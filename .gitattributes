@@ -1,0 +1,2 @@
+mmml/_version.py export-subst
+*.npz filter=lfs diff=lfs merge=lfs -text
