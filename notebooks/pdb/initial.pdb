@@ -1,5 +1,5 @@
 REMARK  EXECUTING CHARMM SCRIPT FROM PYTHON                                           
-REMARK   DATE:     2/25/25     15:21:29      CREATED BY USER: boittier                
+REMARK   DATE:     2/27/25     22:34:43      CREATED BY USER: boittier                
 ATOM      1  CAY ALA     1      -4.883  -1.259   0.058  1.00  0.00      ADP 
 ATOM      2  HY1 ALA     1      -5.376  -0.483   0.682  1.00  0.00      ADP 
 ATOM      3  HY2 ALA     1      -4.761  -2.189   0.653  1.00  0.00      ADP 
