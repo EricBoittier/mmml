@@ -1,0 +1,2 @@
+epoch,tr_loss,ema_tr_loss,ema_tr_e_loss,ema_tr_f_loss,val_e_loss,val_f_loss
+1,Array gpu:1 1.965,Array gpu:1 1.965,Array gpu:1 4.135,Array gpu:1 1.552,Array gpu:1 3.473,Array gpu:1 8.502
