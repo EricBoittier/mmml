@@ -202,15 +202,19 @@ def plot_simulation_distribution_overview(dyna_df, press_df, subfig=None):
 
 
 if __name__ == "__main__":
-    test_dyna_line = "DYNA PRESS>       418.64436   -413.41713  -3099.63460  -1660.34713   9261.00000"
-    print(read_press_line(test_dyna_line))
-    test_dyna_line = "DYNA>        0      0.00000 -61671.83101    283.74974 -61955.58076    124.11071" 
-    print(read_dyna_line(test_dyna_line))
-
     from pathlib import Path
     current_dir = Path(__file__).parent
-    dyna_file = current_dir / ".." / ".." / "testdata" / "DYNA1"
-    press_file = current_dir / ".." / ".." / "testdata" / "PRESS1"
+    #dyna_file = current_dir / ".." / ".." / "testdata" / "DYNA1"
+    #press_file = current_dir / ".." / ".." / "testdata" / "PRESS1"
+
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dyna_file", type=str, required=True)
+    parser.add_argument("--press_file", type=str, required=True)
+    args = parser.parse_args()
+
+    dyna_file = args.dyna_file
+    press_file = args.press_file
 
     dyna_data = []
     press_data = []
