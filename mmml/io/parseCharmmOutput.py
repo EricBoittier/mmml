@@ -135,9 +135,7 @@ def plot_simulation_overview(dyna_df, press_df, subfig=None):
     print(new_xticks)
     axs[-1].set_xticklabels(new_xticks)
 
-    if fig is None:
-        plt.savefig("simulation_overview.png", bbox_inches="tight")
-    return fig
+    return subfig
 
 def plot_distribution(data, column, ax, color, shift=0.0):
     # If data is a DataFrame, get the column, otherwise use the data directly
