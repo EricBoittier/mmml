@@ -20,8 +20,8 @@ def read_dyna_line(line: str) -> dict:
             "dyna": True,
             "step": int(line[5:16].strip()),
             "time": float(line[18:27].strip()),
-            "total_energy": float(line[28:44].strip()),
-            "total_kinetic_energy": float(line[44:54].strip()),
+            "total_energy": float(line[27:40].strip()),
+            "total_kinetic_energy": float(line[40:54].strip()),
             "energy": float(line[54:64].strip()),
             "temperature": float(line[66:].strip())
         }
