@@ -179,7 +179,7 @@ def plot_simulation_distribution_overview(dyna_df, press_df, subfig=None):
     plot_distribution(press_df, "press_e", axs[2, 1], color=spatial_color)
     plot_distribution(press_df, "press_i", axs[2, 1], color=observable_color, shift=0.2)
 
-    plot_distribution(press_df, "volume", axs[2, 2], color=spatial_color)
+    plot_distribution(press_df, "volume", axs[0, 2], color=spatial_color)
 
     # subsample the data into blocks of 25% and plot the distribution of the mean of each block
     for i in range(0, 4):
@@ -187,13 +187,14 @@ def plot_simulation_distribution_overview(dyna_df, press_df, subfig=None):
         # plot_distribution(block, "temperature", axs[0, 2], color=kinetic_color)
         # plot_distribution(block, "total_energy", axs[1, 2], color=spatial_color)
 
-    N = 4 
-    for i in range(0, N):
-        block = press_df.slice(i*len(press_df)//N, (i+1)*len(press_df)//N)
-        print(block.describe())
-        plot_distribution(block/block["volume"].mean(), "volume", axs[1, 2], color=spatial_color, shift=-(1/N)*i)
+    # N = 4 
+    # for i in range(0, N):
+    #     block = press_df.slice(i*len(press_df)//N, (i+1)*len(press_df)//N)
+    #     print(block.describe())
+    #     plot_distribution(block/block["volume"].mean(), "volume", axs[1, 2], color=spatial_color, shift=-(1/N)*i)
 
-    axs[0, 2].set_axis_off()
+    axs[1, 2].set_axis_off()
+    axs[2, 2].set_axis_off()
 
     #if subfig is None:
     #    plt.savefig("simulation_distribution_overview.png", bbox_inches="tight")
@@ -209,8 +210,8 @@ if __name__ == "__main__":
 
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dyna_file", type=str, required=True)
-    parser.add_argument("--press_file", type=str, required=True)
+    parser.add_argument("-d", "--dyna_file", type=str, required=True)
+    parser.add_argument("-p", "--press_file", type=str, required=True)
     args = parser.parse_args()
 
     dyna_file = args.dyna_file
@@ -247,7 +248,7 @@ if __name__ == "__main__":
     dyna_df = dyna_df.slice(1000, None)
     press_df = press_df.slice(1000, None)
 
-    fig = plt.figure(figsize=(20, 10))
+    fig = plt.figure(figsize=(20, 15))
     subfigs = fig.subfigures(2, 1, wspace=0.0, hspace=0.0)
     fig = plot_simulation_distribution_overview(dyna_df, press_df, subfigs[0])
     fig = plot_simulation_overview(dyna_df, press_df, subfigs[1])
