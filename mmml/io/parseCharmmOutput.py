@@ -9,73 +9,68 @@ potential_color = "#004D3D"
 state_color = "#A94A8C"
 observable_color = "#003B5C"
 count_color = "#B67B00"
-#DYNA DYN: Step         Time      TOTEner        TOTKe       ENERgy  TEMPerature
-#DYNA PROP:             GRMS      HFCTote        HFCKe       EHFCor        VIRKe
-#DYNA INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
-#DYNA EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
-#DYNA IMAGES:        IMNBvdw       IMELec       IMHBnd       RXNField    EXTElec
-#DYNA PRESS:            VIRE         VIRI       PRESSE       PRESSI       VOLUme
-#DYNA>        0      0.00000 -61671.83101    283.74974 -61955.58076    124.11071
-#DYNA PRESS>       418.64436   -413.41713  -3099.63460  -1660.34713   9261.00000
 
-def read_dyna_line(line: str):
-    dyna = None
-    step = None
-    time = None
-    total_energy = None
-    total_kinetic_energy = None
-    energy = None
-    temperature = None
-    
-    if line.startswith("DYNA"):
-        dyna = True
+def read_dyna_line(line: str) -> dict:
+    # Early return if not a DYNA line (faster than exception handling)
+    if not line.startswith("DYNA"):
+        return None
+        
+    # Fixed-width parsing but more efficient
+    return {
+        "dyna": True,
+        "step": int(line[5:18].strip()),
+        "time": float(line[18:28].strip()),
+        "total_energy": float(line[28:44].strip()),
+        "total_kinetic_energy": float(line[44:54].strip()),
+        "energy": float(line[54:64].strip()),
+        "temperature": float(line[66:].strip())
+    }
+
+def read_press_line(line: str) -> dict:
+    # Early return if not a PRESS line
+    if not line.startswith("DYNA PRESS"):
+        return None
+        
+    return {
+        "vire": float(line[11:28].strip()),
+        "viri": float(line[28:40].strip()),
+        "press_e": float(line[40:52].strip()),
+        "press_i": float(line[53:65].strip()),
+        "volume": float(line[67:].strip())
+    }
+
+# For processing the whole file, use Polars' streaming capabilities
+def read_dyna_file(filename: str) -> pl.DataFrame:
+    dyna_data = []
+    with open(filename, 'r') as f:
+        # Pre-allocate a reasonable chunk size
+        for line in f:
+            if line.startswith("DYNA>"):  # More specific check
+                if result := read_dyna_line(line):
+                    dyna_data.append(result)
+            if len(dyna_data) >= 10000:  # Process in chunks
+                yield pl.DataFrame(dyna_data)
+                dyna_data = []
+    if dyna_data:  # Don't forget the last chunk
+        yield pl.DataFrame(dyna_data)
+
+def read_press_file(filename: str) -> pl.DataFrame:
+    press_data = []
+    with open(filename, 'r') as f:
+        for line in f:
+            if line.startswith("DYNA PRESS"):
+                press_data.append(read_press_line(line))
+    return pl.DataFrame(press_data)
+
+
+# Usage example:
+def process_file(filename: str) -> pl.DataFrame:
+    if ("DYNA" in filename):
+        return pl.concat(read_dyna_file(filename))
+    elif ("PRESS" in filename):
+        return read_press_file(filename)
     else:
-        raise ValueError(f"Line {line} does not start with DYNA")
-
-    step = int(line[5:18])
-    time = float(line[19:28])
-    total_energy = float(line[28:44])
-    total_kinetic_energy = float(line[44:54])
-    energy = float(line[54:64])
-    temperature = float(line[69:])
-    output = {
-        "dyna": dyna,
-        "step": step,
-        "time": time,
-        "total_energy": total_energy,
-        "total_kinetic_energy": total_kinetic_energy,
-        "energy": energy,
-        "temperature": temperature
-    }
-    return output 
-
-def read_open_line(line: str):
-    pass
-
-
-def read_press_line(line: str):
-    vire = None
-    viri = None
-    press_e = None
-    press_i = None
-    volume = None
-    if line.startswith("DYNA PRESS"):
-        vire = float(line[11:28])
-        viri = float(line[30:40])
-        press_e = float(line[30:42])
-        press_i = float(line[42:55])
-        volume = float(line[68:80])
-    output = {
-        "vire": vire,
-        "viri": viri,
-        "press_e": press_e,
-        "press_i": press_i,
-        "volume": volume
-    }
-    return output
-
-
-
+        raise ValueError(f"Unknown file type: {filename}")
 
 import matplotlib.pyplot as plt
 def plot_simulation_overview(dyna_df, press_df, subfig=None):
@@ -236,6 +231,9 @@ if __name__ == "__main__":
 
     #dyna_df = dyna_df.unique(subset=["step", "time"])
     #press_df = press_df.unique()
+
+    dyna_df = process_file(dyna_file)
+    press_df = process_file(press_file)
 
     print(dyna_df)
     print(press_df)
