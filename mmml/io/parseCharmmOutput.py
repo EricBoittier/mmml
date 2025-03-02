@@ -18,8 +18,8 @@ def read_dyna_line(line: str) -> dict:
     # Fixed-width parsing but more efficient
         return {
             "dyna": True,
-            "step": int(line[5:15].strip()),
-            "time": float(line[18:28].strip()),
+            "step": int(line[5:16].strip()),
+            "time": float(line[18:27].strip()),
             "total_energy": float(line[28:44].strip()),
             "total_kinetic_energy": float(line[44:54].strip()),
             "energy": float(line[54:64].strip()),
