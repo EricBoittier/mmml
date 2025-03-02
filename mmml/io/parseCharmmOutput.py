@@ -14,30 +14,38 @@ def read_dyna_line(line: str) -> dict:
     # Early return if not a DYNA line (faster than exception handling)
     if not line.startswith("DYNA"):
         return None
-        
+    try:
     # Fixed-width parsing but more efficient
-    return {
-        "dyna": True,
-        "step": int(line[5:18].strip()),
-        "time": float(line[18:28].strip()),
-        "total_energy": float(line[28:44].strip()),
-        "total_kinetic_energy": float(line[44:54].strip()),
-        "energy": float(line[54:64].strip()),
-        "temperature": float(line[66:].strip())
-    }
+        return {
+            "dyna": True,
+            "step": int(line[5:16].strip()),
+            "time": float(line[18:28].strip()),
+            "total_energy": float(line[28:44].strip()),
+            "total_kinetic_energy": float(line[44:54].strip()),
+            "energy": float(line[54:64].strip()),
+            "temperature": float(line[66:].strip())
+        }
+    except (ValueError, IndexError) as e:
+        print(f"Error parsing DYNA line: {line.strip()}")
+        print(f"Error: {e}")
+        return None
 
 def read_press_line(line: str) -> dict:
     # Early return if not a PRESS line
     if not line.startswith("DYNA PRESS"):
         return None
-        
-    return {
-        "vire": float(line[11:28].strip()),
-        "viri": float(line[28:40].strip()),
-        "press_e": float(line[40:52].strip()),
-        "press_i": float(line[53:65].strip()),
-        "volume": float(line[67:].strip())
-    }
+    try:    
+        return {
+            "vire": float(line[11:28].strip()),
+            "viri": float(line[28:40].strip()),
+            "press_e": float(line[40:52].strip()),
+            "press_i": float(line[53:65].strip()),
+            "volume": float(line[67:].strip())
+        }
+    except (ValueError, IndexError) as e:
+        print(f"Error parsing PRESS line: {line.strip()}")
+        print(f"Error: {e}")
+        return None
 
 # For processing the whole file, use Polars' streaming capabilities
 def read_dyna_file(filename: str) -> pl.DataFrame:
@@ -63,7 +71,6 @@ def read_press_file(filename: str) -> pl.DataFrame:
     return pl.DataFrame(press_data)
 
 
-# Usage example:
 def process_file(filename: str) -> pl.DataFrame:
     if ("DYNA" in filename):
         return pl.concat(read_dyna_file(filename))
