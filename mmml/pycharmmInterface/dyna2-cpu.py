@@ -51,21 +51,6 @@ from pycharmm.lib import charmm as libcharmm
 
 import sys, time
 
-# Check to see if cuda is available to run BLaDE
-import torch
-cuda  = torch.cuda.is_available()
-num_devices = torch.cuda.device_count()
-usedBLaDe = False
-if cuda:
-    print(f'Running CHARMM/BLaDE MD example on computer with {num_devices} CUDA devices'.format(num_devices))
-    print(f'Running on device {torch.cuda.current_device()} which is a {torch.cuda.get_device_name(torch.cuda.current_device())}')
-    import sys
-    time.sleep(5)
-else: 
-    print('Example not run, no CUDA devices available')
-    sys.exit()
-
-
 # %%
 # The following are some helper functions for setting-up and running the dynamics
 ################################
@@ -275,7 +260,7 @@ def run_md(useomm=False,useblade=False,nequil=10_000,nsteps=10_000,nsavc=100,lea
    HOOVER    REFT 298.0  TMASS 2000.0  TBATH 298.0 -
    blade prmc pref 1 iprs 100 prdv 100 
    """
-    #pycharmm.lingo.charmm_script(script)
+    pycharmm.lingo.charmm_script(script)
     res_file.close()
     lam_file.close()
     dcd_file.close() 
@@ -325,19 +310,8 @@ import time
 start = time.time()
 
 # Check to see if cuda is available to run BLaDE
-import torch
-cuda  = torch.cuda.is_available()
-num_devices = torch.cuda.device_count()
-usedBLaDe = False
-if cuda:
-    print(f'Running CHARMM/BLaDE MD example on computer with {num_devices} CUDA devices'.format(num_devices))
-    print(f'Running on device {torch.cuda.current_device()} which is a {torch.cuda.get_device_name(torch.cuda.current_device())}')
-    import sys
-    time.sleep(5)
-    run_md(useblade = 'prmc pref 1 iprs 100 prdv 100')
-    usedBLaDe = True
-else: print('Example not run, no CUDA devices available')
-
+run_md(useblade = 'prmc pref 1 iprs 100 prdv 100')
+usedBLaDe = True
 end = time.time()
 print("BLADEE", end - start)
 
