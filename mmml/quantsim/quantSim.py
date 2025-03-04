@@ -54,7 +54,7 @@ def setup_charmm(data, data_dir, residue: str, side_length=35):
         # change to the new directory
         os.chdir(new_dir)
         setupRes.main(residue)
-        setupBox.main(density, side_length)
+        setupBox.main(density, side_length, residue)
         # change back to the original directory
         os.chdir(data_dir)
 
