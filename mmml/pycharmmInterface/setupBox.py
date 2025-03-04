@@ -440,7 +440,7 @@ def minimize_box():
     # equivalent CHARMM scripting command: energy
     energy.show()
 
-def main(density: float, side_length: float):
+def main(density: float, side_length: float, residue: str):
     mol = read_initial_pdb(Path("initial.pdb"))
     n_molecules = determine_n_molecules_from_density(density, mol)
     run_packmol(n_molecules, side_length)
@@ -454,8 +454,9 @@ def cli():
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--density", type=float, required=True)
     parser.add_argument("-l", "--side_length", type=float, required=True)
+    parser.add_argument("-r", "--residue", type=str, required=True)
     args = parser.parse_args()
-    main(args.density, args.side_length)
+    main(args.density, args.side_length, args.residue)
 
 
 if __name__ == "__main__":
