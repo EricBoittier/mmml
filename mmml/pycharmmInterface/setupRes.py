@@ -110,6 +110,9 @@ def generate_coordinates() -> Atoms:
     start_energy = energy.energy()
 
     xyz = coor.get_positions()
+    print("positions:")
+    print(xyz)
+
     xyz *= 0 
     xyz += 3 * np.random.random(xyz.to_numpy().shape)
     coor.set_positions(xyz)
@@ -121,12 +124,18 @@ def generate_coordinates() -> Atoms:
     """
     pycharmm.lingo.charmm_script("BOMLEV -1")
     pycharmm.lingo.charmm_script(s)
+
+    print("positions:")
+    print(xyz)
     
     xyz = coor.get_positions()
     xyz *= 3 * np.random.random(xyz.to_numpy().shape)
     coor.set_positions(xyz)
     pycharmm.lingo.charmm_script("BOMLEV -1")
     pycharmm.lingo.charmm_script(s)
+
+    print("positions:")
+    print(xyz)
 
     end_energy = energy.energy()
     energy_diff = end_energy - start_energy
@@ -163,10 +172,14 @@ def mini():
 
 def main(resid: str) -> None:
     """Main function"""
+    resid = resid.upper()
+    print("Generating residue:", resid)
     generate_residue(resid)
+    print("Generating coordinates")
     generate_coordinates()
+    print("Minimizing")
     mini()
-
+    print("Done")
 
 def cli():
     """Command line interface"""
