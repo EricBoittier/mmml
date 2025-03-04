@@ -15,7 +15,6 @@ def read_data_T_rho(charmm_res_id: str, pl_loaded: pl.DataFrame | None = None, p
     if pl_loaded is None:
         pl_loaded = pl.read_parquet(parquet_fn)
     T_RHO_KEY = "[['Temperature, K'], ['Pressure, kPa']]"
-    charmm_res_id = "meoh"
     residue_key = f"('{charmm_res_id.upper()}',)"
     T_RHO_DF = pl_loaded[pl_loaded["variable_names"] == T_RHO_KEY]
     T_RHO_DF = T_RHO_DF[T_RHO_DF["charmm_res_id"] == residue_key]
