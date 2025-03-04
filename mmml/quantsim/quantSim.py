@@ -3,9 +3,10 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 
 pl_loaded = None
+parquet_fn = Path(".").parents[1] / "data" / "charmmthermoml.parquet"
 
-parquet_fn = Path()
-def read_data_T_rho():
+
+def read_data_T_rho(residue_key: str) -> pl.DataFrame:
     if pl_loaded is None:
         pl_loaded = pl.read_parquet(parquet_fn)
     T_RHO_KEY = "[['Temperature, K'], ['Pressure, kPa']]"
@@ -17,5 +18,20 @@ def read_data_T_rho():
     P_KEY = "Pressure, kPa"
     RHO_KEY = "Mass density, kg/m3"
     
+    return T_RHO_DF
+
+
+
+def main():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--residue", type=str, required=True)
+    args = parser.parse_args()
+    T_RHO_DF = read_data_T_rho(args.residue)
+    print(T_RHO_DF)
+
+
+if __name__ == "__main__":
+    main()
 
 
