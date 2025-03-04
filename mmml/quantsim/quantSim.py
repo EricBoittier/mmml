@@ -11,7 +11,7 @@ P_KEY = "Pressure, kPa"
 RHO_KEY = "Mass density, kg/m3"
 
 
-def read_data_T_rho(residue_key: str, pl_loaded: pl.DataFrame | None = None, parquet_fn: Path | None = None) -> pl.DataFrame:
+def read_data_T_rho(charmm_res_id: str, pl_loaded: pl.DataFrame | None = None, parquet_fn: Path | None = None) -> pl.DataFrame:
     if pl_loaded is None:
         pl_loaded = pl.read_parquet(parquet_fn)
     T_RHO_KEY = "[['Temperature, K'], ['Pressure, kPa']]"
