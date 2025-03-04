@@ -4,7 +4,12 @@ from openmm.app.internal.unitcell import computePeriodicBoxVectors
 from openmm import *
 from openmm.unit import *
 import numpy as np
+
+#import sys
+#sys.path.append("/pchem-data/meuwly/boittier/home/openmm-torch")
+
 from openmmml import MLPotential
+
 
 # Input files
 pdbid = "proh"
@@ -54,10 +59,10 @@ simulation.context.setPositions(pdb.positions)
 
 
 # Openmm ML
-chains = list(psf.topology.chains())
-ml_atoms = [atom.index for i, atom in enumerate(chains[0].atoms()) if i < 5]
-potential = MLPotential('ani2x')
-ml_system = potential.createMixedSystem(topology, system, ml_atoms)
+#chains = list(psf.topology.chains())
+#ml_atoms = [atom.index for i, atom in enumerate(chains[0].atoms()) if i < 5]
+#potential = MLPotential('ani2x')
+#ml_system = potential.createMixedSystem(topology, system, ml_atoms)
 
 
 # Minimization
