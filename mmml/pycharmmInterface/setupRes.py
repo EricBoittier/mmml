@@ -164,6 +164,7 @@ def mini():
 def main(resid: str) -> None:
     """Main function"""
     generate_residue(resid)
+    generate_coordinates()
     mini()
 
 
