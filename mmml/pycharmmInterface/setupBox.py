@@ -51,6 +51,11 @@ import pycharmm.scalar as scalar
 import pycharmm.lingo
 
 
+from pint import UnitRegistry
+ureg = UnitRegistry()
+Q_ = ureg.Quantity
+
+
 # Constants
 packmol_input = str(Path("packmol.inp").absolute())
 
