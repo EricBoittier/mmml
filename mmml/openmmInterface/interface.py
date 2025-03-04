@@ -1,11 +1,26 @@
-import os
-import numpy as np
-from datetime import datetime
 from openmm.app import *
+from openmm.app import internal as internal
+from openmm.app.internal.unitcell import computePeriodicBoxVectors
 from openmm import *
 from openmm.unit import *
+import numpy as np
+import os
 
-def setup_simulation(psf_file, pdb_file, rtf_file, prm_file, working_dir, temperature, simulation_schedule):
+#import sys
+#sys.path.append("/pchem-data/meuwly/boittier/home/openmm-torch")
+
+from openmmml import MLPotential
+
+
+# Input files
+pdbid = "proh"
+psf_file = f"/pchem-data/meuwly/boittier/home/project-mmml/proh/proh-262.psf"
+pdb_file = f"/pchem-data/meuwly/boittier/home/project-mmml/proh/mini.pdb"
+rtf_file = "/pchem-data/meuwly/boittier/home/charmm/toppar/top_all36_cgenff.rtf"
+prm_file = "/pchem-data/meuwly/boittier/home/charmm/toppar/par_all36_cgenff.prm"
+
+
+def setup_simulation(psf_file, pdb_file, rtf_file, prm_file, working_dir, temperature, simulation_type):
     # Create necessary directories
     os.makedirs(os.path.join(working_dir, "pdb"), exist_ok=True)
     os.makedirs(os.path.join(working_dir, "dcd"), exist_ok=True)
@@ -40,17 +55,18 @@ def setup_simulation(psf_file, pdb_file, rtf_file, prm_file, working_dir, temper
     simulation = Simulation(psf.topology, system, integrator, platform)
     simulation.context.setPositions(pdb.positions)
 
-    # Run the specified simulation schedule
-    for task in simulation_schedule:
-        sim_type = task.get("type")
-        if sim_type == "minimization":
-            minimize_energy(simulation, working_dir)
-        elif sim_type == "equilibration":
-            equilibrate(simulation, integrator, temperature, working_dir)
-        elif sim_type == "NPT":
-            run_npt(simulation, integrator, working_dir)
-        elif sim_type == "NVE":
-            run_nve(simulation, integrator, working_dir)
+    # Run the specified simulation type
+    if "minimization" in simulation_type:
+        minimize_energy(simulation, working_dir)
+
+    if "equilibration" in simulation_type:
+        equilibrate(simulation, integrator, temperature, working_dir)
+
+    if "NPT" in simulation_type:
+        run_npt(simulation, integrator, working_dir)
+
+    if "NVE" in simulation_type:
+        run_nve(simulation, integrator, working_dir)
 
 def minimize_energy(simulation, working_dir):
     print("Minimizing energy...")
@@ -87,9 +103,8 @@ def run_nve(simulation, integrator, working_dir):
     save_state(simulation, os.path.join(working_dir, "res", "nve_final.res"))
 
 def setup_reporters(simulation, working_dir, prefix):
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    simulation.reporters.append(DCDReporter(os.path.join(working_dir, "dcd", f"{prefix}_{timestamp}.dcd"), 1000))
-    simulation.reporters.append(StateDataReporter(os.path.join(working_dir, "res", f"{prefix}_{timestamp}.log"), 1000, step=True, potentialEnergy=True, temperature=True))
+    simulation.reporters.append(DCDReporter(os.path.join(working_dir, "dcd", f"{prefix}.dcd"), 1000))
+    simulation.reporters.append(StateDataReporter(os.path.join(working_dir, "res", f"{prefix}.log"), 1000, step=True, potentialEnergy=True, temperature=True))
 
 def save_state(simulation, filename):
     state = simulation.context.getState(getPositions=True, getVelocities=True)
@@ -104,10 +119,5 @@ setup_simulation(
     prm_file="/path/to/par_all36_cgenff.prm",
     working_dir="/path/to/working/directory",
     temperature=298,
-    simulation_schedule=[
-        {"type": "minimization"},
-        {"type": "equilibration"},
-        {"type": "NPT"},
-        {"type": "NVE"}
-    ]
-) 
+    simulation_type=["minimization", "equilibration", "NPT"]
+)
