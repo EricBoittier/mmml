@@ -74,7 +74,7 @@ def setup_box(mol: Atoms) -> None:
     box_size = determine_box_size_from_mol(mol)
     print(f"Box size: {box_size}")
 
-def determine_n_molecules_from_density(density: float, mol: Atoms) -> float:
+def determine_n_molecules_from_density(density: float, mol: Atoms, side_length: float = 35) -> float:
     atoms = mol
     masses = atoms.get_masses()
 
@@ -85,7 +85,7 @@ def determine_n_molecules_from_density(density: float, mol: Atoms) -> float:
     s = f'The molecular weight of {molecular_formula} is {molecular_weight:1.2f} gm/mol.'
     print(s)
 
-    box_size = SIDELENGTH * ureg.angstrom
+    box_size = side_length * ureg.angstrom
     volume = box_size**3  # Volume of the box in cm^3
 
     print("Volume of the box: ", volume)
