@@ -40,6 +40,7 @@ def setup_charmm(data, data_dir):
     # Create a directory for the CHARMM files
     os.makedirs(data_dir, exist_ok=True)
 
+    import mmml
     from mmml.pycharmmInterface import setupRes, setupBox
 
     temperatures = data[K_KEY]
