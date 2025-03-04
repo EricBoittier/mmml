@@ -42,7 +42,7 @@ def main():
         print(i, row)
 
     # save data as json
-    original.write_json(f"{args.residue}.json")
+    original.write_ndjson(f"{args.residue}.json")
 
     # save data as csv
     # original.to_csv(f"{args.residue}.csv")
