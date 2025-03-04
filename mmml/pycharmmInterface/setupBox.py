@@ -21,6 +21,12 @@ from ase.visualize.plot import plot_atoms
 from ase.io import read
 from ase.visualize import view
 
+# Environment setup (before loading pycharmm)
+os.environ["CHARMM_HOME"] = "/pchem-data/meuwly/boittier/home/charmm"
+os.environ["CHARMM_LIB_DIR"] = "/pchem-data/meuwly/boittier/home/charmm/build/cmake"
+os.environ["CUDA_VISIBLE_DEVICES"] = ""
+
+
 # CHARMM imports
 import pycharmm
 import pycharmm.generate as gen
@@ -44,10 +50,6 @@ import pycharmm.shake as shake
 import pycharmm.scalar as scalar
 import pycharmm.lingo
 
-# Environment setup
-os.environ["CHARMM_HOME"] = "/pchem-data/meuwly/boittier/home/charmm"
-os.environ["CHARMM_LIB_DIR"] = "/pchem-data/meuwly/boittier/home/charmm/build/cmake"
-os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
 # Constants
 packmol_input = str(Path("packmol.inp").absolute())
@@ -197,8 +199,8 @@ def main(density: float, side_length: float):
 
 def cli():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--density", type=float, required=True)
-    parser.add_argument("--side_length", type=float, required=True)
+    parser.add_argument("-d", "--density", type=float, required=True)
+    parser.add_argument("-l", "--side_length", type=float, required=True)
     args = parser.parse_args()
     main(args.density, args.side_length)
 

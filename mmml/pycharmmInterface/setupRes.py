@@ -21,6 +21,12 @@ from ase.visualize.plot import plot_atoms
 from ase.io import read
 from ase.visualize import view
 
+# Environment setup (before loading pycharmm)
+os.environ["CHARMM_HOME"] = "/pchem-data/meuwly/boittier/home/charmm"
+os.environ["CHARMM_LIB_DIR"] = "/pchem-data/meuwly/boittier/home/charmm/build/cmake"
+os.environ["CUDA_VISIBLE_DEVICES"] = ""
+
+
 # CHARMM imports
 import pycharmm
 import pycharmm.generate as gen
@@ -44,10 +50,7 @@ import pycharmm.shake as shake
 import pycharmm.scalar as scalar
 import pycharmm.lingo
 
-# Environment setup
-os.environ["CHARMM_HOME"] = "/pchem-data/meuwly/boittier/home/charmm"
-os.environ["CHARMM_LIB_DIR"] = "/pchem-data/meuwly/boittier/home/charmm/build/cmake"
-os.environ["CUDA_VISIBLE_DEVICES"] = ""
+
 
 
 def iupac_2_number(iupac):
@@ -166,7 +169,7 @@ def main(resid: str) -> None:
 
 def cli():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--resid", type=str, required=True)
+    parser.add_argument("-r", "--resid", type=str, required=True)
     args = parser.parse_args()
     main(args.resid)
 
