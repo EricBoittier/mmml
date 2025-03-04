@@ -48,15 +48,16 @@ def setup_charmm(data, data_dir, residue: str, side_length=35):
     pressures = data[P_KEY]
 
     for i, (temperature, density, pressure) in enumerate(zip(temperatures, densities, pressures)):
-        # create a new directory 
-        new_dir = data_dir / f"T{temperature}K_rho{density}kg/m3_p{pressure}kPa"
-        new_dir.mkdir(parents=True, exist_ok=True)
-        # change to the new directory
-        os.chdir(new_dir)
-        setupRes.main(residue)
-        setupBox.main(density, side_length, residue)
-        # change back to the original directory
-        os.chdir(data_dir)
+        if temperature is not None and density is not None and pressure is not None:
+            # create a new directory 
+            new_dir = data_dir / f"T{temperature}K_rho{density}kg/m3_p{pressure}kPa"
+            new_dir.mkdir(parents=True, exist_ok=True)
+            # change to the new directory
+            os.chdir(new_dir)
+            setupRes.main(residue)
+            setupBox.main(density, side_length, residue)
+            # change back to the original directory
+            os.chdir(data_dir)
 
 def parse_args():
     import argparse
