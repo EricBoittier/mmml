@@ -81,15 +81,15 @@ def minimize_energy(simulation, working_dir):
 def equilibrate(simulation, integrator, temperature, working_dir, integrator_type, steps=10**6):
     print("Equilibrating...")
     nsteps_equil = steps
-    temp_start, temp_final = 100, temperature
-    for temp in np.linspace(temp_start, temp_final, num=10):
+    temp_start, temp_final = 150, temperature
+    for temp in np.linspace(temp_start, temp_final, num=steps):
         if integrator_type == "Langevin":
             integrator.setTemperature(temp * kelvin)
         elif integrator_type == "Nose-Hoover":
             integrator.setTemperature(temp * kelvin)
         else:
             raise ValueError(f"Unsupported integrator type: {integrator_type}")
-        simulation.step(nsteps_equil // 10)
+        simulation.step(1)
     print("Equilibration complete.")
     save_state(simulation, os.path.join(working_dir, "res", "equilibrated.res"))
 
