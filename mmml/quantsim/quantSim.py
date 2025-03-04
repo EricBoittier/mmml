@@ -60,8 +60,8 @@ def setup_charmm(data, data_dir):
 def parse_args():
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--residue", type=str, required=True)
-    parser.add_argument("--output", type=str, required=True)
+    parser.add_argument("-r", "--residue", type=str, required=True)
+    parser.add_argument("-o", "--output", type=str, required=True)
     return parser.parse_args()
 
 
