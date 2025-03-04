@@ -22,7 +22,15 @@ def read_data_T_rho(charmm_res_id: str, pl_loaded: pl.DataFrame | None = None, p
 
     return T_RHO_DF
 
+def write_json(df: pl.DataFrame, fn: str):
+    import json
 
+    # Convert to a dictionary
+    df = df.to_dict(as_series=False)
+
+    # Write to JSON
+    with open(f"{fn}.json", "w") as f:
+        json.dump(df, f, indent=4)
 
 def main():
     import argparse
@@ -42,8 +50,7 @@ def main():
         print(i, row)
 
     # save data as json
-    original.write_ndjson(f"{args.residue}.json")
-
+    write_json(T_RHO_DF, f"{args.residue}")
     # save data as csv
     # original.to_csv(f"{args.residue}.csv")
 
