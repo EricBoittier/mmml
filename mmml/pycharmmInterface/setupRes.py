@@ -87,6 +87,7 @@ def get_residue_atoms() -> dict[str, list[list[float]]]:
 
 def generate_residue(resid) -> None:
     """Generates a residue from the RTF file"""
+    print("*"*5, "Generating residue", "*"*5)
     s="""DELETE ATOM SELE ALL END"""
     pycharmm.lingo.charmm_script(s)
     read.rtf('/pchem-data/meuwly/boittier/home/charmm/toppar/top_all36_cgenff.rtf')
@@ -103,11 +104,13 @@ def generate_residue(resid) -> None:
 
 
 def generate_coordinates() -> Atoms:
+    print("*"*5, "Generating coordinates", "*"*5)
 
     # make pdb directory
     os.makedirs("pdb", exist_ok=True)
     os.makedirs("res", exist_ok=True)
     os.makedirs("dcd", exist_ok=True)
+    os.makedirs("psf", exist_ok=True)
 
     ic.build()
     coor.show()
@@ -161,6 +164,7 @@ def generate_coordinates() -> Atoms:
 
 
 def mini():
+    print("*"*5, "Minimizing", "*"*5)
     # Specify nonbonded python object called my_nbonds - this just sets it up
     # equivalant CHARMM scripting command: nbonds cutnb 18 ctonnb 13 ctofnb 17 cdie eps 1 atom vatom fswitch vfswitch
     my_nbonds = pycharmm.NonBondedScript(
@@ -178,17 +182,20 @@ def mini():
     # equivalent CHARMM scripting command: energy
     energy.show()
 
+def write_psf(resid: str) -> None:
+    print("*"*5, "Writing PSF", "*"*5)
+    print(f"psf/{resid}-1.psf")
+    write.psf_card(f'psf/{resid}-1.psf')
 
 
 def main(resid: str) -> None:
     """Main function"""
+    print("*"*5, f"Generating residue from residue name ({resid})", "*"*5)
     resid = resid.upper()
-    print("Generating residue:", resid)
     generate_residue(resid)
-    print("Generating coordinates")
-    generate_coordinates()
-    print("Minimizing")
+    generate_coordinates()  
     mini()
+    write_psf(resid)
     print("Done")
 
 def cli():
