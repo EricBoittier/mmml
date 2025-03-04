@@ -87,6 +87,8 @@ def main(residue: str, output_dir: Path):
     # save data as json
     write_json(original, output_dir / f"{args.residue}.json")
 
+    setup_charmm(T_RHO_DF, output_dir)
+
 
 
 if __name__ == "__main__":
