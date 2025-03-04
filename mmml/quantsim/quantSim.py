@@ -3,7 +3,9 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 
 pl_loaded = None
-parquet_fn = Path(".").parents[1] / "data" / "charmmthermoml.parquet"
+main_dir = Path(__file__).parents[1]
+parquet_fn = main_dir / "data" / "charmmthermoml.parquet"
+
 
 
 def read_data_T_rho(residue_key: str) -> pl.DataFrame:
