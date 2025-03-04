@@ -32,8 +32,11 @@ def main():
     T_RHO_DF = read_data_T_rho(args.residue, pl_loaded, parquet_fn)
     print(T_RHO_DF)
 
+    keys = list(T_RHO_DF.columns)
+    print(keys)
+
     # loop through the POLARS dataframe and print the data
-    for row in T_RHO_DF.iter_rows():
+    for row in T_RHO_DF.iter_rows(named=True):
         T = row["Temperature, K"]
         res = row["charmm_res_id"]
         RHO = row["Mass density, kg/m3"]
