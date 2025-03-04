@@ -29,7 +29,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--residue", type=str, required=True)
     args = parser.parse_args()
-    T_RHO_DF = read_data_T_rho(args.residue)
+    T_RHO_DF = read_data_T_rho(args.residue, pl_loaded, parquet_fn)
     print(T_RHO_DF)
 
     # loop through the POLARS dataframe and print the data
