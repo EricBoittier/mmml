@@ -384,7 +384,7 @@ def run_packmol(n_molecules: int, side_length: float) -> None:
     import os
     output = os.system(" ".join(["/pchem-data/meuwly/boittier/home/packmol/packmol", " < ", "packmol.inp"])) 
 
-def initialize_psf():
+def initialize_psf(resid: str, n_molecules: int, side_length: float):
     s="""DELETE ATOM SELE ALL END"""
     pycharmm.lingo.charmm_script(s)
     s="""DELETE PSF SELE ALL END"""
@@ -415,10 +415,10 @@ def initialize_psf():
     READ COOR PDB UNIT 1
     CLOSE UNIT 1"""
     pycharmm.lingo.charmm_script(header)
-    pycharmm.lingo.charmm_script(pbcset)
+    pycharmm.lingo.charmm_script(pbcset.format(SIDELENGTH=side_length))
     pycharmm.lingo.charmm_script(pbcs)
     energy.show()
-    write.psf_card(f'{RESID}-{n_molecules}.psf')
+    write.psf_card(f'{resid}-{n_molecules}.psf')
 
 def minimize_box():
     nbonds = """!#########################################
@@ -444,7 +444,7 @@ def main(density: float, side_length: float):
     mol = read_initial_pdb(Path("initial.pdb"))
     n_molecules = determine_n_molecules_from_density(density, mol)
     run_packmol(n_molecules, side_length)
-    initialize_psf()
+    initialize_psf(residue, n_molecules, side_length)
     minimize_box()
 
 
