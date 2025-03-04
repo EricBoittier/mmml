@@ -6,6 +6,9 @@ pl_loaded = None
 main_dir = Path(__file__).parents[1]
 parquet_fn = main_dir / "data" / "charmmthermoml.parquet"
 
+K_KEY = "Temperature, K"
+P_KEY = "Pressure, kPa"
+RHO_KEY = "Mass density, kg/m3"
 
 
 def read_data_T_rho(residue_key: str, pl_loaded: pl.DataFrame | None = None, parquet_fn: Path | None = None) -> pl.DataFrame:
@@ -16,9 +19,7 @@ def read_data_T_rho(residue_key: str, pl_loaded: pl.DataFrame | None = None, par
     residue_key = f"('{charmm_res_id.upper()}',)"
     T_RHO_DF = pl_loaded[pl_loaded["variable_names"] == T_RHO_KEY]
     T_RHO_DF = T_RHO_DF[T_RHO_DF["charmm_res_id"] == residue_key]
-    K_KEY = "Temperature, K"
-    P_KEY = "Pressure, kPa"
-    RHO_KEY = "Mass density, kg/m3"
+
     
     return T_RHO_DF
 
