@@ -107,11 +107,14 @@ def generate_coordinates() -> Atoms:
     ic.build()
     coor.show()
 
-    start_energy = energy.energy()
-
     xyz = coor.get_positions()
     print("positions:")
     print(xyz)
+
+    start_energy = pycharmm.lingo.get_energy_value('ENER')
+    print("start_energy:")
+    print(start_energy)
+
 
     xyz *= 0 
     xyz += 3 * np.random.random(xyz.to_numpy().shape)
@@ -137,7 +140,9 @@ def generate_coordinates() -> Atoms:
     print("positions:")
     print(xyz)
 
-    end_energy = energy.energy()
+    end_energy = pycharmm.lingo.get_energy_value('ENER')
+    print("end_energy:")
+    print(end_energy)
     energy_diff = end_energy - start_energy
     print(f"Energy difference: {energy_diff}")
     if energy_diff > 0:
