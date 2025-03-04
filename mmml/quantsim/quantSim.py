@@ -35,12 +35,11 @@ def main():
     keys = list(T_RHO_DF.columns)
     print(keys)
 
+    T_RHO_DF = T_RHO_DF.select(["charmm_res_id", RHO_KEY, T_KEY, P_KEY, ])
+    print("charmm_res_id", RHO_KEY, T_KEY, P_KEY)
     # loop through the POLARS dataframe and print the data
-    for row in T_RHO_DF.rows(named=True):
-        T = row["Temperature, K"]
-        res = row["charmm_res_id"]
-        RHO = row["Mass density, kg/m3"]
-        print(res, T, RHO)
+    for i, row in enumerate(T_RHO_DF.rows()):
+        print(i, row)
 
 
 if __name__ == "__main__":
