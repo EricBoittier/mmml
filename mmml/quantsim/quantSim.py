@@ -43,7 +43,7 @@ def main():
 
 
     # save data as csv
-    original.to_csv(f"{charmm_res_id}.csv")
+    original.to_csv(f"{args.residue}.csv")
 
 
 if __name__ == "__main__":
