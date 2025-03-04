@@ -198,6 +198,8 @@ def main(density: float, side_length: float):
 
 
 def cli():
+    """Command line interface"""
+    import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--density", type=float, required=True)
     parser.add_argument("-l", "--side_length", type=float, required=True)
