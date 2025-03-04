@@ -343,7 +343,7 @@ def determine_n_molecules_from_density(density: float, mol: Atoms, side_length: 
 
     # Assume density and molecular weight (you can replace these with actual values)
     # Example: Water (H2O)
-    density = 0.8 * (ureg.kilogram / ureg.meter**3)
+    density = density * (ureg.kilogram / ureg.meter**3)
     molecular_weight = molecular_weight * (ureg.gram / ureg.mole)  # g/mol
 
     # Calculate mass of the substance in the box
