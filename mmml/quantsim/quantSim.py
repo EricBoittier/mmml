@@ -19,7 +19,8 @@ def read_data_T_rho(charmm_res_id: str, pl_loaded: pl.DataFrame | None = None, p
     T_RHO_DF = pl_loaded[pl_loaded["variable_names"] == T_RHO_KEY]
     T_RHO_DF = T_RHO_DF[T_RHO_DF["charmm_res_id"] == residue_key]
 
-    
+    # save data as csv
+    T_RHO_DF.write_csv(f"{charmm_res_id}.csv")
     return T_RHO_DF
 
 
