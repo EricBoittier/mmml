@@ -67,6 +67,9 @@ def parse_args():
 
 
 def main(residue: str, output_dir: Path):
+    if type(output_dir) == str:
+        output_dir = Path(output_dir)
+
     output_dir.mkdir(parents=True, exist_ok=True)
 
     T_RHO_DF = read_data_T_rho(residue, pl_loaded, parquet_fn)
