@@ -33,7 +33,7 @@ def write_json(df: pl.DataFrame, fn: str):
         json.dump(df, f, indent=4)
 
 
-def setup_charmm(data, data_dir):
+def setup_charmm(data, data_dir, residue: str):
     import json
     import os
 
@@ -53,7 +53,7 @@ def setup_charmm(data, data_dir):
         new_dir.mkdir(parents=True, exist_ok=True)
         # change to the new directory
         os.chdir(new_dir)
-        setupRes.main(data["charmm_res_id"])
+        setupRes.main(residue)
         setupBox.main(density, side_length)
         # change back to the original directory
         os.chdir(data_dir)
@@ -88,7 +88,7 @@ def main(residue: str, output_dir: Path):
     # save data as json
     write_json(original, output_dir / f"{args.residue}.json")
 
-    setup_charmm(T_RHO_DF, output_dir)
+    setup_charmm(T_RHO_DF, output_dir, args.residue)
 
 
 
