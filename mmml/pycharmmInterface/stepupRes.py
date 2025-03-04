@@ -164,3 +164,11 @@ def main(resid: str) -> None:
     mini()
 
 
+def cli():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--resid", type=str, required=True)
+    args = parser.parse_args()
+    main(args.resid)
+
+if __name__ == "__main__":
+    cli()
