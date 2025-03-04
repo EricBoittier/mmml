@@ -57,21 +57,19 @@ def setup_charmm(data, data_dir):
         # change back to the original directory
         os.chdir(data_dir)
 
-
-
-
-
-def main():
+def parse_args():
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--residue", type=str, required=True)
     parser.add_argument("--output", type=str, required=True)
+    return parser.parse_args()
 
-    output_dir = Path(args.output)
+
+
+def main(residue: str, output_dir: Path):
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    args = parser.parse_args()
-    T_RHO_DF = read_data_T_rho(args.residue, pl_loaded, parquet_fn)
+    T_RHO_DF = read_data_T_rho(residue, pl_loaded, parquet_fn)
     print(T_RHO_DF)
     original = T_RHO_DF.clone()
     keys = list(T_RHO_DF.columns)
@@ -89,6 +87,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    args = parse_args()
+    main(args.residue, args.output)
 
 
