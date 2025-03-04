@@ -168,6 +168,8 @@ def main(resid: str) -> None:
 
 
 def cli():
+    """Command line interface"""
+    import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("-r", "--resid", type=str, required=True)
     args = parser.parse_args()
