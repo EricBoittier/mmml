@@ -57,6 +57,13 @@ def setup_simulation(psf_file, pdb_file, rtf_file, prm_file, working_dir, temper
         temperature = temperatures[i]
         pressure = pressures[i] if i < len(pressures) else 1.0  # Default pressure if not enough values
 
+        print(f"Running {sim_type} simulation...")
+        print(f"Temperature: {temperature} K")
+        print(f"Pressure: {pressure} atm")  
+        print(f"Integrator: {integrator_type}")
+
+        # setup_reporters(simulation, working_dir, f"{sim_type}_{i}")
+
         if sim_type == "minimization":
             minimize_energy(simulation, working_dir)
         elif sim_type == "equilibration":
@@ -71,9 +78,9 @@ def minimize_energy(simulation, working_dir):
     simulation.minimizeEnergy()
     save_state(simulation, os.path.join(working_dir, "res", "minimized.res"))
 
-def equilibrate(simulation, integrator, temperature, working_dir, integrator_type):
+def equilibrate(simulation, integrator, temperature, working_dir, integrator_type, steps=10**6):
     print("Equilibrating...")
-    nsteps_equil = 10000
+    nsteps_equil = steps
     temp_start, temp_final = 100, temperature
     for temp in np.linspace(temp_start, temp_final, num=10):
         if integrator_type == "Langevin":
@@ -82,21 +89,21 @@ def equilibrate(simulation, integrator, temperature, working_dir, integrator_typ
     print("Equilibration complete.")
     save_state(simulation, os.path.join(working_dir, "res", "equilibrated.res"))
 
-def run_npt(simulation, integrator, pressure, working_dir, integrator_type):
+def run_npt(simulation, integrator, pressure, working_dir, integrator_type, steps=10**6):
     print("Running NPT simulation...")
     system = simulation.system
     system.addForce(MonteCarloBarostat(pressure * atmosphere, 298 * kelvin, 25))
     if integrator_type == "Langevin":
         integrator.setTemperature(298*kelvin)
-    nsteps_prod = 100000
+    nsteps_prod = steps
     setup_reporters(simulation, working_dir, "npt")
     simulation.step(nsteps_prod)
     print("NPT simulation complete.")
     save_state(simulation, os.path.join(working_dir, "res", "npt_final.res"))
 
-def run_nve(simulation, integrator, working_dir):
+def run_nve(simulation, integrator, working_dir, steps=10**6):
     print("Running NVE simulation...")
-    nsteps_prod = 100000
+    nsteps_prod = steps 
     setup_reporters(simulation, working_dir, "nve")
     simulation.step(nsteps_prod)
     print("NVE simulation complete.")
