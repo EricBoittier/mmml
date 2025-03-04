@@ -19,8 +19,7 @@ def read_data_T_rho(charmm_res_id: str, pl_loaded: pl.DataFrame | None = None, p
     T_RHO_DF = pl_loaded[pl_loaded["variable_names"] == T_RHO_KEY]
     T_RHO_DF = T_RHO_DF[T_RHO_DF["charmm_res_id"] == residue_key]
 
-    # save data as csv
-    T_RHO_DF.write_csv(f"{charmm_res_id}.csv")
+
     return T_RHO_DF
 
 
@@ -32,7 +31,7 @@ def main():
     args = parser.parse_args()
     T_RHO_DF = read_data_T_rho(args.residue, pl_loaded, parquet_fn)
     print(T_RHO_DF)
-
+    original = T_RHO_DF.clone()
     keys = list(T_RHO_DF.columns)
     print(keys)
 
@@ -41,6 +40,10 @@ def main():
     # loop through the POLARS dataframe and print the data
     for i, row in enumerate(T_RHO_DF.rows()):
         print(i, row)
+
+
+    # save data as csv
+    original.to_csv(f"{charmm_res_id}.csv")
 
 
 if __name__ == "__main__":
