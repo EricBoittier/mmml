@@ -50,7 +50,7 @@ def setup_charmm(data, data_dir, residue: str, side_length=35):
     for i, (temperature, density, pressure) in enumerate(zip(temperatures, densities, pressures)):
         if temperature is not None and density is not None and pressure is not None:
             # create a new directory 
-            new_dir = data_dir / f"T{temperature}K_rho{density}kg/m3_p{pressure}kPa"
+            new_dir = data_dir / f"sim_t_{temperature}_k_rho_{density}_kgperm3_p{pressure}_kPa"
             new_dir.mkdir(parents=True, exist_ok=True)
             # change to the new directory
             os.chdir(new_dir)
