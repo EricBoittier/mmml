@@ -190,8 +190,8 @@ def write_psf(resid: str) -> None:
 
 def main(resid: str) -> None:
     """Main function"""
-    print("*"*5, f"Generating residue from residue name ({resid})", "*"*5)
     resid = resid.upper()
+    print("*"*5, f"Generating residue from residue name ({resid})", "*"*5)
     generate_residue(resid)
     generate_coordinates()  
     mini()
