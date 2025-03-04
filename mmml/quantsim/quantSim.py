@@ -50,7 +50,7 @@ def main():
         print(i, row)
 
     # save data as json
-    write_json(T_RHO_DF, f"{args.residue}")
+    write_json(original, f"{args.residue}")
     # save data as csv
     # original.to_csv(f"{args.residue}.csv")
 
