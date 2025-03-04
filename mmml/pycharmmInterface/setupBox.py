@@ -194,5 +194,15 @@ def main(density: float, side_length: float):
     initialize_psf()
     minimize_box()
 
+
+def cli():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--density", type=float, required=True)
+    parser.add_argument("--side_length", type=float, required=True)
+    args = parser.parse_args()
+    main(args.density, args.side_length)
+
+
 if __name__ == "__main__":
-    main(0.8, 35)
+    cli()
+
