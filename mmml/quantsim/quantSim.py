@@ -36,7 +36,7 @@ def main():
     print(keys)
 
     # loop through the POLARS dataframe and print the data
-    for row in T_RHO_DF.iter_rows(named=True):
+    for row in T_RHO_DF.rows(named=True):
         T = row["Temperature, K"]
         res = row["charmm_res_id"]
         RHO = row["Mass density, kg/m3"]
