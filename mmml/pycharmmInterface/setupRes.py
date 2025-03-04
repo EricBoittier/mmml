@@ -184,8 +184,8 @@ def mini():
 
 def write_psf(resid: str) -> None:
     print("*"*5, "Writing PSF", "*"*5)
-    print(f"psf/{resid}-1.psf")
-    write.psf_card(f'psf/{resid}-1.psf')
+    print(f"psf/{resid.lower()}-1.psf")
+    write.psf_card(f'psf/{resid.lower()}-1.psf')
 
 
 def main(resid: str) -> None:
