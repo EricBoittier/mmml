@@ -104,6 +104,11 @@ def generate_residue(resid) -> None:
 
 def generate_coordinates() -> Atoms:
 
+    # make pdb directory
+    os.makedirs("pdb", exist_ok=True)
+    os.makedirs("res", exist_ok=True)
+    os.makedirs("dcd", exist_ok=True)
+
     ic.build()
     coor.show()
 
