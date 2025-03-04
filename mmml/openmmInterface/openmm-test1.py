@@ -82,14 +82,8 @@ def equilibrate(simulation, integrator, temperature, working_dir, integrator_typ
     print("Equilibrating...")
     nsteps_equil = steps
     temp_start, temp_final = 150, temperature
-    for temp in np.linspace(temp_start, temp_final, num=steps):
-        if integrator_type == "Langevin":
-            integrator.setTemperature(temp * kelvin)
-        elif integrator_type == "Nose-Hoover":
-            integrator.setTemperature(temp * kelvin)
-        else:
-            raise ValueError(f"Unsupported integrator type: {integrator_type}")
-        simulation.step(1)
+    for temp in np.linspace(temp_start, temp_final, num=steps//100):
+        simulation.step(steps//100)
     print("Equilibration complete.")
     save_state(simulation, os.path.join(working_dir, "res", "equilibrated.res"))
 
@@ -117,17 +111,15 @@ def setup_reporters(simulation, working_dir, prefix):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     dcd_path = os.path.join(working_dir, "dcd", f"{prefix}_{timestamp}.dcd")
     report_path = os.path.join(working_dir, "res", f"{prefix}_{timestamp}.log")
-    simulation.reporters.append(DCDReporter(dcd_path), 1000))
+    simulation.reporters.append(DCDReporter(dcd_path, 1000))
     simulation.reporters.append(StateDataReporter(report_path, 1000,
-     step=True, 
-     potentialEnergy=True, 
-     temperature=True,
-     density=True,
-     volume=True,
-     speed=True,
-     totalEnergy=True,
-     )
-     )
+    step=True, 
+    potentialEnergy=True, 
+    temperature=True,
+    density=True,
+    volume=True,
+    speed=True,
+    totalEnergy=True,))
 
 def save_state(simulation, filename):
     state = simulation.context.getState(getPositions=True, getVelocities=True)
@@ -144,7 +136,7 @@ def parse_args():
     parser.add_argument("--temperatures", type=float, nargs='+', required=True, help="List of temperatures in Kelvin for each simulation step.")
     parser.add_argument("--pressures", type=float, nargs='*', default=[1.0], help="List of pressures in atmospheres for each simulation step (default: 1.0).")
     parser.add_argument("--simulation_schedule", nargs='+', required=True, help="List of simulation types to run (e.g., minimization equilibration NPT NVE).")
-    parser.add_argument("--integrator", choices=["Langevin", "Verlet"], default="Langevin", help="Integrator type to use (default: Langevin).")
+    parser.add_argument("--integrator", choices=["Langevin", "Verlet", "Nose-Hoover"], default="Langevin", help="Integrator type to use (default: Langevin).")
     return parser.parse_args()
 
 if __name__ == "__main__":
