@@ -122,6 +122,23 @@ write coor unit 10 pdb
 
 """
 
+pbcset = """ SET BOXTYPE  = RECT
+ SET XTLTYPE  = CUBIC
+ SET A = {SIDELENGTH}
+ SET B = {SIDELENGTH}
+ SET C = {SIDELENGTH}
+ SET ALPHA = 90.0
+ SET BETA  = 90.0
+ SET GAMMA = 90.0
+ SET IMPATCH = NO
+ SET FFTX  = 40
+ SET FFTY  = 40
+ SET FFTZ  = 40
+ SET XCEN  = 0
+ SET YCEN  = 0
+ SET ZCEN  = 0
+"""
+
 heat = """!#########################################
 ! Heating - NVT {NDCD}
 !#########################################
