@@ -85,6 +85,10 @@ def equilibrate(simulation, integrator, temperature, working_dir, integrator_typ
     for temp in np.linspace(temp_start, temp_final, num=10):
         if integrator_type == "Langevin":
             integrator.setTemperature(temp * kelvin)
+        elif integrator_type == "Nose-Hoover":
+            integrator.setTemperature(temp * kelvin)
+        else:
+            raise ValueError(f"Unsupported integrator type: {integrator_type}")
         simulation.step(nsteps_equil // 10)
     print("Equilibration complete.")
     save_state(simulation, os.path.join(working_dir, "res", "equilibrated.res"))
@@ -111,8 +115,19 @@ def run_nve(simulation, integrator, working_dir, steps=10**6):
 
 def setup_reporters(simulation, working_dir, prefix):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    simulation.reporters.append(DCDReporter(os.path.join(working_dir, "dcd", f"{prefix}_{timestamp}.dcd"), 1000))
-    simulation.reporters.append(StateDataReporter(os.path.join(working_dir, "res", f"{prefix}_{timestamp}.log"), 1000, step=True, potentialEnergy=True, temperature=True))
+    dcd_path = os.path.join(working_dir, "dcd", f"{prefix}_{timestamp}.dcd")
+    report_path = os.path.join(working_dir, "res", f"{prefix}_{timestamp}.log")
+    simulation.reporters.append(DCDReporter(dcd_path), 1000))
+    simulation.reporters.append(StateDataReporter(report_path, 1000,
+     step=True, 
+     potentialEnergy=True, 
+     temperature=True,
+     density=True,
+     volume=True,
+     speed=True,
+     totalEnergy=True,
+     )
+     )
 
 def save_state(simulation, filename):
     state = simulation.context.getState(getPositions=True, getVelocities=True)
