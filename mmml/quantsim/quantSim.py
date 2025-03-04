@@ -33,7 +33,7 @@ def write_json(df: pl.DataFrame, fn: str):
         json.dump(df, f, indent=4)
 
 
-def setup_charmm(data, data_dir, residue: str):
+def setup_charmm(data, data_dir, residue: str, side_length=35):
     import json
     import os
 
