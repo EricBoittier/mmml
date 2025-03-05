@@ -36,11 +36,18 @@ set name dclm
 OPEN UNIT 1 READ FORM NAME init.pdb
 READ SEQU PDB UNIT 1
 CLOSE UNIT 1
-GENERATE DCM FIRST NONE LAST NONE SETUP 
+GENERATE SOL FIRST NONE LAST NONE SETUP 
 
 OPEN UNIT 1 READ FORM NAME init.pdb
 READ COOR PDB UNIT 1
-CLOSE UNIT 1"""
+CLOSE UNIT 1
+
+! Generate PSF and write to a file
+write psf card name system.psf
+* My PSF file
+*
+
+"""
 
 pbcs = """!#########################################
 ! Setup PBC (Periodic Boundary Condition)
