@@ -49,6 +49,12 @@ write psf card name system.psf
 
 """
 
+write_system_psf = """write psf card name system.psf
+* My PSF file
+*
+"""
+
+
 pbcs = """!#########################################
 ! Setup PBC (Periodic Boundary Condition)
 !#########################################
@@ -423,6 +429,7 @@ def initialize_psf(resid: str, n_molecules: int, side_length: float):
     pycharmm.lingo.charmm_script(pbcset.format(SIDELENGTH=side_length))
     pycharmm.lingo.charmm_script(pbcs)
     energy.show()
+    pycharmm.lingo.charmm_script(write_system_psf)
     write.psf_card(f'{resid}-{n_molecules}.psf')
 
 def minimize_box():
