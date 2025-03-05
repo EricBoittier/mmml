@@ -84,7 +84,9 @@ def equilibrate(simulation, integrator, temperature, pressure, working_dir, inte
     temp_start, temp_final = 150, temperature
     print("Running NPT simulation...")
     system = simulation.system
-    barostat = system.addForce(MonteCarloBarostat(pressure * atmosphere, temperature * kelvin, 25))
+    print("Adding barostat...")
+    barostat = system.addForce(MonteCarloBarostat(pressure * atmosphere, temperature * kelvin))
+    simulation.context.reinitialize(True)
     setup_reporters(simulation, working_dir, "equilibration")
     for temp in np.linspace(temp_start, temp_final, num=steps//nheat):
         integrator.setTemperature(temp*kelvin)
