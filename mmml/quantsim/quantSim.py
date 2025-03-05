@@ -88,7 +88,8 @@ def main(residue: str, output_dir: Path):
 
     # save data as json
     write_json(original, output_dir / f"{args.residue}.json")
-
+    # save csv of just the data for parametrization
+    T_RHO_DF.write_csv(output_dir / f"{args.residue}.csv")
     setup_charmm(T_RHO_DF, output_dir, args.residue)
 
 
