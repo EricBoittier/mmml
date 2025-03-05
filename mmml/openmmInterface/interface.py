@@ -82,7 +82,12 @@ def equilibrate(simulation, integrator, temperature, working_dir, integrator_typ
     print("Equilibrating...")
     nsteps_equil = steps
     temp_start, temp_final = 150, temperature
+    print("Running NPT simulation...")
+    system = simulation.system
+    barostat = system.addForce(MonteCarloBarostat(pressure * atmosphere, 298 * kelvin, 25))
+    setup_reporters(simulation, working_dir, "equilibration")
     for temp in np.linspace(temp_start, temp_final, num=steps//100):
+        integrator.setTemperature(temp*kelvin)
         simulation.step(steps//100)
     print("Equilibration complete.")
     save_state(simulation, os.path.join(working_dir, "res", "equilibrated.res"))
@@ -119,7 +124,8 @@ def setup_reporters(simulation, working_dir, prefix):
     density=True,
     volume=True,
     speed=True,
-    totalEnergy=True,))
+    totalEnergy=True,)
+    )
 
 def save_state(simulation, filename):
     state = simulation.context.getState(getPositions=True, getVelocities=True)
@@ -136,7 +142,7 @@ def parse_args():
     parser.add_argument("--temperatures", type=float, nargs='+', required=True, help="List of temperatures in Kelvin for each simulation step.")
     parser.add_argument("--pressures", type=float, nargs='*', default=[1.0], help="List of pressures in atmospheres for each simulation step (default: 1.0).")
     parser.add_argument("--simulation_schedule", nargs='+', required=True, help="List of simulation types to run (e.g., minimization equilibration NPT NVE).")
-    parser.add_argument("--integrator", choices=["Langevin", "Verlet", "Nose-Hoover"], default="Langevin", help="Integrator type to use (default: Langevin).")
+    parser.add_argument("--integrator", choices=["Langevin", "Verlet", "Nose-Hoover"], default="Nose-Hoover", help="Integrator type to use (default: Nose-Hoover).")
     return parser.parse_args()
 
 def cli():
