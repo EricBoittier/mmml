@@ -417,12 +417,12 @@ def initialize_psf(resid: str, n_molecules: int, side_length: float):
     ! Start Production at dcd number n
     set ndcd 0
 
-    OPEN UNIT 1 READ FORM NAME pdb/initial.pdb
+    OPEN UNIT 1 READ FORM NAME init.pdb
     READ SEQU PDB UNIT 1
     CLOSE UNIT 1
     GENERATE {resid.upper()} FIRST NONE LAST NONE SETUP 
 
-    OPEN UNIT 1 READ FORM NAME pdb/initial.pdb
+    OPEN UNIT 1 READ FORM NAME init.pdb
     READ COOR PDB UNIT 1
     CLOSE UNIT 1"""
     pycharmm.lingo.charmm_script(header)
