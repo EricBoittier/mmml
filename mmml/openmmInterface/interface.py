@@ -13,7 +13,8 @@ def setup_simulation(psf_file, pdb_file, rtf_file, prm_file, working_dir, temper
     os.makedirs(os.path.join(working_dir, "pdb"), exist_ok=True)
     os.makedirs(os.path.join(working_dir, "dcd"), exist_ok=True)
     os.makedirs(os.path.join(working_dir, "res"), exist_ok=True)
-
+    os.makedirs(os.path.join(working_dir, "log"), exist_ok=True)
+    
     # Define box size
     box_length = 3.5 * nanometer
     alpha, beta, gamma = 90.0 * degree, 90.0 * degree, 90.0 * degree
@@ -117,7 +118,7 @@ def run_nve(simulation, integrator, working_dir, steps=10**6):
 def setup_reporters(simulation, working_dir, prefix):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     dcd_path = os.path.join(working_dir, "dcd", f"{prefix}_{timestamp}.dcd")
-    report_path = os.path.join(working_dir, "res", f"{prefix}_{timestamp}.log")
+    report_path = os.path.join(working_dir, "log", f"{prefix}_{timestamp}.log")
     simulation.reporters.append(DCDReporter(dcd_path, 1000))
     simulation.reporters.append(StateDataReporter(report_path, 1000,
     step=True, 
