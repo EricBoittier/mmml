@@ -1,26 +1,14 @@
-from openmm.app import *
-from openmm.app import internal as internal
+import os
 from openmm.app.internal.unitcell import computePeriodicBoxVectors
+from pathlib import Path
+import argparse
+import numpy as np
+from datetime import datetime
+from openmm.app import *
 from openmm import *
 from openmm.unit import *
-import numpy as np
-import os
 
-#import sys
-#sys.path.append("/pchem-data/meuwly/boittier/home/openmm-torch")
-
-from openmmml import MLPotential
-
-
-# Input files
-pdbid = "proh"
-psf_file = f"/pchem-data/meuwly/boittier/home/project-mmml/proh/proh-262.psf"
-pdb_file = f"/pchem-data/meuwly/boittier/home/project-mmml/proh/mini.pdb"
-rtf_file = "/pchem-data/meuwly/boittier/home/charmm/toppar/top_all36_cgenff.rtf"
-prm_file = "/pchem-data/meuwly/boittier/home/charmm/toppar/par_all36_cgenff.prm"
-
-
-def setup_simulation(psf_file, pdb_file, rtf_file, prm_file, working_dir, temperature, simulation_type):
+def setup_simulation(psf_file, pdb_file, rtf_file, prm_file, working_dir, temperatures, pressures, simulation_schedule, integrator_type):
     # Create necessary directories
     os.makedirs(os.path.join(working_dir, "pdb"), exist_ok=True)
     os.makedirs(os.path.join(working_dir, "dcd"), exist_ok=True)
@@ -45,8 +33,16 @@ def setup_simulation(psf_file, pdb_file, rtf_file, prm_file, working_dir, temper
     system = psf.createSystem(params, nonbondedMethod=PME, nonbondedCutoff=1.0*nanometer)
     system.setDefaultPeriodicBoxVectors(*box_vectors)
 
-    # Add a Langevin thermostat
-    integrator = LangevinIntegrator(temperature*kelvin, 1/picosecond, 0.5*femtoseconds)
+    # Choose the integrator
+    if integrator_type == "Langevin":
+        integrator = LangevinIntegrator(temperatures[0]*kelvin, 1/picosecond, 0.5*femtoseconds)
+    elif integrator_type == "Verlet":
+        integrator = VerletIntegrator(0.5*femtoseconds)
+    elif integrator_type == "Nose-Hoover": 
+        integrator = NoseHooverIntegrator(temperatures[0]*kelvin, 
+        1/picosecond, 0.5*femtoseconds)
+    else:
+        raise ValueError(f"Unsupported integrator type: {integrator_type}")
 
     # Choose the simulation platform
     platform = Platform.getPlatformByName("CUDA")
@@ -55,69 +51,118 @@ def setup_simulation(psf_file, pdb_file, rtf_file, prm_file, working_dir, temper
     simulation = Simulation(psf.topology, system, integrator, platform)
     simulation.context.setPositions(pdb.positions)
 
-    # Run the specified simulation type
-    if "minimization" in simulation_type:
-        minimize_energy(simulation, working_dir)
+    # Run the specified simulation schedule
+    for i, task in enumerate(simulation_schedule):
+        sim_type = task.get("type")
+        temperature = temperatures[i]
+        pressure = pressures[i] if i < len(pressures) else 1.0  # Default pressure if not enough values
 
-    if "equilibration" in simulation_type:
-        equilibrate(simulation, integrator, temperature, working_dir)
+        print(f"Running {sim_type} simulation...")
+        print(f"Temperature: {temperature} K")
+        print(f"Pressure: {pressure} atm")  
+        print(f"Integrator: {integrator_type}")
 
-    if "NPT" in simulation_type:
-        run_npt(simulation, integrator, working_dir)
+        # setup_reporters(simulation, working_dir, f"{sim_type}_{i}")
 
-    if "NVE" in simulation_type:
-        run_nve(simulation, integrator, working_dir)
+        if sim_type == "minimization":
+            minimize_energy(simulation, working_dir)
+        elif sim_type == "equilibration":
+            equilibrate(simulation, integrator, temperature, working_dir, integrator_type)
+        elif sim_type == "NPT":
+            run_npt(simulation, integrator, pressure, working_dir, integrator_type)
+        elif sim_type == "NVE":
+            run_nve(simulation, integrator, working_dir)
 
 def minimize_energy(simulation, working_dir):
     print("Minimizing energy...")
     simulation.minimizeEnergy()
     save_state(simulation, os.path.join(working_dir, "res", "minimized.res"))
 
-def equilibrate(simulation, integrator, temperature, working_dir):
+def equilibrate(simulation, integrator, temperature, working_dir, integrator_type, steps=10**6):
     print("Equilibrating...")
-    nsteps_equil = 10000
-    temp_start, temp_final = 100, temperature
-    for temp in np.linspace(temp_start, temp_final, num=10):
-        integrator.setTemperature(temp * kelvin)
-        simulation.step(nsteps_equil // 10)
+    nsteps_equil = steps
+    temp_start, temp_final = 150, temperature
+    for temp in np.linspace(temp_start, temp_final, num=steps//100):
+        simulation.step(steps//100)
     print("Equilibration complete.")
     save_state(simulation, os.path.join(working_dir, "res", "equilibrated.res"))
 
-def run_npt(simulation, integrator, working_dir):
+def run_npt(simulation, integrator, pressure, working_dir, integrator_type, steps=10**6):
     print("Running NPT simulation...")
     system = simulation.system
-    system.addForce(MonteCarloBarostat(1 * atmosphere, 298 * kelvin, 25))
-    integrator.setTemperature(298*kelvin)
-    nsteps_prod = 100000
+    system.addForce(MonteCarloBarostat(pressure * atmosphere, 298 * kelvin, 25))
+    if integrator_type == "Langevin":
+        integrator.setTemperature(298*kelvin)
+    nsteps_prod = steps
     setup_reporters(simulation, working_dir, "npt")
     simulation.step(nsteps_prod)
     print("NPT simulation complete.")
     save_state(simulation, os.path.join(working_dir, "res", "npt_final.res"))
 
-def run_nve(simulation, integrator, working_dir):
+def run_nve(simulation, integrator, working_dir, steps=10**6):
     print("Running NVE simulation...")
-    nsteps_prod = 100000
+    nsteps_prod = steps 
     setup_reporters(simulation, working_dir, "nve")
     simulation.step(nsteps_prod)
     print("NVE simulation complete.")
     save_state(simulation, os.path.join(working_dir, "res", "nve_final.res"))
 
 def setup_reporters(simulation, working_dir, prefix):
-    simulation.reporters.append(DCDReporter(os.path.join(working_dir, "dcd", f"{prefix}.dcd"), 1000))
-    simulation.reporters.append(StateDataReporter(os.path.join(working_dir, "res", f"{prefix}.log"), 1000, step=True, potentialEnergy=True, temperature=True))
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    dcd_path = os.path.join(working_dir, "dcd", f"{prefix}_{timestamp}.dcd")
+    report_path = os.path.join(working_dir, "res", f"{prefix}_{timestamp}.log")
+    simulation.reporters.append(DCDReporter(dcd_path, 1000))
+    simulation.reporters.append(StateDataReporter(report_path, 1000,
+    step=True, 
+    potentialEnergy=True, 
+    temperature=True,
+    density=True,
+    volume=True,
+    speed=True,
+    totalEnergy=True,))
 
 def save_state(simulation, filename):
     state = simulation.context.getState(getPositions=True, getVelocities=True)
     with open(filename, "w") as f:
         f.write(state.getPositions(asNumpy=True).__str__())
 
-# Example usage
-setup_simulation(
-    psf_file="/path/to/proh-262.psf",
-    pdb_file="/path/to/mini.pdb",
-    rtf_file="/path/to/top_all36_cgenff.rtf",
-    prm_file="/path/to/par_all36_cgenff.prm",
-    working_dir="/path/to/working/directory",
-    temperature=298,
-    simulation_type=["minimization", "equilibration", "NPT"]
-)
+def parse_args():
+    parser = argparse.ArgumentParser(description="Run OpenMM simulations with specified parameters.")
+    parser.add_argument("--psf_file", required=True, help="Path to the PSF file.")
+    parser.add_argument("--pdb_file", required=True, help="Path to the PDB file.")
+    parser.add_argument("--rtf_file", required=True, help="Path to the RTF file.")
+    parser.add_argument("--prm_file", required=True, help="Path to the PRM file.")
+    parser.add_argument("--working_dir", required=True, help="Working directory for output files.")
+    parser.add_argument("--temperatures", type=float, nargs='+', required=True, help="List of temperatures in Kelvin for each simulation step.")
+    parser.add_argument("--pressures", type=float, nargs='*', default=[1.0], help="List of pressures in atmospheres for each simulation step (default: 1.0).")
+    parser.add_argument("--simulation_schedule", nargs='+', required=True, help="List of simulation types to run (e.g., minimization equilibration NPT NVE).")
+    parser.add_argument("--integrator", choices=["Langevin", "Verlet", "Nose-Hoover"], default="Langevin", help="Integrator type to use (default: Langevin).")
+    return parser.parse_args()
+
+def cli():
+    args = parse_args()
+    setup_simulation(
+        psf_file=args.psf_file,
+        pdb_file=args.pdb_file,
+        rtf_file=args.rtf_file,
+        prm_file=args.prm_file,
+        working_dir=args.working_dir,
+        temperatures=args.temperatures,
+        pressures=args.pressures,
+        simulation_schedule=[{"type": sim_type} for sim_type in args.simulation_schedule],
+        integrator_type=args.integrator
+    )
+
+
+if __name__ == "__main__":
+    cli()   
+
+# example command:
+# python openmm-test1.py --psf_file /pchem-data/meuwly/boittier/home/project-mmml/proh/proh-262.psf 
+# --pdb_file /pchem-data/meuwly/boittier/home/project-mmml/proh/mini.pdb 
+# --rtf_file /pchem-data/meuwly/boittier/home/charmm/toppar/top_all36_cgenff.rtf 
+# --prm_file /pchem-data/meuwly/boittier/home/charmm/toppar/par_all36_cgenff.prm 
+# --working_dir /pchem-data/meuwly/boittier/home/project-mmml/proh/openmm-test1 
+# --temperatures 100 200 300 --pressures 1.0 2.0 3.0 
+# --simulation_schedule minimization equilibration NPT NVE 
+# --integrator Langevin
