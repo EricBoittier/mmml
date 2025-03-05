@@ -67,9 +67,9 @@ def setup_simulation(psf_file, pdb_file, rtf_file, prm_file, working_dir, temper
         if sim_type == "minimization":
             minimize_energy(simulation, working_dir)
         elif sim_type == "equilibration":
-            equilibrate(simulation, integrator, temperature, working_dir, integrator_type)
+            equilibrate(simulation, integrator, temperature, pressure, working_dir, integrator_type)
         elif sim_type == "NPT":
-            run_npt(simulation, integrator, pressure, working_dir, integrator_type)
+            run_npt(simulation, integrator, temperature, pressure, working_dir, integrator_type)
         elif sim_type == "NVE":
             run_nve(simulation, integrator, working_dir)
 
@@ -78,26 +78,26 @@ def minimize_energy(simulation, working_dir):
     simulation.minimizeEnergy()
     save_state(simulation, os.path.join(working_dir, "res", "minimized.res"))
 
-def equilibrate(simulation, integrator, temperature, working_dir, integrator_type, steps=10**6):
+def equilibrate(simulation, integrator, temperature, pressure, working_dir, integrator_type, steps=10**6, nheat=100):
     print("Equilibrating...")
     nsteps_equil = steps
     temp_start, temp_final = 150, temperature
     print("Running NPT simulation...")
     system = simulation.system
-    barostat = system.addForce(MonteCarloBarostat(pressure * atmosphere, 298 * kelvin, 25))
+    barostat = system.addForce(MonteCarloBarostat(pressure * atmosphere, temperature * kelvin, 25))
     setup_reporters(simulation, working_dir, "equilibration")
-    for temp in np.linspace(temp_start, temp_final, num=steps//100):
+    for temp in np.linspace(temp_start, temp_final, num=steps//nheat):
         integrator.setTemperature(temp*kelvin)
-        simulation.step(steps//100)
+        simulation.step(steps//nheat)
     print("Equilibration complete.")
     save_state(simulation, os.path.join(working_dir, "res", "equilibrated.res"))
 
-def run_npt(simulation, integrator, pressure, working_dir, integrator_type, steps=10**6):
+def run_npt(simulation, integrator, temperature, pressure, working_dir, integrator_type, steps=10**6):
     print("Running NPT simulation...")
     system = simulation.system
-    system.addForce(MonteCarloBarostat(pressure * atmosphere, 298 * kelvin, 25))
+    system.addForce(MonteCarloBarostat(pressure * atmosphere, temperature * kelvin, 25))
     if integrator_type == "Langevin":
-        integrator.setTemperature(298*kelvin)
+        integrator.setTemperature(temperature*kelvin)
     nsteps_prod = steps
     setup_reporters(simulation, working_dir, "npt")
     simulation.step(nsteps_prod)
