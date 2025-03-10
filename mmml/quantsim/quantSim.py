@@ -85,7 +85,8 @@ def main(residue: str, output_dir: Path):
     # loop through the POLARS dataframe and print the data
     for i, row in enumerate(T_RHO_DF.rows()):
         print(i, row)
-
+    if len(T_RHO_DF) == 0:
+        raise ValueError(f"No data found for residue {residue}")
     # save data as json
     write_json(original, output_dir / f"{args.residue}.json")
     # save csv of just the data for parametrization
