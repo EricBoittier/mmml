@@ -14,7 +14,7 @@ def setup_simulation(psf_file, pdb_file, rtf_file, prm_file, working_dir, temper
     os.makedirs(os.path.join(working_dir, "dcd"), exist_ok=True)
     os.makedirs(os.path.join(working_dir, "res"), exist_ok=True)
     os.makedirs(os.path.join(working_dir, "log"), exist_ok=True)
-    
+
     # Define box size
     box_length = 3.5 * nanometer
     alpha, beta, gamma = 90.0 * degree, 90.0 * degree, 90.0 * degree
@@ -83,14 +83,15 @@ def equilibrate(simulation, integrator, temperature, pressure, working_dir, inte
     print("Equilibrating...")
     nsteps_equil = steps
     temp_start, temp_final = 150, temperature
-    print("Running NPT simulation...")
+    print(f"Running NPT simulation... {nheat} steps")
     system = simulation.system
     print("Adding barostat...")
     barostat = system.addForce(MonteCarloBarostat(pressure * atmosphere, temperature * kelvin))
     simulation.context.reinitialize(True)
     setup_reporters(simulation, working_dir, "equilibration")
-    for temp in np.linspace(temp_start, temp_final, num=steps//nheat):
+    for i, temp in enumerate(np.linspace(temp_start, temp_final, num=nheat)):
         integrator.setTemperature(temp*kelvin)
+        print(f"{i}: Temperature: {temp} K, updating {steps//nheat} steps")
         simulation.step(steps//nheat)
     print("Equilibration complete.")
     save_state(simulation, os.path.join(working_dir, "res", "equilibrated.res"))
