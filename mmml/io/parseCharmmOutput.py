@@ -45,7 +45,7 @@ def read_press_line(line: str):
         viri = float(line[20:30])
         press_e = float(line[30:40])
         press_i = float(line[40:50])
-        volume = float(line[50:60])
+        volume = float(line[50:])
     output = {
         "vire": vire,
         "viri": viri,
