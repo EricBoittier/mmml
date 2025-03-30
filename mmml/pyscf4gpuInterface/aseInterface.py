@@ -180,10 +180,10 @@ class PYSCF(Calculator):
             if "forces" in properties:
                 self.results["forces"] = -forces * (Ha / Bohr)
 
-            # Create mf object for other properties
-            mol = pyscf.M(atom=atoms_from_ase(atoms), basis=self.p.basis)
-            self.mf = dft.RKS(mol, xc=self.p.xc)
-            self.mf.kernel()
+            # # Create mf object for other properties
+            # mol = pyscf.M(atom=atoms_from_ase(atoms), basis=self.p.basis)
+            # self.mf = dft.RKS(mol, xc=self.p.xc)
+            # self.mf.kernel()
         else:
             # Regular PySCF calculation
             init_geo(self.mf, atoms)
@@ -287,7 +287,7 @@ def main():
 
     # Process each structure and write to trajectory
     print(f"\nProcessing {len(atoms_list)} structures using {args.method.upper()}/{args.basis}")
-    for i, atoms in enumerate(atoms_list[:1]):
+    for i, atoms in enumerate(atoms_list):
         atoms.calc = calc
         energy = atoms.get_potential_energy()
         forces = atoms.get_forces()
