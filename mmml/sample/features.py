@@ -185,6 +185,7 @@ def extract_molecular_descriptors(
 
     trajectory_frames = universe.trajectory[start:end:stride]
     print("*"*100)
+    print(f"n_find: {n_find}")
     print("start", start)
     print("end", end)
     print("stride", stride)
@@ -198,6 +199,7 @@ def extract_molecular_descriptors(
         raise ValueError("trajectory_frames is too long")
 
     for ti, _ in tqdm(enumerate(trajectory_frames)):
+        print(f"ti: {ti}")
         residue_ids = list(range(1, len(universe.residues) + 1))
 
         for ix in range(samples_per_frame):
@@ -214,7 +216,7 @@ def extract_molecular_descriptors(
             # Select closest residues
             sele = select_closest_residues(universe, central_resid, dist_res, n_find_minus_one)
             found = list(set([_.resid for _ in list(sele)]))
-            print(f"found: {found}, n_find: {n_find}")
+            print(f"found: {found}, {len(found)}, n_find: {n_find}")
             if len(found) == n_find:
                 # Process selection and save results
                 result = process_selection(sele, output_path, ti, central_resid, ix, natoms)
