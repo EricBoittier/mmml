@@ -426,8 +426,8 @@ def sample_and_save(results, output_path, key="test"):
         d["pdb_fn"] = np.array([str(results["all_pdb_filenames"][i])])
         d["desc_mbtr"] = results["all_descriptors_full"][i]
         d["train"] = np.int32(i in samples)
-        ase_atoms[i].info["set"] = "train" if i in samples else "test"
-        ase_atoms[i].info["desc_mbtr"] = results["all_descriptors"][i]
+        # ase_atoms[i].info["set"] = "train" if i in samples else "test"
+        # ase_atoms[i].info["desc_mbtr"] = results["all_descriptors"][i]
         ase_atoms[i].info["pdb_fn"] = np.array([str(results["all_pdb_filenames"][i])])
 
     ase_io.write(output_path / f'{key}.traj', ase_atoms) 
