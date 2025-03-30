@@ -233,6 +233,7 @@ class PYSCF(Calculator):
 def main():
     parser = argparse.ArgumentParser(description='Run PySCF calculations on structures from an ASE trajectory')
     parser.add_argument('trajectory', help='Path to ASE trajectory file')
+    parser.add_argument("index", type=int, default=0)
     parser.add_argument('--output', default='output.traj',
                        help='Output trajectory file (default: output.traj)')
     parser.add_argument('--method', choices=['dft', 'hf'], default='dft',
@@ -252,7 +253,7 @@ def main():
 
     # Read trajectory
     from ase.io import read, write
-    atoms_list = read(args.trajectory, ':')
+    atoms_list = read(args.trajectory, f'{args.index}')
     if not isinstance(atoms_list, list):
         atoms_list = [atoms_list]
 
@@ -290,10 +291,10 @@ def main():
         
         # Run calculation
         energy = atoms.get_potential_energy()
-        forces = atoms.get_forces()
+        #forces = atoms.get_forces()
         print(f"\nStructure {i+1}:")
         print(f"Energy: {energy:.6f} eV")
-        print(f"Forces (eV/Å):\n{forces}")
+        #print(f"Forces (eV/Å):\n{forces}")
         
         # Write structure to trajectory
         if i == 0:
