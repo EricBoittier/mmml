@@ -140,7 +140,7 @@ def select_closest_residues(universe, central_resid, dist_res, n_closest=5):
     return universe.select_atoms(residue_selections, periodic=False)
 
 
-def process_selection(sele, output_path, ti, central_resid, ix):
+def process_selection(sele, output_path, ti, central_resid, ix, natoms):
     """Process selected atoms to get descriptors and save structures."""
     # Center positions
     R = sele.positions
@@ -163,7 +163,7 @@ def process_selection(sele, output_path, ti, central_resid, ix):
 
 
 def extract_molecular_descriptors(
-    universe, output_path, samples_per_frame=10, start=0, end=-1, stride=100, n_find=6
+    universe, output_path, natoms,samples_per_frame=10, start=0, end=-1, stride=100, n_find=6,
 ):
     """Extract molecular descriptors from trajectory frames.
 
@@ -212,12 +212,12 @@ def extract_molecular_descriptors(
             )
 
             # Select closest residues
-            sele = select_closest_residues(universe, central_resid, dist_res)
+            sele = select_closest_residues(universe, central_resid, dist_res, n_find)
             found = list(set([_.resid for _ in list(sele)]))
 
             if len(found) == n_find:
                 # Process selection and save results
-                result = process_selection(sele, output_path, ti, central_resid, ix)
+                result = process_selection(sele, output_path, ti, central_resid, ix, natoms)
                 results.append(result)
 
     # Process results
@@ -330,6 +330,7 @@ def process_simulation(args):
     results = extract_molecular_descriptors(
         u,
         output_path,
+        natoms,
         samples_per_frame=args.samples_per_frame,
         stride=args.stride,
         n_find=args.n_find,
