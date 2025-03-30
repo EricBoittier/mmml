@@ -476,6 +476,7 @@ def parse_args():
         default=6,
         help="Number of residues to find and analyze",
     )
+    parser.add_argument("--sim_conds", type=str, help="Simulation conditions", default="sim")
     parser.add_argument("--resid", type=str, help="Residue ID", default="lig")
     parser.add_argument("--psf", type=str, default="system.psf", help="Path to PSF file")
     parser.add_argument("--dcd", type=str, default="eq*_1_*dcd", help="Path to DCD file")
