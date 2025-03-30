@@ -1,35 +1,26 @@
 from pathlib import Path
 import numpy as np
-import numpy.linalg
 import matplotlib.pyplot as plt
 import MDAnalysis as mda
-import rdkit
-from rdkit.Chem.inchi import MolFromInchi
-import dscribe
-import sys
-import pandas as pd
-from sklearn.linear_model import LinearRegression
 from rdkit import Chem
 from rdkit.Chem import Draw, rdDepictor
 from rdkit.Chem.Draw import rdMolDraw2D
+from rdkit.Chem.inchi import MolFromInchi
 import ase
 from ase.visualize import view as viewmol
+from ase.data import atomic_masses as ase_data_masses
 from dscribe.descriptors import MBTR
-from tqdm import tqdm
-from MDAnalysis.analysis import distances as mda_dist
 from MDAnalysis.analysis.distances import dist
+import pandas as pd
+from sklearn.linear_model import LinearRegression
+from tqdm import tqdm
 import os
 import requests
 from html.parser import HTMLParser
-import ase
-
-ase_data_masses = ase.data.atomic_masses
-from MDAnalysis.analysis import distances as mda_dist
-from MDAnalysis.analysis.distances import dist as dist
-from tqdm import tqdm
-import ase
-from ase.visualize import view as viewmol
+import random
 import argparse
+from PIL import Image
+import io
 
 
 def show_atom_number(mol, labels, type_label=True):
@@ -155,10 +146,67 @@ def main(file, timestep=0.5, fitdf=None):
     return plot_temperature_density(data, fitdf)
 
 
+def get_descriptor(atoms, species, plot=False):
+    """Calculate molecular descriptors using MBTR.
+    
+    Args:
+        atoms (ase.Atoms): Atomic structure
+        species (list): List of chemical species
+        plot (bool): Whether to plot the descriptor
+        
+    Returns:
+        tuple: (k2, k3, mbtr) where k2 and k3 are the 2- and 3-body terms,
+        and mbtr is the full descriptor
+    """
+    mbtr = MBTR(
+        species=species,
+        k2={
+            "geometry": {"function": "inverse_distance"},
+            "grid": {"min": 0, "max": 1, "n": 100},
+            "weighting": {"function": "exp", "scale": 0.5, "threshold": 1e-3},
+        },
+        k3={
+            "geometry": {"function": "angle"},
+            "grid": {"min": 0, "max": 180, "n": 100},
+            "weighting": {"function": "exp", "scale": 0.5, "threshold": 1e-3},
+        },
+        periodic=False,
+        normalization="l2_each",
+    )
+    mbtr_output = mbtr.create(atoms)
+    k2 = mbtr_output.get_k2()
+    k3 = mbtr_output.get_k3()
+    
+    if plot:
+        plt.figure(figsize=(10, 4))
+        plt.plot(k2)
+        plt.title("K2 descriptor")
+        plt.show()
+        
+        plt.figure(figsize=(10, 4))
+        plt.plot(k3)
+        plt.title("K3 descriptor")
+        plt.show()
+    
+    return k2, k3, mbtr_output
+
+
 def mass_to_atomic_number(mass):
-    idxs = np.where(abs(ase_data_masses - mass) < 0.001)
-    atomic_number = int(idxs[0])
-    return atomic_number
+    """Convert atomic mass to atomic number.
+    
+    Args:
+        mass (float): Atomic mass
+        
+    Returns:
+        int: Atomic number
+        
+    Raises:
+        ValueError: If no matching atomic number is found
+    """
+    idxs = np.where(abs(ase_data_masses - mass) < 0.001)[0]
+    if len(idxs) == 0:
+        raise ValueError(f"No matching atomic number found for mass {mass}")
+    return int(idxs[0])
 
 
 def select_central_residue(residue_ids):
@@ -318,14 +366,31 @@ def setup_universe(psf_file, dcd_file, pdb_file, start=0, end=None, stride=1):
 
 def sim_to_data(u, labels, natoms, output_path):
     """Convert simulation data to numpy array.
-
+    
     Args:
         u (mda.Universe): MDAnalysis universe object
         labels (list): List of atom labels
         natoms (int): Number of atoms
         output_path (Path): Path to output directory
+        
+    Returns:
+        dict: Dictionary containing processed simulation data
     """
-    pass
+    # Extract positions and create trajectory array
+    positions = []
+    for ts in u.trajectory:
+        positions.append(u.atoms.positions[:natoms])
+    
+    traj = np.array(positions)
+    
+    # Save trajectory data
+    np.save(output_path / "trajectory.npy", traj)
+    
+    return {
+        "trajectory": traj,
+        "labels": labels,
+        "n_atoms": natoms
+    }
 
 
 def process_simulation(args):
@@ -376,7 +441,7 @@ def create_args(
     n_find=6,
 ):
     """Create arguments for process_simulation.
-
+    
     Args:
         logfile (Path): Path to logfile
         psf (Path): Path to PSF file
@@ -384,7 +449,17 @@ def create_args(
         pdb (Path): Path to PDB file
         start (int): Start frame
         end (int): End frame
-        stride (int): Stride
+        resid (str): Residue ID
+        sim_conds (str): Simulation conditions
+        stride (int): Frame stride
+        samples_per_frame (int): Number of samples per frame
+        n_find (int): Number of residues to find
+        
+    Returns:
+        argparse.Namespace: Arguments namespace
+        
+    Raises:
+        AssertionError: If required arguments are missing
     """
     assert logfile is not None, "logfile is required"
     assert psf is not None, "psf is required"
@@ -395,7 +470,7 @@ def create_args(
     assert stride is not None, "stride is required"
     assert samples_per_frame is not None, "samples_per_frame is required"
     assert n_find is not None, "n_find is required"
-    # assert resid is not None, "resid is required"
+    
     namespace = argparse.Namespace(
         logfile=logfile,
         psf=psf,
@@ -413,6 +488,7 @@ def create_args(
 
 
 def main():
+    """Main function to process molecular dynamics simulation data."""
     parser = argparse.ArgumentParser(
         description="Process molecular dynamics simulation data."
     )
@@ -423,33 +499,45 @@ def main():
         help="Path to simulations directory",
     )
     parser.add_argument(
-        "--start", type=int, default=49, help="frame index to start processing"
+        "--start",
+        type=int,
+        default=49,
+        help="Starting frame index for processing",
     )
     parser.add_argument(
-        "--end", type=int, default=50, help="frame index to end processing"
+        "--end",
+        type=int,
+        default=50,
+        help="Ending frame index for processing",
     )
     parser.add_argument(
-        "--stride", type=int, default=100, help="frame index to end processing"
+        "--stride",
+        type=int,
+        default=100,
+        help="Number of frames to skip between processing",
     )
     parser.add_argument(
         "--samples_per_frame",
         type=int,
         default=10,
-        help="frame index to end processing",
+        help="Number of random samples to take per frame",
     )
     parser.add_argument(
-        "--n_find", type=int, default=6, help="frame index to end processing"
+        "--n_find",
+        type=int,
+        default=6,
+        help="Number of residues to find and analyze",
     )
-    parser.add_argument("--psf", type=str, default="system.psf")
-    parser.add_argument("--dcd", type=str, default="eq*_1_*dcd")
-    parser.add_argument("--pdb", type=str, default="initial.pdb")
-    parser.add_argument("--logfile", type=str)
-    parser.add_argument("--output_path", type=str, default="data")
+    parser.add_argument("--psf", type=str, default="system.psf", help="Path to PSF file")
+    parser.add_argument("--dcd", type=str, default="eq*_1_*dcd", help="Path to DCD file")
+    parser.add_argument("--pdb", type=str, default="initial.pdb", help="Path to PDB file")
+    parser.add_argument("--logfile", type=str, help="Path to log file")
+    parser.add_argument("--output_path", type=str, default="data", help="Output directory path")
 
     args = parser.parse_args()
-
+    
     u, labels, natoms, output_path, results = process_simulation(args)
-    # Add any additional processing here
+    return results
 
 
 if __name__ == "__main__":
