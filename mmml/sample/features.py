@@ -252,8 +252,13 @@ def extract_molecular_descriptors(universe, output_path, samples_per_frame=10, s
     all_descriptors_full = [_[1] for _ in results]
     all_descriptors = np.array([_[1].flatten() for _ in results])
     all_pdb_filenames = [_[3] for _ in results]
-    
-    return all_descriptors_full, all_descriptors, all_pdb_filenames
+    results_dict = {
+        "all_descriptors_full": all_descriptors_full,
+        "all_descriptors": all_descriptors,
+        "all_pdb_filenames": all_pdb_filenames,
+    }
+
+    return results_dict
 
 
 
@@ -335,7 +340,9 @@ def process_simulation(args):
         psf_file, dcd_file, pdb_file, start=args.start, end=args.end, stride=args.stride)
     output_path = logfile.parents[2] / "data" / logfile.parents[1].stem
     
-    return u, labels, natoms, output_path
+    results = extract_molecular_descriptors(u, output_path, samples_per_frame=args.samples_per_frame, stride=args.stride, n_find=args.n_find)
+
+    return u, labels, natoms, output_path, results
 
 
 def create_args(logfile=None, psf=None, dcd=None, pdb=None, start=0, end=None, resid=None, sim_conds=None, stride=1):
@@ -384,7 +391,7 @@ def main():
 
     args = parser.parse_args()
     
-    u, labels, natoms, output_path = process_simulation(args)
+    u, labels, natoms, output_path, results = process_simulation(args)
     # Add any additional processing here
     
 if __name__ == "__main__":
