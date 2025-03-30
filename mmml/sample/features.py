@@ -325,7 +325,7 @@ def process_simulation(args):
     u, labels, natoms = setup_universe(
         psf_file, dcd_file, pdb_file
     )
-    output_path = logfile.parents[2] / "data" / logfile.parents[1].stem
+    output_path = logfile.parents[2] / "data" / str(logfile.parents[1]).split("/")[-1]
 
     results = extract_molecular_descriptors(
         u,
