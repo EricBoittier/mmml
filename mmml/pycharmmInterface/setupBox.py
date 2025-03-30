@@ -255,8 +255,6 @@ close unit 35
 """
 
 
-
-
 # Standard library imports
 import os
 import sys
@@ -311,6 +309,7 @@ import pycharmm.lingo
 
 
 from pint import UnitRegistry
+
 ureg = UnitRegistry()
 Q_ = ureg.Quantity
 
@@ -318,35 +317,53 @@ Q_ = ureg.Quantity
 # Constants
 packmol_input = str(Path("packmol.inp").absolute())
 
+
 def read_initial_pdb(path: Path) -> Atoms:
     """Reads the initial PDB file and returns an ASE Atoms object"""
-    write.coor_pdb('pdb/initial.pdb')
+    write.coor_pdb("pdb/initial.pdb")
     mol = ase.io.read("pdb/initial.pdb")
     e = mol.get_chemical_symbols()
     print(mol)
     print(e)
-    mol.set_chemical_symbols([_[:1] if _.upper() not in ["CL",] else _ for _ in e])
+    mol.set_chemical_symbols(
+        [
+            _[:1]
+            if _.upper()
+            not in [
+                "CL",
+            ]
+            else _
+            for _ in e
+        ]
+    )
     return mol
+
 
 def determine_box_size_from_mol(mol: Atoms) -> float:
     """Determines the box size based on the maximum distance between any two atoms"""
-    dists = np.linalg.norm(mol.positions[:, None, :] - mol.positions[None, :, :], axis=-1)
+    dists = np.linalg.norm(
+        mol.positions[:, None, :] - mol.positions[None, :, :], axis=-1
+    )
     return np.max(dists)
+
 
 def setup_box(mol: Atoms) -> None:
     """Sets up the box"""
     box_size = determine_box_size_from_mol(mol)
     print(f"Box size: {box_size}")
 
-def determine_n_molecules_from_density(density: float, mol: Atoms, side_length: float = 35) -> float:
+
+def determine_n_molecules_from_density(
+    density: float, mol: Atoms, side_length: float = 35
+) -> float:
     atoms = mol
     masses = atoms.get_masses()
 
     molecular_weight = masses.sum()
-    molecular_formula = atoms.get_chemical_formula(mode='reduce')
+    molecular_formula = atoms.get_chemical_formula(mode="reduce")
 
     # note use of two lines to keep length of line reasonable
-    s = f'The molecular weight of {molecular_formula} is {molecular_weight:1.2f} gm/mol.'
+    s = f"The molecular weight of {molecular_formula} is {molecular_weight:1.2f} gm/mol."
     print(s)
 
     box_size = side_length * ureg.angstrom
@@ -367,11 +384,12 @@ def determine_n_molecules_from_density(density: float, mol: Atoms, side_length: 
     avogadro_number = 6.022e23 * ureg.molecule / ureg.mole
 
     # Calculate number of molecules
-    num_molecules =  moles * avogadro_number
+    num_molecules = moles * avogadro_number
     n_molecules = int(num_molecules.magnitude)
     # Display the result
     print(f"Number of molecules in the box: {n_molecules}")
     return n_molecules
+
 
 def run_packmol(n_molecules: int, side_length: float) -> None:
     packmol_input = f"""
@@ -393,12 +411,18 @@ def run_packmol(n_molecules: int, side_length: float) -> None:
 
     import subprocess
     import os
-    output = os.system(" ".join(["/pchem-data/meuwly/boittier/home/packmol/packmol", " < ", "packmol.inp"])) 
+
+    output = os.system(
+        " ".join(
+            ["/pchem-data/meuwly/boittier/home/packmol/packmol", " < ", "packmol.inp"]
+        )
+    )
+
 
 def initialize_psf(resid: str, n_molecules: int, side_length: float):
-    s="""DELETE ATOM SELE ALL END"""
+    s = """DELETE ATOM SELE ALL END"""
     pycharmm.lingo.charmm_script(s)
-    s="""DELETE PSF SELE ALL END"""
+    s = """DELETE PSF SELE ALL END"""
     pycharmm.lingo.charmm_script(s)
     header = f"""bomlev -2
     prnlev 3
@@ -430,7 +454,8 @@ def initialize_psf(resid: str, n_molecules: int, side_length: float):
     pycharmm.lingo.charmm_script(pbcs)
     energy.show()
     pycharmm.lingo.charmm_script(write_system_psf)
-    write.psf_card(f'{resid}-{n_molecules}.psf')
+    write.psf_card(f"{resid}-{n_molecules}.psf")
+
 
 def minimize_box():
     nbonds = """!#########################################
@@ -452,6 +477,7 @@ def minimize_box():
     # equivalent CHARMM scripting command: energy
     energy.show()
 
+
 def main(density: float, side_length: float, residue: str):
     mol = read_initial_pdb(Path("initial.pdb"))
     n_molecules = determine_n_molecules_from_density(density, mol)
@@ -463,6 +489,7 @@ def main(density: float, side_length: float, residue: str):
 def cli():
     """Command line interface"""
     import argparse
+
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--density", type=float, required=True)
     parser.add_argument("-l", "--side_length", type=float, required=True)
@@ -473,4 +500,3 @@ def cli():
 
 if __name__ == "__main__":
     cli()
-

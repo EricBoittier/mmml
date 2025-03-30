@@ -11,7 +11,11 @@ P_KEY = "Pressure, kPa"
 RHO_KEY = "Mass density, kg/m3"
 
 
-def read_data_T_rho(charmm_res_id: str, pl_loaded: pl.DataFrame | None = None, parquet_fn: Path | None = None) -> pl.DataFrame:
+def read_data_T_rho(
+    charmm_res_id: str,
+    pl_loaded: pl.DataFrame | None = None,
+    parquet_fn: Path | None = None,
+) -> pl.DataFrame:
     if pl_loaded is None:
         pl_loaded = pl.read_parquet(parquet_fn)
     T_RHO_KEY = "[['Temperature, K'], ['Pressure, kPa']]"
@@ -19,8 +23,8 @@ def read_data_T_rho(charmm_res_id: str, pl_loaded: pl.DataFrame | None = None, p
     T_RHO_DF = pl_loaded[pl_loaded["variable_names"] == T_RHO_KEY]
     T_RHO_DF = T_RHO_DF[T_RHO_DF["charmm_res_id"] == residue_key]
 
-
     return T_RHO_DF
+
 
 def write_json(df: pl.DataFrame, fn: str):
     import json
@@ -47,10 +51,15 @@ def setup_charmm(data, data_dir, residue: str, side_length=35):
     densities = data[RHO_KEY]
     pressures = data[P_KEY]
 
-    for i, (temperature, density, pressure) in enumerate(zip(temperatures, densities, pressures)):
+    for i, (temperature, density, pressure) in enumerate(
+        zip(temperatures, densities, pressures)
+    ):
         if temperature is not None and density is not None:
-            # create a new directory 
-            new_dir = data_dir / f"sim_t_{temperature}_k_rho_{density}_kgperm3_p{pressure}_kPa"
+            # create a new directory
+            new_dir = (
+                data_dir
+                / f"sim_t_{temperature}_k_rho_{density}_kgperm3_p{pressure}_kPa"
+            )
             new_dir.mkdir(parents=True, exist_ok=True)
             # change to the new directory
             os.chdir(new_dir)
@@ -59,13 +68,14 @@ def setup_charmm(data, data_dir, residue: str, side_length=35):
             # change back to the original directory
             os.chdir(data_dir)
 
+
 def parse_args():
     import argparse
+
     parser = argparse.ArgumentParser()
     parser.add_argument("-r", "--residue", type=str, required=True)
     parser.add_argument("-o", "--output", type=str, required=True)
     return parser.parse_args()
-
 
 
 def main(residue: str, output_dir: Path):
@@ -80,7 +90,14 @@ def main(residue: str, output_dir: Path):
     keys = list(T_RHO_DF.columns)
     print(keys)
 
-    T_RHO_DF = T_RHO_DF.select(["charmm_res_id", RHO_KEY, K_KEY, P_KEY, ])
+    T_RHO_DF = T_RHO_DF.select(
+        [
+            "charmm_res_id",
+            RHO_KEY,
+            K_KEY,
+            P_KEY,
+        ]
+    )
     print("charmm_res_id", RHO_KEY, K_KEY, P_KEY)
     # loop through the POLARS dataframe and print the data
     for i, row in enumerate(T_RHO_DF.rows()):
@@ -94,9 +111,6 @@ def main(residue: str, output_dir: Path):
     setup_charmm(T_RHO_DF, output_dir, args.residue)
 
 
-
 if __name__ == "__main__":
     args = parse_args()
     main(args.residue, args.output)
-
-
