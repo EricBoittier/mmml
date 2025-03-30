@@ -435,7 +435,7 @@ def sample_and_save(results, output_path, key="test"):
     return output_path / f'{key}.npz'
 
 
-def main():
+def parse_args():
     """Main function to process molecular dynamics simulation data."""
     parser = argparse.ArgumentParser(
         description="Process molecular dynamics simulation data."
