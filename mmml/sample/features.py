@@ -12,9 +12,26 @@ import random
 from tqdm import tqdm
 import os
 
-
-
 from dscribe.descriptors import MBTR
+
+
+def concat_trajectory(files, output_path, selected=None):
+    """Concatenate trajectory files.
+    
+    Args:
+        files (list): List of file paths to concatenate
+        selected (list): List of indices to select from each file   
+
+    Returns:
+        Path: Path to concatenated trajectory
+    """
+    if selected is None:
+        selected = list(range(len(files)))
+
+    traj = []
+    
+
+
 
 def get_descriptor(system, species, plot=True):
     MIN = 2.0
@@ -381,6 +398,41 @@ def create_args(
     return namespace
 
 
+
+def load_ase_and_fix_atoms(pdb_fn):
+    xyz_fn = str(pdb_fn).replace(".pdb", ".xyz").replace("/pdb/", "/xyz/")
+    assert Path(xyz_fn).exists()
+    a = ase_io.read(pdb_fn)
+    a2 = ase_io.read(xyz_fn)
+    a.set_atomic_numbers(a2.get_atomic_numbers())
+    return a
+
+def sample_and_save(results, output_path):
+    N = len(results["all_descriptors_full"])
+    samples = select_most_unique_samples(results["all_descriptors"], int(N*0.8))
+
+    ase_atoms = [load_ase_and_fix_atoms(pdb_fn) for pdb_fn in results["all_pdb_filenames"]]
+
+    ase_io.write(output_path / 'trajectory.traj', ase_atoms) 
+    ase_dicts = [_.todict() for _ in ase_atoms]
+
+    N = len(ase_dicts)
+
+    for i, d in enumerate(ase_dicts):
+        d["pdb_fn"] = np.array([str(results["all_pdb_filenames"][i])])
+        d["desc_mbtr"] = results["all_descriptors_full"][i]
+        d["train"] = np.int32(i in samples)
+
+    npz_collection = {}
+    dict_keys = ase_dicts[0].keys()
+    dtypes = [( k,  ase_dicts[0][k].dtype, np.stack([ase_dicts[0][k] for _ in range(N)]).shape)  for k in dict_keys]
+    data = {k: np.stack([ase_dicts[i][k] for i in range(N)])  for k in dict_keys}
+
+    np.savez(output_path / 'test.npz', **data)
+
+    return output_path / 'test.npz'
+
+
 def main():
     """Main function to process molecular dynamics simulation data."""
     parser = argparse.ArgumentParser(
@@ -429,9 +481,14 @@ def main():
     parser.add_argument("--output_path", type=str, default="data", help="Output directory path")
 
     args = parser.parse_args()
-    
+    return args
+
+def main():
+    args = parse_args()
     u, labels, natoms, output_path, results = process_simulation(args)
-    return results
+    npz_path = sample_and_save(results, output_path)
+    print(f"Saved to {npz_path}, {len(results['all_descriptors'])} descriptors")
+    return npz_path
 
 
 if __name__ == "__main__":
