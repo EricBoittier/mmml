@@ -338,7 +338,7 @@ def process_simulation(args):
     return u, labels, natoms, output_path
 
 
-def create_args(logfile=None, psf=None, dcd=None, pdb=None, start=0, end=None, stride=1):
+def create_args(logfile=None, psf=None, dcd=None, pdb=None, start=0, end=None, resid=None, sim_conds=None, stride=1):
     """Create arguments for process_simulation.
     
     Args:
@@ -357,7 +357,8 @@ def create_args(logfile=None, psf=None, dcd=None, pdb=None, start=0, end=None, s
     assert start is not None, "start is required"
     assert end is not None, "end is required"
     assert stride is not None, "stride is required"
-    return argparse.Namespace(logfile=logfile, psf=psf, dcd=dcd, pdb=pdb, start=start, end=end, stride=stride)
+    # assert resid is not None, "resid is required"
+    return argparse.Namespace(logfile=logfile, psf=psf, dcd=dcd, pdb=pdb, start=start, end=end, stride=stride, resid=resid, sim_conds=sim_conds)
 
 
 
