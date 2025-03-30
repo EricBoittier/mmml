@@ -6,7 +6,7 @@ TRUE_BASE_PATH="/pchem-data/meuwly/boittier/home/ressim/aceh/"
 # Loop over all subdirectories in the base path
 for SUB_PATH in "${TRUE_BASE_PATH}"/*; do
     if [ -d "${SUB_PATH}" ]; then
-        BASE_PATH="${SUB_PATH}"
+        BASE_PATH="${TRUE_BASE_PATH}/${SUB_PATH}"
         
         LOGFILE="${BASE_PATH}/log/equilibration_1_*.log"
         PSF="${BASE_PATH}/system.psf"
