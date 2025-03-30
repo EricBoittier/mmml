@@ -15,7 +15,7 @@
 
 from ase.calculators.calculator import Calculator, all_changes
 from ase.units import Ha, Bohr, Debye
-from pyscf.prop.polarizability.uhf import polarizability, Polarizability
+# from pyscf.prop.polarizability.uhf import polarizability, Polarizability
 from pyscf.pbc.tools.pyscf_ase import atoms_from_ase
 import jsonpickle
 
@@ -28,10 +28,10 @@ from gpu4pyscf import dft
 import numpy as np
 from ase import Atoms
 from ase.optimize import LBFGS
-from pyscf4gpuInterface.aseInterface import PYSCF, parameters
+# from pyscf4gpuInterface.aseInterface import PYSCF, parameters
 
 
-def run_dft(ATOMS, BASIS, SOLVENT, XC):
+def run_dft(ATOMS, BASIS, AUGBASIS, SOLVENT, XC, do_forces=True):
     """Run DFT calculation with optional solvent model.
 
     Args:
@@ -50,7 +50,7 @@ def run_dft(ATOMS, BASIS, SOLVENT, XC):
         verbose=6,  # Set verbose >= 6 for debugging timer
     )
 
-    mf_df = dft.RKS(mol, xc=XC).density_fit(auxbasis=args.auxbasis)
+    mf_df = dft.RKS(mol, xc=XC).density_fit(auxbasis=AUGBASIS)
     mf_df.verbose = 6
 
     if SOLVENT:
@@ -73,10 +73,12 @@ def run_dft(ATOMS, BASIS, SOLVENT, XC):
     # Run SCF
     e_tot = mf_df.kernel()
 
-    # Calculate nuclear gradients
-    g = mf_df.nuc_grad_method()
-    g.auxbasis_response = True
-    forces = g.kernel()
+    forces = None
+    if do_forces:  
+        # Calculate nuclear gradients
+        g = mf_df.nuc_grad_method()
+        g.auxbasis_response = True
+        forces = g.kernel()
 
     return e_tot, forces
 
@@ -172,10 +174,11 @@ class PYSCF(Calculator):
         if self.p.mode.lower() == "dft":
             # Use GPU4PySCF DFT
             e_tot, forces = run_dft(
-                atoms_from_ase(atoms), self.p.basis, bool(self.p.solvent), self.p.xc
+                atoms_from_ase(atoms), self.p.basis, self.p.auxbasis, bool(self.p.solvent), self.p.xc
             )
             self.results["energy"] = e_tot * Ha
-            self.results["forces"] = -forces * (Ha / Bohr)
+            if "forces" in properties:
+                self.results["forces"] = -forces * (Ha / Bohr)
 
             # Create mf object for other properties
             mol = pyscf.M(atom=atoms_from_ase(atoms), basis=self.p.basis)
@@ -227,88 +230,80 @@ class PYSCF(Calculator):
                 ).polarizability() * (Bohr**3)
 
 
-# if __name__ == '__main__':
+def main():
+    parser = argparse.ArgumentParser(description='Run PySCF calculations on structures from an ASE trajectory')
+    parser.add_argument('trajectory', help='Path to ASE trajectory file')
+    parser.add_argument('--output', default='output.traj',
+                       help='Output trajectory file (default: output.traj)')
+    parser.add_argument('--method', choices=['dft', 'hf'], default='dft',
+                       help='Calculation method (default: dft)')
+    parser.add_argument('--basis', default='cc-pVTZ',
+                       help='Basis set (default: cc-pVTZ)')
+    parser.add_argument('--xc', default='wB97m-v',
+                       help='Exchange-correlation functional for DFT (default: wB97m-v)')
+    parser.add_argument('--auxbasis', default='def2-tzvp-jkfit',
+                       help='Auxiliary basis set for density fitting (default: def2-tzvp-jkfit)')
+    parser.add_argument('--solvent', choices=['cosmo', 'pcm'], 
+                       help='Solvent model (optional)')
+    parser.add_argument('--verbose', type=int, default=3,
+                       help='Verbosity level (default: 3)')
+    
+    args = parser.parse_args()
 
-#     import pyscf
-#     from ase import Atoms
-#     from ase.optimize import LBFGS
+    # Read trajectory
+    from ase.io import read, write
+    atoms_list = read(args.trajectory, ':')
+    if not isinstance(atoms_list, list):
+        atoms_list = [atoms_list]
 
-#     atoms = Atoms('H2', [(0, 0, 0), (0, 0, 1)])
-#     mol = pyscf.M(atom=atoms_from_ase(atoms),basis='cc-pVDZ',spin=0,charge=0)
+    # Set up calculator parameters
+    p = parameters()
+    p.mode = args.method
+    p.basis = args.basis
+    p.verbose = args.verbose
+    
+    if args.method == 'dft':
+        p.xc = args.xc
+        p.auxbasis = args.auxbasis
+        p.solvent = args.solvent
+        
+        # Create initial mf object for DFT
+        mol = pyscf.M(atom=atoms_from_ase(atoms_list[0]), 
+                     basis=p.basis, 
+                     spin=0, 
+                     charge=0)
+        mf = dft.RKS(mol, xc=p.xc)
+    else:
+        # Create PySCF molecule and HF object
+        mol = pyscf.M(atom=atoms_from_ase(atoms_list[0]),
+                     basis=p.basis,
+                     spin=0,
+                     charge=0)
+        mf = mol.HF()
+        mf.verbose = p.verbose
 
-#     mf = mol.UHF()
-#     mf.verbose = 3
-#     mf.kernel()
+    # Create calculator
+    calc = PYSCF(mf=mf, p=p)
 
-#     index = 4
+    # Process each structure and write to trajectory
+    print(f"\nProcessing {len(atoms_list)} structures using {args.method.upper()}/{args.basis}")
+    for i, atoms in enumerate(atoms_list[:1]):
+        atoms.calc = calc
+        energy = atoms.get_potential_energy()
+        forces = atoms.get_forces()
+        print(f"\nStructure {i+1}:")
+        print(f"Energy: {energy:.6f} eV")
+        print(f"Forces (eV/Å):\n{forces}")
+        
+        # Write structure to trajectory
+        if i == 0:
+            print(f"Writing structure {i+1} to trajectory")
+            write(args.output, atoms, format='traj')
+        else:
+            print(f"Appending structure {i+1} to trajectory")
+            write(args.output, atoms, format='traj', append=True)
 
-#     mf = [mf,mf.MP2(),mf.CISD(),mf.CCSD(),mf.CCSD()][index]
+    print(f"\nCalculation results written to: {args.output}")
 
-#     p = parameters()
-#     p.mode = ['hf','mp2','cisd','ccsd','ccsd(t)'][index]
-#     p.verbose = 5
-#     p.show()
-
-#     mf.verbose = p.verbose
-#     atoms.calc = PYSCF(mf=mf,p=p)
-
-
-#     fmax = 1e-3 * (Ha / Bohr)
-
-#     dyn = LBFGS(atoms,logfile='opt.log',trajectory='opt.traj')
-#     dyn.run(fmax=fmax)
-
-# Create water molecule
-water = Atoms(
-    "H2O",
-    positions=[[0, 0, 0], [0.757, 0.586, 0], [-0.757, 0.586, 0]],  # O  # H  # H
-    cell=[10, 10, 10],  # Box size
-    pbc=False,
-)  # No periodic boundary conditions
-
-# First try with GPU-accelerated B3LYP/DZ
-p_dft = parameters()
-p_dft.mode = "dft"
-p_dft.basis = "cc-pVDZ"
-p_dft.xc = "B3LYP"
-p_dft.auxbasis = "def2-tzvp-jkfit"
-p_dft.verbose = 3
-
-# Create initial mf object for DFT
-mol = pyscf.M(atom=atoms_from_ase(water), basis=p_dft.basis, spin=0, charge=0)
-mf_dft = dft.RKS(mol, xc=p_dft.xc)
-
-water.calc = PYSCF(mf=mf_dft, p=p_dft)
-print("\nB3LYP/DZ Calculation:")
-print("Energy:", water.get_potential_energy(), "eV")
-print("Forces:\n", water.get_forces(), "eV/Å")
-
-# # Now try with CPU HF/DZ
-# # Create PySCF molecule and mean-field object
-# mol = pyscf.M(atom=atoms_from_ase(water),
-#               basis='cc-pVDZ',
-#               spin=0,
-#               charge=0)
-# mf = mol.HF()
-# mf.verbose = 3
-# mf.kernel()
-
-# # Set up HF calculator
-# p_hf = parameters()
-# p_hf.mode = 'hf'
-# p_hf.verbose = 3
-
-# water.calc = PYSCF(mf=mf, p=p_hf)
-# print("\nHF/DZ Calculation:")
-# print("Energy:", water.get_potential_energy(), "eV")
-# print("Forces:\n", water.get_forces(), "eV/Å")
-
-# Optional: Geometry optimization
-
-write("water_initial.xyz", water)
-
-opt = LBFGS(water, trajectory="water_optimization.traj")
-opt.run(fmax=0.01)  # Optimize until forces < 0.01 eV/Å
-
-write("water_final.xyz", water)
-write("water_trajectory.xyz", read("water_optimization.traj", ":"))
+if __name__ == '__main__':
+    main()
