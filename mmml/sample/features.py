@@ -180,7 +180,7 @@ def extract_molecular_descriptors(
     # Create output directories
     os.makedirs(output_path / "pdb", exist_ok=True)
     os.makedirs(output_path / "xyz", exist_ok=True)
-
+    n_find_minus_one = n_find - 1
     results = []
 
     trajectory_frames = universe.trajectory[start:end:stride]
@@ -212,9 +212,9 @@ def extract_molecular_descriptors(
             )
 
             # Select closest residues
-            sele = select_closest_residues(universe, central_resid, dist_res, n_find)
+            sele = select_closest_residues(universe, central_resid, dist_res, n_find_minus_one)
             found = list(set([_.resid for _ in list(sele)]))
-
+            print(f"found: {found}, n_find: {n_find}")
             if len(found) == n_find:
                 # Process selection and save results
                 result = process_selection(sele, output_path, ti, central_resid, ix, natoms)
