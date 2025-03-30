@@ -14,6 +14,8 @@ import os
 
 from dscribe.descriptors import MBTR
 
+from select_points import select_most_unique_samples
+
 
 def concat_trajectory(files, output_path, selected=None):
     """Concatenate trajectory files.
@@ -407,13 +409,13 @@ def load_ase_and_fix_atoms(pdb_fn):
     a.set_atomic_numbers(a2.get_atomic_numbers())
     return a
 
-def sample_and_save(results, output_path):
+def sample_and_save(results, output_path, key="test"):
     N = len(results["all_descriptors_full"])
     samples = select_most_unique_samples(results["all_descriptors"], int(N*0.8))
 
     ase_atoms = [load_ase_and_fix_atoms(pdb_fn) for pdb_fn in results["all_pdb_filenames"]]
 
-    ase_io.write(output_path / 'trajectory.traj', ase_atoms) 
+    ase_io.write(output_path / f'{key}.traj', ase_atoms) 
     ase_dicts = [_.todict() for _ in ase_atoms]
 
     N = len(ase_dicts)
@@ -428,9 +430,9 @@ def sample_and_save(results, output_path):
     dtypes = [( k,  ase_dicts[0][k].dtype, np.stack([ase_dicts[0][k] for _ in range(N)]).shape)  for k in dict_keys]
     data = {k: np.stack([ase_dicts[i][k] for i in range(N)])  for k in dict_keys}
 
-    np.savez(output_path / 'test.npz', **data)
+    np.savez(output_path / f'{key}.npz', **data)
 
-    return output_path / 'test.npz'
+    return output_path / f'{key}.npz'
 
 
 def main():
@@ -486,7 +488,10 @@ def main():
 def main():
     args = parse_args()
     u, labels, natoms, output_path, results = process_simulation(args)
-    npz_path = sample_and_save(results, output_path)
+    
+    key = f"{args.resid}_{args.n_find}_{args.samples_per_frame}_{args.start}_{args.end}_{args.stride}"
+    print(f"key: {key}")
+    npz_path = sample_and_save(results, output_path, key = key)
     print(f"Saved to {npz_path}, {len(results['all_descriptors'])} descriptors")
     return npz_path
 
