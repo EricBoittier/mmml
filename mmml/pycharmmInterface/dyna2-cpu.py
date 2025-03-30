@@ -1,22 +1,23 @@
 #!/usr/bin/env python
 # coding: utf-8
 # %%
-# # Run protein dynamics with PBCs using PME  
+# # Run protein dynamics with PBCs using PME
 # ## This notebook builds on the previous protein_setup.ipynb and sets up a molecular dynamics simulation using Particle-Mesh Ewald running on CHARMM/OpenMM or CHARMM/BLaDE.
 # ## Note you need top have run the previous notebook and have created the solvated psf and pdb to use this notebook.
 import os, sys
+
 os.environ["CHARMM_HOME"] = "/pchem-data/meuwly/boittier/home/charmm"
 os.environ["CHARMM_LIB_DIR"] = "/pchem-data/meuwly/boittier/home/charmm/build/cmake"
 sys.path.append("/pchem-data/meuwly/boittier/home/project-mmml/eric-copy/")
-#import jax
-#devices = jax.local_devices()
-#print(devices) 
+# import jax
+# devices = jax.local_devices()
+# print(devices)
 
 
 pdbid = "proh"
 
 # %%
-# This script provides a simple example of running molecular dynamics of 
+# This script provides a simple example of running molecular dynamics of
 # a solvated protein structure created in an earlier notebook tutorial
 # further illustrating the functionality exposed in pyCHARMM.
 #  copyright C.L. Brooks III, June 20, 2022
@@ -51,81 +52,93 @@ from pycharmm.lib import charmm as libcharmm
 
 import sys, time
 
+
 # %%
 # The following are some helper functions for setting-up and running the dynamics
 ################################
 # Ensure that FFT grid is product of small primes 2, 3, 5
 def is_factor(n):
-    if (n % 2 != 0): return False  # favors even number
+    if n % 2 != 0:
+        return False  # favors even number
     while n:
         flag = False
-        for x in (2,3,5):
+        for x in (2, 3, 5):
             if n % x == 0:
-               n = n / x
-               flag = True
-               break
+                n = n / x
+                flag = True
+                break
 
-        if flag: continue
+        if flag:
+            continue
         break
 
-    if n == 1: return True
+    if n == 1:
+        return True
     return False
 
-def checkfft(n, margin = 5):
+
+def checkfft(n, margin=5):
     n = int(n) + margin
     while 1:
-        if is_factor(n): break
-        else: n += 1
+        if is_factor(n):
+            break
+        else:
+            n += 1
     return n
 
 
 # %%
 #################################
-def setup_PBC(boxhalf=0.0, protein_segments=[],solvent_resname='TIP3',ions=[],blade=False):
+def setup_PBC(
+    boxhalf=0.0, protein_segments=[], solvent_resname="TIP3", ions=[], blade=False
+):
     """input: boxhalf [0.0]
               solute  []
               solvent_resname ['']
               ions []
               blade [False]
-    defines the periodic boundary conditions for a cubic volume of boxsize. 
+    defines the periodic boundary conditions for a cubic volume of boxsize.
     Uses: crystal_define_cubic(), crystal.build(), image.setup_residue,
-    image.setup_segment to construct symmetry operations. 
+    image.setup_segment to construct symmetry operations.
 
     If global variable openmm is true
     the image centering is at [boxhalf,boxhalf,boxhalf] otherwise at [0,0,0].
     """
-    crystal.define_cubic(boxhalf*2)
+    crystal.define_cubic(boxhalf * 2)
     crystal.build(boxhalf)
 
-    if blade: boxhalf = 0.0 # center at origin for blade
+    if blade:
+        boxhalf = 0.0  # center at origin for blade
     for segment in protein_segments:
-        image.setup_segment(boxhalf,boxhalf, boxhalf, segment)
-    if len(solvent_resname)>0: image.setup_residue(boxhalf,boxhalf, boxhalf, solvent_resname)
+        image.setup_segment(boxhalf, boxhalf, boxhalf, segment)
+    if len(solvent_resname) > 0:
+        image.setup_residue(boxhalf, boxhalf, boxhalf, solvent_resname)
     for ion in ions:
         image.setup_residue(boxhalf, boxhalf, boxhalf, ion)
     # for systems using centering not at origin, translate coordinates by halfbox
     xyz = coor.get_positions()
     xyz += boxhalf
     coor.set_positions(xyz)
-    print('Coordinates translated by {} A in each dimension to be consistent with image centering'\
-          .format(boxhalf))
+    print(
+        "Coordinates translated by {} A in each dimension to be consistent with image centering".format(
+            boxhalf
+        )
+    )
 
     return
 
 
-s="""DELETE ATOM SELE ALL END"""
+s = """DELETE ATOM SELE ALL END"""
 pycharmm.lingo.charmm_script(s)
-read.rtf('/pchem-data/meuwly/boittier/home/charmm/toppar/top_all36_cgenff.rtf')
-bl =settings.set_bomb_level(-2)
-wl =settings.set_warn_level(-2)
-read.prm('/pchem-data/meuwly/boittier/home/charmm/toppar/par_all36_cgenff.prm')
+read.rtf("/pchem-data/meuwly/boittier/home/charmm/toppar/top_all36_cgenff.rtf")
+bl = settings.set_bomb_level(-2)
+wl = settings.set_warn_level(-2)
+read.prm("/pchem-data/meuwly/boittier/home/charmm/toppar/par_all36_cgenff.prm")
 settings.set_bomb_level(bl)
 settings.set_warn_level(wl)
 
 read.psf_card("/pchem-data/meuwly/boittier/home/project-mmml/proh/proh-262.psf")
-read.pdb(f'/pchem-data/meuwly/boittier/home/project-mmml/proh/mini.pdb')
-
-
+read.pdb(f"/pchem-data/meuwly/boittier/home/project-mmml/proh/mini.pdb")
 
 
 # # Read in the topology (rtf) and parameter file (prm) for proteins
@@ -143,79 +156,109 @@ read.pdb(f'/pchem-data/meuwly/boittier/home/project-mmml/proh/mini.pdb')
 # %%
 # Read in the topology (rtf) and parameter file (prm) for proteins
 # equivalent to the CHARMM scripting command: read rtf card name toppar/top_all36_prot.rtf
-#read.rtf('toppar/top_all36_prot.rtf')
+# read.rtf('toppar/top_all36_prot.rtf')
 # equivalent to the CHARMM scripting command: read param card flexible name toppar/par_all36m_prot.prm
-#read.prm('toppar/par_all36m_prot.prm', flex=True)
+# read.prm('toppar/par_all36m_prot.prm', flex=True)
 
 # stream in the water/ions parameter using the pycharmm.lingo module
 # equivalent to the CHARMM scripting command: stream toppar/toppar_water_ions.str
-#pycharmm.lingo.charmm_script('stream toppar/toppar_water_ions.str')
+# pycharmm.lingo.charmm_script('stream toppar/toppar_water_ions.str')
 
 # %%
 
 
 # Some choices for pdbids
-#pdbid = '4pti'  # bovine pancreatic trypsin inhibitor - an x-ray structuture
-#pdbid = '6pti'  # bovine pancreatic trypsin inhibitor - an x-ray structuture
-#pdbid = '5wyo'  # HDEA a dimeric (two chain) protein - an NMR structure
+# pdbid = '4pti'  # bovine pancreatic trypsin inhibitor - an x-ray structuture
+# pdbid = '6pti'  # bovine pancreatic trypsin inhibitor - an x-ray structuture
+# pdbid = '5wyo'  # HDEA a dimeric (two chain) protein - an NMR structure
 
 # Read the psf and coordinates for the solvated peptide
 # Read psf card name pdb/adp+wat.psf
-#read.psf_card(f'pdb/{pdbid}+wat.psf')
+# read.psf_card(f'pdb/{pdbid}+wat.psf')
 # read coor pdb name pdb/adp+wat_min.pdb
-#read.pdb(f'pdb/{pdbid}+wat_min.pdb',resid=True)
+# read.pdb(f'pdb/{pdbid}+wat_min.pdb',resid=True)
 
 # %%
 # Now setup periodic boundaries
 # boxsize
 stats = coor.stat()
-xsize = stats['xmax'] - stats['xmin']
-ysize = stats['ymax'] - stats['ymin']
-zsize = stats['zmax'] - stats['zmin']
+xsize = stats["xmax"] - stats["xmin"]
+ysize = stats["ymax"] - stats["ymin"]
+zsize = stats["zmax"] - stats["zmin"]
 boxsize = max(xsize, ysize, zsize)
 
 # half box size
 boxhalf = boxsize / 2.0
 # Note we could probably do something to extract the information passed to setup_PPC using pyCHARMM functions
 # but I didn't have the time so I just made some generic thing
-setup_PBC(boxhalf=boxhalf, protein_segments=['PROA', 'PROB', 'PROC'],
-          solvent_resname='TIP3',ions=['CLA', 'SOD', 'POT'],blade=False)
+setup_PBC(
+    boxhalf=boxhalf,
+    protein_segments=["PROA", "PROB", "PROC"],
+    solvent_resname="TIP3",
+    ions=["CLA", "SOD", "POT"],
+    blade=False,
+)
 
 # %%
 # Set-up non-bonded parameters
 # Now specify nonbonded cutoffs for solvated box
-cutnb = min(boxhalf,12)
+cutnb = min(boxhalf, 12)
 cutim = cutnb
 ctofnb = cutnb - 1.0
 ctonnb = cutnb - 3.0
 # Determine the appropriate cubic fft grid for this boxsize
-fft = checkfft(n=np.ceil(boxhalf)*2,margin=0)
+fft = checkfft(n=np.ceil(boxhalf) * 2, margin=0)
 # Set-up the parameters
-nb_wPME_vsw = pycharmm.NonBondedScript(cutnb=cutnb, cutim=cutim,
-                                       ctonnb=ctonnb, ctofnb=ctofnb,
-                                       cdie=True, eps=1,
-                                       atom=True, vatom=True,
-                                       switch=True, vfswitch=False, vswitch=True,
-                                       inbfrq=-1, imgfrq=-1,
-                                       ewald=True,pmewald=True,kappa=0.32,
-                                       fftx=fft,ffty=fft,fftz=fft,order=4)
+nb_wPME_vsw = pycharmm.NonBondedScript(
+    cutnb=cutnb,
+    cutim=cutim,
+    ctonnb=ctonnb,
+    ctofnb=ctofnb,
+    cdie=True,
+    eps=1,
+    atom=True,
+    vatom=True,
+    switch=True,
+    vfswitch=False,
+    vswitch=True,
+    inbfrq=-1,
+    imgfrq=-1,
+    ewald=True,
+    pmewald=True,
+    kappa=0.32,
+    fftx=fft,
+    ffty=fft,
+    fftz=fft,
+    order=4,
+)
 # Let's set the wrnlev to 0 to avoid the large output
 old_wrnlev = settings.set_warn_level(0)
 nb_wPME_vsw.run()
 settings.set_warn_level(old_wrnlev)
 energy.show()
 # Let's also set-up a set of nonbonded parameters using vfswitch instead of vswitch
-nb_wPME_vfsw_dict = {'cutnb':cutnb, 
-                     'cutim':cutim,
-                     'ctonnb':ctonnb, 
-                     'ctofnb':ctofnb,
-                     'cdie':True,
-                     'eps':1,
-                     'atom':True, 'vatom':True,
-                     'switch':True, 'vfswitch':True, 'vswitch':False,
-                     'inbfrq':-1, 'imgfrq':-1,
-                     'ewald':True,'pmewald':True,'kappa':0.32,
-                     'fftx':fft,'ffty':fft,'fftz':fft,'order':4}
+nb_wPME_vfsw_dict = {
+    "cutnb": cutnb,
+    "cutim": cutim,
+    "ctonnb": ctonnb,
+    "ctofnb": ctofnb,
+    "cdie": True,
+    "eps": 1,
+    "atom": True,
+    "vatom": True,
+    "switch": True,
+    "vfswitch": True,
+    "vswitch": False,
+    "inbfrq": -1,
+    "imgfrq": -1,
+    "ewald": True,
+    "pmewald": True,
+    "kappa": 0.32,
+    "fftx": fft,
+    "ffty": fft,
+    "fftz": fft,
+    "order": 4,
+}
 # Let's set the wrnlev to 0 to avoid the large output
 old_wrnlev = settings.set_warn_level(0)
 pycharmm.NonBondedScript(**nb_wPME_vfsw_dict).run()
@@ -231,21 +274,36 @@ energy.show()
 # %%
 
 
-def run_md(useomm=False,useblade=False,nequil=10_000,nsteps=10_000,nsavc=100,leap=True,lang=True):
-    if useomm: append='omm'
-    elif useblade: append='blade'
-    dyn.set_fbetas(np.full((psf.get_natom()),1.0,dtype=float))
-   
-    res_file = pycharmm.CharmmFile(file_name=f'res/{pdbid}.res', file_unit=2,
-                                   formatted=True,read_only=False)
+def run_md(
+    useomm=False,
+    useblade=False,
+    nequil=10_000,
+    nsteps=10_000,
+    nsavc=100,
+    leap=True,
+    lang=True,
+):
+    if useomm:
+        append = "omm"
+    elif useblade:
+        append = "blade"
+    dyn.set_fbetas(np.full((psf.get_natom()), 1.0, dtype=float))
+
+    res_file = pycharmm.CharmmFile(
+        file_name=f"res/{pdbid}.res", file_unit=2, formatted=True, read_only=False
+    )
     # open unit 1 write file name dcd/{}.dcd
-    dcd_file = pycharmm.CharmmFile(file_name=f'dcd/{pdbid}_cpt.dcd', file_unit=1,
-                                   formatted=False,read_only=False)
-    lam_file = pycharmm.CharmmFile(file_name=f'res/{pdbid}.lam'.format(pdbid), 
-                                   file_unit=3,
-                                   formatted=False,read_only=False)
-    
-    script="""
+    dcd_file = pycharmm.CharmmFile(
+        file_name=f"dcd/{pdbid}_cpt.dcd", file_unit=1, formatted=False, read_only=False
+    )
+    lam_file = pycharmm.CharmmFile(
+        file_name=f"res/{pdbid}.lam".format(pdbid),
+        file_unit=3,
+        formatted=False,
+        read_only=False,
+    )
+
+    script = """
 
     open write unit 31 card name equi.res      ! Restart file
     open write unit 32 file name equi.dcd      ! Coordinates file
@@ -263,36 +321,65 @@ def run_md(useomm=False,useblade=False,nequil=10_000,nsteps=10_000,nsavc=100,lea
     pycharmm.lingo.charmm_script(script)
     res_file.close()
     lam_file.close()
-    dcd_file.close() 
+    dcd_file.close()
     nsteps_per_cys = 1000
-    
-    # open unit 2 write form name res/{}.res
-    res_file = pycharmm.CharmmFile(file_name=f'equi.res', file_unit=2,
-                                   formatted=True,read_only=False)
-    lam_file = pycharmm.CharmmFile(file_name=f'res/{pdbid}.lam', 
-                                   file_unit=3,
-                                   formatted=False,read_only=False)
-    # open unit 1 write file name dcd/{}.dcd
-    dcd_file = pycharmm.CharmmFile(file_name=f'dcd/{pdbid}_{append}.dcd', file_unit=1,
-                                   formatted=False,read_only=False)
 
-    my_dyn = pycharmm.DynamicsScript(leap=leap, lang=lang, start=False, restart = True,
-                                     cpt=True,
-                                     nstep=nsteps, timest=0.0005,
-                                     firstt=298.0, finalt=298.0, tbath=298.0,
-                                     tstruc=298.0,
-                                     teminc=0.0, twindh=0.0, twindl=0.0,
-                                     iunwri=res_file.file_unit,
-                                     iunrea=res_file.file_unit,
-                                     iuncrd=dcd_file.file_unit,
-                                     iunlam=lam_file.file_unit,
-                                     inbfrq=-1, imgfrq=-1,
-                                     iasors=0, iasvel=1, ichecw=0, iscale=0,
-                                     iscvel=0,echeck=-1, nsavc=nsavc, nsavv=0, nsavl=0, ntrfrq=0,
-                                     isvfrq=nsavc,
-                                     iprfrq=2*nsavc, nprint=nsavc, ihtfrq=0, ieqfrq=0,
-                                     ilbfrq=0,ihbfrq=0,
-                                     omm=useomm, blade=useblade)
+    # open unit 2 write form name res/{}.res
+    res_file = pycharmm.CharmmFile(
+        file_name=f"equi.res", file_unit=2, formatted=True, read_only=False
+    )
+    lam_file = pycharmm.CharmmFile(
+        file_name=f"res/{pdbid}.lam", file_unit=3, formatted=False, read_only=False
+    )
+    # open unit 1 write file name dcd/{}.dcd
+    dcd_file = pycharmm.CharmmFile(
+        file_name=f"dcd/{pdbid}_{append}.dcd",
+        file_unit=1,
+        formatted=False,
+        read_only=False,
+    )
+
+    my_dyn = pycharmm.DynamicsScript(
+        leap=leap,
+        lang=lang,
+        start=False,
+        restart=True,
+        cpt=True,
+        nstep=nsteps,
+        timest=0.0005,
+        firstt=298.0,
+        finalt=298.0,
+        tbath=298.0,
+        tstruc=298.0,
+        teminc=0.0,
+        twindh=0.0,
+        twindl=0.0,
+        iunwri=res_file.file_unit,
+        iunrea=res_file.file_unit,
+        iuncrd=dcd_file.file_unit,
+        iunlam=lam_file.file_unit,
+        inbfrq=-1,
+        imgfrq=-1,
+        iasors=0,
+        iasvel=1,
+        ichecw=0,
+        iscale=0,
+        iscvel=0,
+        echeck=-1,
+        nsavc=nsavc,
+        nsavv=0,
+        nsavl=0,
+        ntrfrq=0,
+        isvfrq=nsavc,
+        iprfrq=2 * nsavc,
+        nprint=nsavc,
+        ihtfrq=0,
+        ieqfrq=0,
+        ilbfrq=0,
+        ihbfrq=0,
+        omm=useomm,
+        blade=useblade,
+    )
     my_dyn.run()
 
     res_file.close()
@@ -302,16 +389,17 @@ def run_md(useomm=False,useblade=False,nequil=10_000,nsteps=10_000,nsavc=100,lea
 
 # %%
 # Set-up short dynamics
-if not os.path.isdir('res'): os.system('mkdir res')
-if not os.path.isdir('dcd'): os.system('mkdir dcd')
+if not os.path.isdir("res"):
+    os.system("mkdir res")
+if not os.path.isdir("dcd"):
+    os.system("mkdir dcd")
 
 import time
 
 start = time.time()
 
 # Check to see if cuda is available to run BLaDE
-run_md(useblade = 'prmc pref 1 iprs 100 prdv 100')
+run_md(useblade="prmc pref 1 iprs 100 prdv 100")
 usedBLaDe = True
 end = time.time()
 print("BLADEE", end - start)
-
