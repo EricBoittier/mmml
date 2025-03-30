@@ -47,11 +47,11 @@ def run_dft(ATOMS, BASIS, AUGBASIS, SOLVENT, XC, do_forces=True):
         atom=ATOMS,
         basis=BASIS,
         max_memory=32000,
-        verbose=6,  # Set verbose >= 6 for debugging timer
+        verbose=1,  # Set verbose >= 6 for debugging timer
     )
 
     mf_df = dft.RKS(mol, xc=XC).density_fit(auxbasis=AUGBASIS)
-    mf_df.verbose = 6
+    mf_df.verbose = 1 
 
     if SOLVENT:
         mf_df = mf_df.PCM()
@@ -91,7 +91,7 @@ class parameters:
         self.xc = None  # For DFT calculations
         self.auxbasis = None  # For density fitting
         self.solvent = None  # For PCM calculations
-        self.verbose = 3
+        self.verbose = 1 
 
     def show(self):
         print("------------------------")
@@ -128,8 +128,8 @@ class PYSCF(Calculator):
 
     implemented_properties = [
         "energy",
-        "forces",
-        "dipole",
+        #"forces",
+        #"dipole",
         #'polarizability'
     ]
 
@@ -245,8 +245,8 @@ def main():
                        help='Auxiliary basis set for density fitting (default: def2-tzvp-jkfit)')
     parser.add_argument('--solvent', choices=['cosmo', 'pcm'], 
                        help='Solvent model (optional)')
-    parser.add_argument('--verbose', type=int, default=3,
-                       help='Verbosity level (default: 3)')
+    parser.add_argument('--verbose', type=int, default=1,
+                       help='Verbosity level (default: 1)')
     
     args = parser.parse_args()
 
@@ -282,18 +282,18 @@ def main():
         mf = mol.HF()
         mf.verbose = p.verbose
 
-    # Create calculator
-    calc = PYSCF(mf=mf, p=p)
 
     # Process each structure and write to trajectory
     print(f"\nProcessing {len(atoms_list)} structures using {args.method.upper()}/{args.basis}")
     for i, atoms in enumerate(atoms_list):
+        # Create calculator
+        calc = PYSCF(mf=mf, p=p)
         atoms.calc = calc
         energy = atoms.get_potential_energy()
-        forces = atoms.get_forces()
+        #forces = atoms.get_forces()
         print(f"\nStructure {i+1}:")
         print(f"Energy: {energy:.6f} eV")
-        print(f"Forces (eV/Å):\n{forces}")
+        #print(f"Forces (eV/Å):\n{forces}")
         
         # Write structure to trajectory
         if i == 0:
@@ -302,6 +302,9 @@ def main():
         else:
             print(f"Appending structure {i+1} to trajectory")
             write(args.output, atoms, format='traj', append=True)
+
+        del atoms
+        del calc
 
     print(f"\nCalculation results written to: {args.output}")
 
