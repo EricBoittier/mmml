@@ -337,6 +337,7 @@ def process_simulation(args):
     
     return u, labels, natoms, output_path
 
+
 def create_args(logfile=None, psf=None, dcd=None, pdb=None, start=0, end=None, stride=1):
     """Create arguments for process_simulation.
     
@@ -386,9 +387,6 @@ def main():
     # Add any additional processing here
     
 if __name__ == "__main__":
-"""
-
-"""
     main()
 
 
