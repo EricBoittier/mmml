@@ -28,6 +28,7 @@ from MDAnalysis.analysis.distances import dist as dist
 from tqdm import tqdm
 import ase
 from ase.visualize import view as viewmol
+import argparse
 
 
 def show_atom_number(mol, labels, type_label=True):
@@ -158,7 +159,56 @@ def mass_to_atomic_number(mass):
 
 
 
-def extract_molecular_descriptors(universe, output_path, samples_per_frame=10, stride=100):
+def select_central_residue(residue_ids):
+    """Select a random residue ID from the list."""
+    random.shuffle(residue_ids)
+    return residue_ids[0]
+
+def get_nearby_residues(universe, central_resid):
+    """Get residues within 5.5A of central residue."""
+    initial_selection = f"byres sphzone 5.5 (resid {central_resid}) "
+    sele = universe.select_atoms(initial_selection, periodic=False)
+    return list(set([_.resid for _ in list(sele)]))
+
+def calculate_residue_distances(universe, central_resid, nearby_resids):
+    """Calculate mean distances between central residue and nearby residues."""
+    dist_res = []
+    for resi in nearby_resids:
+        if resi != central_resid:
+            sela = universe.select_atoms(f"(resid {central_resid}) ")
+            selb = universe.select_atoms(f"(resid {resi}) ")
+            mean_dist = dist(sela, selb)[-1,:].mean()
+            dist_res.append((mean_dist, resi))
+    dist_res.sort()
+    return dist_res
+
+def select_closest_residues(universe, central_resid, dist_res, n_closest=5):
+    """Select central residue and n closest residues."""
+    residue_selections = f"(resid {central_resid}) or " + " or ".join([f"(resid {_[1]})" for _ in dist_res[:n_closest]])
+    return universe.select_atoms(residue_selections, periodic=False)
+
+def process_selection(sele, output_path, ti, central_resid, ix):
+    """Process selected atoms to get descriptors and save structures."""
+    # Center positions
+    R = sele.positions
+    R = R - R.T.mean(axis=1)
+    
+    # Get atomic numbers and species
+    Z = [mass_to_atomic_number(_.mass) for _ in sele.atoms]
+    atoms = ase.Atoms(Z, R)
+    species = list(set(atoms.get_chemical_symbols()))
+    
+    # Calculate descriptors
+    a, b, c = get_descriptor(atoms, species, plot=False)
+    
+    # Save structures
+    pdb_path = output_path / "pdb" / f"{ti}_{central_resid}_{ix}.pdb"
+    sele.write(pdb_path)
+    ase.io.write(output_path / "xyz" / f"{ti}_{central_resid}_{ix}.xyz", atoms)
+    
+    return a, b, c, pdb_path
+
+def extract_molecular_descriptors(universe, output_path, samples_per_frame=10, stride=100, n_find=6):
     """Extract molecular descriptors from trajectory frames.
     
     Args:
@@ -166,7 +216,8 @@ def extract_molecular_descriptors(universe, output_path, samples_per_frame=10, s
         output_path: Path object for output directory
         samples_per_frame: Number of random samples to take per frame
         stride: Number of frames to skip between samples
-    
+        n_find: Number of residues to find
+
     Returns:
         tuple: (all_descriptors_full, all_descriptors, all_pdb_filenames)
     """
@@ -178,45 +229,24 @@ def extract_molecular_descriptors(universe, output_path, samples_per_frame=10, s
 
     for ti, _ in tqdm(enumerate(universe.trajectory[::stride])):
         residue_ids = list(range(1, len(universe.residues)+1))
+        
         for ix in range(samples_per_frame):
-            random.shuffle(residue_ids)
-            i = residue_ids[0]
+            # Select central residue
+            central_resid = select_central_residue(residue_ids)
+            residue_ids = [r for r in residue_ids if r != central_resid]
             
-            # Select atoms in sphere around central residue
-            initial_selection = f"byres sphzone 5.5 (resid {i}) "
-            sele = universe.select_atoms(initial_selection, periodic=False)
-            resids = list(set([_.resid for _ in list(sele)]))
+            # Get nearby residues and calculate distances
+            nearby_resids = get_nearby_residues(universe, central_resid)
+            dist_res = calculate_residue_distances(universe, central_resid, nearby_resids)
             
-            # Calculate distances to nearby residues
-            dist_res = []
-            for resi in resids:
-                if resi != i:
-                    sela = universe.select_atoms(f"(resid {i}) ")
-                    selb = universe.select_atoms(f"(resid {resi}) ")
-                    mean_dist = dist(sela, selb)[-1,:].mean()
-                    dist_res.append((mean_dist, resi))
-            dist_res.sort()
-            
-            # Select 6 closest residues
-            residue_selections = f"(resid {i}) or " + " or ".join([f"(resid {_[1]})" for _ in dist_res[:5]])
-            sele = universe.select_atoms(residue_selections, periodic=False)
+            # Select closest residues
+            sele = select_closest_residues(universe, central_resid, dist_res)
             found = list(set([_.resid for _ in list(sele)]))
-            residue_ids = [_ for _ in residue_ids if _ != i]
             
-            if len(found) == 6:
-                # Center positions and calculate descriptors
-                R = sele.positions
-                R = R - R.T.mean(axis=1)
-                Z = [mass_to_atomic_number(_.mass) for _ in sele.atoms]
-                atoms = ase.Atoms(Z, R)
-                species = list(set(atoms.get_chemical_symbols()))
-                
-                # Get descriptors and save structures
-                a, b, c = get_descriptor(atoms, species, plot=False)
-                d = output_path / "pdb" / f"{ti}_{i}_{ix}.pdb"
-                sele.write(d)
-                ase.io.write(output_path / "xyz" / f"{ti}_{i}_{ix}.xyz", atoms)
-                results.append((a, b, c, d))
+            if len(found) == n_find:
+                # Process selection and save results
+                result = process_selection(sele, output_path, ti, central_resid, ix)
+                results.append(result)
 
     # Process results
     all_descriptors_full = [_[1] for _ in results]
@@ -227,26 +257,138 @@ def extract_molecular_descriptors(universe, output_path, samples_per_frame=10, s
 
 
 
-sims_path = Path("/home/boittier/studix/ressim")
-files = list(sims_path.glob("*/*/log/equilibration_1_*"))
+def find_simulation_files(sims_path, index):
+    """Find simulation files given a base path and simulation index.
+    
+    Args:
+        sims_path (Path): Base path containing simulation directories
+        index (int): Index of simulation to process
+        
+    Returns:
+        tuple: (logfile, psf_file, dcd_file, pdb_file, resid, sim_conds)
+    """
+    files = list(Path(sims_path).glob("*/*/log/equilibration_1_*"))
+    logfile = files[index]
+    
+    resid = logfile.parents[2].stem
+    sim_conds = str(logfile.parents[1]).split("/")[-1]
+    
+    psf_file = logfile.parents[1] / "system.psf"
+    dcd_file = list((logfile.parents[1] / "dcd").glob("eq*_1_*dcd")).pop()
+    pdb_file = logfile.parents[1] / "pdb" / "initial.pdb"
+    
+    return logfile, psf_file, dcd_file, pdb_file, resid, sim_conds
 
 
-i = 49
-logfile = files[i]
-resid = logfile.parents[2].stem
-sim_conds = str(logfile.parents[1]).split("/")[-1]
-print(resid, sim_conds)
 
-psf_file = logfile.parents[1] / "system.psf"
-dcd_file = list((logfile.parents[1] / "dcd" ).glob("eq*_1_*dcd")).pop()
-pdb_file = logfile.parents[1] / "pdb" / "initial.pdb"
 
-u2 = mda.Universe(pdb_file)
-natoms = len(u2.atoms)
-u = mda.Universe(psf_file, dcd_file)
-labels = list(u.atoms[:natoms])
+def setup_universe(psf_file, dcd_file, pdb_file, start=0, end=None, stride=1):
+    """Set up MDAnalysis universe objects.
+    
+    Args:
+        psf_file (Path): Path to PSF file
+        dcd_file (Path): Path to DCD file
+        pdb_file (Path): Path to PDB file
+        
+    Returns:
+        tuple: (universe, labels, output_path)
+    """
+    u2 = mda.Universe(pdb_file)
+    natoms = len(u2.atoms)
+    u = mda.Universe(psf_file, dcd_file, start=start, end=end, stride=stride)
+    u = u[start:end:stride]
+    labels = list(u.atoms[:natoms])
+    return u, labels, natoms
 
-output_path = logfile.parents[2] / "data" / logfile.parents[1].stem
-os.makedirs(output_path / "pdb", exist_ok=True)
-os.makedirs(output_path / "xyz", exist_ok=True)
+
+def sim_to_data(u, labels, natoms, output_path):
+    """Convert simulation data to numpy array.
+    
+    Args:
+        u (mda.Universe): MDAnalysis universe object
+        labels (list): List of atom labels
+        natoms (int): Number of atoms
+        output_path (Path): Path to output directory
+    """
+    pass
+
+
+def process_simulation(args):
+    """Process a single simulation.
+    
+    Args:
+        sims_path (str): Path to simulation directory
+        index (int): Index of simulation to process
+    """
+   
+    # turn all logfiles into Paths
+    logfile = Path(args.logfile)
+    psf_file = Path(args.psf)
+    dcd_file = Path(args.dcd)
+    pdb_file = Path(args.pdb)
+    resid = args.resid
+    sim_conds = args.sim_conds  
+
+    print(f"Processing: {resid} {sim_conds}")
+    
+    u, labels, natoms = setup_universe(
+        psf_file, dcd_file, pdb_file, start=args.start, end=args.end, stride=args.stride)
+    output_path = logfile.parents[2] / "data" / logfile.parents[1].stem
+    
+    return u, labels, natoms, output_path
+
+def create_args(logfile=None, psf=None, dcd=None, pdb=None, start=0, end=None, stride=1):
+    """Create arguments for process_simulation.
+    
+    Args:
+        logfile (Path): Path to logfile
+        psf (Path): Path to PSF file
+        dcd (Path): Path to DCD file
+        pdb (Path): Path to PDB file
+        start (int): Start frame
+        end (int): End frame
+        stride (int): Stride
+    """
+    assert logfile is not None, "logfile is required"
+    assert psf is not None, "psf is required"
+    assert dcd is not None, "dcd is required"
+    assert pdb is not None, "pdb is required"
+    assert start is not None, "start is required"
+    assert end is not None, "end is required"
+    assert stride is not None, "stride is required"
+    return argparse.Namespace(logfile=logfile, psf=psf, dcd=dcd, pdb=pdb, start=start, end=end, stride=stride)
+
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Process molecular dynamics simulation data.')
+    parser.add_argument('--sims_path', type=str, default="/home/boittier/studix/ressim",
+                      help='Path to simulations directory')
+    parser.add_argument('--start', type=int, default=49,
+                      help='frame index to start processing')
+    parser.add_argument('--end', type=int, default=50,
+                      help='frame index to end processing')
+    parser.add_argument('--stride', type=int, default=100,
+                      help='frame index to end processing')
+    parser.add_argument('--samples_per_frame', type=int, default=10,
+                      help='frame index to end processing')
+    parser.add_argument('--n_find', type=int, default=6,
+                      help='frame index to end processing')
+    parser.add_argument("--psf", type=str, default="system.psf")
+    parser.add_argument("--dcd", type=str, default="eq*_1_*dcd")
+    parser.add_argument("--pdb", type=str, default="initial.pdb")
+    parser.add_argument("--logfile", type=str)
+    parser.add_argument("--output_path", type=str, default="data")
+
+    args = parser.parse_args()
+    
+    u, labels, natoms, output_path = process_simulation(args)
+    # Add any additional processing here
+    
+if __name__ == "__main__":
+"""
+
+"""
+    main()
+
 
