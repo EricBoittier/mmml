@@ -435,7 +435,12 @@ def sample_and_save(results, output_path, key="test"):
     npz_collection = {}
     dict_keys = ase_dicts[0].keys()
     dtypes = [( k,  ase_dicts[0][k].dtype, np.stack([ase_dicts[0][k] for _ in range(N)]).shape)  for k in dict_keys]
-    data = {k: np.stack([ase_dicts[i][k] for i in range(N)])  for k in dict_keys}
+    data = {}
+    for k in dict_keys:
+        try:
+            data[k] = np.stack([ase_dicts[i][k] for i in range(N)])
+        except:
+            print(f"Error stacking {k}")
 
     np.savez(output_path / f'{key}.npz', **data)
 
