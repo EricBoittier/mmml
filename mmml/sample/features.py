@@ -146,50 +146,60 @@ def main(file, timestep=0.5, fitdf=None):
     return plot_temperature_density(data, fitdf)
 
 
-def get_descriptor(atoms, species, plot=False):
-    """Calculate molecular descriptors using MBTR.
-    
-    Args:
-        atoms (ase.Atoms): Atomic structure
-        species (list): List of chemical species
-        plot (bool): Whether to plot the descriptor
-        
-    Returns:
-        tuple: (k2, k3, mbtr) where k2 and k3 are the 2- and 3-body terms,
-        and mbtr is the full descriptor
-    """
-    mbtr = MBTR(
+from dscribe.descriptors import MBTR
+
+def get_descriptor(system, species, plot=True):
+    MIN = 2.0
+    MAX = 10.0
+    N = 100
+    DECAY = 0.5
+    desc = MBTR(
         species=species,
-        k2={
-            "geometry": {"function": "inverse_distance"},
-            "grid": {"min": 0, "max": 1, "n": 100},
-            "weighting": {"function": "exp", "scale": 0.5, "threshold": 1e-3},
-        },
-        k3={
-            "geometry": {"function": "angle"},
-            "grid": {"min": 0, "max": 180, "n": 100},
-            "weighting": {"function": "exp", "scale": 0.5, "threshold": 1e-3},
-        },
+        geometry={"function": "distance"},
+        grid={"min": MIN, "max": MAX, "sigma": 0.1, "n": N},
+        weighting={"function": "exp", "scale": DECAY, "threshold": 1e-3},
         periodic=False,
-        normalization="l2_each",
+        sparse=False,
+        normalization="l2",
     )
-    mbtr_output = mbtr.create(atoms)
-    k2 = mbtr_output.get_k2()
-    k3 = mbtr_output.get_k3()
+
+    # No weighting
+    mbtr_output = desc.create(system)
+
+    # chemical symbol
+    n_elements = len(desc.species)
+    x = np.linspace(0, MAX, N)
+
+    species_list = []
+    descriptor_list = []
+
+    # Plot k=2
+    if plot:
+        fig, ax = plt.subplots()
+    for i in range(n_elements):
+        for j in range(n_elements):
+            if j >= i:
+                i_species = desc.species[i]
+                j_species = desc.species[j]
+                loc = desc.get_location((i_species, j_species))
+                species_list.append((i_species, j_species))
+                descriptor_list.append(mbtr_output[loc])
+                if plot:
+                    plt.plot(x, mbtr_output[loc], "o-", label="{}-{}".format(i_species, j_species))
+
+    if plot:
+        ax.set_xlabel("Distance (Angstrom)")
+        ax.legend()
+        plt.show()
+
+    species_list
+    descriptor = np.array(descriptor_list)
     
     if plot:
-        plt.figure(figsize=(10, 4))
-        plt.plot(k2)
-        plt.title("K2 descriptor")
-        plt.show()
-        
-        plt.figure(figsize=(10, 4))
-        plt.plot(k3)
-        plt.title("K3 descriptor")
+        plt.matshow(descriptor, vmin=0, vmax=.5, cmap="cubehelix_r")
         plt.show()
     
-    return k2, k3, mbtr_output
-
+    return species_list, descriptor, system
 
 def mass_to_atomic_number(mass):
     """Convert atomic mass to atomic number.
