@@ -161,7 +161,23 @@ def extract_molecular_descriptors(
 
     results = []
 
-    for ti, _ in tqdm(enumerate(universe.trajectory[start:end:stride])):
+    trajectory_frames = universe.trajectory[start:end:stride]
+    print("*"*100)
+    print("start", start)
+    print("end", end)
+    print("stride", stride)
+    print("universe.trajectory", len(universe.trajectory))
+    print("trajectory_frames", len(trajectory_frames))
+    print("*"*100)
+
+    if len(trajectory_frames) == 0:
+        raise ValueError("No trajectory frames found")
+    if len(trajectory_frames) != len(universe.trajectory):
+        raise ValueError("trajectory_frames and universe.trajectory have different lengths")
+    if len(trajectory_frames) > 1000:
+        raise ValueError("trajectory_frames is too long")
+
+    for ti, _ in tqdm(enumerate(trajectory_frames)):
         residue_ids = list(range(1, len(universe.residues) + 1))
 
         for ix in range(samples_per_frame):
