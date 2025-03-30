@@ -296,7 +296,7 @@ def setup_universe(psf_file, dcd_file, pdb_file, start=0, end=None, stride=1):
     u2 = mda.Universe(pdb_file)
     natoms = len(u2.atoms)
     u = mda.Universe(psf_file, dcd_file, start=start, end=end, stride=stride)
-    u = u[start:end:stride]
+    # u = u[start:end:stride]
     labels = list(u.atoms[:natoms])
     return u, labels, natoms
 
