@@ -256,44 +256,44 @@ def main():
     if not isinstance(atoms_list, list):
         atoms_list = [atoms_list]
 
-    # Set up calculator parameters
-    p = parameters()
-    p.mode = args.method
-    p.basis = args.basis
-    p.verbose = args.verbose
-    
-    if args.method == 'dft':
-        p.xc = args.xc
-        p.auxbasis = args.auxbasis
-        p.solvent = args.solvent
-        
-        # Create initial mf object for DFT
-        mol = pyscf.M(atom=atoms_from_ase(atoms_list[0]), 
-                     basis=p.basis, 
-                     spin=0, 
-                     charge=0)
-        mf = dft.RKS(mol, xc=p.xc)
-    else:
-        # Create PySCF molecule and HF object
-        mol = pyscf.M(atom=atoms_from_ase(atoms_list[0]),
-                     basis=p.basis,
-                     spin=0,
-                     charge=0)
-        mf = mol.HF()
-        mf.verbose = p.verbose
-
-
     # Process each structure and write to trajectory
     print(f"\nProcessing {len(atoms_list)} structures using {args.method.upper()}/{args.basis}")
+    
     for i, atoms in enumerate(atoms_list):
-        # Create calculator
+        # Create fresh calculator for each structure
+        if args.method == 'dft':
+            mol = pyscf.M(atom=atoms_from_ase(atoms), 
+                         basis=args.basis, 
+                         spin=0, 
+                         charge=0)
+            mf = dft.RKS(mol, xc=args.xc)
+        else:
+            mol = pyscf.M(atom=atoms_from_ase(atoms),
+                         basis=args.basis,
+                         spin=0,
+                         charge=0)
+            mf = mol.HF()
+            mf.verbose = args.verbose
+
+        # Set up parameters
+        p = parameters()
+        p.mode = args.method
+        p.basis = args.basis
+        p.verbose = args.verbose
+        if args.method == 'dft':
+            p.xc = args.xc
+            p.auxbasis = args.auxbasis
+            p.solvent = args.solvent
+
         calc = PYSCF(mf=mf, p=p)
         atoms.calc = calc
+        
+        # Run calculation
         energy = atoms.get_potential_energy()
-        #forces = atoms.get_forces()
+        forces = atoms.get_forces()
         print(f"\nStructure {i+1}:")
         print(f"Energy: {energy:.6f} eV")
-        #print(f"Forces (eV/Å):\n{forces}")
+        print(f"Forces (eV/Å):\n{forces}")
         
         # Write structure to trajectory
         if i == 0:
@@ -302,9 +302,10 @@ def main():
         else:
             print(f"Appending structure {i+1} to trajectory")
             write(args.output, atoms, format='traj', append=True)
-
-        del atoms
-        del calc
+            
+        # Force garbage collection
+        import gc
+        gc.collect()
 
     print(f"\nCalculation results written to: {args.output}")
 
