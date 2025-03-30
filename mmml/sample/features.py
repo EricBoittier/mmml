@@ -175,8 +175,6 @@ def extract_molecular_descriptors(
 
     if len(trajectory_frames) == 0:
         raise ValueError("No trajectory frames found")
-    if len(trajectory_frames) != len(universe.trajectory):
-        raise ValueError("trajectory_frames and universe.trajectory have different lengths")
     if len(trajectory_frames) > 1000:
         raise ValueError("trajectory_frames is too long")
 
