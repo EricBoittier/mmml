@@ -20,7 +20,6 @@ from pyscf.pbc.tools.pyscf_ase import atoms_from_ase
 import jsonpickle
 
 
-
 import pyscf
 import time
 import argparse
@@ -32,16 +31,15 @@ from ase.optimize import LBFGS
 from pyscf4gpuInterface.aseInterface import PYSCF, parameters
 
 
-
 def run_dft(ATOMS, BASIS, SOLVENT, XC):
     """Run DFT calculation with optional solvent model.
-    
+
     Args:
         ATOMS: Atomic coordinates and species
         BASIS: Basis set specification
         SOLVENT: Whether to use solvent model
         XC: Exchange-correlation functional
-    
+
     Returns:
         tuple: Total energy and nuclear gradients
     """
@@ -49,7 +47,7 @@ def run_dft(ATOMS, BASIS, SOLVENT, XC):
         atom=ATOMS,
         basis=BASIS,
         max_memory=32000,
-        verbose=6  # Set verbose >= 6 for debugging timer
+        verbose=6,  # Set verbose >= 6 for debugging timer
     )
 
     mf_df = dft.RKS(mol, xc=XC).density_fit(auxbasis=args.auxbasis)
@@ -83,24 +81,23 @@ def run_dft(ATOMS, BASIS, SOLVENT, XC):
     return e_tot, forces
 
 
-
-class parameters():
+class parameters:
     # holds the calculation mode and user-chosen attributes of post-HF objects
     def __init__(self):
-        self.mode = 'hf'
-        self.basis = 'cc-pVDZ'
+        self.mode = "hf"
+        self.basis = "cc-pVDZ"
         self.xc = None  # For DFT calculations
         self.auxbasis = None  # For density fitting
         self.solvent = None  # For PCM calculations
         self.verbose = 3
+
     def show(self):
-        print('------------------------')
-        print('calculation-specific parameters set by the user')
-        print('------------------------')
+        print("------------------------")
+        print("calculation-specific parameters set by the user")
+        print("------------------------")
         for v in vars(self):
-            print('{}:  {}'.format(v,vars(self)[v]))
-        print('\n\n')
-                                                         
+            print("{}:  {}".format(v, vars(self)[v]))
+        print("\n\n")
 
 
 def todict(x):
@@ -121,23 +118,33 @@ def init_geo(mf, atoms):
         mol.build()
         mf.reset(mol=mol.copy())
 
+
 class PYSCF(Calculator):
     # based on PySCF ASE calculator by Jakob Kraus
     # units:  ase         -> units [eV,Angstroem,eV/Angstroem,e*A,A**3]
     #         pyscf       -> units [Ha,Bohr,Ha/Bohr,Debye,Bohr**3]
 
-    implemented_properties = ['energy','forces','dipole',
-    #'polarizability'
+    implemented_properties = [
+        "energy",
+        "forces",
+        "dipole",
+        #'polarizability'
     ]
-    
-    
-    def __init__(self, restart=None, ignore_bad_restart_file=False,
-                 label='PySCF', atoms=None, directory='.', **kwargs):
-        # constructor
-        Calculator.__init__(self, restart, ignore_bad_restart_file,
-                            label, atoms, directory, **kwargs)
-        self.initialize(**kwargs)
 
+    def __init__(
+        self,
+        restart=None,
+        ignore_bad_restart_file=False,
+        label="PySCF",
+        atoms=None,
+        directory=".",
+        **kwargs,
+    ):
+        # constructor
+        Calculator.__init__(
+            self, restart, ignore_bad_restart_file, label, atoms, directory, **kwargs
+        )
+        self.initialize(**kwargs)
 
     def initialize(self, mf=None, p=None):
         # attach the mf object to the calculator
@@ -153,25 +160,23 @@ class PYSCF(Calculator):
         changed_parameters = Calculator.set(self, **kwargs)
         if changed_parameters:
             self.reset()
-    
-    def get_polarizability(self,atoms=None):
-        return self.get_property('polarizability',atoms)
-    
-    def calculate(self,atoms=None,properties=['energy'],system_changes=all_changes):
-        
-        Calculator.calculate(self,atoms=atoms,properties=properties,system_changes=system_changes)
-        
-        if self.p.mode.lower() == 'dft':
+
+    def get_polarizability(self, atoms=None):
+        return self.get_property("polarizability", atoms)
+
+    def calculate(self, atoms=None, properties=["energy"], system_changes=all_changes):
+        Calculator.calculate(
+            self, atoms=atoms, properties=properties, system_changes=system_changes
+        )
+
+        if self.p.mode.lower() == "dft":
             # Use GPU4PySCF DFT
             e_tot, forces = run_dft(
-                atoms_from_ase(atoms),
-                self.p.basis,
-                bool(self.p.solvent),
-                self.p.xc
+                atoms_from_ase(atoms), self.p.basis, bool(self.p.solvent), self.p.xc
             )
-            self.results['energy'] = e_tot * Ha
-            self.results['forces'] = -forces * (Ha / Bohr)
-            
+            self.results["energy"] = e_tot * Ha
+            self.results["forces"] = -forces * (Ha / Bohr)
+
             # Create mf object for other properties
             mol = pyscf.M(atom=atoms_from_ase(atoms), basis=self.p.basis)
             self.mf = dft.RKS(mol, xc=self.p.xc)
@@ -179,57 +184,66 @@ class PYSCF(Calculator):
         else:
             # Regular PySCF calculation
             init_geo(self.mf, atoms)
-            
-            if hasattr(self.mf, '_scf'):
+
+            if hasattr(self.mf, "_scf"):
                 self.mf._scf.kernel()
                 self.mf.__init__(self.mf._scf)
                 for v in vars(self.p):
-                    if v != 'mode':
+                    if v != "mode":
                         setattr(self.mf, v, vars(self.p)[v])
             self.mf.kernel()
             e = self.mf.e_tot
-            
-            if self.p.mode.lower() == 'ccsd(t)':
+
+            if self.p.mode.lower() == "ccsd(t)":
                 e += self.mf.ccsd_t()
-            
-            self.results['energy'] = e * Ha
-            
-            if 'forces' in properties:
+
+            self.results["energy"] = e * Ha
+
+            if "forces" in properties:
                 gf = self.mf.nuc_grad_method()
                 gf.verbose = self.mf.verbose
-                forces = -1. * gf.kernel() * (Ha / Bohr)
-                self.results['forces'] = forces
+                forces = -1.0 * gf.kernel() * (Ha / Bohr)
+                self.results["forces"] = forces
 
         # Calculate dipole and polarizability for both cases
-        if 'dipole' in properties:
-            if hasattr(self.mf, '_scf'):
-                self.results['dipole'] = self.mf._scf.dip_moment(verbose=self.mf._scf.verbose) * Debye
+        if "dipole" in properties:
+            if hasattr(self.mf, "_scf"):
+                self.results["dipole"] = (
+                    self.mf._scf.dip_moment(verbose=self.mf._scf.verbose) * Debye
+                )
             else:
-                self.results['dipole'] = self.mf.dip_moment(verbose=self.mf.verbose) * Debye
+                self.results["dipole"] = (
+                    self.mf.dip_moment(verbose=self.mf.verbose) * Debye
+                )
 
-        if 'polarizability' in properties:
-            if hasattr(self.mf, '_scf'):
-                self.results['polarizability'] = Polarizability(self.mf._scf).polarizability() * (Bohr**3)
+        if "polarizability" in properties:
+            if hasattr(self.mf, "_scf"):
+                self.results["polarizability"] = Polarizability(
+                    self.mf._scf
+                ).polarizability() * (Bohr**3)
             else:
-                self.results['polarizability'] = Polarizability(self.mf).polarizability() * (Bohr**3)
+                self.results["polarizability"] = Polarizability(
+                    self.mf
+                ).polarizability() * (Bohr**3)
+
 
 # if __name__ == '__main__':
 
 #     import pyscf
 #     from ase import Atoms
 #     from ase.optimize import LBFGS
-    
+
 #     atoms = Atoms('H2', [(0, 0, 0), (0, 0, 1)])
 #     mol = pyscf.M(atom=atoms_from_ase(atoms),basis='cc-pVDZ',spin=0,charge=0)
 
 #     mf = mol.UHF()
 #     mf.verbose = 3
-#     mf.kernel() 
-    
+#     mf.kernel()
+
 #     index = 4
 
 #     mf = [mf,mf.MP2(),mf.CISD(),mf.CCSD(),mf.CCSD()][index]
-    
+
 #     p = parameters()
 #     p.mode = ['hf','mp2','cisd','ccsd','ccsd(t)'][index]
 #     p.verbose = 5
@@ -238,33 +252,30 @@ class PYSCF(Calculator):
 #     mf.verbose = p.verbose
 #     atoms.calc = PYSCF(mf=mf,p=p)
 
-    
+
 #     fmax = 1e-3 * (Ha / Bohr)
-    
+
 #     dyn = LBFGS(atoms,logfile='opt.log',trajectory='opt.traj')
 #     dyn.run(fmax=fmax)
 
 # Create water molecule
-water = Atoms('H2O',
-             positions=[[0, 0, 0],  # O
-                       [0.757, 0.586, 0],  # H
-                       [-0.757, 0.586, 0]], # H
-             cell=[10, 10, 10],  # Box size
-             pbc=False)  # No periodic boundary conditions
+water = Atoms(
+    "H2O",
+    positions=[[0, 0, 0], [0.757, 0.586, 0], [-0.757, 0.586, 0]],  # O  # H  # H
+    cell=[10, 10, 10],  # Box size
+    pbc=False,
+)  # No periodic boundary conditions
 
 # First try with GPU-accelerated B3LYP/DZ
 p_dft = parameters()
-p_dft.mode = 'dft'
-p_dft.basis = 'cc-pVDZ'
-p_dft.xc = 'B3LYP'
-p_dft.auxbasis = 'def2-tzvp-jkfit'
+p_dft.mode = "dft"
+p_dft.basis = "cc-pVDZ"
+p_dft.xc = "B3LYP"
+p_dft.auxbasis = "def2-tzvp-jkfit"
 p_dft.verbose = 3
 
 # Create initial mf object for DFT
-mol = pyscf.M(atom=atoms_from_ase(water),
-              basis=p_dft.basis,
-              spin=0,
-              charge=0)
+mol = pyscf.M(atom=atoms_from_ase(water), basis=p_dft.basis, spin=0, charge=0)
 mf_dft = dft.RKS(mol, xc=p_dft.xc)
 
 water.calc = PYSCF(mf=mf_dft, p=p_dft)
@@ -294,10 +305,10 @@ print("Forces:\n", water.get_forces(), "eV/Å")
 
 # Optional: Geometry optimization
 
-write('water_initial.xyz', water)
+write("water_initial.xyz", water)
 
-opt = LBFGS(water, trajectory='water_optimization.traj')
+opt = LBFGS(water, trajectory="water_optimization.traj")
 opt.run(fmax=0.01)  # Optimize until forces < 0.01 eV/Å
 
-write('water_final.xyz', water)
-write('water_trajectory.xyz', read('water_optimization.traj', ':'))
+write("water_final.xyz", water)
+write("water_trajectory.xyz", read("water_optimization.traj", ":"))
