@@ -7,6 +7,7 @@ from rdkit.Chem import Draw, rdDepictor
 from rdkit.Chem.Draw import rdMolDraw2D
 from rdkit.Chem.inchi import MolFromInchi
 import ase
+from ase import io as ase_io
 from ase.visualize import view as viewmol
 from ase.data import atomic_masses as ase_data_masses
 from dscribe.descriptors import MBTR
@@ -270,7 +271,7 @@ def process_selection(sele, output_path, ti, central_resid, ix):
     # Save structures
     pdb_path = output_path / "pdb" / f"{ti}_{central_resid}_{ix}.pdb"
     sele.write(pdb_path)
-    ase.io.write(output_path / "xyz" / f"{ti}_{central_resid}_{ix}.xyz", atoms)
+    ase_io.write(output_path / "xyz" / f"{ti}_{central_resid}_{ix}.xyz", atoms)
 
     return a, b, c, pdb_path
 
