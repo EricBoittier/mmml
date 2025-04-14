@@ -19,10 +19,10 @@ from select_points import select_most_unique_samples
 
 def concat_trajectory(files, output_path, selected=None):
     """Concatenate trajectory files.
-    
+
     Args:
         files (list): List of file paths to concatenate
-        selected (list): List of indices to select from each file   
+        selected (list): List of indices to select from each file
 
     Returns:
         Path: Path to concatenated trajectory
@@ -31,8 +31,6 @@ def concat_trajectory(files, output_path, selected=None):
         selected = list(range(len(files)))
 
     traj = []
-    
-
 
 
 def get_descriptor(system, species, plot=True):
@@ -72,7 +70,12 @@ def get_descriptor(system, species, plot=True):
                 species_list.append((i_species, j_species))
                 descriptor_list.append(mbtr_output[loc])
                 if plot:
-                    plt.plot(x, mbtr_output[loc], "o-", label="{}-{}".format(i_species, j_species))
+                    plt.plot(
+                        x,
+                        mbtr_output[loc],
+                        "o-",
+                        label="{}-{}".format(i_species, j_species),
+                    )
 
     if plot:
         ax.set_xlabel("Distance (Angstrom)")
@@ -81,22 +84,23 @@ def get_descriptor(system, species, plot=True):
 
     species_list
     descriptor = np.array(descriptor_list)
-    
+
     if plot:
-        plt.matshow(descriptor, vmin=0, vmax=.5, cmap="cubehelix_r")
+        plt.matshow(descriptor, vmin=0, vmax=0.5, cmap="cubehelix_r")
         plt.show()
-    
+
     return species_list, descriptor, system
+
 
 def mass_to_atomic_number(mass):
     """Convert atomic mass to atomic number.
-    
+
     Args:
         mass (float): Atomic mass
-        
+
     Returns:
         int: Atomic number
-        
+
     Raises:
         ValueError: If no matching atomic number is found
     """
@@ -163,7 +167,14 @@ def process_selection(sele, output_path, ti, central_resid, ix, natoms):
 
 
 def extract_molecular_descriptors(
-    universe, output_path, natoms,samples_per_frame=10, start=0, end=-1, stride=100, n_find=6,
+    universe,
+    output_path,
+    natoms,
+    samples_per_frame=10,
+    start=0,
+    end=-1,
+    stride=100,
+    n_find=6,
 ):
     """Extract molecular descriptors from trajectory frames.
 
@@ -184,14 +195,14 @@ def extract_molecular_descriptors(
     results = []
 
     trajectory_frames = universe.trajectory[start:end:stride]
-    print("*"*100)
+    print("*" * 100)
     print(f"n_find: {n_find}")
     print("start", start)
     print("end", end)
     print("stride", stride)
     print("universe.trajectory", len(universe.trajectory))
     print("trajectory_frames", len(trajectory_frames))
-    print("*"*100)
+    print("*" * 100)
 
     if len(trajectory_frames) == 0:
         raise ValueError("No trajectory frames found")
@@ -214,12 +225,16 @@ def extract_molecular_descriptors(
             )
 
             # Select closest residues
-            sele = select_closest_residues(universe, central_resid, dist_res, n_find_minus_one)
+            sele = select_closest_residues(
+                universe, central_resid, dist_res, n_find_minus_one
+            )
             found = list(set([_.resid for _ in list(sele)]))
             print(f"found: {found}, {len(found)}, n_find: {n_find}")
             if len(found) == n_find:
                 # Process selection and save results
-                result = process_selection(sele, output_path, ti, central_resid, ix, natoms)
+                result = process_selection(
+                    sele, output_path, ti, central_resid, ix, natoms
+                )
                 results.append(result)
 
     # Process results
@@ -279,13 +294,13 @@ def setup_universe(psf_file, dcd_file, pdb_file, start=0, end=None, stride=1):
 
 def sim_to_data(u, labels, natoms, output_path):
     """Convert simulation data to numpy array.
-    
+
     Args:
         u (mda.Universe): MDAnalysis universe object
         labels (list): List of atom labels
         natoms (int): Number of atoms
         output_path (Path): Path to output directory
-        
+
     Returns:
         dict: Dictionary containing processed simulation data
     """
@@ -293,17 +308,13 @@ def sim_to_data(u, labels, natoms, output_path):
     positions = []
     for ts in u.trajectory:
         positions.append(u.atoms.positions[:natoms])
-    
+
     traj = np.array(positions)
-    
+
     # Save trajectory data
     np.save(output_path / "trajectory.npy", traj)
-    
-    return {
-        "trajectory": traj,
-        "labels": labels,
-        "n_atoms": natoms
-    }
+
+    return {"trajectory": traj, "labels": labels, "n_atoms": natoms}
 
 
 def process_simulation(args):
@@ -324,9 +335,7 @@ def process_simulation(args):
 
     print(f"Processing: {resid} {sim_conds}")
 
-    u, labels, natoms = setup_universe(
-        psf_file, dcd_file, pdb_file
-    )
+    u, labels, natoms = setup_universe(psf_file, dcd_file, pdb_file)
     output_path = logfile.parents[2] / "data" / str(logfile.parents[1]).split("/")[-1]
 
     results = extract_molecular_descriptors(
@@ -357,7 +366,7 @@ def create_args(
     n_find=6,
 ):
     """Create arguments for process_simulation.
-    
+
     Args:
         logfile (Path): Path to logfile
         psf (Path): Path to PSF file
@@ -370,10 +379,10 @@ def create_args(
         stride (int): Frame stride
         samples_per_frame (int): Number of samples per frame
         n_find (int): Number of residues to find
-        
+
     Returns:
         argparse.Namespace: Arguments namespace
-        
+
     Raises:
         AssertionError: If required arguments are missing
     """
@@ -386,7 +395,7 @@ def create_args(
     assert stride is not None, "stride is required"
     assert samples_per_frame is not None, "samples_per_frame is required"
     assert n_find is not None, "n_find is required"
-    
+
     namespace = argparse.Namespace(
         logfile=logfile,
         psf=psf,
@@ -403,7 +412,6 @@ def create_args(
     return namespace
 
 
-
 def load_ase_and_fix_atoms(pdb_fn):
     xyz_fn = str(pdb_fn).replace(".pdb", ".xyz").replace("/pdb/", "/xyz/")
     assert Path(xyz_fn).exists()
@@ -412,11 +420,14 @@ def load_ase_and_fix_atoms(pdb_fn):
     a.set_atomic_numbers(a2.get_atomic_numbers())
     return a
 
+
 def sample_and_save(results, output_path, key="test"):
     N = len(results["all_descriptors_full"])
-    samples = select_most_unique_samples(results["all_descriptors"], int(N*0.8))
+    samples = select_most_unique_samples(results["all_descriptors"], int(N * 0.8))
 
-    ase_atoms = [load_ase_and_fix_atoms(pdb_fn) for pdb_fn in results["all_pdb_filenames"]]
+    ase_atoms = [
+        load_ase_and_fix_atoms(pdb_fn) for pdb_fn in results["all_pdb_filenames"]
+    ]
 
     ase_dicts = [_.todict() for _ in ase_atoms]
 
@@ -430,11 +441,14 @@ def sample_and_save(results, output_path, key="test"):
         # ase_atoms[i].info["desc_mbtr"] = results["all_descriptors"][i]
         ase_atoms[i].info["pdb_fn"] = np.array([str(results["all_pdb_filenames"][i])])
 
-    ase_io.write(output_path / f'{key}.traj', ase_atoms) 
+    ase_io.write(output_path / f"{key}.traj", ase_atoms)
 
     npz_collection = {}
     dict_keys = ase_dicts[0].keys()
-    dtypes = [( k,  ase_dicts[0][k].dtype, np.stack([ase_dicts[0][k] for _ in range(N)]).shape)  for k in dict_keys]
+    dtypes = [
+        (k, ase_dicts[0][k].dtype, np.stack([ase_dicts[0][k] for _ in range(N)]).shape)
+        for k in dict_keys
+    ]
     data = {}
     for k in dict_keys:
         try:
@@ -442,9 +456,9 @@ def sample_and_save(results, output_path, key="test"):
         except:
             print(f"Error stacking {k}")
 
-    np.savez(output_path / f'{key}.npz', **data)
+    np.savez(output_path / f"{key}.npz", **data)
 
-    return output_path / f'{key}.npz'
+    return output_path / f"{key}.npz"
 
 
 def parse_args():
@@ -488,24 +502,35 @@ def parse_args():
         default=6,
         help="Number of residues to find and analyze",
     )
-    parser.add_argument("--sim_conds", type=str, help="Simulation conditions", default="sim")
+    parser.add_argument(
+        "--sim_conds", type=str, help="Simulation conditions", default="sim"
+    )
     parser.add_argument("--resid", type=str, help="Residue ID", default="lig")
-    parser.add_argument("--psf", type=str, default="system.psf", help="Path to PSF file")
-    parser.add_argument("--dcd", type=str, default="eq*_1_*dcd", help="Path to DCD file")
-    parser.add_argument("--pdb", type=str, default="initial.pdb", help="Path to PDB file")
+    parser.add_argument(
+        "--psf", type=str, default="system.psf", help="Path to PSF file"
+    )
+    parser.add_argument(
+        "--dcd", type=str, default="eq*_1_*dcd", help="Path to DCD file"
+    )
+    parser.add_argument(
+        "--pdb", type=str, default="initial.pdb", help="Path to PDB file"
+    )
     parser.add_argument("--logfile", type=str, help="Path to log file")
-    parser.add_argument("--output_path", type=str, default="data", help="Output directory path")
+    parser.add_argument(
+        "--output_path", type=str, default="data", help="Output directory path"
+    )
 
     args = parser.parse_args()
     return args
 
+
 def main():
     args = parse_args()
     u, labels, natoms, output_path, results = process_simulation(args)
-    
+
     key = f"{args.resid}_{args.n_find}_{args.samples_per_frame}_{args.start}_{args.end}_{args.stride}"
     print(f"key: {key}")
-    npz_path = sample_and_save(results, output_path, key = key)
+    npz_path = sample_and_save(results, output_path, key=key)
     print(f"Saved to {npz_path}, {len(results['all_descriptors'])} descriptors")
     return npz_path
 

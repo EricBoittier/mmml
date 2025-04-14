@@ -15,6 +15,7 @@
 
 from ase.calculators.calculator import Calculator, all_changes
 from ase.units import Ha, Bohr, Debye
+
 # from pyscf.prop.polarizability.uhf import polarizability, Polarizability
 from pyscf.pbc.tools.pyscf_ase import atoms_from_ase
 import jsonpickle
@@ -28,6 +29,7 @@ from gpu4pyscf import dft
 import numpy as np
 from ase import Atoms
 from ase.optimize import LBFGS
+
 # from pyscf4gpuInterface.aseInterface import PYSCF, parameters
 
 
@@ -51,7 +53,7 @@ def run_dft(ATOMS, BASIS, AUGBASIS, SOLVENT, XC, do_forces=True):
     )
 
     mf_df = dft.RKS(mol, xc=XC).density_fit(auxbasis=AUGBASIS)
-    mf_df.verbose = 1 
+    mf_df.verbose = 1
 
     if SOLVENT:
         mf_df = mf_df.PCM()
@@ -74,7 +76,7 @@ def run_dft(ATOMS, BASIS, AUGBASIS, SOLVENT, XC, do_forces=True):
     e_tot = mf_df.kernel()
 
     forces = None
-    if do_forces:  
+    if do_forces:
         # Calculate nuclear gradients
         g = mf_df.nuc_grad_method()
         g.auxbasis_response = True
@@ -91,7 +93,7 @@ class parameters:
         self.xc = None  # For DFT calculations
         self.auxbasis = None  # For density fitting
         self.solvent = None  # For PCM calculations
-        self.verbose = 1 
+        self.verbose = 1
 
     def show(self):
         print("------------------------")
@@ -128,8 +130,8 @@ class PYSCF(Calculator):
 
     implemented_properties = [
         "energy",
-        #"forces",
-        #"dipole",
+        # "forces",
+        # "dipole",
         #'polarizability'
     ]
 
@@ -174,7 +176,11 @@ class PYSCF(Calculator):
         if self.p.mode.lower() == "dft":
             # Use GPU4PySCF DFT
             e_tot, forces = run_dft(
-                atoms_from_ase(atoms), self.p.basis, self.p.auxbasis, bool(self.p.solvent), self.p.xc
+                atoms_from_ase(atoms),
+                self.p.basis,
+                self.p.auxbasis,
+                bool(self.p.solvent),
+                self.p.xc,
             )
             self.results["energy"] = e_tot * Ha
             if "forces" in properties:
@@ -231,48 +237,67 @@ class PYSCF(Calculator):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Run PySCF calculations on structures from an ASE trajectory')
-    parser.add_argument('trajectory', help='Path to ASE trajectory file')
+    parser = argparse.ArgumentParser(
+        description="Run PySCF calculations on structures from an ASE trajectory"
+    )
+    parser.add_argument("trajectory", help="Path to ASE trajectory file")
     parser.add_argument("index", type=int, default=0)
-    parser.add_argument('--output', default='output.traj',
-                       help='Output trajectory file (default: output.traj)')
-    parser.add_argument('--method', choices=['dft', 'hf'], default='dft',
-                       help='Calculation method (default: dft)')
-    parser.add_argument('--basis', default='cc-pVTZ',
-                       help='Basis set (default: cc-pVTZ)')
-    parser.add_argument('--xc', default='wB97m-v',
-                       help='Exchange-correlation functional for DFT (default: wB97m-v)')
-    parser.add_argument('--auxbasis', default='def2-tzvp-jkfit',
-                       help='Auxiliary basis set for density fitting (default: def2-tzvp-jkfit)')
-    parser.add_argument('--solvent', choices=['cosmo', 'pcm'], 
-                       help='Solvent model (optional)')
-    parser.add_argument('--verbose', type=int, default=1,
-                       help='Verbosity level (default: 1)')
-    
+    parser.add_argument(
+        "--output",
+        default="output.traj",
+        help="Output trajectory file (default: output.traj)",
+    )
+    parser.add_argument(
+        "--method",
+        choices=["dft", "hf"],
+        default="dft",
+        help="Calculation method (default: dft)",
+    )
+    parser.add_argument(
+        "--basis", default="cc-pVTZ", help="Basis set (default: cc-pVTZ)"
+    )
+    parser.add_argument(
+        "--xc",
+        default="wB97m-v",
+        help="Exchange-correlation functional for DFT (default: wB97m-v)",
+    )
+    parser.add_argument(
+        "--auxbasis",
+        default="def2-tzvp-jkfit",
+        help="Auxiliary basis set for density fitting (default: def2-tzvp-jkfit)",
+    )
+    parser.add_argument(
+        "--solvent", choices=["cosmo", "pcm"], help="Solvent model (optional)"
+    )
+    parser.add_argument(
+        "--verbose", type=int, default=1, help="Verbosity level (default: 1)"
+    )
+
     args = parser.parse_args()
 
     # Read trajectory
     from ase.io import read, write
-    atoms_list = read(args.trajectory, f'{args.index}')
+
+    atoms_list = read(args.trajectory, f"{args.index}")
     if not isinstance(atoms_list, list):
         atoms_list = [atoms_list]
 
     # Process each structure and write to trajectory
-    print(f"\nProcessing {len(atoms_list)} structures using {args.method.upper()}/{args.basis}")
-    
+    print(
+        f"\nProcessing {len(atoms_list)} structures using {args.method.upper()}/{args.basis}"
+    )
+
     for i, atoms in enumerate(atoms_list):
         # Create fresh calculator for each structure
-        if args.method == 'dft':
-            mol = pyscf.M(atom=atoms_from_ase(atoms), 
-                         basis=args.basis, 
-                         spin=0, 
-                         charge=0)
+        if args.method == "dft":
+            mol = pyscf.M(
+                atom=atoms_from_ase(atoms), basis=args.basis, spin=0, charge=0
+            )
             mf = dft.RKS(mol, xc=args.xc)
         else:
-            mol = pyscf.M(atom=atoms_from_ase(atoms),
-                         basis=args.basis,
-                         spin=0,
-                         charge=0)
+            mol = pyscf.M(
+                atom=atoms_from_ase(atoms), basis=args.basis, spin=0, charge=0
+            )
             mf = mol.HF()
             mf.verbose = args.verbose
 
@@ -281,34 +306,36 @@ def main():
         p.mode = args.method
         p.basis = args.basis
         p.verbose = args.verbose
-        if args.method == 'dft':
+        if args.method == "dft":
             p.xc = args.xc
             p.auxbasis = args.auxbasis
             p.solvent = args.solvent
 
         calc = PYSCF(mf=mf, p=p)
         atoms.calc = calc
-        
+
         # Run calculation
         energy = atoms.get_potential_energy()
-        #forces = atoms.get_forces()
+        # forces = atoms.get_forces()
         print(f"\nStructure {i+1}:")
         print(f"Energy: {energy:.6f} eV")
-        #print(f"Forces (eV/Å):\n{forces}")
-        
+        # print(f"Forces (eV/Å):\n{forces}")
+
         # Write structure to trajectory
         if i == 0:
             print(f"Writing structure {i+1} to trajectory")
-            write(args.output, atoms, format='traj')
+            write(args.output, atoms, format="traj")
         else:
             print(f"Appending structure {i+1} to trajectory")
-            write(args.output, atoms, format='traj', append=True)
-            
+            write(args.output, atoms, format="traj", append=True)
+
         # Force garbage collection
         import gc
+
         gc.collect()
 
     print(f"\nCalculation results written to: {args.output}")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

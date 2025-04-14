@@ -129,4 +129,3 @@ def main(file, timestep=0.5, fitdf=None):
     xcol = "Time (ps)"
     plot_timeseries(data, columns, xcol)
     return plot_temperature_density(data, fitdf)
-
