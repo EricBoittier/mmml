@@ -137,87 +137,90 @@ delete_all_objects()
 
 
 import molecularnodes.entities.trajectory as mnt
-traj = mnt.load(r"C:\Users\Eric\Downloads\ase\test.pdb", r"C:\Users\Eric\Downloads\ase\test.dcd", style="ball+stick")
 
 
-CURRENT_FRAME = 100
+CURRENT_FRAME = 0
 
-#for CURRENT_FRAME in range(len(traj.universe.trajectory[:3])):
-traj = mnt.load(r"C:\Users\Eric\Downloads\ase\test.pdb",
- r"C:\Users\Eric\Downloads\ase\test.dcd", 
- name = "NewTrajectory" ,
- style="ball+stick",
- )
-#bpy.data.node_groups["Style Ball and Stick"].nodes].input[4].default_value = 0.1
-#bpy.data.node_groups["Style Ball and Stick"].interface.items_tree["Radius"] = 0.01
-#for k in bpy.data.node_groups["Style Ball and Stick"].nodes.keys():
-#    print(k)
-#    if len(bpy.data.node_groups["Style Ball and Stick"].nodes[k].inputs) > 4:
-#        bpy.data.node_groups["Style Ball and Stick"].nodes[k].inputs[4].default_value = 0.1
+def load_traj():
+    traj = mnt.load(r"C:\Users\Eric\Downloads\ase\test.pdb", r"C:\Users\Eric\Downloads\ase\test.xyz", style="ball+stick")
 
-bpy.context.scene.frame_set(CURRENT_FRAME)
+    #for CURRENT_FRAME in range(len(traj.universe.trajectory[:3])):
+    traj = mnt.load(r"C:\Users\Eric\Downloads\ase\test.pdb",
+    r"C:\Users\Eric\Downloads\ase\test.xyz", 
+    name = "NewTrajectory" ,
+    style="ball+stick",
+    )
+    #bpy.data.node_groups["Style Ball and Stick"].nodes].input[4].default_value = 0.1
+    #bpy.data.node_groups["Style Ball and Stick"].interface.items_tree["Radius"] = 0.01
+    #for k in bpy.data.node_groups["Style Ball and Stick"].nodes.keys():
+    #    print(k)
+    #    if len(bpy.data.node_groups["Style Ball and Stick"].nodes[k].inputs) > 4:
+    #        bpy.data.node_groups["Style Ball and Stick"].nodes[k].inputs[4].default_value = 0.1
 
-asetraj = ase.io.read(r"C:\Users\Eric\Downloads\ase\merged.traj", index=f"{CURRENT_FRAME}")
+    bpy.context.scene.frame_set(CURRENT_FRAME)
 
-atoms = asetraj
-fs = atoms.get_forces() 
-e = atoms.get_potential_energy()
-pos = atoms.get_positions()
-posmean = pos.T.mean(axis=1)
-pos = pos - posmean
+    asetraj = ase.io.read(r"C:\Users\Eric\Downloads\ase\merged.traj", index=f"{CURRENT_FRAME}")
 
-R = best_fit_rotation_matrix(pos, 
-traj.universe.trajectory[CURRENT_FRAME].positions)
+    atoms = asetraj
+    fs = atoms.get_forces() 
+    e = atoms.get_potential_energy()
+    pos = atoms.get_positions()
+    posmean = pos.T.mean(axis=1)
+    pos = pos - posmean
 
-fs = fs @ R.T
+    R = best_fit_rotation_matrix(pos, 
+    traj.universe.trajectory[CURRENT_FRAME].positions)
 
-for i in range(len(atoms)):
-    start = traj.universe.trajectory[CURRENT_FRAME].positions[i] 
-    end = start + fs[i]
-    create_arrow(start/100, end/100, name="ForceArrow")
+    fs = fs @ R.T
 
-
-sc = bpy.context.scene
-
-# Set output resolution
-bpy.context.scene.render.resolution_x = 1920
-bpy.context.scene.render.resolution_y = 1080
-bpy.context.scene.render.resolution_percentage = 100
-
-# Set file format and output path
-bpy.context.scene.render.image_settings.file_format = 'PNG'
-# Enable transparent background
-bpy.context.scene.render.film_transparent = True
-
-# Set file format to PNG (supports transparency)
-bpy.context.scene.render.image_settings.file_format = 'PNG'
-bpy.context.scene.render.image_settings.color_mode = 'RGBA'  # Ensure alpha channel is included
-
-# Enable GPU if available
-bpy.context.preferences.addons['cycles'].preferences.compute_device_type = 'CUDA'  # or 'OPTIX' / 'HIP' for AMD
+    for i in range(len(atoms)):
+        start = traj.universe.trajectory[CURRENT_FRAME].positions[i] 
+        end = start + fs[i]
+        create_arrow(start/100, end/100, name="ForceArrow")
 
 
-m = traj.universe.trajectory[CURRENT_FRAME].positions.T.mean(axis=1)
-m /= 100
-m[0] -= m[0]/3
-m[1] += m[1]/5
-m[2] += m[2]/3.5
-# Example usage: create a 3D text at the origin
-text_obj = create_3d_text(f"ID:\t{CURRENT_FRAME}\nE:\t{e:.3e}", location=(m[0], m[1], m[2]), size=0.005)
+    sc = bpy.context.scene
 
-camera = add_orthographic_camera()
-bpy.ops.object.select_all(action='SELECT')
-bpy.context.view_layer.objects.active = camera 
-bpy.context.scene.camera = camera
-bpy.ops.view3d.camera_to_view_selected()
-camera.data.ortho_scale = camera.data.ortho_scale * 1.2
-r = r"C:\Users\Eric\Downloads\ase\test-data.png"
+    # Set output resolution
+    bpy.context.scene.render.resolution_x = 1920
+    bpy.context.scene.render.resolution_y = 1080
+    bpy.context.scene.render.resolution_percentage = 100
 
-sc.render.filepath = r
+    # Set file format and output path
+    bpy.context.scene.render.image_settings.file_format = 'PNG'
+    # Enable transparent background
+    bpy.context.scene.render.film_transparent = True
 
-bpy.ops.render.render("INVOKE_DEFAULT", write_still=True) 
+    # Set file format to PNG (supports transparency)
+    bpy.context.scene.render.image_settings.file_format = 'PNG'
+    bpy.context.scene.render.image_settings.color_mode = 'RGBA'  # Ensure alpha channel is included
+
+    # Enable GPU if available
+    bpy.context.preferences.addons['cycles'].preferences.compute_device_type = 'CUDA'  # or 'OPTIX' / 'HIP' for AMD
 
 
-bpy.data.images['Render Result'].save_render(filepath=sc.render.filepath)
+    m = traj.universe.trajectory[CURRENT_FRAME].positions.T.mean(axis=1)
+    m /= 100
+    m[0] -= m[0]/3
+    m[1] += m[1]/5
+    m[2] += m[2]/3.5
+    # Example usage: create a 3D text at the origin
+    text_obj = create_3d_text(f"ID:\t{CURRENT_FRAME}\nE:\t{e:.3e}", location=(m[0], m[1], m[2]), size=0.005)
 
-#delete_all_objects()
+    camera = add_orthographic_camera()
+    bpy.ops.object.select_all(action='SELECT')
+    bpy.context.view_layer.objects.active = camera 
+    bpy.context.scene.camera = camera
+    bpy.ops.view3d.camera_to_view_selected()
+    camera.data.ortho_scale = camera.data.ortho_scale * 1.2
+    r = r"C:\Users\Eric\Downloads\ase\\" 
+    r = r + str(CURRENT_FRAME) + "test-data.png"
+
+    sc.render.filepath = r
+
+    bpy.ops.render.render("INVOKE_DEFAULT", write_still=True) 
+
+
+    bpy.data.images['Render Result'].save_render(filepath=sc.render.filepath)
+
+load_traj()
