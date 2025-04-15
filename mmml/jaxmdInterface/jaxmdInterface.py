@@ -233,6 +233,9 @@ def args_parser():
     parser.add_argument("--data_path", type=str, default=None)
     parser.add_argument("--sim_key", type=int, default=None)
     parser.add_argument("--n_atoms", type=int, default=16)
+    parser.add_argument("--T", type=float, default=300)
+    parser.add_argument("--dt", type=float, default=5e-3)
+    parser.add_argument("--steps_per_recording", type=int, default=250)
     return parser.parse_args()
 
 
@@ -273,6 +276,9 @@ def main():
     out_positions, max_is = run_sim_loop(run_sim, args.sim_key, args.indices, args.Ecatch)
 
     print("Trajectories ran from ", np.array(max_is).min(), " to ", np.array(max_is).max(), " NHC cycles")
+    print(len(out_positions))
+    print(len(out_positions[0]))
+
     # save the trajectory
     for i in range(len(out_positions[0])):
         save_trajectory(
