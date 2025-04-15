@@ -1,17 +1,21 @@
 import requests
 from html.parser import HTMLParser
 
+
 class MyHTMLParser(HTMLParser):
     def __init__(self):
         super().__init__()
         self.found = None  # Use instance attribute
-    
+
     def handle_starttag(self, tag, attrs):
         if "button" in tag:
             for attr in attrs:
                 if "onclick" in attr[0]:
                     self.found = attr[1]
+
+
 parser = MyHTMLParser()
+
 
 def download_paper(doi, resid):
     url = f"https://sci-hub.se/{doi}"
@@ -26,7 +30,7 @@ def download_paper(doi, resid):
 
     parser.feed(str(response.content))
     download_url = parser.found.split("\\")[1][1:]
-    download_url = "https:"+download_url
+    download_url = "https:" + download_url
     response = requests.get(download_url)
     if response.status_code == 200:
         _doi = doi.replace("/", ".")
@@ -48,4 +52,3 @@ if __name__ == "__main__":
     doi = sys.argv[1]
     resid = sys.argv[2]
     download_paper(doi, resid)
-
