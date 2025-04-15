@@ -168,6 +168,7 @@ def set_up_nhc_sim_routine(params, model, test_data, atoms):
                 print(f"{i}/{10000}: E={energy:.6f} eV, max|F|={max_force:.6f}")
 
         # NVT simulation
+        nbrs = neighbor_fn.allocate(fire_state.position)
         state = init_fn(key, fire_state.position, 2.91086e-3, neighbor=nbrs)
         nhc_positions = []
 
