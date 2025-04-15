@@ -8,6 +8,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 # If you want to perform simulations in float64 you have to call this before any JAX compuation
 # jax.config.update('jax_enable_x64', True)
 # Add custom path
+import sys
 sys.path.append("/pchem-data/meuwly/boittier/home/pycharmm_test")
 
 from itertools import combinations, permutations, product
