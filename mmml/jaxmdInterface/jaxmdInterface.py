@@ -1,29 +1,51 @@
-from itertools import combinations, permutations, product
-from typing import Dict, Tuple, List, Any, NamedTuple
-
-import jax
-
-# If you want to perform simulations in float64 you have to call this before any JAX compuation
-# jax.config.update('jax_enable_x64', True)
-
-import jax
-import jax.numpy as jnp
-from jax import Array
+# Standard library imports
 import os
-
+# Environment setup
 os.environ["CHARMM_HOME"] = "/pchem-data/meuwly/boittier/home/charmm"
 os.environ["CHARMM_LIB_DIR"] = "/pchem-data/meuwly/boittier/home/charmm/build/cmake"
-# Set environment variables
 os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".99"
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+# If you want to perform simulations in float64 you have to call this before any JAX compuation
+# jax.config.update('jax_enable_x64', True)
+# Add custom path
+sys.path.append("/pchem-data/meuwly/boittier/home/pycharmm_test")
 
+from itertools import combinations, permutations, product
+from pathlib import Path
+from typing import Dict, Tuple, List, Any, NamedTuple
+
+# Third-party imports
+import numpy as np
 import jax
-from jax import jit
 import jax.numpy as jnp
+from jax import Array, jit, grad, lax, ops, random
+import optax
+import orbax
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from ase.io import read as ase_read
+
 import ase.calculators.calculator as ase_calc
 
-# from jax import config
-# config.update('jax_enable_x64', True)
+# JAX-MD imports
+from jax_md import space, smap, energy, minimize, quantity, simulate, partition, units
+
+# Local imports
+import e3x
+import physnetjax
+from physnetjax.data.data import prepare_datasets
+from physnetjax.training.loss import dipole_calc
+from physnetjax.models.model import EF
+from physnetjax.training.training import train_model
+from physnetjax.data.batches import _prepare_batches as prepare_batches
+from physnetjax.calc.helper_mlp import get_ase_calc
+from physnetjax.data.read_ase import save_traj_to_npz
+from physnetjax.restart.restart import get_last, get_files, get_params_model
+from physnetjax.analysis.analysis import plot_stats
+
+
+
 
 # Check JAX configuration
 devices = jax.local_devices()
@@ -31,73 +53,15 @@ print(devices)
 print(jax.default_backend())
 print(jax.devices())
 
-import sys
-import e3x
-import jax
-import numpy as np
-import optax
-import orbax
-from pathlib import Path
-import pandas as pd
-
-# Add custom path
-sys.path.append("/pchem-data/meuwly/boittier/home/pycharmm_test")
-import physnetjax
 
 sys.path.append("/pchem-data/meuwly/boittier/home/dcm-lj-data")
 from pycharmm_lingo_scripts import script1, script2, script3, load_dcm
 
-from physnetjax.data.data import prepare_datasets
-from physnetjax.training.loss import dipole_calc
-from physnetjax.models.model import EF
-from physnetjax.training.training import train_model  # from model import dipole_calc
-from physnetjax.data.batches import (
-    _prepare_batches as prepare_batches,
-)  # prepare_batches, prepare_datasets
 
 orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
-
 data_key, train_key = jax.random.split(jax.random.PRNGKey(42), 2)
 
-from pathlib import Path
 
-from physnetjax.calc.helper_mlp import get_ase_calc
-
-
-from physnetjax.data.read_ase import save_traj_to_npz
-
-
-from jax_md import partition
-from jax_md import space
-import jax.numpy as np
-from jax import random
-from jax import jit
-from jax import lax
-from jax import ops
-
-import time
-
-from jax_md import space, smap, energy, minimize, quantity, simulate
-
-import matplotlib
-import matplotlib.pyplot as plt
-import seaborn as sns
-
-import jax
-import jax.numpy as jnp
-import jax_md
-import numpy as np
-
-from ase.io import read as ase_read
-from jax_md import units
-from typing import Dict
-
-
-import time
-from jax_md import minimize
-
-from physnetjax.restart.restart import get_last, get_files, get_params_model
-from physnetjax.analysis.analysis import plot_stats
 
 
 def set_up_model(restart, last=True, n_atoms=16):
@@ -128,18 +92,19 @@ def set_up_nhc_sim_routine(params, model, test_data, atoms):
 
     @jit
     def jax_md_energy_fn(position, **kwargs):
-        l_nbrs = nbrs.update(jnp.array(position))
-        _ = evaluate_energies_and_forces(
+        # Ensure position is a JAX array
+        position = jnp.array(position)
+        l_nbrs = nbrs.update(position)
+        result = evaluate_energies_and_forces(
             atomic_numbers=atomic_numbers,
             positions=position,
             dst_idx=dst_idx,
             src_idx=src_idx,
         )
-
-    return _["energy"].reshape(-1)[0]
+        return result["energy"].reshape(-1)[0]
+    
     jax_md_grad_fn = jax.grad(jax_md_energy_fn)
     BOXSIZE = 100
-    # displacement, shift = space.periodic(BOXSIZE, wrapped=False)
     displacement, shift = space.free()
     neighbor_fn = partition.neighbor_list(
         displacement, None, 30 / 2, format=partition.Sparse
@@ -155,7 +120,8 @@ def set_up_nhc_sim_routine(params, model, test_data, atoms):
         def step(i, state_nbrs):
             state, nbrs = state_nbrs
             nbrs = nbrs.update(state.position)
-            return apply_fn(state, neighbor=nbrs), nbrs
+            state = apply_fn(state, neighbor=nbrs)
+            return (state, nbrs)
 
         return lax.fori_loop(0, steps_per_recording, step, (state, nbrs))
 
@@ -171,69 +137,59 @@ def set_up_nhc_sim_routine(params, model, test_data, atoms):
     apply_fn = jit(apply_fn)
 
     def run_sim(
-        key, TESTIDX, Ecatch, nbrs, TFACT=5, total_steps=100000, steps_per_recording=250
+        key, 
+        test_idx, 
+        e_catch, 
+        nbrs, 
+        t_fact=5, 
+        total_steps=100000, 
+        steps_per_recording=250
     ):
-
         total_records = total_steps // steps_per_recording
-        # Define the simulation.
 
-        Si_mass = 2.91086e-3
-
-        fire_state = unwrapped_init_fn(R - R.T.mean(axis=1).T)
+        # Center positions before minimization
+        initial_pos = R - R.mean(axis=0)
+        fire_state = unwrapped_init_fn(initial_pos)
         fire_positions = []
 
-        N = 10000
-        print("*" * 10)
-        print("Minimization")
-        print("*" * 10)
-        for i in range(N):
-            fire_positions += [fire_state.position]
-            fire_state = jit(unwrapped_step_fn)(fire_state)
-            if (i) % int(N // 10) == 0:
-                print(
-                    i,
-                    "/",
-                    N,
-                    float(jax_md_energy_fn(fire_state.position)),
-                    float(np.abs(np.array(jax_md_grad_fn(fire_state.position))).max()),
-                )
+        # FIRE minimization
+        print("*" * 10 + "\nMinimization\n" + "*" * 10)
+        for i in range(10000):
+            fire_positions.append(fire_state.position)
+            fire_state = unwrapped_step_fn(fire_state)
+            
+            if i % (10000 // 10) == 0:
+                energy = float(jax_md_energy_fn(fire_state.position))
+                max_force = float(jnp.abs(jax_md_grad_fn(fire_state.position)).max())
+                print(f"{i}/{10000}: E={energy:.6f} eV, max|F|={max_force:.6f}")
 
-        state = init_fn(key, fire_state.position, Si_mass, neighbor=nbrs)
+        # NVT simulation
+        state = init_fn(key, fire_state.position, 2.91086e-3, neighbor=nbrs)
         nhc_positions = []
 
-        print("*" * 10)
-        print("NVT")
-        print("*" * 10)
-        # Run the simulation.
-        print("\t\tEnergy (eV)\tTemperature (K)")
+        print("*" * 10 + "\nNVT\n" + "*" * 10)
+        print("\t\tTime (ps)\tEnergy (eV)\tTemperature (K)")
+        
         for i in range(total_records):
             state, nbrs = sim(state, nbrs)
-            nhc_positions += [state.position]
-            if (i - 1) % 100 == 0:
-                iT = float(
-                    quantity.temperature(momentum=state.momentum, mass=Si_mass) / K_B
-                )
-                iE = float(jax_md_energy_fn(state.position, neighbor=nbrs))
-                print(
-                    i * steps_per_recording * dt,
-                    "ps",
-                    100 * i / total_records,
-                    "% ={ ",
-                    "{:.02f}\t\t\t{:.02f}".format(iE, iT),
-                )
-                if iT > T * TFACT:
-                    print("ERROR! bailing!")
-                    print("T", iT, T * TFACT, "E", iE, Ecatch)
-                    break
-                if iE < Ecatch:
-                    print("ERROR! bailing!")
-                    print("T", iT, T * TFACT, "E", iE, Ecatch)
+            nhc_positions.append(state.position)
+            
+            if i % 100 == 0:
+                time = i * steps_per_recording * dt
+                temp = float(quantity.temperature(state.momentum, 2.91086e-3) / K_B)
+                energy = float(jax_md_energy_fn(state.position, neighbor=nbrs))
+                
+                print(f"{time:10.2f}\t{energy:10.4f}\t{temp:10.2f}")
+                
+                # Check for simulation stability
+                if temp > T * t_fact or energy < e_catch:
+                    print(f"Simulation terminated: T={temp:.2f}K, E={energy:.4f}eV")
                     break
 
-        print(f"Simulated (NVT, NHC) {i} steps at dt {dt * 1000} (fs)")
-        nhc_positions = np.stack(nhc_positions)
-
-        return i * steps_per_recording, nhc_positions
+        steps_completed = i * steps_per_recording
+        print(f"\nSimulated {steps_completed} steps ({steps_completed * dt:.2f} ps)")
+        
+        return steps_completed, jnp.stack(nhc_positions)
 
     return run_sim
 
