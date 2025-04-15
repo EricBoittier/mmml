@@ -63,7 +63,7 @@ orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
 data_key, train_key = jax.random.split(jax.random.PRNGKey(42), 2)
 
 
-
+Si_mass = 2.81086E-3
 
 def set_up_model(restart, last=True, n_atoms=16):
     if last:
@@ -181,7 +181,7 @@ def set_up_nhc_sim_routine(params, model, test_data, atoms):
             
             if i % 100 == 0:
                 time = i * steps_per_recording * dt
-                temp = float(quantity.temperature(state.momentum, 2.91086e-3) / K_B)
+                temp = float(quantity.temperature(momentum=state.momentum, mass=Si_mass) / K_B)
                 energy = float(jax_md_energy_fn(state.position, neighbor=nbrs))
                 
                 print(f"{time:10.2f}\t{energy:10.4f}\t{temp:10.2f}")
