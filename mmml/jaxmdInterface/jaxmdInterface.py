@@ -88,14 +88,16 @@ def set_up_nhc_sim_routine(params, model, test_data, atoms):
 
     TESTIDX = 0
     dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(len(atoms))
-    atomic_numbers = test_data["Z"][TESTIDX]
-    position = R = test_data["R"][TESTIDX]
+    # atomic_numbers = test_data["Z"][TESTIDX]
+    # position = R = test_data["R"][TESTIDX]
+    atomic_numbers = atoms.get_atomic_numbers()
+    R = position = atoms.get_positions()
 
     @jit
     def jax_md_energy_fn(position, **kwargs):
         # Ensure position is a JAX array
         position = jnp.array(position)
-        l_nbrs = nbrs.update(position)
+        # l_nbrs = nbrs.update(position)
         result = evaluate_energies_and_forces(
             atomic_numbers=atomic_numbers,
             positions=position,
@@ -253,6 +255,10 @@ def main():
     data = np.load(args.data_path)
     R = data["R"][0]
     Z = data["Z"]
+    print("Z", Z.shape)
+    print("Z", Z)
+    print("R", R.shape)
+    print("R", R)
     if len(Z) != args.n_atoms:
         Z = data["Z"][0]
     if len(Z) != len(R):
