@@ -137,11 +137,11 @@ def set_up_nhc_sim_routine(params, model, test_data, atoms):
     init_fn, apply_fn = simulate.nvt_nose_hoover(jax_md_energy_fn, shift, dt, kT)
     apply_fn = jit(apply_fn)
 
+
     def run_sim(
         key, 
         test_idx, 
         e_catch, 
-        nbrs, 
         t_fact=5, 
         total_steps=100000, 
         steps_per_recording=250
@@ -203,7 +203,7 @@ def save_trajectory(out_positions, atoms, filename="nhc_trajectory", format="xyz
     trajectory.close()
 
 
-def run_sim(indices, Ecatch, nbrs):
+def run_sim_loop(indices, Ecatch):
     """
     Run the simulation for the given indices and save the trajectory.
     """
@@ -211,7 +211,7 @@ def run_sim(indices, Ecatch, nbrs):
     max_is = []
     for i in indices:
         print("test data", i)
-        mi, pos = run_sim(i, Ecatch, nbrs)[:5]
+        mi, pos = run_sim(i, Ecatch)
         out_positions.append(pos)
         max_is.append(mi)
 
@@ -260,7 +260,8 @@ def main():
     import ase
     atoms = ase.Atoms(Z,R)
     run_sim = set_up_nhc_sim_routine(params, model, data, atoms)
-    out_positions, max_is = run_sim(args.sim_key, args.indices, args.Ecatch, nbrs)
+    # run the simulation
+    out_positions, max_is = run_sim(args.sim_key, args.indices, args.Ecatch)
 
     print("Trajectories ran from ", max_is.min(), " to ", max_is.max(), " NHC cycles")
     # save the trajectory
