@@ -203,7 +203,7 @@ def save_trajectory(out_positions, atoms, filename="nhc_trajectory", format="xyz
     trajectory.close()
 
 
-def run_sim_loop(indices, Ecatch):
+def run_sim_loop(run_sim, sim_key, indices, Ecatch):
     """
     Run the simulation for the given indices and save the trajectory.
     """
@@ -211,7 +211,7 @@ def run_sim_loop(indices, Ecatch):
     max_is = []
     for i in indices:
         print("test data", i)
-        mi, pos = run_sim(i, Ecatch)
+        mi, pos = run_sim(sim_key, i, Ecatch)
         out_positions.append(pos)
         max_is.append(mi)
 
@@ -261,7 +261,7 @@ def main():
     atoms = ase.Atoms(Z,R)
     run_sim = set_up_nhc_sim_routine(params, model, data, atoms)
     # run the simulation
-    out_positions, max_is = run_sim(args.sim_key, args.indices, args.Ecatch)
+    out_positions, max_is = run_sim_loop(run_sim, args.sim_key, args.indices, args.Ecatch)
 
     print("Trajectories ran from ", max_is.min(), " to ", max_is.max(), " NHC cycles")
     # save the trajectory
