@@ -202,7 +202,7 @@ def set_up_nhc_sim_routine(params, model, test_data, atoms):
 
 def save_trajectory(out_positions, atoms, filename="nhc_trajectory", format="xyz"):
     trajectory = Trajectory(f"{filename}.{format}", "a")
-    for R in out_positions[0]:
+    for R in out_positions:
         atoms.set_positions(R)
         trajectory.write(atoms)
     trajectory.close()
@@ -282,7 +282,7 @@ def main():
     # save the trajectory
     for i in range(len(out_positions[0])):
         save_trajectory(
-            out_positions[0][i], atoms, filename=f"nhc_trajectory_{i}", format="xyz"
+            out_positions, atoms, filename=f"nhc_trajectory_{i}", format="xyz"
         )
 
 if __name__ == "__main__":
