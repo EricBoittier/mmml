@@ -76,7 +76,7 @@ def set_up_model(restart, last=True, n_atoms=16):
     return params, dimer_model
 
 
-def set_up_nhc_sim_routine(params, model, test_data, atoms):
+def set_up_nhc_sim_routine(params, model, test_data, atoms, T=300, dt=5e-3, steps_per_recording=250):
     @jax.jit
     def evaluate_energies_and_forces(atomic_numbers, positions, dst_idx, src_idx):
         return model.apply(
@@ -271,7 +271,7 @@ def main():
         raise ValueError("Z and R must have the same length")
     import ase
     atoms = ase.Atoms(Z,R)
-    run_sim = set_up_nhc_sim_routine(params, model, data, atoms)
+    run_sim = set_up_nhc_sim_routine(params, model, data, atoms, T=args.T, dt=args.dt, steps_per_recording=args.steps_per_recording)
     # run the simulation
     out_positions, max_is = run_sim_loop(run_sim, args.sim_key, args.indices, args.Ecatch)
 
