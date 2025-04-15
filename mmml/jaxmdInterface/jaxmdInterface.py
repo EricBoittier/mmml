@@ -256,14 +256,14 @@ def main():
     check_args(args)
     params, model = set_up_model(args.restart)
     data = np.load(args.data_path)
-    R = data["R"][0]
+    R = data["R"][args.indices[0]]
     Z = data["Z"]
     print("Z", Z.shape)
     print("Z", Z)
     print("R", R.shape)
     print("R", R)
     if len(Z) != args.n_atoms:
-        Z = data["Z"][0]
+        Z = data["Z"][args.indices[0]]
     if len(Z) != len(R):
         raise ValueError("Z and R must have the same length")
     import ase
@@ -274,9 +274,9 @@ def main():
 
     print("Trajectories ran from ", np.array(max_is).min(), " to ", np.array(max_is).max(), " NHC cycles")
     # save the trajectory
-    for i in range(len(out_positions)):
+    for i in range(len(out_positions[0])):
         save_trajectory(
-            out_positions[i], atoms, filename=f"nhc_trajectory_{i}", format="xyz"
+            out_positions[0][i], atoms, filename=f"nhc_trajectory_{i}", format="xyz"
         )
 
 if __name__ == "__main__":
