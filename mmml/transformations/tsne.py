@@ -119,7 +119,7 @@ def transform(
         X: The input data.
         n_components: The number of output components.
         perplexity: The perplexity of the distribution.
-        learning_rate: The learning rate of the optimizer. (auto => max(N/12, 50)) 
+        learning_rate: The learning rate of the optimizer. (auto => max(N/12, 50))
         init: The initialization method ("pca" or "random").
         seed: The random seed.
         n_iter: The number of optimization steps.

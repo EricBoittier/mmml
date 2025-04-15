@@ -130,8 +130,8 @@ class PYSCF(Calculator):
 
     implemented_properties = [
         "energy",
-        #"forces",
-        #"dipole",
+        # "forces",
+        # "dipole",
         #'polarizability'
     ]
 
@@ -168,7 +168,9 @@ class PYSCF(Calculator):
     def get_polarizability(self, atoms=None):
         return self.get_property("polarizability", atoms)
 
-    def calculate(self, atoms=None, properties=["energy", "forces"], system_changes=all_changes):
+    def calculate(
+        self, atoms=None, properties=["energy", "forces"], system_changes=all_changes
+    ):
         Calculator.calculate(
             self, atoms=atoms, properties=properties, system_changes=system_changes
         )
@@ -316,11 +318,11 @@ def main():
 
         # Run calculation
         energy = atoms.get_potential_energy()
-        #forces = atoms.get_forces()
+        # forces = atoms.get_forces()
         print(f"\nStructure {i+1}:")
         print(f"Energy: {energy:.6f} eV")
-        #print(f"Forces (eV/Å):\n{forces}")
-        
+        # print(f"Forces (eV/Å):\n{forces}")
+
         # Write structure to trajectory
         if i == 0:
             print(f"Writing structure {i+1} to trajectory")

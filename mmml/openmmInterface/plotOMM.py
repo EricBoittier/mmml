@@ -7,9 +7,6 @@ import numpy as np
 from sklearn.linear_model import LinearRegression
 
 
-
-
-
 def plot_timeseries(data, columns, xcol):
     fig, axes = plt.subplots(len(columns) - 1, 1, sharex=True, figsize=(8, 12))
     fig.suptitle("Simulation Data Over Time")
@@ -29,7 +26,6 @@ def plot_timeseries(data, columns, xcol):
     plt.show()
 
 
-
 def plot_temperature_density(data, fitdf=None):
     data = data[data["Temperature (K)"] > 175.5]
 
@@ -42,7 +38,9 @@ def plot_temperature_density(data, fitdf=None):
     # scatter plot
     plt.figure(figsize=(8, 6))
     plt.scatter(X, y, label="Data", alpha=0.01, color="gray")
-    plt.plot(X, fit[0] * X**2 + fit[1] * X + fit[2], "--", label="Quadratic Fit", color="r")
+    plt.plot(
+        X, fit[0] * X**2 + fit[1] * X + fit[2], "--", label="Quadratic Fit", color="r"
+    )
     # plt.plot(X, fit.predict(X), label="Linear Fit")
     plt.xlabel("Temperature (K)")
     plt.ylabel("Density (g/mL)")
@@ -60,7 +58,7 @@ def plot_temperature_density(data, fitdf=None):
 
     exp_df = None
     if fitdf is not None:
-        exp_df = pd.read_json(fitdf) #"../../fitdata_meoh.json"
+        exp_df = pd.read_json(fitdf)  # "../../fitdata_meoh.json"
         dens_key = "Mass density, kg/m3"
         temp_key = "Temperature, K"
         pressure_key = "Pressure, kPa"
@@ -95,6 +93,7 @@ def read_data(file):
     xcol = columns[0]
     data = data.iloc[1000:]  # remove the first row
     return data, columns, xcol
+
 
 def main(file, timestep=0.5, fitdf=None):
     data, columns, xcol = read_data(file)

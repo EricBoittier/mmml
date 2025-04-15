@@ -444,22 +444,23 @@ def calculate_E_pair(dimer_results, monomer_results, dimer_idxs, result):
     summed_mm_intE = result["ele_energies"] + result["evdw_energies"]
     return summed_ml_intE, summed_mm_intE
 
+
 def calculate_F_pair(dimer_results, monomer_results, dimer_idxs, result):
     """Calculate and combine ML and MM forces"""
-    mono = monomer_results["ml_forces"][
-        np.array(dimer_idxs)
-    ]
+    mono = monomer_results["ml_forces"][np.array(dimer_idxs)]
     print(mono.shape)
-    a,b,c,d = mono.shape
-    mono = mono.reshape(a, b*c, d)
+    a, b, c, d = mono.shape
+    mono = mono.reshape(a, b * c, d)
     summed_ml_intF = dimer_results["ml_forces"] - mono
     summed_mm_intF = result["mm_forces"]
     return summed_ml_intF, summed_mm_intF
+
 
 def get_fnkey(fn):
     fnkey = str(fn).split("/")[-1].split(".")[0].upper()
     fnkey = "_".join(fnkey.split("_")[:3])
     return fnkey
+
 
 def calc_energies_forces(
     fn, DO_ML=True, DO_MM=True, MM_CUTON=6.0, MM_CUTOFF=10.0, BUFFER=0.1
@@ -473,7 +474,7 @@ def calc_energies_forces(
     energy.show()
 
     ase_atom_full_system = ase.Atoms(atomic_numbers, atom_positions)
-    
+
     result = None
     summed_2body = None
     mmml_energy = None
@@ -538,14 +539,16 @@ def calc_energies_forces(
     mm_forces = summed_mm_intF
     ml_forces = summed_ml_intF
 
-
-    indices = np.array(all_dimer_idxs).flatten()[:, None].repeat(3, axis=1) + np.array([0, mm_forces.shape[1],  2*mm_forces.shape[1]])
+    indices = np.array(all_dimer_idxs).flatten()[:, None].repeat(3, axis=1) + np.array(
+        [0, mm_forces.shape[1], 2 * mm_forces.shape[1]]
+    )
     flattened_ml_dimers = ml_forces.reshape(-1, 3).flatten()
     # indices = np.repeat(np.array(all_dimer_idxs).flatten(), 3)
-    mmml_forces = jax.ops.segment_sum(flattened_ml_dimers, indices.flatten()).reshape(mm_forces.shape[1], 3)
-    
-    # mmml_forces = (mm_forces, ml_forces)
+    mmml_forces = jax.ops.segment_sum(flattened_ml_dimers, indices.flatten()).reshape(
+        mm_forces.shape[1], 3
+    )
 
+    # mmml_forces = (mm_forces, ml_forces)
 
     output_dict = {
         "mmml_energy": mmml_energy,
@@ -557,10 +560,18 @@ def calc_energies_forces(
 
     return output_dict
 
+
 def compare_energies(
-    fn,  df, DO_ML=True, DO_MM=True, MM_CUTON=6.0, MM_CUTOFF=10.0, BUFFER=0.1
+    fn, df, DO_ML=True, DO_MM=True, MM_CUTON=6.0, MM_CUTOFF=10.0, BUFFER=0.1
 ):
-    energy_forces_dict = calc_energies_forces(fn, DO_ML=DO_ML, DO_MM=DO_MM, MM_CUTON=MM_CUTON, MM_CUTOFF=MM_CUTOFF, BUFFER=BUFFER)
+    energy_forces_dict = calc_energies_forces(
+        fn,
+        DO_ML=DO_ML,
+        DO_MM=DO_MM,
+        MM_CUTON=MM_CUTON,
+        MM_CUTOFF=MM_CUTOFF,
+        BUFFER=BUFFER,
+    )
     mmml_energy = energy_forces_dict["mmml_energy"]
     charmm = energy_forces_dict["charmm"]
     mm_forces = energy_forces_dict["mm_forces"]
@@ -598,6 +609,7 @@ def compare_energies(
     }
     return results_dict
 
+
 # !CG321    0.0       -0.0560     2.0100   0.0 -0.01 1.9 ! alkane (CT2), 4/98, yin, adm jr, also used by viv
 # !CLGA1    0.0       -0.3430     1.9100
 
@@ -618,14 +630,31 @@ def set_param_card(CG321EP, CG321RM, CLGA1EP, CLGA1RM):
     pycharmm.lingo.charmm_script(cmd)
 
 
-def get_loss_terms(fns, MM_CUTON=6.0, MM_CUTOFF=10.0, BUFFER=0.01, MM_lambda=1.0, ML_lambda=0.0, DO_MM=True, DO_ML=True):
+def get_loss_terms(
+    fns,
+    MM_CUTON=6.0,
+    MM_CUTOFF=10.0,
+    BUFFER=0.01,
+    MM_lambda=1.0,
+    ML_lambda=0.0,
+    DO_MM=True,
+    DO_ML=True,
+):
     import time
 
     start = time.time()
     err_mmml_list = []
     err_charmm_list = []
     for fn in fns:
-        results_dict = compare_energies(fn, df, DO_MM=DO_MM, DO_ML=DO_ML, MM_CUTON=MM_CUTON, MM_CUTOFF=MM_CUTOFF, BUFFER=BUFFER)
+        results_dict = compare_energies(
+            fn,
+            df,
+            DO_MM=DO_MM,
+            DO_ML=DO_ML,
+            MM_CUTON=MM_CUTON,
+            MM_CUTOFF=MM_CUTOFF,
+            BUFFER=BUFFER,
+        )
         err_mmml_list.append(results_dict["err_mmml"])
         err_charmm_list.append(results_dict["err_charmm"])
         print(
@@ -651,19 +680,38 @@ def get_loss_terms(fns, MM_CUTON=6.0, MM_CUTOFF=10.0, BUFFER=0.01, MM_lambda=1.0
     print("RMSE Charmm", np.sqrt(np.mean(err_charmm_list**2)))
     print("MAE Charmm", np.mean(np.abs(err_charmm_list)))
 
-    loss = MM_lambda * np.mean(err_mmml_list**2) + ML_lambda * np.mean(err_charmm_list**2)
+    loss = MM_lambda * np.mean(err_mmml_list**2) + ML_lambda * np.mean(
+        err_charmm_list**2
+    )
     return loss, err_mmml_list, err_charmm_list
 
-def get_loss_fn(train_filenames, DO_ML=True, DO_MM=True, NTRAIN=20, MM_CUTON=6.0, MM_lambda=1.0, ML_lambda=0.0):
+
+def get_loss_fn(
+    train_filenames,
+    DO_ML=True,
+    DO_MM=True,
+    NTRAIN=20,
+    MM_CUTON=6.0,
+    MM_lambda=1.0,
+    ML_lambda=0.0,
+):
     def loss_fn(x0):
         print("Starting")
         # random_indices = np.random.randint(0, len(train_filenames),6)
         fns = [train_filenames[i] for i in range(NTRAIN)]
         CG321EP, CG321RM, CLGA1EP, CLGA1RM = x0[:4]
         set_param_card(CG321EP, CG321RM, CLGA1EP, CLGA1RM)
-        loss, _, _ = get_loss_terms(fns, MM_CUTON=MM_CUTON, MM_lambda=MM_lambda, ML_lambda=ML_lambda, DO_MM=DO_MM, DO_ML=DO_ML)
+        loss, _, _ = get_loss_terms(
+            fns,
+            MM_CUTON=MM_CUTON,
+            MM_lambda=MM_lambda,
+            ML_lambda=ML_lambda,
+            DO_MM=DO_MM,
+            DO_ML=DO_ML,
+        )
         print("Loss", loss)
         return loss
+
     return loss_fn
 
 
@@ -677,7 +725,9 @@ def ep_scale_loss(x0):
     print("Loss", loss)
     return loss
 
+
 # bounds = None
+
 
 # res = minimize(ep_scale_loss, x0=1.0, bounds=[(0.95, 1.05)])
 # res = minimize(loss, x0=x0, bounds=bounds,
@@ -699,8 +749,9 @@ def create_initial_simplex(x0, delta=0.0001):
     return initial_simplex
 
 
-def optimize_params_simplex(x0, bounds, 
-loss, method="Nelder-Mead", maxiter=100, xatol=0.0001, fatol=0.0001):
+def optimize_params_simplex(
+    x0, bounds, loss, method="Nelder-Mead", maxiter=100, xatol=0.0001, fatol=0.0001
+):
     initial_simplex = create_initial_simplex(x0)
     res = minimize(
         loss,
@@ -717,11 +768,19 @@ loss, method="Nelder-Mead", maxiter=100, xatol=0.0001, fatol=0.0001):
 
     print(res)
     return res
-    
+
+
 def get_bounds(x0, scale=0.1):
-    b= [(x0[i] * (1-scale), x0[i] * (1+scale)) if x0[i] > 0 else (x0[i] * (1+scale), x0[i] * (1-scale)) 
-    for i in range(len(x0)) ]
+    b = [
+        (
+            (x0[i] * (1 - scale), x0[i] * (1 + scale))
+            if x0[i] > 0
+            else (x0[i] * (1 + scale), x0[i] * (1 - scale))
+        )
+        for i in range(len(x0))
+    ]
     return b
+
 
 from physnetjax.restart.restart import get_last, get_files, get_params_model
 from physnetjax.analysis.analysis import plot_stats
@@ -782,8 +841,6 @@ for a in range(1, N_MONOMERS + 1):
     all_monomer_idxs.append(indices_of_monomer(a))
 
 
-
-
 print("N files", len(filenames))
 
 NTRAIN = 20
@@ -795,21 +852,31 @@ DO_MM = True
 
 x0 = np.array([-0.18, 2.0, -0.45, 2.028, MM_CUTON])
 
-bounds = get_bounds(x0,scale=0.1)
+bounds = get_bounds(x0, scale=0.1)
 test_size = 100 - NTRAIN
 test_filenames = filenames[-test_size:]
 train_filenames = filenames[:-test_size]
 
 
-loss = get_loss_fn(train_filenames, DO_ML=DO_ML, DO_MM=DO_MM, NTRAIN=NTRAIN, MM_lambda=MM_lambda, ML_lambda=ML_lambda, MM_CUTON=MM_CUTON)
+loss = get_loss_fn(
+    train_filenames,
+    DO_ML=DO_ML,
+    DO_MM=DO_MM,
+    NTRAIN=NTRAIN,
+    MM_lambda=MM_lambda,
+    ML_lambda=ML_lambda,
+    MM_CUTON=MM_CUTON,
+)
 
 
 optimize = True
-if optimize:    
+if optimize:
     res = optimize_params_simplex(x0, bounds, loss)
     x0 = res.x
 
 CG321EP, CG321RM, CLGA1EP, CLGA1RM, MM_CUTON = x0
 set_param_card(CG321EP, CG321RM, CLGA1EP, CLGA1RM)
-test_loss, test_err_mmml_list, test_err_charmm_list = get_loss_terms(test_filenames, MM_CUTON=MM_CUTON, MM_lambda=MM_lambda, ML_lambda=ML_lambda)
+test_loss, test_err_mmml_list, test_err_charmm_list = get_loss_terms(
+    test_filenames, MM_CUTON=MM_CUTON, MM_lambda=MM_lambda, ML_lambda=ML_lambda
+)
 print(test_loss, test_err_mmml_list, test_err_charmm_list)

@@ -10,12 +10,13 @@ state_color = "#A94A8C"
 observable_color = "#003B5C"
 count_color = "#B67B00"
 
+
 def read_dyna_line(line: str) -> dict:
     # Early return if not a DYNA line (faster than exception handling)
     if not line.startswith("DYNA"):
         return None
     try:
-    # Fixed-width parsing but more efficient
+        # Fixed-width parsing but more efficient
         return {
             "dyna": True,
             "step": int(line[5:16].strip()),
@@ -23,34 +24,36 @@ def read_dyna_line(line: str) -> dict:
             "total_energy": float(line[27:40].strip()),
             "total_kinetic_energy": float(line[40:53].strip()),
             "energy": float(line[53:64].strip()),
-            "temperature": float(line[66:].strip())
+            "temperature": float(line[66:].strip()),
         }
     except (ValueError, IndexError) as e:
         print(f"Error parsing DYNA line: {line.strip()}")
         print(f"Error: {e}")
         return None
 
+
 def read_press_line(line: str) -> dict:
     # Early return if not a PRESS line
     if not line.startswith("DYNA PRESS"):
         return None
-    try:    
+    try:
         return {
             "vire": float(line[11:28].strip()),
             "viri": float(line[28:40].strip()),
             "press_e": float(line[40:52].strip()),
             "press_i": float(line[53:65].strip()),
-            "volume": float(line[67:].strip())
+            "volume": float(line[67:].strip()),
         }
     except (ValueError, IndexError) as e:
         print(f"Error parsing PRESS line: {line.strip()}")
         print(f"Error: {e}")
         return None
 
+
 # For processing the whole file, use Polars' streaming capabilities
 def read_dyna_file(filename: str) -> pl.DataFrame:
     dyna_data = []
-    with open(filename, 'r') as f:
+    with open(filename, "r") as f:
         # Pre-allocate a reasonable chunk size
         for line in f:
             if line.startswith("DYNA>"):  # More specific check
@@ -62,9 +65,10 @@ def read_dyna_file(filename: str) -> pl.DataFrame:
     if dyna_data:  # Don't forget the last chunk
         yield pl.DataFrame(dyna_data)
 
+
 def read_press_file(filename: str) -> pl.DataFrame:
     press_data = []
-    with open(filename, 'r') as f:
+    with open(filename, "r") as f:
         for line in f:
             if line.startswith("DYNA PRESS"):
                 press_data.append(read_press_line(line))
@@ -72,14 +76,17 @@ def read_press_file(filename: str) -> pl.DataFrame:
 
 
 def process_file(filename: str) -> pl.DataFrame:
-    if ("DYNA" in filename):
+    if "DYNA" in filename:
         return pl.concat(read_dyna_file(filename))
-    elif ("PRESS" in filename):
+    elif "PRESS" in filename:
         return read_press_file(filename)
     else:
         raise ValueError(f"Unknown file type: {filename}")
 
+
 import matplotlib.pyplot as plt
+
+
 def plot_simulation_overview(dyna_df, press_df, subfig=None):
     # plot of temperature, virials and volume over time
 
@@ -92,33 +99,48 @@ def plot_simulation_overview(dyna_df, press_df, subfig=None):
 
     axs[0].plot(dyna_df["temperature"], alpha=0.5, color=kinetic_color)
     axs[0].axhline(dyna_df["temperature"].mean(), color=kinetic_color, linestyle="--")
-    
+
     axs[1].plot(press_df["viri"], alpha=0.25, color=state_color)
     axs[1].axhline(press_df["viri"].mean(), color=state_color, linestyle="--")
     axs[1].plot(press_df["vire"], alpha=0.25, color=spatial_color)
     axs[1].axhline(press_df["vire"].mean(), color=spatial_color, linestyle="--")
-    axs[1].plot(press_df["vire"] + press_df["viri"], alpha=0.5, color="k", linestyle="--")
-    axs[1].axhline((press_df["vire"] + press_df["viri"]).mean(), color="k", linestyle="--")   
-    
+    axs[1].plot(
+        press_df["vire"] + press_df["viri"], alpha=0.5, color="k", linestyle="--"
+    )
+    axs[1].axhline(
+        (press_df["vire"] + press_df["viri"]).mean(), color="k", linestyle="--"
+    )
+
     axs[2].plot(press_df["press_e"], alpha=0.5, color=spatial_color)
     axs[2].axhline(press_df["press_e"].mean(), color=spatial_color, linestyle="--")
     axs[2].plot(press_df["press_i"], alpha=0.5, color=state_color)
     axs[2].axhline(press_df["press_i"].mean(), color=state_color, linestyle="--")
-    axs[2].plot(press_df["press_e"] + press_df["press_i"], alpha=0.5, color=observable_color, linestyle="--")
-    axs[2].axhline((press_df["press_e"] + press_df["press_i"]).mean(), color=observable_color, linestyle="--")
-    
+    axs[2].plot(
+        press_df["press_e"] + press_df["press_i"],
+        alpha=0.5,
+        color=observable_color,
+        linestyle="--",
+    )
+    axs[2].axhline(
+        (press_df["press_e"] + press_df["press_i"]).mean(),
+        color=observable_color,
+        linestyle="--",
+    )
+
     axs[3].plot(press_df["volume"], alpha=0.5, color=spatial_color)
     axs[3].axhline(press_df["volume"].mean(), color=spatial_color, linestyle="--")
-    
+
     axs[4].plot(dyna_df["total_energy"], alpha=0.5, color="k")
     axs[4].axhline(dyna_df["total_energy"].mean(), color="k", linestyle="--")
-    
+
     axs[5].plot(dyna_df["total_kinetic_energy"], alpha=0.5, color=kinetic_color)
-    axs[5].axhline(dyna_df["total_kinetic_energy"].mean(), color=kinetic_color, linestyle="--")
-    
+    axs[5].axhline(
+        dyna_df["total_kinetic_energy"].mean(), color=kinetic_color, linestyle="--"
+    )
+
     axs[6].plot(dyna_df["energy"], alpha=0.5, color=potential_color)
     axs[6].axhline(dyna_df["energy"].mean(), color=potential_color, linestyle="--")
-    
+
     axs[0].set_ylabel("$T$")
     axs[1].set_ylabel("Virial")
     axs[2].set_ylabel("Pressure")
@@ -131,27 +153,45 @@ def plot_simulation_overview(dyna_df, press_df, subfig=None):
     current_xticks = axs[-1].get_xticks()
     print(current_xticks)
     max_x_tick = max(current_xticks)
-    new_xticks = ["{}".format(int(max_time * x/max_x_tick)) for x in current_xticks]
+    new_xticks = ["{}".format(int(max_time * x / max_x_tick)) for x in current_xticks]
     print(new_xticks)
     axs[-1].set_xticklabels(new_xticks)
 
     return subfig
 
+
 def plot_distribution(data, column, ax, color, shift=0.0):
     # If data is a DataFrame, get the column, otherwise use the data directly
     values = data[column] if isinstance(data, pl.DataFrame) else data
-    
-    ax.hist(values, bins=100, density=True, alpha=0.2, linewidth=1, edgecolor="k", color=color)
+
+    ax.hist(
+        values,
+        bins=100,
+        density=True,
+        alpha=0.2,
+        linewidth=1,
+        edgecolor="k",
+        color=color,
+    )
     # fit a gaussian to the data
     from scipy.stats import norm
+
     mu, std = norm.fit(values)
     x = np.linspace(values.min(), values.max(), 1000)
     p = norm.pdf(x, mu, std)
     ax.set_title(column)
-    ax.plot(x, p, 'k', linewidth=1, linestyle="--", alpha=0.5)
-    ax.text(0.01, 0.95+shift, f"$\mu = {mu:.0f}$\n $\sigma = {std:.0f}$", transform=ax.transAxes, ha="left", va="top")
+    ax.plot(x, p, "k", linewidth=1, linestyle="--", alpha=0.5)
+    ax.text(
+        0.01,
+        0.95 + shift,
+        f"$\mu = {mu:.0f}$\n $\sigma = {std:.0f}$",
+        transform=ax.transAxes,
+        ha="left",
+        va="top",
+    )
     ax.set_xlabel(column)
     ax.set_ylabel("Density")
+
 
 def plot_simulation_distribution_overview(dyna_df, press_df, subfig=None):
     if subfig is None:
@@ -174,7 +214,13 @@ def plot_simulation_distribution_overview(dyna_df, press_df, subfig=None):
 
     plot_distribution(press_df, "vire", axs[2, 0], color=spatial_color)
     plot_distribution(press_df, "viri", axs[2, 0], color=state_color, shift=-0.2)
-    plot_distribution(press_df["vire"] + press_df["viri"], "viri", axs[2, 0], color=state_color, shift=-0.4)
+    plot_distribution(
+        press_df["vire"] + press_df["viri"],
+        "viri",
+        axs[2, 0],
+        color=state_color,
+        shift=-0.4,
+    )
 
     plot_distribution(press_df, "press_e", axs[2, 1], color=spatial_color)
     plot_distribution(press_df, "press_i", axs[2, 1], color=observable_color, shift=0.2)
@@ -183,11 +229,11 @@ def plot_simulation_distribution_overview(dyna_df, press_df, subfig=None):
 
     # subsample the data into blocks of 25% and plot the distribution of the mean of each block
     for i in range(0, 4):
-        block = dyna_df.slice(i*len(dyna_df)//4, (i+1)*len(dyna_df)//4)
+        block = dyna_df.slice(i * len(dyna_df) // 4, (i + 1) * len(dyna_df) // 4)
         # plot_distribution(block, "temperature", axs[0, 2], color=kinetic_color)
         # plot_distribution(block, "total_energy", axs[1, 2], color=spatial_color)
 
-    # N = 4 
+    # N = 4
     # for i in range(0, N):
     #     block = press_df.slice(i*len(press_df)//N, (i+1)*len(press_df)//N)
     #     print(block.describe())
@@ -196,7 +242,7 @@ def plot_simulation_distribution_overview(dyna_df, press_df, subfig=None):
     axs[1, 2].set_axis_off()
     axs[2, 2].set_axis_off()
 
-    #if subfig is None:
+    # if subfig is None:
     #    plt.savefig("simulation_distribution_overview.png", bbox_inches="tight")
 
     return subfig
@@ -215,18 +261,20 @@ def read_press_line(line: str):
         "viri": viri,
         "press_e": press_e,
         "press_i": press_i,
-        "volume": volume
+        "volume": volume,
     }
     return output
 
 
 if __name__ == "__main__":
     from pathlib import Path
+
     current_dir = Path(__file__).parent
-    #dyna_file = current_dir / ".." / ".." / "testdata" / "DYNA1"
-    #press_file = current_dir / ".." / ".." / "testdata" / "PRESS1"
+    # dyna_file = current_dir / ".." / ".." / "testdata" / "DYNA1"
+    # press_file = current_dir / ".." / ".." / "testdata" / "PRESS1"
 
     import argparse
+
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--dyna_file", type=str, required=True)
     parser.add_argument("-p", "--press_file", type=str, required=True)
@@ -241,8 +289,8 @@ if __name__ == "__main__":
     for line in open(dyna_file).readlines():
         if line.startswith("DYNA"):
             dyna_data.append(read_dyna_line(line))
-    
-    for line in open(press_file).readlines():   
+
+    for line in open(press_file).readlines():
         if line.startswith("DYNA PRESS"):
             press_data.append(read_press_line(line))
 
@@ -252,8 +300,8 @@ if __name__ == "__main__":
     n_steps = len(dyna_df)
     n_press = len(press_df)
 
-    #dyna_df = dyna_df.unique(subset=["step", "time"])
-    #press_df = press_df.unique()
+    # dyna_df = dyna_df.unique(subset=["step", "time"])
+    # press_df = press_df.unique()
 
     dyna_df = process_file(dyna_file)
     press_df = process_file(press_file)

@@ -327,12 +327,14 @@ def read_initial_pdb(path: Path) -> Atoms:
     print(e)
     mol.set_chemical_symbols(
         [
-            _[:1]
-            if _.upper()
-            not in [
-                "CL",
-            ]
-            else _
+            (
+                _[:1]
+                if _.upper()
+                not in [
+                    "CL",
+                ]
+                else _
+            )
             for _ in e
         ]
     )
