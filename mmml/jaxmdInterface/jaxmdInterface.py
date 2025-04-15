@@ -300,7 +300,7 @@ def main():
         Z = data["Z"][0]
     if len(Z) != len(R):
         raise ValueError("Z and R must have the same length")
-
+    import ase
     atoms = ase.Atoms(Z,R)
     run_sim = set_up_nhc_sim_routine(params, model, data, atoms)
     out_positions, max_is = run_sim(args.sim_key, args.indices, args.Ecatch, nbrs)
