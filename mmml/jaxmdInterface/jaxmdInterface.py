@@ -295,9 +295,9 @@ def main():
     params, model = set_up_model(args.restart)
     data = np.load(args.data_path)
     R = data["R"][0]
-    Z = data["Z"][0]
+    Z = data["Z"]
     if len(Z) != args.n_atoms:
-        Z = data["Z"]
+        Z = data["Z"][0]
     if len(Z) != len(R):
         raise ValueError("Z and R must have the same length")
 
