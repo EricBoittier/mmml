@@ -293,6 +293,15 @@ def main():
         args.sim_key = jax.random.PRNGKey(args.sim_key)
     check_args(args)
     params, model = set_up_model(args.restart)
+    data = np.load(args.data_path)
+    R = data["R"][0]
+    Z = data["Z"][0]
+    if len(Z) != args.n_atoms:
+        Z = data["Z"]
+    if len(Z) != len(R):
+        raise ValueError("Z and R must have the same length")
+
+    atoms = ase.Atoms(Z,R)
     run_sim = set_up_nhc_sim_routine(params, model, data, atoms)
     out_positions, max_is = run_sim(args.sim_key, args.indices, args.Ecatch, nbrs)
 
