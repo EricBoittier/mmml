@@ -147,7 +147,7 @@ def set_up_nhc_sim_routine(params, model, test_data, atoms):
         e_catch, 
         t_fact=5, 
         total_steps=100000, 
-        steps_per_recording=1,
+        steps_per_recording=250,
         nbrs=nbrs
     ):
         total_records = total_steps // steps_per_recording
