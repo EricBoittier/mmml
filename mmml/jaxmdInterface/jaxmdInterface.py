@@ -280,7 +280,7 @@ def main():
     print(len(out_positions[0]))
 
     # save the trajectory
-    for i in range(len(out_positions[0])):
+    for i in range(len(out_positions)):
         save_trajectory(
             out_positions[i], atoms, filename=f"nhc_trajectory_{i}", format="xyz"
         )
