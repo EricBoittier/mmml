@@ -15,8 +15,31 @@
 #### JaxMD
 #### CHARMM
 
+## GraphBased
+### RDKit
+### OpenBabel
+### NetworkX
 
 ## Workflow
+
+### 1. Starting molecule
+- Read in starting molecule
+- Generate conformers
+- Optimize geometry
+- Run Initial QM calculations 
+  - Optimize geometry
+  - Frequencies
+  - Run single point QM calculation
+  - Thermodynamics
+  - Electrostatics
+
+  - 
+- Run MD simulation
+  - In water
+  - In vacuum
+  - In hexane
+- Run MMML training
+- Run MMML predictions
 
 ```mermaid
 graph TD
