@@ -28,6 +28,7 @@ import seaborn as sns
 from ase.io import read as ase_read
 
 import ase.calculators.calculator as ase_calc
+from ase.io import Trajectory
 
 # JAX-MD imports
 from jax_md import space, smap, energy, minimize, quantity, simulate, partition, units
