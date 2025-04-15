@@ -274,6 +274,14 @@ def args_parser():
     return parser.parse_args()
 
 
+def check_args(args):
+    if args.restart is None:
+        raise ValueError("restart is required")
+    if args.data_path is None:
+        raise ValueError("data_path is required")
+
+
+
 def main():
     args = args_parser()
     data = np.load(args.data_path)
@@ -283,7 +291,7 @@ def main():
         args.sim_key = jax.random.PRNGKey(42)
     else:
         args.sim_key = jax.random.PRNGKey(args.sim_key)
-
+    check_args(args)
     params, model = set_up_model(args.restart)
     run_sim = set_up_nhc_sim_routine(params, model, data, atoms)
     out_positions, max_is = run_sim(args.sim_key, args.indices, args.Ecatch, nbrs)
@@ -294,3 +302,20 @@ def main():
         save_trajectory(
             out_positions[i], atoms, filename=f"nhc_trajectory_{i}", format="xyz"
         )
+
+if __name__ == "__main__":
+    main()
+
+# Usage
+# python jaxmdInterface.py --restart RESTART_FILE --data_path DATA_PATH --n_atoms N_ATOMS --indices INDICES --Ecatch E_CATCH --sim_key SIM_KEY
+# example values:
+# RESTART_FILE = "restart_file.chk"
+# restart = "/pchem-data/meuwly/boittier/home/pycharmm_test/ckpts/dichloromethane-81b5843f-e937-48c5-a741-fe74f5312ebf"
+# data_path = "/pchem-data/meuwly/boittier/home/asecalcs/sim_t_293.15_k_rho_1044.3_kgperm3_pNone_kPa.npz"
+# DATA_PATH = "data.npz"
+# N_ATOMS = 16
+# INDICES = [0]
+# E_CATCH = 0.0001
+# SIM_KEY = 42
+# # full usage
+# python jaxmdInterface.py --restart /pchem-data/meuwly/boittier/home/pycharmm_test/ckpts/dichloromethane-81b5843f-e937-48c5-a741-fe74f5312ebf --data_path /pchem-data/meuwly/boittier/home/asecalcs/sim_t_293.15_k_rho_1044.3_kgperm3_pNone_kPa.npz --n_atoms 16 --indices 0 --sim_key 42

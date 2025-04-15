@@ -10,6 +10,7 @@ import jax
 from jax import jit
 import jax.numpy as jnp
 import ase.calculators.calculator as ase_calc
+
 # from jax import config
 # config.update('jax_enable_x64', True)
 
@@ -125,6 +126,7 @@ CG321EP = -0.0560
 CG321RM = 2.0100
 CLGA1EP = -0.3430
 CLGA1RM = 1.9100
+
 
 def set_pycharmm_xyz(atom_positions):
     xyz = pd.DataFrame(atom_positions, columns=["x", "y", "z"])
@@ -450,22 +452,23 @@ def calculate_E_pair(dimer_results, monomer_results, dimer_idxs, result):
     summed_mm_intE = result["ele_energies"] + result["evdw_energies"]
     return summed_ml_intE, summed_mm_intE
 
+
 def calculate_F_pair(dimer_results, monomer_results, dimer_idxs, result):
     """Calculate and combine ML and MM forces"""
-    mono = monomer_results["ml_forces"][
-        np.array(dimer_idxs)
-    ]
+    mono = monomer_results["ml_forces"][np.array(dimer_idxs)]
     print(mono.shape)
-    a,b,c,d = mono.shape
-    mono = mono.reshape(a, b*c, d)
+    a, b, c, d = mono.shape
+    mono = mono.reshape(a, b * c, d)
     summed_ml_intF = dimer_results["ml_forces"] - mono
     summed_mm_intF = result["mm_forces"]
     return summed_ml_intF, summed_mm_intF
+
 
 def get_fnkey(fn):
     fnkey = str(fn).split("/")[-1].split(".")[0].upper()
     fnkey = "_".join(fnkey.split("_")[:3])
     return fnkey
+
 
 def calc_energies_forces(
     fn, DO_ML=True, DO_MM=True, MM_CUTON=6.0, MM_CUTOFF=10.0, BUFFER=0.1
@@ -479,7 +482,7 @@ def calc_energies_forces(
     energy.show()
 
     ase_atom_full_system = ase.Atoms(atomic_numbers, atom_positions)
-    
+
     result = None
     summed_2body = None
     mmml_energy = None
@@ -544,14 +547,16 @@ def calc_energies_forces(
     mm_forces = summed_mm_intF
     ml_forces = summed_ml_intF
 
-
-    indices = np.array(all_dimer_idxs).flatten()[:, None].repeat(3, axis=1) + np.array([0, mm_forces.shape[1],  2*mm_forces.shape[1]])
+    indices = np.array(all_dimer_idxs).flatten()[:, None].repeat(3, axis=1) + np.array(
+        [0, mm_forces.shape[1], 2 * mm_forces.shape[1]]
+    )
     flattened_ml_dimers = ml_forces.reshape(-1, 3).flatten()
     # indices = np.repeat(np.array(all_dimer_idxs).flatten(), 3)
-    mmml_forces = jax.ops.segment_sum(flattened_ml_dimers, indices.flatten()).reshape(mm_forces.shape[1], 3)
-    
-    # mmml_forces = (mm_forces, ml_forces)
+    mmml_forces = jax.ops.segment_sum(flattened_ml_dimers, indices.flatten()).reshape(
+        mm_forces.shape[1], 3
+    )
 
+    # mmml_forces = (mm_forces, ml_forces)
 
     output_dict = {
         "mmml_energy": mmml_energy,
@@ -563,10 +568,18 @@ def calc_energies_forces(
 
     return output_dict
 
+
 def compare_energies(
-    fn,  df, DO_ML=True, DO_MM=True, MM_CUTON=6.0, MM_CUTOFF=10.0, BUFFER=0.1
+    fn, df, DO_ML=True, DO_MM=True, MM_CUTON=6.0, MM_CUTOFF=10.0, BUFFER=0.1
 ):
-    energy_forces_dict = calc_energies_forces(fn, DO_ML=DO_ML, DO_MM=DO_MM, MM_CUTON=MM_CUTON, MM_CUTOFF=MM_CUTOFF, BUFFER=BUFFER)
+    energy_forces_dict = calc_energies_forces(
+        fn,
+        DO_ML=DO_ML,
+        DO_MM=DO_MM,
+        MM_CUTON=MM_CUTON,
+        MM_CUTOFF=MM_CUTOFF,
+        BUFFER=BUFFER,
+    )
     mmml_energy = energy_forces_dict["mmml_energy"]
     charmm = energy_forces_dict["charmm"]
     mm_forces = energy_forces_dict["mm_forces"]
@@ -616,14 +629,31 @@ def set_param_card(CG321EP, CG321RM, CLGA1EP, CLGA1RM):
     pycharmm.lingo.charmm_script(cmd)
 
 
-def get_loss_terms(fns, MM_CUTON=6.0, MM_CUTOFF=10.0, BUFFER=0.01, MM_lambda=1.0, ML_lambda=0.0, DO_MM=True, DO_ML=True):
+def get_loss_terms(
+    fns,
+    MM_CUTON=6.0,
+    MM_CUTOFF=10.0,
+    BUFFER=0.01,
+    MM_lambda=1.0,
+    ML_lambda=0.0,
+    DO_MM=True,
+    DO_ML=True,
+):
     import time
 
     start = time.time()
     err_mmml_list = []
     err_charmm_list = []
     for fn in fns:
-        results_dict = compare_energies(fn, df, DO_MM=DO_MM, DO_ML=DO_ML, MM_CUTON=MM_CUTON, MM_CUTOFF=MM_CUTOFF, BUFFER=BUFFER)
+        results_dict = compare_energies(
+            fn,
+            df,
+            DO_MM=DO_MM,
+            DO_ML=DO_ML,
+            MM_CUTON=MM_CUTON,
+            MM_CUTOFF=MM_CUTOFF,
+            BUFFER=BUFFER,
+        )
         err_mmml_list.append(results_dict["err_mmml"])
         err_charmm_list.append(results_dict["err_charmm"])
         print(
@@ -649,19 +679,38 @@ def get_loss_terms(fns, MM_CUTON=6.0, MM_CUTOFF=10.0, BUFFER=0.01, MM_lambda=1.0
     print("RMSE Charmm", np.sqrt(np.mean(err_charmm_list**2)))
     print("MAE Charmm", np.mean(np.abs(err_charmm_list)))
 
-    loss = MM_lambda * np.mean(err_mmml_list**2) + ML_lambda * np.mean(err_charmm_list**2)
+    loss = MM_lambda * np.mean(err_mmml_list**2) + ML_lambda * np.mean(
+        err_charmm_list**2
+    )
     return loss, err_mmml_list, err_charmm_list
 
-def get_loss_fn(train_filenames, DO_ML=True, DO_MM=True, NTRAIN=20, MM_CUTON=6.0, MM_lambda=1.0, ML_lambda=0.0):
+
+def get_loss_fn(
+    train_filenames,
+    DO_ML=True,
+    DO_MM=True,
+    NTRAIN=20,
+    MM_CUTON=6.0,
+    MM_lambda=1.0,
+    ML_lambda=0.0,
+):
     def loss_fn(x0):
         print("Starting")
         # random_indices = np.random.randint(0, len(train_filenames),6)
         fns = [train_filenames[i] for i in range(NTRAIN)]
         CG321EP, CG321RM, CLGA1EP, CLGA1RM = x0[:4]
         set_param_card(CG321EP, CG321RM, CLGA1EP, CLGA1RM)
-        loss, _, _ = get_loss_terms(fns, MM_CUTON=MM_CUTON, MM_lambda=MM_lambda, ML_lambda=ML_lambda, DO_MM=DO_MM, DO_ML=DO_ML)
+        loss, _, _ = get_loss_terms(
+            fns,
+            MM_CUTON=MM_CUTON,
+            MM_lambda=MM_lambda,
+            ML_lambda=ML_lambda,
+            DO_MM=DO_MM,
+            DO_ML=DO_ML,
+        )
         print("Loss", loss)
         return loss
+
     return loss_fn
 
 
@@ -675,6 +724,7 @@ def ep_scale_loss(x0):
     print("Loss", loss)
     return loss
 
+
 def create_initial_simplex(x0, delta=0.0001):
     initial_simplex = np.zeros((len(x0) + 1, len(x0)))
     initial_simplex[0] = x0  # First point is x0
@@ -684,8 +734,9 @@ def create_initial_simplex(x0, delta=0.0001):
     return initial_simplex
 
 
-def optimize_params_simplex(x0, bounds, 
-loss, method="Nelder-Mead", maxiter=100, xatol=0.0001, fatol=0.0001):
+def optimize_params_simplex(
+    x0, bounds, loss, method="Nelder-Mead", maxiter=100, xatol=0.0001, fatol=0.0001
+):
     initial_simplex = create_initial_simplex(x0)
     res = minimize(
         loss,
@@ -702,16 +753,25 @@ loss, method="Nelder-Mead", maxiter=100, xatol=0.0001, fatol=0.0001):
 
     print(res)
     return res
-    
+
+
 def get_bounds(x0, scale=0.1):
-    b= [(x0[i] * (1-scale), x0[i] * (1+scale)) if x0[i] > 0 else (x0[i] * (1+scale), x0[i] * (1-scale)) 
-    for i in range(len(x0)) ]
+    b = [
+        (
+            (x0[i] * (1 - scale), x0[i] * (1 + scale))
+            if x0[i] > 0
+            else (x0[i] * (1 + scale), x0[i] * (1 - scale))
+        )
+        for i in range(len(x0))
+    ]
     return b
+
 
 from physnetjax.restart.restart import get_last, get_files, get_params_model
 from physnetjax.analysis.analysis import plot_stats
 
-def get_block(a,b):
+
+def get_block(a, b):
     block = f"""BLOCK
 CALL 1 SELE .NOT. (RESID {a} .OR. RESID {b}) END
 CALL 2 SELE (RESID {a} .OR. RESID {b}) END
@@ -724,7 +784,8 @@ END
 
 
 @jit
-def switch_MM(    X,
+def switch_MM(
+    X,
     mm_energy,
     dif=10 ** (-6),
     MM_CUTON=6.0,
@@ -742,9 +803,9 @@ def switch_MM(    X,
     return mm_contrib
 
 
-
 @jit
-def switch_ML(X,
+def switch_ML(
+    X,
     ml_energy,
     dif=10 ** (-6),
     MM_CUTON=6.0,
@@ -757,6 +818,7 @@ def switch_ML(X,
     ml_scale = 1 - abs(smooth_switch(r, x0=ML_CUTOFF - BUFFER, x1=ML_CUTOFF))
     ml_contrib = ml_scale * ml_energy
     return ml_contrib.sum()
+
 
 switch_ML_grad = jax.grad(switch_ML)
 switch_MM_grad = jax.grad(switch_MM)
@@ -773,8 +835,8 @@ def combine_with_sigmoid_E(
     BUFFER=0.1,
     debug=False,
 ):
-    ml_contrib = switch_ML(X,ml_energy)
-    mm_contrib = switch_ML(X,mm_energy)
+    ml_contrib = switch_ML(X, ml_energy)
+    mm_contrib = switch_ML(X, mm_energy)
     return mm_contrib + ml_contrib
 
 
@@ -793,21 +855,21 @@ pycharmm.lingo.charmm_script(load_dcm)
 reset_block_no_internal()
 
 
-
-
 def get_dimer_calculator(
-    atomic_numbers, 
+    atomic_numbers,
     atom_positions,
-    MM_CUTON = 6.0,
-    restart_path = "/pchem-data/meuwly/boittier/home/pycharmm_test/ckpts/dichloromethane-d17aaa54-65e1-415e-94ae-980521fcd2b1",
-    ):
+    MM_CUTON=6.0,
+    restart_path="/pchem-data/meuwly/boittier/home/pycharmm_test/ckpts/dichloromethane-d17aaa54-65e1-415e-94ae-980521fcd2b1",
+):
     """
     Returns a dimer calculator that can be used to calculate the energy and forces of a dimer.
     """
     N_ATOMS_MONOMER = 5
     N_MONOMERS = 2
 
-    params, monomer_model, dimer_model = initialize_models(restart_path, N_ATOMS_MONOMER)
+    params, monomer_model, dimer_model = initialize_models(
+        restart_path, N_ATOMS_MONOMER
+    )
 
     # Setup monomer calculator
     ase_atoms_monomer = setup_ase_atoms(atomic_numbers, atom_positions, N_ATOMS_MONOMER)
@@ -816,7 +878,9 @@ def get_dimer_calculator(
     )
 
     # Setup dimer calculator
-    ase_atoms_dimer = setup_ase_atoms(atomic_numbers, atom_positions, N_ATOMS_MONOMER * 2)
+    ase_atoms_dimer = setup_ase_atoms(
+        atomic_numbers, atom_positions, N_ATOMS_MONOMER * 2
+    )
     ase_atoms_dimer = create_physnet_calculator(
         params, dimer_model, ase_atoms_dimer, ev2kcalmol
     )
@@ -831,19 +895,20 @@ def get_dimer_calculator(
 
     set_param_card(CG321EP, CG321RM, CLGA1EP, CLGA1RM)
 
-
     def calc_dimer_energy_forces(R, Z, ase_atoms_dimer, ase_atoms_monomer):
         # Recalculate center-of-mass distance
-        r = jnp.linalg.norm(R[:N_ATOMS_MONOMER].T.mean(axis=1) - R[N_ATOMS_MONOMER:].T.mean(axis=1))
+        r = jnp.linalg.norm(
+            R[:N_ATOMS_MONOMER].T.mean(axis=1) - R[N_ATOMS_MONOMER:].T.mean(axis=1)
+        )
         takeidx = 0
 
         # Set up CHARMM coordinates and calculate MM energy
         tmp_coord = coor.get_positions().to_numpy() * 0
-        tmp_coord[:len(R), :] = R   
+        tmp_coord[: len(R), :] = R
         set_pycharmm_xyz(tmp_coord)
         reset_block()
         a, b = 1, 2  # Select first two residues
-        block = get_block(a,b)
+        block = get_block(a, b)
         _ = pycharmm.lingo.charmm_script(block)
         energy.show()
 
@@ -868,14 +933,16 @@ def get_dimer_calculator(
         ase_monomer_F2 = ase_atoms_monomer.get_forces()
 
         # Calculate force errors relative to reference
-        ase_dimer_forces = np.array(ase_dimer_F) 
+        ase_dimer_forces = np.array(ase_dimer_F)
         # Combine monomer forces and calculate errors
-        ase_dimers_1body_forces = np.concatenate([ase_monomer_F1, ase_monomer_F2]) 
+        ase_dimers_1body_forces = np.concatenate([ase_monomer_F1, ase_monomer_F2])
         # Calculate mixed 1-body/2-body forces and errors
-        mixed_1b2b = (2 * ase_dimers_1body_forces) - ase_dimer_forces 
+        mixed_1b2b = (2 * ase_dimers_1body_forces) - ase_dimer_forces
 
         # Calculate interaction energy (difference between dimer and monomers)
-        final_energy = (ase_monomer_E1 + ase_monomer_E2) - ase_dimer_E  # Interaction energy without MM
+        final_energy = (
+            ase_monomer_E1 + ase_monomer_E2
+        ) - ase_dimer_E  # Interaction energy without MM
         # Apply switching functions to combine ML and MM energies
         final_e1 = combine_with_sigmoid_E(X, chm_d_E, final_energy)
         # Add monomer contributions to final energy
@@ -887,7 +954,9 @@ def get_dimer_calculator(
         grad_ml_s = switch_ML_grad(X, final_energy)  # ML switching gradient
 
         # Combine forces with switching functions
-        ml_forces_out = (ase_dimers_1body_forces - ase_dimer_forces) * val_ml_s + grad_ml_s * final_energy 
+        ml_forces_out = (
+            ase_dimers_1body_forces - ase_dimer_forces
+        ) * val_ml_s + grad_ml_s * final_energy
         mm_forces_out = (chm_ref_dimers) * val_mm_s + grad_mm_s * chm_d_E
         # Combine all force contributions for final forces
         final_forces = ml_forces_out + mm_forces_out + ase_dimers_1body_forces
@@ -898,13 +967,14 @@ def get_dimer_calculator(
         }
         return outdict
 
-
-
     class AseDimerCalculator(ase_calc.Calculator):
         implemented_properties = ["energy", "forces"]
 
         def calculate(
-            self, atoms, properties, system_changes=ase.calculators.calculator.all_changes
+            self,
+            atoms,
+            properties,
+            system_changes=ase.calculators.calculator.all_changes,
         ):
             ase_calc.Calculator.calculate(self, atoms, properties, system_changes)
             R = atoms.get_positions()
@@ -913,9 +983,6 @@ def get_dimer_calculator(
             self.results["energy"] = output[
                 "energy"
             ].squeeze()  # * (ase.units.kcal/ase.units.mol)
-            self.results["forces"] = output[
-                "forces"
-            ] 
+            self.results["forces"] = output["forces"]
 
     return AseDimerCalculator()
-
