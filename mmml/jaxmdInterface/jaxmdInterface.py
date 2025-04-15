@@ -271,7 +271,7 @@ def main():
     # run the simulation
     out_positions, max_is = run_sim_loop(run_sim, args.sim_key, args.indices, args.Ecatch)
 
-    print("Trajectories ran from ", max_is.min(), " to ", max_is.max(), " NHC cycles")
+    print("Trajectories ran from ", np.array(max_is).min(), " to ", np.array(max_is).max(), " NHC cycles")
     # save the trajectory
     for i in range(len(out_positions)):
         save_trajectory(
