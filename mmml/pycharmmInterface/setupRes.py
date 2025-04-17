@@ -48,6 +48,9 @@ import pycharmm.scalar as scalar
 import pycharmm.lingo
 
 
+problem_symbols = ["HO", "CA", "CM"]
+
+
 def iupac_2_number(iupac):
     from mendeleev import element
 
@@ -96,10 +99,10 @@ def generate_residue(resid) -> None:
     print("*" * 5, "Generating residue", "*" * 5)
     s = """DELETE ATOM SELE ALL END"""
     pycharmm.lingo.charmm_script(s)
-    read.rtf("/pchem-data/meuwly/boittier/home/charmm/toppar/top_all36_cgenff.rtf")
+    read.rtf(CGENFF_RTF)
     bl = settings.set_bomb_level(-2)
     wl = settings.set_warn_level(-2)
-    read.prm("/pchem-data/meuwly/boittier/home/charmm/toppar/par_all36_cgenff.prm")
+    read.prm(CGGENFF_PRM)
     settings.set_bomb_level(bl)
     settings.set_warn_level(wl)
     pycharmm.lingo.charmm_script("bomlev 0")
@@ -116,7 +119,7 @@ def generate_coordinates() -> Atoms:
     os.makedirs("res", exist_ok=True)
     os.makedirs("dcd", exist_ok=True)
     os.makedirs("psf", exist_ok=True)
-
+    os.makedirs("xyz", exist_ok=True)
     ic.build()
     coor.show()
 
@@ -164,7 +167,7 @@ def generate_coordinates() -> Atoms:
     mol = ase.io.read("pdb/initial.pdb")
     e = mol.get_chemical_symbols()
     mol.set_chemical_symbols(
-        [_[:1] if _.upper() in ["HO", "CA", "CM"] else _ for _ in e]
+        [_[:1] if _.upper() in problem_symbols else _ for _ in e]
     )
     return mol
 
@@ -208,6 +211,23 @@ def main(resid: str) -> None:
     generate_coordinates()
     mini()
     write_psf(resid)
+
+    # copy pdb/initial.pdb to pdb/resid.pdb
+    shutil.copy("pdb/initial.pdb", f"pdb/{resid}.pdb")
+
+    # copy res/resid.res to res/resid.res
+    shutil.copy("res/initial.res", f"res/{resid}.res")
+
+    # copy psf/resid.psf to psf/resid.psf
+    shutil.copy("psf/initial.psf", f"psf/{resid}.psf")
+
+    # create an xyz file
+    xyz = ase.io.read("pdb/initial.pdb")
+    print(xyz)
+    ase.io.write("xyz/initial.xyz", xyz)
+    print(f"xyz/{resid}.xyz")
+    shutil.copy("xyz/initial.xyz", f"xyz/{resid}.xyz")
+
     print("Done")
 
 
