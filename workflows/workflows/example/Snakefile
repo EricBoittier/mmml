@@ -30,15 +30,22 @@ rule run_qm:
         if config["qm"].get("harmonic", False):
             flags.append("--harmonic")
 
-        script = f"""bash ~/mmml/setup/install.sh && uv run python ~/mmml/mmml/pyscf4gpuInterface/calcs.py \
+        script = f"""#!/bin/bash
+        #SBATCH --job-name=qm
+        #SBATCH --output=qm.log
+        #SBATCH --error=qm.err
+        #SBATCH --partition=gpu
+        #SBATCH --gres=gpu:1
+        
+        bash ~/mmml/setup/install.sh && uv run python ~/mmml/mmml/pyscf4gpuInterface/calcs.py \
             --output {output} --mol xyz/initial.xyz \
             --optimize --xc {config['qm']['xc']} --basis {config['qm']['basis']} \
             {' '.join(flags)} > {output}
             """
         print(script)
-        with open("qm-initial.sh", "w") as f:
+        with open("qm-run.sh", "w") as f:
             f.write(script)
-        shell("sbatch qm-initial.sh")
+        shell("sbatch qm-run.sh")
 
 rule run_md:
     input: "setup-box.log"
@@ -64,11 +71,11 @@ rule run_md:
         #SBATCH --job-name=openmm
         #SBATCH --output=openmm.log
         #SBATCH --error=openmm.err
-        #SBATCH --time=00:00:00
-        #SBATCH --partition=standard
+        #SBATCH --partition=gpu
+        #SBATCH --gres=gpu:1
         
         hostname
-        """ 
+        """ + script
         with open("openmm.sh", "w") as f:   
             f.write(sbatch_script)
         shell("sbatch openmm.sh")
