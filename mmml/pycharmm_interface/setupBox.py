@@ -425,10 +425,13 @@ def initialize_psf(resid: str, n_molecules: int, side_length: float):
     s = """DELETE PSF SELE ALL END"""
     pycharmm.lingo.charmm_script(s)
 
-    # read cgenff
     read.rtf(CGENFF_RTF)
+    bl = settings.set_bomb_level(-2)
+    wl = settings.set_warn_level(-2)
     read.prm(CGENFF_PRM)
-
+    settings.set_bomb_level(bl)
+    settings.set_warn_level(wl)
+    pycharmm.lingo.charmm_script("bomlev 0")
     resstr = " ".join([resid.upper()]*n_molecules)
     print(resstr)
     resstr = f"{resid.upper()}"
