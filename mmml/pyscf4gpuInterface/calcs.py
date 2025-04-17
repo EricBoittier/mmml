@@ -22,7 +22,7 @@ def setup_mol(atoms, basis, xc, log_file='./pyscf.log',
         basis=basis,                # basis set
         output=log_file,              # save log file
         verbose=verbose                          # control the level of print info
-        )
+        ).build()
     else:
         mol = atoms
         
