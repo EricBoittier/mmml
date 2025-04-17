@@ -48,7 +48,7 @@ import pycharmm.scalar as scalar
 import pycharmm.lingo
 
 
-problem_symbols = ["HO", "Ho", "CA", "CM"]
+problem_symbols = ["HO", "CA", "CM"]
 
 
 def iupac_2_number(iupac):
@@ -166,6 +166,7 @@ def generate_coordinates() -> Atoms:
     write.coor_pdb("pdb/initial.pdb")
     mol = ase.io.read("pdb/initial.pdb")
     e = mol.get_chemical_symbols()
+    print(e)
     mol.set_chemical_symbols(
         [_[:1] if _.upper() in problem_symbols else _ for _ in e]
     )
