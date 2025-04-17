@@ -1781,7 +1781,7 @@ wheels = [
 
 [[package]]
 name = "mmml"
-version = "1.0.0+168.gb6bb6d6.dirty"
+version = "1.0.0+171.gfe3c9a4.dirty"
 source = { editable = "." }
 dependencies = [
     { name = "absl-py" },
@@ -1854,6 +1854,7 @@ dependencies = [
     { name = "nest-asyncio" },
     { name = "networkx" },
     { name = "numpy" },
+    { name = "openmm" },
     { name = "openmm-cuda-12" },
     { name = "opt-einsum" },
     { name = "optax" },
@@ -1879,6 +1880,7 @@ dependencies = [
     { name = "pycharmm" },
     { name = "pygments" },
     { name = "pyparsing" },
+    { name = "pyscf" },
     { name = "python-dateutil" },
     { name = "pytz" },
     { name = "pyvolume" },
@@ -1992,6 +1994,7 @@ requires-dist = [
     { name = "nest-asyncio" },
     { name = "networkx" },
     { name = "numpy" },
+    { name = "openmm", extras = ["cuda12"] },
     { name = "openmm-cuda-12" },
     { name = "opt-einsum" },
     { name = "optax" },
@@ -2017,6 +2020,7 @@ requires-dist = [
     { name = "pycharmm", editable = "../charmm/tool/pycharmm" },
     { name = "pygments" },
     { name = "pyparsing" },
+    { name = "pyscf" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=6.1.2" },
     { name = "python-dateutil" },
     { name = "pytz" },
@@ -2370,6 +2374,20 @@ version = "12.1.105"
 source = { registry = "https://pypi.org/simple" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/da/d3/8057f0587683ed2fcd4dbfbdfdfa807b9160b809976099d36b8f60d08f03/nvidia_nvtx_cu12-12.1.105-py3-none-manylinux1_x86_64.whl", hash = "sha256:dc21cf308ca5691e7c04d962e213f8a4aa9bbfa23d95412f452254c2caeb09e5", size = 99138 },
+]
+
+[[package]]
+name = "openmm"
+version = "8.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b5/0c/9db51a816ca8eed0611dafed116ba0bf9c75f0163d7b85d8414d371cb50c/OpenMM-8.2.0-cp312-cp312-macosx_10_12_x86_64.whl", hash = "sha256:663bef9daa386e4d726560123ff2b2457081244c8b5e3047236edc4696e8b3ee", size = 11377313 },
+    { url = "https://files.pythonhosted.org/packages/21/1b/a4e3727a499e6cddb628f205de334175a993d021ce37dfb1e0d6261dc496/OpenMM-8.2.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:1920d2a2ea54ad0d77fabfa725c560836af187476c8a067a7749a240eb251113", size = 10955756 },
+    { url = "https://files.pythonhosted.org/packages/9d/f5/45ec63c5a1df573d8074397fe71e4c4de528230e460e527f3afeea66bd29/OpenMM-8.2.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:c5c6233a78727ad580961da34f59c4d1f11dcb8e439807e3ddd6464aee07d4f8", size = 12334804 },
+    { url = "https://files.pythonhosted.org/packages/26/b9/458dcd4906ff795e971e343f25f4ee8a6e77e4f1ba79f3166dba1c3bcb0e/OpenMM-8.2.0-cp312-cp312-win_amd64.whl", hash = "sha256:4f019eac188c7d757c2b2a0a35768e35363f4fc3e6c4f792840a7901b2363a3a", size = 11259088 },
 ]
 
 [[package]]
