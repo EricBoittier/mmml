@@ -21,8 +21,8 @@ fi
 
 # Set environment variables
 chmhome="export CHARMM_HOME=$PWD; export CHARMM_LIB_DIR=$PWD/lib"
-echo $chmhome > ../CHARMMSETUP
-source ../CHARMMSETUP
+echo $chmhome > ~/mmml/CHARMMSETUP
+source ~/mmml/CHARMMSETUP
 
 cd ../..
 
@@ -32,7 +32,4 @@ source .venv/bin/activate
 
 echo "Setup complete"
 
-# Install pycharmm
-#cd tool/pycharmm
-#uv pip install -e .
 
