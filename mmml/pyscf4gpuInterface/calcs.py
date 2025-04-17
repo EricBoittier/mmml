@@ -23,7 +23,7 @@ def setup_mol(atoms, basis, xc, log_file='./pyscf.log',
         output=log_file,              # save log file
         verbose=verbose                          # control the level of print info
         )
-        mol.build()
+
     else:
         mol = atoms
         
@@ -41,7 +41,7 @@ def setup_mol(atoms, basis, xc, log_file='./pyscf.log',
 
 
 
-def compute_dft(mol, calcs, extra=None, basis="def2-tzvp", xc="wB97m-v"):
+def compute_dft(mol, calcs, extra=None, basis='def2-tzvpp', xc="wB97m-v"):
 
     engine, mol = setup_mol(mol, basis, xc)
 
@@ -283,8 +283,8 @@ if __name__ == "__main__":
     args = parse_args()
     calcs, extra = process_calcs(args)
     print(calcs, extra)
-    mol = setup_mol(args.mol, args.basis, args.xc)
-    output = compute_dft(mol, calcs, extra, args.xc)
+    # mol = setup_mol(args.mol, args.basis, args.xc)
+    output = compute_dft(args.mol, calcs, extra, args.basis, args.xc)
     print(output)
     import pickle
     # save output to pickle
