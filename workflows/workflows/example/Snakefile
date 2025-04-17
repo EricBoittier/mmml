@@ -21,11 +21,11 @@ rule run_qm:
     output: "qm/initial.npz"
     run:
         flags = []
-        if config["qm"].get("hessian"):
+        if config["qm"].get("hessian", False):
             flags.append("--hessian")
-        if config["qm"].get("thermo"):
+        if config["qm"].get("thermo", False):
             flags.append("--thermo")
-        if config["qm"].get("gradient"):
+        if config["qm"].get("gradient", False):
             flags.append("--gradient")
         if config["qm"].get("harmonic", False):
             flags.append("--harmonic")
