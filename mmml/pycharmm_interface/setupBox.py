@@ -312,10 +312,10 @@ PACKMOL_PATH = "/pchem-data/meuwly/boittier/home/packmol/packmol"
 # packmol_input = str(Path("packmol.inp").absolute())
 
 
-def read_initial_pdb(path: Path) -> Atoms:
+def read_initial_pdb(cwd: Path) -> Atoms:
     """Reads the initial PDB file and returns an ASE Atoms object"""
-    write.coor_pdb("pdb/initial.pdb")
-    mol = ase.io.read("pdb/initial.pdb")
+    write.coor_pdb(cwd / "pdb" / "initial.pdb")
+    mol = ase.io.read(cwd / "pdb" / "initial.pdb")
     e = mol.get_chemical_symbols()
     print(mol)
     print(e)
@@ -484,7 +484,8 @@ def minimize_box():
 
 
 def main(density: float, side_length: float, residue: str):
-    mol = read_initial_pdb(Path("initial.pdb"))
+    cwd = Path(os.getcwd())
+    mol = read_initial_pdb(cwd)
     n_molecules = determine_n_molecules_from_density(density, mol)
     run_packmol(n_molecules, side_length)
     initialize_psf(residue, n_molecules, side_length)
