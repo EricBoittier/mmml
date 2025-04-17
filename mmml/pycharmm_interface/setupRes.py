@@ -163,14 +163,20 @@ def generate_coordinates() -> Atoms:
     if energy_diff > 0:
         print("WARNING: Energy difference is positive, something may have gone wrong")
 
+    # save pycharmm coordinates as pdb file
     write.coor_pdb("pdb/initial.pdb")
+
+    # read pdb file
     mol = ase.io.read("pdb/initial.pdb")
     e = mol.get_chemical_symbols()
     e = [_[:1] if _.upper() in problem_symbols else _ for _ in e]
     print(e)
     e = [_ if _[0] != "H" else "H" for _ in e]
     print(e)
-    mol.set_chemical_symbols(e)
+    # atomic numbers
+    an = [ase.data.chemical_symbols.index(_) for _ in e]
+    print(an)
+    mol.set_atomic_numbers(an)
     return mol
 
 
