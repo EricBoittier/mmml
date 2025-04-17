@@ -46,7 +46,7 @@ rule run_md:
         press = " ".join(map(str, config['md']['pressures']))
         sched = " ".join(config['md']['schedule'])
         shell(
-            f"""conda activate openmm && python ~/mmml/mmml/openmm_interface/openmm-test1.py \
+            f"""module load openmm && python ~/mmml/mmml/openmm_interface/openmm-test1.py \
                 --psf_file psf/system.psf --pdb_file pdb/init-packmol.pdb \
                 --working_dir $PWD \
                 --temperatures {temps} \
