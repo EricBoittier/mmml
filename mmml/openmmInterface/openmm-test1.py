@@ -1,4 +1,5 @@
 import os
+import json
 from openmm.app.internal.unitcell import computePeriodicBoxVectors
 from pathlib import Path
 import argparse
@@ -8,6 +9,11 @@ from openmm.app import *
 from openmm import *
 from openmm.unit import *
 
+
+global dcd_files 
+dcd_files = []
+global report_files
+report_files = []
 
 def setup_simulation(
     psf_file,
@@ -144,6 +150,10 @@ def setup_reporters(simulation, working_dir, prefix):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     dcd_path = os.path.join(working_dir, "dcd", f"{prefix}_{timestamp}.dcd")
     report_path = os.path.join(working_dir, "res", f"{prefix}_{timestamp}.log")
+    
+    dcd_files.append(dcd_path)
+    report_files.append(report_path)
+    
     simulation.reporters.append(DCDReporter(dcd_path, 1000))
     simulation.reporters.append(
         StateDataReporter(
@@ -224,7 +234,7 @@ def parse_args():
 
 if __name__ == "__main__":
     args = parse_args()
-    setup_simulation(
+    output = setup_simulation(
         psf_file=args.psf_file,
         pdb_file=args.pdb_file,
         rtf_file=args.rtf_file,
@@ -238,6 +248,18 @@ if __name__ == "__main__":
         integrator_type=args.integrator,
         steps=args.steps,
     )
+
+    # write variables to manifest file...
+    current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+    import os
+    os.makedirs(Path(args.working_dir / "omm"), exist_ok=True)
+    with open(Path(args.working_dir / "omm" / f"openmm-{current_time}.json"), "w") as f:
+        json.dump({
+            "dcd_files": dcd_files,
+            "report_files": report_files,
+            "args": args,
+        }, f)
+
 
 # example command:
 # python openmm-test1.py --psf_file /pchem-data/meuwly/boittier/home/project-mmml/proh/proh-262.psf --pdb_file /pchem-data/meuwly/boittier/home/project-mmml/proh/mini.pdb --rtf_file /pchem-data/meuwly/boittier/home/charmm/toppar/top_all36_cgenff.rtf --prm_file /pchem-data/meuwly/boittier/home/charmm/toppar/par_all36_cgenff.prm --working_dir /pchem-data/meuwly/boittier/home/project-mmml/proh/openmm-test1 --temperatures 100 200 300 --pressures 1.0 2.0 3.0 --simulation_schedule minimization equilibration NPT NVE --integrator Langevin
