@@ -23,8 +23,8 @@ sys.path.append(str(pych))
 import pycharmm
 CGENFF_RTF = cwd / "top_all36_cgenff.rtf"
 print(CGENFF_RTF)
-CGGENFF_PRM = cwd / "par_all36_cgenff.prm"
-print(CGGENFF_PRM)
+CGENFF_PRM = cwd / "par_all36_cgenff.prm"
+print(CGENFF_PRM)
 
 CGENFF_RTF = str(CGENFF_RTF)
-CGGENFF_PRM = str(CGGENFF_PRM)
+CGENFF_PRM = str(CGENFF_PRM)
