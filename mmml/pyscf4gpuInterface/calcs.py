@@ -46,7 +46,32 @@ def compute_dft(mol, calcs, extra=None, xc="wB97m-v"):
 
     engine, mol = setup_mol(mol, xc)
 
-    output = {"mol": mol, "calcs": calcs}
+    opt_callback = None
+
+    if CALCS.OPTIMIZE in calcs:
+        from pyscf.geomopt.geometric_solver import optimize
+        import time
+
+        gradients = []
+        energies = []
+        coords = []
+        def callback(envs):
+            gradients.append(envs['gradients'])
+            energies.append(envs['energy'])
+            coords.append(envs['geom'])
+
+        start_time = time.time()
+        mol = optimize(engine, maxsteps=20, callback=callback)
+        print("Optimized coordinate:")
+        print(mol.atom_coords())
+        print('Geometry optimization took', time.time() - start_time, 's')
+        opt_callback = {
+            'gradients': gradients,
+            'energies': energies,
+            'coords': coords
+        }
+
+    output = {"mol": mol, "calcs": calcs, "opt_callback": opt_callback}
 
     if CALCS.ENERGY in calcs:
         # Compute Energy
@@ -188,11 +213,13 @@ def parse_args():
     parser.add_argument("--xc", type=str, default="wB97m-v")
     # flags to do certain calcs
     parser.add_argument("--energy", default=True, action="store_true")
+    parser.add_argument("--optimize", default=False, action="store_true")
     parser.add_argument("--gradient", default=True, action="store_true")
     parser.add_argument("--hessian", default=False, action="store_true")
     parser.add_argument("--harmonic", default=False, action="store_true")
     parser.add_argument("--thermo", default=False, action="store_true")
     parser.add_argument("--interaction", default=False, action="store_true")
+    parser.add_argument("--dens_esp", default=False, action="store_true")
     args = parser.parse_args()
     return args
 
@@ -200,6 +227,10 @@ def parse_args():
 def process_calcs(args):
     calcs = []
     extra = None
+
+    if args.optimize:
+        calcs.append(CALCS.OPTIMIZE)
+
     if args.energy:
         calcs.append(CALCS.ENERGY)
     if args.gradient:
@@ -210,6 +241,9 @@ def process_calcs(args):
         calcs.append(CALCS.HARMONIC)
     if args.thermo:
         calcs.append(CALCS.THERMO)
+
+    if args.dens_esp:
+        calcs.append(CALCS.DENS_ESP)
     if args.interaction:
         calcs.append(CALCS.INTERACTION)
         extra = (args.monomer_a, args.monomer_b)
