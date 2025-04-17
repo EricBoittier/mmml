@@ -149,8 +149,16 @@ dependencies = [
     "tzdata",
     "wcwidth",
     "wheel",
-    "zipp"
+    "zipp",
+    "pycharmm"
 ]
+
+[tool.uv.sources]
+jax-md = { git = "https://github.com/google/jax-md.git", rev = "05221c551e71f1b5f64458c0e3533452c22efec0" }
+pycharmm = { path = "/pchem-data/meuwly/boittier/home/charmm/tool/pycharmm", editable = true }
+
+
+
 
 # Update the urls once the hosting is set up.
 #[project.urls]
