@@ -275,8 +275,15 @@ from ase.io import read
 from ase.visualize import view
 
 from import_pycharmm import *
-from import_pycharmm import CGENFF_RTF, CGENFF_PRM
+from import_pycharmm import CGENFF_RTF, CGENFF_PRM, CHARMM_HOME, CHARMM_LIB_DIR
+import os
+os.environ["CHARMM_HOME"] = CHARMM_HOME
+os.environ["CHARMM_LIB_DIR"] = CHARMM_LIB_DIR
 
+print(CHARMM_HOME)
+print(CHARMM_LIB_DIR)
+import sys
+sys.path.append(str(Path(CHARMM_HOME) / "tool" / "pycharmm"))
 
 # CHARMM imports
 import pycharmm
