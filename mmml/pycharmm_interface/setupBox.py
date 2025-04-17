@@ -45,7 +45,7 @@
 # *
 # """
 
-write_system_psf = """write psf card name system.psf
+write_system_psf = """write psf card name psf/system.psf
 * My PSF file
 *
 """
@@ -126,7 +126,7 @@ mini = """!#########################################
 
 mini sd nstep 1000 nprint 100
 
-open write unit 10 card name mini.pdb
+open write unit 10 card name pdb/mini.pdb
 write coor unit 10 pdb
 
 """
@@ -471,7 +471,7 @@ def initialize_psf(resid: str, n_molecules: int, side_length: float):
     energy.show()
     print("read energy")
     pycharmm.lingo.charmm_script(write_system_psf)
-    write.psf_card(f"{resid}-{n_molecules}.psf")
+    write.psf_card(f"psf/{resid}-{n_molecules}.psf")
 
 
 def minimize_box():
