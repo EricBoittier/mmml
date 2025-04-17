@@ -286,7 +286,7 @@ if __name__ == "__main__":
     output = compute_dft(args, calcs, extra)
     print(output)
     import pickle
-
+    import os
     # if args.output contains a directory, make sure it exists
     if os.path.dirname(args.output) != "":
         os.makedirs(os.path.dirname(args.output), exist_ok=True)
