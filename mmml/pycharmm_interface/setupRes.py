@@ -215,9 +215,6 @@ def main(resid: str) -> None:
     # copy pdb/initial.pdb to pdb/resid.pdb
     shutil.copy("pdb/initial.pdb", f"pdb/{resid}.pdb")
 
-    # copy res/resid.res to res/resid.res
-    shutil.copy("res/initial.res", f"res/{resid}.res")
-
     # copy psf/resid.psf to psf/resid.psf
     shutil.copy("psf/initial.psf", f"psf/{resid}.psf")
 
