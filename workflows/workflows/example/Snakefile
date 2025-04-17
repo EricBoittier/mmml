@@ -7,14 +7,44 @@ rule all:
 
 rule setup_residue:
     output: "setup-residue.log"
-    shell:
-        "bash ~/mmml/setup/install.sh && uv run ~/mmml/mmml/pycharmm_interface/setupRes.py -r {config[residue]} > {output}"
+    # shell:
+        # "bash ~/mmml/setup/install.sh && uv run ~/mmml/mmml/pycharmm_interface/setupRes.py -r {config[residue]} > {output}"
+    run:
+        script = f"""#!/bin/bash
+        #SBATCH --job-name=setup-residue
+        #SBATCH --output=setup-residue.log
+        #SBATCH --error=setup-residue.err
+        #SBATCH --partition=gpu
+        #SBATCH --gres=gpu:1
+
+        hostname
+
+        """ + f"""bash ~/mmml/setup/install.sh && uv run ~/mmml/mmml/pycharmm_interface/setupRes.py -r {config[residue]} > {output}"""
+        with open("setup-residue.sh", "w") as f:
+            f.write(script)
+        print("sbatch setup-residue.sh")
+        shell("sbatch setup-residue.sh")
 
 rule setup_box:
     input: "setup-residue.log"
     output: "setup-box.log"
-    shell:
-        "bash ~/mmml/setup/install.sh && uv run  ~/mmml/mmml/pycharmm_interface/setupBox.py -d {config[density]} -l {config[side_length]} -r {config[residue]} > {output}"
+    # shell:
+    #     "bash ~/mmml/setup/install.sh && uv run  ~/mmml/mmml/pycharmm_interface/setupBox.py -d {config[density]} -l {config[side_length]} -r {config[residue]} > {output}"
+    run:
+        script = f"""#!/bin/bash
+        #SBATCH --job-name=setup-box
+        #SBATCH --output=setup-box.log
+        #SBATCH --error=setup-box.err
+        #SBATCH --partition=gpu
+        #SBATCH --gres=gpu:1
+
+        hostname
+
+        """ + f"""bash ~/mmml/setup/install.sh && uv run  ~/mmml/mmml/pycharmm_interface/setupBox.py -d {config[density]} -l {config[side_length]} -r {config[residue]} > {output}"""
+        with open("setup-box.sh", "w") as f:
+            f.write(script)
+        print("sbatch setup-box.sh")
+        shell("sbatch setup-box.sh")
 
 rule run_qm:
     input: "setup-residue.log"
