@@ -30,7 +30,7 @@ def setup_mol(atom, basis, log_file='./pyscf.log',
         
     mf_GPU = rks.RKS(                      # restricted Kohn-Sham DFT
         mol,                               # pyscf.gto.object
-        xc='b3lyp'                         # xc funtionals, such as pbe0, wb97m-v, tpss,
+        xc='wb97m-v'                         # xc funtionals, such as pbe0, wb97m-v, tpss,
         ).density_fit()                    # density fitting
 
     mf_GPU.grids.atom_grid = lebedev_grids      # (99,590) lebedev grids, (75,302) is often enough
@@ -45,6 +45,8 @@ def setup_mol(atom, basis, log_file='./pyscf.log',
 def compute_dft(mol, calcs, extra=None, xc="wB97m-v"):
 
     engine, mol = setup_mol(mol, xc)
+
+    print(mol)
 
     opt_callback = None
 
@@ -282,7 +284,7 @@ if __name__ == "__main__":
     args = parse_args()
     calcs, extra = process_calcs(args)
     print(calcs, extra)
-    mol = pyscf.M(atom=args.mol, basis=args.basis).build()
+    mol = setup_mol(args.mol, args.basis, args.xc)
     output = compute_dft(mol, calcs, extra, args.xc)
     print(output)
     import pickle
