@@ -5,6 +5,7 @@ qm:
   basis: cc-pVTZ
   xc: PBE0
   optimize: true
+  harmonic: true
   hessian: true
   thermo: true
   gradient: true
