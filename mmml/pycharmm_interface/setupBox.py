@@ -494,9 +494,12 @@ def cli():
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("-d", "--density", type=float, required=True)
-    parser.add_argument("-l", "--side_length", type=float, required=True)
-    parser.add_argument("-r", "--residue", type=str, required=True)
+    parser.add_argument("-d", "--density", type=float, required=True, 
+        help="Density of the box in kg/m^3"   )
+    parser.add_argument("-l", "--side_length", type=float, required=True, 
+        help="Side length of the box in angstrom")
+    parser.add_argument("-r", "--residue", type=str, required=True, 
+        help="Residue name")
     args = parser.parse_args()
     main(args.density, args.side_length, args.residue)
 
