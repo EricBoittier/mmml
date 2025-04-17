@@ -8,20 +8,20 @@ rule all:
 rule setup_residue:
     output: "setup-residue.log"
     shell:
-        "python ~/mmml/mmml/pycharmm_interface/setupRes.py -r {config[residue]} > {output}"
+        "source ~/mmml/.venv/bin/activate && python ~/mmml/mmml/pycharmm_interface/setupRes.py -r {config[residue]} > {output}"
 
 rule setup_box:
     input: "setup-residue.log"
     output: "setup-box.log"
     shell:
-        "python ~/mmml/mmml/pycharmm_interface/setupBox.py -d {config[density]} -l {config[side_length]} -r {config[residue]} > {output}"
+        "source ~/mmml/.venv/bin/activate && python ~/mmml/mmml/pycharmm_interface/setupBox.py -d {config[density]} -l {config[side_length]} -r {config[residue]} > {output}"
 
 rule run_qm:
     input: "setup-residue.log"
     output: "qm/initial.npz"
     shell:
         """
-        python ~/mmml/mmml/pyscf4gpuInterface/calcs.py \
+        source ~/mmml/.venv/bin/activate && python ~/mmml/mmml/pyscf4gpuInterface/calcs.py \
             --output {output} --mol initial.xyz \
             --optimize --xc {config[qm][xc]} --basis {config[qm][basis]} \
             {('--hessian' if config[qm]['hessian'] else '')} \
@@ -35,7 +35,7 @@ rule run_md:
     output: "omm/openmm.json"
     shell:
         """
-        python openmm-test1.py \
+        module load openmm && python ~/mmml/mmml/openmmInterface/openmm-test1.py \
             --psf_file psf/system.psf --pdb_file pdb/init-packmol.pdb \
             --working_dir $PWD \
             --temperatures {" ".join(map(str, config['md']['temperatures']))} \
