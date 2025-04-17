@@ -256,7 +256,7 @@ def main():
         help="Calculation method (default: dft)",
     )
     parser.add_argument(
-        "--basis", default="cc-pVTZ", help="Basis set (default: cc-pVTZ)"
+        "--basis", default="def2-tzvp", help="Basis set (default: cc-pVTZ)"
     )
     parser.add_argument(
         "--xc",
