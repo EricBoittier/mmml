@@ -31,8 +31,7 @@ rule run_qm:
             flags.append("--harmonic")
 
         shell(
-            f"""
-            bash ~/mmml/setup/install.sh && uv run ~/mmml/mmml/pyscf4gpuInterface/calcs.py \
+            f"""bash ~/mmml/setup/install.sh && uv run python ~/mmml/mmml/pyscf4gpuInterface/calcs.py \
                 --output {output} --mol xyz/initial.xyz \
                 --optimize --xc {config['qm']['xc']} --basis {config['qm']['basis']} \
                 {' '.join(flags)} > {output}
@@ -42,16 +41,23 @@ rule run_qm:
 rule run_md:
     input: "setup-box.log"
     output: "omm/openmm.json"
-    shell:
-        """
-        module load openmm && python ~/mmml/mmml/openmmInterface/openmm-test1.py \
-            --psf_file psf/system.psf --pdb_file pdb/init-packmol.pdb \
-            --working_dir $PWD \
-            --temperatures {" ".join(map(str, config['md']['temperatures']))} \
-            --pressures {" ".join(map(str, config['md']['pressures']))} \
-            --simulation_schedule {" ".join(config['md']['schedule'])} \
-            --integrator {config['md']['integrator']}
-        """
+    output:
+        json="omm/openmm.json"
+    run:
+        temps = " ".join(map(str, config['md']['temperatures']))
+        press = " ".join(map(str, config['md']['pressures']))
+        sched = " ".join(config['md']['schedule'])
+        shell(
+            f"""
+            python openmm-test1.py \
+                --psf_file {input.psf} --pdb_file {input.pdb} \
+                --working_dir $PWD \
+                --temperatures {temps} \
+                --pressures {press} \
+                --simulation_schedule {sched} \
+                --integrator {config['md']['integrator']}
+            """
+        )
 
 rule extract_clusters:
     input: "omm/openmm.json"
