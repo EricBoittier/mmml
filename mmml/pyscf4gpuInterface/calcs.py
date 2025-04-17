@@ -244,6 +244,10 @@ def parse_args():
     parser.add_argument("--interaction", default=False, action="store_true")
     parser.add_argument("--dens_esp", default=False, action="store_true")
     args = parser.parse_args()
+
+    for key, value in vars(args).items():
+        print(f"{key}: {value}")
+
     return args
 
 
@@ -279,7 +283,6 @@ if __name__ == "__main__":
     args = parse_args()
     calcs, extra = process_calcs(args)
     print(calcs, extra)
-    # mol = setup_mol(args.mol, args.basis, args.xc)
     output = compute_dft(args, calcs, extra)
     print(output)
     import pickle
