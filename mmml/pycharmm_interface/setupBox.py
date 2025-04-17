@@ -279,7 +279,7 @@ from ase.io import read
 from ase.visualize import view
 
 from import_pycharmm import *
-from import_pycharmm import CGENFF_RTF, CGENFF_PAR
+from import_pycharmm import CGENFF_RTF, CGENFF_PRM
 
 
 # CHARMM imports
