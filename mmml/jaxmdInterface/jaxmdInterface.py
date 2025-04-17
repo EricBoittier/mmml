@@ -246,7 +246,6 @@ def check_args(args):
         raise ValueError("data_path is required")
 
 
-
 def main():
     args = args_parser()
     data = np.load(args.data_path)
