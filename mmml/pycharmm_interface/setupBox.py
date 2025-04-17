@@ -1,48 +1,48 @@
-header = """bomlev -2
-prnlev 3
-wrnlev 1
+# header = """bomlev -2
+# prnlev 3
+# wrnlev 1
 
-!#########################################
-! Tasks
-!#########################################
+# !#########################################
+# ! Tasks
+# !#########################################
 
-! 0:    Do it, or
-! Else: Do not, there is no try!
-set mini 0
-set heat 0
-set equi 0
-set ndcd 1
-! Start Production at dcd number n
-set ndcd 0
+# ! 0:    Do it, or
+# ! Else: Do not, there is no try!
+# set mini 0
+# set heat 0
+# set equi 0
+# set ndcd 1
+# ! Start Production at dcd number n
+# set ndcd 0
 
-!#########################################
-! Setup System
-!#########################################
+# !#########################################
+# ! Setup System
+# !#########################################
 
-open unit 1 card read name lig.top
-read rtf card unit 1
-close unit 1
+# open unit 1 card read name lig.top
+# read rtf card unit 1
+# close unit 1
 
-open unit 1 form read name lig.par
-read param card unit 1
-close unit 1
+# open unit 1 form read name lig.par
+# read param card unit 1
+# close unit 1
 
-! File name
-set name dclm
+# ! File name
+# set name dclm
 
-OPEN UNIT 1 READ FORM NAME init.pdb
-READ SEQU PDB UNIT 1
-CLOSE UNIT 1
-GENERATE SOL FIRST NONE LAST NONE SETUP 
+# OPEN UNIT 1 READ FORM NAME init.pdb
+# READ SEQU PDB UNIT 1
+# CLOSE UNIT 1
+# GENERATE SOL FIRST NONE LAST NONE SETUP 
 
-OPEN UNIT 1 READ FORM NAME init.pdb
-READ COOR PDB UNIT 1
-CLOSE UNIT 1
+# OPEN UNIT 1 READ FORM NAME init.pdb
+# READ COOR PDB UNIT 1
+# CLOSE UNIT 1
 
-! Generate PSF and write to a file
-write psf card name system.psf
-* My PSF file
-*
+# ! Generate PSF and write to a file
+# write psf card name system.psf
+# * My PSF file
+# *
 
 """
 
@@ -446,7 +446,7 @@ def initialize_psf(resid: str, n_molecules: int, side_length: float):
     OPEN UNIT 1 READ FORM NAME pdb/init-packmol.pdb
     READ SEQU PDB UNIT 1
     CLOSE UNIT 1
-    !GENERATE {resid.upper()} FIRST NONE LAST NONE SETUP 
+    GENERATE {resid.upper()} FIRST NONE LAST NONE SETUP 
 
     OPEN UNIT 1 READ FORM NAME pdb/init-packmol.pdb
     READ COOR PDB UNIT 1
