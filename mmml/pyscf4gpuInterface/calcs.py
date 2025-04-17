@@ -43,9 +43,9 @@ def setup_mol(atoms, basis, xc, spin, charge, log_file='./pyscf.log',
 
 
 
-def compute_dft(mol, calcs, extra=None, basis='def2-tzvpp', xc="wB97m-v"):
+def compute_dft(args, calcs, extra=None):
 
-    engine, mol = setup_mol(mol, basis, xc)
+    engine, mol = setup_mol(args.mol, args.basis, args.xc, args.spin, args.charge)
 
     print(mol)
     from helperfunctions import print_basis
@@ -280,7 +280,7 @@ if __name__ == "__main__":
     calcs, extra = process_calcs(args)
     print(calcs, extra)
     # mol = setup_mol(args.mol, args.basis, args.xc)
-    output = compute_dft(args.mol, calcs, extra, args.basis, args.xc)
+    output = compute_dft(args, calcs, extra)
     print(output)
     import pickle
     # save output to pickle
