@@ -32,8 +32,8 @@ rule run_qm:
 
         shell(
             f"""
-            python ~/mmml/mmml/pyscf4gpuInterface/calcs.py \
-                --output {output} --mol {input} \
+            bash ~/mmml/setup/install.sh && uv run ~/mmml/mmml/pyscf4gpuInterface/calcs.py \
+                --output {output} --mol xyz/initial.xyz \
                 --optimize --xc {config['qm']['xc']} --basis {config['qm']['basis']} \
                 {' '.join(flags)} > {output}
             """
