@@ -254,12 +254,16 @@ if __name__ == "__main__":
     import os
     os.makedirs(Path(args.working_dir) / "omm", exist_ok=True)
     jsonout = Path(args.working_dir) / "omm" / f"openmm-{current_time}.json"
+    args_dict = vars(args)
+    args_dict["dcd_files"] = dcd_files
+    args_dict["report_files"] = report_files
+    for k, v in args_dict.items():
+        if isinstance(v, list):
+            args_dict[k] = [str(Path(p).absolute()) for p in v]
+        print(k, args_dict[k])
+    
     with open(jsonout, "w") as f:
-        json.dump({
-            "dcd_files": dcd_files,
-            "report_files": report_files,
-            "args": args,
-        }, f)
+        json.dump(args_dict, f)
 
 
 # example command:
