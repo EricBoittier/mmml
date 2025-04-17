@@ -258,9 +258,7 @@ if __name__ == "__main__":
     args_dict["dcd_files"] = dcd_files
     args_dict["report_files"] = report_files
     for k, v in args_dict.items():
-        if isinstance(v, list):
-            args_dict[k] = [str(Path(p).absolute()) for p in v]
-        print(k, args_dict[k])
+        print(k, v)
     
     with open(jsonout, "w") as f:
         json.dump(args_dict, f)
