@@ -22,4 +22,4 @@ def print_basis(mol):
     ao_labels = mol.ao_labels()
     idx = mol.search_ao_label(['O.*p', 'H.*s'])
     for i in idx:
-        print(i, ao_labels[i])(base) 
+        print(i, ao_labels[i])
