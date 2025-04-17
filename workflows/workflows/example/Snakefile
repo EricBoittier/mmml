@@ -50,7 +50,7 @@ rule run_md:
         shell(
             f"""
             python openmm-test1.py \
-                --psf_file {input.psf} --pdb_file {input.pdb} \
+                --psf_file psf/system.psf --pdb_file pdb/init-packmol.pdb \
                 --working_dir $PWD \
                 --temperatures {temps} \
                 --pressures {press} \
