@@ -7,6 +7,24 @@ mmml
 
 Molecular Mechanics and Machine Learned Force Fields
 
+
+### Installation
+
+#### Setup
+Cuda 12 and gcc compilers are required. On the studix cluster, "module load cudnn; module load charmm" should do the trick.
+
+#### Install
+
+```bash
+bash setup/install.sh
+```
+
+#### Verify
+
+
+
+
+
 ### Copyright
 
 Copyright (c) 2025, Eric Boittier
