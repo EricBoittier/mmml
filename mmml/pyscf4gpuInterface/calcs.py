@@ -7,7 +7,7 @@ from enums import *
 from helperfunctions import *
 
 
-def setup_mol(atoms, basis, xc, log_file='./pyscf.log', 
+def setup_mol(atoms, basis, xc, spin, charge, log_file='./pyscf.log', 
     verbose=6, 
     lebedev_grids=(99,590),
     scf_tol=1e-10,
@@ -20,6 +20,8 @@ def setup_mol(atoms, basis, xc, log_file='./pyscf.log',
         mol = pyscf.M(
         atom=atoms,                         # water molecule
         basis=basis,                # basis set
+        spin=spin,
+        charge=charge,
         output=log_file,              # save log file
         verbose=verbose                          # control the level of print info
         )
@@ -46,6 +48,8 @@ def compute_dft(mol, calcs, extra=None, basis='def2-tzvpp', xc="wB97m-v"):
     engine, mol = setup_mol(mol, basis, xc)
 
     print(mol)
+    from helperfunctions import print_basis
+    print_basis(mol)
 
     opt_callback = None
 
@@ -228,6 +232,8 @@ def parse_args():
     parser.add_argument("--monomer_b", type=str, default="")
     parser.add_argument("--basis", type=str, default="def2-tzvp")
     parser.add_argument("--xc", type=str, default="wB97m-v")
+    parser.add_argument("--spin", type=int, default=0)
+    parser.add_argument("--charge", type=int, default=0)
     # flags to do certain calcs
     parser.add_argument("--energy", default=True, action="store_true")
     parser.add_argument("--optimize", default=False, action="store_true")
