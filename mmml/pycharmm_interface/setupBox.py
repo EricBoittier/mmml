@@ -424,12 +424,12 @@ def initialize_psf(resid: str, n_molecules: int, side_length: float):
     pycharmm.lingo.charmm_script(s)
     s = """DELETE PSF SELE ALL END"""
     pycharmm.lingo.charmm_script(s)
-    # resstr = " ".join([resid.upper()]*n_molecules)
-    # print(resstr)
+    resstr = " ".join([resid.upper()]*n_molecules)
+    print(resstr)
     resstr = f"{resid.upper()}"
     header = f"""bomlev -2
-    prnlev 3
-    wrnlev 1
+    prnlev 4
+    wrnlev 4
 
     !#########################################
     ! Tasks
@@ -455,9 +455,13 @@ def initialize_psf(resid: str, n_molecules: int, side_length: float):
     
     """
     pycharmm.lingo.charmm_script(header)
+    print("read header")
     pycharmm.lingo.charmm_script(pbcset.format(SIDELENGTH=side_length))
+    print("read pbcset")
     pycharmm.lingo.charmm_script(pbcs)
+    print("read pbcs")
     energy.show()
+    print("read energy")
     pycharmm.lingo.charmm_script(write_system_psf)
     write.psf_card(f"{resid}-{n_molecules}.psf")
 
