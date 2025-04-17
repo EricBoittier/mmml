@@ -45,6 +45,7 @@ rule run_qm:
         print(script)
         with open("qm-run.sh", "w") as f:
             f.write(script)
+        print("sbatch qm-run.sh")
         shell("sbatch qm-run.sh")
 
 rule run_md:
@@ -66,8 +67,7 @@ rule run_md:
                 --integrator {config['md']['integrator']}
             """
         print(script)
-        sbatch_script = f"""
-        #!/bin/bash
+        sbatch_script = f"""#!/bin/bash
         #SBATCH --job-name=openmm
         #SBATCH --output=openmm.log
         #SBATCH --error=openmm.err
@@ -78,6 +78,7 @@ rule run_md:
         """ + script
         with open("openmm.sh", "w") as f:   
             f.write(sbatch_script)
+        print("sbatch openmm.sh")
         shell("sbatch openmm.sh")
 
 rule extract_clusters:
