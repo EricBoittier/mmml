@@ -11,18 +11,18 @@ rule setup_residue:
         "python ~/mmml/mmml/pycharmm_interface/setupRes.py -r {config[residue]} > {output}"
 
 rule setup_box:
-    input: "psf/system.psf"
+    input: "setup-residue.log"
     output: "setup-box.log"
     shell:
         "python ~/mmml/mmml/pycharmm_interface/setupBox.py -d {config[density]} -l {config[side_length]} -r {config[residue]} > {output}"
 
 rule run_qm:
-    input: "xyz/initial.xyz"
-    output: "qm-initial.log"
+    input: "setup-residue.log"
+    output: "qm-initial.npz"
     shell:
         """
         python ~/mmml/mmml/pyscf4gpuInterface/calcs.py \
-            --output {output} --mol {input} \
+            --output {output} --mol initial.xyz \
             --optimize --xc {config[qm][xc]} --basis {config[qm][basis]} \
             {('--hessian' if config[qm]['hessian'] else '')} \
             {('--thermo' if config[qm]['thermo'] else '')} \
