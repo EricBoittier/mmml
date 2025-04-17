@@ -1,0 +1,18 @@
+residue: aceh
+density: 1000.0
+side_length: 35
+qm:
+  basis: cc-pVTZ
+  xc: PBE0
+  optimize: true
+  hessian: true
+  thermo: true
+  gradient: true
+md:
+  temperatures: [100, 200, 300]
+  pressures: [1.0, 2.0, 3.0]
+  integrator: Langevin
+  schedule: [minimization, equilibration, NPT]
+cluster:
+  n_find: 2
+  stride: 1
