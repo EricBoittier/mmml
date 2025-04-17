@@ -163,13 +163,22 @@ def save_state(simulation, filename):
 
 
 def parse_args():
+    # current directory of current file
+    
+    from pathlib import Path
+    cwd = Path(__file__).parents[1]
+    CGENFF_RTF = cwd / "pycharmm_interface" / "top_all36_cgenff.rtf"
+    CGENFF_PRM = cwd / "pycharmm_interface" / "par_all36_cgenff.prm"
+    CGENFF_RTF = str(CGENFF_RTF)
+    CGENFF_PRM = str(CGENFF_PRM)
+
     parser = argparse.ArgumentParser(
         description="Run OpenMM simulations with specified parameters."
     )
     parser.add_argument("--psf_file", required=True, help="Path to the PSF file.")
     parser.add_argument("--pdb_file", required=True, help="Path to the PDB file.")
-    parser.add_argument("--rtf_file", required=True, help="Path to the RTF file.")
-    parser.add_argument("--prm_file", required=True, help="Path to the PRM file.")
+    parser.add_argument("--rtf_file", required=False, default=CGENFF_RTF, help="Path to the RTF file.")
+    parser.add_argument("--prm_file", required=False, default=CGENFF_PRM, help="Path to the PRM file.")
     parser.add_argument(
         "--working_dir", required=True, help="Working directory for output files."
     )

@@ -408,21 +408,18 @@ def run_packmol(n_molecules: int, side_length: float) -> None:
     packmol_script = packmol_input.split("\n")
     packmol_script[1] = f"seed {randint}"
     packmol_script = "\n".join(packmol_script)
-    with open("packmol.inp", "w") as f:
+    with open("packmol/packmol.inp", "w") as f:
         f.writelines(packmol_script)
 
     import subprocess
     import os
 
-    print(f"{PACKMOL_PATH} < packmol.inp")
+    print(f"{PACKMOL_PATH} < packmol/packmol.inp")
     output = os.system(
         " ".join(
-            [PACKMOL_PATH, " < ", "packmol.inp"]
+            [PACKMOL_PATH, " < ", "packmol/packmol.inp"]
         )
     )
-
-    import shutil
-    shutil.copy("packmol.inp", "packmol/packmol.inp")
     print(output)
     print("Generated initial.pdb")
 
