@@ -19,6 +19,7 @@ def setup_simulation(
     pressures,
     simulation_schedule,
     integrator_type,
+    steps,
 ):
     # Create necessary directories
     os.makedirs(os.path.join(working_dir, "pdb"), exist_ok=True)
@@ -86,12 +87,15 @@ def setup_simulation(
             minimize_energy(simulation, working_dir)
         elif sim_type == "equilibration":
             equilibrate(
-                simulation, integrator, temperature, working_dir, integrator_type
+                simulation, integrator, temperature, 
+                working_dir, integrator_type, steps
             )
         elif sim_type == "NPT":
-            run_npt(simulation, integrator, pressure, working_dir, integrator_type)
+            run_npt(simulation, integrator, pressure,
+             working_dir, integrator_type, steps)
         elif sim_type == "NVE":
-            run_nve(simulation, integrator, working_dir)
+            run_nve(simulation, integrator,
+             working_dir, steps)
 
 
 def minimize_energy(simulation, working_dir):
@@ -203,6 +207,13 @@ def parse_args():
         help="List of simulation types to run (e.g., minimization equilibration NPT NVE).",
     )
     parser.add_argument(
+        "--steps",
+        type=int,
+        required=False,
+        default=10**6,
+        help="Number of steps to run for each simulation.",
+    )
+    parser.add_argument(
         "--integrator",
         choices=["Langevin", "Verlet", "Nose-Hoover"],
         default="Langevin",
@@ -225,6 +236,7 @@ if __name__ == "__main__":
             {"type": sim_type} for sim_type in args.simulation_schedule
         ],
         integrator_type=args.integrator,
+        steps=args.steps,
     )
 
 # example command:
