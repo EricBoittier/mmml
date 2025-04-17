@@ -8,20 +8,20 @@ rule all:
 rule setup_residue:
     output: "setup-residue.log"
     shell:
-        "source ~/mmml/.venv/bin/activate && python ~/mmml/mmml/pycharmm_interface/setupRes.py -r {config[residue]} > {output}"
+        "bash ~/mmml/setup/install.sh && python ~/mmml/mmml/pycharmm_interface/setupRes.py -r {config[residue]} > {output}"
 
 rule setup_box:
     input: "setup-residue.log"
     output: "setup-box.log"
     shell:
-        "source ~/mmml/.venv/bin/activate && python ~/mmml/mmml/pycharmm_interface/setupBox.py -d {config[density]} -l {config[side_length]} -r {config[residue]} > {output}"
+        "bash ~/mmml/setup/install.sh && python ~/mmml/mmml/pycharmm_interface/setupBox.py -d {config[density]} -l {config[side_length]} -r {config[residue]} > {output}"
 
 rule run_qm:
     input: "setup-residue.log"
     output: "qm/initial.npz"
     shell:
         """
-        source ~/mmml/.venv/bin/activate && python ~/mmml/mmml/pyscf4gpuInterface/calcs.py \
+        bash ~/mmml/setup/install.sh && python ~/mmml/mmml/pyscf4gpuInterface/calcs.py \
             --output {output} --mol initial.xyz \
             --optimize --xc {config[qm][xc]} --basis {config[qm][basis]} \
             {('--hessian' if config[qm]['hessian'] else '')} \
@@ -59,7 +59,7 @@ rule extract_clusters:
         pdb_file = "pdb/initial.pdb"
 
         shell(f"""
-        source ~/mmml/.venv/bin/activate && python ~/mmml/mmml/sample/features.py \
+        bash ~/mmml/setup/install.sh && python ~/mmml/mmml/sample/features.py \
             --sims_path $PWD --start 0 --end 100 --samples_per_frame 1 \
             --n_find {config["cluster"]["n_find"]} \
             --psf {input.psf} --dcd {dcd_file} \
