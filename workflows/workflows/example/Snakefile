@@ -30,13 +30,15 @@ rule run_qm:
         if config["qm"].get("harmonic", False):
             flags.append("--harmonic")
 
-        shell(
-            f"""bash ~/mmml/setup/install.sh && uv run python ~/mmml/mmml/pyscf4gpuInterface/calcs.py \
-                --output {output} --mol xyz/initial.xyz \
-                --optimize --xc {config['qm']['xc']} --basis {config['qm']['basis']} \
-                {' '.join(flags)} > {output}
+        script = f"""bash ~/mmml/setup/install.sh && uv run python ~/mmml/mmml/pyscf4gpuInterface/calcs.py \
+            --output {output} --mol xyz/initial.xyz \
+            --optimize --xc {config['qm']['xc']} --basis {config['qm']['basis']} \
+            {' '.join(flags)} > {output}
             """
-        )
+        print(script)
+        with open("qm-initial.sh", "w") as f:
+            f.write(script)
+        shell("sbatch qm-initial.sh")
 
 rule run_md:
     input: "setup-box.log"
@@ -48,8 +50,7 @@ rule run_md:
         print(temps)
         print(press)
         print(sched)
-        shell(
-            f"""module load openmm && python ~/mmml/mmml/openmm_interface/openmm-test1.py \
+        script = f"""module load openmm && python ~/mmml/mmml/openmm_interface/openmm-test1.py \
                 --psf_file psf/system.psf --pdb_file pdb/init-packmol.pdb \
                 --working_dir $PWD \
                 --temperatures {temps} \
@@ -57,7 +58,20 @@ rule run_md:
                 --simulation_schedule {sched} \
                 --integrator {config['md']['integrator']}
             """
-        )
+        print(script)
+        sbatch_script = f"""
+        #!/bin/bash
+        #SBATCH --job-name=openmm
+        #SBATCH --output=openmm.log
+        #SBATCH --error=openmm.err
+        #SBATCH --time=00:00:00
+        #SBATCH --partition=standard
+        
+        hostname
+        """ 
+        with open("openmm.sh", "w") as f:   
+            f.write(sbatch_script)
+        shell("sbatch openmm.sh")
 
 rule extract_clusters:
     input: "omm/openmm.json"
