@@ -177,7 +177,14 @@ def generate_coordinates() -> Atoms:
     an = [ase.data.chemical_symbols.index(_) for _ in e]
     print(an)
     mol.set_atomic_numbers(an)
-    return mol
+
+    atoms = ase.Atoms(
+        symbols=e,
+        positions=mol.get_positions(),
+        cell=mol.get_cell(),
+        pbc=mol.get_pbc(),
+    )
+    return atoms
 
 
 def mini():
@@ -217,7 +224,7 @@ def main(resid: str) -> None:
     resid = resid.upper()
     print("*" * 5, f"Generating residue from residue name ({resid})", "*" * 5)
     generate_residue(resid)
-    generate_coordinates()
+    atoms = generate_coordinates()
     mini()
     write_psf(resid)
 
@@ -225,9 +232,7 @@ def main(resid: str) -> None:
     shutil.copy("pdb/initial.pdb", f"pdb/{resid.lower()}.pdb")
 
     # create an xyz file
-    xyz = ase.io.read("pdb/initial.pdb")
-    print(xyz)
-    ase.io.write("xyz/initial.xyz", xyz)
+    ase.io.write("xyz/initial.xyz", atoms)
     print(f"xyz/{resid.lower()}.xyz")
     shutil.copy("xyz/initial.xyz", f"xyz/{resid.lower()}.xyz")
 
