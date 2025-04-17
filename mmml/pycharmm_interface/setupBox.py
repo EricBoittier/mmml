@@ -19,9 +19,6 @@ set ndcd 0
 ! Setup System
 !#########################################
 
-! Read topology and parameter files
-!stream toppar_complex.str
-
 open unit 1 card read name lig.top
 read rtf card unit 1
 close unit 1
@@ -449,11 +446,13 @@ def initialize_psf(resid: str, n_molecules: int, side_length: float):
     OPEN UNIT 1 READ FORM NAME pdb/init-packmol.pdb
     READ SEQU PDB UNIT 1
     CLOSE UNIT 1
-    GENERATE {resid.upper()} FIRST NONE LAST NONE SETUP 
+    !GENERATE {resid.upper()} FIRST NONE LAST NONE SETUP 
 
     OPEN UNIT 1 READ FORM NAME pdb/init-packmol.pdb
     READ COOR PDB UNIT 1
-    CLOSE UNIT 1"""
+    CLOSE UNIT 1
+    
+    """
     pycharmm.lingo.charmm_script(header)
     pycharmm.lingo.charmm_script(pbcset.format(SIDELENGTH=side_length))
     pycharmm.lingo.charmm_script(pbcs)
