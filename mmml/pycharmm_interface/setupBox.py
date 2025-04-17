@@ -424,8 +424,9 @@ def initialize_psf(resid: str, n_molecules: int, side_length: float):
     pycharmm.lingo.charmm_script(s)
     s = """DELETE PSF SELE ALL END"""
     pycharmm.lingo.charmm_script(s)
-    resstr = " ".join([resid.upper()]*n_molecules)
-    print(resstr)
+    # resstr = " ".join([resid.upper()]*n_molecules)
+    # print(resstr)
+    resstr = f"{resid.upper()}"
     header = f"""bomlev -2
     prnlev 3
     wrnlev 1
