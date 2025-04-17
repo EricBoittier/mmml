@@ -3,9 +3,8 @@ import subprocess
 from pathlib import Path
 import sys
 
-# current directory
-cwd = os.getcwd()
-cwd = Path(cwd)
+# current directory of current file
+cwd = Path(__file__).parent
 
 chmh = os.environ["CHARMM_HOME"] #= "/pchem-data/meuwly/boittier/home/charmm"
 chml = os.environ["CHARMM_LIB_DIR"] #= "/pchem-data/meuwly/boittier/home/charmm/build/cmake"
