@@ -2,7 +2,7 @@ configfile: "config.yaml"
 
 rule all:
     input:
-        "qm/aceh.pkl",
+        "qm/initial.npz",
         "clusters/cluster_info.json"
 
 rule setup_residue:
