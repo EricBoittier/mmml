@@ -1,4 +1,4 @@
-cd setup
+cd ~/mmml/setup
 
 # Only extract if 'charmm' directory does not exist
 if [ ! -d "charmm" ]; then
