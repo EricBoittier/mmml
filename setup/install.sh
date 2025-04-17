@@ -1,3 +1,5 @@
+orginal_wd=$PWD
+
 cd ~/mmml/setup
 
 # Only extract if 'charmm' directory does not exist
@@ -21,17 +23,16 @@ fi
 
 # Set environment variables
 chmhome="export CHARMM_HOME=$PWD"
-chmlib="export CHARMM_LIB_DIR=$PWD/lib"
+chmlib="export CHARMM_LIB_DIR=$PWD"
 echo "$chmhome" > ~/mmml/CHARMMSETUP
 echo "$chmlib" >> ~/mmml/CHARMMSETUP
 source ~/mmml/CHARMMSETUP
 
 cd ../..
-
 pip install uv
 uv sync
 source .venv/bin/activate
 
 echo "Setup complete"
 
-
+cd $orginal_wd
