@@ -314,7 +314,6 @@ PACKMOL_PATH = "/pchem-data/meuwly/boittier/home/packmol/packmol"
 
 def read_initial_pdb(cwd: Path) -> Atoms:
     """Reads the initial PDB file and returns an ASE Atoms object"""
-    write.coor_pdb(cwd / "pdb" / "initial.pdb")
     mol = ase.io.read(cwd / "pdb" / "initial.pdb")
     e = mol.get_chemical_symbols()
     print(mol)
