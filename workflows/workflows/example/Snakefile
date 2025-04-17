@@ -19,7 +19,9 @@ rule setup_residue:
 
         hostname
 
-        """ + f"""bash ~/mmml/setup/install.sh && uv run ~/mmml/mmml/pycharmm_interface/setupRes.py -r {config[residue]} > {output}"""
+        """ 
+        job = f"""bash ~/mmml/setup/install.sh && uv run ~/mmml/mmml/pycharmm_interface/setupRes.py -r {config["residue"]} > {output}"""
+        script += job
         with open("setup-residue.sh", "w") as f:
             f.write(script)
         print("sbatch setup-residue.sh")
@@ -40,7 +42,9 @@ rule setup_box:
 
         hostname
 
-        """ + f"""bash ~/mmml/setup/install.sh && uv run  ~/mmml/mmml/pycharmm_interface/setupBox.py -d {config[density]} -l {config[side_length]} -r {config[residue]} > {output}"""
+        """
+        job = f"""bash ~/mmml/setup/install.sh && uv run  ~/mmml/mmml/pycharmm_interface/setupBox.py -d {config["density"]} -l {config["side_length"]} -r {config["residue"]} > {output}"""
+        script += job
         with open("setup-box.sh", "w") as f:
             f.write(script)
         print("sbatch setup-box.sh")
