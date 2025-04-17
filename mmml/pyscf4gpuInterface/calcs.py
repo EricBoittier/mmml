@@ -180,7 +180,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
     # molecule
     parser.add_argument("--mol", type=str, required=True)
-
+    parser.add_argument("--output", type=str, default="output.pkl")
     parser.add_argument("--log_file", type=str, default="pyscf.log")
     parser.add_argument("--monomer_a", type=str, default="")
     parser.add_argument("--monomer_b", type=str, default="")
@@ -225,6 +225,7 @@ if __name__ == "__main__":
     mol = pyscf.M(atom=args.mol, basis=args.basis).build()
     output = compute_dft(mol, calcs, extra, args.xc)
     print(output)
+    import pickle
     # save output to pickle
-    with open("output.pkl", "wb") as f:
+    with open(args.output, "wb") as f:
         pickle.dump(output, f)
