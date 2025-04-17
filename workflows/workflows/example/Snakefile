@@ -18,7 +18,7 @@ rule setup_box:
 
 rule run_qm:
     input: "setup-residue.log"
-    output: "qm-initial.npz"
+    output: "qm/initial.npz"
     shell:
         """
         python ~/mmml/mmml/pyscf4gpuInterface/calcs.py \
