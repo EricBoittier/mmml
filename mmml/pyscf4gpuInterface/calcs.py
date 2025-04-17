@@ -85,7 +85,7 @@ def compute_dft(mol, calcs, extra=None, basis='def2-tzvpp', xc="wB97m-v"):
         print("-"*100)
         # Compute Energy
         e_dft = engine.kernel()
-        print(f"total energy = {e_dft}")       # -76.46668196729536
+        print(f"total energy = {e_dft}")       
         output['energy'] = e_dft
 
     if CALCS.GRADIENT in calcs:
@@ -130,16 +130,6 @@ def compute_dft(mol, calcs, extra=None, basis='def2-tzvpp', xc="wB97m-v"):
         thermo.dump_thermo(mol, results)
         output['thermo'] = results
 
-    if CALCS.HESSIAN in calcs:
-        print("-"*100)
-        print("Computing Hessian")
-        print("-"*100)
-        # force translational symmetry
-        natm = mol.natm
-        h_dft = h_dft.transpose([0,2,1,3]).reshape(3*natm,3*natm)
-        h_diag = h_dft.sum(axis=0)
-        h_dft -= np.diag(h_diag)
-        output['hessian'] = h_dft
 
     if CALCS.INTERACTION in calcs:
         print("-"*100)
