@@ -19,16 +19,25 @@ rule setup_box:
 rule run_qm:
     input: "setup-residue.log"
     output: "qm/initial.npz"
-    shell:
-        """
-        bash ~/mmml/setup/install.sh && uv run ~/mmml/mmml/pyscf4gpuInterface/calcs.py \
-            --output {output} --mol initial.xyz \
-            --optimize --xc {config[qm][xc]} --basis {config[qm][basis]} \
-            {('--hessian' if config[qm]['hessian'] else '')} \
-            {('--thermo' if config[qm]['thermo'] else '')} \
-            {('--gradient' if config[qm]['gradient'] else '')} \
-            {('--harmonic' if config[qm].get('harmonic', False) else '')} > {output}
-        """
+    run:
+        flags = []
+        if config["qm"].get("hessian"):
+            flags.append("--hessian")
+        if config["qm"].get("thermo"):
+            flags.append("--thermo")
+        if config["qm"].get("gradient"):
+            flags.append("--gradient")
+        if config["qm"].get("harmonic", False):
+            flags.append("--harmonic")
+
+        shell(
+            f"""
+            python ~/mmml/mmml/pyscf4gpuInterface/calcs.py \
+                --output {output} --mol {input} \
+                --optimize --xc {config['qm']['xc']} --basis {config['qm']['basis']} \
+                {' '.join(flags)} > {output}
+            """
+        )
 
 rule run_md:
     input: "setup-box.log"
