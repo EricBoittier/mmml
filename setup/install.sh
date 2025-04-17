@@ -26,6 +26,7 @@ chmhome="export CHARMM_HOME=$PWD"
 chmlib="export CHARMM_LIB_DIR=$PWD"
 echo "$chmhome" > ~/mmml/CHARMMSETUP
 echo "$chmlib" >> ~/mmml/CHARMMSETUP
+cat ~/mmml/CHARMMSETUP
 source ~/mmml/CHARMMSETUP
 
 cd ../..
