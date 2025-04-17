@@ -20,7 +20,7 @@ if [ ! -f "libcharmm.so" ]; then
 fi
 
 # Set environment variables
-chmhome="export CHARMM_HOME=$PWD; export CHARMM_LIB_DIR=$PWD/lib"
+chmhome="export CHARMM_HOME=$PWD \n export CHARMM_LIB_DIR=$PWD/lib"
 echo $chmhome > ~/mmml/CHARMMSETUP
 source ~/mmml/CHARMMSETUP
 
