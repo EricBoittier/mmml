@@ -31,15 +31,12 @@ rule run_qm:
         """
 
 rule run_md:
-    input:
-        psf="psf/system.psf",
-        pdb="pdb/init-packmol.pdb"
-    output:
-        json="omm/openmm.json"
+    input: "setup-box.log"
+    output: "omm/openmm.json"
     shell:
         """
         python openmm-test1.py \
-            --psf_file {input.psf} --pdb_file {input.pdb} \
+            --psf_file psf/system.psf --pdb_file pdb/init-packmol.pdb \
             --working_dir $PWD \
             --temperatures {" ".join(map(str, config['md']['temperatures']))} \
             --pressures {" ".join(map(str, config['md']['pressures']))} \
@@ -48,9 +45,7 @@ rule run_md:
         """
 
 rule extract_clusters:
-    input:
-        json="omm/openmm.json",
-        psf="psf/system.psf"
+    input: "omm/openmm.json"
     output: "clusters/cluster_info.json"
     run:
         import json as js
