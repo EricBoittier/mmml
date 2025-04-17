@@ -402,6 +402,7 @@ def run_packmol(n_molecules: int, side_length: float) -> None:
     inside box 0.0 0.0 0.0 {side_length} {side_length} {side_length}
     end structure
     """
+    import os
     os.makedirs("packmol", exist_ok=True)
     randint = np.random.randint(1000000)
     packmol_script = packmol_input.split("\n")
