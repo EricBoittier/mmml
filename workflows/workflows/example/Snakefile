@@ -45,6 +45,9 @@ rule run_md:
         temps = " ".join(map(str, config['md']['temperatures']))
         press = " ".join(map(str, config['md']['pressures']))
         sched = " ".join(config['md']['schedule'])
+        print(temps)
+        print(press)
+        print(sched)
         shell(
             f"""module load openmm && python ~/mmml/mmml/openmm_interface/openmm-test1.py \
                 --psf_file psf/system.psf --pdb_file pdb/init-packmol.pdb \
