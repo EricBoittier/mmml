@@ -6,18 +6,8 @@ from gpu4pyscf.dft import rks
 from enums import *
 from helperfunctions import *
 
-# def create_mol(atoms, basis, log_file='./pyscf.log', 
-#     verbose=6, 
-#     lebedev_grids=(99,590),
-#     scf_tol=1e-10,
-#     scf_max_cycle=50,
-#     cpscf_tol=1e-3,
-#     conv_tol=1e-10,
-#     conv_tol_cpscf=1e-3,
-#     ):
 
-
-def setup_mol(atoms, basis, log_file='./pyscf.log', 
+def setup_mol(atoms, basis, xc, log_file='./pyscf.log', 
     verbose=6, 
     lebedev_grids=(99,590),
     scf_tol=1e-10,
@@ -38,7 +28,7 @@ def setup_mol(atoms, basis, log_file='./pyscf.log',
         
     mf_GPU = rks.RKS(                      # restricted Kohn-Sham DFT
         mol,                               # pyscf.gto.object
-        xc='wb97m-v'                         # xc funtionals, such as pbe0, wb97m-v, tpss,
+        xc=xc                         # xc funtionals, such as pbe0, wb97m-v, tpss,
         ).density_fit()                    # density fitting
 
     mf_GPU.grids.atom_grid = lebedev_grids      # (99,590) lebedev grids, (75,302) is often enough
@@ -50,9 +40,9 @@ def setup_mol(atoms, basis, log_file='./pyscf.log',
 
 
 
-def compute_dft(mol, calcs, extra=None, xc="wB97m-v"):
+def compute_dft(mol, calcs, extra=None, basis="def2-tzvp", xc="wB97m-v"):
 
-    engine, mol = setup_mol(mol, xc)
+    engine, mol = setup_mol(mol, basis, xc)
 
     print(mol)
 
