@@ -63,7 +63,7 @@ def compute_dft(mol, calcs, extra=None, xc="wB97m-v"):
             print(list(envs.keys()))
             gradients.append(envs['gradients'])
             energies.append(envs['energy'])
-            coords.append(envs['atom_coords'])
+            coords.append(envs['coords'])
 
         start_time = time.time()
         mol = optimize(engine, maxsteps=20, callback=callback)
