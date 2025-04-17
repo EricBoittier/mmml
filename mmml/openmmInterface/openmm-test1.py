@@ -252,8 +252,9 @@ if __name__ == "__main__":
     # write variables to manifest file...
     current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
     import os
-    os.makedirs(Path(args.working_dir / "omm"), exist_ok=True)
-    with open(Path(args.working_dir / "omm" / f"openmm-{current_time}.json"), "w") as f:
+    os.makedirs(Path(args.working_dir) / "omm", exist_ok=True)
+    jsonout = Path(args.working_dir) / "omm" / f"openmm-{current_time}.json"
+    with open(jsonout, "w") as f:
         json.dump({
             "dcd_files": dcd_files,
             "report_files": report_files,
