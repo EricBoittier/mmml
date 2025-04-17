@@ -278,10 +278,8 @@ from ase.visualize.plot import plot_atoms
 from ase.io import read
 from ase.visualize import view
 
-# Environment setup (before loading pycharmm)
-os.environ["CHARMM_HOME"] = "/pchem-data/meuwly/boittier/home/charmm"
-os.environ["CHARMM_LIB_DIR"] = "/pchem-data/meuwly/boittier/home/charmm/build/cmake"
-os.environ["CUDA_VISIBLE_DEVICES"] = ""
+from import_pycharmm import *
+from import_pycharmm import CGENFF_RTF, CGENFF_PAR
 
 
 # CHARMM imports
@@ -313,9 +311,9 @@ from pint import UnitRegistry
 ureg = UnitRegistry()
 Q_ = ureg.Quantity
 
-
+PACKMOL_PATH = "/pchem-data/meuwly/boittier/home/packmol/packmol"
 # Constants
-packmol_input = str(Path("packmol.inp").absolute())
+# packmol_input = str(Path("packmol.inp").absolute())
 
 
 def read_initial_pdb(path: Path) -> Atoms:
@@ -414,11 +412,14 @@ def run_packmol(n_molecules: int, side_length: float) -> None:
     import subprocess
     import os
 
+    print(f"{PACKMOL_PATH} < packmol.inp")
     output = os.system(
         " ".join(
-            ["/pchem-data/meuwly/boittier/home/packmol/packmol", " < ", "packmol.inp"]
+            [PACKMOL_PATH, " < ", "packmol.inp"]
         )
     )
+    print(output)
+    print("Generated initial.pdb")
 
 
 def initialize_psf(resid: str, n_molecules: int, side_length: float):
