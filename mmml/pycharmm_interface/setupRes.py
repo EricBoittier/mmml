@@ -166,13 +166,11 @@ def generate_coordinates() -> Atoms:
     write.coor_pdb("pdb/initial.pdb")
     mol = ase.io.read("pdb/initial.pdb")
     e = mol.get_chemical_symbols()
-    for _ in e:
-        print(_, iupac_2_number(_))
-        if _ > 20:
-            print("WARNING: Element is greater than 20, something may have gone wrong")
-    mol.set_chemical_symbols(
-        [_[:1] if _.upper() in problem_symbols else _ for _ in e]
-    )
+    e = [_[:1] if _.upper() in problem_symbols else _ for _ in e]
+    print(e)
+    e = [_ if _[0] != "H" else "H" for _ in e]
+    print(e)
+    mol.set_chemical_symbols(e)
     return mol
 
 
