@@ -3,8 +3,8 @@ import pyscf
 from pyscf.hessian import thermo
 from gpu4pyscf.dft import rks
 
-from .enums import *
-from .helperfunctions import *
+from enums import *
+from helperfunctions import *
 
 def create_mol(atoms):
     mol = pyscf.M(
