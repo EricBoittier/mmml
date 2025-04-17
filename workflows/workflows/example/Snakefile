@@ -59,7 +59,7 @@ rule extract_clusters:
         pdb_file = "pdb/initial.pdb"
 
         shell(f"""
-        python ~/mmml/mmml/sample/features.py \
+        source ~/mmml/.venv/bin/activate && python ~/mmml/mmml/sample/features.py \
             --sims_path $PWD --start 0 --end 100 --samples_per_frame 1 \
             --n_find {config["cluster"]["n_find"]} \
             --psf {input.psf} --dcd {dcd_file} \
