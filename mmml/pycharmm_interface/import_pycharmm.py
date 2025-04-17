@@ -23,10 +23,13 @@ if chml is None:
 os.environ["CHARMM_HOME"] = chmh
 os.environ["CHARMM_LIB_DIR"] = chml
 
-chmhp = Path(chmh) / "tool" / "pycharmm"
+
+CHARMM_HOME = os.environ["CHARMM_HOME"]
+CHARMM_LIB_DIR = os.environ["CHARMM_LIB_DIR"]
+
+chmhp = Path(CHARMM_HOME) / "tool" / "pycharmm"
 sys.path.append(str(chmhp))
 
-import pycharmm
 CGENFF_RTF = cwd / "top_all36_cgenff.rtf"
 print(CGENFF_RTF)
 CGENFF_PRM = cwd / "par_all36_cgenff.prm"
