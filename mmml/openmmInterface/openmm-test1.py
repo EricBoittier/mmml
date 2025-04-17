@@ -253,7 +253,7 @@ if __name__ == "__main__":
     current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
     import os
     os.makedirs(Path(args.working_dir) / "omm", exist_ok=True)
-    jsonout = Path(args.working_dir) / "omm" / f"openmm-{current_time}.json"
+    jsonout = Path(args.working_dir) / "omm" / f"openmm.json"
     args_dict = vars(args)
     args_dict["dcd_files"] = dcd_files
     args_dict["report_files"] = report_files
