@@ -43,8 +43,7 @@
 # write psf card name system.psf
 # * My PSF file
 # *
-
-"""
+# """
 
 write_system_psf = """write psf card name system.psf
 * My PSF file
