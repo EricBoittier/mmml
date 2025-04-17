@@ -48,7 +48,7 @@ import pycharmm.scalar as scalar
 import pycharmm.lingo
 
 
-problem_symbols = ["HO", "CA", "CM"]
+problem_symbols = ["HO", "Ho", "CA", "CM"]
 
 
 def iupac_2_number(iupac):
