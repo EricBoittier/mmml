@@ -9,12 +9,12 @@ cwd = Path(__file__).parent
 chmh = None
 chml = None
 with open(cwd / ".." / ".." / "CHARMMSETUP") as f:
-    if "CHARMM_HOME" in f.read():
-        chmh = f.read().split("=")[1].strip()
-    if "CHARMM_LIB_DIR" in f.read():
-        chml = f.read().split("=")[1].strip()
-    else:
-        raise ValueError("CHARMMSETUP does not contain CHARMM_HOME or CHARMM_LIB_DIR")
+    lines = f.readlines()
+    for line in lines:
+        if "CHARMM_HOME" in line:
+            chmh = line.split("=")[1].strip()
+        if "CHARMM_LIB_DIR" in line:
+            chml = line.split("=")[1].strip()
 if chmh is None:
     raise ValueError("CHARMM_HOME is not set")
 if chml is None:
