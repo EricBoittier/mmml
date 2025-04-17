@@ -117,9 +117,9 @@ def compute_dft(args, calcs, extra=None):
         print("Computing Harmonic Analysis")
         print("-"*100)
         # harmonic analysis
-        results = thermo.harmonic_analysis(mol, h_dft)
-        thermo.dump_normal_mode(mol, results)
-        output['harmonic'] = results
+        harmonic_results = thermo.harmonic_analysis(mol, h_dft)
+        thermo.dump_normal_mode(mol, harmonic_results)
+        output['harmonic'] = harmonic_results
 
     if CALCS.THERMO in calcs:
         print("-"*100)
@@ -127,7 +127,7 @@ def compute_dft(args, calcs, extra=None):
         print("-"*100)
         results = thermo.thermo(
             engine,                            # GPU4PySCF object
-            results['freq_au'],
+            harmonic_results['freq_au'],
             298.15,                            # room temperature
             101325)                            # standard atmosphere
 

@@ -21,11 +21,8 @@ from ase.visualize.plot import plot_atoms
 from ase.io import read
 from ase.visualize import view
 
-# Environment setup (before loading pycharmm)
-os.environ["CHARMM_HOME"] = "/pchem-data/meuwly/boittier/home/charmm"
-os.environ["CHARMM_LIB_DIR"] = "/pchem-data/meuwly/boittier/home/charmm/build/cmake"
-os.environ["CUDA_VISIBLE_DEVICES"] = ""
-
+from import_pycharmm import *
+from import_pycharmm import CGENFF_RTF
 
 # CHARMM imports
 import pycharmm
@@ -69,7 +66,7 @@ def iupac_2_number(iupac):
 
 def get_residue_atoms() -> dict[str, list[list[float]]]:
     with open(
-        "/pchem-data/meuwly/boittier/home/charmm/toppar/top_all36_cgenff.rtf"
+        CGENFF_RTF
     ) as f:
         lines = f.readlines()
 
