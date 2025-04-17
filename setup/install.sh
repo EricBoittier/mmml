@@ -36,7 +36,7 @@ source .venv/bin/activate
 echo "venv activated"
 echo "venv path: $VIRTUAL_ENV"
 echo "venv python path: $(which python)"
-UV_ENV_FILE=$VIRTUAL_ENV/.uv/env.sh
+UV_ENV_FILE=~/mmml/CHARMMSETUP
 echo "UV_ENV_FILE: $UV_ENV_FILE"
 source $UV_ENV_FILE
 echo "Setup complete"
