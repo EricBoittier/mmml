@@ -200,6 +200,7 @@ def mini():
 def write_psf(resid: str) -> None:
     print("*" * 5, "Writing PSF", "*" * 5)
     print(f"psf/{resid.lower()}-1.psf")
+    write.psf_card("psf/initial.psf")
     write.psf_card(f"psf/{resid.lower()}-1.psf")
 
 
@@ -213,17 +214,14 @@ def main(resid: str) -> None:
     write_psf(resid)
 
     # copy pdb/initial.pdb to pdb/resid.pdb
-    shutil.copy("pdb/initial.pdb", f"pdb/{resid}.pdb")
-
-    # copy psf/resid.psf to psf/resid.psf
-    shutil.copy("psf/initial.psf", f"psf/{resid}.psf")
+    shutil.copy("pdb/initial.pdb", f"pdb/{resid.lower()}.pdb")
 
     # create an xyz file
     xyz = ase.io.read("pdb/initial.pdb")
     print(xyz)
     ase.io.write("xyz/initial.xyz", xyz)
-    print(f"xyz/{resid}.xyz")
-    shutil.copy("xyz/initial.xyz", f"xyz/{resid}.xyz")
+    print(f"xyz/{resid.lower()}.xyz")
+    shutil.copy("xyz/initial.xyz", f"xyz/{resid.lower()}.xyz")
 
     print("Done")
 
