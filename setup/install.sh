@@ -32,6 +32,8 @@ cd ../..
 pip install uv
 uv sync
 source .venv/bin/activate
+echo "venv activated"
+echo "venv path: $VIRTUAL_ENV"
 
 echo "Setup complete"
 
