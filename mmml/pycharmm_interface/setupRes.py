@@ -27,8 +27,9 @@ import os
 os.environ["CHARMM_HOME"] = CHARMM_HOME
 os.environ["CHARMM_LIB_DIR"] = CHARMM_LIB_DIR
 
-print(CHARMM_HOME)
-print(CHARMM_LIB_DIR)
+print("CHARMM_HOME: ", CHARMM_HOME)
+print("CHARMM_LIB_DIR: ", CHARMM_LIB_DIR)
+
 import sys
 sys.path.append(str(Path(CHARMM_HOME) / "tool" / "pycharmm"))
 
