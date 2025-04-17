@@ -338,7 +338,8 @@ def process_simulation(args):
 
     u, labels, natoms = setup_universe(psf_file, dcd_file, pdb_file)
     import os
-    output_path = Path(args.sims_path) / "data" / str(logfile.parents[1]).split("/")[-1]
+    outfile_stem = logfile.stem + "_" + pdb_file.stem
+    output_path = Path(args.sims_path) / "data" / outfile_stem
     os.makedirs(output_path, exist_ok=True)
 
     results = extract_molecular_descriptors(
