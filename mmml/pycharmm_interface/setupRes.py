@@ -102,7 +102,7 @@ def generate_residue(resid) -> None:
     read.rtf(CGENFF_RTF)
     bl = settings.set_bomb_level(-2)
     wl = settings.set_warn_level(-2)
-    read.prm(CGGENFF_PRM)
+    read.prm(CGENFF_PRM)
     settings.set_bomb_level(bl)
     settings.set_warn_level(wl)
     pycharmm.lingo.charmm_script("bomlev 0")
