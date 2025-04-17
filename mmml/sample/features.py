@@ -262,7 +262,8 @@ def find_simulation_files(sims_path, index):
     """
     files = list(Path(sims_path).glob("*/*/log/equilibration_1_*"))
     logfile = files[index]
-
+    logfile = Path(logfile).absolute()
+    print(logfile)
     resid = logfile.parents[2].stem
     sim_conds = str(logfile.parents[1]).split("/")[-1]
 
@@ -336,7 +337,9 @@ def process_simulation(args):
     print(f"Processing: {resid} {sim_conds}")
 
     u, labels, natoms = setup_universe(psf_file, dcd_file, pdb_file)
-    output_path = logfile.parents[2] / "data" / str(logfile.parents[1]).split("/")[-1]
+    import os
+    output_path = Path(args.sims_path) / "data" / str(logfile.parents[1]).split("/")[-1]
+    os.makedirs(output_path, exist_ok=True)
 
     results = extract_molecular_descriptors(
         u,
