@@ -150,11 +150,14 @@ dependencies = [
     "wcwidth",
     "wheel",
     "zipp",
-    "pycharmm"
+
+    "pycharmm",
+    "jaxpycharmm"
 ]
 
 [tool.uv.sources]
 jax-md = { git = "https://github.com/google/jax-md.git", rev = "05221c551e71f1b5f64458c0e3533452c22efec0" }
+jaxpycharmm = {git = "https://github.com/EricBoittier/JaxPycharmm.git"  }
 pycharmm = { path = "/pchem-data/meuwly/boittier/home/charmm/tool/pycharmm", editable = true }
 
 
