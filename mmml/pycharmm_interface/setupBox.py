@@ -408,18 +408,21 @@ def run_packmol(n_molecules: int, side_length: float) -> None:
     packmol_script = packmol_input.split("\n")
     packmol_script[1] = f"seed {randint}"
     packmol_script = "\n".join(packmol_script)
-    with open("packmol/packmol.inp", "w") as f:
+    with open("packmol.inp", "w") as f:
         f.writelines(packmol_script)
 
     import subprocess
     import os
 
-    print(f"{PACKMOL_PATH} < packmol/packmol.inp")
+    print(f"{PACKMOL_PATH} < packmol.inp")
     output = os.system(
         " ".join(
-            [PACKMOL_PATH, " < ", "packmol/packmol.inp"]
+            [PACKMOL_PATH, " < ", "packmol.inp"]
         )
     )
+
+    import shutil
+    shutil.copy("packmol.inp", "packmol/packmol.inp")
     print(output)
     print("Generated initial.pdb")
 
@@ -446,12 +449,12 @@ def initialize_psf(resid: str, n_molecules: int, side_length: float):
     ! Start Production at dcd number n
     set ndcd 0
 
-    OPEN UNIT 1 READ FORM NAME init.pdb
+    OPEN UNIT 1 READ FORM NAME pdb/init-packmol.pdb
     READ SEQU PDB UNIT 1
     CLOSE UNIT 1
     GENERATE {resid.upper()} FIRST NONE LAST NONE SETUP 
 
-    OPEN UNIT 1 READ FORM NAME init.pdb
+    OPEN UNIT 1 READ FORM NAME pdb/init-packmol.pdb
     READ COOR PDB UNIT 1
     CLOSE UNIT 1"""
     pycharmm.lingo.charmm_script(header)
