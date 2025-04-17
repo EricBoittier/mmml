@@ -49,16 +49,21 @@ def compute_dft(mol, calcs, extra=None, xc="wB97m-v"):
     opt_callback = None
 
     if CALCS.OPTIMIZE in calcs:
+        print("-"*100)
+        print("Optimizing geometry")
+        print("-"*100)
         from pyscf.geomopt.geometric_solver import optimize
         import time
 
+        
         gradients = []
         energies = []
         coords = []
         def callback(envs):
+            print(list(envs.keys()))
             gradients.append(envs['gradients'])
             energies.append(envs['energy'])
-            coords.append(envs['geom'])
+            coords.append(envs['atom_coords'])
 
         start_time = time.time()
         mol = optimize(engine, maxsteps=20, callback=callback)
@@ -74,18 +79,27 @@ def compute_dft(mol, calcs, extra=None, xc="wB97m-v"):
     output = {"mol": mol, "calcs": calcs, "opt_callback": opt_callback}
 
     if CALCS.ENERGY in calcs:
+        print("-"*100)
+        print("Computing Energy")
+        print("-"*100)
         # Compute Energy
         e_dft = engine.kernel()
         print(f"total energy = {e_dft}")       # -76.46668196729536
         output['energy'] = e_dft
 
     if CALCS.GRADIENT in calcs:
+        print("-"*100)
+        print("Computing Gradient")
+        print("-"*100)
         # Compute Gradient
         g = engine.nuc_grad_method()
         g_dft = g.kernel()
         output['gradient'] = g_dft
 
     if CALCS.HESSIAN in calcs:
+        print("-"*100)
+        print("Computing Hessian")
+        print("-"*100)
         # Compute Hessian
         h = engine.Hessian()
         h.auxbasis_response = 2                # 0: no aux contribution, 1: some contributions, 2: all
@@ -94,12 +108,18 @@ def compute_dft(mol, calcs, extra=None, xc="wB97m-v"):
         output['hessian'] = h_dft
 
     if CALCS.HARMONIC in calcs:
+        print("-"*100)
+        print("Computing Harmonic Analysis")
+        print("-"*100)
         # harmonic analysis
         results = thermo.harmonic_analysis(mol, h_dft)
         thermo.dump_normal_mode(mol, results)
         output['harmonic'] = results
 
     if CALCS.THERMO in calcs:
+        print("-"*100)
+        print("Computing Thermodynamics")
+        print("-"*100)
         results = thermo.thermo(
             engine,                            # GPU4PySCF object
             results['freq_au'],
@@ -110,6 +130,9 @@ def compute_dft(mol, calcs, extra=None, xc="wB97m-v"):
         output['thermo'] = results
 
     if CALCS.HESSIAN in calcs:
+        print("-"*100)
+        print("Computing Hessian")
+        print("-"*100)
         # force translational symmetry
         natm = mol.natm
         h_dft = h_dft.transpose([0,2,1,3]).reshape(3*natm,3*natm)
@@ -118,6 +141,9 @@ def compute_dft(mol, calcs, extra=None, xc="wB97m-v"):
         output['hessian'] = h_dft
 
     if CALCS.INTERACTION in calcs:
+        print("-"*100)
+        print("Computing Interaction Energy")
+        print("-"*100)
         # Compute Interaction Energy
         e_interaction = compute_interaction_energy(mol, extra)
         output['interaction'] = e_interaction
