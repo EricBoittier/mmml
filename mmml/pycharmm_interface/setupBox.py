@@ -426,8 +426,8 @@ def initialize_psf(resid: str, n_molecules: int, side_length: float):
     pycharmm.lingo.charmm_script(s)
 
     # read cgenff
-    pycharmm.lingo.charmm_script(CGENFF_RTF)
-    pycharmm.lingo.charmm_script(CGENFF_PRM)
+    read.rtf(CGENFF_RTF)
+    read.prm(CGENFF_PRM)
 
     resstr = " ".join([resid.upper()]*n_molecules)
     print(resstr)
