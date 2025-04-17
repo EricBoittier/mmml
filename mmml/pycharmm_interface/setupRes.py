@@ -120,6 +120,7 @@ def generate_coordinates() -> Atoms:
     os.makedirs("dcd", exist_ok=True)
     os.makedirs("psf", exist_ok=True)
     os.makedirs("xyz", exist_ok=True)
+    
     ic.build()
     coor.show()
 

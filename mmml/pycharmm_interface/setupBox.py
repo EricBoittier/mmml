@@ -394,7 +394,7 @@ def determine_n_molecules_from_density(
 def run_packmol(n_molecules: int, side_length: float) -> None:
     packmol_input = f"""
 
-    output init.pdb
+    output pdb/init-packmol.pdb
     filetype pdb
     tolerance 2.0
     structure pdb/initial.pdb 
@@ -402,20 +402,21 @@ def run_packmol(n_molecules: int, side_length: float) -> None:
     inside box 0.0 0.0 0.0 {side_length} {side_length} {side_length}
     end structure
     """
+    os.makedirs("packmol", exist_ok=True)
     randint = np.random.randint(1000000)
     packmol_script = packmol_input.split("\n")
     packmol_script[1] = f"seed {randint}"
     packmol_script = "\n".join(packmol_script)
-    with open("packmol.inp", "w") as f:
+    with open("packmol/packmol.inp", "w") as f:
         f.writelines(packmol_script)
 
     import subprocess
     import os
 
-    print(f"{PACKMOL_PATH} < packmol.inp")
+    print(f"{PACKMOL_PATH} < packmol/packmol.inp")
     output = os.system(
         " ".join(
-            [PACKMOL_PATH, " < ", "packmol.inp"]
+            [PACKMOL_PATH, " < ", "packmol/packmol.inp"]
         )
     )
     print(output)
