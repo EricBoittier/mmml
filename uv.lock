@@ -1038,7 +1038,7 @@ with-cuda = [
 [[package]]
 name = "jax-md"
 version = "0.2.8"
-source = { registry = "https://pypi.org/simple" }
+source = { git = "https://github.com/google/jax-md.git?rev=05221c551e71f1b5f64458c0e3533452c22efec0#05221c551e71f1b5f64458c0e3533452c22efec0" }
 dependencies = [
     { name = "absl-py" },
     { name = "dataclasses" },
@@ -1046,16 +1046,13 @@ dependencies = [
     { name = "e3nn-jax" },
     { name = "einops" },
     { name = "flax" },
+    { name = "frozendict" },
     { name = "jax" },
     { name = "jaxlib" },
     { name = "jraph" },
     { name = "ml-collections" },
     { name = "numpy" },
     { name = "optax" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/33/d6/f1cc8f8d13c16aacb0ab11a5042d2f2a06f2ba599fd0b8c062b964ba2d11/jax-md-0.2.8.tar.gz", hash = "sha256:ad74e443c8e89933e38b0e2654b52f7f5aeabbd81a0934c765f09417eaa2e95b", size = 140202 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/f2/cb/4cd5f9f36fba4e78a95c9de1cad499a35451479135960dda75ecdd740885/jax_md-0.2.8-py3-none-any.whl", hash = "sha256:ca8dd37343a324151a89716b0fd39f67c0658c4f8da7ec52a250bc2c98e277dc", size = 150980 },
 ]
 
 [[package]]
@@ -1505,7 +1502,7 @@ wheels = [
 
 [[package]]
 name = "mmml"
-version = "1.0.0+161.gacc5678.dirty"
+version = "1.0.0+167.g76cbd87.dirty"
 source = { editable = "." }
 dependencies = [
     { name = "absl-py" },
@@ -1599,6 +1596,7 @@ dependencies = [
     { name = "pure-eval" },
     { name = "py3dmol" },
     { name = "pyarrow" },
+    { name = "pycharmm" },
     { name = "pygments" },
     { name = "pyparsing" },
     { name = "python-dateutil" },
@@ -1684,7 +1682,7 @@ requires-dist = [
     { name = "ipython-genutils" },
     { name = "ipyvolume" },
     { name = "jax", extras = ["cuda12"] },
-    { name = "jax-md" },
+    { name = "jax-md", git = "https://github.com/google/jax-md.git?rev=05221c551e71f1b5f64458c0e3533452c22efec0" },
     { name = "jaxlib" },
     { name = "jaxtyping" },
     { name = "jedi" },
@@ -1735,6 +1733,7 @@ requires-dist = [
     { name = "pure-eval" },
     { name = "py3dmol" },
     { name = "pyarrow" },
+    { name = "pycharmm", editable = "../charmm/tool/pycharmm" },
     { name = "pygments" },
     { name = "pyparsing" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=6.1.2" },
@@ -2435,6 +2434,23 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/46/9b/fd39836a6397fb363446d83075a7b9c2cc562f4c449292e039ed36084376/pybtex-0.24.0.tar.gz", hash = "sha256:818eae35b61733e5c007c3fcd2cfb75ed1bc8b4173c1f70b56cc4c0802d34755", size = 402879 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ad/5f/40d8e90f985a05133a8895fc454c6127ecec3de8b095dd35bba91382f803/pybtex-0.24.0-py2.py3-none-any.whl", hash = "sha256:e1e0c8c69998452fea90e9179aa2a98ab103f3eed894405b7264e517cc2fcc0f", size = 561354 },
+]
+
+[[package]]
+name = "pycharmm"
+version = "0.0.1"
+source = { editable = "../charmm/tool/pycharmm" }
+dependencies = [
+    { name = "numpy" },
+    { name = "pandas" },
+    { name = "scipy" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "numpy" },
+    { name = "pandas" },
+    { name = "scipy" },
 ]
 
 [[package]]
