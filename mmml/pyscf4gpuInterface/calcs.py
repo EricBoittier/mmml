@@ -8,13 +8,13 @@ from helperfunctions import *
 
 def create_mol(atoms):
     mol = pyscf.M(
-        atom=atom,                         # water molecule
+        atom=atoms,                         # water molecule
         basis=basis,                # basis set
         output=log_file,              # save log file
         verbose=verbose                          # control the level of print info
         )
 
-def setup_mol(atom, basis, log_file='./pyscf.log', 
+def setup_mol(atoms, basis, log_file='./pyscf.log', 
     verbose=6, 
     lebedev_grids=(99,590),
     scf_tol=1e-10,
@@ -23,10 +23,10 @@ def setup_mol(atom, basis, log_file='./pyscf.log',
     conv_tol=1e-10,
     conv_tol_cpscf=1e-3,
     ):
-    if type(atom) == str:
-        mol = create_mol(atom)
+    if type(atoms) == str:
+        mol = create_mol(atoms)
     else:
-        mol = atom
+        mol = atoms
         
     mf_GPU = rks.RKS(                      # restricted Kohn-Sham DFT
         mol,                               # pyscf.gto.object
