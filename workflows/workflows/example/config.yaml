@@ -1,3 +1,19 @@
+cluster:
+  mkdir -p logs/{rule} &&
+  sbatch
+    --parsable
+    --job-name=smk-{rule}-{wildcards}
+    --output=logs/{rule}/{rule}-{wildcards}-%j.out
+    --error=logs/{rule}/{rule}-{wildcards}-%j.err
+    --partition={resources.partition}
+    --gres={resources.gres}
+    --cpus-per-task={threads}
+    --mem={resources.mem_mb}
+default-resources:
+  - partition="cpu"
+  - gres=null
+  - mem_mb=4000
+  - threads=1
 residue: aceh
 density: 1000.0
 side_length: 35
