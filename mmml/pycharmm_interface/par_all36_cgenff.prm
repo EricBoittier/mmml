@@ -300,6 +300,24 @@ MASS  -1  OG2S1     15.99940 ! mono-thio S-P bond modulated oxygen; lsk
 MASS  -1  SG2P2     32.06000 ! di-thio S-P bond; lsk
 MASS  -1  SEGD1     78.96000 ! selenocarbonyl Se
 MASS  -1  BG201     10.81100 ! Boronic acid B
+!ATOMS
+MASS  -1  HT         1.00800 ! TIPS3P WATER HYDROGEN
+MASS  -1  HX         1.00800 ! hydroxide hydrogen
+MASS  -1  OT        15.99940 ! TIPS3P WATER OXYGEN
+MASS  -1  OX        15.99940 ! hydroxide oxygen
+MASS  -1  HPER       1.00800 ! H of H2O2
+MASS  -1  OPER      15.99900 ! O of H2O2
+MASS  -1  LIT        6.94100 ! Lithium ion
+MASS  -1  SOD       22.98977 ! Sodium Ion
+MASS  -1  MG        24.30500 ! Magnesium Ion
+MASS  -1  POT       39.09830 ! Potassium Ion
+MASS  -1  CAL       40.08000 ! Calcium Ion
+MASS  -1  RUB       85.46780 ! Rubidium Ion
+MASS  -1  CES      132.90545 ! Cesium Ion
+MASS  -1  BAR      137.32700 ! Barium Ion
+MASS  -1  ZN        65.37000 ! zinc (II) cation
+MASS  -1  CAD      112.41100 ! cadmium (II) cation
+MASS  -1  CLA       35.45000 ! Chloride Ion
 
 BONDS
 CG1N1  CG2R51  375.00     1.4220 ! DCG, yxu, RNA
@@ -985,6 +1003,20 @@ SG301  SG311   196.02     2.0694 ! CSS, by ac_aa
 SG301  SG3O1   102.28     2.1784 ! CSU, by ac_aa            
 SG311  HGP3    275.00     1.3250 ! PROT methanethiol pure solvent, adm jr., 6/22/92
 FGP1   ALG1    205.00     1.7260 ! aluminum tetrafluoride, ALF4, w/UB
+!BONDS
+!
+!V(bond) = Kb(b - b0)**2
+!
+!Kb: kcal/mole/A**2
+!b0: A
+!
+!atom type Kb          b0
+!
+HT    HT      0.0       1.5139  ! from TIPS3P geometry (for SHAKE w/PARAM)
+HT    OT    450.0       0.9572  ! from TIPS3P geometry
+OX    HX    545.0       0.9700  ! hydroxide ion
+HPER  OPER  521.0       0.963   ! H2O2
+OPER  OPER  285.5       1.442   ! H2O2
 
 ANGLES
 CG2R51 CG1N1  NG1T1    40.00    180.00 ! DCG, yxu, RNA
@@ -3488,6 +3520,23 @@ OG2D2  BG201  OG3C51  110.00    126.90 !   BINB, Boronic acid, sr
 OG311  BG201  OG311   150.00    120.00 !   BORO,BORB Boronic acid, sr
 OG311  BG201  OG3C51  110.00    122.50 !   BICB, Boronic acid, sr
 FGP1   ALG1   FGP1     23.00    109.47 15.0 2.81855 ! aluminum tetrafluoride, ALF4, tetrahedral
+!ANGLES
+!
+!V(angle) = Ktheta(Theta - Theta0)**2
+!
+!V(Urey-Bradley) = Kub(S - S0)**2
+!
+!Ktheta: kcal/mole/rad**2
+!Theta0: degrees
+!Kub: kcal/mole/A**2 (Urey-Bradley)
+!S0: A
+!
+!atom types     Ktheta    Theta0   Kub     S0
+!
+HT   OT   HT     55.0      104.52   ! FROM TIPS3P GEOMETRY
+HPER OPER OPER   60.4       99.92   ! H2O2
+
+
 
 DIHEDRALS
 NG1T1  CG1N1  CG2R61 CG2R61  0.0100 2    0.00 ! CNP2, by ac_aa
@@ -11177,6 +11226,17 @@ NG2O1  OG2N1  OG2N1  CG334     50.80  0     0.00 ! NIME, nitromethane, abar
 NG2S3  HGP4   HGP4   CG2R61    -2.50  0     0.00 ! -2.0 PYRIDINE aminopyridine 11/10 kevo: sic! Compensates for in-plane force from CG2R61 CG2R61 NG2S3 HGP4
 NG2S3  HGP4   HGP4   CG2R64     9.00  0     0.00 ! NA GUA ADE CYT; from artificially planar 2APY, 2-aminopyridine parameter set (12/2010); xxwy & kevo
 
+!
+!V(dihedral) = Kchi(1 + cos(n(chi) - delta))
+!
+!Kchi: kcal/mole
+!n: multiplicity
+!delta: degrees
+!
+!atom types             Kchi    n   delta
+!
+HPER  OPER  OPER  HPER   2.02     2     0.0 ! H2O2
+
 NONBONDED nbxmod  5 atom cdiel fshift vatom vdistance vfswitch -
 cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
 
@@ -11482,87 +11542,6 @@ NN4       BRGR1    -0.22       3.61  ! from BRGR1 NG2R50, N-IMID
 ON1       BRGR1    -0.27       3.52  ! from BRGR1 OG2D1, NMA
 ON1C      BRGR1    -0.27       3.52  ! from BRGR1 OG2D1, NMA
 
-HBOND CUTHB 0.5  ! If you want to do hbond analysis (only), then use
-                 ! READ PARAM APPEND CARD
-                 ! to append hbond parameters from the file: par_hbond.inp
-
-
-ATOMS
-MASS  -1  HT         1.00800 ! TIPS3P WATER HYDROGEN
-MASS  -1  HX         1.00800 ! hydroxide hydrogen
-MASS  -1  OT        15.99940 ! TIPS3P WATER OXYGEN
-MASS  -1  OX        15.99940 ! hydroxide oxygen
-MASS  -1  HPER       1.00800 ! H of H2O2
-MASS  -1  OPER      15.99900 ! O of H2O2
-MASS  -1  LIT        6.94100 ! Lithium ion
-MASS  -1  SOD       22.98977 ! Sodium Ion
-MASS  -1  MG        24.30500 ! Magnesium Ion
-MASS  -1  POT       39.09830 ! Potassium Ion
-MASS  -1  CAL       40.08000 ! Calcium Ion
-MASS  -1  RUB       85.46780 ! Rubidium Ion
-MASS  -1  CES      132.90545 ! Cesium Ion
-MASS  -1  BAR      137.32700 ! Barium Ion
-MASS  -1  ZN        65.37000 ! zinc (II) cation
-MASS  -1  CAD      112.41100 ! cadmium (II) cation
-MASS  -1  CLA       35.45000 ! Chloride Ion
-
-BONDS
-!
-!V(bond) = Kb(b - b0)**2
-!
-!Kb: kcal/mole/A**2
-!b0: A
-!
-!atom type Kb          b0
-!
-HT    HT      0.0       1.5139  ! from TIPS3P geometry (for SHAKE w/PARAM)
-HT    OT    450.0       0.9572  ! from TIPS3P geometry
-OX    HX    545.0       0.9700  ! hydroxide ion
-HPER  OPER  521.0       0.963   ! H2O2
-OPER  OPER  285.5       1.442   ! H2O2
-
-ANGLES
-!
-!V(angle) = Ktheta(Theta - Theta0)**2
-!
-!V(Urey-Bradley) = Kub(S - S0)**2
-!
-!Ktheta: kcal/mole/rad**2
-!Theta0: degrees
-!Kub: kcal/mole/A**2 (Urey-Bradley)
-!S0: A
-!
-!atom types     Ktheta    Theta0   Kub     S0
-!
-HT   OT   HT     55.0      104.52   ! FROM TIPS3P GEOMETRY
-HPER OPER OPER   60.4       99.92   ! H2O2
-
-DIHEDRALS
-!
-!V(dihedral) = Kchi(1 + cos(n(chi) - delta))
-!
-!Kchi: kcal/mole
-!n: multiplicity
-!delta: degrees
-!
-!atom types             Kchi    n   delta
-!
-HPER  OPER  OPER  HPER   2.02     2     0.0 ! H2O2
-
-!
-IMPROPER
-!
-!V(improper) = Kpsi(psi - psi0)**2
-!
-!Kpsi: kcal/mole/rad**2
-!psi0: degrees
-!note that the second column of numbers (0) is ignored
-!
-!atom types           Kpsi                   psi0
-!
-
-NONBONDED nbxmod  5 atom cdiel fshift vatom vdistance vfswitch -
-cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
 
 !TIP3P LJ parameters
 HT       0.0       -0.046     0.2245
@@ -11602,39 +11581,7 @@ CAD    0.000000  -0.120000     1.357000 ! Cadmium
 CLA      0.0       -0.150      2.27     ! Chloride
                    ! D. Beglovd and B. Roux, dA=-83.87+4.46 = -79.40 kcal/mol
 
-NBFIX
-!              Emin         Rmin
-!            (kcal/mol)     (A)
-!SOD    CLA      -0.083875   3.731 !  From osmotic pressure calibration, J. Phys.Chem.Lett. 1:183-189
-!POT    CLA      -0.114236   4.081 !  From osmotic pressure calibration, J. Phys.Chem.Lett. 1:183-189, repeated below
-END
 
-! The following section contains NBFixes for sodium interacting with
-! carboxylate oxygens of various CHARMM force fields. It will generate
-! level -1 warnings whenever any of these force fields have not been
-! read prior to the current stream file. Since we don't want to force
-! the user to always read all the force fields, we're suppressing the
-! warnings. The only side effect is that you will have "most severe
-! warning was at level 0" at the end of your output. Also note that
-! the user is responsible for reading the current file last if they
-! want the NBFixes to apply. A more elegant solution would require new
-! features to be added to CHARMM.
-! parallel fix, to avoid duplicated messages in the log
-set para
-if ?NUMNODE gt 1 set para node 0
-
-set wrn ?WRNLEV
-! Some versions of CHARMM don't seem to initialize wrnlev...
-if "@WRN" eq "?WRNLEV" set wrn 5
-set bom ?bomlev
-WRNLEV -1 @PARA
-BOMLEV -1 @PARA
-read para card flex append
-* NBFix between carboxylate and sodium
-*
-
-! These NBFixes will only apply if the main files have been read in first!!!
-NBFIX
 
 !new SOD NBFIX values
 ! Simulations of Anionic Lipid Membranes: Development of Interaction-Specific
@@ -11684,5 +11631,16 @@ CAL    OC2D2    -0.12       3.232 !
 CAL    OG2D2    -0.12       3.232 !
 
 
+
+
+
+
+
+HBOND CUTHB 0.5  ! If you want to do hbond analysis (only), then use
+                 ! READ PARAM APPEND CARD
+                 ! to append hbond parameters from the file: par_hbond.inp
+
+
+NBFIX
 
 END
