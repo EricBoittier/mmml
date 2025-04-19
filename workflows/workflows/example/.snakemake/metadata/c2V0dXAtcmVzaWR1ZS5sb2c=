@@ -1,0 +1,1 @@
+{"record_format_version": 6, "code": null, "rule": "setup_residue", "input": [], "log": [], "params": [], "shellcmd": null, "incomplete": false, "starttime": 1744903656.7271523, "endtime": 1744903773.7185647, "job_hash": 1406834631477, "conda_env": null, "software_stack_hash": "d41d8cd98f00b204e9800998ecf8427e", "container_img_url": null, "input_checksums": {}}
