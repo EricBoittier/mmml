@@ -10,6 +10,7 @@ cluster:
     --cpus-per-task={threads}
     --mem={resources.mem_mb}
 default-resources:
+  - slurm_account="boittier"
   - partition="cpu"
   - gres=null
   - mem_mb=4000
