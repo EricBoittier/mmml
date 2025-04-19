@@ -22,7 +22,7 @@ rule setup_residue:
         module load charmm
 
         """ 
-        job = f"""bash ~/mmml/setup/install.sh && module load charmm && uv run ~/mmml/mmml/pycharmm_interface/setupRes.py -r {config["residue"]} > {output}"""
+        job = f"""bash ~/mmml/setup/install.sh && module load charmm && module load openmm && uv run ~/mmml/mmml/pycharmm_interface/setupRes.py -r {config["residue"]} > {output}"""
         script += job
         with open("setup-residue.sh", "w") as f:
             f.write(script)
