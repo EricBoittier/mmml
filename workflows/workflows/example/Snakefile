@@ -20,7 +20,7 @@ rule setup_residue:
         hostname
 
         module load charmm
-
+        echo "setup residue"
         """ 
         job = f"""bash ~/mmml/setup/install.sh && module load charmm && module load openmm && uv run ~/mmml/mmml/pycharmm_interface/setupRes.py -r {config["residue"]} > {output}"""
         script += job
@@ -43,7 +43,8 @@ rule setup_box:
         #SBATCH --gres=gpu:1
 
         hostname
-
+        module load charmm
+        echo "setup box"
         """
         job = f"""bash ~/mmml/setup/install.sh && module load charmm && uv run  ~/mmml/mmml/pycharmm_interface/setupBox.py -d {config["density"]} -l {config["side_length"]} -r {config["residue"]} > {output}"""
         script += job
@@ -111,6 +112,8 @@ rule run_md:
         #SBATCH --gres=gpu:1
         
         hostname
+        module load openmm
+        echo "run openmm"
         """ + script
         with open("openmm.sh", "w") as f:   
             f.write(sbatch_script)
