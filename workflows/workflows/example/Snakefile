@@ -19,8 +19,10 @@ rule setup_residue:
 
         hostname
 
+        module load charmm
+
         """ 
-        job = f"""bash ~/mmml/setup/install.sh && uv run ~/mmml/mmml/pycharmm_interface/setupRes.py -r {config["residue"]} > {output}"""
+        job = f"""bash ~/mmml/setup/install.sh && module load charmm && uv run ~/mmml/mmml/pycharmm_interface/setupRes.py -r {config["residue"]} > {output}"""
         script += job
         with open("setup-residue.sh", "w") as f:
             f.write(script)
@@ -43,7 +45,7 @@ rule setup_box:
         hostname
 
         """
-        job = f"""bash ~/mmml/setup/install.sh && uv run  ~/mmml/mmml/pycharmm_interface/setupBox.py -d {config["density"]} -l {config["side_length"]} -r {config["residue"]} > {output}"""
+        job = f"""bash ~/mmml/setup/install.sh && module load charmm && uv run  ~/mmml/mmml/pycharmm_interface/setupBox.py -d {config["density"]} -l {config["side_length"]} -r {config["residue"]} > {output}"""
         script += job
         with open("setup-box.sh", "w") as f:
             f.write(script)
@@ -71,7 +73,7 @@ rule run_qm:
         #SBATCH --partition=gpu
         #SBATCH --gres=gpu:1
         
-        bash ~/mmml/setup/install.sh && uv run python ~/mmml/mmml/pyscf4gpuInterface/calcs.py \
+        bash ~/mmml/setup/install.sh && module load cudnn && uv run python ~/mmml/mmml/pyscf4gpuInterface/calcs.py \
             --output {output} --mol xyz/initial.xyz \
             --optimize --xc {config['qm']['xc']} --basis {config['qm']['basis']} \
             {' '.join(flags)} > {output}
