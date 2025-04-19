@@ -11,7 +11,7 @@ rule setup_residue:
         partition="gpu",
         gres="gpu:1"
     shell:
-        "bash ~/mmml/setup/install.sh && "
+        "hostname && bash ~/mmml/setup/install.sh && "
         "module load charmm openmm && "
         "uv run ~/mmml/mmml/pycharmm_interface/setupRes.py -r {config[residue]} > {output}"
 
@@ -22,7 +22,7 @@ rule setup_box:
         partition="gpu",
         gres="gpu:1"
     shell:
-        "bash ~/mmml/setup/install.sh && "
+        "hostname && bash ~/mmml/setup/install.sh && "
         "module load charmm && "
         "uv run ~/mmml/mmml/pycharmm_interface/setupBox.py "
         "-d {config[density]} -l {config[side_length]} -r {config[residue]} > {output}"
@@ -34,7 +34,7 @@ rule run_qm:
         partition="gpu",
         gres="gpu:1"
     shell:
-        "bash ~/mmml/setup/install.sh && "
+        "hostname && bash ~/mmml/setup/install.sh && "
         "module load cudnn && "
         "uv run python ~/mmml/mmml/pyscf4gpuInterface/calcs.py "
         "--output {output} --mol xyz/initial.xyz "
@@ -49,7 +49,7 @@ rule run_md:
         partition="gpu",
         gres="gpu:1"
     shell:
-        "module load openmm && "
+        "hostname && module load openmm && "
         "python ~/mmml/mmml/openmmInterface/openmm-test1.py "
         "--psf_file psf/system.psf --pdb_file pdb/init-packmol.pdb "
         "--working_dir $PWD "
@@ -65,7 +65,7 @@ rule extract_clusters:
         partition="gpu",
         gres="gpu:1"
     shell:
-        "bash ~/mmml/setup/install.sh && "
+        "hostname && bash ~/mmml/setup/install.sh && "
         "uv run ~/mmml/mmml/sample/features.py "
         "--sims_path $PWD --start 0 --end 100 --samples_per_frame 1 "
         "--n_find {config[cluster][n_find]} "
