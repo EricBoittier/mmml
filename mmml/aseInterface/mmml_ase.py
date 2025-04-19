@@ -9,7 +9,7 @@ os.environ["CHARMM_HOME"] = "/pchem-data/meuwly/boittier/home/charmm"
 os.environ["CHARMM_LIB_DIR"] = "/pchem-data/meuwly/boittier/home/charmm/build/cmake"
 # Set environment variables
 os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".99"
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 import jax
 from jax import jit
