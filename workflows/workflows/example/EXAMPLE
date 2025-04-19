@@ -1,1 +1,1 @@
-snakemake --executor slurm --jobs 1000 --rerun-incomplete 
+snakemake #--profile slurm #--executor slurm 
