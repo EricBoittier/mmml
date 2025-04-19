@@ -7,138 +7,68 @@ rule all:
 
 rule setup_residue:
     output: "setup-residue.log"
-    # shell:
-        # "bash ~/mmml/setup/install.sh && uv run ~/mmml/mmml/pycharmm_interface/setupRes.py -r {config[residue]} > {output}"
-    run:
-        script = f"""#!/bin/bash
-        #SBATCH --job-name=setup-residue
-        #SBATCH --output=setup-residue.log
-        #SBATCH --error=setup-residue.err
-        #SBATCH --partition=gpu
-        #SBATCH --gres=gpu:1
-
-        hostname
-
-        module load charmm
-        echo "setup residue"
-        """ 
-        job = f"""bash ~/mmml/setup/install.sh && module load charmm && module load openmm && uv run ~/mmml/mmml/pycharmm_interface/setupRes.py -r {config["residue"]} > {output}"""
-        script += job
-        with open("setup-residue.sh", "w") as f:
-            f.write(script)
-        print("sbatch setup-residue.sh")
-        shell("sbatch setup-residue.sh")
+    resources:
+        partition="gpu",
+        gres="gpu:1"
+    shell:
+        "bash ~/mmml/setup/install.sh && "
+        "module load charmm openmm && "
+        "uv run ~/mmml/mmml/pycharmm_interface/setupRes.py -r {config[residue]} > {output}"
 
 rule setup_box:
     input: "setup-residue.log"
     output: "setup-box.log"
-    # shell:
-    #     "bash ~/mmml/setup/install.sh && uv run  ~/mmml/mmml/pycharmm_interface/setupBox.py -d {config[density]} -l {config[side_length]} -r {config[residue]} > {output}"
-    run:
-        script = f"""#!/bin/bash
-        #SBATCH --job-name=setup-box
-        #SBATCH --output=setup-box.log
-        #SBATCH --error=setup-box.err
-        #SBATCH --partition=gpu
-        #SBATCH --gres=gpu:1
-
-        hostname
-        module load charmm
-        echo "setup box"
-        """
-        job = f"""bash ~/mmml/setup/install.sh && module load charmm && uv run  ~/mmml/mmml/pycharmm_interface/setupBox.py -d {config["density"]} -l {config["side_length"]} -r {config["residue"]} > {output}"""
-        script += job
-        with open("setup-box.sh", "w") as f:
-            f.write(script)
-        print("sbatch setup-box.sh")
-        shell("sbatch setup-box.sh")
+    resources:
+        partition="gpu",
+        gres="gpu:1"
+    shell:
+        "bash ~/mmml/setup/install.sh && "
+        "module load charmm && "
+        "uv run ~/mmml/mmml/pycharmm_interface/setupBox.py "
+        "-d {config[density]} -l {config[side_length]} -r {config[residue]} > {output}"
 
 rule run_qm:
     input: "setup-residue.log"
     output: "qm/initial.npz"
-    run:
-        flags = []
-        if config["qm"].get("hessian", False):
-            flags.append("--hessian")
-        if config["qm"].get("thermo", False):
-            flags.append("--thermo")
-        if config["qm"].get("gradient", False):
-            flags.append("--gradient")
-        if config["qm"].get("harmonic", False):
-            flags.append("--harmonic")
-
-        script = f"""#!/bin/bash
-        #SBATCH --job-name=qm
-        #SBATCH --output=qm.log
-        #SBATCH --error=qm.err
-        #SBATCH --partition=gpu
-        #SBATCH --gres=gpu:1
-        #
-        bash ~/mmml/setup/install.sh && module load cudnn && uv run python ~/mmml/mmml/pyscf4gpuInterface/calcs.py \
-            --output {output} --mol xyz/initial.xyz \
-            --optimize --xc {config['qm']['xc']} --basis {config['qm']['basis']} \
-            {' '.join(flags)} > {output}
-            """
-        print(script)
-        with open("qm-run.sh", "w") as f:
-            f.write(script)
-        print("sbatch qm-run.sh")
-        shell("sbatch qm-run.sh")
+    resources:
+        partition="gpu",
+        gres="gpu:1"
+    shell:
+        "bash ~/mmml/setup/install.sh && "
+        "module load cudnn && "
+        "uv run python ~/mmml/mmml/pyscf4gpuInterface/calcs.py "
+        "--output {output} --mol xyz/initial.xyz "
+        "--optimize --xc {config[qm][xc]} --basis {config[qm][basis]} "
+        "{' '.join(['--' + flag for flag, enabled in config['qm'].items() if enabled and flag in ['hessian', 'thermo', 'gradient', 'harmonic']])} "
+        "> {output}"
 
 rule run_md:
     input: "setup-box.log"
     output: "omm/openmm.json"
-    run:
-        temps = " ".join(map(str, config['md']['temperatures']))
-        press = " ".join(map(str, config['md']['pressures']))
-        sched = " ".join(config['md']['schedule'])
-        print(temps)
-        print(press)
-        print(sched)
-        script = f"""module load openmm && python ~/mmml/mmml/openmmInterface/openmm-test1.py \
-                --psf_file psf/system.psf --pdb_file pdb/init-packmol.pdb \
-                --working_dir $PWD \
-                --temperatures {temps} \
-                --pressures {press} \
-                --simulation_schedule {sched} \
-                --integrator {config['md']['integrator']}
-            """
-        print(script)
-        sbatch_script = f"""#!/bin/bash
-        #SBATCH --job-name=openmm
-        #SBATCH --output=openmm.log
-        #SBATCH --error=openmm.err
-        #SBATCH --partition=gpu
-        #SBATCH --gres=gpu:1
-        
-        hostname
-        module load openmm
-        echo "run openmm"
-        """ + script
-        with open("openmm.sh", "w") as f:   
-            f.write(sbatch_script)
-        print("sbatch openmm.sh")
-        shell("sbatch openmm.sh")
+    resources:
+        partition="gpu",
+        gres="gpu:1"
+    shell:
+        "module load openmm && "
+        "python ~/mmml/mmml/openmmInterface/openmm-test1.py "
+        "--psf_file psf/system.psf --pdb_file pdb/init-packmol.pdb "
+        "--working_dir $PWD "
+        "--temperatures {' '.join(map(str, config['md']['temperatures']))} "
+        "--pressures {' '.join(map(str, config['md']['pressures']))} "
+        "--simulation_schedule {' '.join(config['md']['schedule'])} "
+        "--integrator {config['md']['integrator']}"
 
 rule extract_clusters:
     input: "omm/openmm.json"
     output: "clusters/cluster_info.json"
-    run:
-        import json as js
-        from pathlib import Path
-
-        with open(input.json) as f:
-            data = js.load(f)
-
-        dcd_file = data["dcd_files"][0]
-        log_file = data["report_files"][0]
-        pdb_file = "pdb/initial.pdb"
-
-        shell(f"""
-        bash ~/mmml/setup/install.sh && uv run   ~/mmml/mmml/sample/features.py \
-            --sims_path $PWD --start 0 --end 100 --samples_per_frame 1 \
-            --n_find {config["cluster"]["n_find"]} \
-            --psf {input.psf} --dcd {dcd_file} \
-            --stride {config["cluster"]["stride"]} --logfile {log_file} \
-            --pdb {pdb_file} --output {output}
-        """)
+    resources:
+        partition="gpu",
+        gres="gpu:1"
+    shell:
+        "bash ~/mmml/setup/install.sh && "
+        "uv run ~/mmml/mmml/sample/features.py "
+        "--sims_path $PWD --start 0 --end 100 --samples_per_frame 1 "
+        "--n_find {config[cluster][n_find]} "
+        "--psf {input.psf} --dcd {wildcards.dcd_file} "
+        "--stride {config[cluster][stride]} --logfile {wildcards.log_file} "
+        "--pdb pdb/initial.pdb --output {output}"
