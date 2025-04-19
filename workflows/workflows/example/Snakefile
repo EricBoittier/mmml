@@ -72,7 +72,7 @@ rule run_qm:
         #SBATCH --error=qm.err
         #SBATCH --partition=gpu
         #SBATCH --gres=gpu:1
-        
+        #
         bash ~/mmml/setup/install.sh && module load cudnn && uv run python ~/mmml/mmml/pyscf4gpuInterface/calcs.py \
             --output {output} --mol xyz/initial.xyz \
             --optimize --xc {config['qm']['xc']} --basis {config['qm']['basis']} \
@@ -94,7 +94,7 @@ rule run_md:
         print(temps)
         print(press)
         print(sched)
-        script = f"""module load openmm && python ~/mmml/mmml/openmm_interface/openmm-test1.py \
+        script = f"""module load openmm && python ~/mmml/mmml/openmmInterface/openmm-test1.py \
                 --psf_file psf/system.psf --pdb_file pdb/init-packmol.pdb \
                 --working_dir $PWD \
                 --temperatures {temps} \
