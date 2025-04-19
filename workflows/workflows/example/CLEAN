@@ -1,0 +1,1 @@
+rm -rf qm omm pdb xyz res *log *out packmol *sh
