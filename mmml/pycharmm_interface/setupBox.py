@@ -317,7 +317,7 @@ Q_ = ureg.Quantity
 PACKMOL_PATH = "/pchem-data/meuwly/boittier/home/packmol/packmol"
 # Constants
 # packmol_input = str(Path("packmol.inp").absolute())
-cwd = Path(os.getcwd())
+cwd = Path(__file__).parent
 water_pdb_path = cwd / ".." / "data" / "tip3.pdb"
 octanol_pdb_path = cwd / ".." / "data" / "ocoh.pdb"
 ase_water = ase.io.read(water_pdb_path)
