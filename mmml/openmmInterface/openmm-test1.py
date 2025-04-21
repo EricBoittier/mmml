@@ -107,10 +107,10 @@ def setup_simulation(
              working_dir, steps, tag)
 
 
-def minimize_energy(simulation, working_dir):
+def minimize_energy(simulation, working_dir, tag=""):
     print("Minimizing energy...")
     simulation.minimizeEnergy()
-    save_state(simulation, os.path.join(working_dir, "res", "minimized.res"))
+    save_state(simulation, os.path.join(working_dir, "res", f"minimized_{tag}.res"))
 
 
 def equilibrate(
@@ -126,7 +126,8 @@ def equilibrate(
 
 
 def run_npt(
-    simulation, integrator, pressure, working_dir, integrator_type, steps=10**6
+    simulation, integrator, pressure, working_dir, integrator_type, steps=10**6,
+    tag=""
 ):
     print("Running NPT simulation...")
     system = simulation.system
@@ -134,16 +135,16 @@ def run_npt(
     if integrator_type == "Langevin":
         integrator.setTemperature(298 * kelvin)
     nsteps_prod = steps
-    setup_reporters(simulation, working_dir, "npt")
+    setup_reporters(simulation, working_dir, "npt", tag)
     simulation.step(nsteps_prod)
     print("NPT simulation complete.")
     save_state(simulation, os.path.join(working_dir, "res", f"npt_final_{tag}.res"))
 
 
-def run_nve(simulation, integrator, working_dir, steps=10**6):
+def run_nve(simulation, integrator, working_dir, steps=10**6, tag=""):
     print("Running NVE simulation...")
     nsteps_prod = steps
-    setup_reporters(simulation, working_dir, "nve")
+    setup_reporters(simulation, working_dir, "nve", tag)
     simulation.step(nsteps_prod)
     print("NVE simulation complete.")
     save_state(simulation, os.path.join(working_dir, "res", f"nve_final_{tag}.res"))
@@ -151,8 +152,8 @@ def run_nve(simulation, integrator, working_dir, steps=10**6):
 
 def setup_reporters(simulation, working_dir, prefix, tag):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    dcd_path = os.path.join(working_dir, "dcd", f"{prefix}_{timestamp}_{tag}.dcd")
-    report_path = os.path.join(working_dir, "res", f"{prefix}_{timestamp}_{tag}.log")
+    dcd_path = os.path.join(working_dir, "dcd", f"{prefix}_{timestamp}{tag}.dcd")
+    report_path = os.path.join(working_dir, "res", f"{prefix}_{timestamp}{tag}.log")
     
     dcd_files.append(dcd_path)
     report_files.append(report_path)
