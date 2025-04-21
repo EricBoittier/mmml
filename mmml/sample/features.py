@@ -112,6 +112,8 @@ def mass_to_atomic_number(mass):
 
 def select_central_residue(residue_ids):
     """Select a random residue ID from the list."""
+    if residue_ids is None:
+        return 1
     random.shuffle(residue_ids)
     return residue_ids[0]
 
@@ -144,7 +146,7 @@ def select_closest_residues(universe, central_resid, dist_res, n_closest=5):
     return universe.select_atoms(residue_selections, periodic=False)
 
 
-def process_selection(sele, output_path, ti, central_resid, ix, natoms):
+def process_selection(sele, output_path, ti, central_resid, ix, natoms, tag=""):
     """Process selected atoms to get descriptors and save structures."""
     # Center positions
     R = sele.positions
@@ -159,9 +161,9 @@ def process_selection(sele, output_path, ti, central_resid, ix, natoms):
     a, b, c = get_descriptor(atoms, species, plot=False)
 
     # Save structures
-    pdb_path = output_path / "pdb" / f"{ti}_{central_resid}_{ix}.pdb"
+    pdb_path = output_path / "pdb" / f"{tag}_{ti}_{central_resid}_{ix}.pdb"
     sele.write(pdb_path)
-    ase_io.write(output_path / "xyz" / f"{ti}_{central_resid}_{ix}.xyz", atoms)
+    ase_io.write(output_path / "xyz" / f"{tag}_{ti}_{central_resid}_{ix}.xyz", atoms)
 
     return a, b, c, pdb_path
 
@@ -175,6 +177,7 @@ def extract_molecular_descriptors(
     end=-1,
     stride=100,
     n_find=6,
+    tag="",
 ):
     """Extract molecular descriptors from trajectory frames.
 
@@ -193,7 +196,8 @@ def extract_molecular_descriptors(
     os.makedirs(output_path / "xyz", exist_ok=True)
     n_find_minus_one = n_find - 1
     results = []
-
+    if tag != "":
+        samples_per_frame = 1
     trajectory_frames = universe.trajectory[start:end:stride]
     print("*" * 100)
     print(f"n_find: {n_find}")
@@ -215,7 +219,10 @@ def extract_molecular_descriptors(
 
         for ix in range(samples_per_frame):
             # Select central residue
-            central_resid = select_central_residue(residue_ids)
+            if tag == "":
+                central_resid = select_central_residue(residue_ids)
+            else:
+                central_resid = 1
             residue_ids = [r for r in residue_ids if r != central_resid]
 
             # Get nearby residues and calculate distances
@@ -351,6 +358,7 @@ def process_simulation(args):
         n_find=args.n_find,
         start=args.start,
         end=args.end,
+        tag=args.tag,
     )
 
     return u, labels, natoms, output_path, results
@@ -368,6 +376,7 @@ def create_args(
     stride=1,
     samples_per_frame=10,
     n_find=6,
+    tag="",
 ):
     """Create arguments for process_simulation.
 
@@ -412,6 +421,7 @@ def create_args(
         sim_conds=sim_conds,
         samples_per_frame=samples_per_frame,
         n_find=n_find,
+        tag=tag,
     )
     return namespace
 
@@ -425,9 +435,12 @@ def load_ase_and_fix_atoms(pdb_fn):
     return a
 
 
-def sample_and_save(results, output_path, key="test"):
+def sample_and_save(results, output_path, key="test", tag=""):
     N = len(results["all_descriptors_full"])
-    samples = select_most_unique_samples(results["all_descriptors"], int(N * 0.8))
+    if tag != "":
+        samples = select_most_unique_samples(results["all_descriptors"], int(N * 0.8))
+    else:
+        samples = select_most_unique_samples(results["all_descriptors"], int(N * 0.8))
 
     ase_atoms = [
         load_ase_and_fix_atoms(pdb_fn) for pdb_fn in results["all_pdb_filenames"]
@@ -460,9 +473,9 @@ def sample_and_save(results, output_path, key="test"):
         except:
             print(f"Error stacking {k}")
 
-    np.savez(output_path / f"{key}.npz", **data)
+    np.savez(output_path / f"{key}{tag}.npz", **data)
 
-    return output_path / f"{key}.npz"
+    return output_path / f"{key}{tag}.npz"
 
 
 def parse_args():
@@ -523,6 +536,7 @@ def parse_args():
     parser.add_argument(
         "--output_path", type=str, default="data", help="Output directory path"
     )
+    parser.add_argument("--tag", type=str, default="", help="Tag for output files")
 
     args = parser.parse_args()
     return args
@@ -532,9 +546,9 @@ def main():
     args = parse_args()
     u, labels, natoms, output_path, results = process_simulation(args)
 
-    key = f"{args.resid}_{args.n_find}_{args.samples_per_frame}_{args.start}_{args.end}_{args.stride}"
+    key = f"{args.resid}_{args.n_find}_{args.samples_per_frame}_{args.start}_{args.end}_{args.stride}_{args.tag}"
     print(f"key: {key}")
-    npz_path = sample_and_save(results, output_path, key=key)
+    npz_path = sample_and_save(results, output_path, key=key, tag=args.tag)
     print(f"Saved to {npz_path}, {len(results['all_descriptors'])} descriptors")
     return npz_path
 
