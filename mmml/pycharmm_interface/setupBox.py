@@ -523,7 +523,7 @@ def initialize_psf(resid: str, n_molecules: int, side_length: float, solvent: st
 
     if solvent is not None:
         resstr = " ".join([solvent.upper()]*(n_molecules-1))    
-        resstr = f"{resid.upper()}-{solvent.upper()}"
+        resstr = f"{resid.upper()} {solvent.upper()}"
         pdb_path = f"pdb/init-{solvent}box.pdb"
     else:
         resstr = " ".join([resid.upper()]*n_molecules)
