@@ -1,0 +1,71 @@
+TITLE     MDANALYSIS FRAME 0: Created by PDBWriter
+CRYST1   35.000   35.000   35.000  90.00  90.00  90.00 P 1           1
+ATOM      1  C1  PENTX  32      26.309   7.650  12.534  1.00  0.00      PENT    
+ATOM      2  H11 PENTX  32      26.076   7.915  13.597  1.00  0.00      PENT    
+ATOM      3  H12 PENTX  32      27.359   7.366  12.493  1.00  0.00      PENT    
+ATOM      4  H13 PENTX  32      26.161   8.451  11.768  1.00  0.00      PENT    
+ATOM      5  C2  PENTX  32      25.430   6.440  12.179  1.00  0.00      PENT    
+ATOM      6  H21 PENTX  32      24.406   6.845  11.979  1.00  0.00      PENT    
+ATOM      7  H22 PENTX  32      25.350   5.795  13.092  1.00  0.00      PENT    
+ATOM      8  C3  PENTX  32      26.003   5.527  11.140  1.00  0.00      PENT    
+ATOM      9  H31 PENTX  32      27.048   5.315  11.382  1.00  0.00      PENT    
+ATOM     10  H32 PENTX  32      25.459   4.495  11.157  1.00  0.00      PENT    
+ATOM     11  C4  PENTX  32      25.886   6.092   9.770  1.00  0.00      PENT    
+ATOM     12  H41 PENTX  32      24.865   6.358   9.494  1.00  0.00      PENT    
+ATOM     13  H42 PENTX  32      26.627   6.891   9.692  1.00  0.00      PENT    
+ATOM     14  C5  PENTX  32      26.307   5.050   8.741  1.00  0.00      PENT    
+ATOM     15  H51 PENTX  32      26.443   5.538   7.805  1.00  0.00      PENT    
+ATOM     16  H52 PENTX  32      25.449   4.289   8.747  1.00  0.00      PENT    
+ATOM     17  H53 PENTX  32      27.185   4.430   9.107  1.00  0.00      PENT    
+ATOM     18  C1  PENTX 212      31.572   6.858  11.130  1.00  0.00      PENT    
+ATOM     19  H11 PENTX 212      32.555   7.237  11.531  1.00  0.00      PENT    
+ATOM     20  H12 PENTX 212      30.979   6.503  12.032  1.00  0.00      PENT    
+ATOM     21  H13 PENTX 212      31.919   6.029  10.536  1.00  0.00      PENT    
+ATOM     22  C2  PENTX 212      30.816   8.042  10.508  1.00  0.00      PENT    
+ATOM     23  H21 PENTX 212      31.345   8.457   9.614  1.00  0.00      PENT    
+ATOM     24  H22 PENTX 212      30.697   8.861  11.284  1.00  0.00      PENT    
+ATOM     25  C3  PENTX 212      29.388   7.698   9.989  1.00  0.00      PENT    
+ATOM     26  H31 PENTX 212      28.879   6.949  10.517  1.00  0.00      PENT    
+ATOM     27  H32 PENTX 212      28.777   8.649  10.057  1.00  0.00      PENT    
+ATOM     28  C4  PENTX 212      29.336   7.207   8.507  1.00  0.00      PENT    
+ATOM     29  H41 PENTX 212      28.260   6.995   8.283  1.00  0.00      PENT    
+ATOM     30  H42 PENTX 212      29.612   8.094   7.890  1.00  0.00      PENT    
+ATOM     31  C5  PENTX 212      30.293   6.103   8.070  1.00  0.00      PENT    
+ATOM     32  H51 PENTX 212      30.149   5.983   6.953  1.00  0.00      PENT    
+ATOM     33  H52 PENTX 212      30.004   5.129   8.534  1.00  0.00      PENT    
+ATOM     34  H53 PENTX 212      31.302   6.376   8.283  1.00  0.00      PENT    
+CONECT    1    2    3    4    5
+CONECT    2    1
+CONECT    3    1
+CONECT    4    1
+CONECT    5    1    6    7    8
+CONECT    6    5
+CONECT    7    5
+CONECT    8    5    9   10   11
+CONECT    9    8
+CONECT   10    8
+CONECT   11    8   12   13   14
+CONECT   12   11
+CONECT   13   11
+CONECT   14   11   15   16   17
+CONECT   15   14
+CONECT   16   14
+CONECT   17   14
+CONECT   18   19   20   21   22
+CONECT   19   18
+CONECT   20   18
+CONECT   21   18
+CONECT   22   18   23   24   25
+CONECT   23   22
+CONECT   24   22
+CONECT   25   22   26   27   28
+CONECT   26   25
+CONECT   27   25
+CONECT   28   25   29   30   31
+CONECT   29   28
+CONECT   30   28
+CONECT   31   28   32   33   34
+CONECT   32   31
+CONECT   33   31
+CONECT   34   31
+END
