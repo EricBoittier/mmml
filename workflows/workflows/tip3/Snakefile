@@ -91,7 +91,7 @@ rule qm_clusters:
         shell(
             f"""hostname &&
             bash ~/mmml/setup/install.sh &&
-            module load cudnn && while read XYZ; do CUDA_DEVICES="0" uv run python ~/mmml/mmml/pyscf4gpuInterface/calcs.py --output $XYZ.npz --mol $XYZ --optimize --xc {config['qm']['xc']} --basis {config['qm']['basis']} {flags_str} > $XYZ.log; done < {input} && ls md_sampling/*/xyz/*npz > qm-clusters.log """
+            module load cudnn && while read XYZ; do CUDA_DEVICES="0" uv run python ~/mmml/mmml/pyscf4gpuInterface/calcs.py --output $XYZ.npz --mol $XYZ  --xc {config['qm']['xc']} --basis {config['qm']['basis']} {flags_str} > $XYZ.log; done < {input} && ls md_sampling/*/xyz/*npz > qm-clusters.log """
         )
 
 rule train_model_1:

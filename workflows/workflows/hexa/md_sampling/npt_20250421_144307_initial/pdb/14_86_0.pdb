@@ -1,0 +1,83 @@
+TITLE     MDANALYSIS FRAME 0: Created by PDBWriter
+CRYST1   35.000   35.000   35.000  90.00  90.00  90.00 P 1           1
+ATOM      1  H11 HEXAX  42      21.061  22.102  35.403  1.00  0.00      HEXA    
+ATOM      2  H12 HEXAX  42      22.552  21.599  34.494  1.00  0.00      HEXA    
+ATOM      3  H13 HEXAX  42      20.981  21.941  33.690  1.00  0.00      HEXA    
+ATOM      4  C1  HEXAX  42      21.443  21.473  34.588  1.00  0.00      HEXA    
+ATOM      5  H21 HEXAX  42      20.975  19.559  33.856  1.00  0.00      HEXA    
+ATOM      6  H22 HEXAX  42      21.581  19.551  35.579  1.00  0.00      HEXA    
+ATOM      7  C2  HEXAX  42      20.929  20.086  34.853  1.00  0.00      HEXA    
+ATOM      8  H31 HEXAX  42      19.205  20.779  36.037  1.00  0.00      HEXA    
+ATOM      9  H32 HEXAX  42      19.237  19.048  35.575  1.00  0.00      HEXA    
+ATOM     10  C3  HEXAX  42      19.462  20.051  35.255  1.00  0.00      HEXA    
+ATOM     11  H41 HEXAX  42      18.740  21.450  33.780  1.00  0.00      HEXA    
+ATOM     12  H42 HEXAX  42      18.642  19.810  33.180  1.00  0.00      HEXA    
+ATOM     13  C4  HEXAX  42      18.476  20.447  34.064  1.00  0.00      HEXA    
+ATOM     14  H51 HEXAX  42      16.880  19.181  34.861  1.00  0.00      HEXA    
+ATOM     15  H52 HEXAX  42      16.893  20.839  35.423  1.00  0.00      HEXA    
+ATOM     16  C5  HEXAX  42      17.043  20.191  34.522  1.00  0.00      HEXA    
+ATOM     17  H61 HEXAX  42      15.945  21.671  33.223  1.00  0.00      HEXA    
+ATOM     18  H62 HEXAX  42      16.161  20.047  32.545  1.00  0.00      HEXA    
+ATOM     19  H63 HEXAX  42      14.943  20.308  33.767  1.00  0.00      HEXA    
+ATOM     20  C6  HEXAX  42      15.982  20.604  33.442  1.00  0.00      HEXA    
+ATOM     21  H11 HEXAX  86      24.643  23.122  30.931  1.00  0.00      HEXA    
+ATOM     22  H12 HEXAX  86      25.433  24.126  32.035  1.00  0.00      HEXA    
+ATOM     23  H13 HEXAX  86      25.287  22.382  32.278  1.00  0.00      HEXA    
+ATOM     24  C1  HEXAX  86      24.737  23.315  31.994  1.00  0.00      HEXA    
+ATOM     25  H21 HEXAX  86      22.876  22.653  32.765  1.00  0.00      HEXA    
+ATOM     26  H22 HEXAX  86      23.764  23.575  33.909  1.00  0.00      HEXA    
+ATOM     27  C2  HEXAX  86      23.498  23.533  32.860  1.00  0.00      HEXA    
+ATOM     28  H31 HEXAX  86      22.311  24.554  31.329  1.00  0.00      HEXA    
+ATOM     29  H32 HEXAX  86      23.427  25.691  32.357  1.00  0.00      HEXA    
+ATOM     30  C3  HEXAX  86      22.730  24.765  32.378  1.00  0.00      HEXA    
+ATOM     31  H41 HEXAX  86      20.840  24.245  33.158  1.00  0.00      HEXA    
+ATOM     32  H42 HEXAX  86      21.899  25.036  34.326  1.00  0.00      HEXA    
+ATOM     33  C4  HEXAX  86      21.561  25.104  33.265  1.00  0.00      HEXA    
+ATOM     34  H51 HEXAX  86      21.557  27.252  33.293  1.00  0.00      HEXA    
+ATOM     35  H52 HEXAX  86      20.611  26.444  31.929  1.00  0.00      HEXA    
+ATOM     36  C5  HEXAX  86      20.903  26.432  33.020  1.00  0.00      HEXA    
+ATOM     37  H61 HEXAX  86      18.958  27.381  33.552  1.00  0.00      HEXA    
+ATOM     38  H62 HEXAX  86      18.866  25.600  33.396  1.00  0.00      HEXA    
+ATOM     39  H63 HEXAX  86      19.688  26.250  34.835  1.00  0.00      HEXA    
+ATOM     40  C6  HEXAX  86      19.542  26.406  33.762  1.00  0.00      HEXA    
+CONECT    1    4
+CONECT    2    4
+CONECT    3    4
+CONECT    4    1    2    3    7
+CONECT    5    7
+CONECT    6    7
+CONECT    7    4    5    6   10
+CONECT    8   10
+CONECT    9   10
+CONECT   10    7    8    9   13
+CONECT   11   13
+CONECT   12   13
+CONECT   13   10   11   12   16
+CONECT   14   16
+CONECT   15   16
+CONECT   16   13   14   15   20
+CONECT   17   20
+CONECT   18   20
+CONECT   19   20
+CONECT   20   16   17   18   19
+CONECT   21   24
+CONECT   22   24
+CONECT   23   24
+CONECT   24   21   22   23   27
+CONECT   25   27
+CONECT   26   27
+CONECT   27   24   25   26   30
+CONECT   28   30
+CONECT   29   30
+CONECT   30   27   28   29   33
+CONECT   31   33
+CONECT   32   33
+CONECT   33   30   31   32   36
+CONECT   34   36
+CONECT   35   36
+CONECT   36   33   34   35   40
+CONECT   37   40
+CONECT   38   40
+CONECT   39   40
+CONECT   40   36   37   38   39
+END

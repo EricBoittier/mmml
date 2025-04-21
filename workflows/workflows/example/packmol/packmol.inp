@@ -1,0 +1,10 @@
+
+seed 624867
+    output pdb/init-packmol.pdb
+    filetype pdb
+    tolerance 2.0
+    structure pdb/initial.pdb 
+    number 1433
+    inside box 0.0 0.0 0.0 35.0 35.0 35.0
+    end structure
+    

@@ -1,4 +1,4 @@
-residue: aceh
+residue: tip3
 density: 1000.0
 side_length: 35
 
@@ -16,7 +16,7 @@ md:
   pressures: [1.0, 2.0, 3.0]
   integrator: Langevin
   schedule: [minimization, equilibration, NPT]
-  steps: 10000
+  steps: 1000
 
 cluster:
   n_find: 2
