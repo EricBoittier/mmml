@@ -63,8 +63,8 @@ rule run_md:
 rule extract_clusters:
     input: 
         json="omm/openmm.json",
-        start=[i for i in range(1000//10)],
-        end=[i for i in range(1000//10, 1000)]
+        start=["{}".format(i) for i in range(1000//10)],
+        end=["{}".format(i) for i in range(1000//10, 1000)]
     output: "clusters.dat"
     resources:
         partition="gpu",
