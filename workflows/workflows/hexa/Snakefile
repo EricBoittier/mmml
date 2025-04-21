@@ -3,7 +3,8 @@ configfile: "config.yaml"
 rule all:
     input:
         "qm/initial.npz",
-        "clusters.log"
+        "clusters.dat",
+        "qm-clusters.log"
 
 rule setup_residue:
     output: "xyz/initial.xyz"
@@ -61,7 +62,7 @@ rule run_md:
 
 rule extract_clusters:
     input: "omm/openmm.json"
-    output: "clusters.log"
+    output: "clusters.dat"
     resources:
         partition="gpu",
         gres="gpu:1"
@@ -72,4 +73,31 @@ rule extract_clusters:
         "--n_find {config[cluster][n_find]} "
         "--psf psf/system.psf --dcd dcd/*.dcd "
         "--stride {config[cluster][stride]} --logfile res/*.log "
-        "--pdb pdb/initial.pdb --output {output} > clusters.log"
+        "--pdb pdb/initial.pdb --output {output} > clusters.log && ls md_sampling/*/xyz/*xyz > clusters.dat"
+
+
+rule qm_clusters:
+    input: "clusters.dat"
+    output: "qm-clusters.log"
+    
+    run:
+        flags = [
+            f"--{flag}"
+            for flag, enabled in config["qm"].items()
+            if enabled and flag in [ "gradient", ]
+        ]
+        flags_str = " ".join(flags)
+
+        shell(
+            f"""hostname &&
+            bash ~/mmml/setup/install.sh &&
+            module load cudnn && while read XYZ; do CUDA_DEVICES="0" uv run python ~/mmml/mmml/pyscf4gpuInterface/calcs.py --output $XYZ.npz --mol $XYZ  --xc {config['qm']['xc']} --basis {config['qm']['basis']} {flags_str} > $XYZ.log; done < {input} && ls md_sampling/*/xyz/*npz > qm-clusters.log """
+        )
+
+rule train_model_1:
+    input: "qm/clusters.npz"
+    output: "train_model_1.log"
+    run:
+        "uv run ~/mmml/mmml/models/train_model_1.py --input qm/clusters.npz --output models/model_1.pth"
+
+

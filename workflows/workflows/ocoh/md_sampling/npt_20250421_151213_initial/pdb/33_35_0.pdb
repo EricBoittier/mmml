@@ -1,0 +1,111 @@
+TITLE     MDANALYSIS FRAME 0: Created by PDBWriter
+CRYST1   35.000   35.000   35.000  90.00  90.00  90.00 P 1           1
+ATOM      1  C1  OCOHX   1      27.284  28.594   1.849  1.00  0.00      OCOH    
+ATOM      2  H11 OCOHX   1      26.820  27.918   1.055  1.00  0.00      OCOH    
+ATOM      3  H12 OCOHX   1      26.753  29.559   1.887  1.00  0.00      OCOH    
+ATOM      4  O1  OCOHX   1      28.619  28.794   1.312  1.00  0.00      OCOH    
+ATOM      5  HO1 OCOHX   1      28.957  29.483   1.869  1.00  0.00      OCOH    
+ATOM      6  C2  OCOHX   1      27.387  27.917   3.196  1.00  0.00      OCOH    
+ATOM      7  H21 OCOHX   1      26.313  27.564   3.404  1.00  0.00      OCOH    
+ATOM      8  H22 OCOHX   1      28.036  27.038   3.078  1.00  0.00      OCOH    
+ATOM      9  C3  OCOHX   1      27.740  28.773   4.359  1.00  0.00      OCOH    
+ATOM     10  H31 OCOHX   1      27.133  29.769   4.339  1.00  0.00      OCOH    
+ATOM     11  H32 OCOHX   1      28.797  29.041   4.256  1.00  0.00      OCOH    
+ATOM     12  C4  OCOHX   1      27.482  28.149   5.752  1.00  0.00      OCOH    
+ATOM     13  H41 OCOHX   1      26.464  28.274   6.158  1.00  0.00      OCOH    
+ATOM     14  H42 OCOHX   1      28.247  28.475   6.452  1.00  0.00      OCOH    
+ATOM     15  C5  OCOHX   1      27.746  26.592   5.760  1.00  0.00      OCOH    
+ATOM     16  H51 OCOHX   1      26.935  26.069   5.142  1.00  0.00      OCOH    
+ATOM     17  H52 OCOHX   1      28.611  26.259   5.245  1.00  0.00      OCOH    
+ATOM     18  C6  OCOHX   1      27.686  26.008   7.220  1.00  0.00      OCOH    
+ATOM     19  H61 OCOHX   1      26.693  26.068   7.646  1.00  0.00      OCOH    
+ATOM     20  H62 OCOHX   1      28.364  26.695   7.712  1.00  0.00      OCOH    
+ATOM     21  C7  OCOHX   1      28.126  24.558   7.248  1.00  0.00      OCOH    
+ATOM     22  H71 OCOHX   1      27.600  23.744   6.686  1.00  0.00      OCOH    
+ATOM     23  H72 OCOHX   1      29.136  24.489   6.839  1.00  0.00      OCOH    
+ATOM     24  C8  OCOHX   1      28.266  24.018   8.681  1.00  0.00      OCOH    
+ATOM     25  H81 OCOHX   1      27.353  24.080   9.216  1.00  0.00      OCOH    
+ATOM     26  H82 OCOHX   1      28.746  23.000   8.657  1.00  0.00      OCOH    
+ATOM     27  H83 OCOHX   1      29.009  24.625   9.252  1.00  0.00      OCOH    
+ATOM     28  C1  OCOHX  35      32.093  27.214   0.013  1.00  0.00      OCOH    
+ATOM     29  H11 OCOHX  35      31.185  27.401  -0.616  1.00  0.00      OCOH    
+ATOM     30  H12 OCOHX  35      32.299  27.847   0.920  1.00  0.00      OCOH    
+ATOM     31  O1  OCOHX  35      33.265  27.327  -0.699  1.00  0.00      OCOH    
+ATOM     32  HO1 OCOHX  35      33.277  28.300  -0.865  1.00  0.00      OCOH    
+ATOM     33  C2  OCOHX  35      31.883  25.717   0.315  1.00  0.00      OCOH    
+ATOM     34  H21 OCOHX  35      31.854  25.143  -0.610  1.00  0.00      OCOH    
+ATOM     35  H22 OCOHX  35      32.734  25.403   0.916  1.00  0.00      OCOH    
+ATOM     36  C3  OCOHX  35      30.537  25.394   1.093  1.00  0.00      OCOH    
+ATOM     37  H31 OCOHX  35      30.310  26.353   1.497  1.00  0.00      OCOH    
+ATOM     38  H32 OCOHX  35      30.708  24.628   1.921  1.00  0.00      OCOH    
+ATOM     39  C4  OCOHX  35      29.366  24.801   0.332  1.00  0.00      OCOH    
+ATOM     40  H41 OCOHX  35      29.692  23.803  -0.079  1.00  0.00      OCOH    
+ATOM     41  H42 OCOHX  35      28.979  25.327  -0.555  1.00  0.00      OCOH    
+ATOM     42  C5  OCOHX  35      28.075  24.617   1.199  1.00  0.00      OCOH    
+ATOM     43  H51 OCOHX  35      28.300  24.177   2.187  1.00  0.00      OCOH    
+ATOM     44  H52 OCOHX  35      27.753  25.646   1.390  1.00  0.00      OCOH    
+ATOM     45  C6  OCOHX  35      26.939  23.786   0.512  1.00  0.00      OCOH    
+ATOM     46  H61 OCOHX  35      27.127  22.669   0.449  1.00  0.00      OCOH    
+ATOM     47  H62 OCOHX  35      26.946  24.106  -0.534  1.00  0.00      OCOH    
+ATOM     48  C7  OCOHX  35      25.633  24.087   1.248  1.00  0.00      OCOH    
+ATOM     49  H71 OCOHX  35      25.750  23.873   2.351  1.00  0.00      OCOH    
+ATOM     50  H72 OCOHX  35      25.533  25.247   1.210  1.00  0.00      OCOH    
+ATOM     51  C8  OCOHX  35      24.446  23.441   0.648  1.00  0.00      OCOH    
+ATOM     52  H81 OCOHX  35      24.614  22.321   0.521  1.00  0.00      OCOH    
+ATOM     53  H82 OCOHX  35      23.448  23.625   1.120  1.00  0.00      OCOH    
+ATOM     54  H83 OCOHX  35      24.280  23.771  -0.420  1.00  0.00      OCOH    
+CONECT    1    2    3    4    6
+CONECT    2    1
+CONECT    3    1
+CONECT    4    1    5
+CONECT    5    4
+CONECT    6    1    7    8    9
+CONECT    7    6
+CONECT    8    6
+CONECT    9    6   10   11   12
+CONECT   10    9
+CONECT   11    9
+CONECT   12    9   13   14   15
+CONECT   13   12
+CONECT   14   12
+CONECT   15   12   16   17   18
+CONECT   16   15
+CONECT   17   15
+CONECT   18   15   19   20   21
+CONECT   19   18
+CONECT   20   18
+CONECT   21   18   22   23   24
+CONECT   22   21
+CONECT   23   21
+CONECT   24   21   25   26   27
+CONECT   25   24
+CONECT   26   24
+CONECT   27   24
+CONECT   28   29   30   31   33
+CONECT   29   28
+CONECT   30   28
+CONECT   31   28   32
+CONECT   32   31
+CONECT   33   28   34   35   36
+CONECT   34   33
+CONECT   35   33
+CONECT   36   33   37   38   39
+CONECT   37   36
+CONECT   38   36
+CONECT   39   36   40   41   42
+CONECT   40   39
+CONECT   41   39
+CONECT   42   39   43   44   45
+CONECT   43   42
+CONECT   44   42
+CONECT   45   42   46   47   48
+CONECT   46   45
+CONECT   47   45
+CONECT   48   45   49   50   51
+CONECT   49   48
+CONECT   50   48
+CONECT   51   48   52   53   54
+CONECT   52   51
+CONECT   53   51
+CONECT   54   51
+END

@@ -1,0 +1,386 @@
+Mon Apr 21 11:43:57 2025       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 550.107.02             Driver Version: 550.107.02     CUDA Version: 12.4     |
+|-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 2080 Ti     On  |   00000000:02:00.0 Off |                  N/A |
+| 29%   33C    P8             17W /  250W |       1MiB /  11264MiB |      0%   E. Process |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+                                                                                         
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI        PID   Type   Process name                              GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+Assuming unrestricted shared filesystem usage.
+host: gpu05
+Building DAG of jobs...
+Using shell: /usr/bin/bash
+Provided cores: 1 (use --cores to define parallelism)
+Rules claiming more threads will be scaled down.
+Job stats:
+job                 count
+----------------  -------
+all                     1
+extract_clusters        1
+qm_clusters             1
+run_md                  1
+run_qm                  1
+setup_box               1
+setup_residue           1
+total                   7
+
+Select jobs to execute...
+Execute 1 jobs...
+
+[Mon Apr 21 11:43:58 2025]
+localrule setup_residue:
+    output: xyz/initial.xyz
+    jobid: 3
+    reason: Missing output files: xyz/initial.xyz
+    resources: tmpdir=/tmp, partition=gpu, gres=gpu:1
+
+Waiting for more resources.
+gpu05
+/pchem-data/meuwly/boittier/home/mmml/setup/charmm
+export CHARMM_HOME=/pchem-data/meuwly/boittier/home/mmml/setup/charmm
+export CHARMM_LIB_DIR=/pchem-data/meuwly/boittier/home/mmml/setup/charmm
+Requirement already satisfied: uv in /pchem-data/meuwly/boittier/home/.local/lib/python3.12/site-packages (0.6.14)
+warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
+Resolved 242 packages in 45ms
+Audited 237 packages in 1ms
+venv activated
+venv path: /pchem-data/meuwly/boittier/home/mmml/.venv
+venv python path: /pchem-data/meuwly/boittier/home/mmml/.venv/bin/python
+UV_ENV_FILE: /pchem-data/meuwly/boittier/home/mmml/CHARMMSETUP
+Setup complete
+warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
+[Mon Apr 21 11:44:05 2025]
+Finished jobid: 3 (Rule: setup_residue)
+1 of 7 steps (14%) done
+Select jobs to execute...
+Execute 1 jobs...
+
+[Mon Apr 21 11:44:05 2025]
+localrule setup_box:
+    input: xyz/initial.xyz
+    output: setup-box.log
+    jobid: 2
+    reason: Missing output files: setup-box.log; Input files updated by another job: xyz/initial.xyz
+    resources: tmpdir=/tmp, partition=gpu, gres=gpu:1
+
+Waiting for more resources.
+gpu05
+/pchem-data/meuwly/boittier/home/mmml/setup/charmm
+export CHARMM_HOME=/pchem-data/meuwly/boittier/home/mmml/setup/charmm
+export CHARMM_LIB_DIR=/pchem-data/meuwly/boittier/home/mmml/setup/charmm
+Requirement already satisfied: uv in /pchem-data/meuwly/boittier/home/.local/lib/python3.12/site-packages (0.6.14)
+warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
+Resolved 242 packages in 1ms
+Audited 237 packages in 0.24ms
+venv activated
+venv path: /pchem-data/meuwly/boittier/home/mmml/.venv
+venv python path: /pchem-data/meuwly/boittier/home/mmml/.venv/bin/python
+UV_ENV_FILE: /pchem-data/meuwly/boittier/home/mmml/CHARMMSETUP
+Setup complete
+warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
+[Mon Apr 21 11:44:12 2025]
+Finished jobid: 2 (Rule: setup_box)
+2 of 7 steps (29%) done
+Select jobs to execute...
+Execute 1 jobs...
+
+[Mon Apr 21 11:44:12 2025]
+localrule run_qm:
+    input: setup-box.log
+    output: qm/initial.npz
+    jobid: 1
+    reason: Missing output files: qm/initial.npz; Input files updated by another job: setup-box.log
+    resources: tmpdir=/tmp
+
+Waiting for more resources.
+gpu05
+warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
+geometric-optimize called with the following command line:
+/pchem-data/meuwly/boittier/home/mmml/mmml/pyscf4gpuInterface/calcs.py --output qm/initial.npz --mol xyz/initial.xyz --optimize --xc PBE0 --basis cc-pVDZ --hessian --thermo --gradient --harmonic
+
+                                        [91m())))))))))))))))/[0m                     
+                                    [91m())))))))))))))))))))))))),[0m                
+                                [91m*)))))))))))))))))))))))))))))))))[0m             
+                        [94m#,[0m    [91m()))))))))/[0m                [91m.)))))))))),[0m          
+                      [94m#%%%%,[0m  [91m())))))[0m                        [91m.))))))))*[0m        
+                      [94m*%%%%%%,[0m  [91m))[0m              [93m..[0m              [91m,))))))).[0m      
+                        [94m*%%%%%%,[0m         [93m***************/.[0m        [91m.)))))))[0m     
+                [94m#%%/[0m      [94m(%%%%%%,[0m    [93m/*********************.[0m       [91m)))))))[0m    
+              [94m.%%%%%%#[0m      [94m*%%%%%%,[0m  [93m*******/,[0m     [93m**********,[0m      [91m.))))))[0m   
+                [94m.%%%%%%/[0m      [94m*%%%%%%,[0m  [93m**[0m              [93m********[0m      [91m.))))))[0m  
+          [94m##[0m      [94m.%%%%%%/[0m      [94m(%%%%%%,[0m                  [93m,******[0m      [91m/)))))[0m  
+        [94m%%%%%%[0m      [94m.%%%%%%#[0m      [94m*%%%%%%,[0m    [92m,/////.[0m       [93m******[0m      [91m))))))[0m 
+      [94m#%[0m      [94m%%[0m      [94m.%%%%%%/[0m      [94m*%%%%%%,[0m  [92m////////,[0m      [93m*****/[0m     [91m,)))))[0m 
+    [94m#%%[0m  [94m%%%[0m  [94m%%%#[0m      [94m.%%%%%%/[0m      [94m(%%%%%%,[0m  [92m///////.[0m     [93m/*****[0m      [91m))))).[0m
+  [94m#%%%%.[0m      [94m%%%%%#[0m      [94m/%%%%%%*[0m      [94m#%%%%%%[0m   [92m/////)[0m     [93m******[0m      [91m))))),[0m
+    [94m#%%%%##%[0m  [94m%%%#[0m      [94m.%%%%%%/[0m      [94m(%%%%%%,[0m  [92m///////.[0m     [93m/*****[0m      [91m))))).[0m
+      [94m##[0m     [94m%%%[0m      [94m.%%%%%%/[0m      [94m*%%%%%%,[0m  [92m////////.[0m      [93m*****/[0m     [91m,)))))[0m 
+        [94m#%%%%#[0m      [94m/%%%%%%/[0m      [94m(%%%%%%[0m      [92m/)/)//[0m       [93m******[0m      [91m))))))[0m 
+          [94m##[0m      [94m.%%%%%%/[0m      [94m(%%%%%%,[0m                  [93m*******[0m      [91m))))))[0m  
+                [94m.%%%%%%/[0m      [94m*%%%%%%,[0m  [93m**.[0m             [93m/*******[0m      [91m.))))))[0m  
+              [94m*%%%%%%/[0m      [94m(%%%%%%[0m   [93m********/*..,*/*********[0m       [91m*))))))[0m   
+                [94m#%%/[0m      [94m(%%%%%%,[0m    [93m*********************/[0m        [91m)))))))[0m    
+                        [94m*%%%%%%,[0m         [93m,**************/[0m         [91m,))))))/[0m     
+                      [94m(%%%%%%[0m   [91m()[0m                              [91m))))))))[0m       
+                      [94m#%%%%,[0m  [91m())))))[0m                        [91m,)))))))),[0m        
+                        [94m#,[0m    [91m())))))))))[0m                [91m,)))))))))).[0m          
+                                 [91m()))))))))))))))))))))))))))))))/[0m             
+                                    [91m())))))))))))))))))))))))).[0m                
+                                         [91m())))))))))))))),[0m                     
+
+-=# [1;94m geomeTRIC started. Version: 1.1 [0m #=-
+Current date and time: 2025-04-21 11:44:20
+#========================================================#
+#| [92m    Arguments passed to driver run_optimizer():     [0m |#
+#========================================================#
+customengine              <pyscf.geomopt.geometric_solver.PySCFEngine object at 0x15042297c740> 
+input                     /tmp/tmpbt992gy0/e6f84b9c-76e2-4c2d-a6b6-aef9b745a441 
+logIni                    /pchem-data/meuwly/boittier/home/mmml/.venv/lib/python3.12/site-packages/pyscf/geomopt/log.ini 
+----------------------------------------------------------
+Custom engine selected.
+Bonds will be generated from interatomic distances less than 1.20 times sum of covalent radii
+60 internal coordinates being used (instead of 60 Cartesians)
+Internal coordinate system (atoms numbered from 1):
+Distance 1-4
+Distance 2-4
+Distance 3-4
+Distance 4-7
+Distance 5-7
+Distance 6-7
+Distance 7-10
+Distance 8-10
+Distance 9-10
+Distance 10-13
+Distance 11-13
+Distance 12-13
+Distance 13-16
+Distance 14-16
+Distance 15-16
+Distance 16-20
+Distance 17-20
+Distance 18-20
+Distance 19-20
+Angle 1-4-2
+Angle 1-4-3
+Angle 1-4-7
+Angle 2-4-3
+Angle 2-4-7
+Angle 3-4-7
+Angle 4-7-5
+Angle 4-7-6
+Angle 4-7-10
+Angle 5-7-6
+Angle 5-7-10
+Angle 6-7-10
+Angle 7-10-8
+Angle 7-10-9
+Angle 7-10-13
+Angle 8-10-9
+Angle 8-10-13
+Angle 9-10-13
+Angle 10-13-11
+Angle 10-13-12
+Angle 10-13-16
+Angle 11-13-12
+Angle 11-13-16
+Angle 12-13-16
+Angle 13-16-14
+Angle 13-16-15
+Angle 13-16-20
+Angle 14-16-15
+Angle 14-16-20
+Angle 15-16-20
+Angle 16-20-17
+Angle 16-20-18
+Angle 16-20-19
+Angle 17-20-18
+Angle 17-20-19
+Angle 18-20-19
+Dihedral 1-4-7-5
+Dihedral 1-4-7-6
+Dihedral 1-4-7-10
+Dihedral 2-4-7-5
+Dihedral 2-4-7-6
+Dihedral 2-4-7-10
+Dihedral 3-4-7-5
+Dihedral 3-4-7-6
+Dihedral 3-4-7-10
+Dihedral 4-7-10-8
+Dihedral 4-7-10-9
+Dihedral 4-7-10-13
+Dihedral 5-7-10-8
+Dihedral 5-7-10-9
+Dihedral 5-7-10-13
+Dihedral 6-7-10-8
+Dihedral 6-7-10-9
+Dihedral 6-7-10-13
+Dihedral 7-10-13-11
+Dihedral 7-10-13-12
+Dihedral 7-10-13-16
+Dihedral 8-10-13-11
+Dihedral 8-10-13-12
+Dihedral 8-10-13-16
+Dihedral 9-10-13-11
+Dihedral 9-10-13-12
+Dihedral 9-10-13-16
+Dihedral 10-13-16-14
+Dihedral 10-13-16-15
+Dihedral 10-13-16-20
+Dihedral 11-13-16-14
+Dihedral 11-13-16-15
+Dihedral 11-13-16-20
+Dihedral 12-13-16-14
+Dihedral 12-13-16-15
+Dihedral 12-13-16-20
+Dihedral 13-16-20-17
+Dihedral 13-16-20-18
+Dihedral 13-16-20-19
+Dihedral 14-16-20-17
+Dihedral 14-16-20-18
+Dihedral 14-16-20-19
+Dihedral 15-16-20-17
+Dihedral 15-16-20-18
+Dihedral 15-16-20-19
+Translation-X 1-20
+Translation-Y 1-20
+Translation-Z 1-20
+Rotation-A 1-20
+Rotation-B 1-20
+Rotation-C 1-20
+<class 'geometric.internal.Distance'> : 19
+<class 'geometric.internal.Angle'> : 36
+<class 'geometric.internal.Dihedral'> : 45
+<class 'geometric.internal.TranslationX'> : 1
+<class 'geometric.internal.TranslationY'> : 1
+<class 'geometric.internal.TranslationZ'> : 1
+<class 'geometric.internal.RotationA'> : 1
+<class 'geometric.internal.RotationB'> : 1
+<class 'geometric.internal.RotationC'> : 1
+> ===== Optimization Info: ====
+> Job type: Energy minimization
+> Maximum number of optimization cycles: 300
+> Initial / maximum trust radius (Angstrom): 0.100 / 0.300
+> Convergence Criteria:
+> Will converge when all 5 criteria are reached:
+>  |Delta-E| < 1.00e-06
+>  RMS-Grad  < 3.00e-04
+>  Max-Grad  < 4.50e-04
+>  RMS-Disp  < 1.20e-03
+>  Max-Disp  < 1.80e-03
+> === End Optimization Info ===
+Step    0 : Gradient = 1.973e-02/4.558e-02 (rms/max) Energy = -236.5627367646
+Hessian Eigenvalues: 2.30000e-02 2.30000e-02 2.30000e-02 ... 3.24995e-01 3.25222e-01 3.25715e-01
+Step    1 : Displace = [0m9.928e-02[0m/[0m1.978e-01[0m (rms/max) Trust = 1.000e-01 (=) Grad = [0m1.892e-02[0m/[0m4.305e-02[0m (rms/max) E (change) = -236.5904129406 ([0m-2.768e-02[0m) Quality = [0m1.297[0m
+Hessian Eigenvalues: 2.02983e-02 2.30000e-02 2.30000e-02 ... 3.25169e-01 3.25671e-01 4.52862e-01
+Step    2 : Displace = [0m1.378e-01[0m/[0m2.747e-01[0m (rms/max) Trust = 1.414e-01 ([92m+[0m) Grad = [0m2.883e-02[0m/[0m1.036e-01[0m (rms/max) E (change) = -236.6149534269 ([0m-2.454e-02[0m) Quality = [0m0.926[0m
+Hessian Eigenvalues: 2.08044e-02 2.30000e-02 2.30000e-02 ... 3.25507e-01 3.25928e-01 6.74056e-01
+Step    3 : Displace = [0m2.165e-01[0m/[0m5.985e-01[0m (rms/max) Trust = 2.000e-01 ([92m+[0m) Grad = [0m5.120e-02[0m/[0m2.007e-01[0m (rms/max) E (change) = -236.6741663605 ([0m-5.921e-02[0m) Quality = [0m1.474[0m
+Eigenvalues below 1.0000e-05 (-1.0229e-01) - returning guess
+Hessian Eigenvalues: 2.30000e-02 2.30000e-02 2.30000e-02 ... 3.41976e-01 3.69486e-01 3.75231e-01
+Step    4 : Displace = [0m2.873e-01[0m/[0m5.021e-01[0m (rms/max) Trust = 2.828e-01 ([92m+[0m) Grad = [0m2.440e-02[0m/[0m8.057e-02[0m (rms/max) E (change) = -236.7540019764 ([0m-7.984e-02[0m) Quality = [0m0.726[0m
+Hessian Eigenvalues: 2.29975e-02 2.30000e-02 2.30000e-02 ... 3.43870e-01 3.62538e-01 3.73264e-01
+Step    5 : Displace = [0m1.484e-01[0m/[0m2.462e-01[0m (rms/max) Trust = 2.828e-01 (=) Grad = [0m1.447e-02[0m/[0m5.587e-02[0m (rms/max) E (change) = -236.7707587039 ([0m-1.676e-02[0m) Quality = [0m0.682[0m
+Hessian Eigenvalues: 2.27090e-02 2.30000e-02 2.30000e-02 ... 3.42380e-01 3.62553e-01 3.73253e-01
+Step    6 : Displace = [0m1.033e-01[0m/[0m1.530e-01[0m (rms/max) Trust = 2.828e-01 (=) Grad = [0m5.266e-03[0m/[0m1.377e-02[0m (rms/max) E (change) = -236.7751197730 ([0m-4.361e-03[0m) Quality = [0m0.602[0m
+Hessian Eigenvalues: 2.11703e-02 2.29925e-02 2.30000e-02 ... 3.61823e-01 3.73151e-01 5.48409e-01
+Step    7 : Displace = [0m1.554e-01[0m/[0m2.838e-01[0m (rms/max) Trust = 2.828e-01 (=) Grad = [0m6.764e-03[0m/[0m1.832e-02[0m (rms/max) E (change) = -236.7741390964 ([91m+9.807e-04[0m) Quality = [91m-0.276[0m
+Hessian Eigenvalues: 1.84038e-02 2.29946e-02 2.30002e-02 ... 3.60350e-01 3.72965e-01 7.44862e-01
+Step    8 : Displace = [0m6.665e-02[0m/[0m1.146e-01[0m (rms/max) Trust = 7.768e-02 ([91m-[0m) Grad = [0m1.377e-03[0m/[0m2.516e-03[0m (rms/max) E (change) = -236.7779425374 ([0m-3.803e-03[0m) Quality = [0m1.233[0m
+Hessian Eigenvalues: 1.56894e-02 2.29850e-02 2.30002e-02 ... 3.61788e-01 3.73055e-01 6.18895e-01
+Step    9 : Displace = [0m7.961e-02[0m/[0m1.410e-01[0m (rms/max) Trust = 1.099e-01 ([92m+[0m) Grad = [0m1.771e-03[0m/[0m3.880e-03[0m (rms/max) E (change) = -236.7793325007 ([0m-1.390e-03[0m) Quality = [0m1.716[0m
+Hessian Eigenvalues: 2.01958e-03 2.29899e-02 2.30013e-02 ... 3.61686e-01 3.72967e-01 1.26570e+00
+Step   10 : Displace = [0m1.619e-01[0m/[0m2.768e-01[0m (rms/max) Trust = 1.554e-01 ([92m+[0m) Grad = [0m2.623e-03[0m/[0m6.671e-03[0m (rms/max) E (change) = -236.7819784804 ([0m-2.646e-03[0m) Quality = [0m1.131[0m
+Hessian Eigenvalues: 6.22027e-04 2.29721e-02 2.30021e-02 ... 3.60448e-01 3.72908e-01 1.92400e+00
+Step   11 : Displace = [0m2.179e-01[0m/[0m3.692e-01[0m (rms/max) Trust = 2.197e-01 ([92m+[0m) Grad = [0m3.170e-03[0m/[0m8.205e-03[0m (rms/max) E (change) = -236.7848939573 ([0m-2.915e-03[0m) Quality = [0m0.834[0m
+Hessian Eigenvalues: 3.04715e-03 2.28870e-02 2.30018e-02 ... 3.59175e-01 3.72913e-01 1.35893e+00
+Step   12 : Displace = [0m1.945e-01[0m/[0m3.143e-01[0m (rms/max) Trust = 3.000e-01 ([92m+[0m) Grad = [0m2.656e-03[0m/[0m6.527e-03[0m (rms/max) E (change) = -236.7867092030 ([0m-1.815e-03[0m) Quality = [0m1.234[0m
+Hessian Eigenvalues: 3.01410e-03 2.26018e-02 2.30023e-02 ... 3.59077e-01 3.72924e-01 9.90383e-01
+Step   13 : Displace = [0m7.959e-02[0m/[0m1.414e-01[0m (rms/max) Trust = 3.000e-01 (=) Grad = [0m1.470e-03[0m/[0m4.269e-03[0m (rms/max) E (change) = -236.7875367204 ([0m-8.275e-04[0m) Quality = [0m1.335[0m
+Hessian Eigenvalues: 2.77264e-03 1.92864e-02 2.30012e-02 ... 3.59078e-01 3.73234e-01 8.19187e-01
+Step   14 : Displace = [0m4.760e-02[0m/[0m8.037e-02[0m (rms/max) Trust = 3.000e-01 (=) Grad = [0m4.425e-04[0m/[0m9.141e-04[0m (rms/max) E (change) = -236.7877694266 ([0m-2.327e-04[0m) Quality = [0m1.231[0m
+Hessian Eigenvalues: 2.87697e-03 1.25421e-02 2.30031e-02 ... 3.59103e-01 3.72802e-01 9.18433e-01
+Step   15 : Displace = [0m1.823e-02[0m/[0m2.909e-02[0m (rms/max) Trust = 3.000e-01 (=) Grad = [0m3.895e-04[0m/[0m1.101e-03[0m (rms/max) E (change) = -236.7878409434 ([0m-7.152e-05[0m) Quality = [0m1.492[0m
+Hessian Eigenvalues: 2.82521e-03 4.85361e-03 2.30144e-02 ... 3.59723e-01 3.74213e-01 1.02866e+00
+Step   16 : Displace = [0m2.897e-02[0m/[0m5.134e-02[0m (rms/max) Trust = 3.000e-01 (=) Grad = [0m4.117e-04[0m/[0m1.116e-03[0m (rms/max) E (change) = -236.7879210006 ([0m-8.006e-05[0m) Quality = [0m1.377[0m
+Hessian Eigenvalues: 2.68804e-03 3.15215e-03 2.30320e-02 ... 3.59394e-01 3.75156e-01 9.58169e-01
+Step   17 : Displace = [0m2.556e-02[0m/[0m4.825e-02[0m (rms/max) Trust = 3.000e-01 (=) Grad = [0m3.403e-04[0m/[0m1.132e-03[0m (rms/max) E (change) = -236.7879695334 ([0m-4.853e-05[0m) Quality = [0m1.299[0m
+Hessian Eigenvalues: 2.45633e-03 3.14590e-03 2.25452e-02 ... 3.58776e-01 3.73824e-01 8.17462e-01
+Step   18 : Displace = [0m1.521e-02[0m/[0m2.759e-02[0m (rms/max) Trust = 3.000e-01 (=) Grad = [92m1.630e-04[0m/[92m3.928e-04[0m (rms/max) E (change) = -236.7879880634 ([0m-1.853e-05[0m) Quality = [0m1.196[0m
+Hessian Eigenvalues: 2.52340e-03 3.29068e-03 1.66360e-02 ... 3.58862e-01 3.72742e-01 8.15251e-01
+Step   19 : Displace = [0m5.954e-03[0m/[0m1.094e-02[0m (rms/max) Trust = 3.000e-01 (=) Grad = [92m8.673e-05[0m/[92m1.494e-04[0m (rms/max) E (change) = -236.7879938350 ([0m-5.772e-06[0m) Quality = [0m1.335[0m
+Hessian Eigenvalues: 2.41805e-03 3.29565e-03 7.58767e-03 ... 3.59411e-01 3.74982e-01 9.33952e-01
+[Mon Apr 21 11:47:07 2025]
+Finished jobid: 1 (Rule: run_qm)
+3 of 7 steps (43%) done
+Select jobs to execute...
+Execute 1 jobs...
+
+[Mon Apr 21 11:47:07 2025]
+localrule run_md:
+    input: qm/initial.npz
+    output: omm/openmm.json
+    jobid: 5
+    reason: Missing output files: omm/openmm.json; Input files updated by another job: qm/initial.npz
+    resources: tmpdir=/tmp
+
+Waiting for more resources.
+gpu05
+slurmstepd: error: *** JOB 29792 ON gpu05 CANCELLED AT 2025-04-21T12:12:12 ***
+RuleException:
+CalledProcessError in file "/pchem-data/meuwly/boittier/home/mmml/workflows/workflows/hexa/Snakefile", line 58:
+Command 'set -euo pipefail;  hostname && module purge && module load openmm && CUDA_VISIBLE_DEVICES="0" python ~/mmml/mmml/openmmInterface/openmm-test1.py --psf_file psf/system.psf --pdb_file pdb/init-packmol.pdb --steps 1000000 --working_dir $PWD --temperatures 300 300 300 --pressures 1.0 1.0 1.0 --simulation_schedule minimization equilibration NPT --integrator Langevin > openmm-md.log' died with <Signals.SIGTERM: 15>.
+Will exit after finishing currently running jobs (scheduler).
+WorkflowError:
+At least one job did not complete successfully.
+Traceback (most recent call last):
+
+  File "/pchem-data/meuwly/boittier/home/.local/lib/python3.12/site-packages/snakemake/executors/local.py", line 232, in spawn_job
+    subprocess.check_call(cmd, shell=True)
+
+  File "/pchem-data/meuwly/boittier/home/.conda/envs/snakemake/lib/python3.12/subprocess.py", line 413, in check_call
+    raise CalledProcessError(retcode, cmd)
+
+subprocess.CalledProcessError: Command 'cd /pchem-data/meuwly/boittier/home/mmml/workflows/workflows/hexa && /pchem-data/meuwly/boittier/home/.conda/envs/snakemake/bin/python3.12 -m snakemake --snakefile '/pchem-data/meuwly/boittier/home/mmml/workflows/workflows/hexa/Snakefile' --target-jobs 'run_md:' --allowed-rules run_md --cores 1 --attempt 1 --force-use-threads  --force --target-files-omit-workdir-adjustment --max-inventory-time 0 --nocolor --notemp --no-hooks --nolock --ignore-incomplete --rerun-triggers software-env params mtime code input --conda-frontend 'conda' --shared-fs-usage persistence sources software-deployment source-cache input-output storage-local-copies --wrapper-prefix 'https://github.com/snakemake/snakemake-wrappers/raw/' --latency-wait 5 --scheduler 'ilp' --local-storage-prefix base64//LnNuYWtlbWFrZS9zdG9yYWdl --scheduler-solver-path '/pchem-data/meuwly/boittier/home/.conda/envs/snakemake/bin' --default-resources base64//dG1wZGlyPXN5c3RlbV90bXBkaXI= --quiet progress rules host --mode 'subprocess' --local-groupid 'local'' died with <Signals.SIGTERM: 15>.
+
+
+During handling of the above exception, another exception occurred:
+
+
+Traceback (most recent call last):
+
+  File "/pchem-data/meuwly/boittier/home/.conda/envs/snakemake/lib/python3.12/concurrent/futures/thread.py", line 59, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+  File "/pchem-data/meuwly/boittier/home/.local/lib/python3.12/site-packages/snakemake/executors/local.py", line 247, in cached_or_run
+    run_func(*args)
+
+  File "/pchem-data/meuwly/boittier/home/.local/lib/python3.12/site-packages/snakemake/executors/local.py", line 234, in spawn_job
+    raise SpawnedJobError()
+
+snakemake.exceptions.SpawnedJobError
+
+[Mon Apr 21 12:12:13 2025]
+Error in rule run_md:
+    message: None
+    jobid: 5
+    input: qm/initial.npz
+    output: omm/openmm.json
+Trying to restart job 5.
+Will exit after finishing currently running jobs (scheduler).
+Shutting down, this might take some time.
+Complete log(s): /pchem-data/meuwly/boittier/home/mmml/workflows/workflows/hexa/.snakemake/log/2025-04-21T114358.565381.snakemake.log
+WorkflowError:
+At least one job did not complete successfully.
