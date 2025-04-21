@@ -48,7 +48,8 @@ rule run_qm:
 rule run_md:
     input: "qm/initial.npz"
     output:
-        json="omm/openmm.json"
+        json="omm/openmm.json",
+        log="openmm-md.log"
     run:
         temps = " ".join(map(str, config['md']['temperatures']))
         press = " ".join(map(str, config['md']['pressures']))
