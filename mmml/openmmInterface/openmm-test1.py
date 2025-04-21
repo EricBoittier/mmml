@@ -26,6 +26,7 @@ def setup_simulation(
     simulation_schedule,
     integrator_type,
     steps,
+    tag,
 ):
     # Create necessary directories
     os.makedirs(os.path.join(working_dir, "pdb"), exist_ok=True)
@@ -92,18 +93,18 @@ def setup_simulation(
         # setup_reporters(simulation, working_dir, f"{sim_type}_{i}")
 
         if sim_type == "minimization":
-            minimize_energy(simulation, working_dir)
+            minimize_energy(simulation, working_dir, tag)
         elif sim_type == "equilibration":
             equilibrate(
                 simulation, integrator, temperature, 
-                working_dir, integrator_type, steps
+                working_dir, integrator_type, steps, tag
             )
         elif sim_type == "NPT":
             run_npt(simulation, integrator, pressure,
-             working_dir, integrator_type, steps)
+             working_dir, integrator_type, steps, tag)
         elif sim_type == "NVE":
             run_nve(simulation, integrator,
-             working_dir, steps)
+             working_dir, steps, tag)
 
 
 def minimize_energy(simulation, working_dir):
@@ -113,7 +114,7 @@ def minimize_energy(simulation, working_dir):
 
 
 def equilibrate(
-    simulation, integrator, temperature, working_dir, integrator_type, steps=10**6
+    simulation, integrator, temperature, working_dir, integrator_type, steps=10**6, tag=""
 ):
     print("Equilibrating...")
     nsteps_equil = steps
@@ -121,7 +122,7 @@ def equilibrate(
     for temp in np.linspace(temp_start, temp_final, num=steps // 100):
         simulation.step(steps // 100)
     print("Equilibration complete.")
-    save_state(simulation, os.path.join(working_dir, "res", "equilibrated.res"))
+    save_state(simulation, os.path.join(working_dir, "res", f"equilibrated_{tag}.res"))
 
 
 def run_npt(
@@ -136,7 +137,7 @@ def run_npt(
     setup_reporters(simulation, working_dir, "npt")
     simulation.step(nsteps_prod)
     print("NPT simulation complete.")
-    save_state(simulation, os.path.join(working_dir, "res", "npt_final.res"))
+    save_state(simulation, os.path.join(working_dir, "res", f"npt_final_{tag}.res"))
 
 
 def run_nve(simulation, integrator, working_dir, steps=10**6):
@@ -145,13 +146,13 @@ def run_nve(simulation, integrator, working_dir, steps=10**6):
     setup_reporters(simulation, working_dir, "nve")
     simulation.step(nsteps_prod)
     print("NVE simulation complete.")
-    save_state(simulation, os.path.join(working_dir, "res", "nve_final.res"))
+    save_state(simulation, os.path.join(working_dir, "res", f"nve_final_{tag}.res"))
 
 
-def setup_reporters(simulation, working_dir, prefix):
+def setup_reporters(simulation, working_dir, prefix, tag):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    dcd_path = os.path.join(working_dir, "dcd", f"{prefix}_{timestamp}.dcd")
-    report_path = os.path.join(working_dir, "res", f"{prefix}_{timestamp}.log")
+    dcd_path = os.path.join(working_dir, "dcd", f"{prefix}_{timestamp}_{tag}.dcd")
+    report_path = os.path.join(working_dir, "res", f"{prefix}_{timestamp}_{tag}.log")
     
     dcd_files.append(dcd_path)
     report_files.append(report_path)
@@ -231,6 +232,14 @@ def parse_args():
         default="Langevin",
         help="Integrator type to use (default: Langevin).",
     )
+
+
+    parser.add_argument(
+        "--tag",
+        default="",
+        help="tag for output files (default: empty).",
+    )
+    
     return parser.parse_args()
 
 
@@ -249,6 +258,7 @@ if __name__ == "__main__":
         ],
         integrator_type=args.integrator,
         steps=args.steps,
+        tag=args.tag,
     )
 
     # write variables to manifest file...
