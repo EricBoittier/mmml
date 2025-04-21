@@ -548,12 +548,9 @@ def initialize_psf(resid: str, n_molecules: int, side_length: float, solvent: st
     pycharmm.lingo.charmm_script(write_system_psf)
     if solvent is not None:
         write.psf_card(f"psf/{resid}-{solvent}-{n_molecules}.psf")
-        write.pdb_card(f"pdb/{resid}-{solvent}-{n_molecules}.pdb")
         write.psf_card(f"psf/system-{solvent}.psf")
-        write.pdb_card(f"pdb/system-{solvent}.pdb")
     else:
         write.psf_card(f"psf/system.psf")
-        write.pdb_card(f"pdb/system.pdb")
 
 
 
