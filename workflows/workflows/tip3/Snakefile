@@ -84,7 +84,7 @@ rule qm_clusters:
         flags = [
             f"--{flag}"
             for flag, enabled in config["qm"].items()
-            if enabled and flag in ["hessian", "thermo", "gradient", "harmonic"]
+            if enabled and flag in [ "gradient", ]
         ]
         flags_str = " ".join(flags)
 
