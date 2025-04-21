@@ -437,20 +437,20 @@ def run_packmol_solvation(n_molecules: int, side_length: float, solvent: str) ->
     packmol_script = packmol_input.split("\n")
     packmol_script[1] = f"seed {randint}"
     packmol_script = "\n".join(packmol_script)
-    with open("packmol/packmol.inp", "w") as f:
+    with open(f"packmol/packmol-{solvent}.inp", "w") as f:
         f.writelines(packmol_script)
 
     import subprocess
     import os
 
-    print(f"{PACKMOL_PATH} < packmol/packmol.inp")
+    print(f"{PACKMOL_PATH} < packmol/packmol-{solvent}.inp")
     output = os.system(
         " ".join(
-            [PACKMOL_PATH, " < ", "packmol/packmol.inp"]
+            [PACKMOL_PATH, " < ", f"packmol/packmol-{solvent}.inp"]
         )
     )
     print(output)
-    print("Generated initial.pdb")
+    print(f"Generated init-{solvent}box.pdb")
 
 
 def run_packmol(n_molecules: int, side_length: float) -> None:
@@ -545,11 +545,12 @@ def initialize_psf(resid: str, n_molecules: int, side_length: float, solvent: st
     if solvent is not None:
         write.psf_card(f"psf/{resid}-{solvent}-{n_molecules}.psf")
         write.pdb_card(f"pdb/{resid}-{solvent}-{n_molecules}.pdb")
+        write.psf_card(f"psf/system-{solvent}.psf")
+        write.pdb_card(f"pdb/system-{solvent}.pdb")
     else:
-        write.psf_card(f"psf/{resid}-{n_molecules}.psf")
-        write.pdb_card(f"pdb/{resid}-{n_molecules}.pdb")
-    write.psf_card("psf/system.psf")
-    write.pdb_card("pdb/system.pdb")
+        write.psf_card(f"psf/system.psf")
+        write.pdb_card(f"pdb/system.pdb")
+
 
 
 def minimize_box():
@@ -586,7 +587,7 @@ def main(density: float, side_length: float, residue: str, solvent: str):
         n_molecules = determine_n_molecules_from_density(density, mol, side_length, solvent)
         run_packmol_solvation(n_molecules, side_length, solvent)
     initialize_psf(residue, n_molecules, side_length, solvent)
-    # minimize_box()
+    minimize_box()
 
 
 def cli():

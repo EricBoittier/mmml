@@ -59,6 +59,44 @@ rule run_md:
             f"""hostname && module purge && module load openmm && CUDA_VISIBLE_DEVICES="0" python ~/mmml/mmml/openmmInterface/openmm-test1.py --psf_file psf/system.psf --pdb_file pdb/init-packmol.pdb --steps {steps} --working_dir $PWD --temperatures {temps} --pressures {press} --simulation_schedule {sched} --integrator {integrator} > openmm-md.log""")
 
 
+rule setup_water_box:
+    output: "setup-water-box.log"
+    resources:
+        partition="gpu",
+        gres="gpu:1"
+    shell:
+        "hostname && bash ~/mmml/setup/install.sh && "
+        "uv run ~/mmml/mmml/pycharmm_interface/setupBox.py "
+        "-d {config[density]} -l {config[side_length]} -r {config[residue]} -s water > {output}"    
+
+rule setup_octanol_box:
+    output: "setup-octanol-box.log"
+    resources:  
+        partition="gpu",
+        gres="gpu:1"
+    shell:
+        "hostname && bash ~/mmml/setup/install.sh && "
+        "uv run ~/mmml/mmml/pycharmm_interface/setupBox.py "
+        "-d {config[density]} -l {config[side_length]} -r {config[residue]} -s octanol > {output}"
+
+rule run_water_md:
+    input: "setup-water-box.log"
+    output: "md-water.log"
+    resources:
+        partition="gpu",
+        gres="gpu:1"
+    shell:
+        "hostname && module purge && module load openmm && CUDA_VISIBLE_DEVICES="0" python ~/mmml/mmml/openmmInterface/openmm-test1.py --psf_file psf/system.psf --pdb_file pdb/init-packmol.pdb --steps {steps} --working_dir $PWD --temperatures {temps} --pressures {press} --simulation_schedule {sched} --integrator {integrator} > openmm-md.log""")
+
+rule run_octanol_md:
+    input: "setup-octanol-box.log"
+    output: "md-octanol.log"
+    resources:
+        partition="gpu",
+        gres="gpu:1"        
+    shell:
+        "hostname && module purge && module load openmm && CUDA_VISIBLE_DEVICES="0" python ~/mmml/mmml/openmmInterface/openmm-test1.py --psf_file psf/system.psf --pdb_file pdb/init-packmol.pdb --steps {steps} --working_dir $PWD --temperatures {temps} --pressures {press} --simulation_schedule {sched} --integrator {integrator} > openmm-md.log""")
+
 
 rule extract_clusters:
     input: 
