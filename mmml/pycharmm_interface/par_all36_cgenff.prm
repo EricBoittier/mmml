@@ -1011,7 +1011,7 @@ FGP1   ALG1    205.00     1.7260 ! aluminum tetrafluoride, ALF4, w/UB
 !
 !atom type Kb          b0
 !
-HT    HT      0.0       1.5139  ! from TIPS3P geometry (for SHAKE w/PARAM)
+!HT    HT      0.0       1.5139  ! from TIPS3P geometry (for SHAKE w/PARAM)
 HT    OT    450.0       0.9572  ! from TIPS3P geometry
 OX    HX    545.0       0.9700  ! hydroxide ion
 HPER  OPER  521.0       0.963   ! H2O2
