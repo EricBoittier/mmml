@@ -549,7 +549,7 @@ def initialize_psf(resid: str, n_molecules: int, side_length: float, solvent: st
     OPEN UNIT 1 READ FORM NAME {pdb_path}
     READ SEQU PDB UNIT 1
     CLOSE UNIT 1
-    GENERATE {resstr} FIRST NONE LAST NONE SETUP 
+    GENERATE {resid.upper()} FIRST NONE LAST NONE SETUP 
 
     OPEN UNIT 1 READ FORM NAME {pdb_path}
     READ COOR PDB UNIT 1
