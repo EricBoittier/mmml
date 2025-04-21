@@ -524,8 +524,10 @@ def initialize_psf(resid: str, n_molecules: int, side_length: float, solvent: st
     if solvent is not None:
         resstr = " ".join([solvent.upper()]*(n_molecules-1))    
         resstr = f"{resid.upper()}-{solvent.upper()}"
+        pdb_path = f"pdb/init-{solvent}box.pdb"
     else:
         resstr = " ".join([resid.upper()]*n_molecules)
+        pdb_path = f"pdb/init-packmol.pdb"
 
     header = f"""bomlev -2
     prnlev 4
@@ -544,12 +546,12 @@ def initialize_psf(resid: str, n_molecules: int, side_length: float, solvent: st
     ! Start Production at dcd number n
     set ndcd 0
 
-    OPEN UNIT 1 READ FORM NAME pdb/init-packmol.pdb
+    OPEN UNIT 1 READ FORM NAME {pdb_path}
     READ SEQU PDB UNIT 1
     CLOSE UNIT 1
     GENERATE {resstr} FIRST NONE LAST NONE SETUP 
 
-    OPEN UNIT 1 READ FORM NAME pdb/init-packmol.pdb
+    OPEN UNIT 1 READ FORM NAME {pdb_path}
     READ COOR PDB UNIT 1
     CLOSE UNIT 1
     
@@ -562,11 +564,12 @@ def initialize_psf(resid: str, n_molecules: int, side_length: float, solvent: st
     print("read pbcs")
     energy.show()
     print("read energy")
-    pycharmm.lingo.charmm_script(write_system_psf)
+    # pycharmm.lingo.charmm_script(write_system_psf)
     if solvent is not None:
         write.psf_card(f"psf/{resid}-{solvent}-{n_molecules}.psf")
         write.psf_card(f"psf/system-{solvent}.psf")
     else:
+        write.psf_card(f"psf/system-packmol.psf")
         write.psf_card(f"psf/system.psf")
 
 
