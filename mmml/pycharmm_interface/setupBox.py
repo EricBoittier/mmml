@@ -573,10 +573,11 @@ def initialize_psf(resid: str, n_molecules: int, side_length: float, solvent: st
     if solvent is not None:
         write.psf_card(f"psf/{resid}-{solvent}-{n_molecules}.psf")
         write.psf_card(f"psf/system-{solvent}.psf")
+        write.coor_pdb(f"pdb/init-{solvent}box.pdb")
     else:
         write.psf_card(f"psf/system-packmol.psf")
         write.psf_card(f"psf/system.psf")
-
+        write.coor_pdb(f"pdb/init-packmol.pdb")
 
 
 def minimize_box():
