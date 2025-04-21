@@ -443,11 +443,13 @@ def run_packmol_solvation(n_molecules: int, side_length: float, solvent: str) ->
     tolerance 2.0
     structure pdb/initial.pdb 
     number 1
+    resnumbers 2
     chain A
     inside box 0.0 0.0 0.0 {side_length} {side_length} {side_length}
     end structure
     structure pdb/{solvent}.pdb 
     number {n_molecules}
+    resnumbers 2
     chain A
     inside box 0.0 0.0 0.0 {side_length} {side_length} {side_length}
     end structure
