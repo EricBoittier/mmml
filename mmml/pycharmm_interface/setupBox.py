@@ -326,7 +326,10 @@ solvents_ase = {
     "water": ase_water,
     "octanol": ase_octanol,
 }
-
+solvents_density = {
+    "water": 1000,
+    "octanol": 824,
+}
 
 def read_initial_pdb(cwd: Path) -> Atoms:
     """Reads the initial PDB file and returns an ASE Atoms object"""
@@ -370,6 +373,7 @@ def determine_n_molecules_from_density(
 ) -> float:
     if solvent is not None:
         atoms = solvent
+        density = solvents_density[solvent]
     else:
         atoms = mol
     masses = atoms.get_masses()

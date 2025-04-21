@@ -60,6 +60,7 @@ rule run_md:
 
 
 rule setup_water_box:
+    input: "xyz/initial.xyz"
     output: "setup-water-box.log"
     resources:
         partition="gpu",
@@ -70,6 +71,7 @@ rule setup_water_box:
         "-d {config[density]} -l {config[side_length]} -r {config[residue]} -s water > {output}"    
 
 rule setup_octanol_box:
+    input: "xyz/initial.xyz"
     output: "setup-octanol-box.log"
     resources:  
         partition="gpu",
@@ -86,7 +88,7 @@ rule run_water_md:
         partition="gpu",
         gres="gpu:1"
     shell:
-        "hostname && module purge && module load openmm && CUDA_VISIBLE_DEVICES="0" python ~/mmml/mmml/openmmInterface/openmm-test1.py --psf_file psf/system.psf --pdb_file pdb/init-packmol.pdb --steps {steps} --working_dir $PWD --temperatures {temps} --pressures {press} --simulation_schedule {sched} --integrator {integrator} > openmm-md.log""")
+        "hostname && module purge && module load openmm && CUDA_VISIBLE_DEVICES="0" python ~/mmml/mmml/openmmInterface/openmm-test1.py --psf_file psf/system-water.psf --pdb_file pdb/system-water.pdb --steps {steps} --working_dir $PWD --temperatures {temps} --pressures {press} --simulation_schedule {sched} --integrator {integrator} > openmm-md-water.log""")
 
 rule run_octanol_md:
     input: "setup-octanol-box.log"
@@ -95,12 +97,14 @@ rule run_octanol_md:
         partition="gpu",
         gres="gpu:1"        
     shell:
-        "hostname && module purge && module load openmm && CUDA_VISIBLE_DEVICES="0" python ~/mmml/mmml/openmmInterface/openmm-test1.py --psf_file psf/system.psf --pdb_file pdb/init-packmol.pdb --steps {steps} --working_dir $PWD --temperatures {temps} --pressures {press} --simulation_schedule {sched} --integrator {integrator} > openmm-md.log""")
+        "hostname && module purge && module load openmm && CUDA_VISIBLE_DEVICES="0" python ~/mmml/mmml/openmmInterface/openmm-test1.py --psf_file psf/system-octanol.psf --pdb_file pdb/system-octanol.pdb --steps {steps} --working_dir $PWD --temperatures {temps} --pressures {press} --simulation_schedule {sched} --integrator {integrator} > openmm-md-octanol.log""")
 
 
 rule extract_clusters:
     input: 
-        "omm/openmm.json"
+        "openmm-md-water.log",
+        "openmm-md-octanol.log",
+        "openmm-md.log"
     output: "clusters.dat"
     resources:
         partition="gpu",
