@@ -62,21 +62,20 @@ rule run_md:
 
 rule extract_clusters:
     input: 
-        json="omm/openmm.json",
-        start=["{}".format(i) for i in range(1000//10)],
-        end=["{}".format(i) for i in range(1000//10, 1000)]
+        "omm/openmm.json"
     output: "clusters.dat"
     resources:
         partition="gpu",
         gres="gpu:1"
     shell:
+        "for i in $(seq 0 100 1000); do "
         "hostname && bash ~/mmml/setup/install.sh && "
         "uv run ~/mmml/mmml/sample/features.py "
-        "--sims_path $PWD --start {input['start']} --end {input['end']} --samples_per_frame 1 "
+        "--sims_path $PWD --start $i --end $((i+100)) --samples_per_frame 1 "
         "--n_find {config[cluster][n_find]} "
         "--psf psf/system.psf --dcd dcd/*.dcd "
         "--stride {config[cluster][stride]} --logfile res/*.log "
-        "--pdb pdb/initial.pdb --output {output} > clusters.log && ls md_sampling/*/xyz/*xyz > clusters.dat"
+        "--pdb pdb/initial.pdb --output {output} > clusters.log && ls md_sampling/*/xyz/*xyz > clusters.dat; done"
 
 
 rule qm_clusters:
