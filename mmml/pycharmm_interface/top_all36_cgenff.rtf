@@ -81,6 +81,7 @@
 !                 parameter set discussion forum                               !
 !  --------------------------------------------------------------------------  !
 
+
 !hydrogens
 MASS  -1  HGA1       1.00800 H ! alphatic proton, CH
 MASS  -1  HGA2       1.00800 H ! alphatic proton, CH2
@@ -281,15 +282,7 @@ MASS  -1  CLA       35.45000 CL ! Chloride Ion
 DEFA FIRS NONE LAST NONE
 AUTO ANGLES DIHE PATCH DRUDE
 
-!RESI TIP3          0.00 NOANG NODIH ! H2O, tip3p water model, generate using noangle nodihedral
-!GROUP
-!ATOM OH2  OGTIP3  -0.834
-!ATOM H1   HGTIP3   0.417
-!ATOM H2   HGTIP3   0.417
-!BOND OH2 H1 OH2 H2 H1 H2  ! the last bond is needed for shake
-!ANGLE H1 OH2 H2           ! required
-!ACCEPTOR OH2
-!PATCHING FIRS NONE LAST NONE
+
 
 !protein model compounds
 !toppar_all22_model_aliphatic.str
@@ -15219,9 +15212,6 @@ BOND C    CL1
 BOND C    CL2
 BOND C    H2
 PATCHING FIRS NONE LAST NONE
-
-END
-
 
 RESI DCA          -1.00 ! C24H39O4, deoxycholic acid(DCA), cacha
 GROUP
@@ -55140,11 +55130,6 @@ IC HE11 SD   *CE  HE13   1.0916  107.06  118.57  112.31   1.0923
 IC N1   CA1  C1   H11    1.2876  118.29  125.06  110.78   1.0956
 IC H11  CA1  *C1  H13    1.0956  110.78 -121.41  110.19   1.0910
 IC H11  CA1  *C1  H14    1.0956  110.78  118.10  109.76   1.0955
-
-END
-
-
-
 
 
 RESI TIP3         0.000 NOANG NODIH ! tip3p water model

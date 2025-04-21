@@ -300,7 +300,6 @@ MASS  -1  OG2S1     15.99940 ! mono-thio S-P bond modulated oxygen; lsk
 MASS  -1  SG2P2     32.06000 ! di-thio S-P bond; lsk
 MASS  -1  SEGD1     78.96000 ! selenocarbonyl Se
 MASS  -1  BG201     10.81100 ! Boronic acid B
-!ATOMS
 MASS  -1  HT         1.00800 ! TIPS3P WATER HYDROGEN
 MASS  -1  HX         1.00800 ! hydroxide hydrogen
 MASS  -1  OT        15.99940 ! TIPS3P WATER OXYGEN
@@ -11418,6 +11417,9 @@ SG2P2    0.0       -0.6199     2.0546 ! di-thio S-P bond
 SEGD1    0.0       -0.6230     2.1750 ! Se, starting from SG2D1 -0.5650  2.0500, TO BE OPTIMIZED, yxu
 BG201    0.0       -0.0380     2.5500 ! Boronic acid B
 
+!TIP3P LJ parameters
+HT       0.0       -0.046     0.2245
+OT       0.0       -0.1521    1.7682
 
 NBFIX
 !!! IMPORTANT!!!
@@ -11541,11 +11543,6 @@ NN3G      BRGR1    -0.22       3.61  ! from BRGR1 NG2R50, N-IMID
 NN4       BRGR1    -0.22       3.61  ! from BRGR1 NG2R50, N-IMID
 ON1       BRGR1    -0.27       3.52  ! from BRGR1 OG2D1, NMA
 ON1C      BRGR1    -0.27       3.52  ! from BRGR1 OG2D1, NMA
-
-
-!TIP3P LJ parameters
-HT       0.0       -0.046     0.2245
-OT       0.0       -0.1521    1.7682
 
 !for hydroxide
 OX     0.000000  -0.120000     1.700000 ! ALLOW   POL ION
