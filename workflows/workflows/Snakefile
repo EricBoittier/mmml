@@ -68,6 +68,8 @@ rule setup_water_box:
         gres="gpu:1"
     shell:
         "hostname && bash ~/mmml/setup/install.sh && "
+        "module load charmm && "
+        "module load openmm && "
         "uv run ~/mmml/mmml/pycharmm_interface/setupBox.py "
         "-d {config[density]} -l {config[side_length]} -r {config[residue]} -s water > {output}"    
 
@@ -79,6 +81,8 @@ rule setup_octanol_box:
         gres="gpu:1"
     shell:
         "hostname && bash ~/mmml/setup/install.sh && "
+        "module load charmm && "
+        "module load openmm && "
         "uv run ~/mmml/mmml/pycharmm_interface/setupBox.py "
         "-d {config[density]} -l {config[side_length]} -r {config[residue]} -s octanol > {output}"
 
