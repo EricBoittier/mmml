@@ -92,8 +92,15 @@ rule run_water_md:
     resources:
         partition="gpu",
         gres="gpu:1"
-    shell:
-        "hostname && module purge && module load openmm && CUDA_VISIBLE_DEVICES=0 python ~/mmml/mmml/openmmInterface/openmm-test1.py --psf_file psf/system-water.psf --pdb_file pdb/system-water.pdb --steps {steps} --working_dir $PWD --temperatures {temps} --pressures {press} --simulation_schedule {sched} --integrator {integrator} > openmm-md-water.log"""
+    run:
+        temps = " ".join(map(str, config['md']['temperatures']))
+        press = " ".join(map(str, config['md']['pressures']))
+        sched = " ".join(config['md']['schedule'])
+        integrator = config['md']['integrator']
+        steps = config['md']['steps']
+        shell(
+            f"""hostname && module purge && module load openmm && CUDA_VISIBLE_DEVICES=0 python ~/mmml/mmml/openmmInterface/openmm-test1.py --psf_file psf/system-water.psf --pdb_file pdb/system-water.pdb --steps {steps} --working_dir $PWD --temperatures {temps} --pressures {press} --simulation_schedule {sched} --integrator {integrator} > openmm-md-water.log"""
+        )
 
 rule run_octanol_md:
     input: "setup-octanol-box.log"
@@ -101,9 +108,15 @@ rule run_octanol_md:
     resources:
         partition="gpu",
         gres="gpu:1"        
-    shell:
-        "hostname && module purge && module load openmm && CUDA_VISIBLE_DEVICES=0 python ~/mmml/mmml/openmmInterface/openmm-test1.py --psf_file psf/system-octanol.psf --pdb_file pdb/system-octanol.pdb --steps {steps} --working_dir $PWD --temperatures {temps} --pressures {press} --simulation_schedule {sched} --integrator {integrator} > openmm-md-octanol.log"""
-
+    run:
+        temps = " ".join(map(str, config['md']['temperatures']))
+        press = " ".join(map(str, config['md']['pressures']))
+        sched = " ".join(config['md']['schedule'])
+        integrator = config['md']['integrator']
+        steps = config['md']['steps']
+        shell(
+            f"""hostname && module purge && module load openmm && CUDA_VISIBLE_DEVICES=0 python ~/mmml/mmml/openmmInterface/openmm-test1.py --psf_file psf/system-octanol.psf --pdb_file pdb/system-octanol.pdb --steps {steps} --working_dir $PWD --temperatures {temps} --pressures {press} --simulation_schedule {sched} --integrator {integrator} > openmm-md-octanol.log"""
+        )   
 
 rule extract_clusters:
     input: 
