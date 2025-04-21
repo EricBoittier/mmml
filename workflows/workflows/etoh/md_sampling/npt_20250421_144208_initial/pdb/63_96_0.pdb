@@ -1,0 +1,39 @@
+TITLE     MDANALYSIS FRAME 0: Created by PDBWriter
+CRYST1   35.000   35.000   35.000  90.00  90.00  90.00 P 1           1
+ATOM      1  C1  ETOHX  96      14.738  23.146  27.943  1.00  0.00      ETOH    
+ATOM      2  O1  ETOHX  96      14.658  22.009  28.865  1.00  0.00      ETOH    
+ATOM      3  HO1 ETOHX  96      14.172  22.221  29.673  1.00  0.00      ETOH    
+ATOM      4  H11 ETOHX  96      13.799  23.554  27.687  1.00  0.00      ETOH    
+ATOM      5  H12 ETOHX  96      15.205  24.032  28.575  1.00  0.00      ETOH    
+ATOM      6  C2  ETOHX  96      15.722  22.778  26.793  1.00  0.00      ETOH    
+ATOM      7  H21 ETOHX  96      15.741  23.545  25.977  1.00  0.00      ETOH    
+ATOM      8  H22 ETOHX  96      15.344  21.869  26.269  1.00  0.00      ETOH    
+ATOM      9  H23 ETOHX  96      16.752  22.749  27.278  1.00  0.00      ETOH    
+ATOM     10  C1  ETOHX 352      14.065  25.478  31.218  1.00  0.00      ETOH    
+ATOM     11  O1  ETOHX 352      14.018  24.155  30.849  1.00  0.00      ETOH    
+ATOM     12  HO1 ETOHX 352      14.078  23.590  31.647  1.00  0.00      ETOH    
+ATOM     13  H11 ETOHX 352      13.205  25.988  30.706  1.00  0.00      ETOH    
+ATOM     14  H12 ETOHX 352      13.948  25.584  32.377  1.00  0.00      ETOH    
+ATOM     15  C2  ETOHX 352      15.364  26.138  30.759  1.00  0.00      ETOH    
+ATOM     16  H21 ETOHX 352      15.350  27.141  30.965  1.00  0.00      ETOH    
+ATOM     17  H22 ETOHX 352      15.604  25.945  29.696  1.00  0.00      ETOH    
+ATOM     18  H23 ETOHX 352      16.129  25.672  31.242  1.00  0.00      ETOH    
+CONECT    1    2    4    5    6
+CONECT    2    1    3
+CONECT    3    2
+CONECT    4    1
+CONECT    5    1
+CONECT    6    1    7    8    9
+CONECT    7    6
+CONECT    8    6
+CONECT    9    6
+CONECT   10   11   13   14   15
+CONECT   11   10   12
+CONECT   12   11
+CONECT   13   10
+CONECT   14   10
+CONECT   15   10   16   17   18
+CONECT   16   15
+CONECT   17   15
+CONECT   18   15
+END
