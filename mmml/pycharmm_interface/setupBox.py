@@ -606,6 +606,7 @@ def cli():
     if args.solvent == "None":
         args.solvent = None
     for arg in vars(args):
+        print(f"{arg}: {getattr(args, arg)} {type(getattr(args, arg))}")
     main(args.density, args.side_length, args.residue, args.solvent)
 
 
