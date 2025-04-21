@@ -85,7 +85,7 @@ rule setup_octanol_box:
         "-d {config[density]} -l {config[side_length]} -r {config[residue]} -s octanol > {output}"
 
 rule run_water_md:
-    input: "setup-water-box.log"
+    input: "openmm-md.log"
     output: "openmm-md-water.log"
     resources:
         partition="gpu",
@@ -101,7 +101,7 @@ rule run_water_md:
         )
 
 rule run_octanol_md:
-    input: "setup-octanol-box.log"
+    input: "openmm-md-water.log"
     output: "openmm-md-octanol.log"
     resources:
         partition="gpu",
