@@ -544,8 +544,12 @@ def initialize_psf(resid: str, n_molecules: int, side_length: float, solvent: st
     pycharmm.lingo.charmm_script(write_system_psf)
     if solvent is not None:
         write.psf_card(f"psf/{resid}-{solvent}-{n_molecules}.psf")
+        write.pdb_card(f"pdb/{resid}-{solvent}-{n_molecules}.pdb")
     else:
         write.psf_card(f"psf/{resid}-{n_molecules}.psf")
+        write.pdb_card(f"pdb/{resid}-{n_molecules}.pdb")
+    write.psf_card("psf/system.psf")
+    write.pdb_card("pdb/system.pdb")
 
 
 def minimize_box():
@@ -572,13 +576,16 @@ def minimize_box():
 def main(density: float, side_length: float, residue: str, solvent: str):
     cwd = Path(os.getcwd())
     mol = read_initial_pdb(cwd)
+    print(mol)
+    print(mol.get_chemical_symbols())
+    print(solvent)
     n_molecules = determine_n_molecules_from_density(density, mol, solvent)
     if solvent is None:
         run_packmol(n_molecules, side_length)
     else:
         run_packmol_solvation(n_molecules, side_length, solvent)
     initialize_psf(residue, n_molecules, side_length, solvent)
-    minimize_box()
+    # minimize_box()
 
 
 def cli():
@@ -595,6 +602,8 @@ def cli():
     parser.add_argument("-s", "--solvent", type=str, required=False, default=None,
         help="Solvent name")
     args = parser.parse_args()
+    for arg in vars(args):
+        print(f"{arg}: {getattr(args, arg)}")
     main(args.density, args.side_length, args.residue, args.solvent)
 
 
