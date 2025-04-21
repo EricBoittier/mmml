@@ -97,7 +97,7 @@ rule run_water_md:
         integrator = config['md']['integrator']
         steps = config['md']['steps']
         shell(
-            f"""hostname && module purge && module load openmm && CUDA_VISIBLE_DEVICES=0 python ~/mmml/mmml/openmmInterface/openmm-test1.py --psf_file psf/system-water.psf --pdb_file pdb/system-water.pdb --steps {steps} --working_dir $PWD --temperatures {temps} --pressures {press} --simulation_schedule {sched} --integrator {integrator} > openmm-md-water.log"""
+            f"""hostname && module purge && module load openmm && CUDA_VISIBLE_DEVICES=0 python ~/mmml/mmml/openmmInterface/openmm-test1.py --psf_file psf/system-water.psf --pdb_file pdb/init-waterbox.pdb --steps {steps} --working_dir $PWD --temperatures {temps} --pressures {press} --simulation_schedule {sched} --integrator {integrator} > openmm-md-water.log"""
         )
 
 rule run_octanol_md:
@@ -113,7 +113,7 @@ rule run_octanol_md:
         integrator = config['md']['integrator']
         steps = config['md']['steps']
         shell(
-            f"""hostname && module purge && module load openmm && CUDA_VISIBLE_DEVICES=0 python ~/mmml/mmml/openmmInterface/openmm-test1.py --psf_file psf/system-octanol.psf --pdb_file pdb/system-octanol.pdb --steps {steps} --working_dir $PWD --temperatures {temps} --pressures {press} --simulation_schedule {sched} --integrator {integrator} > openmm-md-octanol.log"""
+            f"""hostname && module purge && module load openmm && CUDA_VISIBLE_DEVICES=0 python ~/mmml/mmml/openmmInterface/openmm-test1.py --psf_file psf/system-octanol.psf --pdb_file pdb/init-octanolbox.pdb --steps {steps} --working_dir $PWD --temperatures {temps} --pressures {press} --simulation_schedule {sched} --integrator {integrator} > openmm-md-octanol.log"""
         )   
 
 rule extract_clusters:
