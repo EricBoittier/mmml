@@ -1,0 +1,35 @@
+TITLE     MDANALYSIS FRAME 0: Created by PDBWriter
+CRYST1   35.000   35.000   35.000  90.00  90.00  90.00 P 1           1
+ATOM      1  C2  ACEHX 384      21.798  10.902   3.025  1.00  0.00      ACEH    
+ATOM      2  C1  ACEHX 384      21.898  11.284   4.474  1.00  0.00      ACEH    
+ATOM      3  H21 ACEHX 384      21.048  10.112   2.828  1.00  0.00      ACEH    
+ATOM      4  H22 ACEHX 384      22.795  10.581   2.645  1.00  0.00      ACEH    
+ATOM      5  H23 ACEHX 384      21.349  11.812   2.487  1.00  0.00      ACEH    
+ATOM      6  O2  ACEHX 384      21.522  12.285   4.995  1.00  0.00      ACEH    
+ATOM      7  O1  ACEHX 384      22.443  10.235   5.226  1.00  0.00      ACEH    
+ATOM      8  HO1 ACEHX 384      22.272  10.443   6.145  1.00  0.00      ACEH    
+ATOM      9  C2  ACEHX 385      18.123   8.492   3.522  1.00  0.00      ACEH    
+ATOM     10  C1  ACEHX 385      18.526   9.700   4.390  1.00  0.00      ACEH    
+ATOM     11  H21 ACEHX 385      18.076   7.619   4.129  1.00  0.00      ACEH    
+ATOM     12  H22 ACEHX 385      18.931   8.422   2.786  1.00  0.00      ACEH    
+ATOM     13  H23 ACEHX 385      17.147   8.677   3.035  1.00  0.00      ACEH    
+ATOM     14  O2  ACEHX 385      19.455   9.771   5.213  1.00  0.00      ACEH    
+ATOM     15  O1  ACEHX 385      17.664  10.734   4.296  1.00  0.00      ACEH    
+ATOM     16  HO1 ACEHX 385      18.023  11.468   4.812  1.00  0.00      ACEH    
+CONECT    1    2    3    4    5
+CONECT    2    1    6    7
+CONECT    3    1
+CONECT    4    1
+CONECT    5    1
+CONECT    6    2
+CONECT    7    2    8
+CONECT    8    7
+CONECT    9   10   11   12   13
+CONECT   10    9   14   15
+CONECT   11    9
+CONECT   12    9
+CONECT   13    9
+CONECT   14   10
+CONECT   15   10   16
+CONECT   16   15
+END

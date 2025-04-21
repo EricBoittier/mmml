@@ -46,7 +46,8 @@ def setup_simulation(
     pdb = PDBFile(pdb_file)
     pdb.topology.setPeriodicBoxVectors(box_vectors)
     params = CharmmParameterSet(rtf_file, prm_file)
-
+    params2 = ForceField("charmm36/tip3p-pme-f.xml")
+    
     # Create the system
     system = psf.createSystem(
         params, nonbondedMethod=PME, nonbondedCutoff=1.0 * nanometer
