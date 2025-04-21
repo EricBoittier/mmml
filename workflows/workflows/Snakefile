@@ -118,8 +118,6 @@ rule run_octanol_md:
 
 rule extract_clusters:
     input: 
-        "openmm-md-water.log",
-        "openmm-md-octanol.log",
         "openmm-md.log"
     output: "clusters.dat"
     resources:
@@ -133,7 +131,49 @@ rule extract_clusters:
         "--n_find {config[cluster][n_find]} "
         "--psf psf/system.psf --dcd dcd/*.dcd "
         "--stride {config[cluster][stride]} --logfile res/*.log "
-        "--pdb pdb/initial.pdb --output {output} > clusters.log && ls md_sampling/*/xyz/*xyz > clusters.dat; done"
+        "--pdb pdb/initial.pdb --output {output} > clusters.log && ls md_sampling/*/xyz/*xyz > clusters-bulk.dat; done"
+
+rule extract_clusters_water:
+    input: 
+        "openmm-md-water.log"
+    output: "clusters-water.dat"
+    resources:
+        partition="gpu",
+        gres="gpu:1"    
+    shell:
+        "for i in $(seq 0 100 1000); do "
+        "hostname && bash ~/mmml/setup/install.sh && "
+        "uv run ~/mmml/mmml/sample/features.py "
+        "--sims_path $PWD --start $i --end $((i+100)) --samples_per_frame 1 "
+        "--n_find {config[cluster][n_find]} "
+        "--psf psf/system-water.psf --dcd dcd/*water.dcd "
+        "--stride {config[cluster][stride]} --logfile res/*water.log "
+        "--pdb pdb/init-waterbox.pdb --output {output} > clusters-water.log && ls md_sampling/*/xyz/*xyz > clusters-water.dat; done"
+
+rule extract_clusters_octanol:
+    input: 
+        "openmm-md-octanol.log"
+    output: "clusters-octanol.dat"
+    resources:
+        partition="gpu",
+        gres="gpu:1"        
+    shell:
+        "for i in $(seq 0 100 1000); do "
+        "hostname && bash ~/mmml/setup/install.sh && "
+        "uv run ~/mmml/mmml/sample/features.py "
+        "--sims_path $PWD --start $i --end $((i+100)) --samples_per_frame 1 "
+        "--n_find {config[cluster][n_find]} "
+        "--psf psf/system-octanol.psf --dcd dcd/*octanol.dcd "
+        "--stride {config[cluster][stride]} --logfile res/*octanol.log "
+        "--pdb pdb/init-octanolbox.pdb --output {output} > clusters-octanol.log && ls md_sampling/*/xyz/*xyz > clusters-octanol.dat; done"
+
+rule concatenate_clusters:
+    input: 
+        "clusters-bulk.dat",
+        "clusters-water.dat",
+        "clusters-octanol.dat"
+    output: "clusters.dat"
+    shell: "cat {input} > {output}"
 
 
 rule qm_clusters:
