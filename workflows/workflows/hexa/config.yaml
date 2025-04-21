@@ -1,9 +1,9 @@
-residue: hexa 
-density: 660.0
-side_length: 35
+residue: hexa
+density: 600.0
+side_length: 35.0
 
 qm:
-  basis: cc-pVTZ
+  basis: cc-pVDZ
   xc: PBE0
   optimize: true
   hessian: true
@@ -12,11 +12,11 @@ qm:
   harmonic: true
 
 md:
-  temperatures: [100, 200, 300]
-  pressures: [1.0, 2.0, 3.0]
+  temperatures: [300, 300, 300]
+  pressures: [1.0, 1.0, 1.0]
   integrator: Langevin
   schedule: [minimization, equilibration, NPT]
-  steps: 100000
+  steps: 1000000
 
 cluster:
   n_find: 2
