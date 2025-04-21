@@ -608,7 +608,7 @@ def main(density: float, side_length: float, residue: str, solvent: str):
         n_molecules = determine_n_molecules_from_density(density, mol, side_length, solvent)
         run_packmol_solvation(n_molecules, side_length, solvent)
     initialize_psf(residue, n_molecules, side_length, solvent)
-    minimize_box()
+    # minimize_box()
 
 
 def cli():
