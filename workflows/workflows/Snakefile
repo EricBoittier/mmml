@@ -148,7 +148,7 @@ rule extract_clusters_water:
         "--n_find {config[cluster][n_find]} "
         "--psf psf/system-water.psf --dcd dcd/*water.dcd "
         "--stride {config[cluster][stride]} --logfile res/*water.log "
-        "--pdb pdb/init-waterbox.pdb --output {output} > clusters-water.log && ls md_sampling/*/xyz/*xyz > clusters-water.dat; done"
+        "--pdb pdb/init-waterbox.pdb --output {output} > clusters-water.log && ls md_sampling/*/xyz/*water.xyz > clusters-water.dat; done"
 
 rule extract_clusters_octanol:
     input: 
@@ -165,7 +165,7 @@ rule extract_clusters_octanol:
         "--n_find {config[cluster][n_find]} "
         "--psf psf/system-octanol.psf --dcd dcd/*octanol.dcd "
         "--stride {config[cluster][stride]} --logfile res/*octanol.log "
-        "--pdb pdb/init-octanolbox.pdb --output {output} > clusters-octanol.log && ls md_sampling/*/xyz/*xyz > clusters-octanol.dat; done"
+        "--pdb pdb/init-octanolbox.pdb --output {output} > clusters-octanol.log && ls md_sampling/*/xyz/*octanol.xyz > clusters-octanol.dat; done"
 
 rule concatenate_clusters:
     input: 

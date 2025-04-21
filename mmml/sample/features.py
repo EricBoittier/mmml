@@ -161,9 +161,9 @@ def process_selection(sele, output_path, ti, central_resid, ix, natoms, tag=""):
     a, b, c = get_descriptor(atoms, species, plot=False)
 
     # Save structures
-    pdb_path = output_path / "pdb" / f"{tag}_{ti}_{central_resid}_{ix}.pdb"
+    pdb_path = output_path / "pdb" / f"{tag}_{ti}_{central_resid}_{ix}{tag}.pdb"
     sele.write(pdb_path)
-    ase_io.write(output_path / "xyz" / f"{tag}_{ti}_{central_resid}_{ix}.xyz", atoms)
+    ase_io.write(output_path / "xyz" / f"{tag}_{ti}_{central_resid}_{ix}{tag}.xyz", atoms)
 
     return a, b, c, pdb_path
 
