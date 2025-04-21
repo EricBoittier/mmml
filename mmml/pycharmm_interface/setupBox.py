@@ -433,7 +433,7 @@ def run_packmol_solvation(n_molecules: int, side_length: float, solvent: str) ->
         raise ValueError(f"Solvent {solvent} not found in {solvents_ase.keys()}")
 
     solvent_pdb = solvents_ase[solvent]
-    solvent_pdb_path = "pdb" / f"{solvent}.pdb"
+    solvent_pdb_path = f"pdb/{solvent}.pdb"
     solvent_pdb.write(solvent_pdb_path)
 
     packmol_input = f"""
