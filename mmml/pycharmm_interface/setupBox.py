@@ -579,10 +579,11 @@ def main(density: float, side_length: float, residue: str, solvent: str):
     print(mol)
     print(mol.get_chemical_symbols())
     print(solvent)
-    n_molecules = determine_n_molecules_from_density(density, mol, solvent)
     if solvent is None:
+        n_molecules = determine_n_molecules_from_density(density, mol, side_length, solvent=None)
         run_packmol(n_molecules, side_length)
     else:
+        n_molecules = determine_n_molecules_from_density(density, mol, side_length, solvent)
         run_packmol_solvation(n_molecules, side_length, solvent)
     initialize_psf(residue, n_molecules, side_length, solvent)
     # minimize_box()
@@ -605,7 +606,6 @@ def cli():
     if args.solvent == "None":
         args.solvent = None
     for arg in vars(args):
-        print(f"{arg}: {getattr(args, arg)} {type(getattr(args, arg))}")
     main(args.density, args.side_length, args.residue, args.solvent)
 
 
