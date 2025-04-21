@@ -372,7 +372,7 @@ def determine_n_molecules_from_density(
     solvent: str = None
 ) -> float:
     if solvent is not None:
-        atoms = solvent
+        atoms = solvents_ase[solvent]
         density = solvents_density[solvent]
     else:
         atoms = mol
