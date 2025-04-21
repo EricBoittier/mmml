@@ -317,6 +317,15 @@ Q_ = ureg.Quantity
 PACKMOL_PATH = "/pchem-data/meuwly/boittier/home/packmol/packmol"
 # Constants
 # packmol_input = str(Path("packmol.inp").absolute())
+cwd = Path(os.getcwd())
+water_pdb_path = cwd / ".." / "data" / "tip3.pdb"
+octanol_pdb_path = cwd / ".." / "data" / "ocoh.pdb"
+ase_water = ase.io.read(water_pdb_path)
+ase_octanol = ase.io.read(octanol_pdb_path)
+solvents_ase = {
+    "water": ase_water,
+    "octanol": ase_octanol,
+}
 
 
 def read_initial_pdb(cwd: Path) -> Atoms:
@@ -356,9 +365,13 @@ def setup_box(mol: Atoms) -> None:
 
 
 def determine_n_molecules_from_density(
-    density: float, mol: Atoms, side_length: float = 35
+    density: float, mol: Atoms, side_length: float = 35,
+    solvent: str = None
 ) -> float:
-    atoms = mol
+    if solvent is not None:
+        atoms = solvent
+    else:
+        atoms = mol
     masses = atoms.get_masses()
 
     molecular_weight = masses.sum()
@@ -391,6 +404,53 @@ def determine_n_molecules_from_density(
     # Display the result
     print(f"Number of molecules in the box: {n_molecules}")
     return n_molecules
+
+
+def run_packmol_solvation(n_molecules: int, side_length: float, solvent: str) -> None:
+    
+    if solvent not in solvents_ase:
+        raise ValueError(f"Solvent {solvent} not found in {solvents_ase.keys()}")
+
+    solvent_pdb = solvents_ase[solvent]
+    solvent_pdb_path = "pdb" / f"{solvent}.pdb"
+    solvent_pdb.write(solvent_pdb_path)
+
+    packmol_input = f"""
+
+    output pdb/init-{solvent}box.pdb
+    filetype pdb
+    tolerance 2.0
+    structure pdb/initial.pdb 
+    number 1
+    inside box 0.0 0.0 0.0 {side_length} {side_length} {side_length}
+    end structure
+    structure pdb/{solvent}.pdb 
+    number {n_molecules}
+    inside box 0.0 0.0 0.0 {side_length} {side_length} {side_length}
+    end structure
+
+
+    """
+    import os
+    os.makedirs("packmol", exist_ok=True)
+    randint = np.random.randint(1000000)
+    packmol_script = packmol_input.split("\n")
+    packmol_script[1] = f"seed {randint}"
+    packmol_script = "\n".join(packmol_script)
+    with open("packmol/packmol.inp", "w") as f:
+        f.writelines(packmol_script)
+
+    import subprocess
+    import os
+
+    print(f"{PACKMOL_PATH} < packmol/packmol.inp")
+    output = os.system(
+        " ".join(
+            [PACKMOL_PATH, " < ", "packmol/packmol.inp"]
+        )
+    )
+    print(output)
+    print("Generated initial.pdb")
 
 
 def run_packmol(n_molecules: int, side_length: float) -> None:
@@ -426,7 +486,7 @@ def run_packmol(n_molecules: int, side_length: float) -> None:
     print("Generated initial.pdb")
 
 
-def initialize_psf(resid: str, n_molecules: int, side_length: float):
+def initialize_psf(resid: str, n_molecules: int, side_length: float, solvent: str):
     s = """DELETE ATOM SELE ALL END"""
     pycharmm.lingo.charmm_script(s)
     s = """DELETE PSF SELE ALL END"""
@@ -439,9 +499,13 @@ def initialize_psf(resid: str, n_molecules: int, side_length: float):
     settings.set_bomb_level(bl)
     settings.set_warn_level(wl)
     pycharmm.lingo.charmm_script("bomlev 0")
-    resstr = " ".join([resid.upper()]*n_molecules)
-    print(resstr)
-    resstr = f"{resid.upper()}"
+
+    if solvent is not None:
+        resstr = " ".join([solvent.upper()]*(n_molecules-1))    
+        resstr = f"{resid.upper()}-{solvent.upper()}"
+    else:
+        resstr = " ".join([resid.upper()]*n_molecules)
+
     header = f"""bomlev -2
     prnlev 4
     wrnlev 4
@@ -478,7 +542,10 @@ def initialize_psf(resid: str, n_molecules: int, side_length: float):
     energy.show()
     print("read energy")
     pycharmm.lingo.charmm_script(write_system_psf)
-    write.psf_card(f"psf/{resid}-{n_molecules}.psf")
+    if solvent is not None:
+        write.psf_card(f"psf/{resid}-{solvent}-{n_molecules}.psf")
+    else:
+        write.psf_card(f"psf/{resid}-{n_molecules}.psf")
 
 
 def minimize_box():
@@ -502,13 +569,16 @@ def minimize_box():
     energy.show()
 
 
-def main(density: float, side_length: float, residue: str):
+def main(density: float, side_length: float, residue: str, solvent: str):
     cwd = Path(os.getcwd())
     mol = read_initial_pdb(cwd)
-    n_molecules = determine_n_molecules_from_density(density, mol)
-    run_packmol(n_molecules, side_length)
-    initialize_psf(residue, n_molecules, side_length)
-    # minimize_box()
+    n_molecules = determine_n_molecules_from_density(density, mol, solvent)
+    if solvent is None:
+        run_packmol(n_molecules, side_length)
+    else:
+        run_packmol_solvation(n_molecules, side_length, solvent)
+    initialize_psf(residue, n_molecules, side_length, solvent)
+    minimize_box()
 
 
 def cli():
@@ -522,8 +592,10 @@ def cli():
         help="Side length of the box in angstrom")
     parser.add_argument("-r", "--residue", type=str, required=True, 
         help="Residue name")
+    parser.add_argument("-s", "--solvent", type=str, required=False, default=None,
+        help="Solvent name")
     args = parser.parse_args()
-    main(args.density, args.side_length, args.residue)
+    main(args.density, args.side_length, args.residue, args.solvent)
 
 
 if __name__ == "__main__":
