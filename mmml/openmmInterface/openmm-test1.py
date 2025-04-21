@@ -39,9 +39,10 @@ def setup_simulation(
     # Compute periodic box vectors
     a, b, c = box_length, box_length, box_length
     box_vectors = computePeriodicBoxVectors(a, b, c, alpha, beta, gamma)
-
+    print(psf_file)
     # Load CHARMM files
     psf = CharmmPsfFile(psf_file)
+    print(psf)
     psf.setBox(a, b, c, alpha, beta, gamma)
     pdb = PDBFile(pdb_file)
     pdb.topology.setPeriodicBoxVectors(box_vectors)
