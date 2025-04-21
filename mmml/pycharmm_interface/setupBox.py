@@ -322,9 +322,26 @@ water_pdb_path = cwd / ".." / "data" / "tip3.pdb"
 octanol_pdb_path = cwd / ".." / "data" / "ocoh.pdb"
 ase_water = ase.io.read(water_pdb_path)
 ase_octanol = ase.io.read(octanol_pdb_path)
+
+def correct_names(atoms: Atoms) -> Atoms:
+    problem_symbols = ["CL", "HO"]
+    e = atoms.get_chemical_symbols()
+    e = [_[:1] if _.upper() in problem_symbols else _ for _ in e]
+    print(e)
+    e = [_ if _[0] != "H" else "H" for _ in e]
+    print(e)
+    # atomic numbers
+    an = [ase.data.chemical_symbols.index(_) for _ in e]
+    print(an)
+    atoms.set_atomic_numbers(an)
+    return atoms
+
+water = correct_names(ase_water)    
+octanol = correct_names(ase_octanol)
+
 solvents_ase = {
-    "water": ase_water,
-    "octanol": ase_octanol,
+    "water": water,
+    "octanol": octanol,
 }
 solvents_density = {
     "water": 1000,
