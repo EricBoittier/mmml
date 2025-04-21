@@ -602,8 +602,10 @@ def cli():
     parser.add_argument("-s", "--solvent", type=str, required=False, default=None,
         help="Solvent name")
     args = parser.parse_args()
+    if args.solvent == "None":
+        args.solvent = None
     for arg in vars(args):
-        print(f"{arg}: {getattr(args, arg)}")
+        print(f"{arg}: {getattr(args, arg)} {type(getattr(args, arg))}")
     main(args.density, args.side_length, args.residue, args.solvent)
 
 
