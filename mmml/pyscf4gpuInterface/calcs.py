@@ -97,7 +97,7 @@ def compute_dft(args, calcs, extra=None):
         from pyscf.data import radii
         from gpu4pyscf.df import int3c2e
         from gpu4pyscf.lib.cupy_helper import dist_matrix
-        from .esp_helpers import balance_array
+        from esp_helpers import balance_array
         print("-"*100)
         print("Computing Density ESP")
         print("-"*100)
