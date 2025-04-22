@@ -124,10 +124,11 @@ rule extract_clusters:
         partition="gpu",
         gres="gpu:1"
     shell:
-        "for i in $(seq 0 10 1000); do "
+        "for i in $(seq 0 100 1000); do "
+        "echo $i &&"
         "hostname && bash ~/mmml/setup/install.sh && "
         "uv run ~/mmml/mmml/sample/features.py "
-        "--sims_path $PWD --start $i --end $((i+10)) --samples_per_frame 1 "
+        "--sims_path $PWD --start $i --end $((i+100)) --samples_per_frame 1 "
         "--n_find {config[cluster][n_find]} "
         "--psf psf/system.psf --dcd dcd/*.dcd "
         "--stride {config[cluster][stride]} --logfile res/*.log "
@@ -141,10 +142,11 @@ rule extract_clusters_water:
         partition="gpu",
         gres="gpu:1"    
     shell:
-        "for i in $(seq 0 10 1000); do "
+        "for i in $(seq 0 100 1000); do "
+        "echo $i &&"
         "hostname && bash ~/mmml/setup/install.sh && "
         "uv run ~/mmml/mmml/sample/features.py "
-        "--sims_path $PWD --start $i --end $((i+10)) --samples_per_frame 1 "
+        "--sims_path $PWD --start $i --end $((i+100)) --samples_per_frame 1 "
         "--n_find {config[cluster][n_find]} "
         "--psf psf/system-water.psf --dcd dcd/*water.dcd "
         "--stride {config[cluster][stride]} --logfile res/*water.log "
@@ -159,9 +161,10 @@ rule extract_clusters_octanol:
         gres="gpu:1"        
     shell:
         "for i in $(seq 0 100 1000); do "
+        "echo $i &&"
         "hostname && bash ~/mmml/setup/install.sh && "
         "uv run ~/mmml/mmml/sample/features.py "
-        "--sims_path $PWD --start $i --end $((i+10)) --samples_per_frame 1 "
+        "--sims_path $PWD --start $i --end $((i+100)) --samples_per_frame 1 "
         "--n_find {config[cluster][n_find]} "
         "--psf psf/system-octanol.psf --dcd dcd/*octanol.dcd "
         "--stride {config[cluster][stride]} --logfile res/*octanol.log "
