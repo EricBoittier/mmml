@@ -100,11 +100,11 @@ def setup_simulation(
                 working_dir, integrator_type, steps, tag
             )
         elif sim_type == "NPT":
-            run_npt(simulation, integrator, pressure,
+            run_npt(simulation, integrator, pressure, temperature,
              working_dir, integrator_type, steps, tag)
         elif sim_type == "NVE":
             run_nve(simulation, integrator,
-             working_dir, steps, tag)
+             working_dir, temperature, steps, tag)
 
 
 def minimize_energy(simulation, working_dir, tag=""):
@@ -117,23 +117,22 @@ def equilibrate(
     simulation, integrator, temperature, working_dir, integrator_type, steps=10**6, tag=""
 ):
     print("Equilibrating...")
-    nsteps_equil = steps
     temp_start, temp_final = 150, temperature
     for temp in np.linspace(temp_start, temp_final, num=steps // 100):
         simulation.step(steps // 100)
-    print("Equilibration complete.")
+    print(f"Equilibration complete. ({steps} steps)")
     save_state(simulation, os.path.join(working_dir, "res", f"equilibrated_{tag}.res"))
 
 
 def run_npt(
-    simulation, integrator, pressure, working_dir, integrator_type, steps=10**6,
+    simulation, integrator, pressure, temperature, working_dir, integrator_type, steps=10**6,
     tag=""
 ):
     print("Running NPT simulation...")
     system = simulation.system
-    system.addForce(MonteCarloBarostat(pressure * atmosphere, 298 * kelvin, 25))
+    system.addForce(MonteCarloBarostat(pressure * atmosphere, temperature * kelvin, 25))
     if integrator_type == "Langevin":
-        integrator.setTemperature(298 * kelvin)
+        integrator.setTemperature(temperature * kelvin)
     nsteps_prod = steps
     setup_reporters(simulation, working_dir, "npt", tag)
     simulation.step(nsteps_prod)
@@ -141,7 +140,7 @@ def run_npt(
     save_state(simulation, os.path.join(working_dir, "res", f"npt_final_{tag}.res"))
 
 
-def run_nve(simulation, integrator, working_dir, steps=10**6, tag=""):
+def run_nve(simulation, integrator, working_dir, temperature, steps=10**6, tag=""):
     print("Running NVE simulation...")
     nsteps_prod = steps
     setup_reporters(simulation, working_dir, "nve", tag)
