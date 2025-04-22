@@ -167,18 +167,12 @@ rule extract_clusters_octanol:
         "--stride {config[cluster][stride]} --logfile res/octanol.log "
         "--pdb pdb/init-octanolbox.pdb --output {output} > clusters-octanol.log && ls md_sampling/*/xyz/*octanol.xyz > clusters-octanol.dat; done"
 
-# TODO: Add a rule to concatenate the clusters
 
-rule concatenate_clusters:
+rule qm_clusters:
     input: 
         "clusters-bulk.dat",
         "clusters-water.dat",
         "clusters-octanol.dat"
-    output: "clusters-combined.dat"
-    shell: " md_sampling/*/xyz/*.xyz > {output}"
-
-rule qm_clusters:
-    input: "clusters-combined.dat"
     output: "qm-clusters.log"
     
     run:
@@ -190,8 +184,8 @@ rule qm_clusters:
         flags_str = " ".join(flags)
 
         shell(
-            f"""hostname &&
+            f"""md_sampling/*/xyz/*.xyz > clusters-combined.dat && hostname &&
             bash ~/mmml/setup/install.sh &&
-            module load cudnn && while read XYZ; do CUDA_DEVICES="0" uv run python ~/mmml/mmml/pyscf4gpuInterface/calcs.py --output $XYZ.npz --mol $XYZ  --xc {config['qm']['xc']} --basis {config['qm']['basis']} {flags_str} > $XYZ.log; done < {input} && ls md_sampling/*/xyz/*npz > qm-clusters.log """
+            module load cudnn && while read XYZ; do CUDA_DEVICES="0" uv run python ~/mmml/mmml/pyscf4gpuInterface/calcs.py --output $XYZ.npz --mol $XYZ  --xc {config['qm']['xc']} --basis {config['qm']['basis']} {flags_str} > $XYZ.log; done < clusters-combined.dat && ls md_sampling/*/xyz/*npz > qm-clusters.log """
         )
 
