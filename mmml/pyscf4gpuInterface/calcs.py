@@ -149,8 +149,8 @@ def compute_dft(args, calcs, extra=None):
         v_grids_n = cupy.dot(charges, rinv)
         res = v_grids_n - v_grids_e
         
-        dip = mf_GPU.dip_moment(unit="DEBYE", dm=dm )
-        quad = mf_GPU.quad_moment(unit="DEBYE-ANG", dm=dm )
+        dip = engine.dip_moment(unit="DEBYE", dm=dm )
+        quad = engine.quad_moment(unit="DEBYE-ANG", dm=dm )
 
         print("cherry picking points")
         sorted_idxs = np.argsort(res.get())
