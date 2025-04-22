@@ -174,8 +174,6 @@ rule concatenate_clusters:
         "clusters-octanol.dat"
     output: "clusters.dat"
     shell: "cat {input} >> {output}"
-    shell: "cat {input} >> {output}"
-
 
 rule qm_clusters:
     input: "clusters.dat"
