@@ -233,8 +233,6 @@ def parse_args():
         default="Langevin",
         help="Integrator type to use (default: Langevin).",
     )
-
-
     parser.add_argument(
         "--tag",
         default="",
@@ -270,6 +268,14 @@ if __name__ == "__main__":
     args_dict = vars(args)
     args_dict["dcd_files"] = dcd_files
     args_dict["report_files"] = report_files
+    # copy the last dcd file to the working directory as the tag
+    if args.tag:
+        import shutil
+        shutil.copy(dcd_files[-1], Path(args.working_dir) / f"{args.tag}.dcd")
+        args_dict["dcd_files"].append(Path(args.working_dir) / f"{args.tag}.dcd")
+        shutil.copy(report_files[-1], Path(args.working_dir) / f"{args.tag}.log")
+        args_dict["report_files"].append(Path(args.working_dir) / f"{args.tag}.log")
+
     for k, v in args_dict.items():
         print(k, v)
     
