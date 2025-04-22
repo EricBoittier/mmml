@@ -162,6 +162,7 @@ def compute_dft(args, calcs, extra=None):
             N=0
         )
         res_out = np.asarray(res_out)
+        sorted_idxs = np.asarray(sorted_idxs)
         print("res", res.shape)
         print("res_out", res_out.shape)
         print("sorted_idxs", sorted_idxs.shape)
