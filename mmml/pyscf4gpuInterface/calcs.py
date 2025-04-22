@@ -110,7 +110,7 @@ def compute_dft(args, calcs, extra=None):
         density = engine._numint.get_rho(mol, dm, grids)
         
         print('------------------ Selecting points ----------------------------')
-        grid_indices = np.where(np.isclose(density.get(), 0.001, rtol=0.8))[0]
+        grid_indices = np.where(np.isclose(density.get(), 0.001, rtol=0.2))[0]
         print(grid_indices)
         # grid_positions_a = grid_coords[cupy.where(density < 0.001)[0]]
         grid_positions_a = grid_coords[grid_indices]
