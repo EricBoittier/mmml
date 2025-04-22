@@ -165,6 +165,8 @@ def compute_dft(args, calcs, extra=None):
         print(coords_angstrom[sorted_idxs].shape)
 
         output['esp'] = res
+        output['sorted_idxs'] = sorted_idxs
+        output['grid_indices'] = grid_indices
         output['esp_grid'] = coords_angstrom[sorted_idxs]
         output['dipole'] = dip
         output['quadrupole'] = quad
