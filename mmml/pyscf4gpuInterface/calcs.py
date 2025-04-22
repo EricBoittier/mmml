@@ -363,6 +363,9 @@ def parse_args():
     parser.add_argument("--thermo", default=False, action="store_true")
     parser.add_argument("--interaction", default=False, action="store_true")
     parser.add_argument("--dens_esp", default=False, action="store_true")
+    parser.add_argument("--ir", default=False, action="store_true")
+    parser.add_argument("--shielding", default=False, action="store_true")
+    parser.add_argument("--polarizability", default=False, action="store_true")
     args = parser.parse_args()
 
     for key, value in vars(args).items():
@@ -396,6 +399,15 @@ def process_calcs(args):
     if args.dens_esp:
         calcs.append(CALCS.DENS_ESP)
 
+    if args.ir:
+        calcs.append(CALCS.IR)
+
+    if args.shielding:
+        calcs.append(CALCS.SHIELDING)
+
+    if args.polarizability:
+        calcs.append(CALCS.POLARIZABILITY)
+
     if args.interaction:
         calcs.append(CALCS.INTERACTION)
         extra = (args.monomer_a, args.monomer_b)
@@ -421,6 +433,12 @@ def get_dummy_args(mol: str, calcs: list[CALCS]):
             self.hessian = CALCS.HESSIAN in calcs
             self.harmonic = CALCS.HARMONIC in calcs
             self.thermo = CALCS.THERMO in calcs
+            self.dens_esp = CALCS.DENS_ESP in calcs
+            self.ir = CALCS.IR in calcs
+            self.shielding = CALCS.SHIELDING in calcs
+            self.polarizability = CALCS.POLARIZABILITY in calcs
+            self.interaction = CALCS.INTERACTION in calcs
+
     return Args()
             
 
