@@ -191,8 +191,7 @@ def balance_array(q, sorted_idxs, positions, ref_dipole, ref_quadrupole, N=None)
     #     return q[np.concatenate([a_idx, b_idx, c_idx])], np.concatenate([a_idx, b_idx, c_idx])
     
     # print("failed...", s)
-    return q[sorted_idxs[:N]].tolist() + q[sorted_idxs[a:b]].tolist() + q[sorted_idxs[-N:]].tolist(), sorted_idxs[:N].tolist() + \
-        sorted_idxs[a:b].tolist() + sorted_idxs[-N:].tolist()
+    return a, b
 
 # Example Usage:
 # q = loaded["esp"]
