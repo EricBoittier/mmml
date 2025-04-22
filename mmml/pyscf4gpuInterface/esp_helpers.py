@@ -178,7 +178,7 @@ def balance_array(q, sorted_idxs, positions, ref_dipole, ref_quadrupole, N=None)
         else:
             a += incr
         tries += 1
-        if tries < 9:
+        if tries < 40:
             print(tries, a, b, len(sorted_idxs[a:b]))
 
     print(best_alignment, best_quadrupole_alignment, best_s)
