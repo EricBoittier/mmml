@@ -402,6 +402,30 @@ def process_calcs(args):
 
     return calcs, extra
 
+def get_dummy_args(mol: str, calcs: list[CALCS]):
+    # instead of parsing the args, trick python into thinking we have parsed the args
+    class Args:
+        def __init__(self):
+            self.mol = mol
+            self.output = "output.pkl"
+            self.log_file = "pyscf.log"
+            self.monomer_a = ""
+            self.monomer_b = ""
+            self.basis = "def2-tzvp"
+            self.xc = "wB97m-v"
+            self.spin = 0
+            self.charge = 0 
+            self.energy = CALCS.ENERGY in calcs
+            self.optimize = CALCS.OPTIMIZE in calcs
+            self.gradient = CALCS.GRADIENT in calcs
+            self.hessian = CALCS.HESSIAN in calcs
+            self.harmonic = CALCS.HARMONIC in calcs
+            self.thermo = CALCS.THERMO in calcs
+    return Args()
+            
+
+
+
 if __name__ == "__main__":
     import argparse
     import json
