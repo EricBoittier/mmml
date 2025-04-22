@@ -10,10 +10,9 @@ from gpu4pyscf.dft import rks
 
 import cupy
 
-from enums import *
-from helperfunctions import *
-
-from esp_helpers import balance_array
+from mmml.pyscf4gpuInterface.enums import *
+from mmml.pyscf4gpuInterface.helperfunctions import *
+from mmml.pyscf4gpuInterface.esp_helpers import balance_array
 
 def setup_mol(atoms, basis, xc, spin, charge, log_file='./pyscf.log', 
     verbose=6, 
