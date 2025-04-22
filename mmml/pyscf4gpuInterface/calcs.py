@@ -147,12 +147,13 @@ def compute_dft(args, calcs, extra=None):
         print("nuclear grids")
         v_grids_n = cupy.dot(charges, rinv)
         res = v_grids_n - v_grids_e
+        res = res.get()
         
         dip = engine.dip_moment(unit="DEBYE", dm=dm )
         quad = engine.quad_moment(unit="DEBYE-ANG", dm=dm )
 
         print("cherry picking points")
-        sorted_idxs = np.argsort(res.get())
+        sorted_idxs = np.argsort(res)
         a, b = balance_array(
             res.get(), 
             sorted_idxs, 
@@ -162,7 +163,7 @@ def compute_dft(args, calcs, extra=None):
             N=0
         )
         res_out = np.asarray(res)[sorted_idxs[a:b]]
-        sorted_idxs = np.asarray(sorted_idxs)[sorted_idxs[a:b]]
+        sorted_idxs = np.asarray(sorted_idxs)
         print("res", res.shape)
         print("res_out", res_out.shape)
         print("sorted_idxs", sorted_idxs.shape)
