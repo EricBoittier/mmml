@@ -124,14 +124,14 @@ rule extract_clusters:
         partition="gpu",
         gres="gpu:1"
     shell:
-        "for i in $(seq 0 100 1000); do "
+        "for i in $(seq 0 100 999); do "
         "hostname && bash ~/mmml/setup/install.sh && "
         "uv run ~/mmml/mmml/sample/features.py "
         "--sims_path $PWD --start $i --end $((i+100)) --samples_per_frame 1 "
         "--n_find {config[cluster][n_find]} "
         "--psf psf/system.psf --dcd dcd/bulk.dcd "
         "--stride {config[cluster][stride]} --logfile res/bulk.log "
-        "--pdb pdb/initial.pdb --output {output} > clusters.log && ls md_sampling/*/xyz/*xyz > clusters-bulk.dat; done"
+        "--pdb pdb/initial.pdb --output {output} > clusters.log && ls md_sampling/*/xyz/*bulk.xyz > clusters-bulk.dat; done"
 
 rule extract_clusters_water:
     input: 
@@ -141,7 +141,7 @@ rule extract_clusters_water:
         partition="gpu",
         gres="gpu:1"    
     shell:
-        "for i in $(seq 0 100 1000); do "
+        "for i in $(seq 0 100 999); do "
         "hostname && bash ~/mmml/setup/install.sh && "
         "uv run ~/mmml/mmml/sample/features.py "
         "--sims_path $PWD --start $i --end $((i+100)) --samples_per_frame 1 "
@@ -158,7 +158,7 @@ rule extract_clusters_octanol:
         partition="gpu",
         gres="gpu:1"        
     shell:
-        "for i in $(seq 0 100 1000); do "
+        "for i in $(seq 0 100 999); do "
         "hostname && bash ~/mmml/setup/install.sh && "
         "uv run ~/mmml/mmml/sample/features.py "
         "--sims_path $PWD --start $i --end $((i+100)) --samples_per_frame 1 "
