@@ -5,6 +5,10 @@ rule all:
         "qm/initial.npz",
         "qm-clusters.log"
 
+##################################
+# Setup
+##################################
+
 rule setup_residue:
     output: "xyz/initial.xyz"
     resources:
@@ -14,6 +18,10 @@ rule setup_residue:
         "hostname && bash ~/mmml/setup/install.sh && "
         "module load charmm openmm && "
         "uv run ~/mmml/mmml/pycharmm_interface/setupRes.py -r {config[residue]} > setupres.log"
+
+##################################
+# BULK
+##################################
 
 rule setup_box:
     input: "xyz/initial.xyz"
@@ -44,6 +52,7 @@ rule run_qm:
             module load cudnn && CUDA_DEVICES="0" uv run python ~/mmml/mmml/pyscf4gpuInterface/calcs.py --output qm/initial.npz --mol xyz/initial.xyz --optimize --xc {config['qm']['xc']} --basis {config['qm']['basis']} {flags_str} > qm/qm-initial.log   """
         )
 
+
 rule run_md:
     input: "qm/initial.npz"
     output:
@@ -57,63 +66,6 @@ rule run_md:
         steps = config['md']['steps']
         shell(
             f"""hostname && module purge && module load openmm && CUDA_VISIBLE_DEVICES="0" python ~/mmml/mmml/openmmInterface/openmm-test1.py --psf_file psf/system.psf --pdb_file pdb/init-packmol.pdb --steps {steps} --working_dir $PWD --temperatures {temps} --pressures {press} --simulation_schedule {sched} --integrator {integrator} --tag bulk > openmm-md.log""")
-
-
-rule setup_water_box:
-    input: "openmm-md.log"
-    output: "setup-water-box.log"
-    resources:
-        partition="gpu",
-        gres="gpu:1"
-    shell:
-        "hostname && bash ~/mmml/setup/install.sh && "
-        "module load charmm && "
-        "uv run ~/mmml/mmml/pycharmm_interface/setupBox.py "
-        "-d {config[density]} -l {config[side_length]} -r {config[residue]} -s water > {output}"    
-
-rule setup_octanol_box:
-    input: "openmm-md.log"
-    output: "setup-octanol-box.log"
-    resources:  
-        partition="gpu",
-        gres="gpu:1"
-    shell:
-        "hostname && bash ~/mmml/setup/install.sh && "
-        "module load charmm && "
-        "uv run ~/mmml/mmml/pycharmm_interface/setupBox.py "
-        "-d {config[density]} -l {config[side_length]} -r {config[residue]} -s octanol > {output}"
-
-rule run_water_md:
-    input: "setup-water-box.log"
-    output: "openmm-md-water.log"
-    resources:
-        partition="gpu",
-        gres="gpu:1"
-    run:
-        temps = " ".join(map(str, config['md']['temperatures']))
-        press = " ".join(map(str, config['md']['pressures']))
-        sched = " ".join(config['md']['schedule'])
-        integrator = config['md']['integrator']
-        steps = config['md']['steps']
-        shell(
-            f"""hostname && module purge && module load openmm && CUDA_VISIBLE_DEVICES=0 python ~/mmml/mmml/openmmInterface/openmm-test1.py --psf_file psf/system-water.psf --pdb_file pdb/init-waterbox.pdb --steps {steps} --working_dir $PWD --temperatures {temps} --pressures {press} --simulation_schedule {sched} --integrator {integrator} --tag water > openmm-md-water.log"""
-        )
-
-rule run_octanol_md:
-    input: "setup-octanol-box.log"
-    output: "openmm-md-octanol.log"
-    resources:
-        partition="gpu",
-        gres="gpu:1"        
-    run:
-        temps = " ".join(map(str, config['md']['temperatures']))
-        press = " ".join(map(str, config['md']['pressures']))
-        sched = " ".join(config['md']['schedule'])
-        integrator = config['md']['integrator']
-        steps = config['md']['steps']
-        shell(
-            f"""hostname && module purge && module load openmm && CUDA_VISIBLE_DEVICES=0 python ~/mmml/mmml/openmmInterface/openmm-test1.py --psf_file psf/system-octanol.psf --pdb_file pdb/init-octanolbox.pdb --steps {steps} --working_dir $PWD --temperatures {temps} --pressures {press} --simulation_schedule {sched} --integrator {integrator} --tag octanol > openmm-md-octanol.log"""
-        )   
 
 rule extract_clusters:
     input: 
@@ -132,6 +84,40 @@ rule extract_clusters:
         "--stride {config[cluster][stride]} --logfile res/bulk.log "
         "--pdb pdb/initial.pdb --output {output} > clusters.log && ls md_sampling/*/xyz/*bulk.xyz > clusters-bulk.dat; done"
 
+
+
+##################################
+# WATER
+##################################
+
+rule setup_water_box:
+    input: "openmm-md.log"
+    output: "setup-water-box.log"
+    resources:
+        partition="gpu",
+        gres="gpu:1"
+    shell:
+        "hostname && bash ~/mmml/setup/install.sh && "
+        "module load charmm && "
+        "uv run ~/mmml/mmml/pycharmm_interface/setupBox.py "
+        "-d {config[density]} -l {config[side_length]} -r {config[residue]} -s water > {output}"    
+
+rule run_water_md:
+    input: "setup-water-box.log"
+    output: "openmm-md-water.log"
+    resources:
+        partition="gpu",
+        gres="gpu:1"
+    run:
+        temps = " ".join(map(str, config['md']['temperatures']))
+        press = " ".join(map(str, config['md']['pressures']))
+        sched = " ".join(config['md']['schedule'])
+        integrator = config['md']['integrator']
+        steps = config['md']['steps']
+        shell(
+            f"""hostname && module purge && module load openmm && CUDA_VISIBLE_DEVICES=0 python ~/mmml/mmml/openmmInterface/openmm-test1.py --psf_file psf/system-water.psf --pdb_file pdb/init-waterbox.pdb --steps {steps} --working_dir $PWD --temperatures {temps} --pressures {press} --simulation_schedule {sched} --integrator {integrator} --tag water > openmm-md-water.log"""
+        )
+
 rule extract_clusters_water:
     input: 
         "openmm-md-water.log"
@@ -148,6 +134,30 @@ rule extract_clusters_water:
         "--psf psf/system-water.psf --dcd dcd/water.dcd "
         "--stride {config[cluster][stride]} --logfile res/water.log "
         "--pdb pdb/init-waterbox.pdb --output {output} > clusters-water.log && ls md_sampling/*/xyz/*water.xyz > clusters-water.dat; done"
+
+
+
+##################################
+# OCTANOL
+##################################
+
+rule run_octanol_md:
+    input: "setup-octanol-box.log"
+    output: "openmm-md-octanol.log"
+    resources:
+        partition="gpu",
+        gres="gpu:1"        
+    run:
+        temps = " ".join(map(str, config['md']['temperatures']))
+        press = " ".join(map(str, config['md']['pressures']))
+        sched = " ".join(config['md']['schedule'])
+        integrator = config['md']['integrator']
+        steps = config['md']['steps']
+        shell(
+            f"""hostname && module purge && module load openmm && CUDA_VISIBLE_DEVICES=0 python ~/mmml/mmml/openmmInterface/openmm-test1.py --psf_file psf/system-octanol.psf --pdb_file pdb/init-octanolbox.pdb --steps {steps} --working_dir $PWD --temperatures {temps} --pressures {press} --simulation_schedule {sched} --integrator {integrator} --tag octanol > openmm-md-octanol.log"""
+        )   
+
+
 
 rule extract_clusters_octanol:
     input: 
@@ -166,12 +176,12 @@ rule extract_clusters_octanol:
         "--stride {config[cluster][stride]} --logfile res/octanol.log "
         "--pdb pdb/init-octanolbox.pdb --output {output} > clusters-octanol.log && ls md_sampling/*/xyz/*octanol.xyz > clusters-octanol.dat; done"
 
+##################################
+# Do all QM Calculations
+##################################
 
 rule qm_clusters:
-    input: 
-        "clusters-bulk.dat",
-        "clusters-water.dat",
-        "clusters-octanol.dat"
+    input:  "clusters-octanol.dat"
     output: "qm-clusters.log"
     
     run:
@@ -182,12 +192,9 @@ rule qm_clusters:
         ]
         flags_str = " ".join(flags)
 
-        with open("CONCAT", "w") as f:
-            f.write("md_sampling/*/xyz/*.xyz > clusters-combined.dat")
-
         shell(
-            f"""bash CONCAT && hostname &&
+            f"""hostname &&
             bash ~/mmml/setup/install.sh &&
-            module load cudnn && while read XYZ; do CUDA_DEVICES="0" uv run python ~/mmml/mmml/pyscf4gpuInterface/calcs.py --output $XYZ.npz --mol $XYZ  --xc {config['qm']['xc']} --basis {config['qm']['basis']} {flags_str} > $XYZ.log; done < clusters-combined.dat && ls md_sampling/*/xyz/*npz > qm-clusters.log """
+            module load cudnn && for XYZ in $(cat {input}); do CUDA_DEVICES="0" uv run python ~/mmml/mmml/pyscf4gpuInterface/calcs.py --output $XYZ.npz --mol $XYZ  --xc {config['qm']['xc']} --basis {config['qm']['basis']} {flags_str} > $XYZ.log; done"""
         )
 
