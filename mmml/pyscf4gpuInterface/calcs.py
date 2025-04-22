@@ -158,7 +158,8 @@ def compute_dft(args, calcs, extra=None):
             sorted_idxs, 
             coords_angstrom, 
             dip, 
-            quad
+            quad,
+            N=3
         )
         print("res", res.shape)
         print("res_out", res_out.shape)
