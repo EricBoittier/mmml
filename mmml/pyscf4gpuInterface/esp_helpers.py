@@ -121,8 +121,16 @@ def calculate_quadrupole(moment_array, positions):
     return Q
 
 def balance_array(q, sorted_idxs, positions, ref_dipole, ref_quadrupole, N=None):
-    a = 10  # Start from the 10th element
-    b = len(q) - 10  # End at the 10th last element
+    """
+    Balance the array by finding the best subset of points to use for the ESP calculation.
+    If N is not None, the function will balance the array to the Nth point, otherwise it will balance the array to the 10th point.
+    The function returns the balanced array and the indices of the balanced array.
+    """
+    if N is None:
+        N = 10
+    a = N
+    b = len(q) - N
+
     print(len(sorted_idxs[a:b]))
     incr = len(sorted_idxs[a:b])//100 + 1  # Step size for adjusting the middle section
     best_alignment = -float('inf')  # Start with a very low alignment score
@@ -160,7 +168,7 @@ def balance_array(q, sorted_idxs, positions, ref_dipole, ref_quadrupole, N=None)
         if dipole_alignment > best_alignment-0.05 and quadrupole_alignment > best_quadrupole_alignment-0.05 and abs(s) < best_s:
             best_alignment = dipole_alignment.sum()
             best_quadrupole_alignment = quadrupole_alignment.sum()
-            best_subset = (sorted_idxs[:10], sorted_idxs[a:b], sorted_idxs[-10:])
+            best_subset = (sorted_idxs[:N], sorted_idxs[a:b], sorted_idxs[-N:])
             best_s = abs(s)
         
         # If the sum is positive, shrink the middle range
@@ -173,11 +181,14 @@ def balance_array(q, sorted_idxs, positions, ref_dipole, ref_quadrupole, N=None)
     # Return the best subset if we found one that meets the condition
     if best_subset:
         a_idx, b_idx, c_idx = best_subset
-        # print()
+        print("returning best subset")
+        print(q[np.concatenate([a_idx, b_idx, c_idx])].shape)
+        print(np.concatenate([a_idx, b_idx, c_idx]).shape)
         return q[np.concatenate([a_idx, b_idx, c_idx])], np.concatenate([a_idx, b_idx, c_idx])
     
     print("failed...", s)
-    return q[sorted_idxs[:10]].tolist() + q[sorted_idxs[a:b]].tolist() + q[sorted_idxs[-10:]].tolist(), sorted_idxs[:10].tolist() + sorted_idxs[a:b].tolist() + sorted_idxs[-10:].tolist()
+    return q[sorted_idxs[:N]].tolist() + q[sorted_idxs[a:b]].tolist() + q[sorted_idxs[-N:]].tolist(), sorted_idxs[:N].tolist() + \
+        sorted_idxs[a:b].tolist() + sorted_idxs[-N:].tolist()
 
 # Example Usage:
 # q = loaded["esp"]
