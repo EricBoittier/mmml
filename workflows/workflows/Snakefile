@@ -172,11 +172,11 @@ rule concatenate_clusters:
         "clusters-bulk.dat",
         "clusters-water.dat",
         "clusters-octanol.dat"
-    output: "clusters.dat"
-    shell: "cat {input} >> {output}"
+    output: "clusters-combined.dat"
+    shell: "cat *dat > {output}"
 
 rule qm_clusters:
-    input: "clusters.dat"
+    input: "clusters-combined.dat"
     output: "qm-clusters.log"
     
     run:
