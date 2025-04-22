@@ -167,6 +167,8 @@ rule extract_clusters_octanol:
         "--stride {config[cluster][stride]} --logfile res/octanol.log "
         "--pdb pdb/init-octanolbox.pdb --output {output} > clusters-octanol.log && ls md_sampling/*/xyz/*octanol.xyz > clusters-octanol.dat; done"
 
+# TODO: Add a rule to concatenate the clusters
+
 rule concatenate_clusters:
     input: 
         "clusters-bulk.dat",
