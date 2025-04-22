@@ -138,7 +138,7 @@ def balance_array(q, sorted_idxs, positions, ref_dipole, ref_quadrupole, N=None)
     best_s = float("inf")
     best_subset = None
 
-    while((a!= N) & (b!= len(q) - N) & len(sorted_idxs[a:b]) > 8000):
+    while((a== N) & (b== len(q) - N) & len(sorted_idxs[a:b]) > 8000):
         # Compute the sum of the middle section 
         current_subset = q[sorted_idxs[a:b]]
         current_positions = positions[sorted_idxs[a:b]]
