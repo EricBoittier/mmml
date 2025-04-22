@@ -124,10 +124,10 @@ rule extract_clusters:
         partition="gpu",
         gres="gpu:1"
     shell:
-        "for i in $(seq 0 100 1000); do "
+        "for i in $(seq 0 10 1000); do "
         "hostname && bash ~/mmml/setup/install.sh && "
         "uv run ~/mmml/mmml/sample/features.py "
-        "--sims_path $PWD --start $i --end $((i+100)) --samples_per_frame 1 "
+        "--sims_path $PWD --start $i --end $((i+10)) --samples_per_frame 1 "
         "--n_find {config[cluster][n_find]} "
         "--psf psf/system.psf --dcd dcd/*.dcd "
         "--stride {config[cluster][stride]} --logfile res/*.log "
@@ -141,14 +141,14 @@ rule extract_clusters_water:
         partition="gpu",
         gres="gpu:1"    
     shell:
-        "for i in $(seq 0 100 1000); do "
+        "for i in $(seq 0 10 1000); do "
         "hostname && bash ~/mmml/setup/install.sh && "
         "uv run ~/mmml/mmml/sample/features.py "
-        "--sims_path $PWD --start $i --end $((i+100)) --samples_per_frame 1 "
+        "--sims_path $PWD --start $i --end $((i+10)) --samples_per_frame 1 "
         "--n_find {config[cluster][n_find]} "
         "--psf psf/system-water.psf --dcd dcd/*water.dcd "
         "--stride {config[cluster][stride]} --logfile res/*water.log "
-        "--pdb pdb/init-waterbox.pdb --output {output} > clusters-water.log && ls md_sampling/*/xyz/*water.xyz > clusters-water.dat; done"
+        "--pdb pdb/init-waterbox.pdb --output {output} > clusters-water.log && ls md_sampling/*/xyz/water*.xyz > clusters-water.dat; done"
 
 rule extract_clusters_octanol:
     input: 
@@ -161,11 +161,11 @@ rule extract_clusters_octanol:
         "for i in $(seq 0 100 1000); do "
         "hostname && bash ~/mmml/setup/install.sh && "
         "uv run ~/mmml/mmml/sample/features.py "
-        "--sims_path $PWD --start $i --end $((i+100)) --samples_per_frame 1 "
+        "--sims_path $PWD --start $i --end $((i+10)) --samples_per_frame 1 "
         "--n_find {config[cluster][n_find]} "
         "--psf psf/system-octanol.psf --dcd dcd/*octanol.dcd "
         "--stride {config[cluster][stride]} --logfile res/*octanol.log "
-        "--pdb pdb/init-octanolbox.pdb --output {output} > clusters-octanol.log && ls md_sampling/*/xyz/*octanol.xyz > clusters-octanol.dat; done"
+        "--pdb pdb/init-octanolbox.pdb --output {output} > clusters-octanol.log && ls md_sampling/*/xyz/octanol*.xyz > clusters-octanol.dat; done"
 
 rule concatenate_clusters:
     input: 
@@ -173,7 +173,7 @@ rule concatenate_clusters:
         "clusters-water.dat",
         "clusters-octanol.dat"
     output: "clusters.dat"
-    shell: "cat {input} > {output}"
+    shell: "cat {input} >> {output}"
 
 
 rule qm_clusters:
@@ -193,11 +193,5 @@ rule qm_clusters:
             bash ~/mmml/setup/install.sh &&
             module load cudnn && while read XYZ; do CUDA_DEVICES="0" uv run python ~/mmml/mmml/pyscf4gpuInterface/calcs.py --output $XYZ.npz --mol $XYZ  --xc {config['qm']['xc']} --basis {config['qm']['basis']} {flags_str} > $XYZ.log; done < {input} && ls md_sampling/*/xyz/*npz > qm-clusters.log """
         )
-
-rule train_model_1:
-    input: "qm/clusters.npz"
-    output: "train_model_1.log"
-    run:
-        "uv run ~/mmml/mmml/models/train_model_1.py --input qm/clusters.npz --output models/model_1.pth"
 
 
