@@ -153,7 +153,7 @@ def compute_dft(args, calcs, extra=None):
 
         print("cherry picking points")
         sorted_idxs = np.argsort(res.get())
-        res, sorted_idxs = balance_array(
+        res_out, sorted_idxs = balance_array(
             res.get(), 
             sorted_idxs, 
             coords_angstrom, 
