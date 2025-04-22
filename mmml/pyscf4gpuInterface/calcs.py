@@ -6,7 +6,7 @@ from pyscf.data import radii
 from gpu4pyscf.df import int3c2e
 from gpu4pyscf.lib.cupy_helper import dist_matrix
 from gpu4pyscf.dft import rks
-
+from gpu4pyscf.properties import ir, shielding, polarizability
 
 import cupy
 
@@ -214,7 +214,34 @@ def compute_dft(args, calcs, extra=None):
         thermo.dump_normal_mode(mol, harmonic_results)
         output['harmonic'] = harmonic_results
 
+    if CALCS.IR in calcs:
+        assert CALCS.HESSIAN in calcs, "Hessian must be computed for IR"
+        print("-"*100)
+        print("Computing IR")
+        print("-"*100)
+        freq, intensity = ir.eval_ir_freq_intensity(engine, h_dft)
+        output['freq'] = freq
+        output['intensity'] = intensity
+
+    if CALCS.SHIELDING in calcs:
+        assert CALCS.ENERGY in calcs, "Energy must be computed for shielding"
+        print("-"*100)
+        print("Computing Shielding")
+        print("-"*100)
+        msc_d, msc_p = shielding.eval_shielding(engine)
+        msc = (msc_d + msc_p).get()
+        output['shielding'] = msc
+
+    if CALCS.POLARIZABILITY in calcs:
+        assert CALCS.ENERGY in calcs, "Energy must be computed for polarizability"
+        print("-"*100)
+        print("Computing Polarizability")
+        print("-"*100)
+        polar = polarizability.eval_polarizability(engine)
+        output['polarizability'] = polar
+
     if CALCS.THERMO in calcs:
+        assert CALCS.HARMONIC in calcs, "Harmonic must be computed for thermodynamics"
         print("-"*100)
         print("Computing Thermodynamics")
         print("-"*100)
