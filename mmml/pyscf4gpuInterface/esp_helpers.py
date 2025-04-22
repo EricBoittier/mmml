@@ -128,8 +128,8 @@ def balance_array(q, sorted_idxs, positions, ref_dipole, ref_quadrupole, N=None)
     """
     if N is None:
         N = 10
-    a = N
-    b = len(q) - N
+    a = N + 1
+    b = len(q) - N - 1
 
     print(len(sorted_idxs[a:b]))
     incr = len(sorted_idxs[a:b])//1000 + 1  # Step size for adjusting the middle section
