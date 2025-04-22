@@ -257,28 +257,28 @@ def extract_molecular_descriptors(
     return results_dict
 
 
-def find_simulation_files(sims_path, index):
-    """Find simulation files given a base path and simulation index.
+# def find_simulation_files(sims_path, index):
+#     """Find simulation files given a base path and simulation index.
 
-    Args:
-        sims_path (Path): Base path containing simulation directories
-        index (int): Index of simulation to process
+#     Args:
+#         sims_path (Path): Base path containing simulation directories
+#         index (int): Index of simulation to process
 
-    Returns:
-        tuple: (logfile, psf_file, dcd_file, pdb_file, resid, sim_conds)
-    """
-    files = list(Path(sims_path).glob("*/*/log/equilibration_1_*"))
-    logfile = files[index]
-    logfile = Path(logfile).absolute()
-    print(logfile)
-    resid = logfile.parents[2].stem
-    sim_conds = str(logfile.parents[1]).split("/")[-1]
+#     Returns:
+#         tuple: (logfile, psf_file, dcd_file, pdb_file, resid, sim_conds)
+#     """
+#     files = list(Path(sims_path).glob("*/*/log/equilibration_1_*"))
+#     logfile = files[index]
+#     logfile = Path(logfile).absolute()
+#     print(logfile)
+#     resid = logfile.parents[2].stem
+#     sim_conds = str(logfile.parents[1]).split("/")[-1]
 
-    psf_file = logfile.parents[1] / "system.psf"
-    dcd_file = list((logfile.parents[1] / "dcd").glob("eq*_1_*dcd")).pop()
-    pdb_file = logfile.parents[1] / "pdb" / "initial.pdb"
+#     psf_file = logfile.parents[1] / "system.psf"
+#     dcd_file = list((logfile.parents[1] / "dcd").glob("eq*_1_*dcd")).pop()
+#     pdb_file = logfile.parents[1] / "pdb" / "initial.pdb"
 
-    return logfile, psf_file, dcd_file, pdb_file, resid, sim_conds
+#     return logfile, psf_file, dcd_file, pdb_file, resid, sim_conds
 
 
 def setup_universe(psf_file, dcd_file, pdb_file, start=0, end=None, stride=1):
