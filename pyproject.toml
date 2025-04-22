@@ -18,7 +18,7 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
 ]
-requires-python = "==3.12"
+requires-python = "==3.12.*"
 # Declare any run-time dependencies that should be installed with the package.
 dependencies = [
     "absl-py",
@@ -114,7 +114,7 @@ dependencies = [
     "pubchempy",
     "pure-eval",
     "py3dmol",
-    "pyscf",
+    "pyscf[properties]",
     "pyarrow",
     "pygments",
     "pyparsing",
@@ -152,7 +152,6 @@ dependencies = [
     "wcwidth",
     "wheel",
     "zipp",
-
     "pycharmm",
     "jaxpycharmm"
 ]
@@ -160,7 +159,7 @@ dependencies = [
 [tool.uv.sources]
 jax-md = { git = "https://github.com/google/jax-md.git", rev = "05221c551e71f1b5f64458c0e3533452c22efec0" }
 jaxpycharmm = {git = "https://github.com/EricBoittier/JaxPycharmm.git"  }
-pycharmm = { path = "/pchem-data/meuwly/boittier/home/charmm/tool/pycharmm", editable = true }
+pycharmm = { path = "setup/charmm/tool/pycharmm", editable = true }
 
 
 
