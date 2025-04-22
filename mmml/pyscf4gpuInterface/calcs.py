@@ -55,7 +55,7 @@ def compute_dft(args, calcs, extra=None):
     engine, mol = setup_mol(args.mol, args.basis, args.xc, args.spin, args.charge)
 
     print(mol)
-    from helperfunctions import print_basis
+    from mmml.pyscf4gpuInterface.helperfunctions import print_basis
     print_basis(mol)
 
     opt_callback = None
