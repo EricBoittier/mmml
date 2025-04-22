@@ -1,11 +1,18 @@
 import numpy as np
 import pyscf
 from pyscf.hessian import thermo
+from pyscf import gto
+from pyscf.data import radii
+from gpu4pyscf.df import int3c2e
+from gpu4pyscf.lib.cupy_helper import dist_matrix
 from gpu4pyscf.dft import rks
+from gpu4pyscf.properties import ir, shielding, polarizability
 
-from enums import *
-from helperfunctions import *
+import cupy
 
+from mmml.pyscf4gpuInterface.enums import *
+from mmml.pyscf4gpuInterface.helperfunctions import *
+from mmml.pyscf4gpuInterface.esp_helpers import balance_array
 
 def setup_mol(atoms, basis, xc, spin, charge, log_file='./pyscf.log', 
     verbose=6, 
@@ -48,7 +55,7 @@ def compute_dft(args, calcs, extra=None):
     engine, mol = setup_mol(args.mol, args.basis, args.xc, args.spin, args.charge)
 
     print(mol)
-    from helperfunctions import print_basis
+    from mmml.pyscf4gpuInterface.helperfunctions import print_basis
     print_basis(mol)
 
     opt_callback = None
@@ -92,6 +99,92 @@ def compute_dft(args, calcs, extra=None):
         print(f"total energy = {e_dft}")       
         output['energy'] = e_dft
 
+    if CALCS.DENS_ESP in calcs:
+        print("-"*100)
+        print("Computing Density ESP")
+        print("-"*100)
+        print('------------------ Density ----------------------------')
+        dm = engine.make_rdm1()
+        grids = engine.grids
+        grid_coords = grids.coords.get()
+        density = engine._numint.get_rho(mol, dm, grids)
+        
+        print('------------------ Selecting points ----------------------------')
+        grid_indices = np.where(np.isclose(density.get(), 0.001, rtol=0.2))[0]
+        print(grid_indices)
+        # grid_positions_a = grid_coords[cupy.where(density < 0.001)[0]]
+        grid_positions_a = grid_coords[grid_indices]
+        print(grid_positions_a)
+        mask = np.all(grid_positions_a < 1000, axis=1)
+        grid_indices = grid_indices[mask]
+        grid_positions_a = grid_coords[grid_indices]
+        
+        # grid_indices = grid_indices[mask]
+        # grid_positions_a = grid_coords[grid_indices]
+        print(grid_positions_a.shape)
+        print(grid_positions_a.min(), grid_positions_a.max())
+        print('------------------ ESP ----------------------------')
+        dm = engine.make_rdm1()  # compute one-electron density matrix
+        coords = grid_positions_a 
+        print(coords.shape)
+        fakemol = gto.fakemol_for_charges(coords)
+        coords_angstrom = fakemol.atom_coords(unit="ANG")
+        mol_coords_angstrom = mol.atom_coords(unit="ANG")
+
+        charges = mol.atom_charges()
+        charges = cupy.asarray(charges)
+        coords = cupy.asarray(coords)
+        mol_coords = cupy.asarray(mol.atom_coords(unit="B"))
+        print("distance matrix")
+        r = dist_matrix(mol_coords, coords)
+        rinv = 1.0 / r
+        intopt = int3c2e.VHFOpt(mol, fakemol, "int2e")
+        intopt.build(1e-14, diag_block_with_triu=False, aosym=True, group_size=256)
+        # electronic grids
+        print("electronic grids")
+        v_grids_e = 2.0 * int3c2e.get_j_int3c2e_pass1(intopt, dm, sort_j=False)
+        # nuclear grids
+        print("nuclear grids")
+        v_grids_n = cupy.dot(charges, rinv)
+        res = v_grids_n - v_grids_e
+        res = res.get()
+
+        dip = engine.dip_moment(unit="DEBYE", dm=dm )
+        quad = engine.quad_moment(unit="DEBYE-ANG", dm=dm )
+
+        print("cherry picking points")
+        sorted_idxs = np.argsort(res)
+        a, b = balance_array(
+            res, 
+            sorted_idxs, 
+            coords_angstrom, 
+            dip, 
+            quad,
+            N=0
+        )
+        print(a, b)
+        res_out = np.asarray(res)[sorted_idxs[a:b]]
+        sorted_idxs = np.asarray(sorted_idxs[a:b])
+        print("res", res.shape)
+        print("res_out", res_out.shape)
+        print("sorted_idxs", sorted_idxs.shape)
+        print("coords_angstrom[sorted_idxs]", coords_angstrom[sorted_idxs].shape)
+
+        output['esp'] = res
+        output['esp_out'] = res_out
+        output['sorted_idxs'] = sorted_idxs
+        output['grid_indices'] = grid_indices
+        output['esp_grid'] = coords_angstrom[sorted_idxs]
+        output['mol_coords_angstrom'] = mol_coords_angstrom
+        output['mol_z'] = mol.atom_charges()
+        output['dipole'] = dip
+        output['quadrupole'] = quad
+        output['density'] = density
+        output['grid_dens'] = grid_coords
+        output['grid_esp'] = grid_positions_a
+        output['esp_indices'] = grid_indices[sorted_idxs]
+
+
     if CALCS.GRADIENT in calcs:
         print("-"*100)
         print("Computing Gradient")
@@ -121,7 +214,34 @@ def compute_dft(args, calcs, extra=None):
         thermo.dump_normal_mode(mol, harmonic_results)
         output['harmonic'] = harmonic_results
 
+    if CALCS.IR in calcs:
+        assert CALCS.HESSIAN in calcs, "Hessian must be computed for IR"
+        print("-"*100)
+        print("Computing IR")
+        print("-"*100)
+        freq, intensity = ir.eval_ir_freq_intensity(engine, h)
+        output['freq'] = freq
+        output['intensity'] = intensity
+
+    if CALCS.SHIELDING in calcs:
+        assert CALCS.ENERGY in calcs, "Energy must be computed for shielding"
+        print("-"*100)
+        print("Computing Shielding")
+        print("-"*100)
+        msc_d, msc_p = shielding.eval_shielding(engine)
+        msc = (msc_d + msc_p).get()
+        output['shielding'] = msc
+
+    if CALCS.POLARIZABILITY in calcs:
+        assert CALCS.ENERGY in calcs, "Energy must be computed for polarizability"
+        print("-"*100)
+        print("Computing Polarizability")
+        print("-"*100)
+        polar = polarizability.eval_polarizability(engine)
+        output['polarizability'] = polar
+
     if CALCS.THERMO in calcs:
+        assert CALCS.HARMONIC in calcs, "Harmonic must be computed for thermodynamics"
         print("-"*100)
         print("Computing Thermodynamics")
         print("-"*100)
@@ -243,6 +363,9 @@ def parse_args():
     parser.add_argument("--thermo", default=False, action="store_true")
     parser.add_argument("--interaction", default=False, action="store_true")
     parser.add_argument("--dens_esp", default=False, action="store_true")
+    parser.add_argument("--ir", default=False, action="store_true")
+    parser.add_argument("--shielding", default=False, action="store_true")
+    parser.add_argument("--polarizability", default=False, action="store_true")
     args = parser.parse_args()
 
     for key, value in vars(args).items():
@@ -260,22 +383,66 @@ def process_calcs(args):
 
     if args.energy:
         calcs.append(CALCS.ENERGY)
+    
     if args.gradient:
         calcs.append(CALCS.GRADIENT)
+    
     if args.hessian:
         calcs.append(CALCS.HESSIAN)
+    
     if args.harmonic:
         calcs.append(CALCS.HARMONIC)
+    
     if args.thermo:
         calcs.append(CALCS.THERMO)
 
     if args.dens_esp:
         calcs.append(CALCS.DENS_ESP)
+
+    if args.ir:
+        calcs.append(CALCS.IR)
+
+    if args.shielding:
+        calcs.append(CALCS.SHIELDING)
+
+    if args.polarizability:
+        calcs.append(CALCS.POLARIZABILITY)
+
     if args.interaction:
         calcs.append(CALCS.INTERACTION)
         extra = (args.monomer_a, args.monomer_b)
 
     return calcs, extra
+
+def get_dummy_args(mol: str, calcs: list[CALCS]):
+    # instead of parsing the args, trick python into thinking we have parsed the args
+    class Args:
+        def __init__(self):
+            self.mol = mol
+            self.output = "output.pkl"
+            self.log_file = "pyscf.log"
+            self.monomer_a = ""
+            self.monomer_b = ""
+            self.basis = "def2-tzvp"
+            self.xc = "wB97m-v"
+            self.spin = 0
+            self.charge = 0 
+            self.energy = CALCS.ENERGY in calcs
+            self.optimize = CALCS.OPTIMIZE in calcs
+            self.gradient = CALCS.GRADIENT in calcs
+            self.hessian = CALCS.HESSIAN in calcs
+            self.harmonic = CALCS.HARMONIC in calcs
+            self.thermo = CALCS.THERMO in calcs
+            self.dens_esp = CALCS.DENS_ESP in calcs
+            self.ir = CALCS.IR in calcs
+            self.shielding = CALCS.SHIELDING in calcs
+            self.polarizability = CALCS.POLARIZABILITY in calcs
+            self.interaction = CALCS.INTERACTION in calcs
+
+    return Args()
+            
+
+
 
 if __name__ == "__main__":
     import argparse
