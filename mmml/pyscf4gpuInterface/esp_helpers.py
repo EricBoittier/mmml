@@ -132,7 +132,7 @@ def balance_array(q, sorted_idxs, positions, ref_dipole, ref_quadrupole, N=None)
     b = len(q) - N
 
     print(len(sorted_idxs[a:b]))
-    incr = len(sorted_idxs[a:b])//100 + 1  # Step size for adjusting the middle section
+    incr = len(sorted_idxs[a:b])//1000 + 1  # Step size for adjusting the middle section
     best_alignment = -float('inf')  # Start with a very low alignment score
     best_quadrupole_alignment = -float('inf')
     best_s = float("inf")
