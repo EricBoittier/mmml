@@ -124,7 +124,7 @@ rule extract_clusters:
         partition="gpu",
         gres="gpu:1"
     shell:
-        "for i in $(seq 0 100 1000); do "
+        "for i in $(seq 0 100 999); do "
         "echo $i &&"
         "hostname && bash ~/mmml/setup/install.sh && "
         "uv run ~/mmml/mmml/sample/features.py "
@@ -142,7 +142,7 @@ rule extract_clusters_water:
         partition="gpu",
         gres="gpu:1"    
     shell:
-        "for i in $(seq 0 100 1000); do "
+        "for i in $(seq 0 100 999); do "
         "echo $i &&"
         "hostname && bash ~/mmml/setup/install.sh && "
         "uv run ~/mmml/mmml/sample/features.py "
@@ -160,7 +160,7 @@ rule extract_clusters_octanol:
         partition="gpu",
         gres="gpu:1"        
     shell:
-        "for i in $(seq 0 100 1000); do "
+        "for i in $(seq 0 100 999); do "
         "echo $i &&"
         "hostname && bash ~/mmml/setup/install.sh && "
         "uv run ~/mmml/mmml/sample/features.py "
