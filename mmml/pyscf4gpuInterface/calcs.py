@@ -92,6 +92,72 @@ def compute_dft(args, calcs, extra=None):
         print(f"total energy = {e_dft}")       
         output['energy'] = e_dft
 
+    if CALCS.DENS_ESP in calcs:
+        from esp_helpers import *
+        print("-"*100)
+        print("Computing Density ESP")
+        print("-"*100)
+        print('------------------ Density ----------------------------')
+        grids = engine.grids
+        grid_coords = grids.coords.get()
+        density = engine._numint.get_rho(mol, dm, grids)
+        
+        print('------------------ Selecting points ----------------------------')
+        grid_indices = np.where(np.isclose(density.get(), 0.001, rtol=0.8))[0]
+        print(grid_indices)
+        # grid_positions_a = grid_coords[cupy.where(density < 0.001)[0]]
+        grid_positions_a = grid_coords[grid_indices]
+        print(grid_positions_a)
+        mask = np.all(grid_positions_a < 1000, axis=1)
+        grid_indices = grid_indices[mask]
+        grid_positions_a = grid_coords[grid_indices]
+        
+        # grid_indices = grid_indices[mask]
+        # grid_positions_a = grid_coords[grid_indices]
+        print(grid_positions_a.shape)
+        print(grid_positions_a.min(), grid_positions_a.max())
+        print('------------------ ESP ----------------------------')
+        dm = engine.make_rdm1()  # compute one-electron density matrix
+        coords = grid_positions_a 
+        print(coords.shape)
+        fakemol = gto.fakemol_for_charges(coords)
+        coords_angstrom = fakemol.atom_coords(unit="ANG")
+        mol_coords_angstrom = mol.atom_coords(unit="ANG")
+
+        charges = mol.atom_charges()
+        charges = cupy.asarray(charges)
+        coords = cupy.asarray(coords)
+        mol_coords = cupy.asarray(mol.atom_coords(unit="B"))
+        print("distance matrix")
+        r = dist_matrix(mol_coords, coords)
+        rinv = 1.0 / r
+        intopt = int3c2e.VHFOpt(mol, fakemol, "int2e")
+        intopt.build(1e-14, diag_block_with_triu=False, aosym=True, group_size=256)
+        # electronic grids
+        print("electronic grids")
+        v_grids_e = 2.0 * int3c2e.get_j_int3c2e_pass1(intopt, dm, sort_j=False)
+        # nuclear grids
+        print("nuclear grids")
+        v_grids_n = cupy.dot(charges, rinv)
+        res = v_grids_n - v_grids_e
+        
+        dip = mf_GPU.dip_moment(unit="DEBYE", dm=dm )
+        quad = mf_GPU.quad_moment(unit="DEBYE-ANG", dm=dm )
+
+        print("cherry picking points")
+        sorted_idxs = np.argsort(res.get())
+        res, sorted_idxs = balance_array(res.get(), sorted_idxs, coords_angstrom, dip, quad)
+
+        output['esp'] = res
+        output['esp_grid'] = coords_angstrom[sorted_idxs]
+        output['dipole'] = dip
+        output['quadrupole'] = quad
+        output['density'] = density
+        output['grid_dens'] = grid_coords
+        output['grid_esp'] = grid_positions_a
+        output['esp_indices'] = grid_indices[sorted_idxs]
+
+
     if CALCS.GRADIENT in calcs:
         print("-"*100)
         print("Computing Gradient")
@@ -260,17 +326,22 @@ def process_calcs(args):
 
     if args.energy:
         calcs.append(CALCS.ENERGY)
+    
     if args.gradient:
         calcs.append(CALCS.GRADIENT)
+    
     if args.hessian:
         calcs.append(CALCS.HESSIAN)
+    
     if args.harmonic:
         calcs.append(CALCS.HARMONIC)
+    
     if args.thermo:
         calcs.append(CALCS.THERMO)
 
     if args.dens_esp:
         calcs.append(CALCS.DENS_ESP)
+
     if args.interaction:
         calcs.append(CALCS.INTERACTION)
         extra = (args.monomer_a, args.monomer_b)
