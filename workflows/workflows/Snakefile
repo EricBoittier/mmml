@@ -57,7 +57,7 @@ rule run_md:
         integrator = config['md']['integrator']
         steps = config['md']['steps']
         shell(
-            f"""hostname && module purge && module load openmm && CUDA_VISIBLE_DEVICES="0" python ~/mmml/mmml/openmmInterface/openmm-test1.py --psf_file psf/system.psf --pdb_file pdb/init-packmol.pdb --steps {steps} --working_dir $PWD --temperatures {temps} --pressures {press} --simulation_schedule {sched} --integrator {integrator} > openmm-md.log""")
+            f"""hostname && module purge && module load openmm && CUDA_VISIBLE_DEVICES="0" python ~/mmml/mmml/openmmInterface/openmm-test1.py --psf_file psf/system.psf --pdb_file pdb/init-packmol.pdb --steps {steps} --working_dir $PWD --temperatures {temps} --pressures {press} --simulation_schedule {sched} --integrator {integrator} --tag bulk > openmm-md.log""")
 
 
 rule setup_water_box:
@@ -97,7 +97,7 @@ rule run_water_md:
         integrator = config['md']['integrator']
         steps = config['md']['steps']
         shell(
-            f"""hostname && module purge && module load openmm && CUDA_VISIBLE_DEVICES=0 python ~/mmml/mmml/openmmInterface/openmm-test1.py --psf_file psf/system-water.psf --pdb_file pdb/init-waterbox.pdb --steps {steps} --working_dir $PWD --temperatures {temps} --pressures {press} --simulation_schedule {sched} --integrator {integrator} > openmm-md-water.log"""
+            f"""hostname && module purge && module load openmm && CUDA_VISIBLE_DEVICES=0 python ~/mmml/mmml/openmmInterface/openmm-test1.py --psf_file psf/system-water.psf --pdb_file pdb/init-waterbox.pdb --steps {steps} --working_dir $PWD --temperatures {temps} --pressures {press} --simulation_schedule {sched} --integrator {integrator} --tag water > openmm-md-water.log"""
         )
 
 rule run_octanol_md:
@@ -113,7 +113,7 @@ rule run_octanol_md:
         integrator = config['md']['integrator']
         steps = config['md']['steps']
         shell(
-            f"""hostname && module purge && module load openmm && CUDA_VISIBLE_DEVICES=0 python ~/mmml/mmml/openmmInterface/openmm-test1.py --psf_file psf/system-octanol.psf --pdb_file pdb/init-octanolbox.pdb --steps {steps} --working_dir $PWD --temperatures {temps} --pressures {press} --simulation_schedule {sched} --integrator {integrator} > openmm-md-octanol.log"""
+            f"""hostname && module purge && module load openmm && CUDA_VISIBLE_DEVICES=0 python ~/mmml/mmml/openmmInterface/openmm-test1.py --psf_file psf/system-octanol.psf --pdb_file pdb/init-octanolbox.pdb --steps {steps} --working_dir $PWD --temperatures {temps} --pressures {press} --simulation_schedule {sched} --integrator {integrator} --tag octanol > openmm-md-octanol.log"""
         )   
 
 rule extract_clusters:
@@ -129,8 +129,8 @@ rule extract_clusters:
         "uv run ~/mmml/mmml/sample/features.py "
         "--sims_path $PWD --start $i --end $((i+100)) --samples_per_frame 1 "
         "--n_find {config[cluster][n_find]} "
-        "--psf psf/system.psf --dcd dcd/*.dcd "
-        "--stride {config[cluster][stride]} --logfile res/*.log "
+        "--psf psf/system.psf --dcd dcd/bulk.dcd "
+        "--stride {config[cluster][stride]} --logfile res/bulk.log "
         "--pdb pdb/initial.pdb --output {output} > clusters.log && ls md_sampling/*/xyz/*xyz > clusters-bulk.dat; done"
 
 rule extract_clusters_water:
@@ -146,8 +146,8 @@ rule extract_clusters_water:
         "uv run ~/mmml/mmml/sample/features.py "
         "--sims_path $PWD --start $i --end $((i+100)) --samples_per_frame 1 "
         "--n_find {config[cluster][n_find]} "
-        "--psf psf/system-water.psf --dcd dcd/*water.dcd "
-        "--stride {config[cluster][stride]} --logfile res/*water.log "
+        "--psf psf/system-water.psf --dcd dcd/water.dcd "
+        "--stride {config[cluster][stride]} --logfile res/water.log "
         "--pdb pdb/init-waterbox.pdb --output {output} > clusters-water.log && ls md_sampling/*/xyz/*water.xyz > clusters-water.dat; done"
 
 rule extract_clusters_octanol:
@@ -163,8 +163,8 @@ rule extract_clusters_octanol:
         "uv run ~/mmml/mmml/sample/features.py "
         "--sims_path $PWD --start $i --end $((i+100)) --samples_per_frame 1 "
         "--n_find {config[cluster][n_find]} "
-        "--psf psf/system-octanol.psf --dcd dcd/*octanol.dcd "
-        "--stride {config[cluster][stride]} --logfile res/*octanol.log "
+        "--psf psf/system-octanol.psf --dcd dcd/octanol.dcd "
+        "--stride {config[cluster][stride]} --logfile res/octanol.log "
         "--pdb pdb/init-octanolbox.pdb --output {output} > clusters-octanol.log && ls md_sampling/*/xyz/*octanol.xyz > clusters-octanol.dat; done"
 
 rule concatenate_clusters:
@@ -173,7 +173,7 @@ rule concatenate_clusters:
         "clusters-water.dat",
         "clusters-octanol.dat"
     output: "clusters.dat"
-    shell: "cat {input} > {output}"
+    shell: "cat {input} >> {output}"
 
 
 rule qm_clusters:
@@ -193,11 +193,4 @@ rule qm_clusters:
             bash ~/mmml/setup/install.sh &&
             module load cudnn && while read XYZ; do CUDA_DEVICES="0" uv run python ~/mmml/mmml/pyscf4gpuInterface/calcs.py --output $XYZ.npz --mol $XYZ  --xc {config['qm']['xc']} --basis {config['qm']['basis']} {flags_str} > $XYZ.log; done < {input} && ls md_sampling/*/xyz/*npz > qm-clusters.log """
         )
-
-rule train_model_1:
-    input: "qm/clusters.npz"
-    output: "train_model_1.log"
-    run:
-        "uv run ~/mmml/mmml/models/train_model_1.py --input qm/clusters.npz --output models/model_1.pth"
-
 
