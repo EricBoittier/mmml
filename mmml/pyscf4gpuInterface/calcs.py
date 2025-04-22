@@ -1,11 +1,16 @@
 import numpy as np
 import pyscf
 from pyscf.hessian import thermo
+from pyscf import gto
+from pyscf.data import radii
+from gpu4pyscf.df import int3c2e
+from gpu4pyscf.lib.cupy_helper import dist_matrix
 from gpu4pyscf.dft import rks
 
 from enums import *
 from helperfunctions import *
 
+from esp_helpers import balance_array
 
 def setup_mol(atoms, basis, xc, spin, charge, log_file='./pyscf.log', 
     verbose=6, 
@@ -93,11 +98,7 @@ def compute_dft(args, calcs, extra=None):
         output['energy'] = e_dft
 
     if CALCS.DENS_ESP in calcs:
-        from pyscf import gto
-        from pyscf.data import radii
-        from gpu4pyscf.df import int3c2e
-        from gpu4pyscf.lib.cupy_helper import dist_matrix
-        from esp_helpers import balance_array
+
         print("-"*100)
         print("Computing Density ESP")
         print("-"*100)
