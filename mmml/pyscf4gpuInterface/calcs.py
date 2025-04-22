@@ -219,7 +219,7 @@ def compute_dft(args, calcs, extra=None):
         print("-"*100)
         print("Computing IR")
         print("-"*100)
-        freq, intensity = ir.eval_ir_freq_intensity(engine, h_dft)
+        freq, intensity = ir.eval_ir_freq_intensity(engine, h)
         output['freq'] = freq
         output['intensity'] = intensity
 
