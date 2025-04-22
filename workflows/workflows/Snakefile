@@ -173,7 +173,7 @@ rule concatenate_clusters:
         "clusters-water.dat",
         "clusters-octanol.dat"
     output: "clusters-combined.dat"
-    shell: "cat *dat > {output}"
+    shell: " md_sampling/*/xyz/*.xyz > {output}"
 
 rule qm_clusters:
     input: "clusters-combined.dat"
