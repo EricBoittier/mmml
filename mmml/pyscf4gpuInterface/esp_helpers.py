@@ -182,15 +182,15 @@ def balance_array(q, sorted_idxs, positions, ref_dipole, ref_quadrupole, N=None)
             print(tries, a, b, len(sorted_idxs[a:b]))
 
     print(best_alignment, best_quadrupole_alignment, best_s)
-    # Return the best subset if we found one that meets the condition
-    if best_subset:
-        a_idx, b_idx, c_idx = best_subset
-        print("returning best subset")
-        print(q[np.concatenate([a_idx, b_idx, c_idx])].shape)
-        print(np.concatenate([a_idx, b_idx, c_idx]).shape)
-        return q[np.concatenate([a_idx, b_idx, c_idx])], np.concatenate([a_idx, b_idx, c_idx])
+    # # Return the best subset if we found one that meets the condition
+    # if best_subset:
+    #     a_idx, b_idx, c_idx = best_subset
+    #     print("returning best subset")
+    #     print(q[np.concatenate([a_idx, b_idx, c_idx])].shape)
+    #     print(np.concatenate([a_idx, b_idx, c_idx]).shape)
+    #     return q[np.concatenate([a_idx, b_idx, c_idx])], np.concatenate([a_idx, b_idx, c_idx])
     
-    print("failed...", s)
+    # print("failed...", s)
     return q[sorted_idxs[:N]].tolist() + q[sorted_idxs[a:b]].tolist() + q[sorted_idxs[-N:]].tolist(), sorted_idxs[:N].tolist() + \
         sorted_idxs[a:b].tolist() + sorted_idxs[-N:].tolist()
 
