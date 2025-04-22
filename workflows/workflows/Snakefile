@@ -182,8 +182,11 @@ rule qm_clusters:
         ]
         flags_str = " ".join(flags)
 
+        with open("CONCAT", "w") as f:
+            f.write("md_sampling/*/xyz/*.xyz > clusters-combined.dat")
+
         shell(
-            f"""md_sampling/*/xyz/*.xyz > clusters-combined.dat && hostname &&
+            f"""bash CONCAT && hostname &&
             bash ~/mmml/setup/install.sh &&
             module load cudnn && while read XYZ; do CUDA_DEVICES="0" uv run python ~/mmml/mmml/pyscf4gpuInterface/calcs.py --output $XYZ.npz --mol $XYZ  --xc {config['qm']['xc']} --basis {config['qm']['basis']} {flags_str} > $XYZ.log; done < clusters-combined.dat && ls md_sampling/*/xyz/*npz > qm-clusters.log """
         )
