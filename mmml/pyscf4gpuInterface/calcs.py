@@ -7,6 +7,9 @@ from gpu4pyscf.df import int3c2e
 from gpu4pyscf.lib.cupy_helper import dist_matrix
 from gpu4pyscf.dft import rks
 
+
+import cupy
+
 from enums import *
 from helperfunctions import *
 
