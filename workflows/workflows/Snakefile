@@ -3,7 +3,6 @@ configfile: "config.yaml"
 rule all:
     input:
         "qm/initial.npz",
-        "clusters-combined.dat",
         "qm-clusters.log"
 
 rule setup_residue:
