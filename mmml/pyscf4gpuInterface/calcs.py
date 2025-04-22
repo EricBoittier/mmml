@@ -98,11 +98,11 @@ def compute_dft(args, calcs, extra=None):
         output['energy'] = e_dft
 
     if CALCS.DENS_ESP in calcs:
-
         print("-"*100)
         print("Computing Density ESP")
         print("-"*100)
         print('------------------ Density ----------------------------')
+        dm = engine.make_rdm1()
         grids = engine.grids
         grid_coords = grids.coords.get()
         density = engine._numint.get_rho(mol, dm, grids)
