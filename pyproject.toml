@@ -114,7 +114,7 @@ dependencies = [
     "pubchempy",
     "pure-eval",
     "py3dmol",
-    "pyscf[properties]",
+    "pyscf",
     "pyarrow",
     "pygments",
     "pyparsing",
@@ -160,9 +160,6 @@ dependencies = [
 jax-md = { git = "https://github.com/google/jax-md.git", rev = "05221c551e71f1b5f64458c0e3533452c22efec0" }
 jaxpycharmm = {git = "https://github.com/EricBoittier/JaxPycharmm.git"  }
 pycharmm = { path = "setup/charmm/tool/pycharmm", editable = true }
-
-
-
 
 # Update the urls once the hosting is set up.
 #[project.urls]
