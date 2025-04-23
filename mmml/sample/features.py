@@ -118,9 +118,9 @@ def select_central_residue(residue_ids):
     return residue_ids[0]
 
 
-def get_nearby_residues(universe, central_resid):
-    """Get residues within 5.5A of central residue."""
-    initial_selection = f"byres sphzone 5.5 (resid {central_resid}) "
+def get_nearby_residues(universe, central_resid, distance=5.5):
+    """Get residues within a sphere of radius distance of central residue."""
+    initial_selection = f"byres sphzone {distance} (resid {central_resid}) "
     sele = universe.select_atoms(initial_selection, periodic=False)
     return list(set([_.resid for _ in list(sele)]))
 
@@ -204,8 +204,7 @@ def extract_molecular_descriptors(
     os.makedirs(output_path / "xyz", exist_ok=True)
     n_find_minus_one = n_find - 1
     results = []
-    if tag != "":
-        samples_per_frame = 1
+
     trajectory_frames = universe.trajectory[start:end:stride]
     print("*" * 100)
     print(f"n_find: {n_find}")
@@ -227,7 +226,7 @@ def extract_molecular_descriptors(
 
         for ix in range(samples_per_frame):
             # Select central residue
-            if tag == "":
+            if tag == "bulk":
                 central_resid = select_central_residue(residue_ids)
             else:
                 central_resid = 1
