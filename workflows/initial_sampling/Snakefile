@@ -1,5 +1,11 @@
 configfile: "config.yaml"
 
+def get_n_total_minus_1(config):
+    return config["md"]["steps"]//1000 - 1
+
+def get_n_per_batch(config):
+    return config["md"]["steps"]//10000
+
 rule all:
     input:
         "qm/initial.npz",
@@ -77,10 +83,10 @@ rule extract_clusters:
         partition="gpu",
         gres="gpu:1"
     shell:
-        "for i in $(seq 0 {config[cluster][n_per_batch]} {config[cluster][n_total_minus_1]}); do "
+        "for i in $(seq 0 {get_n_per_batch(config)} {get_n_total_minus_1(config)}); do "
         "hostname && bash ~/mmml/setup/install.sh && "
         "uv run ~/mmml/mmml/sample/features.py "
-        "--sims_path $PWD --start $i --end $((i+{config[cluster][n_per_batch]})) --samples_per_frame 1 "
+        "--sims_path $PWD --start $i --end $((i+{get_n_per_batch(config)})) --samples_per_frame 1 "
         "--n_find {config[cluster][n_find]} "
         "--psf psf/system.psf --dcd dcd/bulk.dcd "
         "--stride {config[cluster][stride]} --logfile res/bulk.log "
@@ -128,10 +134,10 @@ rule extract_clusters_water:
         partition="gpu",
         gres="gpu:1"    
     shell:
-        "for i in $(seq 0 {config[cluster][n_per_batch]} {config[cluster][n_total_minus_1]}); do "
+        "for i in $(seq 0 {get_n_per_batch(config)} {get_n_total_minus_1(config)}); do "
         "hostname && bash ~/mmml/setup/install.sh && "
         "uv run ~/mmml/mmml/sample/features.py "
-        "--sims_path $PWD --start $i --end $((i+{config[cluster][n_per_batch]})) --samples_per_frame 1 "
+        "--sims_path $PWD --start $i --end $((i+{get_n_per_batch(config)})) --samples_per_frame 1 "
         "--n_find {config[cluster][n_find]} "
         "--psf psf/system-water.psf --dcd dcd/water.dcd "
         "--stride {config[cluster][stride]} --logfile res/water.log "
@@ -181,10 +187,10 @@ rule extract_clusters_octanol:
         partition="gpu",
         gres="gpu:1"        
     shell:
-        "for i in $(seq 0 {config[cluster][n_per_batch]} {config[cluster][n_total_minus_1]}); do "
+        "for i in $(seq 0 {get_n_per_batch(config)} {get_n_total_minus_1(config)}); do "
         "hostname && bash ~/mmml/setup/install.sh && "
         "uv run ~/mmml/mmml/sample/features.py "
-        "--sims_path $PWD --start $i --end $((i+{config[cluster][n_per_batch]})) --samples_per_frame 1 "
+        "--sims_path $PWD --start $i --end $((i+{get_n_per_batch(config)})) --samples_per_frame 1 "
         "--n_find {config[cluster][n_find]} "
         "--psf psf/system-octanol.psf --dcd dcd/octanol.dcd "
         "--stride {config[cluster][stride]} --logfile res/octanol.log "
