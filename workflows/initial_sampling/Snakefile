@@ -94,7 +94,7 @@ rule extract_clusters:
             hostname && bash ~/mmml/setup/install.sh &&
             uv run ~/mmml/mmml/sample/features.py \
                 --sims_path "$PWD" --start $i --end $((i+{n_per_batch})) --samples_per_frame 1 \
-                --n_find {n_find} \
+                --n_find {n_find} --tag bulk \
                 --psf psf/system.psf --dcd dcd/bulk.dcd \
                 --stride {stride} --logfile res/bulk.log \
                 --pdb pdb/init-packmol.pdb --output {output_file} > clusters-bulk.log &&
@@ -158,7 +158,7 @@ rule extract_clusters_water:
             hostname && bash ~/mmml/setup/install.sh &&
             uv run ~/mmml/mmml/sample/features.py \
                 --sims_path "$PWD" --start $i --end $((i+{n_per_batch})) --samples_per_frame 1 \
-                --n_find {n_find} \
+                --n_find {n_find} --tag water \
                 --psf psf/system-water.psf --dcd dcd/water.dcd \
                 --stride {stride} --logfile res/water.log \
                 --pdb pdb/init-waterbox.pdb --output {output_file} > clusters-water.log &&
@@ -225,7 +225,7 @@ rule extract_clusters_octanol:
             hostname && bash ~/mmml/setup/install.sh &&
             uv run ~/mmml/mmml/sample/features.py \
                 --sims_path "$PWD" --start $i --end $((i+{n_per_batch})) --samples_per_frame 1 \
-                --n_find {n_find} \
+                --n_find {n_find} --tag octanol \
                 --psf psf/system-octanol.psf --dcd dcd/octanol.dcd \
                 --stride {stride} --logfile res/octanol.log \
                 --pdb pdb/init-octanolbox.pdb --output {output_file} > clusters-octanol.log &&
