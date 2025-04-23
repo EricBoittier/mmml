@@ -98,7 +98,7 @@ rule extract_clusters:
                 --psf psf/system.psf --dcd dcd/bulk.dcd \
                 --stride {stride} --logfile res/bulk.log \
                 --pdb pdb/init-packmol.pdb --output {output_file} > clusters-bulk.log &&
-            ls md_sampling/*/xyz/*bulk.xyz > {output_file}
+            ls md_sampling/bulk*/xyz/*.xyz > {output_file}
         done
         """.format(
             n_per_batch=n_per_batch,
@@ -162,7 +162,7 @@ rule extract_clusters_water:
                 --psf psf/system-water.psf --dcd dcd/water.dcd \
                 --stride {stride} --logfile res/water.log \
                 --pdb pdb/init-waterbox.pdb --output {output_file} > clusters-water.log &&
-            ls md_sampling/*/xyz/*water.xyz > {output_file}
+            ls md_sampling/water*/xyz/*.xyz > {output_file}
         done
         """.format(
             n_per_batch=n_per_batch,
@@ -229,7 +229,7 @@ rule extract_clusters_octanol:
                 --psf psf/system-octanol.psf --dcd dcd/octanol.dcd \
                 --stride {stride} --logfile res/octanol.log \
                 --pdb pdb/init-octanolbox.pdb --output {output_file} > clusters-octanol.log &&
-            ls md_sampling/*/xyz/*octanol.xyz > {output_file}
+            ls md_sampling/octanol*/xyzs/*.xyz > {output_file}
         done
         """.format(
             n_per_batch=n_per_batch,
