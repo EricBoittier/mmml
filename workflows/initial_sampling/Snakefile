@@ -151,8 +151,7 @@ rule extract_clusters_water:
                 --n_find {config[cluster][n_find]} \
                 --psf psf/system-water.psf --dcd dcd/water.dcd \
                 --stride {config[cluster][stride]} --logfile res/water.log \
-                --pdb pdb/init-waterbox.pdb --output {output} > clusters-water.log &&
-            ls md_sampling/*/xyz/*water.xyz > clusters-water.dat
+                --pdb pdb/init-waterbox.pdb --output {output} > clusters-water.log && ls md_sampling/*/xyz/*water.xyz > clusters-water.dat
         done
         """.format(n_per_batch=n_per_batch, n_total_minus_1=n_total_minus_1)
         )
