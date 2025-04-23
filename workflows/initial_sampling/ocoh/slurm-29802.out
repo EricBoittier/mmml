@@ -1,202 +1,0 @@
-Mon Apr 21 12:17:02 2025       
-+-----------------------------------------------------------------------------------------+
-| NVIDIA-SMI 550.107.02             Driver Version: 550.107.02     CUDA Version: 12.4     |
-|-----------------------------------------+------------------------+----------------------+
-| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
-| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
-|                                         |                        |               MIG M. |
-|=========================================+========================+======================|
-|   0  NVIDIA GeForce RTX 2080 Ti     On  |   00000000:02:00.0 Off |                  N/A |
-| 28%   34C    P8              4W /  250W |       1MiB /  11264MiB |      0%   E. Process |
-|                                         |                        |                  N/A |
-+-----------------------------------------+------------------------+----------------------+
-|   1  NVIDIA GeForce RTX 2080 Ti     On  |   00000000:03:00.0 Off |                  N/A |
-| 28%   34C    P8             21W /  250W |       1MiB /  11264MiB |      0%   E. Process |
-|                                         |                        |                  N/A |
-+-----------------------------------------+------------------------+----------------------+
-                                                                                         
-+-----------------------------------------------------------------------------------------+
-| Processes:                                                                              |
-|  GPU   GI   CI        PID   Type   Process name                              GPU Memory |
-|        ID   ID                                                               Usage      |
-|=========================================================================================|
-|  No running processes found                                                             |
-+-----------------------------------------------------------------------------------------+
-gpu19
-Assuming unrestricted shared filesystem usage.
-host: gpu19
-Building DAG of jobs...
-Using shell: /usr/bin/bash
-Provided cores: 2
-Rules claiming more threads will be scaled down.
-Job stats:
-job                 count
-----------------  -------
-all                     1
-extract_clusters        1
-qm_clusters             1
-run_md                  1
-total                   4
-
-Select jobs to execute...
-Execute 1 jobs...
-
-[Mon Apr 21 12:17:11 2025]
-localrule run_md:
-    input: qm/initial.npz
-    output: omm/openmm.json
-    jobid: 5
-    reason: Missing output files: omm/openmm.json
-    resources: tmpdir=/tmp
-
-Waiting for more resources.
-gpu19
-[Mon Apr 21 15:14:24 2025]
-Finished jobid: 5 (Rule: run_md)
-1 of 4 steps (25%) done
-Select jobs to execute...
-Execute 1 jobs...
-
-[Mon Apr 21 15:14:24 2025]
-localrule extract_clusters:
-    input: omm/openmm.json
-    output: clusters.dat
-    jobid: 4
-    reason: Missing output files: clusters.dat; Input files updated by another job: omm/openmm.json
-    resources: tmpdir=/tmp, partition=gpu, gres=gpu:1
-
-Waiting for more resources.
-gpu19
-/pchem-data/meuwly/boittier/home/mmml/setup/charmm
-export CHARMM_HOME=/pchem-data/meuwly/boittier/home/mmml/setup/charmm
-export CHARMM_LIB_DIR=/pchem-data/meuwly/boittier/home/mmml/setup/charmm
-Requirement already satisfied: uv in /pchem-data/meuwly/boittier/home/.local/lib/python3.12/site-packages (0.6.14)
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-Resolved 242 packages in 59ms
-Audited 237 packages in 1ms
-venv activated
-venv path: /pchem-data/meuwly/boittier/home/mmml/.venv
-venv python path: /pchem-data/meuwly/boittier/home/mmml/.venv/bin/python
-UV_ENV_FILE: /pchem-data/meuwly/boittier/home/mmml/CHARMMSETUP
-Setup complete
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-/pchem-data/meuwly/boittier/home/mmml/.venv/lib/python3.12/site-packages/MDAnalysis/topology/PDBParser.py:331: UserWarning: Element information is missing, elements attribute will not be populated. If needed these can be guessed using MDAnalysis.topology.guessers.
-  warnings.warn("Element information is missing, elements attribute "
-/pchem-data/meuwly/boittier/home/mmml/.venv/lib/python3.12/site-packages/MDAnalysis/coordinates/DCD.py:165: DeprecationWarning: DCDReader currently makes independent timesteps by copying self.ts while other readers update self.ts inplace. This behavior will be changed in 3.0 to be the same as other readers. Read more at https://github.com/MDAnalysis/mdanalysis/issues/3889 to learn if this change in behavior might affect you.
-  warnings.warn("DCDReader currently makes independent timesteps"
-0it [00:00, ?it/s]/pchem-data/meuwly/boittier/home/mmml/.venv/lib/python3.12/site-packages/MDAnalysis/coordinates/PDB.py:1153: UserWarning: Found no information for attr: 'altLocs' Using default value of ' '
-  warnings.warn("Found no information for attr: '{}'"
-/pchem-data/meuwly/boittier/home/mmml/.venv/lib/python3.12/site-packages/MDAnalysis/coordinates/PDB.py:1153: UserWarning: Found no information for attr: 'icodes' Using default value of ' '
-  warnings.warn("Found no information for attr: '{}'"
-/pchem-data/meuwly/boittier/home/mmml/.venv/lib/python3.12/site-packages/MDAnalysis/coordinates/PDB.py:1153: UserWarning: Found no information for attr: 'chainIDs' Using default value of ''
-  warnings.warn("Found no information for attr: '{}'"
-/pchem-data/meuwly/boittier/home/mmml/.venv/lib/python3.12/site-packages/MDAnalysis/coordinates/PDB.py:1153: UserWarning: Found no information for attr: 'occupancies' Using default value of '1.0'
-  warnings.warn("Found no information for attr: '{}'"
-/pchem-data/meuwly/boittier/home/mmml/.venv/lib/python3.12/site-packages/MDAnalysis/coordinates/PDB.py:1153: UserWarning: Found no information for attr: 'tempfactors' Using default value of '0.0'
-  warnings.warn("Found no information for attr: '{}'"
-/pchem-data/meuwly/boittier/home/mmml/.venv/lib/python3.12/site-packages/MDAnalysis/coordinates/PDB.py:1153: UserWarning: Found no information for attr: 'elements' Using default value of ' '
-  warnings.warn("Found no information for attr: '{}'"
-/pchem-data/meuwly/boittier/home/mmml/.venv/lib/python3.12/site-packages/MDAnalysis/coordinates/PDB.py:1153: UserWarning: Found no information for attr: 'record_types' Using default value of 'ATOM'
-  warnings.warn("Found no information for attr: '{}'"
-/pchem-data/meuwly/boittier/home/mmml/.venv/lib/python3.12/site-packages/MDAnalysis/coordinates/PDB.py:1153: UserWarning: Found no information for attr: 'formalcharges' Using default value of '0'
-  warnings.warn("Found no information for attr: '{}'"
-/pchem-data/meuwly/boittier/home/mmml/.venv/lib/python3.12/site-packages/MDAnalysis/coordinates/PDB.py:1200: UserWarning: Found missing chainIDs. Corresponding atoms will use value of 'X'
-  warnings.warn("Found missing chainIDs."
-1it [00:00,  8.97it/s]4it [00:00, 16.45it/s]7it [00:00, 18.94it/s]10it [00:00, 20.10it/s]12it [00:00, 19.06it/s]15it [00:00, 20.08it/s]17it [00:00, 19.44it/s]20it [00:01, 20.12it/s]23it [00:01, 20.57it/s]26it [00:01, 20.96it/s]29it [00:01, 21.19it/s]32it [00:01, 21.31it/s]35it [00:01, 21.47it/s]38it [00:01, 20.63it/s]41it [00:02, 20.55it/s]44it [00:02, 19.79it/s]46it [00:02, 19.66it/s]49it [00:02, 20.21it/s]52it [00:02, 20.20it/s]55it [00:02, 20.20it/s]58it [00:02, 20.23it/s]61it [00:03, 20.62it/s]64it [00:03, 20.93it/s]67it [00:03, 20.91it/s]70it [00:03, 20.87it/s]73it [00:03, 20.96it/s]76it [00:03, 21.27it/s]79it [00:03, 21.37it/s]82it [00:04, 21.56it/s]85it [00:04, 21.46it/s]88it [00:04, 21.39it/s]91it [00:04, 21.41it/s]94it [00:04, 21.48it/s]97it [00:04, 21.48it/s]100it [00:04, 21.46it/s]100it [00:04, 20.61it/s]
-[Mon Apr 21 15:14:48 2025]
-Finished jobid: 4 (Rule: extract_clusters)
-2 of 4 steps (50%) done
-Select jobs to execute...
-Execute 1 jobs...
-
-[Mon Apr 21 15:14:48 2025]
-localrule qm_clusters:
-    input: clusters.dat
-    output: qm-clusters.log
-    jobid: 6
-    reason: Missing output files: qm-clusters.log; Input files updated by another job: clusters.dat
-    resources: tmpdir=/tmp
-
-Waiting for more resources.
-gpu19
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
-warning: The workspace `requires-python` value (`==3.12`) contains an exact match without a patch version. When omitted, the patch version is implicitly `0` (e.g., `==3.12.0`). Did you mean `==3.12.*`?
