@@ -2,8 +2,8 @@ configfile: "config.yaml"
 
 rule all:
     input:
-        "qm/initial.npz",
-        "qm-clusters.log"
+        "clusters-octanol.dat",
+        "
 
 ##################################
 # Setup
@@ -174,27 +174,6 @@ rule extract_clusters_octanol:
         "--n_find {config[cluster][n_find]} "
         "--psf psf/system-octanol.psf --dcd dcd/octanol.dcd "
         "--stride {config[cluster][stride]} --logfile res/octanol.log "
-        "--pdb pdb/init-octanolbox.pdb --output {output} > clusters-octanol.log && ls md_sampling/*/xyz/*.xyz > clusters-octanol.dat; done"
+        "--pdb pdb/init-octanolbox.pdb --output {output} > clusters-octanol.log && ls md_sampling/*/xyz/*octanol.xyz > clusters-octanol.dat; done"
 
-##################################
-# Do all QM Calculations
-##################################
-
-rule qm_clusters:
-    input:  "clusters-octanol.dat"
-    output: "qm-clusters.log"
-    
-    run:
-        flags = [
-            f"--{flag}"
-            for flag, enabled in config["qm"].items()
-            if enabled and flag in [ "gradient", ]
-        ]
-        flags_str = " ".join(flags)
-
-        shell(
-            f"""hostname &&
-            bash ~/mmml/setup/install.sh &&
-            module load cudnn && for XYZ in $(cat {input}); do CUDA_DEVICES="0" uv run python ~/mmml/mmml/pyscf4gpuInterface/calcs.py --output $XYZ.npz --mol $XYZ  --xc {config['qm']['xc']} --basis {config['qm']['basis']} {flags_str} > $XYZ.log; done"""
-        )
 
