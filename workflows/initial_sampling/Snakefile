@@ -83,23 +83,30 @@ rule extract_clusters:
         partition="gpu",
         gres="gpu:1"
     run:
-        n_per_batch = get_n_per_batch(config)
-        n_total_minus_1 = get_n_total_minus_1(config)
+        n_per_batch = get_n_per_batch()
+        n_total_minus_1 = get_n_total_minus_1()
+        n_find = config["cluster"]["n_find"]
+        stride = config["cluster"]["stride"]
+        output_file = output[0]
 
         shell(r"""
         for i in $(seq 0 {n_per_batch} {n_total_minus_1}); do
-            hostname && bash ~/mmml/setup/install.sh && 
+            hostname && bash ~/mmml/setup/install.sh &&
             uv run ~/mmml/mmml/sample/features.py \
-                --sims_path $PWD --start $i --end $((i+{n_per_batch})) --samples_per_frame 1 \  
-                --n_find {config[cluster][n_find]} \
+                --sims_path "$PWD" --start $i --end $((i+{n_per_batch})) --samples_per_frame 1 \
+                --n_find {n_find} \
                 --psf psf/system.psf --dcd dcd/bulk.dcd \
-                --stride {config[cluster][stride]} --logfile res/bulk.log \ 
-                --pdb pdb/init-packmol.pdb --output {output} > clusters-bulk.log &&
-            ls md_sampling/*/xyz/*bulk.xyz > clusters-bulk.dat
+                --stride {stride} --logfile res/bulk.log \
+                --pdb pdb/init-packmol.pdb --output {output_file} > clusters-bulk.log &&
+            ls md_sampling/*/xyz/*bulk.xyz > {output_file}
         done
-        """.format(n_per_batch=n_per_batch, n_total_minus_1=n_total_minus_1))
-
-
+        """.format(
+            n_per_batch=n_per_batch,
+            n_total_minus_1=n_total_minus_1,
+            n_find=n_find,
+            stride=stride,
+            output_file=output_file
+        ))
 ##################################
 # WATER
 ##################################
@@ -140,21 +147,30 @@ rule extract_clusters_water:
         partition="gpu",
         gres="gpu:1"    
     run:
-        n_per_batch = get_n_per_batch(config)
-        n_total_minus_1 = get_n_total_minus_1(config)
+        n_per_batch = get_n_per_batch()
+        n_total_minus_1 = get_n_total_minus_1()
+        n_find = config["cluster"]["n_find"]
+        stride = config["cluster"]["stride"]
+        output_file = output[0]
 
         shell(r"""
         for i in $(seq 0 {n_per_batch} {n_total_minus_1}); do
-            hostname && bash ~/mmml/setup/install.sh && 
+            hostname && bash ~/mmml/setup/install.sh &&
             uv run ~/mmml/mmml/sample/features.py \
-                --sims_path $PWD --start $i --end $((i+{n_per_batch})) --samples_per_frame 1 \
-                --n_find {config[cluster][n_find]} \
+                --sims_path "$PWD" --start $i --end $((i+{n_per_batch})) --samples_per_frame 1 \
+                --n_find {n_find} \
                 --psf psf/system-water.psf --dcd dcd/water.dcd \
-                --stride {config[cluster][stride]} --logfile res/water.log \
-                --pdb pdb/init-waterbox.pdb --output {output} > clusters-water.log && ls md_sampling/*/xyz/*water.xyz > clusters-water.dat
+                --stride {stride} --logfile res/water.log \
+                --pdb pdb/init-waterbox.pdb --output {output_file} > clusters-water.log &&
+            ls md_sampling/*/xyz/*water.xyz > {output_file}
         done
-        """.format(n_per_batch=n_per_batch, n_total_minus_1=n_total_minus_1)
-        )
+        """.format(
+            n_per_batch=n_per_batch,
+            n_total_minus_1=n_total_minus_1,
+            n_find=n_find,
+            stride=stride,
+            output_file=output_file
+        ))
 
 ##################################
 # OCTANOL
@@ -198,19 +214,27 @@ rule extract_clusters_octanol:
         partition="gpu",
         gres="gpu:1"
     run:
-        n_per_batch = get_n_per_batch(config)
-        n_total_minus_1 = get_n_total_minus_1(config)
+        n_per_batch = get_n_per_batch()
+        n_total_minus_1 = get_n_total_minus_1()
+        n_find = config["cluster"]["n_find"]
+        stride = config["cluster"]["stride"]
+        output_file = output[0]
 
         shell(r"""
         for i in $(seq 0 {n_per_batch} {n_total_minus_1}); do
             hostname && bash ~/mmml/setup/install.sh &&
             uv run ~/mmml/mmml/sample/features.py \
-                --sims_path $PWD --start $i --end $((i+{n_per_batch})) --samples_per_frame 1 \
-                --n_find {config[cluster][n_find]} \
+                --sims_path "$PWD" --start $i --end $((i+{n_per_batch})) --samples_per_frame 1 \
+                --n_find {n_find} \
                 --psf psf/system-octanol.psf --dcd dcd/octanol.dcd \
-                --stride {config[cluster][stride]} --logfile res/octanol.log \
-                --pdb pdb/init-octanolbox.pdb --output {output} > clusters-octanol.log &&
-            ls md_sampling/*/xyz/*octanol.xyz > clusters-octanol.dat
+                --stride {stride} --logfile res/octanol.log \
+                --pdb pdb/init-octanolbox.pdb --output {output_file} > clusters-octanol.log &&
+            ls md_sampling/*/xyz/*octanol.xyz > {output_file}
         done
-        """.format(n_per_batch=n_per_batch, n_total_minus_1=n_total_minus_1))
-
+        """.format(
+            n_per_batch=n_per_batch,
+            n_total_minus_1=n_total_minus_1,
+            n_find=n_find,
+            stride=stride,
+            output_file=output_file
+        ))
