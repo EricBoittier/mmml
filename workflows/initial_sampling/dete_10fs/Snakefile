@@ -72,8 +72,17 @@ rule run_md:
         sched = " ".join(config['md']['schedule'])
         integrator = config['md']['integrator']
         steps = config['md']['steps']
+        timestep = config['md']['timestep']
+        total_production_time_ns = steps * timestep / 1000000
+        print("########################")
+        print("Running bulk MD")
+        print("########################")
+        print(f"timestep (fs): {timestep}")
+        print(f"steps: {steps}")
+        print(f"total_production_time (ns): {total_production_time_ns}")
+        
         shell(
-            f"""hostname && module purge && module load openmm && CUDA_VISIBLE_DEVICES="0" python ~/mmml/mmml/openmmInterface/openmm-sampling.py --psf_file psf/system.psf --pdb_file pdb/init-packmol.pdb --steps {steps} --working_dir $PWD --temperatures {temps} --pressures {press} --simulation_schedule {sched} --integrator {integrator} --tag bulk > openmm-md.log""")
+            f"""hostname && module purge && module load openmm && CUDA_VISIBLE_DEVICES="0" python ~/mmml/mmml/openmmInterface/openmm-sampling.py --psf_file psf/system.psf --pdb_file pdb/init-packmol.pdb --steps {steps} --working_dir $PWD --temperatures {temps} --pressures {press} --simulation_schedule {sched} --integrator {integrator} --timestep {timestep} --tag bulk > openmm-md.log""")
 
 rule extract_clusters:
     input: 
@@ -135,8 +144,16 @@ rule run_water_md:
         sched = " ".join(config['md']['schedule'])
         integrator = config['md']['integrator']
         steps = config['md']['steps']
+        timestep = config['md']['timestep']
+        total_production_time_ns = steps * timestep / 1000000
+        print("########################")
+        print("Running water MD")
+        print("########################")
+        print(f"timestep (fs): {timestep}")
+        print(f"steps: {steps}")
+        print(f"total_production_time (ns): {total_production_time_ns}")
         shell(
-            f"""hostname && module purge && module load openmm && CUDA_VISIBLE_DEVICES=0 python ~/mmml/mmml/openmmInterface/openmm-sampling.py --psf_file psf/system-water.psf --pdb_file pdb/init-waterbox.pdb --steps {steps} --working_dir $PWD --temperatures {temps} --pressures {press} --simulation_schedule {sched} --integrator {integrator} --tag water > openmm-md-water.log"""
+            f"""hostname && module purge && module load openmm && CUDA_VISIBLE_DEVICES=0 python ~/mmml/mmml/openmmInterface/openmm-sampling.py --psf_file psf/system-water.psf --pdb_file pdb/init-waterbox.pdb --steps {steps} --working_dir $PWD --temperatures {temps} --pressures {press} --simulation_schedule {sched} --integrator {integrator} --timestep {timestep} --tag water > openmm-md-water.log"""
         )
 
 rule extract_clusters_water:
@@ -200,8 +217,16 @@ rule run_octanol_md:
         sched = " ".join(config['md']['schedule'])
         integrator = config['md']['integrator']
         steps = config['md']['steps']
+        timestep = config['md']['timestep']
+        total_production_time_ns = steps * timestep / 1000000
+        print("########################")
+        print("Running octanol MD")
+        print("########################")
+        print(f"timestep (fs): {timestep}")
+        print(f"steps: {steps}")
+        print(f"total_production_time (ns): {total_production_time_ns}")
         shell(
-            f"""hostname && module purge && module load openmm && CUDA_VISIBLE_DEVICES=0 python ~/mmml/mmml/openmmInterface/openmm-sampling.py --psf_file psf/system-octanol.psf --pdb_file pdb/init-octanolbox.pdb --steps {steps} --working_dir $PWD --temperatures {temps} --pressures {press} --simulation_schedule {sched} --integrator {integrator} --tag octanol > openmm-md-octanol.log"""
+            f"""hostname && module purge && module load openmm && CUDA_VISIBLE_DEVICES=0 python ~/mmml/mmml/openmmInterface/openmm-sampling.py --psf_file psf/system-octanol.psf --pdb_file pdb/init-octanolbox.pdb --steps {steps} --working_dir $PWD --temperatures {temps} --pressures {press} --simulation_schedule {sched} --integrator {integrator} --timestep {timestep} --tag octanol > openmm-md-octanol.log"""
         )   
 
 
