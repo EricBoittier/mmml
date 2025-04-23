@@ -154,7 +154,8 @@ rule extract_clusters_water:
                 --pdb pdb/init-waterbox.pdb --output {output} > clusters-water.log &&
             ls md_sampling/*/xyz/*water.xyz > clusters-water.dat
         done
-        """.format(n_per_batch=n_per_batch, n_total_minus_1=n_total_minus_1))
+        """.format(n_per_batch=n_per_batch, n_total_minus_1=n_total_minus_1)
+        )
 
 ##################################
 # OCTANOL
