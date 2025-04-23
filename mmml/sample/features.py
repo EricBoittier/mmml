@@ -132,8 +132,12 @@ def calculate_residue_distances(universe, central_resid, nearby_resids):
         if resi != central_resid:
             sela = universe.select_atoms(f"(resid {central_resid}) ")
             selb = universe.select_atoms(f"(resid {resi}) ")
-            mean_dist = dist(sela, selb)[-1, :].mean()
-            dist_res.append((mean_dist, resi))
+            if len(sela) > 0 and len(selb) > 0 and len(sela) == len(selb):  
+                mean_dist = dist(sela, selb)[-1, :].mean()
+                dist_res.append((mean_dist, resi))
+            else:
+                com_dist = np.linalg.norm(sela.center_of_mass() - selb.center_of_mass())
+                dist_res.append((com_dist, resi))
     dist_res.sort()
     return dist_res
 
@@ -364,6 +368,7 @@ def process_simulation(args):
         start=args.start,
         end=args.end,
         tag=args.tag,
+        descriptors=args.descriptors,
     )
 
     return u, labels, natoms, output_path, results
