@@ -229,7 +229,7 @@ rule extract_clusters_octanol:
                 --psf psf/system-octanol.psf --dcd dcd/octanol.dcd \
                 --stride {stride} --logfile res/octanol.log \
                 --pdb pdb/init-octanolbox.pdb --output {output_file} > clusters-octanol.log &&
-            ls md_sampling/octanol*/xyzs/*.xyz > {output_file}
+            ls md_sampling/octanol*/xyz/*.xyz > {output_file}
         done
         """.format(
             n_per_batch=n_per_batch,
