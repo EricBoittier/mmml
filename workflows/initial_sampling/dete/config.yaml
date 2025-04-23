@@ -16,7 +16,7 @@ md:
   pressures: [1.0, 1.0, 1.0]
   integrator: Langevin
   schedule: [minimization, equilibration, NPT]
-  steps: 100000
+  steps: 100_000
 
 cluster:
   n_find: 2
