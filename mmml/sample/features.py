@@ -132,6 +132,8 @@ def calculate_residue_distances(universe, central_resid, nearby_resids):
         if resi != central_resid:
             sela = universe.select_atoms(f"(resid {central_resid}) ")
             selb = universe.select_atoms(f"(resid {resi}) ")
+            print(f"central_resid: {central_resid}, resi: {resi}")
+            print(f"sela: {len(sela)}, selb: {len(selb)}")
             if len(sela) > 0 and len(selb) > 0 and len(sela) == len(selb):  
                 mean_dist = dist(sela, selb)[-1, :].mean()
                 dist_res.append((mean_dist, resi))
