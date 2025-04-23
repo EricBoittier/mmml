@@ -1,10 +1,10 @@
 configfile: "config.yaml"
 
-def get_n_total_minus_1(config):
-    return config["md"]["steps"]//1000 - 1
-
-def get_n_per_batch(config):
+def get_n_per_batch():
     return config["md"]["steps"]//10000
+
+def get_n_total_minus_1():
+    return config["md"]["steps"]//1000 - 1
 
 rule all:
     input:
