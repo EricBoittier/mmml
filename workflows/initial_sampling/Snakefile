@@ -3,7 +3,9 @@ configfile: "config.yaml"
 rule all:
     input:
         "qm/initial.npz",
-        "qm-clusters.log"
+        "clusters-bulk.dat",
+        "clusters-water.dat",
+        "clusters-octanol.dat"
 
 ##################################
 # Setup
