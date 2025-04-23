@@ -21,4 +21,6 @@ md:
 cluster:
   n_find: 2
   stride: 1
+  n_total_minus_1: md[steps]//1000 - 1
+  n_per_batch: md[steps]//10000
 
