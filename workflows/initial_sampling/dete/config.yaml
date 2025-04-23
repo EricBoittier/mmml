@@ -16,11 +16,11 @@ md:
   pressures: [1.0, 1.0, 1.0]
   integrator: Langevin
   schedule: [minimization, equilibration, NPT]
-  steps: 100_000
+  steps: 100000
+  timestep: 0.5
 
 cluster:
   n_find: 2
   stride: 1
-  n_total_minus_1: md[steps]//1000 - 1
-  n_per_batch: md[steps]//10000
+
 
