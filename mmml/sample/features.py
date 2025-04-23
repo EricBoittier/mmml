@@ -181,6 +181,7 @@ def extract_molecular_descriptors(
     stride=100,
     n_find=6,
     tag="",
+    descriptors=False,
 ):
     """Extract molecular descriptors from trajectory frames.
 
@@ -243,19 +244,20 @@ def extract_molecular_descriptors(
             if len(found) == n_find:
                 # Process selection and save results
                 result = process_selection(
-                    sele, output_path, ti, central_resid, ix, natoms
+                    sele, output_path, ti, central_resid, ix, natoms, tag, descriptors
                 )
                 results.append(result)
 
     # Process results
-    all_descriptors_full = [_[1] for _ in results]
-    all_descriptors = np.array([_[1].flatten() for _ in results])
+    all_descriptors_full = [_[1] for _ in results] if descriptors else None
+    all_descriptors = np.array([_[1].flatten() for _ in results]) if descriptors else None
     all_pdb_filenames = [_[3] for _ in results]
     results_dict = {
-        "all_descriptors_full": all_descriptors_full,
-        "all_descriptors": all_descriptors,
         "all_pdb_filenames": all_pdb_filenames,
-    }
+    }       
+    if descriptors:
+        results_dict["all_descriptors_full"] = all_descriptors_full
+        results_dict["all_descriptors"] = all_descriptors
 
     return results_dict
 
