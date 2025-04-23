@@ -27,11 +27,31 @@ def setup_simulation(
     integrator_type,
     steps,
     tag,
+    timestep=0.5
 ):
+    """runs the simulations with the given parameters
+    
+    Args:
+        psf_file, str: path to the psf file
+        pdb_file, str: path to the pdb file
+        rtf_file, str: path to the rtf file
+        prm_file, str: path to the prm file
+        working_dir, str: path to the working directory
+        temperatures, list of floats: list of temperatures
+        pressures, list of floats: list of pressures
+        simulation_schedule, list of dicts: list of simulation types
+        integrator_type, str: type of integrator
+        steps, int: number of steps
+        tag, str: tag for output files
+        timestep, float: timestep for the simulation (in femtoseconds)
+    """
     # Create necessary directories
     os.makedirs(os.path.join(working_dir, "pdb"), exist_ok=True)
     os.makedirs(os.path.join(working_dir, "dcd"), exist_ok=True)
     os.makedirs(os.path.join(working_dir, "res"), exist_ok=True)
+
+    # set timestep
+    timestep = timestep * femtoseconds
 
     # Define box size
     box_length = 3.5 * nanometer
@@ -117,7 +137,7 @@ def equilibrate(
     simulation, integrator, temperature, working_dir, integrator_type, steps=10**6, tag=""
 ):
     print("Equilibrating...")
-    temp_start, temp_final = 150, temperature
+    temp_start, temp_final = 100, temperature
     for temp in np.linspace(temp_start, temp_final, num=steps // 100):
         simulation.step(steps // 100)
     print(f"Equilibration complete. ({steps} steps)")
@@ -242,7 +262,15 @@ def parse_args():
 
 
 if __name__ == "__main__":
+    """
+    example command:
+    python openmm-sampling.py --psf_file /pchem-data/meuwly/boittier/home/project-mmml/proh/proh-262.psf --pdb_file /pchem-data/meuwly/boittier/home/project-mmml/proh/mini.pdb --rtf_file /pchem-data/meuwly/boittier/home/charmm/toppar/top_all36_cgenff.rtf --prm_file /pchem-data/meuwly/boittier/home/charmm/toppar/par_all36_cgenff.prm --working_dir /pchem-data/meuwly/boittier/home/project-mmml/proh/openmm-test1 --temperatures 100 200 300 --pressures 1.0 2.0 3.0 --simulation_schedule minimization equilibration NPT NVE --integrator Langevin
+    """
+    
+    # parse command line arguments
     args = parse_args()
+
+    # setup simulation
     output = setup_simulation(
         psf_file=args.psf_file,
         pdb_file=args.pdb_file,
@@ -281,6 +309,3 @@ if __name__ == "__main__":
     with open(jsonout, "w") as f:
         json.dump(args_dict, f)
 
-
-# example command:
-# python openmm-test1.py --psf_file /pchem-data/meuwly/boittier/home/project-mmml/proh/proh-262.psf --pdb_file /pchem-data/meuwly/boittier/home/project-mmml/proh/mini.pdb --rtf_file /pchem-data/meuwly/boittier/home/charmm/toppar/top_all36_cgenff.rtf --prm_file /pchem-data/meuwly/boittier/home/charmm/toppar/par_all36_cgenff.prm --working_dir /pchem-data/meuwly/boittier/home/project-mmml/proh/openmm-test1 --temperatures 100 200 300 --pressures 1.0 2.0 3.0 --simulation_schedule minimization equilibration NPT NVE --integrator Langevin
