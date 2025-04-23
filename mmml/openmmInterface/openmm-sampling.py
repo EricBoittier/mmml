@@ -252,6 +252,14 @@ def parse_args():
         default="Langevin",
         help="Integrator type to use (default: Langevin).",
     )
+
+    parser.add_argument(
+        "--timestep",
+        type=float,
+        default=0.5,
+        help="Timestep for the simulation (in femtoseconds) (default: 0.5).",
+    )
+
     parser.add_argument(
         "--tag",
         default="",
