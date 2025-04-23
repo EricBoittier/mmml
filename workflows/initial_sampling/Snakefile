@@ -143,6 +143,18 @@ rule extract_clusters_water:
 # OCTANOL
 ##################################
 
+rule setup_octanol_box:
+    input: "clusters-water.dat"
+    output: "setup-octanol-box.log"
+    resources:
+        partition="gpu",
+        gres="gpu:1"
+    shell:
+        "hostname && bash ~/mmml/setup/install.sh && "
+        "module load charmm && "
+        "uv run ~/mmml/mmml/pycharmm_interface/setupBox.py "
+        "-d {config[density]} -l {config[side_length]} -r {config[residue]} -s octanol > {output}"   
+
 rule run_octanol_md:
     input: "setup-octanol-box.log"
     output: "openmm-md-octanol.log"
