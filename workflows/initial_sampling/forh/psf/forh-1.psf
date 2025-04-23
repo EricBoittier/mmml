@@ -1,0 +1,43 @@
+PSF EXT CMAP XPLOR
+
+         2 !NTITLE
+* EXECUTING CHARMM SCRIPT FROM PYTHON                                           
+*  DATE:     4/21/25     16:58:16      CREATED BY USER: boittier                
+
+         5 !NATOM
+         1 FORH     1        FORH     C        CG2O2    0.380000       12.0110           0
+         2 FORH     1        FORH     H        HGR52    0.110000       1.00800           0
+         3 FORH     1        FORH     O2       OG2D1   -0.400000       15.9994           0
+         4 FORH     1        FORH     O1       OG311   -0.490000       15.9994           0
+         5 FORH     1        FORH     HO1      HGP1     0.400000       1.00800           0
+
+         4 !NBOND: bonds
+         1         4         1         2         4         5         1         3
+
+         4 !NTHETA: angles
+         2         1         3         2         1         4         3         1         4
+         1         4         5
+
+         2 !NPHI: dihedrals
+         2         1         4         5         3         1         4         5
+
+         1 !NIMPHI: impropers
+         1         3         4         2
+
+         1 !NDON: donors
+         5         0
+
+         2 !NACC: acceptors
+         4         0         3         0
+
+         0 !NNB
+
+         0         0         0         0         0
+
+         1         0 !NGRP NST2
+         0         1         0
+
+         0         0 !NUMLP NUMLPH
+
+         0 !NCRTERM: cross-terms
+
