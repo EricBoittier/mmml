@@ -118,9 +118,9 @@ def select_central_residue(residue_ids):
     return residue_ids[0]
 
 
-def get_nearby_residues(universe, central_resid):
-    """Get residues within 5.5A of central residue."""
-    initial_selection = f"byres sphzone 5.5 (resid {central_resid}) "
+def get_nearby_residues(universe, central_resid, distance=5.5):
+    """Get residues within a sphere of radius distance of central residue."""
+    initial_selection = f"byres sphzone {distance} (resid {central_resid}) "
     sele = universe.select_atoms(initial_selection, periodic=False)
     return list(set([_.resid for _ in list(sele)]))
 
@@ -132,8 +132,14 @@ def calculate_residue_distances(universe, central_resid, nearby_resids):
         if resi != central_resid:
             sela = universe.select_atoms(f"(resid {central_resid}) ")
             selb = universe.select_atoms(f"(resid {resi}) ")
-            mean_dist = dist(sela, selb)[-1, :].mean()
-            dist_res.append((mean_dist, resi))
+            print(f"central_resid: {central_resid}, resi: {resi}")
+            print(f"sela: {len(sela)}, selb: {len(selb)}")
+            if len(sela) > 0 and len(selb) > 0 and len(sela) == len(selb):  
+                mean_dist = dist(sela, selb)[-1, :].mean()
+                dist_res.append((mean_dist, resi))
+            else:
+                com_dist = np.linalg.norm(sela.center_of_mass() - selb.center_of_mass())
+                dist_res.append((com_dist, resi))
     dist_res.sort()
     return dist_res
 
@@ -146,7 +152,7 @@ def select_closest_residues(universe, central_resid, dist_res, n_closest=5):
     return universe.select_atoms(residue_selections, periodic=False)
 
 
-def process_selection(sele, output_path, ti, central_resid, ix, natoms, tag=""):
+def process_selection(sele, output_path, ti, central_resid, ix, natoms, tag="", descriptors=False):
     """Process selected atoms to get descriptors and save structures."""
     # Center positions
     R = sele.positions
@@ -157,15 +163,18 @@ def process_selection(sele, output_path, ti, central_resid, ix, natoms, tag=""):
     atoms = ase.Atoms(Z, R)
     species = list(set(atoms.get_chemical_symbols()))
 
-    # Calculate descriptors
-    a, b, c = get_descriptor(atoms, species, plot=False)
+
 
     # Save structures
     pdb_path = output_path / "pdb" / f"{tag}_{ti}_{central_resid}_{ix}{tag}.pdb"
     sele.write(pdb_path)
     ase_io.write(output_path / "xyz" / f"{tag}_{ti}_{central_resid}_{ix}{tag}.xyz", atoms)
-
-    return a, b, c, pdb_path
+    if descriptors:
+        # Calculate descriptors
+        a, b, c = get_descriptor(atoms, species, plot=False)
+        return a, b, c, pdb_path
+    else:
+        return None, None, None, pdb_path
 
 
 def extract_molecular_descriptors(
@@ -178,6 +187,7 @@ def extract_molecular_descriptors(
     stride=100,
     n_find=6,
     tag="",
+    descriptors=False,
 ):
     """Extract molecular descriptors from trajectory frames.
 
@@ -196,8 +206,7 @@ def extract_molecular_descriptors(
     os.makedirs(output_path / "xyz", exist_ok=True)
     n_find_minus_one = n_find - 1
     results = []
-    if tag != "":
-        samples_per_frame = 1
+
     trajectory_frames = universe.trajectory[start:end:stride]
     print("*" * 100)
     print(f"n_find: {n_find}")
@@ -219,7 +228,7 @@ def extract_molecular_descriptors(
 
         for ix in range(samples_per_frame):
             # Select central residue
-            if tag == "":
+            if tag == "bulk":
                 central_resid = select_central_residue(residue_ids)
             else:
                 central_resid = 1
@@ -240,45 +249,46 @@ def extract_molecular_descriptors(
             if len(found) == n_find:
                 # Process selection and save results
                 result = process_selection(
-                    sele, output_path, ti, central_resid, ix, natoms
+                    sele, output_path, ti, central_resid, ix, natoms, tag, descriptors
                 )
                 results.append(result)
 
     # Process results
-    all_descriptors_full = [_[1] for _ in results]
-    all_descriptors = np.array([_[1].flatten() for _ in results])
+    all_descriptors_full = [_[1] for _ in results] if descriptors else None
+    all_descriptors = np.array([_[1].flatten() for _ in results]) if descriptors else None
     all_pdb_filenames = [_[3] for _ in results]
     results_dict = {
-        "all_descriptors_full": all_descriptors_full,
-        "all_descriptors": all_descriptors,
         "all_pdb_filenames": all_pdb_filenames,
-    }
+    }       
+    if descriptors:
+        results_dict["all_descriptors_full"] = all_descriptors_full
+        results_dict["all_descriptors"] = all_descriptors
 
     return results_dict
 
 
-def find_simulation_files(sims_path, index):
-    """Find simulation files given a base path and simulation index.
+# def find_simulation_files(sims_path, index):
+#     """Find simulation files given a base path and simulation index.
 
-    Args:
-        sims_path (Path): Base path containing simulation directories
-        index (int): Index of simulation to process
+#     Args:
+#         sims_path (Path): Base path containing simulation directories
+#         index (int): Index of simulation to process
 
-    Returns:
-        tuple: (logfile, psf_file, dcd_file, pdb_file, resid, sim_conds)
-    """
-    files = list(Path(sims_path).glob("*/*/log/equilibration_1_*"))
-    logfile = files[index]
-    logfile = Path(logfile).absolute()
-    print(logfile)
-    resid = logfile.parents[2].stem
-    sim_conds = str(logfile.parents[1]).split("/")[-1]
+#     Returns:
+#         tuple: (logfile, psf_file, dcd_file, pdb_file, resid, sim_conds)
+#     """
+#     files = list(Path(sims_path).glob("*/*/log/equilibration_1_*"))
+#     logfile = files[index]
+#     logfile = Path(logfile).absolute()
+#     print(logfile)
+#     resid = logfile.parents[2].stem
+#     sim_conds = str(logfile.parents[1]).split("/")[-1]
 
-    psf_file = logfile.parents[1] / "system.psf"
-    dcd_file = list((logfile.parents[1] / "dcd").glob("eq*_1_*dcd")).pop()
-    pdb_file = logfile.parents[1] / "pdb" / "initial.pdb"
+#     psf_file = logfile.parents[1] / "system.psf"
+#     dcd_file = list((logfile.parents[1] / "dcd").glob("eq*_1_*dcd")).pop()
+#     pdb_file = logfile.parents[1] / "pdb" / "initial.pdb"
 
-    return logfile, psf_file, dcd_file, pdb_file, resid, sim_conds
+#     return logfile, psf_file, dcd_file, pdb_file, resid, sim_conds
 
 
 def setup_universe(psf_file, dcd_file, pdb_file, start=0, end=None, stride=1):
@@ -359,6 +369,7 @@ def process_simulation(args):
         start=args.start,
         end=args.end,
         tag=args.tag,
+        descriptors=args.descriptors,
     )
 
     return u, labels, natoms, output_path, results
@@ -435,12 +446,12 @@ def load_ase_and_fix_atoms(pdb_fn):
     return a
 
 
-def sample_and_save(results, output_path, key="test", tag=""):
-    N = len(results["all_descriptors_full"])
-    if tag != "":
+def sample_and_save(results, output_path, key="test", tag="", descriptors=False):
+    if descriptors:
+        N = len(results["all_descriptors_full"])
         samples = select_most_unique_samples(results["all_descriptors"], int(N * 0.8))
     else:
-        samples = select_most_unique_samples(results["all_descriptors"], int(N * 0.8))
+        samples = None
 
     ase_atoms = [
         load_ase_and_fix_atoms(pdb_fn) for pdb_fn in results["all_pdb_filenames"]
@@ -452,8 +463,9 @@ def sample_and_save(results, output_path, key="test", tag=""):
 
     for i, d in enumerate(ase_dicts):
         d["pdb_fn"] = np.array([str(results["all_pdb_filenames"][i])])
-        d["desc_mbtr"] = results["all_descriptors_full"][i]
-        d["train"] = np.int32(i in samples)
+        if descriptors:
+            d["desc_mbtr"] = results["all_descriptors_full"][i]
+            d["train"] = np.int32(i in samples)
         # ase_atoms[i].info["set"] = "train" if i in samples else "test"
         # ase_atoms[i].info["desc_mbtr"] = results["all_descriptors"][i]
         ase_atoms[i].info["pdb_fn"] = np.array([str(results["all_pdb_filenames"][i])])
@@ -538,18 +550,31 @@ def parse_args():
     )
     parser.add_argument("--tag", type=str, default="", help="Tag for output files")
 
+    parser.add_argument("--descriptors", action="store_true", help="Use descriptors")
+
     args = parser.parse_args()
     return args
 
 
 def main():
     args = parse_args()
+    if args.descriptors:
+        print("Using descriptors")
+    else:
+        print("Not using descriptors")
+    for k, v in vars(args).items():
+        print(f"{k}: {v}")
+    print("*" * 100)
+    print("Starting sampling routine")
+    print("*" * 100)
     u, labels, natoms, output_path, results = process_simulation(args)
 
     key = f"{args.resid}_{args.n_find}_{args.samples_per_frame}_{args.start}_{args.end}_{args.stride}_{args.tag}"
     print(f"key: {key}")
-    npz_path = sample_and_save(results, output_path, key=key, tag=args.tag)
-    print(f"Saved to {npz_path}, {len(results['all_descriptors'])} descriptors")
+    npz_path = sample_and_save(results, output_path, key=key, tag=args.tag, descriptors=args.descriptors)
+    print(f"Saved to {npz_path}")
+    if args.descriptors:
+        print(f"{len(results['all_descriptors'])} descriptors")
     return npz_path
 
 
