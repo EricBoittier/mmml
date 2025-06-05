@@ -7,6 +7,12 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# data from workflows
+workflows/initial_sampling/*/xyz/*
+workflows/initial_sampling/*/pdb/*
+workflows/initial_sampling/*/qm/*
+
+
 # C extensions
 *.so
 

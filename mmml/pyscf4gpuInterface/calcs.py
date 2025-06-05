@@ -6,7 +6,7 @@ from pyscf.data import radii
 from gpu4pyscf.df import int3c2e
 from gpu4pyscf.lib.cupy_helper import dist_matrix
 from gpu4pyscf.dft import rks
-
+from gpu4pyscf.properties import ir, shielding, polarizability
 
 import cupy
 
@@ -55,7 +55,7 @@ def compute_dft(args, calcs, extra=None):
     engine, mol = setup_mol(args.mol, args.basis, args.xc, args.spin, args.charge)
 
     print(mol)
-    from helperfunctions import print_basis
+    from mmml.pyscf4gpuInterface.helperfunctions import print_basis
     print_basis(mol)
 
     opt_callback = None
@@ -214,7 +214,34 @@ def compute_dft(args, calcs, extra=None):
         thermo.dump_normal_mode(mol, harmonic_results)
         output['harmonic'] = harmonic_results
 
+    if CALCS.IR in calcs:
+        assert CALCS.HESSIAN in calcs, "Hessian must be computed for IR"
+        print("-"*100)
+        print("Computing IR")
+        print("-"*100)
+        freq, intensity = ir.eval_ir_freq_intensity(engine, h)
+        output['freq'] = freq
+        output['intensity'] = intensity
+
+    if CALCS.SHIELDING in calcs:
+        assert CALCS.ENERGY in calcs, "Energy must be computed for shielding"
+        print("-"*100)
+        print("Computing Shielding")
+        print("-"*100)
+        msc_d, msc_p = shielding.eval_shielding(engine)
+        msc = (msc_d + msc_p).get()
+        output['shielding'] = msc
+
+    if CALCS.POLARIZABILITY in calcs:
+        assert CALCS.ENERGY in calcs, "Energy must be computed for polarizability"
+        print("-"*100)
+        print("Computing Polarizability")
+        print("-"*100)
+        polar = polarizability.eval_polarizability(engine)
+        output['polarizability'] = polar
+
     if CALCS.THERMO in calcs:
+        assert CALCS.HARMONIC in calcs, "Harmonic must be computed for thermodynamics"
         print("-"*100)
         print("Computing Thermodynamics")
         print("-"*100)
@@ -336,6 +363,9 @@ def parse_args():
     parser.add_argument("--thermo", default=False, action="store_true")
     parser.add_argument("--interaction", default=False, action="store_true")
     parser.add_argument("--dens_esp", default=False, action="store_true")
+    parser.add_argument("--ir", default=False, action="store_true")
+    parser.add_argument("--shielding", default=False, action="store_true")
+    parser.add_argument("--polarizability", default=False, action="store_true")
     args = parser.parse_args()
 
     for key, value in vars(args).items():
@@ -369,11 +399,50 @@ def process_calcs(args):
     if args.dens_esp:
         calcs.append(CALCS.DENS_ESP)
 
+    if args.ir:
+        calcs.append(CALCS.IR)
+
+    if args.shielding:
+        calcs.append(CALCS.SHIELDING)
+
+    if args.polarizability:
+        calcs.append(CALCS.POLARIZABILITY)
+
     if args.interaction:
         calcs.append(CALCS.INTERACTION)
         extra = (args.monomer_a, args.monomer_b)
 
     return calcs, extra
+
+def get_dummy_args(mol: str, calcs: list[CALCS]):
+    # instead of parsing the args, trick python into thinking we have parsed the args
+    class Args:
+        def __init__(self):
+            self.mol = mol
+            self.output = "output.pkl"
+            self.log_file = "pyscf.log"
+            self.monomer_a = ""
+            self.monomer_b = ""
+            self.basis = "def2-tzvp"
+            self.xc = "wB97m-v"
+            self.spin = 0
+            self.charge = 0 
+            self.energy = CALCS.ENERGY in calcs
+            self.optimize = CALCS.OPTIMIZE in calcs
+            self.gradient = CALCS.GRADIENT in calcs
+            self.hessian = CALCS.HESSIAN in calcs
+            self.harmonic = CALCS.HARMONIC in calcs
+            self.thermo = CALCS.THERMO in calcs
+            self.dens_esp = CALCS.DENS_ESP in calcs
+            self.ir = CALCS.IR in calcs
+            self.shielding = CALCS.SHIELDING in calcs
+            self.polarizability = CALCS.POLARIZABILITY in calcs
+            self.interaction = CALCS.INTERACTION in calcs
+
+    return Args()
+            
+
+
 
 if __name__ == "__main__":
     import argparse
