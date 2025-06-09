@@ -19,7 +19,10 @@ parser = MyHTMLParser()
 
 def download_paper(doi, resid):
     url = f"https://sci-hub.se/{doi}"
+    print(url)
     response = requests.get(url)
+    print(response.content)
+    print(response.status_code)
     if response.status_code == 200:
         with open("paper.pdf", "wb") as f:
             f.write(response.content)
