@@ -21,8 +21,8 @@ from ase.visualize.plot import plot_atoms
 from ase.io import read
 from ase.visualize import view
 
-from import_pycharmm import *
-from import_pycharmm import CGENFF_RTF, CGENFF_PRM, CHARMM_HOME, CHARMM_LIB_DIR
+from mmml.pycharmmInterface.import_pycharmm import *
+from mmml.pycharmmInterface.import_pycharmm import CGENFF_RTF, CGENFF_PRM, CHARMM_HOME, CHARMM_LIB_DIR
 import os
 os.environ["CHARMM_HOME"] = CHARMM_HOME
 os.environ["CHARMM_LIB_DIR"] = CHARMM_LIB_DIR
