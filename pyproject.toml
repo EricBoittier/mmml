@@ -160,10 +160,12 @@ dependencies = [
     "wheel",
     "zipp",
     "pycharmm",
-    "jaxpycharmm"
+    "jaxpycharmm",
+    "xtb_ase"
 ]
 
 [tool.uv.sources]
+xtb_ase = { git = "https://github.com/Quantum-Accelerators/xtb_ase.git"}
 jax-md = { git = "https://github.com/google/jax-md.git", rev = "05221c551e71f1b5f64458c0e3533452c22efec0" }
 jaxpycharmm = {git = "https://github.com/EricBoittier/JaxPycharmm.git"  }
 pycharmm = { path = "setup/charmm/tool/pycharmm", editable = true }
