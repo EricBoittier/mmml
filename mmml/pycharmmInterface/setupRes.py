@@ -23,6 +23,8 @@ from ase.visualize import view
 
 from mmml.pycharmmInterface.import_pycharmm import *
 from mmml.pycharmmInterface.import_pycharmm import CGENFF_RTF, CGENFF_PRM, CHARMM_HOME, CHARMM_LIB_DIR
+from mmml.pycharmmInterface.utils import get_Z_from_psf, set_up_directories
+
 import os
 os.environ["CHARMM_HOME"] = CHARMM_HOME
 os.environ["CHARMM_LIB_DIR"] = CHARMM_LIB_DIR
@@ -121,15 +123,13 @@ def generate_residue(resid) -> None:
     ic.prm_fill(replace_all=True)
 
 
+
+
+
 def generate_coordinates() -> Atoms:
     print("*" * 5, "Generating coordinates", "*" * 5)
 
-    # make pdb directory
-    os.makedirs("pdb", exist_ok=True)
-    os.makedirs("res", exist_ok=True)
-    os.makedirs("dcd", exist_ok=True)
-    os.makedirs("psf", exist_ok=True)
-    os.makedirs("xyz", exist_ok=True)
+    set_up_directories()
     
     ic.build()
     coor.show()
@@ -137,35 +137,33 @@ def generate_coordinates() -> Atoms:
     xyz = coor.get_positions()
     print("positions:")
     print(xyz)
+    coor.set_positions(xyz)
+    coor.show()
 
+    xyz *= 0
+    xyz += 2 * np.random.random(xyz.to_numpy().shape)
+    coor.set_positions(xyz)
+    _ = coor.get_positions()
+    energy.get_energy()
     start_energy = pycharmm.lingo.get_energy_value("ENER")
     print("start_energy:")
     print(start_energy)
 
-    xyz *= 0
-    xyz += 3 * np.random.random(xyz.to_numpy().shape)
-    coor.set_positions(xyz)
-    coor.get_positions()
-    s = """
-    ENERGY
-    mini sd nstep 1000
-    ENERGY
-    """
-    pycharmm.lingo.charmm_script("BOMLEV -1")
-    pycharmm.lingo.charmm_script(s)
+    mini(nbxmod=1)
 
     print("positions:")
     print(xyz)
 
     xyz = coor.get_positions()
-    xyz *= 3 * np.random.random(xyz.to_numpy().shape)
+    xyz *= 1 * np.random.random(xyz.to_numpy().shape)
     coor.set_positions(xyz)
-    pycharmm.lingo.charmm_script("BOMLEV -1")
-    pycharmm.lingo.charmm_script(s)
+    coor.show()
+    mini(nbxmod=5)
 
     print("positions:")
+    xyz = coor.get_positions()
     print(xyz)
-
+    coor.show()
     end_energy = pycharmm.lingo.get_energy_value("ENER")
     print("end_energy:")
     print(end_energy)
@@ -179,18 +177,12 @@ def generate_coordinates() -> Atoms:
 
     # read pdb file
     mol = ase.io.read("pdb/initial.pdb")
-    e = mol.get_chemical_symbols()
-    e = [_[:1] if _.upper() in problem_symbols else _ for _ in e]
-    print(e)
-    e = [_ if _[0] != "H" else "H" for _ in e]
-    print(e)
-    # atomic numbers
-    an = [ase.data.chemical_symbols.index(_) for _ in e]
-    print(an)
-    mol.set_atomic_numbers(an)
+    Z = get_Z_from_psf()
+    print(Z)
+    mol.set_atomic_numbers(Z)
 
     atoms = ase.Atoms(
-        symbols=e,
+        symbols=mol.get_chemical_symbols(),
         positions=mol.get_positions(),
         cell=mol.get_cell(),
         pbc=mol.get_pbc(),
@@ -198,7 +190,9 @@ def generate_coordinates() -> Atoms:
     return atoms
 
 
-def mini():
+
+
+def mini(nbxmod=5):
     print("*" * 5, "Minimizing", "*" * 5)
     # Specify nonbonded python object called my_nbonds - this just sets it up
     # equivalant CHARMM scripting command: nbonds cutnb 18 ctonnb 13 ctofnb 17 cdie eps 1 atom vatom fswitch vfswitch
@@ -212,6 +206,7 @@ def mini():
         vatom=True,
         fswitch=True,
         vfswitch=True,
+        nbxmod=nbxmod, # remove all exclusions
     )
 
     # Implement these non-bonded parameters by "running" them.
@@ -236,7 +231,6 @@ def main(resid: str) -> None:
     print("*" * 5, f"Generating residue from residue name ({resid})", "*" * 5)
     generate_residue(resid)
     atoms = generate_coordinates()
-    mini()
     write_psf(resid)
 
     # copy pdb/initial.pdb to pdb/resid.pdb
@@ -248,6 +242,7 @@ def main(resid: str) -> None:
     shutil.copy("xyz/initial.xyz", f"xyz/{resid.lower()}.xyz")
 
     print("Done")
+    return atoms
 
 
 def cli():
@@ -257,7 +252,8 @@ def cli():
     parser = argparse.ArgumentParser()
     parser.add_argument("-r", "--resid", type=str, required=True)
     args = parser.parse_args()
-    main(args.resid)
+    atoms = main(args.resid)
+    print(atoms)
 
 
 if __name__ == "__main__":
