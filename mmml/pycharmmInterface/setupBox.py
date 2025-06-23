@@ -263,6 +263,44 @@ def run_packmol(n_molecules: int, side_length: float) -> None:
     print("Generated initial.pdb")
 
 
+def setup_box_generic(pdb_path, rtf=CGENFF_RTF, prm=CGENFF_PRM, side_length: float = 30, tag=""):
+    """
+    Sets up the box
+    """
+    CLEAR_CHARMM()
+    read.rtf(rtf)
+    bl = settings.set_bomb_level(-2)
+    wl = settings.set_warn_level(-2)
+    read.prm(prm)
+    settings.set_bomb_level(bl)
+    settings.set_warn_level(wl)
+    pycharmm.lingo.charmm_script("bomlev 0")
+    header = f"""bomlev -2
+    prnlev 4
+    wrnlev 4
+    OPEN UNIT 1 READ FORM NAME {pdb_path}
+    READ SEQU PDB UNIT 1
+    CLOSE UNIT 1
+    GENERATE SYS FIRST NONE LAST NONE SETUP 
+
+    OPEN UNIT 1 READ FORM NAME {pdb_path}
+    READ COOR PDB UNIT 1
+    CLOSE UNIT 1
+    
+    """
+    pycharmm.lingo.charmm_script(header)
+    print("read header")
+    pycharmm.lingo.charmm_script(pbcset.format(SIDELENGTH=side_length))
+    print("read pbcset")
+    pycharmm.lingo.charmm_script(pbcs)
+    print("read pbcs")
+    energy.show()
+    write.psf_card(f"psf/system-{tag}.psf")
+    write.coor_pdb(f"pdb/init-{tag}.pdb")
+    print(f"wrote pdb/init-{tag}.pdb")
+
+
+
 def initialize_psf(resid: str, n_molecules: int, side_length: float, solvent: str):
     """
     Initializes the PSF file
@@ -288,20 +326,6 @@ def initialize_psf(resid: str, n_molecules: int, side_length: float, solvent: st
     header = f"""bomlev -2
     prnlev 4
     wrnlev 4
-
-    !#########################################
-    ! Tasks
-    !#########################################
-
-    ! 0:    Do it, or
-    ! Else: Do not, there is no try!
-    set mini 0
-    set heat 0
-    set equi 0
-    set ndcd 1
-    ! Start Production at dcd number n
-    set ndcd 0
-
     OPEN UNIT 1 READ FORM NAME {pdb_path}
     READ SEQU PDB UNIT 1
     CLOSE UNIT 1
