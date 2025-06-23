@@ -41,25 +41,7 @@ import time
 
 
 df = pd.DataFrame({"atom": Z[0], "x": x.flatten(), "y":y.flatten(), "z": z.flatten()})
-df
-
-
-# In[110]:
-
-
 cart = cc.Cartesian(df)
-cart
-
-
-# In[111]:
-
-
-cart.index
-
-
-# In[113]:
-
-
 zmat = cart.get_zmat()
 
 

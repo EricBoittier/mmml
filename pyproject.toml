@@ -21,6 +21,8 @@ classifiers = [
 requires-python = "==3.12.*"
 # Declare any run-time dependencies that should be installed with the package.
 dependencies = [
+    "molzip",
+    "jsonpickle",
     "absl-py",
     "asciichartpy",
     "ase",
@@ -161,13 +163,15 @@ dependencies = [
     "zipp",
     "pycharmm",
     "jaxpycharmm",
-    "xtb_ase"
+    "xtb_ase",
+    "pyxtal"
 ]
 
 [tool.uv.sources]
 xtb_ase = { git = "https://github.com/Quantum-Accelerators/xtb_ase.git"}
 jax-md = { git = "https://github.com/google/jax-md.git", rev = "05221c551e71f1b5f64458c0e3533452c22efec0" }
-jaxpycharmm = {git = "https://github.com/EricBoittier/JaxPycharmm.git"  }
+jaxpycharmm = {path= "/home/boittier/github/JaxPycharmm"  }
+#jaxpycharmm = {git = "https://github.com/EricBoittier/JaxPycharmm.git"  }
 pycharmm = { path = "setup/charmm/tool/pycharmm", editable = true }
 
 # Update the urls once the hosting is set up.
