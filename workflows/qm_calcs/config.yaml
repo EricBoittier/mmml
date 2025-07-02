@@ -1,0 +1,9 @@
+
+qm:
+  basis: cc-pVDZ
+  xc: PBE0
+  optimize: true
+  hessian: true
+  thermo: true
+  gradient: true
+  harmonic: true

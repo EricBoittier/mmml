@@ -355,9 +355,9 @@ def parse_args():
     parser.add_argument("--spin", type=int, default=0)
     parser.add_argument("--charge", type=int, default=0)
     # flags to do certain calcs
-    parser.add_argument("--energy", default=True, action="store_true")
+    parser.add_argument("--energy", default=False, action="store_true")
     parser.add_argument("--optimize", default=False, action="store_true")
-    parser.add_argument("--gradient", default=True, action="store_true")
+    parser.add_argument("--gradient", default=False, action="store_true")
     parser.add_argument("--hessian", default=False, action="store_true")
     parser.add_argument("--harmonic", default=False, action="store_true")
     parser.add_argument("--thermo", default=False, action="store_true")

@@ -126,9 +126,6 @@ def make_rigid_angle_scan(A, B, n_points=20, distance=3.0, axis='z'):
     return structures
 
 
-# In[101]:
-
-
 import numpy as np
 from ase import Atoms
 from scipy.spatial.distance import pdist, squareform
@@ -240,28 +237,28 @@ import itertools
 def com_dist(x,n):
     return np.linalg.norm(x[:n].get_center_of_mass() - x[n:].get_center_of_mass())
 
-def make_rotations(A, B, distance = 8):
+def make_rotations(A, B, distance = 8, add_noise=False, n_monomer_a=15, np_r=5, np_theta=15):
     
-    scan_r  = make_rigid_com_scan(A, B, maxdist=distance-.01, mindist=distance+.01, n_points=5)
+    scan_r  = make_rigid_com_scan(A, B, maxdist=distance-.01, mindist=distance+.01, n_points=np_r)
     scan_r_theta_1 = [make_rigid_angle_scan(
-        _[:15], _[15:], n_points=15, distance=com_dist(_,15), axis=get_mean_plane(_)[1])
+        _[:n_monomer_a], _[n_monomer_a:], n_points=np_theta, distance=com_dist(_,n_monomer_a), axis=get_mean_plane(_)[1])
                     for _ in scan_r] + [make_rigid_angle_scan(
-        _[:15], _[15:], n_points=15, distance=com_dist(_,15), axis=-get_mean_plane(_)[1])
+        _[:n_monomer_a], _[n_monomer_a:], n_points=np_theta, distance=com_dist(_,n_monomer_a), axis=-get_mean_plane(_)[1])
                     for _ in scan_r] + [make_rigid_angle_scan(
-        _[:15], _[15:], n_points=15, distance=com_dist(_,15), axis=get_mean_plane(_)[0])
+        _[:n_monomer_a], _[n_monomer_a:], n_points=np_theta, distance=com_dist(_,n_monomer_a), axis=get_mean_plane(_)[0])
                     for _ in scan_r] + [make_rigid_angle_scan(
-        _[:15], _[15:], n_points=15, distance=com_dist(_,15), axis=-get_mean_plane(_)[0])
+        _[:n_monomer_a], _[n_monomer_a:], n_points=np_theta, distance=com_dist(_,n_monomer_a), axis=-get_mean_plane(_)[0])
                     for _ in scan_r]
     scan_r_theta_2 = [make_rigid_angle_scan(
-        _[:15], _[15:], n_points=30, distance=com_dist(_,15))
+        _[:n_monomer_a], _[n_monomer_a:], n_points=np_theta*2, distance=com_dist(_,n_monomer_a))
                     for _ in scan_r]
     import itertools
     all_atoms = list(itertools.chain.from_iterable(scan_r_theta_1 + scan_r_theta_2))
-    # add noise
-    for _ in all_atoms:
-        _R = _.get_positions()
-        _R += ((np.random.normal(size=np.prod(_R.shape)).reshape(_R.shape))*0.01)
-        _.set_positions(_R)
+    if add_noise:
+        for _ in all_atoms:
+            _R = _.get_positions()
+            _R += ((np.random.normal(size=np.prod(_R.shape)).reshape(_R.shape))*0.01)
+            _.set_positions(_R)
     return all_atoms
 
 
