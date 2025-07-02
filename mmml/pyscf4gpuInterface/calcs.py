@@ -171,18 +171,18 @@ def compute_dft(args, calcs, extra=None):
         print("coords_angstrom[sorted_idxs]", coords_angstrom[sorted_idxs].shape)
 
         output['esp'] = res
-        output['esp_out'] = res_out
-        output['sorted_idxs'] = sorted_idxs
-        output['grid_indices'] = grid_indices
+        # output['esp_out'] = res_out
+        # output['sorted_idxs'] = sorted_idxs
+        # output['grid_indices'] = grid_indices
         output['esp_grid'] = coords_angstrom[sorted_idxs]
-        output['mol_coords_angstrom'] = mol_coords_angstrom
-        output['mol_z'] = mol.atom_charges()
-        output['dipole'] = dip
-        output['quadrupole'] = quad
-        output['density'] = density
-        output['grid_dens'] = grid_coords
-        output['grid_esp'] = grid_positions_a
-        output['esp_indices'] = grid_indices[sorted_idxs]
+        output['R'] = mol_coords_angstrom
+        output['Z'] = mol.atom_charges()
+        output['D'] = dip
+        output['Q'] = quad
+        # output['density'] = density
+        # output['grid_dens'] = grid_coords
+        # output['grid_esp'] = grid_positions_a
+        # output['esp_indices'] = grid_indices[sorted_idxs]
 
 
     if CALCS.GRADIENT in calcs:
