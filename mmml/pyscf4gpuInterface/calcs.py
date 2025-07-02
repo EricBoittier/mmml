@@ -170,11 +170,9 @@ def compute_dft(args, calcs, extra=None):
         print("sorted_idxs", sorted_idxs.shape)
         print("coords_angstrom[sorted_idxs]", coords_angstrom[sorted_idxs].shape)
 
-        # output['esp'] = res
-        output['esp'] = res_out[sorted_idxs[a:b]]
-        # output['sorted_idxs'] = sorted_idxs
-        # output['grid_indices'] = grid_indices
-        output['esp_grid'] = coords_angstrom[sorted_idxs[a:b]]
+        
+        output['esp'] = res_out[sorted_idxs]
+        output['esp_grid'] = coords_angstrom[sorted_idxs]
         output['R'] = mol_coords_angstrom
         output['Z'] = mol.atom_charges()
         output['D'] = dip
