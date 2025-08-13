@@ -1,0 +1,1 @@
+python analyse_trained.py --restart /path/to/restart --files data_file1.npz data_file2.npz
