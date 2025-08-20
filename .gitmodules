@@ -1,0 +1,6 @@
+[submodule "mmml/github/JaxPycharmm"]
+	path = mmml/github/JaxPycharmm
+	url = https://github.com/EricBoittier/JaxPycharmm.git
+[submodule "mmml/github/dcmnet"]
+	path = mmml/github/dcmnet
+	url = https://github.com/EricBoittier/dcmnet.git
