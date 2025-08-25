@@ -129,7 +129,7 @@ def compute_dft(args, calcs, extra=None):
         coords = grid_positions_a
         print(coords.shape)
         fakemol = gto.fakemol_for_charges(coords)
-        # coords_angstrom = fakemol.atom_coords(unit="ANG")
+        coords_bohr = fakemol.atom_coords(unit="B")
         mol_coords_angstrom = mol.atom_coords(unit="ANG")
 
         charges = mol.atom_charges()
@@ -137,7 +137,7 @@ def compute_dft(args, calcs, extra=None):
         coords = cupy.asarray(coords)
         mol_coords = cupy.asarray(mol.atom_coords(unit="B"))
         print("distance matrix")
-        r = dist_matrix(mol_coords, coords)
+        r = dist_matrix(mol_coords, coords_bohr)
         rinv = 1.0 / r
         intopt = int3c2e.VHFOpt(mol, fakemol, "int2e")
         intopt.build(1e-14, diag_block_with_triu=False, aosym=True, group_size=256)
@@ -153,9 +153,9 @@ def compute_dft(args, calcs, extra=None):
         dip = engine.dip_moment(unit="DEBYE", dm=dm )
         quad = engine.quad_moment(unit="DEBYE-ANG", dm=dm )
         
-        output['esp'] = res
-        output['esp_grid'] = coords
-        output['R'] = mol_coords_angstrom
+        output['esp'] = -1 *res
+        output['esp_grid'] = coords.get()
+        output['R'] = mol_coords_angstrom.get()
         output['Z'] = mol.atom_charges()
         output['D'] = dip
         output['Q'] = quad
