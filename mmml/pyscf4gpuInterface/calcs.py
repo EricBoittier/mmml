@@ -110,7 +110,7 @@ def compute_dft(args, calcs, extra=None):
         density = engine._numint.get_rho(mol, dm, grids)
         
         print('------------------ Selecting points ----------------------------')
-        grid_indices = np.where(np.isclose(density.get(), 0.001, rtol=0.2))[0]
+        grid_indices = np.where(np.isclose(density.get(), 0.001, rtol=0.5))[0]
         print(grid_indices)
         # grid_positions_a = grid_coords[cupy.where(density < 0.001)[0]]
         grid_positions_a = grid_coords[grid_indices]
@@ -151,36 +151,15 @@ def compute_dft(args, calcs, extra=None):
 
         dip = engine.dip_moment(unit="DEBYE", dm=dm )
         quad = engine.quad_moment(unit="DEBYE-ANG", dm=dm )
-
-        print("cherry picking points")
-        sorted_idxs = np.argsort(res)
-        a, b = balance_array(
-            res, 
-            sorted_idxs, 
-            coords_angstrom, 
-            dip, 
-            quad,
-            N=0
-        )
-        print(a, b)
-        res_out = np.asarray(res)
-        sorted_idxs = np.asarray(sorted_idxs[a:b])
-        print("res", res.shape)
-        print("res_out", res_out.shape)
-        print("sorted_idxs", sorted_idxs.shape)
-        print("coords_angstrom[sorted_idxs]", coords_angstrom[sorted_idxs].shape)
-
         
-        output['esp'] = res_out[sorted_idxs]
-        output['esp_grid'] = coords_angstrom[sorted_idxs]
+        output['esp'] = res
+        output['esp_grid'] = grid_coords
         output['R'] = mol_coords_angstrom
         output['Z'] = mol.atom_charges()
         output['D'] = dip
         output['Q'] = quad
-        # output['density'] = density
-        # output['grid_dens'] = grid_coords
-        # output['grid_esp'] = grid_positions_a
-        # output['esp_indices'] = grid_indices[sorted_idxs]
+        output['density'] = density
+        output['density_grid'] = grid_coords
 
 
     if CALCS.GRADIENT in calcs:
