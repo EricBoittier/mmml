@@ -18,9 +18,11 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
 ]
-requires-python = "==3.12.*"
+requires-python = "==3.10.*"
 # Declare any run-time dependencies that should be installed with the package.
 dependencies = [
+    "molzip",
+    "jsonpickle",
     "absl-py",
     "asciichartpy",
     "ase",
@@ -53,6 +55,13 @@ dependencies = [
     "frozendict",
     "fsspec",
     "griddataformats",
+    "cutensor-cu12==2.2.0",
+    "gpu4pyscf-libxc-cuda12x==0.5.0",
+    "cupy-cuda12x==13.4.1",
+    #"pyscf==2.8.0",
+    #"basis-set-exchange==0.11",
+    #"pyscf-dispersion==1.3.0",
+    #"geometric==1.1.0",
     "gpu4pyscf-cuda12x",
     "humanize",
     "importlib-resources",
@@ -91,8 +100,8 @@ dependencies = [
     "networkx",
     "numpy",
     #"openff-toolkit",
-    "openmm[cuda12]",
-    "openmm-cuda-12",
+    #"openmm[cuda12]",
+    #"openmm-cuda-12",
     #"openmmml",
     "opt-einsum",
     "optax",
@@ -153,12 +162,16 @@ dependencies = [
     "wheel",
     "zipp",
     "pycharmm",
-    "jaxpycharmm"
+    #"jaxpycharmm",
+    "xtb_ase",
+    "pyxtal"
 ]
 
 [tool.uv.sources]
+xtb_ase = { git = "https://github.com/Quantum-Accelerators/xtb_ase.git"}
 jax-md = { git = "https://github.com/google/jax-md.git", rev = "05221c551e71f1b5f64458c0e3533452c22efec0" }
-jaxpycharmm = {git = "https://github.com/EricBoittier/JaxPycharmm.git"  }
+#jaxpycharmm = {path= "/home/boittier/github/JaxPycharmm"  }
+#jaxpycharmm = {git = "https://github.com/EricBoittier/JaxPycharmm.git"  }
 pycharmm = { path = "setup/charmm/tool/pycharmm", editable = true }
 
 # Update the urls once the hosting is set up.

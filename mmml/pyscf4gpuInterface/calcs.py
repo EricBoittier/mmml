@@ -163,26 +163,24 @@ def compute_dft(args, calcs, extra=None):
             N=0
         )
         print(a, b)
-        res_out = np.asarray(res)[sorted_idxs[a:b]]
+        res_out = np.asarray(res)
         sorted_idxs = np.asarray(sorted_idxs[a:b])
         print("res", res.shape)
         print("res_out", res_out.shape)
         print("sorted_idxs", sorted_idxs.shape)
         print("coords_angstrom[sorted_idxs]", coords_angstrom[sorted_idxs].shape)
 
-        output['esp'] = res
-        output['esp_out'] = res_out
-        output['sorted_idxs'] = sorted_idxs
-        output['grid_indices'] = grid_indices
+        
+        output['esp'] = res_out[sorted_idxs]
         output['esp_grid'] = coords_angstrom[sorted_idxs]
-        output['mol_coords_angstrom'] = mol_coords_angstrom
-        output['mol_z'] = mol.atom_charges()
-        output['dipole'] = dip
-        output['quadrupole'] = quad
-        output['density'] = density
-        output['grid_dens'] = grid_coords
-        output['grid_esp'] = grid_positions_a
-        output['esp_indices'] = grid_indices[sorted_idxs]
+        output['R'] = mol_coords_angstrom
+        output['Z'] = mol.atom_charges()
+        output['D'] = dip
+        output['Q'] = quad
+        # output['density'] = density
+        # output['grid_dens'] = grid_coords
+        # output['grid_esp'] = grid_positions_a
+        # output['esp_indices'] = grid_indices[sorted_idxs]
 
 
     if CALCS.GRADIENT in calcs:
@@ -355,9 +353,9 @@ def parse_args():
     parser.add_argument("--spin", type=int, default=0)
     parser.add_argument("--charge", type=int, default=0)
     # flags to do certain calcs
-    parser.add_argument("--energy", default=True, action="store_true")
+    parser.add_argument("--energy", default=False, action="store_true")
     parser.add_argument("--optimize", default=False, action="store_true")
-    parser.add_argument("--gradient", default=True, action="store_true")
+    parser.add_argument("--gradient", default=False, action="store_true")
     parser.add_argument("--hessian", default=False, action="store_true")
     parser.add_argument("--harmonic", default=False, action="store_true")
     parser.add_argument("--thermo", default=False, action="store_true")

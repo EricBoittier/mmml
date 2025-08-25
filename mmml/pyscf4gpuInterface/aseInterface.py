@@ -286,7 +286,7 @@ def main():
 
     # Process each structure and write to trajectory
     print(
-        f"\nProcessing {len(atoms_list)} structures using {args.method.upper()}/{args.basis}"
+        f"\nProcessing {len(atoms_list)} structure{'' if len(atoms_list) == 1 else 's'} using {args.xc.upper()}/{args.basis}"
     )
 
     for i, atoms in enumerate(atoms_list):

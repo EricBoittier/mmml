@@ -10,7 +10,7 @@ rule qm_clusters:
         flags = [
             f"--{flag}"
             for flag, enabled in config["qm"].items()
-            if enabled and flag in [ "gradient", ]
+            if enabled 
         ]
         flags_str = " ".join(flags)
 
