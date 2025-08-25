@@ -16,7 +16,7 @@ rm -rf build
 
 # Only build if libcharmm.so doesn't exist
 if [ ! -f "libcharmm.so" ]; then
-  ./configure --as-library > build.setup.out
+  ./configure --as-library --without-openmm > build.setup.out
   echo "compiling"  
   make -j8
 fi
