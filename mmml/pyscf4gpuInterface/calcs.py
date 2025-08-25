@@ -108,22 +108,13 @@ def compute_dft(args, calcs, extra=None):
         grids = engine.grids
         grid_coords = grids.coords.get()
         density = engine._numint.get_rho(mol, dm, grids).get()
-        
         print('------------------ Selecting points ----------------------------')
-        grid_indices = np.where(np.isclose(density, 0.001, rtol=0.5))[0]
+        grid_indices = np.where(np.less(density, 0.001) & np.greater_equal(density, 0.0001))[0]
         print(grid_indices)
         # grid_positions_a = grid_coords[cupy.where(density < 0.001)[0]]
         grid_positions_a = grid_coords[grid_indices]
-        # print(grid_positions_a)
-        # mask = np.all(grid_positions_a < 1000, axis=1)
-        # grid_indices = grid_indices[mask]
-        # grid_positions_a = grid_coords[grid_indices]
-        
-        # grid_indices = grid_indices[mask]
-        # grid_positions_a = grid_coords[grid_indices]
         print(grid_positions_a.shape)
         print(grid_positions_a.min(), grid_positions_a.max())
-
         print('------------------ ESP ----------------------------')
         dm = engine.make_rdm1()  # compute one-electron density matrix
         coords = grid_positions_a
@@ -131,11 +122,10 @@ def compute_dft(args, calcs, extra=None):
         fakemol = gto.fakemol_for_charges(coords)
         coords_bohr = fakemol.atom_coords(unit="B")
         mol_coords_angstrom = mol.atom_coords(unit="ANG")
-
         charges = mol.atom_charges()
         charges = cupy.asarray(charges)
         coords = cupy.asarray(coords)
-        mol_coords = cupy.asarray(mol.atom_coords(unit="B"))
+        mol_coords = cupy.asarray(mol.atom_coords(unit="ANG"))
         print("distance matrix")
         r = dist_matrix(mol_coords, coords_bohr)
         rinv = 1.0 / r
@@ -149,16 +139,12 @@ def compute_dft(args, calcs, extra=None):
         v_grids_n = cupy.dot(charges, rinv)
         res = v_grids_n - v_grids_e
         res = res.get()
-
-        dip = engine.dip_moment(unit="DEBYE", dm=dm )
-        quad = engine.quad_moment(unit="DEBYE-ANG", dm=dm )
-        
-        output['esp'] = -1 *res
+        output['esp'] = res
         output['esp_grid'] = coords.get()
-        output['R'] = mol_coords_angstrom.get()
+        output['R'] = mol_coords_angstrom
         output['Z'] = mol.atom_charges()
-        output['D'] = dip
-        output['Q'] = quad
+        output['D'] = engine.dip_moment(unit="DEBYE", dm=dm )
+        output['Q'] = engine.quad_moment(unit="DEBYE-ANG", dm=dm )
         output['density'] = density
         output['density_grid'] = grid_coords
 
