@@ -125,7 +125,7 @@ def compute_dft(args, calcs, extra=None):
         print(grid_positions_a.min(), grid_positions_a.max())
         print('------------------ ESP ----------------------------')
         dm = engine.make_rdm1()  # compute one-electron density matrix
-        coords = grid_positions_a 
+        coords = grid_coords
         print(coords.shape)
         fakemol = gto.fakemol_for_charges(coords)
         coords_angstrom = fakemol.atom_coords(unit="ANG")
