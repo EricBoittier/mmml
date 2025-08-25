@@ -107,28 +107,29 @@ def compute_dft(args, calcs, extra=None):
         dm = engine.make_rdm1()
         grids = engine.grids
         grid_coords = grids.coords.get()
-        density = engine._numint.get_rho(mol, dm, grids)
+        density = engine._numint.get_rho(mol, dm, grids).get()
         
         print('------------------ Selecting points ----------------------------')
-        grid_indices = np.where(np.isclose(density.get(), 0.001, rtol=0.5))[0]
+        grid_indices = np.where(np.isclose(density, 0.001, rtol=0.5))[0]
         print(grid_indices)
         # grid_positions_a = grid_coords[cupy.where(density < 0.001)[0]]
         grid_positions_a = grid_coords[grid_indices]
-        print(grid_positions_a)
-        mask = np.all(grid_positions_a < 1000, axis=1)
-        grid_indices = grid_indices[mask]
-        grid_positions_a = grid_coords[grid_indices]
+        # print(grid_positions_a)
+        # mask = np.all(grid_positions_a < 1000, axis=1)
+        # grid_indices = grid_indices[mask]
+        # grid_positions_a = grid_coords[grid_indices]
         
         # grid_indices = grid_indices[mask]
         # grid_positions_a = grid_coords[grid_indices]
         print(grid_positions_a.shape)
         print(grid_positions_a.min(), grid_positions_a.max())
+
         print('------------------ ESP ----------------------------')
         dm = engine.make_rdm1()  # compute one-electron density matrix
-        coords = grid_coords
+        coords = grid_positions_a
         print(coords.shape)
         fakemol = gto.fakemol_for_charges(coords)
-        coords_angstrom = fakemol.atom_coords(unit="ANG")
+        # coords_angstrom = fakemol.atom_coords(unit="ANG")
         mol_coords_angstrom = mol.atom_coords(unit="ANG")
 
         charges = mol.atom_charges()
@@ -153,7 +154,7 @@ def compute_dft(args, calcs, extra=None):
         quad = engine.quad_moment(unit="DEBYE-ANG", dm=dm )
         
         output['esp'] = res
-        output['esp_grid'] = grid_positions_a
+        output['esp_grid'] = coords
         output['R'] = mol_coords_angstrom
         output['Z'] = mol.atom_charges()
         output['D'] = dip
