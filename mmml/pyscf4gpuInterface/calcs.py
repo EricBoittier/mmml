@@ -153,7 +153,7 @@ def compute_dft(args, calcs, extra=None):
         quad = engine.quad_moment(unit="DEBYE-ANG", dm=dm )
         
         output['esp'] = res
-        output['esp_grid'] = grid_coords
+        output['esp_grid'] = grid_positions_a
         output['R'] = mol_coords_angstrom
         output['Z'] = mol.atom_charges()
         output['D'] = dip
