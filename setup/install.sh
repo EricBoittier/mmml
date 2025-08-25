@@ -11,12 +11,14 @@ fi
 cd charmm
 echo $PWD
 
+
+export CMAKE_CXX_COMPILER=/usr/bin/cmake
 # Clean and configure
-rm -rf build
+rm build/cmake/*
 
 # Only build if libcharmm.so doesn't exist
 if [ ! -f "libcharmm.so" ]; then
-  ./configure --as-library --without-openmm > build.setup.out
+  ./configure --as-library --without-openmm -C build/cmake > build.setup.out
   echo "compiling"  
   make -j8
 fi
@@ -30,7 +32,7 @@ cat ~/mmml/CHARMMSETUP
 source ~/mmml/CHARMMSETUP
 
 cd ../..
-pip install uv
+#pip install uv
 uv sync
 source .venv/bin/activate
 echo "venv activated"
