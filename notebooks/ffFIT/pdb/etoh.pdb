@@ -1,0 +1,13 @@
+REMARK  EXECUTING CHARMM SCRIPT FROM PYTHON                                           
+REMARK   DATE:     8/20/25     22:11:14      CREATED BY USER: ericb                   
+ATOM      1  C1  ETOH    1       1.429   0.096   0.350  1.00  0.00      ETOH
+ATOM      2  O1  ETOH    1       0.044   0.019   0.826  1.00  0.00      ETOH
+ATOM      3  HO1 ETOH    1       0.270   1.349   0.407  1.00  0.00      ETOH
+ATOM      4  H11 ETOH    1       0.384   0.059   0.135  1.00  0.00      ETOH
+ATOM      5  H12 ETOH    1       1.069   1.909   0.032  1.00  0.00      ETOH
+ATOM      6  C2  ETOH    1       0.262   0.004   0.004  1.00  0.00      ETOH
+ATOM      7  H21 ETOH    1       0.531   1.135   0.388  1.00  0.00      ETOH
+ATOM      8  H22 ETOH    1       0.292   0.443   1.134  1.00  0.00      ETOH
+ATOM      9  H23 ETOH    1       0.453   0.717   0.452  1.00  0.00      ETOH
+TER      10      ETOH     1
+END
