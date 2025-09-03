@@ -69,7 +69,11 @@ Welcome to mmml's documentation!
    :titlesonly:
 
    getting_started
+   tutorials
    user_guide
+   esp_cube_generation
+   dcmnet_fitting
+   tutorial_esp_to_dcmnet
    api
    developer_guide
 
