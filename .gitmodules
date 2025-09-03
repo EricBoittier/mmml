@@ -4,3 +4,6 @@
 [submodule "mmml/github/dcmnet"]
 	path = mmml/github/dcmnet
 	url = https://github.com/EricBoittier/dcmnet.git
+[submodule "mmml/mmml/dcmnet"]
+	path = mmml/mmml/dcmnet
+	url = https://github.com/EricBoittier/dcmnet.git
