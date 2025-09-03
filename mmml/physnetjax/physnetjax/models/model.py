@@ -65,6 +65,12 @@ class EF(nn.Module):
     efa: bool = False
 
     def setup(self) -> None:
+        """
+        Initialize model components.
+        
+        Sets up the model architecture including ZBL repulsion and
+        Euclidean Fast Attention (EFA) if enabled.
+        """
         if self.zbl:
             self.repulsion = ZBLRepulsion(
                 cutoff=self.cutoff,
@@ -86,7 +92,14 @@ class EF(nn.Module):
             )
 
     def return_attributes(self) -> Dict:
-        """Return model attributes for checkpointing."""
+        """
+        Return model attributes for checkpointing.
+        
+        Returns
+        -------
+        Dict
+            Dictionary containing all model hyperparameters and configuration
+        """
         return {
             "features": self.features,
             "max_degree": self.max_degree,
@@ -114,22 +127,37 @@ class EF(nn.Module):
         batch_mask: jnp.ndarray,
         atom_mask: jnp.ndarray,
     ) -> tuple[Array, tuple[Array, Array, Array, Array]]:
-        """Calculate molecular energy and related properties.
+        """
+        Calculate molecular energy and related properties.
 
-        Args:
-            atomic_numbers: Array of atomic numbers for each atom
-            positions: Array of atomic coordinates
-            dst_idx: Destination indices for message passing
-            src_idx: Source indices for message passing
-            batch_segments: Batch segment indices
-            batch_size: Number of molecules in batch
-            batch_mask: Mask for valid batch elements
-            atom_mask: Mask for valid atoms
+        Computes the total energy of molecular systems including atomic energies,
+        electrostatic interactions, and repulsion terms.
 
-        Returns:
+        Parameters
+        ----------
+        atomic_numbers : jnp.ndarray
+            Array of atomic numbers for each atom
+        positions : jnp.ndarray
+            Array of atomic coordinates
+        dst_idx : jnp.ndarray
+            Destination indices for message passing
+        src_idx : jnp.ndarray
+            Source indices for message passing
+        batch_segments : jnp.ndarray
+            Batch segment indices
+        batch_size : int
+            Number of molecules in batch
+        batch_mask : jnp.ndarray
+            Mask for valid batch elements
+        atom_mask : jnp.ndarray
+            Mask for valid atoms
+
+        Returns
+        -------
+        tuple[Array, tuple[Array, Array, Array, Array]]
             Tuple containing:
             - Total energy (negative sum)
-            - Either energy array or tuple of (energy, charges, electrostatics)
+            - Tuple of (energy, charges, electrostatics, repulsion, features)
         """
         # Calculate basic geometric features
         basis, displacements = self._calculate_geometric_features(
@@ -167,7 +195,23 @@ class EF(nn.Module):
         dst_idx: jnp.ndarray,
         src_idx: jnp.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        """Calculate geometric features including displacements and basis functions."""
+        """
+        Calculate geometric features including displacements and basis functions.
+        
+        Parameters
+        ----------
+        positions : jnp.ndarray
+            Atomic positions
+        dst_idx : jnp.ndarray
+            Destination indices for message passing
+        src_idx : jnp.ndarray
+            Source indices for message passing
+            
+        Returns
+        -------
+        Tuple[jnp.ndarray, jnp.ndarray]
+            Tuple of (basis functions, displacements)
+        """
         positions_dst = e3x.ops.gather_dst(positions, dst_idx=dst_idx)
         positions_src = e3x.ops.gather_src(positions, src_idx=src_idx)
         displacements = positions_src - positions_dst
@@ -193,7 +237,31 @@ class EF(nn.Module):
         batch_segments: jnp.ndarray,
         graph_mask: jnp.ndarray,
     ) -> jnp.ndarray:
-        """Process atomic features through message passing and refinement."""
+        """
+        Process atomic features through message passing and refinement.
+        
+        Parameters
+        ----------
+        atomic_numbers : jnp.ndarray
+            Atomic numbers
+        basis : jnp.ndarray
+            Basis functions
+        dst_idx : jnp.ndarray
+            Destination indices
+        src_idx : jnp.ndarray
+            Source indices
+        positions : jnp.ndarray
+            Atomic positions
+        batch_segments : jnp.ndarray
+            Batch segment indices
+        graph_mask : jnp.ndarray
+            Graph mask
+            
+        Returns
+        -------
+        jnp.ndarray
+            Processed atomic features
+        """
         embed = e3x.nn.Embed(
             num_embeddings=self.max_atomic_number + 1,
             features=self.features,
@@ -222,6 +290,27 @@ class EF(nn.Module):
         return x
 
     def _attention(self, x, basis, dst_idx, src_idx, num_heads=2):
+        """
+        Apply self-attention mechanism.
+        
+        Parameters
+        ----------
+        x : jnp.ndarray
+            Input features
+        basis : jnp.ndarray
+            Basis functions
+        dst_idx : jnp.ndarray
+            Destination indices
+        src_idx : jnp.ndarray
+            Source indices
+        num_heads : int, optional
+            Number of attention heads, by default 2
+            
+        Returns
+        -------
+        jnp.ndarray
+            Attention output
+        """
         return e3x.nn.modules.SelfAttention(
             max_degree=0,
             num_heads=num_heads,
@@ -229,6 +318,29 @@ class EF(nn.Module):
         )(x, basis, dst_idx=dst_idx, src_idx=src_idx)
 
     def _multiheadattention(self, x, y, basis, dst_idx, src_idx, num_heads=2):
+        """
+        Apply multi-head attention mechanism.
+        
+        Parameters
+        ----------
+        x : jnp.ndarray
+            Query features
+        y : jnp.ndarray
+            Key/value features
+        basis : jnp.ndarray
+            Basis functions
+        dst_idx : jnp.ndarray
+            Destination indices
+        src_idx : jnp.ndarray
+            Source indices
+        num_heads : int, optional
+            Number of attention heads, by default 2
+            
+        Returns
+        -------
+        jnp.ndarray
+            Multi-head attention output
+        """
         return e3x.nn.modules.MultiHeadAttention(
             max_degree=self.max_degree,
             num_heads=num_heads,
@@ -246,7 +358,33 @@ class EF(nn.Module):
         batch_segments: jnp.ndarray,
         graph_mask: jnp.ndarray,
     ) -> jnp.ndarray:
-        """Perform one iteration of message passing."""
+        """
+        Perform one iteration of message passing.
+        
+        Parameters
+        ----------
+        x : jnp.ndarray
+            Current features
+        basis : jnp.ndarray
+            Basis functions
+        dst_idx : jnp.ndarray
+            Destination indices
+        src_idx : jnp.ndarray
+            Source indices
+        iteration : int
+            Current iteration number
+        positions : jnp.ndarray
+            Atomic positions
+        batch_segments : jnp.ndarray
+            Batch segment indices
+        graph_mask : jnp.ndarray
+            Graph mask
+            
+        Returns
+        -------
+        jnp.ndarray
+            Updated features after message passing
+        """
         # if it is the last iteration
         if iteration == self.num_iterations - 1:
             x = e3x.nn.MessagePass(
@@ -268,7 +406,19 @@ class EF(nn.Module):
         return x
 
     def _refinement_iteration(self, x: jnp.ndarray) -> jnp.ndarray:
-        """Perform refinement iterations with residual connections."""
+        """
+        Perform refinement iterations with residual connections.
+        
+        Parameters
+        ----------
+        x : jnp.ndarray
+            Input features
+            
+        Returns
+        -------
+        jnp.ndarray
+            Refined features
+        """
         x1 = e3x.nn.silu(x)
         for _ in range(abs(self.n_res)):
             y = e3x.nn.silu(x)
@@ -296,7 +446,35 @@ class EF(nn.Module):
         batch_segments: jnp.ndarray,
         batch_size: int,
     ) -> tuple[Array, tuple[Array, Array, Array, Array]]:
-        """Calculate energies including charge interactions."""
+        """
+        Calculate energies including charge interactions.
+        
+        Parameters
+        ----------
+        x : jnp.ndarray
+            Processed atomic features
+        atomic_numbers : jnp.ndarray
+            Atomic numbers
+        displacements : jnp.ndarray
+            Interatomic displacements
+        dst_idx : jnp.ndarray
+            Destination indices
+        src_idx : jnp.ndarray
+            Source indices
+        atom_mask : jnp.ndarray
+            Atom mask
+        batch_mask : jnp.ndarray
+            Batch mask
+        batch_segments : jnp.ndarray
+            Batch segment indices
+        batch_size : int
+            Batch size
+            
+        Returns
+        -------
+        tuple[Array, tuple[Array, Array, Array, Array]]
+            Tuple of (total energy, (atomic energies, charges, electrostatics, repulsion))
+        """
         r, off_dist, eshift = self._calc_switches(displacements, batch_mask)
 
         atomic_energies = self._calculate_atomic_energies(x, atomic_numbers, atom_mask)
@@ -360,7 +538,23 @@ class EF(nn.Module):
     def _calculate_atomic_charges(
         self, x: jnp.ndarray, atomic_numbers: jnp.ndarray, atom_mask: jnp.ndarray
     ) -> jnp.ndarray:
-        """Calculate atomic charges from atomic features."""
+        """
+        Calculate atomic charges from atomic features.
+        
+        Parameters
+        ----------
+        x : jnp.ndarray
+            Atomic features
+        atomic_numbers : jnp.ndarray
+            Atomic numbers
+        atom_mask : jnp.ndarray
+            Atom mask
+            
+        Returns
+        -------
+        jnp.ndarray
+            Predicted atomic charges
+        """
         x = e3x.nn.Dense(1, use_bias=False)(x)
 
         charge_bias = self.param(
@@ -388,8 +582,37 @@ class EF(nn.Module):
         batch_segments: jnp.ndarray,
         batch_size: int,
     ) -> jnp.ndarray:
-        """Calculate repulsion energies between atoms."""
-
+        """
+        Calculate repulsion energies between atoms.
+        
+        Parameters
+        ----------
+        atomic_numbers : jnp.ndarray
+            Atomic numbers
+        distances : jnp.ndarray
+            Interatomic distances
+        off_dist : jnp.ndarray
+            Distance cutoff factors
+        eshift : jnp.ndarray
+            Energy shift factors
+        dst_idx : jnp.ndarray
+            Destination indices
+        src_idx : jnp.ndarray
+            Source indices
+        atom_mask : jnp.ndarray
+            Atom mask
+        batch_mask : jnp.ndarray
+            Batch mask
+        batch_segments : jnp.ndarray
+            Batch segment indices
+        batch_size : int
+            Batch size
+            
+        Returns
+        -------
+        jnp.ndarray
+            Repulsion energies per atom
+        """
         # add the learnable parameters to the model
         repulsion_energy = self.repulsion(
             atomic_numbers,
@@ -408,7 +631,23 @@ class EF(nn.Module):
     def _calculate_atomic_energies(
         self, x: jnp.ndarray, atomic_numbers: jnp.ndarray, atom_mask: jnp.ndarray
     ) -> jnp.ndarray:
-        """Calculate atomic energies from atomic features."""
+        """
+        Calculate atomic energies from atomic features.
+        
+        Parameters
+        ----------
+        x : jnp.ndarray
+            Atomic features
+        atomic_numbers : jnp.ndarray
+            Atomic numbers
+        atom_mask : jnp.ndarray
+            Atom mask
+            
+        Returns
+        -------
+        jnp.ndarray
+            Predicted atomic energies
+        """
         x = e3x.nn.Dense(1, use_bias=False)(x)
         energy_bias = self.param(
             "energy_bias",
@@ -424,6 +663,21 @@ class EF(nn.Module):
         return atomic_energies
 
     def _calc_switches(self, displacements: jnp.ndarray, batch_mask: jnp.ndarray):
+        """
+        Calculate switching functions for smooth interactions.
+        
+        Parameters
+        ----------
+        displacements : jnp.ndarray
+            Interatomic displacements
+        batch_mask : jnp.ndarray
+            Batch mask
+            
+        Returns
+        -------
+        tuple
+            Tuple of (r, off_dist, eshift) switching factors
+        """
         # Numerical stability constants
         eps = 1e-6
         min_dist = 0.01  # Minimum distance in Angstroms
@@ -464,24 +718,40 @@ class EF(nn.Module):
         batch_segments: jnp.ndarray,
         batch_size: int,
     ) -> Tuple[jnp.ndarray, jnp.array]:
-        """Calculate electrostatic interactions between atoms.
+        """
+        Calculate electrostatic interactions between atoms.
 
         Uses a smoothly switched combination of short-range and long-range electrostatics
         to avoid numerical instabilities at zero distance while maintaining accuracy.
 
-        Args:
-            atomic_charges: Predicted atomic charges
-            dst_idx: Destination indices for pair interactions
-            src_idx: Source indices for pair interactions
-            batch_segments: Batch assignment for each atom
-            batch_size: Number of molecules in batch
-            batch_mask: Mask for valid batch elements
-            atom_mask: Mask for valid atoms
+        Parameters
+        ----------
+        atomic_charges : jnp.ndarray
+            Predicted atomic charges
+        r : jnp.ndarray
+            Distance factors
+        off_dist : jnp.ndarray
+            Distance cutoff factors
+        eshift : jnp.ndarray
+            Energy shift factors
+        dst_idx : jnp.ndarray
+            Destination indices for pair interactions
+        src_idx : jnp.ndarray
+            Source indices for pair interactions
+        atom_mask : jnp.ndarray
+            Atom mask
+        batch_mask : jnp.ndarray
+            Batch mask
+        batch_segments : jnp.ndarray
+            Batch assignment for each atom
+        batch_size : int
+            Number of molecules in batch
 
-        Returns:
-            Array of electrostatic energies per atom
+        Returns
+        -------
+        Tuple[jnp.ndarray, jnp.array]
+            Tuple of (atomic electrostatic energies, batch electrostatic energies)
         """
-
         # Get charges for interacting pairs with safe bounds
         q1 = jnp.clip(jnp.take(atomic_charges, dst_idx, fill_value=0.0), -10.0, 10.0)
         q2 = jnp.clip(jnp.take(atomic_charges, src_idx, fill_value=0.0), -10.0, 10.0)
@@ -521,15 +791,26 @@ class EF(nn.Module):
         """
         Calculate dipoles for a batch of molecules.
 
-        Args:
-            positions (jnp.ndarray): Atomic positions.
-            atomic_numbers (jnp.ndarray): Atomic numbers.
-            charges (jnp.ndarray): Atomic charges.
-            batch_segments (jnp.ndarray): Batch segment indices.
-            batch_size (int): Number of molecules in the batch.
+        Computes molecular dipole moments from atomic charges and positions
+        relative to the center of mass of each molecule.
 
-        Returns:
-            jnp.ndarray: Calculated dipoles for each molecule in the batch.
+        Parameters
+        ----------
+        positions : jnp.ndarray
+            Atomic positions
+        atomic_numbers : jnp.ndarray
+            Atomic numbers
+        charges : jnp.ndarray
+            Atomic charges
+        batch_segments : jnp.ndarray
+            Batch segment indices
+        batch_size : int
+            Number of molecules in the batch
+
+        Returns
+        -------
+        jnp.ndarray
+            Calculated dipoles for each molecule in the batch
         """
         charges = charges.squeeze()
         positions = positions.squeeze()
@@ -561,24 +842,43 @@ class EF(nn.Module):
         batch_mask: Optional[jnp.ndarray] = None,
         atom_mask: Optional[jnp.ndarray] = None,
     ) -> Dict[str, Optional[jnp.ndarray]]:
-        """Forward pass of the model.
+        """
+        Forward pass of the model.
 
-        Args:
-            atomic_numbers: Array of atomic numbers
-            positions: Array of atomic positions
-            dst_idx: Destination indices for message passing
-            src_idx: Source indices for message passing
-            batch_segments: Optional batch segment indices
-            batch_size: Optional batch size
-            batch_mask: Optional batch mask
-            atom_mask: Optional atom mask
+        Computes energies, forces, and optionally charges and dipoles
+        for molecular systems.
 
-        Returns:
+        Parameters
+        ----------
+        atomic_numbers : jnp.ndarray
+            Array of atomic numbers
+        positions : jnp.ndarray
+            Array of atomic positions
+        dst_idx : jnp.ndarray
+            Destination indices for message passing
+        src_idx : jnp.ndarray
+            Source indices for message passing
+        batch_segments : Optional[jnp.ndarray], optional
+            Optional batch segment indices, by default None
+        batch_size : Optional[int], optional
+            Optional batch size, by default None
+        batch_mask : Optional[jnp.ndarray], optional
+            Optional batch mask, by default None
+        atom_mask : Optional[jnp.ndarray], optional
+            Optional atom mask, by default None
+
+        Returns
+        -------
+        Dict[str, Optional[jnp.ndarray]]
             Dictionary containing:
             - energy: Predicted energies
             - forces: Predicted forces
             - charges: Predicted charges (if enabled)
             - electrostatics: Electrostatic energies (if charges enabled)
+            - repulsion: Repulsion energies (if ZBL enabled)
+            - dipoles: Predicted dipoles (if charges enabled)
+            - sum_charges: Sum of charges per molecule (if charges enabled)
+            - state: Final atomic features
         """
         if batch_segments is None:
             batch_segments = jnp.zeros_like(atomic_numbers)
