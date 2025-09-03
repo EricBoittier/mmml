@@ -28,6 +28,42 @@ def eval_step(
     charges_weight,
     params,
 ):
+    """
+    Single evaluation step for PhysNetJax model.
+    
+    Performs forward pass and computes loss without updating parameters.
+    Supports both standard energy/force prediction and charge/dipole prediction.
+    
+    Parameters
+    ----------
+    model_apply : callable
+        Function to apply the model (typically model.apply)
+    batch : dict
+        Batch dictionary containing model inputs and targets
+    batch_size : int
+        Size of the current batch
+    charges : bool
+        Whether the model predicts charges and dipoles
+    energy_weight : float
+        Weight for energy loss term
+    forces_weight : float
+        Weight for forces loss term
+    dipole_weight : float
+        Weight for dipole loss term
+    charges_weight : float
+        Weight for charge loss term
+    params : Any
+        Current model parameters
+        
+    Returns
+    -------
+    tuple
+        (loss, energy_mae, forces_mae, dipole_mae) where:
+        - loss: Total loss value
+        - energy_mae: Mean absolute error for energy predictions
+        - forces_mae: Mean absolute error for force predictions
+        - dipole_mae: Mean absolute error for dipole predictions (0 if charges=False)
+    """
     if charges:
         output = model_apply(
             params,

@@ -51,6 +51,19 @@ CONVERSION = {
 }
 
 def is_valid_advanced_batch_config(batch_args_dict):
+    """
+    Check if batch arguments dictionary has valid advanced batching configuration.
+    
+    Parameters
+    ----------
+    batch_args_dict : dict
+        Dictionary containing batch configuration parameters
+        
+    Returns
+    -------
+    bool
+        True if the configuration is valid for advanced batching
+    """
     return (
         isinstance(batch_args_dict, dict)
         and "batch_shape" in batch_args_dict
@@ -85,7 +98,85 @@ def train_model(
     batch_args_dict=None,
     data_keys=("R", "Z", "F", "E", "D", "dst_idx", "src_idx", "batch_segments"),
 ):
-    """Train a model."""
+    """
+    Train a PhysNetJax model with comprehensive logging and checkpointing.
+    
+    This function implements the main training loop for PhysNetJax models,
+    including data batching, optimization, validation, checkpointing, and
+    TensorBoard logging. Supports both standard energy/force prediction
+    and charge/dipole prediction modes.
+    
+    Parameters
+    ----------
+    key : jax.random.PRNGKey
+        Random key for initialization and shuffling
+    model : physnetjax.models.model.EF
+        PhysNetJax model instance
+    train_data : dict
+        Training data dictionary
+    valid_data : dict
+        Validation data dictionary
+    num_epochs : int, optional
+        Number of training epochs, by default 1
+    learning_rate : float, optional
+        Learning rate, by default 0.001
+    energy_weight : float, optional
+        Weight for energy loss, by default 1.0
+    forces_weight : float, optional
+        Weight for forces loss, by default 52.91
+    dipole_weight : float, optional
+        Weight for dipole loss, by default 27.21
+    charges_weight : float, optional
+        Weight for charges loss, by default 14.39
+    batch_size : int, optional
+        Batch size, by default 1
+    num_atoms : int, optional
+        Maximum number of atoms per molecule, by default 60
+    restart : bool | str, optional
+        Whether to restart from checkpoint, by default False
+    conversion : dict, optional
+        Unit conversion factors, by default CONVERSION
+    print_freq : int, optional
+        Frequency of progress printing, by default 1
+    name : str, optional
+        Experiment name for checkpointing, by default "test"
+    best : bool, optional
+        Whether to save best model, by default False
+    optimizer : optax.GradientTransformation | str | None, optional
+        Optimizer or string identifier, by default None
+    transform : optax.GradientTransformation | str | None, optional
+        Transform or string identifier, by default None
+    schedule_fn : optax.Schedule | str | None, optional
+        Learning rate schedule, by default None
+    objective : str, optional
+        Objective metric for best model selection, by default "valid_forces_mae"
+    ckpt_dir : pathlib.Path, optional
+        Checkpoint directory, by default BASE_CKPT_DIR
+    log_tb : bool, optional
+        Whether to log to TensorBoard, by default True
+    batch_method : str | None, optional
+        Batching method ("advanced" or None), by default None
+    batch_args_dict : dict | None, optional
+        Additional batch arguments, by default None
+    data_keys : tuple, optional
+        Keys for data dictionary, by default ("R", "Z", "F", "E", "D", "dst_idx", "src_idx", "batch_segments")
+        
+    Returns
+    -------
+    Any
+        Final EMA parameters
+        
+    Notes
+    -----
+    The training process includes:
+    - Data batching (advanced or default)
+    - Model initialization or checkpoint restoration
+    - Training loop with gradient updates
+    - Validation after each epoch
+    - Checkpointing of best models
+    - TensorBoard logging
+    - Progress monitoring with rich console output
+    """
     data_keys = tuple(data_keys)
 
     print_shapes(train_data, name="Train Data")

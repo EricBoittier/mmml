@@ -1,3 +1,10 @@
+"""
+Training restart utilities for PhysNetJax.
+
+This module provides functions for saving and loading training checkpoints,
+allowing training to be resumed from previous states.
+"""
+
 import os
 from datetime import datetime
 from pathlib import Path
@@ -14,7 +21,19 @@ orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
 
 
 def get_last(path: str) -> Path:
-    """Get the last checkpoint directory."""
+    """
+    Get the last checkpoint directory.
+    
+    Parameters
+    ----------
+    path : str
+        Path to checkpoint directory
+        
+    Returns
+    -------
+    Path
+        Path to the most recent checkpoint directory
+    """
     dirs = get_files(path)
     if "tmp" in str(dirs[-1]):
         dirs.pop()
@@ -22,7 +41,21 @@ def get_last(path: str) -> Path:
 
 
 def get_params_model(restart: str, natoms: int = None):
-    """Load parameters and model from checkpoint."""
+    """
+    Load parameters and model from checkpoint.
+    
+    Parameters
+    ----------
+    restart : str
+        Path to checkpoint directory
+    natoms : int, optional
+        Number of atoms to set in model, by default None
+        
+    Returns
+    -------
+    tuple
+        Tuple of (parameters, model)
+    """
     restored = orbax_checkpointer.restore(restart)
     # print(f"Restoring from {restart}")
     modification_time = os.path.getmtime(restart)
@@ -58,9 +91,33 @@ def restart_training(restart: str, transform, optimizer, num_atoms: int):
     """
     Restart training from a previous checkpoint.
 
-    Args:
-        restart (str): Path to the checkpoint directory
-        num_atoms (int): Number of atoms in the system
+    Loads model parameters, optimizer state, and training configuration
+    from a checkpoint to resume training.
+
+    Parameters
+    ----------
+    restart : str
+        Path to the checkpoint directory
+    transform : optax.GradientTransformation
+        Transform for learning rate scaling
+    optimizer : optax.GradientTransformation
+        Optimizer to use
+    num_atoms : int
+        Number of atoms in the system
+        
+    Returns
+    -------
+    tuple
+        Tuple containing:
+        - ema_params: EMA parameters
+        - model: Model instance
+        - opt_state: Optimizer state
+        - params: Model parameters
+        - transform_state: Transform state
+        - step: Current training step
+        - best_loss: Best loss achieved
+        - CKPT_DIR: Checkpoint directory
+        - state: Training state
     """
     restart = get_last(restart)
     _, _model = get_params_model(restart, num_atoms)
@@ -109,6 +166,23 @@ def restart_training(restart: str, transform, optimizer, num_atoms: int):
 
 
 def get_params_model_with_ase(pkl_path, model_path, atoms):
+    """
+    Load parameters and model from pickle files with ASE atoms.
+    
+    Parameters
+    ----------
+    pkl_path : str
+        Path to parameters pickle file
+    model_path : str
+        Path to model configuration pickle file
+    atoms : ase.Atoms
+        ASE atoms object
+        
+    Returns
+    -------
+    tuple
+        Tuple of (parameters, model)
+    """
     import pandas as pd
 
     from physnetjax.models.model import EF

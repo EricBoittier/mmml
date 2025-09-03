@@ -42,6 +42,60 @@ def train_step(
     debug=False,
     ema_decay=0.999,
 ):
+    """
+    Single training step for PhysNetJax model.
+    
+    Performs forward pass, computes loss, calculates gradients, updates
+    parameters, and maintains exponential moving average (EMA) of parameters.
+    Supports both standard energy/force prediction and charge/dipole prediction.
+    
+    Parameters
+    ----------
+    model_apply : callable
+        Function to apply the model (typically model.apply)
+    optimizer_update : callable
+        Function to update optimizer state (typically optimizer.update)
+    transform_state : Any
+        Current transform state for learning rate scaling
+    batch : dict
+        Batch dictionary containing model inputs and targets
+    batch_size : int
+        Size of the current batch
+    doCharges : bool
+        Whether the model predicts charges and dipoles
+    energy_weight : float
+        Weight for energy loss term
+    forces_weight : float
+        Weight for forces loss term
+    dipole_weight : float
+        Weight for dipole loss term
+    charges_weight : float
+        Weight for charge loss term
+    opt_state : Any
+        Current optimizer state
+    params : Any
+        Current model parameters
+    ema_params : Any
+        Current EMA parameters
+    debug : bool, optional
+        Whether to enable debug prints, by default False
+    ema_decay : float, optional
+        Decay rate for EMA, by default 0.999
+        
+    Returns
+    -------
+    tuple
+        (params, ema_params, opt_state, transform_state, loss, energy_mae, forces_mae, dipole_mae)
+        where:
+        - params: Updated model parameters
+        - ema_params: Updated EMA parameters
+        - opt_state: Updated optimizer state
+        - transform_state: Updated transform state
+        - loss: Total loss value
+        - energy_mae: Mean absolute error for energy predictions
+        - forces_mae: Mean absolute error for force predictions
+        - dipole_mae: Mean absolute error for dipole predictions (0 if doCharges=False)
+    """
     if doCharges:
 
         def loss_fn(params):

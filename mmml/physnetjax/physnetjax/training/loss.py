@@ -37,15 +37,30 @@ def mean_squared_loss(
     """
     Calculate the mean squared loss for energy and forces predictions.
 
-    Args:
-        energy_prediction (jnp.ndarray): Predicted energy values.
-        energy_target (jnp.ndarray): Target energy values.
-        forces_prediction (jnp.ndarray): Predicted force values.
-        forces_target (jnp.ndarray): Target force values.
-        forces_weight (float): Weight for the forces loss.
+    Computes weighted sum of energy and force losses using L2 loss.
+    Forces loss is normalized by the number of valid atoms.
 
-    Returns:
-        float: Combined mean squared loss for energy and forces.
+    Parameters
+    ----------
+    energy_prediction : jnp.ndarray
+        Predicted energy values
+    energy_target : jnp.ndarray
+        Target energy values
+    forces_prediction : jnp.ndarray
+        Predicted force values
+    energy_weight : float
+        Weight for energy loss term
+    forces_target : jnp.ndarray
+        Target force values
+    forces_weight : float
+        Weight for forces loss term
+    atomic_mask : jnp.ndarray
+        Mask indicating valid atoms
+
+    Returns
+    -------
+    float
+        Combined mean squared loss for energy and forces
     """
     energy_loss = jnp.mean(
         optax.l2_loss(energy_prediction.flatten(), energy_target.flatten())
@@ -70,18 +85,32 @@ def mean_squared_loss_D(
     """
     Calculate the mean squared loss for energy, forces, and dipole predictions.
 
-    Args:
-        energy_prediction (jnp.ndarray): Predicted energy values.
-        energy_target (jnp.ndarray): Target energy values.
-        forces_prediction (jnp.ndarray): Predicted force values.
-        forces_target (jnp.ndarray): Target force values.
-        forces_weight (float): Weight for the forces loss.
-        dipole_prediction (jnp.ndarray): Predicted dipole values.
-        dipole_target (jnp.ndarray): Target dipole values.
-        dipole_weight (float): Weight for the dipole loss.
+    Computes weighted sum of energy, force, and dipole losses using L2 loss.
+    All losses are averaged over the batch.
 
-    Returns:
-        float: Combined mean squared loss for energy, forces, and dipole.
+    Parameters
+    ----------
+    energy_prediction : jnp.ndarray
+        Predicted energy values
+    energy_target : jnp.ndarray
+        Target energy values
+    forces_prediction : jnp.ndarray
+        Predicted force values
+    forces_target : jnp.ndarray
+        Target force values
+    forces_weight : float
+        Weight for forces loss term
+    dipole_prediction : jnp.ndarray
+        Predicted dipole values
+    dipole_target : jnp.ndarray
+        Target dipole values
+    dipole_weight : float
+        Weight for dipole loss term
+
+    Returns
+    -------
+    float
+        Combined mean squared loss for energy, forces, and dipole
     """
     energy_loss = jnp.mean(
         optax.l2_loss(energy_prediction.squeeze(), energy_target.squeeze())
@@ -113,23 +142,43 @@ def mean_squared_loss_QD(
     """
     Calculate the mean squared loss for energy, forces, dipole, and total charges predictions.
 
-    Args:
-        energy_prediction (jnp.ndarray): Predicted energy values.
-        energy_target (jnp.ndarray): Target energy values.
-        energy_weight (float): Weight for the energy loss.
-        forces_prediction (jnp.ndarray): Predicted force values.
-        forces_target (jnp.ndarray): Target force values.
-        forces_weight (float): Weight for the forces loss.
-        dipole_prediction (jnp.ndarray): Predicted dipole values.
-        dipole_target (jnp.ndarray): Target dipole values.
-        dipole_weight (float): Weight for the dipole loss.
-        total_charges_prediction (jnp.ndarray): Predicted total charges.
-        total_charge_target (jnp.ndarray): Target total charges.
-        total_charge_weight (float): Weight for the total charges loss.
-        atomic_mask (jnp.ndarray): Mask for atomic positions.
+    Computes weighted sum of energy, force, dipole, and charge losses using L2 loss.
+    Forces and charges are normalized by the number of valid atoms.
+    Dipole loss is normalized by the number of components (3).
 
-    Returns:
-        float: Combined mean squared loss for energy, forces, dipole, and total charges.
+    Parameters
+    ----------
+    energy_prediction : jnp.ndarray
+        Predicted energy values
+    energy_target : jnp.ndarray
+        Target energy values
+    energy_weight : float
+        Weight for energy loss term
+    forces_prediction : jnp.ndarray
+        Predicted force values
+    forces_target : jnp.ndarray
+        Target force values
+    forces_weight : float
+        Weight for forces loss term
+    dipole_prediction : jnp.ndarray
+        Predicted dipole values
+    dipole_target : jnp.ndarray
+        Target dipole values
+    dipole_weight : float
+        Weight for dipole loss term
+    total_charges_prediction : jnp.ndarray
+        Predicted total charges
+    total_charge_target : jnp.ndarray
+        Target total charges
+    total_charge_weight : float
+        Weight for total charges loss term
+    atomic_mask : jnp.ndarray
+        Mask for atomic positions
+
+    Returns
+    -------
+    float
+        Combined mean squared loss for energy, forces, dipole, and total charges
     """
     forces_prediction = forces_prediction * atomic_mask[..., None]
     forces_target = forces_target * atomic_mask[..., None]
@@ -168,13 +217,19 @@ def mean_absolute_error(
     """
     Calculate the mean absolute error between prediction and target.
 
-    Args:
-        prediction (jnp.ndarray): Predicted values.
-        target (jnp.ndarray): Target values.
-        nsamples (int): Number of samples.
+    Parameters
+    ----------
+    prediction : jnp.ndarray
+        Predicted values
+    target : jnp.ndarray
+        Target values
+    nsamples : int
+        Number of samples for normalization
 
-    Returns:
-        float: Mean absolute error.
+    Returns
+    -------
+    float
+        Mean absolute error
     """
     return jnp.sum(jnp.abs(prediction.squeeze() - target.squeeze())) / nsamples
 
@@ -190,15 +245,26 @@ def dipole_calc(
     """
     Calculate dipoles for a batch of molecules.
 
-    Args:
-        positions (jnp.ndarray): Atomic positions.
-        atomic_numbers (jnp.ndarray): Atomic numbers.
-        charges (jnp.ndarray): Atomic charges.
-        batch_segments (jnp.ndarray): Batch segment indices.
-        batch_size (int): Number of molecules in the batch.
+    Computes molecular dipole moments from atomic charges and positions
+    relative to the center of mass of each molecule.
 
-    Returns:
-        jnp.ndarray: Calculated dipoles for each molecule in the batch.
+    Parameters
+    ----------
+    positions : jnp.ndarray
+        Atomic positions, shape (N, 3)
+    atomic_numbers : jnp.ndarray
+        Atomic numbers, shape (N,)
+    charges : jnp.ndarray
+        Atomic charges, shape (N,)
+    batch_segments : jnp.ndarray
+        Batch segment indices, shape (N,)
+    batch_size : int
+        Number of molecules in the batch
+
+    Returns
+    -------
+    jnp.ndarray
+        Calculated dipoles for each molecule in the batch, shape (batch_size, 3)
     """
     charges = charges.squeeze()
     positions = positions.squeeze()
