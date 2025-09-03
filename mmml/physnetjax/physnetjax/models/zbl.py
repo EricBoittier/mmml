@@ -20,13 +20,24 @@ HARTREE_TO_EV = 27.211386245988  # Conversion factor from Hartree to eV
 
 
 class ZBLRepulsion(nn.Module):
-    """Ziegler-Biersack-Littmark nuclear repulsion model.
+    """
+    Ziegler-Biersack-Littmark nuclear repulsion model.
 
-    Attributes:
-        cutoff: Upper cutoff distance
-        cuton: Lower cutoff distance starting switch-off function
-        trainable: If True, repulsion parameters are trainable
-        dtype: Data type for computations
+    Implements the ZBL potential for nuclear repulsion with smooth cutoffs
+    and numerical stability improvements.
+
+    Attributes
+    ----------
+    cutoff : float
+        Upper cutoff distance
+    cuton : Optional[float]
+        Lower cutoff distance starting switch-off function
+    trainable : bool
+        If True, repulsion parameters are trainable
+    dtype : Any
+        Data type for computations
+    debug : bool
+        Whether to enable debug prints
     """
 
     cutoff: float
@@ -36,7 +47,12 @@ class ZBLRepulsion(nn.Module):
     debug: bool = False
 
     def setup(self):
-        """Initialize model parameters."""
+        """
+        Initialize model parameters.
+        
+        Sets up the ZBL potential parameters including coefficients,
+        exponents, and cutoff configuration.
+        """
         # Default ZBL parameters
         a_coefficient = 0.8854  # Bohr
         a_exponent = 0.23
@@ -69,12 +85,20 @@ class ZBLRepulsion(nn.Module):
         self.phi_exponents = make_param("phi_exponents", phi_exponents)
 
     def switch_fn(self, distances: jnp.ndarray) -> jnp.ndarray:
-        """Compute smooth switch factors from 1 to 0.
+        """
+        Compute smooth switch factors from 1 to 0.
 
-        Args:
-            distances: Array of interatomic distances
+        Implements a smooth switching function that transitions from 1 to 0
+        between cuton and cutoff distances.
 
-        Returns:
+        Parameters
+        ----------
+        distances : jnp.ndarray
+            Array of interatomic distances
+
+        Returns
+        -------
+        jnp.ndarray
             Array of switch factors
         """
         x = (self.cutoff_dist - distances) / self.switchoff_range
@@ -103,18 +127,40 @@ class ZBLRepulsion(nn.Module):
         batch_segments: jnp.ndarray,
         batch_size: int,
     ) -> jnp.ndarray:
-        """Calculate ZBL nuclear repulsion energies.
+        """
+        Calculate ZBL nuclear repulsion energies.
 
-        Args:
-            atomic_numbers: Array of atomic numbers
-            distances: Array of interatomic distances
-            idx_i: Array of indices for first atoms in pairs
-            idx_j: Array of indices for second atoms in pairs
+        Computes nuclear repulsion using the ZBL potential with improved
+        numerical stability and smooth cutoffs.
 
-        Returns:
+        Parameters
+        ----------
+        atomic_numbers : jnp.ndarray
+            Array of atomic numbers
+        distances : jnp.ndarray
+            Array of interatomic distances
+        switch_off : jnp.ndarray
+            Switch-off factors
+        eshift : jnp.ndarray
+            Energy shift factors
+        idx_i : jnp.ndarray
+            Array of indices for first atoms in pairs
+        idx_j : jnp.ndarray
+            Array of indices for second atoms in pairs
+        atom_mask : jnp.ndarray
+            Mask for valid atoms
+        batch_mask : jnp.ndarray
+            Mask for valid batch elements
+        batch_segments : jnp.ndarray
+            Batch segment indices
+        batch_size : int
+            Number of molecules in batch
+
+        Returns
+        -------
+        jnp.ndarray
             Array of repulsion energies per atom
         """
-
         # Compute atomic number dependent screening length with safe operations
         # Clip atomic numbers to prevent zero or negative values
         safe_atomic_numbers = jnp.maximum(atomic_numbers, 1e-6)

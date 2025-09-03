@@ -1,5 +1,5 @@
 DCMNet API
-=========
+==========
 
 Core DCMNet modules for training distributed charge multipole networks.
 
