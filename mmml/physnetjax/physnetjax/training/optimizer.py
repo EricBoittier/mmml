@@ -41,7 +41,64 @@ def get_optimizer(
     min_scale: float = 0.01,
     **kwargs,
 ):
-
+    """
+    Create an optimizer with learning rate schedule and optional transforms.
+    
+    This function provides a flexible interface for creating optimizers with
+    various learning rate schedules, gradient clipping, and plateau reduction.
+    
+    Parameters
+    ----------
+    learning_rate : float, optional
+        Base learning rate, by default 0.001
+    schedule_fn : optax.Schedule | str | None, optional
+        Learning rate schedule function or string identifier, by default None
+    optimizer : optax.GradientTransformation | str | None, optional
+        Optimizer or string identifier, by default None
+    transform : optax.GradientTransformation | str | None, optional
+        Additional transform or string identifier, by default None
+    clip_global : bool | float, optional
+        Global gradient clipping value or boolean, by default True
+    patience : int, optional
+        Patience for plateau reduction, by default 5
+    cooldown : int, optional
+        Cooldown for plateau reduction, by default 5
+    factor : float, optional
+        Reduction factor for plateau reduction, by default 0.9
+    rtol : float, optional
+        Relative tolerance for plateau reduction, by default 1e-4
+    accumulation_size : int, optional
+        Accumulation size for plateau reduction, by default 5
+    min_scale : float, optional
+        Minimum scale for plateau reduction, by default 0.01
+    **kwargs
+        Additional keyword arguments
+        
+    Returns
+    -------
+    tuple
+        (_optimizer, _transform, _schedule_fn, optimizer_kwargs) where:
+        - _optimizer: Configured optimizer
+        - _transform: Configured transform
+        - _schedule_fn: Configured learning rate schedule
+        - optimizer_kwargs: Dictionary of optimizer configuration
+        
+    Notes
+    -----
+    Supported schedule_fn strings:
+    - 'warmup': Warmup exponential decay
+    - 'cosine_annealing': Cosine annealing with restarts
+    - 'exponential': Exponential decay
+    - 'polynomial': Polynomial decay
+    - 'cosine': Cosine decay
+    - 'warmup_cosine': Warmup cosine decay
+    - 'constant': Constant learning rate
+    
+    Supported optimizer strings:
+    - 'adam': Adam optimizer
+    - 'adamw': AdamW optimizer
+    - 'amsgrad': AMSGrad optimizer
+    """
     if isinstance(clip_global, bool):
         clip_global = 10.0 if clip_global else None
     elif isinstance(clip_global, float) and clip_global > 0:
@@ -187,13 +244,26 @@ def cycled_cosine_annealing_schedule(init_lr, period=200):
     """
     Creates a cosine annealing learning rate schedule with repeated cycles.
 
-    Args:
-        init_lr (float): Initial learning rate at the start of each cycle.
-        period (int): The number of steps in each cycle.
-    Returns:
-        optax.Schedule: A cycled cosine annealing learning rate schedule.
-    """
+    Creates a learning rate schedule that cycles through cosine annealing
+    with decreasing peak values for each cycle.
 
+    Parameters
+    ----------
+    init_lr : float
+        Initial learning rate at the start of each cycle
+    period : int, optional
+        The number of steps in each cycle, by default 200
+        
+    Returns
+    -------
+    optax.Schedule
+        A cycled cosine annealing learning rate schedule
+        
+    Notes
+    -----
+    The schedule creates 200 cycles by default, with each cycle having
+    a peak value that decreases by 1% from the previous cycle.
+    """
     # Adjust step to account for the starting step
     num_cycles = 200
     print(period, num_cycles)
