@@ -19,12 +19,6 @@ Cuda 12 and gcc compilers are required. On the studix cluster, "module load cudn
 bash setup/install.sh
 ```
 
-#### Verify
-
-
-
-
-
 ### Copyright
 
 Copyright (c) 2025, Eric Boittier

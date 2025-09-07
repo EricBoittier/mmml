@@ -13,9 +13,9 @@ from typing import Tuple
 import orbax
 import orbax.checkpoint
 
-from physnetjax.models.model import EF
-from physnetjax.utils.pretty_printer import print_dict_as_table
-from physnetjax.utils.utils import get_files
+from mmml.physnetjax.physnetjax.models.model import EF
+from mmml.physnetjax.physnetjax.utils.pretty_printer import print_dict_as_table
+from mmml.physnetjax.physnetjax.utils.utils import get_files
 
 orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
 

@@ -19,8 +19,8 @@ from jax import Array
 # from jax.sharding import NamedSharding
 # from jax.sharding import PartitionSpec as P
 
-from physnetjax.models.euclidean_fast_attention import fast_attention as efa
-from physnetjax.models.zbl import ZBLRepulsion
+from mmml.physnetjax.physnetjax.models.euclidean_fast_attention import fast_attention as efa
+from mmml.physnetjax.physnetjax.models.zbl import ZBLRepulsion
 
 EFA = efa.EuclideanFastAttention
 import ase.data

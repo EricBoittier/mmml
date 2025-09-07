@@ -13,9 +13,10 @@ PYCHARMM_DIR = None
 
 # check for paths.toml in main directory
 if not MAIN_PATH.joinpath("paths.toml").exists():
-    raise FileNotFoundError(
-        f"paths.toml not found in {MAIN_PATH}. Please create the file with the required paths."
-    )
+    # raise FileNotFoundError(
+    #     f"paths.toml not found in {MAIN_PATH}. Please create the file with the required paths."
+    # )
+    pass
 else:
     # read the paths.toml file
     paths = toml.load(MAIN_PATH / "paths.toml")["paths"]

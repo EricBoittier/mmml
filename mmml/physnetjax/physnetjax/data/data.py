@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 from scipy.spatial.distance import cdist
 
-from physnetjax.utils.pretty_printer import print_dict_as_table
+from mmml.physnetjax.physnetjax.utils.pretty_printer import print_dict_as_table
 
 # Atomic energies in Hartree
 ATOM_ENERGIES_HARTREE = np.array(
