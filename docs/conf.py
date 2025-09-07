@@ -56,9 +56,21 @@ extensions = [
 
 
 autosummary_generate = True
+autosummary_imported_members = True
 napoleon_google_docstring = False
 napoleon_use_param = False
 napoleon_use_ivar = True
+
+# Mock optional heavy dependencies to keep autodoc importable in minimal envs
+autodoc_mock_imports = [
+    'gpu4pyscf',
+    'pyscf',
+    'e3x',
+    'ase',
+    'openmm',
+    'pycharmm',
+    'jax_md',
+]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -67,7 +79,8 @@ templates_path = ['_templates']
 # You can specify multiple suffix as a list of string:
 #
 # source_suffix = ['.rst', '.md']
-source_suffix = '.rst'
+# Modern explicit mapping to avoid conversion notice in Sphinx 8
+source_suffix = {'.rst': 'restructuredtext'}
 
 # The master toctree document.
 master_doc = 'index'
@@ -77,11 +90,13 @@ master_doc = 'index'
 #
 # This is also used if you do content translation via gettext catalogs.
 # Usually you set "language" from the command line for these cases.
-language = None
+# Explicit language to avoid Sphinx warning
+language = 'en'
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path .
+# Exclude committed autosummary stubs that aren’t part of any toctree
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
 # The name of the Pygments (syntax highlighting) style to use.
@@ -99,12 +114,20 @@ html_theme = 'pydata_sphinx_theme'
 # further.  For a list of options available for each theme, see the
 # documentation.
 #
-# html_theme_options = {}
+html_theme_options = {
+    # Show two levels of the left navigation by default
+    'show_nav_level': 2,
+    # Include up to H2 in the right-hand page TOC
+    'show_toc_level': 2,
+    # Ensure the right sidebar includes a page-level TOC
+    'secondary_sidebar_items': ['page-toc', 'sourcelink', 'searchbox'],
+}
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
+html_js_files = ['hide-empty-section-nav.js']
 
 # Custom sidebar templates, must be a dictionary that maps document names
 # to template names.
