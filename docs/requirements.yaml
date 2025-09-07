@@ -1,16 +1,18 @@
 name: docs_mmml
 channels:
-
   - defaults
 dependencies:
-    # Base depends
+  # Base deps
   - python
   - pip
-  
 
-
-
-    # Pip-only installs
+  # Pip-only installs
   - pip:
-    - -e ../
+      # Project (editable)
+      - -e ../
 
+      # Sphinx + theme + extensions
+      - sphinx>=8.2
+      - pydata-sphinx-theme>=0.16
+      - sphinx-design>=0.5
+      - sphinx-copybutton>=0.5
