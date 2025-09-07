@@ -35,17 +35,17 @@ from pathlib import Path
 import pandas as pd
 
 # Add custom path
-sys.path.append("/pchem-data/meuwly/boittier/home/pycharmm_test")
-import physnetjax
+# sys.path.append("/pchem-data/meuwly/boittier/home/pycharmm_test")
+import  mmml.physnetjax.physnetjax
 
-sys.path.append("/pchem-data/meuwly/boittier/home/dcm-lj-data")
-from pycharmm_lingo_scripts import script1, script2, script3, load_dcm
+# sys.path.append("/pchem-data/meuwly/boittier/home/dcm-lj-data")
+# from pycharmm_lingo_scripts import script1, script2, script3, load_dcm
 
-from physnetjax.data.data import prepare_datasets
-from physnetjax.training.loss import dipole_calc
-from physnetjax.models.model import EF
-from physnetjax.training.training import train_model  # from model import dipole_calc
-from physnetjax.data.batches import (
+from mmml.physnetjax.physnetjax.data.data import prepare_datasets
+from mmml.physnetjax.physnetjax.training.loss import dipole_calc
+from mmml.physnetjax.physnetjax.models.model import EF
+from mmml.physnetjax.physnetjax.training.training import train_model  # from model import dipole_calc
+from mmml.physnetjax.physnetjax.data.batches import (
     _prepare_batches as prepare_batches,
 )  # prepare_batches, prepare_datasets
 
@@ -55,7 +55,7 @@ data_key, train_key = jax.random.split(jax.random.PRNGKey(42), 2)
 
 from pathlib import Path
 
-from physnetjax.calc.helper_mlp import get_ase_calc
+from mmml.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
 
 
 def parse_non_int(s):
