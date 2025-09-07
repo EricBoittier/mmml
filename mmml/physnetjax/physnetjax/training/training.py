@@ -7,27 +7,27 @@ import ase.units
 import e3x
 import jax
 import lovely_jax as lj
-import tensorflow as tf
+# import tensorflow as tf
 from flax.training import orbax_utils, train_state
 from jax.experimental import mesh_utils
 from jax.sharding import Mesh, NamedSharding, PartitionSpec as P
 from rich.console import Console
 from rich.live import Live
 
-from physnetjax.data.data import print_shapes
-from physnetjax.directories import BASE_CKPT_DIR, print_paths
-from physnetjax.logger.tensorboard_logging import write_tb_log
-from physnetjax.restart.restart import orbax_checkpointer, restart_training
-from physnetjax.training.evalstep import eval_step
-from physnetjax.training.optimizer import (
+from mmml.physnetjax.physnetjax.data.data import print_shapes
+from mmml.physnetjax.physnetjax.directories import BASE_CKPT_DIR, print_paths
+# from mmml.physnetjax.physnetjax.logger.tensorboard_logging import write_tb_log
+from mmml.physnetjax.physnetjax.restart.restart import orbax_checkpointer, restart_training
+from mmml.physnetjax.physnetjax.training.evalstep import eval_step
+from mmml.physnetjax.physnetjax.training.optimizer import (
     base_optimizer,
     base_schedule_fn,
     base_transform,
     get_optimizer,
 )
-from physnetjax.training.trainstep import train_step
-from physnetjax.utils.ascii import computer, cubes
-from physnetjax.utils.pretty_printer import (
+from mmml.physnetjax.physnetjax.training.trainstep import train_step
+from mmml.physnetjax.physnetjax.utils.ascii import computer, cubes
+from mmml.physnetjax.physnetjax.utils.pretty_printer import (
     Printer,
     pretty_print_optimizer,
     print_dict_as_table,

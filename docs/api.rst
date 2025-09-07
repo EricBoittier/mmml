@@ -30,3 +30,14 @@ Other Interfaces
 .. note::
    Some modules require optional dependencies (e.g., CUDA, e3x, gpu4pyscf) 
    and may not be available in all environments.
+
+Detailed API (Autosummary)
+--------------------------
+
+The following entries include generated API documentation and will appear in the table of contents.
+
+.. autosummary::
+   :toctree: autosummary
+   :recursive:
+
+   mmml
