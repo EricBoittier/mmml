@@ -1,4 +1,4 @@
-mmml.dcmnet.dcmnet.electrostatics
+﻿mmml.dcmnet.dcmnet.electrostatics
 =================================
 
 .. automodule:: mmml.dcmnet.dcmnet.electrostatics
@@ -8,8 +8,5 @@ mmml.dcmnet.dcmnet.electrostatics
 
    .. autosummary::
    
-      batched_electrostatic_potential
       calc_esp
-      coulomb_potential
-      vmap
    
