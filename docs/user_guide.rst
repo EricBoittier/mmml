@@ -13,6 +13,13 @@ Command-line Interface
 
 How to run common tasks from the CLI (training, ESP generation, conversions).
 
+Saving Results from PySCF GPU
+-----------------------------
+
+Use the CLI flag ``--save_option`` to control how results are persisted when running
+``mmml.pyscf4gpuInterface.calcs``. Supported values are ``pkl``, ``npz``, and ``hdf5``.
+See :ref:`PySCF GPU Interface API <PySCF GPU Interface API>` for details and examples.
+
 Python API
 ----------
 
