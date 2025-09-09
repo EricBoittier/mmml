@@ -10,7 +10,9 @@ fi
 
 # Compile packmol 
 cd ~/mmml/mmml/packmol/
-./configure gfortran 
+bash ./configure gfortran 
+make -j8
+make clean 
 
 cd ~/mmml/setup/charmm
 echo $PWD
