@@ -1,0 +1,93 @@
+[CudaDevice(id=0), CudaDevice(id=1)]
+gpu
+[CudaDevice(id=0), CudaDevice(id=1)]
+Namespace(n_simulations=8000, temperature=0.05, seed=0, verbose=True, target_total=37, target_span=0, save_prefix='scripts/test', neutrality_lambda=0.0, dq_max=0.05, dr_max=0.1, refine_steps=0, refine_lr=0.0001, alpha_e2e=0.0, nn_policy_only=False, swap_per_atom_models=False, excess_charge_penalty=0.0, selection_metric='loss', run_dir='mdcm37', accept_only_better=True, mcts_c_puct=None, mcts_root_noise_frac=None, mcts_dirichlet_alpha=None)
+shape (2000, 60, 3)
+R (2000, 60, 3)
+(2000, 60, 3)
+['R', 'Z', 'N', 'mono', 'esp', 'vdw_surface', 'n_grid', 'espMask']
+2000
+0 R 2000 (2000, 60, 3)
+1 Z 2000 (2000, 60)
+2 N 2000 (2000, 1)
+3 mono 2000 (2000, 60)
+4 esp 2000 (2000, 4953)
+5 vdw_surface 2000 (2000, 4953, 3)
+6 n_grid 2000 (2000,)
+7 espMask 2000 (2000, 4953)
+dict_keys(['R', 'Z', 'N', 'mono', 'esp', 'n_grid', 'vdw_surface'])
+(1, 60)
+=== DCMNET Loading Model Charges and Positions ===
+Downsampling surface points to [3799.]
+Warning: surface subsampling skipped due to: arrays used as indices must be of integer (or boolean) type
+=== DCMNET Preparing Data ===
+=== DCMNET Optimizing with MCTS ===
+[OPT] initial (base) rmses=0.002288028831680139
+[OPT] initial (base) total_selected=37 loss=5.235076514509274e-06
+[NN] Initialized new parameters
+[OPT] trial target=37
+[OPT] initial total_selected=37 loss=5.235076514509274e-06
+[OPT] finished steps=0 total_selected=37 loss=5.235076514509274e-06
+[OPT] finished RMSE=0.0022880290634930134
+[OPT] total time=0.02634401246905327s avg sims/s=0.0
+[OPT] accepted=0/0
+[OPT] Best per total-selected (charges):
+  total=37: loss=0.000005 rmse=0.002288 rmse/charge=0.000062
+[OPT] Selection metric: loss
+[OPT] best among targets loss=5.235076514509274e-06
+=== DCMNET MCTS Test ===
+Time: 3.61s | Loss: 5.235076514509274e-06
+Selection shape: (37, 28) | Total selected: 37
+=== DCMNET Saving Best-by-Total XYZQ Files ===
+Saved scripts/testtag37DCM.xyz (loss=0.000005)
+=== DCMNET Computing ESP Prediction ===
+N charges: 37
+Sum of charge values: -5.960464477539063e-08
+Charge values: [-0.26060402 -0.2324057  -0.0782345  -0.10567208 -0.28683183  0.49418297
+ -0.56851035  0.437059   -0.47405544  0.1260163  -0.18241741 -0.19467211
+  0.20984836 -0.29148626  0.12463995 -0.20254324 -0.19692174  0.04017423
+ -0.10107837 -0.072216    0.11371084  0.11237691  0.10588958  0.07754619
+  0.08586583  0.09167046  0.09283852  0.11267852  0.12823783  0.13696991
+  0.10867248  0.14259769  0.13850701  0.10608105  0.10154855  0.08214597
+  0.07839091]
+Charge positions: [[ 5.609138    0.23628052  0.2562215 ]
+ [ 4.3931155   0.13072081 -0.53180104]
+ [ 3.5958445  -1.0314486  -0.28311506]
+ [ 2.3024108  -0.9491983  -1.0298679 ]
+ [ 1.5426152   0.1804952  -0.4901713 ]
+ [ 0.15117472  0.13018636 -0.25127125]
+ [-0.7217248   0.9337058  -0.8625773 ]
+ [-2.059732    0.9235101  -0.6737386 ]
+ [-2.90421     1.7624041  -1.3152179 ]
+ [-4.20756     1.737875   -1.1201702 ]
+ [-4.761962    0.83013445 -0.2271704 ]
+ [-3.9265363  -0.04910221  0.45398566]
+ [-2.5336065  -0.02720127  0.24698614]
+ [-1.7132075  -0.86216646  0.89165974]
+ [-1.9293382  -1.802792    1.7679881 ]
+ [-0.7417379  -2.4177272   2.1636226 ]
+ [ 0.25627694 -1.7699872   1.4451177 ]
+ [-0.39252675 -0.80439234  0.6612435 ]
+ [ 2.2999544   1.4084754  -0.21187943]
+ [ 3.684382    1.3402089  -0.7523067 ]
+ [ 5.438662    0.678685    1.2491579 ]
+ [ 6.300437    0.86557    -0.3408004 ]
+ [ 6.0315948  -0.7582744   0.35211137]
+ [ 3.443821   -1.2566705   0.77693367]
+ [ 4.1523137  -1.9044498  -0.719649  ]
+ [ 1.7091979  -1.8552399  -0.82043254]
+ [ 2.4924784  -0.8028225  -2.1060743 ]
+ [-4.8826933   2.431076   -1.654827  ]
+ [-5.8167877   0.7855006  -0.04574529]
+ [-4.303795   -0.77309144  1.1571879 ]
+ [-2.9253767  -2.0801866   2.152129  ]
+ [-0.6332539  -3.2253444   2.879061  ]
+ [ 1.2965599  -2.0202708   1.533521  ]
+ [ 1.7484651   2.2251256  -0.7042995 ]
+ [ 2.3174002   1.6254263   0.8662535 ]
+ [ 3.6404128   1.5071404  -1.863352  ]
+ [ 4.2499046   2.1908712  -0.3200359 ]]
+=== DCMNET Saving Error Info ===
+Loss: 5.235076514509274e-06
+RMSE: 0.010808552615344524
+Saved XYZ and error info with prefix: scripts/test
