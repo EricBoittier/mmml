@@ -330,6 +330,7 @@ def parse_args():
     parser.add_argument("--ir", default=False, action="store_true")
     parser.add_argument("--shielding", default=False, action="store_true")
     parser.add_argument("--polarizability", default=False, action="store_true")
+    parser.add_argument("--save_option", type=str, default="pkl")
     args = parser.parse_args()
 
     for key, value in vars(args).items():
@@ -402,10 +403,81 @@ def get_dummy_args(mol: str, calcs: list[CALCS]):
             self.shielding = CALCS.SHIELDING in calcs
             self.polarizability = CALCS.POLARIZABILITY in calcs
             self.interaction = CALCS.INTERACTION in calcs
+            self.save_option = "pkl"
 
     return Args()
             
 
+
+
+def _to_numpy(value):
+    """Best-effort conversion of arrays to numpy, pass through scalars/lists, drop unsupported."""
+    try:
+        import cupy as _cp
+    except Exception:
+        _cp = None
+
+    if isinstance(value, np.ndarray):
+        return value
+    if _cp is not None and isinstance(value, _cp.ndarray):
+        return value.get()
+    if isinstance(value, (int, float, np.number)):
+        return np.array(value)
+    if isinstance(value, (list, tuple)) and all(isinstance(x, (int, float, np.number)) for x in value):
+        return np.asarray(value)
+    return None
+
+
+def save_output(output_path: str, data: dict, save_option: str = "pkl") -> None:
+    """
+    Save a dictionary of results. Intended for dictionaries whose values are primarily
+    numpy/cupy arrays.
+
+    Supported formats:
+    - "pkl": Full pickle of the dict (allows arbitrary Python objects)
+    - "npz": Only array-like entries are saved as separate arrays in a .npz
+    - "hdf5": Only array-like entries saved under datasets by key
+
+    Parquet/Feather are not supported here because they require tabular structures.
+    """
+    import os as _os
+    import pickle as _pickle
+
+    if _os.path.dirname(output_path) != "":
+        _os.makedirs(_os.path.dirname(output_path), exist_ok=True)
+
+    if save_option == "pkl":
+        with open(output_path, "wb") as f:
+            _pickle.dump(data, f, protocol=_pickle.HIGHEST_PROTOCOL)
+        return
+
+    arrays_only: dict[str, np.ndarray] = {}
+    for k, v in data.items():
+        arr = _to_numpy(v)
+        if arr is not None:
+            arrays_only[k] = arr
+
+    if save_option == "npz":
+        if len(arrays_only) == 0:
+            with open(output_path, "wb") as f:
+                _pickle.dump(data, f, protocol=_pickle.HIGHEST_PROTOCOL)
+            return
+        np.savez_compressed(output_path, **arrays_only)
+        return
+
+    if save_option == "hdf5":
+        import h5py as _h5py
+        with _h5py.File(output_path, "w") as h5f:
+            for k, arr in arrays_only.items():
+                h5f.create_dataset(str(k), data=arr)
+        return
+
+    if save_option in {"parquet", "feather"}:
+        raise ValueError(
+            "Parquet/Feather are not supported for arbitrary dicts of arrays. Use 'npz' or 'hdf5', or 'pkl' for full objects."
+        )
+
+    raise ValueError(f"Invalid save option: {save_option}")
 
 
 if __name__ == "__main__":
@@ -416,12 +488,4 @@ if __name__ == "__main__":
     print(calcs, extra)
     output = compute_dft(args, calcs, extra)
     print(output)
-    import pickle
-    import os
-    # if args.output contains a directory, make sure it exists
-    if os.path.dirname(args.output) != "":
-        os.makedirs(os.path.dirname(args.output), exist_ok=True)
-
-    # save output to pickle
-    with open(args.output, "wb") as f:
-        pickle.dump(output, f)
+    save_output(args.output, output, args.save_option)
