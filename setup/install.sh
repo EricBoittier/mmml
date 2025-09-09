@@ -8,13 +8,21 @@ if [ ! -d "charmm" ]; then
     	tar -xf ../charmm.tar.xz
 fi
 
-cd charmm
+# Compile packmol 
+cd ~/mmml/mmml/packmol/
+./configure gfortran 
+
+cd ~/mmml/setup/charmm
 echo $PWD
+
+
+
+
 
 
 export CMAKE_CXX_COMPILER=/usr/bin/cmake
 # Clean and configure
-rm build/cmake/*
+rm ~/mmml/setup/charmmbuild/cmake/*
 
 # Only build if libcharmm.so doesn't exist
 if [ ! -f "libcharmm.so" ]; then
@@ -31,10 +39,16 @@ echo "$chmlib" >> ~/mmml/CHARMMSETUP
 cat ~/mmml/CHARMMSETUP
 source ~/mmml/CHARMMSETUP
 
-cd ../..
-#pip install uv
-uv sync
+cd ~/mmml/ 
+# assumes uv is installed? TODO: install uv
+which uv
+if [ $? -ne 0 ]; then
+    echo "uv not found, installing uv"
+    wget -qO- https://astral.sh/uv/install.sh | sh
+fi
+
 source .venv/bin/activate
+uv sync
 echo "venv activated"
 echo "venv path: $VIRTUAL_ENV"
 echo "venv python path: $(which python)"
