@@ -20,11 +20,12 @@ cd ~/mmml/setup/charmm
 echo $PWD
 
 export CMAKE_CXX_COMPILER=/usr/bin/cmake
-# Clean and configure
-rm ~/mmml/setup/charmm/build/cmake/*
+
 
 # Only build if libcharmm.so doesn't exist
 if [ ! -f "libcharmm.so" ]; then
+# Clean and configure
+  rm ~/mmml/setup/charmm/build/cmake/*
   ./configure --as-library --without-openmm -C build/cmake > build.setup.out
   echo "compiling"  
   make -j8
