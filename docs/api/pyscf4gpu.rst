@@ -1,3 +1,5 @@
+.. _pyscf4gpu_api:
+
 PySCF GPU Interface API
 =======================
 
@@ -34,6 +36,51 @@ Main Functions
    :param conv_tol_cpscf: CPSCF convergence tolerance
    :returns: Tuple of (engine, mol)
 
+Saving Results
+--------------
+
+Use :func:`mmml.pyscf4gpuInterface.calcs.save_output` to persist dictionaries of results
+(produced by :func:`compute_dft`) that contain primarily numpy/cupy arrays.
+
+.. function:: mmml.pyscf4gpuInterface.calcs.save_output(output_path, data, save_option='pkl')
+
+   Save a dictionary to disk with one of the supported formats.
+
+   :param output_path: Output file path
+   :param data: Dictionary of results (np/cupy arrays preferred)
+   :param save_option: One of ``'pkl'``, ``'npz'``, or ``'hdf5'``
+
+   - ``pkl``: Pickle entire dict. Best for arbitrary Python objects.
+   - ``npz``: Save only array-like entries as separate arrays (compressed).
+   - ``hdf5``: Save only array-like entries as datasets (good for large data/partial IO).
+
+   Parquet/Feather are intentionally not supported here because they are columnar, tabular
+   formats and not suitable for heterogeneous dicts of arrays.
+
+Examples
+~~~~~~~~
+
+.. code-block:: bash
+
+   # Pickle (full dict)
+   python -m mmml.pyscf4gpuInterface.calcs \
+     --mol "O 0.000 0.000 0.000; H 0.000 0.757 0.586; H 0.000 -0.757 0.586" \
+     --energy --output results/out.pkl --save_option pkl
+
+.. code-block:: bash
+
+   # Compressed array bundle
+   python -m mmml.pyscf4gpuInterface.calcs \
+     --mol "O 0.000 0.000 0.000; H 0.000 0.757 0.586; H 0.000 -0.757 0.586" \
+     --energy --dens_esp --output results/out.npz --save_option npz
+
+.. code-block:: bash
+
+   # HDF5 datasets
+   python -m mmml.pyscf4gpuInterface.calcs \
+     --mol "O 0.000 0.000 0.000; H 0.000 0.757 0.586; H 0.000 -0.757 0.586" \
+     --energy --output results/out.h5 --save_option hdf5
+
 Calculation Types
 -----------------
 
@@ -64,7 +111,8 @@ Command Line Interface
      --charge 0 \
      --energy \
      --dens_esp \
-     --output results.pkl
+     --save_option npz \
+     --output results/out.npz
 
 Output Format
 -------------

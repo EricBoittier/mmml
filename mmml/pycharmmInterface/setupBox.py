@@ -64,7 +64,7 @@ from pint import UnitRegistry
 ureg = UnitRegistry()
 Q_ = ureg.Quantity
 
-PACKMOL_PATH = "/pchem-data/meuwly/boittier/home/packmol/packmol"
+PACKMOL_PATH = "packmol"
 cwd = Path(__file__).parent
 water_pdb_path = cwd / ".." / "data" / "tip3.pdb"
 octanol_pdb_path = cwd / ".." / "data" / "ocoh.pdb"
