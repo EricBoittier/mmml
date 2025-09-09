@@ -1,4 +1,4 @@
-mmml.physnetjax.physnetjax.utils.utils
+﻿mmml.physnetjax.physnetjax.utils.utils
 ======================================
 
 .. automodule:: mmml.physnetjax.physnetjax.utils.utils
@@ -18,7 +18,6 @@ mmml.physnetjax.physnetjax.utils.utils
    .. autosummary::
    
       Any
-      DTYPE
       Path
       datetime
    
