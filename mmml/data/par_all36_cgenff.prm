@@ -288,8 +288,8 @@ MASS  -1  PG0       30.97380 ! neutral phosphate
 MASS  -1  PG1       30.97380 ! phosphate -1
 MASS  -1  PG2       30.97380 ! phosphate -2
 MASS  -1  ALG1      26.98154 ! Aluminum, for ALF4, AlF4-
-!MASS  -1  HGTIP3     1.00800 ! polar H, TIPS3P WATER HYDROGEN
-!MASS  -1  OGTIP3    15.99940 ! TIPS3P WATER OXYGEN
+MASS  -1  HT     1.00800 ! polar H, TIPS3P WATER HYDROGEN
+MASS  -1  OT    15.99940 ! TIPS3P WATER OXYGEN
 !MASS  -1  DUM        0.000 ! dummy atom
 !MASS  -1  HE         4.00260 ! helium
 !MASS  -1  NE        20.17970 ! neon
@@ -302,6 +302,9 @@ MASS  -1  SEGD1     78.96000 ! selenocarbonyl Se
 MASS  -1  BG201     10.81100 ! Boronic acid B
 
 BONDS
+
+HT    HT      0.0       1.5139  ! from TIPS3P geometry (for SHAKE w/PARAM)
+HT    OT    450.0       0.9572  ! from TIPS3P geometry
 CG1N1  CG2R51  375.00     1.4220 ! DCG, yxu, RNA
 CG1N1  CG2R61  345.00     1.4350 ! 3CYP, 3-Cyanopyridine (PYRIDINE pyr-CN) (MP2 by kevo)
 CG1N1  CG321   400.00     1.4700 ! CYU, from CG1N1 CG331, yxu, RNA
@@ -987,6 +990,8 @@ SG311  HGP3    275.00     1.3250 ! PROT methanethiol pure solvent, adm jr., 6/22
 FGP1   ALG1    205.00     1.7260 ! aluminum tetrafluoride, ALF4, w/UB
 
 ANGLES
+HT   OT   HT     55.0      104.52   ! FROM TIPS3P GEOMETRY
+OT   HT   HT     0.0      0.0   ! FROM TIPS3P GEOMETRY
 CG2R51 CG1N1  NG1T1    40.00    180.00 ! DCG, yxu, RNA
 CG2R61 CG1N1  NG1T1    40.00    180.00 ! 3CYP, 3-Cyanopyridine (PYRIDINE pyr-CN), yin
 CG321  CG1N1  NG1T1    21.20    180.00 ! CYU, from CG331 CG1N1 NG1T1, yxu, RNA
@@ -11179,6 +11184,12 @@ NG2S3  HGP4   HGP4   CG2R64     9.00  0     0.00 ! NA GUA ADE CYT; from artifici
 
 NONBONDED nbxmod  5 atom cdiel fshift vatom vdistance vfswitch -
 cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
+
+
+!TIP3P LJ parameters
+HT       0.0       -0.046     0.2245
+OT       0.0       -0.1521    1.7682
+
 
 !see mass list above for better description of atom types
 !hydrogens
