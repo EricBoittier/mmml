@@ -1,5 +1,5 @@
 
-seed 675103
+seed 419969
     output pdb/init-waterbox.pdb
     filetype pdb
     tolerance 2.0
