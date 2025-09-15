@@ -56,7 +56,7 @@ def get_files(path: str) -> List[Path]:
     """Get sorted directory paths excluding tmp directories."""
     dirs = list(Path(path).glob("*/"))
     dirs = [_ for _ in dirs if "tfevent" not in str(_)]
-    dirs.sort(key=lambda x: sort_names_safe(x))
+    dirs.sort(key=lambda x: sort_names_safe(str(x)))
     return [_ for _ in dirs if "tmp" not in str(_)]
 
 
