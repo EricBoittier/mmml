@@ -201,7 +201,7 @@ def train_model(
             )
     else:
         print("Using default (fat) batching method")
-        from physnetjax.data.batches import _prepare_batches
+        from mmml.physnetjax.physnetjax.data.batches import _prepare_batches
 
     console = Console(width=200, color_system="auto")
 
