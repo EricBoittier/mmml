@@ -42,11 +42,21 @@ def get_epoch_weights(epoch: int) -> Tuple[float, float]:
         return 1.0, 50.0
 
 
+def sort_names_safe(x) -> int:
+    """"""
+    if ("/" in x) and ("-" in x):
+        _ = str(x).split("/")[-1].split("-")[-1]
+
+    if _.isdigit():
+        return int(_)
+
+    return -1
+
 def get_files(path: str) -> List[Path]:
     """Get sorted directory paths excluding tmp directories."""
     dirs = list(Path(path).glob("*/"))
     dirs = [_ for _ in dirs if "tfevent" not in str(_)]
-    dirs.sort(key=lambda x: int(str(x).split("/")[-1].split("-")[-1]))
+    dirs.sort(key=lambda x: sort_names_safe(x))
     return [_ for _ in dirs if "tmp" not in str(_)]
 
 
