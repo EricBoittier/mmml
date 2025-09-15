@@ -2,7 +2,7 @@ PSF EXT CMAP XPLOR
 
          2 !NTITLE
 * EXECUTING CHARMM SCRIPT FROM PYTHON                                           
-*  DATE:     9/ 9/25     21:52:33      CREATED BY USER: ericb                   
+*  DATE:     9/15/25     15:49:29      CREATED BY USER: chaton                  
 
          6 !NATOM
          1 MEOH     1        MEOH     CB       CG331   -0.400000E-01   12.0110           0

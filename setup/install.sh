@@ -29,6 +29,7 @@ if [ ! -f "libcharmm.so" ]; then
   ./configure --as-library --without-openmm -C build/cmake > build.setup.out
   echo "compiling"  
   make -j8
+  cp libcharmm.so ../..
 else
   echo "libcharmm.so already exists"
 fi
