@@ -14,7 +14,7 @@
 # If you want to compile with some specific fortran compiler, you must 
 # change the line below to the path of your fortran compiler. 
 #
-FORTRAN=/usr/bin/gfortran
+FORTRAN=/opt/homebrew/bin/gfortran
 #
 # Change the flags of the compilation if you want:
 #
@@ -139,7 +139,6 @@ ahestetic.o : $(SRCDIR)/ahestetic.f90
 	@$(FORTRAN) $(FLAGS) -c $(SRCDIR)/ahestetic.f90
 cell_indexing.o : $(SRCDIR)/cell_indexing.f90
 	@$(FORTRAN) $(FLAGS) -c $(SRCDIR)/cell_indexing.f90
-
 #
 # Code compiled only for all versions
 #

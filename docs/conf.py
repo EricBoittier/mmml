@@ -17,7 +17,12 @@ import os
 import sys
 sys.path.insert(0, os.path.abspath('..'))
 
-import mmml
+try:
+    # Avoid importing the package to prevent heavy/optional deps from loading on RTD
+    import importlib.metadata as importlib_metadata
+    _pkg_version = importlib_metadata.version("mmml")
+except Exception:
+    _pkg_version = ""
 
 
 # -- Project information -----------------------------------------------------
@@ -28,9 +33,9 @@ copyright = ("2025, Eric Boittier. Project structure based on the "
 author = 'Eric Boittier'
 
 # The short X.Y version
-version = ''
+version = _pkg_version
 # The full version, including alpha/beta/rc tags
-release = ''
+release = _pkg_version
 
 
 # -- General configuration ---------------------------------------------------
