@@ -82,6 +82,8 @@
 !  --------------------------------------------------------------------------  !
 
 !hydrogens
+MASS  -1  HT         1.00800 H !
+MASS  -1  OT         15.99940   
 MASS  -1  HGA1       1.00800 H ! alphatic proton, CH
 MASS  -1  HGA2       1.00800 H ! alphatic proton, CH2
 MASS  -1  HGA3       1.00800 H ! alphatic proton, CH3
@@ -264,15 +266,48 @@ MASS  -1  BG201     10.81100 B  ! Boronic acid B
 DEFA FIRS NONE LAST NONE
 AUTO ANGLES DIHE PATCH DRUDE
 
-!RESI TIP3          0.00 NOANG NODIH ! H2O, tip3p water model, generate using noangle nodihedral
-!GROUP
-!ATOM OH2  OGTIP3  -0.834
-!ATOM H1   HGTIP3   0.417
-!ATOM H2   HGTIP3   0.417
-!BOND OH2 H1 OH2 H2 H1 H2  ! the last bond is needed for shake
-!ANGLE H1 OH2 H2           ! required
-!ACCEPTOR OH2
-!PATCHING FIRS NONE LAST NONE
+RESI TIP3          0.00 NOANG NODIH ! H2O, tip3p water model, generate using noangle nodihedral
+GROUP
+ATOM OH2  OT  -0.834
+ATOM H1   HT   0.417
+ATOM H2   HT   0.417
+BOND OH2 H1 OH2 H2 H1 H2  ! the last bond is needed for shake
+ANGLE H1 OH2 H2           ! required
+ACCEPTOR OH2
+PATCHING FIRS NONE LAST NONE
+
+
+!New compounds from the sugar force field
+RESI ACO           0.00 ! C3H6O, Acetone, adm, Oct 08
+GROUP
+ATOM O1  OG2D3   -0.48
+ATOM C1  CG2O5    0.40
+ATOM C2  CG331   -0.23 !             O1
+ATOM C3  CG331   -0.23 !             ||
+ATOM H21 HGA3     0.09 !             C1
+ATOM H22 HGA3     0.09 !            /  \
+ATOM H23 HGA3     0.09 !     H21--C2    C3--H31
+ATOM H31 HGA3     0.09 !         / |    | \
+ATOM H32 HGA3     0.09 !      H22 H32  H33 H32
+ATOM H33 HGA3     0.09
+
+BOND    C1 C2   C1 C3
+BOND    C2 H21  C2 H22   C2 H23
+BOND    C3 H31  C3 H32   C3 H33
+DOUBLE  O1 C1
+IMPR    C1 C2 C3 O1
+ACCE    O1
+IC C2   C1   C3  H31        1.5366  110.58  135.22  109.51   1.1328
+IC O1   C1   C3  H31        1.2237  122.95  -42.47  109.51   1.1328
+IC O1   C1   C3  H32        1.2237  122.95   77.28  104.63   1.1325
+IC O1   C1   C3  H33        1.2237  122.95 -161.85  105.76   1.0732
+IC C3   C1   C2  H21        1.5233  110.58 -153.74  111.52   1.1204
+IC O1   C1   C2  H21        1.2237  126.42   23.85  111.52   1.1204
+IC O1   C1   C2  H22        1.2237  126.42  148.26  114.11   1.1296
+IC O1   C1   C2  H23        1.2237  126.42  -90.21  101.67   1.1375
+
+
+
 
 !protein model compounds
 !toppar_all22_model_aliphatic.str
