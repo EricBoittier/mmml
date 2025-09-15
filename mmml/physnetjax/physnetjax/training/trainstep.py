@@ -195,7 +195,7 @@ def train_step(
 
     # Update EMA weights
 
-    ema_params = jax.tree_map(
+    ema_params = jax.tree_util.tree_map (
         lambda ema, new: ema_decay * ema + (1 - ema_decay) * new,
         ema_params,
         params,
