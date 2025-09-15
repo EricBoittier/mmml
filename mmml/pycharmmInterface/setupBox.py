@@ -24,6 +24,9 @@ from ase.visualize import view
 from mmml.pycharmmInterface.import_pycharmm import (
     CGENFF_RTF, CGENFF_PRM, CHARMM_HOME, CHARMM_LIB_DIR
 )
+from mmml.pycharmmInterface.pycharmmCommands import (
+    pbcset, pbcs
+)
 os.environ["CHARMM_HOME"] = CHARMM_HOME
 os.environ["CHARMM_LIB_DIR"] = CHARMM_LIB_DIR
 
@@ -64,7 +67,7 @@ from pint import UnitRegistry
 ureg = UnitRegistry()
 Q_ = ureg.Quantity
 
-PACKMOL_PATH = "packmol"
+PACKMOL_PATH = "~/mmml/mmml/packmol/packmol"
 cwd = Path(__file__).parent
 water_pdb_path = cwd / ".." / "data" / "tip3.pdb"
 octanol_pdb_path = cwd / ".." / "data" / "ocoh.pdb"
