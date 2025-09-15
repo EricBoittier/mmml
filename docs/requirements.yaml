@@ -1,10 +1,13 @@
 name: docs_mmml
 channels:
+  - conda-forge
   - defaults
 dependencies:
   # Base deps
-  - python
-  - pip
+  - python=3.10
+  - pip>=23
+  - setuptools>=61
+  - wheel
 
   # Pip-only installs
   - pip:
