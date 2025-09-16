@@ -1,122 +1,224 @@
-# System constants
+"""MM/ML calculator helpers.
 
-from mmml.pycharmmInterface.import_pycharmm import CGENFF_PRM, CGENFF_RTF
-from itertools import combinations, permutations, product
-from typing import Dict, Tuple, List, Any, NamedTuple, Callable
-import jax
-from jax import Array
-#ATOMS_PER_MONOMER: int = 5  # Number of atoms in each monomer
-#MAX_ATOMS_PER_SYSTEM: int = 10  # Maximum atoms in monomer/dimer system
-SPATIAL_DIMS: int = 3  # Number of spatial dimensions (x, y, z)
+This module historically pulled in a large collection of heavy optional
+dependencies (ASE, PyCHARMM, JAX, ...) at import time. That behaviour made the
+module unusable in documentation builds or test environments where the optional
+packages were not installed. The fallout was a cascade of import errors for
+code that only needed light-weight helpers such as the ``ev2kcalmol`` constant.
 
-from itertools import combinations
-import matplotlib.pyplot as plt
+To make the module robust we now gate optional imports and provide small
+shims that fail lazily when the associated functionality is requested. The
+physics functionality is unchanged when the third-party libraries are present.
+"""
 
-def dimer_permutations(n_mol):
-    dimer_permutations = list(combinations(range(n_mol), 2))
-    return dimer_permutations
-
-from itertools import combinations, permutations, product
-from typing import Dict, Tuple, List, Any, NamedTuple, Callable
-import jax
-# If you want to perform simulations in float64 you have to call this before any JAX compuation
-# jax.config.update('jax_enable_x64', True)
-
-from jax import jit
-import jax.numpy as jnp
-import ase.calculators.calculator as ase_calc
-
-
-# Check JAX configuration
-devices = jax.local_devices()
-print(devices)
-print(jax.default_backend())
-print(jax.devices())
-
-import sys
-import e3x
-import jax
-import numpy as np
-import optax
-# import orbax
-from pathlib import Path
-import pandas as pd
-
-from mmml.physnetjax.physnetjax.data.data import prepare_datasets
-from mmml.physnetjax.physnetjax.training.loss import dipole_calc
-from mmml.physnetjax.physnetjax.models.model import EF
-from mmml.physnetjax.physnetjax.restart.restart import get_last, get_files, get_params_model
-from mmml.physnetjax.physnetjax.training.training import train_model  # from model import dipole_calc
-from mmml.physnetjax.physnetjax.data.batches import (
-    _prepare_batches as prepare_batches,
-)  # prepare_batches, prepare_datasets
-
-# orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
-
-data_key, train_key = jax.random.split(jax.random.PRNGKey(42), 2)
-
-from pathlib import Path
-
-from mmml.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
-
-
-def parse_non_int(s):
-    return "".join([_ for _ in s if _.isalpha()]).lower().capitalize()
-
-
-# model = EF(
-#     # attributes
-#     features=128,
-#     max_degree=0,
-#     num_iterations=5,
-#     num_basis_functions=64,
-#     cutoff=10.0,
-#     max_atomic_number=18,
-#     charges=True,
-#     natoms=NATOMS,
-#     total_charge=0,
-#     n_res=3,
-#     zbl=False,
-#     debug=False,
-# )
-
-
-import pycharmm
-
-import pycharmm
-import pycharmm.generate as gen
-import pycharmm.ic as ic
-import pycharmm.coor as coor
-import pycharmm.energy as energy
-import pycharmm.dynamics as dyn
-import pycharmm.nbonds as nbonds
-import pycharmm.minimize as minimize
-import pycharmm.crystal as crystal
-import pycharmm.image as image
-import pycharmm.psf as psf
-import pycharmm.read as read
-import pycharmm.write as write
-import pycharmm.settings as settings
-import pycharmm.cons_harm as cons_harm
-import pycharmm.cons_fix as cons_fix
-import pycharmm.select as select
-import pycharmm.shake as shake
-
-from pycharmm.lib import charmm as libcharmm
-
-
-import ase
-from ase.io import read as read_ase
-from ase import visualize
-from ase.visualize import view
-
-
-from scipy.optimize import minimize
-
-ev2kcalmol = 1 / (ase.units.kcal / ase.units.mol)
-
+from __future__ import annotations
 
 from functools import partial
+from itertools import combinations, permutations, product
+from pathlib import Path
+from typing import Any, Callable, Dict, List, NamedTuple, Tuple
+
+import numpy as np
+import pandas as pd
+from scipy.optimize import minimize as scipy_minimize
+
+# CHARMM force-field definitions are optional.  During documentation builds we
+# often do not have a functional PyCHARMM installation, so fall back to ``None``
+# when the import fails for any reason (missing module or missing shared libs).
+try:
+    from mmml.pycharmmInterface.import_pycharmm import CGENFF_PRM, CGENFF_RTF
+except Exception:  # pragma: no cover - exercised in lightweight envs
+    CGENFF_PRM = CGENFF_RTF = None
+try:
+    from mmml.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
+except ModuleNotFoundError:  # pragma: no cover - helper requires ASE
+
+    def get_ase_calc(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[override]
+        raise ModuleNotFoundError("ase is required for get_ase_calc")
+try:
+    from mmml.physnetjax.physnetjax.data.batches import (
+        _prepare_batches as prepare_batches,
+    )
+    from mmml.physnetjax.physnetjax.data.data import prepare_datasets
+    from mmml.physnetjax.physnetjax.models.model import EF
+    from mmml.physnetjax.physnetjax.restart.restart import get_files, get_last, get_params_model
+    from mmml.physnetjax.physnetjax.training.loss import dipole_calc
+    from mmml.physnetjax.physnetjax.training.training import train_model
+except ModuleNotFoundError:  # pragma: no cover - ML stack optional for docs
+
+    def prepare_batches(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[override]
+        raise ModuleNotFoundError("e3x and jax are required for prepare_batches")
+
+    def prepare_datasets(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[override]
+        raise ModuleNotFoundError("e3x and jax are required for prepare_datasets")
+
+    def EF(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[override]
+        raise ModuleNotFoundError("jax is required for EF model")
+
+    def get_files(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[override]
+        raise ModuleNotFoundError("jax is required for restart helpers")
+
+    def get_last(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[override]
+        raise ModuleNotFoundError("jax is required for restart helpers")
+
+    def get_params_model(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[override]
+        raise ModuleNotFoundError("jax is required for restart helpers")
+
+    def dipole_calc(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[override]
+        raise ModuleNotFoundError("jax is required for dipole calculations")
+
+    def train_model(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[override]
+        raise ModuleNotFoundError("jax and optax are required for training")
+
+# Optional imports ---------------------------------------------------------
+
+try:  # JAX is required for the actual calculator but optional for docs/tests
+    import jax
+    from jax import Array, jit
+    import jax.numpy as jnp
+except ModuleNotFoundError:  # pragma: no cover - exercised when JAX is absent
+    jax = None  # type: ignore[assignment]
+    Array = Any  # type: ignore[misc,assignment]
+
+    def jit(fn: Callable) -> Callable:  # type: ignore[override]
+        raise ModuleNotFoundError("jax is required for mmml_calculator functionality")
+
+    jnp = None  # type: ignore[assignment]
+
+
+try:  # matplotlib is only used for optional plotting utilities
+    import matplotlib.pyplot as plt
+except ModuleNotFoundError:  # pragma: no cover - plotting disabled without matplotlib
+    plt = None  # type: ignore[assignment]
+
+
+try:  # ASE is optional for documentation/tests that only need constants
+    import ase  # type: ignore[import-not-found]
+    import ase.calculators.calculator as ase_calc
+    from ase import visualize
+    from ase.io import read as read_ase
+    from ase.visualize import view
+    _HAVE_ASE = True
+except ModuleNotFoundError:  # pragma: no cover - exercised during doc builds
+    ase = None  # type: ignore[assignment]
+    ase_calc = None  # type: ignore[assignment]
+    visualize = None  # type: ignore[assignment]
+    read_ase = None  # type: ignore[assignment]
+
+    def view(*_args: Any, **_kwargs: Any) -> None:  # type: ignore[override]
+        raise ModuleNotFoundError("ase is required for visualisation support")
+
+    _HAVE_ASE = False
+
+
+try:  # PyCHARMM is optional and only required for the MM plumbing
+    import pycharmm  # type: ignore[import-not-found]
+    import pycharmm.cons_fix as cons_fix
+    import pycharmm.cons_harm as cons_harm
+    import pycharmm.coor as coor
+    import pycharmm.crystal as crystal
+    import pycharmm.dynamics as dyn
+    import pycharmm.energy as energy
+    import pycharmm.generate as gen
+    import pycharmm.ic as ic
+    import pycharmm.image as image
+    import pycharmm.minimize as minimize
+    import pycharmm.nbonds as nbonds
+    import pycharmm.psf as psf
+    import pycharmm.read as read
+    import pycharmm.select as select
+    import pycharmm.settings as settings
+    import pycharmm.shake as shake
+    import pycharmm.write as write
+    from pycharmm.lib import charmm as libcharmm
+    _HAVE_PYCHARMM = True
+except Exception:  # pragma: no cover - exercised when PyCHARMM missing
+    pycharmm = None  # type: ignore[assignment]
+    cons_fix = None  # type: ignore[assignment]
+    cons_harm = None  # type: ignore[assignment]
+    coor = None  # type: ignore[assignment]
+    crystal = None  # type: ignore[assignment]
+    dyn = None  # type: ignore[assignment]
+    energy = None  # type: ignore[assignment]
+    gen = None  # type: ignore[assignment]
+    ic = None  # type: ignore[assignment]
+    image = None  # type: ignore[assignment]
+    minimize = None  # type: ignore[assignment]
+    nbonds = None  # type: ignore[assignment]
+    psf = None  # type: ignore[assignment]
+    read = None  # type: ignore[assignment]
+    select = None  # type: ignore[assignment]
+    settings = None  # type: ignore[assignment]
+    shake = None  # type: ignore[assignment]
+    write = None  # type: ignore[assignment]
+    libcharmm = None  # type: ignore[assignment]
+    _HAVE_PYCHARMM = False
+
+
+try:  # Additional optional scientific libraries used for ML/MM coupling
+    import e3x  # type: ignore[import-not-found]
+    from e3x.nn import smooth_switch, smooth_cutoff  # type: ignore[import-not-found]
+    _HAVE_E3X = True
+except ModuleNotFoundError:  # pragma: no cover - optional runtime dependency
+    e3x = None  # type: ignore[assignment]
+    _HAVE_E3X = False
+
+    def smooth_switch(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[override]
+        raise ModuleNotFoundError("e3x is required for smooth_switch")
+
+    def smooth_cutoff(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[override]
+        raise ModuleNotFoundError("e3x is required for smooth_cutoff")
+
+
+try:
+    import optax  # type: ignore[import-not-found]
+except ModuleNotFoundError:  # pragma: no cover - optional runtime dependency
+    optax = None  # type: ignore[assignment]
+
+
+# Public constants ---------------------------------------------------------
+
+# Energy conversion (1 eV -> kcal / mol).  Use ASE when available for
+# consistency; otherwise fall back to the known constant so documentation tests
+# can still import this module.
+if _HAVE_ASE:
+    ev2kcalmol = 1 / (ase.units.kcal / ase.units.mol)  # type: ignore[attr-defined]
+else:
+    ev2kcalmol = 23.060548867
+
+
+# Module-level configuration ------------------------------------------------
+
+SPATIAL_DIMS: int = 3  # Number of spatial dimensions (x, y, z)
+
+
+if jax is not None:  # pragma: no branch - keeps default behaviour when JAX present
+    # If you want to perform simulations in float64 you have to call this before
+    # any JAX computation.
+    # jax.config.update('jax_enable_x64', True)
+    data_key, train_key = jax.random.split(jax.random.PRNGKey(42), 2)
+
+    # Debug helpers that used to be printed on import are now toggled via
+    # explicit logging to avoid side effects during import.
+    try:
+        devices = jax.local_devices()
+        default_backend = jax.default_backend()
+    except Exception:  # pragma: no cover - only hit when runtime misconfigured
+        devices = []
+        default_backend = "unknown"
+else:  # pragma: no cover - executed in docs/test environments without JAX
+    data_key = train_key = None
+    devices = []
+    default_backend = "unavailable"
+
+
+def parse_non_int(s: str) -> str:
+    return "".join(ch for ch in s if ch.isalpha()).lower().capitalize()
+
+
+def dimer_permutations(n_mol: int) -> List[Tuple[int, int]]:
+    return list(combinations(range(n_mol), 2))
+
 
 
 def set_pycharmm_xyz(atom_positions):
@@ -371,7 +473,6 @@ def prepare_batches_md(
 
 
 epsilon = 10 ** (-6)
-from e3x.nn import smooth_switch, smooth_cutoff
 
 def indices_of_pairs(a, b, n_atoms=5, n_mol=20):
     assert a < b, "by convention, res a must have a smaller index than res b"
@@ -464,7 +565,7 @@ def create_initial_simplex(x0, delta=0.0001):
 def optimize_params_simplex(x0, bounds, 
 loss, method="Nelder-Mead", maxiter=100, xatol=0.0001, fatol=0.0001):
     initial_simplex = create_initial_simplex(x0)
-    res = minimize(
+    res = scipy_minimize(
         loss,
         x0=x0,
         method="Nelder-Mead",
@@ -1087,14 +1188,92 @@ def setup_calculator(
             "mm_F": mm_grad
         }
 
+    if _HAVE_ASE:
 
+        class AseDimerCalculator(ase_calc.Calculator):
+            """ASE calculator implementation for dimer calculations"""
 
-    class AseDimerCalculator(ase_calc.Calculator):
-        """ASE calculator implementation for dimer calculations"""
-        implemented_properties = ["energy", "forces", "out"]
-        
-        def __init__(
-            self,
+            implemented_properties = ["energy", "forces", "out"]
+
+            def __init__(
+                self,
+                n_monomers: int,
+                cutoff_params: CutoffParameters = None,
+                doML: bool = True,
+                doMM: bool = True,
+                doML_dimer: bool = True,
+                backprop: bool = False,
+                debug: bool = False,
+                energy_conversion_factor: float = 1.0,
+                force_conversion_factor: float = 1.0,
+            ):
+                """Initialize calculator with configuration parameters"""
+
+                super().__init__()
+                self.n_monomers = n_monomers
+                self.cutoff_params = cutoff_params or CutoffParameters()
+                self.doML = doML
+                self.doMM = doMM
+                self.doML_dimer = doML_dimer
+                self.backprop = backprop
+                self.debug = debug
+                self.ep_scale = None
+                self.sig_scale = None
+                self.energy_conversion_factor = energy_conversion_factor
+                self.force_conversion_factor = force_conversion_factor
+
+            def calculate(
+                self,
+                atoms,
+                properties,
+                system_changes=ase.calculators.calculator.all_changes,
+            ):
+                """Calculate energy and forces for given atomic configuration"""
+
+                ase_calc.Calculator.calculate(self, atoms, properties, system_changes)
+                R = atoms.get_positions()
+                Z = atoms.get_atomic_numbers()
+
+                out = {}
+                if not self.backprop:
+                    out = spherical_cutoff_calculator(
+                        positions=R,
+                        atomic_numbers=Z,
+                        n_monomers=self.n_monomers,
+                        cutoff_params=self.cutoff_params,
+                        doML=self.doML,
+                        doMM=self.doMM,
+                        doML_dimer=self.doML_dimer,
+                        debug=self.debug,
+                    )
+
+                    E = out.energy
+                    F = out.forces
+
+                if self.backprop:
+
+                    def Efn(R):
+                        return spherical_cutoff_calculator(
+                            positions=R,
+                            atomic_numbers=Z,
+                            n_monomers=self.n_monomers,
+                            cutoff_params=self.cutoff_params,
+                            doML=self.doML,
+                            doMM=self.doMM,
+                            doML_dimer=self.doML_dimer,
+                            debug=self.debug,
+                        ).energy
+
+                    E, F = jax.value_and_grad(Efn)(R)
+                    F = -F
+
+                self.results["out"] = out
+                self.results["energy"] = E * self.energy_conversion_factor
+                self.results["forces"] = F * self.force_conversion_factor
+
+        def get_spherical_cutoff_calculator(
+            atomic_numbers: Array,
+            atomic_positions: Array,
             n_monomers: int,
             cutoff_params: CutoffParameters = None,
             doML: bool = True,
@@ -1103,98 +1282,32 @@ def setup_calculator(
             backprop: bool = False,
             debug: bool = False,
             energy_conversion_factor: float = 1.0,
-            force_conversion_factor: float = 1.0
-        ):
-            """Initialize calculator with configuration parameters"""
-            super().__init__()
-            self.n_monomers = n_monomers
-            self.cutoff_params = cutoff_params or CutoffParameters()
-            self.doML = doML
-            self.doMM = doMM
-            self.doML_dimer = doML_dimer
-            self.backprop = backprop
-            self.debug = debug
-            self.ep_scale = None
-            self.sig_scale = None
-            self.energy_conversion_factor = energy_conversion_factor
-            self.force_conversion_factor = force_conversion_factor
+            force_conversion_factor: float = 1.0,
+        ) -> Tuple[AseDimerCalculator, Callable]:
+            """Factory function to create calculator instances"""
 
-        def calculate(
-            self, 
-            atoms, 
-            properties, 
-            system_changes=ase.calculators.calculator.all_changes
-        ):
-            """Calculate energy and forces for given atomic configuration"""
-            ase_calc.Calculator.calculate(self, atoms, properties, system_changes)
-            R = atoms.get_positions()
-            Z = atoms.get_atomic_numbers()
+            calculator = AseDimerCalculator(
+                n_monomers=n_monomers,
+                cutoff_params=cutoff_params,
+                doML=doML,
+                doMM=doMM,
+                doML_dimer=doML_dimer,
+                backprop=backprop,
+                debug=debug,
+                energy_conversion_factor=energy_conversion_factor,
+                force_conversion_factor=force_conversion_factor,
+            )
 
-            # spherical_cutoff_calculator_grad = jax.grad(spherical_cutoff_calculator)
+            return calculator, spherical_cutoff_calculator
 
-            out = {}
-            if not self.backprop:
-                out = spherical_cutoff_calculator(
-                    positions=R,
-                    atomic_numbers=Z,
-                    n_monomers=self.n_monomers,
-                    cutoff_params=self.cutoff_params,
-                    doML=self.doML,
-                    doMM=self.doMM,
-                    doML_dimer=self.doML_dimer,
-                    debug=self.debug
-                )
-    
-                E = out.energy
-                F = out.forces 
-            
-            if self.backprop:
-                def Efn(R):
-                    return spherical_cutoff_calculator(
-                    positions=R,
-                    atomic_numbers=Z,
-                    n_monomers=self.n_monomers,
-                    cutoff_params=self.cutoff_params,
-                    doML=self.doML,
-                    doMM=self.doMM,
-                    doML_dimer=self.doML_dimer,
-                    debug=self.debug
-                ).energy
-                    
-                E, F  = jax.value_and_grad(Efn)(R)
-                F = -F
-                           
-            self.results["out"] = out
-            self.results["energy"] = E * self.energy_conversion_factor
-            self.results["forces"] = F * self.force_conversion_factor
+    else:  # pragma: no cover - exercised when ASE not installed
 
-    def get_spherical_cutoff_calculator(
-        atomic_numbers: Array,
-        atomic_positions: Array,
-        n_monomers: int,
-        cutoff_params: CutoffParameters = None,
-        doML: bool = True,
-        doMM: bool = True,
-        doML_dimer: bool = True,
-        backprop: bool = False,
-        debug: bool = False,
-        energy_conversion_factor: float = 1.0,
-        force_conversion_factor: float = 1.0
-    ) -> Tuple[AseDimerCalculator, Callable]:
-        """Factory function to create calculator instances"""
-        calculator = AseDimerCalculator(
-            n_monomers=n_monomers,
-            cutoff_params=cutoff_params,
-            doML=doML,
-            doMM=doMM,
-            doML_dimer=doML_dimer,
-            backprop=backprop,
-            debug=debug,
-            energy_conversion_factor=energy_conversion_factor,
-            force_conversion_factor=force_conversion_factor
-        )
-        
-        return calculator, spherical_cutoff_calculator
+        class AseDimerCalculator:  # type: ignore[too-few-public-methods]
+            def __init__(self, *args: Any, **kwargs: Any) -> None:
+                raise ModuleNotFoundError("ase is required for AseDimerCalculator")
+
+        def get_spherical_cutoff_calculator(*args: Any, **kwargs: Any):  # type: ignore[override]
+            raise ModuleNotFoundError("ase is required for get_spherical_cutoff_calculator")
 
 
 
@@ -1376,4 +1489,3 @@ def setup_calculator(
         }
 
     return get_spherical_cutoff_calculator
-

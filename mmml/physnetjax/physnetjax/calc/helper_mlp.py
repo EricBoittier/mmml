@@ -15,9 +15,25 @@ conversion = {
     "forces": 1,
     "dipole": 1,
 }
+implemented_properties = ["energy", "forces", "dipole"]
 
+def get_ase_calc(params, model, ase_mol, 
+conversion=conversion, 
+implemented_properties = implemented_properties):
+    """Ase calculator implementation for physnetjax model
 
-def get_ase_calc(params, model, ase_mol, conversion=conversion):
+    Args:
+    params: params of the physnetjax model
+    model: physnetjax model
+    ase_mol: ase molecule
+    conversion: conversion factor for the energy, forces, and dipole
+    implemented_properties: implemented properties for the ase calculator
+
+    Returns:
+    Ase calculator implementation for physnetjax model
+    """
+    Implemented_properties = implemented_properties
+    print(implemented_properties)
 
     assert model.natoms == len(ase_mol.get_atomic_numbers())
 
@@ -32,7 +48,7 @@ def get_ase_calc(params, model, ase_mol, conversion=conversion):
         )
 
     class MessagePassingCalculator(ase_calc.Calculator):
-        implemented_properties = ["energy", "forces", "dipole"]
+        implemented_properties = Implemented_properties
 
         def calculate(
             self,
@@ -65,6 +81,17 @@ pycharmm_conversion = {
 
 
 def get_pyc(params, model, ase_mol, conversion=pycharmm_conversion):
+    """PyCharmm calculator implementation for physnetjax model
+
+    Args:
+    params: params of the physnetjax model
+    model: physnetjax model
+    ase_mol: ase molecule
+    conversion: conversion factor for the energy, forces, and dipole
+
+    Returns:
+    PyCharmm calculator implementation for physnetjax model
+    """
     Z = ase_mol.get_atomic_numbers()
     Z = [_ if _ < 9 else 6 for _ in Z]
     NATOMS = len(Z)
