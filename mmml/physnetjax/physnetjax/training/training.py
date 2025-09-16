@@ -149,7 +149,9 @@ def train_model(
     schedule_fn : optax.Schedule | str | None, optional
         Learning rate schedule, by default None
     objective : str, optional
-        Objective metric for best model selection, by default "valid_forces_mae"
+        Objective metric for best model selection by early stopping, by default "valid_forces_mae"
+        options: "valid_forces_mae", "valid_energy_mae", 
+        "valid_loss", "train_forces_mae", "train_energy_mae", "train_loss", "lr"
     ckpt_dir : pathlib.Path, optional
         Checkpoint directory, by default BASE_CKPT_DIR
     log_tb : bool, optional
