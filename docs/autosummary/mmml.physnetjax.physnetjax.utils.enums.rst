@@ -1,22 +1,6 @@
-mmml.physnetjax.physnetjax.utils.enums
+﻿mmml.physnetjax.physnetjax.utils.enums
 ======================================
 
-.. automodule:: mmml.physnetjax.physnetjax.utils.enums
+.. currentmodule:: mmml.physnetjax.physnetjax.utils
 
-   
-   .. rubric:: Functions
-
-   .. autosummary::
-   
-      check_keys
-   
-   .. rubric:: Classes
-
-   .. autosummary::
-   
-      Any
-      Enum
-      MolecularData
-      Path
-      auto
-   
+.. autodata:: enums

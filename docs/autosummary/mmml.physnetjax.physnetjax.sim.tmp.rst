@@ -1,6 +1,6 @@
-mmml.physnetjax.physnetjax.sim.tmp
+﻿mmml.physnetjax.physnetjax.sim.tmp
 ==================================
 
-.. automodule:: mmml.physnetjax.physnetjax.sim.tmp
+.. currentmodule:: mmml.physnetjax.physnetjax.sim
 
-   
+.. autodata:: tmp

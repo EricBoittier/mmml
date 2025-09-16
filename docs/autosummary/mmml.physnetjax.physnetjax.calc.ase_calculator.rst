@@ -1,12 +1,6 @@
 ﻿mmml.physnetjax.physnetjax.calc.ase\_calculator
 ===============================================
 
-.. automodule:: mmml.physnetjax.physnetjax.calc.ase_calculator
+.. currentmodule:: mmml.physnetjax.physnetjax.calc
 
-   
-   .. rubric:: Classes
-
-   .. autosummary::
-   
-      MessagePassingCalculator
-   
+.. autodata:: ase_calculator

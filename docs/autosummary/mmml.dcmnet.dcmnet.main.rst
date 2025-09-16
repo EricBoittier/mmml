@@ -1,6 +1,6 @@
-mmml.dcmnet.dcmnet.main
+﻿mmml.dcmnet.dcmnet.main
 =======================
 
-.. automodule:: mmml.dcmnet.dcmnet.main
+.. currentmodule:: mmml.dcmnet.dcmnet
 
-   
+.. autodata:: main

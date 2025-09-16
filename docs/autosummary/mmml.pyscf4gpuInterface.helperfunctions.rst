@@ -1,12 +1,6 @@
-mmml.pyscf4gpuInterface.helperfunctions
+﻿mmml.pyscf4gpuInterface.helperfunctions
 =======================================
 
-.. automodule:: mmml.pyscf4gpuInterface.helperfunctions
+.. currentmodule:: mmml.pyscf4gpuInterface
 
-   
-   .. rubric:: Functions
-
-   .. autosummary::
-   
-      print_basis
-   
+.. autodata:: helperfunctions

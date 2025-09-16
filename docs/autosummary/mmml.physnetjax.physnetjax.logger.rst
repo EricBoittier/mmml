@@ -1,14 +1,6 @@
-mmml.physnetjax.physnetjax.logger
+﻿mmml.physnetjax.physnetjax.logger
 =================================
 
-.. automodule:: mmml.physnetjax.physnetjax.logger
+.. currentmodule:: mmml.physnetjax.physnetjax
 
-   
-.. rubric:: Modules
-
-.. autosummary::
-   :toctree:
-   :recursive:
-
-   tensorboard_interface
-   tensorboard_logging
+.. autodata:: logger

@@ -1,12 +1,6 @@
 ﻿mmml.dcmnet.dcmnet.electrostatics
 =================================
 
-.. automodule:: mmml.dcmnet.dcmnet.electrostatics
+.. currentmodule:: mmml.dcmnet.dcmnet
 
-   
-   .. rubric:: Functions
-
-   .. autosummary::
-   
-      calc_esp
-   
+.. autodata:: electrostatics

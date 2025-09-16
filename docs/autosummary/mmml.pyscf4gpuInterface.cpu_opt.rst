@@ -1,14 +1,6 @@
-mmml.pyscf4gpuInterface.cpu\_opt
+﻿mmml.pyscf4gpuInterface.cpu\_opt
 ================================
 
-.. automodule:: mmml.pyscf4gpuInterface.cpu_opt
+.. currentmodule:: mmml.pyscf4gpuInterface
 
-   
-   .. rubric:: Functions
-
-   .. autosummary::
-   
-      optimize_cpu
-      rotate_dimers
-      write_constraints
-   
+.. autodata:: cpu_opt

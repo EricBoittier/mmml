@@ -1,13 +1,6 @@
-mmml.physnetjax.physnetjax.data.cut\_grid
+﻿mmml.physnetjax.physnetjax.data.cut\_grid
 =========================================
 
-.. automodule:: mmml.physnetjax.physnetjax.data.cut_grid
+.. currentmodule:: mmml.physnetjax.physnetjax.data
 
-   
-   .. rubric:: Functions
-
-   .. autosummary::
-   
-      cdist
-      cut_vdw
-   
+.. autodata:: cut_grid

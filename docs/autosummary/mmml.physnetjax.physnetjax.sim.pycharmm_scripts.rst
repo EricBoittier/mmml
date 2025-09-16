@@ -1,12 +1,6 @@
-mmml.physnetjax.physnetjax.sim.pycharmm\_scripts
+﻿mmml.physnetjax.physnetjax.sim.pycharmm\_scripts
 ================================================
 
-.. automodule:: mmml.physnetjax.physnetjax.sim.pycharmm_scripts
+.. currentmodule:: mmml.physnetjax.physnetjax.sim
 
-   
-   .. rubric:: Functions
-
-   .. autosummary::
-   
-      add_waters
-   
+.. autodata:: pycharmm_scripts

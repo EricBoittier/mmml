@@ -1,13 +1,6 @@
-mmml.dcmnet.dcmnet.modules
+﻿mmml.dcmnet.dcmnet.modules
 ==========================
 
-.. automodule:: mmml.dcmnet.dcmnet.modules
+.. currentmodule:: mmml.dcmnet.dcmnet
 
-   
-   .. rubric:: Classes
-
-   .. autosummary::
-   
-      MessagePassingModel
-      MessagePassingModelDEBUG
-   
+.. autodata:: modules

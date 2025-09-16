@@ -1,20 +1,6 @@
-mmml.dcmnet.dcmnet.data
+﻿mmml.dcmnet.dcmnet.data
 =======================
 
-.. automodule:: mmml.dcmnet.dcmnet.data
+.. currentmodule:: mmml.dcmnet.dcmnet
 
-   
-   .. rubric:: Functions
-
-   .. autosummary::
-   
-      assert_dataset_size
-      cdist
-      cut_vdw
-      get_choices
-      make_dicts
-      prepare_batches
-      prepare_datasets
-      prepare_multiple_datasets
-      print_shapes
-   
+.. autodata:: data

@@ -1,12 +1,6 @@
-mmml.tests.test\_mmml
+﻿mmml.tests.test\_mmml
 =====================
 
-.. automodule:: mmml.tests.test_mmml
+.. currentmodule:: mmml.tests
 
-   
-   .. rubric:: Functions
-
-   .. autosummary::
-   
-      test_mmml_imported
-   
+.. autodata:: test_mmml

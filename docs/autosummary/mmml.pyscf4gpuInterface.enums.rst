@@ -1,15 +1,6 @@
-mmml.pyscf4gpuInterface.enums
+﻿mmml.pyscf4gpuInterface.enums
 =============================
 
-.. automodule:: mmml.pyscf4gpuInterface.enums
+.. currentmodule:: mmml.pyscf4gpuInterface
 
-   
-   .. rubric:: Classes
-
-   .. autosummary::
-   
-      BASIS
-      CALCS
-      ENUM
-      THEORY
-   
+.. autodata:: enums

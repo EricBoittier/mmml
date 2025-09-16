@@ -1,13 +1,6 @@
-mmml.pyscf4gpuInterface.efield
+﻿mmml.pyscf4gpuInterface.efield
 ==============================
 
-.. automodule:: mmml.pyscf4gpuInterface.efield
+.. currentmodule:: mmml.pyscf4gpuInterface
 
-   
-   .. rubric:: Functions
-
-   .. autosummary::
-   
-      maxwell_eval_ir_freq_intensity
-      reduce
-   
+.. autodata:: efield

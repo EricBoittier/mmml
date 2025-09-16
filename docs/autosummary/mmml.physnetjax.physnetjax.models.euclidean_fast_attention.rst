@@ -1,15 +1,6 @@
-mmml.physnetjax.physnetjax.models.euclidean\_fast\_attention
+﻿mmml.physnetjax.physnetjax.models.euclidean\_fast\_attention
 ============================================================
 
-.. automodule:: mmml.physnetjax.physnetjax.models.euclidean_fast_attention
+.. currentmodule:: mmml.physnetjax.physnetjax.models
 
-   
-.. rubric:: Modules
-
-.. autosummary::
-   :toctree:
-   :recursive:
-
-   fast_attention
-   rope
-   tensor_integration
+.. autodata:: euclidean_fast_attention
