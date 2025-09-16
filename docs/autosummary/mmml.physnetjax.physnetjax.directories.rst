@@ -1,18 +1,6 @@
-mmml.physnetjax.physnetjax.directories
+﻿mmml.physnetjax.physnetjax.directories
 ======================================
 
-.. automodule:: mmml.physnetjax.physnetjax.directories
+.. currentmodule:: mmml.physnetjax.physnetjax
 
-   
-   .. rubric:: Functions
-
-   .. autosummary::
-   
-      print_paths
-   
-   .. rubric:: Classes
-
-   .. autosummary::
-   
-      Path
-   
+.. autodata:: directories

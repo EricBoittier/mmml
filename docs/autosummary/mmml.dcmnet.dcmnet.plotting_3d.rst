@@ -1,13 +1,6 @@
-mmml.dcmnet.dcmnet.plotting\_3d
+﻿mmml.dcmnet.dcmnet.plotting\_3d
 ===============================
 
-.. automodule:: mmml.dcmnet.dcmnet.plotting_3d
+.. currentmodule:: mmml.dcmnet.dcmnet
 
-   
-   .. rubric:: Functions
-
-   .. autosummary::
-   
-      plot_3d_models
-      plot_3d_molecule
-   
+.. autodata:: plotting_3d

@@ -1,6 +1,6 @@
-mmml.dcmnet.dcmnet.cubes
+﻿mmml.dcmnet.dcmnet.cubes
 ========================
 
-.. automodule:: mmml.dcmnet.dcmnet.cubes
+.. currentmodule:: mmml.dcmnet.dcmnet
 
-   
+.. autodata:: cubes

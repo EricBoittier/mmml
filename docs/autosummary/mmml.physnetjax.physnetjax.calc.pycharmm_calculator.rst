@@ -1,12 +1,6 @@
-mmml.physnetjax.physnetjax.calc.pycharmm\_calculator
+﻿mmml.physnetjax.physnetjax.calc.pycharmm\_calculator
 ====================================================
 
-.. automodule:: mmml.physnetjax.physnetjax.calc.pycharmm_calculator
+.. currentmodule:: mmml.physnetjax.physnetjax.calc
 
-   
-   .. rubric:: Classes
-
-   .. autosummary::
-   
-      PyCharmm_Calculator
-   
+.. autodata:: pycharmm_calculator

@@ -1,6 +1,6 @@
-mmml.physnetjax.physnetjax.utils.ascii
+﻿mmml.physnetjax.physnetjax.utils.ascii
 ======================================
 
-.. automodule:: mmml.physnetjax.physnetjax.utils.ascii
+.. currentmodule:: mmml.physnetjax.physnetjax.utils
 
-   
+.. autodata:: ascii

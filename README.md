@@ -4,6 +4,9 @@ mmml
 [![GitHub Actions Build Status](https://github.com/EricBoittier/mmml/workflows/CI/badge.svg)](https://github.com/EricBoittier/mmml/actions?query=workflow%3ACI)
 [![codecov](https://codecov.io/gh/EricBoittier/mmml/branch/main/graph/badge.svg)](https://codecov.io/gh/EricBoittier/mmml/branch/main)
 
+
+[Read the Docs](https://mmml.readthedocs.io/en/latest/)
+
 ### Overview
 
 - **mmml** is a molecular mechanics + machine-learned force-field toolkit that combines CHARMM/OpenMM

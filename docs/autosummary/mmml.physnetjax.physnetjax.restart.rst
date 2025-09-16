@@ -1,13 +1,6 @@
-mmml.physnetjax.physnetjax.restart
+﻿mmml.physnetjax.physnetjax.restart
 ==================================
 
-.. automodule:: mmml.physnetjax.physnetjax.restart
+.. currentmodule:: mmml.physnetjax.physnetjax
 
-   
-.. rubric:: Modules
-
-.. autosummary::
-   :toctree:
-   :recursive:
-
-   restart
+.. autodata:: restart
