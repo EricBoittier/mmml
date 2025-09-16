@@ -1,6 +1,6 @@
-mmml.mmml
+﻿mmml.mmml
 =========
 
-.. automodule:: mmml.mmml
+.. currentmodule:: mmml
 
-   
+.. autodata:: mmml

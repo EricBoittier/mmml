@@ -1,6 +1,6 @@
-mmml.physnetjax.physnetjax.training.sharding
+﻿mmml.physnetjax.physnetjax.training.sharding
 ============================================
 
-.. automodule:: mmml.physnetjax.physnetjax.training.sharding
+.. currentmodule:: mmml.physnetjax.physnetjax.training
 
-   
+.. autodata:: sharding

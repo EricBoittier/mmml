@@ -1,13 +1,6 @@
 ﻿mmml.physnetjax.physnetjax.models.zbl
 =====================================
 
-.. automodule:: mmml.physnetjax.physnetjax.models.zbl
+.. currentmodule:: mmml.physnetjax.physnetjax.models
 
-   
-   .. rubric:: Classes
-
-   .. autosummary::
-   
-      Any
-      ZBLRepulsion
-   
+.. autodata:: zbl
