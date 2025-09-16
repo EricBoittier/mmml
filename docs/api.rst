@@ -3,6 +3,14 @@ API Documentation
 
 This page provides links to the main API modules. For detailed function documentation, see the individual module pages.
 
+Top-level Package
+-----------------
+
+.. toctree::
+   :maxdepth: 1
+
+   api/mmml
+
 DCMNet (Distributed Charge Multipole Network)
 ---------------------------------------------
 

@@ -22,18 +22,6 @@ import jax
 # If you want to perform simulations in float64 you have to call this before any JAX compuation
 # jax.config.update('jax_enable_x64', True)
 
-import jax
-import jax.numpy as jnp
-from jax import Array
-import os
-
-os.environ["CHARMM_HOME"] = "/pchem-data/meuwly/boittier/home/charmm"
-os.environ["CHARMM_LIB_DIR"] = "/pchem-data/meuwly/boittier/home/charmm/build/cmake"
-# Set environment variables
-os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".99"
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-
-import jax
 from jax import jit
 import jax.numpy as jnp
 import ase.calculators.calculator as ase_calc
@@ -54,12 +42,12 @@ import optax
 from pathlib import Path
 import pandas as pd
 
-from physnetjax.data.data import prepare_datasets
-from physnetjax.training.loss import dipole_calc
-from physnetjax.models.model import EF
-from physnetjax.restart.restart import get_last, get_files, get_params_model
-from physnetjax.training.training import train_model  # from model import dipole_calc
-from physnetjax.data.batches import (
+from mmml.physnetjax.physnetjax.data.data import prepare_datasets
+from mmml.physnetjax.physnetjax.training.loss import dipole_calc
+from mmml.physnetjax.physnetjax.models.model import EF
+from mmml.physnetjax.physnetjax.restart.restart import get_last, get_files, get_params_model
+from mmml.physnetjax.physnetjax.training.training import train_model  # from model import dipole_calc
+from mmml.physnetjax.physnetjax.data.batches import (
     _prepare_batches as prepare_batches,
 )  # prepare_batches, prepare_datasets
 
@@ -69,7 +57,7 @@ data_key, train_key = jax.random.split(jax.random.PRNGKey(42), 2)
 
 from pathlib import Path
 
-from physnetjax.calc.helper_mlp import get_ase_calc
+from mmml.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
 
 
 def parse_non_int(s):
@@ -541,6 +529,8 @@ def setup_calculator(
     sig_scale = None,
     model_restart_path = None,
     MAX_ATOMS_PER_SYSTEM = 100,
+    ml_energy_conversion_factor: float = 1.0,
+    ml_force_conversion_factor: float = 1.0
 ):
     if model_restart_path is None:
         # raise ValueError("model_restart_path must be provided")
@@ -551,11 +541,11 @@ def setup_calculator(
     
     all_dimer_idxs = []
     for a, b in dimer_permutations(n_monomers):
-        all_dimer_idxs.append(indices_of_pairs(a + 1, b + 1))
+        all_dimer_idxs.append(indices_of_pairs(a + 1, b + 1, n_atoms=ATOMS_PER_MONOMER))
 
     all_monomer_idxs = []
     for a in range(1, n_monomers + 1):
-        all_monomer_idxs.append(indices_of_monomer(a))
+        all_monomer_idxs.append(indices_of_monomer(a, n_atoms=ATOMS_PER_MONOMER))
     print("all_monomer_idxs", all_monomer_idxs)
     print("all_dimer_idxs", all_dimer_idxs)
     unique_res_ids = []
@@ -879,7 +869,9 @@ def setup_calculator(
             outputs.update(calculate_ml_contributions(
                 positions, atomic_numbers, n_dimers, n_monomers,
                 cutoff_params=cutoff_params,
-                debug=debug
+                debug=debug,
+                ml_energy_conversion_factor=ml_energy_conversion_factor,
+                ml_force_conversion_factor=ml_force_conversion_factor
             ))
 
         if doMM:
@@ -987,7 +979,9 @@ def setup_calculator(
         n_dimers: int,
         n_monomers: int,
         cutoff_params: CutoffParameters,
-        debug: bool = False
+        debug: bool = False,
+        ml_energy_conversion_factor: float = 1.0,
+        ml_force_conversion_factor: float = 1.0
     ) -> Dict[str, Array]:
         """Calculate ML energy and force contributions"""
         # Get model predictions
@@ -995,8 +989,8 @@ def setup_calculator(
         output = apply_model(batches["Z"], batches["R"])
         
         # Convert units
-        f = output["forces"] / (ase.units.kcal/ase.units.mol)
-        e = output["energy"] / (ase.units.kcal/ase.units.mol)
+        f = output["forces"] * ml_force_conversion_factor 
+        e = output["energy"] * ml_energy_conversion_factor
         
         # Calculate monomer contributions
         monomer_contribs = calculate_monomer_contributions(e, f, n_monomers, debug)
@@ -1104,7 +1098,9 @@ def setup_calculator(
             doMM: bool = True,
             doML_dimer: bool = True,
             backprop: bool = False,
-            debug: bool = False
+            debug: bool = False,
+            energy_conversion_factor: float = 1.0,
+            force_conversion_factor: float = 1.0
         ):
             """Initialize calculator with configuration parameters"""
             super().__init__()
@@ -1117,6 +1113,8 @@ def setup_calculator(
             self.debug = debug
             self.ep_scale = None
             self.sig_scale = None
+            self.energy_conversion_factor = energy_conversion_factor
+            self.force_conversion_factor = force_conversion_factor
 
         def calculate(
             self, 
@@ -1164,8 +1162,8 @@ def setup_calculator(
                 F = -F
                            
             self.results["out"] = out
-            self.results["energy"] = E
-            self.results["forces"] = F
+            self.results["energy"] = E * self.energy_conversion_factor
+            self.results["forces"] = F * self.force_conversion_factor
 
     def get_spherical_cutoff_calculator(
         atomic_numbers: Array,
@@ -1176,7 +1174,9 @@ def setup_calculator(
         doMM: bool = True,
         doML_dimer: bool = True,
         backprop: bool = False,
-        debug: bool = False
+        debug: bool = False,
+        energy_conversion_factor: float = 1.0,
+        force_conversion_factor: float = 1.0
     ) -> Tuple[AseDimerCalculator, Callable]:
         """Factory function to create calculator instances"""
         calculator = AseDimerCalculator(
@@ -1186,7 +1186,9 @@ def setup_calculator(
             doMM=doMM,
             doML_dimer=doML_dimer,
             backprop=backprop,
-            debug=debug
+            debug=debug,
+            energy_conversion_factor=energy_conversion_factor,
+            force_conversion_factor=force_conversion_factor
         )
         
         return calculator, spherical_cutoff_calculator
@@ -1196,7 +1198,7 @@ def setup_calculator(
     def process_monomer_forces(
         ml_monomer_forces: Array,
         monomer_segment_idxs: Array,
-        debug: bool = False
+        debug: bool = False,
     ) -> Array:
         """Process and reshape monomer forces with proper masking.
         
