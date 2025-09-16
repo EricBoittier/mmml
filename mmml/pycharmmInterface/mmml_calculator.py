@@ -199,8 +199,11 @@ def debug_print(debug: bool, msg: str, *args, **kwargs):
         print(msg)
         for arg in args:
             jax.debug.print(f"{msg}\n{{x}}", x=arg)
-        for name, value in kwargs.items():
-            print(f"{name}: {value.shape}")
+        try:
+            for name, value in kwargs.items():
+                print(f"{name}: {value.shape}")
+        except:
+            pass
 
 
 def prepare_batches_md(
@@ -529,8 +532,8 @@ def setup_calculator(
     sig_scale = None,
     model_restart_path = None,
     MAX_ATOMS_PER_SYSTEM = 100,
-    ml_energy_conversion_factor: float = 1.0,
-    ml_force_conversion_factor: float = 1.0
+    ml_energy_conversion_factor: float = ev2kcalmol,
+    ml_force_conversion_factor: float = ev2kcalmol
 ):
     if model_restart_path is None:
         # raise ValueError("model_restart_path must be provided")
@@ -882,15 +885,15 @@ def setup_calculator(
             ))
 
         return ModelOutput(
-            energy=(outputs["out_E"].sum() + outputs["internal_E"] + outputs.get("mm_E", 0)) * (ase.units.kcal/ase.units.mol),
-            forces=outputs["out_F"] * (ase.units.kcal/ase.units.mol),
-            dH=outputs["dH"] * (ase.units.kcal/ase.units.mol),
-            ml_2b_E=outputs["ml_2b_E"] * (ase.units.kcal/ase.units.mol),
-            ml_2b_F=outputs["ml_2b_F"] * (ase.units.kcal/ase.units.mol),
-            internal_E=outputs["internal_E"] * (ase.units.kcal/ase.units.mol),
-            internal_F=outputs["internal_F"] * (ase.units.kcal/ase.units.mol),
-            mm_E=outputs.get("mm_E", 0) * (ase.units.kcal/ase.units.mol),
-            mm_F=outputs.get("mm_F", 0) * (ase.units.kcal/ase.units.mol)
+            energy=(outputs["out_E"].sum() + outputs["internal_E"] + outputs.get("mm_E", 0)),
+            forces=outputs["out_F"],
+            dH=outputs["dH"],
+            ml_2b_E=outputs["ml_2b_E"],
+            ml_2b_F=outputs["ml_2b_F"],
+            internal_E=outputs["internal_E"],
+            internal_F=outputs["internal_F"],
+            mm_E=outputs.get("mm_E", 0),
+            mm_F=outputs.get("mm_F", 0)
         )
 
     def get_ML_energy_fn(
