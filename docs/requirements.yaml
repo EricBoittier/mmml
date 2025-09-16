@@ -12,7 +12,7 @@ dependencies:
   # Pip-only installs
   - pip:
       # Project (editable)
-      - -e ../
+      # - -e ../
 
       # Sphinx + theme + extensions (pin for Python 3.10 compatibility)
       - sphinx>=7.2,<8.2

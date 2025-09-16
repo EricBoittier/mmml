@@ -1,4 +1,4 @@
-mmml.physnetjax.physnetjax.training.optimizer
+﻿mmml.physnetjax.physnetjax.training.optimizer
 =============================================
 
 .. automodule:: mmml.physnetjax.physnetjax.training.optimizer
@@ -8,7 +8,12 @@ mmml.physnetjax.physnetjax.training.optimizer
 
    .. autosummary::
    
-      base_schedule_fn
       cycled_cosine_annealing_schedule
       get_optimizer
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+   
+      Any
    

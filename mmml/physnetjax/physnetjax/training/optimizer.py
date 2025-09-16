@@ -1,37 +1,66 @@
-import jax.numpy as jnp
-import optax
-import optax.contrib
+"""Optimizer helpers for PhysNetJax training.
 
-base_learning_rate = 0.001
+The real implementation depends on :mod:`jax` and :mod:`optax`.  During
+documentation builds these heavy optional dependencies are not available, so we
+provide lightweight stubs that fail lazily when the functionality is actually
+used.
+"""
 
-base_schedule_fn = optax.schedules.warmup_exponential_decay_schedule(
-    init_value=base_learning_rate,
-    peak_value=base_learning_rate * 1.05,
-    warmup_steps=10,
-    transition_steps=10,
-    decay_rate=0.999,
-)
-base_optimizer = optax.chain(
-    #    optax.adaptive_grad_clip(1.0),
-    optax.clip_by_global_norm(10.0),
-    optax.amsgrad(learning_rate=base_schedule_fn, b1=0.9, b2=0.99, eps=1e-3),
-)
+from __future__ import annotations
 
-base_transform = optax.contrib.reduce_on_plateau(
-    patience=5,
-    cooldown=5,
-    factor=0.99,
-    rtol=1e-4,
-    accumulation_size=5,
-    min_scale=0.01,
-)
+from typing import Any
+
+try:  # Optional imports needed only during actual training
+    import jax.numpy as jnp  # type: ignore
+    import optax  # type: ignore
+    import optax.contrib  # type: ignore
+except ModuleNotFoundError:  # pragma: no cover - exercised in docs/tests
+    jnp = None  # type: ignore[assignment]
+    optax = None  # type: ignore[assignment]
+
+
+if optax is not None and jnp is not None:  # pragma: no branch - keep runtime path fast
+
+    base_learning_rate = 0.001
+
+    base_schedule_fn = optax.schedules.warmup_exponential_decay_schedule(
+        init_value=base_learning_rate,
+        peak_value=base_learning_rate * 1.05,
+        warmup_steps=10,
+        transition_steps=10,
+        decay_rate=0.999,
+    )
+    base_optimizer = optax.chain(
+        #    optax.adaptive_grad_clip(1.0),
+        optax.clip_by_global_norm(10.0),
+        optax.amsgrad(learning_rate=base_schedule_fn, b1=0.9, b2=0.99, eps=1e-3),
+    )
+
+    base_transform = optax.contrib.reduce_on_plateau(
+        patience=5,
+        cooldown=5,
+        factor=0.99,
+        rtol=1e-4,
+        accumulation_size=5,
+        min_scale=0.01,
+    )
+
+else:  # pragma: no cover - executed when optional deps missing
+
+    def _missing(*_args: Any, **_kwargs: Any) -> Any:
+        raise ModuleNotFoundError("jax and optax are required for optimizer utilities")
+
+    base_learning_rate = 0.001
+    base_schedule_fn = _missing  # type: ignore[assignment]
+    base_optimizer = _missing  # type: ignore[assignment]
+    base_transform = _missing  # type: ignore[assignment]
 
 
 def get_optimizer(
     learning_rate: float = 0.001,
-    schedule_fn: optax.Schedule | str | None = None,
-    optimizer: optax.GradientTransformation | str | None = None,
-    transform: optax.GradientTransformation | str | None = None,
+    schedule_fn: Any = None,
+    optimizer: Any = None,
+    transform: Any = None,
     clip_global: bool | float = True,
     patience: int = 5,
     cooldown: int = 5,
@@ -99,6 +128,9 @@ def get_optimizer(
     - 'adamw': AdamW optimizer
     - 'amsgrad': AMSGrad optimizer
     """
+    if optax is None or jnp is None:
+        raise ModuleNotFoundError("jax and optax are required for get_optimizer")
+
     if isinstance(clip_global, bool):
         clip_global = 10.0 if clip_global else None
     elif isinstance(clip_global, float) and clip_global > 0:
