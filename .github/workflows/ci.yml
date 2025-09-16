@@ -26,8 +26,8 @@ jobs:
         run: pip install build
       - name: Build package
         run: python -m build
-      - name: Install package (no extras)
-        run: pip install .
+      - name: Install package without deps (avoid heavy optional deps like pycharmm)
+        run: pip install --no-deps .
       - name: Lint config sanity
         run: |
           python -V
