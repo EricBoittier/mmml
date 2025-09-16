@@ -1,4 +1,4 @@
-mmml.physnetjax.physnetjax.training.trainstep
+﻿mmml.physnetjax.physnetjax.training.trainstep
 =============================================
 
 .. automodule:: mmml.physnetjax.physnetjax.training.trainstep
@@ -11,11 +11,4 @@ mmml.physnetjax.physnetjax.training.trainstep
       mean_absolute_error
       mean_squared_loss
       mean_squared_loss_QD
-      train_step
-   
-   .. rubric:: Classes
-
-   .. autosummary::
-   
-      DTYPE
    
