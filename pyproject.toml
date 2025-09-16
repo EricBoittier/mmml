@@ -18,7 +18,7 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
 ]
-requires-python = "==3.10.*"
+requires-python = "==3.12.*"
 # Declare any run-time dependencies that should be installed with the package.
 dependencies = [
     "molzip",
@@ -132,7 +132,7 @@ dependencies = [
     "pyvolume",
     "pyyaml",
     "pyzmq",
-    "rdkit",
+    #"rdkit",
     "rich",
     "scikit-image",
     "scikit-learn",
@@ -144,8 +144,8 @@ dependencies = [
     "statsmodels",
     "sympy",
     "tabulate",
-    "tensorstore",
-    "tensorflow",
+    #"tensorstore",
+    #"tensorflow",
     "threadpoolctl",
     "toml",
     "toolz",
