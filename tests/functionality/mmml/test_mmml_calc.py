@@ -17,6 +17,9 @@ def test_ev2kcalmol_constant():
 	reason="pycharmm not available in this environment",
 )
 def test_setup_calculator_factory_smoke():
+	# Require JAX runtime for restart helpers
+	if importlib.util.find_spec("jax") is None:
+		pytest.skip("jax not available in this environment")
 	# Skip if no checkpoints are present
 	ckpt_env = os.environ.get("MMML_CKPT")
 	if ckpt_env:
@@ -87,6 +90,9 @@ def test_ml_energy_matches_reference_when_data_available():
 		setup_calculator,
 		ev2kcalmol,
 	)
+	# Skip if e3x (pair indices) backend is not available
+	if importlib.util.find_spec("e3x") is None:
+		pytest.skip("e3x not available in this environment")
 	factory = setup_calculator(
 		ATOMS_PER_MONOMER=10,
 		N_MONOMERS=2,
