@@ -164,7 +164,7 @@ dependencies = [
     "pycharmm",
     "xtb_ase",
     "pyxtal",
-	"polars",
+    "polars",
 ]
 
 [tool.uv.sources]

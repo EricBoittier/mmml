@@ -3,7 +3,7 @@ from pathlib import Path
 import os
 import pytest
 import numpy as np
-import ase
+import importlib as _il  # lazy import in tests
 
 
 def test_ev2kcalmol_constant():
@@ -98,7 +98,11 @@ def test_ml_energy_matches_reference_when_data_available():
 		ml_force_conversion_factor=ev2kcalmol,
 	)
 
-	# ASE atoms
+	# ASE atoms (lazy import and skip if missing)
+	ase_spec = importlib.util.find_spec("ase")
+	if ase_spec is None:
+		pytest.skip("ase not available in this environment")
+	ase = _il.import_module("ase")
 	atoms = ase.Atoms(np.array(Z), np.array(R))
 	calc, _ = factory(
 		atomic_numbers=np.array(Z),
