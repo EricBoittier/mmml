@@ -105,7 +105,7 @@ def test_ablation_baseline_no_nn_not_worse():
     # initial mono loss
     env0 = DCMNETSelectionEnv(md, tgt, sp, mchg, mpos)
     init_loss = env0.get_esp_loss()
-    sel, loss = optimize_dcmnet_combination(
+    sel, loss, _ = optimize_dcmnet_combination(
         molecular_data=md,
         esp_target=tgt,
         vdw_surface=sp,
@@ -140,7 +140,7 @@ def test_ablation_corrections_only_runs_finite():
     md, tgt, sp, mchg, mpos = small_data_for_opt()
     env0 = DCMNETSelectionEnv(md, tgt, sp, mchg, mpos)
     init_loss = env0.get_esp_loss()
-    sel, loss = optimize_dcmnet_combination(
+    sel, loss, _ = optimize_dcmnet_combination(
         molecular_data=md,
         esp_target=tgt,
         vdw_surface=sp,
@@ -162,7 +162,7 @@ def test_ablation_corrections_only_runs_finite():
 
 def test_invariant_no_empty_atoms_after_opt():
     md, tgt, sp, mchg, mpos = small_data_for_opt()
-    sel, loss = optimize_dcmnet_combination(
+    sel, loss, _ = optimize_dcmnet_combination(
         molecular_data=md,
         esp_target=tgt,
         vdw_surface=sp,
@@ -193,7 +193,7 @@ def test_target_enforcement_exact_total():
     mpos = {0: np.stack([env_base.model_positions[0].squeeze(), env_base.model_positions[0].squeeze() + np.array([0.5,0,0])], axis=1)}
     env0 = DCMNETSelectionEnv(md, tgt, sp, mchg, mpos)
     target = env0.n_atoms + 1
-    sel, loss = optimize_dcmnet_combination(
+    sel, loss, _ = optimize_dcmnet_combination(
         molecular_data=md,
         esp_target=tgt,
         vdw_surface=sp,

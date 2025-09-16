@@ -22,6 +22,7 @@ requires-python = "==3.12.*"
 # Declare any run-time dependencies that should be installed with the package.
 dependencies = [
     "molzip",
+    "pytest",
     "jsonpickle",
     "absl-py",
     "asciichartpy",
@@ -165,6 +166,7 @@ dependencies = [
     "xtb_ase",
     "pyxtal",
     "polars",
+    "sphynx>=0.0.3",
 ]
 
 [tool.uv.sources]
