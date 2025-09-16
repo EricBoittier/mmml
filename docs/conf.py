@@ -68,6 +68,7 @@ napoleon_use_ivar = True
 
 # Mock optional heavy dependencies to keep autodoc importable in minimal envs
 autodoc_mock_imports = [
+    'mmml',
     'gpu4pyscf',
     'pyscf',
     'e3x',

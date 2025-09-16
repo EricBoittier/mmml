@@ -73,9 +73,14 @@ implemented_properties = implemented_properties):
     return MessagePassingCalculator()
 
 
+try:
+    _kcal_to_ev = 1 / (ase.units.kcal / ase.units.mol)
+except Exception:  # pragma: no cover - triggered when ASE units mocked
+    _kcal_to_ev = 1.0
+
 pycharmm_conversion = {
-    "energy": 1 / (ase.units.kcal / ase.units.mol),
-    "forces": 1 / (ase.units.kcal / ase.units.mol),
+    "energy": _kcal_to_ev,
+    "forces": _kcal_to_ev,
     "charge": 1,
 }
 
@@ -120,31 +125,32 @@ def get_pyc(params, model, ase_mol, conversion=pycharmm_conversion):
         # ml_fluctuating_charges = model.charges
     )
 
-    blah = np.array(list(range(NATOMS)))
-    blah1 = np.array(list(range(10000)))
-    blah2 = np.arange(NATOMS) * 1.0
-    print("...", dir(pyc)), pyc, "pyc?"
-    _ = pyc.calculate_charmm(
-        Natom=NATOMS,
-        Ntrans=0,
-        Natim=0,
-        idxp=blah,
-        x=blah2,
-        y=blah2,
-        z=blah2,
-        dx=blah2,
-        dy=blah2,
-        dz=blah2,
-        Nmlp=NATOMS,
-        Nmlmmp=NATOMS,
-        idxi=blah1,
-        idxj=blah1,
-        idxjp=blah,
-        idxu=blah,
-        idxv=blah,
-        idxup=blah,
-        idxvp=blah,
-    )
+    if __name__ == "__main__":
+        blah = np.array(list(range(NATOMS)))
+        blah1 = np.array(list(range(10000)))
+        blah2 = np.arange(NATOMS) * 1.0
+        print("...", dir(pyc)), pyc, "pyc?"
+        _ = pyc.calculate_charmm(
+            Natom=NATOMS,
+            Ntrans=0,
+            Natim=0,
+            idxp=blah,
+            x=blah2,
+            y=blah2,
+            z=blah2,
+            dx=blah2,
+            dy=blah2,
+            dz=blah2,
+            Nmlp=NATOMS,
+            Nmlmmp=NATOMS,
+            idxi=blah1,
+            idxj=blah1,
+            idxjp=blah,
+            idxu=blah,
+            idxv=blah,
+            idxup=blah,
+            idxvp=blah,
+        )
 
     class pyCModel:
         def __init__():
