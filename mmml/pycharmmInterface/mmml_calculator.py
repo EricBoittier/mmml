@@ -1268,7 +1268,7 @@ def setup_calculator(
                     F = -F
 
                 self.results["out"] = out
-                self.results["energy"] = E * self.energy_conversion_factor
+                self.results["energy"] = 0.5 * E * self.energy_conversion_factor
                 self.results["forces"] = F * self.force_conversion_factor
 
         def get_spherical_cutoff_calculator(

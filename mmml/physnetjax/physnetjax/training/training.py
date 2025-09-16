@@ -26,7 +26,7 @@ from mmml.physnetjax.physnetjax.training.optimizer import (
     get_optimizer,
 )
 from mmml.physnetjax.physnetjax.training.trainstep import train_step
-from mmml.physnetjax.physnetjax.utils.ascii import computer, cubes
+from mmml.physnetjax.physnetjax.utils.ascii import computer 
 from mmml.physnetjax.physnetjax.utils.pretty_printer import (
     Printer,
     pretty_print_optimizer,
