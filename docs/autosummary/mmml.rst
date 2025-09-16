@@ -10,6 +10,7 @@
    :toctree:
    :recursive:
 
+   dcmnet
    mmml
    physnetjax
    pyscf4gpuInterface

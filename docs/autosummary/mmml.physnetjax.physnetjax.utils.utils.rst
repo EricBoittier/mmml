@@ -12,6 +12,7 @@
       get_epoch_weights
       get_files
       parse_non_int
+      sort_names_safe
    
    .. rubric:: Classes
 

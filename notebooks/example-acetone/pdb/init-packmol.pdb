@@ -1,24 +1,26 @@
-REMARK  EXECUTING CHARMM SCRIPT FROM PYTHON                                           
-REMARK   DATE:     9/16/25     14:31:47      CREATED BY USER: ericb                   
-ATOM      1  O1  ACO     1      16.857  12.841  14.385  1.00  0.00      SYS 
-ATOM      2  C1  ACO     1      16.902  11.955  13.539  1.00  0.00      SYS 
-ATOM      3  C2  ACO     1      15.691  11.540  12.778  1.00  0.00      SYS 
-ATOM      4  C3  ACO     1      18.172  11.236  13.229  1.00  0.00      SYS 
-ATOM      5  H21 ACO     1      15.839  11.747  11.695  1.00  0.00      SYS 
-ATOM      6  H22 ACO     1      15.500  10.460  12.930  1.00  0.00      SYS 
-ATOM      7  H23 ACO     1      14.819  12.124  13.142  1.00  0.00      SYS 
-ATOM      8  H31 ACO     1      18.347  11.236  12.133  1.00  0.00      SYS 
-ATOM      9  H32 ACO     1      18.110  10.192  13.598  1.00  0.00      SYS 
-ATOM     10  H33 ACO     1      19.011  11.753  13.735  1.00  0.00      SYS 
-ATOM     11  O1  ACO     2      17.524  15.571   5.741  1.00  0.00      SYS 
-ATOM     12  C1  ACO     2      17.108  14.446   5.490  1.00  0.00      SYS 
-ATOM     13  C2  ACO     2      17.444  13.754   4.215  1.00  0.00      SYS 
-ATOM     14  C3  ACO     2      16.231  13.707   6.446  1.00  0.00      SYS 
-ATOM     15  H21 ACO     2      18.029  12.833   4.431  1.00  0.00      SYS 
-ATOM     16  H22 ACO     2      16.517  13.490   3.670  1.00  0.00      SYS 
-ATOM     17  H23 ACO     2      18.059  14.434   3.587  1.00  0.00      SYS 
-ATOM     18  H31 ACO     2      16.637  12.688   6.618  1.00  0.00      SYS 
-ATOM     19  H32 ACO     2      15.205  13.638   6.035  1.00  0.00      SYS 
-ATOM     20  H33 ACO     2      16.204  14.258   7.407  1.00  0.00      SYS 
-TER      21      ACO      2
+HEADER 
+TITLE     Built with Packmol                                             
+REMARK   Packmol generated pdb file 
+REMARK   Home-Page: http://m3g.iqm.unicamp.br/packmol
+REMARK
+ATOM      1  O1  ACO A   1       0.009   2.679  25.406  1.00  0.00      ACO     
+ATOM      2  C1  ACO A   1       1.030   2.110  25.039  1.00  0.00      ACO     
+ATOM      3  C2  ACO A   1       1.255   0.659  25.308  1.00  0.00      ACO     
+ATOM      4  C3  ACO A   1       2.107   2.829  24.301  1.00  0.00      ACO     
+ATOM      5  H21 ACO A   1       0.311   0.214  25.680  1.00  0.00      ACO     
+ATOM      6  H22 ACO A   1       1.562   0.147  24.374  1.00  0.00      ACO     
+ATOM      7  H23 ACO A   1       2.045   0.540  26.077  1.00  0.00      ACO     
+ATOM      8  H31 ACO A   1       3.065   2.753  24.857  1.00  0.00      ACO     
+ATOM      9  H32 ACO A   1       2.228   2.387  23.292  1.00  0.00      ACO     
+ATOM     10  H33 ACO A   1       1.822   3.897  24.201  1.00  0.00      ACO     
+ATOM     11  O1  ACO A   2       1.818   3.173  16.323  1.00  0.00      ACO     
+ATOM     12  C1  ACO A   2       1.618   2.034  15.915  1.00  0.00      ACO     
+ATOM     13  C2  ACO A   2       2.102   0.840  16.666  1.00  0.00      ACO     
+ATOM     14  C3  ACO A   2       0.878   1.774  14.648  1.00  0.00      ACO     
+ATOM     15  H21 ACO A   2       2.454   1.164  17.665  1.00  0.00      ACO     
+ATOM     16  H22 ACO A   2       1.276   0.110  16.785  1.00  0.00      ACO     
+ATOM     17  H23 ACO A   2       2.943   0.368  16.116  1.00  0.00      ACO     
+ATOM     18  H31 ACO A   2       1.515   1.195  13.947  1.00  0.00      ACO     
+ATOM     19  H32 ACO A   2      -0.047   1.204  14.865  1.00  0.00      ACO     
+ATOM     20  H33 ACO A   2       0.609   2.745  14.183  1.00  0.00      ACO     
 END
