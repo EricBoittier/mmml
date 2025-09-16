@@ -2,6 +2,10 @@
 CHARMMSETUP
 uv.lock
 
+# Generated outputs and checkpoints (do not version large artifacts)
+outputs/
+mmml/physnetjax/ckpts/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
