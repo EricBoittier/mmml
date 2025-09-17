@@ -18,10 +18,11 @@ reported in eV by default; pass ``--units kcal/mol`` to convert the outputs.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Any, Dict, Tuple
 
 import numpy as np
 
@@ -113,6 +114,20 @@ def parse_args() -> argparse.Namespace:
             "Output units for energies/forces. Use 'kcal/mol' to apply the "
             "ASE conversion factor."
         ),
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Optional path to save a JSON report containing the comparison results.",
+    )
+
+
+    parser.add_argument(
+        "--pdbfile",
+        type=Path,
+        default=None,
+        help="Path to the PDB file to load for pycharmm [requires correct atom names and types].",
     )
     return parser.parse_args()
 
@@ -232,10 +247,10 @@ def main() -> int:
         )
 
     atoms_per_monomer = args.atoms_per_monomer or natoms // n_monomers
-    if atoms_per_monomer * n_monomers != natoms:
-        sys.exit(
-            "Provided --atoms-per-monomer does not match the dataset configuration."
-        )
+    # if atoms_per_monomer * n_monomers != natoms:
+    #     sys.exit(
+    #         "Provided --atoms-per-monomer does not match the dataset configuration."
+    #     )
 
     params, model = load_model_parameters(epoch_dir, natoms)
 
@@ -256,10 +271,14 @@ def main() -> int:
 
     energy_unit_label = args.units
     force_unit_label = "eV/Å" if args.units == "eV" else "kcal/mol/Å"
-
+    from mmml.pycharmmInterface import setupRes
+    from mmml.pycharmmInterface.import_pycharmm import ic, coor
+    setupRes.generate_residue("ACO ACO")
+    ic.build()
+    coor.show()
     calculator_factory = setup_calculator(
         ATOMS_PER_MONOMER=atoms_per_monomer,
-        N_MONOMERS=n_monomers,
+        N_MONOMERS=2,
         ml_cutoff_distance=args.ml_cutoff,
         mm_switch_on=args.mm_switch_on,
         mm_cutoff=args.mm_cutoff,
@@ -276,12 +295,12 @@ def main() -> int:
     hybrid_calc, _ = calculator_factory(
         atomic_numbers=Z,
         atomic_positions=R,
-        n_monomers=n_monomers,
+        n_monomers=2,
         cutoff_params=cutoff,
         doML=True,
         doMM=args.include_mm,
         doML_dimer=not args.skip_ml_dimers,
-        backprop=False,
+        backprop=True,
         debug=args.debug,
         energy_conversion_factor=energy_factor,
         force_conversion_factor=force_factor,
@@ -330,6 +349,7 @@ def main() -> int:
         "mm_F": force_unit_label,
     }
     hybrid_components: Dict[str, np.ndarray] = {}
+    component_reports: Dict[str, Dict[str, Any]] = {}
     hybrid_out = atoms.calc.results.get("out")
     if hybrid_out is not None:
         for key in component_keys:
@@ -351,23 +371,42 @@ def main() -> int:
         header = f"{name:<12}"
         unit = component_units.get(name)
         unit_suffix = f" {unit}" if unit else ""
+
+        hybrid_list = hybrid.tolist()
+        reference_list = reference.tolist() if reference is not None else None
+        stats: Dict[str, Any] = {}
+
         if hybrid.size == 1:
-            value = hybrid[0]
+            value = float(hybrid[0])
             line = f"{value: .8f}{unit_suffix}"
+            stats["value"] = value
             if reference is not None and reference.size == 1:
-                ref_val = reference[0]
+                ref_val = float(reference[0])
                 delta = value - ref_val
                 line += f" | ref {ref_val: .8f}{unit_suffix} | Δ={delta: .8e}{unit_suffix}"
+                stats["reference"] = ref_val
+                stats["delta"] = delta
         else:
             rms = float(np.sqrt(np.mean(hybrid**2)))
             max_abs = float(np.abs(hybrid).max())
             line = f"rms={rms: .8e}, max|.|={max_abs: .8e}"
+            stats["rms"] = rms
+            stats["max_abs"] = max_abs
             if reference is not None and reference.shape == hybrid.shape:
                 diff = hybrid - reference
                 diff_rms, diff_max = compute_force_metrics(diff)
                 line += f" | Δrms={diff_rms: .8e}, Δmax={diff_max: .8e}"
+                stats["delta_rms"] = diff_rms
+                stats["delta_max"] = diff_max
             if unit:
                 line += f" [{unit}]"
+        component_reports[name] = {
+            "unit": unit,
+            "hybrid": hybrid_list,
+            "reference": reference_list,
+            "stats": stats,
+        }
+
         print(f"{header}: {line}")
         if hybrid.size <= 12:
             hybrid_repr = np.array2string(hybrid, precision=6, separator=", ")
@@ -379,11 +418,17 @@ def main() -> int:
                 print(f"    ref{label}:    {ref_repr}")
                 print(f"    delta{label}:  {diff_repr}")
 
-    print(f"Hybrid calculator energy ({energy_unit_label}):      {hybrid_energy: .8f}")
-    print(f"Pure ML calculator energy ({energy_unit_label}):     {ml_energy: .8f}")
+
     print(f"Energy difference (hybrid - ML):           {energy_delta: .8e} {energy_unit_label}")
     print(f"Force RMSD:                                {force_rmsd: .8e} {force_unit_label}")
     print(f"Max |ΔF|:                                  {force_max: .8e} {force_unit_label}")
+
+    import pycharmm
+    from mmml.pycharmmInterface.import_pycharmm import coor
+    _ = pycharmm.lingo.charmm_script("ENER")
+    print(_)
+    print(coor.show())
+
 
     if hybrid_components:
         print("\nComponent comparison (hybrid vs pure ML reference):")
@@ -394,24 +439,236 @@ def main() -> int:
             reference_val = ml_component_refs.get(key)
             print_component_comparison(key, hybrid_val, reference_val)
 
+    dataset_report: Dict[str, Any] = {}
     if references:
         if "E" in references:
             dataset_energy = float(references["E"]) * energy_factor
+            dataset_report["energy"] = dataset_energy
             print(f"Dataset reference energy ({energy_unit_label}):   {dataset_energy: .8f}")
         if "F" in references:
             ref_forces = np.asarray(references["F"]) * force_factor
             ref_force_rmsd, ref_force_max = compute_force_metrics(
                 hybrid_forces - ref_forces
             )
+            dataset_report["force_metrics"] = {
+                "rms": ref_force_rmsd,
+                "max": ref_force_max,
+            }
             print(
                 f"RMSD vs dataset forces ({force_unit_label}):    {ref_force_rmsd: .8e}"
             )
             print(
                 f"Max |ΔF| vs dataset ({force_unit_label}):       {ref_force_max: .8e}"
             )
+    print(f"Hybrid calculator energy ({energy_unit_label}):      {hybrid_energy: .8f}")
+    print(f"Pure ML calculator energy ({energy_unit_label}):     {ml_energy: .8f}")
+    report: Dict[str, Any] = {
+        "settings": {
+            "dataset": str(dataset_path),
+            "checkpoint_root": str(base_ckpt_dir),
+            "checkpoint_epoch": str(epoch_dir),
+            "sample_index": args.sample_index,
+            "n_monomers": n_monomers,
+            "atoms_per_monomer": atoms_per_monomer,
+            "include_mm": args.include_mm,
+            "skip_ml_dimers": args.skip_ml_dimers,
+        },
+        "units": {
+            "energy": energy_unit_label,
+            "force": force_unit_label,
+        },
+        "energies": {
+            "hybrid": hybrid_energy,
+            "pure_ml": ml_energy,
+            "difference": energy_delta,
+        },
+        "forces": {
+            "hybrid": hybrid_forces.tolist(),
+            "pure_ml": ml_forces.tolist(),
+            "difference_metrics": {
+                "rms": force_rmsd,
+                "max": force_max,
+            },
+        },
+        "components": component_reports,
+    }
+    if dataset_report:
+        report["dataset"] = dataset_report
 
-    print("\nAgreement within numerical noise indicates the calculators are consistent.")
+
+    # minimize in ase
+    print("Minimizing in ase")
+    import ase.optimize as ase_opt
+    print("starting minimization")
+    _ = ase_opt.BFGS(ml_atoms).run(fmax=0.01, steps=100)
+    print("minimization done")
+    print("starting minimization")
+    _ = ase_opt.BFGS(atoms).run(fmax=0.01, steps=100)
+    print("minimization done")
+
+    if args.output:
+        output_path = args.output.resolve()
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        with output_path.open("w", encoding="utf-8") as fh:
+            json.dump(report, fh, indent=2)
+        print(f"\nSaved report to {output_path}")
+
+    if args.pdbfile:
+        import pycharmm
+        from mmml.pycharmmInterface.import_pycharmm import coor
+        pdbfilename = str(args.pdbfile)
+
+        # pycharmm.read.sequence_string("ACO ACO")
+        from mmml.pycharmmInterface.setupBox import setup_box_generic
+        setup_box_generic(pdbfilename, side_length=1000)
+        import ase
+        import ase.io
+        pdb_ase_atoms = ase.io.read(pdbfilename)
+        print(pdb_ase_atoms)
+        print(coor.get_positions())
+        print(coor.show())
+        params, model = load_model_parameters(epoch_dir, 200)
+        model.natoms = 200
+        print(model)
+        calculator_factory = setup_calculator(
+            ATOMS_PER_MONOMER=10,
+            N_MONOMERS=20,
+            ml_cutoff_distance=args.ml_cutoff,
+            mm_switch_on=args.mm_switch_on,
+            mm_cutoff=args.mm_cutoff,
+            doML=True,
+            doMM=args.include_mm,
+            doML_dimer=not args.skip_ml_dimers,
+            debug=args.debug,
+            model_restart_path=base_ckpt_dir,
+            MAX_ATOMS_PER_SYSTEM=len(pdb_ase_atoms),
+            ml_energy_conversion_factor=energy_factor,
+            ml_force_conversion_factor=force_factor,
+        )
+        hybrid_calc, _ = calculator_factory(
+            atomic_numbers=Z,
+            atomic_positions=R,
+            n_monomers=20,
+            cutoff_params=cutoff,
+            doML=True,
+            doMM=args.include_mm,
+            doML_dimer=not args.skip_ml_dimers,
+            backprop=True,
+            debug=args.debug,
+            energy_conversion_factor=energy_factor,
+            force_conversion_factor=force_factor,
+        )
+        print(hybrid_calc)
+        atoms = pdb_ase_atoms
+        print(atoms)
+        atoms.calc = hybrid_calc
+        hybrid_energy = float(atoms.get_potential_energy())
+        hybrid_forces = np.asarray(atoms.get_forces())
+        print("Minimizing in hybrid calculator")
+        _ = ase_opt.BFGS(atoms).run(fmax=0.05, steps=1000)
+
+
+        print("\nAgreement within numerical noise indicates the calculators are consistent.")
+        import io
+        import ase
+        import ase.calculators.calculator as ase_calc
+        import ase.io as ase_io
+        from ase.md.velocitydistribution import MaxwellBoltzmannDistribution, Stationary, ZeroRotation
+        from ase.md.verlet import VelocityVerlet
+        import ase.optimize as ase_opt
+        import matplotlib.pyplot as plt
+        import py3Dmol
+        # Parameters.
+        temperature = 200.0
+        timestep_fs = 0.01
+        num_steps = 100_000
+        ase_atoms = atoms
+        # Draw initial momenta.
+
+        import pandas as pd
+        xyz = pd.DataFrame(ase_atoms.get_positions(), columns=["x", "y", "z"])
+        coor.set_positions(xyz)
+        print(coor.show())
+        from mmml.pycharmmInterface.import_pycharmm import minimize
+        minimize.run_abnr(nstep=1000, tolenr=1e-4, tolgrd=1e-4)
+        pycharmm.lingo.charmm_script("ENER")
+        print(coor.show())
+        ase_atoms.set_positions(coor.get_positions())
+        _ = ase_opt.BFGS(atoms).run(fmax=0.001, steps=100)
+        MaxwellBoltzmannDistribution(ase_atoms, temperature_K=temperature)
+        Stationary(ase_atoms)  # Remove center of mass translation.
+        ZeroRotation(ase_atoms)  # Remove rotations.
+
+        MaxwellBoltzmannDistribution(ase_atoms, temperature_K=temperature)
+        Stationary(ase_atoms)  # Remove center of mass translation.
+        ZeroRotation(ase_atoms)  # Remove rotations.
+
+        # Initialize Velocity Verlet integrator.
+        integrator = VelocityVerlet(ase_atoms, timestep=timestep_fs*ase.units.fs)
+
+        # open a trajectory file
+        traj = ase_io.Trajectory(f'{args.output}trajectory_{temperature}K_{num_steps}steps.xyz', 'w')
+
+        # Run molecular dynamics.
+        frames = np.zeros((num_steps, len(ase_atoms), 3))
+        potential_energy = np.zeros((num_steps,))
+        kinetic_energy = np.zeros((num_steps,))
+        total_energy = np.zeros((num_steps,))
+
+        breakcount = 0
+        for i in range(num_steps):
+            # Run 1 time step.
+            integrator.run(1)
+            # Save current frame and keep track of energies.
+            frames[i] = ase_atoms.get_positions()
+            potential_energy[i] = ase_atoms.get_potential_energy()
+            kinetic_energy[i] = ase_atoms.get_kinetic_energy()
+            total_energy[i] = ase_atoms.get_total_energy()
+            traj.write(ase_atoms)
+            if kinetic_energy[i] > 5:
+                pycharmm.lingo.charmm_script("ENER")
+                import pandas as pd
+                xyz = pd.DataFrame(ase_atoms.get_positions(), columns=["x", "y", "z"])
+                coor.set_positions(xyz)
+                print(coor.show())
+                from mmml.pycharmmInterface.import_pycharmm import minimize
+                minimize.run_abnr(nstep=1000, tolenr=1e-2, tolgrd=1e-2)
+                pycharmm.lingo.charmm_script("ENER")
+                print(coor.show())
+                ase_atoms.set_positions(coor.get_positions())
+                _ = ase_opt.BFGS(atoms).run(fmax=0.001, steps=100)
+                MaxwellBoltzmannDistribution(ase_atoms, temperature_K=temperature)
+                Stationary(ase_atoms)  # Remove center of mass translation.
+                ZeroRotation(ase_atoms)  # Remove rotations.
+                breakcount += 1
+                if breakcount > 100:
+                    print("Maximum number of breaks reached")
+                    break
+            # Occasionally print progress.
+            if i % 10000 == 0:
+                temperature += 1
+                Stationary(ase_atoms)  # Remove center of mass translation.
+                ZeroRotation(ase_atoms)  # Remove rotations.
+                MaxwellBoltzmannDistribution(ase_atoms, temperature_K=temperature)
+                print(f"temperature: {temperature}")
+
+            if i % 100 == 0:
+                print(f"step {i:5d} epot {potential_energy[i]: 5.3f} ekin {kinetic_energy[i]: 5.3f} etot {total_energy[i]: 5.3f}")
+
+
+
+        # plot the time series of the energy
+        plt.plot(total_energy)
+        plt.xlabel('time [fs]')
+        plt.ylabel('energy [eV]')
+        plt.title('Total energy')
+        plt.savefig(f'{args.output}total_energy_{temperature}K_{num_steps}steps.png')
+        # plt.show()
+
+
     return 0
+
+
 
 
 if __name__ == "__main__":
