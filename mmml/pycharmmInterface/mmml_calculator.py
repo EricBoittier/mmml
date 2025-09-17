@@ -722,6 +722,8 @@ def setup_calculator(
         ep_scale = ep_scale
     ):
         """Creates functions for calculating MM energies and forces with switching."""
+        from mmml.pycharmmInterface.import_pycharmm import reset_block
+        reset_block()
         read.rtf(CGENFF_RTF)
         bl =settings.set_bomb_level(-2)
         wl =settings.set_warn_level(-2)
@@ -731,6 +733,7 @@ def setup_calculator(
         pycharmm.lingo.charmm_script('bomlev 0')
         cgenff_rtf = open(CGENFF_RTF).readlines()
         atc = pycharmm.param.get_atc()
+        # print("atc", atc)
         cgenff_params_dict_q = {}
         atom_name_to_param = {k: [] for k in atc}
         
@@ -742,7 +745,8 @@ def setup_calculator(
                 except:
                     cgenff_params_dict_q[at] = float(q.split("!")[0])
                 atom_name_to_param[atomname] = at
-        
+        # print("cgenff_params_dict_q", cgenff_params_dict_q)
+        # print("atom_name_to_param", atom_name_to_param)
         cgenff_params = open(CGENFF_PRM).readlines()
         cgenff_params_dict = {}
         cgenff_params_dict_list = []
@@ -986,7 +990,7 @@ def setup_calculator(
             ))
 
         return ModelOutput(
-            energy=(outputs["out_E"].sum() + outputs["internal_E"] + outputs.get("mm_E", 0)),
+            energy=(outputs["out_E"].sum() + outputs["internal_E"] - outputs.get("mm_E", 0)),
             forces=outputs["out_F"],
             dH=outputs["dH"],
             ml_2b_E=outputs["ml_2b_E"],
@@ -1015,13 +1019,16 @@ def setup_calculator(
         
         # Prepare monomer data
         # n_monomers = len(all_monomer_idxs)
+        # Use the maximum number of atoms for consistent array shapes
+        max_atoms = max(ATOMS_PER_MONOMER, 2 * ATOMS_PER_MONOMER)
+        
         # Position of the atoms in the monomer
-        monomer_positions = jnp.zeros((n_monomers, MAX_ATOMS_PER_SYSTEM, SPATIAL_DIMS))
+        monomer_positions = jnp.zeros((n_monomers, max_atoms, SPATIAL_DIMS))
         monomer_positions = monomer_positions.at[:, :ATOMS_PER_MONOMER].set(
             positions[jnp.array(all_monomer_idxs)]
         )
         # Atomic numbers of the atoms in the monomer
-        monomer_atomic = jnp.zeros((n_monomers, MAX_ATOMS_PER_SYSTEM), dtype=jnp.int32)
+        monomer_atomic = jnp.zeros((n_monomers, max_atoms), dtype=jnp.int32)
         monomer_atomic = monomer_atomic.at[:, :ATOMS_PER_MONOMER].set(
             atomic_numbers[jnp.array(all_monomer_idxs)]
         )
@@ -1029,13 +1036,13 @@ def setup_calculator(
         # Prepare dimer data
         n_dimers = len(all_dimer_idxs)
         # Position of the atoms in the dimer
-        dimer_positions = jnp.zeros((n_dimers, MAX_ATOMS_PER_SYSTEM, SPATIAL_DIMS))
-        dimer_positions = dimer_positions.at[:].set(
+        dimer_positions = jnp.zeros((n_dimers, max_atoms, SPATIAL_DIMS))
+        dimer_positions = dimer_positions.at[:, :2 * ATOMS_PER_MONOMER].set(
             positions[jnp.array(all_dimer_idxs)]
         )
         # Atomic numbers of the atoms in the dimer
-        dimer_atomic = jnp.zeros((n_dimers, MAX_ATOMS_PER_SYSTEM), dtype=jnp.int32)
-        dimer_atomic = dimer_atomic.at[:].set(
+        dimer_atomic = jnp.zeros((n_dimers, max_atoms), dtype=jnp.int32)
+        dimer_atomic = dimer_atomic.at[:, :2 * ATOMS_PER_MONOMER].set(
             atomic_numbers[jnp.array(all_dimer_idxs)]
         )
         
@@ -1044,10 +1051,10 @@ def setup_calculator(
         batch_data["Z"] = jnp.concatenate([monomer_atomic, dimer_atomic])
         batch_data["N"] = jnp.concatenate([
             jnp.full((n_monomers,), ATOMS_PER_MONOMER),
-            jnp.full((n_dimers,), MAX_ATOMS_PER_SYSTEM)
+            jnp.full((n_dimers,), 2 * ATOMS_PER_MONOMER)
         ])
         BATCH_SIZE = n_monomers + n_dimers
-        batches = prepare_batches_md(batch_data, batch_size=BATCH_SIZE, num_atoms=MAX_ATOMS_PER_SYSTEM)[0]
+        batches = prepare_batches_md(batch_data, batch_size=BATCH_SIZE, num_atoms=max_atoms)[0]
         
         @jax.jit
         def apply_model(
@@ -1088,6 +1095,9 @@ def setup_calculator(
         ml_force_conversion_factor: float = 1.0
     ) -> Dict[str, Array]:
         """Calculate ML energy and force contributions"""
+        # Calculate max atoms for consistent array shapes
+        max_atoms = max(ATOMS_PER_MONOMER, 2 * ATOMS_PER_MONOMER)
+        
         # Get model predictions
         apply_model, batches = get_ML_energy_fn(atomic_numbers, positions, n_dimers+n_monomers)
         output = apply_model(batches["Z"], batches["R"])
@@ -1097,7 +1107,7 @@ def setup_calculator(
         e = output["energy"] * ml_energy_conversion_factor
         
         # Calculate monomer contributions
-        monomer_contribs = calculate_monomer_contributions(e, f, n_monomers, debug)
+        monomer_contribs = calculate_monomer_contributions(e, f, n_monomers, max_atoms, debug)
         
         if not doML_dimer:
             return monomer_contribs
@@ -1124,12 +1134,13 @@ def setup_calculator(
         e: Array, 
         f: Array,
         n_monomers: int,
+        max_atoms: int,
         debug: bool
     ) -> Dict[str, Array]:
         """Calculate energy and force contributions from monomers"""
         ml_monomer_energy = jnp.array(e[:n_monomers]).flatten()
         
-        monomer_idx_max = MAX_ATOMS_PER_SYSTEM * n_monomers
+        monomer_idx_max = max_atoms * n_monomers
         ml_monomer_forces = f[:monomer_idx_max]
         
         # Calculate segment indices for force summation
@@ -1140,7 +1151,7 @@ def setup_calculator(
         
         # Process forces
         monomer_forces = process_monomer_forces(
-            ml_monomer_forces, monomer_segment_idxs, debug
+            ml_monomer_forces, monomer_segment_idxs, max_atoms, debug
         )
         
         debug_print(debug, "Monomer Contributions:",
@@ -1179,13 +1190,13 @@ def setup_calculator(
             mm_E=mm_E,
             mm_grad=mm_grad
         )
-        
+        kcal2ev = 1/23.0605
         return {
-            "out_E": mm_E,
-            "out_F": mm_grad,
-            "dH": mm_E,
-            "mm_E": mm_E,
-            "mm_F": mm_grad
+            "out_E": mm_E * kcal2ev,
+            "out_F": mm_grad * kcal2ev,
+            "dH": mm_E * kcal2ev,
+            "mm_E": mm_E * kcal2ev,
+            "mm_F": mm_grad * kcal2ev
         }
 
     if _HAVE_ASE:
@@ -1202,7 +1213,7 @@ def setup_calculator(
                 doML: bool = True,
                 doMM: bool = True,
                 doML_dimer: bool = True,
-                backprop: bool = False,
+                backprop: bool = True,
                 debug: bool = False,
                 energy_conversion_factor: float = 1.0,
                 force_conversion_factor: float = 1.0,
@@ -1253,7 +1264,7 @@ def setup_calculator(
                 if self.backprop:
 
                     def Efn(R):
-                        return spherical_cutoff_calculator(
+                        return -spherical_cutoff_calculator(
                             positions=R,
                             atomic_numbers=Z,
                             n_monomers=self.n_monomers,
@@ -1265,10 +1276,10 @@ def setup_calculator(
                         ).energy
 
                     E, F = jax.value_and_grad(Efn)(R)
-                    F = -F
+                    F = F
 
                 self.results["out"] = out
-                self.results["energy"] = 0.5 * E * self.energy_conversion_factor
+                self.results["energy"] = -E * self.energy_conversion_factor
                 self.results["forces"] = F * self.force_conversion_factor
 
         def get_spherical_cutoff_calculator(
@@ -1314,6 +1325,7 @@ def setup_calculator(
     def process_monomer_forces(
         ml_monomer_forces: Array,
         monomer_segment_idxs: Array,
+        max_atoms: int,
         debug: bool = False,
     ) -> Array:
         """Process and reshape monomer forces with proper masking.
@@ -1327,10 +1339,10 @@ def setup_calculator(
             Array: Processed monomer forces
         """
         # Reshape forces to (n_monomers, atoms_per_system, 3)
-        monomer_forces = ml_monomer_forces.reshape(-1, MAX_ATOMS_PER_SYSTEM, 3)
+        monomer_forces = ml_monomer_forces.reshape(-1, max_atoms, 3)
         
         # Create mask for valid atoms
-        atom_mask = jnp.arange(MAX_ATOMS_PER_SYSTEM)[None, :] < ATOMS_PER_MONOMER
+        atom_mask = jnp.arange(max_atoms)[None, :] < ATOMS_PER_MONOMER
         
         # Apply mask
         monomer_forces = jnp.where(
@@ -1376,7 +1388,14 @@ def setup_calculator(
         """
         # Get dimer energies and forces
         ml_dimer_energy = jnp.array(e[n_monomers:]).flatten()
-        ml_dimer_forces = f[n_monomers * MAX_ATOMS_PER_SYSTEM:]
+        # Extract dimer forces: skip monomer atoms, take dimer atoms
+        # The batch is padded to max_atoms per system
+        max_atoms = max(ATOMS_PER_MONOMER, 2 * ATOMS_PER_MONOMER)
+        monomer_atoms = n_monomers * max_atoms
+        if debug:
+            print(f"Debug dimer forces: f.shape={f.shape}, monomer_atoms={monomer_atoms}, max_atoms={max_atoms}")
+            print(f"ml_dimer_forces shape: {f[monomer_atoms:].shape}")
+        ml_dimer_forces = f[monomer_atoms:]
         
         # Calculate force segments for dimers
         force_segments = calculate_dimer_force_segments(n_dimers)
@@ -1394,7 +1413,7 @@ def setup_calculator(
         
         # Apply switching functions
         switched_results = apply_dimer_switching(
-            positions, dimer_int_energies, dimer_forces, cutoffparameters, debug
+            positions, dimer_int_energies, dimer_forces, cutoffparameters, max_atoms, debug
         )
         
         debug_print(debug, "Dimer Contributions:",
@@ -1444,7 +1463,7 @@ def setup_calculator(
         debug: bool
     ) -> Array:
         """Process and reshape dimer forces."""
-        forces = dimer_forces.reshape(n_dimers, MAX_ATOMS_PER_SYSTEM, 3)
+        forces = dimer_forces.reshape(n_dimers, 2 * ATOMS_PER_MONOMER, 3)
         
         return jax.ops.segment_sum(
             forces.reshape(-1, 3),
@@ -1457,12 +1476,13 @@ def setup_calculator(
         dimer_energies: Array,
         dimer_forces: Array,
         cutoff_params: CutoffParameters,
+        max_atoms: int,
         debug: bool
     ) -> Dict[str, Array]:
         """Apply switching functions to dimer energies and forces."""
         # Calculate switched energies using cutoff parameters
         switched_energy = jax.vmap(lambda x, f: switch_ML(
-            x.reshape(MAX_ATOMS_PER_SYSTEM, 3), 
+            x.reshape(max_atoms, 3), 
             f,
             ml_cutoff=cutoff_params.ml_cutoff,
             mm_switch_on=cutoff_params.mm_switch_on,
@@ -1471,7 +1491,7 @@ def setup_calculator(
         
         # Calculate switched energy gradients
         switched_grad = jax.vmap(lambda x, f: switch_ML_grad(
-            x.reshape(MAX_ATOMS_PER_SYSTEM, 3),
+            x.reshape(max_atoms, 3),
             f,
             ml_cutoff=cutoff_params.ml_cutoff,
             mm_switch_on=cutoff_params.mm_switch_on,
@@ -1480,12 +1500,20 @@ def setup_calculator(
         
         # Combine forces using product rule
         dudx_v = dimer_energies.sum() * switched_grad
-        dvdx_u = dimer_forces / switched_energy.sum()
-        combined_forces = 0 #-1 * (dudx_v + dvdx_u)
+        
+        # Reshape dimer_forces to match switched_grad shape
+        n_dimers = len(all_dimer_idxs)
+        # dimer_forces_reshaped = dimer_forces.reshape(n_dimers, 2 * ATOMS_PER_MONOMER, 3)
+        # dvdx_u = dimer_forces_reshaped / switched_energy.sum()
+        
+        # combined_forces =  -1 * (dudx_v + dvdx_u)
+        
+        # Convert forces back to flat format
+        # forces_flat = combined_forces.reshape(-1, 3)
         
         return {
-            "energies": switched_energy,
-            "forces": combined_forces
+            "energies": -switched_energy,
+            "forces": 0
         }
 
     return get_spherical_cutoff_calculator
