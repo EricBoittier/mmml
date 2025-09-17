@@ -625,16 +625,14 @@ def main() -> int:
             kinetic_energy[i] = ase_atoms.get_kinetic_energy()
             total_energy[i] = ase_atoms.get_total_energy()
             traj.write(ase_atoms)
-            if kinetic_energy[i] > 5:
+            if kinetic_energy[i] > 20:
                 pycharmm.lingo.charmm_script("ENER")
                 import pandas as pd
                 xyz = pd.DataFrame(ase_atoms.get_positions(), columns=["x", "y", "z"])
                 coor.set_positions(xyz)
-                print(coor.show())
                 from mmml.pycharmmInterface.import_pycharmm import minimize
                 minimize.run_abnr(nstep=1000, tolenr=1e-2, tolgrd=1e-2)
                 pycharmm.lingo.charmm_script("ENER")
-                print(coor.show())
                 ase_atoms.set_positions(coor.get_positions())
                 _ = ase_opt.BFGS(atoms).run(fmax=0.001, steps=100)
                 MaxwellBoltzmannDistribution(ase_atoms, temperature_K=temperature)
