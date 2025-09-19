@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61.0", "versioningit~=2.0"]
+requires = ["setuptools>=61.0", "wheel", "versioningit~=2.0"]
 build-backend = "setuptools.build_meta"
 
 # Self-descriptive entries which should always be present
@@ -18,7 +18,7 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
 ]
-requires-python = ">=3.12,<3.14"
+requires-python = ">=3.11,<3.13"
 # Declare any run-time dependencies that should be installed with the package.
 dependencies = [
     "molzip",
@@ -163,18 +163,16 @@ dependencies = [
     "wheel",
     "zipp",
     "pycharmm",
-    "xtb_ase",
+    #"xtb_ase",
     "pyxtal",
     "polars",
     "sphynx>=0.0.3",
 ]
 
 [tool.uv.sources]
-xtb_ase = { git = "https://github.com/Quantum-Accelerators/xtb_ase.git"}
+#xtb_ase = { git = "https://github.com/Quantum-Accelerators/xtb_ase.git"}
 jax-md = { git = "https://github.com/google/jax-md.git", rev = "05221c551e71f1b5f64458c0e3533452c22efec0" }
-jaxpycharmm = {path= "mmml/github/JaxPycharmm"  }
-#jaxpycharmm = {git = "https://github.com/EricBoittier/JaxPycharmm.git"  }
-pycharmm = { path = "setup/charmm/tool/pycharmm", editable = true }
+pycharmm = { path = "setup/charmm/tool/pycharmm" }
 
 # Update the urls once the hosting is set up.
 #[project.urls]
