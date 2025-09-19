@@ -423,11 +423,6 @@ def main() -> int:
     print(f"Force RMSD:                                {force_rmsd: .8e} {force_unit_label}")
     print(f"Max |ΔF|:                                  {force_max: .8e} {force_unit_label}")
 
-    import pycharmm
-    from mmml.pycharmmInterface.import_pycharmm import coor
-    _ = pycharmm.lingo.charmm_script("ENER")
-    print(_)
-    print(coor.show())
 
 
     if hybrid_components:
@@ -518,6 +513,11 @@ def main() -> int:
         from mmml.pycharmmInterface.import_pycharmm import coor
         pdbfilename = str(args.pdbfile)
 
+    #import pycharmm
+    #from mmml.pycharmmInterface.import_pycharmm import coor
+    #_ = pycharmm.lingo.charmm_script("ENER")
+    #print(_)
+    #print(coor.show())
         # pycharmm.read.sequence_string("ACO ACO")
         from mmml.pycharmmInterface.setupBox import setup_box_generic
         setup_box_generic(pdbfilename, side_length=1000)

@@ -141,3 +141,4 @@ ENV/
 # Cookiecutter-CMS Test Artifacts
 /tests/CI_files
 build.setup.out
+CHARMMSETUP
