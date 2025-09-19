@@ -579,8 +579,8 @@ def main() -> int:
         import matplotlib.pyplot as plt
         import py3Dmol
         # Parameters.
-        temperature = 200.0
-        timestep_fs = 0.01
+        temperature = 300.0
+        timestep_fs = 0.333
         num_steps = 100_000
         ase_atoms = atoms
         # Draw initial momenta.
