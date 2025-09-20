@@ -109,3 +109,6 @@ Copyright (c) 2025, Eric Boittier
  
 Project based on the 
 [Computational Molecular Science Python Cookiecutter](https://github.com/molssi/cookiecutter-cms) version 1.10.
+
+
+MMML_DATA=~/mmml/mmml/data/fixed-acetone-only_MP2_21000.npz MMML_CKPT=~/mmml/mmml/physnetjax/ckpts/test-70821ae3-d06a-4c87-9a2b-f5889c298376/ python demo.py --mm
