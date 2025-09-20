@@ -142,3 +142,5 @@ ENV/
 /tests/CI_files
 build.setup.out
 CHARMMSETUP
+*.xyz
+*.png

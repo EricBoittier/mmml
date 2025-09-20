@@ -161,12 +161,6 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     """Main function for PDB file demo."""
     args = parse_args()
-
-    for key, value in args.__dict__.items():
-        print(f"{key}: {value}")
-    print("--------------------------------")
-
-
     base_ckpt_dir, epoch_dir = resolve_checkpoint_paths(args.checkpoint)
 
     # Setup imports
@@ -194,11 +188,8 @@ def main() -> int:
     pdbfilename = str(args.pdbfile)
     
     # Setup box and load PDB
-    # setup_box_generic(pdbfilename, side_length=1000)
-    from mmml.pycharmmInterface.setupBox import initialize_psf
-    initialize_psf("ACO", args.n_monomers, 30, None, pdbfilename)
+    setup_box_generic(pdbfilename, side_length=1000)
     pdb_ase_atoms = ase_io.read(pdbfilename)
-
     print(f"Loaded PDB file: {pdb_ase_atoms}")
     print(f"PyCHARMM coordinates: {coor.get_positions()}")
     print(f"PyCHARMM coordinate info: {coor.show()}")
@@ -212,23 +203,6 @@ def main() -> int:
     # Get atomic numbers and positions
     Z, R = pdb_ase_atoms.get_atomic_numbers(), pdb_ase_atoms.get_positions()
     
-    print("--------------------------------")
-    print(f"N atoms: {natoms}")
-    print(f"N monomers: {args.n_monomers}")
-    print(f"Atoms per monomer: {args.atoms_per_monomer}")
-    print(f"ML cutoff: {args.ml_cutoff}")
-    print(f"MM switch on: {args.mm_switch_on}")
-    print(f"MM cutoff: {args.mm_cutoff}")
-    print(f"Include MM: {args.include_mm}")
-    print(f"Cutoff parameters: {CutoffParameters(ml_cutoff=args.ml_cutoff, mm_switch_on=args.mm_switch_on, mm_cutoff=args.mm_cutoff)}")
-    print(f"Do ML: {True}")
-    print(f"Do MM: {args.include_mm}")
-    print(f"Do ML dimer: {not args.skip_ml_dimers}")
-    print(f"Debug: {args.debug}")
-    print(f"Model restart path: {base_ckpt_dir}")
-    print(f"MAX_ATOMS_PER_SYSTEM: {natoms}")
-    print("--------------------------------")
-
     # Setup calculator factory
     calculator_factory = setup_calculator(
         ATOMS_PER_MONOMER=args.atoms_per_monomer,
@@ -246,10 +220,6 @@ def main() -> int:
         ml_force_conversion_factor=1,
     )
     
-    print("--------------------------------")
-    print(f"Calculator factory: {calculator_factory}")
-
-
     # Create hybrid calculator
     hybrid_calc, _ = calculator_factory(
         atomic_numbers=Z,
