@@ -1,23 +1,8 @@
 #!/usr/bin/env python3
-"""Compare the hybrid MM/ML calculator against the pure ML ASE calculator.
+"""Test minimization functionality with hybrid MM/ML calculator.
 
-This example loads one configuration from the acetone dimer dataset and
-initialises both calculators so that only the ML contribution is active.  The
-energies/forces reported by the hybrid calculator (via
-``mmml.pycharmmInterface.mmml_calculator.setup_calculator``) are compared with
-those from the lightweight ASE helper ``get_ase_calc``.  Agreement between the
-numbers is a quick sanity check that the calculator plumbing is consistent.
-
-The script expects the optional runtime dependencies (JAX, e3x, ASE, PyCHARMM)
-needed by ``setup_calculator``.  Use the ``MMML_DATA`` and ``MMML_CKPT``
-environment variables to point to the acetone dataset and checkpoint
-respectively, or rely on the default repository paths.  Energies/forces are
-reported in eV by default; pass ``--units kcal/mol`` to convert the outputs.
-
-For additional functionality, see the specialized demo scripts:
-- demo_test_minimize.py: Test minimization capabilities
-- demo_pdbfile.py: Process PDB files and run MD simulations
-- demo_packmol.py: Create molecular boxes using Packmol
+This demo loads a configuration from the acetone dataset and tests
+the minimization capabilities using both hybrid and pure ML calculators.
 """
 
 from __future__ import annotations
@@ -48,14 +33,24 @@ from demo_base import (
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description=(
-            "Validate that the hybrid MM/ML calculator reproduces the pure "
-            "ML ASE calculator when MM is disabled."
-        )
+        description="Test minimization with hybrid MM/ML calculator"
     )
     
     # Add base arguments
     base_args = parse_base_args()
+    
+    # Add specific arguments for this demo
+    parser.add_argument(
+        "--test-minimize",
+        action="store_true",
+        default=True,
+        help="Test the minimization in ASE (default: True).",
+    )
+    
+    # Override some defaults
+    parser.set_defaults(
+        test_minimize=True,
+    )
     
     return parser.parse_args()
 
@@ -116,7 +111,7 @@ def print_component_comparison(name: str, hybrid: np.ndarray, reference: np.ndar
 
 
 def main() -> int:
-    """Main function for hybrid vs pure ML comparison demo."""
+    """Main function for test-minimize demo."""
     args = parse_args()
     dataset_report: Dict[str, Any] = {}
     dataset_path = resolve_dataset_path(args.dataset)
@@ -314,9 +309,17 @@ def main() -> int:
         with open(args.output, "w") as f:
             json.dump(report, f, indent=4)
 
+    # Test minimization in ASE
+    print("Minimizing in ASE")
+    import ase.optimize as ase_opt
+    print("Starting minimization with pure ML calculator")
+    _ = ase_opt.BFGS(ml_atoms).run(fmax=0.01, steps=100)
+    print("Pure ML minimization done")
+    print("Starting minimization with hybrid calculator")
+    _ = ase_opt.BFGS(atoms).run(fmax=0.01, steps=100)
+    print("Hybrid minimization done")
+
     return 0
-
-
 
 
 if __name__ == "__main__":
