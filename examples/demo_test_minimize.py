@@ -37,7 +37,93 @@ def parse_args() -> argparse.Namespace:
     )
     
     # Add base arguments
-    base_args = parse_base_args()
+    parser.add_argument(
+        "--dataset",
+        type=Path,
+        default=None,
+        help=(
+            "Path to the acetone dataset (.npz). Defaults to $MMML_DATA or "
+            "mmml/data/fixed-acetone-only_MP2_21000.npz."
+        ),
+    )
+    parser.add_argument(
+        "--checkpoint",
+        type=Path,
+        default=None,
+        help=(
+            "Checkpoint directory used for the ML model. Defaults to $MMML_CKPT "
+            "or mmml/physnetjax/ckpts."
+        ),
+    )
+    parser.add_argument(
+        "--sample-index",
+        type=int,
+        default=0,
+        help="Index of the configuration to evaluate (default: 0).",
+    )
+    parser.add_argument(
+        "--n-monomers",
+        type=int,
+        default=2,
+        help="Number of monomers in the system (default: 2).",
+    )
+    parser.add_argument(
+        "--atoms-per-monomer",
+        type=int,
+        default=None,
+        help=(
+            "Number of atoms per monomer. Defaults to total_atoms/n_monomers "
+            "derived from the dataset."
+        ),
+    )
+    parser.add_argument(
+        "--ml-cutoff",
+        type=float,
+        default=2.0,
+        help="ML cutoff distance passed to the calculator factory (default: 2.0 Å).",
+    )
+    parser.add_argument(
+        "--mm-switch-on",
+        type=float,
+        default=5.0,
+        help="MM switch-on distance for the hybrid calculator (default: 5.0 Å).",
+    )
+    parser.add_argument(
+        "--mm-cutoff",
+        type=float,
+        default=1.0,
+        help="MM cutoff width for the hybrid calculator (default: 1.0 Å).",
+    )
+    parser.add_argument(
+        "--include-mm",
+        action="store_true",
+        help="Keep MM contributions enabled when evaluating the hybrid calculator.",
+    )
+    parser.add_argument(
+        "--skip-ml-dimers",
+        action="store_true",
+        help="If set, skip the ML dimer correction in the hybrid calculator.",
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable verbose debug output inside the calculator factory.",
+    )
+    parser.add_argument(
+        "--units",
+        choices=("eV", "kcal/mol"),
+        default="eV",
+        help=(
+            "Output units for energies/forces. Use 'kcal/mol' to apply the "
+            "ASE conversion factor."
+        ),
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Optional path to save a JSON report containing the comparison results.",
+    )
     
     # Add specific arguments for this demo
     parser.add_argument(
@@ -45,11 +131,6 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         default=True,
         help="Test the minimization in ASE (default: True).",
-    )
-    
-    # Override some defaults
-    parser.set_defaults(
-        test_minimize=True,
     )
     
     return parser.parse_args()
