@@ -649,7 +649,7 @@ def setup_calculator(
 
     all_monomer_idxs = []
     for a in range(1, n_monomers + 1):
-        all_monomer_idxs.append(indices_of_monomer(a, n_atoms=ATOMS_PER_MONOMER))
+        all_monomer_idxs.append(indices_of_monomer(a, n_atoms=ATOMS_PER_MONOMER, n_mol=n_monomers))
     print("all_monomer_idxs", all_monomer_idxs)
     print("all_dimer_idxs", all_dimer_idxs)
     unique_res_ids = []

@@ -9,8 +9,8 @@ if [ ! -d "charmm" ]; then
 fi
 
 # Set environment variables
-chmhome="export CHARMM_HOME=$PWD"
-chmlib="export CHARMM_LIB_DIR=$PWD"
+chmhome="export CHARMM_HOME=$PWD/charmm"
+chmlib="export CHARMM_LIB_DIR=$PWD/charmm"
 echo "$chmhome" > ~/mmml/CHARMMSETUP
 echo "$chmlib" >> ~/mmml/CHARMMSETUP
 cat ~/mmml/CHARMMSETUP
