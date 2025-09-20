@@ -29,7 +29,93 @@ def parse_args() -> argparse.Namespace:
     )
     
     # Add base arguments
-    base_args = parse_base_args()
+    parser.add_argument(
+        "--dataset",
+        type=Path,
+        default=None,
+        help=(
+            "Path to the acetone dataset (.npz). Defaults to $MMML_DATA or "
+            "mmml/data/fixed-acetone-only_MP2_21000.npz."
+        ),
+    )
+    parser.add_argument(
+        "--checkpoint",
+        type=Path,
+        default=None,
+        help=(
+            "Checkpoint directory used for the ML model. Defaults to $MMML_CKPT "
+            "or mmml/physnetjax/ckpts."
+        ),
+    )
+    parser.add_argument(
+        "--sample-index",
+        type=int,
+        default=0,
+        help="Index of the configuration to evaluate (default: 0).",
+    )
+    parser.add_argument(
+        "--n-monomers",
+        type=int,
+        default=2,
+        help="Number of monomers in the system (default: 2).",
+    )
+    parser.add_argument(
+        "--atoms-per-monomer",
+        type=int,
+        default=None,
+        help=(
+            "Number of atoms per monomer. Defaults to total_atoms/n_monomers "
+            "derived from the dataset."
+        ),
+    )
+    parser.add_argument(
+        "--ml-cutoff",
+        type=float,
+        default=2.0,
+        help="ML cutoff distance passed to the calculator factory (default: 2.0 Å).",
+    )
+    parser.add_argument(
+        "--mm-switch-on",
+        type=float,
+        default=5.0,
+        help="MM switch-on distance for the hybrid calculator (default: 5.0 Å).",
+    )
+    parser.add_argument(
+        "--mm-cutoff",
+        type=float,
+        default=1.0,
+        help="MM cutoff width for the hybrid calculator (default: 1.0 Å).",
+    )
+    parser.add_argument(
+        "--include-mm",
+        action="store_true",
+        help="Keep MM contributions enabled when evaluating the hybrid calculator.",
+    )
+    parser.add_argument(
+        "--skip-ml-dimers",
+        action="store_true",
+        help="If set, skip the ML dimer correction in the hybrid calculator.",
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable verbose debug output inside the calculator factory.",
+    )
+    parser.add_argument(
+        "--units",
+        choices=("eV", "kcal/mol"),
+        default="eV",
+        help=(
+            "Output units for energies/forces. Use 'kcal/mol' to apply the "
+            "ASE conversion factor."
+        ),
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Optional path to save a JSON report containing the comparison results.",
+    )
     
     # Add specific arguments for this demo
     parser.add_argument(
@@ -41,13 +127,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--temperature",
         type=float,
-        default=300.0,
+        default=210.0,
         help="Temperature for MD simulation in Kelvin (default: 300.0).",
     )
     parser.add_argument(
         "--timestep",
         type=float,
-        default=0.5,
+        default=0.1,
         help="Timestep for MD simulation in fs (default: 0.5).",
     )
     parser.add_argument(
@@ -75,6 +161,12 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     """Main function for PDB file demo."""
     args = parse_args()
+
+    for key, value in args.__dict__.items():
+        print(f"{key}: {value}")
+    print("--------------------------------")
+
+
     base_ckpt_dir, epoch_dir = resolve_checkpoint_paths(args.checkpoint)
 
     # Setup imports
@@ -102,8 +194,11 @@ def main() -> int:
     pdbfilename = str(args.pdbfile)
     
     # Setup box and load PDB
-    setup_box_generic(pdbfilename, side_length=1000)
+    # setup_box_generic(pdbfilename, side_length=1000)
+    from mmml.pycharmmInterface.setupBox import initialize_psf
+    initialize_psf("ACO", args.n_monomers, 30, None, pdbfilename)
     pdb_ase_atoms = ase_io.read(pdbfilename)
+
     print(f"Loaded PDB file: {pdb_ase_atoms}")
     print(f"PyCHARMM coordinates: {coor.get_positions()}")
     print(f"PyCHARMM coordinate info: {coor.show()}")
@@ -117,6 +212,23 @@ def main() -> int:
     # Get atomic numbers and positions
     Z, R = pdb_ase_atoms.get_atomic_numbers(), pdb_ase_atoms.get_positions()
     
+    print("--------------------------------")
+    print(f"N atoms: {natoms}")
+    print(f"N monomers: {args.n_monomers}")
+    print(f"Atoms per monomer: {args.atoms_per_monomer}")
+    print(f"ML cutoff: {args.ml_cutoff}")
+    print(f"MM switch on: {args.mm_switch_on}")
+    print(f"MM cutoff: {args.mm_cutoff}")
+    print(f"Include MM: {args.include_mm}")
+    print(f"Cutoff parameters: {CutoffParameters(ml_cutoff=args.ml_cutoff, mm_switch_on=args.mm_switch_on, mm_cutoff=args.mm_cutoff)}")
+    print(f"Do ML: {True}")
+    print(f"Do MM: {args.include_mm}")
+    print(f"Do ML dimer: {not args.skip_ml_dimers}")
+    print(f"Debug: {args.debug}")
+    print(f"Model restart path: {base_ckpt_dir}")
+    print(f"MAX_ATOMS_PER_SYSTEM: {natoms}")
+    print("--------------------------------")
+
     # Setup calculator factory
     calculator_factory = setup_calculator(
         ATOMS_PER_MONOMER=args.atoms_per_monomer,
@@ -134,6 +246,10 @@ def main() -> int:
         ml_force_conversion_factor=1,
     )
     
+    print("--------------------------------")
+    print(f"Calculator factory: {calculator_factory}")
+
+
     # Create hybrid calculator
     hybrid_calc, _ = calculator_factory(
         atomic_numbers=Z,

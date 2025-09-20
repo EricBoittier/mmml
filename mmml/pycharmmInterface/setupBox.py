@@ -304,11 +304,15 @@ def setup_box_generic(pdb_path, rtf=CGENFF_RTF, prm=CGENFF_PRM, side_length: flo
 
 
 
-def initialize_psf(resid: str, n_molecules: int, side_length: float, solvent: str):
+def initialize_psf(resid: str, n_molecules: int, side_length: float, solvent: str = None, pdb_path: str = None):
     """
     Initializes the PSF file
     """
     CLEAR_CHARMM()
+    if pdb_path is None:
+        pdbfilename = f"pdb/init-{solvent}box.pdb"
+    else:
+        pdbfilename = pdb_path
 
     read.rtf(CGENFF_RTF)
     bl = settings.set_bomb_level(-2)
@@ -321,10 +325,10 @@ def initialize_psf(resid: str, n_molecules: int, side_length: float, solvent: st
     if solvent is not None:
         resstr = " ".join([solvent.upper()]*(n_molecules-1))    
         resstr = f"{resid.upper()} {solvent.upper()}"
-        pdb_path = f"pdb/init-{solvent}box.pdb"
+        pdb_path = pdbfilename
     else:
         resstr = " ".join([resid.upper()]*n_molecules)
-        pdb_path = f"pdb/init-packmol.pdb"
+        pdb_path = pdbfilename
 
     header = f"""bomlev -2
     prnlev 4
@@ -343,21 +347,17 @@ def initialize_psf(resid: str, n_molecules: int, side_length: float, solvent: st
     print("read header")
     pycharmm.lingo.charmm_script(pbcset.format(SIDELENGTH=side_length))
     print("read pbcset")
-    pycharmm.lingo.charmm_script(pbcs)
-    print("read pbcs")
-    energy.show()
-    print("read energy")
+    # pycharmm.lingo.charmm_script(pbcs)
+    # print("read pbcs")
+    # energy.show()
+    # print("read energy")
     # pycharmm.lingo.charmm_script(write_system_psf)
-    if solvent is not None:
-        write.psf_card(f"psf/{resid}-{solvent}-{n_molecules}.psf")
-        write.psf_card(f"psf/system-{solvent}.psf")
-        write.coor_pdb(f"pdb/init-{solvent}box.pdb")
-        print("wrote pdb/init-{solvent}box.pdb")
-    else:
-        write.psf_card(f"psf/system-packmol.psf")
-        write.psf_card(f"psf/system.psf")
-        write.coor_pdb(f"pdb/init-packmol.pdb")
-        print("wrote pdb/init-packmol.pdb")
+    
+    write.psf_card(f"psf/init.box.psf")
+    write.psf_card(f"psf/init.box.psf")
+    write.coor_pdb(f"pdb/init.box.pdb")
+    print("wrote pdb/init.box.pdb")
+
 
 def minimize_box():
     nbonds = """!#########################################
