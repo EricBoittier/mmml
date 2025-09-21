@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
+from __future__ import annotations
 """PDB file processing and molecular dynamics simulation demo.
 
 This demo loads PDB files and runs molecular dynamics simulations using
 the hybrid MM/ML calculator with PyCHARMM integration.
 """
+import jax
+# jax.config.update("jax_enable_x64", True)
 
-from __future__ import annotations
 
 import argparse
 import sys
@@ -270,9 +272,9 @@ def main() -> int:
     
     # Minimize structure if requested
     # if args.minimize_first:
-    if False:
+    def minimize_structure(atoms):
         print("Minimizing structure with hybrid calculator")
-        _ = ase_opt.BFGS(atoms).run(fmax=0.05, steps=100)
+        _ = ase_opt.BFGS(atoms).run(fmax=0.05, steps=10)
         
         # Sync with PyCHARMM
         xyz = pd.DataFrame(atoms.get_positions(), columns=["x", "y", "z"])
@@ -280,7 +282,7 @@ def main() -> int:
         print(f"PyCHARMM coordinates after ASE minimization: {coor.show()}")
         
         # Additional PyCHARMM minimization
-        minimize.run_abnr(nstep=1000, tolenr=1e-4, tolgrd=1e-4)
+        minimize.run_abnr(nstep=4000, tolenr=1e-6, tolgrd=1e-6)
         pycharmm.lingo.charmm_script("ENER")
         print(f"PyCHARMM coordinates after PyCHARMM minimization: {coor.show()}")
         
@@ -288,6 +290,9 @@ def main() -> int:
         atoms.set_positions(coor.get_positions())
         _ = ase_opt.BFGS(atoms).run(fmax=0.0001, steps=100)
         print("Minimization complete")
+        return atoms
+        
+    atoms = minimize_structure(atoms)
 
     # Setup MD simulation
     temperature = args.temperature
@@ -304,7 +309,7 @@ def main() -> int:
     integrator = VelocityVerlet(ase_atoms, timestep=timestep_fs*ase.units.fs)
 
     # Open trajectory file
-    traj_filename = f'{args.output_prefix}_trajectory_{temperature}K_{num_steps}steps.xyz'
+    traj_filename = f'{args.output_prefix}_trajectory_{temperature}K_{num_steps}steps.traj'
     traj = ase_io.Trajectory(traj_filename, 'w')
 
     # Run molecular dynamics
@@ -313,9 +318,59 @@ def main() -> int:
     kinetic_energy = np.zeros((num_steps,))
     total_energy = np.zeros((num_steps,))
 
+    breakcount = 0
+    for i in range(1000):
+        # Run 1 time step
+        integrator.run(1)
+        # Save current frame and keep track of energies
+        frames[i] = ase_atoms.get_positions()
+        potential_energy[i] = ase_atoms.get_potential_energy()
+        kinetic_energy[i] = ase_atoms.get_kinetic_energy()
+        total_energy[i] = ase_atoms.get_total_energy()
+        traj.write(ase_atoms)
+        # Check for energy spikes and re-minimize if needed
+        if kinetic_energy[i] > 200 or potential_energy[i] > 0:
+            print(f"Energy spike detected at step {i}, re-minimizing...")
+            pycharmm.lingo.charmm_script("ENER")
+            xyz = pd.DataFrame(ase_atoms.get_positions(), columns=["x", "y", "z"])
+            coor.set_positions(xyz)
+            minimize.run_abnr(nstep=1000, tolenr=1e-5, tolgrd=1e-5)
+            pycharmm.lingo.charmm_script("ENER")
+            ase_atoms.set_positions(coor.get_positions())
+            _ = ase_opt.BFGS(atoms).run(fmax=0.001, steps=100)
+            MaxwellBoltzmannDistribution(ase_atoms, temperature_K=temperature)
+            Stationary(ase_atoms)
+            ZeroRotation(ase_atoms)
+            breakcount += 1
+            if breakcount > 100:
+                print("Maximum number of breaks reached")
+                break
+        # Occasionally print progress and adjust temperature
+        if i % 10_000 == 0:
+            temperature += 1
+            Stationary(ase_atoms)
+            ZeroRotation(ase_atoms)
+            MaxwellBoltzmannDistribution(ase_atoms, temperature_K=temperature)
+            print(f"Temperature adjusted to: {temperature} K")
+        if i % 100 == 0:
+            print(f"step {i:5d} epot {potential_energy[i]: 5.3f} ekin {kinetic_energy[i]: 5.3f} etot {total_energy[i]: 5.3f}")
+
+    
+    # Close trajectory file
+    traj.close()
+    print(f"Trajectory saved to: {traj_filename}")
+    print("ASE MD simulation complete!")
+
+    
+
+    import jax_md
     # JAX-MD imports
-    from jax_md import space, smap, energy, minimize, quantity, simulate, partition, units
+    from jax_md import space, smap, energy, quantity, simulate, partition, units
+    from ase.units import _amu
+    Si_mass = ase_atoms.get_masses() * _amu
+    # Si_mass = Si_mass.sum()
     Si_mass = 2.81086E-3
+    print(f"Si_mass: {Si_mass}")
     import jax, e3x
     from jax import jit, grad, lax, ops, random
     import jax.numpy as jnp
@@ -376,7 +431,7 @@ def main() -> int:
             displacement, BOXSIZE, 30 / 2, format=partition.Sparse
         )
         nbrs = neighbor_fn.allocate(R)
-        unwrapped_init_fn, unwrapped_step_fn = minimize.fire_descent(
+        unwrapped_init_fn, unwrapped_step_fn = jax_md.minimize.fire_descent(
             jax_md_energy_fn, shift, dt_start=0.001, dt_max=0.001
         )
         unwrapped_step_fn = jit(unwrapped_step_fn)
@@ -396,7 +451,7 @@ def main() -> int:
         Ecatch = -2000
 
         K_B = 8.617e-5
-        dt = 1e-3
+        dt = 0.5e-4
         kT = K_B * T
 
         init_fn, apply_fn = simulate.nvt_nose_hoover(jax_md_energy_fn, shift, dt, kT)
@@ -409,7 +464,7 @@ def main() -> int:
             e_catch, 
             t_fact=5, 
             total_steps=args.nsteps, 
-            steps_per_recording=250,
+            steps_per_recording=100,
             nbrs=nbrs
         ):
             total_records = total_steps // steps_per_recording
@@ -421,7 +476,7 @@ def main() -> int:
 
             # FIRE minimization
             print("*" * 10 + "\nMinimization\n" + "*" * 10)
-            NMIN = 1000
+            NMIN = 100
             for i in range(NMIN):
                 fire_positions.append(fire_state.position)
                 fire_state = unwrapped_step_fn(fire_state)
@@ -431,10 +486,23 @@ def main() -> int:
                     max_force = float(jnp.abs(jax_md_grad_fn(fire_state.position)).max())
                     print(f"{i}/{NMIN}: E={energy:.6f} eV, max|F|={max_force:.6f}")
 
+
+                # check for nans
+                if jnp.isnan(energy):
+                    print("NaN energy caught")
+                    print(f"Simulation terminated: E={energy:.4f}eV")
+                    break
+            # save pdb 
+            ase_io.write(f"{args.output_prefix}_minimized.pdb", atoms)
+
             # NVT simulation
             nbrs = neighbor_fn.allocate(fire_state.position)
             state = init_fn(key, fire_state.position, 2.91086e-3, neighbor=nbrs)
             nhc_positions = []
+
+            # get energy of initial state
+            energy_initial = float(jax_md_energy_fn(state.position))
+            print(f"Initial energy: {energy_initial:.6f} eV")
 
             print("*" * 10 + "\nNVT\n" + "*" * 10)
             print("\t\tTime (ps)\tEnergy (eV)\tTemperature (K)")
@@ -443,20 +511,32 @@ def main() -> int:
                 state, nbrs = sim(state, nbrs)
                 nhc_positions.append(state.position)
                 
-                if i % 100 == 0:
+                if i % 50 == 0:
                     time = i * steps_per_recording * dt
                     temp = float(quantity.temperature(momentum=state.momentum, mass=Si_mass) / K_B)
                     energy = float(jax_md_energy_fn(state.position, neighbor=nbrs))
                     
                     print(f"{time:10.2f}\t{energy:10.4f}\t{temp:10.2f}")
                     
-                    # Check for simulation stability
-                    if temp > T * t_fact:
-                        print("Temperature catch reached")
-                        print(f"Simulation terminated: T={temp:.2f}K, E={energy:.4f}eV")
+                    # # Check for simulation stability
+                    # if temp > T * t_fact:
+                    #     print("Temperature catch reached")
+                    #     print(f"Simulation terminated: T={temp:.2f}K, E={energy:.4f}eV")
+                    #     break
+
+                    # check for nans
+                    if jnp.isnan(energy):
+                        print("NaN energy caught")
+                        print(f"Simulation terminated: E={energy:.4f}eV")
+                        break
+
+                    # check for energy spikes
+                    if energy > energy_initial*0.95:
+                        print("Energy spike caught")
+                        print(f"Simulation terminated: E={energy:.4f}eV")
                         break
                     
-                    if energy > e_catch:
+                    if energy < energy_initial*1.95:
                         print("Energy catch reached")
                         print(f"Simulation terminated: T={temp:.2f}K, E={energy:.4f}eV")
                         break
@@ -472,8 +552,9 @@ def main() -> int:
     def save_trajectory(out_positions, atoms, filename="nhc_trajectory", format="traj"):
         trajectory = Trajectory(f"{filename}.{format}", "a")
         # atoms = ase.Atoms()
+        out_positions = out_positions.reshape(-1, len(atoms),3)
         for R in out_positions:
-            atoms.set_positions(R.reshape(-1, 3))
+            atoms.set_positions(R)
             trajectory.write(atoms)
         trajectory.close()
 
@@ -496,61 +577,24 @@ def main() -> int:
     sim_key, data_key = jax.random.split(jax.random.PRNGKey(42), 2)
 
     s = set_up_nhc_sim_routine(atoms)
-    out_positions, _ = run_sim_loop(s, sim_key, np.arange(2), -1000)
-    for i in range(len(out_positions)):
-        traj_filename = f'{args.output_prefix}_md_trajectory_{i}.traj'
-        print(f"Saving trajectory to: {traj_filename}")
-        save_trajectory(out_positions[i], atoms, filename=traj_filename)
+
+    for j in range(10):
+        out_positions, _ = run_sim_loop(s, sim_key, np.arange(1), -1000)
+
+        for i in range(len(out_positions)):
+            traj_filename = f'{args.output_prefix}_md_trajectory_{j}_{i}.traj'
+            print(f"Saving trajectory to: {traj_filename}")
+            save_trajectory(out_positions[i], atoms, filename=traj_filename)
+
+        atoms = minimize_structure(atoms)
+
     print("Trajectories saved!")
 
 
     print("JAX-MD simulation complete!")
     return 0
 
-    breakcount = 0
-    for i in range(num_steps):
-        # Run 1 time step
-        integrator.run(1)
-        # Save current frame and keep track of energies
-        frames[i] = ase_atoms.get_positions()
-        potential_energy[i] = ase_atoms.get_potential_energy()
-        kinetic_energy[i] = ase_atoms.get_kinetic_energy()
-        total_energy[i] = ase_atoms.get_total_energy()
-        traj.write(ase_atoms)
-        # Check for energy spikes and re-minimize if needed
-        if kinetic_energy[i] > 200 or potential_energy[i] > 0:
-            print(f"Energy spike detected at step {i}, re-minimizing...")
-            pycharmm.lingo.charmm_script("ENER")
-            xyz = pd.DataFrame(ase_atoms.get_positions(), columns=["x", "y", "z"])
-            coor.set_positions(xyz)
-            minimize.run_abnr(nstep=1000, tolenr=1e-5, tolgrd=1e-5)
-            pycharmm.lingo.charmm_script("ENER")
-            ase_atoms.set_positions(coor.get_positions())
-            _ = ase_opt.BFGS(atoms).run(fmax=0.001, steps=100)
-            MaxwellBoltzmannDistribution(ase_atoms, temperature_K=temperature)
-            Stationary(ase_atoms)
-            ZeroRotation(ase_atoms)
-            breakcount += 1
-            if breakcount > 100:
-                print("Maximum number of breaks reached")
-                break
-        # Occasionally print progress and adjust temperature
-        if i % 10_000 == 0:
-            temperature += 1
-            Stationary(ase_atoms)
-            ZeroRotation(ase_atoms)
-            MaxwellBoltzmannDistribution(ase_atoms, temperature_K=temperature)
-            print(f"Temperature adjusted to: {temperature} K")
-        if i % 100 == 0:
-            print(f"step {i:5d} epot {potential_energy[i]: 5.3f} ekin {kinetic_energy[i]: 5.3f} etot {total_energy[i]: 5.3f}")
 
-    
-    # Close trajectory file
-    traj.close()
-    print(f"Trajectory saved to: {traj_filename}")
-    print("MD simulation complete!")
-
-    return 0
 
 
 if __name__ == "__main__":
