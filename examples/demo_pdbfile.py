@@ -154,6 +154,12 @@ def parse_args() -> argparse.Namespace:
         default="md_simulation",
         help="Prefix for output files (default: md_simulation).",
     )
+    parser.add_argument(
+        "--nsteps",
+        type=int,
+        default=10000,
+        help="Number of steps to run (default: 10000).",
+    )
     
     return parser.parse_args()
 
@@ -220,16 +226,21 @@ def main() -> int:
         ml_force_conversion_factor=1,
     )
     
-    # Create hybrid calculator
-    hybrid_calc, _ = calculator_factory(
-        atomic_numbers=Z,
-        atomic_positions=R,
-        n_monomers=args.n_monomers,
-        cutoff_params=CutoffParameters(
+
+    CUTOFF_PARAMS = CutoffParameters(
             ml_cutoff=args.ml_cutoff,
             mm_switch_on=args.mm_switch_on,
             mm_cutoff=args.mm_cutoff,
-        ),
+        )
+
+    print(f"Cutoff parameters: {CUTOFF_PARAMS}")
+
+    # Create hybrid calculator
+    hybrid_calc, _spherical_cutoff_calculator = calculator_factory(
+        atomic_numbers=Z,
+        atomic_positions=R,
+        n_monomers=args.n_monomers,
+        cutoff_params=CUTOFF_PARAMS,
         doML=True,
         doMM=args.include_mm,
         doML_dimer=not args.skip_ml_dimers,
@@ -238,7 +249,15 @@ def main() -> int:
         energy_conversion_factor=1,
         force_conversion_factor=1,
     )
-    
+    # spherical_cutoff_calculator(
+    #                     positions=R,
+    #                     atomic_numbers=Z,
+    #                     n_monomers=self.n_monomers,
+    #                     cutoff_params=self.cutoff_params,
+    #                     doML=self.doML,
+    #                     doMM=self.doMM,
+    #                     doML_dimer=self.doML_dimer,
+    #                     debug=self.debug,
     print(f"Hybrid calculator created: {hybrid_calc}")
     atoms = pdb_ase_atoms
     print(f"ASE atoms: {atoms}")
@@ -250,7 +269,8 @@ def main() -> int:
     print(f"Initial energy: {hybrid_energy:.6f} eV")
     
     # Minimize structure if requested
-    if args.minimize_first:
+    # if args.minimize_first:
+    if False:
         print("Minimizing structure with hybrid calculator")
         _ = ase_opt.BFGS(atoms).run(fmax=0.05, steps=100)
         
@@ -293,18 +313,210 @@ def main() -> int:
     kinetic_energy = np.zeros((num_steps,))
     total_energy = np.zeros((num_steps,))
 
+    # JAX-MD imports
+    from jax_md import space, smap, energy, minimize, quantity, simulate, partition, units
+    Si_mass = 2.81086E-3
+    import jax, e3x
+    from jax import jit, grad, lax, ops, random
+    import jax.numpy as jnp
+    from ase.io import Trajectory
+
+    def set_up_nhc_sim_routine(atoms, T=args.temperature, dt=5e-3, steps_per_recording=250):
+        @jax.jit
+        def evaluate_energies_and_forces(atomic_numbers, positions, dst_idx, src_idx):
+            return _spherical_cutoff_calculator(
+                atomic_numbers=atomic_numbers,
+                positions=positions,
+                n_monomers=args.n_monomers,
+                cutoff_params=CUTOFF_PARAMS,
+                doML=True,
+                doMM=args.include_mm,
+                doML_dimer=not args.skip_ml_dimers,
+                debug=args.debug,
+            )
+
+        TESTIDX = 0
+        dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(len(atoms))
+        # atomic_numbers = test_data["Z"][TESTIDX]
+        # position = R = test_data["R"][TESTIDX]
+        atomic_numbers = atoms.get_atomic_numbers()
+        R = position = atoms.get_positions()
+
+        @jit
+        def jax_md_energy_fn(position, **kwargs):
+            # Ensure position is a JAX array
+            position = jnp.array(position)
+            # l_nbrs = nbrs.update(position)
+            result = evaluate_energies_and_forces(
+                atomic_numbers=atomic_numbers,
+                positions=position,
+                dst_idx=dst_idx,
+                src_idx=src_idx,
+            )
+            return result.energy.reshape(-1)[0]
+        
+        jax_md_grad_fn = jax.grad(jax_md_energy_fn)
+
+        # evaluate_energies_and_forces
+        result = evaluate_energies_and_forces(
+            atomic_numbers=atomic_numbers,
+            positions=R,
+            dst_idx=dst_idx,
+            src_idx=src_idx,
+        )
+        print(f"Result: {result}")
+        init_energy = result.energy.reshape(-1)[0]
+        init_forces = result.forces.reshape(-1, 3)
+        print(f"Initial energy: {init_energy:.6f} eV")
+        print(f"Initial forces: {init_forces}")
+
+        BOXSIZE = 30
+        displacement, shift = space.free()
+        neighbor_fn = partition.neighbor_list(
+            displacement, BOXSIZE, 30 / 2, format=partition.Sparse
+        )
+        nbrs = neighbor_fn.allocate(R)
+        unwrapped_init_fn, unwrapped_step_fn = minimize.fire_descent(
+            jax_md_energy_fn, shift, dt_start=0.001, dt_max=0.001
+        )
+        unwrapped_step_fn = jit(unwrapped_step_fn)
+
+        @jit
+        def sim(state, nbrs):
+            def step(i, state_nbrs):
+                state, nbrs = state_nbrs
+                nbrs = nbrs.update(state.position)
+                state = apply_fn(state, neighbor=nbrs)
+                return (state, nbrs)
+
+            return lax.fori_loop(0, steps_per_recording, step, (state, nbrs))
+
+        # Ecatch = test_data["E"].min() * 1.05
+        steps_per_recording = 25
+        Ecatch = -2000
+
+        K_B = 8.617e-5
+        dt = 1e-3
+        kT = K_B * T
+
+        init_fn, apply_fn = simulate.nvt_nose_hoover(jax_md_energy_fn, shift, dt, kT)
+        apply_fn = jit(apply_fn)
+
+
+        def run_sim(
+            key, 
+            test_idx, 
+            e_catch, 
+            t_fact=5, 
+            total_steps=args.nsteps, 
+            steps_per_recording=250,
+            nbrs=nbrs
+        ):
+            total_records = total_steps // steps_per_recording
+
+            # Center positions before minimization
+            initial_pos = R - R.mean(axis=0)
+            fire_state = unwrapped_init_fn(initial_pos)
+            fire_positions = []
+
+            # FIRE minimization
+            print("*" * 10 + "\nMinimization\n" + "*" * 10)
+            NMIN = 1000
+            for i in range(NMIN):
+                fire_positions.append(fire_state.position)
+                fire_state = unwrapped_step_fn(fire_state)
+                
+                if i % (NMIN // 10) == 0:
+                    energy = float(jax_md_energy_fn(fire_state.position))
+                    max_force = float(jnp.abs(jax_md_grad_fn(fire_state.position)).max())
+                    print(f"{i}/{NMIN}: E={energy:.6f} eV, max|F|={max_force:.6f}")
+
+            # NVT simulation
+            nbrs = neighbor_fn.allocate(fire_state.position)
+            state = init_fn(key, fire_state.position, 2.91086e-3, neighbor=nbrs)
+            nhc_positions = []
+
+            print("*" * 10 + "\nNVT\n" + "*" * 10)
+            print("\t\tTime (ps)\tEnergy (eV)\tTemperature (K)")
+            
+            for i in range(total_records):
+                state, nbrs = sim(state, nbrs)
+                nhc_positions.append(state.position)
+                
+                if i % 100 == 0:
+                    time = i * steps_per_recording * dt
+                    temp = float(quantity.temperature(momentum=state.momentum, mass=Si_mass) / K_B)
+                    energy = float(jax_md_energy_fn(state.position, neighbor=nbrs))
+                    
+                    print(f"{time:10.2f}\t{energy:10.4f}\t{temp:10.2f}")
+                    
+                    # Check for simulation stability
+                    if temp > T * t_fact:
+                        print("Temperature catch reached")
+                        print(f"Simulation terminated: T={temp:.2f}K, E={energy:.4f}eV")
+                        break
+                    
+                    if energy > e_catch:
+                        print("Energy catch reached")
+                        print(f"Simulation terminated: T={temp:.2f}K, E={energy:.4f}eV")
+                        break
+
+            steps_completed = i * steps_per_recording
+            print(f"\nSimulated {steps_completed} steps ({steps_completed * dt:.2f} ps)")
+            
+            return steps_completed, jnp.stack(nhc_positions)
+
+        return run_sim
+
+
+    def save_trajectory(out_positions, atoms, filename="nhc_trajectory", format="traj"):
+        trajectory = Trajectory(f"{filename}.{format}", "a")
+        # atoms = ase.Atoms()
+        for R in out_positions:
+            atoms.set_positions(R.reshape(-1, 3))
+            trajectory.write(atoms)
+        trajectory.close()
+
+
+    def run_sim_loop(run_sim, sim_key, indices, Ecatch):
+        """
+        Run the simulation for the given indices and save the trajectory.
+        """
+        out_positions = []
+        max_is = []
+        for i in indices:
+            print("test data", i)
+            mi, pos = run_sim(sim_key, i, Ecatch)
+            out_positions.append(pos)
+            max_is.append(mi)
+
+        return out_positions, max_is
+
+
+    sim_key, data_key = jax.random.split(jax.random.PRNGKey(42), 2)
+
+    s = set_up_nhc_sim_routine(atoms)
+    out_positions, _ = run_sim_loop(s, sim_key, np.arange(2), -1000)
+    for i in range(len(out_positions)):
+        traj_filename = f'{args.output_prefix}_md_trajectory_{i}.traj'
+        print(f"Saving trajectory to: {traj_filename}")
+        save_trajectory(out_positions[i], atoms, filename=traj_filename)
+    print("Trajectories saved!")
+
+
+    print("JAX-MD simulation complete!")
+    return 0
+
     breakcount = 0
     for i in range(num_steps):
         # Run 1 time step
         integrator.run(1)
-        
         # Save current frame and keep track of energies
         frames[i] = ase_atoms.get_positions()
         potential_energy[i] = ase_atoms.get_potential_energy()
         kinetic_energy[i] = ase_atoms.get_kinetic_energy()
         total_energy[i] = ase_atoms.get_total_energy()
         traj.write(ase_atoms)
-        
         # Check for energy spikes and re-minimize if needed
         if kinetic_energy[i] > 200 or potential_energy[i] > 0:
             print(f"Energy spike detected at step {i}, re-minimizing...")
@@ -322,7 +534,6 @@ def main() -> int:
             if breakcount > 100:
                 print("Maximum number of breaks reached")
                 break
-        
         # Occasionally print progress and adjust temperature
         if i % 10_000 == 0:
             temperature += 1
@@ -330,21 +541,9 @@ def main() -> int:
             ZeroRotation(ase_atoms)
             MaxwellBoltzmannDistribution(ase_atoms, temperature_K=temperature)
             print(f"Temperature adjusted to: {temperature} K")
-
         if i % 100 == 0:
             print(f"step {i:5d} epot {potential_energy[i]: 5.3f} ekin {kinetic_energy[i]: 5.3f} etot {total_energy[i]: 5.3f}")
 
-    # Plot the time series of the energy
-    plt.figure(figsize=(10, 6))
-    plt.plot(total_energy)
-    plt.xlabel('time [fs]')
-    plt.ylabel('energy [eV]')
-    plt.title('Total energy')
-    plt.grid(True)
-    
-    plot_filename = f'{args.output_prefix}_total_energy_dt_{timestep_fs}fs_{temperature}K_{num_steps}steps.png'
-    plt.savefig(plot_filename, dpi=300, bbox_inches='tight')
-    print(f"Energy plot saved to: {plot_filename}")
     
     # Close trajectory file
     traj.close()
