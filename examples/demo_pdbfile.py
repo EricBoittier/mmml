@@ -578,7 +578,7 @@ def main() -> int:
 
     
 
-    for j in range(10):
+    for j in range(300):
         sim_key, data_key = jax.random.split(data_key, 2)
         s = set_up_nhc_sim_routine(atoms)
         out_positions, _ = run_sim_loop(s, sim_key, np.arange(1), -1000)
