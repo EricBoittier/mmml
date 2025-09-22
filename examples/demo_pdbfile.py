@@ -251,15 +251,7 @@ def main() -> int:
         energy_conversion_factor=1,
         force_conversion_factor=1,
     )
-    # spherical_cutoff_calculator(
-    #                     positions=R,
-    #                     atomic_numbers=Z,
-    #                     n_monomers=self.n_monomers,
-    #                     cutoff_params=self.cutoff_params,
-    #                     doML=self.doML,
-    #                     doMM=self.doMM,
-    #                     doML_dimer=self.doML_dimer,
-    #                     debug=self.debug,
+ 
     print(f"Hybrid calculator created: {hybrid_calc}")
     atoms = pdb_ase_atoms
     print(f"ASE atoms: {atoms}")
@@ -334,10 +326,12 @@ def main() -> int:
             pycharmm.lingo.charmm_script("ENER")
             xyz = pd.DataFrame(ase_atoms.get_positions(), columns=["x", "y", "z"])
             coor.set_positions(xyz)
+            # pycharmm MM force field minimization
             minimize.run_abnr(nstep=1000, tolenr=1e-5, tolgrd=1e-5)
             pycharmm.lingo.charmm_script("ENER")
             ase_atoms.set_positions(coor.get_positions())
             _ = ase_opt.BFGS(atoms).run(fmax=0.001, steps=100)
+            # assign new velocities
             MaxwellBoltzmannDistribution(ase_atoms, temperature_K=temperature)
             Stationary(ase_atoms)
             ZeroRotation(ase_atoms)
@@ -492,11 +486,14 @@ def main() -> int:
                     print("NaN energy caught")
                     print(f"Simulation terminated: E={energy:.4f}eV")
                     break
+                    # TODO: fix nans, by going back to the previous state?
             # save pdb 
             ase_io.write(f"{args.output_prefix}_minimized.pdb", atoms)
 
             # NVT simulation
             nbrs = neighbor_fn.allocate(fire_state.position)
+            # TODO: fix nans, by going back to the previous state?
+            # TODO: piston mass?
             state = init_fn(key, fire_state.position, 2.91086e-3, neighbor=nbrs)
             nhc_positions = []
 
@@ -577,7 +574,7 @@ def main() -> int:
     sim_key, data_key = jax.random.split(jax.random.PRNGKey(42), 2)
 
     
-
+    # Main JAXMD simulation loop
     for j in range(300):
         sim_key, data_key = jax.random.split(data_key, 2)
         s = set_up_nhc_sim_routine(atoms)
