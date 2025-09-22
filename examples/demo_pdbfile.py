@@ -274,7 +274,7 @@ def main() -> int:
     # if args.minimize_first:
     def minimize_structure(atoms):
         print("Minimizing structure with hybrid calculator")
-        _ = ase_opt.BFGS(atoms).run(fmax=0.05, steps=10)
+        _ = ase_opt.BFGS(atoms).run(fmax=0.05, steps=3)
         
         # Sync with PyCHARMM
         xyz = pd.DataFrame(atoms.get_positions(), columns=["x", "y", "z"])
@@ -282,13 +282,13 @@ def main() -> int:
         print(f"PyCHARMM coordinates after ASE minimization: {coor.show()}")
         
         # Additional PyCHARMM minimization
-        minimize.run_abnr(nstep=4000, tolenr=1e-6, tolgrd=1e-6)
+        minimize.run_abnr(nstep=20, tolenr=1e-6, tolgrd=1e-6)
         pycharmm.lingo.charmm_script("ENER")
         print(f"PyCHARMM coordinates after PyCHARMM minimization: {coor.show()}")
         
         # Final ASE minimization
         atoms.set_positions(coor.get_positions())
-        _ = ase_opt.BFGS(atoms).run(fmax=0.0001, steps=100)
+        _ = ase_opt.BFGS(atoms).run(fmax=0.0001, steps=20)
         print("Minimization complete")
         return atoms
         
@@ -576,9 +576,11 @@ def main() -> int:
 
     sim_key, data_key = jax.random.split(jax.random.PRNGKey(42), 2)
 
-    s = set_up_nhc_sim_routine(atoms)
+    
 
     for j in range(10):
+        sim_key, data_key = jax.random.split(data_key, 2)
+        s = set_up_nhc_sim_routine(atoms)
         out_positions, _ = run_sim_loop(s, sim_key, np.arange(1), -1000)
 
         for i in range(len(out_positions)):
