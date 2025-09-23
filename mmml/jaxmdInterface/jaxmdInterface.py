@@ -35,6 +35,7 @@ from jax_md import space, smap, energy, minimize, quantity, simulate, partition,
 
 # Local imports
 import e3x
+import jax
 import physnetjax
 from physnetjax.data.data import prepare_datasets
 from physnetjax.training.loss import dipole_calc
