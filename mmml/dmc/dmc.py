@@ -22,6 +22,16 @@ import jax.numpy as jnp
 from e3x import ops as e3x_ops
 
 try:
+    from ase.io import read as ase_read
+    from ase.optimize import BFGS
+except ModuleNotFoundError as exc:  # pragma: no cover - script requires ASE
+    sys.exit("ASE is required to read XYZ input files: " + str(exc))
+try:  # EMT is used as a lightweight fallback calculator for minimisation
+    from ase.calculators.emt import EMT
+except ModuleNotFoundError:  # pragma: no cover - EMT optional
+    EMT = None
+
+try:
     from mmml.cli.base import load_model_parameters, resolve_checkpoint_paths
 except ModuleNotFoundError:  # pragma: no cover - fallback for script execution
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -42,6 +52,12 @@ parser.add_argument("--checkpoint", type=Path, required=True,
                     help="Path to the PhysNetJax checkpoint directory")
 parser.add_argument("--max-batch", type=int, default=512,
                     help="Maximum number of walker geometries evaluated per JAX batch")
+parser.add_argument("--minimize-fmax", type=float, default=1e-3,
+                    help="Force convergence criterion for ASE geometry minimisation (eV/Å)")
+parser.add_argument("--minimize-steps", type=int, default=200,
+                    help="Maximum ASE optimisation steps for the reference geometry")
+parser.add_argument("--random-sigma", type=float, default=0.02,
+                    help="Standard deviation (Å) of the random distortion applied to x0")
 required = parser.add_argument_group("required arguments")
 required.add_argument("-i", "--input", type=str,
                       help="input file specifying the minimum and staring geometry (similar to xyz format)",
@@ -68,9 +84,42 @@ auang = 0.5291772083
 aucm = 219474.6313710
 EV_TO_HARTREE = 0.0367493
 
-# read data from input file (formatted similar to .xyz Files, note the hashtags in the file)
-in_geoms = np.genfromtxt(str(input_path))[:, 1:]
-atom_type = np.loadtxt(str(input_path), usecols=0, dtype=str)
+# read data from input file using ASE (supports extended XYZ headers)
+structures = ase_read(str(input_path), index=":")
+if not isinstance(structures, list):
+    structures = [structures]
+if len(structures) == 0:
+    sys.exit(f"No structures found in input file {input_path}")
+
+first_frame = structures[0]
+if len(first_frame) != args.natm:
+    sys.exit(
+        "Mismatch between --natm and atoms in input: "
+        f"expected {args.natm}, found {len(first_frame)}"
+    )
+
+atom_type = np.asarray(first_frame.get_chemical_symbols(), dtype=str)
+
+
+def minimise_structure(atoms):
+    atoms_min = atoms.copy()
+    if atoms_min.calc is None:
+        if EMT is None:
+            raise RuntimeError("ASE EMT calculator not available for minimisation")
+        atoms_min.calc = EMT()
+    dyn = BFGS(atoms_min, logfile=None)
+    dyn.run(fmax=args.minimize_fmax, steps=args.minimize_steps)
+    return atoms_min
+
+
+try:
+    xmin_atoms = minimise_structure(first_frame)
+    xmin = np.asarray(xmin_atoms.get_positions(), dtype=float)
+except Exception as exc:  # pragma: no cover - fallback if minimisation fails
+    print(f"Warning: ASE minimisation failed ({exc}); using input geometry.", file=sys.stderr)
+    xmin = np.asarray(first_frame.get_positions(), dtype=float)
+
+x0 = xmin + np.random.normal(scale=args.random_sigma, size=xmin.shape)
 
 mass = []
 nucl_charge = []
@@ -90,9 +139,6 @@ for i in range(args.natm):
 
 mass = np.array(mass)
 mass = np.sqrt(np.array(mass * emass))
-
-xmin = in_geoms[:args.natm, :]
-x0 = in_geoms[-args.natm:, :]
 
 max_batch = max(1, args.max_batch)
 
