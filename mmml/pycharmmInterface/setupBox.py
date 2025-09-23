@@ -292,11 +292,8 @@ def setup_box_generic(pdb_path, rtf=CGENFF_RTF, prm=CGENFF_PRM, side_length: flo
     
     """
     pycharmm.lingo.charmm_script(header)
-    print("read header")
     pycharmm.lingo.charmm_script(pbcset.format(SIDELENGTH=side_length))
-    print("read pbcset")
     pycharmm.lingo.charmm_script(pbcs)
-    print("read pbcs")
     energy.show()
     write.psf_card(f"psf/system-{tag}.psf")
     write.coor_pdb(f"pdb/init-{tag}.pdb")
@@ -310,7 +307,7 @@ def initialize_psf(resid: str, n_molecules: int, side_length: float, solvent: st
     """
     CLEAR_CHARMM()
     if pdb_path is None:
-        pdbfilename = f"pdb/init-{solvent}box.pdb"
+        pdbfilename = f"pdb/init-packmol.pdb"
     else:
         pdbfilename = pdb_path
 

@@ -144,12 +144,7 @@ def parse_args() -> argparse.Namespace:
         default=100_000,
         help="Number of MD steps to run (default: 100000).",
     )
-    parser.add_argument(
-        "--minimize-first",
-        action="store_true",
-        default=True,
-        help="Minimize structure before starting MD (default: True).",
-    )
+
     parser.add_argument(
         "--output-prefix",
         type=str,
