@@ -48,11 +48,58 @@ Install project dependencies permanently (optional):
 uv sync
 ```
 
-If you prefer the legacy installer:
-
 ```bash
 bash setup/install.sh
 ```
+
+
+## FAQs
+
+Common errors are not having CHARMM_HOME and CHARMM_LIB_DIR set. source CHARMMSETUP
+
+```bash
+>>> import mmml 
+>>> from mmml.pycharmmInterface import import_pycharmm
+/pchem-data/meuwly/boittier/home/mmml/mmml/data/top_all36_cgenff.rtf
+/pchem-data/meuwly/boittier/home/mmml/mmml/data/par_all36_cgenff.prm
+CHARMM_HOME /pchem-data/meuwly/boittier/home/mmml/setup/charmm
+CHARMM_LIB_DIR /pchem-data/meuwly/boittier/home/mmml/setup/charmm
+Traceback (most recent call last):
+  File "<stdin>", line 1, in <module>
+  File "/pchem-data/meuwly/boittier/home/mmml/mmml/pycharmmInterface/import_pycharmm.py", line 48, in <module>
+    import pycharmm
+  File "/pchem-data/meuwly/boittier/home/mmml/.venv/lib/python3.12/site-packages/pycharmm/__init__.py", line 17, in <module>
+    from .atom_info import get_atom_table
+  File "/pchem-data/meuwly/boittier/home/mmml/.venv/lib/python3.12/site-packages/pycharmm/atom_info.py", line 24, in <module>
+    import pycharmm.coor as coor
+  File "/pchem-data/meuwly/boittier/home/mmml/.venv/lib/python3.12/site-packages/pycharmm/coor.py", line 31, in <module>
+    import pycharmm.lib as lib  
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/pchem-data/meuwly/boittier/home/mmml/.venv/lib/python3.12/site-packages/pycharmm/lib.py", line 67, in <module>
+    charmm_lib = CharmmLib(os.environ.get('CHARMM_LIB_DIR', ''))
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/pchem-data/meuwly/boittier/home/mmml/.venv/lib/python3.12/site-packages/pycharmm/lib.py", line 48, in __init__
+    self.init_charmm()
+  File "/pchem-data/meuwly/boittier/home/mmml/.venv/lib/python3.12/site-packages/pycharmm/lib.py", line 58, in init_charmm
+    self.lib = ctypes.CDLL(self.charmm_lib_name)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/pchem-data/meuwly/boittier/home/.local/share/uv/python/cpython-3.12.0-linux-x86_64-gnu/lib/python3.12/ctypes/__init__.py", line 379, in __init__
+    self._handle = _dlopen(self._name, mode)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^
+OSError: /lib/x86_64-linux-gnu/libstdc++.so.6: version `GLIBCXX_3.4.32' not found (required by /pchem-data/meuwly/boittier/home/mmml/setup/charmm/libcharmm.so)
+>>> exit()
+Exception ignored in: <function CharmmLib.__del__ at 0x149de9f237e0>
+Traceback (most recent call last):
+  File "/pchem-data/meuwly/boittier/home/mmml/.venv/lib/python3.12/site-packages/pycharmm/lib.py", line 54, in __del__
+    self.del_charmm()
+  File "/pchem-data/meuwly/boittier/home/mmml/.venv/lib/python3.12/site-packages/pycharmm/lib.py", line 62, in del_charmm
+    self.lib.del_charmm()  # initiates 'normal stop'
+    ^^^^^^^^^^^^^^^^^^^
+AttributeError: 'NoneType' object has no attribute 'del_charmm'
+(mmml) (base) boittier@gpu23:~/mmml$ module load gcc
+```
+
+
 
 ### Using the calculator (minimal example)
 
