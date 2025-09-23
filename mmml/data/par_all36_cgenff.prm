@@ -992,6 +992,7 @@ FGP1   ALG1    205.00     1.7260 ! aluminum tetrafluoride, ALF4, w/UB
 ANGLES
 HT   OT   HT     55.0      104.52   ! FROM TIPS3P GEOMETRY
 OT   HT   HT     0.0      0.0   ! FROM TIPS3P GEOMETRY
+CLGA1  CG321  CLGA1    95.00    109.00 ! dcm_freq , from CLGA1 CG311 CLGA1, PENALTY= 4
 CG2R51 CG1N1  NG1T1    40.00    180.00 ! DCG, yxu, RNA
 CG2R61 CG1N1  NG1T1    40.00    180.00 ! 3CYP, 3-Cyanopyridine (PYRIDINE pyr-CN), yin
 CG321  CG1N1  NG1T1    21.20    180.00 ! CYU, from CG331 CG1N1 NG1T1, yxu, RNA

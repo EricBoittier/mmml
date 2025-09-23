@@ -306,7 +306,20 @@ IC O1   C1   C2  H21        1.2237  126.42   23.85  111.52   1.1204
 IC O1   C1   C2  H22        1.2237  126.42  148.26  114.11   1.1296
 IC O1   C1   C2  H23        1.2237  126.42  -90.21  101.67   1.1375
 
+RESI DCM       0.000 ! param penalty=   4.000 ; charge penalty=   0.000
+GROUP            ! CHARGE   CH_PENALTY
+ATOM C      CG321  -0.018 !    0.000
+ATOM H1     HGA2    0.090 !    0.000
+ATOM H2     HGA2    0.090 !    0.000
+ATOM CL1    CLGA1  -0.081 !    0.000
+ATOM CL2    CLGA1  -0.081 !    0.000
 
+BOND H1   C
+BOND C    CL1
+BOND C    CL2
+BOND C    H2
+
+END
 
 
 !protein model compounds
@@ -15223,22 +15236,6 @@ IC C22  C23  CD   OE1   1.5494  113.05 -178.02  116.54   1.2584
 IC OE1  C23  *CD  OE2   1.2584  116.54  175.48  119.00   1.2572
 
 
-RESI DCM       0.000 ! param penalty=   4.000 ; charge penalty=   0.000
-
-GROUP            ! CHARGE   CH_PENALTY
-ATOM C      CG321  -0.018 !    0.000
-ATOM CL1    CLGA1  -0.081 !    0.000
-ATOM CL2    CLGA1  -0.081 !    0.000
-ATOM H1     HGA2    0.090 !    0.000
-ATOM H2     HGA2    0.090 !    0.000
-
-BOND H1   C
-BOND C    CL1
-BOND C    CL2
-BOND C    H2
-PATCHING FIRS NONE LAST NONE
-
-END
 
 
 RESI DCA          -1.00 ! C24H39O4, deoxycholic acid(DCA), cacha
