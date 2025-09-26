@@ -135,7 +135,7 @@ def parse_args() -> argparse.Namespace:
         help="Timestep for MD simulation in fs (default: 0.5).",
     )
     parser.add_argument(
-        "--nsteps-jaxmd",
+        "--nsteps_jaxmd",
         type=int,
         default=100_000,
         help="Number of MD steps to run in JAX-MD (default: 100000).",
@@ -147,7 +147,7 @@ def parse_args() -> argparse.Namespace:
         help="Prefix for output files (default: md_simulation).",
     )
     parser.add_argument(
-        "--nsteps-ase",
+        "--nsteps_ase",
         type=int,
         default=10000,
         help="Number of steps to run in ASE (default: 10000).",
@@ -331,16 +331,16 @@ inbfrq -1 imgfrq -1
         traj.close()
         return atoms
         
-    atoms = minimize_structure(atoms)
+    # atoms = minimize_structure(atoms)
 
     def run_ase_md(atoms, run_index=0,):
         
-        atoms = minimize_structure(atoms, run_index=run_index, nsteps=60 if run_index == 0 else 10, fmax=0.0006 if run_index == 0 else 0.001)
+        atoms = minimize_structure(atoms, run_index=run_index, nsteps=20 if run_index == 0 else 10, fmax=0.0006 if run_index == 0 else 0.001)
 
         # Setup MD simulation
         temperature = args.temperature
         timestep_fs = args.timestep
-        num_steps = args["nsteps-ase"]
+        num_steps = args.nsteps_ase
         ase_atoms = atoms
         
         # Draw initial momenta
@@ -600,7 +600,7 @@ inbfrq -1 imgfrq -1
 
         def run_sim(
             key, 
-            total_steps=args["nsteps-jaxmd"], 
+            total_steps=args.nsteps_jaxmd, 
             steps_per_recording=1,
             nbrs=nbrs,
             R=R
