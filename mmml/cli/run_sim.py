@@ -318,13 +318,17 @@ inbfrq -1 imgfrq -1
 
     # Minimize structure if requested
     # if args.minimize_first:
-    def minimize_structure(atoms, run_index=0):
+    def minimize_structure(atoms, run_index=0, nsteps=60, fmax=0.0006):
         traj = ase_io.Trajectory(f'bfgs_{run_index}_{args.output_prefix}_minimized.traj', 'w')
         print("Minimizing structure with hybrid calculator")
-        _ = ase_opt.BFGS(atoms).run(fmax=0.0006, steps=60)
+        print(f"Running BFGS for {nsteps} steps")
+        print(f"Running BFGS with fmax: {fmax}")
+        _ = ase_opt.BFGS(atoms).run(fmax=fmax, steps=nsteps)
         # Sync with PyCHARMM
         xyz = pd.DataFrame(atoms.get_positions(), columns=["x", "y", "z"])
         coor.set_positions(xyz)
+        traj.write(atoms)
+        traj.close()
         return atoms
         
     atoms = minimize_structure(atoms)
