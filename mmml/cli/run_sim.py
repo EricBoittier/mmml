@@ -374,7 +374,7 @@ inbfrq -1 imgfrq -1
             potential_energy[i] = ase_atoms.get_potential_energy()
             kinetic_energy[i] = ase_atoms.get_kinetic_energy()
             total_energy[i] = ase_atoms.get_total_energy()
-            traj.write(ase_atoms)
+            
             # Check for energy spikes and re-minimize if needed
             if i > 10 and (kinetic_energy[i] > 300 or potential_energy[i] > 0):
                 print(f"Energy spike detected at step {i}, re-minimizing...")
@@ -405,7 +405,7 @@ inbfrq -1 imgfrq -1
                 # pycharmm.lingo.charmm_script("ENER")
                 # ase_atoms.set_positions(coor.get_positions())
                 # _ = ase_opt.BFGS(atoms).run(fmax=0.01, steps=10)
-                minimize_structure(ase_atoms, run_index=f"{run_index}_{breakcount}_{i}_", nsteps=20 if run_index == 0 else 10, fmax=0.0006 if run_index == 0 else 0.001)
+                # minimize_structure(ase_atoms, run_index=f"{run_index}_{breakcount}_{i}_", nsteps=20 if run_index == 0 else 10, fmax=0.0006 if run_index == 0 else 0.001)
                 # assign new velocities
                 # MaxwellBoltzmannDistribution(ase_atoms, temperature_K=temperature)
                 cur_eng = ase_atoms.get_potential_energy()
@@ -418,11 +418,12 @@ inbfrq -1 imgfrq -1
                 break
             # Occasionally print progress and adjust temperature
             if (i != 0) and (i % 1000 == 0):
-                temperature += 1
+                traj.write(ase_atoms)
+                # temperature += 1
                 Stationary(ase_atoms)
-                # ZeroRotation(ase_atoms)
-                # MaxwellBoltzmannDistribution(ase_atoms, temperature_K=temperature)
-                # print(f"Temperature adjusted to: {temperature} K")
+                ZeroRotation(ase_atoms)
+                MaxwellBoltzmannDistribution(ase_atoms, temperature_K=temperature)
+                print(f"Temperature adjusted to: {temperature} K")
             if i % 100 == 0:
                 print(f"step {i:5d} epot {potential_energy[i]: 5.3f} ekin {kinetic_energy[i]: 5.3f} etot {total_energy[i]: 5.3f}")
 
@@ -434,7 +435,7 @@ inbfrq -1 imgfrq -1
 
 
     temperature = args.temperature
-    for i in range(10):
+    for i in range(1000):
 
         run_ase_md(atoms, run_index=i, temperature=args.temperature+i)
 
