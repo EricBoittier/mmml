@@ -417,7 +417,7 @@ inbfrq -1 imgfrq -1
                 print("Maximum number of breaks reached")
                 break
             # Occasionally print progress and adjust temperature
-            if (i != 0) and (i % 1000 == 0):
+            if (i != 0) and (i % 500 == 0):
                 traj.write(ase_atoms)
                 # temperature += 1
                 Stationary(ase_atoms)
