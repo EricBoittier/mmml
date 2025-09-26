@@ -325,7 +325,7 @@ inbfrq -1 imgfrq -1
         print(f"Running BFGS with fmax: {fmax}")
         _ = ase_opt.BFGS(atoms).run(fmax=fmax, steps=nsteps)
         # Sync with PyCHARMM
-        xyz = pd.DataFrame(atoms.get_positions(), columns=["x", "y", "z"])
+        xyz = pd.DataFrame(atoms.get_positions() - atoms.get_positions().mean(axis=0), columns=["x", "y", "z"])
         coor.set_positions(xyz)
         traj.write(atoms)
         traj.close()
