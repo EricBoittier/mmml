@@ -331,7 +331,7 @@ inbfrq -1 imgfrq -1
         atoms = minimize_structure(atoms, run_index=run_index, nsteps=20 if run_index == 0 else 10, fmax=0.0006 if run_index == 0 else 0.001)
 
         # Setup MD simulation
-        temperature = args.temperature
+        
         timestep_fs = args.timestep
         num_steps = args.nsteps_ase
         ase_atoms = atoms
@@ -424,8 +424,11 @@ inbfrq -1 imgfrq -1
         print(f"Trajectory saved to: {traj_filename}")
         print("ASE MD simulation complete!")
 
+
+    temperature = args.temperature
     for i in range(10):
-        run_ase_md(atoms, run_index=i)
+
+        run_ase_md(atoms, run_index=i, temperature=temperature+i)
 
 
     sys.exit()

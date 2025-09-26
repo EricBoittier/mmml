@@ -48,6 +48,35 @@ from mmml.physnetjax.physnetjax.data.data import prepare_datasets
 
 import numpy as np
 
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--data", type=str, default=None)
+    parser.add_argument("--ckpt_dir", type=Path)
+
+    parser.add_argument("--tag", type=str, default="run")
+    parser.add_argument("--model", type=str, default=None)
+    parser.add_argument("--n_train", type=int, default=1000)
+    parser.add_argument("--n_valid", type=int, default=100)
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--batch_size", type=int, default=1)
+    parser.add_argument("--num_epochs", type=int, default=0)
+    parser.add_argument("--learning_rate", type=float, default=0.001)
+    parser.add_argument("--energy_weight", type=float, default=1)
+    parser.add_argument("--objective", type=str, default="valid_loss")
+    parser.add_argument("--restart", type=str, default=None)
+    
+    parser.add_argument("--num_atoms", type=int, default=20)
+    parser.add_argument("--features", type=int, default=64)
+    parser.add_argument("--max_degree", type=int, default=0)
+    parser.add_argument("--num_basis_functions", type=int, default=32)
+    parser.add_argument("--num_iterations", type=int, default=2)
+    parser.add_argument("--n_res", type=int, default=2)
+    parser.add_argument("--cutoff", type=float, default=8.0)
+    parser.add_argument("--max_atomic_number", type=int, default=28)
+    return parser.parse_args()
+
+
+
 def to_jsonable(obj: Any):
     """Recursively convert JAX/NumPy objects to JSON-serializable types."""
     # Handle JAX arrays (ArrayImpl) and NumPy arrays
@@ -80,32 +109,6 @@ def load_model(model_file):
         model = EF(**json.load(f))
     return model
 
-def parse_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--data", type=str, default=None)
-    parser.add_argument("--ckpt_dir", type=Path)
-
-    parser.add_argument("--tag", type=str, default="run")
-    parser.add_argument("--model", type=str, default=None)
-    parser.add_argument("--n_train", type=int, default=1000)
-    parser.add_argument("--n_valid", type=int, default=100)
-    parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--batch_size", type=int, default=1)
-    parser.add_argument("--num_epochs", type=int, default=0)
-    parser.add_argument("--learning_rate", type=float, default=0.001)
-    parser.add_argument("--energy_weight", type=float, default=1)
-    parser.add_argument("--objective", type=str, default="valid_loss")
-    parser.add_argument("--restart", type=str, default=None)
-    
-    parser.add_argument("--num_atoms", type=int, default=20)
-    parser.add_argument("--features", type=int, default=64)
-    parser.add_argument("--max_degree", type=int, default=0)
-    parser.add_argument("--num_basis_functions", type=int, default=32)
-    parser.add_argument("--num_iterations", type=int, default=2)
-    parser.add_argument("--n_res", type=int, default=2)
-    parser.add_argument("--cutoff", type=float, default=8.0)
-    parser.add_argument("--max_atomic_number", type=int, default=28)
-    return parser.parse_args()
 
 def main_loop(args):
     seed = args.seed
