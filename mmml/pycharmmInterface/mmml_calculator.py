@@ -24,7 +24,7 @@ from scipy.optimize import minimize as scipy_minimize
 
 # In your module that defines spherical_cutoff_calculator
 import jax.numpy as jnp
-from pbc_prep_factory import make_pbc_mapper
+from mmml.pycharmmInterface.pbc_prep_factory import make_pbc_mapper
 
 
 # CHARMM force-field definitions are optional.  During documentation builds we
