@@ -686,6 +686,7 @@ def setup_calculator(
     MODEL.natoms = MAX_ATOMS_PER_SYSTEM 
 
     if cell:
+        cell = float(cell)
         # somewhere in your factory / calculator init
         from mmml.pycharmmInterface.pbc_prep_factory import make_pbc_mapper
         # turn the length into a 3x3 matrix for a cubic cell
