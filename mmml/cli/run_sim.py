@@ -419,7 +419,7 @@ inbfrq -1 imgfrq -1
             if (i != 0) and (i % 1000 == 0):
                 temperature += 1
                 Stationary(ase_atoms)
-                ZeroRotation(ase_atoms)
+                # ZeroRotation(ase_atoms)
                 # MaxwellBoltzmannDistribution(ase_atoms, temperature_K=temperature)
                 # print(f"Temperature adjusted to: {temperature} K")
             if i % 1 == 0:
