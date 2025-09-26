@@ -344,9 +344,9 @@ inbfrq -1 imgfrq -1
         ase_atoms = atoms
         
         # Draw initial momenta
-        MaxwellBoltzmannDistribution(ase_atoms, temperature_K=temperature)
-        Stationary(ase_atoms)  # Remove center of mass translation
-        ZeroRotation(ase_atoms)  # Remove rotations
+        # MaxwellBoltzmannDistribution(ase_atoms, temperature_K=temperature)
+        # Stationary(ase_atoms)  # Remove center of mass translation
+        # ZeroRotation(ase_atoms)  # Remove rotations
 
         dt = timestep_fs*ase.units.fs
         print(f"Running ASE MD with timestep: {dt} (ase units)")
@@ -385,7 +385,9 @@ inbfrq -1 imgfrq -1
                 # ase_atoms.set_positions(coor.get_positions())
                 _ = ase_opt.BFGS(atoms).run(fmax=0.01, steps=10)
                 # assign new velocities
-                MaxwellBoltzmannDistribution(ase_atoms, temperature_K=temperature)
+                # MaxwellBoltzmannDistribution(ase_atoms, temperature_K=temperature)
+                cur_eng = ase_atoms.get_potential_energy()
+                print(f"Current energy: {cur_eng:.6f} eV")
                 Stationary(ase_atoms)
                 ZeroRotation(ase_atoms)
                 breakcount += 1
