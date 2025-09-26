@@ -2,7 +2,7 @@
 import jax
 import jax.numpy as jnp
 from typing import Optional, Sequence
-from pbc_utils_jax import wrap_positions, unwrap_groups, coregister_groups
+from mmml.pycharmmInterface.pbc_utils_jax import wrap_positions, unwrap_groups, coregister_groups
 
 Array = jnp.ndarray
 
