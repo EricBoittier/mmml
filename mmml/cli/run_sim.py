@@ -333,9 +333,9 @@ inbfrq -1 imgfrq -1
         
     atoms = minimize_structure(atoms)
 
-    def run_ase_md(atoms, run_index=0):
+    def run_ase_md(atoms, run_index=0,):
         
-        atoms = minimize_structure(atoms)
+        atoms = minimize_structure(atoms, run_index=run_index, nsteps=60 if run_index == 0 else 10, fmax=0.0006 if run_index == 0 else 0.001)
 
         # Setup MD simulation
         temperature = args.temperature
@@ -409,7 +409,7 @@ inbfrq -1 imgfrq -1
         print("ASE MD simulation complete!")
 
     for i in range(10):
-        run_ase_md(atoms, i=i)
+        run_ase_md(atoms, run_index=i)
 
     def set_up_nhc_sim_routine(atoms, T=args.temperature, dt=5e-3, steps_per_recording=250):
         @jax.jit
