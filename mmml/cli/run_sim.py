@@ -57,6 +57,16 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         required=True,
     )
+
+    parser.add_argument(
+        "--validate",
+        action="store_true",
+        help="Validate the force field (default: False).",
+    )
+
+    # ========================================================================
+    # MD SIMULATION ARGUMENTS
+    # ========================================================================
     parser.add_argument(
         "--energy-catch",
         type=float,
@@ -222,8 +232,6 @@ def main() -> int:
     print(f"PyCHARMM coordinates: {coor.get_positions()}")
     print(f"Ase coordinates: {pdb_ase_atoms.get_positions()}")
     print(f"{coor.get_positions() == pdb_ase_atoms.get_positions()}")
-
-
 
     print(coor.get_positions())
     
@@ -425,7 +433,7 @@ inbfrq -1 imgfrq -1
             )
             return result.energy.reshape(-1)[0]
         
-        jax_md_grad_fn = jax.grad(jax_md_energy_fn)
+        # jax_md_grad_fn = jax.grad(jax_md_energy_fn)
 
         # evaluate_energies_and_forces
         result = evaluate_energies_and_forces(
