@@ -688,11 +688,14 @@ def setup_calculator(
     if cell:
         # somewhere in your factory / calculator init
         from pbc_prep_factory import make_pbc_mapper
-
-        cell = jnp.asarray(atoms.get_cell(complete=True).array)
+        # turn the length into a 3x3 matrix for a cubic cell
+        cell = jnp.asarray([[cell, 0, 0], [0, cell, 0], [0, 0, cell]])
         mol_id = None
         try:
-            mol_id_np = atoms.get_array('molecule_id')
+            # for now just use a simple array of integers for the molecule id
+            # in order e.g. [0, 0, 0, 1, 1, 1, 2, 2, 2, ...] for n_atoms_monomer = 3
+            mol_id_np = jnp.asarray([i * jnp.ones(ATOMS_PER_MONOMER,
+             dtype=jnp.int32) for i in np.arange(n_monomers)], dtype=jnp.int32)
             mol_id = jnp.asarray(mol_id_np, dtype=jnp.int32)
         except Exception:
             mol_id = None
@@ -731,9 +734,6 @@ def setup_calculator(
         return ml_contrib
 
     switch_ML_grad = jax.grad(switch_ML)
-
-
-
 
     
     def get_MM_energy_forces_fns(
