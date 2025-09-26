@@ -666,8 +666,8 @@ def setup_calculator(
             collect_monomers.append(0)
 
     print("unique_res_ids", unique_res_ids)
-    print("collect_monomers", collect_monomers)
-    print("dimer_perms", dimer_perms)
+    # print("collect_monomers", collect_monomers)
+    print("len(dimer_perms)", len(dimer_perms))
 
     N_MONOMERS = n_monomers
     # Batch processing constants

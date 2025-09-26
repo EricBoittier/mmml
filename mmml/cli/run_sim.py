@@ -411,9 +411,9 @@ inbfrq -1 imgfrq -1
                 Stationary(ase_atoms)
                 ZeroRotation(ase_atoms)
                 breakcount += 1
-                if breakcount > 100:
-                    print("Maximum number of breaks reached")
-                    break
+            if breakcount > 4:
+                print("Maximum number of breaks reached")
+                break
             # Occasionally print progress and adjust temperature
             if i % 10_000 == 0:
                 temperature += 1
