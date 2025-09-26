@@ -650,8 +650,8 @@ def setup_calculator(
     all_monomer_idxs = []
     for a in range(1, n_monomers + 1):
         all_monomer_idxs.append(indices_of_monomer(a, n_atoms=ATOMS_PER_MONOMER, n_mol=n_monomers))
-    print("all_monomer_idxs", all_monomer_idxs)
-    print("all_dimer_idxs", all_dimer_idxs)
+    # print("all_monomer_idxs", all_monomer_idxs)
+    # print("all_dimer_idxs", all_dimer_idxs)
     unique_res_ids = []
     collect_monomers = []
     dimer_perms = dimer_permutations(n_monomers)
@@ -664,6 +664,10 @@ def setup_calculator(
             print(a,b)
         else:
             collect_monomers.append(0)
+
+    print("unique_res_ids", unique_res_ids)
+    print("collect_monomers", collect_monomers)
+    print("dimer_perms", dimer_perms)
 
     N_MONOMERS = n_monomers
     # Batch processing constants
