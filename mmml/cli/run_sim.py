@@ -364,7 +364,7 @@ inbfrq -1 imgfrq -1
         total_energy = np.zeros((num_steps,))
 
         breakcount = 0
-        for i in range(args.nsteps_ase):
+        for i in range(args["nsteps-ase"]):
             # Run 1 time step
             integrator.run(1)
             # Save current frame and keep track of energies
@@ -600,7 +600,7 @@ inbfrq -1 imgfrq -1
 
         def run_sim(
             key, 
-            total_steps=args.nsteps, 
+            total_steps=args["nsteps-jaxmd"], 
             steps_per_recording=1,
             nbrs=nbrs,
             R=R
