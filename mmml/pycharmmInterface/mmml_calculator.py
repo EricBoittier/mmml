@@ -22,6 +22,11 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import minimize as scipy_minimize
 
+# In your module that defines spherical_cutoff_calculator
+import jax.numpy as jnp
+from pbc_prep_factory import make_pbc_mapper
+
+
 # CHARMM force-field definitions are optional.  During documentation builds we
 # often do not have a functional PyCHARMM installation, so fall back to ``None``
 # when the import fails for any reason (missing module or missing shared libs).
@@ -634,7 +639,8 @@ def setup_calculator(
     model_restart_path = None,
     MAX_ATOMS_PER_SYSTEM = 100,
     ml_energy_conversion_factor: float = ev2kcalmol,
-    ml_force_conversion_factor: float = ev2kcalmol
+    ml_force_conversion_factor: float = ev2kcalmol,
+    cell = False,
 ):
     if model_restart_path is None:
         # raise ValueError("model_restart_path must be provided")
@@ -679,6 +685,21 @@ def setup_calculator(
     params, MODEL = get_params_model(restart)
     MODEL.natoms = MAX_ATOMS_PER_SYSTEM 
 
+    if cell:
+        # somewhere in your factory / calculator init
+        from pbc_prep_factory import make_pbc_mapper
+
+        cell = jnp.asarray(atoms.get_cell(complete=True).array)
+        mol_id = None
+        try:
+            mol_id_np = atoms.get_array('molecule_id')
+            mol_id = jnp.asarray(mol_id_np, dtype=jnp.int32)
+        except Exception:
+            mol_id = None
+        do_pbc_map = True
+        pbc_map = make_pbc_mapper(cell=cell, mol_id=mol_id, n_monomers=n_monomers)
+    else:
+        pbc_map = do_pbc_map = False
 
     from functools import partial
     @partial(jax.jit, static_argnames=['dif', 'ml_cutoff', 'mm_switch_on', 'debug', 'ATOMS_PER_MONOMER'])
@@ -936,7 +957,7 @@ def setup_calculator(
 
 
     from functools import partial
-    @partial(jax.jit, static_argnames=['n_monomers', 'cutoff_params', 'doML', 'doMM', 'doML_dimer', 'debug'])
+    @partial(jax.jit, static_argnames=['n_monomers', 'cutoff_params', 'doML', 'doMM', 'doML_dimer', 'debug', 'do_pbc_map',])
     def spherical_cutoff_calculator(
         positions: Array,  # Shape: (n_atoms, 3)
         atomic_numbers: Array,  # Shape: (n_atoms,)
@@ -945,7 +966,8 @@ def setup_calculator(
         doML: bool = True,
         doMM: bool = True,
         doML_dimer: bool = True,
-        debug: bool = False
+        debug: bool = False,
+        do_pbc_map: bool = False,
     ) -> ModelOutput:
         """Calculates energy and forces using combined ML/MM potential.
         
@@ -963,6 +985,9 @@ def setup_calculator(
             ModelOutput containing total energy and forces
         """
         n_dimers = len(dimer_permutations(n_monomers))
+
+        if do_pbc_map:
+            positions = pbc_map(positions)
         
         outputs = {
             "out_E": 0,
@@ -1518,3 +1543,21 @@ def setup_calculator(
         }
 
     return get_spherical_cutoff_calculator
+
+
+
+
+
+######################################################
+
+import jax.numpy as jnp
+
+def check_lattice_invariance(sc_fn, R, Z, n_monomers, cutoff_params, cell):
+    # base energy
+    E0 = sc_fn(R, Z, n_monomers, cutoff_params).energy
+    # translate monomer 0 by +a (first lattice vector)
+    a = cell[0]
+    g0 = jnp.where(jnp.arange(R.shape[0]) < (R.shape[0] // n_monomers))[0]  # assumes chunking; replace if mol_id known
+    R_shift = R.at[g0].add(a)
+    E1 = sc_fn(R_shift, Z, n_monomers, cutoff_params).energy
+    return float(E0 - E1)
