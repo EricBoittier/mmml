@@ -344,9 +344,10 @@ inbfrq -1 imgfrq -1
         ase_atoms = atoms
         
         # Draw initial momenta
-        # MaxwellBoltzmannDistribution(ase_atoms, temperature_K=temperature)
-        # Stationary(ase_atoms)  # Remove center of mass translation
-        # ZeroRotation(ase_atoms)  # Remove rotations
+        if run_index != 0:
+            MaxwellBoltzmannDistribution(ase_atoms, temperature_K=temperature)
+            Stationary(ase_atoms)  # Remove center of mass translation
+            ZeroRotation(ase_atoms)  # Remove rotations
 
         dt = timestep_fs*ase.units.fs
         print(f"Running ASE MD with timestep: {dt} (ase units)")
