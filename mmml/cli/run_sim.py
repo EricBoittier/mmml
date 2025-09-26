@@ -73,6 +73,13 @@ def parse_args() -> argparse.Namespace:
         default=0.5,
         help="Energy catch factor for the simulation (default: 0.05).",
     )
+
+    parser.add_argument(
+        "--cell",
+        default=None,
+        help="Use cell for the simulation (default: False) as a float for a cubic cell length (Å).",
+    )
+
     parser.add_argument(
         "--n-monomers",
         type=int,
@@ -255,6 +262,7 @@ def main() -> int:
         MAX_ATOMS_PER_SYSTEM=natoms,
         ml_energy_conversion_factor=1,
         ml_force_conversion_factor=1,
+        cell=args.cell,
     )
     
 
