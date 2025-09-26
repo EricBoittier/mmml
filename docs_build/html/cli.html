@@ -1,0 +1,776 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="./" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Command Line Interface (CLI) &#8212; mmml 1.0.0+539.g80e7bb3.dirty documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="_static/styles/theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+<link href="_static/styles/pydata-sphinx-theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="_static/sphinx-design.min.css?v=95c83b7e" />
+  
+  <!-- So that users can add custom icons -->
+  <script src="_static/scripts/fontawesome.js?digest=8878045cc6db502f8baf"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
+<link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
+
+    <script src="_static/documentation_options.js?v=2a23db7b"></script>
+    <script src="_static/doctools.js?v=9bcbadda"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=f281be69"></script>
+    <script src="_static/design-tabs.js?v=f930bc37"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'cli';</script>
+    <script src="_static/hide-empty-section-nav.js?v=21b70533"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="User Guide" href="user_guide.html" />
+    <link rel="prev" title="Tutorials" href="tutorials.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="1.0.0+539.g80e7bb3.dirty" />
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">mmml 1.0.0+539.g80e7bb3.dirty documentation</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="getting_started.html">
+    Getting Started
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorials.html">
+    Tutorials
+  </a>
+</li>
+
+
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="#">
+    Command Line Interface (CLI)
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="user_guide.html">
+    User Guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="esp_cube_generation.html">
+    Generating ESP cube files
+  </a>
+</li>
+
+            <li class="nav-item dropdown">
+                <button class="btn dropdown-toggle nav-item" type="button"
+                data-bs-toggle="dropdown" aria-expanded="false"
+                aria-controls="pst-nav-more-links">
+                    More
+                </button>
+                <ul id="pst-nav-more-links" class="dropdown-menu">
+                    
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="dcmnet_fitting.html">
+    Fitting DCMNet to ESP data
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="tutorial_esp_to_dcmnet.html">
+    Tutorial: From ESP to DCMNet
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="api.html">
+    API Documentation
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="developer_guide.html">
+    Developer Guide
+  </a>
+</li>
+
+                </ul>
+            </li>
+            
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+    <button class="pst-navbar-icon sidebar-toggle secondary-toggle" aria-label="On this page">
+      <span class="fa-solid fa-outdent"></span>
+    </button>
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="getting_started.html">
+    Getting Started
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorials.html">
+    Tutorials
+  </a>
+</li>
+
+
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="#">
+    Command Line Interface (CLI)
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="user_guide.html">
+    User Guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="esp_cube_generation.html">
+    Generating ESP cube files
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="dcmnet_fitting.html">
+    Fitting DCMNet to ESP data
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="tutorial_esp_to_dcmnet.html">
+    Tutorial: From ESP to DCMNet
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="api.html">
+    API Documentation
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="developer_guide.html">
+    Developer Guide
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+        
+      </div>
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+<nav class="bd-docs-nav bd-links"
+     aria-label="Section Navigation">
+  <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
+  <div class="bd-toc-item navbar-nav"></div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Command Line Interface (CLI)</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="command-line-interface-cli">
+<h1>Command Line Interface (CLI)<a class="headerlink" href="#command-line-interface-cli" title="Link to this heading">#</a></h1>
+<p>This page documents the main CLI entry points under <code class="docutils literal notranslate"><span class="pre">mmml/cli</span></code> with example
+invocations, minimal input files, and Slurm submission scripts.</p>
+<section id="prerequisites">
+<h2>Prerequisites<a class="headerlink" href="#prerequisites" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p>Python virtual environment with mmml installed and model/data dependencies available</p></li>
+<li><p>Access to GPU/CPU as required by the chosen command</p></li>
+<li><p>For Slurm examples, an HPC partition with CUDA modules or suitable CPU nodes</p></li>
+</ul>
+</section>
+<section id="make-res-py">
+<h2>make_res.py<a class="headerlink" href="#make-res-py" title="Link to this heading">#</a></h2>
+<dl>
+<dt>Purpose</dt><dd><p>Create a residue (or small molecule) template and minimal inputs for subsequent steps.</p>
+</dd>
+<dt>Usage</dt><dd><div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-m<span class="w"> </span>mmml.cli.make_res<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--resname<span class="w"> </span>WAT<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--pdb<span class="w"> </span>water.pdb<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--out<span class="w"> </span>water_res
+</pre></div>
+</div>
+</dd>
+<dt>Inputs</dt><dd><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">--resname</span></code>: residue name (e.g., WAT, ETH, ACE)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--pdb</span></code>: input PDB containing the residue</p></li>
+</ul>
+</dd>
+<dt>Outputs</dt><dd><ul class="simple">
+<li><p>Directory <code class="docutils literal notranslate"><span class="pre">water_res</span></code> with processed residue files</p></li>
+</ul>
+</dd>
+</dl>
+</section>
+<section id="make-box-py">
+<h2>make_box.py<a class="headerlink" href="#make-box-py" title="Link to this heading">#</a></h2>
+<dl>
+<dt>Purpose</dt><dd><p>Build boxes from residues and write PDB/PSF (or equivalent) for simulation setup.</p>
+</dd>
+<dt>Usage</dt><dd><div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-m<span class="w"> </span>mmml.cli.make_box<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--residue<span class="w"> </span>water_res<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--count<span class="w"> </span><span class="m">1000</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--box<span class="w"> </span><span class="m">30</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--out<span class="w"> </span>water_box
+</pre></div>
+</div>
+</dd>
+<dt>Inputs</dt><dd><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">--residue</span></code>: residue directory from <code class="docutils literal notranslate"><span class="pre">make_res</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--count</span></code>: number of molecules</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--box</span></code>: box edge length (Å)</p></li>
+</ul>
+</dd>
+<dt>Outputs</dt><dd><ul class="simple">
+<li><p>Directory <code class="docutils literal notranslate"><span class="pre">water_box</span></code> with PDB (and auxiliary) files</p></li>
+</ul>
+</dd>
+</dl>
+</section>
+<section id="make-training-py">
+<h2>make_training.py<a class="headerlink" href="#make-training-py" title="Link to this heading">#</a></h2>
+<dl>
+<dt>Purpose</dt><dd><p>Prepare and/or run training for a PhysNetJAX (or compatible) model.</p>
+</dd>
+<dt>Common flags</dt><dd><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">--data</span></code>: path to dataset (npz)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--tag</span></code>: run name tag</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--model</span></code>: model definition (JSON/INP); if omitted, a default EF model is created</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--n_train</span></code> / <code class="docutils literal notranslate"><span class="pre">--n_valid</span></code>: split sizes</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--num_epochs</span></code>: number of epochs</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--batch_size</span></code>: batch size</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--learning_rate</span></code>: optimizer learning rate</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--ckpt_dir</span></code>: checkpoints directory</p></li>
+</ul>
+</dd>
+<dt>Usage</dt><dd><div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-m<span class="w"> </span>mmml.cli.make_training<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--data<span class="w"> </span>data/dimers.npz<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--tag<span class="w"> </span>physnet_run1<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--num_epochs<span class="w"> </span><span class="m">5</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--batch_size<span class="w"> </span><span class="m">4</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--learning_rate<span class="w"> </span>1e-3<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--ckpt_dir<span class="w"> </span>checkpoints/physnet_run1
+</pre></div>
+</div>
+</dd>
+<dt>Outputs</dt><dd><ul class="simple">
+<li><p>Checkpoints in <code class="docutils literal notranslate"><span class="pre">checkpoints/physnet_run1</span></code></p></li>
+<li><p>Parameter snapshots <code class="docutils literal notranslate"><span class="pre">paramsYYYY-mm-dd_HH-MM-SS.json</span></code></p></li>
+</ul>
+</dd>
+</dl>
+</section>
+<section id="run-sim-py">
+<h2>run_sim.py<a class="headerlink" href="#run-sim-py" title="Link to this heading">#</a></h2>
+<dl>
+<dt>Purpose</dt><dd><p>Run a short ASE+MM/ML hybrid simulation (or energy/force evaluation) using a trained model.</p>
+</dd>
+<dt>Common flags</dt><dd><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">--pdbfile</span></code>: input PDB to load</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--checkpoint</span></code>: path to trained model checkpoint directory</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--n-monomers</span></code> / <code class="docutils literal notranslate"><span class="pre">--n-atoms-monomer</span></code>: topology assumptions for ML partitions</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--temperature</span></code>: target temperature (K) for MD</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--num-steps</span></code> / <code class="docutils literal notranslate"><span class="pre">--timestep</span></code>: MD length and integration step (fs)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--output-prefix</span></code>: prefix for trajectory/outputs</p></li>
+</ul>
+</dd>
+<dt>Usage</dt><dd><div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-m<span class="w"> </span>mmml.cli.run_sim<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--pdbfile<span class="w"> </span>water_box/water.pdb<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--checkpoint<span class="w"> </span>checkpoints/physnet_run1<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--n-monomers<span class="w"> </span><span class="m">1000</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--n-atoms-monomer<span class="w"> </span><span class="m">3</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--temperature<span class="w"> </span><span class="m">100</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--timestep<span class="w"> </span><span class="m">0</span>.1<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--num-steps<span class="w"> </span><span class="m">10000</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--output-prefix<span class="w"> </span>md_simulation
+</pre></div>
+</div>
+</dd>
+<dt>Outputs</dt><dd><ul class="simple">
+<li><p>Trajectory <code class="docutils literal notranslate"><span class="pre">md_simulation_trajectory_100K_10000steps.traj</span></code></p></li>
+<li><p>Console logs of energy/temperature</p></li>
+</ul>
+</dd>
+</dl>
+</section>
+<section id="minimal-example-files">
+<h2>Minimal example files<a class="headerlink" href="#minimal-example-files" title="Link to this heading">#</a></h2>
+<p>Model args (EF) JSON (if constructing a default model):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+  <span class="s2">&quot;features&quot;</span><span class="p">:</span> <span class="mi">64</span><span class="p">,</span>
+  <span class="s2">&quot;max_degree&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+  <span class="s2">&quot;num_basis_functions&quot;</span><span class="p">:</span> <span class="mi">32</span><span class="p">,</span>
+  <span class="s2">&quot;num_iterations&quot;</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span>
+  <span class="s2">&quot;n_res&quot;</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span>
+  <span class="s2">&quot;cutoff&quot;</span><span class="p">:</span> <span class="mf">8.0</span><span class="p">,</span>
+  <span class="s2">&quot;max_atomic_number&quot;</span><span class="p">:</span> <span class="mi">28</span><span class="p">,</span>
+  <span class="s2">&quot;zbl&quot;</span><span class="p">:</span> <span class="n">false</span><span class="p">,</span>
+  <span class="s2">&quot;efa&quot;</span><span class="p">:</span> <span class="n">false</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<dl class="simple">
+<dt>Dataset layout</dt><dd><ul class="simple">
+<li><p>Single <code class="docutils literal notranslate"><span class="pre">npz</span></code> file with arrays at least: <code class="docutils literal notranslate"><span class="pre">R</span></code> (positions), <code class="docutils literal notranslate"><span class="pre">Z</span></code> (atomic numbers), <code class="docutils literal notranslate"><span class="pre">E</span></code> (energies), <code class="docutils literal notranslate"><span class="pre">F</span></code> (forces)</p></li>
+</ul>
+</dd>
+</dl>
+</section>
+<section id="minimal-slurm-scripts">
+<h2>Minimal Slurm scripts<a class="headerlink" href="#minimal-slurm-scripts" title="Link to this heading">#</a></h2>
+<dl>
+<dt>Training (1 GPU)</dt><dd><div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="ch">#!/bin/bash</span>
+<span class="c1">#SBATCH -J mmml-train</span>
+<span class="c1">#SBATCH -A your_account</span>
+<span class="c1">#SBATCH -p gpu</span>
+<span class="c1">#SBATCH -N 1</span>
+<span class="c1">#SBATCH -c 8</span>
+<span class="c1">#SBATCH --gres=gpu:1</span>
+<span class="c1">#SBATCH -t 12:00:00</span>
+<span class="c1">#SBATCH -o slurm-%j.out</span>
+
+module<span class="w"> </span>load<span class="w"> </span>cuda/12.1<span class="w">  </span><span class="c1"># if needed</span>
+<span class="nb">source</span><span class="w"> </span>/path/to/venv/bin/activate
+
+srun<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>mmml.cli.make_training<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--data<span class="w"> </span>/path/to/data.npz<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--tag<span class="w"> </span>physnet_run1<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--num_epochs<span class="w"> </span><span class="m">20</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--batch_size<span class="w"> </span><span class="m">8</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--learning_rate<span class="w"> </span>1e-3<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--ckpt_dir<span class="w"> </span>/scratch/<span class="nv">$USER</span>/mmml_checkpoints/physnet_run1
+</pre></div>
+</div>
+</dd>
+<dt>MD run (CPU or GPU)</dt><dd><div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="ch">#!/bin/bash</span>
+<span class="c1">#SBATCH -J mmml-md</span>
+<span class="c1">#SBATCH -A your_account</span>
+<span class="c1">#SBATCH -p gpu</span>
+<span class="c1">#SBATCH -N 1</span>
+<span class="c1">#SBATCH -c 8</span>
+<span class="c1">#SBATCH --gres=gpu:1</span>
+<span class="c1">#SBATCH -t 02:00:00</span>
+<span class="c1">#SBATCH -o slurm-%j.out</span>
+
+module<span class="w"> </span>load<span class="w"> </span>cuda/12.1<span class="w">  </span><span class="c1"># if needed</span>
+<span class="nb">source</span><span class="w"> </span>/path/to/venv/bin/activate
+
+srun<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>mmml.cli.run_sim<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--pdbfile<span class="w"> </span>/path/to/box.pdb<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--checkpoint<span class="w"> </span>/scratch/<span class="nv">$USER</span>/mmml_checkpoints/physnet_run1<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--n-monomers<span class="w"> </span><span class="m">1000</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--n-atoms-monomer<span class="w"> </span><span class="m">3</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--temperature<span class="w"> </span><span class="m">100</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--timestep<span class="w"> </span><span class="m">0</span>.1<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--num-steps<span class="w"> </span><span class="m">10000</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--output-prefix<span class="w"> </span>md_simulation
+</pre></div>
+</div>
+</dd>
+<dt>Debug (short) job</dt><dd><div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="ch">#!/bin/bash</span>
+<span class="c1">#SBATCH -J mmml-debug</span>
+<span class="c1">#SBATCH -A your_account</span>
+<span class="c1">#SBATCH -p debug</span>
+<span class="c1">#SBATCH -N 1</span>
+<span class="c1">#SBATCH -c 4</span>
+<span class="c1">#SBATCH -t 00:10:00</span>
+<span class="c1">#SBATCH -o slurm-%j.out</span>
+
+<span class="nb">source</span><span class="w"> </span>/path/to/venv/bin/activate
+srun<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>mmml.cli.make_res<span class="w"> </span>--resname<span class="w"> </span>WAT<span class="w"> </span>--pdb<span class="w"> </span>water.pdb<span class="w"> </span>--out<span class="w"> </span>water_res
+</pre></div>
+</div>
+</dd>
+</dl>
+</section>
+<section id="notes">
+<h2>Notes<a class="headerlink" href="#notes" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p>For reproducible results, set seeds where provided by flags.</p></li>
+<li><p>Ensure the box size in <code class="docutils literal notranslate"><span class="pre">run_sim.py</span></code> is physically reasonable for your system.</p></li>
+<li><p>If running on CPU-only nodes, remove CUDA module loads.</p></li>
+</ul>
+</section>
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="tutorials.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Tutorials</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="user_guide.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">User Guide</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav class="bd-toc-nav page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#prerequisites">Prerequisites</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#make-res-py">make_res.py</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#make-box-py">make_box.py</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#make-training-py">make_training.py</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#run-sim-py">run_sim.py</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#minimal-example-files">Minimal example files</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#minimal-slurm-scripts">Minimal Slurm scripts</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#notes">Notes</a></li>
+</ul>
+  </nav></div>
+
+  <div class="sidebar-secondary-item">
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/cli.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div></div>
+
+  <div class="sidebar-secondary-item">
+<div id="searchbox"></div></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf"></script>
+<script defer src="_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2025, Eric Boittier. Project structure based on the Computational Molecular Science Python Cookiecutter version 1.10.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.2.3.
+    <br/>
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.16.1.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>
