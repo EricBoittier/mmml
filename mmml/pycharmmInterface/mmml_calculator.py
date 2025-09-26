@@ -687,7 +687,7 @@ def setup_calculator(
 
     if cell:
         # somewhere in your factory / calculator init
-        from pbc_prep_factory import make_pbc_mapper
+        from mmml.pycharmmInterface.pbc_prep_factory import make_pbc_mapper
         # turn the length into a 3x3 matrix for a cubic cell
         cell = jnp.asarray([[cell, 0, 0], [0, cell, 0], [0, 0, cell]])
         mol_id = None
