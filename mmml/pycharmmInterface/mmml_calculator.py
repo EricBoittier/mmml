@@ -747,6 +747,8 @@ def setup_calculator(
         ep_scale = ep_scale
     ):
         """Creates functions for calculating MM energies and forces with switching."""
+        # koading from pycharmm (for consistency), will consider moving 
+        # this out of the calculator set-up function eventually
         from mmml.pycharmmInterface.import_pycharmm import reset_block
         reset_block()
         read.rtf(CGENFF_RTF)
@@ -758,7 +760,6 @@ def setup_calculator(
         pycharmm.lingo.charmm_script('bomlev 0')
         cgenff_rtf = open(CGENFF_RTF).readlines()
         atc = pycharmm.param.get_atc()
-        # print("atc", atc)
         cgenff_params_dict_q = {}
         atom_name_to_param = {k: [] for k in atc}
         
@@ -809,14 +810,14 @@ def setup_calculator(
         displacements = R[pair_idx_atom_atom[:,0]] - R[pair_idx_atom_atom[:,1]]
         distances = jnp.linalg.norm(displacements, axis=1)
         at_perms = [_ for _ in list(product(params, repeat=2)) if _[0] <= _[1]]
-        # print("at_perms", at_perms)
+        
         charges = np.array(psf.get_charges())[:N_MONOMERS*ATOMS_PER_MONOMER]
         masses = np.array(psf.get_amass())[:N_MONOMERS*ATOMS_PER_MONOMER]
         at_codes = np.array(psf.get_iac())[:N_MONOMERS*ATOMS_PER_MONOMER]
         atomtype_codes = np.array(psf.get_atype())[:N_MONOMERS*ATOMS_PER_MONOMER]
 
-        rmins_per_system = jnp.take(at_flat_rm, at_codes) #jnp.array([ NBL["pair_rm"][k] for k in atom_keys ])
-        epsilons_per_system = jnp.take(at_flat_ep, at_codes) #jnp.array([ NBL["pair_ep"][k] for k in atom_keys ])
+        rmins_per_system = jnp.take(at_flat_rm, at_codes) 
+        epsilons_per_system = jnp.take(at_flat_ep, at_codes)
 
         rs = distances
         q_per_system = jnp.take(at_flat_q, at_codes)
