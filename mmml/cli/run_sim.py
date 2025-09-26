@@ -374,16 +374,16 @@ inbfrq -1 imgfrq -1
             total_energy[i] = ase_atoms.get_total_energy()
             traj.write(ase_atoms)
             # Check for energy spikes and re-minimize if needed
-            if kinetic_energy[i] > 200 or potential_energy[i] > 0:
+            if kinetic_energy[i] > 300 or potential_energy[i] > 0:
                 print(f"Energy spike detected at step {i}, re-minimizing...")
                 pycharmm.lingo.charmm_script("ENER")
                 xyz = pd.DataFrame(ase_atoms.get_positions(), columns=["x", "y", "z"])
                 coor.set_positions(xyz)
                 # pycharmm MM force field minimization
-                minimize.run_abnr(nstep=10, tolenr=1e-5, tolgrd=1e-5)
+                # minimize.run_abnr(nstep=10, tolenr=1e-5, tolgrd=1e-5)
                 pycharmm.lingo.charmm_script("ENER")
                 ase_atoms.set_positions(coor.get_positions())
-                _ = ase_opt.BFGS(atoms).run(fmax=0.001, steps=100)
+                _ = ase_opt.BFGS(atoms).run(fmax=0.01, steps=10)
                 # assign new velocities
                 MaxwellBoltzmannDistribution(ase_atoms, temperature_K=temperature)
                 Stationary(ase_atoms)
