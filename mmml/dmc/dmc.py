@@ -23,19 +23,18 @@ from e3x import ops as e3x_ops
 
 try:
     from ase.io import read as ase_read
+    from ase.io.trajectory import Trajectory
     from ase.optimize import BFGS
 except ModuleNotFoundError as exc:  # pragma: no cover - script requires ASE
-    sys.exit("ASE is required to read XYZ input files: " + str(exc))
-try:  # EMT is used as a lightweight fallback calculator for minimisation
-    from ase.calculators.emt import EMT
-except ModuleNotFoundError:  # pragma: no cover - EMT optional
-    EMT = None
+    sys.exit("ASE is required to read/write geometries: " + str(exc))
 
 try:
     from mmml.cli.base import load_model_parameters, resolve_checkpoint_paths
+    from mmml.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
 except ModuleNotFoundError:  # pragma: no cover - fallback for script execution
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
     from mmml.cli.base import load_model_parameters, resolve_checkpoint_paths
+    from mmml.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
 
 np.set_printoptions(threshold=sys.maxsize)
 
@@ -73,7 +72,7 @@ np.random.seed(int(time.time()))
 potfile = open(filename + ".pot", "w")
 logfile = open(filename + ".log", "w")
 errorfile = open("defective_" + filename + ".xyz", "w")
-lastfile = open("configs_" + filename + ".xyz", "w")
+trajfile = Trajectory("configs_" + filename + ".traj", mode="w")
 
 ##############################################
 # initialize/prepare all values/objects
@@ -101,25 +100,17 @@ if len(first_frame) != args.natm:
 atom_type = np.asarray(first_frame.get_chemical_symbols(), dtype=str)
 
 
-def minimise_structure(atoms):
+def minimise_structure_with_model(atoms, params, model):
     atoms_min = atoms.copy()
-    if atoms_min.calc is None:
-        if EMT is None:
-            raise RuntimeError("ASE EMT calculator not available for minimisation")
-        atoms_min.calc = EMT()
+    calc = get_ase_calc(params, model, atoms_min)
+    atoms_min.calc = calc
     dyn = BFGS(atoms_min, logfile=None)
-    dyn.run(fmax=args.minimize_fmax, steps=args.minimize_steps)
+    try:
+        dyn.run(fmax=args.minimize_fmax, steps=args.minimize_steps)
+    finally:
+        atoms_min.calc = None
     return atoms_min
 
-
-try:
-    xmin_atoms = minimise_structure(first_frame)
-    xmin = np.asarray(xmin_atoms.get_positions(), dtype=float)
-except Exception as exc:  # pragma: no cover - fallback if minimisation fails
-    print(f"Warning: ASE minimisation failed ({exc}); using input geometry.", file=sys.stderr)
-    xmin = np.asarray(first_frame.get_positions(), dtype=float)
-
-x0 = xmin + np.random.normal(scale=args.random_sigma, size=xmin.shape)
 
 mass = []
 nucl_charge = []
@@ -389,6 +380,19 @@ base_ckpt_dir, epoch_dir = resolve_checkpoint_paths(args.checkpoint)
 params, model = load_model_parameters(epoch_dir, natoms=natm)
 
 
+template_atoms = first_frame.copy()
+template_atoms.calc = None
+
+try:
+    xmin_atoms = minimise_structure_with_model(first_frame, params, model)
+    xmin = np.asarray(xmin_atoms.get_positions(), dtype=float)
+except Exception as exc:  # pragma: no cover - fallback if minimisation fails
+    print(f"Warning: ASE minimisation failed ({exc}); using input geometry.", file=sys.stderr)
+    xmin = np.asarray(first_frame.get_positions(), dtype=float)
+
+x0 = xmin + np.random.normal(scale=args.random_sigma, size=xmin.shape)
+template_atoms.set_positions(xmin)
+
 def _reshape_to_angstrom(coords_flat: np.ndarray) -> jnp.ndarray:
     return jnp.asarray(coords_flat.reshape(natm, 3) * auang, dtype=jnp.float32)
 
@@ -455,19 +459,10 @@ for i in range(nstep):
 
     if i > nstep - 10:
         for j in range(psips_f[0]):
-            lastfile.write(str(natm) + "\n\n")
-            for l in range(int(natm)):
-                l = l + 1
-                lastfile.write(
-                    str(symb[l - 1])
-                    + "  "
-                    + str(psips[j, 3 * l - 3, 0] * auang)
-                    + "  "
-                    + str(psips[j, 3 * l - 2, 0] * auang)
-                    + "  "
-                    + str(psips[j, 3 * l - 1, 0] * auang)
-                    + "\n"
-                )
+            snapshot = template_atoms.copy()
+            walker_coords = psips[j, :, 0].reshape(natm, 3) * auang
+            snapshot.set_positions(walker_coords)
+            trajfile.write(snapshot)
     if i % 10 == 0:
         print("step:  ", i, "time/step:  ", time.time() - start_time, "nalive:   ", psips_f[0])
 
@@ -480,4 +475,4 @@ log_end(filename)
 potfile.close()
 logfile.close()
 errorfile.close()
-lastfile.close()
+trajfile.close()
