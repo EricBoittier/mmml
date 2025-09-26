@@ -419,8 +419,8 @@ inbfrq -1 imgfrq -1
                 temperature += 1
                 Stationary(ase_atoms)
                 ZeroRotation(ase_atoms)
-                MaxwellBoltzmannDistribution(ase_atoms, temperature_K=temperature)
-                print(f"Temperature adjusted to: {temperature} K")
+                # MaxwellBoltzmannDistribution(ase_atoms, temperature_K=temperature)
+                # print(f"Temperature adjusted to: {temperature} K")
             if i % 1 == 0:
                 print(f"step {i:5d} epot {potential_energy[i]: 5.3f} ekin {kinetic_energy[i]: 5.3f} etot {total_energy[i]: 5.3f}")
 
