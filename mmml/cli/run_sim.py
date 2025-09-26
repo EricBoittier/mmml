@@ -436,8 +436,15 @@ inbfrq -1 imgfrq -1
 
     temperature = args.temperature
     for i in range(1000):
-
-        run_ase_md(atoms, run_index=i, temperature=args.temperature+i)
+        if i % 2 == 0:
+            T = args.temperature + 1
+        elif i % 3 == 1:
+            T = args.temperature - 2
+        elif i % 5 == 0:
+            T = args.temperature - 3
+        else:
+            T = 300
+        run_ase_md(atoms, run_index=i, temperature=T)
 
 
     sys.exit()
