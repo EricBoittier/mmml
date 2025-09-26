@@ -357,20 +357,6 @@ def initialize_psf(resid: str, n_molecules: int, side_length: float, solvent: st
 
 
 def minimize_box():
-    nbonds = """!#########################################
-    ! Bonded/Non-bonded Options & Constraints
-    !#########################################
-
-    ! Non-bonding parameters
-    nbonds atom ewald pmewald kappa 0.43  -
-    fftx 32 ffty 32 fftz 32 order 4 -
-    cutnb 14.0  ctofnb 12.0 ctonnb 10.0 -
-    lrc vdw vswitch -
-    inbfrq -1 imgfrq -1
-
-    """
-    pycharmm.lingo.charmm_script(nbonds)
-
     # equivalent CHARMM scripting command: minimize abnr nstep 1000 tole 1e-3 tolgr 1e-3
     minimize.run_abnr(nstep=1000, tolenr=1e-3, tolgrd=1e-3)
     # equivalent CHARMM scripting command: energy
