@@ -340,7 +340,7 @@ inbfrq -1 imgfrq -1
         # Setup MD simulation
         temperature = args.temperature
         timestep_fs = args.timestep
-        num_steps = args.num_steps
+        num_steps = args["nsteps-ase"]
         ase_atoms = atoms
         
         # Draw initial momenta
@@ -364,7 +364,7 @@ inbfrq -1 imgfrq -1
         total_energy = np.zeros((num_steps,))
 
         breakcount = 0
-        for i in range(args["nsteps-ase"]):
+        for i in range(num_steps):
             # Run 1 time step
             integrator.run(1)
             # Save current frame and keep track of energies
