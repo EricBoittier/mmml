@@ -374,8 +374,27 @@ inbfrq -1 imgfrq -1
             total_energy[i] = ase_atoms.get_total_energy()
             traj.write(ase_atoms)
             # Check for energy spikes and re-minimize if needed
-            if kinetic_energy[i] > 300 or potential_energy[i] > 0:
+            if i > 10 and (kinetic_energy[i] > 300 or potential_energy[i] > 0):
                 print(f"Energy spike detected at step {i}, re-minimizing...")
+                print(f"Kinetic energy: {kinetic_energy[i]:.6f} eV")
+                print(f"Potential energy: {potential_energy[i]:.6f} eV")
+                print(f"Total energy: {total_energy[i]:.6f} eV")
+                print(f"Step: {i}")
+                print(f"Breakcount: {breakcount}")
+                print(f"Run index: {run_index}")
+                print(f"Temperature: {temperature} K")
+                print(f"Timestep: {timestep_fs} fs")
+                print(f"Number of steps: {num_steps}")
+                print(f"Number of atoms: {len(ase_atoms)}")
+                print(f"Number of monomers: {args.n_monomers}")
+                print(f"Number of atoms per monomer: {args.n_atoms_monomer}")
+                print(f"ML cutoff: {args.ml_cutoff} Å")
+                print(f"MM switch on: {args.mm_switch_on} Å")
+                print(f"MM cutoff: {args.mm_cutoff} Å")
+                print(f"Include MM: {args.include_mm}")
+                print(f"Skip ML dimers: {args.skip_ml_dimers}")
+                print(f"Debug: {args.debug}")
+
                 # pycharmm.lingo.charmm_script("ENER")
                 # xyz = pd.DataFrame(ase_atoms.get_positions(), columns=["x", "y", "z"])
                 # coor.set_positions(xyz)
