@@ -210,13 +210,6 @@ def main() -> int:
     # Get atomic masses from ASE (in atomic mass units)
     raw_masses = pdb_ase_atoms.get_masses()
     print(f"Raw masses from ASE: {raw_masses}")
-    
-    # Convert ASE masses to JAX-MD units properly
-    # ASE masses are in amu, JAX-MD expects masses in internal units
-    # The issue is _amu conversion is wrong - let's use a simpler approach
-    # For hydrogen: mass should be ~1.66e-27 kg, but we're getting 2.657e-26
-    
-    # Try using masses directly without _amu conversion
     Si_mass = jnp.array(raw_masses)  # Use ASE masses directly (in amu)
     Si_mass_sum = Si_mass.sum()
     print(f"Si_mass (ASE masses in amu): {Si_mass}")
@@ -274,7 +267,7 @@ def main() -> int:
     print(f"Cutoff parameters: {CUTOFF_PARAMS}")
 
     # Create hybrid calculator
-    hybrid_calc, _spherical_cutoff_calculator = calculator_factory(
+    hybrid_calc, _ = calculator_factory(
         atomic_numbers=Z,
         atomic_positions=R,
         n_monomers=args.n_monomers,
@@ -433,6 +426,9 @@ inbfrq -1 imgfrq -1
 
     for i in range(10):
         run_ase_md(atoms, run_index=i)
+
+
+    sys.exit()
 
     def set_up_nhc_sim_routine(atoms, T=args.temperature, dt=5e-3, steps_per_recording=250):
         @jax.jit
