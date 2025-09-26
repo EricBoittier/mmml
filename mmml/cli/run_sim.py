@@ -135,10 +135,10 @@ def parse_args() -> argparse.Namespace:
         help="Timestep for MD simulation in fs (default: 0.5).",
     )
     parser.add_argument(
-        "--num-steps",
+        "--nsteps-jaxmd",
         type=int,
         default=100_000,
-        help="Number of MD steps to run (default: 100000).",
+        help="Number of MD steps to run in JAX-MD (default: 100000).",
     )
     parser.add_argument(
         "--output-prefix",
@@ -147,10 +147,10 @@ def parse_args() -> argparse.Namespace:
         help="Prefix for output files (default: md_simulation).",
     )
     parser.add_argument(
-        "--nsteps",
+        "--nsteps-ase",
         type=int,
         default=10000,
-        help="Number of steps to run (default: 10000).",
+        help="Number of steps to run in ASE (default: 10000).",
     )
     
     return parser.parse_args()
@@ -320,7 +320,7 @@ inbfrq -1 imgfrq -1
     # if args.minimize_first:
     def minimize_structure(atoms):
         print("Minimizing structure with hybrid calculator")
-        _ = ase_opt.BFGS(atoms).run(fmax=0.0001, steps=200)
+        _ = ase_opt.BFGS(atoms).run(fmax=0.0006, steps=60)
         # Sync with PyCHARMM
         xyz = pd.DataFrame(atoms.get_positions(), columns=["x", "y", "z"])
         coor.set_positions(xyz)
@@ -328,78 +328,83 @@ inbfrq -1 imgfrq -1
         
     atoms = minimize_structure(atoms)
 
-    # Setup MD simulation
-    temperature = args.temperature
-    timestep_fs = args.timestep
-    num_steps = args.num_steps
-    ase_atoms = atoms
-    
-    # Draw initial momenta
-    MaxwellBoltzmannDistribution(ase_atoms, temperature_K=temperature)
-    Stationary(ase_atoms)  # Remove center of mass translation
-    ZeroRotation(ase_atoms)  # Remove rotations
+    def run_ase_md(atoms, run_index=0):
+        
+        atoms = minimize_structure(atoms)
 
-    # Initialize Velocity Verlet integrator
-    integrator = VelocityVerlet(ase_atoms, timestep=timestep_fs*ase.units.fs)
+        # Setup MD simulation
+        temperature = args.temperature
+        timestep_fs = args.timestep
+        num_steps = args.num_steps
+        ase_atoms = atoms
+        
+        # Draw initial momenta
+        MaxwellBoltzmannDistribution(ase_atoms, temperature_K=temperature)
+        Stationary(ase_atoms)  # Remove center of mass translation
+        ZeroRotation(ase_atoms)  # Remove rotations
 
-    # Open trajectory file
-    traj_filename = f'{args.output_prefix}_trajectory_{temperature}K_{num_steps}steps.traj'
-    traj = ase_io.Trajectory(traj_filename, 'w')
+        dt = timestep_fs*ase.units.fs
+        print(f"Running ASE MD with timestep: {dt} (ase units)")
+        # Initialize Velocity Verlet integrator
+        integrator = VelocityVerlet(ase_atoms, timestep=dt)
 
-    # Run molecular dynamics
-    frames = np.zeros((num_steps, len(ase_atoms), 3))
-    potential_energy = np.zeros((num_steps,))
-    kinetic_energy = np.zeros((num_steps,))
-    total_energy = np.zeros((num_steps,))
+        # Open trajectory file
+        traj_filename = f'{run_index}_{args.output_prefix}_{temperature}K_{num_steps}steps_P{dt}.traj'
+        traj = ase_io.Trajectory(traj_filename, 'w')
 
-    breakcount = 0
-    for i in range(1):
-        # Run 1 time step
-        integrator.run(1)
-        # Save current frame and keep track of energies
-        frames[i] = ase_atoms.get_positions()
-        potential_energy[i] = ase_atoms.get_potential_energy()
-        kinetic_energy[i] = ase_atoms.get_kinetic_energy()
-        total_energy[i] = ase_atoms.get_total_energy()
-        traj.write(ase_atoms)
-        # Check for energy spikes and re-minimize if needed
-        if kinetic_energy[i] > 200 or potential_energy[i] > 0:
-            print(f"Energy spike detected at step {i}, re-minimizing...")
-            pycharmm.lingo.charmm_script("ENER")
-            xyz = pd.DataFrame(ase_atoms.get_positions(), columns=["x", "y", "z"])
-            coor.set_positions(xyz)
-            # pycharmm MM force field minimization
-            minimize.run_abnr(nstep=10, tolenr=1e-5, tolgrd=1e-5)
-            pycharmm.lingo.charmm_script("ENER")
-            ase_atoms.set_positions(coor.get_positions())
-            _ = ase_opt.BFGS(atoms).run(fmax=0.001, steps=100)
-            # assign new velocities
-            MaxwellBoltzmannDistribution(ase_atoms, temperature_K=temperature)
-            Stationary(ase_atoms)
-            ZeroRotation(ase_atoms)
-            breakcount += 1
-            if breakcount > 100:
-                print("Maximum number of breaks reached")
-                break
-        # Occasionally print progress and adjust temperature
-        if i % 10_000 == 0:
-            temperature += 1
-            Stationary(ase_atoms)
-            ZeroRotation(ase_atoms)
-            MaxwellBoltzmannDistribution(ase_atoms, temperature_K=temperature)
-            print(f"Temperature adjusted to: {temperature} K")
-        if i % 100 == 0:
-            print(f"step {i:5d} epot {potential_energy[i]: 5.3f} ekin {kinetic_energy[i]: 5.3f} etot {total_energy[i]: 5.3f}")
+        # Run molecular dynamics
+        frames = np.zeros((num_steps, len(ase_atoms), 3))
+        potential_energy = np.zeros((num_steps,))
+        kinetic_energy = np.zeros((num_steps,))
+        total_energy = np.zeros((num_steps,))
 
-    
-    # Close trajectory file
-    traj.close()
-    print(f"Trajectory saved to: {traj_filename}")
-    print("ASE MD simulation complete!")
+        breakcount = 0
+        for i in range(args.nsteps_ase):
+            # Run 1 time step
+            integrator.run(1)
+            # Save current frame and keep track of energies
+            frames[i] = ase_atoms.get_positions()
+            potential_energy[i] = ase_atoms.get_potential_energy()
+            kinetic_energy[i] = ase_atoms.get_kinetic_energy()
+            total_energy[i] = ase_atoms.get_total_energy()
+            traj.write(ase_atoms)
+            # Check for energy spikes and re-minimize if needed
+            if kinetic_energy[i] > 200 or potential_energy[i] > 0:
+                print(f"Energy spike detected at step {i}, re-minimizing...")
+                pycharmm.lingo.charmm_script("ENER")
+                xyz = pd.DataFrame(ase_atoms.get_positions(), columns=["x", "y", "z"])
+                coor.set_positions(xyz)
+                # pycharmm MM force field minimization
+                minimize.run_abnr(nstep=10, tolenr=1e-5, tolgrd=1e-5)
+                pycharmm.lingo.charmm_script("ENER")
+                ase_atoms.set_positions(coor.get_positions())
+                _ = ase_opt.BFGS(atoms).run(fmax=0.001, steps=100)
+                # assign new velocities
+                MaxwellBoltzmannDistribution(ase_atoms, temperature_K=temperature)
+                Stationary(ase_atoms)
+                ZeroRotation(ase_atoms)
+                breakcount += 1
+                if breakcount > 100:
+                    print("Maximum number of breaks reached")
+                    break
+            # Occasionally print progress and adjust temperature
+            if i % 10_000 == 0:
+                temperature += 1
+                Stationary(ase_atoms)
+                ZeroRotation(ase_atoms)
+                MaxwellBoltzmannDistribution(ase_atoms, temperature_K=temperature)
+                print(f"Temperature adjusted to: {temperature} K")
+            if i % 100 == 0:
+                print(f"step {i:5d} epot {potential_energy[i]: 5.3f} ekin {kinetic_energy[i]: 5.3f} etot {total_energy[i]: 5.3f}")
 
-    
+        
+        # Close trajectory file
+        traj.close()
+        print(f"Trajectory saved to: {traj_filename}")
+        print("ASE MD simulation complete!")
 
-
+    for i in range(10):
+        run_ase_md(atoms, i=i)
 
     def set_up_nhc_sim_routine(atoms, T=args.temperature, dt=5e-3, steps_per_recording=250):
         @jax.jit
