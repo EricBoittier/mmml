@@ -749,12 +749,9 @@ def setup_calculator(
                 except:
                     cgenff_params_dict_q[at] = float(q.split("!")[0])
                 atom_name_to_param[atomname] = at
-        # print("cgenff_params_dict_q", cgenff_params_dict_q)
-        # print("atom_name_to_param", atom_name_to_param)
-        cgenff_params = open(CGENFF_PRM).readlines()
+
         cgenff_params_dict = {}
         cgenff_params_dict_list = []
-
         for p in open(CGENFF_PRM).readlines():
             if len(p) > 5 and len(p.split()) > 4 and p.split()[1] == "0.0" and p[0] != "!":
                 res, _, ep, sig = p.split()[:4]
