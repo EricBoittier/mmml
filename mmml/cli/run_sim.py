@@ -311,29 +311,33 @@ def main() -> int:
  
     print(f"Hybrid calculator created: {hybrid_calc}")
     atoms = pdb_ase_atoms
-    print(f"ASE atoms: {atoms}")
-    atoms.calc = hybrid_calc
+
     
     if args.cell is not None:
-        
+        print("Setting cell")
         from ase.cell import Cell
+        print("Creating cell")
         cell = Cell.fromcellpar([float(args.cell), float(args.cell), float(args.cell), 90., 90., 90.])
-        
         atoms.set_cell(cell)
+        print(f"Cell: {cell}")
+        print(f"Cell shape: {cell.shape}")
+        print(f"Cell type: {type(cell)}")
+        print(f"Cell dtype: {cell.dtype}")
+        print(f"Cell size: {cell.size}")
+        print(f"Cell dtype: {cell.dtype}")
+        print(f"Cell ndim: {cell.ndim}")
+        print(f"Cell dtype: {cell.dtype}")
     else:
         cell = None
         print("No cell provided")
-    print(f"Cell: {cell}")
-    print(f"Cell shape: {cell.shape}")
-    print(f"Cell type: {type(cell)}")
-    print(f"Cell dtype: {cell.dtype}")
-    print(f"Cell size: {cell.size}")
-    print(f"Cell ndim: {cell.ndim}")
-    print(f"Cell ndim: {cell.ndim}")
+
+    print(f"ASE atoms: {atoms}")
+    atoms.calc = hybrid_calc
     # Get initial energy and forces
     hybrid_energy = float(atoms.get_potential_energy())
     hybrid_forces = np.asarray(atoms.get_forces())
     print(f"Initial energy: {hybrid_energy:.6f} eV")
+    print(f"Initial forces: {hybrid_forces}")
     
 
     from mmml.pycharmmInterface.import_pycharmm import reset_block, pycharmm, reset_block_no_internal
