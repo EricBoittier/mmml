@@ -457,8 +457,8 @@ inbfrq -1 imgfrq -1
                 traj.write(ase_atoms)
             if args.ensemble == "nvt":
                 if (i != 0) and (i % args.heating_interval == 0):
-                    Stationary(ase_atoms)
-                    ZeroRotation(ase_atoms)
+                    # Stationary(ase_atoms)
+                    # ZeroRotation(ase_atoms)
                     MaxwellBoltzmannDistribution(ase_atoms, temperature_K=temperature)
                     print(f"Temperature adjusted to: {temperature} K")
             if i % 100 == 0:
