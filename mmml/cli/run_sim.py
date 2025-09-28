@@ -351,6 +351,9 @@ inbfrq -1 imgfrq -1
 """
     pycharmm.lingo.charmm_script(nbonds)
     pycharmm.energy.show()
+    pycharmm.minimize.run_abnr(nstep=1000, tolenr=1e-6, tolgrd=1e-6)
+    pycharmm.lingo.charmm_script("ENER")
+    pycharmm.energy.show()
 
 
     # Minimize structure if requested
