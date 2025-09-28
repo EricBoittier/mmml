@@ -360,7 +360,7 @@ inbfrq -1 imgfrq -1
     pycharmm.energy.show()
     xyz = pd.DataFrame(atoms.get_positions() - atoms.get_positions().mean(axis=0), columns=["x", "y", "z"])
     coor.set_positions(xyz)
-    save_script = 'write name pdb/init-minimized.pdb coor pdb'
+    save_script = 'open unit 1 write form name pdb/init-minimized.pdb coor pdb'
     pycharmm.lingo.charmm_script(save_script)
 
     # Minimize structure if requested
