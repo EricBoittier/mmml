@@ -159,7 +159,27 @@ def parse_args() -> argparse.Namespace:
         default=10000,
         help="Number of steps to run in ASE (default: 10000).",
     )
-    
+
+    parser.add_argument(
+        "--ensemble",
+        type=str,
+        default="nvt",
+        help="Ensemble to run the simulation in (default: nvt).",
+    )
+
+    parser.add_argument(
+        "--heating_interval",
+        type=int,
+        default=500,
+        help="Interval to heat the system in ASE (default: 500).",
+    )
+    parser.add_argument(
+        "--write_interval",
+        type=int,
+        default=100,
+        help="Interval to write the trajectory in ASE (default: 100).",
+    )
+
     return parser.parse_args()
 
 
@@ -433,12 +453,13 @@ inbfrq -1 imgfrq -1
                 print("Maximum number of breaks reached")
                 break
             # Occasionally print progress and adjust temperature
-            if (i != 0) and (i % 500 == 0):
+            if (i != 0) and (i % args.write_interval == 0):
                 traj.write(ase_atoms)
-                # temperature += 1
-                Stationary(ase_atoms)
-                ZeroRotation(ase_atoms)
-                MaxwellBoltzmannDistribution(ase_atoms, temperature_K=temperature)
+            if args.ensemble == "nvt":
+                if (i != 0) and (i % args.heating_interval == 0):
+                    Stationary(ase_atoms)
+                    ZeroRotation(ase_atoms)
+                    MaxwellBoltzmannDistribution(ase_atoms, temperature_K=temperature)
                 print(f"Temperature adjusted to: {temperature} K")
             if i % 100 == 0:
                 print(f"step {i:5d} epot {potential_energy[i]: 5.3f} ekin {kinetic_energy[i]: 5.3f} etot {total_energy[i]: 5.3f}")
@@ -452,15 +473,7 @@ inbfrq -1 imgfrq -1
 
     temperature = args.temperature
     for i in range(1000):
-        if i % 2 == 0:
-            T = args.temperature + 1
-        elif i % 3 == 1:
-            T = args.temperature - 2
-        elif i % 5 == 0:
-            T = args.temperature - 3
-        else:
-            T = 300
-        run_ase_md(atoms, run_index=i, temperature=T)
+        run_ase_md(atoms, run_index=i, temperature=temperature)
 
 
     sys.exit()
