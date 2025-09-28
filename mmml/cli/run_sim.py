@@ -381,7 +381,7 @@ inbfrq -1 imgfrq -1
         ase_atoms = atoms
         
         # Draw initial momenta
-        if run_index != 0:
+        if run_index == 0:
             MaxwellBoltzmannDistribution(ase_atoms, temperature_K=temperature)
             Stationary(ase_atoms)  # Remove center of mass translation
             ZeroRotation(ase_atoms)  # Remove rotations
@@ -456,7 +456,7 @@ inbfrq -1 imgfrq -1
             if (i != 0) and (i % args.write_interval == 0):
                 traj.write(ase_atoms)
             if args.ensemble == "nvt":
-                if (i != 0) and (i % args.heating_interval == 0):
+                if (i == 200) or (i % args.heating_interval == 0):
                     # Stationary(ase_atoms)
                     # ZeroRotation(ase_atoms)
                     MaxwellBoltzmannDistribution(ase_atoms, temperature_K=temperature)
