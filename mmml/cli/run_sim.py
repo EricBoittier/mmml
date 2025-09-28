@@ -294,6 +294,21 @@ def main() -> int:
     print(f"ASE atoms: {atoms}")
     atoms.calc = hybrid_calc
     
+    if args.cell is not None:
+        
+        from ase.cell import Cell
+        cell = Cell.fromcellpar([args.cell, args.cell, args.cell, 90, 90, 90])
+        cell = Cell(args.cell)
+        atoms.set_cell(cell)
+    else:
+        cell = None
+    print(f"Cell: {cell}")
+    print(f"Cell shape: {cell.shape}")
+    print(f"Cell type: {type(cell)}")
+    print(f"Cell dtype: {cell.dtype}")
+    print(f"Cell size: {cell.size}")
+    print(f"Cell ndim: {cell.ndim}")
+    print(f"Cell ndim: {cell.ndim}")
     # Get initial energy and forces
     hybrid_energy = float(atoms.get_potential_energy())
     hybrid_forces = np.asarray(atoms.get_forces())
