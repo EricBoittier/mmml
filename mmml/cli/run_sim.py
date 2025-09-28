@@ -415,6 +415,7 @@ inbfrq -1 imgfrq -1
         for i in range(num_steps):
             # Run 1 time step
             integrator.run(1)
+            ase_atoms.wrap()
             # Save current frame and keep track of energies
             frames[i] = ase_atoms.get_positions()
             potential_energy[i] = ase_atoms.get_potential_energy()
