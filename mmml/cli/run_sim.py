@@ -302,6 +302,7 @@ def main() -> int:
         atoms.set_cell(cell)
     else:
         cell = None
+        print("No cell provided")
     print(f"Cell: {cell}")
     print(f"Cell shape: {cell.shape}")
     print(f"Cell type: {type(cell)}")
