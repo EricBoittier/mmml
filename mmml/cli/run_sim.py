@@ -297,8 +297,8 @@ def main() -> int:
     if args.cell is not None:
         
         from ase.cell import Cell
-        cell = Cell.fromcellpar([args.cell, args.cell, args.cell, 90, 90, 90])
-        cell = Cell(args.cell)
+        cell = Cell.fromcellpar([float(args.cell), float(args.cell), float(args.cell), 90., 90., 90.])
+        
         atoms.set_cell(cell)
     else:
         cell = None
