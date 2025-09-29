@@ -1554,7 +1554,7 @@ def setup_calculator(
             "forces": 0
         }
 
-    return get_spherical_cutoff_calculator
+    return get_spherical_cutoff_calculator, pbc_map, do_pbc_map
 
 
 
