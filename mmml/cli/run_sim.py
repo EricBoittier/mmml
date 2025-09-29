@@ -382,8 +382,6 @@ inbfrq -1 imgfrq -1
         traj.close()
         return atoms
         
-    atoms = minimize_structure(atoms)
-
     def run_ase_md(atoms, run_index=0, temperature=args.temperature):
         
         atoms = minimize_structure(atoms, run_index=run_index, nsteps=100 if run_index == 0 else 10, fmax=0.0006 if run_index == 0 else 0.001)
