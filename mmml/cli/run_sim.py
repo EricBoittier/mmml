@@ -346,9 +346,9 @@ def main() -> int:
     
 
     from mmml.pycharmmInterface.import_pycharmm import reset_block, pycharmm, reset_block_no_internal
-    reset_block()
-    reset_block_no_internal()
-    reset_block()
+    # reset_block()
+    # reset_block_no_internal()
+    # reset_block()
     nbonds = """!#########################################
 ! Bonded/Non-bonded Options & Constraints
 !#########################################
