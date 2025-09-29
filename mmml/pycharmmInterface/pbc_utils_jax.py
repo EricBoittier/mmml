@@ -73,13 +73,17 @@ def coregister_groups(R: Array, groups: list[Array], cell: Array) -> Array:
     # COMs (equal masses; swap for mass-weighting if needed)
     coms = jnp.stack([R[g].mean(axis=0) for g in groups], axis=0)
     anchor = coms[0]
-    def shift_group(carry_R, inputs):
-        m, g = inputs
-        dv = coms[m] - anchor
-        # MIC shift to bring com[m] near anchor
+    
+    # Apply shifts sequentially since groups have different sizes
+    R_out = R
+    for i, g in enumerate(groups):
+        if i == 0:  # Skip anchor group
+            continue
+        dv = coms[i] - anchor
+        # MIC shift to bring com[i] near anchor
         dS = frac_coords(dv, cell)
         shift = -jnp.round(dS)
         dR = cart_coords(shift, cell)
-        return carry_R.at[g].add(dR), None
-    R_out, _ = jax.lax.scan(shift_group, R, (jnp.arange(len(groups)), jnp.array(groups, dtype=object)))
+        R_out = R_out.at[g].add(dR)
+    
     return R_out

@@ -33,7 +33,7 @@ from pathlib import Path
 
 import numpy as np
 
-from base import (
+from .base import (
     load_model_parameters,
     resolve_checkpoint_paths,
     setup_ase_imports,
