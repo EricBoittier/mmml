@@ -1334,8 +1334,8 @@ def setup_calculator(
             debug: bool = False,
             energy_conversion_factor: float = 1.0,
             force_conversion_factor: float = 1.0,
-            do_pbc_map: bool = False,
-            pbc_map = None,
+            # do_pbc_map: bool = False,
+            # pbc_map = None,
         ) -> Tuple[AseDimerCalculator, Callable]:
             """Factory function to create calculator instances"""
 
