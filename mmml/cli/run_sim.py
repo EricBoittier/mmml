@@ -319,7 +319,10 @@ def main() -> int:
         print("Creating cell")
         cell = Cell.fromcellpar([float(args.cell), float(args.cell), float(args.cell), 90., 90., 90.])
         atoms.set_cell(cell)
+        # Enable periodic boundary conditions
+        atoms.set_pbc(True)
         print(f"Cell: {cell}")
+        print(f"PBC enabled: {atoms.pbc}")
         print(f"Cell shape: {cell.shape}")
         print(f"Cell type: {type(cell)}")
         print(f"Cell dtype: {cell.dtype}")
