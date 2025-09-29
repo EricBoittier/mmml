@@ -1245,6 +1245,8 @@ def setup_calculator(
                 debug: bool = False,
                 energy_conversion_factor: float = 1.0,
                 force_conversion_factor: float = 1.0,
+                do_pbc_map: bool = False,
+                pbc_map = None,
             ):
                 """Initialize calculator with configuration parameters"""
 
@@ -1260,6 +1262,8 @@ def setup_calculator(
                 self.sig_scale = None
                 self.energy_conversion_factor = energy_conversion_factor
                 self.force_conversion_factor = force_conversion_factor
+                self.do_pbc_map = do_pbc_map
+                self.pbc_map = pbc_map
 
             def calculate(
                 self,
@@ -1284,6 +1288,7 @@ def setup_calculator(
                         doMM=self.doMM,
                         doML_dimer=self.doML_dimer,
                         debug=self.debug,
+                        do_pbc_map=self.do_pbc_map,
                     )
 
                     E = out.energy
@@ -1301,6 +1306,7 @@ def setup_calculator(
                             doMM=self.doMM,
                             doML_dimer=self.doML_dimer,
                             debug=self.debug,
+                            do_pbc_map=self.do_pbc_map,
                         ).energy
 
                     E, F = jax.value_and_grad(Efn)(R)
@@ -1322,6 +1328,8 @@ def setup_calculator(
             debug: bool = False,
             energy_conversion_factor: float = 1.0,
             force_conversion_factor: float = 1.0,
+            do_pbc_map: bool = False,
+            pbc_map = None,
         ) -> Tuple[AseDimerCalculator, Callable]:
             """Factory function to create calculator instances"""
 
@@ -1335,6 +1343,8 @@ def setup_calculator(
                 debug=debug,
                 energy_conversion_factor=energy_conversion_factor,
                 force_conversion_factor=force_conversion_factor,
+                do_pbc_map=do_pbc_map,
+                pbc_map=pbc_map,
             )
 
             return calculator, spherical_cutoff_calculator
