@@ -13,11 +13,14 @@ def filter_dataset(input_file: str, output_file: str, min_distance: float = 3.0,
     print(f"Loading dataset: {input_file}")
     dataset = np.load(input_file)
     
-    # Get data
+    # Get data - copy all available keys
     R_all = dataset['R']
     E_all = dataset.get('E', None)
     F_all = dataset.get('F', None)
     Z_all = dataset.get('Z', None)
+    N_all = dataset.get('N', None)
+    Q_all = dataset.get('Q', None)
+    D_all = dataset.get('D', None)
     
     print(f"Original dataset: {len(R_all)} frames")
     
@@ -47,6 +50,9 @@ def filter_dataset(input_file: str, output_file: str, min_distance: float = 3.0,
     E_filtered = E_all[filtered_indices] if E_all is not None else None
     F_filtered = F_all[filtered_indices] if F_all is not None else None
     Z_filtered = Z_all[filtered_indices] if Z_all is not None else None
+    N_filtered = N_all[filtered_indices] if N_all is not None else None
+    Q_filtered = Q_all[filtered_indices] if Q_all is not None else None
+    D_filtered = D_all[filtered_indices] if D_all is not None else None
     
     # Save filtered dataset
     print(f"Saving filtered dataset: {output_file}")
@@ -57,6 +63,12 @@ def filter_dataset(input_file: str, output_file: str, min_distance: float = 3.0,
         save_data['F'] = F_filtered
     if Z_filtered is not None:
         save_data['Z'] = Z_filtered
+    if N_filtered is not None:
+        save_data['N'] = N_filtered
+    if Q_filtered is not None:
+        save_data['Q'] = Q_filtered
+    if D_filtered is not None:
+        save_data['D'] = D_filtered
     
     np.savez(output_file, **save_data)
     
