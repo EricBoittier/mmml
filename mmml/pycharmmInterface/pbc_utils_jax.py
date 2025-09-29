@@ -1,19 +1,23 @@
 # pbc_utils_jax.py
 import jax
 import jax.numpy as jnp
+import jax.scipy.linalg
 
 Array = jnp.ndarray
 
+
 @jax.jit
 def frac_coords(R: Array, cell: Array) -> Array:
-    """Cartesian -> fractional (row-vectors)."""
-    CinvT = jnp.linalg.inv(cell).T
-    return R @ CinvT
+    """Cartesian -> fractional (row-vectors) using a stable linear solve."""
+    S_T = jax.scipy.linalg.solve(cell.T, R.T, assume_a='gen')
+    return S_T.T
+
 
 @jax.jit
 def cart_coords(S: Array, cell: Array) -> Array:
     """Fractional -> Cartesian (row-vectors)."""
-    return S @ cell.T
+    return S @ cell
+
 
 @jax.jit
 def wrap_positions(R: Array, cell: Array) -> Array:
@@ -22,16 +26,15 @@ def wrap_positions(R: Array, cell: Array) -> Array:
     S_wrapped = S - jnp.floor(S)
     return cart_coords(S_wrapped, cell)
 
+
 @jax.jit
 def mic_displacement(Ri: Array, Rj: Array, cell: Array) -> Array:
-    """
-    Minimum-image displacement vector r_j - r_i under PBC.
-    Works for any parallelepiped cell.
-    """
+    """Minimum-image displacement vector r_j - r_i under PBC."""
     dR = Rj - Ri
     dS = frac_coords(dR, cell)
     dS_mic = dS - jnp.round(dS)
     return cart_coords(dS_mic, cell)
+
 
 @jax.jit
 def pairwise_mic(R: Array, cell: Array):
@@ -43,21 +46,19 @@ def pairwise_mic(R: Array, cell: Array):
     dij = jnp.linalg.norm(dR_mic + 1e-18, axis=-1)  # tiny eps avoids NaNs at i=j
     return dR_mic, dij
 
+
 @jax.jit
 def unwrap_group(R: Array, idx: Array, cell: Array) -> Array:
-    """
-    Unwrap a *single* monomer so its atoms are contiguous:
-    uses the first atom in idx as a reference.
-    """
+    """Unwrap a *single* group so its atoms are contiguous; uses idx[0] as reference."""
     ref = idx[0]
     dR = R[idx] - R[ref]
     dS = frac_coords(dR, cell)
     dS_mic = dS - jnp.round(dS)
     return R[ref] + cart_coords(dS_mic, cell)
 
+
 def unwrap_groups(R: Array, groups: list[Array], cell: Array) -> Array:
     """Unwrap all groups and return positions in original atom order."""
-    # Build concatenated list in group order, then invert to original order
     unwrapped_list = [unwrap_group(R, g, cell) for g in groups]
     R_concat = jnp.concatenate(unwrapped_list, axis=0)
     order = jnp.concatenate(groups, axis=0)
@@ -65,25 +66,20 @@ def unwrap_groups(R: Array, groups: list[Array], cell: Array) -> Array:
     inv = inv.at[order].set(jnp.arange(order.shape[0]))
     return R_concat[inv]
 
+
 def coregister_groups(R: Array, groups: list[Array], cell: Array) -> Array:
-    """
-    Place all groups in a common image:
-    anchor group 0; for each other group, shift by the MIC of COMs.
-    """
-    # COMs (equal masses; swap for mass-weighting if needed)
-    coms = jnp.stack([R[g].mean(axis=0) for g in groups], axis=0)
+    """Place all groups in a common image by aligning COMs via MIC shifts."""
+    coms = [R[g].mean(axis=0) for g in groups]
     anchor = coms[0]
-    
-    # Apply shifts sequentially since groups have different sizes
+
     R_out = R
     for i, g in enumerate(groups):
-        if i == 0:  # Skip anchor group
+        if i == 0:
             continue
         dv = coms[i] - anchor
-        # MIC shift to bring com[i] near anchor
-        dS = frac_coords(dv, cell)
-        shift = -jnp.round(dS)
-        dR = cart_coords(shift, cell)
-        R_out = R_out.at[g].add(dR)
-    
+        dS = frac_coords(dv[None, :], cell)[0]
+        shift_frac = -jnp.round(dS)
+        shift = cart_coords(shift_frac[None, :], cell)[0]
+        R_out = R_out.at[g].add(shift)
+
     return R_out
