@@ -5,7 +5,7 @@ source settings.source
 
 # Base command
 BASE_CMD="python -m mmml.cli.opt_mmml \
-   --dataset \$DATA \
+   --dataset filtered_acetone_3-8A.npz \
    --pdbfile \"pdb/init-packmol.pdb\" \
    --checkpoint \$CHECKPOINT \
    --n-monomers 2 \
@@ -30,17 +30,19 @@ for ml_cutoff in "${ML_CUTOFFS[@]}"; do
     for mm_switch_on in "${MM_SWITCH_ON[@]}"; do
         for mm_cutoff in "${MM_CUTOFFS[@]}"; do
             counter=$((counter + 1))
-            output_file="cutoff_opt_${counter}_ml${ml_cutoff}_mm${mm_switch_on}_cut${mm_cutoff}.json"
+            output_json="cutoff_opt_${counter}_ml${ml_cutoff}_mm${mm_switch_on}_cut${mm_cutoff}.json"
+            output_npz="cutoff_opt_${counter}_ml${ml_cutoff}_mm${mm_switch_on}_cut${mm_cutoff}.npz"
             
             echo "Running combination $counter: ml_cutoff=$ml_cutoff, mm_switch_on=$mm_switch_on, mm_cutoff=$mm_cutoff"
-            echo "Output: $output_file"
+            echo "Output: $output_json and $output_npz"
             
             # Run the optimization
             eval "$BASE_CMD \
                 --ml-cutoff-grid $ml_cutoff \
                 --mm-switch-on-grid $mm_switch_on \
                 --mm-cutoff-grid $mm_cutoff \
-                --out $output_file"
+                --out $output_json \
+                --out-npz $output_npz"
             
             echo "Completed combination $counter"
             echo "---"
@@ -49,7 +51,7 @@ for ml_cutoff in "${ML_CUTOFFS[@]}"; do
 done
 
 echo "All optimization runs completed!"
-echo "Results saved as cutoff_opt_*.json files"
+echo "Results saved as cutoff_opt_*.json and cutoff_opt_*.npz files"
 
 # Optional: Create a summary script
 cat > summarize_results.py << 'EOF'
@@ -57,6 +59,7 @@ cat > summarize_results.py << 'EOF'
 import json
 import glob
 import pandas as pd
+import numpy as np
 
 # Load all results
 results = []
@@ -90,6 +93,24 @@ print(f"ml_cutoff: {best_overall['ml_cutoff']}")
 print(f"mm_switch_on: {best_overall['mm_switch_on']}")
 print(f"mm_cutoff: {best_overall['mm_cutoff']}")
 print(f"Objective: {best_overall['objective']:.6f}")
+
+# Check for identical results
+print(f"\nChecking for identical results...")
+unique_objectives = df['objective'].nunique()
+total_results = len(df)
+print(f"Unique objectives: {unique_objectives} out of {total_results}")
+
+if unique_objectives < total_results:
+    print("WARNING: Some results are identical!")
+    # Group by objective to find duplicates
+    duplicates = df.groupby('objective').size()
+    duplicates = duplicates[duplicates > 1]
+    if len(duplicates) > 0:
+        print("Duplicate objectives found:")
+        for obj_val, count in duplicates.items():
+            print(f"  Objective {obj_val:.6f}: {count} occurrences")
+            matching_rows = df[df['objective'] == obj_val]
+            print(f"    Cutoff combinations: {matching_rows[['ml_cutoff', 'mm_switch_on', 'mm_cutoff']].to_string(index=False)}")
 EOF
 
 echo "Created summarize_results.py to analyze all results"
