@@ -14,6 +14,9 @@ import jax
 import argparse
 import sys
 from pathlib import Path
+import itertools
+import json
+import time
 
 import numpy as np
 
@@ -40,6 +43,50 @@ def parse_args() -> argparse.Namespace:
         "--checkpoint",
         type=Path,
         required=True,
+    )
+
+    # Optimization controls
+    parser.add_argument(
+        "--ml-cutoff-grid",
+        type=str,
+        default="1.5,2.0,2.5,3.0",
+        help="Comma-separated ML cutoff grid in Å (e.g., '1.5,2.0,2.5').",
+    )
+    parser.add_argument(
+        "--mm-switch-on-grid",
+        type=str,
+        default="4.0,5.0,6.0,7.0",
+        help="Comma-separated MM switch-on grid in Å (e.g., '4.0,5.0,6.0').",
+    )
+    parser.add_argument(
+        "--mm-cutoff-grid",
+        type=str,
+        default="0.5,1.0,1.5,2.0",
+        help="Comma-separated MM cutoff width grid in Å (e.g., '0.5,1.0,1.5').",
+    )
+    parser.add_argument(
+        "--energy-weight",
+        type=float,
+        default=1.0,
+        help="Weight for energy MSE term in the objective.",
+    )
+    parser.add_argument(
+        "--force-weight",
+        type=float,
+        default=1.0,
+        help="Weight for force MSE term in the objective.",
+    )
+    parser.add_argument(
+        "--max-frames",
+        type=int,
+        default=200,
+        help="Maximum number of frames from dataset to evaluate (for speed). Use -1 for all.",
+    )
+    parser.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="Optional path to save best parameters and scores as JSON.",
     )
 
     parser.add_argument(
@@ -283,10 +330,113 @@ def main() -> int:
     dataset = np.load(args.dataset)
     print(f"Dataset: {dataset}")
     print(f"Dataset keys: {dataset.keys()}")
-    print(f"Dataset shape: {dataset['R'].shape}")
-    print(f"Dataset dtype: {dataset['R'].dtype}")
-    print(f"Dataset ndim: {dataset['R'].ndim}")
-    print(f"Dataset size: {dataset['R'].size}")
+    R_all = dataset["R"]  # (n_frames, natoms, 3)
+    Z_ds = dataset.get("Z", Z)
+    if Z_ds.ndim > 1:
+        Z_ds = np.array(Z_ds[0]).astype(int)
+    print(f"R shape: {R_all.shape}")
+    E_all = dataset.get("E", None)
+    F_all = dataset.get("F", None)
+    has_E = E_all is not None and np.size(E_all) > 0
+    has_F = F_all is not None and np.size(F_all) > 0
+    n_frames = R_all.shape[0]
+    if args.max_frames is not None and args.max_frames > 0:
+        n_eval = min(n_frames, args.max_frames)
+    elif args.max_frames == -1:
+        n_eval = n_frames
+    else:
+        n_eval = n_frames
+    frame_indices = np.arange(n_eval)
+    print(f"Evaluating {n_eval} frames (out of {n_frames}). E available: {has_E}, F available: {has_F}")
+
+    # Utility to parse grids
+    def _parse_grid(s: str) -> list[float]:
+        return [float(x) for x in s.split(",") if x.strip() != ""]
+
+    ml_grid = _parse_grid(args.ml_cutoff_grid)
+    mm_on_grid = _parse_grid(args.mm_switch_on_grid)
+    mm_cut_grid = _parse_grid(args.mm_cutoff_grid)
+    print(f"Grid sizes -> ml:{len(ml_grid)} mm_on:{len(mm_on_grid)} mm_cut:{len(mm_cut_grid)}")
+
+    # Objective evaluation for a given cutoff triple
+    def evaluate_objective(ml_cutoff: float, mm_switch_on: float, mm_cutoff: float) -> dict:
+        nonlocal atoms
+        local_params = CutoffParameters(
+            ml_cutoff=ml_cutoff,
+            mm_switch_on=mm_switch_on,
+            mm_cutoff=mm_cutoff,
+        )
+        # Rebuild calculator with new cutoffs
+        calc, _ = calculator_factory(
+            atomic_numbers=Z_ds,
+            atomic_positions=R_all[0],
+            n_monomers=args.n_monomers,
+            cutoff_params=local_params,
+            doML=True,
+            doMM=args.include_mm,
+            doML_dimer=not args.skip_ml_dimers,
+            backprop=True,
+            debug=args.debug,
+            energy_conversion_factor=1,
+            force_conversion_factor=1,
+        )
+        atoms.calc = calc
+        se_e = 0.0
+        se_f = 0.0
+        n_e = 0
+        n_f = 0
+        for i in frame_indices:
+            atoms.positions = R_all[i]
+            pred_E = float(atoms.get_potential_energy())
+            pred_F = np.asarray(atoms.get_forces())
+            if has_E:
+                ref_E = float(E_all[i])
+                se_e += (pred_E - ref_E) ** 2
+                n_e += 1
+            if has_F:
+                ref_F = np.asarray(F_all[i])
+                se_f += float(np.mean((pred_F - ref_F) ** 2))
+                n_f += 1
+        mse_e = (se_e / max(n_e, 1)) if has_E else 0.0
+        mse_f = (se_f / max(n_f, 1)) if has_F else 0.0
+        obj = args.energy_weight * mse_e + args.force_weight * mse_f
+        return {
+            "ml_cutoff": ml_cutoff,
+            "mm_switch_on": mm_switch_on,
+            "mm_cutoff": mm_cutoff,
+            "mse_energy": mse_e,
+            "mse_forces": mse_f,
+            "objective": obj,
+        }
+
+    # Grid search
+    start = time.time()
+    best = None
+    results = []
+    for ml_c, mm_on, mm_c in itertools.product(ml_grid, mm_on_grid, mm_cut_grid):
+        res = evaluate_objective(ml_c, mm_on, mm_c)
+        results.append(res)
+        if best is None or res["objective"] < best["objective"]:
+            best = res
+        print(
+            f"ml={ml_c:.3f} mm_on={mm_on:.3f} mm_cut={mm_c:.3f} -> obj={res['objective']:.6e} (E={res['mse_energy']:.6e}, F={res['mse_forces']:.6e})"
+        )
+    elapsed = time.time() - start
+    print(f"Grid search completed in {elapsed:.1f}s over {len(results)} combos.")
+    print(f"Best: {best}")
+
+    if args.out is not None:
+        payload = {
+            "best": best,
+            "results": results,
+            "n_eval_frames": int(n_eval),
+            "energy_weight": args.energy_weight,
+            "force_weight": args.force_weight,
+        }
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        with open(args.out, "w") as f:
+            json.dump(payload, f, indent=2)
+        print(f"Saved results to {args.out}")
     
     
 
