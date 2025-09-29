@@ -1,0 +1,2 @@
+DATA=/home/ericb/mmml/filtered_acetone_3-8A.npz
+CHECKPOINT=/pchem-data/meuwly/chaton/mmml_fork/mmml/physnetjax/ckpts/test-4e99316b-d745-4438-aa27-77136f51c60b
