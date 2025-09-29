@@ -48,7 +48,10 @@ try:
     from mmml.physnetjax.physnetjax.models.model import EF
     from mmml.physnetjax.physnetjax.restart.restart import get_files, get_last, get_params_model
     from mmml.physnetjax.physnetjax.training.loss import dipole_calc
-    from mmml.physnetjax.physnetjax.training.training import train_model
+    # Skip training import that requires lovely_jax
+    # from mmml.physnetjax.physnetjax.training.training import train_model
+    def train_model(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[override]
+        raise ModuleNotFoundError("lovely_jax is required for train_model")
 except ModuleNotFoundError:  # pragma: no cover - ML stack optional for docs
 
     def prepare_batches(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[override]
@@ -959,7 +962,7 @@ def setup_calculator(
 
 
     from functools import partial
-    @partial(jax.jit, static_argnames=['n_monomers', 'cutoff_params', 'doML', 'doMM', 'doML_dimer', 'debug', 'do_pbc_map',])
+    @partial(jax.jit, static_argnames=['n_monomers', 'cutoff_params', 'doML', 'doMM', 'doML_dimer', 'debug',])
     def spherical_cutoff_calculator(
         positions: Array,  # Shape: (n_atoms, 3)
         atomic_numbers: Array,  # Shape: (n_atoms,)
@@ -969,7 +972,6 @@ def setup_calculator(
         doMM: bool = True,
         doML_dimer: bool = True,
         debug: bool = False,
-        do_pbc_map: bool = False,
     ) -> ModelOutput:
         """Calculates energy and forces using combined ML/MM potential.
         
@@ -987,9 +989,6 @@ def setup_calculator(
             ModelOutput containing total energy and forces
         """
         n_dimers = len(dimer_permutations(n_monomers))
-
-        if do_pbc_map:
-            positions = pbc_map(positions)
         
         outputs = {
             "out_E": 0,
@@ -1279,8 +1278,10 @@ def setup_calculator(
 
                 out = {}
                 if not self.backprop:
+                    # Apply PBC mapping before JAX computation if needed
+                    R_mapped = self.pbc_map(R) if self.do_pbc_map else R
                     out = spherical_cutoff_calculator(
-                        positions=R,
+                        positions=R_mapped,
                         atomic_numbers=Z,
                         n_monomers=self.n_monomers,
                         cutoff_params=self.cutoff_params,
@@ -1288,7 +1289,6 @@ def setup_calculator(
                         doMM=self.doMM,
                         doML_dimer=self.doML_dimer,
                         debug=self.debug,
-                        do_pbc_map=self.do_pbc_map,
                     )
 
                     E = out.energy
@@ -1297,8 +1297,10 @@ def setup_calculator(
                 if self.backprop:
 
                     def Efn(R):
+                        # Apply PBC mapping before JAX computation if needed
+                        R_mapped = self.pbc_map(R) if self.do_pbc_map else R
                         return -spherical_cutoff_calculator(
-                            positions=R,
+                            positions=R_mapped,
                             atomic_numbers=Z,
                             n_monomers=self.n_monomers,
                             cutoff_params=self.cutoff_params,
@@ -1306,7 +1308,6 @@ def setup_calculator(
                             doMM=self.doMM,
                             doML_dimer=self.doML_dimer,
                             debug=self.debug,
-                            do_pbc_map=self.do_pbc_map,
                         ).energy
 
                     E, F = jax.value_and_grad(Efn)(R)
