@@ -730,11 +730,14 @@ def setup_calculator(
         eps = 1e-10
         r = r + eps
 
+        # Calculate switching region based on ml_cutoff
         ml_cutoff_region = mm_switch_on - ml_cutoff   
-        ml_cutoff_region = mm_switch_on - ml_cutoff
-        ml_cutoff_fn = 1 - smooth_cutoff(r+3, cutoff=ml_cutoff_region)
+        # Apply smooth cutoff based on ml_cutoff
+        ml_cutoff_fn = 1 - smooth_cutoff(r, cutoff=ml_cutoff_region)
+        # Apply smooth switch at mm_switch_on
         switch_off_ml = 1 - smooth_switch(r, x0=mm_switch_on-0.01, x1=mm_switch_on)
-        ml_scale = switch_off_ml
+        # Combine both switching functions
+        ml_scale = ml_cutoff_fn * switch_off_ml
         
         # Ensure scale is between 0 and 1
         ml_scale = jnp.clip(ml_scale, 0.0, 1.0)
