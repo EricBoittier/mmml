@@ -422,7 +422,7 @@ def main() -> int:
         mse_e = (se_e / max(n_e, 1)) if has_E else 0.0
         mse_f = (se_f / max(n_f, 1)) if has_F else 0.0
         obj = args.energy_weight * mse_e + args.force_weight * mse_f
-        return {
+        _out_dict = {
             "ml_cutoff": ml_cutoff,
             "mm_switch_on": mm_switch_on,
             "mm_cutoff": mm_cutoff,
@@ -430,6 +430,8 @@ def main() -> int:
             "mse_forces": mse_f,
             "objective": obj,
         }
+        print(f"Objective: {_out_dict}")
+        return _out_dict
 
     # Grid search
     start = time.time()
