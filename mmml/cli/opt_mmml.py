@@ -443,3 +443,18 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+
+# python -m mmml.cli.opt_mmml \
+#   --dataset /path/to/data.npz \
+#   --checkpoint /path/to/checkpoint \
+#   --n-monomers 2 \
+#   --n-atoms-monomer 10 \
+#   --ml-cutoff-grid 1.5,2.0,2.5 \
+#   --mm-switch-on-grid 4.0,5.0,6.0 \
+#   --mm-cutoff-grid 0.5,1.0,1.5 \
+#   --energy-weight 1.0 \
+#   --force-weight 1.0 \
+#   --max-frames 200 \
+#   --out /tmp/cutoff_opt.json
