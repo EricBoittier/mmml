@@ -39,6 +39,15 @@ def parse_args() -> argparse.Namespace:
         required=True,
         help="Path to the dataset file to load for pycharmm",
     )
+
+    parser.add_argument(
+        "--pdbfile",
+        type=Path,
+        required=True,
+        help="Path to the PDB file to load for pycharmm [requires correct atom names and types].",
+    )
+
+
     parser.add_argument(
         "--checkpoint",
         type=Path,
@@ -105,11 +114,11 @@ def parse_args() -> argparse.Namespace:
         help="Energy catch factor for the simulation (default: 0.05).",
     )
 
-    # parser.add_argument(
-    #     "--cell",
-    #     default=None,
-    #     help="Use cell for the simulation (default: False) as a float for a cubic cell length (Å).",
-    # )
+    parser.add_argument(
+        "--cell",
+        default=None,
+        help="Use cell for the simulation (default: False) as a float for a cubic cell length (Å).",
+    )
 
     parser.add_argument(
         "--n-monomers",
