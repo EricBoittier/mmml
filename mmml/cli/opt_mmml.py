@@ -97,6 +97,12 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional path to save best parameters and scores as JSON.",
     )
+    parser.add_argument(
+        "--out-npz",
+        type=Path,
+        default=None,
+        help="Optional path to save detailed results as NPZ file.",
+    )
 
     parser.add_argument(
         "--validate",
@@ -461,6 +467,29 @@ def main() -> int:
         with open(args.out, "w") as f:
             json.dump(payload, f, indent=2)
         print(f"Saved results to {args.out}")
+    
+    if args.out_npz is not None:
+        # Save detailed results as NPZ
+        npz_data = {
+            "ml_cutoffs": np.array([r["ml_cutoff"] for r in results]),
+            "mm_switch_ons": np.array([r["mm_switch_on"] for r in results]),
+            "mm_cutoffs": np.array([r["mm_cutoff"] for r in results]),
+            "mse_energies": np.array([r["mse_energy"] for r in results]),
+            "mse_forces": np.array([r["mse_forces"] for r in results]),
+            "objectives": np.array([r["objective"] for r in results]),
+            "best_ml_cutoff": best["ml_cutoff"],
+            "best_mm_switch_on": best["mm_switch_on"],
+            "best_mm_cutoff": best["mm_cutoff"],
+            "best_mse_energy": best["mse_energy"],
+            "best_mse_forces": best["mse_forces"],
+            "best_objective": best["objective"],
+            "n_eval_frames": n_eval,
+            "energy_weight": args.energy_weight,
+            "force_weight": args.force_weight,
+        }
+        args.out_npz.parent.mkdir(parents=True, exist_ok=True)
+        np.savez(args.out_npz, **npz_data)
+        print(f"Saved detailed results to {args.out_npz}")
     
     
 
