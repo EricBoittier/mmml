@@ -21,6 +21,8 @@ mmml
 
 ### Quickstart
 
+#### Installation
+
 Prereqs: CUDA 12 toolchain and a working CHARMM/OpenMM stack (on clusters: `module load cudnn` and `module load charmm`).
 
 Install and run with `uv` (no manual venv needed):

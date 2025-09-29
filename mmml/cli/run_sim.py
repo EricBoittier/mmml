@@ -365,11 +365,20 @@ inbfrq -1 imgfrq -1
     pycharmm.lingo.charmm_script(heat)
     atoms.set_positions(coor.get_positions())
     pycharmm.energy.show()
-
+    pycharmm.minimize.run_abnr(nstep=1000, tolenr=1e-6, tolgrd=1e-6)
+    pycharmm.energy.show()
+    pycharmm.lingo.charmm_script("ENER")
 
     # Minimize structure if requested
     # if args.minimize_first:
-    def minimize_structure(atoms, run_index=0, nsteps=60, fmax=0.0006):
+    def minimize_structure(atoms, run_index=0, nsteps=60, fmax=0.0006, charmm=False):
+
+        if charmm:
+            pycharmm.minimize.run_abnr(nstep=1000, tolenr=1e-6, tolgrd=1e-6)
+            pycharmm.lingo.charmm_script("ENER")
+            pycharmm.energy.show()
+            atoms.set_positions(coor.get_positions())
+
         traj = ase_io.Trajectory(f'bfgs_{run_index}_{args.output_prefix}_minimized.traj', 'w')
         print("Minimizing structure with hybrid calculator")
         print(f"Running BFGS for {nsteps} steps")
@@ -395,8 +404,8 @@ inbfrq -1 imgfrq -1
         # Draw initial momenta
         if run_index == 0:
             MaxwellBoltzmannDistribution(ase_atoms, temperature_K=temperature)
-            Stationary(ase_atoms)  # Remove center of mass translation
-            ZeroRotation(ase_atoms)  # Remove rotations
+            # Stationary(ase_atoms)  # Remove center of mass translation
+            # ZeroRotation(ase_atoms)  # Remove rotations
 
         dt = timestep_fs*ase.units.fs
         print(f"Running ASE MD with timestep: {dt} (ase units)")
@@ -445,16 +454,9 @@ inbfrq -1 imgfrq -1
                 print(f"Include MM: {args.include_mm}")
                 print(f"Skip ML dimers: {args.skip_ml_dimers}")
                 print(f"Debug: {args.debug}")
-
-                pycharmm.lingo.charmm_script("ENER")
-                xyz = pd.DataFrame(ase_atoms.get_positions(), columns=["x", "y", "z"])
-                coor.set_positions(xyz)
-                # # pycharmm MM force field minimization
-                minimize.run_abnr(nstep=10, tolenr=1e-5, tolgrd=1e-5)
-                pycharmm.lingo.charmm_script("ENER")
-                ase_atoms.set_positions(coor.get_positions())
-                _ = ase_opt.BFGS(atoms).run(fmax=0.01, steps=10)
-                minimize_structure(ase_atoms, run_index=f"{run_index}_{breakcount}_{i}_", nsteps=20 if run_index == 0 else 10, fmax=0.0006 if run_index == 0 else 0.001)
+                
+                minimize_structure(ase_atoms, run_index=f"{run_index}_{breakcount}_{i}_", nsteps=20 if run_index == 0 else 10, 
+                fmax=0.0006 if run_index == 0 else 0.001, charmm=True)
                 # assign new velocities
                 # MaxwellBoltzmannDistribution(ase_atoms, temperature_K=temperature)
                 cur_eng = ase_atoms.get_potential_energy()
