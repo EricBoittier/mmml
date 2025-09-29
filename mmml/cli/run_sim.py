@@ -363,6 +363,7 @@ inbfrq -1 imgfrq -1
     pycharmm.minimize.run_abnr(nstep=1000, tolenr=1e-6, tolgrd=1e-6)
     pycharmm.lingo.charmm_script("ENER")
     pycharmm.energy.show()
+    atoms.set_positions(coor.get_positions())
     xyz = pd.DataFrame(atoms.get_positions() - atoms.get_positions().mean(axis=0), columns=["x", "y", "z"])
     coor.set_positions(xyz)
     save_script = 'open unit 1 write form name pdb/init-minimized.pdb coor pdb'
