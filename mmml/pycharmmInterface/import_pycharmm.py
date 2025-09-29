@@ -93,12 +93,13 @@ def reset_block():
 
 
 def reset_block_no_internal():
-    block = f"""BLOCK 
-        CALL 1 SELE ALL END
-          COEFF 1 1 1.0 BOND 0.0 ANGL 0.0 DIHEdral 0.0 
-        END
-        """
-    _ = pycharmm.lingo.charmm_script(block)
+    # block = f"""BLOCK 
+    #     CALL 1 SELE ALL END
+    #       COEFF 1 1 1.0 BOND 0.0 ANGL 0.0 DIHEdral 0.0 
+    #     END
+    #     """
+    # _ = pycharmm.lingo.charmm_script(block)
+    pass
 
 
 def view_atoms(atoms):
