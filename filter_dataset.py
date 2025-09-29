@@ -82,25 +82,28 @@ def filter_dataset(input_file: str, output_file: str, min_distance: float = 3.0,
     
     # Test switching function effectiveness
     print(f"\nTesting switching function effectiveness:")
-    from e3x.nn import smooth_switch, smooth_cutoff
-    import jax.numpy as jnp
-    
-    mm_switch_on = 6.0
-    ml_cutoff_values = [0.1, 0.2, 0.3, 1.0]
-    
-    for ml_cutoff in ml_cutoff_values:
-        ml_cutoff_region = mm_switch_on - ml_cutoff
-        switching_values = []
-        for r in filtered_distances:
-            ml_cutoff_fn = 1 - smooth_cutoff(jnp.array(r), cutoff=ml_cutoff_region)
-            switch_off_ml = 1 - smooth_switch(jnp.array(r), x0=mm_switch_on-0.01, x1=mm_switch_on)
-            ml_scale = ml_cutoff_fn * switch_off_ml
-            switching_values.append(float(ml_scale))
+    try:
+        from e3x.nn import smooth_switch, smooth_cutoff
+        import jax.numpy as jnp
         
-        switching_values = np.array(switching_values)
-        non_zero = np.sum(switching_values > 0.001)
-        mean_scale = switching_values.mean()
-        print(f"  ml_cutoff={ml_cutoff}: {non_zero}/{len(switching_values)} frames active, mean scale={mean_scale:.3f}")
+        mm_switch_on = 6.0
+        ml_cutoff_values = [0.1, 0.2, 0.3, 1.0]
+        
+        for ml_cutoff in ml_cutoff_values:
+            ml_cutoff_region = mm_switch_on - ml_cutoff
+            switching_values = []
+            for r in filtered_distances:
+                ml_cutoff_fn = 1 - smooth_cutoff(jnp.array(r), cutoff=ml_cutoff_region)
+                switch_off_ml = 1 - smooth_switch(jnp.array(r), x0=mm_switch_on-0.01, x1=mm_switch_on)
+                ml_scale = ml_cutoff_fn * switch_off_ml
+                switching_values.append(float(ml_scale))
+            
+            switching_values = np.array(switching_values)
+            non_zero = np.sum(switching_values > 0.001)
+            mean_scale = switching_values.mean()
+            print(f"  ml_cutoff={ml_cutoff}: {non_zero}/{len(switching_values)} frames active, mean scale={mean_scale:.3f}")
+    except ImportError:
+        print("  e3x not available - skipping switching function test")
 
 def main():
     parser = argparse.ArgumentParser(description="Filter dataset by COM distance")
