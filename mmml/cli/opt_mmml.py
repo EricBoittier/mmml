@@ -357,14 +357,17 @@ def main() -> int:
         n_eval = n_frames
     # arrange frames by center of mass distances between the two monomers
     com_distances = []
+    count_non_dimer = 0
     for i in range(len(R_all)):
         # Calculate COM for each monomer
         com1 = R_all[i][:args.n_atoms_monomer].mean(axis=0)  # First monomer
         com2 = R_all[i][args.n_atoms_monomer:].mean(axis=0)  # Second monomer
         # Distance between monomer COMs
+        if dataset["N"][i] != args.n_atoms_monomer*2:
+            count_non_dimer += 1
         com_distances.append(np.linalg.norm(com1 - com2))
     com_distances = np.array(com_distances)
-    frame_indices = np.argsort(com_distances)[::len(com_distances)//n_eval]
+    frame_indices = np.argsort(com_distances)[:-count_non_dimer][(len(com_distances)-count_non_dimer)//n_eval]
     print(f"Evaluating {n_eval} frames (out of {n_frames}). E available: {has_E}, F available: {has_F}")
 
     # Utility to parse grids
