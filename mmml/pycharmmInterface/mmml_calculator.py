@@ -1024,17 +1024,8 @@ def setup_calculator(
                 debug=debug
             ))
 
-        # For cutoff optimization, weight the dimer interaction energy more heavily
-        # to make switching effects visible in the total energy
-        monomer_energy = outputs["internal_E"]  # This is the monomer energy (not switched)
-        dimer_energy = outputs["ml_2b_E"]       # This is the switched dimer interaction energy
-        mm_energy = outputs.get("mm_E", 0)
-        
-        # Weight dimer energy 10x more to make switching effects visible
-        weighted_total_energy = monomer_energy + 10.0 * dimer_energy - mm_energy
-        
         return ModelOutput(
-            energy=weighted_total_energy,
+            energy=(outputs["out_E"].sum() + outputs["internal_E"] - outputs.get("mm_E", 0)),
             forces=outputs["out_F"],
             dH=outputs["dH"],
             ml_2b_E=outputs["ml_2b_E"],
