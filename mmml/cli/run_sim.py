@@ -374,9 +374,9 @@ inbfrq -1 imgfrq -1
         print("Minimizing structure with hybrid calculator")
         print(f"Running BFGS for {nsteps} steps")
         print(f"Running BFGS with fmax: {fmax}")
-        _ = ase_opt.BFGS(atoms).run(fmax=fmax, steps=nsteps)
+        _ = ase_opt.BFGS(atoms, trajectory=traj).run(fmax=fmax, steps=nsteps)
         # Sync with PyCHARMM
-        xyz = pd.DataFrame(atoms.get_positions() - atoms.get_positions().mean(axis=0), columns=["x", "y", "z"])
+        xyz = pd.DataFrame(atoms.get_positions(), columns=["x", "y", "z"])
         coor.set_positions(xyz)
         traj.write(atoms)
         traj.close()
