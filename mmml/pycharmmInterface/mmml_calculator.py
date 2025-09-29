@@ -683,7 +683,11 @@ def setup_calculator(
     BATCH_SIZE: int = N_MONOMERS + len(dimer_perms)  # Number of systems per batch
     # print(BATCH_SIZE)
     restart_path = Path(model_restart_path) if type(model_restart_path) == str else model_restart_path
-    restart = get_last(restart_path)
+    try:
+        restart = get_last(restart_path)
+    except (IndexError, FileNotFoundError) as e:
+        raise FileNotFoundError(f"Checkpoint directory is empty or invalid: {restart_path}. "
+                               f"Available files: {list(restart_path.glob('*')) if restart_path.exists() else 'Directory does not exist'}") from e
     # Setup monomer model
     params, MODEL = get_params_model(restart)
     MODEL.natoms = MAX_ATOMS_PER_SYSTEM 
@@ -702,6 +706,7 @@ def setup_calculator(
              dtype=jnp.int32) for i in np.arange(n_monomers)], dtype=jnp.int32)
             mol_id = jnp.asarray(mol_id_np, dtype=jnp.int32)
         except Exception:
+            print("No mol_id provided")
             mol_id = None
         do_pbc_map = True
         pbc_map = make_pbc_mapper(cell=cell, mol_id=mol_id, n_monomers=n_monomers)
@@ -1555,7 +1560,7 @@ def setup_calculator(
             "forces": 0
         }
 
-    return get_spherical_cutoff_calculator, pbc_map, do_pbc_map
+    return get_spherical_cutoff_calculator
 
 
 
