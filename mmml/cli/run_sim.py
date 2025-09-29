@@ -368,6 +368,14 @@ inbfrq -1 imgfrq -1
     save_script = 'open unit 1 write form name pdb/init-minimized.pdb coor pdb'
     pycharmm.lingo.charmm_script(save_script)
 
+    from mmml.pycharmmInterface.pycharmmCommands import heat
+    pycharmm.lingo.charmm_script(heat)
+    pycharmm.energy.show()
+    xyz = pd.DataFrame(atoms.get_positions() - atoms.get_positions().mean(axis=0), columns=["x", "y", "z"])
+    coor.set_positions(xyz)
+    save_script = 'open unit 1 write form name pdb/init-heated.pdb coor pdb'
+    pycharmm.lingo.charmm_script(save_script)
+
     # Minimize structure if requested
     # if args.minimize_first:
     def minimize_structure(atoms, run_index=0, nsteps=60, fmax=0.0006):
