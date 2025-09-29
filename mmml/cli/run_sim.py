@@ -268,7 +268,7 @@ def main() -> int:
     Z, R = pdb_ase_atoms.get_atomic_numbers(), pdb_ase_atoms.get_positions()
     
     # Setup calculator factory
-    calculator_factory, pbc_map, do_pbc_map = setup_calculator(
+    calculator_factory = setup_calculator(
         ATOMS_PER_MONOMER=args.n_atoms_monomer,
         N_MONOMERS=args.n_monomers,
         ml_cutoff_distance=args.ml_cutoff,
@@ -307,8 +307,8 @@ def main() -> int:
         debug=args.debug,
         energy_conversion_factor=1,
         force_conversion_factor=1,
-        do_pbc_map=do_pbc_map,
-        pbc_map=pbc_map,
+        do_pbc_map=args.cell is not None,
+        pbc_map=calculator_factory.pbc_map if hasattr(calculator_factory, 'pbc_map') else None,
     )
  
     print(f"Hybrid calculator created: {hybrid_calc}")
