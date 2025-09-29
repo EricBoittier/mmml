@@ -7,7 +7,7 @@ source settings.source
 echo "Testing single cutoff combination..."
 
 python -m mmml.cli.opt_mmml \
-   --dataset $DATA \
+   --dataset filtered_acetone_3-8A.npz \
    --pdbfile "pdb/init-packmol.pdb" \
    --checkpoint $CHECKPOINT \
    --n-monomers 2 \
@@ -19,6 +19,7 @@ python -m mmml.cli.opt_mmml \
    --force-weight 1.0 \
    --max-frames 100 \
    --include-mm \
-   --out test_cutoff_opt.json
+   --out test_cutoff_opt.json \
+   --out-npz test_cutoff_opt.npz
 
-echo "Test completed. Check test_cutoff_opt.json for results."
+echo "Test completed. Check test_cutoff_opt.json and test_cutoff_opt.npz for results."
