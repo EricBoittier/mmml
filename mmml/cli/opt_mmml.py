@@ -209,6 +209,8 @@ def main() -> int:
     pdb_ase_atoms = ase_io.read(pdbfilename)
 
     print(f"Loaded PDB file: {pdb_ase_atoms}")
+    print("Note: for testing the dimer calculator, the pdb file should contain a dimer, and" \
+     "the atom types should be consistent with the dimer calculator.")
     
     # ========================================================================
     # MASS SETUP FOR JAX-MD SIMULATION
@@ -228,8 +230,6 @@ def main() -> int:
     Si_mass_expanded = jnp.repeat(Si_mass[:, None], 3, axis=1)  # Shape: (20, 3)
     print(f"Si_mass_expanded shape: {Si_mass_expanded.shape}")
     print(f"Si_mass_expanded sample: {Si_mass_expanded[0]}")
-
-
     print(f"PyCHARMM coordinates: {coor.get_positions()}")
     print(f"Ase coordinates: {pdb_ase_atoms.get_positions()}")
     print(f"{coor.get_positions() == pdb_ase_atoms.get_positions()}")
