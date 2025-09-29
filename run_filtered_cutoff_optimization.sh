@@ -5,7 +5,7 @@ source settings.source
 
 # Base command using filtered dataset
 BASE_CMD="python -m mmml.cli.opt_mmml \
-   --dataset filtered_acetone_3-8A.npz \
+   --dataset /home/ericb/mmml/filtered_acetone_3-8A.npz \
    --pdbfile \"pdb/init-packmol.pdb\" \
    --checkpoint \$CHECKPOINT \
    --n-monomers 2 \
