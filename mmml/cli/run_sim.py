@@ -370,7 +370,7 @@ inbfrq -1 imgfrq -1
 
     from mmml.pycharmmInterface.pycharmmCommands import heat
     pycharmm.lingo.charmm_script(heat)
-    atoms.set_positions(coor.get_positions())s
+    atoms.set_positions(coor.get_positions())
     pycharmm.energy.show()
     xyz = pd.DataFrame(atoms.get_positions() - atoms.get_positions().mean(axis=0), columns=["x", "y", "z"])
     coor.set_positions(xyz)
