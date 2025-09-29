@@ -1148,6 +1148,7 @@ def setup_calculator(
         dimer_contribs = calculate_dimer_contributions(
             positions, e, f, n_dimers, 
             monomer_contribs["monomer_energy"],
+            cutoff_params,
             debug
         )
         
@@ -1415,6 +1416,7 @@ def setup_calculator(
         f: Array,
         n_dimers: int,
         monomer_energies: Array,
+        cutoff_params: CutoffParameters,
         debug: bool = False
     ) -> Dict[str, Array]:
         """Calculate energy and force contributions from dimers.
@@ -1457,7 +1459,7 @@ def setup_calculator(
         
         # Apply switching functions
         switched_results = apply_dimer_switching(
-            positions, dimer_int_energies, dimer_forces, cutoffparameters, max_atoms, debug
+            positions, dimer_int_energies, dimer_forces, cutoff_params, max_atoms, debug
         )
         
         debug_print(debug, "Dimer Contributions:",
