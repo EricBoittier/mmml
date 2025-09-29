@@ -144,7 +144,6 @@ dyna leap verlet start -
    ihtfrq 1000 teminc 5 ieqfrq 0 -
    iasors 1 iasvel 1 iscvel 0 ichecw 0 -
    nprint 1000 nsavc 1000 ntrfrq 200 -
-   iseed  {iseed} -
    echeck 100.0   -
    iunrea -1 iunwri 31 iuncrd 32 iunvel -1
 
@@ -330,37 +329,37 @@ pbcset = """ SET BOXTYPE  = RECT
  SET ZCEN  = 0
 """
 
-heat = """!#########################################
-! Heating - NVT {NDCD}
-!#########################################
+# heat = """!#########################################
+# ! Heating - NVT {NDCD}
+# !#########################################
 
-scalar mass stat
-calc pmass = int ( ?stot  /  50.0 )
-calc tmass = @pmass * 10
+# scalar mass stat
+# calc pmass = int ( ?stot  /  50.0 )
+# calc tmass = @pmass * 10
 
-calc tmin = 300 * 0.2 
+# calc tmin = 300 * 0.2 
 
-open write unit 31 card name heat.res       ! Restart file
-open write unit 32 file name heat.dcd       ! Coordinates file
+# open write unit 31 card name heat.res       ! Restart file
+# open write unit 32 file name heat.dcd       ! Coordinates file
 
-dyna leap verlet start -
-   timestp 0.0002 nstep 50000 -
-   firstt @tmin finalt 300 tbath 300 -
-   ihtfrq 1000 teminc 5 ieqfrq 0 -
-   iasors 1 iasvel 1 iscvel 0 ichecw 0 -
-   nprint 1000 nsavc 1000 ntrfrq 200 -
-   iseed  {iseed} -
-   echeck 100.0   -
-   iunrea -1 iunwri 31 iuncrd 32 iunvel -1
+# dyna leap verlet start -
+#    timestp 0.0002 nstep 50000 -
+#    firstt @tmin finalt 300 tbath 300 -
+#    ihtfrq 1000 teminc 5 ieqfrq 0 -
+#    iasors 1 iasvel 1 iscvel 0 ichecw 0 -
+#    nprint 1000 nsavc 1000 ntrfrq 200 -
+#    iseed  {iseed} -
+#    echeck 100.0   -
+#    iunrea -1 iunwri 31 iuncrd 32 iunvel -1
 
-open unit 1 write card name heat.crd
-write coor card unit 1
-close unit 1
+# open unit 1 write card name heat.crd
+# write coor card unit 1
+# close unit 1
 
-open write unit 10 card name heat.pdb
-write coor unit 10 pdb
+# open write unit 10 card name heat.pdb
+# write coor unit 10 pdb
 
-"""
+# """
 
 equi = """!#########################################
 ! Equilibration - NpT {NDCD}
