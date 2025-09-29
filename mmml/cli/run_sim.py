@@ -446,15 +446,15 @@ inbfrq -1 imgfrq -1
                 print(f"Skip ML dimers: {args.skip_ml_dimers}")
                 print(f"Debug: {args.debug}")
 
-                # pycharmm.lingo.charmm_script("ENER")
-                # xyz = pd.DataFrame(ase_atoms.get_positions(), columns=["x", "y", "z"])
-                # coor.set_positions(xyz)
+                pycharmm.lingo.charmm_script("ENER")
+                xyz = pd.DataFrame(ase_atoms.get_positions(), columns=["x", "y", "z"])
+                coor.set_positions(xyz)
                 # # pycharmm MM force field minimization
-                # # minimize.run_abnr(nstep=10, tolenr=1e-5, tolgrd=1e-5)
-                # pycharmm.lingo.charmm_script("ENER")
-                # ase_atoms.set_positions(coor.get_positions())
-                # _ = ase_opt.BFGS(atoms).run(fmax=0.01, steps=10)
-                # minimize_structure(ase_atoms, run_index=f"{run_index}_{breakcount}_{i}_", nsteps=20 if run_index == 0 else 10, fmax=0.0006 if run_index == 0 else 0.001)
+                minimize.run_abnr(nstep=10, tolenr=1e-5, tolgrd=1e-5)
+                pycharmm.lingo.charmm_script("ENER")
+                ase_atoms.set_positions(coor.get_positions())
+                _ = ase_opt.BFGS(atoms).run(fmax=0.01, steps=10)
+                minimize_structure(ase_atoms, run_index=f"{run_index}_{breakcount}_{i}_", nsteps=20 if run_index == 0 else 10, fmax=0.0006 if run_index == 0 else 0.001)
                 # assign new velocities
                 # MaxwellBoltzmannDistribution(ase_atoms, temperature_K=temperature)
                 cur_eng = ase_atoms.get_potential_energy()
