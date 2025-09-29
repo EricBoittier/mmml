@@ -355,7 +355,10 @@ def main() -> int:
         n_eval = n_frames
     else:
         n_eval = n_frames
-    frame_indices = np.arange(n_eval)
+    # arrange frames by center of mass distances between the two monomers
+    coms = np.stack([R_all[i].mean(axis=0) for i in range(len(R_all))])
+    com_distances = np.linalg.norm(coms[0] - coms[1], axis=1)
+    frame_indices = np.argsort(com_distances)[::len(com_distances)//n_eval]
     print(f"Evaluating {n_eval} frames (out of {n_frames}). E available: {has_E}, F available: {has_F}")
 
     # Utility to parse grids
