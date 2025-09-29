@@ -367,6 +367,7 @@ def main() -> int:
             count_non_dimer += 1
         com_distances.append(np.linalg.norm(com1 - com2))
     com_distances = np.array(com_distances)
+    # sort by com_distances and then remove the non-dimer frames
     frame_indices = np.argsort(com_distances)[:-count_non_dimer][::(len(com_distances)-count_non_dimer)//n_eval]
     print(f"Evaluating {n_eval} frames (out of {n_frames}). E available: {has_E}, F available: {has_F}")
 
