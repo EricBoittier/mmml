@@ -355,7 +355,7 @@ def main() -> int:
 
 ! Non-bonding parameters
 nbonds atom cutnb 14.0  ctofnb 12.0 ctonnb 10.0 -
-vswitch NBXMOD 3 -
+vswitch NBXMOD 5 -
 inbfrq -1 imgfrq -1
 """
     pycharmm.lingo.charmm_script(nbonds)
