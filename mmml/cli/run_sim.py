@@ -307,8 +307,8 @@ def main() -> int:
         debug=args.debug,
         energy_conversion_factor=1,
         force_conversion_factor=1,
-        do_pbc_map=args.cell is not None,
-        pbc_map=calculator_factory.pbc_map if hasattr(calculator_factory, 'pbc_map') else None,
+        # do_pbc_map=args.cell is not None,
+        # pbc_map=calculator_factory.pbc_map if hasattr(calculator_factory, 'pbc_map') else None,
     )
  
     print(f"Hybrid calculator created: {hybrid_calc}")
