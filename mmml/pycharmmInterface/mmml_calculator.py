@@ -611,9 +611,98 @@ class CutoffParameters:
             mm_switch_on: Distance where MM potential starts switching on
             mm_cutoff: Final cutoff for MM potential
         """
-        self.ml_cutoff = ml_cutoff
+        self.ml_cutoff =  ml_cutoff 
         self.mm_switch_on = mm_switch_on
         self.mm_cutoff = mm_cutoff
+
+
+    def __str__(self):
+        return f"CutoffParameters(ml_cutoff={self.ml_cutoff}, mm_switch_on={self.mm_switch_on}, mm_cutoff={self.mm_cutoff})"
+    
+    def __repr__(self):
+        return self.__str__()
+
+    def __eq__(self, other):
+        return self.ml_cutoff == other.ml_cutoff and self.mm_switch_on == other.mm_switch_on and self.mm_cutoff == other.mm_cutoff
+    
+    def __ne__(self, other):
+        return not self.__eq__(other)
+    
+    def __hash__(self):
+        return hash((self.ml_cutoff, self.mm_switch_on, self.mm_cutoff))
+
+    def to_dict(self):
+        return {
+            "ml_cutoff": self.ml_cutoff,
+            "mm_switch_on": self.mm_switch_on,
+            "mm_cutoff": self.mm_cutoff
+        }
+    
+    def from_dict(self, d):
+        return CutoffParameters(
+            ml_cutoff=d["ml_cutoff"],
+            mm_switch_on=d["mm_switch_on"],
+            mm_cutoff=d["mm_cutoff"]
+        )
+
+    def plot_cutoff_parameters(self, save_dir: Path | None = None):
+        """Render a schematic of ML taper and MM switch-on window and save PNG."""
+        import matplotlib.pyplot as plt
+        ml_cutoff = float(self.ml_cutoff)
+        mm_switch_on = float(self.mm_switch_on)
+        mm_cutoff = float(self.mm_cutoff)
+
+        r_max = float(max(ml_cutoff, mm_switch_on + mm_cutoff) * 1.5 + 2.0)
+        r = np.linspace(0.0, r_max, 600)
+
+        # ML taper: 1 up to start, linear to 0 at mm_switch_on, 0 after
+        ml_start = max(0.0, mm_switch_on - ml_cutoff)
+        ml_mask = np.ones_like(r)
+        if ml_cutoff > 0:
+            in_ramp = (r >= ml_start) & (r <= mm_switch_on)
+            denom = max(mm_switch_on - ml_start, 1e-12)
+            ml_mask[in_ramp] = 1.0 - (r[in_ramp] - ml_start) / denom
+        ml_mask[r > mm_switch_on] = 0.0
+
+        # MM switch-on: 0 before mm_switch_on, linear to 1 by mm_switch_on+mm_cutoff
+        mm_mask = np.zeros_like(r)
+        ramp_start = mm_switch_on
+        ramp_end = mm_switch_on + mm_cutoff
+        if mm_cutoff > 0:
+            in_ramp = (r >= ramp_start) & (r <= ramp_end)
+            mm_mask[in_ramp] = (r[in_ramp] - ramp_start) / max(ramp_end - ramp_start, 1e-12)
+        mm_mask[r > ramp_end] = 1.0
+
+        fig, axes = plt.subplots(1, 2, figsize=(10, 4))
+
+        ax = axes[0]
+        ax.plot(r, ml_mask, label="ML scale (schematic)")
+        ax.axvline(ml_start, color="C1", linestyle="--", label=f"start taper = {ml_start:.2f} Å")
+        ax.axvline(mm_switch_on, color="C3", linestyle=":", label=f"ML off @ {mm_switch_on:.2f} Å")
+        ax.set_title("ML cutoff schematic")
+        ax.set_xlabel("r (Å)")
+        ax.set_ylim(-0.05, 1.05)
+        ax.legend(loc="best")
+
+        ax = axes[1]
+        ax.plot(r, mm_mask, color="C2", label="MM switch-on")
+        ax.axvline(mm_switch_on, color="k", linestyle=":", label=f"mm_switch_on = {mm_switch_on:.2f} Å")
+        ax.axvline(ramp_end, color="k", linestyle=":", label=f"mm_switch_on + mm_cutoff = {ramp_end:.2f} Å")
+        ax.set_title("MM switching schematic")
+        ax.set_xlabel("r (Å)")
+        ax.set_ylim(-0.05, 1.05)
+        ax.legend(loc="best")
+
+        fig.tight_layout()
+        out_dir = save_dir if save_dir is not None else Path.cwd()
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_path = out_dir / f"cutoffs_schematic_{self.ml_cutoff:.2f}_{self.mm_switch_on:.2f}_{self.mm_cutoff:.2f}.png"
+        fig.savefig(out_path, dpi=150)
+        try:
+            plt.show()
+        except Exception:
+            pass
+        print(f"Saved cutoff schematic to {out_path}")
 
 
 class ModelOutput(NamedTuple):
@@ -646,11 +735,20 @@ def setup_calculator(
     cell = False,
 ):
     if model_restart_path is None:
-        # raise ValueError("model_restart_path must be provided")
-        model_restart_path = "/pchem-data/meuwly/boittier/home/pycharmm_test/ckpts/dichloromethane-7c36e6f9-6f10-4d21-bf6d-693df9b8cd40"
+        raise ValueError("model_restart_path must be provided")
+        # model_restart_path = "/pchem-data/meuwly/boittier/home/pycharmm_test/ckpts/dichloromethane-7c36e6f9-6f10-4d21-bf6d-693df9b8cd40"
     n_monomers = N_MONOMERS
 
     cutoffparameters = CutoffParameters(ml_cutoff_distance, mm_switch_on, mm_cutoff)
+    # Log raw vs stored cutoffs (note: CutoffParameters reorders fields internally)
+    print(
+        "[setup_calculator] Cutoff inputs -> ml_cutoff_distance=%.4f, mm_switch_on=%.4f, mm_cutoff=%.4f"
+        % (ml_cutoff_distance, mm_switch_on, mm_cutoff)
+    )
+    print(
+        "[setup_calculator] CutoffParameters stored -> ml_cutoff=%.4f, mm_switch_on=%.4f, mm_cutoff=%.4f"
+        % (cutoffparameters.ml_cutoff, cutoffparameters.mm_switch_on, cutoffparameters.mm_cutoff)
+    )
     
     all_dimer_idxs = []
     for a, b in dimer_permutations(n_monomers):
