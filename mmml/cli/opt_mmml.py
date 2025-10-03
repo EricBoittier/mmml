@@ -39,15 +39,12 @@ def parse_args() -> argparse.Namespace:
         required=True,
         help="Path to the dataset file to load for pycharmm",
     )
-
     parser.add_argument(
         "--pdbfile",
         type=Path,
         required=True,
         help="Path to the PDB file to load for pycharmm [requires correct atom names and types].",
     )
-
-
     parser.add_argument(
         "--checkpoint",
         type=Path,
@@ -295,7 +292,7 @@ def main() -> int:
         atomic_numbers=Z,
         atomic_positions=R,
         n_monomers=args.n_monomers,
-        cutoff_params=CUTOFF_PARAMS,
+        # cutoff_params=CUTOFF_PARAMS,
         doML=True,
         doMM=args.include_mm,
         doML_dimer=not args.skip_ml_dimers,
@@ -308,6 +305,15 @@ def main() -> int:
     )
  
     print(f"Hybrid calculator created: {hybrid_calc}")
+    # --------------------------------------------------------------------
+    # Visualize cutoff meanings (schematic)
+    # --------------------------------------------------------------------
+    try:
+        _save_dir = args.out.parent if (args.out is not None) else (args.out_npz.parent if (args.out_npz is not None) else None)
+        CUTOFF_PARAMS.plot_cutoff_parameters(_save_dir)
+        
+    except Exception as _plot_exc:
+        print(f"Warning: could not render cutoff schematic: {_plot_exc}")
     atoms = pdb_ase_atoms
 
     
@@ -503,6 +509,8 @@ if __name__ == "__main__":
 #   --dataset /path/to/data.npz \
 #   --checkpoint /path/to/checkpoint \
 #   --n-monomers 2 \
+#   --pdbfile /path/to/pdb \
+#   --include-mm \
 #   --n-atoms-monomer 10 \
 #   --ml-cutoff-grid 1.5,2.0,2.5 \
 #   --mm-switch-on-grid 4.0,5.0,6.0 \
