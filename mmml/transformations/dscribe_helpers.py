@@ -88,10 +88,10 @@ class LazyAtomsLoader:
     def __init__(self, input):
         if isinstance(input, str):
             self.data = np.load(input, mmap_mode='r')
-        elif isinstance(input, np.ndarray):
-            self.data = input
         else:
-            raise ValueError(f"Invalid input type: {type(input)}")
+            self.data = input
+        # else:
+        #     raise ValueError(f"Invalid input type: {type(input)}")
         self.symbols = self.data['Z']
         self.positions = self.data['R']
         self.n_atoms = self.data['N']
