@@ -67,7 +67,7 @@ implemented_properties = implemented_properties):
             if model.charges and "dipoles" in properties:
                 self.results["dipole"] = output["dipoles"] * conversion["dipole"]
             self.results["energy"] = output["energy"].squeeze() * conversion["energy"]
-            self.results["forces"] = output["forces"] * conversion["forces"]
+            self.results["forces"] = np.array(output["forces"] * conversion["forces"])
             atoms.info["output"] = output
 
     return MessagePassingCalculator()
