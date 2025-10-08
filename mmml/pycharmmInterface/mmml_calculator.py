@@ -165,17 +165,10 @@ except Exception:  # pragma: no cover - exercised when PyCHARMM missing
 
 try:  # Additional optional scientific libraries used for ML/MM coupling
     import e3x  # type: ignore[import-not-found]
-    from e3x.nn import smooth_switch, smooth_cutoff  # type: ignore[import-not-found]
     _HAVE_E3X = True
 except ModuleNotFoundError:  # pragma: no cover - optional runtime dependency
     e3x = None  # type: ignore[assignment]
     _HAVE_E3X = False
-
-    def smooth_switch(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[override]
-        raise ModuleNotFoundError("e3x is required for smooth_switch")
-
-    def smooth_cutoff(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[override]
-        raise ModuleNotFoundError("e3x is required for smooth_cutoff")
 
 
 try:
@@ -226,6 +219,57 @@ def parse_non_int(s: str) -> str:
 
 def dimer_permutations(n_mol: int) -> List[Tuple[int, int]]:
     return list(combinations(range(n_mol), 2))
+# -----------------------------------------------------------------------------
+# JAX-native smooth switching utilities (avoid traced-python conditionals)
+# -----------------------------------------------------------------------------
+def _safe_den(x: float | Array) -> Array:
+    return jnp.maximum(x, 1e-6)
+
+def jax_smooth_switch_linear(r: Array, x0: float, x1: float) -> Array:
+    t = (r - x0) / _safe_den(x1 - x0)
+    return jnp.clip(t, 0.0, 1.0)
+
+def jax_smooth_cutoff_cosine(r: Array, cutoff: float) -> Array:
+    t = r / _safe_den(cutoff)
+    val = 0.5 * (1.0 + jnp.cos(jnp.pi * jnp.clip(t, 0.0, 1.0)))
+    return jnp.where(r < cutoff, val, 0.0)
+
+def ml_switch_simple(r: Array, ml_cutoff: float, mm_switch_on: float) -> Array:
+    """ML active at short range, tapers 1→0 over [mm_switch_on - ml_cutoff, mm_switch_on].
+    
+    Args:
+        r: distance
+        ml_cutoff: width of ML taper region
+        mm_switch_on: distance where ML reaches 0 and MM starts
+    
+    Returns:
+        ML scale factor: 1.0 at short range, smooth taper to 0.0 at mm_switch_on
+    """
+    taper_start = mm_switch_on - ml_cutoff
+    # Use cosine taper for smoothness
+    t = (r - taper_start) / _safe_den(ml_cutoff)
+    cosine_taper = 0.5 * (1.0 + jnp.cos(jnp.pi * jnp.clip(t, 0.0, 1.0)))
+    # Return 1.0 below taper_start, cosine taper in [taper_start, mm_switch_on], 0.0 above
+    return jnp.where(r < taper_start, 1.0, jnp.where(r < mm_switch_on, cosine_taper, 0.0))
+
+def mm_switch_simple(r: Array, mm_switch_on: float, mm_cutoff: float) -> Array:
+    """MM off at short range, ramps 0→1 over [mm_switch_on, mm_switch_on + mm_cutoff].
+    
+    Args:
+        r: distance
+        mm_switch_on: distance where MM starts ramping on
+        mm_cutoff: width of MM ramp region
+    
+    Returns:
+        MM scale factor: 0.0 at short range, smooth ramp to 1.0 at mm_switch_on + mm_cutoff
+    """
+    ramp_end = mm_switch_on + mm_cutoff
+    # Use cosine ramp for smoothness (inverse of ML taper)
+    t = (r - mm_switch_on) / _safe_den(mm_cutoff)
+    cosine_ramp = 0.5 * (1.0 - jnp.cos(jnp.pi * jnp.clip(t, 0.0, 1.0)))
+    # Return 0.0 below mm_switch_on, cosine ramp in [mm_switch_on, ramp_end], 1.0 above
+    return jnp.where(r < mm_switch_on, 0.0, jnp.where(r < ramp_end, cosine_ramp, 1.0))
+
 
 
 
@@ -594,7 +638,12 @@ def get_bounds(x0, scale=0.1):
     for i in range(len(x0)) ]
     return b
 
+def _smoothstep01(s): return s * s * (3.0 - 2.0 * s)
 
+def _sharpstep(r, x0, x1, gamma=3.0):
+    s = jnp.clip((r - x0) / _safe_den(x1 - x0), 0.0, 1.0)
+    s = s ** gamma
+    return _smoothstep01(s)
 
 
 class CutoffParameters:
@@ -646,52 +695,48 @@ class CutoffParameters:
         )
 
     def plot_cutoff_parameters(self, save_dir: Path | None = None):
-        """Render a schematic of ML taper and MM switch-on window and save PNG."""
+        import numpy as np
         import matplotlib.pyplot as plt
+
         ml_cutoff = float(self.ml_cutoff)
         mm_switch_on = float(self.mm_switch_on)
         mm_cutoff = float(self.mm_cutoff)
 
-        r_max = float(max(ml_cutoff, mm_switch_on + mm_cutoff) * 1.5 + 2.0)
-        r = np.linspace(0.0, r_max, 600)
+        r_max = float(max(ml_cutoff, mm_switch_on + 2.0 * mm_cutoff) * 1.5 + 2.0)
+        r = np.linspace(0.01, r_max, 600)
 
-        # ML taper: 1 up to start, linear to 0 at mm_switch_on, 0 after
-        ml_start = max(0.0, mm_switch_on - ml_cutoff)
-        ml_mask = np.ones_like(r)
-        if ml_cutoff > 0:
-            in_ramp = (r >= ml_start) & (r <= mm_switch_on)
-            denom = max(mm_switch_on - ml_start, 1e-12)
-            ml_mask[in_ramp] = 1.0 - (r[in_ramp] - ml_start) / denom
-        ml_mask[r > mm_switch_on] = 0.0
+        def _np_smoothstep01(s): return s * s * (3.0 - 2.0 * s)
+        def _np_sharpstep(r, x0, x1, gamma=3.0):
+            s = np.clip((r - x0) / max(x1 - x0, 1e-12), 0.0, 1.0)
+            s = s ** gamma
+            return _np_smoothstep01(s)
 
-        # MM switch-on: 0 before mm_switch_on, linear to 1 by mm_switch_on+mm_cutoff
-        mm_mask = np.zeros_like(r)
-        ramp_start = mm_switch_on
-        ramp_end = mm_switch_on + mm_cutoff
-        if mm_cutoff > 0:
-            in_ramp = (r >= ramp_start) & (r <= ramp_end)
-            mm_mask[in_ramp] = (r[in_ramp] - ramp_start) / max(ramp_end - ramp_start, 1e-12)
-        mm_mask[r > ramp_end] = 1.0
+        gamma_ml = 5.0     # your steeper ML taper
+        gamma_on = 0.001    # faster MM turn-on
+        gamma_off = 3.0    # smooth MM turn-off
 
-        fig, axes = plt.subplots(1, 2, figsize=(10, 4))
+        ml_scale = 1.0 - _np_sharpstep(r, mm_switch_on - ml_cutoff, mm_switch_on, gamma=gamma_ml)
+        mm_on    = _np_sharpstep(r, mm_switch_on, mm_switch_on + mm_cutoff, gamma=gamma_on)
+        mm_off   = _np_sharpstep(r, mm_switch_on + mm_cutoff, mm_switch_on + 2.0 * mm_cutoff, gamma=gamma_off)
+        mm_scale = mm_on * (1.0 - mm_off)
 
-        ax = axes[0]
-        ax.plot(r, ml_mask, label="ML scale (schematic)")
-        ax.axvline(ml_start, color="C1", linestyle="--", label=f"start taper = {ml_start:.2f} Å")
-        ax.axvline(mm_switch_on, color="C3", linestyle=":", label=f"ML off @ {mm_switch_on:.2f} Å")
-        ax.set_title("ML cutoff schematic")
-        ax.set_xlabel("r (Å)")
-        ax.set_ylim(-0.05, 1.05)
+
+        fig, ax = plt.subplots(1, 1, figsize=(8, 5))
+        ax.plot(r, ml_scale, label="ML scale", lw=2, color="C0")
+        ax.plot(r, mm_scale, label="MM scale", lw=2, color="C1")
+        ax.plot(r, ml_scale + mm_scale, "--", lw=1, color="gray", alpha=0.7, label="ML+MM")
+
+        # ax.axvline(taper_start, color="C0", linestyle="--", lw=1, alpha=0.7, label=f"ML start {taper_start:.2f} Å")
+        ax.axvline(mm_switch_on, color="k", linestyle=":", lw=1.5, label=f"handoff {mm_switch_on:.2f} Å")
+        ax.axvline(mm_switch_on + mm_cutoff, color="C1", linestyle="--", lw=1, alpha=0.7, label=f"MM full-on {mm_switch_on + mm_cutoff:.2f} Å")
+        ax.axvline(mm_switch_on + 2.0 * mm_cutoff, color="C1", linestyle="-.", lw=1, alpha=0.7, label=f"MM off {mm_switch_on + 2.0 * mm_cutoff:.2f} Å")
+
+        ax.set_xlabel("COM distance r (Å)")
+        ax.set_ylabel("Scale factor")
+        ax.set_ylim(-0.05, 1.15)
+        ax.set_title(f"ML/MM Handoff (force-switched MM) | ml={ml_cutoff:.2f}, mm_on={mm_switch_on:.2f}, mm_cut={mm_cutoff:.2f}")
         ax.legend(loc="best")
-
-        ax = axes[1]
-        ax.plot(r, mm_mask, color="C2", label="MM switch-on")
-        ax.axvline(mm_switch_on, color="k", linestyle=":", label=f"mm_switch_on = {mm_switch_on:.2f} Å")
-        ax.axvline(ramp_end, color="k", linestyle=":", label=f"mm_switch_on + mm_cutoff = {ramp_end:.2f} Å")
-        ax.set_title("MM switching schematic")
-        ax.set_xlabel("r (Å)")
-        ax.set_ylim(-0.05, 1.05)
-        ax.legend(loc="best")
+        ax.grid(alpha=0.3)
 
         fig.tight_layout()
         out_dir = save_dir if save_dir is not None else Path.cwd()
@@ -703,6 +748,16 @@ class CutoffParameters:
         except Exception:
             pass
         print(f"Saved cutoff schematic to {out_path}")
+
+
+
+def _smoothstep01(s):
+    return s * s * (3.0 - 2.0 * s)
+
+def _sharpstep(r, x0, x1, gamma=5.0):
+    s = jnp.clip((r - x0) / _safe_den(x1 - x0), 0.0, 1.0)
+    s = s ** gamma
+    return _smoothstep01(s)
 
 
 class ModelOutput(NamedTuple):
@@ -733,6 +788,7 @@ def setup_calculator(
     ml_energy_conversion_factor: float = ev2kcalmol,
     ml_force_conversion_factor: float = ev2kcalmol,
     cell = False,
+    verbose: bool = False,
 ):
     if model_restart_path is None:
         raise ValueError("model_restart_path must be provided")
@@ -811,37 +867,40 @@ def setup_calculator(
     else:
         pbc_map = do_pbc_map = False
 
-    from functools import partial
-    @partial(jax.jit, static_argnames=['dif', 'ml_cutoff', 'mm_switch_on', 'debug', 'ATOMS_PER_MONOMER'])
+    # from functools import partial
+    # @partial(jax.jit, static_argnames=['ml_cutoff', 'mm_switch_on', 'ATOMS_PER_MONOMER'])
+    # def switch_ML(X,
+    #     ml_energy,
+    #     ml_cutoff=0.01,
+    #     mm_switch_on=5.0,
+    #     ATOMS_PER_MONOMER=ATOMS_PER_MONOMER,
+    # ):
+    #     """Apply ML switching based on COM distance between monomers."""
+    #     # Calculate center-of-mass distance between monomers
+    #     com1 = X[:ATOMS_PER_MONOMER].T.mean(axis=1)
+    #     com2 = X[ATOMS_PER_MONOMER:2*ATOMS_PER_MONOMER].T.mean(axis=1)
+    #     r = jnp.linalg.norm(com1 - com2)
+        
+    #     # Apply simple ML switching: 1 at short range, taper to 0 at mm_switch_on
+    #     # ml_scale = ml_switch_simple(r, ml_cutoff, mm_switch_on)
+    #     ml_scale = 1.0 - _np_sharpstep(r, mm_switch_on - ml_cutoff, mm_switch_on, gamma=3.0)
+                
+    #     return ml_scale * ml_energy
+
+    @partial(jax.jit, static_argnames=['ml_cutoff', 'mm_switch_on', 'ATOMS_PER_MONOMER'])
     def switch_ML(X,
         ml_energy,
-        dif=10 ** (-6),
-        ml_cutoff=0.01,
+        ml_cutoff=0.5,
         mm_switch_on=5.0,
-        debug=False,    
         ATOMS_PER_MONOMER=ATOMS_PER_MONOMER,
     ):
-        # Calculate center-of-mass distance between monomers
-        r = jnp.linalg.norm(X[:ATOMS_PER_MONOMER].T.mean(axis=1) - X[ATOMS_PER_MONOMER:2*ATOMS_PER_MONOMER].T.mean(axis=1))
-        
-        # Add small epsilon to avoid division by zero
-        eps = 1e-10
-        r = r + eps
+        com1 = X[:ATOMS_PER_MONOMER].T.mean(axis=1)
+        com2 = X[ATOMS_PER_MONOMER:2*ATOMS_PER_MONOMER].T.mean(axis=1)
+        r = jnp.linalg.norm(com1 - com2)
 
-        # Calculate switching region based on ml_cutoff
-        ml_cutoff_region = mm_switch_on - ml_cutoff   
-        # Apply smooth cutoff based on ml_cutoff
-        ml_cutoff_fn = 1 - smooth_cutoff(r, cutoff=ml_cutoff_region)
-        # Apply smooth switch at mm_switch_on
-        switch_off_ml = 1 - smooth_switch(r, x0=mm_switch_on-0.01, x1=mm_switch_on)
-        # Combine both switching functions
-        ml_scale = ml_cutoff_fn * switch_off_ml
-        
-        # Ensure scale is between 0 and 1
-        ml_scale = jnp.clip(ml_scale, 0.0, 1.0)
-        
-        ml_contrib = ml_scale * ml_energy
-        return ml_contrib
+        # ML: 1 -> 0 over [mm_switch_on - ml_cutoff, mm_switch_on]
+        ml_scale = 1.0 - _sharpstep(r, mm_switch_on - ml_cutoff, mm_switch_on, gamma=5.0)
+        return ml_scale * ml_energy
 
     switch_ML_grad = jax.grad(switch_ML)
 
@@ -969,38 +1028,21 @@ def setup_calculator(
             mm_switch_on: float = 5.0,
             mm_cutoff: float = 1.0,
         ):
+            """Applies smooth switching function to MM energies based on COM distance."""
             @jax.jit
-            def apply_switching_function(
-                positions: Array,  # Shape: (n_atoms, 3)
-                pair_energies: Array,  # Shape: (n_pairs,)
-            ) -> Array:
-                """Applies smooth switching function to MM energies based on distances.
-                
-                Args:
-                    positions: Atomic positions
-                    pair_energies: Per-pair MM energies to be scaled
-                    
-                Returns:
-                    Array: Scaled MM energies after applying switching function
-                """
-                # Calculate pairwise distances
-                # r = jnp.linalg.norm(X[:5].T.mean(axis=1) - X[5:10].T.mean(axis=1))
-                pair_positions = positions[pair_idx_atom_atom[:,0]].T.mean(axis=1) - positions[pair_idx_atom_atom[:,1]].T.mean(axis=1)
-                distances = jnp.linalg.norm(pair_positions)
-                
-                # Calculate switching functions
-                ml_cutoff = mm_switch_on - ml_cutoff_distance
-                switch_on = smooth_switch(distances, x0=ml_cutoff, x1=mm_switch_on)
-                switch_off = 1 - smooth_switch(distances - mm_cutoff - mm_switch_on, 
-                                            x0=ml_cutoff, 
-                                            x1=mm_switch_on)
-                cutoff = 1 - smooth_cutoff(distances, cutoff=ml_cutoff_distance)
-                
-                # Combine switching functions and apply to energies
-                switching_factor = switch_on * switch_off * cutoff
-                scaled_energies = pair_energies * switching_factor
-                
-                return scaled_energies.sum()
+            def apply_switching_function(positions: Array, pair_energies: Array) -> Array:
+                """Applies smooth switching function to MM energies based on COM distance."""
+                # COM distance
+                com1 = positions[:ATOMS_PER_MONOMER].mean(axis=0)
+                com2 = positions[ATOMS_PER_MONOMER:2*ATOMS_PER_MONOMER].mean(axis=0)
+                r = jnp.linalg.norm(com1 - com2)
+
+                # MM: 0->1 over [mm_on, mm_on+mm_cut], then 1->0 over [mm_on+mm_cut, mm_on+2*mm_cut]
+                mm_on = _sharpstep(r, mm_switch_on, mm_switch_on + mm_cutoff, gamma=5.0)
+                mm_off = _sharpstep(r, mm_switch_on + mm_cutoff*1.1, mm_switch_on + mm_cutoff, gamma=5.0)
+                mm_scale = mm_on * (1.0 - mm_off)
+
+                return (pair_energies * mm_scale).sum()
                 
             return apply_switching_function
 
@@ -1067,7 +1109,7 @@ def setup_calculator(
         return calculate_mm_energy_and_forces
 
 
-    from functools import partial
+    
     @partial(jax.jit, static_argnames=['n_monomers', 'cutoff_params', 'doML', 'doMM', 'doML_dimer', 'debug',])
     def spherical_cutoff_calculator(
         positions: Array,  # Shape: (n_atoms, 3)
@@ -1107,23 +1149,30 @@ def setup_calculator(
         }
 
         if doML:
-            outputs.update(calculate_ml_contributions(
+            ml_out = calculate_ml_contributions(
                 positions, atomic_numbers, n_dimers, n_monomers,
                 cutoff_params=cutoff_params,
                 debug=debug,
                 ml_energy_conversion_factor=ml_energy_conversion_factor,
                 ml_force_conversion_factor=ml_force_conversion_factor
-            ))
+            )
+            outputs.update(ml_out)
 
         if doMM:
-            outputs.update(calculate_mm_contributions(
+            mm_out = calculate_mm_contributions(
                 positions,
                 cutoff_params=cutoff_params,
                 debug=debug
-            ))
+            )
+            # Preserve separate MM terms and add to totals instead of overwriting
+            outputs["mm_E"] = mm_out.get("mm_E", 0)
+            outputs["mm_F"] = mm_out.get("mm_F", 0)
+            outputs["out_E"] = outputs.get("out_E", 0) + mm_out.get("mm_E", 0)
+            outputs["out_F"] = outputs.get("out_F", 0) + mm_out.get("mm_F", 0)
 
+        # Total energy: combined ML (monomer+dimer switched) + MM
         return ModelOutput(
-            energy=(outputs["out_E"].sum() + outputs["internal_E"] - outputs.get("mm_E", 0)),
+            energy=(outputs["out_E"].sum()),
             forces=outputs["out_F"],
             dH=outputs["dH"],
             ml_2b_E=outputs["ml_2b_E"],
@@ -1353,8 +1402,14 @@ def setup_calculator(
                 force_conversion_factor: float = 1.0,
                 do_pbc_map: bool = False,
                 pbc_map = None,
+                verbose: bool = False,
             ):
-                """Initialize calculator with configuration parameters"""
+                """Initialize calculator with configuration parameters
+                
+                Args:
+                    verbose: If True, store full ModelOutput breakdown (ml_2b_E/F, mm_E/F, etc.) 
+                             in self.results for analysis/testing. Adds overhead.
+                """
 
                 super().__init__()
                 self.n_monomers = n_monomers
@@ -1370,6 +1425,7 @@ def setup_calculator(
                 self.force_conversion_factor = force_conversion_factor
                 self.do_pbc_map = do_pbc_map
                 self.pbc_map = pbc_map
+                self.verbose = verbose
 
             def calculate(
                 self,
@@ -1402,7 +1458,7 @@ def setup_calculator(
                     F = out.forces
 
                 if self.backprop:
-
+                    # Define function for backprop
                     def Efn(R):
                         # Apply PBC mapping before JAX computation if needed
                         R_mapped = self.pbc_map(R) if self.do_pbc_map else R
@@ -1418,10 +1474,17 @@ def setup_calculator(
                         ).energy
 
                     E, F = jax.value_and_grad(Efn)(R)
-                    F = F
 
-                self.results["out"] = out
-                self.results["energy"] = -E * self.energy_conversion_factor
+                if self.verbose:
+                    # Store full ModelOutput with ML/MM breakdown for analysis
+                    self.results["model_output"] = out
+                    if hasattr(out, "_asdict"):
+                        for k, v in out._asdict().items():
+                            self.results[f"model_{k}"] = v
+                else:
+                    self.results["out"] = out
+                # E was negated only in backprop path; here we ensure sign is consistent
+                self.results["energy"] = (-E if self.backprop else E) * self.energy_conversion_factor
                 self.results["forces"] = F * self.force_conversion_factor
 
         def get_spherical_cutoff_calculator(
@@ -1436,10 +1499,16 @@ def setup_calculator(
             debug: bool = False,
             energy_conversion_factor: float = 1.0,
             force_conversion_factor: float = 1.0,
+            verbose: bool = None,
             # do_pbc_map: bool = False,
             # pbc_map = None,
         ) -> Tuple[AseDimerCalculator, Callable]:
-            """Factory function to create calculator instances"""
+            """Factory function to create calculator instances
+            
+            Args:
+                verbose: If True, store full ModelOutput breakdown in results.
+                         If None, defaults to debug value.
+            """
 
             calculator = AseDimerCalculator(
                 n_monomers=n_monomers,
@@ -1453,6 +1522,7 @@ def setup_calculator(
                 force_conversion_factor=force_conversion_factor,
                 do_pbc_map=do_pbc_map,
                 pbc_map=pbc_map,
+                verbose=debug if verbose is None else verbose,
             )
 
             return calculator, spherical_cutoff_calculator

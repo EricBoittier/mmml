@@ -44,6 +44,9 @@ for ml_cutoff in "${ML_CUTOFFS[@]}"; do
                 --mm-switch-on-grid $mm_switch_on \
                 --mm-cutoff-grid $mm_cutoff \
                 --out $output_json \
+                --ml-cutoff $ml_cutoff \
+                --mm-switch-on $mm_switch_on \
+                --mm-cutoff $mm_cutoff \
                 --out-npz $output_npz"
             
             echo "Completed combination $counter"
