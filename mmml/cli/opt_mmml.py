@@ -10,7 +10,7 @@ from __future__ import annotations
 import jax
 # jax.config.update("jax_enable_x64", True)
 
-
+from functools import partial
 import argparse
 import sys
 from pathlib import Path
@@ -141,19 +141,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--ml-cutoff",
         type=float,
-        default=2.0,
+        # default=2.0,
         help="ML cutoff distance passed to the calculator factory (default: 2.0 Å).",
     )
     parser.add_argument(
         "--mm-switch-on",
         type=float,
-        default=5.0,
+        # default=5.0,
         help="MM switch-on distance for the hybrid calculator (default: 5.0 Å).",
     )
     parser.add_argument(
         "--mm-cutoff",
         type=float,
-        default=1.0,
+        # default=1.0,
         help="MM cutoff width for the hybrid calculator (default: 1.0 Å).",
     )
     parser.add_argument(
@@ -259,6 +259,9 @@ def main() -> int:
     
     # Get atomic numbers and positions
     Z, R = pdb_ase_atoms.get_atomic_numbers(), pdb_ase_atoms.get_positions()
+
+    for k, v in args.__dict__.items():
+        print(f"{k}: {v}")
     
     # Setup calculator factory
     calculator_factory = setup_calculator(
@@ -271,6 +274,7 @@ def main() -> int:
         doMM=args.include_mm,
         doML_dimer=not args.skip_ml_dimers,
         debug=args.debug,
+        verbose=True,
         model_restart_path=base_ckpt_dir,
         MAX_ATOMS_PER_SYSTEM=natoms,
         ml_energy_conversion_factor=1,
@@ -286,6 +290,7 @@ def main() -> int:
         )
 
     print(f"Cutoff parameters: {CUTOFF_PARAMS}")
+    CUTOFF_PARAMS.plot_cutoff_parameters(Path.cwd())
 
     # Create hybrid calculator
     hybrid_calc, _ = calculator_factory(
@@ -309,7 +314,7 @@ def main() -> int:
     # Visualize cutoff meanings (schematic)
     # --------------------------------------------------------------------
     try:
-        _save_dir = args.out.parent if (args.out is not None) else (args.out_npz.parent if (args.out_npz is not None) else None)
+        _save_dir = args.out.parent if (args.out is not None) else (args.out_npz.parent if (args.out_npz is not None) else Path.cwd())
         CUTOFF_PARAMS.plot_cutoff_parameters(_save_dir)
         
     except Exception as _plot_exc:
@@ -377,11 +382,183 @@ def main() -> int:
         # Distance between monomer COMs
         if dataset["N"][i] != args.n_atoms_monomer*2:
             count_non_dimer += 1
+        # else:
+        #     print(f"Frame {i} is a dimer", f"com1: {com1}", f"com2: {com2}", dataset["Z"][i])
         com_distances.append(np.linalg.norm(com1 - com2))
+
+        # center all atoms to the origin
+        R_all[i] = R_all[i] - R_all[i].mean(axis=0)
+        # # rotate all atoms to have the first two principal axes in the xy plane
+        # R_all[i] = rotate_to_principal_axes(R_all[i])
+        # if we rotate we need to rotate the forces... seems daft
+
+
     com_distances = np.array(com_distances)
     # sort by com_distances and then remove the non-dimer frames
-    frame_indices = np.argsort(com_distances)[:-count_non_dimer][::(len(com_distances)-count_non_dimer)//n_eval]
-    print(f"Evaluating {n_eval} frames (out of {n_frames}). E available: {has_E}, F available: {has_F}")
+    com_distances = np.array(com_distances)
+    # sort by com_distances and then remove the non-dimer frames
+    valid_mask = (dataset["N"] == args.n_atoms_monomer * 2)
+    valid_idx = np.where(valid_mask)[0]
+    if valid_idx.size == 0:
+        raise RuntimeError("No valid dimer frames found in dataset.")
+    sorted_valid = valid_idx[np.argsort(com_distances[valid_idx])]
+    n_valid = len(sorted_valid)
+    # ensure stride >= 1 and do not overshoot n_valid
+    stride = max(1, n_valid // max(1, n_eval))
+    frame_indices = sorted_valid[::stride][:n_eval]
+    print(f"Evaluating {len(frame_indices)} frames (out of {n_frames}). E available: {has_E}, F available: {has_F}")
+
+
+
+    # sometimes the atoms are in different orders (CHARMM will be based on the topology, the pdb has to match this)
+    # the data usually comes from quantum chemistry calculations, so we need to sort the atoms to match the pdb
+    if not np.all(Z == Z_ds):
+        print("Z does not match Z_ds")
+        print(f"Z: {Z}")
+        print(f"Z_ds: {Z_ds}")
+        # sort R, Z, and F to match the pdb... the mapping has to be known aprioi
+        # for the test case:
+        mapping = np.array([3, 1, 2, 0, 4, 5, 6, 7, 8, 9, 13, 11, 12, 10, 14, 15, 16, 17, 18, 19])
+        print(f"Mapping: {mapping}")
+        Z_ds = Z_ds[mapping]
+        print("R_all before mapping: ", R_all.shape)
+        R_all = np.array([R_all[i][mapping] for i, z in enumerate(R_all)])
+        if has_F:
+            F_all = np.array([F_all[i][mapping] for i, z in enumerate(F_all)])
+        print(f"Z_ds: {Z_ds}")
+        print(f"R_all: {R_all.shape}")
+        print(f"F_all: {F_all.shape}")
+
+
+
+    # --------------------------------------------------------------------
+    # Diagnostics: energy scatter (pred vs ref) and energy vs COM distance
+    # for the current calculator settings, before grid search.
+    # --------------------------------------------------------------------
+    try:
+        if has_E:
+            r_sel = com_distances[frame_indices]
+            pred_E_list = []
+            ref_E_list = []
+            for i in frame_indices:
+                # atoms.positions = R_all[i]
+                atoms.set_positions(R_all[i])
+                _pot = atoms.get_potential_energy()
+                pred_E_list.append(float(_pot))
+                import jax
+                jax.debug.print("{x}", x=atoms.calc.results["out"])
+                ref_E_list.append(float(E_all[i]))
+            pred_E_arr = np.array(pred_E_list)
+            ref_E_arr = np.array(ref_E_list)
+
+            # Determine save dir
+            _save_dir = args.out.parent if (args.out is not None) else (args.out_npz.parent if (args.out_npz is not None) else Path.cwd())
+            _save_dir.mkdir(parents=True, exist_ok=True)
+
+            # 1) Build per-frame diagnostics DataFrame (energies, force errors)
+            rows = []
+            for i, pred_e, ref_e in zip(frame_indices, pred_E_arr, ref_E_arr):
+                if has_F:
+                    atoms.set_positions(R_all[i])
+                    pred_F_i = np.asarray(atoms.get_forces())
+                    ref_F_i = np.asarray(F_all[i])
+                    dF = pred_F_i - ref_F_i
+                    mse_f_i = float(np.mean(dF**2))
+                    max_f_err_i = float(np.abs(dF).max())
+                else:
+                    mse_f_i = float('nan')
+                    max_f_err_i = float('nan')
+                rows.append({
+                    "frame_index": int(i),
+                    "com_dist": float(com_distances[i]),
+                    "pred_e": float(pred_e),
+                    "ref_e": float(ref_e),
+                    "mse_f": mse_f_i,
+                    "max_f_err": max_f_err_i,
+                })
+            df_diag = pd.DataFrame(rows).sort_values(by=["com_dist", "frame_index"]).reset_index(drop=True)
+            out_csv = _save_dir / f"diagnostics_{args.ml_cutoff:.2f}_{args.mm_switch_on:.2f}_{args.mm_cutoff:.2f}.csv"
+            df_diag.to_csv(out_csv, index=False)
+            print(f"Saved diagnostics CSV to {out_csv}")
+
+            # 2) Scatter: predicted vs reference energy
+            plt.figure(figsize=(5,5))
+            plt.scatter(ref_E_arr, pred_E_arr, s=12, alpha=0.8)
+            lim_min = float(min(ref_E_arr.min(), pred_E_arr.min()))
+            lim_max = float(max(ref_E_arr.max(), pred_E_arr.max()))
+            plt.plot([lim_min, lim_max], [lim_min, lim_max], 'k--', lw=1)
+            plt.xlabel("Reference energy (E)")
+            plt.ylabel("Predicted energy (E)")
+            plt.title(
+                f"Energy: predicted vs reference | ml={args.ml_cutoff:.2f}, mm_on={args.mm_switch_on:.2f}, mm_cut={args.mm_cutoff:.2f}"
+            )
+            plt.tight_layout()
+            out_scatter = _save_dir / f"energy_scatter_{args.ml_cutoff:.2f}_{args.mm_switch_on:.2f}_{args.mm_cutoff:.2f}.png"
+            plt.savefig(out_scatter, dpi=150)
+            try:
+                plt.show()
+            except Exception:
+                pass
+            print(f"Saved energy scatter to {out_scatter}")
+
+            # 3) Energy vs COM distance
+            order = np.argsort(r_sel)
+            r_sorted = r_sel[order]
+            pred_sorted = pred_E_arr[order]
+            ref_sorted = ref_E_arr[order]
+            plt.figure(figsize=(6,4))
+            plt.plot(r_sorted, ref_sorted, label="Reference", lw=1.5)
+            plt.plot(r_sorted, pred_sorted, label="Predicted", lw=1.5)
+            plt.xlabel("COM distance (Å)")
+            plt.ylabel("Energy (E)")
+            plt.title(
+                f"Energy vs COM distance | ml={args.ml_cutoff:.2f}, mm_on={args.mm_switch_on:.2f}, mm_cut={args.mm_cutoff:.2f}"
+            )
+            plt.legend()
+            plt.tight_layout()
+            out_curve = _save_dir / f"energy_vs_r_{args.ml_cutoff:.2f}_{args.mm_switch_on:.2f}_{args.mm_cutoff:.2f}.png"
+            plt.savefig(out_curve, dpi=150)
+            try:
+                plt.show()
+            except Exception:
+                pass
+            print(f"Saved energy vs r to {out_curve}")
+    except Exception as _diag_exc:
+        print(f"Warning: diagnostics plotting failed: {_diag_exc}")
+
+    # --------------------------------------------------------------------
+    # Write reference trajectory with ground truth energies and forces
+    # --------------------------------------------------------------------
+    try:
+        if has_E:
+            from ase.io import Trajectory
+            from ase.calculators.singlepoint import SinglePointCalculator
+            ref_traj_path = _save_dir / f"reference_trajectory_{args.ml_cutoff:.2f}_{args.mm_switch_on:.2f}_{args.mm_cutoff:.2f}.traj"
+            
+           
+            with Trajectory(ref_traj_path, 'w') as traj:
+                for idx, i in enumerate(frame_indices):
+                    # Create atoms object with reference positions
+                    ref_atoms = Atoms(
+                        numbers=Z_ds,
+                        positions=R_all[i],
+                        cell=atoms.cell if atoms.cell is not None else None,
+                        pbc=atoms.pbc if hasattr(atoms, 'pbc') else False
+                    )
+                    # Attach reference energy and forces via calculator
+                    ref_E = float(E_all[i])
+                    ref_F = F_all[i] if has_F else None
+                    ref_atoms.calc = SinglePointCalculator(ref_atoms, energy=ref_E, forces=ref_F)                   
+                    # Write to trajectory
+                    traj.write(ref_atoms)
+            
+            print(f"Saved reference trajectory ({len(frame_indices)} frames) to {ref_traj_path}")
+            print(f"  - Contains ground truth energies and forces from dataset")
+            print(f"  - Can be visualized with ASE GUI: ase gui {ref_traj_path}")
+    except Exception as _traj_exc:
+        print(f"Warning: reference trajectory writing failed: {_traj_exc}")
+
+
 
     # Utility to parse grids
     def _parse_grid(s: str) -> list[float]:
@@ -395,6 +572,7 @@ def main() -> int:
     # Objective evaluation for a given cutoff triple
     def evaluate_objective(ml_cutoff: float, mm_switch_on: float, mm_cutoff: float) -> dict:
         nonlocal atoms
+        traj = Trajectory(f"traj_{ml_cutoff:.2f}_{mm_switch_on:.2f}_{mm_cutoff:.2f}.traj",  'w', atoms=atoms)
         local_params = CutoffParameters(
             ml_cutoff=ml_cutoff,
             mm_switch_on=mm_switch_on,
@@ -420,9 +598,10 @@ def main() -> int:
         n_e = 0
         n_f = 0
         for i in frame_indices:
-            atoms.positions = R_all[i]
+            atoms.set_positions(R_all[i])
             pred_E = float(atoms.get_potential_energy())
             pred_F = np.asarray(atoms.get_forces())
+            traj.write(atoms)
             if has_E:
                 ref_E = float(E_all[i])
                 se_e += (pred_E - ref_E) ** 2
