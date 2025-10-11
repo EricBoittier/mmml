@@ -5,20 +5,19 @@ source settings.source
 
 # Base command using filtered dataset
 BASE_CMD="python -m mmml.cli.opt_mmml \
-   --dataset /home/ericb/mmml/filtered_acetone_3-8A.npz \
+   --dataset filtered_acetone_3-8A.npz \
    --pdbfile \"pdb/init-packmol.pdb\" \
    --checkpoint \$CHECKPOINT \
    --n-monomers 2 \
    --n-atoms-monomer 10 \
    --energy-weight 1.0 \
-   --force-weight 1.0 \
-   --max-frames 100 \
-   --include-mm"
+   --force-weight 1.0 --include-mm \
+   --max-frames 10"
 
 # Grid values optimized for the 3-8 Å range
-ML_CUTOFFS=(0.5 1.0 1.5 2.0 2.5)
-MM_SWITCH_ON=(5.0 6.0 7.0 8.0)
-MM_CUTOFFS=(0.5 1.0 1.5 2.0)
+ML_CUTOFFS=( 0.3 )
+MM_SWITCH_ON=( 5.0 8.0 9.0 10.0 )
+MM_CUTOFFS=(3.0  5.0  ) # taper width
 
 # Counter for output files
 counter=0
