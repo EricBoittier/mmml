@@ -40,7 +40,7 @@ def get_last(path: str) -> Path:
     return dirs[-1]
 
 
-def get_params_model(restart: str, natoms: int = None):
+def get_params_model(restart: str, natoms: int = None, return_everything: bool = False):
     """
     Load parameters and model from checkpoint.
     
@@ -50,7 +50,9 @@ def get_params_model(restart: str, natoms: int = None):
         Path to checkpoint directory
     natoms : int, optional
         Number of atoms to set in model, by default None
-        
+    return_everything : bool, optional
+        Whether to return everything from the checkpoint, by default False
+
     Returns
     -------
     tuple
@@ -82,7 +84,8 @@ def get_params_model(restart: str, natoms: int = None):
         "Save Time": modification_date,
     }
     print_dict_as_table(restart_dict, title="Last Checkpoint", plot=True)
-
+    if return_everything:
+        return params, model, restored
     # print(model)
     return params, model
 
