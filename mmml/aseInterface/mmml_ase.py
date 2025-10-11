@@ -40,6 +40,8 @@ import  mmml.physnetjax.physnetjax
 
 # sys.path.append("/pchem-data/meuwly/boittier/home/dcm-lj-data")
 # from pycharmm_lingo_scripts import script1, script2, script3, load_dcm
+from mmml.physnetjax.physnetjax.restart.restart import get_last, get_files, get_params_model
+from mmml.physnetjax.physnetjax.analysis.analysis import plot_stats
 
 from mmml.physnetjax.physnetjax.data.data import prepare_datasets
 from mmml.physnetjax.physnetjax.training.loss import dipole_calc
@@ -787,8 +789,6 @@ def get_bounds(x0, scale=0.1):
     return b
 
 
-from physnetjax.restart.restart import get_last, get_files, get_params_model
-from physnetjax.analysis.analysis import plot_stats
 
 
 def get_block(a, b):

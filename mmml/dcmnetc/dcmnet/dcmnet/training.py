@@ -294,7 +294,7 @@ def clip_grads_by_global_norm(grads, max_norm):
     import jax.numpy as jnp
     global_norm = jnp.sqrt(sum([jnp.sum(jnp.square(g)) for g in jax.tree_util.tree_leaves(grads)]))
     clip_factor = jnp.minimum(1.0, max_norm / (global_norm + 1e-6))
-    clipped_grads = jax.tree_map(lambda g: g * clip_factor, grads)
+    clipped_grads = jax.tree_util.tree_map(lambda g: g * clip_factor, grads)
     return clipped_grads
 
 

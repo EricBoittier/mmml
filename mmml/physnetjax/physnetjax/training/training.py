@@ -96,7 +96,7 @@ def train_model(
     log_tb=True,
     batch_method=None,
     batch_args_dict=None,
-    data_keys=("R", "Z", "F", "E", "D", "dst_idx", "src_idx", "batch_segments"),
+    data_keys=("R", "Z", "F", "E", "N",  "D", "dst_idx", "src_idx", "batch_segments"),
 ):
     """
     Train a PhysNetJax model with comprehensive logging and checkpointing.
