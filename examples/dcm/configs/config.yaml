@@ -2,6 +2,7 @@ defaults:
   - model: base
   - data: water
   - training: bootstrap
+  - optional experiment: null
   - _self_
 
 # Random seed
