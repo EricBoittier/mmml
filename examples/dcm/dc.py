@@ -29,7 +29,7 @@ seed = 42
 # %%
 NDCM = 4
 model = MessagePassingModel(
-    features=128, max_degree=2, num_iterations=1,
+    features=128, max_degree=2, num_iterations=3,
     num_basis_functions=64, cutoff=8.0, n_dcm=NDCM,
     include_pseudotensors=False,
 )
@@ -50,7 +50,8 @@ for k in data_loaded.keys():
     )
 
 n_sample = 1000  # Number of points to keep
-for i in range(10):
+Nboot = 10
+for i in range(Nboot):
     data_key = jax.random.PRNGKey(i*seed)
 
     train_data, valid_data = prepare_datasets(
@@ -141,9 +142,9 @@ for i in range(10):
         key=data_key, model=model,
         writer=None,
         train_data=train_data, valid_data=valid_data,
-        num_epochs=10, learning_rate=1e-4, batch_size=1,
+        num_epochs=50, learning_rate=1e-4, batch_size=1,
         restart_params=params if params is None else params,
-        ndcm=model.n_dcm, esp_w=1.0*i, chg_w=1.0/(i+1), use_grad_clip=True, grad_clip_norm=10.0,
+        ndcm=model.n_dcm, esp_w=1000.0*((i+1)/Nboot), chg_w=1.0/((i+1)), use_grad_clip=True, grad_clip_norm=10.0,
     )
     new_params = params.copy()
 
