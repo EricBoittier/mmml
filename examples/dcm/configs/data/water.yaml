@@ -4,6 +4,7 @@ data:
   paths:
     - /home/ericb/testmmml/test.npz
     - /pchem-data/meuwly/boittier/home/test.npz
+    - /scicore/home/meuwly/boitti0000/test.npz
   
   # Dataset splits
   num_train: 1000
