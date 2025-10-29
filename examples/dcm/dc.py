@@ -37,7 +37,7 @@ model = MessagePassingModel(
 
 # %%
 index = 30
-data_path_resolved = Path('test.npz') 
+data_path_resolved = Path('/pchem-data/meuwly/boittier/home/test.npz') 
 data_loaded = np.load(data_path_resolved, 
 allow_pickle=True)
 data_path_resolved
