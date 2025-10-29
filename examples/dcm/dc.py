@@ -37,7 +37,8 @@ model = MessagePassingModel(
 
 # %%
 index = 30
-data_path_resolved = Path('/pchem-data/meuwly/boittier/home/test.npz') 
+data_path_resolved = Path('/home/ericb/testmmml/test.npz') 
+# data_path_resolved = Path('/pchem-data/meuwly/boittier/home/test.npz') 
 data_loaded = np.load(data_path_resolved, 
 allow_pickle=True)
 data_path_resolved
@@ -59,16 +60,16 @@ for k in data_loaded.keys():
     shape = data_loaded[k].shape
     print(shape
     )
-    if len(shape) < 3:
-        try:
-            d = data_loaded[k]
-            d = d.flatten()
-            plt.hist(d)
-            title = f"{k}: {d.min()} - {d.max()}"
-            plt.title(title)
-            plt.show()
-        except:
-            pass
+    # if len(shape) < 3:
+    #     try:
+    #         d = data_loaded[k]
+    #         d = d.flatten()
+    #         plt.hist(d)
+    #         title = f"{k}: {d.min()} - {d.max()}"
+    #         plt.title(title)
+    #         plt.show()
+    #     except:
+    #         pass
 
 n_sample = 1000  # Number of points to keep
 data_key = jax.random.PRNGKey(0)
@@ -95,7 +96,7 @@ def random_sample_esp(esp, esp_grid, n_sample, seed=42):
         not_0 = esp[i] != 0.0
         condmask = lessthan*morethan*not_0
         _shape = esp[i][condmask].shape[0]
-        print(_shape)
+        # print(_shape)
         indices = np.random.choice(_shape, n_sample, replace=False)
         #indices = np.sort(indices) 
         sampled_esp.append(jnp.take(esp[i], condmask[indices]))
@@ -139,17 +140,6 @@ valid_data["n_grid"] = np.full(valid_data["Z"].shape[0], n_sample)
 train_data["N"] = np.count_nonzero(train_data["Z"], axis=1)
 valid_data["N"] = np.count_nonzero(valid_data["Z"], axis=1)
 
-
-_ = plt.hist(valid_data["esp"][1])
-
-
-_ = plt.hist(valid_data["esp"][0])
-
-# %%
-# valid_data["esp"][0][lessthan * morethan ].shape
-
-# %%
-# Check current batch shapes
 print("After fixes:")
 batch = {k: v[0:1] if len(v.shape) > 0 else v for k, v in train_data.items()}
 for key in ['mono', 'esp', 'vdw_surface', 'n_grid', 'N', 'R', 'Z']:
@@ -175,8 +165,6 @@ params, valid_loss = train_model(
     ndcm=model.n_dcm, esp_w=1.0, chg_w=0.0, use_grad_clip=True, grad_clip_norm=1.0,
 )
 new_params = params.copy()
-
-
 
 from mmml.dcmnet.dcmnet.analysis import dcmnet_analysis, prepare_batch
 
