@@ -29,47 +29,25 @@ key = jax.random.PRNGKey(0)
 # %%
 NDCM = 4
 model = MessagePassingModel(
-    features=128, max_degree=1, num_iterations=2,
+    features=128, max_degree=2, num_iterations=1,
     num_basis_functions=64, cutoff=8.0, n_dcm=NDCM,
     include_pseudotensors=False,
 )
 
 
-# %%
-index = 30
 data_path_resolved = Path('/home/ericb/testmmml/test.npz') 
-# data_path_resolved = Path('/pchem-data/meuwly/boittier/home/test.npz') 
-data_loaded = np.load(data_path_resolved, 
-allow_pickle=True)
-data_path_resolved
+if not data_path_resolved.exists():
+    data_path_resolved = Path('/pchem-data/meuwly/boittier/home/test.npz') 
+    if not data_path_resolved.exists():
+        raise FileNotFoundError(f"Data file not found at {data_path_resolved}")
 
-# %%
-# factorize a number
-def factorize(n):
-    factors = []
-    for i in range(1, n + 1):
-        if n % i == 0:
-            factors.append(i)
-    return factors
-
-factorize(data_loaded["esp"].shape[1])
+data_loaded = np.load(data_path_resolved, allow_pickle=True)
 
 for k in data_loaded.keys():
-    
     print(k)
     shape = data_loaded[k].shape
     print(shape
     )
-    # if len(shape) < 3:
-    #     try:
-    #         d = data_loaded[k]
-    #         d = d.flatten()
-    #         plt.hist(d)
-    #         title = f"{k}: {d.min()} - {d.max()}"
-    #         plt.title(title)
-    #         plt.show()
-    #     except:
-    #         pass
 
 n_sample = 1000  # Number of points to keep
 data_key = jax.random.PRNGKey(0)
@@ -164,12 +142,11 @@ params, valid_loss = train_model(
     train_data=train_data, valid_data=valid_data,
     num_epochs=100, learning_rate=1e-4, batch_size=1,
     restart_params=params if params is None else params,
-    ndcm=model.n_dcm, esp_w=1.0, chg_w=0.0, use_grad_clip=True, grad_clip_norm=1.0,
+    ndcm=model.n_dcm, esp_w=1.0, chg_w=1.0, use_grad_clip=True, grad_clip_norm=1.0,
 )
 new_params = params.copy()
 
 from mmml.dcmnet.dcmnet.analysis import dcmnet_analysis, prepare_batch
-
 from mmml.dcmnet.dcmnet.data import prepare_batches
 from mmml.dcmnet.dcmnet.analysis import dcmnet_analysis
 
