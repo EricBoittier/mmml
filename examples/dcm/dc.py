@@ -29,8 +29,8 @@ seed = 42
 # %%
 NDCM = 4
 model = MessagePassingModel(
-    features=128, max_degree=2, num_iterations=3,
-    num_basis_functions=64, cutoff=8.0, n_dcm=NDCM,
+    features=128, max_degree=2, num_iterations=2,
+    num_basis_functions=32, cutoff=8.0, n_dcm=NDCM,
     include_pseudotensors=False,
 )
 
@@ -61,9 +61,6 @@ for i in range(Nboot):
         natoms=18,
         clip_esp=False,
     )
-
-
-
 
     def random_sample_esp(esp, esp_grid, n_sample, seed=i*seed):
         np.random.seed(seed)
@@ -144,7 +141,8 @@ for i in range(Nboot):
         train_data=train_data, valid_data=valid_data,
         num_epochs=50, learning_rate=1e-4, batch_size=1,
         restart_params=params if params is None else params,
-        ndcm=model.n_dcm, esp_w=1000.0*((i+1)/Nboot), chg_w=1.0/((i+1)), use_grad_clip=True, grad_clip_norm=10.0,
+        ndcm=model.n_dcm, esp_w=1000.0*((i+1)/Nboot), chg_w=1.0/((i+1)),
+         use_grad_clip=True, grad_clip_norm=1.0,
     )
     new_params = params.copy()
 
