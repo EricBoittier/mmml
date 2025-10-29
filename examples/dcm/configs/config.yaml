@@ -1,0 +1,23 @@
+defaults:
+  - model: base
+  - data: water
+  - training: bootstrap
+  - _self_
+
+# Random seed
+seed: 42
+
+# Device configuration
+device:
+  mem_fraction: 0.95
+  cuda_visible_devices: "0"
+
+# Output directory for experiments
+output_dir: outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+
+# Experiment tracking (optional - set to null to disable)
+wandb:
+  enabled: false
+  project: dcmnet-training
+  entity: null
+
