@@ -1,0 +1,43 @@
+gpu02
+Thu Sep 26 19:49:38 2024       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 550.107.02             Driver Version: 550.107.02     CUDA Version: 12.4     |
+|-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3080        On  |   00000000:02:00.0 Off |                  N/A |
+| 31%   33C    P8             25W /  320W |       2MiB /  10240MiB |      0%   E. Process |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+                                                                                         
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI        PID   Type   Process name                              GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+no change     /pchem-data/meuwly/boittier/home/miniforge3/condabin/conda
+no change     /pchem-data/meuwly/boittier/home/miniforge3/bin/conda
+no change     /pchem-data/meuwly/boittier/home/miniforge3/bin/conda-env
+no change     /pchem-data/meuwly/boittier/home/miniforge3/bin/activate
+no change     /pchem-data/meuwly/boittier/home/miniforge3/bin/deactivate
+no change     /pchem-data/meuwly/boittier/home/miniforge3/etc/profile.d/conda.sh
+no change     /pchem-data/meuwly/boittier/home/miniforge3/etc/fish/conf.d/conda.fish
+no change     /pchem-data/meuwly/boittier/home/miniforge3/shell/condabin/Conda.psm1
+no change     /pchem-data/meuwly/boittier/home/miniforge3/shell/condabin/conda-hook.ps1
+no change     /pchem-data/meuwly/boittier/home/miniforge3/lib/python3.12/site-packages/xontrib/conda.xsh
+no change     /pchem-data/meuwly/boittier/home/miniforge3/etc/profile.d/conda.csh
+no change     /pchem-data/meuwly/boittier/home/.bashrc
+No action taken.
+
+/pchem-data/meuwly/boittier/home/miniforge3/envs/jaxe3xcuda11p39/bin/python
+GPU ID: 0
+NDCM 3
+[cuda(id=0)]
+2024-09-26 19:54:41.049756: W external/xla/xla/service/gpu/gemm_fusion_autotuner.cc:807] Compiling 15 configs for gemm_fusion_dot.2 on a single thread.
+2024-09-26 19:54:44.941789: W external/xla/xla/service/gpu/gemm_fusion_autotuner.cc:807] Compiling 25 configs for gemm_fusion_dot.2 on a single thread.
+2024-09-26 19:54:55.288445: W external/xla/xla/service/gpu/gemm_fusion_autotuner.cc:807] Compiling 19 configs for gemm_fusion_dot.2 on a single thread.
+2024-09-26 19:55:43.066094: W external/xla/xla/service/gpu/gemm_fusion_autotuner.cc:810] Compiling 138 configs for 10 fusions on a single thread.

@@ -1,0 +1,256 @@
+args:
+data_dir = data
+model_dir = model
+num_epochs = 100
+learning_rate = 0.0001
+batch_size = 16
+esp_w = 0.0
+num_epics = 100
+restart = None
+random_seed = 0
+n_dcm = 2
+n_gpu = 0
+[cuda(id=0)]
+gpu
+[cuda(id=0)]
+R (20000, 60, 3)
+Z (20000, 60)
+N (20000,)
+mono (20000, 60, 1)
+esp (20000, 3163)
+n_grid (20000,)
+vdw_surface (20000, 3163, 3)
+20000
+...
+...
+atomic_numbers (16384, 60)
+ngrid (16384,)
+positions (16384, 60, 3)
+mono (16384, 60, 1)
+esp (16384, 3163)
+vdw_surface (16384, 3163, 3)
+...
+atomic_numbers (2048, 60)
+positions (2048, 60, 3)
+mono (2048, 60, 1)
+ngrid (2048,)
+esp (2048, 3163)
+vdw_surface (2048, 3163, 3)
+epic 0
+Preparing batches
+..................
+epoch:   1      train:   valid:
+    loss [a.u.]              1.316e+02  5.270e+00
+epoch:   2      train:   valid:
+    loss [a.u.]              3.586e+01  8.267e+01
+epoch:   3      train:   valid:
+    loss [a.u.]              2.943e+01  1.380e+00
+epoch:   4      train:   valid:
+    loss [a.u.]              9.060e-01  1.253e+00
+epoch:   5      train:   valid:
+    loss [a.u.]              5.140e-01  6.036e-01
+epoch:   6      train:   valid:
+    loss [a.u.]              4.387e-01  3.958e-01
+epoch:   7      train:   valid:
+    loss [a.u.]              7.762e-01  5.924e-01
+epoch:   8      train:   valid:
+    loss [a.u.]              8.118e-01  2.841e-01
+epoch:   9      train:   valid:
+    loss [a.u.]              1.132e+01  2.369e-01
+epoch:  10      train:   valid:
+    loss [a.u.]              4.081e-01  1.070e-01
+epoch:  11      train:   valid:
+    loss [a.u.]              3.790e-01  1.244e-01
+epoch:  12      train:   valid:
+    loss [a.u.]              1.048e-01  6.760e-02
+epoch:  13      train:   valid:
+    loss [a.u.]              6.852e-02  4.411e-02
+epoch:  14      train:   valid:
+    loss [a.u.]              1.257e-01  5.514e-02
+epoch:  15      train:   valid:
+    loss [a.u.]              9.510e-02  3.120e-02
+epoch:  16      train:   valid:
+    loss [a.u.]              2.186e-01  1.909e-01
+epoch:  17      train:   valid:
+    loss [a.u.]              1.651e-01  4.037e-02
+epoch:  18      train:   valid:
+    loss [a.u.]              3.367e-02  2.650e-02
+epoch:  19      train:   valid:
+    loss [a.u.]              2.827e-02  2.298e-02
+epoch:  20      train:   valid:
+    loss [a.u.]              2.058e-02  2.337e-02
+epoch:  21      train:   valid:
+    loss [a.u.]              3.377e-01  4.438e-02
+epoch:  22      train:   valid:
+    loss [a.u.]              2.702e-01  9.270e-02
+epoch:  23      train:   valid:
+    loss [a.u.]              3.779e-02  2.202e-02
+epoch:  24      train:   valid:
+    loss [a.u.]              1.981e-02  1.897e-02
+epoch:  25      train:   valid:
+    loss [a.u.]              1.742e-02  1.863e-02
+epoch:  26      train:   valid:
+    loss [a.u.]              1.646e-02  1.410e-02
+epoch:  27      train:   valid:
+    loss [a.u.]              1.087e-01  2.432e-02
+epoch:  28      train:   valid:
+    loss [a.u.]              2.224e-02  1.428e-02
+epoch:  29      train:   valid:
+    loss [a.u.]              1.519e-02  1.174e-02
+epoch:  30      train:   valid:
+    loss [a.u.]              1.150e-02  1.088e-02
+epoch:  31      train:   valid:
+    loss [a.u.]              1.111e-02  1.205e-02
+epoch:  32      train:   valid:
+    loss [a.u.]              1.122e-02  1.012e-02
+epoch:  33      train:   valid:
+    loss [a.u.]              1.012e-02  9.483e-03
+epoch:  34      train:   valid:
+    loss [a.u.]              9.689e-03  1.087e-02
+epoch:  35      train:   valid:
+    loss [a.u.]              9.226e-03  8.653e-03
+epoch:  36      train:   valid:
+    loss [a.u.]              9.375e-03  9.062e-03
+epoch:  37      train:   valid:
+    loss [a.u.]              8.420e-03  8.575e-03
+epoch:  38      train:   valid:
+    loss [a.u.]              8.271e-03  1.041e-02
+epoch:  39      train:   valid:
+    loss [a.u.]              7.619e-03  1.128e-02
+epoch:  40      train:   valid:
+    loss [a.u.]              7.227e-03  6.955e-03
+epoch:  41      train:   valid:
+    loss [a.u.]              7.396e-03  7.429e-03
+epoch:  42      train:   valid:
+    loss [a.u.]              6.536e-03  6.802e-03
+epoch:  43      train:   valid:
+    loss [a.u.]              6.424e-03  6.199e-03
+epoch:  44      train:   valid:
+    loss [a.u.]              5.965e-03  6.137e-03
+epoch:  45      train:   valid:
+    loss [a.u.]              5.860e-03  5.819e-03
+epoch:  46      train:   valid:
+    loss [a.u.]              5.473e-03  5.503e-03
+epoch:  47      train:   valid:
+    loss [a.u.]              5.484e-03  5.515e-03
+epoch:  48      train:   valid:
+    loss [a.u.]              5.047e-03  5.380e-03
+epoch:  49      train:   valid:
+    loss [a.u.]              5.126e-03  5.057e-03
+epoch:  50      train:   valid:
+    loss [a.u.]              4.521e-03  4.952e-03
+epoch:  51      train:   valid:
+    loss [a.u.]              4.573e-03  4.826e-03
+epoch:  52      train:   valid:
+    loss [a.u.]              4.295e-03  6.146e-03
+epoch:  53      train:   valid:
+    loss [a.u.]              4.029e-03  4.261e-03
+epoch:  54      train:   valid:
+    loss [a.u.]              3.659e-03  4.881e-03
+epoch:  55      train:   valid:
+    loss [a.u.]              3.704e-03  3.237e-03
+epoch:  56      train:   valid:
+    loss [a.u.]              3.040e-03  3.175e-03
+epoch:  57      train:   valid:
+    loss [a.u.]              2.939e-03  3.701e-03
+epoch:  58      train:   valid:
+    loss [a.u.]              2.620e-03  2.846e-03
+epoch:  59      train:   valid:
+    loss [a.u.]              2.530e-03  3.196e-03
+epoch:  60      train:   valid:
+    loss [a.u.]              2.435e-03  2.902e-03
+epoch:  61      train:   valid:
+    loss [a.u.]              2.357e-03  3.980e-03
+epoch:  62      train:   valid:
+    loss [a.u.]              2.252e-03  2.405e-03
+epoch:  63      train:   valid:
+    loss [a.u.]              2.164e-03  2.357e-03
+epoch:  64      train:   valid:
+    loss [a.u.]              2.041e-03  2.433e-03
+epoch:  65      train:   valid:
+    loss [a.u.]              2.067e-03  2.146e-03
+epoch:  66      train:   valid:
+    loss [a.u.]              1.920e-03  2.043e-03
+epoch:  67      train:   valid:
+    loss [a.u.]              1.999e-03  2.054e-03
+epoch:  68      train:   valid:
+    loss [a.u.]              2.019e-03  2.127e-03
+epoch:  69      train:   valid:
+    loss [a.u.]              2.052e-03  2.317e-03
+epoch:  70      train:   valid:
+    loss [a.u.]              1.805e-03  1.890e-03
+epoch:  71      train:   valid:
+    loss [a.u.]              1.747e-03  1.864e-03
+epoch:  72      train:   valid:
+    loss [a.u.]              1.680e-03  2.145e-03
+epoch:  73      train:   valid:
+    loss [a.u.]              1.786e-03  1.817e-03
+epoch:  74      train:   valid:
+    loss [a.u.]              1.731e-03  2.013e-03
+epoch:  75      train:   valid:
+    loss [a.u.]              1.716e-03  1.695e-03
+epoch:  76      train:   valid:
+    loss [a.u.]              1.707e-03  1.662e-03
+epoch:  77      train:   valid:
+    loss [a.u.]              1.723e-03  1.674e-03
+epoch:  78      train:   valid:
+    loss [a.u.]              1.581e-03  2.184e-03
+epoch:  79      train:   valid:
+    loss [a.u.]              1.560e-03  1.642e-03
+epoch:  80      train:   valid:
+    loss [a.u.]              1.554e-03  1.818e-03
+epoch:  81      train:   valid:
+    loss [a.u.]              1.540e-03  1.558e-03
+epoch:  82      train:   valid:
+    loss [a.u.]              1.451e-03  1.573e-03
+epoch:  83      train:   valid:
+    loss [a.u.]              1.498e-03  1.553e-03
+epoch:  84      train:   valid:
+    loss [a.u.]              1.501e-03  1.584e-03
+epoch:  85      train:   valid:
+    loss [a.u.]              1.507e-03  1.515e-03
+epoch:  86      train:   valid:
+    loss [a.u.]              1.394e-03  1.415e-03
+epoch:  87      train:   valid:
+    loss [a.u.]              1.478e-03  1.459e-03
+epoch:  88      train:   valid:
+    loss [a.u.]              1.372e-03  1.395e-03
+epoch:  89      train:   valid:
+    loss [a.u.]              1.393e-03  1.535e-03
+epoch:  90      train:   valid:
+    loss [a.u.]              1.364e-03  1.354e-03
+epoch:  91      train:   valid:
+    loss [a.u.]              1.376e-03  1.432e-03
+epoch:  92      train:   valid:
+    loss [a.u.]              1.365e-03  1.362e-03
+epoch:  93      train:   valid:
+    loss [a.u.]              1.263e-03  1.528e-03
+epoch:  94      train:   valid:
+    loss [a.u.]              1.255e-03  1.465e-03
+epoch:  95      train:   valid:
+    loss [a.u.]              1.334e-03  1.364e-03
+epoch:  96      train:   valid:
+    loss [a.u.]              1.280e-03  1.686e-03
+epoch:  97      train:   valid:
+    loss [a.u.]              1.194e-03  1.324e-03
+epoch:  98      train:   valid:
+    loss [a.u.]              1.236e-03  1.196e-03
+epoch:  99      train:   valid:
+    loss [a.u.]              1.227e-03  1.291e-03
+epoch:  100      train:   valid:
+    loss [a.u.]              1.191e-03  1.209e-03
+epic 1
+Preparing batches
+..................
+epoch:   1      train:   valid:
+    loss [a.u.]              1.339e+02  5.335e+00
+epoch:   2      train:   valid:
+    loss [a.u.]              3.218e+01  8.137e+01
+epoch:   3      train:   valid:
+    loss [a.u.]              3.087e+01  1.964e+00
+epoch:   4      train:   valid:
+    loss [a.u.]              9.977e-01  1.587e+00
+epoch:   5      train:   valid:
+    loss [a.u.]              6.045e-01  8.253e-01
+epoch:   6      train:   valid:
+    loss [a.u.]              5.693e-01  4.722e-01

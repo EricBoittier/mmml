@@ -1,0 +1,21 @@
+args:
+data_dir = data
+model_dir = model
+num_epochs = 100
+learning_rate = 0.0001
+batch_size = 16
+esp_w = 10.0
+num_epics = 100
+restart = None
+random_seed = 0
+n_dcm = 3
+n_gpu = cs[cuda(id=0)]
+gpu
+[cuda(id=0)]
+ice(id=0)]
+R (20000, 60, 3)
+Z (20000, 60)
+N (20000,)
+mono (20000, 60, 1)
+esp (20000, 3163)
+n_grid (20000,)
