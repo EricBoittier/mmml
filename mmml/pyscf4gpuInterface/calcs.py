@@ -3,7 +3,7 @@ import pyscf
 from pyscf.hessian import thermo
 from pyscf import gto
 from pyscf.data import radii
-from gpu4pyscf.df import int3c2e
+# from gpu4pyscf.dft import int3c2e
 from gpu4pyscf.lib.cupy_helper import dist_matrix
 from gpu4pyscf.dft import rks
 from gpu4pyscf.properties import ir, shielding, polarizability
