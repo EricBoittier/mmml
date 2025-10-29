@@ -1,0 +1,29 @@
+MessagePassingModel(
+    # attributes
+    features = 16
+    max_degree = 2
+    num_iterations = 2
+    num_basis_functions = 16
+    cutoff = 4.0
+    max_atomic_number = 17
+    n_dcm = 2
+)
+data_dir = /pchem-data/meuwly/boittier/home/jaxeq/
+model_dir = model
+num_epochs = 10000
+learning_rate = 0.0001
+batch_size = 1
+esp_w = 10.0
+num_epics = 1
+n_feat = 16
+n_basis = 16
+max_degree = 2
+n_mp = 2
+restart = None
+random_seed = 29968
+n_dcm = 2
+n_gpu = 0
+data = qm9-esp40000-0.npz
+n_train = 64000
+n_valid = 8000
+type = dipole

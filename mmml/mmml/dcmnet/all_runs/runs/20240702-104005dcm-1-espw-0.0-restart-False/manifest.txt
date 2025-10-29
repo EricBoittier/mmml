@@ -1,0 +1,10 @@
+MessagePassingModel(
+    # attributes
+    features = 16
+    max_degree = 2
+    num_iterations = 3
+    num_basis_functions = 16
+    cutoff = 4.0
+    max_atomic_number = 17
+    n_dcm = 1
+)data_dir = datamodel_dir = modelnum_epochs = 100learning_rate = 0.0001batch_size = 16esp_w = 0.0num_epics = 100restart = Nonerandom_seed = 0n_dcm = 1n_gpu = 0

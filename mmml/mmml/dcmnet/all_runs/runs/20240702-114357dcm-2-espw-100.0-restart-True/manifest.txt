@@ -1,0 +1,21 @@
+MessagePassingModel(
+    # attributes
+    features = 16
+    max_degree = 2
+    num_iterations = 3
+    num_basis_functions = 16
+    cutoff = 4.0
+    max_atomic_number = 17
+    n_dcm = 2
+)
+data_dir = data
+model_dir = model
+num_epochs = 1000
+learning_rate = 0.0001
+batch_size = 16
+esp_w = 100.0
+num_epics = 100
+restart = checkpoints/dcm2-10.0/19-0.0004720478318631649-esp_params.pkl
+random_seed = 0
+n_dcm = 2
+n_gpu = 0

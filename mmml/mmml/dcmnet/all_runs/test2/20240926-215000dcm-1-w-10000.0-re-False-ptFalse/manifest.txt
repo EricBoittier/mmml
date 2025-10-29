@@ -1,0 +1,31 @@
+MessagePassingModel(
+    # attributes
+    features = 16
+    max_degree = 1
+    num_iterations = 2
+    num_basis_functions = 16
+    cutoff = 4.0
+    max_atomic_number = 17
+    n_dcm = 1
+    include_pseudotensors = False
+)
+data_dir = /pchem-data/meuwly/boittier/home/jaxeq/
+model_dir = model
+num_epochs = 5000
+learning_rate = 0.001
+batch_size = 1
+esp_w = 10000.0
+num_epics = 1
+n_feat = 16
+n_basis = 16
+max_degree = 1
+n_mp = 2
+restart = None
+random_seed = 19878
+n_dcm = 1
+n_gpu = 0
+data = /pchem-data/meuwly/boittier/home/jaxeq/data/qm9-esp-dip-40000-0.npz_/pchem-data/meuwly/boittier/home/jaxeq/data/qm9-esp-dip-40000-1.npz_/pchem-data/meuwly/boittier/home/jaxeq/data/qm9-esp-dip-40000-2.npz
+n_train = 78575
+n_valid = 2000
+type = dipole
+include_pseudotensors = False

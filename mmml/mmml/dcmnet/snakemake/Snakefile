@@ -1,0 +1,26 @@
+# Snakemake workflow for dcmnet training
+
+configfile: "config.yaml"
+
+rule all:
+    input:
+        expand("results/{{exp_name}}/done.txt", exp_name=config["experiments"])
+
+rule train_dcmnet:
+    input:
+        data_files=lambda wildcards: config["experiments"][wildcards.exp_name]["data_files"]
+    output:
+        done="results/{exp_name}/done.txt"
+    params:
+        log_dir=lambda wildcards: f"results/{wildcards.exp_name}/logs",
+        checkpoint_dir=lambda wildcards: f"results/{wildcards.exp_name}/checkpoints",
+        extra_args=lambda wildcards: config["experiments"][wildcards.exp_name].get("extra_args", "")
+    shell:
+        """
+        python dcmnet/main.py \
+            --data_files {{input.data_files}} \
+            --log_dir {{params.log_dir}} \
+            --checkpoint_dir {{params.checkpoint_dir}} \
+            {{params.extra_args}} && \
+        touch {{output.done}}
+        """ 
