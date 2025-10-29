@@ -99,8 +99,10 @@ def random_sample_esp(esp, esp_grid, n_sample, seed=42):
         # print(_shape)
         indices = np.random.choice(_shape, n_sample, replace=False)
         #indices = np.sort(indices) 
-        sampled_esp.append(jnp.take(esp[i], condmask[indices]))
-        sampled_grid.append(jnp.take(esp_grid[i], condmask[indices]))
+        sampled_esp.append(np.take(esp[i], condmask[indices]))
+        # print(sampled_esp[-1].shape)
+        sampled_grid.append(np.take(esp_grid[i], condmask[indices], axis=0))
+        # print(sampled_grid[-1].shape)
     
     return np.array(sampled_esp), np.array(sampled_grid)
 
