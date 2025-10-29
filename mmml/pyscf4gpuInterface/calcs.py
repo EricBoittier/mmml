@@ -330,7 +330,7 @@ def parse_args():
     parser.add_argument("--ir", default=False, action="store_true")
     parser.add_argument("--shielding", default=False, action="store_true")
     parser.add_argument("--polarizability", default=False, action="store_true")
-    parser.add_argument("--save_option", type=str, default="pkl")
+    parser.add_argument("--save_option", type=str, default="hdf5")
     args = parser.parse_args()
 
     for key, value in vars(args).items():
