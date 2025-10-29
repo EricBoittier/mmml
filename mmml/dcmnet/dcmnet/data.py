@@ -555,6 +555,7 @@ def prepare_batches(
                 elif k == "mono":
                     dict_[k] = v[perm].reshape(-1)
                 else:
+                    # print(k, v[perm].shape)
                     dict_[k] = v[perm]
 
         if len(dst_idx.shape) > 1:
