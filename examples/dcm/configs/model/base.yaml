@@ -1,0 +1,11 @@
+# @package _global_
+model:
+  name: MessagePassingModel
+  features: 128
+  max_degree: 2
+  num_iterations: 2
+  num_basis_functions: 32
+  cutoff: 8.0
+  n_dcm: 4
+  include_pseudotensors: false
+
