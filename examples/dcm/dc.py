@@ -25,7 +25,7 @@ from mmml.dcmnet.dcmnet.training import train_model, train_model_dipo
 
 key = jax.random.PRNGKey(0)
 
-
+seed = 42
 # %%
 NDCM = 4
 model = MessagePassingModel(
@@ -50,101 +50,102 @@ for k in data_loaded.keys():
     )
 
 n_sample = 1000  # Number of points to keep
-data_key = jax.random.PRNGKey(0)
+for i in range(10):
+    data_key = jax.random.PRNGKey(i*seed)
 
-train_data, valid_data = prepare_datasets(
-    data_key, num_train=1000, num_valid=100,
-    filename=[data_path_resolved],
-    clean=False, esp_mask=False,
-    natoms=18,
-    clip_esp=False,
-)
-
-
-
-
-def random_sample_esp(esp, esp_grid, n_sample, seed=42):
-    np.random.seed(seed)
-    sampled_esp = []
-    sampled_grid = []
-    
-    for i in range(len(esp)):
-        lessthan = esp[i] < 2
-        morethan = esp[i] > -2
-        not_0 = esp[i] != 0.0
-        condmask = lessthan*morethan*not_0
-        _shape = esp[i][condmask].shape[0]
-        # print(_shape)
-        indices = np.random.choice(_shape, n_sample, replace=False)
-        #indices = np.sort(indices) 
-        sampled_esp.append(np.take(esp[i], condmask[indices]))
-        # print(sampled_esp[-1].shape)
-        sampled_grid.append(np.take(esp_grid[i], condmask[indices], axis=0))
-        # print(sampled_grid[-1].shape)
-    
-    return np.array(sampled_esp), np.array(sampled_grid)
-
-train_data["esp"], train_data["esp_grid"] = random_sample_esp(
-    train_data["esp"] , train_data["esp_grid"], n_sample
-)
-valid_data["esp"], valid_data["esp_grid"] = random_sample_esp(
-    valid_data["esp"] , valid_data["esp_grid"], n_sample
-)
+    train_data, valid_data = prepare_datasets(
+        data_key, num_train=1000, num_valid=100,
+        filename=[data_path_resolved],
+        clean=False, esp_mask=False,
+        natoms=18,
+        clip_esp=False,
+    )
 
 
-valid_data["esp"] = 0.0016 * valid_data["esp"]
-train_data["esp"] = 0.0016 * train_data["esp"]
-
-train_data["vdw_surface"] = train_data["esp_grid"] 
-valid_data["vdw_surface"] = valid_data["esp_grid"] 
-train_data["n_grid"] = np.full(len(train_data["vdw_surface"]), n_sample)
-valid_data["n_grid"] = np.full(len(valid_data["vdw_surface"]), n_sample)
 
 
-train_data["vdw_surface"] = train_data["esp_grid"]
-valid_data["vdw_surface"] = valid_data["esp_grid"]
+    def random_sample_esp(esp, esp_grid, n_sample, seed=i*seed):
+        np.random.seed(seed)
+        sampled_esp = []
+        sampled_grid = []
+        
+        for i in range(len(esp)):
+            lessthan = esp[i] < 2
+            morethan = esp[i] > -2
+            not_0 = esp[i] != 0.0
+            condmask = lessthan*morethan*not_0
+            _shape = esp[i][condmask].shape[0]
+            # print(_shape)
+            indices = np.random.choice(_shape, n_sample, replace=False)
+            #indices = np.sort(indices) 
+            sampled_esp.append(np.take(esp[i], condmask[indices]))
+            # print(sampled_esp[-1].shape)
+            sampled_grid.append(np.take(esp_grid[i], condmask[indices], axis=0))
+            # print(sampled_grid[-1].shape)
+        
+        return np.array(sampled_esp), np.array(sampled_grid)
 
-Hs_train = train_data["Z"] == 1.0
-Os_train = train_data["Z"] == 8.0
-Hs_valid = valid_data["Z"] == 1.0
-Os_valid = valid_data["Z"] == 8.0
-
-train_data["mono"] = Hs_train * 0.1 + Os_train * -0.2
-valid_data["mono"] = Hs_valid * 0.1 + Os_valid * -0.2
-
-# Fix n_grid shape
-train_data["n_grid"] = np.full(train_data["Z"].shape[0], n_sample)
-valid_data["n_grid"] = np.full(valid_data["Z"].shape[0], n_sample)
-
-# Fix N shape  
-train_data["N"] = np.count_nonzero(train_data["Z"], axis=1)
-valid_data["N"] = np.count_nonzero(valid_data["Z"], axis=1)
-
-print("After fixes:")
-batch = {k: v[0:1] if len(v.shape) > 0 else v for k, v in train_data.items()}
-for key in ['mono', 'esp', 'vdw_surface', 'n_grid', 'N', 'R', 'Z']:
-    if key in batch:
-        print(f"{key}: {batch[key].shape}")
-
-# Also check the specific values
-print(f"\nmono values: {batch['mono']}")
-print(f"N values: {batch['N']}")
-print(f"n_grid values: {batch['n_grid']}")
-
-# %%
-esp_data = train_data["esp"]
+    train_data["esp"], train_data["esp_grid"] = random_sample_esp(
+        train_data["esp"] , train_data["esp_grid"], n_sample
+    )
+    valid_data["esp"], valid_data["esp_grid"] = random_sample_esp(
+        valid_data["esp"] , valid_data["esp_grid"], n_sample
+    )
 
 
-# %%
-params, valid_loss = train_model(
-    key=data_key, model=model,
-    writer=None,
-    train_data=train_data, valid_data=valid_data,
-    num_epochs=100, learning_rate=1e-4, batch_size=1,
-    restart_params=params if params is None else params,
-    ndcm=model.n_dcm, esp_w=1.0, chg_w=1.0, use_grad_clip=True, grad_clip_norm=1.0,
-)
-new_params = params.copy()
+    valid_data["esp"] = 0.0016 * valid_data["esp"]
+    train_data["esp"] = 0.0016 * train_data["esp"]
+
+    train_data["vdw_surface"] = train_data["esp_grid"] 
+    valid_data["vdw_surface"] = valid_data["esp_grid"] 
+    train_data["n_grid"] = np.full(len(train_data["vdw_surface"]), n_sample)
+    valid_data["n_grid"] = np.full(len(valid_data["vdw_surface"]), n_sample)
+
+
+    train_data["vdw_surface"] = train_data["esp_grid"]
+    valid_data["vdw_surface"] = valid_data["esp_grid"]
+
+    Hs_train = train_data["Z"] == 1.0
+    Os_train = train_data["Z"] == 8.0
+    Hs_valid = valid_data["Z"] == 1.0
+    Os_valid = valid_data["Z"] == 8.0
+
+    train_data["mono"] = Hs_train * 0.1 + Os_train * -0.2
+    valid_data["mono"] = Hs_valid * 0.1 + Os_valid * -0.2
+
+    # Fix n_grid shape
+    train_data["n_grid"] = np.full(train_data["Z"].shape[0], n_sample)
+    valid_data["n_grid"] = np.full(valid_data["Z"].shape[0], n_sample)
+
+    # Fix N shape  
+    train_data["N"] = np.count_nonzero(train_data["Z"], axis=1)
+    valid_data["N"] = np.count_nonzero(valid_data["Z"], axis=1)
+
+    print("After fixes:")
+    batch = {k: v[0:1] if len(v.shape) > 0 else v for k, v in train_data.items()}
+    for key in ['mono', 'esp', 'vdw_surface', 'n_grid', 'N', 'R', 'Z']:
+        if key in batch:
+            print(f"{key}: {batch[key].shape}")
+
+    # Also check the specific values
+    print(f"\nmono values: {batch['mono']}")
+    print(f"N values: {batch['N']}")
+    print(f"n_grid values: {batch['n_grid']}")
+
+    # %%
+    esp_data = train_data["esp"]
+
+
+    # %%
+    params, valid_loss = train_model(
+        key=data_key, model=model,
+        writer=None,
+        train_data=train_data, valid_data=valid_data,
+        num_epochs=10, learning_rate=1e-4, batch_size=1,
+        restart_params=params if params is None else params,
+        ndcm=model.n_dcm, esp_w=1.0*i, chg_w=1.0/(i+1), use_grad_clip=True, grad_clip_norm=10.0,
+    )
+    new_params = params.copy()
 
 from mmml.dcmnet.dcmnet.analysis import dcmnet_analysis, prepare_batch
 from mmml.dcmnet.dcmnet.data import prepare_batches
