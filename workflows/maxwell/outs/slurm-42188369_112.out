@@ -1,0 +1,35 @@
+sgd03
+/usr/bin/python
+/scicore/soft/easybuild/apps/Python/3.12.3-GCCcore-13.3.0/bin/python
+/scicore/home/meuwly/boitti0000/mmml/setup/charmm
+tar (child): --directory: Cannot open: No such file or directory
+tar (child): Error is not recoverable: exiting now
+tar: Child returned status 2
+tar: Error is not recoverable: exiting now
+./configure: line 561: ./bootstrap: No such file or directory
+compiling
+make: *** No targets specified and no makefile found.  Stop.
+export CHARMM_HOME=/scicore/home/meuwly/boitti0000/mmml/setup/charmm
+export CHARMM_LIB_DIR=/scicore/home/meuwly/boitti0000/mmml/setup/charmm
+Defaulting to user installation because normal site-packages is not writeable
+Looking in indexes: https://nexus-int.scicore.unibas.ch/repository/pypi-proxy/simple
+Requirement already satisfied: uv in /scicore/home/meuwly/boitti0000/.local/lib/python3.12/site-packages (0.6.7)
+
+[notice] A new release of pip is available: 24.0 -> 25.1
+[notice] To update, run: pip install --upgrade pip
+Resolved 230 packages in 1ms
+Audited 222 packages in 0.36ms
+venv activated
+venv path: /scicore/home/meuwly/boitti0000/mmml/.venv
+venv python path: /scicore/home/meuwly/boitti0000/mmml/.venv/bin/python
+UV_ENV_FILE: /scicore/home/meuwly/boitti0000/mmml/CHARMMSETUP
+Setup complete
+[PosixPath('/scicore/home/meuwly/boitti0000/data/water_ccf12avtzf12_11100.npz'), PosixPath('/scicore/home/meuwly/boitti0000/data/water_dimer_vpt2.npz'), PosixPath('/scicore/home/meuwly/boitti0000/data/water_ccf12avtzf12_12000.npz')]
+/scicore/home/meuwly/boitti0000/data/water_ccf12avtzf12_11100.npz
+NpzFile '/scicore/home/meuwly/boitti0000/data/water_ccf12avtzf12_11100.npz' with keys: R, Z, N, E
+  0%|          | 0/100 [00:00<?, ?it/s]  0%|          | 0/100 [00:00<?, ?it/s]
+Traceback (most recent call last):
+  File "/scicore/home/meuwly/boitti0000/mmml/workflows/maxwell/test2.py", line 254, in <module>
+    Natoms = water_data_silvan["N"][i]
+             ~~~~~~~~~~~~~~~~~~~~~~^^^
+IndexError: index 11200 is out of bounds for axis 0 with size 11100
