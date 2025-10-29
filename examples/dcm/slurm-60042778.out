@@ -1,0 +1,9 @@
+/scicore/home/meuwly/boitti0000/mmml/.venv/bin/python
+error: Failed to generate package metadata for `mmml @ editable+.`
+  Caused by: Failed to resolve requirements from `build-system.requires`
+  Caused by: No solution found when resolving: `setuptools>=61.0`, `wheel`, `versioningit~=2.0`
+  Caused by: Failed to fetch: `https://pypi.org/simple/wheel/`
+  Caused by: Request failed after 3 retries
+  Caused by: error sending request for url (https://pypi.org/simple/wheel/)
+  Caused by: client error (Connect)
+  Caused by: invalid peer certificate: UnknownIssuer
