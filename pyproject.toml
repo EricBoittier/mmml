@@ -85,7 +85,7 @@ dependencies = [
     "kiwisolver",
     "lovely-jax",
     "markdown-it-py",
-    "matplotlib",
+    "matplotlib>=3.5.0",
     "matplotlib-inline",
     "mda-xdrlib",
     "mdanalysis",
@@ -112,7 +112,7 @@ dependencies = [
     "packaging",
     "pandas",
     "parso",
-    "patchworklib",
+    "patchworklib>=0.6.0",
     "patsy",
     "pexpect",
     "pillow",
@@ -169,6 +169,10 @@ dependencies = [
     "pyxtal",
     "polars",
     "sphynx>=0.0.3",
+    "hydra-core>=1.3.0",
+    "omegaconf>=2.3.0",
+    "hydra-optuna-sweeper>=1.2.0",
+    "wandb>=0.15.0",
 ]
 
 [tool.uv.sources]
