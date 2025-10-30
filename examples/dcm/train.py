@@ -143,11 +143,12 @@ def main(cfg: DictConfig) -> float:
             })
         
         # Evaluate on first training example
-        batch = prepare_batch_for_analysis(train_data, index=0, natoms=cfg.data.natoms)
-        output = dcmnet_analysis(params, model, batch, cfg.data.natoms)
+        for i in range(0, 100, 10):
+            batch = prepare_batch_for_analysis(train_data, index=i, natoms=cfg.data.natoms)
+            output = dcmnet_analysis(params, model, batch, cfg.data.natoms)
         
-        log.info(f"  RMSE: {output['rmse_model']:.6f}")
-        log.info(f"  RMSE (masked): {output['rmse_model_masked']:.6f}")
+            log.info(f"  RMSE: {output['rmse_model']:.6f}")
+            log.info(f"  RMSE (masked): {output['rmse_model_masked']:.6f}")
         
         if wandb is not None:
             wandb.log({
