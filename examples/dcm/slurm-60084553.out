@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "/scicore/home/meuwly/boitti0000/mmml/examples/dcm/train.py", line 6, in <module>
+    import jax
+ModuleNotFoundError: No module named 'jax'
