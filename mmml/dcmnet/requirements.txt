@@ -3,5 +3,6 @@ patchworklib
 ase
 scipy
 rdkit
+lovely_jax
 #tqdm
 dcmnet @ git+https://github.com/EricBoittier/jaxeq@main

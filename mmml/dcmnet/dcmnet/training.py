@@ -650,7 +650,7 @@ def eval_step_dipo(model_apply, batch, batch_size, params, esp_w, ndcm):
         n_dcm=ndcm,
     )
     loss = esp_l + mono_l + dipo_l
-    return loss, esp_l, mono_l, dipo_l
+    return loss, esp_l, mono_l, dipo_l, mono, dipo
 
 
 def train_model_dipo(
@@ -739,8 +739,11 @@ def train_model_dipo(
         train_esp_l = 0.0
         train_mono_l = 0.0
         train_dipo_l = 0.0
+        train_mono_preds = []
+        train_mono_targets = []
+        
         for i, batch in enumerate(train_batches):
-            params, opt_state, loss, esp_l, mono_l, dipo_l = train_step_dipo(
+            params, opt_state, loss, esp_l, mono_l, dipo_l, mono, dipo = train_step_dipo(
                 model_apply=model.apply,
                 optimizer_update=optimizer.update,
                 batch=batch,
@@ -754,13 +757,41 @@ def train_model_dipo(
             train_esp_l += (esp_l - train_esp_l) / (i + 1)
             train_mono_l += (mono_l - train_mono_l) / (i + 1)
             train_dipo_l += (dipo_l - train_dipo_l) / (i + 1)
+            
+            # Collect predictions for statistics
+            train_mono_preds.append(mono)
+            train_mono_targets.append(batch["mono"])
+            
         del train_batches
+        
+        # Concatenate all training predictions and targets
+        train_mono_preds = jnp.concatenate(train_mono_preds, axis=0)
+        train_mono_targets = jnp.concatenate(train_mono_targets, axis=0)
+        
+        # Compute training statistics
+        train_mono_stats = compute_statistics(train_mono_preds.sum(axis=-1), train_mono_targets)
+        train_stats = {
+            'loss': float(train_loss),
+            'esp_loss': float(train_esp_l),
+            'mono_loss': float(train_mono_l),
+            'dipo_loss': float(train_dipo_l),
+            'mono_mae': train_mono_stats['mae'],
+            'mono_rmse': train_mono_stats['rmse'],
+            'mono_mean': train_mono_stats['mean'],
+            'mono_std': train_mono_stats['std'],
+            'mono_min': train_mono_stats['min'],
+            'mono_max': train_mono_stats['max'],
+        }
+        
         valid_loss = 0.0
         valid_esp_l = 0.0
         valid_mono_l = 0.0
         valid_dipo_l = 0.0
+        valid_mono_preds = []
+        valid_mono_targets = []
+        
         for i, batch in enumerate(valid_batches):
-            loss, esp_l, mono_l, dipo_l = eval_step_dipo(
+            loss, esp_l, mono_l, dipo_l, mono, dipo = eval_step_dipo(
                 model_apply=model.apply,
                 batch=batch,
                 batch_size=batch_size,
@@ -772,6 +803,32 @@ def train_model_dipo(
             valid_esp_l += (esp_l - valid_esp_l) / (i + 1)
             valid_mono_l += (mono_l - valid_mono_l) / (i + 1)
             valid_dipo_l += (dipo_l - valid_dipo_l) / (i + 1)
+            
+            # Collect predictions for statistics
+            valid_mono_preds.append(mono)
+            valid_mono_targets.append(batch["mono"])
+        
+        # Concatenate all validation predictions and targets
+        valid_mono_preds = jnp.concatenate(valid_mono_preds, axis=0)
+        valid_mono_targets = jnp.concatenate(valid_mono_targets, axis=0)
+        
+        # Compute validation statistics
+        valid_mono_stats = compute_statistics(valid_mono_preds.sum(axis=-1), valid_mono_targets)
+        valid_stats = {
+            'loss': float(valid_loss),
+            'esp_loss': float(valid_esp_l),
+            'mono_loss': float(valid_mono_l),
+            'dipo_loss': float(valid_dipo_l),
+            'mono_mae': valid_mono_stats['mae'],
+            'mono_rmse': valid_mono_stats['rmse'],
+            'mono_mean': valid_mono_stats['mean'],
+            'mono_std': valid_mono_stats['std'],
+            'mono_min': valid_mono_stats['min'],
+            'mono_max': valid_mono_stats['max'],
+        }
+        
+        # Print detailed statistics
+        print_statistics_table(train_stats, valid_stats, epoch)
         
         if writer is not None:
             writer.add_scalar("Loss/train", train_loss, epoch)
@@ -782,7 +839,17 @@ def train_model_dipo(
             writer.add_scalar("mono_l/valid", train_mono_l, epoch)
             writer.add_scalar("dipo_l/train", train_dipo_l, epoch)
             writer.add_scalar("dipo_l/valid", valid_dipo_l, epoch)
-            writer.add_scalar("Loss/bestValid", best, epoch)     
+            writer.add_scalar("Loss/bestValid", best, epoch)
+            
+            # Log monopole statistics
+            writer.add_scalar("Monopole/train_mae", train_stats['mono_mae'], epoch)
+            writer.add_scalar("Monopole/valid_mae", valid_stats['mono_mae'], epoch)
+            writer.add_scalar("Monopole/train_rmse", train_stats['mono_rmse'], epoch)
+            writer.add_scalar("Monopole/valid_rmse", valid_stats['mono_rmse'], epoch)
+            writer.add_scalar("Monopole/train_mean", train_stats['mono_mean'], epoch)
+            writer.add_scalar("Monopole/valid_mean", valid_stats['mono_mean'], epoch)
+            writer.add_scalar("Monopole/train_std", train_stats['mono_std'], epoch)
+            writer.add_scalar("Monopole/valid_std", valid_stats['mono_std'], epoch)     
         
         if valid_loss < best:
             best = valid_loss
