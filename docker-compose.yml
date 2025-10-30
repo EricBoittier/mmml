@@ -1,0 +1,81 @@
+version: '3.8'
+
+services:
+  # CPU version of mmml
+  mmml-cpu:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime-cpu
+    image: mmml:cpu
+    container_name: mmml-cpu
+    volumes:
+      - .:/workspace/mmml
+      - mmml-cpu-cache:/root/.cache
+    working_dir: /workspace/mmml
+    stdin_open: true
+    tty: true
+    command: bash
+
+  # GPU version of mmml
+  mmml-gpu:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime-gpu
+      args:
+        CUDA_VERSION: "12.2.0"
+    image: mmml:gpu
+    container_name: mmml-gpu
+    volumes:
+      - .:/workspace/mmml
+      - mmml-gpu-cache:/root/.cache
+    working_dir: /workspace/mmml
+    stdin_open: true
+    tty: true
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - CUDA_VISIBLE_DEVICES=0
+    command: bash
+
+  # Development environment with Jupyter
+  mmml-jupyter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime-gpu
+      args:
+        CUDA_VERSION: "12.2.0"
+    image: mmml:jupyter
+    container_name: mmml-jupyter
+    volumes:
+      - .:/workspace/mmml
+      - mmml-jupyter-cache:/root/.cache
+    working_dir: /workspace/mmml
+    ports:
+      - "8888:8888"
+    stdin_open: true
+    tty: true
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    command: bash -c "uv run jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root"
+
+volumes:
+  mmml-cpu-cache:
+  mmml-gpu-cache:
+  mmml-jupyter-cache:
+

@@ -1,19 +1,80 @@
-.git
-.gitmodules
-.github
+# Python
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
+*.so
+.Python
 build/
+develop-eggs/
 dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
 *.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
 .venv/
-.env
-outputs/
-notebooks/
-tests/.pytest_cache/
-uv_cache/
-.DS_Store
-.idea/
+venv/
+ENV/
+env/
+
+# IDEs
 .vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentation
+docs/
+docs_build/
+*.md
+!README.md
+
+# Tests
+tests/
+pytest.ini
+.coverage
+htmlcov/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Notebooks
+notebooks/
+*.ipynb
+.ipynb_checkpoints/
+
+# Data and outputs
+*.npz
+*.pkl
+*.h5
+*.hdf5
+outputs/
+wandb/
+*.log
+
+# Lock files (included explicitly in Dockerfile)
+# uv.lock is needed, so we don't ignore it
+
+# Misc
+*.sh
+!setup/install.sh
+workflows/
+devtools/
