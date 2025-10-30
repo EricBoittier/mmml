@@ -89,7 +89,11 @@ class MolproConverter:
         """
         try:
             # Parse XML using our excellent parser
-            molpro_data = read_molpro_xml(str(xml_file), use_last_geometry=self.use_last_geometry)
+            molpro_data = read_molpro_xml(
+                str(xml_file), 
+                use_last_geometry=self.use_last_geometry,
+                load_cubes=True  # Always load cubes if available
+            )
             
             # Convert to NPZ format
             npz_data = self._molpro_to_npz(molpro_data, source_file=str(xml_file))
