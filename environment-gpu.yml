@@ -44,7 +44,9 @@ dependencies:
       - jaxlib[cuda12]>=0.4.20
       - cupy-cuda12x>=13.0.0
       - cutensor-cu12>=2.0.0
-      
+      - e3x
+      - plotnine
+      - patchworklib
       # JAX ecosystem
       - dm-haiku
       - flax
