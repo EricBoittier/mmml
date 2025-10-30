@@ -168,10 +168,15 @@ def prepare_multiple_datasets(
         dataN = np.concatenate([dataset["N"] for dataset in datasets])[not_failed]
         data.append(dataN.reshape(-1, 1))
         keys.append("N")
+    # Handle both 'mono' and 'Q' (they're the same thing - monopole charges)
     if "mono" in datasets[0].keys():
         dataMono = np.concatenate([dataset["mono"] for dataset in datasets])[not_failed]
         data.append(dataMono.reshape(-1, natoms))
         keys.append("mono")
+    elif "Q" in datasets[0].keys():
+        dataMono = np.concatenate([dataset["Q"] for dataset in datasets])[not_failed]
+        data.append(dataMono.reshape(-1, natoms))
+        keys.append("mono")  # Normalize to 'mono' for consistency
     if "esp" in datasets[0].keys():
         if clip_esp:
             dataEsp = np.concatenate([dataset["esp"][:1000] for dataset in datasets])[
@@ -202,6 +207,19 @@ def prepare_multiple_datasets(
         ]
         data.append(dataNgrid)
         keys.append("n_grid")
+    else:
+        # If n_grid is not present, compute it from esp shape
+        # n_grid should be the number of ESP grid points per molecule
+        if "esp" in keys:
+            esp_idx = keys.index("esp")
+            esp_data = data[esp_idx]
+            if len(esp_data.shape) == 2:
+                n_grid_values = np.array([esp_data.shape[1]] * esp_data.shape[0])
+            else:
+                # For ragged arrays, compute per molecule
+                n_grid_values = np.array([len(esp) for esp in esp_data])
+            data.append(n_grid_values.reshape(-1, 1))
+            keys.append("n_grid")
     if "D" in datasets[0].keys():
         dataD = np.concatenate([dataset["D"] for dataset in datasets])[not_failed]
         print("D", dataD.shape)
