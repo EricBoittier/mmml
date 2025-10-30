@@ -7,7 +7,7 @@ import optax
 from jax.random import randint
 
 from .electrostatics import batched_electrostatic_potential, calc_esp
-from .modules import NATOMS
+
 from .utils import reshape_dipole
 
 
@@ -36,7 +36,7 @@ def pred_dipole(dcm, com, q):
     # return jnp.linalg.norm(dipole_out)* 4.80320
 
 
-@functools.partial(jax.jit, static_argnames=("batch_size", "esp_w", "chg_w", "n_dcm"))
+@functools.partial(jax.jit, static_argnames=("batch_size", "esp_w", "chg_w", "n_dcm", "n_atoms"))
 def esp_mono_loss(
     dipo_prediction,
     mono_prediction,
