@@ -3,7 +3,7 @@
 
 Outputs:
   1) energies_forces_dipoles.npz: contains E, F, dipoles (D/Dxyz) and standard R/Z/N
-  2) grids_esp.npz: contains subsampled esp and vdw_grid (XYZ) per-sample, plus R/Z/N
+  2) grids_esp.npz: contains subsampled esp and vdw_grid (XYZ) per-sample, plus R/Z/N, Dxyz, and Q (if present)
 
 Grid handling:
   - By default, downsample to NGRID points per sample (default 3000) after
@@ -222,6 +222,7 @@ def main():
     F = data.get("F", None)
     D = data.get("D", None)
     Dxyz = data.get("Dxyz", None)
+    Q = data.get("Q", None)
     R = data.get("R", None)
     Z = data.get("Z", None)
     N = data.get("N", None)
@@ -339,6 +340,13 @@ def main():
     # Grids + ESP (subsampled)
     grids_out["esp"] = esp_out
     grids_out["vdw_grid"] = grid_out
+    # Include dipoles and charges in the grids file as requested
+    if Dxyz is not None:
+        grids_out["Dxyz"] = Dxyz
+    elif D is not None:
+        grids_out["D"] = D
+    if Q is not None:
+        grids_out["Q"] = Q
     # Also keep grid metadata for provenance (original full-grid info)
     grids_out["grid_dims"] = cp_dims_arr
     grids_out["grid_origin"] = cp_origin_arr
