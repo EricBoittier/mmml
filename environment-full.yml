@@ -1,0 +1,136 @@
+# Full conda environment for MMML with all optional dependencies (GPU + quantum chemistry + ML + viz)
+name: mmml-full
+channels:
+  - conda-forge
+  - nvidia
+  - defaults
+dependencies:
+  - python>=3.11,<3.13
+  
+  # CUDA toolkit
+  - cuda-toolkit=12
+  - cudnn>=8
+  
+  # Core scientific computing
+  - numpy
+  - scipy
+  - pandas
+  - matplotlib>=3.5
+  
+  # Quantum chemistry
+  - libxc
+  - openblas
+  - liblapack
+  
+  # Chemistry and visualization
+  - ase
+  - pyyaml
+  - rdkit
+  
+  # Machine learning
+  - pytorch
+  - scikit-learn
+  - scikit-image
+  
+  # Visualization
+  - seaborn
+  - plotly
+  
+  # Molecular dynamics
+  - mdanalysis
+  
+  # Jupyter and notebooks
+  - ipykernel
+  - ipython
+  - jupyter
+  - nbformat
+  
+  # Utilities
+  - tqdm
+  - rich-cli
+  - pip
+  - git
+  
+  # Build tools
+  - gfortran
+  - cmake
+  - make
+  
+  # PIP-only dependencies
+  - pip:
+      # JAX with CUDA support (must be installed from specific index)
+      - --find-links https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+      - jax[cuda12]>=0.4.20
+      - jaxlib[cuda12]>=0.4.20
+      - cupy-cuda12x>=13.0.0
+      - cutensor-cu12>=2.0.0
+      
+      # JAX ecosystem
+      - dm-haiku
+      - flax
+      - optax
+      - chex
+      - jaxtyping
+      - jmp
+      - jraph
+      - orbax-checkpoint
+      - jax-md @ git+https://github.com/google/jax-md.git@05221c551e71f1b5f64458c0e3533452c22efec0
+      
+      # ML utilities
+      - ml-dtypes
+      - ml-collections
+      - einops
+      - e3nn-jax
+      - e3x
+      - lovely-jax
+      - torchani
+      
+      # Quantum chemistry
+      - pyscf>=2.8.0
+      - basis-set-exchange>=0.11
+      - pyscf-dispersion>=1.3.0
+      - geometric>=1.1.0
+      - dscribe
+      - gpu4pyscf-cuda12x
+      - gpu4pyscf-libxc-cuda12x
+      
+      # Visualization
+      - scienceplots
+      - cmcrameri
+      - patchworklib>=0.6.0
+      - py3dmol
+      - ipyvolume
+      - pyvolume
+      - plotnine
+      
+      # Molecular dynamics
+      - mda-xdrlib
+      - mmtf-python
+      - griddataformats
+      - mrcfile
+      
+      # Chemistry tools
+      - chemcoord
+      - pubchempy
+      - pyxtal
+      - molzip
+      - sphynx>=0.0.3
+      
+      # Data processing
+      - polars
+      - pyarrow
+      - fastparquet
+      
+      # Experiment tracking
+      - wandb>=0.15.0
+      - hydra-core>=1.3.0
+      - omegaconf>=2.3.0
+      - hydra-optuna-sweeper>=1.2.0
+      
+      # Utilities
+      - tabulate
+      - typing-extensions
+      
+      # Install mmml in editable mode (run this from the repo root)
+      - -e .
+

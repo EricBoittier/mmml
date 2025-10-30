@@ -2,8 +2,6 @@
 requires = ["setuptools>=61.0", "wheel", "versioningit~=2.0"]
 build-backend = "setuptools.build_meta"
 
-# Self-descriptive entries which should always be present
-# https://packaging.python.org/en/latest/specifications/declaring-project-metadata/
 [project]
 name = "mmml"
 description = "Molecular Mechanics and Machine Learned Force Fields"
@@ -13,215 +11,180 @@ authors = [
     { name = "Eric Boittier", email = "eric.boittier@icloud.com" }
 ]
 license = { text = "MIT" }
-# See https://pypi.org/classifiers/
 classifiers = [
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
 ]
 requires-python = ">=3.11,<3.13"
-# Declare any run-time dependencies that should be installed with the package.
+
+# Core dependencies - minimal set required for basic functionality
 dependencies = [
-    "molzip",
-    "pytest",
-    "jsonpickle",
-    "absl-py",
-    "asciichartpy",
-    "ase",
-    "asttokens",
-    "scienceplots",
-    "cmcrameri",
-    "attrs",
-    "chex",
-    "chemcoord",
-    "comm",
-    "contextlib2",
-    "contourpy",
-    "cycler",
-    "Cython",
-    "dataclasses",
-    "debugpy",
-    "decorator",
-    "dill",
-    "dm-haiku",
-    "dscribe",
-    "e3nn-jax",
-    "e3x",
-    "einops",
-    "etils",
-    "executing",
-    "fasteners",
-    "fastparquet",
-    "flax",
-    "flexcache",
-    "flexparser",
-    "fonttools",
-    "frozendict",
-    "fsspec",
-    "griddataformats",
-    "cutensor-cu12==2.2.0",
-    "gpu4pyscf-libxc-cuda12x",
-    "cupy-cuda12x==13.4.1",
-    "pyscf==2.8.0",
-    "basis-set-exchange==0.11",
-    "pyscf-dispersion==1.3.0",
-    "geometric==1.1.0",
-    "gpu4pyscf-cuda12x",
-    "humanize",
-    "importlib-resources",
-    "ipykernel",
-    "ipython",
-    "ipython_genutils",
-    "ipyvolume",
-    "jaxtyping",
-    "jax[cuda12]",
-    "jax-md",
-    "jaxlib",
-    "jedi",
-    "jmp",
-    "joblib",
-    "jraph",
-    "jupyter-client",
-    "jupyter-core",
-    "kiwisolver",
-    "lovely-jax",
-    "markdown-it-py",
+    # Core scientific computing
+    "numpy",
+    "scipy",
+    "pandas",
     "matplotlib>=3.5.0",
-    "matplotlib-inline",
-    "mda-xdrlib",
-    "mdanalysis",
-    "mdurl",
-    "mizani",
+    
+    # JAX ecosystem (CPU version by default)
+    "jax",
+    "jaxlib",
+    "jax-md",
+    "dm-haiku",
+    "flax",
+    "optax",
+    "chex",
+    "jaxtyping",
+    "jmp",
+    "jraph",
+    "orbax-checkpoint",
+    
+    # ML utilities
     "ml-dtypes",
     "ml-collections",
-    "mmtf-python",
-    "more-itertools",
-    "mpmath",
-    "mrcfile",
-    "msgpack",
-    "nbformat",
-    "nest-asyncio",
-    "networkx",
-    "numpy",
-    #"openff-toolkit",
-    #"openmm[cuda12]",
-    #"openmm-cuda-12",
-    #"openmmml",
-    "opt-einsum",
-    "optax",
-    "orbax-checkpoint",
-    "packaging",
-    "pandas",
-    "parso",
-    "patchworklib>=0.6.0",
-    "patsy",
-    "pexpect",
-    "pillow",
-    "pint",
-    "platformdirs",
-    "plotly",
-    "plotnine",
-    "protobuf",
-    "psutil",
-    "ptyprocess",
-    "pubchempy",
-    "pure-eval",
-    "py3dmol",
-    "pyscf",
-    "pyarrow",
-    "pygments",
-    "pyparsing",
-    "python-dateutil",
-    "pytz",
-    "pyvolume",
+    "einops",
+    
+    # Chemistry core
+    "ase",
     "pyyaml",
-    "pyzmq",
-    #"rdkit",
-    "rich",
-    "scikit-image",
-    "scikit-learn",
-    "scipy",
-    "seaborn",
-    "setuptools",
-    "six",
-    "stack-data",
-    "statsmodels",
-    "sympy",
-    "tabulate",
-    #"tensorstore",
-    #"tensorflow",
-    "threadpoolctl",
-    "toml",
-    "toolz",
-    "topsearch",
-    "torch",
-    "torchani",
-    "tornado",
-    "tqdm",
-    "traitlets",
-    "typeguard",
-    "typing-extensions",
-    "tzdata",
-    "wcwidth",
-    "wheel",
-    "zipp",
-    "pycharmm",
-    #"xtb_ase",
-    "pyxtal",
-    "polars",
-    "sphynx>=0.0.3",
+    
+    # Hydra configuration
     "hydra-core>=1.3.0",
     "omegaconf>=2.3.0",
-    "hydra-optuna-sweeper>=1.2.0",
+    
+    # Utilities
+    "tqdm",
+    "rich",
+    "tabulate",
+    "typing-extensions",
+    
+    # CHARMM interface (local)
+    "pycharmm",
+]
+
+[project.optional-dependencies]
+# GPU/CUDA support (CUDA 12)
+# Note: JAX with CUDA requires installation from specific index
+# Install with: pip install -e ".[gpu]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+gpu = [
+    "jax[cuda12]>=0.4.20",
+    "jaxlib[cuda12]>=0.4.20",
+    "cupy-cuda12x>=13.0.0",
+    "cutensor-cu12>=2.0.0",
+]
+
+# Quantum chemistry calculations
+quantum = [
+    "pyscf>=2.8.0",
+    "basis-set-exchange>=0.11",
+    "pyscf-dispersion>=1.3.0",
+    "geometric>=1.1.0",
+    "dscribe",
+]
+
+# GPU-accelerated quantum chemistry
+quantum-gpu = [
+    "mmml[quantum]",
+    "gpu4pyscf-cuda12x",
+    "gpu4pyscf-libxc-cuda12x",
+]
+
+# Machine learning extras
+ml = [
+    "torch",
+    "torchani",
+    "e3nn-jax",
+    "e3x",
+    "lovely-jax",
+]
+
+# Visualization and plotting
+viz = [
+    "plotly",
+    "plotnine",
+    "seaborn",
+    "scienceplots",
+    "cmcrameri",
+    "patchworklib>=0.6.0",
+    "py3dmol",
+    "ipyvolume",
+    "pyvolume",
+]
+
+# Molecular dynamics and analysis
+md = [
+    "mdanalysis",
+    "mda-xdrlib",
+    "mmtf-python",
+    "griddataformats",
+    "mrcfile",
+]
+
+# Chemistry tools
+chem = [
+    "chemcoord",
+    "pubchempy",
+    "pyxtal",
+    "molzip",
+    "sphynx>=0.0.3",
+]
+
+# Data processing
+data = [
+    "polars",
+    "pyarrow",
+    "fastparquet",
+]
+
+# Jupyter notebook support
+notebooks = [
+    "ipykernel",
+    "ipython",
+    "jupyter-client",
+    "jupyter-core",
+    "nbformat",
+]
+
+# Experiment tracking and optimization
+experiments = [
     "wandb>=0.15.0",
+    "hydra-optuna-sweeper>=1.2.0",
+]
+
+# Development and testing
+dev = [
+    "pytest>=6.1.2",
+    "ipykernel>=6.30.1",
+]
+
+# Full installation with all optional dependencies
+all = [
+    "mmml[gpu,quantum,quantum-gpu,ml,viz,md,chem,data,notebooks,experiments]",
+]
+
+# CPU-only full installation (no GPU dependencies)
+all-cpu = [
+    "mmml[quantum,ml,viz,md,chem,data,notebooks,experiments]",
 ]
 
 [tool.uv.sources]
-#xtb_ase = { git = "https://github.com/Quantum-Accelerators/xtb_ase.git"}
 jax-md = { git = "https://github.com/google/jax-md.git", rev = "05221c551e71f1b5f64458c0e3533452c22efec0" }
-
 pycharmm = { path = "setup/charmm/tool/pycharmm", editable = true }
 
-
-# Update the urls once the hosting is set up.
-#[project.urls]
-#"Source" = "https://github.com/<username>/mmml/"
-#"Documentation" = "https://mmml.readthedocs.io/"
-
-[project.optional-dependencies]
-test = [
-  "pytest>=6.1.2",
-]
+[[tool.uv.index]]
+name = "jax-cuda"
+url = "https://storage.googleapis.com/jax-releases/jax_cuda_releases.html"
+explicit = true
 
 [tool.setuptools]
-# This subkey is a beta stage development and keys may change in the future, see https://setuptools.pypa.io/en/latest/userguide/pyproject_config.html for more details
-#
-# As of version 0.971, mypy does not support type checking of installed zipped
-# packages (because it does not actually import the Python packages).
-# We declare the package not-zip-safe so that our type hints are also available
-# when checking client code that uses our (installed) package.
-# Ref:
-# https://mypy.readthedocs.io/en/stable/installed_packages.html?highlight=zip#using-installed-packages-with-mypy-pep-561
 zip-safe = false
-# Let setuptools discover the package in the current directory,
-# but be explicit about non-Python files.
-# See also:
-#   https://setuptools.pypa.io/en/latest/userguide/pyproject_config.html#setuptools-specific-configuration
-# Note that behavior is currently evolving with respect to how to interpret the
-# "data" and "tests" subdirectories. As of setuptools 63, both are automatically
-# included if namespaces is true (default), even if the package is named explicitly
-# (instead of using 'find'). With 'find', the 'tests' subpackage is discovered
-# recursively because of its __init__.py file, but the data subdirectory is excluded
-# with include-package-data = false and namespaces = false.
 include-package-data = false
+
 [tool.setuptools.packages.find]
 namespaces = false
 where = ["."]
 
-# Ref https://setuptools.pypa.io/en/latest/userguide/datafiles.html#package-data
 [tool.setuptools.package-data]
-mmml = [
-    "py.typed"
-]
+mmml = ["py.typed"]
 
 [tool.versioningit]
 default-version = "1+unknown"
@@ -232,16 +195,9 @@ dirty = "{base_version}+{distance}.{vcs}{rev}.dirty"
 distance-dirty = "{base_version}+{distance}.{vcs}{rev}.dirty"
 
 [tool.versioningit.vcs]
-# The method key:
-method = "git"  # <- The method name
-# Parameters to pass to the method:
+method = "git"
 match = ["*"]
 default-tag = "1.0.0"
 
 [tool.versioningit.write]
 file = "mmml/_version.py"
-
-[dependency-groups]
-dev = [
-    "ipykernel>=6.30.1",
-]

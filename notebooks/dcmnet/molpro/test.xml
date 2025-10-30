@@ -1,0 +1,140 @@
+<?xml version="1.0"?>
+<molpro xmlns="http://www.molpro.net/schema/molpro-output"
+  xmlns:xsd="http://www.w3.org/1999/XMLSchema"
+  xmlns:cml="http://www.xml-cml.org/schema"
+  xmlns:stm="http://www.xml-cml.org/schema"
+  xmlns:xhtml="http://www.w3.org/1999/xhtml">
+ <job>
+  <stm:metadataList>
+   <stm:metadata name="dc:date" content="2025-10-29T22:44:36+01:00"/>
+   <stm:metadata name="dc:creator" content="boittier"/>
+   <stm:metadata name="cmlm:insilico" content="Molpro"/>
+  </stm:metadataList>
+  <platform pid="1656450">
+   <version major="2024" minor="1" SHA="675817fde4514a4a933b69e420913a90cee4ef91"
+     integer_bits="64" parallelism="serial">
+    2024.1
+    <date year="2025" month="10" day="29" hour="22" minute="44" second="36">
+     2025-10-29T22:44:36
+    </date>
+   </version>
+   <licence id="meuwlygroup"/>
+   <parallel processes="1" nodes="1" all_processes="1" openmp="16"/>
+   <dimensions natom="400" nvalence="500" nvalence_pno="1000" nbasis="12000" nstate="100"
+     nsymm="16" nrec="1024" nprim="2" ncol="100"/>
+  </platform>
+  <jobstep command="DF-HF-SCF" commandset="SCFPRO">
+   <cml:molecule>
+    <cml:symmetry pointGroup="C1">
+    </cml:symmetry>
+    <cml:atomArray>
+     <cml:atom id="a1" elementType="O" x3="0.0" y3="-0.734380904564291E-17"
+       z3="-0.65628843654712E-01"/>
+     <cml:atom id="a2" elementType="H" x3="0.0" y3="0.757480611646602" z3="0.52087531061829"/>
+     <cml:atom id="a3" elementType="H" x3="0.0" y3="-0.757480611646602" z3="0.52087531061829"/>
+    </cml:atomArray>
+    <cml:bondArray>
+     <cml:bond atomRefs2="a1 a2"/>
+     <cml:bond atomRefs2="a1 a3"/>
+    </cml:bondArray>
+   </cml:molecule>
+   <property name="Energy" method="RHF" principal="true" stateSymmetry="1" stateNumber="1"
+     value="-76.0605521328171"/>
+   <property name="One-electron energy" method="RHF" value="-123.029577864073"/>
+   <property name="Two-electron energy" method="RHF" value="37.781692152506"/>
+   <property name="Kinetic energy" method="RHF" value="75.9557043559763"/>
+   <property name="Nuclear energy" method="RHF" value="9.18733357875023"/>
+   <property name="Virial quotient" method="RHF" value="-1.0013803805485"/>
+   <property name="Dipole moment" method="RHF" principal="true" stateSymmetry="1"
+     stateNumber="1"
+     value="0.184077270920248E-14 -0.872162991783984E-13 0.780349941298195"/>
+   <time start="22:44:36" end="22:44:37" cpu="0.54" system="0.34" real="0.89"/>
+   <storage units="megabyte" memory="6103.52" sf="0.0" df="30.86" eaf="0.0"/>
+   <summary overall_method="DF-HF/aug-cc-pVTZ"/>
+  </jobstep>
+  <jobstep command="DF-MP2" commandset="CCSD">
+   <property name="total energy" method="SCS-MP2" stateSymmetry="1" stateNumber="1"
+     value="-76.3261117738392"/>
+   <property name="energy" method="Reference" stateSymmetry="1" stateNumber="1"
+     value="-76.0605521328171"/>
+   <property name="singlet pair energy" method="MP2" stateSymmetry="1" stateNumber="1"
+     value="-0.170616450124472"/>
+   <property name="triplet pair energy" method="MP2" stateSymmetry="1" stateNumber="1"
+     value="-0.97746269259773E-01"/>
+   <property name="correlation energy" method="MP2" stateSymmetry="1" stateNumber="1"
+     value="-0.268362719384245"/>
+   <property name="total energy" method="MP2" principal="true" stateSymmetry="1"
+     stateNumber="1" value="-76.3289148522014"/>
+   <property name="Dipole moment" method="MP2" principal="true" stateSymmetry="1"
+     stateNumber="1"
+     value="0.947571969606891E-15 0.562525834290131E-11 0.728583122711943"/>
+   <time start="22:44:37" end="22:44:37" cpu="0.38" system="0.04" real="0.42"/>
+   <storage units="megabyte" memory="6103.52" sf="0.0" df="41.25" eaf="0.0"/>
+   <summary overall_method="DF-MP2/aug-cc-pVTZ"/>
+  </jobstep>
+  <jobstep command="CUBE" commandset="CUBE">
+   <cube method="MP2">
+    <field quantity="density" file="h2o_mp2_density_density.cube"/>
+    <dimensions>
+      50      50      50
+    </dimensions>
+    <origin>
+      0.0000000      0.0000000     -0.1240205
+    </origin>
+    <axes>
+      1.0000000      0.0000000      0.0000000
+     -0.0000000      1.0000000      0.0000000
+      0.0000000     -0.0000000      1.0000000
+    </axes>
+    <step>
+      0.2000000      0.2000000      0.2000000
+    </step>
+   </cube>
+   <time start="22:44:37" end="22:44:38" cpu="1.14" system="0.06" real="1.22"/>
+   <storage units="megabyte" memory="6103.52" sf="0.0" df="108.9" eaf="0.0"/>
+   <summary overall_method="CUBE/aug-cc-pVTZ"/>
+  </jobstep>
+  <jobstep command="CUBE" commandset="CUBE">
+   <cube method="MP2">
+    <field quantity="potential" file="h2o_mp2_potential_potential.cube"/>
+    <dimensions>
+      50      50      50
+    </dimensions>
+    <origin>
+      0.0000000      0.0000000     -0.1240205
+    </origin>
+    <axes>
+      1.0000000      0.0000000      0.0000000
+     -0.0000000      1.0000000      0.0000000
+      0.0000000     -0.0000000      1.0000000
+    </axes>
+    <step>
+      0.2000000      0.2000000      0.2000000
+    </step>
+   </cube>
+   <time start="22:44:38" end="22:44:49" cpu="11.21" system="0.01" real="11.24"/>
+   <storage units="megabyte" memory="1.47" sf="0.0" df="108.9" eaf="0.0"/>
+   <summary overall_method="CUBE/aug-cc-pVTZ"/>
+  </jobstep>
+  <input>
+   <p>memory,800,m</p>
+   <p>geometry={</p>
+   <p>O</p>
+   <p>H1,O,r</p>
+   <p>H2,O,r,H1,theta</p>
+   <p>}</p>
+   <p>r=0.958 ang</p>
+   <p>theta=104.5</p>
+   <p>basis=aug-cc-pVTZ</p>
+   <p>! HF reference (density-fitting speeds this up)</p>
+   <p>{df-hf; wf,charge=0,spin=0}</p>
+   <p>! MP2 with property derivatives enabled; save relaxed MP2 1PDM</p>
+   <p>{df-mp2; expec; dm,3000.2}</p>
+   <p>! MP2 electron density on a cube</p>
+   <p>{cube,h2o_mp2_density.cube; density,3000.2; step,0.2,0.2,0.2}</p>
+   <p>! MP2 electrostatic potential on the same grid</p>
+   <p>{cube,h2o_mp2_potential.cube; potential,3000.2; step,0.2,0.2,0.2}</p>
+  </input>
+  <diagnostics warnings="0"/>
+ </job>
+</molpro>

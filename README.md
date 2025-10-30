@@ -19,41 +19,186 @@ mmml
   - Tests: `tests/`
 
 
-### Quickstart
+### Installation
 
-#### Installation
+> 🚀 **New to MMML?** Check out the [QUICKSTART.md](QUICKSTART.md) guide to get running in 5 minutes!
+>
+> 🎮 **Installing with GPU?** See [GPU_INSTALL.md](GPU_INSTALL.md) for GPU-specific installation and troubleshooting.
+>
+> 📚 **Need detailed help?** See [INSTALL.md](INSTALL.md) for comprehensive installation instructions, troubleshooting, and platform-specific guidance.
 
-Prereqs: CUDA 12 toolchain and a working CHARMM/OpenMM stack (on clusters: `module load cudnn` and `module load charmm`).
+MMML can be installed in three different ways depending on your needs:
 
-Install and run with `uv` (no manual venv needed):
+#### Option 1: Using `uv` (Recommended for Development)
+
+Fastest installation using the modern `uv` package manager. Requires CUDA 12 toolchain for GPU support.
 
 ```bash
-# From repo root
+# Clone the repository
+git clone https://github.com/EricBoittier/mmml.git
+cd mmml
+
+# Run without installing (uv manages everything)
 uv run python -c "print('mmml quickstart OK')"
+
+# Or install dependencies permanently
+uv sync
+
+# For GPU support (CUDA 12), use the make command which handles JAX properly
+make install-gpu
+
+# Or manually:
+uv pip install --find-links https://storage.googleapis.com/jax-releases/jax_cuda_releases.html "jax[cuda12]" "jaxlib[cuda12]"
+uv sync --extra gpu
+
+# For full installation with all optional features
+uv sync --extra all
 ```
 
-Run tests (will auto-skip heavy/optional tests if deps or data are missing):
-
+**Run tests:**
 ```bash
 # Minimal constant test
 uv run -m pytest -q tests/functionality/mmml/test_mmml_calc.py::test_ev2kcalmol_constant
 
 # Optional data-driven test (set paths if you have them)
-export MMML_DATA=/home/ericb/mmml/mmml/data/fixed-acetone-only_MP2_21000.npz
-export MMML_CKPT=/home/ericb/mmml/mmml/physnetjax/ckpts
+export MMML_DATA=/path/to/mmml/data/fixed-acetone-only_MP2_21000.npz
+export MMML_CKPT=/path/to/mmml/physnetjax/ckpts
 uv run -m pytest -q tests/functionality/mmml/test_mmml_calc.py::test_ml_energy_matches_reference_when_data_available
 ```
 
-Install project dependencies permanently (optional):
+#### Option 2: Using Conda (Recommended for HPC/Cluster)
 
+Conda provides better control over system libraries and works well on HPC clusters.
+
+**CPU-only installation:**
 ```bash
-uv sync
+# Create and activate the environment
+conda env create -f environment.yml
+conda activate mmml
 ```
 
+**GPU installation (CUDA 12):**
+```bash
+# Create and activate the GPU environment
+conda env create -f environment-gpu.yml
+conda activate mmml-gpu
+```
+
+**Full installation with all features:**
+```bash
+# Create environment with all optional dependencies
+conda env create -f environment-full.yml
+conda activate mmml-full
+```
+
+**Installing optional features individually:**
+```bash
+# After creating the base environment, you can install optional groups
+conda activate mmml
+
+# For GPU support, install JAX with CUDA first
+pip install --find-links https://storage.googleapis.com/jax-releases/jax_cuda_releases.html "jax[cuda12]" "jaxlib[cuda12]"
+pip install -e ".[gpu]"          # GPU support
+
+# Other optional features (no special installation needed)
+pip install -e ".[quantum]"      # Quantum chemistry
+pip install -e ".[ml]"           # Extra ML tools
+pip install -e ".[viz]"          # Visualization tools
+pip install -e ".[all]"          # Everything
+```
+
+#### Option 3: Using Docker (Recommended for Reproducibility)
+
+Docker provides isolated, reproducible environments.
+
+**CPU version:**
+```bash
+# Build and run CPU container
+docker build --target runtime-cpu -t mmml:cpu .
+docker run -it --rm -v $(pwd):/workspace/mmml mmml:cpu
+```
+
+**GPU version (requires NVIDIA Docker runtime):**
+```bash
+# Build and run GPU container
+docker build --target runtime-gpu -t mmml:gpu .
+docker run -it --rm --gpus all -v $(pwd):/workspace/mmml mmml:gpu
+```
+
+**Using Docker Compose (easier):**
+```bash
+# CPU version
+docker-compose up -d mmml-cpu
+docker-compose exec mmml-cpu bash
+
+# GPU version
+docker-compose up -d mmml-gpu
+docker-compose exec mmml-gpu bash
+
+# Jupyter Lab with GPU support
+docker-compose up -d mmml-jupyter
+# Then open http://localhost:8888 in your browser
+```
+
+#### Post-Installation Setup
+
+Set up CHARMM environment variables (if not using Docker):
+```bash
+# Source the CHARMM setup file
+source CHARMMSETUP
+
+# Or manually set the variables
+export CHARMM_HOME=/path/to/mmml/setup/charmm
+export CHARMM_LIB_DIR=/path/to/mmml/setup/charmm
+```
+
+Run the CHARMM setup script (if needed):
 ```bash
 bash setup/install.sh
 ```
 
+### Optional Dependency Groups
+
+The package has been reorganized with modular optional dependencies. Install only what you need:
+
+| Group | Description | Install with |
+|-------|-------------|--------------|
+| `gpu` | CUDA 12 support for JAX | `pip install -e ".[gpu]"` |
+| `quantum` | Quantum chemistry (PySCF) | `pip install -e ".[quantum]"` |
+| `quantum-gpu` | GPU-accelerated quantum chemistry | `pip install -e ".[quantum-gpu]"` |
+| `ml` | Extra ML tools (PyTorch, TorchANI, E3NN) | `pip install -e ".[ml]"` |
+| `viz` | Visualization tools (Plotly, Seaborn, etc.) | `pip install -e ".[viz]"` |
+| `md` | Molecular dynamics analysis (MDAnalysis) | `pip install -e ".[md]"` |
+| `chem` | Additional chemistry tools | `pip install -e ".[chem]"` |
+| `data` | Data processing (Polars, Parquet) | `pip install -e ".[data]"` |
+| `notebooks` | Jupyter notebook support | `pip install -e ".[notebooks]"` |
+| `experiments` | Experiment tracking (W&B, Optuna) | `pip install -e ".[experiments]"` |
+| `dev` | Development and testing tools | `pip install -e ".[dev]"` |
+| `all` | Everything including GPU | `pip install -e ".[all]"` |
+| `all-cpu` | Everything except GPU | `pip install -e ".[all-cpu]"` |
+
+You can combine multiple groups:
+```bash
+# For GPU, always install JAX with CUDA first
+pip install --find-links https://storage.googleapis.com/jax-releases/jax_cuda_releases.html "jax[cuda12]" "jaxlib[cuda12]"
+pip install -e ".[gpu,quantum,viz,notebooks]"
+
+# Or use the Makefile which handles this automatically
+make install-gpu
+```
+
+### Quick Commands with Make
+
+For convenience, common tasks are available via `make`:
+
+```bash
+make install          # Install with uv
+make install-gpu      # Install with GPU support
+make conda-create-gpu # Create conda environment with GPU
+make docker-build-gpu # Build GPU Docker image
+make test             # Run tests
+make help             # Show all available commands
+```
 
 ## FAQs
 
