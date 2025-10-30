@@ -111,6 +111,11 @@ Examples:
         help='Exclude Molpro internal variables from output'
     )
     parser.add_argument(
+        '--first-geometry',
+        action='store_true',
+        help='Use first geometry from files with multiple geometries (default: use last/final)'
+    )
+    parser.add_argument(
         '--recursive',
         '-r',
         action='store_true',
@@ -193,6 +198,7 @@ Examples:
         print(f"   Output: {args.output}")
         print(f"   Padding: {args.padding} atoms")
         print(f"   Variables: {'No' if args.no_variables else 'Yes'}")
+        print(f"   Geometry: {'First' if args.first_geometry else 'Last (final)'}")
     
     try:
         success = batch_convert_xml(
@@ -200,6 +206,7 @@ Examples:
             output_file=args.output,
             padding_atoms=args.padding,
             include_variables=not args.no_variables,
+            use_last_geometry=not args.first_geometry,
             verbose=args.verbose and not args.quiet
         )
         

@@ -45,6 +45,11 @@ class MolproData:
     # Molpro variables
     variables: Dict[str, Union[float, np.ndarray]] = field(default_factory=dict)
     
+    # Cube data (ESP, density, etc.)
+    cube_data: Dict[str, Dict[str, Union[np.ndarray, str]]] = field(default_factory=dict)
+    # Format: {'esp': {'values': np.ndarray, 'origin': np.ndarray, 'axes': np.ndarray, 
+    #                   'dimensions': np.ndarray, 'file': str}, ...}
+    
     # Other properties
     properties: Dict[str, Union[float, np.ndarray]] = field(default_factory=dict)
 
@@ -126,9 +131,13 @@ class MolproXMLParser:
                 return self.root.find(path, self.ns)
         return self.root.find(path, {})
     
-    def parse_geometry(self) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
+    def parse_geometry(self, use_last: bool = True) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         """
         Parse molecular geometry from CML format.
+        
+        Args:
+            use_last: If True, use the last molecule entry (final geometry).
+                     If False, use the first molecule entry.
         
         Returns:
             Tuple of (atomic_numbers, coordinates)
@@ -147,7 +156,15 @@ class MolproXMLParser:
         
         # Try CML format first (most common in Molpro output)
         ns = {**self.ns, 'cml': 'http://www.xml-cml.org/schema'} if self.ns else {}
-        molecule = self._find('.//cml:molecule', use_cml=True)
+        
+        # Find all molecules, then select first or last
+        molecules = self._find_all('.//cml:molecule', use_cml=True)
+        molecule = None
+        if molecules:
+            molecule = molecules[-1] if use_last else molecules[0]
+        elif not molecules:
+            # Fallback to find() for single molecule
+            molecule = self._find('.//cml:molecule', use_cml=True)
         
         atoms = []
         coords = []
@@ -333,14 +350,24 @@ class MolproXMLParser:
         
         return None
     
-    def parse_gradient(self) -> Optional[np.ndarray]:
+    def parse_gradient(self, use_last: bool = True) -> Optional[np.ndarray]:
         """
         Parse energy gradient.
+        
+        Args:
+            use_last: If True, use the last gradient entry (final geometry).
+                     If False, use the first gradient entry.
         
         Returns:
             Gradient array (n_atoms, 3)
         """
-        gradient = self._find('.//gradient')
+        gradients = self._find_all('.//gradient')
+        gradient = None
+        if gradients:
+            gradient = gradients[-1] if use_last else gradients[0]
+        elif not gradients:
+            gradient = self._find('.//gradient')
+        
         if gradient is None:
             return None
         
@@ -411,17 +438,141 @@ class MolproXMLParser:
         
         return variables
     
-    def parse_all(self) -> MolproData:
+    def parse_cubes(self, xml_dir: Optional[str] = None) -> Dict[str, Dict[str, Union[np.ndarray, str]]]:
+        """
+        Parse cube file metadata and optionally load cube data.
+        
+        Args:
+            xml_dir: Directory containing the XML file (for locating cube files).
+                    If None, cube files won't be loaded.
+        
+        Returns:
+            Dictionary mapping cube quantity (e.g., 'esp', 'density') to cube data
+        """
+        from pathlib import Path
+        
+        cube_data = {}
+        
+        # Find all cube elements
+        cubes = self._find_all('.//cube')
+        
+        for cube_elem in cubes:
+            # Get field information
+            field_elem = cube_elem.find('field' if not self.ns else 'molpro:field', self.ns)
+            if field_elem is None:
+                continue
+            
+            quantity = field_elem.get('quantity', 'unknown').lower()
+            cube_file = field_elem.get('file')
+            field_type = field_elem.get('type', '')
+            
+            # Parse grid metadata
+            origin_elem = cube_elem.find('origin' if not self.ns else 'molpro:origin', self.ns)
+            axes_elem = cube_elem.find('axes' if not self.ns else 'molpro:axes', self.ns)
+            dimensions_elem = cube_elem.find('dimensions' if not self.ns else 'molpro:dimensions', self.ns)
+            step_elem = cube_elem.find('step' if not self.ns else 'molpro:step', self.ns)
+            
+            cube_info = {
+                'file': cube_file,
+                'type': field_type,
+                'method': cube_elem.get('method', ''),
+            }
+            
+            # Parse grid parameters
+            if origin_elem is not None and origin_elem.text:
+                cube_info['origin'] = np.array([float(v) for v in origin_elem.text.split()])
+            
+            if axes_elem is not None and axes_elem.text:
+                axes_values = [float(v) for v in axes_elem.text.split()]
+                # Reshape to 3x3 matrix
+                if len(axes_values) == 9:
+                    cube_info['axes'] = np.array(axes_values).reshape(3, 3)
+                else:
+                    cube_info['axes'] = np.array(axes_values)
+            
+            if dimensions_elem is not None and dimensions_elem.text:
+                cube_info['dimensions'] = np.array([int(float(v)) for v in dimensions_elem.text.split()])
+            
+            if step_elem is not None and step_elem.text:
+                cube_info['step'] = np.array([float(v) for v in step_elem.text.split()])
+            
+            # Try to load cube file if path provided
+            if cube_file and xml_dir:
+                cube_path = Path(xml_dir) / cube_file
+                if cube_path.exists():
+                    try:
+                        cube_info['values'] = self._read_cube_file(cube_path)
+                    except Exception as e:
+                        print(f"Warning: Could not read cube file {cube_path}: {e}")
+            
+            # Store with descriptive key
+            key = quantity if quantity != 'unknown' else field_type
+            if key:
+                cube_data[key] = cube_info
+        
+        return cube_data
+    
+    def _read_cube_file(self, cube_path: str) -> np.ndarray:
+        """
+        Read Gaussian cube file format.
+        
+        Args:
+            cube_path: Path to cube file
+            
+        Returns:
+            3D array of cube values
+        """
+        with open(cube_path, 'r') as f:
+            lines = f.readlines()
+        
+        # Skip first two comment lines
+        idx = 2
+        
+        # Read number of atoms and origin
+        parts = lines[idx].split()
+        n_atoms = abs(int(parts[0]))
+        idx += 1
+        
+        # Read grid dimensions
+        nx = int(lines[idx].split()[0])
+        idx += 1
+        ny = int(lines[idx].split()[0])
+        idx += 1
+        nz = int(lines[idx].split()[0])
+        idx += 1
+        
+        # Skip atom lines
+        idx += n_atoms
+        
+        # Read cube data
+        values = []
+        for line in lines[idx:]:
+            values.extend([float(v) for v in line.split()])
+        
+        # Reshape to 3D grid
+        cube_array = np.array(values).reshape(nx, ny, nz)
+        
+        return cube_array
+    
+    def parse_all(self, use_last_geometry: bool = True, load_cubes: bool = True) -> MolproData:
         """
         Parse all available data from XML file.
+        
+        Args:
+            use_last_geometry: If True (default), use the last geometry/gradient from
+                             the XML file (e.g., final optimized structure). If False,
+                             use the first geometry.
+            load_cubes: If True (default), load cube file data (ESP, density) if available.
         
         Returns:
             MolproData object containing all parsed arrays
         """
+        from pathlib import Path
+        
         data = MolproData()
         
-        # Parse geometry
-        data.atomic_numbers, data.coordinates = self.parse_geometry()
+        # Parse geometry (use last by default for optimized structures)
+        data.atomic_numbers, data.coordinates = self.parse_geometry(use_last=use_last_geometry)
         
         # Parse energies
         data.energies = self.parse_energies()
@@ -434,21 +585,29 @@ class MolproXMLParser:
         
         # Parse properties
         data.dipole_moment = self.parse_dipole()
-        data.gradient = self.parse_gradient()
+        data.gradient = self.parse_gradient(use_last=use_last_geometry)
         data.hessian = self.parse_hessian()
         
         # Parse Molpro variables
         data.variables = self.parse_variables()
         
+        # Parse cube data (ESP, density, etc.)
+        if load_cubes:
+            xml_dir = Path(self.xml_file).parent
+            data.cube_data = self.parse_cubes(xml_dir=str(xml_dir))
+        
         return data
 
 
-def read_molpro_xml(xml_file: str) -> MolproData:
+def read_molpro_xml(xml_file: str, use_last_geometry: bool = True) -> MolproData:
     """
     Read Molpro XML output file and return data as NumPy arrays.
     
     Args:
         xml_file: Path to Molpro XML output file
+        use_last_geometry: If True (default), extract the last geometry from files
+                         with multiple geometries (e.g., optimization trajectories).
+                         If False, use the first geometry.
         
     Returns:
         MolproData object containing parsed arrays
@@ -460,7 +619,7 @@ def read_molpro_xml(xml_file: str) -> MolproData:
         >>> print(f"Orbital energies: {data.orbital_energies}")
     """
     parser = MolproXMLParser(xml_file)
-    return parser.parse_all()
+    return parser.parse_all(use_last_geometry=use_last_geometry)
 
 
 if __name__ == '__main__':

@@ -64,11 +64,13 @@ class MolproConverter:
         self,
         padding_atoms: int = 60,
         include_variables: bool = True,
-        verbose: bool = True
+        verbose: bool = True,
+        use_last_geometry: bool = True
     ):
         self.padding_atoms = padding_atoms
         self.include_variables = include_variables
         self.verbose = verbose
+        self.use_last_geometry = use_last_geometry
         self.stats = ConversionStats()
     
     def convert_single(self, xml_file: Union[str, Path]) -> Dict[str, np.ndarray]:
@@ -87,7 +89,7 @@ class MolproConverter:
         """
         try:
             # Parse XML using our excellent parser
-            molpro_data = read_molpro_xml(str(xml_file))
+            molpro_data = read_molpro_xml(str(xml_file), use_last_geometry=self.use_last_geometry)
             
             # Convert to NPZ format
             npz_data = self._molpro_to_npz(molpro_data, source_file=str(xml_file))
@@ -448,6 +450,10 @@ def convert_xml_to_npz(
 def batch_convert_xml(
     xml_files: List[Union[str, Path]],
     output_file: Union[str, Path],
+    padding_atoms: int = 60,
+    include_variables: bool = True,
+    use_last_geometry: bool = True,
+    verbose: bool = True,
     **kwargs
 ) -> bool:
     """
@@ -459,6 +465,16 @@ def batch_convert_xml(
         List of input XML files
     output_file : str or Path
         Output NPZ file
+    padding_atoms : int, optional
+        Number of atoms to pad to, by default 60
+    include_variables : bool, optional
+        Include Molpro variables in output, by default True
+    use_last_geometry : bool, optional
+        Use last geometry from files with multiple geometries (e.g., 
+        optimization trajectories). If False, use first geometry. 
+        Default is True.
+    verbose : bool, optional
+        Print progress information, by default True
     **kwargs
         Additional arguments passed to MolproConverter
         
@@ -471,7 +487,13 @@ def batch_convert_xml(
     --------
     >>> batch_convert_xml(['file1.xml', 'file2.xml'], 'dataset.npz')
     """
-    converter = MolproConverter(**kwargs)
+    converter = MolproConverter(
+        padding_atoms=padding_atoms,
+        include_variables=include_variables,
+        use_last_geometry=use_last_geometry,
+        verbose=verbose,
+        **kwargs
+    )
     
     try:
         data = converter.convert_batch(xml_files)
