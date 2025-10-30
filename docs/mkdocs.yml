@@ -1,0 +1,118 @@
+# MkDocs configuration for MMML documentation
+
+site_name: MMML Documentation
+site_description: Machine Learning for Molecular Modeling - A unified pipeline from quantum chemistry to trained ML models
+site_author: MMML Team
+site_url: https://mmml.readthedocs.io
+
+repo_name: mmml
+repo_url: https://github.com/your-org/mmml
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.annotate
+    - content.code.copy
+  icon:
+    repo: fontawesome/brands/github
+
+markdown_extensions:
+  - admonition
+  - codehilite
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.details
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - tables
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+
+plugins:
+  - search
+  - autorefs
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: numpy
+            show_source: true
+            show_root_heading: true
+            show_root_full_path: false
+            members_order: source
+
+nav:
+  - Home: index.md
+  
+  - Getting Started:
+    - Quick Start: quickstart.md
+    - Installation: installation.md
+    - Tutorial: tutorial.md
+  
+  - User Guide:
+    - Data Pipeline: data_pipeline.md
+    - CLI Reference: cli_reference.md
+    - NPZ Schema: npz_schema.md
+    - Configuration: configuration.md
+    - Examples: examples.md
+  
+  - API Reference:
+    - Data Module: api/data.md
+    - XML Parser: api/parser.md
+    - Adapters: api/adapters.md
+    - Preprocessing: api/preprocessing.md
+  
+  - Developer Guide:
+    - Architecture: architecture.md
+    - Contributing: contributing.md
+    - Testing: testing.md
+    - Changelog: changelog.md
+  
+  - Additional:
+    - Troubleshooting: troubleshooting.md
+    - FAQ: faq.md
+    - Performance: performance.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/your-org/mmml
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/mmml/
+  
+  version:
+    provider: mike
+
+extra_css:
+  - stylesheets/extra.css
+
+copyright: Copyright &copy; 2025 MMML Team
+

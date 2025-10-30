@@ -1,238 +1,383 @@
 # MMML Quick Start Guide
 
-Get MMML up and running in 5 minutes!
+## 🚀 Getting Started with the Unified Data Pipeline
 
-## Choose Your Installation Method
+This guide shows you how to use the new unified data system to go from Molpro XML files to trained models.
 
-### 🚀 Fastest: Using `uv` (Recommended)
-
-```bash
-# Install uv if you don't have it
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Clone and install MMML
-git clone https://github.com/EricBoittier/mmml.git
-cd mmml
-
-# CPU version
-make install
-
-# Or GPU version (requires CUDA 12 - this properly installs JAX with CUDA)
-make install-gpu
-
-# Run a quick test
-make test-quick
-```
-
-**Done!** You can now use MMML:
-```bash
-uv run python -c "import mmml; print('MMML ready!')"
-```
-
-### 🐍 Using Conda (For HPC/Clusters)
+## Installation
 
 ```bash
-git clone https://github.com/EricBoittier/mmml.git
-cd mmml
-
-# CPU version
-make conda-create
-conda activate mmml
-
-# Or GPU version
-make conda-create-gpu
-conda activate mmml-gpu
-
-# Test it
-python -c "import mmml; print('MMML ready!')"
+cd /home/ericb/mmml
+pip install -e .
 ```
 
-### 🐳 Using Docker (Most Isolated)
+Required dependencies:
+- numpy
+- jax
+- scipy
+- ase
+- e3x
+- tqdm
 
-```bash
-git clone https://github.com/EricBoittier/mmml.git
-cd mmml
+## Step-by-Step Workflow
 
-# Build and run (CPU)
-make docker-build-cpu
-make docker-run-cpu
+### Step 1: Convert Molpro XML to NPZ
 
-# Or GPU version
-make docker-build-gpu
-make docker-run-gpu
-
-# Or use Docker Compose
-docker-compose up -d mmml-gpu
-docker-compose exec mmml-gpu bash
-```
-
-## First Steps
-
-### 1. Set up CHARMM (if needed)
-
-```bash
-source CHARMMSETUP
-# Or run the setup script
-bash setup/install.sh
-```
-
-### 2. Run Your First Calculation
-
-Create a file `test_mmml.py`:
+#### Single File Conversion
 
 ```python
-import numpy as np
-from mmml.pycharmmInterface.mmml_calculator import setup_calculator, ev2kcalmol
-import ase
+from mmml.data import convert_xml_to_npz
 
-# Define a simple system (2 water molecules)
-ATOMS_PER_MONOMER = 10
-N_MONOMERS = 2
-Z = np.array([6, 1, 1, 1, 6, 1, 1, 1, 8, 1] * N_MONOMERS, dtype=int)
-R = np.random.randn(ATOMS_PER_MONOMER * N_MONOMERS, 3) * 0.1
+# Convert a single XML file
+convert_xml_to_npz(
+    xml_file='mmml/parse_molpro/co2.xml',
+    output_file='data/co2.npz',
+    padding_atoms=60,
+    verbose=True
+)
+```
 
-# Create calculator (ML only, no CHARMM needed for this test)
-factory = setup_calculator(
-    ATOMS_PER_MONOMER=ATOMS_PER_MONOMER,
-    N_MONOMERS=N_MONOMERS,
-    doML=False,  # Set to True if you have ML checkpoints
-    doMM=False,
-    MAX_ATOMS_PER_SYSTEM=ATOMS_PER_MONOMER * N_MONOMERS,
+#### Batch Conversion
+
+```python
+from mmml.data import batch_convert_xml
+from pathlib import Path
+
+# Convert multiple XML files
+xml_files = list(Path('molpro_outputs/').glob('*.xml'))
+
+batch_convert_xml(
+    xml_files=xml_files,
+    output_file='data/qm9_dataset.npz',
+    padding_atoms=60,
+    include_variables=True,
+    verbose=True
+)
+```
+
+#### Command Line (once CLI is implemented)
+
+```bash
+# Will be available in Phase 2:
+python -m mmml.data.xml_to_npz \
+    molpro_outputs/*.xml \
+    -o data/dataset.npz \
+    --padding 60
+```
+
+### Step 2: Load and Validate Data
+
+```python
+from mmml.data import load_npz, validate_npz, DataConfig
+
+# Validate NPZ file
+is_valid, info = validate_npz('data/co2.npz', verbose=True)
+
+# Load with validation
+data = load_npz(
+    'data/co2.npz',
+    validate=True,
+    verbose=True
 )
 
-calc, _ = factory(atomic_numbers=Z, atomic_positions=R, n_monomers=N_MONOMERS)
-atoms = ase.Atoms(Z, R)
-atoms.calc = calc
-
-print(f"Energy: {atoms.get_potential_energy():.4f} kcal/mol")
-print(f"Forces shape: {atoms.get_forces().shape}")
+print(f"Loaded {len(data['E'])} structures")
+print(f"Properties: {list(data.keys())}")
 ```
 
-Run it:
+### Step 3: Prepare Data for Training
+
+#### Create Train/Valid Split
+
+```python
+from mmml.data import load_npz, train_valid_split
+
+# Load full dataset
+data = load_npz('data/dataset.npz')
+
+# Split into train and validation
+train_data, valid_data = train_valid_split(
+    data,
+    train_fraction=0.8,
+    shuffle=True,
+    seed=42
+)
+
+print(f"Train: {len(train_data['E'])} structures")
+print(f"Valid: {len(valid_data['E'])} structures")
+```
+
+#### Using DataConfig for Preprocessing
+
+```python
+from mmml.data import load_npz, DataConfig
+
+config = DataConfig(
+    batch_size=32,
+    targets=['energy', 'forces', 'dipole'],
+    center_coordinates=True,
+    normalize_energy=False,
+    num_atoms=60
+)
+
+# Load with automatic preprocessing
+data = load_npz('data/dataset.npz', config=config)
+```
+
+### Step 4: Prepare Model-Specific Batches
+
+#### For DCMNet
+
+```python
+from mmml.data import load_npz
+from mmml.data.adapters import prepare_dcmnet_batches
+
+# Load data
+train_data = load_npz('data/train.npz')
+
+# Prepare DCMNet batches
+batches = prepare_dcmnet_batches(
+    train_data,
+    batch_size=32,
+    num_atoms=60,
+    shuffle=True,
+    seed=42
+)
+
+print(f"Created {len(batches)} batches")
+print(f"Batch keys: {batches[0].keys()}")
+```
+
+#### For PhysNetJAX
+
+```python
+from mmml.data import load_npz
+from mmml.data.adapters import prepare_physnet_batches
+
+# Load data
+train_data = load_npz('data/train.npz')
+
+# Prepare PhysNetJAX batches
+batches = prepare_physnet_batches(
+    train_data,
+    batch_size=32,
+    num_atoms=60,
+    shuffle=True
+)
+```
+
+## Complete Example: CO2 Dataset
+
+```python
+"""Complete workflow from XML to ready-for-training batches."""
+
+from mmml.data import (
+    convert_xml_to_npz,
+    load_npz,
+    train_valid_split,
+    get_data_statistics
+)
+from mmml.data.adapters import prepare_dcmnet_batches
+import json
+
+# Step 1: Convert XML to NPZ
+print("Step 1: Converting XML to NPZ...")
+convert_xml_to_npz(
+    xml_file='mmml/parse_molpro/co2.xml',
+    output_file='data/co2.npz',
+    verbose=True
+)
+
+# Step 2: Load and inspect
+print("\nStep 2: Loading and inspecting data...")
+data = load_npz('data/co2.npz', validate=True, verbose=True)
+
+# Get statistics
+stats = get_data_statistics(data)
+print(json.dumps(stats, indent=2))
+
+# Step 3: Train/valid split
+print("\nStep 3: Creating train/valid split...")
+train_data, valid_data = train_valid_split(
+    data,
+    train_fraction=0.8,
+    shuffle=True,
+    seed=42
+)
+
+# Step 4: Prepare batches for DCMNet
+print("\nStep 4: Preparing batches...")
+train_batches = prepare_dcmnet_batches(
+    train_data,
+    batch_size=1,  # Small batch for CO2 (only 1 structure)
+    num_atoms=60
+)
+
+print(f"\n✓ Ready for training!")
+print(f"  Train batches: {len(train_batches)}")
+print(f"  First batch keys: {list(train_batches[0].keys())}")
+print(f"  Coordinates shape: {train_batches[0]['R'].shape}")
+```
+
+## Data Schema Reference
+
+### Required Keys
+
+| Key | Shape | Description | Units |
+|-----|-------|-------------|-------|
+| `R` | `(n_structures, n_atoms, 3)` | Coordinates | Angstrom |
+| `Z` | `(n_structures, n_atoms)` | Atomic numbers | - |
+| `E` | `(n_structures,)` | Energies | Hartree |
+| `N` | `(n_structures,)` | Number of atoms | - |
+
+### Optional Keys
+
+| Key | Shape | Description | Units |
+|-----|-------|-------------|-------|
+| `F` | `(n_structures, n_atoms, 3)` | Forces | Hartree/Bohr |
+| `D` | `(n_structures, 3)` | Dipole moments | Debye |
+| `esp` | `(n_structures, n_grid)` | ESP values | Hartree/e |
+| `esp_grid` | `(n_structures, n_grid, 3)` | ESP grid coords | Angstrom |
+| `mono` | `(n_structures, n_atoms)` | Atomic monopoles | - |
+| `polar` | `(n_structures, 3, 3)` | Polarizability | - |
+
+See `mmml/data/npz_schema.py` for complete specification.
+
+## Validating Your Data
+
+### Python API
+
+```python
+from mmml.data import validate_npz
+
+is_valid, info = validate_npz('data/mydata.npz', verbose=True)
+
+if is_valid:
+    print(f"✓ Valid dataset with {info['n_structures']} structures")
+    print(f"  Elements: {info['unique_elements']}")
+    print(f"  Energy range: {info['energy_range']}")
+else:
+    print("✗ Validation failed")
+```
+
+### Command Line
+
 ```bash
-# With uv
-uv run python test_mmml.py
+# Validate and show statistics
+python -m mmml.data.npz_schema data/mydata.npz
 
-# Or if you used conda/have an activated venv
-python test_mmml.py
+# Or use loaders
+python -m mmml.data.loaders data/mydata.npz
 ```
 
-### 3. Explore Examples
+## Preprocessing Options
 
-```bash
-# Check out the examples directory
-cd examples/dcm/
+### Center Coordinates
 
-# Run an example configuration
-uv run python train.py
+```python
+from mmml.data import preprocessing
+
+# Center at origin
+coords_centered = preprocessing.center_coordinates(
+    data['R'],
+    n_atoms=data['N'],
+    method='geometric'  # or 'com' for center of mass
+)
 ```
 
-## Common Commands
+### Normalize Energies
 
-```bash
-# Show all available make commands
-make help
+```python
+# Normalize energies
+energies_norm, stats = preprocessing.normalize_energies(
+    data['E'],
+    per_atom=True,
+    n_atoms=data['N']
+)
 
-# Run tests
-make test              # All tests
-make test-quick        # Quick test only
-make test-coverage     # With coverage report
-
-# Clean up
-make clean             # Remove build artifacts
-make clean-all         # Remove everything including venv
-
-# Docker commands
-make docker-build-gpu  # Build GPU Docker image
-make docker-jupyter    # Start Jupyter Lab
-make docker-clean      # Remove all Docker artifacts
-
-# Development
-make dev-setup         # Set up development environment
-make lint              # Run linter
-make format            # Format code
+# Later, denormalize predictions
+energies_denorm = preprocessing.denormalize_energies(
+    predictions,
+    stats,
+    n_atoms=data['N']
+)
 ```
 
-## What's Next?
+### Create ESP Mask
 
-### 📚 Learn More
-- **[INSTALL.md](INSTALL.md)** - Detailed installation guide
-- **[README.md](README.md)** - Full documentation
-- **[Examples](examples/)** - Example scripts and configs
-
-### 🔧 Optional Features
-
-Install only what you need:
-
-```bash
-# GPU support (10-100x faster)
-pip install -e ".[gpu]"
-
-# Quantum chemistry calculations
-pip install -e ".[quantum]"
-
-# Visualization tools
-pip install -e ".[viz]"
-
-# Everything
-pip install -e ".[all]"
+```python
+# Mask ESP points inside VDW radii
+esp_mask = preprocessing.create_esp_mask(
+    data['esp_grid'],
+    data['R'],
+    data['Z'],
+    vdw_scale=1.4
+)
 ```
 
-### 🐛 Troubleshooting
+## Troubleshooting
 
-**CHARMM not found?**
-```bash
-export CHARMM_HOME=$(pwd)/setup/charmm
-export CHARMM_LIB_DIR=$(pwd)/setup/charmm
-source CHARMMSETUP
+### Common Issues
+
+#### 1. Missing Keys
+
+```
+Error: Missing required keys: {'E'}
 ```
 
-**CUDA issues?**
-```bash
-# Check CUDA version
-nvidia-smi
+**Solution**: Ensure your Molpro XML contains energy data, or use optional validation:
 
-# Ensure JAX can see GPU
-python -c "import jax; print(jax.devices())"
+```python
+is_valid, info = validate_npz('data.npz', strict=False)
 ```
 
-**Import errors?**
-```bash
-# Verify installation
-python -c "import mmml; print('OK')"
+#### 2. Shape Mismatches
 
-# Check installed packages
-uv pip list  # for uv
-conda list   # for conda
+```
+Error: 'R' and 'Z' shape mismatch: (10, 5) vs (10, 6)
 ```
 
-### 💡 Tips
+**Solution**: Check padding_atoms parameter matches your data:
 
-1. **Use GPU when available** - 10-100x faster for large systems
-2. **Start with examples** - Check `examples/` directory
-3. **Use Makefile** - Simplifies common tasks (`make help`)
-4. **Docker for reproducibility** - Guarantees it works the same everywhere
-5. **Conda for HPC** - Best compatibility with cluster modules
+```python
+convert_xml_to_npz(xml_file, output_file, padding_atoms=100)
+```
+
+#### 3. Import Errors
+
+```
+ImportError: cannot import name 'read_molpro_xml'
+```
+
+**Solution**: Ensure parse_molpro is in your Python path:
+
+```python
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path('mmml/parse_molpro')))
+```
+
+## Next Steps
+
+1. **Phase 2 (Coming Soon)**: CLI commands for easier workflow
+2. **Phase 3 (In Progress)**: Enhanced model adapters
+3. **Phase 4 (Planned)**: Comprehensive tests and examples
 
 ## Getting Help
 
-- **Issues**: https://github.com/EricBoittier/mmml/issues
-- **Docs**: https://mmml.readthedocs.io/
-- **Email**: eric.boittier@icloud.com
+- See `PIPELINE_PLAN.md` for architectural details
+- Check `mmml/data/npz_schema.py` for data format specification
+- Look at `mmml/parse_molpro/README.md` for XML parsing details
 
-## Quick Reference
+## Contributing
 
-| Task | Command |
-|------|---------|
-| Install (uv) | `make install` |
-| Install GPU | `make install-gpu` |
-| Conda env | `make conda-create-gpu` |
-| Docker GPU | `make docker-run-gpu` |
-| Run tests | `make test` |
-| Clean | `make clean` |
-| Help | `make help` |
+To improve the data pipeline:
+
+1. Update adapters in `mmml/data/adapters/`
+2. Add preprocessing functions to `mmml/data/preprocessing.py`
+3. Extend schema in `mmml/data/npz_schema.py`
+4. Add tests in `tests/test_data/`
 
 ---
 
-**Happy computing! 🚀**
-
+**Last Updated**: October 30, 2025  
+**Status**: Phase 1 Complete ✓
