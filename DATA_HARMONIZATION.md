@@ -23,14 +23,16 @@ The data loader now automatically translates between different naming convention
 
 ### 2. Monopole Charges
 ```python
-# Old behavior: Only recognized 'mono'
-# New behavior: Recognizes both
+# Old behavior: Required 'mono' field
+# New behavior: Creates dummy zeros if missing
 
-'mono'  →  'mono'  ✅
-'Q'     →  'mono'  ✅ (auto-translated)
+'mono'      →  'mono'  ✅
+<missing>   →  'mono'  ✅ (zero-filled dummy)
 ```
 
 **What it is**: Atomic charges/monopoles for each atom.
+
+**Note**: `Q` in datasets typically refers to **quadrupole** or **total charge**, NOT monopoles! If your dataset doesn't have atomic charges, the system will automatically create zero-filled placeholders.
 
 ### 3. Grid Point Count
 ```python
@@ -63,7 +65,8 @@ The data loader now automatically translates between different naming convention
 {
     'R': positions,           # Atomic positions
     'Z': atomic_numbers,      # Atomic numbers
-    'Q': charges,             # ✅ Auto-mapped to 'mono'
+    'Q': quadrupole,          # NOTE: This is quadrupole, NOT monopole!
+    # 'mono': missing         # ✅ Auto-created as zeros
     'esp': esp_values,        # ESP values
     'esp_grid': grid,         # ✅ Auto-mapped to 'vdw_surface'
     # n_grid: missing         # ✅ Auto-computed
@@ -228,15 +231,16 @@ print(f"Keys in train_data: {train_data.keys()}")
 
 ## 📋 Field Name Reference
 
-| Concept | Format A | Format B | Normalized Name |
-|---------|----------|----------|-----------------|
-| Grid Points | `vdw_surface` | `esp_grid` | `vdw_surface` |
-| Charges | `mono` | `Q` | `mono` |
-| Grid Count | `n_grid` | *(computed)* | `n_grid` |
-| Positions | `R` | `R` | `R` |
-| Atomic Numbers | `Z` | `Z` | `Z` |
-| ESP Values | `esp` | `esp` | `esp` |
-| Dipole | `D`, `Dxyz` | `D` | `D`, `Dxyz` |
+| Concept | Format A | Format B | Normalized Name | Notes |
+|---------|----------|----------|-----------------|-------|
+| Grid Points | `vdw_surface` | `esp_grid` | `vdw_surface` | Auto-translated |
+| Atomic Charges | `mono` | *(missing)* | `mono` | Zero-filled if missing |
+| Grid Count | `n_grid` | *(computed)* | `n_grid` | Auto-computed from ESP shape |
+| Positions | `R` | `R` | `R` | Standard |
+| Atomic Numbers | `Z` | `Z` | `Z` | Standard |
+| ESP Values | `esp` | `esp` | `esp` | Standard |
+| Dipole | `D`, `Dxyz` | `D` | `D`, `Dxyz` | Optional |
+| Quadrupole | - | `Q` | `Q` | Kept as-is (NOT mono!) |
 
 ## 🚀 Future Enhancements
 

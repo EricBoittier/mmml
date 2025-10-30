@@ -168,15 +168,19 @@ def prepare_multiple_datasets(
         dataN = np.concatenate([dataset["N"] for dataset in datasets])[not_failed]
         data.append(dataN.reshape(-1, 1))
         keys.append("N")
-    # Handle both 'mono' and 'Q' (they're the same thing - monopole charges)
+    # Handle monopole charges (atomic charges)
     if "mono" in datasets[0].keys():
         dataMono = np.concatenate([dataset["mono"] for dataset in datasets])[not_failed]
         data.append(dataMono.reshape(-1, natoms))
         keys.append("mono")
-    elif "Q" in datasets[0].keys():
-        dataMono = np.concatenate([dataset["Q"] for dataset in datasets])[not_failed]
-        data.append(dataMono.reshape(-1, natoms))
-        keys.append("mono")  # Normalize to 'mono' for consistency
+    else:
+        # If no monopole charges provided, create dummy zeros
+        # This allows training without charge constraints
+        n_molecules = len(not_failed) if hasattr(not_failed, '__len__') else sum(not_failed)
+        dataMono = np.zeros((n_molecules, natoms))
+        data.append(dataMono)
+        keys.append("mono")
+        print(f"⚠️  No 'mono' field found - using zero charges (shape: {dataMono.shape})")
     if "esp" in datasets[0].keys():
         if clip_esp:
             dataEsp = np.concatenate([dataset["esp"][:1000] for dataset in datasets])[
