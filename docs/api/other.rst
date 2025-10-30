@@ -19,7 +19,7 @@ PyCharmm Interface
 ------------------
 
 .. note::
-   These interfaces require the optional ``charmm-interface`` extra and a locally built ``pycharmm`` installation from ``setup/charmm/tool/pycharmm``.
+   These interfaces rely on the bundled ``pycharmm`` package and a compiled CHARMM shared library (set ``CHARMM_HOME`` / ``CHARMM_LIB_DIR`` so ``libcharmm`` can be found).
 
 .. function:: mmml.pycharmmInterface.dyna.run_dynamics(psf_file, pdb_file, res_file, output_prefix, num_steps=1000, dt=0.001, temperature=300.0)
 

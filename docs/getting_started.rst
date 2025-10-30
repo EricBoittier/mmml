@@ -4,7 +4,7 @@ Getting Started
 Setup
 ~~~~~~~~~~~~~~~~~~~~~~
 - GPU acceleration requires a working CUDA 12 toolchain and matching drivers.
-- The CHARMM Python bindings are optional. To enable the interface, build ``pycharmm`` from ``setup/charmm/tool/pycharmm`` with a recent GCC toolchain before installing the ``charmm-interface`` extra.
+- The CHARMM Python bindings now ship with MMML. You still need a CHARMM shared library (see ``setup/install.sh``) and the environment variables ``CHARMM_HOME`` / ``CHARMM_LIB_DIR`` so the bundled code can discover ``libcharmm``.
 
 
 Install
@@ -16,11 +16,10 @@ Install the core package in editable mode from the repository root:
    cd ~/mmml
    pip install -e .
 
-To add the optional CHARMM interface once ``pycharmm`` is available:
+Optionally install extra integrations (including the CHARMM helpers) via extras:
 
 .. code-block:: bash
 
-   pip install setup/charmm/tool/pycharmm
    pip install -e ".[charmm-interface]"
 
 The legacy helper script ``bash setup/install.sh`` remains available if you prefer the previous workflow that compiles CHARMM and installs all extras in one step.
