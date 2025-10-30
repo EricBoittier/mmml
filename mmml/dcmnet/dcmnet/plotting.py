@@ -7,16 +7,16 @@ from jax import numpy as jnp
 from rdkit.Chem import Draw
 from scipy.spatial.distance import cdist
 
-from dcmnet.loss import (
+from .loss import (
     esp_loss_eval,
     esp_loss_pots,
     esp_mono_loss_pots,
     get_predictions,
 )
 # NATOMS removed - now using dynamic shape inference
-from dcmnet.multimodel import get_atoms_dcmol
-from dcmnet.multipoles import plot_3d
-from dcmnet.utils import apply_model, clip_colors, reshape_dipole
+from .multimodel import get_atoms_dcmol
+from .multipoles import plot_3d
+from .utils import apply_model, clip_colors, reshape_dipole
 
 
 def infer_num_atoms(batch, batch_size):
