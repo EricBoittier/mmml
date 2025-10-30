@@ -80,3 +80,9 @@ pip install -r mmml/dcmnet/requirements.txt
 - If lovely_jax is not installed, training continues with standard JAX printing
 - Existing function signatures remain compatible through return value unpacking
 
+## Bug Fixes
+- Fixed `train_model_general` to handle both scalar loss components and array predictions
+- Added `use_grad_clip` and `grad_clip_norm` parameters to `train_model` function
+- Resolved conflict between enhanced `train_model` and partial wrapper definition
+- Only scalar values are now stored in metrics (arrays like predictions are skipped)
+
