@@ -314,6 +314,9 @@ def mean_absolute_error(prediction, target, batch_size):
     float
         Mean absolute error
     """
+    # Infer max_atoms from target shape
+    max_atoms = target.size // batch_size if batch_size > 0 else target.size
+    
     nonzero = jnp.nonzero(target, size=batch_size * max_atoms)
     return jnp.mean(jnp.abs(prediction[nonzero] - target[nonzero]))
 

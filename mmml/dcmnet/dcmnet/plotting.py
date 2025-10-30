@@ -13,10 +13,21 @@ from dcmnet.loss import (
     esp_mono_loss_pots,
     get_predictions,
 )
-from dcmnet.modules import NATOMS
+# NATOMS removed - now using dynamic shape inference
 from dcmnet.multimodel import get_atoms_dcmol
 from dcmnet.multipoles import plot_3d
 from dcmnet.utils import apply_model, clip_colors, reshape_dipole
+
+
+def infer_num_atoms(batch, batch_size):
+    """Infer number of atoms from batch shape."""
+    if "Z" in batch:
+        return len(batch["Z"]) // batch_size
+    elif "R" in batch:
+        return len(batch["R"]) // batch_size // 3
+    else:
+        raise ValueError("Cannot infer num_atoms from batch")
+
 
 # set the default color map to RWB
 plt.set_cmap("bwr")
@@ -40,12 +51,15 @@ def evaluate_dc(
 
     non_zero = np.nonzero(batch["Z"])
 
+    # Infer number of atoms from batch
+    num_atoms = infer_num_atoms(batch, batch_size)
+    
     esp_errors = []
     mono_errors = []
-    xyzs = batch["R"].reshape(batch_size, NATOMS, 3)
-    elems = batch["Z"].reshape(batch_size, NATOMS)
-    monos_gt = batch["mono"].reshape(batch_size, NATOMS)
-    monos_pred = mono.reshape(batch_size, NATOMS, nDCM)
+    xyzs = batch["R"].reshape(batch_size, num_atoms, 3)
+    elems = batch["Z"].reshape(batch_size, num_atoms)
+    monos_gt = batch["mono"].reshape(batch_size, num_atoms)
+    monos_pred = mono.reshape(batch_size, num_atoms, nDCM)
 
     if id:
         from dcmnet.rdkit_utils import get_mol_from_id
@@ -362,9 +376,12 @@ def plot_esp(esp, batch, batch_size, rcut=4.0, charges=None):
         rcut: Cutoff distance for ESP visualization
         charges: Optional predicted charges array (batch_size, NATOMS) or (batch_size, NATOMS, nDCM)
     """
+    # Infer number of atoms from batch
+    num_atoms = infer_num_atoms(batch, batch_size)
+    
     mbID = 0
-    xyzs = batch["R"].reshape(batch_size, NATOMS, 3)
-    elems = batch["Z"].reshape(batch_size, NATOMS)
+    xyzs = batch["R"].reshape(batch_size, num_atoms, 3)
+    elems = batch["Z"].reshape(batch_size, num_atoms)
     vdws = batch["vdw_surface"][mbID][: batch["n_grid"][mbID]]
     diff = xyzs[mbID][:, None, :] - vdws[None, :, :]
     r = np.linalg.norm(diff, axis=-1)
@@ -416,7 +433,7 @@ def plot_esp(esp, batch, batch_size, rcut=4.0, charges=None):
         
         # Get charges for visualization
         if charges is not None:
-            charge_array = charges.reshape(batch_size, NATOMS, -1)[mbID]
+            charge_array = charges.reshape(batch_size, num_atoms, -1)[mbID]
             # Sum over DCM sites if multiple
             if charge_array.ndim > 1:
                 atom_charges = np.sum(charge_array, axis=-1)
@@ -424,7 +441,7 @@ def plot_esp(esp, batch, batch_size, rcut=4.0, charges=None):
                 atom_charges = charge_array
         else:
             # Use monopoles from batch as fallback
-            atom_charges = batch["mono"].reshape(batch_size, NATOMS)[mbID]
+            atom_charges = batch["mono"].reshape(batch_size, num_atoms)[mbID]
         
         atom_charges = atom_charges[non_zero_mask]
         
