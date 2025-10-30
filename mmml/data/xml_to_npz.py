@@ -187,6 +187,23 @@ class MolproConverter:
         if data.intensities is not None:
             npz_dict['ir_intensities'] = data.intensities.reshape(1, -1)
         
+        # Optional: Cube data (ESP, density, etc.)
+        if data.cube_data:
+            for cube_name, cube_info in data.cube_data.items():
+                # Store cube values if available
+                if 'values' in cube_info and cube_info['values'] is not None:
+                    # Flatten 3D cube to 1D for storage, add batch dimension
+                    cube_values = cube_info['values'].flatten()
+                    npz_dict[f'cube_{cube_name}'] = cube_values.reshape(1, -1)
+                
+                # Store grid metadata
+                if 'origin' in cube_info:
+                    npz_dict[f'cube_{cube_name}_origin'] = cube_info['origin'].reshape(1, -1)
+                if 'dimensions' in cube_info:
+                    npz_dict[f'cube_{cube_name}_dimensions'] = cube_info['dimensions'].reshape(1, -1)
+                if 'axes' in cube_info:
+                    npz_dict[f'cube_{cube_name}_axes'] = cube_info['axes'].reshape(1, -1)
+        
         # Optional: Polarizability
         # Note: Not currently in Molpro parser, but placeholder for future
         
@@ -202,6 +219,17 @@ class MolproConverter:
             },
             'energies_by_method': data.energies,
         }
+        
+        # Include cube metadata
+        if data.cube_data:
+            cube_metadata = {}
+            for cube_name, cube_info in data.cube_data.items():
+                cube_metadata[cube_name] = {
+                    'file': cube_info.get('file', ''),
+                    'type': cube_info.get('type', ''),
+                    'method': cube_info.get('method', ''),
+                }
+            metadata['cube_files'] = cube_metadata
         
         # Include Molpro variables if requested
         if self.include_variables and data.variables:
