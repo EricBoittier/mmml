@@ -2,17 +2,18 @@ import numpy as np
 from ase import Atoms
 from ase.visualize import view
 
-from .modules import NATOMS
-
 
 def plot_3d_molecule(batch, batch_size):
+    # Infer number of atoms from batch shape
+    num_atoms = len(batch["Z"]) // batch_size
+    
     i = 0
-    b1_ = batch["Z"].reshape(batch_size, NATOMS)[i]
-    c1_ = batch["mono"].reshape(batch_size, NATOMS)[i]
+    b1_ = batch["Z"].reshape(batch_size, num_atoms)[i]
+    c1_ = batch["mono"].reshape(batch_size, num_atoms)[i]
     nonzero = np.nonzero(c1_)
     i = 0
-    xyz = batch["R"].reshape(batch_size, NATOMS, 3)[i][nonzero]
-    elem = batch["Z"].reshape(batch_size, NATOMS)[i][nonzero]
+    xyz = batch["R"].reshape(batch_size, num_atoms, 3)[i][nonzero]
+    elem = batch["Z"].reshape(batch_size, num_atoms)[i][nonzero]
 
     mol = Atoms(elem, xyz)
     V1 = view(mol, viewer="x3d")
