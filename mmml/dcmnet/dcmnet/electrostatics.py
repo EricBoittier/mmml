@@ -11,12 +11,12 @@ def coulomb_potential(q, r):
 
 # @functools.partial(jax.jit, static_argnames=('grid_positions'))
 def calc_esp(charge_positions, charge_values, grid_positions):
-    if grid_positions.ndim < 2:
-        grid_positions = grid_positions.reshape(-1, 3)
-    if charge_positions.ndim < 2:
-        charge_positions = charge_positions.reshape(-1, 3)
-    if charge_values.ndim < 2:
-        charge_values = charge_values.reshape(-1, 1)
+    if grid_positions.ndim != 2:
+        grid_positions = grid_positions.reshape(-1, grid_positions.shape[-1])
+    if charge_positions.ndim != 2:
+        charge_positions = charge_positions.reshape(-1, charge_positions.shape[-1])
+    if charge_values.ndim != 1:
+        charge_values = charge_values.reshape(-1)
     # Expand the grid positions and charge positions to compute all pairwise differences
     diff = grid_positions[:, jnp.newaxis, :] - charge_positions[jnp.newaxis, :, :]
     # Compute the Euclidean distance between each grid point and each charge
