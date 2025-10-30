@@ -119,7 +119,9 @@ def esp_mono_loss(
     # Ensure both arrays have same shape
     if batched_pred.ndim > 1:
         batched_pred = batched_pred.squeeze()
-    l2_loss = optax.l2_loss(batched_pred, esp_target[0])
+    if esp_target.ndim > 1:
+        esp_target = esp_target.squeeze()
+    l2_loss = optax.l2_loss(batched_pred, esp_target)
     # remove dummy grid points using actual grid length
     # n_points = l2_loss.shape[0]
     # ngrid_scalar = jnp.ravel(ngrid)[0]

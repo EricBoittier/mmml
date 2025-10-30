@@ -351,9 +351,20 @@ def plot_model(DCM2, params, batch, batch_size, nDCM, plot=True):
     return outDict
 
 
-def plot_esp(esp, batch, batch_size, rcut=4.0):
+def plot_esp(esp, batch, batch_size, rcut=4.0, charges=None):
+    """
+    Plot ESP predictions and molecular structure with charges.
+    
+    Args:
+        esp: Predicted ESP values
+        batch: Batch data dictionary
+        batch_size: Number of molecules in batch
+        rcut: Cutoff distance for ESP visualization
+        charges: Optional predicted charges array (batch_size, NATOMS) or (batch_size, NATOMS, nDCM)
+    """
     mbID = 0
     xyzs = batch["R"].reshape(batch_size, NATOMS, 3)
+    elems = batch["Z"].reshape(batch_size, NATOMS)
     vdws = batch["vdw_surface"][mbID][: batch["n_grid"][mbID]]
     diff = xyzs[mbID][:, None, :] - vdws[None, :, :]
     r = np.linalg.norm(diff, axis=-1)
@@ -378,32 +389,90 @@ def plot_esp(esp, batch, batch_size, rcut=4.0):
     loss_dc = optax.l2_loss(esp[idx_cut] * 627.509, batch["esp"][0][idx_cut] * 627.509)
     loss_dc = np.mean(loss_dc * 2) ** 0.5
 
-    fig = plt.figure(figsize=(12, 6))
+    # Create figure with 6 subplots (added one for molecular structure)
+    fig = plt.figure(figsize=(15, 6))
 
     # set white background
     fig.patch.set_facecolor("white")
     # whitebackground in 3d
     fig.patch.set_alpha(0.0)
 
-    ax1 = fig.add_subplot(151, projection="3d")
+    # Subplot 1: Molecular structure with charges
+    ax0 = fig.add_subplot(161)
+    
+    # Create ASE Atoms object for the molecule
+    coords = xyzs[mbID]
+    atomic_numbers = elems[mbID]
+    non_zero_mask = atomic_numbers > 0
+    
+    if np.any(non_zero_mask):
+        atoms = ase.Atoms(
+            numbers=atomic_numbers[non_zero_mask].astype(int),
+            positions=coords[non_zero_mask]
+        )
+        
+        # Plot atoms
+        plot_atoms(atoms, ax0, radii=0.3, rotation=('0x,0y,0z'))
+        
+        # Get charges for visualization
+        if charges is not None:
+            charge_array = charges.reshape(batch_size, NATOMS, -1)[mbID]
+            # Sum over DCM sites if multiple
+            if charge_array.ndim > 1:
+                atom_charges = np.sum(charge_array, axis=-1)
+            else:
+                atom_charges = charge_array
+        else:
+            # Use monopoles from batch as fallback
+            atom_charges = batch["mono"].reshape(batch_size, NATOMS)[mbID]
+        
+        atom_charges = atom_charges[non_zero_mask]
+        
+        # Normalize charges for color mapping (same scale as ESP)
+        charge_norm = plt.Normalize(vmin=-0.5, vmax=0.5)
+        cmap = plt.cm.bwr
+        
+        # Add charge visualization as colored circles
+        for i, (pos, charge) in enumerate(zip(atoms.positions[:, :2], atom_charges)):
+            color = cmap(charge_norm(charge))
+            circle = plt.Circle(pos, 0.4, color=color, alpha=0.6, zorder=10)
+            ax0.add_patch(circle)
+            # Add charge value as text
+            ax0.text(pos[0], pos[1], f'{charge:.2f}', 
+                    ha='center', va='center', fontsize=8, 
+                    color='black', weight='bold', zorder=11)
+        
+        ax0.set_title('Molecule + Charges')
+        ax0.set_aspect('equal')
+        
+        # Add colorbar for charges
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=charge_norm)
+        sm.set_array([])
+        cbar = plt.colorbar(sm, ax=ax0, fraction=0.046, pad=0.04)
+        cbar.set_label('Charge (e)', rotation=270, labelpad=15)
+    
+    # Subplots 2-6: ESP visualizations
+    ax1 = fig.add_subplot(162, projection="3d")
     s = ax1.scatter(
         *batch["vdw_surface"][mbID][: batch["n_grid"][mbID]][idx_cut].T,
         c=clip_colors(batch["esp"][mbID][: batch["n_grid"][mbID]][idx_cut]),
         vmin=-0.015,
         vmax=0.015,
+        cmap='bwr'
     )
-    ax1.set_title(f"GT {mbID}")
+    ax1.set_title(f"GT ESP {mbID}")
 
-    ax2 = fig.add_subplot(152, projection="3d")
+    ax2 = fig.add_subplot(163, projection="3d")
     s = ax2.scatter(
         *batch["vdw_surface"][mbID][: batch["n_grid"][mbID]][idx_cut].T,
         c=clip_colors(esp[idx_cut]),
         vmin=-0.015,
         vmax=0.015,
+        cmap='bwr'
     )
-    ax2.set_title(loss_dc)
+    ax2.set_title(f'DC Pred\nRMSE: {loss_dc:.3f}')
 
-    ax4 = fig.add_subplot(153, projection="3d")
+    ax4 = fig.add_subplot(164, projection="3d")
     s = ax4.scatter(
         *batch["vdw_surface"][mbID][: batch["n_grid"][mbID]][idx_cut].T,
         c=clip_colors(
@@ -411,18 +480,21 @@ def plot_esp(esp, batch, batch_size, rcut=4.0):
         ),
         vmin=-0.015,
         vmax=0.015,
+        cmap='bwr'
     )
+    ax4.set_title('DC Error')
 
-    ax3 = fig.add_subplot(154, projection="3d")
+    ax3 = fig.add_subplot(165, projection="3d")
     s = ax3.scatter(
         *batch["vdw_surface"][mbID][: batch["n_grid"][mbID]][idx_cut].T,
         c=clip_colors(mono_pred[mbID][: batch["n_grid"][mbID]][idx_cut]),
         vmin=-0.015,
         vmax=0.015,
+        cmap='bwr'
     )
-    ax3.set_title(loss_mono)
+    ax3.set_title(f'Mono Pred\nRMSE: {loss_mono:.3f}')
 
-    ax5 = fig.add_subplot(155, projection="3d")
+    ax5 = fig.add_subplot(166, projection="3d")
     s = ax5.scatter(
         *batch["vdw_surface"][mbID][: batch["n_grid"][mbID]][idx_cut].T,
         c=clip_colors(
@@ -431,12 +503,20 @@ def plot_esp(esp, batch, batch_size, rcut=4.0):
         ),
         vmin=-0.015,
         vmax=0.015,
+        cmap='bwr'
     )
+    ax5.set_title('Mono Error')
 
-    for _ in [ax1, ax2, ax3]:
-        _.set_xlim(-10, 10)
-        _.set_ylim(-10, 10)
-        _.set_zlim(-10, 10)
+    for ax in [ax1, ax2, ax3, ax4, ax5]:
+        ax.set_xlim(-10, 10)
+        ax.set_ylim(-10, 10)
+        ax.set_zlim(-10, 10)
+        # Remove axis labels for cleaner look
+        ax.set_xlabel('')
+        ax.set_ylabel('')
+        ax.set_zlabel('')
+    
+    plt.tight_layout()
     plt.show()
     return loss_dc, loss_mono
 
