@@ -42,6 +42,9 @@ class MolproData:
     # Hessian
     hessian: Optional[np.ndarray] = None  # (3*n_atoms, 3*n_atoms)
     
+    # Molpro variables
+    variables: Dict[str, Union[float, np.ndarray]] = field(default_factory=dict)
+    
     # Other properties
     properties: Dict[str, Union[float, np.ndarray]] = field(default_factory=dict)
 
@@ -252,7 +255,7 @@ class MolproXMLParser:
     
     def parse_frequencies(self) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], Optional[np.ndarray]]:
         """
-        Parse vibrational frequencies and normal modes.
+        Parse vibrational frequencies and normal modes according to XSD schema.
         
         Returns:
             Tuple of (frequencies, normal_modes, intensities)
@@ -265,23 +268,27 @@ class MolproXMLParser:
         modes = []
         intens = []
         
-        for vib in vibrations.findall('vibration' if not self.ns else 'molpro:vibration', self.ns):
-            freq = vib.get('frequency')
-            intensity = vib.get('intensity')
+        # Schema uses normalCoordinate elements with wavenumber and IRintensity attributes
+        for normal_coord in vibrations.findall('normalCoordinate' if not self.ns else 'molpro:normalCoordinate', self.ns):
+            # Get frequency from wavenumber attribute
+            wavenumber = normal_coord.get('wavenumber')
+            if wavenumber:
+                freqs.append(float(wavenumber))
             
-            if freq:
-                freqs.append(float(freq))
-            if intensity:
-                intens.append(float(intensity))
+            # Get IR intensity
+            ir_intensity = normal_coord.get('IRintensity')
+            if ir_intensity:
+                intens.append(float(ir_intensity))
             
-            # Parse normal mode displacements
-            mode_text = vib.text
+            # Parse normal mode displacements from text content
+            mode_text = normal_coord.text
             if mode_text:
                 mode_vals = [float(v) for v in mode_text.split()]
                 # Reshape to (n_atoms, 3)
-                n_atoms = len(mode_vals) // 3
-                mode_array = np.array(mode_vals).reshape(n_atoms, 3)
-                modes.append(mode_array)
+                if len(mode_vals) >= 3:
+                    n_atoms = len(mode_vals) // 3
+                    mode_array = np.array(mode_vals[:n_atoms*3]).reshape(n_atoms, 3)
+                    modes.append(mode_array)
         
         frequencies = np.array(freqs) if freqs else None
         intensities = np.array(intens) if intens else None
@@ -365,6 +372,45 @@ class MolproXMLParser:
         
         return None
     
+    def parse_variables(self) -> Dict[str, Union[float, np.ndarray]]:
+        """
+        Parse Molpro internal variables according to XSD schema.
+        
+        Returns:
+            Dictionary mapping variable name to value
+        """
+        variables = {}
+        
+        # Find all variable elements within variables containers
+        for variables_container in self._find_all('.//variables'):
+            for var in variables_container.findall('variable' if not self.ns else 'molpro:variable', self.ns):
+                name = var.get('name')
+                var_type = var.get('type')
+                length = var.get('length')
+                
+                # Get value from value element or text content
+                value_elem = var.find('value' if not self.ns else 'molpro:value', self.ns)
+                if value_elem is not None:
+                    value_text = value_elem.text
+                else:
+                    value_text = var.text
+                
+                if name and value_text:
+                    try:
+                        # Parse the value based on length
+                        if length and int(length) > 1:
+                            # Array variable
+                            values = [float(v) for v in value_text.split()]
+                            variables[name] = np.array(values)
+                        else:
+                            # Scalar variable
+                            variables[name] = float(value_text)
+                    except (ValueError, AttributeError):
+                        # If parsing fails, store as string
+                        variables[name] = value_text.strip()
+        
+        return variables
+    
     def parse_all(self) -> MolproData:
         """
         Parse all available data from XML file.
@@ -390,6 +436,9 @@ class MolproXMLParser:
         data.dipole_moment = self.parse_dipole()
         data.gradient = self.parse_gradient()
         data.hessian = self.parse_hessian()
+        
+        # Parse Molpro variables
+        data.variables = self.parse_variables()
         
         return data
 
@@ -470,5 +519,18 @@ if __name__ == '__main__':
     if data.hessian is not None:
         print(f"\nHessian:")
         print(f"  Shape: {data.hessian.shape}")
+    
+    if data.variables:
+        print(f"\nMolpro Variables:")
+        print(f"  Number of variables: {len(data.variables)}")
+        # Show first few variables
+        for i, (name, value) in enumerate(data.variables.items()):
+            if i >= 5:
+                print(f"  ... and {len(data.variables) - 5} more")
+                break
+            if isinstance(value, np.ndarray):
+                print(f"  {name}: array with shape {value.shape}")
+            else:
+                print(f"  {name}: {value}")
     
     print("\n" + "="*60)
