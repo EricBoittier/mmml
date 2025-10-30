@@ -1,0 +1,141 @@
+=============================================================================
+MMML Dependency Cleanup - Files Created/Modified
+=============================================================================
+
+NEW FILES CREATED:
+─────────────────
+
+Configuration Files:
+  1. environment.yml          - Conda environment (CPU)
+  2. environment-gpu.yml      - Conda environment (GPU with CUDA 12)
+  3. environment-full.yml     - Conda environment (all features)
+  4. .dockerignore            - Docker build optimization
+  5. docker-compose.yml       - Multi-container Docker setup
+  6. Makefile                 - Convenient commands for all tasks
+
+Documentation Files:
+  7. INSTALL.md               - Comprehensive installation guide (900+ lines)
+  8. QUICKSTART.md            - 5-minute quick start guide
+  9. GPU_INSTALL.md           - GPU-specific installation and troubleshooting guide
+ 10. CHANGES.md               - Summary of all changes made
+ 11. FILES_CREATED.txt        - This file
+
+Utility Scripts:
+ 12. verify_install.py        - Installation verification script
+
+
+MODIFIED FILES:
+───────────────
+
+  1. pyproject.toml           - Complete reorganization with optional groups
+  2. Dockerfile               - Multi-stage build with CPU/GPU targets
+  3. README.md                - Updated with new installation instructions
+
+
+DEPENDENCY GROUPS CREATED:
+──────────────────────────
+
+Core (always installed):
+  • numpy, scipy, pandas, matplotlib
+  • JAX ecosystem (CPU by default)
+  • ASE, Hydra, utilities
+
+Optional groups:
+  • [gpu]         - CUDA 12 support
+  • [quantum]     - PySCF and quantum chemistry
+  • [quantum-gpu] - GPU-accelerated quantum chemistry
+  • [ml]          - PyTorch, TorchANI, E3NN
+  • [viz]         - Plotly, Seaborn, py3dmol
+  • [md]          - MDAnalysis
+  • [chem]        - RDKit, chemcoord
+  • [data]        - Polars, PyArrow
+  • [notebooks]   - Jupyter
+  • [experiments] - W&B, Optuna
+  • [dev]         - Development tools
+  • [all]         - Everything including GPU
+  • [all-cpu]     - Everything except GPU
+
+
+INSTALLATION METHODS:
+────────────────────
+
+1. Using uv (Recommended for Development):
+   make install
+   make install-gpu
+   uv sync --extra all
+
+2. Using Conda (Recommended for HPC):
+   make conda-create-gpu
+   conda env create -f environment-gpu.yml
+
+3. Using Docker (Recommended for Reproducibility):
+   make docker-build-gpu
+   docker-compose up -d mmml-gpu
+
+
+VERIFICATION:
+────────────
+
+Run after installation:
+   python verify_install.py
+   # or
+   uv run python verify_install.py
+
+
+QUICK REFERENCE:
+───────────────
+
+Documentation:
+  • QUICKSTART.md  - Get started in 5 minutes
+  • GPU_INSTALL.md - GPU-specific guide and troubleshooting
+  • INSTALL.md     - Detailed installation guide
+  • README.md      - Full project documentation
+  • CHANGES.md     - Summary of changes
+
+Commands:
+  • make help                 - Show all available commands
+  • make install-gpu          - Install with GPU support
+  • make test                 - Run tests
+  • make docker-build-gpu     - Build GPU Docker image
+  • python verify_install.py  - Verify installation
+
+
+BENEFITS:
+────────
+
+✓ Cleaner, modular dependencies
+✓ Faster installation (install only what you need)
+✓ Multiple installation methods
+✓ Better documentation
+✓ Easier troubleshooting
+✓ Platform-specific instructions
+✓ Docker and conda support
+✓ Convenient Makefile commands
+
+
+BACKWARD COMPATIBILITY:
+──────────────────────
+
+Basic usage unchanged:
+  • uv sync              - Still works (core dependencies)
+  • pip install -e .     - Still works (core dependencies)
+
+To get old behavior (all dependencies):
+  • uv sync --extra all
+  • pip install -e ".[all]"
+
+
+NEXT STEPS:
+──────────
+
+1. Choose installation method (uv, conda, or Docker)
+2. Follow QUICKSTART.md to get started
+3. Run verify_install.py to check installation
+4. Explore examples/ directory
+
+=============================================================================
+For detailed information, see:
+  • QUICKSTART.md - Quick start
+  • INSTALL.md    - Full installation guide
+  • CHANGES.md    - Complete list of changes
+=============================================================================
