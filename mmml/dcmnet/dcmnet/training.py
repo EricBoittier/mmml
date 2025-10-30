@@ -596,7 +596,7 @@ def train_step_dipo(
     clipped_grads = clip_grads_by_global_norm(grad, clip_norm)
     updates, opt_state = optimizer_update(clipped_grads, opt_state, params)
     params = optax.apply_updates(params, updates)
-    return params, opt_state, loss, esp_l, mono_l, dipo_l
+    return params, opt_state, loss, esp_l, mono_l, dipo_l, mono, dipo
 
 
 @functools.partial(
