@@ -105,6 +105,14 @@ def main():
         help="Dtype for vdw_grid coordinates",
     )
     p.add_argument(
+        "--allow-per-sample",
+        action="store_true",
+        help=(
+            "If grid metadata differs per sample, allow computing per-sample vdw_grid. "
+            "Warning: can be extremely memory/disk heavy."
+        ),
+    )
+    p.add_argument(
         "--compress",
         action="store_true",
         help="Use np.savez_compressed for outputs (slower, smaller)",
@@ -160,8 +168,24 @@ def main():
         cp_origin_arr = np.broadcast_to(cp_origin_arr, (n_samples, 3))
 
     cp_axes_arr = np.array(cp_axes)
+    # Normalize axes shape to (n_samples, 3, 3) if possible
+    if cp_axes_arr.ndim == 1 and cp_axes_arr.shape[0] == 9:
+        cp_axes_arr = cp_axes_arr.reshape(3, 3)
     if cp_axes_arr.ndim == 2:
-        cp_axes_arr = np.broadcast_to(cp_axes_arr, (n_samples, 3, 3))
+        # Could be (n_samples, 9) or already (3,3)
+        if cp_axes_arr.shape == (3, 3):
+            cp_axes_arr = np.broadcast_to(cp_axes_arr, (n_samples, 3, 3))
+        elif cp_axes_arr.shape[1] == 9:
+            cp_axes_arr = cp_axes_arr.reshape(cp_axes_arr.shape[0], 3, 3)
+        else:
+            # Assume it's (n_samples, 3) which is invalid for axes; raise informative error
+            raise ValueError(
+                f"Unexpected cube_potential_axes shape {cp_axes_arr.shape}; expected (3,3) or (n,9) or (n,3,3)."
+            )
+    elif cp_axes_arr.ndim == 3:
+        # already (n_samples, 3, 3) or (1,3,3)
+        if cp_axes_arr.shape[0] != n_samples:
+            cp_axes_arr = np.broadcast_to(cp_axes_arr, (n_samples, 3, 3))
 
     # Decide on shared vs per-sample grid
     has_shared_grid = (
@@ -188,6 +212,13 @@ def main():
                 f"Warning: cube_potential last dim {cube_potential.shape[-1]} != product(dims) {ngrid_expected}"
             )
     else:
+        # Avoid unintentional massive memory blow-up when grids differ.
+        # Require explicit opt-in to compute per-sample grids.
+        if not hasattr(args, "allow_per_sample") or not args.allow_per_sample:
+            raise RuntimeError(
+                "Grid metadata differs across samples. Refusing to compute per-sample vdw_grid "
+                "without --allow-per-sample. This could require enormous memory/disk."
+            )
         print("Computing per-sample vdw_grid (origins/axes/dims differ across samples)")
         vdw_list = []
         for i in range(n_samples):
@@ -242,4 +273,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
