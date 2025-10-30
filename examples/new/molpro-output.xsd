@@ -1,0 +1,471 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+            targetNamespace="http://www.molpro.net/schema/molpro-output"
+	    xmlns:molpro-output="http://www.molpro.net/schema/molpro-output"
+            elementFormDefault="qualified"
+            xmlns:cml="http://www.xml-cml.org/schema"
+	    xmlns:stm="http://www.xml-cml.org/schema"
+            xmlns:xhtml="http://www.w3.org/1999/xhtml"
+	    xmlns:xlink="http://www.w3.org/1999/xlink"
+            id="molproOutputSchema">
+
+<xsd:import
+    namespace="http://www.xml-cml.org/schema"
+    xmlns="http://www.molpro.net/schema/molpro-output"
+    schemaLocation="http://xml-cml.org/schema/schema24/schema.xsd"
+/>
+
+<xsd:import
+    namespace="http://www.w3.org/1999/xhtml"
+    xmlns="http://www.molpro.net/schema/molpro-output"
+    schemaLocation="xhtml1-strict.xsd"
+/>
+
+<!--
+<xsd:import
+    namespace="http://www.w3.org/1999/xlink"
+    xmlns="http://www.molpro.net/schema/molpro-output"
+    schemaLocation="http://www.w3.org/TR/xml-i18n-bp/xmlspec/xlink.xsd"
+/>
+-->
+
+  <xsd:element name="molpro">
+    <xsd:annotation>
+      <xsd:documentation>
+	Root element for molpro output. Can contain one or more jobs.
+      </xsd:documentation>
+    </xsd:annotation>
+    <xsd:complexType>
+      <xsd:sequence>
+	<xsd:element name="job" minOccurs="0" maxOccurs="unbounded">
+	  <xsd:annotation>
+	    <xsd:documentation>
+	      A complete molpro job output.
+	    </xsd:documentation>
+	  </xsd:annotation>
+	  <xsd:complexType>
+	    <xsd:choice minOccurs="0" maxOccurs="unbounded">
+	      <xsd:element name="error"/>
+	      <xsd:element ref="molpro-output:jobstep" minOccurs="0" maxOccurs="unbounded"/>
+	      <xsd:element ref="molpro-output:molecule" minOccurs="0" maxOccurs="unbounded"/>
+	      <xsd:element ref="molpro-output:variables" minOccurs="0" maxOccurs="unbounded"/>
+	      <xsd:element ref="molpro-output:input" minOccurs="0" maxOccurs="unbounded"/>
+	      <xsd:element ref="molpro-output:diagnostics" minOccurs="0" maxOccurs="unbounded"/>
+	      <xsd:element ref="stm:metadataList" minOccurs="0" maxOccurs="unbounded"/>
+	      <xsd:element ref="molpro-output:platform" minOccurs="0" maxOccurs="unbounded"/>
+	      <xsd:element ref="xhtml:table" minOccurs="0" maxOccurs="unbounded"/>
+	      <xsd:element ref="molpro-output:plot" minOccurs="0" maxOccurs="unbounded"/>
+	    </xsd:choice>
+	  </xsd:complexType>
+	</xsd:element>
+	<xsd:element ref="molpro-output:molecule" minOccurs="0" maxOccurs="unbounded"/>
+      </xsd:sequence>
+    </xsd:complexType>
+  </xsd:element>
+
+  <xsd:element name="jobstep">
+    <xsd:annotation>
+      <xsd:documentation>
+	Output from a single Molpro job step
+      </xsd:documentation>
+    </xsd:annotation>
+    <xsd:complexType mixed="true">
+      <xsd:choice minOccurs="0" maxOccurs="unbounded">
+	<xsd:element name="error"/>
+	<xsd:element name="dump_file"/>
+	<xsd:element name="gradient"/>
+	<xsd:element name="opt"/>
+	<xsd:element name="property"/>
+    <xsd:element name="pair"/>
+    <xsd:element name="single"/>
+	<xsd:element ref="molpro-output:cube" minOccurs="0" maxOccurs="unbounded"/>
+	<xsd:element name="time"/>
+	<xsd:element name="storage"/>
+	<xsd:element name="summary"/>
+	<xsd:element ref="molpro-output:vibrations"/>
+	<xsd:element ref="molpro-output:jobstep"/>
+    <xsd:element ref="molpro-output:molecule" minOccurs="0" maxOccurs="unbounded"/>
+	<xsd:element ref="cml:molecule"/>
+	<xsd:element ref="molpro-output:variables" minOccurs="0" maxOccurs="unbounded"/>
+    <xsd:element ref="xhtml:table" minOccurs="0" maxOccurs="unbounded"/>
+	<xsd:element name="instanton"/>
+      </xsd:choice>
+      <xsd:attribute name="command" type="xsd:string"/>
+      <xsd:attribute name="commandset" type="xsd:string"/>
+      <xsd:attribute name="displaced" type="xsd:boolean"/>
+    </xsd:complexType>
+  </xsd:element>
+
+  <xsd:element name="molecule">
+    <xsd:complexType>
+      <xsd:choice minOccurs="0" maxOccurs="unbounded">
+	<xsd:element ref="cml:molecule"/>
+	<xsd:element ref="molpro-output:symmetry"/>
+	<xsd:element ref="molpro-output:basisSet"/>
+	<xsd:element ref="molpro-output:vibrations"/>
+	<xsd:element name="variables"/>
+	<xsd:element name="orbitals"/>
+	<xsd:element ref="stm:metadataList"/>
+	<xsd:element ref="molpro-output:platform" minOccurs="0" maxOccurs="unbounded"/>
+      </xsd:choice>
+      <xsd:attribute name="id" type="xsd:string"/>
+      <xsd:attribute name="index" type="xsd:string"/>
+      <xsd:attribute name="InChI" type="xsd:string">
+       <xsd:annotation>
+         <xsd:documentation>
+           <a href="http://www.iupac.org/home/publications/e-resources/inchi.html">International Chemical Identifier</a> for the species.
+         </xsd:documentation>
+       </xsd:annotation>
+      </xsd:attribute>
+      <xsd:attribute name="InChIKey" type="xsd:string"/>
+      <xsd:attribute name="SMILES" type="xsd:string">
+       <xsd:annotation>
+         <xsd:documentation>
+           <a href="http://www.opensmiles.org">SMILES</a> identifier for the species.
+         </xsd:documentation>
+       </xsd:annotation>
+      </xsd:attribute>
+      <xsd:attribute name="title" type="xsd:string"/>
+      <xsd:attribute name="method" type="xsd:string"/>
+      <xsd:attribute name="basis" type="xsd:string"/>
+      <xsd:attribute name="geometryMethod" type="xsd:string"/>
+      <xsd:attribute name="geometryBasis" type="xsd:string"/>
+      <xsd:attribute name="energy" type="xsd:double"/>
+    </xsd:complexType>
+  </xsd:element>
+
+  <xsd:element name="variables">
+    <xsd:annotation>
+      <xsd:documentation>
+        Container for Molpro internal variables
+      </xsd:documentation>
+    </xsd:annotation>
+    <xsd:complexType>
+      <xsd:choice minOccurs="0" maxOccurs="unbounded">
+        <xsd:element ref="molpro-output:variable"/>
+      </xsd:choice>
+    </xsd:complexType>
+  </xsd:element>
+
+
+  <xsd:element name="variable">
+    <xsd:annotation>
+      <xsd:documentation>
+        A Molpro internal variable
+      </xsd:documentation>
+    </xsd:annotation>
+    <xsd:complexType>
+      <xsd:choice minOccurs="0" maxOccurs="unbounded">
+        <xsd:element name="value"/>
+      </xsd:choice>
+      <xsd:attribute name="name" type="xsd:string"/>
+      <xsd:attribute name="type" type="xsd:string"/>
+      <xsd:attribute name="units" type="xsd:string"/>
+      <xsd:attribute name="length" type="xsd:integer"/>
+    </xsd:complexType>
+  </xsd:element>
+
+  <xsd:element name="orbitals">
+    <xsd:annotation>
+      <xsd:documentation>
+        Container for Molpro internal orbitals
+      </xsd:documentation>
+    </xsd:annotation>
+    <xsd:complexType>
+      <xsd:choice minOccurs="0" maxOccurs="unbounded">
+        <xsd:element ref="molpro-output:orbital"/>
+      </xsd:choice>
+      <xsd:attribute name="basis" type="xsd:string"/>
+      <xsd:attribute name="angular" type="xsd:string">
+        <xsd:annotation>
+          <xsd:documentation>
+            Whether the orbitals are expressed in terms of cartesian or spherical angular functions, overriding what might be in the underlying basis definition.
+          </xsd:documentation>
+        </xsd:annotation>
+      </xsd:attribute>
+      <xsd:attribute name="spin" type="xsd:string"/>
+      <xsd:attribute name="method" type="xsd:string"/>
+      <xsd:attribute name="sidecar" type="xsd:string"/>
+    </xsd:complexType>
+  </xsd:element>
+
+
+  <xsd:element name="orbital">
+    <xsd:annotation>
+      <xsd:documentation>
+        A Molpro molecular orbital
+      </xsd:documentation>
+    </xsd:annotation>
+    <xsd:complexType>
+     <xsd:simpleContent>
+      <xsd:extension base="xsd:string">
+       <xsd:attribute name="ID" type="xsd:string"/>
+       <xsd:attribute name="symmetryID" type="xsd:string"/>
+       <xsd:attribute name="energy" type="xsd:double"/>
+       <xsd:attribute name="occupation" type="xsd:double"/>
+       <xsd:attribute name="moments" type="xsd:string"/>
+       <xsd:attribute name="errorincompletewrite" type="xsd:integer">
+         <xsd:annotation>
+           <xsd:documentation>
+	     Only used internally in the GUI. Do not use this in Molpro. Is created artificially by the GUI when the output of orbitals is yet incomplete in the xml, as a flag.
+           </xsd:documentation>
+         </xsd:annotation>
+       </xsd:attribute>
+       <xsd:attribute name="sidecar_offset" type="xsd:string"/>
+      </xsd:extension>
+     </xsd:simpleContent>
+    </xsd:complexType>
+  </xsd:element>
+
+  <xsd:element name="input">
+    <xsd:annotation>
+      <xsd:documentation>
+        Molpro input dataset
+      </xsd:documentation>
+    </xsd:annotation>
+    <xsd:complexType>
+      <xsd:choice minOccurs="0" maxOccurs="unbounded">
+        <xsd:element name="p">
+	  <xsd:complexType mixed="true">
+	    <xsd:attribute name="depth" type="xsd:integer"/>
+	  </xsd:complexType>
+	</xsd:element>
+        <xsd:element name="include">
+	  <xsd:complexType>
+	    <xsd:attribute name="file" type="xsd:string"/>
+	  </xsd:complexType>
+	</xsd:element>
+      </xsd:choice>
+    </xsd:complexType>
+  </xsd:element>
+
+  <xsd:element name="platform">
+    <xsd:annotation>
+      <xsd:documentation>
+        Container for metadata describing the hardware and software platform for the calculation
+      </xsd:documentation>
+    </xsd:annotation>
+    <xsd:complexType>
+      <xsd:choice minOccurs="0" maxOccurs="unbounded">
+        <xsd:element name="version"/>
+        <xsd:element name="licence"/>
+        <xsd:element name="parallel"/>
+        <xsd:element name="machine"/>
+        <xsd:element name="dimensions"/>
+      </xsd:choice>
+      <xsd:attribute name="pid" type="xsd:integer"/>
+    </xsd:complexType>
+  </xsd:element>
+
+  <xsd:element name="diagnostics">
+    <xsd:annotation>
+      <xsd:documentation>
+        Diagnostic information from Molpro job
+      </xsd:documentation>
+    </xsd:annotation>
+    <xsd:complexType>
+      <xsd:attribute name="warnings" type="xsd:integer"/>
+    </xsd:complexType>
+  </xsd:element>
+
+  <xsd:element name="symmetry">
+      <xsd:annotation>
+          <xsd:documentation>
+              Container for additional symmetry information not representable in CML
+          </xsd:documentation>
+      </xsd:annotation>
+      <xsd:complexType>
+          <xsd:choice minOccurs="0" maxOccurs="unbounded">
+              <xsd:element name="irreducibleRepresentation"/>
+          </xsd:choice>
+      </xsd:complexType>
+  </xsd:element>
+  <xsd:element name="irreducibleRepresentation">
+    <xsd:complexType>
+      <xsd:attribute name="index" type="xsd:integer">
+     	<xsd:annotation>
+	      <xsd:documentation>Index number of irreducible representation in the range 1 to 8
+	      </xsd:documentation>
+    	</xsd:annotation>
+      </xsd:attribute>
+      <xsd:attribute name="id" type="xsd:string">
+        <xsd:annotation>
+          <xsd:documentation>The standard symbol of the irreducible representation, e.g. Ag, B3u, ...
+          </xsd:documentation>
+        </xsd:annotation>
+      </xsd:attribute>
+      <xsd:attribute name="cartesian" type="xsd:string">
+	    <xsd:annotation>
+	      <xsd:documentation>A cartesian product (e.g. "", "x", "yz") that is a basis for the irreducible representation.
+	      </xsd:documentation>
+    	</xsd:annotation>
+      </xsd:attribute>
+    </xsd:complexType>
+  </xsd:element>
+
+  <xsd:element name="basisSet">
+    <xsd:annotation>
+      <xsd:documentation>
+        Container for a basis set (orbital or other)
+      </xsd:documentation>
+    </xsd:annotation>
+    <xsd:complexType>
+      <xsd:choice minOccurs="0" maxOccurs="unbounded">
+        <xsd:element name="basisGroup"/>
+        <xsd:element name="association"/>
+      </xsd:choice>
+      <xsd:attribute name="id" type="xsd:string"/>
+      <xsd:attribute name="type" type="xsd:string"/>
+      <xsd:attribute name="angular" type="xsd:string"/>
+      <xsd:attribute name="groups" type="xsd:integer"/>
+      <xsd:attribute name="primitives" type="xsd:integer"/>
+      <xsd:attribute name="length" type="xsd:integer"/>
+      <xsd:attribute name="cartesianLength" type="xsd:integer"/>
+    </xsd:complexType>
+  </xsd:element>
+
+  <xsd:element name="vibrations">
+    <xsd:annotation>
+      <xsd:documentation>
+        Container for information on molecular vibrations
+      </xsd:documentation>
+    </xsd:annotation>
+    <xsd:complexType>
+      <xsd:choice minOccurs="0" maxOccurs="unbounded">
+        <xsd:element ref="molpro-output:normalCoordinate"/>
+        <xsd:element ref="molpro-output:masses"/>
+      </xsd:choice>
+      <xsd:attribute name="name" type="xsd:string"/>
+      <xsd:attribute name="type" type="xsd:string"/>
+      <xsd:attribute name="units" type="xsd:string"/>
+      <xsd:attribute name="length" type="xsd:integer"/>
+    </xsd:complexType>
+  </xsd:element>
+
+  <xsd:simpleType name='doubles'>
+    <xsd:list itemType='xsd:double'/>
+  </xsd:simpleType>
+
+  <xsd:element name="normalCoordinate">
+    <xsd:annotation>
+      <xsd:documentation>
+        A normal vibrational coordinate
+      </xsd:documentation>
+    </xsd:annotation>
+    <xsd:complexType>
+      <xsd:simpleContent>
+	<xsd:extension base="molpro-output:doubles">
+	  <xsd:attribute name="wavenumber" type="xsd:double"/>
+	  <xsd:attribute name="units" type="xsd:string"/>
+	  <xsd:attribute name="IRintensity" type="xsd:double"/>
+	  <xsd:attribute name="IRintensityunits" type="xsd:string"/>
+	  <xsd:attribute name="symmetry" type="xsd:string"/>
+	  <xsd:attribute name="real_zero_imag" type="xsd:string"/>
+	  <xsd:attribute name="errorincompletewrite" type="xsd:integer">
+            <xsd:annotation>
+              <xsd:documentation>
+		Only used internally in the GUI. Do not use this in Molpro. Is created artificially by the GUI when output of vibrations is yet incomplete in the xml during a running job, as a flag.
+              </xsd:documentation>
+            </xsd:annotation>
+	  </xsd:attribute>
+      </xsd:extension>
+      </xsd:simpleContent>
+    </xsd:complexType>
+  </xsd:element>
+
+  <xsd:element name="masses">
+      <xsd:annotation>
+          <xsd:documentation>
+              Mass/u of all of the atoms in the molecule
+          </xsd:documentation>
+      </xsd:annotation>
+      <xsd:simpleType>
+          <xsd:list itemType='xsd:double'/>
+      </xsd:simpleType>
+  </xsd:element>
+
+
+  <xsd:element name="cube">
+    <xsd:annotation>
+      <xsd:documentation>
+        Metadata for a cube dataset
+      </xsd:documentation>
+    </xsd:annotation>
+    <xsd:complexType>
+      <xsd:choice minOccurs="0" maxOccurs="unbounded">
+	<xsd:element name="field" minOccurs="1" maxOccurs="1">
+	  <xsd:complexType>
+	    <xsd:attribute name="quantity" type="xsd:string"/>
+	    <xsd:attribute name="type" type="xsd:string"/>
+	    <xsd:attribute name="number" type="xsd:string"/>
+	    <xsd:attribute name="symmetry" type="xsd:string"/>
+	    <xsd:attribute name="occupancy" type="xsd:double"/>
+	    <xsd:attribute name="energy" type="xsd:double"/>
+	    <xsd:attribute name="file" type="xsd:string"/>
+	  </xsd:complexType>
+	</xsd:element>
+	<xsd:element name="dimensions" minOccurs="1" maxOccurs="1">
+	  <xsd:simpleType>
+	    <xsd:list itemType='xsd:double'/>
+	  </xsd:simpleType>
+	</xsd:element>
+	<xsd:element name="origin" minOccurs="1" maxOccurs="1">
+	  <xsd:simpleType>
+	    <xsd:list itemType='xsd:double'/>
+	  </xsd:simpleType>
+	</xsd:element>
+	<xsd:element name="axes" minOccurs="1" maxOccurs="1">
+	  <xsd:simpleType>
+	    <xsd:list itemType='xsd:double'/>
+	  </xsd:simpleType>
+	</xsd:element>
+	<xsd:element name="step" minOccurs="1" maxOccurs="1">
+	  <xsd:simpleType>
+	    <xsd:list itemType='xsd:double'/>
+	  </xsd:simpleType>
+	</xsd:element>
+      </xsd:choice>
+      <xsd:attribute name="method" type="xsd:string">
+	<xsd:annotation>
+	  <xsd:documentation>
+	    Method that produced the dataset
+	  </xsd:documentation>
+	</xsd:annotation>
+      </xsd:attribute>
+    </xsd:complexType>
+  </xsd:element>
+
+  <xsd:element name="plot">
+    <xsd:annotation>
+      <xsd:documentation>
+        Metadata for a plot from a Molpro table
+      </xsd:documentation>
+    </xsd:annotation>
+    <xsd:complexType>
+      <xsd:attribute name="table" type="xsd:string">
+	<xsd:annotation>
+	  <xsd:documentation>
+	    Identifier of the table
+	  </xsd:documentation>
+	</xsd:annotation>
+      </xsd:attribute>
+      <xsd:attribute name="plot" type="xsd:string">
+	<xsd:annotation>
+	  <xsd:documentation>
+	    Identifier of which plot in the table
+	  </xsd:documentation>
+	</xsd:annotation>
+      </xsd:attribute>
+      <xsd:attribute name="type" type="xsd:string">
+	<xsd:annotation>
+	  <xsd:documentation>
+	    File type of the resource pointed to by href, eg pdf
+	  </xsd:documentation>
+	</xsd:annotation>
+      </xsd:attribute>
+      <xsd:anyAttribute namespace="http://www.w3.org/1999/xlink" processContents="lax"/>
+    </xsd:complexType>
+  </xsd:element>
+
+</xsd:schema>
