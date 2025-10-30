@@ -314,12 +314,15 @@ def evaluate_dc(
 
 
 def plot_3d_combined(combined, batch, batch_size=1):
+    # Infer number of atoms from batch
+    num_atoms = infer_num_atoms(batch, batch_size)
+    
     xyz2 = combined[:, :3]
     q2 = combined[:, 3]
     i = 0
-    nonzero = np.nonzero(batch["Z"].reshape(batch_size, NATOMS)[i])
-    xyz = batch["R"].reshape(batch_size, NATOMS, 3)[i][nonzero]
-    elem = batch["Z"].reshape(batch_size, NATOMS)[i][nonzero]
+    nonzero = np.nonzero(batch["Z"].reshape(batch_size, num_atoms)[i])
+    xyz = batch["R"].reshape(batch_size, num_atoms, 3)[i][nonzero]
+    elem = batch["Z"].reshape(batch_size, num_atoms)[i][nonzero]
 
     from ase import Atoms
     from ase.visualize import view
