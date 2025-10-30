@@ -3,12 +3,12 @@
 
 Outputs:
   1) energies_forces_dipoles.npz: contains E, F, dipoles (D/Dxyz) and standard R/Z/N
-  2) grids_esp.npz: contains esp (from cube_potential) and vdw_grid (XYZ grid coords), plus R/Z/N
+  2) grids_esp.npz: contains subsampled esp and vdw_grid (XYZ) per-sample, plus R/Z/N
 
 Grid handling:
-  - If all samples share identical cube grid (origin, axes, dims), we emit a single
-    shared `vdw_grid` of shape (n_grid, 3).
-  - Otherwise, we emit per-sample `vdw_grid` of shape (n_samples, n_grid, 3).
+  - By default, downsample to NGRID points per sample (default 3000) after
+    trimming extreme ESP values by percentile. This keeps output compact and
+    avoids building massive per-sample grids.
 
 Notes:
   - This script re-saves arrays; ensure you have free disk space >= input size.
@@ -21,7 +21,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Optional
 
 import numpy as np
 
@@ -83,6 +83,59 @@ def all_close(arr: np.ndarray, rtol=1e-8, atol=1e-12) -> bool:
     return np.allclose(arr, arr[0], rtol=rtol, atol=atol)
 
 
+def select_indices_uniform(
+    esp: np.ndarray,
+    n_select: int,
+    low_pct: float = 1.0,
+    high_pct: float = 99.0,
+    rng: Optional[np.random.Generator] = None,
+) -> np.ndarray:
+    """Select indices uniformly at random after trimming extremes by percentiles.
+
+    If the number of candidates after trimming is < n_select, fallback to the
+    full set without trimming.
+    """
+    if rng is None:
+        rng = np.random.default_rng()
+
+    lo = np.percentile(esp, low_pct)
+    hi = np.percentile(esp, high_pct)
+    mask = (esp >= lo) & (esp <= hi)
+    cand = np.nonzero(mask)[0]
+    if cand.size >= n_select:
+        return rng.choice(cand, size=n_select, replace=False)
+    # Fallback to full range
+    return rng.choice(np.arange(esp.size), size=n_select, replace=False)
+
+
+def coords_from_indices(
+    origin: np.ndarray,
+    axes: np.ndarray,
+    dims: np.ndarray,
+    lin_idx: np.ndarray,
+    dtype,
+) -> np.ndarray:
+    """Compute coordinates for given linear indices without building full grid."""
+    nx, ny, nz = [int(d) for d in np.asarray(dims, dtype=np.int64)]
+    lin_idx = np.asarray(lin_idx, dtype=np.int64)
+
+    ij = lin_idx // (ny * nz)
+    rem = lin_idx % (ny * nz)
+    jj = rem // nz
+    kk = rem % nz
+
+    origin = np.asarray(origin, dtype=np.float64)
+    axes = np.asarray(axes, dtype=np.float64)
+
+    coords = (
+        origin
+        + ij[:, None] * axes[0]
+        + jj[:, None] * axes[1]
+        + kk[:, None] * axes[2]
+    )
+    return coords.astype(dtype, copy=False)
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("input", type=Path, help="Path to input .npz (e.g., co2.1000.npz)")
@@ -99,10 +152,22 @@ def main():
         help="Output npz for esp + vdw_grid + R/Z/N",
     )
     p.add_argument(
+        "--ngrid",
+        type=int,
+        default=3000,
+        help="Number of ESP grid points to keep per sample",
+    )
+    p.add_argument(
         "--grid-dtype",
         choices=["float64", "float32"],
         default="float64",
         help="Dtype for vdw_grid coordinates",
+    )
+    p.add_argument(
+        "--esp-dtype",
+        choices=["float64", "float32"],
+        default="float32",
+        help="Dtype for esp values in output",
     )
     p.add_argument(
         "--allow-per-sample",
@@ -111,6 +176,24 @@ def main():
             "If grid metadata differs per sample, allow computing per-sample vdw_grid. "
             "Warning: can be extremely memory/disk heavy."
         ),
+    )
+    p.add_argument(
+        "--trim-low",
+        type=float,
+        default=1.0,
+        help="Lower percentile for ESP trimming (ignore more-negative values)",
+    )
+    p.add_argument(
+        "--trim-high",
+        type=float,
+        default=99.0,
+        help="Upper percentile for ESP trimming (ignore more-positive values)",
+    )
+    p.add_argument(
+        "--seed",
+        type=int,
+        default=0,
+        help="Random seed for reproducible subsampling",
     )
     p.add_argument(
         "--compress",
@@ -196,39 +279,41 @@ def main():
 
     grid_dtype = np.float64 if args.grid_dtype == "float64" else np.float32
 
-    # Prepare vdw_grid
-    if has_shared_grid:
-        dims0 = cp_dims_arr[0]
-        origin0 = cp_origin_arr[0]
-        axes0 = cp_axes_arr[0]
+    # Subsample per-sample without materializing full per-sample grids
+    rng = np.random.default_rng(args.seed)
+    esp_dtype = np.float64 if args.esp_dtype == "float64" else np.float32
+    grid_dtype = np.float64 if args.grid_dtype == "float64" else np.float32
+
+    print(
+        f"Subsampling ESP grid to {args.ngrid} points per sample "
+        f"(trim {args.trim_low}-{args.trim_high} percentiles)."
+    )
+    # Preallocate outputs
+    esp_out = np.empty((n_samples, args.ngrid), dtype=esp_dtype)
+    grid_out = np.empty((n_samples, args.ngrid, 3), dtype=grid_dtype)
+
+    # Determine expected full grid length from first dims
+    ngrid_expected0 = int(np.prod(cp_dims_arr[0]))
+    lastdim = cube_potential.shape[-1]
+    if lastdim != ngrid_expected0:
         print(
-            f"Computing shared vdw_grid for dims={dims0.tolist()} (n_samples={n_samples})"
+            f"Warning: cube_potential last dim {lastdim} != product(dims[0]) {ngrid_expected0}. "
+            "Proceeding, but check metadata consistency.",
+            file=sys.stderr,
         )
-        vdw_grid = compute_grid_xyz(origin0, axes0, dims0, dtype=grid_dtype)
-        # Sanity check alignment with esp length
-        ngrid_expected = int(np.prod(dims0))
-        if cube_potential.shape[-1] != ngrid_expected:
-            print(
-                f"Warning: cube_potential last dim {cube_potential.shape[-1]} != product(dims) {ngrid_expected}"
-            )
-    else:
-        # Avoid unintentional massive memory blow-up when grids differ.
-        # Require explicit opt-in to compute per-sample grids.
-        if not hasattr(args, "allow_per_sample") or not args.allow_per_sample:
-            raise RuntimeError(
-                "Grid metadata differs across samples. Refusing to compute per-sample vdw_grid "
-                "without --allow-per-sample. This could require enormous memory/disk."
-            )
-        print("Computing per-sample vdw_grid (origins/axes/dims differ across samples)")
-        vdw_list = []
-        for i in range(n_samples):
-            if i % 50 == 0:
-                print(f"  grid {i}/{n_samples}")
-            grid_i = compute_grid_xyz(
-                cp_origin_arr[i], cp_axes_arr[i], cp_dims_arr[i], dtype=grid_dtype
-            )
-            vdw_list.append(grid_i)
-        vdw_grid = np.stack(vdw_list, axis=0)  # (n_samples, ngrid, 3)
+
+    # Iterate samples; avoid keeping large temporaries
+    for i in range(n_samples):
+        if i % 50 == 0:
+            print(f"  sample {i}/{n_samples}")
+        esp_i = np.asarray(cube_potential[i])
+        idx = select_indices_uniform(
+            esp_i, args.ngrid, low_pct=args.trim_low, high_pct=args.trim_high, rng=rng
+        )
+        esp_out[i] = esp_i[idx].astype(esp_dtype, copy=False)
+        grid_out[i] = coords_from_indices(
+            cp_origin_arr[i], cp_axes_arr[i], cp_dims_arr[i], idx, dtype=grid_dtype
+        )
 
     # Build outputs
     props_out: Dict[str, np.ndarray] = {}
@@ -251,10 +336,10 @@ def main():
     elif D is not None:
         props_out["D"] = D
 
-    # Grids + ESP
-    grids_out["esp"] = cube_potential
-    grids_out["vdw_grid"] = vdw_grid
-    # Also keep grid metadata for provenance
+    # Grids + ESP (subsampled)
+    grids_out["esp"] = esp_out
+    grids_out["vdw_grid"] = grid_out
+    # Also keep grid metadata for provenance (original full-grid info)
     grids_out["grid_dims"] = cp_dims_arr
     grids_out["grid_origin"] = cp_origin_arr
     grids_out["grid_axes"] = cp_axes_arr
