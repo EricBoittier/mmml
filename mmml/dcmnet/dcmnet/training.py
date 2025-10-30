@@ -234,8 +234,10 @@ def train_model(
     esp_w=1.0,
     chg_w=0.01,
     restart_params=None,
-    ema_decay=0.999  ,
-    num_atoms=60
+    ema_decay=0.999,
+    num_atoms=60,
+    use_grad_clip=False,
+    grad_clip_norm=2.0
 ):
     """
     Train DCMNet model with ESP and monopole losses.
@@ -266,10 +268,18 @@ def train_model(
         Number of distributed multipoles per atom
     esp_w : float, optional
         Weight for ESP loss term, by default 1.0
+    chg_w : float, optional
+        Weight for charge/monopole loss term, by default 0.01
     restart_params : Any, optional
         Parameters to restart from, by default None
     ema_decay : float, optional
         Exponential moving average decay rate, by default 0.999
+    num_atoms : int, optional
+        Maximum number of atoms for batching, by default 60
+    use_grad_clip : bool, optional
+        Whether to use gradient clipping, by default False
+    grad_clip_norm : float, optional
+        Maximum gradient norm for clipping, by default 2.0
         
     Returns
     -------
@@ -328,6 +338,7 @@ def train_model(
                 esp_w=esp_w,
                 chg_w=chg_w,
                 ndcm=ndcm,
+                clip_norm=grad_clip_norm if use_grad_clip else None,
             )
 
             ema_params = update_ema_params(ema_params, params, ema_decay)
@@ -999,13 +1010,17 @@ def train_model_general(
                 train_metrics = {"loss": float(loss)}
                 if extras:
                     for idx, val in enumerate(extras):
-                        train_metrics[f"extra{idx}"] = float(val)
+                        # Only store scalar values in metrics
+                        if jnp.ndim(val) == 0:
+                            train_metrics[f"extra{idx}"] = float(val)
             else:
                 train_metrics["loss"] += (float(loss) - train_metrics["loss"]) / (i + 1)
                 if extras:
                     for idx, val in enumerate(extras):
-                        k = f"extra{idx}"
-                        train_metrics[k] += (float(val) - train_metrics[k]) / (i + 1)
+                        # Only update scalar values in metrics
+                        if jnp.ndim(val) == 0:
+                            k = f"extra{idx}"
+                            train_metrics[k] += (float(val) - train_metrics[k]) / (i + 1)
         del train_batches
         # Validation metrics
         valid_metrics = {}
@@ -1030,13 +1045,17 @@ def train_model_general(
                 valid_metrics = {"loss": float(loss)}
                 if extras:
                     for idx, val in enumerate(extras):
-                        valid_metrics[f"extra{idx}"] = float(val)
+                        # Only store scalar values in metrics
+                        if jnp.ndim(val) == 0:
+                            valid_metrics[f"extra{idx}"] = float(val)
             else:
                 valid_metrics["loss"] += (float(loss) - valid_metrics["loss"]) / (i + 1)
                 if extras:
                     for idx, val in enumerate(extras):
-                        k = f"extra{idx}"
-                        valid_metrics[k] += (float(val) - valid_metrics[k]) / (i + 1)
+                        # Only update scalar values in metrics
+                        if jnp.ndim(val) == 0:
+                            k = f"extra{idx}"
+                            valid_metrics[k] += (float(val) - valid_metrics[k]) / (i + 1)
         
         if writer is not None and log_extra_metrics:
             log_extra_metrics(writer, train_metrics, valid_metrics, epoch)
@@ -1079,8 +1098,9 @@ def _log_extra_metrics_dipo(writer, train_metrics, valid_metrics, epoch):
     writer.add_scalar("dipo_l/train", train_metrics.get("extra2", 0.0), epoch)
     writer.add_scalar("dipo_l/valid", valid_metrics.get("extra2", 0.0), epoch)
 
-# Default (esp_mono_loss) config
-train_model = partial(
+# Alternative general training interface using train_model_general
+# (kept for backward compatibility with code that uses the general interface)
+train_model_general_default = partial(
     train_model_general,
     loss_step_fn=train_step,
     eval_step_fn=eval_step,
@@ -1094,17 +1114,5 @@ train_model = partial(
     extra_train_args={"chg_w": 0.01},
 )
 
-# Dipole (dipo_esp_mono_loss) config
-train_model_dipo = partial(
-    train_model_general,
-    loss_step_fn=train_step_dipo,
-    eval_step_fn=eval_step_dipo,
-    optimizer_fn=lambda lr, epochs: create_adam_optimizer_with_exponential_decay(lr, 1e-6, 10, epochs),
-    use_ema=False,
-    ema_decay=0.999,
-    use_grad_clip=True,
-    grad_clip_norm=2.0,
-    log_extra_metrics=_log_extra_metrics_dipo,
-    save_best_params_with_ema=False,
-    extra_train_args={"chg_w": 0.01},
-)
+# Note: train_model is defined earlier in the file with enhanced statistics
+# Note: train_model_dipo is defined earlier in the file with enhanced statistics
