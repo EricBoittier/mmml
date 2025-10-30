@@ -36,7 +36,7 @@ def pred_dipole(dcm, com, q):
     # return jnp.linalg.norm(dipole_out)* 4.80320
 
 
-@functools.partial(jax.jit, static_argnames=("batch_size", "esp_w", "chg_w", "n_dcm", "n_atoms"))
+@functools.partial(jax.jit, static_argnames=("batch_size", "esp_w", "chg_w", "n_dcm"))
 def esp_mono_loss(
     dipo_prediction,
     mono_prediction,
@@ -95,8 +95,12 @@ def esp_mono_loss(
     # return esp_loss + mono_loss
     # Ensure scalar n_atoms even if shaped (1,) or (1,1)
     n_atoms = jnp.ravel(n_atoms)[0]
-    d = jnp.moveaxis(dipo_prediction, -1, -2).reshape(batch_size, NATOMS * n_dcm, 3)
-    m = mono_prediction.reshape(batch_size, NATOMS * n_dcm)
+    
+    # Infer max_atoms from prediction shape
+    max_atoms = mono_prediction.shape[1]  # Shape is (batch_size, max_atoms, n_dcm)
+    
+    d = jnp.moveaxis(dipo_prediction, -1, -2).reshape(batch_size, max_atoms * n_dcm, 3)
+    m = mono_prediction.reshape(batch_size, max_atoms * n_dcm)
 
     # # 0 the charges for dummy atoms
     # NDC = n_atoms * n_dcm
