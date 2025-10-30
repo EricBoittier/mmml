@@ -231,14 +231,100 @@ def prepare_multiple_datasets(
                 n_grid_values = np.array([len(esp) for esp in esp_data])
             data.append(n_grid_values.reshape(-1, 1))
             keys.append("n_grid")
+    # Handle D field - can be dipole magnitude, molecular dipole, or atom-centered dipoles
     if "D" in datasets[0].keys():
         dataD = np.concatenate([dataset["D"] for dataset in datasets])[not_failed]
-        print("D", dataD.shape)
-        try:
-            data.append(dataD.reshape(-1, 1))
-        except:
-            data.append(dataD.reshape(shape[0], natoms, 3))
+        
+        # Determine what D represents based on its shape
+        if len(dataD.shape) == 1:
+            # Flattened - need to infer structure
+            total_size = dataD.size
+            n_molecules = shape[0]
+            
+            if total_size == n_molecules:
+                # (n_samples,) -> dipole magnitude
+                dataD = dataD.reshape(-1, 1)
+                print(f"   D field: dipole magnitude (shape: {dataD.shape})")
+            elif total_size == n_molecules * 3:
+                # (n_samples * 3,) -> molecular dipole vector
+                dataD = dataD.reshape(-1, 3)
+                print(f"   D field: molecular dipole vector (shape: {dataD.shape})")
+            elif total_size == n_molecules * natoms * 3:
+                # (n_samples * natoms * 3,) -> atom-centered dipoles
+                dataD = dataD.reshape(n_molecules, natoms, 3)
+                print(f"   D field: atom-centered dipoles (shape: {dataD.shape})")
+            else:
+                print(f"⚠️  D field has unexpected size: {total_size}")
+                print(f"   Expected: {n_molecules} (mag), {n_molecules*3} (vec), or {n_molecules*natoms*3} (atom)")
+                # Try to fit it somehow
+                dataD = dataD.reshape(n_molecules, -1)
+                print(f"   Reshaped to: {dataD.shape}")
+        elif len(dataD.shape) == 2:
+            # Already shaped
+            if dataD.shape[1] == 1:
+                print(f"   D field: dipole magnitude (shape: {dataD.shape})")
+            elif dataD.shape[1] == 3:
+                print(f"   D field: molecular dipole vector (shape: {dataD.shape})")
+            else:
+                print(f"   D field: custom shape {dataD.shape}")
+        elif len(dataD.shape) == 3:
+            print(f"   D field: atom-centered dipoles (shape: {dataD.shape})")
+        
+        data.append(dataD)
         keys.append("D")
+    
+    # Handle Q field - can be total charge, quadrupole moment, or quadrupole tensor
+    if "Q" in datasets[0].keys():
+        dataQ = np.concatenate([dataset["Q"] for dataset in datasets])[not_failed]
+        
+        # Determine what Q represents based on its shape
+        if len(dataQ.shape) == 1:
+            # Flattened - need to infer structure
+            total_size = dataQ.size
+            n_molecules = shape[0]
+            
+            if total_size == n_molecules:
+                # (n_samples,) -> total molecular charge (scalar)
+                dataQ = dataQ.reshape(-1, 1)
+                print(f"   Q field: total molecular charge (shape: {dataQ.shape})")
+            elif total_size == n_molecules * 6:
+                # (n_samples * 6,) -> quadrupole moment (6 components: xx, yy, zz, xy, xz, yz)
+                dataQ = dataQ.reshape(-1, 6)
+                print(f"   Q field: quadrupole moment (6 components, shape: {dataQ.shape})")
+            elif total_size == n_molecules * 9:
+                # (n_samples * 9,) -> quadrupole tensor (3x3 symmetric)
+                dataQ = dataQ.reshape(-1, 3, 3)
+                print(f"   Q field: quadrupole tensor (3×3, shape: {dataQ.shape})")
+            elif total_size == n_molecules * natoms:
+                # (n_samples * natoms,) -> atom-centered charges (same as mono!)
+                dataQ = dataQ.reshape(-1, natoms)
+                print(f"⚠️  Q field: appears to be atomic charges (shape: {dataQ.shape})")
+                print(f"   If this is correct, consider renaming to 'mono' in your dataset")
+            else:
+                print(f"⚠️  Q field has unexpected size: {total_size}")
+                print(f"   Expected: {n_molecules} (charge), {n_molecules*6} (moment), {n_molecules*9} (tensor)")
+                # Keep as-is
+                dataQ = dataQ.reshape(n_molecules, -1)
+                print(f"   Reshaped to: {dataQ.shape}")
+        elif len(dataQ.shape) == 2:
+            # Already shaped
+            if dataQ.shape[1] == 1:
+                print(f"   Q field: total molecular charge (shape: {dataQ.shape})")
+            elif dataQ.shape[1] == 6:
+                print(f"   Q field: quadrupole moment (6 components, shape: {dataQ.shape})")
+            elif dataQ.shape[1] == natoms:
+                print(f"⚠️  Q field: appears to be atomic charges (shape: {dataQ.shape})")
+            else:
+                print(f"   Q field: custom shape {dataQ.shape}")
+        elif len(dataQ.shape) == 3:
+            if dataQ.shape[1] == 3 and dataQ.shape[2] == 3:
+                print(f"   Q field: quadrupole tensor (3×3, shape: {dataQ.shape})")
+            else:
+                print(f"   Q field: custom 3D shape {dataQ.shape}")
+        
+        data.append(dataQ)
+        keys.append("Q")
+    
     if "dipole" in datasets[0].keys():
         dipole = np.concatenate([dataset["dipole"] for dataset in datasets]).reshape(
             -1, 3
