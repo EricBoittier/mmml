@@ -37,6 +37,9 @@ help:
 	@echo "  make clean             - Remove build artifacts and caches"
 	@echo "  make clean-all         - Remove everything including venv"
 	@echo ""
+	@echo "Data Utilities:"
+	@echo "  make split-8-1-1       - Split an NPZ into 8:1:1 train/valid/test"
+	@echo ""
 
 # ==============================================================================
 # Installation with uv
@@ -203,6 +206,16 @@ freeze:
 
 upgrade:
 	uv sync --upgrade
+
+# ==============================================================================
+# Data utilities
+# ==============================================================================
+
+INPUT ?=
+OUTDIR ?=
+split-8-1-1:
+	@if [ -z "$(INPUT)" ]; then echo "Error: set INPUT=<data.npz>"; exit 1; fi
+	uv run python scripts/split_npz_8_1_1.py $(INPUT) $(if $(OUTDIR),--out-dir $(OUTDIR),)
 
 # ==============================================================================
 # Training helpers (PhysNetJAX via Hydra)
