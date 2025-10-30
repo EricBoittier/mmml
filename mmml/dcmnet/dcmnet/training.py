@@ -5,12 +5,16 @@ import e3x
 import jax
 import jax.numpy as jnp
 import optax
+import lovely_jax as lj
 from .loss import esp_mono_loss
 
 from .data import prepare_batches, prepare_datasets
 
 from typing import Callable, Any, Optional
 from functools import partial
+
+# Enable lovely_jax for better array printing
+lj.monkey_patch()
 
 
 @functools.partial(
@@ -80,7 +84,83 @@ def train_step(
         grad = clip_grads_by_global_norm(grad, clip_norm)
     updates, opt_state = optimizer_update(grad, opt_state, params)
     params = optax.apply_updates(params, updates)
-    return params, opt_state, loss
+    return params, opt_state, loss, mono, dipo
+
+
+def compute_statistics(predictions, targets=None):
+    """
+    Compute comprehensive statistics for predictions and optionally compare with targets.
+    
+    Parameters
+    ----------
+    predictions : array_like
+        Predicted values
+    targets : array_like, optional
+        Target values for comparison
+        
+    Returns
+    -------
+    dict
+        Dictionary containing statistical measures
+    """
+    stats = {
+        'mean': float(jnp.mean(predictions)),
+        'std': float(jnp.std(predictions)),
+        'min': float(jnp.min(predictions)),
+        'max': float(jnp.max(predictions)),
+        'median': float(jnp.median(predictions)),
+    }
+    
+    if targets is not None:
+        error = predictions - targets
+        stats.update({
+            'mae': float(jnp.mean(jnp.abs(error))),
+            'rmse': float(jnp.sqrt(jnp.mean(error**2))),
+            'target_mean': float(jnp.mean(targets)),
+            'target_std': float(jnp.std(targets)),
+        })
+    
+    return stats
+
+
+def print_statistics_table(train_stats, valid_stats, epoch):
+    """
+    Print a formatted table comparing training and validation statistics.
+    
+    Parameters
+    ----------
+    train_stats : dict
+        Training statistics
+    valid_stats : dict
+        Validation statistics
+    epoch : int
+        Current epoch number
+    """
+    print(f"\n{'='*80}")
+    print(f"Epoch {epoch:3d} Statistics")
+    print(f"{'='*80}")
+    print(f"{'Metric':<20} {'Train':>15} {'Valid':>15} {'Difference':>15}")
+    print(f"{'-'*80}")
+    
+    # Common metrics to compare
+    for key in ['loss', 'mono_mae', 'mono_rmse', 'mono_mean', 'mono_std']:
+        if key in train_stats and key in valid_stats:
+            train_val = train_stats[key]
+            valid_val = valid_stats[key]
+            diff = valid_val - train_val
+            print(f"{key:<20} {train_val:>15.6e} {valid_val:>15.6e} {diff:>15.6e}")
+    
+    print(f"{'-'*80}")
+    print(f"Monopole Prediction Statistics:")
+    print(f"  Train: mean={train_stats.get('mono_mean', 0):.6e}, "
+          f"std={train_stats.get('mono_std', 0):.6e}, "
+          f"min={train_stats.get('mono_min', 0):.6e}, "
+          f"max={train_stats.get('mono_max', 0):.6e}")
+    print(f"  Valid: mean={valid_stats.get('mono_mean', 0):.6e}, "
+          f"std={valid_stats.get('mono_std', 0):.6e}, "
+          f"min={valid_stats.get('mono_min', 0):.6e}, "
+          f"max={valid_stats.get('mono_max', 0):.6e}")
+    print(f"{'='*80}\n")
 
 
 @functools.partial(
@@ -134,7 +214,7 @@ def eval_step(model_apply, batch, batch_size, params, esp_w, chg_w, ndcm):
         chg_w=chg_w,
         n_dcm=ndcm,
     )
-    return loss
+    return loss, mono, dipo
 
 
 def train_model(
