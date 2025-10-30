@@ -255,6 +255,9 @@ def esp_mono_loss_pots(
     array_like
         Predicted ESP values
     """
+    # Infer max_atoms from prediction shape
+    max_atoms = mono_prediction.shape[1] if len(mono_prediction.shape) > 1 else mono_prediction.size // n_dcm
+    
     return calc_esp(
         dipo_prediction, mono_prediction.reshape(batch_size, n_dcm * max_atoms), vdw_surface
     )
