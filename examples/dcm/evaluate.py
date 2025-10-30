@@ -220,7 +220,8 @@ def main(cfg: DictConfig) -> None:
     
     # Load parameters
     params_data = np.load(checkpoint_path, allow_pickle=True)
-    params = {k: jnp.array(v) for k, v in params_data.items()}
+    # Convert loaded numpy arrays back to JAX arrays, handling nested structures
+    params = jax.tree_util.tree_map(jnp.array, dict(params_data))
     log.info("Loaded model parameters")
     
     # Prepare datasets
