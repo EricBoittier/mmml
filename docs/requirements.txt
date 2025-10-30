@@ -1,7 +1,13 @@
-sphinx>=8.2
-pydata-sphinx-theme>=0.16
-sphinx-design>=0.5
-sphinx-copybutton>=0.5
-numpy
-packaging
+# ReadTheDocs build requirements
 
+# MkDocs and theme
+mkdocs>=1.5.0
+mkdocs-material>=9.0.0
+
+# Documentation plugins
+mkdocstrings[python]>=0.24.0
+pymdown-extensions>=10.0
+
+# For API documentation
+numpy
+scipy

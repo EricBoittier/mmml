@@ -1,0 +1,48 @@
+# Default DCMNet training configuration
+
+# Model
+model: dcmnet
+
+# Data
+train_file: train.npz
+valid_file: valid.npz
+# train_fraction: 0.8  # If valid_file not provided, split train_file
+
+# Training parameters
+batch_size: 32
+max_epochs: 1000
+learning_rate: 0.001
+early_stopping: 50
+
+# Training targets and loss weights
+targets:
+  - energy
+  - forces
+  - dipole
+  - esp
+
+loss_weights:
+  energy: 1.0
+  forces: 100.0
+  dipole: 10.0
+  esp: 1.0
+
+# Output
+output_dir: checkpoints/dcmnet
+log_interval: 10
+checkpoint_interval: 100
+save_best_only: true
+
+# Preprocessing
+center_coordinates: false
+normalize_energy: false
+
+# Model-specific parameters
+model_params:
+  features: 128
+  max_degree: 2
+  num_iterations: 3
+  num_basis_functions: 8
+  cutoff: 5.0
+  esp_max_grid: 1000
+
