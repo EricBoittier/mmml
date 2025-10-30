@@ -9,10 +9,12 @@ A Python parser to read Molpro XML output files (following the schema at https:/
 - **Energies**: Parses energies from various methods (RHF, MP2, CCSD, etc.)
 - **Molecular Orbitals**: Reads orbital energies, occupancies, and coefficients
 - **Vibrational Data**: Extracts frequencies (`normalCoordinate` elements), normal modes, and IR intensities
+- **Cube Data**: Automatically loads ESP, density, and other cube files referenced in XML
 - **Molpro Variables**: Parses internal Molpro variables (e.g., physical constants, user variables)
 - **Properties**: Parses dipole moments, gradients, and Hessians
 - **NumPy Arrays**: All data returned as convenient NumPy arrays
 - **Namespace Handling**: Automatically handles XML namespaces (CML, Molpro)
+- **Multi-Geometry Support**: Extracts final geometry from optimization/scan trajectories
 
 ## Installation
 
@@ -44,6 +46,28 @@ print(f"Dipole moment: {data.dipole_moment}")
 python read_molden.py molpro_output.xml
 ```
 
+### With Cube Data (ESP, Density)
+
+```python
+from read_molden import read_molpro_xml
+
+# Parse XML and load cube files
+data = read_molpro_xml('molpro_output.xml', load_cubes=True)
+
+# Access cube data
+if 'esp' in data.cube_data:
+    esp_cube = data.cube_data['esp']
+    print(f"ESP cube shape: {esp_cube['values'].shape}")
+    print(f"Grid origin: {esp_cube['origin']}")
+    print(f"Grid dimensions: {esp_cube['dimensions']}")
+
+if 'density' in data.cube_data:
+    density = data.cube_data['density']['values']
+    print(f"Density cube shape: {density.shape}")
+```
+
+See [Cube Data Guide](../../docs/cube_data_guide.md) for detailed usage.
+
 ## Data Structure
 
 The `MolproData` class contains:
@@ -62,6 +86,7 @@ The `MolproData` class contains:
 | `dipole_moment` | `np.ndarray(3,)` | Dipole moment vector (Debye) |
 | `gradient` | `np.ndarray(n_atoms, 3)` | Energy gradient |
 | `hessian` | `np.ndarray(3*n_atoms, 3*n_atoms)` | Hessian matrix |
+| `cube_data` | `Dict[str, Dict]` | Cube file data (ESP, density, etc.) |
 | `variables` | `Dict[str, Union[float, np.ndarray]]` | Molpro internal variables |
 
 ## Examples
