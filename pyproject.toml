@@ -60,11 +60,7 @@ dependencies = [
 
 [project.optional-dependencies]
 # Interfaces and optional integrations
-charmm-interface = [
-    # Install `pycharmm` separately from a compatible source (local build or wheel)
-    # before enabling this extra.
-    "pycharmm",
-]
+charmm-interface = []
 # GPU/CUDA support (CUDA 12)
 # Note: JAX with CUDA requires installation from specific index
 # Install with: pip install -e ".[gpu]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
@@ -171,7 +167,6 @@ all-cpu = [
 
 [tool.uv.sources]
 jax-md = { git = "https://github.com/google/jax-md.git", rev = "05221c551e71f1b5f64458c0e3533452c22efec0" }
-pycharmm = { path = "setup/charmm/tool/pycharmm", editable = true }
 
 [[tool.uv.index]]
 name = "jax-cuda"
@@ -185,9 +180,11 @@ include-package-data = false
 [tool.setuptools.packages.find]
 namespaces = false
 where = ["."]
+include = ["mmml*", "pycharmm*"]
 
 [tool.setuptools.package-data]
 mmml = ["py.typed"]
+pycharmm = ["README.md", "LICENSE"]
 
 [tool.versioningit]
 default-version = "1+unknown"
