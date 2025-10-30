@@ -174,6 +174,7 @@ The package has been reorganized with modular optional dependencies. Install onl
 | `notebooks` | Jupyter notebook support | `pip install -e ".[notebooks]"` |
 | `experiments` | Experiment tracking (W&B, Optuna) | `pip install -e ".[experiments]"` |
 | `dev` | Development and testing tools | `pip install -e ".[dev]"` |
+| `charmm-interface` | Enable the optional CHARMM Python bindings | `pip install -e ".[charmm-interface]"` |
 | `all` | Everything including GPU | `pip install -e ".[all]"` |
 | `all-cpu` | Everything except GPU | `pip install -e ".[all-cpu]"` |
 
@@ -186,6 +187,9 @@ pip install -e ".[gpu,quantum,viz,notebooks]"
 # Or use the Makefile which handles this automatically
 make install-gpu
 ```
+
+> ⚠️ **Using the CHARMM interface?**  
+> Build and install `pycharmm` from `setup/charmm/tool/pycharmm` (e.g. `pip install setup/charmm/tool/pycharmm`) before enabling the `charmm-interface` extra. This dependency is not published on PyPI and must be provided locally.
 
 ### Quick Commands with Make
 
