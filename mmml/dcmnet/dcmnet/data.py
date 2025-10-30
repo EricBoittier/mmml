@@ -183,12 +183,19 @@ def prepare_multiple_datasets(
             ]
         data.append(dataEsp)
         keys.append("esp")
+    # Handle both 'vdw_surface' and 'esp_grid' (they're the same thing - grid points on VDW surface)
     if "vdw_surface" in datasets[0].keys():
         dataVDW = np.concatenate([dataset["vdw_surface"] for dataset in datasets])[
             not_failed
         ]
         data.append(dataVDW)
         keys.append("vdw_surface")
+    elif "esp_grid" in datasets[0].keys():
+        dataVDW = np.concatenate([dataset["esp_grid"] for dataset in datasets])[
+            not_failed
+        ]
+        data.append(dataVDW)
+        keys.append("vdw_surface")  # Normalize to 'vdw_surface' for consistency
     if "n_grid" in datasets[0].keys():
         dataNgrid = np.concatenate([dataset["n_grid"] for dataset in datasets])[
             not_failed
@@ -286,11 +293,10 @@ def prepare_datasets(
     num_train,
     num_valid,
     filename,
-    natoms,
+    natoms=60,
     clean=False,
     esp_mask=False,
     clip_esp=False,
-    
 ):
     """
     Prepare datasets for training and validation.
@@ -330,8 +336,8 @@ def prepare_datasets(
         key,
         num_train,
         num_valid,
-        filename,
         natoms,
+        filename=filename,
         clean=clean,
         clip_esp=clip_esp,
         esp_mask=esp_mask,
