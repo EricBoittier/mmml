@@ -128,7 +128,7 @@ def esp_mono_loss(
 
     # esp_loss
     # batched_pred = batched_electrostatic_potential(d, m, vdw_surface)
-    batched_pred = calc_esp(d, m, vdw_surface)
+    batched_pred = batched_electrostatic_potential(d, m, vdw_surface)
     # Ensure both arrays have same shape
     if batched_pred.ndim > 1:
         batched_pred = batched_pred.squeeze()
