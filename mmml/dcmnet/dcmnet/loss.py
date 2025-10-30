@@ -104,7 +104,7 @@ def esp_mono_loss(
 
     # # 0 the charges for dummy atoms
     # NDC = n_atoms * n_dcm
-    # valid_atoms = jnp.where(jnp.arange(NATOMS * n_dcm) < NDC, 1, 0)
+    # valid_atoms = jnp.where(jnp.arange(max_atoms * n_dcm) < NDC, 1, 0)
     # d = d[0]
     # m = m[0] * valid_atoms
     # # constrain the net charge to 0.0
@@ -112,7 +112,7 @@ def esp_mono_loss(
     # m = (m - avg_chg) * valid_atoms
 
     # monopole loss
-    mono_prediction = m.reshape(NATOMS, n_dcm)
+    mono_prediction = m.reshape(max_atoms, n_dcm)
     sum_of_dc_monopoles = mono_prediction.sum(axis=-1)
     l2_loss_mono = optax.l2_loss(sum_of_dc_monopoles, mono)
     mono_loss_corrected = l2_loss_mono.sum() / jnp.maximum(n_atoms, 1.0)
