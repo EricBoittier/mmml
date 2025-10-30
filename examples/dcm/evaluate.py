@@ -219,7 +219,7 @@ def main(cfg: DictConfig) -> None:
     log.info(f"Created model with {cfg.model.n_dcm} DCM components")
     
     # Load parameters
-    params_data = np.load(checkpoint_path)
+    params_data = np.load(checkpoint_path, allow_pickle=True)
     params = {k: jnp.array(v) for k, v in params_data.items()}
     log.info("Loaded model parameters")
     
