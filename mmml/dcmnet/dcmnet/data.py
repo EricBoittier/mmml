@@ -176,7 +176,8 @@ def prepare_multiple_datasets(
     else:
         # If no monopole charges provided, create dummy zeros
         # This allows training without charge constraints
-        n_molecules = len(not_failed) if hasattr(not_failed, '__len__') else sum(not_failed)
+        # Use the shape from R or Z which have already been processed
+        n_molecules = shape[0]  # Already computed from R data
         dataMono = np.zeros((n_molecules, natoms))
         data.append(dataMono)
         keys.append("mono")
