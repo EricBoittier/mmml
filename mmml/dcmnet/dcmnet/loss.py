@@ -87,8 +87,8 @@ def esp_mono_loss(
     # sum_of_dc_monopoles = mono_prediction.sum(axis=-1)
     # l2_loss_mono = optax.l2_loss(sum_of_dc_monopoles, mono)
     # mono_loss = jnp.mean(l2_loss_mono)
-    # d = jnp.moveaxis(dipo_prediction, -1, -2).reshape(batch_size, NATOMS * n_dcm, 3)
-    # m = mono_prediction.reshape(batch_size, NATOMS * n_dcm)
+    # d = jnp.moveaxis(dipo_prediction, -1, -2).reshape(batch_size, max_atoms * n_dcm, 3)
+    # m = mono_prediction.reshape(batch_size, max_atoms * n_dcm)
     # batched_pred = batched_electrostatic_potential(d, m, vdw_surface)
     # l2_loss = optax.l2_loss(batched_pred, esp_target)
     # esp_loss = jnp.mean(l2_loss) * esp_w
@@ -190,14 +190,14 @@ def dipo_esp_mono_loss(
     tuple
         (esp_loss, mono_loss, dipole_loss)
     """
-    d = jnp.moveaxis(dipo_prediction, -1, -2).reshape(batch_size, NATOMS * n_dcm, 3)
-    m = mono_prediction.reshape(batch_size, NATOMS * n_dcm)
+    d = jnp.moveaxis(dipo_prediction, -1, -2).reshape(batch_size, max_atoms * n_dcm, 3)
+    m = mono_prediction.reshape(batch_size, max_atoms * n_dcm)
 
     # 0 the charges for dummy atoms
     # Ensure scalar n_atoms even if shaped (1,) or (1,1)
     n_atoms = jnp.ravel(n_atoms)[0]
     NDC = n_atoms * n_dcm
-    valid_atoms = jnp.where(jnp.arange(NATOMS * n_dcm) < NDC, 1, 0)
+    valid_atoms = jnp.where(jnp.arange(max_atoms * n_dcm) < NDC, 1, 0)
     d = d[0]
     m = m[0] * valid_atoms
     # constrain the net charge to 0.0
@@ -205,7 +205,7 @@ def dipo_esp_mono_loss(
     m = (m - avg_chg) * valid_atoms
 
     # monopole loss
-    mono_prediction = m.reshape(NATOMS, n_dcm)
+    mono_prediction = m.reshape(max_atoms, n_dcm)
     sum_of_dc_monopoles = mono_prediction.sum(axis=-1)
     l2_loss_mono = optax.l2_loss(sum_of_dc_monopoles, mono)
     mono_loss_corrected = l2_loss_mono.sum() / jnp.maximum(n_atoms, 1.0)
@@ -253,7 +253,7 @@ def esp_mono_loss_pots(
         Predicted ESP values
     """
     return calc_esp(
-        dipo_prediction, mono_prediction.reshape(batch_size, n_dcm * NATOMS), vdw_surface
+        dipo_prediction, mono_prediction.reshape(batch_size, n_dcm * max_atoms), vdw_surface
     )
 
 
@@ -279,9 +279,9 @@ def esp_loss_pots(dipo_prediction, mono_prediction, vdw_surface, mono, batch_siz
     array_like
         Predicted ESP values from atomic monopoles
     """
-    d = dipo_prediction.reshape(batch_size, NATOMS, 3)
-    mono = mono.reshape(batch_size, NATOMS)
-    m = mono_prediction.reshape(batch_size, NATOMS)
+    d = dipo_prediction.reshape(batch_size, max_atoms, 3)
+    mono = mono.reshape(batch_size, max_atoms)
+    m = mono_prediction.reshape(batch_size, max_atoms)
     batched_pred = batched_electrostatic_potential(d, m, vdw_surface)
 
     return batched_pred
@@ -305,7 +305,7 @@ def mean_absolute_error(prediction, target, batch_size):
     float
         Mean absolute error
     """
-    nonzero = jnp.nonzero(target, size=batch_size * NATOMS)
+    nonzero = jnp.nonzero(target, size=batch_size * max_atoms)
     return jnp.mean(jnp.abs(prediction[nonzero] - target[nonzero]))
 
 
