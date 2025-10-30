@@ -1,6 +1,0 @@
-﻿mmml
-====
-
-.. automodule:: mmml
-
-   

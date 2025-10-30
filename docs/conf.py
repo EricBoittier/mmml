@@ -68,7 +68,6 @@ napoleon_use_ivar = True
 
 # Mock optional heavy dependencies to keep autodoc importable in minimal envs
 autodoc_mock_imports = [
-    'mmml',
     'gpu4pyscf',
     'pyscf',
     'e3x',
@@ -96,7 +95,12 @@ autodoc_mock_imports = [
     'rdkit.Chem.AllChem',
     'rdkit.Geometry',
     'dcmnet',
+    'tensorflow',
+    'tensorboard',
+    'tensorboardX',
 ]
+
+autosummary_mock_imports = autodoc_mock_imports[:]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']

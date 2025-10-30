@@ -18,7 +18,7 @@ Saving Results from PySCF GPU
 
 Use the CLI flag ``--save_option`` to control how results are persisted when running
 ``mmml.pyscf4gpuInterface.calcs``. Supported values are ``pkl``, ``npz``, and ``hdf5``.
-See :ref:`PySCF GPU Interface API <PySCF GPU Interface API>` for details and examples.
+See :ref:`PySCF GPU Interface API <pyscf4gpu_api>` for details and examples.
 
 Python API
 ----------
