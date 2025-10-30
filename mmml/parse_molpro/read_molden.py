@@ -599,7 +599,7 @@ class MolproXMLParser:
         return data
 
 
-def read_molpro_xml(xml_file: str, use_last_geometry: bool = True) -> MolproData:
+def read_molpro_xml(xml_file: str, use_last_geometry: bool = True, load_cubes: bool = True) -> MolproData:
     """
     Read Molpro XML output file and return data as NumPy arrays.
     
@@ -608,6 +608,7 @@ def read_molpro_xml(xml_file: str, use_last_geometry: bool = True) -> MolproData
         use_last_geometry: If True (default), extract the last geometry from files
                          with multiple geometries (e.g., optimization trajectories).
                          If False, use the first geometry.
+        load_cubes: If True (default), load cube file data (ESP, density, etc.) if available.
         
     Returns:
         MolproData object containing parsed arrays
@@ -617,9 +618,11 @@ def read_molpro_xml(xml_file: str, use_last_geometry: bool = True) -> MolproData
         >>> print(f"Coordinates shape: {data.coordinates.shape}")
         >>> print(f"SCF energy: {data.energies.get('scf')}")
         >>> print(f"Orbital energies: {data.orbital_energies}")
+        >>> if 'esp' in data.cube_data:
+        ...     print(f"ESP cube shape: {data.cube_data['esp']['values'].shape}")
     """
     parser = MolproXMLParser(xml_file)
-    return parser.parse_all(use_last_geometry=use_last_geometry)
+    return parser.parse_all(use_last_geometry=use_last_geometry, load_cubes=load_cubes)
 
 
 if __name__ == '__main__':
