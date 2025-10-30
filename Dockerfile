@@ -3,7 +3,7 @@
 # Supports both CPU and GPU variants
 
 ARG BASE_IMAGE=python:3.11-slim
-ARG CUDA_VERSION=12.2.0
+ARG CUDA_VERSION=12.1.1
 
 # ============================================================================
 # Stage 1: Base image with system dependencies

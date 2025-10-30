@@ -24,7 +24,7 @@ services:
       dockerfile: Dockerfile
       target: runtime-gpu
       args:
-        CUDA_VERSION: "12.2.0"
+        CUDA_VERSION: "12.1.1"
     image: mmml:gpu
     container_name: mmml-gpu
     volumes:
@@ -52,7 +52,7 @@ services:
       dockerfile: Dockerfile
       target: runtime-gpu
       args:
-        CUDA_VERSION: "12.2.0"
+        CUDA_VERSION: "12.1.1"
     image: mmml:jupyter
     container_name: mmml-jupyter
     volumes:
