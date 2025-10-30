@@ -333,8 +333,24 @@ def prepare_multiple_datasets(
         print("dipole.shape", dipole.shape)
         data.append(dipole)
         keys.append("dipole")
+    # Handle Dxyz field - molecular dipole vector (should be (n_samples, 3))
     if "Dxyz" in datasets[0].keys():
         dataDxyz = np.concatenate([dataset["Dxyz"] for dataset in datasets])[not_failed]
+        
+        # Ensure it's the right shape
+        if len(dataDxyz.shape) == 1:
+            n_molecules = shape[0]
+            if dataDxyz.size == n_molecules * 3:
+                dataDxyz = dataDxyz.reshape(-1, 3)
+                print(f"   Dxyz field: molecular dipole vector (shape: {dataDxyz.shape})")
+            else:
+                print(f"⚠️  Dxyz field unexpected size: {dataDxyz.size}, expected {n_molecules*3}")
+                dataDxyz = dataDxyz.reshape(n_molecules, -1)
+        elif dataDxyz.shape[1] != 3:
+            print(f"⚠️  Dxyz field unexpected shape: {dataDxyz.shape}, expected (n, 3)")
+        else:
+            print(f"   Dxyz field: molecular dipole vector (shape: {dataDxyz.shape})")
+        
         data.append(dataDxyz)
         keys.append("Dxyz")
     if "com" in datasets[0].keys():
