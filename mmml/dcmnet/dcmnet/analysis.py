@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 from .data import cut_vdw, prepare_batches
 from .loss import esp_mono_loss_pots, pred_dipole
-from .modules import MessagePassingModel, MessagePassingModelDEBUG, NATOMS
+from .modules import MessagePassingModel, MessagePassingModelDEBUG
 from .multipoles import calc_esp_from_multipoles
 from .utils import apply_model
 
@@ -382,9 +382,20 @@ def rmse(y_true, y_pred):
     return jnp.sqrt(jnp.mean((y_true - y_pred) ** 2)) * au_to_kcal
 
 
-def dcmnet_analysis(params, model, batch, NATOMS):
+def dcmnet_analysis(params, model, batch, num_atoms=None):
     """
     Analyze DCMNet predictions.
+    
+    Parameters
+    ----------
+    params : PyTree
+        Model parameters
+    model : MessagePassingModel
+        Model instance
+    batch : dict
+        Batch dictionary
+    num_atoms : int, optional
+        Number of atoms (inferred from batch if not provided)
     
     Computes ESP and dipole predictions from DCMNet model and
     compares with reference values.
@@ -403,11 +414,15 @@ def dcmnet_analysis(params, model, batch, NATOMS):
     dict
         Dictionary containing analysis results
     """
-    mono, dipo = apply_model(model, params, batch, 1, NATOMS)
+    # Infer number of atoms from batch if not provided
+    if num_atoms is None:
+        num_atoms = len(batch["Z"]) if "Z" in batch else batch["R"].shape[0]
+    
+    mono, dipo = apply_model(model, params, batch, 1, num_atoms)
     esp_dc_pred = esp_mono_loss_pots(
         dipo, mono, batch["vdw_surface"][0], batch["mono"], 1, model.n_dcm
     )
-    D = pred_dipole(dipo, batch["com"], mono.reshape(NATOMS * model.n_dcm))
+    D = pred_dipole(dipo, batch["com"], mono.reshape(num_atoms * model.n_dcm))
     D_mae = jnp.mean(jnp.abs(D - batch["Dxyz"])) * au_to_debye
     mask, closest_atom_type, closest_atom = cut_vdw(
         batch["vdw_surface"][0], batch["R"], batch["Z"]
