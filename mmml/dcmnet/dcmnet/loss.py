@@ -190,6 +190,9 @@ def dipo_esp_mono_loss(
     tuple
         (esp_loss, mono_loss, dipole_loss)
     """
+    # Infer max_atoms from prediction shape
+    max_atoms = mono_prediction.shape[1]  # Shape is (batch_size, max_atoms, n_dcm)
+    
     d = jnp.moveaxis(dipo_prediction, -1, -2).reshape(batch_size, max_atoms * n_dcm, 3)
     m = mono_prediction.reshape(batch_size, max_atoms * n_dcm)
 
