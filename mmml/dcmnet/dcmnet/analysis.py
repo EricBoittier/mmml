@@ -422,20 +422,25 @@ def dcmnet_analysis(params, model, batch, num_atoms=None):
     esp_dc_pred = esp_mono_loss_pots(
         dipo, mono, batch["vdw_surface"][0], batch["mono"], 1, model.n_dcm
     )
+    if esp_dc_pred.ndim == 1:
+        esp_pred = esp_dc_pred
+    else:
+        esp_pred = esp_dc_pred[0]
     D = pred_dipole(dipo, batch["com"], mono.reshape(num_atoms * model.n_dcm))
     D_mae = jnp.mean(jnp.abs(D - batch["Dxyz"])) * au_to_debye
-    mask, closest_atom_type, closest_atom = cut_vdw(
+    mask_np, closest_atom_type, closest_atom = cut_vdw(
         batch["vdw_surface"][0], batch["R"], batch["Z"]
     )
-    rmse_model = rmse(batch["esp"][0], esp_dc_pred[0])
-    rmse_model_masked = rmse(batch["esp"][0][mask], esp_dc_pred[0][mask])
+    mask = jnp.asarray(mask_np)
+    rmse_model = rmse(batch["esp"][0], esp_pred)
+    rmse_model_masked = rmse(batch["esp"][0][mask], esp_pred[mask])
     output_data = {
         "mono": mono,
         "dipo": dipo,
         "D_xyz_pred": D,
         "D_mae": D_mae,
-        "esp_pred": esp_dc_pred[0],
-        "mask": mask,
+        "esp_pred": esp_pred,
+        "mask": mask_np,
         "closest_atom_type": closest_atom_type,
         "closest_atom": closest_atom,
         "rmse_model": rmse_model,
