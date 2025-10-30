@@ -138,9 +138,14 @@ class MessagePassingModel(nn.Module):
 
         x = e3x.nn.hard_tanh(x) * 0.175
         
-        atomic_dipo = x[:, 1, 1:4, :].reshape(1, NATOMS, self.n_dcm, 3)
+        # Extract dipole components: shape (n_atoms, 3, n_dcm)
+        # Then transpose to (n_atoms, n_dcm, 3) for consistency
+        n_atoms = x.shape[0]
+        atomic_dipo = x[:, 1, 1:4, :].transpose(0, 2, 1)
         
-        atomic_dipo += positions[ :, jnp.newaxis, :]
+        # Add positions: positions shape is (n_atoms, 3)
+        # Expand to (n_atoms, 1, 3) to broadcast with (n_atoms, n_dcm, 3)
+        atomic_dipo += positions[:, jnp.newaxis, :]
 
         return atomic_mono, atomic_dipo
 
