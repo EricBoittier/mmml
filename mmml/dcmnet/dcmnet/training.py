@@ -5,7 +5,6 @@ import e3x
 import jax
 import jax.numpy as jnp
 import optax
-import lovely_jax as lj
 from .loss import esp_mono_loss
 
 from .data import prepare_batches, prepare_datasets
@@ -13,8 +12,13 @@ from .data import prepare_batches, prepare_datasets
 from typing import Callable, Any, Optional
 from functools import partial
 
-# Enable lovely_jax for better array printing
-lj.monkey_patch()
+# Try to enable lovely_jax for better array printing
+try:
+    import lovely_jax as lj
+    lj.monkey_patch()
+    print("lovely_jax enabled for enhanced array visualization")
+except ImportError:
+    print("lovely_jax not available, using standard JAX array printing")
 
 
 @functools.partial(
@@ -310,8 +314,11 @@ def train_model(
         train_batches = prepare_batches(shuffle_key, train_data, batch_size, num_atoms=num_atoms)
         # Loop over train batches.
         train_loss = 0.0
+        train_mono_preds = []
+        train_mono_targets = []
+        
         for i, batch in enumerate(train_batches):
-            params, opt_state, loss = train_step(
+            params, opt_state, loss, mono, dipo = train_step(
                 model_apply=model.apply,
                 optimizer_update=optimizer.update,
                 batch=batch,
@@ -326,11 +333,34 @@ def train_model(
             ema_params = update_ema_params(ema_params, params, ema_decay)
             
             train_loss += (loss - train_loss) / (i + 1)
+            
+            # Collect predictions for statistics
+            train_mono_preds.append(mono)
+            train_mono_targets.append(batch["mono"])
+
+        # Concatenate all predictions and targets
+        train_mono_preds = jnp.concatenate(train_mono_preds, axis=0)
+        train_mono_targets = jnp.concatenate(train_mono_targets, axis=0)
+        
+        # Compute training statistics
+        train_mono_stats = compute_statistics(train_mono_preds.sum(axis=-1), train_mono_targets)
+        train_stats = {
+            'loss': float(train_loss),
+            'mono_mae': train_mono_stats['mae'],
+            'mono_rmse': train_mono_stats['rmse'],
+            'mono_mean': train_mono_stats['mean'],
+            'mono_std': train_mono_stats['std'],
+            'mono_min': train_mono_stats['min'],
+            'mono_max': train_mono_stats['max'],
+        }
 
         # Evaluate on validation set.
         valid_loss = 0.0
+        valid_mono_preds = []
+        valid_mono_targets = []
+        
         for i, batch in enumerate(valid_batches):
-            loss = eval_step(
+            loss, mono, dipo = eval_step(
                 model_apply=model.apply,
                 batch=batch,
                 batch_size=batch_size,
@@ -340,18 +370,45 @@ def train_model(
                 ndcm=ndcm,
             )
             valid_loss += (loss - valid_loss) / (i + 1)
+            
+            # Collect predictions for statistics
+            valid_mono_preds.append(mono)
+            valid_mono_targets.append(batch["mono"])
 
-        # Print progress.
-        print(f"epoch: {epoch: 3d}      train:   valid:")
-        print(f"    loss [a.u.]             {train_loss : 8.3e} {valid_loss : 8.3e}")
+        # Concatenate all predictions and targets
+        valid_mono_preds = jnp.concatenate(valid_mono_preds, axis=0)
+        valid_mono_targets = jnp.concatenate(valid_mono_targets, axis=0)
+        
+        # Compute validation statistics
+        valid_mono_stats = compute_statistics(valid_mono_preds.sum(axis=-1), valid_mono_targets)
+        valid_stats = {
+            'loss': float(valid_loss),
+            'mono_mae': valid_mono_stats['mae'],
+            'mono_rmse': valid_mono_stats['rmse'],
+            'mono_mean': valid_mono_stats['mean'],
+            'mono_std': valid_mono_stats['std'],
+            'mono_min': valid_mono_stats['min'],
+            'mono_max': valid_mono_stats['max'],
+        }
+
+        # Print detailed statistics
+        print_statistics_table(train_stats, valid_stats, epoch)
+        
         if writer is not None:
-            # Log metrics
+            # Log loss metrics
             writer.add_scalar("Loss/train", train_loss, epoch)
-            # writer.add_scalar("RMSE/train", jnp.sqrt(2 * train_loss), epoch)
             writer.add_scalar("Loss/valid", valid_loss, epoch)
             writer.add_scalar("Loss/bestValid", best, epoch)
-        # writer.add_scalar("RMSE/valid", jnp.sqrt(2 * valid_loss), epoch)
-        print(epoch, train_loss, valid_loss)
+            
+            # Log monopole statistics
+            writer.add_scalar("Monopole/train_mae", train_stats['mono_mae'], epoch)
+            writer.add_scalar("Monopole/valid_mae", valid_stats['mono_mae'], epoch)
+            writer.add_scalar("Monopole/train_rmse", train_stats['mono_rmse'], epoch)
+            writer.add_scalar("Monopole/valid_rmse", valid_stats['mono_rmse'], epoch)
+            writer.add_scalar("Monopole/train_mean", train_stats['mono_mean'], epoch)
+            writer.add_scalar("Monopole/valid_mean", valid_stats['mono_mean'], epoch)
+            writer.add_scalar("Monopole/train_std", train_stats['mono_std'], epoch)
+            writer.add_scalar("Monopole/valid_std", valid_stats['mono_std'], epoch)
         if valid_loss < best:
             best = valid_loss
             # open a file, where you want to store the data
