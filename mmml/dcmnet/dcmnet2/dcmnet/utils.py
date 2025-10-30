@@ -45,9 +45,17 @@ def clip_colors(c):
 
 
 def reshape_dipole(dipo, nDCM):
-    d = dipo.reshape(1, NATOMS, 3, nDCM)
+    # Infer number of atoms from input shape
+    # Expected input: (n_atoms, nDCM, 3) or flattened
+    if dipo.ndim == 3:
+        n_atoms = dipo.shape[0]
+    else:
+        # If flattened, calculate from total size
+        n_atoms = dipo.size // (nDCM * 3)
+    
+    d = dipo.reshape(1, n_atoms, 3, nDCM)
     d = np.moveaxis(d, -1, -2)
-    d = d.reshape(1, NATOMS * nDCM, 3)
+    d = d.reshape(1, n_atoms * nDCM, 3)
     return d
 
 
