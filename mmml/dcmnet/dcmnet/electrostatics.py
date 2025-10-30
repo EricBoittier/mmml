@@ -22,7 +22,7 @@ def calc_esp(charge_positions, charge_values, grid_positions):
     # Compute the Euclidean distance between each grid point and each charge
     r = jnp.linalg.norm(diff, axis=-1)
     C = coulomb_potential(charge_values[None, :], r)
-    V = jnp.sum(-C, axis=-1)
+    V = jnp.sum(C, axis=-1)
     return V
 
 
