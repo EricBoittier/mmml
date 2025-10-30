@@ -24,7 +24,6 @@ dependencies = [
     "scipy",
     "pandas",
     "matplotlib>=3.5.0",
-    
     # JAX ecosystem (CPU version by default)
     "jax",
     "jaxlib",
@@ -37,25 +36,24 @@ dependencies = [
     "jmp",
     "jraph",
     "orbax-checkpoint",
-    
     # ML utilities
     "ml-dtypes",
     "ml-collections",
     "einops",
-    
     # Chemistry core
     "ase",
     "pyyaml",
-    
     # Hydra configuration
     "hydra-core>=1.3.0",
     "omegaconf>=2.3.0",
-    
     # Utilities
     "tqdm",
     "rich",
     "tabulate",
     "typing-extensions",
+    "e3x>=1.0.2",
+    "plotnine>=0.15.1",
+    "patchworklib>=0.6.6",
 ]
 
 [project.optional-dependencies]
