@@ -5,7 +5,7 @@ import flax.linen as nn
 import jax
 import jax.numpy as jnp
 
-NATOMS = 18
+
 
 
 class MessagePassingModel(nn.Module):

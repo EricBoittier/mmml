@@ -50,12 +50,14 @@ def prepare_multiple_datasets(
     key,
     num_train,
     num_valid,
+    natoms,
     filename=["esp2000.npz"],
     clean=False,
     verbose=False,
     esp_mask=False,
     clip_esp=False,
-    natoms=60,
+
+
 ):
     """
     Prepare multiple datasets for training and validation.
@@ -284,10 +286,11 @@ def prepare_datasets(
     num_train,
     num_valid,
     filename,
+    natoms,
     clean=False,
     esp_mask=False,
     clip_esp=False,
-    natoms=60,
+    
 ):
     """
     Prepare datasets for training and validation.
