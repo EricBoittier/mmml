@@ -74,8 +74,6 @@ if __name__ == "__main__":
         raise ValueError(f"Unknown training type: {args.type}. Available: {list(TRAINING_MODES.keys())}")
     training = TRAINING_MODES[args.type]
 
-    NATOMS = 18
-
     # Model hyperparameters.
     features = args.n_feat
     max_degree = args.max_degree

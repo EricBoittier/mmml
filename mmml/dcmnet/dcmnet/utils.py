@@ -6,10 +6,8 @@ import jax.numpy as jnp
 
 import pandas as pd
 
-NATOMS = 18
 
-
-def apply_model(model, params, batch, batch_size, NATOMS) -> tuple:
+def apply_model(model, params, batch, batch_size, num_atoms) -> tuple:
     mono_prediction, dipo_prediction = model.apply(
         params,
         atomic_numbers=batch["Z"],
@@ -20,19 +18,19 @@ def apply_model(model, params, batch, batch_size, NATOMS) -> tuple:
         batch_size=batch_size,
     )
     n_dcm = model.n_dcm
-    d = jnp.moveaxis(dipo_prediction, -1, -2).reshape(batch_size, NATOMS * n_dcm, 3)
+    d = jnp.moveaxis(dipo_prediction, -1, -2).reshape(batch_size, num_atoms * n_dcm, 3)
 
-    m = mono_prediction.reshape(batch_size, NATOMS * n_dcm)
+    m = mono_prediction.reshape(batch_size, num_atoms * n_dcm)
     # 0 the charges for dummy atoms
     n_atoms = batch["N"][0]
     NDC = n_atoms * n_dcm
-    valid_atoms = jnp.where(jnp.arange(NATOMS * n_dcm) < NDC, 1, 0)
+    valid_atoms = jnp.where(jnp.arange(num_atoms * n_dcm) < NDC, 1, 0)
     d = d[0]
     m = m[0] * valid_atoms
     # constrain the net charge to 0.0
     avg_chg = m.sum() / NDC
     m = (m - avg_chg) * valid_atoms
-    m = m.reshape(batch_size, NATOMS, n_dcm)
+    m = m.reshape(batch_size, num_atoms, n_dcm)
     return m, d
 
 
@@ -57,14 +55,6 @@ def reshape_dipole(dipo, nDCM):
     d = np.moveaxis(d, -1, -2)
     d = d.reshape(1, n_atoms * nDCM, 3)
     return d
-
-
-# def pred_dipole(dcm, com, q):
-#     dipole_out = jnp.zeros(3)
-#     for i, _ in enumerate(dcm):
-#         dipole_out += q[i] * (_ - com) * 1.88873
-#     # print(dipole_out)
-#     return dipole_out
 
 
 def process_df(errors):

@@ -12,22 +12,24 @@ plt.set_cmap("bwr")
 import jax.numpy as jnp
 
 batch_size = 1
-NATOMS = 18
 
 
 def make_charge_xyz(mono, dipo, batch, batch_size, n_dcm):
+    # Infer number of atoms from batch
+    num_atoms = len(batch["atomic_numbers"]) // batch_size
+    
     # n_dcm = mono.shape[1]
     i = 0
-    b1_ = batch["atomic_numbers"].reshape(batch_size, NATOMS)[i]
-    c1_ = batch["mono"].reshape(batch_size, NATOMS)[i]
+    b1_ = batch["atomic_numbers"].reshape(batch_size, num_atoms)[i]
+    c1_ = batch["mono"].reshape(batch_size, num_atoms)[i]
     # print(b1_)
     nonzero = np.nonzero(c1_)
-    dc = dipo.reshape(batch_size, NATOMS, 3, n_dcm)
+    dc = dipo.reshape(batch_size, num_atoms, 3, n_dcm)
     dc = np.moveaxis(dc, -1, -2)
-    dc = dc.reshape(batch_size, NATOMS * n_dcm, 3)
-    dcq = mono.reshape(batch_size, NATOMS * n_dcm, 1)
+    dc = dc.reshape(batch_size, num_atoms * n_dcm, 3)
+    dcq = mono.reshape(batch_size, num_atoms * n_dcm, 1)
     dcq = np.moveaxis(dcq, -1, -2)
-    dcq = dcq.reshape(batch_size, NATOMS * n_dcm, 1)
+    dcq = dcq.reshape(batch_size, num_atoms * n_dcm, 1)
     idx_nozero = len(nonzero[0]) * n_dcm
 
     n_atoms = idx_nozero // n_dcm
@@ -105,10 +107,13 @@ def get_esp_rmse_from_combined(combined, batch, get_esp=False):
 
 
 def combine_chg_arrays(batch, atomwise_charge_array1, atomwise_charge_array2):
+    # Infer number of atoms from batch
+    num_atoms = len(batch["atomic_numbers"]) // batch_size
+    
     i = 0
-    nonzero = np.nonzero(batch["atomic_numbers"].reshape(batch_size, NATOMS)[i])
-    xyz = batch["positions"].reshape(batch_size, NATOMS, 3)[i][nonzero]
-    elem = batch["atomic_numbers"].reshape(batch_size, NATOMS)[i][nonzero]
+    nonzero = np.nonzero(batch["atomic_numbers"].reshape(batch_size, num_atoms)[i])
+    xyz = batch["positions"].reshape(batch_size, num_atoms, 3)[i][nonzero]
+    elem = batch["atomic_numbers"].reshape(batch_size, num_atoms)[i][nonzero]
 
     chg_qs = []
 
@@ -126,10 +131,13 @@ def combine_chg_arrays(batch, atomwise_charge_array1, atomwise_charge_array2):
 def combine_chg_arrays_indexed(
     batch, atomwise_charge_array1, atomwise_charge_array2, indices
 ):
+    # Infer number of atoms from batch
+    num_atoms = len(batch["atomic_numbers"]) // batch_size
+    
     i = 0
-    nonzero = np.nonzero(batch["atomic_numbers"].reshape(batch_size, NATOMS)[i])
-    xyz = batch["positions"].reshape(batch_size, NATOMS, 3)[i][nonzero]
-    elem = batch["atomic_numbers"].reshape(batch_size, NATOMS)[i][nonzero]
+    nonzero = np.nonzero(batch["atomic_numbers"].reshape(batch_size, num_atoms)[i])
+    xyz = batch["positions"].reshape(batch_size, num_atoms, 3)[i][nonzero]
+    elem = batch["atomic_numbers"].reshape(batch_size, num_atoms)[i][nonzero]
 
     chg_qs = []
 
