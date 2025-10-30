@@ -56,12 +56,15 @@ dependencies = [
     "rich",
     "tabulate",
     "typing-extensions",
-    
-    # CHARMM interface (local)
-    "pycharmm",
 ]
 
 [project.optional-dependencies]
+# Interfaces and optional integrations
+charmm-interface = [
+    # Install `pycharmm` separately from a compatible source (local build or wheel)
+    # before enabling this extra.
+    "pycharmm",
+]
 # GPU/CUDA support (CUDA 12)
 # Note: JAX with CUDA requires installation from specific index
 # Install with: pip install -e ".[gpu]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
