@@ -1,0 +1,56 @@
+defaults: []
+
+data:
+  train_file: null
+  valid_file: null
+  train_fraction: 0.9
+  center_coordinates: false
+  normalize_energy: false
+
+model:
+  features: 64
+  max_degree: 3
+  num_iterations: 3
+  num_basis_functions: 32
+  cutoff: 6.0
+  max_atomic_number: 118
+  charges: false
+  natoms: 60
+  total_charge: 0.0
+  n_res: 3
+  zbl: true
+  debug: false
+  efa: false
+
+train:
+  batch_size: 32
+  max_epochs: 100
+  learning_rate: 0.001
+  targets: [energy, forces]
+  seed: 42
+  restart: false
+  objective: valid_forces_mae
+  verbose: true
+
+loss:
+  energy_weight: 1.0
+  forces_weight: 50.0
+  dipole_weight: 25.0
+  charges_weight: 10.0
+
+optimizer:
+  type: amsgrad   # [adam, adamw, amsgrad]
+  schedule: warmup  # [warmup, cosine_annealing, exponential, polynomial, cosine, warmup_cosine, constant]
+  transform: reduce_on_plateau
+
+batching:
+  method: default  # [default, advanced]
+  batch_shape: 512
+  batch_nbl_len: 16384
+
+logging:
+  name: physnet_run
+  save_best: true
+  print_freq: 1
+  tensorboard: false
+
