@@ -270,6 +270,7 @@ class MolproConverter:
             Combined NPZ dictionary
         """
         combined = {}
+        n_datasets = len(datasets)
         
         # Get all unique keys (excluding metadata for now)
         all_keys = set()
@@ -278,10 +279,54 @@ class MolproConverter:
         
         # Concatenate each property
         for key in all_keys:
-            arrays = [ds[key] for ds in datasets if key in ds]
+            # Collect arrays, padding with zeros if missing
+            arrays = []
+            for ds in datasets:
+                if key in ds:
+                    arrays.append(ds[key])
+                else:
+                    # Create zero-filled placeholder with same shape as first occurrence
+                    if arrays:
+                        # Use shape from first valid array
+                        shape = arrays[0].shape
+                        placeholder = np.zeros(shape, dtype=arrays[0].dtype)
+                        arrays.append(placeholder)
+                        if self.verbose:
+                            print(f"Note: Property '{key}' missing in some files, padding with zeros")
+                    # If this is the first array and it's missing, skip for now
+                    # We'll handle it when we find the first valid one
+            
             if arrays:
                 try:
-                    combined[key] = np.concatenate(arrays, axis=0)
+                    # Only concatenate if all datasets have been processed
+                    if len(arrays) == n_datasets:
+                        combined[key] = np.concatenate(arrays, axis=0)
+                    else:
+                        # Need to go back and pad earlier missing values
+                        full_arrays = []
+                        template_shape = None
+                        template_dtype = None
+                        
+                        # Find first valid array as template
+                        for ds in datasets:
+                            if key in ds:
+                                template_shape = ds[key].shape
+                                template_dtype = ds[key].dtype
+                                break
+                        
+                        # Build full array list with padding
+                        for ds in datasets:
+                            if key in ds:
+                                full_arrays.append(ds[key])
+                            else:
+                                placeholder = np.zeros(template_shape, dtype=template_dtype)
+                                full_arrays.append(placeholder)
+                        
+                        combined[key] = np.concatenate(full_arrays, axis=0)
+                        
+                        if self.verbose and len(full_arrays) != len(arrays):
+                            print(f"Note: Property '{key}' missing in some files, padded with zeros")
+                        
                 except ValueError as e:
                     if self.verbose:
                         print(f"Warning: Could not concatenate '{key}': {e}")
