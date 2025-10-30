@@ -97,7 +97,16 @@ def esp_mono_loss(
     n_atoms = jnp.ravel(n_atoms)[0]
     
     # Infer max_atoms from prediction shape
-    max_atoms = mono_prediction.shape[1]  # Shape is (batch_size, max_atoms, n_dcm)
+    # Handle both batched and unbatched predictions
+    if batch_size == 1 and len(mono_prediction.shape) == 2:
+        # Unbatched: (n_atoms, n_dcm)
+        max_atoms = mono_prediction.shape[0]
+        # Add batch dimension
+        mono_prediction = mono_prediction[None, :, :]  # (1, n_atoms, n_dcm)
+        dipo_prediction = dipo_prediction[None, :, :, :]  # (1, n_atoms, n_dcm, 3)
+    else:
+        # Batched: (batch_size, n_atoms, n_dcm)
+        max_atoms = mono_prediction.shape[1]
     
     d = jnp.moveaxis(dipo_prediction, -1, -2).reshape(batch_size, max_atoms * n_dcm, 3)
     m = mono_prediction.reshape(batch_size, max_atoms * n_dcm)
@@ -191,7 +200,16 @@ def dipo_esp_mono_loss(
         (esp_loss, mono_loss, dipole_loss)
     """
     # Infer max_atoms from prediction shape
-    max_atoms = mono_prediction.shape[1]  # Shape is (batch_size, max_atoms, n_dcm)
+    # Handle both batched and unbatched predictions
+    if batch_size == 1 and len(mono_prediction.shape) == 2:
+        # Unbatched: (n_atoms, n_dcm)
+        max_atoms = mono_prediction.shape[0]
+        # Add batch dimension
+        mono_prediction = mono_prediction[None, :, :]  # (1, n_atoms, n_dcm)
+        dipo_prediction = dipo_prediction[None, :, :, :]  # (1, n_atoms, n_dcm, 3)
+    else:
+        # Batched: (batch_size, n_atoms, n_dcm)
+        max_atoms = mono_prediction.shape[1]
     
     d = jnp.moveaxis(dipo_prediction, -1, -2).reshape(batch_size, max_atoms * n_dcm, 3)
     m = mono_prediction.reshape(batch_size, max_atoms * n_dcm)
@@ -256,7 +274,14 @@ def esp_mono_loss_pots(
         Predicted ESP values
     """
     # Infer max_atoms from prediction shape
-    max_atoms = mono_prediction.shape[1] if len(mono_prediction.shape) > 1 else mono_prediction.size // n_dcm
+    # Handle both batched and unbatched predictions
+    if batch_size == 1 and len(mono_prediction.shape) == 2:
+        # Unbatched: (n_atoms, n_dcm)
+        max_atoms = mono_prediction.shape[0]
+    elif len(mono_prediction.shape) > 1:
+        max_atoms = mono_prediction.shape[1]
+    else:
+        max_atoms = mono_prediction.size // n_dcm
     
     return calc_esp(
         dipo_prediction, mono_prediction.reshape(batch_size, n_dcm * max_atoms), vdw_surface
@@ -286,7 +311,14 @@ def esp_loss_pots(dipo_prediction, mono_prediction, vdw_surface, mono, batch_siz
         Predicted ESP values from atomic monopoles
     """
     # Infer max_atoms from prediction shape
-    max_atoms = mono_prediction.shape[1] if len(mono_prediction.shape) > 1 else mono_prediction.size // batch_size
+    # Handle both batched and unbatched predictions
+    if batch_size == 1 and len(mono_prediction.shape) == 1:
+        # Unbatched: (n_atoms,)
+        max_atoms = mono_prediction.size
+    elif len(mono_prediction.shape) > 1:
+        max_atoms = mono_prediction.shape[1] if batch_size > 1 else mono_prediction.shape[0]
+    else:
+        max_atoms = mono_prediction.size // batch_size
     
     d = dipo_prediction.reshape(batch_size, max_atoms, 3)
     mono = mono.reshape(batch_size, max_atoms)
@@ -315,7 +347,10 @@ def mean_absolute_error(prediction, target, batch_size):
         Mean absolute error
     """
     # Infer max_atoms from target shape
-    max_atoms = target.size // batch_size if batch_size > 0 else target.size
+    if len(target.shape) > 1:
+        max_atoms = target.shape[1] if batch_size > 1 else target.shape[0]
+    else:
+        max_atoms = target.size // batch_size if batch_size > 0 else target.size
     
     nonzero = jnp.nonzero(target, size=batch_size * max_atoms)
     return jnp.mean(jnp.abs(prediction[nonzero] - target[nonzero]))
