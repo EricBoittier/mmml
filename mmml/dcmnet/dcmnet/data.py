@@ -331,8 +331,8 @@ def prepare_datasets(
         num_train,
         num_valid,
         filename,
+        natoms,
         clean=clean,
-        natoms=natoms,
         clip_esp=clip_esp,
         esp_mask=esp_mask,
         # dataset_keys
