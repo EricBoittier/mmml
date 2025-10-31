@@ -2,19 +2,21 @@ CO2 Training Data - Units Quick Reference
 ================================================================================
 
 COORDINATES (R)
-  Units: Angstrom
+  Units: Angstrom (ASE standard)
   Original: Already in Angstroms (varying geometries)
-  Fixed: No conversion needed
+  Status: No conversion needed ✓
   Range: C-O bonds from 1.0 to 1.5 Å (mean ~1.25 Å)
 
 ENERGIES (E)
-  Units: Hartree
-  Status: Correct (no change)
-  Range: -187.7 to -187.4 Ha
+  Units: eV (ASE standard)
+  Original: Hartree
+  Conversion: ×27.211386 (Ha → eV)
+  Range: -5107 to -5098 eV (from -187.7 to -187.4 Ha)
 
 FORCES (F)
-  Units: Hartree/Bohr
-  Status: Correct (no change)
+  Units: eV/Angstrom (ASE standard)
+  Original: Hartree/Bohr
+  Conversion: ×51.42208 (Ha/Bohr → eV/Å)
   Note: Gradient = -Force
 
 DIPOLES (Dxyz)
@@ -28,12 +30,13 @@ ESP VALUES (esp)
   Range: -0.058 to +0.862 Ha/e
 
 ESP GRID (vdw_surface / vdw_grid)
-  Units: Angstrom
+  Units: Angstrom (ASE standard)
   Original: Grid indices (0-49)
   Fixed: Physical coordinates
   Conversion: origin_bohr × 0.529177 + (index - origin) × 0.25 × 0.529177
   Extent: ~6.5 Angstrom cube
 
 ================================================================================
-Ready for DCMnet/PhysnetJax training!
+ALL UNITS ARE ASE-STANDARD!
+Ready for DCMnet/PhysnetJax training with ASE-compatible data!
 ================================================================================

@@ -6,10 +6,20 @@ This directory contains CO2 molecular data with **corrected units** ready for DC
 
 ### 1. Atomic Coordinates (R)
 - **Original**: Already in Angstroms (varying C-O bonds: 1.0-1.5 Å)
-- **Fixed**: No conversion needed - already correct!
+- **Status**: No conversion needed - already correct ✓
 - **Note**: Dataset contains varying CO2 geometries (R1, R2, angle scans)
 
-### 2. ESP Grid Coordinates (vdw_surface)
+### 2. Energies (E)
+- **Original**: Hartree
+- **Converted**: eV (ASE standard)
+- **Factor**: ×27.211386
+
+### 3. Forces (F)
+- **Original**: Hartree/Bohr
+- **Converted**: eV/Angstrom (ASE standard)
+- **Factor**: ×51.42208
+
+### 4. ESP Grid Coordinates (vdw_surface)
 - **Original**: Grid index space (0-49 with unit axes)
 - **Fixed**: Physical Angstroms
 - **Conversion**: Applied proper grid spacing (0.25 Bohr = 0.132294 Å)
@@ -29,12 +39,12 @@ This directory contains CO2 molecular data with **corrected units** ready for DC
 - `energies_forces_dipoles_test.npz`
 
 Each contains:
-- `R`: Atomic coordinates (n_samples, 60, 3) [Angstrom]
-- `Z`: Atomic numbers (n_samples, 60) [int]
-- `N`: Number of atoms (n_samples,) [int]
-- `E`: Energies (n_samples,) [Hartree]
-- `F`: Forces (n_samples, 60, 3) [Hartree/Bohr]
-- `Dxyz`: Dipole moments (n_samples, 3) [Debye]
+- `R`: Atomic coordinates (n_samples, 60, 3) [Angstrom] ✓
+- `Z`: Atomic numbers (n_samples, 60) [int] ✓
+- `N`: Number of atoms (n_samples,) [int] ✓
+- `E`: Energies (n_samples,) [eV] ← CONVERTED from Hartree
+- `F`: Forces (n_samples, 60, 3) [eV/Angstrom] ← CONVERTED from Hartree/Bohr
+- `Dxyz`: Dipole moments (n_samples, 3) [Debye] ✓
 
 ### ESP Grids
 - `grids_esp_train.npz`
@@ -53,13 +63,13 @@ Each contains:
 - `grid_axes`: Original cube axes (n_samples, 3, 3)
 - `Dxyz`: Dipole moments (n_samples, 3) [Debye]
 
-## Units Summary (MMML Standard)
+## Units Summary (ASE Standard)
 
 | Property | Unit | Status |
 |----------|------|--------|
-| R (coordinates) | Angstrom | ✓ Fixed |
-| E (energy) | Hartree | ✓ Correct |
-| F (forces) | Hartree/Bohr | ✓ Correct |
+| R (coordinates) | Angstrom | ✓ Correct |
+| E (energy) | eV | ✓ Converted |
+| F (forces) | eV/Angstrom | ✓ Converted |
 | Dxyz (dipoles) | Debye | ✓ Correct |
 | esp (values) | Hartree/e | ✓ Correct |
 | vdw_surface | Angstrom | ✓ Fixed |
@@ -73,21 +83,24 @@ import numpy as np
 train_props = np.load('training_data_fixed/energies_forces_dipoles_train.npz')
 train_grids = np.load('training_data_fixed/grids_esp_train.npz')
 
-# All units are now correct - ready to use!
+# All units are ASE-standard - ready to use!
 R = train_props['R']  # Angstroms
-E = train_props['E']  # Hartree
-F = train_props['F']  # Hartree/Bohr
+E = train_props['E']  # eV (converted from Hartree)
+F = train_props['F']  # eV/Angstrom (converted from Hartree/Bohr)
+Dxyz = train_props['Dxyz']  # Debye
 esp = train_grids['esp']  # Hartree/e
-vdw_surface = train_grids['vdw_surface']  # Angstroms
+vdw_surface = train_grids['vdw_surface']  # Angstroms (fixed from grid indices)
 ```
 
 ## Important Notes
 
-1. **Coordinates are now in physical Angstroms** - no scaling needed
-2. **ESP grid is in physical Angstroms** - matches atomic coordinates
-3. **Forces remain in Hartree/Bohr** - standard quantum chemistry unit
-4. **ESP values are Hartree/e** - electrostatic potential per unit charge
-5. **Splits are reproducible** - same seed (42) ensures consistency
+1. **All units are ASE-standard** - compatible with ASE, SchNetPack, etc.
+2. **Coordinates in Angstroms** - no scaling needed
+3. **Energies in eV** - converted from Hartree (×27.211386)
+4. **Forces in eV/Angstrom** - converted from Hartree/Bohr (×51.42208)
+5. **ESP grid in physical Angstroms** - matches atomic coordinates
+6. **ESP values remain in Hartree/e** - no ASE standard for electrostatic potential
+7. **Splits are reproducible** - same seed (42) ensures consistency
 
 ## Validation
 
