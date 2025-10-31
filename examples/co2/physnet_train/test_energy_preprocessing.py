@@ -49,29 +49,46 @@ def test_atomic_energies():
     print("Test 2: Atomic Energy Reference Computation")
     print("="*70)
     
-    # Create synthetic data for CO2
+    # Create synthetic data with varied compositions
     # C: atomic number 6, O: atomic number 8
-    # Energies: E_mol = E_C + 2*E_O + E_binding
+    # Need different compositions to properly fit atomic energies
     
     E_C = -1000.0  # eV
     E_O = -2000.0  # eV
-    E_binding = -10.0  # eV
     
-    # Create 10 CO2 molecules
-    n_mols = 10
-    atomic_numbers = np.array([[6, 8, 8]] * n_mols)  # C, O, O
-    n_atoms = np.array([3] * n_mols)
-    energies = np.array([E_C + 2*E_O + E_binding] * n_mols)
+    # Create molecules: CO2, CO, O2
+    # Pad with zeros to max 3 atoms
+    atomic_numbers_list = []
+    n_atoms_list = []
+    energies_list = []
     
-    # Add some noise
-    energies += np.random.randn(n_mols) * 0.1
+    # 5 CO2 molecules: C + 2O
+    for _ in range(5):
+        atomic_numbers_list.append([6, 8, 8])
+        n_atoms_list.append(3)
+        energies_list.append(E_C + 2*E_O)
     
-    print(f"Synthetic CO2 data:")
-    print(f"  Molecules: {n_mols}")
-    print(f"  Composition: C + 2O")
+    # 5 CO molecules: C + O
+    for _ in range(5):
+        atomic_numbers_list.append([6, 8, 0])
+        n_atoms_list.append(2)
+        energies_list.append(E_C + E_O)
+    
+    # 5 O2 molecules: 2O
+    for _ in range(5):
+        atomic_numbers_list.append([8, 8, 0])
+        n_atoms_list.append(2)
+        energies_list.append(2*E_O)
+    
+    atomic_numbers = np.array(atomic_numbers_list)
+    n_atoms = np.array(n_atoms_list)
+    energies = np.array(energies_list)
+    
+    print(f"Synthetic data:")
+    print(f"  5 CO2 molecules (C + 2O)")
+    print(f"  5 CO molecules (C + O)")
+    print(f"  5 O2 molecules (2O)")
     print(f"  True atomic energies: C={E_C:.1f} eV, O={E_O:.1f} eV")
-    print(f"  Binding energy: {E_binding:.1f} eV")
-    print(f"  Average molecular energy: {np.mean(energies):.1f} eV")
     
     # Compute atomic energies
     atomic_energies = compute_atomic_energies(
@@ -84,7 +101,16 @@ def test_atomic_energies():
     print(f"\nComputed atomic energies:")
     for z, e in atomic_energies.items():
         element = 'C' if z == 6 else 'O'
-        print(f"  {element} (Z={z}): {e:.2f} eV")
+        true_e = E_C if z == 6 else E_O
+        print(f"  {element} (Z={z}): {e:.2f} eV (true: {true_e:.2f} eV)")
+    
+    # Check if computed values match true values
+    match_C = np.abs(atomic_energies[6] - E_C) < 0.1
+    match_O = np.abs(atomic_energies[8] - E_O) < 0.1
+    
+    print(f"\nAccuracy:")
+    print(f"  C match: {match_C}")
+    print(f"  O match: {match_O}")
     
     # Subtract atomic energies
     binding_energies = subtract_atomic_energies(
@@ -95,11 +121,10 @@ def test_atomic_energies():
     )
     
     print(f"\nAfter subtracting atomic references:")
-    print(f"  Mean binding energy: {np.mean(binding_energies):.2f} eV")
-    print(f"  Expected: {E_binding:.2f} eV")
-    print(f"  Match: {np.abs(np.mean(binding_energies) - E_binding) < 0.2}")
+    print(f"  Binding energies should be ~0 for ideal gases: {np.mean(binding_energies):.4f} eV")
+    print(f"  Std: {np.std(binding_energies):.4f} eV")
     
-    return np.abs(np.mean(binding_energies) - E_binding) < 0.2
+    return match_C and match_O
 
 
 def test_scale_by_atoms():
