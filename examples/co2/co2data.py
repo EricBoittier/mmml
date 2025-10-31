@@ -253,7 +253,7 @@ def plot_esp_3d_with_molecule(grids, esp_values, positions, atomic_numbers, samp
     fig = plt.figure(figsize=(18, 6))
     
     # Make colormap symmetric around 0
-    max_abs = np.percentile(np.abs(esp), 98)
+    max_abs = np.percentile(np.abs(esp), 75)
     vmin, vmax = -max_abs, max_abs
     
     # Three different viewing angles
@@ -266,7 +266,7 @@ def plot_esp_3d_with_molecule(grids, esp_values, positions, atomic_numbers, samp
         # Plot ESP grid points
         scatter = ax.scatter(coords[:, 0], coords[:, 1], coords[:, 2],
                            c=esp, cmap='bwr', s=1, vmin=vmin, vmax=vmax,
-                           alpha=0.3, edgecolors='none')
+                           alpha=0.83, edgecolors='none')
         
         # Plot atoms
         for atom_idx in range(len(valid_pos_scaled)):
