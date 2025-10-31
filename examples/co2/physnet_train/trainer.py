@@ -371,8 +371,8 @@ def main():
             valid_data=valid_data,
             num_epochs=args.epochs,
             learning_rate=args.learning_rate,
-            energy_weight=args.energy_weight,
-            forces_weight=args.forces_weight,
+            energy_weight=energy_weight,
+            forces_weight=forces_weight,
             dipole_weight=args.dipole_weight,
             charges_weight=0.0,  # Not predicting charges by default
             batch_size=args.batch_size,
