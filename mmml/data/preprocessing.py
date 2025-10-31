@@ -60,6 +60,182 @@ def center_coordinates(
     return centered
 
 
+def convert_energy_units(
+    energies: np.ndarray,
+    from_unit: str = 'hartree',
+    to_unit: str = 'eV'
+) -> np.ndarray:
+    """
+    Convert energy units.
+    
+    Parameters
+    ----------
+    energies : np.ndarray
+        Energy array
+    from_unit : str, optional
+        Source unit: 'hartree', 'eV', 'kcal/mol', 'kJ/mol', by default 'hartree'
+    to_unit : str, optional
+        Target unit: 'hartree', 'eV', 'kcal/mol', 'kJ/mol', by default 'eV'
+        
+    Returns
+    -------
+    np.ndarray
+        Converted energies
+    """
+    # Conversion factors to eV
+    to_ev = {
+        'hartree': 27.211386245988,  # Hartree to eV
+        'ev': 1.0,
+        'kcal/mol': 0.043364106370,  # kcal/mol to eV
+        'kj/mol': 0.010364269656,    # kJ/mol to eV
+    }
+    
+    from_unit_lower = from_unit.lower()
+    to_unit_lower = to_unit.lower()
+    
+    if from_unit_lower not in to_ev:
+        raise ValueError(f"Unknown source unit: {from_unit}. Choose from {list(to_ev.keys())}")
+    if to_unit_lower not in to_ev:
+        raise ValueError(f"Unknown target unit: {to_unit}. Choose from {list(to_ev.keys())}")
+    
+    # Convert to eV first, then to target unit
+    energies_ev = energies * to_ev[from_unit_lower]
+    converted = energies_ev / to_ev[to_unit_lower]
+    
+    return converted
+
+
+def compute_atomic_energies(
+    energies: np.ndarray,
+    atomic_numbers: np.ndarray,
+    n_atoms: np.ndarray,
+    method: str = 'linear_regression'
+) -> Dict[int, float]:
+    """
+    Compute atomic energy references from molecular energies.
+    
+    Parameters
+    ----------
+    energies : np.ndarray
+        Total molecular energies, shape (n_structures,)
+    atomic_numbers : np.ndarray
+        Atomic numbers, shape (n_structures, max_atoms)
+    n_atoms : np.ndarray
+        Number of atoms per structure, shape (n_structures,)
+    method : str, optional
+        Method to compute references: 'linear_regression' or 'mean', by default 'linear_regression'
+        
+    Returns
+    -------
+    dict
+        Dictionary mapping atomic number to atomic energy reference
+    """
+    # Get unique atomic numbers
+    unique_z = np.unique(atomic_numbers[atomic_numbers > 0])
+    
+    if method == 'linear_regression':
+        # Solve: E_mol = sum_i n_i * E_i
+        # Using least squares: X @ atomic_energies = energies
+        # where X[mol, z] = count of element z in molecule
+        
+        from scipy.linalg import lstsq
+        
+        # Build composition matrix
+        n_structures = len(energies)
+        X = np.zeros((n_structures, len(unique_z)))
+        
+        for i, z in enumerate(unique_z):
+            for j in range(n_structures):
+                n = n_atoms[j]
+                X[j, i] = np.sum(atomic_numbers[j, :n] == z)
+        
+        # Solve least squares
+        result = lstsq(X, energies)
+        atomic_energies_array = result[0]
+        
+        # Create dictionary
+        atomic_energies = {int(z): float(e) for z, e in zip(unique_z, atomic_energies_array)}
+        
+    elif method == 'mean':
+        # Simple mean per atom type
+        atomic_energies = {}
+        for z in unique_z:
+            # Find molecules containing this element
+            mask = np.any(atomic_numbers == z, axis=1)
+            if np.sum(mask) > 0:
+                avg_energy = np.mean(energies[mask] / n_atoms[mask])
+                atomic_energies[int(z)] = float(avg_energy)
+            else:
+                atomic_energies[int(z)] = 0.0
+    else:
+        raise ValueError(f"Unknown method: {method}. Choose 'linear_regression' or 'mean'")
+    
+    return atomic_energies
+
+
+def subtract_atomic_energies(
+    energies: np.ndarray,
+    atomic_numbers: np.ndarray,
+    n_atoms: np.ndarray,
+    atomic_energy_refs: Dict[int, float]
+) -> np.ndarray:
+    """
+    Subtract atomic energy references from molecular energies.
+    
+    Parameters
+    ----------
+    energies : np.ndarray
+        Total molecular energies, shape (n_structures,)
+    atomic_numbers : np.ndarray
+        Atomic numbers, shape (n_structures, max_atoms)
+    n_atoms : np.ndarray
+        Number of atoms per structure, shape (n_structures,)
+    atomic_energy_refs : dict
+        Dictionary mapping atomic number to atomic energy reference
+        
+    Returns
+    -------
+    np.ndarray
+        Energies with atomic references subtracted
+    """
+    corrected = energies.copy()
+    
+    for i in range(len(energies)):
+        n = n_atoms[i]
+        atomic_contribution = 0.0
+        
+        for j in range(n):
+            z = int(atomic_numbers[i, j])
+            if z in atomic_energy_refs:
+                atomic_contribution += atomic_energy_refs[z]
+        
+        corrected[i] -= atomic_contribution
+    
+    return corrected
+
+
+def scale_energies_by_atoms(
+    energies: np.ndarray,
+    n_atoms: np.ndarray
+) -> np.ndarray:
+    """
+    Scale energies by number of atoms (convert to per-atom energies).
+    
+    Parameters
+    ----------
+    energies : np.ndarray
+        Total molecular energies, shape (n_structures,)
+    n_atoms : np.ndarray
+        Number of atoms per structure, shape (n_structures,)
+        
+    Returns
+    -------
+    np.ndarray
+        Per-atom energies
+    """
+    return energies / n_atoms
+
+
 def normalize_energies(
     energies: np.ndarray,
     mean: Optional[float] = None,

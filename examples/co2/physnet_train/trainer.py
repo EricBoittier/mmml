@@ -158,6 +158,22 @@ def main():
                        help='Center coordinates at origin')
     parser.add_argument('--normalize-energy', action='store_true',
                        help='Normalize energies')
+    
+    # Energy preprocessing options
+    parser.add_argument('--energy-unit', type=str, default='eV',
+                       choices=['eV', 'hartree', 'kcal/mol', 'kJ/mol'],
+                       help='Energy unit in the input data')
+    parser.add_argument('--convert-energy-to', type=str, default=None,
+                       choices=['eV', 'hartree', 'kcal/mol', 'kJ/mol'],
+                       help='Convert energies to this unit (default: no conversion)')
+    parser.add_argument('--subtract-atomic-energies', action='store_true',
+                       help='Subtract atomic energy references from molecular energies')
+    parser.add_argument('--atomic-energy-method', type=str, default='linear_regression',
+                       choices=['linear_regression', 'mean'],
+                       help='Method for computing atomic energy references')
+    parser.add_argument('--scale-by-atoms', action='store_true',
+                       help='Scale energies by number of atoms (per-atom energies)')
+    
     parser.add_argument('--verbose', action='store_true', default=True,
                        help='Verbose output')
     
@@ -204,8 +220,29 @@ def main():
         num_atoms=args.natoms,
         center_coordinates=args.center_coordinates,
         normalize_energy=args.normalize_energy,
+        energy_unit=args.energy_unit,
+        convert_energy_to=args.convert_energy_to,
+        subtract_atomic_energies=args.subtract_atomic_energies,
+        atomic_energy_method=args.atomic_energy_method,
+        scale_by_atoms=args.scale_by_atoms,
         esp_mask_vdw=False,
     )
+    
+    # Print energy preprocessing info
+    if args.verbose:
+        print(f"\nEnergy preprocessing:")
+        print(f"  Input unit: {args.energy_unit}")
+        if args.convert_energy_to:
+            print(f"  Converting to: {args.convert_energy_to}")
+        if args.subtract_atomic_energies:
+            print(f"  Subtracting atomic energies: {args.atomic_energy_method}")
+        if args.scale_by_atoms:
+            print(f"  Scaling by number of atoms: True")
+        if args.normalize_energy:
+            print(f"  Normalizing energies: True")
+        if not any([args.convert_energy_to, args.subtract_atomic_energies, 
+                    args.scale_by_atoms, args.normalize_energy]):
+            print(f"  No preprocessing applied")
     
     if args.verbose:
         print(f"\nLoading training data...")
