@@ -310,15 +310,15 @@ def plot_esp_3d_with_molecule(grids, esp_values, positions, atomic_numbers, samp
                            [pos1[2], pos2[2]], 
                            'k-', linewidth=2, alpha=0.8, zorder=9)
         
-        ax.set_xlabel('X (Bohr)', fontsize=10)
-        ax.set_ylabel('Y (Bohr)', fontsize=10)
-        ax.set_zlabel('Z (Bohr)', fontsize=10)
+        ax.set_xlabel(f'X ({coord_label})', fontsize=10)
+        ax.set_ylabel(f'Y ({coord_label})', fontsize=10)
+        ax.set_zlabel(f'Z ({coord_label})', fontsize=10)
         ax.set_title(titles[i], fontsize=11)
         ax.view_init(elev=elev, azim=azim)
         
         # Add colorbar
         cbar = plt.colorbar(scatter, ax=ax, shrink=0.5, aspect=10)
-        cbar.set_label('ESP (Hartree/Bohr)', fontsize=9)
+        cbar.set_label(f'ESP (Hartree/e per {coord_label})', fontsize=9)
     
     fig.suptitle(f'ESP with Molecular Structure (Sample {sample_idx}, {len(valid_pos_scaled)} atoms, {len(coords)} grid points)', 
                  fontsize=14, fontweight='bold')
