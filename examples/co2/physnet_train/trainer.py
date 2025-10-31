@@ -35,28 +35,154 @@ from mmml.physnetjax.physnetjax.training.training import train_model
 from mmml.physnetjax.physnetjax.directories import BASE_CKPT_DIR
 
 
-def ensure_standard_keys(data: Dict) -> Dict:
+def ensure_standard_keys(data: Dict, verbose: bool = False) -> Dict:
     """
     Ensure data dictionary has standard keys expected by PhysNetJax.
     
     PhysNetJax expects:
-    - 'D' for dipoles (from 'Dxyz')
+    - 'D' for dipoles (from 'Dxyz'), shape (n_structures, 3)
     - Standard energy/force keys
     """
     out = data.copy()
     
-    # Handle dipole keys
-    if 'Dxyz' in data and 'D' not in data:
-        Dxyz = data['Dxyz']
-        
-        # PhysNetJax expects dipoles in Debye, which is already our unit
-        if Dxyz.ndim == 2:
-            out['D'] = Dxyz
-        elif Dxyz.ndim == 3:
-            # If dipoles are per-atom, take molecular dipole (sum)
-            out['D'] = Dxyz.sum(axis=1)
+    # Handle dipole keys - check both D and Dxyz
+    dipole_array = None
+    dipole_key = None
+    if 'D' in data:
+        dipole_array = data['D']
+        dipole_key = 'D'
+    elif 'Dxyz' in data:
+        dipole_array = data['Dxyz']
+        dipole_key = 'Dxyz'
+    
+    if dipole_array is not None:
+        # PhysNetJax expects dipoles as (n_structures, 3)
+        if dipole_array.ndim == 2:
+            if dipole_array.shape[1] == 3:
+                # Already correct shape (n_structures, 3)
+                out['D'] = dipole_array
+            else:
+                # Wrong second dimension - might be (n_structures, n_atoms) incorrectly!
+                # This can happen if dipoles were padded like atom coordinates
+                if verbose:
+                    print(f"  ⚠️  WARNING: {dipole_key} has shape {dipole_array.shape}")
+                    print(f"  ⚠️  Expected (n_structures, 3), got second dim = {dipole_array.shape[1]}")
+                    print(f"  ⚠️  Will extract first 3 columns as dipole moment...")
+                # Take first 3 columns assuming they are x, y, z components
+                out['D'] = dipole_array[:, :3].copy()
+        elif dipole_array.ndim == 3:
+            # Shape is (n_structures, n_atoms, 3) - padded per-atom dipoles
+            # Sum over atoms to get molecular dipole
+            if verbose:
+                print(f"  ⚠️  WARNING: {dipole_key} has shape {dipole_array.shape} (3D)")
+                print(f"  ⚠️  Summing over atoms to get molecular dipole...")
+            out['D'] = dipole_array.sum(axis=1)
+        elif dipole_array.ndim == 1:
+            # Flat array - reshape to (n_structures, 3)
+            out['D'] = dipole_array.reshape(-1, 3)
         else:
-            out['D'] = Dxyz
+            # Unexpected shape - keep as is and let it fail with a better error
+            if verbose:
+                print(f"  ⚠️  WARNING: {dipole_key} has unexpected shape {dipole_array.shape}")
+            out['D'] = dipole_array
+    
+    return out
+
+
+def resize_padded_arrays(data: Dict, target_natoms: int, verbose: bool = False) -> Dict:
+    """
+    Safely resize arrays that are already padded to a different num_atoms.
+    
+    This allows using --natoms to change the padding size of pre-padded data.
+    
+    Parameters
+    ----------
+    data : dict
+        Data dictionary with potentially padded arrays
+    target_natoms : int
+        Target number of atoms to pad/truncate to
+    verbose : bool
+        Whether to print information about resizing
+        
+    Returns
+    -------
+    dict
+        Data with arrays resized to target_natoms
+    """
+    out = data.copy()
+    
+    # Check if R exists to determine current padding
+    if 'R' not in data or 'N' not in data:
+        return out
+    
+    n_structures, current_natoms, _ = data['R'].shape
+    
+    if current_natoms == target_natoms:
+        # Already correct size
+        return out
+    
+    # Check if resizing is safe (no structure has more atoms than target)
+    max_atoms = int(np.max(data['N']))
+    if max_atoms > target_natoms:
+        raise ValueError(
+            f"Cannot resize to {target_natoms} atoms: data contains structures "
+            f"with up to {max_atoms} atoms. Use --natoms >= {max_atoms}"
+        )
+    
+    if verbose:
+        print(f"\n📏 Resizing arrays from {current_natoms} to {target_natoms} atoms...")
+    
+    # Resize coordinate-like arrays (n_structures, n_atoms, 3)
+    for key in ['R', 'F']:
+        if key in data:
+            old_array = data[key]
+            if target_natoms > current_natoms:
+                # Expand with zeros
+                new_array = np.zeros((n_structures, target_natoms, 3), dtype=old_array.dtype)
+                new_array[:, :current_natoms, :] = old_array
+            else:
+                # Truncate
+                new_array = old_array[:, :target_natoms, :]
+            out[key] = new_array
+            if verbose:
+                print(f"  {key}: {old_array.shape} → {new_array.shape}")
+    
+    # Resize atomic number arrays (n_structures, n_atoms)
+    for key in ['Z', 'mono']:
+        if key in data:
+            old_array = data[key]
+            if target_natoms > current_natoms:
+                # Expand with zeros
+                new_array = np.zeros((n_structures, target_natoms), dtype=old_array.dtype)
+                new_array[:, :current_natoms] = old_array
+            else:
+                # Truncate
+                new_array = old_array[:, :target_natoms]
+            out[key] = new_array
+            if verbose:
+                print(f"  {key}: {old_array.shape} → {new_array.shape}")
+    
+    # Handle dipole array (should be n_structures, 3 - NOT padded by atoms!)
+    # If D has wrong shape, fix it here
+    if 'D' in data:
+        dipole_array = data['D']
+        if dipole_array.ndim == 2:
+            if dipole_array.shape[1] == current_natoms:
+                # ERROR: D was incorrectly padded with n_atoms dimension!
+                # D should be (n_structures, 3), not (n_structures, n_atoms)
+                # This is likely the first 3 components which are the actual dipole
+                if verbose:
+                    print(f"  ⚠️  WARNING: D has shape {dipole_array.shape}, expected (n_structures, 3)")
+                    print(f"  ⚠️  Extracting first 3 columns as dipole moment...")
+                out['D'] = dipole_array[:, :3].copy()
+            elif dipole_array.shape[1] == 3:
+                # Correct shape, just copy
+                out['D'] = dipole_array
+            else:
+                # Unknown shape, keep as is
+                out['D'] = dipole_array
+        else:
+            out['D'] = dipole_array
     
     return out
 
@@ -303,8 +429,12 @@ def main():
         valid_raw = load_npz(args.valid, config=dc, validate=True, verbose=args.verbose)
     
     # Ensure standard keys
-    train_data = ensure_standard_keys(train_raw)
-    valid_data = ensure_standard_keys(valid_raw)
+    train_data = ensure_standard_keys(train_raw, verbose=args.verbose)
+    valid_data = ensure_standard_keys(valid_raw, verbose=args.verbose)
+    
+    # Resize arrays if needed (allows --natoms to differ from data padding)
+    train_data = resize_padded_arrays(train_data, args.natoms, verbose=args.verbose)
+    valid_data = resize_padded_arrays(valid_data, args.natoms, verbose=args.verbose)
     
     # Remove metadata from training/validation data as it's not needed by the training loop
     # (and can cause issues if passed to JAX functions)
@@ -317,6 +447,14 @@ def main():
     print(f"  Training samples: {len(train_data['R'])}")
     print(f"  Validation samples: {len(valid_data['R'])}")
     print(f"  Data keys: {list(train_data.keys())}")
+    print(f"  Array shapes:")
+    print(f"    R: {train_data['R'].shape}")
+    print(f"    Z: {train_data['Z'].shape}")
+    print(f"    E: {train_data['E'].shape}")
+    print(f"    F: {train_data['F'].shape}")
+    if 'D' in train_data:
+        print(f"    D: {train_data['D'].shape}")
+    print(f"  Max atoms in data: {int(np.max(train_data['N']))}")
     
     # Check data statistics after preprocessing
     if args.verbose:
