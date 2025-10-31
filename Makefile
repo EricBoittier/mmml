@@ -28,9 +28,17 @@ help:
 	@echo "  make test-quick        - Run quick tests only"
 	@echo "  make test-coverage     - Run tests with coverage report"
 	@echo ""
+	@echo "Training (PhysNetJAX):"
+	@echo "  make physnet-train         TRAIN=train.npz [VALID=valid.npz] [NATOMS=60] [BATCH=32] [EPOCHS=100] [LR=0.001] [NAME=run] [CHARGES=false]"
+	@echo "  make physnet-train-adv     TRAIN=train.npz [VALID=valid.npz] [NATOMS=60] [BATCH=32] [EPOCHS=100] [LR=0.001] [NAME=run] BATCH_SHAPE=512 NBLEN=16384"
+	@echo "  make physnet-train-chg     TRAIN=train.npz [VALID=valid.npz] CHARGES=true (adds dipole/charges loss weights)"
+	@echo ""
 	@echo "Cleanup:"
 	@echo "  make clean             - Remove build artifacts and caches"
 	@echo "  make clean-all         - Remove everything including venv"
+	@echo ""
+	@echo "Data Utilities:"
+	@echo "  make split-8-1-1       - Split an NPZ into 8:1:1 train/valid/test"
 	@echo ""
 
 # ==============================================================================
@@ -199,3 +207,74 @@ freeze:
 upgrade:
 	uv sync --upgrade
 
+# ==============================================================================
+# Data utilities
+# ==============================================================================
+
+INPUT ?=
+OUTDIR ?=
+split-8-1-1:
+	@if [ -z "$(INPUT)" ]; then echo "Error: set INPUT=<data.npz>"; exit 1; fi
+	uv run python scripts/split_npz_8_1_1.py $(INPUT) $(if $(OUTDIR),--out-dir $(OUTDIR),)
+
+# ==============================================================================
+# Training helpers (PhysNetJAX via Hydra)
+# ==============================================================================
+
+PY ?= uv run python
+
+# Common variables with defaults
+TRAIN ?=
+VALID ?=
+NATOMS ?= 60
+BATCH ?= 32
+EPOCHS ?= 100
+LR ?= 0.001
+NAME ?= physnet_run
+SEED ?= 42
+CHARGES ?= false
+
+# Advanced batching defaults
+BATCH_SHAPE ?= 512
+NBLEN ?= 16384
+
+physnet-train:
+	@if [ -z "$(TRAIN)" ]; then echo "Error: set TRAIN=<train.npz>"; exit 1; fi
+	$(PY) scripts/physnet_hydra_train.py \
+	  data.train_file=$(TRAIN) \
+	  $(if $(VALID),data.valid_file=$(VALID),) \
+	  model.natoms=$(NATOMS) \
+	  train.batch_size=$(BATCH) \
+	  train.max_epochs=$(EPOCHS) \
+	  train.learning_rate=$(LR) \
+	  logging.name=$(NAME) \
+	  train.seed=$(SEED) \
+	  model.charges=$(CHARGES)
+
+physnet-train-adv:
+	@if [ -z "$(TRAIN)" ]; then echo "Error: set TRAIN=<train.npz>"; exit 1; fi
+	$(PY) scripts/physnet_hydra_train.py \
+	  data.train_file=$(TRAIN) \
+	  $(if $(VALID),data.valid_file=$(VALID),) \
+	  model.natoms=$(NATOMS) \
+	  train.batch_size=$(BATCH) \
+	  train.max_epochs=$(EPOCHS) \
+	  train.learning_rate=$(LR) \
+	  logging.name=$(NAME) \
+	  train.seed=$(SEED) \
+	  model.charges=$(CHARGES) \
+	  batching.method=advanced batching.batch_shape=$(BATCH_SHAPE) batching.batch_nbl_len=$(NBLEN)
+
+physnet-train-chg:
+	@if [ -z "$(TRAIN)" ]; then echo "Error: set TRAIN=<train.npz>"; exit 1; fi
+	$(PY) scripts/physnet_hydra_train.py \
+	  data.train_file=$(TRAIN) \
+	  $(if $(VALID),data.valid_file=$(VALID),) \
+	  model.natoms=$(NATOMS) \
+	  train.batch_size=$(BATCH) \
+	  train.max_epochs=$(EPOCHS) \
+	  train.learning_rate=$(LR) \
+	  logging.name=$(NAME) \
+	  train.seed=$(SEED) \
+	  model.charges=true \
+	  loss.dipole_weight=25.0 loss.charges_weight=10.0

@@ -1,0 +1,7 @@
+
+CondaError: Run 'conda init' before 'conda activate'
+
+Traceback (most recent call last):
+  File "/scicore/home/meuwly/boitti0000/mmml/examples/dcm/train.py", line 12, in <module>
+    from mmml.dcmnet.dcmnet.training import train_model
+ModuleNotFoundError: No module named 'mmml'
