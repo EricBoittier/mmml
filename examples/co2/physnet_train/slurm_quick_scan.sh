@@ -50,9 +50,9 @@ python trainer.py \
   --n-res 3 \
   --batch-size 16 \
   --natoms 3 \
-  --epochs 500 \
+  --epochs 100 \
   --learning-rate 0.001 \
-  --schedule warmup_cosine \
+  --schedule constant \
   --energy-weight 1.0 \
   --forces-weight 50.0 \
   --dipole-weight 25.0 \
