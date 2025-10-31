@@ -63,6 +63,7 @@ class EF(nn.Module):
     zbl: bool = True
     debug: bool | List[str] = False
     efa: bool = False
+    use_energy_bias: bool = True
 
     def setup(self) -> None:
         """
@@ -114,6 +115,7 @@ class EF(nn.Module):
             "zbl": self.zbl,
             "debug": self.debug,
             "efa": self.efa,
+            "use_energy_bias": self.use_energy_bias,
         }
 
     def energy(
@@ -649,15 +651,22 @@ class EF(nn.Module):
             Predicted atomic energies
         """
         x = e3x.nn.Dense(1, use_bias=False)(x)
-        energy_bias = self.param(
-            "energy_bias",
-            lambda rng, shape: jnp.zeros(shape),
-            (self.max_atomic_number + 1),
-        )
+        
+        # Optionally add per-element energy bias (learnable atomic reference energies)
+        if self.use_energy_bias:
+            energy_bias = self.param(
+                "energy_bias",
+                lambda rng, shape: jnp.zeros(shape),
+                (self.max_atomic_number + 1),
+            )
+        
         atomic_energies = nn.Dense(
             1, use_bias=False, kernel_init=jax.nn.initializers.zeros, dtype=DTYPE
         )(x)
-        atomic_energies += energy_bias[atomic_numbers][..., None, None, None]
+        
+        if self.use_energy_bias:
+            atomic_energies += energy_bias[atomic_numbers][..., None, None, None]
+        
         atomic_energies *= atom_mask[..., None, None, None]
 
         return atomic_energies
