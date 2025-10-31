@@ -17,11 +17,11 @@ python trainer.py \
   --energy-weight 1.0 \
   --forces-weight 1.0 \
   --dipole-weight 25.0 \
-   --energy-unit hartree \
+   --energy-unit eV \
   --convert-energy-to eV \
   --schedule constant \
   --subtract-atomic-energies \
   --atomic-energy-method linear_regression \
-  --natoms 60 \
+  --natoms 3 \
   --verbose
 
