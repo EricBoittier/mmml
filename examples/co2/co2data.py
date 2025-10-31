@@ -268,11 +268,16 @@ def plot_esp_3d_with_molecule(grids, esp_values, positions, atomic_numbers, samp
                            c=esp, cmap='bwr', s=1, vmin=vmin, vmax=vmax,
                            alpha=0.3, edgecolors='none')
         
-        # Plot atoms (positions now scaled and centered in Angstroms)
+        # Plot atoms
         for atom_idx in range(len(valid_pos_scaled)):
-            pos_ang = valid_pos_scaled[atom_idx]
+            pos_physical = valid_pos_scaled[atom_idx]
             atomic_num = int(valid_z[atom_idx])
-            radius = covalent_radii[atomic_num] * 0.5  # Radius in Angstroms
+            
+            # Radius in same units as coordinates
+            if coord_label == "Angstrom":
+                radius = covalent_radii[atomic_num] * 0.5
+            else:  # Bohr
+                radius = covalent_radii[atomic_num] * 1.88973 * 0.5
             
             # Color by element
             if atomic_num == 6:  # Carbon
@@ -289,7 +294,7 @@ def plot_esp_3d_with_molecule(grids, esp_values, positions, atomic_numbers, samp
                 radius_scale = 1.0
             
             # Plot atom as sphere
-            ax.scatter([pos_ang[0]], [pos_ang[1]], [pos_ang[2]],
+            ax.scatter([pos_physical[0]], [pos_physical[1]], [pos_physical[2]],
                       c=color, s=radius * radius_scale * 200, alpha=0.9, 
                       edgecolors='black', linewidths=1.5, zorder=10)
         
@@ -300,9 +305,12 @@ def plot_esp_3d_with_molecule(grids, esp_values, positions, atomic_numbers, samp
                 pos2 = valid_pos_scaled[idx2]
                 dist = np.linalg.norm(pos1 - pos2)
                 
-                # Bond if distance < sum of covalent radii * 1.3 (in Angstroms)
+                # Bond if distance < sum of covalent radii * 1.3
                 z1, z2 = int(valid_z[idx1]), int(valid_z[idx2])
-                max_bond_dist = (covalent_radii[z1] + covalent_radii[z2]) * 1.3
+                if coord_label == "Angstrom":
+                    max_bond_dist = (covalent_radii[z1] + covalent_radii[z2]) * 1.3
+                else:  # Bohr
+                    max_bond_dist = (covalent_radii[z1] + covalent_radii[z2]) * 1.88973 * 1.3
                 
                 if dist < max_bond_dist:
                     ax.plot([pos1[0], pos2[0]], 
