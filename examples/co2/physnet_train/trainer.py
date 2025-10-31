@@ -443,7 +443,7 @@ def main():
             schedule_fn=args.schedule,
             objective=args.objective,
             ckpt_dir=ckpt_dir,
-            log_tb=not args.no_tensorboard,
+            log_tb= False,#not args.no_tensorboard,
             batch_method='default',  # Use default batching
             batch_args_dict=None,
             data_keys=tuple(data_keys),
