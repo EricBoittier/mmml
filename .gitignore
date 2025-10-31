@@ -6,6 +6,13 @@ uv.lock
 outputs/
 mmml/physnetjax/ckpts/
 
+# Training data files (too large for GitHub)
+examples/co2/training_data/
+examples/co2/training_data_fixed/
+examples/co2/charge_files/
+**/training_data/*.npz
+**/training_data_fixed/*.npz
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
