@@ -2,18 +2,19 @@
 Fix unit issues and create properly formatted training data for DCMnet/PhysnetJax.
 
 This script:
-1. Converts normalized atomic coordinates to physical Angstroms
-2. Converts ESP grid coordinates from index space to physical Angstroms
-3. Validates all conversions
-4. Creates 8:1:1 train/valid/test splits
-5. Saves data in MMML standard format
+1. Validates atomic coordinates are in Angstroms
+2. Converts energies from Hartree to eV (ASE standard)
+3. Converts forces from Hartree/Bohr to eV/Angstrom (ASE standard)
+4. Converts ESP grid coordinates from index space to physical Angstroms
+5. Creates 8:1:1 train/valid/test splits
+6. Saves data in ASE-compatible format
 
-MMML Standard Units:
+ASE Standard Units:
 - Coordinates (R): Angstrom
-- Energies (E): Hartree
-- Forces (F): Hartree/Bohr
+- Energies (E): eV
+- Forces (F): eV/Angstrom
 - Dipoles (Dxyz): Debye
-- ESP values: Hartree/e
+- ESP values: Hartree/e (no ASE standard for ESP)
 - ESP grid (vdw_surface): Angstrom
 """
 
@@ -45,23 +46,42 @@ def create_splits(n_samples: int, train_frac=0.8, valid_frac=0.1, test_frac=0.1,
     }
 
 
-def convert_normalized_coords_to_angstrom(R: np.ndarray, scale_factor=1.16) -> np.ndarray:
+def convert_energy_hartree_to_ev(E_hartree: np.ndarray) -> np.ndarray:
     """
-    Convert normalized coordinates to Angstroms.
+    Convert energies from Hartree to eV (ASE standard).
     
     Parameters
     ----------
-    R : np.ndarray
-        Normalized coordinates (C-O bond = 1.0)
-    scale_factor : float
-        Scale factor to get physical coordinates (default: 1.16 for CO2 C-O bond)
+    E_hartree : np.ndarray
+        Energies in Hartree
         
     Returns
     -------
     np.ndarray
-        Coordinates in Angstroms
+        Energies in eV
     """
-    return R * scale_factor
+    HARTREE_TO_EV = 27.211386
+    return E_hartree * HARTREE_TO_EV
+
+
+def convert_forces_hartree_bohr_to_ev_angstrom(F_hartree_bohr: np.ndarray) -> np.ndarray:
+    """
+    Convert forces from Hartree/Bohr to eV/Angstrom (ASE standard).
+    
+    Parameters
+    ----------
+    F_hartree_bohr : np.ndarray
+        Forces in Hartree/Bohr
+        
+    Returns
+    -------
+    np.ndarray
+        Forces in eV/Angstrom
+    """
+    # Conversion factor = (Hartree to eV) / (Bohr to Angstrom)
+    # = 27.211386 / 0.529177 = 51.42208
+    HARTREE_BOHR_TO_EV_ANGSTROM = 51.42208
+    return F_hartree_bohr * HARTREE_BOHR_TO_EV_ANGSTROM
 
 
 def convert_grid_indices_to_angstrom(
@@ -139,7 +159,7 @@ def convert_grid_indices_to_angstrom(
     return vdw_grid_angstrom
 
 
-def validate_fixed_data(R_ang, vdw_grid_ang, Z, N):
+def validate_fixed_data(R_ang, E_ev, F_ev_ang, vdw_grid_ang, Z, N):
     """Validate that fixes worked correctly."""
     print(f"\n{'='*70}")
     print("POST-FIX VALIDATION")
@@ -179,6 +199,34 @@ def validate_fixed_data(R_ang, vdw_grid_ang, Z, N):
     valid = z0 > 0
     valid_pos = r0[valid]
     co_dist = np.linalg.norm(valid_pos[0] - valid_pos[1])
+    
+    # Check energies
+    print(f"\nEnergies (sample 0):")
+    print(f"  Value: {E_ev[0]:.6f} eV")
+    print(f"  Dataset mean: {E_ev.mean():.6f} eV")
+    
+    # For CO2, expect energies around -5100 to -5000 eV (from -187.5 Ha)
+    if -5200 < E_ev.mean() < -4900:
+        print(f"  ✓ Energies in expected range for CO2 in eV")
+        energy_ok = True
+    else:
+        print(f"  ⚠️  Energy range unexpected for CO2")
+        energy_ok = False
+    
+    # Check forces
+    f_sample = F_ev_ang[0, :3, :]  # First sample, first 3 atoms
+    f_norm = np.linalg.norm(f_sample.reshape(-1, 3), axis=1).mean()
+    
+    print(f"\nForces (sample 0):")
+    print(f"  Mean norm: {f_norm:.6e} eV/Angstrom")
+    
+    # For geometry scans, forces can be large (up to 50-100 eV/Å far from equilibrium)
+    if 1e-3 < f_norm < 100:
+        print(f"  ✓ Force magnitudes in reasonable range for geometry scans")
+        force_ok = True
+    else:
+        print(f"  ⚠️  Force magnitudes outside expected range")
+        force_ok = False
     
     # Check ESP grid
     grid0 = vdw_grid_ang[0]
@@ -249,15 +297,22 @@ def validate_fixed_data(R_ang, vdw_grid_ang, Z, N):
             print(f"  ❌ Grid too far from molecule ({max_min_dist:.2f} Å)")
             spatial_ok = False
     
-    overall_ok = coords_ok and grid_ok and spatial_ok
+    overall_ok = coords_ok and energy_ok and force_ok and grid_ok and spatial_ok
+    
+    print(f"\n{'='*70}")
+    print("VALIDATION SUMMARY")
+    print(f"{'='*70}")
+    print(f"  Coordinates: {'✓' if coords_ok else '❌'}")
+    print(f"  Energies:    {'✓' if energy_ok else '❌'}")
+    print(f"  Forces:      {'✓' if force_ok else '❌'}")
+    print(f"  ESP Grid:    {'✓' if grid_ok else '❌'}")
+    print(f"  Spatial:     {'✓' if spatial_ok else '❌'}")
     
     if overall_ok:
-        print(f"\n{'='*70}")
-        print("✅ ALL VALIDATIONS PASSED - Data ready for training!")
+        print(f"\n✅ ALL VALIDATIONS PASSED - Data ready for training!")
         print(f"{'='*70}")
     else:
-        print(f"\n{'='*70}")
-        print("⚠️  SOME VALIDATIONS FAILED - Review above")
+        print(f"\n⚠️  SOME VALIDATIONS FAILED - Review above")
         print(f"{'='*70}")
     
     return overall_ok
@@ -336,10 +391,45 @@ def main():
         return
     
     # =========================================================================
+    # Convert energies: Hartree → eV (ASE standard)
+    # =========================================================================
+    print(f"\n{'#'*70}")
+    print("# Step 3: Converting Energies from Hartree to eV")
+    print(f"{'#'*70}")
+    
+    E_ev = convert_energy_hartree_to_ev(efd_data['E'])
+    
+    HARTREE_TO_EV = 27.211386
+    print(f"\nConversion factor: {HARTREE_TO_EV}")
+    print(f"Original (Hartree): mean={efd_data['E'].mean():.6f}, range=[{efd_data['E'].min():.6f}, {efd_data['E'].max():.6f}]")
+    print(f"Converted (eV):     mean={E_ev.mean():.6f}, range=[{E_ev.min():.6f}, {E_ev.max():.6f}]")
+    print(f"✓ Energies converted to eV")
+    
+    # =========================================================================
+    # Convert forces: Hartree/Bohr → eV/Angstrom (ASE standard)
+    # =========================================================================
+    print(f"\n{'#'*70}")
+    print("# Step 4: Converting Forces from Hartree/Bohr to eV/Angstrom")
+    print(f"{'#'*70}")
+    
+    F_ev_ang = convert_forces_hartree_bohr_to_ev_angstrom(efd_data['F'])
+    
+    HARTREE_BOHR_TO_EV_ANG = 51.42208
+    # Calculate force norms for comparison
+    f_orig_norms = np.linalg.norm(efd_data['F'][:10, :3, :].reshape(-1, 3), axis=1)
+    f_conv_norms = np.linalg.norm(F_ev_ang[:10, :3, :].reshape(-1, 3), axis=1)
+    
+    print(f"\nConversion factor: {HARTREE_BOHR_TO_EV_ANG}")
+    print(f"Original (Ha/Bohr): mean norm={f_orig_norms.mean():.6e}")
+    print(f"Converted (eV/Å):   mean norm={f_conv_norms.mean():.6e}")
+    print(f"Ratio: {f_conv_norms.mean() / f_orig_norms.mean():.6f} (should be ~{HARTREE_BOHR_TO_EV_ANG})")
+    print(f"✓ Forces converted to eV/Angstrom")
+    
+    # =========================================================================
     # Fix ESP grid: index space → physical Angstroms
     # =========================================================================
     print(f"\n{'#'*70}")
-    print("# Step 3: Converting ESP Grid to Physical Angstroms")
+    print("# Step 5: Converting ESP Grid to Physical Angstroms")
     print(f"{'#'*70}")
     
     # From the cube file inspection: spacing = 0.25 Bohr
@@ -371,10 +461,10 @@ def main():
     # Validate fixed data
     # =========================================================================
     print(f"\n{'#'*70}")
-    print("# Step 4: Validating Fixed Data")
+    print("# Step 6: Validating Fixed Data")
     print(f"{'#'*70}")
     
-    is_valid = validate_fixed_data(R_angstrom, vdw_surface_angstrom, efd_data['Z'], efd_data['N'])
+    is_valid = validate_fixed_data(R_angstrom, E_ev, F_ev_ang, vdw_surface_angstrom, efd_data['Z'], efd_data['N'])
     
     if not is_valid:
         print("\n❌ Validation failed! Not proceeding with splits.")
@@ -384,7 +474,7 @@ def main():
     # Create splits
     # =========================================================================
     print(f"\n{'#'*70}")
-    print("# Step 5: Creating 8:1:1 Train/Valid/Test Splits")
+    print("# Step 7: Creating 8:1:1 Train/Valid/Test Splits")
     print(f"{'#'*70}")
     
     splits = create_splits(n_samples, train_frac=0.8, valid_frac=0.1, test_frac=0.1, seed=42)
@@ -398,12 +488,14 @@ def main():
     # Prepare datasets with fixed units
     # =========================================================================
     print(f"\n{'#'*70}")
-    print("# Step 6: Preparing Fixed Datasets")
+    print("# Step 8: Preparing Fixed Datasets")
     print(f"{'#'*70}")
     
-    # Update EFD data with fixed coordinates
+    # Update EFD data with fixed/converted values
     efd_fixed = efd_data.copy()
-    efd_fixed['R'] = R_angstrom
+    efd_fixed['R'] = R_angstrom  # Already in Angstroms
+    efd_fixed['E'] = E_ev  # Converted to eV
+    efd_fixed['F'] = F_ev_ang  # Converted to eV/Angstrom
     
     # Update grid data with fixed coordinates
     # Also rename vdw_grid to vdw_surface (MMML standard name)
@@ -417,7 +509,7 @@ def main():
     # Save split datasets
     # =========================================================================
     print(f"\n{'#'*70}")
-    print("# Step 7: Saving Split Datasets")
+    print("# Step 9: Saving Split Datasets")
     print(f"{'#'*70}")
     
     for split_name, split_indices in splits.items():
@@ -459,10 +551,20 @@ This directory contains CO2 molecular data with **corrected units** ready for DC
 
 ### 1. Atomic Coordinates (R)
 - **Original**: Already in Angstroms (varying C-O bonds: 1.0-1.5 Å)
-- **Fixed**: No conversion needed - already correct!
+- **Status**: No conversion needed - already correct ✓
 - **Note**: Dataset contains varying CO2 geometries (R1, R2, angle scans)
 
-### 2. ESP Grid Coordinates (vdw_surface)
+### 2. Energies (E)
+- **Original**: Hartree
+- **Converted**: eV (ASE standard)
+- **Factor**: ×27.211386
+
+### 3. Forces (F)
+- **Original**: Hartree/Bohr
+- **Converted**: eV/Angstrom (ASE standard)
+- **Factor**: ×51.42208
+
+### 4. ESP Grid Coordinates (vdw_surface)
 - **Original**: Grid index space (0-49 with unit axes)
 - **Fixed**: Physical Angstroms
 - **Conversion**: Applied proper grid spacing ({CUBE_SPACING_BOHR} Bohr = {CUBE_SPACING_BOHR * BOHR_TO_ANGSTROM:.6f} Å)
@@ -482,12 +584,12 @@ This directory contains CO2 molecular data with **corrected units** ready for DC
 - `energies_forces_dipoles_test.npz`
 
 Each contains:
-- `R`: Atomic coordinates (n_samples, 60, 3) [Angstrom]
-- `Z`: Atomic numbers (n_samples, 60) [int]
-- `N`: Number of atoms (n_samples,) [int]
-- `E`: Energies (n_samples,) [Hartree]
-- `F`: Forces (n_samples, 60, 3) [Hartree/Bohr]
-- `Dxyz`: Dipole moments (n_samples, 3) [Debye]
+- `R`: Atomic coordinates (n_samples, 60, 3) [Angstrom] ✓
+- `Z`: Atomic numbers (n_samples, 60) [int] ✓
+- `N`: Number of atoms (n_samples,) [int] ✓
+- `E`: Energies (n_samples,) [eV] ← CONVERTED from Hartree
+- `F`: Forces (n_samples, 60, 3) [eV/Angstrom] ← CONVERTED from Hartree/Bohr
+- `Dxyz`: Dipole moments (n_samples, 3) [Debye] ✓
 
 ### ESP Grids
 - `grids_esp_train.npz`
@@ -506,13 +608,13 @@ Each contains:
 - `grid_axes`: Original cube axes (n_samples, 3, 3)
 - `Dxyz`: Dipole moments (n_samples, 3) [Debye]
 
-## Units Summary (MMML Standard)
+## Units Summary (ASE Standard)
 
 | Property | Unit | Status |
 |----------|------|--------|
-| R (coordinates) | Angstrom | ✓ Fixed |
-| E (energy) | Hartree | ✓ Correct |
-| F (forces) | Hartree/Bohr | ✓ Correct |
+| R (coordinates) | Angstrom | ✓ Correct |
+| E (energy) | eV | ✓ Converted |
+| F (forces) | eV/Angstrom | ✓ Converted |
 | Dxyz (dipoles) | Debye | ✓ Correct |
 | esp (values) | Hartree/e | ✓ Correct |
 | vdw_surface | Angstrom | ✓ Fixed |
@@ -526,21 +628,24 @@ import numpy as np
 train_props = np.load('training_data_fixed/energies_forces_dipoles_train.npz')
 train_grids = np.load('training_data_fixed/grids_esp_train.npz')
 
-# All units are now correct - ready to use!
+# All units are ASE-standard - ready to use!
 R = train_props['R']  # Angstroms
-E = train_props['E']  # Hartree
-F = train_props['F']  # Hartree/Bohr
+E = train_props['E']  # eV (converted from Hartree)
+F = train_props['F']  # eV/Angstrom (converted from Hartree/Bohr)
+Dxyz = train_props['Dxyz']  # Debye
 esp = train_grids['esp']  # Hartree/e
-vdw_surface = train_grids['vdw_surface']  # Angstroms
+vdw_surface = train_grids['vdw_surface']  # Angstroms (fixed from grid indices)
 ```
 
 ## Important Notes
 
-1. **Coordinates are now in physical Angstroms** - no scaling needed
-2. **ESP grid is in physical Angstroms** - matches atomic coordinates
-3. **Forces remain in Hartree/Bohr** - standard quantum chemistry unit
-4. **ESP values are Hartree/e** - electrostatic potential per unit charge
-5. **Splits are reproducible** - same seed (42) ensures consistency
+1. **All units are ASE-standard** - compatible with ASE, SchNetPack, etc.
+2. **Coordinates in Angstroms** - no scaling needed
+3. **Energies in eV** - converted from Hartree (×27.211386)
+4. **Forces in eV/Angstrom** - converted from Hartree/Bohr (×51.42208)
+5. **ESP grid in physical Angstroms** - matches atomic coordinates
+6. **ESP values remain in Hartree/e** - no ASE standard for electrostatic potential
+7. **Splits are reproducible** - same seed (42) ensures consistency
 
 ## Validation
 
@@ -563,19 +668,21 @@ Generated: {Path(__file__).name}
 ================================================================================
 
 COORDINATES (R)
-  Units: Angstrom
+  Units: Angstrom (ASE standard)
   Original: Already in Angstroms (varying geometries)
-  Fixed: No conversion needed
+  Status: No conversion needed ✓
   Range: C-O bonds from 1.0 to 1.5 Å (mean ~1.25 Å)
 
 ENERGIES (E)
-  Units: Hartree
-  Status: Correct (no change)
-  Range: -187.7 to -187.4 Ha
+  Units: eV (ASE standard)
+  Original: Hartree
+  Conversion: ×27.211386 (Ha → eV)
+  Range: -5107 to -5098 eV (from -187.7 to -187.4 Ha)
 
 FORCES (F)
-  Units: Hartree/Bohr
-  Status: Correct (no change)
+  Units: eV/Angstrom (ASE standard)
+  Original: Hartree/Bohr
+  Conversion: ×51.42208 (Ha/Bohr → eV/Å)
   Note: Gradient = -Force
 
 DIPOLES (Dxyz)
@@ -589,14 +696,15 @@ ESP VALUES (esp)
   Range: -0.058 to +0.862 Ha/e
 
 ESP GRID (vdw_surface / vdw_grid)
-  Units: Angstrom
+  Units: Angstrom (ASE standard)
   Original: Grid indices (0-49)
   Fixed: Physical coordinates
   Conversion: origin_bohr × 0.529177 + (index - origin) × 0.25 × 0.529177
   Extent: ~6.5 Angstrom cube
 
 ================================================================================
-Ready for DCMnet/PhysnetJax training!
+ALL UNITS ARE ASE-STANDARD!
+Ready for DCMnet/PhysnetJax training with ASE-compatible data!
 ================================================================================
 """)
     
@@ -616,7 +724,11 @@ Ready for DCMnet/PhysnetJax training!
     print(f"  - README.md (detailed description)")
     print(f"  - UNITS_REFERENCE.txt (quick reference)")
     print(f"  - split_indices.npz (reproducible splits)")
-    print("\n⚠️  IMPORTANT: All units are now MMML-standard compliant!")
+    print("\n✅ IMPORTANT: All units are now ASE-standard compliant!")
+    print("   - Energies: eV (converted from Hartree)")
+    print("   - Forces: eV/Angstrom (converted from Hartree/Bohr)")
+    print("   - Coordinates: Angstrom")
+    print("   - ESP grid: Angstrom (converted from grid indices)")
     print(f"{'='*70}\n")
 
 
