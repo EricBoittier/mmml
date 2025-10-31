@@ -48,7 +48,7 @@ model:
   include_pseudotensors: false
 
 training:
-  num_epochs: 30  # Reduced for faster trials
+  num_epochs: 30  
   batch_size: 1
   n_bootstrap: 1  # No bootstrap for hyperparameter search
   use_grad_clip: true

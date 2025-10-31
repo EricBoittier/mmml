@@ -18,7 +18,7 @@ training:
   
   # Gradient clipping
   use_grad_clip: true
-  grad_clip_norm: 1.0
+  grad_clip_norm: 1000.0
   
   # Restart from previous params
   restart_from_checkpoint: null
