@@ -248,9 +248,59 @@ def main():
         print(f"\nLoading training data...")
     train_raw = load_npz(args.train, config=dc, validate=True, verbose=args.verbose)
     
+    # If atomic energies were computed, extract them from training metadata
+    # and apply the SAME references to validation data
+    atomic_energy_refs = None
+    if args.subtract_atomic_energies and 'metadata' in train_raw:
+        metadata = train_raw['metadata'][0] if len(train_raw['metadata']) > 0 else {}
+        if 'atomic_energies' in metadata:
+            atomic_energy_refs = metadata['atomic_energies']
+            if args.verbose:
+                print(f"\n  Atomic energies computed from training data:")
+                for z, e in sorted(atomic_energy_refs.items()):
+                    element_symbol = {6: 'C', 7: 'N', 8: 'O', 1: 'H'}.get(z, f'Z{z}')
+                    print(f"    {element_symbol} (Z={z}): {e:.4f} eV")
+    
+    # Load validation data - if we have atomic energies from training, don't recompute them
     if args.verbose:
-        print(f"Loading validation data...")
-    valid_raw = load_npz(args.valid, config=dc, validate=True, verbose=args.verbose)
+        print(f"\nLoading validation data...")
+    
+    if atomic_energy_refs is not None:
+        # Load without computing new atomic energies
+        dc_valid = DataConfig(
+            batch_size=args.batch_size,
+            targets=targets,
+            num_atoms=args.natoms,
+            center_coordinates=args.center_coordinates,
+            normalize_energy=args.normalize_energy,
+            energy_unit=args.energy_unit,
+            convert_energy_to=args.convert_energy_to,
+            subtract_atomic_energies=False,  # Don't recompute
+            atomic_energy_method=args.atomic_energy_method,
+            scale_by_atoms=args.scale_by_atoms,
+            esp_mask_vdw=False,
+        )
+        valid_raw = load_npz(args.valid, config=dc_valid, validate=True, verbose=args.verbose)
+        
+        # Manually apply the training set's atomic energies
+        if 'E' in valid_raw and 'Z' in valid_raw and 'N' in valid_raw:
+            from mmml.data.preprocessing import subtract_atomic_energies
+            valid_raw['E'] = subtract_atomic_energies(
+                valid_raw['E'],
+                valid_raw['Z'],
+                valid_raw['N'],
+                atomic_energy_refs
+            )
+            # Update metadata
+            if 'metadata' not in valid_raw:
+                valid_raw['metadata'] = np.array([{}], dtype=object)
+            valid_metadata = valid_raw['metadata'][0] if len(valid_raw['metadata']) > 0 else {}
+            valid_metadata['atomic_energies'] = atomic_energy_refs
+            valid_metadata['atomic_energy_method'] = 'from_training_set'
+            valid_raw['metadata'] = np.array([valid_metadata], dtype=object)
+    else:
+        # No atomic energy preprocessing, load normally
+        valid_raw = load_npz(args.valid, config=dc, validate=True, verbose=args.verbose)
     
     # Ensure standard keys
     train_data = ensure_standard_keys(train_raw)
