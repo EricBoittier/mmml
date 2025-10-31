@@ -306,6 +306,13 @@ def main():
     train_data = ensure_standard_keys(train_raw)
     valid_data = ensure_standard_keys(valid_raw)
     
+    # Remove metadata from training/validation data as it's not needed by the training loop
+    # (and can cause issues if passed to JAX functions)
+    if 'metadata' in train_data:
+        del train_data['metadata']
+    if 'metadata' in valid_data:
+        del valid_data['metadata']
+    
     print(f"\n✅ Data loaded:")
     print(f"  Training samples: {len(train_data['R'])}")
     print(f"  Validation samples: {len(valid_data['R'])}")
