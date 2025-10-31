@@ -150,7 +150,7 @@ def main():
                        help='Learning rate transform')
     
     # Advanced options
-    parser.add_argument('--zbl', action='store_true', default=True,
+    parser.add_argument('--zbl', action='store_true', default=False,
                        help='Use ZBL repulsion')
     parser.add_argument('--charges', action='store_true',
                        help='Predict atomic charges')
