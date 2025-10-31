@@ -30,6 +30,16 @@ class DataConfig:
         Whether to center coordinates at origin
     normalize_energy : bool
         Whether to normalize energies to mean=0, std=1
+    energy_unit : str
+        Expected energy unit in the data ('eV', 'hartree', 'kcal/mol', 'kJ/mol')
+    convert_energy_to : str
+        Target energy unit to convert to (None means no conversion)
+    subtract_atomic_energies : bool
+        Whether to subtract atomic energy references
+    atomic_energy_method : str
+        Method for computing atomic energies ('linear_regression' or 'mean')
+    scale_by_atoms : bool
+        Whether to scale energies by number of atoms (per-atom energies)
     esp_mask_vdw : bool
         Whether to apply VDW masking to ESP data
     vdw_scale : float
@@ -45,6 +55,11 @@ class DataConfig:
     num_atoms: int = 60
     center_coordinates: bool = False
     normalize_energy: bool = False
+    energy_unit: str = 'eV'
+    convert_energy_to: Optional[str] = None
+    subtract_atomic_energies: bool = False
+    atomic_energy_method: str = 'linear_regression'
+    scale_by_atoms: bool = False
     esp_mask_vdw: bool = False
     vdw_scale: float = 1.4
     shuffle: bool = True
@@ -280,21 +295,72 @@ def _apply_config_preprocessing(
     dict
         Preprocessed data
     """
+    # Initialize metadata if needed
+    if 'metadata' not in data:
+        data['metadata'] = np.array([{}], dtype=object)
+    metadata = data['metadata'][0] if len(data['metadata']) > 0 else {}
+    
     # Center coordinates
     if config.center_coordinates and 'R' in data:
         from .preprocessing import center_coordinates
         data['R'] = center_coordinates(data['R'], data.get('N'))
     
-    # Normalize energies
-    if config.normalize_energy and 'E' in data:
-        from .preprocessing import normalize_energies
-        data['E'], stats = normalize_energies(data['E'])
-        # Store normalization statistics in metadata
-        if 'metadata' not in data:
-            data['metadata'] = np.array([{}], dtype=object)
-        metadata = data['metadata'][0]
-        metadata['energy_normalization'] = stats
-        data['metadata'] = np.array([metadata], dtype=object)
+    # Energy preprocessing (applied in order)
+    if 'E' in data:
+        # 1. Convert energy units if requested
+        if config.convert_energy_to is not None and config.convert_energy_to.lower() != config.energy_unit.lower():
+            from .preprocessing import convert_energy_units
+            data['E'] = convert_energy_units(
+                data['E'],
+                from_unit=config.energy_unit,
+                to_unit=config.convert_energy_to
+            )
+            metadata['energy_converted'] = {
+                'from': config.energy_unit,
+                'to': config.convert_energy_to
+            }
+            # Update current unit
+            current_unit = config.convert_energy_to
+        else:
+            current_unit = config.energy_unit
+        
+        # 2. Subtract atomic energy references if requested
+        if config.subtract_atomic_energies and 'Z' in data and 'N' in data:
+            from .preprocessing import compute_atomic_energies, subtract_atomic_energies
+            
+            # Compute atomic energies from the data
+            atomic_energies = compute_atomic_energies(
+                data['E'],
+                data['Z'],
+                data['N'],
+                method=config.atomic_energy_method
+            )
+            
+            # Subtract atomic contributions
+            data['E'] = subtract_atomic_energies(
+                data['E'],
+                data['Z'],
+                data['N'],
+                atomic_energies
+            )
+            
+            metadata['atomic_energies'] = atomic_energies
+            metadata['atomic_energy_method'] = config.atomic_energy_method
+        
+        # 3. Scale by number of atoms if requested
+        if config.scale_by_atoms and 'N' in data:
+            from .preprocessing import scale_energies_by_atoms
+            data['E'] = scale_energies_by_atoms(data['E'], data['N'])
+            metadata['energy_scaled_by_atoms'] = True
+        
+        # 4. Normalize energies if requested
+        if config.normalize_energy:
+            from .preprocessing import normalize_energies
+            data['E'], norm_stats = normalize_energies(data['E'])
+            metadata['energy_normalization'] = norm_stats
+    
+    # Store metadata
+    data['metadata'] = np.array([metadata], dtype=object)
     
     # Create ESP mask
     if config.esp_mask_vdw and 'esp' in data and 'vdw_surface' in data:
