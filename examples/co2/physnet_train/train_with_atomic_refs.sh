@@ -8,16 +8,20 @@
 #
 
 python trainer.py \
-  --train ../preclassified_data/energies_forces_dipoles_train.npz \
-  --valid ../preclassified_data/energies_forces_dipoles_valid.npz \
+  --train energies_forces_dipoles_train.npz \
+  --valid energies_forces_dipoles_valid.npz \
   --name co2_physnet_atomic_refs \
-  --batch-size 32 \
+  --batch-size 1 \
   --epochs 100 \
-  --learning-rate 0.001 \
+  --learning-rate 0.0005 \
   --energy-weight 1.0 \
-  --forces-weight 50.0 \
+  --forces-weight 1.0 \
   --dipole-weight 25.0 \
+   --energy-unit hartree \
+  --convert-energy-to eV \
+  --schedule constant \
   --subtract-atomic-energies \
   --atomic-energy-method linear_regression \
+  --natoms 60 \
   --verbose
 
