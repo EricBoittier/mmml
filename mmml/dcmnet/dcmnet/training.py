@@ -68,7 +68,7 @@ def train_step(
             src_idx=batch["src_idx"],
             batch_segments=batch["batch_segments"],
         )
-        loss = esp_mono_loss(
+        loss, esp_pred, esp_target, esp_errors = esp_mono_loss(
             dipo_prediction=dipo,
             mono_prediction=mono,
             vdw_surface=batch["vdw_surface"],
@@ -81,14 +81,14 @@ def train_step(
             chg_w=chg_w,
             n_dcm=ndcm,
         )
-        return loss, (mono, dipo)
+        return loss, (mono, dipo, esp_pred, esp_target, esp_errors)
 
-    (loss, (mono, dipo)), grad = jax.value_and_grad(loss_fn, has_aux=True)(params)
+    (loss, (mono, dipo, esp_pred, esp_target, esp_errors)), grad = jax.value_and_grad(loss_fn, has_aux=True)(params)
     if clip_norm is not None:
         grad = clip_grads_by_global_norm(grad, clip_norm)
     updates, opt_state = optimizer_update(grad, opt_state, params)
     params = optax.apply_updates(params, updates)
-    return params, opt_state, loss, mono, dipo
+    return params, opt_state, loss, mono, dipo, esp_pred, esp_target, esp_errors
 
 
 def compute_statistics(predictions, targets=None):
@@ -147,7 +147,10 @@ def print_statistics_table(train_stats, valid_stats, epoch):
     print(f"{'-'*80}")
     
     # Common metrics to compare
-    for key in ['loss', 'mono_mae', 'mono_rmse', 'mono_mean', 'mono_std']:
+    metrics_list = ['loss', 'mono_mae', 'mono_rmse', 'mono_mean', 'mono_std',
+                    'esp_mae', 'esp_rmse', 'esp_pred_mean', 'esp_pred_std',
+                    'esp_error_mean', 'esp_error_std']
+    for key in metrics_list:
         if key in train_stats and key in valid_stats:
             train_val = train_stats[key]
             valid_val = valid_stats[key]
@@ -193,8 +196,8 @@ def eval_step(model_apply, batch, batch_size, params, esp_w, chg_w, ndcm):
         
     Returns
     -------
-    float
-        Loss value for the current batch
+    tuple
+        (loss, mono, dipo, esp_pred, esp_target, esp_errors)
     """
     mono, dipo = model_apply(
         params,
@@ -205,7 +208,7 @@ def eval_step(model_apply, batch, batch_size, params, esp_w, chg_w, ndcm):
         batch_segments=batch["batch_segments"],
         batch_size=batch_size,
     )
-    loss = esp_mono_loss(
+    loss, esp_pred, esp_target, esp_errors = esp_mono_loss(
         dipo_prediction=dipo,
         mono_prediction=mono,
         vdw_surface=batch["vdw_surface"],
@@ -218,7 +221,7 @@ def eval_step(model_apply, batch, batch_size, params, esp_w, chg_w, ndcm):
         chg_w=chg_w,
         n_dcm=ndcm,
     )
-    return loss, mono, dipo
+    return loss, mono, dipo, esp_pred, esp_target, esp_errors
 
 
 def train_model(
@@ -326,9 +329,12 @@ def train_model(
         train_loss = 0.0
         train_mono_preds = []
         train_mono_targets = []
+        train_esp_preds = []
+        train_esp_targets = []
+        train_esp_errors = []
         
         for i, batch in enumerate(train_batches):
-            params, opt_state, loss, mono, dipo = train_step(
+            params, opt_state, loss, mono, dipo, esp_pred, esp_target, esp_error = train_step(
                 model_apply=model.apply,
                 optimizer_update=optimizer.update,
                 batch=batch,
@@ -348,13 +354,28 @@ def train_model(
             # Collect predictions for statistics
             train_mono_preds.append(mono)
             train_mono_targets.append(batch["mono"])
+            train_esp_preds.append(esp_pred)
+            train_esp_targets.append(esp_target)
+            train_esp_errors.append(esp_error)
 
         # Concatenate all predictions and targets
         train_mono_preds = jnp.concatenate(train_mono_preds, axis=0)
         train_mono_targets = jnp.concatenate(train_mono_targets, axis=0)
+        train_esp_preds = jnp.concatenate([jnp.ravel(e) for e in train_esp_preds])
+        train_esp_targets = jnp.concatenate([jnp.ravel(e) for e in train_esp_targets])
+        train_esp_errors = jnp.concatenate([jnp.ravel(e) for e in train_esp_errors])
         
         # Compute training statistics
         train_mono_stats = compute_statistics(train_mono_preds.sum(axis=-1), train_mono_targets)
+        train_esp_stats = {
+            'mae': float(jnp.mean(jnp.abs(train_esp_errors))),
+            'rmse': float(jnp.sqrt(jnp.mean(train_esp_errors**2))),
+            'pred_mean': float(jnp.mean(train_esp_preds)),
+            'pred_std': float(jnp.std(train_esp_preds)),
+            'target_mean': float(jnp.mean(train_esp_targets)),
+            'error_mean': float(jnp.mean(train_esp_errors)),
+            'error_std': float(jnp.std(train_esp_errors)),
+        }
         train_stats = {
             'loss': float(train_loss),
             'mono_mae': train_mono_stats['mae'],
@@ -363,15 +384,25 @@ def train_model(
             'mono_std': train_mono_stats['std'],
             'mono_min': train_mono_stats['min'],
             'mono_max': train_mono_stats['max'],
+            'esp_mae': train_esp_stats['mae'],
+            'esp_rmse': train_esp_stats['rmse'],
+            'esp_pred_mean': train_esp_stats['pred_mean'],
+            'esp_pred_std': train_esp_stats['pred_std'],
+            'esp_target_mean': train_esp_stats['target_mean'],
+            'esp_error_mean': train_esp_stats['error_mean'],
+            'esp_error_std': train_esp_stats['error_std'],
         }
 
         # Evaluate on validation set.
         valid_loss = 0.0
         valid_mono_preds = []
         valid_mono_targets = []
+        valid_esp_preds = []
+        valid_esp_targets = []
+        valid_esp_errors = []
         
         for i, batch in enumerate(valid_batches):
-            loss, mono, dipo = eval_step(
+            loss, mono, dipo, esp_pred, esp_target, esp_error = eval_step(
                 model_apply=model.apply,
                 batch=batch,
                 batch_size=batch_size,
@@ -385,13 +416,28 @@ def train_model(
             # Collect predictions for statistics
             valid_mono_preds.append(mono)
             valid_mono_targets.append(batch["mono"])
+            valid_esp_preds.append(esp_pred)
+            valid_esp_targets.append(esp_target)
+            valid_esp_errors.append(esp_error)
 
         # Concatenate all predictions and targets
         valid_mono_preds = jnp.concatenate(valid_mono_preds, axis=0)
         valid_mono_targets = jnp.concatenate(valid_mono_targets, axis=0)
+        valid_esp_preds = jnp.concatenate([jnp.ravel(e) for e in valid_esp_preds])
+        valid_esp_targets = jnp.concatenate([jnp.ravel(e) for e in valid_esp_targets])
+        valid_esp_errors = jnp.concatenate([jnp.ravel(e) for e in valid_esp_errors])
         
         # Compute validation statistics
         valid_mono_stats = compute_statistics(valid_mono_preds.sum(axis=-1), valid_mono_targets)
+        valid_esp_stats = {
+            'mae': float(jnp.mean(jnp.abs(valid_esp_errors))),
+            'rmse': float(jnp.sqrt(jnp.mean(valid_esp_errors**2))),
+            'pred_mean': float(jnp.mean(valid_esp_preds)),
+            'pred_std': float(jnp.std(valid_esp_preds)),
+            'target_mean': float(jnp.mean(valid_esp_targets)),
+            'error_mean': float(jnp.mean(valid_esp_errors)),
+            'error_std': float(jnp.std(valid_esp_errors)),
+        }
         valid_stats = {
             'loss': float(valid_loss),
             'mono_mae': valid_mono_stats['mae'],
@@ -400,6 +446,13 @@ def train_model(
             'mono_std': valid_mono_stats['std'],
             'mono_min': valid_mono_stats['min'],
             'mono_max': valid_mono_stats['max'],
+            'esp_mae': valid_esp_stats['mae'],
+            'esp_rmse': valid_esp_stats['rmse'],
+            'esp_pred_mean': valid_esp_stats['pred_mean'],
+            'esp_pred_std': valid_esp_stats['pred_std'],
+            'esp_target_mean': valid_esp_stats['target_mean'],
+            'esp_error_mean': valid_esp_stats['error_mean'],
+            'esp_error_std': valid_esp_stats['error_std'],
         }
 
         # Print detailed statistics
