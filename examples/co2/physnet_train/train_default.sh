@@ -8,5 +8,4 @@ python trainer.py \
     --epochs 100 \
     --batch-size 32 \
     --learning-rate 0.001 \
-    --no-tensorboard
-
+    --no-tensorboard --energy-unit hartree --convert-energy-to eV --subtract-atomic-energies

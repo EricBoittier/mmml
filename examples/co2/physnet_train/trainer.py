@@ -261,6 +261,13 @@ def main():
     print(f"  Validation samples: {len(valid_data['R'])}")
     print(f"  Data keys: {list(train_data.keys())}")
     
+    # Check data statistics after preprocessing
+    if args.verbose:
+        energy_std = np.std(train_data['E'])
+        force_std = np.std(train_data['F'][train_data['F'] != 0])  # Exclude padding
+        print(f"\n  Energy std: {energy_std:.4f} eV")
+        print(f"  Force std: {force_std:.4f} eV/Å")
+    
     # Build model
     print(f"\n{'#'*70}")
     print("# Building Model")
@@ -310,9 +317,37 @@ def main():
     print(f"  Objective: {args.objective}")
     print(f"  Random seed: {args.seed}")
     
+    # Adjust loss weights if energy preprocessing changed the scale
+    energy_weight = args.energy_weight
+    forces_weight = args.forces_weight
+    
+    if args.subtract_atomic_energies or args.scale_by_atoms:
+        # When preprocessing changes energy scale, we may need to adjust weights
+        # Check if the energy variance increased significantly
+        energy_std = np.std(train_data['E'])
+        force_std = np.std(train_data['F'][train_data['F'] != 0])
+        
+        # For CO2 without preprocessing: E_std ~ 1.77 eV, F_std ~ 1.85 eV/Å
+        # With atomic subtraction: E_std ~ 48 eV, F_std ~ 1.85 eV/Å (unchanged)
+        # The energy std increases by ~27x, so we should reduce energy weight or increase force weight
+        
+        # Original ratio was designed for similar scales (energy_weight / forces_weight ~ 1/50)
+        # We want to maintain the relative contribution to the loss
+        # Scale energy weight down by (reference_std / actual_std)^2 to account for variance
+        
+        reference_energy_std = 1.77  # Original std for CO2 data
+        if energy_std > 3 * reference_energy_std:  # If std increased significantly
+            scale_factor = (reference_energy_std / energy_std) ** 2
+            energy_weight = args.energy_weight * scale_factor
+            
+            if args.verbose:
+                print(f"\n⚠️  Energy variance increased significantly after preprocessing")
+                print(f"  Adjusting energy weight: {args.energy_weight:.3f} → {energy_weight:.6f}")
+                print(f"  (Scale factor: {scale_factor:.6f})")
+    
     print(f"\nLoss weights:")
-    print(f"  Energy: {args.energy_weight}")
-    print(f"  Forces: {args.forces_weight}")
+    print(f"  Energy: {energy_weight}")
+    print(f"  Forces: {forces_weight}")
     print(f"  Dipole: {args.dipole_weight}")
     
     # Initialize JAX random key
