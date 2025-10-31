@@ -106,7 +106,7 @@ def load_npz(
     
     # Load NPZ file
     try:
-        npz = np.load(file_path, allow_pickle=False)
+        npz = np.load(file_path, allow_pickle=True)
         
         # Select specific keys or load all
         if keys is None:
