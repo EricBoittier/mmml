@@ -1,0 +1,140 @@
+═══════════════════════════════════════════════════════════════════════
+                    FIX AND SPLIT DATA CLI - Quick Reference
+═══════════════════════════════════════════════════════════════════════
+
+BASIC USAGE
+-----------
+python fix_and_split_cli.py \
+    --efd <energies_forces_dipoles.npz> \
+    --grid <grids_esp.npz> \
+    --output-dir <output_directory>
+
+
+REQUIRED ARGUMENTS
+------------------
+--efd PATH              Path to energies/forces/dipoles NPZ file
+--grid PATH             Path to ESP grids NPZ file
+--output-dir PATH       Output directory for processed data
+
+
+OPTIONAL ARGUMENTS
+------------------
+--train-frac 0.8        Training set fraction (default: 0.8)
+--valid-frac 0.1        Validation set fraction (default: 0.1)
+--test-frac 0.1         Test set fraction (default: 0.1)
+--seed 42               Random seed for splits (default: 42)
+--cube-spacing 0.25     Grid spacing in Bohr (default: 0.25)
+--skip-validation       Skip validation checks (not recommended)
+--quiet, -q             Suppress verbose output
+
+
+QUICK EXAMPLES
+--------------
+
+# Default 8:1:1 split
+python fix_and_split_cli.py \
+    --efd data.npz --grid grids.npz \
+    --output-dir ./preclassified_data
+
+# Custom 7:1.5:1.5 split
+python fix_and_split_cli.py \
+    --efd data.npz --grid grids.npz \
+    --output-dir ./training_data \
+    --train-frac 0.7 --valid-frac 0.15 --test-frac 0.15
+
+# Quiet mode (no verbose output)
+python fix_and_split_cli.py \
+    --efd data.npz --grid grids.npz \
+    --output-dir ./training_data --quiet
+
+
+WHAT IT DOES
+------------
+✓ Validates coordinates are in Angstroms
+✓ Converts energies: Hartree → eV (×27.211386)
+✓ Converts forces: Hartree/Bohr → eV/Angstrom (×51.42208)
+✓ Fixes ESP grid: Grid indices → Physical Angstroms
+✓ Creates train/valid/test splits
+✓ Validates all conversions
+✓ Saves split datasets
+✓ Generates README documentation
+
+
+OUTPUT FILES
+------------
+energies_forces_dipoles_train.npz    Training EFD data
+energies_forces_dipoles_valid.npz    Validation EFD data
+energies_forces_dipoles_test.npz     Test EFD data
+grids_esp_train.npz                  Training ESP grid data
+grids_esp_valid.npz                  Validation ESP grid data
+grids_esp_test.npz                   Test ESP grid data
+split_indices.npz                    Split indices (reproducibility)
+README.md                            Dataset documentation
+
+
+UNIT CONVERSIONS
+----------------
+Property              Original          →  Converted         Factor
+----------------      ----------------     ----------------   ---------
+Coordinates (R)       Angstrom*            Angstrom           1.0
+Energies (E)          Hartree              eV                 27.211386
+Forces (F)            Hartree/Bohr         eV/Angstrom        51.42208
+Dipoles (Dxyz)        Debye                Debye              1.0
+ESP values            Hartree/e            Hartree/e          1.0
+ESP grid              Grid indices         Angstrom           Custom†
+
+* Auto-detected from bond lengths
+† Uses cube file metadata (origin, spacing, axes)
+
+
+LOADING OUTPUT IN PYTHON
+-------------------------
+import numpy as np
+
+# Load data
+train = np.load('preclassified_data/energies_forces_dipoles_train.npz')
+grid = np.load('preclassified_data/grids_esp_train.npz')
+
+# Access arrays (all in ASE-standard units!)
+R = train['R']          # Coordinates [Angstrom]
+E = train['E']          # Energies [eV]
+F = train['F']          # Forces [eV/Angstrom]
+Z = train['Z']          # Atomic numbers
+Dxyz = train['Dxyz']    # Dipoles [Debye]
+
+esp = grid['esp']       # ESP values [Hartree/e]
+vdw = grid['vdw_surface']  # Grid coords [Angstrom]
+
+
+VALIDATION CHECKS
+-----------------
+✓ Coordinates in Angstroms (bond length check)
+✓ Energy conversion correct (reasonable eV range)
+✓ Force conversion correct (magnitude check)
+✓ ESP grid in physical space (extent check)
+✓ Grid surrounds molecule (spatial relationship)
+
+
+TROUBLESHOOTING
+---------------
+Issue: "Split fractions must sum to 1.0"
+Fix:   Ensure train + valid + test = 1.0 exactly
+
+Issue: "File not found"
+Fix:   Use absolute paths or verify file exists
+
+Issue: "Validation failed"
+Fix:   Check cube spacing with --cube-spacing
+       Or skip with --skip-validation (not recommended)
+
+
+HELP & DOCUMENTATION
+--------------------
+python fix_and_split_cli.py --help    Show detailed help
+See CLI_USAGE.md for full documentation
+
+
+═══════════════════════════════════════════════════════════════════════
+Ready to process molecular data with ASE-standard units!
+═══════════════════════════════════════════════════════════════════════
+
