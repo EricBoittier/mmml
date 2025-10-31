@@ -118,7 +118,7 @@ def compute_gradients(
     Returns
     -------
     tuple
-        (loss, gradients, predictions)
+        (loss, gradients, mono, dipo, esp_pred, esp_target, esp_errors)
     """
     def loss_fn(params):
         mono, dipo = model_apply(
@@ -129,7 +129,7 @@ def compute_gradients(
             src_idx=batch["src_idx"],
             batch_segments=batch["batch_segments"],
         )
-        loss = esp_mono_loss(
+        loss, esp_pred, esp_target, esp_errors = esp_mono_loss(
             dipo_prediction=dipo,
             mono_prediction=mono,
             vdw_surface=batch["vdw_surface"],
@@ -142,10 +142,10 @@ def compute_gradients(
             chg_w=chg_w,
             n_dcm=ndcm,
         )
-        return loss, (mono, dipo)
+        return loss, (mono, dipo, esp_pred, esp_target, esp_errors)
     
-    (loss, (mono, dipo)), grad = jax.value_and_grad(loss_fn, has_aux=True)(params)
-    return loss, grad, mono, dipo
+    (loss, (mono, dipo, esp_pred, esp_target, esp_errors)), grad = jax.value_and_grad(loss_fn, has_aux=True)(params)
+    return loss, grad, mono, dipo, esp_pred, esp_target, esp_errors
 
 
 @functools.partial(
@@ -238,15 +238,24 @@ class TrainingMetrics:
         self.losses = []
         self.mono_preds = []
         self.mono_targets = []
+        self.esp_preds = []
+        self.esp_targets = []
+        self.esp_errors = []
         self.batch_times = []
     
-    def update(self, loss, mono_pred=None, mono_target=None, batch_time=None):
+    def update(self, loss, mono_pred=None, mono_target=None, esp_pred=None, esp_target=None, esp_error=None, batch_time=None):
         """Update metrics with new batch."""
         self.losses.append(float(loss))
         if mono_pred is not None:
             self.mono_preds.append(mono_pred)
         if mono_target is not None:
             self.mono_targets.append(mono_target)
+        if esp_pred is not None:
+            self.esp_preds.append(esp_pred)
+        if esp_target is not None:
+            self.esp_targets.append(esp_target)
+        if esp_error is not None:
+            self.esp_errors.append(esp_error)
         if batch_time is not None:
             self.batch_times.append(batch_time)
     
@@ -273,6 +282,27 @@ class TrainingMetrics:
                 'mono_std': float(jnp.std(all_preds)),
                 'mono_min': float(jnp.min(all_preds)),
                 'mono_max': float(jnp.max(all_preds)),
+            })
+        
+        if self.esp_preds and self.esp_targets:
+            all_esp_preds = jnp.concatenate([jnp.ravel(e) for e in self.esp_preds])
+            all_esp_targets = jnp.concatenate([jnp.ravel(e) for e in self.esp_targets])
+            all_esp_errors = jnp.concatenate([jnp.ravel(e) for e in self.esp_errors])
+            
+            esp_mae = jnp.mean(jnp.abs(all_esp_errors))
+            esp_rmse = jnp.sqrt(jnp.mean(all_esp_errors**2))
+            
+            metrics.update({
+                'esp_mae': float(esp_mae),
+                'esp_rmse': float(esp_rmse),
+                'esp_pred_mean': float(jnp.mean(all_esp_preds)),
+                'esp_pred_std': float(jnp.std(all_esp_preds)),
+                'esp_pred_min': float(jnp.min(all_esp_preds)),
+                'esp_pred_max': float(jnp.max(all_esp_preds)),
+                'esp_target_mean': float(jnp.mean(all_esp_targets)),
+                'esp_target_std': float(jnp.std(all_esp_targets)),
+                'esp_error_mean': float(jnp.mean(all_esp_errors)),
+                'esp_error_std': float(jnp.std(all_esp_errors)),
             })
         
         if self.batch_times:
@@ -302,7 +332,9 @@ def print_epoch_summary(epoch: int, train_metrics: Dict, valid_metrics: Dict, ep
     print(f"{'Metric':<25} {'Train':>15} {'Valid':>15} {'Diff':>15} {'% Diff':>15}")
     print(f"{'-'*90}")
     
-    metrics_to_show = ['loss', 'mono_mae', 'mono_rmse', 'mono_mean', 'mono_std']
+    metrics_to_show = ['loss', 'mono_mae', 'mono_rmse', 'mono_mean', 'mono_std',
+                       'esp_mae', 'esp_rmse', 'esp_pred_mean', 'esp_pred_std',
+                       'esp_error_mean', 'esp_error_std']
     
     for key in metrics_to_show:
         if key in train_metrics and key in valid_metrics:
@@ -489,7 +521,7 @@ def train_model_multibatch(
             batch_start = time.time()
             
             # Compute gradients for this batch
-            loss, grad, mono, dipo = compute_gradients(
+            loss, grad, mono, dipo, esp_pred, esp_target, esp_error = compute_gradients(
                 model_apply=model.apply,
                 batch=batch,
                 batch_size=train_config.batch_size,
@@ -532,6 +564,9 @@ def train_model_multibatch(
                 loss=loss,
                 mono_pred=mono,
                 mono_target=batch["mono"],
+                esp_pred=esp_pred,
+                esp_target=esp_target,
+                esp_error=esp_error,
                 batch_time=batch_time
             )
         
@@ -543,7 +578,7 @@ def train_model_multibatch(
         eval_params = ema_params if train_config.use_ema else params
         
         for batch in valid_batches:
-            loss, _, mono, dipo = compute_gradients(
+            loss, _, mono, dipo, esp_pred, esp_target, esp_error = compute_gradients(
                 model_apply=model.apply,
                 batch=batch,
                 batch_size=train_config.batch_size,
@@ -555,7 +590,10 @@ def train_model_multibatch(
             valid_metrics.update(
                 loss=loss,
                 mono_pred=mono,
-                mono_target=batch["mono"]
+                mono_target=batch["mono"],
+                esp_pred=esp_pred,
+                esp_target=esp_target,
+                esp_error=esp_error
             )
         
         valid_stats = valid_metrics.compute()

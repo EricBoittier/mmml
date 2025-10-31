@@ -81,8 +81,12 @@ def esp_mono_loss(
         
     Returns
     -------
-    float
-        Total loss value
+    tuple
+        (loss, esp_pred, esp_target, esp_errors) where:
+        - loss: scalar total loss value
+        - esp_pred: predicted ESP values at grid points
+        - esp_target: target ESP values at grid points
+        - esp_errors: per-grid-point errors
     """
     # sum_of_dc_monopoles = mono_prediction.sum(axis=-1)
     # l2_loss_mono = optax.l2_loss(sum_of_dc_monopoles, mono)
@@ -134,6 +138,10 @@ def esp_mono_loss(
         batched_pred = batched_pred.squeeze()
     if esp_target.ndim > 1:
         esp_target = esp_target.squeeze()
+    
+    # Compute per-grid-point errors (difference, not squared)
+    esp_errors = batched_pred - esp_target
+    
     l2_loss = optax.l2_loss(batched_pred, esp_target)
     # remove dummy grid points using actual grid length
     # n_points = l2_loss.shape[0]
@@ -141,7 +149,9 @@ def esp_mono_loss(
     # valid = jnp.arange(n_points) < ngrid_scalar
     # valid_grids = jnp.where(valid, l2_loss, 0)
     esp_loss_corrected = l2_loss.sum() / jnp.ravel(ngrid)[0]
-    return esp_loss_corrected * esp_w + mono_loss_corrected * chg_w #+ (mono_prediction).sum()
+    total_loss = esp_loss_corrected * esp_w + mono_loss_corrected * chg_w
+    
+    return total_loss, batched_pred, esp_target, esp_errors
 
 
 @functools.partial(jax.jit, static_argnames=("batch_size", "esp_w", "chg_w", "n_dcm"))
