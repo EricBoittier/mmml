@@ -10,6 +10,24 @@ from typing import Optional, Tuple, Dict
 import ase.data
 from scipy.spatial.distance import cdist
 
+# Import default atomic reference energies (in Hartree)
+try:
+    from mmml.physnetjax.physnetjax.data.data import ATOM_ENERGIES_HARTREE
+except ImportError:
+    # Fallback if physnetjax not available
+    ATOM_ENERGIES_HARTREE = np.array([
+        0,  # dummy
+        -0.500273,  # H
+        0,  # He
+        0,  # Li
+        0,  # Be
+        0,  # B
+        -37.846772,  # C
+        -54.583861,  # N
+        -75.064579,  # O
+        -99.718730,  # F
+    ] + [0] * 19)  # Extended to 28 elements
+
 
 def center_coordinates(
     coordinates: np.ndarray,
@@ -212,6 +230,53 @@ def subtract_atomic_energies(
         corrected[i] -= atomic_contribution
     
     return corrected
+
+
+def get_default_atomic_energies(unit: str = 'eV') -> Dict[int, float]:
+    """
+    Get default atomic reference energies in the specified unit.
+    
+    Uses predefined reference energies from PhysNetJax data module.
+    These are isolated atom energies computed at a reference level of theory.
+    
+    Parameters
+    ----------
+    unit : str, optional
+        Target energy unit ('eV', 'hartree', 'kcal/mol', 'kJ/mol'), by default 'eV'
+        
+    Returns
+    -------
+    dict
+        Dictionary mapping atomic number to atomic energy reference
+        
+    Examples
+    --------
+    >>> refs = get_default_atomic_energies('eV')
+    >>> print(refs[1])  # Energy for Hydrogen
+    -13.605693009...
+    """
+    # Convert from Hartree to target unit
+    hartree_refs = {i: float(e) for i, e in enumerate(ATOM_ENERGIES_HARTREE) if e != 0}
+    
+    if unit.lower() == 'hartree':
+        return hartree_refs
+    
+    # Convert to eV first, then to target unit
+    conversion_factors = {
+        'ev': 27.211386245988,  # Hartree to eV
+        'kcal/mol': 627.509474,  # Hartree to kcal/mol
+        'kj/mol': 2625.499638,   # Hartree to kJ/mol
+    }
+    
+    unit_lower = unit.lower()
+    if unit_lower not in conversion_factors:
+        raise ValueError(
+            f"Unknown energy unit: {unit}. "
+            f"Choose from: {list(conversion_factors.keys()) + ['hartree']}"
+        )
+    
+    factor = conversion_factors[unit_lower]
+    return {z: e * factor for z, e in hartree_refs.items()}
 
 
 def scale_energies_by_atoms(

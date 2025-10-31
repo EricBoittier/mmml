@@ -280,6 +280,8 @@ def main():
                        help='Use ZBL repulsion')
     parser.add_argument('--charges', action='store_true',
                        help='Predict atomic charges')
+    parser.add_argument('--no-energy-bias', action='store_true',
+                       help='Disable learnable per-element atomic energy bias (useful when energies already have atomic references subtracted)')
     parser.add_argument('--center-coordinates', action='store_true',
                        help='Center coordinates at origin')
     parser.add_argument('--normalize-energy', action='store_true',
@@ -295,8 +297,10 @@ def main():
     parser.add_argument('--subtract-atomic-energies', action='store_true',
                        help='Subtract atomic energy references from molecular energies')
     parser.add_argument('--atomic-energy-method', type=str, default='linear_regression',
-                       choices=['linear_regression', 'mean'],
-                       help='Method for computing atomic energy references')
+                       choices=['linear_regression', 'mean', 'default'],
+                       help='Method for computing atomic energy references: '
+                            'linear_regression (fit from data), mean (average per atom), '
+                            'default (use predefined PhysNetJax reference energies)')
     parser.add_argument('--scale-by-atoms', action='store_true',
                        help='Scale energies by number of atoms (per-atom energies)')
     
@@ -478,6 +482,7 @@ def main():
     print(f"  Max atoms: {args.natoms}")
     print(f"  ZBL repulsion: {args.zbl}")
     print(f"  Predict charges: {args.charges}")
+    print(f"  Use energy bias: {not args.no_energy_bias}")
     
     model = EF(
         features=args.features,
@@ -491,6 +496,7 @@ def main():
         total_charge=args.total_charge,
         n_res=args.n_res,
         zbl=args.zbl,
+        use_energy_bias=not args.no_energy_bias,
         debug=False,
         efa=False,
     )
