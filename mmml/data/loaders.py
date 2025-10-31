@@ -37,7 +37,10 @@ class DataConfig:
     subtract_atomic_energies : bool
         Whether to subtract atomic energy references
     atomic_energy_method : str
-        Method for computing atomic energies ('linear_regression' or 'mean')
+        Method for computing atomic energies ('linear_regression', 'mean', or 'default')
+        - 'linear_regression': Fit atomic energies from data using least squares
+        - 'mean': Average energy per atom from data
+        - 'default': Use predefined reference atomic energies from PhysNetJax
     scale_by_atoms : bool
         Whether to scale energies by number of atoms (per-atom energies)
     esp_mask_vdw : bool
@@ -326,15 +329,20 @@ def _apply_config_preprocessing(
         
         # 2. Subtract atomic energy references if requested
         if config.subtract_atomic_energies and 'Z' in data and 'N' in data:
-            from .preprocessing import compute_atomic_energies, subtract_atomic_energies
+            from .preprocessing import compute_atomic_energies, subtract_atomic_energies, get_default_atomic_energies
             
-            # Compute atomic energies from the data
-            atomic_energies = compute_atomic_energies(
-                data['E'],
-                data['Z'],
-                data['N'],
-                method=config.atomic_energy_method
-            )
+            # Get atomic energies based on method
+            if config.atomic_energy_method == 'default':
+                # Use predefined reference energies from PhysNetJax
+                atomic_energies = get_default_atomic_energies(unit=current_unit)
+            else:
+                # Compute atomic energies from the data (linear_regression or mean)
+                atomic_energies = compute_atomic_energies(
+                    data['E'],
+                    data['Z'],
+                    data['N'],
+                    method=config.atomic_energy_method
+                )
             
             # Subtract atomic contributions
             data['E'] = subtract_atomic_energies(
