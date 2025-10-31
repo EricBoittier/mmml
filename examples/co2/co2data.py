@@ -62,6 +62,97 @@ def plot_force_distributions(forces):
     return fig
 
 
+def check_coordinate_units(positions, atomic_numbers, sample_idx=0):
+    """
+    Check what units the atomic coordinates are in by calculating bond lengths.
+    
+    For CO2:
+    - C-O bond length is typically ~1.16 Angstrom or ~2.19 Bohr
+    - O-O distance is typically ~2.32 Angstrom or ~4.38 Bohr
+    
+    Parameters
+    ----------
+    positions : array_like
+        Atomic positions
+    atomic_numbers : array_like
+        Atomic numbers
+    sample_idx : int
+        Sample index to check
+    """
+    pos = positions[sample_idx]
+    z_nums = atomic_numbers[sample_idx]
+    
+    # Remove dummy atoms
+    valid_mask = z_nums > 0
+    valid_pos = pos[valid_mask]
+    valid_z = z_nums[valid_mask]
+    
+    print(f"\n{'='*60}")
+    print(f"COORDINATE UNITS CHECK (Sample {sample_idx})")
+    print(f"{'='*60}")
+    print(f"Number of atoms: {len(valid_pos)}")
+    print(f"Atomic numbers: {valid_z}")
+    print("\nBond lengths:")
+    
+    # Calculate all pairwise distances
+    for i in range(len(valid_pos)):
+        for j in range(i+1, len(valid_pos)):
+            dist = np.linalg.norm(valid_pos[i] - valid_pos[j])
+            z1, z2 = int(valid_z[i]), int(valid_z[j])
+            
+            # Get element symbols
+            elements = {1: 'H', 6: 'C', 7: 'N', 8: 'O'}
+            elem1 = elements.get(z1, f'Z{z1}')
+            elem2 = elements.get(z2, f'Z{z2}')
+            
+            print(f"  {elem1}-{elem2} ({i}-{j}): {dist:.4f}")
+    
+    # Expected values for CO2
+    print("\nExpected bond lengths for CO2:")
+    print("  C-O bond:")
+    print("    ~1.16 Angstrom")
+    print("    ~2.19 Bohr")
+    print("  O-O distance:")
+    print("    ~2.32 Angstrom")
+    print("    ~4.38 Bohr")
+    
+    # Make educated guess
+    co_bonds = []
+    for i in range(len(valid_pos)):
+        for j in range(i+1, len(valid_pos)):
+            z1, z2 = int(valid_z[i]), int(valid_z[j])
+            if (z1 == 6 and z2 == 8) or (z1 == 8 and z2 == 6):  # C-O bond
+                dist = np.linalg.norm(valid_pos[i] - valid_pos[j])
+                co_bonds.append(dist)
+    
+    if co_bonds:
+        avg_co = np.mean(co_bonds)
+        print(f"\nAverage C-O distance: {avg_co:.4f}")
+        
+        # Check units
+        if 1.10 < avg_co < 1.25:
+            print(f"→ Positions appear to be in ANGSTROM units")
+            print(f"   (Expected C-O ~1.16 Å, measured {avg_co:.4f})")
+        elif 2.0 < avg_co < 2.5:
+            print(f"→ Positions appear to be in BOHR units")
+            print(f"   (Expected C-O ~2.19 Bohr, measured {avg_co:.4f})")
+        elif 0.95 < avg_co < 1.05:
+            print(f"→ WARNING: Positions appear to be NORMALIZED/SCALED")
+            print(f"   (Measured C-O = {avg_co:.4f}, expected ~1.16 Å or ~2.19 Bohr)")
+            print(f"   These may be relative coordinates or a different unit system!")
+        else:
+            print(f"→ UNCLEAR units (C-O distance = {avg_co:.4f})")
+            print(f"   Does not match standard Angstrom or Bohr values")
+    
+    # Show coordinate ranges
+    print(f"\nCoordinate ranges:")
+    print(f"  X: [{np.min(valid_pos[:, 0]):.4f}, {np.max(valid_pos[:, 0]):.4f}]")
+    print(f"  Y: [{np.min(valid_pos[:, 1]):.4f}, {np.max(valid_pos[:, 1]):.4f}]")
+    print(f"  Z: [{np.min(valid_pos[:, 2]):.4f}, {np.max(valid_pos[:, 2]):.4f}]")
+    
+    print(f"{'='*60}\n")
+
+
 def plot_esp_3d_with_molecule(grids, esp_values, positions, atomic_numbers, sample_idx=0):
     """
     Plot 3D scatter of ESP grid points with molecular structure overlay using ASE.
@@ -98,8 +189,66 @@ def plot_esp_3d_with_molecule(grids, esp_values, positions, atomic_numbers, samp
     valid_pos = pos[valid_mask]
     valid_z = z_nums[valid_mask]
     
-    # Positions are already in Bohr, so we'll use them directly
-    # (ASE typically uses Angstroms, but we won't use ASE's position attribute)
+    # Positions are NORMALIZED (C-O bond = 1.0 instead of ~1.16 Å)
+    # The ESP grid coordinates are subsampled from a cube grid, so the grid center
+    # isn't meaningful. Instead, we should place the molecule where it actually is.
+    # 
+    # Based on analysis: normalized coords have C-O = 1.0, real C-O ~= 1.16 Å
+    # So: real_position = normalized_position * 1.16
+    #
+    # But this doesn't tell us WHERE in the grid the molecule sits.
+    # Looking at the data: grid is 0-49 Å, molecule is tiny (~1 Å scale)
+    # The molecule must be positioned based on some other information not in these files
+    #
+    # Best guess: place molecule near the grid origin (bottom corner)
+    # OR: assume molecule is centered and the grid was built around it
+    
+    CO_BOND_LENGTH_ANGSTROM = 1.16
+    valid_pos_angstrom = valid_pos * CO_BOND_LENGTH_ANGSTROM
+    
+    # THE ISSUE: We have 3 different coordinate systems:
+    # 1. Normalized atomic coords (C-O = 1.0)
+    # 2. ESP grid coords in the NPZ (0-49 range, unknown units)
+    # 3. Original cube coords in Bohr (-6.125 to +6.125 Bohr)
+    #
+    # The vdw_grid appears to be in GRID INDEX space (0-49), not physical units!
+    # We need to convert to physical coordinates using origin + axes * indices / (dims - 1)
+    #
+    # Actually, looking at split_npz_cube.py, the coords are computed as:
+    # origin + i*axes[0] + j*axes[1] + k*axes[2]
+    # where axes have unit spacing (1.0), so this gives 0-49
+    #
+    # But the original cube has spacing 0.25 Bohr, dimensions 50
+    # So physical coord = origin_bohr + (grid_index / (dims-1)) * (dims-1) * spacing_bohr
+    #                   = origin_bohr + grid_index * spacing_bohr
+    #
+    # Wait, the grid_axes in NPZ is [[1,0,0],[0,1,0],[0,0,1]], not [[0.25,0,0], ...]
+    # This means the vdw_grid is already in PHYSICAL coordinates!
+    # Let me just use origin as the reference point
+    
+    # The simplest approach: place molecule at grid center
+    # Since we don't know the exact transformation, center both
+    grid_center_coords = coords.mean(axis=0)
+    mol_center_normalized = valid_pos.mean(axis=0)
+    
+    # Scale molecule to physical size (C-O = 1.16 Angstroms or 2.19 Bohr)
+    # Check if grid is in Angstroms or Bohr based on extent
+    grid_extent = coords.max(axis=0) - coords.min(axis=0)
+    avg_extent = grid_extent.mean()
+    
+    if avg_extent > 40:  # If extent is ~49, likely Angstroms
+        # Grid is in Angstroms, scale molecule to Angstroms
+        CO_BOND_ANGSTROM = 1.16
+        valid_pos_scaled = (valid_pos - mol_center_normalized) * CO_BOND_ANGSTROM + grid_center_coords
+        coord_label = "Angstrom"
+    else:  # If extent is ~12, likely Bohr
+        # Grid is in Bohr, scale molecule to Bohr  
+        CO_BOND_BOHR = 2.19
+        valid_pos_scaled = (valid_pos - mol_center_normalized) * CO_BOND_BOHR + grid_center_coords
+        coord_label = "Bohr"
+    
+    print(f"Grid extent: {avg_extent:.1f} → using {coord_label} units")
+    print(f"Molecule centered at: {grid_center_coords}")
     
     fig = plt.figure(figsize=(18, 6))
     
@@ -111,9 +260,6 @@ def plot_esp_3d_with_molecule(grids, esp_values, positions, atomic_numbers, samp
     angles = [(30, 45), (30, 135), (60, -90)]
     titles = ['View 1 (30°, 45°)', 'View 2 (30°, 135°)', 'View 3 (60°, -90°)']
     
-    # Conversion factor for covalent radii
-    angstrom_to_bohr = 1.88973  # 1 Angstrom = 1.88973 Bohr
-    
     for i, (elev, azim) in enumerate(angles):
         ax = fig.add_subplot(1, 3, i+1, projection='3d')
         
@@ -122,11 +268,11 @@ def plot_esp_3d_with_molecule(grids, esp_values, positions, atomic_numbers, samp
                            c=esp, cmap='bwr', s=1, vmin=vmin, vmax=vmax,
                            alpha=0.3, edgecolors='none')
         
-        # Plot atoms (positions already in Bohr)
-        for atom_idx in range(len(valid_pos)):
-            pos_bohr = valid_pos[atom_idx]
+        # Plot atoms (positions now scaled and centered in Angstroms)
+        for atom_idx in range(len(valid_pos_scaled)):
+            pos_ang = valid_pos_scaled[atom_idx]
             atomic_num = int(valid_z[atom_idx])
-            radius = covalent_radii[atomic_num] * angstrom_to_bohr * 0.5  # Convert radius to Bohr
+            radius = covalent_radii[atomic_num] * 0.5  # Radius in Angstroms
             
             # Color by element
             if atomic_num == 6:  # Carbon
@@ -143,20 +289,20 @@ def plot_esp_3d_with_molecule(grids, esp_values, positions, atomic_numbers, samp
                 radius_scale = 1.0
             
             # Plot atom as sphere
-            ax.scatter([pos_bohr[0]], [pos_bohr[1]], [pos_bohr[2]],
+            ax.scatter([pos_ang[0]], [pos_ang[1]], [pos_ang[2]],
                       c=color, s=radius * radius_scale * 200, alpha=0.9, 
                       edgecolors='black', linewidths=1.5, zorder=10)
         
         # Draw bonds (simple distance-based)
-        for idx1 in range(len(valid_pos)):
-            for idx2 in range(idx1+1, len(valid_pos)):
-                pos1 = valid_pos[idx1]
-                pos2 = valid_pos[idx2]
+        for idx1 in range(len(valid_pos_scaled)):
+            for idx2 in range(idx1+1, len(valid_pos_scaled)):
+                pos1 = valid_pos_scaled[idx1]
+                pos2 = valid_pos_scaled[idx2]
                 dist = np.linalg.norm(pos1 - pos2)
                 
-                # Bond if distance < sum of covalent radii * 1.3 (in Bohr)
+                # Bond if distance < sum of covalent radii * 1.3 (in Angstroms)
                 z1, z2 = int(valid_z[idx1]), int(valid_z[idx2])
-                max_bond_dist = (covalent_radii[z1] + covalent_radii[z2]) * angstrom_to_bohr * 1.3
+                max_bond_dist = (covalent_radii[z1] + covalent_radii[z2]) * 1.3
                 
                 if dist < max_bond_dist:
                     ax.plot([pos1[0], pos2[0]], 
@@ -174,7 +320,7 @@ def plot_esp_3d_with_molecule(grids, esp_values, positions, atomic_numbers, samp
         cbar = plt.colorbar(scatter, ax=ax, shrink=0.5, aspect=10)
         cbar.set_label('ESP (Hartree/Bohr)', fontsize=9)
     
-    fig.suptitle(f'ESP with Molecular Structure (Sample {sample_idx}, {len(valid_pos)} atoms, {len(coords)} grid points)', 
+    fig.suptitle(f'ESP with Molecular Structure (Sample {sample_idx}, {len(valid_pos_scaled)} atoms, {len(coords)} grid points)', 
                  fontsize=14, fontweight='bold')
     plt.tight_layout()
     return fig
@@ -337,6 +483,13 @@ def main():
         print(f"  {key}: shape {energies_forces_dipoles[key].shape}")
     print()
     
+    # Check atomic coordinates in this file too
+    if 'R' in energies_forces_dipoles and 'Z' in energies_forces_dipoles:
+        print("\n" + "="*60)
+        print("Checking coordinates in energies_forces_dipoles.npz:")
+        print("="*60)
+        check_coordinate_units(energies_forces_dipoles['R'], energies_forces_dipoles['Z'], sample_idx=0)
+    
     # Plot energy distribution
     if 'E' in energies_forces_dipoles or 'energies' in energies_forces_dipoles or 'energy' in energies_forces_dipoles:
         if 'E' in energies_forces_dipoles:
@@ -422,6 +575,66 @@ def main():
     for key in grids_esp.keys():
         print(f"  {key}: shape {grids_esp[key].shape}")
     print()
+    
+    # Check coordinate units by calculating bond lengths
+    if 'R' in grids_esp and 'Z' in grids_esp:
+        check_coordinate_units(grids_esp['R'], grids_esp['Z'], sample_idx=0)
+        
+        # Also show ESP grid coordinate range for comparison
+        grids_key = 'vdw_grid' if 'vdw_grid' in grids_esp else 'grids'
+        if grids_key in grids_esp:
+            grid_coords = grids_esp[grids_key][0]  # First sample
+            print(f"ESP Grid coordinate ranges (sample 0):")
+            print(f"  X: [{np.min(grid_coords[:, 0]):.4f}, {np.max(grid_coords[:, 0]):.4f}]")
+            print(f"  Y: [{np.min(grid_coords[:, 1]):.4f}, {np.max(grid_coords[:, 1]):.4f}]")
+            print(f"  Z: [{np.min(grid_coords[:, 2]):.4f}, {np.max(grid_coords[:, 2]):.4f}]")
+            
+            # Check if there's grid transformation info
+            if 'grid_origin' in grids_esp and 'grid_axes' in grids_esp and 'grid_dims' in grids_esp:
+                origin = grids_esp['grid_origin'][0]
+                axes = grids_esp['grid_axes'][0]
+                dims = grids_esp['grid_dims'][0]
+                print(f"\nGrid transformation info:")
+                print(f"  Origin: {origin}")
+                print(f"  Dimensions: {dims}")
+                print(f"  Axes:\n{axes}")
+                
+                # Try to transform atomic positions
+                pos = grids_esp['R'][0]
+                z_nums = grids_esp['Z'][0]
+                valid_mask = z_nums > 0
+                valid_pos = pos[valid_mask]
+                
+                # Transform: position_grid = origin + axes @ (dims * position_normalized)
+                # The dims might scale the normalized coordinates
+                scaled_pos = valid_pos * dims
+                transformed_pos = origin + (axes @ scaled_pos.T).T
+                print(f"\nScaled atomic positions (sample 0):")
+                for i, sp in enumerate(scaled_pos):
+                    print(f"  Atom {i}: {sp}")
+                print(f"\nTransformed atomic positions (sample 0):")
+                for i, tp in enumerate(transformed_pos):
+                    print(f"  Atom {i}: {tp}")
+                
+                # Calculate bond lengths after transformation
+                if len(transformed_pos) >= 2:
+                    bond_01 = np.linalg.norm(transformed_pos[0] - transformed_pos[1])
+                    print(f"\nBond length after transformation:")
+                    print(f"  Atom 0-1: {bond_01:.4f}")
+                    if 1.10 < bond_01 < 1.25:
+                        print(f"  → This matches C-O in Angstroms (~1.16 Å) ✓")
+                    elif 2.0 < bond_01 < 2.5:
+                        print(f"  → This matches C-O in Bohr (~2.19 Bohr) ✓")
+                
+                # Check if transformed positions are within grid
+                print(f"\nAre transformed atoms within grid?")
+                for i, tp in enumerate(transformed_pos):
+                    in_grid = (np.min(grid_coords[:, 0]) <= tp[0] <= np.max(grid_coords[:, 0]) and
+                              np.min(grid_coords[:, 1]) <= tp[1] <= np.max(grid_coords[:, 1]) and
+                              np.min(grid_coords[:, 2]) <= tp[2] <= np.max(grid_coords[:, 2]))
+                    print(f"  Atom {i}: {in_grid}")
+            
+            print()
     
     # Plot ESP slices
     grids_key = 'vdw_grid' if 'vdw_grid' in grids_esp else 'grids'
