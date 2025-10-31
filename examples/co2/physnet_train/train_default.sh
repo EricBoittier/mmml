@@ -7,5 +7,6 @@ python trainer.py \
     --name co2_physnet_default \
     --epochs 100 \
     --batch-size 32 \
-    --learning-rate 0.001
+    --learning-rate 0.001 \
+    --no-tensorboard
 
