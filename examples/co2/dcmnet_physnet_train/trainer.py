@@ -1905,6 +1905,7 @@ def plot_validation_results(
         ax.set_ylabel('Y (Å)')
         ax.set_zlabel('Z (Å)')
         ax.set_title(f'True ESP (3D){epoch_str}\nESP range: [{esp_vmin},{esp_vmax}] Ha/e')
+        ax.view_init(elev=35, azim=45)  # Isometric view
         plt.colorbar(sc, ax=ax, label='ESP (Ha/e)', shrink=0.6)
         ax.legend()
         
@@ -1926,6 +1927,7 @@ def plot_validation_results(
         ax.set_ylabel('Y (Å)')
         ax.set_zlabel('Z (Å)')
         ax.set_title(f'PhysNet ESP (3D){epoch_str}\nESP range: [{esp_vmin},{esp_vmax}] Ha/e')
+        ax.view_init(elev=35, azim=45)  # Isometric view
         plt.colorbar(sc, ax=ax, label='ESP (Ha/e)', shrink=0.6)
         ax.legend()
         
@@ -1983,6 +1985,7 @@ def plot_validation_results(
         ax.set_ylabel('Y (Å)')
         ax.set_zlabel('Z (Å)')
         ax.set_title(f'DCMNet ESP (3D){epoch_str}\nESP range: [{esp_vmin},{esp_vmax}] Ha/e')
+        ax.view_init(elev=35, azim=45)  # Isometric view
         plt.colorbar(sc, ax=ax, label='ESP (Ha/e)', shrink=0.6)
         ax.legend()
         
@@ -2199,6 +2202,7 @@ def plot_validation_results(
         
         # View 1: 3D view
         ax = fig.add_subplot(221, projection='3d')
+        ax.view_init(elev=35, azim=45)  # Isometric view
         # Plot atoms (larger, dark spheres)
         for i, (pos, Z) in enumerate(zip(atom_positions, atomic_nums)):
             ax.scatter(pos[0], pos[1], pos[2], c='black', s=200, alpha=0.8, marker='o')
