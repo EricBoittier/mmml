@@ -565,7 +565,7 @@ class EF(nn.Module):
             (self.max_atomic_number + 1),
         )
         atomic_charges = nn.Dense(
-            1, use_bias=False, kernel_init=jax.nn.initializers.zeros, dtype=DTYPE
+            1, use_bias=False, kernel_init=jax.nn.initializers.normal(stddev=0.01), dtype=DTYPE
         )(x)
         atomic_charges += charge_bias[atomic_numbers][..., None, None, None]
         atomic_charges *= atom_mask[..., None, None, None]
@@ -824,19 +824,39 @@ class EF(nn.Module):
         charges = charges.squeeze()
         positions = positions.squeeze()
         atomic_numbers = atomic_numbers.squeeze()
+        
+        # Get atomic masses
         masses = jnp.take(ase.data.atomic_masses, atomic_numbers)
-        bs_masses = jax.ops.segment_sum(
-            masses, segment_ids=batch_segments, num_segments=batch_size
-        )
-        masses_per_atom = jnp.take(bs_masses, batch_segments)
-        dis_com = positions * masses[..., None] / masses_per_atom[..., None]
-        com = jnp.sum(dis_com, axis=1)
-        pos_com = positions - com[..., None]
+        
+        # Calculate COM for each molecule: COM = Σ(m_i * r_i) / Σ(m_i)
+        # Use segment_sum to handle batches
+        mass_weighted_pos = positions * masses[..., None]  # (natoms, 3)
+        total_mass_weighted_pos = jax.ops.segment_sum(
+            mass_weighted_pos, 
+            segment_ids=batch_segments, 
+            num_segments=batch_size
+        )  # (batch_size, 3)
+        total_mass = jax.ops.segment_sum(
+            masses, 
+            segment_ids=batch_segments, 
+            num_segments=batch_size
+        )  # (batch_size,)
+        
+        com = total_mass_weighted_pos / total_mass[..., None]  # (batch_size, 3)
+        
+        # Get COM for each atom (broadcast back)
+        com_per_atom = jnp.take(com, batch_segments, axis=0)  # (natoms, 3)
+        
+        # Positions relative to COM
+        pos_com = positions - com_per_atom  # (natoms, 3)
+        
+        # Dipole = Σ(q_i * (r_i - r_COM)) per molecule
         dipoles = jax.ops.segment_sum(
             pos_com * charges[..., None],
             segment_ids=batch_segments,
             num_segments=batch_size,
-        )
+        )  # (batch_size, 3)
+        
         return dipoles
 
     @nn.compact
