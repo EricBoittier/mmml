@@ -1759,11 +1759,13 @@ def plot_validation_results(
         sc = ax.scatter(grid_pos_centered[:, 0], grid_pos_centered[:, 2],
                        c=esp_error_dcmnet, cmap='RdBu_r', s=20, alpha=0.8,
                        vmin=-p75_max, vmax=p75_max)
-        ax.set_xlabel('X (Å)')
-        ax.set_ylabel('Z (Å)')
+        ax.set_xlabel('X (Å, centered)')
+        ax.set_ylabel('Z (Å, centered)')
         ax.set_title(f'DCMNet Error (75th %-ile){epoch_str}')
         plt.colorbar(sc, ax=ax, label='Error (Ha/e)')
         ax.grid(True, alpha=0.3)
+        ax.scatter(atom_positions_centered[:, 0], atom_positions_centered[:, 2],
+                  c='black', s=100, marker='o', edgecolors='cyan', linewidths=2, alpha=1.0, zorder=10)
         
         plt.tight_layout()
         esp_scales_path = save_dir / f'esp_example_{idx}_error_scales{suffix}.png'
