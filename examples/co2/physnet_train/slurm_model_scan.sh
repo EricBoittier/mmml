@@ -79,8 +79,8 @@ EXP_NAME="co2_scan_f${FEATURES}_i${ITERATIONS}_b${BASIS}_r${N_RES}_bs${BATCH}_d$
 echo "Experiment: $EXP_NAME"
 echo "Starting training..."
 
-# Run training
-python trainer.py \
+# Run training with unbuffered output for real-time SLURM logging
+python -u trainer.py \
   --train ../preclassified_data/energies_forces_dipoles_train.npz \
   --valid ../preclassified_data/energies_forces_dipoles_valid.npz \
   --name "$EXP_NAME" \

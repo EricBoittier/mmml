@@ -69,20 +69,20 @@ def get_acp_plot(data, keys, title="", log=False, color="blue"):
 
 
 def init_table(doCharges=False):
-    table = Table(title="PhysNetJax Training Progress")
-    table.add_column("Epoch", style="bright_cyan", no_wrap=True)
-    table.add_column("time", style="green")
-    table.add_column("Eff. LR", style="bright_magenta")
-    table.add_column("Train Loss", style="medium_orchid3")
-    table.add_column("Valid Loss", style="spring_green3")
-    table.add_column("Best Loss", style="dark_goldenrod")
-    table.add_column("Train Energy MAE", style="medium_orchid3")
-    table.add_column("Valid Energy MAE", style="spring_green3")
-    table.add_column("Train Forces MAE", style="medium_orchid3")
-    table.add_column("Valid Forces MAE", style="spring_green3")
+    table = Table(title="PhysNetJax Training Progress", expand=False, min_width=120)
+    table.add_column("Epoch", style="bright_cyan", no_wrap=True, width=6)
+    table.add_column("time", style="green", width=8)
+    table.add_column("Eff. LR", style="bright_magenta", width=10, overflow="fold")
+    table.add_column("Train Loss", style="medium_orchid3", width=11, overflow="fold")
+    table.add_column("Valid Loss", style="spring_green3", width=11, overflow="fold")
+    table.add_column("Best Loss", style="dark_goldenrod", width=11, overflow="fold")
+    table.add_column("Train Energy MAE", style="medium_orchid3", width=13, overflow="fold")
+    table.add_column("Valid Energy MAE", style="spring_green3", width=13, overflow="fold")
+    table.add_column("Train Forces MAE", style="medium_orchid3", width=13, overflow="fold")
+    table.add_column("Valid Forces MAE", style="spring_green3", width=13, overflow="fold")
     if doCharges:
-        table.add_column("Train Dipoles MAE", style="medium_orchid3")
-        table.add_column("Valid Dipoles MAE", style="spring_green3")
+        table.add_column("Train Dipoles MAE", style="medium_orchid3", width=13, overflow="fold")
+        table.add_column("Valid Dipoles MAE", style="spring_green3", width=13, overflow="fold")
     return table
 
 
@@ -283,21 +283,32 @@ def epoch_printer(
     lr_eff,
     epoch_length,
 ):
+    # Smart formatting: use scientific for very small/large numbers
+    def smart_format(val, width=10):
+        """Format number to fit width, using scientific notation if needed"""
+        val = float(val)
+        if val == 0:
+            return f"{0:.3f}".rjust(width)
+        elif abs(val) < 0.01 or abs(val) >= 1000:
+            return f"{val:.3e}"
+        else:
+            return f"{val:.4f}"
+    
     rows = [
-        f"{epoch: 3d}",
+        f"{epoch:3d}",
         f"{epoch_length}",
-        f"{lr_eff: 8.3e}",
-        f"{train_loss : 8.3f}",
-        f"{valid_loss : 8.3f}",
-        f"{best_loss:8.3f}",
-        f"{train_energy_mae: 8.3f}",
-        f"{valid_energy_mae: 8.3f}",
-        f"{train_forces_mae: 8.3f}",
-        f"{valid_forces_mae: 8.3f}",
+        smart_format(lr_eff, 10),
+        smart_format(train_loss, 10),
+        smart_format(valid_loss, 10),
+        smart_format(best_loss, 10),
+        smart_format(train_energy_mae, 12),
+        smart_format(valid_energy_mae, 12),
+        smart_format(train_forces_mae, 12),
+        smart_format(valid_forces_mae, 12),
     ]
     if doCharges:
-        rows.append(f"{train_dipoles_mae: 8.3f}")
-        rows.append(f"{valid_dipoles_mae: 8.3f}")
+        rows.append(smart_format(train_dipoles_mae, 12))
+        rows.append(smart_format(valid_dipoles_mae, 12))
     table.add_row(*rows)
     return table
 

@@ -203,9 +203,18 @@ def train_model(
             )
     else:
         print("Using default (fat) batching method")
+        import sys
+        sys.stdout.flush()  # Flush for SLURM logging
         from mmml.physnetjax.physnetjax.data.batches import _prepare_batches
 
-    console = Console(width=200, color_system="auto")
+    # Force terminal output for SLURM environments
+    import sys
+    console = Console(
+        width=250,  # Wide enough for all columns
+        force_terminal=True,  # Force color output in SLURM
+        force_interactive=False,  # Better for log files
+    )
+    sys.stdout.flush()  # Ensure console initialization is logged
 
     if console is not None:
         console.print("Training Routine")
@@ -507,6 +516,9 @@ def train_model(
                     save_time,
                 )
                 live.update(combined, refresh=True)
+                import sys
+                sys.stdout.flush()  # Force output to SLURM log file
+                sys.stderr.flush()  # Flush errors too
                 gc.collect()  # Force garbage collection to prevent memory buildup during long training runs
                 if PROFILE:
                     jax.profiler.save_device_memory_profile(f"{save_time}-memory-{epoch}.prof")

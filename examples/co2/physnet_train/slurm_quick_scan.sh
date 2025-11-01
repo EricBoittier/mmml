@@ -23,12 +23,12 @@ echo "Running quick scan configuration $X"
 # Simple scan: vary features, iterations, and max_degree
 # Format: FEATURES|ITERATIONS|MAX_DEGREE
 declare -a CONFIGS=(
-    "32|4|0"    # Tiny, scalar only
-    "64|4|0"    # Small, scalar only
+    "32|2|2"    # Tiny, scalar only
+    "64|2|2"    # Small, scalar only
     "128|4|0"   # Medium, scalar only
     "256|4|0"   # Large, scalar only
-    "128|5|2"   # Medium-deep with vectors
-    "256|5|2"   # Large-deep with vectors
+    "128|3|2"   # Medium-deep with vectors
+    "256|3|2"   # Large-deep with vectors
 )
 
 CONFIG=${CONFIGS[$X]}
@@ -39,7 +39,8 @@ EXP_NAME="co2_quick_f${FEATURES}_i${ITERATIONS}_d${MAX_DEGREE}"
 echo "Features: $FEATURES, Iterations: $ITERATIONS, Max Degree: $MAX_DEGREE"
 echo "Running: $EXP_NAME"
 
-python trainer.py \
+# Use unbuffered Python output for real-time SLURM logging
+python -u trainer.py \
   --train ../preclassified_data/energies_forces_dipoles_train.npz \
   --valid ../preclassified_data/energies_forces_dipoles_valid.npz \
   --name "$EXP_NAME" \
@@ -58,7 +59,7 @@ python trainer.py \
   --dipole-weight 25.0 \
   --energy-unit eV \
   --subtract-atomic-energies \
-  --atomic-energy-method default \
+  --atomic-energy-method linear_regression \
   --no-energy-bias \
   --save-best \
   --objective valid_forces_mae \
