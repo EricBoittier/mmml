@@ -9,25 +9,24 @@ This directory contains a joint training script that trains PhysNet and DCMNet s
 3. **DCMNet** predicts distributed multipoles for ESP fitting
 4. Full gradient flow: ESP loss → DCMNet → charges → PhysNet
 
-## ⚠️ Critical: Data Units
+## Data Units
 
-**ESP grid positions are stored in Bohr units and automatically converted to Angstroms:**
-
-The trainer automatically handles this conversion in `load_combined_data()`:
-```python
-BOHR_TO_ANGSTROM = 0.529177210903
-vdw_surface_angstrom = esp_data['vdw_surface'] * BOHR_TO_ANGSTROM
-```
+**All spatial coordinates are in Angstroms:**
 
 **Units throughout:**
 - Atom positions (`R`): Angstroms
-- ESP grid positions (`vdw_surface`): Bohr → **converted to Angstroms** on load
+- ESP grid positions (`vdw_surface`): **Angstroms** (already correct in data files)
 - ESP values (`esp`): Hartree/e (atomic units)
 - Energies (`E`): eV
 - Forces (`F`): eV/Å
 - Dipoles (`Dxyz`): e·Å
 
-**Why this matters:** ESP calculation requires consistent units. A 1.89x unit mismatch (Bohr vs Å) causes ~3 Å spatial offset, completely breaking ESP predictions!
+**ESP calculation:**
+- `calc_esp` expects positions in Angstroms
+- Internally converts distances to Bohr: `ESP = q / (r_Angstrom × 1.88973)`
+- Returns ESP in Hartree/e (atomic units)
+
+**Note:** Grid metadata (`grid_origin`, `grid_axes`) may be in Bohr for cube file compatibility, but `vdw_surface` coordinates are already in Angstroms.
 
 ## Usage
 
