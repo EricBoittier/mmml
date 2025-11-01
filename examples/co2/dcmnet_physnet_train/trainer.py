@@ -211,6 +211,79 @@ def load_combined_data(efd_file: Path, esp_file: Path, verbose: bool = False) ->
     return combined
 
 
+def precompute_edge_lists(
+    data: Dict[str, np.ndarray],
+    cutoff: float,
+    verbose: bool = False,
+) -> Dict[str, np.ndarray]:
+    """
+    Pre-compute edge lists for all samples in the dataset.
+    
+    This is much faster than computing edge lists on-the-fly for each batch.
+    
+    Parameters
+    ----------
+    data : Dict[str, np.ndarray]
+        Dataset dictionary
+    cutoff : float
+        Cutoff distance for edge list construction
+    verbose : bool
+        Print progress
+        
+    Returns
+    -------
+    Dict[str, np.ndarray]
+        Dataset with added edge list arrays
+    """
+    if verbose:
+        print(f"  Pre-computing edge lists (cutoff={cutoff:.1f} Å)...")
+    
+    R = data['R']  # (n_samples, natoms, 3)
+    N = data['N']  # (n_samples,)
+    n_samples = len(N)
+    natoms = R.shape[1]
+    
+    # Pre-compute edge lists for each sample
+    all_dst_idx = []
+    all_src_idx = []
+    all_edge_counts = []
+    
+    for sample_idx in range(n_samples):
+        n_atoms = int(N[sample_idx])
+        pos = R[sample_idx, :n_atoms]
+        
+        dst_list = []
+        src_list = []
+        
+        # Compute pairwise distances
+        for i in range(n_atoms):
+            for j in range(n_atoms):
+                if i != j:
+                    dist = np.linalg.norm(pos[i] - pos[j])
+                    if dist < cutoff:
+                        dst_list.append(i)
+                        src_list.append(j)
+        
+        all_dst_idx.append(np.array(dst_list, dtype=np.int32))
+        all_src_idx.append(np.array(src_list, dtype=np.int32))
+        all_edge_counts.append(len(dst_list))
+        
+        if verbose and (sample_idx + 1) % 1000 == 0:
+            print(f"    Processed {sample_idx + 1}/{n_samples} samples...")
+    
+    # Store as object arrays (variable length per sample)
+    data_with_edges = data.copy()
+    data_with_edges['dst_idx'] = np.array(all_dst_idx, dtype=object)
+    data_with_edges['src_idx'] = np.array(all_src_idx, dtype=object)
+    data_with_edges['edge_counts'] = np.array(all_edge_counts, dtype=np.int32)
+    
+    if verbose:
+        avg_edges = np.mean(all_edge_counts)
+        print(f"  ✅ Pre-computed edge lists: avg {avg_edges:.1f} edges/sample")
+    
+    return data_with_edges
+
+
 def prepare_batch_data(
     data: Dict[str, np.ndarray],
     indices: np.ndarray,
@@ -218,16 +291,16 @@ def prepare_batch_data(
     verbose: bool = False,
 ) -> Dict[str, jnp.ndarray]:
     """
-    Prepare a batch of data with edge lists.
+    Prepare a batch of data using pre-computed edge lists.
     
     Parameters
     ----------
     data : Dict[str, np.ndarray]
-        Full dataset
+        Full dataset with pre-computed edge lists
     indices : np.ndarray
         Indices for this batch
     cutoff : float
-        Cutoff distance for edge list construction
+        Cutoff distance (not used, kept for compatibility)
     verbose : bool
         Print debugging information
         
@@ -256,35 +329,31 @@ def prepare_batch_data(
     
     batch_mask = np.ones(batch_size, dtype=np.float32)
     
-    # Flatten batch dimension for edge list construction
+    # Flatten batch dimension
     R_flat = R.reshape(-1, 3)
     Z_flat = Z.reshape(-1)
     
     # Create batch segments
     batch_segments = np.repeat(np.arange(batch_size), natoms)
     
-    # Construct edge lists (within cutoff, respecting batch boundaries)
+    # Extract pre-computed edge lists and offset for batching
     dst_idx_list = []
     src_idx_list = []
     
-    for batch_idx in range(batch_size):
-        start_idx = batch_idx * natoms
-        end_idx = start_idx + int(N[batch_idx])
-        
-        # Get positions for this molecule
-        pos = R[batch_idx, :int(N[batch_idx])]
-        
-        # Compute pairwise distances
-        for i in range(int(N[batch_idx])):
-            for j in range(int(N[batch_idx])):
-                if i != j:
-                    dist = np.linalg.norm(pos[i] - pos[j])
-                    if dist < cutoff:
-                        dst_idx_list.append(start_idx + i)
-                        src_idx_list.append(start_idx + j)
+    for batch_idx, sample_idx in enumerate(indices):
+        offset = batch_idx * natoms
+        dst = data['dst_idx'][sample_idx] + offset
+        src = data['src_idx'][sample_idx] + offset
+        dst_idx_list.append(dst)
+        src_idx_list.append(src)
     
-    dst_idx = np.array(dst_idx_list, dtype=np.int32)
-    src_idx = np.array(src_idx_list, dtype=np.int32)
+    # Concatenate all edge lists
+    if dst_idx_list:
+        dst_idx = np.concatenate(dst_idx_list, dtype=np.int32)
+        src_idx = np.concatenate(src_idx_list, dtype=np.int32)
+    else:
+        dst_idx = np.array([], dtype=np.int32)
+        src_idx = np.array([], dtype=np.int32)
     
     return {
         'R': jnp.array(R_flat),
@@ -547,6 +616,11 @@ def train_model(
     Any
         Final model parameters
     """
+    # Pre-compute edge lists for all data (huge speedup!)
+    print("\nPre-computing edge lists...")
+    train_data = precompute_edge_lists(train_data, cutoff=cutoff, verbose=True)
+    valid_data = precompute_edge_lists(valid_data, cutoff=cutoff, verbose=True)
+    
     # Initialize model
     key = jax.random.PRNGKey(seed)
     key, init_key = jax.random.split(key)
