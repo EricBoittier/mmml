@@ -415,7 +415,7 @@ def compute_loss(
     return total_loss, losses
 
 
-@functools.partial(jax.jit, static_argnames=('model_apply', 'optimizer_update', 'batch_size', 'n_dcm'))
+@functools.partial(jax.jit, static_argnames=('model_apply', 'optimizer_update', 'batch_size', 'n_dcm', 'clip_norm'))
 def train_step(
     params: Any,
     opt_state: Any,
@@ -429,9 +429,10 @@ def train_step(
     mono_w: float,
     batch_size: int,
     n_dcm: int,
+    clip_norm: float = None,
 ) -> Tuple[Any, Any, jnp.ndarray, Dict[str, jnp.ndarray]]:
     """
-    Single training step with gradient computation.
+    Single training step with gradient computation and optional clipping.
     
     Returns
     -------
@@ -456,6 +457,10 @@ def train_step(
         return total_loss, (output, losses)
     
     (loss, (output, losses)), grads = jax.value_and_grad(loss_fn, has_aux=True)(params)
+    
+    # Clip gradients if requested
+    if clip_norm is not None:
+        grads = optax.clip_by_global_norm(clip_norm)(grads, opt_state, params)[0]
     
     # Update parameters
     updates, opt_state = optimizer_update(grads, opt_state, params)
@@ -532,6 +537,7 @@ def train_model(
     ckpt_dir: Path,
     name: str,
     print_freq: int = 1,
+    grad_clip_norm: float = None,
 ) -> Any:
     """
     Main training loop.
@@ -616,6 +622,7 @@ def train_model(
                 mono_w=mono_w,
                 batch_size=len(batch_indices),
                 n_dcm=n_dcm,
+                clip_norm=grad_clip_norm,
             )
             
             train_losses.append({k: float(v) for k, v in losses.items()})
@@ -712,7 +719,7 @@ def main():
     # PhysNet hyperparameters
     parser.add_argument('--physnet-features', type=int, default=64,
                        help='PhysNet: number of features')
-    parser.add_argument('--physnet-iterations', type=int, default=5,
+    parser.add_argument('--physnet-iterations', type=int, default=2,
                        help='PhysNet: message passing iterations')
     parser.add_argument('--physnet-basis', type=int, default=64,
                        help='PhysNet: number of basis functions')
@@ -732,7 +739,7 @@ def main():
                        help='DCMNet: cutoff distance (Angstroms)')
     parser.add_argument('--n-dcm', type=int, default=3,
                        help='DCMNet: distributed multipoles per atom')
-    parser.add_argument('--max-degree', type=int, default=2,
+    parser.add_argument('--max-degree', type=int, default=1,
                        help='DCMNet: maximum spherical harmonic degree')
     
     # Training hyperparameters
@@ -760,8 +767,10 @@ def main():
     # General options
     parser.add_argument('--natoms', type=int, default=60,
                        help='Maximum number of atoms')
-    parser.add_argument('--max-atomic-number', type=int, default=118,
+    parser.add_argument('--max-atomic-number', type=int, default=28,
                        help='Maximum atomic number')
+    parser.add_argument('--grad-clip-norm', type=float, default=1.0,
+                       help='Gradient clipping norm (None to disable)')
     parser.add_argument('--name', type=str, default='co2_joint_physnet_dcmnet',
                        help='Experiment name')
     parser.add_argument('--ckpt-dir', type=Path, default=None,
@@ -884,6 +893,9 @@ def main():
     print(f"  ESP: {args.esp_weight}")
     print(f"  Monopole constraint: {args.mono_weight}")
     
+    print(f"\nTraining stability:")
+    print(f"  Gradient clipping: {args.grad_clip_norm if args.grad_clip_norm else 'disabled'}")
+    
     # Start training
     print(f"\n{'='*70}")
     print("STARTING TRAINING")
@@ -908,6 +920,7 @@ def main():
             ckpt_dir=ckpt_dir,
             name=args.name,
             print_freq=args.print_freq,
+            grad_clip_norm=args.grad_clip_norm,
         )
         
         print(f"\n{'='*70}")
