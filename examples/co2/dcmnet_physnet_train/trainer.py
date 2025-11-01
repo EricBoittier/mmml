@@ -348,7 +348,7 @@ def resize_data_padding(
     current_natoms = data['R'].shape[1]
     
     if current_natoms == target_natoms:
-        return data
+    return data
 
     # Check if safe
     max_atoms = int(np.max(data['N']))
@@ -567,7 +567,7 @@ def prepare_batch_data(
     }
 
 
-@functools.partial(jax.jit, static_argnames=('batch_size', 'n_dcm', 'dipole_source'))
+@functools.partial(jax.jit, static_argnames=('batch_size', 'n_dcm', 'dipole_source', 'esp_min_distance'))
 def compute_loss(
     output: Dict[str, jnp.ndarray],
     batch: Dict[str, jnp.ndarray],
