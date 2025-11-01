@@ -140,11 +140,19 @@ class JointPhysNetDCMNet(nn.Module):
         )
         
         # 4. Return all outputs for loss computation
+        # Reshape PhysNet outputs to proper shapes
+        # PhysNet energy shape is (batch_size, 1, 1, 1) -> reshape to (batch_size,)
+        # PhysNet forces shape is (batch_size*natoms, 1, 1, 3) -> reshape to (batch_size*natoms, 3)
+        # PhysNet dipoles shape is (batch_size, 1, 1, 3) -> reshape to (batch_size, 3)
+        energy_reshaped = physnet_output["energy"].reshape(batch_size)
+        forces_reshaped = physnet_output["forces"].reshape(-1, 3)
+        dipoles_reshaped = physnet_output["dipoles"].reshape(batch_size, 3)
+        
         return {
-            # PhysNet outputs
-            "energy": physnet_output["energy"],
-            "forces": physnet_output["forces"],
-            "dipoles": physnet_output["dipoles"],
+            # PhysNet outputs (reshaped to proper dimensions)
+            "energy": energy_reshaped,  # (batch_size,)
+            "forces": forces_reshaped,  # (batch_size*natoms, 3)
+            "dipoles": dipoles_reshaped,  # (batch_size, 3)
             "charges": charges,
             "sum_charges": physnet_output.get("sum_charges", jnp.sum(charges_squeezed)),
             # DCMNet outputs
