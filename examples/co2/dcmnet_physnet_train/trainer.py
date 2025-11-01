@@ -2322,6 +2322,7 @@ def train_model(
     num_epochs: int,
     batch_size: int,
     learning_rate: float,
+    weight_decay: float,
     energy_w: float,
     forces_w: float,
     dipole_w: float,
@@ -2385,8 +2386,8 @@ def train_model(
         
         print(f"✅ Model initialized with {sum(x.size for x in jax.tree_util.tree_leaves(params)):,} parameters")
     
-    # Setup optimizer
-    optimizer = optax.adam(learning_rate)
+    # Setup optimizer (AdamW with weight decay for regularization)
+    optimizer = optax.adamw(learning_rate, weight_decay=weight_decay)
     opt_state = optimizer.init(params)
     
     # Prepare training indices
@@ -2722,6 +2723,8 @@ def main():
                        help='Number of epochs')
     parser.add_argument('--learning-rate', '--lr', type=float, default=0.001,
                        help='Learning rate')
+    parser.add_argument('--weight-decay', type=float, default=1e-4,
+                       help='AdamW weight decay (L2 regularization, default: 1e-4)')
     parser.add_argument('--seed', type=int, default=42,
                        help='Random seed')
     
@@ -2907,9 +2910,11 @@ def main():
     print(f"{'#'*70}\n")
     
     print(f"Training hyperparameters:")
+    print(f"  Optimizer: AdamW")
     print(f"  Batch size: {args.batch_size}")
     print(f"  Epochs: {args.epochs}")
     print(f"  Learning rate: {args.learning_rate}")
+    print(f"  Weight decay: {args.weight_decay}")
     print(f"  Random seed: {args.seed}")
     
     print(f"\nLoss weights:")
@@ -2965,6 +2970,7 @@ def main():
             num_epochs=args.epochs,
             batch_size=args.batch_size,
             learning_rate=args.learning_rate,
+            weight_decay=args.weight_decay,
             energy_w=args.energy_weight,
             forces_w=args.forces_weight,
             dipole_w=args.dipole_weight,
