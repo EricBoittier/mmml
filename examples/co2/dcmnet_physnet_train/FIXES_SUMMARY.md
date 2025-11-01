@@ -269,3 +269,42 @@ dipo_flat = dipo_for_esp.reshape(-1, 3)  # CORRECT
 
 **All fixed!** ✅
 
+---
+
+## 8. **Element-Specific ESP Filtering** ✅ IMPROVEMENT
+**File:** `examples/co2/dcmnet_physnet_train/trainer.py`
+
+**Change:** Replaced fixed distance cutoff with **element-specific atomic radius-based filtering**
+
+**Old behavior:**
+```python
+# Fixed 1.0 Å cutoff for all atoms
+if distance < 1.0:  # Too close
+    exclude_point()
+```
+
+**New behavior (DEFAULT):**
+```python
+# Element-specific based on covalent radius
+for each atom:
+    cutoff = 2 × covalent_radius[Z]
+    if distance < cutoff:  # Too close for this element
+        exclude_point()
+```
+
+**Benefits:**
+- **H atoms** (r=0.31 Å): cutoff = 0.62 Å (smaller exclusion zone)
+- **C atoms** (r=0.76 Å): cutoff = 1.52 Å (larger exclusion zone)
+- **O atoms** (r=0.66 Å): cutoff = 1.32 Å (medium exclusion zone)
+- Physically motivated (VDW surface ≈ 2×covalent radius)
+- Element-specific prevents over/under-filtering
+
+**Optional:** Add extra fixed distance on top:
+```bash
+--esp-min-distance 0.5  # Adds 0.5 Å to all radius-based cutoffs
+```
+
+---
+
+**All fixed!** ✅
+
