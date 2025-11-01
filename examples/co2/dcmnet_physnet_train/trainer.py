@@ -832,7 +832,7 @@ def train_step(
     return params, opt_state, loss, losses
 
 
-@functools.partial(jax.jit, static_argnames=('model_apply', 'batch_size', 'n_dcm', 'dipole_source'))
+@functools.partial(jax.jit, static_argnames=('model_apply', 'batch_size', 'n_dcm', 'dipole_source', 'esp_min_distance'))
 def eval_step(
     params: Any,
     batch: Dict[str, jnp.ndarray],
