@@ -11,9 +11,9 @@ python trainer.py \
   --train energies_forces_dipoles_train.npz \
   --valid energies_forces_dipoles_valid.npz \
   --name co2_physnet_atomic_refs \
-  --batch-size 1 \
+  --batch-size 8 \
   --epochs 100 \
-  --learning-rate 0.0005 \
+  --learning-rate 0.005 \
   --energy-weight 1.0 \
   --forces-weight 1.0 \
   --dipole-weight 25.0 \
