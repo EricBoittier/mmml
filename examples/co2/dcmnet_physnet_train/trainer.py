@@ -885,7 +885,7 @@ def eval_step(
     )
     
     total_loss, losses = compute_loss(
-        output, batch, energy_w, forces_w, dipole_w, esp_w, mono_w, batch_size, n_dcm, dipole_source, esp_min_distance
+        output, batch, energy_w, forces_w, dipole_w, esp_w, mono_w, batch_size, n_dcm, dipole_source, esp_min_distance, esp_max_value
     )
     
     # Compute MAE metrics
@@ -1683,6 +1683,7 @@ def plot_validation_results(
             n_dcm=n_dcm,
             dipole_source=dipole_source,
             esp_min_distance=0.0,  # No filtering for plotting
+            esp_max_value=1e10,  # No magnitude filtering for plotting
         )
         
         # Extract distributed charges and positions
@@ -1862,6 +1863,7 @@ def train_model(
     plot_esp_examples: int = 2,
     dipole_source: str = 'physnet',
     esp_min_distance: float = 0.0,
+    esp_max_value: float = 1e10,
     restart_params: Any = None,
     start_epoch: int = 1,
 ) -> Any:
@@ -1962,6 +1964,7 @@ def train_model(
                 clip_norm=grad_clip_norm,
                 dipole_source=dipole_source,
                 esp_min_distance=esp_min_distance,
+                esp_max_value=esp_max_value,
             )
             
             train_losses.append({k: float(v) for k, v in losses.items()})
@@ -2012,6 +2015,7 @@ def train_model(
                 n_dcm=n_dcm,
                 dipole_source=dipole_source,
                 esp_min_distance=esp_min_distance,
+                esp_max_value=esp_max_value,
             )
             
             valid_losses.append({k: float(v) for k, v in losses.items()})
@@ -2127,6 +2131,7 @@ def train_model(
                     n_dcm=n_dcm,
                     dipole_source=dipole_source,
                     esp_min_distance=0.0,
+                    esp_max_value=1e10,
                 )
                 
                 n_atoms_diag = int(diag_batch['N'][0])
@@ -2255,6 +2260,8 @@ def main():
                        help='ESP loss weight')
     parser.add_argument('--esp-min-distance', type=float, default=1.0,
                        help='Minimum distance (Å) from atoms for ESP grid points to include in loss (default: 1.0, set to 0 to disable)')
+    parser.add_argument('--esp-max-value', type=float, default=None,
+                       help='Maximum |ESP| value (Hartree/e) to include in loss - filters out high ESP points (default: no limit)')
     parser.add_argument('--mono-weight', type=float, default=100.0,
                        help='Monopole constraint loss weight (enforce distributed charges sum to atomic charges)')
     parser.add_argument('--dipole-source', type=str, default='physnet',
