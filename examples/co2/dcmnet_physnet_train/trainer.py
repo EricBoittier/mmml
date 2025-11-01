@@ -691,6 +691,232 @@ def eval_step(
     return total_loss, losses, output
 
 
+def plot_validation_results(
+    params: Any,
+    model: JointPhysNetDCMNet,
+    valid_data: Dict[str, np.ndarray],
+    cutoff: float,
+    energy_w: float,
+    forces_w: float,
+    dipole_w: float,
+    esp_w: float,
+    mono_w: float,
+    n_dcm: int,
+    save_dir: Path,
+    n_samples: int = 100,
+    n_esp_examples: int = 2,
+) -> None:
+    """
+    Create validation set plots: scatter plots and ESP examples.
+    
+    Parameters
+    ----------
+    params : Any
+        Model parameters
+    model : JointPhysNetDCMNet
+        Joint model
+    valid_data : Dict[str, np.ndarray]
+        Validation dataset
+    cutoff : float
+        Cutoff distance
+    energy_w, forces_w, dipole_w, esp_w, mono_w : float
+        Loss weights
+    n_dcm : int
+        Number of distributed multipoles
+    save_dir : Path
+        Directory to save plots
+    n_samples : int
+        Number of samples to plot
+    n_esp_examples : int
+        Number of ESP examples to visualize
+    """
+    if not HAS_MATPLOTLIB:
+        print("\n⚠️  Matplotlib not available, skipping plots")
+        return
+    
+    print(f"\n{'#'*70}")
+    print("# Creating Validation Plots")
+    print(f"{'#'*70}\n")
+    
+    save_dir.mkdir(exist_ok=True, parents=True)
+    
+    # Collect predictions for first n_samples
+    n_total = min(n_samples, len(valid_data['E']))
+    
+    energies_pred = []
+    energies_true = []
+    forces_pred = []
+    forces_true = []
+    dipoles_pred = []
+    dipoles_true = []
+    esp_pred_list = []
+    esp_true_list = []
+    
+    print(f"Evaluating {n_total} validation samples...")
+    
+    for i in range(n_total):
+        batch = prepare_batch_data(valid_data, np.array([i]), cutoff=cutoff)
+        
+        _, losses, output = eval_step(
+            params=params,
+            batch=batch,
+            model_apply=model.apply,
+            energy_w=energy_w,
+            forces_w=forces_w,
+            dipole_w=dipole_w,
+            esp_w=esp_w,
+            mono_w=mono_w,
+            batch_size=1,
+            n_dcm=n_dcm,
+        )
+        
+        energies_pred.append(float(output['energy']))
+        energies_true.append(float(batch['E']))
+        
+        forces_pred.append(np.array(output['forces']))
+        forces_true.append(np.array(batch['F']))
+        
+        dipoles_pred.append(np.array(output['dipoles']))
+        dipoles_true.append(np.array(batch['D']))
+        
+        # ESP (only store first n_esp_examples)
+        if i < n_esp_examples:
+            # Compute ESP from model
+            natoms = output["mono_dist"].shape[0]
+            mono_reshaped = output["mono_dist"].reshape(1, natoms, n_dcm)
+            dipo_reshaped = output["dipo_dist"].reshape(1, natoms, n_dcm, 3)
+            
+            mono_flat = mono_reshaped[0].reshape(-1)
+            dipo_flat = jnp.moveaxis(dipo_reshaped[0], -1, -2).reshape(-1, 3)
+            
+            from mmml.dcmnet.dcmnet.electrostatics import calc_esp
+            esp_pred = calc_esp(dipo_flat, mono_flat, batch["vdw_surface"][0])
+            
+            esp_pred_list.append(np.array(esp_pred))
+            esp_true_list.append(np.array(batch['esp'][0]))
+    
+    # Convert to arrays
+    energies_pred = np.array(energies_pred)
+    energies_true = np.array(energies_true)
+    
+    forces_pred = np.concatenate([f.reshape(-1) for f in forces_pred])
+    forces_true = np.concatenate([f.reshape(-1) for f in forces_true])
+    # Remove padding zeros
+    forces_mask = forces_true != 0
+    forces_pred = forces_pred[forces_mask]
+    forces_true = forces_true[forces_mask]
+    
+    dipoles_pred = np.concatenate([d.reshape(-1) for d in dipoles_pred])
+    dipoles_true = np.concatenate([d.reshape(-1) for d in dipoles_true])
+    
+    # Create figure with subplots
+    fig, axes = plt.subplots(2, 2, figsize=(12, 12))
+    
+    # Energy scatter
+    ax = axes[0, 0]
+    ax.scatter(energies_true, energies_pred, alpha=0.5, s=20)
+    lims = [min(energies_true.min(), energies_pred.min()),
+            max(energies_true.max(), energies_pred.max())]
+    ax.plot(lims, lims, 'r--', alpha=0.5, label='Perfect')
+    ax.set_xlabel('True Energy (eV)')
+    ax.set_ylabel('Predicted Energy (eV)')
+    ax.set_title(f'Energy\nMAE: {np.abs(energies_true - energies_pred).mean():.3f} eV')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    
+    # Forces scatter
+    ax = axes[0, 1]
+    ax.scatter(forces_true, forces_pred, alpha=0.3, s=10)
+    lims = [min(forces_true.min(), forces_pred.min()),
+            max(forces_true.max(), forces_pred.max())]
+    ax.plot(lims, lims, 'r--', alpha=0.5, label='Perfect')
+    ax.set_xlabel('True Forces (eV/Å)')
+    ax.set_ylabel('Predicted Forces (eV/Å)')
+    ax.set_title(f'Forces\nMAE: {np.abs(forces_true - forces_pred).mean():.3f} eV/Å')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    
+    # Dipole scatter
+    ax = axes[1, 0]
+    ax.scatter(dipoles_true, dipoles_pred, alpha=0.5, s=20)
+    lims = [min(dipoles_true.min(), dipoles_pred.min()),
+            max(dipoles_true.max(), dipoles_pred.max())]
+    ax.plot(lims, lims, 'r--', alpha=0.5, label='Perfect')
+    ax.set_xlabel('True Dipole (D)')
+    ax.set_ylabel('Predicted Dipole (D)')
+    ax.set_title(f'Dipole Components\nMAE: {np.abs(dipoles_true - dipoles_pred).mean():.3f} D')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    
+    # ESP scatter (all examples)
+    ax = axes[1, 1]
+    if esp_pred_list:
+        esp_pred_all = np.concatenate([e.reshape(-1) for e in esp_pred_list])
+        esp_true_all = np.concatenate([e.reshape(-1) for e in esp_true_list])
+        ax.scatter(esp_true_all, esp_pred_all, alpha=0.3, s=10)
+        lims = [min(esp_true_all.min(), esp_pred_all.min()),
+                max(esp_true_all.max(), esp_pred_all.max())]
+        ax.plot(lims, lims, 'r--', alpha=0.5, label='Perfect')
+        ax.set_xlabel('True ESP (Hartree/e)')
+        ax.set_ylabel('Predicted ESP (Hartree/e)')
+        ax.set_title(f'ESP Grid Points\nMAE: {np.abs(esp_true_all - esp_pred_all).mean():.6f}')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    scatter_path = save_dir / 'validation_scatter.png'
+    plt.savefig(scatter_path, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"  ✅ Saved scatter plots: {scatter_path}")
+    
+    # Create ESP example plots
+    for idx in range(min(n_esp_examples, len(esp_pred_list))):
+        fig, axes = plt.subplots(1, 3, figsize=(15, 4))
+        
+        esp_true = esp_true_list[idx]
+        esp_pred = esp_pred_list[idx]
+        esp_error = esp_pred - esp_true
+        
+        # True ESP
+        ax = axes[0]
+        sc = ax.scatter(range(len(esp_true)), esp_true, c=esp_true, 
+                       cmap='RdBu_r', s=30, alpha=0.7)
+        ax.set_xlabel('Grid Point Index')
+        ax.set_ylabel('ESP (Hartree/e)')
+        ax.set_title(f'True ESP (Sample {idx})')
+        ax.grid(True, alpha=0.3)
+        plt.colorbar(sc, ax=ax)
+        
+        # Predicted ESP
+        ax = axes[1]
+        sc = ax.scatter(range(len(esp_pred)), esp_pred, c=esp_pred,
+                       cmap='RdBu_r', s=30, alpha=0.7)
+        ax.set_xlabel('Grid Point Index')
+        ax.set_ylabel('ESP (Hartree/e)')
+        ax.set_title(f'Predicted ESP (Sample {idx})')
+        ax.grid(True, alpha=0.3)
+        plt.colorbar(sc, ax=ax)
+        
+        # Error
+        ax = axes[2]
+        sc = ax.scatter(range(len(esp_error)), esp_error, c=esp_error,
+                       cmap='RdBu_r', s=30, alpha=0.7)
+        ax.set_xlabel('Grid Point Index')
+        ax.set_ylabel('ESP Error (Hartree/e)')
+        ax.set_title(f'Error (Pred - True)\nMAE: {np.abs(esp_error).mean():.6f}')
+        ax.grid(True, alpha=0.3)
+        ax.axhline(0, color='k', linestyle='--', alpha=0.3)
+        plt.colorbar(sc, ax=ax)
+        
+        plt.tight_layout()
+        esp_path = save_dir / f'esp_example_{idx}.png'
+        plt.savefig(esp_path, dpi=150, bbox_inches='tight')
+        plt.close()
+        print(f"  ✅ Saved ESP example {idx}: {esp_path}")
+    
+    print(f"\n✅ All plots saved to: {save_dir}")
+
+
 def train_model(
     model: JointPhysNetDCMNet,
     train_data: Dict[str, np.ndarray],
@@ -954,6 +1180,12 @@ def main():
                        help='Checkpoint directory')
     parser.add_argument('--print-freq', type=int, default=1,
                        help='Print frequency (epochs)')
+    parser.add_argument('--plot-results', action='store_true', default=False,
+                       help='Create validation plots after training')
+    parser.add_argument('--plot-samples', type=int, default=100,
+                       help='Number of validation samples to plot')
+    parser.add_argument('--plot-esp-examples', type=int, default=2,
+                       help='Number of ESP examples to visualize')
     parser.add_argument('--verbose', action='store_true', default=True,
                        help='Verbose output')
     
@@ -1132,6 +1364,36 @@ def main():
         print("✅ TRAINING COMPLETE!")
         print(f"{'='*70}")
         print(f"\nFinal parameters saved to: {ckpt_dir / args.name}")
+        
+        # Create validation plots if requested
+        if args.plot_results:
+            if HAS_MATPLOTLIB:
+                # Load best parameters
+                best_params_path = ckpt_dir / args.name / 'best_params.pkl'
+                if best_params_path.exists():
+                    with open(best_params_path, 'rb') as f:
+                        plot_params = pickle.load(f)
+                else:
+                    plot_params = final_params
+                
+                plot_validation_results(
+                    params=plot_params,
+                    model=model,
+                    valid_data=valid_data,
+                    cutoff=max(args.physnet_cutoff, args.dcmnet_cutoff),
+                    energy_w=args.energy_weight,
+                    forces_w=args.forces_weight,
+                    dipole_w=args.dipole_weight,
+                    esp_w=args.esp_weight,
+                    mono_w=args.mono_weight,
+                    n_dcm=args.n_dcm,
+                    save_dir=ckpt_dir / args.name / 'plots',
+                    n_samples=args.plot_samples,
+                    n_esp_examples=args.plot_esp_examples,
+                )
+            else:
+                print("\n⚠️  Matplotlib not installed, cannot create plots")
+                print("   Install with: pip install matplotlib")
         
     except KeyboardInterrupt:
         print(f"\n\n⚠️  Training interrupted by user")
