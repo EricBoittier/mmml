@@ -31,6 +31,15 @@ from flax import linen as nn
 import optax
 import functools
 
+# Optional plotting imports
+try:
+    import matplotlib.pyplot as plt
+    import matplotlib
+    matplotlib.use('Agg')  # Non-interactive backend
+    HAS_MATPLOTLIB = True
+except ImportError:
+    HAS_MATPLOTLIB = False
+
 # Import PhysNet components
 from mmml.physnetjax.physnetjax.models.model import EF
 from mmml.physnetjax.physnetjax.directories import BASE_CKPT_DIR
