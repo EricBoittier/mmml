@@ -349,8 +349,8 @@ def prepare_batch_data(
     
     # Concatenate all edge lists
     if dst_idx_list:
-        dst_idx = np.concatenate(dst_idx_list, dtype=np.int32)
-        src_idx = np.concatenate(src_idx_list, dtype=np.int32)
+        dst_idx = np.concatenate(dst_idx_list).astype(np.int32)
+        src_idx = np.concatenate(src_idx_list).astype(np.int32)
     else:
         dst_idx = np.array([], dtype=np.int32)
         src_idx = np.array([], dtype=np.int32)
