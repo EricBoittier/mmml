@@ -567,7 +567,7 @@ def prepare_batch_data(
     }
 
 
-@functools.partial(jax.jit, static_argnames=('batch_size', 'n_dcm', 'dipole_source', 'esp_min_distance'))
+@functools.partial(jax.jit, static_argnames=('batch_size', 'n_dcm', 'dipole_source', 'esp_min_distance', 'esp_max_value'))
 def compute_loss(
     output: Dict[str, jnp.ndarray],
     batch: Dict[str, jnp.ndarray],
@@ -580,6 +580,7 @@ def compute_loss(
     n_dcm: int,
     dipole_source: str = 'physnet',
     esp_min_distance: float = 0.0,
+    esp_max_value: float = 1e10,  # Use large sentinel value for "no limit"
 ) -> Tuple[jnp.ndarray, Dict[str, jnp.ndarray]]:
     """
     Compute joint loss for PhysNet and DCMNet.
@@ -682,9 +683,16 @@ def compute_loss(
             min_distances = jnp.min(jnp.where(atom_mask_single[None, :] > 0.5, distances, 1e10), axis=1)  # (ngrid,)
             
             # Mask: 1 if distance >= esp_min_distance, 0 otherwise
-            esp_mask = (min_distances >= esp_min_distance).astype(jnp.float32)
+            distance_mask = (min_distances >= esp_min_distance).astype(jnp.float32)
         else:
-            esp_mask = jnp.ones_like(esp_target)
+            distance_mask = jnp.ones_like(esp_target)
+        
+        # Add magnitude-based filtering
+        if esp_max_value < 1e9:  # Check if magnitude limit is set (sentinel is 1e10)
+            magnitude_mask = (jnp.abs(esp_target) <= esp_max_value).astype(jnp.float32)
+            esp_mask = distance_mask * magnitude_mask
+        else:
+            esp_mask = distance_mask
         
         # Flatten distributed charges: (natoms*n_dcm,)
         mono_flat = mono_for_esp.reshape(-1)
@@ -714,9 +722,16 @@ def compute_loss(
                 
                 # Min distance to nearest real atom
                 min_distances = jnp.min(jnp.where(atom_mask_mol[None, :] > 0.5, distances, 1e10), axis=1)
-                esp_mask = (min_distances >= esp_min_distance).astype(jnp.float32)
+                distance_mask = (min_distances >= esp_min_distance).astype(jnp.float32)
             else:
-                esp_mask = jnp.ones_like(esp_mol)
+                distance_mask = jnp.ones_like(esp_mol)
+            
+            # Add magnitude-based filtering
+            if esp_max_value < 1e9:  # Check if magnitude limit is set
+                magnitude_mask = (jnp.abs(esp_mol) <= esp_max_value).astype(jnp.float32)
+                esp_mask = distance_mask * magnitude_mask
+            else:
+                esp_mask = distance_mask
             
             # Masked loss
             esp_diff = esp_pred - esp_mol
@@ -770,7 +785,7 @@ def compute_loss(
     return total_loss, losses
 
 
-@functools.partial(jax.jit, static_argnames=('model_apply', 'optimizer_update', 'batch_size', 'n_dcm', 'clip_norm', 'dipole_source', 'esp_min_distance'))
+@functools.partial(jax.jit, static_argnames=('model_apply', 'optimizer_update', 'batch_size', 'n_dcm', 'clip_norm', 'dipole_source', 'esp_min_distance', 'esp_max_value'))
 def train_step(
     params: Any,
     opt_state: Any,
@@ -787,6 +802,7 @@ def train_step(
     clip_norm: float = None,
     dipole_source: str = 'physnet',
     esp_min_distance: float = 0.0,
+    esp_max_value: float = 1e10,
 ) -> Tuple[Any, Any, jnp.ndarray, Dict[str, jnp.ndarray]]:
     """
     Single training step with gradient computation and optional clipping.
@@ -809,7 +825,7 @@ def train_step(
             atom_mask=batch["atom_mask"],
         )
         total_loss, losses = compute_loss(
-            output, batch, energy_w, forces_w, dipole_w, esp_w, mono_w, batch_size, n_dcm, dipole_source, esp_min_distance
+            output, batch, energy_w, forces_w, dipole_w, esp_w, mono_w, batch_size, n_dcm, dipole_source, esp_min_distance, esp_max_value
         )
         return total_loss, (output, losses)
     
@@ -832,7 +848,7 @@ def train_step(
     return params, opt_state, loss, losses
 
 
-@functools.partial(jax.jit, static_argnames=('model_apply', 'batch_size', 'n_dcm', 'dipole_source', 'esp_min_distance'))
+@functools.partial(jax.jit, static_argnames=('model_apply', 'batch_size', 'n_dcm', 'dipole_source', 'esp_min_distance', 'esp_max_value'))
 def eval_step(
     params: Any,
     batch: Dict[str, jnp.ndarray],
@@ -846,6 +862,7 @@ def eval_step(
     n_dcm: int,
     dipole_source: str = 'physnet',
     esp_min_distance: float = 0.0,
+    esp_max_value: float = 1e10,  # Use large sentinel value for "no limit"
 ) -> Tuple[jnp.ndarray, Dict[str, jnp.ndarray], Dict[str, jnp.ndarray]]:
     """
     Evaluation step without gradient computation.
@@ -910,6 +927,28 @@ def eval_step(
     vdw_for_esp = batch["vdw_surface"][0]  # (ngrid, 3)
     esp_target = batch["esp"][0]  # (ngrid,)
     
+    # Create ESP mask (distance-based)
+    atom_positions_single = batch["R"].reshape(batch_size, natoms, 3)[0]  # (natoms, 3)
+    atom_mask_single = batch["atom_mask"].reshape(batch_size, natoms)[0]  # (natoms,)
+    real_atom_positions = atom_positions_single * atom_mask_single[:, None]  # Zero out padding
+    
+    if esp_min_distance > 0:
+        distances = jnp.linalg.norm(
+            vdw_for_esp[:, None, :] - real_atom_positions[None, :, :], 
+            axis=2
+        )  # (ngrid, natoms)
+        min_distances = jnp.min(jnp.where(atom_mask_single[None, :] > 0.5, distances, 1e10), axis=1)  # (ngrid,)
+        distance_mask = (min_distances >= esp_min_distance).astype(jnp.float32)
+    else:
+        distance_mask = jnp.ones_like(esp_target)
+    
+    # Add magnitude-based filtering
+    if esp_max_value < 1e9:  # Check if magnitude limit is set (sentinel is 1e10)
+        magnitude_mask = (jnp.abs(esp_target) <= esp_max_value).astype(jnp.float32)
+        esp_mask = distance_mask * magnitude_mask
+    else:
+        esp_mask = distance_mask
+    
     # DCMNet ESP
     mono_flat = mono_for_esp.reshape(-1)
     dipo_flat = jnp.moveaxis(dipo_for_esp, -1, -2).reshape(-1, 3)
@@ -935,9 +974,12 @@ def eval_step(
     # ESP at each grid point: sum over atoms (padded atoms have charge=0 so don't contribute)
     esp_pred_physnet = jnp.sum(charges_masked[None, :] / (distances + 1e-10), axis=1)
     
-    # Compute RMSE for both
-    rmse_esp_dcmnet = jnp.sqrt(jnp.mean((esp_pred_dcmnet - esp_target)**2))
-    rmse_esp_physnet = jnp.sqrt(jnp.mean((esp_pred_physnet - esp_target)**2))
+    # Compute RMSE for both (using mask)
+    esp_diff_dcmnet = (esp_pred_dcmnet - esp_target) * esp_mask
+    esp_diff_physnet = (esp_pred_physnet - esp_target) * esp_mask
+    n_valid = esp_mask.sum()
+    rmse_esp_dcmnet = jnp.sqrt(jnp.sum(esp_diff_dcmnet ** 2) / (n_valid + 1e-10))
+    rmse_esp_physnet = jnp.sqrt(jnp.sum(esp_diff_physnet ** 2) / (n_valid + 1e-10))
     
     losses["mae_energy"] = mae_energy
     losses["mae_forces"] = mae_forces
