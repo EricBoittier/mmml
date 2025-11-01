@@ -1929,6 +1929,42 @@ def train_model(
             # Print constraint violations if available
             if 'total_charge' in valid_loss_avg:
                 print(f"    Total Charge Violation: {valid_loss_avg['total_charge']:.6f}")
+            
+            # Print charge diagnostics (first validation sample)
+            if epoch % (print_freq * 10) == 0 or epoch == 1:  # Every 10 print_freq epochs
+                print(f"\n  💡 Charge Diagnostics (first validation sample):")
+                diag_batch = prepare_batch_data(valid_data, np.array([0]), cutoff=cutoff)
+                _, _, diag_output = eval_step(
+                    params=params,
+                    batch=diag_batch,
+                    model_apply=model.apply,
+                    energy_w=energy_w,
+                    forces_w=forces_w,
+                    dipole_w=dipole_w,
+                    esp_w=esp_w,
+                    mono_w=mono_w,
+                    batch_size=1,
+                    n_dcm=n_dcm,
+                    dipole_source=dipole_source,
+                    esp_min_distance=0.0,
+                )
+                
+                n_atoms_diag = int(diag_batch['N'][0])
+                charges_physnet_diag = np.array(diag_output['charges_as_mono'][:n_atoms_diag])
+                mono_dcm_diag = np.array(diag_output['mono_dist'][:n_atoms_diag].reshape(n_atoms_diag, n_dcm))
+                
+                print(f"    PhysNet charges: [{charges_physnet_diag.min():.4f}, {charges_physnet_diag.max():.4f}] e, sum={charges_physnet_diag.sum():.4f}")
+                print(f"    DCMNet charges:  [{mono_dcm_diag.min():.4f}, {mono_dcm_diag.max():.4f}] e, sum={mono_dcm_diag.sum():.4f}")
+                n_pos_dcm = (mono_dcm_diag > 0).sum()
+                n_neg_dcm = (mono_dcm_diag < 0).sum()
+                print(f"    DCMNet charge signs: {n_pos_dcm} positive, {n_neg_dcm} negative (out of {n_atoms_diag * n_dcm})")
+                
+                esp_dcmnet_diag = np.array(diag_output['esp_dcmnet'])
+                esp_physnet_diag = np.array(diag_output['esp_physnet'])
+                esp_target_diag = np.array(diag_batch['esp'][0])
+                print(f"    ESP (DCMNet): [{esp_dcmnet_diag.min():.4f}, {esp_dcmnet_diag.max():.4f}] Ha/e")
+                print(f"    ESP (PhysNet): [{esp_physnet_diag.min():.4f}, {esp_physnet_diag.max():.4f}] Ha/e")
+                print(f"    ESP (Target):  [{esp_target_diag.min():.4f}, {esp_target_diag.max():.4f}] Ha/e")
         
         # Save best model
         if valid_loss_avg['total'] < best_valid_loss:
