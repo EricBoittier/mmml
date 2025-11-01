@@ -981,8 +981,8 @@ def eval_step(
         axis=2
     )  # (ngrid, natoms)
     
-    # Get atomic radii for each atom
-    atomic_radii = jnp.array([ase.data.covalent_radii[int(z)] for z in atomic_nums_single])
+    # Get atomic radii for each atom - use jnp.take to avoid concretization  
+    atomic_radii = jnp.take(jnp.array(ase.data.covalent_radii), atomic_nums_single)
     
     # Check if within 2*radius of any atom
     within_cutoff = distances < (2.0 * atomic_radii[None, :])
