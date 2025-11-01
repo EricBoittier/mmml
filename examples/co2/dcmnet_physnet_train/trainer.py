@@ -1,0 +1,923 @@
+#!/usr/bin/env python3
+"""
+Joint PhysNet-DCMNet Training Script for CO2 Data
+
+This script trains PhysNet and DCMNet simultaneously with end-to-end gradient flow.
+PhysNet predicts atomic charges (supervised by molecular dipole), which are fed as
+monopoles into DCMNet to predict distributed multipoles and ESP on VDW surfaces.
+
+Usage:
+    python trainer.py --train-efd energies_forces_dipoles_train.npz \
+                      --train-esp grids_esp_train.npz \
+                      --valid-efd energies_forces_dipoles_valid.npz \
+                      --valid-esp grids_esp_valid.npz
+"""
+
+import sys
+import argparse
+from pathlib import Path
+import numpy as np
+import pickle
+from typing import Dict, Tuple, Any
+import time
+
+# Add mmml to path
+repo_root = Path(__file__).parent / "../../.."
+sys.path.insert(0, str(repo_root.resolve()))
+
+import jax
+import jax.numpy as jnp
+from flax import linen as nn
+import optax
+import functools
+
+# Import PhysNet components
+from mmml.physnetjax.physnetjax.models.model import EF
+from mmml.physnetjax.physnetjax.directories import BASE_CKPT_DIR
+
+# Import DCMNet components
+from mmml.dcmnet.dcmnet.modules import MessagePassingModel
+from mmml.dcmnet.dcmnet.electrostatics import calc_esp
+
+# Import data utilities
+from mmml.data import load_npz, DataConfig
+
+
+class JointPhysNetDCMNet(nn.Module):
+    """
+    Joint PhysNet-DCMNet model for end-to-end charge and ESP prediction.
+    
+    Architecture:
+    1. PhysNet predicts atomic charges (supervised by molecular dipole)
+    2. Charges are fed as monopoles into DCMNet
+    3. DCMNet predicts distributed multipoles for ESP fitting
+    4. Full gradient flow from ESP loss back to PhysNet parameters
+    
+    Attributes
+    ----------
+    physnet_config : dict
+        Configuration for PhysNet EF model
+    dcmnet_config : dict
+        Configuration for DCMNet MessagePassingModel
+    """
+    physnet_config: Dict[str, Any]
+    dcmnet_config: Dict[str, Any]
+    
+    def setup(self):
+        """Initialize both PhysNet and DCMNet models."""
+        # PhysNet must have charges=True to predict atomic charges
+        self.physnet = EF(**self.physnet_config)
+        self.dcmnet = MessagePassingModel(**self.dcmnet_config)
+    
+    @nn.compact
+    def __call__(
+        self,
+        atomic_numbers: jnp.ndarray,
+        positions: jnp.ndarray,
+        dst_idx: jnp.ndarray,
+        src_idx: jnp.ndarray,
+        batch_segments: jnp.ndarray,
+        batch_size: int,
+        batch_mask: jnp.ndarray,
+        atom_mask: jnp.ndarray,
+    ) -> Dict[str, jnp.ndarray]:
+        """
+        Forward pass through both models.
+        
+        Parameters
+        ----------
+        atomic_numbers : jnp.ndarray
+            Atomic numbers, shape (batch_size * natoms,)
+        positions : jnp.ndarray
+            Atomic positions, shape (batch_size * natoms, 3)
+        dst_idx : jnp.ndarray
+            Destination indices for edges
+        src_idx : jnp.ndarray
+            Source indices for edges
+        batch_segments : jnp.ndarray
+            Batch segment indices
+        batch_size : int
+            Batch size
+        batch_mask : jnp.ndarray
+            Batch mask
+        atom_mask : jnp.ndarray
+            Atom mask
+            
+        Returns
+        -------
+        Dict[str, jnp.ndarray]
+            Dictionary containing:
+            - energy, forces, dipoles, charges (from PhysNet)
+            - mono_dist, dipo_dist (from DCMNet)
+            - charges_as_mono (charges formatted for monopole loss)
+        """
+        # 1. PhysNet forward pass: predict E, F, D, and atomic charges
+        physnet_output = self.physnet(
+            atomic_numbers=atomic_numbers,
+            positions=positions,
+            dst_idx=dst_idx,
+            src_idx=src_idx,
+            batch_segments=batch_segments,
+            batch_size=batch_size,
+            batch_mask=batch_mask,
+            atom_mask=atom_mask,
+        )
+        
+        # 2. Extract and reshape charges for DCMNet
+        # PhysNet charges shape: (batch*natoms, 1, 1, 1)
+        charges = physnet_output["charges"]
+        charges_squeezed = jnp.squeeze(charges)  # (batch*natoms,)
+        
+        # 3. DCMNet forward pass: predict distributed multipoles
+        # DCMNet uses charges as the monopole constraint
+        mono_dist, dipo_dist = self.dcmnet(
+            atomic_numbers=atomic_numbers,
+            positions=positions,
+            dst_idx=dst_idx,
+            src_idx=src_idx,
+            batch_segments=batch_segments,
+            batch_size=batch_size,
+        )
+        
+        # 4. Return all outputs for loss computation
+        return {
+            # PhysNet outputs
+            "energy": physnet_output["energy"],
+            "forces": physnet_output["forces"],
+            "dipoles": physnet_output["dipoles"],
+            "charges": charges,
+            "sum_charges": physnet_output.get("sum_charges", jnp.sum(charges_squeezed)),
+            # DCMNet outputs
+            "mono_dist": mono_dist,  # (batch*natoms, n_dcm)
+            "dipo_dist": dipo_dist,  # (batch*natoms, n_dcm, 3)
+            # For monopole constraint loss
+            "charges_as_mono": charges_squeezed,  # (batch*natoms,)
+        }
+
+
+def load_combined_data(efd_file: Path, esp_file: Path, verbose: bool = False) -> Dict[str, np.ndarray]:
+    """
+    Load and combine EFD and ESP data from separate NPZ files.
+    
+    Parameters
+    ----------
+    efd_file : Path
+        Path to energies_forces_dipoles NPZ file
+    esp_file : Path
+        Path to grids_esp NPZ file
+    verbose : bool
+        Whether to print loading information
+        
+    Returns
+    -------
+    Dict[str, np.ndarray]
+        Combined data dictionary with all fields
+    """
+    if verbose:
+        print(f"  Loading EFD: {efd_file}")
+    efd_data = np.load(efd_file)
+    
+    if verbose:
+        print(f"  Loading ESP: {esp_file}")
+    esp_data = np.load(esp_file)
+    
+    # Combine data - ESP file should have R, Z, N as well
+    combined = {
+        # Molecular properties
+        'R': esp_data['R'],
+        'Z': esp_data['Z'],
+        'N': esp_data['N'],
+        'E': efd_data['E'],
+        'F': efd_data['F'],
+        'Dxyz': efd_data.get('Dxyz', efd_data.get('D')),
+        # ESP properties
+        'esp': esp_data['esp'],
+        'vdw_surface': esp_data['vdw_surface'],
+    }
+    
+    if verbose:
+        print(f"  Combined data shapes:")
+        for key, val in combined.items():
+            print(f"    {key}: {val.shape}")
+    
+    return combined
+
+
+def prepare_batch_data(
+    data: Dict[str, np.ndarray],
+    indices: np.ndarray,
+    cutoff: float = 6.0,
+    verbose: bool = False,
+) -> Dict[str, jnp.ndarray]:
+    """
+    Prepare a batch of data with edge lists.
+    
+    Parameters
+    ----------
+    data : Dict[str, np.ndarray]
+        Full dataset
+    indices : np.ndarray
+        Indices for this batch
+    cutoff : float
+        Cutoff distance for edge list construction
+    verbose : bool
+        Print debugging information
+        
+    Returns
+    -------
+    Dict[str, jnp.ndarray]
+        Batch with edge lists and masks
+    """
+    batch_size = len(indices)
+    
+    # Extract batch data
+    R = data['R'][indices]  # (batch_size, natoms, 3)
+    Z = data['Z'][indices]  # (batch_size, natoms)
+    N = data['N'][indices]  # (batch_size,)
+    E = data['E'][indices]  # (batch_size,)
+    F = data['F'][indices]  # (batch_size, natoms, 3)
+    D = data['Dxyz'][indices]  # (batch_size, 3)
+    esp = data['esp'][indices]  # (batch_size, ngrid)
+    vdw_surface = data['vdw_surface'][indices]  # (batch_size, ngrid, 3)
+    
+    # Create masks
+    natoms = R.shape[1]
+    atom_mask = np.zeros((batch_size, natoms), dtype=np.float32)
+    for i, n in enumerate(N):
+        atom_mask[i, :n] = 1.0
+    
+    batch_mask = np.ones(batch_size, dtype=np.float32)
+    
+    # Flatten batch dimension for edge list construction
+    R_flat = R.reshape(-1, 3)
+    Z_flat = Z.reshape(-1)
+    
+    # Create batch segments
+    batch_segments = np.repeat(np.arange(batch_size), natoms)
+    
+    # Construct edge lists (within cutoff, respecting batch boundaries)
+    dst_idx_list = []
+    src_idx_list = []
+    
+    for batch_idx in range(batch_size):
+        start_idx = batch_idx * natoms
+        end_idx = start_idx + int(N[batch_idx])
+        
+        # Get positions for this molecule
+        pos = R[batch_idx, :int(N[batch_idx])]
+        
+        # Compute pairwise distances
+        for i in range(int(N[batch_idx])):
+            for j in range(int(N[batch_idx])):
+                if i != j:
+                    dist = np.linalg.norm(pos[i] - pos[j])
+                    if dist < cutoff:
+                        dst_idx_list.append(start_idx + i)
+                        src_idx_list.append(start_idx + j)
+    
+    dst_idx = np.array(dst_idx_list, dtype=np.int32)
+    src_idx = np.array(src_idx_list, dtype=np.int32)
+    
+    return {
+        'R': jnp.array(R_flat),
+        'Z': jnp.array(Z_flat),
+        'N': jnp.array(N),
+        'E': jnp.array(E),
+        'F': jnp.array(F.reshape(-1, 3)),
+        'D': jnp.array(D),
+        'esp': jnp.array(esp),
+        'vdw_surface': jnp.array(vdw_surface),
+        'atom_mask': jnp.array(atom_mask.reshape(-1)),
+        'batch_mask': jnp.array(batch_mask),
+        'batch_segments': jnp.array(batch_segments),
+        'dst_idx': jnp.array(dst_idx),
+        'src_idx': jnp.array(src_idx),
+    }
+
+
+@functools.partial(jax.jit, static_argnames=('batch_size', 'n_dcm'))
+def compute_loss(
+    output: Dict[str, jnp.ndarray],
+    batch: Dict[str, jnp.ndarray],
+    energy_w: float,
+    forces_w: float,
+    dipole_w: float,
+    esp_w: float,
+    mono_w: float,
+    batch_size: int,
+    n_dcm: int,
+) -> Tuple[jnp.ndarray, Dict[str, jnp.ndarray]]:
+    """
+    Compute joint loss for PhysNet and DCMNet.
+    
+    Parameters
+    ----------
+    output : Dict[str, jnp.ndarray]
+        Model outputs
+    batch : Dict[str, jnp.ndarray]
+        Batch data
+    energy_w, forces_w, dipole_w, esp_w, mono_w : float
+        Loss weights
+    batch_size : int
+        Batch size
+    n_dcm : int
+        Number of distributed multipoles per atom
+        
+    Returns
+    -------
+    Tuple[jnp.ndarray, Dict[str, jnp.ndarray]]
+        Total loss and individual loss components
+    """
+    # PhysNet losses
+    loss_energy = optax.l2_loss(output["energy"], batch["E"]).mean()
+    
+    # Forces loss (only for real atoms)
+    forces_masked = output["forces"] * batch["atom_mask"][:, None]
+    forces_target_masked = batch["F"] * batch["atom_mask"][:, None]
+    loss_forces = optax.l2_loss(forces_masked, forces_target_masked).mean()
+    
+    # Dipole loss
+    loss_dipole = optax.l2_loss(output["dipoles"], batch["D"]).mean()
+    
+    # DCMNet losses
+    # ESP loss - compute ESP from distributed multipoles
+    # Need to reshape for calc_esp
+    natoms = output["mono_dist"].shape[0] // batch_size
+    
+    # Reshape distributed multipoles
+    mono_reshaped = output["mono_dist"].reshape(batch_size, natoms, n_dcm)
+    dipo_reshaped = output["dipo_dist"].reshape(batch_size, natoms, n_dcm, 3)
+    
+    # For batch_size=1, calc_esp expects single molecule
+    if batch_size == 1:
+        mono_for_esp = mono_reshaped[0]  # (natoms, n_dcm)
+        dipo_for_esp = dipo_reshaped[0]  # (natoms, n_dcm, 3)
+        vdw_for_esp = batch["vdw_surface"][0]  # (ngrid, 3)
+        esp_target = batch["esp"][0]  # (ngrid,)
+        
+        # Flatten distributed charges: (natoms*n_dcm,)
+        mono_flat = mono_for_esp.reshape(-1)
+        # Reshape dipoles: (natoms*n_dcm, 3)
+        dipo_flat = jnp.moveaxis(dipo_for_esp, -1, -2).reshape(-1, 3)
+        
+        # Compute ESP
+        esp_pred = calc_esp(dipo_flat, mono_flat, vdw_for_esp)
+        loss_esp = optax.l2_loss(esp_pred, esp_target).mean()
+    else:
+        # For batched, need to loop (or use vmap)
+        def single_esp_loss(mono_mol, dipo_mol, vdw_mol, esp_mol):
+            mono_flat = mono_mol.reshape(-1)
+            dipo_flat = jnp.moveaxis(dipo_mol, -1, -2).reshape(-1, 3)
+            esp_pred = calc_esp(dipo_flat, mono_flat, vdw_mol)
+            return optax.l2_loss(esp_pred, esp_mol).mean()
+        
+        esp_losses = jax.vmap(single_esp_loss)(
+            mono_reshaped, dipo_reshaped, batch["vdw_surface"], batch["esp"]
+        )
+        loss_esp = esp_losses.mean()
+    
+    # Monopole constraint: sum of distributed charges should equal PhysNet charge
+    # mono_dist shape: (batch*natoms, n_dcm)
+    mono_sum = output["mono_dist"].sum(axis=-1)  # (batch*natoms,)
+    charges_target = output["charges_as_mono"]  # (batch*natoms,)
+    
+    # Only compute loss for real atoms
+    mono_sum_masked = mono_sum * batch["atom_mask"]
+    charges_masked = charges_target * batch["atom_mask"]
+    loss_mono = optax.l2_loss(mono_sum_masked, charges_masked).mean()
+    
+    # Total loss
+    total_loss = (
+        energy_w * loss_energy +
+        forces_w * loss_forces +
+        dipole_w * loss_dipole +
+        esp_w * loss_esp +
+        mono_w * loss_mono
+    )
+    
+    losses = {
+        "total": total_loss,
+        "energy": loss_energy,
+        "forces": loss_forces,
+        "dipole": loss_dipole,
+        "esp": loss_esp,
+        "monopole": loss_mono,
+    }
+    
+    return total_loss, losses
+
+
+@functools.partial(jax.jit, static_argnames=('model_apply', 'optimizer_update', 'batch_size', 'n_dcm'))
+def train_step(
+    params: Any,
+    opt_state: Any,
+    batch: Dict[str, jnp.ndarray],
+    model_apply: Any,
+    optimizer_update: Any,
+    energy_w: float,
+    forces_w: float,
+    dipole_w: float,
+    esp_w: float,
+    mono_w: float,
+    batch_size: int,
+    n_dcm: int,
+) -> Tuple[Any, Any, jnp.ndarray, Dict[str, jnp.ndarray]]:
+    """
+    Single training step with gradient computation.
+    
+    Returns
+    -------
+    Tuple
+        (updated_params, updated_opt_state, total_loss, loss_dict)
+    """
+    def loss_fn(params):
+        output = model_apply(
+            params,
+            atomic_numbers=batch["Z"],
+            positions=batch["R"],
+            dst_idx=batch["dst_idx"],
+            src_idx=batch["src_idx"],
+            batch_segments=batch["batch_segments"],
+            batch_size=batch_size,
+            batch_mask=batch["batch_mask"],
+            atom_mask=batch["atom_mask"],
+        )
+        total_loss, losses = compute_loss(
+            output, batch, energy_w, forces_w, dipole_w, esp_w, mono_w, batch_size, n_dcm
+        )
+        return total_loss, (output, losses)
+    
+    (loss, (output, losses)), grads = jax.value_and_grad(loss_fn, has_aux=True)(params)
+    
+    # Update parameters
+    updates, opt_state = optimizer_update(grads, opt_state, params)
+    params = optax.apply_updates(params, updates)
+    
+    return params, opt_state, loss, losses
+
+
+@functools.partial(jax.jit, static_argnames=('model_apply', 'batch_size', 'n_dcm'))
+def eval_step(
+    params: Any,
+    batch: Dict[str, jnp.ndarray],
+    model_apply: Any,
+    energy_w: float,
+    forces_w: float,
+    dipole_w: float,
+    esp_w: float,
+    mono_w: float,
+    batch_size: int,
+    n_dcm: int,
+) -> Tuple[jnp.ndarray, Dict[str, jnp.ndarray], Dict[str, jnp.ndarray]]:
+    """
+    Evaluation step without gradient computation.
+    
+    Returns
+    -------
+    Tuple
+        (total_loss, loss_dict, output_dict)
+    """
+    output = model_apply(
+        params,
+        atomic_numbers=batch["Z"],
+        positions=batch["R"],
+        dst_idx=batch["dst_idx"],
+        src_idx=batch["src_idx"],
+        batch_segments=batch["batch_segments"],
+        batch_size=batch_size,
+        batch_mask=batch["batch_mask"],
+        atom_mask=batch["atom_mask"],
+    )
+    
+    total_loss, losses = compute_loss(
+        output, batch, energy_w, forces_w, dipole_w, esp_w, mono_w, batch_size, n_dcm
+    )
+    
+    # Compute MAE metrics
+    mae_energy = jnp.abs(output["energy"] - batch["E"]).mean()
+    mae_forces = jnp.abs(output["forces"] * batch["atom_mask"][:, None] - 
+                         batch["F"] * batch["atom_mask"][:, None]).mean()
+    mae_dipole = jnp.abs(output["dipoles"] - batch["D"]).mean()
+    
+    losses["mae_energy"] = mae_energy
+    losses["mae_forces"] = mae_forces
+    losses["mae_dipole"] = mae_dipole
+    
+    return total_loss, losses, output
+
+
+def train_model(
+    model: JointPhysNetDCMNet,
+    train_data: Dict[str, np.ndarray],
+    valid_data: Dict[str, np.ndarray],
+    num_epochs: int,
+    batch_size: int,
+    learning_rate: float,
+    energy_w: float,
+    forces_w: float,
+    dipole_w: float,
+    esp_w: float,
+    mono_w: float,
+    n_dcm: int,
+    cutoff: float,
+    seed: int,
+    ckpt_dir: Path,
+    name: str,
+    print_freq: int = 1,
+) -> Any:
+    """
+    Main training loop.
+    
+    Returns
+    -------
+    Any
+        Final model parameters
+    """
+    # Initialize model
+    key = jax.random.PRNGKey(seed)
+    key, init_key = jax.random.split(key)
+    
+    # Create dummy batch for initialization
+    dummy_batch = prepare_batch_data(train_data, np.array([0]), cutoff=cutoff)
+    
+    # Initialize parameters
+    print("\nInitializing model parameters...")
+    params = model.init(
+        init_key,
+        atomic_numbers=dummy_batch["Z"],
+        positions=dummy_batch["R"],
+        dst_idx=dummy_batch["dst_idx"],
+        src_idx=dummy_batch["src_idx"],
+        batch_segments=dummy_batch["batch_segments"],
+        batch_size=1,
+        batch_mask=dummy_batch["batch_mask"],
+        atom_mask=dummy_batch["atom_mask"],
+    )
+    
+    # Setup optimizer
+    optimizer = optax.adam(learning_rate)
+    opt_state = optimizer.init(params)
+    
+    print(f"✅ Model initialized with {sum(x.size for x in jax.tree_util.tree_leaves(params))} parameters")
+    
+    # Prepare training indices
+    n_train = len(train_data['E'])
+    n_valid = len(valid_data['E'])
+    
+    print(f"\nTraining samples: {n_train}")
+    print(f"Validation samples: {n_valid}")
+    print(f"Batch size: {batch_size}")
+    
+    # Training loop
+    best_valid_loss = float('inf')
+    
+    for epoch in range(1, num_epochs + 1):
+        epoch_start = time.time()
+        
+        # Shuffle training data
+        key, shuffle_key = jax.random.split(key)
+        train_indices = jax.random.permutation(shuffle_key, n_train)
+        
+        # Training phase
+        train_losses = []
+        n_batches = (n_train + batch_size - 1) // batch_size
+        
+        for batch_idx in range(n_batches):
+            start_idx = batch_idx * batch_size
+            end_idx = min(start_idx + batch_size, n_train)
+            batch_indices = train_indices[start_idx:end_idx]
+            
+            # Prepare batch
+            batch = prepare_batch_data(
+                train_data, 
+                np.array(batch_indices), 
+                cutoff=cutoff
+            )
+            
+            # Training step
+            params, opt_state, loss, losses = train_step(
+                params=params,
+                opt_state=opt_state,
+                batch=batch,
+                model_apply=model.apply,
+                optimizer_update=optimizer.update,
+                energy_w=energy_w,
+                forces_w=forces_w,
+                dipole_w=dipole_w,
+                esp_w=esp_w,
+                mono_w=mono_w,
+                batch_size=len(batch_indices),
+                n_dcm=n_dcm,
+            )
+            
+            train_losses.append({k: float(v) for k, v in losses.items()})
+        
+        # Average training losses
+        train_loss_avg = {
+            k: np.mean([loss[k] for loss in train_losses])
+            for k in train_losses[0].keys()
+        }
+        
+        # Validation phase
+        valid_losses = []
+        n_valid_batches = (n_valid + batch_size - 1) // batch_size
+        
+        for batch_idx in range(n_valid_batches):
+            start_idx = batch_idx * batch_size
+            end_idx = min(start_idx + batch_size, n_valid)
+            batch_indices = np.arange(start_idx, end_idx)
+            
+            batch = prepare_batch_data(
+                valid_data,
+                batch_indices,
+                cutoff=cutoff
+            )
+            
+            _, losses, _ = eval_step(
+                params=params,
+                batch=batch,
+                model_apply=model.apply,
+                energy_w=energy_w,
+                forces_w=forces_w,
+                dipole_w=dipole_w,
+                esp_w=esp_w,
+                mono_w=mono_w,
+                batch_size=len(batch_indices),
+                n_dcm=n_dcm,
+            )
+            
+            valid_losses.append({k: float(v) for k, v in losses.items()})
+        
+        # Average validation losses
+        valid_loss_avg = {
+            k: np.mean([loss[k] for loss in valid_losses])
+            for k in valid_losses[0].keys()
+        }
+        
+        epoch_time = time.time() - epoch_start
+        
+        # Print progress
+        if epoch % print_freq == 0:
+            print(f"\nEpoch {epoch}/{num_epochs} ({epoch_time:.1f}s)")
+            print(f"  Train Loss: {train_loss_avg['total']:.6f}")
+            print(f"    Energy: {train_loss_avg['energy']:.6f}")
+            print(f"    Forces: {train_loss_avg['forces']:.6f}")
+            print(f"    Dipole: {train_loss_avg['dipole']:.6f}")
+            print(f"    ESP: {train_loss_avg['esp']:.6f}")
+            print(f"    Monopole: {train_loss_avg['monopole']:.6f}")
+            print(f"  Valid Loss: {valid_loss_avg['total']:.6f}")
+            if 'mae_energy' in valid_loss_avg:
+                print(f"    MAE Energy: {valid_loss_avg['mae_energy']:.6f} eV")
+                print(f"    MAE Forces: {valid_loss_avg['mae_forces']:.6f} eV/Å")
+                print(f"    MAE Dipole: {valid_loss_avg['mae_dipole']:.6f} D")
+        
+        # Save best model
+        if valid_loss_avg['total'] < best_valid_loss:
+            best_valid_loss = valid_loss_avg['total']
+            save_path = ckpt_dir / name
+            save_path.mkdir(exist_ok=True, parents=True)
+            
+            with open(save_path / 'best_params.pkl', 'wb') as f:
+                pickle.dump(params, f)
+            
+            print(f"  💾 Saved best model (valid_loss: {best_valid_loss:.6f})")
+    
+    return params
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Joint PhysNet-DCMNet training for CO2 data",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+    
+    # Data arguments
+    parser.add_argument('--train-efd', type=Path, required=True,
+                       help='Training energies/forces/dipoles NPZ file')
+    parser.add_argument('--train-esp', type=Path, required=True,
+                       help='Training ESP grids NPZ file')
+    parser.add_argument('--valid-efd', type=Path, required=True,
+                       help='Validation energies/forces/dipoles NPZ file')
+    parser.add_argument('--valid-esp', type=Path, required=True,
+                       help='Validation ESP grids NPZ file')
+    
+    # PhysNet hyperparameters
+    parser.add_argument('--physnet-features', type=int, default=64,
+                       help='PhysNet: number of features')
+    parser.add_argument('--physnet-iterations', type=int, default=5,
+                       help='PhysNet: message passing iterations')
+    parser.add_argument('--physnet-basis', type=int, default=64,
+                       help='PhysNet: number of basis functions')
+    parser.add_argument('--physnet-cutoff', type=float, default=6.0,
+                       help='PhysNet: cutoff distance (Angstroms)')
+    parser.add_argument('--physnet-n-res', type=int, default=3,
+                       help='PhysNet: number of residual blocks')
+    
+    # DCMNet hyperparameters
+    parser.add_argument('--dcmnet-features', type=int, default=32,
+                       help='DCMNet: number of features')
+    parser.add_argument('--dcmnet-iterations', type=int, default=2,
+                       help='DCMNet: message passing iterations')
+    parser.add_argument('--dcmnet-basis', type=int, default=32,
+                       help='DCMNet: number of basis functions')
+    parser.add_argument('--dcmnet-cutoff', type=float, default=10.0,
+                       help='DCMNet: cutoff distance (Angstroms)')
+    parser.add_argument('--n-dcm', type=int, default=3,
+                       help='DCMNet: distributed multipoles per atom')
+    parser.add_argument('--max-degree', type=int, default=2,
+                       help='DCMNet: maximum spherical harmonic degree')
+    
+    # Training hyperparameters
+    parser.add_argument('--batch-size', type=int, default=1,
+                       help='Batch size (start with 1 for debugging)')
+    parser.add_argument('--epochs', type=int, default=100,
+                       help='Number of epochs')
+    parser.add_argument('--learning-rate', '--lr', type=float, default=0.001,
+                       help='Learning rate')
+    parser.add_argument('--seed', type=int, default=42,
+                       help='Random seed')
+    
+    # Loss weights
+    parser.add_argument('--energy-weight', type=float, default=1.0,
+                       help='Energy loss weight')
+    parser.add_argument('--forces-weight', type=float, default=50.0,
+                       help='Forces loss weight')
+    parser.add_argument('--dipole-weight', type=float, default=25.0,
+                       help='Dipole loss weight')
+    parser.add_argument('--esp-weight', type=float, default=10000.0,
+                       help='ESP loss weight')
+    parser.add_argument('--mono-weight', type=float, default=1.0,
+                       help='Monopole constraint loss weight')
+    
+    # General options
+    parser.add_argument('--natoms', type=int, default=60,
+                       help='Maximum number of atoms')
+    parser.add_argument('--max-atomic-number', type=int, default=118,
+                       help='Maximum atomic number')
+    parser.add_argument('--name', type=str, default='co2_joint_physnet_dcmnet',
+                       help='Experiment name')
+    parser.add_argument('--ckpt-dir', type=Path, default=None,
+                       help='Checkpoint directory')
+    parser.add_argument('--print-freq', type=int, default=1,
+                       help='Print frequency (epochs)')
+    parser.add_argument('--verbose', action='store_true', default=True,
+                       help='Verbose output')
+    
+    args = parser.parse_args()
+    
+    print("="*70)
+    print("Joint PhysNet-DCMNet Training - CO2 Data")
+    print("="*70)
+    
+    # Validate input files
+    for name, path in [
+        ('Train EFD', args.train_efd),
+        ('Train ESP', args.train_esp),
+        ('Valid EFD', args.valid_efd),
+        ('Valid ESP', args.valid_esp),
+    ]:
+        if not path.exists():
+            print(f"❌ Error: {name} file not found: {path}")
+            sys.exit(1)
+    
+    print(f"\n📁 Data Files:")
+    print(f"  Train EFD:  {args.train_efd}")
+    print(f"  Train ESP:  {args.train_esp}")
+    print(f"  Valid EFD:  {args.valid_efd}")
+    print(f"  Valid ESP:  {args.valid_esp}")
+    
+    # Setup checkpoint directory
+    if args.ckpt_dir is None:
+        ckpt_dir = BASE_CKPT_DIR
+    else:
+        ckpt_dir = args.ckpt_dir
+    ckpt_dir.mkdir(exist_ok=True, parents=True)
+    
+    print(f"  Checkpoints: {ckpt_dir / args.name}")
+    
+    # Load data
+    print(f"\n{'#'*70}")
+    print("# Loading Data")
+    print(f"{'#'*70}\n")
+    
+    print("Loading training data...")
+    train_data = load_combined_data(args.train_efd, args.train_esp, verbose=args.verbose)
+    
+    print("\nLoading validation data...")
+    valid_data = load_combined_data(args.valid_efd, args.valid_esp, verbose=args.verbose)
+    
+    print(f"\n✅ Data loaded:")
+    print(f"  Training samples: {len(train_data['E'])}")
+    print(f"  Validation samples: {len(valid_data['E'])}")
+    
+    # Build models
+    print(f"\n{'#'*70}")
+    print("# Building Joint Model")
+    print(f"{'#'*70}\n")
+    
+    physnet_config = {
+        'features': args.physnet_features,
+        'max_degree': 0,  # PhysNet typically uses degree 0
+        'num_iterations': args.physnet_iterations,
+        'num_basis_functions': args.physnet_basis,
+        'cutoff': args.physnet_cutoff,
+        'max_atomic_number': args.max_atomic_number,
+        'charges': True,  # MUST be True for charge prediction
+        'natoms': args.natoms,
+        'total_charge': 0.0,
+        'n_res': args.physnet_n_res,
+        'zbl': False,
+        'use_energy_bias': True,
+        'debug': False,
+        'efa': False,
+    }
+    
+    dcmnet_config = {
+        'features': args.dcmnet_features,
+        'max_degree': args.max_degree,
+        'num_iterations': args.dcmnet_iterations,
+        'num_basis_functions': args.dcmnet_basis,
+        'cutoff': args.dcmnet_cutoff,
+        'max_atomic_number': args.max_atomic_number,
+        'n_dcm': args.n_dcm,
+        'include_pseudotensors': False,
+    }
+    
+    print("PhysNet configuration:")
+    for k, v in physnet_config.items():
+        print(f"  {k}: {v}")
+    
+    print("\nDCMNet configuration:")
+    for k, v in dcmnet_config.items():
+        print(f"  {k}: {v}")
+    
+    model = JointPhysNetDCMNet(
+        physnet_config=physnet_config,
+        dcmnet_config=dcmnet_config,
+    )
+    
+    print(f"\n✅ Joint model created")
+    
+    # Training setup
+    print(f"\n{'#'*70}")
+    print("# Training Setup")
+    print(f"{'#'*70}\n")
+    
+    print(f"Training hyperparameters:")
+    print(f"  Batch size: {args.batch_size}")
+    print(f"  Epochs: {args.epochs}")
+    print(f"  Learning rate: {args.learning_rate}")
+    print(f"  Random seed: {args.seed}")
+    
+    print(f"\nLoss weights:")
+    print(f"  Energy: {args.energy_weight}")
+    print(f"  Forces: {args.forces_weight}")
+    print(f"  Dipole: {args.dipole_weight}")
+    print(f"  ESP: {args.esp_weight}")
+    print(f"  Monopole constraint: {args.mono_weight}")
+    
+    # Start training
+    print(f"\n{'='*70}")
+    print("STARTING TRAINING")
+    print(f"{'='*70}\n")
+    
+    try:
+        final_params = train_model(
+            model=model,
+            train_data=train_data,
+            valid_data=valid_data,
+            num_epochs=args.epochs,
+            batch_size=args.batch_size,
+            learning_rate=args.learning_rate,
+            energy_w=args.energy_weight,
+            forces_w=args.forces_weight,
+            dipole_w=args.dipole_weight,
+            esp_w=args.esp_weight,
+            mono_w=args.mono_weight,
+            n_dcm=args.n_dcm,
+            cutoff=max(args.physnet_cutoff, args.dcmnet_cutoff),
+            seed=args.seed,
+            ckpt_dir=ckpt_dir,
+            name=args.name,
+            print_freq=args.print_freq,
+        )
+        
+        print(f"\n{'='*70}")
+        print("✅ TRAINING COMPLETE!")
+        print(f"{'='*70}")
+        print(f"\nFinal parameters saved to: {ckpt_dir / args.name}")
+        
+    except KeyboardInterrupt:
+        print(f"\n\n⚠️  Training interrupted by user")
+        print(f"Checkpoints saved to: {ckpt_dir / args.name}")
+        sys.exit(0)
+    except Exception as e:
+        print(f"\n\n❌ Training failed with error:")
+        print(f"  {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
