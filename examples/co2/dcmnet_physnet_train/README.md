@@ -99,6 +99,24 @@ Start with balanced weights (all 1.0) and adjust based on loss magnitudes:
 - `--esp-weight`: ESP loss weight (default: 10000.0)
 - `--mono-weight`: Monopole constraint weight (default: 1.0)
 
+### Dipole Source
+Choose which dipole to use for the dipole loss:
+- `--dipole-source physnet` (default): Use PhysNet's dipole computed from charges (D = Σ q_i · r_i)
+- `--dipole-source dcmnet`: Use DCMNet's dipole computed from distributed multipoles
+
+**PhysNet dipole**: Direct from atomic charges and positions. Provides direct supervision for charge prediction.
+
+**DCMNet dipole**: From distributed multipoles. Tests if DCMNet's multipole decomposition is physically consistent with the molecular dipole.
+
+Example comparing both:
+```bash
+# Train with PhysNet dipole (default - supervise charges)
+python trainer.py ... --dipole-source physnet
+
+# Train with DCMNet dipole (supervise multipole decomposition)
+python trainer.py ... --dipole-source dcmnet
+```
+
 ## Visualization
 
 Create validation plots after training with `--plot-results`:
@@ -127,7 +145,7 @@ Options:
 
 Plots are saved to: `{checkpoint_dir}/{experiment_name}/plots/`
 
-**Example:**
+**Plotting After Training:**
 ```bash
 python trainer.py \
   --train-efd ../physnet_train_charges/energies_forces_dipoles_train.npz \
@@ -140,6 +158,123 @@ python trainer.py \
   --plot-esp-examples 5
 ```
 
-This will create:
+This creates plots **once after training completes**:
 - `validation_scatter.png`: 4 scatter plots
 - `esp_example_0.png` through `esp_example_4.png`: Detailed ESP visualizations
+
+**Plotting During Training:**
+```bash
+python trainer.py \
+  --train-efd ../physnet_train_charges/energies_forces_dipoles_train.npz \
+  --train-esp ../dcmnet_train/grids_esp_train.npz \
+  --valid-efd ../physnet_train_charges/energies_forces_dipoles_valid.npz \
+  --valid-esp ../dcmnet_train/grids_esp_valid.npz \
+  --epochs 100 \
+  --plot-freq 10 \
+  --plot-samples 100 \
+  --plot-esp-examples 2
+```
+
+This creates plots **every 10 epochs during training**:
+- `validation_scatter_epoch10.png`, `validation_scatter_epoch20.png`, etc.
+- `esp_example_0_epoch10.png`, `esp_example_1_epoch10.png`, etc.
+
+This allows you to monitor training progress visually and see how predictions improve over time!
+
+## ASE Calculator and Applications
+
+The `ase_calculator.py` script creates an ASE calculator from the trained joint model for downstream applications.
+
+### Features
+
+1. **Geometry Optimization**: Optimize molecular structures with PhysNet forces
+2. **Vibrational Frequencies**: Compute normal modes via numerical Hessian
+3. **IR Spectra**: Calculate IR intensities from dipole derivatives (both PhysNet and DCMNet)
+4. **Dipole Comparison**: Compare dipoles from atomic charges vs distributed multipoles
+
+### Usage
+
+**Full workflow (optimization + frequencies + IR):**
+```bash
+python ase_calculator.py \
+  --checkpoint mmml/physnetjax/ckpts/co2_joint_physnet_dcmnet/best_params.pkl \
+  --molecule co2 \
+  --optimize \
+  --frequencies \
+  --ir-spectra \
+  --output-dir ase_results/co2
+```
+
+**Just optimization:**
+```bash
+python ase_calculator.py \
+  --checkpoint path/to/best_params.pkl \
+  --molecule co2 \
+  --optimize \
+  --fmax 0.01
+```
+
+**Just frequencies:**
+```bash
+python ase_calculator.py \
+  --checkpoint path/to/best_params.pkl \
+  --molecule co2 \
+  --frequencies
+```
+
+### Output
+
+**Geometry Optimization:**
+- Initial and final structures
+- Optimization trajectory log
+- Optimized geometry in XYZ format
+
+**Frequency Calculation:**
+- Vibrational frequencies (cm⁻¹)
+- Normal modes
+- Identification of imaginary/real modes
+
+**IR Spectra:**
+- `ir_spectrum_physnet.png`: IR from PhysNet dipole (charges × positions)
+- `ir_spectrum_dcmnet.png`: IR from DCMNet dipole (distributed multipoles)
+- `ir_spectrum_comparison.png`: Side-by-side comparison
+- Stick and broadened spectra for both methods
+
+### IR Spectrum Comparison
+
+The script computes IR intensities using dipole derivatives:
+
+**PhysNet IR:**
+- Dipole from atomic charges: μ = Σ q_i · r_i
+- Direct charge-based dipole moment
+
+**DCMNet IR:**
+- Dipole from distributed multipoles: μ = Σ Σ q_ij · r_ij
+- More accurate multipole-based dipole
+
+**Comparison shows:**
+- Whether distributed multipoles improve IR predictions
+- Consistency between charge-based and multipole-based approaches
+- Differences in predicted intensities
+
+### Example for CO2
+
+```bash
+# Train model first
+python trainer.py --train-efd ... --epochs 100 --name co2_joint
+
+# Then run ASE calculations
+python ase_calculator.py \
+  --checkpoint mmml/physnetjax/ckpts/co2_joint/best_params.pkl \
+  --molecule co2 \
+  --optimize \
+  --frequencies \
+  --ir-spectra \
+  --output-dir co2_analysis
+```
+
+Expected output:
+- Optimized CO2 geometry (linear)
+- 4 vibrational modes (3 real: symmetric stretch, asymmetric stretch, 2× bend)
+- IR spectrum with characteristic CO2 peaks
+- Comparison showing both dipole methods

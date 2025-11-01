@@ -469,7 +469,7 @@ def prepare_batch_data(
     }
 
 
-@functools.partial(jax.jit, static_argnames=('batch_size', 'n_dcm'))
+@functools.partial(jax.jit, static_argnames=('batch_size', 'n_dcm', 'dipole_source'))
 def compute_loss(
     output: Dict[str, jnp.ndarray],
     batch: Dict[str, jnp.ndarray],
@@ -480,6 +480,7 @@ def compute_loss(
     mono_w: float,
     batch_size: int,
     n_dcm: int,
+    dipole_source: str = 'physnet',
 ) -> Tuple[jnp.ndarray, Dict[str, jnp.ndarray]]:
     """
     Compute joint loss for PhysNet and DCMNet.
@@ -510,8 +511,26 @@ def compute_loss(
     forces_target_masked = batch["F"] * batch["atom_mask"][:, None]
     loss_forces = optax.l2_loss(forces_masked, forces_target_masked).mean()
     
-    # Dipole loss
-    loss_dipole = optax.l2_loss(output["dipoles"], batch["D"]).mean()
+    # Dipole loss - choose source
+    if dipole_source == 'physnet':
+        # Use PhysNet's dipole (from charges × positions)
+        dipole_pred = output["dipoles"]
+    elif dipole_source == 'dcmnet':
+        # Compute dipole from DCMNet distributed multipoles
+        # Dipole = Σ (q_i * r_i) for distributed charges
+        natoms = output["mono_dist"].shape[0] // batch_size
+        mono_reshaped = output["mono_dist"].reshape(batch_size, natoms, n_dcm)
+        dipo_reshaped = output["dipo_dist"].reshape(batch_size, natoms, n_dcm, 3)
+        
+        # For each molecule, compute dipole from distributed charges
+        # mono_reshaped: (batch, natoms, n_dcm) - charges
+        # dipo_reshaped: (batch, natoms, n_dcm, 3) - positions
+        # Dipole = Σ_atoms Σ_dcm (charge * position)
+        dipole_pred = jnp.sum(mono_reshaped[..., None] * dipo_reshaped, axis=(1, 2))  # (batch, 3)
+    else:
+        raise ValueError(f"Unknown dipole_source: {dipole_source}")
+    
+    loss_dipole = optax.l2_loss(dipole_pred, batch["D"]).mean()
     
     # DCMNet losses
     # ESP loss - compute ESP from distributed multipoles
@@ -550,7 +569,12 @@ def compute_loss(
         )
         loss_esp = esp_losses.mean()
     
-    # Monopole constraint: sum of distributed charges should equal PhysNet charge
+    # PhysNet total charge constraint: sum of charges should equal total_charge (0.0)
+    total_charge_pred = output.get("sum_charges", jnp.sum(output["charges_as_mono"] * batch["atom_mask"]))
+    total_charge_target = jnp.zeros_like(total_charge_pred)  # Should be 0.0 for neutral molecules
+    loss_total_charge = optax.l2_loss(total_charge_pred, total_charge_target).mean()
+    
+    # Monopole constraint: sum of distributed charges should equal PhysNet charge per atom
     # mono_dist shape: (batch*natoms, n_dcm)
     mono_sum = output["mono_dist"].sum(axis=-1)  # (batch*natoms,)
     charges_target = output["charges_as_mono"]  # (batch*natoms,)
@@ -566,7 +590,8 @@ def compute_loss(
         forces_w * loss_forces +
         dipole_w * loss_dipole +
         esp_w * loss_esp +
-        mono_w * loss_mono
+        mono_w * loss_mono +
+        mono_w * loss_total_charge  # Use same weight as monopole constraint
     )
     
     losses = {
@@ -576,12 +601,13 @@ def compute_loss(
         "dipole": loss_dipole,
         "esp": loss_esp,
         "monopole": loss_mono,
+        "total_charge": loss_total_charge,
     }
     
     return total_loss, losses
 
 
-@functools.partial(jax.jit, static_argnames=('model_apply', 'optimizer_update', 'batch_size', 'n_dcm', 'clip_norm'))
+@functools.partial(jax.jit, static_argnames=('model_apply', 'optimizer_update', 'batch_size', 'n_dcm', 'clip_norm', 'dipole_source'))
 def train_step(
     params: Any,
     opt_state: Any,
@@ -596,6 +622,7 @@ def train_step(
     batch_size: int,
     n_dcm: int,
     clip_norm: float = None,
+    dipole_source: str = 'physnet',
 ) -> Tuple[Any, Any, jnp.ndarray, Dict[str, jnp.ndarray]]:
     """
     Single training step with gradient computation and optional clipping.
@@ -618,7 +645,7 @@ def train_step(
             atom_mask=batch["atom_mask"],
         )
         total_loss, losses = compute_loss(
-            output, batch, energy_w, forces_w, dipole_w, esp_w, mono_w, batch_size, n_dcm
+            output, batch, energy_w, forces_w, dipole_w, esp_w, mono_w, batch_size, n_dcm, dipole_source
         )
         return total_loss, (output, losses)
     
@@ -641,7 +668,7 @@ def train_step(
     return params, opt_state, loss, losses
 
 
-@functools.partial(jax.jit, static_argnames=('model_apply', 'batch_size', 'n_dcm'))
+@functools.partial(jax.jit, static_argnames=('model_apply', 'batch_size', 'n_dcm', 'dipole_source'))
 def eval_step(
     params: Any,
     batch: Dict[str, jnp.ndarray],
@@ -653,6 +680,7 @@ def eval_step(
     mono_w: float,
     batch_size: int,
     n_dcm: int,
+    dipole_source: str = 'physnet',
 ) -> Tuple[jnp.ndarray, Dict[str, jnp.ndarray], Dict[str, jnp.ndarray]]:
     """
     Evaluation step without gradient computation.
@@ -675,18 +703,70 @@ def eval_step(
     )
     
     total_loss, losses = compute_loss(
-        output, batch, energy_w, forces_w, dipole_w, esp_w, mono_w, batch_size, n_dcm
+        output, batch, energy_w, forces_w, dipole_w, esp_w, mono_w, batch_size, n_dcm, dipole_source
     )
     
     # Compute MAE metrics
     mae_energy = jnp.abs(output["energy"] - batch["E"]).mean()
     mae_forces = jnp.abs(output["forces"] * batch["atom_mask"][:, None] - 
                          batch["F"] * batch["atom_mask"][:, None]).mean()
-    mae_dipole = jnp.abs(output["dipoles"] - batch["D"]).mean()
+    
+    # Compute MAE for BOTH dipole sources (regardless of which is used for loss)
+    # PhysNet dipole
+    mae_dipole_physnet = jnp.abs(output["dipoles"] - batch["D"]).mean()
+    
+    # DCMNet dipole
+    natoms = output["mono_dist"].shape[0] // batch_size
+    mono_reshaped = output["mono_dist"].reshape(batch_size, natoms, n_dcm)
+    dipo_reshaped = output["dipo_dist"].reshape(batch_size, natoms, n_dcm, 3)
+    dipole_dcmnet = jnp.sum(mono_reshaped[..., None] * dipo_reshaped, axis=(1, 2))
+    mae_dipole_dcmnet = jnp.abs(dipole_dcmnet - batch["D"]).mean()
+    
+    # Compute ESP RMSE for BOTH methods (only for batch_size == 1)
+    # For larger batches, this would need batched computation
+    # DCMNet ESP (from distributed multipoles)
+    mono_for_esp = mono_reshaped[0]  # (natoms, n_dcm)
+    dipo_for_esp = dipo_reshaped[0]  # (natoms, n_dcm, 3)
+    vdw_for_esp = batch["vdw_surface"][0]  # (ngrid, 3)
+    esp_target = batch["esp"][0]  # (ngrid,)
+    
+    # DCMNet ESP
+    mono_flat = mono_for_esp.reshape(-1)
+    dipo_flat = jnp.moveaxis(dipo_for_esp, -1, -2).reshape(-1, 3)
+    from mmml.dcmnet.dcmnet.electrostatics import calc_esp
+    esp_pred_dcmnet = calc_esp(dipo_flat, mono_flat, vdw_for_esp)
+    
+    # PhysNet ESP (from atomic charges on atom centers)
+    # Get charges and positions for first molecule in batch
+    charges_physnet = output["charges_as_mono"]  # (batch*natoms,)
+    positions_physnet = batch["R"]  # (batch*natoms, 3)
+    atom_mask_batch = batch["atom_mask"]  # (batch*natoms,)
+    
+    # For batch_size == 1: use first natoms atoms
+    # Apply mask to handle padding (padded atoms have charge 0)
+    charges_masked = charges_physnet[:natoms] * atom_mask_batch[:natoms]
+    positions_masked = positions_physnet[:natoms]  # (natoms, 3)
+    
+    # Compute ESP from point charges: V(r) = Σ q_i / |r - r_i|
+    # Vectorized computation over grid points
+    # grid: (ngrid, 3), positions: (natoms, 3)
+    # distances: (ngrid, natoms)
+    distances = jnp.linalg.norm(vdw_for_esp[:, None, :] - positions_masked[None, :, :], axis=2)
+    # ESP at each grid point: sum over atoms (padded atoms have charge=0 so don't contribute)
+    esp_pred_physnet = jnp.sum(charges_masked[None, :] / (distances + 1e-10), axis=1)
+    
+    # Compute RMSE for both
+    rmse_esp_dcmnet = jnp.sqrt(jnp.mean((esp_pred_dcmnet - esp_target)**2))
+    rmse_esp_physnet = jnp.sqrt(jnp.mean((esp_pred_physnet - esp_target)**2))
     
     losses["mae_energy"] = mae_energy
     losses["mae_forces"] = mae_forces
-    losses["mae_dipole"] = mae_dipole
+    losses["mae_dipole_physnet"] = mae_dipole_physnet
+    losses["mae_dipole_dcmnet"] = mae_dipole_dcmnet
+    losses["rmse_esp_physnet"] = rmse_esp_physnet
+    losses["rmse_esp_dcmnet"] = rmse_esp_dcmnet
+    # Keep backward compatibility
+    losses["mae_dipole"] = mae_dipole_physnet if dipole_source == 'physnet' else mae_dipole_dcmnet
     
     return total_loss, losses, output
 
@@ -705,6 +785,8 @@ def plot_validation_results(
     save_dir: Path,
     n_samples: int = 100,
     n_esp_examples: int = 2,
+    epoch: int = None,
+    dipole_source: str = 'physnet',
 ) -> None:
     """
     Create validation set plots: scatter plots and ESP examples.
@@ -734,11 +816,15 @@ def plot_validation_results(
         print("\n⚠️  Matplotlib not available, skipping plots")
         return
     
+    epoch_str = f" (Epoch {epoch})" if epoch is not None else ""
     print(f"\n{'#'*70}")
-    print("# Creating Validation Plots")
+    print(f"# Creating Validation Plots{epoch_str}")
     print(f"{'#'*70}\n")
     
     save_dir.mkdir(exist_ok=True, parents=True)
+    
+    # Add epoch suffix to filenames if specified
+    suffix = f"_epoch{epoch}" if epoch is not None else ""
     
     # Collect predictions for first n_samples
     n_total = min(n_samples, len(valid_data['E']))
@@ -747,9 +833,11 @@ def plot_validation_results(
     energies_true = []
     forces_pred = []
     forces_true = []
-    dipoles_pred = []
+    dipoles_physnet_pred = []
+    dipoles_dcmnet_pred = []
     dipoles_true = []
-    esp_pred_list = []
+    esp_pred_dcmnet_list = []
+    esp_pred_physnet_list = []
     esp_true_list = []
     
     print(f"Evaluating {n_total} validation samples...")
@@ -768,6 +856,7 @@ def plot_validation_results(
             mono_w=mono_w,
             batch_size=1,
             n_dcm=n_dcm,
+            dipole_source=dipole_source,
         )
         
         energies_pred.append(float(output['energy']))
@@ -776,23 +865,45 @@ def plot_validation_results(
         forces_pred.append(np.array(output['forces']))
         forces_true.append(np.array(batch['F']))
         
-        dipoles_pred.append(np.array(output['dipoles']))
+        # Store BOTH dipole predictions
+        dipoles_physnet_pred.append(np.array(output['dipoles']))
+        
+        # Compute DCMNet dipole
+        natoms = output["mono_dist"].shape[0]
+        mono_reshaped = output["mono_dist"].reshape(1, natoms, n_dcm)
+        dipo_reshaped = output["dipo_dist"].reshape(1, natoms, n_dcm, 3)
+        dipole_dcmnet = np.sum(mono_reshaped[..., None] * dipo_reshaped, axis=(1, 2))
+        dipoles_dcmnet_pred.append(np.array(dipole_dcmnet))
+        
         dipoles_true.append(np.array(batch['D']))
         
-        # ESP (only store first n_esp_examples)
+        # ESP (only store first n_esp_examples) - compute from BOTH methods
         if i < n_esp_examples:
-            # Compute ESP from model
             natoms = output["mono_dist"].shape[0]
             mono_reshaped = output["mono_dist"].reshape(1, natoms, n_dcm)
             dipo_reshaped = output["dipo_dist"].reshape(1, natoms, n_dcm, 3)
             
+            # DCMNet ESP
             mono_flat = mono_reshaped[0].reshape(-1)
             dipo_flat = jnp.moveaxis(dipo_reshaped[0], -1, -2).reshape(-1, 3)
-            
             from mmml.dcmnet.dcmnet.electrostatics import calc_esp
-            esp_pred = calc_esp(dipo_flat, mono_flat, batch["vdw_surface"][0])
+            esp_pred_dcmnet = calc_esp(dipo_flat, mono_flat, batch["vdw_surface"][0])
             
-            esp_pred_list.append(np.array(esp_pred))
+            # PhysNet ESP (from atomic charges)
+            charges_physnet = output["charges_as_mono"]
+            positions_physnet = batch["R"].reshape(natoms, 3)
+            atom_mask_plot = batch["atom_mask"].reshape(natoms)
+            
+            # Apply mask to handle padding
+            charges_masked = charges_physnet * atom_mask_plot
+            
+            # Vectorized ESP computation
+            vdw_grid = batch["vdw_surface"][0]
+            distances = jnp.linalg.norm(vdw_grid[:, None, :] - positions_physnet[None, :, :], axis=2)
+            esp_pred_physnet = jnp.sum(charges_masked[None, :] / (distances + 1e-10), axis=1)
+            
+            esp_pred_dcmnet_list.append(np.array(esp_pred_dcmnet))
+            esp_pred_physnet_list.append(np.array(esp_pred_physnet))
             esp_true_list.append(np.array(batch['esp'][0]))
     
     # Convert to arrays
@@ -806,11 +917,12 @@ def plot_validation_results(
     forces_pred = forces_pred[forces_mask]
     forces_true = forces_true[forces_mask]
     
-    dipoles_pred = np.concatenate([d.reshape(-1) for d in dipoles_pred])
+    dipoles_physnet_pred = np.concatenate([d.reshape(-1) for d in dipoles_physnet_pred])
+    dipoles_dcmnet_pred = np.concatenate([d.reshape(-1) for d in dipoles_dcmnet_pred])
     dipoles_true = np.concatenate([d.reshape(-1) for d in dipoles_true])
     
-    # Create figure with subplots
-    fig, axes = plt.subplots(2, 2, figsize=(12, 12))
+    # Create figure with 6 subplots (2x3) to show both dipole sources
+    fig, axes = plt.subplots(2, 3, figsize=(18, 12))
     
     # Energy scatter
     ax = axes[0, 0]
@@ -836,80 +948,155 @@ def plot_validation_results(
     ax.legend()
     ax.grid(True, alpha=0.3)
     
-    # Dipole scatter
+    # PhysNet Dipole scatter
     ax = axes[1, 0]
-    ax.scatter(dipoles_true, dipoles_pred, alpha=0.5, s=20)
-    lims = [min(dipoles_true.min(), dipoles_pred.min()),
-            max(dipoles_true.max(), dipoles_pred.max())]
+    ax.scatter(dipoles_true, dipoles_physnet_pred, alpha=0.5, s=20)
+    lims = [min(dipoles_true.min(), dipoles_physnet_pred.min()),
+            max(dipoles_true.max(), dipoles_physnet_pred.max())]
     ax.plot(lims, lims, 'r--', alpha=0.5, label='Perfect')
     ax.set_xlabel('True Dipole (D)')
     ax.set_ylabel('Predicted Dipole (D)')
-    ax.set_title(f'Dipole Components\nMAE: {np.abs(dipoles_true - dipoles_pred).mean():.3f} D')
+    marker = ' *' if dipole_source == 'physnet' else ''
+    ax.set_title(f'Dipole - PhysNet{marker}\nMAE: {np.abs(dipoles_true - dipoles_physnet_pred).mean():.3f} D')
     ax.legend()
     ax.grid(True, alpha=0.3)
     
-    # ESP scatter (all examples)
+    # DCMNet Dipole scatter
     ax = axes[1, 1]
-    if esp_pred_list:
-        esp_pred_all = np.concatenate([e.reshape(-1) for e in esp_pred_list])
+    ax.scatter(dipoles_true, dipoles_dcmnet_pred, alpha=0.5, s=20)
+    lims = [min(dipoles_true.min(), dipoles_dcmnet_pred.min()),
+            max(dipoles_true.max(), dipoles_dcmnet_pred.max())]
+    ax.plot(lims, lims, 'r--', alpha=0.5, label='Perfect')
+    ax.set_xlabel('True Dipole (D)')
+    ax.set_ylabel('Predicted Dipole (D)')
+    marker = ' *' if dipole_source == 'dcmnet' else ''
+    ax.set_title(f'Dipole - DCMNet{marker}\nMAE: {np.abs(dipoles_true - dipoles_dcmnet_pred).mean():.3f} D')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    
+    # ESP scatter - DCMNet
+    ax = axes[1, 2]
+    if esp_pred_dcmnet_list:
+        esp_pred_dcmnet_all = np.concatenate([e.reshape(-1) for e in esp_pred_dcmnet_list])
         esp_true_all = np.concatenate([e.reshape(-1) for e in esp_true_list])
-        ax.scatter(esp_true_all, esp_pred_all, alpha=0.3, s=10)
-        lims = [min(esp_true_all.min(), esp_pred_all.min()),
-                max(esp_true_all.max(), esp_pred_all.max())]
+        ax.scatter(esp_true_all, esp_pred_dcmnet_all, alpha=0.3, s=10)
+        lims = [min(esp_true_all.min(), esp_pred_dcmnet_all.min()),
+                max(esp_true_all.max(), esp_pred_dcmnet_all.max())]
         ax.plot(lims, lims, 'r--', alpha=0.5, label='Perfect')
         ax.set_xlabel('True ESP (Hartree/e)')
         ax.set_ylabel('Predicted ESP (Hartree/e)')
-        ax.set_title(f'ESP Grid Points\nMAE: {np.abs(esp_true_all - esp_pred_all).mean():.6f}')
+        rmse = np.sqrt(np.mean((esp_pred_dcmnet_all - esp_true_all)**2))
+        # Compute R²
+        ss_res = np.sum((esp_true_all - esp_pred_dcmnet_all)**2)
+        ss_tot = np.sum((esp_true_all - np.mean(esp_true_all))**2)
+        r2 = 1 - (ss_res / ss_tot)
+        ax.set_title(f'ESP - DCMNet\nRMSE: {rmse:.6f} Ha/e, R²: {r2:.4f}')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+    
+    # Add PhysNet ESP scatter in the empty slot
+    ax = axes[0, 2]
+    if esp_pred_physnet_list:
+        esp_pred_physnet_all = np.concatenate([e.reshape(-1) for e in esp_pred_physnet_list])
+        esp_true_all = np.concatenate([e.reshape(-1) for e in esp_true_list])
+        ax.scatter(esp_true_all, esp_pred_physnet_all, alpha=0.3, s=10, color='orange')
+        lims = [min(esp_true_all.min(), esp_pred_physnet_all.min()),
+                max(esp_true_all.max(), esp_pred_physnet_all.max())]
+        ax.plot(lims, lims, 'r--', alpha=0.5, label='Perfect')
+        ax.set_xlabel('True ESP (Hartree/e)')
+        ax.set_ylabel('Predicted ESP (Hartree/e)')
+        rmse = np.sqrt(np.mean((esp_pred_physnet_all - esp_true_all)**2))
+        # Compute R²
+        ss_res = np.sum((esp_true_all - esp_pred_physnet_all)**2)
+        ss_tot = np.sum((esp_true_all - np.mean(esp_true_all))**2)
+        r2 = 1 - (ss_res / ss_tot)
+        ax.set_title(f'ESP - PhysNet Charges\nRMSE: {rmse:.6f} Ha/e, R²: {r2:.4f}')
         ax.legend()
         ax.grid(True, alpha=0.3)
     
     plt.tight_layout()
-    scatter_path = save_dir / 'validation_scatter.png'
+    scatter_path = save_dir / f'validation_scatter{suffix}.png'
     plt.savefig(scatter_path, dpi=150, bbox_inches='tight')
     plt.close()
     print(f"  ✅ Saved scatter plots: {scatter_path}")
     
-    # Create ESP example plots
-    for idx in range(min(n_esp_examples, len(esp_pred_list))):
-        fig, axes = plt.subplots(1, 3, figsize=(15, 4))
+    # Create ESP example plots - compare PhysNet vs DCMNet
+    for idx in range(min(n_esp_examples, len(esp_pred_dcmnet_list))):
+        fig, axes = plt.subplots(2, 3, figsize=(15, 8))
         
         esp_true = esp_true_list[idx]
-        esp_pred = esp_pred_list[idx]
-        esp_error = esp_pred - esp_true
+        esp_pred_dcmnet = esp_pred_dcmnet_list[idx]
+        esp_pred_physnet = esp_pred_physnet_list[idx]
+        esp_error_dcmnet = esp_pred_dcmnet - esp_true
+        esp_error_physnet = esp_pred_physnet - esp_true
         
-        # True ESP
-        ax = axes[0]
+        # True ESP (shared)
+        ax = axes[0, 0]
         sc = ax.scatter(range(len(esp_true)), esp_true, c=esp_true, 
                        cmap='RdBu_r', s=30, alpha=0.7)
         ax.set_xlabel('Grid Point Index')
         ax.set_ylabel('ESP (Hartree/e)')
-        ax.set_title(f'True ESP (Sample {idx})')
+        ax.set_title(f'True ESP (Sample {idx}){epoch_str}')
         ax.grid(True, alpha=0.3)
         plt.colorbar(sc, ax=ax)
         
-        # Predicted ESP
-        ax = axes[1]
-        sc = ax.scatter(range(len(esp_pred)), esp_pred, c=esp_pred,
+        # DCMNet ESP
+        ax = axes[0, 1]
+        sc = ax.scatter(range(len(esp_pred_dcmnet)), esp_pred_dcmnet, c=esp_pred_dcmnet,
                        cmap='RdBu_r', s=30, alpha=0.7)
         ax.set_xlabel('Grid Point Index')
         ax.set_ylabel('ESP (Hartree/e)')
-        ax.set_title(f'Predicted ESP (Sample {idx})')
+        ax.set_title(f'DCMNet ESP{epoch_str}')
         ax.grid(True, alpha=0.3)
         plt.colorbar(sc, ax=ax)
         
-        # Error
-        ax = axes[2]
-        sc = ax.scatter(range(len(esp_error)), esp_error, c=esp_error,
+        # DCMNet Error
+        ax = axes[0, 2]
+        sc = ax.scatter(range(len(esp_error_dcmnet)), esp_error_dcmnet, c=esp_error_dcmnet,
                        cmap='RdBu_r', s=30, alpha=0.7)
         ax.set_xlabel('Grid Point Index')
         ax.set_ylabel('ESP Error (Hartree/e)')
-        ax.set_title(f'Error (Pred - True)\nMAE: {np.abs(esp_error).mean():.6f}')
+        rmse = np.sqrt(np.mean(esp_error_dcmnet**2))
+        # Compute R²
+        ss_res = np.sum((esp_true - esp_pred_dcmnet)**2)
+        ss_tot = np.sum((esp_true - np.mean(esp_true))**2)
+        r2 = 1 - (ss_res / ss_tot)
+        ax.set_title(f'DCMNet Error\nRMSE: {rmse:.6f}, R²: {r2:.4f}')
+        ax.grid(True, alpha=0.3)
+        ax.axhline(0, color='k', linestyle='--', alpha=0.3)
+        plt.colorbar(sc, ax=ax)
+        
+        # Empty
+        axes[1, 0].axis('off')
+        
+        # PhysNet ESP
+        ax = axes[1, 1]
+        sc = ax.scatter(range(len(esp_pred_physnet)), esp_pred_physnet, c=esp_pred_physnet,
+                       cmap='RdBu_r', s=30, alpha=0.7, marker='s')
+        ax.set_xlabel('Grid Point Index')
+        ax.set_ylabel('ESP (Hartree/e)')
+        ax.set_title(f'PhysNet ESP{epoch_str}')
+        ax.grid(True, alpha=0.3)
+        plt.colorbar(sc, ax=ax)
+        
+        # PhysNet Error
+        ax = axes[1, 2]
+        sc = ax.scatter(range(len(esp_error_physnet)), esp_error_physnet, c=esp_error_physnet,
+                       cmap='RdBu_r', s=30, alpha=0.7, marker='s')
+        ax.set_xlabel('Grid Point Index')
+        ax.set_ylabel('ESP Error (Hartree/e)')
+        rmse = np.sqrt(np.mean(esp_error_physnet**2))
+        # Compute R²
+        ss_res = np.sum((esp_true - esp_pred_physnet)**2)
+        ss_tot = np.sum((esp_true - np.mean(esp_true))**2)
+        r2 = 1 - (ss_res / ss_tot)
+        ax.set_title(f'PhysNet Error\nRMSE: {rmse:.6f}, R²: {r2:.4f}')
         ax.grid(True, alpha=0.3)
         ax.axhline(0, color='k', linestyle='--', alpha=0.3)
         plt.colorbar(sc, ax=ax)
         
         plt.tight_layout()
-        esp_path = save_dir / f'esp_example_{idx}.png'
+        esp_path = save_dir / f'esp_example_{idx}{suffix}.png'
         plt.savefig(esp_path, dpi=150, bbox_inches='tight')
         plt.close()
         print(f"  ✅ Saved ESP example {idx}: {esp_path}")
@@ -936,6 +1123,12 @@ def train_model(
     name: str,
     print_freq: int = 1,
     grad_clip_norm: float = None,
+    plot_freq: int = None,
+    plot_samples: int = 100,
+    plot_esp_examples: int = 2,
+    dipole_source: str = 'physnet',
+    restart_params: Any = None,
+    start_epoch: int = 1,
 ) -> Any:
     """
     Main training loop.
@@ -954,28 +1147,34 @@ def train_model(
     key = jax.random.PRNGKey(seed)
     key, init_key = jax.random.split(key)
     
-    # Create dummy batch for initialization
-    dummy_batch = prepare_batch_data(train_data, np.array([0]), cutoff=cutoff)
-    
-    # Initialize parameters
-    print("\nInitializing model parameters...")
-    params = model.init(
-        init_key,
-        atomic_numbers=dummy_batch["Z"],
-        positions=dummy_batch["R"],
-        dst_idx=dummy_batch["dst_idx"],
-        src_idx=dummy_batch["src_idx"],
-        batch_segments=dummy_batch["batch_segments"],
-        batch_size=1,
-        batch_mask=dummy_batch["batch_mask"],
-        atom_mask=dummy_batch["atom_mask"],
-    )
+    # Initialize or load parameters
+    if restart_params is not None:
+        print("\n🔄 Restarting from checkpoint...")
+        params = restart_params
+        print(f"✅ Loaded {sum(x.size for x in jax.tree_util.tree_leaves(params)):,} parameters")
+    else:
+        # Create dummy batch for initialization
+        dummy_batch = prepare_batch_data(train_data, np.array([0]), cutoff=cutoff)
+        
+        # Initialize parameters
+        print("\nInitializing model parameters...")
+        params = model.init(
+            init_key,
+            atomic_numbers=dummy_batch["Z"],
+            positions=dummy_batch["R"],
+            dst_idx=dummy_batch["dst_idx"],
+            src_idx=dummy_batch["src_idx"],
+            batch_segments=dummy_batch["batch_segments"],
+            batch_size=1,
+            batch_mask=dummy_batch["batch_mask"],
+            atom_mask=dummy_batch["atom_mask"],
+        )
+        
+        print(f"✅ Model initialized with {sum(x.size for x in jax.tree_util.tree_leaves(params)):,} parameters")
     
     # Setup optimizer
     optimizer = optax.adam(learning_rate)
     opt_state = optimizer.init(params)
-    
-    print(f"✅ Model initialized with {sum(x.size for x in jax.tree_util.tree_leaves(params))} parameters")
     
     # Prepare training indices
     n_train = len(train_data['E'])
@@ -988,7 +1187,7 @@ def train_model(
     # Training loop
     best_valid_loss = float('inf')
     
-    for epoch in range(1, num_epochs + 1):
+    for epoch in range(start_epoch, num_epochs + 1):
         epoch_start = time.time()
         
         # Shuffle training data
@@ -1026,6 +1225,7 @@ def train_model(
                 batch_size=len(batch_indices),
                 n_dcm=n_dcm,
                 clip_norm=grad_clip_norm,
+                dipole_source=dipole_source,
             )
             
             train_losses.append({k: float(v) for k, v in losses.items()})
@@ -1062,6 +1262,7 @@ def train_model(
                 mono_w=mono_w,
                 batch_size=len(batch_indices),
                 n_dcm=n_dcm,
+                dipole_source=dipole_source,
             )
             
             valid_losses.append({k: float(v) for k, v in losses.items()})
@@ -1083,11 +1284,27 @@ def train_model(
             print(f"    Dipole: {train_loss_avg['dipole']:.6f}")
             print(f"    ESP: {train_loss_avg['esp']:.6f}")
             print(f"    Monopole: {train_loss_avg['monopole']:.6f}")
+            print(f"    Total Charge: {train_loss_avg['total_charge']:.6f}")
             print(f"  Valid Loss: {valid_loss_avg['total']:.6f}")
             if 'mae_energy' in valid_loss_avg:
-                print(f"    MAE Energy: {valid_loss_avg['mae_energy']:.6f} eV")
-                print(f"    MAE Forces: {valid_loss_avg['mae_forces']:.6f} eV/Å")
-                print(f"    MAE Dipole: {valid_loss_avg['mae_dipole']:.6f} D")
+                # Conversion factors
+                eV_to_kcal = 23.0605        # 1 eV = 23.0605 kcal/mol
+                Ha_to_kcal = 627.509        # 1 Hartree = 627.509 kcal/mol
+                Debye_to_eA = 0.208194      # 1 Debye = 0.208194 e·Å
+                
+                mae_energy_ev = valid_loss_avg['mae_energy']
+                mae_forces_ev = valid_loss_avg['mae_forces']
+                mae_dipole_physnet_D = valid_loss_avg['mae_dipole_physnet']
+                mae_dipole_dcmnet_D = valid_loss_avg['mae_dipole_dcmnet']
+                rmse_esp_physnet_Ha = valid_loss_avg['rmse_esp_physnet']
+                rmse_esp_dcmnet_Ha = valid_loss_avg['rmse_esp_dcmnet']
+                
+                print(f"    MAE Energy: {mae_energy_ev:.6f} eV  ({mae_energy_ev * eV_to_kcal:.6f} kcal/mol)")
+                print(f"    MAE Forces: {mae_forces_ev:.6f} eV/Å  ({mae_forces_ev * eV_to_kcal:.6f} kcal/mol/Å)")
+                print(f"    MAE Dipole (PhysNet): {mae_dipole_physnet_D:.6f} D  ({mae_dipole_physnet_D * Debye_to_eA:.6f} e·Å)")
+                print(f"    MAE Dipole (DCMNet): {mae_dipole_dcmnet_D:.6f} D  ({mae_dipole_dcmnet_D * Debye_to_eA:.6f} e·Å)")
+                print(f"    RMSE ESP (PhysNet): {rmse_esp_physnet_Ha:.6f} Ha/e  ({rmse_esp_physnet_Ha * Ha_to_kcal:.6f} (kcal/mol)/e)")
+                print(f"    RMSE ESP (DCMNet): {rmse_esp_dcmnet_Ha:.6f} Ha/e  ({rmse_esp_dcmnet_Ha * Ha_to_kcal:.6f} (kcal/mol)/e)")
         
         # Save best model
         if valid_loss_avg['total'] < best_valid_loss:
@@ -1098,7 +1315,36 @@ def train_model(
             with open(save_path / 'best_params.pkl', 'wb') as f:
                 pickle.dump(params, f)
             
+            # Also save model config for later use
+            model_config = {
+                'physnet_config': dict(model.physnet_config),
+                'dcmnet_config': dict(model.dcmnet_config),
+            }
+            with open(save_path / 'model_config.pkl', 'wb') as f:
+                pickle.dump(model_config, f)
+            
             print(f"  💾 Saved best model (valid_loss: {best_valid_loss:.6f})")
+        
+        # Create plots periodically if requested
+        if plot_freq is not None and epoch % plot_freq == 0 and HAS_MATPLOTLIB:
+            print(f"\n📊 Creating plots at epoch {epoch}...")
+            plot_validation_results(
+                params=params,
+                model=model,
+                valid_data=valid_data,
+                cutoff=cutoff,
+                energy_w=energy_w,
+                forces_w=forces_w,
+                dipole_w=dipole_w,
+                esp_w=esp_w,
+                mono_w=mono_w,
+                n_dcm=n_dcm,
+                save_dir=ckpt_dir / name / 'plots',
+                n_samples=plot_samples,
+                n_esp_examples=plot_esp_examples,
+                epoch=epoch,
+                dipole_source=dipole_source,
+            )
     
     return params
 
@@ -1166,6 +1412,9 @@ def main():
                        help='ESP loss weight')
     parser.add_argument('--mono-weight', type=float, default=1.0,
                        help='Monopole constraint loss weight')
+    parser.add_argument('--dipole-source', type=str, default='physnet',
+                       choices=['physnet', 'dcmnet'],
+                       help='Source for dipole in loss: physnet (from charges) or dcmnet (from distributed multipoles)')
     
     # General options
     parser.add_argument('--natoms', type=int, default=None,
@@ -1178,10 +1427,14 @@ def main():
                        help='Experiment name')
     parser.add_argument('--ckpt-dir', type=Path, default=None,
                        help='Checkpoint directory')
+    parser.add_argument('--restart', type=Path, default=None,
+                       help='Restart from checkpoint (path to best_params.pkl or checkpoint directory)')
     parser.add_argument('--print-freq', type=int, default=1,
                        help='Print frequency (epochs)')
     parser.add_argument('--plot-results', action='store_true', default=False,
                        help='Create validation plots after training')
+    parser.add_argument('--plot-freq', type=int, default=None,
+                       help='Create validation plots every N epochs during training (None to disable)')
     parser.add_argument('--plot-samples', type=int, default=100,
                        help='Number of validation samples to plot')
     parser.add_argument('--plot-esp-examples', type=int, default=2,
@@ -1326,12 +1579,37 @@ def main():
     print(f"\nLoss weights:")
     print(f"  Energy: {args.energy_weight}")
     print(f"  Forces: {args.forces_weight}")
-    print(f"  Dipole: {args.dipole_weight}")
+    print(f"  Dipole: {args.dipole_weight} (source: {args.dipole_source})")
     print(f"  ESP: {args.esp_weight}")
     print(f"  Monopole constraint: {args.mono_weight}")
     
     print(f"\nTraining stability:")
     print(f"  Gradient clipping: {args.grad_clip_norm if args.grad_clip_norm else 'disabled'}")
+    
+    # Handle restart
+    restart_params = None
+    start_epoch = 1
+    
+    if args.restart:
+        # Determine restart path
+        if args.restart.is_dir():
+            restart_path = args.restart / 'best_params.pkl'
+        else:
+            restart_path = args.restart
+        
+        if not restart_path.exists():
+            print(f"\n❌ Error: Restart checkpoint not found: {restart_path}")
+            sys.exit(1)
+        
+        print(f"\n🔄 Restart checkpoint: {restart_path}")
+        with open(restart_path, 'rb') as f:
+            restart_params = pickle.load(f)
+        print(f"✅ Loaded checkpoint with {sum(x.size for x in jax.tree_util.tree_leaves(restart_params)):,} parameters")
+        
+        # Try to determine start epoch from checkpoint directory name or metadata
+        # For now, user should manually adjust --epochs if needed
+        print(f"⚠️  Starting from epoch 1 (adjust --epochs if continuing a longer run)")
+        print(f"   Example: if you ran 50 epochs before, use --epochs 100 to train 50 more")
     
     # Start training
     print(f"\n{'='*70}")
@@ -1358,6 +1636,12 @@ def main():
             name=args.name,
             print_freq=args.print_freq,
             grad_clip_norm=args.grad_clip_norm,
+            plot_freq=args.plot_freq,
+            plot_samples=args.plot_samples,
+            plot_esp_examples=args.plot_esp_examples,
+            dipole_source=args.dipole_source,
+            restart_params=restart_params,
+            start_epoch=start_epoch,
         )
         
         print(f"\n{'='*70}")
@@ -1390,6 +1674,7 @@ def main():
                     save_dir=ckpt_dir / args.name / 'plots',
                     n_samples=args.plot_samples,
                     n_esp_examples=args.plot_esp_examples,
+                    dipole_source=args.dipole_source,
                 )
             else:
                 print("\n⚠️  Matplotlib not installed, cannot create plots")
