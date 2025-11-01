@@ -296,6 +296,10 @@ def load_combined_data(efd_file: Path, esp_file: Path, subtract_atom_energies: b
         if verbose:
             print(f"  ✅ Subtracted atomic energies (now relative to isolated atoms)")
     
+    # Convert ESP grid from Bohr to Angstroms (ESP grids stored in Bohr)
+    BOHR_TO_ANGSTROM = 0.529177210903
+    vdw_surface_angstrom = esp_data['vdw_surface'] * BOHR_TO_ANGSTROM
+    
     # Combine data - ESP file should have R, Z, N as well
     combined = {
         # Molecular properties
@@ -305,9 +309,9 @@ def load_combined_data(efd_file: Path, esp_file: Path, subtract_atom_energies: b
         'E': energies,
         'F': efd_data['F'],
         'Dxyz': efd_data.get('Dxyz', efd_data.get('D')),
-        # ESP properties
+        # ESP properties (ESP values are in Hartree/e, positions in Bohr → convert to Å)
         'esp': esp_data['esp'],
-        'vdw_surface': esp_data['vdw_surface'],
+        'vdw_surface': vdw_surface_angstrom,
     }
     
     if verbose:
@@ -1791,35 +1795,27 @@ def plot_validation_results(
         fig = plt.figure(figsize=(18, 6))
         
         # Get grid positions and ESP values
-        grid_pos = esp_grid_positions_list[idx]  # (ngrid, 3)
+        grid_pos = esp_grid_positions_list[idx]  # (ngrid, 3) - already in Angstroms after conversion
         
         # Get atom positions and atomic numbers for this molecule
         batch_for_atoms = prepare_batch_data(valid_data, np.array([idx]), cutoff=cutoff)
         n_atoms = int(batch_for_atoms['N'][0])
-        atom_positions = np.array(batch_for_atoms['R'][:n_atoms])  # (n_atoms, 3)
+        atom_positions = np.array(batch_for_atoms['R'][:n_atoms])  # (n_atoms, 3) in Angstroms
         atomic_nums = np.array(batch_for_atoms['Z'][:n_atoms])
         
-        # Center visualization on atom center of mass
-        # Compute atom COM using atomic masses
-        import ase.data
-        masses = np.array([ase.data.atomic_masses[int(z)] for z in atomic_nums])
-        atom_com = np.sum(atom_positions * masses[:, None], axis=0) / masses.sum()
-        
-        # Shift both grid and atoms to center on atom COM
-        grid_pos_centered = grid_pos - atom_com
-        atom_positions_centered = atom_positions - atom_com
+        # No centering needed - grid and atoms should already be aligned after Bohr→Å conversion
         
         # True ESP in 3D
         ax = fig.add_subplot(131, projection='3d')
-        sc = ax.scatter(grid_pos_centered[:, 0], grid_pos_centered[:, 1], grid_pos_centered[:, 2],
+        sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 1], grid_pos[:, 2],
                        c=esp_true, cmap='RdBu_r', s=20, alpha=0.6, 
                        vmin=esp_vmin, vmax=esp_vmax)
-        # Add atom positions (centered)
-        ax.scatter(atom_positions_centered[:, 0], atom_positions_centered[:, 1], atom_positions_centered[:, 2],
+        # Add atom positions
+        ax.scatter(atom_positions[:, 0], atom_positions[:, 1], atom_positions[:, 2],
                   c='black', s=300, marker='o', edgecolors='yellow', linewidths=3, 
                   alpha=1.0, label='Atoms')
         # Label atoms
-        for i, (pos, Z) in enumerate(zip(atom_positions_centered, atomic_nums)):
+        for i, (pos, Z) in enumerate(zip(atom_positions, atomic_nums)):
             ax.text(pos[0], pos[1], pos[2], f'  {int(Z)}', fontsize=10, 
                    color='black', weight='bold', bbox=dict(boxstyle='round,pad=0.3', 
                    facecolor='yellow', alpha=0.7))
@@ -1832,15 +1828,15 @@ def plot_validation_results(
         
         # PhysNet ESP in 3D
         ax = fig.add_subplot(132, projection='3d')
-        sc = ax.scatter(grid_pos_centered[:, 0], grid_pos_centered[:, 1], grid_pos_centered[:, 2],
+        sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 1], grid_pos[:, 2],
                        c=esp_pred_physnet, cmap='RdBu_r', s=20, alpha=0.6,
                        vmin=esp_vmin, vmax=esp_vmax)
-        # Add atom positions (PhysNet charges are AT atom centers, centered)
-        ax.scatter(atom_positions_centered[:, 0], atom_positions_centered[:, 1], atom_positions_centered[:, 2],
+        # Add atom positions (PhysNet charges are AT atom centers)
+        ax.scatter(atom_positions[:, 0], atom_positions[:, 1], atom_positions[:, 2],
                   c='black', s=300, marker='o', edgecolors='lime', linewidths=3, 
                   alpha=1.0, label='Atoms (charge centers)')
         # Label atoms
-        for i, (pos, Z) in enumerate(zip(atom_positions_centered, atomic_nums)):
+        for i, (pos, Z) in enumerate(zip(atom_positions, atomic_nums)):
             ax.text(pos[0], pos[1], pos[2], f'  {int(Z)}\n(q)', fontsize=9, 
                    color='black', weight='bold', bbox=dict(boxstyle='round,pad=0.3', 
                    facecolor='lime', alpha=0.7))
@@ -1853,15 +1849,15 @@ def plot_validation_results(
         
         # DCMNet ESP in 3D
         ax = fig.add_subplot(133, projection='3d')
-        sc = ax.scatter(grid_pos_centered[:, 0], grid_pos_centered[:, 1], grid_pos_centered[:, 2],
+        sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 1], grid_pos[:, 2],
                        c=esp_pred_dcmnet, cmap='RdBu_r', s=20, alpha=0.6,
                        vmin=esp_vmin, vmax=esp_vmax)
-        # Add atom positions (centered)
-        ax.scatter(atom_positions_centered[:, 0], atom_positions_centered[:, 1], atom_positions_centered[:, 2],
+        # Add atom positions
+        ax.scatter(atom_positions[:, 0], atom_positions[:, 1], atom_positions[:, 2],
                   c='black', s=300, marker='o', edgecolors='cyan', linewidths=3, 
                   alpha=1.0, label='Atoms')
         # Label atoms
-        for i, (pos, Z) in enumerate(zip(atom_positions_centered, atomic_nums)):
+        for i, (pos, Z) in enumerate(zip(atom_positions, atomic_nums)):
             ax.text(pos[0], pos[1], pos[2], f'  {int(Z)}', fontsize=10, 
                    color='black', weight='bold', bbox=dict(boxstyle='round,pad=0.3', 
                    facecolor='cyan', alpha=0.7))
@@ -1888,16 +1884,15 @@ def plot_validation_results(
             mono_dcm = output_dcm["mono_dist"][:n_atoms]  # (n_atoms, n_dcm)
             dipo_dcm = output_dcm["dipo_dist"][:n_atoms]  # (n_atoms, n_dcm, 3)
             
-            # Plot distributed charges (centered on atom COM)
+            # Plot distributed charges
             charges_flat = np.array(mono_dcm).flatten()
             positions_flat = np.array(dipo_dcm).reshape(-1, 3)
-            positions_flat_centered = positions_flat - atom_com
             # Only plot charges with significant magnitude
             significant = np.abs(charges_flat) > 0.01
             if np.any(significant):
-                ax.scatter(positions_flat_centered[significant, 0], 
-                          positions_flat_centered[significant, 1], 
-                          positions_flat_centered[significant, 2],
+                ax.scatter(positions_flat[significant, 0], 
+                          positions_flat[significant, 1], 
+                          positions_flat[significant, 2],
                           c=charges_flat[significant], cmap='RdBu_r', s=50, 
                           marker='^', edgecolors='white', linewidths=1,
                           vmin=-0.5, vmax=0.5, alpha=0.9, label='Dist. charges')
@@ -1920,79 +1915,79 @@ def plot_validation_results(
         
         # Row 1: 100% range (all data)
         ax = axes[0, 0]
-        sc = ax.scatter(grid_pos_centered[:, 0], grid_pos_centered[:, 2],
+        sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 2],
                        c=esp_error_physnet, cmap='RdBu_r', s=20, alpha=0.8,
                        vmin=-error_absmax, vmax=error_absmax)
-        ax.set_xlabel('X (Å, centered)')
-        ax.set_ylabel('Z (Å, centered)')
+        ax.set_xlabel('X (Å)')
+        ax.set_ylabel('Z (Å)')
         ax.set_title(f'PhysNet Error (100% range){epoch_str}')
         plt.colorbar(sc, ax=ax, label='Error (Ha/e)')
         ax.grid(True, alpha=0.3)
         # Add atom positions for reference
-        ax.scatter(atom_positions_centered[:, 0], atom_positions_centered[:, 2],
+        ax.scatter(atom_positions[:, 0], atom_positions[:, 2],
                   c='black', s=100, marker='o', edgecolors='lime', linewidths=2, alpha=1.0, zorder=10)
         
         ax = axes[0, 1]
-        sc = ax.scatter(grid_pos_centered[:, 0], grid_pos_centered[:, 2],
+        sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 2],
                        c=esp_error_dcmnet, cmap='RdBu_r', s=20, alpha=0.8,
                        vmin=-error_absmax, vmax=error_absmax)
-        ax.set_xlabel('X (Å, centered)')
-        ax.set_ylabel('Z (Å, centered)')
+        ax.set_xlabel('X (Å)')
+        ax.set_ylabel('Z (Å)')
         ax.set_title(f'DCMNet Error (100% range){epoch_str}')
         plt.colorbar(sc, ax=ax, label='Error (Ha/e)')
         ax.grid(True, alpha=0.3)
         # Add atom positions for reference
-        ax.scatter(atom_positions_centered[:, 0], atom_positions_centered[:, 2],
+        ax.scatter(atom_positions[:, 0], atom_positions[:, 2],
                   c='black', s=100, marker='o', edgecolors='cyan', linewidths=2, alpha=1.0, zorder=10)
         
         # Row 2: 95th percentile
         ax = axes[1, 0]
-        sc = ax.scatter(grid_pos_centered[:, 0], grid_pos_centered[:, 2],
+        sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 2],
                        c=esp_error_physnet, cmap='RdBu_r', s=20, alpha=0.8,
                        vmin=-p95_max, vmax=p95_max)
-        ax.set_xlabel('X (Å, centered)')
-        ax.set_ylabel('Z (Å, centered)')
+        ax.set_xlabel('X (Å)')
+        ax.set_ylabel('Z (Å)')
         ax.set_title(f'PhysNet Error (95th %-ile){epoch_str}')
         plt.colorbar(sc, ax=ax, label='Error (Ha/e)')
         ax.grid(True, alpha=0.3)
-        ax.scatter(atom_positions_centered[:, 0], atom_positions_centered[:, 2],
+        ax.scatter(atom_positions[:, 0], atom_positions[:, 2],
                   c='black', s=100, marker='o', edgecolors='lime', linewidths=2, alpha=1.0, zorder=10)
         
         ax = axes[1, 1]
-        sc = ax.scatter(grid_pos_centered[:, 0], grid_pos_centered[:, 2],
+        sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 2],
                        c=esp_error_dcmnet, cmap='RdBu_r', s=20, alpha=0.8,
                        vmin=-p95_max, vmax=p95_max)
-        ax.set_xlabel('X (Å, centered)')
-        ax.set_ylabel('Z (Å, centered)')
+        ax.set_xlabel('X (Å)')
+        ax.set_ylabel('Z (Å)')
         ax.set_title(f'DCMNet Error (95th %-ile){epoch_str}')
         plt.colorbar(sc, ax=ax, label='Error (Ha/e)')
         ax.grid(True, alpha=0.3)
-        ax.scatter(atom_positions_centered[:, 0], atom_positions_centered[:, 2],
+        ax.scatter(atom_positions[:, 0], atom_positions[:, 2],
                   c='black', s=100, marker='o', edgecolors='cyan', linewidths=2, alpha=1.0, zorder=10)
         
         # Row 3: 75th percentile
         ax = axes[2, 0]
-        sc = ax.scatter(grid_pos_centered[:, 0], grid_pos_centered[:, 2],
+        sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 2],
                        c=esp_error_physnet, cmap='RdBu_r', s=20, alpha=0.8,
                        vmin=-p75_max, vmax=p75_max)
-        ax.set_xlabel('X (Å, centered)')
-        ax.set_ylabel('Z (Å, centered)')
+        ax.set_xlabel('X (Å)')
+        ax.set_ylabel('Z (Å)')
         ax.set_title(f'PhysNet Error (75th %-ile){epoch_str}')
         plt.colorbar(sc, ax=ax, label='Error (Ha/e)')
         ax.grid(True, alpha=0.3)
-        ax.scatter(atom_positions_centered[:, 0], atom_positions_centered[:, 2],
+        ax.scatter(atom_positions[:, 0], atom_positions[:, 2],
                   c='black', s=100, marker='o', edgecolors='lime', linewidths=2, alpha=1.0, zorder=10)
         
         ax = axes[2, 1]
-        sc = ax.scatter(grid_pos_centered[:, 0], grid_pos_centered[:, 2],
+        sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 2],
                        c=esp_error_dcmnet, cmap='RdBu_r', s=20, alpha=0.8,
                        vmin=-p75_max, vmax=p75_max)
-        ax.set_xlabel('X (Å, centered)')
-        ax.set_ylabel('Z (Å, centered)')
+        ax.set_xlabel('X (Å)')
+        ax.set_ylabel('Z (Å)')
         ax.set_title(f'DCMNet Error (75th %-ile){epoch_str}')
         plt.colorbar(sc, ax=ax, label='Error (Ha/e)')
         ax.grid(True, alpha=0.3)
-        ax.scatter(atom_positions_centered[:, 0], atom_positions_centered[:, 2],
+        ax.scatter(atom_positions[:, 0], atom_positions[:, 2],
                   c='black', s=100, marker='o', edgecolors='cyan', linewidths=2, alpha=1.0, zorder=10)
         
         plt.tight_layout()
