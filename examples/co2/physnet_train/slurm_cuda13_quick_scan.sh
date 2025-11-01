@@ -1,7 +1,8 @@
 #!/bin/bash
-# Smaller hyperparameter scan - just 6 configs focusing on model features
+# Quick hyperparameter scan using CUDA 13 environment
+# 6 configurations focusing on model features
 
-#SBATCH --job-name=PhysNet_Quick
+#SBATCH --job-name=PhysNet_CUDA13
 #SBATCH --time=06:00:00
 #SBATCH --qos=gpu6hours
 #SBATCH --mem-per-cpu=20G
@@ -10,20 +11,36 @@
 #SBATCH --cpus-per-task=2
 #SBATCH --partition=titan
 #SBATCH --gres=gpu:1
-#SBATCH --output=logs/quick_%A_%a.out
-#SBATCH --error=logs/quick_%A_%a.err
+#SBATCH --output=logs/cuda13_quick_%A_%a.out
+#SBATCH --error=logs/cuda13_quick_%A_%a.err
 
-module load CUDA/12.2.0
-
-# ============ GPU DIAGNOSTICS ============
 echo "=========================================="
-echo "GPU and CUDA Diagnostics"
+echo "PhysNet Training - CUDA 13 Environment"
 echo "=========================================="
 echo "Hostname: $(hostname)"
 echo "Date: $(date)"
 echo "SLURM_JOB_ID: $SLURM_JOB_ID"
 echo "SLURM_ARRAY_TASK_ID: $SLURM_ARRAY_TASK_ID"
 echo ""
+
+# Load CUDA module - try 13.0 first, fall back to available versions
+echo "Loading CUDA module..."
+if module load CUDA/13.0 2>/dev/null; then
+    echo "✅ Loaded CUDA 13.0"
+elif module load CUDA/12.6 2>/dev/null; then
+    echo "✅ Loaded CUDA 12.6"
+elif module load CUDA/12.3 2>/dev/null; then
+    echo "✅ Loaded CUDA 12.3"
+elif module load CUDA/12.2.0 2>/dev/null; then
+    echo "✅ Loaded CUDA 12.2.0"
+else
+    echo "❌ ERROR: Could not load CUDA module!"
+    module avail CUDA
+    exit 1
+fi
+echo ""
+
+# ============ GPU DIAGNOSTICS ============
 echo "--- GPU Information ---"
 nvidia-smi || echo "ERROR: nvidia-smi failed"
 echo ""
@@ -32,23 +49,36 @@ echo "CUDA_VISIBLE_DEVICES: $CUDA_VISIBLE_DEVICES"
 echo "LD_LIBRARY_PATH: $LD_LIBRARY_PATH"
 which nvcc && nvcc --version || echo "nvcc not found"
 echo ""
-echo "--- Module Information ---"
+echo "--- Loaded Modules ---"
 module list
 echo "=========================================="
 echo ""
 
-source ~/mmml/.venv/bin/activate
+# Activate CUDA 13 virtual environment
+echo "Activating CUDA 13 virtual environment..."
+if [ -f ~/mmml/.venv_cuda13/bin/activate ]; then
+    source ~/mmml/.venv_cuda13/bin/activate
+    echo "✅ Environment activated: ~/mmml/.venv_cuda13"
+else
+    echo "❌ ERROR: CUDA 13 environment not found!"
+    echo "Please run: bash setup_cuda13_env.sh"
+    exit 1
+fi
+echo ""
 
 # Check JAX installation
-echo "--- JAX Installation ---"
+echo "--- JAX Installation Check ---"
 python -c "import jax; print(f'JAX version: {jax.__version__}'); print(f'JAX devices: {jax.devices()}'); print(f'JAX default backend: {jax.default_backend()}')" || echo "ERROR: JAX check failed"
 echo "=========================================="
 echo ""
 
+# Create logs directory
 mkdir -p logs
 
+# Get array task ID
 X=$SLURM_ARRAY_TASK_ID
-echo "Running quick scan configuration $X"
+echo "Running configuration $X"
+echo ""
 
 # Simple scan: vary features, iterations, and max_degree
 # Format: FEATURES|ITERATIONS|MAX_DEGREE
@@ -64,10 +94,17 @@ declare -a CONFIGS=(
 CONFIG=${CONFIGS[$X]}
 IFS='|' read -r FEATURES ITERATIONS MAX_DEGREE <<< "$CONFIG"
 
-EXP_NAME="co2_quick_f${FEATURES}_i${ITERATIONS}_d${MAX_DEGREE}"
+EXP_NAME="co2_cuda13_f${FEATURES}_i${ITERATIONS}_d${MAX_DEGREE}"
 
-echo "Features: $FEATURES, Iterations: $ITERATIONS, Max Degree: $MAX_DEGREE"
-echo "Running: $EXP_NAME"
+echo "Configuration:"
+echo "  Features: $FEATURES"
+echo "  Iterations: $ITERATIONS"
+echo "  Max Degree: $MAX_DEGREE"
+echo "  Experiment: $EXP_NAME"
+echo ""
+echo "Starting training..."
+echo "=========================================="
+echo ""
 
 # Use unbuffered Python output for real-time SLURM logging
 python -u trainer.py \
@@ -95,5 +132,9 @@ python -u trainer.py \
   --objective valid_forces_mae \
   --verbose
 
-echo "Complete: $EXP_NAME"
+echo ""
+echo "=========================================="
+echo "Training complete: $EXP_NAME"
+echo "Date: $(date)"
+echo "=========================================="
 
