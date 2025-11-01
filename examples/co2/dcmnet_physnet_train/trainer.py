@@ -207,8 +207,90 @@ def load_combined_data(efd_file: Path, esp_file: Path, verbose: bool = False) ->
         print(f"  Combined data shapes:")
         for key, val in combined.items():
             print(f"    {key}: {val.shape}")
+        print(f"  Data padding: {combined['R'].shape[1]} atoms")
+        print(f"  Max actual atoms: {int(np.max(combined['N']))}")
     
     return combined
+
+
+def resize_data_padding(
+    data: Dict[str, np.ndarray],
+    target_natoms: int,
+    verbose: bool = False,
+) -> Dict[str, np.ndarray]:
+    """
+    Resize padded arrays to a different number of atoms.
+    
+    Useful when data is padded to N atoms but you want to use M < N atoms
+    to save memory/computation (as long as M >= max(N) in the data).
+    
+    Parameters
+    ----------
+    data : Dict[str, np.ndarray]
+        Dataset dictionary
+    target_natoms : int
+        Target padding size
+    verbose : bool
+        Print information
+        
+    Returns
+    -------
+    Dict[str, np.ndarray]
+        Dataset with resized arrays
+    """
+    current_natoms = data['R'].shape[1]
+    
+    if current_natoms == target_natoms:
+        return data
+    
+    # Check if safe
+    max_atoms = int(np.max(data['N']))
+    if max_atoms > target_natoms:
+        raise ValueError(
+            f"Cannot resize to {target_natoms} atoms: data contains molecules "
+            f"with up to {max_atoms} atoms. Use --natoms >= {max_atoms}"
+        )
+    
+    if verbose:
+        print(f"\n📏 Resizing arrays from {current_natoms} to {target_natoms} atoms...")
+    
+    n_samples = len(data['N'])
+    resized = data.copy()
+    
+    # Resize (n_samples, natoms, 3) arrays
+    for key in ['R', 'F']:
+        if key in data:
+            old = data[key]
+            if target_natoms < current_natoms:
+                # Truncate
+                resized[key] = old[:, :target_natoms, :]
+            else:
+                # Expand with zeros
+                new = np.zeros((n_samples, target_natoms, 3), dtype=old.dtype)
+                new[:, :current_natoms, :] = old
+                resized[key] = new
+            if verbose:
+                print(f"  {key}: {old.shape} → {resized[key].shape}")
+    
+    # Resize (n_samples, natoms) arrays
+    for key in ['Z']:
+        if key in data:
+            old = data[key]
+            if target_natoms < current_natoms:
+                # Truncate
+                resized[key] = old[:, :target_natoms]
+            else:
+                # Expand with zeros
+                new = np.zeros((n_samples, target_natoms), dtype=old.dtype)
+                new[:, :current_natoms] = old
+                resized[key] = new
+            if verbose:
+                print(f"  {key}: {old.shape} → {resized[key].shape}")
+    
+    if verbose:
+        print(f"✅ Arrays resized to {target_natoms} atoms")
+    
+    return resized
 
 
 def precompute_edge_lists(
@@ -845,8 +927,8 @@ def main():
                        help='Monopole constraint loss weight')
     
     # General options
-    parser.add_argument('--natoms', type=int, default=60,
-                       help='Maximum number of atoms')
+    parser.add_argument('--natoms', type=int, default=None,
+                       help='Maximum number of atoms (default: auto-detect from data)')
     parser.add_argument('--max-atomic-number', type=int, default=28,
                        help='Maximum atomic number')
     parser.add_argument('--grad-clip-norm', type=float, default=1.0,
@@ -903,9 +985,37 @@ def main():
     print("\nLoading validation data...")
     valid_data = load_combined_data(args.valid_efd, args.valid_esp, verbose=args.verbose)
     
+    # Auto-detect or validate natoms
+    data_natoms = train_data['R'].shape[1]
+    max_actual_atoms = int(max(np.max(train_data['N']), np.max(valid_data['N'])))
+    
+    if args.natoms is None:
+        # Auto-detect: use data padding
+        args.natoms = data_natoms
+        print(f"\n✅ Auto-detected natoms={args.natoms} from data padding")
+    else:
+        # User specified: validate
+        if args.natoms < max_actual_atoms:
+            print(f"\n❌ Error: --natoms {args.natoms} is too small!")
+            print(f"   Data contains molecules with up to {max_actual_atoms} atoms")
+            print(f"   Use --natoms >= {max_actual_atoms}")
+            sys.exit(1)
+        elif args.natoms < data_natoms:
+            # Valid reduction: resize arrays
+            print(f"\n📏 Resizing data from {data_natoms} to {args.natoms} atoms...")
+            train_data = resize_data_padding(train_data, args.natoms, verbose=args.verbose)
+            valid_data = resize_data_padding(valid_data, args.natoms, verbose=args.verbose)
+        elif args.natoms > data_natoms:
+            # Expansion: resize arrays
+            print(f"\n📏 Expanding data from {data_natoms} to {args.natoms} atoms...")
+            train_data = resize_data_padding(train_data, args.natoms, verbose=args.verbose)
+            valid_data = resize_data_padding(valid_data, args.natoms, verbose=args.verbose)
+    
     print(f"\n✅ Data loaded:")
     print(f"  Training samples: {len(train_data['E'])}")
     print(f"  Validation samples: {len(valid_data['E'])}")
+    print(f"  Padded to: {args.natoms} atoms")
+    print(f"  Max actual atoms: {max_actual_atoms}")
     
     # Build models
     print(f"\n{'#'*70}")
