@@ -239,7 +239,7 @@ class JointPhysNetDCMNet(nn.Module):
         }
 
 
-def load_combined_data(efd_file: Path, esp_file: Path, verbose: bool = False) -> Dict[str, np.ndarray]:
+def load_combined_data(efd_file: Path, esp_file: Path, subtract_atom_energies: bool = True, verbose: bool = False) -> Dict[str, np.ndarray]:
     """
     Load and combine EFD and ESP data from separate NPZ files.
     
@@ -249,6 +249,8 @@ def load_combined_data(efd_file: Path, esp_file: Path, verbose: bool = False) ->
         Path to energies_forces_dipoles NPZ file
     esp_file : Path
         Path to grids_esp NPZ file
+    subtract_atom_energies : bool
+        Whether to subtract reference atomic energies from molecular energies (default: True)
     verbose : bool
         Whether to print loading information
         
@@ -265,13 +267,42 @@ def load_combined_data(efd_file: Path, esp_file: Path, verbose: bool = False) ->
         print(f"  Loading ESP: {esp_file}")
     esp_data = np.load(esp_file)
     
+    # Reference atomic energies (in eV) from PBE/def2-TZVP
+    # These are approximate isolated atom energies
+    ATOM_ENERGIES = {
+        1: -13.587,      # H
+        6: -1029.499,    # C
+        7: -1484.274,    # N
+        8: -2041.878,    # O
+        9: -2713.473,    # F
+        15: -8978.229,   # P
+        16: -10831.086,  # S
+        17: -12516.444,  # Cl
+    }
+    
+    energies = efd_data['E'].copy()
+    
+    # Subtract atomic energies
+    if subtract_atom_energies:
+        Z = esp_data['Z']  # (n_samples, natoms)
+        N = esp_data['N']  # (n_samples,)
+        
+        for i in range(len(energies)):
+            n_atoms = int(N[i])
+            atomic_nums = Z[i, :n_atoms]
+            atom_energy_sum = sum(ATOM_ENERGIES.get(int(z), 0.0) for z in atomic_nums)
+            energies[i] -= atom_energy_sum
+        
+        if verbose:
+            print(f"  ✅ Subtracted atomic energies (now relative to isolated atoms)")
+    
     # Combine data - ESP file should have R, Z, N as well
     combined = {
         # Molecular properties
         'R': esp_data['R'],
         'Z': esp_data['Z'],
         'N': esp_data['N'],
-        'E': efd_data['E'],
+        'E': energies,
         'F': efd_data['F'],
         'Dxyz': efd_data.get('Dxyz', efd_data.get('D')),
         # ESP properties
@@ -916,6 +947,7 @@ def plot_validation_results(
     esp_pred_dcmnet_list = []
     esp_pred_physnet_list = []
     esp_true_list = []
+    esp_grid_positions_list = []
     
     print(f"Evaluating {n_total} validation samples...")
     
@@ -956,6 +988,7 @@ def plot_validation_results(
             esp_pred_dcmnet_list.append(np.array(output['esp_dcmnet']))
             esp_pred_physnet_list.append(np.array(output['esp_physnet']))
             esp_true_list.append(np.array(batch['esp'][0]))
+            esp_grid_positions_list.append(np.array(batch['vdw_surface'][0]))
     
     # Convert to arrays
     energies_pred = np.array(energies_pred)
@@ -1237,7 +1270,54 @@ def plot_validation_results(
         plt.savefig(esp_path, dpi=150, bbox_inches='tight')
         plt.close()
         print(f"  ✅ Saved ESP example {idx}: {esp_path}")
-    
+        
+        # Create 3D scatter plots for this ESP example
+        from mpl_toolkits.mplot3d import Axes3D
+        
+        fig = plt.figure(figsize=(18, 6))
+        
+        # Get grid positions and ESP values
+        grid_pos = esp_grid_positions_list[idx]  # (ngrid, 3)
+        
+        # True ESP in 3D
+        ax = fig.add_subplot(131, projection='3d')
+        sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 1], grid_pos[:, 2],
+                       c=esp_true, cmap='RdBu_r', s=20, alpha=0.8, 
+                       vmin=esp_vmin, vmax=esp_vmax)
+        ax.set_xlabel('X (Å)')
+        ax.set_ylabel('Y (Å)')
+        ax.set_zlabel('Z (Å)')
+        ax.set_title(f'True ESP (3D){epoch_str}')
+        plt.colorbar(sc, ax=ax, label='ESP (Ha/e)', shrink=0.6)
+        
+        # PhysNet ESP in 3D
+        ax = fig.add_subplot(132, projection='3d')
+        sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 1], grid_pos[:, 2],
+                       c=esp_pred_physnet, cmap='RdBu_r', s=20, alpha=0.8,
+                       vmin=esp_vmin, vmax=esp_vmax)
+        ax.set_xlabel('X (Å)')
+        ax.set_ylabel('Y (Å)')
+        ax.set_zlabel('Z (Å)')
+        ax.set_title(f'PhysNet ESP (3D){epoch_str}')
+        plt.colorbar(sc, ax=ax, label='ESP (Ha/e)', shrink=0.6)
+        
+        # DCMNet ESP in 3D
+        ax = fig.add_subplot(133, projection='3d')
+        sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 1], grid_pos[:, 2],
+                       c=esp_pred_dcmnet, cmap='RdBu_r', s=20, alpha=0.8,
+                       vmin=esp_vmin, vmax=esp_vmax)
+        ax.set_xlabel('X (Å)')
+        ax.set_ylabel('Y (Å)')
+        ax.set_zlabel('Z (Å)')
+        ax.set_title(f'DCMNet ESP (3D){epoch_str}')
+        plt.colorbar(sc, ax=ax, label='ESP (Ha/e)', shrink=0.6)
+        
+        plt.tight_layout()
+        esp_3d_path = save_dir / f'esp_example_{idx}_3d{suffix}.png'
+        plt.savefig(esp_3d_path, dpi=150, bbox_inches='tight')
+        plt.close()
+        print(f"  ✅ Saved 3D ESP example {idx}: {esp_3d_path}")
+        
     print(f"\n✅ All plots saved to: {save_dir}")
 
 
@@ -1569,6 +1649,8 @@ def main():
                        help='Validation energies/forces/dipoles NPZ file')
     parser.add_argument('--valid-esp', type=Path, required=True,
                        help='Validation ESP grids NPZ file')
+    parser.add_argument('--no-subtract-atom-energies', action='store_true', default=False,
+                       help='Disable subtraction of reference atomic energies (default: subtract)')
     
     # PhysNet hyperparameters
     parser.add_argument('--physnet-features', type=int, default=64,
@@ -1687,10 +1769,15 @@ def main():
     print(f"{'#'*70}\n")
     
     print("Loading training data...")
-    train_data = load_combined_data(args.train_efd, args.train_esp, verbose=args.verbose)
+    subtract_atom_energies = not args.no_subtract_atom_energies
+    train_data = load_combined_data(args.train_efd, args.train_esp, 
+                                    subtract_atom_energies=subtract_atom_energies, 
+                                    verbose=args.verbose)
     
     print("\nLoading validation data...")
-    valid_data = load_combined_data(args.valid_efd, args.valid_esp, verbose=args.verbose)
+    valid_data = load_combined_data(args.valid_efd, args.valid_esp,
+                                    subtract_atom_energies=subtract_atom_energies,
+                                    verbose=args.verbose)
     
     # Auto-detect or validate natoms
     data_natoms = train_data['R'].shape[1]
