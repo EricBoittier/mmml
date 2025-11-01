@@ -195,30 +195,28 @@ com = segment_sum(mass_weighted_pos) / segment_sum(masses)  # Sums over atoms
 
 ---
 
-## 6. **ESP Grid in Bohr, Atoms in Angstroms** ✅ FIXED
+## 6. **ESP Grid Unit Confusion (NOT AN ISSUE)** ✅ CLARIFIED
 **File:** `examples/co2/dcmnet_physnet_train/trainer.py:load_combined_data`
 
-**Problem:** ESP grid positions (`vdw_surface`) stored in **Bohr** units, but atom positions in **Angstroms**!
+**Initial concern:** Thought ESP grid positions (`vdw_surface`) might be in **Bohr** units
 
-**Impact:**
-- Massive coordinate frame mismatch (1 Bohr = 0.529 Å)
-- ESP grid appeared to extend 0–6.5 Å, atoms at origin → misaligned by ~3 Å!
-- ESP computed at wrong spatial locations
-- Visualizations showed atoms at corner instead of center of grid
-
-**Evidence:**
+**Investigation:**
 ```
-Atoms:     -1.07 to +1.42 Å (centered near origin)
-Grid raw:   0 to 6.48 (if Bohr)
-Grid in Å:  0 to 3.43 Å (converts to surround atoms! ✓)
+Molecule:   -1.07 to +1.42 Å (span ~2.5 Å)
+Grid raw:    0 to 6.48 (span 6.5 Å)
 ```
 
-**Fix:** Convert `vdw_surface` from Bohr to Angstroms when loading:
+**Conclusion:** Grid is **already in Angstroms**!
+- 6.5 Å grid extent is appropriate for ~2.5 Å molecule with 2-3 Å margin ✓
+- If it were Bohr: 6.5 Bohr = 3.4 Å (too small for proper margin) ✗
+
+**Fix:** NO conversion needed - `vdw_surface` is already in Angstroms
 ```python
-BOHR_TO_ANGSTROM = 0.529177210903
-vdw_surface_angstrom = esp_data['vdw_surface'] * BOHR_TO_ANGSTROM
-combined['vdw_surface'] = vdw_surface_angstrom
+# Correct - use as-is
+combined['vdw_surface'] = esp_data['vdw_surface']  # Already in Angstroms
 ```
+
+**Note:** Grid metadata (`grid_origin`) may be in Bohr for cube file format, but the actual grid point coordinates in `vdw_surface` are already in Angstroms.
 
 ---
 
@@ -253,7 +251,7 @@ dipo_flat = dipo_for_esp.reshape(-1, 3)  # CORRECT
 ## Files Modified
 
 1. `mmml/physnetjax/physnetjax/models/model.py` - Charge init + COM calculation
-2. `examples/co2/dcmnet_physnet_train/trainer.py` - DCMNet COM + ESP filtering + moveaxis fix + Bohr→Å conversion
+2. `examples/co2/dcmnet_physnet_train/trainer.py` - DCMNet COM + ESP filtering + moveaxis fix + atomic radius filtering + radial error plots
 3. `examples/co2/dcmnet_physnet_train/align_esp_frames.py` - NEW: Diagnostic tool for spatial alignment
 
 ---
@@ -261,13 +259,14 @@ dipo_flat = dipo_for_esp.reshape(-1, 3)  # CORRECT
 ## Critical Bug Timeline
 
 1. ❌ Charges initialized to zero → no dipoles → no learning
-2. ❌ COM calculation broken → wrong dipoles
-3. ❌ DCMNet COM inconsistent → wrong distributed multipoles  
-4. ❌ ESP grid in Bohr, atoms in Angstroms → 3 Å spatial offset!
-5. ❌ moveaxis scrambling xyz → charges at nonsensical positions
-6. ❌ RMSE not using mask → inflated validation metrics
+2. ❌ COM calculation broken → wrong dipoles  
+3. ❌ DCMNet COM inconsistent → wrong distributed multipoles
+4. ❌ moveaxis scrambling xyz → charges at nonsensical positions
+5. ❌ RMSE not using mask → inflated validation metrics
 
 **All fixed!** ✅
+
+Note: We initially thought vdw_surface was in Bohr (#6), but it was already in Angstroms. No conversion needed.
 
 ---
 
