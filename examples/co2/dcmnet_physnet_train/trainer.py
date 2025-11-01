@@ -617,29 +617,31 @@ def compute_loss(
         dipole_pred = output["dipoles"]
     elif dipole_source == 'dcmnet':
         # Compute dipole from DCMNet distributed multipoles
-        # NOTE: Must compute relative to center of mass like PhysNet does!
+        # NOTE: Must use SAME COM calculation as PhysNet!
         natoms = output["mono_dist"].shape[0] // batch_size
         mono_reshaped = output["mono_dist"].reshape(batch_size, natoms, n_dcm)
         dipo_reshaped = output["dipo_dist"].reshape(batch_size, natoms, n_dcm, 3)
         
-        # Compute center of mass for each molecule
-        # Get atomic masses for real atoms
+        # Compute COM using segment_sum (same method as PhysNet)
         import ase.data
-        atom_mask = batch["atom_mask"].reshape(batch_size, natoms)
-        atomic_nums = batch["Z"].reshape(batch_size, natoms)
-        masses = jnp.take(ase.data.atomic_masses, atomic_nums)  # (batch, natoms)
-        masses_masked = masses * atom_mask  # Zero out padding
-        total_mass = jnp.sum(masses_masked, axis=1, keepdims=True)  # (batch, 1)
+        positions_flat = batch["R"]  # (batch*natoms, 3)
+        atomic_nums_flat = batch["Z"]  # (batch*natoms,)
+        masses_flat = jnp.take(ase.data.atomic_masses, atomic_nums_flat)
         
-        # Get atom positions for COM calculation
-        positions = batch["R"].reshape(batch_size, natoms, 3)
-        # COM = Σ(m_i * r_i) / Σ(m_i)
-        # total_mass: (batch, 1), so division broadcasts correctly
-        com = jnp.sum(positions * masses_masked[..., None], axis=1) / total_mass  # (batch, 3)
+        mass_weighted_pos = positions_flat * masses_flat[..., None]
+        total_mass_weighted_pos = jax.ops.segment_sum(
+            mass_weighted_pos,
+            segment_ids=batch["batch_segments"],
+            num_segments=batch_size
+        )  # (batch_size, 3)
+        total_mass = jax.ops.segment_sum(
+            masses_flat,
+            segment_ids=batch["batch_segments"],
+            num_segments=batch_size
+        )  # (batch_size,)
+        com = total_mass_weighted_pos / total_mass[..., None]  # (batch_size, 3)
         
         # Subtract COM from distributed charge positions
-        # dipo_reshaped: (batch, natoms, n_dcm, 3)
-        # com: (batch, 3) -> need to broadcast
         dipo_rel_com = dipo_reshaped - com[:, None, None, :]  # (batch, natoms, n_dcm, 3)
         
         # Dipole = Σ_atoms Σ_dcm (charge * position_relative_to_COM)
@@ -894,25 +896,38 @@ def eval_step(
                          batch["F"] * batch["atom_mask"][:, None]).mean()
     
     # Compute MAE for BOTH dipole sources (regardless of which is used for loss)
-    # PhysNet dipole
+    # PhysNet dipole (already computed in output["dipoles"])
     mae_dipole_physnet = jnp.abs(output["dipoles"] - batch["D"]).mean()
     
-    # DCMNet dipole - compute relative to COM
+    # DCMNet dipole - must use SAME COM calculation as PhysNet
+    # NOTE: PhysNet calculates dipole in its forward pass, we need to replicate
+    # the COM calculation exactly to ensure consistency
     natoms = output["mono_dist"].shape[0] // batch_size
     mono_reshaped = output["mono_dist"].reshape(batch_size, natoms, n_dcm)
     dipo_reshaped = output["dipo_dist"].reshape(batch_size, natoms, n_dcm, 3)
     
-    # Compute center of mass
+    # Use PhysNet's COM (which is calculated during forward pass)
+    # For batch_size=1, flatten and use segment_sum approach like PhysNet
     import ase.data
-    atom_mask = batch["atom_mask"].reshape(batch_size, natoms)
-    atomic_nums = batch["Z"].reshape(batch_size, natoms)
-    masses = jnp.take(ase.data.atomic_masses, atomic_nums)
-    masses_masked = masses * atom_mask
-    total_mass = jnp.sum(masses_masked, axis=1, keepdims=True)  # (batch, 1)
-    positions = batch["R"].reshape(batch_size, natoms, 3)
-    # COM = Σ(m_i * r_i) / Σ(m_i)
-    # total_mass: (batch, 1), so division broadcasts correctly to give (batch, 3)
-    com = jnp.sum(positions * masses_masked[..., None], axis=1) / total_mass  # (batch, 3)
+    
+    # Flatten for segment_sum (like PhysNet does)
+    positions_flat = batch["R"]  # (batch*natoms, 3)
+    atomic_nums_flat = batch["Z"]  # (batch*natoms,)
+    masses_flat = jnp.take(ase.data.atomic_masses, atomic_nums_flat)
+    
+    # Compute COM using segment_sum
+    mass_weighted_pos = positions_flat * masses_flat[..., None]  # (batch*natoms, 3)
+    total_mass_weighted_pos = jax.ops.segment_sum(
+        mass_weighted_pos,
+        segment_ids=batch["batch_segments"],
+        num_segments=batch_size
+    )  # (batch_size, 3)
+    total_mass = jax.ops.segment_sum(
+        masses_flat,
+        segment_ids=batch["batch_segments"],
+        num_segments=batch_size
+    )  # (batch_size,)
+    com = total_mass_weighted_pos / total_mass[..., None]  # (batch_size, 3)
     
     # Subtract COM from distributed charge positions
     dipo_rel_com = dipo_reshaped - com[:, None, None, :]  # (batch, natoms, n_dcm, 3)
