@@ -1679,6 +1679,7 @@ def train_model(
     plot_samples: int = 100,
     plot_esp_examples: int = 2,
     dipole_source: str = 'physnet',
+    esp_min_distance: float = 0.0,
     restart_params: Any = None,
     start_epoch: int = 1,
 ) -> Any:
