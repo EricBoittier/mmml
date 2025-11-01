@@ -2032,6 +2032,8 @@ def main():
                        help='Dipole loss weight')
     parser.add_argument('--esp-weight', type=float, default=10000.0,
                        help='ESP loss weight')
+    parser.add_argument('--esp-min-distance', type=float, default=1.0,
+                       help='Minimum distance (Å) from atoms for ESP grid points to include in loss (default: 1.0, set to 0 to disable)')
     parser.add_argument('--mono-weight', type=float, default=100.0,
                        help='Monopole constraint loss weight (enforce distributed charges sum to atomic charges)')
     parser.add_argument('--dipole-source', type=str, default='physnet',
