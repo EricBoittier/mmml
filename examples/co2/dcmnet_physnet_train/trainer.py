@@ -1431,14 +1431,15 @@ def plot_validation_results(
         # Create distributed charge visualization
         # Get atom positions and charges for this molecule
         batch_for_charges = prepare_batch_data(valid_data, np.array([idx]), cutoff=cutoff)
+        n_atoms = int(batch_for_charges['N'][0])  # Number of real atoms (not padding)
         atom_positions = np.array(batch_for_charges['R'][:n_atoms])  # (natoms, 3)
         atomic_nums = np.array(batch_for_charges['Z'][:n_atoms])
         
-        # Get distributed charges and positions
-        # mono_for_esp: (natoms, n_dcm) - charge values
-        # dipo_for_esp: (natoms, n_dcm, 3) - charge positions
-        charges_dist = mono_for_esp  # Already defined above
-        positions_dist = dipo_for_esp  # Already defined above
+        # Get distributed charges and positions (only real atoms, not padding)
+        # mono_for_esp: (natoms_padded, n_dcm) - charge values
+        # dipo_for_esp: (natoms_padded, n_dcm, 3) - charge positions
+        charges_dist = mono_for_esp[:n_atoms]  # Only real atoms
+        positions_dist = dipo_for_esp[:n_atoms]  # Only real atoms
         
         # Flatten for plotting: (natoms*n_dcm,) and (natoms*n_dcm, 3)
         charges_flat = np.array(charges_dist.reshape(-1))
