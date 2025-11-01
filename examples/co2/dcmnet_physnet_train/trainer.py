@@ -1765,12 +1765,11 @@ def plot_validation_results(
         atom_positions = np.array(batch_for_plot['R'][:n_atoms])
         atomic_nums = np.array(batch_for_plot['Z'][:n_atoms])
         
-        # Create comprehensive figure (5 rows x 4 cols)
-        from mpl_toolkits.mplot3d import Axes3D
+        # Create ESP comparison figure (2 rows x 3 cols)
         from ase import Atoms
         from ase.visualize.plot import plot_atoms
         
-        fig = plt.figure(figsize=(24, 28))
+        fig, axes = plt.subplots(2, 3, figsize=(18, 10))
         
         esp_true = esp_true_list[idx]
         esp_pred_dcmnet = esp_pred_dcmnet_list[idx]
