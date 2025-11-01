@@ -686,8 +686,8 @@ def compute_loss(
         
         # Get atomic radii for each atom (in Angstroms)
         import ase.data
-        # covalent_radii is in Angstroms
-        atomic_radii = jnp.array([ase.data.covalent_radii[int(z)] for z in atomic_nums_single])
+        # covalent_radii is in Angstroms - use jnp.take to avoid concretization
+        atomic_radii = jnp.take(jnp.array(ase.data.covalent_radii), atomic_nums_single)
         
         # Check if grid point is within 2*radius of any atom
         # distances: (ngrid, natoms), atomic_radii: (natoms,)
@@ -740,8 +740,8 @@ def compute_loss(
                 axis=2
             )  # (ngrid, natoms)
             
-            # Get atomic radii for each atom
-            atomic_radii = jnp.array([ase.data.covalent_radii[int(z)] for z in atomic_nums_mol])
+            # Get atomic radii for each atom - use jnp.take to avoid concretization
+            atomic_radii = jnp.take(jnp.array(ase.data.covalent_radii), atomic_nums_mol)
             
             # Check if within 2*radius of any atom
             within_cutoff = distances < (2.0 * atomic_radii[None, :])
