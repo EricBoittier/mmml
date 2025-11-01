@@ -579,6 +579,7 @@ def compute_loss(
     batch_size: int,
     n_dcm: int,
     dipole_source: str = 'physnet',
+    esp_min_distance: float = 0.0,
 ) -> Tuple[jnp.ndarray, Dict[str, jnp.ndarray]]:
     """
     Compute joint loss for PhysNet and DCMNet.
@@ -663,6 +664,28 @@ def compute_loss(
         vdw_for_esp = batch["vdw_surface"][0]  # (ngrid, 3)
         esp_target = batch["esp"][0]  # (ngrid,)
         
+        # Create distance-based mask for ESP grid points
+        if esp_min_distance > 0:
+            # Get atom positions (only real atoms)
+            atom_positions = batch["R"].reshape(batch_size, natoms, 3)[0]  # (natoms, 3)
+            atom_mask_single = batch["atom_mask"].reshape(batch_size, natoms)[0]  # (natoms,)
+            real_atom_positions = atom_positions * atom_mask_single[:, None]  # Zero out padding
+            
+            # Compute distances from each grid point to each atom
+            # vdw_for_esp: (ngrid, 3), real_atom_positions: (natoms, 3)
+            distances = jnp.linalg.norm(
+                vdw_for_esp[:, None, :] - real_atom_positions[None, :, :], 
+                axis=2
+            )  # (ngrid, natoms)
+            
+            # Min distance from each grid point to nearest atom
+            min_distances = jnp.min(jnp.where(atom_mask_single[None, :] > 0.5, distances, 1e10), axis=1)  # (ngrid,)
+            
+            # Mask: 1 if distance >= esp_min_distance, 0 otherwise
+            esp_mask = (min_distances >= esp_min_distance).astype(jnp.float32)
+        else:
+            esp_mask = jnp.ones_like(esp_target)
+        
         # Flatten distributed charges: (natoms*n_dcm,)
         mono_flat = mono_for_esp.reshape(-1)
         # Reshape dipoles: (natoms*n_dcm, 3)
@@ -670,17 +693,42 @@ def compute_loss(
         
         # Compute ESP
         esp_pred = calc_esp(dipo_flat, mono_flat, vdw_for_esp)
-        loss_esp = optax.l2_loss(esp_pred, esp_target).mean()
+        
+        # Apply mask to ESP loss
+        esp_diff = esp_pred - esp_target
+        loss_esp = (esp_mask * esp_diff ** 2).sum() / (esp_mask.sum() + 1e-10)
     else:
         # For batched, need to loop (or use vmap)
-        def single_esp_loss(mono_mol, dipo_mol, vdw_mol, esp_mol):
+        def single_esp_loss(mono_mol, dipo_mol, vdw_mol, esp_mol, atom_pos, atom_mask_mol):
             mono_flat = mono_mol.reshape(-1)
             dipo_flat = jnp.moveaxis(dipo_mol, -1, -2).reshape(-1, 3)
             esp_pred = calc_esp(dipo_flat, mono_flat, vdw_mol)
-            return optax.l2_loss(esp_pred, esp_mol).mean()
+            
+            # Create distance-based mask
+            if esp_min_distance > 0:
+                # Compute distances from each grid point to each atom
+                distances = jnp.linalg.norm(
+                    vdw_mol[:, None, :] - atom_pos[None, :, :], 
+                    axis=2
+                )  # (ngrid, natoms)
+                
+                # Min distance to nearest real atom
+                min_distances = jnp.min(jnp.where(atom_mask_mol[None, :] > 0.5, distances, 1e10), axis=1)
+                esp_mask = (min_distances >= esp_min_distance).astype(jnp.float32)
+            else:
+                esp_mask = jnp.ones_like(esp_mol)
+            
+            # Masked loss
+            esp_diff = esp_pred - esp_mol
+            return (esp_mask * esp_diff ** 2).sum() / (esp_mask.sum() + 1e-10)
+        
+        # Prepare inputs for vmap
+        atom_positions_batched = batch["R"].reshape(batch_size, natoms, 3)
+        atom_mask_batched = batch["atom_mask"].reshape(batch_size, natoms)
         
         esp_losses = jax.vmap(single_esp_loss)(
-            mono_reshaped, dipo_reshaped, batch["vdw_surface"], batch["esp"]
+            mono_reshaped, dipo_reshaped, batch["vdw_surface"], batch["esp"],
+            atom_positions_batched, atom_mask_batched
         )
         loss_esp = esp_losses.mean()
     
@@ -738,6 +786,7 @@ def train_step(
     n_dcm: int,
     clip_norm: float = None,
     dipole_source: str = 'physnet',
+    esp_min_distance: float = 0.0,
 ) -> Tuple[Any, Any, jnp.ndarray, Dict[str, jnp.ndarray]]:
     """
     Single training step with gradient computation and optional clipping.
@@ -760,7 +809,7 @@ def train_step(
             atom_mask=batch["atom_mask"],
         )
         total_loss, losses = compute_loss(
-            output, batch, energy_w, forces_w, dipole_w, esp_w, mono_w, batch_size, n_dcm, dipole_source
+            output, batch, energy_w, forces_w, dipole_w, esp_w, mono_w, batch_size, n_dcm, dipole_source, esp_min_distance
         )
         return total_loss, (output, losses)
     
@@ -796,6 +845,7 @@ def eval_step(
     batch_size: int,
     n_dcm: int,
     dipole_source: str = 'physnet',
+    esp_min_distance: float = 0.0,
 ) -> Tuple[jnp.ndarray, Dict[str, jnp.ndarray], Dict[str, jnp.ndarray]]:
     """
     Evaluation step without gradient computation.
@@ -818,7 +868,7 @@ def eval_step(
     )
     
     total_loss, losses = compute_loss(
-        output, batch, energy_w, forces_w, dipole_w, esp_w, mono_w, batch_size, n_dcm, dipole_source
+        output, batch, energy_w, forces_w, dipole_w, esp_w, mono_w, batch_size, n_dcm, dipole_source, esp_min_distance
     )
     
     # Compute MAE metrics
