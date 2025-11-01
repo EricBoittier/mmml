@@ -133,6 +133,7 @@ python trainer.py ... --dipole-source dcmnet
 - Separates electrostatic component (DCMNet) from other physics (PhysNet)
 - λ is learned during training (initialized to 0.1)
 - Can improve energy predictions if Coulomb term is accurate
+- **Works with any batch size** (uses `jax.vmap` for batched computation)
 
 **Usage:**
 ```bash
@@ -140,6 +141,7 @@ python trainer.py \
   --train-efd ... \
   --train-esp ... \
   --mix-coulomb-energy \
+  --batch-size 10 \
   --mono-weight 100.0 \
   --esp-weight 1000000.0
 ```

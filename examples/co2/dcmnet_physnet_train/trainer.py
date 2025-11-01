@@ -178,39 +178,39 @@ class JointPhysNetDCMNet(nn.Module):
             # Note: dipo_dist contains the POSITIONS of distributed charges, not dipole moments!
             # E_coulomb = (1/2) Σᵢⱼ qᵢqⱼ/rᵢⱼ (pairwise interactions)
             natoms = mono_dist.shape[0] // batch_size
+            n_dcm = mono_dist.shape[1]
             
             # Get all charge positions and values
             # mono_dist: (batch*natoms, n_dcm) - charge values
             # dipo_dist: (batch*natoms, n_dcm, 3) - charge positions in Angstrom
-            charges_flat = mono_dist.reshape(-1)  # (batch*natoms*n_dcm,)
-            positions_flat = dipo_dist.reshape(-1, 3)  # (batch*natoms*n_dcm, 3)
+            charges_reshaped = mono_dist.reshape(batch_size, natoms * n_dcm)  # (batch, natoms*n_dcm)
+            positions_reshaped = dipo_dist.reshape(batch_size, natoms * n_dcm, 3)  # (batch, natoms*n_dcm, 3)
             
-            # For batch_size==1, compute Coulomb energy
-            if batch_size == 1:
+            # Compute Coulomb energy per molecule using vmap
+            def compute_coulomb_single(charges, positions):
+                """Compute Coulomb energy for a single molecule."""
                 # Pairwise distances between all distributed charges
-                diff = positions_flat[:, None, :] - positions_flat[None, :, :]  # (N, N, 3)
+                diff = positions[:, None, :] - positions[None, :, :]  # (N, N, 3)
                 distances = jnp.linalg.norm(diff, axis=-1)  # (N, N)
                 # Avoid self-interaction
                 distances = jnp.where(distances < 1e-6, 1e6, distances)
                 # Coulomb energy: E = (1/2) Σᵢⱼ qᵢqⱼ/rᵢⱼ
                 # Convert distance from Angstrom to Bohr (rᵢⱼ * 1.88973)
                 # Energy in Hartree, then convert to eV (* 27.2114)
-                pairwise_energy = charges_flat[:, None] * charges_flat[None, :] / (distances * 1.88973)
+                pairwise_energy = charges[:, None] * charges[None, :] / (distances * 1.88973)
                 coulomb_energy_hartree = 0.5 * jnp.sum(pairwise_energy)
-                coulomb_energy = coulomb_energy_hartree * 27.2114  # Convert Ha to eV
-                
-                # Mix energies: E_total = E_physnet + λ * E_coulomb
-                lambda_val = self.coulomb_lambda[0]
-                energy_mixed = energy_reshaped + lambda_val * coulomb_energy
-                energy_reshaped = energy_mixed
-                
-                # Store for monitoring
-                coulomb_energy_out = coulomb_energy
-                lambda_out = lambda_val
-            else:
-                # For batched, would need to compute per-molecule
-                coulomb_energy_out = jnp.array(0.0)
-                lambda_out = self.coulomb_lambda[0]
+                return coulomb_energy_hartree * 27.2114  # Convert Ha to eV
+            
+            # Vectorize over batch dimension
+            coulomb_energies = jax.vmap(compute_coulomb_single)(charges_reshaped, positions_reshaped)  # (batch_size,)
+            
+            # Mix energies: E_total = E_physnet + λ * E_coulomb
+            lambda_val = self.coulomb_lambda[0]
+            energy_reshaped = energy_reshaped + lambda_val * coulomb_energies
+            
+            # Store for monitoring (mean across batch)
+            coulomb_energy_out = jnp.mean(coulomb_energies)
+            lambda_out = lambda_val
         else:
             coulomb_energy_out = jnp.array(0.0)
             lambda_out = jnp.array(0.0)
@@ -317,8 +317,8 @@ def resize_data_padding(
     current_natoms = data['R'].shape[1]
     
     if current_natoms == target_natoms:
-        return data
-    
+    return data
+
     # Check if safe
     max_atoms = int(np.max(data['N']))
     if max_atoms > target_natoms:
@@ -839,6 +839,12 @@ def eval_step(
     losses["coulomb_energy"] = output.get("coulomb_energy", jnp.array(0.0))
     losses["coulomb_lambda"] = output.get("coulomb_lambda", jnp.array(0.0))
     
+    # Add predictions to output for statistics collection
+    output["dipoles_physnet"] = output["dipoles"]  # Already in output
+    output["dipoles_dcmnet"] = dipole_dcmnet
+    output["esp_physnet"] = esp_pred_physnet
+    output["esp_dcmnet"] = esp_pred_dcmnet
+    
     return total_loss, losses, output
 
 
@@ -1316,6 +1322,12 @@ def train_model(
         all_energy_true = []
         all_forces_pred = []
         all_forces_true = []
+        all_dipole_physnet_pred = []
+        all_dipole_dcmnet_pred = []
+        all_dipole_true = []
+        all_esp_physnet_pred = []
+        all_esp_dcmnet_pred = []
+        all_esp_true = []
         
         for batch_idx in range(n_valid_batches):
             start_idx = batch_idx * batch_size
@@ -1349,6 +1361,24 @@ def train_model(
             all_energy_true.extend(np.array(batch['E']).flatten())
             all_forces_pred.extend(np.array(output['forces']).flatten())
             all_forces_true.extend(np.array(batch['F']).flatten())
+            
+            # Collect dipole predictions
+            all_dipole_physnet_pred.extend(np.array(output['dipoles_physnet']).flatten())
+            all_dipole_dcmnet_pred.extend(np.array(output['dipoles_dcmnet']).flatten())
+            all_dipole_true.extend(np.array(batch['D']).flatten())
+            
+            # Collect ESP predictions 
+            # Note: eval_step only computes ESP for first molecule in batch
+            # So we just take the first molecule's ESP values
+            esp_physnet = np.array(output['esp_physnet']).flatten()
+            esp_dcmnet = np.array(output['esp_dcmnet']).flatten()
+            esp_true = np.array(batch['esp'][0]).flatten()  # First molecule
+            esp_mask = np.array(batch['esp_mask'][0]).flatten()  # First molecule
+            
+            # Only collect non-masked ESP values
+            all_esp_physnet_pred.extend(esp_physnet[esp_mask > 0.5])
+            all_esp_dcmnet_pred.extend(esp_dcmnet[esp_mask > 0.5])
+            all_esp_true.extend(esp_true[esp_mask > 0.5])
         
         # Average validation losses
         valid_loss_avg = {
@@ -1362,6 +1392,10 @@ def train_model(
             'energy_std': np.std(all_energy_true),
             'forces_mean': np.mean([f for f in all_forces_true if f != 0]),  # Exclude padding
             'forces_std': np.std([f for f in all_forces_true if f != 0]),
+            'dipole_mean': np.mean([d for d in all_dipole_true if d != 0]),  # Exclude padding
+            'dipole_std': np.std([d for d in all_dipole_true if d != 0]),
+            'esp_mean': np.mean(all_esp_true),
+            'esp_std': np.std(all_esp_true),
         }
         
         epoch_time = time.time() - epoch_start
@@ -1401,13 +1435,17 @@ def train_model(
                 e_std = valid_stats.get('energy_std', 1)
                 f_mean = valid_stats.get('forces_mean', 0)
                 f_std = valid_stats.get('forces_std', 1)
+                d_mean = valid_stats.get('dipole_mean', 0)
+                d_std = valid_stats.get('dipole_std', 1)
+                esp_mean = valid_stats.get('esp_mean', 0)
+                esp_std = valid_stats.get('esp_std', 1)
                 
                 print(f"    MAE Energy: {mae_energy_ev:.6f} eV  ({mae_energy_ev * eV_to_kcal:.6f} kcal/mol) [μ={e_mean:.3f}, σ={e_std:.3f} eV]")
                 print(f"    MAE Forces: {mae_forces_ev:.6f} eV/Å  ({mae_forces_ev * eV_to_kcal:.6f} kcal/mol/Å) [μ={f_mean:.3f}, σ={f_std:.3f} eV/Å]")
-                print(f"    MAE Dipole (PhysNet): {mae_dipole_physnet_D:.6f} D  ({mae_dipole_physnet_D * Debye_to_eA:.6f} e·Å)")
-                print(f"    MAE Dipole (DCMNet): {mae_dipole_dcmnet_D:.6f} D  ({mae_dipole_dcmnet_D * Debye_to_eA:.6f} e·Å)")
-                print(f"    RMSE ESP (PhysNet): {rmse_esp_physnet_Ha:.6f} Ha/e  ({rmse_esp_physnet_Ha * Ha_to_kcal:.6f} (kcal/mol)/e)")
-                print(f"    RMSE ESP (DCMNet): {rmse_esp_dcmnet_Ha:.6f} Ha/e  ({rmse_esp_dcmnet_Ha * Ha_to_kcal:.6f} (kcal/mol)/e)")
+                print(f"    MAE Dipole (PhysNet): {mae_dipole_physnet_D:.6f} D  ({mae_dipole_physnet_D * Debye_to_eA:.6f} e·Å) [μ={d_mean:.3f}, σ={d_std:.3f} D]")
+                print(f"    MAE Dipole (DCMNet): {mae_dipole_dcmnet_D:.6f} D  ({mae_dipole_dcmnet_D * Debye_to_eA:.6f} e·Å) [μ={d_mean:.3f}, σ={d_std:.3f} D]")
+                print(f"    RMSE ESP (PhysNet): {rmse_esp_physnet_Ha:.6f} Ha/e  ({rmse_esp_physnet_Ha * Ha_to_kcal:.6f} (kcal/mol)/e) [μ={esp_mean:.6f}, σ={esp_std:.6f} Ha/e]")
+                print(f"    RMSE ESP (DCMNet): {rmse_esp_dcmnet_Ha:.6f} Ha/e  ({rmse_esp_dcmnet_Ha * Ha_to_kcal:.6f} (kcal/mol)/e) [μ={esp_mean:.6f}, σ={esp_std:.6f} Ha/e]")
             
             # Print constraint violations if available
             if 'total_charge' in valid_loss_avg:
@@ -1510,7 +1548,7 @@ def main():
                        help='Random seed')
     
     # Loss weights
-    parser.add_argument('--energy-weight', type=float, default=1.0,
+    parser.add_argument('--energy-weight', type=float, default=10.0,
                        help='Energy loss weight')
     parser.add_argument('--forces-weight', type=float, default=50.0,
                        help='Forces loss weight')
