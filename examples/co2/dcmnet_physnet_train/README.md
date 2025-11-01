@@ -177,7 +177,9 @@ Coulomb Mixing:
 
 ## Training Output
 
-The training script provides detailed metrics with **validation set statistics** for context:
+The training script provides detailed metrics with **validation set statistics** for context.
+
+**Note:** Energies are **formation energies** (relative to isolated atoms) by default. Use `--no-subtract-atom-energies` to train on absolute energies.
 
 ```
 Epoch 50/500 (1.8s)
@@ -192,7 +194,7 @@ Epoch 50/500 (1.8s)
   Coulomb Mixing:  # (only if --mix-coulomb-energy is enabled)
     λ (learned): 0.100000
     E_coulomb: -127.453 eV
-    MAE Energy: 41.224107 eV  (950.648528 kcal/mol) [μ=-5104.420, σ=1.777 eV]
+    MAE Energy: 2.224 eV  (51.3 kcal/mol) [μ=-5.12, σ=1.78 eV]  # Formation energies!
     MAE Forces: 1.147455 eV/Å  (26.460883 kcal/mol/Å) [μ=-0.000, σ=8.427 eV/Å]
     MAE Dipole (PhysNet): 0.050436 e·Å  (0.242257 D) [μ=0.123, σ=0.456 e·Å]
     MAE Dipole (DCMNet): 0.059249 e·Å  (0.284588 D) [μ=0.123, σ=0.456 e·Å]
