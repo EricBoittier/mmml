@@ -175,12 +175,15 @@ class JointPhysNetDCMNet(nn.Module):
         
         if self.mix_coulomb_energy:
             # Compute Coulomb energy from DCMNet distributed charges
+            # Note: dipo_dist contains the POSITIONS of distributed charges, not dipole moments!
             # E_coulomb = (1/2) Σᵢⱼ qᵢqⱼ/rᵢⱼ (pairwise interactions)
             natoms = mono_dist.shape[0] // batch_size
             
             # Get all charge positions and values
+            # mono_dist: (batch*natoms, n_dcm) - charge values
+            # dipo_dist: (batch*natoms, n_dcm, 3) - charge positions in Angstrom
             charges_flat = mono_dist.reshape(-1)  # (batch*natoms*n_dcm,)
-            positions_flat = jnp.moveaxis(dipo_dist, -1, -2).reshape(-1, 3)  # (batch*natoms*n_dcm, 3)
+            positions_flat = dipo_dist.reshape(-1, 3)  # (batch*natoms*n_dcm, 3)
             
             # For batch_size==1, compute Coulomb energy
             if batch_size == 1:
@@ -189,9 +192,12 @@ class JointPhysNetDCMNet(nn.Module):
                 distances = jnp.linalg.norm(diff, axis=-1)  # (N, N)
                 # Avoid self-interaction
                 distances = jnp.where(distances < 1e-6, 1e6, distances)
-                # Coulomb energy in atomic units: E = (1/2) Σᵢⱼ qᵢqⱼ/(rᵢⱼ * 1.88973)
+                # Coulomb energy: E = (1/2) Σᵢⱼ qᵢqⱼ/rᵢⱼ
+                # Convert distance from Angstrom to Bohr (rᵢⱼ * 1.88973)
+                # Energy in Hartree, then convert to eV (* 27.2114)
                 pairwise_energy = charges_flat[:, None] * charges_flat[None, :] / (distances * 1.88973)
-                coulomb_energy = 0.5 * jnp.sum(pairwise_energy)
+                coulomb_energy_hartree = 0.5 * jnp.sum(pairwise_energy)
+                coulomb_energy = coulomb_energy_hartree * 27.2114  # Convert Ha to eV
                 
                 # Mix energies: E_total = E_physnet + λ * E_coulomb
                 lambda_val = self.coulomb_lambda[0]
