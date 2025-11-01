@@ -615,16 +615,32 @@ def compute_loss(
         dipole_pred = output["dipoles"]
     elif dipole_source == 'dcmnet':
         # Compute dipole from DCMNet distributed multipoles
-        # Dipole = Σ (q_i * r_i) for distributed charges
+        # NOTE: Must compute relative to center of mass like PhysNet does!
         natoms = output["mono_dist"].shape[0] // batch_size
         mono_reshaped = output["mono_dist"].reshape(batch_size, natoms, n_dcm)
         dipo_reshaped = output["dipo_dist"].reshape(batch_size, natoms, n_dcm, 3)
         
-        # For each molecule, compute dipole from distributed charges
-        # mono_reshaped: (batch, natoms, n_dcm) - charges
-        # dipo_reshaped: (batch, natoms, n_dcm, 3) - positions
-        # Dipole = Σ_atoms Σ_dcm (charge * position)
-        dipole_pred = jnp.sum(mono_reshaped[..., None] * dipo_reshaped, axis=(1, 2))  # (batch, 3)
+        # Compute center of mass for each molecule
+        # Get atomic masses for real atoms
+        import ase.data
+        atom_mask = batch["atom_mask"].reshape(batch_size, natoms)
+        atomic_nums = batch["Z"].reshape(batch_size, natoms)
+        masses = jnp.take(ase.data.atomic_masses, atomic_nums)  # (batch, natoms)
+        masses_masked = masses * atom_mask  # Zero out padding
+        total_mass = jnp.sum(masses_masked, axis=1, keepdims=True)  # (batch, 1)
+        
+        # Get atom positions for COM calculation
+        positions = batch["R"].reshape(batch_size, natoms, 3)
+        # COM = Σ(m_i * r_i) / Σ(m_i)
+        com = jnp.sum(positions * masses_masked[..., None], axis=1) / total_mass[..., None]  # (batch, 3)
+        
+        # Subtract COM from distributed charge positions
+        # dipo_reshaped: (batch, natoms, n_dcm, 3)
+        # com: (batch, 3) -> need to broadcast
+        dipo_rel_com = dipo_reshaped - com[:, None, None, :]  # (batch, natoms, n_dcm, 3)
+        
+        # Dipole = Σ_atoms Σ_dcm (charge * position_relative_to_COM)
+        dipole_pred = jnp.sum(mono_reshaped[..., None] * dipo_rel_com, axis=(1, 2))  # (batch, 3)
     else:
         raise ValueError(f"Unknown dipole_source: {dipole_source}")
     
@@ -813,11 +829,24 @@ def eval_step(
     # PhysNet dipole
     mae_dipole_physnet = jnp.abs(output["dipoles"] - batch["D"]).mean()
     
-    # DCMNet dipole
+    # DCMNet dipole - compute relative to COM
     natoms = output["mono_dist"].shape[0] // batch_size
     mono_reshaped = output["mono_dist"].reshape(batch_size, natoms, n_dcm)
     dipo_reshaped = output["dipo_dist"].reshape(batch_size, natoms, n_dcm, 3)
-    dipole_dcmnet = jnp.sum(mono_reshaped[..., None] * dipo_reshaped, axis=(1, 2))
+    
+    # Compute center of mass
+    import ase.data
+    atom_mask = batch["atom_mask"].reshape(batch_size, natoms)
+    atomic_nums = batch["Z"].reshape(batch_size, natoms)
+    masses = jnp.take(ase.data.atomic_masses, atomic_nums)
+    masses_masked = masses * atom_mask
+    total_mass = jnp.sum(masses_masked, axis=1, keepdims=True)
+    positions = batch["R"].reshape(batch_size, natoms, 3)
+    com = jnp.sum(positions * masses_masked[..., None], axis=1) / total_mass[..., None]
+    
+    # Subtract COM from distributed charge positions
+    dipo_rel_com = dipo_reshaped - com[:, None, None, :]
+    dipole_dcmnet = jnp.sum(mono_reshaped[..., None] * dipo_rel_com, axis=(1, 2))
     mae_dipole_dcmnet = jnp.abs(dipole_dcmnet - batch["D"]).mean()
     
     # Compute ESP RMSE for BOTH methods (only for batch_size == 1)
@@ -1190,15 +1219,24 @@ def plot_validation_results(
         esp_error_dcmnet = esp_pred_dcmnet - esp_true
         esp_error_physnet = esp_pred_physnet - esp_true
         
-        # Compute shared color scales
-        # For ESP values: use same scale for true, dcmnet, physnet
-        esp_vmin = min(esp_true.min(), esp_pred_dcmnet.min(), esp_pred_physnet.min())
-        esp_vmax = max(esp_true.max(), esp_pred_dcmnet.max(), esp_pred_physnet.max())
+        # Compute shared color scales - SYMMETRIC around 0
+        # For ESP values: symmetric scale
+        esp_absmax = max(abs(esp_true).max(), abs(esp_pred_dcmnet).max(), abs(esp_pred_physnet).max())
+        esp_vmin = -esp_absmax
+        esp_vmax = esp_absmax
         
         # For errors: use symmetric scale around 0
         error_absmax = max(abs(esp_error_dcmnet).max(), abs(esp_error_physnet).max())
         error_vmin = -error_absmax
         error_vmax = error_absmax
+        
+        # Also compute percentile-based ranges for detailed error views
+        p95_max = max(np.percentile(np.abs(esp_error_dcmnet), 95), 
+                      np.percentile(np.abs(esp_error_physnet), 95))
+        p75_max = max(np.percentile(np.abs(esp_error_dcmnet), 75), 
+                      np.percentile(np.abs(esp_error_physnet), 75))
+        p50_max = max(np.percentile(np.abs(esp_error_dcmnet), 50), 
+                      np.percentile(np.abs(esp_error_physnet), 50))
         
         # True ESP (shared)
         ax = axes[0, 0]
@@ -1317,6 +1355,78 @@ def plot_validation_results(
         plt.savefig(esp_3d_path, dpi=150, bbox_inches='tight')
         plt.close()
         print(f"  ✅ Saved 3D ESP example {idx}: {esp_3d_path}")
+        
+        # Create multi-scale error visualization (3 rows at different percentiles)
+        fig, axes = plt.subplots(3, 2, figsize=(14, 12))
+        
+        # Row 1: 100% range (all data)
+        ax = axes[0, 0]
+        sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 2],
+                       c=esp_error_physnet, cmap='RdBu_r', s=20, alpha=0.8,
+                       vmin=-error_absmax, vmax=error_absmax)
+        ax.set_xlabel('X (Å)')
+        ax.set_ylabel('Z (Å)')
+        ax.set_title(f'PhysNet Error (100% range){epoch_str}')
+        plt.colorbar(sc, ax=ax, label='Error (Ha/e)')
+        ax.grid(True, alpha=0.3)
+        
+        ax = axes[0, 1]
+        sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 2],
+                       c=esp_error_dcmnet, cmap='RdBu_r', s=20, alpha=0.8,
+                       vmin=-error_absmax, vmax=error_absmax)
+        ax.set_xlabel('X (Å)')
+        ax.set_ylabel('Z (Å)')
+        ax.set_title(f'DCMNet Error (100% range){epoch_str}')
+        plt.colorbar(sc, ax=ax, label='Error (Ha/e)')
+        ax.grid(True, alpha=0.3)
+        
+        # Row 2: 95th percentile
+        ax = axes[1, 0]
+        sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 2],
+                       c=esp_error_physnet, cmap='RdBu_r', s=20, alpha=0.8,
+                       vmin=-p95_max, vmax=p95_max)
+        ax.set_xlabel('X (Å)')
+        ax.set_ylabel('Z (Å)')
+        ax.set_title(f'PhysNet Error (95th %-ile){epoch_str}')
+        plt.colorbar(sc, ax=ax, label='Error (Ha/e)')
+        ax.grid(True, alpha=0.3)
+        
+        ax = axes[1, 1]
+        sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 2],
+                       c=esp_error_dcmnet, cmap='RdBu_r', s=20, alpha=0.8,
+                       vmin=-p95_max, vmax=p95_max)
+        ax.set_xlabel('X (Å)')
+        ax.set_ylabel('Z (Å)')
+        ax.set_title(f'DCMNet Error (95th %-ile){epoch_str}')
+        plt.colorbar(sc, ax=ax, label='Error (Ha/e)')
+        ax.grid(True, alpha=0.3)
+        
+        # Row 3: 75th percentile
+        ax = axes[2, 0]
+        sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 2],
+                       c=esp_error_physnet, cmap='RdBu_r', s=20, alpha=0.8,
+                       vmin=-p75_max, vmax=p75_max)
+        ax.set_xlabel('X (Å)')
+        ax.set_ylabel('Z (Å)')
+        ax.set_title(f'PhysNet Error (75th %-ile){epoch_str}')
+        plt.colorbar(sc, ax=ax, label='Error (Ha/e)')
+        ax.grid(True, alpha=0.3)
+        
+        ax = axes[2, 1]
+        sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 2],
+                       c=esp_error_dcmnet, cmap='RdBu_r', s=20, alpha=0.8,
+                       vmin=-p75_max, vmax=p75_max)
+        ax.set_xlabel('X (Å)')
+        ax.set_ylabel('Z (Å)')
+        ax.set_title(f'DCMNet Error (75th %-ile){epoch_str}')
+        plt.colorbar(sc, ax=ax, label='Error (Ha/e)')
+        ax.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        esp_scales_path = save_dir / f'esp_example_{idx}_error_scales{suffix}.png'
+        plt.savefig(esp_scales_path, dpi=150, bbox_inches='tight')
+        plt.close()
+        print(f"  ✅ Saved multi-scale ESP errors {idx}: {esp_scales_path}")
         
     print(f"\n✅ All plots saved to: {save_dir}")
 
