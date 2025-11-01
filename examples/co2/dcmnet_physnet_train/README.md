@@ -34,7 +34,14 @@ This directory contains a joint training script that trains PhysNet and DCMNet s
 - Internally converts distances to Bohr: `ESP = q / (r_Angstrom × 1.88973)`
 - Returns ESP in Hartree/e (atomic units)
 
-**Note:** Grid metadata (`grid_origin`, `grid_axes`) may be in Bohr for cube file compatibility, but `vdw_surface` coordinates are already in Angstroms.
+**Coordinate Frame Alignment:**
+The trainer automatically aligns ESP grids with molecular coordinates:
+- Computes atom COM and grid COM for each molecule
+- Shifts grid by `-(grid_COM - atom_COM)` so they share the same center
+- Ensures ESP calculations use correct spatial relationships
+- Critical for accurate ESP predictions!
+
+Without alignment, atoms and grid can be offset by ~3 Å, causing completely wrong ESP values.
 
 ## Usage
 
