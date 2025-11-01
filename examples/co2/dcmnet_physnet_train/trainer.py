@@ -972,9 +972,10 @@ def plot_validation_results(
     dipoles_dcmnet_pred = np.concatenate([d.reshape(-1) for d in dipoles_dcmnet_pred])
     dipoles_true = np.concatenate([d.reshape(-1) for d in dipoles_true])
     
-    # Create figure with 6 subplots (2x3) to show both dipole sources
-    fig, axes = plt.subplots(2, 3, figsize=(18, 12))
+    # Create figure with scatter plots (row 1&3) and histograms (row 2&4)
+    fig, axes = plt.subplots(4, 3, figsize=(18, 20))
     
+    # ========== ROW 0: SCATTER PLOTS ==========
     # Energy scatter
     ax = axes[0, 0]
     ax.scatter(energies_true, energies_pred, alpha=0.5, s=20)
@@ -983,7 +984,8 @@ def plot_validation_results(
     ax.plot(lims, lims, 'r--', alpha=0.5, label='Perfect')
     ax.set_xlabel('True Energy (eV)')
     ax.set_ylabel('Predicted Energy (eV)')
-    ax.set_title(f'Energy\nMAE: {np.abs(energies_true - energies_pred).mean():.3f} eV')
+    mae_energy = np.abs(energies_true - energies_pred).mean()
+    ax.set_title(f'Energy\nMAE: {mae_energy:.3f} eV')
     ax.legend()
     ax.grid(True, alpha=0.3)
     
@@ -995,81 +997,155 @@ def plot_validation_results(
     ax.plot(lims, lims, 'r--', alpha=0.5, label='Perfect')
     ax.set_xlabel('True Forces (eV/Å)')
     ax.set_ylabel('Predicted Forces (eV/Å)')
-    ax.set_title(f'Forces\nMAE: {np.abs(forces_true - forces_pred).mean():.3f} eV/Å')
+    mae_forces = np.abs(forces_true - forces_pred).mean()
+    ax.set_title(f'Forces\nMAE: {mae_forces:.3f} eV/Å')
     ax.legend()
     ax.grid(True, alpha=0.3)
     
     # PhysNet Dipole scatter
-    ax = axes[1, 0]
+    ax = axes[0, 2]
     ax.scatter(dipoles_true, dipoles_physnet_pred, alpha=0.5, s=20)
     lims = [min(dipoles_true.min(), dipoles_physnet_pred.min()),
             max(dipoles_true.max(), dipoles_physnet_pred.max())]
     ax.plot(lims, lims, 'r--', alpha=0.5, label='Perfect')
-    ax.set_xlabel('True Dipole (D)')
-    ax.set_ylabel('Predicted Dipole (D)')
+    ax.set_xlabel('True Dipole (e·Å)')
+    ax.set_ylabel('Predicted Dipole (e·Å)')
     marker = ' *' if dipole_source == 'physnet' else ''
-    ax.set_title(f'Dipole - PhysNet{marker}\nMAE: {np.abs(dipoles_true - dipoles_physnet_pred).mean():.3f} D')
+    mae_dipole_physnet = np.abs(dipoles_true - dipoles_physnet_pred).mean()
+    ax.set_title(f'Dipole - PhysNet{marker}\nMAE: {mae_dipole_physnet:.3f} e·Å')
     ax.legend()
     ax.grid(True, alpha=0.3)
     
-    # DCMNet Dipole scatter
+    # ========== ROW 1: ERROR HISTOGRAMS ==========
+    # Energy error histogram
+    ax = axes[1, 0]
+    errors_energy = energies_pred - energies_true
+    ax.hist(errors_energy, bins=50, alpha=0.7, color='steelblue', edgecolor='black')
+    ax.axvline(0, color='red', linestyle='--', linewidth=2, alpha=0.5, label='Zero Error')
+    ax.set_xlabel('Prediction Error (eV)')
+    ax.set_ylabel('Count')
+    ax.set_title(f'Energy Error Distribution\nStd: {errors_energy.std():.3f} eV')
+    ax.legend()
+    ax.grid(True, alpha=0.3, axis='y')
+    
+    # Forces error histogram
     ax = axes[1, 1]
-    ax.scatter(dipoles_true, dipoles_dcmnet_pred, alpha=0.5, s=20)
+    errors_forces = forces_pred - forces_true
+    ax.hist(errors_forces, bins=50, alpha=0.7, color='steelblue', edgecolor='black')
+    ax.axvline(0, color='red', linestyle='--', linewidth=2, alpha=0.5, label='Zero Error')
+    ax.set_xlabel('Prediction Error (eV/Å)')
+    ax.set_ylabel('Count')
+    ax.set_title(f'Forces Error Distribution\nStd: {errors_forces.std():.3f} eV/Å')
+    ax.legend()
+    ax.grid(True, alpha=0.3, axis='y')
+    
+    # PhysNet Dipole error histogram
+    ax = axes[1, 2]
+    errors_dipole_physnet = dipoles_physnet_pred - dipoles_true
+    ax.hist(errors_dipole_physnet, bins=50, alpha=0.7, color='steelblue', edgecolor='black')
+    ax.axvline(0, color='red', linestyle='--', linewidth=2, alpha=0.5, label='Zero Error')
+    ax.set_xlabel('Prediction Error (e·Å)')
+    ax.set_ylabel('Count')
+    ax.set_title(f'Dipole (PhysNet) Error\nStd: {errors_dipole_physnet.std():.3f} e·Å')
+    ax.legend()
+    ax.grid(True, alpha=0.3, axis='y')
+    
+    # ========== ROW 2: MORE SCATTER PLOTS ==========
+    # DCMNet Dipole scatter
+    ax = axes[2, 0]
+    ax.scatter(dipoles_true, dipoles_dcmnet_pred, alpha=0.5, s=20, color='orange')
     lims = [min(dipoles_true.min(), dipoles_dcmnet_pred.min()),
             max(dipoles_true.max(), dipoles_dcmnet_pred.max())]
     ax.plot(lims, lims, 'r--', alpha=0.5, label='Perfect')
-    ax.set_xlabel('True Dipole (D)')
-    ax.set_ylabel('Predicted Dipole (D)')
+    ax.set_xlabel('True Dipole (e·Å)')
+    ax.set_ylabel('Predicted Dipole (e·Å)')
     marker = ' *' if dipole_source == 'dcmnet' else ''
-    ax.set_title(f'Dipole - DCMNet{marker}\nMAE: {np.abs(dipoles_true - dipoles_dcmnet_pred).mean():.3f} D')
+    mae_dipole_dcmnet = np.abs(dipoles_true - dipoles_dcmnet_pred).mean()
+    ax.set_title(f'Dipole - DCMNet{marker}\nMAE: {mae_dipole_dcmnet:.3f} e·Å')
     ax.legend()
     ax.grid(True, alpha=0.3)
     
-    # ESP scatter - DCMNet
-    ax = axes[1, 2]
-    if esp_pred_dcmnet_list:
-        esp_pred_dcmnet_all = np.concatenate([e.reshape(-1) for e in esp_pred_dcmnet_list])
-        esp_true_all = np.concatenate([e.reshape(-1) for e in esp_true_list])
-        ax.scatter(esp_true_all, esp_pred_dcmnet_all, alpha=0.3, s=10)
-        lims = [min(esp_true_all.min(), esp_pred_dcmnet_all.min()),
-                max(esp_true_all.max(), esp_pred_dcmnet_all.max())]
-        ax.plot(lims, lims, 'r--', alpha=0.5, label='Perfect')
-        ax.set_xlabel('True ESP (Hartree/e)')
-        ax.set_ylabel('Predicted ESP (Hartree/e)')
-        rmse = np.sqrt(np.mean((esp_pred_dcmnet_all - esp_true_all)**2))
-        # Compute R²
-        ss_res = np.sum((esp_true_all - esp_pred_dcmnet_all)**2)
-        ss_tot = np.sum((esp_true_all - np.mean(esp_true_all))**2)
-        r2 = 1 - (ss_res / ss_tot)
-        ax.set_title(f'ESP - DCMNet\nRMSE: {rmse:.6f} Ha/e, R²: {r2:.4f}')
-        ax.legend()
-        ax.grid(True, alpha=0.3)
-    
-    # Add PhysNet ESP scatter in the empty slot
-    ax = axes[0, 2]
+    # ESP PhysNet scatter
+    ax = axes[2, 1]
     if esp_pred_physnet_list:
         esp_pred_physnet_all = np.concatenate([e.reshape(-1) for e in esp_pred_physnet_list])
         esp_true_all = np.concatenate([e.reshape(-1) for e in esp_true_list])
-        ax.scatter(esp_true_all, esp_pred_physnet_all, alpha=0.3, s=10, color='orange')
+        ax.scatter(esp_true_all, esp_pred_physnet_all, alpha=0.3, s=10, color='green')
         lims = [min(esp_true_all.min(), esp_pred_physnet_all.min()),
                 max(esp_true_all.max(), esp_pred_physnet_all.max())]
         ax.plot(lims, lims, 'r--', alpha=0.5, label='Perfect')
         ax.set_xlabel('True ESP (Hartree/e)')
         ax.set_ylabel('Predicted ESP (Hartree/e)')
-        rmse = np.sqrt(np.mean((esp_pred_physnet_all - esp_true_all)**2))
+        rmse_esp_physnet = np.sqrt(np.mean((esp_pred_physnet_all - esp_true_all)**2))
         # Compute R²
         ss_res = np.sum((esp_true_all - esp_pred_physnet_all)**2)
         ss_tot = np.sum((esp_true_all - np.mean(esp_true_all))**2)
-        r2 = 1 - (ss_res / ss_tot)
-        ax.set_title(f'ESP - PhysNet Charges\nRMSE: {rmse:.6f} Ha/e, R²: {r2:.4f}')
+        r2_esp_physnet = 1 - (ss_res / ss_tot)
+        ax.set_title(f'ESP - PhysNet\nRMSE: {rmse_esp_physnet:.6f} Ha/e, R²: {r2_esp_physnet:.4f}')
         ax.legend()
         ax.grid(True, alpha=0.3)
     
+    # ESP DCMNet scatter
+    ax = axes[2, 2]
+    if esp_pred_dcmnet_list:
+        esp_pred_dcmnet_all = np.concatenate([e.reshape(-1) for e in esp_pred_dcmnet_list])
+        esp_true_all = np.concatenate([e.reshape(-1) for e in esp_true_list])
+        ax.scatter(esp_true_all, esp_pred_dcmnet_all, alpha=0.3, s=10, color='purple')
+        lims = [min(esp_true_all.min(), esp_pred_dcmnet_all.min()),
+                max(esp_true_all.max(), esp_pred_dcmnet_all.max())]
+        ax.plot(lims, lims, 'r--', alpha=0.5, label='Perfect')
+        ax.set_xlabel('True ESP (Hartree/e)')
+        ax.set_ylabel('Predicted ESP (Hartree/e)')
+        rmse_esp_dcmnet = np.sqrt(np.mean((esp_pred_dcmnet_all - esp_true_all)**2))
+        # Compute R²
+        ss_res = np.sum((esp_true_all - esp_pred_dcmnet_all)**2)
+        ss_tot = np.sum((esp_true_all - np.mean(esp_true_all))**2)
+        r2_esp_dcmnet = 1 - (ss_res / ss_tot)
+        ax.set_title(f'ESP - DCMNet\nRMSE: {rmse_esp_dcmnet:.6f} Ha/e, R²: {r2_esp_dcmnet:.4f}')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+    
+    # ========== ROW 3: MORE ERROR HISTOGRAMS ==========
+    # DCMNet Dipole error histogram
+    ax = axes[3, 0]
+    errors_dipole_dcmnet = dipoles_dcmnet_pred - dipoles_true
+    ax.hist(errors_dipole_dcmnet, bins=50, alpha=0.7, color='orange', edgecolor='black')
+    ax.axvline(0, color='red', linestyle='--', linewidth=2, alpha=0.5, label='Zero Error')
+    ax.set_xlabel('Prediction Error (e·Å)')
+    ax.set_ylabel('Count')
+    ax.set_title(f'Dipole (DCMNet) Error\nStd: {errors_dipole_dcmnet.std():.3f} e·Å')
+    ax.legend()
+    ax.grid(True, alpha=0.3, axis='y')
+    
+    # ESP PhysNet error histogram
+    ax = axes[3, 1]
+    if esp_pred_physnet_list:
+        errors_esp_physnet = esp_pred_physnet_all - esp_true_all
+        ax.hist(errors_esp_physnet, bins=50, alpha=0.7, color='green', edgecolor='black')
+        ax.axvline(0, color='red', linestyle='--', linewidth=2, alpha=0.5, label='Zero Error')
+        ax.set_xlabel('Prediction Error (Hartree/e)')
+        ax.set_ylabel('Count')
+        ax.set_title(f'ESP (PhysNet) Error\nStd: {errors_esp_physnet.std():.6f} Ha/e')
+        ax.legend()
+        ax.grid(True, alpha=0.3, axis='y')
+    
+    # ESP DCMNet error histogram
+    ax = axes[3, 2]
+    if esp_pred_dcmnet_list:
+        errors_esp_dcmnet = esp_pred_dcmnet_all - esp_true_all
+        ax.hist(errors_esp_dcmnet, bins=50, alpha=0.7, color='purple', edgecolor='black')
+        ax.axvline(0, color='red', linestyle='--', linewidth=2, alpha=0.5, label='Zero Error')
+        ax.set_xlabel('Prediction Error (Hartree/e)')
+        ax.set_ylabel('Count')
+        ax.set_title(f'ESP (DCMNet) Error\nStd: {errors_esp_dcmnet.std():.6f} Ha/e')
+        ax.legend()
+        ax.grid(True, alpha=0.3, axis='y')
+    
     plt.tight_layout()
-    scatter_path = save_dir / f'validation_scatter{suffix}.png'
-    plt.savefig(scatter_path, dpi=150, bbox_inches='tight')
+    plots_path = save_dir / f'validation_plots{suffix}.png'
+    plt.savefig(plots_path, dpi=150, bbox_inches='tight')
     plt.close()
-    print(f"  ✅ Saved scatter plots: {scatter_path}")
+    print(f"  ✅ Saved validation plots (scatter + histograms): {plots_path}")
     
     # Create ESP example plots - compare PhysNet vs DCMNet
     for idx in range(min(n_esp_examples, len(esp_pred_dcmnet_list))):
@@ -1081,30 +1157,40 @@ def plot_validation_results(
         esp_error_dcmnet = esp_pred_dcmnet - esp_true
         esp_error_physnet = esp_pred_physnet - esp_true
         
+        # Compute shared color scales
+        # For ESP values: use same scale for true, dcmnet, physnet
+        esp_vmin = min(esp_true.min(), esp_pred_dcmnet.min(), esp_pred_physnet.min())
+        esp_vmax = max(esp_true.max(), esp_pred_dcmnet.max(), esp_pred_physnet.max())
+        
+        # For errors: use symmetric scale around 0
+        error_absmax = max(abs(esp_error_dcmnet).max(), abs(esp_error_physnet).max())
+        error_vmin = -error_absmax
+        error_vmax = error_absmax
+        
         # True ESP (shared)
         ax = axes[0, 0]
         sc = ax.scatter(range(len(esp_true)), esp_true, c=esp_true, 
-                       cmap='RdBu_r', s=30, alpha=0.7)
+                       cmap='RdBu_r', s=30, alpha=0.7, vmin=esp_vmin, vmax=esp_vmax)
         ax.set_xlabel('Grid Point Index')
         ax.set_ylabel('ESP (Hartree/e)')
         ax.set_title(f'True ESP (Sample {idx}){epoch_str}')
         ax.grid(True, alpha=0.3)
-        plt.colorbar(sc, ax=ax)
+        plt.colorbar(sc, ax=ax, label='ESP (Ha/e)')
         
         # DCMNet ESP
         ax = axes[0, 1]
         sc = ax.scatter(range(len(esp_pred_dcmnet)), esp_pred_dcmnet, c=esp_pred_dcmnet,
-                       cmap='RdBu_r', s=30, alpha=0.7)
+                       cmap='RdBu_r', s=30, alpha=0.7, vmin=esp_vmin, vmax=esp_vmax)
         ax.set_xlabel('Grid Point Index')
         ax.set_ylabel('ESP (Hartree/e)')
         ax.set_title(f'DCMNet ESP{epoch_str}')
         ax.grid(True, alpha=0.3)
-        plt.colorbar(sc, ax=ax)
+        plt.colorbar(sc, ax=ax, label='ESP (Ha/e)')
         
         # DCMNet Error
         ax = axes[0, 2]
         sc = ax.scatter(range(len(esp_error_dcmnet)), esp_error_dcmnet, c=esp_error_dcmnet,
-                       cmap='RdBu_r', s=30, alpha=0.7)
+                       cmap='RdBu_r', s=30, alpha=0.7, vmin=error_vmin, vmax=error_vmax)
         ax.set_xlabel('Grid Point Index')
         ax.set_ylabel('ESP Error (Hartree/e)')
         rmse = np.sqrt(np.mean(esp_error_dcmnet**2))
@@ -1115,7 +1201,7 @@ def plot_validation_results(
         ax.set_title(f'DCMNet Error\nRMSE: {rmse:.6f}, R²: {r2:.4f}')
         ax.grid(True, alpha=0.3)
         ax.axhline(0, color='k', linestyle='--', alpha=0.3)
-        plt.colorbar(sc, ax=ax)
+        plt.colorbar(sc, ax=ax, label='Error (Ha/e)')
         
         # Empty
         axes[1, 0].axis('off')
@@ -1123,17 +1209,17 @@ def plot_validation_results(
         # PhysNet ESP
         ax = axes[1, 1]
         sc = ax.scatter(range(len(esp_pred_physnet)), esp_pred_physnet, c=esp_pred_physnet,
-                       cmap='RdBu_r', s=30, alpha=0.7, marker='s')
+                       cmap='RdBu_r', s=30, alpha=0.7, marker='s', vmin=esp_vmin, vmax=esp_vmax)
         ax.set_xlabel('Grid Point Index')
         ax.set_ylabel('ESP (Hartree/e)')
         ax.set_title(f'PhysNet ESP{epoch_str}')
         ax.grid(True, alpha=0.3)
-        plt.colorbar(sc, ax=ax)
+        plt.colorbar(sc, ax=ax, label='ESP (Ha/e)')
         
         # PhysNet Error
         ax = axes[1, 2]
         sc = ax.scatter(range(len(esp_error_physnet)), esp_error_physnet, c=esp_error_physnet,
-                       cmap='RdBu_r', s=30, alpha=0.7, marker='s')
+                       cmap='RdBu_r', s=30, alpha=0.7, marker='s', vmin=error_vmin, vmax=error_vmax)
         ax.set_xlabel('Grid Point Index')
         ax.set_ylabel('ESP Error (Hartree/e)')
         rmse = np.sqrt(np.mean(esp_error_physnet**2))
@@ -1144,7 +1230,7 @@ def plot_validation_results(
         ax.set_title(f'PhysNet Error\nRMSE: {rmse:.6f}, R²: {r2:.4f}')
         ax.grid(True, alpha=0.3)
         ax.axhline(0, color='k', linestyle='--', alpha=0.3)
-        plt.colorbar(sc, ax=ax)
+        plt.colorbar(sc, ax=ax, label='Error (Ha/e)')
         
         plt.tight_layout()
         esp_path = save_dir / f'esp_example_{idx}{suffix}.png'
@@ -1394,12 +1480,12 @@ def train_model(
                 # Conversion factors
                 eV_to_kcal = 23.0605        # 1 eV = 23.0605 kcal/mol
                 Ha_to_kcal = 627.509        # 1 Hartree = 627.509 kcal/mol
-                Debye_to_eA = 0.208194      # 1 Debye = 0.208194 e·Å
+                eA_to_Debye = 1.0 / 0.208194  # 1 e·Å = 4.8032 Debye
                 
                 mae_energy_ev = valid_loss_avg['mae_energy']
                 mae_forces_ev = valid_loss_avg['mae_forces']
-                mae_dipole_physnet_D = valid_loss_avg['mae_dipole_physnet']
-                mae_dipole_dcmnet_D = valid_loss_avg['mae_dipole_dcmnet']
+                mae_dipole_physnet_eA = valid_loss_avg['mae_dipole_physnet']
+                mae_dipole_dcmnet_eA = valid_loss_avg['mae_dipole_dcmnet']
                 rmse_esp_physnet_Ha = valid_loss_avg['rmse_esp_physnet']
                 rmse_esp_dcmnet_Ha = valid_loss_avg['rmse_esp_dcmnet']
                 
@@ -1415,8 +1501,8 @@ def train_model(
                 
                 print(f"    MAE Energy: {mae_energy_ev:.6f} eV  ({mae_energy_ev * eV_to_kcal:.6f} kcal/mol) [μ={e_mean:.3f}, σ={e_std:.3f} eV]")
                 print(f"    MAE Forces: {mae_forces_ev:.6f} eV/Å  ({mae_forces_ev * eV_to_kcal:.6f} kcal/mol/Å) [μ={f_mean:.3f}, σ={f_std:.3f} eV/Å]")
-                print(f"    MAE Dipole (PhysNet): {mae_dipole_physnet_D:.6f} D  ({mae_dipole_physnet_D * Debye_to_eA:.6f} e·Å) [μ={d_mean:.3f}, σ={d_std:.3f} D]")
-                print(f"    MAE Dipole (DCMNet): {mae_dipole_dcmnet_D:.6f} D  ({mae_dipole_dcmnet_D * Debye_to_eA:.6f} e·Å) [μ={d_mean:.3f}, σ={d_std:.3f} D]")
+                print(f"    MAE Dipole (PhysNet): {mae_dipole_physnet_eA:.6f} e·Å  ({mae_dipole_physnet_eA * eA_to_Debye:.6f} D) [μ={d_mean:.3f}, σ={d_std:.3f} e·Å]")
+                print(f"    MAE Dipole (DCMNet): {mae_dipole_dcmnet_eA:.6f} e·Å  ({mae_dipole_dcmnet_eA * eA_to_Debye:.6f} D) [μ={d_mean:.3f}, σ={d_std:.3f} e·Å]")
                 print(f"    RMSE ESP (PhysNet): {rmse_esp_physnet_Ha:.6f} Ha/e  ({rmse_esp_physnet_Ha * Ha_to_kcal:.6f} (kcal/mol)/e) [μ={esp_mean:.6f}, σ={esp_std:.6f} Ha/e]")
                 print(f"    RMSE ESP (DCMNet): {rmse_esp_dcmnet_Ha:.6f} Ha/e  ({rmse_esp_dcmnet_Ha * Ha_to_kcal:.6f} (kcal/mol)/e) [μ={esp_mean:.6f}, σ={esp_std:.6f} Ha/e]")
             
