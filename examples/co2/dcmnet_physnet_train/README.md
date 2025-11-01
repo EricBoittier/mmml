@@ -21,8 +21,11 @@ python trainer.py \
   --epochs 100 \
   --batch-size 1 \
   --learning-rate 0.00001 \
-  --grad-clip-norm 1.0
+  --grad-clip-norm 1.0 \
+  --plot-results
 ```
+
+**Note**: Add `--plot-results` to create validation scatter plots and ESP visualizations after training.
 
 Recommended settings for stable training:
 ```bash
@@ -95,3 +98,48 @@ Start with balanced weights (all 1.0) and adjust based on loss magnitudes:
 - `--dipole-weight`: Dipole loss weight (default: 25.0)
 - `--esp-weight`: ESP loss weight (default: 10000.0)
 - `--mono-weight`: Monopole constraint weight (default: 1.0)
+
+## Visualization
+
+Create validation plots after training with `--plot-results`:
+
+### Scatter Plots
+Creates a 2x2 grid showing:
+- **Energy**: True vs Predicted (eV)
+- **Forces**: True vs Predicted (eV/Å)
+- **Dipoles**: True vs Predicted (Debye)
+- **ESP**: True vs Predicted (Hartree/e)
+
+Each plot includes:
+- Perfect prediction line (red dashed)
+- Mean Absolute Error (MAE)
+- Grid for easy reading
+
+### ESP Examples
+Creates detailed visualizations for individual molecules showing:
+- **True ESP**: Reference electrostatic potential on VDW surface
+- **Predicted ESP**: Model-predicted ESP
+- **Error**: Difference between predicted and true ESP
+
+Options:
+- `--plot-samples N`: Number of validation samples to include in scatter plots (default: 100)
+- `--plot-esp-examples N`: Number of detailed ESP examples to create (default: 2)
+
+Plots are saved to: `{checkpoint_dir}/{experiment_name}/plots/`
+
+**Example:**
+```bash
+python trainer.py \
+  --train-efd ../physnet_train_charges/energies_forces_dipoles_train.npz \
+  --train-esp ../dcmnet_train/grids_esp_train.npz \
+  --valid-efd ../physnet_train_charges/energies_forces_dipoles_valid.npz \
+  --valid-esp ../dcmnet_train/grids_esp_valid.npz \
+  --epochs 50 \
+  --plot-results \
+  --plot-samples 200 \
+  --plot-esp-examples 5
+```
+
+This will create:
+- `validation_scatter.png`: 4 scatter plots
+- `esp_example_0.png` through `esp_example_4.png`: Detailed ESP visualizations
