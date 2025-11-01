@@ -193,8 +193,38 @@ com = segment_sum(mass_weighted_pos) / segment_sum(masses)  # Sums over atoms
 
 ---
 
+---
+
+## 6. **Scrambled Distributed Charge Positions** ✅ FIXED
+**File:** `examples/co2/dcmnet_physnet_train/trainer.py` (multiple locations)
+
+**Problem:** Using `moveaxis(-1, -2)` before reshaping scrambled xyz coordinates:
+```python
+dipo_flat = jnp.moveaxis(dipo_for_esp, -1, -2).reshape(-1, 3)  # WRONG!
+# Example: [x1, y1, z1] → [x1, x2, x3] (xyz from different charges mixed!)
+```
+
+**Impact:**
+- Distributed charge positions completely scrambled
+- ESP calculated with charges at wrong locations
+- DCMNet ESP only positive (charges in nonsensical positions)
+- No spatial correlation with target ESP
+
+**Fix:** Direct reshape without moveaxis:
+```python
+dipo_flat = dipo_for_esp.reshape(-1, 3)  # CORRECT
+# Example: [x1, y1, z1] → [x1, y1, z1] (xyz preserved)
+```
+
+**Applied to 3 locations:**
+1. `compute_loss` (line ~702)
+2. `single_esp_loss` (line ~714) 
+3. `eval_step` (line ~969)
+
+---
+
 ## Files Modified
 
 1. `mmml/physnetjax/physnetjax/models/model.py` - Charge init + COM calculation
-2. `examples/co2/dcmnet_physnet_train/trainer.py` - DCMNet COM + ESP filtering
+2. `examples/co2/dcmnet_physnet_train/trainer.py` - DCMNet COM + ESP filtering + moveaxis fix
 
