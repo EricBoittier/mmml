@@ -27,6 +27,23 @@ python trainer.py \
 
 **Note**: Add `--plot-results` to create validation scatter plots and ESP visualizations after training.
 
+### Atomic Energy Subtraction (Default ON)
+
+**By default**, the trainer subtracts reference atomic energies from molecular energies:
+- Converts absolute energies → formation/atomization energies
+- Makes energies relative to isolated atoms
+- Improves training by putting energies on a more consistent scale
+- Helps with chemical interpretation
+
+**Reference atomic energies** (PBE/def2-TZVP in eV):
+- H: -13.587, C: -1029.499, N: -1484.274, O: -2041.878
+- F: -2713.473, P: -8978.229, S: -10831.086, Cl: -12516.444
+
+**To disable** (use absolute energies):
+```bash
+python trainer.py ... --no-subtract-atom-energies
+```
+
 Recommended settings for stable training:
 ```bash
 python trainer.py \
@@ -227,11 +244,22 @@ Creates a comprehensive 4×3 grid with:
 - Color-coded by model: PhysNet (blue/default), DCMNet (orange), ESP variants (green/purple)
 - Consistent scales for easy comparison
 
-### ESP Examples
-Creates detailed visualizations for individual molecules showing:
-- **True ESP**: Reference electrostatic potential on VDW surface
-- **Predicted ESP**: Model-predicted ESP
-- **Error**: Difference between predicted and true ESP
+### ESP Examples (2D + 3D)
+Creates detailed visualizations for individual molecules:
+
+**2D Plots** (`esp_example_N.png`):
+- 2×3 grid comparing True, PhysNet, and DCMNet ESP
+- Row 1: True ESP, DCMNet ESP, DCMNet Error
+- Row 2: Empty, PhysNet ESP, PhysNet Error
+- Color-coded scatter plots with RMSE and R²
+- Shared color scales for easy comparison
+
+**3D Spatial Plots** (`esp_example_N_3d.png`):
+- 3D scatter plots showing ESP on VDW surface in real space
+- Three panels: True ESP, PhysNet ESP, DCMNet ESP
+- Points positioned at actual grid coordinates (X, Y, Z in Ångström)
+- Color indicates ESP value (same scale across all three)
+- Visualize how well ESP is reproduced in 3D space
 
 Options:
 - `--plot-samples N`: Number of validation samples to include in scatter plots (default: 100)
