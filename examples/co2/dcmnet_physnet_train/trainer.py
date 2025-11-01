@@ -1488,7 +1488,7 @@ def main():
     # PhysNet hyperparameters
     parser.add_argument('--physnet-features', type=int, default=64,
                        help='PhysNet: number of features')
-    parser.add_argument('--physnet-iterations', type=int, default=2,
+    parser.add_argument('--physnet-iterations', type=int, default=3,
                        help='PhysNet: message passing iterations')
     parser.add_argument('--physnet-basis', type=int, default=64,
                        help='PhysNet: number of basis functions')
@@ -1498,17 +1498,17 @@ def main():
                        help='PhysNet: number of residual blocks')
     
     # DCMNet hyperparameters
-    parser.add_argument('--dcmnet-features', type=int, default=32,
+    parser.add_argument('--dcmnet-features', type=int, default=128,
                        help='DCMNet: number of features')
     parser.add_argument('--dcmnet-iterations', type=int, default=2,
                        help='DCMNet: message passing iterations')
-    parser.add_argument('--dcmnet-basis', type=int, default=32,
+    parser.add_argument('--dcmnet-basis', type=int, default=64,
                        help='DCMNet: number of basis functions')
     parser.add_argument('--dcmnet-cutoff', type=float, default=10.0,
                        help='DCMNet: cutoff distance (Angstroms)')
     parser.add_argument('--n-dcm', type=int, default=3,
                        help='DCMNet: distributed multipoles per atom')
-    parser.add_argument('--max-degree', type=int, default=1,
+    parser.add_argument('--max-degree', type=int, default=2,
                        help='DCMNet: maximum spherical harmonic degree')
     
     # Training hyperparameters
