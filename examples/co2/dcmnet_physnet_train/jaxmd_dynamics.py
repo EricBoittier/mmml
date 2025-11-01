@@ -261,7 +261,7 @@ def run_jaxmd_simulation(
     nsteps=10000,
     save_interval=10,
     cutoff=10.0,
-    friction=0.001,
+    friction=0.01,
     output_dir=None,
     seed=42,
 ):
@@ -425,37 +425,43 @@ def run_jaxmd_simulation(
         print(f"Using Langevin thermostat (NVT)")
         print(f"Friction: {friction:.4f} 1/fs")
         
-        # Langevin dynamics with proper units
+        # Langevin dynamics - use BBK integrator (standard in LAMMPS/GROMACS)
+        # Reference: Bussi & Parrinello, Phys. Rev. E 2007
         # Units: R[Å], V[Å/fs], F[eV/Å], m[amu], T[K]
         kB = 8.617333262e-5  # eV/K
         gamma = friction  # 1/fs
+        
+        # For Langevin, use smaller friction for stability
+        # Typical values: 0.01 - 0.1 (1/fs)
+        if gamma < 0.001:
+            print(f"⚠️  Warning: Very low friction ({gamma}), increasing to 0.01")
+            gamma = 0.01
         
         @jit
         def step_fn(state, neighbor, key):
             R, V, F = state
             
-            # Langevin equation: m*dv/dt = F - γ*m*v + √(2*γ*m*kB*T) * ξ(t)
-            # where ξ is white noise with <ξ(t)ξ(t')> = δ(t-t')
+            # BBK (Brünger-Brooks-Karplus) Langevin integrator
+            # This is the standard, stable Langevin algorithm
             
             # Acceleration from forces: a = F/m
-            # Conversion: F[eV/Å] / m[amu] → a[Å/fs²]
-            # 1 eV/(Å*amu) = 1/0.01036427 Å/fs²
+            # F[eV/Å] / m[amu] → a[Å/fs²]
             accel = F / (masses[:, None] * 0.01036427)
             
-            # Stochastic force amplitude
-            # noise_amplitude² = 2*γ*kB*T/m
-            # Units: [1/fs] * [eV/K] * [K] / [amu] = eV/(amu*fs)
-            # Need [Å/fs], so convert: eV/(amu*fs) * [fs²/Å] / [amu] = ...
-            # Actually: σ² = 2*γ*kB*T / (m * 0.01036427) gives (Å/fs)²
-            sigma = jnp.sqrt(2 * gamma * kB * temperature / (masses[:, None] * 0.01036427 * dt))
+            # Coefficients for BBK integrator
+            c0 = jnp.exp(-gamma * dt)
+            c1 = (1.0 - c0) / (gamma * dt)
+            c2 = (1.0 - c1) / (gamma * dt)
+            
+            # Random noise
+            # Variance: σ² = kB*T/m * (1 - c0²)
+            # This ensures correct temperature in steady state
+            sigma_sq = kB * temperature / (masses[:, None] * 0.01036427) * (1 - c0**2)
+            sigma = jnp.sqrt(sigma_sq)
             xi = random.normal(key, shape=V.shape)
             
-            # Velocity Verlet-like update with Langevin
-            # v(t+dt/2) = v(t) + 0.5*dt*(a - γ*v) + 0.5*σ*√dt*ξ
-            V_half = V + 0.5 * dt * (accel - gamma * V) + 0.5 * sigma * jnp.sqrt(dt) * xi
-            
-            # r(t+dt) = r(t) + dt*v(t+dt/2)
-            R_new = R + dt * V_half
+            # Update position: r(t+dt) = r(t) + c1*dt*v(t) + c2*dt²*a(t)
+            R_new = R + c1 * dt * V + c2 * dt * dt * accel
             
             # Update neighbor list
             neighbor = neighbor.update(R_new)
@@ -464,9 +470,8 @@ def run_jaxmd_simulation(
             F_new = force_fn(R_new, atomic_numbers, neighbor)
             accel_new = F_new / (masses[:, None] * 0.01036427)
             
-            # v(t+dt) = v(t+dt/2) + 0.5*dt*(a_new - γ*v_half) + 0.5*σ*√dt*ξ_new
-            # For simplicity, reuse same noise (Euler-Maruyama scheme)
-            V_new = V_half + 0.5 * dt * (accel_new - gamma * V_half)
+            # Update velocity: v(t+dt) = c0*v(t) + (c1-c2)*dt*a(t) + c2*dt*a(t+dt) + σ*ξ
+            V_new = c0 * V + (c1 - c2) * dt * accel + c2 * dt * accel_new + sigma * xi
             
             return (R_new, V_new, F_new), neighbor
         
@@ -648,8 +653,8 @@ def main():
                        help='Save trajectory every N steps')
     parser.add_argument('--cutoff', type=float, default=10.0,
                        help='Neighbor list cutoff (Å)')
-    parser.add_argument('--friction', type=float, default=0.001,
-                       help='Langevin friction (1/fs) - default 0.001')
+    parser.add_argument('--friction', type=float, default=0.01,
+                       help='Langevin friction (1/fs) - default 0.01')
     parser.add_argument('--seed', type=int, default=42,
                        help='Random seed')
     
