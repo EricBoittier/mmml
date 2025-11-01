@@ -1347,12 +1347,11 @@ def train_model(
             esp_physnet = np.array(output['esp_physnet']).flatten()
             esp_dcmnet = np.array(output['esp_dcmnet']).flatten()
             esp_true = np.array(batch['esp'][0]).flatten()  # First molecule
-            esp_mask = np.array(batch['esp_mask'][0]).flatten()  # First molecule
             
-            # Only collect non-masked ESP values
-            all_esp_physnet_pred.extend(esp_physnet[esp_mask > 0.5])
-            all_esp_dcmnet_pred.extend(esp_dcmnet[esp_mask > 0.5])
-            all_esp_true.extend(esp_true[esp_mask > 0.5])
+            # All ESP grid points are valid (no masking needed)
+            all_esp_physnet_pred.extend(esp_physnet)
+            all_esp_dcmnet_pred.extend(esp_dcmnet)
+            all_esp_true.extend(esp_true)
         
         # Average validation losses
         valid_loss_avg = {
