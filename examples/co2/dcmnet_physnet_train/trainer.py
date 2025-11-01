@@ -841,12 +841,14 @@ def eval_step(
     atomic_nums = batch["Z"].reshape(batch_size, natoms)
     masses = jnp.take(ase.data.atomic_masses, atomic_nums)
     masses_masked = masses * atom_mask
-    total_mass = jnp.sum(masses_masked, axis=1, keepdims=True)
+    total_mass = jnp.sum(masses_masked, axis=1, keepdims=True)  # (batch, 1)
     positions = batch["R"].reshape(batch_size, natoms, 3)
-    com = jnp.sum(positions * masses_masked[..., None], axis=1) / total_mass[..., None]
+    # COM = Σ(m_i * r_i) / Σ(m_i)
+    # total_mass: (batch, 1), so division broadcasts correctly to give (batch, 3)
+    com = jnp.sum(positions * masses_masked[..., None], axis=1) / total_mass  # (batch, 3)
     
     # Subtract COM from distributed charge positions
-    dipo_rel_com = dipo_reshaped - com[:, None, None, :]
+    dipo_rel_com = dipo_reshaped - com[:, None, None, :]  # (batch, natoms, n_dcm, 3)
     dipole_dcmnet = jnp.sum(mono_reshaped[..., None] * dipo_rel_com, axis=(1, 2))
     mae_dipole_dcmnet = jnp.abs(dipole_dcmnet - batch["D"]).mean()
     
