@@ -409,6 +409,8 @@ def prepare_batch_data(
     for i, n in enumerate(N):
         atom_mask[i, :n] = 1.0
     
+    # batch_mask needs to be per-edge for PhysNet, but create it per-batch for now
+    # It will be expanded to match edges in the edge list
     batch_mask = np.ones(batch_size, dtype=np.float32)
     
     # Flatten batch dimension
@@ -433,9 +435,13 @@ def prepare_batch_data(
     if dst_idx_list:
         dst_idx = np.concatenate(dst_idx_list).astype(np.int32)
         src_idx = np.concatenate(src_idx_list).astype(np.int32)
+        # Create edge mask (1 for valid edges)
+        n_edges = len(dst_idx)
+        edge_batch_mask = np.ones(n_edges, dtype=np.float32)
     else:
         dst_idx = np.array([], dtype=np.int32)
         src_idx = np.array([], dtype=np.int32)
+        edge_batch_mask = np.array([], dtype=np.float32)
     
     return {
         'R': jnp.array(R_flat),
@@ -447,7 +453,7 @@ def prepare_batch_data(
         'esp': jnp.array(esp),
         'vdw_surface': jnp.array(vdw_surface),
         'atom_mask': jnp.array(atom_mask.reshape(-1)),
-        'batch_mask': jnp.array(batch_mask),
+        'batch_mask': jnp.array(edge_batch_mask),  # Per-edge mask
         'batch_segments': jnp.array(batch_segments),
         'dst_idx': jnp.array(dst_idx),
         'src_idx': jnp.array(src_idx),
