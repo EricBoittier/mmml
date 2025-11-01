@@ -158,6 +158,42 @@ Coulomb Mixing:
 - To test if distributed charges improve energy predictions
 - Experimental - may help or hurt depending on data
 
+## Training Output
+
+The training script provides detailed metrics with **validation set statistics** for context:
+
+```
+Epoch 50/500 (1.8s)
+  Train Loss: 3216.732230
+    Energy: 715.649172
+    Forces: 4.951418
+    Dipole: 0.057234
+    ESP: 0.002252
+    Monopole: 0.000409
+    Total Charge: 0.001260
+  Valid Loss: 3081.512695
+  Coulomb Mixing:  # (only if --mix-coulomb-energy is enabled)
+    λ (learned): 0.100000
+    E_coulomb: -127.453 eV
+    MAE Energy: 41.224107 eV  (950.648528 kcal/mol) [μ=-5104.420, σ=1.777 eV]
+    MAE Forces: 1.147455 eV/Å  (26.460883 kcal/mol/Å) [μ=-0.000, σ=8.427 eV/Å]
+    MAE Dipole (PhysNet): 0.242257 D  (0.050436 e·Å) [μ=0.123, σ=2.456 D]
+    MAE Dipole (DCMNet): 0.284588 D  (0.059249 e·Å) [μ=0.123, σ=2.456 D]
+    RMSE ESP (PhysNet): 0.069926 Ha/e  (43.879494 (kcal/mol)/e) [μ=0.001234, σ=0.023456 Ha/e]
+    RMSE ESP (DCMNet): 0.067553 Ha/e  (42.389904 (kcal/mol)/e) [μ=0.001234, σ=0.023456 Ha/e]
+    Total Charge Violation: 0.001000
+```
+
+**Interpretation:**
+- **[μ=mean, σ=std]**: Validation set statistics for each metric
+- **MAE/σ ratio**: Indicates model quality
+  - < 0.5: Excellent (error < 50% of std)
+  - 0.5-1.0: Good
+  - 1.0-2.0: Needs improvement
+  - \> 2.0: Model not learning well
+- **Dual metrics**: Both PhysNet and DCMNet dipoles/ESP are reported for comparison
+- **Multiple units**: Primary units + converted (e.g., eV and kcal/mol)
+
 ## Visualization
 
 Create validation plots after training with `--plot-results`:
