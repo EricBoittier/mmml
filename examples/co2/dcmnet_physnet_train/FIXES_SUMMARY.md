@@ -198,28 +198,39 @@ com = segment_sum(mass_weighted_pos) / segment_sum(masses)  # Sums over atoms
 
 ---
 
-## 6. **ESP Grid Unit Confusion (NOT AN ISSUE)** ✅ CLARIFIED
+## 6. **ESP Grid and Atoms in Different Reference Frames** ✅ FIXED
 **File:** `examples/co2/dcmnet_physnet_train/trainer.py:load_combined_data`
 
-**Initial concern:** Thought ESP grid positions (`vdw_surface`) might be in **Bohr** units
+**Problem:** ESP grid and atom positions had **persistent 3.25 Å offset**!
 
 **Investigation:**
 ```
-Molecule:   -1.07 to +1.42 Å (span ~2.5 Å)
-Grid raw:    0 to 6.48 (span 6.5 Å)
+Atom COM:  [0.00, 0.15, 0.11] Å
+Grid COM:  [3.25, 3.24, 3.40] Å  
+Offset:    ~3.25 Å in ALL dimensions!
 ```
 
-**Conclusion:** Grid is **already in Angstroms**!
-- 6.5 Å grid extent is appropriate for ~2.5 Å molecule with 2-3 Å margin ✓
-- If it were Bohr: 6.5 Bohr = 3.4 Å (too small for proper margin) ✗
+**Root cause:** 
+- ESP grids were generated in a grid-centered coordinate system
+- Atom positions are in molecular coordinate system  
+- Different reference frames → spatial misalignment
+- ESP calculated using positions offset by 3.25 Å!
 
-**Fix:** NO conversion needed - `vdw_surface` is already in Angstroms
+**Impact:**
+- ESP predictions completely wrong (charges at wrong locations)
+- High errors even far from molecule
+- Radial plots show errors don't decay with distance
+- 3D visualizations show atoms at corner of grid
+
+**Fix:** Align grid COM with atom COM for each molecule
 ```python
-# Correct - use as-is
-combined['vdw_surface'] = esp_data['vdw_surface']  # Already in Angstroms
+for each molecule:
+    atom_com = atom_positions.mean(axis=0)
+    grid_com = vdw_surface.mean(axis=0)
+    vdw_surface_aligned = vdw_surface - (grid_com - atom_com)
 ```
 
-**Note:** Grid metadata (`grid_origin`) may be in Bohr for cube file format, but the actual grid point coordinates in `vdw_surface` are already in Angstroms.
+Now grid and atoms share the same center → correct ESP calculations!
 
 ---
 
