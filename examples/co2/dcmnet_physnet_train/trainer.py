@@ -317,7 +317,7 @@ def resize_data_padding(
     current_natoms = data['R'].shape[1]
     
     if current_natoms == target_natoms:
-    return data
+        return data
 
     # Check if safe
     max_atoms = int(np.max(data['N']))
@@ -951,33 +951,10 @@ def plot_validation_results(
         
         dipoles_true.append(np.array(batch['D'][0]))
         
-        # ESP (only store first n_esp_examples) - compute from BOTH methods
+        # ESP (only store first n_esp_examples) - already computed in eval_step
         if i < n_esp_examples:
-            natoms = output["mono_dist"].shape[0]
-            mono_reshaped = output["mono_dist"].reshape(1, natoms, n_dcm)
-            dipo_reshaped = output["dipo_dist"].reshape(1, natoms, n_dcm, 3)
-            
-            # DCMNet ESP
-            mono_flat = mono_reshaped[0].reshape(-1)
-            dipo_flat = jnp.moveaxis(dipo_reshaped[0], -1, -2).reshape(-1, 3)
-            from mmml.dcmnet.dcmnet.electrostatics import calc_esp
-            esp_pred_dcmnet = calc_esp(dipo_flat, mono_flat, batch["vdw_surface"][0])
-            
-            # PhysNet ESP (from atomic charges)
-            charges_physnet = output["charges_as_mono"]
-            positions_physnet = batch["R"].reshape(natoms, 3)
-            atom_mask_plot = batch["atom_mask"].reshape(natoms)
-            
-            # Apply mask to handle padding
-            charges_masked = charges_physnet * atom_mask_plot
-            
-            # Vectorized ESP computation
-            vdw_grid = batch["vdw_surface"][0]
-            distances = jnp.linalg.norm(vdw_grid[:, None, :] - positions_physnet[None, :, :], axis=2)
-            esp_pred_physnet = jnp.sum(charges_masked[None, :] / (distances + 1e-10), axis=1)
-            
-            esp_pred_dcmnet_list.append(np.array(esp_pred_dcmnet))
-            esp_pred_physnet_list.append(np.array(esp_pred_physnet))
+            esp_pred_dcmnet_list.append(np.array(output['esp_dcmnet']))
+            esp_pred_physnet_list.append(np.array(output['esp_physnet']))
             esp_true_list.append(np.array(batch['esp'][0]))
     
     # Convert to arrays
