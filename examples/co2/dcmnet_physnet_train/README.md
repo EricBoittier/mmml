@@ -92,12 +92,14 @@ Gradient clipping is enabled by default (`--grad-clip-norm 1.0`) to prevent expl
 - `--n-dcm`: Distributed multipoles per atom (default: 3)
 
 ### Loss Weights
-Start with balanced weights (all 1.0) and adjust based on loss magnitudes:
+Recommended weights for effective training:
 - `--energy-weight`: Energy loss weight (default: 1.0)
 - `--forces-weight`: Forces loss weight (default: 50.0)
 - `--dipole-weight`: Dipole loss weight (default: 25.0)
 - `--esp-weight`: ESP loss weight (default: 10000.0)
-- `--mono-weight`: Monopole constraint weight (default: 1.0)
+- `--mono-weight`: Monopole constraint weight (default: 100.0)
+
+**Note:** The monopole constraint (distributed charges sum to atomic charge) needs high weight (100+) to be properly enforced.
 
 ### Dipole Source
 Choose which dipole to use for the dipole loss:
@@ -116,6 +118,43 @@ python trainer.py ... --dipole-source physnet
 # Train with DCMNet dipole (supervise multipole decomposition)
 python trainer.py ... --dipole-source dcmnet
 ```
+
+### Energy Mixing (Experimental)
+
+**`--mix-coulomb-energy`**: Mix PhysNet energy with DCMNet Coulomb energy using a learnable λ parameter.
+
+**Idea:**
+- PhysNet predicts total energy (all interactions)
+- DCMNet distributed charges → compute explicit Coulomb energy
+- Learn mixing: `E_total = E_physnet + λ × E_coulomb(DCMNet)`
+- Forces come from gradient of mixed energy
+
+**Benefits:**
+- Separates electrostatic component (DCMNet) from other physics (PhysNet)
+- λ is learned during training (initialized to 0.1)
+- Can improve energy predictions if Coulomb term is accurate
+
+**Usage:**
+```bash
+python trainer.py \
+  --train-efd ... \
+  --train-esp ... \
+  --mix-coulomb-energy \
+  --mono-weight 100.0 \
+  --esp-weight 1000000.0
+```
+
+**Output shows:**
+```
+Coulomb Mixing:
+  λ (learned): 0.123
+  E_coulomb: -12.45 eV
+```
+
+**When to use:**
+- When you want explicit electrostatic energy component
+- To test if distributed charges improve energy predictions
+- Experimental - may help or hurt depending on data
 
 ## Visualization
 

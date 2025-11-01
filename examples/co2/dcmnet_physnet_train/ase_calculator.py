@@ -673,10 +673,12 @@ def main():
             saved_config = pickle.load(f)
         physnet_config = saved_config['physnet_config']
         dcmnet_config = saved_config['dcmnet_config']
+        mix_coulomb_energy = saved_config.get('mix_coulomb_energy', False)
         print("✅ Model config loaded from checkpoint")
     else:
         print("⚠️  Model config not found, using command-line arguments")
         print("   (This may cause errors if args don't match training)")
+        mix_coulomb_energy = False
         
         physnet_config = {
             'features': args.physnet_features,
@@ -716,6 +718,7 @@ def main():
     model = JointPhysNetDCMNet(
         physnet_config=physnet_config,
         dcmnet_config=dcmnet_config,
+        mix_coulomb_energy=mix_coulomb_energy,
     )
     
     print("✅ Model created")
