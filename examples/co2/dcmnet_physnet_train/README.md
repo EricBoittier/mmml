@@ -136,6 +136,31 @@ python trainer.py ... --dipole-source physnet
 python trainer.py ... --dipole-source dcmnet
 ```
 
+### ESP Grid Point Filtering (Default ON)
+
+**By default**, the trainer excludes ESP grid points that are too close to atoms (< 1.0 Å):
+- Points very close to nuclei have near-singular Coulomb potentials
+- These extreme values can dominate the loss and destabilize training
+- Filtering improves training stability and model generalization
+
+**Default:** `--esp-min-distance 1.0` (exclude grid points < 1.0 Å from any atom)
+
+**To disable** (include all grid points):
+```bash
+python trainer.py ... --esp-min-distance 0.0
+```
+
+**To increase filtering** (more conservative):
+```bash
+python trainer.py ... --esp-min-distance 1.5
+```
+
+**How it works:**
+- For each ESP grid point, compute distance to nearest atom
+- If distance < `esp_min_distance`, exclude from loss calculation
+- Filtering applied to both training and validation
+- Plotting uses all points (no filtering) for visualization
+
 ### Energy Mixing (Experimental)
 
 **`--mix-coulomb-energy`**: Mix PhysNet energy with DCMNet Coulomb energy using a learnable λ parameter.
@@ -179,7 +204,9 @@ Coulomb Mixing:
 
 The training script provides detailed metrics with **validation set statistics** for context.
 
-**Note:** Energies are **formation energies** (relative to isolated atoms) by default. Use `--no-subtract-atom-energies` to train on absolute energies.
+**Notes:** 
+- Energies are **formation energies** (relative to isolated atoms) by default. Use `--no-subtract-atom-energies` to train on absolute energies.
+- ESP grid points < 1.0 Å from atoms are **excluded from loss** by default (prevents singularities). Use `--esp-min-distance 0` to disable.
 
 ```
 Epoch 50/500 (1.8s)
