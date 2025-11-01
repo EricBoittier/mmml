@@ -1502,6 +1502,7 @@ def plot_validation_results(
             batch_size=1,
             n_dcm=n_dcm,
             dipole_source=dipole_source,
+            esp_min_distance=0.0,  # No filtering for plotting
         )
         
         # Extract distributed charges and positions
