@@ -529,7 +529,13 @@ def train_step(
     
     # Clip gradients if requested
     if clip_norm is not None:
-        grads = optax.clip_by_global_norm(clip_norm)(grads, opt_state, params)[0]
+        # Compute global norm
+        grad_norm = optax.global_norm(grads)
+        # Scale gradients if norm exceeds clip_norm
+        grads = jax.tree_util.tree_map(
+            lambda g: g * jnp.minimum(clip_norm / grad_norm, 1.0),
+            grads
+        )
     
     # Update parameters
     updates, opt_state = optimizer_update(grads, opt_state, params)
