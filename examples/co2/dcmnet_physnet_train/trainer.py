@@ -62,21 +62,34 @@ class JointPhysNetDCMNet(nn.Module):
     3. DCMNet predicts distributed multipoles for ESP fitting
     4. Full gradient flow from ESP loss back to PhysNet parameters
     
+    Optional: Mix PhysNet energy with DCMNet Coulomb energy via learnable λ
+    
     Attributes
     ----------
     physnet_config : dict
         Configuration for PhysNet EF model
     dcmnet_config : dict
         Configuration for DCMNet MessagePassingModel
+    mix_coulomb_energy : bool
+        If True, mix PhysNet energy with DCMNet Coulomb energy using learnable λ
     """
     physnet_config: Dict[str, Any]
     dcmnet_config: Dict[str, Any]
+    mix_coulomb_energy: bool = False
     
     def setup(self):
         """Initialize both PhysNet and DCMNet models."""
         # PhysNet must have charges=True to predict atomic charges
         self.physnet = EF(**self.physnet_config)
         self.dcmnet = MessagePassingModel(**self.dcmnet_config)
+        
+        # Learnable mixing parameter for Coulomb energy
+        if self.mix_coulomb_energy:
+            self.coulomb_lambda = self.param(
+                "coulomb_lambda",
+                lambda rng, shape: jnp.ones(shape) * 0.1,  # Initialize to 0.1
+                (1,)
+            )
     
     @nn.compact
     def __call__(
@@ -157,12 +170,48 @@ class JointPhysNetDCMNet(nn.Module):
             batch_size=batch_size,
         )
         
-        # 4. Return all outputs for loss computation
+        # 4. Optionally compute and mix Coulomb energy from DCMNet charges
+        energy_reshaped = physnet_output["energy"].reshape(batch_size)
+        
+        if self.mix_coulomb_energy:
+            # Compute Coulomb energy from DCMNet distributed charges
+            # E_coulomb = (1/2) Σᵢⱼ qᵢqⱼ/rᵢⱼ (pairwise interactions)
+            natoms = mono_dist.shape[0] // batch_size
+            
+            # Get all charge positions and values
+            charges_flat = mono_dist.reshape(-1)  # (batch*natoms*n_dcm,)
+            positions_flat = jnp.moveaxis(dipo_dist, -1, -2).reshape(-1, 3)  # (batch*natoms*n_dcm, 3)
+            
+            # For batch_size==1, compute Coulomb energy
+            if batch_size == 1:
+                # Pairwise distances between all distributed charges
+                diff = positions_flat[:, None, :] - positions_flat[None, :, :]  # (N, N, 3)
+                distances = jnp.linalg.norm(diff, axis=-1)  # (N, N)
+                # Avoid self-interaction
+                distances = jnp.where(distances < 1e-6, 1e6, distances)
+                # Coulomb energy in atomic units: E = (1/2) Σᵢⱼ qᵢqⱼ/(rᵢⱼ * 1.88973)
+                pairwise_energy = charges_flat[:, None] * charges_flat[None, :] / (distances * 1.88973)
+                coulomb_energy = 0.5 * jnp.sum(pairwise_energy)
+                
+                # Mix energies: E_total = E_physnet + λ * E_coulomb
+                lambda_val = self.coulomb_lambda[0]
+                energy_mixed = energy_reshaped + lambda_val * coulomb_energy
+                energy_reshaped = energy_mixed
+                
+                # Store for monitoring
+                coulomb_energy_out = coulomb_energy
+                lambda_out = lambda_val
+            else:
+                # For batched, would need to compute per-molecule
+                coulomb_energy_out = jnp.array(0.0)
+                lambda_out = self.coulomb_lambda[0]
+        else:
+            coulomb_energy_out = jnp.array(0.0)
+            lambda_out = jnp.array(0.0)
+        
         # Reshape PhysNet outputs to proper shapes
-        # PhysNet energy shape is (batch_size, 1, 1, 1) -> reshape to (batch_size,)
         # PhysNet forces shape is (batch_size*natoms, 1, 1, 3) -> reshape to (batch_size*natoms, 3)
         # PhysNet dipoles shape is (batch_size, 1, 1, 3) -> reshape to (batch_size, 3)
-        energy_reshaped = physnet_output["energy"].reshape(batch_size)
         forces_reshaped = physnet_output["forces"].reshape(-1, 3)
         dipoles_reshaped = physnet_output["dipoles"].reshape(batch_size, 3)
         
@@ -178,6 +227,9 @@ class JointPhysNetDCMNet(nn.Module):
             "dipo_dist": dipo_dist,  # (batch*natoms, n_dcm, 3)
             # For monopole constraint loss
             "charges_as_mono": charges_squeezed,  # (batch*natoms,)
+            # Energy mixing (if enabled)
+            "coulomb_energy": coulomb_energy_out,
+            "coulomb_lambda": lambda_out,
         }
 
 
@@ -777,6 +829,10 @@ def eval_step(
     # Keep backward compatibility
     losses["mae_dipole"] = mae_dipole_physnet if dipole_source == 'physnet' else mae_dipole_dcmnet
     
+    # Add Coulomb energy info
+    losses["coulomb_energy"] = output.get("coulomb_energy", jnp.array(0.0))
+    losses["coulomb_lambda"] = output.get("coulomb_lambda", jnp.array(0.0))
+    
     return total_loss, losses, output
 
 
@@ -1249,6 +1305,12 @@ def train_model(
         valid_losses = []
         n_valid_batches = (n_valid + batch_size - 1) // batch_size
         
+        # Collect predictions for statistics
+        all_energy_pred = []
+        all_energy_true = []
+        all_forces_pred = []
+        all_forces_true = []
+        
         for batch_idx in range(n_valid_batches):
             start_idx = batch_idx * batch_size
             end_idx = min(start_idx + batch_size, n_valid)
@@ -1260,7 +1322,7 @@ def train_model(
                 cutoff=cutoff
             )
             
-            _, losses, _ = eval_step(
+            _, losses, output = eval_step(
                 params=params,
                 batch=batch,
                 model_apply=model.apply,
@@ -1275,11 +1337,25 @@ def train_model(
             )
             
             valid_losses.append({k: float(v) for k, v in losses.items()})
+            
+            # Collect for statistics
+            all_energy_pred.extend(np.array(output['energy']).flatten())
+            all_energy_true.extend(np.array(batch['E']).flatten())
+            all_forces_pred.extend(np.array(output['forces']).flatten())
+            all_forces_true.extend(np.array(batch['F']).flatten())
         
         # Average validation losses
         valid_loss_avg = {
             k: np.mean([loss[k] for loss in valid_losses])
             for k in valid_losses[0].keys()
+        }
+        
+        # Compute validation set statistics
+        valid_stats = {
+            'energy_mean': np.mean(all_energy_true),
+            'energy_std': np.std(all_energy_true),
+            'forces_mean': np.mean([f for f in all_forces_true if f != 0]),  # Exclude padding
+            'forces_std': np.std([f for f in all_forces_true if f != 0]),
         }
         
         epoch_time = time.time() - epoch_start
@@ -1295,6 +1371,12 @@ def train_model(
             print(f"    Monopole: {train_loss_avg['monopole']:.6f}")
             print(f"    Total Charge: {train_loss_avg['total_charge']:.6f}")
             print(f"  Valid Loss: {valid_loss_avg['total']:.6f}")
+            
+            # Print Coulomb mixing info if enabled
+            if 'coulomb_energy' in valid_loss_avg and valid_loss_avg.get('coulomb_lambda', 0) != 0:
+                print(f"  Coulomb Mixing:")
+                print(f"    λ (learned): {valid_loss_avg['coulomb_lambda']:.6f}")
+                print(f"    E_coulomb: {valid_loss_avg['coulomb_energy']:.6f} eV")
             if 'mae_energy' in valid_loss_avg:
                 # Conversion factors
                 eV_to_kcal = 23.0605        # 1 eV = 23.0605 kcal/mol
@@ -1308,8 +1390,14 @@ def train_model(
                 rmse_esp_physnet_Ha = valid_loss_avg['rmse_esp_physnet']
                 rmse_esp_dcmnet_Ha = valid_loss_avg['rmse_esp_dcmnet']
                 
-                print(f"    MAE Energy: {mae_energy_ev:.6f} eV  ({mae_energy_ev * eV_to_kcal:.6f} kcal/mol)")
-                print(f"    MAE Forces: {mae_forces_ev:.6f} eV/Å  ({mae_forces_ev * eV_to_kcal:.6f} kcal/mol/Å)")
+                # Get validation set statistics
+                e_mean = valid_stats.get('energy_mean', 0)
+                e_std = valid_stats.get('energy_std', 1)
+                f_mean = valid_stats.get('forces_mean', 0)
+                f_std = valid_stats.get('forces_std', 1)
+                
+                print(f"    MAE Energy: {mae_energy_ev:.6f} eV  ({mae_energy_ev * eV_to_kcal:.6f} kcal/mol) [μ={e_mean:.3f}, σ={e_std:.3f} eV]")
+                print(f"    MAE Forces: {mae_forces_ev:.6f} eV/Å  ({mae_forces_ev * eV_to_kcal:.6f} kcal/mol/Å) [μ={f_mean:.3f}, σ={f_std:.3f} eV/Å]")
                 print(f"    MAE Dipole (PhysNet): {mae_dipole_physnet_D:.6f} D  ({mae_dipole_physnet_D * Debye_to_eA:.6f} e·Å)")
                 print(f"    MAE Dipole (DCMNet): {mae_dipole_dcmnet_D:.6f} D  ({mae_dipole_dcmnet_D * Debye_to_eA:.6f} e·Å)")
                 print(f"    RMSE ESP (PhysNet): {rmse_esp_physnet_Ha:.6f} Ha/e  ({rmse_esp_physnet_Ha * Ha_to_kcal:.6f} (kcal/mol)/e)")
@@ -1332,6 +1420,7 @@ def train_model(
             model_config = {
                 'physnet_config': dict(model.physnet_config),
                 'dcmnet_config': dict(model.dcmnet_config),
+                'mix_coulomb_energy': model.mix_coulomb_energy,
             }
             with open(save_path / 'model_config.pkl', 'wb') as f:
                 pickle.dump(model_config, f)
@@ -1428,6 +1517,8 @@ def main():
     parser.add_argument('--dipole-source', type=str, default='physnet',
                        choices=['physnet', 'dcmnet'],
                        help='Source for dipole in loss: physnet (from charges) or dcmnet (from distributed multipoles)')
+    parser.add_argument('--mix-coulomb-energy', action='store_true', default=False,
+                       help='Mix PhysNet energy with DCMNet Coulomb energy via learnable lambda')
     
     # General options
     parser.add_argument('--natoms', type=int, default=None,
@@ -1574,6 +1665,7 @@ def main():
     model = JointPhysNetDCMNet(
         physnet_config=physnet_config,
         dcmnet_config=dcmnet_config,
+        mix_coulomb_energy=args.mix_coulomb_energy,
     )
     
     print(f"\n✅ Joint model created")
@@ -1590,7 +1682,7 @@ def main():
     print(f"  Random seed: {args.seed}")
     
     print(f"\nLoss weights:")
-    print(f"  Energy: {args.energy_weight}")
+    print(f"  Energy: {args.energy_weight} (mix Coulomb: {args.mix_coulomb_energy})")
     print(f"  Forces: {args.forces_weight}")
     print(f"  Dipole: {args.dipole_weight} (source: {args.dipole_source})")
     print(f"  ESP: {args.esp_weight}")
