@@ -1515,13 +1515,24 @@ def plot_validation_results(
     print(f"  ✅ Saved centered scatter plots: {centered_path}")
     
     # ========== COMPREHENSIVE ESP ANALYSIS PLOTS ==========
+    # Create one comprehensive analysis across ALL validation samples
     if esp_pred_physnet_list and esp_pred_dcmnet_list:
         fig_esp_analysis, axes_esp = plt.subplots(3, 4, figsize=(20, 15))
         
-        # Collect ESP data
-        esp_pred_physnet_all = np.concatenate([e.reshape(-1) for e in esp_pred_physnet_list])
-        esp_pred_dcmnet_all = np.concatenate([e.reshape(-1) for e in esp_pred_dcmnet_list])
-        esp_true_all = np.concatenate([e.reshape(-1) for e in esp_true_list])
+        # Collect ESP data (already computed earlier)
+        # Reuse from scatter plots to avoid recomputation
+        try:
+            _ = esp_pred_physnet_all
+        except NameError:
+            esp_pred_physnet_all = np.concatenate([e.reshape(-1) for e in esp_pred_physnet_list])
+        try:
+            _ = esp_pred_dcmnet_all
+        except NameError:
+            esp_pred_dcmnet_all = np.concatenate([e.reshape(-1) for e in esp_pred_dcmnet_list])
+        try:
+            _ = esp_true_all
+        except NameError:
+            esp_true_all = np.concatenate([e.reshape(-1) for e in esp_true_list])
         
         # Row 0: Hexbin density plots
         ax = axes_esp[0, 0]
@@ -1668,12 +1679,12 @@ def plot_validation_results(
         ax.legend()
         ax.set_xlim(0, max(sorted_err_physnet.max(), sorted_err_dcmnet.max()))
         
-        plt.suptitle(f'Comprehensive ESP Analysis (Sample {idx}){epoch_str}', fontsize=14, weight='bold')
+        plt.suptitle(f'Comprehensive ESP Analysis (All Samples){epoch_str}', fontsize=14, weight='bold')
         plt.tight_layout()
-        esp_analysis_path = save_dir / f'esp_analysis_{idx}{suffix}.png'
+        esp_analysis_path = save_dir / f'esp_analysis_comprehensive{suffix}.png'
         plt.savefig(esp_analysis_path, dpi=150, bbox_inches='tight')
         plt.close()
-        print(f"  ✅ Saved comprehensive ESP analysis {idx}: {esp_analysis_path}")
+        print(f"  ✅ Saved comprehensive ESP analysis: {esp_analysis_path}")
     
     # Create ESP example plots - compare PhysNet vs DCMNet
     for idx in range(min(n_esp_examples, len(esp_pred_dcmnet_list))):
