@@ -177,8 +177,8 @@ Epoch 50/500 (1.8s)
     E_coulomb: -127.453 eV
     MAE Energy: 41.224107 eV  (950.648528 kcal/mol) [μ=-5104.420, σ=1.777 eV]
     MAE Forces: 1.147455 eV/Å  (26.460883 kcal/mol/Å) [μ=-0.000, σ=8.427 eV/Å]
-    MAE Dipole (PhysNet): 0.242257 D  (0.050436 e·Å) [μ=0.123, σ=2.456 D]
-    MAE Dipole (DCMNet): 0.284588 D  (0.059249 e·Å) [μ=0.123, σ=2.456 D]
+    MAE Dipole (PhysNet): 0.050436 e·Å  (0.242257 D) [μ=0.123, σ=0.456 e·Å]
+    MAE Dipole (DCMNet): 0.059249 e·Å  (0.284588 D) [μ=0.123, σ=0.456 e·Å]
     RMSE ESP (PhysNet): 0.069926 Ha/e  (43.879494 (kcal/mol)/e) [μ=0.001234, σ=0.023456 Ha/e]
     RMSE ESP (DCMNet): 0.067553 Ha/e  (42.389904 (kcal/mol)/e) [μ=0.001234, σ=0.023456 Ha/e]
     Total Charge Violation: 0.001000
@@ -198,17 +198,34 @@ Epoch 50/500 (1.8s)
 
 Create validation plots after training with `--plot-results`:
 
-### Scatter Plots
-Creates a 2x2 grid showing:
-- **Energy**: True vs Predicted (eV)
-- **Forces**: True vs Predicted (eV/Å)
-- **Dipoles**: True vs Predicted (Debye)
-- **ESP**: True vs Predicted (Hartree/e)
+### Validation Plots (Scatter + Histograms)
+Creates a comprehensive 4×3 grid with:
 
-Each plot includes:
-- Perfect prediction line (red dashed)
-- Mean Absolute Error (MAE)
-- Grid for easy reading
+**Row 1 - Scatter Plots (True vs Predicted):**
+- **Energy** (eV)
+- **Forces** (eV/Å)
+- **Dipole - PhysNet** (e·Å)
+
+**Row 2 - Error Histograms:**
+- Energy prediction errors
+- Forces prediction errors
+- Dipole (PhysNet) prediction errors
+
+**Row 3 - More Scatter Plots:**
+- **Dipole - DCMNet** (e·Å)
+- **ESP - PhysNet** (Hartree/e)
+- **ESP - DCMNet** (Hartree/e)
+
+**Row 4 - More Error Histograms:**
+- Dipole (DCMNet) prediction errors
+- ESP (PhysNet) prediction errors
+- ESP (DCMNet) prediction errors
+
+**Features:**
+- Scatter plots: Perfect prediction line (red dashed), MAE/RMSE, R² for ESP
+- Histograms: Error distribution, zero-error reference line, standard deviation
+- Color-coded by model: PhysNet (blue/default), DCMNet (orange), ESP variants (green/purple)
+- Consistent scales for easy comparison
 
 ### ESP Examples
 Creates detailed visualizations for individual molecules showing:
