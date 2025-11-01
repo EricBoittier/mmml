@@ -1143,6 +1143,7 @@ def plot_validation_results(
             n_dcm=n_dcm,
             dipole_source=dipole_source,
             esp_min_distance=0.0,  # No filtering for plotting
+            esp_max_value=1e10,  # No magnitude filtering for plotting
         )
         
         # Extract scalar/first element from batch outputs
