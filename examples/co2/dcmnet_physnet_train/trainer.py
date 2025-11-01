@@ -1244,9 +1244,24 @@ def plot_validation_results(
         esp_pred_physnet_all = np.concatenate([e.reshape(-1) for e in esp_pred_physnet_list])
         esp_true_all = np.concatenate([e.reshape(-1) for e in esp_true_list])
         ax.scatter(esp_true_all, esp_pred_physnet_all, alpha=0.3, s=10, color='green')
-        lims = [min(esp_true_all.min(), esp_pred_physnet_all.min()),
-                max(esp_true_all.max(), esp_pred_physnet_all.max())]
+        
+        # Compute bounds at median ± 6 SD for better visualization
+        true_median = np.median(esp_true_all)
+        true_std = np.std(esp_true_all)
+        pred_median = np.median(esp_pred_physnet_all)
+        pred_std = np.std(esp_pred_physnet_all)
+        
+        xlim_min = true_median - 6 * true_std
+        xlim_max = true_median + 6 * true_std
+        ylim_min = pred_median - 6 * pred_std
+        ylim_max = pred_median + 6 * pred_std
+        
+        # Plot perfect line across the bounds
+        lims = [min(xlim_min, ylim_min), max(xlim_max, ylim_max)]
         ax.plot(lims, lims, 'r--', alpha=0.5, label='Perfect')
+        ax.set_xlim(xlim_min, xlim_max)
+        ax.set_ylim(ylim_min, ylim_max)
+        
         ax.set_xlabel('True ESP (Hartree/e)')
         ax.set_ylabel('Predicted ESP (Hartree/e)')
         rmse_esp_physnet = np.sqrt(np.mean((esp_pred_physnet_all - esp_true_all)**2))
@@ -1264,9 +1279,24 @@ def plot_validation_results(
         esp_pred_dcmnet_all = np.concatenate([e.reshape(-1) for e in esp_pred_dcmnet_list])
         esp_true_all = np.concatenate([e.reshape(-1) for e in esp_true_list])
         ax.scatter(esp_true_all, esp_pred_dcmnet_all, alpha=0.3, s=10, color='purple')
-        lims = [min(esp_true_all.min(), esp_pred_dcmnet_all.min()),
-                max(esp_true_all.max(), esp_pred_dcmnet_all.max())]
+        
+        # Compute bounds at median ± 6 SD for better visualization
+        true_median = np.median(esp_true_all)
+        true_std = np.std(esp_true_all)
+        pred_median = np.median(esp_pred_dcmnet_all)
+        pred_std = np.std(esp_pred_dcmnet_all)
+        
+        xlim_min = true_median - 6 * true_std
+        xlim_max = true_median + 6 * true_std
+        ylim_min = pred_median - 6 * pred_std
+        ylim_max = pred_median + 6 * pred_std
+        
+        # Plot perfect line across the bounds
+        lims = [min(xlim_min, ylim_min), max(xlim_max, ylim_max)]
         ax.plot(lims, lims, 'r--', alpha=0.5, label='Perfect')
+        ax.set_xlim(xlim_min, xlim_max)
+        ax.set_ylim(ylim_min, ylim_max)
+        
         ax.set_xlabel('True ESP (Hartree/e)')
         ax.set_ylabel('Predicted ESP (Hartree/e)')
         rmse_esp_dcmnet = np.sqrt(np.mean((esp_pred_dcmnet_all - esp_true_all)**2))
@@ -1414,9 +1444,22 @@ def plot_validation_results(
         esp_true_centered = esp_true_all_centered - esp_true_mean
         esp_pred_physnet_centered = esp_pred_physnet_all_centered - esp_pred_physnet_mean
         ax.scatter(esp_true_centered, esp_pred_physnet_centered, alpha=0.3, s=10, color='green')
-        lims = [min(esp_true_centered.min(), esp_pred_physnet_centered.min()),
-                max(esp_true_centered.max(), esp_pred_physnet_centered.max())]
+        
+        # Compute bounds at median ± 6 SD
+        true_centered_median = np.median(esp_true_centered)
+        true_centered_std = np.std(esp_true_centered)
+        pred_centered_median = np.median(esp_pred_physnet_centered)
+        pred_centered_std = np.std(esp_pred_physnet_centered)
+        
+        xlim_min = true_centered_median - 6 * true_centered_std
+        xlim_max = true_centered_median + 6 * true_centered_std
+        ylim_min = pred_centered_median - 6 * pred_centered_std
+        ylim_max = pred_centered_median + 6 * pred_centered_std
+        
+        lims = [min(xlim_min, ylim_min), max(xlim_max, ylim_max)]
         ax.plot(lims, lims, 'r--', alpha=0.5, label='Perfect')
+        ax.set_xlim(xlim_min, xlim_max)
+        ax.set_ylim(ylim_min, ylim_max)
         ax.axhline(0, color='k', linestyle=':', alpha=0.3)
         ax.axvline(0, color='k', linestyle=':', alpha=0.3)
         ax.set_xlabel('True ESP - <True> (Hartree/e)')
@@ -1439,9 +1482,22 @@ def plot_validation_results(
         esp_pred_dcmnet_mean = esp_pred_dcmnet_all_centered.mean()
         esp_pred_dcmnet_centered = esp_pred_dcmnet_all_centered - esp_pred_dcmnet_mean
         ax.scatter(esp_true_centered, esp_pred_dcmnet_centered, alpha=0.3, s=10, color='purple')
-        lims = [min(esp_true_centered.min(), esp_pred_dcmnet_centered.min()),
-                max(esp_true_centered.max(), esp_pred_dcmnet_centered.max())]
+        
+        # Compute bounds at median ± 6 SD
+        true_centered_median = np.median(esp_true_centered)
+        true_centered_std = np.std(esp_true_centered)
+        pred_centered_median = np.median(esp_pred_dcmnet_centered)
+        pred_centered_std = np.std(esp_pred_dcmnet_centered)
+        
+        xlim_min = true_centered_median - 6 * true_centered_std
+        xlim_max = true_centered_median + 6 * true_centered_std
+        ylim_min = pred_centered_median - 6 * pred_centered_std
+        ylim_max = pred_centered_median + 6 * pred_centered_std
+        
+        lims = [min(xlim_min, ylim_min), max(xlim_max, ylim_max)]
         ax.plot(lims, lims, 'r--', alpha=0.5, label='Perfect')
+        ax.set_xlim(xlim_min, xlim_max)
+        ax.set_ylim(ylim_min, ylim_max)
         ax.axhline(0, color='k', linestyle=':', alpha=0.3)
         ax.axvline(0, color='k', linestyle=':', alpha=0.3)
         ax.set_xlabel('True ESP - <True> (Hartree/e)')
