@@ -1646,8 +1646,9 @@ def plot_validation_results(
                 esp_min_distance=0.0,
                 esp_max_value=1e10,
             )
-            mono_dcm = output_dcm["mono_dist"].reshape(n_atoms, n_dcm)
-            dipo_dcm = output_dcm["dipo_dist"].reshape(n_atoms, n_dcm, 3)
+            # Extract only real atoms (output is already (batch*natoms, n_dcm) format)
+            mono_dcm = output_dcm["mono_dist"][:n_atoms]  # (n_atoms, n_dcm)
+            dipo_dcm = output_dcm["dipo_dist"][:n_atoms]  # (n_atoms, n_dcm, 3)
             
             # Plot distributed charges
             charges_flat = np.array(mono_dcm).flatten()
