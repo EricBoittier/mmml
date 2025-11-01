@@ -936,23 +936,20 @@ def plot_validation_results(
             dipole_source=dipole_source,
         )
         
-        energies_pred.append(float(output['energy']))
-        energies_true.append(float(batch['E']))
+        # Extract scalar/first element from batch outputs
+        energies_pred.append(float(output['energy'][0]))
+        energies_true.append(float(batch['E'][0]))
         
         forces_pred.append(np.array(output['forces']))
         forces_true.append(np.array(batch['F']))
         
         # Store BOTH dipole predictions
-        dipoles_physnet_pred.append(np.array(output['dipoles']))
+        dipoles_physnet_pred.append(np.array(output['dipoles'][0]))
         
-        # Compute DCMNet dipole
-        natoms = output["mono_dist"].shape[0]
-        mono_reshaped = output["mono_dist"].reshape(1, natoms, n_dcm)
-        dipo_reshaped = output["dipo_dist"].reshape(1, natoms, n_dcm, 3)
-        dipole_dcmnet = np.sum(mono_reshaped[..., None] * dipo_reshaped, axis=(1, 2))
-        dipoles_dcmnet_pred.append(np.array(dipole_dcmnet))
+        # Compute DCMNet dipole (already batched, extract first)
+        dipoles_dcmnet_pred.append(np.array(output['dipoles_dcmnet'][0]))
         
-        dipoles_true.append(np.array(batch['D']))
+        dipoles_true.append(np.array(batch['D'][0]))
         
         # ESP (only store first n_esp_examples) - compute from BOTH methods
         if i < n_esp_examples:
