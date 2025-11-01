@@ -156,30 +156,37 @@ python trainer.py ... --dipole-source physnet
 python trainer.py ... --dipole-source dcmnet
 ```
 
-### ESP Grid Point Filtering (Default ON)
+### ESP Grid Point Filtering (Atomic Radius-Based, Default ON)
 
-**By default**, the trainer excludes ESP grid points that are too close to atoms (< 1.0 Å):
+**By default**, the trainer excludes ESP grid points too close to atoms using **element-specific atomic radii**:
 - Points very close to nuclei have near-singular Coulomb potentials
 - These extreme values can dominate the loss and destabilize training
-- Filtering improves training stability and model generalization
+- Using atomic radii accounts for different element sizes (H vs C vs O)
 
-**Default:** `--esp-min-distance 1.0` (exclude grid points < 1.0 Å from any atom)
+**Default behavior:** Exclude grid points within **2 × covalent_radius** of any atom
 
-**To disable** (include all grid points):
+**Example cutoff distances:**
+- H (r = 0.31 Å): exclude if d < 0.62 Å
+- C (r = 0.76 Å): exclude if d < 1.52 Å  
+- O (r = 0.66 Å): exclude if d < 1.32 Å
+
+**Add extra fixed distance** (on top of radius-based):
 ```bash
-python trainer.py ... --esp-min-distance 0.0
-```
-
-**To increase filtering** (more conservative):
-```bash
-python trainer.py ... --esp-min-distance 1.5
+python trainer.py ... --esp-min-distance 0.5  # Adds 0.5 Å to radius-based cutoff
 ```
 
 **How it works:**
-- For each ESP grid point, compute distance to nearest atom
-- If distance < `esp_min_distance`, exclude from loss calculation
-- Filtering applied to both training and validation
-- Plotting uses all points (no filtering) for visualization
+1. For each atom, compute cutoff = 2 × covalent_radius
+2. For each grid point, check distance to all atoms
+3. Exclude if within cutoff of ANY atom
+4. Optional: Add fixed `--esp-min-distance` for extra margin
+5. Filtering applied to both training and validation RMSE
+6. Plotting uses all points (no filtering) for visualization
+
+**Why 2× radius?** 
+- 1× radius is inside the electron cloud (extreme ESP)
+- 2× radius is near the VDW surface (reasonable ESP values)
+- Element-specific: H is smaller than C/O
 
 ### Energy Mixing (Experimental)
 

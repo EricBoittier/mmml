@@ -671,27 +671,42 @@ def compute_loss(
         vdw_for_esp = batch["vdw_surface"][0]  # (ngrid, 3)
         esp_target = batch["esp"][0]  # (ngrid,)
         
-        # Create distance-based mask for ESP grid points
+        # Create distance-based mask for ESP grid points using atomic radii
+        # Get atom positions (only real atoms)
+        atom_positions = batch["R"].reshape(batch_size, natoms, 3)[0]  # (natoms, 3)
+        atom_mask_single = batch["atom_mask"].reshape(batch_size, natoms)[0]  # (natoms,)
+        atomic_nums_single = batch["Z"].reshape(batch_size, natoms)[0]  # (natoms,)
+        
+        # Compute distances from each grid point to each atom
+        # vdw_for_esp: (ngrid, 3), atom_positions: (natoms, 3)
+        distances = jnp.linalg.norm(
+            vdw_for_esp[:, None, :] - atom_positions[None, :, :], 
+            axis=2
+        )  # (ngrid, natoms)
+        
+        # Get atomic radii for each atom (in Angstroms)
+        import ase.data
+        # covalent_radii is in Angstroms
+        atomic_radii = jnp.array([ase.data.covalent_radii[int(z)] for z in atomic_nums_single])
+        
+        # Check if grid point is within 2*radius of any atom
+        # distances: (ngrid, natoms), atomic_radii: (natoms,)
+        # For each grid point, check if ANY atom has distance < 2*radius
+        within_cutoff = distances < (2.0 * atomic_radii[None, :])  # (ngrid, natoms)
+        
+        # Apply atom mask (ignore padding atoms)
+        within_cutoff_masked = within_cutoff & (atom_mask_single[None, :] > 0.5)
+        
+        # Grid point is EXCLUDED if it's within cutoff of ANY atom
+        # Grid point is INCLUDED if ALL atoms are beyond cutoff
+        any_too_close = jnp.any(within_cutoff_masked, axis=1)  # (ngrid,)
+        distance_mask = (~any_too_close).astype(jnp.float32)
+        
+        # Optional: override with fixed distance if esp_min_distance > 0
         if esp_min_distance > 0:
-            # Get atom positions (only real atoms)
-            atom_positions = batch["R"].reshape(batch_size, natoms, 3)[0]  # (natoms, 3)
-            atom_mask_single = batch["atom_mask"].reshape(batch_size, natoms)[0]  # (natoms,)
-            real_atom_positions = atom_positions * atom_mask_single[:, None]  # Zero out padding
-            
-            # Compute distances from each grid point to each atom
-            # vdw_for_esp: (ngrid, 3), real_atom_positions: (natoms, 3)
-            distances = jnp.linalg.norm(
-                vdw_for_esp[:, None, :] - real_atom_positions[None, :, :], 
-                axis=2
-            )  # (ngrid, natoms)
-            
-            # Min distance from each grid point to nearest atom
-            min_distances = jnp.min(jnp.where(atom_mask_single[None, :] > 0.5, distances, 1e10), axis=1)  # (ngrid,)
-            
-            # Mask: 1 if distance >= esp_min_distance, 0 otherwise
-            distance_mask = (min_distances >= esp_min_distance).astype(jnp.float32)
-        else:
-            distance_mask = jnp.ones_like(esp_target)
+            min_distances = jnp.min(jnp.where(atom_mask_single[None, :] > 0.5, distances, 1e10), axis=1)
+            fixed_distance_mask = (min_distances >= esp_min_distance).astype(jnp.float32)
+            distance_mask = distance_mask * fixed_distance_mask  # Combine both criteria
         
         # Add magnitude-based filtering
         if esp_max_value < 1e9:  # Check if magnitude limit is set (sentinel is 1e10)
@@ -713,24 +728,32 @@ def compute_loss(
         loss_esp = (esp_mask * esp_diff ** 2).sum() / (esp_mask.sum() + 1e-10)
     else:
         # For batched, need to loop (or use vmap)
-        def single_esp_loss(mono_mol, dipo_mol, vdw_mol, esp_mol, atom_pos, atom_mask_mol):
+        def single_esp_loss(mono_mol, dipo_mol, vdw_mol, esp_mol, atom_pos, atom_mask_mol, atomic_nums_mol):
             mono_flat = mono_mol.reshape(-1)
             dipo_flat = dipo_mol.reshape(-1, 3)  # Direct reshape to preserve xyz
             esp_pred = calc_esp(dipo_flat, mono_flat, vdw_mol)
             
-            # Create distance-based mask
+            # Create atomic radius-based mask
+            import ase.data
+            distances = jnp.linalg.norm(
+                vdw_mol[:, None, :] - atom_pos[None, :, :], 
+                axis=2
+            )  # (ngrid, natoms)
+            
+            # Get atomic radii for each atom
+            atomic_radii = jnp.array([ase.data.covalent_radii[int(z)] for z in atomic_nums_mol])
+            
+            # Check if within 2*radius of any atom
+            within_cutoff = distances < (2.0 * atomic_radii[None, :])
+            within_cutoff_masked = within_cutoff & (atom_mask_mol[None, :] > 0.5)
+            any_too_close = jnp.any(within_cutoff_masked, axis=1)
+            distance_mask = (~any_too_close).astype(jnp.float32)
+            
+            # Optional: additional fixed distance filter
             if esp_min_distance > 0:
-                # Compute distances from each grid point to each atom
-                distances = jnp.linalg.norm(
-                    vdw_mol[:, None, :] - atom_pos[None, :, :], 
-                    axis=2
-                )  # (ngrid, natoms)
-                
-                # Min distance to nearest real atom
                 min_distances = jnp.min(jnp.where(atom_mask_mol[None, :] > 0.5, distances, 1e10), axis=1)
-                distance_mask = (min_distances >= esp_min_distance).astype(jnp.float32)
-            else:
-                distance_mask = jnp.ones_like(esp_mol)
+                fixed_distance_mask = (min_distances >= esp_min_distance).astype(jnp.float32)
+                distance_mask = distance_mask * fixed_distance_mask
             
             # Add magnitude-based filtering
             if esp_max_value < 1e9:  # Check if magnitude limit is set
@@ -746,10 +769,11 @@ def compute_loss(
         # Prepare inputs for vmap
         atom_positions_batched = batch["R"].reshape(batch_size, natoms, 3)
         atom_mask_batched = batch["atom_mask"].reshape(batch_size, natoms)
+        atomic_nums_batched = batch["Z"].reshape(batch_size, natoms)
         
         esp_losses = jax.vmap(single_esp_loss)(
             mono_reshaped, dipo_reshaped, batch["vdw_surface"], batch["esp"],
-            atom_positions_batched, atom_mask_batched
+            atom_positions_batched, atom_mask_batched, atomic_nums_batched
         )
         loss_esp = esp_losses.mean()
     
@@ -946,20 +970,31 @@ def eval_step(
     vdw_for_esp = batch["vdw_surface"][0]  # (ngrid, 3)
     esp_target = batch["esp"][0]  # (ngrid,)
     
-    # Create ESP mask (distance-based)
+    # Create ESP mask using atomic radii (default behavior)
     atom_positions_single = batch["R"].reshape(batch_size, natoms, 3)[0]  # (natoms, 3)
     atom_mask_single = batch["atom_mask"].reshape(batch_size, natoms)[0]  # (natoms,)
-    real_atom_positions = atom_positions_single * atom_mask_single[:, None]  # Zero out padding
+    atomic_nums_single = batch["Z"].reshape(batch_size, natoms)[0]  # (natoms,)
     
+    # Compute distances
+    distances = jnp.linalg.norm(
+        vdw_for_esp[:, None, :] - atom_positions_single[None, :, :], 
+        axis=2
+    )  # (ngrid, natoms)
+    
+    # Get atomic radii for each atom
+    atomic_radii = jnp.array([ase.data.covalent_radii[int(z)] for z in atomic_nums_single])
+    
+    # Check if within 2*radius of any atom
+    within_cutoff = distances < (2.0 * atomic_radii[None, :])
+    within_cutoff_masked = within_cutoff & (atom_mask_single[None, :] > 0.5)
+    any_too_close = jnp.any(within_cutoff_masked, axis=1)
+    distance_mask = (~any_too_close).astype(jnp.float32)
+    
+    # Optional: additional fixed distance filter
     if esp_min_distance > 0:
-        distances = jnp.linalg.norm(
-            vdw_for_esp[:, None, :] - real_atom_positions[None, :, :], 
-            axis=2
-        )  # (ngrid, natoms)
-        min_distances = jnp.min(jnp.where(atom_mask_single[None, :] > 0.5, distances, 1e10), axis=1)  # (ngrid,)
-        distance_mask = (min_distances >= esp_min_distance).astype(jnp.float32)
-    else:
-        distance_mask = jnp.ones_like(esp_target)
+        min_distances = jnp.min(jnp.where(atom_mask_single[None, :] > 0.5, distances, 1e10), axis=1)
+        fixed_distance_mask = (min_distances >= esp_min_distance).astype(jnp.float32)
+        distance_mask = distance_mask * fixed_distance_mask
     
     # Add magnitude-based filtering
     if esp_max_value < 1e9:  # Check if magnitude limit is set (sentinel is 1e10)
@@ -2592,8 +2627,8 @@ def main():
                        help='Dipole loss weight')
     parser.add_argument('--esp-weight', type=float, default=10000.0,
                        help='ESP loss weight')
-    parser.add_argument('--esp-min-distance', type=float, default=1.0,
-                       help='Minimum distance (Å) from atoms for ESP grid points to include in loss (default: 1.0, set to 0 to disable)')
+    parser.add_argument('--esp-min-distance', type=float, default=0.0,
+                       help='Additional minimum distance (Å) from atoms for ESP grid points (default: 0, uses 2×atomic_radius). Set > 0 to add extra distance constraint.')
     parser.add_argument('--esp-max-value', type=float, default=None,
                        help='Maximum |ESP| value (Hartree/e) to include in loss - filters out high ESP points (default: no limit)')
     parser.add_argument('--mono-weight', type=float, default=100.0,
@@ -2775,8 +2810,9 @@ def main():
     print(f"  Forces: {args.forces_weight}")
     print(f"  Dipole: {args.dipole_weight} (source: {args.dipole_source})")
     print(f"  ESP: {args.esp_weight}")
+    print(f"    ESP filtering (default): grid points < 2×atomic_radius from atoms excluded")
     if args.esp_min_distance > 0:
-        print(f"    ESP distance filtering: grid points < {args.esp_min_distance:.2f} Å from atoms excluded")
+        print(f"    ESP additional distance: + {args.esp_min_distance:.2f} Å minimum from atoms")
     if args.esp_max_value is not None:
         print(f"    ESP magnitude filtering: |ESP| > {args.esp_max_value:.4f} Ha/e excluded")
     print(f"  Monopole constraint: {args.mono_weight}")
