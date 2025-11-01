@@ -137,6 +137,15 @@ class JointPhysNetDCMNet(nn.Module):
         charges = physnet_output["charges"]
         charges_squeezed = jnp.squeeze(charges)  # (batch*natoms,)
         
+        # Compute sum of charges per molecule (respecting atom_mask)
+        charges_masked = charges_squeezed * atom_mask
+        # Sum per batch segment
+        sum_charges = jax.ops.segment_sum(
+            charges_masked,
+            segment_ids=batch_segments,
+            num_segments=batch_size
+        )
+        
         # 3. DCMNet forward pass: predict distributed multipoles
         # DCMNet uses charges as the monopole constraint
         mono_dist, dipo_dist = self.dcmnet(
@@ -163,7 +172,7 @@ class JointPhysNetDCMNet(nn.Module):
             "forces": forces_reshaped,  # (batch_size*natoms, 3)
             "dipoles": dipoles_reshaped,  # (batch_size, 3)
             "charges": charges,
-            "sum_charges": physnet_output.get("sum_charges", jnp.sum(charges_squeezed)),
+            "sum_charges": physnet_output.get("sum_charges", sum_charges),  # (batch_size,)
             # DCMNet outputs
             "mono_dist": mono_dist,  # (batch*natoms, n_dcm)
             "dipo_dist": dipo_dist,  # (batch*natoms, n_dcm, 3)
@@ -1305,6 +1314,10 @@ def train_model(
                 print(f"    MAE Dipole (DCMNet): {mae_dipole_dcmnet_D:.6f} D  ({mae_dipole_dcmnet_D * Debye_to_eA:.6f} e·Å)")
                 print(f"    RMSE ESP (PhysNet): {rmse_esp_physnet_Ha:.6f} Ha/e  ({rmse_esp_physnet_Ha * Ha_to_kcal:.6f} (kcal/mol)/e)")
                 print(f"    RMSE ESP (DCMNet): {rmse_esp_dcmnet_Ha:.6f} Ha/e  ({rmse_esp_dcmnet_Ha * Ha_to_kcal:.6f} (kcal/mol)/e)")
+            
+            # Print constraint violations if available
+            if 'total_charge' in valid_loss_avg:
+                print(f"    Total Charge Violation: {valid_loss_avg['total_charge']:.6f}")
         
         # Save best model
         if valid_loss_avg['total'] < best_valid_loss:
