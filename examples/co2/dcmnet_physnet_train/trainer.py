@@ -966,7 +966,7 @@ def eval_step(
     
     # DCMNet ESP
     mono_flat = mono_for_esp.reshape(-1)
-    dipo_flat = jnp.moveaxis(dipo_for_esp, -1, -2).reshape(-1, 3)
+    dipo_flat = dipo_for_esp.reshape(-1, 3)  # Direct reshape to preserve xyz
     from mmml.dcmnet.dcmnet.electrostatics import calc_esp
     esp_pred_dcmnet = calc_esp(dipo_flat, mono_flat, vdw_for_esp)
     
@@ -1571,17 +1571,27 @@ def plot_validation_results(
         atom_positions = np.array(batch_for_atoms['R'][:n_atoms])  # (n_atoms, 3)
         atomic_nums = np.array(batch_for_atoms['Z'][:n_atoms])
         
+        # Center visualization on atom center of mass
+        # Compute atom COM using atomic masses
+        import ase.data
+        masses = np.array([ase.data.atomic_masses[int(z)] for z in atomic_nums])
+        atom_com = np.sum(atom_positions * masses[:, None], axis=0) / masses.sum()
+        
+        # Shift both grid and atoms to center on atom COM
+        grid_pos_centered = grid_pos - atom_com
+        atom_positions_centered = atom_positions - atom_com
+        
         # True ESP in 3D
         ax = fig.add_subplot(131, projection='3d')
-        sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 1], grid_pos[:, 2],
+        sc = ax.scatter(grid_pos_centered[:, 0], grid_pos_centered[:, 1], grid_pos_centered[:, 2],
                        c=esp_true, cmap='RdBu_r', s=20, alpha=0.6, 
                        vmin=esp_vmin, vmax=esp_vmax)
-        # Add atom positions
-        ax.scatter(atom_positions[:, 0], atom_positions[:, 1], atom_positions[:, 2],
+        # Add atom positions (centered)
+        ax.scatter(atom_positions_centered[:, 0], atom_positions_centered[:, 1], atom_positions_centered[:, 2],
                   c='black', s=300, marker='o', edgecolors='yellow', linewidths=3, 
                   alpha=1.0, label='Atoms')
         # Label atoms
-        for i, (pos, Z) in enumerate(zip(atom_positions, atomic_nums)):
+        for i, (pos, Z) in enumerate(zip(atom_positions_centered, atomic_nums)):
             ax.text(pos[0], pos[1], pos[2], f'  {int(Z)}', fontsize=10, 
                    color='black', weight='bold', bbox=dict(boxstyle='round,pad=0.3', 
                    facecolor='yellow', alpha=0.7))
@@ -1594,15 +1604,15 @@ def plot_validation_results(
         
         # PhysNet ESP in 3D
         ax = fig.add_subplot(132, projection='3d')
-        sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 1], grid_pos[:, 2],
+        sc = ax.scatter(grid_pos_centered[:, 0], grid_pos_centered[:, 1], grid_pos_centered[:, 2],
                        c=esp_pred_physnet, cmap='RdBu_r', s=20, alpha=0.6,
                        vmin=esp_vmin, vmax=esp_vmax)
-        # Add atom positions (PhysNet charges are AT atom centers)
-        ax.scatter(atom_positions[:, 0], atom_positions[:, 1], atom_positions[:, 2],
+        # Add atom positions (PhysNet charges are AT atom centers, centered)
+        ax.scatter(atom_positions_centered[:, 0], atom_positions_centered[:, 1], atom_positions_centered[:, 2],
                   c='black', s=300, marker='o', edgecolors='lime', linewidths=3, 
                   alpha=1.0, label='Atoms (charge centers)')
         # Label atoms
-        for i, (pos, Z) in enumerate(zip(atom_positions, atomic_nums)):
+        for i, (pos, Z) in enumerate(zip(atom_positions_centered, atomic_nums)):
             ax.text(pos[0], pos[1], pos[2], f'  {int(Z)}\n(q)', fontsize=9, 
                    color='black', weight='bold', bbox=dict(boxstyle='round,pad=0.3', 
                    facecolor='lime', alpha=0.7))
@@ -1615,15 +1625,15 @@ def plot_validation_results(
         
         # DCMNet ESP in 3D
         ax = fig.add_subplot(133, projection='3d')
-        sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 1], grid_pos[:, 2],
+        sc = ax.scatter(grid_pos_centered[:, 0], grid_pos_centered[:, 1], grid_pos_centered[:, 2],
                        c=esp_pred_dcmnet, cmap='RdBu_r', s=20, alpha=0.6,
                        vmin=esp_vmin, vmax=esp_vmax)
-        # Add atom positions 
-        ax.scatter(atom_positions[:, 0], atom_positions[:, 1], atom_positions[:, 2],
+        # Add atom positions (centered)
+        ax.scatter(atom_positions_centered[:, 0], atom_positions_centered[:, 1], atom_positions_centered[:, 2],
                   c='black', s=300, marker='o', edgecolors='cyan', linewidths=3, 
                   alpha=1.0, label='Atoms')
         # Label atoms
-        for i, (pos, Z) in enumerate(zip(atom_positions, atomic_nums)):
+        for i, (pos, Z) in enumerate(zip(atom_positions_centered, atomic_nums)):
             ax.text(pos[0], pos[1], pos[2], f'  {int(Z)}', fontsize=10, 
                    color='black', weight='bold', bbox=dict(boxstyle='round,pad=0.3', 
                    facecolor='cyan', alpha=0.7))
@@ -1650,15 +1660,16 @@ def plot_validation_results(
             mono_dcm = output_dcm["mono_dist"][:n_atoms]  # (n_atoms, n_dcm)
             dipo_dcm = output_dcm["dipo_dist"][:n_atoms]  # (n_atoms, n_dcm, 3)
             
-            # Plot distributed charges
+            # Plot distributed charges (centered on atom COM)
             charges_flat = np.array(mono_dcm).flatten()
             positions_flat = np.array(dipo_dcm).reshape(-1, 3)
+            positions_flat_centered = positions_flat - atom_com
             # Only plot charges with significant magnitude
             significant = np.abs(charges_flat) > 0.01
             if np.any(significant):
-                ax.scatter(positions_flat[significant, 0], 
-                          positions_flat[significant, 1], 
-                          positions_flat[significant, 2],
+                ax.scatter(positions_flat_centered[significant, 0], 
+                          positions_flat_centered[significant, 1], 
+                          positions_flat_centered[significant, 2],
                           c=charges_flat[significant], cmap='RdBu_r', s=50, 
                           marker='^', edgecolors='white', linewidths=1,
                           vmin=-0.5, vmax=0.5, alpha=0.9, label='Dist. charges')
