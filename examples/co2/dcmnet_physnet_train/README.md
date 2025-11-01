@@ -240,6 +240,30 @@ Epoch 50/500 (1.8s)
 - **Dual metrics**: Both PhysNet and DCMNet dipoles/ESP are reported for comparison
 - **Multiple units**: Primary units + converted (e.g., eV and kcal/mol)
 
+### Charge Diagnostics
+
+Every 10th print interval (and epoch 1), the trainer prints charge statistics:
+
+```
+💡 Charge Diagnostics (first validation sample):
+  PhysNet charges: [-0.3245, +0.3245] e, sum=0.0000
+  DCMNet charges:  [-0.0821, +0.0652] e, sum=-0.0001
+  DCMNet charge signs: 8 positive, 4 negative (out of 12)
+  ESP (DCMNet): [-0.0234, 0.1567] Ha/e
+  ESP (PhysNet): [-0.2106, 0.1531] Ha/e
+  ESP (Target):  [-0.0380, 0.7116] Ha/e
+```
+
+**⚠️ Warning Signs:**
+- **DCMNet ESP only positive:** DCMNet may be predicting all positive charges (bug!)
+- **Charge sum ≠ 0:** Monopole or total charge constraint not enforced
+- **All same sign:** Check if monopole constraint weight is sufficient
+
+**Diagnostic Tool:** Run `diagnose_charges.py` for detailed per-molecule charge analysis:
+```bash
+python diagnose_charges.py --checkpoint path/to/best_params.pkl --n-samples 5
+```
+
 ## Visualization
 
 Create validation plots after training with `--plot-results`:
