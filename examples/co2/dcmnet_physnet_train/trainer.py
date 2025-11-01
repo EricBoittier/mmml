@@ -1428,6 +1428,159 @@ def plot_validation_results(
         plt.close()
         print(f"  ✅ Saved multi-scale ESP errors {idx}: {esp_scales_path}")
         
+        # Create distributed charge visualization
+        # Get atom positions and charges for this molecule
+        batch_for_charges = prepare_batch_data(valid_data, np.array([idx]), cutoff=cutoff)
+        atom_positions = np.array(batch_for_charges['R'][:n_atoms])  # (natoms, 3)
+        atomic_nums = np.array(batch_for_charges['Z'][:n_atoms])
+        
+        # Get distributed charges and positions
+        # mono_for_esp: (natoms, n_dcm) - charge values
+        # dipo_for_esp: (natoms, n_dcm, 3) - charge positions
+        charges_dist = mono_for_esp  # Already defined above
+        positions_dist = dipo_for_esp  # Already defined above
+        
+        # Flatten for plotting: (natoms*n_dcm,) and (natoms*n_dcm, 3)
+        charges_flat = np.array(charges_dist.reshape(-1))
+        positions_flat = np.array(positions_dist.reshape(-1, 3))
+        
+        # Create figure with multiple views
+        from mpl_toolkits.mplot3d import Axes3D
+        fig = plt.figure(figsize=(18, 12))
+        
+        # Compute symmetric color scale for charges
+        charge_absmax = max(abs(charges_flat.min()), abs(charges_flat.max()))
+        
+        # View 1: 3D view
+        ax = fig.add_subplot(221, projection='3d')
+        # Plot atoms (larger, dark spheres)
+        for i, (pos, Z) in enumerate(zip(atom_positions, atomic_nums)):
+            ax.scatter(pos[0], pos[1], pos[2], c='black', s=200, alpha=0.8, marker='o')
+            ax.text(pos[0], pos[1], pos[2], f'  {int(Z)}', fontsize=10, color='black')
+        
+        # Plot distributed charges (smaller, colored by magnitude)
+        sc = ax.scatter(positions_flat[:, 0], positions_flat[:, 1], positions_flat[:, 2],
+                       c=charges_flat, cmap='RdBu_r', s=50, alpha=0.8,
+                       vmin=-charge_absmax, vmax=charge_absmax, edgecolors='black', linewidth=0.5)
+        ax.set_xlabel('X (Å)')
+        ax.set_ylabel('Y (Å)')
+        ax.set_zlabel('Z (Å)')
+        ax.set_title(f'Distributed Charges (3D){epoch_str}\nBlack = atoms, Colored = charges')
+        plt.colorbar(sc, ax=ax, label='Charge (e)', shrink=0.6)
+        
+        # View 2: XY projection
+        ax = fig.add_subplot(222)
+        # Plot atoms
+        for i, (pos, Z) in enumerate(zip(atom_positions, atomic_nums)):
+            ax.scatter(pos[0], pos[1], c='black', s=200, alpha=0.8, marker='o', edgecolors='white', linewidth=2)
+            ax.text(pos[0], pos[1], f' {int(Z)}', fontsize=12, color='black', weight='bold')
+        
+        # Plot distributed charges
+        sc = ax.scatter(positions_flat[:, 0], positions_flat[:, 1],
+                       c=charges_flat, cmap='RdBu_r', s=50, alpha=0.8,
+                       vmin=-charge_absmax, vmax=charge_absmax, edgecolors='black', linewidth=0.5)
+        ax.set_xlabel('X (Å)')
+        ax.set_ylabel('Y (Å)')
+        ax.set_title(f'XY Projection{epoch_str}')
+        ax.grid(True, alpha=0.3)
+        ax.set_aspect('equal')
+        plt.colorbar(sc, ax=ax, label='Charge (e)')
+        
+        # View 3: XZ projection
+        ax = fig.add_subplot(223)
+        # Plot atoms
+        for i, (pos, Z) in enumerate(zip(atom_positions, atomic_nums)):
+            ax.scatter(pos[0], pos[2], c='black', s=200, alpha=0.8, marker='o', edgecolors='white', linewidth=2)
+            ax.text(pos[0], pos[2], f' {int(Z)}', fontsize=12, color='black', weight='bold')
+        
+        # Plot distributed charges
+        sc = ax.scatter(positions_flat[:, 0], positions_flat[:, 2],
+                       c=charges_flat, cmap='RdBu_r', s=50, alpha=0.8,
+                       vmin=-charge_absmax, vmax=charge_absmax, edgecolors='black', linewidth=0.5)
+        ax.set_xlabel('X (Å)')
+        ax.set_ylabel('Z (Å)')
+        ax.set_title(f'XZ Projection{epoch_str}')
+        ax.grid(True, alpha=0.3)
+        ax.set_aspect('equal')
+        plt.colorbar(sc, ax=ax, label='Charge (e)')
+        
+        # View 4: YZ projection
+        ax = fig.add_subplot(224)
+        # Plot atoms
+        for i, (pos, Z) in enumerate(zip(atom_positions, atomic_nums)):
+            ax.scatter(pos[1], pos[2], c='black', s=200, alpha=0.8, marker='o', edgecolors='white', linewidth=2)
+            ax.text(pos[1], pos[2], f' {int(Z)}', fontsize=12, color='black', weight='bold')
+        
+        # Plot distributed charges
+        sc = ax.scatter(positions_flat[:, 1], positions_flat[:, 2],
+                       c=charges_flat, cmap='RdBu_r', s=50, alpha=0.8,
+                       vmin=-charge_absmax, vmax=charge_absmax, edgecolors='black', linewidth=0.5)
+        ax.set_xlabel('Y (Å)')
+        ax.set_ylabel('Z (Å)')
+        ax.set_title(f'YZ Projection{epoch_str}')
+        ax.grid(True, alpha=0.3)
+        ax.set_aspect('equal')
+        plt.colorbar(sc, ax=ax, label='Charge (e)')
+        
+        plt.suptitle(f'DCMNet Distributed Charges (Sample {idx}){epoch_str}', fontsize=14, weight='bold')
+        plt.tight_layout()
+        charges_path = save_dir / f'charges_example_{idx}{suffix}.png'
+        plt.savefig(charges_path, dpi=150, bbox_inches='tight')
+        plt.close()
+        print(f"  ✅ Saved charge distribution {idx}: {charges_path}")
+        
+        # Create a detailed per-atom charge analysis
+        fig, axes = plt.subplots(1, n_atoms, figsize=(6*n_atoms, 6))
+        if n_atoms == 1:
+            axes = [axes]
+        
+        for atom_idx in range(n_atoms):
+            ax = axes[atom_idx]
+            atom_pos = atom_positions[atom_idx]
+            atom_Z = int(atomic_nums[atom_idx])
+            
+            # Get charges for this atom
+            charges_atom = np.array(charges_dist[atom_idx])  # (n_dcm,)
+            positions_atom = np.array(positions_dist[atom_idx])  # (n_dcm, 3)
+            
+            # Compute positions relative to this atom
+            rel_positions = positions_atom - atom_pos
+            
+            # 2D projection (XY relative to atom)
+            ax.scatter(0, 0, c='black', s=300, marker='o', edgecolors='white', linewidth=3, zorder=10)
+            ax.text(0, 0, f'{atom_Z}', fontsize=16, color='white', weight='bold', 
+                   ha='center', va='center', zorder=11)
+            
+            # Plot distributed charges relative to atom
+            charge_max_atom = max(abs(charges_atom.min()), abs(charges_atom.max()))
+            sc = ax.scatter(rel_positions[:, 0], rel_positions[:, 1],
+                           c=charges_atom, cmap='RdBu_r', s=150, alpha=0.9,
+                           vmin=-charge_max_atom, vmax=charge_max_atom,
+                           edgecolors='black', linewidth=1)
+            
+            # Draw lines from atom to charges
+            for j, (rel_pos, q) in enumerate(zip(rel_positions, charges_atom)):
+                ax.plot([0, rel_pos[0]], [0, rel_pos[1]], 'k-', alpha=0.3, linewidth=1)
+                # Label with charge value
+                ax.text(rel_pos[0], rel_pos[1], f'{q:.3f}', fontsize=8, 
+                       ha='center', va='bottom')
+            
+            ax.set_xlabel('ΔX (Å)')
+            ax.set_ylabel('ΔY (Å)')
+            ax.set_title(f'Atom {atom_idx} (Z={atom_Z})\nΣq = {charges_atom.sum():.4f} e')
+            ax.grid(True, alpha=0.3)
+            ax.set_aspect('equal')
+            ax.axhline(0, color='k', linestyle='--', alpha=0.2)
+            ax.axvline(0, color='k', linestyle='--', alpha=0.2)
+            plt.colorbar(sc, ax=ax, label='Charge (e)')
+        
+        plt.suptitle(f'Per-Atom Charge Distribution (Sample {idx}){epoch_str}', fontsize=14, weight='bold')
+        plt.tight_layout()
+        charges_detail_path = save_dir / f'charges_detail_{idx}{suffix}.png'
+        plt.savefig(charges_detail_path, dpi=150, bbox_inches='tight')
+        plt.close()
+        print(f"  ✅ Saved detailed charge distribution {idx}: {charges_detail_path}")
+        
     print(f"\n✅ All plots saved to: {save_dir}")
 
 
