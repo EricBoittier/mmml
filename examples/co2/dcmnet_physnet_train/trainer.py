@@ -1428,7 +1428,7 @@ def train_model(
             print(f"  💾 Saved best model (valid_loss: {best_valid_loss:.6f})")
         
         # Create plots periodically if requested
-        if plot_freq is not None and epoch % plot_freq == 0 and HAS_MATPLOTLIB:
+        if plot_freq is not None and plot_freq > 0 and epoch % plot_freq == 0 and HAS_MATPLOTLIB:
             print(f"\n📊 Creating plots at epoch {epoch}...")
             plot_validation_results(
                 params=params,
@@ -1537,8 +1537,8 @@ def main():
                        help='Print frequency (epochs)')
     parser.add_argument('--plot-results', action='store_true', default=False,
                        help='Create validation plots after training')
-    parser.add_argument('--plot-freq', type=int, default=None,
-                       help='Create validation plots every N epochs during training (None to disable)')
+    parser.add_argument('--plot-freq', type=int, default=10,
+                       help='Create validation plots every N epochs during training (default: 10, set to 0 to disable)')
     parser.add_argument('--plot-samples', type=int, default=100,
                        help='Number of validation samples to plot')
     parser.add_argument('--plot-esp-examples', type=int, default=2,
