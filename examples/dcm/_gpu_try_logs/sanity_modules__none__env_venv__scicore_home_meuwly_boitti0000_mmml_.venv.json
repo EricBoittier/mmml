@@ -1,4 +1,4 @@
-ERROR:2025-10-31 09:00:46,932:jax._src.xla_bridge:473: Jax plugin configuration error: Exception when calling jax_plugins.xla_cuda12.initialize()
+ERROR:2025-11-01 12:28:05,675:jax._src.xla_bridge:473: Jax plugin configuration error: Exception when calling jax_plugins.xla_cuda12.initialize()
 Traceback (most recent call last):
   File "/scicore/home/meuwly/boitti0000/mmml/.venv/lib/python3.12/site-packages/jax/_src/xla_bridge.py", line 471, in discover_pjrt_plugins
     plugin_module.initialize()
@@ -7,6 +7,5 @@ Traceback (most recent call last):
   File "/scicore/home/meuwly/boitti0000/mmml/.venv/lib/python3.12/site-packages/jax_plugins/xla_cuda12/__init__.py", line 285, in _check_cuda_versions
     local_device_count = cuda_versions.cuda_device_count()
                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-RuntimeError: jaxlib/cuda/versions_helpers.cc:113: operation cuInit(0) failed: CUDA_ERROR_NO_DEVICE
-WARNING:2025-10-31 09:00:46,939:jax._src.xla_bridge:850: An NVIDIA GPU may be present on this machine, but a CUDA-enabled jaxlib is not installed. Falling back to cpu.
-{"ok": false, "python_exe": "/scicore/home/meuwly/boitti0000/mmml/.venv/bin/python", "python_ver": "3.12.0", "jax": "0.8.0", "jaxlib": "0.8.0", "cuda_version_from_jaxlib": null, "backend": "cpu", "devices": ["TFRT_CPU_0"], "cuda_visible_devices": "0"}
+RuntimeError: jaxlib/cuda/versions_helpers.cc:113: operation cuInit(0) failed: Unknown CUDA error 303; cuGetErrorName failed. This probably means that JAX was unable to load the CUDA libraries.
+{"ok": false, "python_exe": "/scicore/home/meuwly/boitti0000/mmml/.venv/bin/python", "python_ver": "3.12.0", "jax": "0.8.0", "jaxlib": "0.8.0", "cuda_version_from_jaxlib": null, "backend": "cpu", "devices": ["TFRT_CPU_0"], "cuda_visible_devices": null}
