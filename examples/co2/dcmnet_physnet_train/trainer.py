@@ -1429,17 +1429,35 @@ def plot_validation_results(
         print(f"  ✅ Saved multi-scale ESP errors {idx}: {esp_scales_path}")
         
         # Create distributed charge visualization
-        # Get atom positions and charges for this molecule
+        # Need to recompute the model output for this molecule to get charges
         batch_for_charges = prepare_batch_data(valid_data, np.array([idx]), cutoff=cutoff)
         n_atoms = int(batch_for_charges['N'][0])  # Number of real atoms (not padding)
         atom_positions = np.array(batch_for_charges['R'][:n_atoms])  # (natoms, 3)
         atomic_nums = np.array(batch_for_charges['Z'][:n_atoms])
         
-        # Get distributed charges and positions (only real atoms, not padding)
-        # mono_for_esp: (natoms_padded, n_dcm) - charge values
-        # dipo_for_esp: (natoms_padded, n_dcm, 3) - charge positions
-        charges_dist = mono_for_esp[:n_atoms]  # Only real atoms
-        positions_dist = dipo_for_esp[:n_atoms]  # Only real atoms
+        # Run model to get distributed charges
+        _, _, output_for_charges = eval_step(
+            params=params,
+            batch=batch_for_charges,
+            model_apply=model.apply,
+            energy_w=energy_w,
+            forces_w=forces_w,
+            dipole_w=dipole_w,
+            esp_w=esp_w,
+            mono_w=mono_w,
+            batch_size=1,
+            n_dcm=n_dcm,
+            dipole_source=dipole_source,
+        )
+        
+        # Extract distributed charges and positions
+        natoms_padded = output_for_charges["mono_dist"].shape[0]
+        mono_all = output_for_charges["mono_dist"].reshape(natoms_padded, n_dcm)
+        dipo_all = output_for_charges["dipo_dist"].reshape(natoms_padded, n_dcm, 3)
+        
+        # Get only real atoms (not padding)
+        charges_dist = mono_all[:n_atoms]  # (n_atoms, n_dcm)
+        positions_dist = dipo_all[:n_atoms]  # (n_atoms, n_dcm, 3)
         
         # Flatten for plotting: (natoms*n_dcm,) and (natoms*n_dcm, 3)
         charges_flat = np.array(charges_dist.reshape(-1))
