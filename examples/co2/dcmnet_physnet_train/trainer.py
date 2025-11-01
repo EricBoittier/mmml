@@ -1692,59 +1692,71 @@ def plot_validation_results(
         
         # Row 1: 100% range (all data)
         ax = axes[0, 0]
-        sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 2],
+        sc = ax.scatter(grid_pos_centered[:, 0], grid_pos_centered[:, 2],
                        c=esp_error_physnet, cmap='RdBu_r', s=20, alpha=0.8,
                        vmin=-error_absmax, vmax=error_absmax)
-        ax.set_xlabel('X (Å)')
-        ax.set_ylabel('Z (Å)')
+        ax.set_xlabel('X (Å, centered)')
+        ax.set_ylabel('Z (Å, centered)')
         ax.set_title(f'PhysNet Error (100% range){epoch_str}')
         plt.colorbar(sc, ax=ax, label='Error (Ha/e)')
         ax.grid(True, alpha=0.3)
+        # Add atom positions for reference
+        ax.scatter(atom_positions_centered[:, 0], atom_positions_centered[:, 2],
+                  c='black', s=100, marker='o', edgecolors='lime', linewidths=2, alpha=1.0, zorder=10)
         
         ax = axes[0, 1]
-        sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 2],
+        sc = ax.scatter(grid_pos_centered[:, 0], grid_pos_centered[:, 2],
                        c=esp_error_dcmnet, cmap='RdBu_r', s=20, alpha=0.8,
                        vmin=-error_absmax, vmax=error_absmax)
-        ax.set_xlabel('X (Å)')
-        ax.set_ylabel('Z (Å)')
+        ax.set_xlabel('X (Å, centered)')
+        ax.set_ylabel('Z (Å, centered)')
         ax.set_title(f'DCMNet Error (100% range){epoch_str}')
         plt.colorbar(sc, ax=ax, label='Error (Ha/e)')
         ax.grid(True, alpha=0.3)
+        # Add atom positions for reference
+        ax.scatter(atom_positions_centered[:, 0], atom_positions_centered[:, 2],
+                  c='black', s=100, marker='o', edgecolors='cyan', linewidths=2, alpha=1.0, zorder=10)
         
         # Row 2: 95th percentile
         ax = axes[1, 0]
-        sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 2],
+        sc = ax.scatter(grid_pos_centered[:, 0], grid_pos_centered[:, 2],
                        c=esp_error_physnet, cmap='RdBu_r', s=20, alpha=0.8,
                        vmin=-p95_max, vmax=p95_max)
-        ax.set_xlabel('X (Å)')
-        ax.set_ylabel('Z (Å)')
+        ax.set_xlabel('X (Å, centered)')
+        ax.set_ylabel('Z (Å, centered)')
         ax.set_title(f'PhysNet Error (95th %-ile){epoch_str}')
         plt.colorbar(sc, ax=ax, label='Error (Ha/e)')
         ax.grid(True, alpha=0.3)
+        ax.scatter(atom_positions_centered[:, 0], atom_positions_centered[:, 2],
+                  c='black', s=100, marker='o', edgecolors='lime', linewidths=2, alpha=1.0, zorder=10)
         
         ax = axes[1, 1]
-        sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 2],
+        sc = ax.scatter(grid_pos_centered[:, 0], grid_pos_centered[:, 2],
                        c=esp_error_dcmnet, cmap='RdBu_r', s=20, alpha=0.8,
                        vmin=-p95_max, vmax=p95_max)
-        ax.set_xlabel('X (Å)')
-        ax.set_ylabel('Z (Å)')
+        ax.set_xlabel('X (Å, centered)')
+        ax.set_ylabel('Z (Å, centered)')
         ax.set_title(f'DCMNet Error (95th %-ile){epoch_str}')
         plt.colorbar(sc, ax=ax, label='Error (Ha/e)')
         ax.grid(True, alpha=0.3)
+        ax.scatter(atom_positions_centered[:, 0], atom_positions_centered[:, 2],
+                  c='black', s=100, marker='o', edgecolors='cyan', linewidths=2, alpha=1.0, zorder=10)
         
         # Row 3: 75th percentile
         ax = axes[2, 0]
-        sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 2],
+        sc = ax.scatter(grid_pos_centered[:, 0], grid_pos_centered[:, 2],
                        c=esp_error_physnet, cmap='RdBu_r', s=20, alpha=0.8,
                        vmin=-p75_max, vmax=p75_max)
-        ax.set_xlabel('X (Å)')
-        ax.set_ylabel('Z (Å)')
+        ax.set_xlabel('X (Å, centered)')
+        ax.set_ylabel('Z (Å, centered)')
         ax.set_title(f'PhysNet Error (75th %-ile){epoch_str}')
         plt.colorbar(sc, ax=ax, label='Error (Ha/e)')
         ax.grid(True, alpha=0.3)
+        ax.scatter(atom_positions_centered[:, 0], atom_positions_centered[:, 2],
+                  c='black', s=100, marker='o', edgecolors='lime', linewidths=2, alpha=1.0, zorder=10)
         
         ax = axes[2, 1]
-        sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 2],
+        sc = ax.scatter(grid_pos_centered[:, 0], grid_pos_centered[:, 2],
                        c=esp_error_dcmnet, cmap='RdBu_r', s=20, alpha=0.8,
                        vmin=-p75_max, vmax=p75_max)
         ax.set_xlabel('X (Å)')
