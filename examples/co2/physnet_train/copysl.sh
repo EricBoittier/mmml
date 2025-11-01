@@ -7,10 +7,10 @@ echo "Running quick scan configuration $X"
 declare -a CONFIGS=(
     "32|2|2"    # Tiny, scalar only
     "64|2|2"    # Small, scalar only
-    "128|4|0"   # Medium, scalar only
-    "256|4|0"   # Large, scalar only
-    "128|3|2"   # Medium-deep with vectors
-    "256|3|2"   # Large-deep with vectors
+    "128|2|1"   # Medium, scalar only
+    "256|2|1"   # Large, scalar only
+    "128|3|0"   # Medium-deep with vectors
+    "256|3|0"   # Large-deep with vectors
 )
 
 CONFIG=${CONFIGS[$X]}
@@ -40,6 +40,7 @@ python -u trainer.py \
   --forces-weight 50.0 \
   --dipole-weight 25.0 \
   --energy-unit eV \
+  --charges  \
   --subtract-atomic-energies \
   --atomic-energy-method linear_regression \
   --no-energy-bias \
