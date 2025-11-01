@@ -1757,9 +1757,20 @@ def plot_validation_results(
         plt.close()
         print(f"  ✅ Saved comprehensive ESP analysis: {esp_analysis_path}")
     
-    # Create ESP example plots - compare PhysNet vs DCMNet
+    # Create consolidated ESP example plots - one comprehensive figure per sample
     for idx in range(min(n_esp_examples, len(esp_pred_dcmnet_list))):
-        fig, axes = plt.subplots(2, 3, figsize=(15, 8))
+        # Get molecule data
+        batch_for_plot = prepare_batch_data(valid_data, np.array([idx]), cutoff=cutoff)
+        n_atoms = int(batch_for_plot['N'][0])
+        atom_positions = np.array(batch_for_plot['R'][:n_atoms])
+        atomic_nums = np.array(batch_for_plot['Z'][:n_atoms])
+        
+        # Create comprehensive figure (5 rows x 4 cols)
+        from mpl_toolkits.mplot3d import Axes3D
+        from ase import Atoms
+        from ase.visualize.plot import plot_atoms
+        
+        fig = plt.figure(figsize=(24, 28))
         
         esp_true = esp_true_list[idx]
         esp_pred_dcmnet = esp_pred_dcmnet_list[idx]
@@ -1788,7 +1799,7 @@ def plot_validation_results(
         # True ESP (shared)
         ax = axes[0, 0]
         sc = ax.scatter(range(len(esp_true)), esp_true, c=esp_true, 
-                       cmap='RdBu_r', s=30, alpha=0.7, vmin=esp_vmin, vmax=esp_vmax)
+                       cmap='RdBu_r', s=5, alpha=0.6, vmin=esp_vmin, vmax=esp_vmax)
         ax.set_xlabel('Grid Point Index')
         ax.set_ylabel('ESP (Hartree/e)')
         ax.set_title(f'True ESP (Sample {idx}){epoch_str}')
@@ -1798,7 +1809,7 @@ def plot_validation_results(
         # DCMNet ESP
         ax = axes[0, 1]
         sc = ax.scatter(range(len(esp_pred_dcmnet)), esp_pred_dcmnet, c=esp_pred_dcmnet,
-                       cmap='RdBu_r', s=30, alpha=0.7, vmin=esp_vmin, vmax=esp_vmax)
+                       cmap='RdBu_r', s=5, alpha=0.6, vmin=esp_vmin, vmax=esp_vmax)
         ax.set_xlabel('Grid Point Index')
         ax.set_ylabel('ESP (Hartree/e)')
         ax.set_title(f'DCMNet ESP{epoch_str}')
@@ -1808,7 +1819,7 @@ def plot_validation_results(
         # DCMNet Error
         ax = axes[0, 2]
         sc = ax.scatter(range(len(esp_error_dcmnet)), esp_error_dcmnet, c=esp_error_dcmnet,
-                       cmap='RdBu_r', s=30, alpha=0.7, vmin=error_vmin, vmax=error_vmax)
+                       cmap='RdBu_r', s=5, alpha=0.6, vmin=error_vmin, vmax=error_vmax)
         ax.set_xlabel('Grid Point Index')
         ax.set_ylabel('ESP Error (Hartree/e)')
         rmse = np.sqrt(np.mean(esp_error_dcmnet**2))
@@ -1821,13 +1832,17 @@ def plot_validation_results(
         ax.axhline(0, color='k', linestyle='--', alpha=0.3)
         plt.colorbar(sc, ax=ax, label='Error (Ha/e)')
         
-        # Empty
-        axes[1, 0].axis('off')
+        # ASE molecular visualization
+        ax = axes[1, 0]
+        # Create ASE Atoms object
+        atoms_ase = Atoms(numbers=atomic_nums.astype(int), positions=atom_positions)
+        plot_atoms(atoms_ase, ax=ax, radii=0.5, rotation=('90x,0y,0z'))
+        ax.set_title(f'Molecule (ASE){epoch_str}')
         
         # PhysNet ESP
         ax = axes[1, 1]
         sc = ax.scatter(range(len(esp_pred_physnet)), esp_pred_physnet, c=esp_pred_physnet,
-                       cmap='RdBu_r', s=30, alpha=0.7, marker='s', vmin=esp_vmin, vmax=esp_vmax)
+                       cmap='RdBu_r', s=5, alpha=0.6, marker='s', vmin=esp_vmin, vmax=esp_vmax)
         ax.set_xlabel('Grid Point Index')
         ax.set_ylabel('ESP (Hartree/e)')
         ax.set_title(f'PhysNet ESP{epoch_str}')
@@ -1837,7 +1852,7 @@ def plot_validation_results(
         # PhysNet Error
         ax = axes[1, 2]
         sc = ax.scatter(range(len(esp_error_physnet)), esp_error_physnet, c=esp_error_physnet,
-                       cmap='RdBu_r', s=30, alpha=0.7, marker='s', vmin=error_vmin, vmax=error_vmax)
+                       cmap='RdBu_r', s=5, alpha=0.6, marker='s', vmin=error_vmin, vmax=error_vmax)
         ax.set_xlabel('Grid Point Index')
         ax.set_ylabel('ESP Error (Hartree/e)')
         rmse = np.sqrt(np.mean(esp_error_physnet**2))
@@ -1875,7 +1890,7 @@ def plot_validation_results(
         # True ESP in 3D
         ax = fig.add_subplot(131, projection='3d')
         sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 1], grid_pos[:, 2],
-                       c=esp_true, cmap='RdBu_r', s=20, alpha=0.6, 
+                       c=esp_true, cmap='RdBu_r', s=3, alpha=0.5, 
                        vmin=esp_vmin, vmax=esp_vmax)
         # Add atom positions
         ax.scatter(atom_positions[:, 0], atom_positions[:, 1], atom_positions[:, 2],
@@ -1896,7 +1911,7 @@ def plot_validation_results(
         # PhysNet ESP in 3D
         ax = fig.add_subplot(132, projection='3d')
         sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 1], grid_pos[:, 2],
-                       c=esp_pred_physnet, cmap='RdBu_r', s=20, alpha=0.6,
+                       c=esp_pred_physnet, cmap='RdBu_r', s=3, alpha=0.5,
                        vmin=esp_vmin, vmax=esp_vmax)
         # Add atom positions (PhysNet charges are AT atom centers)
         ax.scatter(atom_positions[:, 0], atom_positions[:, 1], atom_positions[:, 2],
@@ -1917,7 +1932,7 @@ def plot_validation_results(
         # DCMNet ESP in 3D
         ax = fig.add_subplot(133, projection='3d')
         sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 1], grid_pos[:, 2],
-                       c=esp_pred_dcmnet, cmap='RdBu_r', s=20, alpha=0.6,
+                       c=esp_pred_dcmnet, cmap='RdBu_r', s=3, alpha=0.5,
                        vmin=esp_vmin, vmax=esp_vmax)
         # Add atom positions
         ax.scatter(atom_positions[:, 0], atom_positions[:, 1], atom_positions[:, 2],
@@ -1983,7 +1998,7 @@ def plot_validation_results(
         # Row 1: 100% range (all data)
         ax = axes[0, 0]
         sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 2],
-                       c=esp_error_physnet, cmap='RdBu_r', s=20, alpha=0.8,
+                       c=esp_error_physnet, cmap='RdBu_r', s=5, alpha=0.6,
                        vmin=-error_absmax, vmax=error_absmax)
         ax.set_xlabel('X (Å)')
         ax.set_ylabel('Z (Å)')
