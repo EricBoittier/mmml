@@ -1048,6 +1048,7 @@ def plot_validation_results(
             batch_size=1,
             n_dcm=n_dcm,
             dipole_source=dipole_source,
+            esp_min_distance=0.0,  # No filtering for plotting
         )
         
         # Extract scalar/first element from batch outputs
@@ -1779,6 +1780,7 @@ def train_model(
                 n_dcm=n_dcm,
                 clip_norm=grad_clip_norm,
                 dipole_source=dipole_source,
+                esp_min_distance=esp_min_distance,
             )
             
             train_losses.append({k: float(v) for k, v in losses.items()})
