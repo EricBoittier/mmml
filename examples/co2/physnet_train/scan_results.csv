@@ -1,0 +1,9 @@
+experiment,features,basis,iterations,max_degree
+co2_physnet_atomic_refs-a5987976-c47f-4472-b8cf-dfe1111f9536,9536,8,,
+co2_physnet_atomic_refs-baf0229b-7687-4b29-bcf8-f726ee184f9e,229,29,,
+co2_quick_f128_i3_d2-8e8b3aff-a797-4c9b-aea8-3f1a29727b39,128,3,3.0,2.0
+co2_quick_f128_i4_d0-a7c775b6-3059-4a24-ad99-88aec6f16e33,128,6,4.0,0.0
+co2_quick_f256_i3_d2-f86ec51f-d597-41d3-89a6-e7fb37da376f,256,37,3.0,2.0
+co2_quick_f256_i4_d0-2aed65a8-19a3-4e98-93e1-e22fb221472c,256,221472,4.0,0.0
+co2_quick_f32_i2_d2-b0629d17-4118-4faf-9b1c-e6494fb02391,32,629,2.0,2.0
+co2_quick_f64_i2_d2-8ff52095-1a00-4ff6-9e3d-280753ab172c,64,172,2.0,2.0
