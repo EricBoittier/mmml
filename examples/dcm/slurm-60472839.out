@@ -1,0 +1,139 @@
+/scicore/home/meuwly/boitti0000/mmml/.venv/bin/python
+ERROR:2025-11-01 12:30:13,293:jax._src.xla_bridge:473: Jax plugin configuration error: Exception when calling jax_plugins.xla_cuda12.initialize()
+Traceback (most recent call last):
+  File "/scicore/home/meuwly/boitti0000/mmml/.venv/lib/python3.12/site-packages/jax/_src/xla_bridge.py", line 471, in discover_pjrt_plugins
+    plugin_module.initialize()
+  File "/scicore/home/meuwly/boitti0000/mmml/.venv/lib/python3.12/site-packages/jax_plugins/xla_cuda12/__init__.py", line 328, in initialize
+    _check_cuda_versions(raise_on_first_error=True)
+  File "/scicore/home/meuwly/boitti0000/mmml/.venv/lib/python3.12/site-packages/jax_plugins/xla_cuda12/__init__.py", line 285, in _check_cuda_versions
+    local_device_count = cuda_versions.cuda_device_count()
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: jaxlib/cuda/versions_helpers.cc:113: operation cuInit(0) failed: CUDA_ERROR_NOT_INITIALIZED
+WARNING:2025-11-01 12:30:13,298:jax._src.xla_bridge:850: An NVIDIA GPU may be present on this machine, but a CUDA-enabled jaxlib is not installed. Falling back to cpu.
+CUDA_VISIBLE_DEVICES = 0
+JAX backend: cpu
+Devices: [CpuDevice(id=0)]
+jax = 0.8.0 jaxlib = 0.8.0
+jaxlib CUDA = unknown
+/scicore/home/meuwly/boitti0000/mmml/.venv/bin/python
+lovely_jax enabled for enhanced array visualization
+[2025-11-01 12:30:17,335][__main__][INFO] - Configuration:
+[2025-11-01 12:30:17,338][__main__][INFO] - model:
+  name: MessagePassingModel
+  features: 128
+  max_degree: 2
+  num_iterations: 2
+  num_basis_functions: 32
+  cutoff: 8.0
+  n_dcm: 4
+  include_pseudotensors: false
+data:
+  paths:
+  - /home/ericb/testmmml/test.npz
+  - /pchem-data/meuwly/boittier/home/test.npz
+  - /scicore/home/meuwly/boitti0000/test.npz
+  num_train: 1000
+  num_valid: 100
+  natoms: 18
+  esp_sample_size: 1000
+  esp_clip_min: -2.0
+  esp_clip_max: 2.0
+  esp_to_au: 0.0016
+  clean: false
+  esp_mask: false
+  clip_esp: false
+  monopole_H: 0.1
+  monopole_O: -0.2
+training:
+  num_epochs: 50
+  learning_rate: 0.0001
+  batch_size: 1
+  n_bootstrap: 10
+  esp_weight_schedule: linear
+  esp_weight_start: 1000.0
+  esp_weight_end: 10000.0
+  chg_weight_schedule: inverse
+  chg_weight_start: 1.0
+  chg_weight_end: 0.1
+  use_grad_clip: true
+  grad_clip_norm: 1000.0
+  restart_from_checkpoint: null
+seed: 42
+device:
+  mem_fraction: 0.95
+  cuda_visible_devices: '0'
+output_dir: outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+wandb:
+  enabled: false
+  project: dcmnet-training
+  entity: null
+
+ERROR:2025-11-01 12:30:17,580:jax._src.xla_bridge:473: Jax plugin configuration error: Exception when calling jax_plugins.xla_cuda12.initialize()
+Traceback (most recent call last):
+  File "/scicore/home/meuwly/boitti0000/mmml/.venv/lib/python3.12/site-packages/jax/_src/xla_bridge.py", line 471, in discover_pjrt_plugins
+    plugin_module.initialize()
+  File "/scicore/home/meuwly/boitti0000/mmml/.venv/lib/python3.12/site-packages/jax_plugins/xla_cuda12/__init__.py", line 328, in initialize
+    _check_cuda_versions(raise_on_first_error=True)
+  File "/scicore/home/meuwly/boitti0000/mmml/.venv/lib/python3.12/site-packages/jax_plugins/xla_cuda12/__init__.py", line 285, in _check_cuda_versions
+    local_device_count = cuda_versions.cuda_device_count()
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: jaxlib/cuda/versions_helpers.cc:113: operation cuInit(0) failed: CUDA_ERROR_NOT_INITIALIZED
+[2025-11-01 12:30:17,580][jax._src.xla_bridge][ERROR] - Jax plugin configuration error: Exception when calling jax_plugins.xla_cuda12.initialize()
+Traceback (most recent call last):
+  File "/scicore/home/meuwly/boitti0000/mmml/.venv/lib/python3.12/site-packages/jax/_src/xla_bridge.py", line 471, in discover_pjrt_plugins
+    plugin_module.initialize()
+  File "/scicore/home/meuwly/boitti0000/mmml/.venv/lib/python3.12/site-packages/jax_plugins/xla_cuda12/__init__.py", line 328, in initialize
+    _check_cuda_versions(raise_on_first_error=True)
+  File "/scicore/home/meuwly/boitti0000/mmml/.venv/lib/python3.12/site-packages/jax_plugins/xla_cuda12/__init__.py", line 285, in _check_cuda_versions
+    local_device_count = cuda_versions.cuda_device_count()
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: jaxlib/cuda/versions_helpers.cc:113: operation cuInit(0) failed: CUDA_ERROR_NOT_INITIALIZED
+INFO:2025-11-01 12:30:17,587:jax._src.xla_bridge:808: Unable to initialize backend 'tpu': INTERNAL: Failed to open libtpu.so: libtpu.so: cannot open shared object file: No such file or directory
+[2025-11-01 12:30:17,587][jax._src.xla_bridge][INFO] - Unable to initialize backend 'tpu': INTERNAL: Failed to open libtpu.so: libtpu.so: cannot open shared object file: No such file or directory
+WARNING:2025-11-01 12:30:17,587:jax._src.xla_bridge:850: An NVIDIA GPU may be present on this machine, but a CUDA-enabled jaxlib is not installed. Falling back to cpu.
+[2025-11-01 12:30:17,587][jax._src.xla_bridge][WARNING] - An NVIDIA GPU may be present on this machine, but a CUDA-enabled jaxlib is not installed. Falling back to cpu.
+[2025-11-01 12:30:17,587][__main__][INFO] - JAX devices: [CpuDevice(id=0)]
+[2025-11-01 12:30:17,587][__main__][INFO] - JAX backend: cpu
+[2025-11-01 12:30:17,588][__main__][INFO] - Created model with 4 DCM components
+[2025-11-01 12:30:17,651][__main__][INFO] - 
+============================================================
+[2025-11-01 12:30:17,651][__main__][INFO] - Bootstrap iteration 1/10
+[2025-11-01 12:30:17,652][__main__][INFO] - ============================================================
+[2025-11-01 12:30:17,652][__main__][INFO] - Preparing datasets...
+shape (1983, 18, 3)
+⚠️  No 'mono' field found in dataset
+   Creating zero charges for 1983 molecules × 18 atoms
+   Note: Q field (if present) is quadrupole, not monopole charges
+   D field: molecular dipole vector (shape: (1983, 3))
+   Q field: quadrupole tensor (3×3, shape: (1983, 3, 3))
+R (1983, 18, 3)
+(1983, 18, 3)
+['R', 'Z', 'F', 'mono', 'esp', 'vdw_surface', 'n_grid', 'D', 'Q', 'esp_grid']
+1983
+0 R 1983 (1983, 18, 3)
+1 Z 1983 (1983, 18)
+2 F 1983 (1983, 18, 3)
+3 mono 1983 (1983, 18)
+4 esp 1983 (1983, 44510)
+5 vdw_surface 1983 (1983, 44510, 3)
+6 n_grid 1983 (1983, 1)
+7 D 1983 (1983, 3)
+8 Q 1983 (1983, 3, 3)
+9 esp_grid 1983 (1983, 44510, 3)
+
+Batch information:
+  mono: (1, 18)
+  esp: (1, 1000)
+  vdw_surface: (1, 1000, 3)
+  n_grid: (1,)
+  N: (1,)
+  R: (1, 18, 3)
+  Z: (1, 18)
+
+  mono values (first molecule): [-0.2  0.1  0.1 -0.2  0.1  0.1  0.   0.   0.   0.   0.   0.   0.   0.
+  0.   0.   0.   0. ]
+  N values: [6]
+  n_grid values: [1000]
+[2025-11-01 12:30:31,794][__main__][INFO] - Loss weights - ESP: 1900.00, Charge: 1.0000
+[2025-11-01 12:30:31,795][__main__][INFO] - Training for 50 epochs...
+[2025-11-01T12:31:55.888] error: *** JOB 60472839 ON sgi01 CANCELLED AT 2025-11-01T12:31:55 DUE to SIGNAL Terminated ***

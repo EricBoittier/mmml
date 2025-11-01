@@ -1,6 +1,6 @@
 /scicore/home/meuwly/boitti0000/.conda/envs/hello/lib/python3.13/site-packages/jaxlib/plugin_support.py:71: RuntimeWarning: JAX plugin jax_cuda13_plugin version 0.8.0 is installed, but it is not compatible with the installed jaxlib version 0.7.1, so it will not be used.
   warnings.warn(
-ERROR:2025-10-31 09:00:38,658:jax._src.xla_bridge:487: Jax plugin configuration error: Exception when calling jax_plugins.xla_cuda13.initialize()
+ERROR:2025-11-01 12:27:43,281:jax._src.xla_bridge:487: Jax plugin configuration error: Exception when calling jax_plugins.xla_cuda13.initialize()
 Traceback (most recent call last):
   File "/scicore/home/meuwly/boitti0000/.conda/envs/hello/lib/python3.13/site-packages/jax/_src/xla_bridge.py", line 485, in discover_pjrt_plugins
     plugin_module.initialize()
@@ -10,6 +10,5 @@ Traceback (most recent call last):
     ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
   File "/scicore/home/meuwly/boitti0000/.conda/envs/hello/lib/python3.13/site-packages/jax_plugins/xla_cuda13/__init__.py", line 285, in _check_cuda_versions
     local_device_count = cuda_versions.cuda_device_count()
-RuntimeError: jaxlib/cuda/versions_helpers.cc:113: operation cuInit(0) failed: CUDA_ERROR_NO_DEVICE
-WARNING:2025-10-31 09:00:38,796:jax._src.xla_bridge:864: An NVIDIA GPU may be present on this machine, but a CUDA-enabled jaxlib is not installed. Falling back to cpu.
-{"ok": false, "python_exe": "/scicore/home/meuwly/boitti0000/.conda/envs/hello/bin/python", "python_ver": "3.13.7", "jax": "0.7.1", "jaxlib": "0.7.1", "cuda_version_from_jaxlib": null, "backend": "cpu", "devices": ["TFRT_CPU_0"], "cuda_visible_devices": "0"}
+RuntimeError: jaxlib/cuda/versions_helpers.cc:113: operation cuInit(0) failed: Unknown CUDA error 303; cuGetErrorName failed. This probably means that JAX was unable to load the CUDA libraries.
+{"ok": false, "python_exe": "/scicore/home/meuwly/boitti0000/.conda/envs/hello/bin/python", "python_ver": "3.13.7", "jax": "0.7.1", "jaxlib": "0.7.1", "cuda_version_from_jaxlib": null, "backend": "cpu", "devices": ["TFRT_CPU_0"], "cuda_visible_devices": null}
