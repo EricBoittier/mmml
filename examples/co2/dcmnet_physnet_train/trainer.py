@@ -1831,6 +1831,7 @@ def train_model(
                 batch_size=len(batch_indices),
                 n_dcm=n_dcm,
                 dipole_source=dipole_source,
+                esp_min_distance=esp_min_distance,
             )
             
             valid_losses.append({k: float(v) for k, v in losses.items()})
