@@ -698,8 +698,8 @@ def compute_loss(
         
         # Flatten distributed charges: (natoms*n_dcm,)
         mono_flat = mono_for_esp.reshape(-1)
-        # Reshape dipoles: (natoms*n_dcm, 3)
-        dipo_flat = jnp.moveaxis(dipo_for_esp, -1, -2).reshape(-1, 3)
+        # Reshape dipoles: (natoms*n_dcm, 3) - direct reshape to preserve xyz
+        dipo_flat = dipo_for_esp.reshape(-1, 3)
         
         # Compute ESP
         esp_pred = calc_esp(dipo_flat, mono_flat, vdw_for_esp)
@@ -711,7 +711,7 @@ def compute_loss(
         # For batched, need to loop (or use vmap)
         def single_esp_loss(mono_mol, dipo_mol, vdw_mol, esp_mol, atom_pos, atom_mask_mol):
             mono_flat = mono_mol.reshape(-1)
-            dipo_flat = jnp.moveaxis(dipo_mol, -1, -2).reshape(-1, 3)
+            dipo_flat = dipo_mol.reshape(-1, 3)  # Direct reshape to preserve xyz
             esp_pred = calc_esp(dipo_flat, mono_flat, vdw_mol)
             
             # Create distance-based mask
