@@ -35,13 +35,13 @@ python trainer.py \
   --valid-efd ../physnet_train_charges/energies_forces_dipoles_valid.npz \
   --valid-esp ../dcmnet_train/grids_esp_valid.npz \
   --epochs 100 \
-  --batch-size 1 \
+  --batch-size 10 \
   --learning-rate 0.00001 \
   --energy-weight 1.0 \
-  --forces-weight 1.0 \
-  --dipole-weight 1.0 \
-  --esp-weight 1.0 \
-  --mono-weight 0.1 \
+  --forces-weight 50.0 \
+  --dipole-weight 25.0 \
+  --esp-weight 1000000.0 \
+  --mono-weight 100.0 \
   --grad-clip-norm 1.0 \
   --name co2_joint_stable
 ```
