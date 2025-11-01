@@ -348,7 +348,7 @@ def resize_data_padding(
     current_natoms = data['R'].shape[1]
     
     if current_natoms == target_natoms:
-    return data
+        return data
 
     # Check if safe
     max_atoms = int(np.max(data['N']))
