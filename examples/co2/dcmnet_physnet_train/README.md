@@ -21,6 +21,14 @@ This directory contains a joint training script that trains PhysNet and DCMNet s
 - Forces (`F`): eV/Å
 - Dipoles (`Dxyz`): e·Å
 
+**Expected ESP RMSE for well-trained models:**
+- **CO2 (small, rigid)**: < 0.005 Ha/e (~3 kcal/mol/e)
+  - Excellent: < 0.002 Ha/e (~1 kcal/mol/e)
+  - Good: 0.002-0.005 Ha/e (1-3 kcal/mol/e)
+  - Acceptable: < 0.01 Ha/e (~6 kcal/mol/e)
+- **Larger/flexible molecules**: 0.005-0.015 Ha/e
+- **> 0.02 Ha/e**: Indicates training issues or model capacity problems
+
 **ESP calculation:**
 - `calc_esp` expects positions in Angstroms
 - Internally converts distances to Bohr: `ESP = q / (r_Angstrom × 1.88973)`

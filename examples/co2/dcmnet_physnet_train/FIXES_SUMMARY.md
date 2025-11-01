@@ -143,11 +143,14 @@ python trainer.py \
 - ❌ Charges: all near zero, not learning
 
 ### After Fixes:
-- ✅ PhysNet dipoles: Should correlate with true dipoles
-- ✅ DCMNet dipoles: Should correlate with true dipoles
-- ✅ ESP RMSE: Should drop to < 0.02 Ha/e (~12 kcal/mol/e)
-- ✅ Charges: Should show proper distribution (±0.5e for CO2)
-- ✅ Centered scatter plots: Should show strong positive correlation
+- ✅ PhysNet dipoles: Should correlate with true dipoles (R² > 0.95)
+- ✅ DCMNet dipoles: Should correlate with true dipoles (R² > 0.95)
+- ✅ ESP RMSE: Should drop to **< 0.005 Ha/e (~3 kcal/mol/e)** for CO2
+  - Excellent: < 0.002 Ha/e (~1 kcal/mol/e)
+  - Good: < 0.005 Ha/e (~3 kcal/mol/e)
+  - Acceptable: < 0.01 Ha/e (~6 kcal/mol/e)
+- ✅ Charges: Should show proper distribution (±0.5-0.8e for CO2)
+- ✅ Centered scatter plots: Should show strong positive correlation (R > 0.98)
 
 ---
 
