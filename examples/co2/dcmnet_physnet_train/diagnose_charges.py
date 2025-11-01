@@ -40,17 +40,26 @@ def load_model_and_data(checkpoint_path, valid_esp_path, valid_efd_path):
         print(f"✅ Loaded model config from {config_path}")
     else:
         print("❌ No model config found - using defaults")
-        config = {
-            'physnet_features': 64,
-            'physnet_iterations': 3,
-            'physnet_basis': 64,
-            'physnet_cutoff': 10.0,
-            'dcmnet_features': 32,
-            'dcmnet_iterations': 2,
-            'dcmnet_basis': 32,
-            'dcmnet_cutoff': 10.0,
-            'n_dcm': 4,
-        }
+        config = {}
+    
+    # Default values
+    defaults = {
+        'physnet_features': 64,
+        'physnet_iterations': 3,
+        'physnet_basis': 64,
+        'physnet_cutoff': 10.0,
+        'dcmnet_features': 32,
+        'dcmnet_iterations': 2,
+        'dcmnet_basis': 32,
+        'dcmnet_cutoff': 10.0,
+        'n_dcm': 4,
+    }
+    
+    # Merge with defaults
+    for key, default_val in defaults.items():
+        if key not in config:
+            config[key] = default_val
+            print(f"  Using default {key}: {default_val}")
     
     # Create model
     physnet = EF(
