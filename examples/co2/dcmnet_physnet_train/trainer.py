@@ -348,7 +348,7 @@ def resize_data_padding(
     current_natoms = data['R'].shape[1]
     
     if current_natoms == target_natoms:
-        return data
+    return data
 
     # Check if safe
     max_atoms = int(np.max(data['N']))
@@ -1262,6 +1262,144 @@ def plot_validation_results(
     plt.savefig(plots_path, dpi=150, bbox_inches='tight')
     plt.close()
     print(f"  ✅ Saved validation plots (scatter + histograms): {plots_path}")
+    
+    # ========== CENTERED SCATTER PLOTS (True - Mean vs Pred - Mean) ==========
+    # These plots remove mean bias and show correlation patterns
+    fig_centered, axes_centered = plt.subplots(2, 3, figsize=(18, 12))
+    
+    # Compute means
+    energy_mean_true = energies_true.mean()
+    energy_mean_pred = energies_pred.mean()
+    forces_mean_true = forces_true.mean()
+    forces_mean_pred = forces_pred.mean()
+    dipoles_mean_true = dipoles_true.mean()
+    dipoles_mean_physnet_pred = dipoles_physnet_pred.mean()
+    dipoles_mean_dcmnet_pred = dipoles_dcmnet_pred.mean()
+    
+    # Energy centered
+    ax = axes_centered[0, 0]
+    energy_true_centered = energies_true - energy_mean_true
+    energy_pred_centered = energies_pred - energy_mean_pred
+    ax.scatter(energy_true_centered, energy_pred_centered, alpha=0.5, s=20)
+    lims = [min(energy_true_centered.min(), energy_pred_centered.min()),
+            max(energy_true_centered.max(), energy_pred_centered.max())]
+    ax.plot(lims, lims, 'r--', alpha=0.5, label='Perfect')
+    ax.axhline(0, color='k', linestyle=':', alpha=0.3)
+    ax.axvline(0, color='k', linestyle=':', alpha=0.3)
+    ax.set_xlabel('True Energy - <True> (eV)')
+    ax.set_ylabel('Predicted Energy - <Pred> (eV)')
+    # Compute correlation coefficient
+    corr_coef = np.corrcoef(energy_true_centered, energy_pred_centered)[0, 1]
+    ax.set_title(f'Energy (Centered)\nR = {corr_coef:.4f}')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    
+    # Forces centered
+    ax = axes_centered[0, 1]
+    forces_true_centered = forces_true - forces_mean_true
+    forces_pred_centered = forces_pred - forces_mean_pred
+    ax.scatter(forces_true_centered, forces_pred_centered, alpha=0.3, s=10)
+    lims = [min(forces_true_centered.min(), forces_pred_centered.min()),
+            max(forces_true_centered.max(), forces_pred_centered.max())]
+    ax.plot(lims, lims, 'r--', alpha=0.5, label='Perfect')
+    ax.axhline(0, color='k', linestyle=':', alpha=0.3)
+    ax.axvline(0, color='k', linestyle=':', alpha=0.3)
+    ax.set_xlabel('True Forces - <True> (eV/Å)')
+    ax.set_ylabel('Predicted Forces - <Pred> (eV/Å)')
+    corr_coef = np.corrcoef(forces_true_centered, forces_pred_centered)[0, 1]
+    ax.set_title(f'Forces (Centered)\nR = {corr_coef:.4f}')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    
+    # PhysNet Dipole centered
+    ax = axes_centered[0, 2]
+    dipoles_true_centered = dipoles_true - dipoles_mean_true
+    dipoles_physnet_pred_centered = dipoles_physnet_pred - dipoles_mean_physnet_pred
+    ax.scatter(dipoles_true_centered, dipoles_physnet_pred_centered, alpha=0.5, s=20)
+    lims = [min(dipoles_true_centered.min(), dipoles_physnet_pred_centered.min()),
+            max(dipoles_true_centered.max(), dipoles_physnet_pred_centered.max())]
+    ax.plot(lims, lims, 'r--', alpha=0.5, label='Perfect')
+    ax.axhline(0, color='k', linestyle=':', alpha=0.3)
+    ax.axvline(0, color='k', linestyle=':', alpha=0.3)
+    ax.set_xlabel('True Dipole - <True> (e·Å)')
+    ax.set_ylabel('Predicted Dipole - <Pred> (e·Å)')
+    corr_coef = np.corrcoef(dipoles_true_centered, dipoles_physnet_pred_centered)[0, 1]
+    marker = ' *' if dipole_source == 'physnet' else ''
+    ax.set_title(f'Dipole - PhysNet{marker} (Centered)\nR = {corr_coef:.4f}')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    
+    # DCMNet Dipole centered
+    ax = axes_centered[1, 0]
+    dipoles_dcmnet_pred_centered = dipoles_dcmnet_pred - dipoles_mean_dcmnet_pred
+    ax.scatter(dipoles_true_centered, dipoles_dcmnet_pred_centered, alpha=0.5, s=20, color='orange')
+    lims = [min(dipoles_true_centered.min(), dipoles_dcmnet_pred_centered.min()),
+            max(dipoles_true_centered.max(), dipoles_dcmnet_pred_centered.max())]
+    ax.plot(lims, lims, 'r--', alpha=0.5, label='Perfect')
+    ax.axhline(0, color='k', linestyle=':', alpha=0.3)
+    ax.axvline(0, color='k', linestyle=':', alpha=0.3)
+    ax.set_xlabel('True Dipole - <True> (e·Å)')
+    ax.set_ylabel('Predicted Dipole - <Pred> (e·Å)')
+    corr_coef = np.corrcoef(dipoles_true_centered, dipoles_dcmnet_pred_centered)[0, 1]
+    marker = ' *' if dipole_source == 'dcmnet' else ''
+    ax.set_title(f'Dipole - DCMNet{marker} (Centered)\nR = {corr_coef:.4f}')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    
+    # ESP PhysNet centered
+    ax = axes_centered[1, 1]
+    if esp_pred_physnet_list:
+        # Compute arrays for centered plots (may duplicate earlier computation, but simpler)
+        esp_pred_physnet_all_centered = np.concatenate([e.reshape(-1) for e in esp_pred_physnet_list])
+        esp_true_all_centered = np.concatenate([e.reshape(-1) for e in esp_true_list])
+        esp_true_mean = esp_true_all_centered.mean()
+        esp_pred_physnet_mean = esp_pred_physnet_all_centered.mean()
+        esp_true_centered = esp_true_all_centered - esp_true_mean
+        esp_pred_physnet_centered = esp_pred_physnet_all_centered - esp_pred_physnet_mean
+        ax.scatter(esp_true_centered, esp_pred_physnet_centered, alpha=0.3, s=10, color='green')
+        lims = [min(esp_true_centered.min(), esp_pred_physnet_centered.min()),
+                max(esp_true_centered.max(), esp_pred_physnet_centered.max())]
+        ax.plot(lims, lims, 'r--', alpha=0.5, label='Perfect')
+        ax.axhline(0, color='k', linestyle=':', alpha=0.3)
+        ax.axvline(0, color='k', linestyle=':', alpha=0.3)
+        ax.set_xlabel('True ESP - <True> (Hartree/e)')
+        ax.set_ylabel('Predicted ESP - <Pred> (Hartree/e)')
+        corr_coef = np.corrcoef(esp_true_centered, esp_pred_physnet_centered)[0, 1]
+        ax.set_title(f'ESP - PhysNet (Centered)\nR = {corr_coef:.4f}')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+    
+    # ESP DCMNet centered
+    ax = axes_centered[1, 2]
+    if esp_pred_dcmnet_list:
+        # Compute arrays for centered plots
+        esp_pred_dcmnet_all_centered = np.concatenate([e.reshape(-1) for e in esp_pred_dcmnet_list])
+        # Reuse esp_true_centered from PhysNet plot if available, otherwise compute
+        if 'esp_true_centered' not in locals():
+            esp_true_all_centered = np.concatenate([e.reshape(-1) for e in esp_true_list])
+            esp_true_mean = esp_true_all_centered.mean()
+            esp_true_centered = esp_true_all_centered - esp_true_mean
+        esp_pred_dcmnet_mean = esp_pred_dcmnet_all_centered.mean()
+        esp_pred_dcmnet_centered = esp_pred_dcmnet_all_centered - esp_pred_dcmnet_mean
+        ax.scatter(esp_true_centered, esp_pred_dcmnet_centered, alpha=0.3, s=10, color='purple')
+        lims = [min(esp_true_centered.min(), esp_pred_dcmnet_centered.min()),
+                max(esp_true_centered.max(), esp_pred_dcmnet_centered.max())]
+        ax.plot(lims, lims, 'r--', alpha=0.5, label='Perfect')
+        ax.axhline(0, color='k', linestyle=':', alpha=0.3)
+        ax.axvline(0, color='k', linestyle=':', alpha=0.3)
+        ax.set_xlabel('True ESP - <True> (Hartree/e)')
+        ax.set_ylabel('Predicted ESP - <Pred> (Hartree/e)')
+        corr_coef = np.corrcoef(esp_true_centered, esp_pred_dcmnet_centered)[0, 1]
+        ax.set_title(f'ESP - DCMNet (Centered)\nR = {corr_coef:.4f}')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+    
+    plt.suptitle('Centered Scatter Plots (Correlation Analysis)', fontsize=14, weight='bold')
+    plt.tight_layout()
+    centered_path = save_dir / f'validation_centered{suffix}.png'
+    plt.savefig(centered_path, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"  ✅ Saved centered scatter plots: {centered_path}")
     
     # Create ESP example plots - compare PhysNet vs DCMNet
     for idx in range(min(n_esp_examples, len(esp_pred_dcmnet_list))):
