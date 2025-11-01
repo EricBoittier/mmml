@@ -258,8 +258,17 @@ Creates detailed visualizations for individual molecules:
 - 3D scatter plots showing ESP on VDW surface in real space
 - Three panels: True ESP, PhysNet ESP, DCMNet ESP
 - Points positioned at actual grid coordinates (X, Y, Z in Ångström)
-- Color indicates ESP value (same scale across all three)
+- Color indicates ESP value (same **symmetric** scale centered at 0 across all three)
 - Visualize how well ESP is reproduced in 3D space
+
+**Multi-Scale Error Plots** (`esp_example_N_error_scales.png`):
+- 3 rows × 2 columns showing ESP errors at different percentile cutoffs
+- Row 1: 100% range (full error distribution)
+- Row 2: 95th percentile (removes outliers)
+- Row 3: 75th percentile (focuses on typical errors)
+- Left column: PhysNet errors, Right column: DCMNet errors
+- All scales **symmetric around 0** for balanced visualization
+- Helps identify error patterns without outliers dominating the colorscale
 
 Options:
 - `--plot-samples N`: Number of validation samples to include in scatter plots (default: 100)
