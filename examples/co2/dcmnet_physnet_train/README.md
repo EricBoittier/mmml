@@ -270,9 +270,26 @@ Creates detailed visualizations for individual molecules:
 - All scales **symmetric around 0** for balanced visualization
 - Helps identify error patterns without outliers dominating the colorscale
 
+**Distributed Charge Visualization** (`charges_example_N.png`):
+- Shows DCMNet's learned distributed charges around atoms
+- **2×2 grid:** 3D view + XY/XZ/YZ projections
+- Black spheres = atoms (labeled with atomic number)
+- Colored small spheres = distributed charges
+- Color scale: **symmetric around 0** (red = positive, blue = negative)
+- Visualize how DCMNet distributes charge around each atom
+
+**Per-Atom Charge Detail** (`charges_detail_N.png`):
+- One panel per atom showing its distributed charges
+- Atom at origin (0,0) with charges positioned relative to it
+- Lines connect atom to each distributed charge
+- Each charge labeled with its magnitude
+- Shows total charge per atom (Σq)
+- Helps understand local charge distribution patterns
+
 Options:
 - `--plot-samples N`: Number of validation samples to include in scatter plots (default: 100)
 - `--plot-esp-examples N`: Number of detailed ESP examples to create (default: 2)
+  - Each example generates: 2D ESP plots, 3D ESP plots, error scale plots, charge distribution, and per-atom charge detail
 
 Plots are saved to: `{checkpoint_dir}/{experiment_name}/plots/`
 
