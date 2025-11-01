@@ -1514,6 +1514,167 @@ def plot_validation_results(
     plt.close()
     print(f"  ✅ Saved centered scatter plots: {centered_path}")
     
+    # ========== COMPREHENSIVE ESP ANALYSIS PLOTS ==========
+    if esp_pred_physnet_list and esp_pred_dcmnet_list:
+        fig_esp_analysis, axes_esp = plt.subplots(3, 4, figsize=(20, 15))
+        
+        # Collect ESP data
+        esp_pred_physnet_all = np.concatenate([e.reshape(-1) for e in esp_pred_physnet_list])
+        esp_pred_dcmnet_all = np.concatenate([e.reshape(-1) for e in esp_pred_dcmnet_list])
+        esp_true_all = np.concatenate([e.reshape(-1) for e in esp_true_list])
+        
+        # Row 0: Hexbin density plots
+        ax = axes_esp[0, 0]
+        hexbin = ax.hexbin(esp_true_all, esp_pred_physnet_all, gridsize=50, cmap='Greens', mincnt=1)
+        ax.plot([-0.1, 0.9], [-0.1, 0.9], 'r--', alpha=0.5, label='Perfect')
+        ax.set_xlabel('True ESP (Ha/e)')
+        ax.set_ylabel('PhysNet Pred (Ha/e)')
+        ax.set_title('PhysNet - Hexbin Density')
+        ax.grid(True, alpha=0.3)
+        ax.legend()
+        plt.colorbar(hexbin, ax=ax, label='Count')
+        
+        ax = axes_esp[0, 1]
+        hexbin = ax.hexbin(esp_true_all, esp_pred_dcmnet_all, gridsize=50, cmap='Purples', mincnt=1)
+        ax.plot([-0.1, 0.9], [-0.1, 0.9], 'r--', alpha=0.5, label='Perfect')
+        ax.set_xlabel('True ESP (Ha/e)')
+        ax.set_ylabel('DCMNet Pred (Ha/e)')
+        ax.set_title('DCMNet - Hexbin Density')
+        ax.grid(True, alpha=0.3)
+        ax.legend()
+        plt.colorbar(hexbin, ax=ax, label='Count')
+        
+        # Row 0, Col 2-3: Residual plots (error vs true value)
+        ax = axes_esp[0, 2]
+        error_physnet = esp_pred_physnet_all - esp_true_all
+        ax.scatter(esp_true_all, error_physnet, alpha=0.3, s=5, color='green')
+        ax.axhline(0, color='red', linestyle='--', linewidth=2, alpha=0.5)
+        ax.set_xlabel('True ESP (Ha/e)')
+        ax.set_ylabel('Residual (Pred - True, Ha/e)')
+        ax.set_title('PhysNet Residuals')
+        ax.grid(True, alpha=0.3)
+        
+        ax = axes_esp[0, 3]
+        error_dcmnet = esp_pred_dcmnet_all - esp_true_all
+        ax.scatter(esp_true_all, error_dcmnet, alpha=0.3, s=5, color='purple')
+        ax.axhline(0, color='red', linestyle='--', linewidth=2, alpha=0.5)
+        ax.set_xlabel('True ESP (Ha/e)')
+        ax.set_ylabel('Residual (Pred - True, Ha/e)')
+        ax.set_title('DCMNet Residuals')
+        ax.grid(True, alpha=0.3)
+        
+        # Row 1: 2D histogram density
+        ax = axes_esp[1, 0]
+        h = ax.hist2d(esp_true_all, esp_pred_physnet_all, bins=50, cmap='Greens', cmin=1)
+        ax.plot([-0.1, 0.9], [-0.1, 0.9], 'r--', alpha=0.5, linewidth=2)
+        ax.set_xlabel('True ESP (Ha/e)')
+        ax.set_ylabel('PhysNet Pred (Ha/e)')
+        ax.set_title('PhysNet - 2D Histogram')
+        plt.colorbar(h[3], ax=ax, label='Count')
+        
+        ax = axes_esp[1, 1]
+        h = ax.hist2d(esp_true_all, esp_pred_dcmnet_all, bins=50, cmap='Purples', cmin=1)
+        ax.plot([-0.1, 0.9], [-0.1, 0.9], 'r--', alpha=0.5, linewidth=2)
+        ax.set_xlabel('True ESP (Ha/e)')
+        ax.set_ylabel('DCMNet Pred (Ha/e)')
+        ax.set_title('DCMNet - 2D Histogram')
+        plt.colorbar(h[3], ax=ax, label='Count')
+        
+        # Row 1, Col 2-3: Bland-Altman plots (mean vs difference)
+        ax = axes_esp[1, 2]
+        mean_physnet = (esp_true_all + esp_pred_physnet_all) / 2
+        diff_physnet = esp_pred_physnet_all - esp_true_all
+        ax.scatter(mean_physnet, diff_physnet, alpha=0.3, s=5, color='green')
+        ax.axhline(0, color='red', linestyle='--', linewidth=2, alpha=0.5, label='Zero bias')
+        ax.axhline(diff_physnet.mean(), color='blue', linestyle='-', linewidth=1, alpha=0.5, label=f'Mean: {diff_physnet.mean():.6f}')
+        ax.axhline(diff_physnet.mean() + 1.96*diff_physnet.std(), color='orange', linestyle=':', linewidth=1, label='±1.96 SD')
+        ax.axhline(diff_physnet.mean() - 1.96*diff_physnet.std(), color='orange', linestyle=':', linewidth=1)
+        ax.set_xlabel('Mean of True & Pred (Ha/e)')
+        ax.set_ylabel('Difference (Pred - True, Ha/e)')
+        ax.set_title('PhysNet - Bland-Altman')
+        ax.grid(True, alpha=0.3)
+        ax.legend(fontsize=8)
+        
+        ax = axes_esp[1, 3]
+        mean_dcmnet = (esp_true_all + esp_pred_dcmnet_all) / 2
+        diff_dcmnet = esp_pred_dcmnet_all - esp_true_all
+        ax.scatter(mean_dcmnet, diff_dcmnet, alpha=0.3, s=5, color='purple')
+        ax.axhline(0, color='red', linestyle='--', linewidth=2, alpha=0.5, label='Zero bias')
+        ax.axhline(diff_dcmnet.mean(), color='blue', linestyle='-', linewidth=1, alpha=0.5, label=f'Mean: {diff_dcmnet.mean():.6f}')
+        ax.axhline(diff_dcmnet.mean() + 1.96*diff_dcmnet.std(), color='orange', linestyle=':', linewidth=1, label='±1.96 SD')
+        ax.axhline(diff_dcmnet.mean() - 1.96*diff_dcmnet.std(), color='orange', linestyle=':', linewidth=1)
+        ax.set_xlabel('Mean of True & Pred (Ha/e)')
+        ax.set_ylabel('Difference (Pred - True, Ha/e)')
+        ax.set_title('DCMNet - Bland-Altman')
+        ax.grid(True, alpha=0.3)
+        ax.legend(fontsize=8)
+        
+        # Row 2: Q-Q plots and error percentile analysis
+        try:
+            from scipy import stats
+            
+            ax = axes_esp[2, 0]
+            stats.probplot(error_physnet, dist="norm", plot=ax)
+            ax.set_title('PhysNet - Q-Q Plot')
+            ax.grid(True, alpha=0.3)
+            
+            ax = axes_esp[2, 1]
+            stats.probplot(error_dcmnet, dist="norm", plot=ax)
+            ax.set_title('DCMNet - Q-Q Plot')
+            ax.grid(True, alpha=0.3)
+        except ImportError:
+            # If scipy not available, just plot error histograms
+            ax = axes_esp[2, 0]
+            ax.hist(error_physnet, bins=50, color='green', alpha=0.7, edgecolor='black')
+            ax.axvline(0, color='red', linestyle='--', linewidth=2)
+            ax.set_xlabel('Error (Ha/e)')
+            ax.set_ylabel('Count')
+            ax.set_title('PhysNet Error Histogram')
+            ax.grid(True, alpha=0.3)
+            
+            ax = axes_esp[2, 1]
+            ax.hist(error_dcmnet, bins=50, color='purple', alpha=0.7, edgecolor='black')
+            ax.axvline(0, color='red', linestyle='--', linewidth=2)
+            ax.set_xlabel('Error (Ha/e)')
+            ax.set_ylabel('Count')
+            ax.set_title('DCMNet Error Histogram')
+            ax.grid(True, alpha=0.3)
+        
+        # Row 2, Col 2: Error percentiles comparison
+        ax = axes_esp[2, 2]
+        percentiles = np.arange(0, 101, 5)
+        physnet_percentiles = np.percentile(np.abs(error_physnet), percentiles)
+        dcmnet_percentiles = np.percentile(np.abs(error_dcmnet), percentiles)
+        ax.plot(percentiles, physnet_percentiles, 'o-', color='green', label='PhysNet', linewidth=2)
+        ax.plot(percentiles, dcmnet_percentiles, 's-', color='purple', label='DCMNet', linewidth=2)
+        ax.set_xlabel('Percentile')
+        ax.set_ylabel('|Error| (Ha/e)')
+        ax.set_title('Absolute Error Percentiles')
+        ax.grid(True, alpha=0.3)
+        ax.legend()
+        
+        # Row 2, Col 3: Cumulative error distribution
+        ax = axes_esp[2, 3]
+        sorted_err_physnet = np.sort(np.abs(error_physnet))
+        sorted_err_dcmnet = np.sort(np.abs(error_dcmnet))
+        cdf_physnet = np.arange(1, len(sorted_err_physnet) + 1) / len(sorted_err_physnet)
+        cdf_dcmnet = np.arange(1, len(sorted_err_dcmnet) + 1) / len(sorted_err_dcmnet)
+        ax.plot(sorted_err_physnet, cdf_physnet, color='green', label='PhysNet', linewidth=2)
+        ax.plot(sorted_err_dcmnet, cdf_dcmnet, color='purple', label='DCMNet', linewidth=2)
+        ax.set_xlabel('|Error| (Ha/e)')
+        ax.set_ylabel('Cumulative Probability')
+        ax.set_title('Cumulative Error Distribution')
+        ax.grid(True, alpha=0.3)
+        ax.legend()
+        ax.set_xlim(0, max(sorted_err_physnet.max(), sorted_err_dcmnet.max()))
+        
+        plt.suptitle(f'Comprehensive ESP Analysis (Sample {idx}){epoch_str}', fontsize=14, weight='bold')
+        plt.tight_layout()
+        esp_analysis_path = save_dir / f'esp_analysis_{idx}{suffix}.png'
+        plt.savefig(esp_analysis_path, dpi=150, bbox_inches='tight')
+        plt.close()
+        print(f"  ✅ Saved comprehensive ESP analysis {idx}: {esp_analysis_path}")
+    
     # Create ESP example plots - compare PhysNet vs DCMNet
     for idx in range(min(n_esp_examples, len(esp_pred_dcmnet_list))):
         fig, axes = plt.subplots(2, 3, figsize=(15, 8))
