@@ -2442,7 +2442,9 @@ def main():
     print(f"  Dipole: {args.dipole_weight} (source: {args.dipole_source})")
     print(f"  ESP: {args.esp_weight}")
     if args.esp_min_distance > 0:
-        print(f"    ESP filtering: grid points < {args.esp_min_distance:.2f} Å from atoms excluded")
+        print(f"    ESP distance filtering: grid points < {args.esp_min_distance:.2f} Å from atoms excluded")
+    if args.esp_max_value is not None:
+        print(f"    ESP magnitude filtering: |ESP| > {args.esp_max_value:.4f} Ha/e excluded")
     print(f"  Monopole constraint: {args.mono_weight}")
     
     print(f"\nTraining stability:")
@@ -2503,6 +2505,7 @@ def main():
             plot_esp_examples=args.plot_esp_examples,
             dipole_source=args.dipole_source,
             esp_min_distance=args.esp_min_distance,
+            esp_max_value=args.esp_max_value if args.esp_max_value is not None else 1e10,
             restart_params=restart_params,
             start_epoch=start_epoch,
         )
