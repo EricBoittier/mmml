@@ -296,9 +296,25 @@ def load_combined_data(efd_file: Path, esp_file: Path, subtract_atom_energies: b
         if verbose:
             print(f"  ✅ Subtracted atomic energies (now relative to isolated atoms)")
     
+    # Align coordinate frames: shift vdw_surface to molecular reference frame
+    # ESP grids are often generated in a grid-centered frame, need to align with atoms
+    # Check if grid_origin is available and non-zero
+    if 'grid_origin' in esp_data:
+        grid_origin = esp_data['grid_origin']  # (n_samples, 3)
+        # Shift vdw_surface by -grid_origin to align with molecular frame
+        vdw_surface_aligned = esp_data['vdw_surface'] - grid_origin[:, None, :]
+        
+        if verbose:
+            print(f"  ✅ Aligned ESP grid with molecular frame using grid_origin")
+            sample_offset = grid_origin[0]
+            print(f"     Sample 0 offset: {sample_offset} Å")
+    else:
+        vdw_surface_aligned = esp_data['vdw_surface']
+        if verbose:
+            print(f"  ⚠️  No grid_origin found, assuming vdw_surface already aligned")
+    
     # Combine data - ESP file should have R, Z, N as well
-    # NOTE: vdw_surface is ALREADY in Angstroms (do NOT convert from Bohr!)
-    # Grid extent ~6.5 Å is appropriate for ~2.5 Å molecule with margin
+    # NOTE: vdw_surface is in Angstroms (do NOT convert from Bohr!)
     combined = {
         # Molecular properties
         'R': esp_data['R'],  # Angstroms
@@ -309,7 +325,7 @@ def load_combined_data(efd_file: Path, esp_file: Path, subtract_atom_energies: b
         'Dxyz': efd_data.get('Dxyz', efd_data.get('D')),  # e·Å
         # ESP properties
         'esp': esp_data['esp'],  # Hartree/e
-        'vdw_surface': esp_data['vdw_surface'],  # Angstroms (already correct!)
+        'vdw_surface': vdw_surface_aligned,  # Angstroms, aligned to molecular frame
     }
     
     if verbose:
