@@ -632,7 +632,8 @@ def compute_loss(
         # Get atom positions for COM calculation
         positions = batch["R"].reshape(batch_size, natoms, 3)
         # COM = Σ(m_i * r_i) / Σ(m_i)
-        com = jnp.sum(positions * masses_masked[..., None], axis=1) / total_mass[..., None]  # (batch, 3)
+        # total_mass: (batch, 1), so division broadcasts correctly
+        com = jnp.sum(positions * masses_masked[..., None], axis=1) / total_mass  # (batch, 3)
         
         # Subtract COM from distributed charge positions
         # dipo_reshaped: (batch, natoms, n_dcm, 3)
