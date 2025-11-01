@@ -770,7 +770,7 @@ def compute_loss(
     return total_loss, losses
 
 
-@functools.partial(jax.jit, static_argnames=('model_apply', 'optimizer_update', 'batch_size', 'n_dcm', 'clip_norm', 'dipole_source'))
+@functools.partial(jax.jit, static_argnames=('model_apply', 'optimizer_update', 'batch_size', 'n_dcm', 'clip_norm', 'dipole_source', 'esp_min_distance'))
 def train_step(
     params: Any,
     opt_state: Any,
