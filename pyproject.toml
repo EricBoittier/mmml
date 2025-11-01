@@ -54,12 +54,24 @@ dependencies = [
     "e3x>=1.0.2",
     "plotnine>=0.15.1",
     "patchworklib>=0.6.6",
-    "asciichartpy>=1.5.25",
 ]
 
 [project.optional-dependencies]
 # Interfaces and optional integrations
 charmm-interface = []
+
+# Plotting and visualization utilities for training progress
+plotting = [
+    "asciichartpy>=1.5.25",
+    "polars",
+]
+
+# TensorBoard logging and analysis
+tensorboard = [
+    "tensorboard>=2.11.0",
+    "tensorflow>=2.11.0",
+    "polars",
+]
 # GPU/CUDA support (CUDA 12)
 # Note: JAX with CUDA requires installation from specific index
 # Install with: pip install -e ".[gpu]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
@@ -156,12 +168,12 @@ dev = [
 
 # Full installation with all optional dependencies
 all = [
-    "mmml[gpu,quantum,quantum-gpu,ml,viz,md,chem,data,notebooks,experiments]",
+    "mmml[gpu,quantum,quantum-gpu,ml,viz,md,chem,data,notebooks,experiments,plotting,tensorboard]",
 ]
 
 # CPU-only full installation (no GPU dependencies)
 all-cpu = [
-    "mmml[quantum,ml,viz,md,chem,data,notebooks,experiments]",
+    "mmml[quantum,ml,viz,md,chem,data,notebooks,experiments,plotting,tensorboard]",
 ]
 
 [tool.uv.sources]

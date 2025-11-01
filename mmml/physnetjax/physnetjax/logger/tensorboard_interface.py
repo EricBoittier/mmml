@@ -4,9 +4,24 @@ import struct
 from pathlib import Path
 from typing import Dict, List, Tuple, Union
 
-import polars as pl
-from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
-from tensorflow.python.summary.summary_iterator import summary_iterator
+# Optional dependencies for TensorBoard processing
+try:
+    import polars as pl
+    HAS_POLARS = True
+except ImportError:
+    HAS_POLARS = False
+    
+try:
+    from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
+    HAS_TENSORBOARD = True
+except ImportError:
+    HAS_TENSORBOARD = False
+    
+try:
+    from tensorflow.python.summary.summary_iterator import summary_iterator
+    HAS_TENSORFLOW = True
+except ImportError:
+    HAS_TENSORFLOW = False
 
 # Example usage
 """
@@ -15,6 +30,23 @@ df = process_tensorboard_logs(log_dir)
 print(df.head())
 Example usage:
 """
+
+
+def _check_dependencies():
+    """Check if required dependencies are available."""
+    missing = []
+    if not HAS_POLARS:
+        missing.append("polars")
+    if not HAS_TENSORBOARD:
+        missing.append("tensorboard")
+    if not HAS_TENSORFLOW:
+        missing.append("tensorflow")
+    
+    if missing:
+        raise ImportError(
+            f"TensorBoard logging requires: {', '.join(missing)}. "
+            f"Install with: pip install {' '.join(missing)}"
+        )
 
 
 def read_tensor(value) -> Tuple[str, float]:
@@ -46,6 +78,7 @@ def tensorboard_to_polars(logdir: Union[str, Path], epoch: int = 0) -> pl.DataFr
     Returns:
         Polars DataFrame containing the TensorBoard metrics
     """
+    _check_dependencies()
     data: Dict[str, Union[float, int, str]] = {}
 
     for event in summary_iterator(str(logdir)):
@@ -71,6 +104,7 @@ def process_tensorboard_logs(log_dir: Union[str, Path]) -> pl.DataFrame:
     Returns:
         Combined Polars DataFrame with all metrics
     """
+    _check_dependencies()
     path = Path(log_dir)
     if not path.exists():
         raise FileNotFoundError(f"Log directory not found: {log_dir}")

@@ -1,8 +1,19 @@
 import time
 
-import asciichartpy as acp
+# Optional plotting dependencies (safe import)
+try:
+    import asciichartpy as acp
+    HAS_ASCIICHARTPY = True
+except ImportError:
+    HAS_ASCIICHARTPY = False
+
+try:
+    import polars as pl
+    HAS_POLARS = True
+except ImportError:
+    HAS_POLARS = False
+
 import numpy as np
-import polars as pl
 from rich.columns import Columns
 from rich.console import Console
 from rich.live import Live
@@ -11,6 +22,13 @@ from rich.table import Table
 
 
 def get_panel(data, title):
+    """Create a panel with ASCII chart (requires asciichartpy)."""
+    if not HAS_ASCIICHARTPY:
+        return Panel(
+            "[yellow]asciichartpy not installed - chart unavailable[/yellow]",
+            expand=True,
+            title=f"~~ [bold][yellow]{title}[/bold][/yellow] ~~",
+        )
     return Panel(
         acp.plot(data),
         expand=True,
@@ -37,6 +55,17 @@ acp_colors = [
 
 
 def get_acp_plot(data, keys, title="", log=False, color="blue"):
+    """Create ASCII chart plot (requires both polars and asciichartpy)."""
+    if not HAS_POLARS or not HAS_ASCIICHARTPY:
+        missing = []
+        if not HAS_POLARS:
+            missing.append("polars")
+        if not HAS_ASCIICHARTPY:
+            missing.append("asciichartpy")
+        console = Console(width=100)
+        console.print(f"[yellow]Plotting unavailable: missing {', '.join(missing)}[/yellow]")
+        return
+    
     # print(data)
     if log:
         data = data.select(
