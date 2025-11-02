@@ -491,7 +491,7 @@ def plot_ir_spectrum(ir_data, output_dir, temp=300, broadening=10):
         frequencies=freqs,
         intensities_physnet=intensities_physnet,
         intensities_dcmnet=intensities_dcmnet if 'intensities_dcmnet' in ir_data else None,
-        dipole_derivatives_physnet=dipole_deriv_physnet,
+        dipole_derivatives_physnet=ir_data.get('dipole_derivatives_physnet', None),
         dipole_derivatives_dcmnet=ir_data.get('dipole_derivatives_dcmnet', None),
     )
     print(f"✅ Saved harmonic data: {npz_path}")
@@ -679,30 +679,46 @@ def compute_ir_from_md(md_data, output_dir=None, max_lag=None):
     
     n_steps = len(dipoles_physnet)
     if max_lag is None:
-        max_lag = n_steps // 2
+        max_lag = n_steps  # Use ALL data for best frequency resolution!
     
     print(f"Timesteps: {n_steps}")
     print(f"Timestep: {timestep} fs")
     print(f"Max lag for autocorrelation: {max_lag} steps ({max_lag * timestep:.1f} fs)")
+    print(f"  → Frequency resolution: {1.0 / (n_steps * timestep * 1e-15) / 3e10:.2f} cm⁻¹")
     
     # Compute dipole autocorrelation functions
-    print("\nComputing dipole autocorrelation...")
+    print("\nComputing dipole autocorrelation (FFT method for speed)...")
     
-    def autocorrelation(data, max_lag):
-        """Compute autocorrelation function."""
+    def autocorrelation_fft(data, max_lag):
+        """
+        Compute autocorrelation using FFT (much faster!).
+        
+        O(N log N) instead of O(N²)
+        """
         n = len(data)
         # Subtract mean
         data = data - np.mean(data, axis=0)
-        # Compute autocorrelation for each component
+        
+        # Zero-pad to next power of 2 for efficient FFT
+        n_fft = 2**(int(np.ceil(np.log2(2*n - 1))))
+        
+        # Compute autocorrelation via FFT for each component
         acf = np.zeros((max_lag, 3))
-        for lag in range(max_lag):
-            for i in range(3):
-                acf[lag, i] = np.mean(data[:n-lag, i] * data[lag:, i])
+        for i in range(3):
+            # FFT of signal
+            fft_data = np.fft.fft(data[:, i], n=n_fft)
+            # Power spectrum
+            power = fft_data * np.conj(fft_data)
+            # Inverse FFT gives autocorrelation
+            acf_full = np.fft.ifft(power).real[:n]
+            # Normalize by number of overlapping points
+            acf[:, i] = acf_full[:max_lag] / np.arange(n, n-max_lag, -1)
+        
         # Average over xyz components
         return np.mean(acf, axis=1)
     
-    acf_physnet = autocorrelation(dipoles_physnet, max_lag)
-    acf_dcmnet = autocorrelation(dipoles_dcmnet, max_lag)
+    acf_physnet = autocorrelation_fft(dipoles_physnet, max_lag)
+    acf_dcmnet = autocorrelation_fft(dipoles_dcmnet, max_lag)
     
     # Apply Hann window to reduce spectral leakage
     window = np.hanning(max_lag)
@@ -725,9 +741,32 @@ def compute_ir_from_md(md_data, output_dir=None, max_lag=None):
     c_cm_per_s = 2.99792458e10  # speed of light in cm/s
     freqs_cm = freq_hz / c_cm_per_s
     
-    # IR intensity is proportional to |FT|^2
-    intensity_physnet = np.abs(spectrum_physnet)**2
-    intensity_dcmnet = np.abs(spectrum_dcmnet)**2
+    # IR intensity formula with quantum and frequency corrections:
+    # I(ω) ∝ ω × (1 + n(ω)) × |FT[C(t)]|²
+    # where n(ω) = 1/(exp(ℏω/kT) - 1) is Bose-Einstein distribution
+    
+    # Constants
+    hbar_eV = 6.582119569e-16  # eV·s
+    kB_eV = 8.617333262e-5  # eV/K
+    T_kelvin = 300  # Assume 300 K (could be parameter)
+    
+    # Angular frequency in rad/s
+    omega = 2 * np.pi * freq_hz
+    
+    # Quantum occupation number (Bose-Einstein)
+    # n(ω) = 1 / (exp(ℏω/kT) - 1)
+    # Avoid division by zero at ω=0
+    with np.errstate(divide='ignore', invalid='ignore'):
+        n_bose = 1.0 / (np.exp(hbar_eV * omega / (kB_eV * T_kelvin)) - 1.0)
+        n_bose = np.nan_to_num(n_bose, nan=0.0, posinf=0.0)
+    
+    # Frequency prefactor (ω for classical, or ω(1+n) for quantum)
+    # Using quantum correction: ω × (1 + n(ω))
+    freq_prefactor = omega * (1.0 + n_bose)
+    
+    # Apply to spectrum
+    intensity_physnet = freq_prefactor * np.abs(spectrum_physnet)**2
+    intensity_dcmnet = freq_prefactor * np.abs(spectrum_dcmnet)**2
     
     # Normalize
     intensity_physnet /= np.max(intensity_physnet)
