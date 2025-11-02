@@ -820,6 +820,19 @@ def plot_ir_from_md(ir_data, output_dir):
     plt.close()
     
     print(f"✅ Saved IR spectrum from MD: {output_path}")
+    
+    # Save MD spectrum data to NPZ for frequency scaling analysis
+    npz_path = output_dir / 'md_ir_spectrum.npz'
+    np.savez(
+        npz_path,
+        frequencies=ir_data['frequencies'],
+        intensities=ir_data['intensity_physnet'],  # Use PhysNet as primary
+        intensity_physnet=ir_data['intensity_physnet'],
+        intensity_dcmnet=ir_data['intensity_dcmnet'],
+        autocorrelation=ir_data['acf_physnet'],
+        times=ir_data['acf_times'],
+    )
+    print(f"✅ Saved MD spectrum data: {npz_path}")
 
 
 def plot_md_results(md_data, output_dir, ensemble='nvt'):
