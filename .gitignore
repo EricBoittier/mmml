@@ -153,3 +153,4 @@ CHARMMSETUP
 *.xyz
 *.png
 CHARMMSETUP
+examples/co2/dcmnet_physnet_train/md_ir_long/trajectory.npz
