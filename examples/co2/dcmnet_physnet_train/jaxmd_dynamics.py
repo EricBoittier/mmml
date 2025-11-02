@@ -267,6 +267,8 @@ def run_jaxmd_simulation(
     equilibration_steps=2000,
     output_dir=None,
     seed=42,
+    save_unstable_structures=True,
+    active_learning_dir=None,
 ):
     """
     Run molecular dynamics with JAX MD.
@@ -673,18 +675,88 @@ def run_jaxmd_simulation(
         max_force_seen = max(max_force_seen, max_f)
         max_velocity_seen = max(max_velocity_seen, max_v)
         
-        # Detect explosion
+        # Detect explosion and save for active learning
         if max_r > 100 or max_v > 1.0 or max_f > 10.0:
             print(f"\n❌ SIMULATION UNSTABLE at step {step}")
             print(f"   Max position: {max_r:.2f} Å (limit: 100)")
             print(f"   Max velocity: {max_v:.4f} Å/fs (limit: 1.0)")
             print(f"   Max force: {max_f:.2f} eV/Å (limit: 10.0)")
+            
+            # Save unstable structure for active learning
+            if save_unstable_structures:
+                al_dir = active_learning_dir if active_learning_dir else output_dir / 'active_learning'
+                al_dir.mkdir(parents=True, exist_ok=True)
+                
+                # Save structure with timestamp
+                timestamp = time.strftime("%Y%m%d_%H%M%S")
+                structure_file = al_dir / f'unstable_{timestamp}_step{step}.npz'
+                
+                # Compute energy for the unstable structure
+                E_unstable, F_unstable, dp_unstable, dd_unstable = energy_fn(R, atomic_numbers, nbrs)
+                
+                np.savez(
+                    structure_file,
+                    positions=np.array(R),
+                    velocities=np.array(V),
+                    forces=np.array(F_unstable),
+                    atomic_numbers=np.array(atomic_numbers),
+                    energy=float(E_unstable),
+                    dipole_physnet=np.array(dp_unstable),
+                    dipole_dcmnet=np.array(dd_unstable),
+                    # Metadata
+                    step=step,
+                    time_fs=step * timestep,
+                    max_force=max_f,
+                    max_velocity=max_v,
+                    max_position=max_r,
+                    temperature=float(temperature),
+                    ensemble=ensemble,
+                    timestep=timestep,
+                    reason='explosion',
+                    instability_type='force' if max_f > 10.0 else 'velocity' if max_v > 1.0 else 'position',
+                )
+                print(f"   💾 Saved unstable structure: {structure_file}")
+            
             print(f"\n💡 Suggestions:")
             print(f"   1. Reduce timestep (try {timestep/2:.3f} fs)")
             print(f"   2. Increase friction (try {friction*2:.3f})")
             print(f"   3. Check if geometry is actually optimized")
             print(f"   4. Verify model training converged properly")
+            print(f"   5. Use saved structure for active learning/retraining")
             break
+        
+        # Proactive detection: save structures with unusually high forces (even if stable)
+        if save_unstable_structures and max_f > 5.0 and step % save_interval == 0:
+            al_dir = active_learning_dir if active_learning_dir else output_dir / 'active_learning'
+            al_dir.mkdir(parents=True, exist_ok=True)
+            
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            structure_file = al_dir / f'high_force_{timestamp}_step{step}.npz'
+            
+            E_hf, F_hf, dp_hf, dd_hf = energy_fn(R, atomic_numbers, nbrs)
+            
+            np.savez(
+                structure_file,
+                positions=np.array(R),
+                velocities=np.array(V),
+                forces=np.array(F_hf),
+                atomic_numbers=np.array(atomic_numbers),
+                energy=float(E_hf),
+                dipole_physnet=np.array(dp_hf),
+                dipole_dcmnet=np.array(dd_hf),
+                # Metadata
+                step=step,
+                time_fs=step * timestep,
+                max_force=max_f,
+                max_velocity=max_v,
+                max_position=max_r,
+                temperature=float(temperature),
+                ensemble=ensemble,
+                timestep=timestep,
+                reason='high_force',
+                instability_type='warning',
+            )
+            print(f"   ⚠️  High force detected ({max_f:.2f} eV/Å), saved: {structure_file.name}")
         
         # Save data
         if step % save_interval == 0:
