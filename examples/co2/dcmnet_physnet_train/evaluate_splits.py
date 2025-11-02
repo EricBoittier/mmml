@@ -92,7 +92,7 @@ def compute_bond_angle_features(positions: np.ndarray, atomic_numbers: np.ndarra
 
 
 def evaluate_split(params, model, efd_data, esp_data, split_name: str, 
-                   cutoff: float = 10.0, batch_size: int = 100) -> pd.DataFrame:
+                   cutoff: float = 10.0, natoms: int = None, batch_size: int = 100) -> pd.DataFrame:
     """
     Evaluate model on a data split and return DataFrame with errors and features.
     """
@@ -154,15 +154,28 @@ def evaluate_split(params, model, efd_data, esp_data, split_name: str,
             atomic_numbers = Z[idx]
             n_atoms = len(positions)
             
+            # Pad to natoms if specified
+            if natoms is not None and n_atoms < natoms:
+                pad_size = natoms - n_atoms
+                positions = np.vstack([positions, np.zeros((pad_size, 3))])
+                atomic_numbers = np.concatenate([atomic_numbers, np.zeros(pad_size, dtype=np.int32)])
+                n_atoms_padded = natoms
+            else:
+                n_atoms_padded = n_atoms
+            
             # Get edge list
             edge_data = all_edge_lists[idx]
             dst_idx = edge_data['dst_idx']
             src_idx = edge_data['src_idx']
             
-            # Prepare batch data
-            batch_segments = np.zeros(n_atoms, dtype=np.int32)
+            # Prepare batch data with padding
+            batch_segments = np.zeros(n_atoms_padded, dtype=np.int32)
             batch_mask = np.ones(len(dst_idx), dtype=np.float32)
-            atom_mask = np.ones(n_atoms, dtype=np.float32)
+            atom_mask = np.ones(n_atoms_padded, dtype=np.float32)
+            
+            # Mask padded atoms
+            if natoms is not None and n_atoms < natoms:
+                atom_mask[n_atoms:] = 0.0
             
             # Run model
             output = model.apply(
@@ -177,20 +190,23 @@ def evaluate_split(params, model, efd_data, esp_data, split_name: str,
                 atom_mask=jnp.array(atom_mask),
             )
             
-            # Extract predictions
+            # Extract predictions (unpad to original n_atoms)
+            n_atoms_original = len(R[idx])
             E_pred = float(output['energy'][0])
-            F_pred = np.array(output['forces'][:n_atoms])
+            F_pred = np.array(output['forces'][:n_atoms_original])
             D_physnet = np.array(output['dipoles'][0])
-            charges_physnet = np.array(output['charges_as_mono'][:n_atoms])
+            charges_physnet = np.array(output['charges_as_mono'][:n_atoms_original])
             
-            # DCMNet outputs
-            mono_dist = np.array(output['mono_dist'][:n_atoms])
-            dipo_dist = np.array(output['dipo_dist'][:n_atoms])
+            # DCMNet outputs (unpad)
+            mono_dist = np.array(output['mono_dist'][:n_atoms_original])
+            dipo_dist = np.array(output['dipo_dist'][:n_atoms_original])
             
-            # Compute DCMNet dipole
+            # Compute DCMNet dipole (use original unpadded data)
             import ase.data
-            masses = np.array([ase.data.atomic_masses[z] for z in atomic_numbers])
-            com = np.sum(positions * masses[:, None], axis=0) / masses.sum()
+            atomic_numbers_original = Z[idx]
+            positions_original = R[idx]
+            masses = np.array([ase.data.atomic_masses[z] for z in atomic_numbers_original])
+            com = np.sum(positions_original * masses[:, None], axis=0) / masses.sum()
             dipo_rel_com = dipo_dist - com[None, None, :]
             D_dcmnet = np.sum(mono_dist[..., None] * dipo_rel_com, axis=(0, 1))
             
@@ -229,25 +245,25 @@ def evaluate_split(params, model, efd_data, esp_data, split_name: str,
                 esp_true_vals = esp_true_vals[valid_mask]
                 
                 if len(grid_points) > 0:
-                    # PhysNet ESP (from point charges)
+                    # PhysNet ESP (from point charges) - use original positions
                     esp_pred_physnet = np.sum(
                         charges_physnet[None, :] / (
                             np.linalg.norm(
-                                grid_points[:, None, :] - positions[None, :, :],
+                                grid_points[:, None, :] - positions_original[None, :, :],
                                 axis=2
                             ) * 1.88973 + 1e-10
                         ),
                         axis=1
                     )
                     
-                    # DCMNet ESP (from distributed charges)
+                    # DCMNet ESP (from distributed charges) - use original positions
                     # Compute distributed charge positions
                     n_dcm = mono_dist.shape[1]
                     positions_dcmnet_list = []
-                    for atom_idx in range(n_atoms):
+                    for atom_idx in range(n_atoms_original):
                         for dcm_idx in range(n_dcm):
                             # Distributed charge position relative to atom
-                            dist_pos = positions[atom_idx] + dipo_dist[atom_idx, dcm_idx]
+                            dist_pos = positions_original[atom_idx] + dipo_dist[atom_idx, dcm_idx]
                             positions_dcmnet_list.append(dist_pos)
                     positions_dcmnet_flat = np.array(positions_dcmnet_list)
                     charges_dcmnet_flat = mono_dist.flatten()
@@ -263,8 +279,8 @@ def evaluate_split(params, model, efd_data, esp_data, split_name: str,
                     esp_rmse_physnet = np.sqrt(np.mean((esp_pred_physnet - esp_true_vals)**2))
                     esp_rmse_dcmnet = np.sqrt(np.mean((esp_pred_dcmnet - esp_true_vals)**2))
             
-            # Compute geometric features
-            features = compute_bond_angle_features(positions, atomic_numbers)
+            # Compute geometric features (use original unpadded data)
+            features = compute_bond_angle_features(positions_original, atomic_numbers_original)
             
             # Store results
             results.append({
@@ -331,6 +347,8 @@ def main():
     
     parser.add_argument('--cutoff', type=float, default=10.0,
                        help='Cutoff distance for edge list')
+    parser.add_argument('--natoms', type=int, default=None,
+                       help='Number of atoms for padding (use same as training, e.g., 60)')
     parser.add_argument('--batch-size', type=int, default=100,
                        help='Batch size for evaluation')
     parser.add_argument('--output-dir', type=Path, default=Path('./evaluation'),
@@ -390,6 +408,7 @@ def main():
             splits_esp[split_name],
             split_name,
             cutoff=args.cutoff,
+            natoms=args.natoms,
             batch_size=args.batch_size,
         )
         all_results.append(df)

@@ -23,6 +23,7 @@ TRAIN_ESP=""
 VALID_ESP=""
 TEST_ESP=""
 OUTPUT_DIR="./evaluation"
+NATOMS=""
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -57,6 +58,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --output-dir)
             OUTPUT_DIR="$2"
+            shift 2
+            ;;
+        --natoms)
+            NATOMS="$2"
             shift 2
             ;;
         *)
@@ -105,6 +110,10 @@ PYTHON_CMD="python evaluate_splits.py \
 
 if [ -n "$TEST_EFD" ] && [ -n "$TEST_ESP" ]; then
     PYTHON_CMD="$PYTHON_CMD --test-efd $TEST_EFD --test-esp $TEST_ESP"
+fi
+
+if [ -n "$NATOMS" ]; then
+    PYTHON_CMD="$PYTHON_CMD --natoms $NATOMS"
 fi
 
 $PYTHON_CMD
