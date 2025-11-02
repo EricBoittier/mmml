@@ -945,7 +945,7 @@ class EF(nn.Module):
         #     jax.debug.print("atom_mask {x}", x=atom_mask.shape)
 
         # Calculate energies and forces
-        (_, (energy, charges, electrostatics, repulsion, state)), forces = energy_and_forces(
+        (_, (energy, charges, electrostatics, repulsion, state)), gradient = energy_and_forces(
             atomic_numbers,
             positions,
             dst_idx,
@@ -955,6 +955,10 @@ class EF(nn.Module):
             batch_mask,
             atom_mask,
         )
+        # NOTE: energy() returns -E (negative energy) at line 532
+        # So: gradient = d(-E)/dr = -dE/dr
+        # And forces F = -dE/dr = gradient (no extra negation needed!)
+        forces = gradient
         forces *= atom_mask[..., None]
 
         dipoles = (

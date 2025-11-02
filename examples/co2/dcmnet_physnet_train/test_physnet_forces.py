@@ -68,10 +68,19 @@ def test_physnet_forces(checkpoint_dir, molecule_xyz):
         batch_mask=batch_mask,
     )
     
-    energy = float(output['energy'])
-    forces = np.array(output['forces'])
+    print(f"\nPhysNet raw output shapes:")
+    print(f"  Energy shape: {output['energy'].shape}")
+    print(f"  Forces shape: {output['forces'].shape}")
     
-    print(f"\nPhysNet output:")
+    # Extract and squeeze
+    energy = float(jnp.squeeze(output['energy']))
+    forces = np.array(jnp.squeeze(output['forces']))
+    
+    # If forces still have extra dims, reshape
+    if forces.ndim > 2:
+        forces = forces.reshape(n_atoms, 3)
+    
+    print(f"\nPhysNet output (after extraction):")
     print(f"Energy: {energy:.6f} eV")
     print(f"Forces shape: {forces.shape}")
     print(f"Forces:\n{forces}")
@@ -105,7 +114,7 @@ def test_physnet_forces(checkpoint_dir, molecule_xyz):
                 src_idx=jnp.array(src_p, dtype=jnp.int32),
                 batch_mask=jnp.ones(len(dst_p), dtype=jnp.float32),
             )
-            E_plus = float(out_p['energy'])
+            E_plus = float(jnp.squeeze(out_p['energy']))
             
             # Minus
             pos_minus = positions.copy()
@@ -126,7 +135,7 @@ def test_physnet_forces(checkpoint_dir, molecule_xyz):
                 src_idx=jnp.array(src_m, dtype=jnp.int32),
                 batch_mask=jnp.ones(len(dst_m), dtype=jnp.float32),
             )
-            E_minus = float(out_m['energy'])
+            E_minus = float(jnp.squeeze(out_m['energy']))
             
             # F = -dE/dr
             forces_numerical[atom_idx, coord_idx] = -(E_plus - E_minus) / (2 * delta)
