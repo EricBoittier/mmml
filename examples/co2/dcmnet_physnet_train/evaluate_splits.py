@@ -347,24 +347,8 @@ def main():
     # Create output directory
     args.output_dir.mkdir(parents=True, exist_ok=True)
     
-    # Load model
-    print(f"\n1. Loading model from {args.checkpoint}...")
-    with open(args.checkpoint / 'best_params.pkl', 'rb') as f:
-        params = pickle.load(f)
-    
-    with open(args.checkpoint / 'model_config.pkl', 'rb') as f:
-        config = pickle.load(f)
-    
-    model = JointPhysNetDCMNet(
-        physnet_config=config['physnet_config'],
-        dcmnet_config=config['dcmnet_config'],
-        mix_coulomb_energy=config.get('mix_coulomb_energy', False)
-    )
-    
-    print(f"✅ Loaded model with {sum(x.size for x in jax.tree_util.tree_leaves(params)):,} parameters")
-    
-    # Load data splits
-    print(f"\n2. Loading data splits...")
+    # Load data splits FIRST to detect padding
+    print(f"\n1. Loading data splits...")
     splits_efd = {
         'train': np.load(args.train_efd),
         'valid': np.load(args.valid_efd),
@@ -380,6 +364,64 @@ def main():
         print(f"✅ Loaded train/valid/test splits")
     else:
         print(f"✅ Loaded train/valid splits")
+    
+    # Auto-detect natoms from data padding and UNPAD for faster evaluation
+    data_natoms = splits_efd['train']['R'].shape[1]
+    
+    # Check actual max atoms (should be 3 for CO2)
+    max_actual_atoms = 0
+    for split_name in splits_efd.keys():
+        if 'N' in splits_efd[split_name]:
+            max_actual_atoms = max(max_actual_atoms, int(np.max(splits_efd[split_name]['N'])))
+        else:
+            # Count non-zero atomic numbers
+            max_actual_atoms = max(max_actual_atoms, 
+                                  int(np.max(np.sum(splits_efd[split_name]['Z'] > 0, axis=1))))
+    
+    print(f"✅ Data padding: {data_natoms} atoms (actual max: {max_actual_atoms})")
+    
+    # UNPAD data to save computation time
+    if data_natoms > max_actual_atoms:
+        print(f"🚀 Unpacking data from {data_natoms} → {max_actual_atoms} atoms for faster evaluation...")
+        for split_name in splits_efd.keys():
+            splits_efd[split_name] = {
+                'R': splits_efd[split_name]['R'][:, :max_actual_atoms, :],
+                'Z': splits_efd[split_name]['Z'][:, :max_actual_atoms],
+                'E': splits_efd[split_name]['E'],
+                'F': splits_efd[split_name]['F'][:, :max_actual_atoms, :],
+            }
+            # Copy dipole if present
+            if 'D' in splits_efd[split_name]:
+                splits_efd[split_name]['D'] = splits_efd[split_name]['D']
+            elif 'Dxyz' in splits_efd[split_name]:
+                splits_efd[split_name]['D'] = splits_efd[split_name]['Dxyz']
+        
+        target_natoms = max_actual_atoms
+        print(f"   ✅ Data unpacked! Evaluation will be ~{data_natoms//max_actual_atoms}× faster")
+    else:
+        target_natoms = data_natoms
+    
+    if args.natoms is None:
+        args.natoms = target_natoms
+    
+    # Load model with corrected natoms
+    print(f"\n2. Loading model from {args.checkpoint}...")
+    with open(args.checkpoint / 'best_params.pkl', 'rb') as f:
+        params = pickle.load(f)
+    
+    with open(args.checkpoint / 'model_config.pkl', 'rb') as f:
+        config = pickle.load(f)
+    
+    # Override config natoms to match unpacked data
+    config['physnet_config']['natoms'] = args.natoms
+    
+    model = JointPhysNetDCMNet(
+        physnet_config=config['physnet_config'],
+        dcmnet_config=config['dcmnet_config'],
+        mix_coulomb_energy=config.get('mix_coulomb_energy', False)
+    )
+    
+    print(f"✅ Loaded model with {sum(x.size for x in jax.tree_util.tree_leaves(params)):,} parameters")
     
     # Evaluate each split
     print(f"\n3. Evaluating model on splits...")
