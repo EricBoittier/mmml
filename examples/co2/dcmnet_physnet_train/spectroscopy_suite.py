@@ -294,8 +294,9 @@ def jaxmd_to_ase_trajectory(jaxmd_results, atoms_template, output_file, calculat
 
 
 def run_temperature_scan(molecule, calculator, temperatures, ensemble='nvt',
-                         nsteps=50000, timestep=0.5, output_dir=None,
-                         use_jaxmd=True, model=None, params=None, 
+                         integrator='berendsen', nsteps=50000, timestep=0.5, 
+                         equilibration_steps=2000, friction=0.01, tau_t=100.0,
+                         output_dir=None, use_jaxmd=True, model=None, params=None, 
                          optimized_geometry=None):
     """
     Run MD at multiple temperatures and compute IR spectra.
@@ -355,10 +356,14 @@ def run_temperature_scan(molecule, calculator, temperatures, ensemble='nvt',
                 masses=masses,
                 box=box,
                 ensemble=ensemble,
+                integrator=integrator,
                 temperature=T,
                 timestep=timestep,
                 nsteps=nsteps,
                 save_interval=10,
+                friction=friction,
+                tau_t=tau_t,
+                equilibration_steps=equilibration_steps,
                 output_dir=T_dir,
             )
             
@@ -526,9 +531,19 @@ Examples:
     
     # MD parameters
     parser.add_argument('--nsteps', type=int, default=50000,
-                       help='MD steps')
-    parser.add_argument('--timestep', type=float, default=0.1,
-                       help='MD timestep (fs) - default 0.1 for stability')
+                       help='MD steps (production, after equilibration)')
+    parser.add_argument('--timestep', type=float, default=0.05,
+                       help='MD timestep (fs) - default 0.05 for stability')
+    parser.add_argument('--integrator', type=str, default='berendsen',
+                       choices=['velocity-verlet', 'langevin', 'berendsen', 
+                               'velocity-rescale', 'nose-hoover'],
+                       help='Integrator/thermostat (default: berendsen - most stable)')
+    parser.add_argument('--friction', type=float, default=0.01,
+                       help='Langevin friction (1/fs)')
+    parser.add_argument('--tau-t', type=float, default=100.0,
+                       help='Temperature coupling time (fs) for Berendsen/NH')
+    parser.add_argument('--equilibration-steps', type=int, default=2000,
+                       help='NVE equilibration steps before NVT (default: 2000)')
     parser.add_argument('--temperature', type=float, default=300,
                        help='Default temperature (K)')
     parser.add_argument('--use-ase-md', action='store_true',
@@ -661,8 +676,12 @@ Examples:
             args.molecule, calculator,
             temperatures=args.temperatures,
             ensemble='nvt',
+            integrator=args.integrator,
             nsteps=args.nsteps,
             timestep=args.timestep,
+            equilibration_steps=args.equilibration_steps,
+            friction=args.friction,
+            tau_t=args.tau_t,
             output_dir=temp_dir,
             use_jaxmd=not args.use_ase_md,
             model=model,
