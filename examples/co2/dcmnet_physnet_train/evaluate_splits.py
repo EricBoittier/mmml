@@ -154,28 +154,15 @@ def evaluate_split(params, model, efd_data, esp_data, split_name: str,
             atomic_numbers = Z[idx]
             n_atoms = len(positions)
             
-            # Pad to natoms if specified
-            if natoms is not None and n_atoms < natoms:
-                pad_size = natoms - n_atoms
-                positions = np.vstack([positions, np.zeros((pad_size, 3))])
-                atomic_numbers = np.concatenate([atomic_numbers, np.zeros(pad_size, dtype=np.int32)])
-                n_atoms_padded = natoms
-            else:
-                n_atoms_padded = n_atoms
-            
-            # Get edge list
+            # Get edge list (built from original positions, not padded)
             edge_data = all_edge_lists[idx]
             dst_idx = edge_data['dst_idx']
             src_idx = edge_data['src_idx']
             
-            # Prepare batch data with padding
-            batch_segments = np.zeros(n_atoms_padded, dtype=np.int32)
+            # Prepare batch data - no padding, use actual molecule size
+            batch_segments = np.zeros(n_atoms, dtype=np.int32)
             batch_mask = np.ones(len(dst_idx), dtype=np.float32)
-            atom_mask = np.ones(n_atoms_padded, dtype=np.float32)
-            
-            # Mask padded atoms
-            if natoms is not None and n_atoms < natoms:
-                atom_mask[n_atoms:] = 0.0
+            atom_mask = np.ones(n_atoms, dtype=np.float32)
             
             # Run model
             output = model.apply(
@@ -190,23 +177,20 @@ def evaluate_split(params, model, efd_data, esp_data, split_name: str,
                 atom_mask=jnp.array(atom_mask),
             )
             
-            # Extract predictions (unpad to original n_atoms)
-            n_atoms_original = len(R[idx])
+            # Extract predictions
             E_pred = float(output['energy'][0])
-            F_pred = np.array(output['forces'][:n_atoms_original])
+            F_pred = np.array(output['forces'][:n_atoms])
             D_physnet = np.array(output['dipoles'][0])
-            charges_physnet = np.array(output['charges_as_mono'][:n_atoms_original])
+            charges_physnet = np.array(output['charges_as_mono'][:n_atoms])
             
-            # DCMNet outputs (unpad)
-            mono_dist = np.array(output['mono_dist'][:n_atoms_original])
-            dipo_dist = np.array(output['dipo_dist'][:n_atoms_original])
+            # DCMNet outputs
+            mono_dist = np.array(output['mono_dist'][:n_atoms])
+            dipo_dist = np.array(output['dipo_dist'][:n_atoms])
             
-            # Compute DCMNet dipole (use original unpadded data)
+            # Compute DCMNet dipole
             import ase.data
-            atomic_numbers_original = Z[idx]
-            positions_original = R[idx]
-            masses = np.array([ase.data.atomic_masses[z] for z in atomic_numbers_original])
-            com = np.sum(positions_original * masses[:, None], axis=0) / masses.sum()
+            masses = np.array([ase.data.atomic_masses[z] for z in atomic_numbers])
+            com = np.sum(positions * masses[:, None], axis=0) / masses.sum()
             dipo_rel_com = dipo_dist - com[None, None, :]
             D_dcmnet = np.sum(mono_dist[..., None] * dipo_rel_com, axis=(0, 1))
             
@@ -279,8 +263,8 @@ def evaluate_split(params, model, efd_data, esp_data, split_name: str,
                     esp_rmse_physnet = np.sqrt(np.mean((esp_pred_physnet - esp_true_vals)**2))
                     esp_rmse_dcmnet = np.sqrt(np.mean((esp_pred_dcmnet - esp_true_vals)**2))
             
-            # Compute geometric features (use original unpadded data)
-            features = compute_bond_angle_features(positions_original, atomic_numbers_original)
+            # Compute geometric features
+            features = compute_bond_angle_features(positions, atomic_numbers)
             
             # Store results
             results.append({
