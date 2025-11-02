@@ -194,7 +194,7 @@ def initialize_system(molecule='CO2', temperature=300.0, box_size=50.0):
     return positions, atomic_numbers, masses, box
 
 
-def initialize_velocities(key, masses, temperature, remove_com=True):
+def initialize_velocities(key, masses, temperature, remove_com=True, remove_angular=True):
     """
     Initialize velocities from Maxwell-Boltzmann distribution.
     
@@ -210,6 +210,8 @@ def initialize_velocities(key, masses, temperature, remove_com=True):
         Temperature (K)
     remove_com : bool
         Remove center of mass motion
+    remove_angular : bool
+        Remove angular momentum (for isolated molecules in free space)
         
     Returns
     -------
@@ -246,6 +248,61 @@ def initialize_velocities(key, masses, temperature, remove_com=True):
         velocities = velocities - total_momentum / total_mass
     
     return velocities
+
+
+def remove_angular_momentum(positions, velocities, masses):
+    """
+    Remove angular momentum from velocities for isolated molecule.
+    
+    For free-space NVE, angular momentum should be conserved at zero.
+    This removes initial rotations, leaving only vibrations.
+    
+    Parameters
+    ----------
+    positions : array (n_atoms, 3)
+        Positions relative to COM (Å)
+    velocities : array (n_atoms, 3)
+        Velocities (Å/fs)
+    masses : array (n_atoms,)
+        Masses (amu)
+        
+    Returns
+    -------
+    array (n_atoms, 3)
+        Velocities with angular momentum removed
+    """
+    # Ensure COM is at origin
+    com = np.sum(positions * masses[:, None], axis=0) / np.sum(masses)
+    positions_com = positions - com
+    
+    # Compute angular momentum: L = Σ r × (m*v)
+    L = np.sum(np.cross(positions_com, masses[:, None] * velocities), axis=0)
+    
+    # Compute moment of inertia tensor: I = Σ m*(r²δ - r⊗r)
+    I = np.zeros((3, 3))
+    for i in range(len(masses)):
+        r = positions_com[i]
+        r_sq = np.dot(r, r)
+        I += masses[i] * (r_sq * np.eye(3) - np.outer(r, r))
+    
+    # Angular velocity: ω = I⁻¹ × L
+    try:
+        I_inv = np.linalg.inv(I)
+        omega = I_inv @ L
+    except np.linalg.LinAlgError:
+        # Singular (linear molecule) - use pseudoinverse
+        omega = np.linalg.pinv(I) @ L
+    
+    # Remove rotational component from velocities: v_rot = ω × r
+    velocities_corrected = velocities.copy()
+    for i in range(len(masses)):
+        v_rot = np.cross(omega, positions_com[i])
+        velocities_corrected[i] -= v_rot
+    
+    # Verify angular momentum is removed
+    L_final = np.sum(np.cross(positions_com, masses[:, None] * velocities_corrected), axis=0)
+    
+    return velocities_corrected, L, L_final
 
 
 def run_jaxmd_simulation(
@@ -372,6 +429,13 @@ def run_jaxmd_simulation(
     # Initialize velocities
     key, subkey = random.split(key)
     velocities = initialize_velocities(subkey, masses, temperature)
+    
+    # Remove angular momentum for isolated molecule (NVE should have L=0)
+    velocities, L_initial, L_final = remove_angular_momentum(positions, velocities, masses)
+    print(f"\n✅ Removed angular momentum:")
+    print(f"  Initial L: {L_initial} (amu·Å²/fs)")
+    print(f"  Final L: {L_final} (amu·Å²/fs)")
+    print(f"  |L_final|: {np.linalg.norm(L_final):.2e} (should be ~0)")
     
     # Diagnostics
     print(f"\nInitial conditions:")
