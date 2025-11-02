@@ -178,7 +178,7 @@ def compute_esp_on_sphere(charges, positions, sphere_points):
     return esp
 
 
-def plot_esp_spheres(results, radii=[2.0, 3.0, 4.0, 5.0], n_theta=150, n_phi=150, save_path=None):
+def plot_esp_spheres(results, radii=[2.0, 3.0, 4.0, 5.0], n_theta=150, n_phi=150, save_path=None, gt_esp_data=None):
     """
     Create beautiful 3D ESP visualization at multiple radial surfaces with smooth shading.
     
@@ -194,6 +194,8 @@ def plot_esp_spheres(results, radii=[2.0, 3.0, 4.0, 5.0], n_theta=150, n_phi=150
         Mesh resolution in polar direction (higher = smoother)
     save_path : Path, optional
         Where to save the plot
+    gt_esp_data : dict, optional
+        Ground truth ESP data with keys 'grid_points' and 'esp_values'
     """
     positions = results['positions']
     charges_physnet = results['charges_physnet']
@@ -206,8 +208,16 @@ def plot_esp_spheres(results, radii=[2.0, 3.0, 4.0, 5.0], n_theta=150, n_phi=150
     masses = np.array([ase.data.atomic_masses[z] for z in atomic_numbers])
     com = np.sum(positions * masses[:, None], axis=0) / masses.sum()
     
-    # Create figure with 2 rows (PhysNet vs DCMNet) x len(radii) columns
-    fig = plt.figure(figsize=(6*len(radii), 12))
+    # Calculate consistent axis limits for all plots
+    max_radius = max(radii)
+    axis_limit = max_radius * 1.1  # 10% padding
+    
+    # Determine number of rows (3 or 6 depending on GT data availability)
+    n_rows = 6 if gt_esp_data is not None else 3
+    fig_height = 6 * n_rows  # 6 inches per row
+    
+    # Create figure
+    fig = plt.figure(figsize=(6*len(radii), fig_height))
     
     # Fixed color scale for ESP with better range
     esp_vmin = -0.015
@@ -215,6 +225,22 @@ def plot_esp_spheres(results, radii=[2.0, 3.0, 4.0, 5.0], n_theta=150, n_phi=150
     
     # Use a better colormap
     cmap = plt.cm.RdBu_r
+    
+    # Store ESP data for difference calculation
+    esp_physnet_all = []
+    esp_dcmnet_all = []
+    esp_gt_all = []
+    mesh_data_all = []
+    
+    # Prepare ground truth ESP interpolation if available
+    if gt_esp_data is not None:
+        from scipy.interpolate import NearestNDInterpolator
+        gt_grid_points = gt_esp_data['grid_points']  # (n_grid, 3)
+        gt_esp_values = gt_esp_data['esp_values']    # (n_grid,)
+        
+        # Create interpolator for GT ESP
+        gt_interpolator = NearestNDInterpolator(gt_grid_points, gt_esp_values)
+        print(f"  Using ground truth ESP with {len(gt_esp_values)} grid points")
     
     for i, radius in enumerate(radii):
         # Create spherical mesh centered on COM
@@ -225,12 +251,38 @@ def plot_esp_spheres(results, radii=[2.0, 3.0, 4.0, 5.0], n_theta=150, n_phi=150
         # Convert mesh to points for ESP evaluation
         sphere_points = np.column_stack([x_mesh.flatten(), y_mesh.flatten(), z_mesh.flatten()])
         
-        # === PhysNet ESP (point charges at atoms) ===
-        ax = fig.add_subplot(2, len(radii), i+1, projection='3d')
-        
         # Compute ESP from PhysNet charges
         esp_physnet = compute_esp_on_sphere(charges_physnet, positions, sphere_points)
         esp_physnet_mesh = esp_physnet.reshape(x_mesh.shape)
+        
+        # Flatten distributed charges for ESP calculation
+        charges_dcmnet_flat = charges_dcmnet.flatten()
+        positions_dcmnet_flat = positions_dcmnet.reshape(-1, 3)
+        
+        # Compute ESP from DCMNet distributed charges using calc_esp
+        esp_dcmnet = calc_esp(
+            jnp.array(positions_dcmnet_flat),
+            jnp.array(charges_dcmnet_flat),
+            jnp.array(sphere_points)
+        )
+        esp_dcmnet = np.array(esp_dcmnet)
+        esp_dcmnet_mesh = esp_dcmnet.reshape(x_mesh.shape)
+        
+        # Interpolate ground truth ESP if available
+        if gt_esp_data is not None:
+            esp_gt = gt_interpolator(sphere_points)
+            esp_gt_mesh = esp_gt.reshape(x_mesh.shape)
+        else:
+            esp_gt_mesh = None
+        
+        # Store for difference calculation
+        esp_physnet_all.append(esp_physnet_mesh)
+        esp_dcmnet_all.append(esp_dcmnet_mesh)
+        esp_gt_all.append(esp_gt_mesh)
+        mesh_data_all.append((x_mesh, y_mesh, z_mesh))
+        
+        # === ROW 1: PhysNet ESP (point charges at atoms) ===
+        ax = fig.add_subplot(n_rows, len(radii), i+1, projection='3d')
         
         # Normalize colors for better visualization
         norm = plt.Normalize(vmin=esp_vmin, vmax=esp_vmax)
@@ -259,8 +311,13 @@ def plot_esp_spheres(results, radii=[2.0, 3.0, 4.0, 5.0], n_theta=150, n_phi=150
         ax.set_ylabel('Y (Å)', fontsize=11, weight='bold')
         ax.set_zlabel('Z (Å)', fontsize=11, weight='bold')
         ax.set_title(f'PhysNet ESP @ r = {radius:.1f} Å', fontsize=13, weight='bold', pad=10)
-        ax.view_init(elev=25, azim=45)  # Slightly lower for better view
+        ax.view_init(elev=25, azim=45)
         ax.set_box_aspect([1,1,1])
+        
+        # Set consistent axis limits
+        ax.set_xlim([com[0] - axis_limit, com[0] + axis_limit])
+        ax.set_ylim([com[1] - axis_limit, com[1] + axis_limit])
+        ax.set_zlim([com[2] - axis_limit, com[2] + axis_limit])
         
         # Remove grid for cleaner look
         ax.grid(False)
@@ -281,21 +338,8 @@ def plot_esp_spheres(results, radii=[2.0, 3.0, 4.0, 5.0], n_theta=150, n_phi=150
             cbar = plt.colorbar(sm, ax=ax, label='ESP (Ha/e)', shrink=0.7, pad=0.1)
             cbar.ax.tick_params(labelsize=10)
         
-        # === DCMNet ESP (distributed multipoles) ===
-        ax = fig.add_subplot(2, len(radii), len(radii) + i + 1, projection='3d')
-        
-        # Flatten distributed charges for ESP calculation
-        charges_dcmnet_flat = charges_dcmnet.flatten()
-        positions_dcmnet_flat = positions_dcmnet.reshape(-1, 3)
-        
-        # Compute ESP from DCMNet distributed charges using calc_esp
-        esp_dcmnet = calc_esp(
-            jnp.array(positions_dcmnet_flat),
-            jnp.array(charges_dcmnet_flat),
-            jnp.array(sphere_points)
-        )
-        esp_dcmnet = np.array(esp_dcmnet)
-        esp_dcmnet_mesh = esp_dcmnet.reshape(x_mesh.shape)
+        # === ROW 2: DCMNet ESP (distributed multipoles) ===
+        ax = fig.add_subplot(n_rows, len(radii), len(radii) + i + 1, projection='3d')
         
         # Normalize colors for better visualization
         colors = cmap(norm(esp_dcmnet_mesh))
@@ -336,8 +380,13 @@ def plot_esp_spheres(results, radii=[2.0, 3.0, 4.0, 5.0], n_theta=150, n_phi=150
         ax.set_ylabel('Y (Å)', fontsize=11, weight='bold')
         ax.set_zlabel('Z (Å)', fontsize=11, weight='bold')
         ax.set_title(f'DCMNet ESP @ r = {radius:.1f} Å', fontsize=13, weight='bold', pad=10)
-        ax.view_init(elev=25, azim=45)  # Slightly lower for better view
+        ax.view_init(elev=25, azim=45)
         ax.set_box_aspect([1,1,1])
+        
+        # Set consistent axis limits
+        ax.set_xlim([com[0] - axis_limit, com[0] + axis_limit])
+        ax.set_ylim([com[1] - axis_limit, com[1] + axis_limit])
+        ax.set_zlim([com[2] - axis_limit, com[2] + axis_limit])
         
         # Remove grid for cleaner look
         ax.grid(False)
@@ -357,6 +406,254 @@ def plot_esp_spheres(results, radii=[2.0, 3.0, 4.0, 5.0], n_theta=150, n_phi=150
             sm.set_array([])
             cbar = plt.colorbar(sm, ax=ax, label='ESP (Ha/e)', shrink=0.7, pad=0.1)
             cbar.ax.tick_params(labelsize=10)
+    
+    # === ROW 3: Difference (PhysNet - DCMNet) ===
+    # Color scale for differences (symmetric around zero)
+    diff_vmin = -0.01
+    diff_vmax = 0.01
+    diff_norm = plt.Normalize(vmin=diff_vmin, vmax=diff_vmax)
+    
+    for i, radius in enumerate(radii):
+        ax = fig.add_subplot(3, len(radii), 2*len(radii) + i + 1, projection='3d')
+        
+        x_mesh, y_mesh, z_mesh = mesh_data_all[i]
+        esp_diff_mesh = esp_physnet_all[i] - esp_dcmnet_all[i]
+        
+        # Normalize colors
+        colors = cmap(diff_norm(esp_diff_mesh))
+        
+        # Plot surface
+        surf = ax.plot_surface(x_mesh, y_mesh, z_mesh, facecolors=colors,
+                              rstride=1, cstride=1, linewidth=0,
+                              antialiased=True, shade=True, alpha=0.95)
+        
+        # Add atoms (magenta theme for difference)
+        ax.scatter(positions[:, 0], positions[:, 1], positions[:, 2],
+                  c='#FF00FF', s=500, marker='o', edgecolors='magenta', linewidths=4,
+                  alpha=1.0, zorder=100)
+        ax.scatter(positions[:, 0], positions[:, 1], positions[:, 2],
+                  c='black', s=200, marker='o', edgecolors='none',
+                  alpha=1.0, zorder=101)
+        
+        # Label atoms
+        for j, (pos, z) in enumerate(zip(positions, atomic_numbers)):
+            ax.text(pos[0], pos[1], pos[2], f'{int(z)}', fontsize=12,
+                   ha='center', va='center', color='white', weight='bold',
+                   zorder=102)
+        
+        ax.set_xlabel('X (Å)', fontsize=11, weight='bold')
+        ax.set_ylabel('Y (Å)', fontsize=11, weight='bold')
+        ax.set_zlabel('Z (Å)', fontsize=11, weight='bold')
+        ax.set_title(f'Difference (PhysNet - DCMNet) @ r = {radius:.1f} Å', 
+                    fontsize=13, weight='bold', pad=10)
+        ax.view_init(elev=25, azim=45)
+        ax.set_box_aspect([1,1,1])
+        
+        # Set consistent axis limits
+        ax.set_xlim([com[0] - axis_limit, com[0] + axis_limit])
+        ax.set_ylim([com[1] - axis_limit, com[1] + axis_limit])
+        ax.set_zlim([com[2] - axis_limit, com[2] + axis_limit])
+        
+        # Remove grid
+        ax.grid(False)
+        ax.xaxis.pane.fill = False
+        ax.yaxis.pane.fill = False
+        ax.zaxis.pane.fill = False
+        ax.xaxis.pane.set_edgecolor('lightgray')
+        ax.yaxis.pane.set_edgecolor('lightgray')
+        ax.zaxis.pane.set_edgecolor('lightgray')
+        ax.xaxis.pane.set_alpha(0.3)
+        ax.yaxis.pane.set_alpha(0.3)
+        ax.zaxis.pane.set_alpha(0.3)
+        
+        if i == len(radii) - 1:
+            # Add colorbar for difference
+            sm = plt.cm.ScalarMappable(cmap=cmap, norm=diff_norm)
+            sm.set_array([])
+            cbar = plt.colorbar(sm, ax=ax, label='ESP Difference (Ha/e)', shrink=0.7, pad=0.1)
+            cbar.ax.tick_params(labelsize=10)
+    
+    # === Additional rows if GT data available ===
+    if gt_esp_data is not None:
+        # ROW 4: Ground Truth ESP
+        for i, radius in enumerate(radii):
+            ax = fig.add_subplot(n_rows, len(radii), 3*len(radii) + i + 1, projection='3d')
+            
+            x_mesh, y_mesh, z_mesh = mesh_data_all[i]
+            esp_gt_mesh = esp_gt_all[i]
+            
+            # Normalize colors
+            colors = cmap(norm(esp_gt_mesh))
+            
+            # Plot surface
+            surf = ax.plot_surface(x_mesh, y_mesh, z_mesh, facecolors=colors,
+                                  rstride=1, cstride=1, linewidth=0,
+                                  antialiased=True, shade=True, alpha=0.95)
+            
+            # Add atoms (green theme for GT)
+            ax.scatter(positions[:, 0], positions[:, 1], positions[:, 2],
+                      c='#00FF00', s=500, marker='o', edgecolors='lime', linewidths=4,
+                      alpha=1.0, zorder=100)
+            ax.scatter(positions[:, 0], positions[:, 1], positions[:, 2],
+                      c='black', s=200, marker='o', edgecolors='none',
+                      alpha=1.0, zorder=101)
+            
+            # Label atoms
+            for j, (pos, z) in enumerate(zip(positions, atomic_numbers)):
+                ax.text(pos[0], pos[1], pos[2], f'{int(z)}', fontsize=12,
+                       ha='center', va='center', color='white', weight='bold',
+                       zorder=102)
+            
+            ax.set_xlabel('X (Å)', fontsize=11, weight='bold')
+            ax.set_ylabel('Y (Å)', fontsize=11, weight='bold')
+            ax.set_zlabel('Z (Å)', fontsize=11, weight='bold')
+            ax.set_title(f'Ground Truth ESP @ r = {radius:.1f} Å', 
+                        fontsize=13, weight='bold', pad=10)
+            ax.view_init(elev=25, azim=45)
+            ax.set_box_aspect([1,1,1])
+            
+            # Set consistent axis limits
+            ax.set_xlim([com[0] - axis_limit, com[0] + axis_limit])
+            ax.set_ylim([com[1] - axis_limit, com[1] + axis_limit])
+            ax.set_zlim([com[2] - axis_limit, com[2] + axis_limit])
+            
+            # Remove grid
+            ax.grid(False)
+            ax.xaxis.pane.fill = False
+            ax.yaxis.pane.fill = False
+            ax.zaxis.pane.fill = False
+            ax.xaxis.pane.set_edgecolor('lightgray')
+            ax.yaxis.pane.set_edgecolor('lightgray')
+            ax.zaxis.pane.set_edgecolor('lightgray')
+            ax.xaxis.pane.set_alpha(0.3)
+            ax.yaxis.pane.set_alpha(0.3)
+            ax.zaxis.pane.set_alpha(0.3)
+            
+            if i == len(radii) - 1:
+                sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+                sm.set_array([])
+                cbar = plt.colorbar(sm, ax=ax, label='ESP (Ha/e)', shrink=0.7, pad=0.1)
+                cbar.ax.tick_params(labelsize=10)
+        
+        # ROW 5: PhysNet Error (PhysNet - GT)
+        for i, radius in enumerate(radii):
+            ax = fig.add_subplot(n_rows, len(radii), 4*len(radii) + i + 1, projection='3d')
+            
+            x_mesh, y_mesh, z_mesh = mesh_data_all[i]
+            esp_error_mesh = esp_physnet_all[i] - esp_gt_all[i]
+            
+            # Normalize colors
+            colors = cmap(diff_norm(esp_error_mesh))
+            
+            # Plot surface
+            surf = ax.plot_surface(x_mesh, y_mesh, z_mesh, facecolors=colors,
+                                  rstride=1, cstride=1, linewidth=0,
+                                  antialiased=True, shade=True, alpha=0.95)
+            
+            # Add atoms (orange theme for PhysNet error)
+            ax.scatter(positions[:, 0], positions[:, 1], positions[:, 2],
+                      c='#FFA500', s=500, marker='o', edgecolors='orange', linewidths=4,
+                      alpha=1.0, zorder=100)
+            ax.scatter(positions[:, 0], positions[:, 1], positions[:, 2],
+                      c='black', s=200, marker='o', edgecolors='none',
+                      alpha=1.0, zorder=101)
+            
+            # Label atoms
+            for j, (pos, z) in enumerate(zip(positions, atomic_numbers)):
+                ax.text(pos[0], pos[1], pos[2], f'{int(z)}', fontsize=12,
+                       ha='center', va='center', color='white', weight='bold',
+                       zorder=102)
+            
+            ax.set_xlabel('X (Å)', fontsize=11, weight='bold')
+            ax.set_ylabel('Y (Å)', fontsize=11, weight='bold')
+            ax.set_zlabel('Z (Å)', fontsize=11, weight='bold')
+            ax.set_title(f'PhysNet Error (pred - GT) @ r = {radius:.1f} Å', 
+                        fontsize=13, weight='bold', pad=10)
+            ax.view_init(elev=25, azim=45)
+            ax.set_box_aspect([1,1,1])
+            
+            # Set consistent axis limits
+            ax.set_xlim([com[0] - axis_limit, com[0] + axis_limit])
+            ax.set_ylim([com[1] - axis_limit, com[1] + axis_limit])
+            ax.set_zlim([com[2] - axis_limit, com[2] + axis_limit])
+            
+            # Remove grid
+            ax.grid(False)
+            ax.xaxis.pane.fill = False
+            ax.yaxis.pane.fill = False
+            ax.zaxis.pane.fill = False
+            ax.xaxis.pane.set_edgecolor('lightgray')
+            ax.yaxis.pane.set_edgecolor('lightgray')
+            ax.zaxis.pane.set_edgecolor('lightgray')
+            ax.xaxis.pane.set_alpha(0.3)
+            ax.yaxis.pane.set_alpha(0.3)
+            ax.zaxis.pane.set_alpha(0.3)
+            
+            if i == len(radii) - 1:
+                sm = plt.cm.ScalarMappable(cmap=cmap, norm=diff_norm)
+                sm.set_array([])
+                cbar = plt.colorbar(sm, ax=ax, label='ESP Error (Ha/e)', shrink=0.7, pad=0.1)
+                cbar.ax.tick_params(labelsize=10)
+        
+        # ROW 6: DCMNet Error (DCMNet - GT)
+        for i, radius in enumerate(radii):
+            ax = fig.add_subplot(n_rows, len(radii), 5*len(radii) + i + 1, projection='3d')
+            
+            x_mesh, y_mesh, z_mesh = mesh_data_all[i]
+            esp_error_mesh = esp_dcmnet_all[i] - esp_gt_all[i]
+            
+            # Normalize colors
+            colors = cmap(diff_norm(esp_error_mesh))
+            
+            # Plot surface
+            surf = ax.plot_surface(x_mesh, y_mesh, z_mesh, facecolors=colors,
+                                  rstride=1, cstride=1, linewidth=0,
+                                  antialiased=True, shade=True, alpha=0.95)
+            
+            # Add atoms (teal theme for DCMNet error)
+            ax.scatter(positions[:, 0], positions[:, 1], positions[:, 2],
+                      c='#008080', s=500, marker='o', edgecolors='teal', linewidths=4,
+                      alpha=1.0, zorder=100)
+            ax.scatter(positions[:, 0], positions[:, 1], positions[:, 2],
+                      c='black', s=200, marker='o', edgecolors='none',
+                      alpha=1.0, zorder=101)
+            
+            # Label atoms
+            for j, (pos, z) in enumerate(zip(positions, atomic_numbers)):
+                ax.text(pos[0], pos[1], pos[2], f'{int(z)}', fontsize=12,
+                       ha='center', va='center', color='white', weight='bold',
+                       zorder=102)
+            
+            ax.set_xlabel('X (Å)', fontsize=11, weight='bold')
+            ax.set_ylabel('Y (Å)', fontsize=11, weight='bold')
+            ax.set_zlabel('Z (Å)', fontsize=11, weight='bold')
+            ax.set_title(f'DCMNet Error (pred - GT) @ r = {radius:.1f} Å', 
+                        fontsize=13, weight='bold', pad=10)
+            ax.view_init(elev=25, azim=45)
+            ax.set_box_aspect([1,1,1])
+            
+            # Set consistent axis limits
+            ax.set_xlim([com[0] - axis_limit, com[0] + axis_limit])
+            ax.set_ylim([com[1] - axis_limit, com[1] + axis_limit])
+            ax.set_zlim([com[2] - axis_limit, com[2] + axis_limit])
+            
+            # Remove grid
+            ax.grid(False)
+            ax.xaxis.pane.fill = False
+            ax.yaxis.pane.fill = False
+            ax.zaxis.pane.fill = False
+            ax.xaxis.pane.set_edgecolor('lightgray')
+            ax.yaxis.pane.set_edgecolor('lightgray')
+            ax.zaxis.pane.set_edgecolor('lightgray')
+            ax.xaxis.pane.set_alpha(0.3)
+            ax.yaxis.pane.set_alpha(0.3)
+            ax.zaxis.pane.set_alpha(0.3)
+            
+            if i == len(radii) - 1:
+                sm = plt.cm.ScalarMappable(cmap=cmap, norm=diff_norm)
+                sm.set_array([])
+                cbar = plt.colorbar(sm, ax=ax, label='ESP Error (Ha/e)', shrink=0.7, pad=0.1)
+                cbar.ax.tick_params(labelsize=10)
     
     plt.suptitle('Electrostatic Potential on Spherical Surfaces', 
                  fontsize=18, weight='bold', y=0.995)
@@ -379,6 +676,10 @@ def main():
                        help='Molecule formula (e.g., CO2, H2O)')
     parser.add_argument('--geometry', type=str, default=None,
                        help='XYZ file with geometry (optional, uses default if not provided)')
+    parser.add_argument('--esp-data', type=Path, default=None,
+                       help='Path to validation ESP NPZ file for ground truth comparison')
+    parser.add_argument('--esp-index', type=int, default=0,
+                       help='Index of molecule in ESP dataset (default: 0)')
     parser.add_argument('--radii', type=float, nargs='+', default=[2.0, 3.0, 4.0, 5.0],
                        help='Radii (Å) for ESP spherical surfaces')
     parser.add_argument('--mesh-resolution', type=int, default=150,
@@ -476,8 +777,36 @@ def main():
         print(f"  Atom {i} (Z={atoms.get_atomic_numbers()[i]}): {q_dist.sum():.4f} e (from {len(q_dist)} distributed charges)")
     print(f"  Total: {results['charges_dcmnet'].sum():.6f} e")
     
+    # Load ground truth ESP if provided
+    gt_esp_data = None
+    if args.esp_data:
+        print(f"\n4. Loading ground truth ESP data from {args.esp_data}...")
+        esp_npz = np.load(args.esp_data)
+        
+        # Extract data for the specified molecule index
+        vdw_surface = esp_npz['vdw_surface'][args.esp_index]  # (n_grid, 3)
+        esp_values = esp_npz['esp'][args.esp_index]           # (n_grid,)
+        
+        # Align to same coordinate frame as predicted (center on COM)
+        import ase.data
+        masses = np.array([ase.data.atomic_masses[z] for z in atoms.get_atomic_numbers()])
+        positions_mol = atoms.get_positions()
+        com = np.sum(positions_mol * masses[:, None], axis=0) / masses.sum()
+        
+        # Center ground truth grid points
+        vdw_com = vdw_surface.mean(axis=0)
+        vdw_surface_aligned = vdw_surface - vdw_com + com
+        
+        gt_esp_data = {
+            'grid_points': vdw_surface_aligned,
+            'esp_values': esp_values
+        }
+        
+        print(f"✅ Loaded ground truth ESP: {len(esp_values)} grid points")
+        print(f"   GT ESP range: [{esp_values.min():.6f}, {esp_values.max():.6f}] Ha/e")
+    
     # Create ESP visualization
-    print(f"\n4. Creating ESP visualization at {len(args.radii)} radii...")
+    print(f"\n5. Creating ESP visualization at {len(args.radii)} radii...")
     print(f"   Using mesh resolution: {args.mesh_resolution}×{args.mesh_resolution} ({args.mesh_resolution**2:,} points per sphere)")
     
     if args.output_dir:
@@ -487,10 +816,11 @@ def main():
         esp_plot_path = Path(f'esp_spheres_{args.molecule.lower()}.png')
     
     plot_esp_spheres(results, radii=args.radii, n_theta=args.mesh_resolution, 
-                     n_phi=args.mesh_resolution, save_path=esp_plot_path)
+                     n_phi=args.mesh_resolution, save_path=esp_plot_path, 
+                     gt_esp_data=gt_esp_data)
     
     # Create molecule visualization
-    print(f"\n5. Creating molecule visualization...")
+    print(f"\n6. Creating molecule visualization...")
     
     # Extract positions and atomic numbers from results for plotting
     positions = results['positions']
