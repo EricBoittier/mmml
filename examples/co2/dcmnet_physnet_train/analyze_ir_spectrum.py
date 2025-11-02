@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """
-Comprehensive IR Spectrum Analysis Script
+Comprehensive IR and Raman Spectrum Analysis Script
 
-Analyzes MD-based IR spectra and compares with experimental data.
+Analyzes MD-based IR and Raman spectra and compares with experimental data.
 Performs automated fitting with frequency shifts, intensity scaling, and Gaussian broadening.
 
 Usage:
     python analyze_ir_spectrum.py --md-spectrum md_ir_spectrum.npz \
                                    --exp-spectrum experimental_co2_ir.npz \
                                    --output-dir ./ir_analysis \
-                                   --smooth-window 5
+                                   --smooth-window 5 \
+                                   --include-raman
 """
 
 import numpy as np
@@ -35,12 +36,23 @@ COLORS = {
     'black': '#000000'
 }
 
-# Experimental CO2 frequencies
+# Experimental CO2 frequencies and activities
+# IR active: ν₂ (bend), ν₃ (antisym stretch), combinations
+# Raman active: ν₁ (sym stretch), ν₂ (bend - weak), combinations
 EXP_CO2_PEAKS = [
-    ('ν₂ Bending', 667.4),
-    ('ν₁ Symmetric Stretch', 1388.2),
-    ('ν₃ Asymmetric Stretch', 2349.2),
-    ('2ν₂ + ν₃ Combination', 3715.0)
+    ('ν₂ Bending', 667.4, 'both'),           # IR + Raman (weak)
+    ('ν₁ Symmetric Stretch', 1388.2, 'raman'),  # Raman only (strong)
+    ('ν₃ Asymmetric Stretch', 2349.2, 'ir'),    # IR only (strong)
+    ('2ν₂ + ν₃ Combination', 3715.0, 'both')    # Both
+]
+
+# For IR-only analysis
+EXP_CO2_IR_PEAKS = [(name, freq) for name, freq, activity in EXP_CO2_PEAKS]
+
+# For Raman-only analysis (Raman-active modes)
+EXP_CO2_RAMAN_PEAKS = [
+    ('ν₁ Symmetric Stretch', 1388.2),  # Strong
+    ('ν₂ Bending', 667.4),             # Weak
 ]
 
 
@@ -173,10 +185,14 @@ def plot_overview(freqs, int_phys, int_dcm, exp_freq, exp_abs, exp_peaks, output
     # Plot 1: Full range
     ax = axes[0]
     mask_full = (freqs > 300) & (freqs < 4000)
+    ax.fill_between(freqs[mask_full], 0, int_phys[mask_full]/int_phys[mask_full].max(), 
+                    color=COLORS['blue'], alpha=0.3, label='PhysNet')
     ax.plot(freqs[mask_full], int_phys[mask_full]/int_phys[mask_full].max(), 
-            color=COLORS['blue'], lw=2, label='PhysNet', alpha=0.85)
+            color=COLORS['blue'], lw=1.5, alpha=0.9)
+    ax.fill_between(freqs[mask_full], 0, int_dcm[mask_full]/int_dcm[mask_full].max(), 
+                    color=COLORS['orange'], alpha=0.2, label='DCMNet')
     ax.plot(freqs[mask_full], int_dcm[mask_full]/int_dcm[mask_full].max(), 
-            color=COLORS['orange'], lw=2, ls='--', label='DCMNet', alpha=0.85)
+            color=COLORS['orange'], lw=1.5, ls='--', alpha=0.9)
     
     for name, freq in exp_peaks:
         ax.axvline(freq, color=COLORS['vermillion'], ls=':', lw=1.5, alpha=0.7)
@@ -193,12 +209,18 @@ def plot_overview(freqs, int_phys, int_dcm, exp_freq, exp_abs, exp_peaks, output
     # Plot 2: With experimental comparison
     ax = axes[1]
     exp_mask = (exp_freq >= 300) & (exp_freq <= 4000)
+    ax.fill_between(exp_freq[exp_mask], 0, exp_abs[exp_mask]/exp_abs[exp_mask].max(),
+                    color=COLORS['black'], alpha=0.15, label='Experimental', zorder=3)
     ax.plot(exp_freq[exp_mask], exp_abs[exp_mask]/exp_abs[exp_mask].max(),
-            color=COLORS['black'], lw=2.5, label='Experimental', alpha=0.8, zorder=3)
+            color=COLORS['black'], lw=2, alpha=0.8, zorder=3)
+    ax.fill_between(freqs[mask_full], 0, int_phys[mask_full]/int_phys[mask_full].max(),
+                    color=COLORS['blue'], alpha=0.25, label='PhysNet (MD)', zorder=2)
     ax.plot(freqs[mask_full], int_phys[mask_full]/int_phys[mask_full].max(),
-            color=COLORS['blue'], lw=2, label='PhysNet (MD)', alpha=0.7, zorder=2)
+            color=COLORS['blue'], lw=1.5, alpha=0.9, zorder=2)
+    ax.fill_between(freqs[mask_full], 0, int_dcm[mask_full]/int_dcm[mask_full].max(),
+                    color=COLORS['orange'], alpha=0.2, label='DCMNet (MD)', zorder=1)
     ax.plot(freqs[mask_full], int_dcm[mask_full]/int_dcm[mask_full].max(),
-            color=COLORS['orange'], lw=2, ls='--', label='DCMNet (MD)', alpha=0.7, zorder=1)
+            color=COLORS['orange'], lw=1.5, ls='--', alpha=0.9, zorder=1)
     
     for name, freq in exp_peaks:
         ax.axvline(freq, color=COLORS['vermillion'], ls=':', lw=1.5, alpha=0.5)
@@ -229,10 +251,14 @@ def plot_individual_peaks(peak_fits_physnet, peak_fits_dcmnet, output_dir):
     for idx, ((name_p, fit_p), (name_d, fit_d)) in enumerate(zip(peak_fits_physnet, peak_fits_dcmnet)):
         # PhysNet
         ax = axes[idx, 0]
+        ax.fill_between(fit_p['grid'], 0, fit_p['exp_grid'], 
+                        color=COLORS['black'], alpha=0.15, label='Experimental')
         ax.plot(fit_p['grid'], fit_p['exp_grid'], 
-                color=COLORS['black'], lw=2.5, label='Experimental', alpha=0.8)
+                color=COLORS['black'], lw=2, alpha=0.8)
+        ax.fill_between(fit_p['grid'], 0, fit_p['broadened'],
+                        color=COLORS['blue'], alpha=0.3, label='PhysNet (fitted)')
         ax.plot(fit_p['grid'], fit_p['broadened'],
-                color=COLORS['blue'], lw=2, label='PhysNet (fitted)', alpha=0.85)
+                color=COLORS['blue'], lw=1.5, alpha=0.9)
         ax.axvline(fit_p['peak_center'], color=COLORS['vermillion'], 
                    ls=':', lw=1.5, alpha=0.7, label='Expected')
         ax.axvline(fit_p['peak_center'] + fit_p['shift'], 
@@ -249,12 +275,16 @@ def plot_individual_peaks(peak_fits_physnet, peak_fits_dcmnet, output_dir):
         
         # DCMNet
         ax = axes[idx, 1]
+        ax.fill_between(fit_d['grid'], 0, fit_d['exp_grid'],
+                        color=COLORS['black'], alpha=0.15, label='Experimental')
         ax.plot(fit_d['grid'], fit_d['exp_grid'],
-                color=COLORS['black'], lw=2.5, label='Experimental', alpha=0.8)
+                color=COLORS['black'], lw=2, alpha=0.8)
+        ax.fill_between(fit_d['grid'], 0, fit_d['broadened'],
+                        color=COLORS['orange'], alpha=0.25, label='DCMNet (fitted)')
         ax.plot(fit_d['grid'], fit_d['broadened'],
-                color=COLORS['orange'], lw=2, ls='--', label='DCMNet (fitted)', alpha=0.85)
+                color=COLORS['orange'], lw=1.5, ls='--', alpha=0.9)
         ax.axvline(fit_d['peak_center'], color=COLORS['vermillion'],
-                   ls=':', lw=1.5, alpha=0.7, label='Expected')
+                   ls=':', lw=4.5, alpha=0.7, label='Expected')
         ax.axvline(fit_d['peak_center'] + fit_d['shift'],
                    color=COLORS['orange'], ls='--', lw=1.5, alpha=0.5, label='Fitted')
         
@@ -288,12 +318,18 @@ def plot_zoomed_grid(exp_co2, peak_fits_physnet, peak_fits_dcmnet, freqs, int_ph
         ax = axes[idx]
         
         # Plot data
+        ax.fill_between(fit_p['grid'], 0, fit_p['exp_grid'],
+                        color=COLORS['black'], alpha=0.15, zorder=1)
         ax.plot(fit_p['grid'], fit_p['exp_grid'],
-                color=COLORS['black'], lw=2.5, label='Experimental', alpha=0.8, zorder=3)
+                color=COLORS['black'], lw=2, label='Experimental', alpha=0.8, zorder=4)
+        ax.fill_between(fit_p['grid'], 0, fit_p['broadened'],
+                        color=COLORS['blue'], alpha=0.3, zorder=2)
         ax.plot(fit_p['grid'], fit_p['broadened'],
-                color=COLORS['blue'], lw=2, label='PhysNet', alpha=0.7, zorder=2)
+                color=COLORS['blue'], lw=1.5, label='PhysNet', alpha=0.9, zorder=3)
+        ax.fill_between(fit_d['grid'], 0, fit_d['broadened'],
+                        color=COLORS['orange'], alpha=0.25, zorder=1)
         ax.plot(fit_d['grid'], fit_d['broadened'],
-                color=COLORS['orange'], lw=2, ls='--', label='DCMNet', alpha=0.7, zorder=1)
+                color=COLORS['orange'], lw=1.5, ls='--', label='DCMNet', alpha=0.9, zorder=2)
         
         # Mark frequencies
         ax.axvline(exp_freq, color=COLORS['vermillion'], ls=':', lw=2, 
@@ -359,12 +395,18 @@ def plot_combined_spectrum(peak_fits_physnet, peak_fits_dcmnet, exp_freq, exp_ab
     # Full range
     ax = axes[0]
     exp_mask = (exp_freq >= 400) & (exp_freq <= 4000)
+    ax.fill_between(exp_freq[exp_mask], 0, exp_abs[exp_mask] / exp_abs[exp_mask].max(),
+                    color=COLORS['black'], alpha=0.15, zorder=1)
     ax.plot(exp_freq[exp_mask], exp_abs[exp_mask] / exp_abs[exp_mask].max(),
-            color=COLORS['black'], lw=2.5, label='Experimental', alpha=0.8, zorder=3)
+            color=COLORS['black'], lw=2, label='Experimental', alpha=0.8, zorder=4)
+    ax.fill_between(freq_grid_full, 0, spectrum_physnet_full / spectrum_physnet_full.max(),
+                    color=COLORS['blue'], alpha=0.3, zorder=2)
     ax.plot(freq_grid_full, spectrum_physnet_full / spectrum_physnet_full.max(),
-            color=COLORS['blue'], lw=2, label='PhysNet (all peaks fitted)', alpha=0.7, zorder=2)
+            color=COLORS['blue'], lw=1.5, label='PhysNet (all peaks fitted)', alpha=0.9, zorder=3)
+    ax.fill_between(freq_grid_full, 0, spectrum_dcmnet_full / spectrum_dcmnet_full.max(),
+                    color=COLORS['orange'], alpha=0.25, zorder=1)
     ax.plot(freq_grid_full, spectrum_dcmnet_full / spectrum_dcmnet_full.max(),
-            color=COLORS['orange'], lw=2, ls='--', label='DCMNet (all peaks fitted)', alpha=0.7, zorder=1)
+            color=COLORS['orange'], lw=1.5, ls='--', label='DCMNet (all peaks fitted)', alpha=0.9, zorder=2)
     
     for name, freq in exp_co2:
         ax.axvline(freq, color=COLORS['vermillion'], ls=':', lw=1.5, alpha=0.5)
@@ -385,14 +427,22 @@ def plot_combined_spectrum(peak_fits_physnet, peak_fits_dcmnet, exp_freq, exp_ab
     zoom_mask = (exp_freq >= 400) & (exp_freq <= 2600)
     grid_mask = (freq_grid_full >= 400) & (freq_grid_full <= 2600)
     
+    ax.fill_between(exp_freq[zoom_mask], 0, exp_abs[zoom_mask] / exp_abs[zoom_mask].max(),
+                    color=COLORS['black'], alpha=0.15, zorder=1)
     ax.plot(exp_freq[zoom_mask], exp_abs[zoom_mask] / exp_abs[zoom_mask].max(),
-            color=COLORS['black'], lw=2.5, label='Experimental', alpha=0.8, zorder=3)
+            color=COLORS['black'], lw=2, label='Experimental', alpha=0.8, zorder=4)
+    ax.fill_between(freq_grid_full[grid_mask], 0,
+                    spectrum_physnet_full[grid_mask] / spectrum_physnet_full[grid_mask].max(),
+                    color=COLORS['blue'], alpha=0.3, zorder=2)
     ax.plot(freq_grid_full[grid_mask], 
             spectrum_physnet_full[grid_mask] / spectrum_physnet_full[grid_mask].max(),
-            color=COLORS['blue'], lw=2, label='PhysNet (fitted)', alpha=0.7, zorder=2)
+            color=COLORS['blue'], lw=1.5, label='PhysNet (fitted)', alpha=0.9, zorder=3)
+    ax.fill_between(freq_grid_full[grid_mask], 0,
+                    spectrum_dcmnet_full[grid_mask] / spectrum_dcmnet_full[grid_mask].max(),
+                    color=COLORS['orange'], alpha=0.25, zorder=1)
     ax.plot(freq_grid_full[grid_mask],
             spectrum_dcmnet_full[grid_mask] / spectrum_dcmnet_full[grid_mask].max(),
-            color=COLORS['orange'], lw=2, ls='--', label='DCMNet (fitted)', alpha=0.7, zorder=1)
+            color=COLORS['orange'], lw=1.5, ls='--', label='DCMNet (fitted)', alpha=0.9, zorder=2)
     
     for name, freq in exp_co2[:3]:
         ax.axvline(freq, color=COLORS['vermillion'], ls=':', lw=1.5, alpha=0.5)
@@ -408,6 +458,148 @@ def plot_combined_spectrum(peak_fits_physnet, peak_fits_dcmnet, exp_freq, exp_ab
     plt.tight_layout()
     plt.savefig(output_dir / 'combined_spectrum.png', dpi=300, bbox_inches='tight')
     print(f"✅ Saved: {output_dir / 'combined_spectrum.png'}")
+    plt.close()
+
+
+def plot_raman_overview(freqs, raman_phys, raman_dcm, exp_co2, output_dir):
+    """Create overview figure for Raman spectra"""
+    fig, axes = plt.subplots(2, 1, figsize=(14, 10))
+    fig.suptitle('MD-Based Raman Spectra', fontsize=16, weight='bold', y=0.995)
+    
+    # Plot 1: PhysNet Raman
+    ax = axes[0]
+    mask_full = (freqs > 300) & (freqs < 4000)
+    ax.fill_between(freqs[mask_full], 0, raman_phys[mask_full]/raman_phys[mask_full].max(), 
+                    color=COLORS['blue'], alpha=0.3)
+    ax.plot(freqs[mask_full], raman_phys[mask_full]/raman_phys[mask_full].max(), 
+            color=COLORS['blue'], lw=1.5, alpha=0.9)
+    
+    for name, freq in exp_co2:
+        ax.axvline(freq, color=COLORS['vermillion'], ls=':', lw=1.5, alpha=0.5)
+        ax.text(freq, ax.get_ylim()[1]*0.92, name.split()[0], rotation=90, 
+                va='bottom', fontsize=9, color=COLORS['vermillion'], weight='bold')
+    
+    ax.set_xlabel('Raman Shift (cm⁻¹)', fontsize=12, weight='bold')
+    ax.set_ylabel('Raman Intensity (arb. units)', fontsize=12, weight='bold')
+    ax.set_title('PhysNet Raman', fontsize=13, weight='bold', loc='left')
+    ax.grid(True, alpha=0.3, ls='--')
+    ax.set_xlim(300, 4000)
+    
+    # Plot 2: DCMNet Raman
+    ax = axes[1]
+    ax.fill_between(freqs[mask_full], 0, raman_dcm[mask_full]/raman_dcm[mask_full].max(), 
+                    color=COLORS['orange'], alpha=0.3)
+    ax.plot(freqs[mask_full], raman_dcm[mask_full]/raman_dcm[mask_full].max(), 
+            color=COLORS['orange'], lw=1.5, ls='--', alpha=0.9)
+    
+    for name, freq in exp_co2:
+        ax.axvline(freq, color=COLORS['vermillion'], ls=':', lw=1.5, alpha=0.5)
+    
+    ax.set_xlabel('Raman Shift (cm⁻¹)', fontsize=12, weight='bold')
+    ax.set_ylabel('Raman Intensity (arb. units)', fontsize=12, weight='bold')
+    ax.set_title('DCMNet Raman', fontsize=13, weight='bold', loc='left')
+    ax.grid(True, alpha=0.3, ls='--')
+    ax.set_xlim(300, 4000)
+    
+    plt.tight_layout()
+    plt.savefig(output_dir / 'raman_spectra.png', dpi=300, bbox_inches='tight')
+    print(f"✅ Saved: {output_dir / 'raman_spectra.png'}")
+    plt.close()
+
+
+def plot_raman_comparison(freqs, raman_phys, raman_dcm, exp_co2, output_dir):
+    """Create comparison figure for Raman spectra"""
+    fig, ax = plt.subplots(1, 1, figsize=(14, 7))
+    fig.suptitle('Raman Spectrum Comparison', fontsize=16, weight='bold', y=0.995)
+    
+    mask_full = (freqs > 300) & (freqs < 4000)
+    
+    # PhysNet
+    ax.fill_between(freqs[mask_full], 0, raman_phys[mask_full]/raman_phys[mask_full].max(), 
+                    color=COLORS['blue'], alpha=0.3, label='PhysNet')
+    ax.plot(freqs[mask_full], raman_phys[mask_full]/raman_phys[mask_full].max(), 
+            color=COLORS['blue'], lw=1.5, alpha=0.9)
+    
+    # DCMNet
+    ax.fill_between(freqs[mask_full], 0, raman_dcm[mask_full]/raman_dcm[mask_full].max(), 
+                    color=COLORS['orange'], alpha=0.25, label='DCMNet')
+    ax.plot(freqs[mask_full], raman_dcm[mask_full]/raman_dcm[mask_full].max(), 
+            color=COLORS['orange'], lw=1.5, ls='--', alpha=0.9)
+    
+    # Mark expected peaks
+    for name, freq in exp_co2:
+        ax.axvline(freq, color=COLORS['vermillion'], ls=':', lw=1.5, alpha=0.5)
+        ax.text(freq, ax.get_ylim()[1]*0.95, name.split()[0], 
+               rotation=90, va='bottom', ha='right',
+               fontsize=8, color=COLORS['vermillion'], weight='bold')
+    
+    ax.set_xlabel('Raman Shift (cm⁻¹)', fontsize=12, weight='bold')
+    ax.set_ylabel('Raman Intensity (normalized)', fontsize=12, weight='bold')
+    ax.legend(fontsize=11, framealpha=0.9, loc='upper right')
+    ax.grid(True, alpha=0.3, ls='--')
+    ax.set_xlim(300, 4000)
+    ax.set_ylim(0, 1.05)
+    
+    plt.tight_layout()
+    plt.savefig(output_dir / 'raman_comparison.png', dpi=300, bbox_inches='tight')
+    print(f"✅ Saved: {output_dir / 'raman_comparison.png'}")
+    plt.close()
+
+
+def plot_ir_raman_combined(freqs, int_phys, int_dcm, raman_phys, raman_dcm, exp_co2, output_dir):
+    """Create combined IR and Raman comparison"""
+    fig, axes = plt.subplots(2, 1, figsize=(14, 12))
+    fig.suptitle('IR and Raman Spectra Comparison', fontsize=16, weight='bold', y=0.995)
+    
+    mask_full = (freqs > 300) & (freqs < 4000)
+    
+    # IR subplot
+    ax = axes[0]
+    ax.fill_between(freqs[mask_full], 0, int_phys[mask_full]/int_phys[mask_full].max(), 
+                    color=COLORS['blue'], alpha=0.3, label='PhysNet (IR)')
+    ax.plot(freqs[mask_full], int_phys[mask_full]/int_phys[mask_full].max(), 
+            color=COLORS['blue'], lw=1.5, alpha=0.9)
+    ax.fill_between(freqs[mask_full], 0, int_dcm[mask_full]/int_dcm[mask_full].max(), 
+                    color=COLORS['orange'], alpha=0.25, label='DCMNet (IR)')
+    ax.plot(freqs[mask_full], int_dcm[mask_full]/int_dcm[mask_full].max(), 
+            color=COLORS['orange'], lw=1.5, ls='--', alpha=0.9)
+    
+    for name, freq in exp_co2:
+        ax.axvline(freq, color=COLORS['vermillion'], ls=':', lw=1.5, alpha=0.5)
+    
+    ax.set_xlabel('Frequency (cm⁻¹)', fontsize=12, weight='bold')
+    ax.set_ylabel('IR Intensity (normalized)', fontsize=12, weight='bold')
+    ax.set_title('Infrared (IR) Spectrum', fontsize=13, weight='bold', loc='left')
+    ax.legend(fontsize=11, framealpha=0.9)
+    ax.grid(True, alpha=0.3, ls='--')
+    ax.set_xlim(300, 4000)
+    ax.set_ylim(0, 1.05)
+    
+    # Raman subplot
+    ax = axes[1]
+    ax.fill_between(freqs[mask_full], 0, raman_phys[mask_full]/raman_phys[mask_full].max(), 
+                    color=COLORS['blue'], alpha=0.3, label='PhysNet (Raman)')
+    ax.plot(freqs[mask_full], raman_phys[mask_full]/raman_phys[mask_full].max(), 
+            color=COLORS['blue'], lw=1.5, alpha=0.9)
+    ax.fill_between(freqs[mask_full], 0, raman_dcm[mask_full]/raman_dcm[mask_full].max(), 
+                    color=COLORS['orange'], alpha=0.25, label='DCMNet (Raman)')
+    ax.plot(freqs[mask_full], raman_dcm[mask_full]/raman_dcm[mask_full].max(), 
+            color=COLORS['orange'], lw=1.5, ls='--', alpha=0.9)
+    
+    for name, freq in exp_co2:
+        ax.axvline(freq, color=COLORS['vermillion'], ls=':', lw=1.5, alpha=0.5)
+    
+    ax.set_xlabel('Raman Shift (cm⁻¹)', fontsize=12, weight='bold')
+    ax.set_ylabel('Raman Intensity (normalized)', fontsize=12, weight='bold')
+    ax.set_title('Raman Spectrum', fontsize=13, weight='bold', loc='left')
+    ax.legend(fontsize=11, framealpha=0.9)
+    ax.grid(True, alpha=0.3, ls='--')
+    ax.set_xlim(300, 4000)
+    ax.set_ylim(0, 1.05)
+    
+    plt.tight_layout()
+    plt.savefig(output_dir / 'ir_raman_combined.png', dpi=300, bbox_inches='tight')
+    print(f"✅ Saved: {output_dir / 'ir_raman_combined.png'}")
     plt.close()
 
 
@@ -525,17 +717,21 @@ def print_summary_tables(exp_co2, peak_fits_physnet, peak_fits_dcmnet, freqs, in
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Comprehensive IR Spectrum Analysis')
+    parser = argparse.ArgumentParser(description='Comprehensive IR and Raman Spectrum Analysis')
     parser.add_argument('--md-spectrum', type=Path, default='md_ir_spectrum.npz',
                        help='MD-based IR spectrum NPZ file')
     parser.add_argument('--exp-spectrum', type=Path, default='../experimental_co2_ir.npz',
                        help='Experimental IR spectrum NPZ file')
+    parser.add_argument('--raman-spectrum', type=Path, default=None,
+                       help='MD-based Raman spectrum NPZ file (optional)')
     parser.add_argument('--output-dir', type=Path, default='./ir_analysis',
                        help='Output directory for figures and reports')
     parser.add_argument('--smooth-window', type=int, default=5,
                        help='Rolling average window size (1=no smoothing)')
     parser.add_argument('--freq-scale', type=float, default=1.0,
                        help='Frequency scaling factor for calculated spectrum')
+    parser.add_argument('--include-raman', action='store_true',
+                       help='Include Raman analysis (requires --raman-spectrum or Raman data in MD file)')
     
     args = parser.parse_args()
     
@@ -543,14 +739,18 @@ def main():
     args.output_dir.mkdir(parents=True, exist_ok=True)
     
     print("="*70)
-    print("COMPREHENSIVE IR SPECTRUM ANALYSIS")
+    print("COMPREHENSIVE IR & RAMAN SPECTRUM ANALYSIS")
     print("="*70)
     print(f"\nInput files:")
-    print(f"  MD spectrum:   {args.md_spectrum}")
-    print(f"  Exp spectrum:  {args.exp_spectrum}")
-    print(f"  Output dir:    {args.output_dir}")
-    print(f"  Smoothing:     {args.smooth_window}-point rolling average")
-    print(f"  Freq scale:    {args.freq_scale}")
+    print(f"  MD spectrum:     {args.md_spectrum}")
+    print(f"  Exp spectrum:    {args.exp_spectrum}")
+    if args.raman_spectrum:
+        print(f"  Raman spectrum:  {args.raman_spectrum}")
+    print(f"  Output dir:      {args.output_dir}")
+    print(f"\nSettings:")
+    print(f"  Smoothing:       {args.smooth_window}-point rolling average")
+    print(f"  Freq scale:      {args.freq_scale}")
+    print(f"  Include Raman:   {args.include_raman}")
     
     # Load MD data
     print(f"\n📂 Loading MD spectrum...")
@@ -570,14 +770,14 @@ def main():
     
     # Create overview plots
     print(f"\n📊 Creating overview plots...")
-    plot_overview(freqs, int_phys, int_dcm, exp_freq, exp_abs, EXP_CO2_PEAKS, args.output_dir)
+    plot_overview(freqs, int_phys, int_dcm, exp_freq, exp_abs, EXP_CO2_IR_PEAKS, args.output_dir)
     
     # Fit individual peaks
     print(f"\n🔍 Fitting individual peaks...")
     peak_fits_physnet = []
     peak_fits_dcmnet = []
     
-    for name, peak_freq in EXP_CO2_PEAKS:
+    for name, peak_freq in EXP_CO2_IR_PEAKS:
         print(f"\n  {name} ({peak_freq:.1f} cm⁻¹)...")
         
         # Determine window
@@ -605,14 +805,63 @@ def main():
     # Create plots
     print(f"\n📊 Creating detailed plots...")
     plot_individual_peaks(peak_fits_physnet, peak_fits_dcmnet, args.output_dir)
-    plot_zoomed_grid(EXP_CO2_PEAKS, peak_fits_physnet, peak_fits_dcmnet, freqs, int_phys, int_dcm, args.output_dir)
-    plot_combined_spectrum(peak_fits_physnet, peak_fits_dcmnet, exp_freq, exp_abs, EXP_CO2_PEAKS, args.output_dir)
+    plot_zoomed_grid(EXP_CO2_IR_PEAKS, peak_fits_physnet, peak_fits_dcmnet, freqs, int_phys, int_dcm, args.output_dir)
+    plot_combined_spectrum(peak_fits_physnet, peak_fits_dcmnet, exp_freq, exp_abs, EXP_CO2_IR_PEAKS, args.output_dir)
     
     # Print summary tables
     print(f"\n📝 Generating summary report...")
     summary_file = args.output_dir / 'analysis_summary.txt'
-    print_summary_tables(EXP_CO2_PEAKS, peak_fits_physnet, peak_fits_dcmnet, freqs, int_phys, int_dcm, summary_file)
+    print_summary_tables(EXP_CO2_IR_PEAKS, peak_fits_physnet, peak_fits_dcmnet, freqs, int_phys, int_dcm, summary_file)
     print(f"\n✅ Summary saved: {summary_file}")
+    
+    # Raman analysis (if requested and data available)
+    raman_phys = None
+    raman_dcm = None
+    
+    if args.include_raman:
+        print(f"\n{'='*70}")
+        print(f"RAMAN SPECTRUM ANALYSIS")
+        print(f"{'='*70}")
+        
+        if args.raman_spectrum and args.raman_spectrum.exists():
+            print(f"\n📂 Loading Raman spectrum from {args.raman_spectrum}...")
+            raman_data = np.load(args.raman_spectrum)
+            if 'intensity_physnet' in raman_data and 'intensity_dcmnet' in raman_data:
+                raman_phys = rolling_average(raman_data['intensity_physnet'])
+                raman_dcm = rolling_average(raman_data['intensity_dcmnet'])
+                print(f"   ✓ Loaded Raman data")
+        elif 'raman_intensity_physnet' in md_data and 'raman_intensity_dcmnet' in md_data:
+            print(f"\n📂 Loading Raman data from MD spectrum file...")
+            raman_phys = rolling_average(md_data['raman_intensity_physnet'])
+            raman_dcm = rolling_average(md_data['raman_intensity_dcmnet'])
+            print(f"   ✓ Loaded Raman data")
+        else:
+            print(f"\n⚠️  No Raman data found. Skipping Raman analysis.")
+            print(f"   Provide --raman-spectrum or ensure MD file contains Raman data.")
+        
+        if raman_phys is not None and raman_dcm is not None:
+            print(f"\n📊 Creating Raman plots...")
+            print(f"   Note: CO₂ Raman-active modes: ν₁ (1388 cm⁻¹, strong), ν₂ (667 cm⁻¹, weak)")
+            plot_raman_overview(freqs, raman_phys, raman_dcm, EXP_CO2_RAMAN_PEAKS, args.output_dir)
+            plot_raman_comparison(freqs, raman_phys, raman_dcm, EXP_CO2_RAMAN_PEAKS, args.output_dir)
+            plot_ir_raman_combined(freqs, int_phys, int_dcm, raman_phys, raman_dcm, 
+                                  EXP_CO2_IR_PEAKS, args.output_dir)
+            
+            # Report Raman peak intensities
+            print(f"\n📊 Raman Peak Analysis:")
+            for name, peak_freq in EXP_CO2_RAMAN_PEAKS:
+                window = 150
+                mask = (freqs >= peak_freq - window) & (freqs <= peak_freq + window)
+                if mask.sum() > 0:
+                    max_idx_p = np.argmax(raman_phys[mask])
+                    max_idx_d = np.argmax(raman_dcm[mask])
+                    max_freq_p = freqs[mask][max_idx_p]
+                    max_freq_d = freqs[mask][max_idx_d]
+                    print(f"  {name} (exp: {peak_freq:.1f} cm⁻¹):")
+                    print(f"    PhysNet:  {max_freq_p:7.1f} cm⁻¹  (Δ={max_freq_p-peak_freq:+6.1f}, I={raman_phys[mask][max_idx_p]:.3e})")
+                    print(f"    DCMNet:   {max_freq_d:7.1f} cm⁻¹  (Δ={max_freq_d-peak_freq:+6.1f}, I={raman_dcm[mask][max_idx_d]:.3e})")
+            
+            print(f"\n✅ Raman analysis complete!")
     
     print(f"\n{'='*70}")
     print(f"✅ ANALYSIS COMPLETE!")
@@ -623,6 +872,11 @@ def main():
     print(f"  {args.output_dir / 'zoomed_peaks_grid.png'}")
     print(f"  {args.output_dir / 'combined_spectrum.png'}")
     print(f"  {args.output_dir / 'analysis_summary.txt'}")
+    
+    if args.include_raman and raman_phys is not None:
+        print(f"  {args.output_dir / 'raman_spectra.png'}")
+        print(f"  {args.output_dir / 'raman_comparison.png'}")
+        print(f"  {args.output_dir / 'ir_raman_combined.png'}")
 
 
 if __name__ == '__main__':
