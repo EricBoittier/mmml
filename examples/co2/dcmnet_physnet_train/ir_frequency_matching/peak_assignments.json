@@ -1,0 +1,39 @@
+{
+  "scale_factor": 0.8500048253288097,
+  "method": "min_dist",
+  "assignments": [
+    {
+      "harmonic_original": 667.4,
+      "harmonic_scaled": 567.2932204244476,
+      "md_peak": 240.83327673306576,
+      "delta": 326.4599436913818,
+      "assignment": "Bend"
+    },
+    {
+      "harmonic_original": 667.4,
+      "harmonic_scaled": 567.2932204244476,
+      "md_peak": 240.83327673306576,
+      "delta": 326.4599436913818,
+      "assignment": "Bend"
+    },
+    {
+      "harmonic_original": 1388.2,
+      "harmonic_scaled": 1179.9766985214537,
+      "md_peak": 240.83327673306576,
+      "delta": 939.143421788388,
+      "assignment": "Symmetric str"
+    },
+    {
+      "harmonic_original": 2349.2,
+      "harmonic_scaled": 1996.8313356624396,
+      "md_peak": 240.83327673306576,
+      "delta": 1755.9980589293739,
+      "assignment": "Asymmetric str"
+    }
+  ],
+  "quality_metrics": {
+    "mean_residual_cm1": 837.0153420251313,
+    "max_residual_cm1": 1755.9980589293739,
+    "rms_residual_cm1": 1022.0899837247808
+  }
+}

@@ -75,20 +75,39 @@ def load_md_spectrum(spectrum_file: Path):
         raise ValueError(f"Unsupported format: {spectrum_file.suffix}")
 
 
-def find_spectrum_peaks(frequencies, intensities, min_height=0.1, min_distance=50):
-    """Find peaks in spectrum."""
-    # Normalize intensities
-    intensities_norm = intensities / np.max(intensities)
+def find_spectrum_peaks(frequencies, intensities, min_height=0.05, min_distance=20):
+    """Find peaks in spectrum with improved detection."""
+    # Focus on physically relevant range for CO2
+    freq_mask = (frequencies > 200) & (frequencies < 4000)
+    freq_range = frequencies[freq_mask]
+    int_range = intensities[freq_mask]
     
-    # Find peaks
+    if len(int_range) == 0:
+        return np.array([]), np.array([])
+    
+    # Normalize intensities
+    intensities_norm = int_range / np.max(int_range)
+    
+    # Find peaks with relaxed criteria
     peaks, properties = find_peaks(
         intensities_norm,
         height=min_height,
-        distance=min_distance
+        distance=min_distance,
+        prominence=min_height/2,  # Require some prominence
     )
     
-    peak_freqs = frequencies[peaks]
-    peak_heights = intensities[peaks]
+    if len(peaks) == 0:
+        # Fallback: just find global maximum
+        peaks = [np.argmax(intensities_norm)]
+        print(f"   ⚠️  Using relaxed peak detection (only found {len(peaks)} peak)")
+    
+    peak_freqs = freq_range[peaks]
+    peak_heights = int_range[peaks]
+    
+    # Sort by frequency
+    sort_idx = np.argsort(peak_freqs)
+    peak_freqs = peak_freqs[sort_idx]
+    peak_heights = peak_heights[sort_idx]
     
     return peak_freqs, peak_heights
 
@@ -142,10 +161,10 @@ def find_optimal_scale_factor(harmonic_freqs, md_peak_freqs,
 
 def plot_comparison(harmonic_freqs, harmonic_intensities, 
                    md_frequencies, md_intensities,
-                   scale_factor, output_file):
+                   scale_factor, output_file, md_intensities_dcmnet=None):
     """Plot comparison of harmonic vs MD IR spectra."""
     
-    fig, axes = plt.subplots(3, 1, figsize=(12, 10))
+    fig, axes = plt.subplots(4, 1, figsize=(14, 14))
     
     # Normalize intensities
     if harmonic_intensities is not None:
@@ -155,43 +174,110 @@ def plot_comparison(harmonic_freqs, harmonic_intensities,
     
     md_int_norm = md_intensities / np.max(md_intensities)
     
-    # Plot 1: Original harmonic vs MD
+    # Experimental CO2 frequencies
+    exp_freqs = {
+        'ν2 bend': 667.4,
+        'ν1 sym stretch': 1388.2,
+        'ν3 asym stretch': 2349.2,
+    }
+    
+    # Plot 0: Full MD spectrum with both PhysNet and DCMNet
     ax = axes[0]
-    ax.plot(md_frequencies, md_int_norm, 'b-', alpha=0.7, linewidth=1.5, label='MD IR')
+    
+    # Focus on CO2 range
+    freq_mask = (md_frequencies > 100) & (md_frequencies < 3500)
+    ax.plot(md_frequencies[freq_mask], md_int_norm[freq_mask], 'b-', 
+            alpha=0.7, linewidth=1.5, label='MD IR (PhysNet)')
+    
+    if md_intensities_dcmnet is not None:
+        md_int_dcm_norm = md_intensities_dcmnet / np.max(md_intensities_dcmnet)
+        ax.plot(md_frequencies[freq_mask], md_int_dcm_norm[freq_mask], 'c--',
+                alpha=0.7, linewidth=1.5, label='MD IR (DCMNet)')
+    
+    # Add experimental frequencies as vertical lines
+    for name, freq in exp_freqs.items():
+        ax.axvline(freq, color='red', linestyle=':', linewidth=2, alpha=0.6)
+        ax.text(freq, ax.get_ylim()[1] * 0.9, name, rotation=90, 
+                verticalalignment='bottom', fontsize=9, color='red')
+    
+    ax.set_xlabel('Frequency (cm⁻¹)', fontsize=12)
+    ax.set_ylabel('Normalized Intensity', fontsize=12)
+    ax.set_title('MD IR Spectrum (Full Range)', fontsize=14, weight='bold')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    ax.set_xlim(100, 3500)
+    
+    # Plot 1: Original harmonic vs MD
+    ax = axes[1]
+    ax.plot(md_frequencies[freq_mask], md_int_norm[freq_mask], 'b-', alpha=0.7, linewidth=1.5, label='MD IR (PhysNet)')
+    if md_intensities_dcmnet is not None:
+        ax.plot(md_frequencies[freq_mask], md_int_dcm_norm[freq_mask], 'c--',
+                alpha=0.7, linewidth=1.5, label='MD IR (DCMNet)')
     ax.stem(harmonic_freqs, harm_int_norm, linefmt='r-', markerfmt='ro', 
             basefmt=' ', label='Harmonic (original)')
+    
+    # Add experimental lines
+    for name, freq in exp_freqs.items():
+        ax.axvline(freq, color='red', linestyle=':', linewidth=1, alpha=0.4)
+    
     ax.set_xlabel('Frequency (cm⁻¹)', fontsize=12)
     ax.set_ylabel('Normalized Intensity', fontsize=12)
     ax.set_title('Original Harmonic vs MD IR', fontsize=14, weight='bold')
     ax.legend()
     ax.grid(True, alpha=0.3)
+    ax.set_xlim(500, 2800)
     
     # Plot 2: Scaled harmonic vs MD
-    ax = axes[1]
+    ax = axes[2]
     scaled_freqs = harmonic_freqs * scale_factor
-    ax.plot(md_frequencies, md_int_norm, 'b-', alpha=0.7, linewidth=1.5, label='MD IR')
+    ax.plot(md_frequencies[freq_mask], md_int_norm[freq_mask], 'b-', alpha=0.7, linewidth=1.5, label='MD IR (PhysNet)')
+    if md_intensities_dcmnet is not None:
+        ax.plot(md_frequencies[freq_mask], md_int_dcm_norm[freq_mask], 'c--',
+                alpha=0.7, linewidth=1.5, label='MD IR (DCMNet)')
     ax.stem(scaled_freqs, harm_int_norm, linefmt='g-', markerfmt='go',
             basefmt=' ', label=f'Harmonic (scaled ×{scale_factor:.4f})')
+    
+    # Add experimental lines
+    for name, freq in exp_freqs.items():
+        ax.axvline(freq, color='red', linestyle=':', linewidth=1, alpha=0.4)
+    
     ax.set_xlabel('Frequency (cm⁻¹)', fontsize=12)
     ax.set_ylabel('Normalized Intensity', fontsize=12)
     ax.set_title(f'Scaled Harmonic vs MD IR (scale = {scale_factor:.4f})', 
                 fontsize=14, weight='bold')
     ax.legend()
     ax.grid(True, alpha=0.3)
+    ax.set_xlim(500, 2800)
     
     # Plot 3: Overlay both for comparison
-    ax = axes[2]
-    ax.plot(md_frequencies, md_int_norm, 'b-', alpha=0.7, linewidth=2, label='MD IR')
-    ax.stem(harmonic_freqs, harm_int_norm * 0.9, linefmt='r--', markerfmt='ro',
-            basefmt=' ', label='Original harmonic', alpha=0.5)
-    ax.stem(scaled_freqs, harm_int_norm, linefmt='g-', markerfmt='go',
-            basefmt=' ', label=f'Scaled harmonic (×{scale_factor:.4f})')
+    ax = axes[3]
+    ax.plot(md_frequencies[freq_mask], md_int_norm[freq_mask], 'b-', alpha=0.7, linewidth=2, label='MD IR (PhysNet)')
+    if md_intensities_dcmnet is not None:
+        ax.plot(md_frequencies[freq_mask], md_int_dcm_norm[freq_mask], 'c--',
+                alpha=0.7, linewidth=2, label='MD IR (DCMNet)')
+    
+    # Stem plots without alpha parameter
+    markerline1, stemlines1, baseline1 = ax.stem(harmonic_freqs, harm_int_norm * 0.9, 
+                                                  linefmt='r--', markerfmt='ro', basefmt=' ')
+    stemlines1.set_alpha(0.5)
+    markerline1.set_alpha(0.5)
+    markerline1.set_label('Original harmonic')
+    
+    markerline2, stemlines2, baseline2 = ax.stem(scaled_freqs, harm_int_norm,
+                                                  linefmt='g-', markerfmt='go', basefmt=' ')
+    markerline2.set_label(f'Scaled harmonic (×{scale_factor:.4f})')
+    
+    # Add experimental lines
+    for name, freq in exp_freqs.items():
+        ax.axvline(freq, color='red', linestyle=':', linewidth=2, alpha=0.6, label=name if freq == 667.4 else '')
+    
     ax.set_xlabel('Frequency (cm⁻¹)', fontsize=12)
     ax.set_ylabel('Normalized Intensity', fontsize=12)
-    ax.set_title('Comparison: Original vs Scaled Harmonic vs MD', 
+    ax.set_title('Comparison: Original vs Scaled Harmonic vs MD vs Experimental', 
                 fontsize=14, weight='bold')
-    ax.legend()
+    ax.legend(fontsize=9)
     ax.grid(True, alpha=0.3)
+    ax.set_xlim(500, 2800)
     
     plt.tight_layout()
     plt.savefig(output_file, dpi=300, bbox_inches='tight')
@@ -274,12 +360,13 @@ def main():
     
     # Load harmonic data
     print(f"\n1. Loading harmonic frequencies...")
-    if args.harmonic_data:
+    if args.harmonic_data and args.harmonic_data.exists():
         harm_data = np.load(args.harmonic_data)
         harmonic_freqs = harm_data['frequencies']
-        harmonic_intensities = harm_data.get('intensities', None)
+        harmonic_intensities = harm_data.get('intensities_physnet', 
+                                            harm_data.get('intensities', None))
         print(f"✅ Loaded from {args.harmonic_data}")
-    elif args.harmonic_frequencies:
+    elif args.harmonic_frequencies and args.harmonic_frequencies.exists():
         harmonic_freqs, harmonic_intensities = load_harmonic_data(
             args.harmonic_frequencies, args.harmonic_intensities
         )
@@ -291,32 +378,80 @@ def main():
             Path('./dynamics_analysis/harmonic_ir.npz'),
             Path('./harmonic_ir.npz'),
         ]
+        found = False
         for p in search_paths:
             if p.exists():
                 harm_data = np.load(p)
                 harmonic_freqs = harm_data['frequencies']
-                harmonic_intensities = harm_data.get('intensities', None)
+                harmonic_intensities = harm_data.get('intensities_physnet',
+                                                    harm_data.get('intensities', None))
                 print(f"✅ Auto-found harmonic data: {p}")
+                found = True
                 break
-        else:
-            print("❌ No harmonic data found. Specify --harmonic-data or --harmonic-frequencies")
-            return
+        
+        if not found:
+            print("⚠️  No harmonic data found, using experimental CO2 frequencies")
+            print("   (You can compute your own with: python dynamics_calculator.py ...)")
+            
+            # Use experimental CO2 frequencies
+            harmonic_freqs = np.array([
+                667.4,    # ν2 bending mode (doubly degenerate)
+                667.4,    # ν2 bending mode
+                1388.2,   # ν1 symmetric stretch
+                2349.2,   # ν3 asymmetric stretch
+            ])
+            # Rough intensity estimates (asymmetric stretch is strongest)
+            harmonic_intensities = np.array([1.0, 1.0, 0.0, 10.0])
+            
+            print(f"   Using experimental CO2 frequencies: {harmonic_freqs}")
+            print(f"   Note: Intensities are approximate!")
     
     print(f"   Harmonic modes: {len(harmonic_freqs)}")
     print(f"   Frequency range: {harmonic_freqs.min():.1f} - {harmonic_freqs.max():.1f} cm⁻¹")
     
     # Load MD spectrum
     print(f"\n2. Loading MD IR spectrum...")
-    md_frequencies, md_intensities, md_autocorr, md_times = load_md_spectrum(args.md_spectrum)
+    md_spec = np.load(args.md_spectrum)
+    md_frequencies = md_spec['frequencies']
+    md_intensities_physnet = md_spec.get('intensity_physnet', md_spec.get('intensities'))
+    md_intensities_dcmnet = md_spec.get('intensity_dcmnet', None)
+    md_autocorr = md_spec.get('autocorrelation', None)
+    md_times = md_spec.get('times', None)
+    
     print(f"✅ Loaded from {args.md_spectrum}")
     print(f"   Spectrum points: {len(md_frequencies)}")
     print(f"   Frequency range: {md_frequencies.min():.1f} - {md_frequencies.max():.1f} cm⁻¹")
+    
+    # Use PhysNet spectrum for matching (primary)
+    md_intensities = md_intensities_physnet
     
     # Find peaks in MD spectrum
     print(f"\n3. Finding peaks in MD spectrum...")
     md_peak_freqs, md_peak_heights = find_spectrum_peaks(md_frequencies, md_intensities)
     print(f"✅ Found {len(md_peak_freqs)} peaks in MD spectrum")
     print(f"   Peak frequencies: {md_peak_freqs}")
+    
+    # Diagnostic: Check spectrum in CO2-relevant range
+    co2_mask = (md_frequencies > 500) & (md_frequencies < 3000)
+    if np.any(co2_mask):
+        print(f"\n   Spectrum in CO2 range (500-3000 cm⁻¹):")
+        print(f"     Max intensity: {md_intensities[co2_mask].max():.6f}")
+        print(f"     Mean intensity: {md_intensities[co2_mask].mean():.6f}")
+        max_idx = np.argmax(md_intensities[co2_mask])
+        max_freq = md_frequencies[co2_mask][max_idx]
+        print(f"     Peak location: {max_freq:.1f} cm⁻¹")
+        
+        if len(md_peak_freqs) < 2:
+            print(f"\n   ⚠️  Warning: Very few peaks found!")
+            print(f"   This might indicate:")
+            print(f"     - Trajectory too short (need >20 ps)")
+            print(f"     - Timestep too small (try subsampling)")
+            print(f"     - Dipoles not varying enough")
+    
+    if len(md_peak_freqs) == 0:
+        print(f"\n❌ No peaks found in MD spectrum!")
+        print(f"   Cannot perform matching. Check your MD IR spectrum.")
+        return
     
     # Find optimal scaling factor
     print(f"\n4. Finding optimal scaling factor...")
@@ -356,9 +491,10 @@ def main():
     print(f"\n5. Creating comparison plots...")
     plot_comparison(
         harmonic_freqs, harmonic_intensities,
-        md_frequencies, md_intensities,
+        md_frequencies, md_intensities_physnet,
         scale_factor,
-        args.output_dir / 'harmonic_md_comparison.png'
+        args.output_dir / 'harmonic_md_comparison.png',
+        md_intensities_dcmnet=md_intensities_dcmnet
     )
     
     # Save results
