@@ -483,6 +483,18 @@ def plot_ir_spectrum(ir_data, output_dir, temp=300, broadening=10):
     plt.close()
     
     print(f"\n✅ Saved IR spectrum: {output_path}")
+    
+    # Save harmonic data to NPZ for frequency scaling analysis
+    npz_path = output_dir / 'harmonic_ir.npz'
+    np.savez(
+        npz_path,
+        frequencies=freqs,
+        intensities_physnet=intensities_physnet,
+        intensities_dcmnet=intensities_dcmnet if 'intensities_dcmnet' in ir_data else None,
+        dipole_derivatives_physnet=dipole_deriv_physnet,
+        dipole_derivatives_dcmnet=ir_data.get('dipole_derivatives_dcmnet', None),
+    )
+    print(f"✅ Saved harmonic data: {npz_path}")
 
 
 def run_molecular_dynamics(atoms, calculator, ensemble='nvt', temperature=300,
