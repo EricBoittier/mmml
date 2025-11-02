@@ -535,7 +535,7 @@ def calculate_raman_spectrum(atoms, calculator, vib, delta=0.01, laser_wavelengt
 def plot_raman_spectrum(raman_data, output_dir, laser_wavelength=532, 
                         use_dcmnet=True, broadening=10):
     """
-    Plot Raman spectrum.
+    Plot Raman spectrum with Okabe-Ito colors and fill_between.
     
     Parameters
     ----------
@@ -550,6 +550,13 @@ def plot_raman_spectrum(raman_data, output_dir, laser_wavelength=532,
     broadening : float
         Lorentzian broadening (cm⁻¹)
     """
+    # Okabe-Ito colors
+    colors = {
+        'bluish_green': '#009E73',
+        'vermillion': '#D55E00',
+        'black': '#000000'
+    }
+    
     freqs = np.real(raman_data['frequencies'])
     intensities = raman_data['intensities']
     
@@ -562,6 +569,10 @@ def plot_raman_spectrum(raman_data, output_dir, laser_wavelength=532,
         print("⚠️  No positive frequencies for Raman plot")
         return
     
+    # Normalize intensities
+    if intensities.max() > 0:
+        intensities = intensities / intensities.max()
+    
     # Create broadened spectrum
     freq_range = np.linspace(0, max(freqs) + 500, 2000)
     spectrum = np.zeros_like(freq_range)
@@ -569,38 +580,61 @@ def plot_raman_spectrum(raman_data, output_dir, laser_wavelength=532,
     for freq, intensity in zip(freqs, intensities):
         spectrum += intensity * (broadening**2) / ((freq_range - freq)**2 + broadening**2)
     
+    # Normalize broadened spectrum
+    if spectrum.max() > 0:
+        spectrum = spectrum / spectrum.max()
+    
     # Plot
-    fig, axes = plt.subplots(2, 1, figsize=(12, 10))
+    fig, axes = plt.subplots(2, 1, figsize=(14, 10))
+    
+    charge_type = 'DCMNet' if use_dcmnet else 'PhysNet'
+    title_color = 'green' if 'finite-field' in str(output_dir) else 'orange'
+    title_prefix = '✅ Finite-Field' if title_color == 'green' else '⚠️ Charge-Approx'
+    fig.suptitle(f'{title_prefix} Raman Spectrum - {charge_type}', 
+                 fontsize=16, weight='bold', y=0.995)
+    
+    # Experimental CO2 Raman peaks
+    exp_peaks = [(1388.2, 'ν₁'), (667.4, 'ν₂')]
     
     # Stick spectrum
     ax = axes[0]
     markerline, stemlines, baseline = ax.stem(freqs, intensities,
-                                               linefmt='C2-', markerfmt='C2o', basefmt=' ')
-    charge_type = 'DCMNet distributed' if use_dcmnet else 'PhysNet point'
-    markerline.set_label(f'{charge_type} charges')
+                                               linefmt=colors['bluish_green'], 
+                                               markerfmt='o', basefmt=' ')
+    plt.setp(markerline, color=colors['bluish_green'], markersize=7, alpha=0.8)
+    plt.setp(stemlines, color=colors['bluish_green'], linewidth=2.5, alpha=0.7)
+    
+    # Mark experimental peaks
+    for exp_freq, label in exp_peaks:
+        ax.axvline(exp_freq, color=colors['vermillion'], ls=':', lw=2, alpha=0.6)
+        ax.text(exp_freq, ax.get_ylim()[1]*0.92, label, 
+               rotation=90, va='bottom', ha='right',
+               fontsize=10, color=colors['vermillion'], weight='bold')
     
     ax.set_xlabel('Raman Shift (cm⁻¹)', fontsize=12, weight='bold')
-    ax.set_ylabel('Intensity (normalized)', fontsize=12, weight='bold')
-    ax.set_title(f'Raman Spectrum (Stick) - {laser_wavelength} nm laser', 
-                 fontsize=14, weight='bold')
-    ax.legend(fontsize=11)
-    ax.grid(True, alpha=0.3)
+    ax.set_ylabel('Raman Intensity (normalized)', fontsize=12, weight='bold')
+    ax.set_title(f'Stick Spectrum - {laser_wavelength} nm Laser', 
+                 fontsize=13, weight='bold', loc='left')
+    ax.grid(True, alpha=0.3, ls='--')
+    ax.set_ylim(0, 1.1)
     
     # Broadened spectrum
     ax = axes[1]
-    ax.plot(freq_range, spectrum, 'C2-', linewidth=2)
-    ax.fill_between(freq_range, spectrum, alpha=0.3)
+    ax.fill_between(freq_range, 0, spectrum, 
+                    color=colors['bluish_green'], alpha=0.4)
+    ax.plot(freq_range, spectrum, 
+            color=colors['bluish_green'], lw=2, alpha=0.9)
+    
+    # Mark experimental peaks
+    for exp_freq, label in exp_peaks:
+        ax.axvline(exp_freq, color=colors['vermillion'], ls=':', lw=2, alpha=0.6)
     
     ax.set_xlabel('Raman Shift (cm⁻¹)', fontsize=12, weight='bold')
-    ax.set_ylabel('Intensity (normalized)', fontsize=12, weight='bold')
-    ax.set_title(f'Raman Spectrum (Broadened, FWHM = {broadening} cm⁻¹)', 
-                 fontsize=14, weight='bold')
-    ax.grid(True, alpha=0.3)
-    
-    title_color = 'green' if 'finite-field' in str(output_dir) else 'orange'
-    title_prefix = '✅ Proper' if title_color == 'green' else '⚠️ Approximate'
-    plt.suptitle(f'{title_prefix} Raman Spectrum', 
-                 fontsize=16, weight='bold', color=title_color)
+    ax.set_ylabel('Raman Intensity (normalized)', fontsize=12, weight='bold')
+    ax.set_title(f'Broadened Spectrum (HWHM = {broadening:.1f} cm⁻¹)', 
+                 fontsize=13, weight='bold', loc='left')
+    ax.grid(True, alpha=0.3, ls='--')
+    ax.set_ylim(0, 1.1)
     
     plt.tight_layout()
     
@@ -609,6 +643,17 @@ def plot_raman_spectrum(raman_data, output_dir, laser_wavelength=532,
     plt.close()
     
     print(f"✅ Saved Raman spectrum: {output_path}")
+    
+    # Save data to NPZ for later analysis
+    npz_path = output_dir / 'raman_data.npz'
+    np.savez(npz_path,
+             frequencies=freqs,
+             intensities=intensities,
+             broadened_frequencies=freq_range,
+             broadened_spectrum=spectrum,
+             laser_wavelength=laser_wavelength,
+             broadening=broadening)
+    print(f"✅ Saved Raman data: {npz_path}")
 
 
 def main():
