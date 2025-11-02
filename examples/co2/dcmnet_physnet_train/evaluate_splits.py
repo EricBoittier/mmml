@@ -229,25 +229,25 @@ def evaluate_split(params, model, efd_data, esp_data, split_name: str,
                 esp_true_vals = esp_true_vals[valid_mask]
                 
                 if len(grid_points) > 0:
-                    # PhysNet ESP (from point charges) - use original positions
+                    # PhysNet ESP (from point charges)
                     esp_pred_physnet = np.sum(
                         charges_physnet[None, :] / (
                             np.linalg.norm(
-                                grid_points[:, None, :] - positions_original[None, :, :],
+                                grid_points[:, None, :] - positions[None, :, :],
                                 axis=2
                             ) * 1.88973 + 1e-10
                         ),
                         axis=1
                     )
                     
-                    # DCMNet ESP (from distributed charges) - use original positions
+                    # DCMNet ESP (from distributed charges)
                     # Compute distributed charge positions
                     n_dcm = mono_dist.shape[1]
                     positions_dcmnet_list = []
-                    for atom_idx in range(n_atoms_original):
+                    for atom_idx in range(n_atoms):
                         for dcm_idx in range(n_dcm):
                             # Distributed charge position relative to atom
-                            dist_pos = positions_original[atom_idx] + dipo_dist[atom_idx, dcm_idx]
+                            dist_pos = positions[atom_idx] + dipo_dist[atom_idx, dcm_idx]
                             positions_dcmnet_list.append(dist_pos)
                     positions_dcmnet_flat = np.array(positions_dcmnet_list)
                     charges_dcmnet_flat = mono_dist.flatten()
@@ -332,7 +332,7 @@ def main():
     parser.add_argument('--cutoff', type=float, default=10.0,
                        help='Cutoff distance for edge list')
     parser.add_argument('--natoms', type=int, default=None,
-                       help='Number of atoms for padding (use same as training, e.g., 60)')
+                       help='[DEPRECATED] No longer needed - model handles variable sizes dynamically')
     parser.add_argument('--batch-size', type=int, default=100,
                        help='Batch size for evaluation')
     parser.add_argument('--output-dir', type=Path, default=Path('./evaluation'),
