@@ -256,12 +256,15 @@ def run_jaxmd_simulation(
     masses,
     box,
     ensemble='nvt',
+    integrator='langevin',
     temperature=300.0,
-    timestep=0.1,
+    timestep=0.05,
     nsteps=10000,
     save_interval=10,
     cutoff=10.0,
     friction=0.01,
+    tau_t=100.0,
+    equilibration_steps=2000,
     output_dir=None,
     seed=42,
 ):
@@ -283,19 +286,27 @@ def run_jaxmd_simulation(
     box : array (3, 3)
         Simulation box
     ensemble : str
-        'nve', 'nvt', or 'npt'
+        'nve' or 'nvt'
+    integrator : str
+        For NVE: 'verlet', 'velocity-verlet' (default)
+        For NVT: 'langevin', 'berendsen', 'velocity-rescale', 'nose-hoover'
     temperature : float
         Temperature (K)
     timestep : float
         Timestep (fs)
     nsteps : int
-        Number of steps
+        Number of production steps (after equilibration)
     save_interval : int
         Save trajectory every N steps
     cutoff : float
         Neighbor list cutoff (Angstrom)
     friction : float
         Friction coefficient for Langevin (1/fs)
+    tau_t : float
+        Time constant for Berendsen/Nosé-Hoover (fs)
+    equilibration_steps : int
+        Number of NVE equilibration steps before NVT (default: 2000)
+        Set to 0 to skip equilibration
     output_dir : Path
         Output directory
     seed : int
@@ -310,9 +321,12 @@ def run_jaxmd_simulation(
     print(f"JAX MD SIMULATION")
     print(f"{'='*70}")
     print(f"Ensemble: {ensemble.upper()}")
+    print(f"Integrator: {integrator}")
     print(f"Temperature: {temperature} K")
     print(f"Timestep: {timestep} fs")
-    print(f"Total steps: {nsteps}")
+    if ensemble.lower() == 'nvt' and equilibration_steps > 0:
+        print(f"Equilibration: {equilibration_steps} steps ({equilibration_steps * timestep / 1000:.2f} ps) in NVE")
+    print(f"Production steps: {nsteps}")
     print(f"Total time: {nsteps * timestep / 1000:.2f} ps")
     print(f"Cutoff: {cutoff} Å")
     
@@ -381,9 +395,65 @@ def run_jaxmd_simulation(
     # 1 fs = 1 fs (we keep fs as base time unit)
     dt = timestep
     
-    # Set up integrator
+    # ===== EQUILIBRATION PHASE (NVE) =====
+    if ensemble.lower() == 'nvt' and equilibration_steps > 0:
+        print(f"\n{'='*70}")
+        print(f"EQUILIBRATION PHASE (NVE)")
+        print(f"{'='*70}")
+        print(f"Running {equilibration_steps} steps to let system relax...")
+        
+        @jit
+        def nve_step(state, neighbor):
+            R, V, F = state
+            accel = F / (masses[:, None] * 0.01036427)
+            V_half = V + 0.5 * accel * dt
+            R_new = R + V_half * dt
+            neighbor = neighbor.update(R_new)
+            F_new = force_fn(R_new, atomic_numbers, neighbor)
+            accel_new = F_new / (masses[:, None] * 0.01036427)
+            V_new = V_half + 0.5 * accel_new * dt
+            return (R_new, V_new, F_new), neighbor
+        
+        F_init = force_fn(jnp.array(positions), jnp.array(atomic_numbers), nbrs)
+        state = (jnp.array(positions), jnp.array(velocities), F_init)
+        
+        # Run equilibration
+        for step in range(equilibration_steps):
+            state, nbrs = nve_step(state, nbrs)
+            
+            if step % 500 == 0 and step > 0:
+                R, V, F = state
+                KE = 0.5 * jnp.sum(masses[:, None] * V**2) * 0.01036427
+                T = 2 * KE / (3 * len(positions) * 8.617333262e-5)
+                print(f"  Equilibration step {step}/{equilibration_steps} | T = {float(T):.1f} K")
+        
+        # Final temperature and rescaling
+        R, V, F = state
+        KE = 0.5 * jnp.sum(masses[:, None] * V**2) * 0.01036427
+        T_current = float(2 * KE / (3 * len(positions) * 8.617333262e-5))
+        
+        print(f"\nAfter equilibration:")
+        print(f"  Current temperature: {T_current:.1f} K")
+        print(f"  Target temperature: {temperature:.1f} K")
+        
+        # Rescale velocities to target temperature
+        if T_current > 0:
+            scale_factor = np.sqrt(temperature / T_current)
+            V = V * scale_factor
+            KE_new = 0.5 * jnp.sum(masses[:, None] * V**2) * 0.01036427
+            T_new = float(2 * KE_new / (3 * len(positions) * 8.617333262e-5))
+            print(f"  After rescaling: {T_new:.1f} K")
+        
+        # Update state with rescaled velocities
+        state = (R, V, F)
+        positions = np.array(R)
+        velocities = np.array(V)
+        
+        print(f"✅ Equilibration complete, starting NVT production run...")
+    
+    # Set up integrator for production
     if ensemble.lower() == 'nve':
-        print(f"Using Velocity Verlet (NVE)")
+        print(f"\nUsing Velocity Verlet (NVE)")
         
         @jit
         def step_fn(state, neighbor):
@@ -422,61 +492,148 @@ def run_jaxmd_simulation(
         state = (positions, velocities, F_init)
         
     elif ensemble.lower() == 'nvt':
-        print(f"Using Langevin thermostat (NVT)")
-        print(f"Friction: {friction:.4f} 1/fs")
-        
-        # Langevin dynamics - use BBK integrator (standard in LAMMPS/GROMACS)
-        # Reference: Bussi & Parrinello, Phys. Rev. E 2007
-        # Units: R[Å], V[Å/fs], F[eV/Å], m[amu], T[K]
         kB = 8.617333262e-5  # eV/K
-        gamma = friction  # 1/fs
         
-        # For Langevin, use smaller friction for stability
-        # Typical values: 0.01 - 0.1 (1/fs)
-        if gamma < 0.001:
-            print(f"⚠️  Warning: Very low friction ({gamma}), increasing to 0.01")
-            gamma = 0.01
+        # ===== LANGEVIN THERMOSTAT =====
+        if integrator.lower() == 'langevin':
+            print(f"\nUsing Langevin thermostat (BBK integrator)")
+            print(f"Friction: {friction:.4f} 1/fs")
+            
+            gamma = friction
+            if gamma < 0.001:
+                print(f"⚠️  Warning: Very low friction ({gamma}), increasing to 0.01")
+                gamma = 0.01
+            
+            @jit
+            def step_fn(state, neighbor, key):
+                R, V, F = state
+                accel = F / (masses[:, None] * 0.01036427)
+                
+                # BBK coefficients
+                c0 = jnp.exp(-gamma * dt)
+                c1 = (1.0 - c0) / (gamma * dt)
+                c2 = (1.0 - c1) / (gamma * dt)
+                
+                sigma_sq = kB * temperature / (masses[:, None] * 0.01036427) * (1 - c0**2)
+                sigma = jnp.sqrt(sigma_sq)
+                xi = random.normal(key, shape=V.shape)
+                
+                R_new = R + c1 * dt * V + c2 * dt * dt * accel
+                neighbor = neighbor.update(R_new)
+                F_new = force_fn(R_new, atomic_numbers, neighbor)
+                accel_new = F_new / (masses[:, None] * 0.01036427)
+                V_new = c0 * V + (c1 - c2) * dt * accel + c2 * dt * accel_new + sigma * xi
+                
+                return (R_new, V_new, F_new), neighbor
         
-        @jit
-        def step_fn(state, neighbor, key):
-            R, V, F = state
+        # ===== BERENDSEN THERMOSTAT =====
+        elif integrator.lower() == 'berendsen':
+            print(f"\nUsing Berendsen thermostat")
+            print(f"Time constant τ_T: {tau_t:.1f} fs")
             
-            # BBK (Brünger-Brooks-Karplus) Langevin integrator
-            # This is the standard, stable Langevin algorithm
-            
-            # Acceleration from forces: a = F/m
-            # F[eV/Å] / m[amu] → a[Å/fs²]
-            accel = F / (masses[:, None] * 0.01036427)
-            
-            # Coefficients for BBK integrator
-            c0 = jnp.exp(-gamma * dt)
-            c1 = (1.0 - c0) / (gamma * dt)
-            c2 = (1.0 - c1) / (gamma * dt)
-            
-            # Random noise
-            # Variance: σ² = kB*T/m * (1 - c0²)
-            # This ensures correct temperature in steady state
-            sigma_sq = kB * temperature / (masses[:, None] * 0.01036427) * (1 - c0**2)
-            sigma = jnp.sqrt(sigma_sq)
-            xi = random.normal(key, shape=V.shape)
-            
-            # Update position: r(t+dt) = r(t) + c1*dt*v(t) + c2*dt²*a(t)
-            R_new = R + c1 * dt * V + c2 * dt * dt * accel
-            
-            # Update neighbor list
-            neighbor = neighbor.update(R_new)
-            
-            # New forces
-            F_new = force_fn(R_new, atomic_numbers, neighbor)
-            accel_new = F_new / (masses[:, None] * 0.01036427)
-            
-            # Update velocity: v(t+dt) = c0*v(t) + (c1-c2)*dt*a(t) + c2*dt*a(t+dt) + σ*ξ
-            V_new = c0 * V + (c1 - c2) * dt * accel + c2 * dt * accel_new + sigma * xi
-            
-            return (R_new, V_new, F_new), neighbor
+            @jit
+            def step_fn(state, neighbor, key):
+                R, V, F = state
+                accel = F / (masses[:, None] * 0.01036427)
+                
+                # Velocity Verlet
+                V_half = V + 0.5 * accel * dt
+                R_new = R + V_half * dt
+                neighbor = neighbor.update(R_new)
+                F_new = force_fn(R_new, atomic_numbers, neighbor)
+                accel_new = F_new / (masses[:, None] * 0.01036427)
+                V_new = V_half + 0.5 * accel_new * dt
+                
+                # Berendsen velocity rescaling
+                KE = 0.5 * jnp.sum(masses[:, None] * V_new**2) * 0.01036427
+                T_current = 2 * KE / (3 * len(masses) * kB)
+                lambda_scale = jnp.sqrt(1 + (dt / tau_t) * (temperature / T_current - 1))
+                V_new = V_new * lambda_scale
+                
+                return (R_new, V_new, F_new), neighbor
         
-        F_init = force_fn(positions, atomic_numbers, nbrs)
-        state = (positions, velocities, F_init)
+        # ===== VELOCITY RESCALING THERMOSTAT =====
+        elif integrator.lower() == 'velocity-rescale':
+            print(f"\nUsing velocity rescaling thermostat")
+            print(f"Rescale every: {int(tau_t / timestep)} steps ({tau_t:.1f} fs)")
+            
+            rescale_interval = max(1, int(tau_t / timestep))
+            
+            @jit
+            def step_fn_base(state, neighbor):
+                R, V, F = state
+                accel = F / (masses[:, None] * 0.01036427)
+                V_half = V + 0.5 * accel * dt
+                R_new = R + V_half * dt
+                neighbor = neighbor.update(R_new)
+                F_new = force_fn(R_new, atomic_numbers, neighbor)
+                accel_new = F_new / (masses[:, None] * 0.01036427)
+                V_new = V_half + 0.5 * accel_new * dt
+                return (R_new, V_new, F_new), neighbor
+            
+            step_counter = [0]  # Mutable counter
+            
+            def step_fn(state, neighbor, key):
+                state, neighbor = step_fn_base(state, neighbor)
+                R, V, F = state
+                
+                # Rescale velocities periodically
+                if step_counter[0] % rescale_interval == 0:
+                    KE = 0.5 * jnp.sum(masses[:, None] * V**2) * 0.01036427
+                    T_current = 2 * KE / (3 * len(masses) * kB)
+                    scale = jnp.sqrt(temperature / (T_current + 1e-10))
+                    V = V * scale
+                
+                step_counter[0] += 1
+                return (R, V, F), neighbor
+        
+        # ===== NOSE-HOOVER THERMOSTAT =====
+        elif integrator.lower() == 'nose-hoover':
+            print(f"\nUsing Nosé-Hoover thermostat")
+            print(f"Time constant τ_T: {tau_t:.1f} fs")
+            
+            # Nosé-Hoover chain variable
+            Q = (3 * len(masses) * kB * temperature) * (tau_t)**2  # Thermal mass
+            xi_nh = 0.0  # Thermostat variable
+            
+            @jit
+            def step_fn(state, neighbor, key):
+                R, V, F, xi = state
+                accel = F / (masses[:, None] * 0.01036427)
+                
+                # Half-step velocity update
+                KE = 0.5 * jnp.sum(masses[:, None] * V**2) * 0.01036427
+                G = (2 * KE - 3 * len(masses) * kB * temperature) / Q
+                xi_new = xi + 0.5 * dt * G
+                V_half = V + 0.5 * dt * (accel - xi_new * V)
+                
+                # Position update
+                R_new = R + dt * V_half
+                neighbor = neighbor.update(R_new)
+                
+                # New forces
+                F_new = force_fn(R_new, atomic_numbers, neighbor)
+                accel_new = F_new / (masses[:, None] * 0.01036427)
+                
+                # Full velocity update
+                V_new = V_half + 0.5 * dt * accel_new
+                KE_new = 0.5 * jnp.sum(masses[:, None] * V_new**2) * 0.01036427
+                G_new = (2 * KE_new - 3 * len(masses) * kB * temperature) / Q
+                xi_new = xi_new + 0.5 * dt * G_new
+                V_new = V_new / (1 + 0.5 * dt * xi_new)
+                
+                return (R_new, V_new, F_new, xi_new), neighbor
+            
+            F_init = force_fn(positions, atomic_numbers, nbrs)
+            state = (positions, velocities, F_init, xi_nh)
+        
+        else:
+            raise ValueError(f"Unknown integrator: {integrator}")
+        
+        # For non-Nose-Hoover, initialize standard state
+        if integrator.lower() != 'nose-hoover':
+            F_init = force_fn(positions, atomic_numbers, nbrs)
+            state = (positions, velocities, F_init)
     
     else:
         raise ValueError(f"Unknown ensemble: {ensemble}")
@@ -492,10 +649,13 @@ def run_jaxmd_simulation(
     times = np.zeros(n_saves)
     
     # Run MD
-    print(f"\n🚀 Starting MD simulation (JIT compiling first step)...")
+    print(f"\n🚀 Starting production MD...")
     start_time = time.time()
     
     save_idx = 0
+    max_force_seen = 0.0
+    max_velocity_seen = 0.0
+    
     for step in range(nsteps):
         if ensemble.lower() == 'nvt':
             key, subkey = random.split(key)
@@ -504,6 +664,27 @@ def run_jaxmd_simulation(
             state, nbrs = step_fn(state, nbrs)
         
         R, V, F = state
+        
+        # Safety checks
+        max_r = float(jnp.max(jnp.abs(R)))
+        max_v = float(jnp.max(jnp.abs(V)))
+        max_f = float(jnp.max(jnp.abs(F)))
+        
+        max_force_seen = max(max_force_seen, max_f)
+        max_velocity_seen = max(max_velocity_seen, max_v)
+        
+        # Detect explosion
+        if max_r > 100 or max_v > 1.0 or max_f > 10.0:
+            print(f"\n❌ SIMULATION UNSTABLE at step {step}")
+            print(f"   Max position: {max_r:.2f} Å (limit: 100)")
+            print(f"   Max velocity: {max_v:.4f} Å/fs (limit: 1.0)")
+            print(f"   Max force: {max_f:.2f} eV/Å (limit: 10.0)")
+            print(f"\n💡 Suggestions:")
+            print(f"   1. Reduce timestep (try {timestep/2:.3f} fs)")
+            print(f"   2. Increase friction (try {friction*2:.3f})")
+            print(f"   3. Check if geometry is actually optimized")
+            print(f"   4. Verify model training converged properly")
+            break
         
         # Save data
         if step % save_interval == 0:
@@ -537,6 +718,7 @@ def run_jaxmd_simulation(
                 print(f"Step {step:6d}/{nsteps} | "
                       f"T = {float(T):6.1f} K | "
                       f"E = {float(E)+float(KE):10.4f} eV | "
+                      f"F_max = {max_f:.4f} eV/Å | "
                       f"Rate: {rate:.1f} steps/s | "
                       f"ETA: {eta:.1f}s")
     
@@ -544,6 +726,11 @@ def run_jaxmd_simulation(
     print(f"\n✅ Simulation complete in {elapsed:.2f}s")
     print(f"   Average rate: {nsteps/elapsed:.1f} steps/s")
     print(f"   Performance: {nsteps*timestep/elapsed:.2f} fs/s")
+    print(f"\n📊 Simulation statistics:")
+    print(f"   Max force seen: {max_force_seen:.4f} eV/Å")
+    print(f"   Max velocity seen: {max_velocity_seen:.4f} Å/fs")
+    print(f"   Avg temperature: {np.mean(temperatures_traj):.1f} K")
+    print(f"   Temp std dev: {np.std(temperatures_traj):.1f} K")
     
     # Save results
     results = {
@@ -653,8 +840,16 @@ def main():
                        help='Save trajectory every N steps')
     parser.add_argument('--cutoff', type=float, default=10.0,
                        help='Neighbor list cutoff (Å)')
+    parser.add_argument('--integrator', type=str, default='langevin',
+                       choices=['velocity-verlet', 'langevin', 'berendsen', 
+                               'velocity-rescale', 'nose-hoover'],
+                       help='Integrator/thermostat type')
     parser.add_argument('--friction', type=float, default=0.01,
                        help='Langevin friction (1/fs) - default 0.01')
+    parser.add_argument('--tau-t', type=float, default=100.0,
+                       help='Temperature coupling time constant (fs) for Berendsen/NH')
+    parser.add_argument('--equilibration-steps', type=int, default=2000,
+                       help='NVE equilibration steps before NVT (default: 2000)')
     parser.add_argument('--seed', type=int, default=42,
                        help='Random seed')
     
@@ -700,12 +895,15 @@ def main():
         masses=masses,
         box=box,
         ensemble=args.ensemble,
+        integrator=args.integrator,
         temperature=args.temperature,
         timestep=args.timestep,
         nsteps=args.nsteps,
         save_interval=args.save_interval,
         cutoff=args.cutoff,
         friction=args.friction,
+        tau_t=args.tau_t,
+        equilibration_steps=args.equilibration_steps,
         output_dir=args.output_dir,
         seed=args.seed,
     )
