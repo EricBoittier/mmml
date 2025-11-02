@@ -59,20 +59,40 @@ def main():
                        help='Temperature (K)')
     parser.add_argument('--timestep', type=float, default=0.01,
                        help='Timestep (fs) - default 0.01 for stability')
-    parser.add_argument('--nsteps', type=int, default=500000,
-                       help='Number of steps (default: 500k = 50 ps at 0.01 fs)')
-    parser.add_argument('--save-interval', type=int, default=100,
-                       help='Save every N steps')
+    parser.add_argument('--nsteps', type=int, default=None,
+                       help='Number of steps (default: auto-selected based on IR needs)')
+    parser.add_argument('--save-interval', type=int, default=None,
+                       help='Save every N steps (default: auto-selected for IR)')
     parser.add_argument('--equilibration-steps', type=int, default=0,
                        help='NVE equilibration before NVT (default: 0 for NVE)')
     
     # Analysis
     parser.add_argument('--analyze-ir', action='store_true',
-                       help='Compute IR spectrum from MD')
+                       help='Compute IR spectrum from MD (automatically adjusts nsteps/save-interval)')
     parser.add_argument('--convert-to-ase', action='store_true', default=True,
                        help='Convert to ASE trajectory (default: True)')
     
     args = parser.parse_args()
+    
+    # Auto-adjust defaults for IR analysis
+    if args.analyze_ir:
+        # For good IR: need high frequency resolution
+        # Frequency resolution = 1 / (total_time) in Hz → cm⁻¹
+        # Target: 20 ps gives ~1.67 cm⁻¹ resolution (excellent!)
+        if args.save_interval is None:
+            args.save_interval = 10  # Save every 10 steps for high resolution
+            print("💡 IR mode: Setting save-interval=10 for high-frequency resolution")
+        if args.nsteps is None:
+            # Target: 20 ps simulation = 2,000,000 steps at 0.01 fs
+            # With save_interval=10: 200,000 frames (excellent!)
+            target_ps = 20  # 20 ps gives good resolution
+            args.nsteps = int(target_ps * 1000 / args.timestep)
+            print(f"💡 IR mode: Setting nsteps={args.nsteps:,} for ~{target_ps} ps simulation")
+    else:
+        if args.save_interval is None:
+            args.save_interval = 100
+        if args.nsteps is None:
+            args.nsteps = 500000  # Default 50 ps
     
     print("="*70)
     print("PRODUCTION MD SIMULATION")
@@ -82,6 +102,16 @@ def main():
     print(f"Timestep: {args.timestep} fs (conservative for stability)")
     print(f"Total steps: {args.nsteps:,}")
     print(f"Total time: {args.nsteps * args.timestep / 1000:.1f} ps")
+    n_frames = args.nsteps // args.save_interval
+    print(f"Saved frames: {n_frames:,}")
+    if args.analyze_ir:
+        # Frequency resolution: 1 / (N * dt) in Hz, convert to cm⁻¹
+        dt = args.timestep * 1e-15  # fs to seconds
+        freq_res_hz = 1.0 / (n_frames * dt)
+        freq_res_cm1 = freq_res_hz / (3e10)  # Hz to cm⁻¹
+        max_freq_cm1 = 1.0 / (2 * dt) / (3e10)  # Nyquist frequency
+        print(f"IR frequency resolution: ~{freq_res_cm1:.2f} cm⁻¹")
+        print(f"IR max frequency: ~{max_freq_cm1/1000:.0f} cm⁻¹ (Nyquist)")
     
     # Create output directory
     args.output_dir.mkdir(parents=True, exist_ok=True)

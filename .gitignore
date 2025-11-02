@@ -12,6 +12,7 @@ examples/co2/training_data_fixed/
 examples/co2/charge_files/
 **/training_data/*.npz
 **/training_data_fixed/*.npz
+examples/co2/dcmnet_physnet_train/md_ir_long/trajectory.traj
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
