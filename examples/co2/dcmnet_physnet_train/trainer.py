@@ -252,18 +252,18 @@ class ChargeOrientationMixer(nn.Module):
         atom_mask: jnp.ndarray,
     ) -> jnp.ndarray:
         def per_sample(pp, pc, dp, dc, mask):
-            mask_bool = mask > 0.5
-            phys_pos = pp[mask_bool]
-            phys_charge = pc[mask_bool]
-
-            dcm_mask = mask_bool[:, None]
-            dp_valid = dp[dcm_mask]
-            dc_valid = dc[dcm_mask]
-            dp_valid = dp_valid.reshape(-1, 3)
-            dc_valid = dc_valid.reshape(-1)
-
-            phys_feat = _orientation_feature(phys_pos, phys_charge, self.max_degree)
-            dcm_feat = _orientation_feature(dp_valid, dc_valid, self.max_degree)
+            # Use mask weighting instead of boolean indexing for JIT compatibility
+            # Pass masked arrays to _orientation_feature which handles masking internally
+            phys_feat = _orientation_feature(pp, pc * mask, self.max_degree)
+            
+            # For DCM features, flatten and weight by mask
+            # dp: (natoms, n_dcm, 3), dc: (natoms, n_dcm)
+            dp_flat = dp.reshape(-1, 3)  # (natoms*n_dcm, 3)
+            dc_flat = dc.reshape(-1)     # (natoms*n_dcm,)
+            # Expand mask to match DCM shape
+            mask_expanded = jnp.repeat(mask, dp.shape[1])  # (natoms*n_dcm,)
+            dcm_feat = _orientation_feature(dp_flat, dc_flat * mask_expanded, self.max_degree)
+            
             return jnp.concatenate([phys_feat, dcm_feat, dcm_feat - phys_feat])
 
         features = jax.vmap(per_sample)(phys_positions, phys_charges, dcm_positions, dcm_charges, atom_mask)
