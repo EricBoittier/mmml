@@ -3132,6 +3132,17 @@ def train_model(
     ema_decay = 0.999  # EMA decay factor (higher = slower update)
     ema_params = jax.tree_util.tree_map(lambda x: x.copy(), params)  # Initialize EMA params
     
+    # Track training history
+    history = {
+        'train_loss': [],
+        'val_loss': [],
+        'val_energy_mae': [],
+        'val_forces_mae': [],
+        'val_dipole_mae': [],
+        'val_esp_mae': [],
+        'epoch_times': [],
+    }
+    
     print(f"\n📊 Using EMA with decay={ema_decay} for validation")
     
     for epoch in range(start_epoch, num_epochs + 1):
@@ -3289,6 +3300,15 @@ def train_model(
         
         epoch_time = time.time() - epoch_start
         
+        # Track history
+        history['train_loss'].append(float(train_loss_avg['total']))
+        history['val_loss'].append(float(valid_loss_avg['total']))
+        history['val_energy_mae'].append(float(valid_loss_avg.get('mae_energy', 0.0)))
+        history['val_forces_mae'].append(float(valid_loss_avg.get('mae_forces', 0.0)))
+        history['val_dipole_mae'].append(float(valid_loss_avg.get('mae_dipole_physnet', 0.0)))
+        history['val_esp_mae'].append(float(valid_loss_avg.get('rmse_esp_dcmnet', 0.0)))
+        history['epoch_times'].append(float(epoch_time))
+        
         # Print progress
         if epoch % print_freq == 0:
             print(f"\nEpoch {epoch}/{num_epochs} ({epoch_time:.1f}s)")
@@ -3431,6 +3451,13 @@ def train_model(
                 dipole_terms=dipole_terms,
                 esp_terms=esp_terms,
             )
+    
+    # Save training history
+    save_path = ckpt_dir / name
+    history_path = save_path / 'history.json'
+    with open(history_path, 'w') as f:
+        json.dump(history, f, indent=2)
+    print(f"\n💾 Saved training history to: {history_path}")
     
     return ema_params  # Return EMA parameters as final model
 
