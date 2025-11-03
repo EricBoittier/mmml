@@ -3439,6 +3439,16 @@ def main():
     parser.add_argument('--max-degree', type=int, default=2,
                        help='DCMNet: maximum spherical harmonic degree')
     
+    # Non-equivariant model option
+    parser.add_argument('--use-noneq-model', action='store_true', default=False,
+                       help='Use non-equivariant charge model instead of DCMNet (predicts Cartesian displacements)')
+    parser.add_argument('--noneq-features', type=int, default=128,
+                       help='Non-equivariant model: hidden layer size')
+    parser.add_argument('--noneq-layers', type=int, default=3,
+                       help='Non-equivariant model: number of MLP layers')
+    parser.add_argument('--noneq-max-displacement', type=float, default=1.0,
+                       help='Non-equivariant model: maximum displacement distance (Angstroms)')
+    
     # Training hyperparameters
     parser.add_argument('--batch-size', type=int, default=1,
                        help='Batch size (start with 1 for debugging)')
