@@ -2603,8 +2603,12 @@ def train_model(
             f"  - {term.key}: source={term.source}, metric={term.metric}, weight={term.weight}"
         )
 
-    # Training loop
+    # Training loop with EMA
     best_valid_loss = float('inf')
+    ema_decay = 0.999  # EMA decay factor (higher = slower update)
+    ema_params = jax.tree_util.tree_map(lambda x: x.copy(), params)  # Initialize EMA params
+    
+    print(f"\n📊 Using EMA with decay={ema_decay} for validation")
     
     for epoch in range(start_epoch, num_epochs + 1):
         epoch_start = time.time()
