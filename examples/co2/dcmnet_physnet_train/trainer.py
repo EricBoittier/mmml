@@ -3399,9 +3399,14 @@ def train_model(
             # Also save model config for later use
             model_config = {
                 'physnet_config': dict(model.physnet_config),
-                'dcmnet_config': dict(model.dcmnet_config),
                 'mix_coulomb_energy': model.mix_coulomb_energy,
             }
+            # Handle both DCMNet and Non-Equivariant models
+            if hasattr(model, 'dcmnet_config'):
+                model_config['dcmnet_config'] = dict(model.dcmnet_config)
+            elif hasattr(model, 'noneq_config'):
+                model_config['noneq_config'] = dict(model.noneq_config)
+            
             with open(save_path / 'model_config.pkl', 'wb') as f:
                 pickle.dump(model_config, f)
             
