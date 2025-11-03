@@ -242,7 +242,7 @@ def write_ase_povray_with_charges(atoms, result, output_path,
         'camera_dist': camera_distance,  # Dynamic based on molecule size
         'camera_type': 'orthographic',
         'point_lights': [],  # We'll add custom soft area lights
-        'area_light': [],  # Disable default, we'll add custom
+        # Don't include area_light to avoid ASE's default
         'background': 'White',
         'textures': ['jmol'] * len(atoms),
         'celllinewidth': 0.0,
