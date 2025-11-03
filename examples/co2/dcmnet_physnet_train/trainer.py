@@ -3550,6 +3550,8 @@ def main():
             esp_max_value=args.esp_max_value if args.esp_max_value is not None else 1e10,
             restart_params=restart_params,
             start_epoch=start_epoch,
+            optimizer_name=args.optimizer,
+            optimizer_kwargs=optimizer_kwargs,
         )
         
         print(f"\n{'='*70}")
