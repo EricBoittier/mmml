@@ -1,48 +1,83 @@
 #!/usr/bin/env python3
 """
-Joint PhysNet-DCMNet Training Script with Learnable Dipole/ESP Mixing
+Joint PhysNet Training Script with Multiple Architecture Options
 
-This script trains PhysNet and DCMNet simultaneously with end-to-end gradient flow.
+This script trains PhysNet with either DCMNet (equivariant) or a non-equivariant 
+charge model for end-to-end charge and ESP prediction.
 
 KEY CAPABILITIES:
 ---------------
-1. Flexible Loss Configuration
+1. Multiple Architecture Options
+   - DCMNet (default): Equivariant message passing with spherical harmonics
+   - Non-Equivariant: Simple MLP predicting Cartesian displacements
+   - Both produce distributed charges for ESP fitting
+   
+2. Multiple Optimizer Support
+   - Adam, AdamW, RMSprop, Muon
+   - Automatic hyperparameter recommendations based on dataset properties
+   - Configurable or auto-selected learning rates and weight decay
+
+3. Flexible Loss Configuration
    - Train on PhysNet, DCMNet, or mixed dipole/ESP predictions
    - Configurable loss terms with weights and metrics (L2, MAE, RMSE)
    - Support for JSON/YAML loss configuration files
    - Example: Supervise both raw and mixed outputs simultaneously
 
-2. Learnable Charge Orientation Mixing
+4. Learnable Charge Orientation Mixing
    - Neural network that learns mixing weights (λ) from charge distributions
-   - Combines PhysNet (atom-centered) and DCMNet (distributed) predictions
+   - Combines PhysNet (atom-centered) and distributed predictions
    - E(3)-equivariant using spherical harmonics for orientation encoding
-   - Outputs: mixed_dipole = λ·DCMNet + (1-λ)·PhysNet
+   - Outputs: mixed_dipole = λ·Distributed + (1-λ)·PhysNet
 
-3. Exponential Moving Average (EMA)
+5. Exponential Moving Average (EMA)
    - Smooths validation weights for better generalization (decay=0.999)
    - All evaluation uses EMA-parameterized model
 
-4. Comprehensive Validation & Plotting
+6. Comprehensive Validation & Plotting
    - Validation metrics work with any batch size
    - 3D ESP error visualization
    - Detailed charge distribution plots
    - Automated checkpoint management
 
-ARCHITECTURE:
-------------
-PhysNet → Atomic Charges → DCMNet → Distributed Multipoles → ESP
-         ↓                          ↓                         ↓
-     Dipole (Phys)             Dipole (DCM)              ESP (Phys/DCM)
-                                        ↓                      ↓
-                                   [Charge Mixer] → Mixed Dipole/ESP
+ARCHITECTURE OPTIONS:
+--------------------
+Option 1: DCMNet (Equivariant - Default)
+  PhysNet → Atomic Charges → DCMNet → Distributed Multipoles → ESP
+           ↓                          ↓                          ↓
+       Dipole (Phys)             Dipole (DCM)              ESP (Phys/DCM)
+                                          ↓                      ↓
+                                     [Charge Mixer] → Mixed Dipole/ESP
 
-Usage:
-    python trainer.py --train-efd energies_forces_dipoles_train.npz \
-                      --train-esp grids_esp_train.npz \
-                      --valid-efd energies_forces_dipoles_valid.npz \
-                      --valid-esp grids_esp_valid.npz \
-                      --dipole-loss-sources physnet mixed \
-                      --esp-loss-sources dcmnet
+Option 2: Non-Equivariant (--use-noneq-model)
+  PhysNet → Atomic Charges → MLP → n×(charge, displacement_xyz) → ESP
+           ↓                        ↓                               ↓
+       Dipole (Phys)         Dipole (NonEq)                  ESP (NonEq)
+                                    ↓                              ↓
+                               [Charge Mixer] → Mixed Dipole/ESP
+
+USAGE EXAMPLES:
+--------------
+# DCMNet with default settings:
+python trainer.py --train-efd train.npz --train-esp grids_train.npz \
+                  --valid-efd valid.npz --valid-esp grids_valid.npz
+
+# Non-equivariant model with auto-tuned hyperparameters:
+python trainer.py --train-efd train.npz --train-esp grids_train.npz \
+                  --valid-efd valid.npz --valid-esp grids_valid.npz \
+                  --use-noneq-model --use-recommended-hparams
+
+# DCMNet with Muon optimizer:
+python trainer.py --train-efd train.npz --train-esp grids_train.npz \
+                  --valid-efd valid.npz --valid-esp grids_valid.npz \
+                  --optimizer muon --use-recommended-hparams
+
+# Custom loss configuration:
+python trainer.py --train-efd train.npz --train-esp grids_train.npz \
+                  --valid-efd valid.npz --valid-esp grids_valid.npz \
+                  --dipole-loss-sources physnet mixed \
+                  --esp-loss-sources dcmnet
+
+See MODEL_OPTIONS.md, NON_EQUIVARIANT_MODEL.md, and OPTIMIZER_GUIDE.md for details.
 """
 
 import sys
