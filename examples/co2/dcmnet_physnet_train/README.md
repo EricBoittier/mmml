@@ -1,13 +1,41 @@
-# Joint PhysNet-DCMNet Training
+# Joint PhysNet-DCMNet Training with Learnable Dipole/ESP Mixing
 
-This directory contains a joint training script that trains PhysNet and DCMNet simultaneously with end-to-end gradient flow.
+This directory contains a comprehensive toolkit for joint PhysNet–DCMNet training with flexible loss configurations, learnable mixing networks, EMA-parameterized validation, and extensive analysis workflows.
+
+## 🎯 Key Capabilities
+
+### 1. **Flexible Loss Configuration**
+- **Configurable supervision**: Train on PhysNet, DCMNet, or mixed dipole/ESP predictions
+- **Multiple loss terms**: Combine multiple loss terms with individual weights and metrics (L2, MAE, RMSE)
+- **JSON/YAML configs**: Define complex loss configurations in external files
+- **Example**: Supervise both raw and mixed outputs simultaneously for ensemble learning
+
+### 2. **Learnable Charge Orientation Mixing**
+- **E(3)-equivariant mixer**: Neural network that learns mixing weights from charge distributions using spherical harmonics
+- **Orientation-aware**: Encodes 3D charge orientations via weighted spherical harmonic features
+- **Combines modes**: `mixed_dipole = λ·DCMNet + (1-λ)·PhysNet` where λ is learned per-molecule
+- **ESP blending**: Applies the same learnable mixing to ESP predictions
+
+### 3. **Exponential Moving Average (EMA)**
+- **Smoother validation**: All validation uses EMA-smoothed weights (decay=0.999)
+- **Better generalization**: Averaged weights often outperform final snapshots
+- **Checkpointing**: Saved checkpoints use EMA parameters automatically
+
+### 4. **Comprehensive Validation**
+- **Any batch size**: ESP RMSE computed efficiently across all validation batches
+- **3D visualization**: ESP errors visualized in 3D space with symmetric color scales
+- **Charge diagnostics**: Per-molecule charge analysis and distribution visualization
+- **Mixed metrics**: Track λ values and mixed prediction quality
 
 ## Architecture
 
-1. **PhysNet** predicts atomic charges (supervised by molecular dipole D)
-2. Those charges become **monopoles** for DCMNet
-3. **DCMNet** predicts distributed multipoles for ESP fitting
-4. Full gradient flow: ESP loss → DCMNet → charges → PhysNet
+```
+Input → PhysNet → Atomic Charges → DCMNet → Distributed Multipoles
+       ↓                                 ↓                       ↓
+  E, F, D(Phys)                  D(DCM)                    ESP(Phys/DCM)
+                                           ↓                      ↓
+                                   [Charge Mixer] → Mixed D/ESP
+```
 
 ## Data Units
 
@@ -152,23 +180,79 @@ Recommended weights for effective training:
 
 **Note:** The monopole constraint (distributed charges sum to atomic charge) needs high weight (100+) to be properly enforced.
 
-### Dipole Source
-Choose which dipole to use for the dipole loss:
-- `--dipole-source physnet` (default): Use PhysNet's dipole computed from charges (D = Σ q_i · r_i)
-- `--dipole-source dcmnet`: Use DCMNet's dipole computed from distributed multipoles
+### Flexible Loss Configuration
 
-**PhysNet dipole**: Direct from atomic charges and positions. Provides direct supervision for charge prediction.
+**NEW**: Configure loss terms flexibly via CLI or JSON/YAML files!
 
-**DCMNet dipole**: From distributed multipoles. Tests if DCMNet's multipole decomposition is physically consistent with the molecular dipole.
+**Basic CLI Options:**
+- `--dipole-loss-sources {physnet,dcmnet,mixed} ...`: Specify dipole supervision sources
+- `--esp-loss-sources {physnet,dcmnet,mixed} ...`: Specify ESP supervision sources
+- `--dipole-metric {l2,mae,rmse}`: Metric for dipole losses (default: l2)
+- `--esp-metric {l2,mae,rmse}`: Metric for ESP losses (default: l2)
+- `--loss-config PATH`: Load loss configuration from JSON or YAML file
 
-Example comparing both:
+**Examples:**
+
+Train on individual modes:
 ```bash
-# Train with PhysNet dipole (default - supervise charges)
-python trainer.py ... --dipole-source physnet
+# Only PhysNet dipole
+python trainer.py ... --dipole-loss-sources physnet
 
-# Train with DCMNet dipole (supervise multipole decomposition)
-python trainer.py ... --dipole-source dcmnet
+# Only DCMNet ESP
+python trainer.py ... --esp-loss-sources dcmnet
+
+# Mix both sources with equal weight
+python trainer.py ... --dipole-loss-sources physnet dcmnet
 ```
+
+Train with learnable mixed mode:
+```bash
+# Enable charge mixer and train on mixed predictions
+python trainer.py ... --dipole-loss-sources mixed --esp-loss-sources mixed
+```
+
+Train on both raw and mixed simultaneously:
+```bash
+# Learn mixing while supervising both raw and mixed outputs
+python trainer.py ... --dipole-loss-sources physnet dcmnet mixed
+```
+
+**Advanced: Loss Configuration File**
+
+Create `loss_config.yaml`:
+```yaml
+dipole:
+  - source: physnet
+    weight: 25.0
+    metric: l2
+    name: dipole_physnet_raw
+  - source: dcmnet
+    weight: 25.0
+    metric: l2
+    name: dipole_dcmnet_raw
+  - source: mixed
+    weight: 50.0
+    metric: mae
+    name: dipole_mixed
+
+esp:
+  - source: dcmnet
+    weight: 10000.0
+    metric: l2
+    name: esp_dcmnet_raw
+  - source: mixed
+    weight: 5000.0
+    metric: rmse
+    name: esp_mixed
+```
+
+Then use: `python trainer.py ... --loss-config loss_config.yaml`
+
+**Legacy Options** (still supported):
+- `--dipole-source physnet` (default): Single dipole source
+- `--dipole-source dcmnet`: Use DCMNet dipole
+- `--dipole-weight`: Weight for legacy single dipole term
+- `--esp-weight`: Weight for legacy single ESP term
 
 ### ESP Grid Point Filtering (Atomic Radius-Based, Default ON)
 
@@ -202,44 +286,96 @@ python trainer.py ... --esp-min-distance 0.5  # Adds 0.5 Å to radius-based cuto
 - 2× radius is near the VDW surface (reasonable ESP values)
 - Element-specific: H is smaller than C/O
 
-### Energy Mixing (Experimental)
+### Learnable Charge Orientation Mixing ⭐ **NEW**
 
-**`--mix-coulomb-energy`**: Mix PhysNet energy with DCMNet Coulomb energy using a learnable λ parameter.
+**Automatically enabled** when using `--dipole-loss-sources mixed` or `--esp-loss-sources mixed`.
 
-**Idea:**
-- PhysNet predicts total energy (all interactions)
-- DCMNet distributed charges → compute explicit Coulomb energy
-- Learn mixing: `E_total = E_physnet + λ × E_coulomb(DCMNet)`
-- Forces come from gradient of mixed energy
+**What it does:**
+- Neural network (`ChargeOrientationMixer`) learns per-molecule mixing weights (λ) from charge distributions
+- Uses E(3)-equivariant features: weighted spherical harmonics + radial statistics
+- Combines PhysNet (atom-centered) and DCMNet (distributed multipole) predictions
+- Outputs: `mixed = λ·DCMNet + (1-λ)·PhysNet` where λ is learned per-molecule
+
+**Key features:**
+- **E(3)-equivariant**: Respects rotational symmetry using spherical harmonics
+- **Orientation-aware**: Encodes 3D charge distributions via weighted SH coefficients
+- **Per-molecule adaptation**: λ varies based on molecular charge geometry
+- **Automatic scaling**: λ ∈ [0,1] via sigmoid activation
+
+**Architecture:**
+```
+PhysNet charges ──┐
+                  ├→ [Orientation Features (SH + radial)] → MLP → [λ_dipole, λ_ESP]
+DCMNet charges ──┘
+```
+
+**Usage example:**
+```bash
+# Train with mixed dipole and ESP
+python trainer.py \
+  --train-efd ../physnet_train_charges/energies_forces_dipoles_train.npz \
+  --train-esp ../dcmnet_train/grids_esp_train.npz \
+  --valid-efd ../physnet_train_charges/energies_forces_dipoles_valid.npz \
+  --valid-esp ../dcmnet_train/grids_esp_valid.npz \
+  --dipole-loss-sources mixed \
+  --esp-loss-sources mixed \
+  --dipole-weight 1000.0 \
+  --esp-weight 100000.0 \
+  --epochs 1000 \
+  --name co2_mixed
+```
+
+**Expected output:**
+```
+Dipole loss terms:
+  - mixed: source=mixed, metric=l2, weight=1000.0
+ESP loss terms:
+  - mixed: source=mixed, metric=l2, weight=100000.0
+
+Training...
+    lambda_dipole_mean: 0.643
+    lambda_esp_mean: 0.521
+```
+
+**When λ ≈ 0**: Model favors PhysNet predictions  
+**When λ ≈ 1**: Model favors DCMNet predictions  
+**When 0 < λ < 1**: Model learns an optimal blend
+
+### Exponential Moving Average (EMA) ⭐ **NEW**
+
+**Automatic smoothing** of validation parameters for better generalization.
+
+**What it does:**
+- Maintains exponentially weighted average of all parameters: `EMA = 0.999 × EMA + 0.001 × params`
+- All validation evaluations use EMA parameters (not current params)
+- Checkpoints save EMA-averaged parameters
+- Reduces validation noise from stochastic gradient updates
 
 **Benefits:**
-- Separates electrostatic component (DCMNet) from other physics (PhysNet)
-- λ is learned during training (initialized to 0.1)
-- Can improve energy predictions if Coulomb term is accurate
-- **Works with any batch size** (uses `jax.vmap` for batched computation)
+- More stable validation curves
+- Better generalization (standard in modern deep learning)
+- Smoother convergence monitoring
+
+**Configuration:**
+Currently hardcoded to `ema_decay = 0.999` (adjust in `trainer.py` if needed)
+
+**No extra flags needed** - enabled automatically!
+
+### Energy Mixing (Legacy/Experimental)
+
+**`--mix-coulomb-energy`**: Mix PhysNet energy with DCMNet Coulomb energy using a single global λ.
+
+**Different from charge mixing** - this mixes energies, not dipole/ESP:
+- PhysNet predicts total energy
+- DCMNet distributed charges → compute explicit Coulomb energy
+- Learn mixing: `E_total = E_physnet + λ × E_coulomb(DCMNet)`
 
 **Usage:**
 ```bash
-python trainer.py \
-  --train-efd ... \
-  --train-esp ... \
-  --mix-coulomb-energy \
-  --batch-size 10 \
-  --mono-weight 100.0 \
-  --esp-weight 1000000.0
+python trainer.py ... --mix-coulomb-energy
 ```
 
-**Output shows:**
-```
-Coulomb Mixing:
-  λ (learned): 0.123
-  E_coulomb: -12.45 eV
-```
-
-**When to use:**
-- When you want explicit electrostatic energy component
-- To test if distributed charges improve energy predictions
-- Experimental - may help or hurt depending on data
+**Note**: This is a separate feature from the charge orientation mixing described above.
 
 ## Training Output
 
@@ -332,10 +468,15 @@ Creates a comprehensive 4×3 grid with:
 - ESP (PhysNet) prediction errors
 - ESP (DCMNet) prediction errors
 
+**With Mixed Modes** (when using `--dipole-loss-sources mixed`):
+- Additional scatter plots for mixed dipole and mixed ESP
+- λ value histograms showing learned mixing weights
+- Comparison of raw vs mixed prediction quality
+
 **Features:**
 - Scatter plots: Perfect prediction line (red dashed), MAE/RMSE, R² for ESP
 - Histograms: Error distribution, zero-error reference line, standard deviation
-- Color-coded by model: PhysNet (blue/default), DCMNet (orange), ESP variants (green/purple)
+- Color-coded by model: PhysNet (blue/default), DCMNet (orange), Mixed (red), ESP variants (green/purple)
 - Consistent scales for easy comparison
 
 ### ESP Examples (2D + 3D)
@@ -345,14 +486,16 @@ Creates detailed visualizations for individual molecules:
 - 2×3 grid comparing True, PhysNet, and DCMNet ESP
 - Row 1: True ESP, DCMNet ESP, DCMNet Error
 - Row 2: Empty, PhysNet ESP, PhysNet Error
+- **With mixed modes**: Additional panels for Mixed ESP and Mixed Error
 - Color-coded scatter plots with RMSE and R²
 - Shared color scales for easy comparison
 
-**3D Spatial Plots** (`esp_example_N_3d.png`):
+**3D Spatial Plots** (`esp_example_N_3d.png`): ⭐ **Enhanced for mixed modes**
 - 3D scatter plots showing ESP on VDW surface in real space
 - Three panels: True ESP, PhysNet ESP, DCMNet ESP
+- **With mixed modes**: Additional panel for Mixed ESP in 3D space
 - Points positioned at actual grid coordinates (X, Y, Z in Ångström)
-- Color indicates ESP value (same **symmetric** scale centered at 0 across all three)
+- Color indicates ESP value (same **symmetric** scale centered at 0 across all panels)
 - Visualize how well ESP is reproduced in 3D space
 
 **Multi-Scale Error Plots** (`esp_example_N_error_scales.png`):
@@ -361,6 +504,7 @@ Creates detailed visualizations for individual molecules:
 - Row 2: 95th percentile (removes outliers)
 - Row 3: 75th percentile (focuses on typical errors)
 - Left column: PhysNet errors, Right column: DCMNet errors
+- **With mixed modes**: Optional 3rd column for Mixed ESP errors
 - All scales **symmetric around 0** for balanced visualization
 - Helps identify error patterns without outliers dominating the colorscale
 
