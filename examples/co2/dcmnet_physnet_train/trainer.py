@@ -3704,32 +3704,57 @@ def main():
         'efa': False,
     }
     
-    dcmnet_config = {
-        'features': args.dcmnet_features,
-        'max_degree': args.max_degree,
-        'num_iterations': args.dcmnet_iterations,
-        'num_basis_functions': args.dcmnet_basis,
-        'cutoff': args.dcmnet_cutoff,
-        'max_atomic_number': args.max_atomic_number,
-        'n_dcm': args.n_dcm,
-        'include_pseudotensors': False,
-    }
-    
     print("PhysNet configuration:")
     for k, v in physnet_config.items():
         print(f"  {k}: {v}")
     
-    print("\nDCMNet configuration:")
-    for k, v in dcmnet_config.items():
-        print(f"  {k}: {v}")
-    
-    model = JointPhysNetDCMNet(
-        physnet_config=physnet_config,
-        dcmnet_config=dcmnet_config,
-        mix_coulomb_energy=args.mix_coulomb_energy,
-    )
-    
-    print(f"\n✅ Joint model created")
+    if args.use_noneq_model:
+        # Use non-equivariant charge model
+        noneq_config = {
+            'features': args.noneq_features,
+            'n_dcm': args.n_dcm,
+            'max_atomic_number': args.max_atomic_number,
+            'num_layers': args.noneq_layers,
+            'max_displacement': args.noneq_max_displacement,
+        }
+        
+        print("\nNon-Equivariant Charge Model configuration:")
+        for k, v in noneq_config.items():
+            print(f"  {k}: {v}")
+        print("  ⚠️  Note: This model is NOT rotationally equivariant!")
+        print("     It predicts Cartesian displacements directly.")
+        
+        model = JointPhysNetNonEquivariant(
+            physnet_config=physnet_config,
+            noneq_config=noneq_config,
+            mix_coulomb_energy=args.mix_coulomb_energy,
+        )
+        
+        print(f"\n✅ Joint PhysNet + Non-Equivariant model created")
+    else:
+        # Use equivariant DCMNet (default)
+        dcmnet_config = {
+            'features': args.dcmnet_features,
+            'max_degree': args.max_degree,
+            'num_iterations': args.dcmnet_iterations,
+            'num_basis_functions': args.dcmnet_basis,
+            'cutoff': args.dcmnet_cutoff,
+            'max_atomic_number': args.max_atomic_number,
+            'n_dcm': args.n_dcm,
+            'include_pseudotensors': False,
+        }
+        
+        print("\nDCMNet configuration:")
+        for k, v in dcmnet_config.items():
+            print(f"  {k}: {v}")
+        
+        model = JointPhysNetDCMNet(
+            physnet_config=physnet_config,
+            dcmnet_config=dcmnet_config,
+            mix_coulomb_energy=args.mix_coulomb_energy,
+        )
+        
+        print(f"\n✅ Joint PhysNet + DCMNet model created")
     
     # Training setup
     print(f"\n{'#'*70}")
