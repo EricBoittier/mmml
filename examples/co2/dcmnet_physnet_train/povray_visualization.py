@@ -115,11 +115,21 @@ def evaluate_molecule(atoms, model, params, config):
     # Pad to model's expected size
     natoms_actual = len(atoms)
     natoms_padded = config['physnet_config']['natoms']
+    batch_size = 1
     
     if natoms_actual < natoms_padded:
         pad_size = natoms_padded - natoms_actual
         positions = jnp.concatenate([positions, jnp.zeros((pad_size, 3))], axis=0)
         atomic_numbers = jnp.concatenate([atomic_numbers, jnp.zeros(pad_size, dtype=jnp.int32)], axis=0)
+    
+    # Create masks
+    atom_mask = jnp.array([1.0] * natoms_actual + [0.0] * (natoms_padded - natoms_actual))
+    batch_mask = jnp.ones(batch_size)
+    batch_segments = jnp.repeat(jnp.arange(batch_size), natoms_padded)
+    
+    # Flatten for batch dimension
+    positions_flat = positions.reshape(batch_size * natoms_padded, 3)
+    atomic_numbers_flat = atomic_numbers.reshape(batch_size * natoms_padded)
     
     # Compute graph
     dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(natoms_padded)
@@ -127,23 +137,28 @@ def evaluate_molecule(atoms, model, params, config):
     # Forward pass
     output = model.apply(
         {'params': params['params']},
-        positions[None, ...],  # (1, natoms, 3)
-        atomic_numbers[None, ...],  # (1, natoms)
-        dst_idx[None, ...],
-        src_idx[None, ...],
-        compute_esp_on_grid=False,  # We'll compute ESP separately
+        atomic_numbers_flat,
+        positions_flat,
+        dst_idx,
+        src_idx,
+        batch_segments,
+        batch_size,
+        batch_mask,
+        atom_mask,
     )
     
     # Extract charges
-    atomic_charges = np.array(output['charges_as_mono'][0, :natoms_actual])
+    atomic_charges = np.array(output['charges_as_mono'][:natoms_actual])
     
     # Get distributed charge positions and values
     n_dcm = config['dcmnet_config']['n_dcm']
-    mono_dist = np.array(output['mono_dist'][0, :natoms_actual, :, :])  # (natoms, n_dcm, 3)
-    mono_values = np.array(output['mono_dist_values'][0, :natoms_actual, :])  # (natoms, n_dcm)
+    # mono_dist: (batch*natoms, n_dcm) - charge values
+    # dipo_dist: (batch*natoms, n_dcm, 3) - charge positions
+    mono_values = np.array(output['mono_dist'][:natoms_actual, :])  # (natoms, n_dcm)
+    charge_positions = np.array(output['dipo_dist'][:natoms_actual, :, :])  # (natoms, n_dcm, 3)
     
     # Reshape for easier handling
-    distributed_mono = mono_dist.reshape(-1, 3)  # (natoms*n_dcm, 3)
+    distributed_mono = charge_positions.reshape(-1, 3)  # (natoms*n_dcm, 3)
     distributed_mono_values = mono_values.reshape(-1)  # (natoms*n_dcm,)
     
     # Generate VDW surface for ESP visualization
