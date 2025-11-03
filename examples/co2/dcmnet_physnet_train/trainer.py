@@ -84,6 +84,46 @@ class LossTerm:
         return self.name or self.source
 
 
+def _build_loss_term(entry: Dict[str, Any], *, default_metric: str = "l2") -> LossTerm:
+    """Build a LossTerm from a dictionary entry."""
+    source = entry.get("source")
+    if source not in LOSS_SOURCE_CHOICES:
+        raise ValueError(f"Invalid loss source '{source}'. Valid options: {LOSS_SOURCE_CHOICES}")
+    metric = entry.get("metric", default_metric)
+    if metric not in LOSS_METRIC_CHOICES:
+        raise ValueError(f"Invalid loss metric '{metric}'. Valid options: {LOSS_METRIC_CHOICES}")
+    weight = float(entry.get("weight", 1.0))
+    name = entry.get("name")
+    return LossTerm(source=source, weight=weight, metric=metric, name=name)
+
+
+def load_loss_terms_config(path: Path) -> Tuple[Tuple[LossTerm, ...], Tuple[LossTerm, ...]]:
+    """Load dipole and ESP loss term configurations from JSON or YAML file."""
+    with open(path, "r", encoding="utf-8") as fh:
+        if path.suffix.lower() in {".yml", ".yaml"}:
+            if yaml is None:
+                raise RuntimeError("PyYAML is required to load YAML loss configs but is not installed.")
+            data = yaml.safe_load(fh)
+        else:
+            data = json.load(fh)
+
+    if not isinstance(data, dict):
+        raise ValueError("Loss configuration file must define a mapping with 'dipole' and/or 'esp' keys")
+
+    dipole_cfg = data.get("dipole", [])
+    esp_cfg = data.get("esp", [])
+
+    if dipole_cfg and not isinstance(dipole_cfg, (list, tuple)):
+        raise ValueError("'dipole' section of loss config must be a list")
+    if esp_cfg and not isinstance(esp_cfg, (list, tuple)):
+        raise ValueError("'esp' section of loss config must be a list")
+
+    dipole_terms = tuple(_build_loss_term(entry, default_metric="l2") for entry in dipole_cfg)
+    esp_terms = tuple(_build_loss_term(entry, default_metric="l2") for entry in esp_cfg)
+
+    return dipole_terms, esp_terms
+
+
 def _orientation_feature(positions: jnp.ndarray, weights: jnp.ndarray, max_degree: int) -> jnp.ndarray:
     """Compute spherical harmonic orientation descriptors weighted by charges."""
 
@@ -2900,6 +2940,46 @@ def main():
                        help='Verbose output')
     
     args = parser.parse_args()
+    
+    # Configure loss terms
+    dipole_w = args.dipole_weight
+    esp_w = args.esp_weight
+
+    cfg_dipole_terms: Tuple[LossTerm, ...] = ()
+    cfg_esp_terms: Tuple[LossTerm, ...] = ()
+
+    if args.loss_config is not None:
+        cfg_dipole_terms, cfg_esp_terms = load_loss_terms_config(args.loss_config)
+        print(f"\n📄 Loaded loss configuration from {args.loss_config}")
+
+    dipole_terms: Tuple[LossTerm, ...]
+    esp_terms: Tuple[LossTerm, ...]
+
+    if cfg_dipole_terms:
+        dipole_terms = cfg_dipole_terms
+    else:
+        dipole_sources = args.dipole_loss_sources or [args.dipole_source]
+        dipole_terms = tuple(
+            LossTerm(source=src, weight=dipole_w, metric=args.dipole_metric, name=src)
+            for src in dipole_sources
+        )
+
+    if cfg_esp_terms:
+        esp_terms = cfg_esp_terms
+    else:
+        esp_sources = args.esp_loss_sources or ["dcmnet"]
+        esp_terms = tuple(
+            LossTerm(source=src, weight=esp_w, metric=args.esp_metric, name=src)
+            for src in esp_sources
+        )
+
+    if not dipole_terms:
+        raise ValueError("At least one dipole loss term must be specified")
+    if not esp_terms:
+        raise ValueError("At least one ESP loss term must be specified")
+
+    args.dipole_terms = dipole_terms
+    args.esp_terms = esp_terms
     
     print("="*70)
     print("Joint PhysNet-DCMNet Training - CO2 Data")
