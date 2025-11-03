@@ -156,11 +156,22 @@ def compute_esp_surface(atoms, charge_pos, charge_vals, n_points=2000):
     return surface_points, esp_values
 
 
-def plot_molecule_3d(atoms, result, show_charges=True, show_esp=False, 
+def plot_molecule_3d(atoms, result, show_molecule='full', show_charges=False, show_esp=False, 
                      elev=20, azim=45, figsize=(12, 10)):
     """
     Create 3D matplotlib visualization.
     
+    Parameters
+    ----------
+    show_molecule : str
+        'full' - ball-and-stick (default)
+        'wireframe' - thin bonds only
+        'none' - no molecule
+    show_charges : bool
+        Show distributed charges
+    show_esp : bool
+        Show ESP surface
+        
     Returns
     -------
     fig, ax : matplotlib figure and axis
@@ -172,31 +183,44 @@ def plot_molecule_3d(atoms, result, show_charges=True, show_esp=False,
     positions = atoms.get_positions()
     atomic_numbers = atoms.get_atomic_numbers()
     
-    # Plot atoms
-    for pos, Z in zip(positions, atomic_numbers):
-        color = ELEMENT_COLORS.get(Z, '#808080')
-        radius = RADII.get(Z, 0.7)
+    # Plot molecule if requested
+    if show_molecule != 'none':
+        if show_molecule == 'wireframe':
+            # Wireframe: thin bonds, small atoms
+            atom_radius_scale = 0.25
+            bond_width = 2
+            atom_alpha = 0.8
+        else:  # 'full'
+            # Full ball-and-stick
+            atom_radius_scale = 1.0
+            bond_width = 3
+            atom_alpha = 0.9
         
-        # Draw atom as sphere
-        u = np.linspace(0, 2 * np.pi, 20)
-        v = np.linspace(0, np.pi, 15)
-        x = radius * np.outer(np.cos(u), np.sin(v)) + pos[0]
-        y = radius * np.outer(np.sin(u), np.sin(v)) + pos[1]
-        z = radius * np.outer(np.ones(np.size(u)), np.cos(v)) + pos[2]
+        # Plot atoms
+        for pos, Z in zip(positions, atomic_numbers):
+            color = ELEMENT_COLORS.get(Z, '#808080')
+            radius = RADII.get(Z, 0.7) * atom_radius_scale
+            
+            # Draw atom as sphere
+            u = np.linspace(0, 2 * np.pi, 15)
+            v = np.linspace(0, np.pi, 10)
+            x = radius * np.outer(np.cos(u), np.sin(v)) + pos[0]
+            y = radius * np.outer(np.sin(u), np.sin(v)) + pos[1]
+            z = radius * np.outer(np.ones(np.size(u)), np.cos(v)) + pos[2]
+            
+            ax.plot_surface(x, y, z, color=color, alpha=atom_alpha, 
+                           linewidth=0, antialiased=True, shade=True)
         
-        ax.plot_surface(x, y, z, color=color, alpha=0.9, 
-                       linewidth=0, antialiased=True, shade=True)
-    
-    # Draw bonds
-    cutoff = 1.8
-    for i in range(len(atoms)):
-        for j in range(i + 1, len(atoms)):
-            dist = np.linalg.norm(positions[i] - positions[j])
-            if dist < cutoff:
-                ax.plot([positions[i, 0], positions[j, 0]],
-                       [positions[i, 1], positions[j, 1]],
-                       [positions[i, 2], positions[j, 2]],
-                       'k-', linewidth=3, alpha=0.6, zorder=0)
+        # Draw bonds
+        cutoff = 1.8
+        for i in range(len(atoms)):
+            for j in range(i + 1, len(atoms)):
+                dist = np.linalg.norm(positions[i] - positions[j])
+                if dist < cutoff:
+                    ax.plot([positions[i, 0], positions[j, 0]],
+                           [positions[i, 1], positions[j, 1]],
+                           [positions[i, 2], positions[j, 2]],
+                           'k-', linewidth=bond_width, alpha=0.6, zorder=0)
     
     # Plot distributed charges
     if show_charges and 'distributed_mono' in result:
@@ -276,8 +300,12 @@ def main():
     parser.add_argument('--checkpoint', type=str, required=True)
     parser.add_argument('--structure', type=str, required=True)
     parser.add_argument('--output', type=str, default='molecule_3d.png')
-    parser.add_argument('--show-charges', action='store_true')
-    parser.add_argument('--show-esp', action='store_true')
+    parser.add_argument('--plot-type', choices=['molecule', 'molecule+charges', 'esp', 'molecule+esp', 'charges'],
+                       default='molecule+charges',
+                       help='Type of plot to generate')
+    parser.add_argument('--molecule-style', choices=['full', 'wireframe'],
+                       default='wireframe',
+                       help='Molecule style (default: wireframe for charges/esp, full for molecule-only)')
     parser.add_argument('--interactive', action='store_true',
                        help='Show interactive plot window')
     parser.add_argument('--elev', type=float, default=20)
@@ -303,12 +331,35 @@ def main():
     print(f"   • Energy: {result['energy']:.6f} eV")
     print(f"   • Charge sites: {len(result['distributed_mono'])}")
     
+    # Determine what to show based on plot type
+    if args.plot_type == 'molecule':
+        show_mol = 'full'
+        show_charges = False
+        show_esp = False
+    elif args.plot_type == 'molecule+charges':
+        show_mol = args.molecule_style
+        show_charges = True
+        show_esp = False
+    elif args.plot_type == 'charges':
+        show_mol = 'none'
+        show_charges = True
+        show_esp = False
+    elif args.plot_type == 'esp':
+        show_mol = 'none'
+        show_charges = False
+        show_esp = True
+    elif args.plot_type == 'molecule+esp':
+        show_mol = 'wireframe'
+        show_charges = False
+        show_esp = True
+    
     # Plot
-    print(f"\n🎨 Creating visualization...")
+    print(f"\n🎨 Creating {args.plot_type} visualization...")
     fig, ax = plot_molecule_3d(
         atoms, result,
-        show_charges=args.show_charges,
-        show_esp=args.show_esp,
+        show_molecule=show_mol,
+        show_charges=show_charges,
+        show_esp=show_esp,
         elev=args.elev,
         azim=args.azim,
     )
