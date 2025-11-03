@@ -2653,6 +2653,13 @@ def train_model(
             )
             
             train_losses.append({k: float(v) for k, v in losses.items()})
+            
+            # Update EMA parameters after each batch
+            ema_params = jax.tree_util.tree_map(
+                lambda ema, new: ema_decay * ema + (1 - ema_decay) * new,
+                ema_params,
+                params
+            )
         
         # Average training losses
         train_loss_avg = {
@@ -2660,7 +2667,7 @@ def train_model(
             for k in train_losses[0].keys()
         }
         
-        # Validation phase
+        # Validation phase (use EMA parameters)
         valid_losses = []
         n_valid_batches = (n_valid + batch_size - 1) // batch_size
         
@@ -2688,7 +2695,7 @@ def train_model(
             )
             
             _, losses, output = eval_step(
-                params=params,
+                params=ema_params,  # Use EMA parameters for validation
                 batch=batch,
                 model_apply=model.apply,
                 energy_w=energy_w,
@@ -2813,7 +2820,7 @@ def train_model(
                 print(f"\n  💡 Charge Diagnostics (first validation sample):")
                 diag_batch = prepare_batch_data(valid_data, np.array([0]), cutoff=cutoff)
                 _, _, diag_output = eval_step(
-                    params=params,
+                    params=ema_params,  # Use EMA parameters
                     batch=diag_batch,
                     model_apply=model.apply,
                     energy_w=energy_w,
@@ -2844,14 +2851,15 @@ def train_model(
                 print(f"    ESP (PhysNet): [{esp_physnet_diag.min():.4f}, {esp_physnet_diag.max():.4f}] Ha/e")
                 print(f"    ESP (Target):  [{esp_target_diag.min():.4f}, {esp_target_diag.max():.4f}] Ha/e")
         
-        # Save best model
+        # Save best model (use EMA parameters)
         if valid_loss_avg['total'] < best_valid_loss:
             best_valid_loss = valid_loss_avg['total']
             save_path = ckpt_dir / name
             save_path.mkdir(exist_ok=True, parents=True)
             
+            # Save EMA parameters as the best checkpoint
             with open(save_path / 'best_params.pkl', 'wb') as f:
-                pickle.dump(params, f)
+                pickle.dump(ema_params, f)
             
             # Also save model config for later use
             model_config = {
@@ -2868,7 +2876,7 @@ def train_model(
         if plot_freq is not None and plot_freq > 0 and epoch % plot_freq == 0 and HAS_MATPLOTLIB:
             print(f"\n📊 Creating plots at epoch {epoch}...")
             plot_validation_results(
-                params=params,
+                params=ema_params,  # Use EMA parameters for plotting
                 model=model,
                 valid_data=valid_data,
                 cutoff=cutoff,
@@ -2884,7 +2892,7 @@ def train_model(
                 esp_terms=esp_terms,
             )
     
-    return params
+    return ema_params  # Return EMA parameters as final model
 
 
 def main():
