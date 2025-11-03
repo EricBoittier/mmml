@@ -2039,8 +2039,8 @@ def plot_validation_results(
                 mono_w=mono_w,
                 batch_size=1,
                 n_dcm=n_dcm,
-                dipole_terms=[LossTerm(source='physnet', weight=dipole_w), LossTerm(source='dcmnet', weight=dipole_w)],
-                esp_terms=[LossTerm(source='physnet', weight=esp_w), LossTerm(source='dcmnet', weight=esp_w)],
+                dipole_terms=dipole_terms,
+                esp_terms=esp_terms,
                 esp_min_distance=0.0,
                 esp_max_value=1e10,
             )
@@ -2253,8 +2253,8 @@ def plot_validation_results(
             mono_w=mono_w,
             batch_size=1,
             n_dcm=n_dcm,
-            dipole_terms=[LossTerm(source='physnet', weight=dipole_w), LossTerm(source='dcmnet', weight=dipole_w)],
-            esp_terms=[LossTerm(source='physnet', weight=esp_w), LossTerm(source='dcmnet', weight=esp_w)],
+            dipole_terms=dipole_terms,
+            esp_terms=esp_terms,
             esp_min_distance=0.0,  # No filtering for plotting
             esp_max_value=1e10,  # No magnitude filtering for plotting
         )
@@ -2498,17 +2498,10 @@ def train_model(
     print(f"Validation samples: {n_valid}")
     print(f"Batch size: {batch_size}")
 
-    if dipole_terms is None:
-        dipole_terms = (
-            LossTerm(source=dipole_source, weight=dipole_w, metric="l2"),
-        )
-    if esp_terms is None:
-        esp_terms = (
-            LossTerm(source="dcmnet", weight=esp_w, metric="l2"),
-        )
-
-    dipole_terms = tuple(dipole_terms)
-    esp_terms = tuple(esp_terms)
+    if not dipole_terms:
+        raise ValueError("At least one dipole loss term must be specified")
+    if not esp_terms:
+        raise ValueError("At least one ESP loss term must be specified")
 
     print("\nDipole loss terms:")
     for term in dipole_terms:
@@ -3053,12 +3046,12 @@ def main():
     print(f"  Forces weight: {args.forces_weight}")
     print(f"  Monopole weight: {args.mono_weight}")
     print("  Dipole terms:")
-    for term in dipole_terms:
+    for term in args.dipole_terms:
         print(
             f"    - {term.key}: source={term.source}, metric={term.metric}, weight={term.weight}"
         )
     print("  ESP terms:")
-    for term in esp_terms:
+    for term in args.esp_terms:
         print(
             f"    - {term.key}: source={term.source}, metric={term.metric}, weight={term.weight}"
         )
@@ -3126,8 +3119,8 @@ def main():
             plot_freq=args.plot_freq,
             plot_samples=args.plot_samples,
             plot_esp_examples=args.plot_esp_examples,
-            dipole_terms=[LossTerm(source='physnet', weight=dipole_w), LossTerm(source='dcmnet', weight=dipole_w)],
-            esp_terms=[LossTerm(source='physnet', weight=esp_w), LossTerm(source='dcmnet', weight=esp_w)],
+            dipole_terms=args.dipole_terms,
+            esp_terms=args.esp_terms,
             dipole_source=args.dipole_source,
             esp_min_distance=args.esp_min_distance,
             esp_max_value=args.esp_max_value if args.esp_max_value is not None else 1e10,
@@ -3163,8 +3156,8 @@ def main():
                     save_dir=ckpt_dir / args.name / 'plots',
                     n_samples=args.plot_samples,
                     n_esp_examples=args.plot_esp_examples,
-                    dipole_terms=dipole_terms,
-                    esp_terms=esp_terms,
+                    dipole_terms=args.dipole_terms,
+                    esp_terms=args.esp_terms,
                 )
             else:
                 print("\n⚠️  Matplotlib not installed, cannot create plots")
