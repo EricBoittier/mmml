@@ -938,10 +938,18 @@ def main():
     print(f"  Parameters:  DCMNet={num_params_dcm:,}, Non-Eq={num_params_noneq:,} ({(1-num_params_noneq/num_params_dcm)*100:.1f}% reduction)")
     
     # Save results
+    # Convert Path objects to strings for JSON serialization
+    args_dict = {}
+    for key, value in vars(args).items():
+        if isinstance(value, Path):
+            args_dict[key] = str(value)
+        else:
+            args_dict[key] = value
+    
     results = {
         'dcmnet': asdict(metrics_dcm),
         'noneq': asdict(metrics_noneq),
-        'args': vars(args),
+        'args': args_dict,
     }
     
     with open(output_dir / 'comparison_results.json', 'w') as f:
