@@ -468,39 +468,79 @@ def main():
         print(f"   • ESP range: [{result['esp_surface'].min():.4f}, "
               f"{result['esp_surface'].max():.4f}] Ha/e")
     
+    # Parse plot types
+    plot_types = []
+    if 'all' in args.plot_types:
+        plot_types = ['molecule', 'molecule+charges', 'esp', 'molecule+esp', 'charges']
+    else:
+        plot_types = args.plot_types
+    
     # Render views
-    print(f"\n🎬 Rendering {len(args.views)} view(s) at {args.resolution} resolution...")
+    print(f"\n🎬 Rendering {len(args.views)} view(s) × {len(plot_types)} plot type(s)")
     print(f"   Resolution: {width}×{height} pixels")
+    print(f"   Plot types: {', '.join(plot_types)}")
     
     for i, rotation in enumerate(args.views):
-        view_name = f"view_{i+1}_{rotation.replace(',', '_')}"
-        pov_file = output_dir / f'{view_name}.pov'
-        png_file = output_dir / f'{view_name}.png'
+        print(f"\n   📐 View {i+1}/{len(args.views)}: {rotation}")
         
-        print(f"\n   📐 View {i+1}: {rotation}")
-        print(f"      Writing POV scene...")
-        
-        write_ase_povray_with_charges(
-            atoms, result, pov_file,
-            show_charges=args.show_charges,
-            show_esp=args.show_esp,
-            rotation=rotation,
-            canvas_width=width,
-            charge_radius=args.charge_radius,
-            transparency=args.transparency,
-        )
-        
-        print(f"      Rendering (this may take a minute)...")
-        success = render_povray(pov_file, png_file, width, height, quality)
-        
-        if not success:
-            print(f"      ⚠ Skipping remaining renders")
-            break
+        for plot_type in plot_types:
+            # Determine rendering parameters based on plot type
+            if plot_type == 'molecule':
+                show_mol = 'full'
+                show_charges = False
+                show_esp_flag = False
+                suffix = 'molecule'
+            elif plot_type == 'molecule+charges':
+                show_mol = args.molecule_style  # User choice or wireframe
+                show_charges = True
+                show_esp_flag = False
+                suffix = 'molecule_charges'
+            elif plot_type == 'charges':
+                show_mol = 'none'  # No molecule
+                show_charges = True
+                show_esp_flag = False
+                suffix = 'charges_only'
+            elif plot_type == 'esp':
+                show_mol = 'none'
+                show_charges = False
+                show_esp_flag = True
+                suffix = 'esp'
+            elif plot_type == 'molecule+esp':
+                show_mol = 'wireframe'  # Wireframe for ESP overlay
+                show_charges = False
+                show_esp_flag = True
+                suffix = 'molecule_esp'
+            else:
+                print(f"      ⚠ Unknown plot type: {plot_type}")
+                continue
+            
+            view_name = f"view_{i+1}_{rotation.replace(',', '_')}_{suffix}"
+            pov_file = output_dir / f'{view_name}.pov'
+            png_file = output_dir / f'{view_name}.png'
+            
+            print(f"      • {plot_type:20s} → {png_file.name}")
+            
+            write_ase_povray_with_charges(
+                atoms, result, pov_file,
+                show_molecule=show_mol,
+                show_charges=show_charges,
+                show_esp=show_esp_flag,
+                rotation=rotation,
+                canvas_width=width,
+                charge_radius=args.charge_radius,
+                transparency=args.transparency,
+            )
+            
+            success = render_povray(pov_file, png_file, width, height, quality, antialias=True)
+            
+            if not success:
+                print(f"      ⚠ POV-Ray failed, skipping remaining renders")
+                return 1
     
     # Create colorbars
     print(f"\n📊 Creating colorbars...")
     
-    if args.show_charges:
+    if any('charges' in pt for pt in plot_types):
         vmax_q = max(abs(result['distributed_mono_values'].min()),
                     abs(result['distributed_mono_values'].max()))
         create_colorbar(
@@ -511,7 +551,7 @@ def main():
         )
         print(f"   ✓ Charge colorbar saved")
     
-    if args.show_esp:
+    if any('esp' in pt for pt in plot_types):
         vmax_esp = max(abs(np.percentile(result['esp_surface'], 5)),
                       abs(np.percentile(result['esp_surface'], 95)))
         create_colorbar(
