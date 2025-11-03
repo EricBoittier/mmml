@@ -2768,10 +2768,8 @@ def train_model(
                 
                 mae_energy_ev = valid_loss_avg['mae_energy']
                 mae_forces_ev = valid_loss_avg['mae_forces']
-                mae_dipole_physnet_eA = valid_loss_avg['mae_dipole_physnet']
-                mae_dipole_dcmnet_eA = valid_loss_avg['mae_dipole_dcmnet']
-                rmse_esp_physnet_Ha = valid_loss_avg['rmse_esp_physnet']
-                rmse_esp_dcmnet_Ha = valid_loss_avg['rmse_esp_dcmnet']
+                mae_dipole_physnet_eA = valid_loss_avg.get('mae_dipole_physnet', 0.0)
+                mae_dipole_dcmnet_eA = valid_loss_avg.get('mae_dipole_dcmnet', 0.0)
                 
                 # Get validation set statistics
                 e_mean = valid_stats.get('energy_mean', 0)
@@ -2785,10 +2783,22 @@ def train_model(
                 
                 print(f"    MAE Energy: {mae_energy_ev:.6f} eV  ({mae_energy_ev * eV_to_kcal:.6f} kcal/mol) [μ={e_mean:.3f}, σ={e_std:.3f} eV]")
                 print(f"    MAE Forces: {mae_forces_ev:.6f} eV/Å  ({mae_forces_ev * eV_to_kcal:.6f} kcal/mol/Å) [μ={f_mean:.3f}, σ={f_std:.3f} eV/Å]")
-                print(f"    MAE Dipole (PhysNet): {mae_dipole_physnet_eA:.6f} e·Å  ({mae_dipole_physnet_eA * eA_to_Debye:.6f} D) [μ={d_mean:.3f}, σ={d_std:.3f} e·Å]")
-                print(f"    MAE Dipole (DCMNet): {mae_dipole_dcmnet_eA:.6f} e·Å  ({mae_dipole_dcmnet_eA * eA_to_Debye:.6f} D) [μ={d_mean:.3f}, σ={d_std:.3f} e·Å]")
-                print(f"    RMSE ESP (PhysNet): {rmse_esp_physnet_Ha:.6f} Ha/e  ({rmse_esp_physnet_Ha * Ha_to_kcal:.6f} (kcal/mol)/e) [μ={esp_mean:.6f}, σ={esp_std:.6f} Ha/e]")
-                print(f"    RMSE ESP (DCMNet): {rmse_esp_dcmnet_Ha:.6f} Ha/e  ({rmse_esp_dcmnet_Ha * Ha_to_kcal:.6f} (kcal/mol)/e) [μ={esp_mean:.6f}, σ={esp_std:.6f} Ha/e]")
+                
+                if mae_dipole_physnet_eA > 0:
+                    print(f"    MAE Dipole (PhysNet): {mae_dipole_physnet_eA:.6f} e·Å  ({mae_dipole_physnet_eA * eA_to_Debye:.6f} D) [μ={d_mean:.3f}, σ={d_std:.3f} e·Å]")
+                if mae_dipole_dcmnet_eA > 0:
+                    print(f"    MAE Dipole (DCMNet): {mae_dipole_dcmnet_eA:.6f} e·Å  ({mae_dipole_dcmnet_eA * eA_to_Debye:.6f} D) [μ={d_mean:.3f}, σ={d_std:.3f} e·Å]")
+                
+                # ESP RMSE metrics are only available for batch_size=1
+                if 'rmse_esp_physnet' in valid_loss_avg:
+                    rmse_esp_physnet_Ha = valid_loss_avg['rmse_esp_physnet']
+                    print(f"    RMSE ESP (PhysNet): {rmse_esp_physnet_Ha:.6f} Ha/e  ({rmse_esp_physnet_Ha * Ha_to_kcal:.6f} (kcal/mol)/e) [μ={esp_mean:.6f}, σ={esp_std:.6f} Ha/e]")
+                if 'rmse_esp_dcmnet' in valid_loss_avg:
+                    rmse_esp_dcmnet_Ha = valid_loss_avg['rmse_esp_dcmnet']
+                    print(f"    RMSE ESP (DCMNet): {rmse_esp_dcmnet_Ha:.6f} Ha/e  ({rmse_esp_dcmnet_Ha * Ha_to_kcal:.6f} (kcal/mol)/e) [μ={esp_mean:.6f}, σ={esp_std:.6f} Ha/e]")
+                if 'rmse_esp_mixed' in valid_loss_avg:
+                    rmse_esp_mixed_Ha = valid_loss_avg['rmse_esp_mixed']
+                    print(f"    RMSE ESP (Mixed): {rmse_esp_mixed_Ha:.6f} Ha/e  ({rmse_esp_mixed_Ha * Ha_to_kcal:.6f} (kcal/mol)/e)")
             
             # Print constraint violations if available
             if 'total_charge' in valid_loss_avg:
