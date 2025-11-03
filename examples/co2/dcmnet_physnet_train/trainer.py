@@ -171,39 +171,52 @@ def _compute_esp_single(
     esp_min_distance: float,
     esp_max_value: float,
 ) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-    valid_mask = atom_mask_mol > 0.5
-
-    def _compute():
-        mono_valid = mono_mol[valid_mask]
-        dipo_valid = dipo_mol[valid_mask]
-        atom_pos_valid = atom_pos[valid_mask]
-        atomic_nums_valid = atomic_nums_mol[valid_mask].astype(jnp.int32)
-        charges_valid = phys_charges[valid_mask]
-
-        mono_flat = mono_valid.reshape(-1)
-        dipo_flat = dipo_valid.reshape(-1, 3)
-        esp_pred_dcm = calc_esp(dipo_flat, mono_flat, vdw_mol)
-
-        distances = jnp.linalg.norm(vdw_mol[:, None, :] - atom_pos_valid[None, :, :], axis=2)
-        atomic_radii = jnp.take(RADII_TABLE, atomic_nums_valid)
-        distance_mask = (~jnp.any(distances < (2.0 * atomic_radii[None, :]), axis=1)).astype(jnp.float32)
-
-        if esp_min_distance > 0:
-            min_dist = jnp.min(distances, axis=1)
-            distance_mask = distance_mask * (min_dist >= esp_min_distance).astype(jnp.float32)
-
-        if esp_max_value < 1e9:
-            distance_mask = distance_mask * (jnp.abs(esp_target) <= esp_max_value).astype(jnp.float32)
-
-        esp_pred_phys = jnp.sum(charges_valid[None, :] / (distances + 1e-10), axis=1)
-        return esp_pred_dcm, esp_pred_phys, distance_mask
-
-    zeros = (
-        jnp.zeros_like(esp_target),
-        jnp.zeros_like(esp_target),
-        jnp.zeros_like(esp_target),
+    """Compute ESP predictions using masked operations (no boolean indexing for JIT)."""
+    
+    # Use masking instead of boolean indexing - weight by atom_mask
+    # mono_mol: (natoms, n_dcm), dipo_mol: (natoms, n_dcm, 3)
+    # Expand mask to DCM dimensions
+    mask_expanded = atom_mask_mol[:, None]  # (natoms, 1)
+    mono_masked = mono_mol * mask_expanded  # (natoms, n_dcm)
+    dipo_masked = dipo_mol * mask_expanded[..., None]  # (natoms, n_dcm, 3)
+    
+    # Flatten for ESP calculation
+    mono_flat = mono_masked.reshape(-1)  # (natoms*n_dcm,)
+    dipo_flat = dipo_masked.reshape(-1, 3)  # (natoms*n_dcm, 3)
+    esp_pred_dcm = calc_esp(dipo_flat, mono_flat, vdw_mol)
+    
+    # Compute distances from grid to all atoms (including masked)
+    distances = jnp.linalg.norm(vdw_mol[:, None, :] - atom_pos[None, :, :], axis=2)  # (ngrid, natoms)
+    
+    # Get atomic radii and apply mask
+    atomic_nums_int = atomic_nums_mol.astype(jnp.int32)
+    atomic_radii = jnp.take(RADII_TABLE, atomic_nums_int)  # (natoms,)
+    
+    # For distance-based masking, only consider real (unmasked) atoms
+    # Set distances to masked atoms to infinity
+    distances_masked = jnp.where(
+        atom_mask_mol[None, :] > 0.5,
+        distances,
+        1e10  # Large distance for masked atoms
     )
-    return jax.lax.cond(jnp.any(valid_mask), _compute, lambda: zeros)
+    
+    # Check if any REAL atom is too close
+    within_cutoff = distances_masked < (2.0 * atomic_radii[None, :])
+    distance_mask = (~jnp.any(within_cutoff, axis=1)).astype(jnp.float32)
+    
+    if esp_min_distance > 0:
+        min_dist = jnp.min(distances_masked, axis=1)
+        distance_mask = distance_mask * (min_dist >= esp_min_distance).astype(jnp.float32)
+    
+    if esp_max_value < 1e9:
+        distance_mask = distance_mask * (jnp.abs(esp_target) <= esp_max_value).astype(jnp.float32)
+    
+    # PhysNet ESP: sum over atoms with masking
+    # Use masked charges and distances
+    charges_masked = phys_charges * atom_mask_mol  # (natoms,)
+    esp_pred_phys = jnp.sum(charges_masked[None, :] / (distances + 1e-10), axis=1)
+    
+    return esp_pred_dcm, esp_pred_phys, distance_mask
 
 
 def _compute_esp_batch(
