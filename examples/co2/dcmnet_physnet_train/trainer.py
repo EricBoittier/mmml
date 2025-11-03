@@ -18,8 +18,10 @@ import argparse
 from pathlib import Path
 import numpy as np
 import pickle
-from typing import Dict, Tuple, Any
+from typing import Dict, Tuple, Any, Sequence, Optional
 import time
+import json
+from dataclasses import dataclass
 
 # Add mmml to path
 repo_root = Path(__file__).parent / "../../.."
@@ -30,6 +32,14 @@ import jax.numpy as jnp
 from flax import linen as nn
 import optax
 import functools
+
+import e3x
+import ase.data
+
+try:
+    import yaml  # type: ignore
+except ImportError:  # pragma: no cover - optional dependency
+    yaml = None
 
 # Optional plotting imports
 try:
@@ -50,6 +60,93 @@ from mmml.dcmnet.dcmnet.electrostatics import calc_esp
 
 # Import data utilities
 from mmml.data import load_npz, DataConfig
+
+
+EPS = 1e-8
+
+
+@dataclass(frozen=True)
+class LossTerm:
+    """Configuration for an individual loss component."""
+
+    source: str
+    weight: float
+    metric: str = "l2"
+    name: Optional[str] = None
+
+    @property
+    def key(self) -> str:
+        return self.name or self.source
+
+
+def _orientation_feature(positions: jnp.ndarray, weights: jnp.ndarray, max_degree: int) -> jnp.ndarray:
+    """Compute spherical harmonic orientation descriptors weighted by charges."""
+
+    valid_mask = jnp.abs(weights) > 1e-8
+
+    def _compute_features(pos: jnp.ndarray, w: jnp.ndarray) -> jnp.ndarray:
+        w_abs = jnp.abs(w)
+        total = jnp.sum(w_abs) + EPS
+        center = jnp.sum(pos * w_abs[:, None], axis=0) / total
+        rel = pos - center
+        norms = jnp.linalg.norm(rel, axis=1)
+        rel_unit = rel / jnp.maximum(norms[:, None], EPS)
+        sh = e3x.so3.spherical_harmonics(rel_unit, max_degree=max_degree)
+        weighted_sh = jnp.sum(sh * w[:, None], axis=0) / total
+        mean_radial = jnp.sum(norms * w_abs) / total
+        var_radial = jnp.sum(((norms - mean_radial) ** 2) * w_abs) / total
+        radial_stats = jnp.array([mean_radial, var_radial])
+        return jnp.concatenate([weighted_sh, radial_stats])
+
+    feature_dim = (max_degree + 1) ** 2 + 2
+    return jax.lax.cond(
+        jnp.any(valid_mask),
+        lambda: _compute_features(positions[valid_mask], weights[valid_mask]),
+        lambda: jnp.zeros((feature_dim,), dtype=positions.dtype),
+    )
+
+
+class ChargeOrientationMixer(nn.Module):
+    """Learn scalar mixing factors from charge orientations."""
+
+    hidden_dim: int = 64
+    max_degree: int = 2
+    num_layers: int = 2
+    output_dim: int = 2
+
+    @nn.compact
+    def __call__(
+        self,
+        phys_positions: jnp.ndarray,
+        phys_charges: jnp.ndarray,
+        dcm_positions: jnp.ndarray,
+        dcm_charges: jnp.ndarray,
+        atom_mask: jnp.ndarray,
+    ) -> jnp.ndarray:
+        def per_sample(pp, pc, dp, dc, mask):
+            mask_bool = mask > 0.5
+            phys_pos = pp[mask_bool]
+            phys_charge = pc[mask_bool]
+
+            dcm_mask = mask_bool[:, None]
+            dp_valid = dp[dcm_mask]
+            dc_valid = dc[dcm_mask]
+            dp_valid = dp_valid.reshape(-1, 3)
+            dc_valid = dc_valid.reshape(-1)
+
+            phys_feat = _orientation_feature(phys_pos, phys_charge, self.max_degree)
+            dcm_feat = _orientation_feature(dp_valid, dc_valid, self.max_degree)
+            return jnp.concatenate([phys_feat, dcm_feat, dcm_feat - phys_feat])
+
+        features = jax.vmap(per_sample)(phys_positions, phys_charges, dcm_positions, dcm_charges, atom_mask)
+
+        x = nn.Dense(self.hidden_dim)(features)
+        x = nn.silu(x)
+        for _ in range(self.num_layers - 1):
+            x = nn.Dense(self.hidden_dim)(x)
+            x = nn.silu(x)
+        x = nn.Dense(self.output_dim)(x)
+        return nn.sigmoid(x)
 
 
 class JointPhysNetDCMNet(nn.Module):
@@ -76,6 +173,7 @@ class JointPhysNetDCMNet(nn.Module):
     physnet_config: Dict[str, Any]
     dcmnet_config: Dict[str, Any]
     mix_coulomb_energy: bool = False
+    mixer_config: Optional[Dict[str, Any]] = None
     
     def setup(self):
         """Initialize both PhysNet and DCMNet models."""
@@ -90,6 +188,9 @@ class JointPhysNetDCMNet(nn.Module):
                 lambda rng, shape: jnp.ones(shape) * 0.1,  # Initialize to 0.1
                 (1,)
             )
+
+        mixer_cfg = self.mixer_config or {}
+        self.charge_mixer = ChargeOrientationMixer(**mixer_cfg)
     
     @nn.compact
     def __call__(
@@ -172,14 +273,20 @@ class JointPhysNetDCMNet(nn.Module):
         
         # 4. Optionally compute and mix Coulomb energy from DCMNet charges
         energy_reshaped = physnet_output["energy"].reshape(batch_size)
+        natoms = charges_squeezed.shape[0] // batch_size
+        n_dcm = mono_dist.shape[1]
+
+        positions_batched = positions.reshape(batch_size, natoms, 3)
+        charges_batched = charges_squeezed.reshape(batch_size, natoms)
+        atom_mask_batched = atom_mask.reshape(batch_size, natoms)
+        atomic_numbers_batched = atomic_numbers.reshape(batch_size, natoms)
+        mono_batched = mono_dist.reshape(batch_size, natoms, n_dcm)
+        dipo_batched = dipo_dist.reshape(batch_size, natoms, n_dcm, 3)
         
         if self.mix_coulomb_energy:
             # Compute Coulomb energy from DCMNet distributed charges
             # Note: dipo_dist contains the POSITIONS of distributed charges, not dipole moments!
             # E_coulomb = (1/2) Σᵢⱼ qᵢqⱼ/rᵢⱼ (pairwise interactions)
-            natoms = mono_dist.shape[0] // batch_size
-            n_dcm = mono_dist.shape[1]
-            
             # Get all charge positions and values
             # mono_dist: (batch*natoms, n_dcm) - charge values
             # dipo_dist: (batch*natoms, n_dcm, 3) - charge positions in Angstrom
@@ -214,6 +321,30 @@ class JointPhysNetDCMNet(nn.Module):
         else:
             coulomb_energy_out = jnp.array(0.0)
             lambda_out = jnp.array(0.0)
+        masses_lookup = jnp.array(ase.data.atomic_masses)
+        masses = jnp.take(masses_lookup, atomic_numbers_batched.astype(jnp.int32)) * atom_mask_batched
+        total_mass = jnp.sum(masses, axis=1) + EPS
+        mass_weighted_pos = positions_batched * masses[..., None]
+        com = jnp.sum(mass_weighted_pos, axis=1) / total_mass[:, None]
+
+        mono_masked = mono_batched * atom_mask_batched[..., None]
+        dipo_rel = dipo_batched - com[:, None, None, :]
+        dipole_dcmnet = jnp.sum(mono_masked[..., None] * dipo_rel, axis=(1, 2))
+        dipoles_physnet = physnet_output["dipoles"].reshape(batch_size, 3)
+
+        lambda_outputs = self.charge_mixer(
+            positions_batched,
+            charges_batched * atom_mask_batched,
+            dipo_batched,
+            mono_masked,
+            atom_mask_batched,
+        )
+        lambda_dipole = lambda_outputs[:, 0]
+        lambda_esp = lambda_outputs[:, 1]
+        dipoles_mixed = (
+            lambda_dipole[:, None] * dipole_dcmnet
+            + (1.0 - lambda_dipole[:, None]) * dipoles_physnet
+        )
         
         # Reshape PhysNet outputs to proper shapes
         # PhysNet forces shape is (batch_size*natoms, 1, 1, 3) -> reshape to (batch_size*natoms, 3)
@@ -236,6 +367,10 @@ class JointPhysNetDCMNet(nn.Module):
             # Energy mixing (if enabled)
             "coulomb_energy": coulomb_energy_out,
             "coulomb_lambda": lambda_out,
+            "dipoles_dcmnet": dipole_dcmnet,
+            "dipoles_mixed": dipoles_mixed,
+            "lambda_dipole": lambda_dipole,
+            "lambda_esp": lambda_esp,
         }
 
 
@@ -602,251 +737,180 @@ def prepare_batch_data(
     }
 
 
-@functools.partial(jax.jit, static_argnames=('batch_size', 'n_dcm', 'dipole_source', 'esp_min_distance', 'esp_max_value'))
+@functools.partial(jax.jit, static_argnames=("batch_size", "n_dcm", "dipole_terms", "esp_terms", "esp_min_distance", "esp_max_value"))
 def compute_loss(
     output: Dict[str, jnp.ndarray],
     batch: Dict[str, jnp.ndarray],
     energy_w: float,
     forces_w: float,
-    dipole_w: float,
-    esp_w: float,
     mono_w: float,
     batch_size: int,
     n_dcm: int,
-    dipole_source: str = 'physnet',
+    dipole_terms: Sequence[LossTerm],
+    esp_terms: Sequence[LossTerm],
     esp_min_distance: float = 0.0,
-    esp_max_value: float = 1e10,  # Use large sentinel value for "no limit"
+    esp_max_value: float = 1e10,
 ) -> Tuple[jnp.ndarray, Dict[str, jnp.ndarray]]:
-    """
-    Compute joint loss for PhysNet and DCMNet.
-    
-    Parameters
-    ----------
-    output : Dict[str, jnp.ndarray]
-        Model outputs
-    batch : Dict[str, jnp.ndarray]
-        Batch data
-    energy_w, forces_w, dipole_w, esp_w, mono_w : float
-        Loss weights
-    batch_size : int
-        Batch size
-    n_dcm : int
-        Number of distributed multipoles per atom
-        
-    Returns
-    -------
-    Tuple[jnp.ndarray, Dict[str, jnp.ndarray]]
-        Total loss and individual loss components
-    """
-    # PhysNet losses
+    """Compute weighted loss terms for the joint PhysNet/DCMNet model."""
+
+    losses: Dict[str, jnp.ndarray] = {}
+
     loss_energy = optax.l2_loss(output["energy"], batch["E"]).mean()
-    
-    # Forces loss (only for real atoms)
+    losses["energy"] = loss_energy
+
     forces_masked = output["forces"] * batch["atom_mask"][:, None]
     forces_target_masked = batch["F"] * batch["atom_mask"][:, None]
     loss_forces = optax.l2_loss(forces_masked, forces_target_masked).mean()
-    
-    # Dipole loss - choose source
-    if dipole_source == 'physnet':
-        # Use PhysNet's dipole (from charges × positions)
-        dipole_pred = output["dipoles"]
-    elif dipole_source == 'dcmnet':
-        # Compute dipole from DCMNet distributed multipoles
-        # NOTE: Must use SAME COM calculation as PhysNet!
-        natoms = output["mono_dist"].shape[0] // batch_size
-        mono_reshaped = output["mono_dist"].reshape(batch_size, natoms, n_dcm)
-        dipo_reshaped = output["dipo_dist"].reshape(batch_size, natoms, n_dcm, 3)
-        
-        # Compute COM using segment_sum (same method as PhysNet)
-        import ase.data
-        positions_flat = batch["R"]  # (batch*natoms, 3)
-        atomic_nums_flat = batch["Z"]  # (batch*natoms,)
-        masses_flat = jnp.take(ase.data.atomic_masses, atomic_nums_flat)
-        
-        mass_weighted_pos = positions_flat * masses_flat[..., None]
-        total_mass_weighted_pos = jax.ops.segment_sum(
-            mass_weighted_pos,
-            segment_ids=batch["batch_segments"],
-            num_segments=batch_size
-        )  # (batch_size, 3)
-        total_mass = jax.ops.segment_sum(
-            masses_flat,
-            segment_ids=batch["batch_segments"],
-            num_segments=batch_size
-        )  # (batch_size,)
-        com = total_mass_weighted_pos / total_mass[..., None]  # (batch_size, 3)
-        
-        # Subtract COM from distributed charge positions
-        dipo_rel_com = dipo_reshaped - com[:, None, None, :]  # (batch, natoms, n_dcm, 3)
-        
-        # Dipole = Σ_atoms Σ_dcm (charge * position_relative_to_COM)
-        dipole_pred = jnp.sum(mono_reshaped[..., None] * dipo_rel_com, axis=(1, 2))  # (batch, 3)
-    else:
-        raise ValueError(f"Unknown dipole_source: {dipole_source}")
-    
-    loss_dipole = optax.l2_loss(dipole_pred, batch["D"]).mean()
-    
-    # DCMNet losses
-    # ESP loss - compute ESP from distributed multipoles
-    # Need to reshape for calc_esp
+    losses["forces"] = loss_forces
+
+    dipole_predictions = {
+        "physnet": output["dipoles"],
+        "dcmnet": output.get("dipoles_dcmnet"),
+        "mixed": output.get("dipoles_mixed"),
+    }
+
+    total_dipole_loss = jnp.array(0.0, dtype=loss_energy.dtype)
+    for term in dipole_terms:
+        pred = dipole_predictions.get(term.source)
+        if pred is None:
+            raise ValueError(f"Unknown dipole source '{term.source}' in loss config")
+        diff = pred - batch["D"]
+        if term.metric == "l2":
+            loss_term = optax.l2_loss(pred, batch["D"]).mean()
+        elif term.metric == "mae":
+            loss_term = jnp.abs(diff).mean()
+        elif term.metric == "rmse":
+            loss_term = jnp.sqrt(jnp.mean(diff ** 2))
+        else:
+            raise ValueError(f"Unsupported dipole metric '{term.metric}'")
+        losses[f"dipole_{term.key}"] = loss_term
+        total_dipole_loss = total_dipole_loss + term.weight * loss_term
+    losses["dipole"] = total_dipole_loss
+
     natoms = output["mono_dist"].shape[0] // batch_size
-    
-    # Reshape distributed multipoles
     mono_reshaped = output["mono_dist"].reshape(batch_size, natoms, n_dcm)
     dipo_reshaped = output["dipo_dist"].reshape(batch_size, natoms, n_dcm, 3)
-    
-    # For batch_size=1, calc_esp expects single molecule
-    if batch_size == 1:
-        mono_for_esp = mono_reshaped[0]  # (natoms, n_dcm)
-        dipo_for_esp = dipo_reshaped[0]  # (natoms, n_dcm, 3)
-        vdw_for_esp = batch["vdw_surface"][0]  # (ngrid, 3)
-        esp_target = batch["esp"][0]  # (ngrid,)
-        
-        # Create distance-based mask for ESP grid points using atomic radii
-        # Get atom positions (only real atoms)
-        atom_positions = batch["R"].reshape(batch_size, natoms, 3)[0]  # (natoms, 3)
-        atom_mask_single = batch["atom_mask"].reshape(batch_size, natoms)[0]  # (natoms,)
-        atomic_nums_single = batch["Z"].reshape(batch_size, natoms)[0]  # (natoms,)
-        
-        # Compute distances from each grid point to each atom
-        # vdw_for_esp: (ngrid, 3), atom_positions: (natoms, 3)
-        distances = jnp.linalg.norm(
-            vdw_for_esp[:, None, :] - atom_positions[None, :, :], 
-            axis=2
-        )  # (ngrid, natoms)
-        
-        # Get atomic radii for each atom (in Angstroms)
-        import ase.data
-        # covalent_radii is in Angstroms - use jnp.take to avoid concretization
-        atomic_radii = jnp.take(jnp.array(ase.data.covalent_radii), atomic_nums_single)
-        
-        # Check if grid point is within 2*radius of any atom
-        # distances: (ngrid, natoms), atomic_radii: (natoms,)
-        # For each grid point, check if ANY atom has distance < 2*radius
-        within_cutoff = distances < (2.0 * atomic_radii[None, :])  # (ngrid, natoms)
-        
-        # Apply atom mask (ignore padding atoms)
-        within_cutoff_masked = within_cutoff & (atom_mask_single[None, :] > 0.5)
-        
-        # Grid point is EXCLUDED if it's within cutoff of ANY atom
-        # Grid point is INCLUDED if ALL atoms are beyond cutoff
-        any_too_close = jnp.any(within_cutoff_masked, axis=1)  # (ngrid,)
-        distance_mask = (~any_too_close).astype(jnp.float32)
-        
-        # Optional: override with fixed distance if esp_min_distance > 0
-        if esp_min_distance > 0:
-            min_distances = jnp.min(jnp.where(atom_mask_single[None, :] > 0.5, distances, 1e10), axis=1)
-            fixed_distance_mask = (min_distances >= esp_min_distance).astype(jnp.float32)
-            distance_mask = distance_mask * fixed_distance_mask  # Combine both criteria
-        
-        # Add magnitude-based filtering
-        if esp_max_value < 1e9:  # Check if magnitude limit is set (sentinel is 1e10)
-            magnitude_mask = (jnp.abs(esp_target) <= esp_max_value).astype(jnp.float32)
-            esp_mask = distance_mask * magnitude_mask
-        else:
-            esp_mask = distance_mask
-        
-        # Flatten distributed charges: (natoms*n_dcm,)
-        mono_flat = mono_for_esp.reshape(-1)
-        # Reshape dipoles: (natoms*n_dcm, 3) - direct reshape to preserve xyz
-        dipo_flat = dipo_for_esp.reshape(-1, 3)
-        
-        # Compute ESP
-        esp_pred = calc_esp(dipo_flat, mono_flat, vdw_for_esp)
-        
-        # Apply mask to ESP loss
-        esp_diff = esp_pred - esp_target
-        loss_esp = (esp_mask * esp_diff ** 2).sum() / (esp_mask.sum() + 1e-10)
-    else:
-        # For batched, need to loop (or use vmap)
-        def single_esp_loss(mono_mol, dipo_mol, vdw_mol, esp_mol, atom_pos, atom_mask_mol, atomic_nums_mol):
-            mono_flat = mono_mol.reshape(-1)
-            dipo_flat = dipo_mol.reshape(-1, 3)  # Direct reshape to preserve xyz
-            esp_pred = calc_esp(dipo_flat, mono_flat, vdw_mol)
-            
-            # Create atomic radius-based mask
-            import ase.data
-            distances = jnp.linalg.norm(
-                vdw_mol[:, None, :] - atom_pos[None, :, :], 
-                axis=2
-            )  # (ngrid, natoms)
-            
-            # Get atomic radii for each atom - use jnp.take to avoid concretization
-            atomic_radii = jnp.take(jnp.array(ase.data.covalent_radii), atomic_nums_mol)
-            
-            # Check if within 2*radius of any atom
-            within_cutoff = distances < (2.0 * atomic_radii[None, :])
-            within_cutoff_masked = within_cutoff & (atom_mask_mol[None, :] > 0.5)
-            any_too_close = jnp.any(within_cutoff_masked, axis=1)
-            distance_mask = (~any_too_close).astype(jnp.float32)
-            
-            # Optional: additional fixed distance filter
+    atom_positions = batch["R"].reshape(batch_size, natoms, 3)
+    atom_mask = batch["atom_mask"].reshape(batch_size, natoms)
+    atomic_nums = batch["Z"].reshape(batch_size, natoms)
+    physnet_charges = output["charges_as_mono"].reshape(batch_size, natoms)
+
+    radii_table = jnp.array(ase.data.covalent_radii)
+
+    def esp_single(mono_mol, dipo_mol, vdw_mol, esp_target, atom_pos, atom_mask_mol, atomic_nums_mol, phys_charges):
+        valid_mask = atom_mask_mol > 0.5
+        mono_valid = mono_mol[valid_mask]
+        dipo_valid = dipo_mol[valid_mask]
+        atom_pos_valid = atom_pos[valid_mask]
+        atomic_nums_valid = atomic_nums_mol[valid_mask].astype(jnp.int32)
+        charges_valid = phys_charges[valid_mask]
+
+        def compute_predictions():
+            mono_flat = mono_valid.reshape(-1)
+            dipo_flat = dipo_valid.reshape(-1, 3)
+            esp_pred_dcm = calc_esp(dipo_flat, mono_flat, vdw_mol)
+            distances = jnp.linalg.norm(vdw_mol[:, None, :] - atom_pos_valid[None, :, :], axis=2)
+            atomic_radii = jnp.take(radii_table, atomic_nums_valid)
+            distance_mask = (~jnp.any(distances < (2.0 * atomic_radii[None, :]), axis=1)).astype(jnp.float32)
             if esp_min_distance > 0:
-                min_distances = jnp.min(jnp.where(atom_mask_mol[None, :] > 0.5, distances, 1e10), axis=1)
-                fixed_distance_mask = (min_distances >= esp_min_distance).astype(jnp.float32)
-                distance_mask = distance_mask * fixed_distance_mask
-            
-            # Add magnitude-based filtering
-            if esp_max_value < 1e9:  # Check if magnitude limit is set
-                magnitude_mask = (jnp.abs(esp_mol) <= esp_max_value).astype(jnp.float32)
-                esp_mask = distance_mask * magnitude_mask
-            else:
-                esp_mask = distance_mask
-            
-            # Masked loss
-            esp_diff = esp_pred - esp_mol
-            return (esp_mask * esp_diff ** 2).sum() / (esp_mask.sum() + 1e-10)
-        
-        # Prepare inputs for vmap
-        atom_positions_batched = batch["R"].reshape(batch_size, natoms, 3)
-        atom_mask_batched = batch["atom_mask"].reshape(batch_size, natoms)
-        atomic_nums_batched = batch["Z"].reshape(batch_size, natoms)
-        
-        esp_losses = jax.vmap(single_esp_loss)(
-            mono_reshaped, dipo_reshaped, batch["vdw_surface"], batch["esp"],
-            atom_positions_batched, atom_mask_batched, atomic_nums_batched
+                min_dist = jnp.min(distances, axis=1)
+                distance_mask = distance_mask * (min_dist >= esp_min_distance).astype(jnp.float32)
+            if esp_max_value < 1e9:
+                distance_mask = distance_mask * (jnp.abs(esp_target) <= esp_max_value).astype(jnp.float32)
+            esp_pred_phys = jnp.sum(charges_valid[None, :] / (distances + 1e-10), axis=1)
+            return esp_pred_dcm, esp_pred_phys, distance_mask
+
+        default = (
+            jnp.zeros_like(esp_target),
+            jnp.zeros_like(esp_target),
+            jnp.zeros_like(esp_target),
         )
-        loss_esp = esp_losses.mean()
-    
-    # PhysNet total charge constraint: sum of charges should equal total_charge (0.0)
+        return jax.lax.cond(jnp.any(valid_mask), compute_predictions, lambda: default)
+
+    esp_pred_dcmnet, esp_pred_physnet, esp_mask = jax.vmap(esp_single)(
+        mono_reshaped,
+        dipo_reshaped,
+        batch["vdw_surface"],
+        batch["esp"],
+        atom_positions,
+        atom_mask,
+        atomic_nums,
+        physnet_charges,
+    )
+
+    esp_predictions = {
+        "physnet": esp_pred_physnet,
+        "dcmnet": esp_pred_dcmnet,
+    }
+    if output.get("lambda_esp") is not None:
+        lambda_esp_vals = output["lambda_esp"][:, None]
+        esp_predictions["mixed"] = lambda_esp_vals * esp_pred_dcmnet + (1.0 - lambda_esp_vals) * esp_pred_physnet
+
+    mask_total = jnp.sum(esp_mask) + EPS
+    total_esp_loss = jnp.array(0.0, dtype=loss_energy.dtype)
+    for term in esp_terms:
+        pred = esp_predictions.get(term.source)
+        if pred is None:
+            raise ValueError(f"Unknown ESP source '{term.source}' in loss config")
+        diff = (pred - batch["esp"]) * esp_mask
+        if term.metric == "l2":
+            loss_term = jnp.sum(diff ** 2) / mask_total
+        elif term.metric == "mae":
+            loss_term = jnp.sum(jnp.abs(diff)) / mask_total
+        elif term.metric == "rmse":
+            loss_term = jnp.sqrt(jnp.sum(diff ** 2) / mask_total)
+        else:
+            raise ValueError(f"Unsupported ESP metric '{term.metric}'")
+        losses[f"esp_{term.key}"] = loss_term
+        total_esp_loss = total_esp_loss + term.weight * loss_term
+    losses["esp"] = total_esp_loss
+
     total_charge_pred = output.get("sum_charges", jnp.sum(output["charges_as_mono"] * batch["atom_mask"]))
-    total_charge_target = jnp.zeros_like(total_charge_pred)  # Should be 0.0 for neutral molecules
-    loss_total_charge = optax.l2_loss(total_charge_pred, total_charge_target).mean()
-    
-    # Monopole constraint: sum of distributed charges should equal PhysNet charge per atom
-    # mono_dist shape: (batch*natoms, n_dcm)
-    mono_sum = output["mono_dist"].sum(axis=-1)  # (batch*natoms,)
-    charges_target = output["charges_as_mono"]  # (batch*natoms,)
-    
-    # Only compute loss for real atoms
+    loss_total_charge = optax.l2_loss(total_charge_pred, jnp.zeros_like(total_charge_pred)).mean()
+    losses["total_charge"] = loss_total_charge
+
+    mono_sum = output["mono_dist"].sum(axis=-1)
+    charges_target = output["charges_as_mono"]
     mono_sum_masked = mono_sum * batch["atom_mask"]
     charges_masked = charges_target * batch["atom_mask"]
     loss_mono = optax.l2_loss(mono_sum_masked, charges_masked).mean()
-    
-    # Total loss
+    losses["monopole"] = loss_mono
+
     total_loss = (
-        energy_w * loss_energy +
-        forces_w * loss_forces +
-        dipole_w * loss_dipole +
-        esp_w * loss_esp +
-        mono_w * loss_mono +
-        mono_w * loss_total_charge  # Use same weight as monopole constraint
+        energy_w * loss_energy
+        + forces_w * loss_forces
+        + total_dipole_loss
+        + total_esp_loss
+        + mono_w * loss_mono
+        + mono_w * loss_total_charge
     )
-    
-    losses = {
-        "total": total_loss,
-        "energy": loss_energy,
-        "forces": loss_forces,
-        "dipole": loss_dipole,
-        "esp": loss_esp,
-        "monopole": loss_mono,
-        "total_charge": loss_total_charge,
-    }
-    
+
+    losses["coulomb_energy"] = output.get("coulomb_energy", jnp.array(0.0))
+    losses["coulomb_lambda"] = output.get("coulomb_lambda", jnp.array(0.0))
+    if output.get("lambda_dipole") is not None:
+        losses["lambda_dipole_mean"] = jnp.mean(output["lambda_dipole"])
+    if output.get("lambda_esp") is not None:
+        losses["lambda_esp_mean"] = jnp.mean(output["lambda_esp"])
+
+    losses["total"] = total_loss
+
     return total_loss, losses
 
 
-@functools.partial(jax.jit, static_argnames=('model_apply', 'optimizer_update', 'batch_size', 'n_dcm', 'clip_norm', 'dipole_source', 'esp_min_distance', 'esp_max_value'))
+@functools.partial(
+    jax.jit,
+    static_argnames=(
+        "model_apply",
+        "optimizer_update",
+        "batch_size",
+        "n_dcm",
+        "clip_norm",
+        "dipole_terms",
+        "esp_terms",
+        "esp_min_distance",
+        "esp_max_value",
+    ),
+)
 def train_step(
     params: Any,
     opt_state: Any,
@@ -855,24 +919,17 @@ def train_step(
     optimizer_update: Any,
     energy_w: float,
     forces_w: float,
-    dipole_w: float,
-    esp_w: float,
     mono_w: float,
     batch_size: int,
     n_dcm: int,
+    dipole_terms: Sequence[LossTerm],
+    esp_terms: Sequence[LossTerm],
     clip_norm: float = None,
-    dipole_source: str = 'physnet',
     esp_min_distance: float = 0.0,
     esp_max_value: float = 1e10,
 ) -> Tuple[Any, Any, jnp.ndarray, Dict[str, jnp.ndarray]]:
-    """
-    Single training step with gradient computation and optional clipping.
-    
-    Returns
-    -------
-    Tuple
-        (updated_params, updated_opt_state, total_loss, loss_dict)
-    """
+    """Single training step with gradient computation and optional clipping."""
+
     def loss_fn(params):
         output = model_apply(
             params,
@@ -886,53 +943,63 @@ def train_step(
             atom_mask=batch["atom_mask"],
         )
         total_loss, losses = compute_loss(
-            output, batch, energy_w, forces_w, dipole_w, esp_w, mono_w, batch_size, n_dcm, dipole_source, esp_min_distance, esp_max_value
+            output,
+            batch,
+            energy_w,
+            forces_w,
+            mono_w,
+            batch_size,
+            n_dcm,
+            dipole_terms,
+            esp_terms,
+            esp_min_distance,
+            esp_max_value,
         )
         return total_loss, (output, losses)
-    
+
     (loss, (output, losses)), grads = jax.value_and_grad(loss_fn, has_aux=True)(params)
-    
-    # Clip gradients if requested
+
     if clip_norm is not None:
-        # Compute global norm
         grad_norm = optax.global_norm(grads)
-        # Scale gradients if norm exceeds clip_norm
         grads = jax.tree_util.tree_map(
             lambda g: g * jnp.minimum(clip_norm / grad_norm, 1.0),
-            grads
+            grads,
         )
-    
-    # Update parameters
+
     updates, opt_state = optimizer_update(grads, opt_state, params)
     params = optax.apply_updates(params, updates)
-    
+
     return params, opt_state, loss, losses
 
 
-@functools.partial(jax.jit, static_argnames=('model_apply', 'batch_size', 'n_dcm', 'dipole_source', 'esp_min_distance', 'esp_max_value'))
+@functools.partial(
+    jax.jit,
+    static_argnames=(
+        "model_apply",
+        "batch_size",
+        "n_dcm",
+        "dipole_terms",
+        "esp_terms",
+        "esp_min_distance",
+        "esp_max_value",
+    ),
+)
 def eval_step(
     params: Any,
     batch: Dict[str, jnp.ndarray],
     model_apply: Any,
     energy_w: float,
     forces_w: float,
-    dipole_w: float,
-    esp_w: float,
     mono_w: float,
     batch_size: int,
     n_dcm: int,
-    dipole_source: str = 'physnet',
+    dipole_terms: Sequence[LossTerm],
+    esp_terms: Sequence[LossTerm],
     esp_min_distance: float = 0.0,
-    esp_max_value: float = 1e10,  # Use large sentinel value for "no limit"
+    esp_max_value: float = 1e10,
 ) -> Tuple[jnp.ndarray, Dict[str, jnp.ndarray], Dict[str, jnp.ndarray]]:
-    """
-    Evaluation step without gradient computation.
-    
-    Returns
-    -------
-    Tuple
-        (total_loss, loss_dict, output_dict)
-    """
+    """Evaluation step without gradient computation."""
+
     output = model_apply(
         params,
         atomic_numbers=batch["Z"],
@@ -944,148 +1011,80 @@ def eval_step(
         batch_mask=batch["batch_mask"],
         atom_mask=batch["atom_mask"],
     )
-    
+
     total_loss, losses = compute_loss(
-        output, batch, energy_w, forces_w, dipole_w, esp_w, mono_w, batch_size, n_dcm, dipole_source, esp_min_distance, esp_max_value
+        output,
+        batch,
+        energy_w,
+        forces_w,
+        mono_w,
+        batch_size,
+        n_dcm,
+        dipole_terms,
+        esp_terms,
+        esp_min_distance,
+        esp_max_value,
     )
-    
-    # Compute MAE metrics
+
     mae_energy = jnp.abs(output["energy"] - batch["E"]).mean()
-    mae_forces = jnp.abs(output["forces"] * batch["atom_mask"][:, None] - 
-                         batch["F"] * batch["atom_mask"][:, None]).mean()
-    
-    # Compute MAE for BOTH dipole sources (regardless of which is used for loss)
-    # PhysNet dipole (already computed in output["dipoles"])
+    mae_forces = jnp.abs(
+        output["forces"] * batch["atom_mask"][:, None]
+        - batch["F"] * batch["atom_mask"][:, None]
+    ).mean()
+
     mae_dipole_physnet = jnp.abs(output["dipoles"] - batch["D"]).mean()
-    
-    # DCMNet dipole - must use SAME COM calculation as PhysNet
-    # NOTE: PhysNet calculates dipole in its forward pass, we need to replicate
-    # the COM calculation exactly to ensure consistency
+
     natoms = output["mono_dist"].shape[0] // batch_size
     mono_reshaped = output["mono_dist"].reshape(batch_size, natoms, n_dcm)
     dipo_reshaped = output["dipo_dist"].reshape(batch_size, natoms, n_dcm, 3)
-    
-    # Use PhysNet's COM (which is calculated during forward pass)
-    # For batch_size=1, flatten and use segment_sum approach like PhysNet
-    import ase.data
-    
-    # Flatten for segment_sum (like PhysNet does)
-    positions_flat = batch["R"]  # (batch*natoms, 3)
-    atomic_nums_flat = batch["Z"]  # (batch*natoms,)
+
+    positions_flat = batch["R"]
+    atomic_nums_flat = batch["Z"]
     masses_flat = jnp.take(ase.data.atomic_masses, atomic_nums_flat)
-    
-    # Compute COM using segment_sum
-    mass_weighted_pos = positions_flat * masses_flat[..., None]  # (batch*natoms, 3)
+
+    mass_weighted_pos = positions_flat * masses_flat[..., None]
     total_mass_weighted_pos = jax.ops.segment_sum(
         mass_weighted_pos,
         segment_ids=batch["batch_segments"],
-        num_segments=batch_size
-    )  # (batch_size, 3)
+        num_segments=batch_size,
+    )
     total_mass = jax.ops.segment_sum(
         masses_flat,
         segment_ids=batch["batch_segments"],
-        num_segments=batch_size
-    )  # (batch_size,)
-    com = total_mass_weighted_pos / total_mass[..., None]  # (batch_size, 3)
-    
-    # Subtract COM from distributed charge positions
-    dipo_rel_com = dipo_reshaped - com[:, None, None, :]  # (batch, natoms, n_dcm, 3)
+        num_segments=batch_size,
+    )
+    com = total_mass_weighted_pos / total_mass[..., None]
+
+    dipo_rel_com = dipo_reshaped - com[:, None, None, :]
     dipole_dcmnet = jnp.sum(mono_reshaped[..., None] * dipo_rel_com, axis=(1, 2))
     mae_dipole_dcmnet = jnp.abs(dipole_dcmnet - batch["D"]).mean()
-    
-    # Compute ESP RMSE for BOTH methods (only for batch_size == 1)
-    # For larger batches, this would need batched computation
-    # DCMNet ESP (from distributed multipoles)
-    mono_for_esp = mono_reshaped[0]  # (natoms, n_dcm)
-    dipo_for_esp = dipo_reshaped[0]  # (natoms, n_dcm, 3)
-    vdw_for_esp = batch["vdw_surface"][0]  # (ngrid, 3)
-    esp_target = batch["esp"][0]  # (ngrid,)
-    
-    # Create ESP mask using atomic radii (default behavior)
-    atom_positions_single = batch["R"].reshape(batch_size, natoms, 3)[0]  # (natoms, 3)
-    atom_mask_single = batch["atom_mask"].reshape(batch_size, natoms)[0]  # (natoms,)
-    atomic_nums_single = batch["Z"].reshape(batch_size, natoms)[0]  # (natoms,)
-    
-    # Compute distances
-    distances = jnp.linalg.norm(
-        vdw_for_esp[:, None, :] - atom_positions_single[None, :, :], 
-        axis=2
-    )  # (ngrid, natoms)
-    
-    # Get atomic radii for each atom - use jnp.take to avoid concretization  
-    atomic_radii = jnp.take(jnp.array(ase.data.covalent_radii), atomic_nums_single)
-    
-    # Check if within 2*radius of any atom
-    within_cutoff = distances < (2.0 * atomic_radii[None, :])
-    within_cutoff_masked = within_cutoff & (atom_mask_single[None, :] > 0.5)
-    any_too_close = jnp.any(within_cutoff_masked, axis=1)
-    distance_mask = (~any_too_close).astype(jnp.float32)
-    
-    # Optional: additional fixed distance filter
-    if esp_min_distance > 0:
-        min_distances = jnp.min(jnp.where(atom_mask_single[None, :] > 0.5, distances, 1e10), axis=1)
-        fixed_distance_mask = (min_distances >= esp_min_distance).astype(jnp.float32)
-        distance_mask = distance_mask * fixed_distance_mask
-    
-    # Add magnitude-based filtering
-    if esp_max_value < 1e9:  # Check if magnitude limit is set (sentinel is 1e10)
-        magnitude_mask = (jnp.abs(esp_target) <= esp_max_value).astype(jnp.float32)
-        esp_mask = distance_mask * magnitude_mask
-    else:
-        esp_mask = distance_mask
-    
-    # DCMNet ESP
-    mono_flat = mono_for_esp.reshape(-1)
-    dipo_flat = dipo_for_esp.reshape(-1, 3)  # Direct reshape to preserve xyz
-    from mmml.dcmnet.dcmnet.electrostatics import calc_esp
-    esp_pred_dcmnet = calc_esp(dipo_flat, mono_flat, vdw_for_esp)
-    
-    # PhysNet ESP (from atomic charges on atom centers)
-    # Get charges and positions for first molecule in batch
-    charges_physnet = output["charges_as_mono"]  # (batch*natoms,)
-    positions_physnet = batch["R"]  # (batch*natoms, 3)
-    atom_mask_batch = batch["atom_mask"]  # (batch*natoms,)
-    
-    # For batch_size == 1: use first natoms atoms
-    # Apply mask to handle padding (padded atoms have charge 0)
-    charges_masked = charges_physnet[:natoms] * atom_mask_batch[:natoms]
-    positions_masked = positions_physnet[:natoms]  # (natoms, 3)
-    
-    # Compute ESP from point charges: V(r) = Σ q_i / |r - r_i|
-    # Vectorized computation over grid points
-    # grid: (ngrid, 3), positions: (natoms, 3)
-    # distances: (ngrid, natoms)
-    distances = jnp.linalg.norm(vdw_for_esp[:, None, :] - positions_masked[None, :, :], axis=2)
-    # ESP at each grid point: sum over atoms (padded atoms have charge=0 so don't contribute)
-    esp_pred_physnet = jnp.sum(charges_masked[None, :] / (distances + 1e-10), axis=1)
-    
-    # Compute RMSE for both (using mask)
-    esp_diff_dcmnet = (esp_pred_dcmnet - esp_target) * esp_mask
-    esp_diff_physnet = (esp_pred_physnet - esp_target) * esp_mask
-    n_valid = esp_mask.sum()
-    rmse_esp_dcmnet = jnp.sqrt(jnp.sum(esp_diff_dcmnet ** 2) / (n_valid + 1e-10))
-    rmse_esp_physnet = jnp.sqrt(jnp.sum(esp_diff_physnet ** 2) / (n_valid + 1e-10))
-    
-    losses["mae_energy"] = mae_energy
-    losses["mae_forces"] = mae_forces
-    losses["mae_dipole_physnet"] = mae_dipole_physnet
-    losses["mae_dipole_dcmnet"] = mae_dipole_dcmnet
-    losses["rmse_esp_physnet"] = rmse_esp_physnet
-    losses["rmse_esp_dcmnet"] = rmse_esp_dcmnet
-    # Keep backward compatibility
-    losses["mae_dipole"] = mae_dipole_physnet if dipole_source == 'physnet' else mae_dipole_dcmnet
-    
-    # Add Coulomb energy info
-    losses["coulomb_energy"] = output.get("coulomb_energy", jnp.array(0.0))
-    losses["coulomb_lambda"] = output.get("coulomb_lambda", jnp.array(0.0))
-    
-    # Add predictions to output for statistics collection
-    output["dipoles_physnet"] = output["dipoles"]  # Already in output
-    output["dipoles_dcmnet"] = dipole_dcmnet
-    output["esp_physnet"] = esp_pred_physnet
-    output["esp_dcmnet"] = esp_pred_dcmnet
-    
-    return total_loss, losses, output
+
+    metrics = {
+        "mae_energy": mae_energy,
+        "mae_forces": mae_forces,
+        "mae_dipole_physnet": mae_dipole_physnet,
+        "mae_dipole_dcmnet": mae_dipole_dcmnet,
+    }
+
+    if output.get("dipoles_mixed") is not None:
+        mae_dipole_mixed = jnp.abs(output["dipoles_mixed"] - batch["D"]).mean()
+        metrics["mae_dipole_mixed"] = mae_dipole_mixed
+
+    if batch_size == 1:
+        esp_pred_physnet = losses.get("esp_physnet_pred")
+        esp_pred_dcmnet = losses.get("esp_dcmnet_pred")
+        if esp_pred_physnet is not None and esp_pred_dcmnet is not None:
+            esp_true = batch["esp"][0]
+            metrics["rmse_esp_physnet"] = jnp.sqrt(jnp.mean((esp_pred_physnet - esp_true) ** 2))
+            metrics["rmse_esp_dcmnet"] = jnp.sqrt(jnp.mean((esp_pred_dcmnet - esp_true) ** 2))
+            if output.get("lambda_esp") is not None:
+                esp_mixed = (
+                    output["lambda_esp"][0] * esp_pred_dcmnet
+                    + (1.0 - output["lambda_esp"][0]) * esp_pred_physnet
+                )
+                metrics["rmse_esp_mixed"] = jnp.sqrt(jnp.mean((esp_mixed - esp_true) ** 2))
+
+    return total_loss, losses, metrics
 
 
 def plot_validation_results(
@@ -1174,7 +1173,8 @@ def plot_validation_results(
             mono_w=mono_w,
             batch_size=1,
             n_dcm=n_dcm,
-            dipole_source=dipole_source,
+            dipole_terms=[LossTerm(source='physnet', weight=dipole_w), LossTerm(source='dcmnet', weight=dipole_w)],
+            esp_terms=[LossTerm(source='physnet', weight=esp_w), LossTerm(source='dcmnet', weight=esp_w)],
             esp_min_distance=0.0,  # No filtering for plotting
             esp_max_value=1e10,  # No magnitude filtering for plotting
         )
@@ -1959,7 +1959,8 @@ def plot_validation_results(
                 mono_w=mono_w,
                 batch_size=1,
                 n_dcm=n_dcm,
-                dipole_source=dipole_source,
+                dipole_terms=[LossTerm(source='physnet', weight=dipole_w), LossTerm(source='dcmnet', weight=dipole_w)],
+                esp_terms=[LossTerm(source='physnet', weight=esp_w), LossTerm(source='dcmnet', weight=esp_w)],
                 esp_min_distance=0.0,
                 esp_max_value=1e10,
             )
@@ -2174,7 +2175,8 @@ def plot_validation_results(
             mono_w=mono_w,
             batch_size=1,
             n_dcm=n_dcm,
-            dipole_source=dipole_source,
+            dipole_terms=[LossTerm(source='physnet', weight=dipole_w), LossTerm(source='dcmnet', weight=dipole_w)],
+            esp_terms=[LossTerm(source='physnet', weight=esp_w), LossTerm(source='dcmnet', weight=esp_w)],
             esp_min_distance=0.0,  # No filtering for plotting
             esp_max_value=1e10,  # No magnitude filtering for plotting
         )
@@ -2451,13 +2453,12 @@ def train_model(
                 optimizer_update=optimizer.update,
                 energy_w=energy_w,
                 forces_w=forces_w,
-                dipole_w=dipole_w,
-                esp_w=esp_w,
                 mono_w=mono_w,
                 batch_size=len(batch_indices),
                 n_dcm=n_dcm,
+                dipole_terms=[LossTerm(source='physnet', weight=dipole_w), LossTerm(source='dcmnet', weight=dipole_w)],
+                esp_terms=[LossTerm(source='physnet', weight=esp_w), LossTerm(source='dcmnet', weight=esp_w)],
                 clip_norm=grad_clip_norm,
-                dipole_source=dipole_source,
                 esp_min_distance=esp_min_distance,
                 esp_max_value=esp_max_value,
             )
@@ -2508,7 +2509,8 @@ def train_model(
                 mono_w=mono_w,
                 batch_size=len(batch_indices),
                 n_dcm=n_dcm,
-                dipole_source=dipole_source,
+                dipole_terms=[LossTerm(source='physnet', weight=dipole_w), LossTerm(source='dcmnet', weight=dipole_w)],
+                esp_terms=[LossTerm(source='physnet', weight=esp_w), LossTerm(source='dcmnet', weight=esp_w)],
                 esp_min_distance=esp_min_distance,
                 esp_max_value=esp_max_value,
             )
@@ -2624,9 +2626,10 @@ def train_model(
                     mono_w=mono_w,
                     batch_size=1,
                     n_dcm=n_dcm,
-                    dipole_source=dipole_source,
-                    esp_min_distance=0.0,
-                    esp_max_value=1e10,
+                    dipole_terms=[LossTerm(source='physnet', weight=dipole_w), LossTerm(source='dcmnet', weight=dipole_w)],
+                    esp_terms=[LossTerm(source='physnet', weight=esp_w), LossTerm(source='dcmnet', weight=esp_w)],
+                    esp_min_distance=esp_min_distance,
+                    esp_max_value=esp_max_value,
                 )
                 
                 n_atoms_diag = int(diag_batch['N'][0])
