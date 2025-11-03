@@ -462,6 +462,111 @@ def _compute_esp_batch(
     )
 
 
+class NonEquivariantChargeModel(nn.Module):
+    """
+    Non-equivariant model that predicts distributed charges with explicit Cartesian displacements.
+    
+    Instead of using spherical harmonics (equivariant), this model directly predicts:
+    - n charges per atom (scalars)
+    - n displacement vectors per atom (3D Cartesian coordinates)
+    
+    This is simpler but breaks rotational equivariance since displacements are in Cartesian space.
+    
+    Attributes
+    ----------
+    features : int
+        Hidden layer size for MLP
+    n_dcm : int
+        Number of distributed charges per atom
+    max_atomic_number : int
+        Maximum atomic number for embedding
+    num_layers : int
+        Number of MLP layers (default: 3)
+    max_displacement : float
+        Maximum displacement distance in Angstroms (default: 1.0)
+    """
+    features: int
+    n_dcm: int
+    max_atomic_number: int
+    num_layers: int = 3
+    max_displacement: float = 1.0
+    
+    @nn.compact
+    def __call__(
+        self,
+        atomic_numbers: jnp.ndarray,
+        positions: jnp.ndarray,
+        charges_from_physnet: jnp.ndarray,
+        atom_mask: jnp.ndarray,
+    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
+        """
+        Predict distributed charges and their positions.
+        
+        Parameters
+        ----------
+        atomic_numbers : jnp.ndarray
+            Atomic numbers, shape (batch_size * natoms,)
+        positions : jnp.ndarray
+            Atomic positions, shape (batch_size * natoms, 3)
+        charges_from_physnet : jnp.ndarray
+            Atomic charges from PhysNet, shape (batch_size * natoms,)
+        atom_mask : jnp.ndarray
+            Atom mask, shape (batch_size * natoms,)
+            
+        Returns
+        -------
+        charges_dist : jnp.ndarray
+            Distributed charges, shape (batch_size * natoms, n_dcm)
+        positions_dist : jnp.ndarray
+            Absolute positions of distributed charges, shape (batch_size * natoms, n_dcm, 3)
+        """
+        # Atomic number embedding
+        atomic_embedding = nn.Embed(
+            num_embeddings=self.max_atomic_number + 1,
+            features=self.features,
+            name="atomic_embedding"
+        )(atomic_numbers)
+        
+        # Combine atomic embedding with charge information
+        # charges_from_physnet: (batch*natoms,)
+        x = jnp.concatenate([
+            atomic_embedding,  # (batch*natoms, features)
+            charges_from_physnet[:, None],  # (batch*natoms, 1)
+        ], axis=-1)  # (batch*natoms, features+1)
+        
+        # MLP to process features
+        for i in range(self.num_layers):
+            x = nn.Dense(self.features, name=f"layer_{i}")(x)
+            x = nn.silu(x)
+        
+        # Predict charges for each distributed charge point
+        # Output: (batch*natoms, n_dcm)
+        charges_dist = nn.Dense(self.n_dcm, name="charges_head")(x)
+        
+        # Predict displacement vectors for each distributed charge point
+        # Output: (batch*natoms, n_dcm * 3)
+        displacements_flat = nn.Dense(self.n_dcm * 3, name="displacements_head")(x)
+        
+        # Reshape to (batch*natoms, n_dcm, 3)
+        displacements = displacements_flat.reshape(-1, self.n_dcm, 3)
+        
+        # Apply tanh to bound displacements, then scale by max_displacement
+        # This ensures displacements stay within reasonable range
+        displacements = jnp.tanh(displacements) * self.max_displacement
+        
+        # Compute absolute positions by adding displacements to atom positions
+        # positions: (batch*natoms, 3) -> (batch*natoms, 1, 3)
+        # displacements: (batch*natoms, n_dcm, 3)
+        positions_dist = positions[:, None, :] + displacements  # (batch*natoms, n_dcm, 3)
+        
+        # Apply atom mask to outputs
+        mask_expanded = atom_mask[:, None]  # (batch*natoms, 1)
+        charges_dist = charges_dist * mask_expanded
+        positions_dist = positions_dist * mask_expanded[:, :, None]
+        
+        return charges_dist, positions_dist
+
+
 class ChargeOrientationMixer(nn.Module):
     """Learn scalar mixing factors from charge orientations."""
 
