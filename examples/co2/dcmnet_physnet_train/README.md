@@ -520,6 +520,7 @@ Expected output:
 - 4 vibrational modes (3 real: symmetric stretch, asymmetric stretch, 2× bend)
 - IR spectrum with characteristic CO2 peaks
 - Comparison showing both dipole methods
+<<<<<<< HEAD
 
 ## Toolbox Overview
 
@@ -687,3 +688,5 @@ This directory ships a full workflow around the joint PhysNet–DCMNet model. Th
 - **matplotlib** for all plotting scripts (`pip install matplotlib`).
 - **R + tidyverse packages** for `plot_evaluation_results.R` when using the evaluation pipeline.
 - **JAX MD** (`pip install jax-md`) for GPU-accelerated dynamics.
+=======
+>>>>>>> 284d4671 (asdf)
