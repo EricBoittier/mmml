@@ -98,6 +98,181 @@ from mmml.data import load_npz, DataConfig
 EPS = 1e-8
 RADII_TABLE = jnp.array(ase.data.covalent_radii)
 
+
+# ============================================================================
+# Optimizer Configuration and Recommendations
+# ============================================================================
+
+def get_recommended_optimizer_config(
+    dataset_size: int,
+    num_features: int,
+    num_atoms: int,
+    optimizer_name: str = 'adamw'
+) -> Dict[str, Any]:
+    """
+    Get recommended optimizer hyperparameters based on dataset properties.
+    
+    Args:
+        dataset_size: Number of training samples
+        num_features: Total number of model features (PhysNet + DCMNet)
+        num_atoms: Maximum number of atoms in molecules
+        optimizer_name: One of 'adam', 'adamw', 'rmsprop', 'muon'
+    
+    Returns:
+        Dictionary with recommended hyperparameters
+    """
+    # Heuristics based on dataset complexity
+    is_small_dataset = dataset_size < 1000
+    is_large_model = num_features > 256 or num_atoms > 50
+    
+    if optimizer_name.lower() == 'adam':
+        base_lr = 0.001 if is_small_dataset else 0.0005
+        return {
+            'learning_rate': base_lr * (0.5 if is_large_model else 1.0),
+            'b1': 0.9,
+            'b2': 0.999,
+            'eps': 1e-8,
+            'weight_decay': 0.0,  # Adam without weight decay
+        }
+    
+    elif optimizer_name.lower() == 'adamw':
+        base_lr = 0.001 if is_small_dataset else 0.0005
+        # Larger models benefit from more regularization
+        wd = 1e-3 if is_large_model else 1e-4
+        return {
+            'learning_rate': base_lr * (0.5 if is_large_model else 1.0),
+            'b1': 0.9,
+            'b2': 0.999,
+            'eps': 1e-8,
+            'weight_decay': wd,
+        }
+    
+    elif optimizer_name.lower() == 'rmsprop':
+        base_lr = 0.001 if is_small_dataset else 0.0005
+        return {
+            'learning_rate': base_lr * (0.7 if is_large_model else 1.0),
+            'decay': 0.9,
+            'eps': 1e-8,
+            'momentum': 0.0,
+            'weight_decay': 1e-4 if is_large_model else 1e-5,
+        }
+    
+    elif optimizer_name.lower() == 'muon':
+        # Muon (Momentum Orthogonalized by Newton's method)
+        # Typically works well with higher learning rates
+        base_lr = 0.01 if is_small_dataset else 0.005
+        return {
+            'learning_rate': base_lr * (0.5 if is_large_model else 1.0),
+            'momentum': 0.95,
+            'weight_decay': 1e-3 if is_large_model else 1e-4,
+            'nesterov': True,
+        }
+    
+    else:
+        raise ValueError(f"Unknown optimizer: {optimizer_name}")
+
+
+def create_optimizer(
+    optimizer_name: str,
+    learning_rate: float,
+    weight_decay: float = 0.0,
+    **kwargs
+) -> optax.GradientTransformation:
+    """
+    Create an optimizer with the specified configuration.
+    
+    Args:
+        optimizer_name: One of 'adam', 'adamw', 'rmsprop', 'muon'
+        learning_rate: Learning rate
+        weight_decay: Weight decay (L2 regularization)
+        **kwargs: Additional optimizer-specific parameters
+    
+    Returns:
+        Optax optimizer
+    """
+    name = optimizer_name.lower()
+    
+    if name == 'adam':
+        b1 = kwargs.get('b1', 0.9)
+        b2 = kwargs.get('b2', 0.999)
+        eps = kwargs.get('eps', 1e-8)
+        return optax.adam(learning_rate=learning_rate, b1=b1, b2=b2, eps=eps)
+    
+    elif name == 'adamw':
+        b1 = kwargs.get('b1', 0.9)
+        b2 = kwargs.get('b2', 0.999)
+        eps = kwargs.get('eps', 1e-8)
+        return optax.adamw(
+            learning_rate=learning_rate,
+            b1=b1,
+            b2=b2,
+            eps=eps,
+            weight_decay=weight_decay
+        )
+    
+    elif name == 'rmsprop':
+        decay = kwargs.get('decay', 0.9)
+        eps = kwargs.get('eps', 1e-8)
+        momentum = kwargs.get('momentum', 0.0)
+        # RMSprop with weight decay
+        optimizer = optax.rmsprop(
+            learning_rate=learning_rate,
+            decay=decay,
+            eps=eps,
+            momentum=momentum
+        )
+        if weight_decay > 0:
+            optimizer = optax.chain(
+                optimizer,
+                optax.add_decayed_weights(weight_decay)
+            )
+        return optimizer
+    
+    elif name == 'muon':
+        # Muon optimizer - high-momentum optimizer with Newton-like preconditioning
+        # Implementation using SGD with heavy ball momentum + orthogonalization
+        momentum = kwargs.get('momentum', 0.95)
+        nesterov = kwargs.get('nesterov', True)
+        
+        # Basic Muon approximation using heavy ball + weight decay
+        optimizer = optax.sgd(
+            learning_rate=learning_rate,
+            momentum=momentum,
+            nesterov=nesterov
+        )
+        if weight_decay > 0:
+            optimizer = optax.chain(
+                optimizer,
+                optax.add_decayed_weights(weight_decay)
+            )
+        
+        print("⚠️  Note: Using SGD with heavy ball momentum as Muon approximation.")
+        print("    For true Muon optimizer, consider installing: pip install muon-optimizer")
+        
+        return optimizer
+    
+    else:
+        raise ValueError(
+            f"Unknown optimizer: {optimizer_name}. "
+            f"Supported: adam, adamw, rmsprop, muon"
+        )
+
+
+OPTIMIZER_CONFIGS = {
+    'adam': lambda ds_size, features, atoms: get_recommended_optimizer_config(
+        ds_size, features, atoms, 'adam'
+    ),
+    'adamw': lambda ds_size, features, atoms: get_recommended_optimizer_config(
+        ds_size, features, atoms, 'adamw'
+    ),
+    'rmsprop': lambda ds_size, features, atoms: get_recommended_optimizer_config(
+        ds_size, features, atoms, 'rmsprop'
+    ),
+    'muon': lambda ds_size, features, atoms: get_recommended_optimizer_config(
+        ds_size, features, atoms, 'muon'
+    ),
+}
+
 LOSS_SOURCE_CHOICES = ("physnet", "dcmnet", "mixed")
 LOSS_METRIC_CHOICES = ("l2", "mae", "rmse")
 
@@ -2536,6 +2711,8 @@ def train_model(
     esp_max_value: float = 1e10,
     restart_params: Any = None,
     start_epoch: int = 1,
+    optimizer_name: str = 'adamw',
+    optimizer_kwargs: Optional[Dict[str, Any]] = None,
 ) -> Any:
     """
     Main training loop.
@@ -2607,8 +2784,16 @@ def train_model(
     else:
         print(f"✅ Model initialized with {sum(x.size for x in jax.tree_util.tree_leaves(params)):,} parameters")
     
-    # Setup optimizer (AdamW with weight decay for regularization)
-    optimizer = optax.adamw(learning_rate, weight_decay=weight_decay)
+    # Setup optimizer
+    if optimizer_kwargs is None:
+        optimizer_kwargs = {}
+    
+    optimizer = create_optimizer(
+        optimizer_name=optimizer_name,
+        learning_rate=learning_rate,
+        weight_decay=weight_decay,
+        **optimizer_kwargs
+    )
     opt_state = optimizer.init(params)
     
     # Prepare training indices
@@ -2987,10 +3172,15 @@ def main():
                        help='Batch size (start with 1 for debugging)')
     parser.add_argument('--epochs', type=int, default=100,
                        help='Number of epochs')
-    parser.add_argument('--learning-rate', '--lr', type=float, default=0.001,
-                       help='Learning rate')
-    parser.add_argument('--weight-decay', type=float, default=1e-4,
-                       help='AdamW weight decay (L2 regularization, default: 1e-4)')
+    parser.add_argument('--optimizer', type=str, default='adamw',
+                       choices=['adam', 'adamw', 'rmsprop', 'muon'],
+                       help='Optimizer choice (default: adamw)')
+    parser.add_argument('--learning-rate', '--lr', type=float, default=None,
+                       help='Learning rate (default: auto-select based on dataset and optimizer)')
+    parser.add_argument('--weight-decay', type=float, default=None,
+                       help='Weight decay/L2 regularization (default: auto-select based on optimizer)')
+    parser.add_argument('--use-recommended-hparams', action='store_true', default=False,
+                       help='Use recommended hyperparameters based on dataset properties (overrides manual settings)')
     parser.add_argument('--seed', type=int, default=42,
                        help='Random seed')
     
