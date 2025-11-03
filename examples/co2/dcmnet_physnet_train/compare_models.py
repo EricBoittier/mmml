@@ -690,6 +690,14 @@ def main():
         print("🏋️  Training DCMNet...")
         start_time = time.time()
         
+        # Create loss terms for training
+        dipole_terms = (
+            LossTerm(source='physnet', weight=25.0, metric='l2', name='physnet'),
+        )
+        esp_terms = (
+            LossTerm(source='dcmnet', weight=10000.0, metric='l2', name='dcmnet'),
+        )
+        
         params_dcm = train_model(
             model=model_dcm,
             train_data=train_data,
@@ -709,6 +717,8 @@ def main():
             ckpt_dir=dcm_ckpt_dir.parent,
             name=dcm_ckpt_dir.name,
             print_freq=5,
+            dipole_terms=dipole_terms,
+            esp_terms=esp_terms,
             optimizer_name='adamw',
             optimizer_kwargs={'b1': 0.9, 'b2': 0.999},
         )
@@ -741,6 +751,14 @@ def main():
         print("🏋️  Training Non-Equivariant model...")
         start_time = time.time()
         
+        # Create loss terms for training (same as DCMNet for fair comparison)
+        dipole_terms = (
+            LossTerm(source='physnet', weight=25.0, metric='l2', name='physnet'),
+        )
+        esp_terms = (
+            LossTerm(source='dcmnet', weight=10000.0, metric='l2', name='dcmnet'),
+        )
+        
         params_noneq = train_model(
             model=model_noneq,
             train_data=train_data,
@@ -760,6 +778,8 @@ def main():
             ckpt_dir=noneq_ckpt_dir.parent,
             name=noneq_ckpt_dir.name,
             print_freq=5,
+            dipole_terms=dipole_terms,
+            esp_terms=esp_terms,
             optimizer_name='adamw',
             optimizer_kwargs={'b1': 0.9, 'b2': 0.999},
         )
