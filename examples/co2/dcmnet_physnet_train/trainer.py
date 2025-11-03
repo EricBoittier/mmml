@@ -2510,28 +2510,56 @@ def train_model(
     key, init_key = jax.random.split(key)
     
     # Initialize or load parameters
+    # Always initialize a fresh set of parameters for the current model architecture
+    dummy_batch = prepare_batch_data(train_data, np.array([0]), cutoff=cutoff)
+    
+    print("\nInitializing model parameters...")
+    params = model.init(
+        init_key,
+        atomic_numbers=dummy_batch["Z"],
+        positions=dummy_batch["R"],
+        dst_idx=dummy_batch["dst_idx"],
+        src_idx=dummy_batch["src_idx"],
+        batch_segments=dummy_batch["batch_segments"],
+        batch_size=1,
+        batch_mask=dummy_batch["batch_mask"],
+        atom_mask=dummy_batch["atom_mask"],
+    )
+    
+    # If restarting, merge old parameters with new structure (allows partial loading)
     if restart_params is not None:
-        print("\n🔄 Restarting from checkpoint...")
-        params = restart_params
-        print(f"✅ Loaded {sum(x.size for x in jax.tree_util.tree_leaves(params)):,} parameters")
+        print("\n🔄 Merging checkpoint parameters...")
+        
+        # Deep merge: copy matching parameters from restart_params to params
+        def merge_params(new_tree, old_tree, path=""):
+            if isinstance(new_tree, dict):
+                merged = {}
+                for key in new_tree:
+                    new_path = f"{path}/{key}" if path else key
+                    if key in old_tree:
+                        merged[key] = merge_params(new_tree[key], old_tree[key], new_path)
+                    else:
+                        print(f"  ⚠️  New parameter (initialized randomly): {new_path}")
+                        merged[key] = new_tree[key]
+                # Report old parameters not in new model
+                for key in old_tree:
+                    if key not in new_tree:
+                        new_path = f"{path}/{key}" if path else key
+                        print(f"  ⚠️  Dropped old parameter: {new_path}")
+                return merged
+            else:
+                # Leaf node - use old value if shapes match
+                if hasattr(new_tree, 'shape') and hasattr(old_tree, 'shape'):
+                    if new_tree.shape == old_tree.shape:
+                        return old_tree
+                    else:
+                        print(f"  ⚠️  Shape mismatch at {path}: old={old_tree.shape}, new={new_tree.shape} (using new)")
+                        return new_tree
+                return old_tree
+        
+        params = merge_params(params, restart_params)
+        print(f"✅ Merged checkpoint with {sum(x.size for x in jax.tree_util.tree_leaves(params)):,} parameters")
     else:
-        # Create dummy batch for initialization
-        dummy_batch = prepare_batch_data(train_data, np.array([0]), cutoff=cutoff)
-        
-        # Initialize parameters
-        print("\nInitializing model parameters...")
-        params = model.init(
-            init_key,
-            atomic_numbers=dummy_batch["Z"],
-            positions=dummy_batch["R"],
-            dst_idx=dummy_batch["dst_idx"],
-            src_idx=dummy_batch["src_idx"],
-            batch_segments=dummy_batch["batch_segments"],
-            batch_size=1,
-            batch_mask=dummy_batch["batch_mask"],
-            atom_mask=dummy_batch["atom_mask"],
-        )
-        
         print(f"✅ Model initialized with {sum(x.size for x in jax.tree_util.tree_leaves(params)):,} parameters")
     
     # Setup optimizer (AdamW with weight decay for regularization)
