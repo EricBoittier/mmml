@@ -556,6 +556,14 @@ This directory ships a full workflow around the joint PhysNet–DCMNet model. Th
     --train-esp ./data/train_esp.npz --valid-esp ./data/valid_esp.npz \
     --output-dir ./evaluation
   ```
+- `eval_calculator.py` — single-molecule evaluator with ESP surface plots and dipole breakdowns.
+  ```bash
+  python eval_calculator.py \
+    --checkpoint ./ckpts/model \
+    --molecule CO2 \
+    --esp-data ../dcmnet_train/grids_esp_valid.npz --esp-index 0 \
+    --output-dir ./evaluation_results
+  ```
 
 ### Dynamics & Spectroscopy Workflows
 
@@ -564,6 +572,12 @@ This directory ships a full workflow around the joint PhysNet–DCMNet model. Th
   python dynamics_calculator.py \
     --checkpoint ./ckpts/model --molecule CO2 \
     --frequencies --ir-spectra --optimize
+  ```
+- `ase_calculator.py` — lightweight wrapper to expose the joint model as an ASE calculator for geometry, IR, and dipole studies.
+  ```bash
+  python ase_calculator.py \
+    --checkpoint ./ckpts/model --molecule CO2 --optimize --frequencies --ir-spectra \
+    --output-dir ./ase_results/co2
   ```
 - `run_production_md.py` — conservative production MD runner with optional IR post-processing.
   ```bash
@@ -592,6 +606,10 @@ This directory ships a full workflow around the joint PhysNet–DCMNet model. Th
   ```bash
   python convert_npz_to_traj.py md_ir_long/trajectory.npz --output md_ir_long/trajectory.traj
   python extract_ir_from_trajectory.py --trajectory md_ir_long/trajectory.npz --output-dir md_ir_long
+  ```
+- `run_ase_example.sh` — handy presets showcasing optimization, frequency, and IR pipelines with a single command.
+  ```bash
+  ./run_ase_example.sh
   ```
 
 ### Visualization Utilities
