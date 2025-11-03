@@ -2707,7 +2707,7 @@ def train_model(
             all_forces_true.extend(np.array(batch['F']).flatten())
             
             # Collect dipole predictions
-            all_dipole_physnet_pred.extend(np.array(output['dipoles_physnet']).flatten())
+            all_dipole_physnet_pred.extend(np.array(output['dipoles']).flatten())
             all_dipole_dcmnet_pred.extend(np.array(output['dipoles_dcmnet']).flatten())
             all_dipole_true.extend(np.array(batch['D']).flatten())
             
