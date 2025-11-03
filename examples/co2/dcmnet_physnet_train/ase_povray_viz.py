@@ -182,7 +182,7 @@ def compute_esp_on_vdw_surface(atoms, charge_positions, charge_values, n_points=
 def write_ase_povray_with_charges(atoms, result, output_path, 
                                   show_molecule='full', show_charges=False, show_esp=False,
                                   rotation='0x,0y,0z', canvas_width=2400,
-                                  charge_radius=0.15, transparency=0.5):
+                                  charge_radius=0.15, transparency=0.5, camera_zoom=1.0):
     """
     Write POV-Ray scene using ASE's writer, then add charges and ESP.
     
@@ -196,6 +196,8 @@ def write_ase_povray_with_charges(atoms, result, output_path,
         Show distributed charges as colored spheres
     show_esp : bool
         Show ESP on VDW surface
+    camera_zoom : float
+        Camera zoom factor (< 1.0 zooms out, > 1.0 zooms in)
     """
     
     # Determine molecule rendering style
@@ -228,17 +230,23 @@ def write_ase_povray_with_charges(atoms, result, output_path,
             if i < j:  # Avoid duplicates
                 bondatoms.append((i, j))
     
+    # Calculate bounding box for better camera distance
+    positions = atoms.get_positions()
+    center = positions.mean(axis=0)
+    max_extent = np.max(np.linalg.norm(positions - center, axis=1))
+    camera_distance = max(15.0, max_extent * 4.0) / camera_zoom  # Adjustable zoom
+    
     povray_settings = {
         'transparent': False,
         'canvas_width': canvas_width,
-        'camera_dist': 10.0,
+        'camera_dist': camera_distance,  # Dynamic based on molecule size
         'camera_type': 'orthographic',
-        'point_lights': [],  # We'll add custom lights
-        'area_light': [(2., 3., 40.), 'White', .7, .7, 3, 3],
+        'point_lights': [],  # We'll add custom soft area lights
+        'area_light': [],  # Disable default, we'll add custom
         'background': 'White',
         'textures': ['jmol'] * len(atoms),
         'celllinewidth': 0.0,
-        'bondatoms': bondatoms,  # Bonds go in povray_settings
+        'bondatoms': bondatoms,
     }
     
     # Write base molecule
@@ -252,31 +260,72 @@ def write_ase_povray_with_charges(atoms, result, output_path,
         povray_settings=povray_settings,
     )
     
-    # Now append charges and ESP to the POV file
+    # Now append custom lighting, materials, and charges/ESP to the POV file
     with open(output_path, 'a') as f:
-        f.write("\n\n// Distributed Charges and ESP\n")
+        f.write("\n\n// Enhanced rendering settings\n")
         f.write("// Added by ase_povray_viz.py\n\n")
         
-        # Charge finish
+        # Enhanced lighting with soft area lights
         f.write("""
-#declare charge_texture = texture {
-    pigment { rgbf <1, 1, 1, 0.5> }
-    finish {
-        ambient 0.3
-        diffuse 0.6
-        specular 0.4
-        roughness 0.01
-        phong 0.5
-        phong_size 40
-    }
+// Soft area lighting for better appearance
+#declare light_color = rgb <1.0, 1.0, 1.0>;
+
+// Main key light (soft area light)
+light_source {
+    <20, 30, 40>
+    color light_color * 0.8
+    area_light <8, 0, 0>, <0, 8, 0>, 5, 5
+    adaptive 1
+    jitter
+    fade_distance 60
+    fade_power 1
 }
 
-#declare esp_texture = texture {
-    finish {
-        ambient 0.4
-        diffuse 0.5
-        specular 0.2
-    }
+// Fill light (softer, from opposite side)
+light_source {
+    <-15, 20, -30>
+    color light_color * 0.4
+    area_light <6, 0, 0>, <0, 6, 0>, 4, 4
+    adaptive 1
+    jitter
+    fade_distance 50
+    fade_power 1
+}
+
+// Back rim light (subtle)
+light_source {
+    <-10, -15, -40>
+    color light_color * 0.3
+    area_light <5, 0, 0>, <0, 5, 0>, 3, 3
+    adaptive 1
+    jitter
+}
+
+// Ambient illumination
+global_settings {
+    ambient_light rgb <0.15, 0.15, 0.15>
+    max_trace_level 15
+}
+
+// Enhanced charge texture with anisotropic properties
+#declare charge_finish = finish {
+    ambient 0.2
+    diffuse 0.65
+    specular 0.5
+    roughness 0.005
+    metallic 0.15
+    phong 0.6
+    phong_size 80
+    brilliance 1.2
+}
+
+// Enhanced ESP surface finish
+#declare esp_finish = finish {
+    ambient 0.25
+    diffuse 0.6
+    specular 0.3
+    roughness 0.02
+    brilliance 1.0
 }
 
 """)
@@ -305,12 +354,7 @@ def write_ase_povray_with_charges(atoms, result, output_path,
                 f.write(f"  <{pos[0]:.4f}, {pos[1]:.4f}, {pos[2]:.4f}>, {radius:.4f}\n")
                 f.write(f"  texture {{\n")
                 f.write(f"    pigment {{ rgbf <{r:.3f}, {g:.3f}, {b:.3f}, {transparency:.2f}> }}\n")
-                f.write(f"    finish {{\n")
-                f.write(f"      ambient 0.3\n")
-                f.write(f"      diffuse 0.6\n")
-                f.write(f"      specular 0.4\n")
-                f.write(f"      roughness 0.01\n")
-                f.write(f"    }}\n")
+                f.write(f"    finish {{ charge_finish }}\n")
                 f.write(f"  }}\n")
                 f.write(f"}}\n\n")
         
@@ -335,11 +379,8 @@ def write_ase_povray_with_charges(atoms, result, output_path,
                 f.write(f"sphere {{\n")
                 f.write(f"  <{pos[0]:.4f}, {pos[1]:.4f}, {pos[2]:.4f}>, 0.06\n")
                 f.write(f"  texture {{\n")
-                f.write(f"    pigment {{ rgbf <{r:.3f}, {g:.3f}, {b:.3f}, 0.7> }}\n")
-                f.write(f"    finish {{\n")
-                f.write(f"      ambient 0.5\n")
-                f.write(f"      diffuse 0.4\n")
-                f.write(f"    }}\n")
+                f.write(f"    pigment {{ rgbf <{r:.3f}, {g:.3f}, {b:.3f}, 0.65> }}\n")
+                f.write(f"    finish {{ esp_finish }}\n")
                 f.write(f"  }}\n")
                 f.write(f"}}\n\n")
 
@@ -414,6 +455,8 @@ def main():
                        help='Molecule rendering style for molecule+charges (default: full for standalone, wireframe for +charges)')
     parser.add_argument('--charge-radius', type=float, default=0.15)
     parser.add_argument('--transparency', type=float, default=0.5)
+    parser.add_argument('--camera-zoom', type=float, default=1.0,
+                       help='Camera zoom factor (< 1.0 zooms out, > 1.0 zooms in)')
     parser.add_argument('--resolution', choices=['low', 'medium', 'high', 'ultra'],
                        default='high')
     parser.add_argument('--views', nargs='+',
@@ -529,6 +572,7 @@ def main():
                 canvas_width=width,
                 charge_radius=args.charge_radius,
                 transparency=args.transparency,
+                camera_zoom=args.camera_zoom,
             )
             
             success = render_povray(pov_file, png_file, width, height, quality, antialias=True)
