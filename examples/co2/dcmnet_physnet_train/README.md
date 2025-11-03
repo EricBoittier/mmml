@@ -520,3 +520,152 @@ Expected output:
 - 4 vibrational modes (3 real: symmetric stretch, asymmetric stretch, 2× bend)
 - IR spectrum with characteristic CO2 peaks
 - Comparison showing both dipole methods
+
+## Toolbox Overview
+
+This directory ships a full workflow around the joint PhysNet–DCMNet model. The summaries below collect the most-used entry points and sample invocations. All commands assume you run them from `examples/co2/dcmnet_physnet_train/` unless stated otherwise.
+
+### Training & Evaluation
+
+- `trainer.py` — joint training of PhysNet + DCMNet with flexible loss weights and plotting hooks.
+  ```bash
+  python trainer.py \
+    --train-efd ../physnet_train_charges/energies_forces_dipoles_train.npz \
+    --train-esp ../dcmnet_train/grids_esp_train.npz \
+    --valid-efd ../physnet_train_charges/energies_forces_dipoles_valid.npz \
+    --valid-esp ../dcmnet_train/grids_esp_valid.npz \
+    --epochs 100 --batch-size 10 --name co2_joint
+  ```
+- `train_default.sh` — quick-start shell wrapper that wires in default datasets and hyperparameters:
+  ```bash
+  ./train_default.sh
+  ```
+- `run_full_evaluation.sh` — end-to-end metrics + plots (wraps `evaluate_splits.py` and `plot_evaluation_results.R`).
+  ```bash
+  ./run_full_evaluation.sh \
+    --checkpoint ./ckpts/model \
+    --train-efd ./data/train_efd.npz --valid-efd ./data/valid_efd.npz \
+    --train-esp ./data/train_esp.npz --valid-esp ./data/valid_esp.npz \
+    --output-dir ./evaluation
+  ```
+- `evaluate_splits.py` — programmatic error reports and bond/angle features for train/valid/test.
+  ```bash
+  python evaluate_splits.py \
+    --checkpoint ./ckpts/model \
+    --train-efd ./data/train_efd.npz --valid-efd ./data/valid_efd.npz \
+    --train-esp ./data/train_esp.npz --valid-esp ./data/valid_esp.npz \
+    --output-dir ./evaluation
+  ```
+
+### Dynamics & Spectroscopy Workflows
+
+- `dynamics_calculator.py` — ASE-based optimization, vibrational analysis, IR spectra, and MD drivers.
+  ```bash
+  python dynamics_calculator.py \
+    --checkpoint ./ckpts/model --molecule CO2 \
+    --frequencies --ir-spectra --optimize
+  ```
+- `run_production_md.py` — conservative production MD runner with optional IR post-processing.
+  ```bash
+  python run_production_md.py \
+    --checkpoint ./ckpts/model --molecule CO2 \
+    --nsteps 1000000 --analyze-ir --output-dir ./md_ir_long
+  ```
+- `compute_response_properties.py` — IR/Raman/VCD/SFG spectra from saved MD trajectories.
+  ```bash
+  python compute_response_properties.py \
+    --trajectory ./md_ir_long/trajectory.npz \
+    --checkpoint ./ckpts/model --compute-ir --compute-raman --output-dir ./all_spectra
+  ```
+- `spectroscopy_suite.py` — orchestration script for full scans across temperatures, ensembles, and spectroscopy modes.
+  ```bash
+  python spectroscopy_suite.py \
+    --checkpoint ./ckpts/model --molecule CO2 --quick-analysis
+  ```
+- `jaxmd_dynamics.py` — GPU-accelerated JAX MD integrator for long, fine-grained trajectories.
+  ```bash
+  python jaxmd_dynamics.py \
+    --checkpoint ./ckpts/model --molecule CO2 \
+    --ensemble nvt --temperature 300 --nsteps 100000 --output-dir ./jaxmd_nvt
+  ```
+- `convert_npz_to_traj.py` and `extract_ir_from_trajectory.py` — utilities to convert NPZ runs to ASE format and back out IR spectra without retracing the MD.
+  ```bash
+  python convert_npz_to_traj.py md_ir_long/trajectory.npz --output md_ir_long/trajectory.traj
+  python extract_ir_from_trajectory.py --trajectory md_ir_long/trajectory.npz --output-dir md_ir_long
+  ```
+
+### Visualization Utilities
+
+- `visualize_normal_modes.py` — plots and trajectories for vibrational eigenmodes from ASE caches.
+  ```bash
+  python visualize_normal_modes.py --raman-dir ./raman_analysis --output-dir ./mode_animations
+  ```
+- `visualize_charges_during_vibration.py` — snapshots of distributed multipoles along a selected mode.
+  ```bash
+  python visualize_charges_during_vibration.py \
+    --checkpoint ./ckpts/model --raman-dir ./raman_analysis --mode-index 7 --n-frames 20
+  ```
+- `visualize_all_modes.py` — batch driver that loops over every mode and reuses the charge visualization helper.
+  ```bash
+  python visualize_all_modes.py --checkpoint ./ckpts/model --raman-dir ./raman_analysis --n-frames 20
+  ```
+- `remake_raman_plot.py` — rebuild Raman figures (single or multi-wavelength) from cached results.
+  ```bash
+  python remake_raman_plot.py --raman-dir ./raman_analysis --multi-wavelength
+  ```
+
+### Active Learning & Data Preparation
+
+- `active_learning_manager.py` — manage, deduplicate, and export challenging MD structures for QM follow-up.
+  ```bash
+  python active_learning_manager.py \
+    --export-xyz --source "./md_runs/*/active_learning" --output ./qm_candidates --max-structures 100
+  ```
+- `prepare_qm_inputs.py` — build ORCA/Gaussian/Q-Chem/Psi4 inputs from XYZ ensembles.
+  ```bash
+  python prepare_qm_inputs.py \
+    --xyz-dir ./qm_candidates --qm-software orca --method PBE0 --basis def2-TZVP --output ./orca_inputs
+  ```
+- `convert_molpro_to_training.py` — turn Molpro cube/log output into NPZ training packs (with optional merge).
+  ```bash
+  python convert_molpro_to_training.py \
+    --molpro-outputs ./logs/*.out --cube-dir ./cubes --output ./qm_training_data.npz
+  ```
+- `create_molpro_jobs_from_al.py` — generate Molpro input decks and SLURM arrays from active-learning structures.
+  ```bash
+  python create_molpro_jobs_from_al.py \
+    --al-structures "./md_*/active_learning/*.npz" --output-dir ./molpro_al_jobs --ntasks 16 --mem 132G
+  ```
+- `gas_phase_calculator.py` and `gas_phase_jaxmd.py` — simulate gas-phase ensembles; see `GAS_PHASE_README.md` for workflows.
+  ```bash
+  python gas_phase_calculator.py \
+    --checkpoint ./ckpts/model --n-molecules 10 --temperature 300 --pressure 1.0 --output-dir ./gas_phase
+  ```
+
+### Diagnostics & Utilities
+
+- `diagnose_charges.py` — inspect PhysNet/DCMNet charge balance issues on validation samples.
+  ```bash
+  python diagnose_charges.py \
+    --checkpoint ./ckpts/model --valid-esp ../dcmnet_train/grids_esp_valid.npz \
+    --valid-efd ../physnet_train_charges/energies_forces_dipoles_valid.npz --n-samples 5
+  ```
+- `align_esp_frames.py` — detect and correct ESP/geometry frame misalignment.
+  ```bash
+  python align_esp_frames.py \
+    --checkpoint ./ckpts/model --valid-efd ../physnet_train_charges/energies_forces_dipoles_valid.npz \
+    --valid-esp ../dcmnet_train/grids_esp_valid.npz
+  ```
+- `inspect_checkpoint.py` / `save_config_from_checkpoint.py` — recover model configuration metadata from historical checkpoints.
+  ```bash
+  python inspect_checkpoint.py --checkpoint ./ckpts/model/best_params.pkl
+  python save_config_from_checkpoint.py --checkpoint-dir ./ckpts/model --natoms 60 --max-atomic-number 28
+  ```
+- `remove_rotations_and_compute_ir.py`, `match_harmonic_to_md.py`, `interpolate_qm_charges.py`, `analyze_ir_spectrum.py` — targeted analysis utilities for refining IR/Raman comparisons and cleaning MD trajectories.
+
+### External Dependencies
+
+- **ASE** for geometry, vibrational analysis, and MD backends (`pip install ase`).
+- **matplotlib** for all plotting scripts (`pip install matplotlib`).
+- **R + tidyverse packages** for `plot_evaluation_results.R` when using the evaluation pipeline.
+- **JAX MD** (`pip install jax-md`) for GPU-accelerated dynamics.
