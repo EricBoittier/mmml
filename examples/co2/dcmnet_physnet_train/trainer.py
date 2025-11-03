@@ -125,30 +125,38 @@ def load_loss_terms_config(path: Path) -> Tuple[Tuple[LossTerm, ...], Tuple[Loss
 
 
 def _orientation_feature(positions: jnp.ndarray, weights: jnp.ndarray, max_degree: int) -> jnp.ndarray:
-    """Compute spherical harmonic orientation descriptors weighted by charges."""
-
-    valid_mask = jnp.abs(weights) > 1e-8
-
-    def _compute_features(pos: jnp.ndarray, w: jnp.ndarray) -> jnp.ndarray:
-        w_abs = jnp.abs(w)
-        total = jnp.sum(w_abs) + EPS
-        center = jnp.sum(pos * w_abs[:, None], axis=0) / total
-        rel = pos - center
-        norms = jnp.linalg.norm(rel, axis=1)
-        rel_unit = rel / jnp.maximum(norms[:, None], EPS)
-        sh = e3x.so3.spherical_harmonics(rel_unit, max_degree=max_degree)
-        weighted_sh = jnp.sum(sh * w[:, None], axis=0) / total
-        mean_radial = jnp.sum(norms * w_abs) / total
-        var_radial = jnp.sum(((norms - mean_radial) ** 2) * w_abs) / total
-        radial_stats = jnp.array([mean_radial, var_radial])
-        return jnp.concatenate([weighted_sh, radial_stats])
-
-    feature_dim = (max_degree + 1) ** 2 + 2
-    return jax.lax.cond(
-        jnp.any(valid_mask),
-        lambda: _compute_features(positions[valid_mask], weights[valid_mask]),
-        lambda: jnp.zeros((feature_dim,), dtype=positions.dtype),
-    )
+    """Compute spherical harmonic orientation descriptors weighted by charges.
+    
+    Uses weight-based masking instead of boolean indexing for JIT compatibility.
+    Positions/weights with near-zero weights are automatically down-weighted in the computation.
+    """
+    # Compute features using all positions but weighted by their weights
+    # Near-zero weights will have negligible contribution
+    w_abs = jnp.abs(weights)
+    total = jnp.sum(w_abs) + EPS
+    
+    # Weighted center of mass
+    center = jnp.sum(positions * w_abs[:, None], axis=0) / total
+    rel = positions - center
+    norms = jnp.linalg.norm(rel, axis=1)
+    rel_unit = rel / jnp.maximum(norms[:, None], EPS)
+    
+    # Compute spherical harmonics for all positions
+    sh = e3x.so3.spherical_harmonics(rel_unit, max_degree=max_degree)
+    
+    # Weight-averaged spherical harmonics
+    weighted_sh = jnp.sum(sh * weights[:, None], axis=0) / total
+    
+    # Radial statistics (weighted)
+    mean_radial = jnp.sum(norms * w_abs) / total
+    var_radial = jnp.sum(((norms - mean_radial) ** 2) * w_abs) / total
+    radial_stats = jnp.array([mean_radial, var_radial])
+    
+    feature = jnp.concatenate([weighted_sh, radial_stats])
+    
+    # Zero out features if total weight is negligible (all charges masked)
+    has_valid = total > 1e-6
+    return jnp.where(has_valid, feature, jnp.zeros_like(feature))
 
 
 def _compute_esp_single(
