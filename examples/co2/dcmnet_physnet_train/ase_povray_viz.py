@@ -180,15 +180,34 @@ def compute_esp_on_vdw_surface(atoms, charge_positions, charge_values, n_points=
 
 
 def write_ase_povray_with_charges(atoms, result, output_path, 
-                                  show_charges=True, show_esp=False,
+                                  show_molecule='full', show_charges=False, show_esp=False,
                                   rotation='0x,0y,0z', canvas_width=2400,
                                   charge_radius=0.15, transparency=0.5):
     """
     Write POV-Ray scene using ASE's writer, then add charges and ESP.
+    
+    Parameters
+    ----------
+    show_molecule : str
+        'full' - full ball-and-stick (default)
+        'wireframe' - bonds only, small atoms
+        'none' - no molecule (for ESP-only plots)
+    show_charges : bool
+        Show distributed charges as colored spheres
+    show_esp : bool
+        Show ESP on VDW surface
     """
     
-    # First write molecule using ASE
-    radii = [0.4] * len(atoms)  # Ball-and-stick radii
+    # Determine molecule rendering style
+    if show_molecule == 'wireframe':
+        # Small atoms, emphasis on bonds
+        radii = [0.15] * len(atoms)  # Very small atoms for wireframe
+    elif show_molecule == 'none':
+        # Invisible atoms for ESP-only
+        radii = [0.01] * len(atoms)
+    else:  # 'full'
+        # Standard ball-and-stick
+        radii = [0.4] * len(atoms)
     
     # Colors using jmol scheme
     colors = []
@@ -387,10 +406,12 @@ def main():
     parser.add_argument('--checkpoint', type=str, required=True)
     parser.add_argument('--structure', type=str, required=True)
     parser.add_argument('--output-dir', type=str, default='./figures_povray')
-    parser.add_argument('--show-charges', action='store_true',
-                       help='Show distributed charges')
-    parser.add_argument('--show-esp', action='store_true',
-                       help='Show ESP surface')
+    parser.add_argument('--plot-types', nargs='+',
+                       default=['molecule', 'molecule+charges', 'esp', 'molecule+esp'],
+                       help='Types of plots to generate: molecule, molecule+charges, esp, molecule+esp, charges, all')
+    parser.add_argument('--molecule-style', choices=['full', 'wireframe'],
+                       default='full',
+                       help='Molecule rendering style for molecule+charges (default: full for standalone, wireframe for +charges)')
     parser.add_argument('--charge-radius', type=float, default=0.15)
     parser.add_argument('--transparency', type=float, default=0.5)
     parser.add_argument('--resolution', choices=['low', 'medium', 'high', 'ultra'],
