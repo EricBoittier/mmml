@@ -66,6 +66,9 @@ from mmml.data import load_npz, DataConfig
 EPS = 1e-8
 RADII_TABLE = jnp.array(ase.data.covalent_radii)
 
+LOSS_SOURCE_CHOICES = ("physnet", "dcmnet", "mixed")
+LOSS_METRIC_CHOICES = ("l2", "mae", "rmse")
+
 
 @dataclass(frozen=True)
 class LossTerm:
@@ -2860,8 +2863,20 @@ def main():
     parser.add_argument('--mono-weight', type=float, default=100.0,
                        help='Monopole constraint loss weight (enforce distributed charges sum to atomic charges)')
     parser.add_argument('--dipole-source', type=str, default='physnet',
-                       choices=['physnet', 'dcmnet'],
+                       choices=LOSS_SOURCE_CHOICES,
                        help='Source for dipole in loss: physnet (from charges) or dcmnet (from distributed multipoles)')
+    parser.add_argument('--dipole-loss-sources', type=str, nargs='*', default=None,
+                       choices=LOSS_SOURCE_CHOICES,
+                       help='Override dipole supervision sources (e.g. physnet dcmnet mixed). Defaults to --dipole-source when omitted.')
+    parser.add_argument('--esp-loss-sources', type=str, nargs='*', default=None,
+                       choices=LOSS_SOURCE_CHOICES,
+                       help='ESP supervision sources (e.g. dcmnet physnet mixed). Defaults to dcmnet when omitted.')
+    parser.add_argument('--dipole-metric', type=str, default='l2', choices=LOSS_METRIC_CHOICES,
+                       help='Error metric for default dipole loss terms (ignored when --loss-config specified)')
+    parser.add_argument('--esp-metric', type=str, default='l2', choices=LOSS_METRIC_CHOICES,
+                       help='Error metric for default ESP loss terms (ignored when --loss-config specified)')
+    parser.add_argument('--loss-config', type=Path, default=None,
+                       help='Optional JSON or YAML file defining dipole/ESP loss terms (overrides individual loss source flags)')
     parser.add_argument('--mix-coulomb-energy', action='store_true', default=False,
                        help='Mix PhysNet energy with DCMNet Coulomb energy via learnable lambda')
     
@@ -3033,17 +3048,26 @@ def main():
     print(f"  Weight decay: {args.weight_decay}")
     print(f"  Random seed: {args.seed}")
     
-    print(f"\nLoss weights:")
-    print(f"  Energy: {args.energy_weight} (mix Coulomb: {args.mix_coulomb_energy})")
-    print(f"  Forces: {args.forces_weight}")
-    print(f"  Dipole: {args.dipole_weight} (source: {args.dipole_source})")
-    print(f"  ESP: {args.esp_weight}")
-    print(f"    ESP filtering (default): grid points < 2×atomic_radius from atoms excluded")
+    print(f"\nLoss configuration:")
+    print(f"  Energy weight: {args.energy_weight} (mix Coulomb: {args.mix_coulomb_energy})")
+    print(f"  Forces weight: {args.forces_weight}")
+    print(f"  Monopole weight: {args.mono_weight}")
+    print("  Dipole terms:")
+    for term in dipole_terms:
+        print(
+            f"    - {term.key}: source={term.source}, metric={term.metric}, weight={term.weight}"
+        )
+    print("  ESP terms:")
+    for term in esp_terms:
+        print(
+            f"    - {term.key}: source={term.source}, metric={term.metric}, weight={term.weight}"
+        )
     if args.esp_min_distance > 0:
-        print(f"    ESP additional distance: + {args.esp_min_distance:.2f} Å minimum from atoms")
+        print(f"    (additional ESP distance filter: {args.esp_min_distance:.2f} Å)")
     if args.esp_max_value is not None:
-        print(f"    ESP magnitude filtering: |ESP| > {args.esp_max_value:.4f} Ha/e excluded")
-    print(f"  Monopole constraint: {args.mono_weight}")
+        print(
+            f"    (ESP magnitude filter: |ESP| <= {args.esp_max_value:.4f} Ha/e)"
+        )
     
     print(f"\nTraining stability:")
     print(f"  Gradient clipping: {args.grad_clip_norm if args.grad_clip_norm else 'disabled'}")
