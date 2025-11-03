@@ -835,15 +835,43 @@ def main():
     print(f"  Non-Eq:        {num_params_noneq:,} parameters")
     print(f"  Reduction:     {(1 - num_params_noneq/num_params_dcm)*100:.1f}%")
     
-    # Load validation metrics from history
-    with open(dcm_ckpt_dir / 'history.json', 'r') as f:
-        history_dcm = json.load(f)
-    with open(noneq_ckpt_dir / 'history.json', 'r') as f:
-        history_noneq = json.load(f)
+    # Load validation metrics from history (with fallback for missing files)
+    history_dcm_path = dcm_ckpt_dir / 'history.json'
+    history_noneq_path = noneq_ckpt_dir / 'history.json'
     
-    # Get best validation metrics
-    best_epoch_dcm = np.argmin(history_dcm['val_loss'])
-    best_epoch_noneq = np.argmin(history_noneq['val_loss'])
+    if history_dcm_path.exists():
+        with open(history_dcm_path, 'r') as f:
+            history_dcm = json.load(f)
+        best_epoch_dcm = np.argmin(history_dcm['val_loss'])
+        val_energy_mae_dcm = history_dcm['val_energy_mae'][best_epoch_dcm]
+        val_forces_mae_dcm = history_dcm['val_forces_mae'][best_epoch_dcm]
+        val_dipole_mae_dcm = history_dcm['val_dipole_mae'][best_epoch_dcm]
+        val_esp_mae_dcm = history_dcm['val_esp_mae'][best_epoch_dcm]
+    else:
+        print(f"\n⚠️  Warning: No history file found for DCMNet at {history_dcm_path}")
+        print("   Using placeholder values (0.0) for validation metrics.")
+        print("   Rerun comparison to get full metrics.")
+        val_energy_mae_dcm = 0.0
+        val_forces_mae_dcm = 0.0
+        val_dipole_mae_dcm = 0.0
+        val_esp_mae_dcm = 0.0
+    
+    if history_noneq_path.exists():
+        with open(history_noneq_path, 'r') as f:
+            history_noneq = json.load(f)
+        best_epoch_noneq = np.argmin(history_noneq['val_loss'])
+        val_energy_mae_noneq = history_noneq['val_energy_mae'][best_epoch_noneq]
+        val_forces_mae_noneq = history_noneq['val_forces_mae'][best_epoch_noneq]
+        val_dipole_mae_noneq = history_noneq['val_dipole_mae'][best_epoch_noneq]
+        val_esp_mae_noneq = history_noneq['val_esp_mae'][best_epoch_noneq]
+    else:
+        print(f"\n⚠️  Warning: No history file found for Non-Eq at {history_noneq_path}")
+        print("   Using placeholder values (0.0) for validation metrics.")
+        print("   Rerun comparison to get full metrics.")
+        val_energy_mae_noneq = 0.0
+        val_forces_mae_noneq = 0.0
+        val_dipole_mae_noneq = 0.0
+        val_esp_mae_noneq = 0.0
     
     # Create metrics objects
     metrics_dcm = ModelMetrics(
@@ -852,10 +880,10 @@ def main():
         inference_time=inference_time_dcm,
         memory_usage_mb=0.0,  # Would need profiling
         num_parameters=num_params_dcm,
-        val_energy_mae=history_dcm['val_energy_mae'][best_epoch_dcm],
-        val_forces_mae=history_dcm['val_forces_mae'][best_epoch_dcm],
-        val_dipole_mae=history_dcm['val_dipole_mae'][best_epoch_dcm],
-        val_esp_mae=history_dcm['val_esp_mae'][best_epoch_dcm],
+        val_energy_mae=val_energy_mae_dcm,
+        val_forces_mae=val_forces_mae_dcm,
+        val_dipole_mae=val_dipole_mae_dcm,
+        val_esp_mae=val_esp_mae_dcm,
         rotation_error_dipole=equivariance_dcm['rotation_error_dipole'],
         rotation_error_esp=equivariance_dcm['rotation_error_esp'],
         translation_error_dipole=equivariance_dcm['translation_error_dipole'],
@@ -868,10 +896,10 @@ def main():
         inference_time=inference_time_noneq,
         memory_usage_mb=0.0,
         num_parameters=num_params_noneq,
-        val_energy_mae=history_noneq['val_energy_mae'][best_epoch_noneq],
-        val_forces_mae=history_noneq['val_forces_mae'][best_epoch_noneq],
-        val_dipole_mae=history_noneq['val_dipole_mae'][best_epoch_noneq],
-        val_esp_mae=history_noneq['val_esp_mae'][best_epoch_noneq],
+        val_energy_mae=val_energy_mae_noneq,
+        val_forces_mae=val_forces_mae_noneq,
+        val_dipole_mae=val_dipole_mae_noneq,
+        val_esp_mae=val_esp_mae_noneq,
         rotation_error_dipole=equivariance_noneq['rotation_error_dipole'],
         rotation_error_esp=equivariance_noneq['rotation_error_esp'],
         translation_error_dipole=equivariance_noneq['translation_error_dipole'],
