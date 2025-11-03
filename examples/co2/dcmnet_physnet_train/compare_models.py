@@ -40,6 +40,7 @@ from trainer import (
     train_model,
     create_optimizer,
     get_recommended_optimizer_config,
+    LossTerm,
 )
 
 try:
