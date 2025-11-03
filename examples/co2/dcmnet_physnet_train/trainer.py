@@ -3046,12 +3046,12 @@ def main():
     print(f"  Forces weight: {args.forces_weight}")
     print(f"  Monopole weight: {args.mono_weight}")
     print("  Dipole terms:")
-    for term in args.dipole_terms:
+    for term in dipole_terms:
         print(
             f"    - {term.key}: source={term.source}, metric={term.metric}, weight={term.weight}"
         )
     print("  ESP terms:")
-    for term in args.esp_terms:
+    for term in esp_terms:
         print(
             f"    - {term.key}: source={term.source}, metric={term.metric}, weight={term.weight}"
         )
