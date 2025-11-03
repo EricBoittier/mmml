@@ -3363,6 +3363,43 @@ def main():
     print(f"  Padded to: {args.natoms} atoms")
     print(f"  Max actual atoms: {max_actual_atoms}")
     
+    # Setup optimizer hyperparameters (before building model to use in recommendations)
+    dataset_size = len(train_data['E'])
+    total_features = args.physnet_features + args.dcmnet_features
+    
+    # Get recommended config if requested or if params not specified
+    if args.use_recommended_hparams or args.learning_rate is None or args.weight_decay is None:
+        recommended_config = get_recommended_optimizer_config(
+            dataset_size=dataset_size,
+            num_features=total_features,
+            num_atoms=args.natoms,
+            optimizer_name=args.optimizer
+        )
+        
+        if args.use_recommended_hparams:
+            print(f"\n🔧 Using recommended hyperparameters for {args.optimizer.upper()}:")
+            for key, value in recommended_config.items():
+                print(f"  {key}: {value}")
+        
+        # Apply defaults only if not manually specified
+        if args.learning_rate is None:
+            args.learning_rate = recommended_config['learning_rate']
+            print(f"\n📊 Auto-selected learning rate: {args.learning_rate}")
+        if args.weight_decay is None:
+            args.weight_decay = recommended_config.get('weight_decay', 0.0)
+            print(f"📊 Auto-selected weight decay: {args.weight_decay}")
+        
+        # Store additional optimizer-specific params
+        optimizer_kwargs = {k: v for k, v in recommended_config.items() 
+                          if k not in ['learning_rate', 'weight_decay']}
+    else:
+        optimizer_kwargs = {}
+        # Use defaults if still None
+        if args.learning_rate is None:
+            args.learning_rate = 0.001
+        if args.weight_decay is None:
+            args.weight_decay = 1e-4 if args.optimizer == 'adamw' else 0.0
+    
     # Build models
     print(f"\n{'#'*70}")
     print("# Building Joint Model")
@@ -3418,7 +3455,10 @@ def main():
     print(f"{'#'*70}\n")
     
     print(f"Training hyperparameters:")
-    print(f"  Optimizer: AdamW")
+    print(f"  Optimizer: {args.optimizer.upper()}")
+    if optimizer_kwargs:
+        for k, v in optimizer_kwargs.items():
+            print(f"    {k}: {v}")
     print(f"  Batch size: {args.batch_size}")
     print(f"  Epochs: {args.epochs}")
     print(f"  Learning rate: {args.learning_rate}")
