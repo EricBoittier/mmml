@@ -2722,17 +2722,19 @@ def train_model(
             all_dipole_dcmnet_pred.extend(np.array(output['dipoles_dcmnet']).flatten())
             all_dipole_true.extend(np.array(batch['D']).flatten())
             
-            # Collect ESP predictions 
-            # Note: eval_step only computes ESP for first molecule in batch
-            # So we just take the first molecule's ESP values
-            esp_physnet = np.array(output['esp_physnet']).flatten()
-            esp_dcmnet = np.array(output['esp_dcmnet']).flatten()
-            esp_true = np.array(batch['esp'][0]).flatten()  # First molecule
+            # Collect ESP predictions - now computed for all samples in batch
+            esp_physnet_batch = np.array(output['esp_physnet'])  # (batch_size, ngrid)
+            esp_dcmnet_batch = np.array(output['esp_dcmnet'])    # (batch_size, ngrid)
+            esp_true_batch = np.array(batch['esp'])              # (batch_size, ngrid)
+            esp_mask_batch = np.array(output['esp_mask'])        # (batch_size, ngrid)
             
-            # All ESP grid points are valid (no masking needed)
-            all_esp_physnet_pred.extend(esp_physnet)
-            all_esp_dcmnet_pred.extend(esp_dcmnet)
-            all_esp_true.extend(esp_true)
+            # Flatten and collect only valid (masked) ESP points
+            for i in range(len(batch_indices)):
+                mask = esp_mask_batch[i] > 0.5
+                if np.any(mask):
+                    all_esp_physnet_pred.extend(esp_physnet_batch[i][mask])
+                    all_esp_dcmnet_pred.extend(esp_dcmnet_batch[i][mask])
+                    all_esp_true.extend(esp_true_batch[i][mask])
         
         # Average validation losses
         valid_loss_avg = {
@@ -2740,7 +2742,7 @@ def train_model(
             for k in valid_losses[0].keys()
         }
         
-        # Compute validation set statistics
+        # Compute validation set statistics and ESP RMSE from collected predictions
         valid_stats = {
             'energy_mean': np.mean(all_energy_true),
             'energy_std': np.std(all_energy_true),
@@ -2748,9 +2750,18 @@ def train_model(
             'forces_std': np.std([f for f in all_forces_true if f != 0]),
             'dipole_mean': np.mean([d for d in all_dipole_true if d != 0]),  # Exclude padding
             'dipole_std': np.std([d for d in all_dipole_true if d != 0]),
-            'esp_mean': np.mean(all_esp_true),
-            'esp_std': np.std(all_esp_true),
+            'esp_mean': np.mean(all_esp_true) if all_esp_true else 0.0,
+            'esp_std': np.std(all_esp_true) if all_esp_true else 1.0,
         }
+        
+        # Compute ESP RMSE from all collected ESP predictions (across all validation batches)
+        if all_esp_true:
+            esp_physnet_arr = np.array(all_esp_physnet_pred)
+            esp_dcmnet_arr = np.array(all_esp_dcmnet_pred)
+            esp_true_arr = np.array(all_esp_true)
+            
+            valid_loss_avg['rmse_esp_physnet'] = np.sqrt(np.mean((esp_physnet_arr - esp_true_arr) ** 2))
+            valid_loss_avg['rmse_esp_dcmnet'] = np.sqrt(np.mean((esp_dcmnet_arr - esp_true_arr) ** 2))
         
         epoch_time = time.time() - epoch_start
         
