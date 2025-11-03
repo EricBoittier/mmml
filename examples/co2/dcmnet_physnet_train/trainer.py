@@ -610,6 +610,173 @@ class ChargeOrientationMixer(nn.Module):
         return nn.sigmoid(x)
 
 
+class JointPhysNetNonEquivariant(nn.Module):
+    """
+    Joint PhysNet + Non-Equivariant charge model.
+    
+    Architecture:
+    1. PhysNet predicts atomic charges (supervised by molecular dipole)
+    2. Non-equivariant MLP predicts n charges and n Cartesian displacements per atom
+    3. Distributed charges used for ESP fitting
+    4. Full gradient flow from ESP loss back to PhysNet parameters
+    
+    This model is NOT rotationally equivariant (displacements are in Cartesian coords).
+    
+    Attributes
+    ----------
+    physnet_config : dict
+        Configuration for PhysNet EF model
+    noneq_config : dict
+        Configuration for NonEquivariantChargeModel
+    mix_coulomb_energy : bool
+        If True, mix PhysNet energy with Coulomb energy from distributed charges
+    """
+    physnet_config: Dict[str, Any]
+    noneq_config: Dict[str, Any]
+    mix_coulomb_energy: bool = False
+    mixer_config: Optional[Dict[str, Any]] = None
+    
+    def setup(self):
+        """Initialize PhysNet and non-equivariant charge model."""
+        self.physnet = EF(**self.physnet_config)
+        self.noneq_model = NonEquivariantChargeModel(**self.noneq_config)
+        
+        if self.mix_coulomb_energy:
+            self.coulomb_lambda = self.param(
+                "coulomb_lambda",
+                lambda rng, shape: jnp.ones(shape) * 0.1,
+                (1,)
+            )
+        
+        mixer_cfg = self.mixer_config or {}
+        self.charge_mixer = ChargeOrientationMixer(**mixer_cfg)
+    
+    @nn.compact
+    def __call__(
+        self,
+        atomic_numbers: jnp.ndarray,
+        positions: jnp.ndarray,
+        dst_idx: jnp.ndarray,
+        src_idx: jnp.ndarray,
+        batch_segments: jnp.ndarray,
+        batch_size: int,
+        batch_mask: jnp.ndarray,
+        atom_mask: jnp.ndarray,
+    ) -> Dict[str, jnp.ndarray]:
+        """Forward pass through both models."""
+        
+        # 1. PhysNet forward pass
+        physnet_output = self.physnet(
+            atomic_numbers=atomic_numbers,
+            positions=positions,
+            dst_idx=dst_idx,
+            src_idx=src_idx,
+            batch_segments=batch_segments,
+            batch_size=batch_size,
+            batch_mask=batch_mask,
+            atom_mask=atom_mask,
+        )
+        
+        # 2. Extract charges
+        charges = physnet_output["charges"]
+        charges_squeezed = jnp.squeeze(charges)
+        charges_masked = charges_squeezed * atom_mask
+        sum_charges = jax.ops.segment_sum(
+            charges_masked,
+            segment_ids=batch_segments,
+            num_segments=batch_size
+        )
+        
+        # 3. Non-equivariant model predicts distributed charges and positions
+        mono_dist, dipo_dist = self.noneq_model(
+            atomic_numbers=atomic_numbers,
+            positions=positions,
+            charges_from_physnet=charges_squeezed,
+            atom_mask=atom_mask,
+        )
+        # mono_dist: (batch*natoms, n_dcm) - charge values
+        # dipo_dist: (batch*natoms, n_dcm, 3) - absolute positions
+        
+        # 4. Compute energies and mixing (same as DCMNet version)
+        energy_reshaped = physnet_output["energy"].reshape(batch_size)
+        natoms = charges_squeezed.shape[0] // batch_size
+        n_dcm = mono_dist.shape[1]
+        
+        positions_batched = positions.reshape(batch_size, natoms, 3)
+        charges_batched = charges_squeezed.reshape(batch_size, natoms)
+        atom_mask_batched = atom_mask.reshape(batch_size, natoms)
+        atomic_numbers_batched = atomic_numbers.reshape(batch_size, natoms)
+        mono_batched = mono_dist.reshape(batch_size, natoms, n_dcm)
+        dipo_batched = dipo_dist.reshape(batch_size, natoms, n_dcm, 3)
+        
+        if self.mix_coulomb_energy:
+            charges_reshaped = mono_dist.reshape(batch_size, natoms * n_dcm)
+            positions_reshaped = dipo_dist.reshape(batch_size, natoms * n_dcm, 3)
+            
+            def compute_coulomb_single(charges, positions):
+                diff = positions[:, None, :] - positions[None, :, :]
+                distances = jnp.linalg.norm(diff, axis=-1)
+                distances = jnp.where(distances < 1e-6, 1e6, distances)
+                pairwise_energy = charges[:, None] * charges[None, :] / (distances * 1.88973)
+                coulomb_energy_hartree = 0.5 * jnp.sum(pairwise_energy)
+                return coulomb_energy_hartree * 27.2114
+            
+            coulomb_energies = jax.vmap(compute_coulomb_single)(charges_reshaped, positions_reshaped)
+            lambda_val = self.coulomb_lambda[0]
+            energy_reshaped = energy_reshaped + lambda_val * coulomb_energies
+            coulomb_energy_out = jnp.mean(coulomb_energies)
+            lambda_out = lambda_val
+        else:
+            coulomb_energy_out = jnp.array(0.0)
+            lambda_out = jnp.array(0.0)
+        
+        # Compute dipoles
+        masses_lookup = jnp.array(ase.data.atomic_masses)
+        masses = jnp.take(masses_lookup, atomic_numbers_batched.astype(jnp.int32)) * atom_mask_batched
+        total_mass = jnp.sum(masses, axis=1) + EPS
+        mass_weighted_pos = positions_batched * masses[..., None]
+        com = jnp.sum(mass_weighted_pos, axis=1) / total_mass[:, None]
+        
+        mono_masked = mono_batched * atom_mask_batched[..., None]
+        dipo_rel = dipo_batched - com[:, None, None, :]
+        dipole_noneq = jnp.sum(mono_masked[..., None] * dipo_rel, axis=(1, 2))
+        dipoles_physnet = physnet_output["dipoles"].reshape(batch_size, 3)
+        
+        lambda_outputs = self.charge_mixer(
+            positions_batched,
+            charges_batched * atom_mask_batched,
+            dipo_batched,
+            mono_masked,
+            atom_mask_batched,
+        )
+        lambda_dipole = lambda_outputs[:, 0]
+        lambda_esp = lambda_outputs[:, 1]
+        dipoles_mixed = (
+            lambda_dipole[:, None] * dipole_noneq
+            + (1.0 - lambda_dipole[:, None]) * dipoles_physnet
+        )
+        
+        forces_reshaped = physnet_output["forces"].reshape(-1, 3)
+        dipoles_reshaped = physnet_output["dipoles"].reshape(batch_size, 3)
+        
+        return {
+            "energy": energy_reshaped,
+            "forces": forces_reshaped,
+            "dipoles": dipoles_reshaped,
+            "charges": charges,
+            "sum_charges": physnet_output.get("sum_charges", sum_charges),
+            "mono_dist": mono_dist,
+            "dipo_dist": dipo_dist,
+            "charges_as_mono": charges_squeezed,
+            "coulomb_energy": coulomb_energy_out,
+            "coulomb_lambda": lambda_out,
+            "dipoles_dcmnet": dipole_noneq,  # Keep name for compatibility
+            "dipoles_mixed": dipoles_mixed,
+            "lambda_dipole": lambda_dipole,
+            "lambda_esp": lambda_esp,
+        }
+
+
 class JointPhysNetDCMNet(nn.Module):
     """
     Joint PhysNet-DCMNet model for end-to-end charge and ESP prediction.
