@@ -1,0 +1,500 @@
+   10  git checkout main
+   11  git pull
+   12  cs
+   13  cd examples/
+   14  cs
+   15  cd co2/
+   16  cs
+   17  cd physnet_train/
+   18  cs
+   19  ls (sj
+   20  ls *sh
+   21  cs
+   22  cd ..
+   23  cs
+   24  cd .
+   25  cs
+   26  cd ..
+   27  cs
+   28  cd ..
+   29  cs
+   30  module purge
+   31  cs
+   32  rm uv.lock 
+   33  cs
+   34  module load CUDA/12.2.0
+   35  uv sync --extra all
+   36  git pull
+   37  uv sync --extra all
+   38  cs
+   39  uv sync --extra all
+   40  cs
+   41  cs
+   42  cd
+   43  cs
+   44  cat test-gpu-interactive.slurm 
+   45  cs
+   46  cs
+   47  cd mmml
+   48  cs
+   49  cd examples/
+   50  cs
+   51  cd dcm/
+   52  cs
+   53  cd ..
+   54  cs
+   55  cd dcm/
+   56  cs
+   57  sbatch run_gpu.sh
+   58  cs
+   59  Q
+   60  cs
+   61  Q
+   62  cs
+   63  Q
+   64  cs
+   65  Q
+   66  cat slurm-60472835.out
+   67  cat slurm-60472835.out
+   68  cs
+   69  Q
+   70  cs
+   71  cat slurm-60472835.out
+   72  cat slurm-60472835.out
+   73  cat slurm-60472835.out
+   74  cat slurm-60472835.out
+   75  Q
+   76  cs
+   77  cs
+   78  Q
+   79  Q
+   80  Q
+   81  cat slurm-60472835.out
+   82  cat slurm-60472835.out
+   83  cat slurm-60472835.out
+   84  cat slurm-60472835.out
+   85  cat slurm-60472835.out
+   86  cat slurm-60472835.out
+   87  cat slurm-60472835.out
+   88  cat slurm-60472835.out
+   89  cat slurm-60472835.out
+   90  cat slurm-60472835.out
+   91  cat slurm-60472835.out
+   92  cat slurm-60472835.out
+   93  cat slurm-60472835.out
+   94  cat slurm-60472835.out
+   95  cat slurm-60472835.out
+   96  cat slurm-60472835.out
+   97  cat slurm-60472835.out
+   98  cat slurm-60472835.out
+   99  cat slurm-60472835.out
+  100  cat slurm-60472835.out
+  101  cat slurm-60472835.out
+  102  cat slurm-60472835.out
+  103  cat slurm-60472835.out
+  104  cat slurm-60472835.out
+  105  cat slurm-60472835.out
+  106  cat slurm-60472835.out
+  107  cat slurm-60472835.out
+  108  cat slurm-60472835.out
+  109  cat slurm-60472835.out
+  110  cat slurm-60472835.out
+  111  cat slurm-60472835.out
+  112  cat slurm-60472835.out
+  113  cat slurm-60472835.out
+  114  cat slurm-60472835.out
+  115  cat slurm-60472835.out
+  116  cat slurm-60472835.out
+  117  cat slurm-60472835.out
+  118  cat slurm-60472835.out
+  119  cat slurm-60472835.out
+  120  cat slurm-60472835.out
+  121  cat slurm-60472835.out
+  122  cat slurm-60472835.out
+  123  cat slurm-60472835.out
+  124  cat slurm-60472835.out
+  125  cat slurm-60472835.out
+  126  cat slurm-60472835.out
+  127  cat slurm-60472835.out
+  128  cat slurm-60472835.out
+  129  cs
+  130  Q
+  131  cs
+  132  vi run_gpu.sh 
+  133  cs
+  134  cat new.sh 
+  135  sbatch new.sh
+  136  cs
+  137  Q
+  138  cs
+  139  Q
+  140  cs
+  141  cat slurm-60472835.out
+  142  cs
+  143  cat slurm-60472838.out
+  144  vi new.sh 
+  145  cs
+  146  sbatch new.sh
+  147  cs
+  148  Q
+  149  cs
+  150  Q
+  151  cs
+  152  Q
+  153  cs
+  154  cs
+  155  cat slurm-60472839.out
+  156  cs
+  157  vi new.sh 
+  158  cs
+  159  sbatch new.sh
+  160  cs
+  161  Q
+  162  cs
+  163  Q
+  164  scancel 60472838
+  165  cs
+  166  Q
+  167  scancel 60472839
+  168  cs
+  169  Q
+  170  cs
+  171  Q
+  172  cs
+  173  cat slurm-60472955.out
+  174  cs
+  175  Q
+  176  scancel 60472955
+  177  cs
+  178  vi new.sh 
+  179  vi new.sh 
+  180  vi new.sh 
+  181  cs
+  182  sbatch new.sh
+  183  cs
+  184  Q
+  185  cs
+  186  Q
+  187  cs
+  188  Q
+  189  cs
+  190  Q
+  191  cat slurm-60472956.out
+  192  cs
+  193  Q
+  194  cat slurm-60472956.out
+  195  Q
+  196  scancel 60472956
+  197  cs
+  198  vi new.sh 
+  199  sbatch new.sh
+  200  cs
+  201  Q
+  202  cs
+  203  Q
+  204  cs
+  205  Q
+  206  cat slurm-60472957.out
+  207  cs
+  208  Q
+  209  cs
+  210  Q
+  211  cs
+  212  Q
+  213  cs
+  214  Q
+  215  cat slurm-60472957.out
+  216  cs
+  217  Q
+  218  cat slurm-60472957.out
+  219  cat slurm-60472957.out
+  220  cat slurm-60472957.out
+  221  cat slurm-60472957.out
+  222  cat slurm-60472957.out
+  223  Q
+  224  cs
+  225  Q
+  226  cs
+  227  Q
+  228  cs
+  229  Q
+  230  cs
+  231  cat slurm-60472957.out
+  232  cat slurm-60472957.out
+  233  cs
+  234  Q
+  235  cs
+  236  Q
+  237  Q
+  238  cs
+  239  Q
+  240  cs
+  241  uv pip install --force-reinstall --no-deps jedi
+  242  cs
+  243  Q
+  244  cs
+  245  sbatch new.sh
+  246  cs
+  247  Q
+  248  cs
+  249  Q
+  250  cs
+  251  Q
+  252  cs
+  253  Q
+  254  cs
+  255  Q
+  256  uv run python -m ipykernel install --user --name=uv
+  257  uv run --with ipykernel python -m ipykernel install --user --name=uv
+  258  cs
+  259  Q
+  260  cat slurm-60472957.out
+  261  cs
+  262  cd ..
+  263  cs
+  264  cd ..
+  265  cs
+  266  make conda create all
+  267  make
+  268  make install-gpu
+  269  make conda-create-gpu
+  270  rm -rf  /scicore/home/meuwly/boitti0000/.conda/envs/mmml-gpu
+  271  make conda-create-gpu
+  272  conda activate mmml-gpu
+  273  cs
+  274  pip install -e .[all]
+  275  python -m ipykernel install --user --name=conda
+  276     conda install -c conda-forge jaxlib=*=*cuda* jax cuda-nvcc
+  277  rm -rf /scicore/home/meuwly/boitti0000/mmml/.venv
+  278  python -m venv /scicore/home/meuwly/boitti0000/mmml/.venv
+  279  source /scicore/home/meuwly/boitti0000/mmml/.venv/bin/activate
+  280  pip install -e /scicore/home/meuwly/boitti0000/mmml/[all]  # or whatever extras you need
+  281  pip install "jax[cuda12]"  # Make sure JAX with CUDA is installed
+  282  source /scicore/home/meuwly/boitti0000/mmml/.venv/bin/activate
+  283  cs
+  284  cd mmml/examples/co2/dcmnet_physnet_train/
+  285  cs
+  286  export CUDA_VISIBLE_DEVICES=0 && uv run python compare_models.py     --train-efd energies_forces_dipoles_train.npz --train-esp grids_esp_train.npz     --valid-efd energies_forces_dipoles_valid.npz --valid-esp grids_esp_valid.npz --epochs 1000 --batch-size 100 --comparison-name test1
+  287  cs
+  288  cs
+  289  module load Miniconda3
+  290  cs
+  291  git pull
+  292  git add -A
+  293  git commit -m "dsafg"
+  294  git pudh
+  295  git push
+  296  git remote add main https://github.com/EricBoittier/mmml.git
+  297  git push
+  298  git status
+  299  git log
+  300  git push
+  301  git pull
+  302  git branch --set-upstream-to=origin/main main
+  303  git checkout main
+  304  git checkout origin/main
+  305  cs
+  306  git push
+  307  git remote add mmml https://github.com/EricBoittier/mmml.git
+  308  git push
+  309  git push origin main
+  310  exit
+  311  cs
+  312  cd mmml/examples/co2/
+  313  cs
+  314  cd dcmnet_physnet_train/
+  315  cs
+  316  cs
+  317  Q
+  318  cs
+  319  source ~/mmml/.venv/bin/activate
+  320  cs
+  321  history
+  322  export CUDA_VISIBLE_DEVICES=0 && uv run python compare_models.py     --train-efd energies_forces_dipoles_train.npz --train-esp grids_esp_train.npz     --valid-efd energies_forces_dipoles_valid.npz --valid-esp grids_esp_valid.npz --epochs 1000 --batch-size 100 --comparison-name test1
+  323  cp ../physnet_train/*npz .
+  324  cs
+  325  export CUDA_VISIBLE_DEVICES=0 && uv run python compare_models.py     --train-efd energies_forces_dipoles_train.npz --train-esp grids_esp_train.npz     --valid-efd energies_forces_dipoles_valid.npz --valid-esp grids_esp_valid.npz --epochs 1000 --batch-size 100 --comparison-name test1
+  326  which python
+  327  cd ~/mmml
+  328  cs
+  329  uv sync .[gpu]
+  330  uv sync --extras gpu
+  331  uv sync --extra gpu
+  332  uv sync --extra gpu --offline
+  333  uv pip install --offline --no-index --find-lines ../wheels/ -e .
+  334  uv pip install --offline --no-index --find-links ../wheels/
+  335  uv pip install --offline --no-index --find-links ../wheels/ -e .
+  336  exit
+  337  cs
+  338  cd mmml/examples/
+  339  cs
+  340  cd dcm/
+  341  cd ..
+  342  cs
+  343  cd co2/
+  344  cs
+  345  cd dcmnet_physnet_train/
+  346  cs
+  347  cs
+  348  Q
+  349  cs
+  350  Q
+  351  cs
+  352  Q
+  353  ps -ga
+  354  fa
+  355  ps -fa
+  356  cs
+  357  source ~/mmml/.venv/bin/activate
+  358  which python
+  359  uv run python
+  360  module load Miniconda3
+  361  source ~/mmml/.venv/bin/activate
+  362  uv run python
+  363  module load CUDA/12.2.0
+  364  python
+  365  cs
+  366  conda info --envs
+  367  conda activate /scicore/home/meuwly/boitti0000/.conda/envs/mmml-full
+  368  python
+  369  cd ~/mmml
+  370  cs
+  371  uv sync
+  372  exit
+  373  cs
+  374  Q
+  375  python
+  376  source ~/mmml/.venv/bin/activate
+  377  python
+  378  module load CUDA/12.2.0
+  379  cd mmml
+  380  uv sync --extra gpu --frozen 
+  381  python
+  382  nvidia-smi
+  383  Q
+  384  ls
+  385  sinfo
+  386  squeue
+  387  cs
+  388  Q
+  389  exit
+  390  module load CUDA/12.2.0
+  391  source ~/mmml/.venv/bin/activate
+  392  python -c "import jax; print(jax.devices())"
+  393  nvidia-smi
+  394  module purge
+  395  module load CUDA/12.2.0
+  396  source ~/mmml/.venv/bin/activate
+  397  python -c "import jax; print(jax.devices())"
+  398  nvidia-smi
+  399  echo $CUDA_VISIBLE_DEVICES
+  400  python -c "import jax, jaxlib; print(jax.__version__, jaxlib.__version__); print(jax.devices())"
+  401  module purge
+  402  module load CUDA/11.8.0    # or whatever 11.x you have
+  403  source ~/mmml/.venv/bin/activate
+  404  # uninstall current jax/jaxlib/jax_plugins
+  405  uv pip uninstall -y jax jaxlib jax_plugins || true
+  406  # install the CUDA 11 wheels you’ve cached in ./wheelhouse
+  407  uv pip install --no-index --find-links ./wheelhouse "jaxlib==<cuda11_build>" jax
+  408  python -c "import jax; print(jax.devices())"
+  409  uv pip uninstall -y jax jaxlib jax_plugins || true
+  410  uv pip uninstall jax jaxlib jax_plugins || true
+  411  uv pip install --no-index --find-links ./wheelhouse "jaxlib[cuda11]" jax
+  412  uv pip install --no-index --find-links ../wheels "jaxlib[cuda11]" jax]
+  413  uv pip install --no-index --find-links ../wheels "jaxlib[cuda11]" "jax[cuda11]"
+  414  uv pip install --no-index --find-links ~/wheels "jaxlib[cuda11]" "jax[cuda11]"
+  415  uv pip install --no-index --find-links ~/wheels "jaxlib[cuda12]" "jax[cuda12]"
+  416  uv pip install --no-index --find-links ~/wheels "jaxlib" "jax[cuda12]"
+  417  uv pip install --find-links ~/wheels "jaxlib" "jax[cuda12]"
+  418  module load Miniconda3
+  419  conda activate
+  420  source ~/mmml/.venv/bin/activate
+  421  cs
+  422  Q
+  423  uv pip install --no-index --find-links ./wheelhouse "jaxlib==<cuda11_build>" jax
+  424  uv run python
+  425  module load CUDA/12.2.0
+  426  module swap CUDA/12.2.0
+  427  cs
+  428  uv run python
+  429  cs
+  430  conda activate mmml-full
+  431  uv run python
+  432  python
+  433  exit
+  434  module purge
+  435  module load CUDA/11.8.0
+  436  source ~/mmml/.venv/bin/activate
+  437  uv pip uninstall -y jax jaxlib jax_plugins || true
+  438  uv pip install --no-index --find-links ./wheelhouse "jaxlib==<cuda11-build>" jax
+  439  python -c "import jax; print(jax.devices())"   # expect a GpuDevice now
+  440  uv pip uninstall jax jaxlib jax_plugins || true
+  441  ls wheelhouse/
+  442  python -c "import jax; print(jax.devices())"   # expect a GpuDevice now
+  443  uv pip install jax[cuda11]
+  444  nvidia-smi --query-gpu=name,compute_cap --format=csv
+  445  # -> if compute_cap is 6.1 (Pascal) or 7.0/7.2 (Volta), avoid CUDA 13.
+  446  cat /etc/os-release | sed -n '1,6p'           # check distro baseline vs CUDA 13 support
+  447  python -c "import jax, jaxlib; print('jax', jax.__version__, 'jaxlib', jaxlib.__version__)"
+  448  exit
+  449  srun --pty bash
+  450  module purge
+  451  module load CUDA/13.0.0             # or whatever CUDA 13 module your site provides
+  452  source ~/mmml/.venv/bin/activate
+  453  python -c "imp
+  454  exit
+  455  cs
+  456  exit()
+  457  q
+  458  qq
+  459  cs
+  460  Q
+  461  module purge
+  462  cs
+  463  python
+  464  cs
+  465  source .venv/bin/activate
+  466  uv sync --extra[all]
+  467  uv sync --extra all
+  468  uv sync --extra all --frozen
+  469  conda activate mmml
+  470  conda info --envs
+  471  conda activate mmml-gpu
+  472  python
+  473  cs
+  474  cd examples/
+  475  cs
+  476  cd dcm/
+  477  cs
+  478  rm *out
+  479  cs
+  480  cd ..
+  481  cs
+  482  cd co2/
+  483  cs
+  484  cd dcmnet_physnet_train/
+  485  cs
+  486  python compare_models.py     --train-efd energies_forces_dipoles_train.npz --train-esp                                                                                                                                                                 grids_esp_train.npz     --valid-efd energies_forces_dipoles_valid.npz --valid-esp grids_esp_valid.npz --epochs 1000 --batch-s                                                                                                                                                                ize 100 --comparison-name test1
+  487  python compare_models.py     --train-efd energies_forces_dipoles_train.npz --train-esp grids_esp_train.npz     --valid-efd energies_forces_dipoles_valid.npz --valid-esp grids_esp_valid.npz --epochs 1000 --batch-size 100 --comparison-name test1
+  488  Q
+  489  sinfo
+  490  Q
+  491  exit
+  492  srun --pty bash
+  493  module purge
+  494  module load CUDA/13.0.0             # or whatever CUDA 13 module your site provides
+  495  source ~/mmml/.venv/bin/activate
+  496  python -c "imp
+  497  exit
+  498  cs
+  499  exit
+  500  conda activate mmml-gpu
+  501  cd examples/co2/dcmnet_physnet_train/
+  502  cs
+  503  python compare_models.py     --train-efd energies_forces_dipoles_train.npz --train-esp grids_esp_train.npz     --valid-efd energies_forces_dipoles_valid.npz --valid-esp grids_esp_valid.npz --epochs 2000 --batch-size 50 --comparison-name test2.2000.50
+  504  nvidia-smi
+  505  Q
+  506  cs
+  507  cs
+  508  Q
+  509  history > scicore.history
