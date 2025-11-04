@@ -1,5 +1,0 @@
-error: Failed to fetch: `https://files.pythonhosted.org/packages/dc/61/e24b560ab2e2eaeb3c839129175fb330dfcfc29e5203196e5541a4c44682/nvidia_cublas_cu12-12.8.4.1-py3-none-manylinux_2_27_x86_64.whl.metadata`
-  Caused by: Request failed after 3 retries
-  Caused by: error sending request for url (https://files.pythonhosted.org/packages/dc/61/e24b560ab2e2eaeb3c839129175fb330dfcfc29e5203196e5541a4c44682/nvidia_cublas_cu12-12.8.4.1-py3-none-manylinux_2_27_x86_64.whl.metadata)
-  Caused by: client error (Connect)
-  Caused by: invalid peer certificate: UnknownIssuer
