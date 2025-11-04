@@ -61,9 +61,8 @@ except ImportError:
     HAS_MATPLOTLIB = False
 
 from trainer import JointPhysNetDCMNet, JointPhysNetNonEquivariant
+from simple_inference_calculator import SimpleInferenceCalculator
 from dynamics_calculator import (
-    JointPhysNetDCMNetCalculator,
-    optimize_geometry,
     calculate_frequencies,
     calculate_ir_spectrum,
     run_molecular_dynamics,
@@ -209,7 +208,7 @@ def create_co2_configurations(
 
 
 def analyze_charges_vs_geometry(
-    calculator: JointPhysNetDCMNetCalculator,
+    calculator: SimpleInferenceCalculator,
     theta_range: Tuple[float, float, int],
     r_range: Tuple[float, float, int],
     output_dir: Path
@@ -522,7 +521,7 @@ def plot_spectroscopy_comparison(
 
 
 def run_harmonic_analysis(
-    calculator: JointPhysNetDCMNetCalculator,
+    calculator: SimpleInferenceCalculator,
     molecule: str = 'CO2'
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, Atoms, int, float]:
     """
@@ -582,7 +581,7 @@ def run_harmonic_analysis(
 
 
 def run_md_analysis(
-    calculator: JointPhysNetDCMNetCalculator,
+    calculator: SimpleInferenceCalculator,
     molecule: str = 'CO2',
     temperature: float = 300,
     nsteps: int = 10000,
@@ -697,10 +696,10 @@ def main():
     print("\nNon-Equivariant:")
     model_noneq, params_noneq, config_noneq = load_model_and_params(args.checkpoint_noneq, is_noneq=True)
     
-    # Create calculators
-    cutoff = config_dcm.get('cutoff', 6.0)
-    calc_dcm = JointPhysNetDCMNetCalculator(model_dcm, params_dcm, cutoff=cutoff)
-    calc_noneq = JointPhysNetDCMNetCalculator(model_noneq, params_noneq, cutoff=cutoff)
+    # Create calculators (simple, no padding needed!)
+    cutoff = config_dcm['physnet_config'].get('cutoff', 6.0)
+    calc_dcm = SimpleInferenceCalculator(model_dcm, params_dcm, cutoff=cutoff)
+    calc_noneq = SimpleInferenceCalculator(model_noneq, params_noneq, cutoff=cutoff)
     
     print("\nCalculators created successfully")
     
