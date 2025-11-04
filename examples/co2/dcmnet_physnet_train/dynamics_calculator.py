@@ -102,7 +102,14 @@ class JointPhysNetDCMNetCalculator(Calculator):
         self.cutoff = cutoff
         self.use_dcmnet_dipole = use_dcmnet_dipole
         self.natoms = model.physnet_config['natoms']
-        self.n_dcm = model.dcmnet_config['n_dcm']
+        
+        # Handle both DCMNet and NonEquivariant models
+        if hasattr(model, 'dcmnet_config'):
+            self.n_dcm = model.dcmnet_config['n_dcm']
+        elif hasattr(model, 'noneq_config'):
+            self.n_dcm = model.noneq_config['n_dcm']
+        else:
+            self.n_dcm = 3  # Default
     
     def calculate(self, atoms=None, properties=['energy'], system_changes=all_changes):
         """Calculate properties for the given atoms."""
