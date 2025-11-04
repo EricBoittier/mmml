@@ -2,3 +2,7 @@
 # ignore core dumps
 core.*
 **/core.*
+
+# ignore core dumps
+core.*
+**/core.*
