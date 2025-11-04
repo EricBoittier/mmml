@@ -14,24 +14,24 @@ set -eo pipefail
 module load Miniconda3
 # If your site uses CUDA modules, load the one matching your jaxlib wheel:
 # module load CUDA/12.2
-module load cuDNN/8.9.7.29-CUDA-12.4.0
+module load CUDA/12.2.0
+#module load cuDNN/8.9.7.29-CUDA-12.4.0
 eval "$(conda shell.bash hook)"
 
 # binutils hook + nounset can clash; keep -u off (or wrap activate with set +u / set -u)
-conda activate mmml-full
+#conda activate mmml-full
 
 # Block user-site to avoid ~/.local/jax_plugins
-export PYTHONNOUSERSITE=1
+#export PYTHONNOUSERSITE=1
 
 # JAX memory knobs
 export XLA_PYTHON_CLIENT_PREALLOCATE=false
 export XLA_PYTHON_CLIENT_MEM_FRACTION=.95
 
 source ~/mmml/.venv/bin/activate
-
-which python
+uv sync --extra gpu
 # Sanity print
-python - <<'PY'
+uv run python - <<'PY'
 import os, jax
 print("CUDA_VISIBLE_DEVICES =", os.environ.get("CUDA_VISIBLE_DEVICES"))
 print("JAX backend:", jax.default_backend())
@@ -44,7 +44,7 @@ try:
 except Exception as e:
     print("Version check failed:", e)
 PY
-which python
+uv run which python
 # Launch your actual training (fix this line)
-python train.py #--config dcm.yaml
+uv run python train.py #--config dcm.yaml
 
