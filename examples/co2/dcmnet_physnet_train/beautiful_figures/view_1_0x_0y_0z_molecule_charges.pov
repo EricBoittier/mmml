@@ -136,7 +136,7 @@ sphere {
 }
 
 sphere {
-  <0.0000, 0.0000, 10.5080>, 0.0600
+  <0.0000, 0.0000, 10.5040>, 0.0600
   texture {
     pigment { rgbf <0.020, 0.188, 0.380, 0.50> }
     finish { charge_finish }
@@ -144,7 +144,7 @@ sphere {
 }
 
 sphere {
-  <0.0000, 0.0000, 0.7566>, 0.0600
+  <0.0000, 0.0000, 0.7567>, 0.0600
   texture {
     pigment { rgbf <0.966, 0.701, 0.579, 0.50> }
     finish { charge_finish }
@@ -160,7 +160,7 @@ sphere {
 }
 
 sphere {
-  <0.0000, 0.0000, -10.5080>, 0.0600
+  <0.0000, 0.0000, -10.5040>, 0.0600
   texture {
     pigment { rgbf <0.020, 0.188, 0.380, 0.50> }
     finish { charge_finish }
@@ -168,7 +168,7 @@ sphere {
 }
 
 sphere {
-  <0.0000, 0.0000, -0.7566>, 0.0600
+  <0.0000, 0.0000, -0.7567>, 0.0600
   texture {
     pigment { rgbf <0.966, 0.701, 0.579, 0.50> }
     finish { charge_finish }

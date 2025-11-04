@@ -2338,7 +2338,7 @@ sphere {
 sphere {
   <1.9451, 1.0565, -0.8745>, 0.06
   texture {
-    pigment { rgbf <0.876, 0.461, 0.367, 0.65> }
+    pigment { rgbf <0.881, 0.472, 0.375, 0.65> }
     finish { esp_finish }
   }
 }
@@ -3306,7 +3306,7 @@ sphere {
 sphere {
   <2.3084, 0.4804, 0.3240>, 0.06
   texture {
-    pigment { rgbf <0.885, 0.483, 0.383, 0.65> }
+    pigment { rgbf <0.890, 0.493, 0.392, 0.65> }
     finish { esp_finish }
   }
 }
@@ -3794,7 +3794,7 @@ sphere {
 sphere {
   <-2.3501, 0.1900, -0.3243>, 0.06
   texture {
-    pigment { rgbf <0.885, 0.483, 0.383, 0.65> }
+    pigment { rgbf <0.890, 0.493, 0.392, 0.65> }
     finish { esp_finish }
   }
 }
@@ -5050,7 +5050,7 @@ sphere {
 sphere {
   <-1.5317, -0.5575, 1.7342>, 0.06
   texture {
-    pigment { rgbf <0.834, 0.365, 0.297, 0.65> }
+    pigment { rgbf <0.839, 0.376, 0.302, 0.65> }
     finish { esp_finish }
   }
 }
@@ -6642,7 +6642,7 @@ sphere {
 sphere {
   <-1.6231, -1.5049, 0.8748>, 0.06
   texture {
-    pigment { rgbf <0.876, 0.461, 0.367, 0.65> }
+    pigment { rgbf <0.881, 0.472, 0.375, 0.65> }
     finish { esp_finish }
   }
 }
@@ -9354,7 +9354,7 @@ sphere {
 sphere {
   <1.5234, 1.4682, 1.3978>, 0.06
   texture {
-    pigment { rgbf <0.885, 0.483, 0.383, 0.65> }
+    pigment { rgbf <0.890, 0.493, 0.392, 0.65> }
     finish { esp_finish }
   }
 }
@@ -10466,7 +10466,7 @@ sphere {
 sphere {
   <-1.9353, 0.8765, 1.2910>, 0.06
   texture {
-    pigment { rgbf <0.881, 0.472, 0.375, 0.65> }
+    pigment { rgbf <0.885, 0.483, 0.383, 0.65> }
     finish { esp_finish }
   }
 }
@@ -11730,7 +11730,7 @@ sphere {
 sphere {
   <0.0907, 0.2039, 3.2860>, 0.06
   texture {
-    pigment { rgbf <0.945, 0.621, 0.489, 0.65> }
+    pigment { rgbf <0.950, 0.631, 0.498, 0.65> }
     finish { esp_finish }
   }
 }
@@ -13314,7 +13314,7 @@ sphere {
 sphere {
   <-1.5602, -0.6390, 2.4681>, 0.06
   texture {
-    pigment { rgbf <0.922, 0.567, 0.449, 0.65> }
+    pigment { rgbf <0.927, 0.578, 0.457, 0.65> }
     finish { esp_finish }
   }
 }
@@ -18586,7 +18586,7 @@ sphere {
 sphere {
   <1.2774, 0.8126, 0.3257>, 0.06
   texture {
-    pigment { rgbf <0.701, 0.100, 0.171, 0.65> }
+    pigment { rgbf <0.706, 0.111, 0.176, 0.65> }
     finish { esp_finish }
   }
 }
@@ -20626,7 +20626,7 @@ sphere {
 sphere {
   <1.3024, -0.2729, 0.4910>, 0.06
   texture {
-    pigment { rgbf <0.577, 0.055, 0.149, 0.65> }
+    pigment { rgbf <0.588, 0.059, 0.151, 0.65> }
     finish { esp_finish }
   }
 }
