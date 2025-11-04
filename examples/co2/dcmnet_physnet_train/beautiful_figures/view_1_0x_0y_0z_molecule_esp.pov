@@ -5,7 +5,7 @@
 global_settings {assumed_gamma 2.2 max_trace_level 6}
 background {color White}
 camera {orthographic
-  right -0.02*x up 0.02*y
+  right -0.32*x up 0.32*y
   direction 1.00*z
   location <0,0,15.00> look_at <0,0,0>}
 
@@ -36,9 +36,9 @@ union{torus{R, Rcell rotate 45*z texture{pigment{color COL transmit TRANS} finis
 #end
 
 // no cell vertices
-atom(<  0.00,   0.00,  -1.17>, 0.01, rgb <0.56, 0.56, 0.56>, 0.0, jmol) // #0
-atom(<  0.00,   0.00,   0.00>, 0.01, rgb <1.00, 0.05, 0.05>, 0.0, jmol) // #1
-atom(<  0.00,   0.00,  -2.34>, 0.01, rgb <1.00, 0.05, 0.05>, 0.0, jmol) // #2
+atom(<  0.00,   0.00,  -1.17>, 0.15, rgb <0.56, 0.56, 0.56>, 0.0, jmol) // #0
+atom(<  0.00,   0.00,   0.00>, 0.15, rgb <1.00, 0.05, 0.05>, 0.0, jmol) // #1
+atom(<  0.00,   0.00,  -2.34>, 0.15, rgb <1.00, 0.05, 0.05>, 0.0, jmol) // #2
 cylinder {<  0.00,   0.00,  -1.17>, <  0.00,   0.00,  -0.58>, Rbond texture{pigment {color rgb <0.56, 0.56, 0.56> transmit 0.0} finish{jmol}}}
 cylinder {<  0.00,   0.00,   0.00>, <  0.00,   0.00,  -0.58>, Rbond texture{pigment {color rgb <1.00, 0.05, 0.05> transmit 0.0} finish{jmol}}}
 cylinder {<  0.00,   0.00,  -1.17>, <  0.00,   0.00,  -1.75>, Rbond texture{pigment {color rgb <0.56, 0.56, 0.56> transmit 0.0} finish{jmol}}}

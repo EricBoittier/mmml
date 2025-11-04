@@ -48,6 +48,8 @@ class SimpleInferenceCalculator(Calculator):
         elif hasattr(model, "noneq_config"):
             self.n_dcm = model.noneq_config["n_dcm"]
         else:
+            print("Model has no dcmnet_config or noneq_config")
+            print(model)
             self.n_dcm = 3
 
     def calculate(self, atoms=None, properties=None, system_changes=all_changes):
