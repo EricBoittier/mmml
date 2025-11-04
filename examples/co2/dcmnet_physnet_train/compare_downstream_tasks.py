@@ -104,7 +104,11 @@ class DownstreamMetrics:
 
 def load_model_and_params(checkpoint_path: Path, is_noneq: bool = False):
     """Load model and parameters from checkpoint."""
+    checkpoint_path = Path(checkpoint_path).resolve()  # Resolve to absolute path
     print(f"  Loading checkpoint: {checkpoint_path}")
+    
+    if not checkpoint_path.exists():
+        raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}\n  Current dir: {Path.cwd()}")
     
     with open(checkpoint_path, 'rb') as f:
         checkpoint_data = pickle.load(f)
@@ -149,34 +153,11 @@ def load_model_and_params(checkpoint_path: Path, is_noneq: bool = False):
             mix_coulomb_energy=mix_coulomb_energy,
         )
     
-    # Initialize model if params are not in expected structure
-    # Create a dummy input to initialize
-    dummy_atomic_numbers = jnp.array([6, 8, 8])  # CO2
-    dummy_positions = jnp.array([[0,0,0], [1.16,0,0], [-1.16,0,0]])
-    dummy_dst = jnp.array([0, 1, 2])
-    dummy_src = jnp.array([1, 2, 0])
-    dummy_segments = jnp.array([0, 0, 0])
-    dummy_mask = jnp.ones((3,), dtype=bool)
-    dummy_batch_mask = jnp.ones((1,), dtype=bool)
-    
-    # Check if we need to initialize
-    if not isinstance(params, dict) or 'params' not in params:
-        # Need to initialize model structure
-        dummy_params = model.init(
-            jax.random.PRNGKey(0),
-            atomic_numbers=dummy_atomic_numbers,
-            positions=dummy_positions,
-            dst_idx=dummy_dst,
-            src_idx=dummy_src,
-            batch_segments=dummy_segments,
-            batch_size=1,
-            batch_mask=dummy_batch_mask,
-            atom_mask=dummy_mask,
-        )
-        
-        # If params is just the param dict, wrap it
-        if isinstance(params, dict) and 'physnet' in params:
-            params = {'params': params}
+    # The params should already be in the correct structure from training
+    # Just ensure they're wrapped properly if needed
+    if isinstance(params, dict) and 'params' not in params and 'physnet' in params:
+        # Params are unwrapped, wrap them
+        params = {'params': params}
     
     config = saved_config  # Return for reference
     
@@ -665,10 +646,12 @@ def main():
                        help='Non-equivariant checkpoint path')
     
     # Analysis options
+    parser.add_argument('--check-only', action='store_true',
+                       help='Quick smoke test: just load models and exit (~5 sec)')
     parser.add_argument('--quick', action='store_true',
-                       help='Quick analysis (skip MD)')
+                       help='Quick analysis (harmonic only, ~5 min)')
     parser.add_argument('--full', action='store_true',
-                       help='Full analysis (harmonic + MD + Raman)')
+                       help='Full analysis (harmonic + MD + Raman, ~30-60 min)')
     parser.add_argument('--analyze-charges', action='store_true',
                        help='Analyze charges vs CO2 geometry')
     
@@ -720,6 +703,32 @@ def main():
     calc_noneq = JointPhysNetDCMNetCalculator(model_noneq, params_noneq, cutoff=cutoff)
     
     print("\nCalculators created successfully")
+    
+    # Quick smoke test - just check models load
+    if args.check_only:
+        print("\n" + "="*70)
+        print("CHECK-ONLY MODE: Models loaded successfully!")
+        print("="*70)
+        print("\nModel configurations:")
+        print(f"\nDCMNet PhysNet config:")
+        print(f"  natoms: {model_dcm.physnet_config['natoms']}")
+        print(f"  cutoff: {model_dcm.physnet_config['cutoff']}")
+        if hasattr(model_dcm, 'dcmnet_config'):
+            print(f"\nDCMNet config:")
+            print(f"  n_dcm: {model_dcm.dcmnet_config['n_dcm']}")
+            print(f"  features: {model_dcm.dcmnet_config['features']}")
+        
+        print(f"\nNon-Eq PhysNet config:")
+        print(f"  natoms: {model_noneq.physnet_config['natoms']}")
+        print(f"  cutoff: {model_noneq.physnet_config['cutoff']}")
+        if hasattr(model_noneq, 'noneq_config'):
+            print(f"\nNon-Eq config:")
+            print(f"  n_dcm: {model_noneq.noneq_config['n_dcm']}")
+            print(f"  features: {model_noneq.noneq_config['features']}")
+        
+        print("\n✅ All checks passed! Models are ready to use.")
+        print("Run without --check-only to perform actual analysis.")
+        return
     
     # Initialize metrics
     metrics_dcm = DownstreamMetrics()
