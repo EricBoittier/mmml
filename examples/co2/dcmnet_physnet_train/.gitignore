@@ -1,0 +1,4 @@
+
+# ignore core dumps
+core.*
+**/core.*
