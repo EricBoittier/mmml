@@ -35,7 +35,7 @@ For help on a specific command:
     
     parser.add_argument(
         'command',
-        choices=['xml2npz', 'validate', 'train', 'evaluate'],
+        choices=['xml2npz', 'validate', 'train', 'evaluate', 'downstream'],
         help='Command to run'
     )
     parser.add_argument(
@@ -80,6 +80,10 @@ For help on a specific command:
         from . import evaluate
         sys.argv = ['mmml evaluate'] + args.args
         return evaluate.main()
+    elif args.command == 'downstream':
+        from . import downstream
+        sys.argv = ['mmml downstream'] + args.args
+        return downstream.main()
     
     else:
         parser.print_help()
