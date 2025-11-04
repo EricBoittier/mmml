@@ -7,7 +7,7 @@ background {color White}
 camera {orthographic
   right -0.02*x up 0.02*y
   direction 1.00*z
-  location <0,0,15.00> look_at <0,0,0>}
+  location <0,0,60.00> look_at <0,0,0>}
 
 
 light_source {<  2.00,   3.00,  40.00> color White
