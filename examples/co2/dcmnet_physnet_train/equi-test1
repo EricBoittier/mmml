@@ -1,0 +1,47 @@
+Traceback (most recent call last):
+  File "/pchem-data/meuwly/boittier/home/mmml/examples/co2/dcmnet_physnet_train/compare_models.py", line 36, in <module>
+    from trainer import (
+  File "/pchem-data/meuwly/boittier/home/mmml/examples/co2/dcmnet_physnet_train/trainer.py", line 104, in <module>
+    import e3x
+  File "/pchem-data/meuwly/boittier/home/mmml/.venv/lib/python3.12/site-packages/e3x/__init__.py", line 24, in <module>
+    from . import nn
+  File "/pchem-data/meuwly/boittier/home/mmml/.venv/lib/python3.12/site-packages/e3x/nn/__init__.py", line 64, in <module>
+    from .modules import _Conv
+  File "/pchem-data/meuwly/boittier/home/mmml/.venv/lib/python3.12/site-packages/e3x/nn/modules.py", line 27, in <module>
+    from e3x import so3
+  File "/pchem-data/meuwly/boittier/home/mmml/.venv/lib/python3.12/site-packages/e3x/so3/__init__.py", line 18, in <module>
+    from .irreps import clebsch_gordan
+  File "/pchem-data/meuwly/boittier/home/mmml/.venv/lib/python3.12/site-packages/e3x/so3/irreps.py", line 25, in <module>
+    from ._clebsch_gordan_lut import _generate_clebsch_gordan_lookup_table
+  File "/pchem-data/meuwly/boittier/home/mmml/.venv/lib/python3.12/site-packages/e3x/so3/_clebsch_gordan_lut.py", line 31, in <module>
+    from ._symbolic import _clebsch_gordan
+  File "/pchem-data/meuwly/boittier/home/mmml/.venv/lib/python3.12/site-packages/e3x/so3/_symbolic.py", line 19, in <module>
+    import sympy as sp
+  File "/pchem-data/meuwly/boittier/home/mmml/.venv/lib/python3.12/site-packages/sympy/__init__.py", line 203, in <module>
+    from .geometry import (Point, Point2D, Point3D, Line, Ray, Segment, Line2D,
+  File "/pchem-data/meuwly/boittier/home/mmml/.venv/lib/python3.12/site-packages/sympy/geometry/__init__.py", line 13, in <module>
+    from sympy.geometry.point import Point, Point2D, Point3D
+  File "/pchem-data/meuwly/boittier/home/mmml/.venv/lib/python3.12/site-packages/sympy/geometry/point.py", line 37, in <module>
+    from .entity import GeometryEntity
+  File "/pchem-data/meuwly/boittier/home/mmml/.venv/lib/python3.12/site-packages/sympy/geometry/entity.py", line 35, in <module>
+    from sympy.sets.handlers.intersection import intersection_sets
+  File "/pchem-data/meuwly/boittier/home/mmml/.venv/lib/python3.12/site-packages/sympy/sets/handlers/intersection.py", line 514, in <module>
+    @intersection_sets.register(Rationals, Reals)
+     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/pchem-data/meuwly/boittier/home/mmml/.venv/lib/python3.12/site-packages/sympy/multipledispatch/dispatcher.py", line 148, in _
+    self.add(types, func, **kwargs)
+  File "/pchem-data/meuwly/boittier/home/mmml/.venv/lib/python3.12/site-packages/sympy/multipledispatch/dispatcher.py", line 219, in add
+    self.reorder(on_ambiguity=on_ambiguity)
+  File "/pchem-data/meuwly/boittier/home/mmml/.venv/lib/python3.12/site-packages/sympy/multipledispatch/dispatcher.py", line 224, in reorder
+    self.ordering = ordering(self.funcs)
+                    ^^^^^^^^^^^^^^^^^^^^
+  File "/pchem-data/meuwly/boittier/home/mmml/.venv/lib/python3.12/site-packages/sympy/multipledispatch/conflict.py", line 62, in ordering
+    edges = [(a, b) for a in signatures for b in signatures if edge(a, b)]
+                                                               ^^^^^^^^^^
+  File "/pchem-data/meuwly/boittier/home/mmml/.venv/lib/python3.12/site-packages/sympy/multipledispatch/conflict.py", line 48, in edge
+    if supercedes(a, b):
+       ^^^^^^^^^^^^^^^^
+  File "/pchem-data/meuwly/boittier/home/mmml/.venv/lib/python3.12/site-packages/sympy/multipledispatch/conflict.py", line 9, in supercedes
+    return len(a) == len(b) and all(map(issubclass, a, b))
+                                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyboardInterrupt
