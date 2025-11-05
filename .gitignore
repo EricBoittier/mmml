@@ -154,4 +154,7 @@ CHARMMSETUP
 *.png
 CHARMMSETUP
 examples/co2/dcmnet_physnet_train/md_ir_long/trajectory.npz
+<<<<<<< HEAD
 examples/openqdc/openqdc_packed_memmap/
+=======
+>>>>>>> f5899bcf5dd3cccc2bb1f96f6f269611600b038b
