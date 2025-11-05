@@ -175,16 +175,16 @@ def validate(model, ema_params, data, batch_size, num_atoms, energy_weight, forc
 def main():
     # Configuration
     data_path = Path(__file__).parent / "glycol.npz"
-    batch_size = 32
-    num_epochs = 50
-    learning_rate = 0.001
+    batch_size = 100
+    num_epochs = 10
+    learning_rate = 0.0001
     num_atoms = 10  # Max atoms in glycol dataset
     
     # Model hyperparameters
     features = 128
-    max_degree = 2
-    num_iterations = 3
-    num_basis_functions = 16
+    max_degree = 0
+    num_iterations = 5
+    num_basis_functions = 64
     cutoff = 5.0
     n_res = 3
     
