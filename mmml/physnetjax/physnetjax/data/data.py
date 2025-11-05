@@ -8,41 +8,18 @@ import numpy as np
 import pandas as pd
 from scipy.spatial.distance import cdist
 
+from mmml.data.atomic_references import (
+    DEFAULT_CHARGE_STATE,
+    DEFAULT_REFERENCE_LEVEL,
+    get_atomic_reference_array,
+)
 from mmml.physnetjax.physnetjax.utils.pretty_printer import print_dict_as_table
 
-# Atomic energies in Hartree
-ATOM_ENERGIES_HARTREE = np.array(
-    [
-        0,  # dummy
-        -0.500273,  # H
-        0,  # He
-        0,  # Li
-        0,  # Be
-        0,  # B
-        -37.846772,  # C
-        -54.583861,  # N
-        -75.064579,  # O
-        -99.718730,  # F
-        0,  # Ne
-        0,  # Na
-        0,  # Mg
-        0,  # Al
-        0,  # Si
-        0,  # P
-        0,  # S
-        0,  # Cl
-        0,  # Ar
-        0,  # K
-        0,  # Ca
-        0,  # Sc
-        0,  # Ti
-        0,  # V
-        0,  # Cr
-        0,  # Mn
-        0,  # Fe
-        0,  # Co
-        0,  # Ni
-    ]
+# Atomic energies in Hartree sourced from reference table
+ATOM_ENERGIES_HARTREE = get_atomic_reference_array(
+    level=DEFAULT_REFERENCE_LEVEL,
+    charge_state=DEFAULT_CHARGE_STATE,
+    unit="hartree",
 )
 
 
