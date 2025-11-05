@@ -11,6 +11,22 @@ Top-level Package
 
    api/mmml
 
+PhysNet Models
+--------------
+
+.. toctree::
+   :maxdepth: 2
+
+   api/physnet_models
+
+Data Loaders
+------------
+
+.. toctree::
+   :maxdepth: 2
+
+   api/data_loaders
+
 DCMNet (Distributed Charge Multipole Network)
 ---------------------------------------------
 

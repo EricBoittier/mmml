@@ -72,6 +72,8 @@ Welcome to mmml's documentation!
    tutorials
    cli
    user_guide
+   physnet_charge_spin
+   packed_memmap_loader
    esp_cube_generation
    dcmnet_fitting
    tutorial_esp_to_dcmnet
