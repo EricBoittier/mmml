@@ -287,6 +287,86 @@ Outputs
   - Includes energies and forces if available
 
 
+split_dataset.py
+----------------
+
+Purpose
+  Split datasets into train/valid/test sets with optional unit conversion.
+
+Common flags
+  - ``input``: input NPZ file (single file mode)
+  - ``--efd``: energy/force/dipole file (multi-file mode)
+  - ``--grid``: ESP grid file (multi-file mode)
+  - ``-o, --output-dir``: output directory
+  - ``--train, --valid, --test``: split ratios (default: 0.8/0.1/0.1)
+  - ``--convert-units``: convert Hartree→eV and Hartree/Bohr→eV/Å
+  - ``--seed``: random seed for reproducibility
+
+Usage (single file)
+  .. code-block:: bash
+
+     python -m mmml.cli.split_dataset data.npz -o splits/
+
+Usage (with unit conversion)
+  .. code-block:: bash
+
+     python -m mmml.cli.split_dataset data.npz -o splits/ --convert-units
+
+Usage (multiple files - EFD + Grid)
+  .. code-block:: bash
+
+     python -m mmml.cli.split_dataset \\
+       --efd energies_forces_dipoles.npz \\
+       --grid grids_esp.npz \\
+       -o training_data --convert-units
+
+Custom split ratios
+  .. code-block:: bash
+
+     python -m mmml.cli.split_dataset data.npz -o splits/ \\
+       --train 0.7 --valid 0.15 --test 0.15
+
+Outputs
+  - data_train.npz, data_valid.npz, data_test.npz
+  - split_indices.npz (reproducible split indices)
+  - Optionally converts units to ASE standard (eV, eV/Å)
+
+
+explore_data.py
+---------------
+
+Purpose
+  Explore and visualize NPZ datasets with statistical summaries.
+
+Common flags
+  - ``input``: input NPZ file
+  - ``--detailed``: detailed analysis including geometry
+  - ``--plots``: generate distribution plots
+  - ``--output-dir``: output directory for plots
+  - ``--quiet``: suppress output
+
+Usage
+  .. code-block:: bash
+
+     python -m mmml.cli.explore_data data.npz
+
+With plots
+  .. code-block:: bash
+
+     python -m mmml.cli.explore_data data.npz --plots --output-dir exploration
+
+Detailed analysis
+  .. code-block:: bash
+
+     python -m mmml.cli.explore_data data.npz --detailed --plots --output-dir analysis
+
+Outputs
+  - Statistical summaries (energy, forces, dipoles)
+  - Bond length analysis (if --detailed)
+  - Distribution plots (if --plots)
+  - Data quality checks
+
+
 evaluate_model.py
 -----------------
 
