@@ -1,0 +1,80 @@
+==========================================
+GPU Test Script
+==========================================
+Date: Tue Nov  4 17:20:05 CET 2025
+Hostname: sgi01
+Job ID: 60694521
+
+Loading CUDA module...
+Module loaded.
+
+--- GPU Check with nvidia-smi ---
+Tue Nov  4 17:20:05 2025       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.82.07              Driver Version: 580.82.07      CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA TITAN X (Pascal)        On  |   00000000:83:00.0 Off |                  N/A |
+| 23%   27C    P8              9W /  250W |       9MiB /  12288MiB |      0%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A            5527      G   /usr/lib/xorg/Xorg                        5MiB |
++-----------------------------------------------------------------------------------------+
+
+--- CUDA Environment Variables ---
+CUDA_VISIBLE_DEVICES: 0
+LD_LIBRARY_PATH: /scicore/soft/easybuild/apps/CUDA/12.2.0/nvvm/lib64:/scicore/soft/easybuild/apps/CUDA/12.2.0/extras/CUPTI/lib64:/scicore/soft/easybuild/apps/CUDA/12.2.0/targets/x86_64-linux/lib
+
+--- CUDA Compiler ---
+/scicore/soft/easybuild/apps/CUDA/12.2.0/bin/nvcc
+nvcc: NVIDIA (R) Cuda compiler driver
+Copyright (c) 2005-2023 NVIDIA Corporation
+Built on Tue_Jun_13_19:16:58_PDT_2023
+Cuda compilation tools, release 12.2, V12.2.91
+Build cuda_12.2.r12.2/compiler.32965470_0
+
+--- Activating Virtual Environment ---
+Virtual environment activated.
+
+--- Python Environment ---
+Python: /scicore/home/meuwly/boitti0000/mmml/.venv/bin/python
+Python 3.12.11
+
+JAX packages:
+e3nn-jax                  0.20.8
+jax                       0.8.0
+jax-cuda12-pjrt           0.8.0
+jax-cuda12-plugin         0.8.0
+jax-md                    0.2.26
+jaxlib                    0.8.0
+jaxtyping                 0.3.3
+lovely-jax                0.1.4
+
+--- JAX GPU Test ---
+JAX Configuration:
+  Version: 0.8.0
+  Default backend: cpu
+  Available devices: [CpuDevice(id=0)]
+
+❌ ERROR: No GPU device found!
+   JAX is using CPU only.
+
+Likely causes:
+  1. JAX not installed with CUDA support
+  2. CUDA version mismatch
+  3. GPU not visible to the job
+
+==========================================
+❌ TESTS FAILED
+Please check the errors above.
+See CUDA_TROUBLESHOOTING.md for solutions.
+==========================================
