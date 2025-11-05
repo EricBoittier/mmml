@@ -16,7 +16,9 @@ The input CSV/TSV must contain columns:
 """
 
 import argparse
+import logging
 import sys
+import time
 
 import jax
 import jax.numpy as jnp
@@ -31,6 +33,9 @@ from sklearn.neighbors import KNeighborsRegressor
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVR
 from sklearn.tree import DecisionTreeRegressor
+
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------
@@ -60,7 +65,19 @@ def make_update(apply_fn):
         return new_params
     return update
 
-def train_model(X_train, y_train, X_val, y_val, hidden, epochs, lr, batch_size, seed):
+def train_model(
+    X_train,
+    y_train,
+    X_val,
+    y_val,
+    hidden,
+    epochs,
+    lr,
+    batch_size,
+    seed,
+    *,
+    log_interval=None,
+):
     key = random.PRNGKey(seed)
     model = MLP(hidden_sizes=hidden)
     params = model.init(key, jnp.asarray(X_train))
@@ -76,6 +93,17 @@ def train_model(X_train, y_train, X_val, y_val, hidden, epochs, lr, batch_size, 
     use_minibatch = batch_size is not None and 0 < batch_size < n
 
     best = {"params": params, "val_rmse": np.inf}
+    log_interval = max(1, log_interval or max(1, epochs // 10))
+    loop_start = time.perf_counter()
+    last_log = loop_start
+
+    logger.info(
+        "Starting training: epochs=%d lr=%.3g batch_size=%s hidden=%s",
+        epochs,
+        lr,
+        batch_size if use_minibatch else "full",
+        hidden,
+    )
 
     for epoch in range(1, epochs + 1):
         if use_minibatch:
@@ -95,6 +123,21 @@ def train_model(X_train, y_train, X_val, y_val, hidden, epochs, lr, batch_size, 
             best["val_rmse"] = rmse
             best["params"] = params
 
+        if epoch % log_interval == 0 or epoch == 1 or epoch == epochs:
+            preds_train = np.array(apply_fn(params, jnp.asarray(X_train)))
+            train_rmse = float(np.sqrt(mean_squared_error(y_train, preds_train)))
+            now = time.perf_counter()
+            logger.info(
+                "Epoch %d/%d: train_rmse=%.4f val_rmse=%.4f (+%.2fs, total %.2fs)",
+                epoch,
+                epochs,
+                train_rmse,
+                rmse,
+                now - last_log,
+                now - loop_start,
+            )
+            last_log = now
+
     params = best["params"]
     preds_train = np.array(apply_fn(params, jnp.asarray(X_train)))
     preds_val = np.array(apply_fn(params, jnp.asarray(X_val)))
@@ -107,6 +150,11 @@ def train_model(X_train, y_train, X_val, y_val, hidden, epochs, lr, batch_size, 
         "val_mae": float(mean_absolute_error(y_val, preds_val)),
         "val_r2": float(r2_score(y_val, preds_val)) if len(np.unique(y_val)) > 1 else float("nan"),
     }
+    logger.info(
+        "Finished training: best_val_rmse=%.4f total_time=%.2fs",
+        metrics["val_rmse"],
+        time.perf_counter() - loop_start,
+    )
     return metrics, params
 
 def run_group_cv(df_group, n_splits, epochs, lr, batch_size, hidden, seed):
