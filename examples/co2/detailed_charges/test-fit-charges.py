@@ -164,6 +164,10 @@ def run_group_cv(df_group, n_splits, epochs, lr, batch_size, hidden, seed, *, lo
 
     # Decide CV strategy
     if len(df_group) < 2:
+        logger.warning(
+            "Insufficient samples (%d) for grouped JAX model; skipping",
+            len(df_group),
+        )
         return None  # Not enough data to validate anything
     if n_splits is None:
         # Auto: KFold with min(n, 5) if allowed, else LOO
@@ -266,6 +270,10 @@ def run_sklearn_models_cv(df_group, n_splits, seed):
     y = df_group["value"].to_numpy(dtype=float)
 
     if len(df_group) < 2:
+        logger.warning(
+            "Insufficient samples (%d) for scikit-learn baselines; skipping group",
+            len(df_group),
+        )
         return None
 
     # Cross-validation strategy
@@ -472,6 +480,13 @@ def main():
                 r["level"] = level
                 r["atom_index"] = atom_idx
                 results.append(r)
+        else:
+            logger.info(
+                "No scikit-learn baselines produced for group (scheme=%s, level=%s, atom=%s)",
+                scheme,
+                level,
+                atom_idx,
+            )
         if agg is None:
             res = {
                 "scheme": scheme,
@@ -499,9 +514,12 @@ def main():
         results.append(res)
 
     out = pd.DataFrame(results).sort_values(["scheme", "level", "atom_index"])
+    logger.info("Generated %d result rows", len(out))
     # Pretty print
     with pd.option_context("display.max_columns", None):
         print(out.to_string(index=False))
+
+    logger.info("Processing complete.")
 
 
 if __name__ == "__main__":
