@@ -13,8 +13,24 @@ Command-line Interface
 
 How to run common tasks from the CLI (training, ESP generation, conversions).
 
+PhysNet Models
+--------------
+
+Charge-Spin Conditioned Model
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+For multi-state predictions (ionization energies, singlet-triplet gaps, etc.), see :doc:`physnet_charge_spin`.
+
+Data Loading
+------------
+
+Packed Memmap Loader
+^^^^^^^^^^^^^^^^^^^^
+
+For efficient training on large datasets (>10GB), see :doc:`packed_memmap_loader`.
+
 Saving Results from PySCF GPU
------------------------------
+------------------------------
 
 Use the CLI flag ``--save_option`` to control how results are persisted when running
 ``mmml.pyscf4gpuInterface.calcs``. Supported values are ``pkl``, ``npz``, and ``hdf5``.
