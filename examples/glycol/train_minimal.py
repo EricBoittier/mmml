@@ -37,7 +37,8 @@ def load_glycol_data(data_path, train_size=0.8, valid_size=0.1):
     
     n_total = len(E)
     print(f"Total samples: {n_total}")
-    print(f"Max atoms per molecule: {Z.shape[1]}")
+    print(f"Actual max atoms per molecule: {int(N.max())}")
+    print(f"Data padded shape: {Z.shape[1]} (will use only first {int(N.max())} atoms)")
     
     # Create train/valid/test split
     indices = np.arange(n_total)
@@ -77,10 +78,10 @@ def create_batch_generator(data, batch_size, num_atoms, shuffle=True):
         batch_idx = indices[start:start+batch_size]
         batch_size_actual = len(batch_idx)
         
-        # Get batch data
-        Z = data['Z'][batch_idx]  # (B, A)
-        R = data['R'][batch_idx]  # (B, A, 3)
-        F = data['F'][batch_idx]  # (B, A, 3)
+        # Get batch data (only first num_atoms to avoid excessive padding)
+        Z = data['Z'][batch_idx, :num_atoms]  # (B, A)
+        R = data['R'][batch_idx, :num_atoms]  # (B, A, 3)
+        F = data['F'][batch_idx, :num_atoms]  # (B, A, 3)
         E = data['E'][batch_idx]  # (B,)
         N = data['N'][batch_idx]  # (B,)
         
@@ -177,7 +178,7 @@ def main():
     batch_size = 32
     num_epochs = 50
     learning_rate = 0.001
-    num_atoms = 60  # Max atoms in glycol dataset
+    num_atoms = 10  # Max atoms in glycol dataset
     
     # Model hyperparameters
     features = 128
@@ -225,8 +226,8 @@ def main():
     dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(num_atoms)
     
     # Get sample data for initialization
-    sample_Z = data_splits['train']['Z'][0]  # (60,)
-    sample_R = data_splits['train']['R'][0]  # (60, 3)
+    sample_Z = data_splits['train']['Z'][0, :num_atoms]  # (num_atoms,)
+    sample_R = data_splits['train']['R'][0, :num_atoms]  # (num_atoms, 3)
     
     params = model.init(key, sample_Z, sample_R, dst_idx, src_idx)
     print(f"Model initialized with {sum(x.size for x in jax.tree_util.tree_leaves(params)):,} parameters")
