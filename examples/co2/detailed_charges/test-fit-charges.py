@@ -367,7 +367,17 @@ def main():
     ap.add_argument("--batch-size", type=int, default=0, help="Minibatch size; <=0 means full-batch")
     ap.add_argument("--hidden", type=str, default="64,64", help="Comma-separated hidden sizes, e.g., '64,64' or '128,64,32'")
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--log-level", type=str, default="INFO", help="Logging level (DEBUG, INFO, WARNING, ERROR)")
+    ap.add_argument("--log-interval", type=int, default=None, help="Epoch interval for logging training progress")
     args = ap.parse_args()
+
+    log_level = getattr(logging, args.log_level.upper(), logging.INFO)
+    logging.basicConfig(
+        level=log_level,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+
+    logger.info("Starting run with data=%s", args.data)
 
     # Load data
     if args.sep is None:
@@ -382,12 +392,14 @@ def main():
     try:
         df = pd.read_csv(args.data, sep=sep)
     except Exception as e:
+        logger.exception("Failed to read %s", args.data)
         print(f"Failed to read {args.data}: {e}", file=sys.stderr)
         sys.exit(1)
 
     required_cols = {"r1", "r2", "ang", "level", "atom_index", "atom", "scheme", "value"}
     missing = required_cols - set(df.columns)
     if missing:
+        logger.error("Missing required columns: %s", missing)
         print(f"Missing required columns: {missing}", file=sys.stderr)
         sys.exit(1)
 
@@ -398,15 +410,29 @@ def main():
         df[c] = pd.to_numeric(df[c], errors="coerce")
     df = df.dropna(subset=["r1", "r2", "ang", "value", "scheme", "level", "atom_index"])
     if len(df) == 0:
+        logger.error("No valid rows after cleaning.")
         print("No valid rows after cleaning.", file=sys.stderr)
         sys.exit(1)
 
     hidden = tuple(int(x) for x in args.hidden.split(",") if x.strip())
+    grouped = df.groupby(["scheme", "level", "atom_index"], sort=True)
+    logger.info(
+        "Loaded %d rows (%d groups). Hidden layers: %s",
+        len(df),
+        grouped.ngroups,
+        hidden,
+    )
 
     # Group by (scheme, level, atom_index)
     results = []
-    grouped = df.groupby(["scheme", "level", "atom_index"], sort=True)
     for (scheme, level, atom_idx), df_g in grouped:
+        logger.info(
+            "Processing group (scheme=%s, level=%s, atom=%s) with %d samples",
+            scheme,
+            level,
+            atom_idx,
+            len(df_g),
+        )
         # Original JAX model metrics
         agg = run_group_cv(
             df_g,
@@ -416,6 +442,7 @@ def main():
             batch_size=(args.batch_size if args.batch_size and args.batch_size > 0 else None),
             hidden=hidden,
             seed=args.seed,
+            log_interval=args.log_interval,
         )
 
         # Classical ML results
@@ -431,6 +458,13 @@ def main():
             agg["level"] = level
             agg["atom_index"] = atom_idx
             results.append(agg)
+        else:
+            logger.warning(
+                "Skipping Flax model summary for group (scheme=%s, level=%s, atom=%s) due to insufficient samples",
+                scheme,
+                level,
+                atom_idx,
+            )
 
         if sk_results is not None:
             for r in sk_results:
