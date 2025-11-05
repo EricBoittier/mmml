@@ -35,6 +35,21 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVR
 from sklearn.tree import DecisionTreeRegressor
 
+# Import reporting utilities
+try:
+    from reporting import (
+        build_summary_tables,
+        style_table_html,
+        to_latex_table,
+        save_html_table,
+        save_latex_table,
+        plot_metric_by_model,
+        plot_heatmap_by_group,
+    )
+    REPORTING_AVAILABLE = True
+except ImportError:
+    REPORTING_AVAILABLE = False
+
 
 logger = logging.getLogger(__name__)
 
@@ -379,6 +394,12 @@ def main():
     ap.add_argument("--output", type=str, default=None, help="Optional path to write aggregated results as CSV")
     ap.add_argument("--log-level", type=str, default="INFO", help="Logging level (DEBUG, INFO, WARNING, ERROR)")
     ap.add_argument("--log-interval", type=int, default=None, help="Epoch interval for logging training progress")
+    
+    # Reporting options
+    ap.add_argument("--report", action="store_true", help="Generate plots and tables")
+    ap.add_argument("--report-dir", type=str, default="reports", help="Directory for plots and tables")
+    ap.add_argument("--metric", type=str, default="val_rmse_mean", help="Metric for reporting (val_rmse_mean, val_mae_mean, val_r2_mean)")
+    
     args = ap.parse_args()
 
     log_level = getattr(logging, args.log_level.upper(), logging.INFO)
@@ -520,6 +541,79 @@ def main():
         output_path.parent.mkdir(parents=True, exist_ok=True)
         out.to_csv(output_path, index=False)
         logger.info("Saved aggregated results to %s", output_path)
+
+    # Generate reports if requested
+    if args.report:
+        if not REPORTING_AVAILABLE:
+            logger.warning("Reporting module not available. Skipping report generation.")
+        else:
+            logger.info("Generating reports in %s", args.report_dir)
+            report_dir = Path(args.report_dir)
+            report_dir.mkdir(parents=True, exist_ok=True)
+            
+            metric = args.metric
+            
+            # Build summary tables
+            summary_by_model, best_per_group, labeled = build_summary_tables(out, metric=metric)
+            
+            # HTML tables
+            html_summary = style_table_html(
+                summary_by_model.rename(columns={"mean_metric": f"{metric}_mean", "std_metric": f"{metric}_std"}),
+                metric=f"{metric}_mean",
+                cmap="viridis",
+                caption=f"Model summary ({metric})"
+            )
+            save_html_table(html_summary, str(report_dir / "summary_by_model.html"))
+            logger.info("Saved HTML summary to %s", report_dir / "summary_by_model.html")
+            
+            html_best = style_table_html(
+                best_per_group[["model", "scheme", "level", "atom_index", metric, "n_folds", "n_samples"]],
+                metric=metric,
+                cmap="magma",
+                caption=f"Best model per group ({metric})"
+            )
+            save_html_table(html_best, str(report_dir / "best_per_group.html"))
+            logger.info("Saved HTML best-per-group to %s", report_dir / "best_per_group.html")
+            
+            # LaTeX tables
+            latex_summary = to_latex_table(
+                summary_by_model.rename(columns={"mean_metric": f"{metric}_mean", "std_metric": f"{metric}_std"}),
+                metric=f"{metric}_mean",
+                caption=f"Model summary ({metric})",
+                label="tab:model_summary"
+            )
+            save_latex_table(latex_summary, str(report_dir / "summary_by_model.tex"))
+            logger.info("Saved LaTeX summary to %s", report_dir / "summary_by_model.tex")
+            
+            latex_best = to_latex_table(
+                best_per_group[["model", "scheme", "level", "atom_index", metric, "n_folds", "n_samples"]],
+                metric=metric,
+                caption=f"Best model per group ({metric})",
+                label="tab:best_per_group"
+            )
+            save_latex_table(latex_best, str(report_dir / "best_per_group.tex"))
+            logger.info("Saved LaTeX best-per-group to %s", report_dir / "best_per_group.tex")
+            
+            # Plots
+            plot_metric_by_model(
+                out,
+                metric=metric,
+                cmap="tab10",
+                figsize=(8, 5),
+                savepath=str(report_dir / "metric_by_model.png")
+            )
+            logger.info("Saved bar plot to %s", report_dir / "metric_by_model.png")
+            
+            plot_heatmap_by_group(
+                out,
+                metric=metric,
+                cmap="magma",
+                figsize=(11, 6),
+                savepath=str(report_dir / "heatmap_by_group.png")
+            )
+            logger.info("Saved heatmap to %s", report_dir / "heatmap_by_group.png")
+            
+            logger.info("Report generation complete")
 
     logger.info("Processing complete.")
 

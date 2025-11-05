@@ -201,3 +201,47 @@ def plot_parity_by_model(results_df: pd.DataFrame, y_true: np.ndarray, y_pred: d
         os.makedirs(os.path.dirname(savepath) or ".", exist_ok=True)
         plt.savefig(savepath, dpi=200, bbox_inches="tight")
 # ======================= end reporting.py =======================
+
+
+# if __name__ == "__main__":
+
+#     from reporting import (
+#         build_summary_tables, style_table_html, to_latex_table,
+#         save_html_table, save_latex_table,
+#         plot_metric_by_model, plot_heatmap_by_group
+#     )
+
+#     metric = "val_rmse_mean"  # change to "val_mae_mean" or "val_r2_mean" as you like
+
+#     # --------- Tables ---------
+#     summary_by_model, best_per_group, out_labeled = build_summary_tables(out, metric=metric)
+
+#     # HTML tables
+#     html_summary = style_table_html(summary_by_model.rename(columns={
+#         "mean_metric": f"{metric}_mean", "std_metric": f"{metric}_std"
+#     }), metric=f"{metric}_mean", cmap="viridis", caption=f"Model summary ({metric})")
+
+#     save_html_table(html_summary, "reports/summary_by_model.html")
+
+#     html_best = style_table_html(
+#         best_per_group[["model", "scheme", "level", "atom_index", metric, "n_folds", "n_samples"]],
+#         metric=metric, cmap="magma", caption=f"Best model per group ({metric})"
+#     )
+#     save_html_table(html_best, "reports/best_per_group.html")
+
+#     # LaTeX tables
+#     latex_summary = to_latex_table(
+#         summary_by_model.rename(columns={"mean_metric": f"{metric}_mean", "std_metric": f"{metric}_std"}),
+#         metric=f"{metric}_mean", caption=f"Model summary ({metric})", label="tab:model_summary"
+#     )
+#     save_latex_table(latex_summary, "reports/summary_by_model.tex")
+
+#     latex_best = to_latex_table(
+#         best_per_group[["model", "scheme", "level", "atom_index", metric, "n_folds", "n_samples"]],
+#         metric=metric, caption=f"Best model per group ({metric})", label="tab:best_per_group"
+#     )
+#     save_latex_table(latex_best, "reports/best_per_group.tex")
+
+#     # --------- Plots ---------
+#     plot_metric_by_model(out, metric=metric, cmap="tab10", figsize=(8,5), savepath="reports/metric_by_model.png")
+#     plot_heatmap_by_group(out, metric=metric, cmap="magma", figsize=(11,6), savepath="reports/heatmap_by_group.png")
