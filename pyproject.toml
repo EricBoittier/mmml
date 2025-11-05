@@ -39,6 +39,8 @@ dependencies = [
     # ML utilities
     "ml-dtypes",
     "ml-collections",
+    "tensorflow>=2.11.0",
+    "tensorflow-datasets>=4.9.0",
     "einops",
     # Chemistry core
     "ase",

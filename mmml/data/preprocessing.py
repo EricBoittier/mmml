@@ -10,23 +10,18 @@ from typing import Optional, Tuple, Dict
 import ase.data
 from scipy.spatial.distance import cdist
 
-# Import default atomic reference energies (in Hartree)
-try:
-    from mmml.physnetjax.physnetjax.data.data import ATOM_ENERGIES_HARTREE
-except ImportError:
-    # Fallback if physnetjax not available
-    ATOM_ENERGIES_HARTREE = np.array([
-        0,  # dummy
-        -0.500273,  # H
-        0,  # He
-        0,  # Li
-        0,  # Be
-        0,  # B
-        -37.846772,  # C
-        -54.583861,  # N
-        -75.064579,  # O
-        -99.718730,  # F
-    ] + [0] * 19)  # Extended to 28 elements
+from mmml.data.atomic_references import (
+    DEFAULT_CHARGE_STATE,
+    DEFAULT_REFERENCE_LEVEL,
+    get_atomic_reference_array,
+    get_atomic_reference_dict,
+)
+
+ATOM_ENERGIES_HARTREE = get_atomic_reference_array(
+    level=DEFAULT_REFERENCE_LEVEL,
+    charge_state=DEFAULT_CHARGE_STATE,
+    unit="hartree",
+)
 
 
 def center_coordinates(
@@ -232,51 +227,34 @@ def subtract_atomic_energies(
     return corrected
 
 
-def get_default_atomic_energies(unit: str = 'eV') -> Dict[int, float]:
-    """
-    Get default atomic reference energies in the specified unit.
-    
-    Uses predefined reference energies from PhysNetJax data module.
-    These are isolated atom energies computed at a reference level of theory.
-    
+def get_default_atomic_energies(
+    unit: str = 'eV',
+    reference: str = DEFAULT_REFERENCE_LEVEL,
+    charge_state: int = DEFAULT_CHARGE_STATE,
+    *,
+    fallback_to_neutral: bool = True,
+) -> Dict[int, float]:
+    """Return default isolated atomic energies from the reference table.
+
     Parameters
     ----------
-    unit : str, optional
-        Target energy unit ('eV', 'hartree', 'kcal/mol', 'kJ/mol'), by default 'eV'
-        
-    Returns
-    -------
-    dict
-        Dictionary mapping atomic number to atomic energy reference
-        
-    Examples
-    --------
-    >>> refs = get_default_atomic_energies('eV')
-    >>> print(refs[1])  # Energy for Hydrogen
-    -13.605693009...
+    unit
+        Target energy unit (``'eV'``, ``'hartree'``, ``'kcal/mol'`` or ``'kJ/mol'``).
+    reference
+        Level of theory key inside :mod:`mmml.data.atomic_reference_energies`.
+    charge_state
+        Atomic charge state to select (default: neutral atoms).
+    fallback_to_neutral
+        If ``True`` and the requested charge is missing for an element, fall back
+        to the neutral value.
     """
-    # Convert from Hartree to target unit
-    hartree_refs = {i: float(e) for i, e in enumerate(ATOM_ENERGIES_HARTREE) if e != 0}
-    
-    if unit.lower() == 'hartree':
-        return hartree_refs
-    
-    # Convert to eV first, then to target unit
-    conversion_factors = {
-        'ev': 27.211386245988,  # Hartree to eV
-        'kcal/mol': 627.509474,  # Hartree to kcal/mol
-        'kj/mol': 2625.499638,   # Hartree to kJ/mol
-    }
-    
-    unit_lower = unit.lower()
-    if unit_lower not in conversion_factors:
-        raise ValueError(
-            f"Unknown energy unit: {unit}. "
-            f"Choose from: {list(conversion_factors.keys()) + ['hartree']}"
-        )
-    
-    factor = conversion_factors[unit_lower]
-    return {z: e * factor for z, e in hartree_refs.items()}
+
+    return get_atomic_reference_dict(
+        level=reference,
+        charge_state=charge_state,
+        unit=unit,
+        fallback_to_neutral=fallback_to_neutral,
+    )
 
 
 def scale_energies_by_atoms(

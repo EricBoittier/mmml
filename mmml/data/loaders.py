@@ -11,6 +11,7 @@ from typing import Dict, List, Optional, Union, Tuple
 from dataclasses import dataclass, field
 
 from .npz_schema import validate_npz, NPZSchema
+from .atomic_references import DEFAULT_CHARGE_STATE, DEFAULT_REFERENCE_LEVEL
 
 
 @dataclass
@@ -40,7 +41,11 @@ class DataConfig:
         Method for computing atomic energies ('linear_regression', 'mean', or 'default')
         - 'linear_regression': Fit atomic energies from data using least squares
         - 'mean': Average energy per atom from data
-        - 'default': Use predefined reference atomic energies from PhysNetJax
+        - 'default': Use predefined reference atomic energies from the bundled table
+    atomic_energy_reference : str
+        Reference table key to use when ``atomic_energy_method`` is ``'default'``.
+    atomic_energy_charge : int
+        Charge state to use for atomic references when ``atomic_energy_method`` is ``'default'``.
     scale_by_atoms : bool
         Whether to scale energies by number of atoms (per-atom energies)
     esp_mask_vdw : bool
@@ -62,6 +67,8 @@ class DataConfig:
     convert_energy_to: Optional[str] = None
     subtract_atomic_energies: bool = False
     atomic_energy_method: str = 'linear_regression'
+    atomic_energy_reference: str = DEFAULT_REFERENCE_LEVEL
+    atomic_energy_charge: int = DEFAULT_CHARGE_STATE
     scale_by_atoms: bool = False
     esp_mask_vdw: bool = False
     vdw_scale: float = 1.4
@@ -333,8 +340,12 @@ def _apply_config_preprocessing(
             
             # Get atomic energies based on method
             if config.atomic_energy_method == 'default':
-                # Use predefined reference energies from PhysNetJax
-                atomic_energies = get_default_atomic_energies(unit=current_unit)
+                # Use predefined reference energies from bundled table
+                atomic_energies = get_default_atomic_energies(
+                    unit=current_unit,
+                    reference=config.atomic_energy_reference,
+                    charge_state=config.atomic_energy_charge,
+                )
             else:
                 # Compute atomic energies from the data (linear_regression or mean)
                 atomic_energies = compute_atomic_energies(
@@ -354,6 +365,11 @@ def _apply_config_preprocessing(
             
             metadata['atomic_energies'] = atomic_energies
             metadata['atomic_energy_method'] = config.atomic_energy_method
+            if config.atomic_energy_method == 'default':
+                metadata['atomic_energy_reference'] = {
+                    'level': config.atomic_energy_reference,
+                    'charge_state': config.atomic_energy_charge,
+                }
         
         # 3. Scale by number of atoms if requested
         if config.scale_by_atoms and 'N' in data:
