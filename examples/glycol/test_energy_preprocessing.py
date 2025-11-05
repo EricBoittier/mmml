@@ -26,7 +26,8 @@ def main():
     
     print(f"\nDataset Statistics:")
     print(f"  Total molecules: {len(E)}")
-    print(f"  Max atoms per molecule: {Z.shape[1]}")
+    print(f"  Padded shape: {Z.shape[1]} atoms (data is zero-padded)")
+    print(f"  Actual max atoms: {int(N.max())}")
     print(f"  Avg atoms per molecule: {N.mean():.1f}")
     print(f"\nEnergy Statistics:")
     print(f"  Mean: {E.mean():.4f} eV")

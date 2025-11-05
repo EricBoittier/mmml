@@ -49,7 +49,7 @@ def main():
         cutoff=5.0,
         max_atomic_number=118,
         charges=False,
-        natoms=60,
+        natoms=10,
         total_charge=0.0,
         n_res=2,  # Fewer residual blocks
         zbl=True,
@@ -58,8 +58,8 @@ def main():
     )
     
     key = jax.random.PRNGKey(42)
-    dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(60)
-    params = model.init(key, Z[0], R[0], dst_idx, src_idx)
+    dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(10)
+    params = model.init(key, Z[0][:10], R[0][:10], dst_idx, src_idx)
     n_params = sum(x.size for x in jax.tree_util.tree_leaves(params))
     print(f"Model initialized with {n_params:,} parameters")
     
@@ -73,10 +73,10 @@ def main():
     print("\nRunning one training batch...")
     batch_size = 4
     
-    # Prepare batch
-    Z_batch = Z[:batch_size]
-    R_batch = R[:batch_size]
-    F_batch = F[:batch_size]
+    # Prepare batch (use only first 10 atoms)
+    Z_batch = Z[:batch_size, :10]
+    R_batch = R[:batch_size, :10]
+    F_batch = F[:batch_size, :10]
     E_batch = E[:batch_size]
     N_batch = N[:batch_size]
     
@@ -86,7 +86,7 @@ def main():
     F_flat = F_batch.reshape(-1, 3)
     atom_mask = (Z_flat > 0).astype(np.float32)
     batch_mask = jnp.ones_like(dst_idx, dtype=jnp.float32)
-    batch_segments = np.repeat(np.arange(batch_size), 60).astype(np.int32)
+    batch_segments = np.repeat(np.arange(batch_size), 10).astype(np.int32)
     
     batch = {
         'Z': jnp.array(Z_flat, dtype=jnp.int32),

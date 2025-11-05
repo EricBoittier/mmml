@@ -12,8 +12,8 @@ This directory contains a minimal example for training PhysNet on the glycol.npz
 ## Dataset Statistics
 
 - Total molecules: 5,904
-- Max atoms per molecule: 60
-- Average atoms per molecule: 10.0
+- Max atoms per molecule: 10
+- Average atoms per molecule: ~10.0
 - Energy range: [-228.5, 0.0] eV
 - Forces in eV/Å
 
