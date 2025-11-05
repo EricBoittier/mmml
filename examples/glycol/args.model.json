@@ -1,1 +1,1 @@
-{"features": 128, "max_degree": 0, "num_iterations": 5, "num_basis_functions": 32, "cutoff": 10.0, "max_atomic_number": 28, "charges": false, "natoms": 60, "total_charge": 0, "n_res": 2, "zbl": false, "debug": false, "efa": false, "use_energy_bias": true}
+{"features": 64, "max_degree": 0, "num_iterations": 2, "num_basis_functions": 32, "cutoff": 8.0, "max_atomic_number": 28, "charges": false, "natoms": 60, "total_charge": 0, "n_res": 2, "zbl": false, "debug": false, "efa": false, "use_energy_bias": true}
