@@ -1,0 +1,572 @@
+E1101 13:28:56.819060 2004262 cuda_executor.cc:1423] failed to query device memory info: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:56.819248 2004262 se_gpu_pjrt_client.cc:1127] Failed to query available memory for GPU 0
+E1101 13:28:56.821183 2004262 pjrt_stream_executor_client.cc:2974] Execution of replica 0 failed: INTERNAL: the function failed to launch on the GPU
+Traceback (most recent call last):
+  File "/scicore/home/meuwly/boitti0000/mmml/examples/co2/physnet_train/trainer.py", line 568, in main
+    final_params = train_model(
+                   ^^^^^^^^^^^^
+  File "/scicore/home/meuwly/boitti0000/mmml/mmml/physnetjax/physnetjax/training/training.py", line 298, in train_model
+    params = model.init(
+             ^^^^^^^^^^^
+  File "/scicore/home/meuwly/boitti0000/mmml/mmml/physnetjax/physnetjax/models/model.py", line 928, in __call__
+    (_, (energy, charges, electrostatics, repulsion, state)), forces = energy_and_forces(
+                                                                       ^^^^^^^^^^^^^^^^^^
+  File "/scicore/home/meuwly/boitti0000/mmml/mmml/physnetjax/physnetjax/models/model.py", line 172, in energy
+    x = self._process_atomic_features(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scicore/home/meuwly/boitti0000/mmml/mmml/physnetjax/physnetjax/models/model.py", line 275, in _process_atomic_features
+    x = self._message_passing_iteration(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scicore/home/meuwly/boitti0000/mmml/mmml/physnetjax/physnetjax/models/model.py", line 400, in _message_passing_iteration
+    x = e3x.nn.MessagePass(
+        ^^^^^^^^^^^^^^^^^^^
+  File "/scicore/home/meuwly/boitti0000/mmml/.venv/lib/python3.12/site-packages/e3x/nn/modules.py", line 1481, in __call__
+    return super().__call__(
+           ^^^^^^^^^^^^^^^^^
+  File "/scicore/home/meuwly/boitti0000/mmml/.venv/lib/python3.12/site-packages/e3x/nn/modules.py", line 1316, in __call__
+    filters = Dense(
+              ^^^^^^
+  File "/scicore/home/meuwly/boitti0000/mmml/.venv/lib/python3.12/site-packages/e3x/nn/modules.py", line 233, in __call__
+    [
+  File "/scicore/home/meuwly/boitti0000/mmml/.venv/lib/python3.12/site-packages/flax/linen/linear.py", line 287, in __call__
+    y = dot_general(
+        ^^^^^^^^^^^^
+jax.errors.JaxRuntimeError: INTERNAL: the function failed to launch on the GPU
+--------------------
+For simplicity, JAX has removed its internal frames from the traceback of the following exception. Set JAX_TRACEBACK_FILTERING=off to include these.
+E1101 13:28:56.876207 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3de93a20; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:56.878087 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3dd40fc0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:56.880055 2004262 cuda_executor.cc:265] failed to unload module 0x55ec412c9680; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:56.881691 2004262 cuda_executor.cc:265] failed to unload module 0x55ec412a4850; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:56.883152 2004262 cuda_executor.cc:265] failed to unload module 0x55ec4114e370; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:56.884591 2004262 cuda_executor.cc:265] failed to unload module 0x55ec40ef0920; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:56.886388 2004262 cuda_executor.cc:265] failed to unload module 0x55ec40c9fef0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:56.889842 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3fe28380; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:56.892679 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3e655f50; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:56.894335 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3e5f84a0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:56.895631 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3e3403c0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:56.896943 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3ead9040; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:56.898532 2004262 cuda_executor.cc:265] failed to unload module 0x55ec4066ba00; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:56.900125 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3cdffc40; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:56.901637 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3fbc9ad0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:56.903216 2004262 cuda_executor.cc:265] failed to unload module 0x55ec409278f0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:56.904799 2004262 cuda_executor.cc:265] failed to unload module 0x55ec4569c7f0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:56.906345 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3ea52c10; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:56.907999 2004262 cuda_executor.cc:265] failed to unload module 0x55ec40351810; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:56.909708 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3f8a7d50; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:56.911231 2004262 cuda_executor.cc:265] failed to unload module 0x55ec45848400; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:56.912873 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3ebbedc0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:56.914209 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3f783470; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:56.915615 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3e8edd70; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:56.917820 2004262 cuda_executor.cc:265] failed to unload module 0x55ec45ab3ea0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:56.919324 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3f2359e0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:56.920768 2004262 cuda_executor.cc:265] failed to unload module 0x55ec409c0ec0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:56.922359 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3f388f00; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:56.923890 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3f596a40; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:56.925539 2004262 cuda_executor.cc:265] failed to unload module 0x55ec40c41250; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:56.926943 2004262 cuda_executor.cc:265] failed to unload module 0x55ec403bf150; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:56.928891 2004262 cuda_executor.cc:265] failed to unload module 0x55ec44779ae0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:56.930393 2004262 cuda_executor.cc:265] failed to unload module 0x55ec40552c60; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:56.931702 2004262 cuda_executor.cc:265] failed to unload module 0x55ec407bb130; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:56.933122 2004262 cuda_executor.cc:265] failed to unload module 0x55ec329558d0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:56.938062 2004262 cuda_executor.cc:265] failed to unload module 0x55ec46ec08e0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:56.943048 2004262 cuda_executor.cc:265] failed to unload module 0x55ec45f6dcb0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:56.944929 2004262 cuda_executor.cc:265] failed to unload module 0x55ec45ec9ba0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.000075 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3fb42b20; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.004076 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3f3c30f0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.014727 2004262 cuda_executor.cc:265] failed to unload module 0x55ec46565e50; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.017463 2004262 cuda_executor.cc:265] failed to unload module 0x55ec46cb7a30; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.047023 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3fe90620; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.063293 2004262 cuda_executor.cc:265] failed to unload module 0x55ec4329f1b0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.067571 2004262 cuda_executor.cc:265] failed to unload module 0x55ec44eeff20; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.084385 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3f0989c0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.087554 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3fe6b4c0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.089394 2004262 cuda_executor.cc:265] failed to unload module 0x55ec40108dc0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.092259 2004262 cuda_executor.cc:265] failed to unload module 0x55ec4650eeb0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.093616 2004262 cuda_executor.cc:265] failed to unload module 0x55ec4752b360; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.119985 2004262 cuda_executor.cc:265] failed to unload module 0x55ec42801f00; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.121971 2004262 cuda_executor.cc:265] failed to unload module 0x55ec42ccfa40; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.129993 2004262 cuda_executor.cc:265] failed to unload module 0x55ec38381550; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.133255 2004262 cuda_executor.cc:265] failed to unload module 0x55ec39497010; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.134013 2004262 cuda_executor.cc:265] failed to unload module 0x55ec391645f0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.135027 2004262 cuda_executor.cc:265] failed to unload module 0x55ec38dff5f0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.135623 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3975b1d0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.136065 2004262 cuda_executor.cc:265] failed to unload module 0x55ec39b77c50; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.136538 2004262 cuda_executor.cc:265] failed to unload module 0x55ec39bf21c0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.136949 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3a1afb60; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.137326 2004262 cuda_executor.cc:265] failed to unload module 0x55ec389a4e40; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.137763 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3aca09a0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.138320 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3b9ab3e0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.138847 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3cd79910; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.139124 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3c3ba700; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.139671 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3cc2ee50; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.140036 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3cda0560; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.140448 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3ef55470; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.140761 2004262 cuda_executor.cc:265] failed to unload module 0x55ec41c4a440; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.141160 2004262 cuda_executor.cc:265] failed to unload module 0x55ec41ab9fc0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.141529 2004262 cuda_executor.cc:265] failed to unload module 0x55ec4206e6e0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.141891 2004262 cuda_executor.cc:545] [0] failed to free device memory at 0x147aa2802e00; result: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.142129 2004262 cuda_executor.cc:265] failed to unload module 0x55ec42379c60; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.142470 2004262 cuda_executor.cc:545] [0] failed to free device memory at 0x147aa2802c00; result: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.142631 2004262 cuda_executor.cc:265] failed to unload module 0x55ec41e5a3b0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.142894 2004262 cuda_executor.cc:265] failed to unload module 0x55ec424b4200; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.143295 2004262 cuda_executor.cc:265] failed to unload module 0x55ec42accb90; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.143535 2004262 cuda_executor.cc:265] failed to unload module 0x55ec42c15090; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.143990 2004262 cuda_executor.cc:265] failed to unload module 0x55ec426b7e30; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.144614 2004262 cuda_executor.cc:265] failed to unload module 0x55ec42bbf7c0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.144938 2004262 cuda_executor.cc:265] failed to unload module 0x55ec4314f720; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.145318 2004262 cuda_executor.cc:265] failed to unload module 0x55ec433eca10; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.145796 2004262 cuda_executor.cc:265] failed to unload module 0x55ec435390b0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.146298 2004262 cuda_executor.cc:265] failed to unload module 0x55ec4381cba0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.146959 2004262 cuda_executor.cc:265] failed to unload module 0x55ec43efa150; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.147481 2004262 cuda_executor.cc:265] failed to unload module 0x55ec443716e0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.147928 2004262 cuda_executor.cc:265] failed to unload module 0x55ec445fe850; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.148276 2004262 cuda_executor.cc:265] failed to unload module 0x55ec44779470; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.148843 2004262 cuda_executor.cc:265] failed to unload module 0x55ec44a51160; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.149571 2004262 cuda_executor.cc:265] failed to unload module 0x55ec4556da90; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.150652 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3b53a640; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.150940 2004262 cuda_executor.cc:265] failed to unload module 0x55ec44e35bf0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.151315 2004262 cuda_executor.cc:265] failed to unload module 0x55ec44f458f0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.151704 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3b5cfd70; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.152566 2004262 cuda_executor.cc:265] failed to unload module 0x55ec467fdc10; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.153004 2004262 cuda_executor.cc:265] failed to unload module 0x55ec46acb3b0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.153914 2004262 cuda_executor.cc:265] failed to unload module 0x55ec381f2da0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.154430 2004262 cuda_executor.cc:265] failed to unload module 0x55ec38932b00; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.155349 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3860f7a0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.156510 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3c177970; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.157518 2004262 cuda_executor.cc:265] failed to unload module 0x55ec38491a30; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.159168 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3d7eca30; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.159586 2004262 cuda_executor.cc:265] failed to unload module 0x55ec386eef30; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.160011 2004262 cuda_executor.cc:265] failed to unload module 0x55ec39e54490; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.161127 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3dc98a70; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.161486 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3c0381d0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.161935 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3a716b00; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.162282 2004262 cuda_executor.cc:265] failed to unload module 0x55ec39fa2900; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.162575 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3b0bc3e0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.162928 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3be88700; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.163243 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3b4464f0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.163673 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3a494420; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.164040 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3c387a20; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.164330 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3c4cb7e0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.164680 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3a81d850; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.164978 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3c8abb90; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.165383 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3a972260; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.165782 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3aa10020; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.166129 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3ab58d40; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.166470 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3aee4e90; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.166807 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3af80d90; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.167152 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3d8049c0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.167629 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3d079c10; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.167942 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3d31b9d0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.168422 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3d466850; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.168684 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3d7abf40; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.169132 2004262 cuda_executor.cc:265] failed to unload module 0x55ec3da99350; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.169743 2004262 cuda_executor.cc:265] failed to unload module 0x55ec45eec1e0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.453978 2004262 local_device_state.cc:139] Error when closing device: INTERNAL: CUDA error: Could not synchronize CUDA stream: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.454776 2004262 cuda_stream.cc:239] stream not idle on destroy: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.454797 2004262 cuda_stream.cc:244] failed to destroy CUDA stream for executor 0x147abc001450: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.454824 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.454842 2004262 cuda_stream.cc:239] stream not idle on destroy: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.454855 2004262 cuda_stream.cc:244] failed to destroy CUDA stream for executor 0x147abc001450: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.454868 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.454885 2004262 cuda_stream.cc:239] stream not idle on destroy: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.454897 2004262 cuda_stream.cc:244] failed to destroy CUDA stream for executor 0x147abc001450: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.454910 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.454925 2004262 cuda_stream.cc:239] stream not idle on destroy: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.454937 2004262 cuda_stream.cc:244] failed to destroy CUDA stream for executor 0x147abc001450: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.454949 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.454967 2004262 cuda_stream.cc:239] stream not idle on destroy: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.454979 2004262 cuda_stream.cc:244] failed to destroy CUDA stream for executor 0x147abc001450: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.454991 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.455007 2004262 cuda_stream.cc:239] stream not idle on destroy: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.455019 2004262 cuda_stream.cc:244] failed to destroy CUDA stream for executor 0x147abc001450: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.455031 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.455047 2004262 cuda_stream.cc:239] stream not idle on destroy: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.455059 2004262 cuda_stream.cc:244] failed to destroy CUDA stream for executor 0x147abc001450: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.455071 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.455086 2004262 cuda_stream.cc:239] stream not idle on destroy: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.455099 2004262 cuda_stream.cc:244] failed to destroy CUDA stream for executor 0x147abc001450: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.455126 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.455157 2004262 cuda_stream.cc:239] stream not idle on destroy: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.455169 2004262 cuda_stream.cc:244] failed to destroy CUDA stream for executor 0x147abc001450: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.455181 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.455197 2004262 cuda_stream.cc:239] stream not idle on destroy: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.455209 2004262 cuda_stream.cc:244] failed to destroy CUDA stream for executor 0x147abc001450: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.455222 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.455236 2004262 cuda_stream.cc:239] stream not idle on destroy: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.455263 2004262 cuda_stream.cc:244] failed to destroy CUDA stream for executor 0x147abc001450: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.455276 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.455291 2004262 cuda_stream.cc:239] stream not idle on destroy: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.455304 2004262 cuda_stream.cc:244] failed to destroy CUDA stream for executor 0x147abc001450: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.455316 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.455331 2004262 cuda_stream.cc:239] stream not idle on destroy: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.455343 2004262 cuda_stream.cc:244] failed to destroy CUDA stream for executor 0x147abc001450: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.455355 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.455369 2004262 cuda_stream.cc:239] stream not idle on destroy: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.455381 2004262 cuda_stream.cc:244] failed to destroy CUDA stream for executor 0x147abc001450: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.455394 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.455408 2004262 cuda_stream.cc:239] stream not idle on destroy: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.455420 2004262 cuda_stream.cc:244] failed to destroy CUDA stream for executor 0x147abc001450: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.455432 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.455448 2004262 cuda_stream.cc:239] stream not idle on destroy: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.455460 2004262 cuda_stream.cc:244] failed to destroy CUDA stream for executor 0x147abc001450: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.455472 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.455487 2004262 cuda_stream.cc:239] stream not idle on destroy: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.455499 2004262 cuda_stream.cc:244] failed to destroy CUDA stream for executor 0x147abc001450: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.455511 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.455526 2004262 cuda_stream.cc:239] stream not idle on destroy: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.455538 2004262 cuda_stream.cc:244] failed to destroy CUDA stream for executor 0x147abc001450: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.455550 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.455874 2004262 cuda_stream.cc:239] stream not idle on destroy: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456040 2004262 cuda_stream.cc:244] failed to destroy CUDA stream for executor 0x147abc001450: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456059 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456076 2004262 cuda_stream.cc:239] stream not idle on destroy: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456089 2004262 cuda_stream.cc:244] failed to destroy CUDA stream for executor 0x147abc001450: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456101 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456116 2004262 cuda_stream.cc:239] stream not idle on destroy: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456128 2004262 cuda_stream.cc:244] failed to destroy CUDA stream for executor 0x147abc001450: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456141 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456155 2004262 cuda_stream.cc:239] stream not idle on destroy: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456168 2004262 cuda_stream.cc:244] failed to destroy CUDA stream for executor 0x147abc001450: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456180 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456195 2004262 cuda_stream.cc:239] stream not idle on destroy: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456206 2004262 cuda_stream.cc:244] failed to destroy CUDA stream for executor 0x147abc001450: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456219 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456234 2004262 cuda_stream.cc:239] stream not idle on destroy: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456246 2004262 cuda_stream.cc:244] failed to destroy CUDA stream for executor 0x147abc001450: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456258 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456278 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456293 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456304 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456318 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456330 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456342 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456354 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456367 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456378 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456390 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456401 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456428 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456453 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456464 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456490 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456501 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456512 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456524 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456535 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456547 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456558 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456569 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456581 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456592 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456605 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456616 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456635 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456647 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456658 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456686 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456697 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456710 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456721 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456733 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456752 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456764 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456776 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456804 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456818 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456829 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456842 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456853 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456865 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456876 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456888 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456899 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456910 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456922 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456934 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456945 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456956 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456967 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456978 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.456989 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457000 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457012 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457024 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457036 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457047 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457059 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457070 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457082 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457093 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457105 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457117 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457129 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457140 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457151 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457163 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457174 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457186 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457197 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457208 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457220 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457232 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457243 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457254 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457266 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457279 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457291 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457305 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457316 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457328 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457339 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457351 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457391 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457404 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457416 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457428 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457440 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457451 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457463 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457474 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457486 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457497 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457510 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457521 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457534 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457546 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457558 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457570 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457581 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457593 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457605 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457617 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457628 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457640 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457651 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457663 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457675 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457701 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457726 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457753 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457763 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457774 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457785 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457796 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457806 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457818 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457829 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457840 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457850 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457862 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457875 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457886 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457897 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457909 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457919 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457930 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457941 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457952 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457962 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457973 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457984 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.457995 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458005 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458016 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458026 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458037 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458047 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458058 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458068 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458079 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458089 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458099 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458110 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458121 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458132 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458142 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458155 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458165 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458176 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458188 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458198 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458209 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458219 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458229 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458240 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458252 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458262 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458273 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458284 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458294 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458305 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458316 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458326 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458337 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458347 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458364 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458375 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458386 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458397 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458411 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458421 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458432 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458442 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458454 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458464 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458474 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458486 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458502 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458514 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458526 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458537 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458554 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458567 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458577 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458588 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458599 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458610 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458621 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458632 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458644 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458656 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458666 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458686 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458697 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458709 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458720 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458731 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458741 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458752 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458763 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458774 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458785 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458799 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458809 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458820 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458831 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458841 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458852 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458863 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458878 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458889 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458900 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458911 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458924 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458938 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458949 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458961 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458972 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458983 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.458993 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459010 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459022 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459035 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459046 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459056 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459067 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459082 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459093 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459103 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459114 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459125 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459136 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459147 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459158 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459183 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459195 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459209 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459221 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459232 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459244 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459261 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459272 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459285 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459299 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459314 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459325 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459336 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459348 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459359 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459370 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459382 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459394 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459405 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459415 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459426 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459437 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459447 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459458 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459469 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459481 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459491 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459503 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459515 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459526 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459537 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459547 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459559 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459570 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459581 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459594 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459605 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459616 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459628 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459639 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459650 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459661 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459672 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459683 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459693 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459704 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459715 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459726 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459736 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459747 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459758 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459769 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459780 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459791 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459803 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459814 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459829 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459844 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459855 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459867 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459888 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459898 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459910 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459925 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459937 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459948 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459958 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459969 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459980 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.459991 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.460002 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.460013 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.460028 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.460038 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.460049 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.460062 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.460074 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.460086 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.460097 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.460109 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.460120 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.460131 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.460142 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.460158 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.460169 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.460186 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.460201 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.460212 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.460222 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.460233 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.460251 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.460262 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.460273 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.460284 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.460295 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.460306 2004262 cuda_event.cc:49] CUDA error: Error destroying CUDA event: CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.460333 2004262 cuda_executor.cc:545] [0] failed to free device memory at 0x147844000000; result: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
+E1101 13:28:57.478921 2004262 cuda_executor.cc:508] error unregistering host memory at 0x147aad1e3000: INTERNAL: CUDA error: : CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered
