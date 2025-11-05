@@ -1,0 +1,338 @@
+==========================================
+GPU Test Script
+==========================================
+Date: Wed Nov  5 11:56:12 CET 2025
+Hostname: sgd03
+Job ID: 60808591
+
+no change     /scicore/soft/easybuild/apps/Miniconda3/24.7.1-0/condabin/conda
+no change     /scicore/soft/easybuild/apps/Miniconda3/24.7.1-0/bin/conda
+no change     /scicore/soft/easybuild/apps/Miniconda3/24.7.1-0/bin/conda-env
+no change     /scicore/soft/easybuild/apps/Miniconda3/24.7.1-0/bin/activate
+no change     /scicore/soft/easybuild/apps/Miniconda3/24.7.1-0/bin/deactivate
+no change     /scicore/soft/easybuild/apps/Miniconda3/24.7.1-0/etc/profile.d/conda.sh
+no change     /scicore/soft/easybuild/apps/Miniconda3/24.7.1-0/etc/fish/conf.d/conda.fish
+no change     /scicore/soft/easybuild/apps/Miniconda3/24.7.1-0/shell/condabin/Conda.psm1
+no change     /scicore/soft/easybuild/apps/Miniconda3/24.7.1-0/shell/condabin/conda-hook.ps1
+no change     /scicore/soft/easybuild/apps/Miniconda3/24.7.1-0/lib/python3.12/site-packages/xontrib/conda.xsh
+no change     /scicore/soft/easybuild/apps/Miniconda3/24.7.1-0/etc/profile.d/conda.csh
+no change     /scicore/home/meuwly/boitti0000/.bashrc
+No action taken.
+60808591
+======================================================================
+HEAD-TO-HEAD MODEL COMPARISON
+======================================================================
+
+Comparison: dcm1test60808591
+Output directory: comparisons/dcm1test60808591
+
+######################################################################
+# Loading Data
+######################################################################
+
+  Loading EFD: energies_forces_dipoles_train.npz
+  Loading ESP: grids_esp_train.npz
+  ✅ Subtracted atomic energies (now relative to isolated atoms)
+  Aligning ESP grids to molecular reference frames...
+  ✅ Aligned ESP grids to molecular reference frames
+     Sample 0 - Atom COM: [0.         0.14525378 0.11470596]
+     Sample 0 - Grid COM before: [3.25342429 3.24367862 3.3973045 ]
+     Sample 0 - Grid COM after: [2.56091444e-16 1.45253775e-01 1.14705956e-01]
+     Sample 0 - Offset corrected: [3.25342429 3.09842484 3.28259855] Å
+  Combined data shapes:
+    R: (8000, 60, 3)
+    Z: (8000, 60)
+    N: (8000,)
+    E: (8000,)
+    F: (8000, 60, 3)
+    Dxyz: (8000, 3)
+    esp: (8000, 3000)
+    vdw_surface: (8000, 3000, 3)
+  Data padding: 60 atoms
+  Max actual atoms: 3
+  Loading EFD: energies_forces_dipoles_valid.npz
+  Loading ESP: grids_esp_valid.npz
+  ✅ Subtracted atomic energies (now relative to isolated atoms)
+  Aligning ESP grids to molecular reference frames...
+  ✅ Aligned ESP grids to molecular reference frames
+     Sample 0 - Atom COM: [0.         0.25326187 0.02194556]
+     Sample 0 - Grid COM before: [3.22872937 3.4025402  3.33670261]
+     Sample 0 - Grid COM after: [2.56683563e-15 2.53261870e-01 2.19455598e-02]
+     Sample 0 - Offset corrected: [3.22872937 3.14927833 3.31475705] Å
+  Combined data shapes:
+    R: (1000, 60, 3)
+    Z: (1000, 60)
+    N: (1000,)
+    E: (1000,)
+    F: (1000, 60, 3)
+    Dxyz: (1000, 3)
+    esp: (1000, 3000)
+    vdw_surface: (1000, 3000, 3)
+  Data padding: 60 atoms
+  Max actual atoms: 3
+
+✅ Data loaded:
+  Training samples: 8000
+  Validation samples: 1000
+
+######################################################################
+# DCMNet (Equivariant) Model
+######################################################################
+
+🏋️  Training DCMNet...
+
+Pre-computing edge lists...
+  Pre-computing edge lists (cutoff=10.0 Å)...
+    Processed 1000/8000 samples...
+    Processed 2000/8000 samples...
+    Processed 3000/8000 samples...
+    Processed 4000/8000 samples...
+    Processed 5000/8000 samples...
+    Processed 6000/8000 samples...
+    Processed 7000/8000 samples...
+    Processed 8000/8000 samples...
+  ✅ Pre-computed edge lists: avg 6.0 edges/sample
+  Pre-computing edge lists (cutoff=10.0 Å)...
+    Processed 1000/1000 samples...
+  ✅ Pre-computed edge lists: avg 6.0 edges/sample
+
+Initializing model parameters...
+✅ Model initialized with 322,420 parameters
+
+Training samples: 8000
+Validation samples: 1000
+Batch size: 100
+
+Dipole loss terms:
+  - physnet: source=physnet, metric=l2, weight=25.0
+ESP loss terms:
+  - dcmnet: source=dcmnet, metric=l2, weight=10000.0
+
+📊 Using EMA with decay=0.999 for validation
+  💾 Saved best model (valid_loss: 599.186359)
+  💾 Saved best model (valid_loss: 592.023566)
+  💾 Saved best model (valid_loss: 584.382648)
+  💾 Saved best model (valid_loss: 575.273590)
+
+Epoch 5/10 (4.4s)
+  Train Loss: 13.415577
+    Energy: 0.161106
+    Forces: 0.184989
+    Dipole: 1.804137
+    ESP: 0.392751
+    Monopole: 0.003327
+    Total Charge: 0.000255
+  Valid Loss: 564.317780
+    MAE Energy: 9.643082 eV  (222.374283 kcal/mol) [μ=8.834, σ=1.777 eV]
+    MAE Forces: 0.235253 eV/Å  (5.425053 kcal/mol/Å) [μ=-0.000, σ=8.427 eV/Å]
+    MAE Dipole (PhysNet): 0.260165 e·Å  (1.249630 D) [μ=-0.163, σ=0.343 e·Å]
+    MAE Dipole (DCMNet): 0.251418 e·Å  (1.207614 D) [μ=-0.163, σ=0.343 e·Å]
+    RMSE ESP (PhysNet): 0.037514 Ha/e  (23.540413 (kcal/mol)/e) [μ=0.002800, σ=0.016157 Ha/e]
+    RMSE ESP (DCMNet): 0.016049 Ha/e  (10.071072 (kcal/mol)/e) [μ=0.002800, σ=0.016157 Ha/e]
+    Total Charge Violation: 0.006592
+  💾 Saved best model (valid_loss: 564.317780)
+  💾 Saved best model (valid_loss: 551.367535)
+  💾 Saved best model (valid_loss: 536.385892)
+  💾 Saved best model (valid_loss: 519.090475)
+  💾 Saved best model (valid_loss: 499.472552)
+
+Epoch 10/10 (4.5s)
+  Train Loss: 7.336239
+    Energy: 0.114740
+    Forces: 0.074653
+    Dipole: 1.773628
+    ESP: 0.354214
+    Monopole: 0.003218
+    Total Charge: 0.000065
+  Valid Loss: 477.818726
+    MAE Energy: 8.855957 eV  (204.222799 kcal/mol) [μ=8.834, σ=1.777 eV]
+    MAE Forces: 0.216251 eV/Å  (4.986864 kcal/mol/Å) [μ=-0.000, σ=8.427 eV/Å]
+    MAE Dipole (PhysNet): 0.257908 e·Å  (1.238786 D) [μ=-0.163, σ=0.343 e·Å]
+    MAE Dipole (DCMNet): 0.238502 e·Å  (1.145576 D) [μ=-0.163, σ=0.343 e·Å]
+    RMSE ESP (PhysNet): 0.027437 Ha/e  (17.217224 (kcal/mol)/e) [μ=0.002800, σ=0.016157 Ha/e]
+    RMSE ESP (DCMNet): 0.014776 Ha/e  (9.271764 (kcal/mol)/e) [μ=0.002800, σ=0.016157 Ha/e]
+    Total Charge Violation: 0.002975
+  💾 Saved best model (valid_loss: 477.818726)
+
+💾 Saved training history to: comparisons/dcm1test60808591/dcmnet_equivariant/history.json
+
+✅ DCMNet training completed in 0.05 hours
+
+######################################################################
+# Non-Equivariant Model
+######################################################################
+
+🏋️  Training Non-Equivariant model...
+
+Pre-computing edge lists...
+  Pre-computing edge lists (cutoff=10.0 Å)...
+    Processed 1000/8000 samples...
+    Processed 2000/8000 samples...
+    Processed 3000/8000 samples...
+    Processed 4000/8000 samples...
+    Processed 5000/8000 samples...
+    Processed 6000/8000 samples...
+    Processed 7000/8000 samples...
+    Processed 8000/8000 samples...
+  ✅ Pre-computed edge lists: avg 6.0 edges/sample
+  Pre-computing edge lists (cutoff=10.0 Å)...
+    Processed 1000/1000 samples...
+  ✅ Pre-computed edge lists: avg 6.0 edges/sample
+
+Initializing model parameters...
+✅ Model initialized with 120,922 parameters
+
+Training samples: 8000
+Validation samples: 1000
+Batch size: 100
+
+Dipole loss terms:
+  - physnet: source=physnet, metric=l2, weight=25.0
+ESP loss terms:
+  - dcmnet: source=dcmnet, metric=l2, weight=10000.0
+
+📊 Using EMA with decay=0.999 for validation
+  💾 Saved best model (valid_loss: 598.783746)
+  💾 Saved best model (valid_loss: 591.596436)
+  💾 Saved best model (valid_loss: 583.930505)
+  💾 Saved best model (valid_loss: 574.779803)
+
+Epoch 5/10 (3.7s)
+  Train Loss: 14.760452
+    Energy: 0.175453
+    Forces: 0.201134
+    Dipole: 1.810503
+    ESP: 0.729847
+    Monopole: 0.003521
+    Total Charge: 0.000568
+  Valid Loss: 563.723895
+    MAE Energy: 9.640109 eV  (222.305728 kcal/mol) [μ=8.834, σ=1.777 eV]
+    MAE Forces: 0.235186 eV/Å  (5.423503 kcal/mol/Å) [μ=-0.000, σ=8.427 eV/Å]
+    MAE Dipole (PhysNet): 0.260238 e·Å  (1.249978 D) [μ=-0.163, σ=0.343 e·Å]
+    MAE Dipole (DCMNet): 0.243983 e·Å  (1.171903 D) [μ=-0.163, σ=0.343 e·Å]
+    RMSE ESP (PhysNet): 0.037946 Ha/e  (23.811359 (kcal/mol)/e) [μ=0.002800, σ=0.016157 Ha/e]
+    RMSE ESP (DCMNet): 0.014419 Ha/e  (9.048141 (kcal/mol)/e) [μ=0.002800, σ=0.016157 Ha/e]
+    Total Charge Violation: 0.006768
+  💾 Saved best model (valid_loss: 563.723895)
+  💾 Saved best model (valid_loss: 550.651703)
+  💾 Saved best model (valid_loss: 535.187326)
+  💾 Saved best model (valid_loss: 517.748615)
+  💾 Saved best model (valid_loss: 497.874377)
+
+Epoch 10/10 (3.7s)
+  Train Loss: 7.676844
+    Energy: 0.116354
+    Forces: 0.073176
+    Dipole: 1.785311
+    ESP: 0.723270
+    Monopole: 0.003318
+    Total Charge: 0.000141
+  Valid Loss: 476.378275
+    MAE Energy: 8.854570 eV  (204.190823 kcal/mol) [μ=8.834, σ=1.777 eV]
+    MAE Forces: 0.215425 eV/Å  (4.967820 kcal/mol/Å) [μ=-0.000, σ=8.427 eV/Å]
+    MAE Dipole (PhysNet): 0.258332 e·Å  (1.240822 D) [μ=-0.163, σ=0.343 e·Å]
+    MAE Dipole (DCMNet): 0.230434 e·Å  (1.106822 D) [μ=-0.163, σ=0.343 e·Å]
+    RMSE ESP (PhysNet): 0.029784 Ha/e  (18.689722 (kcal/mol)/e) [μ=0.002800, σ=0.016157 Ha/e]
+    RMSE ESP (DCMNet): 0.012787 Ha/e  (8.023959 (kcal/mol)/e) [μ=0.002800, σ=0.016157 Ha/e]
+    Total Charge Violation: 0.003763
+  💾 Saved best model (valid_loss: 476.378275)
+
+💾 Saved training history to: comparisons/dcm1test60808591/noneq_model/history.json
+
+✅ Non-Equivariant training completed in 0.02 hours
+
+######################################################################
+# Equivariance Testing
+######################################################################
+
+--- DCMNet (Equivariant) ---
+
+======================================================================
+Testing Equivariance on 20 samples
+======================================================================
+
+Rotation Equivariance:
+  Dipole error: 0.000003 ± 0.000002 e·Å
+  ESP error:    0.000001 ± 0.000000 Ha/e
+
+Translation Invariance:
+  Dipole error: 0.000000 ± 0.000000 e·Å
+  ESP error:    0.000000 ± 0.000000 Ha/e
+
+--- Non-Equivariant ---
+
+======================================================================
+Testing Equivariance on 20 samples
+======================================================================
+
+Rotation Equivariance:
+  Dipole error: 0.004150 ± 0.001672 e·Å
+  ESP error:    0.000489 ± 0.000150 Ha/e
+
+Translation Invariance:
+  Dipole error: 0.000004 ± 0.000005 e·Å
+  ESP error:    0.000001 ± 0.000001 Ha/e
+
+######################################################################
+# Performance Benchmarking
+######################################################################
+
+Measuring inference times...
+  DCMNet:        1483.18 ms/sample
+  Non-Eq:        787.28 ms/sample
+  Speedup:       1.88×
+
+Parameter counts:
+  DCMNet:        322,420 parameters
+  Non-Eq:        120,922 parameters
+  Reduction:     62.5%
+
+######################################################################
+# Final Comparison Report
+######################################################################
+
+VALIDATION PERFORMANCE:
+  Energy MAE:  DCMNet=8.8560, Non-Eq=8.8546
+  Forces MAE:  DCMNet=0.2163, Non-Eq=0.2154
+  Dipole MAE:  DCMNet=0.2579, Non-Eq=0.2583
+  ESP MAE:     DCMNet=0.0148, Non-Eq=0.0128
+
+EQUIVARIANCE (Rotation):
+  Dipole:      DCMNet=0.000003, Non-Eq=0.004150
+  ESP:         DCMNet=0.000001, Non-Eq=0.000489
+  ⚠️  DCMNet should have near-zero rotation error (equivariant)
+  ⚠️  Non-Eq will have larger error (not equivariant)
+
+INVARIANCE (Translation):
+  Dipole:      DCMNet=0.000000, Non-Eq=0.000004
+  ESP:         DCMNet=0.000000, Non-Eq=0.000001
+  ✅ Both should have near-zero translation error
+
+COMPUTATIONAL EFFICIENCY:
+  Training:    DCMNet=0.05h, Non-Eq=0.02h (2.72× speedup)
+  Inference:   DCMNet=1483.18ms, Non-Eq=787.28ms (1.88× speedup)
+  Parameters:  DCMNet=322,420, Non-Eq=120,922 (62.5% reduction)
+
+✅ Results saved to: comparisons/dcm1test60808591/comparison_results.json
+
+######################################################################
+# Generating Comparison Plots
+######################################################################
+
+  ✅ Saved: comparisons/dcm1test60808591/performance_comparison.png
+  ✅ Saved: comparisons/dcm1test60808591/efficiency_comparison.png
+  ✅ Saved: comparisons/dcm1test60808591/equivariance_comparison.png
+
+======================================================================
+✅ COMPARISON COMPLETE!
+======================================================================
+
+All results saved to: comparisons/dcm1test60808591
+
+Generated files:
+  - comparison_results.json
+  - performance_comparison.png
+  - efficiency_comparison.png
+  - equivariance_comparison.png
+  - dcmnet_equivariant/ (checkpoint)
+  - noneq_model/ (checkpoint)

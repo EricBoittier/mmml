@@ -1,0 +1,48 @@
+{
+  "dcmnet": {
+    "name": "DCMNet (Equivariant)",
+    "training_time": 164.63086342811584,
+    "inference_time": 1.3520241785049438,
+    "memory_usage_mb": 0.0,
+    "num_parameters": 322420,
+    "val_energy_mae": 9.134251403808594,
+    "val_forces_mae": 0.22878968119621276,
+    "val_dipole_mae": 0.25738390237092973,
+    "val_esp_mae": 0.015722865238785744,
+    "rotation_error_dipole": 3.1439944922844297e-06,
+    "rotation_error_esp": 1.0517721875658026e-06,
+    "translation_error_dipole": 3.014287486280409e-08,
+    "translation_error_esp": 1.3360248463101243e-09
+  },
+  "noneq": {
+    "name": "Non-Equivariant",
+    "training_time": 58.7254273891449,
+    "inference_time": 0.7098595190048218,
+    "memory_usage_mb": 0.0,
+    "num_parameters": 120922,
+    "val_energy_mae": 9.125278091430664,
+    "val_forces_mae": 0.22549555599689483,
+    "val_dipole_mae": 0.25718082338571546,
+    "val_esp_mae": 0.012504100799560547,
+    "rotation_error_dipole": 0.01056952010439485,
+    "rotation_error_esp": 0.0006017166888341308,
+    "translation_error_dipole": 1.6548088979106979e-06,
+    "translation_error_esp": 4.209173312119674e-07
+  },
+  "args": {
+    "train_efd": "energies_forces_dipoles_train.npz",
+    "train_esp": "grids_esp_train.npz",
+    "valid_efd": "energies_forces_dipoles_valid.npz",
+    "valid_esp": "grids_esp_valid.npz",
+    "epochs": 10,
+    "batch_size": 100,
+    "seed": 60808785,
+    "physnet_features": 64,
+    "dcmnet_features": 128,
+    "n_dcm": 1,
+    "comparison_name": "dcm1test60808785",
+    "output_dir": "comparisons",
+    "skip_training": false,
+    "equivariance_samples": 20
+  }
+}

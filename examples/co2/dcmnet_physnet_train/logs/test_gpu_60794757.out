@@ -1,0 +1,21 @@
+==========================================
+GPU Test Script
+==========================================
+Date: Wed Nov  5 03:07:13 CET 2025
+Hostname: sgd02
+Job ID: 60794757
+
+no change     /scicore/soft/easybuild/apps/Miniconda3/24.7.1-0/condabin/conda
+no change     /scicore/soft/easybuild/apps/Miniconda3/24.7.1-0/bin/conda
+no change     /scicore/soft/easybuild/apps/Miniconda3/24.7.1-0/bin/conda-env
+no change     /scicore/soft/easybuild/apps/Miniconda3/24.7.1-0/bin/activate
+no change     /scicore/soft/easybuild/apps/Miniconda3/24.7.1-0/bin/deactivate
+no change     /scicore/soft/easybuild/apps/Miniconda3/24.7.1-0/etc/profile.d/conda.sh
+no change     /scicore/soft/easybuild/apps/Miniconda3/24.7.1-0/etc/fish/conf.d/conda.fish
+no change     /scicore/soft/easybuild/apps/Miniconda3/24.7.1-0/shell/condabin/Conda.psm1
+no change     /scicore/soft/easybuild/apps/Miniconda3/24.7.1-0/shell/condabin/conda-hook.ps1
+no change     /scicore/soft/easybuild/apps/Miniconda3/24.7.1-0/lib/python3.12/site-packages/xontrib/conda.xsh
+no change     /scicore/soft/easybuild/apps/Miniconda3/24.7.1-0/etc/profile.d/conda.csh
+no change     /scicore/home/meuwly/boitti0000/.bashrc
+No action taken.
+60794757
