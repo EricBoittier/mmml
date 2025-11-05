@@ -6,6 +6,8 @@ Creates publication-quality figures with:
 - Ball-and-stick molecular structure (using ASE's POV-Ray writer)
 - Distributed charges as colored translucent spheres
 - ESP on VDW surface as colored mesh
+- Multiple camera orientations per run with optional composite outputs
+- Soft, semi-transparent molecule styling with optional grid floor for scale cues
 
 Usage:
     python ase_povray_viz.py \
@@ -20,6 +22,7 @@ import argparse
 from pathlib import Path
 import pickle
 import subprocess
+import re
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from matplotlib.colors import Normalize
@@ -28,6 +31,11 @@ import jax.numpy as jnp
 from ase.io import read, write
 from ase import Atoms
 import ase.io
+
+try:
+    from PIL import Image, ImageDraw, ImageFont
+except ImportError:  # Pillow is optional; composite output requires it
+    Image = ImageDraw = ImageFont = None
 
 
 # Element colors (jmol coloring scheme)
@@ -182,7 +190,8 @@ def compute_esp_on_vdw_surface(atoms, charge_positions, charge_values, n_points=
 def write_ase_povray_with_charges(atoms, result, output_path, 
                                   show_molecule='full', show_charges=False, show_esp=False,
                                   rotation='0x,0y,0z', canvas_width=2400,
-                                  charge_radius=0.15, transparency=0.5, camera_zoom=1.0):
+                                  charge_radius=0.15, transparency=0.5,
+                                  molecule_transparency=0.5, camera_zoom=1.0):
     """
     Write POV-Ray scene using ASE's writer, then add charges and ESP.
     
@@ -235,6 +244,15 @@ def write_ase_povray_with_charges(atoms, result, output_path,
     center = positions.mean(axis=0)
     max_extent = np.max(np.linalg.norm(positions - center, axis=1))
     camera_distance = max(15.0, max_extent * 4.0) / camera_zoom  # Adjustable zoom
+
+    grid_offset = center[1] - max_extent - 0.75
+    grid_spacing = max_extent if max_extent > 0 else 1.0
+    grid_spacing = max(0.5, min(2.5, grid_spacing))
+
+    bbox_padding = 1.0
+    bbox_min = positions.min(axis=0) - bbox_padding
+    bbox_max = positions.max(axis=0) + bbox_padding
+    bbox_radius = max(0.05, min(0.12, max_extent * 0.08 if max_extent > 0 else 0.08))
     
     povray_settings = {
         'transparent': False,
@@ -260,73 +278,105 @@ def write_ase_povray_with_charges(atoms, result, output_path,
         povray_settings=povray_settings,
     )
     
+    apply_molecule_transparency(output_path, molecule_transparency)
+
     # Now append custom lighting, materials, and charges/ESP to the POV file
     with open(output_path, 'a') as f:
         f.write("\n\n// Enhanced rendering settings\n")
         f.write("// Added by ase_povray_viz.py\n\n")
         
-        # Enhanced lighting with soft area lights
-        f.write("""
-// Soft area lighting for better appearance
+        # Enhanced lighting with soft area lights and grid floor
+        f.write(f"""
+// Soft lighting environment
 #declare light_color = rgb <1.0, 1.0, 1.0>;
 
-// Main key light (soft area light)
-light_source {
-    <20, 30, 40>
-    color light_color * 0.8
-    area_light <8, 0, 0>, <0, 8, 0>, 5, 5
+// Main light (broad, gentle)
+light_source {{
+    <24, 36, 42>
+    color light_color * 0.45
+    area_light <12, 0, 0>, <0, 12, 0>, 6, 6
     adaptive 1
     jitter
-    fade_distance 60
-    fade_power 1
-}
+    fade_distance 75
+    fade_power 2
+}}
 
-// Fill light (softer, from opposite side)
-light_source {
-    <-15, 20, -30>
-    color light_color * 0.4
+// Fill light (diffuse bounce)
+light_source {{
+    <-18, 22, -28>
+    color light_color * 0.25
+    area_light <10, 0, 0>, <0, 10, 0>, 5, 5
+    adaptive 1
+    jitter
+    fade_distance 65
+    fade_power 2
+}}
+
+// Rim light (very soft accent)
+light_source {{
+    <-8, -12, -35>
+    color light_color * 0.18
     area_light <6, 0, 0>, <0, 6, 0>, 4, 4
     adaptive 1
     jitter
-    fade_distance 50
-    fade_power 1
-}
-
-// Back rim light (subtle)
-light_source {
-    <-10, -15, -40>
-    color light_color * 0.3
-    area_light <5, 0, 0>, <0, 5, 0>, 3, 3
-    adaptive 1
-    jitter
-}
+}}
 
 // Ambient illumination
-global_settings {
-    ambient_light rgb <0.15, 0.15, 0.15>
+global_settings {{
+    ambient_light rgb <0.20, 0.20, 0.22>
     max_trace_level 15
-}
+}}
 
-// Enhanced charge texture with anisotropic properties
-#declare charge_finish = finish {
-    ambient 0.2
-    diffuse 0.65
-    specular 0.5
-    roughness 0.005
-    metallic 0.15
-    phong 0.6
-    phong_size 80
-    brilliance 1.2
-}
+// Sky tint for subtle background colour
+sky_sphere {{
+    pigment {{
+        gradient y
+        color_map {{
+            [0.0 color rgb <0.92, 0.95, 0.98>]
+            [1.0 color rgb <1.0, 1.0, 1.0>]
+        }}
+    }}
+}}
 
-// Enhanced ESP surface finish
-#declare esp_finish = finish {
+// Soft grid plane for scale reference
+#declare grid_color_light = rgb <0.94, 0.96, 0.98>;
+#declare grid_color_dark  = rgb <0.87, 0.90, 0.94>;
+
+plane {{
+    y, {grid_offset:.4f}
+    texture {{
+        pigment {{
+            checker grid_color_light, grid_color_dark
+            scale {grid_spacing:.4f}
+        }}
+        finish {{
+            ambient 0.25
+            diffuse 0.55
+            specular 0.08
+            roughness 0.04
+        }}
+    }}
+}}
+
+// Softer finish settings
+#declare charge_finish = finish {{
     ambient 0.25
-    diffuse 0.6
-    specular 0.3
+    diffuse 0.55
+    specular 0.35
     roughness 0.02
+    metallic 0.05
+    phong 0.35
+    phong_size 50
+    brilliance 1.05
+}}
+
+#declare esp_finish = finish {{
+    ambient 0.28
+    diffuse 0.55
+    specular 0.18
+    roughness 0.05
     brilliance 1.0
-}
+}}
 
 """)
         
@@ -349,11 +399,16 @@ global_settings {
                 
                 rgba = cmap(norm(q))
                 r, g, b = rgba[:3]
+                pastel = 0.6
+                r = r * pastel + (1 - pastel)
+                g = g * pastel + (1 - pastel)
+                b = b * pastel + (1 - pastel)
+                alpha = min(0.9, max(0.1, transparency + 0.2))
                 
                 f.write(f"sphere {{\n")
                 f.write(f"  <{pos[0]:.4f}, {pos[1]:.4f}, {pos[2]:.4f}>, {radius:.4f}\n")
                 f.write(f"  texture {{\n")
-                f.write(f"    pigment {{ rgbf <{r:.3f}, {g:.3f}, {b:.3f}, {transparency:.2f}> }}\n")
+                f.write(f"    pigment {{ rgbf <{r:.3f}, {g:.3f}, {b:.3f}, {alpha:.2f}> }}\n")
                 f.write(f"    finish {{ charge_finish }}\n")
                 f.write(f"  }}\n")
                 f.write(f"}}\n\n")
@@ -375,11 +430,15 @@ global_settings {
             for pos, esp in zip(surface_pos[::step], esp_vals[::step]):
                 rgba = cmap_esp(norm_esp(esp))
                 r, g, b = rgba[:3]
+                pastel = 0.7
+                r = r * pastel + (1 - pastel)
+                g = g * pastel + (1 - pastel)
+                b = b * pastel + (1 - pastel)
                 
                 f.write(f"sphere {{\n")
                 f.write(f"  <{pos[0]:.4f}, {pos[1]:.4f}, {pos[2]:.4f}>, 0.06\n")
                 f.write(f"  texture {{\n")
-                f.write(f"    pigment {{ rgbf <{r:.3f}, {g:.3f}, {b:.3f}, 0.65> }}\n")
+                f.write(f"    pigment {{ rgbf <{r:.3f}, {g:.3f}, {b:.3f}, 0.75> }}\n")
                 f.write(f"    finish {{ esp_finish }}\n")
                 f.write(f"  }}\n")
                 f.write(f"}}\n\n")
@@ -440,6 +499,88 @@ def create_colorbar(output_path, vmin, vmax, label, cmap='RdBu_r', horizontal=Tr
     plt.close()
 
 
+def create_composite_row(image_paths, output_path, labels=None, padding=40, background_color=(255, 255, 255)):
+    """Create a horizontal composite of images with optional labels."""
+    if not image_paths:
+        raise ValueError('No images provided for composite creation.')
+    if Image is None:
+        raise RuntimeError('Pillow is required for composite rendering (pip install pillow).')
+
+    opened_images = [Image.open(path) for path in image_paths]
+    try:
+        widths = [img.width for img in opened_images]
+        heights = [img.height for img in opened_images]
+
+        total_width = sum(widths) + padding * (len(opened_images) - 1)
+        max_height = max(heights)
+
+        composite = Image.new('RGB', (total_width, max_height), color=background_color)
+        draw = ImageDraw.Draw(composite) if labels else None
+        font = None
+        if labels:
+            try:
+                font = ImageFont.truetype('DejaVuSans.ttf', 36)
+            except Exception:
+                font = ImageFont.load_default()
+
+        x_offset = 0
+        for idx, img in enumerate(opened_images):
+            y_offset = (max_height - img.height) // 2
+            composite.paste(img, (x_offset, y_offset))
+
+            if labels and draw:
+                label = labels[idx]
+                text = label.replace(',', '  ')
+                if hasattr(draw, 'textbbox'):
+                    left, top, right, bottom = draw.textbbox((0, 0), text, font=font)
+                    text_width = right - left
+                    text_height = bottom - top
+                else:
+                    text_width, text_height = draw.textsize(text, font=font)
+                text_x = int(x_offset + (img.width - text_width) // 2)
+                text_y = int(max(10, y_offset + 10))
+
+                # Draw semi-transparent rectangle for readability
+                rect_padding = 10
+                rect_left = max(0, int(text_x - rect_padding))
+                rect_top = max(0, int(text_y - rect_padding))
+                rect_right = min(composite.width, int(text_x + text_width + rect_padding))
+                rect_bottom = min(composite.height, int(text_y + text_height + rect_padding))
+                overlay_width = max(1, rect_right - rect_left)
+                overlay_height = max(1, rect_bottom - rect_top)
+                overlay = Image.new('RGBA', (overlay_width, overlay_height), (255, 255, 255, 180))
+                composite.paste(overlay, (rect_left, rect_top), overlay)
+                draw.text((text_x, text_y), text, fill=(0, 0, 0), font=font)
+
+            x_offset += img.width + padding
+
+        composite.save(output_path)
+    finally:
+        for img in opened_images:
+            img.close()
+
+    return output_path
+
+
+def apply_molecule_transparency(pov_path: Path, transparency: float) -> None:
+    """Inject uniform transparency for atoms and bonds in the base POV file."""
+    target = Path(pov_path)
+    if not target.exists():
+        return
+
+    transparency = max(0.0, min(1.0, transparency))
+    with target.open('r') as fh:
+        content = fh.read()
+
+    # Replace common transmit patterns emitted by ASE writer.
+    content_new = re.sub(r'(transmit\s+)0\.0+', rf'\g<1>{transparency:.3f}', content)
+    content_new = re.sub(r'(transmit\s+)0(\s|})', rf'\g<1>{transparency:.3f}\2', content_new)
+
+    if content_new != content:
+        with target.open('w') as fh:
+            fh.write(content_new)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='High-quality POV-Ray visualization with ASE'
@@ -455,13 +596,23 @@ def main():
                        help='Molecule rendering style for molecule+charges (default: full for standalone, wireframe for +charges)')
     parser.add_argument('--charge-radius', type=float, default=0.15)
     parser.add_argument('--transparency', type=float, default=0.5)
+    parser.add_argument('--molecule-transparency', type=float, default=0.5,
+                       help='Uniform transparency applied to atoms and bonds (0 = opaque, 1 = invisible)')
     parser.add_argument('--camera-zoom', type=float, default=1.0,
                        help='Camera zoom factor (< 1.0 zooms out, > 1.0 zooms in)')
     parser.add_argument('--resolution', choices=['low', 'medium', 'high', 'ultra'],
                        default='high')
-    parser.add_argument('--views', nargs='+',
-                       default=['0x,0y,0z', '90x,0y,0z', '0x,90y,0z'])
+    parser.add_argument('--views', nargs='+', default=None,
+                       metavar='ROTATION',
+                       help=('Legacy option to provide multiple rotation strings, '
+                             'e.g., --views 0x,0y,0z 90x,0y,0z'))
+    parser.add_argument('--view', dest='view_list', action='append', default=None,
+                       metavar='ROTATION',
+                       help=('Add a single view rotation (can be repeated). '
+                             'Format: "ax,by,cz" in degrees, e.g., --view 0x,0y,0z'))
     parser.add_argument('--n-surface-points', type=int, default=5000)
+    parser.add_argument('--composite-row', action='store_true',
+                       help='Combine rendered views for each plot into a single horizontal composite image')
     
     args = parser.parse_args()
     
@@ -473,6 +624,16 @@ def main():
         'ultra': (3840, 2160, 11),
     }
     width, height, quality = resolutions[args.resolution]
+
+    default_views = ['0x,0y,0z', '90x,0y,0z', '0x,90y,0z']
+    if args.view_list and args.views:
+        print("\n⚠ Both --view and --views provided; using values from --view.")
+    if args.view_list:
+        views = args.view_list
+    elif args.views:
+        views = args.views
+    else:
+        views = default_views
     
     # Setup
     output_dir = Path(args.output_dir)
@@ -519,12 +680,14 @@ def main():
         plot_types = args.plot_types
     
     # Render views
-    print(f"\n🎬 Rendering {len(args.views)} view(s) × {len(plot_types)} plot type(s)")
+    print(f"\n🎬 Rendering {len(views)} view(s) × {len(plot_types)} plot type(s)")
     print(f"   Resolution: {width}×{height} pixels")
     print(f"   Plot types: {', '.join(plot_types)}")
     
-    for i, rotation in enumerate(args.views):
-        print(f"\n   📐 View {i+1}/{len(args.views)}: {rotation}")
+    rendered_images = {}
+
+    for i, rotation in enumerate(views):
+        print(f"\n   📐 View {i+1}/{len(views)}: {rotation}")
         
         for plot_type in plot_types:
             # Determine rendering parameters based on plot type
@@ -572,15 +735,35 @@ def main():
                 canvas_width=width,
                 charge_radius=args.charge_radius,
                 transparency=args.transparency,
+                molecule_transparency=args.molecule_transparency,
                 camera_zoom=args.camera_zoom,
             )
             
             success = render_povray(pov_file, png_file, width, height, quality, antialias=True)
-            
-            if not success:
+            if success:
+                rendered_images.setdefault(suffix, []).append((rotation, png_file))
+            else:
                 print(f"      ⚠ POV-Ray failed, skipping remaining renders")
                 return 1
     
+    if args.composite_row:
+        if Image is None:
+            print("\n✗ Pillow not found — install with `pip install pillow` to enable composite rows.")
+        else:
+            print("\n🧩 Building composite rows...")
+            for suffix, entries in rendered_images.items():
+                if not entries:
+                    continue
+
+                rotations, paths = zip(*entries)
+                composite_name = f'composite_{suffix}.png'
+                composite_path = output_dir / composite_name
+                try:
+                    create_composite_row(paths, composite_path, labels=list(rotations))
+                    print(f"   ✓ Composite saved: {composite_name}")
+                except Exception as exc:
+                    print(f"   ✗ Failed to create composite for {suffix}: {exc}")
+
     # Create colorbars
     print(f"\n📊 Creating colorbars...")
     
