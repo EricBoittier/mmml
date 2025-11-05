@@ -352,15 +352,19 @@ class EF_ChargeSpinConditioned(nn.Module):
         graph_mask: jnp.ndarray,
     ) -> jnp.ndarray:
         """Single message passing iteration."""
-        y = e3x.nn.MessagePass(max_degree=self.max_degree, include_pseudotensors=False)(
-            x[src_idx], x[dst_idx], basis
-        )
-        y = e3x.nn.aggregate(y, dst_idx, x.shape[0])
+        # Use the same pattern as working PhysNet
+        if iteration == self.num_iterations - 1:
+            x = e3x.nn.MessagePass(
+                max_degree=0,
+                include_pseudotensors=False,
+            )(x, basis, dst_idx=dst_idx, src_idx=src_idx, indices_are_sorted=False)
+            return x
         
-        y = e3x.nn.add(x, y)
-        y = e3x.nn.silu(y)
+        x = e3x.nn.MessagePass(
+            include_pseudotensors=False,
+        )(x, basis, dst_idx=dst_idx, src_idx=src_idx, indices_are_sorted=False)
         
-        return y
+        return x
     
     def _refinement_iteration(self, x: jnp.ndarray) -> jnp.ndarray:
         """Refinement with residual blocks."""
