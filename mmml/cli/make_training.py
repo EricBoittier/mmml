@@ -51,7 +51,7 @@ import numpy as np
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data", type=str, default=None)
-    parser.add_argument("--ckpt_dir", type=Path)
+    parser.add_argument("--ckpt_dir", type=str)  # Will be converted to absolute Path later
 
     parser.add_argument("--tag", type=str, default="run")
     parser.add_argument("--model", type=str, default=None)
@@ -65,7 +65,8 @@ def parse_args():
     parser.add_argument("--objective", type=str, default="valid_loss")
     parser.add_argument("--restart", type=str, default=None)
     
-    parser.add_argument("--num_atoms", type=int, default=20)
+    parser.add_argument("--num_atoms", type=int, default=None,
+                        help="Number of atoms per structure (auto-detected if not specified)")
     parser.add_argument("--features", type=int, default=64)
     parser.add_argument("--max_degree", type=int, default=0)
     parser.add_argument("--num_basis_functions", type=int, default=32)
@@ -116,7 +117,38 @@ def main_loop(args):
     files = [args.data]
     train_size = args.n_train
     valid_size = args.n_valid
-    natoms = args.num_atoms
+    
+    # Convert ckpt_dir to absolute path (required by Orbax)
+    if args.ckpt_dir is not None:
+        ckpt_dir = Path(args.ckpt_dir).resolve()
+        print(f"Checkpoint directory (absolute): {ckpt_dir}")
+    else:
+        ckpt_dir = None
+    
+    # Auto-detect num_atoms from dataset if not provided
+    if args.num_atoms is None:
+        print("Auto-detecting number of atoms from dataset...")
+        data = np.load(args.data)
+        
+        # Prefer R shape over N since R includes padding (which is what we need for training)
+        if 'R' in data and len(data['R'].shape) >= 2:
+            natoms = int(data['R'].shape[1])
+            print(f"  ✅ Detected num_atoms = {natoms} from R.shape (includes padding)")
+            
+            # Also report actual molecule size if N exists
+            if 'N' in data:
+                max_n = int(np.max(data['N']))
+                if max_n != natoms:
+                    print(f"     (Note: Actual molecule size = {max_n}, padded to {natoms})")
+        elif 'N' in data:
+            natoms = int(np.max(data['N']))
+            print(f"  ✅ Detected num_atoms = {natoms} from max(N)")
+        else:
+            raise ValueError("Could not auto-detect num_atoms from dataset. Please specify --num_atoms explicitly.")
+    else:
+        natoms = args.num_atoms
+        print(f"Using specified num_atoms = {natoms}")
+    
     train_data, valid_data = prepare_datasets(data_key, train_size, valid_size, files, natoms=natoms)
     
     if args.model is not None:
@@ -150,7 +182,7 @@ def main_loop(args):
         valid_data, 
         learning_rate=args.learning_rate,
         batch_size=args.batch_size,
-        num_atoms=args.num_atoms,
+        num_atoms=natoms,
         energy_weight=args.energy_weight,
         restart=args.restart,
         conversion={'energy': 1, 'forces': 1},
@@ -161,7 +193,7 @@ def main_loop(args):
         transform=None,
         schedule_fn=None,
         objective=args.objective,
-        ckpt_dir=args.ckpt_dir,
+        ckpt_dir=ckpt_dir,  # Use absolute path
         log_tb=False,
         batch_method="default",
         batch_args_dict=None,
