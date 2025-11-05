@@ -6,7 +6,7 @@ stored in packed memory-mapped format, with conversion to PhysNet-compatible bat
 """
 
 import os
-from typing import Dict, Iterator, Optional
+from typing import Dict, Iterator, Optional, Tuple
 
 import e3x
 import jax.numpy as jnp
@@ -301,7 +301,7 @@ def split_loader(
     loader: PackedMemmapLoader,
     train_fraction: float = 0.9,
     seed: Optional[int] = None,
-) -> tuple[PackedMemmapLoader, PackedMemmapLoader]:
+) -> Tuple[PackedMemmapLoader, PackedMemmapLoader]:
     """
     Split a loader into train and validation loaders.
     
