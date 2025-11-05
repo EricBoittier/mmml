@@ -560,6 +560,8 @@ class EF_ChargeSpinConditioned(nn.Module):
         batch_size: Optional[int] = None,
         batch_mask: Optional[jnp.ndarray] = None,
         atom_mask: Optional[jnp.ndarray] = None,
+        predict_forces: bool = True,
+        predict_energy: bool = True,
     ) -> Dict[str, Optional[jnp.ndarray]]:
         """
         Forward pass with charge and spin conditioning.
@@ -587,16 +589,22 @@ class EF_ChargeSpinConditioned(nn.Module):
             Batch mask
         atom_mask : Optional[jnp.ndarray], optional
             Atom mask
+        predict_forces : bool, optional
+            Whether to compute forces (default: True)
+            Set to False for faster energy-only predictions
+        predict_energy : bool, optional
+            Whether to compute energy (default: True)
+            Set to False for forces-only predictions (rare use case)
             
         Returns
         -------
         Dict[str, Optional[jnp.ndarray]]
             Dictionary containing:
-            - energy: Predicted energies (batch_size,)
-            - forces: Predicted forces (num_atoms, 3)
-            - charges: Predicted atomic charges (num_atoms,) if enabled
-            - electrostatics: Electrostatic energies (batch_size,) if charges enabled
-            - repulsion: ZBL repulsion energies (batch_size,) if ZBL enabled
+            - energy: Predicted energies (batch_size,) if predict_energy=True
+            - forces: Predicted forces (num_atoms, 3) if predict_forces=True
+            - charges: Predicted atomic charges (num_atoms,) if self.charges=True
+            - electrostatics: Electrostatic energies (batch_size,) if self.charges=True
+            - repulsion: ZBL repulsion energies (batch_size,) if self.zbl=True
             - state: Final atomic features
         """
         if batch_segments is None:
@@ -605,34 +613,87 @@ class EF_ChargeSpinConditioned(nn.Module):
             batch_mask = jnp.ones_like(dst_idx)
             atom_mask = jnp.ones_like(atomic_numbers)
         
-        # Create energy and forces function with gradient
-        energy_and_forces = jax.value_and_grad(self.energy, argnums=1, has_aux=True)
-        
-        # Calculate energies and forces
-        (_, (energy, charges, electrostatics, repulsion, state)), gradient = energy_and_forces(
-            atomic_numbers,
-            positions,
-            dst_idx,
-            src_idx,
-            batch_segments,
-            batch_size,
-            batch_mask,
-            atom_mask,
-            total_charges,
-            total_spins,
-        )
-        
-        # NOTE: energy() returns -E (negative energy)
-        # So gradient = d(-E)/dr = -dE/dr
-        # Therefore forces = -gradient = dE/dr
-        forces = -gradient
-        
-        # Multiply energy by -1 to get actual energy
-        energy = -energy
+        # Branch based on what we need to compute
+        if predict_forces and predict_energy:
+            # Compute both energy and forces (forces via gradient)
+            energy_and_forces = jax.value_and_grad(self.energy, argnums=1, has_aux=True)
+            
+            (_, (energy, charges, electrostatics, repulsion, state)), gradient = energy_and_forces(
+                atomic_numbers,
+                positions,
+                dst_idx,
+                src_idx,
+                batch_segments,
+                batch_size,
+                batch_mask,
+                atom_mask,
+                total_charges,
+                total_spins,
+            )
+            
+            # NOTE: energy() returns -E (negative energy)
+            # So gradient = d(-E)/dr = -dE/dr
+            # Therefore forces = -gradient = dE/dr
+            forces = -gradient
+            energy = -energy
+            
+        elif predict_energy and not predict_forces:
+            # Energy only (no gradient computation - faster!)
+            _, (energy, charges, electrostatics, repulsion, state) = self.energy(
+                atomic_numbers,
+                positions,
+                dst_idx,
+                src_idx,
+                batch_segments,
+                batch_size,
+                batch_mask,
+                atom_mask,
+                total_charges,
+                total_spins,
+            )
+            energy = -energy
+            forces = None
+            
+        elif predict_forces and not predict_energy:
+            # Forces only (still need to compute energy for gradient)
+            energy_and_forces = jax.value_and_grad(self.energy, argnums=1, has_aux=True)
+            
+            (_, (energy_raw, charges, electrostatics, repulsion, state)), gradient = energy_and_forces(
+                atomic_numbers,
+                positions,
+                dst_idx,
+                src_idx,
+                batch_segments,
+                batch_size,
+                batch_mask,
+                atom_mask,
+                total_charges,
+                total_spins,
+            )
+            
+            forces = -gradient
+            energy = None  # Don't return energy
+            
+        else:
+            # Neither energy nor forces requested - just return state
+            _, (_, charges, electrostatics, repulsion, state) = self.energy(
+                atomic_numbers,
+                positions,
+                dst_idx,
+                src_idx,
+                batch_segments,
+                batch_size,
+                batch_mask,
+                atom_mask,
+                total_charges,
+                total_spins,
+            )
+            energy = None
+            forces = None
         
         return {
-            "energy": energy,
-            "forces": forces,
+            "energy": energy if predict_energy else None,
+            "forces": forces if predict_forces else None,
             "charges": charges if self.charges else None,
             "electrostatics": electrostatics if self.charges else None,
             "repulsion": repulsion if self.zbl else None,
