@@ -201,6 +201,10 @@ def train_epoch(
     for i, batch in enumerate(loader.batches(num_atoms=num_atoms)):
         batch_size = int(batch["Z"].shape[0])
         
+        # Add masks that train_step expects
+        batch["atom_mask"] = (batch["Z"] > 0).astype(jnp.float32).reshape(-1)
+        batch["batch_mask"] = jnp.ones_like(batch["dst_idx"], dtype=jnp.float32)
+        
         (
             params,
             ema_params,
@@ -252,6 +256,10 @@ def validate(
     
     for i, batch in enumerate(loader.batches(num_atoms=num_atoms)):
         batch_size = int(batch["Z"].shape[0])
+        
+        # Add masks that eval_step expects
+        batch["atom_mask"] = (batch["Z"] > 0).astype(jnp.float32).reshape(-1)
+        batch["batch_mask"] = jnp.ones_like(batch["dst_idx"], dtype=jnp.float32)
         
         loss, energy_mae, forces_mae, dipole_mae = eval_step(
             model_apply=model.apply,
