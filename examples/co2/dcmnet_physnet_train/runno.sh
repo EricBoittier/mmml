@@ -13,4 +13,4 @@ uv run python compare_models.py \
     --epochs 1000 \
     --batch-size 100 \
     --comparison-name "test${seed}" \
-    --seed "${seed}"
+    -seed "${seed}"
