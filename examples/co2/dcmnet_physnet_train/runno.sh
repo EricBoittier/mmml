@@ -13,8 +13,4 @@ uv run python compare_models.py \
     --epochs 1000 \
     --batch-size 100 \
     --comparison-name "test${seed}" \
-<<<<<<< HEAD
-    -seed "${seed}"
-=======
     --seed "${seed}"
->>>>>>> f5899bcf5dd3cccc2bb1f96f6f269611600b038b
