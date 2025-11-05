@@ -157,7 +157,7 @@ def train_model(
     )
     return metrics, params
 
-def run_group_cv(df_group, n_splits, epochs, lr, batch_size, hidden, seed):
+def run_group_cv(df_group, n_splits, epochs, lr, batch_size, hidden, seed, *, log_interval=None):
     # Extract features/target
     X = df_group[["r1", "r2", "ang"]].to_numpy(dtype=np.float64)
     y = df_group["value"].to_numpy(dtype=np.float64)
@@ -181,10 +181,30 @@ def run_group_cv(df_group, n_splits, epochs, lr, batch_size, hidden, seed):
             kf = LeaveOneOut()
 
     fold_metrics = []
+    cv_label = (
+        f"KFold(n_splits={getattr(kf, 'n_splits', 'LOO')}, shuffle={getattr(kf, 'shuffle', False)})"
+        if isinstance(kf, KFold)
+        else "LeaveOneOut()"
+    )
+    scheme = df_group.iloc[0]["scheme"]
+    level = df_group.iloc[0]["level"]
+    atom_index = int(df_group.iloc[0]["atom_index"])
+    logger.info(
+        "Running CV for group (scheme=%s, level=%s, atom_index=%s): samples=%d strategy=%s",
+        scheme,
+        level,
+        atom_index,
+        len(df_group),
+        cv_label,
+    )
+    group_start = time.perf_counter()
+
     # Cross-validation
     for fold, (tr, va) in enumerate(kf.split(X), start=1):
         X_tr, X_va = X[tr], X[va]
         y_tr, y_va = y[tr], y[va]
+
+        fold_start = time.perf_counter()
 
         # Scale features per-fold using train only
         xs = StandardScaler().fit(X_tr)
@@ -193,10 +213,29 @@ def run_group_cv(df_group, n_splits, epochs, lr, batch_size, hidden, seed):
 
         # (Optional) you can also standardize y; here we keep y as-is
         metrics, _ = train_model(
-            X_trs, y_tr, X_vas, y_va,
-            hidden=hidden, epochs=epochs, lr=lr, batch_size=batch_size, seed=seed + fold
+            X_trs,
+            y_tr,
+            X_vas,
+            y_va,
+            hidden=hidden,
+            epochs=epochs,
+            lr=lr,
+            batch_size=batch_size,
+            seed=seed + fold,
+            log_interval=log_interval,
         )
         fold_metrics.append(metrics)
+
+        logger.info(
+            "Completed fold %d for group (scheme=%s, level=%s, atom=%s): val_rmse=%.4f val_mae=%.4f duration=%.2fs",
+            fold,
+            scheme,
+            level,
+            atom_index,
+            metrics["val_rmse"],
+            metrics["val_mae"],
+            time.perf_counter() - fold_start,
+        )
 
     # Aggregate
     agg = {
@@ -210,6 +249,15 @@ def run_group_cv(df_group, n_splits, epochs, lr, batch_size, hidden, seed):
         "n_folds": len(fold_metrics),
         "n_samples": len(df_group),
     }
+    logger.info(
+        "Group summary (scheme=%s, level=%s, atom=%s): val_rmse_mean=%.4f val_mae_mean=%.4f duration=%.2fs",
+        scheme,
+        level,
+        atom_index,
+        agg["val_rmse_mean"],
+        agg["val_mae_mean"],
+        time.perf_counter() - group_start,
+    )
     return agg
 
 
@@ -232,7 +280,6 @@ def run_sklearn_models_cv(df_group, n_splits, seed):
         else:
             kf = LeaveOneOut()
 
-    # Models to benchmark
     models = {
         "KNN": KNeighborsRegressor(n_neighbors=3),
         "SVR": SVR(kernel="rbf", C=1.0, epsilon=0.1),
@@ -241,9 +288,22 @@ def run_sklearn_models_cv(df_group, n_splits, seed):
         "GradientBoosting": GradientBoostingRegressor(random_state=seed),
     }
 
+    scheme = df_group.iloc[0]["scheme"]
+    level = df_group.iloc[0]["level"]
+    atom_index = int(df_group.iloc[0]["atom_index"])
+    logger.info(
+        "Running scikit-learn baselines for group (scheme=%s, level=%s, atom=%s) using %d models",
+        scheme,
+        level,
+        atom_index,
+        len(models),
+    )
+    start = time.perf_counter()
+
     results = []
 
     for name, model in models.items():
+        model_start = time.perf_counter()
         fold_metrics = []
         for train_idx, val_idx in kf.split(X):
             X_train, X_val = X[train_idx], X[val_idx]
@@ -267,13 +327,31 @@ def run_sklearn_models_cv(df_group, n_splits, seed):
             "model": name,
             "val_rmse_mean": float(np.mean([m["val_rmse"] for m in fold_metrics])),
             "val_rmse_std": float(np.std([m["val_rmse"] for m in fold_metrics], ddof=1))
-                              if len(fold_metrics) > 1 else 0.0,
+            if len(fold_metrics) > 1 else 0.0,
             "val_mae_mean": float(np.mean([m["val_mae"] for m in fold_metrics])),
             "val_r2_mean": float(np.mean([m["val_r2"] for m in fold_metrics])),
             "n_samples": len(df_group),
             "n_folds": len(fold_metrics),
         }
         results.append(agg)
+
+        logger.info(
+            "Completed %s baseline for group (scheme=%s, level=%s, atom=%s): val_rmse=%.4f duration=%.2fs",
+            name,
+            scheme,
+            level,
+            atom_index,
+            agg["val_rmse_mean"],
+            time.perf_counter() - model_start,
+        )
+
+    logger.info(
+        "Finished scikit-learn baselines for group (scheme=%s, level=%s, atom=%s): total_duration=%.2fs",
+        scheme,
+        level,
+        atom_index,
+        time.perf_counter() - start,
+    )
 
     return results
 
