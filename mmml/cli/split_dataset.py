@@ -141,6 +141,8 @@ def split_and_save(
     """
     Split dataset and save to files.
     
+    Only keeps essential training fields to prevent indexing errors.
+    
     Parameters
     ----------
     data : dict
@@ -154,6 +156,9 @@ def split_and_save(
     verbose : bool
         Print progress
     """
+    # Only keep essential training fields
+    essential_fields = {'E', 'F', 'R', 'Z', 'N', 'D', 'Dxyz', 'esp', 'vdw_grid', 'vdw_surface'}
+    
     n_samples = len(next(iter(data.values())))
     
     for split_name, split_indices in splits.items():
@@ -163,14 +168,25 @@ def split_and_save(
         # Create split
         split_data = {}
         for key, value in data.items():
+            # Skip non-essential fields
+            if key not in essential_fields:
+                if verbose:
+                    print(f"   Skipping non-essential field: {key}")
+                continue
+            
             if isinstance(value, np.ndarray) and len(value.shape) > 0:
                 if value.shape[0] == n_samples:
                     split_data[key] = value[split_indices]
+                    if verbose:
+                        print(f"   ✅ {key}: {split_data[key].shape}")
                 else:
-                    # Metadata or other - keep as is
-                    split_data[key] = value
+                    # Skip fields with wrong dimensions
+                    if verbose:
+                        print(f"   ⚠️  Skipping {key}: shape {value.shape} doesn't match n_samples={n_samples}")
             else:
-                split_data[key] = value
+                # Skip scalars
+                if verbose:
+                    print(f"   Skipping scalar: {key}")
         
         # Save
         output_file = output_dir / f"{prefix}_{split_name}.npz"
@@ -178,7 +194,7 @@ def split_and_save(
         
         if verbose:
             size_mb = output_file.stat().st_size / 1024 / 1024
-            print(f"   ✅ {output_file.name} ({size_mb:.1f} MB)")
+            print(f"   💾 {output_file.name} ({size_mb:.1f} MB)")
 
 
 def main():
