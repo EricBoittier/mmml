@@ -244,23 +244,16 @@ class EF_ChargeSpinConditioned(nn.Module):
         src_idx: jnp.ndarray,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         """Calculate pairwise geometric features."""
-        displacements = positions[dst_idx] - positions[src_idx]
-        distances = jnp.sqrt(jnp.sum(displacements**2, axis=-1))
+        positions_dst = e3x.ops.gather_dst(positions, dst_idx=dst_idx)
+        positions_src = e3x.ops.gather_src(positions, src_idx=src_idx)
+        displacements = positions_src - positions_dst
         
         basis = e3x.nn.basis(
             displacements,
             num=self.num_basis_functions,
             max_degree=self.max_degree,
-            radial_fn=functools.partial(
-                e3x.nn.reciprocal_bernstein,
-                max_n=self.num_basis_functions - 1,
-            ),
-            cutoff_fn=functools.partial(
-                e3x.nn.smooth_cutoff,
-                cutoff=self.cutoff,
-            ),
-            envelope_p=1,
-            envelope_h=2,
+            radial_fn=e3x.nn.exponential_chebyshev,
+            cutoff_fn=functools.partial(e3x.nn.smooth_cutoff, cutoff=self.cutoff),
         )
         
         return basis, displacements
