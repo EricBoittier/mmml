@@ -201,8 +201,13 @@ def train_epoch(
     for i, batch in enumerate(loader.batches(num_atoms=num_atoms)):
         batch_size = int(batch["Z"].shape[0])
         
+        # Flatten batch arrays (model expects flattened)
+        batch["Z"] = batch["Z"].reshape(-1)
+        batch["R"] = batch["R"].reshape(-1, 3)
+        batch["F"] = batch["F"].reshape(-1, 3)
+        
         # Add masks that train_step expects
-        batch["atom_mask"] = (batch["Z"] > 0).astype(jnp.float32).reshape(-1)
+        batch["atom_mask"] = (batch["Z"] > 0).astype(jnp.float32)
         batch["batch_mask"] = jnp.ones_like(batch["dst_idx"], dtype=jnp.float32)
         
         (
@@ -257,8 +262,13 @@ def validate(
     for i, batch in enumerate(loader.batches(num_atoms=num_atoms)):
         batch_size = int(batch["Z"].shape[0])
         
+        # Flatten batch arrays (model expects flattened)
+        batch["Z"] = batch["Z"].reshape(-1)
+        batch["R"] = batch["R"].reshape(-1, 3)
+        batch["F"] = batch["F"].reshape(-1, 3)
+        
         # Add masks that eval_step expects
-        batch["atom_mask"] = (batch["Z"] > 0).astype(jnp.float32).reshape(-1)
+        batch["atom_mask"] = (batch["Z"] > 0).astype(jnp.float32)
         batch["batch_mask"] = jnp.ones_like(batch["dst_idx"], dtype=jnp.float32)
         
         loss, energy_mae, forces_mae, dipole_mae = eval_step(
