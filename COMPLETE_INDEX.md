@@ -114,7 +114,8 @@ python train_physnet_charge_spin.py \
 │
 ├── Examples
 │   ├── train_memmap_simple.py                   # Memmap example
-│   └── train_charge_spin_simple.py              # Charge-spin example
+│   ├── train_charge_spin_simple.py              # Charge-spin example
+│   └── predict_options_demo.py                  # Prediction options demo
 │
 ├── Documentation - Packed Memmap
 │   ├── README_PACKED_MEMMAP.md                  # Overview
@@ -127,7 +128,8 @@ python train_physnet_charge_spin.py \
 ├── Documentation - Charge-Spin
 │   ├── README_CHARGE_SPIN.md                    # Overview
 │   ├── CHARGE_SPIN_PHYSNET.md                   # Complete docs
-│   └── CHARGE_SPIN_SUMMARY.md                   # Architecture
+│   ├── CHARGE_SPIN_SUMMARY.md                   # Architecture
+│   └── PREDICTION_OPTIONS.md                    # Energy/Forces options
 │
 └── This File
     └── COMPLETE_INDEX.md                        # You are here!
