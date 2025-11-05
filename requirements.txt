@@ -27,6 +27,9 @@ toolz>=0.12
 wheel>=0.41
 zipp>=3.17
 
+tensorflow>=2.11
+tensorflow-datasets>=4.9
+
 # CHARMM optional — install separately if needed
 # pycharmm
 
