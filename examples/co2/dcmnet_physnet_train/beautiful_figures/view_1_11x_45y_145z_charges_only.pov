@@ -5,9 +5,9 @@
 global_settings {assumed_gamma 2.2 max_trace_level 6}
 background {color White}
 camera {orthographic
-  right -2.12*x up 0.38*y
+  right -1.15*x up 1.38*y
   direction 1.00*z
-  location <0,0,60.00> look_at <0,0,0>}
+  location <0,0,15.00> look_at <0,0,0>}
 
 
 light_source {<  2.00,   3.00,  40.00> color White
@@ -27,22 +27,22 @@ light_source {<  2.00,   3.00,  40.00> color White
 #declare Rbond = 0.100;
 
 #macro atom(LOC, R, COL, TRANS, FIN)
-  sphere{LOC, R texture{pigment{color COL transmit TRANS} finish{FIN}}}
+  sphere{LOC, R texture{pigment{color COL transmit 0.500} finish{FIN}}}
 #end
 #macro constrain(LOC, R, COL, TRANS FIN)
-union{torus{R, Rcell rotate 45*z texture{pigment{color COL transmit TRANS} finish{FIN}}}
-     torus{R, Rcell rotate -45*z texture{pigment{color COL transmit TRANS} finish{FIN}}}
+union{torus{R, Rcell rotate 45*z texture{pigment{color COL transmit 0.500} finish{FIN}}}
+     torus{R, Rcell rotate -45*z texture{pigment{color COL transmit 0.500} finish{FIN}}}
      translate LOC}
 #end
 
 // no cell vertices
-atom(<  0.00,   0.00,  -0.58>, 0.01, rgb <0.56, 0.56, 0.56>, 0.0, jmol) // #0
-atom(<  1.00,  -0.17,   0.00>, 0.01, rgb <1.00, 0.05, 0.05>, 0.0, jmol) // #1
-atom(< -1.00,   0.17,  -1.17>, 0.01, rgb <1.00, 0.05, 0.05>, 0.0, jmol) // #2
-cylinder {<  0.00,   0.00,  -0.58>, <  0.50,  -0.09,  -0.29>, Rbond texture{pigment {color rgb <0.56, 0.56, 0.56> transmit 0.0} finish{jmol}}}
-cylinder {<  1.00,  -0.17,   0.00>, <  0.50,  -0.09,  -0.29>, Rbond texture{pigment {color rgb <1.00, 0.05, 0.05> transmit 0.0} finish{jmol}}}
-cylinder {<  0.00,   0.00,  -0.58>, < -0.50,   0.09,  -0.88>, Rbond texture{pigment {color rgb <0.56, 0.56, 0.56> transmit 0.0} finish{jmol}}}
-cylinder {< -1.00,   0.17,  -1.17>, < -0.50,   0.09,  -0.88>, Rbond texture{pigment {color rgb <1.00, 0.05, 0.05> transmit 0.0} finish{jmol}}}
+atom(<  0.00,   0.00,  -0.81>, 0.500, rgb <0.56, 0.56, 0.56>, 0.0, jmol) // #0
+atom(< -0.54,   0.65,   0.00>, 0.500, rgb <1.00, 0.05, 0.05>, 0.0, jmol) // #1
+atom(<  0.54,  -0.65,  -1.62>, 0.500, rgb <1.00, 0.05, 0.05>, 0.0, jmol) // #2
+cylinder {<  0.00,   0.00,  -0.81>, < -0.27,   0.32,  -0.41>, Rbond texture{pigment {color rgb <0.56, 0.56, 0.56> transmit 0.500} finish{jmol}}}
+cylinder {< -0.54,   0.65,   0.00>, < -0.27,   0.32,  -0.41>, Rbond texture{pigment {color rgb <1.00, 0.05, 0.05> transmit 0.500} finish{jmol}}}
+cylinder {<  0.00,   0.00,  -0.81>, <  0.27,  -0.32,  -1.22>, Rbond texture{pigment {color rgb <0.56, 0.56, 0.56> transmit 0.500} finish{jmol}}}
+cylinder {<  0.54,  -0.65,  -1.62>, <  0.27,  -0.32,  -1.22>, Rbond texture{pigment {color rgb <1.00, 0.05, 0.05> transmit 0.500} finish{jmol}}}
 // no constraints
 
 
@@ -101,27 +101,95 @@ sky_sphere {
     }
 }
 
-// Soft grid plane for scale reference
-#declare grid_color_light = rgb <0.94, 0.96, 0.98>;
-#declare grid_color_dark  = rgb <0.87, 0.90, 0.94>;
+// Bounding box frame for scale reference
+#declare bbox_frame_texture = texture {
+    pigment { rgbf <0.70, 0.72, 0.78, 0.80> }
+    finish { ambient 0.08 diffuse 0.25 specular 0.04 roughness 0.08 }
+};
 
-plane {
-    y, -1.9197
-    texture {
-        pigment {
-            checker grid_color_light, grid_color_dark
-            scale 1.1697
-        }
-        finish {
-            ambient 0.25
-            diffuse 0.55
-            specular 0.08
-            roughness 0.04
-        }
-    }
+cylinder {
+    <-1.0000, -1.0000, -2.1697>, <1.0000, -1.0000, -2.1697>, 0.0292
+    texture { bbox_frame_texture }
+}
+cylinder {
+    <-1.0000, 1.0000, -2.1697>, <1.0000, 1.0000, -2.1697>, 0.0292
+    texture { bbox_frame_texture }
+}
+cylinder {
+    <-1.0000, -1.0000, 2.1697>, <1.0000, -1.0000, 2.1697>, 0.0292
+    texture { bbox_frame_texture }
+}
+cylinder {
+    <-1.0000, 1.0000, 2.1697>, <1.0000, 1.0000, 2.1697>, 0.0292
+    texture { bbox_frame_texture }
+}
+cylinder {
+    <-1.0000, -1.0000, -2.1697>, <-1.0000, 1.0000, -2.1697>, 0.0292
+    texture { bbox_frame_texture }
+}
+cylinder {
+    <1.0000, -1.0000, -2.1697>, <1.0000, 1.0000, -2.1697>, 0.0292
+    texture { bbox_frame_texture }
+}
+cylinder {
+    <-1.0000, -1.0000, 2.1697>, <-1.0000, 1.0000, 2.1697>, 0.0292
+    texture { bbox_frame_texture }
+}
+cylinder {
+    <1.0000, -1.0000, 2.1697>, <1.0000, 1.0000, 2.1697>, 0.0292
+    texture { bbox_frame_texture }
+}
+cylinder {
+    <-1.0000, -1.0000, -2.1697>, <-1.0000, -1.0000, 2.1697>, 0.0292
+    texture { bbox_frame_texture }
+}
+cylinder {
+    <1.0000, -1.0000, -2.1697>, <1.0000, -1.0000, 2.1697>, 0.0292
+    texture { bbox_frame_texture }
+}
+cylinder {
+    <-1.0000, 1.0000, -2.1697>, <-1.0000, 1.0000, 2.1697>, 0.0292
+    texture { bbox_frame_texture }
+}
+cylinder {
+    <1.0000, 1.0000, -2.1697>, <1.0000, 1.0000, 2.1697>, 0.0292
+    texture { bbox_frame_texture }
+}
+sphere {
+    <-1.0000, -1.0000, -2.1697>, 0.0395
+    texture { bbox_frame_texture }
+}
+sphere {
+    <1.0000, -1.0000, -2.1697>, 0.0395
+    texture { bbox_frame_texture }
+}
+sphere {
+    <-1.0000, 1.0000, -2.1697>, 0.0395
+    texture { bbox_frame_texture }
+}
+sphere {
+    <1.0000, 1.0000, -2.1697>, 0.0395
+    texture { bbox_frame_texture }
+}
+sphere {
+    <-1.0000, -1.0000, 2.1697>, 0.0395
+    texture { bbox_frame_texture }
+}
+sphere {
+    <1.0000, -1.0000, 2.1697>, 0.0395
+    texture { bbox_frame_texture }
+}
+sphere {
+    <-1.0000, 1.0000, 2.1697>, 0.0395
+    texture { bbox_frame_texture }
+}
+sphere {
+    <1.0000, 1.0000, 2.1697>, 0.0395
+    texture { bbox_frame_texture }
 }
 
 // Softer finish settings
+
 #declare charge_finish = finish {
     ambient 0.25
     diffuse 0.55
@@ -166,7 +234,7 @@ sphere {
 }
 
 sphere {
-  <0.0000, 0.0000, 1.2519>, 0.0600
+  <0.0000, 0.0000, 1.2520>, 0.0600
   texture {
     pigment { rgbf <0.834, 0.909, 0.948, 0.70> }
     finish { charge_finish }
@@ -174,7 +242,7 @@ sphere {
 }
 
 sphere {
-  <0.0000, 0.0000, 1.1844>, 0.0600
+  <0.0000, 0.0000, 1.1843>, 0.0600
   texture {
     pigment { rgbf <0.504, 0.675, 0.823, 0.70> }
     finish { charge_finish }
@@ -190,7 +258,7 @@ sphere {
 }
 
 sphere {
-  <0.0000, 0.0000, -1.2519>, 0.0600
+  <0.0000, 0.0000, -1.2520>, 0.0600
   texture {
     pigment { rgbf <0.834, 0.909, 0.948, 0.70> }
     finish { charge_finish }
@@ -198,7 +266,7 @@ sphere {
 }
 
 sphere {
-  <0.0000, 0.0000, -1.1844>, 0.0600
+  <0.0000, 0.0000, -1.1843>, 0.0600
   texture {
     pigment { rgbf <0.504, 0.675, 0.823, 0.70> }
     finish { charge_finish }
