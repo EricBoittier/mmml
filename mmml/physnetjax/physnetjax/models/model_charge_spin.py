@@ -305,16 +305,30 @@ class EF_ChargeSpinConditioned(nn.Module):
         x = embed(atomic_numbers)
         
         # Add molecular property features to initial atomic features
-        # First project molecular features to match atomic feature dimension
+        # Project molecular features and convert to e3x format
         mol_projection = nn.Dense(
             self.features,
             dtype=DTYPE,
             name="mol_feature_projection",
         )
-        mol_features_projected = mol_projection(mol_features_per_atom)
+        mol_features_projected = mol_projection(mol_features_per_atom)  # (num_atoms, features)
         
-        # Add to atomic features
-        x = x + mol_features_projected
+        # Convert to e3x format (add parity and degree dimensions)
+        # x has shape (num_atoms, 1, max_degree+1, features) in e3x format
+        # We need to match this structure
+        mol_features_e3x = jnp.expand_dims(mol_features_projected, axis=(1, 2))  # (num_atoms, 1, 1, features)
+        
+        # Broadcast to match x's degree dimension
+        # Only add to L=0 (scalar) features
+        mol_features_e3x = jnp.pad(
+            mol_features_e3x,
+            ((0, 0), (0, 0), (0, x.shape[2] - 1), (0, 0)),
+            mode='constant',
+            constant_values=0
+        )  # (num_atoms, 1, max_degree+1, features)
+        
+        # Add to atomic features (only affects L=0 components)
+        x = e3x.nn.add(x, mol_features_e3x)
         
         # Message passing iterations (reusing from original PhysNet)
         for i in range(self.num_iterations):
@@ -389,6 +403,36 @@ class EF_ChargeSpinConditioned(nn.Module):
         # Simplified attention - can be expanded
         return x
     
+    def _calc_switches(
+        self,
+        displacements: jnp.ndarray,
+        batch_mask: jnp.ndarray,
+    ) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+        """Calculate switching functions for electrostatics and repulsion."""
+        eps = 1e-6
+        min_dist = 0.01
+        switch_start = 1.0
+        switch_end = 10.0
+        
+        displacements = displacements + (1 - batch_mask)[..., None]
+        squared_distances = jnp.sum(displacements**2, axis=1)
+        distances = jnp.sqrt(jnp.maximum(squared_distances, min_dist**2))
+        
+        switch_dist = e3x.nn.smooth_switch(distances, switch_start, switch_end)
+        off_dist = 1.0 - e3x.nn.smooth_switch(distances, 8.0, 10.0)
+        one_minus_switch_dist = 1 - switch_dist
+        
+        safe_distances = distances + eps
+        r1 = switch_dist / jnp.sqrt(squared_distances + 1.0)
+        r2 = one_minus_switch_dist / safe_distances
+        r = r1 + r2
+        eshift = safe_distances / (switch_end**2) - 2.0 / switch_end
+        
+        off_dist *= batch_mask
+        eshift *= batch_mask
+        
+        return r, off_dist, eshift
+    
     def _calculate(
         self,
         x: jnp.ndarray,
@@ -402,6 +446,9 @@ class EF_ChargeSpinConditioned(nn.Module):
         batch_size: int,
     ) -> Tuple[Array, Tuple[Array, Array, Array, Array, Array]]:
         """Calculate final energy and related quantities."""
+        # Calculate switching functions
+        r, off_dist, eshift = self._calc_switches(displacements, batch_mask)
+        
         # Predict atomic energies
         energy_per_atom = nn.Dense(1, use_bias=False, dtype=DTYPE, name="energy_dense")(x)
         energy_per_atom = jnp.squeeze(energy_per_atom, axis=-1)
@@ -419,13 +466,6 @@ class EF_ChargeSpinConditioned(nn.Module):
         # Mask padding atoms
         energy_per_atom = energy_per_atom * atom_mask
         
-        # Sum to get molecular energy
-        energy = jax.ops.segment_sum(
-            energy_per_atom,
-            segment_ids=batch_segments,
-            num_segments=batch_size,
-        )
-        
         # Charges and electrostatics (if enabled)
         charges = jnp.zeros_like(atomic_numbers, dtype=DTYPE)
         electrostatics = jnp.zeros(batch_size, dtype=DTYPE)
@@ -434,26 +474,31 @@ class EF_ChargeSpinConditioned(nn.Module):
             charges = nn.Dense(1, use_bias=False, dtype=DTYPE, name="charges_dense")(x)
             charges = jnp.squeeze(charges, axis=-1)
             charges = charges * atom_mask
-            
-            # Calculate electrostatic energy (simplified)
-            # Could use more sophisticated Coulomb calculation
-            pass
         
         # ZBL repulsion (if enabled)
-        repulsion = jnp.zeros(batch_size, dtype=DTYPE)
+        repulsion = jnp.zeros_like(atomic_numbers, dtype=DTYPE)
         if self.zbl:
-            repulsion_per_pair = self.repulsion(
-                atomic_numbers[dst_idx],
-                atomic_numbers[src_idx],
-                displacements,
+            repulsion = self.repulsion(
+                atomic_numbers,
+                r,
+                off_dist,
+                1 - eshift,  # Note: 1 - eshift as in working model
+                dst_idx,
+                src_idx,
+                atom_mask,
+                batch_mask,
+                batch_segments,
+                batch_size,
             )
-            repulsion_per_pair = repulsion_per_pair * batch_mask
-            repulsion = jax.ops.segment_sum(
-                repulsion_per_pair,
-                segment_ids=batch_segments[dst_idx],
-                num_segments=batch_size,
-            )
-            energy = energy + repulsion
+        else:
+            repulsion = jnp.zeros_like(atomic_numbers, dtype=DTYPE)
+        
+        # Sum to get molecular energy
+        energy = jax.ops.segment_sum(
+            energy_per_atom + repulsion,
+            segment_ids=batch_segments,
+            num_segments=batch_size,
+        )
         
         # Return negative energy for gradient calculation
         total_energy = -jnp.sum(energy)
