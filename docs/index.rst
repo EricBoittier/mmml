@@ -77,6 +77,7 @@ Welcome to mmml's documentation!
    esp_cube_generation
    dcmnet_fitting
    tutorial_esp_to_dcmnet
+   changelog
    api
    developer_guide
 
