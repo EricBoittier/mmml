@@ -19,6 +19,7 @@ import argparse
 import logging
 import sys
 import time
+from pathlib import Path
 
 import jax
 import jax.numpy as jnp
@@ -375,6 +376,7 @@ def main():
     ap.add_argument("--batch-size", type=int, default=0, help="Minibatch size; <=0 means full-batch")
     ap.add_argument("--hidden", type=str, default="64,64", help="Comma-separated hidden sizes, e.g., '64,64' or '128,64,32'")
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--output", type=str, default=None, help="Optional path to write aggregated results as CSV")
     ap.add_argument("--log-level", type=str, default="INFO", help="Logging level (DEBUG, INFO, WARNING, ERROR)")
     ap.add_argument("--log-interval", type=int, default=None, help="Epoch interval for logging training progress")
     args = ap.parse_args()
@@ -465,6 +467,7 @@ def main():
             agg["scheme"] = scheme
             agg["level"] = level
             agg["atom_index"] = atom_idx
+            agg["note"] = ""
             results.append(agg)
         else:
             logger.warning(
@@ -479,6 +482,7 @@ def main():
                 r["scheme"] = scheme
                 r["level"] = level
                 r["atom_index"] = atom_idx
+                r["note"] = ""
                 results.append(r)
         else:
             logger.info(
@@ -488,12 +492,10 @@ def main():
                 atom_idx,
             )
         if agg is None:
-            res = {
+            results.append({
                 "scheme": scheme,
                 "level": level,
                 "atom_index": int(atom_idx),
-                "n_samples": len(df_g),
-                "n_folds": 0,
                 "val_rmse_mean": np.nan,
                 "val_rmse_std": np.nan,
                 "val_mae_mean": np.nan,
@@ -501,23 +503,23 @@ def main():
                 "train_rmse_mean": np.nan,
                 "train_mae_mean": np.nan,
                 "train_r2_mean": np.nan,
+                "n_folds": 0,
+                "n_samples": len(df_g),
+                "model": "FlaxMLP",
                 "note": "Not enough samples for CV",
-            }
-        else:
-            res = {
-                "scheme": scheme,
-                "level": level,
-                "atom_index": int(atom_idx),
-                **agg,
-                "note": "",
-            }
-        results.append(res)
+            })
 
     out = pd.DataFrame(results).sort_values(["scheme", "level", "atom_index"])
     logger.info("Generated %d result rows", len(out))
     # Pretty print
     with pd.option_context("display.max_columns", None):
         print(out.to_string(index=False))
+
+    if args.output:
+        output_path = Path(args.output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        out.to_csv(output_path, index=False)
+        logger.info("Saved aggregated results to %s", output_path)
 
     logger.info("Processing complete.")
 
