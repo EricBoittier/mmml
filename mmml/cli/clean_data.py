@@ -37,6 +37,8 @@ def validate_structure(
     max_force: float = 10.0,
     min_distance: float = 0.4,
     check_distances: bool = True,
+    min_energy: float = -1e6,
+    max_energy: float = -1e-3,
 ) -> Tuple[bool, str]:
     """
     Validate a single structure.
@@ -51,6 +53,16 @@ def validate_structure(
     # Check for NaN/Inf in energy
     if np.isnan(E) or np.isinf(E):
         return False, f"Invalid energy: {E}"
+    
+    # Check for zero or suspiciously high energies (failed calculations)
+    if np.abs(E) < 1e-3:
+        return False, f"Zero energy: {E:.6f} (failed calculation)"
+    
+    if E > max_energy:
+        return False, f"Energy too high: {E:.4f} eV > {max_energy} (failed calculation)"
+    
+    if E < min_energy:
+        return False, f"Energy too low: {E:.4f} eV < {min_energy} (check units)"
     
     # Check for NaN/Inf in forces
     if np.any(np.isnan(F)) or np.any(np.isinf(F)):
@@ -87,6 +99,8 @@ def clean_dataset(
     max_force: float = 10.0,
     min_distance: float = 0.4,
     check_distances: bool = True,
+    min_energy: float = -1e6,
+    max_energy: float = -1e-3,
     verbose: bool = True,
 ) -> Dict:
     """
@@ -104,6 +118,10 @@ def clean_dataset(
         Minimum allowed interatomic distance (Å)
     check_distances : bool
         Whether to check interatomic distances (slower)
+    min_energy : float
+        Minimum allowed energy (eV, default: -1e6)
+    max_energy : float
+        Maximum allowed energy (eV, default: -1e-3, catches zeros and positive)
     verbose : bool
         Print progress
     
@@ -115,6 +133,7 @@ def clean_dataset(
     if verbose:
         print(f"\n🧹 Cleaning dataset: {input_file}")
         print(f"   Max force threshold: {max_force} eV/Å")
+        print(f"   Energy range: [{min_energy}, {max_energy}] eV")
         print(f"   Min distance threshold: {min_distance} Å")
         print(f"   Check distances: {check_distances}")
         print()
@@ -151,6 +170,8 @@ def clean_dataset(
             max_force=max_force,
             min_distance=min_distance,
             check_distances=check_distances,
+            min_energy=min_energy,
+            max_energy=max_energy,
         )
         
         if is_valid:
@@ -182,7 +203,8 @@ def clean_dataset(
         print(f"\n💾 Saving cleaned dataset to: {output_file}")
     
     # Only keep essential training fields (per-structure data)
-    essential_fields = {'E', 'F', 'R', 'Z', 'N', }  # Core training data
+    # Note: D and Dxyz are dipole fields - keep both if they exist
+    essential_fields = {'E', 'F', 'R', 'Z', 'N', 'D', 'Dxyz', 'dipoles', 'dipole'}  # Core training data
     
     cleaned_data = {}
     for key in data.keys():
@@ -252,6 +274,10 @@ Examples:
     
     parser.add_argument('--max-force', type=float, default=10.0,
                        help='Maximum allowed force magnitude (eV/Å), default: 10.0')
+    parser.add_argument('--max-energy', type=float, default=-1e-3,
+                       help='Maximum allowed energy (eV), default: -0.001 (catches zeros)')
+    parser.add_argument('--min-energy', type=float, default=-1e6,
+                       help='Minimum allowed energy (eV), default: -1e6')
     parser.add_argument('--min-distance', type=float, default=0.4,
                        help='Minimum allowed interatomic distance (Å), default: 0.4')
     
@@ -284,6 +310,8 @@ Examples:
         max_force=args.max_force,
         min_distance=args.min_distance,
         check_distances=not args.no_check_distances,
+        min_energy=args.min_energy,
+        max_energy=args.max_energy,
         verbose=not args.quiet,
     )
     

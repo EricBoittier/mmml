@@ -103,8 +103,11 @@ Outputs
   - Parameter snapshots ``paramsYYYY-mm-dd_HH-MM-SS.json``
 
 Notes
-  - The ``--num_atoms`` parameter is now auto-detected from the dataset (R.shape[1])
-  - You only need to specify it explicitly if auto-detection fails or you want to override it
+  - The ``--num_atoms`` parameter is now auto-detected from max(N) in the dataset
+  - **Padding is automatically removed** if detected (e.g., 60 padded → 10 actual atoms)
+  - Training uses only the actual number of atoms for efficiency
+  - Unpadded files are saved for reuse (e.g., ``data_train_unpadded.npz``)
+  - You can still specify ``--num_atoms`` explicitly if needed
 
 
 run_sim.py
