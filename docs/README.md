@@ -1,27 +1,44 @@
-# Compiling mmml's Documentation
+# Documentation
 
-The docs for this project are built with [Sphinx](http://www.sphinx-doc.org/en/master/).
-To compile the docs, first ensure that the necessary dependencies are installed.
+## Charge-Spin Conditioned PhysNet
 
+Multi-state energy and force predictions with charge and spin inputs.
 
-```bash
-pip install sphinx pydata-sphinx-theme sphinx-copybutton sphinx-design
+**Location**: `docs/charge_spin/`
+
+**Usage**:
+```python
+from mmml.physnetjax.physnetjax.models.model_charge_spin import EF_ChargeSpinConditioned
+
+model = EF_ChargeSpinConditioned(features=128, charge_range=(-2,2), spin_range=(1,5))
+outputs = model.apply(params, Z, R, dst_idx, src_idx, total_charges=Q, total_spins=S)
 ```
 
+**Examples**: `examples/train_charge_spin_simple.py`, `examples/predict_options_demo.py`
 
-Once installed, you can use the `Makefile` in this directory to compile static HTML pages by
-```bash
-make html
+---
+
+## Packed Memmap Data Loader
+
+Efficient training on large datasets via memory-mapped files.
+
+**Location**: `docs/memmap_loader/`
+
+**Usage**:
+```python
+from mmml.data.packed_memmap_loader import PackedMemmapLoader
+
+loader = PackedMemmapLoader("data_path", batch_size=32)
+for batch in loader.batches(num_atoms=60):
+    # train...
 ```
 
-The documentation contains default pages for "Getting Started", "User Guide", "Developer Guide" and API reference. 
-We recommend adopting these sections of documentation for your project to ensure comprehensive documentation for all aspects of your project.
+**Examples**: `examples/train_memmap_simple.py`
 
-The compiled docs will be in the `_build` directory and can be viewed by opening `index.html` (which may itself 
-be inside a directory called `html/` depending on what version of Sphinx is installed).
+---
 
+## AI Development Notes
 
-A configuration file for [Read The Docs](https://readthedocs.org/) (readthedocs.yaml) is included in the top level of the repository. To use Read the Docs to host your documentation, go to https://readthedocs.org/ and connect this repository. You may need to change your default branch to `main` under Advanced Settings for the project.
+**Location**: `AI/`
 
-If you would like to use Read The Docs with `autodoc` (included automatically) and your package has dependencies, you will need to include those dependencies in your documentation yaml file (`docs/requirements.yaml`).
-
+Internal notes on fixes, debugging, and development decisions.
