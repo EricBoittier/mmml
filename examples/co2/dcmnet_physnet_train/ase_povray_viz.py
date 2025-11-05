@@ -252,7 +252,45 @@ def write_ase_povray_with_charges(atoms, result, output_path,
     bbox_padding = 1.0
     bbox_min = positions.min(axis=0) - bbox_padding
     bbox_max = positions.max(axis=0) + bbox_padding
-    bbox_radius = max(0.05, min(0.12, max_extent * 0.08 if max_extent > 0 else 0.08))
+    base_radius = max_extent * 0.025 if max_extent > 0 else 0.025
+    bbox_radius = max(0.018, min(0.055, base_radius))
+
+    bbox_corners = []
+    for idx in range(8):
+        x = bbox_min[0] if (idx & 1) == 0 else bbox_max[0]
+        y = bbox_min[1] if (idx & 2) == 0 else bbox_max[1]
+        z = bbox_min[2] if (idx & 4) == 0 else bbox_max[2]
+        bbox_corners.append((x, y, z))
+
+    edge_pairs = []
+    for axis in range(3):
+        bit = 1 << axis
+        for idx in range(8):
+            if (idx & bit) == 0:
+                edge_pairs.append((idx, idx | bit))
+
+    bbox_lines = []
+    bbox_lines.append("#declare bbox_frame_texture = texture {\n")
+    bbox_lines.append("    pigment { rgbf <0.70, 0.72, 0.78, 0.80> }\n")
+    bbox_lines.append("    finish { ambient 0.08 diffuse 0.25 specular 0.04 roughness 0.08 }\n")
+    bbox_lines.append("};\n\n")
+
+    for start_idx, end_idx in edge_pairs:
+        start = bbox_corners[start_idx]
+        end = bbox_corners[end_idx]
+        bbox_lines.append("cylinder {\n")
+        bbox_lines.append(f"    <{start[0]:.4f}, {start[1]:.4f}, {start[2]:.4f}>, <{end[0]:.4f}, {end[1]:.4f}, {end[2]:.4f}>, {bbox_radius:.4f}\n")
+        bbox_lines.append("    texture { bbox_frame_texture }\n")
+        bbox_lines.append("}\n")
+
+    corner_radius = bbox_radius * 1.35
+    for corner in bbox_corners:
+        bbox_lines.append("sphere {\n")
+        bbox_lines.append(f"    <{corner[0]:.4f}, {corner[1]:.4f}, {corner[2]:.4f}>, {corner_radius:.4f}\n")
+        bbox_lines.append("    texture { bbox_frame_texture }\n")
+        bbox_lines.append("}\n")
+
+    bbox_geometry = ''.join(bbox_lines)
     
     povray_settings = {
         'transparent': False,
@@ -285,13 +323,12 @@ def write_ase_povray_with_charges(atoms, result, output_path,
         f.write("\n\n// Enhanced rendering settings\n")
         f.write("// Added by ase_povray_viz.py\n\n")
         
-        # Enhanced lighting with soft area lights and grid floor
-        f.write(f"""
+        lighting_block = """
 // Soft lighting environment
 #declare light_color = rgb <1.0, 1.0, 1.0>;
 
 // Main light (broad, gentle)
-light_source {{
+light_source {
     <24, 36, 42>
     color light_color * 0.45
     area_light <12, 0, 0>, <0, 12, 0>, 6, 6
@@ -299,10 +336,10 @@ light_source {{
     jitter
     fade_distance 75
     fade_power 2
-}}
+}
 
 // Fill light (diffuse bounce)
-light_source {{
+light_source {
     <-18, 22, -28>
     color light_color * 0.25
     area_light <10, 0, 0>, <0, 10, 0>, 5, 5
@@ -310,56 +347,40 @@ light_source {{
     jitter
     fade_distance 65
     fade_power 2
-}}
+}
 
 // Rim light (very soft accent)
-light_source {{
+light_source {
     <-8, -12, -35>
     color light_color * 0.18
     area_light <6, 0, 0>, <0, 6, 0>, 4, 4
     adaptive 1
     jitter
-}}
+}
 
 // Ambient illumination
-global_settings {{
+global_settings {
     ambient_light rgb <0.20, 0.20, 0.22>
     max_trace_level 15
-}}
+}
 
 // Sky tint for subtle background colour
-sky_sphere {{
-    pigment {{
+sky_sphere {
+    pigment {
         gradient y
-        color_map {{
+        color_map {
             [0.0 color rgb <0.92, 0.95, 0.98>]
             [1.0 color rgb <1.0, 1.0, 1.0>]
-        }}
-    }}
-}}
-
-// Soft grid plane for scale reference
-#declare grid_color_light = rgb <0.94, 0.96, 0.98>;
-#declare grid_color_dark  = rgb <0.87, 0.90, 0.94>;
-
-plane {{
-    y, {grid_offset:.4f}
-    texture {{
-        pigment {{
-            checker grid_color_light, grid_color_dark
-            scale {grid_spacing:.4f}
-        }}
-        finish {{
-            ambient 0.25
-            diffuse 0.55
-            specular 0.08
-            roughness 0.04
-        }}
-    }}
-}}
-
-// Softer finish settings
-#declare charge_finish = finish {{
+        }
+    }
+}
+"""
+        f.write(lighting_block)
+        f.write("\n// Bounding box frame for scale reference\n")
+        f.write(bbox_geometry)
+        f.write("\n// Softer finish settings\n")
+        f.write("""
+#declare charge_finish = finish {
     ambient 0.25
     diffuse 0.55
     specular 0.35
@@ -368,15 +389,15 @@ plane {{
     phong 0.35
     phong_size 50
     brilliance 1.05
-}}
+}
 
-#declare esp_finish = finish {{
+#declare esp_finish = finish {
     ambient 0.28
     diffuse 0.55
     specular 0.18
     roughness 0.05
     brilliance 1.0
-}}
+}
 
 """)
         
@@ -572,13 +593,43 @@ def apply_molecule_transparency(pov_path: Path, transparency: float) -> None:
     with target.open('r') as fh:
         content = fh.read()
 
-    # Replace common transmit patterns emitted by ASE writer.
-    content_new = re.sub(r'(transmit\s+)0\.0+', rf'\g<1>{transparency:.3f}', content)
-    content_new = re.sub(r'(transmit\s+)0(\s|})', rf'\g<1>{transparency:.3f}\2', content_new)
+    split_marker = "// Enhanced rendering settings"
+    if split_marker in content:
+        header, tail = content.split(split_marker, 1)
+    else:
+        header, tail = content, ''
 
-    if content_new != content:
+    trans_str = f"{transparency:.3f}"
+
+    header = header.replace('transmit TRANS', f'transmit {trans_str}')
+
+    def replace_transmit(match):
+        try:
+            value = float(match.group(2))
+        except ValueError:
+            return match.group(0)
+        if value <= 0.95:
+            return match.group(1) + trans_str
+        return match.group(0)
+
+    header = re.sub(r'(transmit\s+)([-+]?\d*\.?\d+)', replace_transmit, header)
+
+    def replace_atom_arg(match):
+        try:
+            value = float(match.group(2))
+        except ValueError:
+            return match.group(0)
+        if value <= 0.95:
+            return match.group(1) + trans_str + match.group(3)
+        return match.group(0)
+
+    header = re.sub(r'(atom\([^,]+,[^,]+,[^,]+,\s*)([-+]?\d*\.?\d+)(\s*,)', replace_atom_arg, header)
+
+    updated_content = header + (split_marker + tail if tail else '')
+
+    if updated_content != content:
         with target.open('w') as fh:
-            fh.write(content_new)
+            fh.write(updated_content)
 
 
 def main():
