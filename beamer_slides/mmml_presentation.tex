@@ -431,16 +431,18 @@ python -m mmml.cli.train_charge_spin \
 % ============================================================================
 
 \begin{frame}[fragile]{Model Inspection}
+\begin{columns}
+\column{0.48\textwidth}
 \textbf{Inspect trained models and checkpoints}
 
-\begin{lstlisting}[style=bashstyle]
-# Inspect model checkpoint
+\begin{lstlisting}[style=bashstyle,basicstyle=\ttfamily\tiny]
 python -m mmml.cli.inspect_checkpoint \
-    checkpoints/glycol_run1/params*.pkl \
+    checkpoints/glycol_run1/ \
     --show-structure \
     --count-parameters
 \end{lstlisting}
 
+\vspace{0.2cm}
 \textbf{Provides:}
 \begin{itemize}
     \item Total parameter count
@@ -449,21 +451,43 @@ python -m mmml.cli.inspect_checkpoint \
     \item Parameter statistics
 \end{itemize}
 
-\vspace{0.3cm}
-\textbf{Example output:}
-\begin{center}
+\column{0.52\textwidth}
+\textbf{Parameter Breakdown:}
+
+\small
 \begin{tabular}{lr}
 \toprule
-Component & Parameters \\
+\textbf{Component} & \textbf{Parameters} \\
 \midrule
-Embedding & 3,584 \\
-Interaction blocks & 49,152 \\
-Output layers & 8,192 \\
+\textbf{Embedding} & 3,584 \\
+\quad Atomic embeddings & 2,560 \\
+\quad Edge embeddings & 1,024 \\
+\midrule
+\textbf{Interaction Blocks} & 49,152 \\
+\quad MessagePass 0 & 12,288 \\
+\quad MessagePass 1 & 12,288 \\
+\quad MessagePass 2 & 12,288 \\
+\quad Residual MLPs & 12,288 \\
+\midrule
+\textbf{Output Layers} & 8,192 \\
+\quad Energy head & 4,096 \\
+\quad Forces head & 2,048 \\
+\quad Dipole head & 2,048 \\
 \midrule
 \textbf{Total} & \textbf{60,928} \\
 \bottomrule
 \end{tabular}
-\end{center}
+
+\vspace{0.2cm}
+\small
+\textbf{Configuration:}
+\begin{itemize}
+    \item Features: 128
+    \item Iterations: 3
+    \item Cutoff: 10.0 Å
+    \item Max atoms: 60
+\end{itemize}
+\end{columns}
 \end{frame}
 
 \begin{frame}[fragile]{Model Evaluation}
@@ -759,6 +783,24 @@ python -m mmml.cli.dynamics \
 \textbf{Visualization:} Export to ASE trajectory for viewing
 \end{frame}
 
+\begin{frame}{CO2: Combined IR \& Raman Spectrum}
+\begin{center}
+\includegraphics[width=0.95\textwidth,height=0.82\textheight,keepaspectratio]{figures_keep/combined_spectrum.png}
+\end{center}
+
+\vspace{-0.3cm}
+\textbf{Computed spectra:} IR absorption + Raman scattering from ML potential
+\end{frame}
+
+\begin{frame}{CO2: Multiwavelength Raman Spectroscopy}
+\begin{center}
+\includegraphics[width=0.95\textwidth,height=0.82\textheight,keepaspectratio]{figures_keep/raman_multiwavelength.png}
+\end{center}
+
+\vspace{-0.3cm}
+\textbf{Wavelength dependence:} 532nm, 633nm, 785nm excitation sources
+\end{frame}
+
 % ============================================================================
 \section{Complete Workflows}
 % ============================================================================
@@ -809,7 +851,7 @@ python -m mmml.cli.dynamics \
 \column{0.5\textwidth}
 \begin{block}{After Cleaning}
 \begin{itemize}
-    \item 5,782 structures (\faCheck)
+    \item 5,782 structures
     \item Clean energy range
     \item All forces valid
     \item Auto-unpads to 10 atoms
@@ -831,6 +873,59 @@ Memory usage & 1.0$\times$ & \textbf{6.0$\times$ less} \\
 \bottomrule
 \end{tabular}
 \end{center}
+\end{frame}
+
+\begin{frame}{Glycol Training Results}
+\begin{columns}
+\column{0.65\textwidth}
+\includegraphics[width=\textwidth,height=0.85\textheight,keepaspectratio]{figures_keep/glycol_training_metrics.png}
+
+\column{0.35\textwidth}
+\small
+\begin{tabular}{lr}
+\toprule
+\textbf{Metric} & \textbf{Value} \\
+\midrule
+Epochs & 99 \\
+Checkpoints & 53 \\
+\midrule
+Energy MAE & 4.55 \\
+\quad (kcal/mol) & \\
+Forces MAE & 1.08 \\
+\quad (kcal/mol/Å) & \\
+\midrule
+Convergence & 100\% \\
+Best epoch & 99 \\
+\bottomrule
+\end{tabular}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Glycol Training Comparison}
+\begin{columns}
+\column{0.65\textwidth}
+\includegraphics[width=\textwidth,height=0.85\textheight,keepaspectratio]{figures_keep/glycol_runs_comparison.png}
+
+\column{0.35\textwidth}
+\small
+\begin{tabular}{lcc}
+\toprule
+\textbf{Metric} & \textbf{Run 1} & \textbf{Run 2} \\
+\midrule
+Epochs & 99 & 83 \\
+Checkpoints & 53 & 29 \\
+\midrule
+Valid Loss & 1.110 & \textbf{1.031} \\
+Energy MAE & 4.55 & \textbf{4.43} \\
+\quad (kcal/mol) & & \\
+Forces MAE & 1.08 & \textbf{0.86} \\
+\quad (kcal/mol/Å) & & \\
+\midrule
+\textbf{Winner} & & \textbf{Run 2} \\
+\textbf{Improvement} & & \textbf{20\%} \\
+\bottomrule
+\end{tabular}
+\end{columns}
 \end{frame}
 
 \begin{frame}[fragile]{CO2 Example: ESP Prediction}
@@ -859,6 +954,51 @@ python -m mmml.cli.train_joint \
     \item Electrostatic properties
     \item Charge transfer analysis
 \end{itemize}
+\end{frame}
+
+\begin{frame}{CO2: ESP Visualization}
+\begin{center}
+\includegraphics[width=0.95\textwidth,height=0.85\textheight,keepaspectratio]{figures_keep/esp_spheres_co2.png}
+\end{center}
+
+\vspace{-0.3cm}
+\textbf{Electrostatic potential on molecular surface} - High-resolution 3D rendering
+\end{frame}
+
+\begin{frame}{CO2: Molecular Structure \& Charges}
+\begin{center}
+\includegraphics[width=0.95\textwidth,height=0.85\textheight,keepaspectratio]{figures_keep/view_1_45x_30y_0z_molecule.png}
+\end{center}
+
+\vspace{-0.3cm}
+\textbf{3D visualization:} O=C=O linear geometry with distributed multipoles
+\end{frame}
+
+\begin{frame}{CO2: Distributed Charges - 2D Projections}
+\begin{center}
+\includegraphics[width=0.95\textwidth,height=0.85\textheight,keepaspectratio]{figures_keep/charges_2d_projections.png}
+\end{center}
+
+\vspace{-0.3cm}
+\textbf{Multi-view analysis:} XY, XZ, YZ projections reveal spatial charge arrangement
+\end{frame}
+
+\begin{frame}{CO2: Charge Evolution During Vibration}
+\begin{center}
+\includegraphics[width=0.95\textwidth,height=0.85\textheight,keepaspectratio]{figures_keep/charge_evolution.png}
+\end{center}
+
+\vspace{-0.3cm}
+\textbf{Dynamic charges:} Redistribution during asymmetric stretch and bend modes
+\end{frame}
+
+\begin{frame}{CO2: 3D Charge Dynamics}
+\begin{center}
+\includegraphics[width=0.95\textwidth,height=0.85\textheight,keepaspectratio]{figures_keep/charges_3d_evolution.png}
+\end{center}
+
+\vspace{-0.3cm}
+\textbf{Full 3D evolution:} Charge positions and magnitudes during vibration
 \end{frame}
 
 \begin{frame}[fragile]{Acetone Example: Periodic Liquid Simulation}
@@ -1022,63 +1162,86 @@ python -m mmml.cli.run_sim \
 
 \begin{frame}{Test Set Performance}
 \begin{center}
-\includegraphics[width=0.85\textwidth]{figures/model_comparison_bars.png}
+\includegraphics[width=0.95\textwidth,height=0.82\textheight,keepaspectratio]{figures/model_comparison_bars.png}
 \end{center}
 
+\vspace{-0.3cm}
 \textbf{Finding:} NonEquivariant has 18\% better ESP accuracy on test set
 \end{frame}
 
 \begin{frame}{Accuracy vs Model Complexity}
 \begin{center}
-\includegraphics[width=0.85\textwidth]{figures/accuracy_vs_params.png}
+\includegraphics[width=0.95\textwidth,height=0.82\textheight,keepaspectratio]{figures/accuracy_vs_params.png}
 \end{center}
 
+\vspace{-0.3cm}
 \textbf{Finding:} NonEq achieves better ESP with 2.7$\times$ fewer parameters
 \end{frame}
 
 \begin{frame}{Scaling with Distributed Charges}
 \begin{center}
-\includegraphics[width=0.75\textwidth]{figures/ndcm_scaling.png}
+\includegraphics[width=0.95\textwidth,height=0.75\textheight,keepaspectratio]{figures/ndcm_scaling.png}
 \end{center}
 
-\textbf{Finding:} Both improve with n\_dcm, optimal at 5-6 charges per atom
+\vspace{-0.2cm}
+\textbf{Optimal configuration:} n\_dcm = 5-6 charges per atom (diminishing returns after)
 \end{frame}
 
 \begin{frame}{The Critical Test: Equivariance}
-\begin{center}
-\includegraphics[width=0.85\textwidth]{figures/equivariance_test.png}
-\end{center}
+\begin{columns}
+\column{0.60\textwidth}
+\includegraphics[width=\textwidth,height=0.82\textheight,keepaspectratio]{figures/equivariance_test.png}
+
+\column{0.40\textwidth}
+\begin{alertblock}{Critical Finding}
+\textbf{DCMNet:} \\
+$\sim$10$^{-6}$ rotation error\\
+(machine precision!)
 
 \vspace{0.3cm}
 
-\begin{alertblock}{Critical Finding}
-\textbf{DCMNet:} $\sim$10$^{-6}$ rotation error (machine precision!)\\
-\textbf{NonEq:} $\sim$10$^{-3}$ rotation error (\textbf{1000$\times$ worse!})
+\textbf{NonEq:} \\
+$\sim$10$^{-3}$ rotation error\\
+(\textbf{1000$\times$ worse!})
 \end{alertblock}
 
+\vspace{0.3cm}
+
+\small
+\begin{tabular}{lc}
+\toprule
+\textbf{Ratio} & \textbf{Value} \\
+\midrule
+Dipole error & 670$\times$ \\
+ESP error & 230$\times$ \\
+\midrule
+\textbf{Winner} & \textbf{DCMNet} \\
+\bottomrule
+\end{tabular}
+\end{columns}
+
+\vspace{0.2cm}
 \textbf{Conclusion:} NonEq overfit to training orientations!
 \end{frame}
 
 \begin{frame}{Computational Efficiency}
 \begin{center}
-\includegraphics[width=0.9\textwidth]{figures/computational_efficiency.png}
+\includegraphics[width=0.95\textwidth,height=0.75\textheight,keepaspectratio]{figures/computational_efficiency.png}
 \end{center}
 
-\textbf{Trade-offs:}
-\begin{itemize}
-    \item NonEq: 2.2$\times$ faster training, 1.9$\times$ faster inference
-    \item DCMNet: 54\% more parameter-efficient, perfect equivariance
-\end{itemize}
+\vspace{-0.2cm}
+\small
+\textbf{Trade-offs:} NonEq 2.2$\times$ faster training, 1.9$\times$ faster inference; DCMNet 54\% more parameter-efficient
 \end{frame}
 
 \begin{frame}{Pareto Front: Accuracy vs Cost}
 \begin{center}
-\includegraphics[width=0.85\textwidth]{figures/pareto_front.png}
+\includegraphics[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/pareto_front.png}
 \end{center}
 
-\textbf{Left plot:} ESP accuracy vs parameters - NonEq dominates\\
-\textbf{Right plot:} Energy accuracy vs parameters - Tied\\
-\textbf{But:} Equivariance test changes everything!
+\vspace{-0.3cm}
+\small
+\textbf{ESP:} NonEq dominates (lower-left) | \textbf{Energy:} Tied | \textbf{BUT:} Equivariance test changes everything!
 \end{frame}
 
 \begin{frame}{Comparison Summary}
@@ -1107,6 +1270,43 @@ python -m mmml.cli.run_sim \
 \begin{block}{Recommendation}
 \textbf{Use DCMNet for production.} The equivariance test reveals that NonEq's better test accuracy is misleading - it only works for orientations similar to training data. DCMNet's guaranteed rotational invariance makes it the robust choice.
 \end{block}
+\end{frame}
+
+\begin{frame}{Performance Comparison: Detailed Metrics}
+\begin{center}
+\includegraphics[width=0.95\textwidth,height=0.85\textheight,keepaspectratio]{figures_keep/performance_comparison.png}
+\end{center}
+
+\vspace{-0.3cm}
+\small
+\textbf{Key finding:} NonEq wins on test set, DCMNet wins on equivariance
+\end{frame}
+
+\begin{frame}{Efficiency Comparison: Speed vs Accuracy}
+\begin{columns}
+\column{0.60\textwidth}
+\includegraphics[width=\textwidth,height=0.85\textheight,keepaspectratio]{figures_keep/efficiency_comparison.png}
+
+\column{0.40\textwidth}
+\small
+\begin{tabular}{lcc}
+\toprule
+& \textbf{DCM} & \textbf{NonEq} \\
+\midrule
+Train (s) & 216 & \textbf{100} \\
+Infer (s) & 1.43 & \textbf{0.76} \\
+Params (k) & 323 & \textbf{121} \\
+\midrule
+ESP RMSE & 0.0152 & \textbf{0.0124} \\
+\midrule
+Rotation & \multicolumn{2}{c}{\textbf{Critical}} \\
+Error & \textbf{10$^{-6}$} & 10$^{-3}$ \\
+\midrule
+\textbf{Winner} & \multicolumn{2}{c}{\textbf{DCMNet}} \\
+& \multicolumn{2}{c}{(Equivariance)} \\
+\bottomrule
+\end{tabular}
+\end{columns}
 \end{frame}
 
 \begin{frame}{When to Use Each Architecture}
