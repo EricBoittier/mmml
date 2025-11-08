@@ -1483,6 +1483,208 @@ python -m mmml.cli.make_training \
 \end{center}
 \end{frame}
 
+% ============================================================================
+\section{Training Progression}
+% ============================================================================
+
+\begin{frame}{Validation Metrics Over Training}
+\textbf{Watch the model improve over time (chronological order)}
+
+\begin{center}
+\includegraphics<1>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/validation_plots_epoch10.png}
+\includegraphics<2>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/validation_plots_epoch30.png}
+\includegraphics<3>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/validation_plots_epoch50.png}
+\includegraphics<4>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/validation_plots_epoch70.png}
+\includegraphics<5>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/validation_plots_epoch90.png}
+\includegraphics<6>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/validation_plots_epoch110.png}
+\includegraphics<7>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/validation_plots_epoch130.png}
+\includegraphics<8>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/validation_plots_epoch150.png}
+\includegraphics<9>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/validation_plots_epoch170.png}
+\includegraphics<10>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/validation_plots_epoch190.png}
+\end{center}
+
+\vspace{-0.2cm}
+\small
+\only<1>{\textbf{Early training:} Initial learning}
+\only<2>{\textbf{Progress:} Loss decreasing}
+\only<3>{\textbf{Progress:} Patterns emerging}
+\only<4>{\textbf{Mid-training:} Good accuracy}
+\only<5>{\textbf{Progress:} Refinement}
+\only<6>{\textbf{Progress:} Convergence approaching}
+\only<7>{\textbf{Late training:} Fine-tuning}
+\only<8>{\textbf{Progress:} Near optimal}
+\only<9>{\textbf{Progress:} Final improvements}
+\only<10>{\textbf{Final:} Converged model!}
+\end{frame}
+
+\begin{frame}{ESP Analysis Over Training}
+\textbf{Comprehensive ESP prediction quality (chronological)}
+
+\begin{center}
+\includegraphics<1>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_analysis_comprehensive_epoch10.png}
+\includegraphics<2>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_analysis_comprehensive_epoch30.png}
+\includegraphics<3>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_analysis_comprehensive_epoch50.png}
+\includegraphics<4>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_analysis_comprehensive_epoch70.png}
+\includegraphics<5>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_analysis_comprehensive_epoch90.png}
+\includegraphics<6>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_analysis_comprehensive_epoch110.png}
+\includegraphics<7>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_analysis_comprehensive_epoch130.png}
+\includegraphics<8>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_analysis_comprehensive_epoch150.png}
+\includegraphics<9>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_analysis_comprehensive_epoch170.png}
+\includegraphics<10>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_analysis_comprehensive_epoch190.png}
+\end{center}
+
+\vspace{-0.2cm}
+\small
+\only<1-3>{\textbf{Early:} Learning ESP patterns}
+\only<4-6>{\textbf{Mid:} Accuracy improving}
+\only<7-9>{\textbf{Late:} Fine details emerging}
+\only<10>{\textbf{Final:} High-quality ESP predictions!}
+\end{frame}
+
+\begin{frame}{ESP Prediction Example Over Training}
+\textbf{Example structure: ESP quality evolution (chronological)}
+
+\begin{center}
+\includegraphics<1>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_example_0_epoch10.png}
+\includegraphics<2>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_example_0_epoch30.png}
+\includegraphics<3>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_example_0_epoch50.png}
+\includegraphics<4>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_example_0_epoch70.png}
+\includegraphics<5>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_example_0_epoch90.png}
+\includegraphics<6>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_example_0_epoch110.png}
+\includegraphics<7>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_example_0_epoch130.png}
+\includegraphics<8>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_example_0_epoch150.png}
+\includegraphics<9>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_example_0_epoch170.png}
+\includegraphics<10>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_example_0_epoch190.png}
+\end{center}
+
+\vspace{-0.2cm}
+\small
+\only<1-3>{\textbf{Watch:} Scatter plot tightening, errors shrinking}
+\only<4-6>{\textbf{Watch:} Better correlation, lower MAE}
+\only<7-9>{\textbf{Watch:} Near-perfect predictions}
+\only<10>{\textbf{Final:} Excellent agreement with DFT!}
+\end{frame}
+
+\begin{frame}{ESP Prediction Example 1 Over Training}
+\textbf{Second example structure: ESP quality evolution (chronological)}
+
+\begin{center}
+\includegraphics<1>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_example_1_epoch10.png}
+\includegraphics<2>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_example_1_epoch30.png}
+\includegraphics<3>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_example_1_epoch50.png}
+\includegraphics<4>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_example_1_epoch70.png}
+\includegraphics<5>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_example_1_epoch90.png}
+\includegraphics<6>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_example_1_epoch110.png}
+\includegraphics<7>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_example_1_epoch130.png}
+\includegraphics<8>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_example_1_epoch150.png}
+\includegraphics<9>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_example_1_epoch170.png}
+\includegraphics<10>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_example_1_epoch190.png}
+\end{center}
+
+\vspace{-0.2cm}
+\small
+\only<1-3>{\textbf{Watch:} Second structure learning ESP}
+\only<4-6>{\textbf{Watch:} Correlation improving}
+\only<7-9>{\textbf{Watch:} Errors decreasing}
+\only<10>{\textbf{Final:} High-quality predictions!}
+\end{frame}
+
+\begin{frame}{ESP 3D Visualization Over Training}
+\textbf{3D electrostatic potential surfaces (chronological)}
+
+\begin{center}
+\includegraphics<1>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_example_0_3d_epoch10.png}
+\includegraphics<2>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_example_0_3d_epoch30.png}
+\includegraphics<3>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_example_0_3d_epoch50.png}
+\includegraphics<4>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_example_0_3d_epoch70.png}
+\includegraphics<5>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_example_0_3d_epoch90.png}
+\includegraphics<6>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_example_0_3d_epoch110.png}
+\includegraphics<7>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_example_0_3d_epoch130.png}
+\includegraphics<8>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_example_0_3d_epoch150.png}
+\includegraphics<9>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_example_0_3d_epoch170.png}
+\includegraphics<10>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_example_0_3d_epoch190.png}
+\end{center}
+
+\vspace{-0.2cm}
+\small
+\only<1-3>{\textbf{Watch:} 3D surfaces becoming smoother}
+\only<4-6>{\textbf{Watch:} Potential contours refining}
+\only<7-9>{\textbf{Watch:} High-resolution details emerging}
+\only<10>{\textbf{Final:} Realistic ESP surfaces!}
+\end{frame}
+
+\begin{frame}{ESP Error Scales Over Training}
+\textbf{Error magnitude visualization (chronological)}
+
+\begin{center}
+\includegraphics<1>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_example_0_error_scales_epoch10.png}
+\includegraphics<2>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_example_0_error_scales_epoch30.png}
+\includegraphics<3>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_example_0_error_scales_epoch50.png}
+\includegraphics<4>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_example_0_error_scales_epoch70.png}
+\includegraphics<5>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_example_0_error_scales_epoch90.png}
+\includegraphics<6>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_example_0_error_scales_epoch110.png}
+\includegraphics<7>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_example_0_error_scales_epoch130.png}
+\includegraphics<8>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_example_0_error_scales_epoch150.png}
+\includegraphics<9>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_example_0_error_scales_epoch170.png}
+\includegraphics<10>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_example_0_error_scales_epoch190.png}
+\end{center}
+
+\vspace{-0.2cm}
+\small
+\only<1-3>{\textbf{Watch:} Large errors (red) shrinking}
+\only<4-6>{\textbf{Watch:} Error hotspots disappearing}
+\only<7-9>{\textbf{Watch:} Uniform low errors}
+\only<10>{\textbf{Final:} Minimal error across surface!}
+\end{frame}
+
+\begin{frame}{ESP Radial Dependence Over Training}
+\textbf{ESP vs distance from molecular center (chronological)}
+
+\begin{center}
+\includegraphics<1>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_radial_0_epoch10.png}
+\includegraphics<2>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_radial_0_epoch30.png}
+\includegraphics<3>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_radial_0_epoch50.png}
+\includegraphics<4>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_radial_0_epoch70.png}
+\includegraphics<5>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_radial_0_epoch90.png}
+\includegraphics<6>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_radial_0_epoch110.png}
+\includegraphics<7>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_radial_0_epoch130.png}
+\includegraphics<8>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_radial_0_epoch150.png}
+\includegraphics<9>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_radial_0_epoch170.png}
+\includegraphics<10>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/esp_radial_0_epoch190.png}
+\end{center}
+
+\vspace{-0.2cm}
+\small
+\only<1-3>{\textbf{Watch:} Radial profiles converging}
+\only<4-6>{\textbf{Watch:} Long-range behavior improving}
+\only<7-9>{\textbf{Watch:} Near-field accuracy increasing}
+\only<10>{\textbf{Final:} Accurate radial ESP decay!}
+\end{frame}
+
+\begin{frame}{Charge Distribution Over Training}
+\textbf{Distributed charges learning (chronological)}
+
+\begin{center}
+\includegraphics<1>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/charges_example_0_epoch10.png}
+\includegraphics<2>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/charges_example_0_epoch30.png}
+\includegraphics<3>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/charges_example_0_epoch50.png}
+\includegraphics<4>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/charges_example_0_epoch70.png}
+\includegraphics<5>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/charges_example_0_epoch90.png}
+\includegraphics<6>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/charges_example_0_epoch110.png}
+\includegraphics<7>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/charges_example_0_epoch130.png}
+\includegraphics<8>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/charges_example_0_epoch150.png}
+\includegraphics<9>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/charges_example_0_epoch170.png}
+\includegraphics<10>[width=0.95\textwidth,height=0.78\textheight,keepaspectratio]{figures/plots/charges_example_0_epoch190.png}
+\end{center}
+
+\vspace{-0.2cm}
+\small
+\only<1-3>{\textbf{Watch:} Charge positions stabilizing}
+\only<4-6>{\textbf{Watch:} Physical charge distributions emerging}
+\only<7-9>{\textbf{Watch:} Refined multipole moments}
+\only<10>{\textbf{Final:} Accurate distributed multipoles!}
+\end{frame}
+
 \begin{frame}{Future Directions}
 \textbf{Upcoming features:}
 
