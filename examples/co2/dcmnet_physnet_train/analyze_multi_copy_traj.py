@@ -114,6 +114,12 @@ def main() -> None:
                 print(f"  Nose–Hoover invariant (last): {invariant}")
             if "multi_ensemble" in meta:
                 print(f"  Stored ensemble: {str(meta['multi_ensemble'])}")
+            if "energies" in meta:
+                energies = np.asarray(meta["energies"])
+                total_per_step = energies.sum(axis=1)
+                print(f"  Energies shape: {energies.shape} (steps, replicas)")
+                print(f"  Total energy per step: min={total_per_step.min():.6f}, "
+                      f"max={total_per_step.max():.6f} eV")
             meta.close()
             break
 
