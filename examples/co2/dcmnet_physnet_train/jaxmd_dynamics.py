@@ -181,7 +181,8 @@ def run_multi_copy_dynamics(model,
     )
 
     state = init_fn(key, positions_packed, masses_packed)
-    state = state._replace(momentum=state.momentum + velocities * masses_packed[:, None])
+    desired_momentum = velocities * masses_packed[:, None]
+    state = state.set(momentum=desired_momentum)
 
     traj = []
     for _ in range(steps):
