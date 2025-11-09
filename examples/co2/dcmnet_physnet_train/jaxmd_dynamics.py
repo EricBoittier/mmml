@@ -264,6 +264,20 @@ def run_multi_copy_dynamics(model,
             state = step_fn(state)
             traj.append(state.position.reshape(num_replicas, model_natoms, 3))
             completed_steps = step + 1
+            if not jnp.all(jnp.isfinite(state.position)):
+                print(f"\n⚠️  Non-finite position encountered at step {step + 1}. "
+                      "Aborting simulation loop.")
+                break
+            if not jnp.all(jnp.isfinite(state.momentum)):
+                print(f"\n⚠️  Non-finite momentum encountered at step {step + 1}. "
+                      "Aborting simulation loop.")
+                break
+            if (step + 1) % max(1, steps // 10) == 0 or not jnp.all(jnp.isfinite(state.position)):
+                pos_sample = np.asarray(state.position[:min(1, state.position.shape[0])])
+                mom_sample = np.asarray(state.momentum[:min(1, state.momentum.shape[0])])
+                print(f"Step {step + 1}/{steps}: "
+                      f"pos range [{pos_sample.min():.3e}, {pos_sample.max():.3e}] Å, "
+                      f"momentum range [{mom_sample.min():.3e}, {mom_sample.max():.3e}]")
     except KeyboardInterrupt:
         print("\n⚠️  Simulation interrupted by user (Ctrl+C). "
               "Saving partial trajectory...")
