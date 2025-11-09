@@ -51,7 +51,7 @@ import numpy as np
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data", type=str, default=None)
-    parser.add_argument("--ckpt_dir", type=Path)
+    parser.add_argument("--ckpt_dir", type=str)  # Will be converted to absolute Path later
 
     parser.add_argument("--tag", type=str, default="run")
     parser.add_argument("--model", type=str, default=None)
@@ -65,7 +65,8 @@ def parse_args():
     parser.add_argument("--objective", type=str, default="valid_loss")
     parser.add_argument("--restart", type=str, default=None)
     
-    parser.add_argument("--num_atoms", type=int, default=20)
+    parser.add_argument("--num_atoms", type=int, default=None,
+                        help="Number of atoms per structure (auto-detected if not specified)")
     parser.add_argument("--features", type=int, default=64)
     parser.add_argument("--max_degree", type=int, default=0)
     parser.add_argument("--num_basis_functions", type=int, default=32)
@@ -116,7 +117,94 @@ def main_loop(args):
     files = [args.data]
     train_size = args.n_train
     valid_size = args.n_valid
-    natoms = args.num_atoms
+    
+    # Convert ckpt_dir to absolute path (required by Orbax)
+    if args.ckpt_dir is not None:
+        ckpt_dir = Path(args.ckpt_dir).resolve()
+        print(f"Checkpoint directory (absolute): {ckpt_dir}")
+    else:
+        ckpt_dir = None
+    
+    # Auto-detect num_atoms from dataset if not provided
+    # AND automatically remove padding if present
+    if args.num_atoms is None:
+        print("Auto-detecting number of atoms from dataset...")
+        data = np.load(args.data)
+        
+        # Check actual molecule size from N field
+        if 'N' in data:
+            max_n = int(np.max(data['N']))
+            print(f"  ✅ Actual molecule size: {max_n} atoms (from max(N))")
+            
+            # Check if data is padded
+            if 'R' in data and len(data['R'].shape) >= 2:
+                padded_atoms = int(data['R'].shape[1])
+                if padded_atoms > max_n:
+                    print(f"  ⚠️  Data is PADDED: {padded_atoms} atoms in array (padding: {padded_atoms - max_n})")
+                    print(f"  🔧 Auto-removing padding to train efficiently...")
+                    
+                    # Remove padding from dataset
+                    data_unpadded = {}
+                    for key, value in data.items():
+                        if key == 'R' and value.ndim == 3:
+                            data_unpadded[key] = value[:, :max_n, :]
+                        elif key == 'Z' and value.ndim == 2:
+                            data_unpadded[key] = value[:, :max_n]
+                        elif key == 'F' and value.ndim == 3:
+                            data_unpadded[key] = value[:, :max_n, :]
+                        else:
+                            data_unpadded[key] = value
+                    
+                    # Save unpadded version
+                    unpadded_path = Path(args.data).parent / f"{Path(args.data).stem}_unpadded.npz"
+                    np.savez_compressed(unpadded_path, **data_unpadded)
+                    print(f"  ✅ Saved unpadded data to: {unpadded_path}")
+                    print(f"  📝 Using unpadded version for training")
+                    
+                    # Update args.data to point to unpadded file
+                    args.data = str(unpadded_path)
+                    files = [args.data]
+                    natoms = max_n
+                else:
+                    natoms = padded_atoms
+                    print(f"  ✅ No padding detected (R.shape[1] = {padded_atoms} = max(N))")
+            else:
+                natoms = max_n
+        elif 'R' in data and len(data['R'].shape) >= 2:
+            natoms = int(data['R'].shape[1])
+            print(f"  ✅ Detected num_atoms = {natoms} from R.shape")
+        else:
+            raise ValueError("Could not auto-detect num_atoms from dataset. Please specify --num_atoms explicitly.")
+    else:
+        natoms = args.num_atoms
+        print(f"Using specified num_atoms = {natoms}")
+        
+        # Still check if padding should be removed
+        data = np.load(args.data)
+        if 'N' in data:
+            max_n = int(np.max(data['N']))
+            if 'R' in data and data['R'].shape[1] > max_n and natoms == max_n:
+                print(f"  🔧 Specified num_atoms ({natoms}) < padded size ({data['R'].shape[1]})")
+                print(f"  🔧 Auto-removing padding...")
+                
+                # Remove padding
+                data_unpadded = {}
+                for key, value in data.items():
+                    if key == 'R' and value.ndim == 3:
+                        data_unpadded[key] = value[:, :natoms, :]
+                    elif key == 'Z' and value.ndim == 2:
+                        data_unpadded[key] = value[:, :natoms]
+                    elif key == 'F' and value.ndim == 3:
+                        data_unpadded[key] = value[:, :natoms, :]
+                    else:
+                        data_unpadded[key] = value
+                
+                unpadded_path = Path(args.data).parent / f"{Path(args.data).stem}_unpadded.npz"
+                np.savez_compressed(unpadded_path, **data_unpadded)
+                print(f"  ✅ Saved and using: {unpadded_path}")
+                args.data = str(unpadded_path)
+                files = [args.data]
+    
     train_data, valid_data = prepare_datasets(data_key, train_size, valid_size, files, natoms=natoms)
     
     if args.model is not None:
@@ -150,7 +238,7 @@ def main_loop(args):
         valid_data, 
         learning_rate=args.learning_rate,
         batch_size=args.batch_size,
-        num_atoms=args.num_atoms,
+        num_atoms=natoms,
         energy_weight=args.energy_weight,
         restart=args.restart,
         conversion={'energy': 1, 'forces': 1},
@@ -161,7 +249,7 @@ def main_loop(args):
         transform=None,
         schedule_fn=None,
         objective=args.objective,
-        ckpt_dir=args.ckpt_dir,
+        ckpt_dir=ckpt_dir,  # Use absolute path
         log_tb=False,
         batch_method="default",
         batch_args_dict=None,
