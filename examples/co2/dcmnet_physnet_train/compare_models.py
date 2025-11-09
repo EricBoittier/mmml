@@ -166,6 +166,10 @@ def test_equivariance(
     rotation_errors_esp = []
     translation_errors_dipole = []
     translation_errors_esp = []
+    energy_errors = []
+    forces_errors = []
+    dipole_errors = []
+    esp_errors = []
     
     print(f"\n{'='*70}")
     print(f"Testing Equivariance on {len(test_indices)} samples")
@@ -177,6 +181,7 @@ def test_equivariance(
         Z = test_data['Z'][idx:idx+1]  # (1, natoms)
         N = test_data['N'][idx:idx+1]  # (1,)
         vdw_surface = test_data['vdw_surface'][idx:idx+1]  # (1, ngrid, 3)
+        n_atoms = int(N[0])
         
         # Original prediction
         output_orig = predict_single(model, params, R, Z, N, vdw_surface)
@@ -219,6 +224,28 @@ def test_equivariance(
         esp_trans = jnp.asarray(output_trans['esp'])
         translation_error_esp = jnp.mean(jnp.abs(esp_trans - esp_orig))
         translation_errors_esp.append(float(translation_error_esp))
+
+        # Compare against reference quantities
+        true_energy = jnp.asarray(test_data['E'][idx])
+        energy_error = jnp.abs(jnp.asarray(output_orig['energy']) - true_energy)
+        energy_errors.append(float(energy_error))
+
+        true_dipole = jnp.asarray(test_data['Dxyz'][idx])
+        dipole_mae = jnp.mean(jnp.abs(dipole_orig - true_dipole))
+        dipole_errors.append(float(dipole_mae))
+
+        true_forces = jnp.asarray(test_data['F'][idx])
+        if true_forces.ndim == 1:
+            true_forces = true_forces.reshape(-1, 3)
+        forces_pred = jnp.asarray(output_orig['forces'])
+        forces_mae = jnp.mean(
+            jnp.abs(forces_pred[:n_atoms] - true_forces[:n_atoms])
+        )
+        forces_errors.append(float(forces_mae))
+
+        true_esp = jnp.asarray(test_data['esp'][idx])
+        esp_mae = jnp.mean(jnp.abs(esp_orig - true_esp))
+        esp_errors.append(float(esp_mae))
     
     results = {
         'rotation_error_dipole': float(np.mean(rotation_errors_dipole)),
@@ -229,6 +256,14 @@ def test_equivariance(
         'rotation_error_esp_std': float(np.std(rotation_errors_esp)),
         'translation_error_dipole_std': float(np.std(translation_errors_dipole)),
         'translation_error_esp_std': float(np.std(translation_errors_esp)),
+        'energy_mae': float(np.mean(energy_errors)),
+        'forces_mae': float(np.mean(forces_errors)),
+        'dipole_mae': float(np.mean(dipole_errors)),
+        'esp_mae': float(np.mean(esp_errors)),
+        'energy_mae_std': float(np.std(energy_errors)),
+        'forces_mae_std': float(np.std(forces_errors)),
+        'dipole_mae_std': float(np.std(dipole_errors)),
+        'esp_mae_std': float(np.std(esp_errors)),
     }
     
     print(f"Rotation Equivariance:")
@@ -237,6 +272,11 @@ def test_equivariance(
     print(f"\nTranslation Invariance:")
     print(f"  Dipole error: {results['translation_error_dipole']:.6f} ± {results['translation_error_dipole_std']:.6f} e·Å")
     print(f"  ESP error:    {results['translation_error_esp']:.6f} ± {results['translation_error_esp_std']:.6f} Ha/e")
+    print(f"\nReference Property Errors:")
+    print(f"  Energy MAE: {results['energy_mae']:.6f} ± {results['energy_mae_std']:.6f} eV")
+    print(f"  Forces MAE: {results['forces_mae']:.6f} ± {results['forces_mae_std']:.6f} eV/Å")
+    print(f"  Dipole MAE: {results['dipole_mae']:.6f} ± {results['dipole_mae_std']:.6f} e·Å")
+    print(f"  ESP MAE:    {results['esp_mae']:.6f} ± {results['esp_mae_std']:.6f} Ha/e")
     
     return results
 
@@ -328,10 +368,13 @@ def predict_single(
         atom_mask,
     )
     
+    forces = output['forces'].reshape(batch_size, natoms, 3)
+
     return {
         'dipole': np.array(output['dipoles_dcmnet'][0]),
         'esp': np.array(esp_pred),
         'energy': np.array(output['energy'][0]),
+        'forces': np.array(forces[0]),
     }
 
 
