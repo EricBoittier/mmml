@@ -58,6 +58,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Analyze multi-replica trajectories (NumPy only).")
     parser.add_argument("trajectory", type=Path, help="NPZ file produced by jaxmd_dynamics.py")
     parser.add_argument("--replica", type=int, default=0, help="Replica index for bond-length reporting")
+    parser.add_argument("--metadata", type=Path, help="Optional metadata NPZ (atomic_numbers, temperature)")
+    parser.add_argument("--dipoles", type=Path, help="Optional NPZ with precomputed dipoles")
     parser.add_argument("--save-json", type=Path, help="Optional path to dump summary JSON")
     parser.add_argument("--save-csv", type=Path, help="Optional CSV path for bond-length time series")
     args = parser.parse_args()
@@ -93,6 +95,37 @@ def main() -> None:
             f"mean={series.mean():.6f} Å, std={series.std():.6f}, "
             f"min={series.min():.6f}, max={series.max():.6f}"
         )
+
+    metadata_candidates = []
+    if args.metadata:
+        metadata_candidates.append(args.metadata)
+    metadata_candidates.append(args.trajectory.with_name("multi_copy_metadata.npz"))
+    metadata_candidates.append(args.trajectory.parent / "multi_copy_metadata.npz")
+    for candidate in metadata_candidates:
+        candidate = Path(candidate)
+        if candidate.exists():
+            meta = np.load(candidate)
+            if "temperature" in meta:
+                print(f"  Stored temperature: {meta['temperature']}")
+            if "total_energy" in meta:
+                print(f"  Stored total energy: {meta['total_energy']}")
+            if "thermostat_invariant" in meta:
+                invariant = float(np.asarray(meta["thermostat_invariant"]).reshape(-1)[-1])
+                print(f"  Nose–Hoover invariant (last): {invariant}")
+            meta.close()
+            break
+
+    if args.dipoles and Path(args.dipoles).exists():
+        dip_npz = np.load(args.dipoles)
+        if "dipoles_dcmnet" in dip_npz:
+            dip = dip_npz["dipoles_dcmnet"]
+            magnitudes = np.linalg.norm(dip, axis=-1)
+            print(f"  DCMNet dipole magnitude: mean={magnitudes.mean():.6f}, max={magnitudes.max():.6f} e·Å")
+        if "dipoles_physnet" in dip_npz:
+            dip = dip_npz["dipoles_physnet"]
+            magnitudes = np.linalg.norm(dip, axis=-1)
+            print(f"  PhysNet dipole magnitude: mean={magnitudes.mean():.6f}, max={magnitudes.max():.6f} e·Å")
+        dip_npz.close()
 
     if args.save_json:
         serializable = {
