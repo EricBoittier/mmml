@@ -30,7 +30,7 @@ sys.path.insert(0, str(repo_root.resolve()))
 
 import jax
 import jax.numpy as jnp
-from scipy.spatial.transform import Rotation
+from e3x import so3
 
 # Import training script components
 from trainer import (
@@ -90,7 +90,12 @@ def apply_rotation(positions: np.ndarray, rotation_matrix: np.ndarray) -> np.nda
     np.ndarray
         Rotated positions
     """
-    return np.einsum('ij,snj->sni', rotation_matrix, positions)
+    positions_jax = jnp.asarray(positions)
+    rotation_jax = jnp.asarray(rotation_matrix, dtype=positions_jax.dtype)
+    rotated = jnp.einsum('ij,...j->...i', rotation_jax, positions_jax)
+    if isinstance(positions, np.ndarray):
+        return np.asarray(rotated)
+    return rotated
 
 
 def apply_translation(positions: np.ndarray, translation: np.ndarray) -> np.ndarray:
@@ -109,12 +114,17 @@ def apply_translation(positions: np.ndarray, translation: np.ndarray) -> np.ndar
     np.ndarray
         Translated positions
     """
-    return positions + translation[None, None, :]
+    positions_jax = jnp.asarray(positions)
+    translation_jax = jnp.asarray(translation, dtype=positions_jax.dtype)
+    translated = positions_jax + translation_jax
+    if isinstance(positions, np.ndarray):
+        return np.asarray(translated)
+    return translated
 
 
-def generate_random_rotation() -> np.ndarray:
-    """Generate a random 3D rotation matrix."""
-    return Rotation.random().as_matrix()
+def generate_random_rotation(key: jax.Array) -> jnp.ndarray:
+    """Generate a random 3D rotation matrix using e3x."""
+    return so3.random_rotation(key)
 
 
 def test_equivariance(
@@ -146,6 +156,7 @@ def test_equivariance(
         Equivariance error metrics
     """
     rng = np.random.RandomState(seed)
+    jax_key = jax.random.PRNGKey(seed)
     
     # Select test samples
     n_available = len(test_data['E'])
@@ -171,7 +182,8 @@ def test_equivariance(
         output_orig = predict_single(model, params, R, Z, N, vdw_surface)
         
         # Test rotation
-        rot_matrix = generate_random_rotation()
+        jax_key, rot_key, trans_key = jax.random.split(jax_key, 3)
+        rot_matrix = generate_random_rotation(rot_key)
         R_rot = apply_rotation(R, rot_matrix)
         vdw_rot = apply_rotation(vdw_surface, rot_matrix)
         
@@ -179,34 +191,34 @@ def test_equivariance(
         
         # For equivariant model: rotated output should equal rotation of original output
         # Dipole should rotate
-        dipole_orig = output_orig['dipole']
-        dipole_rot = output_rot['dipole']
-        dipole_expected = np.dot(rot_matrix, dipole_orig)
-        rotation_error_dipole = np.linalg.norm(dipole_rot - dipole_expected)
-        rotation_errors_dipole.append(rotation_error_dipole)
+        dipole_orig = jnp.asarray(output_orig['dipole'])
+        dipole_rot = jnp.asarray(output_rot['dipole'])
+        dipole_expected = jnp.einsum('ij,j->i', rot_matrix, dipole_orig)
+        rotation_error_dipole = jnp.linalg.norm(dipole_rot - dipole_expected)
+        rotation_errors_dipole.append(float(rotation_error_dipole))
         
         # ESP should be identical at rotated grid points
-        esp_orig = output_orig['esp']
-        esp_rot = output_rot['esp']
-        rotation_error_esp = np.mean(np.abs(esp_rot - esp_orig))
-        rotation_errors_esp.append(rotation_error_esp)
+        esp_orig = jnp.asarray(output_orig['esp'])
+        esp_rot = jnp.asarray(output_rot['esp'])
+        rotation_error_esp = jnp.mean(jnp.abs(esp_rot - esp_orig))
+        rotation_errors_esp.append(float(rotation_error_esp))
         
         # Test translation (both models should be translation invariant)
-        translation = rng.randn(3) * 5.0  # Random translation (5 Å scale)
+        translation = 5.0 * jax.random.normal(trans_key, (3,), dtype=rot_matrix.dtype)
         R_trans = apply_translation(R, translation)
         vdw_trans = apply_translation(vdw_surface, translation)
         
         output_trans = predict_single(model, params, R_trans, Z, N, vdw_trans)
         
         # Dipole should be identical (molecule-centered)
-        dipole_trans = output_trans['dipole']
-        translation_error_dipole = np.linalg.norm(dipole_trans - dipole_orig)
-        translation_errors_dipole.append(translation_error_dipole)
+        dipole_trans = jnp.asarray(output_trans['dipole'])
+        translation_error_dipole = jnp.linalg.norm(dipole_trans - dipole_orig)
+        translation_errors_dipole.append(float(translation_error_dipole))
         
         # ESP should be identical
-        esp_trans = output_trans['esp']
-        translation_error_esp = np.mean(np.abs(esp_trans - esp_orig))
-        translation_errors_esp.append(translation_error_esp)
+        esp_trans = jnp.asarray(output_trans['esp'])
+        translation_error_esp = jnp.mean(jnp.abs(esp_trans - esp_orig))
+        translation_errors_esp.append(float(translation_error_esp))
     
     results = {
         'rotation_error_dipole': float(np.mean(rotation_errors_dipole)),
