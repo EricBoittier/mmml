@@ -1,3 +1,169 @@
+# =============================================================================
+# Multi-copy JAX MD driver (batched replicas of a molecule)
+# =============================================================================
+
+
+def _build_single_graph_no_nn(positions_single: np.ndarray, cutoff: float, model_natoms: int):
+    """Dense neighbor graph for one molecule, padded to model_natoms."""
+    n_true = positions_single.shape[0]
+    dst_list, src_list = [], []
+    for i in range(n_true):
+        for j in range(n_true):
+            if i != j:
+                if np.linalg.norm(positions_single[i] - positions_single[j]) < cutoff:
+                    dst_list.append(i)
+                    src_list.append(j)
+    if not dst_list:
+        raise ValueError("No neighbor edges found; increase cutoff or check geometry.")
+
+    n_edges = len(dst_list)
+    dst = jnp.zeros((model_natoms,), dtype=jnp.int32).at[:n_edges].set(jnp.asarray(dst_list, dtype=jnp.int32))
+    src = jnp.zeros((model_natoms,), dtype=jnp.int32).at[:n_edges].set(jnp.asarray(src_list, dtype=jnp.int32))
+    edge_mask = jnp.zeros((model_natoms,), dtype=jnp.float32).at[:n_edges].set(1.0)
+    return dst, src, edge_mask, n_edges
+
+
+def _pack_replicas(positions_single: np.ndarray, atomic_numbers_single: np.ndarray, masses_single: np.ndarray,
+                   model_natoms: int, num_replicas: int, translation: float):
+    """Pad one molecule to model_natoms and tile num_replicas copies far apart."""
+    n_true = positions_single.shape[0]
+    natoms_total = num_replicas * model_natoms
+
+    positions_packed = jnp.zeros((natoms_total, 3), dtype=jnp.float32)
+    atomic_numbers_packed = jnp.zeros((natoms_total,), dtype=jnp.int32)
+    atom_mask = jnp.zeros((natoms_total,), dtype=jnp.float32)
+    masses_packed = jnp.zeros((natoms_total,), dtype=jnp.float32)
+    batch_segments = jnp.repeat(jnp.arange(num_replicas, dtype=jnp.int32), model_natoms)
+
+    positions_single = jnp.asarray(positions_single, dtype=jnp.float32)
+    atomic_numbers_single = jnp.asarray(atomic_numbers_single, dtype=jnp.int32)
+    masses_single = jnp.asarray(masses_single, dtype=jnp.float32)
+    masses_padded_single = jnp.pad(masses_single, (0, model_natoms - n_true), constant_values=0.0)
+
+    offsets = translation * jnp.arange(num_replicas, dtype=jnp.float32)[:, None] * jnp.array([1.0, 0.0, 0.0])
+
+    for k in range(num_replicas):
+        start = k * model_natoms
+        end = start + model_natoms
+
+        pos_block = jnp.zeros((model_natoms, 3), dtype=jnp.float32)
+        pos_block = pos_block.at[:n_true].set(positions_single + offsets[k])
+        positions_packed = positions_packed.at[start:end].set(pos_block)
+
+        z_block = jnp.zeros((model_natoms,), dtype=jnp.int32)
+        z_block = z_block.at[:n_true].set(atomic_numbers_single)
+        atomic_numbers_packed = atomic_numbers_packed.at[start:end].set(z_block)
+
+        mask_block = jnp.zeros((model_natoms,), dtype=jnp.float32).at[:n_true].set(1.0)
+        atom_mask = atom_mask.at[start:end].set(mask_block)
+
+        masses_packed = masses_packed.at[start:end].set(masses_padded_single)
+
+    return positions_packed, atomic_numbers_packed, atom_mask, masses_packed, batch_segments
+
+
+def _replicate_graph(dst_single, src_single, edge_mask_single, model_natoms: int, num_replicas: int, edges_per_single: int):
+    offsets = jnp.arange(num_replicas, dtype=jnp.int32) * model_natoms
+    dst = jnp.concatenate([dst_single[:edges_per_single] + off for off in offsets])
+    src = jnp.concatenate([src_single[:edges_per_single] + off for off in offsets])
+    edge_mask = jnp.tile(edge_mask_single[:edges_per_single], num_replicas)
+    return dst, src, edge_mask.astype(jnp.float32)
+
+
+def _initialize_velocities_multi(key, masses, atom_mask, model_natoms: int, num_replicas: int, temperature: float):
+    """Maxwell–Boltzmann velocities, zeroing padded atoms."""
+    kB = 8.617333262e-5
+    masses_eff = jnp.where(atom_mask > 0, masses, jnp.ones_like(masses))
+    sigma_1d = jnp.sqrt(kB * temperature / (masses_eff * 0.01036427))
+    sigma = sigma_1d[:, None] * jnp.ones((1, 3), dtype=sigma_1d.dtype)
+    velocities = jax.random.normal(key, shape=(masses.shape[0], 3)) * sigma
+    velocities = velocities * atom_mask[:, None]
+    velocities = velocities.reshape(num_replicas, model_natoms, 3)
+    velocities = velocities - jnp.sum(velocities, axis=1, keepdims=True) / jnp.maximum(
+        jnp.sum(atom_mask.reshape(num_replicas, model_natoms, 1), axis=1, keepdims=True), 1.0
+    return velocities.reshape(-1, 3)
+
+
+def _create_energy_fn_multi(model, params,
+                            atomic_numbers, atom_mask,
+                            dst_idx, src_idx, edge_mask,
+                            batch_segments, model_natoms: int, num_replicas: int):
+    natoms_total = atomic_numbers.shape[0]
+
+    @jax.jit
+    def energy_fn(positions, *_):
+        output = model.apply(
+            params,
+            atomic_numbers=atomic_numbers,
+            positions=positions,
+            dst_idx=dst_idx,
+            src_idx=src_idx,
+            batch_segments=batch_segments,
+            batch_size=num_replicas,
+            batch_mask=edge_mask,
+            atom_mask=atom_mask,
+        )
+        energies = output['energy'][:num_replicas]
+        forces = output['forces'][:natoms_total]
+        return jnp.sum(energies), forces
+
+    return energy_fn
+
+
+def run_multi_copy_dynamics(model,
+                            params,
+                            positions_single: np.ndarray,
+                            atomic_numbers_single: np.ndarray,
+                            masses_single: np.ndarray,
+                            num_replicas: int = 8,
+                            timestep_fs: float = 0.5,
+                            temperature: float = 300.0,
+                            cutoff: float = 10.0,
+                            steps: int = 10000,
+                            translation: float = 25.0,
+                            key_seed: int = 0):
+    """
+    Run an NVT Nose–Hoover simulation for several independent replicas simultaneously.
+    """
+    model_natoms = model.physnet_config['natoms']
+
+    positions_packed, Z_packed, atom_mask, masses_packed, batch_segments = _pack_replicas(
+        positions_single, atomic_numbers_single, masses_single,
+        model_natoms, num_replicas, translation
+    )
+
+    dst_single, src_single, edge_mask_single, edges_per_single = _build_single_graph_no_nn(
+        positions_single, cutoff, model_natoms
+    )
+    dst_idx, src_idx, edge_mask = _replicate_graph(
+        dst_single, src_single, edge_mask_single, model_natoms, num_replicas, edges_per_single
+    )
+
+    energy_fn = _create_energy_fn_multi(
+        model, params, Z_packed, atom_mask,
+        dst_idx, src_idx, edge_mask, batch_segments,
+        model_natoms, num_replicas,
+    )
+
+    displacement, shift = space.free()
+    init_fn, step_fn = simulate.nvt_nose_hoover(
+        energy_fn, shift, timestep_fs, 8.617333262e-5 * temperature
+    )
+
+    key = jax.random.PRNGKey(key_seed)
+    velocities = _initialize_velocities_multi(
+        key, masses_packed, atom_mask, model_natoms, num_replicas, temperature
+    )
+
+    state = init_fn(key, positions_packed, masses_packed, velocity=velocities)
+
+    traj = []
+    for _ in range(steps):
+        state = step_fn(state)
+        traj.append(state.position.reshape(num_replicas, model_natoms, 3))
+
+    traj = np.asarray(traj)[:, :, :positions_single.shape[0], :]
+    return traj, state
 #!/usr/bin/env python3
 """
 Ultra-Fast Molecular Dynamics with JAX MD
