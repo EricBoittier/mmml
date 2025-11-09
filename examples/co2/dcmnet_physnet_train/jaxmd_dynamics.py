@@ -185,13 +185,25 @@ def run_multi_copy_dynamics(model,
     state = state.set(momentum=desired_momentum)
 
     traj = []
-    for _ in range(steps):
-        state = step_fn(state)
-        traj.append(state.position.reshape(num_replicas, model_natoms, 3))
+    completed_steps = 0
+    try:
+        for step in range(steps):
+            state = step_fn(state)
+            traj.append(state.position.reshape(num_replicas, model_natoms, 3))
+            completed_steps = step + 1
+    except KeyboardInterrupt:
+        print("\n⚠️  Simulation interrupted by user (Ctrl+C). "
+              "Saving partial trajectory...")
 
-    traj = np.asarray(traj)[:, :, :positions_single.shape[0], :]
-    total_energy = energy_fn(state.position)
-    return traj, state, float(total_energy)
+    if traj:
+        traj = np.asarray(traj)[:, :, :positions_single.shape[0], :]
+    else:
+        traj = np.empty((0, num_replicas, positions_single.shape[0], 3))
+
+    if completed_steps < steps:
+        print(f"   Stored {completed_steps} / {steps} steps.")
+    total_energy = float(energy_fn(state.position))
+    return traj, state, total_energy
 #!/usr/bin/env python3
 """
 Ultra-Fast Molecular Dynamics with JAX MD
