@@ -1360,7 +1360,10 @@ def main():
     parser.add_argument('--seed', type=int, default=42,
                        help='Random seed')
     parser.add_argument('--multi-replicas', type=int, default=1,
-                        help='Run batched NVT Nose–Hoover with this many independent replicas (default: 1)')
+                        help='Run batched simulation with this many independent replicas (default: 1)')
+    parser.add_argument('--multi-ensemble', type=str, default='nvt',
+                        choices=['nvt', 'nve'],
+                        help='Ensemble for multi-replica mode (default: nvt)')
     parser.add_argument('--multi-translation', type=float, default=25.0,
                         help='Translation offset (Å) between replicas to avoid interactions')
     
@@ -1398,8 +1401,8 @@ def main():
     
     # Run MD
     if args.multi_replicas > 1:
-        print(f"\n3. Running batched multi-copy NVT Nose–Hoover simulation "
-              f"({args.multi_replicas} replicas)...")
+        print(f"\n3. Running batched multi-copy simulation "
+              f"({args.multi_replicas} replicas, {args.multi_ensemble.upper()} ensemble)...")
         args.output_dir.mkdir(parents=True, exist_ok=True)
         traj, state, total_energy, invariant = run_multi_copy_dynamics(
             model=model,
@@ -1414,6 +1417,7 @@ def main():
             steps=args.nsteps,
             translation=args.multi_translation,
             key_seed=args.seed,
+            ensemble=args.multi_ensemble,
         )
         traj_path = args.output_dir / f'multi_copy_traj_{args.multi_replicas}x.npz'
         np.savez(traj_path, positions=traj)
@@ -1426,6 +1430,7 @@ def main():
             'timestep_fs': args.timestep,
             'temperature': args.temperature,
             'translation': args.multi_translation,
+            'multi_ensemble': args.multi_ensemble,
             'total_energy': total_energy,
             'thermostat_invariant': invariant,
         }
@@ -1433,7 +1438,8 @@ def main():
         print(f"✅ Saved stacked trajectory: {traj_path}")
         print(f"   Shape: {traj.shape} -> (steps, replicas, atoms, 3)")
         print(f"   Final total energy: {total_energy:.6f} eV")
-        print(f"   Nose–Hoover invariant: {invariant}")
+        if not np.isnan(invariant):
+            print(f"   Nose–Hoover invariant: {invariant}")
         results = None
     else:
         print(f"\n3. Running JAX MD simulation...")
