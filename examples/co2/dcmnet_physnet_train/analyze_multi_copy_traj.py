@@ -76,7 +76,7 @@ def main() -> None:
     rms_replica = summary["rms_per_replica"]
     print(f"  RMS displacement per replica (Å):")
     for idx in range(rms_replica.shape[0]):
-        scalar = float(np.asarray(rms_replica[idx]).squeeze())
+        scalar = float(np.asarray(rms_replica[idx]).reshape(-1)[0])
         print(f"    replica {idx:>3}: {scalar:.6e}")
     rms_step = summary["rms_per_step"]
     rms_step_min = float(np.asarray(rms_step.min()).squeeze())
