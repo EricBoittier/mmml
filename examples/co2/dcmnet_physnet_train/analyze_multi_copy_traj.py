@@ -112,6 +112,8 @@ def main() -> None:
             if "thermostat_invariant" in meta:
                 invariant = float(np.asarray(meta["thermostat_invariant"]).reshape(-1)[-1])
                 print(f"  Nose–Hoover invariant (last): {invariant}")
+            if "multi_ensemble" in meta:
+                print(f"  Stored ensemble: {str(meta['multi_ensemble'])}")
             meta.close()
             break
 
