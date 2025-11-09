@@ -392,6 +392,7 @@ def predict_single(
     return {
         'dipole': np.array(output['dipoles_dcmnet'][0]),
         'esp': np.array(esp_pred),
+        'esp_points': np.array(vdw_surface[0]),
         'energy': np.array(output['energy'][0]),
         'forces': np.array(forces[0]),
     }
