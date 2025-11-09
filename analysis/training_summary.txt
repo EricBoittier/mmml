@@ -1,0 +1,51 @@
+================================================================================
+GLYCOL PRODUCTION TRAINING ANALYSIS
+================================================================================
+
+Checkpoint directory: glycol_production-f535e3cf-4041-4a56-bab1-e3e81cd35ab3
+Location: examples/glycol/checkpoints/glycol_production/glycol_production-f535e3cf-4041-4a56-bab1-e3e81cd35ab3
+
+TRAINING SUMMARY
+--------------------------------------------------------------------------------
+Total epochs saved: 53
+Epoch range: 1 to 99
+Training completed: 99 epochs
+
+CHECKPOINT STATISTICS
+--------------------------------------------------------------------------------
+Checkpoint sizes:
+  Mean: 3.69 MB
+  Std:  0.02 MB
+  Min:  3.64 MB (epoch 89)
+  Max:  3.75 MB (epoch 2)
+Total storage: 195.34 MB
+
+SAVE FREQUENCY
+--------------------------------------------------------------------------------
+Epochs between saves:
+  Mean: 1.9
+  Median: 1.0
+  Min: -80 (most frequent)
+  Max: 90 (largest gap)
+
+Consecutive epoch saves: 26 times
+Gaps > median (1): 18
+
+TRAINING PATTERN ANALYSIS
+--------------------------------------------------------------------------------
+Checkpoint frequency suggests:
+  Early training (first 25%): 1.5 epochs/save (frequent)
+  Late training (last 75%):  2.0 epochs/save
+  → More frequent saves early (exploration phase)
+
+RECOMMENDED ACTIONS
+--------------------------------------------------------------------------------
+To plot actual loss values, use:
+  python -m mmml.cli.plot_training examples/glycol/checkpoints
+
+To evaluate best checkpoint:
+  python -m mmml.cli.evaluate_model \
+      examples/glycol/checkpoints/glycol_production/glycol_production-f535e3cf-4041-4a56-bab1-e3e81cd35ab3/epoch-99 \
+      --test-data splits/data_test.npz
+
+================================================================================
