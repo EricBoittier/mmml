@@ -22,11 +22,14 @@ Available commands:
   train       Train DCMNet or PhysNetJAX models (coming soon)
   evaluate    Evaluate trained models (coming soon)
   validate    Validate NPZ files against schema
+  fix-and-split  Fix units and create train/valid/test splits from NPZ data
 
 Examples:
   mmml xml2npz input.xml -o output.npz
   mmml xml2npz inputs/*.xml -o dataset.npz --validate
   mmml validate dataset.npz
+  mmml fix-and-split --efd data.npz --output-dir ./splits
+  mmml fix-and-split --efd data.npz --grid grids.npz --output-dir ./splits
   
 For help on a specific command:
   mmml <command> --help
@@ -35,7 +38,7 @@ For help on a specific command:
     
     parser.add_argument(
         'command',
-        choices=['xml2npz', 'validate', 'train', 'evaluate', 'downstream'],
+        choices=['xml2npz', 'validate', 'train', 'evaluate', 'downstream', 'fix-and-split'],
         help='Command to run'
     )
     parser.add_argument(
@@ -84,6 +87,11 @@ For help on a specific command:
         from . import downstream
         sys.argv = ['mmml downstream'] + args.args
         return downstream.main()
+    
+    elif args.command == 'fix-and-split':
+        from . import fix_and_split
+        sys.argv = ['mmml fix-and-split'] + args.args
+        return fix_and_split.main()
     
     else:
         parser.print_help()

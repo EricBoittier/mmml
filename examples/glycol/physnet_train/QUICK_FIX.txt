@@ -1,0 +1,75 @@
+═══════════════════════════════════════════════════════════════
+  GPU ERROR QUICK FIX - Follow These Steps
+═══════════════════════════════════════════════════════════════
+
+PROBLEM: CUDA_ERROR_NOT_INITIALIZED → Training on CPU (very slow!)
+
+SOLUTION: 3-Step Fix (Takes ~10-15 minutes total)
+
+───────────────────────────────────────────────────────────────
+STEP 1: Test GPU Access
+───────────────────────────────────────────────────────────────
+
+  $ cd ~/mmml/examples/co2/physnet_train
+  $ mkdir -p logs
+  $ sbatch test_gpu.sh
+
+  Wait ~5 minutes, then check results:
+  
+  $ cat logs/test_gpu_*.out
+
+  ✅ If you see "GPU TEST PASSED" → Skip to Step 3
+  ❌ If you see "No GPU device found" → Continue to Step 2
+
+───────────────────────────────────────────────────────────────
+STEP 2: Fix JAX Installation
+───────────────────────────────────────────────────────────────
+
+  $ cd ~/mmml/examples/co2/physnet_train
+  $ bash fix_jax_cuda.sh
+
+  This will:
+  - Uninstall old JAX (CPU-only)
+  - Install JAX with CUDA 12 support
+  - Takes ~5-10 minutes
+
+  After it completes, repeat STEP 1 to verify.
+
+───────────────────────────────────────────────────────────────
+STEP 3: Run Your Training
+───────────────────────────────────────────────────────────────
+
+  Once test_gpu.sh passes:
+
+  $ sbatch slurm_quick_scan.sh     # Quick scan (6 jobs)
+  OR
+  $ sbatch slurm_model_scan.sh     # Full scan (24 jobs)
+
+  Monitor progress:
+  $ squeue -u $USER
+  $ tail -f logs/scan_*_0.out
+
+───────────────────────────────────────────────────────────────
+HOW TO VERIFY IT'S WORKING
+───────────────────────────────────────────────────────────────
+
+Check the .out log file for:
+
+  ✅ GOOD (GPU):
+     JAX devices: [CudaDevice(id=0)]
+     Epoch times: 1-5 seconds
+
+  ❌ BAD (CPU):
+     JAX devices: [CpuDevice(id=0)]  
+     Epoch times: 30-300 seconds
+
+───────────────────────────────────────────────────────────────
+NEED MORE HELP?
+───────────────────────────────────────────────────────────────
+
+  Quick Guide:    README_GPU_FIX.md
+  Detailed:       CUDA_TROUBLESHOOTING.md
+  Explanation:    GPU_ERROR_SUMMARY.md
+
+═══════════════════════════════════════════════════════════════
+
