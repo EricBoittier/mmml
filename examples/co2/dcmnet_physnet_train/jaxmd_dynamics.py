@@ -290,7 +290,13 @@ def run_multi_copy_dynamics(model,
     if completed_steps < steps:
         print(f"   Stored {completed_steps} / {steps} steps.")
     total_energy = float(energy_fn(state.position))
-    return traj, state, total_energy
+    try:
+        invariant = float(simulate.nvt_nose_hoover_invariant(
+            energy_fn, state, 8.617333262e-5 * temperature
+        ))
+    except Exception:
+        invariant = float("nan")
+    return traj, state, total_energy, invariant
 #!/usr/bin/env python3
 """
 Ultra-Fast Molecular Dynamics with JAX MD
@@ -1327,7 +1333,7 @@ def main():
         print(f"\n3. Running batched multi-copy NVT Nose–Hoover simulation "
               f"({args.multi_replicas} replicas)...")
         args.output_dir.mkdir(parents=True, exist_ok=True)
-        traj, state, total_energy = run_multi_copy_dynamics(
+        traj, state, total_energy, invariant = run_multi_copy_dynamics(
             model=model,
             params=params,
             positions_single=positions,
@@ -1343,9 +1349,23 @@ def main():
         )
         traj_path = args.output_dir / f'multi_copy_traj_{args.multi_replicas}x.npz'
         np.savez(traj_path, positions=traj)
+        metadata_path = args.output_dir / 'multi_copy_metadata.npz'
+        metadata = {
+            'atomic_numbers': np.asarray(atomic_numbers, dtype=np.int32),
+            'masses': np.asarray(masses, dtype=np.float32),
+            'num_replicas': args.multi_replicas,
+            'cutoff': args.cutoff,
+            'timestep_fs': args.timestep,
+            'temperature': args.temperature,
+            'translation': args.multi_translation,
+            'total_energy': total_energy,
+            'thermostat_invariant': invariant,
+        }
+        np.savez(metadata_path, **metadata)
         print(f"✅ Saved stacked trajectory: {traj_path}")
         print(f"   Shape: {traj.shape} -> (steps, replicas, atoms, 3)")
         print(f"   Final total energy: {total_energy:.6f} eV")
+        print(f"   Nose–Hoover invariant: {invariant}")
         results = None
     else:
         print(f"\n3. Running JAX MD simulation...")
