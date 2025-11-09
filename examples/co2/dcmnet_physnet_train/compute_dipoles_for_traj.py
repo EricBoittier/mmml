@@ -12,6 +12,8 @@ from __future__ import annotations
 import argparse
 import pickle
 import sys
+import time
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Tuple
 
@@ -135,8 +137,15 @@ def main() -> None:
 
     total = positions_pad.shape[0]
     batch_size = max(1, args.batch_size)
-
-    for start in range(0, total, batch_size):
+    n_batches = (total + batch_size - 1) // batch_size
+    
+    print(f"Processing {total} frames in {n_batches} batches of {batch_size}...")
+    
+    start_time = time.time()
+    last_print_time = start_time
+    print_interval = 5.0  # Print every 5 seconds minimum
+    
+    for batch_idx, start in enumerate(range(0, total, batch_size)):
         end = min(start + batch_size, total)
         pos_chunk = jnp.asarray(positions_pad[start:end], dtype=jnp.float32)
         dip_phys_chunk, dip_dcm_chunk, energy_chunk = forward_chunk(pos_chunk)
@@ -145,7 +154,19 @@ def main() -> None:
         energy_chunks.append(np.asarray(energy_chunk))
 
         processed = end
-        print(f"Processed {processed}/{total} frames ({processed / total:.1%})")
+        current_time = time.time()
+        
+        # Print progress periodically
+        if (current_time - last_print_time >= print_interval) or (batch_idx == n_batches - 1):
+            elapsed = current_time - start_time
+            rate = processed / elapsed if elapsed > 0 else 0
+            remaining = (total - processed) / rate if rate > 0 else 0
+            eta = datetime.now() + timedelta(seconds=remaining)
+            
+            print(f"Processed {processed}/{total} frames ({processed / total:.1%}) | "
+                  f"Rate: {rate:.1f} frames/s | "
+                  f"ETA: {eta.strftime('%H:%M:%S')}")
+            last_print_time = current_time
 
     dip_phys = np.concatenate(dip_phys_chunks, axis=0)
     dip_dcm = np.concatenate(dip_dcm_chunks, axis=0)
@@ -155,6 +176,11 @@ def main() -> None:
     dipoles_dcmnet = dip_dcm.reshape(n_steps, n_replica, 3)
     energies = energies.reshape(n_steps, n_replica)
     output_path = args.output or args.positions.with_name(args.positions.stem + "_dipoles.npz")
+    
+    total_time = time.time() - start_time
+    print(f"\n✅ Completed in {total_time:.1f}s ({total_time/60:.1f} min)")
+    print(f"   Average rate: {total / total_time:.1f} frames/s")
+    
     np.savez(
         output_path,
         dipoles_physnet=dipoles_physnet,
