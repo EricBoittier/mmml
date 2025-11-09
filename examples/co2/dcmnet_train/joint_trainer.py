@@ -29,17 +29,11 @@ try:
 except ModuleNotFoundError:  # pragma: no cover - pre-3.11 fallback
     tomllib = None  # type: ignore
 
-from trainer import build_argument_parser, run_single_training  # noqa: E402
-
-
-PATH_FIELDS = {
-    "train_efd",
-    "train_grid",
-    "valid_efd",
-    "valid_grid",
-    "output_dir",
-    "restart",
-}
+from trainer import (
+    CLI_PATH_FIELDS,
+    build_argument_parser,
+    run_single_training,
+)  # noqa: E402
 
 
 def load_config_file(path: Path) -> Dict[str, Any]:
@@ -85,7 +79,7 @@ def _merge_with_defaults(
 
 def _convert_paths(cfg: Dict[str, Any]) -> Dict[str, Any]:
     """Normalize any path-like entries into Path objects."""
-    for key in PATH_FIELDS:
+    for key in CLI_PATH_FIELDS:
         if cfg.get(key) is not None:
             cfg[key] = Path(cfg[key]).expanduser()
     return cfg
