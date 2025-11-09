@@ -13,6 +13,29 @@ from ase.io.trajectory import Trajectory
 from ase.calculators.singlepoint import SinglePointCalculator
 
 
+def write_ase_traj(frames: np.ndarray,
+                   atomic_numbers: np.ndarray,
+                   output_path: Path,
+                   energies: np.ndarray | None = None):
+    """Write a set of frames (n_frames, n_atoms, 3) to an ASE .traj file."""
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    traj = Trajectory(str(output_path), 'w')
+
+    for i, positions in enumerate(frames):
+        atoms = Atoms(numbers=atomic_numbers, positions=positions)
+        if energies is not None:
+            calc = SinglePointCalculator(atoms, energy=float(energies[i]))
+            atoms.calc = calc
+        traj.write(atoms)
+
+        if (i + 1) % 100 == 0:
+            print(f"    wrote {i + 1}/{len(frames)} frames to {output_path.name}")
+
+    traj.close()
+    print(f"  ✅ Saved {len(frames)} frames -> {output_path}")
+
+
 def convert_npz_to_traj(npz_file, output_traj, metadata_candidates=None, formula='CO2'):
     """Convert NPZ trajectory to ASE format."""
     if metadata_candidates is None:
@@ -50,42 +73,27 @@ def convert_npz_to_traj(npz_file, output_traj, metadata_candidates=None, formula
     if atomic_numbers is None:
         raise KeyError("Expected 'atomic_numbers' in NPZ file or metadata.")
     
+    output_traj = Path(output_traj)
+
     if trajectory.ndim == 4:  # (steps, replicas, atoms, 3)
         steps, replicas, atoms = trajectory.shape[0], trajectory.shape[1], trajectory.shape[2]
         print(f"Detected multi-replica trajectory: steps={steps}, replicas={replicas}, atoms={atoms}")
-        trajectory = trajectory.reshape(-1, atoms, 3)
         if energies is not None:
-            energies = np.broadcast_to(energies[:, None], (steps, replicas)).reshape(-1)
+            energies = np.broadcast_to(energies[:, None], (steps, replicas))
+
+        for rep in range(replicas):
+            frames_rep = trajectory[:, rep, :, :]
+            energies_rep = energies[:, rep] if energies is not None else None
+            rep_output = output_traj.with_name(f"{output_traj.stem}_rep{rep:02d}{output_traj.suffix}")
+            print(f"\nWriting replica {rep} to {rep_output} ...")
+            write_ase_traj(frames_rep, atomic_numbers, rep_output, energies_rep)
     else:
         print(f"Detected single trajectory: frames={trajectory.shape[0]}")
+        print(f"\nWriting to {output_traj}...")
+        write_ase_traj(trajectory, atomic_numbers, output_traj, energies)
     
-    n_frames = trajectory.shape[0]
-    print(f"Frames: {n_frames}")
-    print(f"Atoms: {len(atomic_numbers)}")
-    
-    # Create trajectory
-    print(f"\nWriting to {output_traj}...")
-    traj = Trajectory(str(output_traj), 'w')
-    
-    for i in range(n_frames):
-        atoms = Atoms(numbers=atomic_numbers, positions=trajectory[i])
-        
-        if energies is not None:
-            calc = SinglePointCalculator(atoms, energy=float(energies[i]))
-            atoms.calc = calc
-        
-        traj.write(atoms)
-        
-        if (i + 1) % 100 == 0:
-            print(f"  Wrote {i+1}/{n_frames} frames...")
-    
-    traj.close()
-    
-    print(f"\n✅ Conversion complete!")
-    print(f"   Output: {output_traj}")
-    print(f"   Frames: {n_frames}")
-    print(f"   File size: {output_traj.stat().st_size / 1024**2:.1f} MB")
-    print(f"\nView with: ase gui {output_traj}")
+    print("\n✅ Conversion complete!")
+    print("   View with: ase gui <output.traj>")
 
 
 if __name__ == '__main__':
