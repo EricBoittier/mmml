@@ -24,8 +24,8 @@ def load_trajectory(path: Path) -> np.ndarray:
 def rms_displacement(traj: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     reference = traj[0]
     displacements = traj - reference
-    rms_per_replica = np.sqrt(np.mean(np.sum(displacements**2, axis=-1), axis=0))
-    rms_per_step = np.sqrt(np.mean(np.sum(displacements**2, axis=-1), axis=(1, 2)))
+    rms_per_replica = np.sqrt(np.mean(np.sum(displacements**2, axis=-1), axis=0))  # shape (replicas,)
+    rms_per_step = np.sqrt(np.mean(np.sum(displacements**2, axis=-1), axis=(1, 2)))  # shape (steps,)
     return rms_per_replica, rms_per_step
 
 
@@ -73,11 +73,16 @@ def main() -> None:
     pos_min = float(summary["pos_min"].min())
     pos_max = float(summary["pos_max"].max())
     print(f"  Position range: [{pos_min:.6f}, {pos_max:.6f}] Å")
+    rms_replica = summary["rms_per_replica"]
     print(f"  RMS displacement per replica (Å):")
-    for idx, val in enumerate(summary["rms_per_replica"]):
-        print(f"    replica {idx:>3}: {val:.6e}")
-    print(f"  RMS displacement per step (Å): min={summary['rms_per_step'].min():.6e}, "
-          f"max={summary['rms_per_step'].max():.6e}")
+    for idx in range(rms_replica.shape[0]):
+        scalar = float(np.asarray(rms_replica[idx]).squeeze())
+        print(f"    replica {idx:>3}: {scalar:.6e}")
+    rms_step = summary["rms_per_step"]
+    rms_step_min = float(np.asarray(rms_step.min()).squeeze())
+    rms_step_max = float(np.asarray(rms_step.max()).squeeze())
+    print(f"  RMS displacement per step (Å): min={rms_step_min:.6e}, "
+          f"max={rms_step_max:.6e}")
 
     bonds = summary["bond_lengths"]
     print(f"  Bond lengths for replica {args.replica}:")
