@@ -79,8 +79,9 @@ def _initialize_velocities_multi(key, masses, atom_mask, model_natoms: int, num_
     velocities = jax.random.normal(key, shape=(masses.shape[0], 3)) * sigma
     velocities = velocities * atom_mask[:, None]
     velocities = velocities.reshape(num_replicas, model_natoms, 3)
-    velocities = velocities - jnp.sum(velocities, axis=1, keepdims=True) / jnp.maximum(
-        jnp.sum(atom_mask.reshape(num_replicas, model_natoms, 1), axis=1, keepdims=True), 1.0
+    counts = jnp.sum(atom_mask.reshape(num_replicas, model_natoms, 1), axis=1, keepdims=True)
+    counts = jnp.where(counts > 0, counts, 1.0)
+    velocities = velocities - jnp.sum(velocities, axis=1, keepdims=True) / counts
     return velocities.reshape(-1, 3)
 
 
@@ -163,7 +164,8 @@ def run_multi_copy_dynamics(model,
         traj.append(state.position.reshape(num_replicas, model_natoms, 3))
 
     traj = np.asarray(traj)[:, :, :positions_single.shape[0], :]
-    return traj, state
+    total_energy, _ = energy_fn(state.position)
+    return traj, state, float(total_energy)
 #!/usr/bin/env python3
 """
 Ultra-Fast Molecular Dynamics with JAX MD
@@ -1154,6 +1156,10 @@ def main():
                        help='NVE equilibration steps before NVT (default: 2000)')
     parser.add_argument('--seed', type=int, default=42,
                        help='Random seed')
+    parser.add_argument('--multi-replicas', type=int, default=1,
+                        help='Run batched NVT Nose–Hoover with this many independent replicas (default: 1)')
+    parser.add_argument('--multi-translation', type=float, default=25.0,
+                        help='Translation offset (Å) between replicas to avoid interactions')
     
     args = parser.parse_args()
     
@@ -1188,27 +1194,52 @@ def main():
     print(f"   Box size: {box[0,0]:.1f} Å")
     
     # Run MD
-    print(f"\n3. Running JAX MD simulation...")
-    results = run_jaxmd_simulation(
-        model=model,
-        params=params,
-        positions=positions,
-        atomic_numbers=atomic_numbers,
-        masses=masses,
-        box=box,
-        ensemble=args.ensemble,
-        integrator=args.integrator,
-        temperature=args.temperature,
-        timestep=args.timestep,
-        nsteps=args.nsteps,
-        save_interval=args.save_interval,
-        cutoff=args.cutoff,
-        friction=args.friction,
-        tau_t=args.tau_t,
-        equilibration_steps=args.equilibration_steps,
-        output_dir=args.output_dir,
-        seed=args.seed,
-    )
+    if args.multi_replicas > 1:
+        print(f"\n3. Running batched multi-copy NVT Nose–Hoover simulation "
+              f"({args.multi_replicas} replicas)...")
+        args.output_dir.mkdir(parents=True, exist_ok=True)
+        traj, state, total_energy = run_multi_copy_dynamics(
+            model=model,
+            params=params,
+            positions_single=positions,
+            atomic_numbers_single=atomic_numbers,
+            masses_single=masses,
+            num_replicas=args.multi_replicas,
+            timestep_fs=args.timestep,
+            temperature=args.temperature,
+            cutoff=args.cutoff,
+            steps=args.nsteps,
+            translation=args.multi_translation,
+            key_seed=args.seed,
+        )
+        traj_path = args.output_dir / f'multi_copy_traj_{args.multi_replicas}x.npz'
+        np.savez(traj_path, positions=traj)
+        print(f"✅ Saved stacked trajectory: {traj_path}")
+        print(f"   Shape: {traj.shape} -> (steps, replicas, atoms, 3)")
+        print(f"   Final total energy: {total_energy:.6f} eV")
+        results = None
+    else:
+        print(f"\n3. Running JAX MD simulation...")
+        results = run_jaxmd_simulation(
+            model=model,
+            params=params,
+            positions=positions,
+            atomic_numbers=atomic_numbers,
+            masses=masses,
+            box=box,
+            ensemble=args.ensemble,
+            integrator=args.integrator,
+            temperature=args.temperature,
+            timestep=args.timestep,
+            nsteps=args.nsteps,
+            save_interval=args.save_interval,
+            cutoff=args.cutoff,
+            friction=args.friction,
+            tau_t=args.tau_t,
+            equilibration_steps=args.equilibration_steps,
+            output_dir=args.output_dir,
+            seed=args.seed,
+        )
     
     print(f"\n{'='*70}")
     print("✅ SIMULATION COMPLETE")
