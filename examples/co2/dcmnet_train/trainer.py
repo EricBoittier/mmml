@@ -27,7 +27,7 @@ import argparse
 from pathlib import Path
 import numpy as np
 import pickle
-from typing import Dict, Tuple, Optional
+from typing import Dict, Tuple, Optional, Any, Mapping
 
 # Add mmml to path
 repo_root = Path(__file__).parent / "../../.."
@@ -38,6 +38,15 @@ import jax.numpy as jnp
 from mmml.dcmnet.dcmnet.modules import MessagePassingModel
 from mmml.dcmnet.dcmnet.training import train_model
 from mmml.dcmnet.dcmnet.data import prepare_datasets
+
+CLI_PATH_FIELDS = {
+    "train_efd",
+    "train_grid",
+    "valid_efd",
+    "valid_grid",
+    "output_dir",
+    "restart",
+}
 
 
 def load_co2_data(efd_file: Path, grid_file: Path) -> Dict:
@@ -343,6 +352,66 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument('--verbose', action='store_true', default=True,
                        help='Verbose output')
     return parser
+
+
+class NotebookArgsHelper:
+    """
+    Convenience wrapper for assembling CLI-equivalent arguments inside notebooks.
+
+    Examples
+    --------
+    >>> helper = NotebookArgsHelper(
+    ...     train_efd="/abs/path/train.npz",
+    ...     train_grid="/abs/path/train_grid.npz",
+    ...     valid_efd="/abs/path/valid.npz",
+    ...     valid_grid="/abs/path/valid_grid.npz",
+    ...     output_dir="/abs/path/checkpoints",
+    ...     name="notebook_experiment",
+    ... )
+    >>> args = helper.to_namespace()
+    >>> run_single_training(args)
+    """
+
+    def __init__(self, **overrides: Any) -> None:
+        parser = build_argument_parser()
+        defaults = vars(parser.parse_args([]))
+        self._data: Dict[str, Any] = {**defaults, **overrides}
+        self._normalize_paths()
+
+    def _normalize_paths(self) -> None:
+        for key in CLI_PATH_FIELDS:
+            value = self._data.get(key)
+            if value is None or isinstance(value, Path):
+                continue
+            self._data[key] = Path(str(value)).expanduser()
+
+    def update(self, mapping: Mapping[str, Any]) -> None:
+        """
+        Update stored arguments with values from *mapping*.
+        """
+        for key, value in mapping.items():
+            if key not in self._data:
+                raise KeyError(f"Unknown argument '{key}'")
+            self._data[key] = value
+        self._normalize_paths()
+
+    def set(self, key: str, value: Any) -> None:
+        """
+        Update a single key/value pair.
+        """
+        self.update({key: value})
+
+    def to_namespace(self) -> argparse.Namespace:
+        """
+        Return an argparse.Namespace compatible with `run_single_training`.
+        """
+        return argparse.Namespace(**self._data)
+
+    def as_dict(self) -> Dict[str, Any]:
+        """
+        Retrieve a shallow copy of the underlying argument dictionary.
+        """
+        return dict(self._data)
 
 
 def main():
