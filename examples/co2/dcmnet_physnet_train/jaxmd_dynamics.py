@@ -116,8 +116,6 @@ def _create_energy_fn_multi(model, params,
                             atomic_numbers, atom_mask,
                             dst_idx, src_idx, edge_mask,
                             batch_segments, model_natoms: int, num_replicas: int):
-    natoms_total = atomic_numbers.shape[0]
-
     @jax.jit
     def energy_fn(positions, *_):
         output = model.apply(
@@ -132,8 +130,7 @@ def _create_energy_fn_multi(model, params,
             atom_mask=atom_mask,
         )
         energies = output['energy'][:num_replicas]
-        forces = output['forces'][:natoms_total]
-        return jnp.sum(energies), forces
+        return jnp.sum(energies)
 
     return energy_fn
 
@@ -192,7 +189,7 @@ def run_multi_copy_dynamics(model,
         traj.append(state.position.reshape(num_replicas, model_natoms, 3))
 
     traj = np.asarray(traj)[:, :, :positions_single.shape[0], :]
-    total_energy, _ = energy_fn(state.position)
+    total_energy = energy_fn(state.position)
     return traj, state, float(total_energy)
 #!/usr/bin/env python3
 """
