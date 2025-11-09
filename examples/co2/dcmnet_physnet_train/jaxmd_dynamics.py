@@ -112,6 +112,65 @@ def _initialize_velocities_multi(key, masses, atom_mask, model_natoms: int, num_
     return velocities.reshape(-1, 3)
 
 
+def _evaluate_initial_state(model,
+                            params,
+                            positions,
+                            atomic_numbers,
+                            dst_idx,
+                            src_idx,
+                            batch_segments,
+                            batch_mask,
+                            atom_mask,
+                            model_natoms: int,
+                            num_replicas: int):
+    """Run one forward pass and sanity-check energy/force magnitudes."""
+    output = model.apply(
+        params,
+        atomic_numbers=atomic_numbers,
+        positions=positions,
+        dst_idx=dst_idx,
+        src_idx=src_idx,
+        batch_segments=batch_segments,
+        batch_size=num_replicas,
+        batch_mask=batch_mask,
+        atom_mask=atom_mask,
+    )
+
+    energies = np.asarray(output['energy'][:num_replicas])
+    forces = np.asarray(output['forces']).reshape(num_replicas, model_natoms, 3)
+    mask = np.asarray(atom_mask).reshape(num_replicas, model_natoms, 1)
+    forces_masked = forces * mask
+
+    if not np.all(np.isfinite(energies)):
+        raise ValueError(
+            "Initial energy evaluation produced NaN/Inf values. "
+            "Check the checkpoint and geometry."
+        )
+    if not np.all(np.isfinite(forces_masked)):
+        raise ValueError(
+            "Initial force evaluation produced NaN/Inf values. "
+            "Check the checkpoint and geometry."
+        )
+
+    max_force = float(np.max(np.abs(forces_masked)))
+    mean_force = float(np.mean(np.abs(forces_masked)))
+    max_energy = float(np.max(np.abs(energies)))
+
+    print("\nInitial diagnostics (batched run):")
+    print(f"  Energy range: [{energies.min():.6f}, {energies.max():.6f}] eV")
+    print(f"  Max |force|: {max_force:.6f} eV/Å")
+    print(f"  Mean |force|: {mean_force:.6f} eV/Å")
+
+    FORCE_THRESHOLD = 500.0  # eV/Å
+    if max_force > FORCE_THRESHOLD:
+        print(
+            f"⚠️  Warning: large initial force magnitude ({max_force:.2f} eV/Å).\n"
+            "   Consider reducing the timestep or relaxing the structure."
+        )
+
+    return energies, forces_masked
+
+
 def _create_energy_fn_multi(model, params,
                             atomic_numbers, atom_mask,
                             dst_idx, src_idx, edge_mask,
@@ -162,6 +221,20 @@ def run_multi_copy_dynamics(model,
     )
     dst_idx, src_idx, edge_mask = _replicate_graph(
         dst_single, src_single, edge_mask_single, model_natoms, num_replicas, edges_per_single
+    )
+
+    _evaluate_initial_state(
+        model,
+        params,
+        positions_packed,
+        Z_packed,
+        dst_idx,
+        src_idx,
+        batch_segments,
+        edge_mask,
+        atom_mask,
+        model_natoms,
+        num_replicas,
     )
 
     energy_fn = _create_energy_fn_multi(
