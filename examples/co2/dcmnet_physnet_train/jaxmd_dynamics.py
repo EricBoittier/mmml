@@ -448,7 +448,7 @@ try:
 except ImportError:
     HAS_MATPLOTLIB = False
 
-from trainer import JointPhysNetDCMNet
+from trainer import JointPhysNetDCMNet, JointPhysNetNonEquivariant
 import ase.data
 
 
@@ -458,7 +458,7 @@ def create_model_energy_fn(model, params, atomic_numbers_static, cutoff=10.0, n_
     
     Parameters
     ----------
-    model : JointPhysNetDCMNet
+    model : JointPhysNetDCMNet or JointPhysNetNonEquivariant or JointPhysNetNonEquivariant
         Trained model
     params : dict
         Model parameters
@@ -729,7 +729,7 @@ def run_jaxmd_simulation(
     
     Parameters
     ----------
-    model : JointPhysNetDCMNet
+    model : JointPhysNetDCMNet or JointPhysNetNonEquivariant
         Trained model
     params : dict
         Model parameters
@@ -1413,12 +1413,31 @@ def main():
     
     print(f"✅ Loaded {sum(x.size for x in jax.tree_util.tree_leaves(params)):,} parameters")
     
-    # Create model
-    model = JointPhysNetDCMNet(
-        physnet_config=config['physnet_config'],
-        dcmnet_config=config['dcmnet_config'],
-        mix_coulomb_energy=config.get('mix_coulomb_energy', False)
-    )
+    # Create model - detect type from config
+    physnet_config = config['physnet_config']
+    mix_coulomb_energy = config.get('mix_coulomb_energy', False)
+    
+    if 'dcmnet_config' in config:
+        # DCMNet (equivariant) model
+        print("   Model type: JointPhysNetDCMNet (equivariant)")
+        model = JointPhysNetDCMNet(
+            physnet_config=physnet_config,
+            dcmnet_config=config['dcmnet_config'],
+            mix_coulomb_energy=mix_coulomb_energy
+        )
+    elif 'noneq_config' in config:
+        # Non-equivariant model
+        print("   Model type: JointPhysNetNonEquivariant (non-equivariant)")
+        model = JointPhysNetNonEquivariant(
+            physnet_config=physnet_config,
+            noneq_config=config['noneq_config'],
+            mix_coulomb_energy=mix_coulomb_energy
+        )
+    else:
+        raise ValueError(
+            "Unknown model type: config must contain either 'dcmnet_config' or 'noneq_config'. "
+            f"Found keys: {list(config.keys())}"
+        )
     
     # Initialize system
     print(f"\n2. Initializing {args.molecule} system...")
