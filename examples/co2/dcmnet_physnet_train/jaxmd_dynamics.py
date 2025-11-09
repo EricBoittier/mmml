@@ -248,7 +248,7 @@ def run_multi_copy_dynamics(model,
         num_replicas,
     )
 
-    energy_fn = _create_energy_fn_multi(
+    energy_sum_fn, energy_full_fn = _create_energy_fn_multi(
         model, params, Z_packed, atom_mask,
         dst_idx, src_idx, edge_mask, batch_segments,
         model_natoms, num_replicas,
@@ -262,7 +262,7 @@ def run_multi_copy_dynamics(model,
     if ensemble == "nvt":
         displacement, shift = space.free()
         init_fn, step_fn = simulate.nvt_nose_hoover(
-            energy_fn, shift, timestep_fs, 8.617333262e-5 * temperature
+            energy_sum_fn, shift, timestep_fs, 8.617333262e-5 * temperature
         )
 
         state = init_fn(key, positions_packed, masses_packed)
@@ -271,6 +271,7 @@ def run_multi_copy_dynamics(model,
 
         traj = []
         completed_steps = 0
+        energies_history = []
         try:
             for step in range(steps):
                 state = step_fn(state)
@@ -290,6 +291,10 @@ def run_multi_copy_dynamics(model,
                         f"pos range [{pos_sample.min():.3e}, {pos_sample.max():.3e}] Å, "
                         f"momentum range [{mom_sample.min():.3e}, {mom_sample.max():.3e}]"
                     )
+                energies_step = np.asarray(
+                    jax.device_get(energy_full_fn(state.position))
+                )
+                energies_history.append(energies_step)
         except KeyboardInterrupt:
             print("\n⚠️  Simulation interrupted by user (Ctrl+C). Saving partial trajectory...")
 
@@ -298,22 +303,23 @@ def run_multi_copy_dynamics(model,
         else:
             traj = np.empty((0, num_replicas, positions_single.shape[0], 3))
 
+        energies_history = np.asarray(energies_history)
         if completed_steps < steps:
             print(f"   Stored {completed_steps} / {steps} steps.")
-        total_energy = float(energy_fn(state.position))
+        total_energy = float(np.sum(energies_history[-1])) if energies_history.size else float("nan")
         try:
             invariant = float(
                 simulate.nvt_nose_hoover_invariant(
-                    energy_fn, state, 8.617333262e-5 * temperature
+                    energy_sum_fn, state, 8.617333262e-5 * temperature
                 )
             )
         except Exception:
             invariant = float("nan")
-        return traj, state, total_energy, invariant
+        return traj, state, total_energy, invariant, energies_history
 
     # Ensemble == NVE
     print("\n⚙️  Using velocity Verlet (NVE) integrator")
-    force_fn = jax.jit(jax.grad(energy_fn))
+    force_fn = jax.jit(jax.grad(energy_sum_fn))
 
     positions_jax = jnp.asarray(positions_packed)
     velocities_jax = jnp.asarray(velocities)
@@ -323,6 +329,7 @@ def run_multi_copy_dynamics(model,
 
     traj = []
     completed_steps = 0
+    energies_history = []
     try:
         for step in range(steps):
             forces = -force_fn(positions_jax) * mask_jax[:, None]
@@ -352,6 +359,10 @@ def run_multi_copy_dynamics(model,
                     f"pos range [{sample_pos.min():.3e}, {sample_pos.max():.3e}] Å, "
                     f"momentum range [{sample_mom.min():.3e}, {sample_mom.max():.3e}]"
                 )
+            energies_step = np.asarray(
+                jax.device_get(energy_full_fn(positions_jax))
+            )
+            energies_history.append(energies_step)
     except KeyboardInterrupt:
         print("\n⚠️  Simulation interrupted by user (Ctrl+C). Saving partial trajectory...")
 
@@ -360,16 +371,17 @@ def run_multi_copy_dynamics(model,
     else:
         traj = np.empty((0, num_replicas, positions_single.shape[0], 3))
 
+    energies_history = np.asarray(energies_history)
     if completed_steps < steps:
         print(f"   Stored {completed_steps} / {steps} steps.")
 
-    total_energy = float(energy_fn(positions_jax))
+    total_energy = float(np.sum(energies_history[-1])) if energies_history.size else float("nan")
     state = SimpleNamespace(
         position=positions_jax,
         momentum=velocities_jax * masses_jax[:, None],
     )
     invariant = float("nan")
-    return traj, state, total_energy, invariant
+    return traj, state, total_energy, invariant, energies_history
 #!/usr/bin/env python3
 """
 Ultra-Fast Molecular Dynamics with JAX MD
@@ -1409,7 +1421,7 @@ def main():
         print(f"\n3. Running batched multi-copy simulation "
               f"({args.multi_replicas} replicas, {args.multi_ensemble.upper()} ensemble)...")
         args.output_dir.mkdir(parents=True, exist_ok=True)
-        traj, state, total_energy, invariant = run_multi_copy_dynamics(
+        traj, state, total_energy, invariant, energies_history = run_multi_copy_dynamics(
             model=model,
             params=params,
             positions_single=positions,
@@ -1438,6 +1450,7 @@ def main():
             'multi_ensemble': args.multi_ensemble,
             'total_energy': total_energy,
             'thermostat_invariant': invariant,
+            'energies': energies_history,
         }
         np.savez(metadata_path, **metadata)
         print(f"✅ Saved stacked trajectory: {traj_path}")
