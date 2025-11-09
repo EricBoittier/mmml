@@ -330,6 +330,10 @@ def run_multi_copy_dynamics(model,
     traj = []
     completed_steps = 0
     energies_history = []
+    masses_reshaped = masses_jax.reshape(num_replicas, model_natoms, 1)
+    mask_reshaped = mask_jax.reshape(num_replicas, model_natoms, 1)
+    mass_effective = masses_reshaped * mask_reshaped
+    total_mass = jnp.sum(mass_effective, axis=1, keepdims=True) + 1e-12
     try:
         for step in range(steps):
             forces = -force_fn(positions_jax) * mask_jax[:, None]
@@ -339,6 +343,15 @@ def run_multi_copy_dynamics(model,
             forces_new = -force_fn(positions_jax) * mask_jax[:, None]
             accel_new = forces_new / (masses_jax[:, None] + 1e-12)
             velocities_jax = velocities_jax + 0.5 * accel_new * dt
+
+            pos_reshaped = positions_jax.reshape(num_replicas, model_natoms, 3)
+            vel_reshaped = velocities_jax.reshape(num_replicas, model_natoms, 3)
+            com_pos = jnp.sum(pos_reshaped * mass_effective, axis=1, keepdims=True) / total_mass
+            com_vel = jnp.sum(vel_reshaped * mass_effective, axis=1, keepdims=True) / total_mass
+            pos_reshaped = pos_reshaped - com_pos
+            vel_reshaped = vel_reshaped - com_vel
+            positions_jax = pos_reshaped.reshape(-1, 3)
+            velocities_jax = vel_reshaped.reshape(-1, 3)
 
             traj.append(
                 np.asarray(positions_jax).reshape(num_replicas, model_natoms, 3)
