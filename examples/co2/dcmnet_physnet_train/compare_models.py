@@ -204,6 +204,10 @@ def test_equivariance(
     print(f"\n{'='*70}")
     print(f"Testing Equivariance on {len(test_indices)} samples")
     print(f"{'='*70}\n")
+
+    all_output_orig = []
+    all_output_rot = []
+    all_output_trans = []
     
     for idx in test_indices:
         # Extract single sample
@@ -278,6 +282,10 @@ def test_equivariance(
         true_esp = jnp.asarray(test_data['esp'][idx])
         esp_mae = jnp.mean(jnp.abs(esp_orig - true_esp))
         esp_errors.append(float(esp_mae))
+
+        all_output_orig.append(output_orig)
+        all_output_rot.append(output_rot)
+        all_output_trans.append(output_trans)
     
     results = {
         'rotation_error_dipole': float(np.mean(rotation_errors_dipole)),
@@ -296,6 +304,9 @@ def test_equivariance(
         'forces_mae_std': float(np.std(forces_errors)),
         'dipole_mae_std': float(np.std(dipole_errors)),
         'esp_mae_std': float(np.std(esp_errors)),
+        'all_output_orig': all_output_orig,
+        'all_output_rot': all_output_rot,
+        'all_output_trans': all_output_trans,
     }
     
     print(f"Rotation Equivariance:")
