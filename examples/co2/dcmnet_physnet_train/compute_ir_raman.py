@@ -31,7 +31,7 @@ import sys
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Tuple
+from typing import Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -42,20 +42,39 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR / "../../.."
 sys.path.insert(0, str(REPO_ROOT.resolve()))
 
-from trainer import JointPhysNetDCMNet  # noqa: E402
+from trainer import JointPhysNetDCMNet, JointPhysNetNonEquivariant  # noqa: E402
 
 
-def load_checkpoint(checkpoint_dir: Path) -> Tuple[JointPhysNetDCMNet, dict]:
-    """Load model and parameters from checkpoint."""
+def load_checkpoint(checkpoint_dir: Path) -> Tuple[Union[JointPhysNetDCMNet, JointPhysNetNonEquivariant], dict]:
+    """Load model and parameters from checkpoint, auto-detecting model type."""
     with open(checkpoint_dir / "best_params.pkl", "rb") as f:
         params = pickle.load(f)
     with open(checkpoint_dir / "model_config.pkl", "rb") as f:
         config = pickle.load(f)
-    model = JointPhysNetDCMNet(
-        physnet_config=config["physnet_config"],
-        dcmnet_config=config["dcmnet_config"],
-        mix_coulomb_energy=config.get("mix_coulomb_energy", False),
-    )
+    
+    physnet_config = config["physnet_config"]
+    mix_coulomb_energy = config.get("mix_coulomb_energy", False)
+    
+    if "dcmnet_config" in config:
+        # DCMNet (equivariant) model
+        model = JointPhysNetDCMNet(
+            physnet_config=physnet_config,
+            dcmnet_config=config["dcmnet_config"],
+            mix_coulomb_energy=mix_coulomb_energy,
+        )
+    elif "noneq_config" in config:
+        # Non-equivariant model
+        model = JointPhysNetNonEquivariant(
+            physnet_config=physnet_config,
+            noneq_config=config["noneq_config"],
+            mix_coulomb_energy=mix_coulomb_energy,
+        )
+    else:
+        raise ValueError(
+            f"Unknown model type: config must contain either 'dcmnet_config' or 'noneq_config'. "
+            f"Found keys: {list(config.keys())}"
+        )
+    
     return model, params
 
 
@@ -403,7 +422,15 @@ def main() -> None:
     if args.dipoles and Path(args.dipoles).exists():
         print(f"\n3. Loading dipoles from {args.dipoles}...")
         dipoles_npz = np.load(args.dipoles)
-        dipoles = dipoles_npz["dipoles_dcmnet"]  # Prefer DCMNet
+        # Try DCMNet first, fall back to PhysNet for non-equivariant models
+        if "dipoles_dcmnet" in dipoles_npz:
+            dipoles = dipoles_npz["dipoles_dcmnet"]
+        elif "dipoles_physnet" in dipoles_npz:
+            dipoles = dipoles_npz["dipoles_physnet"]
+            print("   Using PhysNet dipoles (DCMNet not available)")
+        else:
+            raise KeyError("Neither 'dipoles_dcmnet' nor 'dipoles_physnet' found in NPZ file")
+        
         if dipoles.ndim == 3:
             dipoles = dipoles.reshape(-1, 3)
         if args.subsample > 1:
