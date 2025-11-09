@@ -180,7 +180,7 @@ def _create_energy_fn_multi(model, params,
                             dst_idx, src_idx, edge_mask,
                             batch_segments, model_natoms: int, num_replicas: int):
     @jax.jit
-    def energy_fn(positions, *_):
+    def energy_full(positions, *_):
         output = model.apply(
             params,
             atomic_numbers=atomic_numbers,
@@ -192,10 +192,12 @@ def _create_energy_fn_multi(model, params,
             batch_mask=edge_mask,
             atom_mask=atom_mask,
         )
-        energies = output['energy'][:num_replicas]
-        return jnp.sum(energies)
+        return output['energy'][:num_replicas]
 
-    return energy_fn
+    def energy_sum(positions, *_):
+        return jnp.sum(energy_full(positions))
+
+    return energy_sum, energy_full
 
 
 def run_multi_copy_dynamics(model,
