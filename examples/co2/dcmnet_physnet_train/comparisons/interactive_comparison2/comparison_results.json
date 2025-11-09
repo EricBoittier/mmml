@@ -1,0 +1,33 @@
+{
+  "dcmnet": {
+    "name": "DCMNet (Equivariant)",
+    "training_time": 0,
+    "inference_time": 0,
+    "memory_usage_mb": 0.0,
+    "num_parameters": 484619,
+    "val_energy_mae": 8.896833419799805,
+    "val_forces_mae": 0.20993749797344208,
+    "val_dipole_mae": 0.24983693659305573,
+    "val_esp_mae": 0.015129401348531246,
+    "rotation_error_dipole": 2.2994985010882373e-05,
+    "rotation_error_esp": 4.107665677111072e-06,
+    "translation_error_dipole": 1.5380764617489717e-08,
+    "translation_error_esp": 7.817521574526865e-10
+  },
+  "noneq": {
+    "name": "Non-Equivariant",
+    "training_time": 0,
+    "inference_time": 0,
+    "memory_usage_mb": 0.0,
+    "num_parameters": 315870,
+    "val_energy_mae": 8.897601127624512,
+    "val_forces_mae": 0.20975282788276672,
+    "val_dipole_mae": 0.2495836317539215,
+    "val_esp_mae": 0.013803321868181229,
+    "rotation_error_dipole": 0.004132417310029268,
+    "rotation_error_esp": 0.00033956413026317025,
+    "translation_error_dipole": 1.226712924307094e-06,
+    "translation_error_esp": 2.5727191608204694e-07
+  },
+  "args": {}
+}
