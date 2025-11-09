@@ -1374,7 +1374,7 @@ def main():
     print("✅ SIMULATION COMPLETE")
     print(f"{'='*70}")
     print(f"\nOutputs saved to: {args.output_dir}")
-    print(f"\n🚀 JAX MD is {10}-{100}× faster than ASE!")
+
 
 
 if __name__ == '__main__':
