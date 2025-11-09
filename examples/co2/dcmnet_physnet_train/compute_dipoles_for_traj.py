@@ -56,43 +56,41 @@ def build_neighbor_graph(positions: np.ndarray, cutoff: float) -> Tuple[np.ndarr
     return np.array(dst_list, dtype=np.int32), np.array(src_list, dtype=np.int32), len(dst_list) == 1 and dst_list[0] == 0 and src_list[0] == 0
 
 
-def evaluate_single(
-    model: JointPhysNetDCMNet,
-    params: dict,
-    positions: np.ndarray,
-    atomic_numbers: np.ndarray,
-    cutoff: float,
-    model_natoms: int,
-) -> Tuple[np.ndarray, np.ndarray, float]:
+def prepare_static_inputs(atomic_numbers: np.ndarray,
+                          cutoff: float,
+                          model_natoms: int) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     n_atoms = atomic_numbers.shape[0]
-    positions_pad = np.zeros((model_natoms, 3), dtype=np.float32)
-    positions_pad[:n_atoms] = positions.astype(np.float32)
-
     atomic_numbers_pad = np.zeros((model_natoms,), dtype=np.int32)
     atomic_numbers_pad[:n_atoms] = atomic_numbers.astype(np.int32)
-
     atom_mask = np.zeros((model_natoms,), dtype=np.float32)
     atom_mask[:n_atoms] = 1.0
+    return jnp.array(atomic_numbers_pad), jnp.array(atom_mask)
 
-    dst_idx_np, src_idx_np, empty_edges = build_neighbor_graph(positions[:n_atoms], cutoff)
-    batch_mask = np.zeros((len(dst_idx_np),), dtype=np.float32) if empty_edges else np.ones((len(dst_idx_np),), dtype=np.float32)
 
-    output = model.apply(
+def evaluate_batch(model_apply,
+                   params: dict,
+                   positions_batch: jnp.ndarray,
+                   atomic_numbers_pad: jnp.ndarray,
+                   atom_mask: jnp.ndarray,
+                   dst_idx: jnp.ndarray,
+                   src_idx: jnp.ndarray,
+                   batch_segments: jnp.ndarray,
+                   batch_mask: jnp.ndarray):
+    output = model_apply(
         params,
-        atomic_numbers=jnp.array(atomic_numbers_pad),
-        positions=jnp.array(positions_pad),
-        dst_idx=jnp.array(dst_idx_np),
-        src_idx=jnp.array(src_idx_np),
-        batch_segments=jnp.zeros((model_natoms,), dtype=jnp.int32),
-        batch_size=1,
-        batch_mask=jnp.array(batch_mask),
-        atom_mask=jnp.array(atom_mask),
+        atomic_numbers=atomic_numbers_pad,
+        positions=positions_batch,
+        dst_idx=dst_idx,
+        src_idx=src_idx,
+        batch_segments=batch_segments,
+        batch_size=positions_batch.shape[0],
+        batch_mask=batch_mask,
+        atom_mask=atom_mask,
     )
-
-    dipole_physnet = np.array(output.get("dipoles", output.get("dipoles_mixed"))[0])
-    dipole_dcmnet = np.array(output.get("dipoles_dcmnet", output.get("dipoles", np.zeros(3)))[0])
-    energy = float(output["energy"][0])
-    return dipole_physnet, dipole_dcmnet, energy
+    dipole_physnet = output.get("dipoles", output.get("dipoles_mixed"))
+    dipole_dcmnet = output.get("dipoles_dcmnet", output.get("dipoles"))
+    energies = output["energy"]
+    return dipole_physnet, dipole_dcmnet, energies
 
 
 def main() -> None:
@@ -128,26 +126,37 @@ def main() -> None:
 
     print(f"Frames: {n_steps}, replicas: {n_replica}, atoms: {n_atoms}")
 
-    dipoles_physnet = np.zeros((n_steps, n_replica, 3), dtype=np.float32)
-    dipoles_dcmnet = np.zeros((n_steps, n_replica, 3), dtype=np.float32)
-    energies = np.zeros((n_steps, n_replica), dtype=np.float32)
+    atomic_numbers_pad, atom_mask = prepare_static_inputs(atomic_numbers, args.cutoff, model_natoms)
+    n_total = n_steps * n_replica
+    positions_flat = positions.reshape(n_total, n_atoms, 3)
 
-    for step in range(n_steps):
-        for replica in range(n_replica):
-            dip_phys, dip_dcm, energy = evaluate_single(
-                model,
-                params,
-                positions[step, replica],
-                atomic_numbers,
-                args.cutoff,
-                model_natoms,
-            )
-            dipoles_physnet[step, replica] = dip_phys
-            dipoles_dcmnet[step, replica] = dip_dcm
-            energies[step, replica] = energy
-        if (step + 1) % max(1, n_steps // 10) == 0 or step == n_steps - 1:
-            print(f"Processed {step + 1}/{n_steps} steps")
+    dst_idx_np, src_idx_np, empty_edges = build_neighbor_graph(positions[0, 0], args.cutoff)
+    batch_segments = np.repeat(np.arange(n_total), model_natoms).astype(np.int32)
+    batch_mask = np.ones((n_total, len(dst_idx_np)), dtype=np.float32)
+    if empty_edges:
+        batch_mask[:] = 0.0
 
+    dst_idx = jnp.array(dst_idx_np)
+    src_idx = jnp.array(src_idx_np)
+
+    @jax.jit
+    def batched_forward(positions_batched):
+        return evaluate_batch(
+            model.apply,
+            params,
+            positions_batched,
+            atomic_numbers_pad,
+            atom_mask,
+            dst_idx,
+            src_idx,
+            jnp.zeros((positions_batched.shape[0] * model_natoms,), dtype=jnp.int32),
+            jnp.ones((positions_batched.shape[0], dst_idx.shape[0]), dtype=jnp.float32),
+        )
+
+    dip_phys, dip_dcm, energies = batched_forward(jnp.asarray(positions_flat))
+    dipoles_physnet = np.asarray(dip_phys).reshape(n_steps, n_replica, -1, 3)[:, :, 0, :]
+    dipoles_dcmnet = np.asarray(dip_dcm).reshape(n_steps, n_replica, -1, 3)[:, :, 0, :]
+    energies = np.asarray(energies).reshape(n_steps, n_replica)
     output_path = args.output or args.positions.with_name(args.positions.stem + "_dipoles.npz")
     np.savez(
         output_path,
