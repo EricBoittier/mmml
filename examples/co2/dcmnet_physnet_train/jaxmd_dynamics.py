@@ -1,7 +1,16 @@
 # =============================================================================
 # Multi-copy JAX MD driver (batched replicas of a molecule)
 # =============================================================================
+import numpy as np
+from jax import numpy as jnp
+import jax
+from trainer import JointPhysNetDCMNet
+from jax_md import space, partition, simulate
 
+import jax
+import jax.numpy as jnp
+from jax import random, jit, grad, vmap
+import flax.linen as nn
 
 def _build_single_graph_no_nn(positions_single: np.ndarray, cutoff: float, model_natoms: int):
     """Dense neighbor graph for one molecule, padded to model_natoms."""
