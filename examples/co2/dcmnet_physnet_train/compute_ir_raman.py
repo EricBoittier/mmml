@@ -28,6 +28,8 @@ from __future__ import annotations
 import argparse
 import pickle
 import sys
+import time
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Tuple
 
@@ -308,19 +310,16 @@ def compute_polarizability_from_dipole_fluctuations(
     # Use dipole covariance matrix scaled by temperature
     polarizabilities = np.zeros((n_frames, 3, 3), dtype=np.float32)
     
-    for i in range(n_frames):
-        # Use outer product of fluctuation
-        mu_f = mu_fluct[i]  # (3,)
-        # Scale by empirical factor based on mean isotropic value
-        alpha_frame = np.outer(mu_f, mu_f) / (kB_eV * temperature)
-        alpha_frame *= conversion
-        
-        # Add isotropic baseline
-        alpha_frame += np.eye(3) * alpha_iso_mean * 0.5
-        
-        # Ensure symmetry
-        alpha_frame = (alpha_frame + alpha_frame.T) / 2.0
-        polarizabilities[i] = alpha_frame
+    # Vectorized computation (much faster)
+    mu_fluct_expanded = mu_fluct[:, :, None] * mu_fluct[:, None, :]  # (n_frames, 3, 3)
+    alpha_tensors = mu_fluct_expanded / (kB_eV * temperature)
+    alpha_tensors *= conversion
+    
+    # Add isotropic baseline
+    alpha_tensors += np.eye(3)[None, :, :] * alpha_iso_mean * 0.5
+    
+    # Ensure symmetry
+    polarizabilities = (alpha_tensors + alpha_tensors.transpose(0, 2, 1)) / 2.0
     
     print(f"✅ Computed approximate polarizabilities: shape {polarizabilities.shape}")
     print(f"   Mean trace: {np.mean(np.trace(polarizabilities, axis1=1, axis2=2)):.3f} Å³")
@@ -344,6 +343,8 @@ def main() -> None:
     parser.add_argument("--subsample", type=int, default=1, help="Subsample trajectory (use every Nth frame)")
     
     args = parser.parse_args()
+    
+    script_start_time = time.time()
     
     print("="*70)
     print("FAST IR & RAMAN SPECTRUM COMPUTATION")
@@ -433,17 +434,37 @@ def main() -> None:
         dip_chunks = []
         total = n_frames
         batch_size_dip = args.batch_size
+        n_batches = (total + batch_size_dip - 1) // batch_size_dip
         
-        for start in range(0, total, batch_size_dip):
+        print(f"   Processing {total} frames in {n_batches} batches...")
+        
+        start_time = time.time()
+        last_print_time = start_time
+        print_interval = 5.0  # Print every 5 seconds minimum
+        
+        for batch_idx, start in enumerate(range(0, total, batch_size_dip)):
             end = min(start + batch_size_dip, total)
             pos_chunk = positions_jax[start:end]
             dip_chunk = forward_chunk(pos_chunk)
             dip_chunks.append(np.asarray(dip_chunk))
             processed = end
-            print(f"   Processed {processed}/{total} frames ({processed / total:.1%})")
+            current_time = time.time()
+            
+            # Print progress periodically
+            if (current_time - last_print_time >= print_interval) or (batch_idx == n_batches - 1):
+                elapsed = current_time - start_time
+                rate = processed / elapsed if elapsed > 0 else 0
+                remaining = (total - processed) / rate if rate > 0 else 0
+                eta = datetime.now() + timedelta(seconds=remaining)
+                
+                print(f"   Processed {processed}/{total} frames ({processed / total:.1%}) | "
+                      f"Rate: {rate:.1f} frames/s | "
+                      f"ETA: {eta.strftime('%H:%M:%S')}")
+                last_print_time = current_time
         
         dipoles = np.concatenate(dip_chunks, axis=0)
-        print(f"   Computed {len(dipoles)} dipole vectors")
+        elapsed_total = time.time() - start_time
+        print(f"   ✅ Computed {len(dipoles)} dipole vectors in {elapsed_total:.1f}s")
     
     # Compute IR spectrum
     ir_spectrum = None
@@ -491,7 +512,9 @@ def main() -> None:
         })
     
     np.savez(output_path, **save_dict)
+    total_time = time.time() - script_start_time
     print(f"\n✅ Saved results to {output_path}")
+    print(f"✅ Total computation time: {total_time:.1f}s ({total_time/60:.1f} min)")
     print("="*70)
 
 
