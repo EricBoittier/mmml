@@ -92,7 +92,7 @@ def main() -> None:
     parser.add_argument("--checkpoint", type=Path, required=True, help="Checkpoint directory")
     parser.add_argument("--output", type=Path, default=None, help="Output NPZ for dipoles")
     parser.add_argument("--cutoff", type=float, default=10.0, help="Neighbor cutoff (Å)")
-    parser.add_argument("--batch-size", type=int, default=256, help="Number of frames per evaluation batch")
+    parser.add_argument("--batch-size", type=int, default=32, help="Number of frames per evaluation batch (reduce if OOM)")
     args = parser.parse_args()
 
     positions_npz = np.load(args.positions)
@@ -163,6 +163,12 @@ def main() -> None:
     
     print(f"Processing {total} frames in {n_batches} batches of {batch_size}...")
     
+    # Warn for very large datasets
+    if total > 100000:
+        print(f"⚠️  Large dataset detected ({total:,} frames).")
+        print(f"   If you encounter OOM errors, try: --batch-size {max(1, batch_size // 2)}")
+        print(f"   Or even smaller: --batch-size {max(1, batch_size // 4)}")
+    
     start_time = time.time()
     last_print_time = start_time
     print_interval = 5.0  # Print every 5 seconds minimum
@@ -170,7 +176,17 @@ def main() -> None:
     for batch_idx, start in enumerate(range(0, total, batch_size)):
         end = min(start + batch_size, total)
         pos_chunk = jnp.asarray(positions_pad[start:end], dtype=jnp.float32)
-        dip_phys_chunk, dip_dcm_chunk, energy_chunk = forward_chunk(pos_chunk)
+        try:
+            dip_phys_chunk, dip_dcm_chunk, energy_chunk = forward_chunk(pos_chunk)
+        except (jax.errors.JaxRuntimeError, RuntimeError) as e:
+            if "RESOURCE_EXHAUSTED" in str(e) or "Out of memory" in str(e):
+                print(f"\n❌ GPU out of memory with batch size {batch_size}")
+                print(f"   Try reducing --batch-size (current: {batch_size})")
+                print(f"   Suggested: --batch-size {max(1, batch_size // 4)}")
+                print(f"   Or even smaller: --batch-size {max(1, batch_size // 8)}")
+                raise
+            else:
+                raise
         dip_phys_chunks.append(np.asarray(dip_phys_chunk))
         dip_dcm_chunks.append(np.asarray(dip_dcm_chunk))
         energy_chunks.append(np.asarray(energy_chunk))
