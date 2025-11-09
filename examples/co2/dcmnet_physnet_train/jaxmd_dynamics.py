@@ -2,15 +2,33 @@
 # Multi-copy JAX MD driver (batched replicas of a molecule)
 # =============================================================================
 import numpy as np
-from jax import numpy as jnp
-import jax
-from trainer import JointPhysNetDCMNet
-from jax_md import space, partition, simulate
-
 import jax
 import jax.numpy as jnp
 from jax import random, jit, grad, vmap
-import flax.linen as nn
+from trainer import JointPhysNetDCMNet
+
+# Compatibility shims for older jax_md builds expecting legacy JAX APIs
+try:
+    from jax import tree_util as _tree_util
+    if not hasattr(jax, "tree_map"):
+        jax.tree_map = _tree_util.tree_map
+    if not hasattr(jax, "tree_multimap"):
+        jax.tree_multimap = _tree_util.tree_map
+    if not hasattr(jax, "tree_leaves"):
+        jax.tree_leaves = _tree_util.tree_leaves
+    if not hasattr(jax, "tree_flatten"):
+        jax.tree_flatten = _tree_util.tree_flatten
+    if not hasattr(jax, "tree_unflatten"):
+        jax.tree_unflatten = _tree_util.tree_unflatten
+except Exception:
+    pass
+
+if not hasattr(random, "KeyArray"):
+    random.KeyArray = jnp.ndarray
+if not hasattr(random, "Key"):
+    random.Key = jnp.ndarray
+
+from jax_md import space, simulate
 
 def _build_single_graph_no_nn(positions_single: np.ndarray, cutoff: float, model_natoms: int):
     """Dense neighbor graph for one molecule, padded to model_natoms."""
@@ -165,7 +183,8 @@ def run_multi_copy_dynamics(model,
         key, masses_packed, atom_mask, model_natoms, num_replicas, temperature
     )
 
-    state = init_fn(key, positions_packed, masses_packed, velocity=velocities)
+    state = init_fn(key, positions_packed, masses_packed)
+    state = state._replace(momentum=state.momentum + velocities * masses_packed[:, None])
 
     traj = []
     for _ in range(steps):
