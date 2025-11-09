@@ -710,7 +710,11 @@ def run_jaxmd_simulation(
     velocities = initialize_velocities(subkey, masses, temperature)
     
     # Remove angular momentum for isolated molecule (NVE should have L=0)
-    velocities, L_initial, L_final = remove_angular_momentum(positions, velocities, masses)
+    velocities_np = np.asarray(velocities)
+    positions_np = np.asarray(positions)
+    masses_np = np.asarray(masses)
+    velocities_np, L_initial, L_final = remove_angular_momentum(positions_np, velocities_np, masses_np)
+    velocities = jnp.asarray(velocities_np)
     print(f"\n✅ Removed angular momentum:")
     print(f"  Initial L: {L_initial} (amu·Å²/fs)")
     print(f"  Final L: {L_final} (amu·Å²/fs)")
