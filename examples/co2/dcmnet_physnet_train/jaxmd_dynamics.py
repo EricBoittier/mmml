@@ -65,7 +65,7 @@ def _pack_replicas(positions_single: np.ndarray, atomic_numbers_single: np.ndarr
     positions_single = jnp.asarray(positions_single, dtype=jnp.float32)
     atomic_numbers_single = jnp.asarray(atomic_numbers_single, dtype=jnp.int32)
     masses_single = jnp.asarray(masses_single, dtype=jnp.float32)
-    masses_padded_single = jnp.pad(masses_single, (0, model_natoms - n_true), constant_values=0.0)
+    masses_padded_single = jnp.pad(masses_single, (0, model_natoms - n_true), constant_values=1.0)
 
     offsets = translation * jnp.arange(num_replicas, dtype=jnp.float32)[:, None] * jnp.array([1.0, 0.0, 0.0])
 
