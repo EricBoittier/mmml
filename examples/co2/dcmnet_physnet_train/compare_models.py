@@ -127,6 +127,36 @@ def generate_random_rotation(key: jax.Array) -> jnp.ndarray:
     return so3.random_rotation(key)
 
 
+def build_neighbor_graph(
+    R: np.ndarray,
+    N: np.ndarray,
+    cutoff: float = 10.0,
+) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    """
+    Construct the neighbour graph for a single sample.
+
+    Returns dst/src indices along with batch metadata reused across rigid transforms.
+    """
+    n_atoms = int(N[0])
+    positions = np.asarray(R[0, :n_atoms])
+
+    # Pairwise distances (n_atoms, n_atoms)
+    diff = positions[:, None, :] - positions[None, :, :]
+    distances = np.linalg.norm(diff, axis=-1)
+
+    mask = (distances < cutoff) & (~np.eye(n_atoms, dtype=bool))
+    dst_idx, src_idx = np.where(mask)
+
+    natoms_padded = R.shape[1]
+    dst_idx = jnp.asarray(dst_idx, dtype=jnp.int32)
+    src_idx = jnp.asarray(src_idx, dtype=jnp.int32)
+    batch_segments = jnp.zeros(natoms_padded, dtype=jnp.int32)
+    batch_mask = jnp.ones(1)
+    atom_mask = (jnp.arange(natoms_padded) < n_atoms).astype(jnp.float32)
+
+    return dst_idx, src_idx, batch_segments, batch_mask, atom_mask
+
+
 def test_equivariance(
     model: Any,
     params: Any,
@@ -183,8 +213,10 @@ def test_equivariance(
         vdw_surface = test_data['vdw_surface'][idx:idx+1]  # (1, ngrid, 3)
         n_atoms = int(N[0])
         
+        graph = build_neighbor_graph(R, N)
+
         # Original prediction
-        output_orig = predict_single(model, params, R, Z, N, vdw_surface)
+        output_orig = predict_single(model, params, R, Z, N, vdw_surface, graph=graph)
         
         # Test rotation
         jax_key, rot_key, trans_key = jax.random.split(jax_key, 3)
@@ -192,7 +224,7 @@ def test_equivariance(
         R_rot = apply_rotation(R, rot_matrix)
         vdw_rot = apply_rotation(vdw_surface, rot_matrix)
         
-        output_rot = predict_single(model, params, R_rot, Z, N, vdw_rot)
+        output_rot = predict_single(model, params, R_rot, Z, N, vdw_rot, graph=graph)
         
         # For equivariant model: rotated output should equal rotation of original output
         # Dipole should rotate
@@ -213,7 +245,7 @@ def test_equivariance(
         R_trans = apply_translation(R, translation)
         vdw_trans = apply_translation(vdw_surface, translation)
         
-        output_trans = predict_single(model, params, R_trans, Z, N, vdw_trans)
+        output_trans = predict_single(model, params, R_trans, Z, N, vdw_trans, graph=graph)
         
         # Dipole should be identical (molecule-centered)
         dipole_trans = jnp.asarray(output_trans['dipole'])
@@ -288,6 +320,7 @@ def predict_single(
     Z: np.ndarray,
     N: np.ndarray,
     vdw_surface: np.ndarray,
+    graph: Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray] | None = None,
 ) -> Dict[str, np.ndarray]:
     """
     Make prediction for a single sample.
@@ -321,27 +354,13 @@ def predict_single(
     positions_flat = R.reshape(-1, 3)
     atomic_numbers_flat = Z.reshape(-1)
     
-    # Build edge list
-    cutoff = 10.0  # Use max cutoff
-    n_atoms = int(N[0])
-    dst_idx_list = []
-    src_idx_list = []
-    
-    for i in range(n_atoms):
-        for j in range(n_atoms):
-            if i != j:
-                dist = np.linalg.norm(R[0, i] - R[0, j])
-                if dist < cutoff:
-                    dst_idx_list.append(i)
-                    src_idx_list.append(j)
-    
-    dst_idx = jnp.array(dst_idx_list, dtype=jnp.int32)
-    src_idx = jnp.array(src_idx_list, dtype=jnp.int32)
-    
-    # Batch segments and masks
-    batch_segments = jnp.zeros(natoms, dtype=jnp.int32)
-    batch_mask = jnp.ones(batch_size)
-    atom_mask = (jnp.arange(natoms) < n_atoms).astype(jnp.float32)
+    if graph is None:
+        graph = build_neighbor_graph(R, N)
+
+    dst_idx, src_idx, batch_segments, batch_mask, atom_mask = graph
+    batch_segments = jnp.asarray(batch_segments)
+    batch_mask = jnp.asarray(batch_mask)
+    atom_mask = jnp.asarray(atom_mask)
     
     # Forward pass
     output = model.apply(
