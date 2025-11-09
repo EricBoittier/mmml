@@ -5,6 +5,7 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 from jax import random, jit, grad, vmap
+from types import SimpleNamespace
 from trainer import JointPhysNetDCMNet
 
 # Compatibility shims for older jax_md builds expecting legacy JAX APIs
@@ -205,10 +206,15 @@ def run_multi_copy_dynamics(model,
                             cutoff: float = 10.0,
                             steps: int = 10000,
                             translation: float = 25.0,
-                            key_seed: int = 0):
+                            key_seed: int = 0,
+                            ensemble: str = "nvt"):
     """
-    Run an NVT Nose–Hoover simulation for several independent replicas simultaneously.
+    Run a batched simulation for independent replicas (NVT Nose–Hoover or NVE VV).
     """
+    ensemble = ensemble.lower()
+    if ensemble not in {"nvt", "nve"}:
+        raise ValueError(f"Unsupported multi-copy ensemble '{ensemble}'. Choose 'nvt' or 'nve'.")
+
     model_natoms = model.physnet_config['natoms']
 
     positions_packed, Z_packed, atom_mask, masses_packed, batch_segments = _pack_replicas(
@@ -243,44 +249,106 @@ def run_multi_copy_dynamics(model,
         model_natoms, num_replicas,
     )
 
-    displacement, shift = space.free()
-    init_fn, step_fn = simulate.nvt_nose_hoover(
-        energy_fn, shift, timestep_fs, 8.617333262e-5 * temperature
-    )
-
     key = jax.random.PRNGKey(key_seed)
     velocities = _initialize_velocities_multi(
         key, masses_packed, atom_mask, model_natoms, num_replicas, temperature
     )
 
-    state = init_fn(key, positions_packed, masses_packed)
-    desired_momentum = velocities * masses_packed[:, None]
-    state = state.set(momentum=desired_momentum)
+    if ensemble == "nvt":
+        displacement, shift = space.free()
+        init_fn, step_fn = simulate.nvt_nose_hoover(
+            energy_fn, shift, timestep_fs, 8.617333262e-5 * temperature
+        )
+
+        state = init_fn(key, positions_packed, masses_packed)
+        desired_momentum = velocities * masses_packed[:, None]
+        state = state.set(momentum=desired_momentum)
+
+        traj = []
+        completed_steps = 0
+        try:
+            for step in range(steps):
+                state = step_fn(state)
+                traj.append(state.position.reshape(num_replicas, model_natoms, 3))
+                completed_steps = step + 1
+                if not jnp.all(jnp.isfinite(state.position)):
+                    print(f"\n⚠️  Non-finite position encountered at step {step + 1}. Aborting simulation loop.")
+                    break
+                if not jnp.all(jnp.isfinite(state.momentum)):
+                    print(f"\n⚠️  Non-finite momentum encountered at step {step + 1}. Aborting simulation loop.")
+                    break
+                if (step + 1) % max(1, steps // 10) == 0:
+                    pos_sample = np.asarray(state.position[:1])
+                    mom_sample = np.asarray(state.momentum[:1])
+                    print(
+                        f"Step {step + 1}/{steps}: "
+                        f"pos range [{pos_sample.min():.3e}, {pos_sample.max():.3e}] Å, "
+                        f"momentum range [{mom_sample.min():.3e}, {mom_sample.max():.3e}]"
+                    )
+        except KeyboardInterrupt:
+            print("\n⚠️  Simulation interrupted by user (Ctrl+C). Saving partial trajectory...")
+
+        if traj:
+            traj = np.asarray(traj)[:, :, :positions_single.shape[0], :]
+        else:
+            traj = np.empty((0, num_replicas, positions_single.shape[0], 3))
+
+        if completed_steps < steps:
+            print(f"   Stored {completed_steps} / {steps} steps.")
+        total_energy = float(energy_fn(state.position))
+        try:
+            invariant = float(
+                simulate.nvt_nose_hoover_invariant(
+                    energy_fn, state, 8.617333262e-5 * temperature
+                )
+            )
+        except Exception:
+            invariant = float("nan")
+        return traj, state, total_energy, invariant
+
+    # Ensemble == NVE
+    print("\n⚙️  Using velocity Verlet (NVE) integrator")
+    force_fn = jax.jit(jax.grad(energy_fn))
+
+    positions_jax = jnp.asarray(positions_packed)
+    velocities_jax = jnp.asarray(velocities)
+    masses_jax = jnp.asarray(masses_packed)
+    mask_jax = jnp.asarray(atom_mask)
+    dt = timestep_fs
 
     traj = []
     completed_steps = 0
     try:
         for step in range(steps):
-            state = step_fn(state)
-            traj.append(state.position.reshape(num_replicas, model_natoms, 3))
+            forces = -force_fn(positions_jax) * mask_jax[:, None]
+            accel = forces / (masses_jax[:, None] + 1e-12)
+            velocities_jax = velocities_jax + 0.5 * accel * dt
+            positions_jax = positions_jax + velocities_jax * dt
+            forces_new = -force_fn(positions_jax) * mask_jax[:, None]
+            accel_new = forces_new / (masses_jax[:, None] + 1e-12)
+            velocities_jax = velocities_jax + 0.5 * accel_new * dt
+
+            traj.append(
+                np.asarray(positions_jax).reshape(num_replicas, model_natoms, 3)
+            )
             completed_steps = step + 1
-            if not jnp.all(jnp.isfinite(state.position)):
-                print(f"\n⚠️  Non-finite position encountered at step {step + 1}. "
-                      "Aborting simulation loop.")
+
+            if not jnp.all(jnp.isfinite(positions_jax)):
+                print(f"\n⚠️  Non-finite position encountered at step {step + 1}. Aborting simulation loop.")
                 break
-            if not jnp.all(jnp.isfinite(state.momentum)):
-                print(f"\n⚠️  Non-finite momentum encountered at step {step + 1}. "
-                      "Aborting simulation loop.")
+            if not jnp.all(jnp.isfinite(velocities_jax)):
+                print(f"\n⚠️  Non-finite velocity encountered at step {step + 1}. Aborting simulation loop.")
                 break
-            if (step + 1) % max(1, steps // 10) == 0 or not jnp.all(jnp.isfinite(state.position)):
-                pos_sample = np.asarray(state.position[:min(1, state.position.shape[0])])
-                mom_sample = np.asarray(state.momentum[:min(1, state.momentum.shape[0])])
-                print(f"Step {step + 1}/{steps}: "
-                      f"pos range [{pos_sample.min():.3e}, {pos_sample.max():.3e}] Å, "
-                      f"momentum range [{mom_sample.min():.3e}, {mom_sample.max():.3e}]")
+            if (step + 1) % max(1, steps // 10) == 0:
+                sample_pos = np.asarray(positions_jax[:1])
+                sample_mom = np.asarray((velocities_jax * masses_jax[:, None])[:1])
+                print(
+                    f"Step {step + 1}/{steps}: "
+                    f"pos range [{sample_pos.min():.3e}, {sample_pos.max():.3e}] Å, "
+                    f"momentum range [{sample_mom.min():.3e}, {sample_mom.max():.3e}]"
+                )
     except KeyboardInterrupt:
-        print("\n⚠️  Simulation interrupted by user (Ctrl+C). "
-              "Saving partial trajectory...")
+        print("\n⚠️  Simulation interrupted by user (Ctrl+C). Saving partial trajectory...")
 
     if traj:
         traj = np.asarray(traj)[:, :, :positions_single.shape[0], :]
@@ -289,13 +357,13 @@ def run_multi_copy_dynamics(model,
 
     if completed_steps < steps:
         print(f"   Stored {completed_steps} / {steps} steps.")
-    total_energy = float(energy_fn(state.position))
-    try:
-        invariant = float(simulate.nvt_nose_hoover_invariant(
-            energy_fn, state, 8.617333262e-5 * temperature
-        ))
-    except Exception:
-        invariant = float("nan")
+
+    total_energy = float(energy_fn(positions_jax))
+    state = SimpleNamespace(
+        position=positions_jax,
+        momentum=velocities_jax * masses_jax[:, None],
+    )
+    invariant = float("nan")
     return traj, state, total_energy, invariant
 #!/usr/bin/env python3
 """
