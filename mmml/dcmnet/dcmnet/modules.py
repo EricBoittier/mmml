@@ -44,6 +44,26 @@ class MessagePassingModel(nn.Module):
     n_dcm: int = 4
     include_pseudotensors: bool = False
     
+    def setup(self):
+        """Setup method to validate and fix Ellipsis values."""
+        # Replace Ellipsis with default values if accidentally passed
+        if self.features is ...:
+            object.__setattr__(self, 'features', 32)
+        if self.max_degree is ...:
+            object.__setattr__(self, 'max_degree', 2)
+        if self.num_iterations is ...:
+            object.__setattr__(self, 'num_iterations', 3)
+        if self.num_basis_functions is ...:
+            object.__setattr__(self, 'num_basis_functions', 8)
+        if self.cutoff is ...:
+            object.__setattr__(self, 'cutoff', 5.0)
+        if self.max_atomic_number is ...:
+            object.__setattr__(self, 'max_atomic_number', 17)
+        if self.n_dcm is ...:
+            object.__setattr__(self, 'n_dcm', 4)
+        if self.include_pseudotensors is ...:
+            object.__setattr__(self, 'include_pseudotensors', False)
+    
     def mono(
         self, atomic_numbers, positions, dst_idx, src_idx, batch_segments, batch_size
     ):
@@ -226,6 +246,26 @@ class MessagePassingModelDEBUG(nn.Module):
     max_atomic_number: int = 17
     n_dcm: int = 4
     include_pseudotensors: bool = False
+    
+    def setup(self):
+        """Setup method to validate and fix Ellipsis values."""
+        # Replace Ellipsis with default values if accidentally passed
+        if self.features is ...:
+            object.__setattr__(self, 'features', 32)
+        if self.max_degree is ...:
+            object.__setattr__(self, 'max_degree', 2)
+        if self.num_iterations is ...:
+            object.__setattr__(self, 'num_iterations', 3)
+        if self.num_basis_functions is ...:
+            object.__setattr__(self, 'num_basis_functions', 8)
+        if self.cutoff is ...:
+            object.__setattr__(self, 'cutoff', 5.0)
+        if self.max_atomic_number is ...:
+            object.__setattr__(self, 'max_atomic_number', 17)
+        if self.n_dcm is ...:
+            object.__setattr__(self, 'n_dcm', 4)
+        if self.include_pseudotensors is ...:
+            object.__setattr__(self, 'include_pseudotensors', False)
     
     def mono(
         self, atomic_numbers, positions, dst_idx, src_idx, batch_segments, batch_size
