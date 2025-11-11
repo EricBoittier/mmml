@@ -804,6 +804,7 @@ def preprocess_monopoles(data, mono_imputation_fn, num_atoms=60, batch_size=1000
     # Need to impute monopoles
     if verbose:
         print(f"  Imputing monopoles for {len(data['R'])} samples...")
+        print(f"  Using num_atoms={num_atoms}, batch_size={batch_size}")
     
     # Create batches for imputation
     n_samples = len(data["R"])
@@ -848,6 +849,13 @@ def preprocess_monopoles(data, mono_imputation_fn, num_atoms=60, batch_size=1000
         # Impute monopoles for this batch
         try:
             imputed_batch = mono_imputation_fn(batch_dict)
+            # Verify the shape of imputed batch
+            expected_batch_size = actual_batch_size * num_atoms
+            if imputed_batch.size != expected_batch_size:
+                raise ValueError(
+                    f"Imputation function returned wrong size: got {imputed_batch.size} elements, "
+                    f"expected {expected_batch_size} (batch_size={actual_batch_size} * num_atoms={num_atoms})"
+                )
             imputed_monopoles.append(imputed_batch)
         except Exception as e:
             # If imputation fails, raise an error rather than silently using zeros
@@ -859,8 +867,23 @@ def preprocess_monopoles(data, mono_imputation_fn, num_atoms=60, batch_size=1000
     # Concatenate all imputed monopoles
     all_imputed = jnp.concatenate(imputed_monopoles)
     
+    # Verify the shape is correct before reshaping
+    expected_size = n_samples * num_atoms
+    if all_imputed.size != expected_size:
+        raise ValueError(
+            f"Imputed monopoles size mismatch: got {all_imputed.size} elements, "
+            f"expected {expected_size} (n_samples={n_samples} * num_atoms={num_atoms})"
+        )
+    
     # Reshape to (n_samples, num_atoms) format
-    imputed_reshaped = all_imputed.reshape(n_samples, num_atoms)
+    try:
+        imputed_reshaped = all_imputed.reshape(n_samples, num_atoms)
+    except Exception as e:
+        raise ValueError(
+            f"Failed to reshape imputed monopoles: got shape {all_imputed.shape} "
+            f"(size {all_imputed.size}), trying to reshape to ({n_samples}, {num_atoms}) "
+            f"(size {n_samples * num_atoms}). Check that num_atoms={num_atoms} is correct."
+        ) from e
     
     # Update data dictionary
     data_updated = data.copy()
