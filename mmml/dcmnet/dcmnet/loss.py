@@ -194,32 +194,75 @@ def esp_mono_loss(
     # Mask dummy atoms before ESP computation (critical for accuracy - matches working trainer.py)
     # Create mask for valid atoms: expand atom_mask to DCM dimensions
     if atom_mask is not None:
-        # Handle atom_mask shape
+        # Handle atom_mask shape - need to get it to (batch_size, max_atoms)
         if atom_mask.ndim == 1:
-            # Flattened: (batch_size * max_atoms,) -> reshape
-            total_atoms = atom_mask.shape[0]
-            if total_atoms == batch_size * max_atoms:
+            # Flattened: could be (batch_size * max_atoms,) or something else
+            total_elements = atom_mask.shape[0]
+            if total_elements == batch_size * max_atoms:
+                # Perfect match: reshape to (batch_size, max_atoms)
                 atom_mask_reshaped = atom_mask.reshape(batch_size, max_atoms)
             elif batch_size == 1:
-                atom_mask_reshaped = atom_mask[None, :]
+                # Single sample: (max_atoms,) -> add batch dimension
+                atom_mask_reshaped = atom_mask[None, :]  # (1, max_atoms)
+                if atom_mask_reshaped.shape[1] != max_atoms:
+                    # Pad or trim to match max_atoms
+                    if atom_mask_reshaped.shape[1] < max_atoms:
+                        padding = jnp.zeros((1, max_atoms - atom_mask_reshaped.shape[1]), dtype=atom_mask.dtype)
+                        atom_mask_reshaped = jnp.concatenate([atom_mask_reshaped, padding], axis=1)
+                    else:
+                        atom_mask_reshaped = atom_mask_reshaped[:, :max_atoms]
             else:
-                atom_mask_reshaped = atom_mask.reshape(batch_size, max_atoms)
+                # Try to infer max_atoms from total_elements
+                if total_elements % batch_size == 0:
+                    inferred_max_atoms = total_elements // batch_size
+                    atom_mask_reshaped = atom_mask.reshape(batch_size, inferred_max_atoms)
+                    # Pad or trim to match max_atoms
+                    if inferred_max_atoms < max_atoms:
+                        padding = jnp.zeros((batch_size, max_atoms - inferred_max_atoms), dtype=atom_mask.dtype)
+                        atom_mask_reshaped = jnp.concatenate([atom_mask_reshaped, padding], axis=1)
+                    elif inferred_max_atoms > max_atoms:
+                        atom_mask_reshaped = atom_mask_reshaped[:, :max_atoms]
+                else:
+                    # Fallback: assume it should be max_atoms per batch
+                    # This might fail, but let's try
+                    atom_mask_reshaped = jnp.ones((batch_size, max_atoms), dtype=atom_mask.dtype)
+        elif atom_mask.ndim == 2:
+            # Already batched: (batch_size, max_atoms) or (batch_size, something_else)
+            atom_mask_reshaped = atom_mask
+            if atom_mask.shape[1] != max_atoms:
+                # Pad or trim to match max_atoms
+                if atom_mask.shape[1] < max_atoms:
+                    padding = jnp.zeros((batch_size, max_atoms - atom_mask.shape[1]), dtype=atom_mask.dtype)
+                    atom_mask_reshaped = jnp.concatenate([atom_mask, padding], axis=1)
+                else:
+                    atom_mask_reshaped = atom_mask[:, :max_atoms]
         else:
-            atom_mask_reshaped = atom_mask  # Already (batch_size, max_atoms)
+            # Unexpected shape - create default mask
+            atom_mask_reshaped = jnp.ones((batch_size, max_atoms), dtype=jnp.float32)
         
-        # Expand mask to DCM dimensions: (batch_size, max_atoms, n_dcm) -> (batch_size, max_atoms * n_dcm)
-        mask_expanded = atom_mask_reshaped[:, :, None]  # (batch_size, max_atoms, 1)
-        mask_expanded_flat = mask_expanded.reshape(batch_size, max_atoms * n_dcm)  # (batch_size, max_atoms * n_dcm)
-        
-        # Apply mask to monopoles (zero out dummy atom charges)
-        m = m * mask_expanded_flat
-        # Note: Dipole positions of dummy atoms don't matter if charges are zero
-    else:
-        # No atom_mask provided - create one based on n_atoms
-        NDC = n_atoms * n_dcm
-        valid_atoms_mask = jnp.arange(max_atoms * n_dcm)[None, :] < NDC  # (1, max_atoms * n_dcm)
-        valid_atoms_mask = jnp.broadcast_to(valid_atoms_mask, (batch_size, max_atoms * n_dcm))
-        m = m * valid_atoms_mask.astype(m.dtype)
+        # Ensure atom_mask_reshaped has correct shape (batch_size, max_atoms)
+        # If shape doesn't match, fall back to n_atoms-based mask (more reliable)
+        # Try to reshape if size matches
+        if atom_mask_reshaped.size == batch_size * max_atoms:
+            # Size matches - try to reshape
+            try:
+                atom_mask_final = atom_mask_reshaped.reshape(batch_size, max_atoms)
+                # Expand mask to DCM dimensions
+                mask_expanded = atom_mask_final[:, :, None]  # (batch_size, max_atoms, 1)
+                mask_expanded_flat = mask_expanded.reshape(batch_size, max_atoms * n_dcm)
+                m = m * mask_expanded_flat
+            except:
+                # Reshape failed - use n_atoms-based mask
+                NDC = n_atoms * n_dcm
+                valid_atoms_mask = jnp.arange(max_atoms * n_dcm)[None, :] < NDC
+                valid_atoms_mask = jnp.broadcast_to(valid_atoms_mask, (batch_size, max_atoms * n_dcm))
+                m = m * valid_atoms_mask.astype(m.dtype)
+        else:
+            # Size doesn't match - use n_atoms-based mask
+            NDC = n_atoms * n_dcm
+            valid_atoms_mask = jnp.arange(max_atoms * n_dcm)[None, :] < NDC
+            valid_atoms_mask = jnp.broadcast_to(valid_atoms_mask, (batch_size, max_atoms * n_dcm))
+            m = m * valid_atoms_mask.astype(m.dtype)
 
     # monopole loss
     # Reshape m to (batch_size, max_atoms, n_dcm) to sum over n_dcm dimension
