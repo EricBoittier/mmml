@@ -805,20 +805,40 @@ def preprocess_monopoles(data, mono_imputation_fn, num_atoms=60, batch_size=1000
                 print(f"  Monopoles already present (sum_abs={float(mono_sum):.2e}). Skipping imputation.")
             return data
     
-    # Infer actual number of atoms from data (may be less than num_atoms due to padding)
-    # Check the actual number of atoms from Z or R data
-    actual_num_atoms = num_atoms  # Default to num_atoms
-    if len(data["Z"]) > 0:
-        first_z = data["Z"][0]
-        if isinstance(first_z, (list, tuple, jnp.ndarray)):
-            actual_num_atoms = len(first_z)
+    # Infer padded size from data shape (this is what the data format expects)
+    # Check R or Z shape to determine padded size
+    padded_size = num_atoms  # Default to num_atoms
+    if "R" in data and len(data["R"]) > 0:
+        first_r = np.array(data["R"][0])
+        if first_r.ndim == 2:
+            padded_size = first_r.shape[0]  # (n_atoms, 3)
+        elif first_r.ndim == 1:
+            # Flattened, try to infer from total size
+            padded_size = num_atoms
+    elif "Z" in data and len(data["Z"]) > 0:
+        first_z = np.array(data["Z"][0])
+        if isinstance(first_z, (list, tuple, np.ndarray)):
+            padded_size = len(first_z)
+    
+    # Infer actual number of atoms from data (may be less than padded_size due to padding)
+    # Check the actual number of atoms from Z or R data (non-zero elements)
+    actual_num_atoms = padded_size  # Default to padded_size
+    if "Z" in data and len(data["Z"]) > 0:
+        first_z = np.array(data["Z"][0])
+        if isinstance(first_z, (list, tuple, np.ndarray)):
+            # Count non-zero elements (actual atoms, not padding)
+            non_zero_mask = np.array(first_z) != 0
+            if np.any(non_zero_mask):
+                actual_num_atoms = int(np.sum(non_zero_mask))
+            else:
+                actual_num_atoms = len(first_z)  # Fallback if all zeros
     
     # Create cache path based on data hash
     n_samples = len(data["R"])
     cache_path = None
     if cache_dir is not None:
         # Create a hash from sample count and actual_num_atoms to identify the dataset
-        cache_key = f"mono_imputed_n{n_samples}_atoms{actual_num_atoms}_padded{num_atoms}.npz"
+        cache_key = f"mono_imputed_n{n_samples}_atoms{actual_num_atoms}_padded{padded_size}.npz"
         cache_path = Path(cache_dir) / cache_key
         
         # Try to load from cache
@@ -830,7 +850,7 @@ def preprocess_monopoles(data, mono_imputation_fn, num_atoms=60, batch_size=1000
                 cached_mono = jnp.array(cached_data["mono"])
                 
                 # Verify shape matches
-                if cached_mono.shape == (n_samples, num_atoms):
+                if cached_mono.shape == (n_samples, padded_size):
                     data_updated = data.copy()
                     data_updated["mono"] = cached_mono
                     if verbose:
@@ -839,7 +859,7 @@ def preprocess_monopoles(data, mono_imputation_fn, num_atoms=60, batch_size=1000
                     return data_updated
                 else:
                     if verbose:
-                        print(f"  Warning: Cache shape mismatch ({cached_mono.shape} vs expected ({n_samples}, {num_atoms})). Recomputing...")
+                        print(f"  Warning: Cache shape mismatch ({cached_mono.shape} vs expected ({n_samples}, {padded_size})). Recomputing...")
             except Exception as e:
                 if verbose:
                     print(f"  Warning: Failed to load cache ({e}). Recomputing...")
@@ -847,7 +867,7 @@ def preprocess_monopoles(data, mono_imputation_fn, num_atoms=60, batch_size=1000
     # Need to impute monopoles
     if verbose:
         print(f"  Imputing monopoles for {n_samples} samples...")
-        print(f"  Using num_atoms={num_atoms} (padded), actual_atoms={actual_num_atoms} per molecule, batch_size={batch_size}")
+        print(f"  Using padded_size={padded_size} (from data shape), actual_atoms={actual_num_atoms} per molecule, batch_size={batch_size}")
     
     # Create batches for imputation
     imputed_monopoles = []
@@ -878,9 +898,10 @@ def preprocess_monopoles(data, mono_imputation_fn, num_atoms=60, batch_size=1000
                     pass
         
         # Create message passing indices for this batch
-        batch_segments = jnp.repeat(jnp.arange(actual_batch_size), num_atoms)
-        offsets = jnp.arange(actual_batch_size) * num_atoms
-        dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(num_atoms)
+        # Use padded_size for message passing indices (imputation function expects padded format)
+        batch_segments = jnp.repeat(jnp.arange(actual_batch_size), padded_size)
+        offsets = jnp.arange(actual_batch_size) * padded_size
+        dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(padded_size)
         dst_idx = (dst_idx + offsets[:, None]).reshape(-1)
         src_idx = (src_idx + offsets[:, None]).reshape(-1)
         
@@ -909,14 +930,14 @@ def preprocess_monopoles(data, mono_imputation_fn, num_atoms=60, batch_size=1000
             # Extract only the actual atoms (first actual_num_atoms)
             imputed_actual = imputed_reshaped[:, :actual_num_atoms]
             
-            # Pad with zeros to match num_atoms (the padded size expected by the data format)
-            if actual_num_atoms < num_atoms:
-                padding = jnp.zeros((actual_batch_size, num_atoms - actual_num_atoms), dtype=imputed_actual.dtype)
+            # Pad with zeros to match padded_size (the padded size expected by the data format)
+            if actual_num_atoms < padded_size:
+                padding = jnp.zeros((actual_batch_size, padded_size - actual_num_atoms), dtype=imputed_actual.dtype)
                 imputed_padded = jnp.concatenate([imputed_actual, padding], axis=1)
             else:
-                imputed_padded = imputed_actual[:, :num_atoms]  # Trim if somehow larger
+                imputed_padded = imputed_actual[:, :padded_size]  # Trim if somehow larger
             
-            # Flatten back to (actual_batch_size * num_atoms,) for concatenation
+            # Flatten back to (actual_batch_size * padded_size,) for concatenation
             imputed_monopoles.append(imputed_padded.reshape(-1))
         except Exception as e:
             # If imputation fails, raise an error rather than silently using zeros
@@ -929,21 +950,21 @@ def preprocess_monopoles(data, mono_imputation_fn, num_atoms=60, batch_size=1000
     all_imputed = jnp.concatenate(imputed_monopoles)
     
     # Verify the shape is correct before reshaping
-    expected_size = n_samples * num_atoms
+    expected_size = n_samples * padded_size
     if all_imputed.size != expected_size:
         raise ValueError(
             f"Imputed monopoles size mismatch: got {all_imputed.size} elements, "
-            f"expected {expected_size} (n_samples={n_samples} * num_atoms={num_atoms})"
+            f"expected {expected_size} (n_samples={n_samples} * padded_size={padded_size})"
         )
     
-    # Reshape to (n_samples, num_atoms) format
+    # Reshape to (n_samples, padded_size) format
     try:
-        imputed_reshaped = all_imputed.reshape(n_samples, num_atoms)
+        imputed_reshaped = all_imputed.reshape(n_samples, padded_size)
     except Exception as e:
         raise ValueError(
             f"Failed to reshape imputed monopoles: got shape {all_imputed.shape} "
-            f"(size {all_imputed.size}), trying to reshape to ({n_samples}, {num_atoms}) "
-            f"(size {n_samples * num_atoms}). Check that num_atoms={num_atoms} is correct."
+            f"(size {all_imputed.size}), trying to reshape to ({n_samples}, {padded_size}) "
+            f"(size {n_samples * padded_size}). Check that padded_size={padded_size} is correct."
         ) from e
     
     # Update data dictionary
