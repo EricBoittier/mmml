@@ -26,7 +26,8 @@ except ImportError:
     static_argnames=("model_apply", "optimizer_update", "batch_size", "esp_w", "chg_w", "ndcm"),
 )
 def train_step(
-    model_apply, optimizer_update, batch, batch_size, opt_state, params, esp_w, chg_w, ndcm, clip_norm=None
+    model_apply, optimizer_update, batch, batch_size, opt_state, params, esp_w, chg_w, ndcm, clip_norm=None,
+    distance_weighting=False, distance_scale=2.0, distance_min=0.5
 ):
     """
     Single training step for DCMNet with ESP and monopole losses.
@@ -80,6 +81,10 @@ def train_step(
             esp_w=esp_w,
             chg_w=chg_w,
             n_dcm=ndcm,
+            atom_positions=batch.get("R"),  # Pass atom positions for distance weighting
+            distance_weighting=distance_weighting,  # Use function parameter, not batch value
+            distance_scale=distance_scale,  # Use function parameter, not batch value
+            distance_min=distance_min,  # Use function parameter, not batch value
         )
         return loss, (mono, dipo, esp_pred, esp_target, esp_errors)
 
@@ -220,6 +225,10 @@ def eval_step(model_apply, batch, batch_size, params, esp_w, chg_w, ndcm):
         esp_w=esp_w,
         chg_w=chg_w,
         n_dcm=ndcm,
+        atom_positions=batch.get("R"),
+        distance_weighting=False,  # Typically don't weight during evaluation
+        distance_scale=2.0,
+        distance_min=0.5,
     )
     return loss, mono, dipo, esp_pred, esp_target, esp_errors
 
@@ -241,7 +250,10 @@ def train_model(
     num_atoms=60,
     use_grad_clip=False,
     grad_clip_norm=2.0,
-    mono_imputation_fn=None
+    mono_imputation_fn=None,
+    distance_weighting=False,
+    distance_scale=2.0,
+    distance_min=0.5,
 ):
     """
     Train DCMNet model with ESP and monopole losses.
@@ -287,6 +299,15 @@ def train_model(
     mono_imputation_fn : callable, optional
         Function to impute monopoles if missing from batches. Should take a batch dict
         and return monopoles with shape (batch_size * num_atoms,). By default None
+    distance_weighting : bool, optional
+        Whether to apply distance-based weighting to ESP loss. Errors further from atoms
+        will have lower weight. By default False
+    distance_scale : float, optional
+        Scale parameter for distance weighting (in Angstroms). Larger values give slower
+        decay with distance. Weight = exp(-distance / distance_scale). By default 2.0
+    distance_min : float, optional
+        Minimum distance for weighting (in Angstroms). Distances below this are clamped
+        to avoid singularities. By default 0.5
         
     Returns
     -------
@@ -349,6 +370,9 @@ def train_model(
                 chg_w=chg_w,
                 ndcm=ndcm,
                 clip_norm=grad_clip_norm if use_grad_clip else None,
+                distance_weighting=distance_weighting,
+                distance_scale=distance_scale,
+                distance_min=distance_min,
             )
 
             # Block until JAX operations complete to avoid async context issues

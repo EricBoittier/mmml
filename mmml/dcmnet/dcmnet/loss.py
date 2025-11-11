@@ -36,7 +36,7 @@ def pred_dipole(dcm, com, q):
     # return jnp.linalg.norm(dipole_out)* 4.80320
 
 
-@functools.partial(jax.jit, static_argnames=("batch_size", "esp_w", "chg_w", "n_dcm"))
+@functools.partial(jax.jit, static_argnames=("batch_size", "esp_w", "chg_w", "n_dcm", "distance_weighting", "distance_scale", "distance_min"))
 def esp_mono_loss(
     dipo_prediction,
     mono_prediction,
@@ -49,12 +49,18 @@ def esp_mono_loss(
     esp_w,
     chg_w,
     n_dcm,
+    atom_positions=None,
+    distance_weighting=False,
+    distance_scale=2.0,
+    distance_min=0.5,
 ):
     """
     Combined ESP and monopole loss function for DCMNet training.
     
     Computes loss as weighted sum of ESP fitting error and monopole
     constraint violation. Handles dummy atoms and charge neutrality.
+    Optionally applies distance-based weighting to ESP loss, giving higher
+    weight to errors near atoms and lower weight to errors far away.
     
     Parameters
     ----------
@@ -76,8 +82,22 @@ def esp_mono_loss(
         Batch size
     esp_w : float
         Weight for ESP loss term
+    chg_w : float
+        Weight for charge/monopole loss term
     n_dcm : int
         Number of distributed multipoles per atom
+    atom_positions : array_like, optional
+        Atom positions, shape (batch_size, natoms, 3) or (batch_size * natoms, 3).
+        Required if distance_weighting=True.
+    distance_weighting : bool, optional
+        Whether to apply distance-based weighting to ESP loss, by default False
+    distance_scale : float, optional
+        Scale parameter for distance weighting (in Angstroms). Larger values
+        give slower decay with distance. Weight = exp(-distance / distance_scale),
+        by default 2.0
+    distance_min : float, optional
+        Minimum distance for weighting (in Angstroms). Distances below this
+        are clamped to this value to avoid singularities, by default 0.5
         
     Returns
     -------
@@ -149,10 +169,18 @@ def esp_mono_loss(
     # m = (m - avg_chg) * valid_atoms
 
     # monopole loss
-    mono_prediction = m.reshape(max_atoms, n_dcm)
-    sum_of_dc_monopoles = mono_prediction.sum(axis=-1)
-    l2_loss_mono = optax.l2_loss(sum_of_dc_monopoles, mono)
-    mono_loss_corrected = l2_loss_mono.sum() / jnp.maximum(n_atoms, 1.0)
+    # Reshape m to (batch_size, max_atoms, n_dcm) to sum over n_dcm dimension
+    mono_pred_reshaped = m.reshape(batch_size, max_atoms, n_dcm)
+    sum_of_dc_monopoles = mono_pred_reshaped.sum(axis=-1)  # (batch_size, max_atoms)
+    
+    # Handle mono shape - it might be (batch_size, max_atoms) or (batch_size * max_atoms,)
+    if mono.ndim == 1:
+        mono_target = mono.reshape(batch_size, max_atoms)
+    else:
+        mono_target = mono
+    
+    l2_loss_mono = optax.l2_loss(sum_of_dc_monopoles, mono_target)
+    mono_loss_corrected = l2_loss_mono.sum() / jnp.maximum(n_atoms * batch_size, 1.0)
 
     # esp_loss
     # batched_pred = batched_electrostatic_potential(d, m, vdw_surface)
@@ -167,12 +195,58 @@ def esp_mono_loss(
     esp_errors = batched_pred - esp_target
     
     l2_loss = optax.l2_loss(batched_pred, esp_target)
-    # remove dummy grid points using actual grid length
-    # n_points = l2_loss.shape[0]
-    # ngrid_scalar = jnp.ravel(ngrid)[0]
-    # valid = jnp.arange(n_points) < ngrid_scalar
-    # valid_grids = jnp.where(valid, l2_loss, 0)
-    esp_loss_corrected = l2_loss.sum() / jnp.ravel(ngrid)[0]
+    
+    # Apply distance-based weighting if requested
+    if distance_weighting and atom_positions is not None:
+        # Handle atom_positions shape - could be (batch_size, natoms, 3) or flattened
+        if atom_positions.ndim == 2:
+            # Flattened: (batch_size * natoms, 3) -> reshape to (batch_size, natoms, 3)
+            atom_pos = atom_positions.reshape(batch_size, max_atoms, 3)
+        else:
+            # Already batched: (batch_size, natoms, 3)
+            atom_pos = atom_positions
+        
+        # Handle vdw_surface shape
+        if vdw_surface.ndim == 2:
+            # Single sample: (ngrid, 3) -> add batch dimension
+            vdw = vdw_surface[None, :, :]  # (1, ngrid, 3)
+        else:
+            vdw = vdw_surface  # (batch_size, ngrid, 3)
+        
+        # Compute distances from each grid point to nearest atom
+        # vdw: (batch_size, ngrid, 3), atom_pos: (batch_size, natoms, 3)
+        # Compute pairwise distances: (batch_size, ngrid, natoms)
+        diff = vdw[:, :, None, :] - atom_pos[:, None, :, :]  # (batch_size, ngrid, natoms, 3)
+        distances = jnp.linalg.norm(diff, axis=-1)  # (batch_size, ngrid, natoms)
+        
+        # Find minimum distance to any atom for each grid point
+        min_distances = jnp.min(distances, axis=-1)  # (batch_size, ngrid)
+        
+        # Clamp minimum distance to avoid singularities
+        min_distances = jnp.maximum(min_distances, distance_min)
+        
+        # Compute weights: exponential decay with distance
+        # Weight = exp(-distance / scale)
+        # This gives weight=1 at distance=0, weight≈0.6 at distance=scale, weight≈0.14 at distance=2*scale
+        weights = jnp.exp(-min_distances / distance_scale)  # (batch_size, ngrid)
+        
+        # Handle single sample case
+        if vdw_surface.ndim == 2:
+            weights = weights[0]  # (ngrid,)
+            l2_loss = l2_loss.reshape(-1) if l2_loss.ndim > 1 else l2_loss
+        
+        # Apply weights to loss
+        weighted_l2_loss = l2_loss * weights
+        esp_loss_corrected = weighted_l2_loss.sum() / jnp.maximum(weights.sum(), 1.0)
+    else:
+        # No distance weighting - use original uniform weighting
+        # remove dummy grid points using actual grid length
+        # n_points = l2_loss.shape[0]
+        # ngrid_scalar = jnp.ravel(ngrid)[0]
+        # valid = jnp.arange(n_points) < ngrid_scalar
+        # valid_grids = jnp.where(valid, l2_loss, 0)
+        esp_loss_corrected = l2_loss.sum() / jnp.ravel(ngrid)[0]
+    
     total_loss = esp_loss_corrected * esp_w + mono_loss_corrected * chg_w
     
     return total_loss, batched_pred, esp_target, esp_errors
