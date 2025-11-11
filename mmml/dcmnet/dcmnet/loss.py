@@ -610,7 +610,7 @@ def esp_mono_loss(
         'charge_conservation_loss_weighted': charge_conservation_loss * charge_conservation_w,
     }
     
-    return total_loss, batched_pred, esp_target, esp_errors, loss_components
+    return total_loss, batched_pred, esp_target, esp_errors, loss_components, esp_mask
 
 
 @functools.partial(jax.jit, static_argnames=("batch_size", "esp_w", "chg_w", "n_dcm"))
