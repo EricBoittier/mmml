@@ -449,16 +449,16 @@ def esp_mono_loss(
             esp_mask_expanded = esp_mask
             esp_target_expanded = esp_target
         
+        # Handle unit conversion: if ESP grid is in Bohr, convert to Angstrom for distance computation
+        # (atomic positions and radii are always in Angstrom)
+        if esp_grid_units.lower() == "bohr":
+            vdw = vdw * BOHR_TO_ANGSTROM  # Convert grid from Bohr to Angstrom
+        
         # Compute distances from grid to all atoms: (batch_size, ngrid, natoms)
         # vdw: (batch_size, ngrid, 3), atom_pos: (batch_size, natoms, 3)
         # Use broadcasting: vdw[:, :, None, :] - atom_pos[:, None, :, :]
         diff = vdw[:, :, None, :] - atom_pos[:, None, :, :]  # (batch_size, ngrid, natoms, 3)
         distances = jnp.linalg.norm(diff, axis=-1)  # (batch_size, ngrid, natoms)
-        
-        # Handle unit conversion if ESP grid is in Bohr but atoms/radii are in Angstrom
-        # If grid is in Bohr, convert distances to Angstrom for comparison with radii
-        if esp_grid_units.lower() == "bohr":
-            distances = distances * BOHR_TO_ANGSTROM  # Convert Bohr to Angstrom
         
         # Get atomic radii for each atom (in Angstrom)
         atomic_nums_int = atomic_nums.astype(jnp.int32)
