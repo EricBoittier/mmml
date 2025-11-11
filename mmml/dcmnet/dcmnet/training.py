@@ -81,11 +81,14 @@ def train_step(
             esp_w=esp_w,
             chg_w=chg_w,
             n_dcm=ndcm,
-            atom_positions=batch.get("R"),  # Pass atom positions for distance weighting
+            atom_positions=batch.get("R"),  # Pass atom positions for distance weighting and masking
+            atomic_numbers=batch.get("Z"),  # Pass atomic numbers for atomic radii masking
+            atom_mask=batch.get("atom_mask"),  # Pass atom mask for dummy atom handling
             distance_weighting=distance_weighting,  # Use function parameter, not batch value
             distance_scale=distance_scale,  # Use function parameter, not batch value
             distance_min=distance_min,  # Use function parameter, not batch value
             esp_magnitude_weighting=esp_magnitude_weighting,  # Weight by ESP magnitude instead
+            use_atomic_radii_mask=True,  # Enable atomic radii masking (critical for reducing ESP errors)
         )
         return loss, (mono, dipo, esp_pred, esp_target, esp_errors)
 
@@ -240,9 +243,12 @@ def eval_step(model_apply, batch, batch_size, params, esp_w, chg_w, ndcm):
         chg_w=chg_w,
         n_dcm=ndcm,
         atom_positions=batch.get("R"),
+        atomic_numbers=batch.get("Z"),  # Pass atomic numbers for atomic radii masking
+        atom_mask=batch.get("atom_mask"),  # Pass atom mask for dummy atom handling
         distance_weighting=False,  # Typically don't weight during evaluation
         distance_scale=2.0,
         distance_min=0.5,
+        use_atomic_radii_mask=True,  # Enable atomic radii masking (critical for reducing ESP errors)
     )
     return loss, mono, dipo, esp_pred, esp_target, esp_errors
 
