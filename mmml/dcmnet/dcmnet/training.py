@@ -73,7 +73,7 @@ def train_step(
             src_idx=batch["src_idx"],
             batch_segments=batch["batch_segments"],
         )
-        loss, esp_pred, esp_target, esp_errors, loss_components = esp_mono_loss(
+        loss, esp_pred, esp_target, esp_errors, loss_components, esp_mask = esp_mono_loss(
             dipo_prediction=dipo,
             mono_prediction=mono,
             vdw_surface=batch["vdw_surface"],
@@ -95,14 +95,14 @@ def train_step(
             use_atomic_radii_mask=True,  # Enable atomic radii masking (critical for reducing ESP errors)
             charge_conservation_w=charge_conservation_w,  # Weight for charge conservation loss
         )
-        return loss, (mono, dipo, esp_pred, esp_target, esp_errors, loss_components)
+        return loss, (mono, dipo, esp_pred, esp_target, esp_errors, loss_components, esp_mask)
 
-    (loss, (mono, dipo, esp_pred, esp_target, esp_errors, loss_components)), grad = jax.value_and_grad(loss_fn, has_aux=True)(params)
+    (loss, (mono, dipo, esp_pred, esp_target, esp_errors, loss_components, esp_mask)), grad = jax.value_and_grad(loss_fn, has_aux=True)(params)
     if clip_norm is not None:
         grad = clip_grads_by_global_norm(grad, clip_norm)
     updates, opt_state = optimizer_update(grad, opt_state, params)
     params = optax.apply_updates(params, updates)
-    return params, opt_state, loss, mono, dipo, esp_pred, esp_target, esp_errors, loss_components
+    return params, opt_state, loss, mono, dipo, esp_pred, esp_target, esp_errors, loss_components, esp_mask
 
 
 def compute_statistics(predictions, targets=None):
@@ -164,7 +164,7 @@ def print_statistics_table(train_stats, valid_stats, epoch):
     metrics_list = ['loss', 'esp_loss', 'mono_loss', 'charge_conservation_loss',
                     'esp_loss_weighted', 'mono_loss_weighted', 'charge_conservation_loss_weighted',
                     'mono_mae', 'mono_rmse', 'mono_mean', 'mono_std',
-                    'esp_mae', 'esp_rmse', 'esp_r2', 'esp_pred_mean', 'esp_pred_std',
+                    'esp_mae', 'esp_rmse', 'esp_r2_unmasked', 'esp_r2_masked', 'esp_pred_mean', 'esp_pred_std',
                     'esp_error_mean', 'esp_error_std']
     
     # Conversion factor: Hartree to kcal/mol
@@ -237,7 +237,7 @@ def eval_step(model_apply, batch, batch_size, params, esp_w, chg_w, ndcm, charge
         batch_segments=batch["batch_segments"],
         batch_size=batch_size,
     )
-    loss, esp_pred, esp_target, esp_errors, loss_components = esp_mono_loss(
+    loss, esp_pred, esp_target, esp_errors, loss_components, esp_mask = esp_mono_loss(
         dipo_prediction=dipo,
         mono_prediction=mono,
         vdw_surface=batch["vdw_surface"],
@@ -258,7 +258,7 @@ def eval_step(model_apply, batch, batch_size, params, esp_w, chg_w, ndcm, charge
         use_atomic_radii_mask=True,  # Enable atomic radii masking (critical for reducing ESP errors)
         charge_conservation_w=charge_conservation_w,  # Weight for charge conservation loss
     )
-    return loss, mono, dipo, esp_pred, esp_target, esp_errors, loss_components
+    return loss, mono, dipo, esp_pred, esp_target, esp_errors, loss_components, esp_mask
 
 
 def verify_esp_grid_alignment(train_data, valid_data, num_atoms=60, verbose=True):
@@ -629,9 +629,10 @@ def train_model(
         train_esp_targets = []
         train_esp_errors = []
         train_loss_components = []
+        train_esp_masks = []
         
         for i, batch in enumerate(train_batches):
-            params, opt_state, loss, mono, dipo, esp_pred, esp_target, esp_error, loss_components = train_step(
+            params, opt_state, loss, mono, dipo, esp_pred, esp_target, esp_error, loss_components, esp_mask = train_step(
                 model_apply=model.apply,
                 optimizer_update=optimizer.update,
                 batch=batch,
@@ -670,6 +671,7 @@ def train_model(
         train_esp_preds = jnp.concatenate([jnp.ravel(e) for e in train_esp_preds])
         train_esp_targets = jnp.concatenate([jnp.ravel(e) for e in train_esp_targets])
         train_esp_errors = jnp.concatenate([jnp.ravel(e) for e in train_esp_errors])
+        train_esp_masks = jnp.concatenate([jnp.ravel(e) for e in train_esp_masks])
         
         # Block once for statistics computation (better GPU utilization)
         jax.block_until_ready(train_esp_errors)
@@ -687,15 +689,30 @@ def train_model(
         # R² = 1 - (SS_res / SS_tot)
         # SS_res = sum((y_pred - y_true)²)
         # SS_tot = sum((y_true - y_mean)²)
-        train_esp_ss_res = jnp.sum((train_esp_preds - train_esp_targets)**2)
-        train_esp_target_mean = jnp.mean(train_esp_targets)
-        train_esp_ss_tot = jnp.sum((train_esp_targets - train_esp_target_mean)**2)
-        train_esp_r2 = 1.0 - (train_esp_ss_res / (train_esp_ss_tot + 1e-10))
+        
+        # Unmasked R² (all points)
+        train_esp_ss_res_unmasked = jnp.sum((train_esp_preds - train_esp_targets)**2)
+        train_esp_target_mean_unmasked = jnp.mean(train_esp_targets)
+        train_esp_ss_tot_unmasked = jnp.sum((train_esp_targets - train_esp_target_mean_unmasked)**2)
+        train_esp_r2_unmasked = 1.0 - (train_esp_ss_res_unmasked / (train_esp_ss_tot_unmasked + 1e-10))
+        
+        # Masked R² (only valid points)
+        train_esp_preds_masked = train_esp_preds[train_esp_masks > 0.5]
+        train_esp_targets_masked = train_esp_targets[train_esp_masks > 0.5]
+        n_masked_points = float(jnp.sum(train_esp_masks > 0.5))
+        if n_masked_points > 0:
+            train_esp_ss_res_masked = jnp.sum((train_esp_preds_masked - train_esp_targets_masked)**2)
+            train_esp_target_mean_masked = jnp.mean(train_esp_targets_masked)
+            train_esp_ss_tot_masked = jnp.sum((train_esp_targets_masked - train_esp_target_mean_masked)**2)
+            train_esp_r2_masked = 1.0 - (train_esp_ss_res_masked / (train_esp_ss_tot_masked + 1e-10))
+        else:
+            train_esp_r2_masked = 0.0  # No valid points
         
         train_esp_stats = {
             'mae': float(jnp.mean(jnp.abs(train_esp_errors))),
             'rmse': float(jnp.sqrt(jnp.mean(train_esp_errors**2))),
-            'r2': float(train_esp_r2),
+            'r2_unmasked': float(train_esp_r2_unmasked),
+            'r2_masked': float(train_esp_r2_masked),
             'pred_mean': float(jnp.mean(train_esp_preds)),
             'pred_std': float(jnp.std(train_esp_preds)),
             'target_mean': float(jnp.mean(train_esp_targets)),
@@ -726,7 +743,8 @@ def train_model(
             'mono_max': train_mono_stats['max'],
             'esp_mae': train_esp_stats['mae'],
             'esp_rmse': train_esp_stats['rmse'],
-            'esp_r2': train_esp_stats['r2'],
+            'esp_r2_unmasked': train_esp_stats['r2_unmasked'],
+            'esp_r2_masked': train_esp_stats['r2_masked'],
             'esp_pred_mean': train_esp_stats['pred_mean'],
             'esp_pred_std': train_esp_stats['pred_std'],
             'esp_target_mean': train_esp_stats['target_mean'],
@@ -742,9 +760,10 @@ def train_model(
         valid_esp_targets = []
         valid_esp_errors = []
         valid_loss_components = []
+        valid_esp_masks = []
         
         for i, batch in enumerate(valid_batches):
-            loss, mono, dipo, esp_pred, esp_target, esp_error, loss_components = eval_step(
+            loss, mono, dipo, esp_pred, esp_target, esp_error, loss_components, esp_mask = eval_step(
                 model_apply=model.apply,
                 batch=batch,
                 batch_size=batch_size,
@@ -764,6 +783,7 @@ def train_model(
             valid_esp_targets.append(esp_target)
             valid_esp_errors.append(esp_error)
             valid_loss_components.append(loss_components)
+            valid_esp_masks.append(esp_mask)
 
         # Concatenate all predictions and targets (block once at end of epoch)
         valid_mono_preds = jnp.concatenate(valid_mono_preds, axis=0)
@@ -771,6 +791,7 @@ def train_model(
         valid_esp_preds = jnp.concatenate([jnp.ravel(e) for e in valid_esp_preds])
         valid_esp_targets = jnp.concatenate([jnp.ravel(e) for e in valid_esp_targets])
         valid_esp_errors = jnp.concatenate([jnp.ravel(e) for e in valid_esp_errors])
+        valid_esp_masks = jnp.concatenate([jnp.ravel(e) for e in valid_esp_masks])
         
         # Block once for statistics computation (better GPU utilization)
         jax.block_until_ready(valid_esp_errors)
@@ -788,15 +809,30 @@ def train_model(
         # R² = 1 - (SS_res / SS_tot)
         # SS_res = sum((y_pred - y_true)²)
         # SS_tot = sum((y_true - y_mean)²)
-        valid_esp_ss_res = jnp.sum((valid_esp_preds - valid_esp_targets)**2)
-        valid_esp_target_mean = jnp.mean(valid_esp_targets)
-        valid_esp_ss_tot = jnp.sum((valid_esp_targets - valid_esp_target_mean)**2)
-        valid_esp_r2 = 1.0 - (valid_esp_ss_res / (valid_esp_ss_tot + 1e-10))
+        
+        # Unmasked R² (all points)
+        valid_esp_ss_res_unmasked = jnp.sum((valid_esp_preds - valid_esp_targets)**2)
+        valid_esp_target_mean_unmasked = jnp.mean(valid_esp_targets)
+        valid_esp_ss_tot_unmasked = jnp.sum((valid_esp_targets - valid_esp_target_mean_unmasked)**2)
+        valid_esp_r2_unmasked = 1.0 - (valid_esp_ss_res_unmasked / (valid_esp_ss_tot_unmasked + 1e-10))
+        
+        # Masked R² (only valid points)
+        valid_esp_preds_masked = valid_esp_preds[valid_esp_masks > 0.5]
+        valid_esp_targets_masked = valid_esp_targets[valid_esp_masks > 0.5]
+        n_masked_points = float(jnp.sum(valid_esp_masks > 0.5))
+        if n_masked_points > 0:
+            valid_esp_ss_res_masked = jnp.sum((valid_esp_preds_masked - valid_esp_targets_masked)**2)
+            valid_esp_target_mean_masked = jnp.mean(valid_esp_targets_masked)
+            valid_esp_ss_tot_masked = jnp.sum((valid_esp_targets_masked - valid_esp_target_mean_masked)**2)
+            valid_esp_r2_masked = 1.0 - (valid_esp_ss_res_masked / (valid_esp_ss_tot_masked + 1e-10))
+        else:
+            valid_esp_r2_masked = 0.0  # No valid points
         
         valid_esp_stats = {
             'mae': float(jnp.mean(jnp.abs(valid_esp_errors))),
             'rmse': float(jnp.sqrt(jnp.mean(valid_esp_errors**2))),
-            'r2': float(valid_esp_r2),
+            'r2_unmasked': float(valid_esp_r2_unmasked),
+            'r2_masked': float(valid_esp_r2_masked),
             'pred_mean': float(jnp.mean(valid_esp_preds)),
             'pred_std': float(jnp.std(valid_esp_preds)),
             'target_mean': float(jnp.mean(valid_esp_targets)),
@@ -827,7 +863,8 @@ def train_model(
             'mono_max': valid_mono_stats['max'],
             'esp_mae': valid_esp_stats['mae'],
             'esp_rmse': valid_esp_stats['rmse'],
-            'esp_r2': valid_esp_stats['r2'],
+            'esp_r2_unmasked': valid_esp_stats['r2_unmasked'],
+            'esp_r2_masked': valid_esp_stats['r2_masked'],
             'esp_pred_mean': valid_esp_stats['pred_mean'],
             'esp_pred_std': valid_esp_stats['pred_std'],
             'esp_target_mean': valid_esp_stats['target_mean'],
