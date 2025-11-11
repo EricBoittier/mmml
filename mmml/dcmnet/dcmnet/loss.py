@@ -5,10 +5,15 @@ import jax.numpy as jnp
 import numpy as np
 import optax
 from jax.random import randint
+import ase.data
 
 from .electrostatics import batched_electrostatic_potential, calc_esp
 
 from .utils import reshape_dipole
+
+# Constants for ESP masking
+EPS = 1e-8
+RADII_TABLE = jnp.array(ase.data.covalent_radii)
 
 
 def pred_dipole(dcm, com, q):
@@ -36,7 +41,7 @@ def pred_dipole(dcm, com, q):
     # return jnp.linalg.norm(dipole_out)* 4.80320
 
 
-@functools.partial(jax.jit, static_argnames=("batch_size", "esp_w", "chg_w", "n_dcm", "distance_weighting", "distance_scale", "distance_min", "esp_magnitude_weighting"))
+@functools.partial(jax.jit, static_argnames=("batch_size", "esp_w", "chg_w", "n_dcm", "distance_weighting", "distance_scale", "distance_min", "esp_magnitude_weighting", "esp_min_distance", "esp_max_value", "use_atomic_radii_mask"))
 def esp_mono_loss(
     dipo_prediction,
     mono_prediction,
@@ -50,10 +55,15 @@ def esp_mono_loss(
     chg_w,
     n_dcm,
     atom_positions=None,
+    atomic_numbers=None,
+    atom_mask=None,
     distance_weighting=False,
     distance_scale=2.0,
     distance_min=0.5,
     esp_magnitude_weighting=False,
+    esp_min_distance=0.0,
+    esp_max_value=1e10,
+    use_atomic_radii_mask=True,
 ):
     """
     Combined ESP and monopole loss function for DCMNet training.
@@ -89,7 +99,13 @@ def esp_mono_loss(
         Number of distributed multipoles per atom
     atom_positions : array_like, optional
         Atom positions, shape (batch_size, natoms, 3) or (batch_size * natoms, 3).
-        Required if distance_weighting=True.
+        Required if distance_weighting=True or use_atomic_radii_mask=True.
+    atomic_numbers : array_like, optional
+        Atomic numbers, shape (batch_size, natoms) or (batch_size * natoms,).
+        Required if use_atomic_radii_mask=True.
+    atom_mask : array_like, optional
+        Atom mask (1 for real atoms, 0 for dummy), shape (batch_size, natoms) or (batch_size * natoms,).
+        Required if use_atomic_radii_mask=True.
     distance_weighting : bool, optional
         Whether to apply distance-based weighting to ESP loss, by default False
     distance_scale : float, optional
@@ -105,6 +121,15 @@ def esp_mono_loss(
         with larger |ESP| values will have LOWER weight. This reduces the impact
         of points where nuclear-electron shielding occurs and ESP approaches
         singularity. By default False
+    esp_min_distance : float, optional
+        Minimum distance from atoms for ESP points to be included in loss (in Angstroms).
+        Points closer than this are masked out. By default 0.0 (no masking).
+    esp_max_value : float, optional
+        Maximum absolute ESP value to include in loss. Points with |ESP| > this are masked out.
+        By default 1e10 (no masking).
+    use_atomic_radii_mask : bool, optional
+        Whether to mask out ESP points too close to atoms (within 2.0 * covalent_radii).
+        This excludes singularities near atomic nuclei. By default True.
         
     Returns
     -------
@@ -203,6 +228,89 @@ def esp_mono_loss(
     
     l2_loss = optax.l2_loss(batched_pred, esp_target)
     
+    # Create ESP mask to exclude points too close to atoms (singularities)
+    # This is critical for reducing ESP errors - matches working trainer.py
+    esp_mask = jnp.ones_like(esp_target, dtype=jnp.float32)
+    
+    if use_atomic_radii_mask and atom_positions is not None and atomic_numbers is not None:
+        # Handle atom_positions shape
+        if atom_positions.ndim == 2:
+            atom_pos = atom_positions.reshape(batch_size, max_atoms, 3)
+        else:
+            atom_pos = atom_positions
+        
+        # Handle atomic_numbers shape
+        if atomic_numbers.ndim == 1:
+            atomic_nums = atomic_numbers.reshape(batch_size, max_atoms)
+        else:
+            atomic_nums = atomic_numbers
+        
+        # Handle atom_mask shape
+        if atom_mask is None:
+            # Assume all atoms are valid if mask not provided
+            atom_mask_arr = jnp.ones((batch_size, max_atoms), dtype=jnp.float32)
+        elif atom_mask.ndim == 1:
+            atom_mask_arr = atom_mask.reshape(batch_size, max_atoms)
+        else:
+            atom_mask_arr = atom_mask
+        
+        # Handle vdw_surface shape
+        if vdw_surface.ndim == 2:
+            vdw = vdw_surface[None, :, :]  # (1, ngrid, 3)
+            esp_mask = esp_mask[None, :] if esp_mask.ndim == 1 else esp_mask
+        else:
+            vdw = vdw_surface  # (batch_size, ngrid, 3)
+        
+        # Compute distances from grid to all atoms: (batch_size, ngrid, natoms)
+        diff = vdw[:, :, None, :] - atom_pos[:, None, :, :]
+        distances = jnp.linalg.norm(diff, axis=-1)
+        
+        # Get atomic radii for each atom
+        atomic_nums_int = atomic_nums.astype(jnp.int32)
+        atomic_radii = jnp.take(RADII_TABLE, atomic_nums_int, mode='clip')  # (batch_size, natoms)
+        
+        # For distance-based masking, only consider real (unmasked) atoms
+        # Set distances to masked atoms to infinity
+        distances_masked = jnp.where(
+            atom_mask_arr[:, None, :] > 0.5,
+            distances,
+            1e10  # Large distance for masked atoms
+        )
+        
+        # Check if any REAL atom is too close (within 2.0 * covalent_radii)
+        cutoff_distances = 2.0 * atomic_radii[:, None, :]  # (batch_size, 1, natoms)
+        within_cutoff = distances_masked < cutoff_distances
+        distance_mask = (~jnp.any(within_cutoff, axis=-1)).astype(jnp.float32)  # (batch_size, ngrid)
+        
+        # Apply additional distance and value filters
+        if esp_min_distance > 0:
+            min_dist = jnp.min(distances_masked, axis=-1)  # (batch_size, ngrid)
+            distance_mask = distance_mask * (min_dist >= esp_min_distance).astype(jnp.float32)
+        
+        if esp_max_value < 1e9:
+            esp_abs = jnp.abs(esp_target)
+            if esp_abs.ndim == 1 and batch_size == 1:
+                esp_abs = esp_abs[None, :]
+            distance_mask = distance_mask * (esp_abs <= esp_max_value).astype(jnp.float32)
+        
+        # Apply mask to esp_mask
+        if esp_mask.ndim == 1:
+            esp_mask = distance_mask[0] if batch_size == 1 else distance_mask.reshape(-1)
+        else:
+            esp_mask = distance_mask
+    
+    # Apply mask to loss
+    if esp_mask.ndim > 1:
+        esp_mask = esp_mask.reshape(-1)
+    if l2_loss.ndim > 1:
+        l2_loss = l2_loss.reshape(-1)
+    if esp_errors.ndim > 1:
+        esp_errors = esp_errors.reshape(-1)
+    
+    # Mask the loss (set masked points to 0)
+    l2_loss_masked = l2_loss * esp_mask
+    mask_total = jnp.sum(esp_mask) + EPS
+    
     # Apply weighting if requested
     if esp_magnitude_weighting:
         # Weight by inverse ESP magnitude: points with larger |ESP| get LOWER weight
@@ -228,9 +336,11 @@ def esp_mono_loss(
         if l2_loss.ndim > 1:
             l2_loss = l2_loss.reshape(-1)
         
-        # Apply weights to loss
-        weighted_l2_loss = l2_loss * weights
-        esp_loss_corrected = weighted_l2_loss.sum() / jnp.maximum(weights.sum(), 1.0)
+        # Apply weights to loss (with mask)
+        weighted_l2_loss = l2_loss_masked * weights
+        # Normalize by masked weights sum
+        weights_masked = weights * esp_mask
+        esp_loss_corrected = weighted_l2_loss.sum() / jnp.maximum(weights_masked.sum(), EPS)
         
     elif distance_weighting and atom_positions is not None:
         # Handle atom_positions shape - could be (batch_size, natoms, 3) or flattened
@@ -273,17 +383,15 @@ def esp_mono_loss(
             weights = weights[0]  # (ngrid,)
             l2_loss = l2_loss.reshape(-1) if l2_loss.ndim > 1 else l2_loss
         
-        # Apply weights to loss
-        weighted_l2_loss = l2_loss * weights
-        esp_loss_corrected = weighted_l2_loss.sum() / jnp.maximum(weights.sum(), 1.0)
+        # Apply weights to loss (with mask)
+        weighted_l2_loss = l2_loss_masked * weights
+        # Normalize by masked weights sum
+        weights_masked = weights * esp_mask
+        esp_loss_corrected = weighted_l2_loss.sum() / jnp.maximum(weights_masked.sum(), EPS)
     else:
-        # No weighting - use original uniform weighting
-        # remove dummy grid points using actual grid length
-        # n_points = l2_loss.shape[0]
-        # ngrid_scalar = jnp.ravel(ngrid)[0]
-        # valid = jnp.arange(n_points) < ngrid_scalar
-        # valid_grids = jnp.where(valid, l2_loss, 0)
-        esp_loss_corrected = l2_loss.sum() / jnp.ravel(ngrid)[0]
+        # No weighting - normalize by mask_total (number of valid grid points)
+        # This matches the working trainer.py approach
+        esp_loss_corrected = l2_loss_masked.sum() / mask_total
     
     total_loss = esp_loss_corrected * esp_w + mono_loss_corrected * chg_w
     
