@@ -9,6 +9,7 @@ import jax
 import jax.numpy as jnp
 import optax
 import numpy as np
+import ase.data
 from .loss import esp_mono_loss
 from .electrostatics import calc_esp
 
@@ -16,6 +17,11 @@ from .data import prepare_batches, prepare_datasets
 
 from typing import Callable, Any, Optional
 from functools import partial
+
+# Constants for ESP masking (matching loss.py)
+BOHR_TO_ANGSTROM = 0.529177
+ANGSTROM_TO_BOHR = 1.88973
+RADII_TABLE = jnp.array(ase.data.covalent_radii)
 
 # Try to enable lovely_jax for better array printing
 try:
@@ -880,8 +886,38 @@ def train_model(
                 # Already batched: (batch_size, ngrid)
                 esp_target_reshaped = esp_target_batch
             
+            # Get atomic numbers and atom mask for masking
+            Z_batch = batch.get("Z")
+            atom_mask_batch = batch.get("atom_mask")
+            
+            # Reshape Z to (batch_size, num_atoms)
+            if Z_batch is not None:
+                if Z_batch.ndim == 1:
+                    if actual_batch_size == 1:
+                        Z_reshaped = Z_batch[None, :]
+                    else:
+                        Z_reshaped = Z_batch.reshape(actual_batch_size, num_atoms_per_sample)
+                else:
+                    Z_reshaped = Z_batch
+            else:
+                Z_reshaped = None
+            
+            # Reshape atom_mask to (batch_size, num_atoms)
+            if atom_mask_batch is not None:
+                if atom_mask_batch.ndim == 1:
+                    if actual_batch_size == 1:
+                        atom_mask_reshaped = atom_mask_batch[None, :]
+                    else:
+                        atom_mask_reshaped = atom_mask_batch.reshape(actual_batch_size, num_atoms_per_sample)
+                else:
+                    atom_mask_reshaped = atom_mask_batch
+            else:
+                atom_mask_reshaped = None
+            
             # Compute ESP from monopoles for each sample in batch
             batch_esp_pred = []
+            batch_esp_mask = []
+            
             for sample_idx in range(actual_batch_size):
                 R_sample = R_reshaped[sample_idx]  # (num_atoms, 3)
                 mono_sample = mono_reshaped[sample_idx]  # (num_atoms,)
@@ -899,31 +935,61 @@ def train_model(
                 R_real = R_sample[:n_real]  # (n_real, 3)
                 mono_real = mono_sample[:n_real]  # (n_real,)
                 
+                # Handle unit conversion for grid
+                # Note: calc_esp expects positions in Angstrom (based on coulomb_potential conversion factor)
+                # If grid is in Bohr, we need to convert it
+                vdw_sample_for_esp = vdw_sample.copy()
+                if esp_grid_units.lower() == "bohr":
+                    # Convert grid from Bohr to Angstrom for ESP calculation
+                    vdw_sample_for_esp = vdw_sample * BOHR_TO_ANGSTROM
+                
                 # Calculate ESP from monopoles
                 esp_pred_sample = calc_esp(
                     charge_positions=R_real,
                     charge_values=mono_real,
-                    grid_positions=vdw_sample
+                    grid_positions=vdw_sample_for_esp
                 )  # (ngrid,)
                 
                 batch_esp_pred.append(esp_pred_sample)
+                
+                # Compute ESP mask using atomic radii (same logic as loss.py)
+                # Initialize mask as all ones
+                distance_mask = jnp.ones(vdw_sample.shape[0], dtype=jnp.float32)
+                
+                # Always apply atomic radii masking in sense check (matching training)
+                if Z_reshaped is not None:
+                    Z_sample = Z_reshaped[sample_idx][:n_real]  # (n_real,)
+                    R_sample_for_dist = R_real  # Already in Angstrom
+                    
+                    # Handle unit conversion for distance calculations
+                    vdw_sample_for_dist = vdw_sample.copy()
+                    if esp_grid_units.lower() == "bohr":
+                        # Convert grid from Bohr to Angstrom for distance computation
+                        vdw_sample_for_dist = vdw_sample * BOHR_TO_ANGSTROM
+                    
+                    # Compute distances from grid to atoms
+                    diff = vdw_sample_for_dist[:, None, :] - R_sample_for_dist[None, :, :]  # (ngrid, n_real, 3)
+                    distances = jnp.linalg.norm(diff, axis=-1)  # (ngrid, n_real)
+                    
+                    # Get atomic radii (in Angstrom)
+                    atomic_nums_int = Z_sample.astype(jnp.int32)
+                    atomic_radii = jnp.take(RADII_TABLE, atomic_nums_int, mode='clip')  # (n_real,)
+                    
+                    # Check if any atom is too close (within radii_cutoff_multiplier * covalent_radii)
+                    cutoff_distances = radii_cutoff_multiplier * atomic_radii[None, :]  # (1, n_real) -> broadcast to (ngrid, n_real)
+                    within_cutoff = distances < cutoff_distances  # (ngrid, n_real)
+                    distance_mask = (~jnp.any(within_cutoff, axis=-1)).astype(jnp.float32)  # (ngrid,)
+                
+                batch_esp_mask.append(distance_mask)
             
-            # Stack predictions for this batch
+            # Stack predictions and masks for this batch
             batch_esp_pred = jnp.stack(batch_esp_pred, axis=0)  # (batch_size, ngrid)
+            batch_esp_mask = jnp.stack(batch_esp_mask, axis=0)  # (batch_size, ngrid)
             
             # Collect results
             all_esp_pred_from_mono.append(batch_esp_pred)
             all_esp_target.append(esp_target_reshaped)
-            
-            # Get ESP mask if available (for masking statistics)
-            if "esp_mask" in batch:
-                esp_mask_batch = batch["esp_mask"]
-                if esp_mask_batch.ndim == 1:
-                    esp_mask_batch = esp_mask_batch[None, :]
-                all_esp_mask.append(esp_mask_batch)
-            else:
-                # Create default mask (all ones) if not available
-                all_esp_mask.append(jnp.ones_like(esp_target_reshaped))
+            all_esp_mask.append(batch_esp_mask)
         
         # Concatenate all batches
         all_esp_pred_from_mono = jnp.concatenate(all_esp_pred_from_mono, axis=0)  # (total_samples, ngrid)
@@ -1046,6 +1112,25 @@ def train_model(
             print(f"      - Target ESP includes higher-order multipole contributions")
             print(f"      - Target ESP is from quantum mechanical calculations")
             print(f"      - Distributed multipoles (DCM) are needed for accuracy")
+        
+        # Unit and masking diagnostics
+        print(f"\n  Unit and Masking Diagnostics:")
+        print(f"    ESP grid units: {esp_grid_units}")
+        print(f"    Radii cutoff multiplier: {radii_cutoff_multiplier}")
+        print(f"    Use atomic radii mask: True (always enabled in sense check)")
+        if len(valid_batches) > 0:
+            first_batch = valid_batches[0]
+            if "vdw_surface" in first_batch:
+                vdw_first = jnp.array(first_batch["vdw_surface"][0])  # First sample
+                if esp_grid_units.lower() == "bohr":
+                    vdw_first_angstrom = vdw_first * BOHR_TO_ANGSTROM
+                    print(f"    First sample grid range (Bohr): [{float(jnp.min(vdw_first)):.4f}, {float(jnp.max(vdw_first)):.4f}]")
+                    print(f"    First sample grid range (Angstrom): [{float(jnp.min(vdw_first_angstrom)):.4f}, {float(jnp.max(vdw_first_angstrom)):.4f}]")
+                else:
+                    print(f"    First sample grid range (Angstrom): [{float(jnp.min(vdw_first)):.4f}, {float(jnp.max(vdw_first)):.4f}]")
+            if "R" in first_batch:
+                R_first = jnp.array(first_batch["R"][:3])  # First 3 atoms (assuming 3 atoms per molecule)
+                print(f"    First sample atom positions range (Angstrom): [{float(jnp.min(R_first)):.4f}, {float(jnp.max(R_first)):.4f}]")
         
     except Exception as e:
         print(f"  ⚠️  ESP sense check failed: {e}")
