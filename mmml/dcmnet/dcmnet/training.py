@@ -156,12 +156,25 @@ def print_statistics_table(train_stats, valid_stats, epoch):
     metrics_list = ['loss', 'mono_mae', 'mono_rmse', 'mono_mean', 'mono_std',
                     'esp_mae', 'esp_rmse', 'esp_pred_mean', 'esp_pred_std',
                     'esp_error_mean', 'esp_error_std']
+    
+    # Conversion factor: Hartree to kcal/mol
+    HARTREE_TO_KCAL_MOL = 627.5
+    
     for key in metrics_list:
         if key in train_stats and key in valid_stats:
             train_val = train_stats[key]
             valid_val = valid_stats[key]
             diff = valid_val - train_val
-            print(f"{key:<20} {train_val:>15.6e} {valid_val:>15.6e} {diff:>15.6e}")
+            
+            # Convert ESP RMSE and MAE to kcal/mol/e
+            if key in ['esp_mae', 'esp_rmse']:
+                train_val_kcal = train_val * HARTREE_TO_KCAL_MOL
+                valid_val_kcal = valid_val * HARTREE_TO_KCAL_MOL
+                diff_kcal = diff * HARTREE_TO_KCAL_MOL
+                print(f"{key:<20} {train_val:>15.6e} {valid_val:>15.6e} {diff:>15.6e}")
+                print(f"{key+'_kcal':<20} {train_val_kcal:>15.6f} {valid_val_kcal:>15.6f} {diff_kcal:>15.6f} (kcal/mol/e)")
+            else:
+                print(f"{key:<20} {train_val:>15.6e} {valid_val:>15.6e} {diff:>15.6e}")
     
     print(f"{'-'*80}")
     print(f"Monopole Prediction Statistics:")
@@ -345,6 +358,65 @@ def train_model(
     # Initialize EMA parameters (a copy of the initial parameters)
     ema_params = initialize_ema_params(params)
     
+    # Print data statistics before training
+    print("\n" + "="*80)
+    print("DATA STATISTICS")
+    print("="*80)
+    
+    # Training data statistics
+    train_n_samples = len(train_data["R"])
+    train_n_atoms = len(train_data["Z"][0]) if len(train_data["Z"]) > 0 else 0
+    train_mono_mean = float(jnp.mean(jnp.array(train_data.get("mono", [0]))))
+    train_mono_std = float(jnp.std(jnp.array(train_data.get("mono", [0]))))
+    train_esp_mean = float(jnp.mean(jnp.concatenate([jnp.ravel(e) for e in train_data.get("esp", [])])))
+    train_esp_std = float(jnp.std(jnp.concatenate([jnp.ravel(e) for e in train_data.get("esp", [])])))
+    train_esp_min = float(jnp.min(jnp.concatenate([jnp.ravel(e) for e in train_data.get("esp", [])])))
+    train_esp_max = float(jnp.max(jnp.concatenate([jnp.ravel(e) for e in train_data.get("esp", [])])))
+    train_n_grid = int(jnp.mean(jnp.array([len(e) for e in train_data.get("esp", [])])))
+    
+    print(f"\nTraining Data:")
+    print(f"  Samples: {train_n_samples}")
+    print(f"  Atoms per sample: {train_n_atoms}")
+    print(f"  Grid points per sample: {train_n_grid}")
+    print(f"  Monopoles: mean={train_mono_mean:.6f} e, std={train_mono_std:.6f} e")
+    print(f"  ESP: mean={train_esp_mean:.6f} Ha/e ({train_esp_mean*627.5:.3f} kcal/mol/e)")
+    print(f"        std={train_esp_std:.6f} Ha/e ({train_esp_std*627.5:.3f} kcal/mol/e)")
+    print(f"        range=[{train_esp_min:.6f}, {train_esp_max:.6f}] Ha/e")
+    print(f"        range=[{train_esp_min*627.5:.3f}, {train_esp_max*627.5:.3f}] kcal/mol/e")
+    
+    # Validation data statistics
+    valid_n_samples = len(valid_data["R"])
+    valid_n_atoms = len(valid_data["Z"][0]) if len(valid_data["Z"]) > 0 else 0
+    valid_mono_mean = float(jnp.mean(jnp.array(valid_data.get("mono", [0]))))
+    valid_mono_std = float(jnp.std(jnp.array(valid_data.get("mono", [0]))))
+    valid_esp_mean = float(jnp.mean(jnp.concatenate([jnp.ravel(e) for e in valid_data.get("esp", [])])))
+    valid_esp_std = float(jnp.std(jnp.concatenate([jnp.ravel(e) for e in valid_data.get("esp", [])])))
+    valid_esp_min = float(jnp.min(jnp.concatenate([jnp.ravel(e) for e in valid_data.get("esp", [])])))
+    valid_esp_max = float(jnp.max(jnp.concatenate([jnp.ravel(e) for e in valid_data.get("esp", [])])))
+    valid_n_grid = int(jnp.mean(jnp.array([len(e) for e in valid_data.get("esp", [])])))
+    
+    print(f"\nValidation Data:")
+    print(f"  Samples: {valid_n_samples}")
+    print(f"  Atoms per sample: {valid_n_atoms}")
+    print(f"  Grid points per sample: {valid_n_grid}")
+    print(f"  Monopoles: mean={valid_mono_mean:.6f} e, std={valid_mono_std:.6f} e")
+    print(f"  ESP: mean={valid_esp_mean:.6f} Ha/e ({valid_esp_mean*627.5:.3f} kcal/mol/e)")
+    print(f"        std={valid_esp_std:.6f} Ha/e ({valid_esp_std*627.5:.3f} kcal/mol/e)")
+    print(f"        range=[{valid_esp_min:.6f}, {valid_esp_max:.6f}] Ha/e")
+    print(f"        range=[{valid_esp_min*627.5:.3f}, {valid_esp_max*627.5:.3f}] kcal/mol/e")
+    
+    print(f"\nTraining Configuration:")
+    print(f"  Batch size: {batch_size}")
+    print(f"  Steps per epoch: {train_n_samples // batch_size}")
+    print(f"  ESP weight: {esp_w}")
+    print(f"  Charge weight: {chg_w}")
+    print(f"  Distance weighting: {distance_weighting}")
+    print(f"  ESP magnitude weighting: {esp_magnitude_weighting}")
+    print(f"  Learning rate: {learning_rate}")
+    print(f"  Number of DCM per atom: {ndcm}")
+    print(f"  Total parameters: {sum(x.size for x in jax.tree_util.tree_leaves(params)):,}")
+    print("="*80 + "\n")
+    
     print("Preparing batches")
     print("..................")
     # Batches for the validation set need to be prepared only once.
@@ -384,12 +456,10 @@ def train_model(
                 esp_magnitude_weighting=esp_magnitude_weighting,
             )
 
-            # Block until JAX operations complete to avoid async context issues
-            # This prevents RuntimeError: cannot enter context in IPython/Jupyter
-            jax.block_until_ready(loss)
-            jax.block_until_ready(params)
-
+            # Update EMA parameters (non-blocking for better GPU utilization)
             ema_params = update_ema_params(ema_params, params, ema_decay)
+            
+            # Only block at end of epoch for statistics, not every batch
             
             train_loss += (loss - train_loss) / (i + 1)
             
@@ -400,12 +470,15 @@ def train_model(
             train_esp_targets.append(esp_target)
             train_esp_errors.append(esp_error)
 
-        # Concatenate all predictions and targets
+        # Concatenate all predictions and targets (block once at end of epoch)
         train_mono_preds = jnp.concatenate(train_mono_preds, axis=0)
         train_mono_targets = jnp.concatenate(train_mono_targets, axis=0)
         train_esp_preds = jnp.concatenate([jnp.ravel(e) for e in train_esp_preds])
         train_esp_targets = jnp.concatenate([jnp.ravel(e) for e in train_esp_targets])
         train_esp_errors = jnp.concatenate([jnp.ravel(e) for e in train_esp_errors])
+        
+        # Block once for statistics computation (better GPU utilization)
+        jax.block_until_ready(train_esp_errors)
         
         # Compute training statistics
         train_mono_stats = compute_statistics(train_mono_preds.sum(axis=-1), train_mono_targets)
@@ -453,8 +526,7 @@ def train_model(
                 chg_w=chg_w,
                 ndcm=ndcm,
             )
-            # Block until JAX operations complete to avoid async context issues
-            jax.block_until_ready(loss)
+            # Accumulate loss (non-blocking for better GPU utilization)
             valid_loss += (loss - valid_loss) / (i + 1)
             
             # Collect predictions for statistics
@@ -464,12 +536,15 @@ def train_model(
             valid_esp_targets.append(esp_target)
             valid_esp_errors.append(esp_error)
 
-        # Concatenate all predictions and targets
+        # Concatenate all predictions and targets (block once at end of epoch)
         valid_mono_preds = jnp.concatenate(valid_mono_preds, axis=0)
         valid_mono_targets = jnp.concatenate(valid_mono_targets, axis=0)
         valid_esp_preds = jnp.concatenate([jnp.ravel(e) for e in valid_esp_preds])
         valid_esp_targets = jnp.concatenate([jnp.ravel(e) for e in valid_esp_targets])
         valid_esp_errors = jnp.concatenate([jnp.ravel(e) for e in valid_esp_errors])
+        
+        # Block once for statistics computation (better GPU utilization)
+        jax.block_until_ready(valid_esp_errors)
         
         # Compute validation statistics
         valid_mono_stats = compute_statistics(valid_mono_preds.sum(axis=-1), valid_mono_targets)

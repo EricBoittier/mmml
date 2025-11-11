@@ -752,6 +752,14 @@ def prepare_batches(
                 # Fallback: assume some default grid size
                 dict_["n_grid"] = jnp.full(batch_size, 1000)  # Default grid size
         
+        # Move batch data to GPU device for better performance
+        # This ensures data is on GPU before training step (non-blocking)
+        device = jax.devices()[0]  # Use first available device (typically GPU)
+        dict_ = jax.tree_util.tree_map(
+            lambda x: jax.device_put(x, device) if isinstance(x, (jnp.ndarray, np.ndarray)) else x,
+            dict_
+        )
+        
         output.append(dict_)
 
     return output
