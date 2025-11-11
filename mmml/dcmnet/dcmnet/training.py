@@ -467,6 +467,14 @@ def train_model(
     
     print("Preparing batches")
     print("..................")
+    # Pre-impute monopoles for all data before training (more efficient)
+    if mono_imputation_fn is not None:
+        print("\nPreprocessing monopoles...")
+        train_data = preprocess_monopoles(train_data, mono_imputation_fn, num_atoms=num_atoms, batch_size=batch_size, verbose=True)
+        valid_data = preprocess_monopoles(valid_data, mono_imputation_fn, num_atoms=num_atoms, batch_size=batch_size, verbose=True)
+        # Set imputation function to None since monopoles are already imputed
+        mono_imputation_fn = None
+    
     # Batches for the validation set need to be prepared only once.
     key, shuffle_key = jax.random.split(key)
     valid_batches = prepare_batches(shuffle_key, valid_data, batch_size, num_atoms=num_atoms, mono_imputation_fn=mono_imputation_fn)
@@ -751,6 +759,113 @@ def update_ema_params(ema_params, new_params, decay):
     return jax.tree_util.tree_map(
         lambda ema, new: decay * ema + (1.0 - decay) * new, ema_params, new_params
     )
+
+
+def preprocess_monopoles(data, mono_imputation_fn, num_atoms=60, batch_size=1000, verbose=False):
+    """
+    Pre-impute monopoles for all samples in the dataset before training.
+    
+    This is more efficient than imputing during batch preparation, as it only
+    needs to be done once before the training loop starts.
+    
+    Parameters
+    ----------
+    data : dict
+        Data dictionary containing 'R', 'Z', etc.
+    mono_imputation_fn : callable
+        Function to impute monopoles. Takes a batch dict and returns monopoles.
+    num_atoms : int
+        Number of atoms per system
+    batch_size : int
+        Batch size to use for imputation
+    verbose : bool
+        Whether to print progress messages
+        
+    Returns
+    -------
+    dict
+        Updated data dictionary with imputed monopoles
+    """
+    # Check if monopoles need imputation
+    if "mono" in data:
+        mono_data = jnp.array(data["mono"])
+        mono_sum = jnp.abs(mono_data).sum()
+        if mono_sum > 1e-6:
+            # Monopoles are not all zeros, no need to impute
+            if verbose:
+                print(f"  Monopoles already present (sum_abs={float(mono_sum):.2e}). Skipping imputation.")
+            return data
+    
+    # Need to impute monopoles
+    if verbose:
+        print(f"  Imputing monopoles for {len(data['R'])} samples...")
+    
+    # Create batches for imputation
+    n_samples = len(data["R"])
+    imputed_monopoles = []
+    
+    # Use a dummy key for deterministic batching (order doesn't matter for imputation)
+    dummy_key = jax.random.PRNGKey(0)
+    
+    # Process in batches
+    for i in range(0, n_samples, batch_size):
+        end_idx = min(i + batch_size, n_samples)
+        batch_indices = jnp.arange(i, end_idx)
+        
+        # Create a batch dict for this subset
+        batch_dict = {}
+        for k, v in data.items():
+            if k == "R":
+                batch_dict[k] = jnp.array([data["R"][idx] for idx in batch_indices]).reshape(-1, 3)
+            elif k == "Z":
+                batch_dict[k] = jnp.array([data["Z"][idx] for idx in batch_indices]).reshape(-1)
+            elif k == "N":
+                batch_dict[k] = jnp.array([data["N"][idx] for idx in batch_indices])
+            else:
+                # For other fields, try to index if possible
+                try:
+                    batch_dict[k] = jnp.array([data[k][idx] for idx in batch_indices])
+                except:
+                    pass
+        
+        # Create message passing indices for this batch
+        actual_batch_size = len(batch_indices)
+        batch_segments = jnp.repeat(jnp.arange(actual_batch_size), num_atoms)
+        offsets = jnp.arange(actual_batch_size) * num_atoms
+        dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(num_atoms)
+        dst_idx = (dst_idx + offsets[:, None]).reshape(-1)
+        src_idx = (src_idx + offsets[:, None]).reshape(-1)
+        
+        batch_dict["dst_idx"] = dst_idx
+        batch_dict["src_idx"] = src_idx
+        batch_dict["batch_segments"] = batch_segments
+        
+        # Impute monopoles for this batch
+        try:
+            imputed_batch = mono_imputation_fn(batch_dict)
+            imputed_monopoles.append(imputed_batch)
+        except Exception as e:
+            if verbose:
+                print(f"  Warning: Failed to impute batch {i//batch_size + 1}: {e}")
+            # Fallback to zeros for this batch
+            imputed_monopoles.append(jnp.zeros(actual_batch_size * num_atoms))
+    
+    # Concatenate all imputed monopoles
+    all_imputed = jnp.concatenate(imputed_monopoles)
+    
+    # Reshape to (n_samples, num_atoms) format
+    imputed_reshaped = all_imputed.reshape(n_samples, num_atoms)
+    
+    # Update data dictionary
+    data_updated = data.copy()
+    data_updated["mono"] = imputed_reshaped
+    
+    if verbose:
+        imputed_mean = float(jnp.mean(jnp.abs(all_imputed)))
+        imputed_std = float(jnp.std(all_imputed))
+        print(f"  ✓ Monopole imputation complete. Mean_abs={imputed_mean:.6f} e, Std={imputed_std:.6f} e")
+    
+    return data_updated
 
 
 def create_mono_imputation_fn(model, params):
