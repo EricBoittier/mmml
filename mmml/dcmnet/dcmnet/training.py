@@ -672,7 +672,7 @@ def train_model(
         train_esp_preds = jnp.concatenate([jnp.ravel(e) for e in train_esp_preds])
         train_esp_targets = jnp.concatenate([jnp.ravel(e) for e in train_esp_targets])
         train_esp_errors = jnp.concatenate([jnp.ravel(e) for e in train_esp_errors])
-        train_esp_masks = jnp.concatenate([jnp.ravel(e) for e in train_esp_masks])
+        train_esp_masks = jnp.concatenate([jnp.ravel(e) for e in train_esp_masks]) if len(train_esp_masks) > 0 else jnp.ones_like(train_esp_targets)
         
         # Block once for statistics computation (better GPU utilization)
         jax.block_until_ready(train_esp_errors)
