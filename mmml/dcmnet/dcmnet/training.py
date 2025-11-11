@@ -664,6 +664,7 @@ def train_model(
             train_esp_targets.append(esp_target)
             train_esp_errors.append(esp_error)
             train_loss_components.append(loss_components)
+            train_esp_masks.append(esp_mask)
 
         # Concatenate all predictions and targets (block once at end of epoch)
         train_mono_preds = jnp.concatenate(train_mono_preds, axis=0)
@@ -791,7 +792,7 @@ def train_model(
         valid_esp_preds = jnp.concatenate([jnp.ravel(e) for e in valid_esp_preds])
         valid_esp_targets = jnp.concatenate([jnp.ravel(e) for e in valid_esp_targets])
         valid_esp_errors = jnp.concatenate([jnp.ravel(e) for e in valid_esp_errors])
-        valid_esp_masks = jnp.concatenate([jnp.ravel(e) for e in valid_esp_masks])
+        valid_esp_masks = jnp.concatenate([jnp.ravel(e) for e in valid_esp_masks]) if len(valid_esp_masks) > 0 else jnp.ones_like(valid_esp_targets)
         
         # Block once for statistics computation (better GPU utilization)
         jax.block_until_ready(valid_esp_errors)
