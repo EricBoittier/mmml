@@ -33,6 +33,9 @@ def create_mono_imputation_fn_from_gb(model_path: Path):
     # Load models
     models = joblib.load(model_path)
     
+    # Import here to avoid circular imports
+    from train_charge_predictor import compute_molecular_features
+    
     def imputation_fn(batch: Dict) -> jnp.ndarray:
         """
         Impute monopoles for a batch.
@@ -64,13 +67,33 @@ def create_mono_imputation_fn_from_gb(model_path: Path):
         R_np = np.array(R)
         Z_np = np.array(Z)
         
-        # Predict charges using gradient boosting
-        mono_pred = predict_charges(models, R_np, Z_np)  # (batch_size, num_atoms)
+        # Process each molecule separately (for CO2, we only use first 3 atoms)
+        # The model was trained on CO2, so we extract the first 3 atoms
+        n_atoms_model = 3  # CO2 has 3 atoms
+        predictions = []
         
-        # Flatten back to (batch_size * num_atoms,)
-        mono_flat = mono_pred.reshape(-1)
+        for i in range(batch_size):
+            # Extract first 3 atoms (assuming CO2 structure)
+            R_mol = R_np[i, :n_atoms_model, :]  # (3, 3)
+            Z_mol = Z_np[i, :n_atoms_model]    # (3,)
+            
+            # Compute features for this molecule
+            X_mol = compute_molecular_features(R_mol, Z_mol, n_atoms=n_atoms_model)  # (1, n_features)
+            
+            # Predict for each atom
+            mol_charges = []
+            for atom_idx in range(n_atoms_model):
+                model = models[f'atom_{atom_idx}']
+                charge = model.predict(X_mol)[0]  # Single prediction
+                mol_charges.append(charge)
+            
+            # Pad with zeros if num_atoms > 3
+            if num_atoms > n_atoms_model:
+                mol_charges.extend([0.0] * (num_atoms - n_atoms_model))
+            
+            predictions.extend(mol_charges)
         
-        return jnp.array(mono_flat)
+        return jnp.array(predictions)
     
     return imputation_fn
 
