@@ -605,7 +605,7 @@ def print_shapes(train_data, valid_data):
 def prepare_batches(
     key, data, batch_size, 
     include_id=False, data_keys=None, num_atoms=60,
-    dst_idx=None, src_idx=None
+    dst_idx=None, src_idx=None, mono_imputation_fn=None
 ) -> list:
     """
     Prepare batches for training.
@@ -631,6 +631,9 @@ def prepare_batches(
         Destination indices for message passing, by default None
     src_idx : array_like, optional
         Source indices for message passing, by default None
+    mono_imputation_fn : callable, optional
+        Function to impute monopoles if missing. Should take a batch dict and return
+        monopoles with shape (batch_size * num_atoms,). By default None
 
     Returns
     -------
@@ -708,6 +711,20 @@ def prepare_batches(
         else:
             dict_["src_idx"] = src_idx
         dict_["batch_segments"] = batch_segments
+        
+        # Impute monopoles if missing
+        if "mono" not in dict_ and mono_imputation_fn is not None:
+            try:
+                dict_["mono"] = mono_imputation_fn(dict_)
+            except Exception as e:
+                import warnings
+                warnings.warn(f"Failed to impute monopoles: {e}. Using zeros instead.")
+                # Fallback to zeros if imputation fails
+                dict_["mono"] = jnp.zeros(batch_size * num_atoms)
+        elif "mono" not in dict_:
+            # If no imputation function provided and mono is missing, use zeros
+            dict_["mono"] = jnp.zeros(batch_size * num_atoms)
+        
         output.append(dict_)
 
     return output
