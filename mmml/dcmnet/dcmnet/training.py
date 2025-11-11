@@ -969,6 +969,11 @@ def train_model(
         r2_unmasked = 1.0 - (ss_res_unmasked / jnp.maximum(ss_tot_unmasked, 1e-10))
         r2_unmasked = float(jnp.clip(r2_unmasked, -10.0, 1.0))
         
+        # Per-sample statistics to identify problematic samples
+        per_sample_rmse = jnp.sqrt(jnp.mean((all_esp_pred_from_mono - all_esp_target)**2, axis=1))  # (n_samples,)
+        per_sample_mae = jnp.mean(jnp.abs(all_esp_pred_from_mono - all_esp_target), axis=1)  # (n_samples,)
+        worst_samples_idx = jnp.argsort(per_sample_rmse)[-5:][::-1]  # Top 5 worst samples
+        
         # Print results
         print(f"\nESP from Reference Monopoles (Validation Set):")
         print(f"  Total samples: {all_esp_pred_from_mono.shape[0]}")
@@ -978,23 +983,69 @@ def train_model(
         print(f"    MAE: {mae_unmasked:.6f} Ha/e ({mae_unmasked*627.5:.3f} kcal/mol/e)")
         print(f"    RMSE: {rmse_unmasked:.6f} Ha/e ({rmse_unmasked*627.5:.3f} kcal/mol/e)")
         print(f"    R²: {r2_unmasked:.6f}")
+        print(f"    Per-sample RMSE: mean={float(jnp.mean(per_sample_rmse)):.6f}, "
+              f"median={float(jnp.median(per_sample_rmse)):.6f}, "
+              f"max={float(jnp.max(per_sample_rmse)):.6f} Ha/e")
         if n_valid > 0:
             print(f"\n  Masked Statistics:")
             print(f"    MAE: {mae_masked:.6f} Ha/e ({mae_masked*627.5:.3f} kcal/mol/e)")
             print(f"    RMSE: {rmse_masked:.6f} Ha/e ({rmse_masked*627.5:.3f} kcal/mol/e)")
             print(f"    R²: {r2_masked:.6f}")
         
+        # Print worst samples
+        print(f"\n  Worst 5 samples (by RMSE):")
+        for rank, sample_idx in enumerate(worst_samples_idx):
+            sample_rmse = float(per_sample_rmse[sample_idx])
+            sample_mae = float(per_sample_mae[sample_idx])
+            print(f"    {rank+1}. Sample {int(sample_idx)}: "
+                  f"RMSE={sample_rmse:.6f} Ha/e ({sample_rmse*627.5:.3f} kcal/mol/e), "
+                  f"MAE={sample_mae:.6f} Ha/e ({sample_mae*627.5:.3f} kcal/mol/e)")
+        
+        # Check error distribution
+        error_abs = jnp.abs(esp_errors)
+        large_error_threshold = 0.1  # 0.1 Ha/e = ~63 kcal/mol/e
+        n_large_errors = int(jnp.sum(error_abs > large_error_threshold))
+        pct_large_errors = 100.0 * n_large_errors / len(error_abs)
+        
+        print(f"\n  Error Distribution:")
+        print(f"    Errors > {large_error_threshold:.3f} Ha/e ({large_error_threshold*627.5:.1f} kcal/mol/e): "
+              f"{n_large_errors:,} / {len(error_abs):,} ({pct_large_errors:.2f}%)")
+        print(f"    Error percentiles:")
+        for pct in [50, 75, 90, 95, 99]:
+            pct_val = float(jnp.percentile(error_abs, pct))
+            print(f"      {pct}th: {pct_val:.6f} Ha/e ({pct_val*627.5:.3f} kcal/mol/e)")
+        
         # Check if results are reasonable
-        if rmse_unmasked < 0.1:  # Less than 0.1 Ha/e (~63 kcal/mol/e)
-            print(f"\n  ✓ ESP calculation looks reasonable (RMSE < 0.1 Ha/e)")
+        if rmse_unmasked < 0.01:  # Less than 0.01 Ha/e (~6.3 kcal/mol/e)
+            print(f"\n  ✓ ESP calculation looks excellent (RMSE < 0.01 Ha/e)")
+        elif rmse_unmasked < 0.05:  # Less than 0.05 Ha/e (~31 kcal/mol/e)
+            print(f"\n  ✓ ESP calculation looks reasonable (RMSE < 0.05 Ha/e)")
+        elif rmse_unmasked < 0.1:  # Less than 0.1 Ha/e (~63 kcal/mol/e)
+            print(f"\n  ⚠️  ESP calculation has moderate errors (RMSE < 0.1 Ha/e)")
+            print(f"      Note: Monopoles alone may not reproduce full ESP if higher-order")
+            print(f"      multipoles (dipoles, quadrupoles) contribute significantly.")
         elif rmse_unmasked < 0.5:  # Less than 0.5 Ha/e (~314 kcal/mol/e)
-            print(f"\n  ⚠️  ESP calculation has moderate errors (RMSE < 0.5 Ha/e)")
-        else:
-            print(f"\n  ⚠️  ESP calculation has large errors (RMSE >= 0.5 Ha/e)")
+            print(f"\n  ⚠️  ESP calculation has large errors (RMSE < 0.5 Ha/e)")
             print(f"      This may indicate issues with:")
-            print(f"      - Monopole values")
+            print(f"      - Monopole values (may need higher-order multipoles)")
             print(f"      - Grid alignment")
             print(f"      - Unit conversions")
+            print(f"      - {pct_large_errors:.1f}% of points have errors > {large_error_threshold*627.5:.1f} kcal/mol/e")
+        else:
+            print(f"\n  ⚠️  ESP calculation has very large errors (RMSE >= 0.5 Ha/e)")
+            print(f"      This strongly suggests issues with:")
+            print(f"      - Monopole values (likely need higher-order multipoles)")
+            print(f"      - Grid alignment")
+            print(f"      - Unit conversions")
+            print(f"      - {pct_large_errors:.1f}% of points have errors > {large_error_threshold*627.5:.1f} kcal/mol/e")
+        
+        # Additional diagnostics
+        if r2_unmasked < 0.5:
+            print(f"\n  ⚠️  Low R² ({r2_unmasked:.4f}) suggests monopoles alone cannot")
+            print(f"      accurately reproduce the target ESP. This is expected if:")
+            print(f"      - Target ESP includes higher-order multipole contributions")
+            print(f"      - Target ESP is from quantum mechanical calculations")
+            print(f"      - Distributed multipoles (DCM) are needed for accuracy")
         
     except Exception as e:
         print(f"  ⚠️  ESP sense check failed: {e}")
