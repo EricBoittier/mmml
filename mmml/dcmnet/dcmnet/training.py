@@ -164,7 +164,7 @@ def print_statistics_table(train_stats, valid_stats, epoch):
     metrics_list = ['loss', 'esp_loss', 'mono_loss', 'charge_conservation_loss',
                     'esp_loss_weighted', 'mono_loss_weighted', 'charge_conservation_loss_weighted',
                     'mono_mae', 'mono_rmse', 'mono_mean', 'mono_std',
-                    'esp_mae', 'esp_rmse', 'esp_pred_mean', 'esp_pred_std',
+                    'esp_mae', 'esp_rmse', 'esp_r2', 'esp_pred_mean', 'esp_pred_std',
                     'esp_error_mean', 'esp_error_std']
     
     # Conversion factor: Hartree to kcal/mol
@@ -347,16 +347,27 @@ def verify_esp_grid_alignment(train_data, valid_data, num_atoms=60, verbose=True
                 
                 # Compute distances from grid to atoms
                 distances = cdist(vdw, R_real)  # (n_grid, n_real)
-                min_distances = np.min(distances, axis=1)  # (n_grid,)
                 
-                # Check if any points are too close (within 2 * covalent radius)
+                # Check if any points are too close (within 2 * covalent radius per atom)
+                # This matches the loss function logic: mask if point is within 2.0 * radius of ANY atom
                 import ase.data
                 radii = np.array([ase.data.covalent_radii[z] if z > 0 else 0 for z in Z_real])
-                cutoff = 2.0 * radii.max() if len(radii) > 0 else 1.0
+                cutoff_per_atom = 2.0 * radii  # (n_real,) - per-atom cutoff
                 
-                n_too_close = np.sum(min_distances < cutoff)
+                # Check if any grid point is within cutoff of any atom
+                # distances: (n_grid, n_real), cutoff_per_atom: (n_real,)
+                within_cutoff = distances < cutoff_per_atom[None, :]  # (n_grid, n_real)
+                too_close = np.any(within_cutoff, axis=1)  # (n_grid,) - True if point is too close to any atom
+                
+                n_too_close = np.sum(too_close)
                 if n_too_close > 0:
                     n_masked_samples += 1
+                    if verbose and n_masked_samples == 1:  # Print details for first sample only
+                        print(f"      Sample {i}: {n_too_close}/{len(vdw)} points too close")
+                        print(f"      Radii: {radii}")
+                        print(f"      Cutoffs per atom: {cutoff_per_atom}")
+                        min_distances_sample = np.min(distances, axis=1)
+                        print(f"      Min distances range: [{min_distances_sample.min():.4f}, {min_distances_sample.max():.4f}] Å")
             
             if n_masked_samples > 0:
                 print(f"  ⚠️  {dataset_name}: {n_masked_samples}/{n_check} samples have ESP points too close to atoms")
@@ -671,9 +682,20 @@ def train_model(
         
         # Compute training statistics
         train_mono_stats = compute_statistics(train_mono_preds.sum(axis=-1), train_mono_targets)
+        
+        # Compute R² for ESP (coefficient of determination)
+        # R² = 1 - (SS_res / SS_tot)
+        # SS_res = sum((y_pred - y_true)²)
+        # SS_tot = sum((y_true - y_mean)²)
+        train_esp_ss_res = jnp.sum((train_esp_preds - train_esp_targets)**2)
+        train_esp_target_mean = jnp.mean(train_esp_targets)
+        train_esp_ss_tot = jnp.sum((train_esp_targets - train_esp_target_mean)**2)
+        train_esp_r2 = 1.0 - (train_esp_ss_res / (train_esp_ss_tot + 1e-10))
+        
         train_esp_stats = {
             'mae': float(jnp.mean(jnp.abs(train_esp_errors))),
             'rmse': float(jnp.sqrt(jnp.mean(train_esp_errors**2))),
+            'r2': float(train_esp_r2),
             'pred_mean': float(jnp.mean(train_esp_preds)),
             'pred_std': float(jnp.std(train_esp_preds)),
             'target_mean': float(jnp.mean(train_esp_targets)),
@@ -704,6 +726,7 @@ def train_model(
             'mono_max': train_mono_stats['max'],
             'esp_mae': train_esp_stats['mae'],
             'esp_rmse': train_esp_stats['rmse'],
+            'esp_r2': train_esp_stats['r2'],
             'esp_pred_mean': train_esp_stats['pred_mean'],
             'esp_pred_std': train_esp_stats['pred_std'],
             'esp_target_mean': train_esp_stats['target_mean'],
@@ -760,9 +783,20 @@ def train_model(
         
         # Compute validation statistics
         valid_mono_stats = compute_statistics(valid_mono_preds.sum(axis=-1), valid_mono_targets)
+        
+        # Compute R² for ESP (coefficient of determination)
+        # R² = 1 - (SS_res / SS_tot)
+        # SS_res = sum((y_pred - y_true)²)
+        # SS_tot = sum((y_true - y_mean)²)
+        valid_esp_ss_res = jnp.sum((valid_esp_preds - valid_esp_targets)**2)
+        valid_esp_target_mean = jnp.mean(valid_esp_targets)
+        valid_esp_ss_tot = jnp.sum((valid_esp_targets - valid_esp_target_mean)**2)
+        valid_esp_r2 = 1.0 - (valid_esp_ss_res / (valid_esp_ss_tot + 1e-10))
+        
         valid_esp_stats = {
             'mae': float(jnp.mean(jnp.abs(valid_esp_errors))),
             'rmse': float(jnp.sqrt(jnp.mean(valid_esp_errors**2))),
+            'r2': float(valid_esp_r2),
             'pred_mean': float(jnp.mean(valid_esp_preds)),
             'pred_std': float(jnp.std(valid_esp_preds)),
             'target_mean': float(jnp.mean(valid_esp_targets)),
@@ -793,6 +827,7 @@ def train_model(
             'mono_max': valid_mono_stats['max'],
             'esp_mae': valid_esp_stats['mae'],
             'esp_rmse': valid_esp_stats['rmse'],
+            'esp_r2': valid_esp_stats['r2'],
             'esp_pred_mean': valid_esp_stats['pred_mean'],
             'esp_pred_std': valid_esp_stats['pred_std'],
             'esp_target_mean': valid_esp_stats['target_mean'],
