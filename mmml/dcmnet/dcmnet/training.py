@@ -231,9 +231,17 @@ def print_statistics_table(train_stats, valid_stats, epoch):
     if valid_r2_unmasked < 0:
         warnings.append(f"⚠️  Validation ESP R² is negative ({valid_r2_unmasked:.4f}) - model performs worse than predicting the mean")
     if train_r2_masked < -5:
-        warnings.append(f"⚠️  Training masked ESP R² is very negative ({train_r2_masked:.4f}) - check masking logic")
+        train_r2_unclamped = train_stats.get('r2_masked_unclamped', train_r2_masked)
+        train_ss_res = train_stats.get('ss_res_masked', 0)
+        train_ss_tot = train_stats.get('ss_tot_masked', 0)
+        warnings.append(f"⚠️  Training masked ESP R² is very negative ({train_r2_masked:.4f}, unclamped: {train_r2_unclamped:.4f})")
+        warnings.append(f"      SS_res={train_ss_res:.2e}, SS_tot={train_ss_tot:.2e}, ratio={train_ss_res/(train_ss_tot+1e-10):.2f} - check masking logic")
     if valid_r2_masked < -5:
-        warnings.append(f"⚠️  Validation masked ESP R² is very negative ({valid_r2_masked:.4f}) - check masking logic")
+        valid_r2_unclamped = valid_stats.get('r2_masked_unclamped', valid_r2_masked)
+        valid_ss_res = valid_stats.get('ss_res_masked', 0)
+        valid_ss_tot = valid_stats.get('ss_tot_masked', 0)
+        warnings.append(f"⚠️  Validation masked ESP R² is very negative ({valid_r2_masked:.4f}, unclamped: {valid_r2_unclamped:.4f})")
+        warnings.append(f"      SS_res={valid_ss_res:.2e}, SS_tot={valid_ss_tot:.2e}, ratio={valid_ss_res/(valid_ss_tot+1e-10):.2f} - check masking logic")
     
     # Check ESP error magnitude
     valid_esp_rmse = valid_stats.get('esp_rmse', 0)
@@ -251,6 +259,26 @@ def print_statistics_table(train_stats, valid_stats, epoch):
         warnings.append(f"⚠️  Very low mask fraction ({valid_mask_fraction:.1%}) - most points are being masked out")
     elif valid_mask_fraction > 0.95:
         warnings.append(f"⚠️  Very high mask fraction ({valid_mask_fraction:.1%}) - masking may not be working")
+    
+    # Check for systematic bias
+    valid_bias_relative = valid_stats.get('bias_relative', 0)
+    train_bias_relative = train_stats.get('bias_relative', 0)
+    if abs(valid_bias_relative) > 0.5:  # Bias > 0.5 * target_std
+        warnings.append(f"⚠️  Systematic bias detected: validation error mean ({valid_stats.get('error_mean', 0):.6f} Ha/e) is "
+                       f"{abs(valid_bias_relative):.2f}x the target std - predictions are systematically {'high' if valid_bias_relative > 0 else 'low'}")
+    if abs(train_bias_relative) > 0.5:
+        warnings.append(f"⚠️  Systematic bias detected: training error mean ({train_stats.get('error_mean', 0):.6f} Ha/e) is "
+                       f"{abs(train_bias_relative):.2f}x the target std - predictions are systematically {'high' if train_bias_relative > 0 else 'low'}")
+    
+    # Check for scale mismatch
+    valid_std_ratio = valid_stats.get('std_ratio', 1.0)
+    train_std_ratio = train_stats.get('std_ratio', 1.0)
+    if valid_std_ratio < 0.5:
+        warnings.append(f"⚠️  Scale mismatch: validation predicted std ({valid_stats.get('esp_pred_std', 0):.6f}) is "
+                       f"{valid_std_ratio:.2f}x smaller than target std ({valid_stats.get('esp_target_std', 0):.6f}) - predictions have too little variance")
+    elif valid_std_ratio > 2.0:
+        warnings.append(f"⚠️  Scale mismatch: validation predicted std ({valid_stats.get('esp_pred_std', 0):.6f}) is "
+                       f"{valid_std_ratio:.2f}x larger than target std ({valid_stats.get('esp_target_std', 0):.6f}) - predictions have too much variance")
     
     # Print warnings if any
     if warnings:
@@ -1382,24 +1410,52 @@ def train_model(
                 train_esp_target_mean_masked = jnp.mean(train_esp_targets_masked)
                 train_esp_ss_tot_masked = jnp.sum((train_esp_targets_masked - train_esp_target_mean_masked)**2)
                 # Clamp to avoid division by zero and extreme values
-                train_esp_r2_masked = 1.0 - (train_esp_ss_res_masked / jnp.maximum(train_esp_ss_tot_masked, 1e-10))
+                train_esp_r2_masked_unclamped = 1.0 - (train_esp_ss_res_masked / jnp.maximum(train_esp_ss_tot_masked, 1e-10))
                 # Clamp R² to reasonable range [-10, 1] to avoid extreme values
-                train_esp_r2_masked = jnp.clip(train_esp_r2_masked, -10.0, 1.0)
+                train_esp_r2_masked = jnp.clip(train_esp_r2_masked_unclamped, -10.0, 1.0)
+                
+                # Store diagnostics for warnings
+                train_esp_r2_masked_unclamped_val = float(train_esp_r2_masked_unclamped)
+                train_esp_ss_res_masked_val = float(train_esp_ss_res_masked)
+                train_esp_ss_tot_masked_val = float(train_esp_ss_tot_masked)
             else:
                 # Too few masked points - use unmasked R²
                 train_esp_r2_masked = train_esp_r2_unmasked
+                train_esp_r2_masked_unclamped_val = float(train_esp_r2_unmasked)
+                train_esp_ss_res_masked_val = 0.0
+                train_esp_ss_tot_masked_val = 0.0
+            else:
+                # Too few masked points - use unmasked R²
+                train_esp_r2_masked = train_esp_r2_unmasked
+        
+        # Check for systematic bias and scale mismatches
+        train_esp_pred_mean = float(jnp.mean(train_esp_preds))
+        train_esp_target_mean = float(jnp.mean(train_esp_targets))
+        train_esp_pred_std = float(jnp.std(train_esp_preds))
+        train_esp_target_std = float(jnp.std(train_esp_targets))
+        train_esp_error_mean = float(jnp.mean(train_esp_errors))
+        
+        # Relative bias (as fraction of target std)
+        train_esp_bias_relative = train_esp_error_mean / (train_esp_target_std + 1e-10)
+        # Scale mismatch (ratio of stds)
+        train_esp_std_ratio = train_esp_pred_std / (train_esp_target_std + 1e-10)
         
         train_esp_stats = {
             'mae': float(jnp.mean(jnp.abs(train_esp_errors))),
             'rmse': float(jnp.sqrt(jnp.mean(train_esp_errors**2))),
             'r2_unmasked': float(train_esp_r2_unmasked),
             'r2_masked': float(train_esp_r2_masked),
+            'r2_masked_unclamped': train_esp_r2_masked_unclamped_val if 'train_esp_r2_masked_unclamped_val' in locals() else float(train_esp_r2_masked),
+            'ss_res_masked': train_esp_ss_res_masked_val if 'train_esp_ss_res_masked_val' in locals() else 0.0,
+            'ss_tot_masked': train_esp_ss_tot_masked_val if 'train_esp_ss_tot_masked_val' in locals() else 0.0,
             'mask_fraction': float(train_mask_fraction),  # Fraction of points that passed masking
-            'pred_mean': float(jnp.mean(train_esp_preds)),
-            'pred_std': float(jnp.std(train_esp_preds)),
-            'target_mean': float(jnp.mean(train_esp_targets)),
-            'error_mean': float(jnp.mean(train_esp_errors)),
+            'pred_mean': train_esp_pred_mean,
+            'pred_std': train_esp_pred_std,
+            'target_mean': train_esp_target_mean,
+            'error_mean': train_esp_error_mean,
             'error_std': float(jnp.std(train_esp_errors)),
+            'bias_relative': train_esp_bias_relative,  # Bias relative to target std
+            'std_ratio': train_esp_std_ratio,  # Ratio of pred std to target std
         }
         
         # Verify monopoles are non-zero (after imputation)
@@ -1431,8 +1487,11 @@ def train_model(
             'esp_pred_mean': train_esp_stats['pred_mean'],
             'esp_pred_std': train_esp_stats['pred_std'],
             'esp_target_mean': train_esp_stats['target_mean'],
+            'esp_target_std': train_esp_target_std,  # Add target std for warnings
             'esp_error_mean': train_esp_stats['error_mean'],
             'esp_error_std': train_esp_stats['error_std'],
+            'bias_relative': train_esp_stats['bias_relative'],
+            'std_ratio': train_esp_stats['std_ratio'],
         }
 
         # Evaluate on validation set.
@@ -1543,24 +1602,49 @@ def train_model(
                 valid_esp_target_mean_masked = jnp.mean(valid_esp_targets_masked)
                 valid_esp_ss_tot_masked = jnp.sum((valid_esp_targets_masked - valid_esp_target_mean_masked)**2)
                 # Clamp to avoid division by zero and extreme values
-                valid_esp_r2_masked = 1.0 - (valid_esp_ss_res_masked / jnp.maximum(valid_esp_ss_tot_masked, 1e-10))
+                valid_esp_r2_masked_unclamped = 1.0 - (valid_esp_ss_res_masked / jnp.maximum(valid_esp_ss_tot_masked, 1e-10))
                 # Clamp R² to reasonable range [-10, 1] to avoid extreme values
-                valid_esp_r2_masked = jnp.clip(valid_esp_r2_masked, -10.0, 1.0)
+                valid_esp_r2_masked = jnp.clip(valid_esp_r2_masked_unclamped, -10.0, 1.0)
+                
+                # Store diagnostics for warnings
+                valid_esp_r2_masked_unclamped_val = float(valid_esp_r2_masked_unclamped)
+                valid_esp_ss_res_masked_val = float(valid_esp_ss_res_masked)
+                valid_esp_ss_tot_masked_val = float(valid_esp_ss_tot_masked)
             else:
                 # Too few masked points - use unmasked R²
                 valid_esp_r2_masked = valid_esp_r2_unmasked
+                valid_esp_r2_masked_unclamped_val = float(valid_esp_r2_unmasked)
+                valid_esp_ss_res_masked_val = 0.0
+                valid_esp_ss_tot_masked_val = 0.0
+        
+        # Check for systematic bias and scale mismatches
+        valid_esp_pred_mean = float(jnp.mean(valid_esp_preds))
+        valid_esp_target_mean = float(jnp.mean(valid_esp_targets))
+        valid_esp_pred_std = float(jnp.std(valid_esp_preds))
+        valid_esp_target_std = float(jnp.std(valid_esp_targets))
+        valid_esp_error_mean = float(jnp.mean(valid_esp_errors))
+        
+        # Relative bias (as fraction of target std)
+        valid_esp_bias_relative = valid_esp_error_mean / (valid_esp_target_std + 1e-10)
+        # Scale mismatch (ratio of stds)
+        valid_esp_std_ratio = valid_esp_pred_std / (valid_esp_target_std + 1e-10)
         
         valid_esp_stats = {
             'mae': float(jnp.mean(jnp.abs(valid_esp_errors))),
             'rmse': float(jnp.sqrt(jnp.mean(valid_esp_errors**2))),
             'r2_unmasked': float(valid_esp_r2_unmasked),
             'r2_masked': float(valid_esp_r2_masked),
+            'r2_masked_unclamped': valid_esp_r2_masked_unclamped_val if 'valid_esp_r2_masked_unclamped_val' in locals() else float(valid_esp_r2_masked),
+            'ss_res_masked': valid_esp_ss_res_masked_val if 'valid_esp_ss_res_masked_val' in locals() else 0.0,
+            'ss_tot_masked': valid_esp_ss_tot_masked_val if 'valid_esp_ss_tot_masked_val' in locals() else 0.0,
             'mask_fraction': float(valid_mask_fraction),  # Fraction of points that passed masking
-            'pred_mean': float(jnp.mean(valid_esp_preds)),
-            'pred_std': float(jnp.std(valid_esp_preds)),
-            'target_mean': float(jnp.mean(valid_esp_targets)),
-            'error_mean': float(jnp.mean(valid_esp_errors)),
+            'pred_mean': valid_esp_pred_mean,
+            'pred_std': valid_esp_pred_std,
+            'target_mean': valid_esp_target_mean,
+            'error_mean': valid_esp_error_mean,
             'error_std': float(jnp.std(valid_esp_errors)),
+            'bias_relative': valid_esp_bias_relative,  # Bias relative to target std
+            'std_ratio': valid_esp_std_ratio,  # Ratio of pred std to target std
         }
         
         # Verify monopoles are non-zero (after imputation)
@@ -1592,8 +1676,11 @@ def train_model(
             'esp_pred_mean': valid_esp_stats['pred_mean'],
             'esp_pred_std': valid_esp_stats['pred_std'],
             'esp_target_mean': valid_esp_stats['target_mean'],
+            'esp_target_std': valid_esp_target_std,  # Add target std for warnings
             'esp_error_mean': valid_esp_stats['error_mean'],
             'esp_error_std': valid_esp_stats['error_std'],
+            'bias_relative': valid_esp_stats['bias_relative'],
+            'std_ratio': valid_esp_stats['std_ratio'],
         }
 
         # Print detailed statistics
