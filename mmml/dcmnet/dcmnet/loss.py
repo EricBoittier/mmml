@@ -600,7 +600,17 @@ def esp_mono_loss(
     
     total_loss = esp_loss_corrected * esp_w + mono_loss_corrected * chg_w + charge_conservation_loss * charge_conservation_w
     
-    return total_loss, batched_pred, esp_target, esp_errors
+    # Return individual loss components for logging
+    loss_components = {
+        'esp_loss': esp_loss_corrected,
+        'mono_loss': mono_loss_corrected,
+        'charge_conservation_loss': charge_conservation_loss,
+        'esp_loss_weighted': esp_loss_corrected * esp_w,
+        'mono_loss_weighted': mono_loss_corrected * chg_w,
+        'charge_conservation_loss_weighted': charge_conservation_loss * charge_conservation_w,
+    }
+    
+    return total_loss, batched_pred, esp_target, esp_errors, loss_components
 
 
 @functools.partial(jax.jit, static_argnames=("batch_size", "esp_w", "chg_w", "n_dcm"))
