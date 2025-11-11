@@ -194,7 +194,7 @@ def print_statistics_table(train_stats, valid_stats, epoch):
                 print(f"{key:<20} {train_val:>15.6e} {valid_val:>15.6e} {diff:>15.6e}")
                 print(f"{key+'_kcal':<20} {train_val_kcal:>15.6f} {valid_val_kcal:>15.6f} {diff_kcal:>15.6f} (kcal/mol/e)")
             else:
-                print(f"{key:<20} {train_val:>15.6e} {valid_val:>15.6e} {diff:>15.6e}")
+            print(f"{key:<20} {train_val:>15.6e} {valid_val:>15.6e} {diff:>15.6e}")
     
     print(f"{'-'*80}")
     print(f"Monopole Prediction Statistics:")
@@ -260,6 +260,34 @@ def print_statistics_table(train_stats, valid_stats, epoch):
     elif valid_mask_fraction > 0.95:
         warnings.append(f"⚠️  Very high mask fraction ({valid_mask_fraction:.1%}) - masking may not be working")
     
+    # Check for scale mismatch
+    valid_std_ratio = valid_stats.get('std_ratio', 1.0)
+    train_std_ratio = train_stats.get('std_ratio', 1.0)
+    if valid_std_ratio < 0.5:
+        warnings.append(f"⚠️  Scale mismatch: validation predicted std ({valid_stats.get('esp_pred_std', 0):.6f}) is "
+                       f"{valid_std_ratio:.2f}x smaller than target std ({valid_stats.get('esp_target_std', 0):.6f}) - predictions have too little variance")
+        if valid_std_ratio < 0.1:
+            warnings.append(f"      CRITICAL: Predicted variance is {1/valid_std_ratio:.1f}x too small - model may be collapsing!")
+            warnings.append(f"      Possible causes:")
+            warnings.append(f"      - ESP loss weight ({train_stats.get('esp_loss_weighted', 0):.2e}) may be too high, causing gradient issues")
+            warnings.append(f"      - Learning rate may be too high, causing instability")
+            warnings.append(f"      - Model may not be expressive enough for ESP prediction")
+            warnings.append(f"      - Check if predictions are nearly constant: pred_mean={valid_stats.get('esp_pred_mean', 0):.6f}, pred_std={valid_stats.get('esp_pred_std', 0):.6f}")
+    elif valid_std_ratio > 2.0:
+        warnings.append(f"⚠️  Scale mismatch: validation predicted std ({valid_stats.get('esp_pred_std', 0):.6f}) is "
+                       f"{valid_std_ratio:.2f}x larger than target std ({valid_stats.get('esp_target_std', 0):.6f}) - predictions have too much variance")
+    
+    # Check for model collapse (very negative R² combined with scale mismatch)
+    valid_r2_unmasked = valid_stats.get('esp_r2_unmasked', 0)
+    train_r2_unmasked = train_stats.get('esp_r2_unmasked', 0)
+    if valid_r2_unmasked < -0.5 and valid_std_ratio < 0.1:
+        warnings.append(f"⚠️  MODEL COLLAPSE DETECTED: R²={valid_r2_unmasked:.4f}, std_ratio={valid_std_ratio:.4f}")
+        warnings.append(f"      The model is predicting nearly constant values. Immediate actions:")
+        warnings.append(f"      1. Reduce ESP loss weight (currently {train_stats.get('esp_loss_weighted', 0):.2e})")
+        warnings.append(f"      2. Check learning rate (may need to reduce)")
+        warnings.append(f"      3. Verify model architecture can express ESP variation")
+        warnings.append(f"      4. Check if monopole predictions are reasonable (mono_rmse={valid_stats.get('mono_rmse', 0):.4f})")
+    
     # Check for systematic bias
     valid_bias_relative = valid_stats.get('bias_relative', 0)
     train_bias_relative = train_stats.get('bias_relative', 0)
@@ -269,16 +297,6 @@ def print_statistics_table(train_stats, valid_stats, epoch):
     if abs(train_bias_relative) > 0.5:
         warnings.append(f"⚠️  Systematic bias detected: training error mean ({train_stats.get('error_mean', 0):.6f} Ha/e) is "
                        f"{abs(train_bias_relative):.2f}x the target std - predictions are systematically {'high' if train_bias_relative > 0 else 'low'}")
-    
-    # Check for scale mismatch
-    valid_std_ratio = valid_stats.get('std_ratio', 1.0)
-    train_std_ratio = train_stats.get('std_ratio', 1.0)
-    if valid_std_ratio < 0.5:
-        warnings.append(f"⚠️  Scale mismatch: validation predicted std ({valid_stats.get('esp_pred_std', 0):.6f}) is "
-                       f"{valid_std_ratio:.2f}x smaller than target std ({valid_stats.get('esp_target_std', 0):.6f}) - predictions have too little variance")
-    elif valid_std_ratio > 2.0:
-        warnings.append(f"⚠️  Scale mismatch: validation predicted std ({valid_stats.get('esp_pred_std', 0):.6f}) is "
-                       f"{valid_std_ratio:.2f}x larger than target std ({valid_stats.get('esp_target_std', 0):.6f}) - predictions have too much variance")
     
     # Print warnings if any
     if warnings:
@@ -1179,6 +1197,9 @@ def train_model(
             print(f"      - Grid alignment")
             print(f"      - Unit conversions")
             print(f"      - {pct_large_errors:.1f}% of points have errors > {large_error_threshold*627.5:.1f} kcal/mol/e")
+            if radii_cutoff_multiplier < 2.0:
+                print(f"      - Consider increasing radii_cutoff_multiplier from {radii_cutoff_multiplier} to >= 2.0")
+                print(f"        to mask more points near atomic nuclei (where ESP has singularities)")
         else:
             print(f"\n  ⚠️  ESP calculation has very large errors (RMSE >= 0.5 Ha/e)")
             print(f"      This strongly suggests issues with:")
@@ -1186,6 +1207,9 @@ def train_model(
             print(f"      - Grid alignment")
             print(f"      - Unit conversions")
             print(f"      - {pct_large_errors:.1f}% of points have errors > {large_error_threshold*627.5:.1f} kcal/mol/e")
+            if radii_cutoff_multiplier < 2.0:
+                print(f"      - Consider increasing radii_cutoff_multiplier from {radii_cutoff_multiplier} to >= 2.0")
+                print(f"        to mask more points near atomic nuclei (where ESP has singularities)")
         
         # Additional diagnostics
         if r2_unmasked < 0.5:
@@ -1199,6 +1223,11 @@ def train_model(
         print(f"\n  Unit and Masking Diagnostics:")
         print(f"    ESP grid units: {esp_grid_units}")
         print(f"    Radii cutoff multiplier: {radii_cutoff_multiplier}")
+        if radii_cutoff_multiplier < 2.0:
+            print(f"    ⚠️  WARNING: Radii cutoff multiplier ({radii_cutoff_multiplier}) is very low!")
+            print(f"       This means only points within {radii_cutoff_multiplier}× covalent radius are masked.")
+            print(f"       Many points near atomic nuclei (where ESP has singularities) will NOT be masked.")
+            print(f"       Recommended: Use radii_cutoff_multiplier >= 2.0 (typically 2.0-4.0)")
         print(f"    Use atomic radii mask: True (always enabled in sense check)")
         if len(valid_batches) > 0:
             first_batch = valid_batches[0]
@@ -1390,6 +1419,11 @@ def train_model(
         
         # Masked R² (only valid points)
         # Ensure masks and predictions have matching shapes for boolean indexing
+        # Initialize diagnostic variables
+        train_esp_r2_masked_unclamped_val = float(train_esp_r2_unmasked)
+        train_esp_ss_res_masked_val = 0.0
+        train_esp_ss_tot_masked_val = 0.0
+        
         if train_esp_masks.shape != train_esp_preds.shape:
             # Reshape mask to match predictions if needed
             if train_esp_masks.size == train_esp_preds.size:
@@ -1424,9 +1458,6 @@ def train_model(
                 train_esp_r2_masked_unclamped_val = float(train_esp_r2_unmasked)
                 train_esp_ss_res_masked_val = 0.0
                 train_esp_ss_tot_masked_val = 0.0
-            else:
-                # Too few masked points - use unmasked R²
-                train_esp_r2_masked = train_esp_r2_unmasked
         
         # Check for systematic bias and scale mismatches
         train_esp_pred_mean = float(jnp.mean(train_esp_preds))
@@ -1445,9 +1476,9 @@ def train_model(
             'rmse': float(jnp.sqrt(jnp.mean(train_esp_errors**2))),
             'r2_unmasked': float(train_esp_r2_unmasked),
             'r2_masked': float(train_esp_r2_masked),
-            'r2_masked_unclamped': train_esp_r2_masked_unclamped_val if 'train_esp_r2_masked_unclamped_val' in locals() else float(train_esp_r2_masked),
-            'ss_res_masked': train_esp_ss_res_masked_val if 'train_esp_ss_res_masked_val' in locals() else 0.0,
-            'ss_tot_masked': train_esp_ss_tot_masked_val if 'train_esp_ss_tot_masked_val' in locals() else 0.0,
+            'r2_masked_unclamped': train_esp_r2_masked_unclamped_val,
+            'ss_res_masked': train_esp_ss_res_masked_val,
+            'ss_tot_masked': train_esp_ss_tot_masked_val,
             'mask_fraction': float(train_mask_fraction),  # Fraction of points that passed masking
             'pred_mean': train_esp_pred_mean,
             'pred_std': train_esp_pred_std,
@@ -1582,6 +1613,11 @@ def train_model(
         
         # Masked R² (only valid points)
         # Ensure masks and predictions have matching shapes for boolean indexing
+        # Initialize diagnostic variables
+        valid_esp_r2_masked_unclamped_val = float(valid_esp_r2_unmasked)
+        valid_esp_ss_res_masked_val = 0.0
+        valid_esp_ss_tot_masked_val = 0.0
+        
         if valid_esp_masks.shape != valid_esp_preds.shape:
             # Reshape mask to match predictions if needed
             if valid_esp_masks.size == valid_esp_preds.size:
@@ -1634,9 +1670,9 @@ def train_model(
             'rmse': float(jnp.sqrt(jnp.mean(valid_esp_errors**2))),
             'r2_unmasked': float(valid_esp_r2_unmasked),
             'r2_masked': float(valid_esp_r2_masked),
-            'r2_masked_unclamped': valid_esp_r2_masked_unclamped_val if 'valid_esp_r2_masked_unclamped_val' in locals() else float(valid_esp_r2_masked),
-            'ss_res_masked': valid_esp_ss_res_masked_val if 'valid_esp_ss_res_masked_val' in locals() else 0.0,
-            'ss_tot_masked': valid_esp_ss_tot_masked_val if 'valid_esp_ss_tot_masked_val' in locals() else 0.0,
+            'r2_masked_unclamped': valid_esp_r2_masked_unclamped_val,
+            'ss_res_masked': valid_esp_ss_res_masked_val,
+            'ss_tot_masked': valid_esp_ss_tot_masked_val,
             'mask_fraction': float(valid_mask_fraction),  # Fraction of points that passed masking
             'pred_mean': valid_esp_pred_mean,
             'pred_std': valid_esp_pred_std,
