@@ -785,6 +785,11 @@ def preprocess_monopoles(data, mono_imputation_fn, num_atoms=60, batch_size=1000
     -------
     dict
         Updated data dictionary with imputed monopoles
+        
+    Raises
+    ------
+    RuntimeError
+        If monopole imputation fails for any batch
     """
     # Check if monopoles need imputation
     if "mono" in data:
@@ -845,10 +850,11 @@ def preprocess_monopoles(data, mono_imputation_fn, num_atoms=60, batch_size=1000
             imputed_batch = mono_imputation_fn(batch_dict)
             imputed_monopoles.append(imputed_batch)
         except Exception as e:
-            if verbose:
-                print(f"  Warning: Failed to impute batch {i//batch_size + 1}: {e}")
-            # Fallback to zeros for this batch
-            imputed_monopoles.append(jnp.zeros(actual_batch_size * num_atoms))
+            # If imputation fails, raise an error rather than silently using zeros
+            raise RuntimeError(
+                f"Failed to impute monopoles for batch {i//batch_size + 1} "
+                f"(samples {i} to {end_idx-1}): {e}"
+            ) from e
     
     # Concatenate all imputed monopoles
     all_imputed = jnp.concatenate(imputed_monopoles)
