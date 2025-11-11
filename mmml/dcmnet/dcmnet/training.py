@@ -206,6 +206,60 @@ def print_statistics_table(train_stats, valid_stats, epoch):
           f"std={valid_stats.get('mono_std', 0):.6e}, "
           f"min={valid_stats.get('mono_min', 0):.6e}, "
           f"max={valid_stats.get('mono_max', 0):.6e}")
+    
+    # Warnings for concerning metrics
+    warnings = []
+    
+    # Check for overfitting
+    train_loss_val = train_stats.get('loss', 0)
+    valid_loss_val = valid_stats.get('loss', 0)
+    if valid_loss_val > 0 and train_loss_val > 0:
+        loss_ratio = valid_loss_val / train_loss_val
+        if loss_ratio > 2.0:
+            warnings.append(f"⚠️  Severe overfitting: validation loss ({valid_loss_val:.2e}) is {loss_ratio:.1f}x higher than training loss ({train_loss_val:.2e})")
+        elif loss_ratio > 1.5:
+            warnings.append(f"⚠️  Overfitting detected: validation loss ({valid_loss_val:.2e}) is {loss_ratio:.1f}x higher than training loss ({train_loss_val:.2e})")
+    
+    # Check for negative R²
+    train_r2_unmasked = train_stats.get('esp_r2_unmasked', 0)
+    valid_r2_unmasked = valid_stats.get('esp_r2_unmasked', 0)
+    train_r2_masked = train_stats.get('esp_r2_masked', 0)
+    valid_r2_masked = valid_stats.get('esp_r2_masked', 0)
+    
+    if train_r2_unmasked < 0:
+        warnings.append(f"⚠️  Training ESP R² is negative ({train_r2_unmasked:.4f}) - model performs worse than predicting the mean")
+    if valid_r2_unmasked < 0:
+        warnings.append(f"⚠️  Validation ESP R² is negative ({valid_r2_unmasked:.4f}) - model performs worse than predicting the mean")
+    if train_r2_masked < -5:
+        warnings.append(f"⚠️  Training masked ESP R² is very negative ({train_r2_masked:.4f}) - check masking logic")
+    if valid_r2_masked < -5:
+        warnings.append(f"⚠️  Validation masked ESP R² is very negative ({valid_r2_masked:.4f}) - check masking logic")
+    
+    # Check ESP error magnitude
+    valid_esp_rmse = valid_stats.get('esp_rmse', 0)
+    if valid_esp_rmse > 0.1:  # > 0.1 Ha/e = ~63 kcal/mol/e
+        warnings.append(f"⚠️  High validation ESP RMSE ({valid_esp_rmse*627.5:.1f} kcal/mol/e) - model may not be learning ESP well")
+    
+    # Check monopole errors
+    valid_mono_rmse = valid_stats.get('mono_rmse', 0)
+    if valid_mono_rmse > 0.2:  # > 0.2 e
+        warnings.append(f"⚠️  High validation monopole RMSE ({valid_mono_rmse:.4f} e) - model may not be learning charges well")
+    
+    # Check mask fraction
+    valid_mask_fraction = valid_stats.get('esp_mask_fraction', 0)
+    if valid_mask_fraction < 0.1:
+        warnings.append(f"⚠️  Very low mask fraction ({valid_mask_fraction:.1%}) - most points are being masked out")
+    elif valid_mask_fraction > 0.95:
+        warnings.append(f"⚠️  Very high mask fraction ({valid_mask_fraction:.1%}) - masking may not be working")
+    
+    # Print warnings if any
+    if warnings:
+        print(f"\n{'='*80}")
+        print("WARNINGS:")
+        for warning in warnings:
+            print(f"  {warning}")
+        print(f"{'='*80}")
+    
     print(f"{'='*80}\n")
 
 
