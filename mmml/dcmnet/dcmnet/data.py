@@ -721,10 +721,19 @@ def prepare_batches(
             # Check if monopoles are all zeros (within numerical tolerance)
             mono_sum = jnp.abs(dict_["mono"]).sum()
             mono_missing_or_zero = mono_sum < 1e-6  # Treat as zero if sum of absolute values is tiny
+            if mono_missing_or_zero:
+                # Print warning when zeros detected
+                print(f"⚠️  Monopoles detected as zeros (sum_abs={float(mono_sum):.2e}). "
+                      f"Using imputation function to replace them.")
         
         if mono_missing_or_zero and mono_imputation_fn is not None:
             try:
-                dict_["mono"] = mono_imputation_fn(dict_)
+                imputed_mono = mono_imputation_fn(dict_)
+                dict_["mono"] = imputed_mono
+                # Print success message (only for first batch to avoid spam)
+                if len(output) == 0:  # First batch
+                    imputed_mean = float(jnp.mean(jnp.abs(imputed_mono)))
+                    print(f"✓  Monopole imputation successful. Imputed monopoles have mean_abs={imputed_mean:.6f} e")
             except Exception as e:
                 import warnings
                 warnings.warn(f"Failed to impute monopoles: {e}. Using zeros instead.")
@@ -733,6 +742,10 @@ def prepare_batches(
                     dict_["mono"] = jnp.zeros(batch_size * num_atoms)
         elif "mono" not in dict_:
             # If no imputation function provided and mono is missing, use zeros
+            if mono_imputation_fn is None:
+                # Only warn if imputation function was expected but not provided
+                if len(output) == 0:  # First batch only
+                    print("⚠️  No monopole imputation function provided. Using zeros for monopoles.")
             dict_["mono"] = jnp.zeros(batch_size * num_atoms)
         
         # Compute n_grid if missing
