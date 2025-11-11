@@ -23,11 +23,11 @@ except ImportError:
 
 @functools.partial(
     jax.jit,
-    static_argnames=("model_apply", "optimizer_update", "batch_size", "esp_w", "chg_w", "ndcm", "distance_weighting", "distance_scale", "distance_min"),
+    static_argnames=("model_apply", "optimizer_update", "batch_size", "esp_w", "chg_w", "ndcm", "distance_weighting", "distance_scale", "distance_min", "esp_magnitude_weighting"),
 )
 def train_step(
     model_apply, optimizer_update, batch, batch_size, opt_state, params, esp_w, chg_w, ndcm, clip_norm=None,
-    distance_weighting=False, distance_scale=2.0, distance_min=0.5
+    distance_weighting=False, distance_scale=2.0, distance_min=0.5, esp_magnitude_weighting=False
 ):
     """
     Single training step for DCMNet with ESP and monopole losses.
@@ -85,6 +85,7 @@ def train_step(
             distance_weighting=distance_weighting,  # Use function parameter, not batch value
             distance_scale=distance_scale,  # Use function parameter, not batch value
             distance_min=distance_min,  # Use function parameter, not batch value
+            esp_magnitude_weighting=esp_magnitude_weighting,  # Weight by ESP magnitude instead
         )
         return loss, (mono, dipo, esp_pred, esp_target, esp_errors)
 
@@ -254,6 +255,7 @@ def train_model(
     distance_weighting=False,
     distance_scale=2.0,
     distance_min=0.5,
+    esp_magnitude_weighting=False,
 ):
     """
     Train DCMNet model with ESP and monopole losses.
@@ -301,13 +303,19 @@ def train_model(
         and return monopoles with shape (batch_size * num_atoms,). By default None
     distance_weighting : bool, optional
         Whether to apply distance-based weighting to ESP loss. Errors further from atoms
-        will have lower weight. By default False
+        will have HIGHER weight (reversed from typical). By default False
     distance_scale : float, optional
         Scale parameter for distance weighting (in Angstroms). Larger values give slower
-        decay with distance. Weight = exp(-distance / distance_scale). By default 2.0
+        increase with distance. Weight = exp((distance - distance_min) / distance_scale),
+        normalized to have mean=1. By default 2.0
     distance_min : float, optional
         Minimum distance for weighting (in Angstroms). Distances below this are clamped
         to avoid singularities. By default 0.5
+    esp_magnitude_weighting : bool, optional
+        Whether to weight by ESP magnitude instead of distance. Errors at points with
+        larger |ESP| values will have LOWER weight. This reduces the impact of points
+        where nuclear-electron shielding occurs and ESP approaches singularity (near
+        atomic nuclei). By default False
         
     Returns
     -------
@@ -373,6 +381,7 @@ def train_model(
                 distance_weighting=distance_weighting,
                 distance_scale=distance_scale,
                 distance_min=distance_min,
+                esp_magnitude_weighting=esp_magnitude_weighting,
             )
 
             # Block until JAX operations complete to avoid async context issues

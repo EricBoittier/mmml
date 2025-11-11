@@ -36,7 +36,7 @@ def pred_dipole(dcm, com, q):
     # return jnp.linalg.norm(dipole_out)* 4.80320
 
 
-@functools.partial(jax.jit, static_argnames=("batch_size", "esp_w", "chg_w", "n_dcm", "distance_weighting", "distance_scale", "distance_min"))
+@functools.partial(jax.jit, static_argnames=("batch_size", "esp_w", "chg_w", "n_dcm", "distance_weighting", "distance_scale", "distance_min", "esp_magnitude_weighting"))
 def esp_mono_loss(
     dipo_prediction,
     mono_prediction,
@@ -53,6 +53,7 @@ def esp_mono_loss(
     distance_weighting=False,
     distance_scale=2.0,
     distance_min=0.5,
+    esp_magnitude_weighting=False,
 ):
     """
     Combined ESP and monopole loss function for DCMNet training.
@@ -93,11 +94,17 @@ def esp_mono_loss(
         Whether to apply distance-based weighting to ESP loss, by default False
     distance_scale : float, optional
         Scale parameter for distance weighting (in Angstroms). Larger values
-        give slower decay with distance. Weight = exp(-distance / distance_scale),
-        by default 2.0
+        give slower increase with distance. Weight = exp((distance - distance_min) / distance_scale),
+        normalized to have mean=1. This gives higher weight to points further from atoms.
+        By default 2.0
     distance_min : float, optional
         Minimum distance for weighting (in Angstroms). Distances below this
         are clamped to this value to avoid singularities, by default 0.5
+    esp_magnitude_weighting : bool, optional
+        Whether to weight by ESP magnitude instead of distance. Errors at points
+        with larger |ESP| values will have LOWER weight. This reduces the impact
+        of points where nuclear-electron shielding occurs and ESP approaches
+        singularity. By default False
         
     Returns
     -------
@@ -196,8 +203,36 @@ def esp_mono_loss(
     
     l2_loss = optax.l2_loss(batched_pred, esp_target)
     
-    # Apply distance-based weighting if requested
-    if distance_weighting and atom_positions is not None:
+    # Apply weighting if requested
+    if esp_magnitude_weighting:
+        # Weight by inverse ESP magnitude: points with larger |ESP| get LOWER weight
+        # This reduces the impact of points where nuclear-electron shielding occurs
+        # and ESP approaches singularity (near atomic nuclei)
+        esp_magnitude = jnp.abs(esp_target)  # Use target ESP magnitude
+        
+        # Avoid division by zero for very small ESP values
+        esp_magnitude_safe = jnp.maximum(esp_magnitude, 1e-10)
+        
+        # Inverse weighting: weight = 1 / (1 + esp_magnitude / scale)
+        # This gives weight ≈ 1 for small ESP, weight → 0 for large ESP
+        # Use mean ESP as scale for normalization
+        esp_scale = jnp.mean(esp_magnitude_safe) + 1e-10
+        weights = 1.0 / (1.0 + esp_magnitude_safe / esp_scale)
+        
+        # Normalize weights to have mean=1 for stability
+        weights = weights / (jnp.mean(weights) + 1e-10)
+        
+        # Handle shape
+        if weights.ndim > 1:
+            weights = weights.reshape(-1)
+        if l2_loss.ndim > 1:
+            l2_loss = l2_loss.reshape(-1)
+        
+        # Apply weights to loss
+        weighted_l2_loss = l2_loss * weights
+        esp_loss_corrected = weighted_l2_loss.sum() / jnp.maximum(weights.sum(), 1.0)
+        
+    elif distance_weighting and atom_positions is not None:
         # Handle atom_positions shape - could be (batch_size, natoms, 3) or flattened
         if atom_positions.ndim == 2:
             # Flattened: (batch_size * natoms, 3) -> reshape to (batch_size, natoms, 3)
@@ -225,10 +260,13 @@ def esp_mono_loss(
         # Clamp minimum distance to avoid singularities
         min_distances = jnp.maximum(min_distances, distance_min)
         
-        # Compute weights: exponential decay with distance
-        # Weight = exp(-distance / scale)
-        # This gives weight=1 at distance=0, weight≈0.6 at distance=scale, weight≈0.14 at distance=2*scale
-        weights = jnp.exp(-min_distances / distance_scale)  # (batch_size, ngrid)
+        # Compute weights: INCREASING with distance (reversed from before)
+        # Weight = exp(distance / scale) normalized so that weight at distance_min = 1
+        # This gives higher weight to points further from atoms
+        raw_weights = jnp.exp((min_distances - distance_min) / distance_scale)  # (batch_size, ngrid)
+        
+        # Normalize weights to have mean=1 for stability
+        weights = raw_weights / (jnp.mean(raw_weights) + 1e-10)
         
         # Handle single sample case
         if vdw_surface.ndim == 2:
@@ -239,7 +277,7 @@ def esp_mono_loss(
         weighted_l2_loss = l2_loss * weights
         esp_loss_corrected = weighted_l2_loss.sum() / jnp.maximum(weights.sum(), 1.0)
     else:
-        # No distance weighting - use original uniform weighting
+        # No weighting - use original uniform weighting
         # remove dummy grid points using actual grid length
         # n_points = l2_loss.shape[0]
         # ngrid_scalar = jnp.ravel(ngrid)[0]
