@@ -10,6 +10,7 @@ import jax.numpy as jnp
 import optax
 import numpy as np
 from .loss import esp_mono_loss
+from .electrostatics import calc_esp
 
 from .data import prepare_batches, prepare_datasets
 
@@ -807,6 +808,200 @@ def train_model(
                 print(f"    {k}: {v.shape} (dtype={v.dtype})")
             else:
                 print(f"    {k}: {type(v)}")
+    
+    # ESP sense check: Calculate ESP from reference monopoles
+    print("\n" + "="*80)
+    print("ESP Sense Check (Monopoles)")
+    print("="*80)
+    print("Computing ESP from reference monopoles on validation set...")
+    
+    try:
+        all_esp_pred_from_mono = []
+        all_esp_target = []
+        all_esp_mask = []
+        
+        for batch_idx, batch in enumerate(valid_batches):
+            # Get batch data
+            R_batch = batch["R"]  # Atom positions: (batch_size * num_atoms, 3) or (batch_size, num_atoms, 3)
+            mono_batch = batch["mono"]  # Monopoles: (batch_size * num_atoms,) or (batch_size, num_atoms)
+            vdw_batch = batch["vdw_surface"]  # Grid points: (batch_size, ngrid, 3) or (ngrid, 3)
+            esp_target_batch = batch["esp"]  # Target ESP: (batch_size, ngrid) or (ngrid,)
+            n_atoms_batch = batch["N"]  # Number of atoms per sample: (batch_size,) or scalar
+            n_grid_batch = batch["n_grid"]  # Number of grid points per sample: (batch_size,) or scalar
+            
+            # Determine batch size
+            if isinstance(n_atoms_batch, (int, np.integer)):
+                actual_batch_size = 1
+            elif n_atoms_batch.ndim == 0:
+                actual_batch_size = 1
+            else:
+                actual_batch_size = len(n_atoms_batch)
+            
+            # Handle different input shapes
+            # Reshape R to (batch_size, num_atoms, 3)
+            if R_batch.ndim == 2:
+                # Flattened: (batch_size * num_atoms, 3)
+                total_atoms = R_batch.shape[0]
+                if actual_batch_size == 1:
+                    num_atoms_per_sample = total_atoms
+                    R_reshaped = R_batch[None, :, :]  # (1, num_atoms, 3)
+                else:
+                    num_atoms_per_sample = total_atoms // actual_batch_size
+                    R_reshaped = R_batch.reshape(actual_batch_size, num_atoms_per_sample, 3)
+            else:
+                # Already batched: (batch_size, num_atoms, 3)
+                R_reshaped = R_batch
+                num_atoms_per_sample = R_reshaped.shape[1]
+            
+            # Reshape mono to (batch_size, num_atoms)
+            if mono_batch.ndim == 1:
+                # Flattened: (batch_size * num_atoms,)
+                if actual_batch_size == 1:
+                    mono_reshaped = mono_batch[None, :]  # (1, num_atoms)
+                else:
+                    mono_reshaped = mono_batch.reshape(actual_batch_size, num_atoms_per_sample)
+            else:
+                # Already batched: (batch_size, num_atoms)
+                mono_reshaped = mono_batch
+            
+            # Handle vdw_surface shape
+            if vdw_batch.ndim == 2:
+                # Single sample: (ngrid, 3) -> add batch dimension
+                vdw_reshaped = vdw_batch[None, :, :]  # (1, ngrid, 3)
+            else:
+                # Already batched: (batch_size, ngrid, 3)
+                vdw_reshaped = vdw_batch
+            
+            # Handle esp_target shape
+            if esp_target_batch.ndim == 1:
+                # Single sample: (ngrid,) -> add batch dimension
+                esp_target_reshaped = esp_target_batch[None, :]  # (1, ngrid)
+            else:
+                # Already batched: (batch_size, ngrid)
+                esp_target_reshaped = esp_target_batch
+            
+            # Compute ESP from monopoles for each sample in batch
+            batch_esp_pred = []
+            for sample_idx in range(actual_batch_size):
+                R_sample = R_reshaped[sample_idx]  # (num_atoms, 3)
+                mono_sample = mono_reshaped[sample_idx]  # (num_atoms,)
+                vdw_sample = vdw_reshaped[sample_idx]  # (ngrid, 3)
+                
+                # Get actual number of atoms (not padded)
+                if isinstance(n_atoms_batch, (int, np.integer)):
+                    n_real = n_atoms_batch
+                elif n_atoms_batch.ndim == 0:
+                    n_real = int(n_atoms_batch)
+                else:
+                    n_real = int(n_atoms_batch[sample_idx])
+                
+                # Use only real atoms (not padding)
+                R_real = R_sample[:n_real]  # (n_real, 3)
+                mono_real = mono_sample[:n_real]  # (n_real,)
+                
+                # Calculate ESP from monopoles
+                esp_pred_sample = calc_esp(
+                    charge_positions=R_real,
+                    charge_values=mono_real,
+                    grid_positions=vdw_sample
+                )  # (ngrid,)
+                
+                batch_esp_pred.append(esp_pred_sample)
+            
+            # Stack predictions for this batch
+            batch_esp_pred = jnp.stack(batch_esp_pred, axis=0)  # (batch_size, ngrid)
+            
+            # Collect results
+            all_esp_pred_from_mono.append(batch_esp_pred)
+            all_esp_target.append(esp_target_reshaped)
+            
+            # Get ESP mask if available (for masking statistics)
+            if "esp_mask" in batch:
+                esp_mask_batch = batch["esp_mask"]
+                if esp_mask_batch.ndim == 1:
+                    esp_mask_batch = esp_mask_batch[None, :]
+                all_esp_mask.append(esp_mask_batch)
+            else:
+                # Create default mask (all ones) if not available
+                all_esp_mask.append(jnp.ones_like(esp_target_reshaped))
+        
+        # Concatenate all batches
+        all_esp_pred_from_mono = jnp.concatenate(all_esp_pred_from_mono, axis=0)  # (total_samples, ngrid)
+        all_esp_target = jnp.concatenate(all_esp_target, axis=0)  # (total_samples, ngrid)
+        all_esp_mask = jnp.concatenate(all_esp_mask, axis=0)  # (total_samples, ngrid)
+        
+        # Flatten for statistics
+        esp_pred_flat = all_esp_pred_from_mono.ravel()
+        esp_target_flat = all_esp_target.ravel()
+        esp_mask_flat = all_esp_mask.ravel()
+        
+        # Compute errors
+        esp_errors = esp_pred_flat - esp_target_flat
+        
+        # Statistics (unmasked)
+        mae_unmasked = float(jnp.mean(jnp.abs(esp_errors)))
+        rmse_unmasked = float(jnp.sqrt(jnp.mean(esp_errors**2)))
+        
+        # Statistics (masked)
+        mask_bool = esp_mask_flat > 0.5
+        n_valid = int(jnp.sum(mask_bool))
+        n_total = len(esp_mask_flat)
+        
+        if n_valid > 0:
+            esp_pred_masked = esp_pred_flat[mask_bool]
+            esp_target_masked = esp_target_flat[mask_bool]
+            esp_errors_masked = esp_pred_masked - esp_target_masked
+            
+            mae_masked = float(jnp.mean(jnp.abs(esp_errors_masked)))
+            rmse_masked = float(jnp.sqrt(jnp.mean(esp_errors_masked**2)))
+            
+            # R² (masked)
+            ss_res = jnp.sum(esp_errors_masked**2)
+            ss_tot = jnp.sum((esp_target_masked - jnp.mean(esp_target_masked))**2)
+            r2_masked = 1.0 - (ss_res / jnp.maximum(ss_tot, 1e-10))
+            r2_masked = float(jnp.clip(r2_masked, -10.0, 1.0))
+        else:
+            mae_masked = rmse_masked = r2_masked = float('nan')
+        
+        # R² (unmasked)
+        ss_res_unmasked = jnp.sum(esp_errors**2)
+        ss_tot_unmasked = jnp.sum((esp_target_flat - jnp.mean(esp_target_flat))**2)
+        r2_unmasked = 1.0 - (ss_res_unmasked / jnp.maximum(ss_tot_unmasked, 1e-10))
+        r2_unmasked = float(jnp.clip(r2_unmasked, -10.0, 1.0))
+        
+        # Print results
+        print(f"\nESP from Reference Monopoles (Validation Set):")
+        print(f"  Total samples: {all_esp_pred_from_mono.shape[0]}")
+        print(f"  Total grid points: {len(esp_pred_flat):,}")
+        print(f"  Valid grid points (masked): {n_valid:,} / {n_total:,} ({100.0*n_valid/n_total:.2f}%)")
+        print(f"\n  Unmasked Statistics:")
+        print(f"    MAE: {mae_unmasked:.6f} Ha/e ({mae_unmasked*627.5:.3f} kcal/mol/e)")
+        print(f"    RMSE: {rmse_unmasked:.6f} Ha/e ({rmse_unmasked*627.5:.3f} kcal/mol/e)")
+        print(f"    R²: {r2_unmasked:.6f}")
+        if n_valid > 0:
+            print(f"\n  Masked Statistics:")
+            print(f"    MAE: {mae_masked:.6f} Ha/e ({mae_masked*627.5:.3f} kcal/mol/e)")
+            print(f"    RMSE: {rmse_masked:.6f} Ha/e ({rmse_masked*627.5:.3f} kcal/mol/e)")
+            print(f"    R²: {r2_masked:.6f}")
+        
+        # Check if results are reasonable
+        if rmse_unmasked < 0.1:  # Less than 0.1 Ha/e (~63 kcal/mol/e)
+            print(f"\n  ✓ ESP calculation looks reasonable (RMSE < 0.1 Ha/e)")
+        elif rmse_unmasked < 0.5:  # Less than 0.5 Ha/e (~314 kcal/mol/e)
+            print(f"\n  ⚠️  ESP calculation has moderate errors (RMSE < 0.5 Ha/e)")
+        else:
+            print(f"\n  ⚠️  ESP calculation has large errors (RMSE >= 0.5 Ha/e)")
+            print(f"      This may indicate issues with:")
+            print(f"      - Monopole values")
+            print(f"      - Grid alignment")
+            print(f"      - Unit conversions")
+        
+    except Exception as e:
+        print(f"  ⚠️  ESP sense check failed: {e}")
+        import traceback
+        traceback.print_exc()
+    
+    print("="*80 + "\n")
 
     print("\nTraining")
     print("..................")
