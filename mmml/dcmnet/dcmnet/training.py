@@ -515,38 +515,93 @@ def train_model(
         if train_mono_data.size > 0:
             train_mono_mean = float(jnp.mean(train_mono_data))
             train_mono_std = float(jnp.std(train_mono_data))
+            train_mono_min = float(jnp.min(train_mono_data))
+            train_mono_max = float(jnp.max(train_mono_data))
+            train_mono_sum_abs = float(jnp.sum(jnp.abs(train_mono_data)))
+            train_mono_nonzero = float(jnp.sum(jnp.abs(train_mono_data) > 1e-6))
+            train_mono_shape = train_mono_data.shape
         else:
-            train_mono_mean = train_mono_std = 0.0
-    except:
-        train_mono_mean = train_mono_std = 0.0
+            train_mono_mean = train_mono_std = train_mono_min = train_mono_max = train_mono_sum_abs = train_mono_nonzero = 0.0
+            train_mono_shape = (0,)
+    except Exception as e:
+        train_mono_mean = train_mono_std = train_mono_min = train_mono_max = train_mono_sum_abs = train_mono_nonzero = 0.0
+        train_mono_shape = (0,)
+        print(f"  Warning: Could not compute monopole statistics: {e}")
     
     # Compute ESP statistics safely
     try:
-        train_esp_flat = jnp.concatenate([jnp.ravel(e) for e in train_data.get("esp", [])])
-        if train_esp_flat.size > 0:
+        train_esp_list = train_data.get("esp", [])
+        if len(train_esp_list) > 0:
+            train_esp_flat = jnp.concatenate([jnp.ravel(e) for e in train_esp_list])
             train_esp_mean = float(jnp.mean(train_esp_flat))
             train_esp_std = float(jnp.std(train_esp_flat))
             train_esp_min = float(jnp.min(train_esp_flat))
             train_esp_max = float(jnp.max(train_esp_flat))
+            train_esp_median = float(jnp.median(train_esp_flat))
+            train_esp_q25 = float(jnp.percentile(train_esp_flat, 25))
+            train_esp_q75 = float(jnp.percentile(train_esp_flat, 75))
+            train_esp_total_points = train_esp_flat.size
+            # Check for NaN or Inf
+            train_esp_nan = float(jnp.sum(jnp.isnan(train_esp_flat)))
+            train_esp_inf = float(jnp.sum(jnp.isinf(train_esp_flat)))
         else:
-            train_esp_mean = train_esp_std = train_esp_min = train_esp_max = 0.0
-    except:
-        train_esp_mean = train_esp_std = train_esp_min = train_esp_max = 0.0
+            train_esp_mean = train_esp_std = train_esp_min = train_esp_max = train_esp_median = train_esp_q25 = train_esp_q75 = 0.0
+            train_esp_total_points = train_esp_nan = train_esp_inf = 0
+    except Exception as e:
+        train_esp_mean = train_esp_std = train_esp_min = train_esp_max = train_esp_median = train_esp_q25 = train_esp_q75 = 0.0
+        train_esp_total_points = train_esp_nan = train_esp_inf = 0
+        print(f"  Warning: Could not compute ESP statistics: {e}")
     
     try:
         train_n_grid = int(jnp.mean(jnp.array([len(e) for e in train_data.get("esp", [])]))) if len(train_data.get("esp", [])) > 0 else 0
+        train_n_grid_min = int(jnp.min(jnp.array([len(e) for e in train_data.get("esp", [])]))) if len(train_data.get("esp", [])) > 0 else 0
+        train_n_grid_max = int(jnp.max(jnp.array([len(e) for e in train_data.get("esp", [])]))) if len(train_data.get("esp", [])) > 0 else 0
     except:
-        train_n_grid = 0
+        train_n_grid = train_n_grid_min = train_n_grid_max = 0
+    
+    # Check VDW surface statistics
+    try:
+        train_vdw_list = train_data.get("vdw_surface", [])
+        if len(train_vdw_list) > 0:
+            train_vdw_shapes = [jnp.array(e).shape for e in train_vdw_list[:5]]  # First 5 samples
+            train_vdw_first = jnp.array(train_vdw_list[0])
+            train_vdw_mean = float(jnp.mean(train_vdw_first))
+            train_vdw_std = float(jnp.std(train_vdw_first))
+            train_vdw_min = float(jnp.min(train_vdw_first))
+            train_vdw_max = float(jnp.max(train_vdw_first))
+        else:
+            train_vdw_shapes = []
+            train_vdw_mean = train_vdw_std = train_vdw_min = train_vdw_max = 0.0
+    except Exception as e:
+        train_vdw_shapes = []
+        train_vdw_mean = train_vdw_std = train_vdw_min = train_vdw_max = 0.0
+        print(f"  Warning: Could not compute VDW surface statistics: {e}")
     
     print(f"\nTraining Data:")
     print(f"  Samples: {train_n_samples}")
     print(f"  Atoms per sample: {train_n_atoms}")
-    print(f"  Grid points per sample: {train_n_grid}")
-    print(f"  Monopoles: mean={train_mono_mean:.6f} e, std={train_mono_std:.6f} e")
-    print(f"  ESP: mean={train_esp_mean:.6f} Ha/e ({train_esp_mean*627.5:.3f} kcal/mol/e)")
-    print(f"        std={train_esp_std:.6f} Ha/e ({train_esp_std*627.5:.3f} kcal/mol/e)")
-    print(f"        range=[{train_esp_min:.6f}, {train_esp_max:.6f}] Ha/e")
-    print(f"        range=[{train_esp_min*627.5:.3f}, {train_esp_max*627.5:.3f}] kcal/mol/e")
+    print(f"  Grid points per sample: mean={train_n_grid}, min={train_n_grid_min}, max={train_n_grid_max}")
+    print(f"  Total ESP grid points: {train_esp_total_points:,}")
+    print(f"  Monopoles:")
+    print(f"    Shape: {train_mono_shape}")
+    print(f"    Mean: {train_mono_mean:.6f} e")
+    print(f"    Std: {train_mono_std:.6f} e")
+    print(f"    Range: [{train_mono_min:.6f}, {train_mono_max:.6f}] e")
+    print(f"    Sum(abs): {train_mono_sum_abs:.6f} e")
+    print(f"    Non-zero count: {train_mono_nonzero:,} / {train_mono_data.size if train_mono_data.size > 0 else 0:,}")
+    print(f"  ESP:")
+    print(f"    Mean: {train_esp_mean:.6f} Ha/e ({train_esp_mean*627.5:.3f} kcal/mol/e)")
+    print(f"    Std: {train_esp_std:.6f} Ha/e ({train_esp_std*627.5:.3f} kcal/mol/e)")
+    print(f"    Range: [{train_esp_min:.6f}, {train_esp_max:.6f}] Ha/e")
+    print(f"    Range: [{train_esp_min*627.5:.3f}, {train_esp_max*627.5:.3f}] kcal/mol/e")
+    print(f"    Median: {train_esp_median:.6f} Ha/e ({train_esp_median*627.5:.3f} kcal/mol/e)")
+    print(f"    Q25-Q75: [{train_esp_q25:.6f}, {train_esp_q75:.6f}] Ha/e")
+    print(f"    NaN count: {train_esp_nan}, Inf count: {train_esp_inf}")
+    if train_vdw_shapes:
+        print(f"  VDW Surface (first sample):")
+        print(f"    Shape: {train_vdw_shapes[0]}")
+        print(f"    Position range: [{train_vdw_min:.4f}, {train_vdw_max:.4f}] Å")
+        print(f"    Position mean: {train_vdw_mean:.4f} Å, std: {train_vdw_std:.4f} Å")
     
     # Validation data statistics
     valid_n_samples = len(valid_data["R"])
@@ -557,45 +612,106 @@ def train_model(
         if valid_mono_data.size > 0:
             valid_mono_mean = float(jnp.mean(valid_mono_data))
             valid_mono_std = float(jnp.std(valid_mono_data))
+            valid_mono_min = float(jnp.min(valid_mono_data))
+            valid_mono_max = float(jnp.max(valid_mono_data))
+            valid_mono_sum_abs = float(jnp.sum(jnp.abs(valid_mono_data)))
+            valid_mono_nonzero = float(jnp.sum(jnp.abs(valid_mono_data) > 1e-6))
+            valid_mono_shape = valid_mono_data.shape
         else:
-            valid_mono_mean = valid_mono_std = 0.0
-    except:
-        valid_mono_mean = valid_mono_std = 0.0
+            valid_mono_mean = valid_mono_std = valid_mono_min = valid_mono_max = valid_mono_sum_abs = valid_mono_nonzero = 0.0
+            valid_mono_shape = (0,)
+    except Exception as e:
+        valid_mono_mean = valid_mono_std = valid_mono_min = valid_mono_max = valid_mono_sum_abs = valid_mono_nonzero = 0.0
+        valid_mono_shape = (0,)
+        print(f"  Warning: Could not compute validation monopole statistics: {e}")
     
     try:
-        valid_esp_flat = jnp.concatenate([jnp.ravel(e) for e in valid_data.get("esp", [])])
-        if valid_esp_flat.size > 0:
+        valid_esp_list = valid_data.get("esp", [])
+        if len(valid_esp_list) > 0:
+            valid_esp_flat = jnp.concatenate([jnp.ravel(e) for e in valid_esp_list])
             valid_esp_mean = float(jnp.mean(valid_esp_flat))
             valid_esp_std = float(jnp.std(valid_esp_flat))
             valid_esp_min = float(jnp.min(valid_esp_flat))
             valid_esp_max = float(jnp.max(valid_esp_flat))
+            valid_esp_median = float(jnp.median(valid_esp_flat))
+            valid_esp_q25 = float(jnp.percentile(valid_esp_flat, 25))
+            valid_esp_q75 = float(jnp.percentile(valid_esp_flat, 75))
+            valid_esp_total_points = valid_esp_flat.size
+            # Check for NaN or Inf
+            valid_esp_nan = float(jnp.sum(jnp.isnan(valid_esp_flat)))
+            valid_esp_inf = float(jnp.sum(jnp.isinf(valid_esp_flat)))
         else:
-            valid_esp_mean = valid_esp_std = valid_esp_min = valid_esp_max = 0.0
-    except:
-        valid_esp_mean = valid_esp_std = valid_esp_min = valid_esp_max = 0.0
+            valid_esp_mean = valid_esp_std = valid_esp_min = valid_esp_max = valid_esp_median = valid_esp_q25 = valid_esp_q75 = 0.0
+            valid_esp_total_points = valid_esp_nan = valid_esp_inf = 0
+    except Exception as e:
+        valid_esp_mean = valid_esp_std = valid_esp_min = valid_esp_max = valid_esp_median = valid_esp_q25 = valid_esp_q75 = 0.0
+        valid_esp_total_points = valid_esp_nan = valid_esp_inf = 0
+        print(f"  Warning: Could not compute validation ESP statistics: {e}")
     
     try:
         valid_n_grid = int(jnp.mean(jnp.array([len(e) for e in valid_data.get("esp", [])]))) if len(valid_data.get("esp", [])) > 0 else 0
+        valid_n_grid_min = int(jnp.min(jnp.array([len(e) for e in valid_data.get("esp", [])]))) if len(valid_data.get("esp", [])) > 0 else 0
+        valid_n_grid_max = int(jnp.max(jnp.array([len(e) for e in valid_data.get("esp", [])]))) if len(valid_data.get("esp", [])) > 0 else 0
     except:
-        valid_n_grid = 0
+        valid_n_grid = valid_n_grid_min = valid_n_grid_max = 0
+    
+    # Check VDW surface statistics
+    try:
+        valid_vdw_list = valid_data.get("vdw_surface", [])
+        if len(valid_vdw_list) > 0:
+            valid_vdw_shapes = [jnp.array(e).shape for e in valid_vdw_list[:5]]  # First 5 samples
+            valid_vdw_first = jnp.array(valid_vdw_list[0])
+            valid_vdw_mean = float(jnp.mean(valid_vdw_first))
+            valid_vdw_std = float(jnp.std(valid_vdw_first))
+            valid_vdw_min = float(jnp.min(valid_vdw_first))
+            valid_vdw_max = float(jnp.max(valid_vdw_first))
+        else:
+            valid_vdw_shapes = []
+            valid_vdw_mean = valid_vdw_std = valid_vdw_min = valid_vdw_max = 0.0
+    except Exception as e:
+        valid_vdw_shapes = []
+        valid_vdw_mean = valid_vdw_std = valid_vdw_min = valid_vdw_max = 0.0
+        print(f"  Warning: Could not compute validation VDW surface statistics: {e}")
     
     print(f"\nValidation Data:")
     print(f"  Samples: {valid_n_samples}")
     print(f"  Atoms per sample: {valid_n_atoms}")
-    print(f"  Grid points per sample: {valid_n_grid}")
-    print(f"  Monopoles: mean={valid_mono_mean:.6f} e, std={valid_mono_std:.6f} e")
-    print(f"  ESP: mean={valid_esp_mean:.6f} Ha/e ({valid_esp_mean*627.5:.3f} kcal/mol/e)")
-    print(f"        std={valid_esp_std:.6f} Ha/e ({valid_esp_std*627.5:.3f} kcal/mol/e)")
-    print(f"        range=[{valid_esp_min:.6f}, {valid_esp_max:.6f}] Ha/e")
-    print(f"        range=[{valid_esp_min*627.5:.3f}, {valid_esp_max*627.5:.3f}] kcal/mol/e")
+    print(f"  Grid points per sample: mean={valid_n_grid}, min={valid_n_grid_min}, max={valid_n_grid_max}")
+    print(f"  Total ESP grid points: {valid_esp_total_points:,}")
+    print(f"  Monopoles:")
+    print(f"    Shape: {valid_mono_shape}")
+    print(f"    Mean: {valid_mono_mean:.6f} e")
+    print(f"    Std: {valid_mono_std:.6f} e")
+    print(f"    Range: [{valid_mono_min:.6f}, {valid_mono_max:.6f}] e")
+    print(f"    Sum(abs): {valid_mono_sum_abs:.6f} e")
+    print(f"    Non-zero count: {valid_mono_nonzero:,} / {valid_mono_data.size if valid_mono_data.size > 0 else 0:,}")
+    print(f"  ESP:")
+    print(f"    Mean: {valid_esp_mean:.6f} Ha/e ({valid_esp_mean*627.5:.3f} kcal/mol/e)")
+    print(f"    Std: {valid_esp_std:.6f} Ha/e ({valid_esp_std*627.5:.3f} kcal/mol/e)")
+    print(f"    Range: [{valid_esp_min:.6f}, {valid_esp_max:.6f}] Ha/e")
+    print(f"    Range: [{valid_esp_min*627.5:.3f}, {valid_esp_max*627.5:.3f}] kcal/mol/e")
+    print(f"    Median: {valid_esp_median:.6f} Ha/e ({valid_esp_median*627.5:.3f} kcal/mol/e)")
+    print(f"    Q25-Q75: [{valid_esp_q25:.6f}, {valid_esp_q75:.6f}] Ha/e")
+    print(f"    NaN count: {valid_esp_nan}, Inf count: {valid_esp_inf}")
+    if valid_vdw_shapes:
+        print(f"  VDW Surface (first sample):")
+        print(f"    Shape: {valid_vdw_shapes[0]}")
+        print(f"    Position range: [{valid_vdw_min:.4f}, {valid_vdw_max:.4f}] Å")
+        print(f"    Position mean: {valid_vdw_mean:.4f} Å, std: {valid_vdw_std:.4f} Å")
     
     print(f"\nTraining Configuration:")
     print(f"  Batch size: {batch_size}")
     print(f"  Steps per epoch: {train_n_samples // batch_size}")
     print(f"  ESP weight: {esp_w}")
     print(f"  Charge weight: {chg_w}")
+    print(f"  Charge conservation weight: {charge_conservation_w}")
     print(f"  Distance weighting: {distance_weighting}")
+    print(f"    Distance scale: {distance_scale} Å")
+    print(f"    Distance min: {distance_min} Å")
     print(f"  ESP magnitude weighting: {esp_magnitude_weighting}")
+    print(f"  ESP grid units: {esp_grid_units}")
+    print(f"  Radii cutoff multiplier: {radii_cutoff_multiplier}")
+    print(f"  Use atomic radii mask: True")
     print(f"  Learning rate: {learning_rate}")
     print(f"  Number of DCM per atom: {ndcm}")
     print(f"  Total parameters: {sum(x.size for x in jax.tree_util.tree_leaves(params)):,}")
@@ -608,6 +724,30 @@ def train_model(
         print("\nPreprocessing monopoles...")
         train_data = preprocess_monopoles(train_data, mono_imputation_fn, num_atoms=num_atoms, batch_size=batch_size, verbose=True)
         valid_data = preprocess_monopoles(valid_data, mono_imputation_fn, num_atoms=num_atoms, batch_size=batch_size, verbose=True)
+        
+        # Print statistics after imputation
+        print("\nPost-imputation Statistics:")
+        try:
+            train_mono_imputed = jnp.array(train_data.get("mono", []))
+            if train_mono_imputed.size > 0:
+                print(f"  Training monopoles after imputation:")
+                print(f"    Mean: {float(jnp.mean(train_mono_imputed)):.6f} e")
+                print(f"    Std: {float(jnp.std(train_mono_imputed)):.6f} e")
+                print(f"    Range: [{float(jnp.min(train_mono_imputed)):.6f}, {float(jnp.max(train_mono_imputed)):.6f}] e")
+                print(f"    Sum(abs): {float(jnp.sum(jnp.abs(train_mono_imputed))):.6f} e")
+                print(f"    Non-zero: {float(jnp.sum(jnp.abs(train_mono_imputed) > 1e-6)):,} / {train_mono_imputed.size:,}")
+            
+            valid_mono_imputed = jnp.array(valid_data.get("mono", []))
+            if valid_mono_imputed.size > 0:
+                print(f"  Validation monopoles after imputation:")
+                print(f"    Mean: {float(jnp.mean(valid_mono_imputed)):.6f} e")
+                print(f"    Std: {float(jnp.std(valid_mono_imputed)):.6f} e")
+                print(f"    Range: [{float(jnp.min(valid_mono_imputed)):.6f}, {float(jnp.max(valid_mono_imputed)):.6f}] e")
+                print(f"    Sum(abs): {float(jnp.sum(jnp.abs(valid_mono_imputed))):.6f} e")
+                print(f"    Non-zero: {float(jnp.sum(jnp.abs(valid_mono_imputed) > 1e-6)):,} / {valid_mono_imputed.size:,}")
+        except Exception as e:
+            print(f"  Warning: Could not compute post-imputation statistics: {e}")
+        
         # Set imputation function to None since monopoles are already imputed
         mono_imputation_fn = None
     
@@ -620,15 +760,53 @@ def train_model(
     
     # Batches for the validation set need to be prepared only once.
     key, shuffle_key = jax.random.split(key)
+    print(f"\nPreparing validation batches (batch_size={batch_size}, num_atoms={num_atoms})...")
     valid_batches = prepare_batches(shuffle_key, valid_data, batch_size, num_atoms=num_atoms, mono_imputation_fn=mono_imputation_fn)
+    print(f"  Created {len(valid_batches)} validation batches")
+    
+    # Print batch statistics
+    if len(valid_batches) > 0:
+        first_valid_batch = valid_batches[0]
+        print(f"  First validation batch shapes:")
+        for k, v in first_valid_batch.items():
+            if hasattr(v, 'shape'):
+                print(f"    {k}: {v.shape} (dtype={v.dtype})")
+            else:
+                print(f"    {k}: {type(v)}")
 
-    print("Training")
+    print("\nTraining")
     print("..................")
     # Train for 'num_epochs' epochs.
     for epoch in range(1, num_epochs + 1):
         # Prepare batches.
         key, shuffle_key = jax.random.split(key)
         train_batches = prepare_batches(shuffle_key, train_data, batch_size, num_atoms=num_atoms, mono_imputation_fn=mono_imputation_fn)
+        
+        # Print batch preparation info on first epoch
+        if epoch == 1:
+            print(f"\n  Created {len(train_batches)} training batches")
+            if len(train_batches) > 0:
+                first_train_batch = train_batches[0]
+                print(f"  First training batch shapes:")
+                for k, v in first_train_batch.items():
+                    if hasattr(v, 'shape'):
+                        print(f"    {k}: {v.shape} (dtype={v.dtype})")
+                    else:
+                        print(f"    {k}: {type(v)}")
+                # Check ESP and VDW surface shapes
+                if "esp" in first_train_batch:
+                    esp_shape = first_train_batch["esp"].shape
+                    print(f"    ESP shape: {esp_shape}")
+                if "vdw_surface" in first_train_batch:
+                    vdw_shape = first_train_batch["vdw_surface"].shape
+                    print(f"    VDW surface shape: {vdw_shape}")
+                if "n_grid" in first_train_batch:
+                    n_grid = first_train_batch["n_grid"]
+                    print(f"    n_grid: {n_grid}")
+                if "atom_mask" in first_train_batch:
+                    atom_mask_shape = first_train_batch["atom_mask"].shape
+                    atom_mask_sum = float(jnp.sum(first_train_batch["atom_mask"]))
+                    print(f"    atom_mask shape: {atom_mask_shape}, sum: {atom_mask_sum}")
         # Loop over train batches.
         train_loss = 0.0
         train_mono_preds = []
@@ -675,6 +853,25 @@ def train_model(
             train_esp_errors.append(esp_error)
             train_loss_components.append(loss_components)
             train_esp_masks.append(esp_mask)
+            
+            # Debug output for first batch of first epoch
+            if epoch == 1 and i == 0:
+                print(f"\n  First batch (epoch {epoch}, batch {i}) statistics:")
+                print(f"    Loss: {float(loss):.6e}")
+                print(f"    ESP mask shape: {esp_mask.shape}")
+                print(f"    ESP mask dtype: {esp_mask.dtype}")
+                print(f"    ESP mask min: {float(jnp.min(esp_mask)):.6f}, max: {float(jnp.max(esp_mask)):.6f}")
+                print(f"    ESP mask mean: {float(jnp.mean(esp_mask)):.6f}")
+                print(f"    ESP mask sum: {float(jnp.sum(esp_mask)):.6f}")
+                print(f"    ESP mask size: {esp_mask.size}")
+                print(f"    ESP mask valid count (>0.5): {float(jnp.sum(esp_mask > 0.5))}")
+                print(f"    ESP mask valid fraction: {float(jnp.sum(esp_mask > 0.5)) / float(esp_mask.size):.6f}")
+                print(f"    ESP pred shape: {esp_pred.shape}")
+                print(f"    ESP target shape: {esp_target.shape}")
+                print(f"    ESP error shape: {esp_error.shape}")
+                if esp_mask.size > 0:
+                    mask_sample = esp_mask.ravel()[:20] if esp_mask.size >= 20 else esp_mask.ravel()
+                    print(f"    ESP mask first 20 values: {mask_sample}")
 
         # Concatenate all predictions and targets (block once at end of epoch)
         train_mono_preds = jnp.concatenate(train_mono_preds, axis=0)
