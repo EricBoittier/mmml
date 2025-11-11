@@ -591,7 +591,13 @@ def esp_mono_loss(
         # This matches the working trainer.py approach
         esp_loss_corrected = l2_loss_masked.sum() / mask_total
     
-    total_loss = esp_loss_corrected * esp_w + mono_loss_corrected * chg_w + sum_of_dc_monopoles.sum() **2
+    # Enforce per-molecule zero charge constraint
+    # sum_of_dc_monopoles has shape (batch_size, max_atoms)
+    # Sum over atoms (axis=-1) to get total charge per molecule: (batch_size,)
+    # Square each molecule's total charge and average over batch
+    charge_conservation_loss = (sum_of_dc_monopoles.sum(axis=-1) ** 2).mean()
+    
+    total_loss = esp_loss_corrected * esp_w + mono_loss_corrected * chg_w + charge_conservation_loss
     
     return total_loss, batched_pred, esp_target, esp_errors
 

@@ -712,15 +712,25 @@ def prepare_batches(
             dict_["src_idx"] = src_idx
         dict_["batch_segments"] = batch_segments
         
-        # Impute monopoles if missing
-        if "mono" not in dict_ and mono_imputation_fn is not None:
+        # Impute monopoles if missing OR if all zeros (imputation function should override zeros)
+        # Check if monopoles are missing or all zeros
+        mono_missing_or_zero = False
+        if "mono" not in dict_:
+            mono_missing_or_zero = True
+        elif mono_imputation_fn is not None:
+            # Check if monopoles are all zeros (within numerical tolerance)
+            mono_sum = jnp.abs(dict_["mono"]).sum()
+            mono_missing_or_zero = mono_sum < 1e-6  # Treat as zero if sum of absolute values is tiny
+        
+        if mono_missing_or_zero and mono_imputation_fn is not None:
             try:
                 dict_["mono"] = mono_imputation_fn(dict_)
             except Exception as e:
                 import warnings
                 warnings.warn(f"Failed to impute monopoles: {e}. Using zeros instead.")
                 # Fallback to zeros if imputation fails
-                dict_["mono"] = jnp.zeros(batch_size * num_atoms)
+                if "mono" not in dict_:
+                    dict_["mono"] = jnp.zeros(batch_size * num_atoms)
         elif "mono" not in dict_:
             # If no imputation function provided and mono is missing, use zeros
             dict_["mono"] = jnp.zeros(batch_size * num_atoms)
