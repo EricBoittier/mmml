@@ -155,3 +155,6 @@ CHARMMSETUP
 CHARMMSETUP
 examples/co2/dcmnet_physnet_train/md_ir_long/trajectory.npz
 examples/openqdc/openqdc_packed_memmap/
+
+# Training logs and checkpoints in examples/heme (do not commit)
+examples/heme/co2_*/
