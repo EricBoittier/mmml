@@ -347,6 +347,11 @@ def train_model(
                 clip_norm=grad_clip_norm if use_grad_clip else None,
             )
 
+            # Block until JAX operations complete to avoid async context issues
+            # This prevents RuntimeError: cannot enter context in IPython/Jupyter
+            jax.block_until_ready(loss)
+            jax.block_until_ready(params)
+
             ema_params = update_ema_params(ema_params, params, ema_decay)
             
             train_loss += (loss - train_loss) / (i + 1)
@@ -411,6 +416,8 @@ def train_model(
                 chg_w=chg_w,
                 ndcm=ndcm,
             )
+            # Block until JAX operations complete to avoid async context issues
+            jax.block_until_ready(loss)
             valid_loss += (loss - valid_loss) / (i + 1)
             
             # Collect predictions for statistics
