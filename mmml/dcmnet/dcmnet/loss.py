@@ -233,37 +233,136 @@ def esp_mono_loss(
     esp_mask = jnp.ones_like(esp_target, dtype=jnp.float32)
     
     if use_atomic_radii_mask and atom_positions is not None and atomic_numbers is not None:
-        # Handle atom_positions shape
+        # First, determine the actual shape of atom_positions to get max_atoms
+        # atom_positions could be:
+        # - Flattened: (batch_size * natoms, 3)
+        # - Batched: (batch_size, natoms, 3)
+        # - Single sample: (natoms, 3)
+        
         if atom_positions.ndim == 2:
-            atom_pos = atom_positions.reshape(batch_size, max_atoms, 3)
-        else:
+            # Could be flattened batch or single sample
+            total_atoms = atom_positions.shape[0]
+            if total_atoms == batch_size * max_atoms:
+                # Flattened batch: reshape to (batch_size, natoms, 3)
+                atom_pos = atom_positions.reshape(batch_size, max_atoms, 3)
+            elif batch_size == 1:
+                # Single sample: (natoms, 3) -> add batch dimension
+                actual_max_atoms = total_atoms
+                atom_pos = atom_positions[None, :, :]  # (1, natoms, 3)
+                # Update max_atoms if needed
+                if actual_max_atoms != max_atoms:
+                    max_atoms = actual_max_atoms
+            else:
+                # Try to infer max_atoms from total_atoms
+                if total_atoms % batch_size == 0:
+                    inferred_max_atoms = total_atoms // batch_size
+                    atom_pos = atom_positions.reshape(batch_size, inferred_max_atoms, 3)
+                    max_atoms = inferred_max_atoms
+                else:
+                    # Fallback: assume it's already correct
+                    atom_pos = atom_positions.reshape(batch_size, max_atoms, 3)
+        elif atom_positions.ndim == 3:
+            # Already batched: (batch_size, natoms, 3)
             atom_pos = atom_positions
-        
-        # Handle atomic_numbers shape
-        if atomic_numbers.ndim == 1:
-            atomic_nums = atomic_numbers.reshape(batch_size, max_atoms)
+            # Update max_atoms if needed
+            if atom_positions.shape[1] != max_atoms:
+                max_atoms = atom_positions.shape[1]
         else:
-            atomic_nums = atomic_numbers
+            raise ValueError(f"Unexpected atom_positions shape: {atom_positions.shape}")
         
-        # Handle atom_mask shape
+        # Handle atomic_numbers shape similarly
+        if atomic_numbers.ndim == 1:
+            total_atoms = atomic_numbers.shape[0]
+            if total_atoms == batch_size * max_atoms:
+                atomic_nums = atomic_numbers.reshape(batch_size, max_atoms)
+            elif batch_size == 1:
+                atomic_nums = atomic_numbers[None, :]  # (1, natoms)
+            else:
+                if total_atoms % batch_size == 0:
+                    inferred_max_atoms = total_atoms // batch_size
+                    atomic_nums = atomic_numbers.reshape(batch_size, inferred_max_atoms)
+                    max_atoms = inferred_max_atoms
+                else:
+                    atomic_nums = atomic_numbers.reshape(batch_size, max_atoms)
+        elif atomic_numbers.ndim == 2:
+            atomic_nums = atomic_numbers
+            if atomic_numbers.shape[1] != max_atoms:
+                max_atoms = atomic_numbers.shape[1]
+        else:
+            raise ValueError(f"Unexpected atomic_numbers shape: {atomic_numbers.shape}")
+        
+        # Ensure atom_pos and atomic_nums have matching max_atoms
+        if atom_pos.shape[1] != atomic_nums.shape[1]:
+            # Use the larger one and pad if needed
+            actual_max_atoms = max(atom_pos.shape[1], atomic_nums.shape[1])
+            if atom_pos.shape[1] < actual_max_atoms:
+                # Pad atom_pos
+                padding = jnp.zeros((batch_size, actual_max_atoms - atom_pos.shape[1], 3))
+                atom_pos = jnp.concatenate([atom_pos, padding], axis=1)
+            if atomic_nums.shape[1] < actual_max_atoms:
+                # Pad atomic_nums with zeros
+                padding = jnp.zeros((batch_size, actual_max_atoms - atomic_nums.shape[1]), dtype=atomic_nums.dtype)
+                atomic_nums = jnp.concatenate([atomic_nums, padding], axis=1)
+            max_atoms = actual_max_atoms
+        
+        # Handle atom_mask shape - ensure it matches max_atoms
         if atom_mask is None:
             # Assume all atoms are valid if mask not provided
             atom_mask_arr = jnp.ones((batch_size, max_atoms), dtype=jnp.float32)
         elif atom_mask.ndim == 1:
-            atom_mask_arr = atom_mask.reshape(batch_size, max_atoms)
-        else:
+            # Flattened: reshape to (batch_size, natoms)
+            total_atoms = atom_mask.shape[0]
+            if total_atoms == batch_size * max_atoms:
+                atom_mask_arr = atom_mask.reshape(batch_size, max_atoms)
+            elif batch_size == 1:
+                atom_mask_arr = atom_mask[None, :]  # (1, natoms)
+            else:
+                if total_atoms % batch_size == 0:
+                    inferred_max_atoms = total_atoms // batch_size
+                    atom_mask_arr = atom_mask.reshape(batch_size, inferred_max_atoms)
+                    if inferred_max_atoms != max_atoms:
+                        # Pad or trim to match max_atoms
+                        if inferred_max_atoms < max_atoms:
+                            padding = jnp.zeros((batch_size, max_atoms - inferred_max_atoms), dtype=atom_mask.dtype)
+                            atom_mask_arr = jnp.concatenate([atom_mask_arr, padding], axis=1)
+                        else:
+                            atom_mask_arr = atom_mask_arr[:, :max_atoms]
+                else:
+                    atom_mask_arr = atom_mask.reshape(batch_size, max_atoms)
+        elif atom_mask.ndim == 2:
             atom_mask_arr = atom_mask
-        
-        # Handle vdw_surface shape
-        if vdw_surface.ndim == 2:
-            vdw = vdw_surface[None, :, :]  # (1, ngrid, 3)
-            esp_mask = esp_mask[None, :] if esp_mask.ndim == 1 else esp_mask
+            if atom_mask.shape[1] != max_atoms:
+                # Pad or trim to match max_atoms
+                if atom_mask.shape[1] < max_atoms:
+                    padding = jnp.zeros((batch_size, max_atoms - atom_mask.shape[1]), dtype=atom_mask.dtype)
+                    atom_mask_arr = jnp.concatenate([atom_mask_arr, padding], axis=1)
+                else:
+                    atom_mask_arr = atom_mask_arr[:, :max_atoms]
         else:
-            vdw = vdw_surface  # (batch_size, ngrid, 3)
+            raise ValueError(f"Unexpected atom_mask shape: {atom_mask.shape}")
+        
+        # Handle vdw_surface shape - check if already batched
+        if vdw_surface.ndim == 2:
+            # Single sample: (ngrid, 3) -> add batch dimension
+            vdw = vdw_surface[None, :, :]  # (1, ngrid, 3)
+            esp_mask_expanded = esp_mask[None, :] if esp_mask.ndim == 1 else esp_mask
+            esp_target_expanded = esp_target[None, :] if esp_target.ndim == 1 else esp_target
+        elif vdw_surface.ndim == 3:
+            # Already batched: (batch_size, ngrid, 3)
+            vdw = vdw_surface
+            esp_mask_expanded = esp_mask
+            esp_target_expanded = esp_target
+        else:
+            # Unexpected shape - try to handle gracefully
+            vdw = vdw_surface.reshape(batch_size, -1, 3)
+            esp_mask_expanded = esp_mask
+            esp_target_expanded = esp_target
         
         # Compute distances from grid to all atoms: (batch_size, ngrid, natoms)
-        diff = vdw[:, :, None, :] - atom_pos[:, None, :, :]
-        distances = jnp.linalg.norm(diff, axis=-1)
+        # vdw: (batch_size, ngrid, 3), atom_pos: (batch_size, natoms, 3)
+        # Use broadcasting: vdw[:, :, None, :] - atom_pos[:, None, :, :]
+        diff = vdw[:, :, None, :] - atom_pos[:, None, :, :]  # (batch_size, ngrid, natoms, 3)
+        distances = jnp.linalg.norm(diff, axis=-1)  # (batch_size, ngrid, natoms)
         
         # Get atomic radii for each atom
         atomic_nums_int = atomic_nums.astype(jnp.int32)
@@ -272,14 +371,15 @@ def esp_mono_loss(
         # For distance-based masking, only consider real (unmasked) atoms
         # Set distances to masked atoms to infinity
         distances_masked = jnp.where(
-            atom_mask_arr[:, None, :] > 0.5,
-            distances,
+            atom_mask_arr[:, None, :] > 0.5,  # (batch_size, 1, natoms)
+            distances,  # (batch_size, ngrid, natoms)
             1e10  # Large distance for masked atoms
         )
         
         # Check if any REAL atom is too close (within 2.0 * covalent_radii)
+        # atomic_radii: (batch_size, natoms) -> expand to (batch_size, 1, natoms) for broadcasting
         cutoff_distances = 2.0 * atomic_radii[:, None, :]  # (batch_size, 1, natoms)
-        within_cutoff = distances_masked < cutoff_distances
+        within_cutoff = distances_masked < cutoff_distances  # (batch_size, ngrid, natoms)
         distance_mask = (~jnp.any(within_cutoff, axis=-1)).astype(jnp.float32)  # (batch_size, ngrid)
         
         # Apply additional distance and value filters
@@ -288,16 +388,16 @@ def esp_mono_loss(
             distance_mask = distance_mask * (min_dist >= esp_min_distance).astype(jnp.float32)
         
         if esp_max_value < 1e9:
-            esp_abs = jnp.abs(esp_target)
-            if esp_abs.ndim == 1 and batch_size == 1:
+            esp_abs = jnp.abs(esp_target_expanded)
+            if esp_abs.ndim == 1:
                 esp_abs = esp_abs[None, :]
             distance_mask = distance_mask * (esp_abs <= esp_max_value).astype(jnp.float32)
         
-        # Apply mask to esp_mask
-        if esp_mask.ndim == 1:
-            esp_mask = distance_mask[0] if batch_size == 1 else distance_mask.reshape(-1)
+        # Apply mask to esp_mask - ensure correct shape
+        if batch_size == 1 and vdw_surface.ndim == 2:
+            esp_mask = distance_mask[0]  # (ngrid,)
         else:
-            esp_mask = distance_mask
+            esp_mask = distance_mask.reshape(-1) if distance_mask.ndim > 1 else distance_mask
     
     # Apply mask to loss
     if esp_mask.ndim > 1:
