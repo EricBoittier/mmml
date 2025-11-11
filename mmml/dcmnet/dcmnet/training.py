@@ -801,19 +801,18 @@ def preprocess_monopoles(data, mono_imputation_fn, num_atoms=60, batch_size=1000
                 print(f"  Monopoles already present (sum_abs={float(mono_sum):.2e}). Skipping imputation.")
             return data
     
-    # Infer num_atoms from data if not provided correctly
+    # Infer actual number of atoms from data (may be less than num_atoms due to padding)
     # Check the actual number of atoms from Z or R data
+    actual_num_atoms = num_atoms  # Default to num_atoms
     if len(data["Z"]) > 0:
-        inferred_num_atoms = len(data["Z"][0]) if isinstance(data["Z"][0], (list, tuple, jnp.ndarray)) else num_atoms
-        if inferred_num_atoms != num_atoms:
-            if verbose:
-                print(f"  Warning: num_atoms parameter ({num_atoms}) doesn't match data ({inferred_num_atoms}). Using inferred value.")
-            num_atoms = inferred_num_atoms
+        first_z = data["Z"][0]
+        if isinstance(first_z, (list, tuple, jnp.ndarray)):
+            actual_num_atoms = len(first_z)
     
     # Need to impute monopoles
     if verbose:
         print(f"  Imputing monopoles for {len(data['R'])} samples...")
-        print(f"  Using num_atoms={num_atoms} (inferred from data), batch_size={batch_size}")
+        print(f"  Using num_atoms={num_atoms} (padded), actual_atoms={actual_num_atoms} per molecule, batch_size={batch_size}")
     
     # Create batches for imputation
     n_samples = len(data["R"])
@@ -858,14 +857,25 @@ def preprocess_monopoles(data, mono_imputation_fn, num_atoms=60, batch_size=1000
         # Impute monopoles for this batch
         try:
             imputed_batch = mono_imputation_fn(batch_dict)
-            # Verify the shape of imputed batch
-            expected_batch_size = actual_batch_size * num_atoms
+            # Verify the shape of imputed batch - should be (actual_batch_size * actual_num_atoms,)
+            expected_batch_size = actual_batch_size * actual_num_atoms
             if imputed_batch.size != expected_batch_size:
                 raise ValueError(
                     f"Imputation function returned wrong size: got {imputed_batch.size} elements, "
-                    f"expected {expected_batch_size} (batch_size={actual_batch_size} * num_atoms={num_atoms})"
+                    f"expected {expected_batch_size} (batch_size={actual_batch_size} * actual_num_atoms={actual_num_atoms})"
                 )
-            imputed_monopoles.append(imputed_batch)
+            
+            # Reshape to (actual_batch_size, actual_num_atoms) and pad to (actual_batch_size, num_atoms)
+            imputed_reshaped = imputed_batch.reshape(actual_batch_size, actual_num_atoms)
+            # Pad with zeros to match num_atoms
+            if actual_num_atoms < num_atoms:
+                padding = jnp.zeros((actual_batch_size, num_atoms - actual_num_atoms), dtype=imputed_reshaped.dtype)
+                imputed_padded = jnp.concatenate([imputed_reshaped, padding], axis=1)
+            else:
+                imputed_padded = imputed_reshaped[:, :num_atoms]  # Trim if somehow larger
+            
+            # Flatten back to (actual_batch_size * num_atoms,) for concatenation
+            imputed_monopoles.append(imputed_padded.reshape(-1))
         except Exception as e:
             # If imputation fails, raise an error rather than silently using zeros
             raise RuntimeError(
