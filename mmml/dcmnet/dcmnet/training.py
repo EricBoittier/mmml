@@ -892,27 +892,24 @@ def preprocess_monopoles(data, mono_imputation_fn, num_atoms=60, batch_size=1000
         try:
             imputed_batch = mono_imputation_fn(batch_dict)
             
-            # The imputation function might return monopoles for padded atoms (num_atoms)
-            # or for actual atoms (actual_num_atoms). Handle both cases.
-            expected_actual_size = actual_batch_size * actual_num_atoms
-            expected_padded_size = actual_batch_size * num_atoms
+            # The imputation function might return monopoles for different numbers of atoms.
+            # It could return: actual_num_atoms, num_atoms (padded), or even 60 (hardcoded padding).
+            # We need to infer the number of atoms per molecule from the output size.
+            atoms_per_molecule = imputed_batch.size // actual_batch_size
             
-            if imputed_batch.size == expected_padded_size:
-                # Imputation function returned padded monopoles (num_atoms per molecule)
-                # Reshape to (actual_batch_size, num_atoms) and extract only actual atoms
-                imputed_reshaped = imputed_batch.reshape(actual_batch_size, num_atoms)
-                imputed_actual = imputed_reshaped[:, :actual_num_atoms]  # Extract only actual atoms
-            elif imputed_batch.size == expected_actual_size:
-                # Imputation function returned monopoles for actual atoms only
-                imputed_actual = imputed_batch.reshape(actual_batch_size, actual_num_atoms)
-            else:
+            if atoms_per_molecule < actual_num_atoms:
                 raise ValueError(
-                    f"Imputation function returned wrong size: got {imputed_batch.size} elements, "
-                    f"expected either {expected_actual_size} (batch_size={actual_batch_size} * actual_num_atoms={actual_num_atoms}) "
-                    f"or {expected_padded_size} (batch_size={actual_batch_size} * num_atoms={num_atoms})"
+                    f"Imputation function returned too few atoms: got {atoms_per_molecule} atoms per molecule, "
+                    f"but need at least {actual_num_atoms} (actual atoms)"
                 )
             
-            # Pad with zeros to match num_atoms
+            # Reshape to (actual_batch_size, atoms_per_molecule)
+            imputed_reshaped = imputed_batch.reshape(actual_batch_size, atoms_per_molecule)
+            
+            # Extract only the actual atoms (first actual_num_atoms)
+            imputed_actual = imputed_reshaped[:, :actual_num_atoms]
+            
+            # Pad with zeros to match num_atoms (the padded size expected by the data format)
             if actual_num_atoms < num_atoms:
                 padding = jnp.zeros((actual_batch_size, num_atoms - actual_num_atoms), dtype=imputed_actual.dtype)
                 imputed_padded = jnp.concatenate([imputed_actual, padding], axis=1)
