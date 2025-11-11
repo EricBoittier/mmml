@@ -27,11 +27,12 @@ except ImportError:
 
 @functools.partial(
     jax.jit,
-    static_argnames=("model_apply", "optimizer_update", "batch_size", "esp_w", "chg_w", "ndcm", "distance_weighting", "distance_scale", "distance_min", "esp_magnitude_weighting", "charge_conservation_w"),
+    static_argnames=("model_apply", "optimizer_update", "batch_size", "esp_w", "chg_w", "ndcm", "distance_weighting", "distance_scale", "distance_min", "esp_magnitude_weighting", "charge_conservation_w", "esp_grid_units", "radii_cutoff_multiplier"),
 )
 def train_step(
     model_apply, optimizer_update, batch, batch_size, opt_state, params, esp_w, chg_w, ndcm, clip_norm=None,
-    distance_weighting=False, distance_scale=2.0, distance_min=0.5, esp_magnitude_weighting=False, charge_conservation_w=1.0
+    distance_weighting=False, distance_scale=2.0, distance_min=0.5, esp_magnitude_weighting=False, charge_conservation_w=1.0,
+    esp_grid_units="angstrom", radii_cutoff_multiplier=2.0
 ):
     """
     Single training step for DCMNet with ESP and monopole losses.
@@ -94,6 +95,8 @@ def train_step(
             esp_magnitude_weighting=esp_magnitude_weighting,  # Weight by ESP magnitude instead
             use_atomic_radii_mask=True,  # Enable atomic radii masking (critical for reducing ESP errors)
             charge_conservation_w=charge_conservation_w,  # Weight for charge conservation loss
+            esp_grid_units=esp_grid_units,  # Units of ESP grid ("angstrom" or "bohr")
+            radii_cutoff_multiplier=radii_cutoff_multiplier,  # Multiplier for atomic radii cutoff
         )
         return loss, (mono, dipo, esp_pred, esp_target, esp_errors, loss_components, esp_mask)
 
@@ -200,9 +203,10 @@ def print_statistics_table(train_stats, valid_stats, epoch):
 
 
 @functools.partial(
-    jax.jit, static_argnames=("model_apply", "batch_size", "esp_w", "chg_w", "ndcm", "charge_conservation_w")
+    jax.jit, static_argnames=("model_apply", "batch_size", "esp_w", "chg_w", "ndcm", "charge_conservation_w", "esp_grid_units", "radii_cutoff_multiplier")
 )
-def eval_step(model_apply, batch, batch_size, params, esp_w, chg_w, ndcm, charge_conservation_w=1.0):
+def eval_step(model_apply, batch, batch_size, params, esp_w, chg_w, ndcm, charge_conservation_w=1.0,
+              esp_grid_units="angstrom", radii_cutoff_multiplier=2.0):
     """
     Single evaluation step for DCMNet.
     
@@ -257,6 +261,8 @@ def eval_step(model_apply, batch, batch_size, params, esp_w, chg_w, ndcm, charge
         distance_min=0.5,
         use_atomic_radii_mask=True,  # Enable atomic radii masking (critical for reducing ESP errors)
         charge_conservation_w=charge_conservation_w,  # Weight for charge conservation loss
+        esp_grid_units=esp_grid_units,  # Units of ESP grid ("angstrom" or "bohr")
+        radii_cutoff_multiplier=radii_cutoff_multiplier,  # Multiplier for atomic radii cutoff
     )
     return loss, mono, dipo, esp_pred, esp_target, esp_errors, loss_components, esp_mask
 
@@ -403,6 +409,8 @@ def train_model(
     distance_min=0.5,
     esp_magnitude_weighting=False,
     charge_conservation_w=1.0,
+    esp_grid_units="angstrom",
+    radii_cutoff_multiplier=2.0,
 ):
     """
     Train DCMNet model with ESP and monopole losses.
@@ -648,6 +656,8 @@ def train_model(
                 distance_min=distance_min,
                 esp_magnitude_weighting=esp_magnitude_weighting,
                 charge_conservation_w=charge_conservation_w,
+                esp_grid_units=esp_grid_units,
+                radii_cutoff_multiplier=radii_cutoff_multiplier,
             )
 
             # Update EMA parameters (non-blocking for better GPU utilization)
@@ -773,6 +783,8 @@ def train_model(
                 chg_w=chg_w,
                 ndcm=ndcm,
                 charge_conservation_w=charge_conservation_w,
+                esp_grid_units=esp_grid_units,
+                radii_cutoff_multiplier=radii_cutoff_multiplier,
             )
             # Accumulate loss (non-blocking for better GPU utilization)
             valid_loss += (loss - valid_loss) / (i + 1)

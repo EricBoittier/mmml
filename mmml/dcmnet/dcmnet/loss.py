@@ -14,6 +14,9 @@ from .utils import reshape_dipole
 # Constants for ESP masking
 EPS = 1e-8
 RADII_TABLE = jnp.array(ase.data.covalent_radii)
+# Conversion factor: 1 Bohr = 0.529177 Angstrom, so 1 Angstrom = 1.88973 Bohr
+BOHR_TO_ANGSTROM = 0.529177
+ANGSTROM_TO_BOHR = 1.88973
 
 
 def pred_dipole(dcm, com, q):
@@ -41,7 +44,7 @@ def pred_dipole(dcm, com, q):
     # return jnp.linalg.norm(dipole_out)* 4.80320
 
 
-@functools.partial(jax.jit, static_argnames=("batch_size", "esp_w", "chg_w", "n_dcm", "distance_weighting", "distance_scale", "distance_min", "esp_magnitude_weighting", "esp_min_distance", "esp_max_value", "use_atomic_radii_mask", "charge_conservation_w"))
+@functools.partial(jax.jit, static_argnames=("batch_size", "esp_w", "chg_w", "n_dcm", "distance_weighting", "distance_scale", "distance_min", "esp_magnitude_weighting", "esp_min_distance", "esp_max_value", "use_atomic_radii_mask", "charge_conservation_w", "esp_grid_units", "radii_cutoff_multiplier"))
 def esp_mono_loss(
     dipo_prediction,
     mono_prediction,
@@ -65,6 +68,8 @@ def esp_mono_loss(
     esp_max_value=1e10,
     use_atomic_radii_mask=True,
     charge_conservation_w=1.0,
+    esp_grid_units="angstrom",
+    radii_cutoff_multiplier=2.0,
 ):
     """
     Combined ESP and monopole loss function for DCMNet training.
@@ -129,17 +134,29 @@ def esp_mono_loss(
         Maximum absolute ESP value to include in loss. Points with |ESP| > this are masked out.
         By default 1e10 (no masking).
     use_atomic_radii_mask : bool, optional
-        Whether to mask out ESP points too close to atoms (within 2.0 * covalent_radii).
+        Whether to mask out ESP points too close to atoms (within radii_cutoff_multiplier * covalent_radii).
         This excludes singularities near atomic nuclei. By default True.
+    charge_conservation_w : float, optional
+        Weight for charge conservation loss term. By default 1.0.
+    esp_grid_units : str, optional
+        Units of ESP grid coordinates. Either "angstrom" (default) or "bohr".
+        If "bohr", distances will be converted to Angstrom for comparison with Angstrom-based radii.
+        By default "angstrom".
+    radii_cutoff_multiplier : float, optional
+        Multiplier for atomic radii when computing cutoff distances for masking.
+        Points within (radii_cutoff_multiplier * covalent_radius) of any atom are masked.
+        By default 2.0. Increase this value to mask out more points (larger exclusion zone).
         
     Returns
     -------
     tuple
-        (loss, esp_pred, esp_target, esp_errors) where:
+        (loss, esp_pred, esp_target, esp_errors, loss_components, esp_mask) where:
         - loss: scalar total loss value
         - esp_pred: predicted ESP values at grid points
         - esp_target: target ESP values at grid points
         - esp_errors: per-grid-point errors
+        - loss_components: dict with individual loss components
+        - esp_mask: mask indicating valid ESP points (1.0 = valid, 0.0 = masked)
     """
     # sum_of_dc_monopoles = mono_prediction.sum(axis=-1)
     # l2_loss_mono = optax.l2_loss(sum_of_dc_monopoles, mono)
@@ -438,7 +455,12 @@ def esp_mono_loss(
         diff = vdw[:, :, None, :] - atom_pos[:, None, :, :]  # (batch_size, ngrid, natoms, 3)
         distances = jnp.linalg.norm(diff, axis=-1)  # (batch_size, ngrid, natoms)
         
-        # Get atomic radii for each atom
+        # Handle unit conversion if ESP grid is in Bohr but atoms/radii are in Angstrom
+        # If grid is in Bohr, convert distances to Angstrom for comparison with radii
+        if esp_grid_units.lower() == "bohr":
+            distances = distances * BOHR_TO_ANGSTROM  # Convert Bohr to Angstrom
+        
+        # Get atomic radii for each atom (in Angstrom)
         atomic_nums_int = atomic_nums.astype(jnp.int32)
         atomic_radii = jnp.take(RADII_TABLE, atomic_nums_int, mode='clip')  # (batch_size, natoms)
         
@@ -450,9 +472,9 @@ def esp_mono_loss(
             1e10  # Large distance for masked atoms
         )
         
-        # Check if any REAL atom is too close (within 2.0 * covalent_radii)
+        # Check if any REAL atom is too close (within radii_cutoff_multiplier * covalent_radii)
         # atomic_radii: (batch_size, natoms) -> expand to (batch_size, 1, natoms) for broadcasting
-        cutoff_distances = 2.0 * atomic_radii[:, None, :]  # (batch_size, 1, natoms)
+        cutoff_distances = radii_cutoff_multiplier * atomic_radii[:, None, :]  # (batch_size, 1, natoms)
         within_cutoff = distances_masked < cutoff_distances  # (batch_size, ngrid, natoms)
         distance_mask = (~jnp.any(within_cutoff, axis=-1)).astype(jnp.float32)  # (batch_size, ngrid)
         
