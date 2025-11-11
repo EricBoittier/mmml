@@ -194,7 +194,7 @@ def print_statistics_table(train_stats, valid_stats, epoch):
                 print(f"{key:<20} {train_val:>15.6e} {valid_val:>15.6e} {diff:>15.6e}")
                 print(f"{key+'_kcal':<20} {train_val_kcal:>15.6f} {valid_val_kcal:>15.6f} {diff_kcal:>15.6f} (kcal/mol/e)")
             else:
-            print(f"{key:<20} {train_val:>15.6e} {valid_val:>15.6e} {diff:>15.6e}")
+                print(f"{key:<20} {train_val:>15.6e} {valid_val:>15.6e} {diff:>15.6e}")
     
     print(f"{'-'*80}")
     print(f"Monopole Prediction Statistics:")
