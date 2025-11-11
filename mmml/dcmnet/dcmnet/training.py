@@ -560,21 +560,35 @@ def train_model(
         train_n_grid = train_n_grid_min = train_n_grid_max = 0
     
     # Check VDW surface statistics
+    # Conversion factor: 1 Bohr = 0.529177 Angstrom
+    BOHR_TO_ANGSTROM = 0.529177
     try:
         train_vdw_list = train_data.get("vdw_surface", [])
         if len(train_vdw_list) > 0:
             train_vdw_shapes = [jnp.array(e).shape for e in train_vdw_list[:5]]  # First 5 samples
             train_vdw_first = jnp.array(train_vdw_list[0])
-            train_vdw_mean = float(jnp.mean(train_vdw_first))
-            train_vdw_std = float(jnp.std(train_vdw_first))
-            train_vdw_min = float(jnp.min(train_vdw_first))
-            train_vdw_max = float(jnp.max(train_vdw_first))
+            # Convert to Angstrom if grid is in Bohr
+            if esp_grid_units.lower() == "bohr":
+                train_vdw_first_angstrom = train_vdw_first * BOHR_TO_ANGSTROM
+                train_vdw_mean = float(jnp.mean(train_vdw_first_angstrom))
+                train_vdw_std = float(jnp.std(train_vdw_first_angstrom))
+                train_vdw_min = float(jnp.min(train_vdw_first_angstrom))
+                train_vdw_max = float(jnp.max(train_vdw_first_angstrom))
+                train_vdw_units = "Å (converted from Bohr)"
+            else:
+                train_vdw_mean = float(jnp.mean(train_vdw_first))
+                train_vdw_std = float(jnp.std(train_vdw_first))
+                train_vdw_min = float(jnp.min(train_vdw_first))
+                train_vdw_max = float(jnp.max(train_vdw_first))
+                train_vdw_units = "Å"
         else:
             train_vdw_shapes = []
             train_vdw_mean = train_vdw_std = train_vdw_min = train_vdw_max = 0.0
+            train_vdw_units = "Å"
     except Exception as e:
         train_vdw_shapes = []
         train_vdw_mean = train_vdw_std = train_vdw_min = train_vdw_max = 0.0
+        train_vdw_units = "Å"
         print(f"  Warning: Could not compute VDW surface statistics: {e}")
     
     print(f"\nTraining Data:")
@@ -600,8 +614,12 @@ def train_model(
     if train_vdw_shapes:
         print(f"  VDW Surface (first sample):")
         print(f"    Shape: {train_vdw_shapes[0]}")
-        print(f"    Position range: [{train_vdw_min:.4f}, {train_vdw_max:.4f}] Å")
-        print(f"    Position mean: {train_vdw_mean:.4f} Å, std: {train_vdw_std:.4f} Å")
+        print(f"    Position range: [{train_vdw_min:.4f}, {train_vdw_max:.4f}] {train_vdw_units}")
+        print(f"    Position mean: {train_vdw_mean:.4f} {train_vdw_units}, std: {train_vdw_std:.4f} {train_vdw_units}")
+        if esp_grid_units.lower() == "bohr":
+            # Also show original Bohr values
+            train_vdw_first_bohr = jnp.array(train_vdw_list[0])
+            print(f"    Position range (Bohr): [{float(jnp.min(train_vdw_first_bohr)):.4f}, {float(jnp.max(train_vdw_first_bohr)):.4f}] Bohr")
     
     # Validation data statistics
     valid_n_samples = len(valid_data["R"])
@@ -661,16 +679,28 @@ def train_model(
         if len(valid_vdw_list) > 0:
             valid_vdw_shapes = [jnp.array(e).shape for e in valid_vdw_list[:5]]  # First 5 samples
             valid_vdw_first = jnp.array(valid_vdw_list[0])
-            valid_vdw_mean = float(jnp.mean(valid_vdw_first))
-            valid_vdw_std = float(jnp.std(valid_vdw_first))
-            valid_vdw_min = float(jnp.min(valid_vdw_first))
-            valid_vdw_max = float(jnp.max(valid_vdw_first))
+            # Convert to Angstrom if grid is in Bohr
+            if esp_grid_units.lower() == "bohr":
+                valid_vdw_first_angstrom = valid_vdw_first * BOHR_TO_ANGSTROM
+                valid_vdw_mean = float(jnp.mean(valid_vdw_first_angstrom))
+                valid_vdw_std = float(jnp.std(valid_vdw_first_angstrom))
+                valid_vdw_min = float(jnp.min(valid_vdw_first_angstrom))
+                valid_vdw_max = float(jnp.max(valid_vdw_first_angstrom))
+                valid_vdw_units = "Å (converted from Bohr)"
+            else:
+                valid_vdw_mean = float(jnp.mean(valid_vdw_first))
+                valid_vdw_std = float(jnp.std(valid_vdw_first))
+                valid_vdw_min = float(jnp.min(valid_vdw_first))
+                valid_vdw_max = float(jnp.max(valid_vdw_first))
+                valid_vdw_units = "Å"
         else:
             valid_vdw_shapes = []
             valid_vdw_mean = valid_vdw_std = valid_vdw_min = valid_vdw_max = 0.0
+            valid_vdw_units = "Å"
     except Exception as e:
         valid_vdw_shapes = []
         valid_vdw_mean = valid_vdw_std = valid_vdw_min = valid_vdw_max = 0.0
+        valid_vdw_units = "Å"
         print(f"  Warning: Could not compute validation VDW surface statistics: {e}")
     
     print(f"\nValidation Data:")
@@ -696,8 +726,12 @@ def train_model(
     if valid_vdw_shapes:
         print(f"  VDW Surface (first sample):")
         print(f"    Shape: {valid_vdw_shapes[0]}")
-        print(f"    Position range: [{valid_vdw_min:.4f}, {valid_vdw_max:.4f}] Å")
-        print(f"    Position mean: {valid_vdw_mean:.4f} Å, std: {valid_vdw_std:.4f} Å")
+        print(f"    Position range: [{valid_vdw_min:.4f}, {valid_vdw_max:.4f}] {valid_vdw_units}")
+        print(f"    Position mean: {valid_vdw_mean:.4f} {valid_vdw_units}, std: {valid_vdw_std:.4f} {valid_vdw_units}")
+        if esp_grid_units.lower() == "bohr":
+            # Also show original Bohr values
+            valid_vdw_first_bohr = jnp.array(valid_vdw_list[0])
+            print(f"    Position range (Bohr): [{float(jnp.min(valid_vdw_first_bohr)):.4f}, {float(jnp.max(valid_vdw_first_bohr)):.4f}] Bohr")
     
     print(f"\nTraining Configuration:")
     print(f"  Batch size: {batch_size}")
@@ -854,10 +888,11 @@ def train_model(
             train_loss_components.append(loss_components)
             train_esp_masks.append(esp_mask)
             
-            # Debug output for first batch of first epoch
+                # Debug output for first batch of first epoch
             if epoch == 1 and i == 0:
                 print(f"\n  First batch (epoch {epoch}, batch {i}) statistics:")
                 print(f"    Loss: {float(loss):.6e}")
+                print(f"    Loss components: {loss_components}")
                 print(f"    ESP mask shape: {esp_mask.shape}")
                 print(f"    ESP mask dtype: {esp_mask.dtype}")
                 print(f"    ESP mask min: {float(jnp.min(esp_mask)):.6f}, max: {float(jnp.max(esp_mask)):.6f}")
@@ -866,12 +901,28 @@ def train_model(
                 print(f"    ESP mask size: {esp_mask.size}")
                 print(f"    ESP mask valid count (>0.5): {float(jnp.sum(esp_mask > 0.5))}")
                 print(f"    ESP mask valid fraction: {float(jnp.sum(esp_mask > 0.5)) / float(esp_mask.size):.6f}")
-                print(f"    ESP pred shape: {esp_pred.shape}")
-                print(f"    ESP target shape: {esp_target.shape}")
-                print(f"    ESP error shape: {esp_error.shape}")
+                print(f"    ESP pred shape: {esp_pred.shape}, mean: {float(jnp.mean(esp_pred)):.6f}, std: {float(jnp.std(esp_pred)):.6f}")
+                print(f"    ESP target shape: {esp_target.shape}, mean: {float(jnp.mean(esp_target)):.6f}, std: {float(jnp.std(esp_target)):.6f}")
+                print(f"    ESP error shape: {esp_error.shape}, mean: {float(jnp.mean(esp_error)):.6f}, std: {float(jnp.std(esp_error)):.6f}")
+                print(f"    ESP error MAE: {float(jnp.mean(jnp.abs(esp_error))):.6f} Ha/e")
+                print(f"    ESP error RMSE: {float(jnp.sqrt(jnp.mean(esp_error**2))):.6f} Ha/e")
                 if esp_mask.size > 0:
                     mask_sample = esp_mask.ravel()[:20] if esp_mask.size >= 20 else esp_mask.ravel()
                     print(f"    ESP mask first 20 values: {mask_sample}")
+                # Check batch contents
+                print(f"    Batch keys: {list(batch.keys())}")
+                if "R" in batch:
+                    print(f"    Batch R shape: {batch['R'].shape}")
+                if "Z" in batch:
+                    print(f"    Batch Z shape: {batch['Z'].shape}, unique values: {jnp.unique(batch['Z'])}")
+                if "atom_mask" in batch:
+                    print(f"    Batch atom_mask shape: {batch['atom_mask'].shape}, sum: {float(jnp.sum(batch['atom_mask']))}")
+                if "vdw_surface" in batch:
+                    print(f"    Batch vdw_surface shape: {batch['vdw_surface'].shape}")
+                    vdw_first = jnp.array(batch['vdw_surface'])
+                    if vdw_first.ndim >= 2:
+                        vdw_flat = vdw_first.ravel()[:9] if vdw_first.size >= 9 else vdw_first.ravel()
+                        print(f"    Batch vdw_surface first 9 values (x,y,z of first 3 points): {vdw_flat}")
 
         # Concatenate all predictions and targets (block once at end of epoch)
         train_mono_preds = jnp.concatenate(train_mono_preds, axis=0)
