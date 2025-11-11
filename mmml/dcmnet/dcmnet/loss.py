@@ -217,11 +217,20 @@ def esp_mono_loss(
     # esp_loss
     # batched_pred = batched_electrostatic_potential(d, m, vdw_surface)
     batched_pred = batched_electrostatic_potential(d, m, vdw_surface)
-    # Ensure both arrays have same shape
+    
+    # Ensure batched_pred and esp_target have compatible shapes
+    # They might be (batch_size, ngrid) or flattened
     if batched_pred.ndim > 1:
-        batched_pred = batched_pred.squeeze()
+        # Keep batch dimension for proper masking
+        batched_pred_shape = batched_pred.shape
+    else:
+        # Flattened - will need to reshape based on ngrid
+        batched_pred_shape = (batch_size, -1)
+    
     if esp_target.ndim > 1:
-        esp_target = esp_target.squeeze()
+        esp_target_shape = esp_target.shape
+    else:
+        esp_target_shape = (batch_size, -1)
     
     # Compute per-grid-point errors (difference, not squared)
     esp_errors = batched_pred - esp_target
@@ -230,7 +239,12 @@ def esp_mono_loss(
     
     # Create ESP mask to exclude points too close to atoms (singularities)
     # This is critical for reducing ESP errors - matches working trainer.py
-    esp_mask = jnp.ones_like(esp_target, dtype=jnp.float32)
+    # Initialize mask with same shape as esp_target
+    if esp_target.ndim > 1:
+        esp_mask = jnp.ones_like(esp_target, dtype=jnp.float32)  # (batch_size, ngrid)
+    else:
+        # Flattened case - will reshape later
+        esp_mask = jnp.ones_like(esp_target, dtype=jnp.float32)
     
     if use_atomic_radii_mask and atom_positions is not None and atomic_numbers is not None:
         # First, determine the actual shape of atom_positions to get max_atoms
@@ -393,19 +407,43 @@ def esp_mono_loss(
                 esp_abs = esp_abs[None, :]
             distance_mask = distance_mask * (esp_abs <= esp_max_value).astype(jnp.float32)
         
-        # Apply mask to esp_mask - ensure correct shape
+        # Apply mask to esp_mask - keep same shape as esp_target
         if batch_size == 1 and vdw_surface.ndim == 2:
             esp_mask = distance_mask[0]  # (ngrid,)
         else:
-            esp_mask = distance_mask.reshape(-1) if distance_mask.ndim > 1 else distance_mask
+            # Keep distance_mask as (batch_size, ngrid) to match esp_target shape
+            esp_mask = distance_mask  # (batch_size, ngrid)
     
-    # Apply mask to loss
-    if esp_mask.ndim > 1:
-        esp_mask = esp_mask.reshape(-1)
-    if l2_loss.ndim > 1:
-        l2_loss = l2_loss.reshape(-1)
-    if esp_errors.ndim > 1:
-        esp_errors = esp_errors.reshape(-1)
+    # Ensure esp_mask, l2_loss, and esp_errors have matching shapes
+    # They should all be (batch_size, ngrid) or flattened consistently
+    if esp_target.ndim > 1:
+        # Keep 2D shape: (batch_size, ngrid)
+        if esp_mask.ndim == 1:
+            # Reshape esp_mask to match esp_target
+            esp_mask = esp_mask.reshape(esp_target.shape)
+        elif esp_mask.ndim > 1 and esp_mask.shape != esp_target.shape:
+            # Reshape to match
+            esp_mask = esp_mask.reshape(esp_target.shape)
+        
+        # Ensure l2_loss has same shape
+        if l2_loss.ndim == 1:
+            l2_loss = l2_loss.reshape(esp_target.shape)
+        elif l2_loss.ndim > 1 and l2_loss.shape != esp_target.shape:
+            l2_loss = l2_loss.reshape(esp_target.shape)
+        
+        # Ensure esp_errors has same shape
+        if esp_errors.ndim == 1:
+            esp_errors = esp_errors.reshape(esp_target.shape)
+        elif esp_errors.ndim > 1 and esp_errors.shape != esp_target.shape:
+            esp_errors = esp_errors.reshape(esp_target.shape)
+    else:
+        # Flattened case - ensure all are 1D
+        if esp_mask.ndim > 1:
+            esp_mask = esp_mask.reshape(-1)
+        if l2_loss.ndim > 1:
+            l2_loss = l2_loss.reshape(-1)
+        if esp_errors.ndim > 1:
+            esp_errors = esp_errors.reshape(-1)
     
     # Mask the loss (set masked points to 0)
     l2_loss_masked = l2_loss * esp_mask
@@ -430,11 +468,11 @@ def esp_mono_loss(
         # Normalize weights to have mean=1 for stability
         weights = weights / (jnp.mean(weights) + 1e-10)
         
-        # Handle shape
-        if weights.ndim > 1:
-            weights = weights.reshape(-1)
-        if l2_loss.ndim > 1:
-            l2_loss = l2_loss.reshape(-1)
+        # Ensure weights have same shape as l2_loss_masked
+        if weights.ndim != l2_loss_masked.ndim:
+            weights = weights.reshape(l2_loss_masked.shape)
+        elif weights.shape != l2_loss_masked.shape:
+            weights = weights.reshape(l2_loss_masked.shape)
         
         # Apply weights to loss (with mask)
         weighted_l2_loss = l2_loss_masked * weights
@@ -478,10 +516,11 @@ def esp_mono_loss(
         # Normalize weights to have mean=1 for stability
         weights = raw_weights / (jnp.mean(raw_weights) + 1e-10)
         
-        # Handle single sample case
-        if vdw_surface.ndim == 2:
-            weights = weights[0]  # (ngrid,)
-            l2_loss = l2_loss.reshape(-1) if l2_loss.ndim > 1 else l2_loss
+        # Ensure weights have same shape as l2_loss_masked
+        if weights.ndim != l2_loss_masked.ndim:
+            weights = weights.reshape(l2_loss_masked.shape)
+        elif weights.shape != l2_loss_masked.shape:
+            weights = weights.reshape(l2_loss_masked.shape)
         
         # Apply weights to loss (with mask)
         weighted_l2_loss = l2_loss_masked * weights
