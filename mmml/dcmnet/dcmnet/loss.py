@@ -191,14 +191,35 @@ def esp_mono_loss(
     d = jnp.moveaxis(dipo_prediction, -1, -2).reshape(batch_size, max_atoms * n_dcm, 3)
     m = mono_prediction.reshape(batch_size, max_atoms * n_dcm)
 
-    # # 0 the charges for dummy atoms
-    # NDC = n_atoms * n_dcm
-    # valid_atoms = jnp.where(jnp.arange(max_atoms * n_dcm) < NDC, 1, 0)
-    # d = d[0]
-    # m = m[0] * valid_atoms
-    # # constrain the net charge to 0.0
-    # avg_chg = m.sum() / NDC
-    # m = (m - avg_chg) * valid_atoms
+    # Mask dummy atoms before ESP computation (critical for accuracy - matches working trainer.py)
+    # Create mask for valid atoms: expand atom_mask to DCM dimensions
+    if atom_mask is not None:
+        # Handle atom_mask shape
+        if atom_mask.ndim == 1:
+            # Flattened: (batch_size * max_atoms,) -> reshape
+            total_atoms = atom_mask.shape[0]
+            if total_atoms == batch_size * max_atoms:
+                atom_mask_reshaped = atom_mask.reshape(batch_size, max_atoms)
+            elif batch_size == 1:
+                atom_mask_reshaped = atom_mask[None, :]
+            else:
+                atom_mask_reshaped = atom_mask.reshape(batch_size, max_atoms)
+        else:
+            atom_mask_reshaped = atom_mask  # Already (batch_size, max_atoms)
+        
+        # Expand mask to DCM dimensions: (batch_size, max_atoms, n_dcm) -> (batch_size, max_atoms * n_dcm)
+        mask_expanded = atom_mask_reshaped[:, :, None]  # (batch_size, max_atoms, 1)
+        mask_expanded_flat = mask_expanded.reshape(batch_size, max_atoms * n_dcm)  # (batch_size, max_atoms * n_dcm)
+        
+        # Apply mask to monopoles (zero out dummy atom charges)
+        m = m * mask_expanded_flat
+        # Note: Dipole positions of dummy atoms don't matter if charges are zero
+    else:
+        # No atom_mask provided - create one based on n_atoms
+        NDC = n_atoms * n_dcm
+        valid_atoms_mask = jnp.arange(max_atoms * n_dcm)[None, :] < NDC  # (1, max_atoms * n_dcm)
+        valid_atoms_mask = jnp.broadcast_to(valid_atoms_mask, (batch_size, max_atoms * n_dcm))
+        m = m * valid_atoms_mask.astype(m.dtype)
 
     # monopole loss
     # Reshape m to (batch_size, max_atoms, n_dcm) to sum over n_dcm dimension
