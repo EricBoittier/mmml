@@ -192,8 +192,10 @@ def esp_mono_loss(
     m = mono_prediction.reshape(batch_size, max_atoms * n_dcm)
 
     # Mask dummy atoms before ESP computation (critical for accuracy - matches working trainer.py)
-    # Create mask for valid atoms: expand atom_mask to DCM dimensions
-    if atom_mask is not None:
+    # Always use n_atoms-based mask for reliability (atom_mask from batch may have wrong shape)
+    # This ensures dummy atoms are properly masked out before ESP calculation
+    # Note: We skip using atom_mask from batch to avoid shape mismatch issues
+    if False:  # Disabled: always use n_atoms-based mask
         # Handle atom_mask shape - need to get it to (batch_size, max_atoms)
         if atom_mask.ndim == 1:
             # Flattened: could be (batch_size * max_atoms,) or something else
@@ -242,23 +244,16 @@ def esp_mono_loss(
         
         # Ensure atom_mask_reshaped has correct shape (batch_size, max_atoms)
         # If shape doesn't match, fall back to n_atoms-based mask (more reliable)
-        # Try to reshape if size matches
-        if atom_mask_reshaped.size == batch_size * max_atoms:
-            # Size matches - try to reshape
-            try:
-                atom_mask_final = atom_mask_reshaped.reshape(batch_size, max_atoms)
-                # Expand mask to DCM dimensions
-                mask_expanded = atom_mask_final[:, :, None]  # (batch_size, max_atoms, 1)
-                mask_expanded_flat = mask_expanded.reshape(batch_size, max_atoms * n_dcm)
-                m = m * mask_expanded_flat
-            except:
-                # Reshape failed - use n_atoms-based mask
-                NDC = n_atoms * n_dcm
-                valid_atoms_mask = jnp.arange(max_atoms * n_dcm)[None, :] < NDC
-                valid_atoms_mask = jnp.broadcast_to(valid_atoms_mask, (batch_size, max_atoms * n_dcm))
-                m = m * valid_atoms_mask.astype(m.dtype)
+        # Check if size matches and reshape if possible
+        if atom_mask_reshaped.size == batch_size * max_atoms and atom_mask_reshaped.ndim >= 1:
+            # Size matches - reshape and use it
+            atom_mask_final = atom_mask_reshaped.reshape(batch_size, max_atoms)
+            # Expand mask to DCM dimensions
+            mask_expanded = atom_mask_final[:, :, None]  # (batch_size, max_atoms, 1)
+            mask_expanded_flat = mask_expanded.reshape(batch_size, max_atoms * n_dcm)
+            m = m * mask_expanded_flat
         else:
-            # Size doesn't match - use n_atoms-based mask
+            # Size doesn't match or wrong shape - use n_atoms-based mask
             NDC = n_atoms * n_dcm
             valid_atoms_mask = jnp.arange(max_atoms * n_dcm)[None, :] < NDC
             valid_atoms_mask = jnp.broadcast_to(valid_atoms_mask, (batch_size, max_atoms * n_dcm))
