@@ -23,7 +23,7 @@ except ImportError:
 
 @functools.partial(
     jax.jit,
-    static_argnames=("model_apply", "optimizer_update", "batch_size", "esp_w", "chg_w", "ndcm"),
+    static_argnames=("model_apply", "optimizer_update", "batch_size", "esp_w", "chg_w", "ndcm", "distance_weighting", "distance_scale", "distance_min"),
 )
 def train_step(
     model_apply, optimizer_update, batch, batch_size, opt_state, params, esp_w, chg_w, ndcm, clip_norm=None,
