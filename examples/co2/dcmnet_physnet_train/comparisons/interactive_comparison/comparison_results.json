@@ -9,10 +9,10 @@
     "val_forces_mae": 0.003666531783528626,
     "val_dipole_mae": 0.04087930768728256,
     "val_esp_mae": 0.004369776695966721,
-    "rotation_error_dipole": 0.0004581401706673205,
-    "rotation_error_esp": 7.948985203256597e-05,
-    "translation_error_dipole": 1.0116465883669433e-06,
-    "translation_error_esp": 1.311792099389919e-07
+    "rotation_error_dipole": 0.0004493091015319806,
+    "rotation_error_esp": 8.829979042275226e-05,
+    "translation_error_dipole": 2.662133258368726e-06,
+    "translation_error_esp": 1.1438524051943233e-06
   },
   "noneq": {
     "name": "Non-Equivariant",
