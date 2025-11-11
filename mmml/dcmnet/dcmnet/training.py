@@ -801,10 +801,19 @@ def preprocess_monopoles(data, mono_imputation_fn, num_atoms=60, batch_size=1000
                 print(f"  Monopoles already present (sum_abs={float(mono_sum):.2e}). Skipping imputation.")
             return data
     
+    # Infer num_atoms from data if not provided correctly
+    # Check the actual number of atoms from Z or R data
+    if len(data["Z"]) > 0:
+        inferred_num_atoms = len(data["Z"][0]) if isinstance(data["Z"][0], (list, tuple, jnp.ndarray)) else num_atoms
+        if inferred_num_atoms != num_atoms:
+            if verbose:
+                print(f"  Warning: num_atoms parameter ({num_atoms}) doesn't match data ({inferred_num_atoms}). Using inferred value.")
+            num_atoms = inferred_num_atoms
+    
     # Need to impute monopoles
     if verbose:
         print(f"  Imputing monopoles for {len(data['R'])} samples...")
-        print(f"  Using num_atoms={num_atoms}, batch_size={batch_size}")
+        print(f"  Using num_atoms={num_atoms} (inferred from data), batch_size={batch_size}")
     
     # Create batches for imputation
     n_samples = len(data["R"])
