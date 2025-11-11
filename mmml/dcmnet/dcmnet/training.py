@@ -810,26 +810,26 @@ def preprocess_monopoles(data, mono_imputation_fn, num_atoms=60, batch_size=1000
     # Process in batches
     for i in range(0, n_samples, batch_size):
         end_idx = min(i + batch_size, n_samples)
-        batch_indices = jnp.arange(i, end_idx)
+        batch_indices = list(range(i, end_idx))
+        actual_batch_size = len(batch_indices)
         
         # Create a batch dict for this subset
         batch_dict = {}
         for k, v in data.items():
             if k == "R":
-                batch_dict[k] = jnp.array([data["R"][idx] for idx in batch_indices]).reshape(-1, 3)
+                batch_dict[k] = jnp.array([jnp.array(data["R"][idx]) for idx in batch_indices]).reshape(-1, 3)
             elif k == "Z":
-                batch_dict[k] = jnp.array([data["Z"][idx] for idx in batch_indices]).reshape(-1)
+                batch_dict[k] = jnp.array([jnp.array(data["Z"][idx]) for idx in batch_indices]).reshape(-1)
             elif k == "N":
-                batch_dict[k] = jnp.array([data["N"][idx] for idx in batch_indices])
+                batch_dict[k] = jnp.array([jnp.array(data["N"][idx]) for idx in batch_indices])
             else:
                 # For other fields, try to index if possible
                 try:
-                    batch_dict[k] = jnp.array([data[k][idx] for idx in batch_indices])
+                    batch_dict[k] = jnp.array([jnp.array(data[k][idx]) for idx in batch_indices])
                 except:
                     pass
         
         # Create message passing indices for this batch
-        actual_batch_size = len(batch_indices)
         batch_segments = jnp.repeat(jnp.arange(actual_batch_size), num_atoms)
         offsets = jnp.arange(actual_batch_size) * num_atoms
         dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(num_atoms)
