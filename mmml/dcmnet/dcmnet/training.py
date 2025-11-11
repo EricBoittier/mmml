@@ -167,7 +167,7 @@ def print_statistics_table(train_stats, valid_stats, epoch):
     metrics_list = ['loss', 'esp_loss', 'mono_loss', 'charge_conservation_loss',
                     'esp_loss_weighted', 'mono_loss_weighted', 'charge_conservation_loss_weighted',
                     'mono_mae', 'mono_rmse', 'mono_mean', 'mono_std',
-                    'esp_mae', 'esp_rmse', 'esp_r2_unmasked', 'esp_r2_masked', 'esp_pred_mean', 'esp_pred_std',
+                    'esp_mae', 'esp_rmse', 'esp_r2_unmasked', 'esp_r2_masked', 'esp_mask_fraction', 'esp_pred_mean', 'esp_pred_std',
                     'esp_error_mean', 'esp_error_std']
     
     # Conversion factor: Hartree to kcal/mol
@@ -682,7 +682,24 @@ def train_model(
         train_esp_preds = jnp.concatenate([jnp.ravel(e) for e in train_esp_preds])
         train_esp_targets = jnp.concatenate([jnp.ravel(e) for e in train_esp_targets])
         train_esp_errors = jnp.concatenate([jnp.ravel(e) for e in train_esp_errors])
-        train_esp_masks = jnp.concatenate([jnp.ravel(e) for e in train_esp_masks]) if len(train_esp_masks) > 0 else jnp.ones_like(train_esp_targets)
+        train_esp_masks_list = train_esp_masks  # Save list before concatenation
+        train_esp_masks = jnp.concatenate([jnp.ravel(e) for e in train_esp_masks]) if len(train_esp_masks_list) > 0 else jnp.ones_like(train_esp_targets)
+        
+        # Debug: Check mask statistics (only on first epoch to avoid spam)
+        if epoch == 1:
+            mask_sum = float(jnp.sum(train_esp_masks))
+            mask_size = float(train_esp_masks.size)
+            mask_mean = float(jnp.mean(train_esp_masks))
+            mask_min = float(jnp.min(train_esp_masks))
+            mask_max = float(jnp.max(train_esp_masks))
+            n_valid = float(jnp.sum(train_esp_masks > 0.5))
+            n_total = float(train_esp_masks.size)
+            print(f"  DEBUG: train_esp_masks: size={mask_size}, sum={mask_sum}, mean={mask_mean:.6f}, min={mask_min:.6f}, max={mask_max:.6f}")
+            print(f"  DEBUG: train_esp_masks: n_valid={n_valid}, n_total={n_total}, fraction={n_valid/n_total:.6f}")
+            # Also check first few mask values from first batch
+            if len(train_esp_masks_list) > 0:
+                first_mask = train_esp_masks_list[0]
+                print(f"  DEBUG: first_mask shape={first_mask.shape}, first_mask[:10]={first_mask.ravel()[:10]}")
         
         # Block once for statistics computation (better GPU utilization)
         jax.block_until_ready(train_esp_errors)
@@ -705,25 +722,46 @@ def train_model(
         train_esp_ss_res_unmasked = jnp.sum((train_esp_preds - train_esp_targets)**2)
         train_esp_target_mean_unmasked = jnp.mean(train_esp_targets)
         train_esp_ss_tot_unmasked = jnp.sum((train_esp_targets - train_esp_target_mean_unmasked)**2)
-        train_esp_r2_unmasked = 1.0 - (train_esp_ss_res_unmasked / (train_esp_ss_tot_unmasked + 1e-10))
+        # Clamp to avoid division by zero and extreme values
+        train_esp_r2_unmasked = 1.0 - (train_esp_ss_res_unmasked / jnp.maximum(train_esp_ss_tot_unmasked, 1e-10))
+        # Clamp R² to reasonable range [-10, 1] to avoid extreme values
+        train_esp_r2_unmasked = jnp.clip(train_esp_r2_unmasked, -10.0, 1.0)
         
         # Masked R² (only valid points)
-        train_esp_preds_masked = train_esp_preds[train_esp_masks > 0.5]
-        train_esp_targets_masked = train_esp_targets[train_esp_masks > 0.5]
-        n_masked_points = float(jnp.sum(train_esp_masks > 0.5))
-        if n_masked_points > 0:
-            train_esp_ss_res_masked = jnp.sum((train_esp_preds_masked - train_esp_targets_masked)**2)
-            train_esp_target_mean_masked = jnp.mean(train_esp_targets_masked)
-            train_esp_ss_tot_masked = jnp.sum((train_esp_targets_masked - train_esp_target_mean_masked)**2)
-            train_esp_r2_masked = 1.0 - (train_esp_ss_res_masked / (train_esp_ss_tot_masked + 1e-10))
+        # Ensure masks and predictions have matching shapes for boolean indexing
+        if train_esp_masks.shape != train_esp_preds.shape:
+            # Reshape mask to match predictions if needed
+            if train_esp_masks.size == train_esp_preds.size:
+                train_esp_masks = train_esp_masks.reshape(train_esp_preds.shape)
+            else:
+                # If sizes don't match, fall back to unmasked R²
+                train_esp_r2_masked = train_esp_r2_unmasked
+                train_mask_fraction = 0.0
         else:
-            train_esp_r2_masked = 0.0  # No valid points
+            mask_bool = train_esp_masks > 0.5
+            n_masked_points = float(jnp.sum(mask_bool))
+            n_total_points = float(train_esp_masks.size)
+            train_mask_fraction = n_masked_points / n_total_points if n_total_points > 0 else 0.0
+            if n_masked_points > 10:  # Need at least 10 points for meaningful R²
+                train_esp_preds_masked = train_esp_preds[mask_bool]
+                train_esp_targets_masked = train_esp_targets[mask_bool]
+                train_esp_ss_res_masked = jnp.sum((train_esp_preds_masked - train_esp_targets_masked)**2)
+                train_esp_target_mean_masked = jnp.mean(train_esp_targets_masked)
+                train_esp_ss_tot_masked = jnp.sum((train_esp_targets_masked - train_esp_target_mean_masked)**2)
+                # Clamp to avoid division by zero and extreme values
+                train_esp_r2_masked = 1.0 - (train_esp_ss_res_masked / jnp.maximum(train_esp_ss_tot_masked, 1e-10))
+                # Clamp R² to reasonable range [-10, 1] to avoid extreme values
+                train_esp_r2_masked = jnp.clip(train_esp_r2_masked, -10.0, 1.0)
+            else:
+                # Too few masked points - use unmasked R²
+                train_esp_r2_masked = train_esp_r2_unmasked
         
         train_esp_stats = {
             'mae': float(jnp.mean(jnp.abs(train_esp_errors))),
             'rmse': float(jnp.sqrt(jnp.mean(train_esp_errors**2))),
             'r2_unmasked': float(train_esp_r2_unmasked),
             'r2_masked': float(train_esp_r2_masked),
+            'mask_fraction': float(train_mask_fraction),  # Fraction of points that passed masking
             'pred_mean': float(jnp.mean(train_esp_preds)),
             'pred_std': float(jnp.std(train_esp_preds)),
             'target_mean': float(jnp.mean(train_esp_targets)),
@@ -756,6 +794,7 @@ def train_model(
             'esp_rmse': train_esp_stats['rmse'],
             'esp_r2_unmasked': train_esp_stats['r2_unmasked'],
             'esp_r2_masked': train_esp_stats['r2_masked'],
+            'esp_mask_fraction': train_esp_stats['mask_fraction'],
             'esp_pred_mean': train_esp_stats['pred_mean'],
             'esp_pred_std': train_esp_stats['pred_std'],
             'esp_target_mean': train_esp_stats['target_mean'],
@@ -804,7 +843,24 @@ def train_model(
         valid_esp_preds = jnp.concatenate([jnp.ravel(e) for e in valid_esp_preds])
         valid_esp_targets = jnp.concatenate([jnp.ravel(e) for e in valid_esp_targets])
         valid_esp_errors = jnp.concatenate([jnp.ravel(e) for e in valid_esp_errors])
-        valid_esp_masks = jnp.concatenate([jnp.ravel(e) for e in valid_esp_masks]) if len(valid_esp_masks) > 0 else jnp.ones_like(valid_esp_targets)
+        valid_esp_masks_list = valid_esp_masks  # Save list before concatenation
+        valid_esp_masks = jnp.concatenate([jnp.ravel(e) for e in valid_esp_masks]) if len(valid_esp_masks_list) > 0 else jnp.ones_like(valid_esp_targets)
+        
+        # Debug: Check mask statistics (only on first epoch to avoid spam)
+        if epoch == 1:
+            mask_sum = float(jnp.sum(valid_esp_masks))
+            mask_size = float(valid_esp_masks.size)
+            mask_mean = float(jnp.mean(valid_esp_masks))
+            mask_min = float(jnp.min(valid_esp_masks))
+            mask_max = float(jnp.max(valid_esp_masks))
+            n_valid = float(jnp.sum(valid_esp_masks > 0.5))
+            n_total = float(valid_esp_masks.size)
+            print(f"  DEBUG: valid_esp_masks: size={mask_size}, sum={mask_sum}, mean={mask_mean:.6f}, min={mask_min:.6f}, max={mask_max:.6f}")
+            print(f"  DEBUG: valid_esp_masks: n_valid={n_valid}, n_total={n_total}, fraction={n_valid/n_total:.6f}")
+            # Also check first few mask values from first batch
+            if len(valid_esp_masks_list) > 0:
+                first_mask = valid_esp_masks_list[0]
+                print(f"  DEBUG: first_mask shape={first_mask.shape}, first_mask[:10]={first_mask.ravel()[:10]}")
         
         # Block once for statistics computation (better GPU utilization)
         jax.block_until_ready(valid_esp_errors)
@@ -827,25 +883,46 @@ def train_model(
         valid_esp_ss_res_unmasked = jnp.sum((valid_esp_preds - valid_esp_targets)**2)
         valid_esp_target_mean_unmasked = jnp.mean(valid_esp_targets)
         valid_esp_ss_tot_unmasked = jnp.sum((valid_esp_targets - valid_esp_target_mean_unmasked)**2)
-        valid_esp_r2_unmasked = 1.0 - (valid_esp_ss_res_unmasked / (valid_esp_ss_tot_unmasked + 1e-10))
+        # Clamp to avoid division by zero and extreme values
+        valid_esp_r2_unmasked = 1.0 - (valid_esp_ss_res_unmasked / jnp.maximum(valid_esp_ss_tot_unmasked, 1e-10))
+        # Clamp R² to reasonable range [-10, 1] to avoid extreme values
+        valid_esp_r2_unmasked = jnp.clip(valid_esp_r2_unmasked, -10.0, 1.0)
         
         # Masked R² (only valid points)
-        valid_esp_preds_masked = valid_esp_preds[valid_esp_masks > 0.5]
-        valid_esp_targets_masked = valid_esp_targets[valid_esp_masks > 0.5]
-        n_masked_points = float(jnp.sum(valid_esp_masks > 0.5))
-        if n_masked_points > 0:
-            valid_esp_ss_res_masked = jnp.sum((valid_esp_preds_masked - valid_esp_targets_masked)**2)
-            valid_esp_target_mean_masked = jnp.mean(valid_esp_targets_masked)
-            valid_esp_ss_tot_masked = jnp.sum((valid_esp_targets_masked - valid_esp_target_mean_masked)**2)
-            valid_esp_r2_masked = 1.0 - (valid_esp_ss_res_masked / (valid_esp_ss_tot_masked + 1e-10))
+        # Ensure masks and predictions have matching shapes for boolean indexing
+        if valid_esp_masks.shape != valid_esp_preds.shape:
+            # Reshape mask to match predictions if needed
+            if valid_esp_masks.size == valid_esp_preds.size:
+                valid_esp_masks = valid_esp_masks.reshape(valid_esp_preds.shape)
+            else:
+                # If sizes don't match, fall back to unmasked R²
+                valid_esp_r2_masked = valid_esp_r2_unmasked
+                valid_mask_fraction = 0.0
         else:
-            valid_esp_r2_masked = 0.0  # No valid points
+            mask_bool = valid_esp_masks > 0.5
+            n_masked_points = float(jnp.sum(mask_bool))
+            n_total_points = float(valid_esp_masks.size)
+            valid_mask_fraction = n_masked_points / n_total_points if n_total_points > 0 else 0.0
+            if n_masked_points > 10:  # Need at least 10 points for meaningful R²
+                valid_esp_preds_masked = valid_esp_preds[mask_bool]
+                valid_esp_targets_masked = valid_esp_targets[mask_bool]
+                valid_esp_ss_res_masked = jnp.sum((valid_esp_preds_masked - valid_esp_targets_masked)**2)
+                valid_esp_target_mean_masked = jnp.mean(valid_esp_targets_masked)
+                valid_esp_ss_tot_masked = jnp.sum((valid_esp_targets_masked - valid_esp_target_mean_masked)**2)
+                # Clamp to avoid division by zero and extreme values
+                valid_esp_r2_masked = 1.0 - (valid_esp_ss_res_masked / jnp.maximum(valid_esp_ss_tot_masked, 1e-10))
+                # Clamp R² to reasonable range [-10, 1] to avoid extreme values
+                valid_esp_r2_masked = jnp.clip(valid_esp_r2_masked, -10.0, 1.0)
+            else:
+                # Too few masked points - use unmasked R²
+                valid_esp_r2_masked = valid_esp_r2_unmasked
         
         valid_esp_stats = {
             'mae': float(jnp.mean(jnp.abs(valid_esp_errors))),
             'rmse': float(jnp.sqrt(jnp.mean(valid_esp_errors**2))),
             'r2_unmasked': float(valid_esp_r2_unmasked),
             'r2_masked': float(valid_esp_r2_masked),
+            'mask_fraction': float(valid_mask_fraction),  # Fraction of points that passed masking
             'pred_mean': float(jnp.mean(valid_esp_preds)),
             'pred_std': float(jnp.std(valid_esp_preds)),
             'target_mean': float(jnp.mean(valid_esp_targets)),
@@ -878,6 +955,7 @@ def train_model(
             'esp_rmse': valid_esp_stats['rmse'],
             'esp_r2_unmasked': valid_esp_stats['r2_unmasked'],
             'esp_r2_masked': valid_esp_stats['r2_masked'],
+            'esp_mask_fraction': valid_esp_stats['mask_fraction'],
             'esp_pred_mean': valid_esp_stats['pred_mean'],
             'esp_pred_std': valid_esp_stats['pred_std'],
             'esp_target_mean': valid_esp_stats['target_mean'],
