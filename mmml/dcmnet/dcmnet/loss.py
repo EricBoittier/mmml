@@ -41,7 +41,7 @@ def pred_dipole(dcm, com, q):
     # return jnp.linalg.norm(dipole_out)* 4.80320
 
 
-@functools.partial(jax.jit, static_argnames=("batch_size", "esp_w", "chg_w", "n_dcm", "distance_weighting", "distance_scale", "distance_min", "esp_magnitude_weighting", "esp_min_distance", "esp_max_value", "use_atomic_radii_mask"))
+@functools.partial(jax.jit, static_argnames=("batch_size", "esp_w", "chg_w", "n_dcm", "distance_weighting", "distance_scale", "distance_min", "esp_magnitude_weighting", "esp_min_distance", "esp_max_value", "use_atomic_radii_mask", "charge_conservation_w"))
 def esp_mono_loss(
     dipo_prediction,
     mono_prediction,
@@ -64,6 +64,7 @@ def esp_mono_loss(
     esp_min_distance=0.0,
     esp_max_value=1e10,
     use_atomic_radii_mask=True,
+    charge_conservation_w=1.0,
 ):
     """
     Combined ESP and monopole loss function for DCMNet training.
@@ -597,7 +598,7 @@ def esp_mono_loss(
     # Square each molecule's total charge and average over batch
     charge_conservation_loss = (sum_of_dc_monopoles.sum(axis=-1) ** 2).mean()
     
-    total_loss = esp_loss_corrected * esp_w + mono_loss_corrected * chg_w + charge_conservation_loss
+    total_loss = esp_loss_corrected * esp_w + mono_loss_corrected * chg_w + charge_conservation_loss * charge_conservation_w
     
     return total_loss, batched_pred, esp_target, esp_errors
 
