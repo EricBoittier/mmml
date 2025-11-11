@@ -240,7 +240,8 @@ def train_model(
     ema_decay=0.999,
     num_atoms=60,
     use_grad_clip=False,
-    grad_clip_norm=2.0
+    grad_clip_norm=2.0,
+    mono_imputation_fn=None
 ):
     """
     Train DCMNet model with ESP and monopole losses.
@@ -283,6 +284,9 @@ def train_model(
         Whether to use gradient clipping, by default False
     grad_clip_norm : float, optional
         Maximum gradient norm for clipping, by default 2.0
+    mono_imputation_fn : callable, optional
+        Function to impute monopoles if missing from batches. Should take a batch dict
+        and return monopoles with shape (batch_size * num_atoms,). By default None
         
     Returns
     -------
@@ -316,7 +320,7 @@ def train_model(
     print("..................")
     # Batches for the validation set need to be prepared only once.
     key, shuffle_key = jax.random.split(key)
-    valid_batches = prepare_batches(shuffle_key, valid_data, batch_size, num_atoms=num_atoms)
+    valid_batches = prepare_batches(shuffle_key, valid_data, batch_size, num_atoms=num_atoms, mono_imputation_fn=mono_imputation_fn)
 
     print("Training")
     print("..................")
@@ -324,7 +328,7 @@ def train_model(
     for epoch in range(1, num_epochs + 1):
         # Prepare batches.
         key, shuffle_key = jax.random.split(key)
-        train_batches = prepare_batches(shuffle_key, train_data, batch_size, num_atoms=num_atoms)
+        train_batches = prepare_batches(shuffle_key, train_data, batch_size, num_atoms=num_atoms, mono_imputation_fn=mono_imputation_fn)
         # Loop over train batches.
         train_loss = 0.0
         train_mono_preds = []
@@ -591,6 +595,92 @@ def update_ema_params(ema_params, new_params, decay):
     return jax.tree_util.tree_map(
         lambda ema, new: decay * ema + (1.0 - decay) * new, ema_params, new_params
     )
+
+
+def create_mono_imputation_fn(model, params):
+    """
+    Create a monopole imputation function from a trained model.
+    
+    This function wraps a model to create an imputation function that can be
+    passed to prepare_batches. The function predicts monopoles from a batch
+    and returns them in the expected format (per-atom atomic monopoles).
+    
+    Parameters
+    ----------
+    model : MessagePassingModel
+        DCMNet model instance (must have n_dcm attribute)
+    params : Any
+        Model parameters
+        
+    Returns
+    -------
+    callable
+        Imputation function that takes a batch dict and returns monopoles
+        with shape (batch_size * num_atoms,) - atomic monopoles per atom
+    
+    Examples
+    --------
+    Load a pretrained model and use it to impute monopoles:
+    
+    >>> import pickle
+    >>> from mmml.dcmnet.dcmnet.training import create_mono_imputation_fn, train_model
+    >>> 
+    >>> # Load a pretrained model
+    >>> with open('pretrained_model/best_params.pkl', 'rb') as f:
+    ...     pretrained_params = pickle.load(f)
+    >>> 
+    >>> # Create imputation function (n_dcm is inferred from model.n_dcm)
+    >>> mono_imputation_fn = create_mono_imputation_fn(
+    ...     model=pretrained_model,
+    ...     params=pretrained_params
+    ... )
+    >>> 
+    >>> # Use in training
+    >>> final_params, valid_loss = train_model(
+    ...     key=key,
+    ...     model=new_model,
+    ...     train_data=train_data,
+    ...     valid_data=valid_data,
+    ...     num_epochs=5,
+    ...     learning_rate=0.0005,
+    ...     batch_size=1000,
+    ...     writer=writer,
+    ...     ndcm=3,
+    ...     mono_imputation_fn=mono_imputation_fn  # Pass imputation function
+    ... )
+    """
+    def imputation_fn(batch):
+        """
+        Impute monopoles for a batch.
+        
+        Parameters
+        ----------
+        batch : dict
+            Batch dictionary containing 'Z', 'R', 'dst_idx', 'src_idx', 'batch_segments'
+            
+        Returns
+        -------
+        jnp.ndarray
+            Atomic monopoles with shape (batch_size * num_atoms,)
+        """
+        # Run model forward pass
+        mono_pred, dipo_pred = model.apply(
+            params,
+            atomic_numbers=batch["Z"],
+            positions=batch["R"],
+            dst_idx=batch["dst_idx"],
+            src_idx=batch["src_idx"],
+            batch_segments=batch["batch_segments"],
+        )
+        
+        # Sum distributed monopoles to get atomic monopoles
+        # mono_pred shape: (batch_size * num_atoms, n_dcm)
+        # We want: (batch_size * num_atoms,) - sum over n_dcm dimension to get per-atom charges
+        atomic_mono = mono_pred.sum(axis=-1)
+        
+        return atomic_mono
+    
+    return imputation_fn
 
 # ===================== DIPOLAR TRAINING FUNCTIONS =====================
 from .loss import dipo_esp_mono_loss
