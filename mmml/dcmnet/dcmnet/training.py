@@ -665,9 +665,9 @@ def train_model(
         
         # Aggregate loss components
         train_loss_components_agg = {}
-        for key in train_loss_components[0].keys():
-            values = jnp.array([comp[key] for comp in train_loss_components])
-            train_loss_components_agg[key] = float(jnp.mean(values))
+        for component_name in train_loss_components[0].keys():
+            values = jnp.array([comp[component_name] for comp in train_loss_components])
+            train_loss_components_agg[component_name] = float(jnp.mean(values))
         
         # Compute training statistics
         train_mono_stats = compute_statistics(train_mono_preds.sum(axis=-1), train_mono_targets)
@@ -754,9 +754,9 @@ def train_model(
         
         # Aggregate loss components
         valid_loss_components_agg = {}
-        for key in valid_loss_components[0].keys():
-            values = jnp.array([comp[key] for comp in valid_loss_components])
-            valid_loss_components_agg[key] = float(jnp.mean(values))
+        for component_name in valid_loss_components[0].keys():
+            values = jnp.array([comp[component_name] for comp in valid_loss_components])
+            valid_loss_components_agg[component_name] = float(jnp.mean(values))
         
         # Compute validation statistics
         valid_mono_stats = compute_statistics(valid_mono_preds.sum(axis=-1), valid_mono_targets)
