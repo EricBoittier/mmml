@@ -101,13 +101,37 @@ def esp_mono_loss(
     n_atoms = jnp.ravel(n_atoms)[0]
     
     # Infer max_atoms from prediction shape
-    # Handle both batched and unbatched predictions
-    if batch_size == 1 and len(mono_prediction.shape) == 2:
+    # Handle both batched and unbatched/flattened predictions
+    # Model can return either:
+    # - Flattened: (batch_size * num_atoms, n_dcm) and (batch_size * num_atoms, n_dcm, 3)
+    # - Batched: (batch_size, num_atoms, n_dcm) and (batch_size, num_atoms, n_dcm, 3)
+    # - Unbatched (batch_size=1): (num_atoms, n_dcm) and (num_atoms, n_dcm, 3)
+    
+    mono_ndim = len(mono_prediction.shape)
+    dipo_ndim = len(dipo_prediction.shape)
+    
+    if batch_size == 1 and mono_ndim == 2:
         # Unbatched: (n_atoms, n_dcm)
         max_atoms = mono_prediction.shape[0]
         # Add batch dimension
         mono_prediction = mono_prediction[None, :, :]  # (1, n_atoms, n_dcm)
         dipo_prediction = dipo_prediction[None, :, :, :]  # (1, n_atoms, n_dcm, 3)
+    elif mono_ndim == 2 and dipo_ndim == 3:
+        # Check if flattened: (batch_size * num_atoms, n_dcm) and (batch_size * num_atoms, n_dcm, 3)
+        total_atoms_mono = mono_prediction.shape[0]
+        total_atoms_dipo = dipo_prediction.shape[0]
+        
+        # If both are divisible by batch_size and match, they're flattened
+        if (total_atoms_mono % batch_size == 0 and 
+            total_atoms_dipo % batch_size == 0 and 
+            total_atoms_mono == total_atoms_dipo):
+            # Flattened format - reshape to batched
+            max_atoms = total_atoms_mono // batch_size
+            mono_prediction = mono_prediction.reshape(batch_size, max_atoms, n_dcm)
+            dipo_prediction = dipo_prediction.reshape(batch_size, max_atoms, n_dcm, 3)
+        else:
+            # Batched: (batch_size, n_atoms, n_dcm)
+            max_atoms = mono_prediction.shape[1]
     else:
         # Batched: (batch_size, n_atoms, n_dcm)
         max_atoms = mono_prediction.shape[1]

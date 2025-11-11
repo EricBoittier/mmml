@@ -725,6 +725,33 @@ def prepare_batches(
             # If no imputation function provided and mono is missing, use zeros
             dict_["mono"] = jnp.zeros(batch_size * num_atoms)
         
+        # Compute n_grid if missing
+        if "n_grid" not in dict_:
+            if "esp" in dict_:
+                # Compute from ESP shape
+                esp = dict_["esp"]
+                if esp.ndim == 1:
+                    # Single sample, compute from length
+                    dict_["n_grid"] = jnp.array([len(esp)])
+                else:
+                    # Multiple samples, compute per sample
+                    # esp shape should be (batch_size, n_grid_points)
+                    n_grid_per_sample = esp.shape[1] if esp.ndim == 2 else len(esp)
+                    dict_["n_grid"] = jnp.full(batch_size, n_grid_per_sample)
+            elif "vdw_surface" in dict_:
+                # Compute from vdw_surface shape
+                vdw = dict_["vdw_surface"]
+                if vdw.ndim == 2:
+                    # (batch_size, n_grid_points, 3)
+                    n_grid_per_sample = vdw.shape[1]
+                    dict_["n_grid"] = jnp.full(batch_size, n_grid_per_sample)
+                else:
+                    # Single sample or different shape
+                    dict_["n_grid"] = jnp.array([vdw.shape[0] // 3 if vdw.ndim == 1 else vdw.shape[0]])
+            else:
+                # Fallback: assume some default grid size
+                dict_["n_grid"] = jnp.full(batch_size, 1000)  # Default grid size
+        
         output.append(dict_)
 
     return output
