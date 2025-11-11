@@ -198,7 +198,7 @@ def print_statistics_table(train_stats, valid_stats, epoch):
 
 
 @functools.partial(
-    jax.jit, static_argnames=("model_apply", "batch_size", "esp_w", "chg_w", "ndcm")
+    jax.jit, static_argnames=("model_apply", "batch_size", "esp_w", "chg_w", "ndcm", "charge_conservation_w")
 )
 def eval_step(model_apply, batch, batch_size, params, esp_w, chg_w, ndcm, charge_conservation_w=1.0):
     """
