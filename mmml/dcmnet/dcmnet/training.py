@@ -1,10 +1,14 @@
 import functools
 import pickle
+import hashlib
+import os
+from pathlib import Path
 
 import e3x
 import jax
 import jax.numpy as jnp
 import optax
+import numpy as np
 from .loss import esp_mono_loss
 
 from .data import prepare_batches, prepare_datasets
@@ -912,6 +916,15 @@ def preprocess_monopoles(data, mono_imputation_fn, num_atoms=60, batch_size=1000
         imputed_mean = float(jnp.mean(jnp.abs(all_imputed)))
         imputed_std = float(jnp.std(all_imputed))
         print(f"  ✓ Monopole imputation complete. Mean_abs={imputed_mean:.6f} e, Std={imputed_std:.6f} e")
+    
+    # Save to cache for next time
+    try:
+        if verbose:
+            print(f"  Saving imputed monopoles to cache: {cache_path}")
+        np.savez(cache_path, mono=imputed_reshaped)
+    except Exception as e:
+        if verbose:
+            print(f"  Warning: Failed to save cache ({e}). Continuing anyway...")
     
     return data_updated
 
