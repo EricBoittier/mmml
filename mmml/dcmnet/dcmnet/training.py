@@ -366,13 +366,35 @@ def train_model(
     # Training data statistics
     train_n_samples = len(train_data["R"])
     train_n_atoms = len(train_data["Z"][0]) if len(train_data["Z"]) > 0 else 0
-    train_mono_mean = float(jnp.mean(jnp.array(train_data.get("mono", [0]))))
-    train_mono_std = float(jnp.std(jnp.array(train_data.get("mono", [0]))))
-    train_esp_mean = float(jnp.mean(jnp.concatenate([jnp.ravel(e) for e in train_data.get("esp", [])])))
-    train_esp_std = float(jnp.std(jnp.concatenate([jnp.ravel(e) for e in train_data.get("esp", [])])))
-    train_esp_min = float(jnp.min(jnp.concatenate([jnp.ravel(e) for e in train_data.get("esp", [])])))
-    train_esp_max = float(jnp.max(jnp.concatenate([jnp.ravel(e) for e in train_data.get("esp", [])])))
-    train_n_grid = int(jnp.mean(jnp.array([len(e) for e in train_data.get("esp", [])])))
+    
+    # Compute monopole statistics safely
+    try:
+        train_mono_data = jnp.array(train_data.get("mono", []))
+        if train_mono_data.size > 0:
+            train_mono_mean = float(jnp.mean(train_mono_data))
+            train_mono_std = float(jnp.std(train_mono_data))
+        else:
+            train_mono_mean = train_mono_std = 0.0
+    except:
+        train_mono_mean = train_mono_std = 0.0
+    
+    # Compute ESP statistics safely
+    try:
+        train_esp_flat = jnp.concatenate([jnp.ravel(e) for e in train_data.get("esp", [])])
+        if train_esp_flat.size > 0:
+            train_esp_mean = float(jnp.mean(train_esp_flat))
+            train_esp_std = float(jnp.std(train_esp_flat))
+            train_esp_min = float(jnp.min(train_esp_flat))
+            train_esp_max = float(jnp.max(train_esp_flat))
+        else:
+            train_esp_mean = train_esp_std = train_esp_min = train_esp_max = 0.0
+    except:
+        train_esp_mean = train_esp_std = train_esp_min = train_esp_max = 0.0
+    
+    try:
+        train_n_grid = int(jnp.mean(jnp.array([len(e) for e in train_data.get("esp", [])]))) if len(train_data.get("esp", [])) > 0 else 0
+    except:
+        train_n_grid = 0
     
     print(f"\nTraining Data:")
     print(f"  Samples: {train_n_samples}")
@@ -387,13 +409,33 @@ def train_model(
     # Validation data statistics
     valid_n_samples = len(valid_data["R"])
     valid_n_atoms = len(valid_data["Z"][0]) if len(valid_data["Z"]) > 0 else 0
-    valid_mono_mean = float(jnp.mean(jnp.array(valid_data.get("mono", [0]))))
-    valid_mono_std = float(jnp.std(jnp.array(valid_data.get("mono", [0]))))
-    valid_esp_mean = float(jnp.mean(jnp.concatenate([jnp.ravel(e) for e in valid_data.get("esp", [])])))
-    valid_esp_std = float(jnp.std(jnp.concatenate([jnp.ravel(e) for e in valid_data.get("esp", [])])))
-    valid_esp_min = float(jnp.min(jnp.concatenate([jnp.ravel(e) for e in valid_data.get("esp", [])])))
-    valid_esp_max = float(jnp.max(jnp.concatenate([jnp.ravel(e) for e in valid_data.get("esp", [])])))
-    valid_n_grid = int(jnp.mean(jnp.array([len(e) for e in valid_data.get("esp", [])])))
+    
+    try:
+        valid_mono_data = jnp.array(valid_data.get("mono", []))
+        if valid_mono_data.size > 0:
+            valid_mono_mean = float(jnp.mean(valid_mono_data))
+            valid_mono_std = float(jnp.std(valid_mono_data))
+        else:
+            valid_mono_mean = valid_mono_std = 0.0
+    except:
+        valid_mono_mean = valid_mono_std = 0.0
+    
+    try:
+        valid_esp_flat = jnp.concatenate([jnp.ravel(e) for e in valid_data.get("esp", [])])
+        if valid_esp_flat.size > 0:
+            valid_esp_mean = float(jnp.mean(valid_esp_flat))
+            valid_esp_std = float(jnp.std(valid_esp_flat))
+            valid_esp_min = float(jnp.min(valid_esp_flat))
+            valid_esp_max = float(jnp.max(valid_esp_flat))
+        else:
+            valid_esp_mean = valid_esp_std = valid_esp_min = valid_esp_max = 0.0
+    except:
+        valid_esp_mean = valid_esp_std = valid_esp_min = valid_esp_max = 0.0
+    
+    try:
+        valid_n_grid = int(jnp.mean(jnp.array([len(e) for e in valid_data.get("esp", [])]))) if len(valid_data.get("esp", [])) > 0 else 0
+    except:
+        valid_n_grid = 0
     
     print(f"\nValidation Data:")
     print(f"  Samples: {valid_n_samples}")
