@@ -752,6 +752,19 @@ def prepare_batches(
                 # Fallback: assume some default grid size
                 dict_["n_grid"] = jnp.full(batch_size, 1000)  # Default grid size
         
+        # Create atom_mask if missing (needed for ESP loss masking)
+        if "atom_mask" not in dict_ and "N" in dict_:
+            # Create mask from number of atoms per sample
+            n_atoms_per_sample = dict_["N"]  # Shape: (batch_size,) or scalar
+            if jnp.isscalar(n_atoms_per_sample) or n_atoms_per_sample.ndim == 0:
+                n_atoms_per_sample = jnp.array([n_atoms_per_sample])
+            # Create mask: 1 for real atoms, 0 for dummy atoms
+            atom_mask = jnp.zeros((batch_size, num_atoms), dtype=jnp.float32)
+            for i in range(batch_size):
+                n_real = int(n_atoms_per_sample[i] if n_atoms_per_sample.ndim > 0 else n_atoms_per_sample)
+                atom_mask = atom_mask.at[i, :n_real].set(1.0)
+            dict_["atom_mask"] = atom_mask
+        
         # Move batch data to GPU device for better performance
         # This ensures data is on GPU before training step (non-blocking)
         device = jax.devices()[0]  # Use first available device (typically GPU)
