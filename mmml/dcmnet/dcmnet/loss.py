@@ -591,7 +591,7 @@ def esp_mono_loss(
         # This matches the working trainer.py approach
         esp_loss_corrected = l2_loss_masked.sum() / mask_total
     
-    total_loss = esp_loss_corrected * esp_w + mono_loss_corrected * chg_w
+    total_loss = esp_loss_corrected * esp_w + mono_loss_corrected * chg_w + sum_of_dc_monopoles.sum() **2
     
     return total_loss, batched_pred, esp_target, esp_errors
 
