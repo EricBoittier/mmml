@@ -10,6 +10,7 @@ import jax.numpy as jnp
 import optax
 import numpy as np
 import ase.data
+from scipy.optimize import minimize
 from .loss import esp_mono_loss
 from .electrostatics import calc_esp
 
@@ -1245,6 +1246,184 @@ def train_model(
         
     except Exception as e:
         print(f"  ⚠️  ESP sense check failed: {e}")
+        import traceback
+        traceback.print_exc()
+    
+    print("="*80 + "\n")
+    
+    # Calculate optimal grid shifts by fitting monopole ESP to true ESP
+    print("\n" + "="*80)
+    print("ESP Grid Shift Optimization")
+    print("="*80)
+    print("Finding optimal grid shifts to minimize monopole ESP error...")
+    
+    try:
+        grid_shifts = []  # List of shift dictionaries
+        
+        for batch_idx, batch in enumerate(valid_batches):
+            # Get batch data (same as ESP sense check)
+            R_batch = batch["R"]
+            mono_batch = batch["mono"]
+            vdw_batch = batch["vdw_surface"]
+            esp_target_batch = batch["esp"]
+            n_atoms_batch = batch["N"]
+            Z_batch = batch.get("Z", None)
+            
+            # Determine batch size
+            if isinstance(n_atoms_batch, (int, np.integer)):
+                actual_batch_size = 1
+            elif n_atoms_batch.ndim == 0:
+                actual_batch_size = 1
+            else:
+                actual_batch_size = len(n_atoms_batch)
+            
+            # Reshape inputs (same logic as ESP sense check)
+            if R_batch.ndim == 2:
+                total_atoms = R_batch.shape[0]
+                if actual_batch_size == 1:
+                    num_atoms_per_sample = total_atoms
+                    R_reshaped = R_batch[None, :, :]
+                else:
+                    num_atoms_per_sample = total_atoms // actual_batch_size
+                    R_reshaped = R_batch.reshape(actual_batch_size, num_atoms_per_sample, 3)
+            else:
+                R_reshaped = R_batch
+                num_atoms_per_sample = R_reshaped.shape[1]
+            
+            if mono_batch.ndim == 1:
+                if actual_batch_size == 1:
+                    mono_reshaped = mono_batch[None, :]
+                else:
+                    mono_reshaped = mono_batch.reshape(actual_batch_size, num_atoms_per_sample)
+            else:
+                mono_reshaped = mono_batch
+            
+            if vdw_batch.ndim == 2:
+                vdw_reshaped = vdw_batch[None, :, :]
+            else:
+                vdw_reshaped = vdw_batch
+            
+            if esp_target_batch.ndim == 1:
+                esp_target_reshaped = esp_target_batch[None, :]
+            else:
+                esp_target_reshaped = esp_target_batch
+            
+            Z_reshaped = None
+            if Z_batch is not None:
+                if Z_batch.ndim == 1:
+                    if actual_batch_size == 1:
+                        Z_reshaped = Z_batch[None, :]
+                    else:
+                        Z_reshaped = Z_batch.reshape(actual_batch_size, num_atoms_per_sample)
+                else:
+                    Z_reshaped = Z_batch
+            
+            # Process each sample in the batch
+            for sample_idx in range(actual_batch_size):
+                R_sample = np.array(R_reshaped[sample_idx])  # (num_atoms, 3)
+                mono_sample = np.array(mono_reshaped[sample_idx])  # (num_atoms,)
+                vdw_sample = np.array(vdw_reshaped[sample_idx])  # (ngrid, 3)
+                esp_target_sample = np.array(esp_target_reshaped[sample_idx])  # (ngrid,)
+                
+                # Get actual number of atoms
+                if isinstance(n_atoms_batch, (int, np.integer)):
+                    n_real = n_atoms_batch
+                elif n_atoms_batch.ndim == 0:
+                    n_real = int(n_atoms_batch)
+                else:
+                    n_real = int(n_atoms_batch[sample_idx])
+                
+                R_real = R_sample[:n_real]  # (n_real, 3)
+                mono_real = mono_sample[:n_real]  # (n_real,)
+                
+                # Handle unit conversion
+                vdw_sample_for_esp = vdw_sample.copy()
+                if esp_grid_units.lower() == "bohr":
+                    vdw_sample_for_esp = vdw_sample * BOHR_TO_ANGSTROM
+                
+                # Define objective function: RMSE between monopole ESP and true ESP
+                def objective(shift):
+                    """Calculate RMSE for a given grid shift."""
+                    shifted_grid = vdw_sample_for_esp + shift.reshape(1, 3)
+                    esp_pred = calc_esp(
+                        charge_positions=R_real,
+                        charge_values=mono_real,
+                        grid_positions=shifted_grid
+                    )
+                    # Convert JAX array to NumPy for optimization
+                    esp_pred_np = np.array(esp_pred)
+                    errors = esp_pred_np - esp_target_sample
+                    rmse = np.sqrt(np.mean(errors**2))
+                    return rmse
+                
+                # Initial guess: zero shift
+                initial_shift = np.zeros(3)
+                
+                # Optimize shift (use bounded optimization to avoid extreme shifts)
+                # Limit shifts to ±2.0 Angstrom in each direction
+                bounds = [(-2.0, 2.0), (-2.0, 2.0), (-2.0, 2.0)]
+                result = minimize(
+                    objective,
+                    initial_shift,
+                    method='L-BFGS-B',
+                    bounds=bounds,
+                    options={'maxiter': 100, 'ftol': 1e-6}
+                )
+                
+                optimal_shift = result.x
+                optimal_rmse = result.fun
+                
+                # Calculate RMSE without shift for comparison
+                rmse_no_shift = objective(np.zeros(3))
+                
+                grid_shifts.append({
+                    'batch_idx': batch_idx,
+                    'sample_idx': sample_idx,
+                    'global_idx': len(grid_shifts),
+                    'shift': optimal_shift,
+                    'rmse_with_shift': optimal_rmse,
+                    'rmse_no_shift': rmse_no_shift,
+                    'improvement': rmse_no_shift - optimal_rmse,
+                    'improvement_pct': 100.0 * (rmse_no_shift - optimal_rmse) / rmse_no_shift if rmse_no_shift > 0 else 0.0
+                })
+        
+        # Print statistics
+        if grid_shifts:
+            shifts_array = np.array([s['shift'] for s in grid_shifts])
+            improvements = np.array([s['improvement'] for s in grid_shifts])
+            improvements_pct = np.array([s['improvement_pct'] for s in grid_shifts])
+            
+            print(f"\n  Processed {len(grid_shifts)} samples")
+            print(f"  Shift statistics (Angstrom):")
+            print(f"    Mean shift: [{np.mean(shifts_array[:, 0]):.6f}, {np.mean(shifts_array[:, 1]):.6f}, {np.mean(shifts_array[:, 2]):.6f}]")
+            print(f"    Std shift: [{np.std(shifts_array[:, 0]):.6f}, {np.std(shifts_array[:, 1]):.6f}, {np.std(shifts_array[:, 2]):.6f}]")
+            print(f"    Min shift: [{np.min(shifts_array[:, 0]):.6f}, {np.min(shifts_array[:, 1]):.6f}, {np.min(shifts_array[:, 2]):.6f}]")
+            print(f"    Max shift: [{np.max(shifts_array[:, 0]):.6f}, {np.max(shifts_array[:, 1]):.6f}, {np.max(shifts_array[:, 2]):.6f}]")
+            print(f"  RMSE improvement:")
+            print(f"    Mean improvement: {np.mean(improvements):.6f} Ha/e ({np.mean(improvements)*627.5:.3f} kcal/mol/e)")
+            print(f"    Mean improvement %: {np.mean(improvements_pct):.2f}%")
+            print(f"    Max improvement: {np.max(improvements):.6f} Ha/e ({np.max(improvements)*627.5:.3f} kcal/mol/e)")
+            
+            # Save shifts to file
+            if writer is not None:
+                shifts_file = Path(writer.logdir) / "grid_shifts.npz"
+            else:
+                shifts_file = Path("grid_shifts.npz")
+            
+            np.savez(
+                shifts_file,
+                shifts=shifts_array,
+                improvements=improvements,
+                improvements_pct=improvements_pct,
+                sample_info=np.array([(s['batch_idx'], s['sample_idx'], s['global_idx']) for s in grid_shifts])
+            )
+            print(f"\n  ✓ Saved grid shifts to: {shifts_file}")
+            print(f"    File contains: shifts array, improvements, and sample indices")
+        else:
+            print("  ⚠️  No shifts calculated (no valid samples)")
+    
+    except Exception as e:
+        print(f"  ⚠️  Grid shift optimization failed: {e}")
         import traceback
         traceback.print_exc()
     
