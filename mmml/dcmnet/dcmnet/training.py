@@ -9,8 +9,11 @@ import jax
 import jax.numpy as jnp
 import optax
 import numpy as np
+<<<<<<< HEAD
 import ase.data
 from scipy.optimize import minimize
+=======
+>>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
 from .loss import esp_mono_loss
 from .electrostatics import calc_esp
 
@@ -35,12 +38,20 @@ except ImportError:
 
 @functools.partial(
     jax.jit,
+<<<<<<< HEAD
     static_argnames=("model_apply", "optimizer_update", "batch_size", "esp_w", "chg_w", "ndcm", "distance_weighting", "distance_scale", "distance_min", "esp_magnitude_weighting", "charge_conservation_w", "esp_grid_units", "radii_cutoff_multiplier"),
 )
 def train_step(
     model_apply, optimizer_update, batch, batch_size, opt_state, params, esp_w, chg_w, ndcm, clip_norm=None,
     distance_weighting=False, distance_scale=2.0, distance_min=0.5, esp_magnitude_weighting=False, charge_conservation_w=1.0,
     esp_grid_units="angstrom", radii_cutoff_multiplier=2.0
+=======
+    static_argnames=("model_apply", "optimizer_update", "batch_size", "esp_w", "chg_w", "ndcm", "distance_weighting", "distance_scale", "distance_min", "esp_magnitude_weighting", "charge_conservation_w"),
+)
+def train_step(
+    model_apply, optimizer_update, batch, batch_size, opt_state, params, esp_w, chg_w, ndcm, clip_norm=None,
+    distance_weighting=False, distance_scale=2.0, distance_min=0.5, esp_magnitude_weighting=False, charge_conservation_w=1.0
+>>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
 ):
     """
     Single training step for DCMNet with ESP and monopole losses.
@@ -82,7 +93,11 @@ def train_step(
             src_idx=batch["src_idx"],
             batch_segments=batch["batch_segments"],
         )
+<<<<<<< HEAD
         loss, esp_pred, esp_target, esp_errors, loss_components, esp_mask = esp_mono_loss(
+=======
+        loss, esp_pred, esp_target, esp_errors, loss_components = esp_mono_loss(
+>>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
             dipo_prediction=dipo,
             mono_prediction=mono,
             vdw_surface=batch["vdw_surface"],
@@ -103,17 +118,28 @@ def train_step(
             esp_magnitude_weighting=esp_magnitude_weighting,  # Weight by ESP magnitude instead
             use_atomic_radii_mask=True,  # Enable atomic radii masking (critical for reducing ESP errors)
             charge_conservation_w=charge_conservation_w,  # Weight for charge conservation loss
+<<<<<<< HEAD
             esp_grid_units=esp_grid_units,  # Units of ESP grid ("angstrom" or "bohr")
             radii_cutoff_multiplier=radii_cutoff_multiplier,  # Multiplier for atomic radii cutoff
         )
         return loss, (mono, dipo, esp_pred, esp_target, esp_errors, loss_components, esp_mask)
 
     (loss, (mono, dipo, esp_pred, esp_target, esp_errors, loss_components, esp_mask)), grad = jax.value_and_grad(loss_fn, has_aux=True)(params)
+=======
+        )
+        return loss, (mono, dipo, esp_pred, esp_target, esp_errors, loss_components)
+
+    (loss, (mono, dipo, esp_pred, esp_target, esp_errors, loss_components)), grad = jax.value_and_grad(loss_fn, has_aux=True)(params)
+>>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
     if clip_norm is not None:
         grad = clip_grads_by_global_norm(grad, clip_norm)
     updates, opt_state = optimizer_update(grad, opt_state, params)
     params = optax.apply_updates(params, updates)
+<<<<<<< HEAD
     return params, opt_state, loss, mono, dipo, esp_pred, esp_target, esp_errors, loss_components, esp_mask
+=======
+    return params, opt_state, loss, mono, dipo, esp_pred, esp_target, esp_errors, loss_components
+>>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
 
 
 def compute_statistics(predictions, targets=None):
@@ -175,7 +201,11 @@ def print_statistics_table(train_stats, valid_stats, epoch):
     metrics_list = ['loss', 'esp_loss', 'mono_loss', 'charge_conservation_loss',
                     'esp_loss_weighted', 'mono_loss_weighted', 'charge_conservation_loss_weighted',
                     'mono_mae', 'mono_rmse', 'mono_mean', 'mono_std',
+<<<<<<< HEAD
                     'esp_mae', 'esp_rmse', 'esp_r2_unmasked', 'esp_r2_masked', 'esp_mask_fraction', 'esp_pred_mean', 'esp_pred_std',
+=======
+                    'esp_mae', 'esp_rmse', 'esp_pred_mean', 'esp_pred_std',
+>>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
                     'esp_error_mean', 'esp_error_std']
     
     # Conversion factor: Hartree to kcal/mol
@@ -311,10 +341,16 @@ def print_statistics_table(train_stats, valid_stats, epoch):
 
 
 @functools.partial(
+<<<<<<< HEAD
     jax.jit, static_argnames=("model_apply", "batch_size", "esp_w", "chg_w", "ndcm", "charge_conservation_w", "esp_grid_units", "radii_cutoff_multiplier")
 )
 def eval_step(model_apply, batch, batch_size, params, esp_w, chg_w, ndcm, charge_conservation_w=1.0,
               esp_grid_units="angstrom", radii_cutoff_multiplier=2.0):
+=======
+    jax.jit, static_argnames=("model_apply", "batch_size", "esp_w", "chg_w", "ndcm", "charge_conservation_w")
+)
+def eval_step(model_apply, batch, batch_size, params, esp_w, chg_w, ndcm, charge_conservation_w=1.0):
+>>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
     """
     Single evaluation step for DCMNet.
     
@@ -349,7 +385,11 @@ def eval_step(model_apply, batch, batch_size, params, esp_w, chg_w, ndcm, charge
         batch_segments=batch["batch_segments"],
         batch_size=batch_size,
     )
+<<<<<<< HEAD
     loss, esp_pred, esp_target, esp_errors, loss_components, esp_mask = esp_mono_loss(
+=======
+    loss, esp_pred, esp_target, esp_errors, loss_components = esp_mono_loss(
+>>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
         dipo_prediction=dipo,
         mono_prediction=mono,
         vdw_surface=batch["vdw_surface"],
@@ -369,10 +409,15 @@ def eval_step(model_apply, batch, batch_size, params, esp_w, chg_w, ndcm, charge
         distance_min=0.5,
         use_atomic_radii_mask=True,  # Enable atomic radii masking (critical for reducing ESP errors)
         charge_conservation_w=charge_conservation_w,  # Weight for charge conservation loss
+<<<<<<< HEAD
         esp_grid_units=esp_grid_units,  # Units of ESP grid ("angstrom" or "bohr")
         radii_cutoff_multiplier=radii_cutoff_multiplier,  # Multiplier for atomic radii cutoff
     )
     return loss, mono, dipo, esp_pred, esp_target, esp_errors, loss_components, esp_mask
+=======
+    )
+    return loss, mono, dipo, esp_pred, esp_target, esp_errors, loss_components
+>>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
 
 
 def verify_esp_grid_alignment(train_data, valid_data, num_atoms=60, verbose=True):
@@ -461,6 +506,7 @@ def verify_esp_grid_alignment(train_data, valid_data, num_atoms=60, verbose=True
                 
                 # Compute distances from grid to atoms
                 distances = cdist(vdw, R_real)  # (n_grid, n_real)
+<<<<<<< HEAD
                 
                 # Check if any points are too close (within 2 * covalent radius per atom)
                 # This matches the loss function logic: mask if point is within 2.0 * radius of ANY atom
@@ -482,6 +528,18 @@ def verify_esp_grid_alignment(train_data, valid_data, num_atoms=60, verbose=True
                         print(f"      Cutoffs per atom: {cutoff_per_atom}")
                         min_distances_sample = np.min(distances, axis=1)
                         print(f"      Min distances range: [{min_distances_sample.min():.4f}, {min_distances_sample.max():.4f}] Å")
+=======
+                min_distances = np.min(distances, axis=1)  # (n_grid,)
+                
+                # Check if any points are too close (within 2 * covalent radius)
+                import ase.data
+                radii = np.array([ase.data.covalent_radii[z] if z > 0 else 0 for z in Z_real])
+                cutoff = 2.0 * radii.max() if len(radii) > 0 else 1.0
+                
+                n_too_close = np.sum(min_distances < cutoff)
+                if n_too_close > 0:
+                    n_masked_samples += 1
+>>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
             
             if n_masked_samples > 0:
                 print(f"  ⚠️  {dataset_name}: {n_masked_samples}/{n_check} samples have ESP points too close to atoms")
@@ -517,8 +575,11 @@ def train_model(
     distance_min=0.5,
     esp_magnitude_weighting=False,
     charge_conservation_w=1.0,
+<<<<<<< HEAD
     esp_grid_units="angstrom",
     radii_cutoff_multiplier=2.0,
+=======
+>>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
 ):
     """
     Train DCMNet model with ESP and monopole losses.
@@ -623,6 +684,7 @@ def train_model(
         if train_mono_data.size > 0:
             train_mono_mean = float(jnp.mean(train_mono_data))
             train_mono_std = float(jnp.std(train_mono_data))
+<<<<<<< HEAD
             train_mono_min = float(jnp.min(train_mono_data))
             train_mono_max = float(jnp.max(train_mono_data))
             train_mono_sum_abs = float(jnp.sum(jnp.abs(train_mono_data)))
@@ -641,10 +703,22 @@ def train_model(
         train_esp_list = train_data.get("esp", [])
         if len(train_esp_list) > 0:
             train_esp_flat = jnp.concatenate([jnp.ravel(e) for e in train_esp_list])
+=======
+        else:
+            train_mono_mean = train_mono_std = 0.0
+    except:
+        train_mono_mean = train_mono_std = 0.0
+    
+    # Compute ESP statistics safely
+    try:
+        train_esp_flat = jnp.concatenate([jnp.ravel(e) for e in train_data.get("esp", [])])
+        if train_esp_flat.size > 0:
+>>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
             train_esp_mean = float(jnp.mean(train_esp_flat))
             train_esp_std = float(jnp.std(train_esp_flat))
             train_esp_min = float(jnp.min(train_esp_flat))
             train_esp_max = float(jnp.max(train_esp_flat))
+<<<<<<< HEAD
             train_esp_median = float(jnp.median(train_esp_flat))
             train_esp_q25 = float(jnp.percentile(train_esp_flat, 25))
             train_esp_q75 = float(jnp.percentile(train_esp_flat, 75))
@@ -698,10 +772,22 @@ def train_model(
         train_vdw_mean = train_vdw_std = train_vdw_min = train_vdw_max = 0.0
         train_vdw_units = "Å"
         print(f"  Warning: Could not compute VDW surface statistics: {e}")
+=======
+        else:
+            train_esp_mean = train_esp_std = train_esp_min = train_esp_max = 0.0
+    except:
+        train_esp_mean = train_esp_std = train_esp_min = train_esp_max = 0.0
+    
+    try:
+        train_n_grid = int(jnp.mean(jnp.array([len(e) for e in train_data.get("esp", [])]))) if len(train_data.get("esp", [])) > 0 else 0
+    except:
+        train_n_grid = 0
+>>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
     
     print(f"\nTraining Data:")
     print(f"  Samples: {train_n_samples}")
     print(f"  Atoms per sample: {train_n_atoms}")
+<<<<<<< HEAD
     print(f"  Grid points per sample: mean={train_n_grid}, min={train_n_grid_min}, max={train_n_grid_max}")
     print(f"  Total ESP grid points: {train_esp_total_points:,}")
     print(f"  Monopoles:")
@@ -728,6 +814,14 @@ def train_model(
             # Also show original Bohr values
             train_vdw_first_bohr = jnp.array(train_vdw_list[0])
             print(f"    Position range (Bohr): [{float(jnp.min(train_vdw_first_bohr)):.4f}, {float(jnp.max(train_vdw_first_bohr)):.4f}] Bohr")
+=======
+    print(f"  Grid points per sample: {train_n_grid}")
+    print(f"  Monopoles: mean={train_mono_mean:.6f} e, std={train_mono_std:.6f} e")
+    print(f"  ESP: mean={train_esp_mean:.6f} Ha/e ({train_esp_mean*627.5:.3f} kcal/mol/e)")
+    print(f"        std={train_esp_std:.6f} Ha/e ({train_esp_std*627.5:.3f} kcal/mol/e)")
+    print(f"        range=[{train_esp_min:.6f}, {train_esp_max:.6f}] Ha/e")
+    print(f"        range=[{train_esp_min*627.5:.3f}, {train_esp_max*627.5:.3f}] kcal/mol/e")
+>>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
     
     # Validation data statistics
     valid_n_samples = len(valid_data["R"])
@@ -738,6 +832,7 @@ def train_model(
         if valid_mono_data.size > 0:
             valid_mono_mean = float(jnp.mean(valid_mono_data))
             valid_mono_std = float(jnp.std(valid_mono_data))
+<<<<<<< HEAD
             valid_mono_min = float(jnp.min(valid_mono_data))
             valid_mono_max = float(jnp.max(valid_mono_data))
             valid_mono_sum_abs = float(jnp.sum(jnp.abs(valid_mono_data)))
@@ -755,10 +850,21 @@ def train_model(
         valid_esp_list = valid_data.get("esp", [])
         if len(valid_esp_list) > 0:
             valid_esp_flat = jnp.concatenate([jnp.ravel(e) for e in valid_esp_list])
+=======
+        else:
+            valid_mono_mean = valid_mono_std = 0.0
+    except:
+        valid_mono_mean = valid_mono_std = 0.0
+    
+    try:
+        valid_esp_flat = jnp.concatenate([jnp.ravel(e) for e in valid_data.get("esp", [])])
+        if valid_esp_flat.size > 0:
+>>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
             valid_esp_mean = float(jnp.mean(valid_esp_flat))
             valid_esp_std = float(jnp.std(valid_esp_flat))
             valid_esp_min = float(jnp.min(valid_esp_flat))
             valid_esp_max = float(jnp.max(valid_esp_flat))
+<<<<<<< HEAD
             valid_esp_median = float(jnp.median(valid_esp_flat))
             valid_esp_q25 = float(jnp.percentile(valid_esp_flat, 25))
             valid_esp_q75 = float(jnp.percentile(valid_esp_flat, 75))
@@ -810,10 +916,22 @@ def train_model(
         valid_vdw_mean = valid_vdw_std = valid_vdw_min = valid_vdw_max = 0.0
         valid_vdw_units = "Å"
         print(f"  Warning: Could not compute validation VDW surface statistics: {e}")
+=======
+        else:
+            valid_esp_mean = valid_esp_std = valid_esp_min = valid_esp_max = 0.0
+    except:
+        valid_esp_mean = valid_esp_std = valid_esp_min = valid_esp_max = 0.0
+    
+    try:
+        valid_n_grid = int(jnp.mean(jnp.array([len(e) for e in valid_data.get("esp", [])]))) if len(valid_data.get("esp", [])) > 0 else 0
+    except:
+        valid_n_grid = 0
+>>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
     
     print(f"\nValidation Data:")
     print(f"  Samples: {valid_n_samples}")
     print(f"  Atoms per sample: {valid_n_atoms}")
+<<<<<<< HEAD
     print(f"  Grid points per sample: mean={valid_n_grid}, min={valid_n_grid_min}, max={valid_n_grid_max}")
     print(f"  Total ESP grid points: {valid_esp_total_points:,}")
     print(f"  Monopoles:")
@@ -840,12 +958,21 @@ def train_model(
             # Also show original Bohr values
             valid_vdw_first_bohr = jnp.array(valid_vdw_list[0])
             print(f"    Position range (Bohr): [{float(jnp.min(valid_vdw_first_bohr)):.4f}, {float(jnp.max(valid_vdw_first_bohr)):.4f}] Bohr")
+=======
+    print(f"  Grid points per sample: {valid_n_grid}")
+    print(f"  Monopoles: mean={valid_mono_mean:.6f} e, std={valid_mono_std:.6f} e")
+    print(f"  ESP: mean={valid_esp_mean:.6f} Ha/e ({valid_esp_mean*627.5:.3f} kcal/mol/e)")
+    print(f"        std={valid_esp_std:.6f} Ha/e ({valid_esp_std*627.5:.3f} kcal/mol/e)")
+    print(f"        range=[{valid_esp_min:.6f}, {valid_esp_max:.6f}] Ha/e")
+    print(f"        range=[{valid_esp_min*627.5:.3f}, {valid_esp_max*627.5:.3f}] kcal/mol/e")
+>>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
     
     print(f"\nTraining Configuration:")
     print(f"  Batch size: {batch_size}")
     print(f"  Steps per epoch: {train_n_samples // batch_size}")
     print(f"  ESP weight: {esp_w}")
     print(f"  Charge weight: {chg_w}")
+<<<<<<< HEAD
     print(f"  Charge conservation weight: {charge_conservation_w}")
     print(f"  Distance weighting: {distance_weighting}")
     print(f"    Distance scale: {distance_scale} Å")
@@ -854,6 +981,10 @@ def train_model(
     print(f"  ESP grid units: {esp_grid_units}")
     print(f"  Radii cutoff multiplier: {radii_cutoff_multiplier}")
     print(f"  Use atomic radii mask: True")
+=======
+    print(f"  Distance weighting: {distance_weighting}")
+    print(f"  ESP magnitude weighting: {esp_magnitude_weighting}")
+>>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
     print(f"  Learning rate: {learning_rate}")
     print(f"  Number of DCM per atom: {ndcm}")
     print(f"  Total parameters: {sum(x.size for x in jax.tree_util.tree_leaves(params)):,}")
@@ -866,6 +997,7 @@ def train_model(
         print("\nPreprocessing monopoles...")
         train_data = preprocess_monopoles(train_data, mono_imputation_fn, num_atoms=num_atoms, batch_size=batch_size, verbose=True)
         valid_data = preprocess_monopoles(valid_data, mono_imputation_fn, num_atoms=num_atoms, batch_size=batch_size, verbose=True)
+<<<<<<< HEAD
         
         # Print statistics after imputation
         print("\nPost-imputation Statistics:")
@@ -890,6 +1022,8 @@ def train_model(
         except Exception as e:
             print(f"  Warning: Could not compute post-imputation statistics: {e}")
         
+=======
+>>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
         # Set imputation function to None since monopoles are already imputed
         mono_imputation_fn = None
     
@@ -902,6 +1036,7 @@ def train_model(
     
     # Batches for the validation set need to be prepared only once.
     key, shuffle_key = jax.random.split(key)
+<<<<<<< HEAD
     print(f"\nPreparing validation batches (batch_size={batch_size}, num_atoms={num_atoms})...")
     valid_batches = prepare_batches(shuffle_key, valid_data, batch_size, num_atoms=num_atoms, mono_imputation_fn=mono_imputation_fn)
     print(f"  Created {len(valid_batches)} validation batches")
@@ -1428,6 +1563,9 @@ def train_model(
         traceback.print_exc()
     
     print("="*80 + "\n")
+=======
+    valid_batches = prepare_batches(shuffle_key, valid_data, batch_size, num_atoms=num_atoms, mono_imputation_fn=mono_imputation_fn)
+>>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
 
     print("\nTraining")
     print("..................")
@@ -1436,6 +1574,7 @@ def train_model(
         # Prepare batches.
         key, shuffle_key = jax.random.split(key)
         train_batches = prepare_batches(shuffle_key, train_data, batch_size, num_atoms=num_atoms, mono_imputation_fn=mono_imputation_fn)
+<<<<<<< HEAD
         
         # Print batch preparation info on first epoch
         if epoch == 1:
@@ -1462,6 +1601,8 @@ def train_model(
                     atom_mask_shape = first_train_batch["atom_mask"].shape
                     atom_mask_sum = float(jnp.sum(first_train_batch["atom_mask"]))
                     print(f"    atom_mask shape: {atom_mask_shape}, sum: {atom_mask_sum}")
+=======
+>>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
         # Loop over train batches.
         train_loss = 0.0
         train_mono_preds = []
@@ -1470,10 +1611,16 @@ def train_model(
         train_esp_targets = []
         train_esp_errors = []
         train_loss_components = []
+<<<<<<< HEAD
         train_esp_masks = []
         
         for i, batch in enumerate(train_batches):
             params, opt_state, loss, mono, dipo, esp_pred, esp_target, esp_error, loss_components, esp_mask = train_step(
+=======
+        
+        for i, batch in enumerate(train_batches):
+            params, opt_state, loss, mono, dipo, esp_pred, esp_target, esp_error, loss_components = train_step(
+>>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
                 model_apply=model.apply,
                 optimizer_update=optimizer.update,
                 batch=batch,
@@ -1489,8 +1636,11 @@ def train_model(
                 distance_min=distance_min,
                 esp_magnitude_weighting=esp_magnitude_weighting,
                 charge_conservation_w=charge_conservation_w,
+<<<<<<< HEAD
                 esp_grid_units=esp_grid_units,
                 radii_cutoff_multiplier=radii_cutoff_multiplier,
+=======
+>>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
             )
 
             # Update EMA parameters (non-blocking for better GPU utilization)
@@ -1507,6 +1657,7 @@ def train_model(
             train_esp_targets.append(esp_target)
             train_esp_errors.append(esp_error)
             train_loss_components.append(loss_components)
+<<<<<<< HEAD
             train_esp_masks.append(esp_mask)
             
                 # Debug output for first batch of first epoch
@@ -1544,6 +1695,8 @@ def train_model(
                     if vdw_first.ndim >= 2:
                         vdw_flat = vdw_first.ravel()[:9] if vdw_first.size >= 9 else vdw_first.ravel()
                         print(f"    Batch vdw_surface first 9 values (x,y,z of first 3 points): {vdw_flat}")
+=======
+>>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
 
         # Concatenate all predictions and targets (block once at end of epoch)
         train_mono_preds = jnp.concatenate(train_mono_preds, axis=0)
@@ -1569,6 +1722,15 @@ def train_model(
             if len(train_esp_masks_list) > 0:
                 first_mask = train_esp_masks_list[0]
                 print(f"  DEBUG: first_mask shape={first_mask.shape}, first_mask[:10]={first_mask.ravel()[:10]}")
+        
+        # Block once for statistics computation (better GPU utilization)
+        jax.block_until_ready(train_esp_errors)
+        
+        # Aggregate loss components
+        train_loss_components_agg = {}
+        for component_name in train_loss_components[0].keys():
+            values = jnp.array([comp[component_name] for comp in train_loss_components])
+            train_loss_components_agg[component_name] = float(jnp.mean(values))
         
         # Block once for statistics computation (better GPU utilization)
         jax.block_until_ready(train_esp_errors)
@@ -1712,10 +1874,16 @@ def train_model(
         valid_esp_targets = []
         valid_esp_errors = []
         valid_loss_components = []
+<<<<<<< HEAD
         valid_esp_masks = []
         
         for i, batch in enumerate(valid_batches):
             loss, mono, dipo, esp_pred, esp_target, esp_error, loss_components, esp_mask = eval_step(
+=======
+        
+        for i, batch in enumerate(valid_batches):
+            loss, mono, dipo, esp_pred, esp_target, esp_error, loss_components = eval_step(
+>>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
                 model_apply=model.apply,
                 batch=batch,
                 batch_size=batch_size,
@@ -1724,8 +1892,11 @@ def train_model(
                 chg_w=chg_w,
                 ndcm=ndcm,
                 charge_conservation_w=charge_conservation_w,
+<<<<<<< HEAD
                 esp_grid_units=esp_grid_units,
                 radii_cutoff_multiplier=radii_cutoff_multiplier,
+=======
+>>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
             )
             # Accumulate loss (non-blocking for better GPU utilization)
             valid_loss += (loss - valid_loss) / (i + 1)
@@ -1737,7 +1908,10 @@ def train_model(
             valid_esp_targets.append(esp_target)
             valid_esp_errors.append(esp_error)
             valid_loss_components.append(loss_components)
+<<<<<<< HEAD
             valid_esp_masks.append(esp_mask)
+=======
+>>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
 
         # Concatenate all predictions and targets (block once at end of epoch)
         valid_mono_preds = jnp.concatenate(valid_mono_preds, axis=0)
@@ -1763,6 +1937,15 @@ def train_model(
             if len(valid_esp_masks_list) > 0:
                 first_mask = valid_esp_masks_list[0]
                 print(f"  DEBUG: first_mask shape={first_mask.shape}, first_mask[:10]={first_mask.ravel()[:10]}")
+        
+        # Block once for statistics computation (better GPU utilization)
+        jax.block_until_ready(valid_esp_errors)
+        
+        # Aggregate loss components
+        valid_loss_components_agg = {}
+        for component_name in valid_loss_components[0].keys():
+            values = jnp.array([comp[component_name] for comp in valid_loss_components])
+            valid_loss_components_agg[component_name] = float(jnp.mean(values))
         
         # Block once for statistics computation (better GPU utilization)
         jax.block_until_ready(valid_esp_errors)
