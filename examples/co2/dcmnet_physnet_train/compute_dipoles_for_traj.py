@@ -178,11 +178,14 @@ def main() -> None:
         pos_chunk = jnp.asarray(positions_pad[start:end], dtype=jnp.float32)
         try:
             dip_phys_chunk, dip_dcm_chunk, energy_chunk = forward_chunk(pos_chunk)
+<<<<<<< HEAD
             # Block until JAX operations complete to avoid async context issues
             # This prevents RuntimeError: cannot enter context in IPython/Jupyter
             jax.block_until_ready(dip_phys_chunk)
             jax.block_until_ready(dip_dcm_chunk)
             jax.block_until_ready(energy_chunk)
+=======
+>>>>>>> 6efd228e (studix0)
         except (jax.errors.JaxRuntimeError, RuntimeError) as e:
             if "RESOURCE_EXHAUSTED" in str(e) or "Out of memory" in str(e):
                 print(f"\n❌ GPU out of memory with batch size {batch_size}")
