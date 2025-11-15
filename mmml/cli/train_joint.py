@@ -3185,6 +3185,11 @@ def train_model(
                 esp_max_value=esp_max_value,
             )
             
+            # Block until JAX operations complete to avoid async context issues
+            # This prevents RuntimeError: cannot enter context in IPython/Jupyter
+            jax.block_until_ready(loss)
+            jax.block_until_ready(params)
+            
             train_losses.append({k: float(v) for k, v in losses.items()})
             
             # Update EMA parameters after each batch
@@ -3241,6 +3246,10 @@ def train_model(
                 esp_min_distance=esp_min_distance,
                 esp_max_value=esp_max_value,
             )
+            
+            # Block until JAX operations complete to avoid async context issues
+            jax.block_until_ready(losses)
+            jax.block_until_ready(output)
             
             valid_losses.append({k: float(v) for k, v in losses.items()})
             

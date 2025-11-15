@@ -605,7 +605,7 @@ def print_shapes(train_data, valid_data):
 def prepare_batches(
     key, data, batch_size, 
     include_id=False, data_keys=None, num_atoms=60,
-    dst_idx=None, src_idx=None
+    dst_idx=None, src_idx=None, mono_imputation_fn=None
 ) -> list:
     """
     Prepare batches for training.
@@ -631,6 +631,9 @@ def prepare_batches(
         Destination indices for message passing, by default None
     src_idx : array_like, optional
         Source indices for message passing, by default None
+    mono_imputation_fn : callable, optional
+        Function to impute monopoles if missing. Should take a batch dict and return
+        monopoles with shape (batch_size * num_atoms,). By default None
 
     Returns
     -------
@@ -708,6 +711,91 @@ def prepare_batches(
         else:
             dict_["src_idx"] = src_idx
         dict_["batch_segments"] = batch_segments
+        
+        # Impute monopoles if missing OR if all zeros (imputation function should override zeros)
+        # Check if monopoles are missing or all zeros
+        mono_missing_or_zero = False
+        if "mono" not in dict_:
+            mono_missing_or_zero = True
+        elif mono_imputation_fn is not None:
+            # Check if monopoles are all zeros (within numerical tolerance)
+            mono_sum = jnp.abs(dict_["mono"]).sum()
+            mono_missing_or_zero = mono_sum < 1e-6  # Treat as zero if sum of absolute values is tiny
+            if mono_missing_or_zero:
+                # Print warning when zeros detected
+                print(f"⚠️  Monopoles detected as zeros (sum_abs={float(mono_sum):.2e}). "
+                      f"Using imputation function to replace them.")
+        
+        if mono_missing_or_zero and mono_imputation_fn is not None:
+            try:
+                imputed_mono = mono_imputation_fn(dict_)
+                dict_["mono"] = imputed_mono
+                # Print success message (only for first batch to avoid spam)
+                if len(output) == 0:  # First batch
+                    imputed_mean = float(jnp.mean(jnp.abs(imputed_mono)))
+                    print(f"✓  Monopole imputation successful. Imputed monopoles have mean_abs={imputed_mean:.6f} e")
+            except Exception as e:
+                import warnings
+                warnings.warn(f"Failed to impute monopoles: {e}. Using zeros instead.")
+                # Fallback to zeros if imputation fails
+                if "mono" not in dict_:
+                    dict_["mono"] = jnp.zeros(batch_size * num_atoms)
+        elif "mono" not in dict_:
+            # If no imputation function provided and mono is missing, use zeros
+            if mono_imputation_fn is None:
+                # Only warn if imputation function was expected but not provided
+                if len(output) == 0:  # First batch only
+                    print("⚠️  No monopole imputation function provided. Using zeros for monopoles.")
+            dict_["mono"] = jnp.zeros(batch_size * num_atoms)
+        
+        # Compute n_grid if missing
+        if "n_grid" not in dict_:
+            if "esp" in dict_:
+                # Compute from ESP shape
+                esp = dict_["esp"]
+                if esp.ndim == 1:
+                    # Single sample, compute from length
+                    dict_["n_grid"] = jnp.array([len(esp)])
+                else:
+                    # Multiple samples, compute per sample
+                    # esp shape should be (batch_size, n_grid_points)
+                    n_grid_per_sample = esp.shape[1] if esp.ndim == 2 else len(esp)
+                    dict_["n_grid"] = jnp.full(batch_size, n_grid_per_sample)
+            elif "vdw_surface" in dict_:
+                # Compute from vdw_surface shape
+                vdw = dict_["vdw_surface"]
+                if vdw.ndim == 2:
+                    # (batch_size, n_grid_points, 3)
+                    n_grid_per_sample = vdw.shape[1]
+                    dict_["n_grid"] = jnp.full(batch_size, n_grid_per_sample)
+                else:
+                    # Single sample or different shape
+                    dict_["n_grid"] = jnp.array([vdw.shape[0] // 3 if vdw.ndim == 1 else vdw.shape[0]])
+            else:
+                # Fallback: assume some default grid size
+                dict_["n_grid"] = jnp.full(batch_size, 1000)  # Default grid size
+        
+        # Create atom_mask if missing (needed for ESP loss masking)
+        if "atom_mask" not in dict_ and "N" in dict_:
+            # Create mask from number of atoms per sample
+            n_atoms_per_sample = dict_["N"]  # Shape: (batch_size,) or scalar
+            if jnp.isscalar(n_atoms_per_sample) or n_atoms_per_sample.ndim == 0:
+                n_atoms_per_sample = jnp.array([n_atoms_per_sample])
+            # Create mask: 1 for real atoms, 0 for dummy atoms
+            atom_mask = jnp.zeros((batch_size, num_atoms), dtype=jnp.float32)
+            for i in range(batch_size):
+                n_real = int(n_atoms_per_sample[i] if n_atoms_per_sample.ndim > 0 else n_atoms_per_sample)
+                atom_mask = atom_mask.at[i, :n_real].set(1.0)
+            dict_["atom_mask"] = atom_mask
+        
+        # Move batch data to GPU device for better performance
+        # This ensures data is on GPU before training step (non-blocking)
+        device = jax.devices()[0]  # Use first available device (typically GPU)
+        dict_ = jax.tree_util.tree_map(
+            lambda x: jax.device_put(x, device) if isinstance(x, (jnp.ndarray, np.ndarray)) else x,
+            dict_
+        )
+        
         output.append(dict_)
 
     return output

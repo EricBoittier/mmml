@@ -399,6 +399,10 @@ def train_model(
                     ema_params=ema_params,
                     debug=True,
                 )
+                # Block until JAX operations complete to avoid async context issues
+                # This prevents RuntimeError: cannot enter context in IPython/Jupyter
+                jax.block_until_ready(loss)
+                jax.block_until_ready(params)
                 train_loss += (loss - train_loss) / (i + 1)
                 train_energy_mae += (energy_mae - train_energy_mae) / (i + 1)
                 train_forces_mae += (forces_mae - train_forces_mae) / (i + 1)
@@ -420,6 +424,11 @@ def train_model(
                     charges=do_charges,
                     params=ema_params,
                 )
+                # Block until JAX operations complete to avoid async context issues
+                jax.block_until_ready(loss)
+                jax.block_until_ready(energy_mae)
+                jax.block_until_ready(forces_mae)
+                jax.block_until_ready(dipole_mae)
                 valid_loss += (loss - valid_loss) / (i + 1)
                 valid_energy_mae += (energy_mae - valid_energy_mae) / (i + 1)
                 valid_forces_mae += (forces_mae - valid_forces_mae) / (i + 1)

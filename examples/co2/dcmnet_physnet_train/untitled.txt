@@ -1,0 +1,11 @@
+python jaxmd_dynamics.py \
+  --checkpoint /scicore/home/meuwly/boitti0000/mmml/examples/co2/dcmnet_physnet_train/comparisons/interactive_comparison3/dcmnet_equivariant \
+  --molecule CO2 \
+  --multi-replicas 16 \
+  --multi-translation 30.0 \
+  --temperature 300 \
+  --timestep 0.5 \
+  --nsteps 20000 \
+  --cutoff 10.0 \
+  --seed 0 \
+  --output-dir ./jaxmd_sim

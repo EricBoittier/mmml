@@ -1,3 +1,400 @@
+# =============================================================================
+# Multi-copy JAX MD driver (batched replicas of a molecule)
+# =============================================================================
+import numpy as np
+import jax
+import jax.numpy as jnp
+from jax import random, jit, grad, vmap
+from types import SimpleNamespace
+from trainer import JointPhysNetDCMNet
+
+# Compatibility shims for older jax_md builds expecting legacy JAX APIs
+try:
+    from jax import tree_util as _tree_util
+    if not hasattr(jax, "tree_map"):
+        jax.tree_map = _tree_util.tree_map
+    if not hasattr(jax, "tree_multimap"):
+        jax.tree_multimap = _tree_util.tree_map
+    if not hasattr(jax, "tree_leaves"):
+        jax.tree_leaves = _tree_util.tree_leaves
+    if not hasattr(jax, "tree_flatten"):
+        jax.tree_flatten = _tree_util.tree_flatten
+    if not hasattr(jax, "tree_unflatten"):
+        jax.tree_unflatten = _tree_util.tree_unflatten
+except Exception:
+    pass
+
+if not hasattr(random, "KeyArray"):
+    random.KeyArray = jnp.ndarray
+if not hasattr(random, "Key"):
+    random.Key = jnp.ndarray
+
+from jax_md import space, simulate
+
+def _build_single_graph_no_nn(positions_single: np.ndarray, cutoff: float, model_natoms: int):
+    """Dense neighbor graph for one molecule, padded to model_natoms."""
+    n_true = positions_single.shape[0]
+    dst_list, src_list = [], []
+    for i in range(n_true):
+        for j in range(n_true):
+            if i != j:
+                if np.linalg.norm(positions_single[i] - positions_single[j]) < cutoff:
+                    dst_list.append(i)
+                    src_list.append(j)
+    if not dst_list:
+        raise ValueError("No neighbor edges found; increase cutoff or check geometry.")
+
+    n_edges = len(dst_list)
+    dst = jnp.zeros((model_natoms,), dtype=jnp.int32).at[:n_edges].set(jnp.asarray(dst_list, dtype=jnp.int32))
+    src = jnp.zeros((model_natoms,), dtype=jnp.int32).at[:n_edges].set(jnp.asarray(src_list, dtype=jnp.int32))
+    edge_mask = jnp.zeros((model_natoms,), dtype=jnp.float32).at[:n_edges].set(1.0)
+    return dst, src, edge_mask, n_edges
+
+
+def _pack_replicas(positions_single: np.ndarray, atomic_numbers_single: np.ndarray, masses_single: np.ndarray,
+                   model_natoms: int, num_replicas: int, translation: float):
+    """Pad one molecule to model_natoms and tile num_replicas copies far apart."""
+    n_true = positions_single.shape[0]
+    natoms_total = num_replicas * model_natoms
+
+    positions_packed = jnp.zeros((natoms_total, 3), dtype=jnp.float32)
+    atomic_numbers_packed = jnp.zeros((natoms_total,), dtype=jnp.int32)
+    atom_mask = jnp.zeros((natoms_total,), dtype=jnp.float32)
+    masses_packed = jnp.zeros((natoms_total,), dtype=jnp.float32)
+    batch_segments = jnp.repeat(jnp.arange(num_replicas, dtype=jnp.int32), model_natoms)
+
+    positions_single = jnp.asarray(positions_single, dtype=jnp.float32)
+    atomic_numbers_single = jnp.asarray(atomic_numbers_single, dtype=jnp.int32)
+    masses_single = jnp.asarray(masses_single, dtype=jnp.float32)
+    masses_padded_single = jnp.pad(masses_single, (0, model_natoms - n_true), constant_values=1.0)
+
+    if translation is None:
+        translation = 0.0
+    translation = max(float(translation), 0.0)
+    offsets = translation * jnp.arange(num_replicas, dtype=jnp.float32)[:, None] * jnp.array([1.0, 0.0, 0.0])
+
+    for k in range(num_replicas):
+        start = k * model_natoms
+        end = start + model_natoms
+
+        pos_block = jnp.zeros((model_natoms, 3), dtype=jnp.float32)
+        pos_block = pos_block.at[:n_true].set(positions_single + offsets[k])
+        positions_packed = positions_packed.at[start:end].set(pos_block)
+
+        z_block = jnp.zeros((model_natoms,), dtype=jnp.int32)
+        z_block = z_block.at[:n_true].set(atomic_numbers_single)
+        atomic_numbers_packed = atomic_numbers_packed.at[start:end].set(z_block)
+
+        mask_block = jnp.zeros((model_natoms,), dtype=jnp.float32).at[:n_true].set(1.0)
+        atom_mask = atom_mask.at[start:end].set(mask_block)
+
+        masses_packed = masses_packed.at[start:end].set(masses_padded_single)
+
+    return positions_packed, atomic_numbers_packed, atom_mask, masses_packed, batch_segments
+
+
+def _replicate_graph(dst_single, src_single, edge_mask_single, model_natoms: int, num_replicas: int, edges_per_single: int):
+    offsets = jnp.arange(num_replicas, dtype=jnp.int32) * model_natoms
+    dst = jnp.concatenate([dst_single[:edges_per_single] + off for off in offsets])
+    src = jnp.concatenate([src_single[:edges_per_single] + off for off in offsets])
+    edge_mask = jnp.tile(edge_mask_single[:edges_per_single], num_replicas)
+    return dst, src, edge_mask.astype(jnp.float32)
+
+
+def _initialize_velocities_multi(key, masses, atom_mask, model_natoms: int, num_replicas: int, temperature: float):
+    """Maxwell–Boltzmann velocities, zeroing padded atoms."""
+    kB = 8.617333262e-5
+    masses_eff = jnp.where(atom_mask > 0, masses, jnp.ones_like(masses))
+    sigma_1d = jnp.sqrt(kB * temperature / (masses_eff * 0.01036427))
+    sigma = sigma_1d[:, None] * jnp.ones((1, 3), dtype=sigma_1d.dtype)
+    velocities = jax.random.normal(key, shape=(masses.shape[0], 3)) * sigma
+    velocities = velocities * atom_mask[:, None]
+    velocities = velocities.reshape(num_replicas, model_natoms, 3)
+    counts = jnp.sum(atom_mask.reshape(num_replicas, model_natoms, 1), axis=1, keepdims=True)
+    counts = jnp.where(counts > 0, counts, 1.0)
+    velocities = velocities - jnp.sum(velocities, axis=1, keepdims=True) / counts
+    return velocities.reshape(-1, 3)
+
+
+def _evaluate_initial_state(model,
+                            params,
+                            positions,
+                            atomic_numbers,
+                            dst_idx,
+                            src_idx,
+                            batch_segments,
+                            batch_mask,
+                            atom_mask,
+                            model_natoms: int,
+                            num_replicas: int):
+    """Run one forward pass and sanity-check energy/force magnitudes."""
+    output = model.apply(
+        params,
+        atomic_numbers=atomic_numbers,
+        positions=positions,
+        dst_idx=dst_idx,
+        src_idx=src_idx,
+        batch_segments=batch_segments,
+        batch_size=num_replicas,
+        batch_mask=batch_mask,
+        atom_mask=atom_mask,
+    )
+
+    energies = np.asarray(output['energy'][:num_replicas])
+    forces = np.asarray(output['forces']).reshape(num_replicas, model_natoms, 3)
+    mask = np.asarray(atom_mask).reshape(num_replicas, model_natoms, 1)
+    forces_masked = forces * mask
+
+    if not np.all(np.isfinite(energies)):
+        raise ValueError(
+            "Initial energy evaluation produced NaN/Inf values. "
+            "Check the checkpoint and geometry."
+        )
+    if not np.all(np.isfinite(forces_masked)):
+        raise ValueError(
+            "Initial force evaluation produced NaN/Inf values. "
+            "Check the checkpoint and geometry."
+        )
+
+    max_force = float(np.max(np.abs(forces_masked)))
+    mean_force = float(np.mean(np.abs(forces_masked)))
+    max_energy = float(np.max(np.abs(energies)))
+
+    print("\nInitial diagnostics (batched run):")
+    print(f"  Energy range: [{energies.min():.6f}, {energies.max():.6f}] eV")
+    print(f"  Max |force|: {max_force:.6f} eV/Å")
+    print(f"  Mean |force|: {mean_force:.6f} eV/Å")
+
+    FORCE_THRESHOLD = 500.0  # eV/Å
+    if max_force > FORCE_THRESHOLD:
+        print(
+            f"⚠️  Warning: large initial force magnitude ({max_force:.2f} eV/Å).\n"
+            "   Consider reducing the timestep or relaxing the structure."
+        )
+
+    return energies, forces_masked
+
+
+def _create_energy_fn_multi(model, params,
+                            atomic_numbers, atom_mask,
+                            dst_idx, src_idx, edge_mask,
+                            batch_segments, model_natoms: int, num_replicas: int):
+    @jax.jit
+    def energy_full(positions, *_):
+        output = model.apply(
+            params,
+            atomic_numbers=atomic_numbers,
+            positions=positions,
+            dst_idx=dst_idx,
+            src_idx=src_idx,
+            batch_segments=batch_segments,
+            batch_size=num_replicas,
+            batch_mask=edge_mask,
+            atom_mask=atom_mask,
+        )
+        return output['energy'][:num_replicas]
+
+    def energy_sum(positions, *_):
+        return jnp.sum(energy_full(positions))
+
+    return energy_sum, energy_full
+
+
+def run_multi_copy_dynamics(model,
+                            params,
+                            positions_single: np.ndarray,
+                            atomic_numbers_single: np.ndarray,
+                            masses_single: np.ndarray,
+                            num_replicas: int = 8,
+                            timestep_fs: float = 0.5,
+                            temperature: float = 300.0,
+                            cutoff: float = 10.0,
+                            steps: int = 10000,
+                            translation: float = 25.0,
+                            key_seed: int = 0,
+                            ensemble: str = "nvt"):
+    """
+    Run a batched simulation for independent replicas (NVT Nose–Hoover or NVE VV).
+    """
+    ensemble = ensemble.lower()
+    if ensemble not in {"nvt", "nve"}:
+        raise ValueError(f"Unsupported multi-copy ensemble '{ensemble}'. Choose 'nvt' or 'nve'.")
+
+    model_natoms = model.physnet_config['natoms']
+
+    positions_packed, Z_packed, atom_mask, masses_packed, batch_segments = _pack_replicas(
+        positions_single, atomic_numbers_single, masses_single,
+        model_natoms, num_replicas, translation
+    )
+
+    dst_single, src_single, edge_mask_single, edges_per_single = _build_single_graph_no_nn(
+        positions_single, cutoff, model_natoms
+    )
+    dst_idx, src_idx, edge_mask = _replicate_graph(
+        dst_single, src_single, edge_mask_single, model_natoms, num_replicas, edges_per_single
+    )
+
+    _evaluate_initial_state(
+        model,
+        params,
+        positions_packed,
+        Z_packed,
+        dst_idx,
+        src_idx,
+        batch_segments,
+        edge_mask,
+        atom_mask,
+        model_natoms,
+        num_replicas,
+    )
+
+    energy_sum_fn, energy_full_fn = _create_energy_fn_multi(
+        model, params, Z_packed, atom_mask,
+        dst_idx, src_idx, edge_mask, batch_segments,
+        model_natoms, num_replicas,
+    )
+
+    key = jax.random.PRNGKey(key_seed)
+    velocities = _initialize_velocities_multi(
+        key, masses_packed, atom_mask, model_natoms, num_replicas, temperature
+    )
+
+    if ensemble == "nvt":
+        displacement, shift = space.free()
+        init_fn, step_fn = simulate.nvt_nose_hoover(
+            energy_sum_fn, shift, timestep_fs, 8.617333262e-5 * temperature
+        )
+
+        state = init_fn(key, positions_packed, masses_packed)
+        desired_momentum = velocities * masses_packed[:, None]
+        state = state.set(momentum=desired_momentum)
+
+        traj = []
+        completed_steps = 0
+        energies_history = []
+        try:
+            for step in range(steps):
+                state = step_fn(state)
+                traj.append(state.position.reshape(num_replicas, model_natoms, 3))
+                completed_steps = step + 1
+                if not jnp.all(jnp.isfinite(state.position)):
+                    print(f"\n⚠️  Non-finite position encountered at step {step + 1}. Aborting simulation loop.")
+                    break
+                if not jnp.all(jnp.isfinite(state.momentum)):
+                    print(f"\n⚠️  Non-finite momentum encountered at step {step + 1}. Aborting simulation loop.")
+                    break
+                if (step + 1) % max(1, steps // 10) == 0:
+                    pos_sample = np.asarray(state.position[:1])
+                    mom_sample = np.asarray(state.momentum[:1])
+                    print(
+                        f"Step {step + 1}/{steps}: "
+                        f"pos range [{pos_sample.min():.3e}, {pos_sample.max():.3e}] Å, "
+                        f"momentum range [{mom_sample.min():.3e}, {mom_sample.max():.3e}]"
+                    )
+                energies_step = np.asarray(
+                    jax.device_get(energy_full_fn(state.position))
+                )
+                energies_history.append(energies_step)
+        except KeyboardInterrupt:
+            print("\n⚠️  Simulation interrupted by user (Ctrl+C). Saving partial trajectory...")
+
+        if traj:
+            traj = np.asarray(traj)[:, :, :positions_single.shape[0], :]
+        else:
+            traj = np.empty((0, num_replicas, positions_single.shape[0], 3))
+
+        energies_history = np.asarray(energies_history)
+        if completed_steps < steps:
+            print(f"   Stored {completed_steps} / {steps} steps.")
+        total_energy = float(np.sum(energies_history[-1])) if energies_history.size else float("nan")
+        try:
+            invariant = float(
+                simulate.nvt_nose_hoover_invariant(
+                    energy_sum_fn, state, 8.617333262e-5 * temperature
+                )
+            )
+        except Exception:
+            invariant = float("nan")
+        return traj, state, total_energy, invariant, energies_history
+
+    # Ensemble == NVE
+    print("\n⚙️  Using velocity Verlet (NVE) integrator")
+    force_fn = jax.jit(jax.grad(energy_sum_fn))
+
+    positions_jax = jnp.asarray(positions_packed)
+    velocities_jax = jnp.asarray(velocities)
+    masses_jax = jnp.asarray(masses_packed)
+    mask_jax = jnp.asarray(atom_mask)
+    dt = timestep_fs
+
+    traj = []
+    completed_steps = 0
+    energies_history = []
+    masses_reshaped = masses_jax.reshape(num_replicas, model_natoms, 1)
+    mask_reshaped = mask_jax.reshape(num_replicas, model_natoms, 1)
+    mass_effective = masses_reshaped * mask_reshaped
+    total_mass = jnp.sum(mass_effective, axis=1, keepdims=True) + 1e-12
+    try:
+        for step in range(steps):
+            forces = -force_fn(positions_jax) * mask_jax[:, None]
+            accel = forces / (masses_jax[:, None] + 1e-12)
+            velocities_jax = velocities_jax + 0.5 * accel * dt
+            positions_jax = positions_jax + velocities_jax * dt
+            forces_new = -force_fn(positions_jax) * mask_jax[:, None]
+            accel_new = forces_new / (masses_jax[:, None] + 1e-12)
+            velocities_jax = velocities_jax + 0.5 * accel_new * dt
+
+            pos_reshaped = positions_jax.reshape(num_replicas, model_natoms, 3)
+            vel_reshaped = velocities_jax.reshape(num_replicas, model_natoms, 3)
+            com_pos = jnp.sum(pos_reshaped * mass_effective, axis=1, keepdims=True) / total_mass
+            com_vel = jnp.sum(vel_reshaped * mass_effective, axis=1, keepdims=True) / total_mass
+            pos_reshaped = pos_reshaped - com_pos
+            vel_reshaped = vel_reshaped - com_vel
+            positions_jax = pos_reshaped.reshape(-1, 3)
+            velocities_jax = vel_reshaped.reshape(-1, 3)
+
+            traj.append(
+                np.asarray(positions_jax).reshape(num_replicas, model_natoms, 3)
+            )
+            completed_steps = step + 1
+
+            if not jnp.all(jnp.isfinite(positions_jax)):
+                print(f"\n⚠️  Non-finite position encountered at step {step + 1}. Aborting simulation loop.")
+                break
+            if not jnp.all(jnp.isfinite(velocities_jax)):
+                print(f"\n⚠️  Non-finite velocity encountered at step {step + 1}. Aborting simulation loop.")
+                break
+            if (step + 1) % max(1, steps // 10) == 0:
+                sample_pos = np.asarray(positions_jax[:1])
+                sample_mom = np.asarray((velocities_jax * masses_jax[:, None])[:1])
+                print(
+                    f"Step {step + 1}/{steps}: "
+                    f"pos range [{sample_pos.min():.3e}, {sample_pos.max():.3e}] Å, "
+                    f"momentum range [{sample_mom.min():.3e}, {sample_mom.max():.3e}]"
+                )
+            energies_step = np.asarray(
+                jax.device_get(energy_full_fn(positions_jax))
+            )
+            energies_history.append(energies_step)
+    except KeyboardInterrupt:
+        print("\n⚠️  Simulation interrupted by user (Ctrl+C). Saving partial trajectory...")
+
+    if traj:
+        traj = np.asarray(traj)[:, :, :positions_single.shape[0], :]
+    else:
+        traj = np.empty((0, num_replicas, positions_single.shape[0], 3))
+
+    energies_history = np.asarray(energies_history)
+    if completed_steps < steps:
+        print(f"   Stored {completed_steps} / {steps} steps.")
+
+    total_energy = float(np.sum(energies_history[-1])) if energies_history.size else float("nan")
+    state = SimpleNamespace(
+        position=positions_jax,
+        momentum=velocities_jax * masses_jax[:, None],
+    )
+    invariant = float("nan")
+    return traj, state, total_energy, invariant, energies_history
 #!/usr/bin/env python3
 """
 Ultra-Fast Molecular Dynamics with JAX MD
@@ -51,7 +448,7 @@ try:
 except ImportError:
     HAS_MATPLOTLIB = False
 
-from trainer import JointPhysNetDCMNet
+from trainer import JointPhysNetDCMNet, JointPhysNetNonEquivariant
 import ase.data
 
 
@@ -61,7 +458,7 @@ def create_model_energy_fn(model, params, atomic_numbers_static, cutoff=10.0, n_
     
     Parameters
     ----------
-    model : JointPhysNetDCMNet
+    model : JointPhysNetDCMNet or JointPhysNetNonEquivariant or JointPhysNetNonEquivariant
         Trained model
     params : dict
         Model parameters
@@ -332,7 +729,7 @@ def run_jaxmd_simulation(
     
     Parameters
     ----------
-    model : JointPhysNetDCMNet
+    model : JointPhysNetDCMNet or JointPhysNetNonEquivariant
         Trained model
     params : dict
         Model parameters
@@ -431,7 +828,11 @@ def run_jaxmd_simulation(
     velocities = initialize_velocities(subkey, masses, temperature)
     
     # Remove angular momentum for isolated molecule (NVE should have L=0)
-    velocities, L_initial, L_final = remove_angular_momentum(positions, velocities, masses)
+    velocities_np = np.asarray(velocities)
+    positions_np = np.asarray(positions)
+    masses_np = np.asarray(masses)
+    velocities_np, L_initial, L_final = remove_angular_momentum(positions_np, velocities_np, masses_np)
+    velocities = jnp.asarray(velocities_np)
     print(f"\n✅ Removed angular momentum:")
     print(f"  Initial L: {L_initial} (amu·Å²/fs)")
     print(f"  Final L: {L_final} (amu·Å²/fs)")
@@ -988,6 +1389,13 @@ def main():
                        help='NVE equilibration steps before NVT (default: 2000)')
     parser.add_argument('--seed', type=int, default=42,
                        help='Random seed')
+    parser.add_argument('--multi-replicas', type=int, default=1,
+                        help='Run batched simulation with this many independent replicas (default: 1)')
+    parser.add_argument('--multi-ensemble', type=str, default='nvt',
+                        choices=['nvt', 'nve'],
+                        help='Ensemble for multi-replica mode (default: nvt)')
+    parser.add_argument('--multi-translation', type=float, default=25.0,
+                        help='Translation offset (Å) between replicas to avoid interactions')
     
     args = parser.parse_args()
     
@@ -1005,12 +1413,31 @@ def main():
     
     print(f"✅ Loaded {sum(x.size for x in jax.tree_util.tree_leaves(params)):,} parameters")
     
-    # Create model
-    model = JointPhysNetDCMNet(
-        physnet_config=config['physnet_config'],
-        dcmnet_config=config['dcmnet_config'],
-        mix_coulomb_energy=config.get('mix_coulomb_energy', False)
-    )
+    # Create model - detect type from config
+    physnet_config = config['physnet_config']
+    mix_coulomb_energy = config.get('mix_coulomb_energy', False)
+    
+    if 'dcmnet_config' in config:
+        # DCMNet (equivariant) model
+        print("   Model type: JointPhysNetDCMNet (equivariant)")
+        model = JointPhysNetDCMNet(
+            physnet_config=physnet_config,
+            dcmnet_config=config['dcmnet_config'],
+            mix_coulomb_energy=mix_coulomb_energy
+        )
+    elif 'noneq_config' in config:
+        # Non-equivariant model
+        print("   Model type: JointPhysNetNonEquivariant (non-equivariant)")
+        model = JointPhysNetNonEquivariant(
+            physnet_config=physnet_config,
+            noneq_config=config['noneq_config'],
+            mix_coulomb_energy=mix_coulomb_energy
+        )
+    else:
+        raise ValueError(
+            "Unknown model type: config must contain either 'dcmnet_config' or 'noneq_config'. "
+            f"Found keys: {list(config.keys())}"
+        )
     
     # Initialize system
     print(f"\n2. Initializing {args.molecule} system...")
@@ -1022,33 +1449,76 @@ def main():
     print(f"   Box size: {box[0,0]:.1f} Å")
     
     # Run MD
-    print(f"\n3. Running JAX MD simulation...")
-    results = run_jaxmd_simulation(
-        model=model,
-        params=params,
-        positions=positions,
-        atomic_numbers=atomic_numbers,
-        masses=masses,
-        box=box,
-        ensemble=args.ensemble,
-        integrator=args.integrator,
-        temperature=args.temperature,
-        timestep=args.timestep,
-        nsteps=args.nsteps,
-        save_interval=args.save_interval,
-        cutoff=args.cutoff,
-        friction=args.friction,
-        tau_t=args.tau_t,
-        equilibration_steps=args.equilibration_steps,
-        output_dir=args.output_dir,
-        seed=args.seed,
-    )
+    if args.multi_replicas > 1:
+        print(f"\n3. Running batched multi-copy simulation "
+              f"({args.multi_replicas} replicas, {args.multi_ensemble.upper()} ensemble)...")
+        args.output_dir.mkdir(parents=True, exist_ok=True)
+        traj, state, total_energy, invariant, energies_history = run_multi_copy_dynamics(
+            model=model,
+            params=params,
+            positions_single=positions,
+            atomic_numbers_single=atomic_numbers,
+            masses_single=masses,
+            num_replicas=args.multi_replicas,
+            timestep_fs=args.timestep,
+            temperature=args.temperature,
+            cutoff=args.cutoff,
+            steps=args.nsteps,
+            translation=args.multi_translation,
+            key_seed=args.seed,
+            ensemble=args.multi_ensemble,
+        )
+        traj_path = args.output_dir / f'multi_copy_traj_{args.multi_replicas}x.npz'
+        np.savez(traj_path, positions=traj)
+        metadata_path = args.output_dir / 'multi_copy_metadata.npz'
+        metadata = {
+            'atomic_numbers': np.asarray(atomic_numbers, dtype=np.int32),
+            'masses': np.asarray(masses, dtype=np.float32),
+            'num_replicas': args.multi_replicas,
+            'cutoff': args.cutoff,
+            'timestep_fs': args.timestep,
+            'temperature': args.temperature,
+            'translation': args.multi_translation,
+            'multi_ensemble': args.multi_ensemble,
+            'total_energy': total_energy,
+            'thermostat_invariant': invariant,
+            'energies': energies_history,
+        }
+        np.savez(metadata_path, **metadata)
+        print(f"✅ Saved stacked trajectory: {traj_path}")
+        print(f"   Shape: {traj.shape} -> (steps, replicas, atoms, 3)")
+        print(f"   Final total energy: {total_energy:.6f} eV")
+        if not np.isnan(invariant):
+            print(f"   Nose–Hoover invariant: {invariant}")
+        results = None
+    else:
+        print(f"\n3. Running JAX MD simulation...")
+        results = run_jaxmd_simulation(
+            model=model,
+            params=params,
+            positions=positions,
+            atomic_numbers=atomic_numbers,
+            masses=masses,
+            box=box,
+            ensemble=args.ensemble,
+            integrator=args.integrator,
+            temperature=args.temperature,
+            timestep=args.timestep,
+            nsteps=args.nsteps,
+            save_interval=args.save_interval,
+            cutoff=args.cutoff,
+            friction=args.friction,
+            tau_t=args.tau_t,
+            equilibration_steps=args.equilibration_steps,
+            output_dir=args.output_dir,
+            seed=args.seed,
+        )
     
     print(f"\n{'='*70}")
     print("✅ SIMULATION COMPLETE")
     print(f"{'='*70}")
     print(f"\nOutputs saved to: {args.output_dir}")
-    print(f"\n🚀 JAX MD is {10}-{100}× faster than ASE!")
+
 
 
 if __name__ == '__main__':

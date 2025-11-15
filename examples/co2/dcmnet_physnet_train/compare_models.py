@@ -30,7 +30,7 @@ sys.path.insert(0, str(repo_root.resolve()))
 
 import jax
 import jax.numpy as jnp
-from scipy.spatial.transform import Rotation
+from e3x import so3
 
 # Import training script components
 from trainer import (
@@ -90,7 +90,12 @@ def apply_rotation(positions: np.ndarray, rotation_matrix: np.ndarray) -> np.nda
     np.ndarray
         Rotated positions
     """
-    return np.einsum('ij,snj->sni', rotation_matrix, positions)
+    positions_jax = jnp.asarray(positions)
+    rotation_jax = jnp.asarray(rotation_matrix, dtype=positions_jax.dtype)
+    rotated = jnp.einsum('ij,...j->...i', rotation_jax, positions_jax)
+    if isinstance(positions, np.ndarray):
+        return np.asarray(rotated)
+    return rotated
 
 
 def apply_translation(positions: np.ndarray, translation: np.ndarray) -> np.ndarray:
@@ -109,12 +114,47 @@ def apply_translation(positions: np.ndarray, translation: np.ndarray) -> np.ndar
     np.ndarray
         Translated positions
     """
-    return positions + translation[None, None, :]
+    positions_jax = jnp.asarray(positions)
+    translation_jax = jnp.asarray(translation, dtype=positions_jax.dtype)
+    translated = positions_jax + translation_jax
+    if isinstance(positions, np.ndarray):
+        return np.asarray(translated)
+    return translated
 
 
-def generate_random_rotation() -> np.ndarray:
-    """Generate a random 3D rotation matrix."""
-    return Rotation.random().as_matrix()
+def generate_random_rotation(key: jax.Array) -> jnp.ndarray:
+    """Generate a random 3D rotation matrix using e3x."""
+    return so3.random_rotation(key)
+
+
+def build_neighbor_graph(
+    R: np.ndarray,
+    N: np.ndarray,
+    cutoff: float = 10.0,
+) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    """
+    Construct the neighbour graph for a single sample.
+
+    Returns dst/src indices along with batch metadata reused across rigid transforms.
+    """
+    n_atoms = int(N[0])
+    positions = np.asarray(R[0, :n_atoms])
+
+    # Pairwise distances (n_atoms, n_atoms)
+    diff = positions[:, None, :] - positions[None, :, :]
+    distances = np.linalg.norm(diff, axis=-1)
+
+    mask = (distances < cutoff) & (~np.eye(n_atoms, dtype=bool))
+    dst_idx, src_idx = np.where(mask)
+
+    natoms_padded = R.shape[1]
+    dst_idx = jnp.asarray(dst_idx, dtype=jnp.int32)
+    src_idx = jnp.asarray(src_idx, dtype=jnp.int32)
+    batch_segments = jnp.zeros(natoms_padded, dtype=jnp.int32)
+    batch_mask = jnp.ones(1)
+    atom_mask = (jnp.arange(natoms_padded) < n_atoms).astype(jnp.float32)
+
+    return dst_idx, src_idx, batch_segments, batch_mask, atom_mask
 
 
 def test_equivariance(
@@ -146,6 +186,7 @@ def test_equivariance(
         Equivariance error metrics
     """
     rng = np.random.RandomState(seed)
+    jax_key = jax.random.PRNGKey(seed)
     
     # Select test samples
     n_available = len(test_data['E'])
@@ -155,10 +196,18 @@ def test_equivariance(
     rotation_errors_esp = []
     translation_errors_dipole = []
     translation_errors_esp = []
+    energy_errors = []
+    forces_errors = []
+    dipole_errors = []
+    esp_errors = []
     
     print(f"\n{'='*70}")
     print(f"Testing Equivariance on {len(test_indices)} samples")
     print(f"{'='*70}\n")
+
+    all_output_orig = []
+    all_output_rot = []
+    all_output_trans = []
     
     for idx in test_indices:
         # Extract single sample
@@ -166,47 +215,77 @@ def test_equivariance(
         Z = test_data['Z'][idx:idx+1]  # (1, natoms)
         N = test_data['N'][idx:idx+1]  # (1,)
         vdw_surface = test_data['vdw_surface'][idx:idx+1]  # (1, ngrid, 3)
+        n_atoms = int(N[0])
         
+        graph = build_neighbor_graph(R, N)
+
         # Original prediction
-        output_orig = predict_single(model, params, R, Z, N, vdw_surface)
+        output_orig = predict_single(model, params, R, Z, N, vdw_surface, graph=graph)
         
         # Test rotation
-        rot_matrix = generate_random_rotation()
+        jax_key, rot_key, trans_key = jax.random.split(jax_key, 3)
+        rot_matrix = generate_random_rotation(rot_key)
         R_rot = apply_rotation(R, rot_matrix)
         vdw_rot = apply_rotation(vdw_surface, rot_matrix)
         
-        output_rot = predict_single(model, params, R_rot, Z, N, vdw_rot)
+        output_rot = predict_single(model, params, R_rot, Z, N, vdw_rot, graph=graph)
         
         # For equivariant model: rotated output should equal rotation of original output
         # Dipole should rotate
-        dipole_orig = output_orig['dipole']
-        dipole_rot = output_rot['dipole']
-        dipole_expected = np.dot(rot_matrix, dipole_orig)
-        rotation_error_dipole = np.linalg.norm(dipole_rot - dipole_expected)
-        rotation_errors_dipole.append(rotation_error_dipole)
+        dipole_orig = jnp.asarray(output_orig['dipole'])
+        dipole_rot = jnp.asarray(output_rot['dipole'])
+        dipole_expected = jnp.einsum('ij,j->i', rot_matrix, dipole_orig)
+        rotation_error_dipole = jnp.linalg.norm(dipole_rot - dipole_expected)
+        rotation_errors_dipole.append(float(rotation_error_dipole))
         
         # ESP should be identical at rotated grid points
-        esp_orig = output_orig['esp']
-        esp_rot = output_rot['esp']
-        rotation_error_esp = np.mean(np.abs(esp_rot - esp_orig))
-        rotation_errors_esp.append(rotation_error_esp)
+        esp_orig = jnp.asarray(output_orig['esp'])
+        esp_rot = jnp.asarray(output_rot['esp'])
+        rotation_error_esp = jnp.mean(jnp.abs(esp_rot - esp_orig))
+        rotation_errors_esp.append(float(rotation_error_esp))
         
         # Test translation (both models should be translation invariant)
-        translation = rng.randn(3) * 5.0  # Random translation (5 Å scale)
+        translation = 5.0 * jax.random.normal(trans_key, (3,), dtype=rot_matrix.dtype)
         R_trans = apply_translation(R, translation)
         vdw_trans = apply_translation(vdw_surface, translation)
         
-        output_trans = predict_single(model, params, R_trans, Z, N, vdw_trans)
+        output_trans = predict_single(model, params, R_trans, Z, N, vdw_trans, graph=graph)
         
         # Dipole should be identical (molecule-centered)
-        dipole_trans = output_trans['dipole']
-        translation_error_dipole = np.linalg.norm(dipole_trans - dipole_orig)
-        translation_errors_dipole.append(translation_error_dipole)
+        dipole_trans = jnp.asarray(output_trans['dipole'])
+        translation_error_dipole = jnp.linalg.norm(dipole_trans - dipole_orig)
+        translation_errors_dipole.append(float(translation_error_dipole))
         
         # ESP should be identical
-        esp_trans = output_trans['esp']
-        translation_error_esp = np.mean(np.abs(esp_trans - esp_orig))
-        translation_errors_esp.append(translation_error_esp)
+        esp_trans = jnp.asarray(output_trans['esp'])
+        translation_error_esp = jnp.mean(jnp.abs(esp_trans - esp_orig))
+        translation_errors_esp.append(float(translation_error_esp))
+
+        # Compare against reference quantities
+        true_energy = jnp.asarray(test_data['E'][idx])
+        energy_error = jnp.abs(jnp.asarray(output_orig['energy']) - true_energy)
+        energy_errors.append(float(energy_error))
+
+        true_dipole = jnp.asarray(test_data['Dxyz'][idx])
+        dipole_mae = jnp.mean(jnp.abs(dipole_orig - true_dipole))
+        dipole_errors.append(float(dipole_mae))
+
+        true_forces = jnp.asarray(test_data['F'][idx])
+        if true_forces.ndim == 1:
+            true_forces = true_forces.reshape(-1, 3)
+        forces_pred = jnp.asarray(output_orig['forces'])
+        forces_mae = jnp.mean(
+            jnp.abs(forces_pred[:n_atoms] - true_forces[:n_atoms])
+        )
+        forces_errors.append(float(forces_mae))
+
+        true_esp = jnp.asarray(test_data['esp'][idx])
+        esp_mae = jnp.mean(jnp.abs(esp_orig - true_esp))
+        esp_errors.append(float(esp_mae))
+
+        all_output_orig.append(output_orig)
+        all_output_rot.append(output_rot)
+        all_output_trans.append(output_trans)
     
     results = {
         'rotation_error_dipole': float(np.mean(rotation_errors_dipole)),
@@ -217,6 +296,17 @@ def test_equivariance(
         'rotation_error_esp_std': float(np.std(rotation_errors_esp)),
         'translation_error_dipole_std': float(np.std(translation_errors_dipole)),
         'translation_error_esp_std': float(np.std(translation_errors_esp)),
+        'energy_mae': float(np.mean(energy_errors)),
+        'forces_mae': float(np.mean(forces_errors)),
+        'dipole_mae': float(np.mean(dipole_errors)),
+        'esp_mae': float(np.mean(esp_errors)),
+        'energy_mae_std': float(np.std(energy_errors)),
+        'forces_mae_std': float(np.std(forces_errors)),
+        'dipole_mae_std': float(np.std(dipole_errors)),
+        'esp_mae_std': float(np.std(esp_errors)),
+        'all_output_orig': all_output_orig,
+        'all_output_rot': all_output_rot,
+        'all_output_trans': all_output_trans,
     }
     
     print(f"Rotation Equivariance:")
@@ -225,6 +315,11 @@ def test_equivariance(
     print(f"\nTranslation Invariance:")
     print(f"  Dipole error: {results['translation_error_dipole']:.6f} ± {results['translation_error_dipole_std']:.6f} e·Å")
     print(f"  ESP error:    {results['translation_error_esp']:.6f} ± {results['translation_error_esp_std']:.6f} Ha/e")
+    print(f"\nReference Property Errors:")
+    print(f"  Energy MAE: {results['energy_mae']:.6f} ± {results['energy_mae_std']:.6f} eV")
+    print(f"  Forces MAE: {results['forces_mae']:.6f} ± {results['forces_mae_std']:.6f} eV/Å")
+    print(f"  Dipole MAE: {results['dipole_mae']:.6f} ± {results['dipole_mae_std']:.6f} e·Å")
+    print(f"  ESP MAE:    {results['esp_mae']:.6f} ± {results['esp_mae_std']:.6f} Ha/e")
     
     return results
 
@@ -236,6 +331,7 @@ def predict_single(
     Z: np.ndarray,
     N: np.ndarray,
     vdw_surface: np.ndarray,
+    graph: Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray] | None = None,
 ) -> Dict[str, np.ndarray]:
     """
     Make prediction for a single sample.
@@ -269,27 +365,13 @@ def predict_single(
     positions_flat = R.reshape(-1, 3)
     atomic_numbers_flat = Z.reshape(-1)
     
-    # Build edge list
-    cutoff = 10.0  # Use max cutoff
-    n_atoms = int(N[0])
-    dst_idx_list = []
-    src_idx_list = []
-    
-    for i in range(n_atoms):
-        for j in range(n_atoms):
-            if i != j:
-                dist = np.linalg.norm(R[0, i] - R[0, j])
-                if dist < cutoff:
-                    dst_idx_list.append(i)
-                    src_idx_list.append(j)
-    
-    dst_idx = jnp.array(dst_idx_list, dtype=jnp.int32)
-    src_idx = jnp.array(src_idx_list, dtype=jnp.int32)
-    
-    # Batch segments and masks
-    batch_segments = jnp.zeros(natoms, dtype=jnp.int32)
-    batch_mask = jnp.ones(batch_size)
-    atom_mask = (jnp.arange(natoms) < n_atoms).astype(jnp.float32)
+    if graph is None:
+        graph = build_neighbor_graph(R, N)
+
+    dst_idx, src_idx, batch_segments, batch_mask, atom_mask = graph
+    batch_segments = jnp.asarray(batch_segments)
+    batch_mask = jnp.asarray(batch_mask)
+    atom_mask = jnp.asarray(atom_mask)
     
     # Forward pass
     output = model.apply(
@@ -316,10 +398,14 @@ def predict_single(
         atom_mask,
     )
     
+    forces = output['forces'].reshape(batch_size, natoms, 3)
+
     return {
         'dipole': np.array(output['dipoles_dcmnet'][0]),
         'esp': np.array(esp_pred),
+        'esp_points': np.array(vdw_surface[0]),
         'energy': np.array(output['energy'][0]),
+        'forces': np.array(forces[0]),
     }
 
 
