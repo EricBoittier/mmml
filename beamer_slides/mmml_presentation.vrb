@@ -1,0 +1,20 @@
+\frametitle{Basic Training}
+\textbf{Train a PhysNet model for energies, forces, and dipoles}
+
+\begin{lstlisting}[style=bashstyle]
+# Simple training with auto-detection
+python -m mmml.cli.make_training \
+    --data splits/data_train.npz \
+    --ckpt_dir checkpoints/glycol_run1 \
+    --n_train 4000 \
+    --n_valid 500 \
+    --num_epochs 100 \
+    --batch_size 16
+\end{lstlisting}
+
+\textbf{Auto-detected:}
+\begin{itemize}
+    \item Number of atoms (from dataset)
+    \item Padding removal (if needed)
+    \item Checkpoint path (made absolute)
+\end{itemize}
