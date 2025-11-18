@@ -322,19 +322,14 @@ def create_hybrid_fitting_factory(
         # IMPORTANT: For ML optimization, we need to use model.apply directly with updated params
         # The calculator factory uses fixed params, so we bypass it when optimizing ML
         # For LJ-only optimization with precomputed ML, we skip ML computation entirely
-        # For ML-only optimization, we skip ML here (it's computed separately with updated params)
+        # For ML-only optimization, we compute ML with updated params (MM is precomputed)
         try:
             # Skip ML if optimize_mode is "lj_only" (ML will be precomputed and added separately)
-            # or "ml_only" (ML is computed separately with updated params in the loss function)
             if optimize_mode == "lj_only":
                 # For LJ-only, we only compute MM contributions (ML is precomputed)
                 ml_energy = jnp.array(0.0)
                 ml_forces = jnp.zeros_like(R)
-            elif optimize_mode == "ml_only":
-                # For ML-only, we only compute MM contributions here (ML is computed separately)
-                ml_energy = jnp.array(0.0)
-                ml_forces = jnp.zeros_like(R)
-            elif optimize_mode in ["both"] and model is not None and hasattr(model, 'apply'):
+            elif optimize_mode in ["ml_only", "both"] and model is not None and hasattr(model, 'apply'):
                 # For ML optimization, use model.apply directly with updated parameters
                 # We need to prepare batches in the same format as the calculator expects
                 n_monomers_val = args.n_monomers if args and hasattr(args, 'n_monomers') else 2
