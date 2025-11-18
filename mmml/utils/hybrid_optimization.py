@@ -232,91 +232,91 @@ def create_hybrid_fitting_factory(
             ep_scale = jnp.ones(len(atc_epsilons))
             sig_scale = jnp.ones(len(atc_rmins))
         
-        # Compute MM contributions with LJ parameters
-        at_ep = -1 * jnp.abs(jnp.array(atc_epsilons)) * ep_scale
-        at_rm = jnp.array(atc_rmins) * sig_scale
-        at_q = jnp.array(atc_qs)
-        
-        # Validate at_codes indices are within bounds
-        # at_codes should already be mapped to parameter indices (0-indexed)
-        # Also ensure we don't have empty arrays
-        if len(at_codes) == 0:
-            # Return zero energy/forces if no atoms
-            return jnp.array(0.0), jnp.zeros_like(R)
-        
-        # Ensure parameter arrays are not empty
-        if len(at_ep) == 0 or len(at_rm) == 0 or len(at_q) == 0:
-            return jnp.array(0.0), jnp.zeros_like(R)
-        
-        # Convert at_codes to JAX array and validate
-        # at_codes should already be 0-indexed and mapped to parameter indices
-        at_codes_arr = np.array(at_codes)
-        
-        # Clamp at_codes to valid range (0 to len-1)
-        # This ensures we don't have out-of-bounds indices
-        at_codes_safe = jnp.clip(jnp.array(at_codes_arr), 0, len(at_ep) - 1)
-        
-        rmins_per_system = jnp.take(at_rm, at_codes_safe)
-        epsilons_per_system = jnp.take(at_ep, at_codes_safe)
-        q_per_system = jnp.take(at_q, at_codes_safe)
-        
-        # Validate pair indices are within bounds
-        n_atoms = len(R)
-        if len(pair_idx_atom_atom) == 0:
-            return jnp.array(0.0), jnp.zeros_like(R)
-        
-        # Clamp pair indices to valid range
-        pair_idx_safe = jnp.clip(pair_idx_atom_atom, 0, n_atoms - 1)
-        
-        rm_a = jnp.take(rmins_per_system, pair_idx_safe[:, 0])
-        rm_b = jnp.take(rmins_per_system, pair_idx_safe[:, 1])
-        ep_a = jnp.take(epsilons_per_system, pair_idx_safe[:, 0])
-        ep_b = jnp.take(epsilons_per_system, pair_idx_safe[:, 1])
-        q_a = jnp.take(q_per_system, pair_idx_safe[:, 0])
-        q_b = jnp.take(q_per_system, pair_idx_safe[:, 1])
-        
-        pair_rm = (rm_a + rm_b)
-        pair_ep = (ep_a * ep_b) ** 0.5
-        pair_qq = q_a * q_b
-        
-        displacements = R[pair_idx_safe[:, 0]] - R[pair_idx_safe[:, 1]]
-        distances = jnp.linalg.norm(displacements, axis=1)
-        
-        def lennard_jones(r, sig, ep):
-            r6 = (sig / r) ** 6
-            return ep * (r6 ** 2 - 2 * r6)
-        
-        coulombs_constant = 3.32063711e2
-        coulomb_epsilon = 1e-10
-        def coulomb(r, qq, constant=coulombs_constant, eps=coulomb_epsilon):
-            r_safe = jnp.maximum(r, eps)
-            return -constant * qq / r_safe
-        
-        vdw_energies = lennard_jones(distances, pair_rm, pair_ep)
-        coulomb_energies = coulomb(distances, pair_qq)
-        mm_pair_energies = vdw_energies + coulomb_energies
-        mm_energy = mm_pair_energies.sum()
-        
-        if hasattr(mm_energy, 'shape') and mm_energy.shape != ():
-            mm_energy = jnp.sum(mm_energy) if mm_energy.size > 0 else jnp.array(0.0)
-        
-        def mm_energy_fn(R_pos):
-            disp = R_pos[pair_idx_safe[:, 0]] - R_pos[pair_idx_safe[:, 1]]
-            dist = jnp.linalg.norm(disp, axis=1)
-            vdw = lennard_jones(dist, pair_rm, pair_ep)
-            coul = coulomb(dist, pair_qq)
-            energy_sum = (vdw + coul).sum()
-            if hasattr(energy_sum, 'shape') and energy_sum.shape != ():
-                energy_sum = jnp.sum(energy_sum)
-            return energy_sum
-        
-        mm_forces = -jax.grad(mm_energy_fn)(R)
-        
-        # Skip MM if optimize_mode is "ml_only" (MM will be precomputed and added separately)
+        # Skip MM computation if optimize_mode is "ml_only" (MM will be precomputed and added separately)
         if optimize_mode == "ml_only":
             # For ML-only, we only compute ML contributions (MM is precomputed)
             mm_energy = jnp.array(0.0)
             mm_forces = jnp.zeros_like(R)
+        else:
+            # Compute MM contributions with LJ parameters
+            at_ep = -1 * jnp.abs(jnp.array(atc_epsilons)) * ep_scale
+            at_rm = jnp.array(atc_rmins) * sig_scale
+            at_q = jnp.array(atc_qs)
+            
+            # Validate at_codes indices are within bounds
+            # at_codes should already be mapped to parameter indices (0-indexed)
+            # Also ensure we don't have empty arrays
+            if len(at_codes) == 0:
+                # Return zero energy/forces if no atoms
+                return jnp.array(0.0), jnp.zeros_like(R)
+            
+            # Ensure parameter arrays are not empty
+            if len(at_ep) == 0 or len(at_rm) == 0 or len(at_q) == 0:
+                return jnp.array(0.0), jnp.zeros_like(R)
+            
+            # Convert at_codes to JAX array and validate
+            # at_codes should already be 0-indexed and mapped to parameter indices
+            at_codes_arr = np.array(at_codes)
+            
+            # Clamp at_codes to valid range (0 to len-1)
+            # This ensures we don't have out-of-bounds indices
+            at_codes_safe = jnp.clip(jnp.array(at_codes_arr), 0, len(at_ep) - 1)
+            
+            rmins_per_system = jnp.take(at_rm, at_codes_safe)
+            epsilons_per_system = jnp.take(at_ep, at_codes_safe)
+            q_per_system = jnp.take(at_q, at_codes_safe)
+            
+            # Validate pair indices are within bounds
+            n_atoms = len(R)
+            if len(pair_idx_atom_atom) == 0:
+                return jnp.array(0.0), jnp.zeros_like(R)
+            
+            # Clamp pair indices to valid range
+            pair_idx_safe = jnp.clip(pair_idx_atom_atom, 0, n_atoms - 1)
+            
+            rm_a = jnp.take(rmins_per_system, pair_idx_safe[:, 0])
+            rm_b = jnp.take(rmins_per_system, pair_idx_safe[:, 1])
+            ep_a = jnp.take(epsilons_per_system, pair_idx_safe[:, 0])
+            ep_b = jnp.take(epsilons_per_system, pair_idx_safe[:, 1])
+            q_a = jnp.take(q_per_system, pair_idx_safe[:, 0])
+            q_b = jnp.take(q_per_system, pair_idx_safe[:, 1])
+            
+            pair_rm = (rm_a + rm_b)
+            pair_ep = (ep_a * ep_b) ** 0.5
+            pair_qq = q_a * q_b
+            
+            displacements = R[pair_idx_safe[:, 0]] - R[pair_idx_safe[:, 1]]
+            distances = jnp.linalg.norm(displacements, axis=1)
+            
+            def lennard_jones(r, sig, ep):
+                r6 = (sig / r) ** 6
+                return ep * (r6 ** 2 - 2 * r6)
+            
+            coulombs_constant = 3.32063711e2
+            coulomb_epsilon = 1e-10
+            def coulomb(r, qq, constant=coulombs_constant, eps=coulomb_epsilon):
+                r_safe = jnp.maximum(r, eps)
+                return -constant * qq / r_safe
+            
+            vdw_energies = lennard_jones(distances, pair_rm, pair_ep)
+            coulomb_energies = coulomb(distances, pair_qq)
+            mm_pair_energies = vdw_energies + coulomb_energies
+            mm_energy = mm_pair_energies.sum()
+            
+            if hasattr(mm_energy, 'shape') and mm_energy.shape != ():
+                mm_energy = jnp.sum(mm_energy) if mm_energy.size > 0 else jnp.array(0.0)
+            
+            def mm_energy_fn(R_pos):
+                disp = R_pos[pair_idx_safe[:, 0]] - R_pos[pair_idx_safe[:, 1]]
+                dist = jnp.linalg.norm(disp, axis=1)
+                vdw = lennard_jones(dist, pair_rm, pair_ep)
+                coul = coulomb(dist, pair_qq)
+                energy_sum = (vdw + coul).sum()
+                if hasattr(energy_sum, 'shape') and energy_sum.shape != ():
+                    energy_sum = jnp.sum(energy_sum)
+                return energy_sum
+            
+            mm_forces = -jax.grad(mm_energy_fn)(R)
         
         # Compute ML contributions using model
         # IMPORTANT: For ML optimization, we need to use model.apply directly with updated params
