@@ -360,8 +360,8 @@ def fit_hybrid_potential_to_training_data_jax(
     atc_qs: np.ndarray,
     at_codes: np.ndarray,
     pair_idx_atom_atom: np.ndarray,
-    cutoff_params,
-    args,
+    cutoff_params=None,
+    args=None,
     optimize_mode: str = "lj_only",  # "ml_only", "lj_only", or "both"
     initial_ep_scale: Optional[np.ndarray] = None,
     initial_sig_scale: Optional[np.ndarray] = None,
@@ -371,6 +371,8 @@ def fit_hybrid_potential_to_training_data_jax(
     learning_rate: float = 0.01,
     n_iterations: int = 100,
     verbose: bool = True,
+    n_monomers: Optional[int] = None,
+    skip_ml_dimers: bool = False,
 ) -> Dict[str, Any]:
     """
     Fit hybrid potential parameters to training data using JAX optimization.
@@ -390,9 +392,11 @@ def fit_hybrid_potential_to_training_data_jax(
         atc_qs: Charges for each atom type (numpy array)
         at_codes: Atom type codes for each atom in the system (numpy array)
         pair_idx_atom_atom: Pair indices for atom-atom interactions (numpy array)
-        cutoff_params: Cutoff parameters
-        args: Arguments object (for calculator factory calls)
+        cutoff_params: Cutoff parameters (optional, can be None)
+        args: Arguments object (optional, for calculator factory calls)
         optimize_mode: "ml_only", "lj_only", or "both"
+        n_monomers: Number of monomers (optional, extracted from args if provided)
+        skip_ml_dimers: Whether to skip ML dimers (optional, extracted from args if provided)
         initial_ep_scale: Initial epsilon scaling factors (array, defaults to ones)
         initial_sig_scale: Initial sigma scaling factors (array, defaults to ones)
         n_samples: Number of training samples to use (if None, uses all)
@@ -441,6 +445,22 @@ def fit_hybrid_potential_to_training_data_jax(
         params["ep_scale"] = initial_ep_scale
         params["sig_scale"] = initial_sig_scale
     
+    # Extract n_monomers and skip_ml_dimers from args if provided, otherwise use defaults
+    if args is not None:
+        n_monomers_val = getattr(args, 'n_monomers', n_monomers) if n_monomers is None else n_monomers
+        skip_ml_dimers_val = getattr(args, 'skip_ml_dimers', skip_ml_dimers) if hasattr(args, 'skip_ml_dimers') else skip_ml_dimers
+    else:
+        n_monomers_val = n_monomers if n_monomers is not None else 2
+        skip_ml_dimers_val = skip_ml_dimers
+    
+    # Create a minimal args-like object if needed
+    class MinimalArgs:
+        def __init__(self, n_monomers, skip_ml_dimers):
+            self.n_monomers = n_monomers
+            self.skip_ml_dimers = skip_ml_dimers
+    
+    args_for_factory = args if args is not None else MinimalArgs(n_monomers_val, skip_ml_dimers_val)
+    
     # Create the differentiable factory
     compute_energy_forces = create_hybrid_fitting_factory(
         base_calculator_factory,
@@ -453,7 +473,7 @@ def fit_hybrid_potential_to_training_data_jax(
         pair_idx_atom_atom_jax,
         cutoff_params,
         optimize_mode=optimize_mode,
-        args=args,
+        args=args_for_factory,
     )
     
     # Select training samples
@@ -746,8 +766,8 @@ def fit_lj_parameters_to_training_data_jax(
     atc_qs: np.ndarray,
     at_codes: np.ndarray,
     pair_idx_atom_atom: np.ndarray,
-    cutoff_params,
-    args,
+    cutoff_params=None,
+    args=None,
     initial_ep_scale: Optional[np.ndarray] = None,
     initial_sig_scale: Optional[np.ndarray] = None,
     n_samples: Optional[int] = None,
@@ -756,6 +776,8 @@ def fit_lj_parameters_to_training_data_jax(
     learning_rate: float = 0.01,
     n_iterations: int = 100,
     verbose: bool = True,
+    n_monomers: Optional[int] = None,
+    skip_ml_dimers: bool = False,
 ) -> Tuple[jnp.ndarray, jnp.ndarray, List[float]]:
     """
     Fit LJ parameters (ep_scale, sig_scale) to training data using JAX optimization.
@@ -793,6 +815,8 @@ def fit_lj_parameters_to_training_data_jax(
         learning_rate=learning_rate,
         n_iterations=n_iterations,
         verbose=verbose,
+        n_monomers=n_monomers,
+        skip_ml_dimers=skip_ml_dimers,
     )
     
     return result["ep_scale"], result["sig_scale"], result["loss_history"]
