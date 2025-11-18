@@ -91,6 +91,16 @@ def reorder_atoms_to_match_pycharmm(
     
     print(f"  Trying {len(candidate_orderings)} different atom orderings...")
     
+    # IMPORTANT: Set initial coordinates from batch data first
+    # PyCHARMM may have undefined coordinates (9999.0) that need to be set before computing energies
+    try:
+        xyz_initial = pd.DataFrame(R, columns=["x", "y", "z"])
+        coor.set_positions(xyz_initial)
+        print(f"  Set initial coordinates from batch data")
+    except Exception as e:
+        print(f"  Warning: Could not set initial coordinates: {e}")
+        # Continue anyway - will try to set for each ordering
+    
     # Determine which energy terms are available and active
     # Try to use the most specific term available (IMPR > BOND > ANGLE > DIHE)
     # Note: INTE is not always available, so we don't use it as a fallback
@@ -98,10 +108,12 @@ def reorder_atoms_to_match_pycharmm(
     primary_term = None
     try:
         # Try to get energy terms with error handling to prevent crashes
+        # First ensure coordinates are set (energy.get_energy() may fail if coords are undefined)
         try:
             energy.get_energy()  # Update energy terms
         except Exception as e:
-            print(f"  Warning: energy.get_energy() failed: {e}")
+            print(f"  Warning: energy.get_energy() failed (coordinates may be undefined): {e}")
+            # Don't raise - will try again after setting coordinates for each ordering
             raise
         
         try:
@@ -167,8 +179,12 @@ def reorder_atoms_to_match_pycharmm(
                 continue
             
             # Set positions in PyCHARMM with error handling
+            # This is critical - PyCHARMM may have undefined coordinates (9999.0) that need to be set
             try:
                 xyz = pd.DataFrame(R_test, columns=["x", "y", "z"])
+                # Check if coordinates are valid (not undefined/placeholder values)
+                if np.any(np.abs(R_test) > 1000):  # Likely undefined coordinates (9999.0)
+                    print(f"    Ordering {i+1}: Setting coordinates from batch data (PyCHARMM had undefined coords)")
                 coor.set_positions(xyz)
             except Exception as e:
                 print(f"    Ordering {i+1} failed: Could not set positions in PyCHARMM: {e}")
@@ -268,12 +284,18 @@ def reorder_atoms_to_match_pycharmm(
         raise RuntimeError("Final reordered positions contain NaN/Inf values")
     
     # Set final positions in PyCHARMM
+    # This ensures PyCHARMM has valid coordinates (not the undefined 9999.0 values)
     try:
         xyz = pd.DataFrame(best_R, columns=["x", "y", "z"])
         coor.set_positions(xyz)
         print("  Final positions set in PyCHARMM")
+    except (AttributeError, RuntimeError, OSError, SystemError) as e:
+        print(f"  ERROR: Could not set final positions in PyCHARMM (may have crashed): {e}")
+        raise RuntimeError(f"Failed to set final positions. PyCHARMM may have crashed: {e}") from e
     except Exception as e:
         print(f"  Warning: Could not set final positions in PyCHARMM: {e}")
+        import traceback
+        traceback.print_exc()
         raise
     
     return best_R, best_Z, best_indices
