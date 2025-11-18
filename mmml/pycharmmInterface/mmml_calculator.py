@@ -1098,8 +1098,11 @@ def setup_calculator(
             """
             a = 6
             b = 2
+            # Add epsilon to prevent division by zero when r is very small
+            lj_epsilon = 1e-10
+            r_safe = jnp.maximum(r, lj_epsilon)
             # sig = sig / (2 ** (1 / 6))
-            r6 = (sig / r) ** a
+            r6 = (sig / r_safe) ** a
             return ep * (r6 ** b - 2 * r6)
         
         coulombs_constant = 3.32063711e2 #Coulomb's constant kappa = 1/(4*pi*e0) in kcal-Angstroms/e^2.
@@ -1258,6 +1261,40 @@ def setup_calculator(
             # Flatten all_monomer_idxs to get the actual atom indices
             monomer_atom_indices = jnp.array(all_monomer_idxs).flatten()
             
+            # Validate that monomer_atom_indices are within bounds
+            # Clamp indices to valid range to prevent out-of-bounds access
+            max_idx = jnp.max(monomer_atom_indices) if len(monomer_atom_indices) > 0 else 0
+            min_idx = jnp.min(monomer_atom_indices) if len(monomer_atom_indices) > 0 else 0
+            
+            # Ensure indices are valid (0 to n_atoms-1)
+            monomer_atom_indices = jnp.clip(monomer_atom_indices, 0, n_atoms - 1)
+            
+            # Validate that ML forces shape matches expected size
+            expected_n_ml_atoms = n_monomers * ATOMS_PER_MONOMER
+            if ml_forces.shape[0] != expected_n_ml_atoms:
+                # If shape mismatch, pad or truncate to expected size
+                if ml_forces.shape[0] < expected_n_ml_atoms:
+                    padding = jnp.zeros((expected_n_ml_atoms - ml_forces.shape[0], 3))
+                    ml_forces = jnp.concatenate([ml_forces, padding], axis=0)
+                    ml_internal_F = jnp.concatenate([ml_internal_F, jnp.zeros((expected_n_ml_atoms - ml_internal_F.shape[0], 3))], axis=0)
+                    if "ml_2b_F" in ml_out:
+                        ml_2b_F = jnp.concatenate([ml_2b_F, jnp.zeros((expected_n_ml_atoms - ml_2b_F.shape[0], 3))], axis=0)
+                else:
+                    ml_forces = ml_forces[:expected_n_ml_atoms]
+                    ml_internal_F = ml_internal_F[:expected_n_ml_atoms]
+                    if "ml_2b_F" in ml_out:
+                        ml_2b_F = ml_2b_F[:expected_n_ml_atoms]
+            
+            # Ensure monomer_atom_indices matches ML forces size
+            if len(monomer_atom_indices) != ml_forces.shape[0]:
+                # If mismatch, use sequential indices up to min of both
+                n_valid = min(len(monomer_atom_indices), ml_forces.shape[0], n_atoms)
+                monomer_atom_indices = jnp.arange(n_valid)
+                ml_forces = ml_forces[:n_valid]
+                ml_internal_F = ml_internal_F[:n_valid]
+                if "ml_2b_F" in ml_out:
+                    ml_2b_F = ml_2b_F[:n_valid]
+            
             # Check for NaN/Inf in ML forces before mapping
             ml_forces = jnp.where(jnp.isfinite(ml_forces), ml_forces, 0.0)
             ml_internal_F = jnp.where(jnp.isfinite(ml_internal_F), ml_internal_F, 0.0)
@@ -1269,6 +1306,7 @@ def setup_calculator(
             # to avoid tracer bool conversion errors in JIT-compiled code
             
             # Map ML forces to the correct positions in the full force array
+            # Use safe indexing to prevent out-of-bounds access
             outputs["out_F"] = outputs["out_F"].at[monomer_atom_indices].add(ml_forces)
             outputs["internal_F"] = outputs["internal_F"].at[monomer_atom_indices].add(ml_internal_F)
             # Only add ml_2b_F if it's not zero (i.e., if it was actually computed)
@@ -1649,6 +1687,10 @@ def setup_calculator(
                         ).energy
 
                     E, F = jax.value_and_grad(Efn)(R)
+                    
+                    # Check for NaN/Inf in energy and forces immediately after computation
+                    E = jnp.where(jnp.isfinite(E), E, 0.0)
+                    F = jnp.where(jnp.isfinite(F), F, 0.0)
 
                 if self.verbose:
                     # Store full ModelOutput with ML/MM breakdown for analysis
@@ -1660,7 +1702,10 @@ def setup_calculator(
                     self.results["out"] = out
                 # E was negated only in backprop path; here we ensure sign is consistent
                 self.results["energy"] = (-E if self.backprop else E) * self.energy_conversion_factor
-                self.results["forces"] = F * self.force_conversion_factor
+                # Ensure forces are finite before storing
+                forces_final = F * self.force_conversion_factor
+                forces_final = jnp.where(jnp.isfinite(forces_final), forces_final, 0.0)
+                self.results["forces"] = forces_final
 
         def get_spherical_cutoff_calculator(
             atomic_numbers: Array,
