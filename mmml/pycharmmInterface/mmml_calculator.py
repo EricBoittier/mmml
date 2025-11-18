@@ -845,23 +845,21 @@ def setup_calculator(
     if is_json_checkpoint:
         # This is a JSON checkpoint - use it directly
         restart = restart_path
-        # Load using JSON loader (from notebook, but we'll use a similar approach)
+        # Load using JSON loader
         try:
             from mmml.utils.model_checkpoint import load_model_checkpoint
-            checkpoint = load_model_checkpoint(restart, use_orbax=False)
+            checkpoint = load_model_checkpoint(restart, use_orbax=False, load_params=True, load_config=True)
             params = checkpoint.get('params')
-            # For JSON checkpoints, we need to reconstruct the model from config
             config = checkpoint.get('config', {})
+            
+            if params is None:
+                raise FileNotFoundError(f"params not found in JSON checkpoint at {restart_path}")
             if not config:
-                # Try to load config separately
-                config_path = restart / "model_config.json"
-                if config_path.exists():
-                    import json
-                    with open(config_path, 'r') as f:
-                        config = json.load(f)
+                raise FileNotFoundError(f"model_config not found in JSON checkpoint at {restart_path}")
             
             # Reconstruct model from config
             from mmml.physnetjax.physnetjax.models.model import EF
+            
             # Convert JSON arrays back to JAX arrays for model config
             def json_to_jax_config(obj):
                 """Convert JSON config values back to appropriate types."""
