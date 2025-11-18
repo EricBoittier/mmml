@@ -316,13 +316,19 @@ def create_hybrid_fitting_factory(
         # IMPORTANT: For ML optimization, we need to use model.apply directly with updated params
         # The calculator factory uses fixed params, so we bypass it when optimizing ML
         # For LJ-only optimization with precomputed ML, we skip ML computation entirely
+        # For ML-only optimization, we skip ML here (it's computed separately with updated params)
         try:
             # Skip ML if optimize_mode is "lj_only" (ML will be precomputed and added separately)
+            # or "ml_only" (ML is computed separately with updated params in the loss function)
             if optimize_mode == "lj_only":
-                # For LJ-only, we only compute MM contributions
+                # For LJ-only, we only compute MM contributions (ML is precomputed)
                 ml_energy = jnp.array(0.0)
                 ml_forces = jnp.zeros_like(R)
-            elif optimize_mode in ["ml_only", "both"] and model is not None and hasattr(model, 'apply'):
+            elif optimize_mode == "ml_only":
+                # For ML-only, we only compute MM contributions here (ML is computed separately)
+                ml_energy = jnp.array(0.0)
+                ml_forces = jnp.zeros_like(R)
+            elif optimize_mode in ["both"] and model is not None and hasattr(model, 'apply'):
                 # For ML optimization, use model.apply directly with updated parameters
                 # We need to prepare batches in the same format as the calculator expects
                 n_monomers_val = args.n_monomers if args and hasattr(args, 'n_monomers') else 2
@@ -600,9 +606,12 @@ def fit_hybrid_potential_to_training_data_jax(
         print(f"  Energy weight: {energy_weight}, Force weight: {force_weight}")
         print(f"  Learning rate: {learning_rate}, Iterations: {n_iterations}")
     
-    # Precompute ML contributions for LJ-only optimization (they don't change)
+    # Precompute contributions that don't change during optimization
     precomputed_ml = None
+    precomputed_mm = None
+    
     if optimize_mode == "lj_only":
+        # Precompute ML contributions (they don't change for LJ-only optimization)
         if verbose:
             print("  Precomputing ML contributions (constant for LJ-only optimization)...")
         
@@ -622,40 +631,102 @@ def fit_hybrid_potential_to_training_data_jax(
         )
         
         # Precompute ML energies and forces for all training samples
+        # We'll compute them in the same structure as training_data will be created
         precomputed_ml = []
+        
+        # First, prepare training data structure to match indices
+        temp_training_data = []
         for batch in selected_batches:
             R = batch["R"]
             Z = batch["Z"]
             
             if R.ndim == 3:
                 # Multiple configurations in batch
-                ml_energies = []
-                ml_forces_list = []
                 for config_idx in range(R.shape[0]):
-                    R_config = jnp.array(R[config_idx])
-                    Z_config = jnp.array(Z[config_idx])
-                    # Use dummy params (ML params don't matter since we're using fixed model_params)
-                    dummy_params = {"ml_params": model_params}
-                    ml_e, ml_f = compute_ml_only(R_config, Z_config, dummy_params)
-                    ml_energies.append(ml_e)
-                    ml_forces_list.append(ml_f)
-                precomputed_ml.append({
-                    "energies": jnp.array(ml_energies),
-                    "forces": jnp.array(ml_forces_list),
-                })
+                    temp_training_data.append({
+                        "R": jnp.array(R[config_idx]),
+                        "Z": jnp.array(Z[config_idx]),
+                    })
             else:
                 # Single configuration
-                R_config = jnp.array(R)
-                Z_config = jnp.array(Z)
-                dummy_params = {"ml_params": model_params}
-                ml_e, ml_f = compute_ml_only(R_config, Z_config, dummy_params)
-                precomputed_ml.append({
-                    "energies": ml_e,
-                    "forces": ml_f,
+                temp_training_data.append({
+                    "R": jnp.array(R),
+                    "Z": jnp.array(Z),
                 })
         
+        # Now precompute ML for each training data entry
+        for data in temp_training_data:
+            R_config = data["R"]
+            Z_config = data["Z"]
+            # Use dummy params (ML params don't matter since we're using fixed model_params)
+            dummy_params = {"ml_params": model_params}
+            ml_e, ml_f = compute_ml_only(R_config, Z_config, dummy_params)
+            precomputed_ml.append({
+                "energies": ml_e,
+                "forces": ml_f,
+            })
+        
         if verbose:
-            print("  ✓ ML contributions precomputed")
+            print(f"  ✓ ML contributions precomputed for {len(precomputed_ml)} configurations")
+    
+    elif optimize_mode == "ml_only":
+        # Precompute MM contributions (they don't change for ML-only optimization)
+        if verbose:
+            print("  Precomputing MM contributions (constant for ML-only optimization)...")
+        
+        # Create a factory that only computes MM (no ML)
+        compute_mm_only = create_hybrid_fitting_factory(
+            base_calculator_factory,
+            model,
+            model_params,
+            atc_epsilons_jax,
+            atc_rmins_jax,
+            atc_qs_jax,
+            at_codes_jax,
+            pair_idx_atom_atom_jax,
+            cutoff_params,
+            optimize_mode="lj_only",  # Only compute MM (LJ params fixed)
+            args=args_for_factory,
+        )
+        
+        # Precompute MM energies and forces for all training samples
+        # We'll compute them in the same structure as training_data will be created
+        precomputed_mm = []
+        
+        # First, prepare training data structure to match indices
+        temp_training_data = []
+        for batch in selected_batches:
+            R = batch["R"]
+            Z = batch["Z"]
+            
+            if R.ndim == 3:
+                # Multiple configurations in batch
+                for config_idx in range(R.shape[0]):
+                    temp_training_data.append({
+                        "R": jnp.array(R[config_idx]),
+                        "Z": jnp.array(Z[config_idx]),
+                    })
+            else:
+                # Single configuration
+                temp_training_data.append({
+                    "R": jnp.array(R),
+                    "Z": jnp.array(Z),
+                })
+        
+        # Now precompute MM for each training data entry
+        for data in temp_training_data:
+            R_config = data["R"]
+            Z_config = data["Z"]
+            # Use default LJ scaling (1.0) since we're not optimizing LJ
+            dummy_params = {"ep_scale": jnp.ones(len(atc_epsilons_jax)), "sig_scale": jnp.ones(len(atc_rmins_jax))}
+            mm_e, mm_f = compute_mm_only(R_config, Z_config, dummy_params)
+            precomputed_mm.append({
+                "energies": mm_e,
+                "forces": mm_f,
+            })
+        
+        if verbose:
+            print(f"  ✓ MM contributions precomputed for {len(precomputed_mm)} configurations")
     
     # Create the differentiable factory (for MM contributions or full hybrid)
     compute_energy_forces = create_hybrid_fitting_factory(
@@ -722,23 +793,52 @@ def fit_hybrid_potential_to_training_data_jax(
     
     # Define loss function based on mode
     if optimize_mode == "ml_only":
+        # Create a factory that only computes ML (for speed, MM is precomputed)
+        compute_ml_only = create_hybrid_fitting_factory(
+            base_calculator_factory,
+            model,
+            model_params,
+            atc_epsilons_jax,
+            atc_rmins_jax,
+            atc_qs_jax,
+            at_codes_jax,
+            pair_idx_atom_atom_jax,
+            cutoff_params,
+            optimize_mode="ml_only",  # Only compute ML
+            args=args_for_factory,
+        )
+        
         def loss_fn(p):
-            """Loss function for ML-only optimization."""
+            """Loss function for ML-only optimization (uses precomputed MM)."""
             total_energy_error = jnp.array(0.0)
             total_force_error = jnp.array(0.0)
             n_configs = 0
             
-            for data in training_data:
+            for idx, data in enumerate(training_data):
                 try:
-                    E_pred, F_pred = compute_energy_forces(
+                    # Compute ML contributions (fast, depends on ML params)
+                    E_ml, F_ml = compute_ml_only(
                         data["R"],
                         data["Z"],
                         {"ml_params": p["ml_params"]}
                     )
                     
-                    E_pred = jnp.asarray(E_pred)
-                    if E_pred.shape != ():
-                        E_pred = jnp.sum(E_pred) if E_pred.size > 0 else jnp.array(0.0)
+                    # Get precomputed MM contributions (structure matches training_data)
+                    mm_data = precomputed_mm[idx]
+                    E_mm = mm_data["energies"]
+                    F_mm = mm_data["forces"]
+                    
+                    # Ensure E_ml and E_mm are scalars
+                    E_ml = jnp.asarray(E_ml)
+                    if E_ml.shape != ():
+                        E_ml = jnp.sum(E_ml) if E_ml.size > 0 else jnp.array(0.0)
+                    
+                    if E_mm.shape != ():
+                        E_mm = jnp.sum(E_mm) if E_mm.size > 0 else jnp.array(0.0)
+                    
+                    # Combine ML + MM
+                    E_pred = E_ml + E_mm
+                    F_pred = F_ml + F_mm
                     
                     if data["E_ref"] is not None:
                         E_ref = jnp.asarray(data["E_ref"])
@@ -800,17 +900,14 @@ def fit_hybrid_potential_to_training_data_jax(
                         {"ep_scale": p["ep_scale"], "sig_scale": p["sig_scale"]}
                     )
                     
-                    # Get precomputed ML contributions
+                    # Get precomputed ML contributions (structure matches training_data)
                     ml_data = precomputed_ml[idx]
-                    if isinstance(ml_data["energies"], jnp.ndarray) and ml_data["energies"].ndim > 0:
-                        # Multiple configurations - need to find the right one
-                        # For now, take first (should match training_data structure)
-                        E_ml = ml_data["energies"][0] if ml_data["energies"].size > 0 else jnp.array(0.0)
-                        F_ml = ml_data["forces"][0] if ml_data["forces"].shape[0] > 0 else jnp.zeros_like(F_mm)
-                    else:
-                        # Single configuration
-                        E_ml = ml_data["energies"]
-                        F_ml = ml_data["forces"]
+                    E_ml = ml_data["energies"]
+                    F_ml = ml_data["forces"]
+                    
+                    # Ensure E_ml is scalar
+                    if E_ml.shape != ():
+                        E_ml = jnp.sum(E_ml) if E_ml.size > 0 else jnp.array(0.0)
                     
                     # Combine ML + MM
                     E_pred = E_ml + E_mm
