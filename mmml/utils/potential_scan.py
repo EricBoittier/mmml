@@ -144,6 +144,7 @@ def scan_potential_with_calculator(
     distances: Optional[np.ndarray] = None,
     direction: Optional[np.ndarray] = None,
     extract_outputs: bool = True,
+    enable_verbose: bool = True,
 ) -> Dict[str, np.ndarray]:
     """
     Scan potential energy surface by varying dimer COM distances.
@@ -159,6 +160,7 @@ def scan_potential_with_calculator(
         distances: Array of COM distances to scan. If None, uses default range.
         direction: Direction vector for translation. If None, uses COM-COM vector.
         extract_outputs: If True, tries to extract detailed outputs (ML/MM breakdown)
+        enable_verbose: If True, enables verbose mode on calculator to get detailed outputs
     
     Returns:
         Dictionary with:
@@ -170,6 +172,10 @@ def scan_potential_with_calculator(
             - "internal_energies": Internal ML energies (if available)
             - "ml_2b_energies": ML dimer energies (if available)
     """
+    # Enable verbose mode on calculator if needed (for detailed outputs)
+    if enable_verbose and hasattr(calculator, 'verbose'):
+        calculator.verbose = True
+    
     # Generate trajectory
     trajectory = generate_dimer_com_scan_trajectory(
         atoms, n_monomers, atoms_per_monomer, distances, direction
@@ -211,22 +217,103 @@ def scan_potential_with_calculator(
             if extract_outputs and hasattr(calculator, 'results'):
                 calc_results = calculator.results
                 
-                # Try to get model_output if available
-                if "model_output" in calc_results:
+                # The calculator stores outputs in two ways:
+                # 1. As "model_output" NamedTuple (when verbose=True)
+                # 2. As individual "model_*" keys (when verbose=True)
+                # 3. As "out" (when verbose=False)
+                
+                # First, try to get from individual model_* keys (most reliable)
+                if "model_ml_2b_E" in calc_results:
+                    results["ml_2b_energies"][i] = float(np.asarray(calc_results["model_ml_2b_E"]))
+                if "model_internal_E" in calc_results:
+                    results["internal_energies"][i] = float(np.asarray(calc_results["model_internal_E"]))
+                if "model_mm_E" in calc_results:
+                    results["mm_energies"][i] = float(np.asarray(calc_results["model_mm_E"]))
+                if "model_dH" in calc_results:
+                    dH_val = float(np.asarray(calc_results["model_dH"]))
+                    # ML energy = internal + interaction (dH)
+                    if results["internal_energies"][i] != 0:
+                        results["ml_energies"][i] = results["internal_energies"][i] + dH_val
+                    elif results["ml_2b_energies"][i] != 0:
+                        results["ml_energies"][i] = results["ml_2b_energies"][i]
+                    else:
+                        results["ml_energies"][i] = dH_val
+                elif "model_energy" in calc_results and "model_mm_E" in calc_results:
+                    # ML = total - MM
+                    total_e = float(np.asarray(calc_results["model_energy"]))
+                    results["ml_energies"][i] = total_e - results["mm_energies"][i]
+                elif results["ml_2b_energies"][i] != 0 and results["internal_energies"][i] != 0:
+                    # ML = internal + dimer
+                    results["ml_energies"][i] = results["internal_energies"][i] + results["ml_2b_energies"][i]
+                
+                # Fallback: try model_output NamedTuple
+                elif "model_output" in calc_results:
                     model_out = calc_results["model_output"]
-                    if hasattr(model_out, 'ml_2b_E'):
-                        results["ml_2b_energies"][i] = float(model_out.ml_2b_E)
-                    if hasattr(model_out, 'internal_E'):
-                        results["internal_energies"][i] = float(model_out.internal_E)
-                    if hasattr(model_out, 'mm_E'):
-                        results["mm_energies"][i] = float(model_out.mm_E)
-                    # ML energy = total - MM (or from model_output if available)
-                    if hasattr(model_out, 'energy'):
-                        total_e = float(model_out.energy)
-                        if hasattr(model_out, 'mm_E'):
-                            results["ml_energies"][i] = total_e - float(model_out.mm_E)
+                    
+                    try:
+                        # Try to convert to dict for easier access
+                        if hasattr(model_out, '_asdict'):
+                            model_dict = model_out._asdict()
                         else:
-                            results["ml_energies"][i] = total_e
+                            # If not a NamedTuple, try direct attribute access
+                            model_dict = {}
+                            for attr in ['ml_2b_E', 'internal_E', 'mm_E', 'energy', 'dH']:
+                                if hasattr(model_out, attr):
+                                    model_dict[attr] = getattr(model_out, attr)
+                        
+                        # Extract ML dimer energy (2-body interaction)
+                        if 'ml_2b_E' in model_dict:
+                            val = model_dict['ml_2b_E']
+                            results["ml_2b_energies"][i] = float(np.asarray(val))
+                        
+                        # Extract internal ML energy (1-body)
+                        if 'internal_E' in model_dict:
+                            val = model_dict['internal_E']
+                            results["internal_energies"][i] = float(np.asarray(val))
+                        
+                        # Extract MM energy
+                        if 'mm_E' in model_dict:
+                            val = model_dict['mm_E']
+                            results["mm_energies"][i] = float(np.asarray(val))
+                        
+                        # Compute ML energy = total - MM (or use dH if available)
+                        if 'dH' in model_dict:
+                            # dH is interaction energy
+                            dH_val = float(np.asarray(model_dict['dH']))
+                            if results["internal_energies"][i] != 0:
+                                results["ml_energies"][i] = results["internal_energies"][i] + dH_val
+                            elif results["ml_2b_energies"][i] != 0:
+                                results["ml_energies"][i] = results["ml_2b_energies"][i]
+                            else:
+                                results["ml_energies"][i] = dH_val
+                        elif 'energy' in model_dict and 'mm_E' in model_dict:
+                            # ML = total - MM
+                            total_e = float(np.asarray(model_dict['energy']))
+                            results["ml_energies"][i] = total_e - results["mm_energies"][i]
+                        elif results["ml_2b_energies"][i] != 0 and results["internal_energies"][i] != 0:
+                            # ML = internal + dimer
+                            results["ml_energies"][i] = results["internal_energies"][i] + results["ml_2b_energies"][i]
+                        
+                    except Exception as e:
+                        # Fallback: try direct attribute access
+                        try:
+                            if hasattr(model_out, 'ml_2b_E'):
+                                results["ml_2b_energies"][i] = float(np.asarray(model_out.ml_2b_E))
+                            if hasattr(model_out, 'internal_E'):
+                                results["internal_energies"][i] = float(np.asarray(model_out.internal_E))
+                            if hasattr(model_out, 'mm_E'):
+                                results["mm_energies"][i] = float(np.asarray(model_out.mm_E))
+                            if hasattr(model_out, 'dH'):
+                                dH_val = float(np.asarray(model_out.dH))
+                                if results["internal_energies"][i] != 0:
+                                    results["ml_energies"][i] = results["internal_energies"][i] + dH_val
+                                elif results["ml_2b_energies"][i] != 0:
+                                    results["ml_energies"][i] = results["ml_2b_energies"][i]
+                                else:
+                                    results["ml_energies"][i] = dH_val
+                        except Exception as e2:
+                            # If extraction fails, leave as zeros
+                            pass
                 
         except Exception as e:
             print(f"Warning: Failed to compute energy for distance {distances[i]:.2f} A: {e}")
