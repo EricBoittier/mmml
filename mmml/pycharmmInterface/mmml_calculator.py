@@ -893,6 +893,23 @@ def setup_calculator(
                     return obj
             
             params = json_to_jax_params(params)
+            
+            # Flax models expect params to be wrapped in {'params': {...}}
+            # Check if params is already in the correct format
+            # get_params_model from Orbax returns {'params': {...}}, but JSON loading
+            # might return just the raw params dict, so we need to wrap it
+            if isinstance(params, dict):
+                # Check if it's already in Flax format (has 'params' key at top level)
+                if 'params' in params:
+                    # Already wrapped, but check if it's the right structure
+                    # Flax expects {'params': {...}} where {...} is the actual params
+                    pass  # Already in correct format
+                else:
+                    # Not wrapped, need to wrap it
+                    params = {'params': params}
+            else:
+                # Params is not a dict (unlikely but handle it)
+                params = {'params': params}
         except Exception as e:
             raise FileNotFoundError(
                 f"Failed to load JSON checkpoint from {restart_path}. "
