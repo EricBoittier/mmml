@@ -181,9 +181,10 @@ def create_hybrid_fitting_factory(
     """
     Create a factory function that computes hybrid energy/forces with differentiable parameters.
     
-    This factory supports three modes:
+    This factory supports four modes:
     - "ml_only": Only ML parameters are optimized (model_params)
     - "lj_only": Only LJ scaling parameters are optimized (ep_scale, sig_scale)
+    - "cutoff_only": Only cutoff parameters are optimized (ml_cutoff, mm_switch_on, mm_cutoff)
     - "both": Both ML and LJ parameters are optimized together
     
     Args:
@@ -196,7 +197,7 @@ def create_hybrid_fitting_factory(
         at_codes: Atom type codes for each atom in the system
         pair_idx_atom_atom: Pair indices for atom-atom interactions
         cutoff_params: Cutoff parameters
-        optimize_mode: "ml_only", "lj_only", or "both"
+        optimize_mode: "ml_only", "lj_only", "cutoff_only", or "both"
         args: Arguments object (needed for calculator factory calls)
     
     Returns:
@@ -213,6 +214,9 @@ def create_hybrid_fitting_factory(
                 - "ml_params": ML model parameters (if optimize_mode includes "ml")
                 - "ep_scale": Epsilon scaling factors (if optimize_mode includes "lj")
                 - "sig_scale": Sigma scaling factors (if optimize_mode includes "lj")
+                - "ml_cutoff": ML cutoff distance (if optimize_mode == "cutoff_only")
+                - "mm_switch_on": MM switch-on distance (if optimize_mode == "cutoff_only")
+                - "mm_cutoff": MM cutoff distance (if optimize_mode == "cutoff_only")
         
         Returns:
             E: Total energy (scalar)
@@ -231,6 +235,17 @@ def create_hybrid_fitting_factory(
             # Use default scaling (1.0) if not optimizing LJ
             ep_scale = jnp.ones(len(atc_epsilons))
             sig_scale = jnp.ones(len(atc_rmins))
+        
+        # Extract cutoff parameters
+        if optimize_mode == "cutoff_only":
+            ml_cutoff_val = params_dict.get("ml_cutoff", cutoff_params.ml_cutoff if cutoff_params else 2.0)
+            mm_switch_on_val = params_dict.get("mm_switch_on", cutoff_params.mm_switch_on if cutoff_params else 5.0)
+            mm_cutoff_val = params_dict.get("mm_cutoff", cutoff_params.mm_cutoff if cutoff_params else 1.0)
+        else:
+            # Use fixed cutoff values
+            ml_cutoff_val = cutoff_params.ml_cutoff if cutoff_params else 2.0
+            mm_switch_on_val = cutoff_params.mm_switch_on if cutoff_params else 5.0
+            mm_cutoff_val = cutoff_params.mm_cutoff if cutoff_params else 1.0
         
         # Skip MM computation if optimize_mode is "ml_only" (MM will be precomputed and added separately)
         if optimize_mode == "ml_only":
@@ -472,6 +487,36 @@ def create_hybrid_fitting_factory(
             ml_energy = jnp.array(0.0)
             ml_forces = jnp.zeros_like(R)
         
+        # Apply cutoff-dependent switching if optimizing cutoffs
+        if optimize_mode == "cutoff_only":
+            # Import switching functions
+            from mmml.pycharmmInterface.mmml_calculator import ml_switch_simple, mm_switch_simple
+            
+            # Calculate distances for switching (use COM distances for dimers, or pair distances)
+            # For simplicity, we'll apply switching based on average pair distances
+            # This is a simplified approach - in practice, switching is applied per dimer
+            n_atoms = len(R)
+            if len(pair_idx_atom_atom) > 0:
+                pair_distances = jnp.linalg.norm(
+                    R[pair_idx_atom_atom[:, 0]] - R[pair_idx_atom_atom[:, 1]], 
+                    axis=1
+                )
+                avg_distance = jnp.mean(pair_distances)
+            else:
+                # Fallback: use average distance from origin
+                avg_distance = jnp.mean(jnp.linalg.norm(R, axis=1))
+            
+            # Apply ML switching (1.0 at short range, tapers to 0.0 at mm_switch_on)
+            ml_scale = ml_switch_simple(avg_distance, ml_cutoff_val, mm_switch_on_val)
+            # Apply MM switching (0.0 at short range, ramps to 1.0 at mm_switch_on + mm_cutoff)
+            mm_scale = mm_switch_simple(avg_distance, mm_switch_on_val, mm_cutoff_val)
+            
+            # Scale energies and forces by switching functions
+            ml_energy = ml_energy * ml_scale
+            ml_forces = ml_forces * ml_scale
+            mm_energy = mm_energy * mm_scale
+            mm_forces = mm_forces * mm_scale
+        
         total_energy = ml_energy + mm_energy
         total_forces = ml_forces + mm_forces
         
@@ -492,9 +537,12 @@ def fit_hybrid_potential_to_training_data_jax(
     pair_idx_atom_atom: np.ndarray,
     cutoff_params=None,
     args=None,
-    optimize_mode: str = "lj_only",  # "ml_only", "lj_only", or "both"
+    optimize_mode: str = "lj_only",  # "ml_only", "lj_only", "cutoff_only", or "both"
     initial_ep_scale: Optional[np.ndarray] = None,
     initial_sig_scale: Optional[np.ndarray] = None,
+    initial_ml_cutoff: Optional[float] = None,
+    initial_mm_switch_on: Optional[float] = None,
+    initial_mm_cutoff: Optional[float] = None,
     n_samples: Optional[int] = None,
     energy_weight: float = 1.0,
     force_weight: float = 1.0,
@@ -507,10 +555,11 @@ def fit_hybrid_potential_to_training_data_jax(
     """
     Fit hybrid potential parameters to training data using JAX optimization.
     
-    Supports three optimization modes:
+    Supports four optimization modes:
     1. "ml_only": Optimize ML model parameters only
     2. "lj_only": Optimize LJ scaling parameters (ep_scale, sig_scale) only
-    3. "both": Optimize both ML and LJ parameters together
+    3. "cutoff_only": Optimize cutoff parameters (ml_cutoff, mm_switch_on, mm_cutoff) only
+    4. "both": Optimize both ML and LJ parameters together
     
     Args:
         train_batches: List of training batches (from prepare_batches_jit)
@@ -524,11 +573,14 @@ def fit_hybrid_potential_to_training_data_jax(
         pair_idx_atom_atom: Pair indices for atom-atom interactions (numpy array)
         cutoff_params: Cutoff parameters (optional, can be None)
         args: Arguments object (optional, for calculator factory calls)
-        optimize_mode: "ml_only", "lj_only", or "both"
+        optimize_mode: "ml_only", "lj_only", "cutoff_only", or "both"
         n_monomers: Number of monomers (optional, extracted from args if provided)
         skip_ml_dimers: Whether to skip ML dimers (optional, extracted from args if provided)
         initial_ep_scale: Initial epsilon scaling factors (array, defaults to ones)
         initial_sig_scale: Initial sigma scaling factors (array, defaults to ones)
+        initial_ml_cutoff: Initial ML cutoff distance (float, defaults to cutoff_params.ml_cutoff)
+        initial_mm_switch_on: Initial MM switch-on distance (float, defaults to cutoff_params.mm_switch_on)
+        initial_mm_cutoff: Initial MM cutoff distance (float, defaults to cutoff_params.mm_cutoff)
         n_samples: Number of training samples to use (if None, uses all)
         energy_weight: Weight for energy loss term
         force_weight: Weight for force loss term
@@ -541,10 +593,13 @@ def fit_hybrid_potential_to_training_data_jax(
             - "ml_params": Optimized ML parameters (if mode includes "ml")
             - "ep_scale": Optimized epsilon scaling factors (if mode includes "lj")
             - "sig_scale": Optimized sigma scaling factors (if mode includes "lj")
+            - "ml_cutoff": Optimized ML cutoff (if mode == "cutoff_only")
+            - "mm_switch_on": Optimized MM switch-on (if mode == "cutoff_only")
+            - "mm_cutoff": Optimized MM cutoff (if mode == "cutoff_only")
             - "loss_history": History of loss values
     """
-    if optimize_mode not in ["ml_only", "lj_only", "both"]:
-        raise ValueError(f"optimize_mode must be 'ml_only', 'lj_only', or 'both', got {optimize_mode}")
+    if optimize_mode not in ["ml_only", "lj_only", "cutoff_only", "both"]:
+        raise ValueError(f"optimize_mode must be 'ml_only', 'lj_only', 'cutoff_only', or 'both', got {optimize_mode}")
     
     # Convert inputs to JAX arrays
     atc_epsilons_jax = jnp.array(atc_epsilons)
@@ -575,6 +630,18 @@ def fit_hybrid_potential_to_training_data_jax(
         params["ep_scale"] = initial_ep_scale
         params["sig_scale"] = initial_sig_scale
     
+    if optimize_mode == "cutoff_only":
+        if initial_ml_cutoff is None:
+            initial_ml_cutoff = cutoff_params.ml_cutoff if cutoff_params else 2.0
+        if initial_mm_switch_on is None:
+            initial_mm_switch_on = cutoff_params.mm_switch_on if cutoff_params else 5.0
+        if initial_mm_cutoff is None:
+            initial_mm_cutoff = cutoff_params.mm_cutoff if cutoff_params else 1.0
+        
+        params["ml_cutoff"] = jnp.array(initial_ml_cutoff)
+        params["mm_switch_on"] = jnp.array(initial_mm_switch_on)
+        params["mm_cutoff"] = jnp.array(initial_mm_cutoff)
+    
     # Extract n_monomers and skip_ml_dimers from args if provided, otherwise use defaults
     if args is not None:
         n_monomers_val = getattr(args, 'n_monomers', n_monomers) if n_monomers is None else n_monomers
@@ -604,6 +671,10 @@ def fit_hybrid_potential_to_training_data_jax(
         if optimize_mode in ["lj_only", "both"]:
             print(f"  Initial ep_scale: {initial_ep_scale}")
             print(f"  Initial sig_scale: {initial_sig_scale}")
+        if optimize_mode == "cutoff_only":
+            print(f"  Initial ml_cutoff: {initial_ml_cutoff}")
+            print(f"  Initial mm_switch_on: {initial_mm_switch_on}")
+            print(f"  Initial mm_cutoff: {initial_mm_cutoff}")
         print(f"  Energy weight: {energy_weight}, Force weight: {force_weight}")
         print(f"  Learning rate: {learning_rate}, Iterations: {n_iterations}")
     
@@ -947,6 +1018,60 @@ def fit_hybrid_potential_to_training_data_jax(
             
             return loss
     
+    elif optimize_mode == "cutoff_only":
+        # For cutoff optimization, we compute both ML and MM, then apply switching
+        # No precomputation needed since cutoffs affect both contributions
+        def loss_fn(p):
+            """Loss function for cutoff-only optimization."""
+            total_energy_error = jnp.array(0.0)
+            total_force_error = jnp.array(0.0)
+            n_configs = 0
+            
+            for data in training_data:
+                try:
+                    E_pred, F_pred = compute_energy_forces(
+                        data["R"],
+                        data["Z"],
+                        {
+                            "ml_cutoff": p["ml_cutoff"],
+                            "mm_switch_on": p["mm_switch_on"],
+                            "mm_cutoff": p["mm_cutoff"]
+                        }
+                    )
+                    
+                    E_pred = jnp.asarray(E_pred)
+                    if E_pred.shape != ():
+                        E_pred = jnp.sum(E_pred) if E_pred.size > 0 else jnp.array(0.0)
+                    
+                    if data["E_ref"] is not None:
+                        E_ref = jnp.asarray(data["E_ref"])
+                        if E_ref.shape != ():
+                            E_ref = jnp.sum(E_ref) if E_ref.size > 0 else jnp.array(0.0)
+                        energy_error = (E_pred - E_ref) ** 2
+                        total_energy_error = total_energy_error + energy_error
+                    
+                    if data["F_ref"] is not None:
+                        force_error = jnp.mean((F_pred - data["F_ref"]) ** 2)
+                        total_force_error = total_force_error + force_error
+                    
+                    n_configs += 1
+                except Exception as e:
+                    if verbose:
+                        print(f"  Warning: Error in loss computation: {e}")
+                    continue
+            
+            if n_configs == 0:
+                return jnp.array(jnp.inf)
+            
+            avg_energy_error = total_energy_error / n_configs
+            avg_force_error = total_force_error / n_configs
+            loss = energy_weight * avg_energy_error + force_weight * avg_force_error
+            
+            if hasattr(loss, 'shape') and loss.shape != ():
+                loss = jnp.sum(loss)
+            
+            return loss
+    
     else:  # optimize_mode == "both"
         def loss_fn(p):
             """Loss function for combined ML+LJ optimization."""
@@ -1028,6 +1153,14 @@ def fit_hybrid_potential_to_training_data_jax(
             params["ep_scale"] = jnp.clip(params["ep_scale"], 0.1, 10.0)
             params["sig_scale"] = jnp.clip(params["sig_scale"], 0.1, 10.0)
         
+        if optimize_mode == "cutoff_only":
+            # Clip cutoffs to reasonable bounds (positive, with ordering constraints)
+            params["ml_cutoff"] = jnp.clip(params["ml_cutoff"], 0.1, 10.0)
+            params["mm_switch_on"] = jnp.clip(params["mm_switch_on"], 0.1, 20.0)
+            params["mm_cutoff"] = jnp.clip(params["mm_cutoff"], 0.1, 10.0)
+            # Ensure mm_switch_on > ml_cutoff (for valid switching)
+            params["mm_switch_on"] = jnp.maximum(params["mm_switch_on"], params["ml_cutoff"] + 0.1)
+        
         if hasattr(loss, 'item'):
             loss_val = float(loss.item())
         elif hasattr(loss, '__array__'):
@@ -1046,6 +1179,10 @@ def fit_hybrid_potential_to_training_data_jax(
             if optimize_mode in ["lj_only", "both"]:
                 print(f"    ep_scale: {params['ep_scale']}")
                 print(f"    sig_scale: {params['sig_scale']}")
+            if optimize_mode == "cutoff_only":
+                print(f"    ml_cutoff: {params['ml_cutoff']:.4f}")
+                print(f"    mm_switch_on: {params['mm_switch_on']:.4f}")
+                print(f"    mm_cutoff: {params['mm_cutoff']:.4f}")
     
     if verbose:
         print(f"\n✓ Optimization complete!")
@@ -1053,6 +1190,10 @@ def fit_hybrid_potential_to_training_data_jax(
         if optimize_mode in ["lj_only", "both"]:
             print(f"  Optimized ep_scale: {best_params['ep_scale']}")
             print(f"  Optimized sig_scale: {best_params['sig_scale']}")
+        if optimize_mode == "cutoff_only":
+            print(f"  Optimized ml_cutoff: {best_params['ml_cutoff']:.4f}")
+            print(f"  Optimized mm_switch_on: {best_params['mm_switch_on']:.4f}")
+            print(f"  Optimized mm_cutoff: {best_params['mm_cutoff']:.4f}")
     
     result_dict = {
         "loss_history": loss_history,
@@ -1064,6 +1205,11 @@ def fit_hybrid_potential_to_training_data_jax(
     if optimize_mode in ["lj_only", "both"]:
         result_dict["ep_scale"] = best_params["ep_scale"]
         result_dict["sig_scale"] = best_params["sig_scale"]
+    
+    if optimize_mode == "cutoff_only":
+        result_dict["ml_cutoff"] = best_params["ml_cutoff"]
+        result_dict["mm_switch_on"] = best_params["mm_switch_on"]
+        result_dict["mm_cutoff"] = best_params["mm_cutoff"]
     
     return result_dict
 
