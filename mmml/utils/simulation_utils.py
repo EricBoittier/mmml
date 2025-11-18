@@ -341,17 +341,62 @@ def initialize_simulation_from_batch(
     print(f"  Atomic numbers shape: {Z.shape}")
     print(f"  Number of atoms: {len(R)}")
     
+    # Test if PyCHARMM is responsive before doing anything with it
+    pycharmm_available = False
+    if hasattr(args, 'include_mm') and args.include_mm:
+        try:
+            from mmml.pycharmmInterface.import_pycharmm import psf, coor
+            # Try a simple test call to see if PyCHARMM is alive
+            try:
+                _ = psf.get_atype()
+                pycharmm_available = True
+                print(f"  PyCHARMM is responsive")
+            except (AttributeError, RuntimeError, OSError, SystemError) as e:
+                print(f"  WARNING: PyCHARMM test call failed: {e}")
+                print(f"  PyCHARMM may have crashed or is not properly initialized")
+                print(f"  Disabling MM contributions to prevent further crashes")
+                # Disable MM to prevent crashes
+                if hasattr(args, 'include_mm'):
+                    args.include_mm = False
+                pycharmm_available = False
+        except ImportError:
+            print(f"  PyCHARMM not available (ImportError)")
+            pycharmm_available = False
+        except Exception as e:
+            print(f"  WARNING: Unexpected error testing PyCHARMM: {e}")
+            pycharmm_available = False
+    
     # Try to get PyCHARMM data if not provided but PyCHARMM is available
-    if pycharmm_atypes is None or pycharmm_resids is None:
+    # Wrap in comprehensive error handling to prevent crashes
+    if pycharmm_available and (pycharmm_atypes is None or pycharmm_resids is None):
         try:
             from mmml.pycharmmInterface.import_pycharmm import psf
-            if pycharmm_atypes is None:
-                pycharmm_atypes = np.array(psf.get_atype())
-            if pycharmm_resids is None:
-                pycharmm_resids = np.array(psf.get_resid())
-            print(f"  Retrieved PyCHARMM atom types and residue IDs from PSF")
+            # Test if PyCHARMM is responsive before calling it
+            try:
+                # Try a simple call first to see if PyCHARMM is alive
+                test_atypes = psf.get_atype()
+                if pycharmm_atypes is None:
+                    pycharmm_atypes = np.array(test_atypes)
+                if pycharmm_resids is None:
+                    pycharmm_resids = np.array(psf.get_resid())
+                print(f"  Retrieved PyCHARMM atom types and residue IDs from PSF")
+            except (AttributeError, RuntimeError, OSError, SystemError) as e:
+                print(f"  Warning: PyCHARMM call failed (may have crashed): {e}")
+                print(f"  PyCHARMM may not be properly initialized or may have segfaulted")
+                # Set to None to disable reordering
+                pycharmm_atypes = None
+                pycharmm_resids = None
+        except ImportError:
+            print(f"  PyCHARMM not available (ImportError)")
+            pycharmm_atypes = None
+            pycharmm_resids = None
         except Exception as e:
             print(f"  Could not retrieve PyCHARMM data: {e}")
+            import traceback
+            traceback.print_exc()
+            # Set to None to disable reordering
+            pycharmm_atypes = None
+            pycharmm_resids = None
     
     # Try to get ATOMS_PER_MONOMER and N_MONOMERS from args if not provided
     if ATOMS_PER_MONOMER is None and hasattr(args, 'n_atoms_monomer'):
@@ -399,67 +444,123 @@ def initialize_simulation_from_batch(
         print(f"  No reordering applied (missing: {', '.join(missing)})")
     
     # Validate atomic numbers match between batch and PyCHARMM (if available)
+    # Wrap in comprehensive error handling to prevent crashes
     if hasattr(args, 'include_mm') and args.include_mm and pycharmm_atypes is not None:
         try:
             from mmml.pycharmmInterface.import_pycharmm import psf
-            # Get atomic numbers from PyCHARMM PSF
-            pycharmm_atomic_numbers = np.array([ase.data.atomic_numbers.get(atype, 0) for atype in pycharmm_atypes[:len(Z)]])
-            
-            # Compare with batch atomic numbers (after reordering if applicable)
-            if len(pycharmm_atomic_numbers) == len(Z):
-                matches = np.allclose(pycharmm_atomic_numbers, Z, atol=0.1)
-                if not matches:
-                    print(f"  Warning: Atomic number mismatch between batch and PyCHARMM!")
-                    print(f"    Batch Z: {Z}")
-                    print(f"    PyCHARMM Z (from types): {pycharmm_atomic_numbers}")
-                    print(f"    This may cause force calculation issues.")
-                else:
-                    print(f"  ✓ Atomic numbers match between batch and PyCHARMM")
+            # Get atomic numbers from PyCHARMM PSF with error handling
+            try:
+                pycharmm_atomic_numbers = np.array([ase.data.atomic_numbers.get(atype, 0) for atype in pycharmm_atypes[:len(Z)]])
+                
+                # Compare with batch atomic numbers (after reordering if applicable)
+                if len(pycharmm_atomic_numbers) == len(Z):
+                    matches = np.allclose(pycharmm_atomic_numbers, Z, atol=0.1)
+                    if not matches:
+                        print(f"  Warning: Atomic number mismatch between batch and PyCHARMM!")
+                        print(f"    Batch Z: {Z}")
+                        print(f"    PyCHARMM Z (from types): {pycharmm_atomic_numbers}")
+                        print(f"    This may cause force calculation issues.")
+                    else:
+                        print(f"  ✓ Atomic numbers match between batch and PyCHARMM")
+            except (AttributeError, RuntimeError, OSError, SystemError) as e:
+                print(f"  Warning: Could not validate atomic numbers (PyCHARMM may have crashed): {e}")
+        except ImportError:
+            print(f"  Warning: PyCHARMM not available for atomic number validation")
         except Exception as e:
             print(f"  Warning: Could not validate atomic numbers: {e}")
+            import traceback
+            traceback.print_exc()
     
     # Create ASE Atoms object
     atoms = ase.Atoms(Z, R)
     
-    # Sync positions with PyCHARMM if MM is enabled
+    # Sync positions with PyCHARMM if MM is enabled and PyCHARMM is available
     # This ensures PyCHARMM coordinates match the batch positions
-    if hasattr(args, 'include_mm') and args.include_mm:
+    # Wrap in comprehensive error handling to prevent crashes
+    if pycharmm_available and hasattr(args, 'include_mm') and args.include_mm:
         try:
-            xyz = pd.DataFrame(R, columns=["x", "y", "z"])
-            coor.set_positions(xyz)
-            print("  Synced positions with PyCHARMM")
+            # Test if coor is available and responsive
+            try:
+                xyz = pd.DataFrame(R, columns=["x", "y", "z"])
+                # Try to set positions - this can crash if PyCHARMM is in bad state
+                coor.set_positions(xyz)
+                print("  Synced positions with PyCHARMM")
+            except (AttributeError, RuntimeError, OSError, SystemError) as e:
+                print(f"  Warning: Could not sync positions with PyCHARMM: {e}")
+                print(f"  PyCHARMM may have crashed or is in an invalid state")
+                # Don't raise - continue without syncing
+        except ImportError:
+            print(f"  Warning: PyCHARMM not available for position sync")
         except Exception as e:
-            print(f"  Warning: Could not sync positions with PyCHARMM: {e}")
+            print(f"  Warning: Unexpected error syncing positions: {e}")
+            import traceback
+            traceback.print_exc()
+            # Don't raise - continue without syncing
     
     # Create hybrid calculator (following run_sim.py)
     # Note: MM contributions require PyCHARMM to be initialized first
-    hybrid_calc, _ = calculator_factory(
-        atomic_numbers=Z,
-        atomic_positions=R,
-        n_monomers=args.n_monomers if hasattr(args, 'n_monomers') else N_MONOMERS,
-        cutoff_params=cutoff_params,
-        doML=True,
-        doMM=args.include_mm if hasattr(args, 'include_mm') else False,
-        doML_dimer=not (args.skip_ml_dimers if hasattr(args, 'skip_ml_dimers') else False),
-        backprop=True,
-        debug=args.debug if hasattr(args, 'debug') else False,
-        energy_conversion_factor=1,
-        force_conversion_factor=1,
-    )
+    # Wrap calculator creation in error handling
+    try:
+        hybrid_calc, _ = calculator_factory(
+            atomic_numbers=Z,
+            atomic_positions=R,
+            n_monomers=args.n_monomers if hasattr(args, 'n_monomers') else N_MONOMERS,
+            cutoff_params=cutoff_params,
+            doML=True,
+            doMM=args.include_mm if hasattr(args, 'include_mm') else False,
+            doML_dimer=not (args.skip_ml_dimers if hasattr(args, 'skip_ml_dimers') else False),
+            backprop=True,
+            debug=args.debug if hasattr(args, 'debug') else False,
+            energy_conversion_factor=1,
+            force_conversion_factor=1,
+        )
+    except (AttributeError, RuntimeError, OSError, SystemError) as e:
+        print(f"  ERROR: Calculator factory failed (PyCHARMM may have crashed): {e}")
+        import traceback
+        traceback.print_exc()
+        raise RuntimeError(f"Failed to create calculator. PyCHARMM may have crashed: {e}") from e
+    except Exception as e:
+        print(f"  ERROR: Calculator factory failed: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
     
     atoms.calc = hybrid_calc
     
-    # Get initial energy and forces
+    # Get initial energy and forces with comprehensive error handling
     try:
-        hybrid_energy = float(atoms.get_potential_energy())
-        hybrid_forces = np.asarray(atoms.get_forces())
+        try:
+            hybrid_energy = float(atoms.get_potential_energy())
+        except (AttributeError, RuntimeError, OSError, SystemError) as e:
+            print(f"  ERROR: get_potential_energy() failed (PyCHARMM may have crashed): {e}")
+            raise RuntimeError(f"Energy calculation failed. PyCHARMM may have crashed: {e}") from e
+        
+        try:
+            hybrid_forces = np.asarray(atoms.get_forces())
+        except (AttributeError, RuntimeError, OSError, SystemError) as e:
+            print(f"  ERROR: get_forces() failed (PyCHARMM may have crashed): {e}")
+            raise RuntimeError(f"Force calculation failed. PyCHARMM may have crashed: {e}") from e
+        
         print(f"Initial energy: {hybrid_energy:.6f} eV")
         print(f"Initial forces shape: {hybrid_forces.shape}")
-        print(f"Max force: {np.abs(hybrid_forces).max():.6f} eV/Å")
+        
+        # Check for NaN in forces
+        if np.any(~np.isfinite(hybrid_forces)):
+            nan_count = np.sum(~np.isfinite(hybrid_forces))
+            print(f"  WARNING: {nan_count} NaN/Inf values found in forces!")
+            print(f"  This may indicate atom ordering or indexing issues.")
+        else:
+            print(f"Max force: {np.abs(hybrid_forces).max():.6f} eV/Å")
+            
+    except RuntimeError:
+        # Re-raise RuntimeErrors (these are our custom errors)
+        raise
     except Exception as e:
         print(f"Warning: Could not compute initial energy/forces: {e}")
         print("This may be due to PyCHARMM not being properly initialized")
         print("or atom ordering mismatch. Check the reordering function.")
+        import traceback
+        traceback.print_exc()
         raise
     
     return atoms, hybrid_calc
