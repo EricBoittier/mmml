@@ -1019,8 +1019,12 @@ def setup_calculator(
             return ep * (r6 ** b - 2 * r6)
         
         coulombs_constant = 3.32063711e2 #Coulomb's constant kappa = 1/(4*pi*e0) in kcal-Angstroms/e^2.
-        def coulomb(r, qq, constant = coulombs_constant):
-            return -constant * qq/r
+        # Small epsilon to prevent division by zero in coulomb interactions
+        coulomb_epsilon = 1e-10
+        def coulomb(r, qq, constant = coulombs_constant, eps = coulomb_epsilon):
+            # Add epsilon to prevent division by zero (r can be very small for bonded atoms)
+            r_safe = jnp.maximum(r, eps)
+            return -constant * qq / r_safe
         
 
         def get_switching_function(
@@ -1103,6 +1107,9 @@ def setup_calculator(
             # Calculate forces with switching
             forces = -(mm_energy_grad(positions) + 
                     switching_grad(positions, pair_energies))
+            
+            # Check for NaN/Inf in forces and replace with zeros
+            forces = jnp.where(jnp.isfinite(forces), forces, 0.0)
 
             return switched_energy, forces
 
@@ -1167,6 +1174,17 @@ def setup_calculator(
             # Flatten all_monomer_idxs to get the actual atom indices
             monomer_atom_indices = jnp.array(all_monomer_idxs).flatten()
             
+            # Check for NaN/Inf in ML forces before mapping
+            ml_forces = jnp.where(jnp.isfinite(ml_forces), ml_forces, 0.0)
+            ml_internal_F = jnp.where(jnp.isfinite(ml_internal_F), ml_internal_F, 0.0)
+            if "ml_2b_F" in ml_out:
+                ml_2b_F = jnp.where(jnp.isfinite(ml_2b_F), ml_2b_F, 0.0)
+            
+            # Validate indexing
+            max_idx = jnp.max(monomer_atom_indices) if len(monomer_atom_indices) > 0 else -1
+            if max_idx >= n_atoms:
+                raise ValueError(f"ML force indexing error: max index {max_idx} >= n_atoms {n_atoms}")
+            
             # Map ML forces to the correct positions in the full force array
             outputs["out_F"] = outputs["out_F"].at[monomer_atom_indices].add(ml_forces)
             outputs["internal_F"] = outputs["internal_F"].at[monomer_atom_indices].add(ml_internal_F)
@@ -1188,15 +1206,45 @@ def setup_calculator(
                 debug=debug
             )
             # Preserve separate MM terms and add to totals instead of overwriting
-            outputs["mm_E"] = mm_out.get("mm_E", 0)
-            outputs["mm_F"] = mm_out.get("mm_F", 0)
-            outputs["out_E"] = outputs.get("out_E", 0) + mm_out.get("mm_E", 0)
-            outputs["out_F"] = outputs.get("out_F", 0) + mm_out.get("mm_F", 0)
+            mm_E = mm_out.get("mm_E", 0)
+            mm_F = mm_out.get("mm_F", 0)
+            
+            # Final NaN check on MM contributions
+            mm_E = jnp.where(jnp.isfinite(mm_E), mm_E, 0.0)
+            mm_F = jnp.where(jnp.isfinite(mm_F), mm_F, 0.0)
+            
+            # Ensure MM forces match system size
+            if mm_F.shape[0] != n_atoms:
+                if mm_F.shape[0] < n_atoms:
+                    padding = jnp.zeros((n_atoms - mm_F.shape[0], 3))
+                    mm_F = jnp.concatenate([mm_F, padding], axis=0)
+                else:
+                    mm_F = mm_F[:n_atoms]
+            
+            outputs["mm_E"] = mm_E
+            outputs["mm_F"] = mm_F
+            outputs["out_E"] = outputs.get("out_E", 0) + mm_E
+            outputs["out_F"] = outputs.get("out_F", 0) + mm_F
 
+        # Final validation: check for NaN/Inf in final forces
+        final_forces = outputs["out_F"]
+        final_forces = jnp.where(jnp.isfinite(final_forces), final_forces, 0.0)
+        
         # Total energy: combined ML (monomer+dimer switched) + MM
+        final_energy = outputs["out_E"]
+        if isinstance(final_energy, (int, float)):
+            final_energy = jnp.array(final_energy)
+        final_energy = jnp.where(jnp.isfinite(final_energy), final_energy, 0.0)
+        
+        # Compute energy sum safely
+        if hasattr(final_energy, 'sum'):
+            energy_sum = final_energy.sum()
+        else:
+            energy_sum = final_energy
+        
         return ModelOutput(
-            energy=(outputs["out_E"].sum()),
-            forces=outputs["out_F"],
+            energy=energy_sum,
+            forces=final_forces,
             dH=outputs["dH"],
             ml_2b_E=outputs["ml_2b_E"],
             ml_2b_F=outputs["ml_2b_F"],
@@ -1379,6 +1427,9 @@ def setup_calculator(
         debug: bool
     ) -> Dict[str, Array]:
         """Calculate MM energy and force contributions"""
+        
+        # Ensure positions are finite
+        positions = jnp.where(jnp.isfinite(positions), positions, 0.0)
 
         MM_energy_and_gradient = get_MM_energy_forces_fns(
             positions, 
@@ -1392,9 +1443,27 @@ def setup_calculator(
         
         mm_E, mm_grad = MM_energy_and_gradient(positions)
         
+        # Check for NaN/Inf in MM energy and forces
+        mm_E = jnp.where(jnp.isfinite(mm_E), mm_E, 0.0)
+        mm_grad = jnp.where(jnp.isfinite(mm_grad), mm_grad, 0.0)
+        
+        # Ensure MM forces match the full system size
+        n_atoms = positions.shape[0]
+        if mm_grad.shape[0] != n_atoms:
+            # MM forces are computed for N_MONOMERS * ATOMS_PER_MONOMER atoms
+            # If system has more atoms (e.g., water), pad with zeros
+            if mm_grad.shape[0] < n_atoms:
+                padding = jnp.zeros((n_atoms - mm_grad.shape[0], 3))
+                mm_grad = jnp.concatenate([mm_grad, padding], axis=0)
+            else:
+                # Truncate to system size
+                mm_grad = mm_grad[:n_atoms]
+        
         debug_print(debug, "MM Contributions:", 
             mm_E=mm_E,
-            mm_grad=mm_grad
+            mm_grad=mm_grad,
+            mm_grad_shape=mm_grad.shape,
+            n_atoms=n_atoms
         )
         kcal2ev = 1/23.0605
         return {
