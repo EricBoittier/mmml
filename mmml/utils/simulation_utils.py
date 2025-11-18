@@ -91,7 +91,50 @@ def reorder_atoms_to_match_pycharmm(
     
     print(f"  Trying {len(candidate_orderings)} different atom orderings...")
     
-    # Evaluate each ordering by computing CHARMM internal energy
+    # Determine which energy terms are available and active
+    # Try to use the most specific term available (BOND > ANGLE > DIHE > INTE)
+    available_energy_terms = []
+    try:
+        energy.get_energy()  # Update energy terms
+        term_names = energy.get_term_names()
+        term_statuses = energy.get_term_statuses()
+        
+        # Check for available terms in order of preference
+        preferred_terms = ["BOND", "ANGLE", "DIHE", "IMPR", "INTE"]
+        for term_name in preferred_terms:
+            if term_name in term_names:
+                idx = term_names.index(term_name)
+                if term_statuses[idx]:  # Term is active
+                    available_energy_terms.append(term_name)
+        
+        if not available_energy_terms:
+            # Fallback: use INTE if available, or first active term
+            if "INTE" in term_names:
+                idx = term_names.index("INTE")
+                if term_statuses[idx]:
+                    available_energy_terms.append("INTE")
+            else:
+                # Use first active term
+                for name, status in zip(term_names, term_statuses):
+                    if status:
+                        available_energy_terms.append(name)
+                        break
+        
+        if available_energy_terms:
+            primary_term = available_energy_terms[0]
+            print(f"  Using energy term '{primary_term}' for reordering evaluation")
+            if len(available_energy_terms) > 1:
+                print(f"  (Also available: {', '.join(available_energy_terms[1:])})")
+        else:
+            raise RuntimeError("No active energy terms found in PyCHARMM")
+            
+    except Exception as e:
+        print(f"  Warning: Could not determine available energy terms: {e}")
+        print(f"  Falling back to INTE")
+        available_energy_terms = ["INTE"]
+        primary_term = "INTE"
+    
+    # Evaluate each ordering by computing CHARMM energy using available terms
     best_energy = float('inf')
     best_indices = base_indices
     best_R = R
@@ -120,18 +163,42 @@ def reorder_atoms_to_match_pycharmm(
             # Compute energy with error handling
             try:
                 energy.get_energy()
-                inte_energy = energy.get_term_by_name("INTE")
+                
+                # Try to get energy from primary term, with fallbacks
+                ordering_energy = None
+                energy_str = ""
+                
+                for term_name in available_energy_terms:
+                    try:
+                        term_value = energy.get_term_by_name(term_name)
+                        if np.isfinite(term_value):
+                            if ordering_energy is None:
+                                ordering_energy = term_value
+                            else:
+                                # Sum multiple terms if available
+                                ordering_energy += term_value
+                            energy_str += f"{term_name}={term_value:.6f} "
+                    except Exception:
+                        continue
+                
+                # If we couldn't get any energy term, try INTE as last resort
+                if ordering_energy is None:
+                    try:
+                        ordering_energy = energy.get_term_by_name("INTE")
+                        energy_str = f"INTE={ordering_energy:.6f}"
+                    except Exception:
+                        pass
                 
                 # Check if energy is valid
-                if not np.isfinite(inte_energy):
-                    print(f"    Ordering {i+1} failed: invalid energy (NaN/Inf)")
+                if ordering_energy is None or not np.isfinite(ordering_energy):
+                    print(f"    Ordering {i+1} failed: invalid energy (NaN/Inf or not available)")
                     continue
                 
-                print(f"    Ordering {i+1}/{len(candidate_orderings)}: INTE = {inte_energy:.6f} kcal/mol")
+                print(f"    Ordering {i+1}/{len(candidate_orderings)}: {energy_str.strip()} kcal/mol")
                 
                 # Keep track of best (lowest energy) ordering
-                if inte_energy < best_energy:
-                    best_energy = inte_energy
+                if ordering_energy < best_energy:
+                    best_energy = ordering_energy
                     best_indices = reorder_indices
                     best_R = R_test
                     best_Z = Z_test
@@ -159,7 +226,7 @@ def reorder_atoms_to_match_pycharmm(
             "4. PyCHARMM energy calculation is failing"
         )
     
-    print(f"  Best ordering found: INTE = {best_energy:.6f} kcal/mol")
+    print(f"  Best ordering found: Energy = {best_energy:.6f} kcal/mol (using {primary_term})")
     print(f"  Reorder indices: {best_indices}")
     
     # Validate final arrays
@@ -240,18 +307,58 @@ def initialize_simulation_from_batch(
     print(f"  Atomic numbers shape: {Z.shape}")
     print(f"  Number of atoms: {len(R)}")
     
+    # Try to get PyCHARMM data if not provided but PyCHARMM is available
+    if pycharmm_atypes is None or pycharmm_resids is None:
+        try:
+            from mmml.pycharmmInterface.import_pycharmm import psf
+            if pycharmm_atypes is None:
+                pycharmm_atypes = np.array(psf.get_atype())
+            if pycharmm_resids is None:
+                pycharmm_resids = np.array(psf.get_resid())
+            print(f"  Retrieved PyCHARMM atom types and residue IDs from PSF")
+        except Exception as e:
+            print(f"  Could not retrieve PyCHARMM data: {e}")
+    
+    # Try to get ATOMS_PER_MONOMER and N_MONOMERS from args if not provided
+    if ATOMS_PER_MONOMER is None and hasattr(args, 'n_atoms_monomer'):
+        ATOMS_PER_MONOMER = args.n_atoms_monomer
+    if N_MONOMERS is None and hasattr(args, 'n_monomers'):
+        N_MONOMERS = args.n_monomers
+    
     # Reorder atoms to match PyCHARMM ordering if PyCHARMM is initialized
-    if (args.include_mm if hasattr(args, 'include_mm') else False) and \
+    # Check if MM is enabled (either via args or if PyCHARMM data is available)
+    mm_enabled = (args.include_mm if hasattr(args, 'include_mm') else False) or \
+                 (pycharmm_atypes is not None)
+    
+    if mm_enabled and \
        pycharmm_atypes is not None and \
        ATOMS_PER_MONOMER is not None and \
        N_MONOMERS is not None:
-        R, Z, reorder_indices = reorder_atoms_to_match_pycharmm(
-            R, Z, pycharmm_atypes, pycharmm_resids,
-            ATOMS_PER_MONOMER, N_MONOMERS
-        )
-        print(f"  Atoms reordered to match PyCHARMM ordering")
+        print(f"  Attempting to reorder atoms to match PyCHARMM ordering...")
+        print(f"    ATOMS_PER_MONOMER: {ATOMS_PER_MONOMER}, N_MONOMERS: {N_MONOMERS}")
+        print(f"    PyCHARMM atom types shape: {pycharmm_atypes.shape if pycharmm_atypes is not None else None}")
+        try:
+            R, Z, reorder_indices = reorder_atoms_to_match_pycharmm(
+                R, Z, pycharmm_atypes, pycharmm_resids,
+                ATOMS_PER_MONOMER, N_MONOMERS
+            )
+            print(f"  ✓ Atoms reordered to match PyCHARMM ordering")
+        except Exception as e:
+            print(f"  Warning: Reordering failed: {e}")
+            print(f"  Continuing without reordering (this may cause issues)")
+            import traceback
+            traceback.print_exc()
     else:
-        print(f"  No reordering applied (MM disabled or PyCHARMM not initialized)")
+        missing = []
+        if not mm_enabled:
+            missing.append("MM not enabled")
+        if pycharmm_atypes is None:
+            missing.append("pycharmm_atypes")
+        if ATOMS_PER_MONOMER is None:
+            missing.append("ATOMS_PER_MONOMER")
+        if N_MONOMERS is None:
+            missing.append("N_MONOMERS")
+        print(f"  No reordering applied (missing: {', '.join(missing)})")
     
     # Validate atomic numbers match between batch and PyCHARMM (if available)
     if hasattr(args, 'include_mm') and args.include_mm and pycharmm_atypes is not None:
