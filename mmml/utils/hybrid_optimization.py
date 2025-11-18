@@ -49,7 +49,23 @@ def extract_lj_parameters_from_calculator(
     from mmml.pycharmmInterface.import_pycharmm import psf, CGENFF_RTF, CGENFF_PRM, read, settings, reset_block
     
     # Get atom type codes from PSF (these are IAC codes, 1-indexed in PyCHARMM)
-    iac_codes_raw = np.array(psf.get_iac())[:N_MONOMERS * ATOMS_PER_MONOMER]
+    try:
+        iac_codes_raw = np.array(psf.get_iac())
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to get IAC codes from PSF. Make sure PyCHARMM is initialized "
+            f"and the PSF structure is built before calling this function. Error: {e}"
+        )
+    
+    n_atoms_expected = N_MONOMERS * ATOMS_PER_MONOMER
+    if len(iac_codes_raw) < n_atoms_expected:
+        raise RuntimeError(
+            f"PSF has {len(iac_codes_raw)} atoms, but expected {n_atoms_expected} "
+            f"(N_MONOMERS={N_MONOMERS} * ATOMS_PER_MONOMER={ATOMS_PER_MONOMER}). "
+            f"Make sure PyCHARMM is fully initialized with the correct number of atoms."
+        )
+    
+    iac_codes_raw = iac_codes_raw[:n_atoms_expected]
     
     # Convert IAC codes to 0-indexed if needed
     if len(iac_codes_raw) > 0 and np.min(iac_codes_raw) > 0:
@@ -58,7 +74,17 @@ def extract_lj_parameters_from_calculator(
         iac_codes = iac_codes_raw
     
     # Get all atom types from parameter file
-    atc_all = param.get_atc()
+    try:
+        atc_all = param.get_atc()
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to get atom types from PyCHARMM. Make sure parameters are loaded. Error: {e}"
+        )
+    
+    if len(atc_all) == 0:
+        raise RuntimeError(
+            "No atom types found in PyCHARMM parameter file. Make sure CGENFF parameters are loaded."
+        )
     
     # Load CGENFF parameters (this should match what's in setup_calculator)
     reset_block()
@@ -93,8 +119,21 @@ def extract_lj_parameters_from_calculator(
     unique_iac_codes = unique_iac_codes[unique_iac_codes >= 0]  # Remove negative indices
     unique_iac_codes = unique_iac_codes[unique_iac_codes < len(atc_all)]  # Remove out-of-bounds
     
+    if len(unique_iac_codes) == 0:
+        raise RuntimeError(
+            f"No valid atom types found! IAC codes: {iac_codes}, "
+            f"unique (after filtering): {np.unique(iac_codes)}, "
+            f"atc_all length: {len(atc_all)}. "
+            f"This usually means:\n"
+            f"1. PyCHARMM PSF is not properly initialized\n"
+            f"2. IAC codes are out of bounds (max IAC: {np.max(iac_codes) if len(iac_codes) > 0 else 'N/A'}, "
+            f"atc_all length: {len(atc_all)})\n"
+            f"3. Atom reordering hasn't been done yet\n"
+            f"Make sure to call this function AFTER PyCHARMM initialization and atom reordering."
+        )
+    
     # Get the actual atom type names used in the system
-    atc_used = [atc_all[iac] for iac in unique_iac_codes]
+    atc_used = [atc_all[int(iac)] for iac in unique_iac_codes]
     
     # Create mapping from IAC code to parameter index (for the reduced parameter set)
     iac_to_param_idx = {int(iac): idx for idx, iac in enumerate(unique_iac_codes)}
