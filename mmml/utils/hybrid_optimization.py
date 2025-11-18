@@ -162,7 +162,67 @@ def extract_lj_parameters_from_calculator(
         "pair_idx_atom_atom": pair_idx_atom_atom,
         "atc": atc_used,  # List of atom type names actually used
         "iac_to_param_idx": iac_to_param_idx,  # Mapping for reference
+        "unique_iac_codes": unique_iac_codes,  # Original IAC codes (0-indexed) for used types
     }
+
+
+def expand_scaling_parameters_to_full_set(
+    optimized_ep_scale: np.ndarray,
+    optimized_sig_scale: np.ndarray,
+    lj_params: Dict[str, np.ndarray],
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Expand optimized scaling parameters from reduced set to full parameter set.
+    
+    The optimization only optimizes parameters for atom types actually used in the system.
+    However, the calculator expects scaling parameters for ALL atom types in the parameter file.
+    This function expands the optimized parameters to the full set.
+    
+    Args:
+        optimized_ep_scale: Optimized epsilon scaling factors (shape: n_used_types)
+        optimized_sig_scale: Optimized sigma scaling factors (shape: n_used_types)
+        lj_params: Dictionary from extract_lj_parameters_from_calculator, must contain:
+            - "unique_iac_codes": IAC codes (0-indexed) for used atom types
+            - "iac_to_param_idx": Mapping from IAC codes to parameter indices
+    
+    Returns:
+        full_ep_scale: Expanded epsilon scaling factors (shape: n_all_types)
+        full_sig_scale: Expanded sigma scaling factors (shape: n_all_types)
+    """
+    import pycharmm.param as param
+    
+    # Get all atom types from parameter file
+    try:
+        atc_all = param.get_atc()
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to get atom types from PyCHARMM. Make sure parameters are loaded. Error: {e}"
+        )
+    
+    n_all_types = len(atc_all)
+    
+    # Initialize full arrays with ones (default scaling)
+    full_ep_scale = np.ones(n_all_types)
+    full_sig_scale = np.ones(n_all_types)
+    
+    # Get IAC codes for used types
+    if "unique_iac_codes" not in lj_params:
+        raise ValueError(
+            "lj_params must contain 'unique_iac_codes'. "
+            "Make sure you're using the latest version of extract_lj_parameters_from_calculator."
+        )
+    
+    unique_iac_codes = lj_params["unique_iac_codes"]
+    
+    # Map optimized values to full parameter set
+    # unique_iac_codes are 0-indexed IAC codes that index into atc_all
+    for i, iac_code in enumerate(unique_iac_codes):
+        iac_int = int(iac_code)
+        if 0 <= iac_int < n_all_types:
+            full_ep_scale[iac_int] = float(optimized_ep_scale[i])
+            full_sig_scale[iac_int] = float(optimized_sig_scale[i])
+    
+    return full_ep_scale, full_sig_scale
 
 
 def create_hybrid_fitting_factory(
@@ -1269,8 +1329,11 @@ def fit_hybrid_potential_to_training_data_jax(
         result_dict["ml_params"] = best_params["ml_params"]
     
     if optimize_mode in ["lj_only", "both"]:
+        # Return optimized parameters (these are for the reduced set of used atom types)
         result_dict["ep_scale"] = best_params["ep_scale"]
         result_dict["sig_scale"] = best_params["sig_scale"]
+        # Note: To use these with setup_calculator, you need to expand them to the full
+        # parameter set using expand_scaling_parameters_to_full_set()
     
     if optimize_mode == "cutoff_only":
         result_dict["ml_cutoff"] = best_params["ml_cutoff"]
