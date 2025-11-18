@@ -1137,15 +1137,17 @@ def setup_calculator(
             ModelOutput containing total energy and forces
         """
         n_dimers = len(dimer_permutations(n_monomers))
+        n_atoms = positions.shape[0]
         
+        # Initialize force arrays with correct shape for all atoms
         outputs = {
             "out_E": 0,
-            "out_F": 0,
+            "out_F": jnp.zeros((n_atoms, 3)),
             "dH": 0,
             "internal_E": 0, 
-            "internal_F": 0,
+            "internal_F": jnp.zeros((n_atoms, 3)),
             "ml_2b_E": 0,
-            "ml_2b_F": 0
+            "ml_2b_F": jnp.zeros((n_atoms, 3))
         }
 
         if doML:
@@ -1156,7 +1158,28 @@ def setup_calculator(
                 ml_energy_conversion_factor=ml_energy_conversion_factor,
                 ml_force_conversion_factor=ml_force_conversion_factor
             )
-            outputs.update(ml_out)
+            # Map ML forces to correct atom indices in the full system
+            # ML forces are computed for n_monomers * ATOMS_PER_MONOMER atoms
+            ml_forces = ml_out.get("out_F", jnp.zeros((n_monomers * ATOMS_PER_MONOMER, 3)))
+            ml_internal_F = ml_out.get("internal_F", jnp.zeros((n_monomers * ATOMS_PER_MONOMER, 3)))
+            ml_2b_F = ml_out.get("ml_2b_F", jnp.zeros((n_monomers * ATOMS_PER_MONOMER, 3)))
+            
+            # Flatten all_monomer_idxs to get the actual atom indices
+            monomer_atom_indices = jnp.array(all_monomer_idxs).flatten()
+            
+            # Map ML forces to the correct positions in the full force array
+            outputs["out_F"] = outputs["out_F"].at[monomer_atom_indices].add(ml_forces)
+            outputs["internal_F"] = outputs["internal_F"].at[monomer_atom_indices].add(ml_internal_F)
+            # Only add ml_2b_F if it's not zero (i.e., if it was actually computed)
+            # Check by seeing if the key exists in ml_out
+            if "ml_2b_F" in ml_out:
+                outputs["ml_2b_F"] = outputs["ml_2b_F"].at[monomer_atom_indices].add(ml_2b_F)
+            
+            # Update energy terms (these are scalars, so no shape issue)
+            outputs["out_E"] = ml_out.get("out_E", 0)
+            outputs["dH"] = ml_out.get("dH", 0)
+            outputs["internal_E"] = ml_out.get("internal_E", 0)
+            outputs["ml_2b_E"] = ml_out.get("ml_2b_E", 0)
 
         if doMM:
             mm_out = calculate_mm_contributions(
