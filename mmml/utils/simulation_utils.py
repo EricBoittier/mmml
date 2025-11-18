@@ -106,15 +106,34 @@ def reorder_atoms_to_match_pycharmm(
     # Note: INTE is not always available, so we don't use it as a fallback
     available_energy_terms = []
     primary_term = None
+    
+    # Verify coordinates were set successfully before trying to get energy terms
+    coordinates_set = False
+    try:
+        # Check if coordinates are valid (not undefined 9999.0 values)
+        current_positions = coor.get_positions()
+        if current_positions is not None and len(current_positions) > 0:
+            # Check if any coordinates are still undefined (9999.0)
+            if not np.any(np.abs(current_positions.values.flatten()) > 1000):
+                coordinates_set = True
+    except Exception:
+        pass
+    
+    if not coordinates_set:
+        print(f"  Warning: Coordinates may still be undefined, will set for each ordering")
+    
     try:
         # Try to get energy terms with error handling to prevent crashes
         # First ensure coordinates are set (energy.get_energy() may fail if coords are undefined)
-        try:
-            energy.get_energy()  # Update energy terms
-        except Exception as e:
-            print(f"  Warning: energy.get_energy() failed (coordinates may be undefined): {e}")
-            # Don't raise - will try again after setting coordinates for each ordering
-            raise
+        if coordinates_set:
+            try:
+                energy.get_energy()  # Update energy terms
+            except Exception as e:
+                print(f"  Warning: energy.get_energy() failed: {e}")
+                raise
+        else:
+            # Skip getting energy terms now - will do it after setting coordinates for each ordering
+            raise RuntimeError("Coordinates not set, will determine energy terms per ordering")
         
         try:
             term_names = energy.get_term_names()
