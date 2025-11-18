@@ -492,6 +492,16 @@ def create_hybrid_fitting_factory(
             # Import switching functions
             from mmml.pycharmmInterface.mmml_calculator import ml_switch_simple, mm_switch_simple
             
+            # Ensure cutoff parameters are valid (positive, finite)
+            ml_cutoff_val = jnp.maximum(ml_cutoff_val, 0.1)  # Minimum 0.1 Å
+            mm_switch_on_val = jnp.maximum(mm_switch_on_val, ml_cutoff_val + 0.1)  # Must be > ml_cutoff
+            mm_cutoff_val = jnp.maximum(mm_cutoff_val, 0.1)  # Minimum 0.1 Å
+            
+            # Ensure all are finite
+            ml_cutoff_val = jnp.where(jnp.isfinite(ml_cutoff_val), ml_cutoff_val, 2.0)
+            mm_switch_on_val = jnp.where(jnp.isfinite(mm_switch_on_val), mm_switch_on_val, 5.0)
+            mm_cutoff_val = jnp.where(jnp.isfinite(mm_cutoff_val), mm_cutoff_val, 1.0)
+            
             # Calculate distances for switching (use COM distances for dimers, or pair distances)
             # For simplicity, we'll apply switching based on average pair distances
             # This is a simplified approach - in practice, switching is applied per dimer
@@ -501,21 +511,39 @@ def create_hybrid_fitting_factory(
                     R[pair_idx_atom_atom[:, 0]] - R[pair_idx_atom_atom[:, 1]], 
                     axis=1
                 )
+                # Use minimum distance for switching (more conservative)
+                min_distance = jnp.min(pair_distances)
                 avg_distance = jnp.mean(pair_distances)
+                # Use a combination: closer to minimum for short-range behavior
+                switching_distance = 0.7 * min_distance + 0.3 * avg_distance
             else:
                 # Fallback: use average distance from origin
-                avg_distance = jnp.mean(jnp.linalg.norm(R, axis=1))
+                switching_distance = jnp.mean(jnp.linalg.norm(R, axis=1))
+            
+            # Ensure switching distance is finite and positive
+            switching_distance = jnp.maximum(switching_distance, 0.1)
+            switching_distance = jnp.where(jnp.isfinite(switching_distance), switching_distance, 5.0)
             
             # Apply ML switching (1.0 at short range, tapers to 0.0 at mm_switch_on)
-            ml_scale = ml_switch_simple(avg_distance, ml_cutoff_val, mm_switch_on_val)
+            ml_scale = ml_switch_simple(switching_distance, ml_cutoff_val, mm_switch_on_val)
             # Apply MM switching (0.0 at short range, ramps to 1.0 at mm_switch_on + mm_cutoff)
-            mm_scale = mm_switch_simple(avg_distance, mm_switch_on_val, mm_cutoff_val)
+            mm_scale = mm_switch_simple(switching_distance, mm_switch_on_val, mm_cutoff_val)
+            
+            # Ensure scales are finite and in valid range [0, 1]
+            ml_scale = jnp.clip(jnp.where(jnp.isfinite(ml_scale), ml_scale, 1.0), 0.0, 1.0)
+            mm_scale = jnp.clip(jnp.where(jnp.isfinite(mm_scale), mm_scale, 0.0), 0.0, 1.0)
             
             # Scale energies and forces by switching functions
             ml_energy = ml_energy * ml_scale
             ml_forces = ml_forces * ml_scale
             mm_energy = mm_energy * mm_scale
             mm_forces = mm_forces * mm_scale
+            
+            # Ensure results are finite
+            ml_energy = jnp.where(jnp.isfinite(ml_energy), ml_energy, 0.0)
+            mm_energy = jnp.where(jnp.isfinite(mm_energy), mm_energy, 0.0)
+            ml_forces = jnp.where(jnp.isfinite(ml_forces), ml_forces, 0.0)
+            mm_forces = jnp.where(jnp.isfinite(mm_forces), mm_forces, 0.0)
         
         total_energy = ml_energy + mm_energy
         total_forces = ml_forces + mm_forces
@@ -1023,6 +1051,22 @@ def fit_hybrid_potential_to_training_data_jax(
         # No precomputation needed since cutoffs affect both contributions
         def loss_fn(p):
             """Loss function for cutoff-only optimization."""
+            # Validate and clip parameters before computing loss
+            ml_cutoff = jnp.clip(
+                jnp.where(jnp.isfinite(p["ml_cutoff"]), p["ml_cutoff"], 2.0),
+                0.1, 10.0
+            )
+            mm_switch_on = jnp.clip(
+                jnp.where(jnp.isfinite(p["mm_switch_on"]), p["mm_switch_on"], 5.0),
+                0.1, 20.0
+            )
+            mm_cutoff = jnp.clip(
+                jnp.where(jnp.isfinite(p["mm_cutoff"]), p["mm_cutoff"], 1.0),
+                0.1, 10.0
+            )
+            # Ensure mm_switch_on > ml_cutoff
+            mm_switch_on = jnp.maximum(mm_switch_on, ml_cutoff + 0.1)
+            
             total_energy_error = jnp.array(0.0)
             total_force_error = jnp.array(0.0)
             n_configs = 0
@@ -1033,25 +1077,34 @@ def fit_hybrid_potential_to_training_data_jax(
                         data["R"],
                         data["Z"],
                         {
-                            "ml_cutoff": p["ml_cutoff"],
-                            "mm_switch_on": p["mm_switch_on"],
-                            "mm_cutoff": p["mm_cutoff"]
+                            "ml_cutoff": ml_cutoff,
+                            "mm_switch_on": mm_switch_on,
+                            "mm_cutoff": mm_cutoff
                         }
                     )
                     
+                    # Check for NaN/Inf in predictions
                     E_pred = jnp.asarray(E_pred)
                     if E_pred.shape != ():
                         E_pred = jnp.sum(E_pred) if E_pred.size > 0 else jnp.array(0.0)
+                    
+                    # Replace NaN/Inf with large penalty
+                    E_pred = jnp.where(jnp.isfinite(E_pred), E_pred, 1e6)
+                    F_pred = jnp.where(jnp.isfinite(F_pred), F_pred, 0.0)
                     
                     if data["E_ref"] is not None:
                         E_ref = jnp.asarray(data["E_ref"])
                         if E_ref.shape != ():
                             E_ref = jnp.sum(E_ref) if E_ref.size > 0 else jnp.array(0.0)
+                        E_ref = jnp.where(jnp.isfinite(E_ref), E_ref, 0.0)
                         energy_error = (E_pred - E_ref) ** 2
+                        energy_error = jnp.where(jnp.isfinite(energy_error), energy_error, 1e6)
                         total_energy_error = total_energy_error + energy_error
                     
                     if data["F_ref"] is not None:
-                        force_error = jnp.mean((F_pred - data["F_ref"]) ** 2)
+                        F_ref = jnp.where(jnp.isfinite(data["F_ref"]), data["F_ref"], 0.0)
+                        force_error = jnp.mean((F_pred - F_ref) ** 2)
+                        force_error = jnp.where(jnp.isfinite(force_error), force_error, 1e6)
                         total_force_error = total_force_error + force_error
                     
                     n_configs += 1
@@ -1061,11 +1114,14 @@ def fit_hybrid_potential_to_training_data_jax(
                     continue
             
             if n_configs == 0:
-                return jnp.array(jnp.inf)
+                return jnp.array(1e6)
             
             avg_energy_error = total_energy_error / n_configs
             avg_force_error = total_force_error / n_configs
             loss = energy_weight * avg_energy_error + force_weight * avg_force_error
+            
+            # Ensure loss is finite
+            loss = jnp.where(jnp.isfinite(loss), loss, jnp.array(1e6))
             
             if hasattr(loss, 'shape') and loss.shape != ():
                 loss = jnp.sum(loss)
@@ -1155,9 +1211,19 @@ def fit_hybrid_potential_to_training_data_jax(
         
         if optimize_mode == "cutoff_only":
             # Clip cutoffs to reasonable bounds (positive, with ordering constraints)
-            params["ml_cutoff"] = jnp.clip(params["ml_cutoff"], 0.1, 10.0)
-            params["mm_switch_on"] = jnp.clip(params["mm_switch_on"], 0.1, 20.0)
-            params["mm_cutoff"] = jnp.clip(params["mm_cutoff"], 0.1, 10.0)
+            # Also ensure they're finite
+            params["ml_cutoff"] = jnp.clip(
+                jnp.where(jnp.isfinite(params["ml_cutoff"]), params["ml_cutoff"], 2.0),
+                0.1, 10.0
+            )
+            params["mm_switch_on"] = jnp.clip(
+                jnp.where(jnp.isfinite(params["mm_switch_on"]), params["mm_switch_on"], 5.0),
+                0.1, 20.0
+            )
+            params["mm_cutoff"] = jnp.clip(
+                jnp.where(jnp.isfinite(params["mm_cutoff"]), params["mm_cutoff"], 1.0),
+                0.1, 10.0
+            )
             # Ensure mm_switch_on > ml_cutoff (for valid switching)
             params["mm_switch_on"] = jnp.maximum(params["mm_switch_on"], params["ml_cutoff"] + 0.1)
         
