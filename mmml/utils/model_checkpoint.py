@@ -297,35 +297,55 @@ def load_model_checkpoint(
                 use_orbax = False
         
         if not use_orbax:
-            # Try pickle file
-            params_path = checkpoint_dir / "params.pkl"
-            if not params_path.exists():
-                # Try common alternative names
-                alternatives = [
-                    checkpoint_dir / "best_params.pkl",
-                    checkpoint_dir / "checkpoint_latest.pkl",
-                    checkpoint_dir / "checkpoint_best.pkl",
-                ]
-                for alt in alternatives:
-                    if alt.exists():
-                        params_path = alt
-                        break
-                else:
-                    raise FileNotFoundError(f"Parameters not found in {checkpoint_dir}")
-            
-            with open(params_path, 'rb') as f:
-                checkpoint_data = pickle.load(f)
+            # Try JSON file first (preferred for portability)
+            json_params_path = checkpoint_dir / "params.json"
+            if json_params_path.exists():
+                with open(json_params_path, 'r') as f:
+                    checkpoint_data = json.load(f)
                 
-            # Extract params if checkpoint is a dict
-            if isinstance(checkpoint_data, dict):
-                if 'params' in checkpoint_data:
-                    result['params'] = checkpoint_data['params']
-                elif 'ema_params' in checkpoint_data:
-                    result['params'] = checkpoint_data['ema_params']
+                # Extract params if checkpoint is a dict
+                if isinstance(checkpoint_data, dict):
+                    if 'params' in checkpoint_data:
+                        result['params'] = checkpoint_data['params']
+                    elif 'ema_params' in checkpoint_data:
+                        result['params'] = checkpoint_data['ema_params']
+                    else:
+                        result['params'] = checkpoint_data
                 else:
                     result['params'] = checkpoint_data
             else:
-                result['params'] = checkpoint_data
+                # Fall back to pickle file
+                params_path = checkpoint_dir / "params.pkl"
+                if not params_path.exists():
+                    # Try common alternative names
+                    alternatives = [
+                        checkpoint_dir / "best_params.pkl",
+                        checkpoint_dir / "checkpoint_latest.pkl",
+                        checkpoint_dir / "checkpoint_best.pkl",
+                    ]
+                    for alt in alternatives:
+                        if alt.exists():
+                            params_path = alt
+                            break
+                    else:
+                        raise FileNotFoundError(
+                            f"Parameters not found in {checkpoint_dir}. "
+                            f"Tried: params.json, params.pkl, and alternatives."
+                        )
+                
+                with open(params_path, 'rb') as f:
+                    checkpoint_data = pickle.load(f)
+                    
+                # Extract params if checkpoint is a dict
+                if isinstance(checkpoint_data, dict):
+                    if 'params' in checkpoint_data:
+                        result['params'] = checkpoint_data['params']
+                    elif 'ema_params' in checkpoint_data:
+                        result['params'] = checkpoint_data['ema_params']
+                    else:
+                        result['params'] = checkpoint_data
+                else:
+                    result['params'] = checkpoint_data
     
     # Load config
     if load_config:
