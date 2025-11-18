@@ -53,6 +53,7 @@ dependencies = [
     "rich",
     "tabulate",
     "typing-extensions",
+    "pint",
     "e3x>=1.0.2",
     "plotnine>=0.15.1",
     "patchworklib>=0.6.6",

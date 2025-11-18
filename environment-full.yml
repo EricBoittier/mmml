@@ -130,6 +130,7 @@ dependencies:
       # Utilities
       - tabulate
       - typing-extensions
+      - pint
       
       # Install mmml in editable mode (run this from the repo root)
       - -e .
