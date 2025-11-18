@@ -312,6 +312,12 @@ def create_hybrid_fitting_factory(
         
         mm_forces = -jax.grad(mm_energy_fn)(R)
         
+        # Skip MM if optimize_mode is "ml_only" (MM will be precomputed and added separately)
+        if optimize_mode == "ml_only":
+            # For ML-only, we only compute ML contributions (MM is precomputed)
+            mm_energy = jnp.array(0.0)
+            mm_forces = jnp.zeros_like(R)
+        
         # Compute ML contributions using model
         # IMPORTANT: For ML optimization, we need to use model.apply directly with updated params
         # The calculator factory uses fixed params, so we bypass it when optimizing ML
