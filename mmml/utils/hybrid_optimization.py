@@ -27,24 +27,38 @@ def extract_lj_parameters_from_calculator(
     This should be called once after calculator_factory is created to extract
     the base parameters that will be scaled during optimization.
     
+    IMPORTANT: This function extracts parameters ONLY for atom types that are
+    actually used in the system (based on at_codes from the PSF). This ensures
+    we only optimize the parameters that are needed.
+    
     Args:
         ATOMS_PER_MONOMER: Number of atoms per monomer
         N_MONOMERS: Number of monomers
     
     Returns:
         dict with keys:
-            atc_epsilons: Base epsilon values for each atom type
-            atc_rmins: Base rmin values for each atom type
-            atc_qs: Charges for each atom type
-            at_codes: Atom type codes for each atom in the system
+            atc_epsilons: Base epsilon values for each atom type (only used types)
+            atc_rmins: Base rmin values for each atom type (only used types)
+            atc_qs: Charges for each atom type (only used types)
+            at_codes: Atom type codes for each atom in the system (mapped to parameter indices)
             pair_idx_atom_atom: Pair indices for atom-atom interactions
+            atc: List of atom type names actually used in the system
+            iac_to_param_idx: Mapping from IAC codes to parameter array indices
     """
     import pycharmm.param as param
     from mmml.pycharmmInterface.import_pycharmm import psf, CGENFF_RTF, CGENFF_PRM, read, settings, reset_block
     
-    # Get atom type codes
-    atc = param.get_atc()
-    at_codes = np.array(psf.get_iac())[:N_MONOMERS * ATOMS_PER_MONOMER]
+    # Get atom type codes from PSF (these are IAC codes, 1-indexed in PyCHARMM)
+    iac_codes_raw = np.array(psf.get_iac())[:N_MONOMERS * ATOMS_PER_MONOMER]
+    
+    # Convert IAC codes to 0-indexed if needed
+    if len(iac_codes_raw) > 0 and np.min(iac_codes_raw) > 0:
+        iac_codes = iac_codes_raw - 1
+    else:
+        iac_codes = iac_codes_raw
+    
+    # Get all atom types from parameter file
+    atc_all = param.get_atc()
     
     # Load CGENFF parameters (this should match what's in setup_calculator)
     reset_block()
@@ -57,7 +71,7 @@ def extract_lj_parameters_from_calculator(
     
     # Extract parameters from parameter file
     cgenff_rtf = open(CGENFF_RTF).readlines()
-    atc = param.get_atc()
+    atc_all = param.get_atc()  # Refresh after reading
     cgenff_params_dict_q = {}
     for _ in cgenff_rtf:
         if _.startswith("ATOM"):
@@ -73,10 +87,25 @@ def extract_lj_parameters_from_calculator(
             res, _, ep, sig = p.split()[:4]
             cgenff_params_dict[res] = (float(ep), float(sig))
     
-    # Extract base parameters
-    atc_epsilons = np.array([cgenff_params_dict.get(_, (0.0, 0.0))[0] for _ in atc])
-    atc_rmins = np.array([cgenff_params_dict.get(_, (0.0, 0.0))[1] for _ in atc])
-    atc_qs = np.array([cgenff_params_dict_q.get(_, 0.0) for _ in atc])
+    # Find which atom types are actually used in the system
+    # IAC codes index into atc_all, so we need to find unique atom types used
+    unique_iac_codes = np.unique(iac_codes)
+    unique_iac_codes = unique_iac_codes[unique_iac_codes >= 0]  # Remove negative indices
+    unique_iac_codes = unique_iac_codes[unique_iac_codes < len(atc_all)]  # Remove out-of-bounds
+    
+    # Get the actual atom type names used in the system
+    atc_used = [atc_all[iac] for iac in unique_iac_codes]
+    
+    # Create mapping from IAC code to parameter index (for the reduced parameter set)
+    iac_to_param_idx = {int(iac): idx for idx, iac in enumerate(unique_iac_codes)}
+    
+    # Map at_codes to parameter indices (for the reduced set)
+    at_codes = np.array([iac_to_param_idx.get(int(iac), 0) for iac in iac_codes])
+    
+    # Extract base parameters ONLY for used atom types
+    atc_epsilons = np.array([cgenff_params_dict.get(_, (0.0, 0.0))[0] for _ in atc_used])
+    atc_rmins = np.array([cgenff_params_dict.get(_, (0.0, 0.0))[1] for _ in atc_used])
+    atc_qs = np.array([cgenff_params_dict_q.get(_, 0.0) for _ in atc_used])
     
     # Compute pair indices (matching the calculator setup)
     from mmml.pycharmmInterface.mmml_calculator import dimer_permutations
@@ -90,8 +119,10 @@ def extract_lj_parameters_from_calculator(
         "atc_epsilons": atc_epsilons,
         "atc_rmins": atc_rmins,
         "atc_qs": atc_qs,
-        "at_codes": at_codes,
+        "at_codes": at_codes,  # Now mapped to parameter indices
         "pair_idx_atom_atom": pair_idx_atom_atom,
+        "atc": atc_used,  # List of atom type names actually used
+        "iac_to_param_idx": iac_to_param_idx,  # Mapping for reference
     }
 
 
@@ -168,7 +199,7 @@ def create_hybrid_fitting_factory(
         at_q = jnp.array(atc_qs)
         
         # Validate at_codes indices are within bounds
-        # IAC codes from PyCHARMM are 1-indexed, but arrays are 0-indexed
+        # at_codes should already be mapped to parameter indices (0-indexed)
         # Also ensure we don't have empty arrays
         if len(at_codes) == 0:
             # Return zero energy/forces if no atoms
@@ -178,18 +209,12 @@ def create_hybrid_fitting_factory(
         if len(at_ep) == 0 or len(at_rm) == 0 or len(at_q) == 0:
             return jnp.array(0.0), jnp.zeros_like(R)
         
-        # Convert at_codes to numpy array and handle indexing
+        # Convert at_codes to JAX array and validate
+        # at_codes should already be 0-indexed and mapped to parameter indices
         at_codes_arr = np.array(at_codes)
         
-        # IAC codes are 1-indexed in PyCHARMM, convert to 0-indexed
-        # But first check if they're already 0-indexed by checking the min value
-        if len(at_codes_arr) > 0:
-            min_code = np.min(at_codes_arr)
-            if min_code > 0:
-                # Likely 1-indexed, convert to 0-indexed
-                at_codes_arr = at_codes_arr - 1
-        
         # Clamp at_codes to valid range (0 to len-1)
+        # This ensures we don't have out-of-bounds indices
         at_codes_safe = jnp.clip(jnp.array(at_codes_arr), 0, len(at_ep) - 1)
         
         rmins_per_system = jnp.take(at_rm, at_codes_safe)
