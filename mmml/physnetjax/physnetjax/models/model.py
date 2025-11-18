@@ -771,12 +771,19 @@ class EF(nn.Module):
         electrostatics += eshift * batch_mask
         electrostatics *= off_dist
         # Sum contributions for each atom
+        # Use actual number of atoms from atomic_charges to match atomic_energies shape
+        num_atoms_actual = atomic_charges.shape[0]
+        # Use batch_size * self.natoms for num_segments to handle all possible indices (static for JIT)
+        # Then truncate to match atomic_energies shape (atomic_energies has shape (num_atoms_actual, 1, 1, 1))
         atomic_electrostatics = jax.ops.segment_sum(
             electrostatics,
             segment_ids=dst_idx,
             num_segments=batch_size * self.natoms,
         )
+        # Truncate to match atomic_energies shape
+        atomic_electrostatics = atomic_electrostatics[:num_atoms_actual]
         # atomic_electrostatics *= atom_mask
+        # Use batch_segments as-is (it should match num_atoms_actual)
         batch_electrostatics = jax.ops.segment_sum(
             atomic_electrostatics,
             segment_ids=batch_segments,
