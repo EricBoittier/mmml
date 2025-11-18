@@ -837,13 +837,82 @@ def setup_calculator(
     BATCH_SIZE: int = N_MONOMERS + len(dimer_perms)  # Number of systems per batch
     # print(BATCH_SIZE)
     restart_path = Path(model_restart_path) if type(model_restart_path) == str else model_restart_path
-    try:
-        restart = get_last(restart_path)
-    except (IndexError, FileNotFoundError) as e:
-        raise FileNotFoundError(f"Checkpoint directory is empty or invalid: {restart_path}. "
-                               f"Available files: {list(restart_path.glob('*')) if restart_path.exists() else 'Directory does not exist'}") from e
-    # Setup monomer model
-    params, MODEL = get_params_model(restart)
+    
+    # Check if this is a JSON checkpoint (has params.json file)
+    json_params_path = restart_path / "params.json"
+    is_json_checkpoint = json_params_path.exists()
+    
+    if is_json_checkpoint:
+        # This is a JSON checkpoint - use it directly
+        restart = restart_path
+        # Load using JSON loader (from notebook, but we'll use a similar approach)
+        try:
+            from mmml.utils.model_checkpoint import load_model_checkpoint
+            checkpoint = load_model_checkpoint(restart, use_orbax=False)
+            params = checkpoint.get('params')
+            # For JSON checkpoints, we need to reconstruct the model from config
+            config = checkpoint.get('config', {})
+            if not config:
+                # Try to load config separately
+                config_path = restart / "model_config.json"
+                if config_path.exists():
+                    import json
+                    with open(config_path, 'r') as f:
+                        config = json.load(f)
+            
+            # Reconstruct model from config
+            from mmml.physnetjax.physnetjax.models.model import EF
+            # Convert JSON arrays back to JAX arrays for model config
+            def json_to_jax_config(obj):
+                """Convert JSON config values back to appropriate types."""
+                if isinstance(obj, dict):
+                    return {k: json_to_jax_config(v) for k, v in obj.items()}
+                elif isinstance(obj, list):
+                    # Lists in config are usually parameters, keep as lists
+                    return obj
+                else:
+                    return obj
+            
+            model_config = json_to_jax_config(config)
+            model_config['natoms'] = MAX_ATOMS_PER_SYSTEM
+            MODEL = EF(**model_config)
+            MODEL.natoms = MAX_ATOMS_PER_SYSTEM
+            
+            # Convert JSON params back to JAX arrays
+            def json_to_jax_params(obj):
+                """Recursively convert JSON lists to JAX arrays."""
+                if isinstance(obj, dict):
+                    return {k: json_to_jax_params(v) for k, v in obj.items()}
+                elif isinstance(obj, list):
+                    # Check if it's a nested list (array)
+                    if len(obj) > 0 and isinstance(obj[0], (list, int, float)):
+                        return jnp.array(obj)
+                    else:
+                        return [json_to_jax_params(item) for item in obj]
+                elif isinstance(obj, (int, float)):
+                    return obj
+                else:
+                    return obj
+            
+            params = json_to_jax_params(params)
+        except Exception as e:
+            raise FileNotFoundError(
+                f"Failed to load JSON checkpoint from {restart_path}. "
+                f"Error: {e}. "
+                f"Make sure params.json and model_config.json exist."
+            ) from e
+    else:
+        # This is an orbax checkpoint - use get_last to find the latest epoch
+        try:
+            restart = get_last(restart_path)
+        except (IndexError, FileNotFoundError) as e:
+            raise FileNotFoundError(
+                f"Checkpoint directory is empty or invalid: {restart_path}. "
+                f"Available files: {list(restart_path.glob('*')) if restart_path.exists() else 'Directory does not exist'}. "
+                f"If this is a JSON checkpoint, make sure params.json exists in the directory."
+            ) from e
+        # Setup monomer model using orbax
+        params, MODEL = get_params_model(restart)
     MODEL.natoms = MAX_ATOMS_PER_SYSTEM 
 
     if cell:
