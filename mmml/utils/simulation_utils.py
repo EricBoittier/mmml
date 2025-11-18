@@ -92,33 +92,42 @@ def reorder_atoms_to_match_pycharmm(
     print(f"  Trying {len(candidate_orderings)} different atom orderings...")
     
     # Determine which energy terms are available and active
-    # Try to use the most specific term available (BOND > ANGLE > DIHE > INTE)
+    # Try to use the most specific term available (IMPR > BOND > ANGLE > DIHE)
+    # Note: INTE is not always available, so we don't use it as a fallback
     available_energy_terms = []
+    primary_term = None
     try:
-        energy.get_energy()  # Update energy terms
-        term_names = energy.get_term_names()
-        term_statuses = energy.get_term_statuses()
+        # Try to get energy terms with error handling to prevent crashes
+        try:
+            energy.get_energy()  # Update energy terms
+        except Exception as e:
+            print(f"  Warning: energy.get_energy() failed: {e}")
+            raise
         
-        # Check for available terms in order of preference
-        preferred_terms = ["BOND", "ANGLE", "DIHE", "IMPR", "INTE"]
+        try:
+            term_names = energy.get_term_names()
+            term_statuses = energy.get_term_statuses()
+        except Exception as e:
+            print(f"  Warning: Could not get term names/statuses: {e}")
+            raise
+        
+        # Check for available terms in order of preference (IMPR first, then BOND, ANGLE, DIHE)
+        preferred_terms = ["IMPR", "BOND", "ANGLE", "DIHE"]
         for term_name in preferred_terms:
-            if term_name in term_names:
-                idx = term_names.index(term_name)
-                if term_statuses[idx]:  # Term is active
-                    available_energy_terms.append(term_name)
+            try:
+                if term_name in term_names:
+                    idx = term_names.index(term_name)
+                    if term_statuses[idx]:  # Term is active
+                        available_energy_terms.append(term_name)
+            except Exception:
+                continue
         
         if not available_energy_terms:
-            # Fallback: use INTE if available, or first active term
-            if "INTE" in term_names:
-                idx = term_names.index("INTE")
-                if term_statuses[idx]:
-                    available_energy_terms.append("INTE")
-            else:
-                # Use first active term
-                for name, status in zip(term_names, term_statuses):
-                    if status:
-                        available_energy_terms.append(name)
-                        break
+            # Fallback: use first active term (but not INTE, as it's not always available)
+            for name, status in zip(term_names, term_statuses):
+                if status and name != "INTE":  # Skip INTE
+                    available_energy_terms.append(name)
+                    break
         
         if available_energy_terms:
             primary_term = available_energy_terms[0]
@@ -126,13 +135,14 @@ def reorder_atoms_to_match_pycharmm(
             if len(available_energy_terms) > 1:
                 print(f"  (Also available: {', '.join(available_energy_terms[1:])})")
         else:
-            raise RuntimeError("No active energy terms found in PyCHARMM")
+            raise RuntimeError("No active energy terms found in PyCHARMM (excluding INTE)")
             
     except Exception as e:
         print(f"  Warning: Could not determine available energy terms: {e}")
-        print(f"  Falling back to INTE")
-        available_energy_terms = ["INTE"]
-        primary_term = "INTE"
+        print(f"  Will try to use IMPR, BOND, ANGLE, or DIHE during evaluation")
+        # Don't set a default - let the evaluation loop try to find available terms
+        available_energy_terms = ["IMPR", "BOND", "ANGLE", "DIHE"]
+        primary_term = "IMPR"  # Default for display, but may not be used
     
     # Evaluate each ordering by computing CHARMM energy using available terms
     best_energy = float('inf')
@@ -156,18 +166,28 @@ def reorder_atoms_to_match_pycharmm(
                 print(f"    Ordering {i+1} failed: NaN/Inf in positions")
                 continue
             
-            # Set positions in PyCHARMM
-            xyz = pd.DataFrame(R_test, columns=["x", "y", "z"])
-            coor.set_positions(xyz)
-            
-            # Compute energy with error handling
+            # Set positions in PyCHARMM with error handling
             try:
-                energy.get_energy()
+                xyz = pd.DataFrame(R_test, columns=["x", "y", "z"])
+                coor.set_positions(xyz)
+            except Exception as e:
+                print(f"    Ordering {i+1} failed: Could not set positions in PyCHARMM: {e}")
+                continue
+            
+            # Compute energy with error handling to prevent crashes
+            try:
+                # Try to compute energy - wrap in try-except to catch Fortran crashes
+                try:
+                    energy.get_energy()
+                except Exception as e:
+                    print(f"    Ordering {i+1} failed: energy.get_energy() crashed: {e}")
+                    continue
                 
-                # Try to get energy from primary term, with fallbacks
+                # Try to get energy from available terms, with fallbacks
                 ordering_energy = None
                 energy_str = ""
                 
+                # Try preferred terms first (IMPR, BOND, ANGLE, DIHE)
                 for term_name in available_energy_terms:
                     try:
                         term_value = energy.get_term_by_name(term_name)
@@ -179,13 +199,24 @@ def reorder_atoms_to_match_pycharmm(
                                 ordering_energy += term_value
                             energy_str += f"{term_name}={term_value:.6f} "
                     except Exception:
+                        # Term not available, skip it
                         continue
                 
-                # If we couldn't get any energy term, try INTE as last resort
+                # If we still don't have energy, try to find any active term
                 if ordering_energy is None:
                     try:
-                        ordering_energy = energy.get_term_by_name("INTE")
-                        energy_str = f"INTE={ordering_energy:.6f}"
+                        term_names = energy.get_term_names()
+                        term_statuses = energy.get_term_statuses()
+                        for name, status in zip(term_names, term_statuses):
+                            if status and name != "INTE":  # Skip INTE
+                                try:
+                                    term_value = energy.get_term_by_name(name)
+                                    if np.isfinite(term_value):
+                                        ordering_energy = term_value
+                                        energy_str = f"{name}={term_value:.6f}"
+                                        break
+                                except Exception:
+                                    continue
                     except Exception:
                         pass
                 
@@ -226,7 +257,10 @@ def reorder_atoms_to_match_pycharmm(
             "4. PyCHARMM energy calculation is failing"
         )
     
-    print(f"  Best ordering found: Energy = {best_energy:.6f} kcal/mol (using {primary_term})")
+    if primary_term:
+        print(f"  Best ordering found: Energy = {best_energy:.6f} kcal/mol (using {primary_term})")
+    else:
+        print(f"  Best ordering found: Energy = {best_energy:.6f} kcal/mol")
     print(f"  Reorder indices: {best_indices}")
     
     # Validate final arrays
@@ -343,11 +377,15 @@ def initialize_simulation_from_batch(
                 ATOMS_PER_MONOMER, N_MONOMERS
             )
             print(f"  ✓ Atoms reordered to match PyCHARMM ordering")
+        except KeyboardInterrupt:
+            # Re-raise keyboard interrupts
+            raise
         except Exception as e:
             print(f"  Warning: Reordering failed: {e}")
             print(f"  Continuing without reordering (this may cause issues)")
             import traceback
             traceback.print_exc()
+            # Don't re-raise - allow continuation without reordering
     else:
         missing = []
         if not mm_enabled:
