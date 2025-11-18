@@ -313,50 +313,127 @@ def create_hybrid_fitting_factory(
         mm_forces = -jax.grad(mm_energy_fn)(R)
         
         # Compute ML contributions using model
+        # IMPORTANT: For ML optimization, we need to use model.apply directly with updated params
+        # The calculator factory uses fixed params, so we bypass it when optimizing ML
         try:
-            # Get ML energy and forces using the model directly
-            # This requires accessing the model's apply function
-            if hasattr(model, 'apply'):
-                # Use model.apply directly for JAX-native computation
-                # We need to prepare the input in the format expected by the model
-                # For now, use the calculator but extract ML contributions
-                calc, _ = base_calculator_factory(
-                    atomic_numbers=Z,
-                    atomic_positions=R,
-                    n_monomers=args.n_monomers if args else 2,
-                    cutoff_params=cutoff_params,
-                    doML=True,
-                    doMM=False,
-                    doML_dimer=not (args.skip_ml_dimers if args else False),
-                    backprop=True,
-                    debug=False,
-                    energy_conversion_factor=1,
-                    force_conversion_factor=1,
+            if optimize_mode in ["ml_only", "both"] and model is not None and hasattr(model, 'apply'):
+                # For ML optimization, use model.apply directly with updated parameters
+                # We need to prepare batches in the same format as the calculator expects
+                n_monomers_val = args.n_monomers if args and hasattr(args, 'n_monomers') else 2
+                skip_ml_dimers = args.skip_ml_dimers if args and hasattr(args, 'skip_ml_dimers') else False
+                
+                # Prepare batches manually (matching calculator's format)
+                from mmml.pycharmmInterface.mmml_calculator import (
+                    prepare_batches_md,
+                    dimer_permutations,
+                    indices_of_monomer,
+                    indices_of_pairs,
                 )
                 
-                # Temporarily replace model params if optimizing ML
-                if optimize_mode in ["ml_only", "both"]:
-                    # Note: This requires the calculator to support parameter replacement
-                    # For now, we'll use the calculator as-is and note that ML optimization
-                    # may require a different approach (direct model.apply)
-                    pass
+                # Determine ATOMS_PER_MONOMER from the system
+                ATOMS_PER_MONOMER_val = len(Z) // n_monomers_val if n_monomers_val > 0 else len(Z)
                 
-                atoms = ase.Atoms(Z, R)
-                atoms.calc = calc
-                ml_energy_raw = atoms.get_potential_energy()
-                ml_forces_raw = atoms.get_forces()
+                # Prepare monomer and dimer indices (matching calculator logic)
+                all_monomer_idxs = []
+                for a in range(1, n_monomers_val + 1):
+                    idxs = indices_of_monomer(a, n_atoms=ATOMS_PER_MONOMER_val, n_mol=n_monomers_val)
+                    all_monomer_idxs.append(jnp.array(idxs))
                 
+                all_dimer_idxs = []
+                if not skip_ml_dimers:
+                    for a, b in dimer_permutations(n_monomers_val):
+                        idxs = indices_of_pairs(a + 1, b + 1, n_atoms=ATOMS_PER_MONOMER_val, n_mol=n_monomers_val)
+                        all_dimer_idxs.append(jnp.array(idxs))
+                
+                # Prepare batch data
+                max_atoms = max(ATOMS_PER_MONOMER_val, 2 * ATOMS_PER_MONOMER_val)
+                SPATIAL_DIMS = 3
+                
+                # Monomer positions and atomic numbers
+                monomer_positions = jnp.zeros((n_monomers_val, max_atoms, SPATIAL_DIMS))
+                for i, idxs in enumerate(all_monomer_idxs):
+                    monomer_positions = monomer_positions.at[i, :ATOMS_PER_MONOMER_val].set(
+                        R[idxs]
+                    )
+                monomer_atomic = jnp.zeros((n_monomers_val, max_atoms), dtype=jnp.int32)
+                for i, idxs in enumerate(all_monomer_idxs):
+                    monomer_atomic = monomer_atomic.at[i, :ATOMS_PER_MONOMER_val].set(
+                        Z[idxs]
+                    )
+                
+                # Dimer positions and atomic numbers
+                n_dimers = len(all_dimer_idxs)
+                dimer_positions = jnp.zeros((n_dimers, max_atoms, SPATIAL_DIMS))
+                if n_dimers > 0:
+                    for i, idxs in enumerate(all_dimer_idxs):
+                        dimer_positions = dimer_positions.at[i, :2 * ATOMS_PER_MONOMER_val].set(
+                            R[idxs]
+                        )
+                    dimer_atomic = jnp.zeros((n_dimers, max_atoms), dtype=jnp.int32)
+                    for i, idxs in enumerate(all_dimer_idxs):
+                        dimer_atomic = dimer_atomic.at[i, :2 * ATOMS_PER_MONOMER_val].set(
+                            Z[idxs]
+                        )
+                else:
+                    dimer_atomic = jnp.zeros((0, max_atoms), dtype=jnp.int32)
+                
+                # Combine monomer and dimer data
+                batch_data = {
+                    "R": jnp.concatenate([monomer_positions, dimer_positions]) if n_dimers > 0 else monomer_positions,
+                    "Z": jnp.concatenate([monomer_atomic, dimer_atomic]) if n_dimers > 0 else monomer_atomic,
+                    "N": jnp.concatenate([
+                        jnp.full((n_monomers_val,), ATOMS_PER_MONOMER_val),
+                        jnp.full((n_dimers,), 2 * ATOMS_PER_MONOMER_val)
+                    ]) if n_dimers > 0 else jnp.full((n_monomers_val,), ATOMS_PER_MONOMER_val),
+                }
+                
+                BATCH_SIZE = n_monomers_val + n_dimers
+                batches = prepare_batches_md(batch_data, batch_size=BATCH_SIZE, num_atoms=max_atoms)[0]
+                
+                # Use model.apply directly with updated params
+                ml_output = model.apply(
+                    current_ml_params,
+                    atomic_numbers=batches["Z"],
+                    positions=batches["R"],
+                    dst_idx=batches["dst_idx"],
+                    src_idx=batches["src_idx"],
+                    batch_segments=batches["batch_segments"],
+                    batch_size=BATCH_SIZE,
+                    batch_mask=batches["batch_mask"],
+                    atom_mask=batches["atom_mask"]
+                )
+                
+                # Extract energy and forces from model output
+                ml_energy_raw = ml_output.get("energy", jnp.array(0.0))
+                ml_forces_raw = ml_output.get("forces", jnp.zeros((len(R), 3)))
+                
+                # Handle energy (might be per-config or total)
                 ml_energy = jnp.asarray(ml_energy_raw)
                 if ml_energy.shape != ():
                     ml_energy = jnp.sum(ml_energy) if ml_energy.size > 0 else jnp.array(0.0)
                 
-                ml_forces = jnp.asarray(ml_forces_raw)
+                # Handle forces - map back to original atom order
+                # Forces from model are for batched system (monomers + dimers)
+                # We need to extract just the monomer forces and map them back
+                ml_forces_batched = jnp.asarray(ml_forces_raw)
+                
+                # Extract forces for monomers only (first n_monomers * ATOMS_PER_MONOMER atoms)
+                n_monomer_atoms = n_monomers_val * ATOMS_PER_MONOMER_val
+                if ml_forces_batched.shape[0] >= n_monomer_atoms:
+                    ml_forces = ml_forces_batched[:n_monomer_atoms]
+                else:
+                    # If forces are shorter, pad or use what we have
+                    ml_forces = jnp.zeros((len(R), 3))
+                    ml_forces = ml_forces.at[:ml_forces_batched.shape[0]].set(ml_forces_batched)
+                    
             else:
-                # Fallback: use calculator
+                # For LJ-only optimization or when model is None, use calculator
+                import ase
+                n_monomers_val = args.n_monomers if args and hasattr(args, 'n_monomers') else 2
                 calc, _ = base_calculator_factory(
                     atomic_numbers=Z,
                     atomic_positions=R,
-                    n_monomers=args.n_monomers if args else 2,
+                    n_monomers=n_monomers_val,
                     cutoff_params=cutoff_params,
                     doML=True,
                     doMM=False,
@@ -378,6 +455,7 @@ def create_hybrid_fitting_factory(
                 
                 ml_forces = jnp.asarray(ml_forces_raw)
         except Exception as e:
+            # If ML computation fails, set to zero (allows MM-only fitting)
             ml_energy = jnp.array(0.0)
             ml_forces = jnp.zeros_like(R)
         
