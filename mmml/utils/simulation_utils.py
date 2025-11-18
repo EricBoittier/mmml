@@ -253,6 +253,26 @@ def initialize_simulation_from_batch(
     else:
         print(f"  No reordering applied (MM disabled or PyCHARMM not initialized)")
     
+    # Validate atomic numbers match between batch and PyCHARMM (if available)
+    if hasattr(args, 'include_mm') and args.include_mm and pycharmm_atypes is not None:
+        try:
+            from mmml.pycharmmInterface.import_pycharmm import psf
+            # Get atomic numbers from PyCHARMM PSF
+            pycharmm_atomic_numbers = np.array([ase.data.atomic_numbers.get(atype, 0) for atype in pycharmm_atypes[:len(Z)]])
+            
+            # Compare with batch atomic numbers (after reordering if applicable)
+            if len(pycharmm_atomic_numbers) == len(Z):
+                matches = np.allclose(pycharmm_atomic_numbers, Z, atol=0.1)
+                if not matches:
+                    print(f"  Warning: Atomic number mismatch between batch and PyCHARMM!")
+                    print(f"    Batch Z: {Z}")
+                    print(f"    PyCHARMM Z (from types): {pycharmm_atomic_numbers}")
+                    print(f"    This may cause force calculation issues.")
+                else:
+                    print(f"  ✓ Atomic numbers match between batch and PyCHARMM")
+        except Exception as e:
+            print(f"  Warning: Could not validate atomic numbers: {e}")
+    
     # Create ASE Atoms object
     atoms = ase.Atoms(Z, R)
     

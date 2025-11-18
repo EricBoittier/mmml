@@ -562,32 +562,46 @@ def create_hybrid_fitting_factory(
             mm_switch_on_val = jnp.where(jnp.isfinite(mm_switch_on_val), mm_switch_on_val, 5.0)
             mm_cutoff_val = jnp.where(jnp.isfinite(mm_cutoff_val), mm_cutoff_val, 1.0)
             
-            # Calculate distances for switching (use COM distances for dimers, or pair distances)
-            # For simplicity, we'll apply switching based on average pair distances
-            # This is a simplified approach - in practice, switching is applied per dimer
+            # Calculate pair distances for switching (apply switching per-pair, not globally)
+            # This is more accurate and gives better gradients
             n_atoms = len(R)
             if len(pair_idx_atom_atom) > 0:
                 pair_distances = jnp.linalg.norm(
                     R[pair_idx_atom_atom[:, 0]] - R[pair_idx_atom_atom[:, 1]], 
                     axis=1
                 )
-                # Use minimum distance for switching (more conservative)
-                min_distance = jnp.min(pair_distances)
-                avg_distance = jnp.mean(pair_distances)
-                # Use a combination: closer to minimum for short-range behavior
-                switching_distance = 0.7 * min_distance + 0.3 * avg_distance
+                
+                # Apply switching per-pair and average the scales
+                # This ensures gradients flow through all pairs, not just a single distance
+                ml_scales_per_pair = ml_switch_simple(pair_distances, ml_cutoff_val, mm_switch_on_val)
+                mm_scales_per_pair = mm_switch_simple(pair_distances, mm_switch_on_val, mm_cutoff_val)
+                
+                # Average scales across all pairs (weighted by distance to emphasize close pairs)
+                # Use inverse distance weighting to emphasize short-range pairs where switching matters most
+                weights = 1.0 / (pair_distances + 1e-6)  # Add small epsilon to avoid division by zero
+                weights = weights / (jnp.sum(weights) + 1e-10)  # Normalize
+                
+                ml_scale = jnp.sum(ml_scales_per_pair * weights)
+                mm_scale = jnp.sum(mm_scales_per_pair * weights)
+                
+                # Also compute a simple average as fallback
+                ml_scale_avg = jnp.mean(ml_scales_per_pair)
+                mm_scale_avg = jnp.mean(mm_scales_per_pair)
+                
+                # Use weighted average, but ensure we have gradients
+                # Blend weighted and unweighted to ensure gradients flow
+                ml_scale = 0.5 * ml_scale + 0.5 * ml_scale_avg
+                mm_scale = 0.5 * mm_scale + 0.5 * mm_scale_avg
             else:
                 # Fallback: use average distance from origin
                 switching_distance = jnp.mean(jnp.linalg.norm(R, axis=1))
-            
-            # Ensure switching distance is finite and positive
-            switching_distance = jnp.maximum(switching_distance, 0.1)
-            switching_distance = jnp.where(jnp.isfinite(switching_distance), switching_distance, 5.0)
-            
-            # Apply ML switching (1.0 at short range, tapers to 0.0 at mm_switch_on)
-            ml_scale = ml_switch_simple(switching_distance, ml_cutoff_val, mm_switch_on_val)
-            # Apply MM switching (0.0 at short range, ramps to 1.0 at mm_switch_on + mm_cutoff)
-            mm_scale = mm_switch_simple(switching_distance, mm_switch_on_val, mm_cutoff_val)
+                switching_distance = jnp.maximum(switching_distance, 0.1)
+                switching_distance = jnp.where(jnp.isfinite(switching_distance), switching_distance, 5.0)
+                
+                # Apply ML switching (1.0 at short range, tapers to 0.0 at mm_switch_on)
+                ml_scale = ml_switch_simple(switching_distance, ml_cutoff_val, mm_switch_on_val)
+                # Apply MM switching (0.0 at short range, ramps to 1.0 at mm_switch_on + mm_cutoff)
+                mm_scale = mm_switch_simple(switching_distance, mm_switch_on_val, mm_cutoff_val)
             
             # Ensure scales are finite and in valid range [0, 1]
             ml_scale = jnp.clip(jnp.where(jnp.isfinite(ml_scale), ml_scale, 1.0), 0.0, 1.0)
@@ -1306,9 +1320,13 @@ def fit_hybrid_potential_to_training_data_jax(
                 print(f"    ep_scale: {params['ep_scale']}")
                 print(f"    sig_scale: {params['sig_scale']}")
             if optimize_mode == "cutoff_only":
-                print(f"    ml_cutoff: {params['ml_cutoff']:.4f}")
-                print(f"    mm_switch_on: {params['mm_switch_on']:.4f}")
-                print(f"    mm_cutoff: {params['mm_cutoff']:.4f}")
+                # Check gradients to diagnose if they're zero
+                grad_ml_cutoff = grads.get("ml_cutoff", None)
+                grad_mm_switch_on = grads.get("mm_switch_on", None)
+                grad_mm_cutoff = grads.get("mm_cutoff", None)
+                print(f"    ml_cutoff: {params['ml_cutoff']:.4f} (grad: {float(grad_ml_cutoff) if grad_ml_cutoff is not None else 'N/A':.6e})")
+                print(f"    mm_switch_on: {params['mm_switch_on']:.4f} (grad: {float(grad_mm_switch_on) if grad_mm_switch_on is not None else 'N/A':.6e})")
+                print(f"    mm_cutoff: {params['mm_cutoff']:.4f} (grad: {float(grad_mm_cutoff) if grad_mm_cutoff is not None else 'N/A':.6e})")
     
     if verbose:
         print(f"\n✓ Optimization complete!")
