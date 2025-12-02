@@ -1633,10 +1633,11 @@ def fit_hybrid_parameters_iteratively(
             skip_ml_dimers=skip_ml_dimers,
         )
         
+        # Convert JAX arrays to Python floats for CutoffParameters (required for hashability)
         current_cutoff_params = CutoffParameters(
-            ml_cutoff=result_cutoff["ml_cutoff"],
-            mm_switch_on=result_cutoff["mm_switch_on"],
-            mm_cutoff=result_cutoff["mm_cutoff"],
+            ml_cutoff=float(result_cutoff["ml_cutoff"]),
+            mm_switch_on=float(result_cutoff["mm_switch_on"]),
+            mm_cutoff=float(result_cutoff["mm_cutoff"]),
         )
         cutoff_final_loss = result_cutoff["loss_history"][-1] if result_cutoff["loss_history"] else None
         cutoff_loss_history.append(result_cutoff["loss_history"])
@@ -1685,6 +1686,9 @@ def fit_hybrid_parameters_iteratively(
         "lj_loss_history": lj_loss_history,
         "cutoff_loss_history": cutoff_loss_history,
     }
+
+
+def fit_hybrid_parameters_iteratively(
     train_batches: List[Dict],
     base_calculator_factory,
     model,
@@ -1765,6 +1769,8 @@ def fit_hybrid_parameters_iteratively(
             - "lj_loss_history": List of LJ optimization loss histories
             - "cutoff_loss_history": List of cutoff optimization loss histories
     """
+    from mmml.pycharmmInterface.mmml_calculator import CutoffParameters
+    
     # Initialize parameters
     current_ep_scale = initial_ep_scale
     current_sig_scale = initial_sig_scale
@@ -1872,10 +1878,11 @@ def fit_hybrid_parameters_iteratively(
             skip_ml_dimers=skip_ml_dimers,
         )
         
+        # Convert JAX arrays to Python floats for CutoffParameters (required for hashability)
         current_cutoff_params = CutoffParameters(
-            ml_cutoff=result_cutoff["ml_cutoff"],
-            mm_switch_on=result_cutoff["mm_switch_on"],
-            mm_cutoff=result_cutoff["mm_cutoff"],
+            ml_cutoff=float(result_cutoff["ml_cutoff"]),
+            mm_switch_on=float(result_cutoff["mm_switch_on"]),
+            mm_cutoff=float(result_cutoff["mm_cutoff"]),
         )
         cutoff_final_loss = result_cutoff["loss_history"][-1] if result_cutoff["loss_history"] else None
         cutoff_loss_history.append(result_cutoff["loss_history"])
