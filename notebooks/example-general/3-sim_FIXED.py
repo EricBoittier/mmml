@@ -41,7 +41,7 @@ import matplotlib.pyplot as plt
 # ========================================================================
 # Set environment variables for JAX/GPU
 os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".45"
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 # Check JAX configuration
 devices = jax.local_devices()
@@ -196,7 +196,7 @@ print(f"Each batch contains {len(valid_batches[0]['R'])} atoms")
 # Checkpoint path
 uid = "test-84aa02d9-e329-46c4-b12c-f55e6c9a2f94"
 SCICORE = Path("/pchem-data/meuwly/boittier/home/")
-RESTART = SCICORE / "ckpts" / f"{uid}" / "epoch-5450" 
+RESTART = SCICORE / "ckpts" / f"{uid}" / "epoch-6595" 
 args.checkpoint = RESTART  # Keep as Path object (resolve_checkpoint_paths handles both str and Path)
 
 def load_model_parameters_json(epoch_dir, natoms, use_orbax=False):
