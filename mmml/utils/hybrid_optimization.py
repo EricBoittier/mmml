@@ -1872,6 +1872,7 @@ def fit_hybrid_parameters_iteratively(
     lj_n_iterations: int = 100,
     cutoff_n_iterations: int = 100,
     convergence_threshold: float = 1e-3,
+    min_com_distance: Optional[float] = 3.5,  # Filter out samples below this COM distance (default: 3.5 Å)
     verbose: bool = True,
     n_monomers: Optional[int] = None,
     skip_ml_dimers: bool = False,
@@ -2119,6 +2120,7 @@ def fit_hybrid_parameters_iteratively(
     lj_n_iterations: int = 100,
     cutoff_n_iterations: int = 100,
     convergence_threshold: float = 1e-3,
+    min_com_distance: Optional[float] = 3.5,  # Filter out samples below this COM distance (default: 3.5 Å)
     verbose: bool = True,
     n_monomers: Optional[int] = None,
     skip_ml_dimers: bool = False,
