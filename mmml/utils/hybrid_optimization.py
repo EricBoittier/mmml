@@ -15,6 +15,7 @@ import optax
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 from itertools import product
+import matplotlib.pyplot as plt
 
 
 def extract_lj_parameters_from_calculator(
@@ -625,6 +626,265 @@ def create_hybrid_fitting_factory(
         return total_energy, total_forces
     
     return compute_energy_forces
+
+
+def compute_com_distance(R: np.ndarray, Z: np.ndarray, n_monomers: int, atoms_per_monomer: int) -> float:
+    """
+    Compute center of mass distance between first two monomers.
+    
+    Args:
+        R: Atomic positions (n_atoms, 3)
+        Z: Atomic numbers (n_atoms,)
+        n_monomers: Number of monomers
+        atoms_per_monomer: Number of atoms per monomer
+    
+    Returns:
+        COM distance in Angstroms
+    """
+    import ase.data
+    
+    if n_monomers < 2:
+        return 0.0
+    
+    # Get masses for each atom
+    masses = np.array([ase.data.atomic_masses[z] for z in Z])
+    
+    # Compute COM for first monomer
+    monomer1_indices = np.arange(0, atoms_per_monomer)
+    com1 = np.average(R[monomer1_indices], axis=0, weights=masses[monomer1_indices])
+    
+    # Compute COM for second monomer
+    monomer2_indices = np.arange(atoms_per_monomer, 2 * atoms_per_monomer)
+    com2 = np.average(R[monomer2_indices], axis=0, weights=masses[monomer2_indices])
+    
+    # Return distance
+    return np.linalg.norm(com2 - com1)
+
+
+def validate_and_plot_forces(
+    train_batches: List[Dict],
+    compute_energy_forces,
+    n_monomers: int,
+    atoms_per_monomer: int,
+    iteration: Optional[int] = None,
+    save_dir: Optional[Path] = None,
+    verbose: bool = True,
+) -> Dict[str, Any]:
+    """
+    Validate forces and plot errors vs COM distance.
+    
+    Args:
+        train_batches: List of training batches
+        compute_energy_forces: Function to compute energy and forces
+        n_monomers: Number of monomers
+        atoms_per_monomer: Number of atoms per monomer
+        iteration: Current iteration number (for labeling)
+        save_dir: Directory to save plots
+        verbose: Print validation results
+    
+    Returns:
+        Dictionary with validation statistics
+    """
+    all_com_distances = []
+    all_force_errors = []
+    all_energy_errors = []
+    all_force_magnitudes_pred = []
+    all_force_magnitudes_ref = []
+    zero_force_count = 0
+    nan_force_count = 0
+    total_configs = 0
+    
+    # Collect data from all batches
+    for batch in train_batches:
+        R = batch.get("R")
+        Z = batch.get("Z")
+        F_ref = batch.get("F")
+        E_ref = batch.get("E")
+        
+        if R is None or Z is None:
+            continue
+        
+        # Handle batched data
+        if R.ndim == 3:
+            n_configs = R.shape[0]
+            for i in range(n_configs):
+                R_i = R[i]
+                Z_i = Z[i]
+                F_ref_i = F_ref[i] if F_ref is not None and F_ref.ndim == 3 else None
+                E_ref_i = E_ref[i] if E_ref is not None and E_ref.ndim == 1 else None
+                
+                # Compute COM distance
+                com_dist = compute_com_distance(R_i, Z_i, n_monomers, atoms_per_monomer)
+                
+                # Compute predicted forces
+                try:
+                    E_pred, F_pred = compute_energy_forces(
+                        R_i,
+                        Z_i,
+                        {}  # Use default parameters
+                    )
+                    
+                    # Convert to numpy
+                    F_pred = np.asarray(F_pred)
+                    E_pred = float(E_pred) if np.isscalar(E_pred) else float(np.sum(E_pred))
+                    
+                    # Validate forces
+                    if np.any(~np.isfinite(F_pred)):
+                        nan_force_count += 1
+                        if verbose:
+                            print(f"  WARNING: NaN/Inf forces detected in config {total_configs}")
+                    
+                    force_magnitude = np.linalg.norm(F_pred, axis=1)
+                    if np.any(force_magnitude < 1e-10):
+                        zero_force_count += np.sum(force_magnitude < 1e-10)
+                        if verbose:
+                            print(f"  WARNING: Zero forces detected in config {total_configs}")
+                    
+                    # Compute errors if reference available
+                    if F_ref_i is not None:
+                        F_ref_i = np.asarray(F_ref_i)
+                        force_error = np.mean((F_pred - F_ref_i) ** 2)
+                        all_force_errors.append(force_error)
+                        all_force_magnitudes_pred.append(np.mean(force_magnitude))
+                        all_force_magnitudes_ref.append(np.mean(np.linalg.norm(F_ref_i, axis=1)))
+                    
+                    if E_ref_i is not None:
+                        energy_error = (E_pred - E_ref_i) ** 2
+                        all_energy_errors.append(energy_error)
+                    
+                    all_com_distances.append(com_dist)
+                    total_configs += 1
+                    
+                except Exception as e:
+                    if verbose:
+                        print(f"  ERROR computing forces for config {total_configs}: {e}")
+                    continue
+        else:
+            # Single configuration
+            com_dist = compute_com_distance(R, Z, n_monomers, atoms_per_monomer)
+            
+            try:
+                E_pred, F_pred = compute_energy_forces(R, Z, {})
+                F_pred = np.asarray(F_pred)
+                E_pred = float(E_pred) if np.isscalar(E_pred) else float(np.sum(E_pred))
+                
+                # Validate forces
+                if np.any(~np.isfinite(F_pred)):
+                    nan_force_count += 1
+                
+                force_magnitude = np.linalg.norm(F_pred, axis=1)
+                if np.any(force_magnitude < 1e-10):
+                    zero_force_count += np.sum(force_magnitude < 1e-10)
+                
+                if F_ref is not None:
+                    F_ref = np.asarray(F_ref)
+                    force_error = np.mean((F_pred - F_ref) ** 2)
+                    all_force_errors.append(force_error)
+                    all_force_magnitudes_pred.append(np.mean(force_magnitude))
+                    all_force_magnitudes_ref.append(np.mean(np.linalg.norm(F_ref, axis=1)))
+                
+                if E_ref is not None:
+                    energy_error = (E_pred - E_ref) ** 2
+                    all_energy_errors.append(energy_error)
+                
+                all_com_distances.append(com_dist)
+                total_configs += 1
+                
+            except Exception as e:
+                if verbose:
+                    print(f"  ERROR computing forces: {e}")
+                continue
+    
+    # Print validation summary
+    if verbose:
+        print(f"\n{'='*60}")
+        print("FORCE VALIDATION SUMMARY")
+        print(f"{'='*60}")
+        print(f"Total configurations analyzed: {total_configs}")
+        print(f"Configurations with NaN/Inf forces: {nan_force_count}")
+        print(f"Atoms with zero forces: {zero_force_count}")
+        if all_force_errors:
+            print(f"Mean force error (MSE): {np.mean(all_force_errors):.6f} eV²/Å²")
+            print(f"Max force error: {np.max(all_force_errors):.6f} eV²/Å²")
+        if all_force_magnitudes_pred:
+            print(f"Mean predicted force magnitude: {np.mean(all_force_magnitudes_pred):.6f} eV/Å")
+        if all_force_magnitudes_ref:
+            print(f"Mean reference force magnitude: {np.mean(all_force_magnitudes_ref):.6f} eV/Å")
+        print(f"{'='*60}\n")
+    
+    # Create plots if we have data
+    if len(all_com_distances) > 0 and len(all_force_errors) > 0:
+        fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+        
+        # Plot 1: Force error vs COM distance
+        ax1 = axes[0, 0]
+        ax1.scatter(all_com_distances[:len(all_force_errors)], all_force_errors, alpha=0.6, s=20)
+        ax1.set_xlabel('COM Distance (Å)')
+        ax1.set_ylabel('Force Error (MSE, eV²/Å²)')
+        ax1.set_title('Force Error vs COM Distance')
+        ax1.set_yscale('log')
+        ax1.grid(True, alpha=0.3)
+        
+        # Plot 2: Energy error vs COM distance
+        ax2 = axes[0, 1]
+        if len(all_energy_errors) > 0:
+            ax2.scatter(all_com_distances[:len(all_energy_errors)], all_energy_errors, alpha=0.6, s=20, color='orange')
+            ax2.set_xlabel('COM Distance (Å)')
+            ax2.set_ylabel('Energy Error (MSE, eV²)')
+            ax2.set_title('Energy Error vs COM Distance')
+            ax2.set_yscale('log')
+            ax2.grid(True, alpha=0.3)
+        
+        # Plot 3: Force magnitude comparison
+        ax3 = axes[1, 0]
+        if len(all_force_magnitudes_pred) > 0 and len(all_force_magnitudes_ref) > 0:
+            min_val = min(min(all_force_magnitudes_pred), min(all_force_magnitudes_ref))
+            max_val = max(max(all_force_magnitudes_pred), max(all_force_magnitudes_ref))
+            ax3.scatter(all_force_magnitudes_ref, all_force_magnitudes_pred, alpha=0.6, s=20)
+            ax3.plot([min_val, max_val], [min_val, max_val], 'r--', label='y=x')
+            ax3.set_xlabel('Reference Force Magnitude (eV/Å)')
+            ax3.set_ylabel('Predicted Force Magnitude (eV/Å)')
+            ax3.set_title('Force Magnitude Comparison')
+            ax3.legend()
+            ax3.grid(True, alpha=0.3)
+        
+        # Plot 4: Force error distribution
+        ax4 = axes[1, 1]
+        if len(all_force_errors) > 0:
+            ax4.hist(all_force_errors, bins=50, alpha=0.7, edgecolor='black')
+            ax4.set_xlabel('Force Error (MSE, eV²/Å²)')
+            ax4.set_ylabel('Frequency')
+            ax4.set_title('Force Error Distribution')
+            ax4.set_yscale('log')
+            ax4.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        
+        # Save plot
+        if save_dir is not None:
+            save_dir.mkdir(parents=True, exist_ok=True)
+            iter_str = f"_iter{iteration}" if iteration is not None else ""
+            plot_path = save_dir / f"force_validation{iter_str}.png"
+            plt.savefig(plot_path, dpi=150, bbox_inches='tight')
+            if verbose:
+                print(f"  Saved force validation plot to: {plot_path}")
+        else:
+            iter_str = f"_iter{iteration}" if iteration is not None else ""
+            plt.savefig(f"force_validation{iter_str}.png", dpi=150, bbox_inches='tight')
+            if verbose:
+                print(f"  Saved force validation plot to: force_validation{iter_str}.png")
+        
+        plt.close()
+    
+    return {
+        "total_configs": total_configs,
+        "nan_force_count": nan_force_count,
+        "zero_force_count": zero_force_count,
+        "mean_force_error": np.mean(all_force_errors) if all_force_errors else None,
+        "max_force_error": np.max(all_force_errors) if all_force_errors else None,
+        "mean_force_magnitude_pred": np.mean(all_force_magnitudes_pred) if all_force_magnitudes_pred else None,
+        "mean_force_magnitude_ref": np.mean(all_force_magnitudes_ref) if all_force_magnitudes_ref else None,
+    }
 
 
 def fit_hybrid_potential_to_training_data_jax(
@@ -1345,6 +1605,45 @@ def fit_hybrid_potential_to_training_data_jax(
                 print(f"    ml_cutoff: {params['ml_cutoff']:.4f} (grad: {float(grad_ml_cutoff) if grad_ml_cutoff is not None else 'N/A':.6e})")
                 print(f"    mm_switch_on: {params['mm_switch_on']:.4f} (grad: {float(grad_mm_switch_on) if grad_mm_switch_on is not None else 'N/A':.6e})")
                 print(f"    mm_cutoff: {params['mm_cutoff']:.4f} (grad: {float(grad_mm_cutoff) if grad_mm_cutoff is not None else 'N/A':.6e})")
+            
+            # Validate forces and plot at key iterations
+            if (iteration % 20 == 0 or iteration == n_iterations - 1) and verbose:
+                try:
+                    # Extract n_monomers and atoms_per_monomer from args
+                    n_monomers_val = getattr(args, 'n_monomers', n_monomers) if n_monomers is None else n_monomers
+                    atoms_per_monomer_val = getattr(args, 'n_atoms_monomer', None) if args is not None else None
+                    if atoms_per_monomer_val is None:
+                        # Try to infer from first batch
+                        if selected_batches and len(selected_batches) > 0:
+                            first_batch = selected_batches[0]
+                            if first_batch.get("R") is not None:
+                                R_first = first_batch["R"]
+                                if R_first.ndim == 3:
+                                    n_atoms_total = R_first.shape[1]
+                                else:
+                                    n_atoms_total = R_first.shape[0]
+                                atoms_per_monomer_val = n_atoms_total // n_monomers_val if n_monomers_val > 0 else 10
+                            else:
+                                atoms_per_monomer_val = 10  # Default
+                        else:
+                            atoms_per_monomer_val = 10  # Default
+                    
+                    # Create a wrapper function for compute_energy_forces with current params
+                    def compute_with_params(R, Z, dummy_dict):
+                        return compute_energy_forces(R, Z, params)
+                    
+                    validation_stats = validate_and_plot_forces(
+                        train_batches=selected_batches,
+                        compute_energy_forces=compute_with_params,
+                        n_monomers=n_monomers_val,
+                        atoms_per_monomer=atoms_per_monomer_val,
+                        iteration=iteration,
+                        save_dir=None,  # Save to current directory
+                        verbose=verbose,
+                    )
+                except Exception as e:
+                    if verbose:
+                        print(f"  Warning: Force validation failed: {e}")
     
     if verbose:
         print(f"\n✓ Optimization complete!")
