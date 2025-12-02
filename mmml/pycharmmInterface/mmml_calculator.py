@@ -672,13 +672,28 @@ class CutoffParameters:
         return self.__str__()
 
     def __eq__(self, other):
-        return self.ml_cutoff == other.ml_cutoff and self.mm_switch_on == other.mm_switch_on and self.mm_cutoff == other.mm_cutoff
+        if not isinstance(other, CutoffParameters):
+            return False
+        # Convert to floats for comparison (handles JAX arrays)
+        ml_cutoff_self = float(self.ml_cutoff) if hasattr(self.ml_cutoff, '__float__') else self.ml_cutoff
+        mm_switch_on_self = float(self.mm_switch_on) if hasattr(self.mm_switch_on, '__float__') else self.mm_switch_on
+        mm_cutoff_self = float(self.mm_cutoff) if hasattr(self.mm_cutoff, '__float__') else self.mm_cutoff
+        ml_cutoff_other = float(other.ml_cutoff) if hasattr(other.ml_cutoff, '__float__') else other.ml_cutoff
+        mm_switch_on_other = float(other.mm_switch_on) if hasattr(other.mm_switch_on, '__float__') else other.mm_switch_on
+        mm_cutoff_other = float(other.mm_cutoff) if hasattr(other.mm_cutoff, '__float__') else other.mm_cutoff
+        return (ml_cutoff_self == ml_cutoff_other and 
+                mm_switch_on_self == mm_switch_on_other and 
+                mm_cutoff_self == mm_cutoff_other)
     
     def __ne__(self, other):
         return not self.__eq__(other)
     
     def __hash__(self):
-        return hash((self.ml_cutoff, self.mm_switch_on, self.mm_cutoff))
+        # Convert to Python floats if they're JAX arrays (for hashability)
+        ml_cutoff_val = float(self.ml_cutoff) if hasattr(self.ml_cutoff, '__float__') else self.ml_cutoff
+        mm_switch_on_val = float(self.mm_switch_on) if hasattr(self.mm_switch_on, '__float__') else self.mm_switch_on
+        mm_cutoff_val = float(self.mm_cutoff) if hasattr(self.mm_cutoff, '__float__') else self.mm_cutoff
+        return hash((ml_cutoff_val, mm_switch_on_val, mm_cutoff_val))
 
     def to_dict(self):
         return {

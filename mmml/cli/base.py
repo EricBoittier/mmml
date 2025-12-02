@@ -119,11 +119,18 @@ def resolve_dataset_path(arg: Path | None) -> Path:
     return candidate
 
 
-def resolve_checkpoint_paths(arg: Path | None) -> Tuple[Path, Path]:
+def resolve_checkpoint_paths(arg: Path | str | None) -> Tuple[Path, Path]:
     """Return (factory_base_dir, epoch_dir) for the supplied checkpoint."""
     from mmml.physnetjax.physnetjax.restart.restart import get_last
 
-    candidate = arg or Path(os.environ.get("MMML_CKPT", "mmml/physnetjax/ckpts"))
+    # Convert string to Path if needed
+    if arg is None:
+        candidate = Path(os.environ.get("MMML_CKPT", "mmml/physnetjax/ckpts"))
+    elif isinstance(arg, str):
+        candidate = Path(arg)
+    else:
+        candidate = arg
+    
     if not candidate.exists():
         sys.exit(f"Checkpoint directory not found: {candidate}")
 
