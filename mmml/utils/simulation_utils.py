@@ -489,9 +489,30 @@ def initialize_simulation_from_batch(
     if hasattr(args, 'include_mm') and args.include_mm and pycharmm_atypes is not None:
         try:
             from mmml.pycharmmInterface.import_pycharmm import psf
+            from mmml.pycharmmInterface.utils import get_Z_from_psf
             # Get atomic numbers from PyCHARMM PSF with error handling
             try:
-                pycharmm_atomic_numbers = np.array([ase.data.atomic_numbers.get(atype, 0) for atype in pycharmm_atypes[:len(Z)]])
+                # Use get_Z_from_psf() which uses atomic masses to determine Z
+                # This is more reliable than trying to parse atom type strings
+                pycharmm_atomic_numbers_all = np.array(get_Z_from_psf())
+                pycharmm_atomic_numbers = pycharmm_atomic_numbers_all[:len(Z)]
+                
+                # Fallback: Try parsing atom type strings if mass-based method fails
+                if len(pycharmm_atomic_numbers) == 0 or np.all(pycharmm_atomic_numbers == 0):
+                    # Try to extract element symbol from atom type string
+                    # PyCHARMM atom types are IUPAC names like "C", "O", "H" (may have whitespace)
+                    pycharmm_atomic_numbers = []
+                    for atype in pycharmm_atypes[:len(Z)]:
+                        # Strip whitespace and try to get atomic number
+                        atype_clean = str(atype).strip()
+                        # Try direct lookup first
+                        z = ase.data.atomic_numbers.get(atype_clean, None)
+                        if z is None:
+                            # Try extracting first character (for cases like "C1", "O1")
+                            first_char = atype_clean[0] if len(atype_clean) > 0 else ""
+                            z = ase.data.atomic_numbers.get(first_char, 0)
+                        pycharmm_atomic_numbers.append(z)
+                    pycharmm_atomic_numbers = np.array(pycharmm_atomic_numbers)
                 
                 # Compare with batch atomic numbers (after reordering if applicable)
                 if len(pycharmm_atomic_numbers) == len(Z):
@@ -499,8 +520,10 @@ def initialize_simulation_from_batch(
                     if not matches:
                         print(f"  Warning: Atomic number mismatch between batch and PyCHARMM!")
                         print(f"    Batch Z: {Z}")
-                        print(f"    PyCHARMM Z (from types): {pycharmm_atomic_numbers}")
+                        print(f"    PyCHARMM Z (from PSF): {pycharmm_atomic_numbers}")
+                        print(f"    PyCHARMM atom types: {pycharmm_atypes[:len(Z)]}")
                         print(f"    This may cause force calculation issues.")
+                        print(f"    Note: This warning may be safe to ignore if atom types are correct.")
                     else:
                         print(f"  ✓ Atomic numbers match between batch and PyCHARMM")
             except (AttributeError, RuntimeError, OSError, SystemError) as e:
