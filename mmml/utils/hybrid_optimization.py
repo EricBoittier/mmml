@@ -292,9 +292,9 @@ def create_hybrid_fitting_factory(
             ep_scale = params_dict.get("ep_scale", jnp.ones(len(atc_epsilons)))
             sig_scale = params_dict.get("sig_scale", jnp.ones(len(atc_rmins)))
         else:
-            # Use default scaling (1.0) if not optimizing LJ
-            ep_scale = jnp.ones(len(atc_epsilons))
-            sig_scale = jnp.ones(len(atc_rmins))
+            # Use provided scaling if available (e.g., from previous optimization), otherwise default to 1.0
+            ep_scale = params_dict.get("ep_scale", jnp.ones(len(atc_epsilons)))
+            sig_scale = params_dict.get("sig_scale", jnp.ones(len(atc_rmins)))
         
         # Extract cutoff parameters
         if optimize_mode == "cutoff_only":
@@ -743,6 +743,15 @@ def fit_hybrid_potential_to_training_data_jax(
         params["ml_cutoff"] = jnp.array(initial_ml_cutoff)
         params["mm_switch_on"] = jnp.array(initial_mm_switch_on)
         params["mm_cutoff"] = jnp.array(initial_mm_cutoff)
+        
+        # Store optimized LJ parameters if provided (from previous optimization)
+        # These will be used in the loss function to get better starting loss
+        optimized_ep_scale = None
+        optimized_sig_scale = None
+        if initial_ep_scale is not None:
+            optimized_ep_scale = jnp.array(initial_ep_scale)
+        if initial_sig_scale is not None:
+            optimized_sig_scale = jnp.array(initial_sig_scale)
     
     # Extract n_monomers and skip_ml_dimers from args if provided, otherwise use defaults
     if args is not None:
@@ -1147,14 +1156,23 @@ def fit_hybrid_potential_to_training_data_jax(
             
             for data in training_data:
                 try:
+                    # Build params dict with cutoff parameters
+                    params_dict_cutoff = {
+                        "ml_cutoff": ml_cutoff,
+                        "mm_switch_on": mm_switch_on,
+                        "mm_cutoff": mm_cutoff
+                    }
+                    # Include optimized LJ parameters if provided (from previous optimization)
+                    # This allows cutoff optimization to use optimized LJ parameters for better starting loss
+                    if optimized_ep_scale is not None:
+                        params_dict_cutoff["ep_scale"] = optimized_ep_scale
+                    if optimized_sig_scale is not None:
+                        params_dict_cutoff["sig_scale"] = optimized_sig_scale
+                    
                     E_pred, F_pred = compute_energy_forces(
                         data["R"],
                         data["Z"],
-                        {
-                            "ml_cutoff": ml_cutoff,
-                            "mm_switch_on": mm_switch_on,
-                            "mm_cutoff": mm_cutoff
-                        }
+                        params_dict_cutoff
                     )
                     
                     # Check for NaN/Inf in predictions
@@ -1423,4 +1441,487 @@ def fit_lj_parameters_to_training_data_jax(
     )
     
     return result["ep_scale"], result["sig_scale"], result["loss_history"]
+
+
+def fit_hybrid_parameters_iteratively(
+    train_batches: List[Dict],
+    base_calculator_factory,
+    model,
+    model_params,
+    atc_epsilons: np.ndarray,
+    atc_rmins: np.ndarray,
+    atc_qs: np.ndarray,
+    at_codes: np.ndarray,
+    pair_idx_atom_atom: np.ndarray,
+    cutoff_params=None,
+    args=None,
+    initial_ep_scale: Optional[np.ndarray] = None,
+    initial_sig_scale: Optional[np.ndarray] = None,
+    initial_ml_cutoff: Optional[float] = None,
+    initial_mm_switch_on: Optional[float] = None,
+    initial_mm_cutoff: Optional[float] = None,
+    n_iterations: int = 3,
+    n_samples: Optional[int] = None,
+    energy_weight: float = 1.0,
+    force_weight: float = 1.0,
+    lj_learning_rate: float = 0.01,
+    cutoff_learning_rate: float = 0.01,
+    lj_n_iterations: int = 100,
+    cutoff_n_iterations: int = 100,
+    convergence_threshold: float = 1e-3,
+    verbose: bool = True,
+    n_monomers: Optional[int] = None,
+    skip_ml_dimers: bool = False,
+) -> Dict[str, Any]:
+    """
+    Iteratively optimize LJ and cutoff parameters by alternating between the two modes.
+    
+    This function alternates between:
+    1. Optimizing LJ parameters (using current cutoff parameters)
+    2. Optimizing cutoff parameters (using current LJ parameters)
+    
+    This iterative approach can lead to better overall optimization since the parameters
+    are coupled - optimal cutoffs depend on LJ parameters and vice versa.
+    
+    Args:
+        train_batches: List of training batches
+        base_calculator_factory: Base calculator factory
+        model: ML model instance
+        model_params: ML model parameters
+        atc_epsilons: Base epsilon values for each atom type
+        atc_rmins: Base rmin values for each atom type
+        atc_qs: Charges for each atom type
+        at_codes: Atom type codes
+        pair_idx_atom_atom: Pair indices for atom-atom interactions
+        cutoff_params: Initial cutoff parameters
+        args: Arguments object
+        initial_ep_scale: Initial epsilon scaling factors (default: ones)
+        initial_sig_scale: Initial sigma scaling factors (default: ones)
+        initial_ml_cutoff: Initial ML cutoff (default: from cutoff_params)
+        initial_mm_switch_on: Initial MM switch-on (default: from cutoff_params)
+        initial_mm_cutoff: Initial MM cutoff (default: from cutoff_params)
+        n_iterations: Number of alternating iterations (default: 3)
+        n_samples: Number of training samples to use
+        energy_weight: Weight for energy loss term
+        force_weight: Weight for force loss term
+        lj_learning_rate: Learning rate for LJ optimization
+        cutoff_learning_rate: Learning rate for cutoff optimization
+        lj_n_iterations: Number of iterations per LJ optimization step
+        cutoff_n_iterations: Number of iterations per cutoff optimization step
+        convergence_threshold: Relative loss improvement threshold for early stopping
+        verbose: Print progress
+        n_monomers: Number of monomers
+        skip_ml_dimers: Whether to skip ML dimers
+    
+    Returns:
+        Dictionary with:
+            - "ep_scale": Final optimized epsilon scaling factors
+            - "sig_scale": Final optimized sigma scaling factors
+            - "ml_cutoff": Final optimized ML cutoff
+            - "mm_switch_on": Final optimized MM switch-on
+            - "mm_cutoff": Final optimized MM cutoff
+            - "loss_history": List of loss values at each iteration
+            - "lj_loss_history": List of LJ optimization loss histories
+            - "cutoff_loss_history": List of cutoff optimization loss histories
+    """
+    from mmml.pycharmmInterface.mmml_calculator import CutoffParameters
+    
+    # Initialize parameters
+    current_ep_scale = initial_ep_scale
+    current_sig_scale = initial_sig_scale
+    current_cutoff_params = cutoff_params
+    
+    if current_cutoff_params is None:
+        current_cutoff_params = CutoffParameters(
+            ml_cutoff=initial_ml_cutoff if initial_ml_cutoff is not None else 2.0,
+            mm_switch_on=initial_mm_switch_on if initial_mm_switch_on is not None else 5.0,
+            mm_cutoff=initial_mm_cutoff if initial_mm_cutoff is not None else 1.0,
+        )
+    
+    # Track history
+    loss_history = []
+    lj_loss_history = []
+    cutoff_loss_history = []
+    previous_loss = None
+    
+    if verbose:
+        print("=" * 80)
+        print("ITERATIVE OPTIMIZATION: Alternating LJ and Cutoff Optimization")
+        print("=" * 80)
+        print(f"Number of iterations: {n_iterations}")
+        print(f"Convergence threshold: {convergence_threshold}")
+        print(f"Initial cutoff parameters: {current_cutoff_params}")
+        print("=" * 80)
+    
+    for iteration in range(n_iterations):
+        if verbose:
+            print(f"\n{'='*80}")
+            print(f"ITERATION {iteration + 1}/{n_iterations}")
+            print(f"{'='*80}")
+        
+        # Step 1: Optimize LJ parameters using current cutoff parameters
+        if verbose:
+            print(f"\n[Iteration {iteration + 1}] Step 1: Optimizing LJ parameters...")
+            print(f"  Using cutoff parameters: {current_cutoff_params}")
+        
+        result_lj = fit_hybrid_potential_to_training_data_jax(
+            train_batches=train_batches,
+            base_calculator_factory=base_calculator_factory,
+            model=model,
+            model_params=model_params,
+            atc_epsilons=atc_epsilons,
+            atc_rmins=atc_rmins,
+            atc_qs=atc_qs,
+            at_codes=at_codes,
+            pair_idx_atom_atom=pair_idx_atom_atom,
+            cutoff_params=current_cutoff_params,
+            args=args,
+            optimize_mode="lj_only",
+            initial_ep_scale=current_ep_scale,
+            initial_sig_scale=current_sig_scale,
+            n_samples=n_samples,
+            energy_weight=energy_weight,
+            force_weight=force_weight,
+            learning_rate=lj_learning_rate,
+            n_iterations=lj_n_iterations,
+            verbose=verbose,
+            n_monomers=n_monomers,
+            skip_ml_dimers=skip_ml_dimers,
+        )
+        
+        current_ep_scale = result_lj["ep_scale"]
+        current_sig_scale = result_lj["sig_scale"]
+        lj_final_loss = result_lj["loss_history"][-1] if result_lj["loss_history"] else None
+        lj_loss_history.append(result_lj["loss_history"])
+        
+        if verbose:
+            print(f"\n[Iteration {iteration + 1}] LJ optimization complete")
+            print(f"  Final loss: {lj_final_loss:.6f}")
+            print(f"  ep_scale: {current_ep_scale}")
+            print(f"  sig_scale: {current_sig_scale}")
+        
+        # Step 2: Optimize cutoff parameters using current LJ parameters
+        if verbose:
+            print(f"\n[Iteration {iteration + 1}] Step 2: Optimizing cutoff parameters...")
+            print(f"  Using optimized LJ parameters from Step 1")
+        
+        result_cutoff = fit_hybrid_potential_to_training_data_jax(
+            train_batches=train_batches,
+            base_calculator_factory=base_calculator_factory,
+            model=model,
+            model_params=model_params,
+            atc_epsilons=atc_epsilons,
+            atc_rmins=atc_rmins,
+            atc_qs=atc_qs,
+            at_codes=at_codes,
+            pair_idx_atom_atom=pair_idx_atom_atom,
+            cutoff_params=current_cutoff_params,
+            args=args,
+            optimize_mode="cutoff_only",
+            initial_ep_scale=current_ep_scale,
+            initial_sig_scale=current_sig_scale,
+            initial_ml_cutoff=current_cutoff_params.ml_cutoff,
+            initial_mm_switch_on=current_cutoff_params.mm_switch_on,
+            initial_mm_cutoff=current_cutoff_params.mm_cutoff,
+            n_samples=n_samples,
+            energy_weight=energy_weight,
+            force_weight=force_weight,
+            learning_rate=cutoff_learning_rate,
+            n_iterations=cutoff_n_iterations,
+            verbose=verbose,
+            n_monomers=n_monomers,
+            skip_ml_dimers=skip_ml_dimers,
+        )
+        
+        current_cutoff_params = CutoffParameters(
+            ml_cutoff=result_cutoff["ml_cutoff"],
+            mm_switch_on=result_cutoff["mm_switch_on"],
+            mm_cutoff=result_cutoff["mm_cutoff"],
+        )
+        cutoff_final_loss = result_cutoff["loss_history"][-1] if result_cutoff["loss_history"] else None
+        cutoff_loss_history.append(result_cutoff["loss_history"])
+        
+        if verbose:
+            print(f"\n[Iteration {iteration + 1}] Cutoff optimization complete")
+            print(f"  Final loss: {cutoff_final_loss:.6f}")
+            print(f"  Cutoff parameters: {current_cutoff_params}")
+        
+        # Track overall loss (use cutoff loss as it includes both LJ and cutoff effects)
+        current_loss = cutoff_final_loss if cutoff_final_loss is not None else lj_final_loss
+        if current_loss is not None:
+            loss_history.append(current_loss)
+            
+            # Check convergence
+            if previous_loss is not None:
+                loss_improvement = abs(previous_loss - current_loss) / abs(previous_loss)
+                if verbose:
+                    print(f"\n[Iteration {iteration + 1}] Loss improvement: {loss_improvement:.6f}")
+                
+                if loss_improvement < convergence_threshold:
+                    if verbose:
+                        print(f"\n✓ Convergence reached! Loss improvement ({loss_improvement:.6f}) < threshold ({convergence_threshold})")
+                    break
+            
+            previous_loss = current_loss
+    
+    if verbose:
+        print(f"\n{'='*80}")
+        print("ITERATIVE OPTIMIZATION COMPLETE")
+        print(f"{'='*80}")
+        print(f"Final parameters:")
+        print(f"  ep_scale: {current_ep_scale}")
+        print(f"  sig_scale: {current_sig_scale}")
+        print(f"  Cutoff parameters: {current_cutoff_params}")
+        print(f"  Final loss: {loss_history[-1] if loss_history else 'N/A':.6f}")
+        print(f"{'='*80}")
+    
+    return {
+        "ep_scale": current_ep_scale,
+        "sig_scale": current_sig_scale,
+        "ml_cutoff": current_cutoff_params.ml_cutoff,
+        "mm_switch_on": current_cutoff_params.mm_switch_on,
+        "mm_cutoff": current_cutoff_params.mm_cutoff,
+        "loss_history": loss_history,
+        "lj_loss_history": lj_loss_history,
+        "cutoff_loss_history": cutoff_loss_history,
+    }
+    train_batches: List[Dict],
+    base_calculator_factory,
+    model,
+    model_params,
+    atc_epsilons: np.ndarray,
+    atc_rmins: np.ndarray,
+    atc_qs: np.ndarray,
+    at_codes: np.ndarray,
+    pair_idx_atom_atom: np.ndarray,
+    cutoff_params=None,
+    args=None,
+    initial_ep_scale: Optional[np.ndarray] = None,
+    initial_sig_scale: Optional[np.ndarray] = None,
+    initial_ml_cutoff: Optional[float] = None,
+    initial_mm_switch_on: Optional[float] = None,
+    initial_mm_cutoff: Optional[float] = None,
+    n_iterations: int = 3,
+    n_samples: Optional[int] = None,
+    energy_weight: float = 1.0,
+    force_weight: float = 1.0,
+    lj_learning_rate: float = 0.01,
+    cutoff_learning_rate: float = 0.01,
+    lj_n_iterations: int = 100,
+    cutoff_n_iterations: int = 100,
+    convergence_threshold: float = 1e-3,
+    verbose: bool = True,
+    n_monomers: Optional[int] = None,
+    skip_ml_dimers: bool = False,
+) -> Dict[str, Any]:
+    """
+    Iteratively optimize LJ and cutoff parameters by alternating between the two modes.
+    
+    This function alternates between:
+    1. Optimizing LJ parameters (using current cutoff parameters)
+    2. Optimizing cutoff parameters (using current LJ parameters)
+    
+    This iterative approach can lead to better overall optimization since the parameters
+    are coupled - optimal cutoffs depend on LJ parameters and vice versa.
+    
+    Args:
+        train_batches: List of training batches
+        base_calculator_factory: Base calculator factory
+        model: ML model instance
+        model_params: ML model parameters
+        atc_epsilons: Base epsilon values for each atom type
+        atc_rmins: Base rmin values for each atom type
+        atc_qs: Charges for each atom type
+        at_codes: Atom type codes
+        pair_idx_atom_atom: Pair indices for atom-atom interactions
+        cutoff_params: Initial cutoff parameters
+        args: Arguments object
+        initial_ep_scale: Initial epsilon scaling factors (default: ones)
+        initial_sig_scale: Initial sigma scaling factors (default: ones)
+        initial_ml_cutoff: Initial ML cutoff (default: from cutoff_params)
+        initial_mm_switch_on: Initial MM switch-on (default: from cutoff_params)
+        initial_mm_cutoff: Initial MM cutoff (default: from cutoff_params)
+        n_iterations: Number of alternating iterations (default: 3)
+        n_samples: Number of training samples to use
+        energy_weight: Weight for energy loss term
+        force_weight: Weight for force loss term
+        lj_learning_rate: Learning rate for LJ optimization
+        cutoff_learning_rate: Learning rate for cutoff optimization
+        lj_n_iterations: Number of iterations per LJ optimization step
+        cutoff_n_iterations: Number of iterations per cutoff optimization step
+        convergence_threshold: Relative loss improvement threshold for early stopping
+        verbose: Print progress
+        n_monomers: Number of monomers
+        skip_ml_dimers: Whether to skip ML dimers
+    
+    Returns:
+        Dictionary with:
+            - "ep_scale": Final optimized epsilon scaling factors
+            - "sig_scale": Final optimized sigma scaling factors
+            - "ml_cutoff": Final optimized ML cutoff
+            - "mm_switch_on": Final optimized MM switch-on
+            - "mm_cutoff": Final optimized MM cutoff
+            - "loss_history": List of loss values at each iteration
+            - "lj_loss_history": List of LJ optimization loss histories
+            - "cutoff_loss_history": List of cutoff optimization loss histories
+    """
+    # Initialize parameters
+    current_ep_scale = initial_ep_scale
+    current_sig_scale = initial_sig_scale
+    current_cutoff_params = cutoff_params
+    
+    if current_cutoff_params is None:
+        current_cutoff_params = CutoffParameters(
+            ml_cutoff=initial_ml_cutoff if initial_ml_cutoff is not None else 2.0,
+            mm_switch_on=initial_mm_switch_on if initial_mm_switch_on is not None else 5.0,
+            mm_cutoff=initial_mm_cutoff if initial_mm_cutoff is not None else 1.0,
+        )
+    
+    # Track history
+    loss_history = []
+    lj_loss_history = []
+    cutoff_loss_history = []
+    previous_loss = None
+    
+    if verbose:
+        print("=" * 80)
+        print("ITERATIVE OPTIMIZATION: Alternating LJ and Cutoff Optimization")
+        print("=" * 80)
+        print(f"Number of iterations: {n_iterations}")
+        print(f"Convergence threshold: {convergence_threshold}")
+        print(f"Initial cutoff parameters: {current_cutoff_params}")
+        print("=" * 80)
+    
+    for iteration in range(n_iterations):
+        if verbose:
+            print(f"\n{'='*80}")
+            print(f"ITERATION {iteration + 1}/{n_iterations}")
+            print(f"{'='*80}")
+        
+        # Step 1: Optimize LJ parameters using current cutoff parameters
+        if verbose:
+            print(f"\n[Iteration {iteration + 1}] Step 1: Optimizing LJ parameters...")
+            print(f"  Using cutoff parameters: {current_cutoff_params}")
+        
+        result_lj = fit_hybrid_potential_to_training_data_jax(
+            train_batches=train_batches,
+            base_calculator_factory=base_calculator_factory,
+            model=model,
+            model_params=model_params,
+            atc_epsilons=atc_epsilons,
+            atc_rmins=atc_rmins,
+            atc_qs=atc_qs,
+            at_codes=at_codes,
+            pair_idx_atom_atom=pair_idx_atom_atom,
+            cutoff_params=current_cutoff_params,
+            args=args,
+            optimize_mode="lj_only",
+            initial_ep_scale=current_ep_scale,
+            initial_sig_scale=current_sig_scale,
+            n_samples=n_samples,
+            energy_weight=energy_weight,
+            force_weight=force_weight,
+            learning_rate=lj_learning_rate,
+            n_iterations=lj_n_iterations,
+            verbose=verbose,
+            n_monomers=n_monomers,
+            skip_ml_dimers=skip_ml_dimers,
+        )
+        
+        current_ep_scale = result_lj["ep_scale"]
+        current_sig_scale = result_lj["sig_scale"]
+        lj_final_loss = result_lj["loss_history"][-1] if result_lj["loss_history"] else None
+        lj_loss_history.append(result_lj["loss_history"])
+        
+        if verbose:
+            print(f"\n[Iteration {iteration + 1}] LJ optimization complete")
+            print(f"  Final loss: {lj_final_loss:.6f}")
+            print(f"  ep_scale: {current_ep_scale}")
+            print(f"  sig_scale: {current_sig_scale}")
+        
+        # Step 2: Optimize cutoff parameters using current LJ parameters
+        if verbose:
+            print(f"\n[Iteration {iteration + 1}] Step 2: Optimizing cutoff parameters...")
+            print(f"  Using optimized LJ parameters from Step 1")
+        
+        result_cutoff = fit_hybrid_potential_to_training_data_jax(
+            train_batches=train_batches,
+            base_calculator_factory=base_calculator_factory,
+            model=model,
+            model_params=model_params,
+            atc_epsilons=atc_epsilons,
+            atc_rmins=atc_rmins,
+            atc_qs=atc_qs,
+            at_codes=at_codes,
+            pair_idx_atom_atom=pair_idx_atom_atom,
+            cutoff_params=current_cutoff_params,
+            args=args,
+            optimize_mode="cutoff_only",
+            initial_ep_scale=current_ep_scale,
+            initial_sig_scale=current_sig_scale,
+            initial_ml_cutoff=current_cutoff_params.ml_cutoff,
+            initial_mm_switch_on=current_cutoff_params.mm_switch_on,
+            initial_mm_cutoff=current_cutoff_params.mm_cutoff,
+            n_samples=n_samples,
+            energy_weight=energy_weight,
+            force_weight=force_weight,
+            learning_rate=cutoff_learning_rate,
+            n_iterations=cutoff_n_iterations,
+            verbose=verbose,
+            n_monomers=n_monomers,
+            skip_ml_dimers=skip_ml_dimers,
+        )
+        
+        current_cutoff_params = CutoffParameters(
+            ml_cutoff=result_cutoff["ml_cutoff"],
+            mm_switch_on=result_cutoff["mm_switch_on"],
+            mm_cutoff=result_cutoff["mm_cutoff"],
+        )
+        cutoff_final_loss = result_cutoff["loss_history"][-1] if result_cutoff["loss_history"] else None
+        cutoff_loss_history.append(result_cutoff["loss_history"])
+        
+        if verbose:
+            print(f"\n[Iteration {iteration + 1}] Cutoff optimization complete")
+            print(f"  Final loss: {cutoff_final_loss:.6f}")
+            print(f"  Cutoff parameters: {current_cutoff_params}")
+        
+        # Track overall loss (use cutoff loss as it includes both LJ and cutoff effects)
+        current_loss = cutoff_final_loss if cutoff_final_loss is not None else lj_final_loss
+        if current_loss is not None:
+            loss_history.append(current_loss)
+            
+            # Check convergence
+            if previous_loss is not None:
+                loss_improvement = abs(previous_loss - current_loss) / abs(previous_loss)
+                if verbose:
+                    print(f"\n[Iteration {iteration + 1}] Loss improvement: {loss_improvement:.6f}")
+                
+                if loss_improvement < convergence_threshold:
+                    if verbose:
+                        print(f"\n✓ Convergence reached! Loss improvement ({loss_improvement:.6f}) < threshold ({convergence_threshold})")
+                    break
+            
+            previous_loss = current_loss
+    
+    if verbose:
+        print(f"\n{'='*80}")
+        print("ITERATIVE OPTIMIZATION COMPLETE")
+        print(f"{'='*80}")
+        print(f"Final parameters:")
+        print(f"  ep_scale: {current_ep_scale}")
+        print(f"  sig_scale: {current_sig_scale}")
+        print(f"  Cutoff parameters: {current_cutoff_params}")
+        print(f"  Final loss: {loss_history[-1] if loss_history else 'N/A':.6f}")
+        print(f"{'='*80}")
+    
+    return {
+        "ep_scale": current_ep_scale,
+        "sig_scale": current_sig_scale,
+        "ml_cutoff": current_cutoff_params.ml_cutoff,
+        "mm_switch_on": current_cutoff_params.mm_switch_on,
+        "mm_cutoff": current_cutoff_params.mm_cutoff,
+        "loss_history": loss_history,
+        "lj_loss_history": lj_loss_history,
+        "cutoff_loss_history": cutoff_loss_history,
+    }
 
