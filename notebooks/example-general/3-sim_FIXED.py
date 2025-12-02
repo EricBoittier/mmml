@@ -41,7 +41,7 @@ import matplotlib.pyplot as plt
 # ========================================================================
 # Set environment variables for JAX/GPU
 os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".45"
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 # Check JAX configuration
 devices = jax.local_devices()
@@ -80,6 +80,7 @@ from mmml.utils.hybrid_optimization import (
     extract_lj_parameters_from_calculator,
     fit_hybrid_potential_to_training_data_jax,
     fit_lj_parameters_to_training_data_jax,
+    fit_hybrid_parameters_iteratively,
     expand_scaling_parameters_to_full_set,
 )
 from mmml.utils.simulation_utils import (
@@ -111,7 +112,7 @@ class MockArgs:
     def __init__(self):
         # Paths
         self.pdbfile = None  # Will be created from valid_data if needed
-        self.checkpoint = None  # Will be set below
+        self.checkpoint = None  # Will be set below (can be Path or str)
 
         # System parameters
         self.n_monomers = 2
@@ -195,8 +196,8 @@ print(f"Each batch contains {len(valid_batches[0]['R'])} atoms")
 # Checkpoint path
 uid = "test-84aa02d9-e329-46c4-b12c-f55e6c9a2f94"
 SCICORE = Path("/pchem-data/meuwly/boittier/home/")
-RESTART = str(SCICORE / "ckpts" / f"{uid}" / "epoch-5450" / "json_checkpoint")
-args.checkpoint = RESTART
+RESTART = SCICORE / "ckpts" / f"{uid}" / "epoch-5450" 
+args.checkpoint = RESTART  # Keep as Path object (resolve_checkpoint_paths handles both str and Path)
 
 def load_model_parameters_json(epoch_dir, natoms, use_orbax=False):
     """
@@ -522,69 +523,130 @@ print("=" * 60)
 lj_params = extract_lj_parameters_from_calculator(ATOMS_PER_MONOMER=10, N_MONOMERS=2)
 print(f"LJ parameters extracted: {list(lj_params.keys())}")
 
-# Step 2: Optimize LJ parameters only
+# Step 2: Iteratively optimize LJ and cutoff parameters
+# This alternates between optimizing LJ parameters and cutoff parameters,
+# using the results from each step to improve the next
 print("\n" + "=" * 60)
-print("MODE 1: Optimizing LJ parameters only")
+print("ITERATIVE OPTIMIZATION: Alternating LJ and Cutoff Optimization")
 print("=" * 60)
-result_lj = fit_hybrid_potential_to_training_data_jax(
-    train_batches=train_batches_copy,
-    base_calculator_factory=calculator_factory,
-    model=model,
-    model_params=params,
-    atc_epsilons=lj_params["atc_epsilons"],
-    atc_rmins=lj_params["atc_rmins"],
-    atc_qs=lj_params["atc_qs"],
-    at_codes=lj_params["at_codes"],
-    pair_idx_atom_atom=lj_params["pair_idx_atom_atom"],
-    cutoff_params=CUTOFF_PARAMS,
-    args=args,
-    optimize_mode="lj_only",
-    n_samples=20,
-    energy_weight=1.0,
-    force_weight=1.0,
-    learning_rate=0.01,
-    n_iterations=100,
-    verbose=True
-)
+print("This will alternate between:")
+print("  1. Optimizing LJ parameters (using current cutoffs)")
+print("  2. Optimizing cutoff parameters (using current LJ parameters)")
+print("This iterative approach leads to better overall optimization.")
 
-opt_ep_scale_lj = result_lj["ep_scale"]
-opt_sig_scale_lj = result_lj["sig_scale"]
-print(f"\nOptimized LJ scales:")
-print(f"  ep_scale: {opt_ep_scale_lj}")
-print(f"  sig_scale: {opt_sig_scale_lj}")
+# Choose optimization mode:
+# Option A: Iterative optimization (recommended)
+USE_ITERATIVE = True  # Set to False to use separate modes
 
-# Step 3: Optimize cutoff parameters
-print("\n" + "=" * 60)
-print("MODE 2: Optimizing cutoff parameters")
-print("=" * 60)
-result_cutoff = fit_hybrid_potential_to_training_data_jax(
-    train_batches=train_batches_copy,
-    base_calculator_factory=calculator_factory,
-    model=model,
-    model_params=params,
-    atc_epsilons=lj_params["atc_epsilons"],
-    atc_rmins=lj_params["atc_rmins"],
-    atc_qs=lj_params["atc_qs"],
-    at_codes=lj_params["at_codes"],
-    pair_idx_atom_atom=lj_params["pair_idx_atom_atom"],
-    cutoff_params=CUTOFF_PARAMS,
-    optimize_mode="cutoff_only",
-    initial_ml_cutoff=1.0,
-    initial_mm_switch_on=6.0,
-    initial_mm_cutoff=1.0,
-    n_samples=20,
-    learning_rate=0.01,
-    n_iterations=100,
-    verbose=True
-)
+if USE_ITERATIVE:
+    result_iterative = fit_hybrid_parameters_iteratively(
+        train_batches=train_batches_copy,
+        base_calculator_factory=calculator_factory,
+        model=model,
+        model_params=params,
+        atc_epsilons=lj_params["atc_epsilons"],
+        atc_rmins=lj_params["atc_rmins"],
+        atc_qs=lj_params["atc_qs"],
+        at_codes=lj_params["at_codes"],
+        pair_idx_atom_atom=lj_params["pair_idx_atom_atom"],
+        cutoff_params=CUTOFF_PARAMS,
+        args=args,
+        n_iterations=3,  # Number of alternating iterations
+        n_samples=20,
+        energy_weight=1.0,
+        force_weight=1.0,
+        lj_learning_rate=0.01,
+        cutoff_learning_rate=0.01,
+        lj_n_iterations=100,  # Iterations per LJ optimization step
+        cutoff_n_iterations=100,  # Iterations per cutoff optimization step
+        convergence_threshold=1e-3,  # Stop early if loss improvement < 0.1%
+        verbose=True,
+    )
+    
+    opt_ep_scale_lj = result_iterative["ep_scale"]
+    opt_sig_scale_lj = result_iterative["sig_scale"]
+    # Convert JAX arrays to Python floats for CutoffParameters (required for hashability)
+    CUTOFF_PARAMS = CutoffParameters(
+        ml_cutoff=float(result_iterative["ml_cutoff"]),
+        mm_switch_on=float(result_iterative["mm_switch_on"]),
+        mm_cutoff=float(result_iterative["mm_cutoff"]),
+    )
+    
+    print(f"\nFinal optimized parameters:")
+    print(f"  ep_scale: {opt_ep_scale_lj}")
+    print(f"  sig_scale: {opt_sig_scale_lj}")
+    print(f"  Cutoff parameters: {CUTOFF_PARAMS}")
+    print(f"  Loss history: {result_iterative['loss_history']}")
 
-# Update cutoff parameters with optimized values
-CUTOFF_PARAMS = CutoffParameters(
-    ml_cutoff=result_cutoff["ml_cutoff"], 
-    mm_switch_on=result_cutoff["mm_switch_on"], 
-    mm_cutoff=result_cutoff["mm_cutoff"]
-)
-print(f"\nOptimized cutoff parameters: {CUTOFF_PARAMS}")
+else:
+    # Option B: Separate optimization modes (original approach)
+    # Step 2a: Optimize LJ parameters only
+    print("\n" + "=" * 60)
+    print("MODE 1: Optimizing LJ parameters only")
+    print("=" * 60)
+    result_lj = fit_hybrid_potential_to_training_data_jax(
+        train_batches=train_batches_copy,
+        base_calculator_factory=calculator_factory,
+        model=model,
+        model_params=params,
+        atc_epsilons=lj_params["atc_epsilons"],
+        atc_rmins=lj_params["atc_rmins"],
+        atc_qs=lj_params["atc_qs"],
+        at_codes=lj_params["at_codes"],
+        pair_idx_atom_atom=lj_params["pair_idx_atom_atom"],
+        cutoff_params=CUTOFF_PARAMS,
+        args=args,
+        optimize_mode="lj_only",
+        n_samples=20,
+        energy_weight=1.0,
+        force_weight=1.0,
+        learning_rate=0.01,
+        n_iterations=100,
+        verbose=True
+    )
+
+    opt_ep_scale_lj = result_lj["ep_scale"]
+    opt_sig_scale_lj = result_lj["sig_scale"]
+    print(f"\nOptimized LJ scales:")
+    print(f"  ep_scale: {opt_ep_scale_lj}")
+    print(f"  sig_scale: {opt_sig_scale_lj}")
+
+    # Step 2b: Optimize cutoff parameters (using optimized LJ parameters)
+    print("\n" + "=" * 60)
+    print("MODE 2: Optimizing cutoff parameters")
+    print("=" * 60)
+    print("Using optimized LJ parameters from MODE 1 for better starting loss")
+    result_cutoff = fit_hybrid_potential_to_training_data_jax(
+        train_batches=train_batches_copy,
+        base_calculator_factory=calculator_factory,
+        model=model,
+        model_params=params,
+        atc_epsilons=lj_params["atc_epsilons"],
+        atc_rmins=lj_params["atc_rmins"],
+        atc_qs=lj_params["atc_qs"],
+        at_codes=lj_params["at_codes"],
+        pair_idx_atom_atom=lj_params["pair_idx_atom_atom"],
+        cutoff_params=CUTOFF_PARAMS,
+        optimize_mode="cutoff_only",
+        initial_ep_scale=opt_ep_scale_lj,  # Use optimized LJ parameters from MODE 1
+        initial_sig_scale=opt_sig_scale_lj,  # Use optimized LJ parameters from MODE 1
+        initial_ml_cutoff=1.0,
+        initial_mm_switch_on=6.0,
+        initial_mm_cutoff=1.0,
+        n_samples=20,
+        learning_rate=0.01,
+        n_iterations=100,
+        verbose=True
+    )
+
+    # Update cutoff parameters with optimized values
+    # Convert JAX arrays to Python floats for CutoffParameters (required for hashability)
+    CUTOFF_PARAMS = CutoffParameters(
+        ml_cutoff=float(result_cutoff["ml_cutoff"]), 
+        mm_switch_on=float(result_cutoff["mm_switch_on"]), 
+        mm_cutoff=float(result_cutoff["mm_cutoff"])
+    )
+    print(f"\nOptimized cutoff parameters: {CUTOFF_PARAMS}")
 
 # Step 4: Create calculator with optimized parameters
 print("\n" + "=" * 60)
