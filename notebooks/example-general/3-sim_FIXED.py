@@ -572,6 +572,13 @@ if USE_ITERATIVE:
         mm_cutoff=float(result_iterative["mm_cutoff"]),
     )
     
+    # Store cutoff results for later use (fix NameError)
+    result_cutoff = {
+        "ml_cutoff": result_iterative["ml_cutoff"],
+        "mm_switch_on": result_iterative["mm_switch_on"],
+        "mm_cutoff": result_iterative["mm_cutoff"],
+    }
+    
     print(f"\nFinal optimized parameters:")
     print(f"  ep_scale: {opt_ep_scale_lj}")
     print(f"  sig_scale: {opt_sig_scale_lj}")
