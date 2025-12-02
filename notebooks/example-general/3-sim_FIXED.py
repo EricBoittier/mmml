@@ -553,6 +553,7 @@ if USE_ITERATIVE:
         args=args,
         n_iterations=3,  # Number of alternating iterations
         n_samples=20,
+        min_com_distance=3.5,  # Filter out samples with COM distance < 3.5 Å (large force errors)
         energy_weight=1.0,
         force_weight=1.0,
         lj_learning_rate=0.01,

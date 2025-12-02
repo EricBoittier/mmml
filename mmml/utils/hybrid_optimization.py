@@ -906,6 +906,7 @@ def fit_hybrid_potential_to_training_data_jax(
     initial_mm_switch_on: Optional[float] = None,
     initial_mm_cutoff: Optional[float] = None,
     n_samples: Optional[int] = None,
+    min_com_distance: Optional[float] = None,  # Filter out samples below this COM distance
     energy_weight: float = 1.0,
     force_weight: float = 1.0,
     learning_rate: float = 0.01,
@@ -1049,13 +1050,18 @@ def fit_hybrid_potential_to_training_data_jax(
         else:
             atoms_per_monomer_val = 10  # Default
     
-    # Compute COM distances for all batches
+    # Default minimum COM distance threshold (filter out very close contacts with large errors)
+    if min_com_distance is None:
+        min_com_distance = 3.5  # Default threshold based on user observation
+    
+    # Compute COM distances for all batches and filter out those below threshold
     batch_com_distances = []
-    for batch in train_batches:
+    valid_batch_indices = []
+    
+    for idx, batch in enumerate(train_batches):
         R = batch.get("R")
         Z = batch.get("Z")
         if R is None or Z is None:
-            batch_com_distances.append(0.0)
             continue
         
         # Handle batched data (take first configuration)
@@ -1068,19 +1074,37 @@ def fit_hybrid_potential_to_training_data_jax(
         
         try:
             com_dist = compute_com_distance(R_i, Z_i, n_monomers_val, atoms_per_monomer_val)
-            batch_com_distances.append(com_dist)
+            
+            # Filter out batches below minimum COM distance threshold
+            if com_dist >= min_com_distance:
+                batch_com_distances.append(com_dist)
+                valid_batch_indices.append(idx)
         except Exception:
-            batch_com_distances.append(0.0)
+            # Skip batches where COM distance calculation fails
+            continue
     
-    # Select samples to ensure variety of COM distances
+    # Filter train_batches to only include valid ones
+    filtered_train_batches = [train_batches[i] for i in valid_batch_indices]
+    
+    if verbose:
+        n_filtered = len(train_batches) - len(filtered_train_batches)
+        if n_filtered > 0:
+            print(f"Filtered out {n_filtered} batches with COM distance < {min_com_distance:.2f} Å")
+        print(f"Remaining batches: {len(filtered_train_batches)}")
+    
+    if len(filtered_train_batches) == 0:
+        raise ValueError(f"No batches remain after filtering COM distance < {min_com_distance:.2f} Å. "
+                        f"Consider lowering min_com_distance or checking your data.")
+    
+    # Select samples to ensure variety of COM distances from filtered batches
     if n_samples is None:
-        n_samples = len(train_batches)
-    n_samples = min(n_samples, len(train_batches))
+        n_samples = len(filtered_train_batches)
+    n_samples = min(n_samples, len(filtered_train_batches))
     
-    if n_samples < len(train_batches):
+    if n_samples < len(filtered_train_batches):
         # Use stratified sampling based on COM distance
         # Sort batches by COM distance
-        batch_indices = np.arange(len(train_batches))
+        batch_indices = np.arange(len(filtered_train_batches))
         sorted_indices = sorted(batch_indices, key=lambda i: batch_com_distances[i])
         
         # Select samples evenly distributed across COM distance range
@@ -1101,7 +1125,7 @@ def fit_hybrid_potential_to_training_data_jax(
                     additional = rng.choice(available_indices, size=min(remaining, len(available_indices)), replace=False)
                     selected_indices.extend(additional.tolist())
         
-        selected_batches = [train_batches[i] for i in selected_indices[:n_samples]]
+        selected_batches = [filtered_train_batches[i] for i in selected_indices[:n_samples]]
         
         if verbose:
             selected_distances = [batch_com_distances[i] for i in selected_indices[:n_samples]]
@@ -1109,7 +1133,11 @@ def fit_hybrid_potential_to_training_data_jax(
             print(f"  Min: {min(selected_distances):.2f} Å, Max: {max(selected_distances):.2f} Å")
             print(f"  Mean: {np.mean(selected_distances):.2f} Å, Std: {np.std(selected_distances):.2f} Å")
     else:
-        selected_batches = train_batches
+        selected_batches = filtered_train_batches
+        if verbose:
+            print(f"Using all {len(selected_batches)} filtered batches")
+            if len(batch_com_distances) > 0:
+                print(f"COM distances: Min: {min(batch_com_distances):.2f} Å, Max: {max(batch_com_distances):.2f} Å")
     
     if verbose:
         print(f"Fitting hybrid potential using {n_samples} training samples")
@@ -1955,6 +1983,7 @@ def fit_hybrid_parameters_iteratively(
             initial_ep_scale=current_ep_scale,
             initial_sig_scale=current_sig_scale,
             n_samples=n_samples,
+            min_com_distance=min_com_distance,
             energy_weight=energy_weight,
             force_weight=force_weight,
             learning_rate=lj_learning_rate,
@@ -1999,6 +2028,7 @@ def fit_hybrid_parameters_iteratively(
             initial_mm_switch_on=current_cutoff_params.mm_switch_on,
             initial_mm_cutoff=current_cutoff_params.mm_cutoff,
             n_samples=n_samples,
+            min_com_distance=min_com_distance,
             energy_weight=energy_weight,
             force_weight=force_weight,
             learning_rate=cutoff_learning_rate,
@@ -2200,6 +2230,7 @@ def fit_hybrid_parameters_iteratively(
             initial_ep_scale=current_ep_scale,
             initial_sig_scale=current_sig_scale,
             n_samples=n_samples,
+            min_com_distance=min_com_distance,
             energy_weight=energy_weight,
             force_weight=force_weight,
             learning_rate=lj_learning_rate,
@@ -2244,6 +2275,7 @@ def fit_hybrid_parameters_iteratively(
             initial_mm_switch_on=current_cutoff_params.mm_switch_on,
             initial_mm_cutoff=current_cutoff_params.mm_cutoff,
             n_samples=n_samples,
+            min_com_distance=min_com_distance,
             energy_weight=energy_weight,
             force_weight=force_weight,
             learning_rate=cutoff_learning_rate,
