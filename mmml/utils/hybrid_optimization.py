@@ -1029,11 +1029,87 @@ def fit_hybrid_potential_to_training_data_jax(
     
     args_for_factory = args if args is not None else MinimalArgs(n_monomers_val, skip_ml_dimers_val)
     
-    # Select training samples
+    # Select training samples based on COM distance to ensure variety
+    # Extract n_monomers and atoms_per_monomer for COM distance calculation
+    n_monomers_val = getattr(args, 'n_monomers', n_monomers) if n_monomers is None else n_monomers
+    atoms_per_monomer_val = getattr(args, 'n_atoms_monomer', None) if args is not None else None
+    if atoms_per_monomer_val is None:
+        # Try to infer from first batch
+        if train_batches and len(train_batches) > 0:
+            first_batch = train_batches[0]
+            if first_batch.get("R") is not None:
+                R_first = first_batch["R"]
+                if R_first.ndim == 3:
+                    n_atoms_total = R_first.shape[1]
+                else:
+                    n_atoms_total = R_first.shape[0]
+                atoms_per_monomer_val = n_atoms_total // n_monomers_val if n_monomers_val > 0 else 10
+            else:
+                atoms_per_monomer_val = 10  # Default
+        else:
+            atoms_per_monomer_val = 10  # Default
+    
+    # Compute COM distances for all batches
+    batch_com_distances = []
+    for batch in train_batches:
+        R = batch.get("R")
+        Z = batch.get("Z")
+        if R is None or Z is None:
+            batch_com_distances.append(0.0)
+            continue
+        
+        # Handle batched data (take first configuration)
+        if R.ndim == 3:
+            R_i = R[0]
+            Z_i = Z[0] if Z.ndim == 2 else Z
+        else:
+            R_i = R
+            Z_i = Z
+        
+        try:
+            com_dist = compute_com_distance(R_i, Z_i, n_monomers_val, atoms_per_monomer_val)
+            batch_com_distances.append(com_dist)
+        except Exception:
+            batch_com_distances.append(0.0)
+    
+    # Select samples to ensure variety of COM distances
     if n_samples is None:
         n_samples = len(train_batches)
     n_samples = min(n_samples, len(train_batches))
-    selected_batches = train_batches[:n_samples]
+    
+    if n_samples < len(train_batches):
+        # Use stratified sampling based on COM distance
+        # Sort batches by COM distance
+        batch_indices = np.arange(len(train_batches))
+        sorted_indices = sorted(batch_indices, key=lambda i: batch_com_distances[i])
+        
+        # Select samples evenly distributed across COM distance range
+        selected_indices = []
+        if n_samples > 0:
+            step = max(1, len(sorted_indices) // n_samples)
+            for i in range(0, len(sorted_indices), step):
+                if len(selected_indices) < n_samples:
+                    selected_indices.append(sorted_indices[i])
+            
+            # Fill remaining slots with random samples if needed
+            remaining = n_samples - len(selected_indices)
+            if remaining > 0:
+                available_indices = [i for i in batch_indices if i not in selected_indices]
+                if available_indices:
+                    # Use a fixed seed for reproducibility (based on n_samples)
+                    rng = np.random.RandomState(seed=42)
+                    additional = rng.choice(available_indices, size=min(remaining, len(available_indices)), replace=False)
+                    selected_indices.extend(additional.tolist())
+        
+        selected_batches = [train_batches[i] for i in selected_indices[:n_samples]]
+        
+        if verbose:
+            selected_distances = [batch_com_distances[i] for i in selected_indices[:n_samples]]
+            print(f"Selected {n_samples} samples with COM distances:")
+            print(f"  Min: {min(selected_distances):.2f} Å, Max: {max(selected_distances):.2f} Å")
+            print(f"  Mean: {np.mean(selected_distances):.2f} Å, Std: {np.std(selected_distances):.2f} Å")
+    else:
+        selected_batches = train_batches
     
     if verbose:
         print(f"Fitting hybrid potential using {n_samples} training samples")
