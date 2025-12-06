@@ -5,7 +5,7 @@ cd ~/mmml/setup
 # Only extract if 'charmm' directory does not exist
 if [ ! -d "charmm" ]; then
 	echo "unzipping"
-    	tar -xf ../charmm.tar.xz
+    	tar -xf charmm.tar.xz
 fi
 
 # Set environment variables

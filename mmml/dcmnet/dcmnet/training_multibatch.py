@@ -531,6 +531,11 @@ def train_model_multibatch(
                 ndcm=model_config.n_dcm,
             )
             
+            # Block until JAX operations complete to avoid async context issues
+            # This prevents RuntimeError: cannot enter context in IPython/Jupyter
+            jax.block_until_ready(loss)
+            jax.block_until_ready(grad)
+            
             # Accumulate gradients
             if accumulated_grads is None:
                 accumulated_grads = grad
@@ -549,6 +554,9 @@ def train_model_multibatch(
                     params=params,
                     num_accumulation_steps=accum_step,
                 )
+                
+                # Block until JAX operations complete to avoid async context issues
+                jax.block_until_ready(params)
                 
                 # Update EMA
                 if train_config.use_ema:
@@ -587,6 +595,8 @@ def train_model_multibatch(
                 chg_w=train_config.chg_w,
                 ndcm=model_config.n_dcm,
             )
+            # Block until JAX operations complete to avoid async context issues
+            jax.block_until_ready(loss)
             valid_metrics.update(
                 loss=loss,
                 mono_pred=mono,
