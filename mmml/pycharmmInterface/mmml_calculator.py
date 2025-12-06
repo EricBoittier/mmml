@@ -966,25 +966,7 @@ def setup_calculator(
     else:
         pbc_map = do_pbc_map = False
 
-    # from functools import partial
-    # @partial(jax.jit, static_argnames=['ml_cutoff', 'mm_switch_on', 'ATOMS_PER_MONOMER'])
-    # def switch_ML(X,
-    #     ml_energy,
-    #     ml_cutoff=0.01,
-    #     mm_switch_on=5.0,
-    #     ATOMS_PER_MONOMER=ATOMS_PER_MONOMER,
-    # ):
-    #     """Apply ML switching based on COM distance between monomers."""
-    #     # Calculate center-of-mass distance between monomers
-    #     com1 = X[:ATOMS_PER_MONOMER].T.mean(axis=1)
-    #     com2 = X[ATOMS_PER_MONOMER:2*ATOMS_PER_MONOMER].T.mean(axis=1)
-    #     r = jnp.linalg.norm(com1 - com2)
-        
-    #     # Apply simple ML switching: 1 at short range, taper to 0 at mm_switch_on
-    #     # ml_scale = ml_switch_simple(r, ml_cutoff, mm_switch_on)
-    #     ml_scale = 1.0 - _np_sharpstep(r, mm_switch_on - ml_cutoff, mm_switch_on, gamma=3.0)
-                
-    #     return ml_scale * ml_energy
+
 
     @partial(jax.jit, static_argnames=['ml_cutoff', 'mm_switch_on', 'ATOMS_PER_MONOMER'])
     def switch_ML(X,
@@ -1267,24 +1249,15 @@ def setup_calculator(
                 ml_energy_conversion_factor=ml_energy_conversion_factor,
                 ml_force_conversion_factor=ml_force_conversion_factor
             )
-            # Map ML forces to correct atom indices in the full system
-            # ML forces are computed for n_monomers * ATOMS_PER_MONOMER atoms
+            # Get ML forces from calculate_ml_contributions
+            # CRITICAL: These forces are ALREADY correctly mapped to atoms 0 to (n_monomers * ATOMS_PER_MONOMER - 1)
+            # via segment_sum in process_monomer_forces and process_dimer_forces
+            # They should be in the same order as the atom positions (atoms 0, 1, 2, ..., n_atoms-1)
             ml_forces = ml_out.get("out_F", jnp.zeros((n_monomers * ATOMS_PER_MONOMER, 3)))
             ml_internal_F = ml_out.get("internal_F", jnp.zeros((n_monomers * ATOMS_PER_MONOMER, 3)))
             ml_2b_F = ml_out.get("ml_2b_F", jnp.zeros((n_monomers * ATOMS_PER_MONOMER, 3)))
             
-            # Flatten all_monomer_idxs to get the actual atom indices
-            monomer_atom_indices = jnp.array(all_monomer_idxs).flatten()
-            
-            # Validate that monomer_atom_indices are within bounds
-            # Clamp indices to valid range to prevent out-of-bounds access
-            max_idx = jnp.max(monomer_atom_indices) if len(monomer_atom_indices) > 0 else 0
-            min_idx = jnp.min(monomer_atom_indices) if len(monomer_atom_indices) > 0 else 0
-            
-            # Ensure indices are valid (0 to n_atoms-1)
-            monomer_atom_indices = jnp.clip(monomer_atom_indices, 0, n_atoms - 1)
-            
-            # Validate that ML forces shape matches expected size
+            # Ensure ML forces have the correct shape (should match n_atoms)
             expected_n_ml_atoms = n_monomers * ATOMS_PER_MONOMER
             if ml_forces.shape[0] != expected_n_ml_atoms:
                 # If shape mismatch, pad or truncate to expected size
@@ -1300,34 +1273,51 @@ def setup_calculator(
                     if "ml_2b_F" in ml_out:
                         ml_2b_F = ml_2b_F[:expected_n_ml_atoms]
             
-            # Ensure monomer_atom_indices matches ML forces size
-            if len(monomer_atom_indices) != ml_forces.shape[0]:
-                # If mismatch, use sequential indices up to min of both
-                n_valid = min(len(monomer_atom_indices), ml_forces.shape[0], n_atoms)
-                monomer_atom_indices = jnp.arange(n_valid)
-                ml_forces = ml_forces[:n_valid]
-                ml_internal_F = ml_internal_F[:n_valid]
+            # Ensure ML forces match system size (in case n_atoms != expected_n_ml_atoms)
+            if ml_forces.shape[0] > n_atoms:
+                ml_forces = ml_forces[:n_atoms]
+                ml_internal_F = ml_internal_F[:n_atoms]
                 if "ml_2b_F" in ml_out:
-                    ml_2b_F = ml_2b_F[:n_valid]
+                    ml_2b_F = ml_2b_F[:n_atoms]
+            elif ml_forces.shape[0] < n_atoms:
+                padding = jnp.zeros((n_atoms - ml_forces.shape[0], 3))
+                ml_forces = jnp.concatenate([ml_forces, padding], axis=0)
+                ml_internal_F = jnp.concatenate([ml_internal_F, padding], axis=0)
+                if "ml_2b_F" in ml_out:
+                    ml_2b_F = jnp.concatenate([ml_2b_F, padding], axis=0)
             
-            # Check for NaN/Inf in ML forces before mapping
+            # Check for NaN/Inf in ML forces
             ml_forces = jnp.where(jnp.isfinite(ml_forces), ml_forces, 0.0)
             ml_internal_F = jnp.where(jnp.isfinite(ml_internal_F), ml_internal_F, 0.0)
             if "ml_2b_F" in ml_out:
                 ml_2b_F = jnp.where(jnp.isfinite(ml_2b_F), ml_2b_F, 0.0)
             
-            # Validate indexing (using JAX-compatible operations only)
-            # Note: We rely on JAX's bounds checking during indexing rather than explicit validation
-            # to avoid tracer bool conversion errors in JIT-compiled code
+            if debug:
+                jax.debug.print("ML forces shape: {s}, n_atoms: {n}, expected: {e}",
+                               s=ml_forces.shape, n=n_atoms, e=expected_n_ml_atoms)
+                jax.debug.print("ML forces norm before adding: {n}", n=jnp.linalg.norm(ml_forces))
+                jax.debug.print("ML forces non-zero count: {c}", c=jnp.sum(jnp.any(jnp.abs(ml_forces) > 1e-10, axis=1)))
             
-            # Map ML forces to the correct positions in the full force array
-            # Use safe indexing to prevent out-of-bounds access
-            outputs["out_F"] = outputs["out_F"].at[monomer_atom_indices].add(ml_forces)
-            outputs["internal_F"] = outputs["internal_F"].at[monomer_atom_indices].add(ml_internal_F)
-            # Only add ml_2b_F if it's not zero (i.e., if it was actually computed)
-            # Check by seeing if the key exists in ml_out
+            # CRITICAL FIX: Forces from calculate_ml_contributions are ALREADY correctly ordered
+            # (atoms 0, 1, 2, ..., n_atoms-1), so we should ADD them directly, not remap them
+            outputs["out_F"] = outputs["out_F"] + ml_forces
+            outputs["internal_F"] = outputs["internal_F"] + ml_internal_F
+            
+            # ml_2b_F is stored separately for analysis but is already included in ml_forces
             if "ml_2b_F" in ml_out:
-                outputs["ml_2b_F"] = outputs["ml_2b_F"].at[monomer_atom_indices].add(ml_2b_F)
+                outputs["ml_2b_F"] = outputs["ml_2b_F"] + ml_2b_F
+            
+            if debug:
+                # Check what atoms received forces
+                atom_force_magnitudes = jnp.linalg.norm(outputs["out_F"], axis=1)
+                jax.debug.print("After adding ML forces - force magnitudes (first 10 atoms): {f}", 
+                               f=atom_force_magnitudes[:10])
+                jax.debug.print("After adding ML forces - min force mag: {min}, max: {max}, mean: {mean}",
+                               min=jnp.min(atom_force_magnitudes),
+                               max=jnp.max(atom_force_magnitudes),
+                               mean=jnp.mean(atom_force_magnitudes))
+                jax.debug.print("ML forces norm after adding to outputs: {n}", n=jnp.linalg.norm(outputs["out_F"]))
+                jax.debug.print("outputs out_F non-zero count: {c}", c=jnp.sum(jnp.any(jnp.abs(outputs["out_F"]) > 1e-10, axis=1)))
             
             # Update energy terms (these are scalars, so no shape issue)
             outputs["out_E"] = ml_out.get("out_E", 0)
@@ -1364,7 +1354,23 @@ def setup_calculator(
 
         # Final validation: check for NaN/Inf in final forces
         final_forces = outputs["out_F"]
+        
+        # Debug: Check force accumulation
+        if debug:
+            ml_force_norm = jnp.linalg.norm(outputs.get("out_F", jnp.zeros((n_atoms, 3)))) if "out_F" in outputs else 0.0
+            mm_force_norm = jnp.linalg.norm(outputs.get("mm_F", jnp.zeros((n_atoms, 3)))) if "mm_F" in outputs else 0.0
+            jax.debug.print("Before final check - ML force norm: {ml}, MM force norm: {mm}, n_atoms: {n}",
+                           ml=ml_force_norm, mm=mm_force_norm, n=n_atoms)
+            if "out_F" in outputs:
+                ml_non_zero = jnp.sum(jnp.any(jnp.abs(outputs["out_F"]) > 1e-10, axis=1))
+                jax.debug.print("ML forces non-zero atoms: {c} / {t}", c=ml_non_zero, t=n_atoms)
+        
         final_forces = jnp.where(jnp.isfinite(final_forces), final_forces, 0.0)
+        
+        if debug:
+            final_non_zero = jnp.sum(jnp.any(jnp.abs(final_forces) > 1e-10, axis=1))
+            jax.debug.print("Final forces non-zero atoms: {c} / {t}, norm: {n}",
+                           c=final_non_zero, t=n_atoms, n=jnp.linalg.norm(final_forces))
         
         # Total energy: combined ML (monomer+dimer switched) + MM
         final_energy = outputs["out_E"]
@@ -1492,8 +1498,21 @@ def setup_calculator(
         output = apply_model(batches["Z"], batches["R"])
         
         # Convert units
+        # Note: If model outputs in eV/Å and we want eV/Å, conversion_factor should be 1
+        # If model outputs in kcal/mol/Å and we want eV/Å, we multiply by ev2kcalmol (~23)
+        # If model outputs in eV/Å and we want kcal/mol/Å, we divide by ev2kcalmol
         f = output["forces"] * ml_force_conversion_factor 
         e = output["energy"] * ml_energy_conversion_factor
+        
+        if debug:
+            jax.debug.print("Model output - forces norm: {f}, energy: {e}, conversion factors - force: {cf}, energy: {ce}",
+                           f=jnp.linalg.norm(output["forces"]),
+                           e=jnp.sum(output["energy"]),
+                           cf=ml_force_conversion_factor,
+                           ce=ml_energy_conversion_factor)
+            jax.debug.print("After conversion - forces norm: {f}, energy: {e}",
+                           f=jnp.linalg.norm(f),
+                           e=jnp.sum(e))
         
         # Calculate monomer contributions
         monomer_contribs = calculate_monomer_contributions(e, f, n_monomers, max_atoms, debug)
@@ -1510,9 +1529,22 @@ def setup_calculator(
         )
         
         # Combine contributions
+        combined_forces = monomer_contribs["out_F"] + dimer_contribs["out_F"]
+        
+        if debug:
+            jax.debug.print("Combining ML forces - monomer norm: {m}, dimer norm: {d}, combined norm: {c}",
+                           m=jnp.linalg.norm(monomer_contribs["out_F"]),
+                           d=jnp.linalg.norm(dimer_contribs["out_F"]),
+                           c=jnp.linalg.norm(combined_forces))
+            monomer_non_zero = jnp.sum(jnp.any(jnp.abs(monomer_contribs["out_F"]) > 1e-10, axis=1))
+            dimer_non_zero = jnp.sum(jnp.any(jnp.abs(dimer_contribs["out_F"]) > 1e-10, axis=1))
+            combined_non_zero = jnp.sum(jnp.any(jnp.abs(combined_forces) > 1e-10, axis=1))
+            jax.debug.print("Non-zero atoms - monomer: {m}, dimer: {d}, combined: {c}",
+                           m=monomer_non_zero, d=dimer_non_zero, c=combined_non_zero)
+        
         return {
             "out_E": monomer_contribs["out_E"] + dimer_contribs["out_E"],
-            "out_F": monomer_contribs["out_F"] + dimer_contribs["out_F"],
+            "out_F": combined_forces,
             "dH": dimer_contribs["dH"],
             "internal_E": monomer_contribs["internal_E"],
             "internal_F": monomer_contribs["internal_F"],
@@ -1630,7 +1662,7 @@ def setup_calculator(
                 force_conversion_factor: float = 1.0,
                 do_pbc_map: bool = False,
                 pbc_map = None,
-                verbose: bool = False,
+                verbose: bool = True,
             ):
                 """Initialize calculator with configuration parameters
                 
@@ -1863,6 +1895,22 @@ def setup_calculator(
             ml_dimer_forces, force_segments, n_dimers, debug
         )
         
+        # Debug: Check if dimer forces are non-zero
+        if debug:
+            jax.debug.print("process_dimer_forces output - shape[0]: {s0}, shape[1]: {s1}, max abs: {m}, norm: {n}",
+                           s0=dimer_forces.shape[0],
+                           s1=dimer_forces.shape[1],
+                           m=jnp.max(jnp.abs(dimer_forces)),
+                           n=jnp.linalg.norm(dimer_forces))
+            # Check how many atoms have non-zero forces
+            force_magnitudes = jnp.linalg.norm(dimer_forces, axis=1)
+            non_zero_count = jnp.sum(force_magnitudes > 1e-10)
+            jax.debug.print("Dimer forces non-zero atoms: {c} / {t}", c=non_zero_count, t=dimer_forces.shape[0])
+            jax.debug.print("Dimer int energies - min: {m}, max: {M}, mean: {a}",
+                           m=jnp.min(dimer_int_energies),
+                           M=jnp.max(dimer_int_energies),
+                           a=jnp.mean(dimer_int_energies))
+        
         # Apply switching functions
         switched_results = apply_dimer_switching(
             positions, dimer_int_energies, dimer_forces, cutoff_params, max_atoms, debug
@@ -1885,7 +1933,12 @@ def setup_calculator(
         """Calculate force segments for dimer force summation."""
         dimer_pairs = jnp.array(dimer_perms)
         
+        if debug:
+            jax.debug.print("calculate_dimer_force_segments - dimer_pairs: {p}, n_dimers: {n}",
+                           p=dimer_pairs, n=n_dimers)
+        
         # Calculate base indices for each monomer
+        # Note: dimer_pairs uses 0-indexed monomer indices (0, 1)
         first_indices = ATOMS_PER_MONOMER * dimer_pairs[:, 0:1]
         second_indices = ATOMS_PER_MONOMER * dimer_pairs[:, 1:2]
         
@@ -1898,7 +1951,20 @@ def setup_calculator(
             second_indices + atom_offsets[None, :]
         ], axis=1)
         
-        return force_segments.reshape(-1)
+        force_segments_flat = force_segments.reshape(-1)
+        
+        if debug:
+            jax.debug.print("Force segments shape: {s}",
+                           s=force_segments_flat.shape)
+            # Print first 10 values using static slice (safe since we have at least 1 dimer = 20 elements)
+            jax.debug.print("Force segments first 10: {v}",
+                           v=force_segments_flat[:10])
+            jax.debug.print("Force segments min: {min}, max: {max}, expected range: [0, {e})",
+                           min=jnp.min(force_segments_flat),
+                           max=jnp.max(force_segments_flat),
+                           e=n_monomers * ATOMS_PER_MONOMER)
+        
+        return force_segments_flat
 
     def calculate_monomer_contribution_to_dimers(
         monomer_energies: Array,
@@ -1978,11 +2044,19 @@ def setup_calculator(
         
         # Map energy-weighted switching gradients to full system
         # This gives us the E * ds/dR term
+        # We need to multiply by dimer energies first, then map
+        # The gradient is already energy-weighted by switch_ML_grad, but we need to ensure
+        # it's properly distributed to atoms
         energy_weighted_grad = jax.ops.segment_sum(
             -dimer_switching_grads_flat,  # Negative because F = -grad(E)
             force_segments,
             num_segments=n_monomers * ATOMS_PER_MONOMER
         )  # Shape: (n_monomers * ATOMS_PER_MONOMER, 3)
+        
+        # Debug: Check if energy_weighted_grad is all zeros
+        if debug:
+            max_grad = jnp.max(jnp.abs(energy_weighted_grad))
+            jax.debug.print("Energy-weighted grad max abs value: {x}", x=max_grad)
         
         # For the scale * F_dimer term, we need to scale dimer_forces by switching
         # Since each atom may belong to multiple dimers, we compute atom-wise scales
@@ -2014,14 +2088,36 @@ def setup_calculator(
         # Apply switching scale to dimer forces
         scaled_dimer_forces = dimer_forces * atom_switching_scales[:, None]
         
+        # Debug: Check dimer forces before scaling
+        if debug:
+            jax.debug.print("Dimer forces before scaling - max abs: {x}, norm: {y}", 
+                           x=jnp.max(jnp.abs(dimer_forces)),
+                           y=jnp.linalg.norm(dimer_forces))
+            jax.debug.print("Atom switching scales - min: {x}, max: {y}, mean: {z}",
+                           x=jnp.min(atom_switching_scales),
+                           y=jnp.max(atom_switching_scales),
+                           z=jnp.mean(atom_switching_scales))
+        
         # Combine both terms: F_switched = scale * F_dimer - E * grad(scale)
         switched_forces = scaled_dimer_forces + energy_weighted_grad
         
         if debug:
-            jax.debug.print("Dimer switching: scales={x}, scaled_forces_norm={y}, energy_grad_norm={z}", 
+            jax.debug.print("Dimer switching: scales={x}, scaled_forces_norm={y}, energy_grad_norm={z}, final_forces_norm={w}", 
                            x=switching_scales.sum(), 
                            y=jnp.linalg.norm(scaled_dimer_forces),
-                           z=jnp.linalg.norm(energy_weighted_grad))
+                           z=jnp.linalg.norm(energy_weighted_grad),
+                           w=jnp.linalg.norm(switched_forces))
+
+            jax.debug.print("Switched forces: {x}", x=switched_forces)
+            jax.debug.print("Switched energy: {x}", x=switched_energy)
+            jax.debug.print("Dimer forces: {x}", x=dimer_forces)
+            jax.debug.print("Energy weighted grad: {x}", x=energy_weighted_grad)
+            jax.debug.print("Dimer switching scales: {x}", x=switching_scales)
+            jax.debug.print("Scaled dimer forces: {x}", x=scaled_dimer_forces)
+            jax.debug.print("Atom switching scales: {x}", x=atom_switching_scales)
+            jax.debug.print("Atom switching scales sum: {x}", x=atom_switching_scales_sum)
+            jax.debug.print("Atom dimer counts: {x}", x=atom_dimer_counts)
+            jax.debug.print("Atom switching scales: {x}", x=atom_switching_scales)
         
         return {
             "energies": -switched_energy,
