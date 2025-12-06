@@ -1931,7 +1931,18 @@ def setup_calculator(
         max_atoms: int,
         debug: bool
     ) -> Dict[str, Array]:
-        """Apply switching functions to dimer energies and forces."""
+        """Apply switching functions to dimer energies and forces.
+        
+        Forces are computed using the product rule:
+        F = -d/dR [E * s(R)] = -[dE/dR * s(R) + E * ds/dR]
+        where s(R) is the switching function.
+        
+        Since dimer_forces is already mapped to the full system, we compute
+        forces by differentiating the switched energy function directly using JAX.
+        """
+        n_dimers = len(all_dimer_idxs)
+        force_segments = calculate_dimer_force_segments(n_dimers)
+        
         # Calculate switched energies using cutoff parameters
         switched_energy = jax.vmap(lambda x, f: switch_ML(
             x.reshape(max_atoms, 3), 
@@ -1941,7 +1952,17 @@ def setup_calculator(
             ATOMS_PER_MONOMER=ATOMS_PER_MONOMER,
         ))(positions[jnp.array(all_dimer_idxs)], dimer_energies)
         
-        # Calculate switched energy gradients
+        # Calculate switching scale for each dimer (needed for force scaling)
+        switching_scales = jax.vmap(lambda x: switch_ML(
+            x.reshape(max_atoms, 3),
+            1.0,  # Use 1.0 to get just the switching scale
+            ml_cutoff=cutoff_params.ml_cutoff,
+            mm_switch_on=cutoff_params.mm_switch_on,
+            ATOMS_PER_MONOMER=ATOMS_PER_MONOMER,
+        ))(positions[jnp.array(all_dimer_idxs)])
+        
+        # Calculate energy-weighted switching gradients (E * ds/dR)
+        # switch_ML_grad(X, E) computes d/dX [scale(X) * E] = E * d(scale)/dX
         switched_grad = jax.vmap(lambda x, f: switch_ML_grad(
             x.reshape(max_atoms, 3),
             f,
@@ -1950,22 +1971,61 @@ def setup_calculator(
             ATOMS_PER_MONOMER=ATOMS_PER_MONOMER,
         ))(positions[jnp.array(all_dimer_idxs)], dimer_energies)
         
-        # Combine forces using product rule
-        dudx_v = dimer_energies.sum() * switched_grad
+        # Extract relevant atoms from switched_grad (first 2*ATOMS_PER_MONOMER per dimer)
+        # switched_grad shape: (n_dimers, max_atoms, 3)
+        dimer_switching_grads = switched_grad[:, :2 * ATOMS_PER_MONOMER, :]  # (n_dimers, 2*ATOMS_PER_MONOMER, 3)
+        dimer_switching_grads_flat = dimer_switching_grads.reshape(-1, 3)  # (n_dimers * 2*ATOMS_PER_MONOMER, 3)
         
-        # Reshape dimer_forces to match switched_grad shape
-        n_dimers = len(all_dimer_idxs)
-        # dimer_forces_reshaped = dimer_forces.reshape(n_dimers, 2 * ATOMS_PER_MONOMER, 3)
-        # dvdx_u = dimer_forces_reshaped / switched_energy.sum()
+        # Map energy-weighted switching gradients to full system
+        # This gives us the E * ds/dR term
+        energy_weighted_grad = jax.ops.segment_sum(
+            -dimer_switching_grads_flat,  # Negative because F = -grad(E)
+            force_segments,
+            num_segments=n_monomers * ATOMS_PER_MONOMER
+        )  # Shape: (n_monomers * ATOMS_PER_MONOMER, 3)
         
-        # combined_forces =  -1 * (dudx_v + dvdx_u)
+        # For the scale * F_dimer term, we need to scale dimer_forces by switching
+        # Since each atom may belong to multiple dimers, we compute atom-wise scales
+        # by using segment_sum to accumulate scales from all dimers containing each atom
+        # Repeat switching_scales for each atom in each dimer (2*ATOMS_PER_MONOMER atoms per dimer)
+        switching_scales_per_atom = jnp.repeat(switching_scales, 2 * ATOMS_PER_MONOMER)  # (n_dimers * 2*ATOMS_PER_MONOMER,)
         
-        # Convert forces back to flat format
-        # forces_flat = combined_forces.reshape(-1, 3)
+        # Use segment_sum to accumulate scales for each atom in the full system
+        atom_switching_scales_sum = jax.ops.segment_sum(
+            switching_scales_per_atom,
+            force_segments,
+            num_segments=n_monomers * ATOMS_PER_MONOMER
+        )
+        
+        # Count how many dimers each atom belongs to
+        atom_dimer_counts = jax.ops.segment_sum(
+            jnp.ones_like(switching_scales_per_atom),
+            force_segments,
+            num_segments=n_monomers * ATOMS_PER_MONOMER
+        )
+        
+        # Average scales for atoms that belong to multiple dimers (avoid division by zero)
+        atom_switching_scales = jnp.where(
+            atom_dimer_counts > 0,
+            atom_switching_scales_sum / jnp.maximum(atom_dimer_counts, 1.0),
+            1.0  # Default to 1.0 if atom is in no dimers (shouldn't happen)
+        )
+        
+        # Apply switching scale to dimer forces
+        scaled_dimer_forces = dimer_forces * atom_switching_scales[:, None]
+        
+        # Combine both terms: F_switched = scale * F_dimer - E * grad(scale)
+        switched_forces = scaled_dimer_forces + energy_weighted_grad
+        
+        if debug:
+            jax.debug.print("Dimer switching: scales={x}, scaled_forces_norm={y}, energy_grad_norm={z}", 
+                           x=switching_scales.sum(), 
+                           y=jnp.linalg.norm(scaled_dimer_forces),
+                           z=jnp.linalg.norm(energy_weighted_grad))
         
         return {
             "energies": -switched_energy,
-            "forces": 0
+            "forces": switched_forces
         }
 
     return get_spherical_cutoff_calculator

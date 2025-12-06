@@ -120,9 +120,9 @@ class MockArgs:
         self.atoms_per_monomer = 10  # Alias for compatibility
 
         # Calculator parameters
-        self.ml_cutoff = 1.0
-        self.mm_switch_on = 6.0
-        self.mm_cutoff = 1.0
+        self.ml_cutoff = 8.0
+        self.mm_switch_on = 0.1
+        self.mm_cutoff = 4.0
         self.include_mm = True
         self.skip_ml_dimers = False
         self.debug = True
@@ -174,8 +174,8 @@ print(f"\nLoading data from: {data_file}")
 # Prepare datasets
 train_data, valid_data = prepare_datasets(
     data_key, 
-    10500,  # num_train
-    10500,  # num_valid
+    1000,  # num_train
+    1000,  # num_valid
     [data_file], 
     natoms=ATOMS_PER_MONOMER * N_MONOMERS
 )
@@ -187,6 +187,8 @@ train_batches = prepare_batches_jit(data_key, train_data, 1, num_atoms=ATOMS_PER
 print(f"Loaded {len(valid_data['R'])} validation samples")
 print(f"Prepared {len(valid_batches)} validation batches")
 print(f"Each batch contains {len(valid_batches[0]['R'])} atoms")
+
+
 
 # ========================================================================
 # SECTION 5: LOAD MODEL AND SETUP CALCULATOR
@@ -551,15 +553,15 @@ if USE_ITERATIVE:
         pair_idx_atom_atom=lj_params["pair_idx_atom_atom"],
         cutoff_params=CUTOFF_PARAMS,
         args=args,
-        n_iterations=10,  # Number of alternating iterations
+        n_iterations=3,  # Number of alternating iterations
         n_samples=100,
         min_com_distance=2.0,  # Filter out samples with COM distance < 3.5 Å (large force errors)
         energy_weight=1.0,
         force_weight=1.0,
         lj_learning_rate=0.01,
         cutoff_learning_rate=0.01,
-        lj_n_iterations=1000,  # Iterations per LJ optimization step
-        cutoff_n_iterations=1000,  # Iterations per cutoff optimization step
+        lj_n_iterations=10 ,  # Iterations per LJ optimization step
+        cutoff_n_iterations=10 ,  # Iterations per cutoff optimization step
         convergence_threshold=1e-3,  # Stop early if loss improvement < 0.1%
         verbose=True,
     )
@@ -605,11 +607,11 @@ else:
         cutoff_params=CUTOFF_PARAMS,
         args=args,
         optimize_mode="lj_only",
-        n_samples=20,
+        n_samples=100,
         energy_weight=1.0,
         force_weight=1.0,
         learning_rate=0.01,
-        n_iterations=100,
+        n_iterations=10,
         verbose=True
     )
 
@@ -639,11 +641,11 @@ else:
         initial_ep_scale=opt_ep_scale_lj,  # Use optimized LJ parameters from MODE 1
         initial_sig_scale=opt_sig_scale_lj,  # Use optimized LJ parameters from MODE 1
         initial_ml_cutoff=1.0,
-        initial_mm_switch_on=6.0,
+        initial_mm_switch_on=7.0,
         initial_mm_cutoff=1.0,
-        n_samples=20,
+        n_samples=100,
         learning_rate=0.01,
-        n_iterations=100,
+        n_iterations=3,
         verbose=True
     )
 
@@ -711,6 +713,18 @@ print(f"Initialized simulation:")
 print(f"  Number of atoms: {len(atoms)}")
 print(f"  Calculator: {type(hybrid_calc)}")
 
+print(f"Initialized simulation: {atoms}")
+print(f"Calculator: {type(hybrid_calc)}")
+print(f"Number of atoms: {len(atoms)}")
+print(f"Positions: {atoms.get_positions()}")
+print(f"Forces: {atoms.get_forces()}")
+print(f"Energy: {atoms.get_potential_energy()}")
+true_E = train_batches_copy[0]["E"] 
+true_F = train_batches_copy[0]["F"] 
+print(f"True energy: {true_E}")
+print(f"True force: {true_F}")
+
+
 # Initialize multiple simulations (optional)
 simulations = initialize_multiple_simulations(
     train_batches_copy[:2], 
@@ -734,11 +748,49 @@ for i, b in enumerate(train_batches_copy[:10]):
     if b["N"] == 20:  # Only process batches with correct number of atoms
         atoms.set_positions(b["R"])
         f_true = b["F"]
+        e_true = b.get("E", None)  # Ground truth energy (if available)
         f_calc = atoms.get_forces()
+        e_calc = atoms.get_potential_energy()
+        
+        # Print energy comparison
+        print(f"\n{'='*80}")
+        print(f"Batch {i} - Energy Comparison")
+        print(f"{'='*80}")
+        if e_true is not None:
+            print(f"{'Ground Truth Energy:':<30} {e_true } eV")
+            print(f"{'Predicted Energy:':<30} {e_calc} eV")
+            print(f"{'Energy Difference:':<30} {abs(e_true - e_calc):>15.8f} eV")
+            print(f"{'Relative Error (%):':<30} {abs((e_true - e_calc) / e_true) * 100:>15.6f} %")
+        else:
+            print(f"{'Predicted Energy:':<30} {e_calc} eV")
+            print(f"{'Ground Truth Energy:':<30} {'N/A'}")
+        
+        # Print force comparison header
+        print(f"\n{'='*80}")
+        print(f"Batch {i} - Force Comparison (eV/Å)")
+        print(f"{'='*80}")
+        print(f"{'Atom':<6} {'Component':<10} {'Ground Truth':>15} {'Predicted':>15} {'Difference':>15} {'Abs Error':>15}")
+        print(f"{'-'*80}")
+        
+        # Print forces per atom, per component
+        max_force_error = 0.0
+        for atom_idx in range(len(f_true)):
+            for comp_idx, comp_name in enumerate(['X', 'Y', 'Z']):
+                f_gt = f_true[atom_idx, comp_idx]
+                f_pred = f_calc[atom_idx, comp_idx]
+                diff = f_pred - f_gt
+                abs_error = abs(diff)
+                max_force_error = max(max_force_error, abs_error)
+                print(f"{atom_idx:<6} {comp_name:<10} {f_gt:>15.8f} {f_pred:>15.8f} {diff:>15.8f} {abs_error:>15.8f}")
+        
+        # Print summary statistics
+        print(f"{'-'*80}")
+        print(f"{'Max Force Error:':<30} {max_force_error:>15.8f} eV/Å")
+        print(f"{'Mean Force Error:':<30} {np.abs(f_true - f_calc).mean():>15.8f} eV/Å")
+        print(f"{'RMSE Force Error:':<30} {np.sqrt(np.mean((f_true - f_calc)**2)):>15.8f} eV/Å")
         
         # Plot comparison (optional)
         plt.scatter(f_true.flatten(), f_calc.flatten(), alpha=0.5, label=f"Batch {i}")
-        print(f"Batch {i}: Max force diff = {np.abs(f_true - f_calc).max():.6f}")
 
 plt.xlabel("Reference Forces")
 plt.ylabel("Calculated Forces")

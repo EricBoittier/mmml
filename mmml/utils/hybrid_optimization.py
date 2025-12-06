@@ -496,24 +496,108 @@ def create_hybrid_fitting_factory(
                 ml_energy_raw = ml_output.get("energy", jnp.array(0.0))
                 ml_forces_raw = ml_output.get("forces", jnp.zeros((len(R), 3)))
                 
-                # Handle energy (might be per-config or total)
-                ml_energy = jnp.asarray(ml_energy_raw)
-                if ml_energy.shape != ():
-                    ml_energy = jnp.sum(ml_energy) if ml_energy.size > 0 else jnp.array(0.0)
+                # Handle energy - it's per-config (one per monomer/dimer)
+                # For ML, we need: monomer_energies.sum() + dimer_interaction_energies.sum()
+                ml_energy_raw_arr = jnp.asarray(ml_energy_raw)
                 
-                # Handle forces - map back to original atom order
-                # Forces from model are for batched system (monomers + dimers)
-                # We need to extract just the monomer forces and map them back
+                # Extract monomer energies (first n_monomers)
+                ml_monomer_energies = ml_energy_raw_arr[:n_monomers_val]
+                ml_monomer_energy_total = ml_monomer_energies.sum()
+                
+                # Extract dimer energies (remaining)
+                if n_dimers > 0:
+                    ml_dimer_energies = ml_energy_raw_arr[n_monomers_val:]
+                    # Calculate monomer contributions to dimers
+                    dimer_perms = dimer_permutations(n_monomers_val)
+                    monomer_contrib_to_dimers = jnp.array([
+                        ml_monomer_energies[a] + ml_monomer_energies[b]
+                        for a, b in dimer_perms
+                    ])
+                    # Dimer interaction energies = dimer_energy - monomer_energy
+                    dimer_interaction_energies = ml_dimer_energies - monomer_contrib_to_dimers
+                    dimer_interaction_total = dimer_interaction_energies.sum()
+                    # Total ML energy = monomer_energy + dimer_interaction_energy
+                    ml_energy = ml_monomer_energy_total + dimer_interaction_total
+                else:
+                    ml_energy = ml_monomer_energy_total
+                
+                # Handle forces - need to properly map monomer and dimer forces back to full system
+                # Forces from model are for batched system: [monomer1_atoms, monomer2_atoms, ..., dimer1_atoms, ...]
                 ml_forces_batched = jnp.asarray(ml_forces_raw)
                 
-                # Extract forces for monomers only (first n_monomers * ATOMS_PER_MONOMER atoms)
-                n_monomer_atoms = n_monomers_val * ATOMS_PER_MONOMER_val
-                if ml_forces_batched.shape[0] >= n_monomer_atoms:
-                    ml_forces = ml_forces_batched[:n_monomer_atoms]
+                # Step 1: Extract and map monomer forces
+                n_monomer_atoms_batched = n_monomers_val * max_atoms
+                ml_monomer_forces_batched = ml_forces_batched[:n_monomer_atoms_batched]
+                
+                # Map monomer forces back to full system (using segment_sum with proper indices)
+                monomer_segment_idxs = jnp.concatenate([
+                    jnp.arange(ATOMS_PER_MONOMER_val) + i * ATOMS_PER_MONOMER_val 
+                    for i in range(n_monomers_val)
+                ])
+                
+                # Reshape monomer forces and extract only valid atoms
+                monomer_forces_reshaped = ml_monomer_forces_batched.reshape(n_monomers_val, max_atoms, 3)
+                atom_mask = jnp.arange(max_atoms)[None, :] < ATOMS_PER_MONOMER_val
+                monomer_forces_masked = jnp.where(
+                    atom_mask[..., None],
+                    monomer_forces_reshaped,
+                    0.0
+                )
+                # Sum forces using segment_sum
+                monomer_forces_flat = monomer_forces_masked[:, :ATOMS_PER_MONOMER_val].reshape(-1, 3)
+                ml_monomer_forces = jax.ops.segment_sum(
+                    monomer_forces_flat,
+                    monomer_segment_idxs,
+                    num_segments=n_monomers_val * ATOMS_PER_MONOMER_val
+                )
+                
+                # Step 2: Extract and map dimer forces (if dimers exist)
+                if n_dimers > 0 and not skip_ml_dimers:
+                    # Calculate force segments for dimers (matching calculator logic)
+                    dimer_perms_arr = jnp.array(dimer_perms)
+                    first_indices = ATOMS_PER_MONOMER_val * dimer_perms_arr[:, 0:1]
+                    second_indices = ATOMS_PER_MONOMER_val * dimer_perms_arr[:, 1:2]
+                    atom_offsets = jnp.arange(ATOMS_PER_MONOMER_val)
+                    dimer_force_segments = jnp.concatenate([
+                        first_indices + atom_offsets[None, :],
+                        second_indices + atom_offsets[None, :]
+                    ], axis=1).reshape(-1)
+                    
+                    # Extract dimer forces (after monomer forces in batched array)
+                    dimer_start_idx = n_monomer_atoms_batched
+                    dimer_end_idx = dimer_start_idx + n_dimers * max_atoms
+                    if ml_forces_batched.shape[0] >= dimer_end_idx:
+                        ml_dimer_forces_batched = ml_forces_batched[dimer_start_idx:dimer_end_idx]
+                        
+                        # Reshape and extract valid atoms
+                        dimer_forces_reshaped = ml_dimer_forces_batched.reshape(n_dimers, max_atoms, 3)
+                        dimer_forces_valid = dimer_forces_reshaped[:, :2 * ATOMS_PER_MONOMER_val, :]
+                        dimer_forces_flat = dimer_forces_valid.reshape(-1, 3)
+                        
+                        # Map dimer forces back to full system
+                        ml_dimer_forces = jax.ops.segment_sum(
+                            dimer_forces_flat,
+                            dimer_force_segments,
+                            num_segments=n_monomers_val * ATOMS_PER_MONOMER_val
+                        )
+                    else:
+                        # If dimer forces not available, set to zero
+                        ml_dimer_forces = jnp.zeros((n_monomers_val * ATOMS_PER_MONOMER_val, 3))
+                    
+                    # Combine monomer and dimer forces
+                    ml_forces = ml_monomer_forces + ml_dimer_forces
                 else:
-                    # If forces are shorter, pad or use what we have
-                    ml_forces = jnp.zeros((len(R), 3))
-                    ml_forces = ml_forces.at[:ml_forces_batched.shape[0]].set(ml_forces_batched)
+                    # No dimers, use only monomer forces
+                    ml_forces = ml_monomer_forces
+                
+                # Ensure forces match system size
+                if ml_forces.shape[0] < len(R):
+                    # Pad with zeros if needed
+                    padding = jnp.zeros((len(R) - ml_forces.shape[0], 3))
+                    ml_forces = jnp.concatenate([ml_forces, padding], axis=0)
+                elif ml_forces.shape[0] > len(R):
+                    # Truncate if needed
+                    ml_forces = ml_forces[:len(R)]
                     
             else:
                 # For LJ-only optimization or when model is None, use calculator
@@ -669,9 +753,10 @@ def validate_and_plot_forces(
     iteration: Optional[int] = None,
     save_dir: Optional[Path] = None,
     verbose: bool = True,
+    extract_energy_components: bool = True,
 ) -> Dict[str, Any]:
     """
-    Validate forces and plot errors vs COM distance.
+    Validate forces and plot errors vs COM distance with enhanced visualizations.
     
     Args:
         train_batches: List of training batches
@@ -681,6 +766,7 @@ def validate_and_plot_forces(
         iteration: Current iteration number (for labeling)
         save_dir: Directory to save plots
         verbose: Print validation results
+        extract_energy_components: Try to extract ML/MM energy components from calculator
     
     Returns:
         Dictionary with validation statistics
@@ -690,6 +776,26 @@ def validate_and_plot_forces(
     all_energy_errors = []
     all_force_magnitudes_pred = []
     all_force_magnitudes_ref = []
+    
+    # Force component data
+    all_force_errors_x = []
+    all_force_errors_y = []
+    all_force_errors_z = []
+    all_forces_pred_x = []
+    all_forces_pred_y = []
+    all_forces_pred_z = []
+    all_forces_ref_x = []
+    all_forces_ref_y = []
+    all_forces_ref_z = []
+    
+    # Energy component data
+    all_total_energies = []
+    all_ml_energies = []
+    all_mm_energies = []
+    all_internal_energies = []
+    all_dimer_energies = []
+    all_ref_energies = []
+    
     zero_force_count = 0
     nan_force_count = 0
     total_configs = 0
@@ -728,6 +834,28 @@ def validate_and_plot_forces(
                     F_pred = np.asarray(F_pred)
                     E_pred = float(E_pred) if np.isscalar(E_pred) else float(np.sum(E_pred))
                     
+                    # Note: Energy components would need to be extracted from calculator directly
+                    # For now, we just store total energy. To get components, you'd need to call
+                    # the calculator separately with verbose=True and extract from results.
+                    ml_energy = None
+                    mm_energy = None
+                    internal_energy = None
+                    dimer_energy = None
+                    
+                    # Store total energy
+                    all_total_energies.append(E_pred)
+                    if ml_energy is not None:
+                        all_ml_energies.append(ml_energy)
+                    if mm_energy is not None:
+                        all_mm_energies.append(mm_energy)
+                    if internal_energy is not None:
+                        all_internal_energies.append(internal_energy)
+                    if dimer_energy is not None:
+                        all_dimer_energies.append(dimer_energy)
+                    if E_ref_i is not None:
+                        E_ref_i_scalar = float(E_ref_i) if not np.isscalar(E_ref_i) else float(E_ref_i)
+                        all_ref_energies.append(E_ref_i_scalar)
+                    
                     # Validate forces
                     if np.any(~np.isfinite(F_pred)):
                         nan_force_count += 1
@@ -747,9 +875,22 @@ def validate_and_plot_forces(
                         all_force_errors.append(force_error)
                         all_force_magnitudes_pred.append(np.mean(force_magnitude))
                         all_force_magnitudes_ref.append(np.mean(np.linalg.norm(F_ref_i, axis=1)))
+                        
+                        # Store force components
+                        all_forces_pred_x.extend(F_pred[:, 0].flatten())
+                        all_forces_pred_y.extend(F_pred[:, 1].flatten())
+                        all_forces_pred_z.extend(F_pred[:, 2].flatten())
+                        all_forces_ref_x.extend(F_ref_i[:, 0].flatten())
+                        all_forces_ref_y.extend(F_ref_i[:, 1].flatten())
+                        all_forces_ref_z.extend(F_ref_i[:, 2].flatten())
+                        
+                        # Component-wise errors
+                        all_force_errors_x.extend((F_pred[:, 0] - F_ref_i[:, 0]).flatten() ** 2)
+                        all_force_errors_y.extend((F_pred[:, 1] - F_ref_i[:, 1]).flatten() ** 2)
+                        all_force_errors_z.extend((F_pred[:, 2] - F_ref_i[:, 2]).flatten() ** 2)
                     
                     if E_ref_i is not None:
-                        energy_error = (E_pred - E_ref_i) ** 2
+                        energy_error = (E_pred - E_ref_i_scalar) ** 2
                         all_energy_errors.append(energy_error)
                     
                     all_com_distances.append(com_dist)
@@ -768,6 +909,12 @@ def validate_and_plot_forces(
                 F_pred = np.asarray(F_pred)
                 E_pred = float(E_pred) if np.isscalar(E_pred) else float(np.sum(E_pred))
                 
+                # Store total energy
+                all_total_energies.append(E_pred)
+                if E_ref is not None:
+                    E_ref_scalar = float(E_ref) if not np.isscalar(E_ref) else float(E_ref)
+                    all_ref_energies.append(E_ref_scalar)
+                
                 # Validate forces
                 if np.any(~np.isfinite(F_pred)):
                     nan_force_count += 1
@@ -782,9 +929,22 @@ def validate_and_plot_forces(
                     all_force_errors.append(force_error)
                     all_force_magnitudes_pred.append(np.mean(force_magnitude))
                     all_force_magnitudes_ref.append(np.mean(np.linalg.norm(F_ref, axis=1)))
+                    
+                    # Store force components
+                    all_forces_pred_x.extend(F_pred[:, 0].flatten())
+                    all_forces_pred_y.extend(F_pred[:, 1].flatten())
+                    all_forces_pred_z.extend(F_pred[:, 2].flatten())
+                    all_forces_ref_x.extend(F_ref[:, 0].flatten())
+                    all_forces_ref_y.extend(F_ref[:, 1].flatten())
+                    all_forces_ref_z.extend(F_ref[:, 2].flatten())
+                    
+                    # Component-wise errors
+                    all_force_errors_x.extend((F_pred[:, 0] - F_ref[:, 0]).flatten() ** 2)
+                    all_force_errors_y.extend((F_pred[:, 1] - F_ref[:, 1]).flatten() ** 2)
+                    all_force_errors_z.extend((F_pred[:, 2] - F_ref[:, 2]).flatten() ** 2)
                 
                 if E_ref is not None:
-                    energy_error = (E_pred - E_ref) ** 2
+                    energy_error = (E_pred - E_ref_scalar) ** 2
                     all_energy_errors.append(energy_error)
                 
                 all_com_distances.append(com_dist)
@@ -812,71 +972,227 @@ def validate_and_plot_forces(
             print(f"Mean reference force magnitude: {np.mean(all_force_magnitudes_ref):.6f} eV/Å")
         print(f"{'='*60}\n")
     
-    # Create plots if we have data
-    if len(all_com_distances) > 0 and len(all_force_errors) > 0:
-        fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+    # Create enhanced plots if we have data
+    if len(all_com_distances) > 0:
+        iter_str = f"_iter{iteration}" if iteration is not None else ""
         
-        # Plot 1: Force error vs COM distance
-        ax1 = axes[0, 0]
-        ax1.scatter(all_com_distances[:len(all_force_errors)], all_force_errors, alpha=0.6, s=20)
-        ax1.set_xlabel('COM Distance (Å)')
-        ax1.set_ylabel('Force Error (MSE, eV²/Å²)')
-        ax1.set_title('Force Error vs COM Distance')
-        ax1.set_yscale('log')
-        ax1.grid(True, alpha=0.3)
-        
-        # Plot 2: Energy error vs COM distance
-        ax2 = axes[0, 1]
-        if len(all_energy_errors) > 0:
-            ax2.scatter(all_com_distances[:len(all_energy_errors)], all_energy_errors, alpha=0.6, s=20, color='orange')
-            ax2.set_xlabel('COM Distance (Å)')
-            ax2.set_ylabel('Energy Error (MSE, eV²)')
-            ax2.set_title('Energy Error vs COM Distance')
-            ax2.set_yscale('log')
-            ax2.grid(True, alpha=0.3)
-        
-        # Plot 3: Force magnitude comparison
-        ax3 = axes[1, 0]
-        if len(all_force_magnitudes_pred) > 0 and len(all_force_magnitudes_ref) > 0:
-            min_val = min(min(all_force_magnitudes_pred), min(all_force_magnitudes_ref))
-            max_val = max(max(all_force_magnitudes_pred), max(all_force_magnitudes_ref))
-            ax3.scatter(all_force_magnitudes_ref, all_force_magnitudes_pred, alpha=0.6, s=20)
-            ax3.plot([min_val, max_val], [min_val, max_val], 'r--', label='y=x')
-            ax3.set_xlabel('Reference Force Magnitude (eV/Å)')
-            ax3.set_ylabel('Predicted Force Magnitude (eV/Å)')
-            ax3.set_title('Force Magnitude Comparison')
-            ax3.legend()
-            ax3.grid(True, alpha=0.3)
-        
-        # Plot 4: Force error distribution
-        ax4 = axes[1, 1]
+        # Plot 1: Main validation plots (2x2 grid)
         if len(all_force_errors) > 0:
-            ax4.hist(all_force_errors, bins=50, alpha=0.7, edgecolor='black')
-            ax4.set_xlabel('Force Error (MSE, eV²/Å²)')
-            ax4.set_ylabel('Frequency')
-            ax4.set_title('Force Error Distribution')
-            ax4.set_yscale('log')
-            ax4.grid(True, alpha=0.3)
-        
-        plt.tight_layout()
-        
-        # Save plot
-        if save_dir is not None:
-            save_dir.mkdir(parents=True, exist_ok=True)
-            iter_str = f"_iter{iteration}" if iteration is not None else ""
-            plot_path = save_dir / f"force_validation{iter_str}.png"
+            fig, axes = plt.subplots(2, 2, figsize=(14, 12))
+            
+            # Plot 1a: Force error vs COM distance
+            ax1 = axes[0, 0]
+            ax1.scatter(all_com_distances[:len(all_force_errors)], all_force_errors, alpha=0.6, s=20)
+            ax1.set_xlabel('COM Distance (Å)')
+            ax1.set_ylabel('Force Error (MSE, eV²/Å²)')
+            ax1.set_title('Force Error vs COM Distance')
+            ax1.set_yscale('log')
+            ax1.grid(True, alpha=0.3)
+            
+            # Plot 1b: Energy error vs COM distance
+            ax2 = axes[0, 1]
+            if len(all_energy_errors) > 0:
+                ax2.scatter(all_com_distances[:len(all_energy_errors)], all_energy_errors, alpha=0.6, s=20, color='orange')
+                ax2.set_xlabel('COM Distance (Å)')
+                ax2.set_ylabel('Energy Error (MSE, eV²)')
+                ax2.set_title('Energy Error vs COM Distance')
+                ax2.set_yscale('log')
+                ax2.grid(True, alpha=0.3)
+            
+            # Plot 1c: Force magnitude comparison
+            ax3 = axes[1, 0]
+            if len(all_force_magnitudes_pred) > 0 and len(all_force_magnitudes_ref) > 0:
+                min_val = min(min(all_force_magnitudes_pred), min(all_force_magnitudes_ref))
+                max_val = max(max(all_force_magnitudes_pred), max(all_force_magnitudes_ref))
+                ax3.scatter(all_force_magnitudes_ref, all_force_magnitudes_pred, alpha=0.6, s=20)
+                ax3.plot([min_val, max_val], [min_val, max_val], 'r--', label='y=x')
+                ax3.set_xlabel('Reference Force Magnitude (eV/Å)')
+                ax3.set_ylabel('Predicted Force Magnitude (eV/Å)')
+                ax3.set_title('Force Magnitude Comparison')
+                ax3.legend()
+                ax3.grid(True, alpha=0.3)
+            
+            # Plot 1d: Force error distribution
+            ax4 = axes[1, 1]
+            if len(all_force_errors) > 0:
+                ax4.hist(all_force_errors, bins=50, alpha=0.7, edgecolor='black')
+                ax4.set_xlabel('Force Error (MSE, eV²/Å²)')
+                ax4.set_ylabel('Frequency')
+                ax4.set_title('Force Error Distribution')
+                ax4.set_yscale('log')
+                ax4.grid(True, alpha=0.3)
+            
+            plt.tight_layout()
+            plot_path = (save_dir / f"force_validation{iter_str}.png") if save_dir else f"force_validation{iter_str}.png"
+            if save_dir:
+                save_dir.mkdir(parents=True, exist_ok=True)
             plt.savefig(plot_path, dpi=150, bbox_inches='tight')
             if verbose:
                 print(f"  Saved force validation plot to: {plot_path}")
-        else:
-            iter_str = f"_iter{iteration}" if iteration is not None else ""
-            plt.savefig(f"force_validation{iter_str}.png", dpi=150, bbox_inches='tight')
-            if verbose:
-                print(f"  Saved force validation plot to: force_validation{iter_str}.png")
+            plt.close()
         
-        plt.close()
+        # Plot 2: Force components (3x2 grid)
+        if len(all_forces_pred_x) > 0 and len(all_forces_ref_x) > 0:
+            fig, axes = plt.subplots(3, 2, figsize=(14, 15))
+            
+            # X component
+            ax1 = axes[0, 0]
+            min_x = min(min(all_forces_ref_x), min(all_forces_pred_x))
+            max_x = max(max(all_forces_ref_x), max(all_forces_pred_x))
+            ax1.scatter(all_forces_ref_x, all_forces_pred_x, alpha=0.4, s=10)
+            ax1.plot([min_x, max_x], [min_x, max_x], 'r--', label='y=x')
+            ax1.set_xlabel('Reference Fx (eV/Å)')
+            ax1.set_ylabel('Predicted Fx (eV/Å)')
+            ax1.set_title('Force X Component')
+            ax1.legend()
+            ax1.grid(True, alpha=0.3)
+            
+            ax2 = axes[0, 1]
+            if len(all_force_errors_x) > 0:
+                ax2.hist(np.sqrt(all_force_errors_x), bins=50, alpha=0.7, edgecolor='black')
+                ax2.set_xlabel('|Error| in Fx (eV/Å)')
+                ax2.set_ylabel('Frequency')
+                ax2.set_title('Force X Component Error Distribution')
+                ax2.set_yscale('log')
+                ax2.grid(True, alpha=0.3)
+            
+            # Y component
+            ax3 = axes[1, 0]
+            min_y = min(min(all_forces_ref_y), min(all_forces_pred_y))
+            max_y = max(max(all_forces_ref_y), max(all_forces_pred_y))
+            ax3.scatter(all_forces_ref_y, all_forces_pred_y, alpha=0.4, s=10, color='green')
+            ax3.plot([min_y, max_y], [min_y, max_y], 'r--', label='y=x')
+            ax3.set_xlabel('Reference Fy (eV/Å)')
+            ax3.set_ylabel('Predicted Fy (eV/Å)')
+            ax3.set_title('Force Y Component')
+            ax3.legend()
+            ax3.grid(True, alpha=0.3)
+            
+            ax4 = axes[1, 1]
+            if len(all_force_errors_y) > 0:
+                ax4.hist(np.sqrt(all_force_errors_y), bins=50, alpha=0.7, edgecolor='black', color='green')
+                ax4.set_xlabel('|Error| in Fy (eV/Å)')
+                ax4.set_ylabel('Frequency')
+                ax4.set_title('Force Y Component Error Distribution')
+                ax4.set_yscale('log')
+                ax4.grid(True, alpha=0.3)
+            
+            # Z component
+            ax5 = axes[2, 0]
+            min_z = min(min(all_forces_ref_z), min(all_forces_pred_z))
+            max_z = max(max(all_forces_ref_z), max(all_forces_pred_z))
+            ax5.scatter(all_forces_ref_z, all_forces_pred_z, alpha=0.4, s=10, color='blue')
+            ax5.plot([min_z, max_z], [min_z, max_z], 'r--', label='y=x')
+            ax5.set_xlabel('Reference Fz (eV/Å)')
+            ax5.set_ylabel('Predicted Fz (eV/Å)')
+            ax5.set_title('Force Z Component')
+            ax5.legend()
+            ax5.grid(True, alpha=0.3)
+            
+            ax6 = axes[2, 1]
+            if len(all_force_errors_z) > 0:
+                ax6.hist(np.sqrt(all_force_errors_z), bins=50, alpha=0.7, edgecolor='black', color='blue')
+                ax6.set_xlabel('|Error| in Fz (eV/Å)')
+                ax6.set_ylabel('Frequency')
+                ax6.set_title('Force Z Component Error Distribution')
+                ax6.set_yscale('log')
+                ax6.grid(True, alpha=0.3)
+            
+            plt.tight_layout()
+            plot_path = (save_dir / f"force_components{iter_str}.png") if save_dir else f"force_components{iter_str}.png"
+            plt.savefig(plot_path, dpi=150, bbox_inches='tight')
+            if verbose:
+                print(f"  Saved force components plot to: {plot_path}")
+            plt.close()
+        
+        # Plot 3: Energy histograms
+        if len(all_total_energies) > 0:
+            n_plots = 1
+            if len(all_ml_energies) > 0:
+                n_plots += 1
+            if len(all_mm_energies) > 0:
+                n_plots += 1
+            if len(all_internal_energies) > 0:
+                n_plots += 1
+            if len(all_dimer_energies) > 0:
+                n_plots += 1
+            
+            if n_plots > 1:
+                ncols = 2
+                nrows = (n_plots + 1) // 2
+                fig, axes = plt.subplots(nrows, ncols, figsize=(14, 4*nrows))
+                axes = axes.flatten() if n_plots > 2 else axes if n_plots == 2 else [axes]
+                
+                idx = 0
+                
+                # Total energy
+                ax = axes[idx] if n_plots > 1 else axes
+                ax.hist(all_total_energies, bins=50, alpha=0.7, edgecolor='black', label='Total')
+                if len(all_ref_energies) > 0:
+                    ax.hist(all_ref_energies, bins=50, alpha=0.7, edgecolor='red', label='Reference', histtype='step', linewidth=2)
+                ax.set_xlabel('Energy (eV)')
+                ax.set_ylabel('Frequency')
+                ax.set_title('Total Energy Distribution')
+                ax.legend()
+                ax.grid(True, alpha=0.3)
+                idx += 1
+                
+                # ML energy
+                if len(all_ml_energies) > 0:
+                    ax = axes[idx]
+                    ax.hist(all_ml_energies, bins=50, alpha=0.7, edgecolor='black', color='blue', label='ML')
+                    ax.set_xlabel('Energy (eV)')
+                    ax.set_ylabel('Frequency')
+                    ax.set_title('ML Energy Distribution')
+                    ax.legend()
+                    ax.grid(True, alpha=0.3)
+                    idx += 1
+                
+                # MM energy
+                if len(all_mm_energies) > 0:
+                    ax = axes[idx]
+                    ax.hist(all_mm_energies, bins=50, alpha=0.7, edgecolor='black', color='green', label='MM')
+                    ax.set_xlabel('Energy (eV)')
+                    ax.set_ylabel('Frequency')
+                    ax.set_title('MM Energy Distribution')
+                    ax.legend()
+                    ax.grid(True, alpha=0.3)
+                    idx += 1
+                
+                # Internal energy
+                if len(all_internal_energies) > 0:
+                    ax = axes[idx]
+                    ax.hist(all_internal_energies, bins=50, alpha=0.7, edgecolor='black', color='purple', label='Internal (ML)')
+                    ax.set_xlabel('Energy (eV)')
+                    ax.set_ylabel('Frequency')
+                    ax.set_title('Internal ML Energy Distribution')
+                    ax.legend()
+                    ax.grid(True, alpha=0.3)
+                    idx += 1
+                
+                # Dimer energy
+                if len(all_dimer_energies) > 0:
+                    ax = axes[idx]
+                    ax.hist(all_dimer_energies, bins=50, alpha=0.7, edgecolor='black', color='orange', label='Dimer (ML)')
+                    ax.set_xlabel('Energy (eV)')
+                    ax.set_ylabel('Frequency')
+                    ax.set_title('Dimer ML Energy Distribution')
+                    ax.legend()
+                    ax.grid(True, alpha=0.3)
+                    idx += 1
+                
+                # Hide unused subplots
+                for i in range(idx, len(axes)):
+                    axes[i].axis('off')
+                
+                plt.tight_layout()
+                plot_path = (save_dir / f"energy_histograms{iter_str}.png") if save_dir else f"energy_histograms{iter_str}.png"
+                plt.savefig(plot_path, dpi=150, bbox_inches='tight')
+                if verbose:
+                    print(f"  Saved energy histograms plot to: {plot_path}")
+                plt.close()
     
-    return {
+    stats = {
         "total_configs": total_configs,
         "nan_force_count": nan_force_count,
         "zero_force_count": zero_force_count,
@@ -885,6 +1201,31 @@ def validate_and_plot_forces(
         "mean_force_magnitude_pred": np.mean(all_force_magnitudes_pred) if all_force_magnitudes_pred else None,
         "mean_force_magnitude_ref": np.mean(all_force_magnitudes_ref) if all_force_magnitudes_ref else None,
     }
+    
+    # Add component-wise statistics
+    if len(all_force_errors_x) > 0:
+        stats["mean_force_error_x"] = np.mean(all_force_errors_x)
+        stats["mean_force_error_y"] = np.mean(all_force_errors_y) if len(all_force_errors_y) > 0 else None
+        stats["mean_force_error_z"] = np.mean(all_force_errors_z) if len(all_force_errors_z) > 0 else None
+    
+    # Add energy statistics
+    if len(all_total_energies) > 0:
+        stats["mean_total_energy"] = np.mean(all_total_energies)
+        stats["std_total_energy"] = np.std(all_total_energies)
+    if len(all_ml_energies) > 0:
+        stats["mean_ml_energy"] = np.mean(all_ml_energies)
+        stats["std_ml_energy"] = np.std(all_ml_energies)
+    if len(all_mm_energies) > 0:
+        stats["mean_mm_energy"] = np.mean(all_mm_energies)
+        stats["std_mm_energy"] = np.std(all_mm_energies)
+    if len(all_internal_energies) > 0:
+        stats["mean_internal_energy"] = np.mean(all_internal_energies)
+        stats["std_internal_energy"] = np.std(all_internal_energies)
+    if len(all_dimer_energies) > 0:
+        stats["mean_dimer_energy"] = np.mean(all_dimer_energies)
+        stats["std_dimer_energy"] = np.std(all_dimer_energies)
+    
+    return stats
 
 
 def fit_hybrid_potential_to_training_data_jax(
@@ -1212,6 +1553,8 @@ def fit_hybrid_potential_to_training_data_jax(
                 "energies": ml_e,
                 "forces": ml_f,
             })
+
+
         
         if verbose:
             print(f"  ✓ ML contributions precomputed for {len(precomputed_ml)} configurations")
@@ -1745,6 +2088,7 @@ def fit_hybrid_potential_to_training_data_jax(
                         save_dir=None,  # Save to current directory
                         verbose=verbose,
                     )
+                    print(f"Validation stats: {validation_stats}")
                 except Exception as e:
                     if verbose:
                         print(f"  Warning: Force validation failed: {e}")
@@ -1779,6 +2123,10 @@ def fit_hybrid_potential_to_training_data_jax(
         result_dict["mm_switch_on"] = best_params["mm_switch_on"]
         result_dict["mm_cutoff"] = best_params["mm_cutoff"]
     
+    print("Result dict:  ")
+    for key, value in result_dict.items():
+        print(f"{key}: {value}")
+
     return result_dict
 
 
