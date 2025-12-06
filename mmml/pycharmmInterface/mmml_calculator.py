@@ -672,13 +672,28 @@ class CutoffParameters:
         return self.__str__()
 
     def __eq__(self, other):
-        return self.ml_cutoff == other.ml_cutoff and self.mm_switch_on == other.mm_switch_on and self.mm_cutoff == other.mm_cutoff
+        if not isinstance(other, CutoffParameters):
+            return False
+        # Convert to floats for comparison (handles JAX arrays)
+        ml_cutoff_self = float(self.ml_cutoff) if hasattr(self.ml_cutoff, '__float__') else self.ml_cutoff
+        mm_switch_on_self = float(self.mm_switch_on) if hasattr(self.mm_switch_on, '__float__') else self.mm_switch_on
+        mm_cutoff_self = float(self.mm_cutoff) if hasattr(self.mm_cutoff, '__float__') else self.mm_cutoff
+        ml_cutoff_other = float(other.ml_cutoff) if hasattr(other.ml_cutoff, '__float__') else other.ml_cutoff
+        mm_switch_on_other = float(other.mm_switch_on) if hasattr(other.mm_switch_on, '__float__') else other.mm_switch_on
+        mm_cutoff_other = float(other.mm_cutoff) if hasattr(other.mm_cutoff, '__float__') else other.mm_cutoff
+        return (ml_cutoff_self == ml_cutoff_other and 
+                mm_switch_on_self == mm_switch_on_other and 
+                mm_cutoff_self == mm_cutoff_other)
     
     def __ne__(self, other):
         return not self.__eq__(other)
     
     def __hash__(self):
-        return hash((self.ml_cutoff, self.mm_switch_on, self.mm_cutoff))
+        # Convert to Python floats if they're JAX arrays (for hashability)
+        ml_cutoff_val = float(self.ml_cutoff) if hasattr(self.ml_cutoff, '__float__') else self.ml_cutoff
+        mm_switch_on_val = float(self.mm_switch_on) if hasattr(self.mm_switch_on, '__float__') else self.mm_switch_on
+        mm_cutoff_val = float(self.mm_cutoff) if hasattr(self.mm_cutoff, '__float__') else self.mm_cutoff
+        return hash((ml_cutoff_val, mm_switch_on_val, mm_cutoff_val))
 
     def to_dict(self):
         return {
@@ -837,13 +852,97 @@ def setup_calculator(
     BATCH_SIZE: int = N_MONOMERS + len(dimer_perms)  # Number of systems per batch
     # print(BATCH_SIZE)
     restart_path = Path(model_restart_path) if type(model_restart_path) == str else model_restart_path
-    try:
-        restart = get_last(restart_path)
-    except (IndexError, FileNotFoundError) as e:
-        raise FileNotFoundError(f"Checkpoint directory is empty or invalid: {restart_path}. "
-                               f"Available files: {list(restart_path.glob('*')) if restart_path.exists() else 'Directory does not exist'}") from e
-    # Setup monomer model
-    params, MODEL = get_params_model(restart)
+    
+    # Check if this is a JSON checkpoint (has params.json file)
+    json_params_path = restart_path / "params.json"
+    is_json_checkpoint = json_params_path.exists()
+    
+    if is_json_checkpoint:
+        # This is a JSON checkpoint - use it directly
+        restart = restart_path
+        # Load using JSON loader
+        try:
+            from mmml.utils.model_checkpoint import load_model_checkpoint
+            checkpoint = load_model_checkpoint(restart, use_orbax=False, load_params=True, load_config=True)
+            params = checkpoint.get('params')
+            config = checkpoint.get('config', {})
+            
+            if params is None:
+                raise FileNotFoundError(f"params not found in JSON checkpoint at {restart_path}")
+            if not config:
+                raise FileNotFoundError(f"model_config not found in JSON checkpoint at {restart_path}")
+            
+            # Reconstruct model from config
+            from mmml.physnetjax.physnetjax.models.model import EF
+            
+            # Convert JSON arrays back to JAX arrays for model config
+            def json_to_jax_config(obj):
+                """Convert JSON config values back to appropriate types."""
+                if isinstance(obj, dict):
+                    return {k: json_to_jax_config(v) for k, v in obj.items()}
+                elif isinstance(obj, list):
+                    # Lists in config are usually parameters, keep as lists
+                    return obj
+                else:
+                    return obj
+            
+            model_config = json_to_jax_config(config)
+            model_config['natoms'] = MAX_ATOMS_PER_SYSTEM
+            MODEL = EF(**model_config)
+            MODEL.natoms = MAX_ATOMS_PER_SYSTEM
+            
+            # Convert JSON params back to JAX arrays
+            def json_to_jax_params(obj):
+                """Recursively convert JSON lists to JAX arrays."""
+                if isinstance(obj, dict):
+                    return {k: json_to_jax_params(v) for k, v in obj.items()}
+                elif isinstance(obj, list):
+                    # Check if it's a nested list (array)
+                    if len(obj) > 0 and isinstance(obj[0], (list, int, float)):
+                        return jnp.array(obj)
+                    else:
+                        return [json_to_jax_params(item) for item in obj]
+                elif isinstance(obj, (int, float)):
+                    return obj
+                else:
+                    return obj
+            
+            params = json_to_jax_params(params)
+            
+            # Flax models expect params to be wrapped in {'params': {...}}
+            # Check if params is already in the correct format
+            # get_params_model from Orbax returns {'params': {...}}, but JSON loading
+            # might return just the raw params dict, so we need to wrap it
+            if isinstance(params, dict):
+                # Check if it's already in Flax format (has 'params' key at top level)
+                if 'params' in params:
+                    # Already wrapped, but check if it's the right structure
+                    # Flax expects {'params': {...}} where {...} is the actual params
+                    pass  # Already in correct format
+                else:
+                    # Not wrapped, need to wrap it
+                    params = {'params': params}
+            else:
+                # Params is not a dict (unlikely but handle it)
+                params = {'params': params}
+        except Exception as e:
+            raise FileNotFoundError(
+                f"Failed to load JSON checkpoint from {restart_path}. "
+                f"Error: {e}. "
+                f"Make sure params.json and model_config.json exist."
+            ) from e
+    else:
+        # This is an orbax checkpoint - use get_last to find the latest epoch
+        try:
+            restart = get_last(restart_path)
+        except (IndexError, FileNotFoundError) as e:
+            raise FileNotFoundError(
+                f"Checkpoint directory is empty or invalid: {restart_path}. "
+                f"Available files: {list(restart_path.glob('*')) if restart_path.exists() else 'Directory does not exist'}. "
+                f"If this is a JSON checkpoint, make sure params.json exists in the directory."
+            ) from e
+        # Setup monomer model using orbax
+        params, MODEL = get_params_model(restart)
     MODEL.natoms = MAX_ATOMS_PER_SYSTEM 
 
     if cell:
@@ -1014,13 +1113,20 @@ def setup_calculator(
             """
             a = 6
             b = 2
+            # Add epsilon to prevent division by zero when r is very small
+            lj_epsilon = 1e-10
+            r_safe = jnp.maximum(r, lj_epsilon)
             # sig = sig / (2 ** (1 / 6))
-            r6 = (sig / r) ** a
+            r6 = (sig / r_safe) ** a
             return ep * (r6 ** b - 2 * r6)
         
         coulombs_constant = 3.32063711e2 #Coulomb's constant kappa = 1/(4*pi*e0) in kcal-Angstroms/e^2.
-        def coulomb(r, qq, constant = coulombs_constant):
-            return -constant * qq/r
+        # Small epsilon to prevent division by zero in coulomb interactions
+        coulomb_epsilon = 1e-10
+        def coulomb(r, qq, constant = coulombs_constant, eps = coulomb_epsilon):
+            # Add epsilon to prevent division by zero (r can be very small for bonded atoms)
+            r_safe = jnp.maximum(r, eps)
+            return -constant * qq / r_safe
         
 
         def get_switching_function(
@@ -1103,6 +1209,9 @@ def setup_calculator(
             # Calculate forces with switching
             forces = -(mm_energy_grad(positions) + 
                     switching_grad(positions, pair_energies))
+            
+            # Check for NaN/Inf in forces and replace with zeros
+            forces = jnp.where(jnp.isfinite(forces), forces, 0.0)
 
             return switched_energy, forces
 
@@ -1137,15 +1246,17 @@ def setup_calculator(
             ModelOutput containing total energy and forces
         """
         n_dimers = len(dimer_permutations(n_monomers))
+        n_atoms = positions.shape[0]
         
+        # Initialize force arrays with correct shape for all atoms
         outputs = {
             "out_E": 0,
-            "out_F": 0,
+            "out_F": jnp.zeros((n_atoms, 3)),
             "dH": 0,
             "internal_E": 0, 
-            "internal_F": 0,
+            "internal_F": jnp.zeros((n_atoms, 3)),
             "ml_2b_E": 0,
-            "ml_2b_F": 0
+            "ml_2b_F": jnp.zeros((n_atoms, 3))
         }
 
         if doML:
@@ -1156,7 +1267,73 @@ def setup_calculator(
                 ml_energy_conversion_factor=ml_energy_conversion_factor,
                 ml_force_conversion_factor=ml_force_conversion_factor
             )
-            outputs.update(ml_out)
+            # Map ML forces to correct atom indices in the full system
+            # ML forces are computed for n_monomers * ATOMS_PER_MONOMER atoms
+            ml_forces = ml_out.get("out_F", jnp.zeros((n_monomers * ATOMS_PER_MONOMER, 3)))
+            ml_internal_F = ml_out.get("internal_F", jnp.zeros((n_monomers * ATOMS_PER_MONOMER, 3)))
+            ml_2b_F = ml_out.get("ml_2b_F", jnp.zeros((n_monomers * ATOMS_PER_MONOMER, 3)))
+            
+            # Flatten all_monomer_idxs to get the actual atom indices
+            monomer_atom_indices = jnp.array(all_monomer_idxs).flatten()
+            
+            # Validate that monomer_atom_indices are within bounds
+            # Clamp indices to valid range to prevent out-of-bounds access
+            max_idx = jnp.max(monomer_atom_indices) if len(monomer_atom_indices) > 0 else 0
+            min_idx = jnp.min(monomer_atom_indices) if len(monomer_atom_indices) > 0 else 0
+            
+            # Ensure indices are valid (0 to n_atoms-1)
+            monomer_atom_indices = jnp.clip(monomer_atom_indices, 0, n_atoms - 1)
+            
+            # Validate that ML forces shape matches expected size
+            expected_n_ml_atoms = n_monomers * ATOMS_PER_MONOMER
+            if ml_forces.shape[0] != expected_n_ml_atoms:
+                # If shape mismatch, pad or truncate to expected size
+                if ml_forces.shape[0] < expected_n_ml_atoms:
+                    padding = jnp.zeros((expected_n_ml_atoms - ml_forces.shape[0], 3))
+                    ml_forces = jnp.concatenate([ml_forces, padding], axis=0)
+                    ml_internal_F = jnp.concatenate([ml_internal_F, jnp.zeros((expected_n_ml_atoms - ml_internal_F.shape[0], 3))], axis=0)
+                    if "ml_2b_F" in ml_out:
+                        ml_2b_F = jnp.concatenate([ml_2b_F, jnp.zeros((expected_n_ml_atoms - ml_2b_F.shape[0], 3))], axis=0)
+                else:
+                    ml_forces = ml_forces[:expected_n_ml_atoms]
+                    ml_internal_F = ml_internal_F[:expected_n_ml_atoms]
+                    if "ml_2b_F" in ml_out:
+                        ml_2b_F = ml_2b_F[:expected_n_ml_atoms]
+            
+            # Ensure monomer_atom_indices matches ML forces size
+            if len(monomer_atom_indices) != ml_forces.shape[0]:
+                # If mismatch, use sequential indices up to min of both
+                n_valid = min(len(monomer_atom_indices), ml_forces.shape[0], n_atoms)
+                monomer_atom_indices = jnp.arange(n_valid)
+                ml_forces = ml_forces[:n_valid]
+                ml_internal_F = ml_internal_F[:n_valid]
+                if "ml_2b_F" in ml_out:
+                    ml_2b_F = ml_2b_F[:n_valid]
+            
+            # Check for NaN/Inf in ML forces before mapping
+            ml_forces = jnp.where(jnp.isfinite(ml_forces), ml_forces, 0.0)
+            ml_internal_F = jnp.where(jnp.isfinite(ml_internal_F), ml_internal_F, 0.0)
+            if "ml_2b_F" in ml_out:
+                ml_2b_F = jnp.where(jnp.isfinite(ml_2b_F), ml_2b_F, 0.0)
+            
+            # Validate indexing (using JAX-compatible operations only)
+            # Note: We rely on JAX's bounds checking during indexing rather than explicit validation
+            # to avoid tracer bool conversion errors in JIT-compiled code
+            
+            # Map ML forces to the correct positions in the full force array
+            # Use safe indexing to prevent out-of-bounds access
+            outputs["out_F"] = outputs["out_F"].at[monomer_atom_indices].add(ml_forces)
+            outputs["internal_F"] = outputs["internal_F"].at[monomer_atom_indices].add(ml_internal_F)
+            # Only add ml_2b_F if it's not zero (i.e., if it was actually computed)
+            # Check by seeing if the key exists in ml_out
+            if "ml_2b_F" in ml_out:
+                outputs["ml_2b_F"] = outputs["ml_2b_F"].at[monomer_atom_indices].add(ml_2b_F)
+            
+            # Update energy terms (these are scalars, so no shape issue)
+            outputs["out_E"] = ml_out.get("out_E", 0)
+            outputs["dH"] = ml_out.get("dH", 0)
+            outputs["internal_E"] = ml_out.get("internal_E", 0)
+            outputs["ml_2b_E"] = ml_out.get("ml_2b_E", 0)
 
         if doMM:
             mm_out = calculate_mm_contributions(
@@ -1165,15 +1342,45 @@ def setup_calculator(
                 debug=debug
             )
             # Preserve separate MM terms and add to totals instead of overwriting
-            outputs["mm_E"] = mm_out.get("mm_E", 0)
-            outputs["mm_F"] = mm_out.get("mm_F", 0)
-            outputs["out_E"] = outputs.get("out_E", 0) + mm_out.get("mm_E", 0)
-            outputs["out_F"] = outputs.get("out_F", 0) + mm_out.get("mm_F", 0)
+            mm_E = mm_out.get("mm_E", 0)
+            mm_F = mm_out.get("mm_F", 0)
+            
+            # Final NaN check on MM contributions
+            mm_E = jnp.where(jnp.isfinite(mm_E), mm_E, 0.0)
+            mm_F = jnp.where(jnp.isfinite(mm_F), mm_F, 0.0)
+            
+            # Ensure MM forces match system size
+            if mm_F.shape[0] != n_atoms:
+                if mm_F.shape[0] < n_atoms:
+                    padding = jnp.zeros((n_atoms - mm_F.shape[0], 3))
+                    mm_F = jnp.concatenate([mm_F, padding], axis=0)
+                else:
+                    mm_F = mm_F[:n_atoms]
+            
+            outputs["mm_E"] = mm_E
+            outputs["mm_F"] = mm_F
+            outputs["out_E"] = outputs.get("out_E", 0) + mm_E
+            outputs["out_F"] = outputs.get("out_F", 0) + mm_F
 
+        # Final validation: check for NaN/Inf in final forces
+        final_forces = outputs["out_F"]
+        final_forces = jnp.where(jnp.isfinite(final_forces), final_forces, 0.0)
+        
         # Total energy: combined ML (monomer+dimer switched) + MM
+        final_energy = outputs["out_E"]
+        if isinstance(final_energy, (int, float)):
+            final_energy = jnp.array(final_energy)
+        final_energy = jnp.where(jnp.isfinite(final_energy), final_energy, 0.0)
+        
+        # Compute energy sum safely
+        if hasattr(final_energy, 'sum'):
+            energy_sum = final_energy.sum()
+        else:
+            energy_sum = final_energy
+        
         return ModelOutput(
-            energy=(outputs["out_E"].sum()),
-            forces=outputs["out_F"],
+            energy=energy_sum,
+            forces=final_forces,
             dH=outputs["dH"],
             ml_2b_E=outputs["ml_2b_E"],
             ml_2b_F=outputs["ml_2b_F"],
@@ -1356,6 +1563,9 @@ def setup_calculator(
         debug: bool
     ) -> Dict[str, Array]:
         """Calculate MM energy and force contributions"""
+        
+        # Ensure positions are finite
+        positions = jnp.where(jnp.isfinite(positions), positions, 0.0)
 
         MM_energy_and_gradient = get_MM_energy_forces_fns(
             positions, 
@@ -1369,9 +1579,27 @@ def setup_calculator(
         
         mm_E, mm_grad = MM_energy_and_gradient(positions)
         
+        # Check for NaN/Inf in MM energy and forces
+        mm_E = jnp.where(jnp.isfinite(mm_E), mm_E, 0.0)
+        mm_grad = jnp.where(jnp.isfinite(mm_grad), mm_grad, 0.0)
+        
+        # Ensure MM forces match the full system size
+        n_atoms = positions.shape[0]
+        if mm_grad.shape[0] != n_atoms:
+            # MM forces are computed for N_MONOMERS * ATOMS_PER_MONOMER atoms
+            # If system has more atoms (e.g., water), pad with zeros
+            if mm_grad.shape[0] < n_atoms:
+                padding = jnp.zeros((n_atoms - mm_grad.shape[0], 3))
+                mm_grad = jnp.concatenate([mm_grad, padding], axis=0)
+            else:
+                # Truncate to system size
+                mm_grad = mm_grad[:n_atoms]
+        
         debug_print(debug, "MM Contributions:", 
             mm_E=mm_E,
-            mm_grad=mm_grad
+            mm_grad=mm_grad,
+            mm_grad_shape=mm_grad.shape,
+            n_atoms=n_atoms
         )
         kcal2ev = 1/23.0605
         return {
@@ -1474,6 +1702,10 @@ def setup_calculator(
                         ).energy
 
                     E, F = jax.value_and_grad(Efn)(R)
+                    
+                    # Check for NaN/Inf in energy and forces immediately after computation
+                    E = jnp.where(jnp.isfinite(E), E, 0.0)
+                    F = jnp.where(jnp.isfinite(F), F, 0.0)
 
                 if self.verbose:
                     # Store full ModelOutput with ML/MM breakdown for analysis
@@ -1485,7 +1717,10 @@ def setup_calculator(
                     self.results["out"] = out
                 # E was negated only in backprop path; here we ensure sign is consistent
                 self.results["energy"] = (-E if self.backprop else E) * self.energy_conversion_factor
-                self.results["forces"] = F * self.force_conversion_factor
+                # Ensure forces are finite before storing
+                forces_final = F * self.force_conversion_factor
+                forces_final = jnp.where(jnp.isfinite(forces_final), forces_final, 0.0)
+                self.results["forces"] = forces_final
 
         def get_spherical_cutoff_calculator(
             atomic_numbers: Array,

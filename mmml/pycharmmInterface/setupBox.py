@@ -63,9 +63,22 @@ from mmml.pycharmmInterface.pycharmmCommands import CLEAR_CHARMM
 
 
 # unit registry
-from pint import UnitRegistry
-ureg = UnitRegistry()
-Q_ = ureg.Quantity
+try:
+    from pint import UnitRegistry
+    ureg = UnitRegistry()
+    Q_ = ureg.Quantity
+    _PINT_AVAILABLE = True
+except ImportError:
+    _PINT_AVAILABLE = False
+    ureg = None
+    Q_ = None
+    import warnings
+    warnings.warn(
+        "pint is not installed. Some functions requiring unit conversions "
+        "(e.g., determine_n_molecules_from_density) will not work. "
+        "Install pint with: pip install pint or conda install -c conda-forge pint",
+        ImportWarning
+    )
 
 PACKMOL_PATH = "~/mmml/mmml/packmol/packmol"
 cwd = Path(__file__).parent
@@ -142,6 +155,18 @@ def determine_n_molecules_from_density(
     density: float, mol: Atoms, side_length: float = 35,
     solvent: str = None
 ) -> float:
+    """
+    Determine number of molecules from density.
+    
+    Requires pint to be installed for unit conversions.
+    Install with: pip install pint or conda install -c conda-forge pint
+    """
+    if not _PINT_AVAILABLE:
+        raise ImportError(
+            "pint is required for determine_n_molecules_from_density. "
+            "Please install pint with: pip install pint or conda install -c conda-forge pint"
+        )
+    
     if solvent is not None:
         atoms = solvents_ase[solvent]
         density = solvents_density[solvent]

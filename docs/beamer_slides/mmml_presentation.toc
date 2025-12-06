@@ -1,0 +1,7 @@
+\beamer@sectionintoc {1}{Ordinary World: Introduction}{3}{0}{1}
+\beamer@sectionintoc {2}{Crossing the First Threshold: fMDCM}{6}{0}{2}
+\beamer@sectionintoc {3}{Tests, Allies, and Enemies}{7}{0}{3}
+\beamer@sectionintoc {4}{Approach to the Innermost Cave: kMDCM}{10}{0}{4}
+\beamer@sectionintoc {5}{The Ordeal: DCM-Net}{14}{0}{5}
+\beamer@sectionintoc {6}{Reward: Applications}{20}{0}{6}
+\beamer@sectionintoc {7}{The Road Back: Conclusion}{21}{0}{7}
