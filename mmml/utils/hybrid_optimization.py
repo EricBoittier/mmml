@@ -1844,18 +1844,18 @@ def fit_hybrid_potential_to_training_data_jax(
             # Validate and clip parameters before computing loss
             ml_cutoff = jnp.clip(
                 jnp.where(jnp.isfinite(p["ml_cutoff"]), p["ml_cutoff"], 2.0),
-                0.1, 10.0
+                0.00001, 100.0
             )
             mm_switch_on = jnp.clip(
                 jnp.where(jnp.isfinite(p["mm_switch_on"]), p["mm_switch_on"], 5.0),
-                0.1, 20.0
+                0.00001, 200.0
             )
             mm_cutoff = jnp.clip(
                 jnp.where(jnp.isfinite(p["mm_cutoff"]), p["mm_cutoff"], 1.0),
-                0.1, 10.0
+                0.00001, 100.0
             )
             # Ensure mm_switch_on > ml_cutoff
-            mm_switch_on = jnp.maximum(mm_switch_on, ml_cutoff + 0.1)
+            mm_switch_on = jnp.maximum(mm_switch_on, ml_cutoff + 0.0001)
             
             total_energy_error = jnp.array(0.0)
             total_force_error = jnp.array(0.0)

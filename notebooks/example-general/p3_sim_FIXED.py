@@ -120,9 +120,9 @@ class MockArgs:
         self.atoms_per_monomer = 10  # Alias for compatibility
 
         # Calculator parameters
-        self.ml_cutoff = 8.0
-        self.mm_switch_on = 0.1
-        self.mm_cutoff = 4.0
+        self.ml_cutoff = 0.1
+        self.mm_switch_on = 8.0
+        self.mm_cutoff = 5.0
         self.include_mm = True
         self.skip_ml_dimers = False
         self.debug = True
@@ -195,11 +195,12 @@ print(f"Each batch contains {len(valid_batches[0]['R'])} atoms")
 # ========================================================================
 # Load ML model from checkpoint and create calculator factory
 
-# Checkpoint path
-uid = "test-84aa02d9-e329-46c4-b12c-f55e6c9a2f94"
-SCICORE = Path("/pchem-data/meuwly/boittier/home/")
-RESTART = SCICORE / "ckpts" / f"{uid}" / "epoch-6595" 
+uid = "pyhsnetacetone-d38b2d5c-b24d-432b-83b4-801ff726dbde"
+SCICORE = Path('/scicore/home/meuwly/boitti0000/')
+SCICORE = Path("/pchem-data/meuwly/boittier/home/ckpts")
+RESTART=str(SCICORE / f"{uid}")
 args.checkpoint = RESTART  # Keep as Path object (resolve_checkpoint_paths handles both str and Path)
+
 
 def load_model_parameters_json(epoch_dir, natoms, use_orbax=False):
     """
@@ -540,7 +541,7 @@ print("This iterative approach leads to better overall optimization.")
 # Option A: Iterative optimization (recommended)
 USE_ITERATIVE = True  # Set to False to use separate modes
 
-if USE_ITERATIVE:
+if False:
     result_iterative = fit_hybrid_parameters_iteratively(
         train_batches=train_batches_copy,
         base_calculator_factory=calculator_factory,
@@ -554,12 +555,12 @@ if USE_ITERATIVE:
         cutoff_params=CUTOFF_PARAMS,
         args=args,
         n_iterations=3,  # Number of alternating iterations
-        n_samples=100,
+        n_samples=35,
         min_com_distance=2.0,  # Filter out samples with COM distance < 3.5 Å (large force errors)
         energy_weight=1.0,
         force_weight=1.0,
-        lj_learning_rate=0.01,
-        cutoff_learning_rate=0.01,
+        lj_learning_rate=0.1,
+        cutoff_learning_rate=0.1,
         lj_n_iterations=10 ,  # Iterations per LJ optimization step
         cutoff_n_iterations=10 ,  # Iterations per cutoff optimization step
         convergence_threshold=1e-3,  # Stop early if loss improvement < 0.1%
@@ -607,7 +608,8 @@ else:
         cutoff_params=CUTOFF_PARAMS,
         args=args,
         optimize_mode="lj_only",
-        n_samples=100,
+        n_samples=35,
+        min_com_distance=7.0,
         energy_weight=1.0,
         force_weight=1.0,
         learning_rate=0.01,
@@ -621,42 +623,43 @@ else:
     print(f"  ep_scale: {opt_ep_scale_lj}")
     print(f"  sig_scale: {opt_sig_scale_lj}")
 
-    # Step 2b: Optimize cutoff parameters (using optimized LJ parameters)
-    print("\n" + "=" * 60)
-    print("MODE 2: Optimizing cutoff parameters")
-    print("=" * 60)
-    print("Using optimized LJ parameters from MODE 1 for better starting loss")
-    result_cutoff = fit_hybrid_potential_to_training_data_jax(
-        train_batches=train_batches_copy,
-        base_calculator_factory=calculator_factory,
-        model=model,
-        model_params=params,
-        atc_epsilons=lj_params["atc_epsilons"],
-        atc_rmins=lj_params["atc_rmins"],
-        atc_qs=lj_params["atc_qs"],
-        at_codes=lj_params["at_codes"],
-        pair_idx_atom_atom=lj_params["pair_idx_atom_atom"],
-        cutoff_params=CUTOFF_PARAMS,
-        optimize_mode="cutoff_only",
-        initial_ep_scale=opt_ep_scale_lj,  # Use optimized LJ parameters from MODE 1
-        initial_sig_scale=opt_sig_scale_lj,  # Use optimized LJ parameters from MODE 1
-        initial_ml_cutoff=1.0,
-        initial_mm_switch_on=7.0,
-        initial_mm_cutoff=1.0,
-        n_samples=100,
-        learning_rate=0.01,
-        n_iterations=3,
-        verbose=True
-    )
+    if False:
+        # Step 2b: Optimize cutoff parameters (using optimized LJ parameters)
+        print("\n" + "=" * 60)
+        print("MODE 2: Optimizing cutoff parameters")
+        print("=" * 60)
+        print("Using optimized LJ parameters from MODE 1 for better starting loss")
+        result_cutoff = fit_hybrid_potential_to_training_data_jax(
+            train_batches=train_batches_copy,
+            base_calculator_factory=calculator_factory,
+            model=model,
+            model_params=params,
+            atc_epsilons=lj_params["atc_epsilons"],
+            atc_rmins=lj_params["atc_rmins"],
+            atc_qs=lj_params["atc_qs"],
+            at_codes=lj_params["at_codes"],
+            pair_idx_atom_atom=lj_params["pair_idx_atom_atom"],
+            cutoff_params=CUTOFF_PARAMS,
+            optimize_mode="cutoff_only",
+            initial_ep_scale=opt_ep_scale_lj,  # Use optimized LJ parameters from MODE 1
+            initial_sig_scale=opt_sig_scale_lj,  # Use optimized LJ parameters from MODE 1
+            initial_ml_cutoff=1.0,
+            initial_mm_switch_on=7.0,
+            initial_mm_cutoff=1.0,
+            n_samples=35,
+            learning_rate=0.01,
+            n_iterations=3,
+            verbose=True
+        )
 
-    # Update cutoff parameters with optimized values
-    # Convert JAX arrays to Python floats for CutoffParameters (required for hashability)
-    CUTOFF_PARAMS = CutoffParameters(
-        ml_cutoff=float(result_cutoff["ml_cutoff"]), 
-        mm_switch_on=float(result_cutoff["mm_switch_on"]), 
-        mm_cutoff=float(result_cutoff["mm_cutoff"])
-    )
-    print(f"\nOptimized cutoff parameters: {CUTOFF_PARAMS}")
+        # Update cutoff parameters with optimized values
+        # Convert JAX arrays to Python floats for CutoffParameters (required for hashability)
+        CUTOFF_PARAMS = CutoffParameters(
+            ml_cutoff=float(result_cutoff["ml_cutoff"]), 
+            mm_switch_on=float(result_cutoff["mm_switch_on"]), 
+            mm_cutoff=float(result_cutoff["mm_cutoff"])
+        )
+        print(f"\nOptimized cutoff parameters: {CUTOFF_PARAMS}")
 
 # Step 4: Create calculator with optimized parameters
 print("\n" + "=" * 60)
@@ -757,10 +760,20 @@ for i, b in enumerate(train_batches_copy[:10]):
         print(f"Batch {i} - Energy Comparison")
         print(f"{'='*80}")
         if e_true is not None:
-            print(f"{'Ground Truth Energy:':<30} {e_true } eV")
+            # Convert e_true to scalar if it's an array
+            if isinstance(e_true, np.ndarray):
+                e_true_scalar = float(e_true.item() if e_true.size == 1 else e_true.flat[0])
+            elif hasattr(e_true, 'item'):
+                e_true_scalar = float(e_true.item())
+            elif isinstance(e_true, (list, tuple)):
+                e_true_scalar = float(e_true[0] if len(e_true) > 0 else 0.0)
+            else:
+                e_true_scalar = float(e_true)
+            
+            print(f"{'Ground Truth Energy:':<30} {e_true_scalar} eV")
             print(f"{'Predicted Energy:':<30} {e_calc} eV")
-            print(f"{'Energy Difference:':<30} {abs(e_true - e_calc):>15.8f} eV")
-            print(f"{'Relative Error (%):':<30} {abs((e_true - e_calc) / e_true) * 100:>15.6f} %")
+            print(f"{'Energy Difference:':<30} {abs(e_true_scalar - e_calc):>15.8f} eV")
+            print(f"{'Relative Error (%):':<30} {abs((e_true_scalar - e_calc) / e_true_scalar) * 100:>15.6f} %")
         else:
             print(f"{'Predicted Energy:':<30} {e_calc} eV")
             print(f"{'Ground Truth Energy:':<30} {'N/A'}")
