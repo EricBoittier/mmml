@@ -851,12 +851,11 @@ def setup_calculator(
         ATOMS_PER_MONOMER=ATOMS_PER_MONOMER,
     ):
         # per atom coordinates rather than CoM
-        com1 = X[:ATOMS_PER_MONOMER].T
-        com2 = X[ATOMS_PER_MONOMER:2*ATOMS_PER_MONOMER].T
-        
+        com1 = X[:ATOMS_PER_MONOMER].T.mean(axis=1)
+        com2 = X[ATOMS_PER_MONOMER:2*ATOMS_PER_MONOMER].T.mean(axis=1)
 
         r = jnp.linalg.norm(com1 - com2)
-
+    
         # ML: 1 -> 0 over [mm_switch_on - ml_cutoff, mm_switch_on]
         ml_scale = 1.0 - _sharpstep(r, mm_switch_on - ml_cutoff, mm_switch_on, gamma=5.0)
       
@@ -1008,8 +1007,8 @@ def setup_calculator(
             def apply_switching_function(positions: Array, pair_energies: Array) -> Array:
                 """Applies smooth switching function to MM energies based on COM distance."""
                 # COM distance
-                com1 = positions[:ATOMS_PER_MONOMER].mean(axis=0)
-                com2 = positions[ATOMS_PER_MONOMER:2*ATOMS_PER_MONOMER].mean(axis=0)
+                com1 = positions[:ATOMS_PER_MONOMER].mean(axis=1)
+                com2 = positions[ATOMS_PER_MONOMER:2*ATOMS_PER_MONOMER].mean(axis=1)
                 r = jnp.linalg.norm(com1 - com2)
 
                 # MM: 0→1 over [mm_on, mm_on+mm_cut], then 1→0 over [mm_on+mm_cut, mm_on+2*mm_cut]
@@ -1017,11 +1016,6 @@ def setup_calculator(
                 mm_on = _sharpstep(r, mm_switch_on, mm_switch_on + mm_cutoff, gamma=0.001)
                 mm_off = _sharpstep(r, mm_switch_on + mm_cutoff, mm_switch_on + 2.0 * mm_cutoff, gamma=3.0)
                 mm_scale = mm_on * (1.0 - mm_off)
-                # also turn MM on by default at short distances
-                # TODO: add this to the cutoff parameters
-                r_rep = 0.1
-                mm_scale = mm_scale + (1.0 - _sharpstep(r, 0.0, r_rep, gamma=1.0))
-
 
                 return (pair_energies * mm_scale).sum()
                 
@@ -1448,17 +1442,7 @@ def setup_calculator(
         # Get model predictions
         apply_model, batches = get_ML_energy_fn(atomic_numbers, positions, n_dimers+n_monomers)
         output = apply_model(batches["Z"], batches["R"])
-        # if False:
-        #     jax.debug.print("output['forces'] shape: {s}", s=output["forces"].shape)
-        #     jax.debug.print("output['energy'] shape: {s}", s=output["energy"].shape)
-        #     jax.debug.print("output['forces'][:30]: {f}", f=output["forces"][:30])
-        #     jax.debug.print("output['energy'][:30]: {e}", e=output["energy"][:30])
 
-        
-        # Convert units
-        # Note: If model outputs in eV/Å and we want eV/Å, conversion_factor should be 1
-        # If model outputs in kcal/mol/Å and we want eV/Å, we multiply by ev2kcalmol (~23)
-        # If model outputs in eV/Å and we want kcal/mol/Å, we divide by ev2kcalmol
         f = output["forces"] * ml_force_conversion_factor 
         e = output["energy"] * ml_energy_conversion_factor
 
@@ -1506,22 +1490,7 @@ def setup_calculator(
         
         # Ensure combined forces are finite
         combined_forces = jnp.where(jnp.isfinite(combined_forces), combined_forces, 0.0)
-        
-        # # Debug prints (jax.debug.print handles conditional execution)
-        # jax.debug.print("Combining ML forces - monomer norm: {m}, dimer norm: {d}, combined norm: {c}",
-        # m=jnp.linalg.norm(monomer_forces_safe),
-        # d=jnp.linalg.norm(dimer_forces_safe),
-        # c=jnp.linalg.norm(combined_forces),
-        # ordered=False)
-        monomer_non_zero = jnp.sum(jnp.any(jnp.abs(monomer_forces_safe) > 1e-10, axis=1))
-        dimer_non_zero = jnp.sum(jnp.any(jnp.abs(dimer_forces_safe) > 1e-10, axis=1))
-        combined_non_zero = jnp.sum(jnp.any(jnp.abs(combined_forces) > 1e-10, axis=1))
-        nan_count = jnp.sum(~jnp.isfinite(combined_forces))
-        # jax.debug.print("Combined forces NaN check: {n}", n=nan_count, ordered=False)
-        # jax.debug.print("Non-zero atoms - monomer: {m}, dimer: {d}, combined: {c}",
-        # m=monomer_non_zero, d=dimer_non_zero, c=combined_non_zero,
-        # ordered=False)
-        
+               
         return {
             "out_E": monomer_contribs["out_E"] + dimer_contribs["out_E"],
             "out_F": combined_forces,
@@ -1541,9 +1510,8 @@ def setup_calculator(
     ) -> Dict[str, Array]:
         """Calculate energy and force contributions from monomers"""
         ml_monomer_energy = jnp.array(e[:n_monomers]).flatten()
-        
-        monomer_idx_max = max_atoms * n_monomers
-        ml_monomer_forces = f[:monomer_idx_max]
+
+        ml_monomer_forces = f[:max_atoms*n_monomers]
         
         # Calculate segment indices for force summation
         # These indices map each force to its corresponding atom in the system
@@ -1552,14 +1520,7 @@ def setup_calculator(
             jnp.arange(ATOMS_PER_MONOMER) + i * ATOMS_PER_MONOMER 
             for i in range(n_monomers)
         ])
-        
-        # Debug: Check segment indices
-        # jax.debug.print("Monomer segment indices shape: {s}, first 10: {f}, last 10: {l}",
-        # s=monomer_segment_idxs.shape,
-        # f=monomer_segment_idxs[:10] if len(monomer_segment_idxs) >= 10 else monomer_segment_idxs,
-        # l=monomer_segment_idxs[-10:] if len(monomer_segment_idxs) >= 10 else monomer_segment_idxs,
-        # ordered=False)
-        
+                
         # Process forces
         # Note: For monomers, we use ATOMS_PER_MONOMER, not max_atoms (which is for dimers)
         monomer_forces = process_monomer_forces(
@@ -1568,8 +1529,6 @@ def setup_calculator(
         
 
         force_mags = jnp.linalg.norm(monomer_forces, axis=1)
-        zero_force_atoms = jnp.sum(force_mags < 1e-10)
-
         
         debug_print(debug, "Monomer Contributions:",
             ml_monomer_energy=ml_monomer_energy,
@@ -1628,7 +1587,7 @@ def setup_calculator(
             mm_grad_shape=mm_grad.shape,
             n_atoms=n_atoms
         )
-        kcal2ev = 1 /  627.51 #
+        kcal2ev = 1 /  23.0605
         return {
             "out_E": mm_E * kcal2ev,
             "out_F": mm_grad * kcal2ev,

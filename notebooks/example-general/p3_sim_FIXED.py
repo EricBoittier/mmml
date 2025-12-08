@@ -586,14 +586,14 @@ if USE_ITERATIVE:
         pair_idx_atom_atom=lj_params["pair_idx_atom_atom"],
         cutoff_params=CUTOFF_PARAMS,
         args=args,
-        n_iterations=5,  # Number of alternating iterations
+        n_iterations=1,  # Number of alternating iterations
         n_samples=15,
         min_com_distance=5.0,  # Filter out samples with COM distance < 3.5 Å (large force errors)
         energy_weight=1.0,
         force_weight=1.0,
         lj_learning_rate=0.01,
         cutoff_learning_rate=0.01,
-        lj_n_iterations=5 ,  # Iterations per LJ optimization step
+        lj_n_iterations=10 ,  # Iterations per LJ optimization step
         cutoff_n_iterations= 2 ,  # Iterations per cutoff optimization step
         convergence_threshold=1e-3,  # Stop early if loss improvement < 0.1%
         verbose=False,
