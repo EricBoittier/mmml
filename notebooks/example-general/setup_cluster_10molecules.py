@@ -368,7 +368,7 @@ inbfrq -1 imgfrq -1
         print(f"XYZ min: {np.min(XYZ)}")
         print(f"XYZ max: {np.max(XYZ)}")
 
-        pycharmm.minimize.run_abnr(nstep=1000, tolenr=1e-6, tolgrd=1e-6)
+        pycharmm.minimize.run_abnr(nstep=10000, tolenr=1e-3, tolgrd=1e-3)
         pycharmm.lingo.charmm_script("ENER")
         pycharmm.energy.show()
         print("Energy minimization completed")
@@ -383,11 +383,11 @@ inbfrq -1 imgfrq -1
         pycharmm_charges = np.array(psf.get_charges())
         pycharmm_iac = np.array(psf.get_iac())
         pycharmm_resids = np.array(psf.get_res())
-        print(f"  ✓ PyCHARMM fully initialized:")
-        print(f"     Atoms: {len(pycharmm_atypes)}")
-        print(f"     Charges: {len(pycharmm_charges)}")
-        print(f"     IAC codes: {len(pycharmm_iac)}")
-        print(f"     Residue IDs: {len(pycharmm_resids)}")
+        # print(f"  ✓ PyCHARMM fully initialized:")
+        # print(f"     Atoms: {len(pycharmm_atypes)}")
+        # print(f"     Charges: {len(pycharmm_charges)}")
+        # print(f"     IAC codes: {len(pycharmm_iac)}")
+        # print(f"     Residue IDs: {len(pycharmm_resids)}")
         
         # # ========================================================================
         # # REORDER ATOMS TO MATCH PYCHARMM ORDERING
