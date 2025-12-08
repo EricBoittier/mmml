@@ -1680,19 +1680,7 @@ def setup_calculator(
         # If model outputs in eV/Å and we want kcal/mol/Å, we divide by ev2kcalmol
         f = output["forces"] * ml_force_conversion_factor 
         e = output["energy"] * ml_energy_conversion_factor
-        
-        # # Debug prints (jax.debug.print only executes when debug=True via static_argnames)
-        # jax.debug.print("Model output - forces norm: {f}, energy: {e}, conversion factors - force: {cf}, energy: {ce}",
-        # f=jnp.linalg.norm(output["forces"]),
-        # e=jnp.sum(output["energy"]),
-        # cf=ml_force_conversion_factor,
-        # ce=ml_energy_conversion_factor,
-        # ordered=False)
-        # jax.debug.print("After conversion - forces norm: {f}, energy: {e}",
-        # f=jnp.linalg.norm(f),
-        # e=jnp.sum(e),
-        # ordered=False)
-        
+
         # Calculate monomer contributions
         monomer_contribs = calculate_monomer_contributions(e, f, n_monomers, max_atoms, debug)
         
@@ -1792,22 +1780,15 @@ def setup_calculator(
         # ordered=False)
         
         # Process forces
+        # Note: For monomers, we use ATOMS_PER_MONOMER, not max_atoms (which is for dimers)
         monomer_forces = process_monomer_forces(
-            ml_monomer_forces, monomer_segment_idxs, max_atoms, debug
+            ml_monomer_forces, monomer_segment_idxs, ATOMS_PER_MONOMER, debug
         )
         
-        # Debug: Check which atoms received forces after processing
-        # jax.debug.print("Monomer forces after processing - shape: {s}, norm: {n}",
-        # s=monomer_forces.shape, n=jnp.linalg.norm(monomer_forces),
-        # ordered=False)
+
         force_mags = jnp.linalg.norm(monomer_forces, axis=1)
-        # jax.debug.print("Monomer forces per atom (first 10): {f}",
-        # f=force_mags[:10] if monomer_forces.shape[0] >= 10 else force_mags,
-        # ordered=False)
         zero_force_atoms = jnp.sum(force_mags < 1e-10)
-        # jax.debug.print("Monomer forces - atoms with near-zero forces: {z}/{t}",
-        # z=zero_force_atoms, t=monomer_forces.shape[0],
-        # ordered=False)
+
         
         debug_print(debug, "Monomer Contributions:",
             ml_monomer_energy=ml_monomer_energy,
@@ -1869,7 +1850,7 @@ def setup_calculator(
         kcal2ev = 1/23.0605
         return {
             "out_E": mm_E * kcal2ev,
-            "out_F": mm_grad ,
+            "out_F": mm_grad * kcal2ev,
             "dH": mm_E * kcal2ev,
             "mm_E": mm_E * kcal2ev,
             "mm_F": mm_grad * kcal2ev
@@ -2221,47 +2202,39 @@ def setup_calculator(
     def process_monomer_forces(
         ml_monomer_forces: Array,
         monomer_segment_idxs: Array,
-        max_atoms: int,
+        atoms_per_monomer: int,
         debug: bool = False,
     ) -> Array:
         """Process and reshape monomer forces with proper masking.
         
         Args:
-            ml_monomer_forces: Raw forces from ML model
-            monomer_segment_idxs: Indices for force segmentation
+            ml_monomer_forces: Raw forces from ML model (shape: (n_monomers * max_atoms, 3) where max_atoms may be padded)
+            monomer_segment_idxs: Indices for force segmentation (length: n_monomers * atoms_per_monomer)
+            atoms_per_monomer: Number of atoms per monomer (ATOMS_PER_MONOMER)
             debug: Enable debug printing
             
         Returns:
             Array: Processed monomer forces
         """
-        # Reshape forces to (n_monomers, atoms_per_system, 3)
-        monomer_forces = ml_monomer_forces.reshape(-1, max_atoms, 3)
+        # Determine n_monomers from segment indices length
+        n_monomers = monomer_segment_idxs.shape[0] // atoms_per_monomer
         
-        # Create mask for valid atoms (avoiding boolean conversion issues in JIT)
-        # Create a mask that selects only the first ATOMS_PER_MONOMER atoms per monomer
-        # We'll do this by slicing directly instead of using a boolean mask
-        # For atoms beyond ATOMS_PER_MONOMER, set forces to zero
-        # Shape: (n_monomers, max_atoms, 3) -> mask atoms > ATOMS_PER_MONOMER
+        # Determine atoms_per_system from ml_monomer_forces shape
+        # ml_monomer_forces has shape (n_monomers * atoms_per_system, 3)
+        total_forces = ml_monomer_forces.shape[0]
+        atoms_per_system = total_forces // n_monomers
         
-        # Use direct indexing approach instead of boolean mask to avoid JIT issues
-        # Create a mask using integer comparison (which is JIT-safe)
-        # atom_mask[i] = 1.0 if i < ATOMS_PER_MONOMER else 0.0
-        atom_mask_values = (jnp.arange(max_atoms) < ATOMS_PER_MONOMER).astype(jnp.float32)  # Shape: (max_atoms,)
-        # Expand for broadcasting: (max_atoms,) -> (1, max_atoms, 1) to match (n_monomers, max_atoms, 3)
-        atom_mask_broadcast = atom_mask_values[None, :, None]  # Shape: (1, max_atoms, 1)
+        # Reshape to (n_monomers, atoms_per_system, 3)
+        monomer_forces = ml_monomer_forces.reshape(n_monomers, atoms_per_system, 3)
         
-        # Apply mask by multiplication (0.0 for invalid atoms, 1.0 for valid)
-        monomer_forces = monomer_forces * atom_mask_broadcast
+        # Take only first atoms_per_monomer atoms per monomer (discard any padding)
+        # Result shape: (n_monomers, atoms_per_monomer, 3)
+        monomer_forces_valid = monomer_forces[:, :atoms_per_monomer, :]
         
-        # Sum forces for valid atoms
-        forces_to_sum = monomer_forces[:, :ATOMS_PER_MONOMER].reshape(-1, 3)
-        
-        
-        processed_forces = jax.ops.segment_sum(
-            forces_to_sum,
-            monomer_segment_idxs,
-            num_segments=n_monomers * ATOMS_PER_MONOMER
-        )
+        # Reshape to (n_monomers * atoms_per_monomer, 3) - forces are already in correct order
+        # Since monomer_segment_idxs is sequential [0,1,2,...,n_monomers*atoms_per_monomer-1],
+        # segment_sum would be a no-op, so we can just return the reshaped forces directly
+        processed_forces = monomer_forces_valid.reshape(-1, 3)
         
 
         # Ensure all forces are finite
@@ -2534,26 +2507,13 @@ def setup_calculator(
         )
         # Ensure scales are finite
         atom_switching_scales = jnp.where(jnp.isfinite(atom_switching_scales), atom_switching_scales, 1.0)
-        
-        nan_scales = jnp.sum(~jnp.isfinite(atom_switching_scales))
-        # jax.debug.print("Switching scales NaN check: {n}", n=nan_scales, ordered=False)
+
         
         # Apply switching scale to dimer forces
         # Ensure dimer_forces are finite before scaling
         dimer_forces_safe = jnp.where(jnp.isfinite(dimer_forces), dimer_forces, 0.0)
         scaled_dimer_forces = dimer_forces_safe * atom_switching_scales[:, None]
-        # Debug block removed (previous prints caused JAX concretization issues)
-        
-        # # Debug: Check dimer forces before scaling (jax.debug.print handles conditional execution)
-        # jax.debug.print("Dimer forces before scaling - max abs: {x}, norm: {y}", 
-        # x=jnp.max(jnp.abs(dimer_forces)),
-        # y=jnp.linalg.norm(dimer_forces),
-        # ordered=False)
-        # jax.debug.print("Atom switching scales - min: {x}, max: {y}, mean: {z}",
-        # x=jnp.min(atom_switching_scales),
-        # y=jnp.max(atom_switching_scales),
-        # z=jnp.mean(atom_switching_scales),
-        # ordered=False)
+
         
         # Combine both terms: F_switched = scale * F_dimer - E * grad(scale)
         # Ensure energy_weighted_grad is finite
@@ -2563,36 +2523,12 @@ def setup_calculator(
         # Final safety check - ensure all forces are finite
         switched_forces = jnp.where(jnp.isfinite(switched_forces), switched_forces, 0.0)
         
-        nan_forces = jnp.sum(~jnp.isfinite(switched_forces))
-        # jax.debug.print("Switched forces NaN check - after combination: {n}", n=nan_forces, ordered=False)
-        
-        # # Debug prints (jax.debug.print only executes when debug=True)
-        # jax.debug.print("Dimer switching: scales={x}, scaled_forces_norm={y}, energy_grad_norm={z}, final_forces_norm={w}", 
-        # x=switching_scales.sum(),
-        # y=jnp.linalg.norm(scaled_dimer_forces),
-        # z=jnp.linalg.norm(energy_weighted_grad),
-        # w=jnp.linalg.norm(switched_forces),
-        # ordered=False)
-        # jax.debug.print("Switched forces: {x}", x=switched_forces, ordered=False)
-        # jax.debug.print("Switched energy: {x}", x=switched_energy, ordered=False)
-        # jax.debug.print("Dimer forces: {x}", x=dimer_forces, ordered=False)
-        # jax.debug.print("Energy weighted grad: {x}", x=energy_weighted_grad, ordered=False)
-        # jax.debug.print("Dimer switching scales: {x}", x=switching_scales, ordered=False)
-        # jax.debug.print("Scaled dimer forces: {x}", x=scaled_dimer_forces, ordered=False)
-        # jax.debug.print("Atom switching scales: {x}", x=atom_switching_scales, ordered=False)
-        # jax.debug.print("Atom switching scales sum: {x}", x=atom_switching_scales_sum, ordered=False)
-        # jax.debug.print("Atom dimer counts: {x}", x=atom_dimer_counts, ordered=False)
-        
         return {
             "energies": -switched_energy,
             "forces": switched_forces
         }
 
     return get_spherical_cutoff_calculator
-
-
-
-
 
 ######################################################
 
