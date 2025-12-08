@@ -994,7 +994,8 @@ def setup_calculator(
         def coulomb(r, qq, constant = coulombs_constant, eps = coulomb_epsilon):
             # Add epsilon to prevent division by zero (r can be very small for bonded atoms)
             r_safe = jnp.maximum(r, eps)
-            return -constant * qq / r_safe
+            # Positive constant * qq / r gives physically correct sign (repulsion for like charges)
+            return constant * qq / r_safe
         
 
         def get_switching_function(
