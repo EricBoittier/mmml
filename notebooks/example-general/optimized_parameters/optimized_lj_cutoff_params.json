@@ -1,7 +1,7 @@
 {
   "ep_scale": [
     1.1004422903060913,
-    1.1010724306106567,
+    1.1010725498199463,
     1.1002432107925415,
     1.0998753309249878
   ],
@@ -513,7 +513,7 @@
     1.0,
     1.0,
     1.0,
-    1.1010724306106567,
+    1.1010725498199463,
     1.0,
     1.0,
     1.0,
@@ -800,8 +800,8 @@
     1.0,
     1.0
   ],
-  "checkpoint_path": "/pchem-data/meuwly/boittier/home/ckpts/pyhsnetacetone-d38b2d5c-b24d-432b-83b4-801ff726dbde",
-  "model_uid": "pyhsnetacetone-d38b2d5c-b24d-432b-83b4-801ff726dbde",
+  "checkpoint_path": "/pchem-data/meuwly/boittier/home/ckpts/eq_acetone-a114f328-a678-4999-904a-ef8ff78a7eb1",
+  "model_uid": "eq_acetone-a114f328-a678-4999-904a-ef8ff78a7eb1",
   "n_monomers": 2,
   "n_atoms_monomer": 10
 }
