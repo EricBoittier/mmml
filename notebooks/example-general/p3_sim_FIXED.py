@@ -587,8 +587,8 @@ if USE_ITERATIVE:
         pair_idx_atom_atom=lj_params["pair_idx_atom_atom"],
         cutoff_params=CUTOFF_PARAMS,
         args=args,
-        n_iterations=1,  # Number of alternating iterations
-        n_samples=15,
+        n_iterations=3,  # Number of alternating iterations
+        n_samples=100,
         min_com_distance=5.0,  # Filter out samples with COM distance < 3.5 Å (large force errors)
         energy_weight=1.0,
         force_weight=1.0,
