@@ -1007,8 +1007,8 @@ def setup_calculator(
             def apply_switching_function(positions: Array, pair_energies: Array) -> Array:
                 """Applies smooth switching function to MM energies based on COM distance."""
                 # COM distance
-                com1 = positions[:ATOMS_PER_MONOMER].mean(axis=1)
-                com2 = positions[ATOMS_PER_MONOMER:2*ATOMS_PER_MONOMER].mean(axis=1)
+                com1 = positions[:ATOMS_PER_MONOMER].T
+                com2 = positions[ATOMS_PER_MONOMER:2*ATOMS_PER_MONOMER].T
                 r = jnp.linalg.norm(com1 - com2)
 
                 # MM: 0→1 over [mm_on, mm_on+mm_cut], then 1→0 over [mm_on+mm_cut, mm_on+2*mm_cut]
@@ -2230,7 +2230,7 @@ def setup_calculator(
         switched_forces = jnp.where(jnp.isfinite(switched_forces), switched_forces, 0.0)
         
         return {
-            "energies": -switched_energy,
+            "energies": switched_energy,
             "forces": switched_forces
         }
 
