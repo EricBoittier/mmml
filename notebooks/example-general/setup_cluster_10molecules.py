@@ -630,6 +630,11 @@ else:
 
 # Set flag to indicate PyCHARMM status
 if PYCHARMM_AVAILABLE:
+    print("Running energy minimization to check PyCHARMM initialization...")
+    pycharmm.minimize.run_abnr(nstep=10000, tolenr=1e-6, tolgrd=1e-6)
+    pycharmm.lingo.charmm_script("ENER")
+    pycharmm.energy.show()
+
     try:
         pycharmm_n_atoms_check = len(psf.get_atype())
         PYCHARMM_INITIALIZED = (pycharmm_n_atoms_check >= n_atoms_cluster)
