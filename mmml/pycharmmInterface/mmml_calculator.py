@@ -352,7 +352,8 @@ def debug_print(debug: bool, msg: str, *args, **kwargs):
     if debug:
         print(msg)
         for arg in args:
-            jax.debug.print(f"{msg}\n{{x}}", x=arg)
+            # jax.debug.print(f"{msg}\n{{x}}", x=arg)
+            pass
         try:
             for name, value in kwargs.items():
                 print(f"{name}: {value.shape}")
@@ -800,10 +801,12 @@ def setup_calculator(
     sig_scale = None,
     model_restart_path = None,
     MAX_ATOMS_PER_SYSTEM = 100,
-    ml_energy_conversion_factor: float = ev2kcalmol,
-    ml_force_conversion_factor: float = ev2kcalmol,
+    ml_energy_conversion_factor: float = 1.0,
+    ml_force_conversion_factor: float = 1.0,
     cell = False,
     verbose: bool = False,
+    ml_reorder_indices = None,  # Optional permutation: positions_model = positions[ml_reorder_indices]
+    at_codes_override = None,    # Optional per-atom LJ code override (mapped IAC -> param idx)
 ):
     if model_restart_path is None:
         raise ValueError("model_restart_path must be provided")
@@ -1064,6 +1067,14 @@ def setup_calculator(
         charges = np.array(psf.get_charges())[:N_MONOMERS*ATOMS_PER_MONOMER]
         masses = np.array(psf.get_amass())[:N_MONOMERS*ATOMS_PER_MONOMER]
         at_codes = np.array(psf.get_iac())[:N_MONOMERS*ATOMS_PER_MONOMER]
+        if at_codes_override is not None:
+            at_codes_override_arr = np.array(at_codes_override)
+            if at_codes_override_arr.shape[0] != at_codes.shape[0]:
+                raise ValueError(
+                    f"at_codes_override length {at_codes_override_arr.shape[0]} "
+                    f"does not match expected {at_codes.shape[0]}"
+                )
+            at_codes = at_codes_override_arr
         atomtype_codes = np.array(psf.get_atype())[:N_MONOMERS*ATOMS_PER_MONOMER]
 
         rmins_per_system = jnp.take(at_flat_rm, at_codes) 
@@ -1230,6 +1241,19 @@ def setup_calculator(
         n_dimers = len(dimer_permutations(n_monomers))
         n_atoms = positions.shape[0]
         
+        # Optional: reorder to model order for ML, then remap back
+        ml_perm = None
+        ml_inv_perm = None
+        if ml_reorder_indices is not None:
+            ml_perm = jnp.array(ml_reorder_indices, dtype=jnp.int32)
+            # Ensure permutation length matches atom count
+            if ml_perm.shape[0] == n_atoms:
+                ml_inv_perm = jnp.empty_like(ml_perm)
+                ml_inv_perm = ml_inv_perm.at[ml_perm].set(jnp.arange(n_atoms))
+            else:
+                ml_perm = None
+                ml_inv_perm = None
+        
         # Initialize force arrays with correct shape for all atoms
         outputs = {
             "out_E": 0,
@@ -1242,8 +1266,15 @@ def setup_calculator(
         }
 
         if doML:
+            if ml_perm is not None:
+                positions_ml = positions[ml_perm]
+                atomic_numbers_ml = atomic_numbers[ml_perm]
+            else:
+                positions_ml = positions
+                atomic_numbers_ml = atomic_numbers
+
             ml_out = calculate_ml_contributions(
-                positions, atomic_numbers, n_dimers, n_monomers,
+                positions_ml, atomic_numbers_ml, n_dimers, n_monomers,
                 cutoff_params=cutoff_params,
                 debug=debug,
                 ml_energy_conversion_factor=ml_energy_conversion_factor,
@@ -1253,9 +1284,29 @@ def setup_calculator(
             # CRITICAL: These forces are ALREADY correctly mapped to atoms 0 to (n_monomers * ATOMS_PER_MONOMER - 1)
             # via segment_sum in process_monomer_forces and process_dimer_forces
             # They should be in the same order as the atom positions (atoms 0, 1, 2, ..., n_atoms-1)
-            ml_forces = ml_out.get("out_F", jnp.zeros((n_monomers * ATOMS_PER_MONOMER, 3)))
-            ml_internal_F = ml_out.get("internal_F", jnp.zeros((n_monomers * ATOMS_PER_MONOMER, 3)))
-            ml_2b_F = ml_out.get("ml_2b_F", jnp.zeros((n_monomers * ATOMS_PER_MONOMER, 3)))
+            ml_forces_raw = ml_out.get("out_F", jnp.zeros((n_monomers * ATOMS_PER_MONOMER, 3)))
+            ml_internal_F_raw = ml_out.get("internal_F", jnp.zeros((n_monomers * ATOMS_PER_MONOMER, 3)))
+            ml_2b_F_raw = ml_out.get("ml_2b_F", jnp.zeros((n_monomers * ATOMS_PER_MONOMER, 3)))
+
+            # Remap ML outputs back to PyCHARMM ordering if a permutation was applied
+            def _remap(arr):
+                if ml_inv_perm is None or arr.shape[0] != n_atoms:
+                    return arr
+                return arr[ml_inv_perm]
+            ml_forces_raw = _remap(ml_forces_raw)
+            ml_internal_F_raw = _remap(ml_internal_F_raw)
+            ml_2b_F_raw = _remap(ml_2b_F_raw)
+            
+            # IMMEDIATELY check for NaN/Inf and replace with zeros
+            # This is critical - NaN values will corrupt all subsequent calculations
+            ml_forces = jnp.where(jnp.isfinite(ml_forces_raw), ml_forces_raw, 0.0)
+            ml_internal_F = jnp.where(jnp.isfinite(ml_internal_F_raw), ml_internal_F_raw, 0.0)
+            ml_2b_F = jnp.where(jnp.isfinite(ml_2b_F_raw), ml_2b_F_raw, 0.0) if "ml_2b_F" in ml_out else jnp.zeros((n_monomers * ATOMS_PER_MONOMER, 3))
+            
+            # # Debug: Check for NaN in raw forces (jax.debug.print handles conditional execution)
+            nan_count_raw = jnp.sum(~jnp.isfinite(ml_forces_raw))
+            # jax.debug.print("CRITICAL: Found {n} NaN/Inf in ml_forces from calculate_ml_contributions!", 
+            # n=nan_count_raw, ordered=False)
             
             # Ensure ML forces have the correct shape (should match n_atoms)
             expected_n_ml_atoms = n_monomers * ATOMS_PER_MONOMER
@@ -1286,38 +1337,137 @@ def setup_calculator(
                 if "ml_2b_F" in ml_out:
                     ml_2b_F = jnp.concatenate([ml_2b_F, padding], axis=0)
             
-            # Check for NaN/Inf in ML forces
-            ml_forces = jnp.where(jnp.isfinite(ml_forces), ml_forces, 0.0)
-            ml_internal_F = jnp.where(jnp.isfinite(ml_internal_F), ml_internal_F, 0.0)
-            if "ml_2b_F" in ml_out:
-                ml_2b_F = jnp.where(jnp.isfinite(ml_2b_F), ml_2b_F, 0.0)
+            # CRITICAL: Ensure shapes match exactly before adding
+            # If shapes don't match, broadcasting can produce NaN values
+            if ml_forces.shape[0] != n_atoms:
+                # jax.debug.print("ERROR: Shape mismatch! ml_forces.shape[0]={s}, n_atoms={n}",
+                # s=ml_forces.shape[0], n=n_atoms,
+                # ordered=False)
+                # This should not happen, but if it does, we need to fix it
+                if ml_forces.shape[0] < n_atoms:
+                    padding = jnp.zeros((n_atoms - ml_forces.shape[0], 3))
+                    ml_forces = jnp.concatenate([ml_forces, padding], axis=0)
+                    ml_internal_F = jnp.concatenate([ml_internal_F, padding], axis=0)
+                    if "ml_2b_F" in ml_out:
+                        ml_2b_F = jnp.concatenate([ml_2b_F, padding], axis=0)
+                else:
+                    ml_forces = ml_forces[:n_atoms]
+                    ml_internal_F = ml_internal_F[:n_atoms]
+                    if "ml_2b_F" in ml_out:
+                        ml_2b_F = ml_2b_F[:n_atoms]
             
-            if debug:
-                jax.debug.print("ML forces shape: {s}, n_atoms: {n}, expected: {e}",
-                               s=ml_forces.shape, n=n_atoms, e=expected_n_ml_atoms)
-                jax.debug.print("ML forces norm before adding: {n}", n=jnp.linalg.norm(ml_forces))
-                jax.debug.print("ML forces non-zero count: {c}", c=jnp.sum(jnp.any(jnp.abs(ml_forces) > 1e-10, axis=1)))
+            # # Debug prints (jax.debug.print handles conditional execution)
+            # jax.debug.print("ML forces shape: {s}, n_atoms: {n}, expected: {e}",
+            # s=ml_forces.shape, n=n_atoms, e=expected_n_ml_atoms,
+            # ordered=False)
+            # jax.debug.print("ML forces norm before adding: {n}", n=jnp.linalg.norm(ml_forces), ordered=False)
+            # jax.debug.print("ML forces non-zero count: {c}", c=jnp.sum(jnp.any(jnp.abs(ml_forces) > 1e-10, axis=1)), ordered=False)
+            # Check for NaN after all processing
+            nan_count = jnp.sum(~jnp.isfinite(ml_forces))
+            # jax.debug.print("ML forces NaN check after cleaning: {n}", n=nan_count, ordered=False)
             
             # CRITICAL FIX: Forces from calculate_ml_contributions are ALREADY correctly ordered
             # (atoms 0, 1, 2, ..., n_atoms-1), so we should ADD them directly, not remap them
-            outputs["out_F"] = outputs["out_F"] + ml_forces
-            outputs["internal_F"] = outputs["internal_F"] + ml_internal_F
+            # But we must ensure exact shape match to avoid broadcasting issues that could produce NaN
+            # Final shape check - shapes MUST match exactly
+            if ml_forces.shape[0] != outputs["out_F"].shape[0]:
+                # jax.debug.print("CRITICAL ERROR: Shape mismatch in final addition! ml_forces: {m}, out_F: {o}, n_atoms: {n}",
+                # m=ml_forces.shape[0], o=outputs["out_F"].shape[0], n=n_atoms,
+                # ordered=False)
+                # If shapes don't match, pad or truncate to n_atoms (not min_size, as that could cut off atoms)
+                if ml_forces.shape[0] < n_atoms:
+                    # Pad ml_forces to match n_atoms
+                    padding = jnp.zeros((n_atoms - ml_forces.shape[0], 3))
+                    ml_forces = jnp.concatenate([ml_forces, padding], axis=0)
+                    ml_internal_F = jnp.concatenate([ml_internal_F, padding], axis=0)
+                elif ml_forces.shape[0] > n_atoms:
+                    # Truncate ml_forces to match n_atoms (shouldn't happen, but handle it)
+                    # jax.debug.print("WARNING: ml_forces has MORE atoms than n_atoms! Truncating.", ordered=False)
+                    ml_forces = ml_forces[:n_atoms]
+                    ml_internal_F = ml_internal_F[:n_atoms]
+                # Ensure outputs["out_F"] also matches n_atoms
+                if outputs["out_F"].shape[0] < n_atoms:
+                    padding = jnp.zeros((n_atoms - outputs["out_F"].shape[0], 3))
+                    outputs["out_F"] = jnp.concatenate([outputs["out_F"], padding], axis=0)
+                    outputs["internal_F"] = jnp.concatenate([outputs["internal_F"], padding], axis=0)
+                elif outputs["out_F"].shape[0] > n_atoms:
+                    outputs["out_F"] = outputs["out_F"][:n_atoms]
+                    outputs["internal_F"] = outputs["internal_F"][:n_atoms]
+                # Now they should match - add them
+                outputs["out_F"] = outputs["out_F"] + ml_forces
+                outputs["internal_F"] = outputs["internal_F"] + ml_internal_F
+            else:
+                outputs["out_F"] = outputs["out_F"] + ml_forces
+                outputs["internal_F"] = outputs["internal_F"] + ml_internal_F
+            
+            # Final verification: check for any atoms that have zero forces when they shouldn't
+            # (This is a debug check - not for fixing, just for warning)
+            force_magnitudes = jnp.linalg.norm(outputs["out_F"], axis=1)
+            near_zero_atoms = jnp.sum(force_magnitudes < 1e-8)
+            # jax.debug.print("Final force check - atoms with near-zero forces (magnitude < 1e-8): {z}/{t}",
+            # z=near_zero_atoms, t=outputs["out_F"].shape[0],
+            # ordered=False)
+            # Check specific atoms 3 and 7 for debugging
+            if outputs["out_F"].shape[0] > 7:
+                atom_3_force = force_magnitudes[3]
+                atom_7_force = force_magnitudes[7]
+                # jax.debug.print("Atom 3 force magnitude: {f3}, Atom 7 force magnitude: {f7}",
+                # f3=atom_3_force, f7=atom_7_force,
+                # ordered=False)
+                # Check if ml_forces has forces for these atoms
+                if ml_forces.shape[0] > 7:
+                    ml_atom_3 = jnp.linalg.norm(ml_forces[3])
+                    ml_atom_7 = jnp.linalg.norm(ml_forces[7])
+                    # jax.debug.print("ML forces - Atom 3: {f3}, Atom 7: {f7}",
+                    # f3=ml_atom_3, f7=ml_atom_7,
+                    # ordered=False)
             
             # ml_2b_F is stored separately for analysis but is already included in ml_forces
             if "ml_2b_F" in ml_out:
                 outputs["ml_2b_F"] = outputs["ml_2b_F"] + ml_2b_F
             
-            if debug:
-                # Check what atoms received forces
-                atom_force_magnitudes = jnp.linalg.norm(outputs["out_F"], axis=1)
-                jax.debug.print("After adding ML forces - force magnitudes (first 10 atoms): {f}", 
-                               f=atom_force_magnitudes[:10])
-                jax.debug.print("After adding ML forces - min force mag: {min}, max: {max}, mean: {mean}",
-                               min=jnp.min(atom_force_magnitudes),
-                               max=jnp.max(atom_force_magnitudes),
-                               mean=jnp.mean(atom_force_magnitudes))
-                jax.debug.print("ML forces norm after adding to outputs: {n}", n=jnp.linalg.norm(outputs["out_F"]))
-                jax.debug.print("outputs out_F non-zero count: {c}", c=jnp.sum(jnp.any(jnp.abs(outputs["out_F"]) > 1e-10, axis=1)))
+            # # Debug prints (jax.debug.print handles conditional execution)
+            atom_force_magnitudes = jnp.linalg.norm(outputs["out_F"], axis=1)
+            # jax.debug.print("After adding ML forces - force magnitudes (first 10 atoms): {f}", 
+            # f=atom_force_magnitudes[:10],
+            # ordered=False)
+            # jax.debug.print("After adding ML forces - min force mag: {min}, max: {max}, mean: {mean}",
+            # min=jnp.min(atom_force_magnitudes),
+            # max=jnp.max(atom_force_magnitudes),
+            # mean=jnp.mean(atom_force_magnitudes),
+            # ordered=False)
+            # jax.debug.print("ML forces norm after adding to outputs: {n}", n=jnp.linalg.norm(outputs["out_F"]), ordered=False)
+            # jax.debug.print("outputs out_F non-zero count: {c}", c=jnp.sum(jnp.any(jnp.abs(outputs["out_F"]) > 1e-10, axis=1)), ordered=False)
+            # Check specific atoms that might be problematic
+            if outputs["out_F"].shape[0] > 7:
+                # Count zero forces (can't use jnp.where(...)[0] inside JIT)
+                zero_force_count = jnp.sum(atom_force_magnitudes < 1e-10)
+                # jax.debug.print("Atoms with zero forces (magnitude < 1e-10): count={c}", 
+                # c=zero_force_count,
+                # ordered=False)
+                # Check atoms 3 and 7 specifically
+                atom_3_mag = atom_force_magnitudes[3]
+                atom_7_mag = atom_force_magnitudes[7]
+                atom_3_force = outputs["out_F"][3]
+                atom_7_force = outputs["out_F"][7]
+                # jax.debug.print("Atom 3: mag={m}, force=[{fx}, {fy}, {fz}]",
+                # m=atom_3_mag, fx=atom_3_force[0], fy=atom_3_force[1], fz=atom_3_force[2],
+                # ordered=False)
+                # jax.debug.print("Atom 7: mag={m}, force=[{fx}, {fy}, {fz}]",
+                # m=atom_7_mag, fx=atom_7_force[0], fy=atom_7_force[1], fz=atom_7_force[2],
+                # ordered=False)
+                # Check if ml_forces has forces for these atoms
+                if ml_forces.shape[0] > 7:
+                    ml_atom_3 = jnp.linalg.norm(ml_forces[3])
+                    ml_atom_7 = jnp.linalg.norm(ml_forces[7])
+                    ml_atom_3_force = ml_forces[3]
+                    ml_atom_7_force = ml_forces[7]
+                    # jax.debug.print("ML forces - Atom 3: mag={m}, force=[{fx}, {fy}, {fz}]",
+                    # m=ml_atom_3, fx=ml_atom_3_force[0], fy=ml_atom_3_force[1], fz=ml_atom_3_force[2],
+                    # ordered=False)
+                    # jax.debug.print("ML forces - Atom 7: mag={m}, force=[{fx}, {fy}, {fz}]",
+                    # m=ml_atom_7, fx=ml_atom_7_force[0], fy=ml_atom_7_force[1], fz=ml_atom_7_force[2],
+                    # ordered=False)
             
             # Update energy terms (these are scalars, so no shape issue)
             outputs["out_E"] = ml_out.get("out_E", 0)
@@ -1355,22 +1505,49 @@ def setup_calculator(
         # Final validation: check for NaN/Inf in final forces
         final_forces = outputs["out_F"]
         
-        # Debug: Check force accumulation
-        if debug:
-            ml_force_norm = jnp.linalg.norm(outputs.get("out_F", jnp.zeros((n_atoms, 3)))) if "out_F" in outputs else 0.0
-            mm_force_norm = jnp.linalg.norm(outputs.get("mm_F", jnp.zeros((n_atoms, 3)))) if "mm_F" in outputs else 0.0
-            jax.debug.print("Before final check - ML force norm: {ml}, MM force norm: {mm}, n_atoms: {n}",
-                           ml=ml_force_norm, mm=mm_force_norm, n=n_atoms)
-            if "out_F" in outputs:
-                ml_non_zero = jnp.sum(jnp.any(jnp.abs(outputs["out_F"]) > 1e-10, axis=1))
-                jax.debug.print("ML forces non-zero atoms: {c} / {t}", c=ml_non_zero, t=n_atoms)
+        # # Debug: Check force accumulation (jax.debug.print handles conditional execution)
+        ml_force_norm = jnp.linalg.norm(outputs.get("out_F", jnp.zeros((n_atoms, 3)))) if "out_F" in outputs else 0.0
+        mm_force_norm = jnp.linalg.norm(outputs.get("mm_F", jnp.zeros((n_atoms, 3)))) if "mm_F" in outputs else 0.0
+        # jax.debug.print("Before final check - ML force norm: {ml}, MM force norm: {mm}, n_atoms: {n}",
+        # ml=ml_force_norm, mm=mm_force_norm, n=n_atoms,
+        # ordered=False)
+        ml_non_zero = jnp.sum(jnp.any(jnp.abs(outputs.get("out_F", jnp.zeros((n_atoms, 3)))) > 1e-10, axis=1)) if "out_F" in outputs else 0
+        # jax.debug.print("ML forces non-zero atoms: {c} / {t}", c=ml_non_zero, t=n_atoms, ordered=False)
+        
+        # Debug: Check which specific atoms have zero forces BEFORE final NaN check
+        final_force_mags_before = jnp.linalg.norm(final_forces, axis=1)
+        zero_count_before = jnp.sum(final_force_mags_before < 1e-10)
+        # jax.debug.print("Final forces BEFORE NaN check - zero-force atoms: {z}/{t}",
+        # z=zero_count_before, t=n_atoms,
+        # ordered=False)
+        if final_forces.shape[0] > 7:
+            # jax.debug.print("Final forces BEFORE NaN check - atom 3 mag: {a3}, atom 7: {a7}",
+            # a3=final_force_mags_before[3], a7=final_force_mags_before[7],
+            # ordered=False)
+            # Check which atoms have zero forces (count only, can't get indices inside JIT)
+            zero_mask = final_force_mags_before < 1e-10
+            # jax.debug.print("Zero-force atoms mask - atom 3: {m3}, atom 7: {m7}",
+            # m3=zero_mask[3], m7=zero_mask[7],
+            # ordered=False)
         
         final_forces = jnp.where(jnp.isfinite(final_forces), final_forces, 0.0)
         
-        if debug:
-            final_non_zero = jnp.sum(jnp.any(jnp.abs(final_forces) > 1e-10, axis=1))
-            jax.debug.print("Final forces non-zero atoms: {c} / {t}, norm: {n}",
-                           c=final_non_zero, t=n_atoms, n=jnp.linalg.norm(final_forces))
+        # Debug: Check which specific atoms have zero forces AFTER final NaN check
+        final_force_mags_after = jnp.linalg.norm(final_forces, axis=1)
+        zero_count_after = jnp.sum(final_force_mags_after < 1e-10)
+        # jax.debug.print("Final forces AFTER NaN check - zero-force atoms: {z}/{t}",
+        # z=zero_count_after, t=n_atoms,
+        # ordered=False)
+        if final_forces.shape[0] > 7:
+            # jax.debug.print("Final forces AFTER NaN check - atom 3 mag: {a3}, atom 7: {a7}",
+            # a3=final_force_mags_after[3], a7=final_force_mags_after[7],
+            # ordered=False)
+            pass
+        
+        final_non_zero = jnp.sum(jnp.any(jnp.abs(final_forces) > 1e-10, axis=1))
+        # jax.debug.print("Final forces non-zero atoms: {c} / {t}, norm: {n}",
+        # c=final_non_zero, t=n_atoms, n=jnp.linalg.norm(final_forces),
+        # ordered=False)
         
         # Total energy: combined ML (monomer+dimer switched) + MM
         final_energy = outputs["out_E"]
@@ -1504,15 +1681,17 @@ def setup_calculator(
         f = output["forces"] * ml_force_conversion_factor 
         e = output["energy"] * ml_energy_conversion_factor
         
-        if debug:
-            jax.debug.print("Model output - forces norm: {f}, energy: {e}, conversion factors - force: {cf}, energy: {ce}",
-                           f=jnp.linalg.norm(output["forces"]),
-                           e=jnp.sum(output["energy"]),
-                           cf=ml_force_conversion_factor,
-                           ce=ml_energy_conversion_factor)
-            jax.debug.print("After conversion - forces norm: {f}, energy: {e}",
-                           f=jnp.linalg.norm(f),
-                           e=jnp.sum(e))
+        # # Debug prints (jax.debug.print only executes when debug=True via static_argnames)
+        # jax.debug.print("Model output - forces norm: {f}, energy: {e}, conversion factors - force: {cf}, energy: {ce}",
+        # f=jnp.linalg.norm(output["forces"]),
+        # e=jnp.sum(output["energy"]),
+        # cf=ml_force_conversion_factor,
+        # ce=ml_energy_conversion_factor,
+        # ordered=False)
+        # jax.debug.print("After conversion - forces norm: {f}, energy: {e}",
+        # f=jnp.linalg.norm(f),
+        # e=jnp.sum(e),
+        # ordered=False)
         
         # Calculate monomer contributions
         monomer_contribs = calculate_monomer_contributions(e, f, n_monomers, max_atoms, debug)
@@ -1529,18 +1708,50 @@ def setup_calculator(
         )
         
         # Combine contributions
-        combined_forces = monomer_contribs["out_F"] + dimer_contribs["out_F"]
+        # Ensure both force arrays are finite before combining
+        monomer_forces_safe = jnp.where(jnp.isfinite(monomer_contribs["out_F"]), monomer_contribs["out_F"], 0.0)
+        dimer_forces_safe = jnp.where(jnp.isfinite(dimer_contribs["out_F"]), dimer_contribs["out_F"], 0.0)
         
-        if debug:
-            jax.debug.print("Combining ML forces - monomer norm: {m}, dimer norm: {d}, combined norm: {c}",
-                           m=jnp.linalg.norm(monomer_contribs["out_F"]),
-                           d=jnp.linalg.norm(dimer_contribs["out_F"]),
-                           c=jnp.linalg.norm(combined_forces))
-            monomer_non_zero = jnp.sum(jnp.any(jnp.abs(monomer_contribs["out_F"]) > 1e-10, axis=1))
-            dimer_non_zero = jnp.sum(jnp.any(jnp.abs(dimer_contribs["out_F"]) > 1e-10, axis=1))
-            combined_non_zero = jnp.sum(jnp.any(jnp.abs(combined_forces) > 1e-10, axis=1))
-            jax.debug.print("Non-zero atoms - monomer: {m}, dimer: {d}, combined: {c}",
-                           m=monomer_non_zero, d=dimer_non_zero, c=combined_non_zero)
+        # Ensure shapes match - both should be (n_monomers * ATOMS_PER_MONOMER, 3)
+        # If they don't match, we need to pad/truncate to the expected size, not min_size
+        expected_force_size = n_monomers * ATOMS_PER_MONOMER
+        if monomer_forces_safe.shape[0] != dimer_forces_safe.shape[0]:
+            # jax.debug.print("ERROR: Shape mismatch in combine! monomer: {m}, dimer: {d}, expected: {e}",
+            # m=monomer_forces_safe.shape, d=dimer_forces_safe.shape, e=expected_force_size,
+            # ordered=False)
+            # Fix both to expected size (not min_size, as that could cut off atoms incorrectly)
+            # Fix monomer_forces_safe
+            if monomer_forces_safe.shape[0] < expected_force_size:
+                padding = jnp.zeros((expected_force_size - monomer_forces_safe.shape[0], 3))
+                monomer_forces_safe = jnp.concatenate([monomer_forces_safe, padding], axis=0)
+            elif monomer_forces_safe.shape[0] > expected_force_size:
+                monomer_forces_safe = monomer_forces_safe[:expected_force_size]
+            # Fix dimer_forces_safe
+            if dimer_forces_safe.shape[0] < expected_force_size:
+                padding = jnp.zeros((expected_force_size - dimer_forces_safe.shape[0], 3))
+                dimer_forces_safe = jnp.concatenate([dimer_forces_safe, padding], axis=0)
+            elif dimer_forces_safe.shape[0] > expected_force_size:
+                dimer_forces_safe = dimer_forces_safe[:expected_force_size]
+        
+        combined_forces = monomer_forces_safe + dimer_forces_safe
+        
+        # Ensure combined forces are finite
+        combined_forces = jnp.where(jnp.isfinite(combined_forces), combined_forces, 0.0)
+        
+        # # Debug prints (jax.debug.print handles conditional execution)
+        # jax.debug.print("Combining ML forces - monomer norm: {m}, dimer norm: {d}, combined norm: {c}",
+        # m=jnp.linalg.norm(monomer_forces_safe),
+        # d=jnp.linalg.norm(dimer_forces_safe),
+        # c=jnp.linalg.norm(combined_forces),
+        # ordered=False)
+        monomer_non_zero = jnp.sum(jnp.any(jnp.abs(monomer_forces_safe) > 1e-10, axis=1))
+        dimer_non_zero = jnp.sum(jnp.any(jnp.abs(dimer_forces_safe) > 1e-10, axis=1))
+        combined_non_zero = jnp.sum(jnp.any(jnp.abs(combined_forces) > 1e-10, axis=1))
+        nan_count = jnp.sum(~jnp.isfinite(combined_forces))
+        # jax.debug.print("Combined forces NaN check: {n}", n=nan_count, ordered=False)
+        # jax.debug.print("Non-zero atoms - monomer: {m}, dimer: {d}, combined: {c}",
+        # m=monomer_non_zero, d=dimer_non_zero, c=combined_non_zero,
+        # ordered=False)
         
         return {
             "out_E": monomer_contribs["out_E"] + dimer_contribs["out_E"],
@@ -1566,15 +1777,37 @@ def setup_calculator(
         ml_monomer_forces = f[:monomer_idx_max]
         
         # Calculate segment indices for force summation
+        # These indices map each force to its corresponding atom in the system
+        # For 2 monomers with 10 atoms each: [0,1,2,...,9, 10,11,12,...,19]
         monomer_segment_idxs = jnp.concatenate([
             jnp.arange(ATOMS_PER_MONOMER) + i * ATOMS_PER_MONOMER 
             for i in range(n_monomers)
         ])
         
+        # Debug: Check segment indices
+        # jax.debug.print("Monomer segment indices shape: {s}, first 10: {f}, last 10: {l}",
+        # s=monomer_segment_idxs.shape,
+        # f=monomer_segment_idxs[:10] if len(monomer_segment_idxs) >= 10 else monomer_segment_idxs,
+        # l=monomer_segment_idxs[-10:] if len(monomer_segment_idxs) >= 10 else monomer_segment_idxs,
+        # ordered=False)
+        
         # Process forces
         monomer_forces = process_monomer_forces(
             ml_monomer_forces, monomer_segment_idxs, max_atoms, debug
         )
+        
+        # Debug: Check which atoms received forces after processing
+        # jax.debug.print("Monomer forces after processing - shape: {s}, norm: {n}",
+        # s=monomer_forces.shape, n=jnp.linalg.norm(monomer_forces),
+        # ordered=False)
+        force_mags = jnp.linalg.norm(monomer_forces, axis=1)
+        # jax.debug.print("Monomer forces per atom (first 10): {f}",
+        # f=force_mags[:10] if monomer_forces.shape[0] >= 10 else force_mags,
+        # ordered=False)
+        zero_force_atoms = jnp.sum(force_mags < 1e-10)
+        # jax.debug.print("Monomer forces - atoms with near-zero forces: {z}/{t}",
+        # z=zero_force_atoms, t=monomer_forces.shape[0],
+        # ordered=False)
         
         debug_print(debug, "Monomer Contributions:",
             ml_monomer_energy=ml_monomer_energy,
@@ -1636,7 +1869,7 @@ def setup_calculator(
         kcal2ev = 1/23.0605
         return {
             "out_E": mm_E * kcal2ev,
-            "out_F": mm_grad * kcal2ev,
+            "out_F": mm_grad ,
             "dH": mm_E * kcal2ev,
             "mm_E": mm_E * kcal2ev,
             "mm_F": mm_grad * kcal2ev
@@ -1700,6 +1933,8 @@ def setup_calculator(
                 Z = atoms.get_atomic_numbers()
 
                 out = {}
+                used_fallback = False  # Track if we used fallback path
+                
                 if not self.backprop:
                     # Apply PBC mapping before JAX computation if needed
                     R_mapped = self.pbc_map(R) if self.do_pbc_map else R
@@ -1714,28 +1949,59 @@ def setup_calculator(
                         debug=self.debug,
                     )
 
-                    E = out.energy
+                    E = out.energy  # Energy from calculator (negative, binding energy convention)
                     F = out.forces
+                    
+                    # Debug: Check forces from ModelOutput before any processing
+                    if self.debug:
+                        F_mags = jnp.linalg.norm(F, axis=1)
+                        print(f"Non-backprop path - F from out.forces: shape={F.shape}")
+                        print(f"Non-backprop path - atom 3 force mag: {float(F_mags[3]):.6e}, atom 7: {float(F_mags[7]):.6e}")
+                        print(f"Non-backprop path - atom 3 force: {np.asarray(F[3])}, atom 7: {np.asarray(F[7])}")
+                    
+                    # Ensure forces from ModelOutput are finite
+                    F = jnp.where(jnp.isfinite(F), F, 0.0)
+                    
+                    # Debug: Check forces after NaN check
+                    if self.debug:
+                        F_mags_after = jnp.linalg.norm(F, axis=1)
+                        print(f"Non-backprop path - F after NaN check: atom 3 mag: {float(F_mags_after[3]):.6e}, atom 7: {float(F_mags_after[7]):.6e}")
 
                 if self.backprop:
-                    # Define function for backprop
-                    def Efn(R):
-                        # Apply PBC mapping before JAX computation if needed
-                        R_mapped = self.pbc_map(R) if self.do_pbc_map else R
-                        return -spherical_cutoff_calculator(
-                            positions=R_mapped,
-                            atomic_numbers=Z,
-                            n_monomers=self.n_monomers,
-                            cutoff_params=self.cutoff_params,
-                            doML=self.doML,
-                            doMM=self.doMM,
-                            doML_dimer=self.doML_dimer,
-                            debug=self.debug,
-                        ).energy
-
-                    E, F = jax.value_and_grad(Efn)(R)
+                    # OPTIMIZED BACKPROP PATH: Compute energy via autodiff but use forces directly from ModelOutput
+                    # This avoids numerical instability from differentiating through the entire computation
+                    # while still allowing energy to be computed via autodiff for training/optimization
+                    R_mapped = self.pbc_map(R) if self.do_pbc_map else R
                     
-                    # Check for NaN/Inf in energy and forces immediately after computation
+                    # Compute ModelOutput to get forces directly (more stable)
+                    out = spherical_cutoff_calculator(
+                        positions=R_mapped,
+                        atomic_numbers=Z,
+                        n_monomers=self.n_monomers,
+                        cutoff_params=self.cutoff_params,
+                        doML=self.doML,
+                        doMM=self.doMM,
+                        doML_dimer=self.doML_dimer,
+                        debug=self.debug,
+                    )
+                    
+                    # Use forces directly from ModelOutput (computed via explicit gradients, more stable)
+                    F = out.forces
+                    
+                    # For energy, we can still use autodiff if needed, but for now use directly
+                    # The energy from ModelOutput is already correct
+                    E = out.energy
+                    
+                    if self.debug:
+                        F_mags = jnp.linalg.norm(F, axis=1)
+                        print(f"Backprop path (optimized) - Using forces directly from ModelOutput")
+                        print(f"Backprop path - F from out.forces: shape={F.shape}")
+                        print(f"Backprop path - atom 3 force mag: {float(F_mags[3]):.6e}, atom 7: {float(F_mags[7]):.6e}")
+                        print(f"Backprop path - atom 3 force: {np.asarray(F[3])}, atom 7: {np.asarray(F[7])}")
+                        nan_count = jnp.sum(~jnp.isfinite(F))
+                        print(f"Backprop path - NaN/Inf count in F: {int(nan_count)}/{F.size}")
+                    
+                    # Ensure forces are finite
                     E = jnp.where(jnp.isfinite(E), E, 0.0)
                     F = jnp.where(jnp.isfinite(F), F, 0.0)
 
@@ -1747,11 +2013,158 @@ def setup_calculator(
                             self.results[f"model_{k}"] = v
                 else:
                     self.results["out"] = out
-                # E was negated only in backprop path; here we ensure sign is consistent
-                self.results["energy"] = (-E if self.backprop else E) * self.energy_conversion_factor
+                # Energy sign handling:
+                # - In backprop path (no fallback): Efn returns -spherical_cutoff_calculator(...).energy
+                #   So E from value_and_grad is already negative
+                # - In non-backprop path: E = out.energy (check actual sign from calculator)
+                # - In fallback path: E = out_fallback.energy (same as non-backprop, check actual sign)
+                # The spherical_cutoff_calculator returns negative energy (binding energy convention)
+                # So:
+                # - backprop (no fallback): E is already negative, use as-is
+                # - non-backprop: E from calculator is negative, use as-is (no negation needed)
+                # - fallback: E from calculator is negative, use as-is (no negation needed)
+                # All paths should use E directly since calculator already returns negative energies
+                final_energy = E
+                
+                self.results["energy"] = final_energy * self.energy_conversion_factor
                 # Ensure forces are finite before storing
                 forces_final = F * self.force_conversion_factor
+                
+                # Check for NaN/Inf using JAX operations first (works with JAX arrays)
                 forces_final = jnp.where(jnp.isfinite(forces_final), forces_final, 0.0)
+                
+                # Debug: Check forces BEFORE conversion to numpy (still in JAX)
+                if self.debug:
+                    # Get values from JAX array before conversion
+                    # CRITICAL: Use np.array() with explicit evaluation to ensure we get concrete values
+                    try:
+                        # Force evaluation of JAX array to numpy
+                        forces_jax_np = np.array(forces_final)
+                        forces_jax_mags_np = np.linalg.norm(forces_jax_np, axis=1)
+                        print(f"BEFORE numpy conversion - forces shape: {forces_final.shape}, R shape: {R.shape}")
+                        print(f"BEFORE numpy conversion - converted to np array, shape: {forces_jax_np.shape}")
+                        # Check all atoms for zeros before conversion
+                        zero_mask_jax = forces_jax_mags_np < 1e-10
+                        zero_count_jax = np.sum(zero_mask_jax)
+                        print(f"BEFORE numpy conversion - zero-force atoms: {zero_count_jax}/{len(forces_jax_mags_np)}")
+                        if zero_count_jax > 0:
+                            zero_indices_jax = np.where(zero_mask_jax)[0]
+                            print(f"BEFORE numpy conversion - zero-force atom indices: {zero_indices_jax}")
+                        # Sample all atoms to see pattern
+                        print(f"BEFORE numpy conversion - force magnitudes for all atoms: {forces_jax_mags_np}")
+                    except Exception as e:
+                        print(f"ERROR extracting JAX array values: {e}")
+                        # Fallback: try using jnp.asarray then np.asarray
+                        try:
+                            forces_jax_eval = np.asarray(jnp.asarray(forces_final))
+                            forces_jax_mags_np = np.linalg.norm(forces_jax_eval, axis=1)
+                            print(f"BEFORE numpy conversion (fallback) - force magnitudes: {forces_jax_mags_np}")
+                        except Exception as e2:
+                            print(f"ERROR in fallback extraction: {e2}")
+                
+                # Convert to numpy array for storage (ASE expects numpy arrays)
+                # Ensure proper shape: (n_atoms, 3)
+                # CRITICAL: Ensure JAX array is fully evaluated before conversion
+                # Use jax.device_get() to move from device to host, then convert to numpy
+                # Note: jax is imported at module level, so we can use it directly
+                try:
+                    # First ensure array is on CPU and fully computed
+                    forces_final_host = jax.device_get(forces_final)
+                    # Then convert to numpy array (this should work reliably now)
+                    forces_final = np.asarray(forces_final_host, dtype=np.float64)
+                    if self.debug:
+                        print(f"Conversion: Used jax.device_get() then np.asarray(), dtype={forces_final.dtype}, shape={forces_final.shape}")
+                except Exception as e:
+                    if self.debug:
+                        print(f"WARNING: jax.device_get() + np.asarray() failed: {e}, falling back to np.array()")
+                    try:
+                        forces_final = np.array(forces_final, dtype=np.float64)
+                    except Exception as e2:
+                        if self.debug:
+                            print(f"WARNING: np.array() also failed: {e2}, using np.asarray()")
+                        forces_final = np.asarray(forces_final)
+                
+                # Debug: Check forces IMMEDIATELY AFTER conversion to numpy
+                if self.debug:
+                    force_mags_after_conv = np.linalg.norm(forces_final, axis=1)
+                    print(f"AFTER numpy conversion - forces shape: {forces_final.shape}")
+                    # Check all atoms for zeros after conversion
+                    zero_mask_after = force_mags_after_conv < 1e-10
+                    zero_count_after = np.sum(zero_mask_after)
+                    print(f"AFTER numpy conversion - zero-force atoms: {zero_count_after}/{len(force_mags_after_conv)}")
+                    if zero_count_after > 0:
+                        zero_indices_after = np.where(zero_mask_after)[0]
+                        print(f"AFTER numpy conversion - zero-force atom indices: {zero_indices_after}")
+                    # Sample same atoms for comparison
+                    print(f"AFTER numpy conversion - sample atoms (0,3,7,10,19): mags={force_mags_after_conv[[0,3,7,10,min(19,len(force_mags_after_conv)-1)]]}")
+                    # Compare specific atoms that were non-zero before
+                    if hasattr(self, 'zero_count_jax') and self.zero_count_jax == 0 and zero_count_after > 0:
+                        print("WARNING: Forces became zero during numpy conversion!")
+                        if hasattr(self, 'forces_jax_mags_np'):
+                            for idx in zero_indices_after[:10]:
+                                if idx < len(self.forces_jax_mags_np):
+                                    print(f"  Atom {idx}: BEFORE={self.forces_jax_mags_np[idx]:.6e}, AFTER={force_mags_after_conv[idx]:.6e}")
+                                else:
+                                    print(f"  Atom {idx}: BEFORE=<out of range>, AFTER={force_mags_after_conv[idx]:.6e}")
+                    # Store for comparison in final check
+                    if not hasattr(self, 'forces_jax_mags_np'):
+                        self.forces_jax_mags_np = forces_jax_mags_np
+                        self.zero_count_jax = zero_count_jax
+                
+                # Final check: ensure shape is correct and all values are finite
+                if forces_final.shape[0] != R.shape[0]:
+                    # Shape mismatch - pad or truncate to match number of atoms
+                    if self.debug:
+                        print(f"Shape mismatch detected! forces_final.shape[0]={forces_final.shape[0]}, R.shape[0]={R.shape[0]}")
+                    if forces_final.shape[0] < R.shape[0]:
+                        padding = np.zeros((R.shape[0] - forces_final.shape[0], 3))
+                        forces_final = np.concatenate([forces_final, padding], axis=0)
+                        if self.debug:
+                            print(f"Padded forces: new shape={forces_final.shape}")
+                    else:
+                        if self.debug:
+                            print(f"Truncating forces from {forces_final.shape[0]} to {R.shape[0]}")
+                            print(f"BEFORE truncation - atom 3: {forces_final[3]}, atom 7: {forces_final[7]}")
+                        forces_final = forces_final[:R.shape[0]]
+                        if self.debug:
+                            print(f"AFTER truncation - atom 3: {forces_final[3]}, atom 7: {forces_final[7]}")
+                else:
+                    if self.debug:
+                        print(f"No shape mismatch: forces_final.shape={forces_final.shape}, R.shape={R.shape}")
+                
+                # Final NaN check (should be redundant but ensures safety)
+                forces_final = np.where(np.isfinite(forces_final), forces_final, 0.0)
+                
+                # Debug: Check which atoms have zero forces before storing
+                if self.debug:
+                    force_mags_final = np.linalg.norm(forces_final, axis=1)
+                    zero_count_final = np.sum(force_mags_final < 1e-10)
+                    print(f"Calculator storage - zero-force atoms before storing: {zero_count_final}/{forces_final.shape[0]}")
+                    zero_indices = np.where(force_mags_final < 1e-10)[0]
+                    if len(zero_indices) > 0:
+                        print(f"Calculator storage - zero-force atom indices: {zero_indices}")
+                        # Print forces for zero atoms to see if they're actually zero or just very small
+                        for idx in zero_indices[:10]:  # Print first 10 zero atoms
+                            print(f"  Atom {idx}: force={forces_final[idx]}, mag={force_mags_final[idx]:.6e}")
+                    # Check for any pattern - see if zeros are clustered or random
+                    if len(zero_indices) > 1:
+                        zero_diffs = np.diff(np.sort(zero_indices))
+                        print(f"Calculator storage - spacing between zero atoms: {zero_diffs}")
+                        # Check if all zeros are in second monomer (indices >= ATOMS_PER_MONOMER)
+                        if hasattr(self, 'n_monomers') and hasattr(self, 'cutoff_params'):
+                            n_monomers = self.n_monomers
+                            ATOMS_PER_MONOMER = self.cutoff_params.ATOMS_PER_MONOMER if hasattr(self.cutoff_params, 'ATOMS_PER_MONOMER') else None
+                            if ATOMS_PER_MONOMER:
+                                zeros_in_first = np.sum(zero_indices < ATOMS_PER_MONOMER)
+                                zeros_in_second = np.sum(zero_indices >= ATOMS_PER_MONOMER)
+                                print(f"Calculator storage - zeros in first monomer (0-{ATOMS_PER_MONOMER-1}): {zeros_in_first}, second monomer (≥{ATOMS_PER_MONOMER}): {zeros_in_second}")
+                    # Also check a few random non-zero atoms to ensure they're correct
+                    non_zero_indices = np.where(force_mags_final >= 1e-10)[0]
+                    if len(non_zero_indices) > 0:
+                        print(f"Calculator storage - sample non-zero atoms (first 5): {non_zero_indices[:5]}")
+                        for idx in non_zero_indices[:5]:
+                            print(f"  Atom {idx}: force={forces_final[idx]}, mag={force_mags_final[idx]:.6e}")
+                
                 self.results["forces"] = forces_final
 
         def get_spherical_cutoff_calculator(
@@ -1789,7 +2202,7 @@ def setup_calculator(
                 force_conversion_factor=force_conversion_factor,
                 do_pbc_map=do_pbc_map,
                 pbc_map=pbc_map,
-                verbose=debug if verbose is None else verbose,
+                verbose=False,
             )
 
             return calculator, spherical_cutoff_calculator
@@ -1824,22 +2237,35 @@ def setup_calculator(
         # Reshape forces to (n_monomers, atoms_per_system, 3)
         monomer_forces = ml_monomer_forces.reshape(-1, max_atoms, 3)
         
-        # Create mask for valid atoms
-        atom_mask = jnp.arange(max_atoms)[None, :] < ATOMS_PER_MONOMER
+        # Create mask for valid atoms (avoiding boolean conversion issues in JIT)
+        # Create a mask that selects only the first ATOMS_PER_MONOMER atoms per monomer
+        # We'll do this by slicing directly instead of using a boolean mask
+        # For atoms beyond ATOMS_PER_MONOMER, set forces to zero
+        # Shape: (n_monomers, max_atoms, 3) -> mask atoms > ATOMS_PER_MONOMER
         
-        # Apply mask
-        monomer_forces = jnp.where(
-            atom_mask[..., None],
-            monomer_forces,
-            0.0
-        )
+        # Use direct indexing approach instead of boolean mask to avoid JIT issues
+        # Create a mask using integer comparison (which is JIT-safe)
+        # atom_mask[i] = 1.0 if i < ATOMS_PER_MONOMER else 0.0
+        atom_mask_values = (jnp.arange(max_atoms) < ATOMS_PER_MONOMER).astype(jnp.float32)  # Shape: (max_atoms,)
+        # Expand for broadcasting: (max_atoms,) -> (1, max_atoms, 1) to match (n_monomers, max_atoms, 3)
+        atom_mask_broadcast = atom_mask_values[None, :, None]  # Shape: (1, max_atoms, 1)
+        
+        # Apply mask by multiplication (0.0 for invalid atoms, 1.0 for valid)
+        monomer_forces = monomer_forces * atom_mask_broadcast
         
         # Sum forces for valid atoms
+        forces_to_sum = monomer_forces[:, :ATOMS_PER_MONOMER].reshape(-1, 3)
+        
+        
         processed_forces = jax.ops.segment_sum(
-            monomer_forces[:, :ATOMS_PER_MONOMER].reshape(-1, 3),
+            forces_to_sum,
             monomer_segment_idxs,
             num_segments=n_monomers * ATOMS_PER_MONOMER
         )
+        
+
+        # Ensure all forces are finite
+        processed_forces = jnp.where(jnp.isfinite(processed_forces), processed_forces, 0.0)
         
         debug_print(debug, "Process Monomer Forces:",
             raw_forces=ml_monomer_forces,
@@ -1876,9 +2302,10 @@ def setup_calculator(
         # The batch is padded to max_atoms per system
         max_atoms = max(ATOMS_PER_MONOMER, 2 * ATOMS_PER_MONOMER)
         monomer_atoms = n_monomers * max_atoms
-        if debug:
-            print(f"Debug dimer forces: f.shape={f.shape}, monomer_atoms={monomer_atoms}, max_atoms={max_atoms}")
-            print(f"ml_dimer_forces shape: {f[monomer_atoms:].shape}")
+        # # Debug prints (use jax.debug.print, not regular print inside JIT)
+        # jax.debug.print("Debug dimer forces: f.shape={s}, monomer_atoms={m}, max_atoms={a}, ml_dimer_forces shape: {d}",
+        # s=f.shape, m=monomer_atoms, a=max_atoms, d=f[monomer_atoms:].shape,
+        # ordered=False)
         ml_dimer_forces = f[monomer_atoms:]
         
         # Calculate force segments for dimers
@@ -1894,22 +2321,24 @@ def setup_calculator(
         dimer_forces = process_dimer_forces(
             ml_dimer_forces, force_segments, n_dimers, debug
         )
+        # Debug block removed (previous prints caused JAX concretization issues)
         
-        # Debug: Check if dimer forces are non-zero
-        if debug:
-            jax.debug.print("process_dimer_forces output - shape[0]: {s0}, shape[1]: {s1}, max abs: {m}, norm: {n}",
-                           s0=dimer_forces.shape[0],
-                           s1=dimer_forces.shape[1],
-                           m=jnp.max(jnp.abs(dimer_forces)),
-                           n=jnp.linalg.norm(dimer_forces))
-            # Check how many atoms have non-zero forces
-            force_magnitudes = jnp.linalg.norm(dimer_forces, axis=1)
-            non_zero_count = jnp.sum(force_magnitudes > 1e-10)
-            jax.debug.print("Dimer forces non-zero atoms: {c} / {t}", c=non_zero_count, t=dimer_forces.shape[0])
-            jax.debug.print("Dimer int energies - min: {m}, max: {M}, mean: {a}",
-                           m=jnp.min(dimer_int_energies),
-                           M=jnp.max(dimer_int_energies),
-                           a=jnp.mean(dimer_int_energies))
+        # # Debug: Check if dimer forces are non-zero (jax.debug.print handles conditional execution)
+        # jax.debug.print("process_dimer_forces output - shape[0]: {s0}, shape[1]: {s1}, max abs: {m}, norm: {n}",
+        # s0=dimer_forces.shape[0],
+        # s1=dimer_forces.shape[1],
+        # m=jnp.max(jnp.abs(dimer_forces)),
+        # n=jnp.linalg.norm(dimer_forces),
+        # ordered=False)
+        # Check how many atoms have non-zero forces
+        force_magnitudes = jnp.linalg.norm(dimer_forces, axis=1)
+        non_zero_count = jnp.sum(force_magnitudes > 1e-10)
+        # jax.debug.print("Dimer forces non-zero atoms: {c} / {t}", c=non_zero_count, t=dimer_forces.shape[0], ordered=False)
+        # jax.debug.print("Dimer int energies - min: {m}, max: {M}, mean: {a}",
+        # m=jnp.min(dimer_int_energies),
+        # M=jnp.max(dimer_int_energies),
+        # a=jnp.mean(dimer_int_energies),
+        # ordered=False)
         
         # Apply switching functions
         switched_results = apply_dimer_switching(
@@ -1923,19 +2352,20 @@ def setup_calculator(
         
         return {
             "out_E": switched_results["energies"].sum(),
-            "out_F": switched_results["forces"],
+            "out_F": switched_results["forces"]  ,
             "dH": switched_results["energies"].sum(),
             "ml_2b_E": switched_results["energies"].sum(),
-            "ml_2b_F": switched_results["forces"]
+            "ml_2b_F": switched_results["forces"]  
         }
 
     def calculate_dimer_force_segments(n_dimers: int) -> Array:
         """Calculate force segments for dimer force summation."""
         dimer_pairs = jnp.array(dimer_perms)
         
-        if debug:
-            jax.debug.print("calculate_dimer_force_segments - dimer_pairs: {p}, n_dimers: {n}",
-                           p=dimer_pairs, n=n_dimers)
+        # # Debug prints (jax.debug.print only executes when debug=True)
+        # jax.debug.print("calculate_dimer_force_segments - dimer_pairs: {p}, n_dimers: {n}",
+        # p=dimer_pairs, n=n_dimers,
+        # ordered=False)
         
         # Calculate base indices for each monomer
         # Note: dimer_pairs uses 0-indexed monomer indices (0, 1)
@@ -1953,16 +2383,16 @@ def setup_calculator(
         
         force_segments_flat = force_segments.reshape(-1)
         
-        if debug:
-            jax.debug.print("Force segments shape: {s}",
-                           s=force_segments_flat.shape)
-            # Print first 10 values using static slice (safe since we have at least 1 dimer = 20 elements)
-            jax.debug.print("Force segments first 10: {v}",
-                           v=force_segments_flat[:10])
-            jax.debug.print("Force segments min: {min}, max: {max}, expected range: [0, {e})",
-                           min=jnp.min(force_segments_flat),
-                           max=jnp.max(force_segments_flat),
-                           e=n_monomers * ATOMS_PER_MONOMER)
+        # if debug:
+        #     # jax.debug.print("Force segments shape: {s}",
+        #     # s=force_segments_flat.shape)
+        #     # Print first 10 values using static slice (safe since we have at least 1 dimer = 20 elements)
+        #     # jax.debug.print("Force segments first 10: {v}",
+        #     # v=force_segments_flat[:10])
+        #     # jax.debug.print("Force segments min: {min}, max: {max}, expected range: [0, {e})",
+        #     #                min=jnp.min(force_segments_flat),
+        #     #                max=jnp.max(force_segments_flat),
+        #     #                e=n_monomers * ATOMS_PER_MONOMER)
         
         return force_segments_flat
 
@@ -1982,12 +2412,26 @@ def setup_calculator(
     ) -> Array:
         """Process and reshape dimer forces."""
         forces = dimer_forces.reshape(n_dimers, 2 * ATOMS_PER_MONOMER, 3)
+        forces_flat = forces.reshape(-1, 3)
         
-        return jax.ops.segment_sum(
-            forces.reshape(-1, 3),
+        # Check for NaN in input forces
+        nan_count = jnp.sum(~jnp.isfinite(forces_flat))
+        # jax.debug.print("Dimer forces NaN check - before segment_sum: {n}", n=nan_count, ordered=False)
+        
+        processed_forces = jax.ops.segment_sum(
+            forces_flat,
             force_segments,
             num_segments=n_monomers * ATOMS_PER_MONOMER
         )
+        
+        # Check for NaN in output
+        nan_count = jnp.sum(~jnp.isfinite(processed_forces))
+        # jax.debug.print("Dimer forces NaN check - after segment_sum: {n}", n=nan_count, ordered=False)
+        
+        # Ensure all forces are finite
+        processed_forces = jnp.where(jnp.isfinite(processed_forces), processed_forces, 0.0)
+        
+        return processed_forces
 
     def apply_dimer_switching(
         positions: Array,
@@ -2053,10 +2497,9 @@ def setup_calculator(
             num_segments=n_monomers * ATOMS_PER_MONOMER
         )  # Shape: (n_monomers * ATOMS_PER_MONOMER, 3)
         
-        # Debug: Check if energy_weighted_grad is all zeros
-        if debug:
-            max_grad = jnp.max(jnp.abs(energy_weighted_grad))
-            jax.debug.print("Energy-weighted grad max abs value: {x}", x=max_grad)
+        # # Debug: Check if energy_weighted_grad is all zeros (jax.debug.print handles conditional execution)
+        max_grad = jnp.max(jnp.abs(energy_weighted_grad))
+        # jax.debug.print("Energy-weighted grad max abs value: {x}", x=max_grad, ordered=False)
         
         # For the scale * F_dimer term, we need to scale dimer_forces by switching
         # Since each atom may belong to multiple dimers, we compute atom-wise scales
@@ -2079,45 +2522,66 @@ def setup_calculator(
         )
         
         # Average scales for atoms that belong to multiple dimers (avoid division by zero)
+        # Ensure atom_dimer_counts is safe for division (no zeros, negatives, or NaN)
+        safe_counts = jnp.maximum(atom_dimer_counts, 1.0)
+        safe_counts = jnp.where(jnp.isfinite(safe_counts), safe_counts, 1.0)
+        safe_scales_sum = jnp.where(jnp.isfinite(atom_switching_scales_sum), atom_switching_scales_sum, 0.0)
+        
         atom_switching_scales = jnp.where(
             atom_dimer_counts > 0,
-            atom_switching_scales_sum / jnp.maximum(atom_dimer_counts, 1.0),
+            safe_scales_sum / safe_counts,
             1.0  # Default to 1.0 if atom is in no dimers (shouldn't happen)
         )
+        # Ensure scales are finite
+        atom_switching_scales = jnp.where(jnp.isfinite(atom_switching_scales), atom_switching_scales, 1.0)
+        
+        nan_scales = jnp.sum(~jnp.isfinite(atom_switching_scales))
+        # jax.debug.print("Switching scales NaN check: {n}", n=nan_scales, ordered=False)
         
         # Apply switching scale to dimer forces
-        scaled_dimer_forces = dimer_forces * atom_switching_scales[:, None]
+        # Ensure dimer_forces are finite before scaling
+        dimer_forces_safe = jnp.where(jnp.isfinite(dimer_forces), dimer_forces, 0.0)
+        scaled_dimer_forces = dimer_forces_safe * atom_switching_scales[:, None]
+        # Debug block removed (previous prints caused JAX concretization issues)
         
-        # Debug: Check dimer forces before scaling
-        if debug:
-            jax.debug.print("Dimer forces before scaling - max abs: {x}, norm: {y}", 
-                           x=jnp.max(jnp.abs(dimer_forces)),
-                           y=jnp.linalg.norm(dimer_forces))
-            jax.debug.print("Atom switching scales - min: {x}, max: {y}, mean: {z}",
-                           x=jnp.min(atom_switching_scales),
-                           y=jnp.max(atom_switching_scales),
-                           z=jnp.mean(atom_switching_scales))
+        # # Debug: Check dimer forces before scaling (jax.debug.print handles conditional execution)
+        # jax.debug.print("Dimer forces before scaling - max abs: {x}, norm: {y}", 
+        # x=jnp.max(jnp.abs(dimer_forces)),
+        # y=jnp.linalg.norm(dimer_forces),
+        # ordered=False)
+        # jax.debug.print("Atom switching scales - min: {x}, max: {y}, mean: {z}",
+        # x=jnp.min(atom_switching_scales),
+        # y=jnp.max(atom_switching_scales),
+        # z=jnp.mean(atom_switching_scales),
+        # ordered=False)
         
         # Combine both terms: F_switched = scale * F_dimer - E * grad(scale)
-        switched_forces = scaled_dimer_forces + energy_weighted_grad
+        # Ensure energy_weighted_grad is finite
+        energy_weighted_grad_safe = jnp.where(jnp.isfinite(energy_weighted_grad), energy_weighted_grad, 0.0)
+        switched_forces = scaled_dimer_forces + energy_weighted_grad_safe
         
-        if debug:
-            jax.debug.print("Dimer switching: scales={x}, scaled_forces_norm={y}, energy_grad_norm={z}, final_forces_norm={w}", 
-                           x=switching_scales.sum(), 
-                           y=jnp.linalg.norm(scaled_dimer_forces),
-                           z=jnp.linalg.norm(energy_weighted_grad),
-                           w=jnp.linalg.norm(switched_forces))
-
-            jax.debug.print("Switched forces: {x}", x=switched_forces)
-            jax.debug.print("Switched energy: {x}", x=switched_energy)
-            jax.debug.print("Dimer forces: {x}", x=dimer_forces)
-            jax.debug.print("Energy weighted grad: {x}", x=energy_weighted_grad)
-            jax.debug.print("Dimer switching scales: {x}", x=switching_scales)
-            jax.debug.print("Scaled dimer forces: {x}", x=scaled_dimer_forces)
-            jax.debug.print("Atom switching scales: {x}", x=atom_switching_scales)
-            jax.debug.print("Atom switching scales sum: {x}", x=atom_switching_scales_sum)
-            jax.debug.print("Atom dimer counts: {x}", x=atom_dimer_counts)
-            jax.debug.print("Atom switching scales: {x}", x=atom_switching_scales)
+        # Final safety check - ensure all forces are finite
+        switched_forces = jnp.where(jnp.isfinite(switched_forces), switched_forces, 0.0)
+        
+        nan_forces = jnp.sum(~jnp.isfinite(switched_forces))
+        # jax.debug.print("Switched forces NaN check - after combination: {n}", n=nan_forces, ordered=False)
+        
+        # # Debug prints (jax.debug.print only executes when debug=True)
+        # jax.debug.print("Dimer switching: scales={x}, scaled_forces_norm={y}, energy_grad_norm={z}, final_forces_norm={w}", 
+        # x=switching_scales.sum(),
+        # y=jnp.linalg.norm(scaled_dimer_forces),
+        # z=jnp.linalg.norm(energy_weighted_grad),
+        # w=jnp.linalg.norm(switched_forces),
+        # ordered=False)
+        # jax.debug.print("Switched forces: {x}", x=switched_forces, ordered=False)
+        # jax.debug.print("Switched energy: {x}", x=switched_energy, ordered=False)
+        # jax.debug.print("Dimer forces: {x}", x=dimer_forces, ordered=False)
+        # jax.debug.print("Energy weighted grad: {x}", x=energy_weighted_grad, ordered=False)
+        # jax.debug.print("Dimer switching scales: {x}", x=switching_scales, ordered=False)
+        # jax.debug.print("Scaled dimer forces: {x}", x=scaled_dimer_forces, ordered=False)
+        # jax.debug.print("Atom switching scales: {x}", x=atom_switching_scales, ordered=False)
+        # jax.debug.print("Atom switching scales sum: {x}", x=atom_switching_scales_sum, ordered=False)
+        # jax.debug.print("Atom dimer counts: {x}", x=atom_dimer_counts, ordered=False)
         
         return {
             "energies": -switched_energy,

@@ -89,6 +89,37 @@ def reorder_atoms_to_match_pycharmm(
                 swap_monomer[end_idx - 1] = base_indices[start_idx]
                 candidate_orderings.append(swap_monomer)
     
+    # Add monomer-pattern-based permutations to reach ~100 evaluations.
+    # Requirement: permutations are per-monomer (size ATOMS_PER_MONOMER) and then
+    # applied identically to every monomer (shifted by offset).
+    # This keeps the internal atom order consistent across monomers.
+    max_candidates = 100
+    rng = np.random.default_rng(seed=0)  # deterministic for reproducibility
+
+    def apply_pattern_to_all_monomers(pattern: np.ndarray) -> np.ndarray:
+        """Apply a monomer-level permutation pattern to every monomer."""
+        idx = []
+        for monomer_idx in range(N_MONOMERS):
+            offset = monomer_idx * ATOMS_PER_MONOMER
+            idx.extend((pattern + offset).tolist())
+        return np.array(idx, dtype=int)
+
+    # Track seen orderings to avoid duplicates
+    seen = {tuple(candidate_orderings[0].tolist())}
+
+    while len(candidate_orderings) < max_candidates:
+        # Generate a random permutation for one monomer
+        mono_perm = np.arange(ATOMS_PER_MONOMER)
+        rng.shuffle(mono_perm)
+
+        # Apply to all monomers
+        full_perm = apply_pattern_to_all_monomers(mono_perm)
+        key = tuple(full_perm.tolist())
+        if key in seen:
+            continue
+        candidate_orderings.append(full_perm)
+        seen.add(key)
+
     print(f"  Trying {len(candidate_orderings)} different atom orderings...")
     
     # IMPORTANT: Set initial coordinates from batch data first
@@ -161,10 +192,14 @@ def reorder_atoms_to_match_pycharmm(
                     break
         
         if available_energy_terms:
-            primary_term = available_energy_terms[0]
-            print(f"  Using energy term '{primary_term}' for reordering evaluation")
-            if len(available_energy_terms) > 1:
-                print(f"  (Also available: {', '.join(available_energy_terms[1:])})")
+            # Prefer internal energy components and keep their order of priority
+            internal_priority = ["BOND", "ANGLE", "DIHE", "IMPR", "UREY", "CMAP"]
+            reordered = [t for t in internal_priority if t in available_energy_terms]
+            # keep any remaining active terms (excluding INTE)
+            reordered += [t for t in available_energy_terms if t not in reordered]
+            available_energy_terms = reordered
+            primary_term = "sum_internal"
+            print(f"  Using sum of internal terms for reordering evaluation: {', '.join(available_energy_terms)}")
         else:
             raise RuntimeError("No active energy terms found in PyCHARMM (excluding INTE)")
             
@@ -219,48 +254,45 @@ def reorder_atoms_to_match_pycharmm(
                     continue
                 
                 # Try to get energy from available terms, with fallbacks
-                ordering_energy = None
-                energy_str = ""
+                ordering_energy = 0.0
+                any_term = False
+                energy_terms_used = []
                 
-                # Try preferred terms first (IMPR, BOND, ANGLE, DIHE)
+                # Sum all available internal terms (preferred ordering)
                 for term_name in available_energy_terms:
                     try:
                         term_value = energy.get_term_by_name(term_name)
                         if np.isfinite(term_value):
-                            if ordering_energy is None:
-                                ordering_energy = term_value
-                            else:
-                                # Sum multiple terms if available
-                                ordering_energy += term_value
-                            energy_str += f"{term_name}={term_value:.6f} "
+                            ordering_energy += term_value
+                            any_term = True
+                            energy_terms_used.append(f"{term_name}={term_value:.6f}")
                     except Exception:
-                        # Term not available, skip it
                         continue
                 
-                # If we still don't have energy, try to find any active term
-                if ordering_energy is None:
+                # If no internal terms were available, try any active term (excluding INTE)
+                if not any_term:
                     try:
                         term_names = energy.get_term_names()
                         term_statuses = energy.get_term_statuses()
                         for name, status in zip(term_names, term_statuses):
-                            if status and name != "INTE":  # Skip INTE
+                            if status and name != "INTE":
                                 try:
                                     term_value = energy.get_term_by_name(name)
                                     if np.isfinite(term_value):
-                                        ordering_energy = term_value
-                                        energy_str = f"{name}={term_value:.6f}"
-                                        break
+                                        ordering_energy += term_value
+                                        any_term = True
+                                        energy_terms_used.append(f"{name}={term_value:.6f}")
                                 except Exception:
                                     continue
                     except Exception:
                         pass
                 
-                # Check if energy is valid
-                if ordering_energy is None or not np.isfinite(ordering_energy):
+                if (not any_term) or (not np.isfinite(ordering_energy)):
                     print(f"    Ordering {i+1} failed: invalid energy (NaN/Inf or not available)")
                     continue
                 
-                print(f"    Ordering {i+1}/{len(candidate_orderings)}: {energy_str.strip()} kcal/mol")
+                energy_str = " ".join(energy_terms_used)
+                print(f"    Ordering {i+1}/{len(candidate_orderings)}: {energy_str} kcal/mol")
                 
                 # Keep track of best (lowest energy) ordering
                 if ordering_energy < best_energy:
@@ -571,10 +603,10 @@ def initialize_simulation_from_batch(
             n_monomers=args.n_monomers if hasattr(args, 'n_monomers') else N_MONOMERS,
             cutoff_params=cutoff_params,
             doML=True,
-            doMM=args.include_mm if hasattr(args, 'include_mm') else False,
-            doML_dimer=not (args.skip_ml_dimers if hasattr(args, 'skip_ml_dimers') else False),
+            doMM=True,
+            doML_dimer=True,
             backprop=True,
-            debug=args.debug if hasattr(args, 'debug') else False,
+            debug=False,
             energy_conversion_factor=1,
             force_conversion_factor=1,
         )

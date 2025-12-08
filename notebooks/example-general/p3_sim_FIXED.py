@@ -120,12 +120,12 @@ class MockArgs:
         self.atoms_per_monomer = 10  # Alias for compatibility
 
         # Calculator parameters
-        self.ml_cutoff = 0.1
-        self.mm_switch_on = 8.0
-        self.mm_cutoff = 5.0
+        self.ml_cutoff = 0.001
+        self.mm_switch_on = 7.5
+        self.mm_cutoff = 3.5
         self.include_mm = True
         self.skip_ml_dimers = False
-        self.debug = True
+        self.debug = False
 
         # MD simulation parameters
         self.temperature = 210.0
@@ -198,7 +198,8 @@ print(f"Each batch contains {len(valid_batches[0]['R'])} atoms")
 uid = "pyhsnetacetone-d38b2d5c-b24d-432b-83b4-801ff726dbde"
 SCICORE = Path('/scicore/home/meuwly/boitti0000/')
 SCICORE = Path("/pchem-data/meuwly/boittier/home/ckpts")
-RESTART=str(SCICORE / f"{uid}")
+RESTART=str(SCICORE / f"{uid}" / "epoch-1017" )
+
 args.checkpoint = RESTART  # Keep as Path object (resolve_checkpoint_paths handles both str and Path)
 
 
@@ -208,6 +209,8 @@ def load_model_parameters_json(epoch_dir, natoms, use_orbax=False):
 
     This function tries to load checkpoints from JSON files first, then falls back
     to pickle if needed. JSON is preferred for portability.
+    
+    Also checks for json_checkpoint subdirectories if no JSON files found in epoch_dir.
 
     Args:
         epoch_dir: Path to checkpoint epoch directory
@@ -217,6 +220,11 @@ def load_model_parameters_json(epoch_dir, natoms, use_orbax=False):
     Returns:
         params, model: Model parameters and model instance
     """
+    # Convert to Path if string
+    if isinstance(epoch_dir, str):
+        epoch_dir = Path(epoch_dir)
+    elif not isinstance(epoch_dir, Path):
+        epoch_dir = Path(epoch_dir)
     from mmml.physnetjax.physnetjax.models.model import EF
     import json
     import pickle
@@ -252,13 +260,29 @@ def load_model_parameters_json(epoch_dir, natoms, use_orbax=False):
         else:
             return obj
 
+    # Check for json_checkpoint subdirectory first (common in newer checkpoints)
+    json_checkpoint_dir = epoch_dir / "json_checkpoint"
+    if not json_checkpoint_dir.exists():
+        # Also check parent directory (in case epoch_dir points to parent)
+        json_checkpoint_dir = epoch_dir.parent / "json_checkpoint"
+    
     # Try JSON-based loading first (preferred)
-    json_candidates = [
+    json_candidates = []
+    if json_checkpoint_dir.exists():
+        # Prefer json_checkpoint subdirectory
+        json_candidates.extend([
+            json_checkpoint_dir / "params.json",
+            json_checkpoint_dir / "best_params.json",
+            json_checkpoint_dir / "checkpoint.json",
+            json_checkpoint_dir / "final_params.json",
+        ])
+    # Also check the epoch directory itself
+    json_candidates.extend([
         epoch_dir / "params.json",
         epoch_dir / "best_params.json",
         epoch_dir / "checkpoint.json",
         epoch_dir / "final_params.json",
-    ]
+    ])
 
     params = None
     params_source = None
@@ -323,12 +347,20 @@ def load_model_parameters_json(epoch_dir, natoms, use_orbax=False):
         )
 
     # Load model config (prefer JSON)
-    config_candidates = [
+    config_candidates = []
+    if json_checkpoint_dir.exists():
+        # Prefer json_checkpoint subdirectory
+        config_candidates.extend([
+            json_checkpoint_dir / "model_config.json",
+            json_checkpoint_dir / "model_config.pkl",
+        ])
+    # Also check epoch directory and parent
+    config_candidates.extend([
         epoch_dir / "model_config.json",
         epoch_dir.parent / "model_config.json",
         epoch_dir / "model_config.pkl",
         epoch_dir.parent / "model_config.pkl",
-    ]
+    ])
 
     model_kwargs = {}
     for config_path in config_candidates:
@@ -541,7 +573,7 @@ print("This iterative approach leads to better overall optimization.")
 # Option A: Iterative optimization (recommended)
 USE_ITERATIVE = True  # Set to False to use separate modes
 
-if False:
+if USE_ITERATIVE:
     result_iterative = fit_hybrid_parameters_iteratively(
         train_batches=train_batches_copy,
         base_calculator_factory=calculator_factory,
@@ -554,17 +586,17 @@ if False:
         pair_idx_atom_atom=lj_params["pair_idx_atom_atom"],
         cutoff_params=CUTOFF_PARAMS,
         args=args,
-        n_iterations=3,  # Number of alternating iterations
-        n_samples=35,
-        min_com_distance=2.0,  # Filter out samples with COM distance < 3.5 Å (large force errors)
+        n_iterations=10,  # Number of alternating iterations
+        n_samples=10,
+        min_com_distance=5.0,  # Filter out samples with COM distance < 3.5 Å (large force errors)
         energy_weight=1.0,
         force_weight=1.0,
-        lj_learning_rate=0.1,
-        cutoff_learning_rate=0.1,
+        lj_learning_rate=0.01,
+        cutoff_learning_rate=0.01,
         lj_n_iterations=10 ,  # Iterations per LJ optimization step
         cutoff_n_iterations=10 ,  # Iterations per cutoff optimization step
         convergence_threshold=1e-3,  # Stop early if loss improvement < 0.1%
-        verbose=True,
+        verbose=False,
     )
     
     opt_ep_scale_lj = result_iterative["ep_scale"]
@@ -609,11 +641,11 @@ else:
         args=args,
         optimize_mode="lj_only",
         n_samples=35,
-        min_com_distance=7.0,
+        min_com_distance=5.0,
         energy_weight=1.0,
         force_weight=1.0,
         learning_rate=0.01,
-        n_iterations=10,
+        n_iterations=50,
         verbose=True
     )
 
@@ -679,7 +711,7 @@ calculator_factory_lj_optimized = setup_calculator(
     doML=True,
     doMM=args.include_mm,
     doML_dimer=not args.skip_ml_dimers,
-    debug=True,
+    debug=False,
     model_restart_path=base_ckpt_dir,
     MAX_ATOMS_PER_SYSTEM=natoms,
     ml_energy_conversion_factor=1,
@@ -689,6 +721,107 @@ calculator_factory_lj_optimized = setup_calculator(
     sig_scale=np.array(full_sig_scale),
 )
 print("Optimized calculator created")
+
+# ========================================================================
+# SECTION: SAVE OPTIMIZED PARAMETERS
+# ========================================================================
+print("\n" + "=" * 60)
+print("Saving optimized parameters")
+print("=" * 60)
+
+import json
+from pathlib import Path
+
+params_output_dir = Path("optimized_parameters")
+params_output_dir.mkdir(exist_ok=True)
+
+# Convert JAX arrays to lists for JSON serialization
+def to_serializable(obj):
+    """Convert JAX/NumPy arrays to lists for JSON serialization"""
+    # Check for array-like objects first (before type checking)
+    # Handle JAX arrays
+    if hasattr(obj, '__jax_array__') or (hasattr(obj, 'shape') and hasattr(obj, 'dtype') and 'jax' in str(type(obj))):
+        try:
+            return np.asarray(obj).tolist()
+        except:
+            return str(obj)
+    # Handle NumPy arrays (check this before other numpy types)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    # Handle NumPy scalar types (must come after ndarray check)
+    elif isinstance(obj, (np.integer, np.floating, np.bool_, np.number)):
+        return obj.item()
+    # Handle JAX scalar types
+    elif hasattr(obj, 'item') and not isinstance(obj, (list, tuple, dict)):
+        try:
+            result = obj.item()
+            # Recursively handle in case item() returns another array
+            return to_serializable(result)
+        except (AttributeError, ValueError):
+            pass
+    # Handle lists and tuples (recursive)
+    elif isinstance(obj, (list, tuple)):
+        return [to_serializable(item) for item in obj]
+    # Handle dictionaries (recursive)
+    elif isinstance(obj, dict):
+        return {str(k): to_serializable(v) for k, v in obj.items()}
+    # Handle basic Python types
+    elif isinstance(obj, (int, float, str, bool, type(None))):
+        return obj
+    else:
+        # Try to convert to native Python type as last resort
+        try:
+            # Try to convert to numpy array first, then to list
+            arr = np.asarray(obj)
+            if arr.ndim == 0:  # Scalar
+                return arr.item()
+            else:  # Array
+                return arr.tolist()
+        except:
+            # Final fallback: try item() if available
+            try:
+                if hasattr(obj, 'item'):
+                    return obj.item()
+            except:
+                pass
+            # Last resort: convert to string
+            return str(obj)
+
+# Ensure all values are serializable before creating the dict
+params_to_save = to_serializable({
+    "ep_scale": opt_ep_scale_lj,
+    "sig_scale": opt_sig_scale_lj,
+    "ml_cutoff": CUTOFF_PARAMS.ml_cutoff,
+    "mm_switch_on": CUTOFF_PARAMS.mm_switch_on,
+    "mm_cutoff": CUTOFF_PARAMS.mm_cutoff,
+    "lj_params": {
+        "atc_epsilons": lj_params["atc_epsilons"],
+        "atc_rmins": lj_params["atc_rmins"],
+        "atc_qs": lj_params["atc_qs"],
+        "at_codes": lj_params["at_codes"],
+        "pair_idx_atom_atom": lj_params.get("pair_idx_atom_atom"),
+        "unique_iac_codes": lj_params.get("unique_iac_codes"),
+        "iac_to_param_idx": lj_params.get("iac_to_param_idx"),
+    },
+    "full_ep_scale": full_ep_scale,
+    "full_sig_scale": full_sig_scale,
+    "checkpoint_path": str(base_ckpt_dir),
+    "model_uid": uid if 'uid' in locals() else None,
+    "n_monomers": args.n_monomers,
+    "n_atoms_monomer": args.n_atoms_monomer,
+})
+
+params_file = params_output_dir / "optimized_lj_cutoff_params.json"
+with open(params_file, 'w') as f:
+    json.dump(params_to_save, f, indent=2)
+
+print(f"✅ Saved optimized parameters to: {params_file}")
+print(f"   Parameters saved:")
+print(f"     - LJ scaling factors (ep_scale, sig_scale)")
+print(f"     - Cutoff parameters (ml_cutoff, mm_switch_on, mm_cutoff)")
+print(f"     - Base LJ parameters (epsilons, rmins, charges)")
+print(f"     - Full expanded scaling parameters")
+print(f"     - Checkpoint path and model information")
 
 # ========================================================================
 # SECTION 9: INITIALIZE SIMULATIONS FROM BATCHES
@@ -860,7 +993,7 @@ def minimize_structure(atoms, run_index=0, nsteps=60, fmax=0.0006, charmm=False,
                     doMM=args.include_mm,
                     doML_dimer=not args.skip_ml_dimers,
                     backprop=True,
-                    debug=args.debug,
+                    debug=False,
                     energy_conversion_factor=1,
                     force_conversion_factor=1,
                 )
