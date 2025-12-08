@@ -2224,6 +2224,12 @@ def setup_calculator(
         total_forces = ml_monomer_forces.shape[0]
         atoms_per_system = total_forces // n_monomers
         
+        # Verify that atoms_per_system >= atoms_per_monomer (should be, due to padding)
+        # If not, there's a shape mismatch issue
+        if atoms_per_system < atoms_per_monomer:
+            # This shouldn't happen, but handle it gracefully
+            atoms_per_system = atoms_per_monomer
+        
         # Reshape to (n_monomers, atoms_per_system, 3)
         monomer_forces = ml_monomer_forces.reshape(n_monomers, atoms_per_system, 3)
         
@@ -2231,9 +2237,10 @@ def setup_calculator(
         # Result shape: (n_monomers, atoms_per_monomer, 3)
         monomer_forces_valid = monomer_forces[:, :atoms_per_monomer, :]
         
-        # Reshape to (n_monomers * atoms_per_monomer, 3) - forces are already in correct order
+        # Reshape to (n_monomers * atoms_per_monomer, 3)
+        # Forces are already in the correct order: [monomer0_atom0, monomer0_atom1, ..., monomer0_atomN-1, monomer1_atom0, ...]
         # Since monomer_segment_idxs is sequential [0,1,2,...,n_monomers*atoms_per_monomer-1],
-        # segment_sum would be a no-op, so we can just return the reshaped forces directly
+        # we can return forces directly without segment_sum
         processed_forces = monomer_forces_valid.reshape(-1, 3)
         
 
