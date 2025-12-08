@@ -520,6 +520,13 @@ inbfrq -1 imgfrq -1
         
         print(f"  ✓ Created PDB file with reordered positions: {temp_pdb_cluster}")
         
+
+        # # delete everything and start from scratch
+        # pycharmm.lingo.charmm_script("DELETE ATOM SELE ALL END")
+        # pycharmm.lingo.charmm_script("DELETE PSF SELE ALL END")
+        # # load the psf and parameters
+
+
         # Read coordinates from PDB to verify
         print("  Reading coordinates from PDB file to verify...")
         try:
@@ -800,8 +807,8 @@ calculator_factory_cluster = setup_calculator(
     model_restart_path=base_ckpt_dir,
     MAX_ATOMS_PER_SYSTEM=n_atoms_monomer*2,
     # PhysNet model outputs are in kcal/mol; convert to eV
-    # ml_energy_conversion_factor=0.0433641153087705,
-    # ml_force_conversion_factor=0.0433641153087705,
+    ml_energy_conversion_factor=0.0433641153087705,
+    ml_force_conversion_factor=0.0433641153087705,
     # ml_reorder_indices=ml_reorder_indices,
     cell=None,  # No PBC
     ep_scale=np.array(full_ep_scale_cluster),
