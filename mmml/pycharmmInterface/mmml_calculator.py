@@ -833,21 +833,11 @@ def setup_calculator(
         all_monomer_idxs.append(indices_of_monomer(a, n_atoms=ATOMS_PER_MONOMER, n_mol=n_monomers))
     # print("all_monomer_idxs", all_monomer_idxs)
     # print("all_dimer_idxs", all_dimer_idxs)
-    unique_res_ids = []
-    collect_monomers = []
     dimer_perms = dimer_permutations(n_monomers)
-    for i, _ in enumerate(dimer_perms):
-        a,b = _
-        if a not in unique_res_ids and b not in unique_res_ids:
-            unique_res_ids.append(a)
-            unique_res_ids.append(b)
-            collect_monomers.append(1)
-            print(a,b)
-        else:
-            collect_monomers.append(0)
+    # Print all dimer pairs for verification
+    for a, b in dimer_perms:
+        print(a, b)
 
-    print("unique_res_ids", unique_res_ids)
-    # print("collect_monomers", collect_monomers)
     print("len(dimer_perms)", len(dimer_perms))
 
     N_MONOMERS = n_monomers
@@ -2231,17 +2221,25 @@ def setup_calculator(
             atoms_per_system = atoms_per_monomer
         
         # Reshape to (n_monomers, atoms_per_system, 3)
+        # Forces from model are in batch order: [batch0_atom0, batch0_atom1, ..., batch0_atomN, batch1_atom0, ...]
         monomer_forces = ml_monomer_forces.reshape(n_monomers, atoms_per_system, 3)
         
         # Take only first atoms_per_monomer atoms per monomer (discard any padding)
         # Result shape: (n_monomers, atoms_per_monomer, 3)
         monomer_forces_valid = monomer_forces[:, :atoms_per_monomer, :]
         
-        # Reshape to (n_monomers * atoms_per_monomer, 3)
-        # Forces are already in the correct order: [monomer0_atom0, monomer0_atom1, ..., monomer0_atomN-1, monomer1_atom0, ...]
-        # Since monomer_segment_idxs is sequential [0,1,2,...,n_monomers*atoms_per_monomer-1],
-        # we can return forces directly without segment_sum
-        processed_forces = monomer_forces_valid.reshape(-1, 3)
+        # Flatten to (n_monomers * atoms_per_monomer, 3) for segment_sum
+        # This gives forces in batch order: [batch0_atom0...batch0_atom9, batch1_atom0...batch1_atom9, ...]
+        forces_flat = monomer_forces_valid.reshape(-1, 3)
+        
+        # Use segment_sum to map batch-ordered forces to system atom positions
+        # monomer_segment_idxs maps: batch0_atom0 -> system_atom0, batch0_atom1 -> system_atom1, etc.
+        # This ensures forces are correctly assigned to the right atoms in the system
+        processed_forces = jax.ops.segment_sum(
+            forces_flat,
+            monomer_segment_idxs,
+            num_segments=n_monomers * atoms_per_monomer
+        )
         
 
         # Ensure all forces are finite
