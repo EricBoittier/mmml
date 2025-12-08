@@ -3,9 +3,9 @@
   "n_atoms": 500,
   "n_atoms_per_molecule": 10,
   "cutoff_params": {
-    "ml_cutoff": 0.0005000000237487257,
-    "mm_switch_on": 5.0200042724609375,
-    "mm_cutoff": 4.9799981117248535
+    "ml_cutoff": 0.07029116898775101,
+    "mm_switch_on": 6.497955799102783,
+    "mm_cutoff": 5.500025749206543
   },
   "cluster_file": "cluster_50molecules.xyz",
   "checkpoint_path": "/pchem-data/meuwly/boittier/home/ckpts/eq_acetone-a114f328-a678-4999-904a-ef8ff78a7eb1"
