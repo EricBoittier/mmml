@@ -4,7 +4,7 @@
   "n_atoms_per_molecule": 10,
   "cutoff_params": {
     "ml_cutoff": 0.0010000000474974513,
-    "mm_switch_on": 8.494433403015137,
+    "mm_switch_on": 8.494434356689453,
     "mm_cutoff": 2.500110149383545
   },
   "cluster_file": "cluster_10molecules.xyz",
