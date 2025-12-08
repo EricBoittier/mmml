@@ -2206,31 +2206,43 @@ def setup_calculator(
         Returns:
             Array: Processed monomer forces
         """
+        debug = True
         # Determine n_monomers from segment indices length
         n_monomers = monomer_segment_idxs.shape[0] // atoms_per_monomer
         
         # Determine atoms_per_system from ml_monomer_forces shape
-        # ml_monomer_forces has shape (n_monomers * atoms_per_system, 3)
+        # ml_monomer_forces has shape (n_monomers * atoms_per_system, 3) where atoms_per_system = max_atoms
+        # (max_atoms is used for padding to handle both monomers and dimers)
         total_forces = ml_monomer_forces.shape[0]
         atoms_per_system = total_forces // n_monomers
         
-        # Verify that atoms_per_system >= atoms_per_monomer (should be, due to padding)
-        # If not, there's a shape mismatch issue
-        if atoms_per_system < atoms_per_monomer:
-            # This shouldn't happen, but handle it gracefully
-            atoms_per_system = atoms_per_monomer
+        jax.debug.print("ml_monomer_forces shape: {s}", s=ml_monomer_forces.shape)
+        jax.debug.print("atoms_per_system: {a}", a=atoms_per_system)
+        jax.debug.print("ml_monomer_forces[:30]: {f}", f=ml_monomer_forces[:30])
         
         # Reshape to (n_monomers, atoms_per_system, 3)
         # Forces from model are in batch order: [batch0_atom0, batch0_atom1, ..., batch0_atomN, batch1_atom0, ...]
+        # where each batch item has atoms_per_system atoms (padded to max_atoms for dimers)
         monomer_forces = ml_monomer_forces.reshape(n_monomers, atoms_per_system, 3)
         
-        # Take only first atoms_per_monomer atoms per monomer (discard any padding)
+        jax.debug.print("monomer_forces shape: {s}", s=monomer_forces.shape)
+        jax.debug.print("monomer_forces[0, :10]: {f}", f=monomer_forces[0, :10])
+        jax.debug.print("monomer_forces[1, :10]: {f}", f=monomer_forces[1, :10])
+        
+        # Take only first atoms_per_monomer atoms per monomer (discard any padding beyond ATOMS_PER_MONOMER)
         # Result shape: (n_monomers, atoms_per_monomer, 3)
         monomer_forces_valid = monomer_forces[:, :atoms_per_monomer, :]
         
         # Flatten to (n_monomers * atoms_per_monomer, 3) for segment_sum
         # This gives forces in batch order: [batch0_atom0...batch0_atom9, batch1_atom0...batch1_atom9, ...]
         forces_flat = monomer_forces_valid.reshape(-1, 3)
+        jax.debug.print("forces_flat shape: {s}", s=forces_flat.shape)
+        jax.debug.print("monomer_segment_idxs shape: {s}", s=monomer_segment_idxs.shape)
+        jax.debug.print("n_monomers: {n}", n=n_monomers)
+        jax.debug.print("atoms_per_monomer: {a}", a=atoms_per_monomer)
+        jax.debug.print("forces_flat: {f}", f=forces_flat)
+        jax.debug.print("monomer_segment_idxs: {m}", m=monomer_segment_idxs)
+        jax.debug.print("num_segments: {n}", n=n_monomers * atoms_per_monomer)
         
         # Use segment_sum to map batch-ordered forces to system atom positions
         # monomer_segment_idxs maps: batch0_atom0 -> system_atom0, batch0_atom1 -> system_atom1, etc.
