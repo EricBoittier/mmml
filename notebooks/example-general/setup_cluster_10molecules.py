@@ -346,6 +346,14 @@ vswitch NBXMOD 3 -
 inbfrq -1 imgfrq -1
 """
 
+        _read_pdb_file = "pdb/init-packmol.pdb"
+        mol = ase.io.read(_read_pdb_file)
+        print(mol)
+        print(mol.get_chemical_symbols())
+        # coor.set_positions expects a pandas DataFrame with x/y/z columns
+        init_pos = pd.DataFrame(mol.get_positions(), columns=["x", "y", "z"])
+        coor.set_positions(init_pos)
+
         print("Running energy minimization to check PyCHARMM initialization...")
 
         XYZ = coor.get_positions()
