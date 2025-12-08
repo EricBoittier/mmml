@@ -711,6 +711,32 @@ try:
 except Exception:
     pass
 
+print(f"at_codes_for_calc: {at_codes_for_calc}")
+print("--------------------------------")
+print(f"n_atoms_cluster: {n_atoms_cluster}")
+Z = [round(_/2) for _ in psf.get_amass()]
+cluster_atoms.set_atomic_numbers(Z)
+print(f"Z: {Z}")
+print("--------------------------------")
+print(f"psf.get_atype(): {psf.get_atype()}")
+print("cluster_atoms.get_atomic_numbers(): {cluster_atoms.get_atomic_numbers()}")
+print("cluster_atoms.get_atomic_positions(): {cluster_atoms.get_atomic_positions()}")
+print("cluster_atoms.get_atomic_numbers(): {cluster_atoms.get_atomic_numbers()}")
+print("cluster_atoms.get_atomic_positions(): {cluster_atoms.get_atomic_positions()}")
+
+
+print("--------------------------------")
+print(f"pycharmm_iac: {pycharmm_iac}")
+print("--------------------------------")
+print(f"mapped_param_indices: {mapped_param_indices}")
+print("--------------------------------")
+print(f"lj_params_base: {lj_params_base}")
+print("--------------------------------")
+print(f"at_codes_expanded: {lj_params_base['at_codes_expanded']}")
+print("--------------------------------")
+print(f"at_codes_for_calc: {at_codes_for_calc}")
+print("--------------------------------")
+
 # ========================================================================
 # STEP 6: SETUP CALCULATOR FOR CLUSTER
 # ========================================================================
@@ -957,3 +983,24 @@ print(f"  from ase import units")
 print(f"  dyn = VelocityVerlet(cluster_atoms, timestep=0.5 * units.fs)")
 print(f"  dyn.run(1000)")
 
+################## VALIDATION
+
+# assert that the pycharmm atom types and the at_codes_for_calc are the same
+for i in range(len(cluster_atoms)):
+    print(f"Atom {i}: {cluster_atoms.get_atomic_numbers()[i]} == {at_codes_for_calc[i]}")
+    if cluster_atoms.get_atomic_numbers()[i] != at_codes_for_calc[i]:
+        print(f"Atom {i} has atomic number {cluster_atoms.get_atomic_numbers()[i]} but at_codes_for_calc has {at_codes_for_calc[i]}")
+
+
+
+
+#print forces per atom
+print("Forces per atom:")
+for i in range(len(cluster_atoms)):
+    print(f"Atom {i}: {cluster_atoms.get_forces()[i]}")
+
+# get the calculator and validate the indices, and components are all sensible
+calc = cluster_atoms.calc
+results = calc.results
+for k in results:
+    print(f"Result {k}: {results[k]}")
