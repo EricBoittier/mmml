@@ -120,9 +120,9 @@ class MockArgs:
         self.atoms_per_monomer = 10  # Alias for compatibility
 
         # Calculator parameters
-        self.ml_cutoff = 0.0005
-        self.mm_switch_on = 5.0
-        self.mm_cutoff = 5.0
+        self.ml_cutoff = 0.1
+        self.mm_switch_on = 8.0
+        self.mm_cutoff = 4.0
         self.include_mm = True
         self.skip_ml_dimers = False
         self.debug = False
@@ -587,15 +587,15 @@ if USE_ITERATIVE:
         pair_idx_atom_atom=lj_params["pair_idx_atom_atom"],
         cutoff_params=CUTOFF_PARAMS,
         args=args,
-        n_iterations=3,  # Number of alternating iterations
+        n_iterations=2,  # Number of alternating iterations
         n_samples=100,
-        min_com_distance=5.0,  # Filter out samples with COM distance < 3.5 Å (large force errors)
-        energy_weight=1.0,
+        min_com_distance=4.5,  # Filter out samples with COM distance < 3.5 Å (large force errors)
+        energy_weight=3.0,
         force_weight=1.0,
         lj_learning_rate=0.01,
         cutoff_learning_rate=0.01,
-        lj_n_iterations=10 ,  # Iterations per LJ optimization step
-        cutoff_n_iterations= 2 ,  # Iterations per cutoff optimization step
+        lj_n_iterations=1000 ,  # Iterations per LJ optimization step
+        cutoff_n_iterations= 50 ,  # Iterations per cutoff optimization step
         convergence_threshold=1e-3,  # Stop early if loss improvement < 0.1%
         verbose=False,
     )
