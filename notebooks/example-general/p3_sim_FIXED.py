@@ -120,9 +120,9 @@ class MockArgs:
         self.atoms_per_monomer = 10  # Alias for compatibility
 
         # Calculator parameters
-        self.ml_cutoff = 0.001
-        self.mm_switch_on = 7.5
-        self.mm_cutoff = 3.5
+        self.ml_cutoff = 0.0005
+        self.mm_switch_on = 5.0
+        self.mm_cutoff = 5.0
         self.include_mm = True
         self.skip_ml_dimers = False
         self.debug = False
@@ -586,15 +586,15 @@ if USE_ITERATIVE:
         pair_idx_atom_atom=lj_params["pair_idx_atom_atom"],
         cutoff_params=CUTOFF_PARAMS,
         args=args,
-        n_iterations=10,  # Number of alternating iterations
-        n_samples=10,
+        n_iterations=5,  # Number of alternating iterations
+        n_samples=15,
         min_com_distance=5.0,  # Filter out samples with COM distance < 3.5 Å (large force errors)
         energy_weight=1.0,
         force_weight=1.0,
         lj_learning_rate=0.01,
         cutoff_learning_rate=0.01,
-        lj_n_iterations=10 ,  # Iterations per LJ optimization step
-        cutoff_n_iterations=10 ,  # Iterations per cutoff optimization step
+        lj_n_iterations=5 ,  # Iterations per LJ optimization step
+        cutoff_n_iterations= 2 ,  # Iterations per cutoff optimization step
         convergence_threshold=1e-3,  # Stop early if loss improvement < 0.1%
         verbose=False,
     )
@@ -643,7 +643,7 @@ else:
         n_samples=35,
         min_com_distance=5.0,
         energy_weight=1.0,
-        force_weight=1.0,
+        force_weight=1.0,   
         learning_rate=0.01,
         n_iterations=50,
         verbose=True
@@ -676,8 +676,8 @@ else:
             initial_ep_scale=opt_ep_scale_lj,  # Use optimized LJ parameters from MODE 1
             initial_sig_scale=opt_sig_scale_lj,  # Use optimized LJ parameters from MODE 1
             initial_ml_cutoff=1.0,
-            initial_mm_switch_on=7.0,
-            initial_mm_cutoff=1.0,
+            initial_mm_switch_on=8.0,
+            initial_mm_cutoff=5.0,
             n_samples=35,
             learning_rate=0.01,
             n_iterations=3,
