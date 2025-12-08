@@ -2013,18 +2013,18 @@ def fit_hybrid_potential_to_training_data_jax(
             # Also ensure they're finite
             params["ml_cutoff"] = jnp.clip(
                 jnp.where(jnp.isfinite(params["ml_cutoff"]), params["ml_cutoff"], 2.0),
-                0.1, 10.0
+                0.0001, 10.0
             )
             params["mm_switch_on"] = jnp.clip(
                 jnp.where(jnp.isfinite(params["mm_switch_on"]), params["mm_switch_on"], 5.0),
-                0.1, 20.0
+                0.0001, 20.0
             )
             params["mm_cutoff"] = jnp.clip(
                 jnp.where(jnp.isfinite(params["mm_cutoff"]), params["mm_cutoff"], 1.0),
-                0.1, 10.0
+                0.0001, 10.0
             )
             # Ensure mm_switch_on > ml_cutoff (for valid switching)
-            params["mm_switch_on"] = jnp.maximum(params["mm_switch_on"], params["ml_cutoff"] + 0.1)
+            params["mm_switch_on"] = jnp.maximum(params["mm_switch_on"], params["ml_cutoff"] + 0.001)
         
         if hasattr(loss, 'item'):
             loss_val = float(loss.item())
