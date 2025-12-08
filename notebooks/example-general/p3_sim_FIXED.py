@@ -196,9 +196,10 @@ print(f"Each batch contains {len(valid_batches[0]['R'])} atoms")
 # Load ML model from checkpoint and create calculator factory
 
 uid = "pyhsnetacetone-d38b2d5c-b24d-432b-83b4-801ff726dbde"
+uid = "eq_acetone-a114f328-a678-4999-904a-ef8ff78a7eb1"
 SCICORE = Path('/scicore/home/meuwly/boitti0000/')
 SCICORE = Path("/pchem-data/meuwly/boittier/home/ckpts")
-RESTART=str(SCICORE / f"{uid}" / "epoch-1017" )
+RESTART=str(SCICORE / f"{uid}" / "epoch-266" )
 
 args.checkpoint = RESTART  # Keep as Path object (resolve_checkpoint_paths handles both str and Path)
 
