@@ -199,7 +199,7 @@ uid = "pyhsnetacetone-d38b2d5c-b24d-432b-83b4-801ff726dbde"
 uid = "eq_acetone-a114f328-a678-4999-904a-ef8ff78a7eb1"
 SCICORE = Path('/scicore/home/meuwly/boitti0000/')
 SCICORE = Path("/pchem-data/meuwly/boittier/home/ckpts")
-RESTART=str(SCICORE / f"{uid}" / "epoch-1505" )
+RESTART=str(SCICORE / f"{uid}" / "epoch-2227" )
 
 args.checkpoint = RESTART  # Keep as Path object (resolve_checkpoint_paths handles both str and Path)
 
@@ -587,15 +587,15 @@ if USE_ITERATIVE:
         pair_idx_atom_atom=lj_params["pair_idx_atom_atom"],
         cutoff_params=CUTOFF_PARAMS,
         args=args,
-        n_iterations=2,  # Number of alternating iterations
-        n_samples=100,
+        n_iterations=10,  # Number of alternating iterations
+        n_samples=30,
         min_com_distance=4.5,  # Filter out samples with COM distance < 3.5 Å (large force errors)
         energy_weight=3.0,
         force_weight=1.0,
-        lj_learning_rate=0.01,
+        lj_learning_rate=0.01251,
         cutoff_learning_rate=0.01,
-        lj_n_iterations=1000 ,  # Iterations per LJ optimization step
-        cutoff_n_iterations= 50 ,  # Iterations per cutoff optimization step
+        lj_n_iterations=10,  # Iterations per LJ optimization step
+        cutoff_n_iterations= 5 ,  # Iterations per cutoff optimization step
         convergence_threshold=1e-3,  # Stop early if loss improvement < 0.1%
         verbose=False,
     )
