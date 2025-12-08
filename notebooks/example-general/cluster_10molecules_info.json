@@ -1,12 +1,12 @@
 {
-  "n_molecules": 10,
-  "n_atoms": 100,
+  "n_molecules": 50,
+  "n_atoms": 500,
   "n_atoms_per_molecule": 10,
   "cutoff_params": {
     "ml_cutoff": 0.0010000000474974513,
     "mm_switch_on": 8.494434356689453,
     "mm_cutoff": 2.500110149383545
   },
-  "cluster_file": "cluster_10molecules.xyz",
+  "cluster_file": "cluster_50molecules.xyz",
   "checkpoint_path": "/pchem-data/meuwly/boittier/home/ckpts/pyhsnetacetone-d38b2d5c-b24d-432b-83b4-801ff726dbde"
 }

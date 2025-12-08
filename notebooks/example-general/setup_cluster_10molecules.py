@@ -29,7 +29,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 # Set environment variables for JAX/GPU
 os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".45"
-
+N_MOLS_IN_CLUSTER = 50
 # ========================================================================
 # IMPORTS
 # ========================================================================
@@ -60,7 +60,7 @@ except ImportError as e:
     PYCHARMM_AVAILABLE = False
 
 print("=" * 70)
-print("CLUSTER OF 10 MOLECULES SETUP")
+print("CLUSTER OF {N_MOLS_IN_CLUSTER} MOLECULES SETUP")
 print("=" * 70)
 
 # ========================================================================
@@ -114,7 +114,7 @@ print(f"  Base checkpoint dir: {base_ckpt_dir}")
 print(f"  Epoch dir: {epoch_dir}")
 
 # For cluster of 10 molecules
-n_cluster_molecules = 10
+n_cluster_molecules = N_MOLS_IN_CLUSTER
 n_atoms_cluster = n_cluster_molecules * n_atoms_monomer
 
 try:
@@ -128,88 +128,31 @@ except Exception as e:
     model = None
 
 # ========================================================================
-# STEP 3: GENERATE CLUSTER OF 10 MOLECULES
+# STEP 3: LOAD PRE-PACKED CLUSTER (50 MOLECULES)
 # ========================================================================
 print("\n" + "=" * 70)
-print("STEP 3: Generating cluster of 10 molecules")
+print("STEP 3: Loading pre-packed cluster (50 molecules)")
 print("=" * 70)
 
-# Load a reference dimer structure to extract single molecule structure
-# We'll use one of the training batches from p3_sim_FIXED.py
-data_file = "/pchem-data/meuwly/boittier/home/mmml/mmml/data/fixed-acetone-only_MP2_21000.npz"
-print(f"  Loading reference data from: {data_file}")
+from pathlib import Path
+import ase.io
 
-from mmml.physnetjax.physnetjax.data.data import prepare_datasets
-from mmml.physnetjax.physnetjax.data.batches import prepare_batches_jit
+pdb_path = Path("pdb/init-packmol.pdb")
+print(f"  Loading cluster from: {pdb_path}")
+cluster_atoms = ase.io.read(pdb_path)
+cluster_positions = cluster_atoms.get_positions()
+cluster_Z = cluster_atoms.get_atomic_numbers()
 
-data_key = jax.random.PRNGKey(42)
-train_data, _ = prepare_datasets(
-    data_key,
-    100,  # num_train (just need a few samples)
-    0,    # num_valid
-    [data_file],
-    natoms=n_atoms_monomer * 2  # Dimer for reference
+assert len(cluster_atoms) == n_atoms_cluster, (
+    f"Expected {n_atoms_cluster} atoms, got {len(cluster_atoms)}"
 )
-train_batches = prepare_batches_jit(data_key, train_data, 1, num_atoms=n_atoms_monomer * 2)
 
-# Extract positions and atomic numbers from first batch
-ref_batch = train_batches[0]
-ref_positions = np.array(ref_batch["R"])
-ref_atomic_numbers = np.array(ref_batch["Z"])
-
-# Extract first monomer (reference molecule)
-monomer_positions = ref_positions[:n_atoms_monomer]
-monomer_Z = ref_atomic_numbers[:n_atoms_monomer]
-
-print(f"  Reference monomer: {n_atoms_monomer} atoms")
-print(f"  Atomic numbers: {monomer_Z}")
-
-# Define acetone atom names in PyCHARMM order: O1, C1, C2, C3, H21, H22, H23, H31, H32, H33
-ACETONE_ATOM_NAMES = ["O1", "C1", "C2", "C3", "H21", "H22", "H23", "H31", "H32", "H33"]
-assert len(ACETONE_ATOM_NAMES) == n_atoms_monomer, f"Expected {n_atoms_monomer} atom names, got {len(ACETONE_ATOM_NAMES)}"
-
-# Generate cluster by placing molecules in a simple cubic-like arrangement
-# Compute approximate molecular size (max distance from COM)
-com_monomer = np.mean(monomer_positions, axis=0)
-distances_from_com = np.linalg.norm(monomer_positions - com_monomer, axis=1)
-mol_radius = np.max(distances_from_com)
-spacing = mol_radius * 10.5  # Spacing between molecular centers
-
-# Generate positions for 10 molecules in a 2x2x3 arrangement
-cluster_positions = []
-cluster_Z = []
-cluster_atom_names = []  # Store atom names for PDB file writing
-
-# Simple cubic-like grid
-positions_3d = [
-    (0, 0, 0), (1, 0, 0), (0, 1, 0), (1, 1, 0),  # Bottom layer (4 molecules)
-    (0, 0, 1), (1, 0, 1), (0, 1, 1), (1, 1, 1),  # Middle layer (4 molecules)
-    (0.5, 0.5, 2), (0.5, 0.5, -1)                 # Top and bottom (2 molecules)
-]
-
-for i, (x, y, z) in enumerate(positions_3d[:n_cluster_molecules]):
-    # Translate monomer to grid position
-    translation = np.array([x, y, z]) * spacing - com_monomer
-    mol_positions = monomer_positions + translation
-    cluster_positions.append(mol_positions)
-    cluster_Z.append(monomer_Z)
-    # Add atom names for this molecule
-    cluster_atom_names.extend(ACETONE_ATOM_NAMES)
-
-# Combine into single cluster
-cluster_positions = np.vstack(cluster_positions)
-cluster_Z = np.concatenate(cluster_Z)
-
-# Create ASE Atoms object for cluster
-cluster_atoms = Atoms(cluster_Z, cluster_positions)
-# Store atom names as array info (for later use in PDB writing)
-cluster_atoms.arrays['atom_names'] = np.array(cluster_atom_names)
-print(f"✓ Generated cluster of {n_cluster_molecules} molecules")
+print(f"✓ Loaded cluster of {n_cluster_molecules} molecules")
 print(f"  Total atoms: {len(cluster_atoms)}")
 print(f"  Cluster dimensions: {np.max(cluster_positions, axis=0) - np.min(cluster_positions, axis=0)}")
 
-# Save cluster structure
-cluster_output_file = Path("cluster_10molecules.xyz")
+# Save cluster structure (for reference)
+cluster_output_file = Path("cluster_50molecules.xyz")
 ase.io.write(str(cluster_output_file), cluster_atoms)
 print(f"  Saved cluster structure to: {cluster_output_file}")
 
@@ -402,6 +345,35 @@ nbonds atom cutnb 14.0  ctofnb 12.0 ctonnb 10.0 -
 vswitch NBXMOD 3 -
 inbfrq -1 imgfrq -1
 """
+
+        print("Running energy minimization to check PyCHARMM initialization...")
+
+        XYZ = coor.get_positions()
+        print(f"XYZ: {XYZ}")
+        print(f"XYZ shape: {XYZ.shape}")
+        print(f"XYZ[:10]: {XYZ[:10]}")
+        print(f"XYZ[-10:]: {XYZ[-10:]}")
+        print(f"XYZ min: {np.min(XYZ)}")
+        print(f"XYZ max: {np.max(XYZ)}")
+        print(f"XYZ mean: {np.mean(XYZ)}")
+        print(f"XYZ std: {np.std(XYZ)}")
+        # set XYZ to random positions
+        XYZ = np.random.random(XYZ.shape)
+        XYZ = pd.DataFrame(XYZ, columns=["x", "y", "z"])
+        coor.set_positions(XYZ)
+        print(f"XYZ: {XYZ}")
+        print(f"XYZ shape: {XYZ.shape}")
+        print(f"XYZ[:10]: {XYZ[:10]}")
+        print(f"XYZ[-10:]: {XYZ[-10:]}")
+        print(f"XYZ min: {np.min(XYZ)}")
+        print(f"XYZ max: {np.max(XYZ)}")
+
+        pycharmm.minimize.run_abnr(nstep=10000, tolenr=1e-6, tolgrd=1e-6)
+        pycharmm.lingo.charmm_script("ENER")
+        pycharmm.energy.show()
+        print("Energy minimization completed")
+        XYZ = coor.get_positions()
+        cluster_atoms.set_positions(XYZ)
         pycharmm.lingo.charmm_script(nbonds)
         pycharmm_quiet()
         print("  ✓ PyCHARMM non-bonded parameters set for cluster")
@@ -417,152 +389,62 @@ inbfrq -1 imgfrq -1
         print(f"     IAC codes: {len(pycharmm_iac)}")
         print(f"     Residue IDs: {len(pycharmm_resids)}")
         
-        # ========================================================================
-        # REORDER ATOMS TO MATCH PYCHARMM ORDERING
-        # ========================================================================
-        print("\n  Reordering cluster atoms to match PyCHARMM ordering...")
+        # # ========================================================================
+        # # REORDER ATOMS TO MATCH PYCHARMM ORDERING
+        # # ========================================================================
+        # print("\n  Reordering cluster atoms to match PyCHARMM ordering...")
         
-        # IMPORTANT: PyCHARMM generates the PSF with atoms in a specific order based on the RTF.
-        # We need to reorder our cluster positions to match PyCHARMM's PSF order.
-        # First, try automatic reordering which tests multiple patterns and finds the best match
-        try:
-            cluster_positions_reordered, cluster_Z_reordered, reorder_indices_auto = reorder_atoms_to_match_pycharmm(
-                R=cluster_positions,
-                Z=cluster_Z,
-                pycharmm_atypes=pycharmm_atypes[:n_atoms_cluster],
-                pycharmm_resids=pycharmm_resids[:n_atoms_cluster],
-                ATOMS_PER_MONOMER=n_atoms_monomer,
-                N_MONOMERS=n_cluster_molecules,
-            )
-            cluster_positions = cluster_positions_reordered
-            cluster_Z = cluster_Z_reordered
-            print(f"  ✓ Automatic reordering found pattern (first 20 indices: {reorder_indices_auto[:20]})")
-            try:
-                inv = np.argsort(reorder_indices_auto)
-                if len(inv) == len(cluster_positions):
-                    ml_reorder_indices = inv
-            except Exception:
-                pass
+        # # IMPORTANT: PyCHARMM generates the PSF with atoms in a specific order based on the RTF.
+        # # We need to reorder our cluster positions to match PyCHARMM's PSF order.
+        # # First, try automatic reordering which tests multiple patterns and finds the best match
+        # try:
+        #     cluster_positions_reordered, cluster_Z_reordered, reorder_indices_auto = reorder_atoms_to_match_pycharmm(
+        #         R=cluster_positions,
+        #         Z=cluster_Z,
+        #         pycharmm_atypes=pycharmm_atypes[:n_atoms_cluster],
+        #         pycharmm_resids=pycharmm_resids[:n_atoms_cluster],
+        #         ATOMS_PER_MONOMER=n_atoms_monomer,
+        #         N_MONOMERS=n_cluster_molecules,
+        #     )
+        #     cluster_positions = cluster_positions_reordered
+        #     cluster_Z = cluster_Z_reordered
+        #     print(f"  ✓ Automatic reordering found pattern (first 20 indices: {reorder_indices_auto[:20]})")
+        #     try:
+        #         inv = np.argsort(reorder_indices_auto)
+        #         if len(inv) == len(cluster_positions):
+        #             ml_reorder_indices = inv
+        #     except Exception:
+        #         pass
             
-        except Exception as e_auto:
-            print(f"  ⚠ Automatic reordering failed, trying manual pattern: {e_auto}")
-            # Fallback to manual pattern from p3_sim_FIXED.py
-            # Pattern for 2 molecules: [3, 0, 1, 2, 7, 8, 9, 4, 5, 6, 13, 10, 11, 12, 17, 18, 19, 14, 15, 16]
-            # Per molecule (10 atoms): [3, 0, 1, 2, 7, 8, 9, 4, 5, 6]
-            monomer_reorder_pattern = [3, 0, 1, 2, 7, 8, 9, 4, 5, 6]
+        # except Exception as e_auto:
+        #     print(f"  ⚠ Automatic reordering failed, trying manual pattern: {e_auto}")
+        #     # Fallback to manual pattern from p3_sim_FIXED.py
+        #     # Pattern for 2 molecules: [3, 0, 1, 2, 7, 8, 9, 4, 5, 6, 13, 10, 11, 12, 17, 18, 19, 14, 15, 16]
+        #     # Per molecule (10 atoms): [3, 0, 1, 2, 7, 8, 9, 4, 5, 6]
+        #     monomer_reorder_pattern = [3, 0, 1, 2, 7, 8, 9, 4, 5, 6]
             
-            # Extend to 10 molecules
-            print(f"  Applying manual reordering pattern per molecule: {monomer_reorder_pattern}")
-            full_reorder_indices = []
-            for mol_idx in range(n_cluster_molecules):
-                mol_start = mol_idx * n_atoms_monomer
-                for atom_idx_in_mol in monomer_reorder_pattern:
-                    full_reorder_indices.append(mol_start + atom_idx_in_mol)
+        #     # Extend to 10 molecules
+        #     print(f"  Applying manual reordering pattern per molecule: {monomer_reorder_pattern}")
+        #     full_reorder_indices = []
+        #     for mol_idx in range(n_cluster_molecules):
+        #         mol_start = mol_idx * n_atoms_monomer
+        #         for atom_idx_in_mol in monomer_reorder_pattern:
+        #             full_reorder_indices.append(mol_start + atom_idx_in_mol)
             
-            print(f"  Full reordering pattern (first 20 indices): {full_reorder_indices[:20]}")
-            print(f"  Full reordering pattern (last 20 indices): {full_reorder_indices[-20:]}")
+        #     print(f"  Full reordering pattern (first 20 indices): {full_reorder_indices[:20]}")
+        #     print(f"  Full reordering pattern (last 20 indices): {full_reorder_indices[-20:]}")
             
-            # Apply reordering
-            cluster_positions = cluster_positions[full_reorder_indices]
-            cluster_Z = cluster_Z[full_reorder_indices]
-            print(f"  ✓ Applied manual reordering pattern")
+        #     # Apply reordering
+        #     cluster_positions = cluster_positions[full_reorder_indices]
+        #     cluster_Z = cluster_Z[full_reorder_indices]
+        #     print(f"  ✓ Applied manual reordering pattern")
             
-            # Update PyCHARMM coordinates
-            coor.set_positions(pd.DataFrame(cluster_positions, columns=["x", "y", "z"]))
+        #     # Update PyCHARMM coordinates
+        #     coor.set_positions(pd.DataFrame(cluster_positions, columns=["x", "y", "z"]))
         
-        # Write PDB file with reordered positions and correct atom names
-        # This ensures the PDB matches PyCHARMM's PSF order
-        print("  Creating PDB file with reordered positions and correct atom names...")
-        temp_pdb_cluster = Path("temp_cluster_for_pycharmm.pdb")
-        
-        # Get PyCHARMM atom names from PSF (this is the canonical order)
-        pycharmm_psf_atom_names = np.array([name.strip() for name in psf.get_atype()])[:n_atoms_cluster]
-        pycharmm_psf_resids = pycharmm_resids[:n_atoms_cluster]
-        
-        # Convert residue IDs to integers (PyCHARMM may return floats or strings)
-        pycharmm_psf_resids_int = []
-        for rid in pycharmm_psf_resids:
-            try:
-                pycharmm_psf_resids_int.append(int(float(rid)))
-            except (ValueError, TypeError):
-                # If conversion fails, use None and we'll infer from position
-                pycharmm_psf_resids_int.append(None)
-        
-        with open(temp_pdb_cluster, 'w') as f:
-            atom_idx = 1
-            residue_idx = 1
-            
-            for i in range(min(len(cluster_positions), len(pycharmm_psf_atom_names))):
-                pos = cluster_positions[i]
-                atom_name = pycharmm_psf_atom_names[i] if i < len(pycharmm_psf_atom_names) else "X"
-                
-                # Get residue ID, converting to int if needed
-                current_resid_raw = pycharmm_psf_resids_int[i] if i < len(pycharmm_psf_resids_int) else None
-                if current_resid_raw is None:
-                    # Infer residue number from atom index (every n_atoms_monomer atoms = new residue)
-                    current_resid = (i // n_atoms_monomer) + 1
-                else:
-                    current_resid = int(current_resid_raw)
-                
-                # Update residue_idx if we moved to a new residue
-                if current_resid != residue_idx:
-                    residue_idx = current_resid
-                
-                # Format atom name to 4 characters (right-aligned)
-                atom_name_formatted = f"{atom_name:>4s}"
-                
-                # Build the line with exact spacing matching: ATOM      1  O1  ACO     1      12.446  -1.494   1.290  1.00  0.00      SYS
-                line = f"ATOM  {atom_idx:5d} {atom_name_formatted}  ACO {residue_idx:4d}    {pos[0]:8.3f}{pos[1]:8.3f}{pos[2]:8.3f}  1.00  0.00      SYS"
-                # Ensure exactly 80 characters
-                line = line.ljust(80)
-                f.write(line + "\n")
-                atom_idx += 1
-        
-        print(f"  ✓ Created PDB file with reordered positions: {temp_pdb_cluster}")
-        
-
-        # # delete everything and start from scratch
-        # pycharmm.lingo.charmm_script("DELETE ATOM SELE ALL END")
-        # pycharmm.lingo.charmm_script("DELETE PSF SELE ALL END")
-        # # load the psf and parameters
-
-
-        # Read coordinates from PDB to verify
-        print("  Reading coordinates from PDB file to verify...")
-        try:
-            pycharmm.lingo.charmm_script(f"""
-OPEN UNIT 1 READ FORM NAME {temp_pdb_cluster}
-READ COOR PDB UNIT 1
-CLOSE UNIT 1
-""")
-            print("  ✓ Coordinates read from PDB file")
-        except Exception as e:
-            print(f"  ⚠ Warning: Could not read PDB file: {e}")
-            # Coordinates are already set from reordering, so continue
-        
-        # Clean up temporary PDB file
-        if temp_pdb_cluster.exists():
-            temp_pdb_cluster.unlink()
-            print("  ✓ Cleaned up temporary PDB file")
-        
-        # CRITICAL: Ensure PyCHARMM coordinates match reordered positions
-        coor.set_positions(pd.DataFrame(cluster_positions[:pycharmm_n_atoms], columns=["x", "y", "z"]))
-        print(f"  ✓ Set PyCHARMM coordinates to reordered positions ({min(pycharmm_n_atoms, n_atoms_cluster)} atoms)")
-        
-        # Update cluster_atoms object with reordered positions
-        cluster_atoms.set_positions(cluster_positions)
-        cluster_atoms.set_atomic_numbers(cluster_Z)
-        print(f"  ✓ Updated cluster_atoms with reordered positions")
-
-        try:
-            inv = np.argsort(full_reorder_indices)
-            if len(inv) == len(cluster_positions):
-                ml_reorder_indices = inv
-        except Exception:
-            pass
-
-        # do an optimization to check the reordering
-        pycharmm.minimize.run_abnr(nstep=10000, tolenr=1e-6, tolgrd=1e-6)
+        # Reordering disabled: keep PDB order as-is
+        print("  Reordering skipped; keeping PDB atom order.")
+        ml_reorder_indices = None
         
         # Verify the reordering worked by checking summed internal energy (no INTE)
         try:
@@ -630,10 +512,7 @@ else:
 
 # Set flag to indicate PyCHARMM status
 if PYCHARMM_AVAILABLE:
-    print("Running energy minimization to check PyCHARMM initialization...")
-    pycharmm.minimize.run_abnr(nstep=10000, tolenr=1e-6, tolgrd=1e-6)
-    pycharmm.lingo.charmm_script("ENER")
-    pycharmm.energy.show()
+
 
     try:
         pycharmm_n_atoms_check = len(psf.get_atype())
@@ -810,7 +689,7 @@ calculator_factory_cluster = setup_calculator(
     doML_dimer=True,
     debug=True,
     model_restart_path=base_ckpt_dir,
-    MAX_ATOMS_PER_SYSTEM=n_atoms_monomer*2,
+    MAX_ATOMS_PER_SYSTEM=n_atoms_monomer,
     # PhysNet model outputs are in kcal/mol; convert to eV
     ml_energy_conversion_factor=0.0433641153087705,
     ml_force_conversion_factor=0.0433641153087705,
