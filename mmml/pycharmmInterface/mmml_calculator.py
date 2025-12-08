@@ -1663,11 +1663,11 @@ def setup_calculator(
         # Get model predictions
         apply_model, batches = get_ML_energy_fn(atomic_numbers, positions, n_dimers+n_monomers)
         output = apply_model(batches["Z"], batches["R"])
-        if True:
-            jax.debug.print("output['forces'] shape: {s}", s=output["forces"].shape)
-            jax.debug.print("output['energy'] shape: {s}", s=output["energy"].shape)
-            jax.debug.print("output['forces'][:30]: {f}", f=output["forces"][:30])
-            jax.debug.print("output['energy'][:30]: {e}", e=output["energy"][:30])
+        # if False:
+        #     jax.debug.print("output['forces'] shape: {s}", s=output["forces"].shape)
+        #     jax.debug.print("output['energy'] shape: {s}", s=output["energy"].shape)
+        #     jax.debug.print("output['forces'][:30]: {f}", f=output["forces"][:30])
+        #     jax.debug.print("output['energy'][:30]: {e}", e=output["energy"][:30])
 
         
         # Convert units
@@ -2221,9 +2221,7 @@ def setup_calculator(
         total_forces = ml_monomer_forces.shape[0]
         atoms_per_system = total_forces // n_monomers
         
-        jax.debug.print("ml_monomer_forces shape: {s}", s=ml_monomer_forces.shape)
-        jax.debug.print("atoms_per_system: {a}", a=atoms_per_system)
-        jax.debug.print("ml_monomer_forces[:30]: {f}", f=ml_monomer_forces[:30])
+        # Debug prints disabled to reduce verbosity
         
         # Reshape to (n_monomers, atoms_per_system, 3)
         # Forces from model are in batch order: [batch0_atom0, batch0_atom1, ..., batch0_atomN, batch1_atom0, ...]
@@ -2288,10 +2286,7 @@ def setup_calculator(
         # The batch is padded to max_atoms per system
         max_atoms = max(ATOMS_PER_MONOMER, 2 * ATOMS_PER_MONOMER)
         monomer_atoms = n_monomers * max_atoms
-        # # Debug prints (use jax.debug.print, not regular print inside JIT)
-        # jax.debug.print("Debug dimer forces: f.shape={s}, monomer_atoms={m}, max_atoms={a}, ml_dimer_forces shape: {d}",
-        # s=f.shape, m=monomer_atoms, a=max_atoms, d=f[monomer_atoms:].shape,
-        # ordered=False)
+
         ml_dimer_forces = f[monomer_atoms:]
         
         # Calculate force segments for dimers
@@ -2307,25 +2302,11 @@ def setup_calculator(
         dimer_forces = process_dimer_forces(
             ml_dimer_forces, force_segments, n_dimers, debug
         )
-        # Debug block removed (previous prints caused JAX concretization issues)
-        
-        # # Debug: Check if dimer forces are non-zero (jax.debug.print handles conditional execution)
-        # jax.debug.print("process_dimer_forces output - shape[0]: {s0}, shape[1]: {s1}, max abs: {m}, norm: {n}",
-        # s0=dimer_forces.shape[0],
-        # s1=dimer_forces.shape[1],
-        # m=jnp.max(jnp.abs(dimer_forces)),
-        # n=jnp.linalg.norm(dimer_forces),
-        # ordered=False)
+
         # Check how many atoms have non-zero forces
         force_magnitudes = jnp.linalg.norm(dimer_forces, axis=1)
         non_zero_count = jnp.sum(force_magnitudes > 1e-10)
-        # jax.debug.print("Dimer forces non-zero atoms: {c} / {t}", c=non_zero_count, t=dimer_forces.shape[0], ordered=False)
-        # jax.debug.print("Dimer int energies - min: {m}, max: {M}, mean: {a}",
-        # m=jnp.min(dimer_int_energies),
-        # M=jnp.max(dimer_int_energies),
-        # a=jnp.mean(dimer_int_energies),
-        # ordered=False)
-        
+
         # Apply switching functions
         switched_results = apply_dimer_switching(
             positions, dimer_int_energies, dimer_forces, cutoff_params, max_atoms, debug
