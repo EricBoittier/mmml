@@ -1077,7 +1077,7 @@ def setup_calculator(
             switched_energy = apply_switching_function(positions, pair_energies)
             
             # Calculate forces with switching
-            forces = -(mm_energy_grad(positions) + 
+            forces = (-mm_energy_grad(positions) + 
                     switching_grad(positions, pair_energies))
             
             # Check for NaN/Inf in forces and replace with zeros
