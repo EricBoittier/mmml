@@ -647,126 +647,6 @@ def _sharpstep(r, x0, x1, gamma=3.0):
     return _smoothstep01(s)
 
 
-class CutoffParameters:
-    """Parameters for ML and MM cutoffs and switching functions"""
-    def __init__(
-        self,
-        ml_cutoff: float = 2.0,
-        mm_switch_on: float = 5.0,
-        mm_cutoff: float = 1.0
-    ):
-        """
-        Args:
-            ml_cutoff: Distance where ML potential is cut off
-            mm_switch_on: Distance where MM potential starts switching on
-            mm_cutoff: Final cutoff for MM potential
-        """
-        self.ml_cutoff =  ml_cutoff 
-        self.mm_switch_on = mm_switch_on
-        self.mm_cutoff = mm_cutoff
-
-
-    def __str__(self):
-        return f"CutoffParameters(ml_cutoff={self.ml_cutoff}, mm_switch_on={self.mm_switch_on}, mm_cutoff={self.mm_cutoff})"
-    
-    def __repr__(self):
-        return self.__str__()
-
-    def __eq__(self, other):
-        if not isinstance(other, CutoffParameters):
-            return False
-        # Convert to floats for comparison (handles JAX arrays)
-        ml_cutoff_self = float(self.ml_cutoff) if hasattr(self.ml_cutoff, '__float__') else self.ml_cutoff
-        mm_switch_on_self = float(self.mm_switch_on) if hasattr(self.mm_switch_on, '__float__') else self.mm_switch_on
-        mm_cutoff_self = float(self.mm_cutoff) if hasattr(self.mm_cutoff, '__float__') else self.mm_cutoff
-        ml_cutoff_other = float(other.ml_cutoff) if hasattr(other.ml_cutoff, '__float__') else other.ml_cutoff
-        mm_switch_on_other = float(other.mm_switch_on) if hasattr(other.mm_switch_on, '__float__') else other.mm_switch_on
-        mm_cutoff_other = float(other.mm_cutoff) if hasattr(other.mm_cutoff, '__float__') else other.mm_cutoff
-        return (ml_cutoff_self == ml_cutoff_other and 
-                mm_switch_on_self == mm_switch_on_other and 
-                mm_cutoff_self == mm_cutoff_other)
-    
-    def __ne__(self, other):
-        return not self.__eq__(other)
-    
-    def __hash__(self):
-        # Convert to Python floats if they're JAX arrays (for hashability)
-        ml_cutoff_val = float(self.ml_cutoff) if hasattr(self.ml_cutoff, '__float__') else self.ml_cutoff
-        mm_switch_on_val = float(self.mm_switch_on) if hasattr(self.mm_switch_on, '__float__') else self.mm_switch_on
-        mm_cutoff_val = float(self.mm_cutoff) if hasattr(self.mm_cutoff, '__float__') else self.mm_cutoff
-        return hash((ml_cutoff_val, mm_switch_on_val, mm_cutoff_val))
-
-    def to_dict(self):
-        return {
-            "ml_cutoff": self.ml_cutoff,
-            "mm_switch_on": self.mm_switch_on,
-            "mm_cutoff": self.mm_cutoff
-        }
-    
-    def from_dict(self, d):
-        return CutoffParameters(
-            ml_cutoff=d["ml_cutoff"],
-            mm_switch_on=d["mm_switch_on"],
-            mm_cutoff=d["mm_cutoff"]
-        )
-
-    def plot_cutoff_parameters(self, save_dir: Path | None = None):
-        import numpy as np
-        import matplotlib.pyplot as plt
-
-        ml_cutoff = float(self.ml_cutoff)
-        mm_switch_on = float(self.mm_switch_on)
-        mm_cutoff = float(self.mm_cutoff)
-
-        r_max = float(max(ml_cutoff, mm_switch_on + 2.0 * mm_cutoff) * 1.5 + 2.0)
-        r = np.linspace(0.01, r_max, 600)
-
-        def _np_smoothstep01(s): return s * s * (3.0 - 2.0 * s)
-        def _np_sharpstep(r, x0, x1, gamma=3.0):
-            s = np.clip((r - x0) / max(x1 - x0, 1e-12), 0.0, 1.0)
-            s = s ** gamma
-            return _np_smoothstep01(s)
-
-        gamma_ml = 5.0     # your steeper ML taper
-        gamma_on = 0.001    # faster MM turn-on
-        gamma_off = 3.0    # smooth MM turn-off
-
-        ml_scale = 1.0 - _np_sharpstep(r, mm_switch_on - ml_cutoff, mm_switch_on, gamma=gamma_ml)
-        mm_on    = _np_sharpstep(r, mm_switch_on, mm_switch_on + mm_cutoff, gamma=gamma_on)
-        mm_off   = _np_sharpstep(r, mm_switch_on + mm_cutoff, mm_switch_on + 2.0 * mm_cutoff, gamma=gamma_off)
-        mm_scale = mm_on * (1.0 - mm_off)
-
-
-        fig, ax = plt.subplots(1, 1, figsize=(8, 5))
-        ax.plot(r, ml_scale, label="ML scale", lw=2, color="C0")
-        ax.plot(r, mm_scale, label="MM scale", lw=2, color="C1")
-        ax.plot(r, ml_scale + mm_scale, "--", lw=1, color="gray", alpha=0.7, label="ML+MM")
-
-        # ax.axvline(taper_start, color="C0", linestyle="--", lw=1, alpha=0.7, label=f"ML start {taper_start:.2f} Å")
-        ax.axvline(mm_switch_on, color="k", linestyle=":", lw=1.5, label=f"handoff {mm_switch_on:.2f} Å")
-        ax.axvline(mm_switch_on + mm_cutoff, color="C1", linestyle="--", lw=1, alpha=0.7, label=f"MM full-on {mm_switch_on + mm_cutoff:.2f} Å")
-        ax.axvline(mm_switch_on + 2.0 * mm_cutoff, color="C1", linestyle="-.", lw=1, alpha=0.7, label=f"MM off {mm_switch_on + 2.0 * mm_cutoff:.2f} Å")
-
-        ax.set_xlabel("COM distance r (Å)")
-        ax.set_ylabel("Scale factor")
-        ax.set_ylim(-0.05, 1.15)
-        ax.set_title(f"ML/MM Handoff (force-switched MM) | ml={ml_cutoff:.2f}, mm_on={mm_switch_on:.2f}, mm_cut={mm_cutoff:.2f}")
-        ax.legend(loc="best")
-        ax.grid(alpha=0.3)
-
-        fig.tight_layout()
-        out_dir = save_dir if save_dir is not None else Path.cwd()
-        out_dir.mkdir(parents=True, exist_ok=True)
-        out_path = out_dir / f"cutoffs_schematic_{self.ml_cutoff:.2f}_{self.mm_switch_on:.2f}_{self.mm_cutoff:.2f}.png"
-        fig.savefig(out_path, dpi=150)
-        try:
-            plt.show()
-        except Exception:
-            pass
-        print(f"Saved cutoff schematic to {out_path}")
-
-
-
 def _smoothstep01(s):
     return s * s * (3.0 - 2.0 * s)
 
@@ -775,6 +655,8 @@ def _sharpstep(r, x0, x1, gamma=5.0):
     s = s ** gamma
     return _smoothstep01(s)
 
+
+from mmml.pycharmmInterface.cutoffs import CutoffParameters
 
 class ModelOutput(NamedTuple):
     energy: Array  # Shape: (,), total energy in kcal/mol
@@ -968,12 +850,16 @@ def setup_calculator(
         mm_switch_on=5.0,
         ATOMS_PER_MONOMER=ATOMS_PER_MONOMER,
     ):
-        com1 = X[:ATOMS_PER_MONOMER].T.mean(axis=1)
-        com2 = X[ATOMS_PER_MONOMER:2*ATOMS_PER_MONOMER].T.mean(axis=1)
+        # per atom coordinates rather than CoM
+        com1 = X[:ATOMS_PER_MONOMER].T
+        com2 = X[ATOMS_PER_MONOMER:2*ATOMS_PER_MONOMER].T
+        
+
         r = jnp.linalg.norm(com1 - com2)
 
         # ML: 1 -> 0 over [mm_switch_on - ml_cutoff, mm_switch_on]
         ml_scale = 1.0 - _sharpstep(r, mm_switch_on - ml_cutoff, mm_switch_on, gamma=5.0)
+      
         return ml_scale * ml_energy
 
     switch_ML_grad = jax.grad(switch_ML)
@@ -1126,10 +1012,16 @@ def setup_calculator(
                 com2 = positions[ATOMS_PER_MONOMER:2*ATOMS_PER_MONOMER].mean(axis=0)
                 r = jnp.linalg.norm(com1 - com2)
 
-                # MM: 0->1 over [mm_on, mm_on+mm_cut], then 1->0 over [mm_on+mm_cut, mm_on+2*mm_cut]
-                mm_on = _sharpstep(r, mm_switch_on, mm_switch_on + mm_cutoff, gamma=5.0)
-                mm_off = _sharpstep(r, mm_switch_on + mm_cutoff*1.1, mm_switch_on + mm_cutoff, gamma=5.0)
+                # MM: 0→1 over [mm_on, mm_on+mm_cut], then 1→0 over [mm_on+mm_cut, mm_on+2*mm_cut]
+                # Match cutoffs.py plotting (gamma_on=0.001, gamma_off=3.0, symmetric window)
+                mm_on = _sharpstep(r, mm_switch_on, mm_switch_on + mm_cutoff, gamma=0.001)
+                mm_off = _sharpstep(r, mm_switch_on + mm_cutoff, mm_switch_on + 2.0 * mm_cutoff, gamma=3.0)
                 mm_scale = mm_on * (1.0 - mm_off)
+                # also turn MM on by default at short distances
+                # TODO: add this to the cutoff parameters
+                r_rep = 0.1
+                mm_scale = mm_scale + (1.0 - _sharpstep(r, 0.0, r_rep, gamma=1.0))
+
 
                 return (pair_energies * mm_scale).sum()
                 
@@ -1346,119 +1238,22 @@ def setup_calculator(
                     if "ml_2b_F" in ml_out:
                         ml_2b_F = ml_2b_F[:n_atoms]
             
-            # # Debug prints (jax.debug.print handles conditional execution)
-            # jax.debug.print("ML forces shape: {s}, n_atoms: {n}, expected: {e}",
-            # s=ml_forces.shape, n=n_atoms, e=expected_n_ml_atoms,
-            # ordered=False)
-            # jax.debug.print("ML forces norm before adding: {n}", n=jnp.linalg.norm(ml_forces), ordered=False)
-            # jax.debug.print("ML forces non-zero count: {c}", c=jnp.sum(jnp.any(jnp.abs(ml_forces) > 1e-10, axis=1)), ordered=False)
-            # Check for NaN after all processing
+
             nan_count = jnp.sum(~jnp.isfinite(ml_forces))
-            # jax.debug.print("ML forces NaN check after cleaning: {n}", n=nan_count, ordered=False)
-            
-            # CRITICAL FIX: Forces from calculate_ml_contributions are ALREADY correctly ordered
-            # (atoms 0, 1, 2, ..., n_atoms-1), so we should ADD them directly, not remap them
-            # But we must ensure exact shape match to avoid broadcasting issues that could produce NaN
-            # Final shape check - shapes MUST match exactly
-            if ml_forces.shape[0] != outputs["out_F"].shape[0]:
-                # jax.debug.print("CRITICAL ERROR: Shape mismatch in final addition! ml_forces: {m}, out_F: {o}, n_atoms: {n}",
-                # m=ml_forces.shape[0], o=outputs["out_F"].shape[0], n=n_atoms,
-                # ordered=False)
-                # If shapes don't match, pad or truncate to n_atoms (not min_size, as that could cut off atoms)
-                if ml_forces.shape[0] < n_atoms:
-                    # Pad ml_forces to match n_atoms
-                    padding = jnp.zeros((n_atoms - ml_forces.shape[0], 3))
-                    ml_forces = jnp.concatenate([ml_forces, padding], axis=0)
-                    ml_internal_F = jnp.concatenate([ml_internal_F, padding], axis=0)
-                elif ml_forces.shape[0] > n_atoms:
-                    # Truncate ml_forces to match n_atoms (shouldn't happen, but handle it)
-                    # jax.debug.print("WARNING: ml_forces has MORE atoms than n_atoms! Truncating.", ordered=False)
-                    ml_forces = ml_forces[:n_atoms]
-                    ml_internal_F = ml_internal_F[:n_atoms]
-                # Ensure outputs["out_F"] also matches n_atoms
-                if outputs["out_F"].shape[0] < n_atoms:
-                    padding = jnp.zeros((n_atoms - outputs["out_F"].shape[0], 3))
-                    outputs["out_F"] = jnp.concatenate([outputs["out_F"], padding], axis=0)
-                    outputs["internal_F"] = jnp.concatenate([outputs["internal_F"], padding], axis=0)
-                elif outputs["out_F"].shape[0] > n_atoms:
-                    outputs["out_F"] = outputs["out_F"][:n_atoms]
-                    outputs["internal_F"] = outputs["internal_F"][:n_atoms]
-                # Now they should match - add them
-                outputs["out_F"] = outputs["out_F"] + ml_forces
-                outputs["internal_F"] = outputs["internal_F"] + ml_internal_F
-            else:
-                outputs["out_F"] = outputs["out_F"] + ml_forces
-                outputs["internal_F"] = outputs["internal_F"] + ml_internal_F
+           
+            outputs["out_F"] = outputs["out_F"] + ml_forces
+            outputs["internal_F"] = outputs["internal_F"] + ml_internal_F
             
             # Final verification: check for any atoms that have zero forces when they shouldn't
             # (This is a debug check - not for fixing, just for warning)
             force_magnitudes = jnp.linalg.norm(outputs["out_F"], axis=1)
             near_zero_atoms = jnp.sum(force_magnitudes < 1e-8)
-            # jax.debug.print("Final force check - atoms with near-zero forces (magnitude < 1e-8): {z}/{t}",
-            # z=near_zero_atoms, t=outputs["out_F"].shape[0],
-            # ordered=False)
-            # Check specific atoms 3 and 7 for debugging
-            if outputs["out_F"].shape[0] > 7:
-                atom_3_force = force_magnitudes[3]
-                atom_7_force = force_magnitudes[7]
-                # jax.debug.print("Atom 3 force magnitude: {f3}, Atom 7 force magnitude: {f7}",
-                # f3=atom_3_force, f7=atom_7_force,
-                # ordered=False)
-                # Check if ml_forces has forces for these atoms
-                if ml_forces.shape[0] > 7:
-                    ml_atom_3 = jnp.linalg.norm(ml_forces[3])
-                    ml_atom_7 = jnp.linalg.norm(ml_forces[7])
-                    # jax.debug.print("ML forces - Atom 3: {f3}, Atom 7: {f7}",
-                    # f3=ml_atom_3, f7=ml_atom_7,
-                    # ordered=False)
+
             
-            # ml_2b_F is stored separately for analysis but is already included in ml_forces
+            # # ml_2b_F is stored separately for analysis but is already included in ml_forces
             if "ml_2b_F" in ml_out:
                 outputs["ml_2b_F"] = outputs["ml_2b_F"] + ml_2b_F
-            
-            # # Debug prints (jax.debug.print handles conditional execution)
-            atom_force_magnitudes = jnp.linalg.norm(outputs["out_F"], axis=1)
-            # jax.debug.print("After adding ML forces - force magnitudes (first 10 atoms): {f}", 
-            # f=atom_force_magnitudes[:10],
-            # ordered=False)
-            # jax.debug.print("After adding ML forces - min force mag: {min}, max: {max}, mean: {mean}",
-            # min=jnp.min(atom_force_magnitudes),
-            # max=jnp.max(atom_force_magnitudes),
-            # mean=jnp.mean(atom_force_magnitudes),
-            # ordered=False)
-            # jax.debug.print("ML forces norm after adding to outputs: {n}", n=jnp.linalg.norm(outputs["out_F"]), ordered=False)
-            # jax.debug.print("outputs out_F non-zero count: {c}", c=jnp.sum(jnp.any(jnp.abs(outputs["out_F"]) > 1e-10, axis=1)), ordered=False)
-            # Check specific atoms that might be problematic
-            if outputs["out_F"].shape[0] > 7:
-                # Count zero forces (can't use jnp.where(...)[0] inside JIT)
-                zero_force_count = jnp.sum(atom_force_magnitudes < 1e-10)
-                # jax.debug.print("Atoms with zero forces (magnitude < 1e-10): count={c}", 
-                # c=zero_force_count,
-                # ordered=False)
-                # Check atoms 3 and 7 specifically
-                atom_3_mag = atom_force_magnitudes[3]
-                atom_7_mag = atom_force_magnitudes[7]
-                atom_3_force = outputs["out_F"][3]
-                atom_7_force = outputs["out_F"][7]
-                # jax.debug.print("Atom 3: mag={m}, force=[{fx}, {fy}, {fz}]",
-                # m=atom_3_mag, fx=atom_3_force[0], fy=atom_3_force[1], fz=atom_3_force[2],
-                # ordered=False)
-                # jax.debug.print("Atom 7: mag={m}, force=[{fx}, {fy}, {fz}]",
-                # m=atom_7_mag, fx=atom_7_force[0], fy=atom_7_force[1], fz=atom_7_force[2],
-                # ordered=False)
-                # Check if ml_forces has forces for these atoms
-                if ml_forces.shape[0] > 7:
-                    ml_atom_3 = jnp.linalg.norm(ml_forces[3])
-                    ml_atom_7 = jnp.linalg.norm(ml_forces[7])
-                    ml_atom_3_force = ml_forces[3]
-                    ml_atom_7_force = ml_forces[7]
-                    # jax.debug.print("ML forces - Atom 3: mag={m}, force=[{fx}, {fy}, {fz}]",
-                    # m=ml_atom_3, fx=ml_atom_3_force[0], fy=ml_atom_3_force[1], fz=ml_atom_3_force[2],
-                    # ordered=False)
-                    # jax.debug.print("ML forces - Atom 7: mag={m}, force=[{fx}, {fy}, {fz}]",
-                    # m=ml_atom_7, fx=ml_atom_7_force[0], fy=ml_atom_7_force[1], fz=ml_atom_7_force[2],
-                    # ordered=False)
-            
+                   
             # Update energy terms (these are scalars, so no shape issue)
             outputs["out_E"] = ml_out.get("out_E", 0)
             outputs["dH"] = ml_out.get("dH", 0)
@@ -1507,18 +1302,8 @@ def setup_calculator(
         # Debug: Check which specific atoms have zero forces BEFORE final NaN check
         final_force_mags_before = jnp.linalg.norm(final_forces, axis=1)
         zero_count_before = jnp.sum(final_force_mags_before < 1e-10)
-        # jax.debug.print("Final forces BEFORE NaN check - zero-force atoms: {z}/{t}",
-        # z=zero_count_before, t=n_atoms,
-        # ordered=False)
-        if final_forces.shape[0] > 7:
-            # jax.debug.print("Final forces BEFORE NaN check - atom 3 mag: {a3}, atom 7: {a7}",
-            # a3=final_force_mags_before[3], a7=final_force_mags_before[7],
-            # ordered=False)
-            # Check which atoms have zero forces (count only, can't get indices inside JIT)
-            zero_mask = final_force_mags_before < 1e-10
-            # jax.debug.print("Zero-force atoms mask - atom 3: {m3}, atom 7: {m7}",
-            # m3=zero_mask[3], m7=zero_mask[7],
-            # ordered=False)
+
+
         
         final_forces = jnp.where(jnp.isfinite(final_forces), final_forces, 0.0)
         
@@ -1843,7 +1628,7 @@ def setup_calculator(
             mm_grad_shape=mm_grad.shape,
             n_atoms=n_atoms
         )
-        kcal2ev = 1/23.0605
+        kcal2ev = 1 /  627.51 #
         return {
             "out_E": mm_E * kcal2ev,
             "out_F": mm_grad * kcal2ev,
@@ -1910,7 +1695,6 @@ def setup_calculator(
                 Z = atoms.get_atomic_numbers()
 
                 out = {}
-                used_fallback = False  # Track if we used fallback path
                 
                 if not self.backprop:
                     # Apply PBC mapping before JAX computation if needed
@@ -1928,13 +1712,6 @@ def setup_calculator(
 
                     E = out.energy  # Energy from calculator (negative, binding energy convention)
                     F = out.forces
-                    
-                    # Debug: Check forces from ModelOutput before any processing
-                    if self.debug:
-                        F_mags = jnp.linalg.norm(F, axis=1)
-                        print(f"Non-backprop path - F from out.forces: shape={F.shape}")
-                        print(f"Non-backprop path - atom 3 force mag: {float(F_mags[3]):.6e}, atom 7: {float(F_mags[7]):.6e}")
-                        print(f"Non-backprop path - atom 3 force: {np.asarray(F[3])}, atom 7: {np.asarray(F[7])}")
                     
                     # Ensure forces from ModelOutput are finite
                     F = jnp.where(jnp.isfinite(F), F, 0.0)
@@ -1968,16 +1745,7 @@ def setup_calculator(
                     # For energy, we can still use autodiff if needed, but for now use directly
                     # The energy from ModelOutput is already correct
                     E = out.energy
-                    
-                    if self.debug:
-                        F_mags = jnp.linalg.norm(F, axis=1)
-                        print(f"Backprop path (optimized) - Using forces directly from ModelOutput")
-                        print(f"Backprop path - F from out.forces: shape={F.shape}")
-                        print(f"Backprop path - atom 3 force mag: {float(F_mags[3]):.6e}, atom 7: {float(F_mags[7]):.6e}")
-                        print(f"Backprop path - atom 3 force: {np.asarray(F[3])}, atom 7: {np.asarray(F[7])}")
-                        nan_count = jnp.sum(~jnp.isfinite(F))
-                        print(f"Backprop path - NaN/Inf count in F: {int(nan_count)}/{F.size}")
-                    
+
                     # Ensure forces are finite
                     E = jnp.where(jnp.isfinite(E), E, 0.0)
                     F = jnp.where(jnp.isfinite(F), F, 0.0)
@@ -2328,12 +2096,7 @@ def setup_calculator(
     def calculate_dimer_force_segments(n_dimers: int) -> Array:
         """Calculate force segments for dimer force summation."""
         dimer_pairs = jnp.array(dimer_perms)
-        
-        # # Debug prints (jax.debug.print only executes when debug=True)
-        # jax.debug.print("calculate_dimer_force_segments - dimer_pairs: {p}, n_dimers: {n}",
-        # p=dimer_pairs, n=n_dimers,
-        # ordered=False)
-        
+
         # Calculate base indices for each monomer
         # Note: dimer_pairs uses 0-indexed monomer indices (0, 1)
         first_indices = ATOMS_PER_MONOMER * dimer_pairs[:, 0:1]
@@ -2349,18 +2112,7 @@ def setup_calculator(
         ], axis=1)
         
         force_segments_flat = force_segments.reshape(-1)
-        
-        # if debug:
-        #     # jax.debug.print("Force segments shape: {s}",
-        #     # s=force_segments_flat.shape)
-        #     # Print first 10 values using static slice (safe since we have at least 1 dimer = 20 elements)
-        #     # jax.debug.print("Force segments first 10: {v}",
-        #     # v=force_segments_flat[:10])
-        #     # jax.debug.print("Force segments min: {min}, max: {max}, expected range: [0, {e})",
-        #     #                min=jnp.min(force_segments_flat),
-        #     #                max=jnp.max(force_segments_flat),
-        #     #                e=n_monomers * ATOMS_PER_MONOMER)
-        
+
         return force_segments_flat
 
     def calculate_monomer_contribution_to_dimers(
@@ -2379,6 +2131,7 @@ def setup_calculator(
     ) -> Array:
         """Process and reshape dimer forces."""
         forces = dimer_forces.reshape(n_dimers, 2 * ATOMS_PER_MONOMER, 3)
+
         forces_flat = forces.reshape(-1, 3)
         
         # Check for NaN in input forces

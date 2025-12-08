@@ -368,7 +368,7 @@ inbfrq -1 imgfrq -1
         print(f"XYZ min: {np.min(XYZ)}")
         print(f"XYZ max: {np.max(XYZ)}")
 
-        pycharmm.minimize.run_abnr(nstep=10000, tolenr=1e-6, tolgrd=1e-6)
+        pycharmm.minimize.run_abnr(nstep=1000, tolenr=1e-6, tolgrd=1e-6)
         pycharmm.lingo.charmm_script("ENER")
         pycharmm.energy.show()
         print("Energy minimization completed")
@@ -689,11 +689,7 @@ calculator_factory_cluster = setup_calculator(
     doML_dimer=True,
     debug=True,
     model_restart_path=base_ckpt_dir,
-    MAX_ATOMS_PER_SYSTEM=n_atoms_monomer,
-    # PhysNet model outputs are in kcal/mol; convert to eV
-    ml_energy_conversion_factor=0.0433641153087705,
-    ml_force_conversion_factor=0.0433641153087705,
-    # ml_reorder_indices=ml_reorder_indices,
+    MAX_ATOMS_PER_SYSTEM=n_atoms_monomer * 2,
     cell=None,  # No PBC
     ep_scale=np.array(full_ep_scale_cluster),
     sig_scale=np.array(full_sig_scale_cluster),
@@ -739,12 +735,11 @@ try:
         n_monomers=n_cluster_molecules,
         cutoff_params=cutoff_params,
         doML=True,
-        doMM=doMM_for_calc,  # Only enable MM if PyCHARMM is ready
+        doMM=True,  # Only enable MM if PyCHARMM is ready
         doML_dimer=True,
         backprop=True,
         debug=False,
-    energy_conversion_factor=0.0433641153087705,
-    force_conversion_factor=0.0433641153087705,
+
     )
     
     cluster_atoms.calc = calc
@@ -808,10 +803,7 @@ except Exception as e:
             doML_dimer=True,
             debug=False,
             model_restart_path=base_ckpt_dir,
-            MAX_ATOMS_PER_SYSTEM=n_atoms_cluster,
-            ml_energy_conversion_factor=0.0433641153087705,
-            ml_force_conversion_factor=0.0433641153087705,
-            ml_reorder_indices=ml_reorder_indices,
+            MAX_ATOMS_PER_SYSTEM=n_atoms_cluster*2,
             cell=None,
             at_codes_override=at_codes_for_calc,
         )
@@ -826,8 +818,6 @@ except Exception as e:
             doML_dimer=True,
             backprop=True,
             debug=False,
-            energy_conversion_factor=0.0433641153087705,
-            force_conversion_factor=0.0433641153087705,
         )
         
         cluster_atoms.calc = calc_ml_only
