@@ -800,7 +800,7 @@ def setup_calculator(
     ep_scale = None,
     sig_scale = None,
     model_restart_path = None,
-    MAX_ATOMS_PER_SYSTEM = 100,
+    MAX_ATOMS_PER_SYSTEM: int = 20,
     ml_energy_conversion_factor: float = 1.0,
     ml_force_conversion_factor: float = 1.0,
     cell = False,
@@ -1663,6 +1663,12 @@ def setup_calculator(
         # Get model predictions
         apply_model, batches = get_ML_energy_fn(atomic_numbers, positions, n_dimers+n_monomers)
         output = apply_model(batches["Z"], batches["R"])
+        if True:
+            jax.debug.print("output['forces'] shape: {s}", s=output["forces"].shape)
+            jax.debug.print("output['energy'] shape: {s}", s=output["energy"].shape)
+            jax.debug.print("output['forces'][:30]: {f}", f=output["forces"][:30])
+            jax.debug.print("output['energy'][:30]: {e}", e=output["energy"][:30])
+
         
         # Convert units
         # Note: If model outputs in eV/Å and we want eV/Å, conversion_factor should be 1
@@ -2206,7 +2212,6 @@ def setup_calculator(
         Returns:
             Array: Processed monomer forces
         """
-        debug = True
         # Determine n_monomers from segment indices length
         n_monomers = monomer_segment_idxs.shape[0] // atoms_per_monomer
         
@@ -2225,10 +2230,6 @@ def setup_calculator(
         # where each batch item has atoms_per_system atoms (padded to max_atoms for dimers)
         monomer_forces = ml_monomer_forces.reshape(n_monomers, atoms_per_system, 3)
         
-        jax.debug.print("monomer_forces shape: {s}", s=monomer_forces.shape)
-        jax.debug.print("monomer_forces[0, :10]: {f}", f=monomer_forces[0, :10])
-        jax.debug.print("monomer_forces[1, :10]: {f}", f=monomer_forces[1, :10])
-        
         # Take only first atoms_per_monomer atoms per monomer (discard any padding beyond ATOMS_PER_MONOMER)
         # Result shape: (n_monomers, atoms_per_monomer, 3)
         monomer_forces_valid = monomer_forces[:, :atoms_per_monomer, :]
@@ -2236,17 +2237,12 @@ def setup_calculator(
         # Flatten to (n_monomers * atoms_per_monomer, 3) for segment_sum
         # This gives forces in batch order: [batch0_atom0...batch0_atom9, batch1_atom0...batch1_atom9, ...]
         forces_flat = monomer_forces_valid.reshape(-1, 3)
-        jax.debug.print("forces_flat shape: {s}", s=forces_flat.shape)
-        jax.debug.print("monomer_segment_idxs shape: {s}", s=monomer_segment_idxs.shape)
-        jax.debug.print("n_monomers: {n}", n=n_monomers)
-        jax.debug.print("atoms_per_monomer: {a}", a=atoms_per_monomer)
-        jax.debug.print("forces_flat: {f}", f=forces_flat)
-        jax.debug.print("monomer_segment_idxs: {m}", m=monomer_segment_idxs)
-        jax.debug.print("num_segments: {n}", n=n_monomers * atoms_per_monomer)
         
-        # Use segment_sum to map batch-ordered forces to system atom positions
-        # monomer_segment_idxs maps: batch0_atom0 -> system_atom0, batch0_atom1 -> system_atom1, etc.
-        # This ensures forces are correctly assigned to the right atoms in the system
+        # Check if segment_idxs are sequential (in which case segment_sum is a no-op)
+        # If monomer_segment_idxs is [0,1,2,...,9, 10,11,...,19, ...], then segment_sum just copies
+        # Since forces_flat is already in the correct order [batch0_atom0...batch0_atom9, batch1_atom0...batch1_atom9, ...]
+        # and monomer_segment_idxs maps to [0,1,...,9, 10,11,...,19, ...], segment_sum is effectively a no-op
+        # But we still use it for consistency with the general case (non-sequential indices)
         processed_forces = jax.ops.segment_sum(
             forces_flat,
             monomer_segment_idxs,
