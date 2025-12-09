@@ -639,18 +639,11 @@ def get_bounds(x0, scale=0.1):
     for i in range(len(x0)) ]
     return b
 
-def _smoothstep01(s): return s * s * (3.0 - 2.0 * s)
-
-def _sharpstep(r, x0, x1, gamma=3.0):
-    s = jnp.clip((r - x0) / _safe_den(x1 - x0), 0.0, 1.0)
-    s = s ** gamma
-    return _smoothstep01(s)
-
-
 def _smoothstep01(s):
     return s * s * (3.0 - 2.0 * s)
 
-def _sharpstep(r, x0, x1, gamma=5.0):
+
+def _sharpstep(r, x0, x1, gamma=3.0):
     s = jnp.clip((r - x0) / _safe_den(x1 - x0), 0.0, 1.0)
     s = s ** gamma
     return _smoothstep01(s)
@@ -994,8 +987,7 @@ def setup_calculator(
         def coulomb(r, qq, constant = coulombs_constant, eps = coulomb_epsilon):
             # Add epsilon to prevent division by zero (r can be very small for bonded atoms)
             r_safe = jnp.maximum(r, eps)
-            
-            return constant * qq / r_safe
+            return -constant * qq / r_safe
         
 
         def get_switching_function(
