@@ -519,7 +519,7 @@ class EF(nn.Module):
             repulsion = repulsion * atom_mask[..., None, None, None]
             # Guard against NaN/Inf and huge magnitudes to keep grads stable
             repulsion = jnp.nan_to_num(repulsion, nan=0.0, posinf=0.0, neginf=0.0)
-            repulsion = jnp.clip(repulsion, -1.0e4, 1.0e4)
+            repulsion = jnp.clip(repulsion, -1.0e8, 1.0e8)
             if self.debug:
                 jax.debug.print("Repulsion shape: {x}", x=repulsion.shape)
                 jax.debug.print("Repulsion stats min={mn}, max={mx}, mean={mu}",

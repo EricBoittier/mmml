@@ -164,7 +164,7 @@ class ZBLRepulsion(nn.Module):
         # Guard against NaN/Inf early
         atomic_numbers = jnp.nan_to_num(atomic_numbers, nan=1.0, posinf=1.0, neginf=1.0)
         distances = jnp.nan_to_num(distances, nan=1e-6, posinf=1e6, neginf=1e-6)
-        distances = distances / 1.88973 #angstrom to bohr
+        # distances = distances  #angstrom to bohr
         switch_off = jnp.nan_to_num(switch_off, nan=0.0, posinf=0.0, neginf=0.0)
         eshift = jnp.nan_to_num(eshift, nan=0.0, posinf=0.0, neginf=0.0)
         atom_mask = jnp.nan_to_num(atom_mask, nan=0.0, posinf=0.0, neginf=0.0)
@@ -230,4 +230,4 @@ class ZBLRepulsion(nn.Module):
             jax.debug.print("idxj {x} {y}", x=idx_j, y=idx_j.shape)
             jax.debug.print("atom {x} {y}", x=atomic_numbers, y=atomic_numbers.shape)
             jax.debug.print("rep {x} {y}", x=repulsion, y=repulsion.shape)
-        return erep[..., None, None, None] / 27.211386245988  #bohr to eV
+        return erep[..., None, None, None]  #bohr to eV
