@@ -1,0 +1,12 @@
+jobs:
+  job1:
+    data_file: "/path/to/data.npz"
+    checkpoint: "/path/to/checkpoint/epoch-XXXX"
+    n_monomers: 2
+    n_atoms_monomer: 10
+    ml_cutoff: 0.01
+    mm_switch_on: 8.0
+    mm_cutoff: 3.0
+    include_mm: true
+    skip_ml_dimers: false
+

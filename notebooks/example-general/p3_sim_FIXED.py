@@ -101,57 +101,55 @@ import ase.optimize as ase_opt
 from ase.visualize import view as view_atoms
 from ase.visualize.plot import plot_atoms
 
-# ========================================================================
-# SECTION 3: MOCK CLI ARGUMENTS
-# ========================================================================
-# Create a mock args object that mimics CLI arguments
-# This allows the script to follow the same structure as run_sim.py
+def parse_args():
+    parser = argparse.ArgumentParser(description="MM/ML Hybrid Simulation Setup")
+    # Paths
+    parser.add_argument("--data-file", type=Path, required=True, help="Path to NPZ dataset")
+    parser.add_argument("--checkpoint", type=Path, default=None, help="Path to checkpoint epoch directory")
+    parser.add_argument("--ckpt-root", type=Path, default=Path("/pchem-data/meuwly/boittier/home/ckpts"),
+                        help="Root directory containing checkpoint UID folders (used if --checkpoint not set)")
+    parser.add_argument("--uid", type=str, default="eq_acetone-46a8cd1d-880c-427b-8c3f-c206c3b75a19/",
+                        help="Checkpoint UID (used with --ckpt-root)")
 
-class MockArgs:
-    """Mock CLI arguments following run_sim.py structure"""
-    def __init__(self):
-        # Paths
-        self.pdbfile = None  # Will be created from valid_data if needed
-        self.checkpoint = None  # Will be set below (can be Path or str)
+    # System parameters
+    parser.add_argument("--n-monomers", type=int, default=2)
+    parser.add_argument("--n-atoms-monomer", type=int, default=10)
 
-        # System parameters
-        self.n_monomers = 2
-        self.n_atoms_monomer = 10
-        self.atoms_per_monomer = 10  # Alias for compatibility
+    # Calculator parameters
+    parser.add_argument("--ml-cutoff", type=float, default=0.01)
+    parser.add_argument("--mm-switch-on", type=float, default=8.0)
+    parser.add_argument("--mm-cutoff", type=float, default=3.0)
+    parser.add_argument("--include-mm", action="store_true", default=True)
+    parser.add_argument("--skip-ml-dimers", action="store_true", default=False)
+    parser.add_argument("--debug", action="store_true", default=False)
 
-        # Calculator parameters
-        self.ml_cutoff = 0.01
-        self.mm_switch_on = 8.0
-        self.mm_cutoff = 3.0
-        self.include_mm = True
-        self.skip_ml_dimers = False
-        self.debug = False
+    # MD simulation parameters
+    parser.add_argument("--temperature", type=float, default=210.0)
+    parser.add_argument("--timestep", type=float, default=0.1)
+    parser.add_argument("--nsteps-jaxmd", type=int, default=100_000)
+    parser.add_argument("--nsteps-ase", type=int, default=10000)
+    parser.add_argument("--ensemble", type=str, default="nvt")
+    parser.add_argument("--heating-interval", type=int, default=500)
+    parser.add_argument("--write-interval", type=int, default=100)
+    parser.add_argument("--energy-catch", type=float, default=0.5)
 
-        # MD simulation parameters
-        self.temperature = 210.0
-        self.timestep = 0.1
-        self.nsteps_jaxmd = 100_000
-        self.nsteps_ase = 10000
-        self.ensemble = "nvt"
-        self.heating_interval = 500
-        self.write_interval = 100
-        self.energy_catch = 0.5
+    # Output / misc
+    parser.add_argument("--output-prefix", type=str, default="md_simulation")
+    parser.add_argument("--cell", type=float, default=None, help="Cubic box length (Å) for PBC; omit for non-PBC")
+    parser.add_argument("--validate", action="store_true", default=False)
+    return parser.parse_args()
 
-        # Output
-        self.output_prefix = "md_simulation"
-        self.cell = None  # No PBC by default
-
-        # Validation
-        self.validate = False
-
-# Create mock args object
-args = MockArgs()
+# Parse CLI
+args = parse_args()
 
 # System parameters (can be overridden)
 ATOMS_PER_MONOMER = args.n_atoms_monomer
 N_MONOMERS = args.n_monomers
 
-print(f"Mock args created:")
+print("Args parsed:")
+print(f"  data_file: {args.data_file}")
+print(f"  checkpoint: {args.checkpoint}")
+print(f"  uid: {args.uid}")
 print(f"  n_monomers: {args.n_monomers}")
 print(f"  n_atoms_monomer: {args.n_atoms_monomer}")
 print(f"  ml_cutoff: {args.ml_cutoff}")
@@ -167,7 +165,7 @@ print(f"  mm_cutoff: {args.mm_cutoff}")
 data_key = jax.random.PRNGKey(42)
 
 # Data file path
-data_file = "/pchem-data/meuwly/boittier/home/mmml/mmml/data/fixed-acetone-only_MP2_21000.npz"
+data_file = args.data_file
 
 print(f"\nLoading data from: {data_file}")
 
@@ -195,15 +193,12 @@ print(f"Each batch contains {len(valid_batches[0]['R'])} atoms")
 # ========================================================================
 # Load ML model from checkpoint and create calculator factory
 
-uid = "pyhsnetacetone-d38b2d5c-b24d-432b-83b4-801ff726dbde"
-uid = "eq_acetone-a114f328-a678-4999-904a-ef8ff78a7eb1"
-uid = "eq_acetone-46a8cd1d-880c-427b-8c3f-c206c3b75a19/"
+uid = args.uid
 
-SCICORE = Path('/scicore/home/meuwly/boitti0000/')
-SCICORE = Path("/pchem-data/meuwly/boittier/home/ckpts")
-RESTART=str(SCICORE / f"{uid}" / "epoch-4706" )
-
-args.checkpoint = RESTART  # Keep as Path object (resolve_checkpoint_paths handles both str and Path)
+ckpt_root = args.ckpt_root
+if args.checkpoint is None:
+    RESTART = ckpt_root / uid / "epoch-4706"
+    args.checkpoint = RESTART  # Keep as Path object (resolve_checkpoint_paths handles both str and Path)
 
 
 def load_model_parameters_json(epoch_dir, natoms, use_orbax=False):
