@@ -161,8 +161,15 @@ class ZBLRepulsion(nn.Module):
         jnp.ndarray
             Array of repulsion energies per atom
         """
+        # Guard against NaN/Inf early
+        atomic_numbers = jnp.nan_to_num(atomic_numbers, nan=1.0, posinf=1.0, neginf=1.0)
+        distances = jnp.nan_to_num(distances, nan=1e-6, posinf=1e6, neginf=1e-6)
+        switch_off = jnp.nan_to_num(switch_off, nan=0.0, posinf=0.0, neginf=0.0)
+        eshift = jnp.nan_to_num(eshift, nan=0.0, posinf=0.0, neginf=0.0)
+        atom_mask = jnp.nan_to_num(atom_mask, nan=0.0, posinf=0.0, neginf=0.0)
+        batch_mask = jnp.nan_to_num(batch_mask, nan=0.0, posinf=0.0, neginf=0.0)
+
         # Compute atomic number dependent screening length with safe operations
-        # Clip atomic numbers to prevent zero or negative values
         safe_atomic_numbers = jnp.maximum(atomic_numbers, 1e-6)
         distances = jnp.maximum(distances, 1e-6)
         eshift = jnp.maximum(eshift, 0.0)
