@@ -117,8 +117,8 @@ def parse_args(argv=None):
 
     # Calculator parameters
     parser.add_argument("--ml-cutoff", type=float, default=0.01)
-    parser.add_argument("--mm-switch-on", type=float, default=8.0)
-    parser.add_argument("--mm-cutoff", type=float, default=3.0)
+    parser.add_argument("--mm-switch-on", type=float, default=10.0)
+    parser.add_argument("--mm-cutoff", type=float, default=4.0)
     parser.add_argument("--include-mm", action="store_true", default=True)
     parser.add_argument("--skip-ml-dimers", action="store_true", default=False)
     parser.add_argument("--debug", action="store_true", default=False)
@@ -621,11 +621,11 @@ if USE_ITERATIVE:
         n_iterations=4,  # Number of alternating iterations
         n_samples=10,
         min_com_distance=3.5,  # Filter out samples with COM distance < 3.5 Å (large force errors)
-        energy_weight=10.0,
+        energy_weight=1.0,
         force_weight=1.0,
         lj_learning_rate=0.005,
         cutoff_learning_rate=0.005,
-        lj_n_iterations=4,  # Iterations per LJ optimization step
+        lj_n_iterations=8,  # Iterations per LJ optimization step
         cutoff_n_iterations= 3 ,  # Iterations per cutoff optimization step
         convergence_threshold=1e-3,  # Stop early if loss improvement < 0.1%
         verbose=False,
