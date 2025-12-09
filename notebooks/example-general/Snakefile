@@ -1,0 +1,28 @@
+configfile: "config.yaml"
+
+rule all:
+    input:
+        expand("results/{job}/done.txt", job=config["jobs"].keys())
+
+rule run_sim:
+    output:
+        touch("results/{job}/done.txt")
+    params:
+        job=lambda wildcards: config["jobs"][wildcards.job],
+    shell:
+        """
+        mkdir -p results/{wildcards.job}
+        python p3_sim_FIXED.py \
+          --data-file {params.job[data_file]} \
+          --checkpoint {params.job[checkpoint]} \
+          --n-monomers {params.job[n_monomers]} \
+          --n-atoms-monomer {params.job[n_atoms_monomer]} \
+          --ml-cutoff {params.job[ml_cutoff]} \
+          --mm-switch-on {params.job[mm_switch_on]} \
+          --mm-cutoff {params.job[mm_cutoff]} \
+          {("--include-mm" if params.job.get("include_mm", True) else "")} \
+          {("--skip-ml-dimers" if params.job.get("skip_ml_dimers", False) else "")} \
+          --output-prefix results/{wildcards.job}/run \
+          > results/{wildcards.job}/stdout.log 2>&1
+        """
+
