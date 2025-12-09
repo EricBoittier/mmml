@@ -230,4 +230,4 @@ class ZBLRepulsion(nn.Module):
             jax.debug.print("idxj {x} {y}", x=idx_j, y=idx_j.shape)
             jax.debug.print("atom {x} {y}", x=atomic_numbers, y=atomic_numbers.shape)
             jax.debug.print("rep {x} {y}", x=repulsion, y=repulsion.shape)
-        return erep[..., None, None, None] / 1.88973 #bohr to angstrom
+        return erep[..., None, None, None] / 27.211386245988  #bohr to eV
