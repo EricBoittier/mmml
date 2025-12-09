@@ -2,7 +2,7 @@ PSF EXT CMAP XPLOR
 
          2 !NTITLE
 * EXECUTING CHARMM SCRIPT FROM PYTHON                                           
-*  DATE:    12/ 8/25     22:11:25      CREATED BY USER: boittier                
+*  DATE:    12/ 9/25     12:13:38      CREATED BY USER: boittier                
 
        500 !NATOM
          1 SYS      1        ACO      O1       OG2D3   -0.480000       15.9994           0
