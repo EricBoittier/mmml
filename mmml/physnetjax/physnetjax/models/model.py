@@ -507,7 +507,7 @@ class EF(nn.Module):
                 atomic_numbers,
                 r,
                 off_dist,
-                1 - eshift,
+                eshift,
                 dst_idx,
                 src_idx,
                 atom_mask,
@@ -515,10 +515,10 @@ class EF(nn.Module):
                 batch_segments,
                 batch_size,
             )
-            # # repulsion *= batch_mask[..., None]
-            # if not self.debug and "repulsion" in self.debug:
-            #     jax.debug.print("Repulsion shape: {x}", x=repulsion.shape)
-            #     jax.debug.print("Repulsion: {x}", x=repulsion)
+            # repulsion *= batch_mask[..., None]
+            if True: #not self.debug and "repulsion" in self.debug:
+                jax.debug.print("Repulsion shape: {x}", x=repulsion.shape)
+                jax.debug.print("Repulsion: {x}", x=repulsion)
 
         else:
             repulsion = 0.0
@@ -693,6 +693,7 @@ class EF(nn.Module):
         switch_start = 1.0  # Start switching at 2 Angstroms
         switch_end = 10.0  # Complete switch by 10 Angstroms
         # Calculate distances between atom pairs
+        displacements = jnp.nan_to_num(displacements, nan=0.0, posinf=0.0, neginf=0.0)
         displacements = displacements + (1 - batch_mask)[..., None]
         # Safe distance calculation with minimum cutoff
         squared_distances = jnp.sum(displacements**2, axis=1)
@@ -700,6 +701,8 @@ class EF(nn.Module):
         # Improved switching function
         switch_dist = e3x.nn.smooth_switch(distances, switch_start, switch_end)
         off_dist = 1.0 - e3x.nn.smooth_switch(distances, 8.0, 10.0)
+        switch_dist = jnp.clip(switch_dist, 0.0, 1.0)
+        off_dist = jnp.clip(off_dist, 0.0, 1.0)
         one_minus_switch_dist = 1 - switch_dist
         # Calculate interaction potential with improved stability
         safe_distances = distances + eps
@@ -712,6 +715,10 @@ class EF(nn.Module):
         # r *= batch_mask[..., None]
         off_dist *= batch_mask
         eshift *= batch_mask
+        # Final NaN/Inf guards
+        r = jnp.nan_to_num(r, nan=0.0, posinf=0.0, neginf=0.0)
+        off_dist = jnp.nan_to_num(off_dist, nan=0.0, posinf=0.0, neginf=0.0)
+        eshift = jnp.nan_to_num(eshift, nan=0.0, posinf=0.0, neginf=0.0)
         return r, off_dist, eshift
 
     def _calculate_electrostatics(
