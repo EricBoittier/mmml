@@ -994,8 +994,8 @@ def setup_calculator(
         def coulomb(r, qq, constant = coulombs_constant, eps = coulomb_epsilon):
             # Add epsilon to prevent division by zero (r can be very small for bonded atoms)
             r_safe = jnp.maximum(r, eps)
-            # Negative sign preserves previous convention used elsewhere in the codebase
-            return -constant * qq / r_safe
+            
+            return constant * qq / r_safe
         
 
         def get_switching_function(
@@ -1594,7 +1594,7 @@ def setup_calculator(
             "out_F": mm_grad * kcal2ev,
             "dH": mm_E * kcal2ev,
             "mm_E": mm_E * kcal2ev,
-            "mm_F": mm_grad 
+            "mm_F": mm_grad * kcal2ev,
         }
 
     if _HAVE_ASE:
