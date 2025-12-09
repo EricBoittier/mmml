@@ -515,8 +515,9 @@ class EF(nn.Module):
                 batch_segments,
                 batch_size,
             )
-            # repulsion *= batch_mask[..., None]
-            if True: #not self.debug and "repulsion" in self.debug:
+            # Repulsion is per-atom; align mask to atom_mask for consistency
+            repulsion = repulsion * atom_mask[..., None, None, None]
+            if True:  # debug hook
                 jax.debug.print("Repulsion shape: {x}", x=repulsion.shape)
                 jax.debug.print("Repulsion: {x}", x=repulsion)
 
@@ -528,6 +529,8 @@ class EF(nn.Module):
             segment_ids=batch_segments,
             num_segments=batch_size,
         )
+        # Collapse any extra singleton dims and ensure per-batch shape (batch_size, 1)
+        energy = energy.reshape((batch_size, -1)).sum(axis=1, keepdims=True)
 
         return -1 * jnp.sum(energy), (
             energy,
@@ -797,6 +800,7 @@ class EF(nn.Module):
             num_segments=batch_size,
         )
         atomic_electrostatics = atomic_electrostatics[..., None, None, None]
+        batch_electrostatics = batch_electrostatics[..., None, None, None]
         # if not self.debug and "ele" in self.debug:
         #     jax.debug.print(
         #         f"{atomic_electrostatics}", atomic_electrostatics=atomic_electrostatics
