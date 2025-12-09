@@ -13,7 +13,7 @@
   ],
   "ml_cutoff": 0.009999999776482582,
   "mm_switch_on": 8.100105285644531,
-  "mm_cutoff": 2.9000823497772217,
+  "mm_cutoff": 2.900082588195801,
   "lj_params": {
     "atc_epsilons": [
       -0.035,
@@ -800,8 +800,8 @@
     1.0,
     1.0
   ],
-  "checkpoint_path": "/pchem-data/meuwly/boittier/home/ckpts/eq_acetone-a114f328-a678-4999-904a-ef8ff78a7eb1",
-  "model_uid": "eq_acetone-a114f328-a678-4999-904a-ef8ff78a7eb1",
+  "checkpoint_path": "/pchem-data/meuwly/boittier/home/ckpts/eq_acetone-46a8cd1d-880c-427b-8c3f-c206c3b75a19",
+  "model_uid": "eq_acetone-46a8cd1d-880c-427b-8c3f-c206c3b75a19/",
   "n_monomers": 2,
   "n_atoms_monomer": 10
 }
