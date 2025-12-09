@@ -132,7 +132,8 @@ class CutoffParameters:
         fig.tight_layout()
         out_dir = save_dir if save_dir is not None else Path.cwd()
         out_dir.mkdir(parents=True, exist_ok=True)
-        out_path = out_dir / f"cutoffs_schematic_{self.ml_cutoff:.2f}_{self.mm_switch_on:.2f}_{self.mm_cutoff:.2f}.png"
+        # Use the already-cast float values to avoid JAX array formatting issues
+        out_path = out_dir / f"cutoffs_schematic_{ml_cutoff:.2f}_{mm_switch_on:.2f}_{mm_cutoff:.2f}.png"
         fig.savefig(out_path, dpi=150)
         try:
             plt.show()

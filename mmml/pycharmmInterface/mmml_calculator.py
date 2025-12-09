@@ -1593,7 +1593,7 @@ def setup_calculator(
             "out_E": mm_E * kcal2ev,
             "out_F": mm_grad * kcal2ev,
             "dH": mm_E * kcal2ev,
-            "mm_E": mm_E ,
+            "mm_E": mm_E * kcal2ev,
             "mm_F": mm_grad 
         }
 
