@@ -101,7 +101,7 @@ import ase.optimize as ase_opt
 from ase.visualize import view as view_atoms
 from ase.visualize.plot import plot_atoms
 
-def parse_args():
+def parse_args(argv=None):
     parser = argparse.ArgumentParser(description="MM/ML Hybrid Simulation Setup")
     # Paths
     parser.add_argument("--data-file", type=Path, required=True, help="Path to NPZ dataset")
@@ -137,10 +137,44 @@ def parse_args():
     parser.add_argument("--output-prefix", type=str, default="md_simulation")
     parser.add_argument("--cell", type=float, default=None, help="Cubic box length (Å) for PBC; omit for non-PBC")
     parser.add_argument("--validate", action="store_true", default=False)
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
-# Parse CLI
-args = parse_args()
+def _in_notebook() -> bool:
+    try:
+        from IPython import get_ipython  # type: ignore
+        return get_ipython() is not None
+    except Exception:
+        return False
+
+def get_args():
+    """
+    Resolve arguments for both CLI and notebook use.
+    In notebooks, pull required paths from env vars:
+      MMML_DATA_FILE (required)
+      MMML_CHECKPOINT (optional; if absent, uses MMML_CKPT_ROOT + MMML_UID)
+      MMML_CKPT_ROOT (default: /pchem-data/meuwly/boittier/home/ckpts)
+      MMML_UID (default: eq_acetone-46a8cd1d-880c-427b-8c3f-c206c3b75a19/)
+    """
+    if not _in_notebook():
+        return parse_args()
+
+    data_file = os.environ.get("MMML_DATA_FILE")
+    checkpoint = os.environ.get("MMML_CHECKPOINT")
+    ckpt_root = os.environ.get("MMML_CKPT_ROOT", "/pchem-data/meuwly/boittier/home/ckpts")
+    uid = os.environ.get("MMML_UID", "eq_acetone-46a8cd1d-880c-427b-8c3f-c206c3b75a19/")
+
+    if not data_file:
+        raise SystemExit("Notebook run: set MMML_DATA_FILE (and optionally MMML_CHECKPOINT or MMML_UID/MMML_CKPT_ROOT).")
+
+    argv = ["--data-file", data_file]
+    if checkpoint:
+        argv += ["--checkpoint", checkpoint]
+    else:
+        argv += ["--ckpt-root", ckpt_root, "--uid", uid]
+    return parse_args(argv)
+
+# Parse args (CLI or notebook env vars)
+args = get_args()
 
 # System parameters (can be overridden)
 ATOMS_PER_MONOMER = args.n_atoms_monomer
