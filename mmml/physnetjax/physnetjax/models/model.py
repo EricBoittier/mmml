@@ -75,7 +75,7 @@ class EF(nn.Module):
         if self.zbl:
             self.repulsion = ZBLRepulsion(
                 cutoff=self.cutoff,
-                trainable=True,
+                trainable=False,
             )
         self.efa_final = None
         if self.efa:
