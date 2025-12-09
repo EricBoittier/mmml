@@ -994,8 +994,8 @@ def setup_calculator(
         def coulomb(r, qq, constant = coulombs_constant, eps = coulomb_epsilon):
             # Add epsilon to prevent division by zero (r can be very small for bonded atoms)
             r_safe = jnp.maximum(r, eps)
-            # Positive constant * qq / r gives physically correct sign (repulsion for like charges)
-            return constant * qq / r_safe
+            # Negative sign preserves previous convention used elsewhere in the codebase
+            return -constant * qq / r_safe
         
 
         def get_switching_function(
@@ -1008,8 +1008,8 @@ def setup_calculator(
             def apply_switching_function(positions: Array, pair_energies: Array) -> Array:
                 """Applies smooth switching function to MM energies based on COM distance."""
                 # COM distance
-                com1 = positions[:ATOMS_PER_MONOMER].T
-                com2 = positions[ATOMS_PER_MONOMER:2*ATOMS_PER_MONOMER].T
+                com1 = positions[:ATOMS_PER_MONOMER].T.mean(axis=1)
+                com2 = positions[ATOMS_PER_MONOMER:2*ATOMS_PER_MONOMER].T.mean(axis=1)
                 r = jnp.linalg.norm(com1 - com2)
 
                 # MM: 0→1 over [mm_on, mm_on+mm_cut], then 1→0 over [mm_on+mm_cut, mm_on+2*mm_cut]
@@ -1077,8 +1077,8 @@ def setup_calculator(
             switched_energy = apply_switching_function(positions, pair_energies)
             
             # Calculate forces with switching
-            forces = (-mm_energy_grad(positions) + 
-                    switching_grad(positions, pair_energies))
+            # Negate the full sum: F = -(∂E_mm/∂R + ∂(switch)/∂R)
+            forces = -(mm_energy_grad(positions) + switching_grad(positions, pair_energies))
             
             # Check for NaN/Inf in forces and replace with zeros
             forces = jnp.where(jnp.isfinite(forces), forces, 0.0)
@@ -1593,8 +1593,8 @@ def setup_calculator(
             "out_E": mm_E * kcal2ev,
             "out_F": mm_grad * kcal2ev,
             "dH": mm_E * kcal2ev,
-            "mm_E": mm_E * kcal2ev,
-            "mm_F": mm_grad * kcal2ev
+            "mm_E": mm_E ,
+            "mm_F": mm_grad 
         }
 
     if _HAVE_ASE:
