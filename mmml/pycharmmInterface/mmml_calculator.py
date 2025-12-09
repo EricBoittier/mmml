@@ -2164,7 +2164,7 @@ def setup_calculator(
         # The gradient is already energy-weighted by switch_ML_grad, but we need to ensure
         # it's properly distributed to atoms
         energy_weighted_grad = jax.ops.segment_sum(
-            -dimer_switching_grads_flat,  # Negative because F = -grad(E)
+            dimer_switching_grads_flat,  # Negative because F = -grad(E)
             force_segments,
             num_segments=n_monomers * ATOMS_PER_MONOMER
         )  # Shape: (n_monomers * ATOMS_PER_MONOMER, 3)
