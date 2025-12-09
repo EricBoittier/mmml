@@ -50,6 +50,38 @@ class CutoffParameters:
         mm_cutoff_val = float(self.mm_cutoff) if hasattr(self.mm_cutoff, '__float__') else self.mm_cutoff
         return hash((ml_cutoff_val, mm_switch_on_val, mm_cutoff_val))
 
+    # --- Switching functions (must match mmml_calculator implementation) ---
+    @staticmethod
+    def _smoothstep01(s):
+        return s * s * (3.0 - 2.0 * s)
+
+    @staticmethod
+    def _sharpstep(r, x0, x1, gamma=3.0):
+        # Match _sharpstep in mmml_calculator: clip -> power -> smoothstep
+        s = np.clip((r - x0) / np.maximum(x1 - x0, 1e-12), 0.0, 1.0)
+        s = s ** gamma
+        return CutoffParameters._smoothstep01(s)
+
+    def ml_scale(self, r, gamma_ml: float = 5.0):
+        """ML taper: 1→0 over [mm_switch_on - ml_cutoff, mm_switch_on]."""
+        r = np.asarray(r, dtype=float)
+        start = float(self.mm_switch_on) - float(self.ml_cutoff)
+        stop = float(self.mm_switch_on)
+        return 1.0 - self._sharpstep(r, start, stop, gamma=gamma_ml)
+
+    def mm_scale(self, r, gamma_on: float = 0.001, gamma_off: float = 3.0):
+        """MM window: 0→1 over [mm_switch_on, mm_switch_on+mm_cutoff], then 1→0 over the next window."""
+        r = np.asarray(r, dtype=float)
+        mm_on = self._sharpstep(r,
+                                float(self.mm_switch_on),
+                                float(self.mm_switch_on) + float(self.mm_cutoff),
+                                gamma=gamma_on)
+        mm_off = self._sharpstep(r,
+                                 float(self.mm_switch_on) + float(self.mm_cutoff),
+                                 float(self.mm_switch_on) + 2.0 * float(self.mm_cutoff),
+                                 gamma=gamma_off)
+        return mm_on * (1.0 - mm_off)
+
     def to_dict(self):
         return {
             "ml_cutoff": self.ml_cutoff,
@@ -75,20 +107,9 @@ class CutoffParameters:
         r_max = float(max(ml_cutoff, mm_switch_on + 2.0 * mm_cutoff) * 1.5 + 2.0)
         r = np.linspace(0.01, r_max, 600)
 
-        def _np_smoothstep01(s): return s * s * (3.0 - 2.0 * s)
-        def _np_sharpstep(r, x0, x1, gamma=3.0):
-            s = np.clip((r - x0) / max(x1 - x0, 1e-12), 0.0, 1.0)
-            s = s ** gamma
-            return _np_smoothstep01(s)
-
-        gamma_ml = 5.0     # your steeper ML taper
-        gamma_on = 0.001    # faster MM turn-on
-        gamma_off = 3.0    # smooth MM turn-off
-
-        ml_scale = 1.0 - _np_sharpstep(r, mm_switch_on - ml_cutoff, mm_switch_on, gamma=gamma_ml)
-        mm_on    = _np_sharpstep(r, mm_switch_on, mm_switch_on + mm_cutoff, gamma=gamma_on)
-        mm_off   = _np_sharpstep(r, mm_switch_on + mm_cutoff, mm_switch_on + 2.0 * mm_cutoff, gamma=gamma_off)
-        mm_scale = mm_on * (1.0 - mm_off)
+        # Exact curves as used in mmml_calculator (switch_ML and apply_switching_function)
+        ml_scale = self.ml_scale(r, gamma_ml=5.0)
+        mm_scale = self.mm_scale(r, gamma_on=0.001, gamma_off=3.0)
 
 
         fig, ax = plt.subplots(1, 1, figsize=(8, 5))
