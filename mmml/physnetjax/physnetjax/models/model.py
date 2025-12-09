@@ -517,9 +517,15 @@ class EF(nn.Module):
             )
             # Repulsion is per-atom; align mask to atom_mask for consistency
             repulsion = repulsion * atom_mask[..., None, None, None]
-            if True:  # debug hook
+            # Guard against NaN/Inf and huge magnitudes to keep grads stable
+            repulsion = jnp.nan_to_num(repulsion, nan=0.0, posinf=0.0, neginf=0.0)
+            repulsion = jnp.clip(repulsion, -1.0e4, 1.0e4)
+            if self.debug:
                 jax.debug.print("Repulsion shape: {x}", x=repulsion.shape)
-                jax.debug.print("Repulsion: {x}", x=repulsion)
+                jax.debug.print("Repulsion stats min={mn}, max={mx}, mean={mu}",
+                                mn=jnp.min(repulsion),
+                                mx=jnp.max(repulsion),
+                                mu=jnp.mean(repulsion))
 
         else:
             repulsion = 0.0
