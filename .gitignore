@@ -1,7 +1,10 @@
 # Core dump files (from program crashes)
 core.*
 *.core
-
+.DS_Store
+.DS_Store**
+*.DS_Store
+.DS_Store*
 # project specific gitignore files
 CHARMMSETUP
 uv.lock
@@ -162,3 +165,4 @@ examples/openqdc/openqdc_packed_memmap/
 
 # Training logs and checkpoints in examples/heme (do not commit)
 examples/heme/co2_*/
+devtools/.DS_Store
