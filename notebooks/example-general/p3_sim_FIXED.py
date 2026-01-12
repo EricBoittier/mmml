@@ -116,9 +116,9 @@ def parse_args(argv=None):
     parser.add_argument("--n-atoms-monomer", type=int, default=10)
 
     # Calculator parameters
-    parser.add_argument("--ml-cutoff", type=float, default=0.01)
-    parser.add_argument("--mm-switch-on", type=float, default=10.0)
-    parser.add_argument("--mm-cutoff", type=float, default=4.0)
+    parser.add_argument("--ml-cutoff", type=float, default=1.0)
+    parser.add_argument("--mm-switch-on", type=float, default=5.0)
+    parser.add_argument("--mm-cutoff", type=float, default=5.0)
     parser.add_argument("--include-mm", action="store_true", default=True)
     parser.add_argument("--skip-ml-dimers", action="store_true", default=False)
     parser.add_argument("--debug", action="store_true", default=False)
@@ -576,6 +576,12 @@ for i in range(len(train_batches)):
     train_batches_copy[i]["Z"] = train_batches[i]["Z"][final_reorder]
     train_batches_copy[i]["F"] = train_batches[i]["F"][final_reorder]
 
+valid_batches_copy = valid_batches.copy()
+for i in range(len(train_batches)):
+    valid_batches_copy[i]["R"] = valid_batches[i]["R"][final_reorder]
+    valid_batches_copy[i]["Z"] = valid_batches[i]["Z"][final_reorder]
+    valid_batches_copy[i]["F"] = valid_batches[i]["F"][final_reorder]
+
 print(f"\nApplied atom reordering to {len(train_batches_copy)} batches")
 
 # ========================================================================
@@ -618,15 +624,15 @@ if USE_ITERATIVE:
         pair_idx_atom_atom=lj_params["pair_idx_atom_atom"],
         cutoff_params=CUTOFF_PARAMS,
         args=args,
-        n_iterations=4,  # Number of alternating iterations
-        n_samples=10,
+        n_iterations=6,  # Number of alternating iterations
+        n_samples=30,
         min_com_distance=3.5,  # Filter out samples with COM distance < 3.5 Å (large force errors)
         energy_weight=1.0,
         force_weight=1.0,
         lj_learning_rate=0.005,
         cutoff_learning_rate=0.005,
-        lj_n_iterations=8,  # Iterations per LJ optimization step
-        cutoff_n_iterations= 3 ,  # Iterations per cutoff optimization step
+        lj_n_iterations=50,  # Iterations per LJ optimization step
+        cutoff_n_iterations= 5 ,  # Iterations per cutoff optimization step
         convergence_threshold=1e-3,  # Stop early if loss improvement < 0.1%
         verbose=False,
     )
@@ -912,9 +918,14 @@ print("Running energy/force calculations")
 print("=" * 60)
 
 # Example: Calculate energy and forces for multiple configurations
-for i, b in enumerate(train_batches_copy[:10]):
+for i, b in enumerate(valid_batches_copy[:10]):
     if b["N"] == 20:  # Only process batches with correct number of atoms
         atoms.set_positions(b["R"])
+
+        com_dist = b["R"][:10].T.mean(axis=1) - b["R"][10:].T.mean(axis=1)
+        r = np.linalg.norm(com_dist)
+        print(f"COM distance: {r} Å")
+
         f_true = b["F"]
         e_true = b.get("E", None)  # Ground truth energy (if available)
         f_calc = atoms.get_forces()

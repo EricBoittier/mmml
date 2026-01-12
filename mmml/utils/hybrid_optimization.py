@@ -1925,7 +1925,7 @@ def fit_hybrid_potential_to_training_data_jax(
             if hasattr(loss, 'shape') and loss.shape != ():
                 loss = jnp.sum(loss)
             
-            return loss
+            return loss + 10 * mm_switch_on**3
     
     else:  # optimize_mode == "both"
         def loss_fn(p):
