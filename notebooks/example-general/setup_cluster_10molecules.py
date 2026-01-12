@@ -376,7 +376,7 @@ inbfrq -1 imgfrq -1
         print(f"XYZ min: {np.min(XYZ)}")
         print(f"XYZ max: {np.max(XYZ)}")
 
-        pycharmm.minimize.run_abnr(nstep=10000, tolenr=1e-3, tolgrd=1e-3)
+        pycharmm.minimize.run_abnr(nstep=1000, tolenr=1e-3, tolgrd=1e-3)
         pycharmm.lingo.charmm_script("ENER")
         pycharmm.energy.show()
         print("Energy minimization completed")
@@ -745,7 +745,7 @@ try:
         doML=True,
         doMM=True,  # Only enable MM if PyCHARMM is ready
         doML_dimer=True,
-        backprop=True,
+        backprop=False,
         debug=False,
 
     )

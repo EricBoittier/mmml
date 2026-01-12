@@ -1,6 +1,8 @@
 import numpy as np
 from pathlib import Path
 
+from mmml.pycharmmInterface.mmml_calculator import GAMMA_ON, GAMMA_OFF
+
 class CutoffParameters:
     """Parameters for ML and MM cutoffs and switching functions"""
     def __init__(
@@ -108,8 +110,8 @@ class CutoffParameters:
         r = np.linspace(0.01, r_max, 600)
 
         # Exact curves as used in mmml_calculator (switch_ML and apply_switching_function)
-        ml_scale = self.ml_scale(r, gamma_ml=5.0)
-        mm_scale = self.mm_scale(r, gamma_on=0.001, gamma_off=3.0)
+        ml_scale = self.ml_scale(r, gamma_ml=GAMMA_ON)
+        mm_scale = self.mm_scale(r, gamma_on=GAMMA_ON, gamma_off=GAMMA_OFF)
 
 
         fig, ax = plt.subplots(1, 1, figsize=(8, 5))
@@ -134,10 +136,11 @@ class CutoffParameters:
         out_dir.mkdir(parents=True, exist_ok=True)
         # Use the already-cast float values to avoid JAX array formatting issues
         out_path = out_dir / f"cutoffs_schematic_{ml_cutoff:.2f}_{mm_switch_on:.2f}_{mm_cutoff:.2f}.png"
-        fig.savefig(out_path, dpi=150)
-        try:
-            plt.show()
-        except Exception:
-            pass
-        print(f"Saved cutoff schematic to {out_path}")
+        # fig.savefig(out_path, dpi=150)
+        # try:
+        #     plt.show()
+        # except Exception:
+        #     pass
+        # print(f"Saved cutoff schematic to {out_path}")
+        return ax
 
