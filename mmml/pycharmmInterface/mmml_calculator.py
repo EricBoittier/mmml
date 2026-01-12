@@ -191,7 +191,8 @@ else:
 # Module-level configuration ------------------------------------------------
 
 SPATIAL_DIMS: int = 3  # Number of spatial dimensions (x, y, z)
-
+GAMMA_ON = 1.0
+GAMMA_OFF = 3.0
 
 if jax is not None:  # pragma: no branch - keeps default behaviour when JAX present
     # If you want to perform simulations in float64 you have to call this before
@@ -643,7 +644,7 @@ def _smoothstep01(s):
     return s * s * (3.0 - 2.0 * s)
 
 
-def _sharpstep(r, x0, x1, gamma=3.0):
+def _sharpstep(r, x0, x1, gamma=GAMMA_ON):
     s = jnp.clip((r - x0) / _safe_den(x1 - x0), 0.0, 1.0)
     s = s ** gamma
     return _smoothstep01(s)
@@ -665,9 +666,9 @@ class ModelOutput(NamedTuple):
 def setup_calculator(
     ATOMS_PER_MONOMER,
     N_MONOMERS: int = 2,
-    ml_cutoff_distance: float = 2.0,
-    mm_switch_on: float = 5.0,
-    mm_cutoff: float = 1.0,
+    ml_cutoff_distance: float = 2.0, # actually width of the switching function
+    mm_switch_on: float = 5.0, # when MM turns on
+    mm_cutoff: float = 1.0, # when MM turns off
     doML: bool = True,
     doMM: bool = True,
     doML_dimer: bool = True,
@@ -844,13 +845,13 @@ def setup_calculator(
         ATOMS_PER_MONOMER=ATOMS_PER_MONOMER,
     ):
         # per atom coordinates rather than CoM
-        com1 = X[:ATOMS_PER_MONOMER].T.mean(axis=1)
-        com2 = X[ATOMS_PER_MONOMER:2*ATOMS_PER_MONOMER].T.mean(axis=1)
+        com1 = X[:ATOMS_PER_MONOMER].T
+        com2 = X[ATOMS_PER_MONOMER:2*ATOMS_PER_MONOMER].T
 
         r = jnp.linalg.norm(com1 - com2)
     
         # ML: 1 -> 0 over [mm_switch_on - ml_cutoff, mm_switch_on]
-        ml_scale = 1.0 - _sharpstep(r, mm_switch_on - ml_cutoff, mm_switch_on, gamma=5.0)
+        ml_scale = 1.0 - _sharpstep(r, mm_switch_on - ml_cutoff, mm_switch_on, gamma=GAMMA_ON)
       
         return ml_scale * ml_energy
 
@@ -1005,9 +1006,9 @@ def setup_calculator(
                 r = jnp.linalg.norm(com1 - com2)
 
                 # MM: 0→1 over [mm_on, mm_on+mm_cut], then 1→0 over [mm_on+mm_cut, mm_on+2*mm_cut]
-                # Match cutoffs.py plotting (gamma_on=0.001, gamma_off=3.0, symmetric window)
-                mm_on = _sharpstep(r, mm_switch_on, mm_switch_on + mm_cutoff, gamma=0.001)
-                mm_off = _sharpstep(r, mm_switch_on + mm_cutoff, mm_switch_on + 2.0 * mm_cutoff, gamma=3.0)
+                # Match cutoffs.py plotting (gamma_on=GAMMA_ON, gamma_off=GAMMA_OFF)
+                mm_on = _sharpstep(r, mm_switch_on, mm_switch_on + mm_cutoff, gamma=GAMMA_ON)
+                mm_off = _sharpstep(r, mm_switch_on + mm_cutoff, mm_switch_on + 2.0 * mm_cutoff, gamma=GAMMA_OFF)
                 mm_scale = mm_on * (1.0 - mm_off)
 
                 return (pair_energies * mm_scale).sum()
@@ -1069,9 +1070,10 @@ def setup_calculator(
             switched_energy = apply_switching_function(positions, pair_energies)
             
             # Calculate forces with switching
-            # Negate the full sum: F = -(∂E_mm/∂R + ∂(switch)/∂R)
-            forces = -(mm_energy_grad(positions) + switching_grad(positions, pair_energies))
-            
+
+            # forces = -(mm_energy_grad(positions) + switching_grad(positions, pair_energies))
+            # Mitradip was here v(^_^)v
+            forces = -1.0 * switching_grad(positions, pair_energies)
             # Check for NaN/Inf in forces and replace with zeros
             forces = jnp.where(jnp.isfinite(forces), forces, 0.0)
 
@@ -1271,8 +1273,8 @@ def setup_calculator(
             
             outputs["mm_E"] = mm_E
             outputs["mm_F"] = mm_F
-            outputs["out_E"] = outputs.get("out_E", 0) + mm_E
-            outputs["out_F"] = outputs.get("out_F", 0) + mm_F
+            outputs["out_E"] = outputs.get("out_E", 0) + outputs["mm_E"]
+            outputs["out_F"] = outputs.get("out_F", 0) + outputs["mm_E"]
 
         # Final validation: check for NaN/Inf in final forces
         final_forces = outputs["out_F"]
@@ -1293,24 +1295,7 @@ def setup_calculator(
 
         
         final_forces = jnp.where(jnp.isfinite(final_forces), final_forces, 0.0)
-        
-        # Debug: Check which specific atoms have zero forces AFTER final NaN check
-        final_force_mags_after = jnp.linalg.norm(final_forces, axis=1)
-        zero_count_after = jnp.sum(final_force_mags_after < 1e-10)
-        # jax.debug.print("Final forces AFTER NaN check - zero-force atoms: {z}/{t}",
-        # z=zero_count_after, t=n_atoms,
-        # ordered=False)
-        if final_forces.shape[0] > 7:
-            # jax.debug.print("Final forces AFTER NaN check - atom 3 mag: {a3}, atom 7: {a7}",
-            # a3=final_force_mags_after[3], a7=final_force_mags_after[7],
-            # ordered=False)
-            pass
-        
-        final_non_zero = jnp.sum(jnp.any(jnp.abs(final_forces) > 1e-10, axis=1))
-        # jax.debug.print("Final forces non-zero atoms: {c} / {t}, norm: {n}",
-        # c=final_non_zero, t=n_atoms, n=jnp.linalg.norm(final_forces),
-        # ordered=False)
-        
+
         # Total energy: combined ML (monomer+dimer switched) + MM
         final_energy = outputs["out_E"]
         if isinstance(final_energy, (int, float)):

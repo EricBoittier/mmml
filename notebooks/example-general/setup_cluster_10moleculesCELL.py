@@ -391,65 +391,7 @@ inbfrq -1 imgfrq -1
         pycharmm_charges = np.array(psf.get_charges())
         pycharmm_iac = np.array(psf.get_iac())
         pycharmm_resids = np.array(psf.get_res())
-        # print(f"  ✓ PyCHARMM fully initialized:")
-        # print(f"     Atoms: {len(pycharmm_atypes)}")
-        # print(f"     Charges: {len(pycharmm_charges)}")
-        # print(f"     IAC codes: {len(pycharmm_iac)}")
-        # print(f"     Residue IDs: {len(pycharmm_resids)}")
-        
-        # # ========================================================================
-        # # REORDER ATOMS TO MATCH PYCHARMM ORDERING
-        # # ========================================================================
-        # print("\n  Reordering cluster atoms to match PyCHARMM ordering...")
-        
-        # # IMPORTANT: PyCHARMM generates the PSF with atoms in a specific order based on the RTF.
-        # # We need to reorder our cluster positions to match PyCHARMM's PSF order.
-        # # First, try automatic reordering which tests multiple patterns and finds the best match
-        # try:
-        #     cluster_positions_reordered, cluster_Z_reordered, reorder_indices_auto = reorder_atoms_to_match_pycharmm(
-        #         R=cluster_positions,
-        #         Z=cluster_Z,
-        #         pycharmm_atypes=pycharmm_atypes[:n_atoms_cluster],
-        #         pycharmm_resids=pycharmm_resids[:n_atoms_cluster],
-        #         ATOMS_PER_MONOMER=n_atoms_monomer,
-        #         N_MONOMERS=n_cluster_molecules,
-        #     )
-        #     cluster_positions = cluster_positions_reordered
-        #     cluster_Z = cluster_Z_reordered
-        #     print(f"  ✓ Automatic reordering found pattern (first 20 indices: {reorder_indices_auto[:20]})")
-        #     try:
-        #         inv = np.argsort(reorder_indices_auto)
-        #         if len(inv) == len(cluster_positions):
-        #             ml_reorder_indices = inv
-        #     except Exception:
-        #         pass
-            
-        # except Exception as e_auto:
-        #     print(f"  ⚠ Automatic reordering failed, trying manual pattern: {e_auto}")
-        #     # Fallback to manual pattern from p3_sim_FIXED.py
-        #     # Pattern for 2 molecules: [3, 0, 1, 2, 7, 8, 9, 4, 5, 6, 13, 10, 11, 12, 17, 18, 19, 14, 15, 16]
-        #     # Per molecule (10 atoms): [3, 0, 1, 2, 7, 8, 9, 4, 5, 6]
-        #     monomer_reorder_pattern = [3, 0, 1, 2, 7, 8, 9, 4, 5, 6]
-            
-        #     # Extend to 10 molecules
-        #     print(f"  Applying manual reordering pattern per molecule: {monomer_reorder_pattern}")
-        #     full_reorder_indices = []
-        #     for mol_idx in range(n_cluster_molecules):
-        #         mol_start = mol_idx * n_atoms_monomer
-        #         for atom_idx_in_mol in monomer_reorder_pattern:
-        #             full_reorder_indices.append(mol_start + atom_idx_in_mol)
-            
-        #     print(f"  Full reordering pattern (first 20 indices): {full_reorder_indices[:20]}")
-        #     print(f"  Full reordering pattern (last 20 indices): {full_reorder_indices[-20:]}")
-            
-        #     # Apply reordering
-        #     cluster_positions = cluster_positions[full_reorder_indices]
-        #     cluster_Z = cluster_Z[full_reorder_indices]
-        #     print(f"  ✓ Applied manual reordering pattern")
-            
-        #     # Update PyCHARMM coordinates
-        #     coor.set_positions(pd.DataFrame(cluster_positions, columns=["x", "y", "z"]))
-        
+
         # Reordering disabled: keep PDB order as-is
         print("  Reordering skipped; keeping PDB atom order.")
         ml_reorder_indices = None
@@ -698,7 +640,7 @@ calculator_factory_cluster = setup_calculator(
     debug=True,
     model_restart_path=base_ckpt_dir,
     MAX_ATOMS_PER_SYSTEM=n_atoms_monomer * 2,
-    cell=None,  # No PBC
+    cell=50.0,  # No PBC
     ep_scale=np.array(full_ep_scale_cluster),
     sig_scale=np.array(full_sig_scale_cluster),
     at_codes_override=at_codes_for_calc,
