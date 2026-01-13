@@ -9,11 +9,6 @@ import jax
 import jax.numpy as jnp
 import optax
 import numpy as np
-<<<<<<< HEAD
-import ase.data
-from scipy.optimize import minimize
-=======
->>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
 from .loss import esp_mono_loss
 from .electrostatics import calc_esp
 
@@ -38,20 +33,11 @@ except ImportError:
 
 @functools.partial(
     jax.jit,
-<<<<<<< HEAD
-    static_argnames=("model_apply", "optimizer_update", "batch_size", "esp_w", "chg_w", "ndcm", "distance_weighting", "distance_scale", "distance_min", "esp_magnitude_weighting", "charge_conservation_w", "esp_grid_units", "radii_cutoff_multiplier"),
-)
-def train_step(
-    model_apply, optimizer_update, batch, batch_size, opt_state, params, esp_w, chg_w, ndcm, clip_norm=None,
-    distance_weighting=False, distance_scale=2.0, distance_min=0.5, esp_magnitude_weighting=False, charge_conservation_w=1.0,
-    esp_grid_units="angstrom", radii_cutoff_multiplier=2.0
-=======
     static_argnames=("model_apply", "optimizer_update", "batch_size", "esp_w", "chg_w", "ndcm", "distance_weighting", "distance_scale", "distance_min", "esp_magnitude_weighting", "charge_conservation_w"),
 )
 def train_step(
     model_apply, optimizer_update, batch, batch_size, opt_state, params, esp_w, chg_w, ndcm, clip_norm=None,
     distance_weighting=False, distance_scale=2.0, distance_min=0.5, esp_magnitude_weighting=False, charge_conservation_w=1.0
->>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
 ):
     """
     Single training step for DCMNet with ESP and monopole losses.
@@ -93,11 +79,7 @@ def train_step(
             src_idx=batch["src_idx"],
             batch_segments=batch["batch_segments"],
         )
-<<<<<<< HEAD
-        loss, esp_pred, esp_target, esp_errors, loss_components, esp_mask = esp_mono_loss(
-=======
         loss, esp_pred, esp_target, esp_errors, loss_components = esp_mono_loss(
->>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
             dipo_prediction=dipo,
             mono_prediction=mono,
             vdw_surface=batch["vdw_surface"],
@@ -118,28 +100,15 @@ def train_step(
             esp_magnitude_weighting=esp_magnitude_weighting,  # Weight by ESP magnitude instead
             use_atomic_radii_mask=True,  # Enable atomic radii masking (critical for reducing ESP errors)
             charge_conservation_w=charge_conservation_w,  # Weight for charge conservation loss
-<<<<<<< HEAD
-            esp_grid_units=esp_grid_units,  # Units of ESP grid ("angstrom" or "bohr")
-            radii_cutoff_multiplier=radii_cutoff_multiplier,  # Multiplier for atomic radii cutoff
-        )
-        return loss, (mono, dipo, esp_pred, esp_target, esp_errors, loss_components, esp_mask)
-
-    (loss, (mono, dipo, esp_pred, esp_target, esp_errors, loss_components, esp_mask)), grad = jax.value_and_grad(loss_fn, has_aux=True)(params)
-=======
         )
         return loss, (mono, dipo, esp_pred, esp_target, esp_errors, loss_components)
 
     (loss, (mono, dipo, esp_pred, esp_target, esp_errors, loss_components)), grad = jax.value_and_grad(loss_fn, has_aux=True)(params)
->>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
     if clip_norm is not None:
         grad = clip_grads_by_global_norm(grad, clip_norm)
     updates, opt_state = optimizer_update(grad, opt_state, params)
     params = optax.apply_updates(params, updates)
-<<<<<<< HEAD
-    return params, opt_state, loss, mono, dipo, esp_pred, esp_target, esp_errors, loss_components, esp_mask
-=======
     return params, opt_state, loss, mono, dipo, esp_pred, esp_target, esp_errors, loss_components
->>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
 
 
 def compute_statistics(predictions, targets=None):
@@ -201,11 +170,7 @@ def print_statistics_table(train_stats, valid_stats, epoch):
     metrics_list = ['loss', 'esp_loss', 'mono_loss', 'charge_conservation_loss',
                     'esp_loss_weighted', 'mono_loss_weighted', 'charge_conservation_loss_weighted',
                     'mono_mae', 'mono_rmse', 'mono_mean', 'mono_std',
-<<<<<<< HEAD
-                    'esp_mae', 'esp_rmse', 'esp_r2_unmasked', 'esp_r2_masked', 'esp_mask_fraction', 'esp_pred_mean', 'esp_pred_std',
-=======
                     'esp_mae', 'esp_rmse', 'esp_pred_mean', 'esp_pred_std',
->>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
                     'esp_error_mean', 'esp_error_std']
     
     # Conversion factor: Hartree to kcal/mol
@@ -341,16 +306,9 @@ def print_statistics_table(train_stats, valid_stats, epoch):
 
 
 @functools.partial(
-<<<<<<< HEAD
-    jax.jit, static_argnames=("model_apply", "batch_size", "esp_w", "chg_w", "ndcm", "charge_conservation_w", "esp_grid_units", "radii_cutoff_multiplier")
-)
-def eval_step(model_apply, batch, batch_size, params, esp_w, chg_w, ndcm, charge_conservation_w=1.0,
-              esp_grid_units="angstrom", radii_cutoff_multiplier=2.0):
-=======
     jax.jit, static_argnames=("model_apply", "batch_size", "esp_w", "chg_w", "ndcm", "charge_conservation_w")
 )
 def eval_step(model_apply, batch, batch_size, params, esp_w, chg_w, ndcm, charge_conservation_w=1.0):
->>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
     """
     Single evaluation step for DCMNet.
     
@@ -385,11 +343,7 @@ def eval_step(model_apply, batch, batch_size, params, esp_w, chg_w, ndcm, charge
         batch_segments=batch["batch_segments"],
         batch_size=batch_size,
     )
-<<<<<<< HEAD
-    loss, esp_pred, esp_target, esp_errors, loss_components, esp_mask = esp_mono_loss(
-=======
     loss, esp_pred, esp_target, esp_errors, loss_components = esp_mono_loss(
->>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
         dipo_prediction=dipo,
         mono_prediction=mono,
         vdw_surface=batch["vdw_surface"],
@@ -409,15 +363,8 @@ def eval_step(model_apply, batch, batch_size, params, esp_w, chg_w, ndcm, charge
         distance_min=0.5,
         use_atomic_radii_mask=True,  # Enable atomic radii masking (critical for reducing ESP errors)
         charge_conservation_w=charge_conservation_w,  # Weight for charge conservation loss
-<<<<<<< HEAD
-        esp_grid_units=esp_grid_units,  # Units of ESP grid ("angstrom" or "bohr")
-        radii_cutoff_multiplier=radii_cutoff_multiplier,  # Multiplier for atomic radii cutoff
-    )
-    return loss, mono, dipo, esp_pred, esp_target, esp_errors, loss_components, esp_mask
-=======
     )
     return loss, mono, dipo, esp_pred, esp_target, esp_errors, loss_components
->>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
 
 
 def verify_esp_grid_alignment(train_data, valid_data, num_atoms=60, verbose=True):
@@ -506,29 +453,6 @@ def verify_esp_grid_alignment(train_data, valid_data, num_atoms=60, verbose=True
                 
                 # Compute distances from grid to atoms
                 distances = cdist(vdw, R_real)  # (n_grid, n_real)
-<<<<<<< HEAD
-                
-                # Check if any points are too close (within 2 * covalent radius per atom)
-                # This matches the loss function logic: mask if point is within 2.0 * radius of ANY atom
-                import ase.data
-                radii = np.array([ase.data.covalent_radii[z] if z > 0 else 0 for z in Z_real])
-                cutoff_per_atom = 2.0 * radii  # (n_real,) - per-atom cutoff
-                
-                # Check if any grid point is within cutoff of any atom
-                # distances: (n_grid, n_real), cutoff_per_atom: (n_real,)
-                within_cutoff = distances < cutoff_per_atom[None, :]  # (n_grid, n_real)
-                too_close = np.any(within_cutoff, axis=1)  # (n_grid,) - True if point is too close to any atom
-                
-                n_too_close = np.sum(too_close)
-                if n_too_close > 0:
-                    n_masked_samples += 1
-                    if verbose and n_masked_samples == 1:  # Print details for first sample only
-                        print(f"      Sample {i}: {n_too_close}/{len(vdw)} points too close")
-                        print(f"      Radii: {radii}")
-                        print(f"      Cutoffs per atom: {cutoff_per_atom}")
-                        min_distances_sample = np.min(distances, axis=1)
-                        print(f"      Min distances range: [{min_distances_sample.min():.4f}, {min_distances_sample.max():.4f}] Å")
-=======
                 min_distances = np.min(distances, axis=1)  # (n_grid,)
                 
                 # Check if any points are too close (within 2 * covalent radius)
@@ -539,7 +463,6 @@ def verify_esp_grid_alignment(train_data, valid_data, num_atoms=60, verbose=True
                 n_too_close = np.sum(min_distances < cutoff)
                 if n_too_close > 0:
                     n_masked_samples += 1
->>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
             
             if n_masked_samples > 0:
                 print(f"  ⚠️  {dataset_name}: {n_masked_samples}/{n_check} samples have ESP points too close to atoms")
@@ -575,11 +498,6 @@ def train_model(
     distance_min=0.5,
     esp_magnitude_weighting=False,
     charge_conservation_w=1.0,
-<<<<<<< HEAD
-    esp_grid_units="angstrom",
-    radii_cutoff_multiplier=2.0,
-=======
->>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
 ):
     """
     Train DCMNet model with ESP and monopole losses.
@@ -684,26 +602,6 @@ def train_model(
         if train_mono_data.size > 0:
             train_mono_mean = float(jnp.mean(train_mono_data))
             train_mono_std = float(jnp.std(train_mono_data))
-<<<<<<< HEAD
-            train_mono_min = float(jnp.min(train_mono_data))
-            train_mono_max = float(jnp.max(train_mono_data))
-            train_mono_sum_abs = float(jnp.sum(jnp.abs(train_mono_data)))
-            train_mono_nonzero = float(jnp.sum(jnp.abs(train_mono_data) > 1e-6))
-            train_mono_shape = train_mono_data.shape
-        else:
-            train_mono_mean = train_mono_std = train_mono_min = train_mono_max = train_mono_sum_abs = train_mono_nonzero = 0.0
-            train_mono_shape = (0,)
-    except Exception as e:
-        train_mono_mean = train_mono_std = train_mono_min = train_mono_max = train_mono_sum_abs = train_mono_nonzero = 0.0
-        train_mono_shape = (0,)
-        print(f"  Warning: Could not compute monopole statistics: {e}")
-    
-    # Compute ESP statistics safely
-    try:
-        train_esp_list = train_data.get("esp", [])
-        if len(train_esp_list) > 0:
-            train_esp_flat = jnp.concatenate([jnp.ravel(e) for e in train_esp_list])
-=======
         else:
             train_mono_mean = train_mono_std = 0.0
     except:
@@ -713,66 +611,10 @@ def train_model(
     try:
         train_esp_flat = jnp.concatenate([jnp.ravel(e) for e in train_data.get("esp", [])])
         if train_esp_flat.size > 0:
->>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
             train_esp_mean = float(jnp.mean(train_esp_flat))
             train_esp_std = float(jnp.std(train_esp_flat))
             train_esp_min = float(jnp.min(train_esp_flat))
             train_esp_max = float(jnp.max(train_esp_flat))
-<<<<<<< HEAD
-            train_esp_median = float(jnp.median(train_esp_flat))
-            train_esp_q25 = float(jnp.percentile(train_esp_flat, 25))
-            train_esp_q75 = float(jnp.percentile(train_esp_flat, 75))
-            train_esp_total_points = train_esp_flat.size
-            # Check for NaN or Inf
-            train_esp_nan = float(jnp.sum(jnp.isnan(train_esp_flat)))
-            train_esp_inf = float(jnp.sum(jnp.isinf(train_esp_flat)))
-        else:
-            train_esp_mean = train_esp_std = train_esp_min = train_esp_max = train_esp_median = train_esp_q25 = train_esp_q75 = 0.0
-            train_esp_total_points = train_esp_nan = train_esp_inf = 0
-    except Exception as e:
-        train_esp_mean = train_esp_std = train_esp_min = train_esp_max = train_esp_median = train_esp_q25 = train_esp_q75 = 0.0
-        train_esp_total_points = train_esp_nan = train_esp_inf = 0
-        print(f"  Warning: Could not compute ESP statistics: {e}")
-    
-    try:
-        train_n_grid = int(jnp.mean(jnp.array([len(e) for e in train_data.get("esp", [])]))) if len(train_data.get("esp", [])) > 0 else 0
-        train_n_grid_min = int(jnp.min(jnp.array([len(e) for e in train_data.get("esp", [])]))) if len(train_data.get("esp", [])) > 0 else 0
-        train_n_grid_max = int(jnp.max(jnp.array([len(e) for e in train_data.get("esp", [])]))) if len(train_data.get("esp", [])) > 0 else 0
-    except:
-        train_n_grid = train_n_grid_min = train_n_grid_max = 0
-    
-    # Check VDW surface statistics
-    # Conversion factor: 1 Bohr = 0.529177 Angstrom
-    BOHR_TO_ANGSTROM = 0.529177
-    try:
-        train_vdw_list = train_data.get("vdw_surface", [])
-        if len(train_vdw_list) > 0:
-            train_vdw_shapes = [jnp.array(e).shape for e in train_vdw_list[:5]]  # First 5 samples
-            train_vdw_first = jnp.array(train_vdw_list[0])
-            # Convert to Angstrom if grid is in Bohr
-            if esp_grid_units.lower() == "bohr":
-                train_vdw_first_angstrom = train_vdw_first * BOHR_TO_ANGSTROM
-                train_vdw_mean = float(jnp.mean(train_vdw_first_angstrom))
-                train_vdw_std = float(jnp.std(train_vdw_first_angstrom))
-                train_vdw_min = float(jnp.min(train_vdw_first_angstrom))
-                train_vdw_max = float(jnp.max(train_vdw_first_angstrom))
-                train_vdw_units = "Å (converted from Bohr)"
-            else:
-                train_vdw_mean = float(jnp.mean(train_vdw_first))
-                train_vdw_std = float(jnp.std(train_vdw_first))
-                train_vdw_min = float(jnp.min(train_vdw_first))
-                train_vdw_max = float(jnp.max(train_vdw_first))
-                train_vdw_units = "Å"
-        else:
-            train_vdw_shapes = []
-            train_vdw_mean = train_vdw_std = train_vdw_min = train_vdw_max = 0.0
-            train_vdw_units = "Å"
-    except Exception as e:
-        train_vdw_shapes = []
-        train_vdw_mean = train_vdw_std = train_vdw_min = train_vdw_max = 0.0
-        train_vdw_units = "Å"
-        print(f"  Warning: Could not compute VDW surface statistics: {e}")
-=======
         else:
             train_esp_mean = train_esp_std = train_esp_min = train_esp_max = 0.0
     except:
@@ -782,46 +624,16 @@ def train_model(
         train_n_grid = int(jnp.mean(jnp.array([len(e) for e in train_data.get("esp", [])]))) if len(train_data.get("esp", [])) > 0 else 0
     except:
         train_n_grid = 0
->>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
     
     print(f"\nTraining Data:")
     print(f"  Samples: {train_n_samples}")
     print(f"  Atoms per sample: {train_n_atoms}")
-<<<<<<< HEAD
-    print(f"  Grid points per sample: mean={train_n_grid}, min={train_n_grid_min}, max={train_n_grid_max}")
-    print(f"  Total ESP grid points: {train_esp_total_points:,}")
-    print(f"  Monopoles:")
-    print(f"    Shape: {train_mono_shape}")
-    print(f"    Mean: {train_mono_mean:.6f} e")
-    print(f"    Std: {train_mono_std:.6f} e")
-    print(f"    Range: [{train_mono_min:.6f}, {train_mono_max:.6f}] e")
-    print(f"    Sum(abs): {train_mono_sum_abs:.6f} e")
-    print(f"    Non-zero count: {train_mono_nonzero:,} / {train_mono_data.size if train_mono_data.size > 0 else 0:,}")
-    print(f"  ESP:")
-    print(f"    Mean: {train_esp_mean:.6f} Ha/e ({train_esp_mean*627.5:.3f} kcal/mol/e)")
-    print(f"    Std: {train_esp_std:.6f} Ha/e ({train_esp_std*627.5:.3f} kcal/mol/e)")
-    print(f"    Range: [{train_esp_min:.6f}, {train_esp_max:.6f}] Ha/e")
-    print(f"    Range: [{train_esp_min*627.5:.3f}, {train_esp_max*627.5:.3f}] kcal/mol/e")
-    print(f"    Median: {train_esp_median:.6f} Ha/e ({train_esp_median*627.5:.3f} kcal/mol/e)")
-    print(f"    Q25-Q75: [{train_esp_q25:.6f}, {train_esp_q75:.6f}] Ha/e")
-    print(f"    NaN count: {train_esp_nan}, Inf count: {train_esp_inf}")
-    if train_vdw_shapes:
-        print(f"  VDW Surface (first sample):")
-        print(f"    Shape: {train_vdw_shapes[0]}")
-        print(f"    Position range: [{train_vdw_min:.4f}, {train_vdw_max:.4f}] {train_vdw_units}")
-        print(f"    Position mean: {train_vdw_mean:.4f} {train_vdw_units}, std: {train_vdw_std:.4f} {train_vdw_units}")
-        if esp_grid_units.lower() == "bohr":
-            # Also show original Bohr values
-            train_vdw_first_bohr = jnp.array(train_vdw_list[0])
-            print(f"    Position range (Bohr): [{float(jnp.min(train_vdw_first_bohr)):.4f}, {float(jnp.max(train_vdw_first_bohr)):.4f}] Bohr")
-=======
     print(f"  Grid points per sample: {train_n_grid}")
     print(f"  Monopoles: mean={train_mono_mean:.6f} e, std={train_mono_std:.6f} e")
     print(f"  ESP: mean={train_esp_mean:.6f} Ha/e ({train_esp_mean*627.5:.3f} kcal/mol/e)")
     print(f"        std={train_esp_std:.6f} Ha/e ({train_esp_std*627.5:.3f} kcal/mol/e)")
     print(f"        range=[{train_esp_min:.6f}, {train_esp_max:.6f}] Ha/e")
     print(f"        range=[{train_esp_min*627.5:.3f}, {train_esp_max*627.5:.3f}] kcal/mol/e")
->>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
     
     # Validation data statistics
     valid_n_samples = len(valid_data["R"])
@@ -832,25 +644,6 @@ def train_model(
         if valid_mono_data.size > 0:
             valid_mono_mean = float(jnp.mean(valid_mono_data))
             valid_mono_std = float(jnp.std(valid_mono_data))
-<<<<<<< HEAD
-            valid_mono_min = float(jnp.min(valid_mono_data))
-            valid_mono_max = float(jnp.max(valid_mono_data))
-            valid_mono_sum_abs = float(jnp.sum(jnp.abs(valid_mono_data)))
-            valid_mono_nonzero = float(jnp.sum(jnp.abs(valid_mono_data) > 1e-6))
-            valid_mono_shape = valid_mono_data.shape
-        else:
-            valid_mono_mean = valid_mono_std = valid_mono_min = valid_mono_max = valid_mono_sum_abs = valid_mono_nonzero = 0.0
-            valid_mono_shape = (0,)
-    except Exception as e:
-        valid_mono_mean = valid_mono_std = valid_mono_min = valid_mono_max = valid_mono_sum_abs = valid_mono_nonzero = 0.0
-        valid_mono_shape = (0,)
-        print(f"  Warning: Could not compute validation monopole statistics: {e}")
-    
-    try:
-        valid_esp_list = valid_data.get("esp", [])
-        if len(valid_esp_list) > 0:
-            valid_esp_flat = jnp.concatenate([jnp.ravel(e) for e in valid_esp_list])
-=======
         else:
             valid_mono_mean = valid_mono_std = 0.0
     except:
@@ -859,64 +652,10 @@ def train_model(
     try:
         valid_esp_flat = jnp.concatenate([jnp.ravel(e) for e in valid_data.get("esp", [])])
         if valid_esp_flat.size > 0:
->>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
             valid_esp_mean = float(jnp.mean(valid_esp_flat))
             valid_esp_std = float(jnp.std(valid_esp_flat))
             valid_esp_min = float(jnp.min(valid_esp_flat))
             valid_esp_max = float(jnp.max(valid_esp_flat))
-<<<<<<< HEAD
-            valid_esp_median = float(jnp.median(valid_esp_flat))
-            valid_esp_q25 = float(jnp.percentile(valid_esp_flat, 25))
-            valid_esp_q75 = float(jnp.percentile(valid_esp_flat, 75))
-            valid_esp_total_points = valid_esp_flat.size
-            # Check for NaN or Inf
-            valid_esp_nan = float(jnp.sum(jnp.isnan(valid_esp_flat)))
-            valid_esp_inf = float(jnp.sum(jnp.isinf(valid_esp_flat)))
-        else:
-            valid_esp_mean = valid_esp_std = valid_esp_min = valid_esp_max = valid_esp_median = valid_esp_q25 = valid_esp_q75 = 0.0
-            valid_esp_total_points = valid_esp_nan = valid_esp_inf = 0
-    except Exception as e:
-        valid_esp_mean = valid_esp_std = valid_esp_min = valid_esp_max = valid_esp_median = valid_esp_q25 = valid_esp_q75 = 0.0
-        valid_esp_total_points = valid_esp_nan = valid_esp_inf = 0
-        print(f"  Warning: Could not compute validation ESP statistics: {e}")
-    
-    try:
-        valid_n_grid = int(jnp.mean(jnp.array([len(e) for e in valid_data.get("esp", [])]))) if len(valid_data.get("esp", [])) > 0 else 0
-        valid_n_grid_min = int(jnp.min(jnp.array([len(e) for e in valid_data.get("esp", [])]))) if len(valid_data.get("esp", [])) > 0 else 0
-        valid_n_grid_max = int(jnp.max(jnp.array([len(e) for e in valid_data.get("esp", [])]))) if len(valid_data.get("esp", [])) > 0 else 0
-    except:
-        valid_n_grid = valid_n_grid_min = valid_n_grid_max = 0
-    
-    # Check VDW surface statistics
-    try:
-        valid_vdw_list = valid_data.get("vdw_surface", [])
-        if len(valid_vdw_list) > 0:
-            valid_vdw_shapes = [jnp.array(e).shape for e in valid_vdw_list[:5]]  # First 5 samples
-            valid_vdw_first = jnp.array(valid_vdw_list[0])
-            # Convert to Angstrom if grid is in Bohr
-            if esp_grid_units.lower() == "bohr":
-                valid_vdw_first_angstrom = valid_vdw_first * BOHR_TO_ANGSTROM
-                valid_vdw_mean = float(jnp.mean(valid_vdw_first_angstrom))
-                valid_vdw_std = float(jnp.std(valid_vdw_first_angstrom))
-                valid_vdw_min = float(jnp.min(valid_vdw_first_angstrom))
-                valid_vdw_max = float(jnp.max(valid_vdw_first_angstrom))
-                valid_vdw_units = "Å (converted from Bohr)"
-            else:
-                valid_vdw_mean = float(jnp.mean(valid_vdw_first))
-                valid_vdw_std = float(jnp.std(valid_vdw_first))
-                valid_vdw_min = float(jnp.min(valid_vdw_first))
-                valid_vdw_max = float(jnp.max(valid_vdw_first))
-                valid_vdw_units = "Å"
-        else:
-            valid_vdw_shapes = []
-            valid_vdw_mean = valid_vdw_std = valid_vdw_min = valid_vdw_max = 0.0
-            valid_vdw_units = "Å"
-    except Exception as e:
-        valid_vdw_shapes = []
-        valid_vdw_mean = valid_vdw_std = valid_vdw_min = valid_vdw_max = 0.0
-        valid_vdw_units = "Å"
-        print(f"  Warning: Could not compute validation VDW surface statistics: {e}")
-=======
         else:
             valid_esp_mean = valid_esp_std = valid_esp_min = valid_esp_max = 0.0
     except:
@@ -926,65 +665,24 @@ def train_model(
         valid_n_grid = int(jnp.mean(jnp.array([len(e) for e in valid_data.get("esp", [])]))) if len(valid_data.get("esp", [])) > 0 else 0
     except:
         valid_n_grid = 0
->>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
     
     print(f"\nValidation Data:")
     print(f"  Samples: {valid_n_samples}")
     print(f"  Atoms per sample: {valid_n_atoms}")
-<<<<<<< HEAD
-    print(f"  Grid points per sample: mean={valid_n_grid}, min={valid_n_grid_min}, max={valid_n_grid_max}")
-    print(f"  Total ESP grid points: {valid_esp_total_points:,}")
-    print(f"  Monopoles:")
-    print(f"    Shape: {valid_mono_shape}")
-    print(f"    Mean: {valid_mono_mean:.6f} e")
-    print(f"    Std: {valid_mono_std:.6f} e")
-    print(f"    Range: [{valid_mono_min:.6f}, {valid_mono_max:.6f}] e")
-    print(f"    Sum(abs): {valid_mono_sum_abs:.6f} e")
-    print(f"    Non-zero count: {valid_mono_nonzero:,} / {valid_mono_data.size if valid_mono_data.size > 0 else 0:,}")
-    print(f"  ESP:")
-    print(f"    Mean: {valid_esp_mean:.6f} Ha/e ({valid_esp_mean*627.5:.3f} kcal/mol/e)")
-    print(f"    Std: {valid_esp_std:.6f} Ha/e ({valid_esp_std*627.5:.3f} kcal/mol/e)")
-    print(f"    Range: [{valid_esp_min:.6f}, {valid_esp_max:.6f}] Ha/e")
-    print(f"    Range: [{valid_esp_min*627.5:.3f}, {valid_esp_max*627.5:.3f}] kcal/mol/e")
-    print(f"    Median: {valid_esp_median:.6f} Ha/e ({valid_esp_median*627.5:.3f} kcal/mol/e)")
-    print(f"    Q25-Q75: [{valid_esp_q25:.6f}, {valid_esp_q75:.6f}] Ha/e")
-    print(f"    NaN count: {valid_esp_nan}, Inf count: {valid_esp_inf}")
-    if valid_vdw_shapes:
-        print(f"  VDW Surface (first sample):")
-        print(f"    Shape: {valid_vdw_shapes[0]}")
-        print(f"    Position range: [{valid_vdw_min:.4f}, {valid_vdw_max:.4f}] {valid_vdw_units}")
-        print(f"    Position mean: {valid_vdw_mean:.4f} {valid_vdw_units}, std: {valid_vdw_std:.4f} {valid_vdw_units}")
-        if esp_grid_units.lower() == "bohr":
-            # Also show original Bohr values
-            valid_vdw_first_bohr = jnp.array(valid_vdw_list[0])
-            print(f"    Position range (Bohr): [{float(jnp.min(valid_vdw_first_bohr)):.4f}, {float(jnp.max(valid_vdw_first_bohr)):.4f}] Bohr")
-=======
     print(f"  Grid points per sample: {valid_n_grid}")
     print(f"  Monopoles: mean={valid_mono_mean:.6f} e, std={valid_mono_std:.6f} e")
     print(f"  ESP: mean={valid_esp_mean:.6f} Ha/e ({valid_esp_mean*627.5:.3f} kcal/mol/e)")
     print(f"        std={valid_esp_std:.6f} Ha/e ({valid_esp_std*627.5:.3f} kcal/mol/e)")
     print(f"        range=[{valid_esp_min:.6f}, {valid_esp_max:.6f}] Ha/e")
     print(f"        range=[{valid_esp_min*627.5:.3f}, {valid_esp_max*627.5:.3f}] kcal/mol/e")
->>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
     
     print(f"\nTraining Configuration:")
     print(f"  Batch size: {batch_size}")
     print(f"  Steps per epoch: {train_n_samples // batch_size}")
     print(f"  ESP weight: {esp_w}")
     print(f"  Charge weight: {chg_w}")
-<<<<<<< HEAD
-    print(f"  Charge conservation weight: {charge_conservation_w}")
-    print(f"  Distance weighting: {distance_weighting}")
-    print(f"    Distance scale: {distance_scale} Å")
-    print(f"    Distance min: {distance_min} Å")
-    print(f"  ESP magnitude weighting: {esp_magnitude_weighting}")
-    print(f"  ESP grid units: {esp_grid_units}")
-    print(f"  Radii cutoff multiplier: {radii_cutoff_multiplier}")
-    print(f"  Use atomic radii mask: True")
-=======
     print(f"  Distance weighting: {distance_weighting}")
     print(f"  ESP magnitude weighting: {esp_magnitude_weighting}")
->>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
     print(f"  Learning rate: {learning_rate}")
     print(f"  Number of DCM per atom: {ndcm}")
     print(f"  Total parameters: {sum(x.size for x in jax.tree_util.tree_leaves(params)):,}")
@@ -997,33 +695,6 @@ def train_model(
         print("\nPreprocessing monopoles...")
         train_data = preprocess_monopoles(train_data, mono_imputation_fn, num_atoms=num_atoms, batch_size=batch_size, verbose=True)
         valid_data = preprocess_monopoles(valid_data, mono_imputation_fn, num_atoms=num_atoms, batch_size=batch_size, verbose=True)
-<<<<<<< HEAD
-        
-        # Print statistics after imputation
-        print("\nPost-imputation Statistics:")
-        try:
-            train_mono_imputed = jnp.array(train_data.get("mono", []))
-            if train_mono_imputed.size > 0:
-                print(f"  Training monopoles after imputation:")
-                print(f"    Mean: {float(jnp.mean(train_mono_imputed)):.6f} e")
-                print(f"    Std: {float(jnp.std(train_mono_imputed)):.6f} e")
-                print(f"    Range: [{float(jnp.min(train_mono_imputed)):.6f}, {float(jnp.max(train_mono_imputed)):.6f}] e")
-                print(f"    Sum(abs): {float(jnp.sum(jnp.abs(train_mono_imputed))):.6f} e")
-                print(f"    Non-zero: {float(jnp.sum(jnp.abs(train_mono_imputed) > 1e-6)):,} / {train_mono_imputed.size:,}")
-            
-            valid_mono_imputed = jnp.array(valid_data.get("mono", []))
-            if valid_mono_imputed.size > 0:
-                print(f"  Validation monopoles after imputation:")
-                print(f"    Mean: {float(jnp.mean(valid_mono_imputed)):.6f} e")
-                print(f"    Std: {float(jnp.std(valid_mono_imputed)):.6f} e")
-                print(f"    Range: [{float(jnp.min(valid_mono_imputed)):.6f}, {float(jnp.max(valid_mono_imputed)):.6f}] e")
-                print(f"    Sum(abs): {float(jnp.sum(jnp.abs(valid_mono_imputed))):.6f} e")
-                print(f"    Non-zero: {float(jnp.sum(jnp.abs(valid_mono_imputed) > 1e-6)):,} / {valid_mono_imputed.size:,}")
-        except Exception as e:
-            print(f"  Warning: Could not compute post-imputation statistics: {e}")
-        
-=======
->>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
         # Set imputation function to None since monopoles are already imputed
         mono_imputation_fn = None
     
@@ -1036,536 +707,7 @@ def train_model(
     
     # Batches for the validation set need to be prepared only once.
     key, shuffle_key = jax.random.split(key)
-<<<<<<< HEAD
-    print(f"\nPreparing validation batches (batch_size={batch_size}, num_atoms={num_atoms})...")
     valid_batches = prepare_batches(shuffle_key, valid_data, batch_size, num_atoms=num_atoms, mono_imputation_fn=mono_imputation_fn)
-    print(f"  Created {len(valid_batches)} validation batches")
-    
-    # Print batch statistics
-    if len(valid_batches) > 0:
-        first_valid_batch = valid_batches[0]
-        print(f"  First validation batch shapes:")
-        for k, v in first_valid_batch.items():
-            if hasattr(v, 'shape'):
-                print(f"    {k}: {v.shape} (dtype={v.dtype})")
-            else:
-                print(f"    {k}: {type(v)}")
-    
-    # ESP sense check: Calculate ESP from reference monopoles
-    print("\n" + "="*80)
-    print("ESP Sense Check (Monopoles)")
-    print("="*80)
-    print("Computing ESP from reference monopoles on validation set...")
-    
-    try:
-        all_esp_pred_from_mono = []
-        all_esp_target = []
-        all_esp_mask = []
-        
-        for batch_idx, batch in enumerate(valid_batches):
-            # Get batch data
-            R_batch = batch["R"]  # Atom positions: (batch_size * num_atoms, 3) or (batch_size, num_atoms, 3)
-            mono_batch = batch["mono"]  # Monopoles: (batch_size * num_atoms,) or (batch_size, num_atoms)
-            vdw_batch = batch["vdw_surface"]  # Grid points: (batch_size, ngrid, 3) or (ngrid, 3)
-            esp_target_batch = batch["esp"]  # Target ESP: (batch_size, ngrid) or (ngrid,)
-            n_atoms_batch = batch["N"]  # Number of atoms per sample: (batch_size,) or scalar
-            n_grid_batch = batch["n_grid"]  # Number of grid points per sample: (batch_size,) or scalar
-            
-            # Determine batch size
-            if isinstance(n_atoms_batch, (int, np.integer)):
-                actual_batch_size = 1
-            elif n_atoms_batch.ndim == 0:
-                actual_batch_size = 1
-            else:
-                actual_batch_size = len(n_atoms_batch)
-            
-            # Handle different input shapes
-            # Reshape R to (batch_size, num_atoms, 3)
-            if R_batch.ndim == 2:
-                # Flattened: (batch_size * num_atoms, 3)
-                total_atoms = R_batch.shape[0]
-                if actual_batch_size == 1:
-                    num_atoms_per_sample = total_atoms
-                    R_reshaped = R_batch[None, :, :]  # (1, num_atoms, 3)
-                else:
-                    num_atoms_per_sample = total_atoms // actual_batch_size
-                    R_reshaped = R_batch.reshape(actual_batch_size, num_atoms_per_sample, 3)
-            else:
-                # Already batched: (batch_size, num_atoms, 3)
-                R_reshaped = R_batch
-                num_atoms_per_sample = R_reshaped.shape[1]
-            
-            # Reshape mono to (batch_size, num_atoms)
-            if mono_batch.ndim == 1:
-                # Flattened: (batch_size * num_atoms,)
-                if actual_batch_size == 1:
-                    mono_reshaped = mono_batch[None, :]  # (1, num_atoms)
-                else:
-                    mono_reshaped = mono_batch.reshape(actual_batch_size, num_atoms_per_sample)
-            else:
-                # Already batched: (batch_size, num_atoms)
-                mono_reshaped = mono_batch
-            
-            # Handle vdw_surface shape
-            if vdw_batch.ndim == 2:
-                # Single sample: (ngrid, 3) -> add batch dimension
-                vdw_reshaped = vdw_batch[None, :, :]  # (1, ngrid, 3)
-            else:
-                # Already batched: (batch_size, ngrid, 3)
-                vdw_reshaped = vdw_batch
-            
-            # Handle esp_target shape
-            if esp_target_batch.ndim == 1:
-                # Single sample: (ngrid,) -> add batch dimension
-                esp_target_reshaped = esp_target_batch[None, :]  # (1, ngrid)
-            else:
-                # Already batched: (batch_size, ngrid)
-                esp_target_reshaped = esp_target_batch
-            
-            # Get atomic numbers and atom mask for masking
-            Z_batch = batch.get("Z")
-            atom_mask_batch = batch.get("atom_mask")
-            
-            # Reshape Z to (batch_size, num_atoms)
-            if Z_batch is not None:
-                if Z_batch.ndim == 1:
-                    if actual_batch_size == 1:
-                        Z_reshaped = Z_batch[None, :]
-                    else:
-                        Z_reshaped = Z_batch.reshape(actual_batch_size, num_atoms_per_sample)
-                else:
-                    Z_reshaped = Z_batch
-            else:
-                Z_reshaped = None
-            
-            # Reshape atom_mask to (batch_size, num_atoms)
-            if atom_mask_batch is not None:
-                if atom_mask_batch.ndim == 1:
-                    if actual_batch_size == 1:
-                        atom_mask_reshaped = atom_mask_batch[None, :]
-                    else:
-                        atom_mask_reshaped = atom_mask_batch.reshape(actual_batch_size, num_atoms_per_sample)
-                else:
-                    atom_mask_reshaped = atom_mask_batch
-            else:
-                atom_mask_reshaped = None
-            
-            # Compute ESP from monopoles for each sample in batch
-            batch_esp_pred = []
-            batch_esp_mask = []
-            
-            for sample_idx in range(actual_batch_size):
-                R_sample = R_reshaped[sample_idx]  # (num_atoms, 3)
-                mono_sample = mono_reshaped[sample_idx]  # (num_atoms,)
-                vdw_sample = vdw_reshaped[sample_idx]  # (ngrid, 3)
-                
-                # Get actual number of atoms (not padded)
-                if isinstance(n_atoms_batch, (int, np.integer)):
-                    n_real = n_atoms_batch
-                elif n_atoms_batch.ndim == 0:
-                    n_real = int(n_atoms_batch)
-                else:
-                    n_real = int(n_atoms_batch[sample_idx])
-                
-                # Use only real atoms (not padding)
-                R_real = R_sample[:n_real]  # (n_real, 3)
-                mono_real = mono_sample[:n_real]  # (n_real,)
-                
-                # Handle unit conversion for grid
-                # Note: calc_esp expects positions in Angstrom (based on coulomb_potential conversion factor)
-                # If grid is in Bohr, we need to convert it
-                vdw_sample_for_esp = vdw_sample.copy()
-                if esp_grid_units.lower() == "bohr":
-                    # Convert grid from Bohr to Angstrom for ESP calculation
-                    vdw_sample_for_esp = vdw_sample * BOHR_TO_ANGSTROM
-                
-                # Calculate ESP from monopoles
-                esp_pred_sample = calc_esp(
-                    charge_positions=R_real,
-                    charge_values=mono_real,
-                    grid_positions=vdw_sample_for_esp
-                )  # (ngrid,)
-                
-                batch_esp_pred.append(esp_pred_sample)
-                
-                # Compute ESP mask using atomic radii (same logic as loss.py)
-                # Initialize mask as all ones
-                distance_mask = jnp.ones(vdw_sample.shape[0], dtype=jnp.float32)
-                
-                # Always apply atomic radii masking in sense check (matching training)
-                if Z_reshaped is not None:
-                    Z_sample = Z_reshaped[sample_idx][:n_real]  # (n_real,)
-                    R_sample_for_dist = R_real  # Already in Angstrom
-                    
-                    # Handle unit conversion for distance calculations
-                    vdw_sample_for_dist = vdw_sample.copy()
-                    if esp_grid_units.lower() == "bohr":
-                        # Convert grid from Bohr to Angstrom for distance computation
-                        vdw_sample_for_dist = vdw_sample * BOHR_TO_ANGSTROM
-                    
-                    # Compute distances from grid to atoms
-                    diff = vdw_sample_for_dist[:, None, :] - R_sample_for_dist[None, :, :]  # (ngrid, n_real, 3)
-                    distances = jnp.linalg.norm(diff, axis=-1)  # (ngrid, n_real)
-                    
-                    # Get atomic radii (in Angstrom)
-                    atomic_nums_int = Z_sample.astype(jnp.int32)
-                    atomic_radii = jnp.take(RADII_TABLE, atomic_nums_int, mode='clip')  # (n_real,)
-                    
-                    # Check if any atom is too close (within radii_cutoff_multiplier * covalent_radii)
-                    cutoff_distances = radii_cutoff_multiplier * atomic_radii[None, :]  # (1, n_real) -> broadcast to (ngrid, n_real)
-                    within_cutoff = distances < cutoff_distances  # (ngrid, n_real)
-                    distance_mask = (~jnp.any(within_cutoff, axis=-1)).astype(jnp.float32)  # (ngrid,)
-                
-                batch_esp_mask.append(distance_mask)
-            
-            # Stack predictions and masks for this batch
-            batch_esp_pred = jnp.stack(batch_esp_pred, axis=0)  # (batch_size, ngrid)
-            batch_esp_mask = jnp.stack(batch_esp_mask, axis=0)  # (batch_size, ngrid)
-            
-            # Collect results
-            all_esp_pred_from_mono.append(batch_esp_pred)
-            all_esp_target.append(esp_target_reshaped)
-            all_esp_mask.append(batch_esp_mask)
-        
-        # Concatenate all batches
-        all_esp_pred_from_mono = jnp.concatenate(all_esp_pred_from_mono, axis=0)  # (total_samples, ngrid)
-        all_esp_target = jnp.concatenate(all_esp_target, axis=0)  # (total_samples, ngrid)
-        all_esp_mask = jnp.concatenate(all_esp_mask, axis=0)  # (total_samples, ngrid)
-        
-        # Flatten for statistics
-        esp_pred_flat = all_esp_pred_from_mono.ravel()
-        esp_target_flat = all_esp_target.ravel()
-        esp_mask_flat = all_esp_mask.ravel()
-        
-        # Compute errors
-        esp_errors = esp_pred_flat - esp_target_flat
-        
-        # Statistics (unmasked)
-        mae_unmasked = float(jnp.mean(jnp.abs(esp_errors)))
-        rmse_unmasked = float(jnp.sqrt(jnp.mean(esp_errors**2)))
-        
-        # Statistics (masked)
-        mask_bool = esp_mask_flat > 0.5
-        n_valid = int(jnp.sum(mask_bool))
-        n_total = len(esp_mask_flat)
-        
-        if n_valid > 0:
-            esp_pred_masked = esp_pred_flat[mask_bool]
-            esp_target_masked = esp_target_flat[mask_bool]
-            esp_errors_masked = esp_pred_masked - esp_target_masked
-            
-            mae_masked = float(jnp.mean(jnp.abs(esp_errors_masked)))
-            rmse_masked = float(jnp.sqrt(jnp.mean(esp_errors_masked**2)))
-            
-            # R² (masked)
-            ss_res = jnp.sum(esp_errors_masked**2)
-            ss_tot = jnp.sum((esp_target_masked - jnp.mean(esp_target_masked))**2)
-            r2_masked = 1.0 - (ss_res / jnp.maximum(ss_tot, 1e-10))
-            r2_masked = float(jnp.clip(r2_masked, -10.0, 1.0))
-        else:
-            mae_masked = rmse_masked = r2_masked = float('nan')
-        
-        # R² (unmasked)
-        ss_res_unmasked = jnp.sum(esp_errors**2)
-        ss_tot_unmasked = jnp.sum((esp_target_flat - jnp.mean(esp_target_flat))**2)
-        r2_unmasked = 1.0 - (ss_res_unmasked / jnp.maximum(ss_tot_unmasked, 1e-10))
-        r2_unmasked = float(jnp.clip(r2_unmasked, -10.0, 1.0))
-        
-        # Per-sample statistics to identify problematic samples
-        per_sample_rmse = jnp.sqrt(jnp.mean((all_esp_pred_from_mono - all_esp_target)**2, axis=1))  # (n_samples,)
-        per_sample_mae = jnp.mean(jnp.abs(all_esp_pred_from_mono - all_esp_target), axis=1)  # (n_samples,)
-        worst_samples_idx = jnp.argsort(per_sample_rmse)[-5:][::-1]  # Top 5 worst samples
-        
-        # Print results
-        print(f"\nESP from Reference Monopoles (Validation Set):")
-        print(f"  Total samples: {all_esp_pred_from_mono.shape[0]}")
-        print(f"  Total grid points: {len(esp_pred_flat):,}")
-        print(f"  Valid grid points (masked): {n_valid:,} / {n_total:,} ({100.0*n_valid/n_total:.2f}%)")
-        print(f"\n  Unmasked Statistics:")
-        print(f"    MAE: {mae_unmasked:.6f} Ha/e ({mae_unmasked*627.5:.3f} kcal/mol/e)")
-        print(f"    RMSE: {rmse_unmasked:.6f} Ha/e ({rmse_unmasked*627.5:.3f} kcal/mol/e)")
-        print(f"    R²: {r2_unmasked:.6f}")
-        print(f"    Per-sample RMSE: mean={float(jnp.mean(per_sample_rmse)):.6f}, "
-              f"median={float(jnp.median(per_sample_rmse)):.6f}, "
-              f"max={float(jnp.max(per_sample_rmse)):.6f} Ha/e")
-        if n_valid > 0:
-            print(f"\n  Masked Statistics:")
-            print(f"    MAE: {mae_masked:.6f} Ha/e ({mae_masked*627.5:.3f} kcal/mol/e)")
-            print(f"    RMSE: {rmse_masked:.6f} Ha/e ({rmse_masked*627.5:.3f} kcal/mol/e)")
-            print(f"    R²: {r2_masked:.6f}")
-        
-        # Print worst samples
-        print(f"\n  Worst 5 samples (by RMSE):")
-        for rank, sample_idx in enumerate(worst_samples_idx):
-            sample_rmse = float(per_sample_rmse[sample_idx])
-            sample_mae = float(per_sample_mae[sample_idx])
-            print(f"    {rank+1}. Sample {int(sample_idx)}: "
-                  f"RMSE={sample_rmse:.6f} Ha/e ({sample_rmse*627.5:.3f} kcal/mol/e), "
-                  f"MAE={sample_mae:.6f} Ha/e ({sample_mae*627.5:.3f} kcal/mol/e)")
-        
-        # Check error distribution
-        error_abs = jnp.abs(esp_errors)
-        large_error_threshold = 0.1  # 0.1 Ha/e = ~63 kcal/mol/e
-        n_large_errors = int(jnp.sum(error_abs > large_error_threshold))
-        pct_large_errors = 100.0 * n_large_errors / len(error_abs)
-        
-        print(f"\n  Error Distribution:")
-        print(f"    Errors > {large_error_threshold:.3f} Ha/e ({large_error_threshold*627.5:.1f} kcal/mol/e): "
-              f"{n_large_errors:,} / {len(error_abs):,} ({pct_large_errors:.2f}%)")
-        print(f"    Error percentiles:")
-        for pct in [50, 75, 90, 95, 99]:
-            pct_val = float(jnp.percentile(error_abs, pct))
-            print(f"      {pct}th: {pct_val:.6f} Ha/e ({pct_val*627.5:.3f} kcal/mol/e)")
-        
-        # Check if results are reasonable
-        if rmse_unmasked < 0.01:  # Less than 0.01 Ha/e (~6.3 kcal/mol/e)
-            print(f"\n  ✓ ESP calculation looks excellent (RMSE < 0.01 Ha/e)")
-        elif rmse_unmasked < 0.05:  # Less than 0.05 Ha/e (~31 kcal/mol/e)
-            print(f"\n  ✓ ESP calculation looks reasonable (RMSE < 0.05 Ha/e)")
-        elif rmse_unmasked < 0.1:  # Less than 0.1 Ha/e (~63 kcal/mol/e)
-            print(f"\n  ⚠️  ESP calculation has moderate errors (RMSE < 0.1 Ha/e)")
-            print(f"      Note: Monopoles alone may not reproduce full ESP if higher-order")
-            print(f"      multipoles (dipoles, quadrupoles) contribute significantly.")
-        elif rmse_unmasked < 0.5:  # Less than 0.5 Ha/e (~314 kcal/mol/e)
-            print(f"\n  ⚠️  ESP calculation has large errors (RMSE < 0.5 Ha/e)")
-            print(f"      This may indicate issues with:")
-            print(f"      - Monopole values (may need higher-order multipoles)")
-            print(f"      - Grid alignment")
-            print(f"      - Unit conversions")
-            print(f"      - {pct_large_errors:.1f}% of points have errors > {large_error_threshold*627.5:.1f} kcal/mol/e")
-            if radii_cutoff_multiplier < 2.0:
-                print(f"      - Consider increasing radii_cutoff_multiplier from {radii_cutoff_multiplier} to >= 2.0")
-                print(f"        to mask more points near atomic nuclei (where ESP has singularities)")
-        else:
-            print(f"\n  ⚠️  ESP calculation has very large errors (RMSE >= 0.5 Ha/e)")
-            print(f"      This strongly suggests issues with:")
-            print(f"      - Monopole values (likely need higher-order multipoles)")
-            print(f"      - Grid alignment")
-            print(f"      - Unit conversions")
-            print(f"      - {pct_large_errors:.1f}% of points have errors > {large_error_threshold*627.5:.1f} kcal/mol/e")
-            if radii_cutoff_multiplier < 2.0:
-                print(f"      - Consider increasing radii_cutoff_multiplier from {radii_cutoff_multiplier} to >= 2.0")
-                print(f"        to mask more points near atomic nuclei (where ESP has singularities)")
-        
-        # Additional diagnostics
-        if r2_unmasked < 0.5:
-            print(f"\n  ⚠️  Low R² ({r2_unmasked:.4f}) suggests monopoles alone cannot")
-            print(f"      accurately reproduce the target ESP. This is expected if:")
-            print(f"      - Target ESP includes higher-order multipole contributions")
-            print(f"      - Target ESP is from quantum mechanical calculations")
-            print(f"      - Distributed multipoles (DCM) are needed for accuracy")
-        
-        # Unit and masking diagnostics
-        print(f"\n  Unit and Masking Diagnostics:")
-        print(f"    ESP grid units: {esp_grid_units}")
-        print(f"    Radii cutoff multiplier: {radii_cutoff_multiplier}")
-        if radii_cutoff_multiplier < 2.0:
-            print(f"    ⚠️  WARNING: Radii cutoff multiplier ({radii_cutoff_multiplier}) is very low!")
-            print(f"       This means only points within {radii_cutoff_multiplier}× covalent radius are masked.")
-            print(f"       Many points near atomic nuclei (where ESP has singularities) will NOT be masked.")
-            print(f"       Recommended: Use radii_cutoff_multiplier >= 2.0 (typically 2.0-4.0)")
-        print(f"    Use atomic radii mask: True (always enabled in sense check)")
-        if len(valid_batches) > 0:
-            first_batch = valid_batches[0]
-            if "vdw_surface" in first_batch:
-                vdw_first = jnp.array(first_batch["vdw_surface"][0])  # First sample
-                if esp_grid_units.lower() == "bohr":
-                    vdw_first_angstrom = vdw_first * BOHR_TO_ANGSTROM
-                    print(f"    First sample grid range (Bohr): [{float(jnp.min(vdw_first)):.4f}, {float(jnp.max(vdw_first)):.4f}]")
-                    print(f"    First sample grid range (Angstrom): [{float(jnp.min(vdw_first_angstrom)):.4f}, {float(jnp.max(vdw_first_angstrom)):.4f}]")
-                else:
-                    print(f"    First sample grid range (Angstrom): [{float(jnp.min(vdw_first)):.4f}, {float(jnp.max(vdw_first)):.4f}]")
-            if "R" in first_batch:
-                R_first = jnp.array(first_batch["R"][:3])  # First 3 atoms (assuming 3 atoms per molecule)
-                print(f"    First sample atom positions range (Angstrom): [{float(jnp.min(R_first)):.4f}, {float(jnp.max(R_first)):.4f}]")
-        
-    except Exception as e:
-        print(f"  ⚠️  ESP sense check failed: {e}")
-        import traceback
-        traceback.print_exc()
-    
-    print("="*80 + "\n")
-    
-    # Calculate optimal grid shifts by fitting monopole ESP to true ESP
-    print("\n" + "="*80)
-    print("ESP Grid Shift Optimization")
-    print("="*80)
-    print("Finding optimal grid shifts to minimize monopole ESP error...")
-    
-    try:
-        grid_shifts = []  # List of shift dictionaries
-        
-        for batch_idx, batch in enumerate(valid_batches):
-            # Get batch data (same as ESP sense check)
-            R_batch = batch["R"]
-            mono_batch = batch["mono"]
-            vdw_batch = batch["vdw_surface"]
-            esp_target_batch = batch["esp"]
-            n_atoms_batch = batch["N"]
-            Z_batch = batch.get("Z", None)
-            
-            # Determine batch size
-            if isinstance(n_atoms_batch, (int, np.integer)):
-                actual_batch_size = 1
-            elif n_atoms_batch.ndim == 0:
-                actual_batch_size = 1
-            else:
-                actual_batch_size = len(n_atoms_batch)
-            
-            # Reshape inputs (same logic as ESP sense check)
-            if R_batch.ndim == 2:
-                total_atoms = R_batch.shape[0]
-                if actual_batch_size == 1:
-                    num_atoms_per_sample = total_atoms
-                    R_reshaped = R_batch[None, :, :]
-                else:
-                    num_atoms_per_sample = total_atoms // actual_batch_size
-                    R_reshaped = R_batch.reshape(actual_batch_size, num_atoms_per_sample, 3)
-            else:
-                R_reshaped = R_batch
-                num_atoms_per_sample = R_reshaped.shape[1]
-            
-            if mono_batch.ndim == 1:
-                if actual_batch_size == 1:
-                    mono_reshaped = mono_batch[None, :]
-                else:
-                    mono_reshaped = mono_batch.reshape(actual_batch_size, num_atoms_per_sample)
-            else:
-                mono_reshaped = mono_batch
-            
-            if vdw_batch.ndim == 2:
-                vdw_reshaped = vdw_batch[None, :, :]
-            else:
-                vdw_reshaped = vdw_batch
-            
-            if esp_target_batch.ndim == 1:
-                esp_target_reshaped = esp_target_batch[None, :]
-            else:
-                esp_target_reshaped = esp_target_batch
-            
-            Z_reshaped = None
-            if Z_batch is not None:
-                if Z_batch.ndim == 1:
-                    if actual_batch_size == 1:
-                        Z_reshaped = Z_batch[None, :]
-                    else:
-                        Z_reshaped = Z_batch.reshape(actual_batch_size, num_atoms_per_sample)
-                else:
-                    Z_reshaped = Z_batch
-            
-            # Process each sample in the batch
-            for sample_idx in range(actual_batch_size):
-                R_sample = np.array(R_reshaped[sample_idx])  # (num_atoms, 3)
-                mono_sample = np.array(mono_reshaped[sample_idx])  # (num_atoms,)
-                vdw_sample = np.array(vdw_reshaped[sample_idx])  # (ngrid, 3)
-                esp_target_sample = np.array(esp_target_reshaped[sample_idx])  # (ngrid,)
-                
-                # Get actual number of atoms
-                if isinstance(n_atoms_batch, (int, np.integer)):
-                    n_real = n_atoms_batch
-                elif n_atoms_batch.ndim == 0:
-                    n_real = int(n_atoms_batch)
-                else:
-                    n_real = int(n_atoms_batch[sample_idx])
-                
-                R_real = R_sample[:n_real]  # (n_real, 3)
-                mono_real = mono_sample[:n_real]  # (n_real,)
-                
-                # Handle unit conversion
-                vdw_sample_for_esp = vdw_sample.copy()
-                if esp_grid_units.lower() == "bohr":
-                    vdw_sample_for_esp = vdw_sample * BOHR_TO_ANGSTROM
-                
-                # Define objective function: RMSE between monopole ESP and true ESP
-                def objective(shift):
-                    """Calculate RMSE for a given grid shift."""
-                    shifted_grid = vdw_sample_for_esp + shift.reshape(1, 3)
-                    esp_pred = calc_esp(
-                        charge_positions=R_real,
-                        charge_values=mono_real,
-                        grid_positions=shifted_grid
-                    )
-                    # Convert JAX array to NumPy for optimization
-                    esp_pred_np = np.array(esp_pred)
-                    errors = esp_pred_np - esp_target_sample
-                    rmse = np.sqrt(np.mean(errors**2))
-                    return rmse
-                
-                # Initial guess: zero shift
-                initial_shift = np.zeros(3)
-                
-                # Optimize shift (use bounded optimization to avoid extreme shifts)
-                # Limit shifts to ±2.0 Angstrom in each direction
-                bounds = [(-2.0, 2.0), (-2.0, 2.0), (-2.0, 2.0)]
-                result = minimize(
-                    objective,
-                    initial_shift,
-                    method='L-BFGS-B',
-                    bounds=bounds,
-                    options={'maxiter': 100, 'ftol': 1e-6}
-                )
-                
-                optimal_shift = result.x
-                optimal_rmse = result.fun
-                
-                # Calculate RMSE without shift for comparison
-                rmse_no_shift = objective(np.zeros(3))
-                
-                grid_shifts.append({
-                    'batch_idx': batch_idx,
-                    'sample_idx': sample_idx,
-                    'global_idx': len(grid_shifts),
-                    'shift': optimal_shift,
-                    'rmse_with_shift': optimal_rmse,
-                    'rmse_no_shift': rmse_no_shift,
-                    'improvement': rmse_no_shift - optimal_rmse,
-                    'improvement_pct': 100.0 * (rmse_no_shift - optimal_rmse) / rmse_no_shift if rmse_no_shift > 0 else 0.0
-                })
-        
-        # Print statistics
-        if grid_shifts:
-            shifts_array = np.array([s['shift'] for s in grid_shifts])
-            improvements = np.array([s['improvement'] for s in grid_shifts])
-            improvements_pct = np.array([s['improvement_pct'] for s in grid_shifts])
-            
-            print(f"\n  Processed {len(grid_shifts)} samples")
-            print(f"  Shift statistics (Angstrom):")
-            print(f"    Mean shift: [{np.mean(shifts_array[:, 0]):.6f}, {np.mean(shifts_array[:, 1]):.6f}, {np.mean(shifts_array[:, 2]):.6f}]")
-            print(f"    Std shift: [{np.std(shifts_array[:, 0]):.6f}, {np.std(shifts_array[:, 1]):.6f}, {np.std(shifts_array[:, 2]):.6f}]")
-            print(f"    Min shift: [{np.min(shifts_array[:, 0]):.6f}, {np.min(shifts_array[:, 1]):.6f}, {np.min(shifts_array[:, 2]):.6f}]")
-            print(f"    Max shift: [{np.max(shifts_array[:, 0]):.6f}, {np.max(shifts_array[:, 1]):.6f}, {np.max(shifts_array[:, 2]):.6f}]")
-            print(f"  RMSE improvement:")
-            print(f"    Mean improvement: {np.mean(improvements):.6f} Ha/e ({np.mean(improvements)*627.5:.3f} kcal/mol/e)")
-            print(f"    Mean improvement %: {np.mean(improvements_pct):.2f}%")
-            print(f"    Max improvement: {np.max(improvements):.6f} Ha/e ({np.max(improvements)*627.5:.3f} kcal/mol/e)")
-            
-            # Save shifts to file
-            if writer is not None:
-                shifts_file = Path(writer.logdir) / "grid_shifts.npz"
-            else:
-                shifts_file = Path("grid_shifts.npz")
-            
-            np.savez(
-                shifts_file,
-                shifts=shifts_array,
-                improvements=improvements,
-                improvements_pct=improvements_pct,
-                sample_info=np.array([(s['batch_idx'], s['sample_idx'], s['global_idx']) for s in grid_shifts])
-            )
-            print(f"\n  ✓ Saved grid shifts to: {shifts_file}")
-            print(f"    File contains: shifts array, improvements, and sample indices")
-        else:
-            print("  ⚠️  No shifts calculated (no valid samples)")
-    
-    except Exception as e:
-        print(f"  ⚠️  Grid shift optimization failed: {e}")
-        import traceback
-        traceback.print_exc()
-    
-    print("="*80 + "\n")
-=======
-    valid_batches = prepare_batches(shuffle_key, valid_data, batch_size, num_atoms=num_atoms, mono_imputation_fn=mono_imputation_fn)
->>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
 
     print("\nTraining")
     print("..................")
@@ -1574,35 +716,6 @@ def train_model(
         # Prepare batches.
         key, shuffle_key = jax.random.split(key)
         train_batches = prepare_batches(shuffle_key, train_data, batch_size, num_atoms=num_atoms, mono_imputation_fn=mono_imputation_fn)
-<<<<<<< HEAD
-        
-        # Print batch preparation info on first epoch
-        if epoch == 1:
-            print(f"\n  Created {len(train_batches)} training batches")
-            if len(train_batches) > 0:
-                first_train_batch = train_batches[0]
-                print(f"  First training batch shapes:")
-                for k, v in first_train_batch.items():
-                    if hasattr(v, 'shape'):
-                        print(f"    {k}: {v.shape} (dtype={v.dtype})")
-                    else:
-                        print(f"    {k}: {type(v)}")
-                # Check ESP and VDW surface shapes
-                if "esp" in first_train_batch:
-                    esp_shape = first_train_batch["esp"].shape
-                    print(f"    ESP shape: {esp_shape}")
-                if "vdw_surface" in first_train_batch:
-                    vdw_shape = first_train_batch["vdw_surface"].shape
-                    print(f"    VDW surface shape: {vdw_shape}")
-                if "n_grid" in first_train_batch:
-                    n_grid = first_train_batch["n_grid"]
-                    print(f"    n_grid: {n_grid}")
-                if "atom_mask" in first_train_batch:
-                    atom_mask_shape = first_train_batch["atom_mask"].shape
-                    atom_mask_sum = float(jnp.sum(first_train_batch["atom_mask"]))
-                    print(f"    atom_mask shape: {atom_mask_shape}, sum: {atom_mask_sum}")
-=======
->>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
         # Loop over train batches.
         train_loss = 0.0
         train_mono_preds = []
@@ -1611,16 +724,9 @@ def train_model(
         train_esp_targets = []
         train_esp_errors = []
         train_loss_components = []
-<<<<<<< HEAD
-        train_esp_masks = []
-        
-        for i, batch in enumerate(train_batches):
-            params, opt_state, loss, mono, dipo, esp_pred, esp_target, esp_error, loss_components, esp_mask = train_step(
-=======
         
         for i, batch in enumerate(train_batches):
             params, opt_state, loss, mono, dipo, esp_pred, esp_target, esp_error, loss_components = train_step(
->>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
                 model_apply=model.apply,
                 optimizer_update=optimizer.update,
                 batch=batch,
@@ -1636,11 +742,6 @@ def train_model(
                 distance_min=distance_min,
                 esp_magnitude_weighting=esp_magnitude_weighting,
                 charge_conservation_w=charge_conservation_w,
-<<<<<<< HEAD
-                esp_grid_units=esp_grid_units,
-                radii_cutoff_multiplier=radii_cutoff_multiplier,
-=======
->>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
             )
 
             # Update EMA parameters (non-blocking for better GPU utilization)
@@ -1657,46 +758,6 @@ def train_model(
             train_esp_targets.append(esp_target)
             train_esp_errors.append(esp_error)
             train_loss_components.append(loss_components)
-<<<<<<< HEAD
-            train_esp_masks.append(esp_mask)
-            
-                # Debug output for first batch of first epoch
-            if epoch == 1 and i == 0:
-                print(f"\n  First batch (epoch {epoch}, batch {i}) statistics:")
-                print(f"    Loss: {float(loss):.6e}")
-                print(f"    Loss components: {loss_components}")
-                print(f"    ESP mask shape: {esp_mask.shape}")
-                print(f"    ESP mask dtype: {esp_mask.dtype}")
-                print(f"    ESP mask min: {float(jnp.min(esp_mask)):.6f}, max: {float(jnp.max(esp_mask)):.6f}")
-                print(f"    ESP mask mean: {float(jnp.mean(esp_mask)):.6f}")
-                print(f"    ESP mask sum: {float(jnp.sum(esp_mask)):.6f}")
-                print(f"    ESP mask size: {esp_mask.size}")
-                print(f"    ESP mask valid count (>0.5): {float(jnp.sum(esp_mask > 0.5))}")
-                print(f"    ESP mask valid fraction: {float(jnp.sum(esp_mask > 0.5)) / float(esp_mask.size):.6f}")
-                print(f"    ESP pred shape: {esp_pred.shape}, mean: {float(jnp.mean(esp_pred)):.6f}, std: {float(jnp.std(esp_pred)):.6f}")
-                print(f"    ESP target shape: {esp_target.shape}, mean: {float(jnp.mean(esp_target)):.6f}, std: {float(jnp.std(esp_target)):.6f}")
-                print(f"    ESP error shape: {esp_error.shape}, mean: {float(jnp.mean(esp_error)):.6f}, std: {float(jnp.std(esp_error)):.6f}")
-                print(f"    ESP error MAE: {float(jnp.mean(jnp.abs(esp_error))):.6f} Ha/e")
-                print(f"    ESP error RMSE: {float(jnp.sqrt(jnp.mean(esp_error**2))):.6f} Ha/e")
-                if esp_mask.size > 0:
-                    mask_sample = esp_mask.ravel()[:20] if esp_mask.size >= 20 else esp_mask.ravel()
-                    print(f"    ESP mask first 20 values: {mask_sample}")
-                # Check batch contents
-                print(f"    Batch keys: {list(batch.keys())}")
-                if "R" in batch:
-                    print(f"    Batch R shape: {batch['R'].shape}")
-                if "Z" in batch:
-                    print(f"    Batch Z shape: {batch['Z'].shape}, unique values: {jnp.unique(batch['Z'])}")
-                if "atom_mask" in batch:
-                    print(f"    Batch atom_mask shape: {batch['atom_mask'].shape}, sum: {float(jnp.sum(batch['atom_mask']))}")
-                if "vdw_surface" in batch:
-                    print(f"    Batch vdw_surface shape: {batch['vdw_surface'].shape}")
-                    vdw_first = jnp.array(batch['vdw_surface'])
-                    if vdw_first.ndim >= 2:
-                        vdw_flat = vdw_first.ravel()[:9] if vdw_first.size >= 9 else vdw_first.ravel()
-                        print(f"    Batch vdw_surface first 9 values (x,y,z of first 3 points): {vdw_flat}")
-=======
->>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
 
         # Concatenate all predictions and targets (block once at end of epoch)
         train_mono_preds = jnp.concatenate(train_mono_preds, axis=0)
@@ -1874,16 +935,9 @@ def train_model(
         valid_esp_targets = []
         valid_esp_errors = []
         valid_loss_components = []
-<<<<<<< HEAD
-        valid_esp_masks = []
-        
-        for i, batch in enumerate(valid_batches):
-            loss, mono, dipo, esp_pred, esp_target, esp_error, loss_components, esp_mask = eval_step(
-=======
         
         for i, batch in enumerate(valid_batches):
             loss, mono, dipo, esp_pred, esp_target, esp_error, loss_components = eval_step(
->>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
                 model_apply=model.apply,
                 batch=batch,
                 batch_size=batch_size,
@@ -1892,11 +946,6 @@ def train_model(
                 chg_w=chg_w,
                 ndcm=ndcm,
                 charge_conservation_w=charge_conservation_w,
-<<<<<<< HEAD
-                esp_grid_units=esp_grid_units,
-                radii_cutoff_multiplier=radii_cutoff_multiplier,
-=======
->>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
             )
             # Accumulate loss (non-blocking for better GPU utilization)
             valid_loss += (loss - valid_loss) / (i + 1)
@@ -1908,10 +957,6 @@ def train_model(
             valid_esp_targets.append(esp_target)
             valid_esp_errors.append(esp_error)
             valid_loss_components.append(loss_components)
-<<<<<<< HEAD
-            valid_esp_masks.append(esp_mask)
-=======
->>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
 
         # Concatenate all predictions and targets (block once at end of epoch)
         valid_mono_preds = jnp.concatenate(valid_mono_preds, axis=0)
