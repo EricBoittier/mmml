@@ -41,7 +41,23 @@ def pred_dipole(dcm, com, q):
     # return jnp.linalg.norm(dipole_out)* 4.80320
 
 
-@functools.partial(jax.jit, static_argnames=("batch_size", "esp_w", "chg_w", "n_dcm", "distance_weighting", "distance_scale", "distance_min", "esp_magnitude_weighting", "esp_min_distance", "esp_max_value", "use_atomic_radii_mask", "charge_conservation_w", "esp_grid_units", "radii_cutoff_multiplier"))
+@functools.partial(
+    jax.jit,
+    static_argnames=(
+        "batch_size",
+        "esp_w",
+        "chg_w",
+        "n_dcm",
+        "distance_weighting",
+        "distance_scale",
+        "distance_min",
+        "esp_magnitude_weighting",
+        "esp_min_distance",
+        "esp_max_value",
+        "use_atomic_radii_mask",
+        "charge_conservation_w",
+    ),
+)
 def esp_mono_loss(
     dipo_prediction,
     mono_prediction,
