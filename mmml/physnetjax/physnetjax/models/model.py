@@ -75,7 +75,7 @@ class EF(nn.Module):
         if self.zbl:
             self.repulsion = ZBLRepulsion(
                 cutoff=self.cutoff,
-                trainable=True,
+                trainable=False,
             )
         self.efa_final = None
         if self.efa:
@@ -507,7 +507,7 @@ class EF(nn.Module):
                 atomic_numbers,
                 r,
                 off_dist,
-                1 - eshift,
+                eshift,
                 dst_idx,
                 src_idx,
                 atom_mask,
@@ -515,10 +515,17 @@ class EF(nn.Module):
                 batch_segments,
                 batch_size,
             )
-            # # repulsion *= batch_mask[..., None]
-            # if not self.debug and "repulsion" in self.debug:
-            #     jax.debug.print("Repulsion shape: {x}", x=repulsion.shape)
-            #     jax.debug.print("Repulsion: {x}", x=repulsion)
+            # Repulsion is per-atom; align mask to atom_mask for consistency
+            repulsion = repulsion * atom_mask[..., None, None, None]
+            # Guard against NaN/Inf and huge magnitudes to keep grads stable
+            repulsion = jnp.nan_to_num(repulsion, nan=0.0, posinf=0.0, neginf=0.0)
+            repulsion = jnp.clip(repulsion, -1.0e8, 1.0e8)
+            if self.debug:
+                jax.debug.print("Repulsion shape: {x}", x=repulsion.shape)
+                jax.debug.print("Repulsion stats min={mn}, max={mx}, mean={mu}",
+                                mn=jnp.min(repulsion),
+                                mx=jnp.max(repulsion),
+                                mu=jnp.mean(repulsion))
 
         else:
             repulsion = 0.0
@@ -528,6 +535,8 @@ class EF(nn.Module):
             segment_ids=batch_segments,
             num_segments=batch_size,
         )
+        # Collapse any extra singleton dims and ensure per-batch shape (batch_size, 1)
+        energy = energy.reshape((batch_size, -1)).sum(axis=1, keepdims=True)
 
         return -1 * jnp.sum(energy), (
             energy,
@@ -693,6 +702,7 @@ class EF(nn.Module):
         switch_start = 1.0  # Start switching at 2 Angstroms
         switch_end = 10.0  # Complete switch by 10 Angstroms
         # Calculate distances between atom pairs
+        displacements = jnp.nan_to_num(displacements, nan=0.0, posinf=0.0, neginf=0.0)
         displacements = displacements + (1 - batch_mask)[..., None]
         # Safe distance calculation with minimum cutoff
         squared_distances = jnp.sum(displacements**2, axis=1)
@@ -700,6 +710,8 @@ class EF(nn.Module):
         # Improved switching function
         switch_dist = e3x.nn.smooth_switch(distances, switch_start, switch_end)
         off_dist = 1.0 - e3x.nn.smooth_switch(distances, 8.0, 10.0)
+        switch_dist = jnp.clip(switch_dist, 0.0, 1.0)
+        off_dist = jnp.clip(off_dist, 0.0, 1.0)
         one_minus_switch_dist = 1 - switch_dist
         # Calculate interaction potential with improved stability
         safe_distances = distances + eps
@@ -712,6 +724,10 @@ class EF(nn.Module):
         # r *= batch_mask[..., None]
         off_dist *= batch_mask
         eshift *= batch_mask
+        # Final NaN/Inf guards
+        r = jnp.nan_to_num(r, nan=0.0, posinf=0.0, neginf=0.0)
+        off_dist = jnp.nan_to_num(off_dist, nan=0.0, posinf=0.0, neginf=0.0)
+        eshift = jnp.nan_to_num(eshift, nan=0.0, posinf=0.0, neginf=0.0)
         return r, off_dist, eshift
 
     def _calculate_electrostatics(
@@ -790,6 +806,7 @@ class EF(nn.Module):
             num_segments=batch_size,
         )
         atomic_electrostatics = atomic_electrostatics[..., None, None, None]
+        batch_electrostatics = batch_electrostatics[..., None, None, None]
         # if not self.debug and "ele" in self.debug:
         #     jax.debug.print(
         #         f"{atomic_electrostatics}", atomic_electrostatics=atomic_electrostatics

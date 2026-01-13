@@ -227,6 +227,6 @@ This runs comprehensive tests including:
 
 ## References
 
-- [PhysNet Paper](https://doi.org/10.1021/acs.jctc.8b00908) - Discussion of atomic energy references
+- [SchNetPack Paper](https://doi.org/10.1021/acs.jctc.8b00908) - Discussion of atomic energy references
 - [SchNet Paper](https://arxiv.org/abs/1706.08566) - Atomic energy decomposition in neural networks
 
