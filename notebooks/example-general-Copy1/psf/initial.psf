@@ -1,0 +1,59 @@
+PSF EXT CMAP XPLOR
+
+         2 !NTITLE
+* EXECUTING CHARMM SCRIPT FROM PYTHON                                           
+*  DATE:    11/18/25     16:29:21      CREATED BY USER: boitti0000              
+
+        10 !NATOM
+         1 ACO      1        ACO      O1       OG2D3   -0.480000       15.9994           0
+         2 ACO      1        ACO      C1       CG2O5    0.400000       12.0110           0
+         3 ACO      1        ACO      C2       CG331   -0.230000       12.0110           0
+         4 ACO      1        ACO      C3       CG331   -0.230000       12.0110           0
+         5 ACO      1        ACO      H21      HGA3     0.900000E-01   1.00800           0
+         6 ACO      1        ACO      H22      HGA3     0.900000E-01   1.00800           0
+         7 ACO      1        ACO      H23      HGA3     0.900000E-01   1.00800           0
+         8 ACO      1        ACO      H31      HGA3     0.900000E-01   1.00800           0
+         9 ACO      1        ACO      H32      HGA3     0.900000E-01   1.00800           0
+        10 ACO      1        ACO      H33      HGA3     0.900000E-01   1.00800           0
+
+         9 !NBOND: bonds
+         2         3         2         4         3         5         3         6
+         3         7         4         8         4         9         4        10
+         1         2
+
+        15 !NTHETA: angles
+         1         2         3         1         2         4         3         2         4
+         2         3         5         2         3         6         2         3         7
+         5         3         6         5         3         7         6         3         7
+         2         4         8         2         4         9         2         4        10
+         8         4         9         8         4        10         9         4        10
+
+        12 !NPHI: dihedrals
+         1         2         3         5         1         2         3         6
+         1         2         3         7         1         2         4         8
+         1         2         4         9         1         2         4        10
+         3         2         4         8         3         2         4         9
+         3         2         4        10         4         2         3         5
+         4         2         3         6         4         2         3         7
+
+         1 !NIMPHI: impropers
+         2         3         4         1
+
+         0 !NDON: donors
+
+
+         1 !NACC: acceptors
+         1         0
+
+         0 !NNB
+
+         0         0         0         0         0         0         0         0
+         0         0
+
+         1         0 !NGRP NST2
+         0         1         0
+
+         0         0 !NUMLP NUMLPH
+
+         0 !NCRTERM: cross-terms
+
