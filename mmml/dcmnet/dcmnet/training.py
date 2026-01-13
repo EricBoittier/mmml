@@ -17,6 +17,9 @@ from .data import prepare_batches, prepare_datasets
 from typing import Callable, Any, Optional
 from functools import partial
 
+import ase
+import ase.data
+
 # Constants for ESP masking (matching loss.py)
 BOHR_TO_ANGSTROM = 0.529177
 ANGSTROM_TO_BOHR = 1.88973
