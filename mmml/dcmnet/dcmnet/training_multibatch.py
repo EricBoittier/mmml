@@ -118,7 +118,7 @@ def compute_gradients(
     Returns
     -------
     tuple
-        (loss, gradients, mono, dipo, esp_pred, esp_target, esp_errors)
+        (loss, gradients, mono, dipo, esp_pred, esp_target, esp_errors, esp_mask, loss_components)
     """
     def loss_fn(params):
         mono, dipo = model_apply(
@@ -129,7 +129,7 @@ def compute_gradients(
             src_idx=batch["src_idx"],
             batch_segments=batch["batch_segments"],
         )
-        loss, esp_pred, esp_target, esp_errors = esp_mono_loss(
+        loss, esp_pred, esp_target, esp_errors, loss_components, esp_mask = esp_mono_loss(
             dipo_prediction=dipo,
             mono_prediction=mono,
             vdw_surface=batch["vdw_surface"],
@@ -142,10 +142,10 @@ def compute_gradients(
             chg_w=chg_w,
             n_dcm=ndcm,
         )
-        return loss, (mono, dipo, esp_pred, esp_target, esp_errors)
+        return loss, (mono, dipo, esp_pred, esp_target, esp_errors, esp_mask, loss_components)
     
-    (loss, (mono, dipo, esp_pred, esp_target, esp_errors)), grad = jax.value_and_grad(loss_fn, has_aux=True)(params)
-    return loss, grad, mono, dipo, esp_pred, esp_target, esp_errors
+    (loss, (mono, dipo, esp_pred, esp_target, esp_errors, esp_mask, loss_components)), grad = jax.value_and_grad(loss_fn, has_aux=True)(params)
+    return loss, grad, mono, dipo, esp_pred, esp_target, esp_errors, esp_mask, loss_components
 
 
 @functools.partial(
@@ -521,7 +521,7 @@ def train_model_multibatch(
             batch_start = time.time()
             
             # Compute gradients for this batch
-            loss, grad, mono, dipo, esp_pred, esp_target, esp_error = compute_gradients(
+            loss, grad, mono, dipo, esp_pred, esp_target, esp_error, esp_mask, loss_components = compute_gradients(
                 model_apply=model.apply,
                 batch=batch,
                 batch_size=train_config.batch_size,
@@ -586,7 +586,7 @@ def train_model_multibatch(
         eval_params = ema_params if train_config.use_ema else params
         
         for batch in valid_batches:
-            loss, _, mono, dipo, esp_pred, esp_target, esp_error = compute_gradients(
+            loss, _, mono, dipo, esp_pred, esp_target, esp_error, esp_mask, loss_components = compute_gradients(
                 model_apply=model.apply,
                 batch=batch,
                 batch_size=train_config.batch_size,

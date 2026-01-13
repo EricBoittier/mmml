@@ -116,7 +116,7 @@ def analyze_checkpoint(
         )
         
         # Compute loss
-        loss, esp_pred, esp_target, esp_error = esp_mono_loss(
+        loss, esp_pred, esp_target, esp_error, loss_components, esp_mask = esp_mono_loss(
             dipo_prediction=dipo_pred,
             mono_prediction=mono_pred,
             vdw_surface=batch["vdw_surface"],

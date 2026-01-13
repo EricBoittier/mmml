@@ -82,7 +82,7 @@ def train_step(
             src_idx=batch["src_idx"],
             batch_segments=batch["batch_segments"],
         )
-        loss, esp_pred, esp_target, esp_errors, loss_components = esp_mono_loss(
+        loss, esp_pred, esp_target, esp_errors, loss_components, esp_mask = esp_mono_loss(
             dipo_prediction=dipo,
             mono_prediction=mono,
             vdw_surface=batch["vdw_surface"],
@@ -104,14 +104,14 @@ def train_step(
             use_atomic_radii_mask=True,  # Enable atomic radii masking (critical for reducing ESP errors)
             charge_conservation_w=charge_conservation_w,  # Weight for charge conservation loss
         )
-        return loss, (mono, dipo, esp_pred, esp_target, esp_errors, loss_components)
+        return loss, (mono, dipo, esp_pred, esp_target, esp_errors, loss_components, esp_mask)
 
-    (loss, (mono, dipo, esp_pred, esp_target, esp_errors, loss_components)), grad = jax.value_and_grad(loss_fn, has_aux=True)(params)
+    (loss, (mono, dipo, esp_pred, esp_target, esp_errors, loss_components, esp_mask)), grad = jax.value_and_grad(loss_fn, has_aux=True)(params)
     if clip_norm is not None:
         grad = clip_grads_by_global_norm(grad, clip_norm)
     updates, opt_state = optimizer_update(grad, opt_state, params)
     params = optax.apply_updates(params, updates)
-    return params, opt_state, loss, mono, dipo, esp_pred, esp_target, esp_errors, loss_components
+    return params, opt_state, loss, mono, dipo, esp_pred, esp_target, esp_errors, loss_components, esp_mask
 
 
 def compute_statistics(predictions, targets=None):
@@ -346,7 +346,7 @@ def eval_step(model_apply, batch, batch_size, params, esp_w, chg_w, ndcm, charge
         batch_segments=batch["batch_segments"],
         batch_size=batch_size,
     )
-    loss, esp_pred, esp_target, esp_errors, loss_components = esp_mono_loss(
+    loss, esp_pred, esp_target, esp_errors, loss_components, esp_mask = esp_mono_loss(
         dipo_prediction=dipo,
         mono_prediction=mono,
         vdw_surface=batch["vdw_surface"],
@@ -367,7 +367,7 @@ def eval_step(model_apply, batch, batch_size, params, esp_w, chg_w, ndcm, charge
         use_atomic_radii_mask=True,  # Enable atomic radii masking (critical for reducing ESP errors)
         charge_conservation_w=charge_conservation_w,  # Weight for charge conservation loss
     )
-    return loss, mono, dipo, esp_pred, esp_target, esp_errors, loss_components
+    return loss, mono, dipo, esp_pred, esp_target, esp_errors, loss_components, esp_mask
 
 
 def verify_esp_grid_alignment(train_data, valid_data, num_atoms=60, verbose=True):
@@ -726,10 +726,11 @@ def train_model(
         train_esp_preds = []
         train_esp_targets = []
         train_esp_errors = []
+        train_esp_masks = []
         train_loss_components = []
         
         for i, batch in enumerate(train_batches):
-            params, opt_state, loss, mono, dipo, esp_pred, esp_target, esp_error, loss_components = train_step(
+            params, opt_state, loss, mono, dipo, esp_pred, esp_target, esp_error, loss_components, esp_mask = train_step(
                 model_apply=model.apply,
                 optimizer_update=optimizer.update,
                 batch=batch,
@@ -760,6 +761,7 @@ def train_model(
             train_esp_preds.append(esp_pred)
             train_esp_targets.append(esp_target)
             train_esp_errors.append(esp_error)
+            train_esp_masks.append(esp_mask)
             train_loss_components.append(loss_components)
 
         # Concatenate all predictions and targets (block once at end of epoch)
@@ -937,10 +939,11 @@ def train_model(
         valid_esp_preds = []
         valid_esp_targets = []
         valid_esp_errors = []
+        valid_esp_masks = []
         valid_loss_components = []
         
         for i, batch in enumerate(valid_batches):
-            loss, mono, dipo, esp_pred, esp_target, esp_error, loss_components = eval_step(
+            loss, mono, dipo, esp_pred, esp_target, esp_error, loss_components, esp_mask = eval_step(
                 model_apply=model.apply,
                 batch=batch,
                 batch_size=batch_size,
@@ -959,6 +962,7 @@ def train_model(
             valid_esp_preds.append(esp_pred)
             valid_esp_targets.append(esp_target)
             valid_esp_errors.append(esp_error)
+            valid_esp_masks.append(esp_mask)
             valid_loss_components.append(loss_components)
 
         # Concatenate all predictions and targets (block once at end of epoch)
