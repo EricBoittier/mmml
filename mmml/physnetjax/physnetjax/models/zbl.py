@@ -54,7 +54,7 @@ class ZBLRepulsion(nn.Module):
         exponents, and cutoff configuration.
         """
         # Default ZBL parameters
-        a_coefficient = 0.8854  # Bohr
+        a_coefficient = 0.8854 / BOHR_TO_ANGSTROM # Bohr
         a_exponent = 0.23
         phi_coefficients = [0.18175, 0.50986, 0.28022, 0.02817]
         phi_exponents = [3.19980, 0.94229, 0.40290, 0.20162]
@@ -161,8 +161,8 @@ class ZBLRepulsion(nn.Module):
         jnp.ndarray
             Array of repulsion energies per atom
         """
+
         # Compute atomic number dependent screening length with safe operations
-        # Clip atomic numbers to prevent zero or negative values
         safe_atomic_numbers = jnp.maximum(atomic_numbers, 1e-6)
         distances = jnp.maximum(distances, 1e-6)
         eshift = jnp.maximum(eshift, 0.0)
@@ -222,5 +222,4 @@ class ZBLRepulsion(nn.Module):
             jax.debug.print("idxj {x} {y}", x=idx_j, y=idx_j.shape)
             jax.debug.print("atom {x} {y}", x=atomic_numbers, y=atomic_numbers.shape)
             jax.debug.print("rep {x} {y}", x=repulsion, y=repulsion.shape)
-
-        return erep[..., None, None, None]
+        return erep[..., None, None, None]  * (BOHR_TO_ANGSTROM**3) * (1/HARTREE_TO_EV)

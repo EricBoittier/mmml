@@ -477,6 +477,20 @@ class MolproXMLParser:
                 'type': field_type,
                 'method': cube_elem.get('method', ''),
             }
+
+            # print(origin_elem.text)
+            # print(axes_elem.text)
+            # print(dimensions_elem.text)
+            # print(step_elem.text)
+            # print(cube_file)
+            # print(field_type)
+            # print(cube_elem.get('method', ''))
+            # print(cube_elem.get('quantity', 'unknown'))
+            # print(cube_elem.get('type', ''))
+            # print(cube_elem.get('number', ''))
+            # print(cube_elem.get('symmetry', ''))
+            # print(cube_elem.get('occupancy', ''))
+            # print(cube_elem.get('energy', ''))
             
             # Parse grid parameters
             if origin_elem is not None and origin_elem.text:

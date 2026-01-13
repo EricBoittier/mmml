@@ -14,12 +14,6 @@ from .utils import reshape_dipole
 # Constants for ESP masking
 EPS = 1e-8
 RADII_TABLE = jnp.array(ase.data.covalent_radii)
-<<<<<<< HEAD
-# Conversion factor: 1 Bohr = 0.529177 Angstrom, so 1 Angstrom = 1.88973 Bohr
-BOHR_TO_ANGSTROM = 0.529177
-ANGSTROM_TO_BOHR = 1.88973
-=======
->>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
 
 
 def pred_dipole(dcm, com, q):
@@ -47,11 +41,23 @@ def pred_dipole(dcm, com, q):
     # return jnp.linalg.norm(dipole_out)* 4.80320
 
 
-<<<<<<< HEAD
-@functools.partial(jax.jit, static_argnames=("batch_size", "esp_w", "chg_w", "n_dcm", "distance_weighting", "distance_scale", "distance_min", "esp_magnitude_weighting", "esp_min_distance", "esp_max_value", "use_atomic_radii_mask", "charge_conservation_w", "esp_grid_units", "radii_cutoff_multiplier"))
-=======
-@functools.partial(jax.jit, static_argnames=("batch_size", "esp_w", "chg_w", "n_dcm", "distance_weighting", "distance_scale", "distance_min", "esp_magnitude_weighting", "esp_min_distance", "esp_max_value", "use_atomic_radii_mask", "charge_conservation_w"))
->>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
+@functools.partial(
+    jax.jit,
+    static_argnames=(
+        "batch_size",
+        "esp_w",
+        "chg_w",
+        "n_dcm",
+        "distance_weighting",
+        "distance_scale",
+        "distance_min",
+        "esp_magnitude_weighting",
+        "esp_min_distance",
+        "esp_max_value",
+        "use_atomic_radii_mask",
+        "charge_conservation_w",
+    ),
+)
 def esp_mono_loss(
     dipo_prediction,
     mono_prediction,
@@ -75,11 +81,6 @@ def esp_mono_loss(
     esp_max_value=1e10,
     use_atomic_radii_mask=True,
     charge_conservation_w=1.0,
-<<<<<<< HEAD
-    esp_grid_units="angstrom",
-    radii_cutoff_multiplier=2.0,
-=======
->>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
 ):
     """
     Combined ESP and monopole loss function for DCMNet training.
@@ -144,23 +145,8 @@ def esp_mono_loss(
         Maximum absolute ESP value to include in loss. Points with |ESP| > this are masked out.
         By default 1e10 (no masking).
     use_atomic_radii_mask : bool, optional
-<<<<<<< HEAD
-        Whether to mask out ESP points too close to atoms (within radii_cutoff_multiplier * covalent_radii).
-        This excludes singularities near atomic nuclei. By default True.
-    charge_conservation_w : float, optional
-        Weight for charge conservation loss term. By default 1.0.
-    esp_grid_units : str, optional
-        Units of ESP grid coordinates. Either "angstrom" (default) or "bohr".
-        If "bohr", distances will be converted to Angstrom for comparison with Angstrom-based radii.
-        By default "angstrom".
-    radii_cutoff_multiplier : float, optional
-        Multiplier for atomic radii when computing cutoff distances for masking.
-        Points within (radii_cutoff_multiplier * covalent_radius) of any atom are masked.
-        By default 2.0. Increase this value to mask out more points (larger exclusion zone).
-=======
         Whether to mask out ESP points too close to atoms (within 2.0 * covalent_radii).
         This excludes singularities near atomic nuclei. By default True.
->>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
         
     Returns
     -------
@@ -464,25 +450,13 @@ def esp_mono_loss(
             esp_mask_expanded = esp_mask
             esp_target_expanded = esp_target
         
-<<<<<<< HEAD
-        # Handle unit conversion: if ESP grid is in Bohr, convert to Angstrom for distance computation
-        # (atomic positions and radii are always in Angstrom)
-        if esp_grid_units.lower() == "bohr":
-            vdw = vdw * BOHR_TO_ANGSTROM  # Convert grid from Bohr to Angstrom
-        
-=======
->>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
         # Compute distances from grid to all atoms: (batch_size, ngrid, natoms)
         # vdw: (batch_size, ngrid, 3), atom_pos: (batch_size, natoms, 3)
         # Use broadcasting: vdw[:, :, None, :] - atom_pos[:, None, :, :]
         diff = vdw[:, :, None, :] - atom_pos[:, None, :, :]  # (batch_size, ngrid, natoms, 3)
         distances = jnp.linalg.norm(diff, axis=-1)  # (batch_size, ngrid, natoms)
         
-<<<<<<< HEAD
-        # Get atomic radii for each atom (in Angstrom)
-=======
         # Get atomic radii for each atom
->>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
         atomic_nums_int = atomic_nums.astype(jnp.int32)
         atomic_radii = jnp.take(RADII_TABLE, atomic_nums_int, mode='clip')  # (batch_size, natoms)
         
@@ -494,15 +468,9 @@ def esp_mono_loss(
             1e10  # Large distance for masked atoms
         )
         
-<<<<<<< HEAD
-        # Check if any REAL atom is too close (within radii_cutoff_multiplier * covalent_radii)
-        # atomic_radii: (batch_size, natoms) -> expand to (batch_size, 1, natoms) for broadcasting
-        cutoff_distances = radii_cutoff_multiplier * atomic_radii[:, None, :]  # (batch_size, 1, natoms)
-=======
         # Check if any REAL atom is too close (within 2.0 * covalent_radii)
         # atomic_radii: (batch_size, natoms) -> expand to (batch_size, 1, natoms) for broadcasting
         cutoff_distances = 2.0 * atomic_radii[:, None, :]  # (batch_size, 1, natoms)
->>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
         within_cutoff = distances_masked < cutoff_distances  # (batch_size, ngrid, natoms)
         distance_mask = (~jnp.any(within_cutoff, axis=-1)).astype(jnp.float32)  # (batch_size, ngrid)
         
@@ -660,11 +628,7 @@ def esp_mono_loss(
         'charge_conservation_loss_weighted': charge_conservation_loss * charge_conservation_w,
     }
     
-<<<<<<< HEAD
-    return total_loss, batched_pred, esp_target, esp_errors, loss_components, esp_mask
-=======
     return total_loss, batched_pred, esp_target, esp_errors, loss_components
->>>>>>> 8ab8d1fcd0c83e83f5619d6be73c3b324d88e3bf
 
 
 @functools.partial(jax.jit, static_argnames=("batch_size", "esp_w", "chg_w", "n_dcm"))
