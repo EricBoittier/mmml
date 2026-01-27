@@ -1546,15 +1546,7 @@ def setup_calculator(
         
         # Ensure MM forces match the full system size
         n_atoms = positions.shape[0]
-        if mm_grad.shape[0] != n_atoms:
-            # MM forces are computed for N_MONOMERS * ATOMS_PER_MONOMER atoms
-            # If system has more atoms (e.g., water), pad with zeros
-            if mm_grad.shape[0] < n_atoms:
-                padding = jnp.zeros((n_atoms - mm_grad.shape[0], 3))
-                mm_grad = jnp.concatenate([mm_grad, padding], axis=0)
-            else:
-                # Truncate to system size
-                mm_grad = mm_grad[:n_atoms]
+
         
         debug_print(debug, "MM Contributions:", 
             mm_E=mm_E,
@@ -1567,7 +1559,7 @@ def setup_calculator(
             "out_E": mm_E * kcal2ev,
             "out_F": mm_grad * kcal2ev,
             "dH": mm_E * kcal2ev,
-            "mm_E": mm_E * kcal2ev,
+            "mm_E": -mm_E * kcal2ev,
             "mm_F": mm_grad * kcal2ev,
         }
 
