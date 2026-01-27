@@ -102,16 +102,22 @@ class CutoffParameters:
         stop = float(self.mm_switch_on)
         return 1.0 - self._sharpstep(r, start, stop, gamma=gamma_ml)
 
-    def ml_mm_scales_complementary(self, r, gamma_ml: float = 5.0):
-        """(s_ML, s_MM) with s_ML + s_MM = 1 over the handoff.
-        ML 1→0 and MM 0→1 over [mm_switch_on - ml_cutoff, mm_switch_on].
-        Use when building E_hybrid = s_ML*E_ML + s_MM*E_MM for energy-conserving switching."""
+    def ml_mm_scales_complementary(self, r, gamma_ml: float = 5.0, gamma_mm_off: float = 3.0):
+        """(s_ML, s_MM): s_ML + s_MM = 1 over handoff; s_MM tapers to 0 at mm_switch_on + mm_cutoff."""
         s_ml = self.ml_scale(r, gamma_ml=gamma_ml)
-        return s_ml, 1.0 - s_ml
+        handoff = 1.0 - s_ml  # 0→1 over [mm_switch_on - ml_cutoff, mm_switch_on]
+        mm_taper = 1.0 - self._sharpstep(
+            np.asarray(r, dtype=float),
+            float(self.mm_switch_on),
+            float(self.mm_switch_on) + float(self.mm_cutoff),
+            gamma=gamma_mm_off,
+        )
+        s_mm = handoff * np.asarray(mm_taper, dtype=float)
+        return s_ml, s_mm
 
-    def mm_scale_complementary(self, r, gamma_ml: float = 5.0):
-        """MM scale with s_MM = 1 - s_ML over handoff [mm_switch_on - ml_cutoff, mm_switch_on]."""
-        s_ml, s_mm = self.ml_mm_scales_complementary(r, gamma_ml=gamma_ml)
+    def mm_scale_complementary(self, r, gamma_ml: float = 5.0, gamma_mm_off: float = 3.0):
+        """MM scale: (1 - s_ML) over handoff, tapered to 0 at mm_switch_on + mm_cutoff."""
+        _, s_mm = self.ml_mm_scales_complementary(r, gamma_ml=gamma_ml, gamma_mm_off=gamma_mm_off)
         return s_mm
 
     def mm_scale(self, r, gamma_on: float = 0.001, gamma_off: float = 3.0):
@@ -157,7 +163,7 @@ class CutoffParameters:
         r = np.linspace(0.01, r_max, 600)
 
         ml_scale = self.ml_scale(r, gamma_ml=GAMMA_ON)
-        mm_comp = self.mm_scale_complementary(r, gamma_ml=GAMMA_ON)
+        mm_comp = self.mm_scale_complementary(r, gamma_ml=GAMMA_ON, gamma_mm_off=GAMMA_OFF)
         mm_legacy = self.mm_scale(r, gamma_on=GAMMA_ON, gamma_off=GAMMA_OFF)
 
         fig, ax = plt.subplots(1, 1, figsize=(9, 5))
@@ -168,12 +174,16 @@ class CutoffParameters:
 
         ax.axvline(r0, color="C0", linestyle="--", lw=1, alpha=0.7, label=f"handoff start {r0:.2f} Å")
         ax.axvline(mm_switch_on, color="k", linestyle="-.", lw=1.5, label=f"handoff end {mm_switch_on:.2f} Å")
-        ax.axvline(mm_switch_on + mm_cutoff, color="gray", linestyle=":", lw=1, alpha=0.6, label=f"MM legacy full {mm_switch_on + mm_cutoff:.2f} Å")
+        ax.axvline(mm_switch_on + mm_cutoff, color="C1", linestyle="--", lw=1, alpha=0.8, label=f"MM cutoff {mm_switch_on + mm_cutoff:.2f} Å")
 
         ax.set_xlabel("COM distance r (Å)")
         ax.set_ylabel("Scale factor")
         ax.set_ylim(-0.05, 1.2)
-        title = f"ML/MM handoff (complementary s_MM=1-s_ML)" if comp else "ML/MM handoff (legacy)"
+        title = (
+            f"ML/MM handoff (complementary: s_MM→0 at mm_on+mm_cut)"
+            if comp
+            else "ML/MM handoff (legacy)"
+        )
         ax.set_title(f"{title} | ml_cut={ml_cutoff:.2f}, mm_on={mm_switch_on:.2f}, mm_cut={mm_cutoff:.2f}")
         ax.legend(loc="best", fontsize=8)
         ax.grid(alpha=0.3)

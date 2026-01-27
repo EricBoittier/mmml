@@ -995,15 +995,20 @@ def setup_calculator(
             mm_cutoff: float = mm_cutoff,
             complementary_handoff: bool = complementary_handoff,
         ):
-            """MM scale: complementary s_MM = 1 - s_ML over [mm_switch_on - ml_cutoff, mm_switch_on], or legacy window."""
+            """MM scale: complementary (1-s_ML) over handoff, then taper to 0 at mm_switch_on+mm_cutoff; or legacy."""
             @jax.jit
             def apply_switching_function(positions: Array, pair_energies: Array) -> Array:
                 com1 = jnp.mean(positions[:ATOMS_PER_MONOMER], axis=0)
                 com2 = jnp.mean(positions[ATOMS_PER_MONOMER:2*ATOMS_PER_MONOMER], axis=0)
                 r = jnp.linalg.norm(com2 - com1)
                 if complementary_handoff:
-                    # s_MM = 1 - s_ML over same handoff as ML
-                    mm_scale = _sharpstep(r, mm_switch_on - ml_cutoff_distance, mm_switch_on, gamma=GAMMA_ON)
+                    # handoff: s_MM = 1 - s_ML over [mm_switch_on - ml_cutoff, mm_switch_on]
+                    handoff = _sharpstep(r, mm_switch_on - ml_cutoff_distance, mm_switch_on, gamma=GAMMA_ON)
+                    # taper to 0 at mm_switch_on + mm_cutoff so energies/forces go to 0
+                    mm_taper = 1.0 - _sharpstep(
+                        r, mm_switch_on, mm_switch_on + mm_cutoff, gamma=GAMMA_OFF
+                    )
+                    mm_scale = handoff * mm_taper
                 else:
                     mm_on = _sharpstep(r, mm_switch_on, mm_switch_on + mm_cutoff, gamma=GAMMA_ON)
                     mm_off = _sharpstep(r, mm_switch_on + mm_cutoff, mm_switch_on + 2.0 * mm_cutoff, gamma=GAMMA_OFF)
