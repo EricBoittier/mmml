@@ -176,9 +176,8 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def main() -> int:
-    """Main function for PDB file demo."""
-    args = parse_args()
+def run(args: argparse.Namespace) -> int:
+    """Run cutoff optimization with the given args. Callable from CLI or notebook."""
     base_ckpt_dir, epoch_dir = resolve_checkpoint_paths(args.checkpoint)
 
     # Setup imports
@@ -675,8 +674,13 @@ def main() -> int:
         args.out_npz.parent.mkdir(parents=True, exist_ok=True)
         np.savez(args.out_npz, **npz_data)
         print(f"Saved detailed results to {args.out_npz}")
-    
-    
+
+    return 0
+
+
+def main() -> int:
+    """Entry point for CLI."""
+    return run(parse_args())
 
 
 if __name__ == "__main__":
