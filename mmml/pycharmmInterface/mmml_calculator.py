@@ -2245,7 +2245,7 @@ def setup_calculator(
         switched_forces = jnp.where(jnp.isfinite(switched_forces), switched_forces, 0.0)
         
         return {
-            "energies": -switched_energy,
+            "energies": switched_energy,
             "forces": switched_forces
         }
 
