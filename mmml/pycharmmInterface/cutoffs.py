@@ -1,3 +1,31 @@
+"""
+Cutoff and switching parameters for ML/MM hybrid potentials.
+
+Energy-conserving force shifting (what to consider)
+--------------------------------------------------
+For a single combined potential E_hybrid(r) that switches between ML and MM,
+energy is conserved only if forces are F = -dE_hybrid/dR.
+
+1. Complementary windows: ML two-body should go to 0 as MM goes to 1.
+   Use s_ML(r) + s_MM(r) = 1 over the handoff region so there is no gap
+   (double-counting or missing energy). Define:
+     E_hybrid = s_ML(r) * E_ML + s_MM(r) * E_MM
+
+2. Forces from E_hybrid (product rule):
+     F = -dE_hybrid/dR = s_ML * F_ML + s_MM * F_MM + (E_MM - E_ML) * (ds_MM/dR)
+   So you need:
+   - scaled ML/MM forces: s_ML*F_ML, s_MM*F_MM
+   - correction term: (E_MM - E_ML) * (ds_MM/dR)  [or equivalently -(E_MM - E_ML)*(ds_ML/dR)]
+   Naive force blending F = s*F_ML + (1-s)*F_MM without that correction is
+   not the gradient of any E_hybrid unless E_ML = E_MM in the switch zone.
+
+3. Per-term switching (current style): ML and MM are switched separately
+   (E_ML_sw = s_ML*E_ML, E_MM_sw = s_MM*E_MM). Total E = E_ML_sw + E_MM_sw is
+   conservative only if forces are F = -d(E_ML_sw + E_MM_sw)/dR. That is
+   already done when each term uses F = s*F_term - E_term*(ds/dR). For
+   complementary handoff, use the same r-interval and s_MM = 1 - s_ML so
+   E_hybrid = s_ML*E_ML + (1-s_ML)*E_MM has no overlap/gap.
+"""
 import numpy as np
 from pathlib import Path
 
@@ -70,6 +98,13 @@ class CutoffParameters:
         start = float(self.mm_switch_on) - float(self.ml_cutoff)
         stop = float(self.mm_switch_on)
         return 1.0 - self._sharpstep(r, start, stop, gamma=gamma_ml)
+
+    def ml_mm_scales_complementary(self, r, gamma_ml: float = 5.0):
+        """(s_ML, s_MM) with s_ML + s_MM = 1 over the handoff.
+        ML 1→0 and MM 0→1 over [mm_switch_on - ml_cutoff, mm_switch_on].
+        Use when building E_hybrid = s_ML*E_ML + s_MM*E_MM for energy-conserving switching."""
+        s_ml = self.ml_scale(r, gamma_ml=gamma_ml)
+        return s_ml, 1.0 - s_ml
 
     def mm_scale(self, r, gamma_on: float = 0.001, gamma_off: float = 3.0):
         """MM window: 0→1 over [mm_switch_on, mm_switch_on+mm_cutoff], then 1→0 over the next window."""
