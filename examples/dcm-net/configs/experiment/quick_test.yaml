@@ -1,0 +1,20 @@
+# @package _global_
+# Quick test configuration for debugging and testing
+
+model:
+  features: 64
+  num_iterations: 2
+  n_dcm: 2
+
+data:
+  num_train: 50
+  num_valid: 10
+  esp_sample_size: 100
+
+training:
+  num_epochs: 5
+  learning_rate: 1e-4
+  n_bootstrap: 2
+  esp_weight_start: 100.0
+  chg_weight_start: 1.0
+
