@@ -611,6 +611,7 @@ def run_grid_search(
     for ml_c, mm_on, mm_c in itertools.product(ml_grid, mm_on_grid, mm_cut_grid):
         res = evaluate_objective(ml_c, mm_on, mm_c, ctx, CutoffParameters, Traj)
         results.append(res)
+        print(f"DEBUG result: {res}")
         if best is None or res["objective"] < best["objective"]:
             best = res
     return results, best
