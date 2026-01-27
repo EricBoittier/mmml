@@ -345,7 +345,12 @@ def main() -> int:
     print(f"Initial forces: {hybrid_forces}")
     
 
-    from mmml.pycharmmInterface.import_pycharmm import reset_block, pycharmm, reset_block_no_internal
+    from mmml.pycharmmInterface.import_pycharmm import (
+        reset_block,
+        reset_block_no_internal,
+        pycharmm,
+        safe_energy_show,
+    )
     reset_block()
     nbonds = """!#########################################
 ! Bonded/Non-bonded Options & Constraints
@@ -357,16 +362,16 @@ vswitch NBXMOD 5 -
 inbfrq -1 imgfrq -1
 """
     pycharmm.lingo.charmm_script(nbonds)
-    pycharmm.energy.show()
+    safe_energy_show()
     pycharmm.minimize.run_abnr(nstep=1000, tolenr=1e-6, tolgrd=1e-6)
     pycharmm.lingo.charmm_script("ENER")
-    pycharmm.energy.show()
+    safe_energy_show()
     from mmml.pycharmmInterface.pycharmmCommands import heat
     pycharmm.lingo.charmm_script(heat)
     atoms.set_positions(coor.get_positions())
-    pycharmm.energy.show()
+    safe_energy_show()
     pycharmm.minimize.run_abnr(nstep=1000, tolenr=1e-6, tolgrd=1e-6)
-    pycharmm.energy.show()
+    safe_energy_show()
     pycharmm.lingo.charmm_script("ENER")
 
     # Minimize structure if requested
@@ -376,7 +381,7 @@ inbfrq -1 imgfrq -1
         if charmm:
             pycharmm.minimize.run_abnr(nstep=1000, tolenr=1e-6, tolgrd=1e-6)
             pycharmm.lingo.charmm_script("ENER")
-            pycharmm.energy.show()
+            safe_energy_show()
             atoms.set_positions(coor.get_positions())
 
         traj = ase_io.Trajectory(f'bfgs_{run_index}_{args.output_prefix}_minimized.traj', 'w')
