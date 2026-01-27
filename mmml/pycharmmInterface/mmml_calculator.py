@@ -2184,13 +2184,10 @@ def setup_calculator(
         dimer_switching_grads = switched_grad[:, :2 * ATOMS_PER_MONOMER, :]  # (n_dimers, 2*ATOMS_PER_MONOMER, 3)
         dimer_switching_grads_flat = dimer_switching_grads.reshape(-1, 3)  # (n_dimers * 2*ATOMS_PER_MONOMER, 3)
         
-        # Map energy-weighted switching gradients to full system
-        # This gives us the E * ds/dR term
-        # We need to multiply by dimer energies first, then map
-        # The gradient is already energy-weighted by switch_ML_grad, but we need to ensure
-        # it's properly distributed to atoms
+        # Map energy-weighted switching gradients to full system.
+        # switch_ML_grad gives d(s*E)/dX = E*ds/dX; we subtract it below so F = -grad(s*E).
         energy_weighted_grad = jax.ops.segment_sum(
-            dimer_switching_grads_flat,  # Negative because F = -grad(E)
+            dimer_switching_grads_flat,
             force_segments,
             num_segments=n_monomers * ATOMS_PER_MONOMER
         )  # Shape: (n_monomers * ATOMS_PER_MONOMER, 3)
@@ -2240,10 +2237,10 @@ def setup_calculator(
         scaled_dimer_forces = dimer_forces_safe * atom_switching_scales[:, None]
 
         
-        # Combine both terms: F_switched = scale * F_dimer - E * grad(scale)
-        # Ensure energy_weighted_grad is finite
+        # Combine both terms: F_switched = -d(s*E)/dR = s*F_dimer - E*ds/dR
+        # switch_ML_grad gives d(s*E)/dX = E*ds/dX, so we subtract it to get F = -grad(s*E)
         energy_weighted_grad_safe = jnp.where(jnp.isfinite(energy_weighted_grad), energy_weighted_grad, 0.0)
-        switched_forces = scaled_dimer_forces + energy_weighted_grad_safe
+        switched_forces = scaled_dimer_forces - energy_weighted_grad_safe
         
         # Final safety check - ensure all forces are finite
         switched_forces = jnp.where(jnp.isfinite(switched_forces), switched_forces, 0.0)
