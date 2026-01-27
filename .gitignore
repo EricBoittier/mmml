@@ -167,3 +167,4 @@ examples/openqdc/openqdc_packed_memmap/
 examples/heme/co2_*/
 devtools/.DS_Store
 .vscode/settings.json
+mmml/packmol/packmol
