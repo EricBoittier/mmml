@@ -1500,9 +1500,7 @@ def setup_calculator(
         monomer_forces = process_monomer_forces(
             ml_monomer_forces, monomer_segment_idxs, ATOMS_PER_MONOMER, debug
         )
-        
 
-        force_mags = jnp.linalg.norm(monomer_forces, axis=1)
         
         debug_print(debug, "Monomer Contributions:",
             ml_monomer_energy=ml_monomer_energy,
@@ -1559,7 +1557,7 @@ def setup_calculator(
             "out_E": mm_E * kcal2ev,
             "out_F": mm_grad * kcal2ev,
             "dH": mm_E * kcal2ev,
-            "mm_E": -mm_E * kcal2ev,
+            "mm_E": mm_E * kcal2ev,
             "mm_F": mm_grad * kcal2ev,
         }
 
@@ -2242,7 +2240,7 @@ def setup_calculator(
         switched_forces = jnp.where(jnp.isfinite(switched_forces), switched_forces, 0.0)
         
         return {
-            "energies": switched_energy,
+            "energies": -switched_energy,
             "forces": switched_forces
         }
 
