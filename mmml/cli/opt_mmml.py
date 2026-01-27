@@ -26,6 +26,9 @@ Public API for notebook use:
     ctx.results          # list of grid-search result dicts
     ctx.best             # best result dict (ml_cutoff, mm_switch_on, mm_cutoff, objective, ...)
     ctx.save_dir         # directory used for diagnostics and trajectories
+
+Notebook kernel: Use the project venv (e.g. mmml/.venv/bin/python) as the notebook kernel.
+Using a different Python (e.g. ~/.local) can cause JaxRuntimeError / PJRT version mismatch.
 """
 
 #!/usr/bin/env python3
