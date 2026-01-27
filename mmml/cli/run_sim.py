@@ -13,6 +13,21 @@ If no residue is specified, the system will be at the residue of the box.
 Args:
     --pdbfile
     simulation conditions
+
+Run from a notebook:
+    from pathlib import Path
+    import argparse
+    from mmml.cli.run_sim import run
+
+    args = argparse.Namespace(
+        pdbfile=Path("pdb/init-packmol.pdb"),
+        checkpoint=Path("ACO-..."),
+        n_monomers=50,
+        n_atoms_monomer=10,
+        cell=40.0,
+        # optional: temperature=200.0, timestep=0.3, ensemble="nve", ...
+    )
+    run(args)
 """
 
 
@@ -183,9 +198,8 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def main() -> int:
-    """Main function for PDB file demo."""
-    args = parse_args()
+def run(args: argparse.Namespace) -> int:
+    """Run MD simulation with the given arguments (CLI or notebook)."""
     base_ckpt_dir, epoch_dir = resolve_checkpoint_paths(args.checkpoint)
 
     # Setup imports
@@ -201,15 +215,13 @@ def main() -> int:
         from ase.md.velocitydistribution import MaxwellBoltzmannDistribution, Stationary, ZeroRotation
         from ase.md.verlet import VelocityVerlet
         import ase.optimize as ase_opt
-        import matplotlib.pyplot as plt
-        import py3Dmol
         from mmml.pycharmmInterface.import_pycharmm import coor
         from mmml.pycharmmInterface.setupBox import setup_box_generic
         import pandas as pd
         from mmml.pycharmmInterface.import_pycharmm import minimize
-        import jax_md
-        # JAX-MD imports
-        from jax_md import space, smap, energy, quantity, simulate, partition, units
+        # import jax_md
+        # # JAX-MD imports
+        # from jax_md import space, smap, energy, quantity, simulate, partition, units
         from ase.units import _amu
 
         import jax.numpy as jnp
@@ -929,6 +941,9 @@ inbfrq -1 imgfrq -1
     return 0
 
 
+def main() -> int:
+    """CLI entry point: parse args and run simulation."""
+    return run(parse_args())
 
 
 if __name__ == "__main__":
