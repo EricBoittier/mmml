@@ -844,11 +844,10 @@ def setup_calculator(
         mm_switch_on=mm_switch_on,
         ATOMS_PER_MONOMER=ATOMS_PER_MONOMER,
     ):
-        # per atom coordinates rather than CoM
-        com1 = X[:ATOMS_PER_MONOMER].T
-        com2 = X[ATOMS_PER_MONOMER:2*ATOMS_PER_MONOMER].T
-
-        r = jnp.linalg.norm(com1 - com2)
+        # COM–COM distance (used for ML taper; must match debug "dimer COM distance")
+        com1 = jnp.mean(X[:ATOMS_PER_MONOMER], axis=0)
+        com2 = jnp.mean(X[ATOMS_PER_MONOMER:2*ATOMS_PER_MONOMER], axis=0)
+        r = jnp.linalg.norm(com2 - com1)
     
         # ML: 1 -> 0 over [mm_switch_on - ml_cutoff, mm_switch_on]
         ml_scale = 1.0 - _sharpstep(r, mm_switch_on - ml_cutoff, mm_switch_on, gamma=GAMMA_ON)
@@ -1430,6 +1429,8 @@ def setup_calculator(
             cutoff_params,
             debug
         )
+
+        print(f"DEBUG dimer_contribs: {dimer_contribs}")
         
         # Combine contributions
         # Ensure both force arrays are finite before combining
@@ -1710,6 +1711,38 @@ def setup_calculator(
                 
                 # Debug: Check forces BEFORE conversion to numpy (still in JAX)
                 if self.debug:
+                    # Why ml_2b can be zero: (1) doML_dimer=False, or (2) dimer COM distance > mm_switch_on
+                    print(f"DEBUG doML_dimer: {self.doML_dimer}")
+                    if getattr(self, "cutoff_params", None) is not None:
+                        cp = self.cutoff_params
+                        print(f"DEBUG cutoffs: ml_cutoff={getattr(cp,'ml_cutoff',None)}, mm_switch_on={getattr(cp,'mm_switch_on',None)}")
+                    # Dimer COM distance for first pair (atoms 0:n_per and n_per:2*n_per)
+                    try:
+                        R_np = np.asarray(jax.device_get(R) if hasattr(R, "shape") and hasattr(jax, "device_get") else R)
+                        n_mon = getattr(self, "n_monomers", 2)
+                        n_per = (R_np.shape[0] // n_mon) if n_mon else 10
+                        if R_np.shape[0] >= 2 * n_per:
+                            com0 = R_np[:n_per].mean(axis=0)
+                            com1 = R_np[n_per : 2 * n_per].mean(axis=0)
+                            d_com = float(np.linalg.norm(com1 - com0))
+                            print(f"DEBUG dimer COM distance: {d_com:.4f} (ml_2b is 0 when this > mm_switch_on)")
+                    except Exception as e:
+                        print(f"DEBUG dimer COM distance: (could not compute: {e})")
+                    # ML 2-body contributions (from ModelOutput)
+                    try:
+                        ml_2b_E_val = float(np.asarray(jax.device_get(out.ml_2b_E)))
+                        print(f"DEBUG ml_2b_E: {ml_2b_E_val:.6e}")
+                    except Exception as e:
+                        print(f"DEBUG ml_2b_E extraction failed: {e}")
+                    try:
+                        ml_2b_F_np = np.asarray(jax.device_get(out.ml_2b_F))
+                        print(f"DEBUG ml_2b_F shape: {ml_2b_F_np.shape}")
+                        ml_2b_F_mags = np.linalg.norm(ml_2b_F_np, axis=1)
+                        print(f"DEBUG ml_2b_F per-atom magnitudes: {ml_2b_F_mags}")
+                        if ml_2b_F_np.size > 0:
+                            print(f"DEBUG ml_2b_F first 3 rows:\n{ml_2b_F_np[:3]}")
+                    except Exception as e:
+                        print(f"DEBUG ml_2b_F extraction failed: {e}")
                     # Get values from JAX array before conversion
                     # CRITICAL: Use np.array() with explicit evaluation to ensure we get concrete values
                     try:
@@ -1999,6 +2032,19 @@ def setup_calculator(
         )
         dimer_int_energies = ml_dimer_energy - monomer_contrib
         
+        if debug:
+            print(f"DEBUG dimer_int_energies: {dimer_int_energies}")
+            print(f"DEBUG ml_dimer_energy: {ml_dimer_energy}")
+            print(f"DEBUG monomer_contrib: {monomer_contrib}")
+            print(f"DEBUG dimer_perms: {dimer_perms}")
+            print(f"DEBUG force_segments: {force_segments}")
+            print(f"DEBUG ml_dimer_forces: {ml_dimer_forces}")
+            print(f"DEBUG monomer_energies: {monomer_energies}")
+            print(f"DEBUG cutoff_params: {cutoff_params}")
+            print(f"DEBUG max_atoms: {max_atoms}")
+            print(f"DEBUG debug: {debug}")
+
+
         # Process dimer forces
         dimer_forces = process_dimer_forces(
             ml_dimer_forces, force_segments, n_dimers, debug
