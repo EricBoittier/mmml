@@ -1,0 +1,16 @@
+# Core dependencies
+hydra-core>=1.3.0
+omegaconf>=2.3.0
+
+# Optional: Hyperparameter optimization
+hydra-optuna-sweeper>=1.2.0
+
+# Optional: Experiment tracking
+wandb>=0.15.0
+
+# Visualization
+matplotlib>=3.5.0
+patchworklib>=0.6.0
+
+# Note: JAX, NumPy, and mmml dependencies should already be installed
+

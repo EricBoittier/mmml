@@ -13,7 +13,8 @@ echo $PWD
 
 source ~/mmml/.venv/bin/activate
 module load gcc
-#module load 
+# Skip CHARMM energy.show() in make_res to avoid segfault in CHARMM bond routines under SLURM
+export SKIP_CHARMM_ENERGY_SHOW=1
 bash 01_make.sh
 bash 02_sim.sh
 

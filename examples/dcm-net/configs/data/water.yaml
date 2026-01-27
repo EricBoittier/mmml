@@ -1,0 +1,28 @@
+# @package _global_
+data:
+  # Data file paths (will try in order)
+  paths:
+    - /home/ericb/testmmml/test.npz
+    - /pchem-data/meuwly/boittier/home/test.npz
+    - /scicore/home/meuwly/boitti0000/test.npz
+  
+  # Dataset splits
+  num_train: 1000
+  num_valid: 100
+  natoms: 18
+  
+  # ESP sampling
+  esp_sample_size: 1000  # Number of ESP points to sample
+  esp_clip_min: -2.0
+  esp_clip_max: 2.0
+  esp_to_au: 0.0016  # Conversion factor to atomic units
+  
+  # Data preparation
+  clean: false
+  esp_mask: false
+  clip_esp: false
+  
+  # Monopole initialization (based on atomic numbers)
+  monopole_H: 0.1   # For hydrogen (Z=1)
+  monopole_O: -0.2  # For oxygen (Z=8)
+
