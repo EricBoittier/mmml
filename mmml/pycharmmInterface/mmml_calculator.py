@@ -1147,6 +1147,7 @@ def setup_calculator(
             ml_out = calculate_ml_contributions(
                 positions_ml, atomic_numbers_ml, n_dimers, n_monomers,
                 cutoff_params=cutoff_params,
+                doML_dimer=doML_dimer,
                 debug=debug,
                 ml_energy_conversion_factor=ml_energy_conversion_factor,
                 ml_force_conversion_factor=ml_force_conversion_factor
@@ -1239,9 +1240,8 @@ def setup_calculator(
             near_zero_atoms = jnp.sum(force_magnitudes < 1e-8)
 
             
-            # # ml_2b_F is stored separately for analysis but is already included in ml_forces
-            if "ml_2b_F" in ml_out:
-                outputs["ml_2b_F"] = outputs["ml_2b_F"] + ml_2b_F
+            # ml_2b_F is stored separately for analysis but is already included in ml_forces
+            outputs["ml_2b_F"] = outputs["ml_2b_F"] + ml_2b_F
                    
             # Update energy terms (these are scalars, so no shape issue)
             outputs["out_E"] = ml_out.get("out_E", 0)
@@ -1274,7 +1274,7 @@ def setup_calculator(
             outputs["mm_E"] = mm_E
             outputs["mm_F"] = mm_F
             outputs["out_E"] = outputs.get("out_E", 0) + outputs["mm_E"]
-            outputs["out_F"] = outputs.get("out_F", 0) + outputs["mm_E"]
+            outputs["out_F"] = outputs.get("out_F", 0) + outputs["mm_F"]
 
         # Final validation: check for NaN/Inf in final forces
         final_forces = outputs["out_F"]
@@ -1409,6 +1409,7 @@ def setup_calculator(
         n_dimers: int,
         n_monomers: int,
         cutoff_params: CutoffParameters,
+        doML_dimer: bool = True,
         debug: bool = False,
         ml_energy_conversion_factor: float = 1.0,
         ml_force_conversion_factor: float = 1.0
@@ -1428,8 +1429,13 @@ def setup_calculator(
         monomer_contribs = calculate_monomer_contributions(e, f, n_monomers, max_atoms, debug)
         
         if not doML_dimer:
-            return monomer_contribs
-            
+            # Return same keys as full path so caller always sees ml_2b_* (as zeros when skipped)
+            return {
+                **monomer_contribs,
+                "ml_2b_E": 0,
+                "ml_2b_F": jnp.zeros((n_monomers * ATOMS_PER_MONOMER, 3)),
+            }
+
         # Calculate dimer contributions
         dimer_contribs = calculate_dimer_contributions(
             positions, e, f, n_dimers, 
@@ -1857,7 +1863,7 @@ def setup_calculator(
             doML: bool = True,
             doMM: bool = True,
             doML_dimer: bool = True,
-            backprop: bool = False,
+            backprop: bool = True,
             debug: bool = False,
             energy_conversion_factor: float = 1.0,
             force_conversion_factor: float = 1.0,

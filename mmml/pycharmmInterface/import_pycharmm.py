@@ -92,6 +92,36 @@ def reset_block():
     _ = pycharmm.lingo.charmm_script(block)
 
 
+def should_skip_charmm_energy_show() -> bool:
+    """
+    True if CHARMM energy.show() / get_energy() should be skipped to avoid segfault.
+
+    Segfaults in CHARMM's bond routines (e.g. ebondfs) are known on SLURM, some
+    cluster nodes, or with certain MPI/threading. Set SKIP_CHARMM_ENERGY_SHOW=1
+    (or "yes"/"true") to skip. When SLURM_JOB_ID is set, skip by default unless
+    RUN_CHARMM_ENERGY_SHOW=1 is set.
+    """
+    ev = (os.environ.get("SKIP_CHARMM_ENERGY_SHOW") or "").strip().lower()
+    if ev in ("1", "yes", "true"):
+        return True
+    if os.environ.get("SLURM_JOB_ID"):
+        force = (os.environ.get("RUN_CHARMM_ENERGY_SHOW") or "").strip().lower()
+        if force not in ("1", "yes", "true"):
+            return True
+    return False
+
+
+def safe_energy_show():
+    """
+    Call energy.show() unless the environment requests skipping it to avoid segfault.
+    Use when CHARMM energy evaluation may crash (e.g. under SLURM / on some clusters).
+    """
+    if should_skip_charmm_energy_show():
+        print("Skipping energy.show() (SKIP_CHARMM_ENERGY_SHOW or SLURM).")
+    else:
+        energy.show()
+
+
 def reset_block_no_internal():
     # block = f"""BLOCK 
     #     CALL 1 SELE ALL END

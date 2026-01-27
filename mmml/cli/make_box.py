@@ -55,9 +55,12 @@ def main_loop(args):
     pdb_path = args.pdb if args.pdb is not None else "pdb/init-packmol.pdb"
     setupBox.setup_box_generic(pdb_path, side_length=args.side_length, tag=str(args.res).lower())
     
-    from mmml.pycharmmInterface.import_pycharmm import reset_block
-    reset_block()
-    from mmml.pycharmmInterface.import_pycharmm import reset_block, pycharmm, reset_block_no_internal
+    from mmml.pycharmmInterface.import_pycharmm import (
+        reset_block,
+        reset_block_no_internal,
+        pycharmm,
+        safe_energy_show,
+    )
     reset_block()
     reset_block_no_internal()
     reset_block()
@@ -71,7 +74,7 @@ vswitch NBXMOD 3 -
 inbfrq -1 imgfrq -1
 """
     pycharmm.lingo.charmm_script(nbonds)
-    pycharmm.energy.show()
+    safe_energy_show()
     setupBox.minimize_box()
 
 
