@@ -840,8 +840,8 @@ def setup_calculator(
     @partial(jax.jit, static_argnames=['ml_cutoff', 'mm_switch_on', 'ATOMS_PER_MONOMER'])
     def switch_ML(X,
         ml_energy,
-        ml_cutoff=0.5,
-        mm_switch_on=5.0,
+        ml_cutoff=ml_cutoff_distance,
+        mm_switch_on=mm_switch_on,
         ATOMS_PER_MONOMER=ATOMS_PER_MONOMER,
     ):
         # per atom coordinates rather than CoM
@@ -992,9 +992,9 @@ def setup_calculator(
         
 
         def get_switching_function(
-            ml_cutoff_distance: float = 2.0,
-            mm_switch_on: float = 5.0,
-            mm_cutoff: float = 1.0,
+            ml_cutoff_distance: float = ml_cutoff_distance,
+            mm_switch_on: float = mm_switch_on,
+            mm_cutoff: float = mm_cutoff,
         ):
             """Applies smooth switching function to MM energies based on COM distance."""
             @jax.jit
@@ -1173,61 +1173,48 @@ def setup_calculator(
             # This is critical - NaN values will corrupt all subsequent calculations
             ml_forces = jnp.where(jnp.isfinite(ml_forces_raw), ml_forces_raw, 0.0)
             ml_internal_F = jnp.where(jnp.isfinite(ml_internal_F_raw), ml_internal_F_raw, 0.0)
-            ml_2b_F = jnp.where(jnp.isfinite(ml_2b_F_raw), ml_2b_F_raw, 0.0) if "ml_2b_F" in ml_out else jnp.zeros((n_monomers * ATOMS_PER_MONOMER, 3))
+            ml_2b_F = jnp.where(jnp.isfinite(ml_2b_F_raw), ml_2b_F_raw, 0.0)
             
-            # # Debug: Check for NaN in raw forces (jax.debug.print handles conditional execution)
+            # Debug: Check for NaN in raw forces (jax.debug.print handles conditional execution)
             nan_count_raw = jnp.sum(~jnp.isfinite(ml_forces_raw))
-            # jax.debug.print("CRITICAL: Found {n} NaN/Inf in ml_forces from calculate_ml_contributions!", 
+            # jax.debug.print("CRITICAL: Found {n} NaN/Inf in ml_forces from calculate_ml_contributions!",
             # n=nan_count_raw, ordered=False)
             
             # Ensure ML forces have the correct shape (should match n_atoms)
             expected_n_ml_atoms = n_monomers * ATOMS_PER_MONOMER
             if ml_forces.shape[0] != expected_n_ml_atoms:
-                # If shape mismatch, pad or truncate to expected size
                 if ml_forces.shape[0] < expected_n_ml_atoms:
                     padding = jnp.zeros((expected_n_ml_atoms - ml_forces.shape[0], 3))
                     ml_forces = jnp.concatenate([ml_forces, padding], axis=0)
                     ml_internal_F = jnp.concatenate([ml_internal_F, jnp.zeros((expected_n_ml_atoms - ml_internal_F.shape[0], 3))], axis=0)
-                    if "ml_2b_F" in ml_out:
-                        ml_2b_F = jnp.concatenate([ml_2b_F, jnp.zeros((expected_n_ml_atoms - ml_2b_F.shape[0], 3))], axis=0)
+                    ml_2b_F = jnp.concatenate([ml_2b_F, jnp.zeros((expected_n_ml_atoms - ml_2b_F.shape[0], 3))], axis=0)
                 else:
                     ml_forces = ml_forces[:expected_n_ml_atoms]
                     ml_internal_F = ml_internal_F[:expected_n_ml_atoms]
-                    if "ml_2b_F" in ml_out:
-                        ml_2b_F = ml_2b_F[:expected_n_ml_atoms]
+                    ml_2b_F = ml_2b_F[:expected_n_ml_atoms]
             
             # Ensure ML forces match system size (in case n_atoms != expected_n_ml_atoms)
             if ml_forces.shape[0] > n_atoms:
                 ml_forces = ml_forces[:n_atoms]
                 ml_internal_F = ml_internal_F[:n_atoms]
-                if "ml_2b_F" in ml_out:
-                    ml_2b_F = ml_2b_F[:n_atoms]
+                ml_2b_F = ml_2b_F[:n_atoms]
             elif ml_forces.shape[0] < n_atoms:
                 padding = jnp.zeros((n_atoms - ml_forces.shape[0], 3))
                 ml_forces = jnp.concatenate([ml_forces, padding], axis=0)
                 ml_internal_F = jnp.concatenate([ml_internal_F, padding], axis=0)
-                if "ml_2b_F" in ml_out:
-                    ml_2b_F = jnp.concatenate([ml_2b_F, padding], axis=0)
+                ml_2b_F = jnp.concatenate([ml_2b_F, padding], axis=0)
             
             # CRITICAL: Ensure shapes match exactly before adding
-            # If shapes don't match, broadcasting can produce NaN values
             if ml_forces.shape[0] != n_atoms:
-                # jax.debug.print("ERROR: Shape mismatch! ml_forces.shape[0]={s}, n_atoms={n}",
-                # s=ml_forces.shape[0], n=n_atoms,
-                # ordered=False)
-                # This should not happen, but if it does, we need to fix it
                 if ml_forces.shape[0] < n_atoms:
                     padding = jnp.zeros((n_atoms - ml_forces.shape[0], 3))
                     ml_forces = jnp.concatenate([ml_forces, padding], axis=0)
                     ml_internal_F = jnp.concatenate([ml_internal_F, padding], axis=0)
-                    if "ml_2b_F" in ml_out:
-                        ml_2b_F = jnp.concatenate([ml_2b_F, padding], axis=0)
+                    ml_2b_F = jnp.concatenate([ml_2b_F, padding], axis=0)
                 else:
                     ml_forces = ml_forces[:n_atoms]
                     ml_internal_F = ml_internal_F[:n_atoms]
-                    if "ml_2b_F" in ml_out:
-                        ml_2b_F = ml_2b_F[:n_atoms]
-            
+                    ml_2b_F = ml_2b_F[:n_atoms]
 
             nan_count = jnp.sum(~jnp.isfinite(ml_forces))
            
@@ -1860,19 +1847,22 @@ def setup_calculator(
             atomic_positions: Array,
             n_monomers: int,
             cutoff_params: CutoffParameters = None,
-            doML: bool = True,
-            doMM: bool = True,
-            doML_dimer: bool = True,
+            doML: bool = doML,
+            doMM: bool = doMM,
+            doML_dimer: bool = doML_dimer,
             backprop: bool = True,
-            debug: bool = False,
+            debug: bool = debug,
             energy_conversion_factor: float = 1.0,
             force_conversion_factor: float = 1.0,
             verbose: bool = None,
             # do_pbc_map: bool = False,
             # pbc_map = None,
         ) -> Tuple[AseDimerCalculator, Callable]:
-            """Factory function to create calculator instances
-            
+            """Factory function to create calculator instances.
+
+            doML, doMM, doML_dimer, debug default to the values passed to setup_calculator.
+            Pass them explicitly here to override per-call.
+
             Args:
                 verbose: If True, store full ModelOutput breakdown in results.
                          If None, defaults to debug value.
@@ -1890,7 +1880,7 @@ def setup_calculator(
                 force_conversion_factor=force_conversion_factor,
                 do_pbc_map=do_pbc_map,
                 pbc_map=pbc_map,
-                verbose=False,
+                verbose=verbose,
             )
 
             return calculator, spherical_cutoff_calculator

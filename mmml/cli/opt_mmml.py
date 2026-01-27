@@ -395,7 +395,7 @@ def build_hybrid_calculator(
         cutoff_params=cutoff_params,
         doML=True,
         doMM=args.include_mm,
-        doML_dimer=not args.skip_ml_dimers,
+        doML_dimer=True, #not args.skip_ml_dimers,
         backprop=True,
         debug=args.debug,
         energy_conversion_factor=1,
@@ -661,7 +661,8 @@ def run(args: argparse.Namespace) -> OptContext:
     ctx.hybrid_calc = build_hybrid_calculator(
         ctx.calculator_factory, Z, R, args, cutoff_params=None
     )
-    print(f"Hybrid calculator created: {ctx.hybrid_calc}")
+    do_ml_dimer = not getattr(args, "skip_ml_dimers", False)
+    print(f"Hybrid calculator created: {ctx.hybrid_calc} (doML_dimer={do_ml_dimer})")
 
     ctx.save_dir = (
         args.out.parent if args.out is not None
