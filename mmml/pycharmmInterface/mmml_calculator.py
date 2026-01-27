@@ -1004,8 +1004,7 @@ def setup_calculator(
                 com2 = positions[ATOMS_PER_MONOMER:2*ATOMS_PER_MONOMER].T.mean(axis=1)
                 r = jnp.linalg.norm(com1 - com2)
 
-                # MM: 0→1 over [mm_on, mm_on+mm_cut], then 1→0 over [mm_on+mm_cut, mm_on+2*mm_cut]
-                # Match cutoffs.py plotting (gamma_on=GAMMA_ON, gamma_off=GAMMA_OFF)
+                
                 mm_on = _sharpstep(r, mm_switch_on, mm_switch_on + mm_cutoff, gamma=GAMMA_ON)
                 mm_off = _sharpstep(r, mm_switch_on + mm_cutoff, mm_switch_on + 2.0 * mm_cutoff, gamma=GAMMA_OFF)
                 mm_scale = mm_on * (1.0 - mm_off)
