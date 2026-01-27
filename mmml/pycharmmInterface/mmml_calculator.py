@@ -666,38 +666,36 @@ class ModelOutput(NamedTuple):
 def setup_calculator(
     ATOMS_PER_MONOMER,
     N_MONOMERS: int = 2,
-    ml_cutoff_distance: float = 2.0, # actually width of the switching function
-    mm_switch_on: float = 5.0, # when MM turns on
-    mm_cutoff: float = 1.0, # when MM turns off
+    ml_cutoff_distance: float = 2.0,
+    mm_switch_on: float = 5.0,
+    mm_cutoff: float = 1.0,
+    complementary_handoff: bool = True,
     doML: bool = True,
     doMM: bool = True,
     doML_dimer: bool = True,
     debug: bool = False,
-    ep_scale = None,
-    sig_scale = None,
-    model_restart_path = None,
+    ep_scale=None,
+    sig_scale=None,
+    model_restart_path=None,
     MAX_ATOMS_PER_SYSTEM: int = 20,
     ml_energy_conversion_factor: float = 1.0,
     ml_force_conversion_factor: float = 1.0,
-    cell = False,
+    cell=False,
     verbose: bool = False,
-    ml_reorder_indices = None,  # Optional permutation: positions_model = positions[ml_reorder_indices]
-    at_codes_override = None,    # Optional per-atom LJ code override (mapped IAC -> param idx)
+    ml_reorder_indices=None,
+    at_codes_override=None,
 ):
     if model_restart_path is None:
         raise ValueError("model_restart_path must be provided")
         # model_restart_path = "/pchem-data/meuwly/boittier/home/pycharmm_test/ckpts/dichloromethane-7c36e6f9-6f10-4d21-bf6d-693df9b8cd40"
     n_monomers = N_MONOMERS
 
-    cutoffparameters = CutoffParameters(ml_cutoff_distance, mm_switch_on, mm_cutoff)
-    # Log raw vs stored cutoffs (note: CutoffParameters reorders fields internally)
-    print(
-        "[setup_calculator] Cutoff inputs -> ml_cutoff_distance=%.4f, mm_switch_on=%.4f, mm_cutoff=%.4f"
-        % (ml_cutoff_distance, mm_switch_on, mm_cutoff)
+    cutoffparameters = CutoffParameters(
+        ml_cutoff_distance, mm_switch_on, mm_cutoff, complementary_handoff=complementary_handoff
     )
     print(
-        "[setup_calculator] CutoffParameters stored -> ml_cutoff=%.4f, mm_switch_on=%.4f, mm_cutoff=%.4f"
-        % (cutoffparameters.ml_cutoff, cutoffparameters.mm_switch_on, cutoffparameters.mm_cutoff)
+        "[setup_calculator] Cutoff inputs -> ml_cutoff=%.4f, mm_switch_on=%.4f, mm_cutoff=%.4f, complementary_handoff=%s"
+        % (ml_cutoff_distance, mm_switch_on, mm_cutoff, complementary_handoff)
     )
     
     all_dimer_idxs = []
@@ -858,14 +856,15 @@ def setup_calculator(
 
     
     def get_MM_energy_forces_fns(
-        R, 
-        ATOMS_PER_MONOMER, 
-        N_MONOMERS=N_MONOMERS, 
-        ml_cutoff_distance=ml_cutoff_distance, 
-        mm_switch_on=mm_switch_on, 
+        R,
+        ATOMS_PER_MONOMER,
+        N_MONOMERS=N_MONOMERS,
+        ml_cutoff_distance=ml_cutoff_distance,
+        mm_switch_on=mm_switch_on,
         mm_cutoff=mm_cutoff,
-        sig_scale = sig_scale,
-        ep_scale = ep_scale
+        complementary_handoff=True,
+        sig_scale=sig_scale,
+        ep_scale=ep_scale,
     ):
         """Creates functions for calculating MM energies and forces with switching."""
         # koading from pycharmm (for consistency), will consider moving 
@@ -994,30 +993,29 @@ def setup_calculator(
             ml_cutoff_distance: float = ml_cutoff_distance,
             mm_switch_on: float = mm_switch_on,
             mm_cutoff: float = mm_cutoff,
+            complementary_handoff: bool = complementary_handoff,
         ):
-            """Applies smooth switching function to MM energies based on COM distance."""
+            """MM scale: complementary s_MM = 1 - s_ML over [mm_switch_on - ml_cutoff, mm_switch_on], or legacy window."""
             @jax.jit
             def apply_switching_function(positions: Array, pair_energies: Array) -> Array:
-                """Applies smooth switching function to MM energies based on COM distance."""
-                # COM distance
-                com1 = positions[:ATOMS_PER_MONOMER].T.mean(axis=1)
-                com2 = positions[ATOMS_PER_MONOMER:2*ATOMS_PER_MONOMER].T.mean(axis=1)
-                r = jnp.linalg.norm(com1 - com2)
-
-                
-                mm_on = _sharpstep(r, mm_switch_on, mm_switch_on + mm_cutoff, gamma=GAMMA_ON)
-                mm_off = _sharpstep(r, mm_switch_on + mm_cutoff, mm_switch_on + 2.0 * mm_cutoff, gamma=GAMMA_OFF)
-                mm_scale = mm_on * (1.0 - mm_off)
-
+                com1 = jnp.mean(positions[:ATOMS_PER_MONOMER], axis=0)
+                com2 = jnp.mean(positions[ATOMS_PER_MONOMER:2*ATOMS_PER_MONOMER], axis=0)
+                r = jnp.linalg.norm(com2 - com1)
+                if complementary_handoff:
+                    # s_MM = 1 - s_ML over same handoff as ML
+                    mm_scale = _sharpstep(r, mm_switch_on - ml_cutoff_distance, mm_switch_on, gamma=GAMMA_ON)
+                else:
+                    mm_on = _sharpstep(r, mm_switch_on, mm_switch_on + mm_cutoff, gamma=GAMMA_ON)
+                    mm_off = _sharpstep(r, mm_switch_on + mm_cutoff, mm_switch_on + 2.0 * mm_cutoff, gamma=GAMMA_OFF)
+                    mm_scale = mm_on * (1.0 - mm_off)
                 return (pair_energies * mm_scale).sum()
-                
             return apply_switching_function
 
-        # Create the switching function with specified parameters
         apply_switching_function = get_switching_function(
             ml_cutoff_distance=ml_cutoff_distance,
             mm_switch_on=mm_switch_on,
-            mm_cutoff=mm_cutoff
+            mm_cutoff=mm_cutoff,
+            complementary_handoff=complementary_handoff,
         )
 
         @jax.jit
@@ -1525,12 +1523,13 @@ def setup_calculator(
         positions = jnp.where(jnp.isfinite(positions), positions, 0.0)
 
         MM_energy_and_gradient = get_MM_energy_forces_fns(
-            positions, 
-            ATOMS_PER_MONOMER , 
-            N_MONOMERS=n_monomers, 
-            ml_cutoff_distance=cutoff_params.ml_cutoff, 
-            mm_switch_on=cutoff_params.mm_switch_on, 
-            mm_cutoff=cutoff_params.mm_cutoff
+            positions,
+            ATOMS_PER_MONOMER,
+            N_MONOMERS=n_monomers,
+            ml_cutoff_distance=cutoff_params.ml_cutoff,
+            mm_switch_on=cutoff_params.mm_switch_on,
+            mm_cutoff=cutoff_params.mm_cutoff,
+            complementary_handoff=getattr(cutoff_params, "complementary_handoff", True),
         )
         
         
