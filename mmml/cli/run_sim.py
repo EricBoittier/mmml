@@ -266,7 +266,21 @@ def run(args: argparse.Namespace) -> int:
     print(f"{coor.get_positions() == pdb_ase_atoms.get_positions()}")
 
     print(coor.get_positions())
-    
+    ase_monomer = pdb_ase_atoms[0:args.n_atoms_monomer]
+    params, model = load_model_parameters(epoch_dir, args.n_atoms_monomer)
+    simple_physnet_calculator = get_ase_calc(params, model, ase_monomer)
+    print(f"Simple physnet calculator: {simple_physnet_calculator}")
+    ase_monomer.calc = simple_physnet_calculator
+    print(f"ASE monomer: {ase_monomer}")
+    print(f"ASE monomer energy: {ase_monomer.get_potential_energy()}")
+    print(f"ASE monomer forces: {ase_monomer.get_forces()}")
+    print(f"ASE monomer positions: {ase_monomer.get_positions()}")
+    print(f"ASE monomer cell: {ase_monomer.get_cell()}")
+    print(f"ASE monomer pbc: {ase_monomer.get_pbc()}")
+    print(f"ASE monomer calculator: {ase_monomer.calc}")
+    print(f"ASE monomer calculator type: {type(ase_monomer.calc)}")
+
+
     # Load model parameters
     natoms = len(pdb_ase_atoms)
     n_monomers = args.n_monomers
@@ -317,8 +331,8 @@ def run(args: argparse.Namespace) -> int:
         doML_dimer=not args.skip_ml_dimers,
         backprop=True,
         debug=args.debug,
-        energy_conversion_factor=1,
-        force_conversion_factor=1,
+        energy_conversion_factor=1 / ev2kcalmol,
+        force_conversion_factor=1 / ev2kcalmol,
         # do_pbc_map=args.cell is not None,
         # pbc_map=calculator_factory.pbc_map if hasattr(calculator_factory, 'pbc_map') else None,
     )
@@ -375,14 +389,14 @@ inbfrq -1 imgfrq -1
 """
     pycharmm.lingo.charmm_script(nbonds)
     safe_energy_show()
-    pycharmm.minimize.run_abnr(nstep=1000, tolenr=1e-6, tolgrd=1e-6)
+    pycharmm.minimize.run_abnr(nstep=10000, tolenr=1e-2, tolgrd=1e-2)
     pycharmm.lingo.charmm_script("ENER")
     safe_energy_show()
     from mmml.pycharmmInterface.pycharmmCommands import heat
     pycharmm.lingo.charmm_script(heat)
     atoms.set_positions(coor.get_positions())
     safe_energy_show()
-    pycharmm.minimize.run_abnr(nstep=1000, tolenr=1e-6, tolgrd=1e-6)
+    pycharmm.minimize.run_abnr(nstep=10000, tolenr=1e-2, tolgrd=1e-2)
     safe_energy_show()
     pycharmm.lingo.charmm_script("ENER")
 
@@ -391,7 +405,7 @@ inbfrq -1 imgfrq -1
     def minimize_structure(atoms, run_index=0, nsteps=60, fmax=0.0006, charmm=False):
 
         if charmm:
-            pycharmm.minimize.run_abnr(nstep=1000, tolenr=1e-6, tolgrd=1e-6)
+            pycharmm.minimize.run_abnr(nstep=10000, tolenr=1e-6, tolgrd=1e-6)
             pycharmm.lingo.charmm_script("ENER")
             safe_energy_show()
             atoms.set_positions(coor.get_positions())
@@ -404,12 +418,31 @@ inbfrq -1 imgfrq -1
         # Sync with PyCHARMM
         xyz = pd.DataFrame(atoms.get_positions(), columns=["x", "y", "z"])
         coor.set_positions(xyz)
-        traj.write(atoms)
         traj.close()
         return atoms
         
-    def run_ase_md(atoms, run_index=0, temperature=args.temperature):
+    def optimize_as_monomers(atoms, run_index=0, nsteps=60, fmax=0.0006):
+        optimized_atoms_positions = np.zeros_like(atoms.get_positions())
+        # use ase and the original physnet calculator to optimize the structure, one monomer at a time
+        for i in range(args.n_monomers):
+            monomer_atoms = atoms[i*args.n_atoms_monomer:(i+1)*args.n_atoms_monomer]
+            monomer_atoms.calc = simple_physnet_calculator
+            _ = ase_opt.BFGS(monomer_atoms).run(fmax=fmax, steps=nsteps)
+            optimized_atoms_positions[i*args.n_atoms_monomer:(i+1)*args.n_atoms_monomer] = monomer_atoms.get_positions()
+
+        atoms.set_positions(optimized_atoms_positions)
+        xyz = pd.DataFrame(atoms.get_positions(), columns=["x", "y", "z"])
+        coor.set_positions(xyz)
+
+        return atoms
+
+
         
+    def run_ase_md(atoms, run_index=0, temperature=args.temperature):
+        atoms = optimize_as_monomers(atoms, run_index=run_index, nsteps=100 if run_index == 0 else 10, fmax=0.0006 if run_index == 0 else 0.001)
+        print(f"Optimized atoms energy: {atoms.get_potential_energy()}")
+        print(f"Optimized atoms forces: {atoms.get_forces()}")
+
         atoms = minimize_structure(atoms, run_index=run_index, nsteps=100 if run_index == 0 else 10, fmax=0.0006 if run_index == 0 else 0.001)
 
         # Setup MD simulation
@@ -504,11 +537,11 @@ inbfrq -1 imgfrq -1
 
 
     temperature = args.temperature
-    for i in range(1000):
+    for i in range(1):
         run_ase_md(atoms, run_index=i, temperature=temperature)
 
-
-    sys.exit()
+    return atoms
+    # sys.exit()
 
     def set_up_nhc_sim_routine(atoms, T=args.temperature, dt=5e-3, steps_per_recording=250):
         @jax.jit
