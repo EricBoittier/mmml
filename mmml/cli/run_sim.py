@@ -390,14 +390,14 @@ inbfrq -1 imgfrq -1
 """
     pycharmm.lingo.charmm_script(nbonds)
     safe_energy_show()
-    pycharmm.minimize.run_abnr(nstep=10000, tolenr=1e-2, tolgrd=1e-2)
+    pycharmm.minimize.run_abnr(nstep=1000, tolenr=1e-2, tolgrd=1e-2)
     pycharmm.lingo.charmm_script("ENER")
     safe_energy_show()
     from mmml.pycharmmInterface.pycharmmCommands import heat
-    pycharmm.lingo.charmm_script(heat)
+    # pycharmm.lingo.charmm_script(heat)
     atoms.set_positions(coor.get_positions())
     safe_energy_show()
-    pycharmm.minimize.run_abnr(nstep=10000, tolenr=1e-2, tolgrd=1e-2)
+    pycharmm.minimize.run_abnr(nstep=1000, tolenr=1e-2, tolgrd=1e-2)
     safe_energy_show()
     pycharmm.lingo.charmm_script("ENER")
 

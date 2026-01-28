@@ -1439,6 +1439,10 @@ def setup_calculator(
         # Calculate monomer contributions
         monomer_atomic_numbers_flat = atomic_numbers[jnp.array(all_monomer_idxs)].reshape(-1)
         monomer_positions_flat = positions[jnp.array(all_monomer_idxs)].reshape(-1, 3)
+        # atom_mask is already flattened over (batch_size * num_atoms)
+        monomer_atom_mask_flat = batches["atom_mask"][: n_monomers * max_atoms]
+        # Keep only first ATOMS_PER_MONOMER entries per monomer
+        monomer_atom_mask_flat = monomer_atom_mask_flat.reshape(n_monomers, max_atoms)[:, :ATOMS_PER_MONOMER].reshape(-1)
         monomer_contribs = calculate_monomer_contributions(
             e,
             f,
@@ -1447,6 +1451,7 @@ def setup_calculator(
             debug,
             monomer_atomic_numbers_flat=monomer_atomic_numbers_flat,
             monomer_positions_flat=monomer_positions_flat,
+            monomer_atom_mask_flat=monomer_atom_mask_flat,
         )
         
         if not doML_dimer:
@@ -1516,6 +1521,7 @@ def setup_calculator(
         debug: bool,
         monomer_atomic_numbers_flat: Array | None = None,
         monomer_positions_flat: Array | None = None,
+        monomer_atom_mask_flat: Array | None = None,
     ) -> Dict[str, Array]:
         """Calculate energy and force contributions from monomers"""
         ml_monomer_energy = jnp.array(e[:n_monomers]).flatten()
@@ -1538,6 +1544,7 @@ def setup_calculator(
             ATOMS_PER_MONOMER,
             monomer_atomic_numbers_flat=monomer_atomic_numbers_flat,
             monomer_positions_flat=monomer_positions_flat,
+            monomer_atom_mask_flat=monomer_atom_mask_flat,
             debug=debug,
         )
 
@@ -1786,9 +1793,15 @@ def setup_calculator(
                     internal_zero_mask = np.linalg.norm(internal_F_host, axis=1) < 1e-12
                     if np.any(internal_zero_mask):
                         zero_indices = np.where(internal_zero_mask)[0]
+                        R_host = np.asarray(jax.device_get(R))
+                        slots = (zero_indices % self.atoms_per_monomer).tolist()
+                        monomers = (zero_indices // self.atoms_per_monomer).tolist()
+                        pos_sample = R_host[zero_indices[:10]].tolist()
                         raise ValueError(
                             "Internal monomer forces must be non-zero. "
-                            f"Zero-force atoms at indices {zero_indices.tolist()} with Z {Z[zero_indices].tolist()}."
+                            f"Zero-force atoms at indices {zero_indices.tolist()} "
+                            f"(monomer slots {slots}, monomers {monomers}) "
+                            f"with Z {Z[zero_indices].tolist()} and positions {pos_sample}."
                         )
                     if self.debug:
                         # Also report zero internal forces in debug mode (should be none due to check above).
@@ -2025,6 +2038,7 @@ def setup_calculator(
         atoms_per_monomer: int,
         monomer_atomic_numbers_flat: Array | None = None,
         monomer_positions_flat: Array | None = None,
+        monomer_atom_mask_flat: Array | None = None,
         debug: bool = False,
     ) -> Array:
         """Process and reshape monomer forces with proper masking.
@@ -2096,6 +2110,9 @@ def setup_calculator(
             if monomer_positions_flat is not None:
                 pos_sample = jnp.take(monomer_positions_flat, zero_indices, axis=0, mode="clip")
                 jax.debug.print("DEBUG monomer forces: position sample {p}", p=pos_sample, ordered=False)
+            if monomer_atom_mask_flat is not None:
+                mask_sample = jnp.take(monomer_atom_mask_flat, zero_indices, axis=0, mode="clip")
+                jax.debug.print("DEBUG monomer forces: atom_mask sample {m}", m=mask_sample, ordered=False)
         
         debug_print(debug, "Process Monomer Forces:",
             raw_forces=ml_monomer_forces,
