@@ -179,13 +179,14 @@ except ModuleNotFoundError:  # pragma: no cover - optional runtime dependency
 
 # Public constants ---------------------------------------------------------
 
-# Energy conversion (1 eV -> kcal / mol).  Use ASE when available for
+# Energy conversion (1 eV -> kcal / mol). Use ASE when available for
 # consistency; otherwise fall back to the known constant so documentation tests
 # can still import this module.
 if _HAVE_ASE:
     ev2kcalmol = 1 / (ase.units.kcal / ase.units.mol)  # type: ignore[attr-defined]
 else:
     ev2kcalmol = 23.060548867
+kcalmol2ev = 1.0 / ev2kcalmol
 
 
 # Module-level configuration ------------------------------------------------
@@ -653,10 +654,10 @@ def _sharpstep(r, x0, x1, gamma=GAMMA_ON):
 from mmml.pycharmmInterface.cutoffs import CutoffParameters
 
 class ModelOutput(NamedTuple):
-    energy: Array  # Shape: (,), total energy in kcal/mol
-    forces: Array  # Shape: (n_atoms, 3), forces in kcal/mol/Å
-    dH: Array # Shape: (,), total interaction energy in kcal/mol
-    internal_E: Array # Shape: (,) total internal energy in kcal/mol
+    energy: Array  # Shape: (,), total energy in eV
+    forces: Array  # Shape: (n_atoms, 3), forces in eV/Å
+    dH: Array # Shape: (,), total interaction energy in eV
+    internal_E: Array # Shape: (,) total internal energy in eV
     internal_F: Array
     mm_E: Array
     mm_F: Array
@@ -685,6 +686,11 @@ def setup_calculator(
     ml_reorder_indices=None,
     at_codes_override=None,
 ):
+    """Create hybrid ML/MM calculator with outputs in eV/eV-A.
+
+    ML energies/forces are assumed to be in eV already. MM energies/forces
+    (kcal/mol, kcal/mol/Å) are converted to eV/eV-Å internally before summing.
+    """
     if model_restart_path is None:
         raise ValueError("model_restart_path must be provided")
         # model_restart_path = "/pchem-data/meuwly/boittier/home/pycharmm_test/ckpts/dichloromethane-7c36e6f9-6f10-4d21-bf6d-693df9b8cd40"
@@ -1537,7 +1543,7 @@ def setup_calculator(
         cutoff_params: CutoffParameters,
         debug: bool
     ) -> Dict[str, Array]:
-        """Calculate MM energy and force contributions"""
+        """Calculate MM energy and force contributions (converted to eV)."""
         
         # Ensure positions are finite
         positions = jnp.where(jnp.isfinite(positions), positions, 0.0)
@@ -1558,6 +1564,10 @@ def setup_calculator(
         # Check for NaN/Inf in MM energy and forces
         mm_E = jnp.where(jnp.isfinite(mm_E), mm_E, 0.0)
         mm_grad = jnp.where(jnp.isfinite(mm_grad), mm_grad, 0.0)
+
+        # MM outputs are in kcal/mol and kcal/mol/Å. Convert to eV and eV/Å.
+        mm_E = mm_E * kcalmol2ev
+        mm_grad = mm_grad * kcalmol2ev
         
         # Ensure MM forces match the full system size
         n_atoms = positions.shape[0]
