@@ -1438,6 +1438,7 @@ def setup_calculator(
 
         # Calculate monomer contributions
         monomer_atomic_numbers_flat = atomic_numbers[jnp.array(all_monomer_idxs)].reshape(-1)
+        monomer_positions_flat = positions[jnp.array(all_monomer_idxs)].reshape(-1, 3)
         monomer_contribs = calculate_monomer_contributions(
             e,
             f,
@@ -1445,6 +1446,7 @@ def setup_calculator(
             max_atoms,
             debug,
             monomer_atomic_numbers_flat=monomer_atomic_numbers_flat,
+            monomer_positions_flat=monomer_positions_flat,
         )
         
         if not doML_dimer:
@@ -1513,6 +1515,7 @@ def setup_calculator(
         max_atoms: int,
         debug: bool,
         monomer_atomic_numbers_flat: Array | None = None,
+        monomer_positions_flat: Array | None = None,
     ) -> Dict[str, Array]:
         """Calculate energy and force contributions from monomers"""
         ml_monomer_energy = jnp.array(e[:n_monomers]).flatten()
@@ -1534,6 +1537,7 @@ def setup_calculator(
             monomer_segment_idxs,
             ATOMS_PER_MONOMER,
             monomer_atomic_numbers_flat=monomer_atomic_numbers_flat,
+            monomer_positions_flat=monomer_positions_flat,
             debug=debug,
         )
 
@@ -1742,6 +1746,19 @@ def setup_calculator(
                             self.results[f"model_{k}"] = v
                 else:
                     self.results["out"] = out
+
+                # Hard check: ml_2b outputs must be finite (avoid silent zeroing).
+                if hasattr(out, "ml_2b_E") or hasattr(out, "ml_2b_F"):
+                    ml_2b_E_host = np.asarray(jax.device_get(getattr(out, "ml_2b_E", 0.0)))
+                    ml_2b_F_host = np.asarray(jax.device_get(getattr(out, "ml_2b_F", np.zeros_like(R))))
+                    if not np.all(np.isfinite(ml_2b_E_host)):
+                        raise ValueError(f"Non-finite ml_2b_E detected: {ml_2b_E_host}")
+                    if not np.all(np.isfinite(ml_2b_F_host)):
+                        bad_idx = np.where(~np.isfinite(ml_2b_F_host).all(axis=1))[0]
+                        raise ValueError(
+                            "Non-finite ml_2b_F detected at atom indices "
+                            f"{bad_idx.tolist()}."
+                        )
                 # Energy sign handling:
                 # - In backprop path (no fallback): Efn returns -spherical_cutoff_calculator(...).energy
                 #   So E from value_and_grad is already negative
@@ -1762,18 +1779,26 @@ def setup_calculator(
                 # Check for NaN/Inf using JAX operations first (works with JAX arrays)
                 forces_final = jnp.where(jnp.isfinite(forces_final), forces_final, 0.0)
 
-                if self.debug and hasattr(out, "internal_F"):
+                if hasattr(out, "internal_F"):
                     internal_F = out.internal_F
                     internal_F = jnp.where(jnp.isfinite(internal_F), internal_F, 0.0)
                     internal_F_host = np.asarray(jax.device_get(internal_F))
                     internal_zero_mask = np.linalg.norm(internal_F_host, axis=1) < 1e-12
                     if np.any(internal_zero_mask):
                         zero_indices = np.where(internal_zero_mask)[0]
-                        print(f"DEBUG internal_F zero-force atoms: {zero_indices}")
-                        print(f"DEBUG internal_F zero-force Z: {Z[zero_indices]}")
-                        if hasattr(out, "ml_2b_F"):
-                            ml_2b_F_host = np.asarray(jax.device_get(out.ml_2b_F))
-                            print(f"DEBUG internal_F zeros -> ml_2b_F sample: {ml_2b_F_host[zero_indices[:10]]}")
+                        raise ValueError(
+                            "Internal monomer forces must be non-zero. "
+                            f"Zero-force atoms at indices {zero_indices.tolist()} with Z {Z[zero_indices].tolist()}."
+                        )
+                    if self.debug:
+                        # Also report zero internal forces in debug mode (should be none due to check above).
+                        if np.any(internal_zero_mask):
+                            zero_indices = np.where(internal_zero_mask)[0]
+                            print(f"DEBUG internal_F zero-force atoms: {zero_indices}")
+                            print(f"DEBUG internal_F zero-force Z: {Z[zero_indices]}")
+                            if hasattr(out, "ml_2b_F"):
+                                ml_2b_F_host = np.asarray(jax.device_get(out.ml_2b_F))
+                                print(f"DEBUG internal_F zeros -> ml_2b_F sample: {ml_2b_F_host[zero_indices[:10]]}")
                 
                 # Debug: Check forces BEFORE conversion to numpy (still in JAX)
                 if self.debug:
@@ -1999,6 +2024,7 @@ def setup_calculator(
         monomer_segment_idxs: Array,
         atoms_per_monomer: int,
         monomer_atomic_numbers_flat: Array | None = None,
+        monomer_positions_flat: Array | None = None,
         debug: bool = False,
     ) -> Array:
         """Process and reshape monomer forces with proper masking.
@@ -2067,6 +2093,9 @@ def setup_calculator(
             if monomer_atomic_numbers_flat is not None:
                 z_sample = jnp.take(monomer_atomic_numbers_flat, zero_indices, axis=0, mode="clip")
                 jax.debug.print("DEBUG monomer forces: Z sample {z}", z=z_sample, ordered=False)
+            if monomer_positions_flat is not None:
+                pos_sample = jnp.take(monomer_positions_flat, zero_indices, axis=0, mode="clip")
+                jax.debug.print("DEBUG monomer forces: position sample {p}", p=pos_sample, ordered=False)
         
         debug_print(debug, "Process Monomer Forces:",
             raw_forces=ml_monomer_forces,
