@@ -1791,7 +1791,10 @@ def setup_calculator(
                             com0 = R_np[:n_per].mean(axis=0)
                             com1 = R_np[n_per : 2 * n_per].mean(axis=0)
                             d_com = float(np.linalg.norm(com1 - com0))
-                            print(f"DEBUG dimer COM distance: {d_com:.4f} (ml_2b is 0 when this > mm_switch_on)")
+                            print(
+                                f"DEBUG dimer COM distance: {d_com:.4f} "
+                                "(ml_2b can be 0 if r > mm_switch_on or the model yields ~0 interaction)"
+                            )
                     except Exception as e:
                         print(f"DEBUG dimer COM distance: (could not compute: {e})")
                     # ML 2-body contributions (from ModelOutput)
@@ -1871,19 +1874,13 @@ def setup_calculator(
                         print(f"AFTER numpy conversion - zero-force atom indices: {zero_indices_after}")
                     # Sample same atoms for comparison
                     print(f"AFTER numpy conversion - sample atoms (0,3,7,10,19): mags={force_mags_after_conv[[0,3,7,10,min(19,len(force_mags_after_conv)-1)]]}")
-                    # Compare specific atoms that were non-zero before
-                    if hasattr(self, 'zero_count_jax') and self.zero_count_jax == 0 and zero_count_after > 0:
-                        print("WARNING: Forces became zero during numpy conversion!")
-                        if hasattr(self, 'forces_jax_mags_np'):
-                            for idx in zero_indices_after[:10]:
-                                if idx < len(self.forces_jax_mags_np):
-                                    print(f"  Atom {idx}: BEFORE={self.forces_jax_mags_np[idx]:.6e}, AFTER={force_mags_after_conv[idx]:.6e}")
-                                else:
-                                    print(f"  Atom {idx}: BEFORE=<out of range>, AFTER={force_mags_after_conv[idx]:.6e}")
-                    # Store for comparison in final check
-                    if not hasattr(self, 'forces_jax_mags_np'):
-                        self.forces_jax_mags_np = forces_jax_mags_np
-                        self.zero_count_jax = zero_count_jax
+                    # Compare atoms that changed to zero during conversion
+                    if "zero_mask_jax" in locals():
+                        became_zero = np.where((~zero_mask_jax) & zero_mask_after)[0]
+                        if len(became_zero) > 0:
+                            print("WARNING: Forces became zero during numpy conversion!")
+                            for idx in became_zero[:10]:
+                                print(f"  Atom {idx}: BEFORE={forces_jax_mags_np[idx]:.6e}, AFTER={force_mags_after_conv[idx]:.6e}")
                 
                 # Final check: ensure shape is correct and all values are finite
                 if forces_final.shape[0] != R.shape[0]:
@@ -1924,18 +1921,16 @@ def setup_calculator(
                     if len(zero_indices) > 1:
                         zero_diffs = np.diff(np.sort(zero_indices))
                         print(f"Calculator storage - spacing between zero atoms: {zero_diffs}")
-                        # Check if all zeros are in second monomer (indices >= ATOMS_PER_MONOMER)
-                        if hasattr(self, 'n_monomers') and hasattr(self, 'cutoff_params'):
-                            n_monomers = self.n_monomers
-                            atoms_per_monomer = (
-                                self.cutoff_params.ATOMS_PER_MONOMER
-                                if hasattr(self.cutoff_params, "ATOMS_PER_MONOMER")
-                                else self.atoms_per_monomer
-                            )
-                            if atoms_per_monomer:
-                                zeros_in_first = np.sum(zero_indices < atoms_per_monomer)
-                                zeros_in_second = np.sum(zero_indices >= atoms_per_monomer)
-                                print(f"Calculator storage - zeros in first monomer (0-{atoms_per_monomer-1}): {zeros_in_first}, second monomer (≥{atoms_per_monomer}): {zeros_in_second}")
+                        # Report per-monomer slot pattern (index mod atoms_per_monomer)
+                        atoms_per_monomer = (
+                            self.cutoff_params.ATOMS_PER_MONOMER
+                            if hasattr(self.cutoff_params, "ATOMS_PER_MONOMER")
+                            else self.atoms_per_monomer
+                        )
+                        if atoms_per_monomer:
+                            zero_mod = zero_indices % atoms_per_monomer
+                            mod_counts = np.bincount(zero_mod, minlength=int(atoms_per_monomer))
+                            print(f"Calculator storage - zero-force slot counts (mod n_per): {mod_counts}")
                     # Also check a few random non-zero atoms to ensure they're correct
                     non_zero_indices = np.where(force_mags_final >= 1e-10)[0]
                     if len(non_zero_indices) > 0:
@@ -2063,7 +2058,10 @@ def setup_calculator(
             # Use JAX-safe debug prints inside jit
             jax.debug.print("DEBUG monomer forces: zero count {c}", c=zero_count, ordered=False)
             zero_indices = jnp.where(zero_mask, size=10, fill_value=-1)[0]
+            valid_mask = zero_indices >= 0
+            zero_mod = jnp.where(valid_mask, zero_indices % atoms_per_monomer, -1)
             jax.debug.print("DEBUG monomer forces: zero indices sample {idx}", idx=zero_indices, ordered=False)
+            jax.debug.print("DEBUG monomer forces: zero mod n_per {m}", m=zero_mod, ordered=False)
             raw_sample = jnp.take(forces_flat, zero_indices, axis=0, mode="clip")
             jax.debug.print("DEBUG monomer forces: raw sample {s}", s=raw_sample, ordered=False)
             if monomer_atomic_numbers_flat is not None:
