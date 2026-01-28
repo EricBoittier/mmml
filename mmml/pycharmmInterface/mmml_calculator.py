@@ -944,12 +944,29 @@ def setup_calculator(
             at_codes = at_codes_override_arr
         atomtype_codes = np.array(psf.get_atype())[:N_MONOMERS*ATOMS_PER_MONOMER]
 
+        if debug:
+            atc_eps_arr = np.array(atc_epsilons)
+            missing_eps_codes = np.where(atc_eps_arr == 0.0)[0]
+            used_missing = np.unique(at_codes[np.isin(at_codes, missing_eps_codes)])
+            if used_missing.size > 0:
+                missing_names = [atc[idx] for idx in used_missing if idx < len(atc)]
+                print(
+                    "WARNING: Missing LJ params for atom types in PSF:",
+                    missing_names,
+                    "(epsilon=0 -> zero MM forces possible)",
+                )
+
         rmins_per_system = jnp.take(at_flat_rm, at_codes) 
         epsilons_per_system = jnp.take(at_flat_ep, at_codes)
 
         rs = distances
         q_per_system = jnp.take(at_flat_q, at_codes)
-
+        q_per_system = charges
+        # # make sure the system is charge neutral
+        # if jnp.sum(q_per_system) != 0:
+        #     raise ValueError(
+        #         "System is not charge neutral. Please check the charges in the PSF file."
+        #     )
 
         q_a = jnp.take(q_per_system, pair_idx_atom_atom[:, 0])
         q_b = jnp.take(q_per_system, pair_idx_atom_atom[:, 1])
@@ -1055,9 +1072,12 @@ def setup_calculator(
                 
             return vdw_energies + electrostatic_energies
         
-        # Calculate gradients
-        mm_energy_grad = jax.grad(calculate_mm_energy)
-        switching_grad = jax.grad(apply_switching_function)
+        def switched_mm_energy(positions: Array) -> Array:
+            """MM energy with switching applied (differentiable)."""
+            pair_energies = calculate_mm_pair_energies(positions)
+            return apply_switching_function(positions, pair_energies)
+
+        switched_mm_grad = jax.grad(switched_mm_energy)
 
         @jax.jit 
         def calculate_mm_energy_and_forces(
@@ -1070,11 +1090,8 @@ def setup_calculator(
             # Apply switching function
             switched_energy = apply_switching_function(positions, pair_energies)
             
-            # Calculate forces with switching
-
-            # forces = -(mm_energy_grad(positions) + switching_grad(positions, pair_energies))
-            # Mitradip was here v(^_^)v
-            forces = -1.0 * switching_grad(positions, pair_energies)
+            # Calculate forces with switching (include energy dependence on positions)
+            forces = -1.0 * switched_mm_grad(positions)
             # Check for NaN/Inf in forces and replace with zeros
             forces = jnp.where(jnp.isfinite(forces), forces, 0.0)
 
@@ -1552,13 +1569,12 @@ def setup_calculator(
             mm_grad_shape=mm_grad.shape,
             n_atoms=n_atoms
         )
-        kcal2ev = 1 /  23.0605
         return {
-            "out_E": mm_E * kcal2ev,
-            "out_F": mm_grad * kcal2ev,
-            "dH": mm_E * kcal2ev,
-            "mm_E": mm_E * kcal2ev,
-            "mm_F": mm_grad * kcal2ev,
+            "out_E": mm_E,
+            "out_F": mm_grad,
+            "dH": mm_E,
+            "mm_E": mm_E,
+            "mm_F": mm_grad,
         }
 
     if _HAVE_ASE:
@@ -1617,6 +1633,26 @@ def setup_calculator(
                 ase_calc.Calculator.calculate(self, atoms, properties, system_changes)
                 R = atoms.get_positions()
                 Z = atoms.get_atomic_numbers()
+
+                expected_atoms = self.n_monomers * ATOMS_PER_MONOMER
+                if len(Z) != expected_atoms:
+                    raise ValueError(
+                        "Atom count mismatch: len(Z) != n_monomers * ATOMS_PER_MONOMER. "
+                        f"Got len(Z)={len(Z)}, expected {expected_atoms} "
+                        f"({self.n_monomers}*{ATOMS_PER_MONOMER}). This triggers padding and "
+                        "can yield exact zero forces for the padded slots. "
+                        "Fix ATOMS_PER_MONOMER or trim the input atoms."
+                    )
+
+                if np.any(Z <= 0):
+                    bad_idx = np.where(Z <= 0)[0]
+                    bad_symbols = [atoms[i].symbol for i in bad_idx]
+                    raise ValueError(
+                        "Invalid atomic numbers detected (Z<=0) at indices "
+                        f"{bad_idx.tolist()} with symbols {bad_symbols}. "
+                        "These atoms are treated as padding and will yield zero forces. "
+                        "Fix the PDB element names or atom typing."
+                    )
 
                 out = {}
                 
@@ -2185,11 +2221,7 @@ def setup_calculator(
             force_segments,
             num_segments=n_monomers * ATOMS_PER_MONOMER
         )  # Shape: (n_monomers * ATOMS_PER_MONOMER, 3)
-        
-        # # Debug: Check if energy_weighted_grad is all zeros (jax.debug.print handles conditional execution)
-        max_grad = jnp.max(jnp.abs(energy_weighted_grad))
-        # jax.debug.print("Energy-weighted grad max abs value: {x}", x=max_grad, ordered=False)
-        
+
         # For the scale * F_dimer term, we need to scale dimer_forces by switching
         # Since each atom may belong to multiple dimers, we compute atom-wise scales
         # by using segment_sum to accumulate scales from all dimers containing each atom
@@ -2240,7 +2272,7 @@ def setup_calculator(
         switched_forces = jnp.where(jnp.isfinite(switched_forces), switched_forces, 0.0)
         
         return {
-            "energies": -switched_energy,
+            "energies": switched_energy,
             "forces": switched_forces
         }
 
