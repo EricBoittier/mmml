@@ -2046,12 +2046,12 @@ def setup_calculator(
             force_mags = jnp.linalg.norm(processed_forces, axis=1)
             zero_mask = force_mags < 1e-12
             zero_count = jnp.sum(zero_mask)
-            if zero_count > 0:
-                zero_indices = np.asarray(jnp.where(zero_mask)[0])
-                print(f"DEBUG monomer forces: zero atoms {zero_indices.tolist()}")
-                sample = zero_indices[:10]
-                raw_sample = np.asarray(jax.device_get(forces_flat))[sample]
-                print(f"DEBUG monomer forces: raw sample {raw_sample}")
+            # Use JAX-safe debug prints inside jit
+            jax.debug.print("DEBUG monomer forces: zero count {c}", c=zero_count, ordered=False)
+            zero_indices = jnp.where(zero_mask, size=10, fill_value=-1)[0]
+            jax.debug.print("DEBUG monomer forces: zero indices sample {idx}", idx=zero_indices, ordered=False)
+            raw_sample = jnp.take(forces_flat, zero_indices, axis=0, mode="clip")
+            jax.debug.print("DEBUG monomer forces: raw sample {s}", s=raw_sample, ordered=False)
         
         debug_print(debug, "Process Monomer Forces:",
             raw_forces=ml_monomer_forces,
