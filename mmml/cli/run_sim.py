@@ -305,7 +305,7 @@ def run(args: argparse.Namespace) -> int:
         doML_dimer=not args.skip_ml_dimers,
         debug=args.debug,
         model_restart_path=base_ckpt_dir,
-        MAX_ATOMS_PER_SYSTEM=natoms,
+        MAX_ATOMS_PER_SYSTEM=2*args.n_atoms_monomer,
         ml_energy_conversion_factor=1,
         ml_force_conversion_factor=1,
         cell=args.cell,
