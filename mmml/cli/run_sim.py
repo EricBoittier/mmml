@@ -331,8 +331,9 @@ def run(args: argparse.Namespace) -> int:
         doML_dimer=not args.skip_ml_dimers,
         backprop=True,
         debug=args.debug,
-        energy_conversion_factor=1 / ev2kcalmol,
-        force_conversion_factor=1 / ev2kcalmol,
+        # Final energies/forces are already in eV; MM terms are converted internally.
+        energy_conversion_factor=1.0,
+        force_conversion_factor=1.0,
         # do_pbc_map=args.cell is not None,
         # pbc_map=calculator_factory.pbc_map if hasattr(calculator_factory, 'pbc_map') else None,
     )
