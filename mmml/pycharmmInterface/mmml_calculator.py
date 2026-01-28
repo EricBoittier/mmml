@@ -1656,6 +1656,9 @@ def setup_calculator(
                 self.pbc_map = pbc_map
                 self.verbose = verbose
                 self.atoms_per_monomer = ATOMS_PER_MONOMER
+                if self.do_pbc_map and self.pbc_map is None:
+                    # Avoid NoneType call when mapping is unavailable.
+                    self.do_pbc_map = False
 
             def calculate(
                 self,
@@ -1693,7 +1696,7 @@ def setup_calculator(
                 
                 if not self.backprop:
                     # Apply PBC mapping before JAX computation if needed
-                    R_mapped = self.pbc_map(R) if self.do_pbc_map else R
+                    R_mapped = self.pbc_map(R) if (self.do_pbc_map and self.pbc_map is not None) else R
                     out = spherical_cutoff_calculator(
                         positions=R_mapped,
                         atomic_numbers=Z,
@@ -1720,7 +1723,7 @@ def setup_calculator(
                     # OPTIMIZED BACKPROP PATH: Compute energy via autodiff but use forces directly from ModelOutput
                     # This avoids numerical instability from differentiating through the entire computation
                     # while still allowing energy to be computed via autodiff for training/optimization
-                    R_mapped = self.pbc_map(R) if self.do_pbc_map else R
+                    R_mapped = self.pbc_map(R) if (self.do_pbc_map and self.pbc_map is not None) else R
                     
                     # Compute ModelOutput to get forces directly (more stable)
                     out = spherical_cutoff_calculator(
@@ -1797,11 +1800,23 @@ def setup_calculator(
                         slots = (zero_indices % self.atoms_per_monomer).tolist()
                         monomers = (zero_indices // self.atoms_per_monomer).tolist()
                         pos_sample = R_host[zero_indices[:10]].tolist()
+                        # Compute min distance within each monomer for zero-force atoms
+                        min_distances = []
+                        for idx in zero_indices:
+                            monomer_id = idx // self.atoms_per_monomer
+                            start = monomer_id * self.atoms_per_monomer
+                            end = start + self.atoms_per_monomer
+                            monomer_positions = R_host[start:end]
+                            diffs = monomer_positions - R_host[idx]
+                            dists = np.linalg.norm(diffs, axis=1)
+                            dists[idx - start] = np.inf  # exclude self-distance
+                            min_distances.append(float(np.min(dists)))
                         raise ValueError(
                             "Internal monomer forces must be non-zero. "
                             f"Zero-force atoms at indices {zero_indices.tolist()} "
                             f"(monomer slots {slots}, monomers {monomers}) "
-                            f"with Z {Z[zero_indices].tolist()} and positions {pos_sample}."
+                            f"with Z {Z[zero_indices].tolist()} and positions {pos_sample}. "
+                            f"Min in-monomer distances {min_distances}."
                         )
                     if self.debug:
                         # Also report zero internal forces in debug mode (should be none due to check above).
@@ -1991,8 +2006,8 @@ def setup_calculator(
             energy_conversion_factor: float = 1.0,
             force_conversion_factor: float = 1.0,
             verbose: bool = None,
-            # do_pbc_map: bool = False,
-            # pbc_map = None,
+            do_pbc_map: bool = False,
+            pbc_map = None,
         ) -> Tuple[AseDimerCalculator, Callable]:
             """Factory function to create calculator instances.
 
