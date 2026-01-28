@@ -1748,6 +1748,19 @@ def setup_calculator(
                 
                 # Check for NaN/Inf using JAX operations first (works with JAX arrays)
                 forces_final = jnp.where(jnp.isfinite(forces_final), forces_final, 0.0)
+
+                if self.debug and hasattr(out, "internal_F"):
+                    internal_F = out.internal_F
+                    internal_F = jnp.where(jnp.isfinite(internal_F), internal_F, 0.0)
+                    internal_F_host = np.asarray(jax.device_get(internal_F))
+                    internal_zero_mask = np.linalg.norm(internal_F_host, axis=1) < 1e-12
+                    if np.any(internal_zero_mask):
+                        zero_indices = np.where(internal_zero_mask)[0]
+                        print(f"DEBUG internal_F zero-force atoms: {zero_indices}")
+                        print(f"DEBUG internal_F zero-force Z: {Z[zero_indices]}")
+                        if hasattr(out, "ml_2b_F"):
+                            ml_2b_F_host = np.asarray(jax.device_get(out.ml_2b_F))
+                            print(f"DEBUG internal_F zeros -> ml_2b_F sample: {ml_2b_F_host[zero_indices[:10]]}")
                 
                 # Debug: Check forces BEFORE conversion to numpy (still in JAX)
                 if self.debug:
@@ -2028,6 +2041,17 @@ def setup_calculator(
 
         # Ensure all forces are finite
         processed_forces = jnp.where(jnp.isfinite(processed_forces), processed_forces, 0.0)
+
+        if debug:
+            force_mags = jnp.linalg.norm(processed_forces, axis=1)
+            zero_mask = force_mags < 1e-12
+            zero_count = jnp.sum(zero_mask)
+            if zero_count > 0:
+                zero_indices = np.asarray(jnp.where(zero_mask)[0])
+                print(f"DEBUG monomer forces: zero atoms {zero_indices.tolist()}")
+                sample = zero_indices[:10]
+                raw_sample = np.asarray(jax.device_get(forces_flat))[sample]
+                print(f"DEBUG monomer forces: raw sample {raw_sample}")
         
         debug_print(debug, "Process Monomer Forces:",
             raw_forces=ml_monomer_forces,
