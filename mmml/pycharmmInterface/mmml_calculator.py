@@ -1437,7 +1437,15 @@ def setup_calculator(
         e = output["energy"] * ml_energy_conversion_factor
 
         # Calculate monomer contributions
-        monomer_contribs = calculate_monomer_contributions(e, f, n_monomers, max_atoms, debug)
+        monomer_atomic_numbers_flat = atomic_numbers[jnp.array(all_monomer_idxs)].reshape(-1)
+        monomer_contribs = calculate_monomer_contributions(
+            e,
+            f,
+            n_monomers,
+            max_atoms,
+            debug,
+            monomer_atomic_numbers_flat=monomer_atomic_numbers_flat,
+        )
         
         if not doML_dimer:
             # Return same keys as full path so caller always sees ml_2b_* (as zeros when skipped)
@@ -1503,7 +1511,8 @@ def setup_calculator(
         f: Array,
         n_monomers: int,
         max_atoms: int,
-        debug: bool
+        debug: bool,
+        monomer_atomic_numbers_flat: Array | None = None,
     ) -> Dict[str, Array]:
         """Calculate energy and force contributions from monomers"""
         ml_monomer_energy = jnp.array(e[:n_monomers]).flatten()
@@ -1521,7 +1530,11 @@ def setup_calculator(
         # Process forces
         # Note: For monomers, we use ATOMS_PER_MONOMER, not max_atoms (which is for dimers)
         monomer_forces = process_monomer_forces(
-            ml_monomer_forces, monomer_segment_idxs, ATOMS_PER_MONOMER, debug
+            ml_monomer_forces,
+            monomer_segment_idxs,
+            ATOMS_PER_MONOMER,
+            monomer_atomic_numbers_flat=monomer_atomic_numbers_flat,
+            debug=debug,
         )
 
         
@@ -1990,6 +2003,7 @@ def setup_calculator(
         ml_monomer_forces: Array,
         monomer_segment_idxs: Array,
         atoms_per_monomer: int,
+        monomer_atomic_numbers_flat: Array | None = None,
         debug: bool = False,
     ) -> Array:
         """Process and reshape monomer forces with proper masking.
@@ -2052,6 +2066,9 @@ def setup_calculator(
             jax.debug.print("DEBUG monomer forces: zero indices sample {idx}", idx=zero_indices, ordered=False)
             raw_sample = jnp.take(forces_flat, zero_indices, axis=0, mode="clip")
             jax.debug.print("DEBUG monomer forces: raw sample {s}", s=raw_sample, ordered=False)
+            if monomer_atomic_numbers_flat is not None:
+                z_sample = jnp.take(monomer_atomic_numbers_flat, zero_indices, axis=0, mode="clip")
+                jax.debug.print("DEBUG monomer forces: Z sample {z}", z=z_sample, ordered=False)
         
         debug_print(debug, "Process Monomer Forces:",
             raw_forces=ml_monomer_forces,
