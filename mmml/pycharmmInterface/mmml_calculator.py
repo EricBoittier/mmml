@@ -1621,6 +1621,7 @@ def setup_calculator(
                 self.do_pbc_map = do_pbc_map
                 self.pbc_map = pbc_map
                 self.verbose = verbose
+                self.atoms_per_monomer = ATOMS_PER_MONOMER
 
             def calculate(
                 self,
@@ -1634,12 +1635,12 @@ def setup_calculator(
                 R = atoms.get_positions()
                 Z = atoms.get_atomic_numbers()
 
-                expected_atoms = self.n_monomers * ATOMS_PER_MONOMER
+                expected_atoms = self.n_monomers * self.atoms_per_monomer
                 if len(Z) != expected_atoms:
                     raise ValueError(
                         "Atom count mismatch: len(Z) != n_monomers * ATOMS_PER_MONOMER. "
                         f"Got len(Z)={len(Z)}, expected {expected_atoms} "
-                        f"({self.n_monomers}*{ATOMS_PER_MONOMER}). This triggers padding and "
+                        f"({self.n_monomers}*{self.atoms_per_monomer}). This triggers padding and "
                         "can yield exact zero forces for the padded slots. "
                         "Fix ATOMS_PER_MONOMER or trim the input atoms."
                     )
@@ -1890,11 +1891,15 @@ def setup_calculator(
                         # Check if all zeros are in second monomer (indices >= ATOMS_PER_MONOMER)
                         if hasattr(self, 'n_monomers') and hasattr(self, 'cutoff_params'):
                             n_monomers = self.n_monomers
-                            ATOMS_PER_MONOMER = self.cutoff_params.ATOMS_PER_MONOMER if hasattr(self.cutoff_params, 'ATOMS_PER_MONOMER') else None
-                            if ATOMS_PER_MONOMER:
-                                zeros_in_first = np.sum(zero_indices < ATOMS_PER_MONOMER)
-                                zeros_in_second = np.sum(zero_indices >= ATOMS_PER_MONOMER)
-                                print(f"Calculator storage - zeros in first monomer (0-{ATOMS_PER_MONOMER-1}): {zeros_in_first}, second monomer (≥{ATOMS_PER_MONOMER}): {zeros_in_second}")
+                            atoms_per_monomer = (
+                                self.cutoff_params.ATOMS_PER_MONOMER
+                                if hasattr(self.cutoff_params, "ATOMS_PER_MONOMER")
+                                else self.atoms_per_monomer
+                            )
+                            if atoms_per_monomer:
+                                zeros_in_first = np.sum(zero_indices < atoms_per_monomer)
+                                zeros_in_second = np.sum(zero_indices >= atoms_per_monomer)
+                                print(f"Calculator storage - zeros in first monomer (0-{atoms_per_monomer-1}): {zeros_in_first}, second monomer (≥{atoms_per_monomer}): {zeros_in_second}")
                     # Also check a few random non-zero atoms to ensure they're correct
                     non_zero_indices = np.where(force_mags_final >= 1e-10)[0]
                     if len(non_zero_indices) > 0:
