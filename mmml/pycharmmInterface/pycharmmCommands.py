@@ -139,8 +139,8 @@ open write unit 31 card name heat.res       ! Restart file
 open write unit 32 file name heat.dcd       ! Coordinates file
 
 dyna leap verlet start -
-   timestp 0.002 nstep 5000 -
-   firstt @tmin finalt 3000 tbath 3000 -
+   timestp 0.001 nstep 5000 -
+   firstt @tmin finalt 300 tbath 300 -
    ihtfrq 1000 teminc 5 ieqfrq 0 -
    iasors 1 iasvel 1 iscvel 0 ichecw 0 -
    nprint 1000 nsavc 1000 ntrfrq 200 -
