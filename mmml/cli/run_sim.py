@@ -538,7 +538,7 @@ inbfrq -1 imgfrq -1
 
 
     temperature = args.temperature
-    for i in range(1):
+    for i in range(4):
         run_ase_md(atoms, run_index=i, temperature=temperature)
 
     return atoms
