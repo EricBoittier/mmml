@@ -79,6 +79,25 @@ def is_valid_advanced_batch_config(batch_args_dict):
         and "batch_nbl_len" in batch_args_dict
     )
 
+
+def _merge_params(init_params, loaded_params):
+    """
+    Merge loaded params with init params, filling in any keys missing from loaded.
+    Used when restarting from checkpoints that lack newer submodules (e.g. repulsion).
+    Prefers loaded values when both exist (e.g. trained repulsion params).
+    """
+    if not isinstance(loaded_params, dict):
+        return loaded_params  # leaf: prefer loaded (checkpoint) values
+    if not isinstance(init_params, dict):
+        return loaded_params
+    result = {}
+    for k in init_params:
+        if k not in loaded_params:
+            result[k] = init_params[k]
+        else:
+            result[k] = _merge_params(init_params[k], loaded_params[k])
+    return result
+
 def train_model(
     key,
     model,
@@ -324,6 +343,16 @@ def train_model(
             CKPT_DIR,
             state,
         ) = restart_training(restart, transform, optimizer, num_atoms)
+        # Fill missing params (e.g. repulsion) from old checkpoints that lack newer submodules
+        init_params = model.init(
+            init_key,
+            atomic_numbers=train_data["Z"][0],
+            positions=train_data["R"][0],
+            dst_idx=dst_idx,
+            src_idx=src_idx,
+        )
+        params = _merge_params(init_params, params)
+        ema_params = _merge_params(init_params, ema_params)
     # initialize
     else:
         ema_params = params
@@ -493,7 +522,7 @@ def train_model(
                 # update best loss
                 best_loss = obj_res[objective]
                 model_attributes = model.return_attributes()
-                # checkpoints.save_checkpoint(ckpt_dir=CKPT_DIR, target=state, step=epoch)
+
                 ckpt = {
                     "model": state,
                     "model_attributes": model_attributes,

@@ -234,7 +234,7 @@ def main_loop(args):
             n_res=args.n_res,
             cutoff=args.cutoff,
             max_atomic_number=args.max_atomic_number,
-            zbl=False, # TODO: add zbl
+            zbl=True, # TODO: add zbl
             efa=False, # TODO: add efa
         )
         try:
@@ -297,10 +297,29 @@ def run_notebook(**kwargs):
 
     Example:
         from mmml.cli import make_training
+
         params, params_path = make_training.run_notebook(
             data="train.npz",
             ckpt_dir="/tmp/ckpts",
+            tag="run",
+            model=None,
+            n_train=1000,
+            n_valid=100,
+            seed=42,
+            batch_size=1,
             num_epochs=2,
+            learning_rate=0.001,
+            energy_weight=1,
+            objective="valid_loss",
+            restart=None,
+            num_atoms=None,
+            features=64,
+            max_degree=0,
+            num_basis_functions=32,
+            num_iterations=2,
+            n_res=2,
+            cutoff=8.0,
+            max_atomic_number=28,
         )
     """
     args = args_from_kwargs(**kwargs)

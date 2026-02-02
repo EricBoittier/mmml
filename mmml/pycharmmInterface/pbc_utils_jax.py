@@ -21,10 +21,25 @@ def cart_coords(S: Array, cell: Array) -> Array:
 
 @jax.jit
 def wrap_positions(R: Array, cell: Array) -> Array:
-    """Wrap positions into the primary cell [0,1)^3 (C∞ in interiors; piecewise at faces)."""
+    """Wrap positions into the primary cell [0,1)^3 (C∞ in interiors; piecewise at faces).
+    Wraps each atom individually - use wrap_groups for molecular wrapping."""
     S = frac_coords(R, cell)
     S_wrapped = S - jnp.floor(S)
     return cart_coords(S_wrapped, cell)
+
+
+def wrap_groups(R: Array, groups: list[Array], cell: Array) -> Array:
+    """Wrap each group (monomer) as a unit into the primary cell.
+    Keeps monomers intact: wrap CoM into cell, then apply same shift to all atoms in group."""
+    R_out = R
+    for g in groups:
+        com = R[g].mean(axis=0)
+        S_com = frac_coords(com[None, :], cell)[0]
+        S_wrapped = S_com - jnp.floor(S_com)
+        com_wrapped = cart_coords(S_wrapped[None, :], cell)[0]
+        shift = com_wrapped - com
+        R_out = R_out.at[g].add(shift)
+    return R_out
 
 
 @jax.jit
