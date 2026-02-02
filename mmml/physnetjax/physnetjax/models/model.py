@@ -64,7 +64,7 @@ class EF(nn.Module):
     zbl: bool = True
     debug: bool | List[str] = False
     efa: bool = False
-    use_energy_bias: bool = True
+    use_energy_bias: bool = False
     use_pbc: bool = False
 
     def setup(self) -> None:
