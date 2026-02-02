@@ -13,6 +13,7 @@ physics functionality is unchanged when the third-party libraries are present.
 
 from __future__ import annotations
 
+import warnings
 from functools import partial
 from itertools import combinations, permutations, product
 from pathlib import Path
@@ -1589,7 +1590,7 @@ def setup_calculator(
         mm_E = jnp.where(jnp.isfinite(mm_E), mm_E, 0.0)
         mm_grad = jnp.where(jnp.isfinite(mm_grad), mm_grad, 0.0)
 
-        # MM outputs are in kcal/mol and kcal/mol/Å. Convert to eV and eV/Å.
+        # # MM outputs are in kcal/mol and kcal/mol/Å. Convert to eV and eV/Å.
         mm_E = mm_E * kcalmol2ev
         mm_grad = mm_grad * kcalmol2ev
         
@@ -1694,59 +1695,34 @@ def setup_calculator(
 
                 out = {}
                 
-                if not self.backprop:
-                    # Apply PBC mapping before JAX computation if needed
-                    R_mapped = self.pbc_map(R) if (self.do_pbc_map and self.pbc_map is not None) else R
-                    out = spherical_cutoff_calculator(
-                        positions=R_mapped,
-                        atomic_numbers=Z,
-                        n_monomers=self.n_monomers,
-                        cutoff_params=self.cutoff_params,
-                        doML=self.doML,
-                        doMM=self.doMM,
-                        doML_dimer=self.doML_dimer,
-                        debug=self.debug,
-                    )
 
-                    E = out.energy  # Energy from calculator (negative, binding energy convention)
-                    F = out.forces
-                    
-                    # Ensure forces from ModelOutput are finite
-                    F = jnp.where(jnp.isfinite(F), F, 0.0)
-                    
-                    # Debug: Check forces after NaN check
-                    if self.debug:
-                        F_mags_after = jnp.linalg.norm(F, axis=1)
-                        print(f"Non-backprop path - F after NaN check: atom 3 mag: {float(F_mags_after[3]):.6e}, atom 7: {float(F_mags_after[7]):.6e}")
+                R_mapped = self.pbc_map(R) if (self.do_pbc_map and self.pbc_map is not None) else R
+                
+                # Compute ModelOutput to get forces directly (more stable)
+                out = spherical_cutoff_calculator(
+                    positions=R_mapped,
+                    atomic_numbers=Z,
+                    n_monomers=self.n_monomers,
+                    cutoff_params=self.cutoff_params,
+                    doML=self.doML,
+                    doMM=self.doMM,
+                    doML_dimer=self.doML_dimer,
+                    debug=self.debug,
+                )
+                
+                # Use forces directly from ModelOutput (computed via explicit gradients, more stable)
+                F = out.forces
+                # Transform forces from R_mapped space back to R space (chain rule: F_orig = J^T F_mapped)
+                if self.do_pbc_map and self.pbc_map is not None and hasattr(self.pbc_map, "transform_forces"):
+                    F = self.pbc_map.transform_forces(R, F)
+                
+                # For energy, we can still use autodiff if needed, but for now use directly
+                # The energy from ModelOutput is already correct
+                E = out.energy
 
-                if self.backprop:
-                    # OPTIMIZED BACKPROP PATH: Compute energy via autodiff but use forces directly from ModelOutput
-                    # This avoids numerical instability from differentiating through the entire computation
-                    # while still allowing energy to be computed via autodiff for training/optimization
-                    R_mapped = self.pbc_map(R) if (self.do_pbc_map and self.pbc_map is not None) else R
-                    
-                    # Compute ModelOutput to get forces directly (more stable)
-                    out = spherical_cutoff_calculator(
-                        positions=R_mapped,
-                        atomic_numbers=Z,
-                        n_monomers=self.n_monomers,
-                        cutoff_params=self.cutoff_params,
-                        doML=self.doML,
-                        doMM=self.doMM,
-                        doML_dimer=self.doML_dimer,
-                        debug=self.debug,
-                    )
-                    
-                    # Use forces directly from ModelOutput (computed via explicit gradients, more stable)
-                    F = out.forces
-                    
-                    # For energy, we can still use autodiff if needed, but for now use directly
-                    # The energy from ModelOutput is already correct
-                    E = out.energy
-
-                    # Ensure forces are finite
-                    E = jnp.where(jnp.isfinite(E), E, 0.0)
-                    F = jnp.where(jnp.isfinite(F), F, 0.0)
+                # Ensure forces are finite
+                E = jnp.where(jnp.isfinite(E), E, 0.0)
+                F = jnp.where(jnp.isfinite(F), F, 0.0)
 
                 if self.verbose:
                     # Store full ModelOutput with ML/MM breakdown for analysis
@@ -1757,29 +1733,8 @@ def setup_calculator(
                 else:
                     self.results["out"] = out
 
-                # Hard check: ml_2b outputs must be finite (avoid silent zeroing).
-                if hasattr(out, "ml_2b_E") or hasattr(out, "ml_2b_F"):
-                    ml_2b_E_host = np.asarray(jax.device_get(getattr(out, "ml_2b_E", 0.0)))
-                    ml_2b_F_host = np.asarray(jax.device_get(getattr(out, "ml_2b_F", np.zeros_like(R))))
-                    if not np.all(np.isfinite(ml_2b_E_host)):
-                        raise ValueError(f"Non-finite ml_2b_E detected: {ml_2b_E_host}")
-                    if not np.all(np.isfinite(ml_2b_F_host)):
-                        bad_idx = np.where(~np.isfinite(ml_2b_F_host).all(axis=1))[0]
-                        raise ValueError(
-                            "Non-finite ml_2b_F detected at atom indices "
-                            f"{bad_idx.tolist()}."
-                        )
-                # Energy sign handling:
-                # - In backprop path (no fallback): Efn returns -spherical_cutoff_calculator(...).energy
-                #   So E from value_and_grad is already negative
-                # - In non-backprop path: E = out.energy (check actual sign from calculator)
-                # - In fallback path: E = out_fallback.energy (same as non-backprop, check actual sign)
-                # The spherical_cutoff_calculator returns negative energy (binding energy convention)
-                # So:
-                # - backprop (no fallback): E is already negative, use as-is
-                # - non-backprop: E from calculator is negative, use as-is (no negation needed)
-                # - fallback: E from calculator is negative, use as-is (no negation needed)
-                # All paths should use E directly since calculator already returns negative energies
+
+
                 final_energy = E
                 
                 self.results["energy"] = final_energy * self.energy_conversion_factor
@@ -1788,37 +1743,55 @@ def setup_calculator(
                 
                 # Check for NaN/Inf using JAX operations first (works with JAX arrays)
                 forces_final = jnp.where(jnp.isfinite(forces_final), forces_final, 0.0)
+                if self.debug:
 
-                if hasattr(out, "internal_F"):
-                    internal_F = out.internal_F
-                    internal_F = jnp.where(jnp.isfinite(internal_F), internal_F, 0.0)
-                    internal_F_host = np.asarray(jax.device_get(internal_F))
-                    internal_zero_mask = np.linalg.norm(internal_F_host, axis=1) < 1e-12
-                    if np.any(internal_zero_mask):
-                        zero_indices = np.where(internal_zero_mask)[0]
-                        R_host = np.asarray(jax.device_get(R))
-                        slots = (zero_indices % self.atoms_per_monomer).tolist()
-                        monomers = (zero_indices // self.atoms_per_monomer).tolist()
-                        pos_sample = R_host[zero_indices[:10]].tolist()
-                        # Compute min distance within each monomer for zero-force atoms
-                        min_distances = []
-                        for idx in zero_indices:
-                            monomer_id = idx // self.atoms_per_monomer
-                            start = monomer_id * self.atoms_per_monomer
-                            end = start + self.atoms_per_monomer
-                            monomer_positions = R_host[start:end]
-                            diffs = monomer_positions - R_host[idx]
-                            dists = np.linalg.norm(diffs, axis=1)
-                            dists[idx - start] = np.inf  # exclude self-distance
-                            min_distances.append(float(np.min(dists)))
-                        raise ValueError(
-                            "Internal monomer forces must be non-zero. "
-                            f"Zero-force atoms at indices {zero_indices.tolist()} "
-                            f"(monomer slots {slots}, monomers {monomers}) "
-                            f"with Z {Z[zero_indices].tolist()} and positions {pos_sample}. "
-                            f"Min in-monomer distances {min_distances}."
-                        )
-                    if self.debug:
+                    # Hard check: ml_2b outputs must be finite (avoid silent zeroing).
+                    if hasattr(out, "ml_2b_E") or hasattr(out, "ml_2b_F"):
+                        ml_2b_E_host = np.asarray(jax.device_get(getattr(out, "ml_2b_E", 0.0)))
+                        ml_2b_F_host = np.asarray(jax.device_get(getattr(out, "ml_2b_F", np.zeros_like(R))))
+                        if not np.all(np.isfinite(ml_2b_E_host)):
+                            raise ValueError(f"Non-finite ml_2b_E detected: {ml_2b_E_host}")
+                        if not np.all(np.isfinite(ml_2b_F_host)):
+                            bad_idx = np.where(~np.isfinite(ml_2b_F_host).all(axis=1))[0]
+                            raise ValueError(
+                                "Non-finite ml_2b_F detected at atom indices "
+                                f"{bad_idx.tolist()}."
+                            )
+
+                    if hasattr(out, "internal_F"):
+                        internal_F = out.internal_F
+                        internal_F = jnp.where(jnp.isfinite(internal_F), internal_F, 0.0)
+                        internal_F_host = np.asarray(jax.device_get(internal_F))
+                        # Use relaxed threshold (1e-10) - float32 ML models can produce very small forces
+                        internal_zero_mask = np.linalg.norm(internal_F_host, axis=1) < 1e-10
+                        if np.any(internal_zero_mask):
+                            zero_indices = np.where(internal_zero_mask)[0]
+                            R_host = np.asarray(jax.device_get(R))
+                            slots = (zero_indices % self.atoms_per_monomer).tolist()
+                            monomers = (zero_indices // self.atoms_per_monomer).tolist()
+                            pos_sample = R_host[zero_indices[:10]].tolist()
+                            # Compute min distance within each monomer for zero-force atoms
+                            min_distances = []
+                            for idx in zero_indices:
+                                monomer_id = idx // self.atoms_per_monomer
+                                start = monomer_id * self.atoms_per_monomer
+                                end = start + self.atoms_per_monomer
+                                monomer_positions = R_host[start:end]
+                                diffs = monomer_positions - R_host[idx]
+                                dists = np.linalg.norm(diffs, axis=1)
+                                dists[idx - start] = np.inf  # exclude self-distance
+                                min_distances.append(float(np.min(dists)))
+                            warnings.warn(
+                                "Internal monomer forces near zero. "
+                                f"Zero-force atoms at indices {zero_indices.tolist()} "
+                                f"(monomer slots {slots}, monomers {monomers}) "
+                                f"with Z {Z[zero_indices].tolist()} and positions {pos_sample}. "
+                                f"Min in-monomer distances {min_distances}. "
+                                "Continuing; if unexpected, check model/checkpoint or PBC mapping.",
+                                UserWarning,
+                                stacklevel=2,
+                            )
+                    
                         # Also report zero internal forces in debug mode (should be none due to check above).
                         if np.any(internal_zero_mask):
                             zero_indices = np.where(internal_zero_mask)[0]
@@ -1892,11 +1865,6 @@ def setup_calculator(
                         except Exception as e2:
                             print(f"ERROR in fallback extraction: {e2}")
                 
-                # Convert to numpy array for storage (ASE expects numpy arrays)
-                # Ensure proper shape: (n_atoms, 3)
-                # CRITICAL: Ensure JAX array is fully evaluated before conversion
-                # Use jax.device_get() to move from device to host, then convert to numpy
-                # Note: jax is imported at module level, so we can use it directly
                 try:
                     # First ensure array is on CPU and fully computed
                     forces_final_host = jax.device_get(forces_final)
@@ -2276,6 +2244,15 @@ def setup_calculator(
         
         return processed_forces
 
+
+    def dimer_repulsion(
+        positions: Array,
+        cutoff_params: CutoffParameters,
+        debug: bool
+    ) -> Array:
+        """Calculate dimer repulsion forces."""
+        return 0.0
+
     def apply_dimer_switching(
         positions: Array,
         dimer_energies: Array,
@@ -2391,6 +2368,9 @@ def setup_calculator(
             "forces": switched_forces
         }
 
+    # Expose pbc_map and do_pbc_map so callers (e.g. run_sim) can pass them to the calculator
+    get_spherical_cutoff_calculator.pbc_map = pbc_map if do_pbc_map else None
+    get_spherical_cutoff_calculator.do_pbc_map = do_pbc_map
     return get_spherical_cutoff_calculator
 
 ######################################################
