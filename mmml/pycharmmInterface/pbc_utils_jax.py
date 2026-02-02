@@ -52,6 +52,15 @@ def mic_displacement(Ri: Array, Rj: Array, cell: Array) -> Array:
 
 
 @jax.jit
+def mic_displacements_batched(positions_dst: Array, positions_src: Array, cell: Array) -> Array:
+    """MIC displacement for batched pairs. positions_dst/src shape (n_edges, 3)."""
+    dR = positions_src - positions_dst
+    dS = frac_coords(dR, cell)
+    dS_mic = dS - jnp.round(dS)
+    return cart_coords(dS_mic, cell)
+
+
+@jax.jit
 def pairwise_mic(R: Array, cell: Array):
     """All-pairs MIC displacement and distance. Returns (dR_ij, d_ij)."""
     dR = R[None, :, :] - R[:, None, :]
