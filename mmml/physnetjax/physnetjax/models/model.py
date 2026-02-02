@@ -13,6 +13,7 @@ import e3x
 import flax.linen as nn
 import jax
 import jax.numpy as jnp
+import jax.scipy.linalg
 from jax import Array
 # from jax.experimental import mesh_utils
 # from jax.sharding import Mesh
@@ -128,6 +129,7 @@ class EF(nn.Module):
         batch_size: int,
         batch_mask: jnp.ndarray,
         atom_mask: jnp.ndarray,
+        cell: Optional[jnp.ndarray] = None,
     ) -> tuple[Array, tuple[Array, Array, Array, Array]]:
         """
         Calculate molecular energy and related properties.
@@ -163,7 +165,7 @@ class EF(nn.Module):
         """
         # Calculate basic geometric features
         basis, displacements = self._calculate_geometric_features(
-            positions, dst_idx, src_idx
+            positions, dst_idx, src_idx, cell=cell
         )
 
         graph_mask = jnp.ones(batch_size)
@@ -196,6 +198,7 @@ class EF(nn.Module):
         positions: jnp.ndarray,
         dst_idx: jnp.ndarray,
         src_idx: jnp.ndarray,
+        cell: Optional[jnp.ndarray] = None,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         """
         Calculate geometric features including displacements and basis functions.
@@ -208,6 +211,8 @@ class EF(nn.Module):
             Destination indices for message passing
         src_idx : jnp.ndarray
             Source indices for message passing
+        cell : Optional[jnp.ndarray]
+            If provided, apply minimum-image convention to displacements (PBC).
             
         Returns
         -------
@@ -216,8 +221,14 @@ class EF(nn.Module):
         """
         positions_dst = e3x.ops.gather_dst(positions, dst_idx=dst_idx)
         positions_src = e3x.ops.gather_src(positions, src_idx=src_idx)
-        displacements = positions_src - positions_dst
-        # print(displacements)
+        if cell is not None:
+            # Minimum-image convention for PBC
+            dR = positions_src - positions_dst
+            dS = jax.scipy.linalg.solve(cell.T, dR.T, assume_a='gen').T
+            dS_mic = dS - jnp.round(dS)
+            displacements = dS_mic @ cell
+        else:
+            displacements = positions_src - positions_dst
         return (
             e3x.nn.basis(
                 displacements,
@@ -894,6 +905,7 @@ class EF(nn.Module):
         batch_size: Optional[int] = None,
         batch_mask: Optional[jnp.ndarray] = None,
         atom_mask: Optional[jnp.ndarray] = None,
+        cell: Optional[jnp.ndarray] = None,
     ) -> Dict[str, Optional[jnp.ndarray]]:
         """
         Forward pass of the model.
@@ -978,6 +990,7 @@ class EF(nn.Module):
             batch_size,
             batch_mask,
             atom_mask,
+            cell,
         )
         # NOTE: energy() returns -E (negative energy) at line 532
         # So: gradient = d(-E)/dr = -dE/dr

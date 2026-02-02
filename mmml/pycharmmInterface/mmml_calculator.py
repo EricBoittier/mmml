@@ -26,6 +26,10 @@ from scipy.optimize import minimize as scipy_minimize
 # In your module that defines spherical_cutoff_calculator
 import jax.numpy as jnp
 from mmml.pycharmmInterface.pbc_prep_factory import make_pbc_mapper
+from mmml.pycharmmInterface.pbc_utils_jax import (
+    mic_displacement,
+    mic_displacements_batched,
+)
 
 
 # CHARMM force-field definitions are optional.  During documentation builds we
@@ -848,11 +852,16 @@ def setup_calculator(
         ml_cutoff=ml_cutoff_distance,
         mm_switch_on=mm_switch_on,
         ATOMS_PER_MONOMER=ATOMS_PER_MONOMER,
+        pbc_cell=None,
     ):
         # COM–COM distance (used for ML taper; must match debug "dimer COM distance")
         com1 = jnp.mean(X[:ATOMS_PER_MONOMER], axis=0)
         com2 = jnp.mean(X[ATOMS_PER_MONOMER:2*ATOMS_PER_MONOMER], axis=0)
-        r = jnp.linalg.norm(com2 - com1)
+        if pbc_cell is not None:
+            d = mic_displacement(com1, com2, pbc_cell)
+            r = jnp.linalg.norm(d)
+        else:
+            r = jnp.linalg.norm(com2 - com1)
     
         # ML: 1 -> 0 over [mm_switch_on - ml_cutoff, mm_switch_on]
         ml_scale = 1.0 - _sharpstep(r, mm_switch_on - ml_cutoff, mm_switch_on, gamma=GAMMA_ON)
@@ -934,7 +943,13 @@ def setup_calculator(
         pair_idx_atom_atom = pair_idxs_np[:, None, :] + pair_idxs_product[None,...]
         pair_idx_atom_atom = pair_idx_atom_atom.reshape(-1, 2)
         
-        displacements = R[pair_idx_atom_atom[:,0]] - R[pair_idx_atom_atom[:,1]]
+        pbc_cell = cell if do_pbc_map else None
+        if pbc_cell is not None:
+            pos_dst = R[pair_idx_atom_atom[:, 1]]
+            pos_src = R[pair_idx_atom_atom[:, 0]]
+            displacements = mic_displacements_batched(pos_dst, pos_src, pbc_cell)
+        else:
+            displacements = R[pair_idx_atom_atom[:, 0]] - R[pair_idx_atom_atom[:, 1]]
         distances = jnp.linalg.norm(displacements, axis=1)
         at_perms = [_ for _ in list(product(params, repeat=2)) if _[0] <= _[1]]
         
@@ -1024,7 +1039,11 @@ def setup_calculator(
             def apply_switching_function(positions: Array, pair_energies: Array) -> Array:
                 com1 = jnp.mean(positions[:ATOMS_PER_MONOMER], axis=0)
                 com2 = jnp.mean(positions[ATOMS_PER_MONOMER:2*ATOMS_PER_MONOMER], axis=0)
-                r = jnp.linalg.norm(com2 - com1)
+                if pbc_cell is not None:
+                    d = mic_displacement(com1, com2, pbc_cell)
+                    r = jnp.linalg.norm(d)
+                else:
+                    r = jnp.linalg.norm(com2 - com1)
                 if complementary_handoff:
                     # handoff: s_MM = 1 - s_ML over [mm_switch_on - ml_cutoff, mm_switch_on]
                     handoff = _sharpstep(r, mm_switch_on - ml_cutoff_distance, mm_switch_on, gamma=GAMMA_ON)
@@ -1050,8 +1069,13 @@ def setup_calculator(
         @jax.jit
         def calculate_mm_energy(positions: Array) -> Array:
             """Calculates MM energies including both VDW and electrostatic terms."""
-            # Calculate pairwise distances
-            displacements = positions[pair_idx_atom_atom[:,0]] - positions[pair_idx_atom_atom[:,1]]
+            # Calculate pairwise distances (use MIC when PBC enabled)
+            if pbc_cell is not None:
+                pos_dst = positions[pair_idx_atom_atom[:, 1]]
+                pos_src = positions[pair_idx_atom_atom[:, 0]]
+                displacements = mic_displacements_batched(pos_dst, pos_src, pbc_cell)
+            else:
+                displacements = positions[pair_idx_atom_atom[:, 0]] - positions[pair_idx_atom_atom[:, 1]]
             distances = jnp.linalg.norm(displacements, axis=1)
             
             # Only include interactions between unique pairs
@@ -1070,7 +1094,12 @@ def setup_calculator(
         @jax.jit
         def calculate_mm_pair_energies(positions: Array) -> Array:
             """Calculates per-pair MM energies for switching calculations."""
-            displacements = positions[pair_idx_atom_atom[:,0]] - positions[pair_idx_atom_atom[:,1]]
+            if pbc_cell is not None:
+                pos_dst = positions[pair_idx_atom_atom[:, 1]]
+                pos_src = positions[pair_idx_atom_atom[:, 0]]
+                displacements = mic_displacements_batched(pos_dst, pos_src, pbc_cell)
+            else:
+                displacements = positions[pair_idx_atom_atom[:, 0]] - positions[pair_idx_atom_atom[:, 1]]
             distances = jnp.linalg.norm(displacements, axis=1)
             pair_mask = (pair_idx_atom_atom[:, 0] < pair_idx_atom_atom[:, 1])
             
@@ -1410,7 +1439,8 @@ def setup_calculator(
                 batch_segments=batches["batch_segments"],
                 batch_size=BATCH_SIZE,
                 batch_mask=batches["batch_mask"],
-                atom_mask=batches["atom_mask"]
+                atom_mask=batches["atom_mask"],
+                cell=cell if do_pbc_map else None,
             )
     
         return apply_model, batches
@@ -2273,6 +2303,7 @@ def setup_calculator(
         n_dimers = len(all_dimer_idxs)
         force_segments = calculate_dimer_force_segments(n_dimers)
         
+        pbc_cell = cell if do_pbc_map else None
         # Calculate switched energies using cutoff parameters
         switched_energy = jax.vmap(lambda x, f: switch_ML(
             x.reshape(max_atoms, 3), 
@@ -2280,6 +2311,7 @@ def setup_calculator(
             ml_cutoff=cutoff_params.ml_cutoff,
             mm_switch_on=cutoff_params.mm_switch_on,
             ATOMS_PER_MONOMER=ATOMS_PER_MONOMER,
+            pbc_cell=pbc_cell,
         ))(positions[jnp.array(all_dimer_idxs)], dimer_energies)
         
         # Calculate switching scale for each dimer (needed for force scaling)
@@ -2289,6 +2321,7 @@ def setup_calculator(
             ml_cutoff=cutoff_params.ml_cutoff,
             mm_switch_on=cutoff_params.mm_switch_on,
             ATOMS_PER_MONOMER=ATOMS_PER_MONOMER,
+            pbc_cell=pbc_cell,
         ))(positions[jnp.array(all_dimer_idxs)])
         
         # Calculate energy-weighted switching gradients (E * ds/dR)
@@ -2299,6 +2332,7 @@ def setup_calculator(
             ml_cutoff=cutoff_params.ml_cutoff,
             mm_switch_on=cutoff_params.mm_switch_on,
             ATOMS_PER_MONOMER=ATOMS_PER_MONOMER,
+            pbc_cell=pbc_cell,
         ))(positions[jnp.array(all_dimer_idxs)], dimer_energies)
         
         # Extract relevant atoms from switched_grad (first 2*ATOMS_PER_MONOMER per dimer)
