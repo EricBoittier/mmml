@@ -492,6 +492,8 @@ inbfrq -1 imgfrq -1
          nsteps=100 if run_index == 0 else 10, fmax=0.0006 if run_index == 0 else 0.001)
         # Wrap positions into cell after BFGS (avoids unwrapped coords for PBC)
         if args.cell is not None:
+            # translate to the center of the cell
+            atoms.set_positions(atoms.get_positions() - atoms.get_positions().mean(axis=0))
             wrapped = wrap_positions_for_pbc(atoms.get_positions())
             atoms.set_positions(wrapped)
             xyz = pd.DataFrame(wrapped, columns=["x", "y", "z"])
