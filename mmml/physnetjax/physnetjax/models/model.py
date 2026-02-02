@@ -65,6 +65,7 @@ class EF(nn.Module):
     debug: bool | List[str] = False
     efa: bool = False
     use_energy_bias: bool = True
+    use_pbc: bool = False
 
     def setup(self) -> None:
         """
@@ -117,6 +118,7 @@ class EF(nn.Module):
             "debug": self.debug,
             "efa": self.efa,
             "use_energy_bias": self.use_energy_bias,
+            "use_pbc": self.use_pbc,
         }
 
     def energy(
@@ -221,8 +223,8 @@ class EF(nn.Module):
         """
         positions_dst = e3x.ops.gather_dst(positions, dst_idx=dst_idx)
         positions_src = e3x.ops.gather_src(positions, src_idx=src_idx)
-        if cell is not None:
-            # Minimum-image convention for PBC
+        if self.use_pbc and cell is not None:
+            # Minimum-image convention for PBC (only traced when use_pbc=True)
             dR = positions_src - positions_dst
             dS = jax.scipy.linalg.solve(cell.T, dR.T, assume_a='gen').T
             dS_mic = dS - jnp.round(dS)
