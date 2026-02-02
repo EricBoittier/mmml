@@ -234,7 +234,7 @@ def main_loop(args):
             n_res=args.n_res,
             cutoff=args.cutoff,
             max_atomic_number=args.max_atomic_number,
-            zbl=True, # TODO: add zbl
+            zbl=False, # TODO: add zbl
             efa=False, # TODO: add efa
         )
         try:

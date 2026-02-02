@@ -766,6 +766,8 @@ def setup_calculator(
             
             model_config = json_to_jax_config(config)
             model_config['natoms'] = MAX_ATOMS_PER_SYSTEM
+            if cell:
+                model_config['use_pbc'] = True
             MODEL = EF(**model_config)
             MODEL.natoms = MAX_ATOMS_PER_SYSTEM
             
@@ -821,9 +823,10 @@ def setup_calculator(
             ) from e
         # Setup monomer model using orbax
         params, MODEL = get_params_model(restart)
-    MODEL.natoms = MAX_ATOMS_PER_SYSTEM 
+    MODEL.natoms = MAX_ATOMS_PER_SYSTEM
 
     if cell:
+        MODEL.use_pbc = True
         cell = float(cell)
         # somewhere in your factory / calculator init
         from mmml.pycharmmInterface.pbc_prep_factory import make_pbc_mapper
