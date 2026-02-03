@@ -68,6 +68,7 @@ def parse_args(argv=None):
     parser.add_argument("--n_res", type=int, default=2)
     parser.add_argument("--cutoff", type=float, default=8.0)
     parser.add_argument("--max_atomic_number", type=int, default=28)
+    parser.add_argument("--zbl", type=bool, default=False)
     return parser.parse_args(argv)
 
 
@@ -234,7 +235,7 @@ def main_loop(args):
             n_res=args.n_res,
             cutoff=args.cutoff,
             max_atomic_number=args.max_atomic_number,
-            zbl=False, # TODO: add zbl
+            zbl=args.zbl, # TODO: add zbl
             efa=False, # TODO: add efa
         )
         try:
