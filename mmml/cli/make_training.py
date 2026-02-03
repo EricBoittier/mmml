@@ -69,6 +69,8 @@ def parse_args(argv=None):
     parser.add_argument("--cutoff", type=float, default=8.0)
     parser.add_argument("--max_atomic_number", type=int, default=28)
     parser.add_argument("--zbl", type=bool, default=False)
+    parser.add_argument("--use_pbc", type=bool, default=False)
+    parser.add_argument("--use_energy_bias", type=bool, default=True)
     return parser.parse_args(argv)
 
 
@@ -237,6 +239,8 @@ def main_loop(args):
             max_atomic_number=args.max_atomic_number,
             zbl=args.zbl, # TODO: add zbl
             efa=False, # TODO: add efa
+            use_pbc=args.use_pbc,
+            use_energy_bias=args.use_energy_bias,
         )
         try:
             # save the model to a file
