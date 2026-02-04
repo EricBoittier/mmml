@@ -106,9 +106,9 @@ class MessagePassingModel(nn.Module):
         N = 29  # Static - constant number of atoms per molecule
 
         # Positions and atomic_numbers are already flattened in prepare_batches (like physnetjax)
-        # No need to reshape - use them directly
-        positions_flat = positions  # Already (B*N, 3) from batch prep
-        atomic_numbers_flat = atomic_numbers  # Already (B*N,) from batch prep
+        # Ensure they're properly shaped (1D for atomic_numbers, 2D for positions)
+        positions_flat = positions.reshape(-1, 3)  # Ensure (B*N, 3)
+        atomic_numbers_flat = atomic_numbers.reshape(-1)  # Ensure (B*N,) - 1D array
 
         # Compute displacements using e3x gather operations (CUDA-graph-friendly)
         # This matches the pattern used in working physnetjax code
@@ -118,7 +118,7 @@ class MessagePassingModel(nn.Module):
 
         # Build an EF tensor of shape compatible with e3x.nn.Tensor()
         # e3x format is (num_atoms, 1, (lmax+1)^2, features)
-        ones = jnp.ones((B, 1), dtype=positions.dtype)
+        ones = jnp.ones((B, 1), dtype=positions_flat.dtype)
         xEF = jnp.concatenate((ones, Ef), axis=-1)   # (B, 4) - [1, Ef_x, Ef_y, Ef_z]
         xEF = xEF[:, None, :, None]                  # (B, 1, 4, 1)
         xEF = jnp.tile(xEF, (1, 1, 1, self.features)) # (B, 1, 4, features)
@@ -137,7 +137,7 @@ class MessagePassingModel(nn.Module):
             cutoff_fn=functools.partial(e3x.nn.smooth_cutoff, cutoff=self.cutoff)
         )
 
-        # Embed atoms (flattened)
+        # Embed atoms (flattened) - atomic_numbers_flat is already ensured to be 1D above
         x = e3x.nn.Embed(num_embeddings=self.max_atomic_number + 1, features=self.features)(atomic_numbers_flat)
 
         # Message passing loop
@@ -153,8 +153,10 @@ class MessagePassingModel(nn.Module):
             x = e3x.nn.Dense(self.features, kernel_init=jax.nn.initializers.zeros)(x)
             x = e3x.nn.add(x, y)
 
-            # Couple EF (kept close to your original structure)
-            xEF_t = e3x.nn.Tensor()(x, xEF)
+            # Couple EF - xEF needs to match x's parity dimension
+            # Since include_pseudotensors=True, x has parity=2, so expand xEF from parity=1 to parity=2
+            xEF_expanded = jnp.broadcast_to(xEF[:, None, :, :], (B * N, 2, 4, self.features))
+            xEF_t = e3x.nn.Tensor()(x, xEF_expanded)
             x = e3x.nn.add(x, xEF_t)
 
             x = e3x.nn.TensorDense(max_degree=self.max_degree)(x)
@@ -367,8 +369,9 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
     src_idx = jnp.asarray(src_idx, dtype=jnp.int32)
 
     # Use slicing [0:1] to keep batch dimension, not [0] which removes it
+    # __call__ will flatten these when batch_segments is None
     atomic_numbers0 = train_data["atomic_numbers"][0:1]    # (1, N)
-    positions0 = train_data["positions"][0:1]              # (1, N, 3)
+    positions0 = train_data["positions"][0:1]                # (1, N, 3)
     ef0 = train_data["electric_field"][0:1]                # (1, 3)
     batch_segments0 = jnp.repeat(jnp.arange(1, dtype=jnp.int32), num_atoms)
     # Pre-compute flattened indices for initialization
