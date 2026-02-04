@@ -14,9 +14,7 @@ import os
 # --- Environment (must be set before importing jax) ---
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".99"
-# Workaround for: "Failed to capture gpu graph: the library was not initialized"
-# You can drop one of these flags if your setup only needs the first.
-#os.environ["XLA_FLAGS"] = "--xla_gpu_enable_cuda_graphs=false"
+
 
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -179,6 +177,7 @@ class MessagePassingModel(nn.Module):
 
     @nn.compact
     def __call__(self, atomic_numbers, positions, Ef, dst_idx, src_idx, batch_segments=None, batch_size=None):
+        """Returns (proxy_energy, energy) - use energy_and_forces() wrapper for forces."""
         if batch_segments is None:
             # atomic_numbers expected (B,N); if B absent, treat as (N,)
             if atomic_numbers.ndim == 1:
@@ -189,11 +188,29 @@ class MessagePassingModel(nn.Module):
             batch_size = B
             batch_segments = jnp.repeat(jnp.arange(B, dtype=jnp.int32), N)
 
-        energy_and_forces = jax.value_and_grad(self.EFD, argnums=1, has_aux=True)
-        (_, energy), forces = energy_and_forces(
+        proxy_energy, energy = self.EFD(
             atomic_numbers, positions, Ef, dst_idx, src_idx, batch_segments, batch_size
         )
-        return energy, forces
+        return energy
+
+
+def energy_and_forces(model_apply, params, atomic_numbers, positions, Ef, dst_idx, src_idx, batch_segments, batch_size):
+    """Compute energy and forces (negative gradient of energy w.r.t. positions)."""
+    def energy_fn(pos):
+        energy = model_apply(
+            params,
+            atomic_numbers=atomic_numbers,
+            positions=pos,
+            Ef=Ef,
+            dst_idx=dst_idx,
+            src_idx=src_idx,
+            batch_segments=batch_segments,
+            batch_size=batch_size,
+        )
+        return -jnp.sum(energy), energy
+    
+    (_, energy), forces = jax.value_and_grad(energy_fn, has_aux=True)(positions)
+    return energy, forces
 
 
 # -------------------------
@@ -250,6 +267,9 @@ def prepare_batches(key, data, batch_size):
 
     num_atoms = 29 #data["positions"].shape[1]
     dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(num_atoms)
+    # Ensure these are jax arrays with explicit dtype
+    dst_idx = jnp.asarray(dst_idx, dtype=jnp.int32)
+    src_idx = jnp.asarray(src_idx, dtype=jnp.int32)
 
     batch_segments = jnp.repeat(jnp.arange(batch_size, dtype=jnp.int32), num_atoms)
 
@@ -275,7 +295,7 @@ def prepare_batches(key, data, batch_size):
 @functools.partial(jax.jit, static_argnames=("model_apply", "optimizer_update", "batch_size"))
 def train_step(model_apply, optimizer_update, batch, batch_size, opt_state, params):
     def loss_fn(params):
-        energy, forces = model_apply(
+        energy = model_apply(
             params,
             atomic_numbers=batch["atomic_numbers"],
             positions=batch["positions"],
@@ -286,9 +306,9 @@ def train_step(model_apply, optimizer_update, batch, batch_size, opt_state, para
             batch_size=batch_size,
         )
         loss = mean_squared_loss(energy.reshape(-1), batch["energies"].reshape(-1))
-        return loss, (energy, forces)
+        return loss, energy
 
-    (loss, (energy, forces)), grad = jax.value_and_grad(loss_fn, has_aux=True)(params)
+    (loss, energy), grad = jax.value_and_grad(loss_fn, has_aux=True)(params)
     updates, opt_state = optimizer_update(grad, opt_state, params)
     params = optax.apply_updates(params, updates)
 
@@ -298,7 +318,7 @@ def train_step(model_apply, optimizer_update, batch, batch_size, opt_state, para
 
 @functools.partial(jax.jit, static_argnames=("model_apply", "batch_size"))
 def eval_step(model_apply, batch, batch_size, params):
-    energy, forces = model_apply(
+    energy = model_apply(
         params,
         atomic_numbers=batch["atomic_numbers"],
         positions=batch["positions"],
@@ -320,6 +340,9 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
     key, init_key = jax.random.split(key)
     num_atoms = 29 #train_data["positions"].shape[1]
     dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(num_atoms)
+    # Ensure these are jax arrays with explicit dtype
+    dst_idx = jnp.asarray(dst_idx, dtype=jnp.int32)
+    src_idx = jnp.asarray(src_idx, dtype=jnp.int32)
 
     # Use slicing [0:1] to keep batch dimension, not [0] which removes it
     atomic_numbers0 = train_data["atomic_numbers"][0:1]    # (1, N)
