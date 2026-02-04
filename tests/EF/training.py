@@ -100,11 +100,19 @@ class MessagePassingModel(nn.Module):
           proxy_energy: scalar (sum over batch)
           energy: (B,) per-molecule energy
         """
-        # Basic dims: use static batch_size for B (CUDA-graph-friendly), derive N from shape
+        # Basic dims: use static values (CUDA-graph-friendly)
         B = batch_size  # Static - known at compile time
-        N = atomic_numbers.shape[1]  # Derived but used consistently
+        N = 29  # Static - constant number of atoms per molecule
 
-        # Flatten batch for message passing
+        # Compute displacements: reshape to enable vectorized computation without advanced indexing
+        # Instead of gather, use reshape + broadcasting to compute all pairs
+        # positions: (B, N, 3) -> expand to (B, E, 3) by selecting pairs
+        # This avoids gather operations that CUDA graphs struggle with
+        positions_expanded_src = positions[:, src_idx, :]  # (B, E, 3) - broadcast selection
+        positions_expanded_dst = positions[:, dst_idx, :]  # (B, E, 3)
+        displacements = (positions_expanded_src - positions_expanded_dst).reshape(-1, 3)  # (B*E, 3)
+        
+        # Flatten batch for message passing (after computing displacements)
         positions_flat = positions.reshape(-1, 3)           # (B*N, 3)
         atomic_numbers_flat = atomic_numbers.reshape(-1)    # (B*N,)
 
@@ -123,9 +131,6 @@ class MessagePassingModel(nn.Module):
         offsets = jnp.arange(B, dtype=jnp.int32) * N
         dst_idx_flat = (dst_idx[None, :] + offsets[:, None]).reshape(-1)
         src_idx_flat = (src_idx[None, :] + offsets[:, None]).reshape(-1)
-
-        # Displacements on flattened positions
-        displacements = positions_flat[src_idx_flat] - positions_flat[dst_idx_flat]
         
         # Basis
         basis = e3x.nn.basis(
