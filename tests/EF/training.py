@@ -100,8 +100,9 @@ class MessagePassingModel(nn.Module):
           proxy_energy: scalar (sum over batch)
           energy: (B,) per-molecule energy
         """
-        # Basic dims (derive from inputs to avoid init/train mismatches)
-        B, N = atomic_numbers.shape
+        # Basic dims: use static batch_size for B (CUDA-graph-friendly), derive N from shape
+        B = batch_size  # Static - known at compile time
+        N = atomic_numbers.shape[1]  # Derived but used consistently
 
         # Flatten batch for message passing
         positions_flat = positions.reshape(-1, 3)           # (B*N, 3)
@@ -118,7 +119,7 @@ class MessagePassingModel(nn.Module):
         # per-molecule EF over N atoms and reshaping matches positions_flat order.
         xEF = jnp.broadcast_to(xEF[:, None, ...], (B, N, 1, 4, self.features)).reshape(B * N, 1, 4, self.features)
 
-        # Offsets for batched edges
+        # Offsets for batched edges - use static B for CUDA graph compatibility
         offsets = jnp.arange(B, dtype=jnp.int32) * N
         dst_idx_flat = (dst_idx[None, :] + offsets[:, None]).reshape(-1)
         src_idx_flat = (src_idx[None, :] + offsets[:, None]).reshape(-1)
@@ -342,7 +343,7 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
 
     # Initialize params with a single batch item (B=1) but correct ranks
     key, init_key = jax.random.split(key)
-    num_atoms = 29 #train_data["positions"].shape[1]
+    num_atoms = train_data["positions"].shape[1]
     dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(num_atoms)
     # Ensure these are jax arrays with explicit dtype
     dst_idx = jnp.asarray(dst_idx, dtype=jnp.int32)
