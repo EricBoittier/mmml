@@ -14,8 +14,6 @@ import os
 # --- Environment (must be set before importing jax) ---
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".99"
-# Workaround for CUDA graph capture issue (environment/driver specific)
-os.environ["XLA_FLAGS"] = "--xla_gpu_enable_cuda_graphs=false"
 
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -28,6 +26,10 @@ import pandas as pd
 
 import jax
 import jax.numpy as jnp
+
+# Disable command buffer / CUDA graph features that cause issues
+jax.config.update("jax_disable_jit", False)  # Keep JIT enabled
+jax.config.update("jax_debug_nans", False)   # Don't check for NaNs (faster)
 
 import optax
 from flax import linen as nn
@@ -359,7 +361,7 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
         dst_idx=dst_idx,
         src_idx=src_idx,
         batch_segments=batch_segments0,
-        batch_size=1,
+        batch_size=batch_size,
     )
     opt_state = optimizer.init(params)
 
