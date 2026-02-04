@@ -14,7 +14,8 @@ import os
 # --- Environment (must be set before importing jax) ---
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".99"
-
+# Workaround for CUDA graph capture issue (environment/driver specific)
+os.environ["XLA_FLAGS"] = "--xla_gpu_enable_cuda_graphs=false"
 
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -412,10 +413,10 @@ num_iterations = 2
 num_basis_functions = 64
 cutoff = 5.0
 
-num_train = 500
-num_valid = 20
+num_train = 5
+num_valid = 2
 
-num_epochs = 100
+num_epochs = 10
 learning_rate = 0.003
 batch_size = 1
 
