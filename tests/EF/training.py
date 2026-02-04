@@ -87,13 +87,14 @@ class MessagePassingModel(nn.Module):
     max_atomic_number: int = 55
     include_pseudotensors: bool = True
 
-    def EFD(self, atomic_numbers, positions, Ef, dst_idx, src_idx, batch_segments, batch_size):
+    def EFD(self, atomic_numbers, positions, Ef, dst_idx, src_idx, dst_idx_flat, src_idx_flat, batch_segments, batch_size):
         """
         Expected shapes:
           atomic_numbers: (B, N)
           positions:      (B, N, 3)
           Ef:             (B, 3)
           dst_idx/src_idx: (E,) indices for a single molecule of N atoms (no batching offsets)
+          dst_idx_flat/src_idx_flat: (B*E,) pre-computed flattened indices (CUDA-graph-friendly)
           batch_segments: (B*N,) segment ids 0..B-1 repeated per atom
           batch_size:     int (static)
         Returns:
@@ -127,12 +128,8 @@ class MessagePassingModel(nn.Module):
         # per-molecule EF over N atoms and reshaping matches positions_flat order.
         xEF = jnp.broadcast_to(xEF[:, None, ...], (B, N, 1, 4, self.features)).reshape(B * N, 1, 4, self.features)
 
-        # Offsets for batched edges - use static B for CUDA graph compatibility
-        offsets = jnp.arange(B, dtype=jnp.int32) * N
-        dst_idx_flat = (dst_idx[None, :] + offsets[:, None]).reshape(-1)
-        src_idx_flat = (src_idx[None, :] + offsets[:, None]).reshape(-1)
-        
-        # Basis
+        # Use pre-computed flattened indices (passed from batch dict, computed outside JIT)
+        # This avoids creating traced index arrays inside the JIT function
         basis = e3x.nn.basis(
             displacements,
             num=self.num_basis_functions,
@@ -197,9 +194,13 @@ class MessagePassingModel(nn.Module):
             B, N = atomic_numbers.shape
             batch_size = B
             batch_segments = jnp.repeat(jnp.arange(B, dtype=jnp.int32), N)
+            # Compute flattened indices for this single-batch case
+            offsets = jnp.arange(B, dtype=jnp.int32) * N
+            dst_idx_flat = (dst_idx[None, :] + offsets[:, None]).reshape(-1)
+            src_idx_flat = (src_idx[None, :] + offsets[:, None]).reshape(-1)
 
         proxy_energy, energy = self.EFD(
-            atomic_numbers, positions, Ef, dst_idx, src_idx, batch_segments, batch_size
+            atomic_numbers, positions, Ef, dst_idx, src_idx, dst_idx_flat, src_idx_flat, batch_segments, batch_size
         )
         return energy
 
@@ -281,6 +282,11 @@ def prepare_batches(key, data, batch_size):
     dst_idx = jnp.asarray(dst_idx, dtype=jnp.int32)
     src_idx = jnp.asarray(src_idx, dtype=jnp.int32)
 
+    # Pre-compute flattened indices (CUDA-graph-friendly: computed outside JIT)
+    offsets = jnp.arange(batch_size, dtype=jnp.int32) * num_atoms
+    dst_idx_flat = (dst_idx[None, :] + offsets[:, None]).reshape(-1)
+    src_idx_flat = (src_idx[None, :] + offsets[:, None]).reshape(-1)
+
     batch_segments = jnp.repeat(jnp.arange(batch_size, dtype=jnp.int32), num_atoms)
 
     batches = []
@@ -291,8 +297,10 @@ def prepare_batches(key, data, batch_size):
                 positions=data["positions"][perm],             # (B,N,3)
                 energies=data["energies"][perm],               # (B,) or (B,1)
                 electric_field=data["electric_field"][perm],   # (B,3)
-                dst_idx=dst_idx,
-                src_idx=src_idx,
+                dst_idx=dst_idx,  # Keep original for reference
+                src_idx=src_idx,  # Keep original for reference
+                dst_idx_flat=dst_idx_flat,  # Pre-computed flattened indices
+                src_idx_flat=src_idx_flat,  # Pre-computed flattened indices
                 batch_segments=batch_segments,
             )
         )
@@ -312,6 +320,8 @@ def train_step(model_apply, optimizer_update, batch, batch_size, opt_state, para
             Ef=batch["electric_field"],
             dst_idx=batch["dst_idx"],
             src_idx=batch["src_idx"],
+            dst_idx_flat=batch["dst_idx_flat"],
+            src_idx_flat=batch["src_idx_flat"],
             batch_segments=batch["batch_segments"],
             batch_size=batch_size,
         )
@@ -359,6 +369,10 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
     positions0 = train_data["positions"][0:1]              # (1, N, 3)
     ef0 = train_data["electric_field"][0:1]                # (1, 3)
     batch_segments0 = jnp.repeat(jnp.arange(1, dtype=jnp.int32), num_atoms)
+    # Pre-compute flattened indices for initialization
+    offsets0 = jnp.arange(1, dtype=jnp.int32) * num_atoms
+    dst_idx_flat0 = (dst_idx[None, :] + offsets0[:, None]).reshape(-1)
+    src_idx_flat0 = (src_idx[None, :] + offsets0[:, None]).reshape(-1)
 
     params = model.init(
         init_key,
@@ -367,8 +381,10 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
         Ef=ef0,
         dst_idx=dst_idx,
         src_idx=src_idx,
+        dst_idx_flat=dst_idx_flat0,
+        src_idx_flat=src_idx_flat0,
         batch_segments=batch_segments0,
-        batch_size=batch_size,
+        batch_size=1,  # Init always uses batch_size=1
     )
     opt_state = optimizer.init(params)
 
