@@ -117,15 +117,20 @@ class MessagePassingModel(nn.Module):
         displacements = positions_src - positions_dst  # (B*E, 3)
 
         # Build an EF tensor of shape compatible with e3x.nn.Tensor()
-        # e3x format is (num_atoms, 1, (lmax+1)^2, features)
+        # e3x format is (num_atoms, parity, (lmax+1)^2, features)
+        # Start with (B, 4) -> expand to (B*N, 2, 4, features) for parity=2 (pseudotensors)
         ones = jnp.ones((B, 1), dtype=positions_flat.dtype)
         xEF = jnp.concatenate((ones, Ef), axis=-1)   # (B, 4) - [1, Ef_x, Ef_y, Ef_z]
         xEF = xEF[:, None, :, None]                  # (B, 1, 4, 1)
         xEF = jnp.tile(xEF, (1, 1, 1, self.features)) # (B, 1, 4, features)
-        # Expand to per-atom level without gather-by-index (CUDA-graph-friendly).
-        # Flattening uses row-major order (mol0 atoms, mol1 atoms, ...), so broadcasting
-        # per-molecule EF over N atoms and reshaping matches positions_flat order.
-        xEF = jnp.broadcast_to(xEF[:, None, ...], (B, N, 1, 4, self.features)).reshape(B * N, 1, 4, self.features)
+        # Expand to per-atom level: (B, 1, 4, features) -> (B, N, 1, 4, features) -> (B*N, 1, 4, features)
+        # Insert dimension for N, then repeat: (B, 1, 4, features) -> (B, 1, 1, 4, features) -> (B, N, 1, 4, features)
+        xEF = xEF[:, None, :, :]  # (B, 1, 1, 4, features) - add dimension
+        xEF = jnp.repeat(xEF, N, axis=1)  # (B, N, 1, 4, features) - repeat N times
+        xEF = xEF.reshape(B * N, 1, 4, self.features)  # (B*N, 1, 4, features)
+        # Expand parity dimension from 1 to 2 to match x (since include_pseudotensors=True)
+        # xEF is (B*N, 1, 4, features), need (B*N, 2, 4, features) - broadcast the parity dimension
+        xEF = jnp.broadcast_to(xEF, (B * N, 2, 4, self.features))
 
         # Use pre-computed flattened indices (passed from batch dict, computed outside JIT)
         # This avoids creating traced index arrays inside the JIT function
@@ -153,10 +158,8 @@ class MessagePassingModel(nn.Module):
             x = e3x.nn.Dense(self.features, kernel_init=jax.nn.initializers.zeros)(x)
             x = e3x.nn.add(x, y)
 
-            # Couple EF - xEF needs to match x's parity dimension
-            # Since include_pseudotensors=True, x has parity=2, so expand xEF from parity=1 to parity=2
-            xEF_expanded = jnp.broadcast_to(xEF[:, None, :, :], (B * N, 2, 4, self.features))
-            xEF_t = e3x.nn.Tensor()(x, xEF_expanded)
+            # Couple EF - xEF already has correct shape (B*N, 2, 4, features) matching x
+            xEF_t = e3x.nn.Tensor()(x, xEF)
             x = e3x.nn.add(x, xEF_t)
 
             x = e3x.nn.TensorDense(max_degree=self.max_degree)(x)
