@@ -105,17 +105,16 @@ class MessagePassingModel(nn.Module):
         B = batch_size  # Static - known at compile time
         N = 29  # Static - constant number of atoms per molecule
 
-        # Compute displacements: reshape to enable vectorized computation without advanced indexing
-        # Instead of gather, use reshape + broadcasting to compute all pairs
-        # positions: (B, N, 3) -> expand to (B, E, 3) by selecting pairs
-        # This avoids gather operations that CUDA graphs struggle with
-        positions_expanded_src = positions[:, src_idx, :]  # (B, E, 3) - broadcast selection
-        positions_expanded_dst = positions[:, dst_idx, :]  # (B, E, 3)
-        displacements = (positions_expanded_src - positions_expanded_dst).reshape(-1, 3)  # (B*E, 3)
-        
-        # Flatten batch for message passing (after computing displacements)
-        positions_flat = positions.reshape(-1, 3)           # (B*N, 3)
-        atomic_numbers_flat = atomic_numbers.reshape(-1)    # (B*N,)
+        # Positions and atomic_numbers are already flattened in prepare_batches (like physnetjax)
+        # No need to reshape - use them directly
+        positions_flat = positions  # Already (B*N, 3) from batch prep
+        atomic_numbers_flat = atomic_numbers  # Already (B*N,) from batch prep
+
+        # Compute displacements using e3x gather operations (CUDA-graph-friendly)
+        # This matches the pattern used in working physnetjax code
+        positions_dst = e3x.ops.gather_dst(positions_flat, dst_idx=dst_idx_flat)
+        positions_src = e3x.ops.gather_src(positions_flat, src_idx=src_idx_flat)
+        displacements = positions_src - positions_dst  # (B*E, 3)
 
         # Build an EF tensor of shape compatible with e3x.nn.Tensor()
         # e3x format is (num_atoms, 1, (lmax+1)^2, features)
@@ -183,7 +182,7 @@ class MessagePassingModel(nn.Module):
         return -jnp.sum(energy), energy
 
     @nn.compact
-    def __call__(self, atomic_numbers, positions, Ef, dst_idx, src_idx, batch_segments=None, batch_size=None):
+    def __call__(self, atomic_numbers, positions, Ef, dst_idx, src_idx, dst_idx_flat=None, src_idx_flat=None, batch_segments=None, batch_size=None):
         """Returns (proxy_energy, energy) - use energy_and_forces() wrapper for forces."""
         if batch_segments is None:
             # atomic_numbers expected (B,N); if B absent, treat as (N,)
@@ -193,6 +192,9 @@ class MessagePassingModel(nn.Module):
                 Ef = Ef[None, :]
             B, N = atomic_numbers.shape
             batch_size = B
+            # Flatten positions and atomic_numbers to match batch prep pattern
+            atomic_numbers = atomic_numbers.reshape(-1)  # (B*N,)
+            positions = positions.reshape(-1, 3)          # (B*N, 3)
             batch_segments = jnp.repeat(jnp.arange(B, dtype=jnp.int32), N)
             # Compute flattened indices for this single-batch case
             offsets = jnp.arange(B, dtype=jnp.int32) * N
@@ -293,10 +295,10 @@ def prepare_batches(key, data, batch_size):
     for perm in perms:
         batches.append(
             dict(
-                atomic_numbers=data["atomic_numbers"][perm],   # (B,N)
-                positions=data["positions"][perm],             # (B,N,3)
-                energies=data["energies"][perm],               # (B,) or (B,1)
-                electric_field=data["electric_field"][perm],   # (B,3)
+                atomic_numbers=data["atomic_numbers"][perm].reshape(batch_size * num_atoms),  # (B*N,)
+                positions=data["positions"][perm].reshape(batch_size * num_atoms, 3),          # (B*N, 3) - flattened like physnetjax
+                energies=data["energies"][perm],                                               # (B,) or (B,1)
+                electric_field=data["electric_field"][perm],                                   # (B,3)
                 dst_idx=dst_idx,  # Keep original for reference
                 src_idx=src_idx,  # Keep original for reference
                 dst_idx_flat=dst_idx_flat,  # Pre-computed flattened indices
