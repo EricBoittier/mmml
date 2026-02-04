@@ -100,9 +100,8 @@ class MessagePassingModel(nn.Module):
           proxy_energy: scalar (sum over batch)
           energy: (B,) per-molecule energy
         """
-        # Basic dims
-        B = batch_size
-        N = 29
+        # Basic dims (derive from inputs to avoid init/train mismatches)
+        B, N = atomic_numbers.shape
 
         # Flatten batch for message passing
         positions_flat = positions.reshape(-1, 3)           # (B*N, 3)
@@ -114,8 +113,10 @@ class MessagePassingModel(nn.Module):
         xEF = jnp.concatenate((ones, Ef), axis=-1)   # (B, 4) - [1, Ef_x, Ef_y, Ef_z]
         xEF = xEF[:, None, :, None]                  # (B, 1, 4, 1)
         xEF = jnp.tile(xEF, (1, 1, 1, self.features)) # (B, 1, 4, features)
-        # Expand to per-atom level using batch_segments
-        xEF = xEF[batch_segments]                    # (B*N, 1, 4, features)
+        # Expand to per-atom level without gather-by-index (CUDA-graph-friendly).
+        # Flattening uses row-major order (mol0 atoms, mol1 atoms, ...), so broadcasting
+        # per-molecule EF over N atoms and reshaping matches positions_flat order.
+        xEF = jnp.broadcast_to(xEF[:, None, ...], (B, N, 1, 4, self.features)).reshape(B * N, 1, 4, self.features)
 
         # Offsets for batched edges
         offsets = jnp.arange(B, dtype=jnp.int32) * N
@@ -172,8 +173,8 @@ class MessagePassingModel(nn.Module):
         # If you want element biases, do it in flattened space:
         # atomic_energies = atomic_energies + element_bias[atomic_numbers_flat]
 
-        # Sum per molecule using batch_segments (length B*N)
-        energy = jax.ops.segment_sum(atomic_energies, segment_ids=batch_segments, num_segments=B)  # (B,)
+        # Sum per molecule without segment_sum/scatter (CUDA-graph-friendly).
+        energy = atomic_energies.reshape(B, N).sum(axis=1)  # (B,)
 
         # Proxy energy for force differentiation
         return -jnp.sum(energy), energy
