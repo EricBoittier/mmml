@@ -141,6 +141,8 @@ class MolecularFileParser:
         self.file_type = self._detect_file_type()
         self._data = None
         self._metadata = None
+        self._frame_cache: Dict[int, FrameData] = {}  # Cache for computed frames
+        self._max_cache_size = 100  # Maximum frames to cache
     
     def _detect_file_type(self) -> str:
         """Detect file type from extension."""
@@ -293,12 +295,25 @@ class MolecularFileParser:
         FrameData
             Frame data including PDB string and properties
         """
+        # Check cache first
+        if index in self._frame_cache:
+            return self._frame_cache[index]
+        
         self._load_data()
         
         if self.file_type == 'npz':
-            return self._get_npz_frame(index)
+            frame = self._get_npz_frame(index)
         else:
-            return self._get_ase_frame(index)
+            frame = self._get_ase_frame(index)
+        
+        # Add to cache (with simple LRU eviction)
+        if len(self._frame_cache) >= self._max_cache_size:
+            # Remove oldest entry
+            oldest_key = next(iter(self._frame_cache))
+            del self._frame_cache[oldest_key]
+        self._frame_cache[index] = frame
+        
+        return frame
     
     def _get_npz_frame(self, index: int) -> FrameData:
         """Get frame from NPZ file."""

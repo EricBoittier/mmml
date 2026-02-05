@@ -1,20 +1,25 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import MoleculeViewer from './components/MoleculeViewer';
 import FrameSlider from './components/FrameSlider';
 import PropertyPanel from './components/PropertyPanel';
 import PropertyChart from './components/PropertyChart';
 import ScatterPlot from './components/ScatterPlot';
+import PCAProjection from './components/PCAProjection';
 import FileSidebar from './components/FileSidebar';
 import {
   listFiles,
   getFileMetadata,
   getFrame,
   getProperties,
+  getFramesBatch,
   FileInfo,
   FileMetadata,
   FrameData,
   Properties,
 } from './api/client';
+
+// Number of frames to preload in each direction
+const PRELOAD_WINDOW = 5;
 
 function App() {
   // File state
@@ -27,6 +32,10 @@ function App() {
   const [frameData, setFrameData] = useState<FrameData | null>(null);
   const [properties, setProperties] = useState<Properties | null>(null);
   
+  // Frame cache for preloading
+  const frameCache = useRef<Map<number, FrameData>>(new Map());
+  const preloadingRef = useRef<Set<number>>(new Set());
+  
   // UI state
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,6 +43,47 @@ function App() {
   
   // Visualization options
   const [showDipole, setShowDipole] = useState(true);
+  
+  // Sorting options
+  type SortOrder = 'frame' | 'energy_asc' | 'energy_desc';
+  const [sortOrder, setSortOrder] = useState<SortOrder>('frame');
+  
+  // Compute sorted frame indices based on sort order
+  const sortedFrameIndices = useMemo(() => {
+    if (!properties || !metadata) return null;
+    
+    const n = metadata.n_frames;
+    const indices = Array.from({ length: n }, (_, i) => i);
+    
+    if (sortOrder === 'frame') {
+      return indices;
+    }
+    
+    const energies = properties.energy;
+    if (!energies || energies.length !== n) {
+      return indices; // Fall back to frame order if no energy data
+    }
+    
+    // Sort indices by energy
+    const sorted = [...indices].sort((a, b) => {
+      const diff = energies[a] - energies[b];
+      return sortOrder === 'energy_asc' ? diff : -diff;
+    });
+    
+    return sorted;
+  }, [properties, metadata, sortOrder]);
+  
+  // Map from sorted position to actual frame index
+  const getActualFrameIndex = useCallback((sortedPosition: number) => {
+    if (!sortedFrameIndices) return sortedPosition;
+    return sortedFrameIndices[sortedPosition];
+  }, [sortedFrameIndices]);
+  
+  // Map from actual frame index to sorted position
+  const getSortedPosition = useCallback((actualFrame: number) => {
+    if (!sortedFrameIndices) return actualFrame;
+    return sortedFrameIndices.indexOf(actualFrame);
+  }, [sortedFrameIndices]);
 
   // Load file list on mount
   useEffect(() => {
@@ -60,6 +110,10 @@ function App() {
     setSelectedFile(file);
     setCurrentFrame(0);
     
+    // Clear frame cache for new file
+    frameCache.current.clear();
+    preloadingRef.current.clear();
+    
     try {
       // Load metadata
       const meta = await getFileMetadata(file.path);
@@ -68,10 +122,14 @@ function App() {
       // Load first frame
       const frame = await getFrame(file.path, 0);
       setFrameData(frame);
+      frameCache.current.set(0, frame);
       
       // Load properties for charts
       const props = await getProperties(file.path);
       setProperties(props);
+      
+      // Preload nearby frames in background
+      preloadFrames(file.path, 0, meta.n_frames);
     } catch (err) {
       setError(`Failed to load file: ${err}`);
     } finally {
@@ -79,18 +137,72 @@ function App() {
     }
   };
 
+  // Preload frames around a given index
+  const preloadFrames = useCallback(async (filePath: string, centerIndex: number, totalFrames: number) => {
+    const indicesToLoad: number[] = [];
+    
+    for (let i = 1; i <= PRELOAD_WINDOW; i++) {
+      // Forward frames
+      const forward = centerIndex + i;
+      if (forward < totalFrames && !frameCache.current.has(forward) && !preloadingRef.current.has(forward)) {
+        indicesToLoad.push(forward);
+        preloadingRef.current.add(forward);
+      }
+      // Backward frames
+      const backward = centerIndex - i;
+      if (backward >= 0 && !frameCache.current.has(backward) && !preloadingRef.current.has(backward)) {
+        indicesToLoad.push(backward);
+        preloadingRef.current.add(backward);
+      }
+    }
+    
+    if (indicesToLoad.length === 0) return;
+    
+    try {
+      const frames = await getFramesBatch(filePath, indicesToLoad);
+      for (const [idxStr, frame] of Object.entries(frames)) {
+        const idx = parseInt(idxStr, 10);
+        frameCache.current.set(idx, frame);
+        preloadingRef.current.delete(idx);
+      }
+    } catch (err) {
+      // Silent failure for preloading
+      console.warn('Preload failed:', err);
+      indicesToLoad.forEach(idx => preloadingRef.current.delete(idx));
+    }
+  }, []);
+
   const handleFrameChange = useCallback(async (frameIndex: number) => {
-    if (!selectedFile) return;
+    if (!selectedFile || !metadata) return;
     
     setCurrentFrame(frameIndex);
+    
+    // Check cache first
+    const cached = frameCache.current.get(frameIndex);
+    if (cached) {
+      setFrameData(cached);
+      // Still preload nearby frames
+      preloadFrames(selectedFile.path, frameIndex, metadata.n_frames);
+      return;
+    }
     
     try {
       const frame = await getFrame(selectedFile.path, frameIndex);
       setFrameData(frame);
+      frameCache.current.set(frameIndex, frame);
+      
+      // Preload nearby frames
+      preloadFrames(selectedFile.path, frameIndex, metadata.n_frames);
     } catch (err) {
       setError(`Failed to load frame: ${err}`);
     }
-  }, [selectedFile]);
+  }, [selectedFile, metadata, preloadFrames]);
+
+  // Handle slider change in sorted view - converts sorted position to actual frame
+  const handleSortedFrameChange = useCallback((sortedPosition: number) => {
+    const actualFrame = getActualFrameIndex(sortedPosition);
+    handleFrameChange(actualFrame);
+  }, [getActualFrameIndex, handleFrameChange]);
 
   const handleChartClick = useCallback((frameIndex: number) => {
     handleFrameChange(frameIndex);
@@ -179,6 +291,29 @@ function App() {
                     </span>
                   )}
                 </label>
+                
+                {/* Sort order selector */}
+                {properties?.energy && (
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm text-slate-600 dark:text-slate-400">Order by:</label>
+                    <select
+                      value={sortOrder}
+                      onChange={(e) => setSortOrder(e.target.value as SortOrder)}
+                      className="text-sm bg-slate-100 dark:bg-slate-700 border-none rounded px-2 py-1 text-slate-700 dark:text-slate-300"
+                    >
+                      <option value="frame">Frame Index</option>
+                      <option value="energy_asc">Energy (Low to High)</option>
+                      <option value="energy_desc">Energy (High to Low)</option>
+                    </select>
+                  </div>
+                )}
+                
+                {/* Show current frame info when sorted */}
+                {sortOrder !== 'frame' && (
+                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                    Frame #{currentFrame} (Position {getSortedPosition(currentFrame) + 1}/{metadata?.n_frames})
+                  </span>
+                )}
               </div>
 
               {/* Viewer and properties panel */}
@@ -203,9 +338,9 @@ function App() {
               {/* Frame slider */}
               {metadata && metadata.n_frames > 1 && (
                 <FrameSlider
-                  currentFrame={currentFrame}
+                  currentFrame={sortOrder === 'frame' ? currentFrame : getSortedPosition(currentFrame)}
                   totalFrames={metadata.n_frames}
-                  onFrameChange={handleFrameChange}
+                  onFrameChange={sortOrder === 'frame' ? handleFrameChange : handleSortedFrameChange}
                 />
               )}
 
@@ -221,6 +356,16 @@ function App() {
               {/* Scatter plot */}
               {properties && metadata && metadata.n_frames > 1 && (
                 <ScatterPlot
+                  properties={properties}
+                  currentFrame={currentFrame}
+                  onFrameClick={handleChartClick}
+                />
+              )}
+
+              {/* PCA Projection */}
+              {properties && metadata && metadata.n_frames > 1 && selectedFile && (
+                <PCAProjection
+                  filePath={selectedFile.path}
                   properties={properties}
                   currentFrame={currentFrame}
                   onFrameClick={handleChartClick}

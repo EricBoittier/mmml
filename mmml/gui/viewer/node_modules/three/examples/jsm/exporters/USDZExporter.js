@@ -1,5 +1,14 @@
-import * as THREE from 'three';
-import * as fflate from '../libs/fflate.module.js';
+import {
+  NoColorSpace,
+  DoubleSide,
+} from 'three';
+
+import {
+  strToU8,
+  zipSync,
+} from '../libs/fflate.module.js';
+
+import { decompress } from './../utils/TextureUtils.js';
 
 class USDZExporter {
 
@@ -71,12 +80,18 @@ class USDZExporter {
 
 		output += buildMaterials( materials, textures, options.quickLookCompatible );
 
-		files[ modelFileName ] = fflate.strToU8( output );
+		files[ modelFileName ] = strToU8( output );
 		output = null;
 
 		for ( const id in textures ) {
 
-			const texture = textures[ id ];
+			let texture = textures[ id ];
+
+			if ( texture.isCompressedTexture === true ) {
+
+				texture = decompress( texture );
+
+			}
 
 			const canvas = imageToCanvas( texture.image, texture.flipY );
 			const blob = await new Promise( resolve => canvas.toBlob( resolve, 'image/png', 1 ) );
@@ -112,7 +127,7 @@ class USDZExporter {
 
 		}
 
-		return fflate.zipSync( files, { level: 0 } );
+		return zipSync( files, { level: 0 } );
 
 	}
 
@@ -165,6 +180,7 @@ function buildHeader() {
 	customLayerData = {
 		string creator = "Three.js USDZExporter"
 	}
+	defaultPrim = "Root"
 	metersPerUnit = 1
 	upAxis = "Y"
 )
@@ -211,7 +227,7 @@ function buildUSDFileAsString( dataToInsert ) {
 
 	let output = buildHeader();
 	output += dataToInsert;
-	return fflate.strToU8( output );
+	return strToU8( output );
 
 }
 
@@ -286,7 +302,7 @@ function buildMesh( geometry ) {
 			interpolation = "vertex"
 		)
 		point3f[] points = [${ buildVector3Array( attributes.position, count )}]
-${ buildPrimvars( attributes, count ) }
+${ buildPrimvars( attributes ) }
 		uniform token subdivisionScheme = "none"
 	}
 `;
@@ -355,14 +371,7 @@ function buildVector3Array( attribute, count ) {
 
 }
 
-function buildVector2Array( attribute, count ) {
-
-	if ( attribute === undefined ) {
-
-		console.warn( 'USDZExporter: UVs missing.' );
-		return Array( count ).fill( '(0, 0)' ).join( ', ' );
-
-	}
+function buildVector2Array( attribute ) {
 
 	const array = [];
 
@@ -379,7 +388,7 @@ function buildVector2Array( attribute, count ) {
 
 }
 
-function buildPrimvars( attributes, count ) {
+function buildPrimvars( attributes ) {
 
 	let string = '';
 
@@ -391,7 +400,7 @@ function buildPrimvars( attributes, count ) {
 		if ( attribute !== undefined ) {
 
 			string += `
-		texCoord2f[] primvars:st${ id } = [${ buildVector2Array( attribute, count )}] (
+		texCoord2f[] primvars:st${ id } = [${ buildVector2Array( attribute )}] (
 			interpolation = "vertex"
 		)`;
 
@@ -505,7 +514,7 @@ function buildMaterial( material, textures, quickLookCompatible = false ) {
 			asset inputs:file = @textures/Texture_${ id }.png@
 			float2 inputs:st.connect = </Materials/Material_${ material.id }/Transform2d_${ mapType }.outputs:result>
 			${ color !== undefined ? 'float4 inputs:scale = ' + buildColor4( color ) : '' }
-			token inputs:sourceColorSpace = "${ texture.colorSpace === THREE.NoColorSpace ? 'raw' : 'sRGB' }"
+			token inputs:sourceColorSpace = "${ texture.colorSpace === NoColorSpace ? 'raw' : 'sRGB' }"
 			token inputs:wrapS = "${ WRAPPINGS[ texture.wrapS ] }"
 			token inputs:wrapT = "${ WRAPPINGS[ texture.wrapT ] }"
 			float outputs:r
@@ -518,7 +527,7 @@ function buildMaterial( material, textures, quickLookCompatible = false ) {
 	}
 
 
-	if ( material.side === THREE.DoubleSide ) {
+	if ( material.side === DoubleSide ) {
 
 		console.warn( 'THREE.USDZExporter: USDZ does not support double sided materials', material );
 

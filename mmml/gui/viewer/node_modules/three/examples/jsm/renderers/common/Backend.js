@@ -1,7 +1,9 @@
 let vector2 = null;
 let vector4 = null;
+let color4 = null;
 
-import { Vector2, Vector4 } from 'three';
+import Color4 from './Color4.js';
+import { Vector2, Vector4, REVISION, createCanvasElement } from 'three';
 
 class Backend {
 
@@ -52,9 +54,9 @@ class Backend {
 
 	// cache key
 
-	needsUpdate( renderObject ) { } // return Boolean ( fast test )
+	needsRenderUpdate( renderObject ) { } // return Boolean ( fast test )
 
-	getCacheKey( renderObject ) { } // return String
+	getRenderCacheKey( renderObject ) { } // return String
 
 	// node builder
 
@@ -67,6 +69,8 @@ class Backend {
 	createDefaultTexture( texture ) { }
 
 	createTexture( texture ) { }
+
+	copyTextureToBuffer( texture, x, y, width, height ) {}
 
 	// attributes
 
@@ -110,13 +114,32 @@ class Backend {
 
 	}
 
+	getClearColor() {
+
+		const renderer = this.renderer;
+
+		color4 = color4 || new Color4();
+
+		renderer.getClearColor( color4 );
+
+		color4.getRGB( color4, this.renderer.currentColorSpace );
+
+		return color4;
+
+	}
+
 	getDomElement() {
 
 		let domElement = this.domElement;
 
 		if ( domElement === null ) {
 
-			this.domElement = domElement = ( this.parameters.canvas !== undefined ) ? this.parameters.canvas : this.createCanvasElement();
+			domElement = ( this.parameters.canvas !== undefined ) ? this.parameters.canvas : createCanvasElement();
+
+			// OffscreenCanvas does not have setAttribute, see #22811
+			if ( 'setAttribute' in domElement ) domElement.setAttribute( 'data-engine', `three.js r${REVISION} webgpu` );
+
+			this.domElement = domElement;
 
 		}
 
@@ -124,15 +147,13 @@ class Backend {
 
 	}
 
-	createCanvasElement() {
+	// resource properties
 
-		const canvas = document.createElementNS( 'http://www.w3.org/1999/xhtml', 'canvas' );
-		canvas.style.display = 'block';
-		return canvas;
+	set( object, value ) {
+
+		this.data.set( object, value );
 
 	}
-
-	// resource properties
 
 	get( object ) {
 

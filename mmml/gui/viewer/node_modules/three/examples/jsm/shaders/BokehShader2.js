@@ -11,6 +11,8 @@ import {
  */
 const BokehShader = {
 
+	name: 'BokehShader',
+
 	uniforms: {
 
 		'textureWidth': { value: 1.0 },
@@ -347,12 +349,14 @@ const BokehShader = {
 			gl_FragColor.a = 1.0;
 
 			#include <tonemapping_fragment>
-			#include <encodings_fragment>
+			#include <colorspace_fragment>
 		}`
 
 };
 
 const BokehDepthShader = {
+
+	name: 'BokehDepthShader',
 
 	uniforms: {
 

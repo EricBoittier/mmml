@@ -1,5 +1,7 @@
 const OutputShader = {
 
+	name: 'OutputShader',
+
 	uniforms: {
 
 		'tDiffuse': { value: null },
@@ -8,6 +10,13 @@ const OutputShader = {
 	},
 
 	vertexShader: /* glsl */`
+		precision highp float;
+
+		uniform mat4 modelViewMatrix;
+		uniform mat4 projectionMatrix;
+
+		attribute vec3 position;
+		attribute vec2 uv;
 
 		varying vec2 vUv;
 
@@ -19,10 +28,13 @@ const OutputShader = {
 		}`,
 
 	fragmentShader: /* glsl */`
+	
+		precision highp float;
 
 		uniform sampler2D tDiffuse;
 
 		#include <tonemapping_pars_fragment>
+		#include <colorspace_pars_fragment>
 
 		varying vec2 vUv;
 
@@ -48,11 +60,19 @@ const OutputShader = {
 
 				gl_FragColor.rgb = ACESFilmicToneMapping( gl_FragColor.rgb );
 
+			#elif defined( AGX_TONE_MAPPING )
+
+				gl_FragColor.rgb = AgXToneMapping( gl_FragColor.rgb );
+
 			#endif
 
 			// color space
 
-			gl_FragColor = LinearTosRGB( gl_FragColor );
+			#ifdef SRGB_TRANSFER
+
+				gl_FragColor = sRGBTransferOETF( gl_FragColor );
+
+			#endif
 
 		}`
 

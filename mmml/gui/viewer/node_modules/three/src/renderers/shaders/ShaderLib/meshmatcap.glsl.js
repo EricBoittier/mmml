@@ -4,6 +4,7 @@ export const vertex = /* glsl */`
 varying vec3 vViewPosition;
 
 #include <common>
+#include <batching_pars_vertex>
 #include <uv_pars_vertex>
 #include <color_pars_vertex>
 #include <displacementmap_pars_vertex>
@@ -20,6 +21,8 @@ void main() {
 	#include <uv_vertex>
 	#include <color_vertex>
 	#include <morphcolor_vertex>
+	#include <batching_vertex>
+
 	#include <beginnormal_vertex>
 	#include <morphnormal_vertex>
 	#include <skinbase_vertex>
@@ -58,6 +61,7 @@ varying vec3 vViewPosition;
 #include <map_pars_fragment>
 #include <alphamap_pars_fragment>
 #include <alphatest_pars_fragment>
+#include <alphahash_pars_fragment>
 #include <fog_pars_fragment>
 #include <normal_pars_fragment>
 #include <bumpmap_pars_fragment>
@@ -76,6 +80,7 @@ void main() {
 	#include <color_fragment>
 	#include <alphamap_fragment>
 	#include <alphatest_fragment>
+	#include <alphahash_fragment>
 	#include <normal_fragment_begin>
 	#include <normal_fragment_maps>
 
@@ -96,9 +101,9 @@ void main() {
 
 	vec3 outgoingLight = diffuseColor.rgb * matcapColor.rgb;
 
-	#include <output_fragment>
+	#include <opaque_fragment>
 	#include <tonemapping_fragment>
-	#include <encodings_fragment>
+	#include <colorspace_fragment>
 	#include <fog_fragment>
 	#include <premultiplied_alpha_fragment>
 	#include <dithering_fragment>
