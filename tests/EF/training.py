@@ -517,11 +517,14 @@ def inference_step(model_apply, batch, batch_size, params):
     )
     return energy
 
-predicted_energies = inference_step(
-    model_apply=message_passing_model.apply,
-    batch=valid_data,
-    batch_size=batch_size,
-    params=params,
-)
-print(predicted_energies)
-print(valid_data["energies"])
+valid_key, valid_key = jax.random.split(jax.random.PRNGKey(0), 2)
+valid_batches = prepare_batches(valid_key, valid_data, batch_size)
+for valid_batch in valid_batches:
+    predicted_energies = inference_step(
+        model_apply=message_passing_model.apply,
+        batch=valid_batch,
+        batch_size=batch_size,
+        params=params,
+    )
+    print(predicted_energies)
+    print(valid_batch["energies"])
