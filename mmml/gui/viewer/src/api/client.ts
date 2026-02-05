@@ -33,6 +33,7 @@ export interface FrameData {
   forces: number[][] | null;
   dipole: number[] | null;
   charges: number[] | null;
+  electric_field: number[] | null;
 }
 
 export interface Properties {
@@ -44,6 +45,10 @@ export interface Properties {
   dipole_z?: number[];
   force_max?: number[];
   force_mean?: number[];
+  efield_magnitude?: number[];
+  efield_x?: number[];
+  efield_y?: number[];
+  efield_z?: number[];
 }
 
 export interface PCAData {

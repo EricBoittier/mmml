@@ -43,6 +43,7 @@ function App() {
   
   // Visualization options
   const [showDipole, setShowDipole] = useState(true);
+  const [showElectricField, setShowElectricField] = useState(true);
   
   // Sorting options
   type SortOrder = 'frame' | 'energy_asc' | 'energy_desc';
@@ -276,21 +277,36 @@ function App() {
           ) : (
             <>
               {/* Viewer controls toolbar */}
-              <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-4 py-2 flex items-center gap-4">
-                <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={showDipole}
-                    onChange={(e) => setShowDipole(e.target.checked)}
-                    className="w-4 h-4 rounded border-slate-300 text-blue-500 focus:ring-blue-500"
-                  />
-                  <span>Show Dipole</span>
-                  {frameData?.dipole && (
+              <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-4 py-2 flex items-center gap-4 flex-wrap">
+                {frameData?.dipole && (
+                  <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={showDipole}
+                      onChange={(e) => setShowDipole(e.target.checked)}
+                      className="w-4 h-4 rounded border-slate-300 text-blue-500 focus:ring-blue-500"
+                    />
+                    <span>Dipole</span>
                     <span className="text-xs text-slate-500">
-                      ({Math.sqrt(frameData.dipole.reduce((sum, v) => sum + v * v, 0)).toFixed(3)} D)
+                      ({Math.sqrt(frameData.dipole.reduce((sum, v) => sum + v * v, 0)).toFixed(2)} D)
                     </span>
-                  )}
-                </label>
+                  </label>
+                )}
+                
+                {frameData?.electric_field && (
+                  <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={showElectricField}
+                      onChange={(e) => setShowElectricField(e.target.checked)}
+                      className="w-4 h-4 rounded border-slate-300 text-amber-500 focus:ring-amber-500"
+                    />
+                    <span>E-Field</span>
+                    <span className="text-xs text-slate-500">
+                      ({Math.sqrt(frameData.electric_field.reduce((sum, v) => sum + v * v, 0)).toFixed(1)} mV/A)
+                    </span>
+                  </label>
+                )}
                 
                 {/* Sort order selector */}
                 {properties?.energy && (
@@ -324,6 +340,8 @@ function App() {
                     pdbString={frameData?.pdb_string || null}
                     dipole={frameData?.dipole}
                     showDipole={showDipole}
+                    electricField={frameData?.electric_field}
+                    showElectricField={showElectricField}
                   />
                 </div>
 

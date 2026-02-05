@@ -23,7 +23,9 @@ interface PCAProjectionProps {
 const COLOR_OPTIONS = [
   { key: 'none', label: 'None (uniform)' },
   { key: 'energy', label: 'Energy' },
-  { key: 'dipole_magnitude', label: 'Dipole Magnitude' },
+  { key: 'dipole_magnitude', label: 'Dipole |D|' },
+  { key: 'efield_magnitude', label: 'E-Field |E|' },
+  { key: 'efield_z', label: 'E-Field Z' },
   { key: 'force_max', label: 'Max Force' },
   { key: 'force_mean', label: 'Mean Force' },
   { key: 'frame_indices', label: 'Frame Index' },
