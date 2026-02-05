@@ -115,9 +115,9 @@ class MessagePassingModel(nn.Module):
         atomic_numbers_flat = atomic_numbers.reshape(-1)  # Ensure (B*N,) - 1D array
 
         # Compute displacements using e3x gather operations (CUDA-graph-friendly)
-        # This matches the pattern used in working physnetjax code
-        positions_dst = e3x.ops.gather_dst(positions_flat, dst_idx=dst_idx)
-        positions_src = e3x.ops.gather_src(positions_flat, src_idx=src_idx)
+        # Must use flattened indices to get (B*E, 3) displacements matching MessagePass
+        positions_dst = e3x.ops.gather_dst(positions_flat, dst_idx=dst_idx_flat)
+        positions_src = e3x.ops.gather_src(positions_flat, src_idx=src_idx_flat)
         displacements = positions_src - positions_dst  # (B*E, 3)
 
         # Build an EF tensor of shape compatible with e3x.nn.Tensor()
@@ -457,7 +457,7 @@ num_valid = 1000
 
 num_epochs = 1000
 learning_rate = 0.003
-batch_size = 1
+batch_size = 100
 
 # -------------------------
 # Run
