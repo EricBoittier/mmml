@@ -472,6 +472,125 @@ class MolecularFileParser:
             properties['force_mean'] = mean_forces
         
         return properties
+    
+    def get_pca_projection(self, n_components: int = 2) -> Dict[str, Any]:
+        """
+        Compute PCA projection of molecular coordinates.
+        
+        Parameters
+        ----------
+        n_components : int
+            Number of PCA components (2 or 3)
+        
+        Returns
+        -------
+        dict
+            Dictionary with PCA projection data
+        """
+        self._load_data()
+        
+        if self.file_type == 'npz':
+            return self._get_npz_pca(n_components)
+        else:
+            return self._get_ase_pca(n_components)
+    
+    def _get_npz_pca(self, n_components: int) -> Dict[str, Any]:
+        """Compute PCA for NPZ file."""
+        data = self._data
+        
+        # Get coordinates
+        R_raw = data['R']
+        Z_raw = data['Z']
+        n_frames = len(R_raw)
+        
+        # Flatten coordinates per frame
+        coords_list = []
+        for i in range(n_frames):
+            R = np.asarray(R_raw[i], dtype=np.float64)
+            Z = np.asarray(Z_raw[i] if len(Z_raw.shape) > 1 else Z_raw, dtype=np.int64)
+            
+            # Handle extra dimensions
+            while R.ndim > 2 and R.shape[0] == 1:
+                R = R.squeeze(axis=0)
+            
+            # Mask out padding
+            mask = Z > 0
+            R_masked = R[mask]
+            
+            # Flatten to 1D
+            coords_list.append(R_masked.flatten())
+        
+        # Pad to same length if needed (in case of variable atom count)
+        max_len = max(len(c) for c in coords_list)
+        coords_padded = np.zeros((n_frames, max_len))
+        for i, c in enumerate(coords_list):
+            coords_padded[i, :len(c)] = c
+        
+        # Compute PCA using SVD
+        coords_centered = coords_padded - coords_padded.mean(axis=0)
+        U, S, Vt = np.linalg.svd(coords_centered, full_matrices=False)
+        
+        # Project onto principal components
+        projections = coords_centered @ Vt.T[:, :n_components]
+        
+        # Compute explained variance
+        explained_variance = (S[:n_components] ** 2) / (n_frames - 1)
+        total_variance = np.sum(S ** 2) / (n_frames - 1)
+        explained_variance_ratio = explained_variance / total_variance
+        
+        result = {
+            'frame_indices': list(range(n_frames)),
+            'pc1': projections[:, 0].tolist(),
+            'pc2': projections[:, 1].tolist(),
+            'explained_variance': explained_variance.tolist(),
+            'explained_variance_ratio': explained_variance_ratio.tolist(),
+        }
+        
+        if n_components >= 3:
+            result['pc3'] = projections[:, 2].tolist()
+        
+        return result
+    
+    def _get_ase_pca(self, n_components: int) -> Dict[str, Any]:
+        """Compute PCA for ASE trajectory."""
+        frames = self._data
+        n_frames = len(frames)
+        
+        # Flatten coordinates per frame
+        coords_list = []
+        for f in frames:
+            coords_list.append(f.get_positions().flatten())
+        
+        # Pad to same length
+        max_len = max(len(c) for c in coords_list)
+        coords_padded = np.zeros((n_frames, max_len))
+        for i, c in enumerate(coords_list):
+            coords_padded[i, :len(c)] = c
+        
+        # Compute PCA using SVD
+        coords_centered = coords_padded - coords_padded.mean(axis=0)
+        U, S, Vt = np.linalg.svd(coords_centered, full_matrices=False)
+        
+        # Project onto principal components
+        projections = coords_centered @ Vt.T[:, :n_components]
+        
+        # Compute explained variance
+        explained_variance = (S[:n_components] ** 2) / (n_frames - 1)
+        total_variance = np.sum(S ** 2) / (n_frames - 1)
+        explained_variance_ratio = explained_variance / total_variance
+        
+        result = {
+            'frame_indices': list(range(n_frames)),
+            'pc1': projections[:, 0].tolist(),
+            'pc2': projections[:, 1].tolist(),
+            'explained_variance': explained_variance.tolist(),
+            'explained_variance_ratio': explained_variance_ratio.tolist(),
+        }
+        
+        if n_components >= 3:
+            result['pc3'] = projections[:, 2].tolist()
+        
+        return result
 
 
 def list_molecular_files(directory: Union[str, Path]) -> List[Dict[str, str]]:
