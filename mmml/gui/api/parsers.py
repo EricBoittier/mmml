@@ -41,6 +41,7 @@ class FrameData:
     forces: Optional[List[List[float]]] = None
     dipole: Optional[List[float]] = None
     charges: Optional[List[float]] = None
+    electric_field: Optional[List[float]] = None
     
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -50,6 +51,7 @@ class FrameData:
             'forces': self.forces,
             'dipole': self.dipole,
             'charges': self.charges,
+            'electric_field': self.electric_field,
         }
 
 
@@ -212,6 +214,8 @@ class MolecularFileParser:
             properties.append('charges')
         if 'esp' in data:
             properties.append('esp')
+        if 'Ef' in data:
+            properties.append('electric_field')
         
         # Get unique elements (handle object dtype)
         Z = np.asarray(Z_arr[0] if len(Z_arr.shape) > 1 else Z_arr)
@@ -361,6 +365,10 @@ class MolecularFileParser:
                 mask[:N] = True
             charges = mono[mask].tolist()
         
+        electric_field = None
+        if 'Ef' in data:
+            electric_field = np.asarray(data['Ef'][index], dtype=np.float64).tolist()
+        
         return FrameData(
             pdb_string=pdb_string,
             n_atoms=len(atoms),
@@ -368,6 +376,7 @@ class MolecularFileParser:
             forces=forces,
             dipole=dipole,
             charges=charges,
+            electric_field=electric_field,
         )
     
     def _get_ase_frame(self, index: int) -> FrameData:
@@ -454,6 +463,13 @@ class MolecularFileParser:
             
             properties['force_max'] = max_forces
             properties['force_mean'] = mean_forces
+        
+        if 'Ef' in data:
+            Ef = np.stack([np.asarray(ef, dtype=np.float64) for ef in data['Ef']])
+            properties['efield_magnitude'] = np.linalg.norm(Ef, axis=1).tolist()
+            properties['efield_x'] = Ef[:, 0].tolist()
+            properties['efield_y'] = Ef[:, 1].tolist()
+            properties['efield_z'] = Ef[:, 2].tolist()
         
         return properties
     

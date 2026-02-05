@@ -22,10 +22,14 @@ interface ScatterPlotProps {
 const AXIS_OPTIONS = [
   { key: 'frame_indices', label: 'Frame Index' },
   { key: 'energy', label: 'Energy (Ha)' },
-  { key: 'dipole_magnitude', label: 'Dipole Magnitude (D)' },
+  { key: 'dipole_magnitude', label: 'Dipole |D|' },
   { key: 'dipole_x', label: 'Dipole X' },
   { key: 'dipole_y', label: 'Dipole Y' },
   { key: 'dipole_z', label: 'Dipole Z' },
+  { key: 'efield_magnitude', label: 'E-Field |E|' },
+  { key: 'efield_x', label: 'E-Field X' },
+  { key: 'efield_y', label: 'E-Field Y' },
+  { key: 'efield_z', label: 'E-Field Z' },
   { key: 'force_max', label: 'Max Force' },
   { key: 'force_mean', label: 'Mean Force' },
 ];
