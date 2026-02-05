@@ -446,7 +446,7 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
 # -------------------------
 # Hyperparameters
 # -------------------------
-features = 128
+features = 32
 max_degree = 1
 num_iterations = 3
 num_basis_functions = 16
