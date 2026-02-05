@@ -195,7 +195,8 @@ class MolecularFileParser:
         
         # Get basic info
         n_frames = len(data['E']) if 'E' in data else len(data['R'])
-        n_atoms = data['Z'].shape[1] if len(data['Z'].shape) > 1 else len(data['Z'])
+        Z_arr = data['Z']
+        n_atoms = Z_arr.shape[1] if len(Z_arr.shape) > 1 else len(Z_arr)
         
         # Available properties
         properties = ['structure']
@@ -210,10 +211,9 @@ class MolecularFileParser:
         if 'esp' in data:
             properties.append('esp')
         
-        # Get unique elements
-        Z = data['Z']
-        if len(Z.shape) > 1:
-            Z = Z[0]  # First frame
+        # Get unique elements (handle object dtype)
+        Z = np.asarray(Z_arr[0] if len(Z_arr.shape) > 1 else Z_arr)
+        Z = Z.astype(np.int64)  # Ensure numeric type for comparison
         unique_Z = np.unique(Z[Z > 0])
         elements = [ELEMENT_SYMBOLS.get(int(z), f'X{z}') for z in unique_Z]
         
@@ -304,10 +304,14 @@ class MolecularFileParser:
         """Get frame from NPZ file."""
         data = self._data
         
-        # Get coordinates and atomic numbers
-        R = data['R'][index]
-        Z = data['Z'][index] if len(data['Z'].shape) > 1 else data['Z']
+        # Get coordinates and atomic numbers (handle object dtype)
+        R = np.asarray(data['R'][index], dtype=np.float64)
+        Z = np.asarray(data['Z'][index] if len(data['Z'].shape) > 1 else data['Z'], dtype=np.int64)
         N = int(data['N'][index]) if 'N' in data else None
+        
+        # Handle extra dimensions in R (e.g., shape (1, n_atoms, 3) -> (n_atoms, 3))
+        while R.ndim > 2 and R.shape[0] == 1:
+            R = R.squeeze(axis=0)
         
         # Convert to Atoms and PDB
         atoms = npz_frame_to_atoms(R, Z, N)
@@ -320,7 +324,7 @@ class MolecularFileParser:
         
         forces = None
         if 'F' in data:
-            F = data['F'][index]
+            F = np.asarray(data['F'][index], dtype=np.float64)
             mask = Z > 0
             if N is not None:
                 mask = np.zeros_like(Z, dtype=bool)
@@ -329,13 +333,13 @@ class MolecularFileParser:
         
         dipole = None
         if 'D' in data:
-            dipole = data['D'][index].tolist()
+            dipole = np.asarray(data['D'][index], dtype=np.float64).tolist()
         elif 'Dxyz' in data:
-            dipole = data['Dxyz'][index].tolist()
+            dipole = np.asarray(data['Dxyz'][index], dtype=np.float64).tolist()
         
         charges = None
         if 'mono' in data:
-            mono = data['mono'][index]
+            mono = np.asarray(data['mono'][index], dtype=np.float64)
             mask = Z > 0
             if N is not None:
                 mask = np.zeros_like(Z, dtype=bool)
@@ -395,16 +399,17 @@ class MolecularFileParser:
         }
         
         if 'E' in data:
-            properties['energy'] = data['E'].tolist()
+            E = np.asarray([float(e) for e in data['E']])
+            properties['energy'] = E.tolist()
         
         if 'D' in data:
-            D = data['D']
+            D = np.stack([np.asarray(d, dtype=np.float64) for d in data['D']])
             properties['dipole_magnitude'] = np.linalg.norm(D, axis=1).tolist()
             properties['dipole_x'] = D[:, 0].tolist()
             properties['dipole_y'] = D[:, 1].tolist()
             properties['dipole_z'] = D[:, 2].tolist()
         elif 'Dxyz' in data:
-            D = data['Dxyz']
+            D = np.stack([np.asarray(d, dtype=np.float64) for d in data['Dxyz']])
             properties['dipole_magnitude'] = np.linalg.norm(D, axis=1).tolist()
             properties['dipole_x'] = D[:, 0].tolist()
             properties['dipole_y'] = D[:, 1].tolist()
@@ -420,8 +425,8 @@ class MolecularFileParser:
             mean_forces = []
             
             for i in range(len(F)):
-                frame_F = F[i]
-                frame_Z = Z[i] if len(Z.shape) > 1 else Z
+                frame_F = np.asarray(F[i], dtype=np.float64)
+                frame_Z = np.asarray(Z[i] if len(Z.shape) > 1 else Z, dtype=np.int64)
                 mask = frame_Z > 0
                 if N is not None:
                     mask = np.zeros_like(frame_Z, dtype=bool)

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react';
-import { Viewer } from 'miew-react';
+import Viewer from 'miew-react';
 
 interface MoleculeViewerProps {
   pdbString: string | null;

@@ -50,9 +50,9 @@ def create_app(
         allow_headers=["*"],
     )
     
-    # Store configuration in app state
-    app.state.data_dir = Path(data_dir) if data_dir else None
-    app.state.single_file = Path(single_file) if single_file else None
+    # Store configuration in app state (resolve to absolute paths)
+    app.state.data_dir = Path(data_dir).resolve() if data_dir else None
+    app.state.single_file = Path(single_file).resolve() if single_file else None
     app.state.parsers = {}  # Cache for file parsers
     
     # API Routes
