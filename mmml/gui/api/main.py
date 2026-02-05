@@ -144,6 +144,32 @@ def create_app(
         
         return pca_result
     
+    @app.get("/api/frames/{path:path}")
+    async def get_frames_batch(
+        path: str,
+        indices: str = Query(..., description="Comma-separated frame indices"),
+    ):
+        """Get multiple frames at once for preloading."""
+        file_path = _resolve_path(app, path)
+        
+        parser = _get_parser(app, file_path)
+        metadata = parser.get_metadata()
+        
+        # Parse indices
+        try:
+            frame_indices = [int(i.strip()) for i in indices.split(',')]
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid indices format")
+        
+        # Validate and fetch frames
+        frames = {}
+        for idx in frame_indices:
+            if 0 <= idx < metadata.n_frames:
+                frame = parser.get_frame(idx)
+                frames[str(idx)] = frame.to_dict()
+        
+        return frames
+    
     # Serve static files if directory provided
     if static_dir and Path(static_dir).exists():
         # Serve index.html for SPA routing

@@ -125,3 +125,16 @@ export async function getPCA(path: string, nComponents: number = 2): Promise<PCA
   }
   return response.json();
 }
+
+/**
+ * Get multiple frames at once for preloading.
+ */
+export async function getFramesBatch(path: string, indices: number[]): Promise<Record<string, FrameData>> {
+  const encodedPath = encodeURIComponent(path);
+  const indicesStr = indices.join(',');
+  const response = await fetch(`${API_BASE}/frames/${encodedPath}?indices=${indicesStr}`);
+  if (!response.ok) {
+    throw new Error(`Failed to get frames batch: ${response.statusText}`);
+  }
+  return response.json();
+}
