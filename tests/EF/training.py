@@ -165,9 +165,9 @@ class MessagePassingModel(nn.Module):
             # Couple EF - xEF already has correct shape (B*N, 2, 4, features) matching x
             xEF_t = e3x.nn.Tensor()(x, xEF)
             x = e3x.nn.add(x, xEF_t)
-
+            x = e3x.nn.silu(x)
             x = e3x.nn.TensorDense(max_degree=self.max_degree)(x)
-
+            x = e3x.nn.silu(x)
         # Reduce to scalars per atom
         x = e3x.nn.change_max_degree_or_type(x, max_degree=0, include_pseudotensors=False)
 
