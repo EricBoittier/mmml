@@ -519,12 +519,22 @@ def inference_step(model_apply, batch, batch_size, params):
 
 valid_key, valid_key = jax.random.split(jax.random.PRNGKey(0), 2)
 valid_batches = prepare_batches(valid_key, valid_data, batch_size)
+predicted_energies = []
+true_energies = []
 for valid_batch in valid_batches:
-    predicted_energies = inference_step(
+    predicted_energy = inference_step(
         model_apply=message_passing_model.apply,
         batch=valid_batch,
         batch_size=batch_size,
         params=params,
     )
-    print(predicted_energies)
-    print(valid_batch["energies"])
+    predicted_energies.append(predicted_energy)
+    true_energies.append(valid_batch["energies"])
+
+
+predicted_energies = jnp.concatenate(predicted_energies, axis=0)
+true_energies = jnp.concatenate(true_energies, axis=0)
+print("predicted_energies shape: ", predicted_energies.shape)
+print("true_energies shape: ", true_energies.shape)
+print("MAE: ", jnp.mean(jnp.abs(predicted_energies - true_energies)))
+print("RMSE: ", jnp.sqrt(jnp.mean((predicted_energies - true_energies)**2)))
