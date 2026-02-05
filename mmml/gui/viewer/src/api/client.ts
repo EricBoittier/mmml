@@ -34,6 +34,8 @@ export interface FrameData {
   dipole: number[] | null;
   charges: number[] | null;
   electric_field: number[] | null;
+  positions: number[][] | null;
+  atomic_numbers: number[] | null;
 }
 
 export interface Properties {

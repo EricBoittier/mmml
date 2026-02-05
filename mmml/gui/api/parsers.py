@@ -42,6 +42,8 @@ class FrameData:
     dipole: Optional[List[float]] = None
     charges: Optional[List[float]] = None
     electric_field: Optional[List[float]] = None
+    positions: Optional[List[List[float]]] = None
+    atomic_numbers: Optional[List[int]] = None
     
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -52,6 +54,8 @@ class FrameData:
             'dipole': self.dipole,
             'charges': self.charges,
             'electric_field': self.electric_field,
+            'positions': self.positions,
+            'atomic_numbers': self.atomic_numbers,
         }
 
 
@@ -332,9 +336,20 @@ class MolecularFileParser:
         while R.ndim > 2 and R.shape[0] == 1:
             R = R.squeeze(axis=0)
         
+        # Create mask for valid atoms
+        mask = Z > 0
+        if N is not None:
+            mask = np.zeros_like(Z, dtype=bool)
+            mask[:N] = True
+            mask = mask & (Z > 0)
+        
         # Convert to Atoms and PDB
         atoms = npz_frame_to_atoms(R, Z, N)
         pdb_string = atoms_to_pdb(atoms)
+        
+        # Extract positions and atomic numbers for 3D visualization
+        positions = R[mask].tolist()
+        atomic_numbers = Z[mask].tolist()
         
         # Get properties
         energy = None
@@ -344,10 +359,6 @@ class MolecularFileParser:
         forces = None
         if 'F' in data:
             F = np.asarray(data['F'][index], dtype=np.float64)
-            mask = Z > 0
-            if N is not None:
-                mask = np.zeros_like(Z, dtype=bool)
-                mask[:N] = True
             forces = F[mask].tolist()
         
         dipole = None
@@ -359,10 +370,6 @@ class MolecularFileParser:
         charges = None
         if 'mono' in data:
             mono = np.asarray(data['mono'][index], dtype=np.float64)
-            mask = Z > 0
-            if N is not None:
-                mask = np.zeros_like(Z, dtype=bool)
-                mask[:N] = True
             charges = mono[mask].tolist()
         
         electric_field = None
@@ -377,6 +384,8 @@ class MolecularFileParser:
             dipole=dipole,
             charges=charges,
             electric_field=electric_field,
+            positions=positions,
+            atomic_numbers=atomic_numbers,
         )
     
     def _get_ase_frame(self, index: int) -> FrameData:
@@ -389,6 +398,10 @@ class MolecularFileParser:
         if forces is not None:
             forces = forces.tolist()
         
+        # Extract positions and atomic numbers for 3D visualization
+        positions = atoms.get_positions().tolist()
+        atomic_numbers = atoms.get_atomic_numbers().tolist()
+        
         return FrameData(
             pdb_string=pdb_string,
             n_atoms=len(atoms),
@@ -396,6 +409,8 @@ class MolecularFileParser:
             forces=forces,
             dipole=None,
             charges=None,
+            positions=positions,
+            atomic_numbers=atomic_numbers,
         )
     
     def get_all_properties(self) -> Dict[str, List]:
