@@ -508,6 +508,12 @@ def inference_step(model_apply, batch, batch_size, params):
         atomic_numbers=batch["atomic_numbers"],
         positions=batch["positions"],
         Ef=batch["electric_field"],
+        dst_idx=batch["dst_idx"],
+        src_idx=batch["src_idx"],
+        dst_idx_flat=batch["dst_idx_flat"],
+        src_idx_flat=batch["src_idx_flat"],
+        batch_segments=batch["batch_segments"],
+        batch_size=batch_size,
     )
     return energy
 
