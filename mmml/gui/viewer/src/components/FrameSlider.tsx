@@ -40,18 +40,23 @@ function FrameSlider({ currentFrame, totalFrames, onFrameChange }: FrameSliderPr
     setIsPlaying((prev) => !prev);
   }, []);
 
+  // Use ref to track current frame for animation to avoid stale closures
+  const frameRef = useRef(currentFrame);
+  useEffect(() => {
+    frameRef.current = currentFrame;
+  }, [currentFrame]);
+
   // Animation loop
   useEffect(() => {
     if (isPlaying) {
       intervalRef.current = window.setInterval(() => {
-        onFrameChange((prev) => {
-          const next = prev + 1;
-          if (next >= totalFrames) {
-            setIsPlaying(false);
-            return 0; // Loop back to start
-          }
-          return next;
-        });
+        const next = frameRef.current + 1;
+        if (next >= totalFrames) {
+          setIsPlaying(false);
+          onFrameChange(0); // Loop back to start
+        } else {
+          onFrameChange(next);
+        }
       }, 1000 / playSpeed);
     } else if (intervalRef.current) {
       window.clearInterval(intervalRef.current);
