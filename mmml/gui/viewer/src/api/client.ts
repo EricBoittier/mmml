@@ -46,6 +46,15 @@ export interface Properties {
   force_mean?: number[];
 }
 
+export interface PCAData {
+  frame_indices: number[];
+  pc1: number[];
+  pc2: number[];
+  pc3?: number[];
+  explained_variance: number[];
+  explained_variance_ratio: number[];
+}
+
 /**
  * Check API health.
  */
@@ -101,6 +110,18 @@ export async function getProperties(path: string): Promise<Properties> {
   const response = await fetch(`${API_BASE}/properties/${encodedPath}`);
   if (!response.ok) {
     throw new Error(`Failed to get properties: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+/**
+ * Get PCA projection of molecular coordinates.
+ */
+export async function getPCA(path: string, nComponents: number = 2): Promise<PCAData> {
+  const encodedPath = encodeURIComponent(path);
+  const response = await fetch(`${API_BASE}/pca/${encodedPath}?n_components=${nComponents}`);
+  if (!response.ok) {
+    throw new Error(`Failed to get PCA projection: ${response.statusText}`);
   }
   return response.json();
 }
