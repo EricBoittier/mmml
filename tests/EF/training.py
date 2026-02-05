@@ -446,18 +446,18 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
 # -------------------------
 # Hyperparameters
 # -------------------------
-features = 64
+features = 128
 max_degree = 1
-num_iterations = 2
-num_basis_functions = 64
+num_iterations = 3
+num_basis_functions = 16
 cutoff = 5.0
 
 num_train = 8000
 num_valid = 1000
 
 num_epochs = 1000
-learning_rate = 0.003
-batch_size = 100
+learning_rate = 0.0001
+batch_size = 500
 
 # -------------------------
 # Run
