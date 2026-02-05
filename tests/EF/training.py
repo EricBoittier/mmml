@@ -450,7 +450,7 @@ features = 32
 max_degree = 1
 num_iterations = 3
 num_basis_functions = 16
-cutoff = 5.0
+cutoff = 2.0
 
 num_train = 8000
 num_valid = 2000
