@@ -455,7 +455,7 @@ cutoff = 2.0
 num_train = 8000
 num_valid = 2000
 
-num_epochs = 1
+num_epochs = 1000
 learning_rate = 0.0001
 batch_size = 100
 
