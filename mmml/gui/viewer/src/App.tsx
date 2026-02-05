@@ -3,6 +3,7 @@ import MoleculeViewer from './components/MoleculeViewer';
 import FrameSlider from './components/FrameSlider';
 import PropertyPanel from './components/PropertyPanel';
 import PropertyChart from './components/PropertyChart';
+import ScatterPlot from './components/ScatterPlot';
 import FileSidebar from './components/FileSidebar';
 import {
   listFiles,
@@ -30,6 +31,9 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  
+  // Visualization options
+  const [showDipole, setShowDipole] = useState(true);
 
   // Load file list on mount
   useEffect(() => {
@@ -159,11 +163,33 @@ function App() {
             </div>
           ) : (
             <>
+              {/* Viewer controls toolbar */}
+              <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-4 py-2 flex items-center gap-4">
+                <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={showDipole}
+                    onChange={(e) => setShowDipole(e.target.checked)}
+                    className="w-4 h-4 rounded border-slate-300 text-blue-500 focus:ring-blue-500"
+                  />
+                  <span>Show Dipole</span>
+                  {frameData?.dipole && (
+                    <span className="text-xs text-slate-500">
+                      ({Math.sqrt(frameData.dipole.reduce((sum, v) => sum + v * v, 0)).toFixed(3)} D)
+                    </span>
+                  )}
+                </label>
+              </div>
+
               {/* Viewer and properties panel */}
               <div className="flex-1 flex overflow-hidden">
                 {/* 3D Viewer */}
                 <div className="flex-1 relative">
-                  <MoleculeViewer pdbString={frameData?.pdb_string || null} />
+                  <MoleculeViewer 
+                    pdbString={frameData?.pdb_string || null}
+                    dipole={frameData?.dipole}
+                    showDipole={showDipole}
+                  />
                 </div>
 
                 {/* Property panel */}
@@ -186,6 +212,15 @@ function App() {
               {/* Property charts */}
               {properties && metadata && metadata.n_frames > 1 && (
                 <PropertyChart
+                  properties={properties}
+                  currentFrame={currentFrame}
+                  onFrameClick={handleChartClick}
+                />
+              )}
+
+              {/* Scatter plot */}
+              {properties && metadata && metadata.n_frames > 1 && (
+                <ScatterPlot
                   properties={properties}
                   currentFrame={currentFrame}
                   onFrameClick={handleChartClick}
