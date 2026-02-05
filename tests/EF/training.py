@@ -453,11 +453,11 @@ num_basis_functions = 16
 cutoff = 5.0
 
 num_train = 8000
-num_valid = 1000
+num_valid = 2000
 
-num_epochs = 1000
+num_epochs = 1
 learning_rate = 0.0001
-batch_size = 500
+batch_size = 100
 
 # -------------------------
 # Run
@@ -467,6 +467,7 @@ data_key, train_key = jax.random.split(jax.random.PRNGKey(0), 2)
 train_data, valid_data = prepare_datasets(
     data_key, num_train=num_train, num_valid=num_valid, dataset=dataset
 )
+
 
 print("\nPrepared data shapes:")
 print(f"  train atomic_numbers: {train_data['atomic_numbers'].shape}")
@@ -492,3 +493,29 @@ params = train_model(
     batch_size=batch_size,
 )
 
+import json
+from mmml.utils.model_checkpoint import to_jsonable
+params_dict = to_jsonable(params)
+with open('params.json', 'w') as f:
+    json.dump(params_dict, f)
+
+"""
+Set up an inference function that takes in a batch of data and returns the predicted energies
+"""
+def inference_step(model_apply, batch, batch_size, params):
+    energy = model_apply(
+        params,
+        atomic_numbers=batch["atomic_numbers"],
+        positions=batch["positions"],
+        Ef=batch["electric_field"],
+    )
+    return energy
+
+predicted_energies = inference_step(
+    model_apply=message_passing_model.apply,
+    batch=valid_data,
+    batch_size=batch_size,
+    params=params,
+)
+print(predicted_energies)
+print(valid_data["energies"])
