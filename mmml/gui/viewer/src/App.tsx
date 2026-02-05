@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import MoleculeViewer from './components/MoleculeViewer';
+import VectorViewer3D from './components/VectorViewer3D';
 import FrameSlider from './components/FrameSlider';
 import PropertyPanel from './components/PropertyPanel';
 import PropertyChart from './components/PropertyChart';
@@ -44,6 +45,7 @@ function App() {
   // Visualization options
   const [showDipole, setShowDipole] = useState(true);
   const [showElectricField, setShowElectricField] = useState(true);
+  const [showForces, setShowForces] = useState(true);
   
   // Sorting options
   type SortOrder = 'frame' | 'energy_asc' | 'energy_desc';
@@ -278,6 +280,21 @@ function App() {
             <>
               {/* Viewer controls toolbar */}
               <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-4 py-2 flex items-center gap-4 flex-wrap">
+                {/* Vector visualization toggles */}
+                <span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Vectors:</span>
+                
+                {frameData?.forces && frameData.forces.length > 0 && (
+                  <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={showForces}
+                      onChange={(e) => setShowForces(e.target.checked)}
+                      className="w-4 h-4 rounded border-slate-300 text-red-500 focus:ring-red-500"
+                    />
+                    <span className="text-red-500">Forces</span>
+                  </label>
+                )}
+                
                 {frameData?.dipole && (
                   <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer">
                     <input
@@ -286,7 +303,7 @@ function App() {
                       onChange={(e) => setShowDipole(e.target.checked)}
                       className="w-4 h-4 rounded border-slate-300 text-blue-500 focus:ring-blue-500"
                     />
-                    <span>Dipole</span>
+                    <span className="text-blue-500">Dipole</span>
                     <span className="text-xs text-slate-500">
                       ({Math.sqrt(frameData.dipole.reduce((sum, v) => sum + v * v, 0)).toFixed(2)} D)
                     </span>
@@ -301,12 +318,14 @@ function App() {
                       onChange={(e) => setShowElectricField(e.target.checked)}
                       className="w-4 h-4 rounded border-slate-300 text-amber-500 focus:ring-amber-500"
                     />
-                    <span>E-Field</span>
+                    <span className="text-amber-500">E-Field</span>
                     <span className="text-xs text-slate-500">
                       ({Math.sqrt(frameData.electric_field.reduce((sum, v) => sum + v * v, 0)).toFixed(1)} mV/A)
                     </span>
                   </label>
                 )}
+                
+                <div className="w-px h-5 bg-slate-300 dark:bg-slate-600" />
                 
                 {/* Sort order selector */}
                 {properties?.energy && (
@@ -334,15 +353,38 @@ function App() {
 
               {/* Viewer and properties panel */}
               <div className="flex-1 flex overflow-hidden">
-                {/* 3D Viewer */}
-                <div className="flex-1 relative">
-                  <MoleculeViewer 
-                    pdbString={frameData?.pdb_string || null}
-                    dipole={frameData?.dipole}
-                    showDipole={showDipole}
-                    electricField={frameData?.electric_field}
-                    showElectricField={showElectricField}
-                  />
+                {/* Dual 3D Viewers - Side by Side */}
+                <div className="flex-1 flex">
+                  {/* Structure Viewer (Miew) */}
+                  <div className="flex-1 relative border-r border-slate-700">
+                    <div className="absolute top-2 left-2 z-10 bg-slate-900/70 backdrop-blur-sm rounded px-2 py-1 text-xs text-slate-300 pointer-events-none">
+                      Structure
+                    </div>
+                    <MoleculeViewer 
+                      pdbString={frameData?.pdb_string || null}
+                      dipole={frameData?.dipole}
+                      showDipole={showDipole}
+                      electricField={frameData?.electric_field}
+                      showElectricField={showElectricField}
+                    />
+                  </div>
+                  
+                  {/* Vector Viewer (Three.js) */}
+                  <div className="flex-1 relative">
+                    <div className="absolute top-2 left-2 z-10 bg-slate-900/70 backdrop-blur-sm rounded px-2 py-1 text-xs text-slate-300 pointer-events-none">
+                      Vectors
+                    </div>
+                    <VectorViewer3D
+                      positions={frameData?.positions || null}
+                      atomicNumbers={frameData?.atomic_numbers || null}
+                      forces={frameData?.forces || null}
+                      dipole={frameData?.dipole || null}
+                      electricField={frameData?.electric_field || null}
+                      showForces={showForces}
+                      showDipole={showDipole}
+                      showElectricField={showElectricField}
+                    />
+                  </div>
                 </div>
 
                 {/* Property panel */}
