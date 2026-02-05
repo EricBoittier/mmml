@@ -27,9 +27,13 @@ import pandas as pd
 import jax
 import jax.numpy as jnp
 
-# Disable command buffer / CUDA graph features that cause issues
-jax.config.update("jax_disable_jit", False)  # Keep JIT enabled
-jax.config.update("jax_debug_nans", False)   # Don't check for NaNs (faster)
+# Disable CUDA graph capture to avoid "library was not initialized" errors
+# This makes training slower but more stable
+# CUDA graph capture is incompatible with certain computation patterns
+try:
+    jax.config.update("jax_cuda_graph_level", 0)  # Disable CUDA graphs if supported
+except:
+    pass  # Not available in this JAX version
 
 import optax
 from flax import linen as nn
@@ -178,7 +182,7 @@ class MessagePassingModel(nn.Module):
         atomic_energies = jnp.squeeze(atomic_energies, axis=(-1, -2, -3))  # (B*N,)
 
         # If you want element biases, do it in flattened space:
-        # atomic_energies = atomic_energies + element_bias[atomic_numbers_flat]
+        atomic_energies = atomic_energies + element_bias[atomic_numbers_flat]
 
         # Sum per molecule without segment_sum/scatter (CUDA-graph-friendly).
         energy = atomic_energies.reshape(B, N).sum(axis=1)  # (B,)
