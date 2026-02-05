@@ -131,6 +131,19 @@ def create_app(
         
         return properties
     
+    @app.get("/api/pca/{path:path}")
+    async def get_pca_projection(
+        path: str,
+        n_components: int = Query(2, ge=2, le=3, description="Number of PCA components"),
+    ):
+        """Get PCA projection of molecular coordinates."""
+        file_path = _resolve_path(app, path)
+        
+        parser = _get_parser(app, file_path)
+        pca_result = parser.get_pca_projection(n_components=n_components)
+        
+        return pca_result
+    
     # Serve static files if directory provided
     if static_dir and Path(static_dir).exists():
         # Serve index.html for SPA routing
