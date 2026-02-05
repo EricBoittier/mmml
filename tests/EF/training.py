@@ -12,7 +12,7 @@
 import os
 
 # --- Environment (must be set before importing jax) ---
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".99"
 
 import warnings
@@ -116,8 +116,8 @@ class MessagePassingModel(nn.Module):
 
         # Compute displacements using e3x gather operations (CUDA-graph-friendly)
         # This matches the pattern used in working physnetjax code
-        positions_dst = e3x.ops.gather_dst(positions_flat, dst_idx=dst_idx_flat)
-        positions_src = e3x.ops.gather_src(positions_flat, src_idx=src_idx_flat)
+        positions_dst = e3x.ops.gather_dst(positions_flat, dst_idx=dst_idx)
+        positions_src = e3x.ops.gather_src(positions_flat, src_idx=src_idx)
         displacements = positions_src - positions_dst  # (B*E, 3)
 
         # Build an EF tensor of shape compatible with e3x.nn.Tensor()
@@ -356,6 +356,8 @@ def eval_step(model_apply, batch, batch_size, params):
         Ef=batch["electric_field"],
         dst_idx=batch["dst_idx"],
         src_idx=batch["src_idx"],
+        dst_idx_flat=batch["dst_idx_flat"],
+        src_idx_flat=batch["src_idx_flat"],
         batch_segments=batch["batch_segments"],
         batch_size=batch_size,
     )
@@ -450,10 +452,10 @@ num_iterations = 2
 num_basis_functions = 64
 cutoff = 5.0
 
-num_train = 5
-num_valid = 2
+num_train = 8000
+num_valid = 1000
 
-num_epochs = 10
+num_epochs = 1000
 learning_rate = 0.003
 batch_size = 1
 
