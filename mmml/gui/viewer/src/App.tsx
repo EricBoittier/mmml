@@ -47,6 +47,10 @@ function App() {
   const [showElectricField, setShowElectricField] = useState(true);
   const [showForces, setShowForces] = useState(true);
   
+  // Panel visibility
+  const [showStructurePanel, setShowStructurePanel] = useState(true);
+  const [showVectorPanel, setShowVectorPanel] = useState(true);
+  
   // Sorting options
   type SortOrder = 'frame' | 'energy_asc' | 'energy_desc';
   const [sortOrder, setSortOrder] = useState<SortOrder>('frame');
@@ -280,8 +284,35 @@ function App() {
             <>
               {/* Viewer controls toolbar */}
               <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-4 py-2 flex items-center gap-4 flex-wrap">
+                {/* Panel visibility toggles */}
+                <span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Panels:</span>
+                
+                <button
+                  onClick={() => setShowStructurePanel(!showStructurePanel)}
+                  className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
+                    showStructurePanel
+                      ? 'bg-emerald-500 text-white'
+                      : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400'
+                  }`}
+                >
+                  Structure
+                </button>
+                
+                <button
+                  onClick={() => setShowVectorPanel(!showVectorPanel)}
+                  className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
+                    showVectorPanel
+                      ? 'bg-purple-500 text-white'
+                      : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400'
+                  }`}
+                >
+                  Vectors
+                </button>
+                
+                <div className="w-px h-5 bg-slate-300 dark:bg-slate-600" />
+                
                 {/* Vector visualization toggles */}
-                <span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Vectors:</span>
+                <span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Show:</span>
                 
                 {frameData?.forces && frameData.forces.length > 0 && (
                   <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer">
@@ -353,38 +384,49 @@ function App() {
 
               {/* Viewer and properties panel */}
               <div className="flex-1 flex overflow-hidden">
-                {/* Dual 3D Viewers - Side by Side */}
+                {/* 3D Viewers - Side by Side */}
                 <div className="flex-1 flex">
                   {/* Structure Viewer (Miew) */}
-                  <div className="flex-1 relative border-r border-slate-700">
-                    <div className="absolute top-2 left-2 z-10 bg-slate-900/70 backdrop-blur-sm rounded px-2 py-1 text-xs text-slate-300 pointer-events-none">
-                      Structure
+                  {showStructurePanel && (
+                    <div className={`flex-1 relative ${showVectorPanel ? 'border-r border-slate-700' : ''}`}>
+                      <div className="absolute top-2 left-2 z-10 bg-slate-900/70 backdrop-blur-sm rounded px-2 py-1 text-xs text-slate-300 pointer-events-none">
+                        Structure
+                      </div>
+                      <MoleculeViewer 
+                        pdbString={frameData?.pdb_string || null}
+                        dipole={frameData?.dipole}
+                        showDipole={showDipole}
+                        electricField={frameData?.electric_field}
+                        showElectricField={showElectricField}
+                      />
                     </div>
-                    <MoleculeViewer 
-                      pdbString={frameData?.pdb_string || null}
-                      dipole={frameData?.dipole}
-                      showDipole={showDipole}
-                      electricField={frameData?.electric_field}
-                      showElectricField={showElectricField}
-                    />
-                  </div>
+                  )}
                   
                   {/* Vector Viewer (Three.js) */}
-                  <div className="flex-1 relative">
-                    <div className="absolute top-2 left-2 z-10 bg-slate-900/70 backdrop-blur-sm rounded px-2 py-1 text-xs text-slate-300 pointer-events-none">
-                      Vectors
+                  {showVectorPanel && (
+                    <div className="flex-1 relative">
+                      <div className="absolute top-2 left-2 z-10 bg-slate-900/70 backdrop-blur-sm rounded px-2 py-1 text-xs text-slate-300 pointer-events-none">
+                        Vectors
+                      </div>
+                      <VectorViewer3D
+                        positions={frameData?.positions || null}
+                        atomicNumbers={frameData?.atomic_numbers || null}
+                        forces={frameData?.forces || null}
+                        dipole={frameData?.dipole || null}
+                        electricField={frameData?.electric_field || null}
+                        showForces={showForces}
+                        showDipole={showDipole}
+                        showElectricField={showElectricField}
+                      />
                     </div>
-                    <VectorViewer3D
-                      positions={frameData?.positions || null}
-                      atomicNumbers={frameData?.atomic_numbers || null}
-                      forces={frameData?.forces || null}
-                      dipole={frameData?.dipole || null}
-                      electricField={frameData?.electric_field || null}
-                      showForces={showForces}
-                      showDipole={showDipole}
-                      showElectricField={showElectricField}
-                    />
-                  </div>
+                  )}
+                  
+                  {/* Placeholder when both panels are hidden */}
+                  {!showStructurePanel && !showVectorPanel && (
+                    <div className="flex-1 flex items-center justify-center bg-slate-800 text-slate-400">
+                      <p className="text-sm">Enable a panel to view the molecule</p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Property panel */}
