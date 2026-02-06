@@ -69,14 +69,14 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data", type=str, default="data-full.npz")
     parser.add_argument("--features", type=int, default=64)
-    parser.add_argument("--max_degree", type=int, default=1)
+    parser.add_argument("--max_degree", type=int, default=2)
     parser.add_argument("--num_iterations", type=int, default=2)
-    parser.add_argument("--num_basis_functions", type=int, default=32)
+    parser.add_argument("--num_basis_functions", type=int, default=64)
     parser.add_argument("--cutoff", type=float, default=10.0)
     
     parser.add_argument("--num_train", type=int, default=8000)
     parser.add_argument("--num_valid", type=int, default=2000)
-    parser.add_argument("--num_epochs", type=int, default=100)
+    parser.add_argument("--num_epochs", type=int, default=1000)
     parser.add_argument("--learning_rate", type=float, default=0.001)
     parser.add_argument("--batch_size", type=int, default=128)
 
@@ -172,18 +172,13 @@ class MessagePassingModel(nn.Module):
 
 
         """
-        
         # Positions and atomic_numbers are already flattened in prepare_batches (like physnetjax)
         # Ensure they're properly shaped (1D for atomic_numbers, 2D for positions)
         positions_flat = positions.reshape(-1, 3)  # Ensure (B*N, 3)
         atomic_numbers_flat = atomic_numbers.reshape(-1)  # Ensure (B*N,) - 1D array
-        
-        # Basic dims: use static values (CUDA-graph-friendly)
+                # Basic dims: use static values (CUDA-graph-friendly)
         B = batch_size  # Static - known at compile time
         N = atomic_numbers_flat.shape[0] // B   # Static - constant number of atoms per molecule
-
-
-
         # Compute displacements using e3x gather operations (CUDA-graph-friendly)
         # Must use flattened indices to get (B*E, 3) displacements matching MessagePass
         positions_dst = e3x.ops.gather_dst(positions_flat, dst_idx=dst_idx_flat)
@@ -194,7 +189,6 @@ class MessagePassingModel(nn.Module):
         # e3x format is (num_atoms, parity, (lmax+1)^2, features)
         # Start with (B, 4) -> expand to (B*N, 2, 4, features) for parity=2 (pseudotensors)
         pad_ef = jnp.zeros((B, 1), dtype=positions_flat.dtype)
-
         xEF = jnp.concatenate((pad_ef, Ef), axis=-1)   # (B, 4) - [1, Ef_x, Ef_y, Ef_z]
         xEF = xEF[:, None, :, None]                  # (B, 1, 4, 1)
         xEF = jnp.tile(xEF, (1, 1, 1, self.features)) # (B, 1, 4, features)
@@ -216,7 +210,6 @@ class MessagePassingModel(nn.Module):
             radial_fn=e3x.nn.reciprocal_bernstein,
             cutoff_fn=functools.partial(e3x.nn.smooth_cutoff, cutoff=self.cutoff)
         )
-
         # Embed atoms (flattened) - atomic_numbers_flat is already ensured to be 1D above
         x = e3x.nn.Embed(num_embeddings=self.max_atomic_number + 1, features=self.features)(atomic_numbers_flat)
 
@@ -226,7 +219,6 @@ class MessagePassingModel(nn.Module):
                 include_pseudotensors=self.include_pseudotensors,
                 max_degree=self.max_degree if i < self.num_iterations - 1 else 0
             )(x, basis, dst_idx=dst_idx_flat, src_idx=src_idx_flat)
-
             x = e3x.nn.add(x, y)
             x = e3x.nn.Dense(self.features)(x)
             x = e3x.nn.hard_tanh(x)
@@ -235,7 +227,7 @@ class MessagePassingModel(nn.Module):
             x = e3x.nn.add(x, xEF)
             x = e3x.nn.TensorDense(max_degree=self.max_degree)(x)
             x = e3x.nn.hard_tanh(x)
-            
+
         for i in range(2):
             x = e3x.nn.Dense(self.features)(x)
             x = e3x.nn.silu(x)
@@ -258,8 +250,6 @@ class MessagePassingModel(nn.Module):
         x_dipole = e3x.nn.change_max_degree_or_type(x_orig, max_degree=1, include_pseudotensors=False)
         # run through a tensor dense layer to get the dipole in the correct shape
         x_dipole = e3x.nn.TensorDense(max_degree=1)(x_dipole)
-        
-
         # x_dipole shape: (B*N, parity, 4, features) where 4 = (lmax+1)^2 = (1+1)^2
         # Index 0: l=0 (scalar), indices 1-3: l=1 (dipole, 3 components)
         # Apply Dense to reduce features dimension: (B*N, parity, 4, features) -> (B*N, parity, 4, 1)
@@ -291,12 +281,8 @@ class MessagePassingModel(nn.Module):
         )
         atomic_energies = nn.Dense(1, use_bias=False, kernel_init=jax.nn.initializers.zeros)(x)
         atomic_energies = jnp.squeeze(atomic_energies, axis=(-1, -2, -3))  # (B*N,)
-
         atomic_energies = atomic_energies + element_bias[atomic_numbers_flat]
-
         energy = atomic_energies.reshape(B, N).sum(axis=1)  # (B,)
-
-
 
         # Proxy energy for force differentiation
         return -jnp.sum(energy), energy, dipole
