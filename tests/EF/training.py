@@ -338,11 +338,10 @@ def prepare_datasets(key, num_train, num_valid, dataset):
     if forces_raw.ndim == 4 and forces_raw.shape[1] == 1:
         forces_raw = forces_raw.squeeze(axis=1)  # (num_data, N, 3)
     
-    # Load dipoles if available
+    # Load dipoles if available (key "D" in dataset)
     dipoles = None
-    if "dipoles" in dataset or "dipole" in dataset:
-        dipole_key = "dipoles" if "dipoles" in dataset else "dipole"
-        dipoles_raw = jnp.asarray(dataset[dipole_key], dtype=jnp.float32)
+    if "D" in dataset:
+        dipoles_raw = jnp.asarray(dataset["D"], dtype=jnp.float32)
         if dipoles_raw.ndim == 2 and dipoles_raw.shape[1] == 3:
             # Shape is (num_data, 3) - already correct
             dipoles = dipoles_raw
@@ -360,7 +359,7 @@ def prepare_datasets(key, num_train, num_valid, dataset):
         forces=forces_raw[train_choice],                                               # (num_train, N, 3)
     )
     if dipoles is not None:
-        train_data["dipoles"] = dipoles[train_choice]  # (num_train, 3)
+        train_data["D"] = dipoles[train_choice]  # (num_train, 3)
     
     valid_data = dict(
         atomic_numbers=jnp.asarray(dataset["Z"], dtype=jnp.int32)[valid_choice],
@@ -369,6 +368,8 @@ def prepare_datasets(key, num_train, num_valid, dataset):
         energies=jnp.asarray(dataset["E"], dtype=jnp.float32)[valid_choice],
         forces=forces_raw[valid_choice],                                               # (num_valid, N, 3)
     )
+    if dipoles is not None:
+        valid_data["D"] = dipoles[valid_choice]  # (num_valid, 3)
     return train_data, valid_data
 
 
@@ -415,9 +416,9 @@ def prepare_batches(key, data, batch_size):
             src_idx_flat=src_idx_flat,  # Pre-computed flattened indices
             batch_segments=batch_segments,
         )
-        # Add dipoles if available
-        if "dipoles" in data and data["dipoles"] is not None:
-            batch_dict["dipoles"] = data["dipoles"][perm]  # (B, 3)
+        # Add dipoles if available (key "D" in data)
+        if "D" in data and data["D"] is not None:
+            batch_dict["dipoles"] = data["D"][perm]  # (B, 3)
         batches.append(batch_dict)
     return batches
 
@@ -465,7 +466,7 @@ def train_step(model_apply, optimizer_update, batch, batch_size, opt_state, para
         # Force loss
         force_loss = mean_squared_loss(forces, batch["forces"])
         
-        # Dipole loss (if targets available)
+        # Dipole loss (if targets available, key "D" in batch)
         dipole_loss = 0.0
         if "dipoles" in batch:
             dipole_loss = mean_squared_loss(dipole, batch["dipoles"])
@@ -536,12 +537,13 @@ def eval_step(model_apply, batch, batch_size, params, energy_weight=1.0, forces_
     if "dipoles" in batch:
         total_loss = total_loss + dipole_loss
     
+
     # Compute MAEs
     energy_mae = mean_absolute_error(energy, batch["energies"])
     forces_mae = mean_absolute_error_forces(forces, batch["forces"])
     dipole_mae = mean_absolute_error(dipole, batch["dipoles"]) if "dipoles" in batch else 0.0
     
-    return total_loss, energy_loss, force_loss, energy_mae, forces_mae, dipole_mae
+    return total_loss, energy_loss, force_loss, dipole_loss, energy_mae, forces_mae, dipole_mae
 
 
 def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, batch_size, 
@@ -688,12 +690,13 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
         valid_loss = 0.0
         valid_energy_loss = 0.0
         valid_force_loss = 0.0
+        valid_dipole_loss = 0.0
         valid_energy_mae = 0.0
         valid_forces_mae = 0.0
         valid_dipole_mae = 0.0
         # Use EMA parameters for validation (as in physnetjax)
         for i, batch in enumerate(valid_batches):
-            loss, energy_loss, force_loss, energy_mae, forces_mae, dipole_mae = eval_step(
+            loss, energy_loss, force_loss, dipole_loss_batch, energy_mae, forces_mae, dipole_mae = eval_step(
                 model_apply=model.apply,
                 batch=batch,
                 batch_size=batch_size,
@@ -704,6 +707,7 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
             valid_loss += (loss - valid_loss) / (i + 1)
             valid_energy_loss += (energy_loss - valid_energy_loss) / (i + 1)
             valid_force_loss += (force_loss - valid_force_loss) / (i + 1)
+            valid_dipole_loss += (dipole_loss_batch - valid_dipole_loss) / (i + 1)
             valid_energy_mae += (energy_mae - valid_energy_mae) / (i + 1)
             valid_forces_mae += (forces_mae - valid_forces_mae) / (i + 1)
             valid_dipole_mae += (dipole_mae - valid_dipole_mae) / (i + 1)
@@ -732,6 +736,8 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
         print(f"    forces mae [eV/Å]       {train_forces_mae: 8.6f} {valid_forces_mae: 8.6f}")
         if train_dipole_mae > 0.0 or valid_dipole_mae > 0.0:
             print(f"    dipole mae [Debye]      {train_dipole_mae: 8.6f} {valid_dipole_mae: 8.6f}")
+            print(f"    dipole loss [a.u.]      {train_dipole_mae**2: 8.6f} {valid_dipole_loss: 8.6f}")
+            print(f"    dipole loss [a.u.]     {train_dipole_mae**2: 8.6f} {valid_dipole_mae**2: 8.6f}")
         print(f"    LR scale: {lr_scale: 8.6f}, effective LR: {learning_rate * lr_scale: 8.6f}")
         if early_stopping_patience is not None:
             print(f"    best valid loss: {best_valid_loss: 8.6f}, patience: {patience_counter}/{early_stopping_patience}")

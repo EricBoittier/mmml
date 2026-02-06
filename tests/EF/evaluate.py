@@ -785,10 +785,9 @@ def main():
         print("Warning: No forces (F) found in dataset. Force evaluation will be skipped.")
         test_data['forces'] = None
     
-    # Handle dipoles: dipoles or dipole key
-    if 'dipoles' in dataset.files or 'dipole' in dataset.files:
-        dipole_key = 'dipoles' if 'dipoles' in dataset.files else 'dipole'
-        dipoles_raw = jnp.asarray(dataset[dipole_key], dtype=jnp.float32)
+    # Handle dipoles: key "D" in dataset
+    if 'D' in dataset.files:
+        dipoles_raw = jnp.asarray(dataset['D'], dtype=jnp.float32)
         if dipoles_raw.ndim == 3 and dipoles_raw.shape[1] == 1:
             dipoles_raw = dipoles_raw.squeeze(axis=1)  # (num_data, 3)
         
