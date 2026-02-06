@@ -11,9 +11,49 @@ A React-based molecular viewer using miew-react to visualize molecules in the br
 - **Property Charts**: Interactive plots of properties over trajectory frames
 - **Dark Mode**: Automatic dark mode support
 
+## Installation
+
+### 1. Install MMML Package
+
+The GUI is part of the MMML package. Install it using pip:
+
+```bash
+# From the MMML root directory
+pip install -e .
+
+# Or install from a distribution
+pip install mmml
+```
+
+This installs the `mmml` CLI command and all Python dependencies, including FastAPI and uvicorn (required for the GUI).
+
+### 2. Install Frontend Dependencies
+
+The React frontend requires Node.js and npm. Install the frontend dependencies:
+
+```bash
+cd mmml/gui/viewer
+npm install
+```
+
+### 3. Build Frontend (for Production)
+
+For production use, build the frontend:
+
+```bash
+cd mmml/gui/viewer
+npm run build
+```
+
+This creates optimized production files in `mmml/gui/viewer/dist/`. The `mmml gui` command will automatically serve these files.
+
+**Note**: If you skip this step, you can still use the GUI in development mode (see below).
+
 ## Quick Start
 
-### Option 1: Using the CLI (Recommended)
+### Production Mode (Recommended)
+
+After building the frontend (step 3 above), you can run the GUI:
 
 ```bash
 # View all molecular files in a directory
@@ -26,21 +66,22 @@ mmml gui --file simulation.npz
 mmml gui --data-dir ./data --port 8080
 ```
 
-### Option 2: Development Mode
+The server will start and automatically open your browser. The GUI will be available at `http://localhost:8000` (or your specified port).
 
-For development with hot-reload:
+### Development Mode
+
+For development with hot-reload (no need to rebuild after code changes):
 
 ```bash
-# Terminal 1: Start the API server
+# Terminal 1: Start the API server (dev mode)
 mmml gui --data-dir ./data --dev
 
 # Terminal 2: Start the React dev server
 cd mmml/gui/viewer
-npm install
 npm run dev
 ```
 
-Then open http://localhost:5173 in your browser.
+Then open http://localhost:5173 in your browser. The React dev server will proxy API requests to the FastAPI server.
 
 ## Building the Frontend
 

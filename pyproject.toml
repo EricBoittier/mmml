@@ -58,6 +58,9 @@ dependencies = [
     "plotnine>=0.15.1",
     "patchworklib>=0.6.6",
     "pillow>=12.0.0",
+    # Web/API (for GUI)
+    "fastapi",
+    "uvicorn",
 ]
 
 [project.optional-dependencies]
