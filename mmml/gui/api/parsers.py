@@ -359,6 +359,9 @@ class MolecularFileParser:
         forces = None
         if 'F' in data:
             F = np.asarray(data['F'][index], dtype=np.float64)
+            # Handle extra dimensions in F (e.g., shape (1, n_atoms, 3) -> (n_atoms, 3))
+            while F.ndim > 2 and F.shape[0] == 1:
+                F = F.squeeze(axis=0)
             forces = F[mask].tolist()
         
         dipole = None
@@ -370,6 +373,9 @@ class MolecularFileParser:
         charges = None
         if 'mono' in data:
             mono = np.asarray(data['mono'][index], dtype=np.float64)
+            # Handle extra dimensions in mono (e.g., shape (1, n_atoms) -> (n_atoms,))
+            while mono.ndim > 1 and mono.shape[0] == 1:
+                mono = mono.squeeze(axis=0)
             charges = mono[mask].tolist()
         
         electric_field = None
@@ -460,16 +466,24 @@ class MolecularFileParser:
             Z = data['Z']
             N = data.get('N')
             
+            # Determine number of frames (use same logic as frame_indices)
+            n_frames = len(data['E']) if 'E' in data else len(data['R'])
+            
             max_forces = []
             mean_forces = []
             
-            for i in range(len(F)):
+            for i in range(n_frames):
                 frame_F = np.asarray(F[i], dtype=np.float64)
+                # Handle extra dimensions in frame_F (e.g., shape (1, n_atoms, 3) -> (n_atoms, 3))
+                while frame_F.ndim > 2 and frame_F.shape[0] == 1:
+                    frame_F = frame_F.squeeze(axis=0)
+                
                 frame_Z = np.asarray(Z[i] if len(Z.shape) > 1 else Z, dtype=np.int64)
                 mask = frame_Z > 0
                 if N is not None:
                     mask = np.zeros_like(frame_Z, dtype=bool)
                     mask[:int(N[i])] = True
+                    mask = mask & (frame_Z > 0)
                 
                 frame_F = frame_F[mask]
                 force_mags = np.linalg.norm(frame_F, axis=1)

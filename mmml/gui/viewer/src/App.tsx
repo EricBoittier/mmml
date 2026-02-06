@@ -48,11 +48,17 @@ function App() {
   const [showForces, setShowForces] = useState(true);
   
   // Panel visibility
-  const [showStructurePanel, setShowStructurePanel] = useState(true);
+  const [showStructurePanel, setShowStructurePanel] = useState(false);
   const [showVectorPanel, setShowVectorPanel] = useState(true);
   
   // Sorting options
-  type SortOrder = 'frame' | 'energy_asc' | 'energy_desc';
+  type SortOrder = 
+    | 'frame' 
+    | 'energy_asc' | 'energy_desc'
+    | 'force_max_asc' | 'force_max_desc'
+    | 'force_mean_asc' | 'force_mean_desc'
+    | 'dipole_asc' | 'dipole_desc'
+    | 'efield_asc' | 'efield_desc';
   const [sortOrder, setSortOrder] = useState<SortOrder>('frame');
   
   // Compute sorted frame indices based on sort order
@@ -66,15 +72,35 @@ function App() {
       return indices;
     }
     
-    const energies = properties.energy;
-    if (!energies || energies.length !== n) {
-      return indices; // Fall back to frame order if no energy data
+    let values: number[] | undefined;
+    let ascending = true;
+    
+    // Determine which property to sort by
+    if (sortOrder.startsWith('energy_')) {
+      values = properties.energy;
+      ascending = sortOrder === 'energy_asc';
+    } else if (sortOrder.startsWith('force_max_')) {
+      values = properties.force_max;
+      ascending = sortOrder === 'force_max_asc';
+    } else if (sortOrder.startsWith('force_mean_')) {
+      values = properties.force_mean;
+      ascending = sortOrder === 'force_mean_asc';
+    } else if (sortOrder.startsWith('dipole_')) {
+      values = properties.dipole_magnitude;
+      ascending = sortOrder === 'dipole_asc';
+    } else if (sortOrder.startsWith('efield_')) {
+      values = properties.efield_magnitude;
+      ascending = sortOrder === 'efield_asc';
     }
     
-    // Sort indices by energy
+    if (!values || values.length !== n) {
+      return indices; // Fall back to frame order if no data
+    }
+    
+    // Sort indices by the selected property
     const sorted = [...indices].sort((a, b) => {
-      const diff = energies[a] - energies[b];
-      return sortOrder === 'energy_asc' ? diff : -diff;
+      const diff = values![a] - values![b];
+      return ascending ? diff : -diff;
     });
     
     return sorted;
@@ -91,6 +117,22 @@ function App() {
     if (!sortedFrameIndices) return actualFrame;
     return sortedFrameIndices.indexOf(actualFrame);
   }, [sortedFrameIndices]);
+
+  // Validate and reset sort order if property becomes unavailable
+  useEffect(() => {
+    if (!properties || sortOrder === 'frame') return;
+    
+    const isValid = 
+      (sortOrder.startsWith('energy_') && properties.energy) ||
+      (sortOrder.startsWith('force_max_') && properties.force_max) ||
+      (sortOrder.startsWith('force_mean_') && properties.force_mean) ||
+      (sortOrder.startsWith('dipole_') && properties.dipole_magnitude) ||
+      (sortOrder.startsWith('efield_') && properties.efield_magnitude);
+    
+    if (!isValid) {
+      setSortOrder('frame');
+    }
+  }, [properties, sortOrder]);
 
   // Load file list on mount
   useEffect(() => {
@@ -359,7 +401,8 @@ function App() {
                 <div className="w-px h-5 bg-slate-300 dark:bg-slate-600" />
                 
                 {/* Sort order selector */}
-                {properties?.energy && (
+                {(properties?.energy || properties?.force_max || properties?.force_mean || 
+                  properties?.dipole_magnitude || properties?.efield_magnitude) && (
                   <div className="flex items-center gap-2">
                     <label className="text-sm text-slate-600 dark:text-slate-400">Order by:</label>
                     <select
@@ -368,8 +411,36 @@ function App() {
                       className="text-sm bg-slate-100 dark:bg-slate-700 border-none rounded px-2 py-1 text-slate-700 dark:text-slate-300"
                     >
                       <option value="frame">Frame Index</option>
-                      <option value="energy_asc">Energy (Low to High)</option>
-                      <option value="energy_desc">Energy (High to Low)</option>
+                      {properties?.energy && (
+                        <>
+                          <option value="energy_asc">Energy (Low to High)</option>
+                          <option value="energy_desc">Energy (High to Low)</option>
+                        </>
+                      )}
+                      {properties?.force_max && (
+                        <>
+                          <option value="force_max_asc">Max Force (Low to High)</option>
+                          <option value="force_max_desc">Max Force (High to Low)</option>
+                        </>
+                      )}
+                      {properties?.force_mean && (
+                        <>
+                          <option value="force_mean_asc">Mean Force (Low to High)</option>
+                          <option value="force_mean_desc">Mean Force (High to Low)</option>
+                        </>
+                      )}
+                      {properties?.dipole_magnitude && (
+                        <>
+                          <option value="dipole_asc">Dipole (Low to High)</option>
+                          <option value="dipole_desc">Dipole (High to Low)</option>
+                        </>
+                      )}
+                      {properties?.efield_magnitude && (
+                        <>
+                          <option value="efield_asc">E-Field (Low to High)</option>
+                          <option value="efield_desc">E-Field (High to Low)</option>
+                        </>
+                      )}
                     </select>
                   </div>
                 )}

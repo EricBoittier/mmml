@@ -18,8 +18,11 @@ os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".99"
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
+import argparse
 import functools
 import json
+import uuid
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -27,15 +30,8 @@ import pandas as pd
 import jax
 import jax.numpy as jnp
 
-# Disable CUDA graph capture to avoid "library was not initialized" errors
-# This makes training slower but more stable
-# CUDA graph capture is incompatible with certain computation patterns
-try:
-    jax.config.update("jax_cuda_graph_level", 0)  # Disable CUDA graphs if supported
-except:
-    pass  # Not available in this JAX version
-
 import optax
+from optax import tree_utils as otu
 from flax import linen as nn
 
 import e3x
@@ -44,24 +40,31 @@ import matplotlib.pyplot as plt  # optional; kept because you had it
 import ase  # optional; kept because you had it
 from ase.visualize import view as view  # optional; kept because you had it
 
+# Disable CUDA graph capture to avoid "library was not initialized" errors
+# This makes training slower but more stable
+# CUDA graph capture is incompatible with certain computation patterns
+try:
+    jax.config.update("jax_cuda_graph_level", 0)  # Disable CUDA graphs if supported
+except:
+    print("CUDA graph capture is not supported in this JAX version")
+    pass  # Not available in this JAX version
+
+
+import json
+from mmml.utils.model_checkpoint import to_jsonable
+
 
 print("JAX devices:", jax.devices())
+
+
+import lovely_jax as lj
+lj.monkey_patch()
 
 # -------------------------
 # Load dataset
 # -------------------------
-dataset = np.load("dataset1.npz", allow_pickle=True)
-# Expected keys (based on your code): 'Z', 'R', 'Ef', 'E'
-# Z: (num_data, N) int
-# R: (num_data, N, 3) float
-# Ef: (num_data, 3) float (or (num_data, 1, 3) — we assume (num_data, 3))
-# E: (num_data,) or (num_data, 1)
+dataset = np.load("data-full.npz", allow_pickle=True)
 print("Dataset keys:", dataset.files)
-print("Dataset shapes:")
-print(f"  R:  {dataset['R'].shape}")
-print(f"  Z:  {dataset['Z'].shape}")
-print(f"  Ef: {dataset['Ef'].shape}")
-print(f"  E:  {dataset['E'].shape}")
 
 
 # -------------------------
@@ -123,8 +126,9 @@ class MessagePassingModel(nn.Module):
         # Build an EF tensor of shape compatible with e3x.nn.Tensor()
         # e3x format is (num_atoms, parity, (lmax+1)^2, features)
         # Start with (B, 4) -> expand to (B*N, 2, 4, features) for parity=2 (pseudotensors)
-        ones = jnp.ones((B, 1), dtype=positions_flat.dtype)
-        xEF = jnp.concatenate((ones, Ef), axis=-1)   # (B, 4) - [1, Ef_x, Ef_y, Ef_z]
+        pad_ef = jnp.zeros((B, 1), dtype=positions_flat.dtype)
+
+        xEF = jnp.concatenate((pad_ef, Ef), axis=-1)   # (B, 4) - [1, Ef_x, Ef_y, Ef_z]
         xEF = xEF[:, None, :, None]                  # (B, 1, 4, 1)
         xEF = jnp.tile(xEF, (1, 1, 1, self.features)) # (B, 1, 4, features)
         # Expand to per-atom level: (B, 1, 4, features) -> (B, N, 1, 4, features) -> (B*N, 1, 4, features)
@@ -161,13 +165,16 @@ class MessagePassingModel(nn.Module):
             x = e3x.nn.silu(x)
             x = e3x.nn.Dense(self.features, kernel_init=jax.nn.initializers.zeros)(x)
             x = e3x.nn.add(x, y)
-
+            x = e3x.nn.silu(x)
             # Couple EF - xEF already has correct shape (B*N, 2, 4, features) matching x
-            xEF_t = e3x.nn.Tensor()(x, xEF)
-            x = e3x.nn.add(x, xEF_t)
-            x = e3x.nn.silu(x)
+            xEF = e3x.nn.Tensor()(x, xEF)
+            x = e3x.nn.add(x, xEF)
             x = e3x.nn.TensorDense(max_degree=self.max_degree)(x)
+            x = e3x.nn.add(x, xEF)
             x = e3x.nn.silu(x)
+
+        x = e3x.nn.silu(x)
+
         # Reduce to scalars per atom
         x = e3x.nn.change_max_degree_or_type(x, max_degree=0, include_pseudotensors=False)
 
@@ -178,6 +185,10 @@ class MessagePassingModel(nn.Module):
             (self.max_atomic_number + 1,)
         )
 
+
+        for i in range(3):
+            x = e3x.nn.Dense(self.features)(x)
+            x = e3x.nn.silu(x)
         atomic_energies = nn.Dense(1, use_bias=False, kernel_init=jax.nn.initializers.zeros)(x)
         atomic_energies = jnp.squeeze(atomic_energies, axis=(-1, -2, -3))  # (B*N,)
 
@@ -321,8 +332,8 @@ def prepare_batches(key, data, batch_size):
 # -------------------------
 # Train / Eval steps
 # -------------------------
-@functools.partial(jax.jit, static_argnames=("model_apply", "optimizer_update", "batch_size"))
-def train_step(model_apply, optimizer_update, batch, batch_size, opt_state, params):
+@functools.partial(jax.jit, static_argnames=("model_apply", "optimizer_update", "batch_size", "ema_decay"))
+def train_step(model_apply, optimizer_update, batch, batch_size, opt_state, params, ema_params, transform_state, ema_decay=0.999):
     def loss_fn(params):
         energy = model_apply(
             params,
@@ -341,10 +352,20 @@ def train_step(model_apply, optimizer_update, batch, batch_size, opt_state, para
 
     (loss, energy), grad = jax.value_and_grad(loss_fn, has_aux=True)(params)
     updates, opt_state = optimizer_update(grad, opt_state, params)
+    
+    # Apply learning rate scaling from reduce_on_plateau transform
+    updates = otu.tree_scalar_mul(transform_state.scale, updates)
     params = optax.apply_updates(params, updates)
 
+    # Update EMA parameters
+    ema_params = jax.tree_util.tree_map(
+        lambda ema, new: ema_decay * ema + (1 - ema_decay) * new,
+        ema_params,
+        params,
+    )
+
     mae = mean_absolute_error(energy, batch["energies"])
-    return params, opt_state, loss, mae
+    return params, ema_params, opt_state, loss, mae
 
 
 @functools.partial(jax.jit, static_argnames=("model_apply", "batch_size"))
@@ -366,8 +387,70 @@ def eval_step(model_apply, batch, batch_size, params):
     return loss, mae
 
 
-def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, batch_size):
-    optimizer = optax.adam(learning_rate)
+def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, batch_size, 
+                clip_norm=10.0, ema_decay=0.999, early_stopping_patience=None, early_stopping_min_delta=0.0,
+                reduce_on_plateau_patience=5, reduce_on_plateau_cooldown=5, reduce_on_plateau_factor=0.9,
+                reduce_on_plateau_rtol=1e-4, reduce_on_plateau_accumulation_size=5, reduce_on_plateau_min_scale=0.01):
+    """
+    Train model with EMA, gradient clipping, early stopping, and learning rate reduction on plateau.
+    
+    Parameters
+    ----------
+    key : jax.random.PRNGKey
+        Random key for initialization and shuffling
+    model : MessagePassingModel
+        Model instance
+    train_data : dict
+        Training data dictionary
+    valid_data : dict
+        Validation data dictionary
+    num_epochs : int
+        Maximum number of training epochs
+    learning_rate : float
+        Learning rate
+    batch_size : int
+        Batch size
+    clip_norm : float, optional
+        Gradient clipping norm (default: 10.0)
+    ema_decay : float, optional
+        EMA decay factor (default: 0.999)
+    early_stopping_patience : int, optional
+        Number of epochs to wait before early stopping (default: None, disabled)
+    early_stopping_min_delta : float, optional
+        Minimum change to qualify as an improvement (default: 0.0)
+    reduce_on_plateau_patience : int, optional
+        Patience for reduce on plateau (default: 5)
+    reduce_on_plateau_cooldown : int, optional
+        Cooldown for reduce on plateau (default: 5)
+    reduce_on_plateau_factor : float, optional
+        Factor to reduce LR by (default: 0.9)
+    reduce_on_plateau_rtol : float, optional
+        Relative tolerance for plateau detection (default: 1e-4)
+    reduce_on_plateau_accumulation_size : int, optional
+        Accumulation size for plateau detection (default: 5)
+    reduce_on_plateau_min_scale : float, optional
+        Minimum scale factor (default: 0.01)
+    
+    Returns
+    -------
+    params : dict
+        Final EMA parameters (best validation loss)
+    """
+    # Create optimizer with gradient clipping
+    optimizer = optax.chain(
+        optax.clip_by_global_norm(clip_norm),
+        optax.adam(learning_rate)
+    )
+    
+    # Create reduce on plateau transform
+    transform = optax.contrib.reduce_on_plateau(
+        patience=reduce_on_plateau_patience,
+        cooldown=reduce_on_plateau_cooldown,
+        factor=reduce_on_plateau_factor,
+        rtol=reduce_on_plateau_rtol,
+        accumulation_size=reduce_on_plateau_accumulation_size,
+        min_scale=reduce_on_plateau_min_scale,
+    )
 
     # Initialize params with a single batch item (B=1) but correct ranks
     key, init_key = jax.random.split(key)
@@ -401,10 +484,25 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
         batch_size=1,  # Init always uses batch_size=1
     )
     opt_state = optimizer.init(params)
+    
+    # Initialize transform state for reduce on plateau
+    transform_state = transform.init(params)
+    
+    # Initialize EMA parameters
+    ema_params = params
 
     # Validation batches prepared once
     key, valid_key = jax.random.split(key)
     valid_batches = prepare_batches(valid_key, valid_data, batch_size)
+
+    print("Validation batches prepared")
+    for k in valid_batches[0].keys():
+        print(f"  {k}: {valid_batches[0][k]}")
+
+    # Early stopping tracking
+    best_valid_loss = float('inf')
+    patience_counter = 0
+    best_ema_params = ema_params
 
     for epoch in range(1, num_epochs + 1):
         key, shuffle_key = jax.random.split(key)
@@ -413,128 +511,255 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
         train_loss = 0.0
         train_mae = 0.0
         for i, batch in enumerate(train_batches):
-            params, opt_state, loss, mae = train_step(
+            params, ema_params, opt_state, loss, mae = train_step(
                 model_apply=model.apply,
                 optimizer_update=optimizer.update,
                 batch=batch,
                 batch_size=batch_size,
                 opt_state=opt_state,
                 params=params,
+                ema_params=ema_params,
+                transform_state=transform_state,
+                ema_decay=ema_decay,
             )
             train_loss += (loss - train_loss) / (i + 1)
             train_mae += (mae - train_mae) / (i + 1)
 
         valid_loss = 0.0
         valid_mae = 0.0
+        # Use EMA parameters for validation (as in physnetjax)
         for i, batch in enumerate(valid_batches):
             loss, mae = eval_step(
                 model_apply=model.apply,
                 batch=batch,
                 batch_size=batch_size,
-                params=params,
+                params=ema_params,
             )
             valid_loss += (loss - valid_loss) / (i + 1)
             valid_mae += (mae - valid_mae) / (i + 1)
 
+        # Update reduce on plateau transform state
+        _, transform_state = transform.update(
+            updates=params, state=transform_state, value=valid_loss
+        )
+        lr_scale = transform_state.scale
+
+        # Early stopping logic
+        improved = False
+        if valid_loss < best_valid_loss - early_stopping_min_delta:
+            best_valid_loss = valid_loss
+            best_ema_params = ema_params
+            patience_counter = 0
+            improved = True
+        else:
+            patience_counter += 1
+
+        train_mae = train_mae * 23.0605
+        valid_mae = valid_mae * 23.0605
+
         print(f"epoch: {epoch:3d}                    train:   valid:")
         print(f"    loss [a.u.]             {train_loss: 8.6f} {valid_loss: 8.6f}")
         print(f"    energy mae [kcal/mol]   {train_mae: 8.6f} {valid_mae: 8.6f}")
+        print(f"    LR scale: {lr_scale: 8.6f}, effective LR: {learning_rate * lr_scale: 8.6f}")
+        if early_stopping_patience is not None:
+            print(f"    best valid loss: {best_valid_loss: 8.6f}, patience: {patience_counter}/{early_stopping_patience}")
+            if improved:
+                print(f"    ✓ Improved! Saving best model.")
+        
+        # Early stopping check
+        if early_stopping_patience is not None and patience_counter >= early_stopping_patience:
+            print(f"\nEarly stopping triggered after {epoch} epochs.")
+            print(f"Best validation loss: {best_valid_loss: 8.6f} at epoch {epoch - patience_counter}")
+            break
 
-    return params
-
-
-# -------------------------
-# Hyperparameters
-# -------------------------
-features = 32
-max_degree = 2
-num_iterations = 2
-num_basis_functions = 64
-cutoff = 2.0
-
-num_train = 8000
-num_valid = 2000
-
-num_epochs = 1000
-learning_rate = 0.0005
-batch_size = 100
-
-# -------------------------
-# Run
-# -------------------------
-data_key, train_key = jax.random.split(jax.random.PRNGKey(0), 2)
-
-train_data, valid_data = prepare_datasets(
-    data_key, num_train=num_train, num_valid=num_valid, dataset=dataset
-)
+    return best_ema_params
 
 
-print("\nPrepared data shapes:")
-print(f"  train atomic_numbers: {train_data['atomic_numbers'].shape}")
-print(f"  train positions:      {train_data['positions'].shape}")
-print(f"  train electric_field: {train_data['electric_field'].shape}")
-print(f"  train energies:       {train_data['energies'].shape}")
+if __name__ == "__main__":
 
-message_passing_model = MessagePassingModel(
-    features=features,
-    max_degree=max_degree,
-    num_iterations=num_iterations,
-    num_basis_functions=num_basis_functions,
-    cutoff=cutoff,
-)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--data", type=str, default="data-full.npz")
+    parser.add_argument("--features", type=int, default=64)
+    parser.add_argument("--max_degree", type=int, default=2)
+    parser.add_argument("--num_iterations", type=int, default=2)
+    parser.add_argument("--num_basis_functions", type=int, default=64)
+    parser.add_argument("--cutoff", type=float, default=10.0)
+    parser.add_argument("--num_train", type=int, default=8000)
+    parser.add_argument("--num_valid", type=int, default=2000)
+    parser.add_argument("--num_epochs", type=int, default=100)
+    parser.add_argument("--learning_rate", type=float, default=0.0003)
+    parser.add_argument("--batch_size", type=int, default=64)
+    parser.add_argument("--clip_norm", type=float, default=100.0)
+    parser.add_argument("--ema_decay", type=float, default=0.5)
+    parser.add_argument("--early_stopping_patience", type=int, default=None)
+    parser.add_argument("--early_stopping_min_delta", type=float, default=0.0)
+    parser.add_argument("--reduce_on_plateau_patience", type=int, default=5)
+    parser.add_argument("--reduce_on_plateau_cooldown", type=int, default=5)
+    parser.add_argument("--reduce_on_plateau_factor", type=float, default=0.9)
+    parser.add_argument("--reduce_on_plateau_rtol", type=float, default=1e-4)
+    parser.add_argument("--reduce_on_plateau_accumulation_size", type=int, default=5)
+    parser.add_argument("--reduce_on_plateau_min_scale", type=float, default=0.01)
+    args = parser.parse_args()
 
-params = train_model(
-    key=train_key,
-    model=message_passing_model,
-    train_data=train_data,
-    valid_data=valid_data,
-    num_epochs=num_epochs,
-    learning_rate=learning_rate,
-    batch_size=batch_size,
-)
+    print("Arguments:")
+    for arg in vars(args):
+        print(f"  {arg}: {getattr(args, arg)}")
 
-import json
-from mmml.utils.model_checkpoint import to_jsonable
-params_dict = to_jsonable(params)
-with open('params.json', 'w') as f:
-    json.dump(params_dict, f)
 
-"""
-Set up an inference function that takes in a batch of data and returns the predicted energies
-"""
-def inference_step(model_apply, batch, batch_size, params):
-    energy = model_apply(
-        params,
-        atomic_numbers=batch["atomic_numbers"],
-        positions=batch["positions"],
-        Ef=batch["electric_field"],
-        dst_idx=batch["dst_idx"],
-        src_idx=batch["src_idx"],
-        dst_idx_flat=batch["dst_idx_flat"],
-        src_idx_flat=batch["src_idx_flat"],
-        batch_segments=batch["batch_segments"],
-        batch_size=batch_size,
+    # Training hyperparameters
+    clip_norm = 10000.0  # Gradient clipping norm
+    ema_decay = 0.5  # EMA decay factor
+    early_stopping_patience = None  # Number of epochs to wait before early stopping (None to disable)
+    early_stopping_min_delta = 0.0  # Minimum change to qualify as improvement
+
+    # Reduce on plateau hyperparameters
+    reduce_on_plateau_patience = 5  # Patience for reduce on plateau
+    reduce_on_plateau_cooldown = 5  # Cooldown for reduce on plateau
+    reduce_on_plateau_factor = 0.9  # Factor to reduce LR by
+    reduce_on_plateau_rtol = 1e-4  # Relative tolerance for plateau detection
+    reduce_on_plateau_accumulation_size = 5  # Accumulation size for plateau detection
+    reduce_on_plateau_min_scale = 0.01  # Minimum scale factor
+
+    # print the hyperparameters
+    print("Hyperparameters:")
+    print(f"  features: {args.features}")
+    print(f"  max_degree: {args.max_degree}")
+    print(f"  num_iterations: {args.num_iterations}")
+    print(f"  num_basis_functions: {args.num_basis_functions}")
+    print(f"  cutoff: {args.cutoff}")
+    print(f"  num_train: {args. num_train}")
+    print(f"  num_valid: {args.num_valid}")
+    print(f"  num_epochs: {args.num_epochs}")
+    print(f"  learning_rate: {args.learning_rate}")
+    print(f"  batch_size: {args.batch_size}")
+    print(f"  clip_norm: {args.clip_norm}")
+    print(f"  ema_decay: {args.ema_decay}")
+    print(f"  early_stopping_patience: {args.early_stopping_patience}")
+    print(f"  early_stopping_min_delta: {args.early_stopping_min_delta}")
+    print(f"  reduce_on_plateau_patience: {args.reduce_on_plateau_patience}")
+    print(f"  reduce_on_plateau_cooldown: {args.reduce_on_plateau_cooldown}")
+    print(f"  reduce_on_plateau_factor: {args.reduce_on_plateau_factor}")
+    print(f"  reduce_on_plateau_rtol: {args.reduce_on_plateau_rtol}")
+    print(f"  reduce_on_plateau_accumulation_size: {args.reduce_on_plateau_accumulation_size}")
+    print(f"  reduce_on_plateau_min_scale: {args.reduce_on_plateau_min_scale}")
+
+
+    # -------------------------
+    # Run
+    # -------------------------
+    data_key, train_key = jax.random.split(jax.random.PRNGKey(0), 2)
+
+    # Load dataset
+    dataset = np.load(args.data, allow_pickle=True)
+    
+    train_data, valid_data = prepare_datasets(
+        data_key, num_train=args.num_train, num_valid=args.num_valid, dataset=dataset
     )
-    return energy
 
-valid_key, valid_key = jax.random.split(jax.random.PRNGKey(0), 2)
-valid_batches = prepare_batches(valid_key, valid_data, batch_size)
-predicted_energies = []
-true_energies = []
-for valid_batch in valid_batches:
-    predicted_energy = inference_step(
-        model_apply=message_passing_model.apply,
-        batch=valid_batch,
-        batch_size=batch_size,
-        params=params,
+
+    print("\nPrepared data shapes:")
+    print(f"  train atomic_numbers: {train_data['atomic_numbers'].shape}")
+    print(f"  train positions:      {train_data['positions'].shape}")
+    print(f"  train electric_field: {train_data['electric_field'].shape}")
+    print(f"  train energies:       {train_data['energies'].shape}")
+
+    message_passing_model = MessagePassingModel(
+        features=args.features,
+        max_degree=args.max_degree,
+        num_iterations=args.num_iterations,
+        num_basis_functions=args.num_basis_functions,
+        cutoff=args.cutoff,
     )
-    predicted_energies.append(predicted_energy)
-    true_energies.append(valid_batch["energies"])
 
+    # Generate UUID for this training run
+    run_uuid = str(uuid.uuid4())
+    print(f"\n{'='*60}")
+    print(f"Training Run UUID: {run_uuid}")
+    print(f"{'='*60}\n")
 
-predicted_energies = jnp.concatenate(predicted_energies, axis=0)
-true_energies = jnp.concatenate(true_energies, axis=0)
-print("predicted_energies shape: ", predicted_energies.shape)
-print("true_energies shape: ", true_energies.shape)
-print("MAE: ", jnp.mean(jnp.abs(predicted_energies - true_energies)))
-print("RMSE: ", jnp.sqrt(jnp.mean((predicted_energies - true_energies)**2)))
+    params = train_model(
+        key=train_key,
+        model=message_passing_model,
+        train_data=train_data,
+        valid_data=valid_data,
+        num_epochs=args.num_epochs,
+        learning_rate=args.learning_rate,
+        batch_size=args.batch_size,
+        clip_norm=args.clip_norm,
+        ema_decay=args.ema_decay,
+        early_stopping_patience=args.early_stopping_patience,
+        early_stopping_min_delta=args.early_stopping_min_delta,
+        reduce_on_plateau_patience=args.reduce_on_plateau_patience,
+        reduce_on_plateau_cooldown=args.reduce_on_plateau_cooldown,
+        reduce_on_plateau_factor=args.reduce_on_plateau_factor,
+        reduce_on_plateau_rtol=args.reduce_on_plateau_rtol,
+        reduce_on_plateau_accumulation_size=args.reduce_on_plateau_accumulation_size,
+        reduce_on_plateau_min_scale=args.reduce_on_plateau_min_scale,
+    )
+
+    # Prepare model config
+    model_config = {
+        'uuid': run_uuid,
+        'model': {
+            'features': args.features,
+            'max_degree': args.max_degree,
+            'num_iterations': args.num_iterations,
+            'num_basis_functions': args.num_basis_functions,
+            'cutoff': args.cutoff,
+            'max_atomic_number': 55,  # Fixed in model
+            'include_pseudotensors': True,  # Fixed in model
+        },
+        'training': {
+            'num_train': args.num_train,
+            'num_valid': args.num_valid,
+            'num_epochs': args.num_epochs,
+            'learning_rate': args.learning_rate,
+            'batch_size': args.batch_size,
+            'clip_norm': args.clip_norm,
+            'ema_decay': args.ema_decay,
+            'early_stopping_patience': args.early_stopping_patience,
+            'early_stopping_min_delta': args.early_stopping_min_delta,
+            'reduce_on_plateau_patience': args.reduce_on_plateau_patience,
+            'reduce_on_plateau_cooldown': args.reduce_on_plateau_cooldown,
+            'reduce_on_plateau_factor': args.reduce_on_plateau_factor,
+            'reduce_on_plateau_rtol': args.reduce_on_plateau_rtol,
+            'reduce_on_plateau_accumulation_size': args.reduce_on_plateau_accumulation_size,
+            'reduce_on_plateau_min_scale': args.reduce_on_plateau_min_scale,
+        },
+        'data': {
+            'dataset': args.data,
+        }
+    }
+
+    # Save config file
+    config_filename = f'config-{run_uuid}.json'
+    with open(config_filename, 'w') as f:
+        json.dump(model_config, f, indent=2)
+    print(f"\n✓ Model config saved to {config_filename}")
+
+    # Save parameters with UUID
+    params_filename = f'params-{run_uuid}.json'
+    params_dict = to_jsonable(params)
+    with open(params_filename, 'w') as f:
+        json.dump(params_dict, f)
+    print(f"✓ Parameters saved to {params_filename}")
+
+    # Also save symlinks for convenience (params.json and config.json)
+    try:
+        if Path('params.json').exists():
+            Path('params.json').unlink()
+        if Path('config.json').exists():
+            Path('config.json').unlink()
+        Path('params.json').symlink_to(params_filename)
+        Path('config.json').symlink_to(config_filename)
+        print(f"✓ Created symlinks: params.json -> {params_filename}")
+        print(f"✓ Created symlinks: config.json -> {config_filename}")
+    except Exception as e:
+        print(f"Note: Could not create symlinks: {e}")
+
+    print(f"\n{'='*60}")
+    print(f"Training complete!")
+    print(f"UUID: {run_uuid}")
+    print(f"Config: {config_filename}")
+    print(f"Params: {params_filename}")
+    print(f"{'='*60}")
