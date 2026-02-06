@@ -69,17 +69,17 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data", type=str, default="data-full.npz")
     parser.add_argument("--features", type=int, default=64)
-    parser.add_argument("--max_degree", type=int, default=1)
-    parser.add_argument("--num_iterations", type=int, default=3)
+    parser.add_argument("--max_degree", type=int, default=2)
+    parser.add_argument("--num_iterations", type=int, default=1)
     parser.add_argument("--num_basis_functions", type=int, default=64)
-    parser.add_argument("--cutoff", type=float, default=3.0)
+    parser.add_argument("--cutoff", type=float, default=10.0)
     parser.add_argument("--num_train", type=int, default=8000)
     parser.add_argument("--num_valid", type=int, default=2000)
     parser.add_argument("--num_epochs", type=int, default=100)
-    parser.add_argument("--learning_rate", type=float, default=0.0001)
+    parser.add_argument("--learning_rate", type=float, default=0.001)
     parser.add_argument("--batch_size", type=int, default=64)
-    parser.add_argument("--clip_norm", type=float, default=1.0)
-    parser.add_argument("--ema_decay", type=float, default=0.75)
+    parser.add_argument("--clip_norm", type=float, default=1000.0)
+    parser.add_argument("--ema_decay", type=float, default=0.9)
     parser.add_argument("--early_stopping_patience", type=int, default=None)
     parser.add_argument("--early_stopping_min_delta", type=float, default=0.0)
     parser.add_argument("--reduce_on_plateau_patience", type=int, default=5)
@@ -88,11 +88,12 @@ def get_args():
     parser.add_argument("--reduce_on_plateau_rtol", type=float, default=1e-4)
     parser.add_argument("--reduce_on_plateau_accumulation_size", type=int, default=5)
     parser.add_argument("--reduce_on_plateau_min_scale", type=float, default=0.01)
+
     parser.add_argument("--energy_weight", type=float, default=1.0,
                        help="Weight for energy loss in total loss")
     parser.add_argument("--forces_weight", type=float, default=100.0,
                        help="Weight for forces loss in total loss")
-    parser.add_argument("--dipole_weight", type=float, default=10.0,
+    parser.add_argument("--dipole_weight", type=float, default=5.0,
                        help="Weight for dipole loss in total loss")
     args = parser.parse_args()
     return args
@@ -231,37 +232,23 @@ class MessagePassingModel(nn.Module):
             x = e3x.nn.add(x, y)
             x = e3x.nn.silu(x)
             # Couple EF - xEF already has correct shape (B*N, 2, 4, features) matching x
-            _xEF = e3x.nn.Tensor()(x, xEF)
-            _xEF = e3x.nn.hard_tanh(_xEF) 
-            x = e3x.nn.add(x, _xEF)
-            x = e3x.nn.silu(x)
+            xEF = e3x.nn.Tensor()(x, xEF)
+            x = e3x.nn.add(x, xEF)
             x = e3x.nn.TensorDense(max_degree=self.max_degree)(x)
             
-        for i in range(3):
-            x = e3x.nn.Dense(self.features)(x)
-            x = e3x.nn.silu(x)
+            for i in range(2):
+                x = e3x.nn.Dense(self.features)(x)
+                x = e3x.nn.silu(x)
 
         # Save original x before reduction for dipole prediction
         x_orig = x  # (B*N, 2, (max_degree+1)^2, features)
         
         # Reduce to scalars per atom for energy prediction
         x = e3x.nn.change_max_degree_or_type(x, max_degree=0, include_pseudotensors=False)
+        for i in range(2):
+            x = e3x.nn.Dense(self.features)(x)
+            x = e3x.nn.silu(x)
 
-        # Predict atomic energies
-        element_bias = self.param(
-            "element_bias",
-            lambda rng, shape: jnp.zeros(shape, dtype=positions.dtype),
-            (self.max_atomic_number + 1,)
-        )
-
-
-
-        atomic_energies = nn.Dense(1, use_bias=False, kernel_init=jax.nn.initializers.zeros)(x)
-        atomic_energies = jnp.squeeze(atomic_energies, axis=(-1, -2, -3))  # (B*N,)
-
-        atomic_energies = atomic_energies + element_bias[atomic_numbers_flat]
-
-        energy = atomic_energies.reshape(B, N).sum(axis=1)  # (B,)
 
         # Predict atomic charges (scalar per atom)
         # Use a separate branch from the same features
@@ -275,9 +262,11 @@ class MessagePassingModel(nn.Module):
         # Predict atomic dipoles (3D vector per atom)
         # Use original x_orig and change max_degree to 1
         x_dipole = e3x.nn.change_max_degree_or_type(x_orig, max_degree=1, include_pseudotensors=False)
+        # run through a tensor dense layer to get the dipole in the correct shape
         for i in range(2):
             x_dipole = e3x.nn.TensorDense(max_degree=1)(x_dipole)
             x_dipole = e3x.nn.silu(x_dipole)
+
         # x_dipole shape: (B*N, parity, 4, features) where 4 = (lmax+1)^2 = (1+1)^2
         # Index 0: l=0 (scalar), indices 1-3: l=1 (dipole, 3 components)
         # Apply Dense to reduce features dimension: (B*N, parity, 4, features) -> (B*N, parity, 4, 1)
@@ -285,27 +274,35 @@ class MessagePassingModel(nn.Module):
         # Extract l=1 components (indices 1-3) and take real part (first parity dimension, index 0)
         # Shape: (B*N, parity, 3, 1) -> take parity=0 (real part) -> (B*N, 3, 1) -> squeeze -> (B*N, 3)
         atomic_dipoles = x_dipole[:, 0, 1:4, 0]  # (B*N, 3) - take first parity (real), l=1 components, squeeze features
-
         # Compute molecular dipole: μ = Σ(q_i * (r_i - COM)) + Σ(μ_i)
         # Reshape to (B, N, 3) for positions and dipoles, (B, N) for charges
         positions_batched = positions_flat.reshape(B, N, 3)  # (B, N, 3)
         charges_batched = atomic_charges.reshape(B, N)  # (B, N)
         dipoles_batched = atomic_dipoles.reshape(B, N, 3)  # (B, N, 3)
-        
         # Center of mass (using atomic masses or uniform weighting)
         # For simplicity, use uniform weighting (geometric center)
         com = positions_batched.mean(axis=1, keepdims=True)  # (B, 1, 3)
         positions_centered = positions_batched - com  # (B, N, 3)
-        
         # Charge contribution: Σ(q_i * (r_i - COM))
         charge_dipole = jnp.sum(charges_batched[:, :, None] * positions_centered, axis=1)  # (B, 3)
-        
         # Atomic dipole contribution: Σ(μ_i)
         atomic_dipole_sum = jnp.sum(dipoles_batched, axis=1)  # (B, 3)
-        
         # Total molecular dipole
         dipole = charge_dipole + atomic_dipole_sum  # (B, 3)
 
+
+
+        # Predict atomic energies
+        element_bias = self.param(
+            "element_bias",
+            lambda rng, shape: jnp.zeros(shape, dtype=positions.dtype),
+            (self.max_atomic_number + 1,)
+        )
+        atomic_energies = nn.Dense(1, use_bias=False, kernel_init=jax.nn.initializers.zeros)(x)
+        atomic_energies = jnp.squeeze(atomic_energies, axis=(-1, -2, -3))  # (B*N,)
+        atomic_energies = atomic_energies + element_bias[atomic_numbers_flat]
+
+        energy = atomic_energies.reshape(B, N).sum(axis=1)  # (B,)
         # Proxy energy for force differentiation
         return -jnp.sum(energy), energy, dipole
 
@@ -856,6 +853,16 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
             improved = True
         else:
             patience_counter += 1
+
+
+        # convert the losses to kcal/mol
+        
+        train_energy_mae *= 23.0609
+        train_forces_mae *= 23.0609
+        
+        valid_energy_mae *= 23.0609
+        valid_forces_mae *= 23.0609
+        
 
         print(f"epoch: {epoch:3d}                    train:   valid:")
         print(f"    loss [a.u.]             {train_loss: 8.6f} {valid_loss: 8.6f}")
