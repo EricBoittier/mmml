@@ -552,6 +552,154 @@ def plot_force_error_distribution(predictions, targets, metrics, save_path=None,
     return ax
 
 
+def plot_dipole_scatter(predictions, targets, metrics, save_path=None, ax=None):
+    """Create scatter plot of dipole magnitudes."""
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(8, 8))
+    
+    pred_mags = np.linalg.norm(predictions, axis=1)
+    target_mags = np.linalg.norm(targets, axis=1)
+    
+    ax.scatter(target_mags, pred_mags, alpha=0.5, s=20, edgecolors='none')
+    
+    lims = [min(target_mags.min(), pred_mags.min()), max(target_mags.max(), pred_mags.max())]
+    ax.plot(lims, lims, 'r--', alpha=0.75, linewidth=2, label='Perfect prediction')
+    
+    ax.set_xlabel('True Dipole Magnitude (Debye)', fontsize=12)
+    ax.set_ylabel('Predicted Dipole Magnitude (Debye)', fontsize=12)
+    mae_mag = metrics.get('mae_magnitude_debye', metrics.get('mae_magnitude', 0.0))
+    rmse_mag = metrics.get('rmse_magnitude_debye', metrics.get('rmse_magnitude', 0.0))
+    ax.set_title(f'Dipole Magnitude Predictions\nMAE: {mae_mag:.4f} | RMSE: {rmse_mag:.4f} Debye', fontsize=11)
+    ax.legend(fontsize=10)
+    ax.grid(True, alpha=0.3)
+    ax.set_aspect('equal', adjustable='box')
+    
+    if save_path:
+        plt.savefig(save_path, bbox_inches='tight')
+        print(f"Saved plot to {save_path}")
+    
+    return ax
+
+
+def plot_dipole_component_errors(predictions, targets, metrics, save_path=None, ax=None):
+    """Plot dipole errors per component."""
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(8, 6))
+    
+    errors = predictions - targets  # Already in Debye
+    
+    components = ['X', 'Y', 'Z']
+    mae_values = [
+        metrics.get('mae_x_debye', metrics.get('mae_x', 0.0)),
+        metrics.get('mae_y_debye', metrics.get('mae_y', 0.0)),
+        metrics.get('mae_z_debye', metrics.get('mae_z', 0.0)),
+    ]
+    
+    bars = ax.bar(components, mae_values, alpha=0.7, edgecolor='black', linewidth=1)
+    ax.set_ylabel('MAE (Debye)', fontsize=12)
+    ax.set_title('Dipole Error per Component', fontsize=11)
+    ax.grid(True, alpha=0.3, axis='y')
+    
+    # Add value labels on bars
+    for bar, val in zip(bars, mae_values):
+        height = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width()/2., height,
+                f'{val:.4f}', ha='center', va='bottom', fontsize=10)
+    
+    if save_path:
+        plt.savefig(save_path, bbox_inches='tight')
+        print(f"Saved plot to {save_path}")
+    
+    return ax
+
+
+def plot_dipole_magnitude_scatter(predictions, targets, metrics, save_path=None, ax=None):
+    """Plot dipole magnitude errors vs magnitude."""
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(8, 6))
+    
+    pred_mags = np.linalg.norm(predictions, axis=1)
+    target_mags = np.linalg.norm(targets, axis=1)
+    mag_errors = pred_mags - target_mags
+    
+    ax.scatter(target_mags, mag_errors, alpha=0.5, s=20, edgecolors='none')
+    ax.axhline(0, color='r', linestyle='--', linewidth=2, label='Zero error')
+    
+    ax.set_xlabel('True Dipole Magnitude (Debye)', fontsize=12)
+    ax.set_ylabel('Error (Predicted - True) [Debye]', fontsize=12)
+    mae_mag = metrics.get('mae_magnitude_debye', metrics.get('mae_magnitude', 0.0))
+    ax.set_title(f'Dipole Magnitude Error vs Magnitude\nMAE: {mae_mag:.4f} Debye', fontsize=11)
+    ax.legend(fontsize=10)
+    ax.grid(True, alpha=0.3)
+    
+    if save_path:
+        plt.savefig(save_path, bbox_inches='tight')
+        print(f"Saved plot to {save_path}")
+    
+    return ax
+
+
+def plot_dipole_error_distribution(predictions, targets, metrics, save_path=None, ax=None):
+    """Plot distribution of dipole errors."""
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(8, 6))
+    
+    errors = predictions - targets  # (N, 3)
+    error_mags = np.linalg.norm(errors, axis=1)  # (N,)
+    
+    ax.hist(error_mags, bins=50, alpha=0.7, edgecolor='black', linewidth=0.5)
+    ax.axvline(0, color='r', linestyle='--', linewidth=2)
+    
+    mae_overall = metrics.get('mae_overall_debye', metrics.get('mae_overall', 0.0))
+    rmse_overall = metrics.get('rmse_overall_debye', metrics.get('rmse_overall', 0.0))
+    ax.set_xlabel('Dipole Error Magnitude (Debye)', fontsize=12)
+    ax.set_ylabel('Frequency', fontsize=12)
+    ax.set_title(f'Dipole Error Distribution\nMAE: {mae_overall:.4f} | RMSE: {rmse_overall:.4f} Debye', fontsize=11)
+    ax.grid(True, alpha=0.3, axis='y')
+    
+    if save_path:
+        plt.savefig(save_path, bbox_inches='tight')
+        print(f"Saved plot to {save_path}")
+    
+    return ax
+
+
+def plot_dipole_component_comparison(predictions, targets, metrics, save_path=None, ax=None):
+    """Plot dipole component predictions vs targets."""
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(8, 8))
+    
+    components = ['X', 'Y', 'Z']
+    colors = ['r', 'g', 'b']
+    
+    for i, (comp, color) in enumerate(zip(components, colors)):
+        pred_comp = predictions[:, i]
+        target_comp = targets[:, i]
+        
+        ax.scatter(target_comp, pred_comp, alpha=0.5, s=20, label=f'{comp} component', 
+                  edgecolors='none', c=color)
+    
+    # Perfect prediction line
+    all_targets = targets.flatten()
+    all_preds = predictions.flatten()
+    lims = [min(all_targets.min(), all_preds.min()), max(all_targets.max(), all_preds.max())]
+    ax.plot(lims, lims, 'k--', alpha=0.75, linewidth=2, label='Perfect prediction')
+    
+    ax.set_xlabel('True Dipole Component (Debye)', fontsize=12)
+    ax.set_ylabel('Predicted Dipole Component (Debye)', fontsize=12)
+    mae_overall = metrics.get('mae_overall_debye', metrics.get('mae_overall', 0.0))
+    ax.set_title(f'Dipole Component Predictions\nMAE: {mae_overall:.4f} Debye', fontsize=11)
+    ax.legend(fontsize=10)
+    ax.grid(True, alpha=0.3)
+    ax.set_aspect('equal', adjustable='box')
+    
+    if save_path:
+        plt.savefig(save_path, bbox_inches='tight')
+        print(f"Saved plot to {save_path}")
+    
+    return ax
+
+
 def plot_force_component_comparison(predictions, targets, metrics, save_path=None, ax=None):
     """Plot comparison of force components."""
     if ax is None:
@@ -854,8 +1002,75 @@ def main():
         force_error_dist_path = output_dir / "force_error_distribution.png"
         plot_force_error_distribution(force_pred, force_targets, metrics, save_path=force_error_dist_path)
     
-    # Combined figure
-    if force_pred is not None and force_targets is not None:
+    # Dipole scatter plots (if dipoles available)
+    if dipole_pred is not None and dipole_targets is not None:
+        dipole_scatter_path = output_dir / "scatter_dipoles.png"
+        plot_dipole_scatter(dipole_pred, dipole_targets, metrics, save_path=dipole_scatter_path)
+        
+        dipole_component_path = output_dir / "dipole_component_errors.png"
+        plot_dipole_component_errors(dipole_pred, dipole_targets, metrics, save_path=dipole_component_path)
+        
+        dipole_magnitude_path = output_dir / "dipole_magnitude_scatter.png"
+        plot_dipole_magnitude_scatter(dipole_pred, dipole_targets, metrics, save_path=dipole_magnitude_path)
+        
+        dipole_error_dist_path = output_dir / "dipole_error_distribution.png"
+        plot_dipole_error_distribution(dipole_pred, dipole_targets, metrics, save_path=dipole_error_dist_path)
+        
+        dipole_component_comp_path = output_dir / "dipole_component_comparison.png"
+        plot_dipole_component_comparison(dipole_pred, dipole_targets, metrics, save_path=dipole_component_comp_path)
+    
+    # Combined figure - adjust layout based on available data
+    has_forces = force_pred is not None and force_targets is not None
+    has_dipoles = dipole_pred is not None and dipole_targets is not None
+    
+    if has_forces and has_dipoles:
+        # 4x3 grid: Energy (row 0), Forces (row 1), Dipoles (row 2), Mixed (row 3)
+        fig = plt.figure(figsize=(20, 24))
+        gs = fig.add_gridspec(4, 3, hspace=0.3, wspace=0.3)
+        
+        # Energy plots (top row)
+        plot_scatter(energy_pred, energy_targets, metrics, 
+                    title="Energy Predictions", ax=fig.add_subplot(gs[0, 0]))
+        plot_error_distribution(energy_pred, energy_targets, metrics,
+                              title="Energy Error Distribution", ax=fig.add_subplot(gs[0, 1]))
+        plot_residuals(energy_pred, energy_targets, metrics,
+                      title="Energy Residual Plot", ax=fig.add_subplot(gs[0, 2]))
+        
+        # Force plots (second row)
+        plot_force_scatter(force_pred, force_targets, metrics, ax=fig.add_subplot(gs[1, 0]))
+        plot_force_component_errors(force_pred, force_targets, metrics, ax=fig.add_subplot(gs[1, 1]))
+        plot_force_magnitude_scatter(force_pred, force_targets, metrics, ax=fig.add_subplot(gs[1, 2]))
+        
+        # Dipole plots (third row)
+        plot_dipole_scatter(dipole_pred, dipole_targets, metrics, ax=fig.add_subplot(gs[2, 0]))
+        plot_dipole_component_errors(dipole_pred, dipole_targets, metrics, ax=fig.add_subplot(gs[2, 1]))
+        plot_dipole_magnitude_scatter(dipole_pred, dipole_targets, metrics, ax=fig.add_subplot(gs[2, 2]))
+        
+        # Mixed plots (bottom row)
+        try:
+            from scipy import stats
+            errors = energy_pred - energy_targets
+            errors_kcal = errors * EV_TO_KCAL_MOL
+            stats.probplot(errors_kcal, dist="norm", plot=fig.add_subplot(gs[3, 0]))
+            fig.axes[-1].set_title("Q-Q Plot of Energy Errors", fontsize=11)
+            fig.axes[-1].set_xlabel('Theoretical Quantiles', fontsize=12)
+            fig.axes[-1].set_ylabel('Sample Quantiles (kcal/mol)', fontsize=12)
+            fig.axes[-1].grid(True, alpha=0.3)
+        except ImportError:
+            errors = energy_pred - energy_targets
+            errors_kcal = errors * EV_TO_KCAL_MOL
+            fig.add_subplot(gs[3, 0]).hist(errors_kcal, bins=50, alpha=0.7, edgecolor='black', linewidth=0.5)
+            fig.axes[-1].axvline(0, color='r', linestyle='--', linewidth=2)
+            fig.axes[-1].set_title("Energy Error Histogram", fontsize=11)
+            fig.axes[-1].set_xlabel('Error (kcal/mol)', fontsize=12)
+            fig.axes[-1].set_ylabel('Frequency', fontsize=12)
+            fig.axes[-1].grid(True, alpha=0.3)
+        
+        plot_force_error_distribution(force_pred, force_targets, metrics, ax=fig.add_subplot(gs[3, 1]))
+        plot_dipole_error_distribution(dipole_pred, dipole_targets, metrics, ax=fig.add_subplot(gs[3, 2]))
+        
+    elif has_forces:
+        # 3x3 grid: Energy, Forces, Mixed
         fig = plt.figure(figsize=(20, 16))
         gs = fig.add_gridspec(3, 3, hspace=0.3, wspace=0.3)
         
@@ -894,6 +1109,47 @@ def main():
         
         plot_force_error_distribution(force_pred, force_targets, metrics, ax=fig.add_subplot(gs[2, 1]))
         plot_force_component_comparison(force_pred, force_targets, metrics, ax=fig.add_subplot(gs[2, 2]))
+    
+    elif has_dipoles:
+        # 3x3 grid: Energy, Dipoles, Mixed
+        fig = plt.figure(figsize=(20, 16))
+        gs = fig.add_gridspec(3, 3, hspace=0.3, wspace=0.3)
+        
+        # Energy plots (top row)
+        plot_scatter(energy_pred, energy_targets, metrics, 
+                    title="Energy Predictions", ax=fig.add_subplot(gs[0, 0]))
+        plot_error_distribution(energy_pred, energy_targets, metrics,
+                              title="Energy Error Distribution", ax=fig.add_subplot(gs[0, 1]))
+        plot_residuals(energy_pred, energy_targets, metrics,
+                      title="Energy Residual Plot", ax=fig.add_subplot(gs[0, 2]))
+        
+        # Dipole plots (middle row)
+        plot_dipole_scatter(dipole_pred, dipole_targets, metrics, ax=fig.add_subplot(gs[1, 0]))
+        plot_dipole_component_errors(dipole_pred, dipole_targets, metrics, ax=fig.add_subplot(gs[1, 1]))
+        plot_dipole_magnitude_scatter(dipole_pred, dipole_targets, metrics, ax=fig.add_subplot(gs[1, 2]))
+        
+        # Q-Q plot and dipole error distribution (bottom row)
+        try:
+            from scipy import stats
+            errors = energy_pred - energy_targets
+            errors_kcal = errors * EV_TO_KCAL_MOL
+            stats.probplot(errors_kcal, dist="norm", plot=fig.add_subplot(gs[2, 0]))
+            fig.axes[-1].set_title("Q-Q Plot of Energy Errors", fontsize=11)
+            fig.axes[-1].set_xlabel('Theoretical Quantiles', fontsize=12)
+            fig.axes[-1].set_ylabel('Sample Quantiles (kcal/mol)', fontsize=12)
+            fig.axes[-1].grid(True, alpha=0.3)
+        except ImportError:
+            errors = energy_pred - energy_targets
+            errors_kcal = errors * EV_TO_KCAL_MOL
+            fig.add_subplot(gs[2, 0]).hist(errors_kcal, bins=50, alpha=0.7, edgecolor='black', linewidth=0.5)
+            fig.axes[-1].axvline(0, color='r', linestyle='--', linewidth=2)
+            fig.axes[-1].set_title("Energy Error Histogram", fontsize=11)
+            fig.axes[-1].set_xlabel('Error (kcal/mol)', fontsize=12)
+            fig.axes[-1].set_ylabel('Frequency', fontsize=12)
+            fig.axes[-1].grid(True, alpha=0.3)
+        
+        plot_dipole_error_distribution(dipole_pred, dipole_targets, metrics, ax=fig.add_subplot(gs[2, 1]))
+        plot_dipole_component_comparison(dipole_pred, dipole_targets, metrics, ax=fig.add_subplot(gs[2, 2]))
     else:
         # Energy-only figure
         fig, axes = plt.subplots(2, 2, figsize=(16, 16))
@@ -942,6 +1198,12 @@ def main():
         print(f"  - Force component errors: {force_component_path}")
         print(f"  - Force magnitude scatter: {force_magnitude_path}")
         print(f"  - Force error distribution: {force_error_dist_path}")
+    if dipole_pred is not None and dipole_targets is not None:
+        print(f"  - Dipole scatter plot: {dipole_scatter_path}")
+        print(f"  - Dipole component errors: {dipole_component_path}")
+        print(f"  - Dipole magnitude scatter: {dipole_magnitude_path}")
+        print(f"  - Dipole error distribution: {dipole_error_dist_path}")
+        print(f"  - Dipole component comparison: {dipole_component_comp_path}")
     print(f"  - Summary: {combined_path}")
 
 
