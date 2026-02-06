@@ -229,32 +229,27 @@ class MessagePassingModel(nn.Module):
 
             x = e3x.nn.add(x, y)
             x = e3x.nn.Dense(self.features)(x)
-            x = e3x.nn.silu(x)
+            x = e3x.nn.hard_tanh(x)
             # Couple EF - xEF already has correct shape (B*N, 2, 4, features) matching x
             xEF = e3x.nn.Tensor()(x, xEF)
             x = e3x.nn.add(x, xEF)
             x = e3x.nn.TensorDense(max_degree=self.max_degree)(x)
+            x = e3x.nn.hard_tanh(x)
             
-            for i in range(5):
-                x = e3x.nn.Dense(self.features)(x)
-                x = e3x.nn.silu(x)
+        for i in range(2):
+            x = e3x.nn.Dense(self.features)(x)
+            x = e3x.nn.silu(x)
 
         # Save original x before reduction for dipole prediction
         x_orig = x  # (B*N, 2, (max_degree+1)^2, features)
         
         # Reduce to scalars per atom for energy prediction
         x = e3x.nn.change_max_degree_or_type(x, max_degree=0, include_pseudotensors=False)
-        for i in range(5):
-            x = e3x.nn.Dense(self.features)(x)
-            x = e3x.nn.silu(x)
-
 
         # Predict atomic charges (scalar per atom)
         # Use a separate branch from the same features
         x_charge = x  # (B*N, 1, 1, features)
-        for i in range(2):
-            x_charge = e3x.nn.Dense(self.features)(x_charge)
-            x_charge = e3x.nn.silu(x_charge)
+
         atomic_charges = nn.Dense(1, use_bias=False, kernel_init=jax.nn.initializers.zeros)(x_charge)
         atomic_charges = jnp.squeeze(atomic_charges, axis=(-1, -2, -3))  # (B*N,)
 
@@ -263,7 +258,7 @@ class MessagePassingModel(nn.Module):
         x_dipole = e3x.nn.change_max_degree_or_type(x_orig, max_degree=1, include_pseudotensors=False)
         # run through a tensor dense layer to get the dipole in the correct shape
         x_dipole = e3x.nn.TensorDense(max_degree=1)(x_dipole)
-        x_dipole = e3x.nn.silu(x_dipole)
+        
 
         # x_dipole shape: (B*N, parity, 4, features) where 4 = (lmax+1)^2 = (1+1)^2
         # Index 0: l=0 (scalar), indices 1-3: l=1 (dipole, 3 components)
