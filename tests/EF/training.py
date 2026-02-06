@@ -11,6 +11,8 @@
 
 import os
 
+from pandas._testing import at
+
 # --- Environment (must be set before importing jax) ---
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".99"
@@ -82,6 +84,19 @@ def mean_absolute_error(prediction, target):
     return jnp.mean(jnp.abs(prediction - target))
 
 
+def mean_absolute_error_forces(prediction, target, mask=None):
+    """Compute MAE for forces, optionally masked."""
+    prediction = jnp.asarray(prediction)
+    target = jnp.asarray(target)
+    errors = prediction - target
+    if mask is not None:
+        errors = errors * mask
+        count = mask.sum()
+    else:
+        count = errors.size
+    return jnp.sum(jnp.abs(errors)) / count if count > 0 else 0.0
+
+
 # -------------------------
 # Model
 # -------------------------
@@ -94,28 +109,33 @@ class MessagePassingModel(nn.Module):
     max_atomic_number: int = 55
     include_pseudotensors: bool = True
 
-    def EFD(self, atomic_numbers, positions, Ef, dst_idx, src_idx, dst_idx_flat, src_idx_flat, batch_segments, batch_size):
+    def EFD(self, atomic_numbers, positions, Ef, dst_idx_flat, src_idx_flat, batch_segments, batch_size, dst_idx=None, src_idx=None):
         """
         Expected shapes:
-          atomic_numbers: (B, N)
-          positions:      (B, N, 3)
+          atomic_numbers: (B*N,) flattened
+          positions:      (B*N, 3) flattened
           Ef:             (B, 3)
-          dst_idx/src_idx: (E,) indices for a single molecule of N atoms (no batching offsets)
           dst_idx_flat/src_idx_flat: (B*E,) pre-computed flattened indices (CUDA-graph-friendly)
           batch_segments: (B*N,) segment ids 0..B-1 repeated per atom
           batch_size:     int (static)
+          dst_idx/src_idx: (E,) optional - only needed when batch_segments is None
         Returns:
           proxy_energy: scalar (sum over batch)
           energy: (B,) per-molecule energy
-        """
-        # Basic dims: use static values (CUDA-graph-friendly)
-        B = batch_size  # Static - known at compile time
-        N = 29  # Static - constant number of atoms per molecule
 
+
+        """
+        
         # Positions and atomic_numbers are already flattened in prepare_batches (like physnetjax)
         # Ensure they're properly shaped (1D for atomic_numbers, 2D for positions)
         positions_flat = positions.reshape(-1, 3)  # Ensure (B*N, 3)
         atomic_numbers_flat = atomic_numbers.reshape(-1)  # Ensure (B*N,) - 1D array
+        
+        # Basic dims: use static values (CUDA-graph-friendly)
+        B = batch_size  # Static - known at compile time
+        N = atomic_numbers_flat.shape[0] // B   # Static - constant number of atoms per molecule
+
+
 
         # Compute displacements using e3x gather operations (CUDA-graph-friendly)
         # Must use flattened indices to get (B*E, 3) displacements matching MessagePass
@@ -170,12 +190,12 @@ class MessagePassingModel(nn.Module):
             xEF = e3x.nn.Tensor()(x, xEF)
             x = e3x.nn.add(x, xEF)
             x = e3x.nn.TensorDense(max_degree=self.max_degree)(x)
-            x = e3x.nn.add(x, xEF)
-            x = e3x.nn.silu(x)
 
-        x = e3x.nn.silu(x)
 
-        # Reduce to scalars per atom
+        # Save original x before reduction for dipole prediction
+        x_orig = x  # (B*N, 2, (max_degree+1)^2, features)
+        
+        # Reduce to scalars per atom for energy prediction
         x = e3x.nn.change_max_degree_or_type(x, max_degree=0, include_pseudotensors=False)
 
         # Predict atomic energies
@@ -185,10 +205,10 @@ class MessagePassingModel(nn.Module):
             (self.max_atomic_number + 1,)
         )
 
-
         for i in range(3):
             x = e3x.nn.Dense(self.features)(x)
             x = e3x.nn.silu(x)
+
         atomic_energies = nn.Dense(1, use_bias=False, kernel_init=jax.nn.initializers.zeros)(x)
         atomic_energies = jnp.squeeze(atomic_energies, axis=(-1, -2, -3))  # (B*N,)
 
@@ -198,12 +218,55 @@ class MessagePassingModel(nn.Module):
         # Sum per molecule without segment_sum/scatter (CUDA-graph-friendly).
         energy = atomic_energies.reshape(B, N).sum(axis=1)  # (B,)
 
+        # Predict atomic charges (scalar per atom)
+        # Use a separate branch from the same features
+        x_charge = x  # (B*N, 1, 1, features)
+        for i in range(2):
+            x_charge = e3x.nn.Dense(self.features)(x_charge)
+            x_charge = e3x.nn.silu(x_charge)
+        atomic_charges = nn.Dense(1, use_bias=False, kernel_init=jax.nn.initializers.zeros)(x_charge)
+        atomic_charges = jnp.squeeze(atomic_charges, axis=(-1, -2, -3))  # (B*N,)
+
+        # Predict atomic dipoles (3D vector per atom)
+        # Use original x_orig and change max_degree to 1
+        x_dipole = e3x.nn.change_max_degree_or_type(x_orig, max_degree=1, include_pseudotensors=False)
+        for i in range(2):
+            x_dipole = e3x.nn.TensorDense(max_degree=1)(x_dipole)
+            x_dipole = e3x.nn.silu(x_dipole)
+        # x_dipole shape: (B*N, parity, 4, features) where 4 = (lmax+1)^2 = (1+1)^2
+        # Index 0: l=0 (scalar), indices 1-3: l=1 (dipole, 3 components)
+        # Apply Dense to reduce features dimension: (B*N, parity, 4, features) -> (B*N, parity, 4, 1)
+        x_dipole = e3x.nn.Dense(1, use_bias=False, kernel_init=jax.nn.initializers.zeros)(x_dipole)
+        # Extract l=1 components (indices 1-3) and take real part (first parity dimension, index 0)
+        # Shape: (B*N, parity, 3, 1) -> take parity=0 (real part) -> (B*N, 3, 1) -> squeeze -> (B*N, 3)
+        atomic_dipoles = x_dipole[:, 0, 1:4, 0]  # (B*N, 3) - take first parity (real), l=1 components, squeeze features
+
+        # Compute molecular dipole: μ = Σ(q_i * (r_i - COM)) + Σ(μ_i)
+        # Reshape to (B, N, 3) for positions and dipoles, (B, N) for charges
+        positions_batched = positions_flat.reshape(B, N, 3)  # (B, N, 3)
+        charges_batched = atomic_charges.reshape(B, N)  # (B, N)
+        dipoles_batched = atomic_dipoles.reshape(B, N, 3)  # (B, N, 3)
+        
+        # Center of mass (using atomic masses or uniform weighting)
+        # For simplicity, use uniform weighting (geometric center)
+        com = positions_batched.mean(axis=1, keepdims=True)  # (B, 1, 3)
+        positions_centered = positions_batched - com  # (B, N, 3)
+        
+        # Charge contribution: Σ(q_i * (r_i - COM))
+        charge_dipole = jnp.sum(charges_batched[:, :, None] * positions_centered, axis=1)  # (B, 3)
+        
+        # Atomic dipole contribution: Σ(μ_i)
+        atomic_dipole_sum = jnp.sum(dipoles_batched, axis=1)  # (B, 3)
+        
+        # Total molecular dipole
+        dipole = charge_dipole + atomic_dipole_sum  # (B, 3)
+
         # Proxy energy for force differentiation
-        return -jnp.sum(energy), energy
+        return -jnp.sum(energy), energy, dipole
 
     @nn.compact
-    def __call__(self, atomic_numbers, positions, Ef, dst_idx, src_idx, dst_idx_flat=None, src_idx_flat=None, batch_segments=None, batch_size=None):
-        """Returns (proxy_energy, energy) - use energy_and_forces() wrapper for forces."""
+    def __call__(self, atomic_numbers, positions, Ef, dst_idx_flat=None, src_idx_flat=None, batch_segments=None, batch_size=None, dst_idx=None, src_idx=None):
+        """Returns (energy, dipole) - use energy_and_forces() wrapper for forces."""
         if batch_segments is None:
             # atomic_numbers expected (B,N); if B absent, treat as (N,)
             if atomic_numbers.ndim == 1:
@@ -217,33 +280,37 @@ class MessagePassingModel(nn.Module):
             positions = positions.reshape(-1, 3)          # (B*N, 3)
             batch_segments = jnp.repeat(jnp.arange(B, dtype=jnp.int32), N)
             # Compute flattened indices for this single-batch case
+            if dst_idx is None or src_idx is None:
+                raise ValueError("dst_idx and src_idx are required when batch_segments is None")
             offsets = jnp.arange(B, dtype=jnp.int32) * N
             dst_idx_flat = (dst_idx[None, :] + offsets[:, None]).reshape(-1)
             src_idx_flat = (src_idx[None, :] + offsets[:, None]).reshape(-1)
 
-        proxy_energy, energy = self.EFD(
-            atomic_numbers, positions, Ef, dst_idx, src_idx, dst_idx_flat, src_idx_flat, batch_segments, batch_size
+        proxy_energy, energy, dipole = self.EFD(
+            atomic_numbers, positions, Ef, dst_idx_flat, src_idx_flat, batch_segments, batch_size, dst_idx=dst_idx, src_idx=src_idx
         )
-        return energy
+        return energy, dipole
 
 
-def energy_and_forces(model_apply, params, atomic_numbers, positions, Ef, dst_idx, src_idx, batch_segments, batch_size):
-    """Compute energy and forces (negative gradient of energy w.r.t. positions)."""
+def energy_and_forces(model_apply, params, atomic_numbers, positions, Ef, dst_idx_flat, src_idx_flat, batch_segments, batch_size, dst_idx=None, src_idx=None):
+    """Compute energy, forces (negative gradient of energy w.r.t. positions), and dipole."""
     def energy_fn(pos):
-        energy = model_apply(
+        energy, dipole = model_apply(
             params,
             atomic_numbers=atomic_numbers,
             positions=pos,
             Ef=Ef,
-            dst_idx=dst_idx,
-            src_idx=src_idx,
+            dst_idx_flat=dst_idx_flat,
+            src_idx_flat=src_idx_flat,
             batch_segments=batch_segments,
             batch_size=batch_size,
+            dst_idx=dst_idx,
+            src_idx=src_idx,
         )
-        return -jnp.sum(energy), energy
+        return -jnp.sum(energy), (energy, dipole)
     
-    (_, energy), forces = jax.value_and_grad(energy_fn, has_aux=True)(positions)
-    return energy, forces
+    (_, (energy, dipole)), forces = jax.value_and_grad(energy_fn, has_aux=True)(positions)
+    return energy, forces, dipole
 
 
 # -------------------------
@@ -266,17 +333,41 @@ def prepare_datasets(key, num_train, num_valid, dataset):
     if positions_raw.ndim == 4 and positions_raw.shape[1] == 1:
         positions_raw = positions_raw.squeeze(axis=1)  # (num_data, N, 3)
     
+    # Handle forces: F has shape (num_data, 1, N, 3) - squeeze out the extra dimension
+    forces_raw = jnp.asarray(dataset["F"], dtype=jnp.float32)
+    if forces_raw.ndim == 4 and forces_raw.shape[1] == 1:
+        forces_raw = forces_raw.squeeze(axis=1)  # (num_data, N, 3)
+    
+    # Load dipoles if available
+    dipoles = None
+    if "dipoles" in dataset or "dipole" in dataset:
+        dipole_key = "dipoles" if "dipoles" in dataset else "dipole"
+        dipoles_raw = jnp.asarray(dataset[dipole_key], dtype=jnp.float32)
+        if dipoles_raw.ndim == 2 and dipoles_raw.shape[1] == 3:
+            # Shape is (num_data, 3) - already correct
+            dipoles = dipoles_raw
+        elif dipoles_raw.ndim == 3:
+            # Shape might be (num_data, 1, 3) - squeeze
+            dipoles = dipoles_raw.squeeze()
+        else:
+            dipoles = dipoles_raw
+    
     train_data = dict(
         atomic_numbers=jnp.asarray(dataset["Z"], dtype=jnp.int32)[train_choice],      # (num_train, N)
         positions=positions_raw[train_choice],                                         # (num_train, N, 3)
         electric_field=jnp.asarray(dataset["Ef"], dtype=jnp.float32)[train_choice],   # (num_train, 3)
         energies=jnp.asarray(dataset["E"], dtype=jnp.float32)[train_choice],          # (num_train,) or (num_train,1)
+        forces=forces_raw[train_choice],                                               # (num_train, N, 3)
     )
+    if dipoles is not None:
+        train_data["dipoles"] = dipoles[train_choice]  # (num_train, 3)
+    
     valid_data = dict(
         atomic_numbers=jnp.asarray(dataset["Z"], dtype=jnp.int32)[valid_choice],
         positions=positions_raw[valid_choice],                                         # (num_valid, N, 3)
         electric_field=jnp.asarray(dataset["Ef"], dtype=jnp.float32)[valid_choice],
         energies=jnp.asarray(dataset["E"], dtype=jnp.float32)[valid_choice],
+        forces=forces_raw[valid_choice],                                               # (num_valid, N, 3)
     )
     return train_data, valid_data
 
@@ -284,11 +375,12 @@ def prepare_datasets(key, num_train, num_valid, dataset):
 def prepare_batches(key, data, batch_size):
     """
     Returns list of batch dicts with consistent shapes:
-      atomic_numbers: (B,N)
-      positions: (B,N,3)
+      atomic_numbers: (B*N,) flattened
+      positions: (B*N,3) flattened
       electric_field: (B,3)
       energies: (B,) or (B,1)
-      dst_idx/src_idx: (E,) for single molecule (no offsets)
+      forces: (B*N,3) flattened
+      dst_idx_flat/src_idx_flat: (B*E,) pre-computed flattened indices
       batch_segments: (B*N,)
     """
     data_size = len(data["electric_field"])
@@ -313,48 +405,83 @@ def prepare_batches(key, data, batch_size):
 
     batches = []
     for perm in perms:
-        batches.append(
-            dict(
-                atomic_numbers=data["atomic_numbers"][perm].reshape(batch_size * num_atoms),  # (B*N,)
-                positions=data["positions"][perm].reshape(batch_size * num_atoms, 3),          # (B*N, 3) - flattened like physnetjax
-                energies=data["energies"][perm],                                               # (B,) or (B,1)
-                electric_field=data["electric_field"][perm],                                   # (B,3)
-                dst_idx=dst_idx,  # Keep original for reference
-                src_idx=src_idx,  # Keep original for reference
-                dst_idx_flat=dst_idx_flat,  # Pre-computed flattened indices
-                src_idx_flat=src_idx_flat,  # Pre-computed flattened indices
-                batch_segments=batch_segments,
-            )
+        batch_dict = dict(
+            atomic_numbers=data["atomic_numbers"][perm].reshape(batch_size * num_atoms),  # (B*N,)
+            positions=data["positions"][perm].reshape(batch_size * num_atoms, 3),          # (B*N, 3) - flattened like physnetjax
+            energies=data["energies"][perm],                                               # (B,) or (B,1)
+            forces=data["forces"][perm].reshape(batch_size * num_atoms, 3),               # (B*N, 3) - flattened
+            electric_field=data["electric_field"][perm],                                   # (B,3)
+            dst_idx_flat=dst_idx_flat,  # Pre-computed flattened indices
+            src_idx_flat=src_idx_flat,  # Pre-computed flattened indices
+            batch_segments=batch_segments,
         )
+        # Add dipoles if available
+        if "dipoles" in data and data["dipoles"] is not None:
+            batch_dict["dipoles"] = data["dipoles"][perm]  # (B, 3)
+        batches.append(batch_dict)
     return batches
 
 
 # -------------------------
 # Train / Eval steps
 # -------------------------
-@functools.partial(jax.jit, static_argnames=("model_apply", "optimizer_update", "batch_size", "ema_decay"))
-def train_step(model_apply, optimizer_update, batch, batch_size, opt_state, params, ema_params, transform_state, ema_decay=0.999):
+@functools.partial(jax.jit, static_argnames=("model_apply", "optimizer_update", "batch_size", "ema_decay", "energy_weight", "forces_weight"))
+def train_step(model_apply, optimizer_update, batch, batch_size, opt_state, params, ema_params, transform_state, ema_decay=0.999, energy_weight=1.0, forces_weight=1.0):
     def loss_fn(params):
-        energy = model_apply(
+        # Compute energy and dipole
+        energy, dipole_pred = model_apply(
             params,
             atomic_numbers=batch["atomic_numbers"],
             positions=batch["positions"],
             Ef=batch["electric_field"],
-            dst_idx=batch["dst_idx"],
-            src_idx=batch["src_idx"],
+            dst_idx=None,  # Not needed when batch_segments is provided
+            src_idx=None,  # Not needed when batch_segments is provided
             dst_idx_flat=batch["dst_idx_flat"],
             src_idx_flat=batch["src_idx_flat"],
             batch_segments=batch["batch_segments"],
             batch_size=batch_size,
         )
-        loss = mean_squared_loss(energy.reshape(-1), batch["energies"].reshape(-1))
-        return loss, energy
+        
+        # Compute forces and dipole (from energy_and_forces for consistency)
+        _, forces, dipole_from_forces = energy_and_forces(
+            model_apply, params,
+            atomic_numbers=batch["atomic_numbers"],
+            positions=batch["positions"],
+            Ef=batch["electric_field"],
+            dst_idx=None,  # Not needed when batch_segments is provided
+            src_idx=None,  # Not needed when batch_segments is provided
+            dst_idx_flat=batch["dst_idx_flat"],
+            src_idx_flat=batch["src_idx_flat"],
+            batch_segments=batch["batch_segments"],
+            batch_size=batch_size,
+        )
+        
+        # Use dipole from model_apply (should be same as from energy_and_forces)
+        dipole = dipole_pred
+        
+        # Energy loss
+        energy_loss = mean_squared_loss(energy.reshape(-1), batch["energies"].reshape(-1))
+        
+        # Force loss
+        force_loss = mean_squared_loss(forces, batch["forces"])
+        
+        # Dipole loss (if targets available)
+        dipole_loss = 0.0
+        if "dipoles" in batch:
+            dipole_loss = mean_squared_loss(dipole, batch["dipoles"])
+        
+        # Combined loss
+        total_loss = energy_weight * energy_loss + forces_weight * force_loss
+        if "dipoles" in batch:
+            total_loss = total_loss + dipole_loss  # Add dipole loss with weight 1.0 by default
+        
+        return total_loss, (energy, forces, dipole)
 
-    (loss, energy), grad = jax.value_and_grad(loss_fn, has_aux=True)(params)
+    (loss, (energy, forces, dipole)), grad = jax.value_and_grad(loss_fn, has_aux=True)(params)
     updates, opt_state = optimizer_update(grad, opt_state, params)
     
     # Apply learning rate scaling from reduce_on_plateau transform
-    updates = otu.tree_scalar_mul(transform_state.scale, updates)
+    updates = otu.tree_scale(transform_state.scale, updates)
     params = optax.apply_updates(params, updates)
 
     # Update EMA parameters
@@ -364,33 +491,64 @@ def train_step(model_apply, optimizer_update, batch, batch_size, opt_state, para
         params,
     )
 
-    mae = mean_absolute_error(energy, batch["energies"])
-    return params, ema_params, opt_state, loss, mae
+    energy_mae = mean_absolute_error(energy, batch["energies"])
+    forces_mae = mean_absolute_error_forces(forces, batch["forces"])
+    dipole_mae = mean_absolute_error(dipole, batch["dipoles"]) if "dipoles" in batch else 0.0
+    
+    return params, ema_params, opt_state, loss, energy_mae, forces_mae, dipole_mae
 
 
-@functools.partial(jax.jit, static_argnames=("model_apply", "batch_size"))
-def eval_step(model_apply, batch, batch_size, params):
-    energy = model_apply(
+@functools.partial(jax.jit, static_argnames=("model_apply", "batch_size", "energy_weight", "forces_weight"))
+def eval_step(model_apply, batch, batch_size, params, energy_weight=1.0, forces_weight=1.0):
+    # Compute energy and dipole
+    energy, dipole = model_apply(
         params,
         atomic_numbers=batch["atomic_numbers"],
         positions=batch["positions"],
         Ef=batch["electric_field"],
-        dst_idx=batch["dst_idx"],
-        src_idx=batch["src_idx"],
+        dst_idx=None,  # Not needed when batch_segments is provided
+        src_idx=None,  # Not needed when batch_segments is provided
         dst_idx_flat=batch["dst_idx_flat"],
         src_idx_flat=batch["src_idx_flat"],
         batch_segments=batch["batch_segments"],
         batch_size=batch_size,
     )
-    loss = mean_squared_loss(energy, batch["energies"])
-    mae = mean_absolute_error(energy, batch["energies"])
-    return loss, mae
+    
+    # Compute forces (dipole from energy_and_forces should match model_apply)
+    _, forces, _ = energy_and_forces(
+        model_apply, params,
+        atomic_numbers=batch["atomic_numbers"],
+        positions=batch["positions"],
+        Ef=batch["electric_field"],
+        dst_idx=None,  # Not needed when batch_segments is provided
+        src_idx=None,  # Not needed when batch_segments is provided
+        dst_idx_flat=batch["dst_idx_flat"],
+        src_idx_flat=batch["src_idx_flat"],
+        batch_segments=batch["batch_segments"],
+        batch_size=batch_size,
+    )
+    
+    # Compute losses
+    energy_loss = mean_squared_loss(energy.reshape(-1), batch["energies"].reshape(-1))
+    force_loss = mean_squared_loss(forces, batch["forces"])
+    dipole_loss = mean_squared_loss(dipole, batch["dipoles"]) if "dipoles" in batch else 0.0
+    total_loss = energy_weight * energy_loss + forces_weight * force_loss
+    if "dipoles" in batch:
+        total_loss = total_loss + dipole_loss
+    
+    # Compute MAEs
+    energy_mae = mean_absolute_error(energy, batch["energies"])
+    forces_mae = mean_absolute_error_forces(forces, batch["forces"])
+    dipole_mae = mean_absolute_error(dipole, batch["dipoles"]) if "dipoles" in batch else 0.0
+    
+    return total_loss, energy_loss, force_loss, energy_mae, forces_mae, dipole_mae
 
 
 def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, batch_size, 
                 clip_norm=10.0, ema_decay=0.999, early_stopping_patience=None, early_stopping_min_delta=0.0,
                 reduce_on_plateau_patience=5, reduce_on_plateau_cooldown=5, reduce_on_plateau_factor=0.9,
-                reduce_on_plateau_rtol=1e-4, reduce_on_plateau_accumulation_size=5, reduce_on_plateau_min_scale=0.01):
+                reduce_on_plateau_rtol=1e-4, reduce_on_plateau_accumulation_size=5, reduce_on_plateau_min_scale=0.01,
+                energy_weight=1.0, forces_weight=1.0):
     """
     Train model with EMA, gradient clipping, early stopping, and learning rate reduction on plateau.
     
@@ -476,12 +634,12 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
         atomic_numbers=atomic_numbers0,
         positions=positions0,
         Ef=ef0,
-        dst_idx=dst_idx,
-        src_idx=src_idx,
         dst_idx_flat=dst_idx_flat0,
         src_idx_flat=src_idx_flat0,
         batch_segments=batch_segments0,
         batch_size=1,  # Init always uses batch_size=1
+        dst_idx=dst_idx,
+        src_idx=src_idx,
     )
     opt_state = optimizer.init(params)
     
@@ -495,10 +653,6 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
     key, valid_key = jax.random.split(key)
     valid_batches = prepare_batches(valid_key, valid_data, batch_size)
 
-    print("Validation batches prepared")
-    for k in valid_batches[0].keys():
-        print(f"  {k}: {valid_batches[0][k]}")
-
     # Early stopping tracking
     best_valid_loss = float('inf')
     patience_counter = 0
@@ -509,9 +663,11 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
         train_batches = prepare_batches(shuffle_key, train_data, batch_size)
 
         train_loss = 0.0
-        train_mae = 0.0
+        train_energy_mae = 0.0
+        train_forces_mae = 0.0
+        train_dipole_mae = 0.0
         for i, batch in enumerate(train_batches):
-            params, ema_params, opt_state, loss, mae = train_step(
+            params, ema_params, opt_state, loss, energy_mae, forces_mae, dipole_mae = train_step(
                 model_apply=model.apply,
                 optimizer_update=optimizer.update,
                 batch=batch,
@@ -521,22 +677,36 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
                 ema_params=ema_params,
                 transform_state=transform_state,
                 ema_decay=ema_decay,
+                energy_weight=energy_weight,
+                forces_weight=forces_weight,
             )
             train_loss += (loss - train_loss) / (i + 1)
-            train_mae += (mae - train_mae) / (i + 1)
+            train_energy_mae += (energy_mae - train_energy_mae) / (i + 1)
+            train_forces_mae += (forces_mae - train_forces_mae) / (i + 1)
+            train_dipole_mae += (dipole_mae - train_dipole_mae) / (i + 1)
 
         valid_loss = 0.0
-        valid_mae = 0.0
+        valid_energy_loss = 0.0
+        valid_force_loss = 0.0
+        valid_energy_mae = 0.0
+        valid_forces_mae = 0.0
+        valid_dipole_mae = 0.0
         # Use EMA parameters for validation (as in physnetjax)
         for i, batch in enumerate(valid_batches):
-            loss, mae = eval_step(
+            loss, energy_loss, force_loss, energy_mae, forces_mae, dipole_mae = eval_step(
                 model_apply=model.apply,
                 batch=batch,
                 batch_size=batch_size,
                 params=ema_params,
+                energy_weight=energy_weight,
+                forces_weight=forces_weight,
             )
             valid_loss += (loss - valid_loss) / (i + 1)
-            valid_mae += (mae - valid_mae) / (i + 1)
+            valid_energy_loss += (energy_loss - valid_energy_loss) / (i + 1)
+            valid_force_loss += (force_loss - valid_force_loss) / (i + 1)
+            valid_energy_mae += (energy_mae - valid_energy_mae) / (i + 1)
+            valid_forces_mae += (forces_mae - valid_forces_mae) / (i + 1)
+            valid_dipole_mae += (dipole_mae - valid_dipole_mae) / (i + 1)
 
         # Update reduce on plateau transform state
         _, transform_state = transform.update(
@@ -554,12 +724,14 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
         else:
             patience_counter += 1
 
-        train_mae = train_mae * 23.0605
-        valid_mae = valid_mae * 23.0605
-
         print(f"epoch: {epoch:3d}                    train:   valid:")
         print(f"    loss [a.u.]             {train_loss: 8.6f} {valid_loss: 8.6f}")
-        print(f"    energy mae [kcal/mol]   {train_mae: 8.6f} {valid_mae: 8.6f}")
+        print(f"    energy loss [a.u.]      {train_energy_mae**2: 8.6f} {valid_energy_loss: 8.6f}")
+        print(f"    force loss [a.u.]       {train_forces_mae**2: 8.6f} {valid_force_loss: 8.6f}")
+        print(f"    energy mae [eV]         {train_energy_mae: 8.6f} {valid_energy_mae: 8.6f}")
+        print(f"    forces mae [eV/Å]       {train_forces_mae: 8.6f} {valid_forces_mae: 8.6f}")
+        if train_dipole_mae > 0.0 or valid_dipole_mae > 0.0:
+            print(f"    dipole mae [Debye]      {train_dipole_mae: 8.6f} {valid_dipole_mae: 8.6f}")
         print(f"    LR scale: {lr_scale: 8.6f}, effective LR: {learning_rate * lr_scale: 8.6f}")
         if early_stopping_patience is not None:
             print(f"    best valid loss: {best_valid_loss: 8.6f}, patience: {patience_counter}/{early_stopping_patience}")
@@ -579,11 +751,11 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--data", type=str, default="data-full.npz")
-    parser.add_argument("--features", type=int, default=64)
-    parser.add_argument("--max_degree", type=int, default=2)
-    parser.add_argument("--num_iterations", type=int, default=2)
-    parser.add_argument("--num_basis_functions", type=int, default=64)
-    parser.add_argument("--cutoff", type=float, default=10.0)
+    parser.add_argument("--features", type=int, default=128)
+    parser.add_argument("--max_degree", type=int, default=1)
+    parser.add_argument("--num_iterations", type=int, default=3)
+    parser.add_argument("--num_basis_functions", type=int, default=32)
+    parser.add_argument("--cutoff", type=float, default=6.0)
     parser.add_argument("--num_train", type=int, default=8000)
     parser.add_argument("--num_valid", type=int, default=2000)
     parser.add_argument("--num_epochs", type=int, default=100)
@@ -599,6 +771,10 @@ if __name__ == "__main__":
     parser.add_argument("--reduce_on_plateau_rtol", type=float, default=1e-4)
     parser.add_argument("--reduce_on_plateau_accumulation_size", type=int, default=5)
     parser.add_argument("--reduce_on_plateau_min_scale", type=float, default=0.01)
+    parser.add_argument("--energy_weight", type=float, default=1.0,
+                       help="Weight for energy loss in total loss")
+    parser.add_argument("--forces_weight", type=float, default=1.0,
+                       help="Weight for forces loss in total loss")
     args = parser.parse_args()
 
     print("Arguments:")
@@ -627,7 +803,7 @@ if __name__ == "__main__":
     print(f"  num_iterations: {args.num_iterations}")
     print(f"  num_basis_functions: {args.num_basis_functions}")
     print(f"  cutoff: {args.cutoff}")
-    print(f"  num_train: {args. num_train}")
+    print(f"  num_train: {args.num_train}")
     print(f"  num_valid: {args.num_valid}")
     print(f"  num_epochs: {args.num_epochs}")
     print(f"  learning_rate: {args.learning_rate}")
@@ -662,6 +838,7 @@ if __name__ == "__main__":
     print(f"  train positions:      {train_data['positions'].shape}")
     print(f"  train electric_field: {train_data['electric_field'].shape}")
     print(f"  train energies:       {train_data['energies'].shape}")
+    print(f"  train forces:        {train_data['forces'].shape}")
 
     message_passing_model = MessagePassingModel(
         features=args.features,
@@ -695,6 +872,8 @@ if __name__ == "__main__":
         reduce_on_plateau_rtol=args.reduce_on_plateau_rtol,
         reduce_on_plateau_accumulation_size=args.reduce_on_plateau_accumulation_size,
         reduce_on_plateau_min_scale=args.reduce_on_plateau_min_scale,
+        energy_weight=args.energy_weight,
+        forces_weight=args.forces_weight,
     )
 
     # Prepare model config
@@ -725,6 +904,8 @@ if __name__ == "__main__":
             'reduce_on_plateau_rtol': args.reduce_on_plateau_rtol,
             'reduce_on_plateau_accumulation_size': args.reduce_on_plateau_accumulation_size,
             'reduce_on_plateau_min_scale': args.reduce_on_plateau_min_scale,
+            'energy_weight': args.energy_weight,
+            'forces_weight': args.forces_weight,
         },
         'data': {
             'dataset': args.data,

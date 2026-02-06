@@ -129,20 +129,69 @@ def compute_metrics(predictions, targets, convert_to_kcal_mol=True):
 
 @functools.partial(jax.jit, static_argnames=("model_apply", "batch_size"))
 def inference_step(model_apply, batch, batch_size, params):
-    """Single inference step."""
-    energy = model_apply(
+    """Single inference step - returns energy, forces, and dipole."""
+    # Compute energy and dipole
+    energy, dipole = model_apply(
         params,
         atomic_numbers=batch["atomic_numbers"],
         positions=batch["positions"],
         Ef=batch["electric_field"],
-        dst_idx=batch["dst_idx"],
-        src_idx=batch["src_idx"],
         dst_idx_flat=batch["dst_idx_flat"],
         src_idx_flat=batch["src_idx_flat"],
         batch_segments=batch["batch_segments"],
         batch_size=batch_size,
     )
-    return energy
+    
+    # Compute forces
+    from training import energy_and_forces
+    _, forces, _ = energy_and_forces(
+        model_apply, params,
+        atomic_numbers=batch["atomic_numbers"],
+        positions=batch["positions"],
+        Ef=batch["electric_field"],
+        dst_idx_flat=batch["dst_idx_flat"],
+        src_idx_flat=batch["src_idx_flat"],
+        batch_segments=batch["batch_segments"],
+        batch_size=batch_size,
+    )
+    
+    return energy, forces, dipole
+
+
+def compute_force_metrics(predictions, targets):
+    """Compute force error metrics per component and magnitude."""
+    predictions = np.asarray(predictions)  # (N, 3)
+    targets = np.asarray(targets)  # (N, 3)
+    
+    errors = predictions - targets  # (N, 3)
+    
+    # Per component errors
+    mae_x = np.mean(np.abs(errors[:, 0]))
+    mae_y = np.mean(np.abs(errors[:, 1]))
+    mae_z = np.mean(np.abs(errors[:, 2]))
+    mae_components = np.array([mae_x, mae_y, mae_z])
+    
+    # Magnitude errors
+    pred_mags = np.linalg.norm(predictions, axis=1)
+    target_mags = np.linalg.norm(targets, axis=1)
+    mag_errors = pred_mags - target_mags
+    mae_magnitude = np.mean(np.abs(mag_errors))
+    rmse_magnitude = np.sqrt(np.mean(mag_errors**2))
+    
+    # Overall force MAE (average over all components)
+    mae_overall = np.mean(np.abs(errors))
+    rmse_overall = np.sqrt(np.mean(errors**2))
+    
+    return {
+        'mae_overall': mae_overall,
+        'rmse_overall': rmse_overall,
+        'mae_x': mae_x,
+        'mae_y': mae_y,
+        'mae_z': mae_z,
+        'mae_components': mae_components,
+        'mae_magnitude': mae_magnitude,
+        'rmse_magnitude': rmse_magnitude,
+    }
 
 
 def evaluate_dataset(model, params, data, batch_size=64, dataset_name="test"):
@@ -151,20 +200,27 @@ def evaluate_dataset(model, params, data, batch_size=64, dataset_name="test"):
     print(f"Evaluating on {dataset_name} dataset")
     print(f"{'='*60}")
     
+    has_forces = 'forces' in data and data['forces'] is not None
+    has_dipoles = 'dipoles' in data and data['dipoles'] is not None
+    
     # Prepare batches
     key = jax.random.PRNGKey(42)
     batches = prepare_batches(key, data, batch_size)
     
     # Collect predictions and targets
-    all_predictions = []
-    all_targets = []
+    all_energy_predictions = []
+    all_energy_targets = []
+    all_force_predictions = []
+    all_force_targets = []
+    all_dipole_predictions = []
+    all_dipole_targets = []
     
     print(f"Processing {len(batches)} batches...")
     for i, batch in enumerate(batches):
         if (i + 1) % 10 == 0:
             print(f"  Batch {i+1}/{len(batches)}")
         
-        predictions = inference_step(
+        energy_pred, forces_pred, dipole_pred = inference_step(
             model_apply=model.apply,
             batch=batch,
             batch_size=batch_size,
@@ -172,28 +228,119 @@ def evaluate_dataset(model, params, data, batch_size=64, dataset_name="test"):
         )
         
         # Convert to numpy
-        predictions = np.asarray(predictions)
-        targets = np.asarray(batch["energies"]).reshape(-1)
+        energy_pred = np.asarray(energy_pred)
+        forces_pred = np.asarray(forces_pred)
+        dipole_pred = np.asarray(dipole_pred)
+        energy_targets = np.asarray(batch["energies"]).reshape(-1)
         
-        all_predictions.append(predictions)
-        all_targets.append(targets)
+        all_energy_predictions.append(energy_pred)
+        all_energy_targets.append(energy_targets)
+        
+        if has_forces:
+            force_targets = np.asarray(batch["forces"])
+            all_force_predictions.append(forces_pred)
+            all_force_targets.append(force_targets)
+        
+        if has_dipoles and "dipoles" in batch:
+            dipole_targets = np.asarray(batch["dipoles"])
+            all_dipole_predictions.append(dipole_pred)
+            all_dipole_targets.append(dipole_targets)
     
     # Concatenate all predictions and targets
-    all_predictions = np.concatenate(all_predictions)
-    all_targets = np.concatenate(all_targets)
+    all_energy_predictions = np.concatenate(all_energy_predictions)
+    all_energy_targets = np.concatenate(all_energy_targets)
     
-    # Compute metrics
-    metrics = compute_metrics(all_predictions, all_targets)
+    # Compute energy metrics
+    energy_metrics = compute_metrics(all_energy_predictions, all_energy_targets)
     
-    print(f"\nMetrics for {dataset_name}:")
-    print(f"  MAE:  {metrics['mae_kcal_mol']:.4f} kcal/mol ({metrics['mae']:.6f} eV)")
-    print(f"  RMSE: {metrics['rmse_kcal_mol']:.4f} kcal/mol ({metrics['rmse']:.6f} eV)")
-    print(f"  R²:   {metrics['r2']:.6f}")
-    print(f"  Mean Error: {metrics['mean_error_kcal_mol']:.4f} kcal/mol ({metrics['mean_error']:.6f} eV)")
-    print(f"  Std Error:  {metrics['std_error_kcal_mol']:.4f} kcal/mol ({metrics['std_error']:.6f} eV)")
-    print(f"  Max |Error|: {metrics['max_abs_error_kcal_mol']:.4f} kcal/mol ({metrics['max_abs_error']:.6f} eV)")
+    print(f"\nEnergy Metrics for {dataset_name}:")
+    print(f"  MAE:  {energy_metrics['mae_kcal_mol']:.4f} kcal/mol ({energy_metrics['mae']:.6f} eV)")
+    print(f"  RMSE: {energy_metrics['rmse_kcal_mol']:.4f} kcal/mol ({energy_metrics['rmse']:.6f} eV)")
+    print(f"  R²:   {energy_metrics['r2']:.6f}")
+    print(f"  Mean Error: {energy_metrics['mean_error_kcal_mol']:.4f} kcal/mol ({energy_metrics['mean_error']:.6f} eV)")
+    print(f"  Std Error:  {energy_metrics['std_error_kcal_mol']:.4f} kcal/mol ({energy_metrics['std_error']:.6f} eV)")
+    print(f"  Max |Error|: {energy_metrics['max_abs_error_kcal_mol']:.4f} kcal/mol ({energy_metrics['max_abs_error']:.6f} eV)")
     
-    return all_predictions, all_targets, metrics
+    # Compute force metrics if available
+    force_metrics = {}
+    if has_forces:
+        all_force_predictions = np.concatenate(all_force_predictions)
+        all_force_targets = np.concatenate(all_force_targets)
+        
+        force_metrics = compute_force_metrics(all_force_predictions, all_force_targets)
+        
+        # Convert force metrics to kcal/mol/angstrom
+        EV_ANG_TO_KCAL_MOL_ANG = EV_TO_KCAL_MOL  # Same conversion factor
+        force_metrics['mae_overall_kcal_mol_ang'] = force_metrics['mae_overall'] * EV_ANG_TO_KCAL_MOL_ANG
+        force_metrics['rmse_overall_kcal_mol_ang'] = force_metrics['rmse_overall'] * EV_ANG_TO_KCAL_MOL_ANG
+        force_metrics['mae_x_kcal_mol_ang'] = force_metrics['mae_x'] * EV_ANG_TO_KCAL_MOL_ANG
+        force_metrics['mae_y_kcal_mol_ang'] = force_metrics['mae_y'] * EV_ANG_TO_KCAL_MOL_ANG
+        force_metrics['mae_z_kcal_mol_ang'] = force_metrics['mae_z'] * EV_ANG_TO_KCAL_MOL_ANG
+        force_metrics['mae_magnitude_kcal_mol_ang'] = force_metrics['mae_magnitude'] * EV_ANG_TO_KCAL_MOL_ANG
+        force_metrics['rmse_magnitude_kcal_mol_ang'] = force_metrics['rmse_magnitude'] * EV_ANG_TO_KCAL_MOL_ANG
+        
+        print(f"\nForce Metrics for {dataset_name}:")
+        print(f"  MAE (overall): {force_metrics['mae_overall_kcal_mol_ang']:.4f} kcal/(mol·Å) ({force_metrics['mae_overall']:.6f} eV/Å)")
+        print(f"  RMSE (overall): {force_metrics['rmse_overall_kcal_mol_ang']:.4f} kcal/(mol·Å) ({force_metrics['rmse_overall']:.6f} eV/Å)")
+        print(f"  MAE (magnitude): {force_metrics['mae_magnitude_kcal_mol_ang']:.4f} kcal/(mol·Å) ({force_metrics['mae_magnitude']:.6f} eV/Å)")
+        print(f"  RMSE (magnitude): {force_metrics['rmse_magnitude_kcal_mol_ang']:.4f} kcal/(mol·Å) ({force_metrics['rmse_magnitude']:.6f} eV/Å)")
+        print(f"  MAE per component:")
+        print(f"    X: {force_metrics['mae_x_kcal_mol_ang']:.4f} kcal/(mol·Å) ({force_metrics['mae_x']:.6f} eV/Å)")
+        print(f"    Y: {force_metrics['mae_y_kcal_mol_ang']:.4f} kcal/(mol·Å) ({force_metrics['mae_y']:.6f} eV/Å)")
+        print(f"    Z: {force_metrics['mae_z_kcal_mol_ang']:.4f} kcal/(mol·Å) ({force_metrics['mae_z']:.6f} eV/Å)")
+    else:
+        all_force_predictions = None
+        all_force_targets = None
+    
+    # Compute dipole metrics if available
+    dipole_metrics = {}
+    if has_dipoles and len(all_dipole_predictions) > 0:
+        all_dipole_predictions = np.concatenate(all_dipole_predictions)
+        all_dipole_targets = np.concatenate(all_dipole_targets)
+        
+        # Compute dipole metrics (similar to force metrics)
+        dipole_errors = all_dipole_predictions - all_dipole_targets  # (N, 3)
+        dipole_metrics['mae_overall'] = np.mean(np.abs(dipole_errors))
+        dipole_metrics['rmse_overall'] = np.sqrt(np.mean(dipole_errors**2))
+        dipole_metrics['mae_x'] = np.mean(np.abs(dipole_errors[:, 0]))
+        dipole_metrics['mae_y'] = np.mean(np.abs(dipole_errors[:, 1]))
+        dipole_metrics['mae_z'] = np.mean(np.abs(dipole_errors[:, 2]))
+        
+        # Magnitude errors
+        dipole_pred_mag = np.linalg.norm(all_dipole_predictions, axis=1)
+        dipole_target_mag = np.linalg.norm(all_dipole_targets, axis=1)
+        dipole_mag_errors = dipole_pred_mag - dipole_target_mag
+        dipole_metrics['mae_magnitude'] = np.mean(np.abs(dipole_mag_errors))
+        dipole_metrics['rmse_magnitude'] = np.sqrt(np.mean(dipole_mag_errors**2))
+        
+        # Convert to Debye (assuming input is in Debye, or atomic units)
+        # Note: dipole is typically in Debye units, so no conversion needed
+        # But we'll add Debye suffix for clarity
+        dipole_metrics['mae_overall_debye'] = dipole_metrics['mae_overall']
+        dipole_metrics['rmse_overall_debye'] = dipole_metrics['rmse_overall']
+        dipole_metrics['mae_x_debye'] = dipole_metrics['mae_x']
+        dipole_metrics['mae_y_debye'] = dipole_metrics['mae_y']
+        dipole_metrics['mae_z_debye'] = dipole_metrics['mae_z']
+        dipole_metrics['mae_magnitude_debye'] = dipole_metrics['mae_magnitude']
+        dipole_metrics['rmse_magnitude_debye'] = dipole_metrics['rmse_magnitude']
+        
+        print(f"\nDipole Metrics for {dataset_name}:")
+        print(f"  MAE (overall): {dipole_metrics['mae_overall_debye']:.4f} Debye")
+        print(f"  RMSE (overall): {dipole_metrics['rmse_overall_debye']:.4f} Debye")
+        print(f"  MAE (magnitude): {dipole_metrics['mae_magnitude_debye']:.4f} Debye")
+        print(f"  RMSE (magnitude): {dipole_metrics['rmse_magnitude_debye']:.4f} Debye")
+        print(f"  MAE per component:")
+        print(f"    X: {dipole_metrics['mae_x_debye']:.4f} Debye")
+        print(f"    Y: {dipole_metrics['mae_y_debye']:.4f} Debye")
+        print(f"    Z: {dipole_metrics['mae_z_debye']:.4f} Debye")
+    else:
+        all_dipole_predictions = None
+        all_dipole_targets = None
+    
+    # Combine metrics
+    all_metrics = {**energy_metrics, **force_metrics, **dipole_metrics}
+    
+    return all_energy_predictions, all_energy_targets, all_force_predictions, all_force_targets, all_dipole_predictions, all_dipole_targets, all_metrics
 
 
 def plot_scatter(predictions, targets, metrics, title="Energy Predictions", 
@@ -284,6 +431,152 @@ def plot_residuals(predictions, targets, metrics, title="Residual Plot",
     ax.set_title(f'{title}', fontsize=11)
     ax.legend(fontsize=10)
     ax.grid(True, alpha=0.3)
+    
+    if save_path:
+        plt.savefig(save_path, bbox_inches='tight')
+        print(f"Saved plot to {save_path}")
+    
+    return ax
+
+
+def plot_force_scatter(predictions, targets, metrics, save_path=None, ax=None):
+    """Create scatter plot of force magnitudes."""
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(8, 8))
+    
+    pred_mags = np.linalg.norm(predictions, axis=1) * EV_TO_KCAL_MOL
+    target_mags = np.linalg.norm(targets, axis=1) * EV_TO_KCAL_MOL
+    
+    ax.scatter(target_mags, pred_mags, alpha=0.5, s=20, edgecolors='none')
+    
+    lims = [min(target_mags.min(), pred_mags.min()), max(target_mags.max(), pred_mags.max())]
+    ax.plot(lims, lims, 'r--', alpha=0.75, linewidth=2, label='Perfect prediction')
+    
+    ax.set_xlabel('True Force Magnitude (kcal/(mol·Å))', fontsize=12)
+    ax.set_ylabel('Predicted Force Magnitude (kcal/(mol·Å))', fontsize=12)
+    mae_mag = metrics.get('mae_magnitude_kcal_mol_ang', metrics['mae_magnitude'] * EV_TO_KCAL_MOL)
+    rmse_mag = metrics.get('rmse_magnitude_kcal_mol_ang', metrics['rmse_magnitude'] * EV_TO_KCAL_MOL)
+    ax.set_title(f'Force Magnitude Predictions\nMAE: {mae_mag:.4f} | RMSE: {rmse_mag:.4f} kcal/(mol·Å)', fontsize=11)
+    ax.legend(fontsize=10)
+    ax.grid(True, alpha=0.3)
+    ax.set_aspect('equal', adjustable='box')
+    
+    if save_path:
+        plt.savefig(save_path, bbox_inches='tight')
+        print(f"Saved plot to {save_path}")
+    
+    return ax
+
+
+def plot_force_component_errors(predictions, targets, metrics, save_path=None, ax=None):
+    """Plot force errors per component."""
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(8, 6))
+    
+    errors = (predictions - targets) * EV_TO_KCAL_MOL  # Convert to kcal/(mol·Å)
+    
+    components = ['X', 'Y', 'Z']
+    mae_values = [
+        metrics.get('mae_x_kcal_mol_ang', metrics['mae_x'] * EV_TO_KCAL_MOL),
+        metrics.get('mae_y_kcal_mol_ang', metrics['mae_y'] * EV_TO_KCAL_MOL),
+        metrics.get('mae_z_kcal_mol_ang', metrics['mae_z'] * EV_TO_KCAL_MOL),
+    ]
+    
+    bars = ax.bar(components, mae_values, alpha=0.7, edgecolor='black', linewidth=1)
+    ax.set_ylabel('MAE (kcal/(mol·Å))', fontsize=12)
+    ax.set_title('Force Error per Component', fontsize=11)
+    ax.grid(True, alpha=0.3, axis='y')
+    
+    # Add value labels on bars
+    for bar, val in zip(bars, mae_values):
+        height = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width()/2., height,
+                f'{val:.4f}', ha='center', va='bottom', fontsize=10)
+    
+    if save_path:
+        plt.savefig(save_path, bbox_inches='tight')
+        print(f"Saved plot to {save_path}")
+    
+    return ax
+
+
+def plot_force_magnitude_scatter(predictions, targets, metrics, save_path=None, ax=None):
+    """Plot force magnitude errors vs magnitude."""
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(8, 6))
+    
+    pred_mags = np.linalg.norm(predictions, axis=1) * EV_TO_KCAL_MOL
+    target_mags = np.linalg.norm(targets, axis=1) * EV_TO_KCAL_MOL
+    mag_errors = (pred_mags - target_mags)
+    
+    ax.scatter(target_mags, mag_errors, alpha=0.5, s=20, edgecolors='none')
+    ax.axhline(0, color='r', linestyle='--', linewidth=2, label='Zero error')
+    
+    ax.set_xlabel('True Force Magnitude (kcal/(mol·Å))', fontsize=12)
+    ax.set_ylabel('Magnitude Error (kcal/(mol·Å))', fontsize=12)
+    ax.set_title('Force Magnitude Error vs Magnitude', fontsize=11)
+    ax.legend(fontsize=10)
+    ax.grid(True, alpha=0.3)
+    
+    if save_path:
+        plt.savefig(save_path, bbox_inches='tight')
+        print(f"Saved plot to {save_path}")
+    
+    return ax
+
+
+def plot_force_error_distribution(predictions, targets, metrics, save_path=None, ax=None):
+    """Plot distribution of force errors."""
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(8, 6))
+    
+    errors = (predictions - targets) * EV_TO_KCAL_MOL  # Convert to kcal/(mol·Å)
+    errors_flat = errors.flatten()
+    
+    ax.hist(errors_flat, bins=50, alpha=0.7, edgecolor='black', linewidth=0.5)
+    ax.axvline(0, color='r', linestyle='--', linewidth=2, label='Zero error')
+    mean_error = np.mean(errors_flat)
+    ax.axvline(mean_error, color='g', linestyle='--', linewidth=2, label=f'Mean: {mean_error:.4f}')
+    
+    ax.set_xlabel('Force Error (kcal/(mol·Å))', fontsize=12)
+    ax.set_ylabel('Frequency', fontsize=12)
+    std_error = np.std(errors_flat)
+    ax.set_title(f'Force Error Distribution\nStd: {std_error:.4f} kcal/(mol·Å)', fontsize=11)
+    ax.legend(fontsize=10)
+    ax.grid(True, alpha=0.3)
+    
+    if save_path:
+        plt.savefig(save_path, bbox_inches='tight')
+        print(f"Saved plot to {save_path}")
+    
+    return ax
+
+
+def plot_force_component_comparison(predictions, targets, metrics, save_path=None, ax=None):
+    """Plot comparison of force components."""
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(8, 8))
+    
+    errors = (predictions - targets) * EV_TO_KCAL_MOL
+    
+    # Flatten all components for comparison
+    errors_x = errors[:, 0].flatten()
+    errors_y = errors[:, 1].flatten()
+    errors_z = errors[:, 2].flatten()
+    
+    ax.scatter(errors_x, errors_y, alpha=0.3, s=10, label='X vs Y', c='blue')
+    ax.scatter(errors_x, errors_z, alpha=0.3, s=10, label='X vs Z', c='red')
+    ax.scatter(errors_y, errors_z, alpha=0.3, s=10, label='Y vs Z', c='green')
+    
+    ax.axhline(0, color='k', linestyle='--', linewidth=1, alpha=0.5)
+    ax.axvline(0, color='k', linestyle='--', linewidth=1, alpha=0.5)
+    
+    ax.set_xlabel('Force Error (kcal/(mol·Å))', fontsize=12)
+    ax.set_ylabel('Force Error (kcal/(mol·Å))', fontsize=12)
+    ax.set_title('Force Component Error Comparison', fontsize=11)
+    ax.legend(fontsize=10)
+    ax.grid(True, alpha=0.3)
+    ax.set_aspect('equal', adjustable='box')
     
     if save_path:
         plt.savefig(save_path, bbox_inches='tight')
@@ -457,6 +750,7 @@ def main():
     
     # Use all data as test if num_test is None, otherwise use first num_test
     if args.num_test is None:
+        indices = None
         test_data = {
             'atomic_numbers': jnp.asarray(dataset["Z"], dtype=jnp.int32),
             'positions': jnp.asarray(dataset["R"], dtype=jnp.float32),
@@ -477,70 +771,162 @@ def main():
         if test_data['positions'].ndim == 4 and test_data['positions'].shape[1] == 1:
             test_data['positions'] = test_data['positions'].squeeze(axis=1)
     
+    # Handle forces: F has shape (num_data, 1, N, 3) - squeeze out the extra dimension
+    if 'F' in dataset.files:
+        forces_raw = jnp.asarray(dataset["F"], dtype=jnp.float32)
+        if forces_raw.ndim == 4 and forces_raw.shape[1] == 1:
+            forces_raw = forces_raw.squeeze(axis=1)  # (num_data, N, 3)
+        
+        if indices is None:
+            test_data['forces'] = forces_raw
+        else:
+            test_data['forces'] = forces_raw[indices]
+    else:
+        print("Warning: No forces (F) found in dataset. Force evaluation will be skipped.")
+        test_data['forces'] = None
+    
+    # Handle dipoles: dipoles or dipole key
+    if 'dipoles' in dataset.files or 'dipole' in dataset.files:
+        dipole_key = 'dipoles' if 'dipoles' in dataset.files else 'dipole'
+        dipoles_raw = jnp.asarray(dataset[dipole_key], dtype=jnp.float32)
+        if dipoles_raw.ndim == 3 and dipoles_raw.shape[1] == 1:
+            dipoles_raw = dipoles_raw.squeeze(axis=1)  # (num_data, 3)
+        
+        if indices is None:
+            test_data['dipoles'] = dipoles_raw
+        else:
+            test_data['dipoles'] = dipoles_raw[indices]
+    else:
+        test_data['dipoles'] = None
+    
     print(f"Test data size: {len(test_data['energies'])}")
+    if test_data['forces'] is not None:
+        print(f"Test forces shape: {test_data['forces'].shape}")
     
     # Evaluate
-    predictions, targets, metrics = evaluate_dataset(
-        model, params, test_data, batch_size=args.batch_size, dataset_name="test"
-    )
+    if test_data['forces'] is not None:
+        energy_pred, energy_targets, force_pred, force_targets, dipole_pred, dipole_targets, metrics = evaluate_dataset(
+            model, params, test_data, batch_size=args.batch_size, dataset_name="test"
+        )
+    else:
+        # Fallback if no forces
+        print("Warning: Evaluating without forces (forces not available in dataset)")
+        energy_pred, energy_targets, _, _, dipole_pred, dipole_targets, metrics = evaluate_dataset(
+            model, params, test_data, batch_size=args.batch_size, dataset_name="test"
+        )
+        force_pred = None
+        force_targets = None
     
     # Save metrics
     metrics_path = output_dir / "metrics.json"
     with open(metrics_path, 'w') as f:
-        json.dump({k: float(v) for k, v in metrics.items()}, f, indent=2)
+        json.dump({k: float(v) if isinstance(v, (np.ndarray, np.generic)) else v for k, v in metrics.items()}, f, indent=2)
     print(f"\n✓ Saved metrics to {metrics_path}")
     
     # Create plots
     print(f"\nCreating plots...")
     
-    # Scatter plot
+    # Energy scatter plot
     scatter_path = output_dir / "scatter_energy.png"
-    plot_scatter(predictions, targets, metrics, 
+    plot_scatter(energy_pred, energy_targets, metrics, 
                 title="Energy Predictions", save_path=scatter_path)
     
-    # Error distribution
+    # Energy error distribution
     error_path = output_dir / "error_distribution.png"
-    plot_error_distribution(predictions, targets, metrics,
-                          title="Error Distribution", save_path=error_path)
+    plot_error_distribution(energy_pred, energy_targets, metrics,
+                          title="Energy Error Distribution", save_path=error_path)
     
-    # Residual plot
+    # Energy residual plot
     residual_path = output_dir / "residuals.png"
-    plot_residuals(predictions, targets, metrics,
-                  title="Residual Plot", save_path=residual_path)
+    plot_residuals(energy_pred, energy_targets, metrics,
+                  title="Energy Residual Plot", save_path=residual_path)
+    
+    # Force scatter plots (if forces available)
+    if force_pred is not None and force_targets is not None:
+        force_scatter_path = output_dir / "scatter_forces.png"
+        plot_force_scatter(force_pred, force_targets, metrics, save_path=force_scatter_path)
+        
+        force_component_path = output_dir / "force_component_errors.png"
+        plot_force_component_errors(force_pred, force_targets, metrics, save_path=force_component_path)
+        
+        force_magnitude_path = output_dir / "force_magnitude_scatter.png"
+        plot_force_magnitude_scatter(force_pred, force_targets, metrics, save_path=force_magnitude_path)
+        
+        force_error_dist_path = output_dir / "force_error_distribution.png"
+        plot_force_error_distribution(force_pred, force_targets, metrics, save_path=force_error_dist_path)
     
     # Combined figure
-    fig, axes = plt.subplots(2, 2, figsize=(16, 16))
-    
-    plot_scatter(predictions, targets, metrics, 
-                title="Energy Predictions", ax=axes[0, 0])
-    plot_error_distribution(predictions, targets, metrics,
-                          title="Error Distribution", ax=axes[0, 1])
-    plot_residuals(predictions, targets, metrics,
-                  title="Residual Plot", ax=axes[1, 0])
-    
-    # Q-Q plot for errors
-    try:
-        from scipy import stats
-        errors = predictions - targets
-        errors_kcal = errors * EV_TO_KCAL_MOL
-        stats.probplot(errors_kcal, dist="norm", plot=axes[1, 1])
-        axes[1, 1].set_title("Q-Q Plot of Errors", fontsize=11)
-        axes[1, 1].set_xlabel('Theoretical Quantiles', fontsize=12)
-        axes[1, 1].set_ylabel('Sample Quantiles (kcal/mol)', fontsize=12)
-        axes[1, 1].grid(True, alpha=0.3)
-    except ImportError:
-        # If scipy not available, show error histogram instead
-        errors = predictions - targets
-        errors_kcal = errors * EV_TO_KCAL_MOL
-        axes[1, 1].hist(errors_kcal, bins=50, alpha=0.7, edgecolor='black', linewidth=0.5)
-        axes[1, 1].axvline(0, color='r', linestyle='--', linewidth=2)
-        axes[1, 1].set_title("Error Histogram", fontsize=11)
-        axes[1, 1].set_xlabel('Error (kcal/mol)', fontsize=12)
-        axes[1, 1].set_ylabel('Frequency', fontsize=12)
-        axes[1, 1].grid(True, alpha=0.3)
+    if force_pred is not None and force_targets is not None:
+        fig = plt.figure(figsize=(20, 16))
+        gs = fig.add_gridspec(3, 3, hspace=0.3, wspace=0.3)
+        
+        # Energy plots (top row)
+        plot_scatter(energy_pred, energy_targets, metrics, 
+                    title="Energy Predictions", ax=fig.add_subplot(gs[0, 0]))
+        plot_error_distribution(energy_pred, energy_targets, metrics,
+                              title="Energy Error Distribution", ax=fig.add_subplot(gs[0, 1]))
+        plot_residuals(energy_pred, energy_targets, metrics,
+                      title="Energy Residual Plot", ax=fig.add_subplot(gs[0, 2]))
+        
+        # Force plots (middle row)
+        plot_force_scatter(force_pred, force_targets, metrics, ax=fig.add_subplot(gs[1, 0]))
+        plot_force_component_errors(force_pred, force_targets, metrics, ax=fig.add_subplot(gs[1, 1]))
+        plot_force_magnitude_scatter(force_pred, force_targets, metrics, ax=fig.add_subplot(gs[1, 2]))
+        
+        # Q-Q plot and force error distribution (bottom row)
+        try:
+            from scipy import stats
+            errors = energy_pred - energy_targets
+            errors_kcal = errors * EV_TO_KCAL_MOL
+            stats.probplot(errors_kcal, dist="norm", plot=fig.add_subplot(gs[2, 0]))
+            fig.axes[-1].set_title("Q-Q Plot of Energy Errors", fontsize=11)
+            fig.axes[-1].set_xlabel('Theoretical Quantiles', fontsize=12)
+            fig.axes[-1].set_ylabel('Sample Quantiles (kcal/mol)', fontsize=12)
+            fig.axes[-1].grid(True, alpha=0.3)
+        except ImportError:
+            errors = energy_pred - energy_targets
+            errors_kcal = errors * EV_TO_KCAL_MOL
+            fig.add_subplot(gs[2, 0]).hist(errors_kcal, bins=50, alpha=0.7, edgecolor='black', linewidth=0.5)
+            fig.axes[-1].axvline(0, color='r', linestyle='--', linewidth=2)
+            fig.axes[-1].set_title("Energy Error Histogram", fontsize=11)
+            fig.axes[-1].set_xlabel('Error (kcal/mol)', fontsize=12)
+            fig.axes[-1].set_ylabel('Frequency', fontsize=12)
+            fig.axes[-1].grid(True, alpha=0.3)
+        
+        plot_force_error_distribution(force_pred, force_targets, metrics, ax=fig.add_subplot(gs[2, 1]))
+        plot_force_component_comparison(force_pred, force_targets, metrics, ax=fig.add_subplot(gs[2, 2]))
+    else:
+        # Energy-only figure
+        fig, axes = plt.subplots(2, 2, figsize=(16, 16))
+        
+        plot_scatter(energy_pred, energy_targets, metrics, 
+                    title="Energy Predictions", ax=axes[0, 0])
+        plot_error_distribution(energy_pred, energy_targets, metrics,
+                              title="Energy Error Distribution", ax=axes[0, 1])
+        plot_residuals(energy_pred, energy_targets, metrics,
+                      title="Energy Residual Plot", ax=axes[1, 0])
+        
+        # Q-Q plot for errors
+        try:
+            from scipy import stats
+            errors = energy_pred - energy_targets
+            errors_kcal = errors * EV_TO_KCAL_MOL
+            stats.probplot(errors_kcal, dist="norm", plot=axes[1, 1])
+            axes[1, 1].set_title("Q-Q Plot of Energy Errors", fontsize=11)
+            axes[1, 1].set_xlabel('Theoretical Quantiles', fontsize=12)
+            axes[1, 1].set_ylabel('Sample Quantiles (kcal/mol)', fontsize=12)
+            axes[1, 1].grid(True, alpha=0.3)
+        except ImportError:
+            errors = energy_pred - energy_targets
+            errors_kcal = errors * EV_TO_KCAL_MOL
+            axes[1, 1].hist(errors_kcal, bins=50, alpha=0.7, edgecolor='black', linewidth=0.5)
+            axes[1, 1].axvline(0, color='r', linestyle='--', linewidth=2)
+            axes[1, 1].set_title("Energy Error Histogram", fontsize=11)
+            axes[1, 1].set_xlabel('Error (kcal/mol)', fontsize=12)
+            axes[1, 1].set_ylabel('Frequency', fontsize=12)
+            axes[1, 1].grid(True, alpha=0.3)
     
     combined_path = output_dir / "evaluation_summary.png"
-    plt.tight_layout()
     plt.savefig(combined_path, bbox_inches='tight')
     print(f"✓ Saved combined plot to {combined_path}")
     
@@ -549,9 +935,14 @@ def main():
     print(f"{'='*60}")
     print(f"\nResults saved to: {output_dir}")
     print(f"  - Metrics: {metrics_path}")
-    print(f"  - Scatter plot: {scatter_path}")
-    print(f"  - Error distribution: {error_path}")
-    print(f"  - Residual plot: {residual_path}")
+    print(f"  - Energy scatter plot: {scatter_path}")
+    print(f"  - Energy error distribution: {error_path}")
+    print(f"  - Energy residual plot: {residual_path}")
+    if force_pred is not None and force_targets is not None:
+        print(f"  - Force scatter plot: {force_scatter_path}")
+        print(f"  - Force component errors: {force_component_path}")
+        print(f"  - Force magnitude scatter: {force_magnitude_path}")
+        print(f"  - Force error distribution: {force_error_dist_path}")
     print(f"  - Summary: {combined_path}")
 
 
