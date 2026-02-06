@@ -68,19 +68,19 @@ lj.monkey_patch()
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data", type=str, default="data-full.npz")
-    parser.add_argument("--features", type=int, default=64)
+    parser.add_argument("--features", type=int, default=32)
     parser.add_argument("--max_degree", type=int, default=4)
     parser.add_argument("--num_iterations", type=int, default=2)
-    parser.add_argument("--num_basis_functions", type=int, default=64)
+    parser.add_argument("--num_basis_functions", type=int, default=32)
     parser.add_argument("--cutoff", type=float, default=10.0)
     
-    parser.add_argument("--num_train", type=int, default=8000)
-    parser.add_argument("--num_valid", type=int, default=2000)
+    parser.add_argument("--num_train", type=int, default=800)
+    parser.add_argument("--num_valid", type=int, default=100)
     parser.add_argument("--num_epochs", type=int, default=500)
-    parser.add_argument("--learning_rate", type=float, default=0.001)
-    parser.add_argument("--batch_size", type=int, default=1)
+    parser.add_argument("--learning_rate", type=float, default=0.0001)
+    parser.add_argument("--batch_size", type=int, default=10)
 
-    parser.add_argument("--clip_norm", type=float, default=10000.0)
+    parser.add_argument("--clip_norm", type=float, default=1000.0)
     parser.add_argument("--ema_decay", type=float, default=0.9)
     parser.add_argument("--early_stopping_patience", type=int, default=None)
     parser.add_argument("--early_stopping_min_delta", type=float, default=0.0)
@@ -93,7 +93,7 @@ def get_args():
 
     parser.add_argument("--energy_weight", type=float, default=1.0,
                        help="Weight for energy loss in total loss")
-    parser.add_argument("--forces_weight", type=float, default=100.0,
+    parser.add_argument("--forces_weight", type=float, default=1000.0,
                        help="Weight for forces loss in total loss")
     parser.add_argument("--dipole_weight", type=float, default=20.0,
                        help="Weight for dipole loss in total loss")
