@@ -69,9 +69,9 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data", type=str, default="data-full.npz")
     parser.add_argument("--features", type=int, default=64)
-    parser.add_argument("--max_degree", type=int, default=2)
+    parser.add_argument("--max_degree", type=int, default=1)
     parser.add_argument("--num_iterations", type=int, default=2)
-    parser.add_argument("--num_basis_functions", type=int, default=64)
+    parser.add_argument("--num_basis_functions", type=int, default=32)
     parser.add_argument("--cutoff", type=float, default=10.0)
     
     parser.add_argument("--num_train", type=int, default=8000)
@@ -294,15 +294,8 @@ class MessagePassingModel(nn.Module):
             lambda rng, shape: jnp.zeros(shape, dtype=positions.dtype),
             (self.max_atomic_number + 1,)
         )
-        # add an energy proportional to the dipole x electric field
-        # Broadcast Ef from (B, 3) to (B*N, 3) by repeating for each atom
-        Ef_broadcasted = jnp.repeat(Ef[:, None, :], N, axis=1).reshape(B * N, 3)  # (B*N, 3)
-        # Compute atomic dipole-electric field interaction: -μ·E for each atom
-        dipole_ef_interaction = -jnp.sum(atomic_dipoles * Ef_broadcasted, axis=-1)  # (B*N,)
-
         atomic_energies = nn.Dense(1, use_bias=False, kernel_init=jax.nn.initializers.zeros)(x)
         atomic_energies = jnp.squeeze(atomic_energies, axis=(-1, -2, -3))  # (B*N,)
-        atomic_energies = atomic_energies + dipole_ef_interaction  # (B*N,)
 
         atomic_energies = atomic_energies + element_bias[atomic_numbers_flat]
 
