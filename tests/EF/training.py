@@ -373,7 +373,7 @@ def prepare_datasets(key, num_train, num_valid, dataset):
     return train_data, valid_data
 
 
-def prepare_batches(key, data, batch_size):
+def prepare_batches(key, data, batch_size, num_atoms = 29):
     """
     Returns list of batch dicts with consistent shapes:
       atomic_numbers: (B*N,) flattened
@@ -391,7 +391,7 @@ def prepare_batches(key, data, batch_size):
     perms = perms[: steps_per_epoch * batch_size]  # drop incomplete last batch
     perms = perms.reshape((steps_per_epoch, batch_size))
 
-    num_atoms = 29 #data["positions"].shape[1]
+     #data["positions"].shape[1]
     dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(num_atoms)
     # Ensure these are jax arrays with explicit dtype
     dst_idx = jnp.asarray(dst_idx, dtype=jnp.int32)
