@@ -62,6 +62,50 @@ print("JAX devices:", jax.devices())
 import lovely_jax as lj
 lj.monkey_patch()
 
+
+
+
+def get_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--data", type=str, default="data-full.npz")
+    parser.add_argument("--features", type=int, default=64)
+    parser.add_argument("--max_degree", type=int, default=1)
+    parser.add_argument("--num_iterations", type=int, default=3)
+    parser.add_argument("--num_basis_functions", type=int, default=64)
+    parser.add_argument("--cutoff", type=float, default=3.0)
+    parser.add_argument("--num_train", type=int, default=8000)
+    parser.add_argument("--num_valid", type=int, default=2000)
+    parser.add_argument("--num_epochs", type=int, default=100)
+    parser.add_argument("--learning_rate", type=float, default=0.0001)
+    parser.add_argument("--batch_size", type=int, default=64)
+    parser.add_argument("--clip_norm", type=float, default=1.0)
+    parser.add_argument("--ema_decay", type=float, default=0.75)
+    parser.add_argument("--early_stopping_patience", type=int, default=None)
+    parser.add_argument("--early_stopping_min_delta", type=float, default=0.0)
+    parser.add_argument("--reduce_on_plateau_patience", type=int, default=5)
+    parser.add_argument("--reduce_on_plateau_cooldown", type=int, default=5)
+    parser.add_argument("--reduce_on_plateau_factor", type=float, default=0.9)
+    parser.add_argument("--reduce_on_plateau_rtol", type=float, default=1e-4)
+    parser.add_argument("--reduce_on_plateau_accumulation_size", type=int, default=5)
+    parser.add_argument("--reduce_on_plateau_min_scale", type=float, default=0.01)
+    parser.add_argument("--energy_weight", type=float, default=1.0,
+                       help="Weight for energy loss in total loss")
+    parser.add_argument("--forces_weight", type=float, default=100.0,
+                       help="Weight for forces loss in total loss")
+    parser.add_argument("--dipole_weight", type=float, default=10.0,
+                       help="Weight for dipole loss in total loss")
+    args = parser.parse_args()
+    return args
+
+
+
+
+
+
+
+
+
+
 # -------------------------
 # Load dataset
 # -------------------------
@@ -94,7 +138,7 @@ def mean_absolute_error_forces(prediction, target, mask=None):
         count = mask.sum()
     else:
         count = errors.size
-    return jnp.sum(jnp.abs(errors)) / count if count > 0 else 0.0
+    return jnp.where(count > 0, jnp.sum(jnp.abs(errors)) / count, 0.0)
 
 
 # -------------------------
@@ -183,14 +227,19 @@ class MessagePassingModel(nn.Module):
             x = e3x.nn.add(x, y)
             x = e3x.nn.Dense(self.features)(x)
             x = e3x.nn.silu(x)
-            x = e3x.nn.Dense(self.features, kernel_init=jax.nn.initializers.zeros)(x)
+            x = e3x.nn.Dense(self.features)(x)
             x = e3x.nn.add(x, y)
             x = e3x.nn.silu(x)
             # Couple EF - xEF already has correct shape (B*N, 2, 4, features) matching x
-            xEF = e3x.nn.Tensor()(x, xEF)
-            x = e3x.nn.add(x, xEF)
+            _xEF = e3x.nn.Tensor()(x, xEF)
+            _xEF = e3x.nn.hard_tanh(_xEF) 
+            x = e3x.nn.add(x, _xEF)
+            x = e3x.nn.silu(x)
             x = e3x.nn.TensorDense(max_degree=self.max_degree)(x)
-
+            
+        for i in range(3):
+            x = e3x.nn.Dense(self.features)(x)
+            x = e3x.nn.silu(x)
 
         # Save original x before reduction for dipole prediction
         x_orig = x  # (B*N, 2, (max_degree+1)^2, features)
@@ -205,17 +254,13 @@ class MessagePassingModel(nn.Module):
             (self.max_atomic_number + 1,)
         )
 
-        for i in range(3):
-            x = e3x.nn.Dense(self.features)(x)
-            x = e3x.nn.silu(x)
+
 
         atomic_energies = nn.Dense(1, use_bias=False, kernel_init=jax.nn.initializers.zeros)(x)
         atomic_energies = jnp.squeeze(atomic_energies, axis=(-1, -2, -3))  # (B*N,)
 
-        # If you want element biases, do it in flattened space:
         atomic_energies = atomic_energies + element_bias[atomic_numbers_flat]
 
-        # Sum per molecule without segment_sum/scatter (CUDA-graph-friendly).
         energy = atomic_energies.reshape(B, N).sum(axis=1)  # (B,)
 
         # Predict atomic charges (scalar per atom)
@@ -426,8 +471,8 @@ def prepare_batches(key, data, batch_size, num_atoms = 29):
 # -------------------------
 # Train / Eval steps
 # -------------------------
-@functools.partial(jax.jit, static_argnames=("model_apply", "optimizer_update", "batch_size", "ema_decay", "energy_weight", "forces_weight"))
-def train_step(model_apply, optimizer_update, batch, batch_size, opt_state, params, ema_params, transform_state, ema_decay=0.999, energy_weight=1.0, forces_weight=1.0):
+@functools.partial(jax.jit, static_argnames=("model_apply", "optimizer_update", "batch_size", "ema_decay", "energy_weight", "forces_weight", "dipole_weight"))
+def train_step(model_apply, optimizer_update, batch, batch_size, opt_state, params, ema_params, transform_state, ema_decay=0.999, energy_weight=1.0, forces_weight=100.0, dipole_weight=10.0):
     def loss_fn(params):
         # Compute energy and dipole
         energy, dipole_pred = model_apply(
@@ -474,33 +519,73 @@ def train_step(model_apply, optimizer_update, batch, batch_size, opt_state, para
         # Combined loss
         total_loss = energy_weight * energy_loss + forces_weight * force_loss
         if "dipoles" in batch:
-            total_loss = total_loss + dipole_loss  # Add dipole loss with weight 1.0 by default
+            total_loss = total_loss + dipole_weight * dipole_loss
         
         return total_loss, (energy, forces, dipole)
 
     (loss, (energy, forces, dipole)), grad = jax.value_and_grad(loss_fn, has_aux=True)(params)
+    
+    # Check for NaN/Inf in loss
+    loss_finite = jnp.isfinite(loss)
+    
+    # Replace NaN/Inf gradients with zeros to prevent NaN propagation
+    grad = jax.tree_util.tree_map(
+        lambda g: jnp.where(jnp.isfinite(g), g, 0.0),
+        grad
+    )
+    
+    # Compute updates
     updates, opt_state = optimizer_update(grad, opt_state, params)
     
     # Apply learning rate scaling from reduce_on_plateau transform
     updates = otu.tree_scale(transform_state.scale, updates)
-    params = optax.apply_updates(params, updates)
+    
+    # Check updates for NaN/Inf and replace with zeros
+    updates = jax.tree_util.tree_map(
+        lambda u: jnp.where(jnp.isfinite(u), u, 0.0),
+        updates
+    )
+    
+    # Only apply updates if loss was finite
+    params = jax.tree_util.tree_map(
+        lambda p, u: jnp.where(loss_finite, p + u, p),
+        params,
+        updates
+    )
 
-    # Update EMA parameters
+    # Update EMA parameters (only if loss was finite)
     ema_params = jax.tree_util.tree_map(
-        lambda ema, new: ema_decay * ema + (1 - ema_decay) * new,
+        lambda ema, new: jnp.where(
+            loss_finite,
+            ema_decay * ema + (1 - ema_decay) * new,
+            ema  # Keep old EMA if loss was NaN
+        ),
         ema_params,
         params,
     )
+    
+    # Ensure loss is finite for return
+    loss = jnp.where(loss_finite, loss, 1e6)
+    
+    # Ensure outputs are finite before computing metrics
+    energy = jnp.where(jnp.isfinite(energy), energy, 0.0)
+    forces = jnp.where(jnp.isfinite(forces), forces, 0.0)
+    dipole = jnp.where(jnp.isfinite(dipole), dipole, 0.0)
 
     energy_mae = mean_absolute_error(energy, batch["energies"])
     forces_mae = mean_absolute_error_forces(forces, batch["forces"])
     dipole_mae = mean_absolute_error(dipole, batch["dipoles"]) if "dipoles" in batch else 0.0
     
-    return params, ema_params, opt_state, loss, energy_mae, forces_mae, dipole_mae
+    # R² computation skipped for training batches (only computed for validation)
+    energy_r2 = 0.0
+    forces_r2 = 0.0
+    dipole_r2 = 0.0
+    
+    return params, ema_params, opt_state, loss, energy_mae, forces_mae, dipole_mae, energy_r2, forces_r2, dipole_r2
 
 
-@functools.partial(jax.jit, static_argnames=("model_apply", "batch_size", "energy_weight", "forces_weight"))
-def eval_step(model_apply, batch, batch_size, params, energy_weight=1.0, forces_weight=1.0):
+@functools.partial(jax.jit, static_argnames=("model_apply", "batch_size", "energy_weight", "forces_weight", "dipole_weight"))
+def eval_step(model_apply, batch, batch_size, params, energy_weight=1.0, forces_weight=100.0, dipole_weight=10.0):
     # Compute energy and dipole
     energy, dipole = model_apply(
         params,
@@ -529,13 +614,21 @@ def eval_step(model_apply, batch, batch_size, params, energy_weight=1.0, forces_
         batch_size=batch_size,
     )
     
+    # Check for NaN/Inf and replace with zeros to prevent evaluation crash
+    energy = jnp.where(jnp.isfinite(energy), energy, 0.0)
+    forces = jnp.where(jnp.isfinite(forces), forces, 0.0)
+    dipole = jnp.where(jnp.isfinite(dipole), dipole, 0.0)
+    
     # Compute losses
     energy_loss = mean_squared_loss(energy.reshape(-1), batch["energies"].reshape(-1))
     force_loss = mean_squared_loss(forces, batch["forces"])
     dipole_loss = mean_squared_loss(dipole, batch["dipoles"]) if "dipoles" in batch else 0.0
     total_loss = energy_weight * energy_loss + forces_weight * force_loss
     if "dipoles" in batch:
-        total_loss = total_loss + dipole_loss
+        total_loss = total_loss + dipole_weight * dipole_loss
+    
+    # Ensure loss is finite
+    total_loss = jnp.where(jnp.isfinite(total_loss), total_loss, 1e6)
     
 
     # Compute MAEs
@@ -543,14 +636,38 @@ def eval_step(model_apply, batch, batch_size, params, energy_weight=1.0, forces_
     forces_mae = mean_absolute_error_forces(forces, batch["forces"])
     dipole_mae = mean_absolute_error(dipole, batch["dipoles"]) if "dipoles" in batch else 0.0
     
-    return total_loss, energy_loss, force_loss, dipole_loss, energy_mae, forces_mae, dipole_mae
+    # Compute R² for energy
+    energy_pred_flat = energy.reshape(-1)
+    energy_target_flat = batch["energies"].reshape(-1)
+    energy_errors = energy_pred_flat - energy_target_flat
+    ss_res_energy = jnp.sum(energy_errors**2)
+    ss_tot_energy = jnp.sum((energy_target_flat - jnp.mean(energy_target_flat))**2)
+    # Add small epsilon to prevent division by zero
+    eps = 1e-10
+    energy_r2 = jnp.where(ss_tot_energy > eps, 1.0 - (ss_res_energy / (ss_tot_energy + eps)), 0.0)
+    
+    # Compute R² for forces (flattened)
+    forces_errors = forces - batch["forces"]
+    ss_res_forces = jnp.sum(forces_errors**2)
+    ss_tot_forces = jnp.sum((batch["forces"] - jnp.mean(batch["forces"]))**2)
+    forces_r2 = jnp.where(ss_tot_forces > eps, 1.0 - (ss_res_forces / (ss_tot_forces + eps)), 0.0)
+    
+    # Compute R² for dipoles (if available)
+    dipole_r2 = 0.0
+    if "dipoles" in batch:
+        dipole_errors = dipole - batch["dipoles"]
+        ss_res_dipole = jnp.sum(dipole_errors**2)
+        ss_tot_dipole = jnp.sum((batch["dipoles"] - jnp.mean(batch["dipoles"]))**2)
+        dipole_r2 = jnp.where(ss_tot_dipole > eps, 1.0 - (ss_res_dipole / (ss_tot_dipole + eps)), 0.0)
+    
+    return total_loss, energy_loss, force_loss, dipole_loss, energy_mae, forces_mae, dipole_mae, energy_r2, forces_r2, dipole_r2
 
 
 def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, batch_size, 
                 clip_norm=10.0, ema_decay=0.999, early_stopping_patience=None, early_stopping_min_delta=0.0,
                 reduce_on_plateau_patience=5, reduce_on_plateau_cooldown=5, reduce_on_plateau_factor=0.9,
                 reduce_on_plateau_rtol=1e-4, reduce_on_plateau_accumulation_size=5, reduce_on_plateau_min_scale=0.01,
-                energy_weight=1.0, forces_weight=1.0):
+                energy_weight=1.0, forces_weight=100.0, dipole_weight=10.0):
     """
     Train model with EMA, gradient clipping, early stopping, and learning rate reduction on plateau.
     
@@ -673,7 +790,7 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
         train_forces_mae = 0.0
         train_dipole_mae = 0.0
         for i, batch in enumerate(train_batches):
-            params, ema_params, opt_state, loss, energy_mae, forces_mae, dipole_mae = train_step(
+            params, ema_params, opt_state, loss, energy_mae, forces_mae, dipole_mae, energy_r2, forces_r2, dipole_r2 = train_step(
                 model_apply=model.apply,
                 optimizer_update=optimizer.update,
                 batch=batch,
@@ -685,6 +802,7 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
                 ema_decay=ema_decay,
                 energy_weight=energy_weight,
                 forces_weight=forces_weight,
+                dipole_weight=dipole_weight,
             )
             train_loss += (loss - train_loss) / (i + 1)
             train_energy_mae += (energy_mae - train_energy_mae) / (i + 1)
@@ -698,15 +816,19 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
         valid_energy_mae = 0.0
         valid_forces_mae = 0.0
         valid_dipole_mae = 0.0
+        valid_energy_r2 = 0.0
+        valid_forces_r2 = 0.0
+        valid_dipole_r2 = 0.0
         # Use EMA parameters for validation (as in physnetjax)
         for i, batch in enumerate(valid_batches):
-            loss, energy_loss, force_loss, dipole_loss_batch, energy_mae, forces_mae, dipole_mae = eval_step(
+            loss, energy_loss, force_loss, dipole_loss_batch, energy_mae, forces_mae, dipole_mae, energy_r2, forces_r2, dipole_r2 = eval_step(
                 model_apply=model.apply,
                 batch=batch,
                 batch_size=batch_size,
                 params=ema_params,
                 energy_weight=energy_weight,
                 forces_weight=forces_weight,
+                dipole_weight=dipole_weight,
             )
             valid_loss += (loss - valid_loss) / (i + 1)
             valid_energy_loss += (energy_loss - valid_energy_loss) / (i + 1)
@@ -715,6 +837,9 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
             valid_energy_mae += (energy_mae - valid_energy_mae) / (i + 1)
             valid_forces_mae += (forces_mae - valid_forces_mae) / (i + 1)
             valid_dipole_mae += (dipole_mae - valid_dipole_mae) / (i + 1)
+            valid_energy_r2 += (energy_r2 - valid_energy_r2) / (i + 1)
+            valid_forces_r2 += (forces_r2 - valid_forces_r2) / (i + 1)
+            valid_dipole_r2 += (dipole_r2 - valid_dipole_r2) / (i + 1)
 
         # Update reduce on plateau transform state
         _, transform_state = transform.update(
@@ -737,11 +862,13 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
         print(f"    energy loss [a.u.]      {train_energy_mae**2: 8.6f} {valid_energy_loss: 8.6f}")
         print(f"    force loss [a.u.]       {train_forces_mae**2: 8.6f} {valid_force_loss: 8.6f}")
         print(f"    energy mae [eV]         {train_energy_mae: 8.6f} {valid_energy_mae: 8.6f}")
+        print(f"    energy R²               {'N/A':>8s} {valid_energy_r2: 8.6f}")
         print(f"    forces mae [eV/Å]       {train_forces_mae: 8.6f} {valid_forces_mae: 8.6f}")
+        print(f"    forces R²               {'N/A':>8s} {valid_forces_r2: 8.6f}")
         if train_dipole_mae > 0.0 or valid_dipole_mae > 0.0:
             print(f"    dipole mae [Debye]      {train_dipole_mae: 8.6f} {valid_dipole_mae: 8.6f}")
+            print(f"    dipole R²               {'N/A':>8s} {valid_dipole_r2: 8.6f}")
             print(f"    dipole loss [a.u.]      {train_dipole_mae**2: 8.6f} {valid_dipole_loss: 8.6f}")
-            print(f"    dipole loss [a.u.]     {train_dipole_mae**2: 8.6f} {valid_dipole_mae**2: 8.6f}")
         print(f"    LR scale: {lr_scale: 8.6f}, effective LR: {learning_rate * lr_scale: 8.6f}")
         if early_stopping_patience is not None:
             print(f"    best valid loss: {best_valid_loss: 8.6f}, patience: {patience_counter}/{early_stopping_patience}")
@@ -759,52 +886,11 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
 
 if __name__ == "__main__":
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--data", type=str, default="data-full.npz")
-    parser.add_argument("--features", type=int, default=128)
-    parser.add_argument("--max_degree", type=int, default=1)
-    parser.add_argument("--num_iterations", type=int, default=3)
-    parser.add_argument("--num_basis_functions", type=int, default=32)
-    parser.add_argument("--cutoff", type=float, default=6.0)
-    parser.add_argument("--num_train", type=int, default=8000)
-    parser.add_argument("--num_valid", type=int, default=2000)
-    parser.add_argument("--num_epochs", type=int, default=100)
-    parser.add_argument("--learning_rate", type=float, default=0.0003)
-    parser.add_argument("--batch_size", type=int, default=64)
-    parser.add_argument("--clip_norm", type=float, default=100.0)
-    parser.add_argument("--ema_decay", type=float, default=0.5)
-    parser.add_argument("--early_stopping_patience", type=int, default=None)
-    parser.add_argument("--early_stopping_min_delta", type=float, default=0.0)
-    parser.add_argument("--reduce_on_plateau_patience", type=int, default=5)
-    parser.add_argument("--reduce_on_plateau_cooldown", type=int, default=5)
-    parser.add_argument("--reduce_on_plateau_factor", type=float, default=0.9)
-    parser.add_argument("--reduce_on_plateau_rtol", type=float, default=1e-4)
-    parser.add_argument("--reduce_on_plateau_accumulation_size", type=int, default=5)
-    parser.add_argument("--reduce_on_plateau_min_scale", type=float, default=0.01)
-    parser.add_argument("--energy_weight", type=float, default=1.0,
-                       help="Weight for energy loss in total loss")
-    parser.add_argument("--forces_weight", type=float, default=1.0,
-                       help="Weight for forces loss in total loss")
-    args = parser.parse_args()
+    args = get_args()
 
     print("Arguments:")
     for arg in vars(args):
         print(f"  {arg}: {getattr(args, arg)}")
-
-
-    # Training hyperparameters
-    clip_norm = 10000.0  # Gradient clipping norm
-    ema_decay = 0.5  # EMA decay factor
-    early_stopping_patience = None  # Number of epochs to wait before early stopping (None to disable)
-    early_stopping_min_delta = 0.0  # Minimum change to qualify as improvement
-
-    # Reduce on plateau hyperparameters
-    reduce_on_plateau_patience = 5  # Patience for reduce on plateau
-    reduce_on_plateau_cooldown = 5  # Cooldown for reduce on plateau
-    reduce_on_plateau_factor = 0.9  # Factor to reduce LR by
-    reduce_on_plateau_rtol = 1e-4  # Relative tolerance for plateau detection
-    reduce_on_plateau_accumulation_size = 5  # Accumulation size for plateau detection
-    reduce_on_plateau_min_scale = 0.01  # Minimum scale factor
 
     # print the hyperparameters
     print("Hyperparameters:")
@@ -884,6 +970,7 @@ if __name__ == "__main__":
         reduce_on_plateau_min_scale=args.reduce_on_plateau_min_scale,
         energy_weight=args.energy_weight,
         forces_weight=args.forces_weight,
+        dipole_weight=args.dipole_weight,
     )
 
     # Prepare model config
@@ -916,6 +1003,7 @@ if __name__ == "__main__":
             'reduce_on_plateau_min_scale': args.reduce_on_plateau_min_scale,
             'energy_weight': args.energy_weight,
             'forces_weight': args.forces_weight,
+            'dipole_weight': args.dipole_weight,
         },
         'data': {
             'dataset': args.data,

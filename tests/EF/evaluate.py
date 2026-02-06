@@ -50,6 +50,39 @@ plt.rcParams['savefig.dpi'] = 300
 # Data is expected in eV/angstrom units
 EV_TO_KCAL_MOL = 23.06035  # 1 eV = 23.06035 kcal/mol
 
+def get_args():
+    parser = argparse.ArgumentParser(description="Evaluate trained model")
+    parser.add_argument("--params", type=str, default="params.json",
+                       help="Path to parameters JSON file (can be params-UUID.json or params.json)")
+    parser.add_argument("--config", type=str, default=None,
+                       help="Path to config JSON file (will be auto-detected from params UUID if not provided)")
+    parser.add_argument("--data", type=str, default="data-full.npz",
+                       help="Path to dataset NPZ file")
+    parser.add_argument("--output-dir", type=str, default="evaluation_results",
+                       help="Output directory for plots and metrics")
+    parser.add_argument("--batch-size", type=int, default=64,
+                       help="Batch size for evaluation")
+    parser.add_argument("--num-test", type=int, default=None,
+                       help="Number of test samples to use (None = use all)")
+    parser.add_argument("--model-config", type=str, default=None,
+                       help="Path to model config JSON (deprecated: use --config)")
+    parser.add_argument("--features", type=int, default=None,
+                       help="Model features (will be inferred from params/config if not provided)")
+    parser.add_argument("--max-degree", type=int, default=None,
+                       help="Max degree (default: 2)")
+    parser.add_argument("--num-iterations", type=int, default=None,
+                       help="Number of iterations (default: 2)")
+    parser.add_argument("--num-basis-functions", type=int, default=None,
+                       help="Number of basis functions (default: 64)")
+    parser.add_argument("--cutoff", type=float, default=None,
+                       help="Cutoff radius (default: 10.0)")
+    parser.add_argument("--max-atomic-number", type=int, default=None,
+                       help="Max atomic number (default: 55)")
+    
+    args = parser.parse_args()
+    return args
+
+
 
 def load_params(params_path):
     """Load parameters from JSON file."""
@@ -201,7 +234,7 @@ def evaluate_dataset(model, params, data, batch_size=64, dataset_name="test"):
     print(f"{'='*60}")
     
     has_forces = 'forces' in data and data['forces'] is not None
-    has_dipoles = 'dipoles' in data and data['dipoles'] is not None
+    has_dipoles = ('dipoles' in data and data['dipoles'] is not None) or ('D' in data and data['D'] is not None)
     
     # Prepare batches
     key = jax.random.PRNGKey(42)
@@ -241,8 +274,11 @@ def evaluate_dataset(model, params, data, batch_size=64, dataset_name="test"):
             all_force_predictions.append(forces_pred)
             all_force_targets.append(force_targets)
         
-        if has_dipoles and "dipoles" in batch:
-            dipole_targets = np.asarray(batch["dipoles"])
+        # Check for dipoles in batch (could be "dipoles" or "D" key)
+        batch_has_dipoles = "dipoles" in batch or "D" in batch
+        if has_dipoles and batch_has_dipoles:
+            # Get dipoles from batch (prefer "dipoles" key, fallback to "D")
+            dipole_targets = np.asarray(batch.get("dipoles", batch.get("D")))
             all_dipole_predictions.append(dipole_pred)
             all_dipole_targets.append(dipole_targets)
     
@@ -313,6 +349,16 @@ def evaluate_dataset(model, params, data, batch_size=64, dataset_name="test"):
         dipole_metrics['mae_magnitude'] = np.mean(np.abs(dipole_mag_errors))
         dipole_metrics['rmse_magnitude'] = np.sqrt(np.mean(dipole_mag_errors**2))
         
+        # R² score (flattened components)
+        dipole_pred_flat = all_dipole_predictions.flatten()
+        dipole_target_flat = all_dipole_targets.flatten()
+        ss_res = np.sum((dipole_pred_flat - dipole_target_flat)**2)
+        ss_tot = np.sum((dipole_target_flat - np.mean(dipole_target_flat))**2)
+        dipole_metrics['r2'] = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0.0
+        
+        # Correlation coefficient R
+        dipole_metrics['r'] = np.corrcoef(dipole_pred_flat, dipole_target_flat)[0, 1]
+        
         # Convert to Debye (assuming input is in Debye, or atomic units)
         # Note: dipole is typically in Debye units, so no conversion needed
         # But we'll add Debye suffix for clarity
@@ -327,6 +373,8 @@ def evaluate_dataset(model, params, data, batch_size=64, dataset_name="test"):
         print(f"\nDipole Metrics for {dataset_name}:")
         print(f"  MAE (overall): {dipole_metrics['mae_overall_debye']:.4f} Debye")
         print(f"  RMSE (overall): {dipole_metrics['rmse_overall_debye']:.4f} Debye")
+        print(f"  R²:   {dipole_metrics['r2']:.6f}")
+        print(f"  R:    {dipole_metrics['r']:.6f}")
         print(f"  MAE (magnitude): {dipole_metrics['mae_magnitude_debye']:.4f} Debye")
         print(f"  RMSE (magnitude): {dipole_metrics['rmse_magnitude_debye']:.4f} Debye")
         print(f"  MAE per component:")
@@ -440,23 +488,34 @@ def plot_residuals(predictions, targets, metrics, title="Residual Plot",
 
 
 def plot_force_scatter(predictions, targets, metrics, save_path=None, ax=None):
-    """Create scatter plot of force magnitudes."""
+    """Create scatter plot of force components (flattened)."""
     if ax is None:
         fig, ax = plt.subplots(figsize=(8, 8))
     
-    pred_mags = np.linalg.norm(predictions, axis=1) * EV_TO_KCAL_MOL
-    target_mags = np.linalg.norm(targets, axis=1) * EV_TO_KCAL_MOL
+    # Flatten all force components (X, Y, Z for all atoms)
+    pred_flat = predictions.flatten() * EV_TO_KCAL_MOL
+    target_flat = targets.flatten() * EV_TO_KCAL_MOL
     
-    ax.scatter(target_mags, pred_mags, alpha=0.5, s=20, edgecolors='none')
+    ax.scatter(target_flat, pred_flat, alpha=0.5, s=20, edgecolors='none')
     
-    lims = [min(target_mags.min(), pred_mags.min()), max(target_mags.max(), pred_mags.max())]
+    lims = [min(target_flat.min(), pred_flat.min()), max(target_flat.max(), pred_flat.max())]
     ax.plot(lims, lims, 'r--', alpha=0.75, linewidth=2, label='Perfect prediction')
     
-    ax.set_xlabel('True Force Magnitude (kcal/(mol·Å))', fontsize=12)
-    ax.set_ylabel('Predicted Force Magnitude (kcal/(mol·Å))', fontsize=12)
-    mae_mag = metrics.get('mae_magnitude_kcal_mol_ang', metrics['mae_magnitude'] * EV_TO_KCAL_MOL)
-    rmse_mag = metrics.get('rmse_magnitude_kcal_mol_ang', metrics['rmse_magnitude'] * EV_TO_KCAL_MOL)
-    ax.set_title(f'Force Magnitude Predictions\nMAE: {mae_mag:.4f} | RMSE: {rmse_mag:.4f} kcal/(mol·Å)', fontsize=11)
+    # Compute R² and R (correlation coefficient)
+    errors = pred_flat - target_flat
+    ss_res = np.sum(errors**2)
+    ss_tot = np.sum((target_flat - np.mean(target_flat))**2)
+    r2 = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0.0
+    
+    # Pearson correlation coefficient R
+    correlation_matrix = np.corrcoef(target_flat, pred_flat)
+    r = correlation_matrix[0, 1] if correlation_matrix.size > 1 else 0.0
+    
+    ax.set_xlabel('True Force Component (kcal/(mol·Å))', fontsize=12)
+    ax.set_ylabel('Predicted Force Component (kcal/(mol·Å))', fontsize=12)
+    mae_overall = metrics.get('mae_overall_kcal_mol_ang', metrics.get('mae_overall', 0.0) * EV_TO_KCAL_MOL)
+    rmse_overall = metrics.get('rmse_overall_kcal_mol_ang', metrics.get('rmse_overall', 0.0) * EV_TO_KCAL_MOL)
+    ax.set_title(f'Force Component Predictions\nMAE: {mae_overall:.4f} | RMSE: {rmse_overall:.4f} kcal/(mol·Å) | R²: {r2:.6f} | R: {r:.6f}', fontsize=11)
     ax.legend(fontsize=10)
     ax.grid(True, alpha=0.3)
     ax.set_aspect('equal', adjustable='box')
@@ -553,23 +612,34 @@ def plot_force_error_distribution(predictions, targets, metrics, save_path=None,
 
 
 def plot_dipole_scatter(predictions, targets, metrics, save_path=None, ax=None):
-    """Create scatter plot of dipole magnitudes."""
+    """Create scatter plot of dipole components (flattened)."""
     if ax is None:
         fig, ax = plt.subplots(figsize=(8, 8))
     
-    pred_mags = np.linalg.norm(predictions, axis=1)
-    target_mags = np.linalg.norm(targets, axis=1)
+    # Flatten all dipole components (X, Y, Z for all molecules)
+    pred_flat = predictions.flatten()
+    target_flat = targets.flatten()
     
-    ax.scatter(target_mags, pred_mags, alpha=0.5, s=20, edgecolors='none')
+    ax.scatter(target_flat, pred_flat, alpha=0.5, s=20, edgecolors='none')
     
-    lims = [min(target_mags.min(), pred_mags.min()), max(target_mags.max(), pred_mags.max())]
+    lims = [min(target_flat.min(), pred_flat.min()), max(target_flat.max(), pred_flat.max())]
     ax.plot(lims, lims, 'r--', alpha=0.75, linewidth=2, label='Perfect prediction')
     
-    ax.set_xlabel('True Dipole Magnitude (Debye)', fontsize=12)
-    ax.set_ylabel('Predicted Dipole Magnitude (Debye)', fontsize=12)
-    mae_mag = metrics.get('mae_magnitude_debye', metrics.get('mae_magnitude', 0.0))
-    rmse_mag = metrics.get('rmse_magnitude_debye', metrics.get('rmse_magnitude', 0.0))
-    ax.set_title(f'Dipole Magnitude Predictions\nMAE: {mae_mag:.4f} | RMSE: {rmse_mag:.4f} Debye', fontsize=11)
+    # Compute R² and R (correlation coefficient)
+    errors = pred_flat - target_flat
+    ss_res = np.sum(errors**2)
+    ss_tot = np.sum((target_flat - np.mean(target_flat))**2)
+    r2 = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0.0
+    
+    # Pearson correlation coefficient R
+    correlation_matrix = np.corrcoef(target_flat, pred_flat)
+    r = correlation_matrix[0, 1] if correlation_matrix.size > 1 else 0.0
+    
+    ax.set_xlabel('True Dipole Component (Debye)', fontsize=12)
+    ax.set_ylabel('Predicted Dipole Component (Debye)', fontsize=12)
+    mae_overall = metrics.get('mae_overall_debye', metrics.get('mae_overall', 0.0))
+    rmse_overall = metrics.get('rmse_overall_debye', metrics.get('rmse_overall', 0.0))
+    ax.set_title(f'Dipole Component Predictions\nMAE: {mae_overall:.4f} | RMSE: {rmse_overall:.4f} Debye | R²: {r2:.6f} | R: {r:.6f}', fontsize=11)
     ax.legend(fontsize=10)
     ax.grid(True, alpha=0.3)
     ax.set_aspect('equal', adjustable='box')
@@ -734,35 +804,7 @@ def plot_force_component_comparison(predictions, targets, metrics, save_path=Non
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Evaluate trained model")
-    parser.add_argument("--params", type=str, default="params.json",
-                       help="Path to parameters JSON file (can be params-UUID.json or params.json)")
-    parser.add_argument("--config", type=str, default=None,
-                       help="Path to config JSON file (will be auto-detected from params UUID if not provided)")
-    parser.add_argument("--data", type=str, default="data-full.npz",
-                       help="Path to dataset NPZ file")
-    parser.add_argument("--output-dir", type=str, default="evaluation_results",
-                       help="Output directory for plots and metrics")
-    parser.add_argument("--batch-size", type=int, default=64,
-                       help="Batch size for evaluation")
-    parser.add_argument("--num-test", type=int, default=None,
-                       help="Number of test samples to use (None = use all)")
-    parser.add_argument("--model-config", type=str, default=None,
-                       help="Path to model config JSON (deprecated: use --config)")
-    parser.add_argument("--features", type=int, default=None,
-                       help="Model features (will be inferred from params/config if not provided)")
-    parser.add_argument("--max-degree", type=int, default=None,
-                       help="Max degree (default: 2)")
-    parser.add_argument("--num-iterations", type=int, default=None,
-                       help="Number of iterations (default: 2)")
-    parser.add_argument("--num-basis-functions", type=int, default=None,
-                       help="Number of basis functions (default: 64)")
-    parser.add_argument("--cutoff", type=float, default=None,
-                       help="Cutoff radius (default: 10.0)")
-    parser.add_argument("--max-atomic-number", type=int, default=None,
-                       help="Max atomic number (default: 55)")
-    
-    args = parser.parse_args()
+    args = get_args()
     
     # Create output directory
     output_dir = Path(args.output_dir)
@@ -941,14 +983,19 @@ def main():
         
         if indices is None:
             test_data['dipoles'] = dipoles_raw
+            test_data['D'] = dipoles_raw  # Also add as 'D' for prepare_batches compatibility
         else:
             test_data['dipoles'] = dipoles_raw[indices]
+            test_data['D'] = dipoles_raw[indices]  # Also add as 'D' for prepare_batches compatibility
     else:
         test_data['dipoles'] = None
+        test_data['D'] = None
     
     print(f"Test data size: {len(test_data['energies'])}")
     if test_data['forces'] is not None:
         print(f"Test forces shape: {test_data['forces'].shape}")
+    if test_data.get('dipoles') is not None:
+        print(f"Test dipoles shape: {test_data['dipoles'].shape}")
     
     # Evaluate
     if test_data['forces'] is not None:
@@ -966,8 +1013,27 @@ def main():
     
     # Save metrics
     metrics_path = output_dir / "metrics.json"
+    
+    # Convert metrics to JSON-serializable format
+    def to_json_serializable(obj):
+        """Convert numpy arrays and other non-serializable types to JSON-compatible formats."""
+        if isinstance(obj, (np.ndarray, np.generic)):
+            if obj.size == 1:
+                return float(obj.item()) if np.issubdtype(obj.dtype, np.floating) else int(obj.item())
+            else:
+                # Convert array to list
+                return obj.tolist()
+        elif isinstance(obj, (np.integer, np.floating)):
+            return float(obj) if isinstance(obj, np.floating) else int(obj)
+        elif isinstance(obj, dict):
+            return {k: to_json_serializable(v) for k, v in obj.items()}
+        elif isinstance(obj, (list, tuple)):
+            return [to_json_serializable(item) for item in obj]
+        else:
+            return obj
+    
     with open(metrics_path, 'w') as f:
-        json.dump({k: float(v) if isinstance(v, (np.ndarray, np.generic)) else v for k, v in metrics.items()}, f, indent=2)
+        json.dump(to_json_serializable(metrics), f, indent=2)
     print(f"\n✓ Saved metrics to {metrics_path}")
     
     # Create plots
@@ -988,36 +1054,15 @@ def main():
     plot_residuals(energy_pred, energy_targets, metrics,
                   title="Energy Residual Plot", save_path=residual_path)
     
-    # Force scatter plots (if forces available)
+    # Force scatter plot (if forces available) - flattened components
     if force_pred is not None and force_targets is not None:
         force_scatter_path = output_dir / "scatter_forces.png"
         plot_force_scatter(force_pred, force_targets, metrics, save_path=force_scatter_path)
-        
-        force_component_path = output_dir / "force_component_errors.png"
-        plot_force_component_errors(force_pred, force_targets, metrics, save_path=force_component_path)
-        
-        force_magnitude_path = output_dir / "force_magnitude_scatter.png"
-        plot_force_magnitude_scatter(force_pred, force_targets, metrics, save_path=force_magnitude_path)
-        
-        force_error_dist_path = output_dir / "force_error_distribution.png"
-        plot_force_error_distribution(force_pred, force_targets, metrics, save_path=force_error_dist_path)
     
-    # Dipole scatter plots (if dipoles available)
+    # Dipole scatter plot (if dipoles available) - flattened components
     if dipole_pred is not None and dipole_targets is not None:
         dipole_scatter_path = output_dir / "scatter_dipoles.png"
         plot_dipole_scatter(dipole_pred, dipole_targets, metrics, save_path=dipole_scatter_path)
-        
-        dipole_component_path = output_dir / "dipole_component_errors.png"
-        plot_dipole_component_errors(dipole_pred, dipole_targets, metrics, save_path=dipole_component_path)
-        
-        dipole_magnitude_path = output_dir / "dipole_magnitude_scatter.png"
-        plot_dipole_magnitude_scatter(dipole_pred, dipole_targets, metrics, save_path=dipole_magnitude_path)
-        
-        dipole_error_dist_path = output_dir / "dipole_error_distribution.png"
-        plot_dipole_error_distribution(dipole_pred, dipole_targets, metrics, save_path=dipole_error_dist_path)
-        
-        dipole_component_comp_path = output_dir / "dipole_component_comparison.png"
-        plot_dipole_component_comparison(dipole_pred, dipole_targets, metrics, save_path=dipole_component_comp_path)
     
     # Combined figure - adjust layout based on available data
     has_forces = force_pred is not None and force_targets is not None
@@ -1036,15 +1081,17 @@ def main():
         plot_residuals(energy_pred, energy_targets, metrics,
                       title="Energy Residual Plot", ax=fig.add_subplot(gs[0, 2]))
         
-        # Force plots (second row)
+        # Force plot (second row) - flattened components
         plot_force_scatter(force_pred, force_targets, metrics, ax=fig.add_subplot(gs[1, 0]))
-        plot_force_component_errors(force_pred, force_targets, metrics, ax=fig.add_subplot(gs[1, 1]))
-        plot_force_magnitude_scatter(force_pred, force_targets, metrics, ax=fig.add_subplot(gs[1, 2]))
+        # Leave other two subplots empty or use for other plots
+        fig.add_subplot(gs[1, 1]).axis('off')
+        fig.add_subplot(gs[1, 2]).axis('off')
         
-        # Dipole plots (third row)
+        # Dipole plot (third row) - flattened components
         plot_dipole_scatter(dipole_pred, dipole_targets, metrics, ax=fig.add_subplot(gs[2, 0]))
-        plot_dipole_component_errors(dipole_pred, dipole_targets, metrics, ax=fig.add_subplot(gs[2, 1]))
-        plot_dipole_magnitude_scatter(dipole_pred, dipole_targets, metrics, ax=fig.add_subplot(gs[2, 2]))
+        # Leave other two subplots empty
+        fig.add_subplot(gs[2, 1]).axis('off')
+        fig.add_subplot(gs[2, 2]).axis('off')
         
         # Mixed plots (bottom row)
         try:
@@ -1066,8 +1113,10 @@ def main():
             fig.axes[-1].set_ylabel('Frequency', fontsize=12)
             fig.axes[-1].grid(True, alpha=0.3)
         
-        plot_force_error_distribution(force_pred, force_targets, metrics, ax=fig.add_subplot(gs[3, 1]))
-        plot_dipole_error_distribution(dipole_pred, dipole_targets, metrics, ax=fig.add_subplot(gs[3, 2]))
+        # Leave subplots empty or use for other plots
+        fig.add_subplot(gs[3, 1]).axis('off')
+        # Leave subplot empty
+        fig.add_subplot(gs[3, 2]).axis('off')
         
     elif has_forces:
         # 3x3 grid: Energy, Forces, Mixed
@@ -1082,12 +1131,13 @@ def main():
         plot_residuals(energy_pred, energy_targets, metrics,
                       title="Energy Residual Plot", ax=fig.add_subplot(gs[0, 2]))
         
-        # Force plots (middle row)
+        # Force plot (middle row) - flattened components
         plot_force_scatter(force_pred, force_targets, metrics, ax=fig.add_subplot(gs[1, 0]))
-        plot_force_component_errors(force_pred, force_targets, metrics, ax=fig.add_subplot(gs[1, 1]))
-        plot_force_magnitude_scatter(force_pred, force_targets, metrics, ax=fig.add_subplot(gs[1, 2]))
+        # Leave other two subplots empty
+        fig.add_subplot(gs[1, 1]).axis('off')
+        fig.add_subplot(gs[1, 2]).axis('off')
         
-        # Q-Q plot and force error distribution (bottom row)
+        # Q-Q plot (bottom row)
         try:
             from scipy import stats
             errors = energy_pred - energy_targets
@@ -1107,8 +1157,9 @@ def main():
             fig.axes[-1].set_ylabel('Frequency', fontsize=12)
             fig.axes[-1].grid(True, alpha=0.3)
         
-        plot_force_error_distribution(force_pred, force_targets, metrics, ax=fig.add_subplot(gs[2, 1]))
-        plot_force_component_comparison(force_pred, force_targets, metrics, ax=fig.add_subplot(gs[2, 2]))
+        # Leave other subplots empty
+        fig.add_subplot(gs[2, 1]).axis('off')
+        fig.add_subplot(gs[2, 2]).axis('off')
     
     elif has_dipoles:
         # 3x3 grid: Energy, Dipoles, Mixed
@@ -1123,10 +1174,11 @@ def main():
         plot_residuals(energy_pred, energy_targets, metrics,
                       title="Energy Residual Plot", ax=fig.add_subplot(gs[0, 2]))
         
-        # Dipole plots (middle row)
+        # Dipole plot (middle row) - flattened components
         plot_dipole_scatter(dipole_pred, dipole_targets, metrics, ax=fig.add_subplot(gs[1, 0]))
-        plot_dipole_component_errors(dipole_pred, dipole_targets, metrics, ax=fig.add_subplot(gs[1, 1]))
-        plot_dipole_magnitude_scatter(dipole_pred, dipole_targets, metrics, ax=fig.add_subplot(gs[1, 2]))
+        # Leave other two subplots empty
+        fig.add_subplot(gs[1, 1]).axis('off')
+        fig.add_subplot(gs[1, 2]).axis('off')
         
         # Q-Q plot and dipole error distribution (bottom row)
         try:
@@ -1148,8 +1200,9 @@ def main():
             fig.axes[-1].set_ylabel('Frequency', fontsize=12)
             fig.axes[-1].grid(True, alpha=0.3)
         
-        plot_dipole_error_distribution(dipole_pred, dipole_targets, metrics, ax=fig.add_subplot(gs[2, 1]))
-        plot_dipole_component_comparison(dipole_pred, dipole_targets, metrics, ax=fig.add_subplot(gs[2, 2]))
+        # Leave subplots empty
+        fig.add_subplot(gs[2, 1]).axis('off')
+        fig.add_subplot(gs[2, 2]).axis('off')
     else:
         # Energy-only figure
         fig, axes = plt.subplots(2, 2, figsize=(16, 16))
@@ -1194,16 +1247,9 @@ def main():
     print(f"  - Energy error distribution: {error_path}")
     print(f"  - Energy residual plot: {residual_path}")
     if force_pred is not None and force_targets is not None:
-        print(f"  - Force scatter plot: {force_scatter_path}")
-        print(f"  - Force component errors: {force_component_path}")
-        print(f"  - Force magnitude scatter: {force_magnitude_path}")
-        print(f"  - Force error distribution: {force_error_dist_path}")
+        print(f"  - Force scatter plot (flattened components): {force_scatter_path}")
     if dipole_pred is not None and dipole_targets is not None:
-        print(f"  - Dipole scatter plot: {dipole_scatter_path}")
-        print(f"  - Dipole component errors: {dipole_component_path}")
-        print(f"  - Dipole magnitude scatter: {dipole_magnitude_path}")
-        print(f"  - Dipole error distribution: {dipole_error_dist_path}")
-        print(f"  - Dipole component comparison: {dipole_component_comp_path}")
+        print(f"  - Dipole scatter plot (flattened components): {dipole_scatter_path}")
     print(f"  - Summary: {combined_path}")
 
 
