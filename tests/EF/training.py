@@ -655,6 +655,10 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
     key, valid_key = jax.random.split(key)
     valid_batches = prepare_batches(valid_key, valid_data, batch_size)
 
+
+    for k in valid_batches[0].keys():
+        print(f"    valid batch {k}: {valid_batches[0][k]}")
+
     # Early stopping tracking
     best_valid_loss = float('inf')
     patience_counter = 0
