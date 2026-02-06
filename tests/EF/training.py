@@ -69,16 +69,16 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data", type=str, default="data-full.npz")
     parser.add_argument("--features", type=int, default=64)
-    parser.add_argument("--max_degree", type=int, default=2)
+    parser.add_argument("--max_degree", type=int, default=4)
     parser.add_argument("--num_iterations", type=int, default=2)
     parser.add_argument("--num_basis_functions", type=int, default=64)
     parser.add_argument("--cutoff", type=float, default=10.0)
     
     parser.add_argument("--num_train", type=int, default=8000)
     parser.add_argument("--num_valid", type=int, default=2000)
-    parser.add_argument("--num_epochs", type=int, default=1000)
+    parser.add_argument("--num_epochs", type=int, default=500)
     parser.add_argument("--learning_rate", type=float, default=0.001)
-    parser.add_argument("--batch_size", type=int, default=128)
+    parser.add_argument("--batch_size", type=int, default=1)
 
     parser.add_argument("--clip_norm", type=float, default=10000.0)
     parser.add_argument("--ema_decay", type=float, default=0.9)
@@ -200,6 +200,10 @@ class MessagePassingModel(nn.Module):
         # Expand parity dimension from 1 to 2 to match x (since include_pseudotensors=True)
         # xEF is (B*N, 1, 4, features), need (B*N, 2, 4, features) - broadcast the parity dimension
         xEF = jnp.broadcast_to(xEF, (B * N, 2, 4, self.features))
+
+
+        xEF = e3x.nn.change_max_degree_or_type(xEF, max_degree=self.max_degree,
+         include_pseudotensors=self.include_pseudotensors)
 
         # Use pre-computed flattened indices (passed from batch dict, computed outside JIT)
         # This avoids creating traced index arrays inside the JIT function
