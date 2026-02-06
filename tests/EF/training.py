@@ -272,6 +272,9 @@ class MessagePassingModel(nn.Module):
         atomic_dipole_sum = jnp.sum(dipoles_batched, axis=1)  # (B, 3)
         # Total molecular dipole
         dipole = charge_dipole + atomic_dipole_sum  # (B, 3)
+        #dipole = charge_dipole  # physnet 
+        #dipole =  atomic_dipole_sum  # direct eqv. pred
+
 
         # Predict atomic energies
         element_bias = self.param(
