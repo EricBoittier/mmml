@@ -69,8 +69,8 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data", type=str, default="data-full.npz")
     parser.add_argument("--features", type=int, default=128)
-    parser.add_argument("--max_degree", type=int, default=4)
-    parser.add_argument("--num_iterations", type=int, default=3)
+    parser.add_argument("--max_degree", type=int, default=2)
+    parser.add_argument("--num_iterations", type=int, default=2)
     parser.add_argument("--num_basis_functions", type=int, default=32)
     parser.add_argument("--cutoff", type=float, default=10.0)
     
@@ -78,7 +78,7 @@ def get_args():
     parser.add_argument("--num_valid", type=int, default=100)
     parser.add_argument("--num_epochs", type=int, default=5000)
     parser.add_argument("--learning_rate", type=float, default=0.0001)
-    parser.add_argument("--batch_size", type=int, default=1)
+    parser.add_argument("--batch_size", type=int, default=64)
 
     parser.add_argument("--clip_norm", type=float, default=100.0)
     parser.add_argument("--ema_decay", type=float, default=0.5)
@@ -309,8 +309,14 @@ class MessagePassingModel(nn.Module):
         #   E_total = E_nn + mu · Ef_phys   (converted to eV)
         # mu [e·Bohr] * Ef_phys [Hartree/(e·Bohr)] = [Hartree] -> * 27.21 -> [eV]
         if self.dipole_field_coupling:
-            coupling = jnp.sum(dipole * Ef, axis=-1)  # (B,)  mu·Ef_input
+            coupling = jnp.sum(dipole * Ef , axis=-1)  # (B,)  mu·Ef_input
             coupling = coupling * self.field_scale * HARTREE_TO_EV  # -> eV
+            learnable_coupling = self.param(
+                "learnable_coupling",
+                lambda rng, shape: jnp.zeros(shape, dtype=positions.dtype),
+                (1,)
+            )
+            coupling = coupling * learnable_coupling
             energy = energy + coupling
 
         # Proxy energy for force differentiation
