@@ -1,0 +1,17 @@
+CUDA graph capture is not supported in this JAX version
+JAX devices: [CudaDevice(id=0)]
+Dataset keys: ['R', 'Z', 'D', 'E', 'F', 'P', 'Ef']
+======================================================================
+  Vibrational Spectroscopy from Electric-Field Model
+======================================================================
+  Structure : 29 atoms, dataset index 0
+  Ef (input): [ 0.  0. 50.]  (physical = [0.   0.   0.05] au)
+  Masses    : [32.06  12.011 14.007 12.011 12.011 12.011 12.011 12.011 12.011 14.007
+ 12.011 32.06  12.011  1.008  1.008  1.008  1.008  1.008  1.008  1.008
+  1.008  1.008  1.008  1.008  1.008  1.008  1.008  1.008  1.008]
+
+[0] Geometry optimisation (fmax=0.01 eV/Å, max 200 steps) ...
+    Converged in 200 steps
+    Final max |F| = 1.086214 eV/Å
+
+[1] Hessian (d²E/dR²) ...

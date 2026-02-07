@@ -45,6 +45,66 @@ FREQ_FACTOR = np.sqrt(EV_TO_J / (ANG_TO_M**2 * AMU_TO_KG)) / (2 * np.pi * C_CMS)
 
 
 # =====================================================================
+# Hessian via finite differences of forces  (memory-safe)
+# =====================================================================
+def hessian_fd(calc, atoms, delta=0.001):
+    """Build the Hessian column-by-column from central finite differences
+    of the forces.
+
+        H[i, j] = -( F_j(R + δ e_i) - F_j(R - δ e_i) ) / (2δ)
+
+    Each evaluation uses exactly the same GPU memory as a single
+    energy+forces call, so this never OOMs.
+
+    Parameters
+    ----------
+    calc  : ASE calculator (must return forces)
+    atoms : ASE Atoms (positions will be restored after)
+    delta : finite-difference step in Å
+
+    Returns
+    -------
+    hessian : (N, 3, N, 3)  in eV/Å²
+    """
+    import copy
+    N = len(atoms)
+    ndof = 3 * N
+    pos0 = atoms.get_positions().copy()
+    hess = np.zeros((ndof, ndof))
+
+    # We need a scratch atoms object so we don't trigger recalculations
+    # on the original one
+    work = atoms.copy()
+    work.calc = calc
+    work.info.update(atoms.info)
+
+    for i in range(ndof):
+        s, c = divmod(i, 3)          # atom index, Cartesian component
+        if (i + 1) % 10 == 0 or i == 0:
+            print(f"    Hessian col {i+1}/{ndof}  (atom {s}, {'xyz'[c]})")
+
+        # +δ
+        pos_p = pos0.copy()
+        pos_p[s, c] += delta
+        work.set_positions(pos_p)
+        f_p = work.get_forces().flatten()   # (3N,)
+
+        # –δ
+        pos_m = pos0.copy()
+        pos_m[s, c] -= delta
+        work.set_positions(pos_m)
+        f_m = work.get_forces().flatten()   # (3N,)
+
+        hess[i, :] = -(f_p - f_m) / (2.0 * delta)
+
+    # Restore original positions
+    atoms.set_positions(pos0)
+    # Symmetrise
+    hess = 0.5 * (hess + hess.T)
+    return hess.reshape(N, 3, N, 3)
+
+
+# =====================================================================
 # Normal-mode analysis
 # =====================================================================
 def compute_normal_modes(hessian, masses):
@@ -243,6 +303,10 @@ def get_args():
     p.add_argument("--all",   action="store_true",
                    help="Compute IR + Raman + VCD")
 
+    p.add_argument("--hessian-method", choices=["fd", "ad"], default="fd",
+                   help="Hessian method: fd=finite diff (safe), ad=jax.hessian (fast but OOM-prone)")
+    p.add_argument("--hessian-delta", type=float, default=0.001,
+                   help="Finite-diff step for Hessian (Å)")
     p.add_argument("--raman-delta", type=float, default=0.005,
                    help="Finite-diff step for Raman (Å)")
     p.add_argument("--freq-min",  type=float, default=0.0)
@@ -316,19 +380,28 @@ def main():
     # ================================================================
     # 1.  Hessian  →  normal modes
     # ================================================================
-    print("\n[1] Hessian (d²E/dR²) ...")
-    hessian = calc.get_hessian(atoms)
+    if args.hessian_method == "fd":
+        print(f"\n[1] Hessian via finite differences (δ = {args.hessian_delta} Å, "
+              f"2×{3*N} = {6*N} force evaluations) ...")
+        hessian = hessian_fd(calc, atoms, delta=args.hessian_delta)
+    else:
+        print("\n[1] Hessian via jax.hessian (AD) ...")
+        hessian = calc.get_hessian(atoms)
     print(f"    shape {hessian.shape},  max |H| = {np.max(np.abs(hessian)):.4f} eV/Å²")
 
     print("\n[2] Normal-mode analysis ...")
     frequencies, eigvecs_mw, eigvecs_cart = compute_normal_modes(hessian, masses)
 
-    n_real = np.sum(frequencies > 1.0)
-    n_imag = np.sum(frequencies < -1.0)
+    n_real = int(np.sum(frequencies > 1.0))
+    n_imag = int(np.sum(frequencies < -1.0))
     n_zero = 3 * N - n_real - n_imag
     print(f"    {n_real} real,  {n_zero} near-zero (trans/rot),  {n_imag} imaginary")
-    print(f"    range: {frequencies[frequencies > 1.0].min():.1f} – "
-          f"{frequencies.max():.1f} cm⁻¹")
+    if n_real > 0:
+        print(f"    range: {frequencies[frequencies > 1.0].min():.1f} – "
+              f"{frequencies.max():.1f} cm⁻¹")
+    if n_imag > 6:
+        print(f"    WARNING: {n_imag} imaginary modes — structure is not at "
+              f"a minimum.  Use --optimize.")
 
     # ================================================================
     # 2.  APT  →  IR
