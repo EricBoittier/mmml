@@ -279,6 +279,9 @@ class MessagePassingModel(nn.Module):
         #dipole = charge_dipole  # physnet 
         #dipole =  atomic_dipole_sum  # direct eqv. pred
 
+        # Store atomic-level properties for downstream use (e.g. AAT)
+        self.sow('intermediates', 'atomic_charges', charges_batched)      # (B, N)
+        self.sow('intermediates', 'atomic_dipoles', dipoles_batched)      # (B, N, 3)
 
         # Predict atomic energies
         element_bias = self.param(
