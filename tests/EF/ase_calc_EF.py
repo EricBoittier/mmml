@@ -59,7 +59,7 @@ class AseCalculatorEF(ase_calc.Calculator):
     implemented_properties = ["energy", "forces", "dipole"]
     
     def __init__(self, params_path, config_path=None, electric_field=None,
-                 field_scale=0.001, **kwargs):
+                 field_scale=0.001, dipole_field_coupling=None, **kwargs):
         """
         Initialize the calculator.
         
@@ -75,6 +75,9 @@ class AseCalculatorEF(ase_calc.Calculator):
         field_scale : float, optional
             Conversion factor: Ef_physical [au] = Ef_input * field_scale.
             Default 0.001 (i.e. the model input is in milli-au).
+        dipole_field_coupling : bool or None, optional
+            If True/False, override the config's dipole_field_coupling setting.
+            If None (default), use whatever the config says.
         **kwargs
             Additional arguments passed to ase.calculators.calculator.Calculator
         """
@@ -108,7 +111,8 @@ class AseCalculatorEF(ase_calc.Calculator):
                 # Extract model config (may be nested under 'model', 'model_config', or flat)
                 model_keys = {'features', 'max_degree', 'num_iterations',
                               'num_basis_functions', 'cutoff', 'max_atomic_number',
-                              'include_pseudotensors'}
+                              'include_pseudotensors',
+                              'dipole_field_coupling', 'field_scale'}
                 if 'model' in config and isinstance(config['model'], dict):
                     model_config = {k: v for k, v in config['model'].items()
                                     if k in model_keys}
@@ -139,6 +143,10 @@ class AseCalculatorEF(ase_calc.Calculator):
                 'include_pseudotensors': True,
             }
         
+        # Apply runtime overrides
+        if dipole_field_coupling is not None:
+            model_config['dipole_field_coupling'] = dipole_field_coupling
+
         # Create model
         self.model = MessagePassingModel(**model_config)
         

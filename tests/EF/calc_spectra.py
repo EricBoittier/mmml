@@ -293,6 +293,9 @@ def get_args():
                    help="Override electric field (in model input units, i.e. ×0.001 au). "
                         "Default: use the field from the dataset.")
 
+    p.add_argument("--dipole-field-coupling", action="store_true",
+                   help="Force E_total = E_nn + mu·Ef coupling (overrides config)")
+
     p.add_argument("--optimize", action="store_true",
                    help="Minimise geometry before computing spectra")
     p.add_argument("--fmax", type=float, default=0.001,
@@ -359,10 +362,13 @@ def main():
     print(f"  Masses    : {masses}")
 
     # ---- calculator ----------------------------------------------------
+    dfc = True if args.dipole_field_coupling else None  # None = use config default
     calc = AseCalculatorEF(
         params_path=args.params, config_path=args.config,
         field_scale=args.field_scale,
+        dipole_field_coupling=dfc,
     )
+    print(f"  dipole-field coupling: {calc.model.dipole_field_coupling}")
     atoms.calc = calc
 
     # ================================================================

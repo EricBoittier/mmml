@@ -97,6 +97,10 @@ def get_args():
                        help="Weight for forces loss in total loss")
     parser.add_argument("--dipole_weight", type=float, default=20.0,
                        help="Weight for dipole loss in total loss")
+    parser.add_argument("--dipole_field_coupling", action="store_true",
+                       help="Add explicit E_total = E_nn + mu·Ef coupling")
+    parser.add_argument("--field_scale", type=float, default=0.001,
+                       help="Ef_phys = Ef_input * field_scale (au)")
     args = parser.parse_args()
     return args
 
@@ -147,6 +151,9 @@ def mean_absolute_error_forces(prediction, target, mask=None):
 # -------------------------
 # Model
 # -------------------------
+HARTREE_TO_EV = 27.211386245988
+
+
 class MessagePassingModel(nn.Module):
     features: int = 32
     max_degree: int = 2
@@ -155,6 +162,10 @@ class MessagePassingModel(nn.Module):
     cutoff: float = 5.0
     max_atomic_number: int = 55
     include_pseudotensors: bool = True
+    # Explicit dipole-field coupling:  E_total = E_nn + mu·Ef  (in eV)
+    # When False (default) the existing implicit coupling through features is used.
+    dipole_field_coupling: bool = False
+    field_scale: float = 0.001  # Ef_phys [au] = Ef_input * field_scale
 
     def EFD(self, atomic_numbers, positions, Ef, dst_idx_flat, src_idx_flat, batch_segments, batch_size, dst_idx=None, src_idx=None):
         """
@@ -293,6 +304,14 @@ class MessagePassingModel(nn.Module):
         atomic_energies = jnp.squeeze(atomic_energies, axis=(-1, -2, -3))  # (B*N,)
         atomic_energies = atomic_energies + element_bias[atomic_numbers_flat]
         energy = atomic_energies.reshape(B, N).sum(axis=1)  # (B,)
+
+        # Optional explicit dipole-field coupling:
+        #   E_total = E_nn + mu · Ef_phys   (converted to eV)
+        # mu [e·Bohr] * Ef_phys [Hartree/(e·Bohr)] = [Hartree] -> * 27.21 -> [eV]
+        if self.dipole_field_coupling:
+            coupling = jnp.sum(dipole * Ef, axis=-1)  # (B,)  mu·Ef_input
+            coupling = coupling * self.field_scale * HARTREE_TO_EV  # -> eV
+            energy = energy + coupling
 
         # Proxy energy for force differentiation
         return -jnp.sum(energy), energy, dipole
@@ -940,6 +959,8 @@ if __name__ == "__main__":
         num_iterations=args.num_iterations,
         num_basis_functions=args.num_basis_functions,
         cutoff=args.cutoff,
+        dipole_field_coupling=args.dipole_field_coupling,
+        field_scale=args.field_scale,
     )
 
     # Generate UUID for this training run
@@ -982,6 +1003,8 @@ if __name__ == "__main__":
             'cutoff': args.cutoff,
             'max_atomic_number': 55,  # Fixed in model
             'include_pseudotensors': True,  # Fixed in model
+            'dipole_field_coupling': args.dipole_field_coupling,
+            'field_scale': args.field_scale,
         },
         'training': {
             'num_train': args.num_train,
