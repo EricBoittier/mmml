@@ -74,8 +74,8 @@ def get_args():
     parser.add_argument("--num_basis_functions", type=int, default=32)
     parser.add_argument("--cutoff", type=float, default=10.0)
     
-    parser.add_argument("--num_train", type=int, default=800)
-    parser.add_argument("--num_valid", type=int, default=100)
+    parser.add_argument("--num_train", type=int, default=8000)
+    parser.add_argument("--num_valid", type=int, default=1000)
     parser.add_argument("--num_epochs", type=int, default=500)
     parser.add_argument("--learning_rate", type=float, default=0.0001)
     parser.add_argument("--batch_size", type=int, default=10)
@@ -234,7 +234,7 @@ class MessagePassingModel(nn.Module):
 
         for i in range(2):
             x = e3x.nn.Dense(self.features)(x)
-            x = e3x.nn.silu(x)
+            x = e3x.nn.hard_tanh(x)
 
         # Save original x before reduction for dipole prediction
         x_orig = x  # (B*N, 2, (max_degree+1)^2, features)
