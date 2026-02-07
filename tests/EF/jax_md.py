@@ -45,7 +45,7 @@ from model_functions import energy_and_forces, get_atomic_properties
 # Physical constants  (ASE convention: eV, Å, fs, amu)
 # ---------------------------------------------------------------------------
 BOLTZMANN_EV = 8.617333262e-5          # eV / K
-AMU_TO_EV_FS2_ANG2 = 1.0 / 103.6427   # 1 amu·Å²/fs² ≈ 0.009649 eV
+AMU_TO_EV_FS2_ANG2 = 103.6427          # 1 amu·Å²/fs² = 103.6427 eV
 
 # Atomic masses (amu) indexed by atomic number — first 100 elements
 _ASE_MASSES = None
@@ -161,10 +161,8 @@ def langevin_step(state, force_fn, dt, inv_masses, gamma, kT, rng_key):
 
     # O: Ornstein-Uhlenbeck (thermostat)
     c1 = jnp.exp(-gamma * dt)
-    # sigma_v = sqrt(kT * inv_mass_eV)  where inv_mass_eV = 1 / (m [amu] * AMU_TO_EV_FS2_ANG2)
-    # but we want sigma for velocity in Å/fs
-    # kT [eV], mass [amu], 1 amu·Å²/fs² = AMU_TO_EV_FS2_ANG2 eV
-    # sigma² = kT / (m * AMU_TO_EV_FS2_ANG2) = kT * inv_masses
+    # sigma² = kT / (m * AMU_TO_EV_FS2_ANG2) * (1 - c1²)  [Å²/fs²]
+    # inv_masses = 1/(m * AMU_TO_EV_FS2_ANG2), so sigma² = kT * inv_masses * (1-c1²)
     sigma = jnp.sqrt(kT * inv_masses * (1.0 - c1 ** 2))
     noise = jax.random.normal(rng_key, shape=V.shape)
     V = c1 * V + sigma * noise
@@ -354,19 +352,12 @@ def save_trajectory(output_path, Z, R_traj, V_traj, E_traj, mu_traj,
     traj = Trajectory(str(output_path), 'w')
     for i in range(n_frames):
         atoms = ase.Atoms(numbers=Z_np, positions=R_np[i])
-        # Store velocities (Å/fs -> ASE internal: Å/√(amu·eV)·fs)
-        # ASE velocity unit: sqrt(eV/amu) = Å/fs * sqrt(AMU_TO_EV_FS2_ANG2)
-        # v_ase = v_real / sqrt(AMU_TO_EV_FS2_ANG2)
-        # But actually ASE stores velocities in Å/fs when using atoms.set_velocities?
-        # set_velocities expects amu * Å / fs  ... no.
-        # ASE uses "ase units": length=Å, energy=eV, mass=amu.
-        # velocity unit = sqrt(eV / amu)  ≈ 0.098 Å/fs
-        # So v_ase = v_real [Å/fs] / sqrt(eV/amu) = v_real / 0.098...
-        # ASE: atoms.set_velocities expects Å/(fs * sqrt(amu/eV))
-        # Simpler: just use set_velocities which takes Å/ASE_time_unit
-        # ASE time unit = fs * sqrt(amu·Å²/eV) ≈ 10.18 fs
-        # Actually let's just use momenta
-        atoms.set_momenta(V_np[i] * masses[:, None] * AMU_TO_EV_FS2_ANG2)
+        # Convert velocity from Å/fs to ASE internal units (Å/ASE_time)
+        # ASE time unit = sqrt(amu·Å²/eV) ≈ 1/sqrt(103.6427) fs ≈ 0.0982 fs
+        # v_ASE = v_real [Å/fs] * sqrt(AMU_TO_EV_FS2_ANG2)
+        # p_ASE = m [amu] * v_ASE
+        v_ase = V_np[i] * np.sqrt(AMU_TO_EV_FS2_ANG2)   # Å/ASE_time
+        atoms.set_momenta(masses[:, None] * v_ase)
 
         atoms.info['electric_field'] = Ef_np
         atoms.info['ml_dipole'] = mu_np[i]
@@ -398,7 +389,7 @@ def maxwell_boltzmann_velocities(masses_amu, temperature, rng_key):
     """
     N = len(masses_amu)
     kT = BOLTZMANN_EV * temperature
-    # sigma_v = sqrt(kT / (m * AMU_TO_EV_FS2_ANG2))  [Å/fs]
+    # sigma_v = sqrt(kT / (m * AMU_TO_EV_FS2_ANG2))  [Å/fs]  (MB distribution)
     sigma = jnp.sqrt(kT / (masses_amu[:, None] * AMU_TO_EV_FS2_ANG2))
     V = sigma * jax.random.normal(rng_key, shape=(N, 3))
     # Remove centre-of-mass velocity
@@ -450,6 +441,18 @@ def get_args():
     g.add_argument("--save-charges", action="store_true",
                    help="Recompute & save atomic charges for each saved frame "
                         "(post-hoc, slower)")
+
+    g = p.add_argument_group("geometry optimisation")
+    g.add_argument("--optimize", action="store_true",
+                   help="Run geometry optimisation before MD")
+    g.add_argument("--optimizer", choices=["bfgs", "fire"], default="fire",
+                   help="Optimiser: 'bfgs' or 'fire' (default fire, more robust for ML)")
+    g.add_argument("--fmax", type=float, default=0.05,
+                   help="Convergence criterion: max force (eV/Å)")
+    g.add_argument("--opt-steps", type=int, default=2000,
+                   help="Max optimisation steps")
+    g.add_argument("--maxstep", type=float, default=0.04,
+                   help="Max step size in Å (default 0.04; ASE default 0.2)")
 
     g = p.add_argument_group("misc")
     g.add_argument("--seed", type=int, default=42)
@@ -568,6 +571,58 @@ def main():
     print(f"  E = {float(E0):.6f} eV")
     print(f"  max|F| = {float(jnp.max(jnp.abs(F0))):.6f} eV/Å")
     print(f"  μ = {np.asarray(mu0)}")
+
+    # ---- Optional geometry optimisation (via ASE BFGS) --------------------
+    if args.optimize:
+        import ase
+        from ase.optimize import BFGS
+        from ase_calc_EF import AseCalculatorEF
+
+        from ase.optimize import FIRE
+        opt_cls = FIRE if args.optimizer == 'fire' else BFGS
+
+        print(f"\n  Geometry optimisation ({args.optimizer.upper()}, "
+              f"fmax={args.fmax} eV/Å, max {args.opt_steps} steps, "
+              f"maxstep={args.maxstep} Å) ...")
+        opt_atoms = ase.Atoms(numbers=np.asarray(Z),
+                              positions=np.asarray(R0))
+        opt_atoms.info['electric_field'] = np.asarray(Ef)
+        opt_calc = AseCalculatorEF(
+            params_path=args.params, config_path=config_path,
+            field_scale=args.field_scale,
+            dipole_field_coupling=args.dipole_field_coupling,
+        )
+        opt_atoms.calc = opt_calc
+
+        opt_traj = str(Path(args.output).with_suffix('.opt.traj'))
+        opt = opt_cls(opt_atoms, trajectory=opt_traj, logfile='-',
+                      maxstep=args.maxstep)
+        opt.run(fmax=args.fmax, steps=args.opt_steps)
+
+        fmax_final = np.max(np.abs(opt_atoms.get_forces()))
+        if fmax_final <= args.fmax:
+            print(f"  Converged in {opt.nsteps} steps.")
+        else:
+            print(f"  WARNING: not converged after {opt.nsteps} steps  "
+                  f"(max |F| = {fmax_final:.6f} eV/Å)")
+            print(f"  Consider increasing --opt-steps or relaxing --fmax.")
+
+        e_opt = opt_atoms.get_potential_energy()
+        f_max = np.max(np.abs(opt_atoms.get_forces()))
+        print(f"  Optimised E     : {e_opt:.6f} eV")
+        print(f"  Optimised max|F|: {f_max:.6f} eV/Å")
+        print(f"  Opt trajectory  : {opt_traj}")
+
+        # Update R0 with optimised positions
+        R0 = jnp.asarray(opt_atoms.get_positions(), dtype=jnp.float32)
+
+        # Re-evaluate force_fn with the new geometry
+        E0, F0, mu0 = force_fn(R0)
+        E0.block_until_ready()
+        print(f"  E (JAX)  = {float(E0):.6f} eV")
+        print(f"  max|F|   = {float(jnp.max(jnp.abs(F0))):.6f} eV/Å")
+
+        del opt_calc  # free the ASE calculator
 
     # ---- Initial velocities ---------------------------------------------
     masses_amu = jnp.asarray(_get_masses()[np.asarray(Z)], dtype=jnp.float32)
