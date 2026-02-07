@@ -288,6 +288,10 @@ def get_args():
     p.add_argument("--data",        default="data-full.npz")
     p.add_argument("--index",       type=int, default=0)
     p.add_argument("--field-scale", type=float, default=0.001)
+    p.add_argument("--electric-field", type=float, nargs=3, default=None,
+                   metavar=("EX", "EY", "EZ"),
+                   help="Override electric field (in model input units, i.e. ×0.001 au). "
+                        "Default: use the field from the dataset.")
 
     p.add_argument("--optimize", action="store_true",
                    help="Minimise geometry before computing spectra")
@@ -340,6 +344,11 @@ def main():
         R = R.squeeze(0)
     Ef = np.asarray(dataset["Ef"][idx], dtype=float)
 
+    # Override electric field if requested
+    if args.electric_field is not None:
+        Ef = np.asarray(args.electric_field, dtype=float)
+        print(f"  Electric field overridden → {Ef}")
+
     atoms = ase.Atoms(numbers=Z, positions=R)
     atoms.info['electric_field'] = Ef
     N = len(atoms)
@@ -360,14 +369,25 @@ def main():
     # 0.  (optional) Geometry optimisation
     # ================================================================
     if args.optimize:
-        print(f"\n[0] Geometry optimisation (fmax={args.fmax} eV/Å, "
-              f"max {args.opt_steps} steps) ...")
-        opt = BFGS(atoms, logfile=str(out / "opt.log"),
-                   trajectory=str(out / "opt.traj"))
-        opt.run(fmax=args.fmax, steps=args.opt_steps)
-        print(f"    Converged in {opt.get_number_of_steps()} steps")
-        print(f"    Final max |F| = "
-              f"{np.max(np.abs(atoms.get_forces())):.6f} eV/Å")
+        traj_path = str(out / "opt.traj")
+        print(f"\n[0] Geometry optimisation  (BFGS, fmax={args.fmax} eV/Å, "
+              f"max {args.opt_steps} steps)")
+        print(f"    Trajectory → {traj_path}")
+        # logfile='-' prints to stdout (Step  Time  Energy  fmax)
+        opt = BFGS(atoms, logfile='-', trajectory=traj_path)
+        converged = opt.run(fmax=args.fmax, steps=args.opt_steps)
+        n_steps = opt.get_number_of_steps()
+        forces = atoms.get_forces()
+        fmax_final = float(np.max(np.linalg.norm(forces, axis=1)))
+        energy_final = float(atoms.get_potential_energy())
+        if converged:
+            print(f"    ✓ Converged in {n_steps} steps")
+        else:
+            print(f"    ✗ NOT converged after {n_steps} steps "
+                  f"(fmax target {args.fmax}, got {fmax_final:.6f} eV/Å)")
+            print(f"      Try increasing --opt-steps or relaxing --fmax")
+        print(f"    Final energy  = {energy_final:.6f} eV")
+        print(f"    Final max |F| = {fmax_final:.6f} eV/Å")
     else:
         # Check whether structure is likely a minimum
         f = atoms.get_forces()
