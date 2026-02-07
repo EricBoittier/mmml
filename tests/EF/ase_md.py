@@ -62,6 +62,8 @@ def get_args():
                        help="Output trajectory file (ASE .traj format)")
     parser.add_argument("--seed", type=int, default=42,
                        help="Random seed for initial velocities")
+    parser.add_argument("--save-charges", action="store_true",
+                       help="Save ML atomic charges per frame (slower, for VCD)")
     return parser.parse_args()
 
 
@@ -154,12 +156,28 @@ def run_md(args):
         max_force = np.max(np.abs(atoms.get_forces()))
         print(f"{step:8d} {time_fs:10.2f} {e_pot:12.6f} {e_kin:12.6f} {e_tot:12.6f} {temp:8.1f} {max_force:12.6f}")
 
+    # --- Property-saving callback (dipole always, charges optional) ---
+    def save_properties():
+        """Copy model predictions into atoms.info so they persist in .traj."""
+        results = getattr(atoms.calc, 'results', {})
+        if 'dipole' in results:
+            atoms.info['ml_dipole'] = np.array(results['dipole'])
+        if args.save_charges:
+            try:
+                q, mu_at = calc.get_atomic_charges(atoms)
+                atoms.arrays['ml_charges'] = q
+                atoms.arrays['ml_atomic_dipoles'] = mu_at
+            except Exception:
+                pass
+
     # Log and save initial state
     print_status()
+    save_properties()
     traj.write()
 
-    # Attach callbacks
+    # Attach callbacks — save_properties BEFORE traj.write
     dyn.attach(print_status, interval=args.log_interval)
+    dyn.attach(save_properties, interval=args.traj_interval)
     dyn.attach(traj.write, interval=args.traj_interval)
 
     # Run MD
