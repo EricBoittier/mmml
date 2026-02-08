@@ -638,7 +638,7 @@ def eval_step(model_apply, batch, batch_size, params, energy_weight=1.0, forces_
     dipole_loss = mean_squared_loss(dipole, batch["dipoles"]) if "dipoles" in batch else 0.0
     total_loss = energy_weight * energy_loss + forces_weight * force_loss
     if "dipoles" in batch:
-        total_loss = total_loss - dipole_weight * dipole_loss
+        total_loss = total_loss + dipole_weight * dipole_loss
     
     # Ensure loss is finite
     total_loss = jnp.where(jnp.isfinite(total_loss), total_loss, 1e6)
@@ -859,7 +859,6 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
             updates=params, state=transform_state, value=valid_loss
         )
         lr_scale = transform_state.scale
-
         # Early stopping logic
         improved = False
         if valid_loss < best_valid_loss - early_stopping_min_delta:
@@ -872,10 +871,8 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
 
 
         # convert the losses to kcal/mol
-        
         train_energy_mae *= 23.0609
         train_forces_mae *= 23.0609
-        
         valid_energy_mae *= 23.0609
         valid_forces_mae *= 23.0609
         
