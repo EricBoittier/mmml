@@ -1,14 +1,3 @@
-# =========================
-# FULL WORKING SCRIPT (FIXED)
-# =========================
-# Key fixes:
-# 1) Set XLA/CUDA env flags BEFORE importing jax (restart kernel if in notebook).
-# 2) Keep batch shapes consistent with the model:
-#    atomic_numbers: (B, N), positions: (B, N, 3), Ef: (B, 3)
-# 3) Do NOT pre-offset dst/src indices in prepare_batches; EFD() already offsets.
-# 4) batch_segments must be length (B*N) with segment ids 0..B-1 repeated per atom.
-# 5) Fix element_bias indexing to use flattened atomic numbers if enabled.
-
 import os
 
 from pandas._testing import at
