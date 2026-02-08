@@ -14,7 +14,7 @@ import os
 from pandas._testing import at
 
 # --- Environment (must be set before importing jax) ---
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".99"
 
 import warnings
@@ -103,14 +103,6 @@ def get_args():
                        help="Ef_phys = Ef_input * field_scale (au)")
     args = parser.parse_args()
     return args
-
-
-
-
-
-
-
-
 
 
 # -------------------------
