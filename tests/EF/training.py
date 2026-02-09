@@ -45,6 +45,28 @@ import json
 from mmml.utils.model_checkpoint import to_jsonable
 
 
+def load_params(params_path):
+    """Load parameters from JSON file."""
+    with open(params_path, 'r') as f:
+        params_dict = json.load(f)
+    
+    # Convert numpy arrays back from lists
+    def convert_to_jax(obj):
+        if isinstance(obj, dict):
+            return {k: convert_to_jax(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            arr = np.array(obj)
+            if arr.dtype == np.float64:
+                return jnp.array(arr, dtype=jnp.float32)
+            elif arr.dtype == np.int64:
+                return jnp.array(arr, dtype=jnp.int32)
+            return jnp.array(arr)
+        return obj
+    
+    params = convert_to_jax(params_dict)
+    return params
+
+
 print("JAX devices:", jax.devices())
 
 
@@ -94,6 +116,7 @@ def get_args(**kwargs):
         "dipole_weight": 20.0,
         "dipole_field_coupling": False,
         "field_scale": 0.001,
+        "restart": None,  # Path to params JSON file to restart from
     }
     
     # Check if we're in a notebook/IPython environment
@@ -147,6 +170,8 @@ def get_args(**kwargs):
                            help="Add explicit E_total = E_nn + mu·Ef coupling")
         parser.add_argument("--field_scale", type=float, default=defaults["field_scale"],
                            help="Ef_phys = Ef_input * field_scale (au)")
+        parser.add_argument("--restart", type=str, default=defaults["restart"],
+                           help="Path to params JSON file to restart training from")
         args = parser.parse_args()
         return args
     
@@ -722,7 +747,7 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
                 clip_norm=10.0, ema_decay=0.999, early_stopping_patience=None, early_stopping_min_delta=0.0,
                 reduce_on_plateau_patience=5, reduce_on_plateau_cooldown=5, reduce_on_plateau_factor=0.9,
                 reduce_on_plateau_rtol=1e-4, reduce_on_plateau_accumulation_size=5, reduce_on_plateau_min_scale=0.01,
-                energy_weight=1.0, forces_weight=100.0, dipole_weight=10.0):
+                energy_weight=1.0, forces_weight=100.0, dipole_weight=10.0, initial_params=None):
     """
     Train model with EMA, gradient clipping, early stopping, and learning rate reduction on plateau.
     
@@ -762,6 +787,9 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
         Accumulation size for plateau detection (default: 5)
     reduce_on_plateau_min_scale : float, optional
         Minimum scale factor (default: 0.01)
+    initial_params : dict, optional
+        Initial parameters to start training from (for restart).
+        If None, parameters are initialized from scratch (default: None)
     
     Returns
     -------
@@ -784,37 +812,42 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
         min_scale=reduce_on_plateau_min_scale,
     )
 
-    # Initialize params with a single batch item (B=1) but correct ranks
-    key, init_key = jax.random.split(key)
-    num_atoms = train_data["positions"].shape[1]
-    dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(num_atoms)
-    # Ensure these are jax arrays with explicit dtype
-    dst_idx = jnp.asarray(dst_idx, dtype=jnp.int32)
-    src_idx = jnp.asarray(src_idx, dtype=jnp.int32)
+    # Initialize params - either from restart file or from scratch
+    if initial_params is not None:
+        print("  Restarting from provided parameters...")
+        params = initial_params
+    else:
+        # Initialize params with a single batch item (B=1) but correct ranks
+        key, init_key = jax.random.split(key)
+        num_atoms = train_data["positions"].shape[1]
+        dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(num_atoms)
+        # Ensure these are jax arrays with explicit dtype
+        dst_idx = jnp.asarray(dst_idx, dtype=jnp.int32)
+        src_idx = jnp.asarray(src_idx, dtype=jnp.int32)
 
-    # Use slicing [0:1] to keep batch dimension, not [0] which removes it
-    # __call__ will flatten these when batch_segments is None
-    atomic_numbers0 = train_data["atomic_numbers"][0:1]    # (1, N)
-    positions0 = train_data["positions"][0:1]                # (1, N, 3)
-    ef0 = train_data["electric_field"][0:1]                # (1, 3)
-    batch_segments0 = jnp.repeat(jnp.arange(1, dtype=jnp.int32), num_atoms)
-    # Pre-compute flattened indices for initialization
-    offsets0 = jnp.arange(1, dtype=jnp.int32) * num_atoms
-    dst_idx_flat0 = (dst_idx[None, :] + offsets0[:, None]).reshape(-1)
-    src_idx_flat0 = (src_idx[None, :] + offsets0[:, None]).reshape(-1)
+        # Use slicing [0:1] to keep batch dimension, not [0] which removes it
+        # __call__ will flatten these when batch_segments is None
+        atomic_numbers0 = train_data["atomic_numbers"][0:1]    # (1, N)
+        positions0 = train_data["positions"][0:1]                # (1, N, 3)
+        ef0 = train_data["electric_field"][0:1]                # (1, 3)
+        batch_segments0 = jnp.repeat(jnp.arange(1, dtype=jnp.int32), num_atoms)
+        # Pre-compute flattened indices for initialization
+        offsets0 = jnp.arange(1, dtype=jnp.int32) * num_atoms
+        dst_idx_flat0 = (dst_idx[None, :] + offsets0[:, None]).reshape(-1)
+        src_idx_flat0 = (src_idx[None, :] + offsets0[:, None]).reshape(-1)
 
-    params = model.init(
-        init_key,
-        atomic_numbers=atomic_numbers0,
-        positions=positions0,
-        Ef=ef0,
-        dst_idx_flat=dst_idx_flat0,
-        src_idx_flat=src_idx_flat0,
-        batch_segments=batch_segments0,
-        batch_size=1,  # Init always uses batch_size=1
-        dst_idx=dst_idx,
-        src_idx=src_idx,
-    )
+        params = model.init(
+            init_key,
+            atomic_numbers=atomic_numbers0,
+            positions=positions0,
+            Ef=ef0,
+            dst_idx_flat=dst_idx_flat0,
+            src_idx_flat=src_idx_flat0,
+            batch_segments=batch_segments0,
+            batch_size=1,  # Init always uses batch_size=1
+            dst_idx=dst_idx,
+            src_idx=src_idx,
+        )
     opt_state = optimizer.init(params)
     
     # Initialize transform state for reduce on plateau
@@ -1005,10 +1038,19 @@ if __name__ == "__main__":
         field_scale=args.field_scale,
     )
 
+    # Load restart parameters if provided
+    initial_params = None
+    if args.restart is not None:
+        print(f"\nLoading restart parameters from {args.restart}...")
+        initial_params = load_params(args.restart)
+        print("✓ Restart parameters loaded")
+
     # Generate UUID for this training run
     run_uuid = str(uuid.uuid4())
     print(f"\n{'='*60}")
     print(f"Training Run UUID: {run_uuid}")
+    if args.restart is not None:
+        print(f"Restarting from: {args.restart}")
     print(f"{'='*60}\n")
 
     params = train_model(
@@ -1032,6 +1074,7 @@ if __name__ == "__main__":
         energy_weight=args.energy_weight,
         forces_weight=args.forces_weight,
         dipole_weight=args.dipole_weight,
+        initial_params=initial_params,
     )
 
     # Prepare model config
