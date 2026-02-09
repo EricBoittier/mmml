@@ -96,8 +96,25 @@ def get_args(**kwargs):
         "field_scale": 0.001,
     }
     
-    # If command line arguments are provided, use argparse
-    if len(sys.argv) > 1:
+    # Check if we're in a notebook/IPython environment
+    try:
+        get_ipython()
+        in_notebook = True
+    except NameError:
+        in_notebook = False
+    
+    # If kwargs are provided, always use notebook mode
+    if kwargs:
+        defaults.update(kwargs)
+        return SimpleNamespace(**defaults)
+    
+    # Check if any command line arguments look like our flags (start with --)
+    # This avoids false positives from Jupyter kernel arguments
+    has_flag_args = any(arg.startswith('--') for arg in sys.argv[1:])
+    
+    # If command line arguments are provided AND we're not in a notebook, use argparse
+    # Otherwise, use notebook mode (defaults only)
+    if has_flag_args and not in_notebook:
         parser = argparse.ArgumentParser()
         parser.add_argument("--data", type=str, default=defaults["data"])
         parser.add_argument("--features", type=int, default=defaults["features"])
