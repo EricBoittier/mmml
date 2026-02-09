@@ -410,8 +410,9 @@ def get_args(**kwargs):
 # =====================================================================
 # Main
 # =====================================================================
-def main():
-    args = get_args()
+def main(args=None):
+    if args is None:
+        args = get_args()
     if args.all:
         args.raman = args.vcd = True
     out = Path(args.output_dir)

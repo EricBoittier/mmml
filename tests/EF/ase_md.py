@@ -157,7 +157,9 @@ def get_args(**kwargs):
     return SimpleNamespace(**defaults)
 
 
-def run_md(args):
+def main(args=None):
+    if args is None:
+        args = get_args()
     """Run molecular dynamics simulation."""
     print("=" * 60)
     print("ASE Molecular Dynamics with Electric Field Model")
@@ -341,4 +343,4 @@ def run_md(args):
 
 if __name__ == "__main__":
     args = get_args()
-    run_md(args)
+    main(args)

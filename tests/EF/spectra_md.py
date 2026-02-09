@@ -698,8 +698,9 @@ def plot_harmonic_snapshots(t_arr, freq_ax, ir_gram, vcd_gram, path):
 # =====================================================================
 # Main
 # =====================================================================
-def main():
-    args = get_args()
+def main(args=None):
+    if args is None:
+        args = get_args()
     out = Path(args.output_dir)
     out.mkdir(parents=True, exist_ok=True)
 

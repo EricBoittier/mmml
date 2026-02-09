@@ -550,8 +550,9 @@ def get_args(**kwargs):
 # Main
 # =====================================================================
 
-def main():
-    args = get_args()
+def main(args=None):
+    if args is None:
+        args = get_args()
     rng = jax.random.PRNGKey(args.seed)
 
     print("=" * 70)
