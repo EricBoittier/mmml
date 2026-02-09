@@ -1,0 +1,918 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Other Interfaces API &#8212; mmml 1.0.0+539.g80e7bb3.dirty documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+  
+  <!-- So that users can add custom icons -->
+  <script src="../_static/scripts/fontawesome.js?digest=8878045cc6db502f8baf"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
+
+    <script src="../_static/documentation_options.js?v=2a23db7b"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'api/other';</script>
+    <script src="../_static/hide-empty-section-nav.js?v=21b70533"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="mmml" href="../autosummary/mmml.html" />
+    <link rel="prev" title="PySCF GPU Interface API" href="pyscf4gpu.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="1.0.0+539.g80e7bb3.dirty" />
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">mmml 1.0.0+539.g80e7bb3.dirty documentation</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../getting_started.html">
+    Getting Started
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../tutorials.html">
+    Tutorials
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../cli.html">
+    Command Line Interface (CLI)
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../user_guide.html">
+    User Guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../esp_cube_generation.html">
+    Generating ESP cube files
+  </a>
+</li>
+
+            <li class="nav-item dropdown">
+                <button class="btn dropdown-toggle nav-item" type="button"
+                data-bs-toggle="dropdown" aria-expanded="false"
+                aria-controls="pst-nav-more-links">
+                    More
+                </button>
+                <ul id="pst-nav-more-links" class="dropdown-menu">
+                    
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="../dcmnet_fitting.html">
+    Fitting DCMNet to ESP data
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="../tutorial_esp_to_dcmnet.html">
+    Tutorial: From ESP to DCMNet
+  </a>
+</li>
+
+
+<li class=" current active">
+  <a class="nav-link dropdown-item nav-internal" href="../api.html">
+    API Documentation
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="../developer_guide.html">
+    Developer Guide
+  </a>
+</li>
+
+                </ul>
+            </li>
+            
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+    <button class="pst-navbar-icon sidebar-toggle secondary-toggle" aria-label="On this page">
+      <span class="fa-solid fa-outdent"></span>
+    </button>
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../getting_started.html">
+    Getting Started
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../tutorials.html">
+    Tutorials
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../cli.html">
+    Command Line Interface (CLI)
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../user_guide.html">
+    User Guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../esp_cube_generation.html">
+    Generating ESP cube files
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../dcmnet_fitting.html">
+    Fitting DCMNet to ESP data
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../tutorial_esp_to_dcmnet.html">
+    Tutorial: From ESP to DCMNet
+  </a>
+</li>
+
+
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="../api.html">
+    API Documentation
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../developer_guide.html">
+    Developer Guide
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+        
+      </div>
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+<nav class="bd-docs-nav bd-links"
+     aria-label="Section Navigation">
+  <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
+  <div class="bd-toc-item navbar-nav"><ul class="nav bd-sidenav">
+<li class="toctree-l1 has-children"><a class="reference internal" href="mmml.html">mmml Package</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../autosummary/mmml.mmml.html">mmml.mmml</a></li>
+</ul>
+</details></li>
+</ul>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="dcmnet.html">DCMNet API</a></li>
+</ul>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="pyscf4gpu.html">PySCF GPU Interface API</a></li>
+</ul>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Other Interfaces API</a></li>
+</ul>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../autosummary/mmml.html">mmml</a></li>
+</ul>
+</div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="../api.html" class="nav-link">API Documentation</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Other Interfaces API</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="other-interfaces-api">
+<h1>Other Interfaces API<a class="headerlink" href="#other-interfaces-api" title="Link to this heading">#</a></h1>
+<p>Additional interfaces and utilities in mmml.</p>
+<section id="ase-interface">
+<h2>ASE Interface<a class="headerlink" href="#ase-interface" title="Link to this heading">#</a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="mmml.aseInterface.mmml_ase.MMMLCalculator">
+<span class="sig-prename descclassname"><span class="pre">mmml.aseInterface.mmml_ase.</span></span><span class="sig-name descname"><span class="pre">MMMLCalculator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">atoms</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model_params</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cutoff</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">4.0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mmml.aseInterface.mmml_ase.MMMLCalculator" title="Link to this definition">#</a></dt>
+<dd><p>ASE calculator for MMML models.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>atoms</strong> – ASE Atoms object</p></li>
+<li><p><strong>model_params</strong> – Trained model parameters</p></li>
+<li><p><strong>cutoff</strong> – Distance cutoff</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>ASE calculator instance</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<section id="pycharmm-interface">
+<h2>PyCharmm Interface<a class="headerlink" href="#pycharmm-interface" title="Link to this heading">#</a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="mmml.pycharmmInterface.dyna.run_dynamics">
+<span class="sig-prename descclassname"><span class="pre">mmml.pycharmmInterface.dyna.</span></span><span class="sig-name descname"><span class="pre">run_dynamics</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">psf_file</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pdb_file</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">res_file</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_prefix</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dt</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.001</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">temperature</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">300.0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mmml.pycharmmInterface.dyna.run_dynamics" title="Link to this definition">#</a></dt>
+<dd><p>Run molecular dynamics with PyCharmm.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>psf_file</strong> – PSF topology file</p></li>
+<li><p><strong>pdb_file</strong> – PDB coordinate file</p></li>
+<li><p><strong>res_file</strong> – RES parameter file</p></li>
+<li><p><strong>output_prefix</strong> – Output file prefix</p></li>
+<li><p><strong>num_steps</strong> – Number of MD steps</p></li>
+<li><p><strong>dt</strong> – Time step in ps</p></li>
+<li><p><strong>temperature</strong> – Temperature in K</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="mmml.pycharmmInterface.setupBox.setup_box">
+<span class="sig-prename descclassname"><span class="pre">mmml.pycharmmInterface.setupBox.</span></span><span class="sig-name descname"><span class="pre">setup_box</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">psf_file</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pdb_file</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">res_file</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_prefix</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">box_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">50.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">water_model</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'TIP3'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mmml.pycharmmInterface.setupBox.setup_box" title="Link to this definition">#</a></dt>
+<dd><p>Set up simulation box with solvent.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>psf_file</strong> – PSF topology file</p></li>
+<li><p><strong>pdb_file</strong> – PDB coordinate file</p></li>
+<li><p><strong>res_file</strong> – RES parameter file</p></li>
+<li><p><strong>output_prefix</strong> – Output file prefix</p></li>
+<li><p><strong>box_size</strong> – Box size in Angstrom</p></li>
+<li><p><strong>water_model</strong> – Water model name</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<section id="openmm-interface">
+<h2>OpenMM Interface<a class="headerlink" href="#openmm-interface" title="Link to this heading">#</a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="mmml.openmmInterface.interface.setup_openmm_system">
+<span class="sig-prename descclassname"><span class="pre">mmml.openmmInterface.interface.</span></span><span class="sig-name descname"><span class="pre">setup_openmm_system</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pdb_file</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">forcefield</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'amber14-all.xml'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">water_model</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'tip3p'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mmml.openmmInterface.interface.setup_openmm_system" title="Link to this definition">#</a></dt>
+<dd><p>Set up OpenMM system.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>pdb_file</strong> – PDB coordinate file</p></li>
+<li><p><strong>forcefield</strong> – Force field XML file</p></li>
+<li><p><strong>water_model</strong> – Water model name</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>OpenMM system object</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<section id="jax-md-interface">
+<h2>JAX-MD Interface<a class="headerlink" href="#jax-md-interface" title="Link to this heading">#</a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="mmml.jaxmdInterface.jaxmdInterface.run_jaxmd_simulation">
+<span class="sig-prename descclassname"><span class="pre">mmml.jaxmdInterface.jaxmdInterface.</span></span><span class="sig-name descname"><span class="pre">run_jaxmd_simulation</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">positions</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">masses</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">forces</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dt</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.001</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">temperature</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">300.0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mmml.jaxmdInterface.jaxmdInterface.run_jaxmd_simulation" title="Link to this definition">#</a></dt>
+<dd><p>Run molecular dynamics with JAX-MD.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>positions</strong> – Initial positions</p></li>
+<li><p><strong>masses</strong> – Atomic masses</p></li>
+<li><p><strong>forces</strong> – Force function</p></li>
+<li><p><strong>num_steps</strong> – Number of MD steps</p></li>
+<li><p><strong>dt</strong> – Time step</p></li>
+<li><p><strong>temperature</strong> – Temperature</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Trajectory array</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<section id="data-processing">
+<h2>Data Processing<a class="headerlink" href="#data-processing" title="Link to this heading">#</a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="mmml.io.parseCharmmOutput.parse_dcd">
+<span class="sig-prename descclassname"><span class="pre">mmml.io.parseCharmmOutput.</span></span><span class="sig-name descname"><span class="pre">parse_dcd</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dcd_file</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mmml.io.parseCharmmOutput.parse_dcd" title="Link to this definition">#</a></dt>
+<dd><p>Parse CHARMM DCD trajectory file.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>dcd_file</strong> – DCD file path</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Trajectory data</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="mmml.io.parseOpenMMOutput.parse_dcd">
+<span class="sig-prename descclassname"><span class="pre">mmml.io.parseOpenMMOutput.</span></span><span class="sig-name descname"><span class="pre">parse_dcd</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dcd_file</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mmml.io.parseOpenMMOutput.parse_dcd" title="Link to this definition">#</a></dt>
+<dd><p>Parse OpenMM DCD trajectory file.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>dcd_file</strong> – DCD file path</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Trajectory data</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<section id="visualization">
+<h2>Visualization<a class="headerlink" href="#visualization" title="Link to this heading">#</a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="mmml.visualize.ase_x3d.write_x3d">
+<span class="sig-prename descclassname"><span class="pre">mmml.visualize.ase_x3d.</span></span><span class="sig-name descname"><span class="pre">write_x3d</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">atoms</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">filename</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trajectory</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mmml.visualize.ase_x3d.write_x3d" title="Link to this definition">#</a></dt>
+<dd><p>Write ASE atoms to X3D format.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>atoms</strong> – ASE Atoms object</p></li>
+<li><p><strong>filename</strong> – Output file path</p></li>
+<li><p><strong>trajectory</strong> – Optional trajectory data</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="mmml.plotting.esp.plot_esp_surface">
+<span class="sig-prename descclassname"><span class="pre">mmml.plotting.esp.</span></span><span class="sig-name descname"><span class="pre">plot_esp_surface</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">esp_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">grid_coords</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_file</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mmml.plotting.esp.plot_esp_surface" title="Link to this definition">#</a></dt>
+<dd><p>Plot ESP on molecular surface.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>esp_data</strong> – ESP values</p></li>
+<li><p><strong>grid_coords</strong> – Grid coordinates</p></li>
+<li><p><strong>output_file</strong> – Output file path</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<section id="utilities">
+<h2>Utilities<a class="headerlink" href="#utilities" title="Link to this heading">#</a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="mmml.transformations.pca.apply_pca">
+<span class="sig-prename descclassname"><span class="pre">mmml.transformations.pca.</span></span><span class="sig-name descname"><span class="pre">apply_pca</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_components</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mmml.transformations.pca.apply_pca" title="Link to this definition">#</a></dt>
+<dd><p>Apply PCA dimensionality reduction.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> – Input data array</p></li>
+<li><p><strong>n_components</strong> – Number of components</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Transformed data</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<section id="pycharmm-mmml-calculator">
+<h2>PyCharmm MMML Calculator<a class="headerlink" href="#pycharmm-mmml-calculator" title="Link to this heading">#</a></h2>
+<p>High-level calculator that couples ML and MM terms with smooth switching for monomer/dimer systems.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="mmml.pycharmmInterface.mmml_calculator.CutoffParameters">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">mmml.pycharmmInterface.mmml_calculator.</span></span><span class="sig-name descname"><span class="pre">CutoffParameters</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ml_cutoff</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mm_switch_on</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mm_cutoff</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mmml.pycharmmInterface.mmml_calculator.CutoffParameters" title="Link to this definition">#</a></dt>
+<dd><p>Parameters controlling ML/MM switching distances.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>ml_cutoff</strong> – Distance where ML potential is cut off</p></li>
+<li><p><strong>mm_switch_on</strong> – Distance where MM potential starts switching on</p></li>
+<li><p><strong>mm_cutoff</strong> – Final cutoff for MM potential</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="mmml.pycharmmInterface.mmml_calculator.ModelOutput">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">mmml.pycharmmInterface.mmml_calculator.</span></span><span class="sig-name descname"><span class="pre">ModelOutput</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">energy</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">forces</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dH</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">internal_E</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">internal_F</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mm_E</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mm_F</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ml_2b_E</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ml_2b_F</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mmml.pycharmmInterface.mmml_calculator.ModelOutput" title="Link to this definition">#</a></dt>
+<dd><p>Structured output for energies and forces.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Variables<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>energy</strong> – Total energy (kcal/mol)</p></li>
+<li><p><strong>forces</strong> – Forces (kcal/mol/Å)</p></li>
+<li><p><strong>dH</strong> – Interaction energy</p></li>
+<li><p><strong>internal_E</strong> – Sum of monomer energies</p></li>
+<li><p><strong>internal_F</strong> – Monomer forces</p></li>
+<li><p><strong>mm_E</strong> – Classical MM energy</p></li>
+<li><p><strong>mm_F</strong> – Classical MM forces</p></li>
+<li><p><strong>ml_2b_E</strong> – ML two-body interaction energy</p></li>
+<li><p><strong>ml_2b_F</strong> – ML two-body interaction forces</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="mmml.pycharmmInterface.mmml_calculator.prepare_batches_md">
+<span class="sig-prename descclassname"><span class="pre">mmml.pycharmmInterface.mmml_calculator.</span></span><span class="sig-name descname"><span class="pre">prepare_batches_md</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_keys</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_atoms</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">60</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dst_idx</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">src_idx</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug_mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mmml.pycharmmInterface.mmml_calculator.prepare_batches_md" title="Link to this definition">#</a></dt>
+<dd><p>Prepare batched inputs for the underlying JAX model with precomputed indices and masks.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> – Dataset with keys like ‘R’, ‘Z’, ‘N’, optionally ‘F’, ‘E’, etc.</p></li>
+<li><p><strong>batch_size</strong> – Batch size</p></li>
+<li><p><strong>data_keys</strong> – Keys to include; defaults to all</p></li>
+<li><p><strong>num_atoms</strong> – Max atoms per system</p></li>
+<li><p><strong>dst_idx</strong> – Optional destination indices for pairs</p></li>
+<li><p><strong>src_idx</strong> – Optional source indices for pairs</p></li>
+<li><p><strong>include_id</strong> – Include ‘id’ if present</p></li>
+<li><p><strong>debug_mode</strong> – Extra checks/assertions</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>List of batch dictionaries</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="mmml.pycharmmInterface.mmml_calculator.setup_calculator">
+<span class="sig-prename descclassname"><span class="pre">mmml.pycharmmInterface.mmml_calculator.</span></span><span class="sig-name descname"><span class="pre">setup_calculator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ATOMS_PER_MONOMER</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">N_MONOMERS</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ml_cutoff_distance</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mm_switch_on</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mm_cutoff</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">doML</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">doMM</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">doML_dimer</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ep_scale</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sig_scale</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model_restart_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">MAX_ATOMS_PER_SYSTEM</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mmml.pycharmmInterface.mmml_calculator.setup_calculator" title="Link to this definition">#</a></dt>
+<dd><p>Build a configured calculator factory that computes energies and forces combining ML and MM with switching.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>ATOMS_PER_MONOMER</strong> – Number of atoms in a monomer</p></li>
+<li><p><strong>N_MONOMERS</strong> – Number of monomers in the system</p></li>
+<li><p><strong>ml_cutoff_distance</strong> – ML cutoff distance</p></li>
+<li><p><strong>mm_switch_on</strong> – Distance where MM switches on</p></li>
+<li><p><strong>mm_cutoff</strong> – MM cutoff distance</p></li>
+<li><p><strong>doML</strong> – Include ML term</p></li>
+<li><p><strong>doMM</strong> – Include MM term</p></li>
+<li><p><strong>doML_dimer</strong> – Include ML two-body interactions</p></li>
+<li><p><strong>debug</strong> – Enable verbose debug</p></li>
+<li><p><strong>ep_scale</strong> – Optional epsilon scaling per atom type</p></li>
+<li><p><strong>sig_scale</strong> – Optional sigma scaling per atom type</p></li>
+<li><p><strong>model_restart_path</strong> – Path to trained model checkpoint</p></li>
+<li><p><strong>MAX_ATOMS_PER_SYSTEM</strong> – Padding size for batching</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A factory function to create an ASE calculator and the core compute function</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="mmml.transformations.tsne.apply_tsne">
+<span class="sig-prename descclassname"><span class="pre">mmml.transformations.tsne.</span></span><span class="sig-name descname"><span class="pre">apply_tsne</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_components</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">perplexity</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">30.0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mmml.transformations.tsne.apply_tsne" title="Link to this definition">#</a></dt>
+<dd><p>Apply t-SNE dimensionality reduction.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> – Input data array</p></li>
+<li><p><strong>n_components</strong> – Number of components</p></li>
+<li><p><strong>perplexity</strong> – Perplexity parameter</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Transformed data</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="pyscf4gpu.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">PySCF GPU Interface API</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="../autosummary/mmml.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">mmml</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav class="bd-toc-nav page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#ase-interface">ASE Interface</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#mmml.aseInterface.mmml_ase.MMMLCalculator"><code class="docutils literal notranslate"><span class="pre">mmml.aseInterface.mmml_ase.MMMLCalculator()</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#pycharmm-interface">PyCharmm Interface</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#mmml.pycharmmInterface.dyna.run_dynamics"><code class="docutils literal notranslate"><span class="pre">mmml.pycharmmInterface.dyna.run_dynamics()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#mmml.pycharmmInterface.setupBox.setup_box"><code class="docutils literal notranslate"><span class="pre">mmml.pycharmmInterface.setupBox.setup_box()</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#openmm-interface">OpenMM Interface</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#mmml.openmmInterface.interface.setup_openmm_system"><code class="docutils literal notranslate"><span class="pre">mmml.openmmInterface.interface.setup_openmm_system()</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#jax-md-interface">JAX-MD Interface</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#mmml.jaxmdInterface.jaxmdInterface.run_jaxmd_simulation"><code class="docutils literal notranslate"><span class="pre">mmml.jaxmdInterface.jaxmdInterface.run_jaxmd_simulation()</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#data-processing">Data Processing</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#mmml.io.parseCharmmOutput.parse_dcd"><code class="docutils literal notranslate"><span class="pre">mmml.io.parseCharmmOutput.parse_dcd()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#mmml.io.parseOpenMMOutput.parse_dcd"><code class="docutils literal notranslate"><span class="pre">mmml.io.parseOpenMMOutput.parse_dcd()</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#visualization">Visualization</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#mmml.visualize.ase_x3d.write_x3d"><code class="docutils literal notranslate"><span class="pre">mmml.visualize.ase_x3d.write_x3d()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#mmml.plotting.esp.plot_esp_surface"><code class="docutils literal notranslate"><span class="pre">mmml.plotting.esp.plot_esp_surface()</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#utilities">Utilities</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#mmml.transformations.pca.apply_pca"><code class="docutils literal notranslate"><span class="pre">mmml.transformations.pca.apply_pca()</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#pycharmm-mmml-calculator">PyCharmm MMML Calculator</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#mmml.pycharmmInterface.mmml_calculator.CutoffParameters"><code class="docutils literal notranslate"><span class="pre">mmml.pycharmmInterface.mmml_calculator.CutoffParameters</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#mmml.pycharmmInterface.mmml_calculator.ModelOutput"><code class="docutils literal notranslate"><span class="pre">mmml.pycharmmInterface.mmml_calculator.ModelOutput</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#mmml.pycharmmInterface.mmml_calculator.prepare_batches_md"><code class="docutils literal notranslate"><span class="pre">mmml.pycharmmInterface.mmml_calculator.prepare_batches_md()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#mmml.pycharmmInterface.mmml_calculator.setup_calculator"><code class="docutils literal notranslate"><span class="pre">mmml.pycharmmInterface.mmml_calculator.setup_calculator()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#mmml.transformations.tsne.apply_tsne"><code class="docutils literal notranslate"><span class="pre">mmml.transformations.tsne.apply_tsne()</span></code></a></li>
+</ul>
+</li>
+</ul>
+  </nav></div>
+
+  <div class="sidebar-secondary-item">
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="../_sources/api/other.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div></div>
+
+  <div class="sidebar-secondary-item">
+<div id="searchbox"></div></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf"></script>
+<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2025, Eric Boittier. Project structure based on the Computational Molecular Science Python Cookiecutter version 1.10.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.2.3.
+    <br/>
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.16.1.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>
