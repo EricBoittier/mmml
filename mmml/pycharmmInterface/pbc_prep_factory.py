@@ -5,11 +5,36 @@ import math
 
 import jax
 import jax.numpy as jnp
-from typing import Iterable, List, Optional, Sequence
+from typing import Callable, Iterable, List, Optional, Sequence
 
-from mmml.pycharmmInterface.pbc_utils_jax import coregister_groups, unwrap_groups, wrap_positions
+from mmml.pycharmmInterface.pbc_utils_jax import coregister_groups, unwrap_groups, wrap_groups
 
 Array = jnp.ndarray
+
+
+class PBCMapper:
+    """PBC mapper that keeps monomers intact and transforms forces via chain rule.
+
+    map_positions(R): unwrap → coregister → wrap (molecular groups preserved).
+    transform_forces(R, F_mapped): applies J^T to map forces from R_mapped space back to R.
+    """
+
+    def __init__(self, map_positions_fn: Callable[[Array], Array]):
+        self._map_positions_fn = map_positions_fn
+
+    def __call__(self, R: Array) -> Array:
+        """Map positions into the primary cell (keeps monomers intact)."""
+        return self._map_positions_fn(R)
+
+    def map_positions(self, R: Array) -> Array:
+        """Map positions into the primary cell (keeps monomers intact)."""
+        return self._map_positions_fn(R)
+
+    def transform_forces(self, R: Array, F_mapped: Array) -> Array:
+        """Transform forces from R_mapped space back to R space (chain rule: F_orig = J^T F_mapped)."""
+        _, vjp_fn = jax.vjp(self._map_positions_fn, R)
+        F_orig = vjp_fn(F_mapped)[0]
+        return F_orig
 
 
 def _validate_cell(cell: Array) -> Array:
@@ -87,7 +112,7 @@ def make_pbc_mapper(
         groups = _runtime_groups(R.shape[0])
         R1 = unwrap_groups(R, groups, cell)
         R2 = coregister_groups(R1, groups, cell)
-        R3 = wrap_positions(R2, cell)
+        R3 = wrap_groups(R2, groups, cell)
         return R3
 
-    return map_positions
+    return PBCMapper(map_positions)
