@@ -76,6 +76,7 @@ def get_args(**kwargs):
         "num_basis_functions": None,
         "cutoff": None,
         "max_atomic_number": None,
+        "save_output_npz": False,
     }
     
     # Check if we're in a notebook/IPython environment
@@ -122,8 +123,8 @@ def get_args(**kwargs):
                            help="Cutoff radius (default: 10.0)")
         parser.add_argument("--max-atomic-number", type=int, default=defaults["max_atomic_number"],
                            help="Max atomic number (default: 55)")
-        parser.add_argument("--save-output-npz", action="store_true", default=defaults["save_output_npz"],
-                           help="Save output to NPZ file (default: False)")
+        parser.add_argument("--save-output-npz", action="store_true",
+                           help="Save evaluation outputs (predictions, targets) to NPZ file")
         
         args = parser.parse_args()
         return SimpleNamespace(
@@ -140,6 +141,7 @@ def get_args(**kwargs):
             num_basis_functions=args.num_basis_functions,
             cutoff=args.cutoff,
             max_atomic_number=args.max_atomic_number,
+            save_output_npz=args.save_output_npz,
         )
     
     # Otherwise, use notebook mode (defaults only)
