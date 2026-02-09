@@ -100,7 +100,7 @@ def get_args(**kwargs):
         "num_valid": 100,
         "num_epochs": 5000,
         "learning_rate": 0.0001,
-        "batch_size": 1,
+        "batch_size": 8,  # Increased from 1 for better GPU utilization
         "clip_norm": 100.0,
         "ema_decay": 0.5,
         "early_stopping_patience": None,
@@ -498,7 +498,7 @@ def prepare_datasets(key, num_train, num_valid, dataset):
     return train_data, valid_data
 
 
-def prepare_batches(key, data, batch_size, num_atoms = 29):
+def prepare_batches(key, data, batch_size, num_atoms=29, dst_idx_flat=None, src_idx_flat=None, batch_segments=None):
     """
     Returns list of batch dicts with consistent shapes:
       atomic_numbers: (B*N,) flattened
@@ -508,6 +508,11 @@ def prepare_batches(key, data, batch_size, num_atoms = 29):
       forces: (B*N,3) flattened
       dst_idx_flat/src_idx_flat: (B*E,) pre-computed flattened indices
       batch_segments: (B*N,)
+    
+    Parameters
+    ----------
+    dst_idx_flat, src_idx_flat, batch_segments : optional pre-computed arrays
+        If provided, these are reused instead of recomputing (performance optimization)
     """
     data_size = len(data["electric_field"])
     steps_per_epoch = data_size // batch_size
@@ -516,35 +521,39 @@ def prepare_batches(key, data, batch_size, num_atoms = 29):
     perms = perms[: steps_per_epoch * batch_size]  # drop incomplete last batch
     perms = perms.reshape((steps_per_epoch, batch_size))
 
-     #data["positions"].shape[1]
-    dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(num_atoms)
-    # Ensure these are jax arrays with explicit dtype
-    dst_idx = jnp.asarray(dst_idx, dtype=jnp.int32)
-    src_idx = jnp.asarray(src_idx, dtype=jnp.int32)
+    # Pre-compute indices only if not provided (performance optimization)
+    if dst_idx_flat is None or src_idx_flat is None or batch_segments is None:
+        dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(num_atoms)
+        # Ensure these are jax arrays with explicit dtype
+        dst_idx = jnp.asarray(dst_idx, dtype=jnp.int32)
+        src_idx = jnp.asarray(src_idx, dtype=jnp.int32)
 
-    # Pre-compute flattened indices (CUDA-graph-friendly: computed outside JIT)
-    offsets = jnp.arange(batch_size, dtype=jnp.int32) * num_atoms
-    dst_idx_flat = (dst_idx[None, :] + offsets[:, None]).reshape(-1)
-    src_idx_flat = (src_idx[None, :] + offsets[:, None]).reshape(-1)
+        # Pre-compute flattened indices (CUDA-graph-friendly: computed outside JIT)
+        offsets = jnp.arange(batch_size, dtype=jnp.int32) * num_atoms
+        dst_idx_flat = (dst_idx[None, :] + offsets[:, None]).reshape(-1)
+        src_idx_flat = (src_idx[None, :] + offsets[:, None]).reshape(-1)
 
-    batch_segments = jnp.repeat(jnp.arange(batch_size, dtype=jnp.int32), num_atoms)
+        batch_segments = jnp.repeat(jnp.arange(batch_size, dtype=jnp.int32), num_atoms)
 
-    batches = []
-    for perm in perms:
-        batch_dict = dict(
-            atomic_numbers=data["atomic_numbers"][perm].reshape(batch_size * num_atoms),  # (B*N,)
-            positions=data["positions"][perm].reshape(batch_size * num_atoms, 3),          # (B*N, 3) - flattened like physnetjax
-            energies=data["energies"][perm],                                               # (B,) or (B,1)
-            forces=data["forces"][perm].reshape(batch_size * num_atoms, 3),               # (B*N, 3) - flattened
-            electric_field=data["electric_field"][perm],                                   # (B,3)
-            dst_idx_flat=dst_idx_flat,  # Pre-computed flattened indices
-            src_idx_flat=src_idx_flat,  # Pre-computed flattened indices
-            batch_segments=batch_segments,
-        )
-        # Add dipoles if available (key "D" in data)
-        if "D" in data and data["D"] is not None:
-            batch_dict["dipoles"] = data["D"][perm]  # (B, 3)
-        batches.append(batch_dict)
+    # Pre-allocate list for better performance
+    batches = [None] * steps_per_epoch
+    has_dipoles = "D" in data and data["D"] is not None
+    
+    for idx, perm in enumerate(perms):
+        # Create batch dict directly (avoid intermediate variables)
+        batch_dict = {
+            "atomic_numbers": data["atomic_numbers"][perm].reshape(batch_size * num_atoms),
+            "positions": data["positions"][perm].reshape(batch_size * num_atoms, 3),
+            "energies": data["energies"][perm],
+            "forces": data["forces"][perm].reshape(batch_size * num_atoms, 3),
+            "electric_field": data["electric_field"][perm],
+            "dst_idx_flat": dst_idx_flat,
+            "src_idx_flat": src_idx_flat,
+            "batch_segments": batch_segments,
+        }
+        if has_dipoles:
+            batch_dict["dipoles"] = data["D"][perm]
+        batches[idx] = batch_dict
     return batches
 
 
@@ -856,10 +865,22 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
     # Initialize EMA parameters
     ema_params = params
 
+    # Pre-compute indices once (performance optimization - reuse across epochs)
+    num_atoms = train_data["positions"].shape[1]
+    dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(num_atoms)
+    dst_idx = jnp.asarray(dst_idx, dtype=jnp.int32)
+    src_idx = jnp.asarray(src_idx, dtype=jnp.int32)
+    offsets = jnp.arange(batch_size, dtype=jnp.int32) * num_atoms
+    dst_idx_flat = (dst_idx[None, :] + offsets[:, None]).reshape(-1)
+    src_idx_flat = (src_idx[None, :] + offsets[:, None]).reshape(-1)
+    batch_segments = jnp.repeat(jnp.arange(batch_size, dtype=jnp.int32), num_atoms)
+
     # Validation batches prepared once
     key, valid_key = jax.random.split(key)
-    valid_batches = prepare_batches(valid_key, valid_data, batch_size)
-
+    valid_batches = prepare_batches(valid_key, valid_data, batch_size, 
+                                    dst_idx_flat=dst_idx_flat, 
+                                    src_idx_flat=src_idx_flat,
+                                    batch_segments=batch_segments)
 
     for k in valid_batches[0].keys():
         print(f"    valid batch {k}: {valid_batches[0][k]}")
@@ -871,7 +892,10 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
 
     for epoch in range(1, num_epochs + 1):
         key, shuffle_key = jax.random.split(key)
-        train_batches = prepare_batches(shuffle_key, train_data, batch_size)
+        train_batches = prepare_batches(shuffle_key, train_data, batch_size,
+                                       dst_idx_flat=dst_idx_flat,
+                                       src_idx_flat=src_idx_flat,
+                                       batch_segments=batch_segments)
 
         train_loss = 0.0
         train_energy_mae = 0.0
@@ -892,6 +916,8 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
                 forces_weight=forces_weight,
                 dipole_weight=dipole_weight,
             )
+            # Don't block - let JAX execute asynchronously for maximum throughput
+            # Only convert to Python float at the end for logging
             train_loss += (loss - train_loss) / (i + 1)
             train_energy_mae += (energy_mae - train_energy_mae) / (i + 1)
             train_forces_mae += (forces_mae - train_forces_mae) / (i + 1)
@@ -918,6 +944,7 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
                 forces_weight=forces_weight,
                 dipole_weight=dipole_weight,
             )
+            # Don't block - let JAX execute asynchronously
             valid_loss += (loss - valid_loss) / (i + 1)
             valid_energy_loss += (energy_loss - valid_energy_loss) / (i + 1)
             valid_force_loss += (force_loss - valid_force_loss) / (i + 1)
@@ -945,25 +972,30 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
             patience_counter += 1
 
 
-        valid_energy_mae *= 23.0609
-        valid_forces_mae *= 23.0609
+        # Convert to Python floats only once for logging (performance optimization)
+        valid_energy_mae_val = float(valid_energy_mae * 23.0609)
+        valid_forces_mae_val = float(valid_forces_mae * 23.0609)
+        train_energy_mae_val = float(train_energy_mae * 23.0609)
+        train_forces_mae_val = float(train_forces_mae * 23.0609)
         
-
+        # Block once at the end of epoch for logging (allows async execution during training)
+        jax.block_until_ready(valid_loss)
+        
         print(f"epoch: {epoch:3d}                    train:   valid:")
-        print(f"    loss [a.u.]             {train_loss: 8.6f} {valid_loss: 8.6f}")
-        print(f"    energy loss [a.u.]      {train_energy_mae**2: 8.6f} {valid_energy_loss: 8.6f}")
-        print(f"    force loss [a.u.]       {train_forces_mae**2: 8.6f} {valid_force_loss: 8.6f}")
-        print(f"    energy mae [kcal/mol]         {train_energy_mae: 8.6f} {valid_energy_mae: 8.6f}")
-        print(f"    energy R²               {'N/A':>8s} {valid_energy_r2: 8.6f}")
-        print(f"    forces mae [kcal/mol/Å]       {train_forces_mae: 8.6f} {valid_forces_mae: 8.6f}")
-        print(f"    forces R²               {'N/A':>8s} {valid_forces_r2: 8.6f}")
+        print(f"    loss [a.u.]             {float(train_loss): 8.6f} {float(valid_loss): 8.6f}")
+        print(f"    energy loss [a.u.]      {float(train_energy_mae**2): 8.6f} {float(valid_energy_loss): 8.6f}")
+        print(f"    force loss [a.u.]       {float(train_forces_mae**2): 8.6f} {float(valid_force_loss): 8.6f}")
+        print(f"    energy mae [kcal/mol]         {train_energy_mae_val: 8.6f} {valid_energy_mae_val: 8.6f}")
+        print(f"    energy R²               {'N/A':>8s} {float(valid_energy_r2): 8.6f}")
+        print(f"    forces mae [kcal/mol/Å]       {train_forces_mae_val: 8.6f} {valid_forces_mae_val: 8.6f}")
+        print(f"    forces R²               {'N/A':>8s} {float(valid_forces_r2): 8.6f}")
         if train_dipole_mae > 0.0 or valid_dipole_mae > 0.0:
-            print(f"    dipole mae [Debye]      {train_dipole_mae: 8.6f} {valid_dipole_mae: 8.6f}")
-            print(f"    dipole R²               {'N/A':>8s} {valid_dipole_r2: 8.6f}")
-            print(f"    dipole loss [a.u.]      {train_dipole_mae**2: 8.6f} {valid_dipole_loss: 8.6f}")
-        print(f"    LR scale: {lr_scale: 8.6f}, effective LR: {learning_rate * lr_scale: 8.6f}")
+            print(f"    dipole mae [Debye]      {float(train_dipole_mae): 8.6f} {float(valid_dipole_mae): 8.6f}")
+            print(f"    dipole R²               {'N/A':>8s} {float(valid_dipole_r2): 8.6f}")
+            print(f"    dipole loss [a.u.]      {float(train_dipole_mae**2): 8.6f} {float(valid_dipole_loss): 8.6f}")
+        print(f"    LR scale: {float(lr_scale): 8.6f}, effective LR: {float(learning_rate * lr_scale): 8.6f}")
         if early_stopping_patience is not None:
-            print(f"    best valid loss: {best_valid_loss: 8.6f}, patience: {patience_counter}/{early_stopping_patience}")
+            print(f"    best valid loss: {float(best_valid_loss): 8.6f}, patience: {patience_counter}/{early_stopping_patience}")
             if improved:
                 print(f"    ✓ Improved! Saving best model.")
         
