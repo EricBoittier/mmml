@@ -122,6 +122,8 @@ def get_args(**kwargs):
                            help="Cutoff radius (default: 10.0)")
         parser.add_argument("--max-atomic-number", type=int, default=defaults["max_atomic_number"],
                            help="Max atomic number (default: 55)")
+        parser.add_argument("--save-output-npz", action="store_true", default=defaults["save_output_npz"],
+                           help="Save output to NPZ file (default: False)")
         
         args = parser.parse_args()
         return SimpleNamespace(
@@ -1313,6 +1315,32 @@ def main(args=None):
     if dipole_pred is not None and dipole_targets is not None:
         print(f"  - Dipole scatter plot (flattened components): {dipole_scatter_path}")
     print(f"  - Summary: {combined_path}")
+
+
+
+    output_dict = {
+
+        "energy_pred": energy_pred,
+        "energy_targets": energy_targets,
+        "force_pred": force_pred,
+        "force_targets": force_targets,
+        "dipole_pred": dipole_pred,
+        "dipole_targets": dipole_targets,
+        "metrics": metrics,
+        "R": test_data['positions'],
+        "Z": test_data['atomic_numbers'],
+        "E": test_data['energies'],
+        "F": test_data['forces'],
+        "D": test_data['dipoles'],
+        "Ef": test_data['electric_field'],
+    }
+
+    if args.save_output_npz:
+        output_npz = output_dir / "evaluation_output.npz"
+        np.savez_compressed(output_npz, **output_dict)
+        print(f"✓ Saved output to {output_npz}")
+
+    return output_dict
 
 
 if __name__ == "__main__":
