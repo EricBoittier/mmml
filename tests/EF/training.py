@@ -976,9 +976,9 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
     return best_ema_params
 
 
-if __name__ == "__main__":
-
-    args = get_args()
+def main(args=None):
+    if args is None:
+        args = get_args()
 
     print("Arguments:")
     for arg in vars(args):
@@ -1148,3 +1148,10 @@ if __name__ == "__main__":
     print(f"Config: {config_filename}")
     print(f"Params: {params_filename}")
     print(f"{'='*60}")
+    
+    return params
+
+
+if __name__ == "__main__":
+    args = get_args()
+    main(args)
