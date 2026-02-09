@@ -13,6 +13,8 @@ os.environ.setdefault("CUDA_VISIBLE_DEVICES", "1")
 os.environ.setdefault("XLA_PYTHON_CLIENT_MEM_FRACTION", ".99")
 
 import argparse
+import sys
+from types import SimpleNamespace
 import numpy as np
 import ase
 import ase.io as ase_io
@@ -29,61 +31,130 @@ sys.path.insert(0, str(Path(__file__).parent))
 from ase_calc_EF import AseCalculatorEF
 
 
-def get_args():
-    parser = argparse.ArgumentParser(description="Run MD with AseCalculatorEF")
-    parser.add_argument("--params", type=str, default="params.json",
-                       help="Path to parameters JSON file")
-    parser.add_argument("--config", type=str, default=None,
-                       help="Path to config JSON file (auto-detected from params UUID)")
-    parser.add_argument("--data", type=str, default="data-full.npz",
-                       help="Path to dataset NPZ file (to extract initial geometry)")
-    parser.add_argument("--xyz", type=str, default=None,
-                       help="Path to XYZ file for initial geometry (overrides --data)")
-    parser.add_argument("--index", type=int, default=0,
-                       help="Index of structure in dataset to use as starting geometry")
-<<<<<<< HEAD
-    parser.add_argument("--electric-field", type=float, nargs=3, default=[0.0, 0.0, 0.0],
-                       help="Electric field vector (Ef_x, Ef_y, Ef_z) in eV/(e*A)")
-=======
-    parser.add_argument("--electric-field", type=float, nargs=3, default=None,
-                       help="Electric field vector (Ef_x, Ef_y, Ef_z). "
-                            "If omitted, uses dataset value; pass '0 0 0' for zero field.")
->>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
-    parser.add_argument("--thermostat", type=str, default="langevin",
-                       choices=["langevin", "nve"],
-                       help="Thermostat type: 'langevin' (NVT) or 'nve' (NVE)")
-    parser.add_argument("--temperature", type=float, default=300.0,
-                       help="Temperature in Kelvin (for Langevin thermostat)")
-    parser.add_argument("--friction", type=float, default=0.01,
-                       help="Friction coefficient for Langevin thermostat (1/fs)")
-    parser.add_argument("--dt", type=float, default=0.5,
-                       help="Time step in femtoseconds")
-    parser.add_argument("--steps", type=int, default=1000,
-                       help="Number of MD steps")
-    parser.add_argument("--log-interval", type=int, default=10,
-                       help="Log every N steps")
-    parser.add_argument("--traj-interval", type=int, default=10,
-                       help="Save trajectory every N steps")
-    parser.add_argument("--output", type=str, default="md_trajectory.traj",
-                       help="Output trajectory file (ASE .traj format)")
-    parser.add_argument("--seed", type=int, default=42,
-                       help="Random seed for initial velocities")
-    parser.add_argument("--save-charges", action="store_true",
-                       help="Save ML atomic charges per frame (slower, for VCD)")
-<<<<<<< HEAD
-=======
-    parser.add_argument("--optimize", action="store_true",
-                       help="Geometry-optimise before starting MD")
-    parser.add_argument("--optimizer", choices=["bfgs", "fire"], default="fire",
-                       help="Optimiser: 'bfgs' or 'fire' (default fire, more robust for ML)")
-    parser.add_argument("--fmax", type=float, default=0.05,
-                       help="Convergence criterion: max force (eV/Å)")
-    parser.add_argument("--opt-steps", type=int, default=2000,
-                       help="Max optimisation steps")
-    parser.add_argument("--maxstep", type=float, default=0.04,
-                       help="Max step size in Å (default 0.04; ASE default 0.2)")
->>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
-    return parser.parse_args()
+def get_args(**kwargs):
+    """
+    Get configuration arguments. Works both from command line and notebooks.
+    
+    In notebooks, you can override defaults by passing keyword arguments:
+        args = get_args(params="params.json", steps=1000, temperature=300)
+    
+    From command line, use argparse flags as before.
+    """
+    # Default values
+    defaults = {
+        "params": "params.json",
+        "config": None,
+        "data": "data-full.npz",
+        "xyz": None,
+        "index": 0,
+        "electric_field": None,
+        "thermostat": "langevin",
+        "temperature": 300.0,
+        "friction": 0.01,
+        "dt": 0.5,
+        "steps": 1000,
+        "log_interval": 10,
+        "traj_interval": 10,
+        "output": "md_trajectory.traj",
+        "seed": 42,
+        "save_charges": False,
+        "optimize": False,
+        "optimizer": "fire",
+        "fmax": 0.05,
+        "opt_steps": 2000,
+        "maxstep": 0.04,
+    }
+    
+    # Check if we're in a notebook/IPython environment
+    try:
+        get_ipython()
+        in_notebook = True
+    except NameError:
+        in_notebook = False
+    
+    # If kwargs are provided, always use notebook mode
+    if kwargs:
+        defaults.update(kwargs)
+        return SimpleNamespace(**defaults)
+    
+    # Check if any command line arguments look like our flags (start with --)
+    has_flag_args = any(arg.startswith('--') for arg in sys.argv[1:])
+    
+    # If command line arguments are provided AND we're not in a notebook, use argparse
+    if has_flag_args and not in_notebook:
+        parser = argparse.ArgumentParser(description="Run MD with AseCalculatorEF")
+        parser.add_argument("--params", type=str, default=defaults["params"],
+                           help="Path to parameters JSON file")
+        parser.add_argument("--config", type=str, default=defaults["config"],
+                           help="Path to config JSON file (auto-detected from params UUID)")
+        parser.add_argument("--data", type=str, default=defaults["data"],
+                           help="Path to dataset NPZ file (to extract initial geometry)")
+        parser.add_argument("--xyz", type=str, default=defaults["xyz"],
+                           help="Path to XYZ file for initial geometry (overrides --data)")
+        parser.add_argument("--index", type=int, default=defaults["index"],
+                           help="Index of structure in dataset to use as starting geometry")
+        parser.add_argument("--electric-field", type=float, nargs=3, default=defaults["electric_field"],
+                           help="Electric field vector (Ef_x, Ef_y, Ef_z). "
+                                "If omitted, uses dataset value; pass '0 0 0' for zero field.")
+        parser.add_argument("--thermostat", type=str, default=defaults["thermostat"],
+                           choices=["langevin", "nve"],
+                           help="Thermostat type: 'langevin' (NVT) or 'nve' (NVE)")
+        parser.add_argument("--temperature", type=float, default=defaults["temperature"],
+                           help="Temperature in Kelvin (for Langevin thermostat)")
+        parser.add_argument("--friction", type=float, default=defaults["friction"],
+                           help="Friction coefficient for Langevin thermostat (1/fs)")
+        parser.add_argument("--dt", type=float, default=defaults["dt"],
+                           help="Time step in femtoseconds")
+        parser.add_argument("--steps", type=int, default=defaults["steps"],
+                           help="Number of MD steps")
+        parser.add_argument("--log-interval", type=int, default=defaults["log_interval"],
+                           help="Log every N steps")
+        parser.add_argument("--traj-interval", type=int, default=defaults["traj_interval"],
+                           help="Save trajectory every N steps")
+        parser.add_argument("--output", type=str, default=defaults["output"],
+                           help="Output trajectory file (ASE .traj format)")
+        parser.add_argument("--seed", type=int, default=defaults["seed"],
+                           help="Random seed for initial velocities")
+        parser.add_argument("--save-charges", action="store_true",
+                           help="Save ML atomic charges per frame (slower, for VCD)")
+        parser.add_argument("--optimize", action="store_true",
+                           help="Geometry-optimise before starting MD")
+        parser.add_argument("--optimizer", choices=["bfgs", "fire"], default=defaults["optimizer"],
+                           help="Optimiser: 'bfgs' or 'fire' (default fire, more robust for ML)")
+        parser.add_argument("--fmax", type=float, default=defaults["fmax"],
+                           help="Convergence criterion: max force (eV/Å)")
+        parser.add_argument("--opt-steps", type=int, default=defaults["opt_steps"],
+                           help="Max optimisation steps")
+        parser.add_argument("--maxstep", type=float, default=defaults["maxstep"],
+                           help="Max step size in Å (default 0.04; ASE default 0.2)")
+        
+        args = parser.parse_args()
+        return SimpleNamespace(
+            params=args.params,
+            config=args.config,
+            data=args.data,
+            xyz=args.xyz,
+            index=args.index,
+            electric_field=args.electric_field,
+            thermostat=args.thermostat,
+            temperature=args.temperature,
+            friction=args.friction,
+            dt=args.dt,
+            steps=args.steps,
+            log_interval=args.log_interval,
+            traj_interval=args.traj_interval,
+            output=args.output,
+            seed=args.seed,
+            save_charges=args.save_charges,
+            optimize=args.optimize,
+            optimizer=args.optimizer,
+            fmax=args.fmax,
+            opt_steps=args.opt_steps,
+            maxstep=args.maxstep,
+        )
+    
+    # Otherwise, use notebook mode (defaults only)
+    return SimpleNamespace(**defaults)
 
 
 def run_md(args):

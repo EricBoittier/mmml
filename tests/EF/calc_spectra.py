@@ -18,6 +18,8 @@ import os
 os.environ.setdefault("XLA_PYTHON_CLIENT_MEM_FRACTION", ".99")
 
 import argparse
+import sys
+from types import SimpleNamespace
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
@@ -280,48 +282,129 @@ def broaden(freq_axis, stick_freqs, stick_intensities, gamma=10.0,
 # =====================================================================
 # CLI
 # =====================================================================
-def get_args():
-    p = argparse.ArgumentParser(
-        description="Calculate IR, Raman, and VCD spectra")
-    p.add_argument("--params",      default="params.json")
-    p.add_argument("--config",      default=None)
-    p.add_argument("--data",        default="data-full.npz")
-    p.add_argument("--index",       type=int, default=0)
-    p.add_argument("--field-scale", type=float, default=0.001)
-    p.add_argument("--electric-field", type=float, nargs=3, default=None,
-                   metavar=("EX", "EY", "EZ"),
-                   help="Override electric field (in model input units, i.e. ×0.001 au). "
-                        "Default: use the field from the dataset.")
+def get_args(**kwargs):
+    """
+    Get configuration arguments. Works both from command line and notebooks.
+    
+    In notebooks, you can override defaults by passing keyword arguments:
+        args = get_args(params="params.json", data="data-full.npz", raman=True, vcd=True)
+    
+    From command line, use argparse flags as before.
+    """
+    # Default values
+    defaults = {
+        "params": "params.json",
+        "config": None,
+        "data": "data-full.npz",
+        "index": 0,
+        "field_scale": 0.001,
+        "electric_field": None,
+        "dipole_field_coupling": False,
+        "optimize": False,
+        "fmax": 0.001,
+        "opt_steps": 500,
+        "raman": False,
+        "vcd": False,
+        "all": False,
+        "hessian_method": "fd",
+        "hessian_delta": 0.001,
+        "raman_delta": 0.005,
+        "freq_min": 0.0,
+        "freq_max": 4000.0,
+        "broadening": 10.0,
+        "output_dir": "spectra",
+    }
+    
+    # Check if we're in a notebook/IPython environment
+    try:
+        get_ipython()
+        in_notebook = True
+    except NameError:
+        in_notebook = False
+    
+    # If kwargs are provided, always use notebook mode
+    if kwargs:
+        defaults.update(kwargs)
+        if defaults["all"]:
+            defaults["raman"] = True
+            defaults["vcd"] = True
+        return SimpleNamespace(**defaults)
+    
+    # Check if any command line arguments look like our flags (start with --)
+    has_flag_args = any(arg.startswith('--') for arg in sys.argv[1:])
+    
+    # If command line arguments are provided AND we're not in a notebook, use argparse
+    if has_flag_args and not in_notebook:
+        p = argparse.ArgumentParser(
+            description="Calculate IR, Raman, and VCD spectra")
+        p.add_argument("--params",      default=defaults["params"])
+        p.add_argument("--config",      default=defaults["config"])
+        p.add_argument("--data",        default=defaults["data"])
+        p.add_argument("--index",       type=int, default=defaults["index"])
+        p.add_argument("--field-scale", type=float, default=defaults["field_scale"])
+        p.add_argument("--electric-field", type=float, nargs=3, default=defaults["electric_field"],
+                       metavar=("EX", "EY", "EZ"),
+                       help="Override electric field (in model input units, i.e. ×0.001 au). "
+                            "Default: use the field from the dataset.")
 
-    p.add_argument("--dipole-field-coupling", action="store_true",
-                   help="Force E_total = E_nn + mu·Ef coupling (overrides config)")
+        p.add_argument("--dipole-field-coupling", action="store_true",
+                       help="Force E_total = E_nn + mu·Ef coupling (overrides config)")
 
-    p.add_argument("--optimize", action="store_true",
-                   help="Minimise geometry before computing spectra")
-    p.add_argument("--fmax", type=float, default=0.001,
-                   help="Force convergence for optimisation (eV/Å)")
-    p.add_argument("--opt-steps", type=int, default=500,
-                   help="Max optimisation steps")
+        p.add_argument("--optimize", action="store_true",
+                       help="Minimise geometry before computing spectra")
+        p.add_argument("--fmax", type=float, default=defaults["fmax"],
+                       help="Force convergence for optimisation (eV/Å)")
+        p.add_argument("--opt-steps", type=int, default=defaults["opt_steps"],
+                       help="Max optimisation steps")
 
-    p.add_argument("--raman", action="store_true",
-                   help="Compute Raman (slower — finite diff)")
-    p.add_argument("--vcd",   action="store_true",
-                   help="Compute VCD")
-    p.add_argument("--all",   action="store_true",
-                   help="Compute IR + Raman + VCD")
+        p.add_argument("--raman", action="store_true",
+                       help="Compute Raman (slower — finite diff)")
+        p.add_argument("--vcd",   action="store_true",
+                       help="Compute VCD")
+        p.add_argument("--all",   action="store_true",
+                       help="Compute IR + Raman + VCD")
 
-    p.add_argument("--hessian-method", choices=["fd", "ad"], default="fd",
-                   help="Hessian method: fd=finite diff (safe), ad=jax.hessian (fast but OOM-prone)")
-    p.add_argument("--hessian-delta", type=float, default=0.001,
-                   help="Finite-diff step for Hessian (Å)")
-    p.add_argument("--raman-delta", type=float, default=0.005,
-                   help="Finite-diff step for Raman (Å)")
-    p.add_argument("--freq-min",  type=float, default=0.0)
-    p.add_argument("--freq-max",  type=float, default=4000.0)
-    p.add_argument("--broadening", type=float, default=10.0,
-                   help="Lorentzian HWHM (cm⁻¹)")
-    p.add_argument("--output-dir", default="spectra")
-    return p.parse_args()
+        p.add_argument("--hessian-method", choices=["fd", "ad"], default=defaults["hessian_method"],
+                       help="Hessian method: fd=finite diff (safe), ad=jax.hessian (fast but OOM-prone)")
+        p.add_argument("--hessian-delta", type=float, default=defaults["hessian_delta"],
+                       help="Finite-diff step for Hessian (Å)")
+        p.add_argument("--raman-delta", type=float, default=defaults["raman_delta"],
+                       help="Finite-diff step for Raman (Å)")
+        p.add_argument("--freq-min",  type=float, default=defaults["freq_min"])
+        p.add_argument("--freq-max",  type=float, default=defaults["freq_max"])
+        p.add_argument("--broadening", type=float, default=defaults["broadening"],
+                       help="Lorentzian HWHM (cm⁻¹)")
+        p.add_argument("--output-dir", default=defaults["output_dir"])
+        
+        args = p.parse_args()
+        if args.all:
+            args.raman = True
+            args.vcd = True
+        return SimpleNamespace(
+            params=args.params,
+            config=args.config,
+            data=args.data,
+            index=args.index,
+            field_scale=args.field_scale,
+            electric_field=args.electric_field,
+            dipole_field_coupling=args.dipole_field_coupling,
+            optimize=args.optimize,
+            fmax=args.fmax,
+            opt_steps=args.opt_steps,
+            raman=args.raman,
+            vcd=args.vcd,
+            all=args.all,
+            hessian_method=args.hessian_method,
+            hessian_delta=args.hessian_delta,
+            raman_delta=args.raman_delta,
+            freq_min=args.freq_min,
+            freq_max=args.freq_max,
+            broadening=args.broadening,
+            output_dir=args.output_dir,
+        )
+    
+    # Otherwise, use notebook mode (defaults only)
+    return SimpleNamespace(**defaults)
 
 
 # =====================================================================

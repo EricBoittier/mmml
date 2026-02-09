@@ -45,6 +45,8 @@ import os
 os.environ.setdefault("XLA_PYTHON_CLIENT_MEM_FRACTION", ".99")
 
 import argparse
+import sys
+from types import SimpleNamespace
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
@@ -460,71 +462,154 @@ def plot_noda(freq, sync, async_, kind, path):
 # =====================================================================
 # CLI
 # =====================================================================
-def get_args():
-    p = argparse.ArgumentParser(
-        description="IR / VCD spectra from MD trajectories "
-                    "(correlation functions and/or harmonic snapshots)")
+def get_args(**kwargs):
+    """
+    Get configuration arguments. Works both from command line and notebooks.
+    
+    In notebooks, you can override defaults by passing keyword arguments:
+        args = get_args(trajectory="md.traj", method="both", transient=True)
+    
+    From command line, use argparse flags as before.
+    """
+    # Default values
+    defaults = {
+        "trajectory": None,  # Required, but None for notebook mode
+        "params": "params.json",
+        "config": None,
+        "field_scale": 0.001,
+        "method": "correlation",
+        "recompute_dipole": False,
+        "recompute_charges": False,
+        "dt": None,
+        "window_fn": "hann",
+        "zero_pad": 4,
+        "transient": False,
+        "window_size": 500,
+        "stride": 100,
+        "spectra_2d": False,
+        "waiting_times": [0, 50, 200],
+        "stft_window": 256,
+        "stft_stride": 32,
+        "noda": False,
+        "snapshot_interval": 200,
+        "hessian_delta": 0.001,
+        "broadening": 10.0,
+        "freq_min": 0.0,
+        "freq_max": 4000.0,
+        "output_dir": "spectra_md",
+    }
+    
+    # Check if we're in a notebook/IPython environment
+    try:
+        get_ipython()
+        in_notebook = True
+    except NameError:
+        in_notebook = False
+    
+    # If kwargs are provided, always use notebook mode
+    if kwargs:
+        defaults.update(kwargs)
+        return SimpleNamespace(**defaults)
+    
+    # Check if any command line arguments look like our flags (start with --)
+    has_flag_args = any(arg.startswith('--') for arg in sys.argv[1:])
+    
+    # If command line arguments are provided AND we're not in a notebook, use argparse
+    if has_flag_args and not in_notebook:
+        p = argparse.ArgumentParser(
+            description="IR / VCD spectra from MD trajectories "
+                        "(correlation functions and/or harmonic snapshots)")
 
-    g = p.add_argument_group("input")
-    g.add_argument("--trajectory", required=True,
-                   help=".traj or multi-frame .xyz")
-    g.add_argument("--params",  default="params.json")
-    g.add_argument("--config",  default=None)
-    g.add_argument("--field-scale", type=float, default=0.001)
+        g = p.add_argument_group("input")
+        g.add_argument("--trajectory", required=True,
+                       help=".traj or multi-frame .xyz")
+        g.add_argument("--params",  default=defaults["params"])
+        g.add_argument("--config",  default=defaults["config"])
+        g.add_argument("--field-scale", type=float, default=defaults["field_scale"])
 
-    g = p.add_argument_group("method")
-    g.add_argument("--method",
-                   choices=["correlation", "harmonic", "both"],
-                   default="correlation")
+        g = p.add_argument_group("method")
+        g.add_argument("--method",
+                       choices=["correlation", "harmonic", "both"],
+                       default=defaults["method"])
 
-    g = p.add_argument_group("property extraction")
-    g.add_argument("--recompute-dipole", action="store_true",
-                   help="Recompute dipoles even if stored in trajectory")
-    g.add_argument("--recompute-charges", action="store_true",
-                   help="Recompute charges even if stored in trajectory")
+        g = p.add_argument_group("property extraction")
+        g.add_argument("--recompute-dipole", action="store_true",
+                       help="Recompute dipoles even if stored in trajectory")
+        g.add_argument("--recompute-charges", action="store_true",
+                       help="Recompute charges even if stored in trajectory")
 
-    g = p.add_argument_group("correlation parameters")
-    g.add_argument("--dt", type=float, default=None,
-                   help="MD timestep in fs (auto-detect or default 0.5)")
-    g.add_argument("--window-fn",
-                   choices=["hann", "blackman", "gaussian", "none"],
-                   default="hann")
-    g.add_argument("--zero-pad", type=int, default=4)
+        g = p.add_argument_group("correlation parameters")
+        g.add_argument("--dt", type=float, default=defaults["dt"],
+                       help="MD timestep in fs (auto-detect or default 0.5)")
+        g.add_argument("--window-fn",
+                       choices=["hann", "blackman", "gaussian", "none"],
+                       default=defaults["window_fn"])
+        g.add_argument("--zero-pad", type=int, default=defaults["zero_pad"])
 
-    g = p.add_argument_group("transient (sliding-window)")
-    g.add_argument("--transient", action="store_true")
-    g.add_argument("--window-size", type=int, default=500,
-                   help="Sliding window in frames")
-    g.add_argument("--stride", type=int, default=100,
-                   help="Stride in frames")
+        g = p.add_argument_group("transient (sliding-window)")
+        g.add_argument("--transient", action="store_true")
+        g.add_argument("--window-size", type=int, default=defaults["window_size"],
+                       help="Sliding window in frames")
+        g.add_argument("--stride", type=int, default=defaults["stride"],
+                       help="Stride in frames")
 
-    g = p.add_argument_group("2D spectra")
-    g.add_argument("--spectra-2d", action="store_true",
-                   help="Compute 2D IR / 2D VCD frequency-frequency maps")
-    g.add_argument("--waiting-times", type=float, nargs='+',
-                   default=[0, 50, 200],
-                   help="Waiting times T (fs) for 2D spectra")
-    g.add_argument("--stft-window", type=int, default=256,
-                   help="STFT window size in frames for 2D spectra")
-    g.add_argument("--stft-stride", type=int, default=32,
-                   help="STFT stride in frames for 2D spectra")
-    g.add_argument("--noda", action="store_true",
-                   help="Compute Noda 2D correlation from transient spectra "
-                        "(requires --transient)")
+        g = p.add_argument_group("2D spectra")
+        g.add_argument("--spectra-2d", action="store_true",
+                       help="Compute 2D IR / 2D VCD frequency-frequency maps")
+        g.add_argument("--waiting-times", type=float, nargs='+',
+                       default=defaults["waiting_times"],
+                       help="Waiting times T (fs) for 2D spectra")
+        g.add_argument("--stft-window", type=int, default=defaults["stft_window"],
+                       help="STFT window size in frames for 2D spectra")
+        g.add_argument("--stft-stride", type=int, default=defaults["stft_stride"],
+                       help="STFT stride in frames for 2D spectra")
+        g.add_argument("--noda", action="store_true",
+                       help="Compute Noda 2D correlation from transient spectra "
+                            "(requires --transient)")
 
-    g = p.add_argument_group("harmonic snapshots")
-    g.add_argument("--snapshot-interval", type=int, default=200,
-                   help="Compute harmonic spectrum every N frames")
-    g.add_argument("--hessian-delta", type=float, default=0.001)
-    g.add_argument("--broadening", type=float, default=10.0,
-                   help="Lorentzian HWHM for harmonic spectra (cm⁻¹)")
+        g = p.add_argument_group("harmonic snapshots")
+        g.add_argument("--snapshot-interval", type=int, default=defaults["snapshot_interval"],
+                       help="Compute harmonic spectrum every N frames")
+        g.add_argument("--hessian-delta", type=float, default=defaults["hessian_delta"])
+        g.add_argument("--broadening", type=float, default=defaults["broadening"],
+                       help="Lorentzian HWHM for harmonic spectra (cm⁻¹)")
 
-    g = p.add_argument_group("output")
-    g.add_argument("--freq-min", type=float, default=0.0)
-    g.add_argument("--freq-max", type=float, default=4000.0)
-    g.add_argument("--output-dir", default="spectra_md")
+        g = p.add_argument_group("output")
+        g.add_argument("--freq-min", type=float, default=defaults["freq_min"])
+        g.add_argument("--freq-max", type=float, default=defaults["freq_max"])
+        g.add_argument("--output-dir", default=defaults["output_dir"])
 
-    return p.parse_args()
+        args = p.parse_args()
+        # Convert argparse namespace to match our naming (hyphens to underscores)
+        return SimpleNamespace(
+            trajectory=args.trajectory,
+            params=args.params,
+            config=args.config,
+            field_scale=args.field_scale,
+            method=args.method,
+            recompute_dipole=args.recompute_dipole,
+            recompute_charges=args.recompute_charges,
+            dt=args.dt,
+            window_fn=args.window_fn,
+            zero_pad=args.zero_pad,
+            transient=args.transient,
+            window_size=args.window_size,
+            stride=args.stride,
+            spectra_2d=args.spectra_2d,
+            waiting_times=args.waiting_times,
+            stft_window=args.stft_window,
+            stft_stride=args.stft_stride,
+            noda=args.noda,
+            snapshot_interval=args.snapshot_interval,
+            hessian_delta=args.hessian_delta,
+            broadening=args.broadening,
+            freq_min=args.freq_min,
+            freq_max=args.freq_max,
+            output_dir=args.output_dir,
+        )
+    
+    # Otherwise, use notebook mode (defaults only)
+    return SimpleNamespace(**defaults)
 
 
 # =====================================================================

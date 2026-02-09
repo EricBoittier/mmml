@@ -20,6 +20,8 @@ import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 import argparse
+import sys
+from types import SimpleNamespace
 import json
 from pathlib import Path
 
@@ -50,37 +52,96 @@ plt.rcParams['savefig.dpi'] = 300
 # Data is expected in eV/angstrom units
 EV_TO_KCAL_MOL = 23.06035  # 1 eV = 23.06035 kcal/mol
 
-def get_args():
-    parser = argparse.ArgumentParser(description="Evaluate trained model")
-    parser.add_argument("--params", type=str, default="params.json",
-                       help="Path to parameters JSON file (can be params-UUID.json or params.json)")
-    parser.add_argument("--config", type=str, default=None,
-                       help="Path to config JSON file (will be auto-detected from params UUID if not provided)")
-    parser.add_argument("--data", type=str, default="data-full.npz",
-                       help="Path to dataset NPZ file")
-    parser.add_argument("--output-dir", type=str, default="evaluation_results",
-                       help="Output directory for plots and metrics")
-    parser.add_argument("--batch-size", type=int, default=64,
-                       help="Batch size for evaluation")
-    parser.add_argument("--num-test", type=int, default=None,
-                       help="Number of test samples to use (None = use all)")
-    parser.add_argument("--model-config", type=str, default=None,
-                       help="Path to model config JSON (deprecated: use --config)")
-    parser.add_argument("--features", type=int, default=None,
-                       help="Model features (will be inferred from params/config if not provided)")
-    parser.add_argument("--max-degree", type=int, default=None,
-                       help="Max degree (default: 2)")
-    parser.add_argument("--num-iterations", type=int, default=None,
-                       help="Number of iterations (default: 2)")
-    parser.add_argument("--num-basis-functions", type=int, default=None,
-                       help="Number of basis functions (default: 64)")
-    parser.add_argument("--cutoff", type=float, default=None,
-                       help="Cutoff radius (default: 10.0)")
-    parser.add_argument("--max-atomic-number", type=int, default=None,
-                       help="Max atomic number (default: 55)")
+def get_args(**kwargs):
+    """
+    Get configuration arguments. Works both from command line and notebooks.
     
-    args = parser.parse_args()
-    return args
+    In notebooks, you can override defaults by passing keyword arguments:
+        args = get_args(params="params.json", data="data-full.npz", batch_size=32)
+    
+    From command line, use argparse flags as before.
+    """
+    # Default values
+    defaults = {
+        "params": "params.json",
+        "config": None,
+        "data": "data-full.npz",
+        "output_dir": "evaluation_results",
+        "batch_size": 64,
+        "num_test": None,
+        "model_config": None,
+        "features": None,
+        "max_degree": None,
+        "num_iterations": None,
+        "num_basis_functions": None,
+        "cutoff": None,
+        "max_atomic_number": None,
+    }
+    
+    # Check if we're in a notebook/IPython environment
+    try:
+        get_ipython()
+        in_notebook = True
+    except NameError:
+        in_notebook = False
+    
+    # If kwargs are provided, always use notebook mode
+    if kwargs:
+        defaults.update(kwargs)
+        return SimpleNamespace(**defaults)
+    
+    # Check if any command line arguments look like our flags (start with --)
+    has_flag_args = any(arg.startswith('--') for arg in sys.argv[1:])
+    
+    # If command line arguments are provided AND we're not in a notebook, use argparse
+    if has_flag_args and not in_notebook:
+        parser = argparse.ArgumentParser(description="Evaluate trained model")
+        parser.add_argument("--params", type=str, default=defaults["params"],
+                           help="Path to parameters JSON file (can be params-UUID.json or params.json)")
+        parser.add_argument("--config", type=str, default=defaults["config"],
+                           help="Path to config JSON file (will be auto-detected from params UUID if not provided)")
+        parser.add_argument("--data", type=str, default=defaults["data"],
+                           help="Path to dataset NPZ file")
+        parser.add_argument("--output-dir", type=str, default=defaults["output_dir"],
+                           help="Output directory for plots and metrics")
+        parser.add_argument("--batch-size", type=int, default=defaults["batch_size"],
+                           help="Batch size for evaluation")
+        parser.add_argument("--num-test", type=int, default=defaults["num_test"],
+                           help="Number of test samples to use (None = use all)")
+        parser.add_argument("--model-config", type=str, default=defaults["model_config"],
+                           help="Path to model config JSON (deprecated: use --config)")
+        parser.add_argument("--features", type=int, default=defaults["features"],
+                           help="Model features (will be inferred from params/config if not provided)")
+        parser.add_argument("--max-degree", type=int, default=defaults["max_degree"],
+                           help="Max degree (default: 2)")
+        parser.add_argument("--num-iterations", type=int, default=defaults["num_iterations"],
+                           help="Number of iterations (default: 2)")
+        parser.add_argument("--num-basis-functions", type=int, default=defaults["num_basis_functions"],
+                           help="Number of basis functions (default: 64)")
+        parser.add_argument("--cutoff", type=float, default=defaults["cutoff"],
+                           help="Cutoff radius (default: 10.0)")
+        parser.add_argument("--max-atomic-number", type=int, default=defaults["max_atomic_number"],
+                           help="Max atomic number (default: 55)")
+        
+        args = parser.parse_args()
+        return SimpleNamespace(
+            params=args.params,
+            config=args.config,
+            data=args.data,
+            output_dir=args.output_dir,
+            batch_size=args.batch_size,
+            num_test=args.num_test,
+            model_config=args.model_config,
+            features=args.features,
+            max_degree=args.max_degree,
+            num_iterations=args.num_iterations,
+            num_basis_functions=args.num_basis_functions,
+            cutoff=args.cutoff,
+            max_atomic_number=args.max_atomic_number,
+        )
+    
+    # Otherwise, use notebook mode (defaults only)
+    return SimpleNamespace(**defaults)
 
 
 

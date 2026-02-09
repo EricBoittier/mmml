@@ -25,6 +25,8 @@ import os
 os.environ.setdefault("XLA_PYTHON_CLIENT_MEM_FRACTION", ".99")
 
 import argparse
+import sys
+from types import SimpleNamespace
 import time
 import functools
 from pathlib import Path
@@ -403,65 +405,145 @@ def maxwell_boltzmann_velocities(masses_amu, temperature, rng_key):
 # CLI
 # =====================================================================
 
-def get_args():
-    p = argparse.ArgumentParser(
-        description="Pure JAX Molecular Dynamics (JIT-compiled integrator)")
+def get_args(**kwargs):
+    """
+    Get configuration arguments. Works both from command line and notebooks.
+    
+    In notebooks, you can override defaults by passing keyword arguments:
+        args = get_args(params="params.json", steps=5000, temperature=300)
+    
+    From command line, use argparse flags as before.
+    """
+    # Default values
+    defaults = {
+        "params": None,  # Required, but None for notebook mode
+        "config": None,
+        "data": "data-full.npz",
+        "xyz": None,
+        "index": 0,
+        "electric_field": None,
+        "field_scale": 0.001,
+        "thermostat": "langevin",
+        "temperature": 300.0,
+        "friction": 0.002,
+        "dt": 0.5,
+        "steps": 10000,
+        "save_interval": 10,
+        "output": "jax_md_trajectory.traj",
+        "save_charges": False,
+        "optimize": False,
+        "optimizer": "fire",
+        "fmax": 0.05,
+        "opt_steps": 2000,
+        "maxstep": 0.04,
+        "seed": 42,
+        "print_interval": None,
+        "dipole_field_coupling": None,
+    }
+    
+    # Check if we're in a notebook/IPython environment
+    try:
+        get_ipython()
+        in_notebook = True
+    except NameError:
+        in_notebook = False
+    
+    # If kwargs are provided, always use notebook mode
+    if kwargs:
+        defaults.update(kwargs)
+        return SimpleNamespace(**defaults)
+    
+    # Check if any command line arguments look like our flags (start with --)
+    has_flag_args = any(arg.startswith('--') for arg in sys.argv[1:])
+    
+    # If command line arguments are provided AND we're not in a notebook, use argparse
+    if has_flag_args and not in_notebook:
+        p = argparse.ArgumentParser(
+            description="Pure JAX Molecular Dynamics (JIT-compiled integrator)")
 
-    g = p.add_argument_group("model / data")
-    g.add_argument("--params", required=True, help="Path to params JSON")
-    g.add_argument("--config", default=None, help="Config JSON (auto-detect)")
-    g.add_argument("--data", default="data-full.npz",
-                   help="Dataset NPZ for initial geometry")
-    g.add_argument("--xyz", default=None,
-                   help="XYZ file for initial geometry (overrides --data)")
-    g.add_argument("--index", type=int, default=0,
-                   help="Structure index in dataset")
-    g.add_argument("--electric-field", type=float, nargs=3,
-                   default=None,
-                   help="Electric field (Ef_x Ef_y Ef_z); default: from dataset")
-    g.add_argument("--field-scale", type=float, default=0.001)
+        g = p.add_argument_group("model / data")
+        g.add_argument("--params", required=True, help="Path to params JSON")
+        g.add_argument("--config", default=defaults["config"], help="Config JSON (auto-detect)")
+        g.add_argument("--data", default=defaults["data"],
+                       help="Dataset NPZ for initial geometry")
+        g.add_argument("--xyz", default=defaults["xyz"],
+                       help="XYZ file for initial geometry (overrides --data)")
+        g.add_argument("--index", type=int, default=defaults["index"],
+                       help="Structure index in dataset")
+        g.add_argument("--electric-field", type=float, nargs=3,
+                       default=defaults["electric_field"],
+                       help="Electric field (Ef_x Ef_y Ef_z); default: from dataset")
+        g.add_argument("--field-scale", type=float, default=defaults["field_scale"])
 
-    g = p.add_argument_group("integrator")
-    g.add_argument("--thermostat", choices=["nve", "langevin"],
-                   default="langevin")
-    g.add_argument("--temperature", type=float, default=300.0,
-                   help="Temperature (K) for Langevin or initial velocities")
-    g.add_argument("--friction", type=float, default=0.002,
-                   help="Langevin friction γ (1/fs). Default 0.002 ≈ 500 fs "
-                        "decorrelation time")
-    g.add_argument("--dt", type=float, default=0.5, help="Timestep (fs)")
-    g.add_argument("--steps", type=int, default=10000,
-                   help="Total integration steps")
+        g = p.add_argument_group("integrator")
+        g.add_argument("--thermostat", choices=["nve", "langevin"],
+                       default=defaults["thermostat"])
+        g.add_argument("--temperature", type=float, default=defaults["temperature"],
+                       help="Temperature (K) for Langevin or initial velocities")
+        g.add_argument("--friction", type=float, default=defaults["friction"],
+                       help="Langevin friction γ (1/fs). Default 0.002 ≈ 500 fs "
+                            "decorrelation time")
+        g.add_argument("--dt", type=float, default=defaults["dt"], help="Timestep (fs)")
+        g.add_argument("--steps", type=int, default=defaults["steps"],
+                       help="Total integration steps")
 
-    g = p.add_argument_group("output")
-    g.add_argument("--save-interval", type=int, default=10,
-                   help="Save every N steps")
-    g.add_argument("--output", default="jax_md_trajectory.traj",
-                   help="Output ASE .traj file")
-    g.add_argument("--save-charges", action="store_true",
-                   help="Recompute & save atomic charges for each saved frame "
-                        "(post-hoc, slower)")
+        g = p.add_argument_group("output")
+        g.add_argument("--save-interval", type=int, default=defaults["save_interval"],
+                       help="Save every N steps")
+        g.add_argument("--output", default=defaults["output"],
+                       help="Output ASE .traj file")
+        g.add_argument("--save-charges", action="store_true",
+                       help="Recompute & save atomic charges for each saved frame "
+                            "(post-hoc, slower)")
 
-    g = p.add_argument_group("geometry optimisation")
-    g.add_argument("--optimize", action="store_true",
-                   help="Run geometry optimisation before MD")
-    g.add_argument("--optimizer", choices=["bfgs", "fire"], default="fire",
-                   help="Optimiser: 'bfgs' or 'fire' (default fire, more robust for ML)")
-    g.add_argument("--fmax", type=float, default=0.05,
-                   help="Convergence criterion: max force (eV/Å)")
-    g.add_argument("--opt-steps", type=int, default=2000,
-                   help="Max optimisation steps")
-    g.add_argument("--maxstep", type=float, default=0.04,
-                   help="Max step size in Å (default 0.04; ASE default 0.2)")
+        g = p.add_argument_group("geometry optimisation")
+        g.add_argument("--optimize", action="store_true",
+                       help="Run geometry optimisation before MD")
+        g.add_argument("--optimizer", choices=["bfgs", "fire"], default=defaults["optimizer"],
+                       help="Optimiser: 'bfgs' or 'fire' (default fire, more robust for ML)")
+        g.add_argument("--fmax", type=float, default=defaults["fmax"],
+                       help="Convergence criterion: max force (eV/Å)")
+        g.add_argument("--opt-steps", type=int, default=defaults["opt_steps"],
+                       help="Max optimisation steps")
+        g.add_argument("--maxstep", type=float, default=defaults["maxstep"],
+                       help="Max step size in Å (default 0.04; ASE default 0.2)")
 
-    g = p.add_argument_group("misc")
-    g.add_argument("--seed", type=int, default=42)
-    g.add_argument("--print-interval", type=int, default=None,
-                   help="Print status every N saved frames (default: ~20 lines)")
-    g.add_argument("--dipole-field-coupling", action="store_true",
-                   default=None)
+        g = p.add_argument_group("misc")
+        g.add_argument("--seed", type=int, default=defaults["seed"])
+        g.add_argument("--print-interval", type=int, default=defaults["print_interval"],
+                       help="Print status every N saved frames (default: ~20 lines)")
+        g.add_argument("--dipole-field-coupling", action="store_true",
+                       default=defaults["dipole_field_coupling"])
 
-    return p.parse_args()
+        args = p.parse_args()
+        return SimpleNamespace(
+            params=args.params,
+            config=args.config,
+            data=args.data,
+            xyz=args.xyz,
+            index=args.index,
+            electric_field=args.electric_field,
+            field_scale=args.field_scale,
+            thermostat=args.thermostat,
+            temperature=args.temperature,
+            friction=args.friction,
+            dt=args.dt,
+            steps=args.steps,
+            save_interval=args.save_interval,
+            output=args.output,
+            save_charges=args.save_charges,
+            optimize=args.optimize,
+            optimizer=args.optimizer,
+            fmax=args.fmax,
+            opt_steps=args.opt_steps,
+            maxstep=args.maxstep,
+            seed=args.seed,
+            print_interval=args.print_interval,
+            dipole_field_coupling=args.dipole_field_coupling,
+        )
+    
+    # Otherwise, use notebook mode (defaults only)
+    return SimpleNamespace(**defaults)
 
 
 # =====================================================================
