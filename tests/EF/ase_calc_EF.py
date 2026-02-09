@@ -532,69 +532,71 @@ class AseCalculatorEF(ase_calc.Calculator):
         return np.asarray(raw).squeeze()
 
 
-if __name__ == "__main__":
-    """Example: compute all available response properties for a dataset structure."""
+def get_args(**kwargs):
+    """
+    Get configuration arguments. Works both from command line and notebooks.
+    
+    In notebooks, you can override defaults by passing keyword arguments:
+        args = get_args(params="params.json", data="data-full.npz", index=0)
+    
+    From command line, use argparse flags as before.
+    """
     import argparse
     import sys
     from types import SimpleNamespace
-
-    def get_args(**kwargs):
-        """
-        Get configuration arguments. Works both from command line and notebooks.
-        
-        In notebooks, you can override defaults by passing keyword arguments:
-            args = get_args(params="params.json", data="data-full.npz", index=0)
-        
-        From command line, use argparse flags as before.
-        """
-        # Default values
-        defaults = {
-            "params": "params.json",
-            "config": None,
-            "data": "data-full.npz",
-            "index": 0,
-            "field_scale": 0.001,
-        }
-        
-        # Check if we're in a notebook/IPython environment
-        try:
-            get_ipython()
-            in_notebook = True
-        except NameError:
-            in_notebook = False
-        
-        # If kwargs are provided, always use notebook mode
-        if kwargs:
-            defaults.update(kwargs)
-            return SimpleNamespace(**defaults)
-        
-        # Check if any command line arguments look like our flags (start with --)
-        has_flag_args = any(arg.startswith('--') for arg in sys.argv[1:])
-        
-        # If command line arguments are provided AND we're not in a notebook, use argparse
-        if has_flag_args and not in_notebook:
-            parser = argparse.ArgumentParser(
-                description="Test AseCalculatorEF — energy, forces, dipole, polarizability, APT, AAT"
-            )
-            parser.add_argument("--params", type=str, default=defaults["params"])
-            parser.add_argument("--config", type=str, default=defaults["config"])
-            parser.add_argument("--data", type=str, default=defaults["data"])
-            parser.add_argument("--index", type=int, default=defaults["index"])
-            parser.add_argument("--field-scale", type=float, default=defaults["field_scale"],
-                               help="Ef_physical [au] = Ef_input * field_scale (default: 0.001)")
-            args = parser.parse_args()
-            return SimpleNamespace(
-                params=args.params,
-                config=args.config,
-                data=args.data,
-                index=args.index,
-                field_scale=args.field_scale,
-            )
-        
-        # Otherwise, use notebook mode (defaults only)
+    
+    # Default values
+    defaults = {
+        "params": "params.json",
+        "config": None,
+        "data": "data-full.npz",
+        "index": 0,
+        "field_scale": 0.001,
+    }
+    
+    # Check if we're in a notebook/IPython environment
+    try:
+        get_ipython()
+        in_notebook = True
+    except NameError:
+        in_notebook = False
+    
+    # If kwargs are provided, always use notebook mode
+    if kwargs:
+        defaults.update(kwargs)
         return SimpleNamespace(**defaults)
     
-    args = get_args()
+    # Check if any command line arguments look like our flags (start with --)
+    has_flag_args = any(arg.startswith('--') for arg in sys.argv[1:])
+    
+    # If command line arguments are provided AND we're not in a notebook, use argparse
+    if has_flag_args and not in_notebook:
+        parser = argparse.ArgumentParser(
+            description="Test AseCalculatorEF — energy, forces, dipole, polarizability, APT, AAT"
+        )
+        parser.add_argument("--params", type=str, default=defaults["params"])
+        parser.add_argument("--config", type=str, default=defaults["config"])
+        parser.add_argument("--data", type=str, default=defaults["data"])
+        parser.add_argument("--index", type=int, default=defaults["index"])
+        parser.add_argument("--field-scale", type=float, default=defaults["field_scale"],
+                           help="Ef_physical [au] = Ef_input * field_scale (default: 0.001)")
+        args = parser.parse_args()
+        return SimpleNamespace(
+            params=args.params,
+            config=args.config,
+            data=args.data,
+            index=args.index,
+            field_scale=args.field_scale,
+        )
+    
+    # Otherwise, use notebook mode (defaults only)
+    return SimpleNamespace(**defaults)
+
+
+def main(args=None):
+    """Example: compute all available response properties for a dataset structure."""
+    if args is None:
+        args = get_args()
 
     # --- Load dataset --------------------------------------------------
     dataset = np.load(args.data, allow_pickle=True)
@@ -734,4 +736,9 @@ if __name__ == "__main__":
         print(f"  -d2E/dEf2 (raw): diag = {np.diag(alpha_E)}")
     except Exception as e:
         print(f"  Error: {e}")
+
+
+if __name__ == "__main__":
+    args = get_args()
+    main(args)
 

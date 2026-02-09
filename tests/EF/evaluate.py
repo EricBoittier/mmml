@@ -864,8 +864,9 @@ def plot_force_component_comparison(predictions, targets, metrics, save_path=Non
     return ax
 
 
-def main():
-    args = get_args()
+def main(args=None):
+    if args is None:
+        args = get_args()
     
     # Create output directory
     output_dir = Path(args.output_dir)
