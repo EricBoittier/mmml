@@ -13,6 +13,21 @@ If no residue is specified, the system will be at the residue of the box.
 Args:
     --pdbfile
     simulation conditions
+
+Run from a notebook:
+    from pathlib import Path
+    import argparse
+    from mmml.cli.run_sim import run
+
+    args = argparse.Namespace(
+        pdbfile=Path("pdb/init-packmol.pdb"),
+        checkpoint=Path("ACO-..."),
+        n_monomers=50,
+        n_atoms_monomer=10,
+        cell=40.0,
+        # optional: temperature=200.0, timestep=0.3, ensemble="nve", ...
+    )
+    run(args)
 """
 
 
@@ -183,9 +198,8 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def main() -> int:
-    """Main function for PDB file demo."""
-    args = parse_args()
+def run(args: argparse.Namespace) -> int:
+    """Run MD simulation with the given arguments (CLI or notebook)."""
     base_ckpt_dir, epoch_dir = resolve_checkpoint_paths(args.checkpoint)
 
     # Setup imports
@@ -201,15 +215,13 @@ def main() -> int:
         from ase.md.velocitydistribution import MaxwellBoltzmannDistribution, Stationary, ZeroRotation
         from ase.md.verlet import VelocityVerlet
         import ase.optimize as ase_opt
-        import matplotlib.pyplot as plt
-        import py3Dmol
         from mmml.pycharmmInterface.import_pycharmm import coor
         from mmml.pycharmmInterface.setupBox import setup_box_generic
         import pandas as pd
         from mmml.pycharmmInterface.import_pycharmm import minimize
-        import jax_md
-        # JAX-MD imports
-        from jax_md import space, smap, energy, quantity, simulate, partition, units
+        # import jax_md
+        # # JAX-MD imports
+        # from jax_md import space, smap, energy, quantity, simulate, partition, units
         from ase.units import _amu
 
         import jax.numpy as jnp
@@ -254,7 +266,21 @@ def main() -> int:
     print(f"{coor.get_positions() == pdb_ase_atoms.get_positions()}")
 
     print(coor.get_positions())
-    
+    ase_monomer = pdb_ase_atoms[0:args.n_atoms_monomer]
+    params, model = load_model_parameters(epoch_dir, args.n_atoms_monomer)
+    simple_physnet_calculator = get_ase_calc(params, model, ase_monomer)
+    print(f"Simple physnet calculator: {simple_physnet_calculator}")
+    ase_monomer.calc = simple_physnet_calculator
+    print(f"ASE monomer: {ase_monomer}")
+    print(f"ASE monomer energy: {ase_monomer.get_potential_energy()}")
+    print(f"ASE monomer forces: {ase_monomer.get_forces()}")
+    print(f"ASE monomer positions: {ase_monomer.get_positions()}")
+    print(f"ASE monomer cell: {ase_monomer.get_cell()}")
+    print(f"ASE monomer pbc: {ase_monomer.get_pbc()}")
+    print(f"ASE monomer calculator: {ase_monomer.calc}")
+    print(f"ASE monomer calculator type: {type(ase_monomer.calc)}")
+
+
     # Load model parameters
     natoms = len(pdb_ase_atoms)
     n_monomers = args.n_monomers
@@ -263,58 +289,9 @@ def main() -> int:
     params, model = load_model_parameters(epoch_dir, natoms)
     model.natoms = natoms
     print(f"Model loaded: {model}")
-    
     # Get atomic numbers and positions
     Z, R = pdb_ase_atoms.get_atomic_numbers(), pdb_ase_atoms.get_positions()
-    
-    # Setup calculator factory
-    calculator_factory = setup_calculator(
-        ATOMS_PER_MONOMER=args.n_atoms_monomer,
-        N_MONOMERS=args.n_monomers,
-        ml_cutoff_distance=args.ml_cutoff,
-        mm_switch_on=args.mm_switch_on,
-        mm_cutoff=args.mm_cutoff,
-        doML=True,
-        doMM=args.include_mm,
-        doML_dimer=not args.skip_ml_dimers,
-        debug=args.debug,
-        model_restart_path=base_ckpt_dir,
-        MAX_ATOMS_PER_SYSTEM=natoms,
-        ml_energy_conversion_factor=1,
-        ml_force_conversion_factor=1,
-        cell=args.cell,
-    )
-    
-
-    CUTOFF_PARAMS = CutoffParameters(
-            ml_cutoff=args.ml_cutoff,
-            mm_switch_on=args.mm_switch_on,
-            mm_cutoff=args.mm_cutoff,
-        )
-
-    print(f"Cutoff parameters: {CUTOFF_PARAMS}")
-
-    # Create hybrid calculator
-    hybrid_calc, _ = calculator_factory(
-        atomic_numbers=Z,
-        atomic_positions=R,
-        n_monomers=args.n_monomers,
-        cutoff_params=CUTOFF_PARAMS,
-        doML=True,
-        doMM=args.include_mm,
-        doML_dimer=not args.skip_ml_dimers,
-        backprop=True,
-        debug=args.debug,
-        energy_conversion_factor=1,
-        force_conversion_factor=1,
-        # do_pbc_map=args.cell is not None,
-        # pbc_map=calculator_factory.pbc_map if hasattr(calculator_factory, 'pbc_map') else None,
-    )
- 
-    print(f"Hybrid calculator created: {hybrid_calc}")
     atoms = pdb_ase_atoms
-
-    
     if args.cell is not None:
         print("Setting cell")
         from ase.cell import Cell
@@ -336,8 +313,81 @@ def main() -> int:
         cell = None
         print("No cell provided")
 
+
+    # Setup calculator factory
+    calculator_factory = setup_calculator(
+        ATOMS_PER_MONOMER=args.n_atoms_monomer,
+        N_MONOMERS=args.n_monomers,
+        ml_cutoff_distance=args.ml_cutoff,
+        mm_switch_on=args.mm_switch_on,
+        mm_cutoff=args.mm_cutoff,
+        doML=True,
+        doMM=args.include_mm,
+        doML_dimer=not args.skip_ml_dimers,
+        debug=args.debug,
+        model_restart_path=base_ckpt_dir,
+        MAX_ATOMS_PER_SYSTEM=2*args.n_atoms_monomer,
+        ml_energy_conversion_factor=1,
+        ml_force_conversion_factor=1,
+        cell=args.cell,
+    )
+    
+
+    CUTOFF_PARAMS = CutoffParameters(
+            ml_cutoff=args.ml_cutoff,
+            mm_switch_on=args.mm_switch_on,
+            mm_cutoff=args.mm_cutoff,
+        )
+
+    print(f"Cutoff parameters: {CUTOFF_PARAMS}")
+
+
+
+
+
+    # Create hybrid calculator (pbc_map/do_pbc_map from factory when cell is set)
+    hybrid_calc, _ = calculator_factory(
+        atomic_numbers=Z,
+        atomic_positions=R,
+        n_monomers=args.n_monomers,
+        cutoff_params=CUTOFF_PARAMS,
+        doML=True,
+        doMM=args.include_mm,
+        doML_dimer=not args.skip_ml_dimers,
+        backprop=True,
+        debug=args.debug,
+        # Final energies/forces are already in eV; MM terms are converted internally.
+        energy_conversion_factor=1.0,
+        force_conversion_factor=1.0,
+        do_pbc_map=getattr(calculator_factory, "do_pbc_map", args.cell is not None),
+        pbc_map=getattr(calculator_factory, "pbc_map", None),
+    )
+ 
+    print(f"Hybrid calculator created: {hybrid_calc}")
+    atoms = pdb_ase_atoms
+
     print(f"ASE atoms: {atoms}")
     atoms.calc = hybrid_calc
+
+    # After: atoms.calc = hybrid_calc
+    print(f"PBC status: cell={args.cell}, atoms.pbc={atoms.pbc}, "
+        f"calc.do_pbc_map={getattr(hybrid_calc, 'do_pbc_map', 'N/A')}")
+
+
+
+    # Test invariance of energy under translation of monomer 0 by a lattice vector (PBC)
+    if args.cell is not None:
+        E0 = atoms.get_potential_energy()
+        a = np.array([float(args.cell), 0.0, 0.0])  # first lattice vector for cubic cell
+        g0 = np.where(np.arange(len(atoms)) < (len(atoms) // args.n_monomers))[0]
+        R_shift = R.copy()
+        R_shift[g0] += a
+        atoms.set_positions(R_shift)
+        E1 = atoms.get_potential_energy()
+        print(f"Energy invariance test: E0={E0}, E1={E1}, difference={E1-E0}")
+        assert np.isclose(E0, E1), "Energy invariance test failed"
+        atoms.set_positions(R)
+    
     # Get initial energy and forces
     hybrid_energy = float(atoms.get_potential_energy())
     hybrid_forces = np.asarray(atoms.get_forces())
@@ -345,7 +395,12 @@ def main() -> int:
     print(f"Initial forces: {hybrid_forces}")
     
 
-    from mmml.pycharmmInterface.import_pycharmm import reset_block, pycharmm, reset_block_no_internal
+    from mmml.pycharmmInterface.import_pycharmm import (
+        reset_block,
+        reset_block_no_internal,
+        pycharmm,
+        safe_energy_show,
+    )
     reset_block()
     nbonds = """!#########################################
 ! Bonded/Non-bonded Options & Constraints
@@ -357,27 +412,38 @@ vswitch NBXMOD 5 -
 inbfrq -1 imgfrq -1
 """
     pycharmm.lingo.charmm_script(nbonds)
-    pycharmm.energy.show()
-    pycharmm.minimize.run_abnr(nstep=1000, tolenr=1e-6, tolgrd=1e-6)
+    safe_energy_show()
+    pycharmm.minimize.run_abnr(nstep=1000, tolenr=1e-2, tolgrd=1e-2)
     pycharmm.lingo.charmm_script("ENER")
-    pycharmm.energy.show()
+    safe_energy_show()
     from mmml.pycharmmInterface.pycharmmCommands import heat
-    pycharmm.lingo.charmm_script(heat)
+    # pycharmm.lingo.charmm_script(heat)
     atoms.set_positions(coor.get_positions())
-    pycharmm.energy.show()
-    pycharmm.minimize.run_abnr(nstep=1000, tolenr=1e-6, tolgrd=1e-6)
-    pycharmm.energy.show()
+    safe_energy_show()
+    pycharmm.minimize.run_abnr(nstep=1000, tolenr=1e-2, tolgrd=1e-2)
+    safe_energy_show()
     pycharmm.lingo.charmm_script("ENER")
 
     # Minimize structure if requested
     # if args.minimize_first:
+    def wrap_positions_for_pbc(positions):
+        """Apply PBC mapping to wrap positions into the cell (molecular wrapping)."""
+        if args.cell is None:
+            return positions
+        pbc_map_fn = getattr(hybrid_calc, "pbc_map", None)
+        if pbc_map_fn is None or not getattr(hybrid_calc, "do_pbc_map", False):
+            return positions
+        R_mapped = pbc_map_fn(jnp.asarray(positions))
+        return np.asarray(jax.device_get(R_mapped))
+
     def minimize_structure(atoms, run_index=0, nsteps=60, fmax=0.0006, charmm=False):
 
         if charmm:
-            pycharmm.minimize.run_abnr(nstep=1000, tolenr=1e-6, tolgrd=1e-6)
+            pycharmm.minimize.run_abnr(nstep=10000, tolenr=1e-6, tolgrd=1e-6)
             pycharmm.lingo.charmm_script("ENER")
-            pycharmm.energy.show()
+            safe_energy_show()
             atoms.set_positions(coor.get_positions())
+            atoms = optimize_as_monomers(atoms, run_index=run_index, nsteps=100, fmax=0.0006)
 
         traj = ase_io.Trajectory(f'bfgs_{run_index}_{args.output_prefix}_minimized.traj', 'w')
         print("Minimizing structure with hybrid calculator")
@@ -387,13 +453,51 @@ inbfrq -1 imgfrq -1
         # Sync with PyCHARMM
         xyz = pd.DataFrame(atoms.get_positions(), columns=["x", "y", "z"])
         coor.set_positions(xyz)
-        traj.write(atoms)
         traj.close()
         return atoms
         
+    def optimize_as_monomers(atoms, run_index=0, nsteps=60, fmax=0.0006):
+        optimized_atoms_positions = np.zeros_like(atoms.get_positions())
+        # use ase and the original physnet calculator to optimize the structure, one monomer at a time
+        for i in range(args.n_monomers):
+            monomer_atoms = atoms[i*args.n_atoms_monomer:(i+1)*args.n_atoms_monomer]
+            monomer_atoms.calc = simple_physnet_calculator
+            _ = ase_opt.BFGS(monomer_atoms).run(fmax=fmax, steps=nsteps)
+            optimized_atoms_positions[i*args.n_atoms_monomer:(i+1)*args.n_atoms_monomer] = monomer_atoms.get_positions()
+
+        atoms.set_positions(optimized_atoms_positions)
+        # Wrap positions into cell after monomer optimization (avoids unwrapped coords for PBC)
+        if args.cell is not None:
+            wrapped = wrap_positions_for_pbc(atoms.get_positions())
+            atoms.set_positions(wrapped)
+            xyz = pd.DataFrame(wrapped, columns=["x", "y", "z"])
+        else:
+            xyz = pd.DataFrame(atoms.get_positions(), columns=["x", "y", "z"])
+        coor.set_positions(xyz)
+
+        return atoms
+
+
+        
     def run_ase_md(atoms, run_index=0, temperature=args.temperature):
         
-        atoms = minimize_structure(atoms, run_index=run_index, nsteps=100 if run_index == 0 else 10, fmax=0.0006 if run_index == 0 else 0.001)
+        if run_index == 0:
+            atoms = optimize_as_monomers(atoms, run_index=run_index, nsteps=100, fmax=0.0006)
+
+        
+        print(f"Optimized atoms energy: {atoms.get_potential_energy()}")
+        print(f"Optimized atoms forces: {atoms.get_forces()}")
+
+        atoms = minimize_structure(atoms, run_index=run_index,
+         nsteps=100 if run_index == 0 else 10, fmax=0.0006 if run_index == 0 else 0.001)
+        # Wrap positions into cell after BFGS (avoids unwrapped coords for PBC)
+        if args.cell is not None:
+            # translate to the center of the cell
+            atoms.set_positions(atoms.get_positions() - atoms.get_positions().mean(axis=0))
+            wrapped = wrap_positions_for_pbc(atoms.get_positions())
+            atoms.set_positions(wrapped)
+            xyz = pd.DataFrame(wrapped, columns=["x", "y", "z"])
+            coor.set_positions(xyz)
 
         # Setup MD simulation
         
@@ -404,8 +508,8 @@ inbfrq -1 imgfrq -1
         # Draw initial momenta
         if run_index == 0:
             MaxwellBoltzmannDistribution(ase_atoms, temperature_K=temperature)
-            # Stationary(ase_atoms)  # Remove center of mass translation
-            # ZeroRotation(ase_atoms)  # Remove rotations
+            Stationary(ase_atoms)  # Remove center of mass translation
+            ZeroRotation(ase_atoms)  # Remove rotations
 
         dt = timestep_fs*ase.units.fs
         print(f"Running ASE MD with timestep: {dt} (ase units)")
@@ -426,7 +530,11 @@ inbfrq -1 imgfrq -1
         for i in range(num_steps):
             # Run 1 time step
             integrator.run(1)
-            # ase_atoms.wrap()
+            # Do NOT wrap positions every timestep: pbc_map applies a discontinuous coordinate
+            # transformation. Replacing R with wrapped(R) after integration creates an inconsistent
+            # phase-space point (velocities unchanged, positions jumped) and breaks NVE energy
+            # conservation. The calculator applies pbc_map internally for forces; integration uses
+            # unwrapped coordinates. Wrap only for trajectory output if needed (see traj.write).
             # Save current frame and keep track of energies
             frames[i] = ase_atoms.get_positions()
             potential_energy[i] = ase_atoms.get_potential_energy()
@@ -464,16 +572,27 @@ inbfrq -1 imgfrq -1
                 Stationary(ase_atoms)
                 ZeroRotation(ase_atoms)
                 breakcount += 1
-            if breakcount > 4:
+            if breakcount > 1:
                 print("Maximum number of breaks reached")
                 break
             # Occasionally print progress and adjust temperature
             if (i != 0) and (i % args.write_interval == 0):
-                traj.write(ase_atoms)
+                if args.cell is not None:
+                    traj.write(ase_atoms)
+                    # # Wrap for output only (does not affect integration; preserves NVE)
+                    # atoms_to_write = ase_atoms.copy()
+                    # atoms_to_write.set_positions(wrap_positions_for_pbc(ase_atoms.get_positions()))
+                    # atoms_to_write.set_forces(wrap_positions_for_pbc(ase_atoms.get_forces()))
+                    # atoms_to_write.set_potential_energy(potential_energy[i])
+                    # atoms_to_write.set_kinetic_energy(kinetic_energy[i])
+                    # atoms_to_write.set_total_energy(total_energy[i])
+                    # traj.write(atoms_to_write)
+                else:
+                    traj.write(ase_atoms)
             if args.ensemble == "nvt":
                 if  (i % args.heating_interval == 0):
-                    # Stationary(ase_atoms)
-                    # ZeroRotation(ase_atoms)
+                    Stationary(ase_atoms)
+                    ZeroRotation(ase_atoms)
                     MaxwellBoltzmannDistribution(ase_atoms, temperature_K=temperature)
                     print(f"Temperature adjusted to: {temperature} K")
             if i % 100 == 0:
@@ -487,11 +606,12 @@ inbfrq -1 imgfrq -1
 
 
     temperature = args.temperature
-    for i in range(1000):
+    for i in range(1):
         run_ase_md(atoms, run_index=i, temperature=temperature)
 
+    return atoms
 
-    sys.exit()
+    # sys.exit()
 
     def set_up_nhc_sim_routine(atoms, T=args.temperature, dt=5e-3, steps_per_recording=250):
         @jax.jit
@@ -924,6 +1044,9 @@ inbfrq -1 imgfrq -1
     return 0
 
 
+def main() -> int:
+    """CLI entry point: parse args and run simulation."""
+    return run(parse_args())
 
 
 if __name__ == "__main__":
