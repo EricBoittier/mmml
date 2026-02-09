@@ -672,14 +672,32 @@ class ModelOutput(NamedTuple):
 def setup_calculator(
     ATOMS_PER_MONOMER,
     N_MONOMERS: int = 2,
+<<<<<<< HEAD
+    ml_cutoff_distance: float = 2.0, # actually width of the switching function
+    mm_switch_on: float = 5.0, # when MM turns on
+    mm_cutoff: float = 1.0, # when MM turns off
+=======
     ml_cutoff_distance: float = 2.0,
     mm_switch_on: float = 5.0,
     mm_cutoff: float = 1.0,
     complementary_handoff: bool = True,
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
     doML: bool = True,
     doMM: bool = True,
     doML_dimer: bool = True,
     debug: bool = False,
+<<<<<<< HEAD
+    ep_scale = None,
+    sig_scale = None,
+    model_restart_path = None,
+    MAX_ATOMS_PER_SYSTEM: int = 20,
+    ml_energy_conversion_factor: float = 1.0,
+    ml_force_conversion_factor: float = 1.0,
+    cell = False,
+    verbose: bool = False,
+    ml_reorder_indices = None,  # Optional permutation: positions_model = positions[ml_reorder_indices]
+    at_codes_override = None,    # Optional per-atom LJ code override (mapped IAC -> param idx)
+=======
     ep_scale=None,
     sig_scale=None,
     model_restart_path=None,
@@ -690,6 +708,7 @@ def setup_calculator(
     verbose: bool = False,
     ml_reorder_indices=None,
     at_codes_override=None,
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
 ):
     """Create hybrid ML/MM calculator with outputs in eV/eV-A.
 
@@ -766,8 +785,11 @@ def setup_calculator(
             
             model_config = json_to_jax_config(config)
             model_config['natoms'] = MAX_ATOMS_PER_SYSTEM
+<<<<<<< HEAD
+=======
             if cell:
                 model_config['use_pbc'] = True
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
             MODEL = EF(**model_config)
             MODEL.natoms = MAX_ATOMS_PER_SYSTEM
             
@@ -823,7 +845,11 @@ def setup_calculator(
             ) from e
         # Setup monomer model using orbax
         params, MODEL = get_params_model(restart)
+<<<<<<< HEAD
+    MODEL.natoms = MAX_ATOMS_PER_SYSTEM 
+=======
     MODEL.natoms = MAX_ATOMS_PER_SYSTEM
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
 
     if cell:
         MODEL.use_pbc = True
@@ -857,6 +883,13 @@ def setup_calculator(
         ATOMS_PER_MONOMER=ATOMS_PER_MONOMER,
         pbc_cell=None,
     ):
+<<<<<<< HEAD
+        # per atom coordinates rather than CoM
+        com1 = X[:ATOMS_PER_MONOMER].T
+        com2 = X[ATOMS_PER_MONOMER:2*ATOMS_PER_MONOMER].T
+
+        r = jnp.linalg.norm(com1 - com2)
+=======
         # COM–COM distance (used for ML taper; must match debug "dimer COM distance")
         com1 = jnp.mean(X[:ATOMS_PER_MONOMER], axis=0)
         com2 = jnp.mean(X[ATOMS_PER_MONOMER:2*ATOMS_PER_MONOMER], axis=0)
@@ -865,6 +898,7 @@ def setup_calculator(
             r = jnp.linalg.norm(d)
         else:
             r = jnp.linalg.norm(com2 - com1)
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
     
         # ML: 1 -> 0 over [mm_switch_on - ml_cutoff, mm_switch_on]
         ml_scale = 1.0 - _sharpstep(r, mm_switch_on - ml_cutoff, mm_switch_on, gamma=GAMMA_ON)
@@ -1040,6 +1074,20 @@ def setup_calculator(
             """MM scale: complementary (1-s_ML) over handoff, then taper to 0 at mm_switch_on+mm_cutoff; or legacy."""
             @jax.jit
             def apply_switching_function(positions: Array, pair_energies: Array) -> Array:
+<<<<<<< HEAD
+                """Applies smooth switching function to MM energies based on COM distance."""
+                # COM distance
+                com1 = positions[:ATOMS_PER_MONOMER].T.mean(axis=1)
+                com2 = positions[ATOMS_PER_MONOMER:2*ATOMS_PER_MONOMER].T.mean(axis=1)
+                r = jnp.linalg.norm(com1 - com2)
+
+                # MM: 0→1 over [mm_on, mm_on+mm_cut], then 1→0 over [mm_on+mm_cut, mm_on+2*mm_cut]
+                # Match cutoffs.py plotting (gamma_on=GAMMA_ON, gamma_off=GAMMA_OFF)
+                mm_on = _sharpstep(r, mm_switch_on, mm_switch_on + mm_cutoff, gamma=GAMMA_ON)
+                mm_off = _sharpstep(r, mm_switch_on + mm_cutoff, mm_switch_on + 2.0 * mm_cutoff, gamma=GAMMA_OFF)
+                mm_scale = mm_on * (1.0 - mm_off)
+
+=======
                 com1 = jnp.mean(positions[:ATOMS_PER_MONOMER], axis=0)
                 com2 = jnp.mean(positions[ATOMS_PER_MONOMER:2*ATOMS_PER_MONOMER], axis=0)
                 if pbc_cell is not None:
@@ -1059,6 +1107,7 @@ def setup_calculator(
                     mm_on = _sharpstep(r, mm_switch_on, mm_switch_on + mm_cutoff, gamma=GAMMA_ON)
                     mm_off = _sharpstep(r, mm_switch_on + mm_cutoff, mm_switch_on + 2.0 * mm_cutoff, gamma=GAMMA_OFF)
                     mm_scale = mm_on * (1.0 - mm_off)
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
                 return (pair_energies * mm_scale).sum()
             return apply_switching_function
 
@@ -1129,8 +1178,16 @@ def setup_calculator(
             # Apply switching function
             switched_energy = apply_switching_function(positions, pair_energies)
             
+<<<<<<< HEAD
+            # Calculate forces with switching
+
+            # forces = -(mm_energy_grad(positions) + switching_grad(positions, pair_energies))
+            # Mitradip was here v(^_^)v
+            forces = -1.0 * switching_grad(positions, pair_energies)
+=======
             # Calculate forces with switching (include energy dependence on positions)
             forces = -1.0 * switched_mm_grad(positions)
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
             # Check for NaN/Inf in forces and replace with zeros
             forces = jnp.where(jnp.isfinite(forces), forces, 0.0)
 
@@ -1230,48 +1287,98 @@ def setup_calculator(
             # This is critical - NaN values will corrupt all subsequent calculations
             ml_forces = jnp.where(jnp.isfinite(ml_forces_raw), ml_forces_raw, 0.0)
             ml_internal_F = jnp.where(jnp.isfinite(ml_internal_F_raw), ml_internal_F_raw, 0.0)
+<<<<<<< HEAD
+            ml_2b_F = jnp.where(jnp.isfinite(ml_2b_F_raw), ml_2b_F_raw, 0.0) if "ml_2b_F" in ml_out else jnp.zeros((n_monomers * ATOMS_PER_MONOMER, 3))
+            
+            # # Debug: Check for NaN in raw forces (jax.debug.print handles conditional execution)
+            nan_count_raw = jnp.sum(~jnp.isfinite(ml_forces_raw))
+            # jax.debug.print("CRITICAL: Found {n} NaN/Inf in ml_forces from calculate_ml_contributions!", 
+=======
             ml_2b_F = jnp.where(jnp.isfinite(ml_2b_F_raw), ml_2b_F_raw, 0.0)
             
             # Debug: Check for NaN in raw forces (jax.debug.print handles conditional execution)
             nan_count_raw = jnp.sum(~jnp.isfinite(ml_forces_raw))
             # jax.debug.print("CRITICAL: Found {n} NaN/Inf in ml_forces from calculate_ml_contributions!",
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
             # n=nan_count_raw, ordered=False)
             
             # Ensure ML forces have the correct shape (should match n_atoms)
             expected_n_ml_atoms = n_monomers * ATOMS_PER_MONOMER
             if ml_forces.shape[0] != expected_n_ml_atoms:
+<<<<<<< HEAD
+                # If shape mismatch, pad or truncate to expected size
+=======
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
                 if ml_forces.shape[0] < expected_n_ml_atoms:
                     padding = jnp.zeros((expected_n_ml_atoms - ml_forces.shape[0], 3))
                     ml_forces = jnp.concatenate([ml_forces, padding], axis=0)
                     ml_internal_F = jnp.concatenate([ml_internal_F, jnp.zeros((expected_n_ml_atoms - ml_internal_F.shape[0], 3))], axis=0)
+<<<<<<< HEAD
+                    if "ml_2b_F" in ml_out:
+                        ml_2b_F = jnp.concatenate([ml_2b_F, jnp.zeros((expected_n_ml_atoms - ml_2b_F.shape[0], 3))], axis=0)
+                else:
+                    ml_forces = ml_forces[:expected_n_ml_atoms]
+                    ml_internal_F = ml_internal_F[:expected_n_ml_atoms]
+                    if "ml_2b_F" in ml_out:
+                        ml_2b_F = ml_2b_F[:expected_n_ml_atoms]
+=======
                     ml_2b_F = jnp.concatenate([ml_2b_F, jnp.zeros((expected_n_ml_atoms - ml_2b_F.shape[0], 3))], axis=0)
                 else:
                     ml_forces = ml_forces[:expected_n_ml_atoms]
                     ml_internal_F = ml_internal_F[:expected_n_ml_atoms]
                     ml_2b_F = ml_2b_F[:expected_n_ml_atoms]
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
             
             # Ensure ML forces match system size (in case n_atoms != expected_n_ml_atoms)
             if ml_forces.shape[0] > n_atoms:
                 ml_forces = ml_forces[:n_atoms]
                 ml_internal_F = ml_internal_F[:n_atoms]
+<<<<<<< HEAD
+                if "ml_2b_F" in ml_out:
+                    ml_2b_F = ml_2b_F[:n_atoms]
+=======
                 ml_2b_F = ml_2b_F[:n_atoms]
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
             elif ml_forces.shape[0] < n_atoms:
                 padding = jnp.zeros((n_atoms - ml_forces.shape[0], 3))
                 ml_forces = jnp.concatenate([ml_forces, padding], axis=0)
                 ml_internal_F = jnp.concatenate([ml_internal_F, padding], axis=0)
+<<<<<<< HEAD
+                if "ml_2b_F" in ml_out:
+                    ml_2b_F = jnp.concatenate([ml_2b_F, padding], axis=0)
+            
+            # CRITICAL: Ensure shapes match exactly before adding
+            if ml_forces.shape[0] != n_atoms:
+                # jax.debug.print("ERROR: Shape mismatch! ml_forces.shape[0]={s}, n_atoms={n}",
+                # s=ml_forces.shape[0], n=n_atoms,
+                # ordered=False)
+                # This should not happen, but if it does, we need to fix it
+=======
                 ml_2b_F = jnp.concatenate([ml_2b_F, padding], axis=0)
             
             # CRITICAL: Ensure shapes match exactly before adding
             if ml_forces.shape[0] != n_atoms:
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
                 if ml_forces.shape[0] < n_atoms:
                     padding = jnp.zeros((n_atoms - ml_forces.shape[0], 3))
                     ml_forces = jnp.concatenate([ml_forces, padding], axis=0)
                     ml_internal_F = jnp.concatenate([ml_internal_F, padding], axis=0)
+<<<<<<< HEAD
+                    if "ml_2b_F" in ml_out:
+                        ml_2b_F = jnp.concatenate([ml_2b_F, padding], axis=0)
+                else:
+                    ml_forces = ml_forces[:n_atoms]
+                    ml_internal_F = ml_internal_F[:n_atoms]
+                    if "ml_2b_F" in ml_out:
+                        ml_2b_F = ml_2b_F[:n_atoms]
+            
+=======
                     ml_2b_F = jnp.concatenate([ml_2b_F, padding], axis=0)
                 else:
                     ml_forces = ml_forces[:n_atoms]
                     ml_internal_F = ml_internal_F[:n_atoms]
                     ml_2b_F = ml_2b_F[:n_atoms]
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
 
             nan_count = jnp.sum(~jnp.isfinite(ml_forces))
            
@@ -1284,8 +1391,14 @@ def setup_calculator(
             near_zero_atoms = jnp.sum(force_magnitudes < 1e-8)
 
             
+<<<<<<< HEAD
+            # # ml_2b_F is stored separately for analysis but is already included in ml_forces
+            if "ml_2b_F" in ml_out:
+                outputs["ml_2b_F"] = outputs["ml_2b_F"] + ml_2b_F
+=======
             # ml_2b_F is stored separately for analysis but is already included in ml_forces
             outputs["ml_2b_F"] = outputs["ml_2b_F"] + ml_2b_F
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
                    
             # Update energy terms (these are scalars, so no shape issue)
             outputs["out_E"] = ml_out.get("out_E", 0)
@@ -1318,7 +1431,11 @@ def setup_calculator(
             outputs["mm_E"] = mm_E
             outputs["mm_F"] = mm_F
             outputs["out_E"] = outputs.get("out_E", 0) + outputs["mm_E"]
+<<<<<<< HEAD
+            outputs["out_F"] = outputs.get("out_F", 0) + outputs["mm_E"]
+=======
             outputs["out_F"] = outputs.get("out_F", 0) + outputs["mm_F"]
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
 
         # Final validation: check for NaN/Inf in final forces
         final_forces = outputs["out_F"]
@@ -1573,6 +1690,9 @@ def setup_calculator(
         # Process forces
         # Note: For monomers, we use ATOMS_PER_MONOMER, not max_atoms (which is for dimers)
         monomer_forces = process_monomer_forces(
+<<<<<<< HEAD
+            ml_monomer_forces, monomer_segment_idxs, ATOMS_PER_MONOMER, debug
+=======
             ml_monomer_forces,
             monomer_segment_idxs,
             ATOMS_PER_MONOMER,
@@ -1580,6 +1700,7 @@ def setup_calculator(
             monomer_positions_flat=monomer_positions_flat,
             monomer_atom_mask_flat=monomer_atom_mask_flat,
             debug=debug,
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
         )
 
         
@@ -1601,7 +1722,11 @@ def setup_calculator(
         cutoff_params: CutoffParameters,
         debug: bool
     ) -> Dict[str, Array]:
+<<<<<<< HEAD
+        """Calculate MM energy and force contributions"""
+=======
         """Calculate MM energy and force contributions (converted to eV)."""
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
         
         # Ensure positions are finite
         positions = jnp.where(jnp.isfinite(positions), positions, 0.0)
@@ -1622,6 +1747,20 @@ def setup_calculator(
         # Check for NaN/Inf in MM energy and forces
         mm_E = jnp.where(jnp.isfinite(mm_E), mm_E, 0.0)
         mm_grad = jnp.where(jnp.isfinite(mm_grad), mm_grad, 0.0)
+<<<<<<< HEAD
+        
+        # Ensure MM forces match the full system size
+        n_atoms = positions.shape[0]
+        if mm_grad.shape[0] != n_atoms:
+            # MM forces are computed for N_MONOMERS * ATOMS_PER_MONOMER atoms
+            # If system has more atoms (e.g., water), pad with zeros
+            if mm_grad.shape[0] < n_atoms:
+                padding = jnp.zeros((n_atoms - mm_grad.shape[0], 3))
+                mm_grad = jnp.concatenate([mm_grad, padding], axis=0)
+            else:
+                # Truncate to system size
+                mm_grad = mm_grad[:n_atoms]
+=======
 
         # # MM outputs are in kcal/mol and kcal/mol/Å. Convert to eV and eV/Å.
         mm_E = mm_E * kcalmol2ev
@@ -1630,6 +1769,7 @@ def setup_calculator(
         # Ensure MM forces match the full system size
         n_atoms = positions.shape[0]
 
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
         
         debug_print(debug, "MM Contributions:", 
             mm_E=mm_E,
@@ -1637,12 +1777,22 @@ def setup_calculator(
             mm_grad_shape=mm_grad.shape,
             n_atoms=n_atoms
         )
+<<<<<<< HEAD
+        kcal2ev = 1 /  23.0605
+        return {
+            "out_E": mm_E * kcal2ev,
+            "out_F": mm_grad * kcal2ev,
+            "dH": mm_E * kcal2ev,
+            "mm_E": mm_E * kcal2ev,
+            "mm_F": mm_grad * kcal2ev,
+=======
         return {
             "out_E": mm_E,
             "out_F": mm_grad,
             "dH": mm_E,
             "mm_E": mm_E,
             "mm_F": mm_grad,
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
         }
 
     if _HAVE_ASE:
@@ -1706,6 +1856,63 @@ def setup_calculator(
                 R = atoms.get_positions()
                 Z = atoms.get_atomic_numbers()
 
+<<<<<<< HEAD
+                out = {}
+                
+                if not self.backprop:
+                    # Apply PBC mapping before JAX computation if needed
+                    R_mapped = self.pbc_map(R) if self.do_pbc_map else R
+                    out = spherical_cutoff_calculator(
+                        positions=R_mapped,
+                        atomic_numbers=Z,
+                        n_monomers=self.n_monomers,
+                        cutoff_params=self.cutoff_params,
+                        doML=self.doML,
+                        doMM=self.doMM,
+                        doML_dimer=self.doML_dimer,
+                        debug=self.debug,
+                    )
+
+                    E = out.energy  # Energy from calculator (negative, binding energy convention)
+                    F = out.forces
+                    
+                    # Ensure forces from ModelOutput are finite
+                    F = jnp.where(jnp.isfinite(F), F, 0.0)
+                    
+                    # Debug: Check forces after NaN check
+                    if self.debug:
+                        F_mags_after = jnp.linalg.norm(F, axis=1)
+                        print(f"Non-backprop path - F after NaN check: atom 3 mag: {float(F_mags_after[3]):.6e}, atom 7: {float(F_mags_after[7]):.6e}")
+
+                if self.backprop:
+                    # OPTIMIZED BACKPROP PATH: Compute energy via autodiff but use forces directly from ModelOutput
+                    # This avoids numerical instability from differentiating through the entire computation
+                    # while still allowing energy to be computed via autodiff for training/optimization
+                    R_mapped = self.pbc_map(R) if self.do_pbc_map else R
+                    
+                    # Compute ModelOutput to get forces directly (more stable)
+                    out = spherical_cutoff_calculator(
+                        positions=R_mapped,
+                        atomic_numbers=Z,
+                        n_monomers=self.n_monomers,
+                        cutoff_params=self.cutoff_params,
+                        doML=self.doML,
+                        doMM=self.doMM,
+                        doML_dimer=self.doML_dimer,
+                        debug=self.debug,
+                    )
+                    
+                    # Use forces directly from ModelOutput (computed via explicit gradients, more stable)
+                    F = out.forces
+                    
+                    # For energy, we can still use autodiff if needed, but for now use directly
+                    # The energy from ModelOutput is already correct
+                    E = out.energy
+
+                    # Ensure forces are finite
+                    E = jnp.where(jnp.isfinite(E), E, 0.0)
+                    F = jnp.where(jnp.isfinite(F), F, 0.0)
+=======
                 expected_atoms = self.n_monomers * self.atoms_per_monomer
                 if len(Z) != expected_atoms:
                     raise ValueError(
@@ -1756,6 +1963,7 @@ def setup_calculator(
                 # Ensure forces are finite
                 E = jnp.where(jnp.isfinite(E), E, 0.0)
                 F = jnp.where(jnp.isfinite(F), F, 0.0)
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
 
                 if self.verbose:
                     # Store full ModelOutput with ML/MM breakdown for analysis
@@ -1765,9 +1973,23 @@ def setup_calculator(
                             self.results[f"model_{k}"] = v
                 else:
                     self.results["out"] = out
+<<<<<<< HEAD
+                # Energy sign handling:
+                # - In backprop path (no fallback): Efn returns -spherical_cutoff_calculator(...).energy
+                #   So E from value_and_grad is already negative
+                # - In non-backprop path: E = out.energy (check actual sign from calculator)
+                # - In fallback path: E = out_fallback.energy (same as non-backprop, check actual sign)
+                # The spherical_cutoff_calculator returns negative energy (binding energy convention)
+                # So:
+                # - backprop (no fallback): E is already negative, use as-is
+                # - non-backprop: E from calculator is negative, use as-is (no negation needed)
+                # - fallback: E from calculator is negative, use as-is (no negation needed)
+                # All paths should use E directly since calculator already returns negative energies
+=======
 
 
 
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
                 final_energy = E
                 
                 self.results["energy"] = final_energy * self.energy_conversion_factor
@@ -1776,6 +1998,11 @@ def setup_calculator(
                 
                 # Check for NaN/Inf using JAX operations first (works with JAX arrays)
                 forces_final = jnp.where(jnp.isfinite(forces_final), forces_final, 0.0)
+<<<<<<< HEAD
+                
+                # Debug: Check forces BEFORE conversion to numpy (still in JAX)
+                if self.debug:
+=======
                 if self.debug:
 
                     # Hard check: ml_2b outputs must be finite (avoid silent zeroing).
@@ -1871,6 +2098,7 @@ def setup_calculator(
                             print(f"DEBUG ml_2b_F first 3 rows:\n{ml_2b_F_np[:3]}")
                     except Exception as e:
                         print(f"DEBUG ml_2b_F extraction failed: {e}")
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
                     # Get values from JAX array before conversion
                     # CRITICAL: Use np.array() with explicit evaluation to ensure we get concrete values
                     try:
@@ -1898,6 +2126,14 @@ def setup_calculator(
                         except Exception as e2:
                             print(f"ERROR in fallback extraction: {e2}")
                 
+<<<<<<< HEAD
+                # Convert to numpy array for storage (ASE expects numpy arrays)
+                # Ensure proper shape: (n_atoms, 3)
+                # CRITICAL: Ensure JAX array is fully evaluated before conversion
+                # Use jax.device_get() to move from device to host, then convert to numpy
+                # Note: jax is imported at module level, so we can use it directly
+=======
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
                 try:
                     # First ensure array is on CPU and fully computed
                     forces_final_host = jax.device_get(forces_final)
@@ -1928,6 +2164,21 @@ def setup_calculator(
                         print(f"AFTER numpy conversion - zero-force atom indices: {zero_indices_after}")
                     # Sample same atoms for comparison
                     print(f"AFTER numpy conversion - sample atoms (0,3,7,10,19): mags={force_mags_after_conv[[0,3,7,10,min(19,len(force_mags_after_conv)-1)]]}")
+<<<<<<< HEAD
+                    # Compare specific atoms that were non-zero before
+                    if hasattr(self, 'zero_count_jax') and self.zero_count_jax == 0 and zero_count_after > 0:
+                        print("WARNING: Forces became zero during numpy conversion!")
+                        if hasattr(self, 'forces_jax_mags_np'):
+                            for idx in zero_indices_after[:10]:
+                                if idx < len(self.forces_jax_mags_np):
+                                    print(f"  Atom {idx}: BEFORE={self.forces_jax_mags_np[idx]:.6e}, AFTER={force_mags_after_conv[idx]:.6e}")
+                                else:
+                                    print(f"  Atom {idx}: BEFORE=<out of range>, AFTER={force_mags_after_conv[idx]:.6e}")
+                    # Store for comparison in final check
+                    if not hasattr(self, 'forces_jax_mags_np'):
+                        self.forces_jax_mags_np = forces_jax_mags_np
+                        self.zero_count_jax = zero_count_jax
+=======
                     # Compare atoms that changed to zero during conversion
                     if "zero_mask_jax" in locals():
                         became_zero = np.where((~zero_mask_jax) & zero_mask_after)[0]
@@ -1935,6 +2186,7 @@ def setup_calculator(
                             print("WARNING: Forces became zero during numpy conversion!")
                             for idx in became_zero[:10]:
                                 print(f"  Atom {idx}: BEFORE={forces_jax_mags_np[idx]:.6e}, AFTER={force_mags_after_conv[idx]:.6e}")
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
                 
                 # Final check: ensure shape is correct and all values are finite
                 if forces_final.shape[0] != R.shape[0]:
@@ -1975,6 +2227,16 @@ def setup_calculator(
                     if len(zero_indices) > 1:
                         zero_diffs = np.diff(np.sort(zero_indices))
                         print(f"Calculator storage - spacing between zero atoms: {zero_diffs}")
+<<<<<<< HEAD
+                        # Check if all zeros are in second monomer (indices >= ATOMS_PER_MONOMER)
+                        if hasattr(self, 'n_monomers') and hasattr(self, 'cutoff_params'):
+                            n_monomers = self.n_monomers
+                            ATOMS_PER_MONOMER = self.cutoff_params.ATOMS_PER_MONOMER if hasattr(self.cutoff_params, 'ATOMS_PER_MONOMER') else None
+                            if ATOMS_PER_MONOMER:
+                                zeros_in_first = np.sum(zero_indices < ATOMS_PER_MONOMER)
+                                zeros_in_second = np.sum(zero_indices >= ATOMS_PER_MONOMER)
+                                print(f"Calculator storage - zeros in first monomer (0-{ATOMS_PER_MONOMER-1}): {zeros_in_first}, second monomer (≥{ATOMS_PER_MONOMER}): {zeros_in_second}")
+=======
                         # Report per-monomer slot pattern (index mod atoms_per_monomer)
                         atoms_per_monomer = (
                             self.cutoff_params.ATOMS_PER_MONOMER
@@ -1985,6 +2247,7 @@ def setup_calculator(
                             zero_mod = zero_indices % atoms_per_monomer
                             mod_counts = np.bincount(zero_mod, minlength=int(atoms_per_monomer))
                             print(f"Calculator storage - zero-force slot counts (mod n_per): {mod_counts}")
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
                     # Also check a few random non-zero atoms to ensure they're correct
                     non_zero_indices = np.where(force_mags_final >= 1e-10)[0]
                     if len(non_zero_indices) > 0:
@@ -2032,7 +2295,11 @@ def setup_calculator(
                 force_conversion_factor=force_conversion_factor,
                 do_pbc_map=do_pbc_map,
                 pbc_map=pbc_map,
+<<<<<<< HEAD
+                verbose=False,
+=======
                 verbose=verbose,
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
             )
 
             return calculator, spherical_cutoff_calculator
@@ -2052,9 +2319,12 @@ def setup_calculator(
         ml_monomer_forces: Array,
         monomer_segment_idxs: Array,
         atoms_per_monomer: int,
+<<<<<<< HEAD
+=======
         monomer_atomic_numbers_flat: Array | None = None,
         monomer_positions_flat: Array | None = None,
         monomer_atom_mask_flat: Array | None = None,
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
         debug: bool = False,
     ) -> Array:
         """Process and reshape monomer forces with proper masking.
@@ -2106,6 +2376,8 @@ def setup_calculator(
 
         # Ensure all forces are finite
         processed_forces = jnp.where(jnp.isfinite(processed_forces), processed_forces, 0.0)
+<<<<<<< HEAD
+=======
 
         if debug:
             force_mags = jnp.linalg.norm(processed_forces, axis=1)
@@ -2129,10 +2401,7 @@ def setup_calculator(
             if monomer_atom_mask_flat is not None:
                 mask_sample = jnp.take(monomer_atom_mask_flat, zero_indices, axis=0, mode="clip")
                 jax.debug.print("DEBUG monomer forces: atom_mask sample {m}", m=mask_sample, ordered=False)
-        
-
-        # Ensure all forces are finite
-        processed_forces = jnp.where(jnp.isfinite(processed_forces), processed_forces, 0.0)
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
         
         debug_print(debug, "Process Monomer Forces:",
             raw_forces=ml_monomer_forces,
@@ -2280,6 +2549,8 @@ def setup_calculator(
         processed_forces = jnp.where(jnp.isfinite(processed_forces), processed_forces, 0.0)
         
         return processed_forces
+<<<<<<< HEAD
+=======
 
 
     def dimer_repulsion(
@@ -2289,6 +2560,7 @@ def setup_calculator(
     ) -> Array:
         """Calculate dimer repulsion forces."""
         return 0.0
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
 
     def apply_dimer_switching(
         positions: Array,
@@ -2310,7 +2582,10 @@ def setup_calculator(
         n_dimers = len(all_dimer_idxs)
         force_segments = calculate_dimer_force_segments(n_dimers)
         
+<<<<<<< HEAD
+=======
         pbc_cell = cell if do_pbc_map else None
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
         # Calculate switched energies using cutoff parameters
         switched_energy = jax.vmap(lambda x, f: switch_ML(
             x.reshape(max_atoms, 3), 
@@ -2328,7 +2603,10 @@ def setup_calculator(
             ml_cutoff=cutoff_params.ml_cutoff,
             mm_switch_on=cutoff_params.mm_switch_on,
             ATOMS_PER_MONOMER=ATOMS_PER_MONOMER,
+<<<<<<< HEAD
+=======
             pbc_cell=pbc_cell,
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
         ))(positions[jnp.array(all_dimer_idxs)])
         
         # Calculate energy-weighted switching gradients (E * ds/dR)
@@ -2347,6 +2625,36 @@ def setup_calculator(
         dimer_switching_grads = switched_grad[:, :2 * ATOMS_PER_MONOMER, :]  # (n_dimers, 2*ATOMS_PER_MONOMER, 3)
         dimer_switching_grads_flat = dimer_switching_grads.reshape(-1, 3)  # (n_dimers * 2*ATOMS_PER_MONOMER, 3)
         
+<<<<<<< HEAD
+        # Map energy-weighted switching gradients to full system
+        # This gives us the E * ds/dR term
+        # We need to multiply by dimer energies first, then map
+        # The gradient is already energy-weighted by switch_ML_grad, but we need to ensure
+        # it's properly distributed to atoms
+        energy_weighted_grad = jax.ops.segment_sum(
+            dimer_switching_grads_flat,  # Negative because F = -grad(E)
+            force_segments,
+            num_segments=n_monomers * ATOMS_PER_MONOMER
+        )  # Shape: (n_monomers * ATOMS_PER_MONOMER, 3)
+        
+        # # Debug: Check if energy_weighted_grad is all zeros (jax.debug.print handles conditional execution)
+        max_grad = jnp.max(jnp.abs(energy_weighted_grad))
+        # jax.debug.print("Energy-weighted grad max abs value: {x}", x=max_grad, ordered=False)
+        
+        # For the scale * F_dimer term, we need to scale dimer_forces by switching
+        # Since each atom may belong to multiple dimers, we compute atom-wise scales
+        # by using segment_sum to accumulate scales from all dimers containing each atom
+        # Repeat switching_scales for each atom in each dimer (2*ATOMS_PER_MONOMER atoms per dimer)
+        switching_scales_per_atom = jnp.repeat(switching_scales, 2 * ATOMS_PER_MONOMER)  # (n_dimers * 2*ATOMS_PER_MONOMER,)
+        
+        # Use segment_sum to accumulate scales for each atom in the full system
+        atom_switching_scales_sum = jax.ops.segment_sum(
+            switching_scales_per_atom,
+            force_segments,
+            num_segments=n_monomers * ATOMS_PER_MONOMER
+        )
+        
+=======
         # Map energy-weighted switching gradients to full system.
         # switch_ML_grad gives d(s*E)/dX = E*ds/dX; we subtract it below so F = -grad(s*E).
         energy_weighted_grad = jax.ops.segment_sum(
@@ -2368,6 +2676,7 @@ def setup_calculator(
             num_segments=n_monomers * ATOMS_PER_MONOMER
         )
         
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
         # Count how many dimers each atom belongs to
         atom_dimer_counts = jax.ops.segment_sum(
             jnp.ones_like(switching_scales_per_atom),
@@ -2396,16 +2705,27 @@ def setup_calculator(
         scaled_dimer_forces = dimer_forces_safe * atom_switching_scales[:, None]
 
         
+<<<<<<< HEAD
+        # Combine both terms: F_switched = scale * F_dimer - E * grad(scale)
+        # Ensure energy_weighted_grad is finite
+        energy_weighted_grad_safe = jnp.where(jnp.isfinite(energy_weighted_grad), energy_weighted_grad, 0.0)
+        switched_forces = scaled_dimer_forces + energy_weighted_grad_safe
+=======
         # Combine both terms: F_switched = -d(s*E)/dR = s*F_dimer - E*ds/dR
         # switch_ML_grad gives d(s*E)/dX = E*ds/dX, so we subtract it to get F = -grad(s*E)
         energy_weighted_grad_safe = jnp.where(jnp.isfinite(energy_weighted_grad), energy_weighted_grad, 0.0)
         switched_forces = scaled_dimer_forces - energy_weighted_grad_safe
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
         
         # Final safety check - ensure all forces are finite
         switched_forces = jnp.where(jnp.isfinite(switched_forces), switched_forces, 0.0)
         
         return {
+<<<<<<< HEAD
+            "energies": -switched_energy,
+=======
             "energies": switched_energy,
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
             "forces": switched_forces
         }
 

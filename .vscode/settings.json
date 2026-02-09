@@ -1,5 +1,13 @@
 {
+<<<<<<< HEAD
     "workbench.colorTheme": "5412c41d-f76b-4488-85a7-1ae1a63bbfcc",
+=======
+<<<<<<< HEAD
+    "workbench.colorTheme": "91415015-8fe3-48eb-9951-70a5cd6cbb7f",
+=======
+    "workbench.colorTheme": "5412c41d-f76b-4488-85a7-1ae1a63bbfcc",
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
+>>>>>>> 9e4472215e92126d15a49e2c777a808ed09f67b9
     "r.lsp.promptToInstall": false,
     "chatgpt.commentCodeLensEnabled": false
 }

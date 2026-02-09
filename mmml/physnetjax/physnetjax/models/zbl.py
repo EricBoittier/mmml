@@ -52,7 +52,6 @@ class ZBLRepulsion(nn.Module):
 
     def setup(self):
         # Default ZBL parameters
-        a_coefficient = 0.8854 / BOHR_TO_ANGSTROM # Bohr
         # a_ij = (0.8854 a0) / (Zi^0.23 + Zj^0.23), with a0 in Å because distances are Å
         a_coefficient = 0.8854 * BOHR_TO_ANGSTROM  # Å
         a_exponent = 0.23
@@ -115,45 +114,6 @@ class ZBLRepulsion(nn.Module):
         batch_size: int,  # unused, kept for compatibility
     ) -> jnp.ndarray:
         """
-        Calculate ZBL nuclear repulsion energies.
-
-        Computes nuclear repulsion using the ZBL potential with improved
-        numerical stability and smooth cutoffs.
-
-        Parameters
-        ----------
-        atomic_numbers : jnp.ndarray
-            Array of atomic numbers
-        distances : jnp.ndarray
-            Array of interatomic distances
-        switch_off : jnp.ndarray
-            Switch-off factors
-        eshift : jnp.ndarray
-            Energy shift factors
-        idx_i : jnp.ndarray
-            Array of indices for first atoms in pairs
-        idx_j : jnp.ndarray
-            Array of indices for second atoms in pairs
-        atom_mask : jnp.ndarray
-            Mask for valid atoms
-        batch_mask : jnp.ndarray
-            Mask for valid batch elements
-        batch_segments : jnp.ndarray
-            Batch segment indices
-        batch_size : int
-            Number of molecules in batch
-
-        Returns
-        -------
-        jnp.ndarray
-            Array of repulsion energies per atom
-        """
-
-        # Compute atomic number dependent screening length with safe operations
-        safe_atomic_numbers = jnp.maximum(atomic_numbers, 1e-6)
-        distances = jnp.maximum(distances, 1e-6)
-        eshift = jnp.maximum(eshift, 0.0)
-        switch_off = jnp.maximum(switch_off, 0.0)
         Returns per-atom repulsion energies in eV with shape (n_atoms, 1, 1, 1).
         """
 

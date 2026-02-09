@@ -1,9 +1,27 @@
+<<<<<<< HEAD
+# =========================
+# FULL WORKING SCRIPT (FIXED)
+# =========================
+# Key fixes:
+# 1) Set XLA/CUDA env flags BEFORE importing jax (restart kernel if in notebook).
+# 2) Keep batch shapes consistent with the model:
+#    atomic_numbers: (B, N), positions: (B, N, 3), Ef: (B, 3)
+# 3) Do NOT pre-offset dst/src indices in prepare_batches; EFD() already offsets.
+# 4) batch_segments must be length (B*N) with segment ids 0..B-1 repeated per atom.
+# 5) Fix element_bias indexing to use flattened atomic numbers if enabled.
+
+=======
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
 import os
 
 from pandas._testing import at
 
 # --- Environment (must be set before importing jax) ---
+<<<<<<< HEAD
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+=======
 # os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
 os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".99"
 
 import warnings
@@ -57,6 +75,26 @@ lj.monkey_patch()
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data", type=str, default="data-full.npz")
+<<<<<<< HEAD
+    parser.add_argument("--features", type=int, default=128)
+    parser.add_argument("--max_degree", type=int, default=4)
+    parser.add_argument("--num_iterations", type=int, default=3)
+    parser.add_argument("--num_basis_functions", type=int, default=32)
+    parser.add_argument("--cutoff", type=float, default=10.0)
+    
+    parser.add_argument("--num_train", type=int, default=800)
+    parser.add_argument("--num_valid", type=int, default=100)
+    parser.add_argument("--num_epochs", type=int, default=5000)
+    parser.add_argument("--learning_rate", type=float, default=0.0001)
+    parser.add_argument("--batch_size", type=int, default=1)
+
+    parser.add_argument("--clip_norm", type=float, default=100.0)
+    parser.add_argument("--ema_decay", type=float, default=0.5)
+    parser.add_argument("--early_stopping_patience", type=int, default=None)
+    parser.add_argument("--early_stopping_min_delta", type=float, default=0.0)
+    parser.add_argument("--reduce_on_plateau_patience", type=int, default=5)
+    parser.add_argument("--reduce_on_plateau_cooldown", type=int, default=5)
+=======
     parser.add_argument("--features", type=int, default=64)
     parser.add_argument("--max_degree", type=int, default=4)
     parser.add_argument("--num_iterations", type=int, default=2)
@@ -75,6 +113,7 @@ def get_args():
     parser.add_argument("--early_stopping_min_delta", type=float, default=0.0)
     parser.add_argument("--reduce_on_plateau_patience", type=int, default=15)
     parser.add_argument("--reduce_on_plateau_cooldown", type=int, default=15)
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
     parser.add_argument("--reduce_on_plateau_factor", type=float, default=0.9)
     parser.add_argument("--reduce_on_plateau_rtol", type=float, default=1e-4)
     parser.add_argument("--reduce_on_plateau_accumulation_size", type=int, default=5)
@@ -82,9 +121,15 @@ def get_args():
 
     parser.add_argument("--energy_weight", type=float, default=1.0,
                        help="Weight for energy loss in total loss")
+<<<<<<< HEAD
+    parser.add_argument("--forces_weight", type=float, default=1000.0,
+                       help="Weight for forces loss in total loss")
+    parser.add_argument("--dipole_weight", type=float, default=20.0,
+=======
     parser.add_argument("--forces_weight", type=float, default=10.0,
                        help="Weight for forces loss in total loss")
     parser.add_argument("--dipole_weight", type=float, default=2.0,
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
                        help="Weight for dipole loss in total loss")
     parser.add_argument("--dipole_field_coupling", action="store_true",
                        help="Add explicit E_total = E_nn + mu·Ef coupling")
@@ -94,6 +139,17 @@ def get_args():
     return args
 
 
+<<<<<<< HEAD
+
+
+
+
+
+
+
+
+=======
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
 # -------------------------
 # Load dataset
 # -------------------------
@@ -290,6 +346,10 @@ class MessagePassingModel(nn.Module):
         #   E_total = E_nn + mu · Ef_phys   (converted to eV)
         # mu [e·Bohr] * Ef_phys [Hartree/(e·Bohr)] = [Hartree] -> * 27.21 -> [eV]
         if self.dipole_field_coupling:
+<<<<<<< HEAD
+            coupling = jnp.sum(dipole * Ef, axis=-1)  # (B,)  mu·Ef_input
+            coupling = coupling * self.field_scale * HARTREE_TO_EV  # -> eV
+=======
             coupling = jnp.sum(dipole * Ef , axis=-1)  # (B,)  mu·Ef_input
             coupling = coupling * self.field_scale * HARTREE_TO_EV  # -> eV
             learnable_coupling = self.param(
@@ -298,6 +358,7 @@ class MessagePassingModel(nn.Module):
                 (1,)
             )
             coupling = coupling * learnable_coupling
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
             energy = energy + coupling
 
         # Proxy energy for force differentiation
@@ -840,6 +901,10 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
             updates=params, state=transform_state, value=valid_loss
         )
         lr_scale = transform_state.scale
+<<<<<<< HEAD
+
+=======
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
         # Early stopping logic
         improved = False
         if valid_loss < best_valid_loss - early_stopping_min_delta:
@@ -852,8 +917,15 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
 
 
         # convert the losses to kcal/mol
+<<<<<<< HEAD
+        
         train_energy_mae *= 23.0609
         train_forces_mae *= 23.0609
+        
+=======
+        train_energy_mae *= 23.0609
+        train_forces_mae *= 23.0609
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
         valid_energy_mae *= 23.0609
         valid_forces_mae *= 23.0609
         
