@@ -41,8 +41,14 @@ def get_args():
                        help="Path to XYZ file for initial geometry (overrides --data)")
     parser.add_argument("--index", type=int, default=0,
                        help="Index of structure in dataset to use as starting geometry")
+<<<<<<< HEAD
     parser.add_argument("--electric-field", type=float, nargs=3, default=[0.0, 0.0, 0.0],
                        help="Electric field vector (Ef_x, Ef_y, Ef_z) in eV/(e*A)")
+=======
+    parser.add_argument("--electric-field", type=float, nargs=3, default=None,
+                       help="Electric field vector (Ef_x, Ef_y, Ef_z). "
+                            "If omitted, uses dataset value; pass '0 0 0' for zero field.")
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
     parser.add_argument("--thermostat", type=str, default="langevin",
                        choices=["langevin", "nve"],
                        help="Thermostat type: 'langevin' (NVT) or 'nve' (NVE)")
@@ -64,6 +70,19 @@ def get_args():
                        help="Random seed for initial velocities")
     parser.add_argument("--save-charges", action="store_true",
                        help="Save ML atomic charges per frame (slower, for VCD)")
+<<<<<<< HEAD
+=======
+    parser.add_argument("--optimize", action="store_true",
+                       help="Geometry-optimise before starting MD")
+    parser.add_argument("--optimizer", choices=["bfgs", "fire"], default="fire",
+                       help="Optimiser: 'bfgs' or 'fire' (default fire, more robust for ML)")
+    parser.add_argument("--fmax", type=float, default=0.05,
+                       help="Convergence criterion: max force (eV/Å)")
+    parser.add_argument("--opt-steps", type=int, default=2000,
+                       help="Max optimisation steps")
+    parser.add_argument("--maxstep", type=float, default=0.04,
+                       help="Max step size in Å (default 0.04; ASE default 0.2)")
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
     return parser.parse_args()
 
 
@@ -87,6 +106,7 @@ def run_md(args):
         atoms = ase.Atoms(numbers=Z, positions=R)
 
     # Set electric field
+<<<<<<< HEAD
     Ef = np.array(args.electric_field, dtype=np.float64)
     # If electric field is all zeros and dataset has Ef, use dataset value
     if np.allclose(Ef, 0.0) and args.xyz is None:
@@ -94,6 +114,22 @@ def run_md(args):
         if "Ef" in dataset.files:
             Ef = np.array(dataset["Ef"][args.index], dtype=np.float64)
             print(f"  Using electric field from dataset: {Ef}")
+=======
+    if args.electric_field is not None:
+        Ef = np.array(args.electric_field, dtype=np.float64)
+        print(f"  Electric field (CLI): {Ef}")
+    elif args.xyz is None:
+        dataset = np.load(args.data, allow_pickle=True)
+        if "Ef" in dataset.files:
+            Ef = np.array(dataset["Ef"][args.index], dtype=np.float64)
+            print(f"  Electric field (dataset): {Ef}")
+        else:
+            Ef = np.zeros(3, dtype=np.float64)
+            print(f"  Electric field (default): {Ef}")
+    else:
+        Ef = np.zeros(3, dtype=np.float64)
+        print(f"  Electric field (default): {Ef}")
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
     atoms.info['electric_field'] = Ef
 
     print(f"  Number of atoms: {len(atoms)}")
@@ -116,6 +152,31 @@ def run_md(args):
     print(f"  Initial energy: {energy:.6f} eV ({energy * 23.06035:.4f} kcal/mol)")
     print(f"  Max force: {np.max(np.abs(forces)):.6f} eV/A")
 
+<<<<<<< HEAD
+=======
+    # --- Optional geometry optimisation before MD ---
+    if args.optimize:
+        from ase.optimize import BFGS, FIRE
+        opt_cls = FIRE if args.optimizer == 'fire' else BFGS
+        print(f"\nOptimising geometry ({args.optimizer.upper()}, fmax={args.fmax} eV/Å, "
+              f"max {args.opt_steps} steps, maxstep={args.maxstep} Å) ...")
+        opt_traj = str(Path(args.output).with_suffix('.opt.traj'))
+        opt = opt_cls(atoms, trajectory=opt_traj, logfile='-',
+                      maxstep=args.maxstep)
+        opt.run(fmax=args.fmax, steps=args.opt_steps)
+        fmax_final = np.max(np.abs(atoms.get_forces()))
+        if fmax_final <= args.fmax:
+            print(f"  Converged in {opt.nsteps} steps.")
+        else:
+            print(f"  WARNING: not converged after {opt.nsteps} steps  "
+                  f"(max |F| = {fmax_final:.6f} eV/Å)")
+            print(f"  Consider increasing --opt-steps or relaxing --fmax.")
+        energy = atoms.get_potential_energy()
+        print(f"  Optimised energy: {energy:.6f} eV")
+        print(f"  Optimised max|F|: {np.max(np.abs(atoms.get_forces())):.6f} eV/Å")
+        print(f"  Opt trajectory  : {opt_traj}")
+
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
     # --- Initialize velocities ---
     print(f"\nInitializing velocities at T={args.temperature} K (seed={args.seed})...")
     np.random.seed(args.seed)

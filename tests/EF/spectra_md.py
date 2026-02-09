@@ -247,7 +247,19 @@ def transient_spectra(mu, m, dt_fs,
     vcd_gram  : (W, F)
     """
     T = len(mu)
+<<<<<<< HEAD
     starts = list(range(0, T - window_frames + 1, stride_frames))
+=======
+    if window_frames > T:
+        raise ValueError(
+            f"--window-size ({window_frames}) exceeds trajectory length "
+            f"({T} frames).  Use a smaller window or a longer trajectory.")
+    starts = list(range(0, T - window_frames + 1, stride_frames))
+    if len(starts) == 0:
+        raise ValueError(
+            f"No windows fit: window_frames={window_frames}, "
+            f"stride={stride_frames}, trajectory={T} frames.")
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
 
     ir_rows, vcd_rows, t_centres = [], [], []
     for i, t0 in enumerate(starts):
@@ -697,12 +709,25 @@ def main():
     # 4.  Transient (windowed) spectra
     # ================================================================
     if args.transient:
+<<<<<<< HEAD
         print(f"\n[4] Transient spectra  (window={args.window_size} frames, "
+=======
+        ws = args.window_size
+        if ws > T:
+            print(f"\n  ⚠  --window-size {ws} > trajectory length {T}. "
+                  f"Clamping to {T}.")
+            ws = T
+        print(f"\n[4] Transient spectra  (window={ws} frames, "
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
               f"stride={args.stride}) ...")
 
         t_cen, freq_t, ir_gram, vcd_gram = transient_spectra(
             dipoles, mag_dipoles, dt_fs,
+<<<<<<< HEAD
             window_frames=args.window_size,
+=======
+            window_frames=ws,
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
             stride_frames=args.stride,
             fft_window=args.window_fn if args.window_fn != 'none' else None,
             zero_pad=min(args.zero_pad, 2),   # keep spectrograms compact

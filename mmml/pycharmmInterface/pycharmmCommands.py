@@ -133,13 +133,13 @@ scalar mass stat
 calc pmass = int ( ?stot  /  50.0 )
 calc tmass = @pmass * 10
 
-calc tmin = 300 * 0.2 
+calc tmin = 3000 * 0.2 
 
 open write unit 31 card name heat.res       ! Restart file
 open write unit 32 file name heat.dcd       ! Coordinates file
 
 dyna leap verlet start -
-   timestp 0.0002 nstep 5000 -
+   timestp 0.001 nstep 5000 -
    firstt @tmin finalt 300 tbath 300 -
    ihtfrq 1000 teminc 5 ieqfrq 0 -
    iasors 1 iasvel 1 iscvel 0 ichecw 0 -

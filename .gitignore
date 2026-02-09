@@ -166,3 +166,8 @@ examples/openqdc/openqdc_packed_memmap/
 # Training logs and checkpoints in examples/heme (do not commit)
 examples/heme/co2_*/
 devtools/.DS_Store
+<<<<<<< HEAD
+=======
+.vscode/settings.json
+mmml/packmol/packmol
+>>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451

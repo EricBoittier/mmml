@@ -691,7 +691,7 @@ def main():
             'natoms': args.natoms,
             'total_charge': 0.0,
             'n_res': 3,
-            'zbl': False,
+            'zbl': True,
             'use_energy_bias': True,
             'debug': False,
             'efa': False,
