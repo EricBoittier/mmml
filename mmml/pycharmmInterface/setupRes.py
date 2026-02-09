@@ -197,9 +197,9 @@ def mini(nbxmod=5):
     # Specify nonbonded python object called my_nbonds - this just sets it up
     # equivalant CHARMM scripting command: nbonds cutnb 18 ctonnb 13 ctofnb 17 cdie eps 1 atom vatom fswitch vfswitch
     my_nbonds = pycharmm.NonBondedScript(
-        cutnb=18.0,
-        ctonnb=13.0,
-        ctofnb=17.0,
+        cutnb=7.0,
+        ctonnb=10.0,
+        ctofnb=18.0,
         eps=1.0,
         cdie=True,
         atom=True,

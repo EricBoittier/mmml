@@ -58,6 +58,9 @@ dependencies = [
     "plotnine>=0.15.1",
     "patchworklib>=0.6.6",
     "pillow>=12.0.0",
+    # Web/API (for GUI)
+    "fastapi",
+    "uvicorn",
 ]
 
 [project.optional-dependencies]
@@ -187,6 +190,9 @@ jax-md = { git = "https://github.com/google/jax-md.git", rev = "05221c551e71f1b5
 name = "jax-cuda"
 url = "https://storage.googleapis.com/jax-releases/jax_cuda_releases.html"
 explicit = true
+
+[project.scripts]
+mmml = "mmml.cli.__main__:main"
 
 [tool.setuptools]
 zip-safe = false

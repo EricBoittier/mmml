@@ -122,3 +122,86 @@ def test_ml_energy_matches_reference_when_data_available():
 	assert np.isfinite(ml_only_energy_kcal)
 
 
+@pytest.mark.skipif(
+	importlib.util.find_spec("pycharmm") is None,
+	reason="pycharmm not available in this environment",
+)
+def test_check_lattice_invariance():
+	"""
+	Test that the energy is invariant under translation of monomer 0 by a lattice vector (PBC).
+	Uses check_lattice_invariance with a spherical_cutoff_calculator that applies PBC mapping.
+	"""
+	if importlib.util.find_spec("jax") is None:
+		pytest.skip("jax not available in this environment")
+	if importlib.util.find_spec("e3x") is None:
+		pytest.skip("e3x not available in this environment")
+
+	ckpt_env = os.environ.get("MMML_CKPT")
+	ckpt = Path(ckpt_env) if ckpt_env else Path("mmml/physnetjax/ckpts")
+	if not ckpt.exists():
+		pytest.skip("No checkpoints present for ML model")
+
+	import jax.numpy as jnp
+	from mmml.pycharmmInterface.mmml_calculator import (
+		setup_calculator,
+		check_lattice_invariance,
+	)
+	from mmml.pycharmmInterface.cutoffs import CutoffParameters
+	from mmml.pycharmmInterface.pbc_prep_factory import make_pbc_mapper
+
+	# Setup calculator with PBC (cell=40 Å cubic)
+	cell_length = 40.0
+	factory = setup_calculator(
+		ATOMS_PER_MONOMER=10,
+		N_MONOMERS=2,
+		doML=True,
+		doMM=False,
+		model_restart_path=ckpt,
+		MAX_ATOMS_PER_SYSTEM=20,
+		cell=cell_length,
+	)
+	# Build pbc_map (factory does not expose it; create with same params)
+	cell_matrix = jnp.array([
+		[cell_length, 0, 0],
+		[0, cell_length, 0],
+		[0, 0, cell_length],
+	])
+	mol_id = jnp.array([
+		i * jnp.ones(10, dtype=jnp.int32)
+		for i in range(2)
+	], dtype=jnp.int32)
+	pbc_map = make_pbc_mapper(cell=cell_matrix, mol_id=mol_id, n_monomers=2)
+
+	# Create test positions and atomic numbers (2 monomers × 10 atoms)
+	import jax
+	key = jax.random.PRNGKey(42)
+	R = jax.random.uniform(key, (20, 3), minval=2.0, maxval=cell_length - 2.0)
+	Z = jnp.array([6] * 20)  # carbon
+	cutoff_params = CutoffParameters()
+
+	calc, spherical_cutoff_calculator = factory(
+		atomic_numbers=np.array(Z),
+		atomic_positions=np.array(R),
+		n_monomers=2,
+		cutoff_params=cutoff_params,
+		do_pbc_map=True,
+		pbc_map=pbc_map,
+	)
+
+	def sc_fn(R_in, Z_in, n_monomers, cutoff_params_in):
+		R_mapped = pbc_map(R_in)
+		return spherical_cutoff_calculator(
+			positions=R_mapped,
+			atomic_numbers=Z_in,
+			n_monomers=n_monomers,
+			cutoff_params=cutoff_params_in,
+		)
+
+	delta_E = check_lattice_invariance(
+		sc_fn, R, Z, 2, cutoff_params, cell_matrix
+	)
+	assert abs(delta_E) < 1e-4, (
+		f"Lattice invariance violated: |E0 - E1| = {abs(delta_E):.6e} (expected < 1e-4)"
+	)
+
+

@@ -1,0 +1,27 @@
+# Hydra outputs
+outputs/
+multirun/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Checkpoints
+*.npz
+*.ckpt
+
+# Logs
+*.log
+

@@ -28,17 +28,11 @@ from pathlib import Path
 from typing import List, Dict, Any
 
 from datetime import datetime
-# Check JAX configuration
 import jax
-devices = jax.local_devices()
-print(devices)
-print(jax.default_backend())
-print(jax.devices())
 
 import mmml
 import ase
 import os
-from pathlib import Path
 
 # from mmml.physnetjax.physnetjax.models import model as model
 from mmml.physnetjax.physnetjax.models.model import EF
@@ -48,7 +42,7 @@ from mmml.physnetjax.physnetjax.data.data import prepare_datasets
 
 import numpy as np
 
-def parse_args():
+def parse_args(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument("--data", type=str, default=None)
     parser.add_argument("--ckpt_dir", type=str)  # Will be converted to absolute Path later
@@ -74,7 +68,32 @@ def parse_args():
     parser.add_argument("--n_res", type=int, default=2)
     parser.add_argument("--cutoff", type=float, default=8.0)
     parser.add_argument("--max_atomic_number", type=int, default=28)
-    return parser.parse_args()
+    parser.add_argument("--zbl", type=bool, default=False)
+    parser.add_argument("--use_pbc", type=bool, default=False)
+    parser.add_argument("--use_energy_bias", type=bool, default=True)
+    return parser.parse_args(argv)
+
+
+def args_from_kwargs(**overrides) -> argparse.Namespace:
+    """Create an argparse-like Namespace using defaults, then apply overrides.
+
+    Handy for notebook use: import this module and call `run_notebook(...)`
+    with keyword arguments instead of constructing CLI strings.
+    """
+    args = parse_args([])
+    for key, value in overrides.items():
+        if not hasattr(args, key):
+            raise ValueError(f"Unknown argument: {key}")
+        setattr(args, key, value)
+    return args
+
+
+def log_jax_devices():
+    """Print a short JAX device summary."""
+    devices = jax.local_devices()
+    print(devices)
+    print(jax.default_backend())
+    print(jax.devices())
 
 
 
@@ -218,8 +237,10 @@ def main_loop(args):
             n_res=args.n_res,
             cutoff=args.cutoff,
             max_atomic_number=args.max_atomic_number,
-            zbl=False, # TODO: add zbl
+            zbl=args.zbl, # TODO: add zbl
             efa=False, # TODO: add efa
+            use_pbc=args.use_pbc,
+            use_energy_bias=args.use_energy_bias,
         )
         try:
             # save the model to a file
@@ -261,17 +282,59 @@ def main_loop(args):
     now = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     # save as a directory with the name of the run
     # save the parameter dictionary
-    with open(f"params{now}.json", 'w') as f:
+    params_path = Path(f"params{now}.json")
+    with open(params_path, 'w') as f:
         print("Saving parameters to params.json")
         print(params_out)
         json.dump(params_out, f, default=to_jsonable)
+
+    return params_out, params_path
     
 
 
-def main():
-    args = parse_args()
+def run(args):
     print(args)
-    main_loop(args)
+    return main_loop(args)
+
+
+def run_notebook(**kwargs):
+    """Convenience entrypoint for notebooks.
+
+    Example:
+        from mmml.cli import make_training
+
+        params, params_path = make_training.run_notebook(
+            data="train.npz",
+            ckpt_dir="/tmp/ckpts",
+            tag="run",
+            model=None,
+            n_train=1000,
+            n_valid=100,
+            seed=42,
+            batch_size=1,
+            num_epochs=2,
+            learning_rate=0.001,
+            energy_weight=1,
+            objective="valid_loss",
+            restart=None,
+            num_atoms=None,
+            features=64,
+            max_degree=0,
+            num_basis_functions=32,
+            num_iterations=2,
+            n_res=2,
+            cutoff=8.0,
+            max_atomic_number=28,
+        )
+    """
+    args = args_from_kwargs(**kwargs)
+    return run(args)
+
+
+def main():
+    log_jax_devices()
+    args = parse_args()
+    run(args)
 
 if __name__ == "__main__":
     main()

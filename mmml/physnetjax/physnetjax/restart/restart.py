@@ -10,6 +10,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Tuple
 
+import e3x
+import jax
+import jax.numpy as jnp
 import orbax
 import orbax.checkpoint
 
@@ -18,6 +21,25 @@ from mmml.physnetjax.physnetjax.utils.pretty_printer import print_dict_as_table
 from mmml.physnetjax.physnetjax.utils.utils import get_files
 
 orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
+
+
+def _merge_params(init_params, loaded_params):
+    """
+    Merge loaded params with init params, filling in any keys missing from loaded.
+    Used when loading checkpoints that lack newer submodules (e.g. repulsion).
+    Prefers loaded values when both exist (e.g. trained repulsion params).
+    """
+    if not isinstance(loaded_params, dict):
+        return loaded_params  # leaf: prefer loaded (checkpoint) values
+    if not isinstance(init_params, dict):
+        return loaded_params
+    result = {}
+    for k in init_params:
+        if k not in loaded_params:
+            result[k] = init_params[k]
+        else:
+            result[k] = _merge_params(init_params[k], loaded_params[k])
+    return result
 
 
 def get_last(path: str) -> Path:
@@ -84,6 +106,20 @@ def get_params_model(restart: str, natoms: int = None, return_everything: bool =
         "Save Time": modification_date,
     }
     print_dict_as_table(restart_dict, title="Last Checkpoint", plot=True)
+
+    # Fill missing params (e.g. repulsion) from old checkpoints that lack newer submodules
+    if model.zbl:
+        n = natoms if natoms is not None else getattr(model, "natoms", 10) or 10
+        dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(n)
+        init_params = model.init(
+            jax.random.PRNGKey(0),
+            atomic_numbers=jnp.ones(n, dtype=jnp.int32),
+            positions=jnp.zeros((n, 3)),
+            dst_idx=dst_idx,
+            src_idx=src_idx,
+        )
+        params = _merge_params(init_params, params)
+
     if return_everything:
         return params, model, restored
     # print(model)
