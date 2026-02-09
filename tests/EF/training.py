@@ -1,27 +1,8 @@
-<<<<<<< HEAD
-# =========================
-# FULL WORKING SCRIPT (FIXED)
-# =========================
-# Key fixes:
-# 1) Set XLA/CUDA env flags BEFORE importing jax (restart kernel if in notebook).
-# 2) Keep batch shapes consistent with the model:
-#    atomic_numbers: (B, N), positions: (B, N, 3), Ef: (B, 3)
-# 3) Do NOT pre-offset dst/src indices in prepare_batches; EFD() already offsets.
-# 4) batch_segments must be length (B*N) with segment ids 0..B-1 repeated per atom.
-# 5) Fix element_bias indexing to use flattened atomic numbers if enabled.
-
-=======
->>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
 import os
 
 from pandas._testing import at
 
 # --- Environment (must be set before importing jax) ---
-<<<<<<< HEAD
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-=======
-# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
->>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
 os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".99"
 
 import warnings
@@ -32,6 +13,7 @@ import functools
 import json
 import uuid
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
@@ -72,85 +54,90 @@ lj.monkey_patch()
 
 
 
-def get_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--data", type=str, default="data-full.npz")
-<<<<<<< HEAD
-    parser.add_argument("--features", type=int, default=128)
-    parser.add_argument("--max_degree", type=int, default=4)
-    parser.add_argument("--num_iterations", type=int, default=3)
-    parser.add_argument("--num_basis_functions", type=int, default=32)
-    parser.add_argument("--cutoff", type=float, default=10.0)
+def get_args(**kwargs):
+    """
+    Get configuration arguments. Works both from command line and notebooks.
     
-    parser.add_argument("--num_train", type=int, default=800)
-    parser.add_argument("--num_valid", type=int, default=100)
-    parser.add_argument("--num_epochs", type=int, default=5000)
-    parser.add_argument("--learning_rate", type=float, default=0.0001)
-    parser.add_argument("--batch_size", type=int, default=1)
-
-    parser.add_argument("--clip_norm", type=float, default=100.0)
-    parser.add_argument("--ema_decay", type=float, default=0.5)
-    parser.add_argument("--early_stopping_patience", type=int, default=None)
-    parser.add_argument("--early_stopping_min_delta", type=float, default=0.0)
-    parser.add_argument("--reduce_on_plateau_patience", type=int, default=5)
-    parser.add_argument("--reduce_on_plateau_cooldown", type=int, default=5)
-=======
-    parser.add_argument("--features", type=int, default=64)
-    parser.add_argument("--max_degree", type=int, default=4)
-    parser.add_argument("--num_iterations", type=int, default=2)
-    parser.add_argument("--num_basis_functions", type=int, default=32)
-    parser.add_argument("--cutoff", type=float, default=10.0)
+    In notebooks, you can override defaults by passing keyword arguments:
+        args = get_args(features=256, learning_rate=0.001)
     
-    parser.add_argument("--num_train", type=int, default=8000)
-    parser.add_argument("--num_valid", type=int, default=1000)
-    parser.add_argument("--num_epochs", type=int, default=100)
-    parser.add_argument("--learning_rate", type=float, default=0.0004)
-    parser.add_argument("--batch_size", type=int, default=16)
+    From command line, use argparse flags as before:
+        python script.py --features 256 --learning_rate 0.001
+    """
+    import sys
+    
+    # Default values (using HEAD version defaults)
+    defaults = {
+        "data": "data-full.npz",
+        "features": 128,
+        "max_degree": 4,
+        "num_iterations": 3,
+        "num_basis_functions": 32,
+        "cutoff": 10.0,
+        "num_train": 800,
+        "num_valid": 100,
+        "num_epochs": 5000,
+        "learning_rate": 0.0001,
+        "batch_size": 1,
+        "clip_norm": 100.0,
+        "ema_decay": 0.5,
+        "early_stopping_patience": None,
+        "early_stopping_min_delta": 0.0,
+        "reduce_on_plateau_patience": 5,
+        "reduce_on_plateau_cooldown": 5,
+        "reduce_on_plateau_factor": 0.9,
+        "reduce_on_plateau_rtol": 1e-4,
+        "reduce_on_plateau_accumulation_size": 5,
+        "reduce_on_plateau_min_scale": 0.01,
+        "energy_weight": 1.0,
+        "forces_weight": 1000.0,
+        "dipole_weight": 20.0,
+        "dipole_field_coupling": False,
+        "field_scale": 0.001,
+    }
+    
+    # If command line arguments are provided, use argparse
+    if len(sys.argv) > 1:
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--data", type=str, default=defaults["data"])
+        parser.add_argument("--features", type=int, default=defaults["features"])
+        parser.add_argument("--max_degree", type=int, default=defaults["max_degree"])
+        parser.add_argument("--num_iterations", type=int, default=defaults["num_iterations"])
+        parser.add_argument("--num_basis_functions", type=int, default=defaults["num_basis_functions"])
+        parser.add_argument("--cutoff", type=float, default=defaults["cutoff"])
+        parser.add_argument("--num_train", type=int, default=defaults["num_train"])
+        parser.add_argument("--num_valid", type=int, default=defaults["num_valid"])
+        parser.add_argument("--num_epochs", type=int, default=defaults["num_epochs"])
+        parser.add_argument("--learning_rate", type=float, default=defaults["learning_rate"])
+        parser.add_argument("--batch_size", type=int, default=defaults["batch_size"])
+        parser.add_argument("--clip_norm", type=float, default=defaults["clip_norm"])
+        parser.add_argument("--ema_decay", type=float, default=defaults["ema_decay"])
+        parser.add_argument("--early_stopping_patience", type=int, default=defaults["early_stopping_patience"])
+        parser.add_argument("--early_stopping_min_delta", type=float, default=defaults["early_stopping_min_delta"])
+        parser.add_argument("--reduce_on_plateau_patience", type=int, default=defaults["reduce_on_plateau_patience"])
+        parser.add_argument("--reduce_on_plateau_cooldown", type=int, default=defaults["reduce_on_plateau_cooldown"])
+        parser.add_argument("--reduce_on_plateau_factor", type=float, default=defaults["reduce_on_plateau_factor"])
+        parser.add_argument("--reduce_on_plateau_rtol", type=float, default=defaults["reduce_on_plateau_rtol"])
+        parser.add_argument("--reduce_on_plateau_accumulation_size", type=int, default=defaults["reduce_on_plateau_accumulation_size"])
+        parser.add_argument("--reduce_on_plateau_min_scale", type=float, default=defaults["reduce_on_plateau_min_scale"])
+        parser.add_argument("--energy_weight", type=float, default=defaults["energy_weight"],
+                           help="Weight for energy loss in total loss")
+        parser.add_argument("--forces_weight", type=float, default=defaults["forces_weight"],
+                           help="Weight for forces loss in total loss")
+        parser.add_argument("--dipole_weight", type=float, default=defaults["dipole_weight"],
+                           help="Weight for dipole loss in total loss")
+        parser.add_argument("--dipole_field_coupling", action="store_true",
+                           help="Add explicit E_total = E_nn + mu·Ef coupling")
+        parser.add_argument("--field_scale", type=float, default=defaults["field_scale"],
+                           help="Ef_phys = Ef_input * field_scale (au)")
+        args = parser.parse_args()
+        return args
+    
+    # Otherwise, use defaults and override with kwargs (notebook mode)
+    defaults.update(kwargs)
+    return SimpleNamespace(**defaults)
 
-    parser.add_argument("--clip_norm", type=float, default=10000.0)
-    parser.add_argument("--ema_decay", type=float, default=0.5)
-    parser.add_argument("--early_stopping_patience", type=int, default=None)
-    parser.add_argument("--early_stopping_min_delta", type=float, default=0.0)
-    parser.add_argument("--reduce_on_plateau_patience", type=int, default=15)
-    parser.add_argument("--reduce_on_plateau_cooldown", type=int, default=15)
->>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
-    parser.add_argument("--reduce_on_plateau_factor", type=float, default=0.9)
-    parser.add_argument("--reduce_on_plateau_rtol", type=float, default=1e-4)
-    parser.add_argument("--reduce_on_plateau_accumulation_size", type=int, default=5)
-    parser.add_argument("--reduce_on_plateau_min_scale", type=float, default=0.01)
 
-    parser.add_argument("--energy_weight", type=float, default=1.0,
-                       help="Weight for energy loss in total loss")
-<<<<<<< HEAD
-    parser.add_argument("--forces_weight", type=float, default=1000.0,
-                       help="Weight for forces loss in total loss")
-    parser.add_argument("--dipole_weight", type=float, default=20.0,
-=======
-    parser.add_argument("--forces_weight", type=float, default=10.0,
-                       help="Weight for forces loss in total loss")
-    parser.add_argument("--dipole_weight", type=float, default=2.0,
->>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
-                       help="Weight for dipole loss in total loss")
-    parser.add_argument("--dipole_field_coupling", action="store_true",
-                       help="Add explicit E_total = E_nn + mu·Ef coupling")
-    parser.add_argument("--field_scale", type=float, default=0.001,
-                       help="Ef_phys = Ef_input * field_scale (au)")
-    args = parser.parse_args()
-    return args
-
-
-<<<<<<< HEAD
-
-
-
-
-
-
-
-
-=======
->>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
-# -------------------------
 # Load dataset
 # -------------------------
 dataset = np.load("data-full.npz", allow_pickle=True)
@@ -346,10 +333,7 @@ class MessagePassingModel(nn.Module):
         #   E_total = E_nn + mu · Ef_phys   (converted to eV)
         # mu [e·Bohr] * Ef_phys [Hartree/(e·Bohr)] = [Hartree] -> * 27.21 -> [eV]
         if self.dipole_field_coupling:
-<<<<<<< HEAD
-            coupling = jnp.sum(dipole * Ef, axis=-1)  # (B,)  mu·Ef_input
-            coupling = coupling * self.field_scale * HARTREE_TO_EV  # -> eV
-=======
+
             coupling = jnp.sum(dipole * Ef , axis=-1)  # (B,)  mu·Ef_input
             coupling = coupling * self.field_scale * HARTREE_TO_EV  # -> eV
             learnable_coupling = self.param(
@@ -358,7 +342,6 @@ class MessagePassingModel(nn.Module):
                 (1,)
             )
             coupling = coupling * learnable_coupling
->>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
             energy = energy + coupling
 
         # Proxy energy for force differentiation
@@ -901,10 +884,6 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
             updates=params, state=transform_state, value=valid_loss
         )
         lr_scale = transform_state.scale
-<<<<<<< HEAD
-
-=======
->>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
         # Early stopping logic
         improved = False
         if valid_loss < best_valid_loss - early_stopping_min_delta:
@@ -916,16 +895,6 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
             patience_counter += 1
 
 
-        # convert the losses to kcal/mol
-<<<<<<< HEAD
-        
-        train_energy_mae *= 23.0609
-        train_forces_mae *= 23.0609
-        
-=======
-        train_energy_mae *= 23.0609
-        train_forces_mae *= 23.0609
->>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
         valid_energy_mae *= 23.0609
         valid_forces_mae *= 23.0609
         
