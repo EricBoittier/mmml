@@ -345,6 +345,14 @@ class MessagePassingModel(nn.Module):
         positions_batched = positions_flat.reshape(B, N, 3)  # (B, N, 3)
         charges_batched = atomic_charges.reshape(B, N)  # (B, N)
         dipoles_batched = atomic_dipoles.reshape(B, N, 3)  # (B, N, 3)
+
+
+        # add a Coulomb term to the energy 
+        coulomb_energy = jnp.sum(charges_batched[:, :, None] * positions_centered, axis=1)  # (B, 3)
+        
+        energy = energy + coulomb_energy
+
+
         # Center of mass (using atomic masses or uniform weighting)
         # For simplicity, use uniform weighting (geometric center)
         com = positions_batched.mean(axis=1, keepdims=True)  # (B, 1, 3)
