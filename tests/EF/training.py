@@ -346,7 +346,7 @@ class MessagePassingModel(nn.Module):
         # Sum per molecule (each pair counted twice in neighbor list, so divide by 2)
         edge_batch = batch_segments[dst_idx_flat]  # (B*E,) batch index per edge
         coulomb_energy = jax.ops.segment_sum(pair_coulomb, edge_batch, num_segments=B) / 2.0  # (B,)
-        energy = energy - coulomb_energy * HARTREE_TO_EV * 14.399645  # Coulomb constant in eV·Å/e²
+        energy = energy + coulomb_energy * 14.399645  # Coulomb constant in eV·Å/e²
 
         # Proxy energy for force differentiation
         return -jnp.sum(energy), energy, dipole
