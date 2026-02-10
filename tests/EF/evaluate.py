@@ -1036,7 +1036,6 @@ def main(args=None):
                                 batch_segments=_bs, batch_size=1, dst_idx=_dst, src_idx=_src)
         print_params_structure(ref_params, "model.init() reference")
         # Compare tree structures
-        import jax
         loaded_leaves = jax.tree_util.tree_leaves(params)
         ref_leaves = jax.tree_util.tree_leaves(ref_params)
         print(f"[DIAG] Loaded params: {len(loaded_leaves)} leaves")
