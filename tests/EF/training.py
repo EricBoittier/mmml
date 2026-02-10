@@ -348,7 +348,7 @@ class MessagePassingModel(nn.Module):
 
         
         # add a Coulomb term to the energy 
-        coulomb_energy = jnp.sum(charges_batched[:, :, None] * positions_flat, axis=1)  # (B, 3)
+        coulomb_energy = jnp.sum(charges_batched[:, :, None] * positions_batched, axis=1)  # (B, 3)
         
         energy = energy + coulomb_energy
 
