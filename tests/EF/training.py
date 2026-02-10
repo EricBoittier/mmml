@@ -116,6 +116,8 @@ def get_args(**overrides):
                        help="Weight for forces loss in total loss")
     parser.add_argument("--dipole_weight", type=float, default=0.1,
                        help="Weight for dipole loss in total loss")
+    parser.add_argument("--charge_weight", type=float, default=1.0,
+                       help="Weight for charge neutrality loss (sum of charges per molecule squared)")
     parser.add_argument("--dipole_field_coupling", action="store_true",
                        help="Add explicit E_total = E_nn + mu·Ef coupling")
     parser.add_argument("--field_scale", type=float, default=0.001,
@@ -264,7 +266,7 @@ class MessagePassingModel(nn.Module):
             x = e3x.nn.Dense(self.features)(x)
             x = e3x.nn.relu(x)
         x = e3x.nn.Dense(self.features)(x)
-        
+
         # Save original x before reduction for dipole prediction
         x_orig = x  # (B*N, 2, (max_degree+1)^2, features)
         
@@ -524,22 +526,31 @@ def prepare_batches(key, data, batch_size, num_atoms=29, dst_idx_flat=None, src_
 # -------------------------
 # Train / Eval steps
 # -------------------------
-@functools.partial(jax.jit, static_argnames=("model_apply", "optimizer_update", "batch_size", "ema_decay", "energy_weight", "forces_weight", "dipole_weight"))
-def train_step(model_apply, optimizer_update, batch, batch_size, opt_state, params, ema_params, transform_state, ema_decay=0.999, energy_weight=1.0, forces_weight=100.0, dipole_weight=10.0):
+@functools.partial(jax.jit, static_argnames=("model_apply", "optimizer_update", "batch_size", "ema_decay", "energy_weight", "forces_weight", "dipole_weight", "charge_weight"))
+def train_step(model_apply, optimizer_update, batch, batch_size, opt_state, params, ema_params, transform_state, ema_decay=0.999, energy_weight=1.0, forces_weight=100.0, dipole_weight=10.0, charge_weight=1.0):
     def loss_fn(params):
-        # Compute energy, forces, and dipole in a single forward+backward pass
-        energy, forces, dipole = energy_and_forces(
-            model_apply, params,
-            atomic_numbers=batch["atomic_numbers"],
-            positions=batch["positions"],
-            Ef=batch["electric_field"],
-            dst_idx=None,  # Not needed when batch_segments is provided
-            src_idx=None,  # Not needed when batch_segments is provided
-            dst_idx_flat=batch["dst_idx_flat"],
-            src_idx_flat=batch["src_idx_flat"],
-            batch_segments=batch["batch_segments"],
-            batch_size=batch_size,
-        )
+        # Forward pass with mutable intermediates to capture atomic charges
+        def energy_fn(pos):
+            (energy, dipole), state = model_apply(
+                params,
+                atomic_numbers=batch["atomic_numbers"],
+                positions=pos,
+                Ef=batch["electric_field"],
+                dst_idx_flat=batch["dst_idx_flat"],
+                src_idx_flat=batch["src_idx_flat"],
+                batch_segments=batch["batch_segments"],
+                batch_size=batch_size,
+                mutable=['intermediates'],
+            )
+            return -jnp.sum(energy), (energy, dipole, state)
+
+        (_, (energy, dipole, state)), forces = jax.value_and_grad(
+            energy_fn, has_aux=True
+        )(batch["positions"])
+
+        # Charge neutrality loss: penalize non-zero sum of charges per molecule
+        charges = state['intermediates']['atomic_charges'][-1]  # (B, N)
+        charge_sum_sq = jnp.mean(charges.sum(axis=1)**2)
         
         # Energy loss
         energy_loss = mean_squared_loss(energy.reshape(-1), batch["energies"].reshape(-1))
@@ -552,14 +563,14 @@ def train_step(model_apply, optimizer_update, batch, batch_size, opt_state, para
         if "dipoles" in batch:
             dipole_loss = mean_squared_loss(dipole, batch["dipoles"])
         
-        # Combined loss
-        total_loss = energy_weight * energy_loss + forces_weight * force_loss
+        # Combined loss with charge neutrality
+        total_loss = energy_weight * energy_loss + forces_weight * force_loss + charge_weight * charge_sum_sq
         if "dipoles" in batch:
             total_loss = total_loss + dipole_weight * dipole_loss
         
-        return total_loss, (energy, forces, dipole)
+        return total_loss, (energy, forces, dipole, charge_sum_sq)
 
-    (loss, (energy, forces, dipole)), grad = jax.value_and_grad(loss_fn, has_aux=True)(params)
+    (loss, (energy, forces, dipole, charge_sum_sq)), grad = jax.value_and_grad(loss_fn, has_aux=True)(params)
     
     # Check for NaN/Inf in loss
     loss_finite = jnp.isfinite(loss)
@@ -617,26 +628,25 @@ def train_step(model_apply, optimizer_update, batch, batch_size, opt_state, para
     forces_r2 = 0.0
     dipole_r2 = 0.0
     
-    return params, ema_params, opt_state, loss, energy_mae, forces_mae, dipole_mae, energy_r2, forces_r2, dipole_r2
+    return params, ema_params, opt_state, loss, energy_mae, forces_mae, dipole_mae, charge_sum_sq, energy_r2, forces_r2, dipole_r2
 
 
-@functools.partial(jax.jit, static_argnames=("model_apply", "batch_size", "energy_weight", "forces_weight", "dipole_weight"))
-def eval_step(model_apply, batch, batch_size, params, energy_weight=1.0, forces_weight=100.0, dipole_weight=10.0):
-    # Compute energy and dipole
-    energy, dipole = model_apply(
+@functools.partial(jax.jit, static_argnames=("model_apply", "batch_size", "energy_weight", "forces_weight", "dipole_weight", "charge_weight"))
+def eval_step(model_apply, batch, batch_size, params, energy_weight=1.0, forces_weight=100.0, dipole_weight=10.0, charge_weight=1.0):
+    # Compute energy, dipole, and capture atomic charges via mutable intermediates
+    (energy, dipole), state = model_apply(
         params,
         atomic_numbers=batch["atomic_numbers"],
         positions=batch["positions"],
         Ef=batch["electric_field"],
-        dst_idx=None,  # Not needed when batch_segments is provided
-        src_idx=None,  # Not needed when batch_segments is provided
         dst_idx_flat=batch["dst_idx_flat"],
         src_idx_flat=batch["src_idx_flat"],
         batch_segments=batch["batch_segments"],
         batch_size=batch_size,
+        mutable=['intermediates'],
     )
     
-    # Compute forces (dipole from energy_and_forces should match model_apply)
+    # Compute forces
     _, forces, _ = energy_and_forces(
         model_apply, params,
         atomic_numbers=batch["atomic_numbers"],
@@ -650,6 +660,10 @@ def eval_step(model_apply, batch, batch_size, params, energy_weight=1.0, forces_
         batch_size=batch_size,
     )
     
+    # Extract charge neutrality metric
+    charges = state['intermediates']['atomic_charges'][-1]  # (B, N)
+    charge_sum_sq = jnp.mean(charges.sum(axis=1)**2)
+    
     # Check for NaN/Inf and replace with zeros to prevent evaluation crash
     energy = jnp.where(jnp.isfinite(energy), energy, 0.0)
     forces = jnp.where(jnp.isfinite(forces), forces, 0.0)
@@ -659,7 +673,7 @@ def eval_step(model_apply, batch, batch_size, params, energy_weight=1.0, forces_
     energy_loss = mean_squared_loss(energy.reshape(-1), batch["energies"].reshape(-1))
     force_loss = mean_squared_loss(forces, batch["forces"])
     dipole_loss = mean_squared_loss(dipole, batch["dipoles"]) if "dipoles" in batch else 0.0
-    total_loss = energy_weight * energy_loss + forces_weight * force_loss
+    total_loss = energy_weight * energy_loss + forces_weight * force_loss + charge_weight * charge_sum_sq
     if "dipoles" in batch:
         total_loss = total_loss + dipole_weight * dipole_loss
     
@@ -696,14 +710,14 @@ def eval_step(model_apply, batch, batch_size, params, energy_weight=1.0, forces_
         ss_tot_dipole = jnp.sum((batch["dipoles"] - jnp.mean(batch["dipoles"]))**2)
         dipole_r2 = jnp.where(ss_tot_dipole > eps, 1.0 - (ss_res_dipole / (ss_tot_dipole + eps)), 0.0)
     
-    return total_loss, energy_loss, force_loss, dipole_loss, energy_mae, forces_mae, dipole_mae, energy_r2, forces_r2, dipole_r2
+    return total_loss, energy_loss, force_loss, dipole_loss, charge_sum_sq, energy_mae, forces_mae, dipole_mae, energy_r2, forces_r2, dipole_r2
 
 
 def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, batch_size, 
                 clip_norm=10.0, ema_decay=0.999, early_stopping_patience=None, early_stopping_min_delta=0.0,
                 reduce_on_plateau_patience=5, reduce_on_plateau_cooldown=5, reduce_on_plateau_factor=0.9,
                 reduce_on_plateau_rtol=1e-4, reduce_on_plateau_accumulation_size=5, reduce_on_plateau_min_scale=0.01,
-                energy_weight=1.0, forces_weight=100.0, dipole_weight=10.0, initial_params=None):
+                energy_weight=1.0, forces_weight=100.0, dipole_weight=10.0, charge_weight=1.0, initial_params=None):
     """
     Train model with EMA, gradient clipping, early stopping, and learning rate reduction on plateau.
     
@@ -848,8 +862,9 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
         train_energy_mae = 0.0
         train_forces_mae = 0.0
         train_dipole_mae = 0.0
+        train_charge_loss = 0.0
         for i, batch in enumerate(train_batches):
-            params, ema_params, opt_state, loss, energy_mae, forces_mae, dipole_mae, energy_r2, forces_r2, dipole_r2 = train_step(
+            params, ema_params, opt_state, loss, energy_mae, forces_mae, dipole_mae, charge_loss_val, energy_r2, forces_r2, dipole_r2 = train_step(
                 model_apply=model.apply,
                 optimizer_update=optimizer.update,
                 batch=batch,
@@ -862,6 +877,7 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
                 energy_weight=energy_weight,
                 forces_weight=forces_weight,
                 dipole_weight=dipole_weight,
+                charge_weight=charge_weight,
             )
             # Don't block - let JAX execute asynchronously for maximum throughput
             # Only convert to Python float at the end for logging
@@ -869,11 +885,13 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
             train_energy_mae += (energy_mae - train_energy_mae) / (i + 1)
             train_forces_mae += (forces_mae - train_forces_mae) / (i + 1)
             train_dipole_mae += (dipole_mae - train_dipole_mae) / (i + 1)
+            train_charge_loss += (charge_loss_val - train_charge_loss) / (i + 1)
 
         valid_loss = 0.0
         valid_energy_loss = 0.0
         valid_force_loss = 0.0
         valid_dipole_loss = 0.0
+        valid_charge_loss = 0.0
         valid_energy_mae = 0.0
         valid_forces_mae = 0.0
         valid_dipole_mae = 0.0
@@ -882,7 +900,7 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
         valid_dipole_r2 = 0.0
         # Use EMA parameters for validation (as in physnetjax)
         for i, batch in enumerate(valid_batches):
-            loss, energy_loss, force_loss, dipole_loss_batch, energy_mae, forces_mae, dipole_mae, energy_r2, forces_r2, dipole_r2 = eval_step(
+            loss, energy_loss, force_loss, dipole_loss_batch, charge_loss_batch, energy_mae, forces_mae, dipole_mae, energy_r2, forces_r2, dipole_r2 = eval_step(
                 model_apply=model.apply,
                 batch=batch,
                 batch_size=batch_size,
@@ -890,12 +908,14 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
                 energy_weight=energy_weight,
                 forces_weight=forces_weight,
                 dipole_weight=dipole_weight,
+                charge_weight=charge_weight,
             )
             # Don't block - let JAX execute asynchronously
             valid_loss += (loss - valid_loss) / (i + 1)
             valid_energy_loss += (energy_loss - valid_energy_loss) / (i + 1)
             valid_force_loss += (force_loss - valid_force_loss) / (i + 1)
             valid_dipole_loss += (dipole_loss_batch - valid_dipole_loss) / (i + 1)
+            valid_charge_loss += (charge_loss_batch - valid_charge_loss) / (i + 1)
             valid_energy_mae += (energy_mae - valid_energy_mae) / (i + 1)
             valid_forces_mae += (forces_mae - valid_forces_mae) / (i + 1)
             valid_dipole_mae += (dipole_mae - valid_dipole_mae) / (i + 1)
@@ -940,6 +960,8 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
             print(f"    dipole mae [Debye]      {float(train_dipole_mae): 8.6f} {float(valid_dipole_mae): 8.6f}")
             print(f"    dipole R²               {'N/A':>8s} {float(valid_dipole_r2): 8.6f}")
             print(f"    dipole loss [a.u.]      {float(train_dipole_mae**2): 8.6f} {float(valid_dipole_loss): 8.6f}")
+        print(f"    charge loss [e²]        {float(train_charge_loss): 8.6f} {float(valid_charge_loss): 8.6f}")
+        print(f"    charge RMSE [e]         {float(jnp.sqrt(train_charge_loss)): 8.6f} {float(jnp.sqrt(valid_charge_loss)): 8.6f}")
         print(f"    LR scale: {float(lr_scale): 8.6f}, effective LR: {float(learning_rate * lr_scale): 8.6f}")
         if early_stopping_patience is not None:
             print(f"    best valid loss: {float(best_valid_loss): 8.6f}, patience: {patience_counter}/{early_stopping_patience}")
@@ -1054,6 +1076,7 @@ def main(args=None):
         energy_weight=args.energy_weight,
         forces_weight=args.forces_weight,
         dipole_weight=args.dipole_weight,
+        charge_weight=args.charge_weight,
         initial_params=initial_params,
     )
 
@@ -1090,6 +1113,7 @@ def main(args=None):
             'energy_weight': args.energy_weight,
             'forces_weight': args.forces_weight,
             'dipole_weight': args.dipole_weight,
+            'charge_weight': args.charge_weight,
         },
         'data': {
             'dataset': args.data,
