@@ -112,7 +112,7 @@ def get_args():
                        help="Add explicit E_total = E_nn + mu·Ef coupling")
     parser.add_argument("--field_scale", type=float, default=0.001,
                        help="Ef_phys = Ef_input * field_scale (au)")
-    args = parser.parse_args()
+    args, _ = parser.parse_known_args()
     return args
 
 
