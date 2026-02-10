@@ -76,6 +76,7 @@ lj.monkey_patch()
 
 
 
+<<<<<<< HEAD
 def get_args(**kwargs):
     """
     Get configuration arguments. Works both from command line and notebooks.
@@ -178,6 +179,46 @@ def get_args(**kwargs):
     # Otherwise, use defaults and override with kwargs (notebook mode)
     defaults.update(kwargs)
     return SimpleNamespace(**defaults)
+=======
+def get_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--data", type=str, default="data-full.npz")
+    parser.add_argument("--features", type=int, default=10)
+    parser.add_argument("--max_degree", type=int, default=4)
+    parser.add_argument("--num_iterations", type=int, default=2)
+    parser.add_argument("--num_basis_functions", type=int, default=10)
+    parser.add_argument("--cutoff", type=float, default=10.0)
+    
+    parser.add_argument("--num_train", type=int, default=8000)
+    parser.add_argument("--num_valid", type=int, default=1000)
+    parser.add_argument("--num_epochs", type=int, default=100)
+    parser.add_argument("--learning_rate", type=float, default=0.0004)
+    parser.add_argument("--batch_size", type=int, default=1000)
+
+    parser.add_argument("--clip_norm", type=float, default=10000.0)
+    parser.add_argument("--ema_decay", type=float, default=0.5)
+    parser.add_argument("--early_stopping_patience", type=int, default=None)
+    parser.add_argument("--early_stopping_min_delta", type=float, default=0.0)
+    parser.add_argument("--reduce_on_plateau_patience", type=int, default=15)
+    parser.add_argument("--reduce_on_plateau_cooldown", type=int, default=15)
+    parser.add_argument("--reduce_on_plateau_factor", type=float, default=0.9)
+    parser.add_argument("--reduce_on_plateau_rtol", type=float, default=1e-4)
+    parser.add_argument("--reduce_on_plateau_accumulation_size", type=int, default=5)
+    parser.add_argument("--reduce_on_plateau_min_scale", type=float, default=0.01)
+
+    parser.add_argument("--energy_weight", type=float, default=1.0,
+                       help="Weight for energy loss in total loss")
+    parser.add_argument("--forces_weight", type=float, default=100.0,
+                       help="Weight for forces loss in total loss")
+    parser.add_argument("--dipole_weight", type=float, default=0.1,
+                       help="Weight for dipole loss in total loss")
+    parser.add_argument("--dipole_field_coupling", action="store_true",
+                       help="Add explicit E_total = E_nn + mu·Ef coupling")
+    parser.add_argument("--field_scale", type=float, default=0.001,
+                       help="Ef_phys = Ef_input * field_scale (au)")
+    args = parser.parse_args()
+    return args
+>>>>>>> 109a8628 (asdf)
 
 
 # Load dataset
@@ -302,18 +343,26 @@ class MessagePassingModel(nn.Module):
             )(x, basis, dst_idx=dst_idx_flat, src_idx=src_idx_flat)
             x = e3x.nn.add(x, y)
             x = e3x.nn.Dense(self.features)(x)
-            x = e3x.nn.hard_tanh(x)
+            x = e3x.nn.relu(x)
             # Couple EF - xEF already has correct shape (B*N, 2, 4, features) matching x
             xEF = e3x.nn.Tensor()(x, xEF)
             x = e3x.nn.add(x, xEF)
             x = e3x.nn.TensorDense(max_degree=self.max_degree)(x)
+<<<<<<< HEAD
             x = e3x.nn.hard_tanh(x)
             x = e3x.nn.add(x, y)
+=======
+            #x = e3x.nn.hard_tanh(x)
+>>>>>>> 109a8628 (asdf)
 
         for i in range(2):
             x = e3x.nn.add(x, y)
             x = e3x.nn.Dense(self.features)(x)
+<<<<<<< HEAD
             # x = e3x.nn.hard_tanh(x)
+=======
+            x = e3x.nn.relu(x)
+>>>>>>> 109a8628 (asdf)
 
         # Save original x before reduction for dipole prediction
         x_orig = x  # (B*N, 2, (max_degree+1)^2, features)
@@ -383,11 +432,11 @@ class MessagePassingModel(nn.Module):
             coupling = coupling * self.field_scale * HARTREE_TO_EV  # -> eV
             learnable_coupling = self.param(
                 "learnable_coupling",
-                lambda rng, shape: jnp.zeros(shape, dtype=positions.dtype),
+                lambda rng, shape: jnp.ones(shape, dtype=positions.dtype),
                 (1,)
             )
             coupling = coupling * learnable_coupling
-            energy = energy + coupling
+            energy = energy - coupling
 
         # add a Coulomb term to the energy
         # Pairwise Coulomb: E_coul = 0.5 * Σ_{i≠j} q_i * q_j / r_ij

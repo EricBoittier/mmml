@@ -1,0 +1,23 @@
+==========================================
+Sweep: grid search
+==========================================
+Job ID: 114219
+Array Task ID: 1
+Node: gpu06
+Start time: Sun Feb  8 03:59:43 PM CET 2026
+==========================================
+no change     /opt/miniconda3/condabin/conda
+no change     /opt/miniconda3/bin/conda
+no change     /opt/miniconda3/bin/conda-env
+no change     /opt/miniconda3/bin/activate
+no change     /opt/miniconda3/bin/deactivate
+no change     /opt/miniconda3/etc/profile.d/conda.sh
+no change     /opt/miniconda3/etc/fish/conf.d/conda.fish
+no change     /opt/miniconda3/shell/condabin/Conda.psm1
+no change     /opt/miniconda3/shell/condabin/conda-hook.ps1
+no change     /opt/miniconda3/lib/python3.12/site-packages/xontrib/conda.xsh
+no change     /opt/miniconda3/etc/profile.d/conda.csh
+modified      /pchem-data/meuwly/boittier/home/.bashrc
+
+==> For changes to take effect, close and re-open your current shell. <==
+

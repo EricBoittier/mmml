@@ -6,7 +6,7 @@
 #SBATCH --partition=gpu
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
-#SBATCH --mem=32G
+#SBATCH --mem=8G
 #SBATCH --array=0-4
 #SBATCH --output=logs/sweep_max_degree_%A_%a.out
 #SBATCH --error=logs/sweep_max_degree_%A_%a.err
@@ -22,8 +22,6 @@ echo "Node: $(hostname)"
 echo "Start time: $(date)"
 echo "=========================================="
 
-# ---- Environment ----
-module load CUDA/12.2.0
 
 echo "--- GPU Information ---"
 nvidia-smi || echo "nvidia-smi failed"
@@ -40,7 +38,7 @@ cd "$SLURM_SUBMIT_DIR"
 mkdir -p logs
 
 # ---- Parameter sweep ----
-MAX_DEGREE_LIST=(0 1 2 3 4)
+MAX_DEGREE_LIST=(1 2 3 4 5)
 MAX_DEGREE=${MAX_DEGREE_LIST[$SLURM_ARRAY_TASK_ID]}
 
 echo ""

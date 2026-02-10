@@ -33,7 +33,8 @@ echo "Start time: $(date)"
 echo "=========================================="
 
 # ---- Environment ----
-module load CUDA/12.2.0
+#module load CUDA/12.2.0
+module load charmm
 
 echo "--- GPU Information ---"
 nvidia-smi || echo "nvidia-smi failed"
