@@ -346,9 +346,9 @@ class MessagePassingModel(nn.Module):
         charges_batched = atomic_charges.reshape(B, N)  # (B, N)
         dipoles_batched = atomic_dipoles.reshape(B, N, 3)  # (B, N, 3)
 
-
+        
         # add a Coulomb term to the energy 
-        coulomb_energy = jnp.sum(charges_batched[:, :, None] * positions_centered, axis=1)  # (B, 3)
+        coulomb_energy = jnp.sum(charges_batched[:, :, None] * positions_batched, axis=1)  # (B, 3)
         
         energy = energy + coulomb_energy
 
