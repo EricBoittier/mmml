@@ -346,10 +346,6 @@ class MessagePassingModel(nn.Module):
         charges_batched = atomic_charges.reshape(B, N)  # (B, N)
         dipoles_batched = atomic_dipoles.reshape(B, N, 3)  # (B, N, 3)
 
-        
-
-
-
         # Center of mass (using atomic masses or uniform weighting)
         # For simplicity, use uniform weighting (geometric center)
         com = positions_batched.mean(axis=1, keepdims=True)  # (B, 1, 3)
@@ -393,9 +389,16 @@ class MessagePassingModel(nn.Module):
             coupling = coupling * learnable_coupling
             energy = energy + coupling
 
-        # add a Coulomb term to the energy 
-        coulomb_energy = jnp.sum(charges_batched[:, :, None] * positions_batched, axis=1)  # (B, 3)
-        energy = energy + coulomb_energy * HARTREE_TO_EV * 14.399645 # convert to eV
+        # add a Coulomb term to the energy
+        # Pairwise Coulomb: E_coul = 0.5 * Σ_{i≠j} q_i * q_j / r_ij
+        r_ij = jnp.linalg.norm(displacements, axis=-1)  # (B*E,)
+        q_src = atomic_charges[src_idx_flat]  # (B*E,)
+        q_dst = atomic_charges[dst_idx_flat]  # (B*E,)
+        pair_coulomb = q_src * q_dst / (r_ij + 1e-10)  # (B*E,)
+        # Sum per molecule (each pair counted twice in neighbor list, so divide by 2)
+        edge_batch = batch_segments[dst_idx_flat]  # (B*E,) batch index per edge
+        coulomb_energy = jax.ops.segment_sum(pair_coulomb, edge_batch, num_segments=B) / 2.0  # (B,)
+        energy = energy + coulomb_energy * HARTREE_TO_EV * 14.399645  # Coulomb constant in eV·Å/e²
 
         # Proxy energy for force differentiation
         return -jnp.sum(energy), energy, dipole
