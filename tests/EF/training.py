@@ -577,22 +577,8 @@ def prepare_batches(key, data, batch_size, num_atoms=29, dst_idx_flat=None, src_
 @functools.partial(jax.jit, static_argnames=("model_apply", "optimizer_update", "batch_size", "ema_decay", "energy_weight", "forces_weight", "dipole_weight"))
 def train_step(model_apply, optimizer_update, batch, batch_size, opt_state, params, ema_params, transform_state, ema_decay=0.999, energy_weight=1.0, forces_weight=100.0, dipole_weight=10.0):
     def loss_fn(params):
-        # Compute energy and dipole
-        energy, dipole_pred = model_apply(
-            params,
-            atomic_numbers=batch["atomic_numbers"],
-            positions=batch["positions"],
-            Ef=batch["electric_field"],
-            dst_idx=None,  # Not needed when batch_segments is provided
-            src_idx=None,  # Not needed when batch_segments is provided
-            dst_idx_flat=batch["dst_idx_flat"],
-            src_idx_flat=batch["src_idx_flat"],
-            batch_segments=batch["batch_segments"],
-            batch_size=batch_size,
-        )
-        
-        # Compute forces and dipole (from energy_and_forces for consistency)
-        _, forces, dipole_from_forces = energy_and_forces(
+        # Compute energy, forces, and dipole in a single forward+backward pass
+        energy, forces, dipole = energy_and_forces(
             model_apply, params,
             atomic_numbers=batch["atomic_numbers"],
             positions=batch["positions"],
@@ -604,9 +590,6 @@ def train_step(model_apply, optimizer_update, batch, batch_size, opt_state, para
             batch_segments=batch["batch_segments"],
             batch_size=batch_size,
         )
-        
-        # Use dipole from model_apply (should be same as from energy_and_forces)
-        dipole = dipole_pred
         
         # Energy loss
         energy_loss = mean_squared_loss(energy.reshape(-1), batch["energies"].reshape(-1))
