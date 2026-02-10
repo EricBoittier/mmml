@@ -76,110 +76,6 @@ lj.monkey_patch()
 
 
 
-<<<<<<< HEAD
-def get_args(**kwargs):
-    """
-    Get configuration arguments. Works both from command line and notebooks.
-    
-    In notebooks, you can override defaults by passing keyword arguments:
-        args = get_args(features=256, learning_rate=0.001)
-    
-    From command line, use argparse flags as before:
-        python script.py --features 256 --learning_rate 0.001
-    """
-    import sys
-    
-    # Default values (using HEAD version defaults)
-    defaults = {
-        "data": "data-full.npz",
-        "features": 128,
-        "max_degree": 4,
-        "num_iterations": 3,
-        "num_basis_functions": 32,
-        "cutoff": 10.0,
-        "num_train": 800,
-        "num_valid": 100,
-        "num_epochs": 5000,
-        "learning_rate": 0.0001,
-        "batch_size": 8,  # Increased from 1 for better GPU utilization
-        "clip_norm": 100.0,
-        "ema_decay": 0.5,
-        "early_stopping_patience": None,
-        "early_stopping_min_delta": 0.0,
-        "reduce_on_plateau_patience": 5,
-        "reduce_on_plateau_cooldown": 5,
-        "reduce_on_plateau_factor": 0.9,
-        "reduce_on_plateau_rtol": 1e-4,
-        "reduce_on_plateau_accumulation_size": 5,
-        "reduce_on_plateau_min_scale": 0.01,
-        "energy_weight": 1.0,
-        "forces_weight": 1000.0,
-        "dipole_weight": 20.0,
-        "dipole_field_coupling": False,
-        "field_scale": 0.001,
-        "restart": None,  # Path to params JSON file to restart from
-    }
-    
-    # Check if we're in a notebook/IPython environment
-    try:
-        get_ipython()
-        in_notebook = True
-    except NameError:
-        in_notebook = False
-    
-    # If kwargs are provided, always use notebook mode
-    if kwargs:
-        defaults.update(kwargs)
-        return SimpleNamespace(**defaults)
-    
-    # Check if any command line arguments look like our flags (start with --)
-    # This avoids false positives from Jupyter kernel arguments
-    has_flag_args = any(arg.startswith('--') for arg in sys.argv[1:])
-    
-    # If command line arguments are provided AND we're not in a notebook, use argparse
-    # Otherwise, use notebook mode (defaults only)
-    if has_flag_args and not in_notebook:
-        parser = argparse.ArgumentParser()
-        parser.add_argument("--data", type=str, default=defaults["data"])
-        parser.add_argument("--features", type=int, default=defaults["features"])
-        parser.add_argument("--max_degree", type=int, default=defaults["max_degree"])
-        parser.add_argument("--num_iterations", type=int, default=defaults["num_iterations"])
-        parser.add_argument("--num_basis_functions", type=int, default=defaults["num_basis_functions"])
-        parser.add_argument("--cutoff", type=float, default=defaults["cutoff"])
-        parser.add_argument("--num_train", type=int, default=defaults["num_train"])
-        parser.add_argument("--num_valid", type=int, default=defaults["num_valid"])
-        parser.add_argument("--num_epochs", type=int, default=defaults["num_epochs"])
-        parser.add_argument("--learning_rate", type=float, default=defaults["learning_rate"])
-        parser.add_argument("--batch_size", type=int, default=defaults["batch_size"])
-        parser.add_argument("--clip_norm", type=float, default=defaults["clip_norm"])
-        parser.add_argument("--ema_decay", type=float, default=defaults["ema_decay"])
-        parser.add_argument("--early_stopping_patience", type=int, default=defaults["early_stopping_patience"])
-        parser.add_argument("--early_stopping_min_delta", type=float, default=defaults["early_stopping_min_delta"])
-        parser.add_argument("--reduce_on_plateau_patience", type=int, default=defaults["reduce_on_plateau_patience"])
-        parser.add_argument("--reduce_on_plateau_cooldown", type=int, default=defaults["reduce_on_plateau_cooldown"])
-        parser.add_argument("--reduce_on_plateau_factor", type=float, default=defaults["reduce_on_plateau_factor"])
-        parser.add_argument("--reduce_on_plateau_rtol", type=float, default=defaults["reduce_on_plateau_rtol"])
-        parser.add_argument("--reduce_on_plateau_accumulation_size", type=int, default=defaults["reduce_on_plateau_accumulation_size"])
-        parser.add_argument("--reduce_on_plateau_min_scale", type=float, default=defaults["reduce_on_plateau_min_scale"])
-        parser.add_argument("--energy_weight", type=float, default=defaults["energy_weight"],
-                           help="Weight for energy loss in total loss")
-        parser.add_argument("--forces_weight", type=float, default=defaults["forces_weight"],
-                           help="Weight for forces loss in total loss")
-        parser.add_argument("--dipole_weight", type=float, default=defaults["dipole_weight"],
-                           help="Weight for dipole loss in total loss")
-        parser.add_argument("--dipole_field_coupling", action="store_true",
-                           help="Add explicit E_total = E_nn + mu·Ef coupling")
-        parser.add_argument("--field_scale", type=float, default=defaults["field_scale"],
-                           help="Ef_phys = Ef_input * field_scale (au)")
-        parser.add_argument("--restart", type=str, default=defaults["restart"],
-                           help="Path to params JSON file to restart training from")
-        args = parser.parse_args()
-        return args
-    
-    # Otherwise, use defaults and override with kwargs (notebook mode)
-    defaults.update(kwargs)
-    return SimpleNamespace(**defaults)
-=======
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data", type=str, default="data-full.npz")
@@ -218,7 +114,6 @@ def get_args():
                        help="Ef_phys = Ef_input * field_scale (au)")
     args = parser.parse_args()
     return args
->>>>>>> 109a8628 (asdf)
 
 
 # Load dataset
@@ -348,21 +243,12 @@ class MessagePassingModel(nn.Module):
             xEF = e3x.nn.Tensor()(x, xEF)
             x = e3x.nn.add(x, xEF)
             x = e3x.nn.TensorDense(max_degree=self.max_degree)(x)
-<<<<<<< HEAD
-            x = e3x.nn.hard_tanh(x)
-            x = e3x.nn.add(x, y)
-=======
             #x = e3x.nn.hard_tanh(x)
->>>>>>> 109a8628 (asdf)
 
         for i in range(2):
             x = e3x.nn.add(x, y)
             x = e3x.nn.Dense(self.features)(x)
-<<<<<<< HEAD
-            # x = e3x.nn.hard_tanh(x)
-=======
             x = e3x.nn.relu(x)
->>>>>>> 109a8628 (asdf)
 
         # Save original x before reduction for dipole prediction
         x_orig = x  # (B*N, 2, (max_degree+1)^2, features)
