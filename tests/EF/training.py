@@ -68,8 +68,6 @@ def load_params(params_path):
 
 
 print("JAX devices:", jax.devices())
-
-
 import lovely_jax as lj
 lj.monkey_patch()
 
@@ -116,7 +114,7 @@ def get_args(**overrides):
                        help="Weight for forces loss in total loss")
     parser.add_argument("--dipole_weight", type=float, default=0.1,
                        help="Weight for dipole loss in total loss")
-    parser.add_argument("--charge_weight", type=float, default=10.0,
+    parser.add_argument("--charge_weight", type=float, default=1000.0,
                        help="Weight for charge neutrality loss (sum of charges per molecule squared)")
     parser.add_argument("--dipole_field_coupling", action="store_true",
                        help="Add explicit E_total = E_nn + mu·Ef coupling")
@@ -309,8 +307,6 @@ class MessagePassingModel(nn.Module):
         atomic_dipole_sum = jnp.sum(dipoles_batched, axis=1)  # (B, 3)
         # Total molecular dipole
         dipole = charge_dipole + atomic_dipole_sum  # (B, 3)
-        #dipole = charge_dipole  # physnet 
-        #dipole =  atomic_dipole_sum  # direct eqv. pred
 
         # Store atomic-level properties for downstream use (e.g. AAT)
         self.sow('intermediates', 'atomic_charges', charges_batched)      # (B, N)
@@ -328,14 +324,14 @@ class MessagePassingModel(nn.Module):
         energy = atomic_energies.reshape(B, N).sum(axis=1)  # (B,)
 
         # Optional explicit dipole-field coupling:
-        #   E_total = E_nn + mu · Ef_phys   (converted to eV)
-        # mu [e·Bohr] * Ef_phys [Hartree/(e·Bohr)] = [Hartree] -> * 27.21 -> [eV]
         if self.dipole_field_coupling:
 
             coupling = jnp.sum(dipole * Ef , axis=-1)  # (B,)  mu·Ef_input
             coupling = coupling * self.field_scale * HARTREE_TO_EV  # -> eV
+            coupling = nn.Dense(1, use_bias=False, kernel_init=jax.nn.initializers.zeros)(coupling)
+            coupling = jnp.squeeze(coupling, axis=(-1, -2, -3))  # (B,)
             
-            energy = energy - coupling
+            energy = energy + coupling
 
         # add a Coulomb term to the energy
         # Pairwise Coulomb: E_coul = 0.5 * Σ_{i≠j} q_i * q_j / r_ij
