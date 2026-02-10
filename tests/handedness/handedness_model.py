@@ -26,6 +26,7 @@ def get_args():
   parser.add_argument("--learning_rate", type=float, default=1e-4)
   parser.add_argument("--batch_size", type=int, default=1)
   parser.add_argument("--seed", type=int, default=42)
+  return parser.parse_args()
 
 
 
