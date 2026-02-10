@@ -76,7 +76,13 @@ lj.monkey_patch()
 
 
 
-def get_args():
+def get_args(**overrides):
+    """Parse command-line arguments, with optional keyword overrides (useful in notebooks).
+
+    Usage:
+        args = get_args()                          # CLI defaults
+        args = get_args(features=32, cutoff=8.0)   # override specific params
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument("--data", type=str, default="data-full.npz")
     parser.add_argument("--features", type=int, default=10)
@@ -113,6 +119,13 @@ def get_args():
     parser.add_argument("--field_scale", type=float, default=0.001,
                        help="Ef_phys = Ef_input * field_scale (au)")
     args, _ = parser.parse_known_args()
+
+    # Apply keyword overrides (for notebook usage)
+    for key, value in overrides.items():
+        if not hasattr(args, key):
+            raise ValueError(f"Unknown argument: {key}")
+        setattr(args, key, value)
+
     return args
 
 
