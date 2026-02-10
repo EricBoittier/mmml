@@ -108,6 +108,8 @@ def get_args(**overrides):
     parser.add_argument("--reduce_on_plateau_accumulation_size", type=int, default=5)
     parser.add_argument("--reduce_on_plateau_min_scale", type=float, default=0.01)
 
+    parser.add_argument("--restart", type=str, default=None)
+
     parser.add_argument("--energy_weight", type=float, default=1.0,
                        help="Weight for energy loss in total loss")
     parser.add_argument("--forces_weight", type=float, default=100.0,
@@ -963,6 +965,7 @@ def main(args=None):
 
     # print the hyperparameters
     print("Hyperparameters:")
+    print(f"  restart: {args.restart}")
     print(f"  features: {args.features}")
     print(f"  max_degree: {args.max_degree}")
     print(f"  num_iterations: {args.num_iterations}")
