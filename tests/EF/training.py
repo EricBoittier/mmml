@@ -261,10 +261,10 @@ class MessagePassingModel(nn.Module):
             #x = e3x.nn.hard_tanh(x)
 
         for i in range(2):
-            x = e3x.nn.add(x, y)
             x = e3x.nn.Dense(self.features)(x)
             x = e3x.nn.relu(x)
-
+        x = e3x.nn.Dense(self.features)(x)
+        
         # Save original x before reduction for dipole prediction
         x_orig = x  # (B*N, 2, (max_degree+1)^2, features)
         
