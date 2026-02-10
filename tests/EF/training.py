@@ -116,7 +116,7 @@ def get_args(**overrides):
                        help="Weight for forces loss in total loss")
     parser.add_argument("--dipole_weight", type=float, default=0.1,
                        help="Weight for dipole loss in total loss")
-    parser.add_argument("--charge_weight", type=float, default=1.0,
+    parser.add_argument("--charge_weight", type=float, default=10.0,
                        help="Weight for charge neutrality loss (sum of charges per molecule squared)")
     parser.add_argument("--dipole_field_coupling", action="store_true",
                        help="Add explicit E_total = E_nn + mu·Ef coupling")
@@ -254,17 +254,19 @@ class MessagePassingModel(nn.Module):
                 max_degree=self.max_degree if i < self.num_iterations - 1 else 0
             )(x, basis, dst_idx=dst_idx_flat, src_idx=src_idx_flat)
             x = e3x.nn.add(x, y)
+            x = e3x.nn.silu(x)
             x = e3x.nn.Dense(self.features)(x)
-            x = e3x.nn.relu(x)
+            x = e3x.nn.silu(x)
             # Couple EF - xEF already has correct shape (B*N, 2, 4, features) matching x
             xEF = e3x.nn.Tensor()(x, xEF)
             x = e3x.nn.add(x, xEF)
             x = e3x.nn.TensorDense(max_degree=self.max_degree)(x)
-            #x = e3x.nn.hard_tanh(x)
+            x = e3x.nn.add(x, y)
+            x = e3x.nn.hard_tanh(x)
 
-        for i in range(2):
+        for i in range(4):
             x = e3x.nn.Dense(self.features)(x)
-            x = e3x.nn.relu(x)
+            x = e3x.nn.silu(x)
         x = e3x.nn.Dense(self.features)(x)
 
         # Save original x before reduction for dipole prediction
