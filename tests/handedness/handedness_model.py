@@ -289,7 +289,8 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
 
 def main(args):
   key = jax.random.PRNGKey(args.seed)
-  dataset = np.load(args.data)
+  dataset = np.load(args.data, allow_pickle=True)
+
   train_data, valid_data = prepare_datasets(key, args.num_train, args.num_valid, dataset)
   model = MessagePassingModel(
     features=args.features, 
