@@ -77,7 +77,14 @@ def print_params_structure(params, label="params", max_depth=3):
 
 
 def load_params(params_path):
-    """Load parameters from JSON file."""
+    """Load parameters from JSON file.
+    
+    Handles the Flax sow() tuple-to-array conversion issue:
+    Flax stores intermediates from sow() as tuples (array,), but JSON
+    round-trip converts these to arrays with an extra dimension.
+    This function strips the 'intermediates' key (which is not needed
+    for inference or restart) to avoid pytree structure mismatches.
+    """
     with open(params_path, 'r') as f:
         params_dict = json.load(f)
     
@@ -95,6 +102,15 @@ def load_params(params_path):
         return obj
     
     params = convert_to_jax(params_dict)
+    
+    # Strip 'intermediates' key if present — these are sow() artifacts that
+    # get corrupted during JSON round-trip (tuples become arrays, changing
+    # the pytree structure). They are recomputed during every forward pass
+    # and are NOT needed for inference or restart.
+    if isinstance(params, dict) and 'intermediates' in params:
+        print(f"  Stripping 'intermediates' key from loaded params (sow artifacts)")
+        params = {k: v for k, v in params.items() if k != 'intermediates'}
+    
     print_params_structure(params, f"loaded from {params_path}")
     return params
 
@@ -807,7 +823,35 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
     # Initialize params - either from restart file or from scratch
     if initial_params is not None:
         print("  Restarting from provided parameters...")
-        params = initial_params
+        # Ensure params have the correct structure for model.apply with mutable=['intermediates'].
+        # If intermediates were stripped during load (correct behavior), we need to
+        # re-initialize them by doing a dummy model.init and merging the weights.
+        if isinstance(initial_params, dict) and 'intermediates' not in initial_params:
+            print("  Re-initializing intermediates via model.init()...")
+            key, init_key = jax.random.split(key)
+            num_atoms = train_data["positions"].shape[1]
+            dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(num_atoms)
+            dst_idx = jnp.asarray(dst_idx, dtype=jnp.int32)
+            src_idx = jnp.asarray(src_idx, dtype=jnp.int32)
+            atomic_numbers0 = train_data["atomic_numbers"][0:1]
+            positions0 = train_data["positions"][0:1]
+            ef0 = train_data["electric_field"][0:1]
+            batch_segments0 = jnp.repeat(jnp.arange(1, dtype=jnp.int32), num_atoms)
+            offsets0 = jnp.arange(1, dtype=jnp.int32) * num_atoms
+            dst_idx_flat0 = (dst_idx[None, :] + offsets0[:, None]).reshape(-1)
+            src_idx_flat0 = (src_idx[None, :] + offsets0[:, None]).reshape(-1)
+            ref_params = model.init(
+                init_key, atomic_numbers=atomic_numbers0, positions=positions0, Ef=ef0,
+                dst_idx_flat=dst_idx_flat0, src_idx_flat=src_idx_flat0,
+                batch_segments=batch_segments0, batch_size=1, dst_idx=dst_idx, src_idx=src_idx,
+            )
+            # Use loaded weights but fresh intermediates structure
+            params = dict(ref_params)  # copy structure from init
+            params['params'] = initial_params['params']  # plug in loaded weights
+            print("  ✓ Merged loaded weights with fresh intermediates")
+            print_params_structure(params, "restart params (merged)")
+        else:
+            params = initial_params
     else:
         # Initialize params with a single batch item (B=1) but correct ranks
         key, init_key = jax.random.split(key)
@@ -1175,18 +1219,25 @@ def main(args=None):
     print(f"\n✓ Model config saved to {config_filename}")
 
     # Save parameters with UUID
+    # Strip intermediates before saving — they are sow() artifacts that
+    # get corrupted during JSON round-trip (tuples → arrays) and are
+    # recomputed during every forward pass anyway.
+    params_to_save = params
+    if isinstance(params, dict) and 'intermediates' in params:
+        params_to_save = {k: v for k, v in params.items() if k != 'intermediates'}
+        print(f"  Stripped 'intermediates' from params before saving (sow artifacts)")
+    
     params_filename = f'params-{run_uuid}.json'
-    print_params_structure(params, "params being saved")
-    params_dict = to_jsonable(params)
+    print_params_structure(params_to_save, "params being saved (intermediates stripped)")
+    params_dict = to_jsonable(params_to_save)
     with open(params_filename, 'w') as f:
         json.dump(params_dict, f)
     print(f"✓ Parameters saved to {params_filename}")
     
     # Verify round-trip: load back and check structure
     params_reloaded = load_params(params_filename)
-    # Quick sanity check: compare a few leaf values
-    import jax
-    orig_leaves = jax.tree_util.tree_leaves(params)
+    # Quick sanity check: compare leaf values
+    orig_leaves = jax.tree_util.tree_leaves(params_to_save)
     try:
         reload_leaves = jax.tree_util.tree_leaves(params_reloaded)
         if len(orig_leaves) != len(reload_leaves):
