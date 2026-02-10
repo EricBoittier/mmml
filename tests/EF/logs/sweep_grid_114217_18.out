@@ -1,0 +1,21 @@
+==========================================
+Sweep: grid search
+==========================================
+Job ID: 114236
+Array Task ID: 18
+Node: gpu25
+Start time: Sun Feb  8 03:59:55 PM CET 2026
+==========================================
+no change     /opt/miniconda3/condabin/conda
+no change     /opt/miniconda3/bin/conda
+no change     /opt/miniconda3/bin/conda-env
+no change     /opt/miniconda3/bin/activate
+no change     /opt/miniconda3/bin/deactivate
+no change     /opt/miniconda3/etc/profile.d/conda.sh
+no change     /opt/miniconda3/etc/fish/conf.d/conda.fish
+no change     /opt/miniconda3/shell/condabin/Conda.psm1
+no change     /opt/miniconda3/shell/condabin/conda-hook.ps1
+no change     /opt/miniconda3/lib/python3.12/site-packages/xontrib/conda.xsh
+no change     /opt/miniconda3/etc/profile.d/conda.csh
+no change     /pchem-data/meuwly/boittier/home/.bashrc
+No action taken.

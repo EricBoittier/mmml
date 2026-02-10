@@ -1,0 +1,7 @@
+Lmod has detected the following error: The following module(s) are unknown:
+"CUDA/12.2.0"
+
+Please check the spelling or version number. Also try "module spider ..."
+
+
+

@@ -1,0 +1,16 @@
+W0209 18:44:40.910482    2041 bfc_allocator.cc:502] Allocator (GPU_0_bfc) ran out of memory trying to allocate 8.95GiB (rounded to 9611894528)requested by op 
+If the cause is memory fragmentation maybe the environment variable 'TF_GPU_ALLOCATOR=cuda_malloc_async' will improve the situation. 
+Current allocation summary follows.
+Current allocation summary follows.
+W0209 18:44:40.915218    2041 bfc_allocator.cc:513] *___________________________________________________________________________________________________
+E0209 18:44:40.915589    2041 pjrt_stream_executor_client.cc:2111] Execution of replica 0 failed: RESOURCE_EXHAUSTED: Out of memory while trying to allocate 8.95GiB. [tf-allocator-allocation-error='']
+Traceback (most recent call last):
+  File "/pchem-data/meuwly/boittier/home/mmml/tests/EF/training.py", line 956, in <module>
+    params = train_model(
+             ^^^^^^^^^^^^
+  File "/pchem-data/meuwly/boittier/home/mmml/tests/EF/training.py", line 787, in train_model
+    params, ema_params, opt_state, loss, energy_mae, forces_mae, dipole_mae, energy_r2, forces_r2, dipole_r2 = train_step(
+                                                                                                               ^^^^^^^^^^^
+jax.errors.JaxRuntimeError: RESOURCE_EXHAUSTED: Out of memory while trying to allocate 8.95GiB.
+--------------------
+For simplicity, JAX has removed its internal frames from the traceback of the following exception. Set JAX_TRACEBACK_FILTERING=off to include these.

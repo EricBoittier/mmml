@@ -1,0 +1,113 @@
+==========================================
+Sweep: max_degree
+==========================================
+Job ID: 114250
+Array Task ID: 4
+Node: gpu01
+Start time: Mon Feb  9 06:36:39 PM CET 2026
+==========================================
+--- GPU Information ---
+Mon Feb  9 18:36:39 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 550.107.02             Driver Version: 550.107.02     CUDA Version: 12.4     |
+|-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3080        On  |   00000000:03:00.0 Off |                  N/A |
+| 30%   28C    P8             13W /  320W |       2MiB /  10240MiB |      0%   E. Process |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+                                                                                         
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI        PID   Type   Process name                              GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+CUDA_VISIBLE_DEVICES: 0
+
+JAX version: 0.9.0.1
+Devices: [CudaDevice(id=0)]
+==========================================
+
+Configuration:
+  features:            64 (fixed)
+  max_degree:          5
+  num_basis_functions: 32 (fixed)
+  num_iterations:      2  (fixed)
+
+CUDA graph capture is not supported in this JAX version
+JAX devices: [CudaDevice(id=0)]
+Dataset keys: ['R', 'Z', 'D', 'E', 'F', 'P', 'Ef']
+Arguments:
+  data: data-full.npz
+  features: 64
+  max_degree: 5
+  num_iterations: 2
+  num_basis_functions: 32
+  cutoff: 10.0
+  num_train: 8000
+  num_valid: 1000
+  num_epochs: 500
+  learning_rate: 0.0001
+  batch_size: 10
+  clip_norm: 1000.0
+  ema_decay: 0.9
+  early_stopping_patience: None
+  early_stopping_min_delta: 0.0
+  reduce_on_plateau_patience: 5
+  reduce_on_plateau_cooldown: 5
+  reduce_on_plateau_factor: 0.9
+  reduce_on_plateau_rtol: 0.0001
+  reduce_on_plateau_accumulation_size: 5
+  reduce_on_plateau_min_scale: 0.01
+  energy_weight: 1.0
+  forces_weight: 1000.0
+  dipole_weight: 20.0
+  dipole_field_coupling: False
+  field_scale: 0.001
+Hyperparameters:
+  features: 64
+  max_degree: 5
+  num_iterations: 2
+  num_basis_functions: 32
+  cutoff: 10.0
+  num_train: 8000
+  num_valid: 1000
+  num_epochs: 500
+  learning_rate: 0.0001
+  batch_size: 10
+  clip_norm: 1000.0
+  ema_decay: 0.9
+  early_stopping_patience: None
+  early_stopping_min_delta: 0.0
+  reduce_on_plateau_patience: 5
+  reduce_on_plateau_cooldown: 5
+  reduce_on_plateau_factor: 0.9
+  reduce_on_plateau_rtol: 0.0001
+  reduce_on_plateau_accumulation_size: 5
+  reduce_on_plateau_min_scale: 0.01
+
+Prepared data shapes:
+  train atomic_numbers: (8000, 29)
+  train positions:      (8000, 29, 3)
+  train electric_field: (8000, 3)
+  train energies:       (8000,)
+  train forces:        (8000, 29, 3)
+
+============================================================
+Training Run UUID: f52a3366-fb44-4427-b528-81b621e4f915
+============================================================
+
+    valid batch atomic_numbers: Array[290] i32 1.1Kb x∈[1, 16] μ=4.000 σ=4.094 gpu:0
+    valid batch positions: Array[290, 3] n=870 (3.4Kb) x∈[-4.261, 4.264] μ=0.055 σ=1.816 gpu:0
+    valid batch energies: Array[10] x∈[-121.174, -120.578] μ=-120.815 σ=0.156 gpu:0 [-120.838, -120.839, -120.659, -120.735, -120.888, -120.847, -121.174, -120.894, -120.698, -120.578]
+    valid batch forces: Array[290, 3] n=870 (3.4Kb) x∈[-0.079, 0.085] μ=1.113e-10 σ=0.017 gpu:0
+    valid batch electric_field: Array[10, 3] n=30 x∈[-101.000, 101.000] μ=1.700 σ=32.174 gpu:0
+    valid batch dst_idx_flat: Array[8120] i32 32Kb x∈[0, 289] μ=144.500 σ=83.715 gpu:0
+    valid batch src_idx_flat: Array[8120] i32 32Kb x∈[0, 289] μ=144.500 σ=83.715 gpu:0
+    valid batch batch_segments: Array[290] i32 1.1Kb x∈[0, 9] μ=4.500 σ=2.872 gpu:0
+    valid batch dipoles: Array[10, 3] n=30 x∈[-5.681, 4.635] μ=0.383 σ=2.742 gpu:0
