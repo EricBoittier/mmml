@@ -326,10 +326,10 @@ class MessagePassingModel(nn.Module):
         # Optional explicit dipole-field coupling:
         if self.dipole_field_coupling:
 
-            coupling = jnp.sum(dipole * Ef , axis=-1)  # (B,)  mu·Ef_input
+            coupling = jnp.sum(-1.0 * dipole * Ef , axis=-1)  # (B,)  mu·Ef_input
             coupling = coupling * self.field_scale * HARTREE_TO_EV  # -> eV
             coupling = nn.Dense(1, use_bias=False, kernel_init=jax.nn.initializers.zeros)(coupling)
-            coupling = jnp.squeeze(coupling, axis=(-1, -2, -3))  # (B,)
+            # coupling = jnp.squeeze(coupling, axis=(-1, -2, -3))  # (B,)
             
             energy = energy + coupling
 
