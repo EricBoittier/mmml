@@ -308,10 +308,12 @@ class MessagePassingModel(nn.Module):
             x = e3x.nn.add(x, xEF)
             x = e3x.nn.TensorDense(max_degree=self.max_degree)(x)
             x = e3x.nn.hard_tanh(x)
+            x = e3x.nn.add(x, y)
 
         for i in range(2):
+            x = e3x.nn.add(x, y)
             x = e3x.nn.Dense(self.features)(x)
-            x = e3x.nn.hard_tanh(x)
+            # x = e3x.nn.hard_tanh(x)
 
         # Save original x before reduction for dipole prediction
         x_orig = x  # (B*N, 2, (max_degree+1)^2, features)
@@ -343,6 +345,14 @@ class MessagePassingModel(nn.Module):
         positions_batched = positions_flat.reshape(B, N, 3)  # (B, N, 3)
         charges_batched = atomic_charges.reshape(B, N)  # (B, N)
         dipoles_batched = atomic_dipoles.reshape(B, N, 3)  # (B, N, 3)
+
+
+        # add a Coulomb term to the energy 
+        coulomb_energy = jnp.sum(charges_batched[:, :, None] * positions_centered, axis=1)  # (B, 3)
+        
+        energy = energy + coulomb_energy
+
+
         # Center of mass (using atomic masses or uniform weighting)
         # For simplicity, use uniform weighting (geometric center)
         com = positions_batched.mean(axis=1, keepdims=True)  # (B, 1, 3)
