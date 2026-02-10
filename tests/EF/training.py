@@ -759,7 +759,7 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
     # Create optimizer with gradient clipping
     optimizer = optax.chain(
         optax.clip_by_global_norm(clip_norm),
-        optax.adam(learning_rate)
+        optax.adamw(learning_rate)
     )
     
     # Create reduce on plateau transform
