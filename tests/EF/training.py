@@ -45,6 +45,37 @@ import json
 from mmml.utils.model_checkpoint import to_jsonable
 
 
+def print_params_structure(params, label="params", max_depth=3):
+    """Print the pytree structure of params for debugging."""
+    def _print(obj, prefix="", depth=0):
+        if depth > max_depth:
+            print(f"{prefix}...")
+            return
+        if isinstance(obj, dict):
+            for k, v in sorted(obj.items()):
+                if isinstance(v, dict):
+                    print(f"{prefix}{k}/ ({len(v)} keys)")
+                    _print(v, prefix + "  ", depth + 1)
+                elif hasattr(v, 'shape'):
+                    print(f"{prefix}{k}: {type(v).__name__} shape={v.shape} dtype={v.dtype}")
+                elif isinstance(v, (list, tuple)):
+                    print(f"{prefix}{k}: {type(v).__name__} len={len(v)}")
+                    for i, item in enumerate(v):
+                        if hasattr(item, 'shape'):
+                            print(f"{prefix}  [{i}]: {type(item).__name__} shape={item.shape} dtype={item.dtype}")
+                        else:
+                            print(f"{prefix}  [{i}]: {type(item).__name__}")
+                else:
+                    print(f"{prefix}{k}: {type(v).__name__} = {v}")
+        elif hasattr(obj, 'shape'):
+            print(f"{prefix}{type(obj).__name__} shape={obj.shape} dtype={obj.dtype}")
+        else:
+            print(f"{prefix}{type(obj).__name__}")
+    print(f"\n[STRUCT] {label}:")
+    print(f"[STRUCT]   top-level keys: {list(params.keys()) if isinstance(params, dict) else type(params)}")
+    _print(params, prefix="[STRUCT]   ")
+
+
 def load_params(params_path):
     """Load parameters from JSON file."""
     with open(params_path, 'r') as f:
@@ -64,6 +95,7 @@ def load_params(params_path):
         return obj
     
     params = convert_to_jax(params_dict)
+    print_params_structure(params, f"loaded from {params_path}")
     return params
 
 
@@ -808,6 +840,7 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
             dst_idx=dst_idx,
             src_idx=src_idx,
         )
+        print_params_structure(params, "model.init() output")
     opt_state = optimizer.init(params)
     
     # Initialize transform state for reduce on plateau
@@ -1143,10 +1176,28 @@ def main(args=None):
 
     # Save parameters with UUID
     params_filename = f'params-{run_uuid}.json'
+    print_params_structure(params, "params being saved")
     params_dict = to_jsonable(params)
     with open(params_filename, 'w') as f:
         json.dump(params_dict, f)
     print(f"✓ Parameters saved to {params_filename}")
+    
+    # Verify round-trip: load back and check structure
+    params_reloaded = load_params(params_filename)
+    # Quick sanity check: compare a few leaf values
+    import jax
+    orig_leaves = jax.tree_util.tree_leaves(params)
+    try:
+        reload_leaves = jax.tree_util.tree_leaves(params_reloaded)
+        if len(orig_leaves) != len(reload_leaves):
+            print(f"⚠ WARNING: param tree leaf count mismatch! saved={len(orig_leaves)} reloaded={len(reload_leaves)}")
+        else:
+            max_diff = max(float(jnp.max(jnp.abs(jnp.asarray(a, dtype=jnp.float32) - jnp.asarray(b, dtype=jnp.float32)))) 
+                         for a, b in zip(orig_leaves, reload_leaves) 
+                         if hasattr(a, 'shape') and hasattr(b, 'shape') and a.shape == b.shape)
+            print(f"✓ Round-trip check: {len(orig_leaves)} leaves, max diff = {max_diff:.2e}")
+    except Exception as e:
+        print(f"⚠ WARNING: round-trip structure mismatch: {e}")
 
     # Also save symlinks for convenience (params.json and config.json)
     try:

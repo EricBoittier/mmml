@@ -41,7 +41,7 @@ from pathlib import Path
 # Add parent directory to path to import training module
 sys.path.insert(0, str(Path(__file__).parent))
 
-from training import MessagePassingModel, prepare_batches
+from training import MessagePassingModel, prepare_batches, print_params_structure
 
 # Set style for better plots
 sns.set_style("whitegrid")
@@ -1011,6 +1011,45 @@ def main(args=None):
     
     # Create model
     model = MessagePassingModel(**model_config)
+    
+    # Print loaded params structure
+    print_params_structure(params, "loaded params for evaluation")
+    
+    # Verify params work with model by doing a quick init comparison
+    print("\n[DIAG] Verifying params structure against model.init()...")
+    try:
+        _key = jax.random.PRNGKey(99)
+        _Z = jnp.asarray(dataset["Z"][:1], dtype=jnp.int32)
+        _R = jnp.asarray(dataset["R"][:1], dtype=jnp.float32)
+        if _R.ndim == 4: _R = _R.squeeze(1)
+        _Ef = jnp.asarray(dataset["Ef"][:1], dtype=jnp.float32)
+        _N = _Z.shape[1]
+        _dst, _src = e3x.ops.sparse_pairwise_indices(_N)
+        _dst = jnp.asarray(_dst, dtype=jnp.int32)
+        _src = jnp.asarray(_src, dtype=jnp.int32)
+        _bs = jnp.repeat(jnp.arange(1, dtype=jnp.int32), _N)
+        _off = jnp.arange(1, dtype=jnp.int32) * _N
+        _df = (_dst[None,:] + _off[:,None]).reshape(-1)
+        _sf = (_src[None,:] + _off[:,None]).reshape(-1)
+        ref_params = model.init(_key, atomic_numbers=_Z, positions=_R, Ef=_Ef,
+                                dst_idx_flat=_df, src_idx_flat=_sf,
+                                batch_segments=_bs, batch_size=1, dst_idx=_dst, src_idx=_src)
+        print_params_structure(ref_params, "model.init() reference")
+        # Compare tree structures
+        import jax
+        loaded_leaves = jax.tree_util.tree_leaves(params)
+        ref_leaves = jax.tree_util.tree_leaves(ref_params)
+        print(f"[DIAG] Loaded params: {len(loaded_leaves)} leaves")
+        print(f"[DIAG] model.init():  {len(ref_leaves)} leaves")
+        if len(loaded_leaves) != len(ref_leaves):
+            print(f"⚠ TREE STRUCTURE MISMATCH! This is likely the bug.")
+            # Show shape comparison
+            for i, (ll, rl) in enumerate(zip(loaded_leaves, ref_leaves)):
+                if hasattr(ll, 'shape') and hasattr(rl, 'shape'):
+                    match = "✓" if ll.shape == rl.shape else "✗ MISMATCH"
+                    print(f"  leaf {i}: loaded={ll.shape} init={rl.shape} {match}")
+    except Exception as e:
+        print(f"[DIAG] Could not verify params structure: {e}")
     
     # Prepare test data
     print(f"\nPreparing test data...")
