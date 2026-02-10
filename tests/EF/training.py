@@ -366,7 +366,7 @@ class MessagePassingModel(nn.Module):
             lambda rng, shape: jnp.zeros(shape, dtype=positions.dtype),
             (self.max_atomic_number + 1,)
         )
-        atomic_energies = nn.Dense(1, use_bias=False, kernel_init=jax.nn.initializers.zeros)(x)
+        atomic_energies = nn.Dense(1, use_bias=True, kernel_init=jax.nn.initializers.zeros)(x)
         atomic_energies = jnp.squeeze(atomic_energies, axis=(-1, -2, -3))  # (B*N,)
         atomic_energies = atomic_energies + element_bias[atomic_numbers_flat]
         energy = atomic_energies.reshape(B, N).sum(axis=1)  # (B,)
