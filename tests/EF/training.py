@@ -347,10 +347,7 @@ class MessagePassingModel(nn.Module):
         dipoles_batched = atomic_dipoles.reshape(B, N, 3)  # (B, N, 3)
 
         
-        # add a Coulomb term to the energy 
-        coulomb_energy = jnp.sum(charges_batched[:, :, None] * positions_batched, axis=1)  # (B, 3)
-        
-        energy = energy + coulomb_energy
+
 
 
         # Center of mass (using atomic masses or uniform weighting)
@@ -395,6 +392,10 @@ class MessagePassingModel(nn.Module):
             )
             coupling = coupling * learnable_coupling
             energy = energy + coupling
+
+        # add a Coulomb term to the energy 
+        coulomb_energy = jnp.sum(charges_batched[:, :, None] * positions_batched, axis=1)  # (B, 3)
+        energy = energy + coulomb_energy * HARTREE_TO_EV * 14.399645 # convert to eV
 
         # Proxy energy for force differentiation
         return -jnp.sum(energy), energy, dipole
