@@ -335,12 +335,7 @@ class MessagePassingModel(nn.Module):
 
             coupling = jnp.sum(dipole * Ef , axis=-1)  # (B,)  mu·Ef_input
             coupling = coupling * self.field_scale * HARTREE_TO_EV  # -> eV
-            learnable_coupling = self.param(
-                "learnable_coupling",
-                lambda rng, shape: jnp.ones(shape, dtype=positions.dtype),
-                (1,)
-            )
-            coupling = coupling * learnable_coupling
+            
             energy = energy - coupling
 
         # add a Coulomb term to the energy
@@ -352,7 +347,7 @@ class MessagePassingModel(nn.Module):
         # Sum per molecule (each pair counted twice in neighbor list, so divide by 2)
         edge_batch = batch_segments[dst_idx_flat]  # (B*E,) batch index per edge
         coulomb_energy = jax.ops.segment_sum(pair_coulomb, edge_batch, num_segments=B) / 2.0  # (B,)
-        energy = energy + coulomb_energy * HARTREE_TO_EV * 14.399645  # Coulomb constant in eV·Å/e²
+        energy = energy - coulomb_energy * HARTREE_TO_EV * 14.399645  # Coulomb constant in eV·Å/e²
 
         # Proxy energy for force differentiation
         return -jnp.sum(energy), energy, dipole
