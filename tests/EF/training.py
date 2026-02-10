@@ -262,7 +262,6 @@ class MessagePassingModel(nn.Module):
             x = e3x.nn.add(x, xEF)
             x = e3x.nn.TensorDense(max_degree=self.max_degree)(x)
             x = e3x.nn.add(x, y)
-            x = e3x.nn.hard_tanh(x)
 
         for i in range(4):
             x = e3x.nn.Dense(self.features)(x)
