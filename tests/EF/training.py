@@ -323,16 +323,6 @@ class MessagePassingModel(nn.Module):
         atomic_energies = atomic_energies + element_bias[atomic_numbers_flat]
         energy = atomic_energies.reshape(B, N).sum(axis=1)  # (B,)
 
-        # Optional explicit dipole-field coupling:
-        if self.dipole_field_coupling:
-
-            coupling = jnp.sum(-1.0 * dipole * Ef , axis=-1)  # (B,)  mu·Ef_input
-            coupling = coupling * self.field_scale * HARTREE_TO_EV  # -> eV
-            coupling = nn.Dense(1, use_bias=False, kernel_init=jax.nn.initializers.zeros)(coupling)
-            # coupling = jnp.squeeze(coupling, axis=(-1, -2, -3))  # (B,)
-            
-            energy = energy + coupling
-
         # add a Coulomb term to the energy
         # Pairwise Coulomb: E_coul = 0.5 * Σ_{i≠j} q_i * q_j / r_ij
         r_ij = jnp.linalg.norm(displacements, axis=-1)  # (B*E,)
@@ -343,6 +333,15 @@ class MessagePassingModel(nn.Module):
         edge_batch = batch_segments[dst_idx_flat]  # (B*E,) batch index per edge
         coulomb_energy = jax.ops.segment_sum(pair_coulomb, edge_batch, num_segments=B) / 2.0  # (B,)
         energy = energy + coulomb_energy * 14.399645  # Coulomb constant in eV·Å/e²
+
+
+        # Optional explicit dipole-field coupling:
+        if self.dipole_field_coupling:
+
+            coupling = jnp.sum(-1.0 * dipole * Ef , axis=-1)  # (B,)  mu·Ef_input
+            coupling = coupling * self.field_scale * HARTREE_TO_EV  # -> eV
+            
+            energy = energy + coupling
 
         # Proxy energy for force differentiation
         return -jnp.sum(energy), energy, dipole
