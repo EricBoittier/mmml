@@ -280,15 +280,44 @@ def compute_force_metrics(predictions, targets):
     mae_overall = np.mean(np.abs(errors))
     rmse_overall = np.sqrt(np.mean(errors**2))
     
+    # R² overall (treating all components as one flat array)
+    ss_res_all = np.sum(errors**2)
+    ss_tot_all = np.sum((targets - np.mean(targets))**2)
+    r2_overall = 1 - (ss_res_all / ss_tot_all) if ss_tot_all > 0 else 0.0
+    
+    # R² per component
+    def _r2(pred, targ):
+        ss_res = np.sum((pred - targ)**2)
+        ss_tot = np.sum((targ - np.mean(targ))**2)
+        return 1 - (ss_res / ss_tot) if ss_tot > 0 else 0.0
+    
+    r2_x = _r2(predictions[:, 0], targets[:, 0])
+    r2_y = _r2(predictions[:, 1], targets[:, 1])
+    r2_z = _r2(predictions[:, 2], targets[:, 2])
+    
+    # R² for magnitude
+    r2_magnitude = _r2(pred_mags, target_mags)
+    
+    # Pearson R overall (flat)
+    flat_pred = predictions.ravel()
+    flat_targ = targets.ravel()
+    r_overall = np.corrcoef(flat_pred, flat_targ)[0, 1] if len(flat_pred) > 1 else 0.0
+    
     return {
         'mae_overall': mae_overall,
         'rmse_overall': rmse_overall,
+        'r2_overall': r2_overall,
+        'r_overall': r_overall,
         'mae_x': mae_x,
         'mae_y': mae_y,
         'mae_z': mae_z,
+        'r2_x': r2_x,
+        'r2_y': r2_y,
+        'r2_z': r2_z,
         'mae_components': mae_components,
         'mae_magnitude': mae_magnitude,
         'rmse_magnitude': rmse_magnitude,
+        'r2_magnitude': r2_magnitude,
     }
 
 
@@ -395,12 +424,15 @@ def evaluate_dataset(model, params, data, batch_size=64, dataset_name="test"):
         print(f"\nForce Metrics for {dataset_name}:")
         print(f"  MAE (overall): {force_metrics['mae_overall_kcal_mol_ang']:.4f} kcal/(mol·Å) ({force_metrics['mae_overall']:.6f} eV/Å)")
         print(f"  RMSE (overall): {force_metrics['rmse_overall_kcal_mol_ang']:.4f} kcal/(mol·Å) ({force_metrics['rmse_overall']:.6f} eV/Å)")
+        print(f"  R²:   {force_metrics['r2_overall']:.6f}")
+        print(f"  R:    {force_metrics['r_overall']:.6f}")
         print(f"  MAE (magnitude): {force_metrics['mae_magnitude_kcal_mol_ang']:.4f} kcal/(mol·Å) ({force_metrics['mae_magnitude']:.6f} eV/Å)")
         print(f"  RMSE (magnitude): {force_metrics['rmse_magnitude_kcal_mol_ang']:.4f} kcal/(mol·Å) ({force_metrics['rmse_magnitude']:.6f} eV/Å)")
+        print(f"  R² (magnitude): {force_metrics['r2_magnitude']:.6f}")
         print(f"  MAE per component:")
-        print(f"    X: {force_metrics['mae_x_kcal_mol_ang']:.4f} kcal/(mol·Å) ({force_metrics['mae_x']:.6f} eV/Å)")
-        print(f"    Y: {force_metrics['mae_y_kcal_mol_ang']:.4f} kcal/(mol·Å) ({force_metrics['mae_y']:.6f} eV/Å)")
-        print(f"    Z: {force_metrics['mae_z_kcal_mol_ang']:.4f} kcal/(mol·Å) ({force_metrics['mae_z']:.6f} eV/Å)")
+        print(f"    X: {force_metrics['mae_x_kcal_mol_ang']:.4f} kcal/(mol·Å) ({force_metrics['mae_x']:.6f} eV/Å)  R²: {force_metrics['r2_x']:.6f}")
+        print(f"    Y: {force_metrics['mae_y_kcal_mol_ang']:.4f} kcal/(mol·Å) ({force_metrics['mae_y']:.6f} eV/Å)  R²: {force_metrics['r2_y']:.6f}")
+        print(f"    Z: {force_metrics['mae_z_kcal_mol_ang']:.4f} kcal/(mol·Å) ({force_metrics['mae_z']:.6f} eV/Å)  R²: {force_metrics['r2_z']:.6f}")
     else:
         all_force_predictions = None
         all_force_targets = None
