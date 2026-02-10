@@ -13,7 +13,7 @@ Usage:
 import os
 
 # --- Environment (must be set before importing jax) ---
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".99"
 
 import warnings
@@ -367,6 +367,18 @@ def evaluate_dataset(model, params, data, batch_size=64, dataset_name="test"):
     if has_forces:
         all_force_predictions = np.concatenate(all_force_predictions)
         all_force_targets = np.concatenate(all_force_targets)
+        
+        # Diagnostic: compare with training's mean_absolute_error_forces
+        print(f"\n  [DIAG] force shapes: pred={all_force_predictions.shape}, targ={all_force_targets.shape}")
+        print(f"  [DIAG] target stats: mean={np.mean(all_force_targets):.6f}, std={np.std(all_force_targets):.6f}, max|F|={np.max(np.abs(all_force_targets)):.6f} eV/Å")
+        print(f"  [DIAG] pred   stats: mean={np.mean(all_force_predictions):.6f}, std={np.std(all_force_predictions):.6f}, max|F|={np.max(np.abs(all_force_predictions)):.6f} eV/Å")
+        try:
+            from training import mean_absolute_error_forces
+            training_mae = float(mean_absolute_error_forces(
+                jnp.asarray(all_force_predictions), jnp.asarray(all_force_targets)))
+            print(f"  [DIAG] training.mean_absolute_error_forces: {training_mae:.6f} eV/Å ({training_mae * 23.06:.4f} kcal/mol/Å)")
+        except Exception as e:
+            print(f"  [DIAG] Could not import training MAE function: {e}")
         
         force_metrics = compute_force_metrics(all_force_predictions, all_force_targets)
         

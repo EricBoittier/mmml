@@ -938,6 +938,31 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
         # Block once at the end of epoch for logging (allows async execution during training)
         jax.block_until_ready(valid_loss)
         
+        # ---- Force MAE diagnostic (non-JIT verification) ----
+        if epoch == 1 or epoch == num_epochs or epoch % 50 == 0:
+            debug_batch = valid_batches[0]
+            _, debug_forces, _ = energy_and_forces(
+                model.apply, ema_params,
+                atomic_numbers=debug_batch["atomic_numbers"],
+                positions=debug_batch["positions"],
+                Ef=debug_batch["electric_field"],
+                dst_idx_flat=debug_batch["dst_idx_flat"],
+                src_idx_flat=debug_batch["src_idx_flat"],
+                batch_segments=debug_batch["batch_segments"],
+                batch_size=batch_size,
+            )
+            jax.block_until_ready(debug_forces)
+            f_pred = np.asarray(debug_forces)
+            f_targ = np.asarray(debug_batch["forces"])
+            debug_mae = float(np.mean(np.abs(f_pred - f_targ)))
+            debug_rmse = float(np.sqrt(np.mean((f_pred - f_targ)**2)))
+            print(f"    [DIAG] force shapes:  pred={f_pred.shape}, targ={f_targ.shape}")
+            print(f"    [DIAG] target stats:  mean={float(np.mean(f_targ)):.6f}, std={float(np.std(f_targ)):.6f}, max|F|={float(np.max(np.abs(f_targ))):.6f} eV/Å")
+            print(f"    [DIAG] pred   stats:  mean={float(np.mean(f_pred)):.6f}, std={float(np.std(f_pred)):.6f}, max|F|={float(np.max(np.abs(f_pred))):.6f} eV/Å")
+            print(f"    [DIAG] non-JIT force MAE:  {debug_mae:.6f} eV/Å  ({debug_mae * 23.06:.4f} kcal/mol/Å)")
+            print(f"    [DIAG] non-JIT force RMSE: {debug_rmse:.6f} eV/Å  ({debug_rmse * 23.06:.4f} kcal/mol/Å)")
+            print(f"    [DIAG] JIT eval_step MAE:  {float(valid_forces_mae):.6f} eV/Å  ({valid_forces_mae_val:.4f} kcal/mol/Å)")
+        
         print(f"epoch: {epoch:3d}                    train:   valid:")
         print(f"    loss [a.u.]             {float(train_loss): 8.6f} {float(valid_loss): 8.6f}")
         print(f"    energy loss [a.u.]      {float(train_energy_mae**2): 8.6f} {float(valid_energy_loss): 8.6f}")
