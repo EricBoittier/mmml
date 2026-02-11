@@ -726,14 +726,7 @@ def train_model(
         train_esp_preds = []
         train_esp_targets = []
         train_esp_errors = []
-<<<<<<< HEAD
         train_esp_masks = []
-=======
-<<<<<<< HEAD
-=======
-        train_esp_masks = []
->>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
->>>>>>> 9e4472215e92126d15a49e2c777a808ed09f67b9
         train_loss_components = []
         
         for i, batch in enumerate(train_batches):
@@ -768,14 +761,7 @@ def train_model(
             train_esp_preds.append(esp_pred)
             train_esp_targets.append(esp_target)
             train_esp_errors.append(esp_error)
-<<<<<<< HEAD
             train_esp_masks.append(esp_mask)
-=======
-<<<<<<< HEAD
-=======
-            train_esp_masks.append(esp_mask)
->>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
->>>>>>> 9e4472215e92126d15a49e2c777a808ed09f67b9
             train_loss_components.append(loss_components)
 
         # Concatenate all predictions and targets (block once at end of epoch)
@@ -953,14 +939,7 @@ def train_model(
         valid_esp_preds = []
         valid_esp_targets = []
         valid_esp_errors = []
-<<<<<<< HEAD
         valid_esp_masks = []
-=======
-<<<<<<< HEAD
-=======
-        valid_esp_masks = []
->>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
->>>>>>> 9e4472215e92126d15a49e2c777a808ed09f67b9
         valid_loss_components = []
         
         for i, batch in enumerate(valid_batches):
@@ -983,14 +962,7 @@ def train_model(
             valid_esp_preds.append(esp_pred)
             valid_esp_targets.append(esp_target)
             valid_esp_errors.append(esp_error)
-<<<<<<< HEAD
             valid_esp_masks.append(esp_mask)
-=======
-<<<<<<< HEAD
-=======
-            valid_esp_masks.append(esp_mask)
->>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
->>>>>>> 9e4472215e92126d15a49e2c777a808ed09f67b9
             valid_loss_components.append(loss_components)
 
         # Concatenate all predictions and targets (block once at end of epoch)

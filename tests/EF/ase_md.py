@@ -179,15 +179,6 @@ def main(args=None):
         atoms = ase.Atoms(numbers=Z, positions=R)
 
     # Set electric field
-<<<<<<< HEAD
-    Ef = np.array(args.electric_field, dtype=np.float64)
-    # If electric field is all zeros and dataset has Ef, use dataset value
-    if np.allclose(Ef, 0.0) and args.xyz is None:
-        dataset = np.load(args.data, allow_pickle=True)
-        if "Ef" in dataset.files:
-            Ef = np.array(dataset["Ef"][args.index], dtype=np.float64)
-            print(f"  Using electric field from dataset: {Ef}")
-=======
     if args.electric_field is not None:
         Ef = np.array(args.electric_field, dtype=np.float64)
         print(f"  Electric field (CLI): {Ef}")
@@ -202,7 +193,6 @@ def main(args=None):
     else:
         Ef = np.zeros(3, dtype=np.float64)
         print(f"  Electric field (default): {Ef}")
->>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
     atoms.info['electric_field'] = Ef
 
     print(f"  Number of atoms: {len(atoms)}")
@@ -225,8 +215,6 @@ def main(args=None):
     print(f"  Initial energy: {energy:.6f} eV ({energy * 23.06035:.4f} kcal/mol)")
     print(f"  Max force: {np.max(np.abs(forces)):.6f} eV/A")
 
-<<<<<<< HEAD
-=======
     # --- Optional geometry optimisation before MD ---
     if args.optimize:
         from ase.optimize import BFGS, FIRE
@@ -249,7 +237,6 @@ def main(args=None):
         print(f"  Optimised max|F|: {np.max(np.abs(atoms.get_forces())):.6f} eV/Å")
         print(f"  Opt trajectory  : {opt_traj}")
 
->>>>>>> bdfda8dbbf49b1f2d64d87d88d2231ee12619451
     # --- Initialize velocities ---
     print(f"\nInitializing velocities at T={args.temperature} K (seed={args.seed})...")
     np.random.seed(args.seed)
