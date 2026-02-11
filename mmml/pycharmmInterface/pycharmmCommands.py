@@ -67,9 +67,9 @@ if @zdim .gt. @bsiz then
    set bsiz = @zdim
 endif
 
-crystal read crystal_image.str
+open read unit 10 card name crystal_image.str
 crystal defi cubic @bsiz @bsiz @bsiz 90. 90. 90.
-crystal build 
+CRYSTAL READ UNIT 10 CARD
 image byres xcen 0.0 ycen 0.0 zcen 0.0 sele all end"""
 
 nbonds = """!#########################################
@@ -109,9 +109,9 @@ if @zdim .gt. @bsiz then
    set bsiz = @zdim
 endif
 
-crystal read crystal_image.str
+open read unit 10 card name crystal_image.str
 crystal defi cubic @bsiz @bsiz @bsiz 90. 90. 90.
-crystal build 
+CRYSTAL READ UNIT 10 CARD
 image byres xcen 0.0 ycen 0.0 zcen 0.0 sele all end"""
 
 mini = """!#########################################
@@ -254,9 +254,10 @@ if @zdim .gt. @bsiz then
    set bsiz = @zdim
 endif
 
-crystal read crystal_image.str
+open read unit 10 card name crystal_image.str
 crystal defi cubic @bsiz @bsiz @bsiz 90. 90. 90.
-crystal build 
+CRYSTAL READ UNIT 10 CARD
+
 image byres xcen 0.0 ycen 0.0 zcen 0.0 sele all end"""
 
 nbonds = """!#########################################
