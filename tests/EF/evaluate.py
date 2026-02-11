@@ -227,31 +227,34 @@ def compute_metrics(predictions, targets, convert_to_kcal_mol=True):
 
 @functools.partial(jax.jit, static_argnames=("model_apply", "batch_size"))
 def inference_step(model_apply, batch, batch_size, params):
-    """Single inference step - returns energy, forces, and dipole."""
-    # Compute energy and dipole
-    energy, dipole = model_apply(
-        params,
-        atomic_numbers=batch["atomic_numbers"],
-        positions=batch["positions"],
-        Ef=batch["electric_field"],
-        dst_idx_flat=batch["dst_idx_flat"],
-        src_idx_flat=batch["src_idx_flat"],
-        batch_segments=batch["batch_segments"],
-        batch_size=batch_size,
-    )
+    """Single inference step - returns energy, forces, and dipole.
     
-    # Compute forces
-    from training import energy_and_forces
-    _, forces, _ = energy_and_forces(
-        model_apply, params,
-        atomic_numbers=batch["atomic_numbers"],
-        positions=batch["positions"],
-        Ef=batch["electric_field"],
-        dst_idx_flat=batch["dst_idx_flat"],
-        src_idx_flat=batch["src_idx_flat"],
-        batch_segments=batch["batch_segments"],
-        batch_size=batch_size,
-    )
+    Forces are computed by differentiating through model_apply with
+    mutable=['intermediates'], matching the exact pattern used in train_step.
+    This is critical because the model uses sow() for atomic charges/dipoles,
+    and the Flax tracing behavior differs with/without mutable collections,
+    which affects gradient computation.
+    """
+    # Compute energy, forces, and dipole in a single gradient pass
+    # This matches train_step's force computation pattern exactly:
+    #   model_apply(..., mutable=['intermediates']) inside jax.value_and_grad
+    def energy_fn(pos):
+        (energy, dipole), state = model_apply(
+            params,
+            atomic_numbers=batch["atomic_numbers"],
+            positions=pos,
+            Ef=batch["electric_field"],
+            dst_idx_flat=batch["dst_idx_flat"],
+            src_idx_flat=batch["src_idx_flat"],
+            batch_segments=batch["batch_segments"],
+            batch_size=batch_size,
+            mutable=['intermediates'],
+        )
+        return -jnp.sum(energy), (energy, dipole)
+
+    (_, (energy, dipole)), forces = jax.value_and_grad(
+        energy_fn, has_aux=True
+    )(batch["positions"])
     
     return energy, forces, dipole
 
@@ -1047,8 +1050,14 @@ def main(args=None):
     # Print loaded params structure
     print_params_structure(params, "loaded params for evaluation")
     
-    # Verify params work with model by doing a quick init comparison
-    print("\n[DIAG] Verifying params structure against model.init()...")
+    # Initialize intermediates collection via a dummy forward pass.
+    # This is critical: the model uses sow() for atomic charges/dipoles,
+    # and Flax's gradient tracing behaves differently when the 'intermediates'
+    # collection is present vs absent in the variables dict. During training,
+    # ema_params always have {'params': {...}, 'intermediates': {...}}, but
+    # loaded params only have {'params': {...}} (intermediates are stripped
+    # before saving). We must restore the intermediates structure.
+    print("\n[DIAG] Initializing intermediates collection...")
     try:
         _key = jax.random.PRNGKey(99)
         _Z = jnp.asarray(dataset["Z"][:1], dtype=jnp.int32)
@@ -1063,24 +1072,43 @@ def main(args=None):
         _off = jnp.arange(1, dtype=jnp.int32) * _N
         _df = (_dst[None,:] + _off[:,None]).reshape(-1)
         _sf = (_src[None,:] + _off[:,None]).reshape(-1)
+        
+        # Do a forward pass with mutable=['intermediates'] to get the collection structure
+        _, init_state = model.apply(
+            params,
+            atomic_numbers=_Z, positions=_R, Ef=_Ef,
+            dst_idx_flat=_df, src_idx_flat=_sf,
+            batch_segments=_bs, batch_size=1,
+            mutable=['intermediates'],
+        )
+        
+        # Add intermediates to params (matching training's ema_params structure)
+        if 'intermediates' in init_state:
+            params = {**params, 'intermediates': init_state['intermediates']}
+            print(f"✓ Added 'intermediates' collection to params (keys: {list(init_state['intermediates'].keys())})")
+        
+        # Also verify param structure against model.init()
         ref_params = model.init(_key, atomic_numbers=_Z, positions=_R, Ef=_Ef,
                                 dst_idx_flat=_df, src_idx_flat=_sf,
                                 batch_segments=_bs, batch_size=1, dst_idx=_dst, src_idx=_src)
         print_params_structure(ref_params, "model.init() reference")
-        # Compare tree structures
-        loaded_leaves = jax.tree_util.tree_leaves(params)
-        ref_leaves = jax.tree_util.tree_leaves(ref_params)
+        # Compare tree structures (params only, not intermediates)
+        loaded_leaves = jax.tree_util.tree_leaves(params.get('params', params))
+        ref_leaves = jax.tree_util.tree_leaves(ref_params.get('params', ref_params))
         print(f"[DIAG] Loaded params: {len(loaded_leaves)} leaves")
         print(f"[DIAG] model.init():  {len(ref_leaves)} leaves")
         if len(loaded_leaves) != len(ref_leaves):
-            print(f"⚠ TREE STRUCTURE MISMATCH! This is likely the bug.")
-            # Show shape comparison
+            print(f"⚠ TREE STRUCTURE MISMATCH! This is likely a bug.")
             for i, (ll, rl) in enumerate(zip(loaded_leaves, ref_leaves)):
                 if hasattr(ll, 'shape') and hasattr(rl, 'shape'):
                     match = "✓" if ll.shape == rl.shape else "✗ MISMATCH"
                     print(f"  leaf {i}: loaded={ll.shape} init={rl.shape} {match}")
+        else:
+            print(f"✓ Param tree structure matches ({len(loaded_leaves)} leaves)")
     except Exception as e:
-        print(f"[DIAG] Could not verify params structure: {e}")
+        print(f"[DIAG] Could not initialize intermediates: {e}")
+        import traceback
+        traceback.print_exc()
     
     # Prepare test data
     print(f"\nPreparing test data...")
