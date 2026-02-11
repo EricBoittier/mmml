@@ -366,7 +366,7 @@ class MessagePassingModel(nn.Module):
             lambda rng, shape: jnp.zeros(shape, dtype=positions.dtype),
             (self.max_atomic_number + 1,)
         )
-        atomic_energies = nn.Dense(1, use_bias=True, kernel_init=jax.nn.initializers.zeros)(x)
+        atomic_energies = nn.Dense(1, use_bias=False, kernel_init=jax.nn.initializers.zeros)(x)
         atomic_energies = jnp.squeeze(atomic_energies, axis=(-1, -2, -3))  # (B*N,)
         atomic_energies = atomic_energies + element_bias[atomic_numbers_flat]
         energy = atomic_energies.reshape(B, N).sum(axis=1)  # (B,)
@@ -824,12 +824,34 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
     if initial_params is not None:
         print("  Restarting from provided parameters...")
         
+        # Detect if user accidentally loaded a config file instead of a params file.
+        # Config files have keys like 'uuid', 'model', 'training', 'data'.
+        # Params files have keys like 'params' (Flax format) or Dense/Embed layers (flat format).
+        _config_keys = {'uuid', 'model', 'training', 'data'}
+        if isinstance(initial_params, dict) and _config_keys.intersection(initial_params.keys()):
+            raise ValueError(
+                f"The loaded restart file appears to be a CONFIG file, not a PARAMS file.\n"
+                f"  Top-level keys found: {list(initial_params.keys())}\n"
+                f"  Config-like keys: {_config_keys.intersection(initial_params.keys())}\n"
+                f"  Expected: a params file with top-level key 'params' (e.g., params-UUID.json)\n"
+                f"  Hint: use --restart params-UUID.json, not config-UUID.json"
+            )
+        
         # Normalize initial_params to standard Flax format {'params': {...}}
         # The loaded params might be:
         #   (a) {'params': {...}}                          — standard Flax format
         #   (b) {'params': {...}, 'intermediates': {...}}   — full state (intermediates will be re-initialized)
         #   (c) {...flat weight dict...}                   — no 'params' wrapper (e.g., from a different pipeline)
         if isinstance(initial_params, dict) and 'params' not in initial_params:
+            # Validate: check that leaves are array-like, not strings/dicts without arrays
+            leaves = jax.tree_util.tree_leaves(initial_params)
+            has_arrays = any(hasattr(leaf, 'shape') for leaf in leaves)
+            if not has_arrays:
+                raise ValueError(
+                    f"Loaded restart file does not contain array data.\n"
+                    f"  Top-level keys: {list(initial_params.keys())[:10]}\n"
+                    f"  This doesn't look like a params file. Check the --restart path."
+                )
             # Case (c): wrap flat weights in {'params': ...}
             print("  Note: loaded params have no 'params' key — wrapping as {'params': <loaded>}")
             initial_params = {'params': initial_params}
