@@ -67,7 +67,7 @@ if @zdim .gt. @bsiz then
    set bsiz = @zdim
 endif
 
-open read unit 10 card name crystal_image.str
+stream crystal_image.str
 crystal defi cubic @bsiz @bsiz @bsiz 90. 90. 90.
 crystal build 
 image byres xcen 0.0 ycen 0.0 zcen 0.0 sele all end"""
@@ -109,7 +109,7 @@ if @zdim .gt. @bsiz then
    set bsiz = @zdim
 endif
 
-open read unit 10 card name crystal_image.str
+stream crystal_image.str
 crystal defi cubic @bsiz @bsiz @bsiz 90. 90. 90.
 crystal build 
 image byres xcen 0.0 ycen 0.0 zcen 0.0 sele all end"""
@@ -254,7 +254,7 @@ if @zdim .gt. @bsiz then
    set bsiz = @zdim
 endif
 
-open read unit 10 card name crystal_image.str
+stream crystal_image.str
 crystal defi cubic @bsiz @bsiz @bsiz 90. 90. 90.
 crystal build 
 image byres xcen 0.0 ycen 0.0 zcen 0.0 sele all end"""
