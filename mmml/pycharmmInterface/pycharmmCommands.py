@@ -256,7 +256,7 @@ endif
 
 open read unit 10 card name crystal_image.str
 crystal defi cubic @bsiz @bsiz @bsiz 90. 90. 90.
-crystal build cutoff 14.0 nope 0
+crystal build 
 image byres xcen 0.0 ycen 0.0 zcen 0.0 sele all end"""
 
 nbonds = """!#########################################
@@ -298,7 +298,7 @@ endif
 
 open read unit 10 card name crystal_image.str
 crystal defi cubic @bsiz @bsiz @bsiz 90. 90. 90.
-crystal build cutoff 14.0 nope 0
+crystal build 
 image byres xcen 0.0 ycen 0.0 zcen 0.0 sele all end"""
 
 mini = """!#########################################
