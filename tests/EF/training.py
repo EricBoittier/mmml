@@ -823,6 +823,17 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
     # Initialize params - either from restart file or from scratch
     if initial_params is not None:
         print("  Restarting from provided parameters...")
+        
+        # Normalize initial_params to standard Flax format {'params': {...}}
+        # The loaded params might be:
+        #   (a) {'params': {...}}                          — standard Flax format
+        #   (b) {'params': {...}, 'intermediates': {...}}   — full state (intermediates will be re-initialized)
+        #   (c) {...flat weight dict...}                   — no 'params' wrapper (e.g., from a different pipeline)
+        if isinstance(initial_params, dict) and 'params' not in initial_params:
+            # Case (c): wrap flat weights in {'params': ...}
+            print("  Note: loaded params have no 'params' key — wrapping as {'params': <loaded>}")
+            initial_params = {'params': initial_params}
+        
         # Ensure params have the correct structure for model.apply with mutable=['intermediates'].
         # If intermediates were stripped during load (correct behavior), we need to
         # re-initialize them by doing a dummy model.init and merging the weights.
