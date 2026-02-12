@@ -740,7 +740,7 @@ inbfrq -1 imgfrq -1
         # Metal units: eV, Å, ps, amu (JAX-MD standard)
         K_B = 8.617333262e-5  # eV/K
         dt = args.timestep * 0.001  # args.timestep is in fs; JAX-MD uses ps (1 fs = 0.001 ps)
-        target_temp_K = 100.0
+        target_temp_K = T
         kT = K_B * target_temp_K  # eV
         steps_per_recording = 25
         rng_key = jax.random.PRNGKey(0)
@@ -753,7 +753,7 @@ inbfrq -1 imgfrq -1
         def run_sim(
             key,
             total_steps=args.nsteps_jaxmd,
-            steps_per_recording=1,
+            steps_per_recording=steps_per_recording,
             R=R,
         ):
             total_records = total_steps // steps_per_recording
@@ -868,27 +868,28 @@ inbfrq -1 imgfrq -1
                     
                 # Print progress every 10 steps
                 if i % 10 == 0:
-                    time = i * steps_per_recording * dt
-                    
+                    time_ps = i * steps_per_recording * dt
                     # Temperature: quantity.temperature needs mass to broadcast with momentum (n,3)
                     kT_curr = quantity.temperature(momentum=state.momentum, mass=Si_mass[:, None])
                     temp = float(kT_curr / K_B)
-                    
                     energy = float(wrapped_energy_fn(state.position))
-                    print(f"{time:10.2f}\t{energy:10.4f}\t{temp:10.2f}")
-                    
-                    # ========================================================================
-                    # ERROR HANDLING AND SIMULATION MONITORING
-                    # ========================================================================
-                    
-                    # Check for NaN energies (indicates numerical instability)
-                    if jnp.isnan(energy):
-                        print("NaN energy caught")
-                        print(f"Simulation terminated: E={energy:.4f}eV")
-                        # Only try to restore previous position if we have positions stored
+                    print(f"{time_ps:10.4f}\t{energy:10.4f}\t{temp:10.2f}")
+
+                    # Stop on numerical instability (NaN, Inf, or energy blow-up to 0)
+                    if not np.isfinite(energy) or not np.isfinite(temp):
+                        print(f"Numerical instability at step {i * steps_per_recording}; stopping.")
                         if len(nhc_positions) > 1:
                             nhc_positions = nhc_positions[:-1]
-                            # Create new state with previous position
+                            state = type(state)(
+                                position=nhc_positions[-1],
+                                momentum=state.momentum,
+                                mass=state.mass
+                            )
+                        break
+                    if energy >= 0 and energy_initial < 0:
+                        print(f"Energy blow-up at step {i * steps_per_recording} (E={energy:.4f}); stopping.")
+                        if len(nhc_positions) > 1:
+                            nhc_positions = nhc_positions[:-1]
                             state = type(state)(
                                 position=nhc_positions[-1],
                                 momentum=state.momentum,
@@ -945,7 +946,7 @@ inbfrq -1 imgfrq -1
     # Main JAXMD simulation loop
     for j in range(1):
         sim_key, data_key = jax.random.split(data_key, 2)
-        s = set_up_nhc_sim_routine(atoms)
+        s = set_up_nhc_sim_routine(atoms, T=temperature)
         out_positions, _ = run_sim_loop(s, sim_key)
 
         for i in range(len(out_positions)):
