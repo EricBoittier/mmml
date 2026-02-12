@@ -647,69 +647,22 @@ inbfrq -1 imgfrq -1
         # Use actual cell size when PBC is set; otherwise fallback for non-periodic
         BOXSIZE = float(args.cell) if args.cell is not None else 1000.0
         use_pbc = args.cell is not None
-        print(f"JAX-MD BOXSIZE: {BOXSIZE} Å, PBC: {use_pbc}")
+        # Use the calculator's pbc_map for PBC (unwrap→coregister→wrap) to avoid
+        # monomer overlap. Our custom wrap_molecules wrapped each COM to [0,L)
+        # independently, causing monomers in different images to overlap → E=0, F=nan.
+        pbc_map_fn = getattr(atoms.calc, "pbc_map", None) if atoms.calc else None
+        print(f"JAX-MD BOXSIZE: {BOXSIZE} Å, PBC: {use_pbc}, pbc_map: {pbc_map_fn is not None}")
 
-        # Define molecular wrapping function to keep residues together (only for PBC)
-        def wrap_molecules(positions, n_atoms_per_monomer, n_monomers):
-            """
-            Wrap molecules to keep residues intact across periodic boundaries.
-            When PBC is disabled, returns positions unchanged.
-            """
-            if not use_pbc:
-                return positions
-            wrapped_positions = []
-            # Process each monomer separately
-            for i in range(n_monomers):
-                start_idx = i * n_atoms_per_monomer
-                end_idx = (i + 1) * n_atoms_per_monomer
-                monomer_positions = positions[start_idx:end_idx]
-                
-                # Calculate center of mass of the monomer
-                com = jnp.mean(monomer_positions, axis=0)
-                
-                # Wrap center of mass to box using periodic boundary conditions
-                wrapped_com = com - BOXSIZE * jnp.floor(com / BOXSIZE)
-                
-                # Apply the same translation to all atoms in the monomer
-                # This keeps the monomer intact while moving it to the wrapped position
-                translation = wrapped_com - com
-                wrapped_monomer = monomer_positions + translation
-                
-                wrapped_positions.append(wrapped_monomer)
-            
-            return jnp.concatenate(wrapped_positions, axis=0)
-        
-        # Create wrapped energy function that applies molecular wrapping
-        # This preserves momentum conservation while ensuring residue integrity
+        # Energy: pass positions directly; calculator applies pbc_map internally.
         @jit
         def wrapped_energy_fn(position, **kwargs):
-            """
-            Energy function that applies molecular wrapping before calculation.
-            
-            This function wraps molecular positions to maintain residue integrity
-            while preserving the physics of the simulation. The wrapping is applied
-            only during energy calculation, not during integration steps, which
-            maintains proper momentum conservation.
-            
-            Args:
-                position: Current atomic positions
-                **kwargs: Additional arguments passed to the energy function
-                
-            Returns:
-                Energy value with molecular wrapping applied
-            """
-            # Apply molecular wrapping before energy calculation
-            wrapped_position = wrap_molecules(position, args.n_atoms_monomer, args.n_monomers)
-            return jax_md_energy_fn(wrapped_position, **kwargs)
+            return jax_md_energy_fn(jnp.array(position), **kwargs)
 
-        # Use periodic space when PBC is set; our energy_fn does not use neighbor lists
-        # For PBC: use molecular wrapping in shift (not atom-wise) to avoid splitting
-        # molecules when they cross the box boundary.
+        # Shift: use pbc_map to wrap molecules (keeps monomers intact, coregisters correctly)
         _displacement, _shift_free = space.free()
-        if use_pbc:
+        if use_pbc and pbc_map_fn is not None:
             def shift(R, dR, **kwargs):
-                new_R = R + dR
-                return wrap_molecules(new_R, args.n_atoms_monomer, args.n_monomers)
+                return pbc_map_fn(R + dR)
             displacement = _displacement
         else:
             shift = _shift_free
@@ -895,10 +848,8 @@ inbfrq -1 imgfrq -1
 
             nhc_positions_out = []
             for R in nhc_positions:
-                if use_pbc:
-                    # Wrap positions into [0, BOXSIZE) for trajectory output.
-                    # space.transform multiplies R*box (wrong); use mod to wrap.
-                    R = jnp.mod(R, BOXSIZE)
+                if use_pbc and pbc_map_fn is not None:
+                    R = pbc_map_fn(R)
                 nhc_positions_out.append(R)
             return steps_completed, jnp.stack(nhc_positions_out)
 
