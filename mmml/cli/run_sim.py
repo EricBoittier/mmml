@@ -881,8 +881,8 @@ inbfrq -1 imgfrq -1
                                 mass=state.mass
                             )
                         break
-                    if energy >= 0 and energy_initial < 0:
-                        print(f"Energy blow-up at step {i * steps_per_recording} (E={energy:.4f}); stopping.")
+                    if e_pot >= 0 and energy_initial < 0:
+                        print(f"Energy blow-up at step {steps} (E_pot={e_pot:.4f}); stopping.")
                         if len(nhc_positions) > 1:
                             nhc_positions = nhc_positions[:-1]
                             state = type(state)(
