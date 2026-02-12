@@ -726,16 +726,15 @@ inbfrq -1 imgfrq -1
 
 
         # ========================================================================
-        # SIMULATION PARAMETERS (metal unit system from JAX-MD example)
+        # SIMULATION PARAMETERS (metal units: eV, Å, ps, amu)
         # ========================================================================
         unit = units.metal_unit_system()
-        timestep_fs = args.timestep  # fs, same as ASE
-        dt = timestep_fs * unit['time']
-        T_init = T * unit['temperature']
-        kT = T_init
+        # dt must be in ps: args.timestep is fs, 1 fs = 0.001 ps
+        dt = args.timestep * 0.001
+        kT = T * unit['temperature']
         steps_per_recording = 25
         rng_key = jax.random.PRNGKey(0)
-        print(f"JAX-MD NVE: dt={dt} (metal units), kT={kT} ({T} K), same timestep as ASE")
+        print(f"JAX-MD NVE: dt={dt} ps ({args.timestep} fs), kT={kT} ({T} K)")
 
         # NVE uses same displacement/shift as minimization
         init_fn, apply_fn = simulate.nve(wrapped_energy_fn, shift, dt)
@@ -828,18 +827,8 @@ inbfrq -1 imgfrq -1
                 print("Error: No valid positions for NVE; skipping JAX-MD simulation")
                 return 0, jnp.array([]).reshape(0, len(md_pos), 3)
 
-            # NVE init then manual momentum override for target temperature
+            # NVE init with temperature from metal units (init_fn handles momentum scaling)
             state = init_fn(key, md_pos, kT, mass=Si_mass)
-            # Overwrite momentum for controlled temperature
-            momentum_scale = jnp.sqrt(Si_mass[:, None] * kT)
-            key, mkey = jax.random.split(key)
-            scaled_momenta = momentum_scale * jax.random.normal(mkey, md_pos.shape)
-            state = type(state)(
-                position=state.position,
-                momentum=scaled_momenta,
-                mass=state.mass,
-                force=state.force
-            )
             print(f"Momentum initialized for {T} K")
             nhc_positions = []
 
