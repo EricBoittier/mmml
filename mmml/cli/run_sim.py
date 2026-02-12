@@ -739,12 +739,12 @@ inbfrq -1 imgfrq -1
         
         # Metal units: eV, Å, ps, amu (JAX-MD standard)
         K_B = 8.617333262e-5  # eV/K
-        dt = 0.001  # 1 fs = 0.001 ps
+        dt = 0.0005  # 0.5 fs = 0.0005 ps (conservative for stability)
         target_temp_K = 100.0
         kT = K_B * target_temp_K  # eV
         steps_per_recording = 25
         rng_key = jax.random.PRNGKey(0)
-        print(f"JAX-MD NVE: dt={dt} ps (1 fs), kT={kT:.6f} eV ({target_temp_K} K)")
+        print(f"JAX-MD NVE: dt={dt} ps, kT={kT:.6f} eV ({target_temp_K} K)")
 
         # NVE uses same displacement/shift as minimization
         init_fn, apply_fn = simulate.nve(wrapped_energy_fn, shift, dt)
