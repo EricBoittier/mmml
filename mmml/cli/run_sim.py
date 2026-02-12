@@ -220,7 +220,7 @@ def run(args: argparse.Namespace) -> int:
         import pandas as pd
         from mmml.pycharmmInterface.import_pycharmm import minimize
         import jax_md
-        from jax_md import space, quantity, simulate, partition, units
+        from jax_md import space, quantity, simulate, partition
         from ase.units import _amu
 
         import jax.numpy as jnp
@@ -836,9 +836,7 @@ inbfrq -1 imgfrq -1
                     return 0, jnp.array([]).reshape(0, len(md_pos), 3)
 
             # NVE init then manual momentum override for target temperature
-            target_temp = 100.0  # K
-            kT_target = K_B * target_temp  # eV
-            state = init_fn(key, md_pos, kT_target, mass=Si_mass)
+            state = init_fn(key, md_pos, kT, mass=Si_mass)
             # Overwrite momentum for controlled temperature
             momentum_scale = jnp.sqrt(Si_mass[:, None] * kT)
             key, mkey = jax.random.split(key)
