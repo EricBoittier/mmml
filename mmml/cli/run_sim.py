@@ -703,11 +703,17 @@ inbfrq -1 imgfrq -1
             return jax_md_energy_fn(wrapped_position, **kwargs)
 
         # Use periodic space when PBC is set; our energy_fn does not use neighbor lists
-        displacement, shift = (
-            space.periodic(BOXSIZE, wrapped=True)
-            if use_pbc
-            else space.free()
-        )
+        # For PBC: use molecular wrapping in shift (not atom-wise) to avoid splitting
+        # molecules when they cross the box boundary.
+        _displacement, _shift_free = space.free()
+        if use_pbc:
+            def shift(R, dR, **kwargs):
+                new_R = R + dR
+                return wrap_molecules(new_R, args.n_atoms_monomer, args.n_monomers)
+            displacement = _displacement
+        else:
+            shift = _shift_free
+            displacement = _displacement
 
         unwrapped_init_fn, unwrapped_step_fn = jax_md.minimize.fire_descent(
             wrapped_energy_fn, shift, dt_start=0.001, dt_max=0.001
@@ -730,11 +736,13 @@ inbfrq -1 imgfrq -1
         # ========================================================================
         unit = units.metal_unit_system()
         # dt must be in ps: args.timestep is fs, 1 fs = 0.001 ps
-        dt = args.timestep * 0.001
+        # Use smaller dt for PBC to improve stability (large forces at boundaries)
+        dt_fs = args.timestep * (0.5 if use_pbc else 1.0)
+        dt = dt_fs * 0.001
         kT = T * unit['temperature']
         steps_per_recording = 25
         rng_key = jax.random.PRNGKey(0)
-        print(f"JAX-MD NVE: dt={dt} ps ({args.timestep} fs), kT={kT} ({T} K)")
+        print(f"JAX-MD NVE: dt={dt} ps ({dt_fs} fs), kT={kT} ({T} K)")
 
         # NVE uses same displacement/shift as minimization
         init_fn, apply_fn = simulate.nve(wrapped_energy_fn, shift, dt)
