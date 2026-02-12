@@ -899,7 +899,6 @@ inbfrq -1 imgfrq -1
 
     def save_trajectory(out_positions, atoms, filename="nhc_trajectory", format="traj"):
         trajectory = Trajectory(f"{filename}.{format}", "a")
-        # atoms = ase.Atoms()
         out_positions = out_positions.reshape(-1, len(atoms),3)
         for R in out_positions:
             atoms.set_positions(R)
