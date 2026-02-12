@@ -862,9 +862,11 @@ inbfrq -1 imgfrq -1
                 # Print progress every 10 steps
                 if i % 10 == 0:
                     time_ps = i * steps_per_recording * dt
-                    # Temperature: quantity.temperature needs mass to broadcast with momentum (n,3)
-                    kT_curr = quantity.temperature(momentum=state.momentum, mass=Si_mass[:, None])
-                    temp = float(kT_curr / unit['temperature'])
+                    T = jax_md.quantity.temperature(
+                        momentum=state.momentum,
+                        mass=state.mass
+                    ) / unit['temperature']
+                    temp = float(T)
                     energy = float(wrapped_energy_fn(state.position))
                     print(f"{time_ps:10.4f}\t{energy:10.4f}\t{temp:10.2f}")
 
