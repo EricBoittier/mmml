@@ -605,14 +605,6 @@ inbfrq -1 imgfrq -1
         print("ASE MD simulation complete!")
 
 
-    temperature = args.temperature
-    for i in range(1):
-        run_ase_md(atoms, run_index=i, temperature=temperature)
-
-    return atoms
-
-    # sys.exit()
-
     def set_up_nhc_sim_routine(atoms, T=args.temperature, dt=5e-3, steps_per_recording=250):
         @jax.jit
         def evaluate_energies_and_forces(atomic_numbers, positions, dst_idx, src_idx):
@@ -1022,6 +1014,10 @@ inbfrq -1 imgfrq -1
 
 
     sim_key, data_key = jax.random.split(jax.random.PRNGKey(42), 2)
+    temperature = args.temperature
+    for i in range(1):
+        run_ase_md(atoms, run_index=i, temperature=temperature)
+
 
     
     # Main JAXMD simulation loop
@@ -1041,7 +1037,9 @@ inbfrq -1 imgfrq -1
 
 
     print("JAX-MD simulation complete!")
-    return 0
+    return atoms
+
+
 
 
 def main() -> int:
