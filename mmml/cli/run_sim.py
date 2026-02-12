@@ -651,28 +651,20 @@ inbfrq -1 imgfrq -1
         print(f"Initial energy: {init_energy:.6f} eV")
         print(f"Initial forces: {init_forces}")
 
-        BOXSIZE = float(1000)  # Increased from 45 to 100 Å for proper neighbor list allocation
-        
-        # Define molecular wrapping function to keep residues together
+        # Use actual cell size when PBC is set; otherwise fallback for non-periodic
+        BOXSIZE = float(args.cell) if args.cell is not None else 1000.0
+        use_pbc = args.cell is not None
+        print(f"JAX-MD BOXSIZE: {BOXSIZE} Å, PBC: {use_pbc}")
+
+        # Define molecular wrapping function to keep residues together (only for PBC)
         def wrap_molecules(positions, n_atoms_per_monomer, n_monomers):
             """
             Wrap molecules to keep residues intact across periodic boundaries.
-            
-            This function ensures that when atoms cross periodic boundaries, 
-            entire residues (monomers) are moved as a unit to maintain molecular
-            integrity. This is crucial for energy functions that are sensitive
-            to atomic permutations.
-            
-            Args:
-                positions: Array of shape (n_atoms, 3) with atomic positions
-                n_atoms_per_monomer: Number of atoms per monomer/residue
-                n_monomers: Total number of monomers in the system
-                
-            Returns:
-                Array of wrapped positions with same shape as input
+            When PBC is disabled, returns positions unchanged.
             """
+            if not use_pbc:
+                return positions
             wrapped_positions = []
-            
             # Process each monomer separately
             for i in range(n_monomers):
                 start_idx = i * n_atoms_per_monomer
@@ -716,12 +708,13 @@ inbfrq -1 imgfrq -1
             # Apply molecular wrapping before energy calculation
             wrapped_position = wrap_molecules(position, args.n_atoms_monomer, args.n_monomers)
             return jax_md_energy_fn(wrapped_position, **kwargs)
-        
-        displacement, shift = space.free()
-        neighbor_fn = partition.neighbor_list(
-            displacement, BOXSIZE, 12, format=partition.Dense
+
+        # Use periodic space when PBC is set; our energy_fn does not use neighbor lists
+        displacement, shift = (
+            space.periodic(BOXSIZE, wrapped=True)
+            if use_pbc
+            else space.free()
         )
-        nbrs = neighbor_fn.allocate(R)
 
         unwrapped_init_fn, unwrapped_step_fn = jax_md.minimize.fire_descent(
             wrapped_energy_fn, shift, dt_start=0.001, dt_max=0.001
@@ -730,14 +723,11 @@ inbfrq -1 imgfrq -1
 
 
         @jit
-        def sim(state, nbrs):
-            def step(i, state_nbrs):
-                state, nbrs = state_nbrs
-                nbrs = nbrs.update(state.position)
-                state = apply_fn(state, neighbor=nbrs)
-                return (state, nbrs)
+        def sim(state):
+            def step(i, s):
+                return apply_fn(s)
 
-            return lax.fori_loop(0, steps_per_recording, step, (state, nbrs))
+            return lax.fori_loop(0, steps_per_recording, step, state)
 
 
 
@@ -785,18 +775,15 @@ inbfrq -1 imgfrq -1
         print(f"T_init value: {T_init}")
         print(f"unit['temperature']: {unit['temperature']}")
 
-        displacement, shift = space.periodic(BOXSIZE, wrapped=True)
-        # init_fn, apply_fn = simulate.nvt_nose_hoover(wrapped_energy_fn, shift, dt, kT)
+        # NVE uses same displacement/shift as minimization
         init_fn, apply_fn = simulate.nve(wrapped_energy_fn, shift, dt)
         apply_fn = jit(apply_fn)
 
-
         def run_sim(
-            key, 
-            total_steps=args.nsteps_jaxmd, 
+            key,
+            total_steps=args.nsteps_jaxmd,
             steps_per_recording=1,
-            nbrs=nbrs,
-            R=R
+            R=R,
         ):
             total_records = total_steps // steps_per_recording
 
@@ -833,17 +820,11 @@ inbfrq -1 imgfrq -1
             ase_io.write(f"{args.output_prefix}_minimized_{current_time}.pdb", atoms)
 
             # ========================================================================
-            # PBC MINIMIZATION
+            # PBC MINIMIZATION (when PBC enabled)
             # ========================================================================
-            # Additional minimization in periodic boundary conditions to ensure
-            # proper molecular packing and eliminate any remaining artifacts
-            
             print("*" * 10 + "\nPBC Minimization\n" + "*" * 10)
-            
-            # Set up PBC minimization using periodic space
-            pbc_displacement, pbc_shift = space.periodic(BOXSIZE, wrapped=True)
             pbc_unwrapped_init_fn, pbc_unwrapped_step_fn = jax_md.minimize.fire_descent(
-                wrapped_energy_fn, pbc_shift, dt_start=0.001, dt_max=0.001
+                wrapped_energy_fn, shift, dt_start=0.001, dt_max=0.001
             )
             pbc_unwrapped_step_fn = jit(pbc_unwrapped_step_fn)
             
@@ -874,33 +855,28 @@ inbfrq -1 imgfrq -1
             ase_io.write(f"{args.output_prefix}_pbc_minimized_{pbc_current_time}.pdb", atoms)
             print(f"PBC minimization complete. Final energy: {energy:.6f} eV")
 
-            # NVT simulation
-            nbrs = neighbor_fn.allocate(pbc_fire_state.position)
-            # TODO: fix nans, by going back to the previous state?
-            # TODO: piston mass?
-            # For NVE simulations, we need to provide the correct mass units
-            # JAX-MD expects masses to match position shape (20, 3) for momentum initialization
-            # The init_fn needs expanded mass array to match position dimensions
-            state = init_fn(key, pbc_fire_state.position, Si_mass_expanded, neighbor=nbrs)
-            
-            # Manual momentum initialization to achieve target temperature
-            # JAX-MD's init_fn seems to generate momenta that are too large
-            # Let's manually initialize momenta for 100 K target temperature
+            # Use last valid positions if minimization produced NaN
+            md_pos = pbc_fire_state.position
+            if jnp.any(~jnp.isfinite(md_pos)):
+                print("Warning: NaN/Inf in minimized positions, using last valid state")
+                md_pos = fire_state.position
+                if jnp.any(~jnp.isfinite(md_pos)):
+                    print("Error: No valid positions for NVE; skipping JAX-MD simulation")
+                    return 0, jnp.stack([])
+
+            # NVE init then manual momentum override for target temperature
             target_temp = 100.0  # K
             kT_target = K_B * target_temp  # eV
-            
-            # Generate random momenta with correct temperature
-            # p = sqrt(m * kT) * random.normal
-            momentum_scale = jnp.sqrt(Si_mass_expanded * kT_target)
-            random_momenta = jax.random.normal(key, pbc_fire_state.position.shape)
-            scaled_momenta = momentum_scale * random_momenta
-            
-            # Create state with manually initialized momenta
+            state = init_fn(key, md_pos, kT_target, mass=Si_mass)
+            # Overwrite momentum for controlled temperature
+            momentum_scale = jnp.sqrt(Si_mass[:, None] * kT_target)
+            key, mkey = jax.random.split(key)
+            scaled_momenta = momentum_scale * jax.random.normal(mkey, md_pos.shape)
             state = type(state)(
-                position=pbc_fire_state.position,
+                position=state.position,
                 momentum=scaled_momenta,
-                mass=Si_mass_expanded,
-                force=jnp.zeros_like(pbc_fire_state.position)
+                mass=state.mass,
+                force=state.force
             )
             print(f"Manually initialized momenta for target temperature: {target_temp} K")
             nhc_positions = []
@@ -916,8 +892,7 @@ inbfrq -1 imgfrq -1
             # MAIN SIMULATION LOOP
             # ========================================================================
             for i in range(total_records):
-                # Run simulation steps
-                state, nbrs = sim(state, nbrs)
+                state = sim(state)
                 
                 # Store current position for trajectory analysis
                 nhc_positions.append(state.position)
@@ -926,34 +901,12 @@ inbfrq -1 imgfrq -1
                 if i % 10 == 0:
                     time = i * steps_per_recording * dt
                     
-                    # Debug: Print momentum and mass info for first few steps
-                    if i < 30:
-                        print(f"Debug - Step {i}:")
-                        print(f"  Momentum shape: {state.momentum.shape}")
-                        print(f"  Momentum sample: {state.momentum[0]}")
-                        print(f"  Mass shape: {Si_mass_expanded.shape}")
-                        print(f"  Mass sample: {Si_mass_expanded[0]}")
-                        print(f"  K_B: {K_B}")
-                    
-                    # Calculate temperature using expanded mass array for proper broadcasting
-                    temp_jaxmd = float(quantity.temperature(momentum=state.momentum, mass=Si_mass_expanded) / K_B)
-                    
-                    # Try manual temperature calculation as alternative
-                    # T = (2/3) * <KE> / (N * kB) where KE = 0.5 * p^2 / m
-                    # Use the correct mass array for temperature calculation
-                    kinetic_energy = 0.5 * jnp.sum(state.momentum**2 / Si_mass_expanded)
+                    # Temperature: T = (2/3) * <KE> / (N * kB), KE = 0.5 * p^2 / m
+                    kinetic_energy = 0.5 * jnp.sum(state.momentum**2 / Si_mass[:, None])
                     n_atoms = len(Si_mass)
-                    temp_manual = float(2.0 * kinetic_energy / (3.0 * n_atoms * K_B))
+                    temp = float(2.0 * kinetic_energy / (3.0 * n_atoms * K_B))
                     
-                    # Use the manual calculation for now
-                    temp = temp_manual
-                    
-                    if i < 30:  # Debug info
-                        print(f"  JAX-MD temp: {temp_jaxmd:.2f} K")
-                        print(f"  Manual temp: {temp_manual:.2f} K")
-                    
-                    # Calculate energy using wrapped positions to maintain residue integrity
-                    energy = float(wrapped_energy_fn(state.position, neighbor=nbrs))
+                    energy = float(wrapped_energy_fn(state.position))
                     print(f"{time:10.2f}\t{energy:10.4f}\t{temp:10.2f}")
                     
                     # ========================================================================
@@ -981,7 +934,9 @@ inbfrq -1 imgfrq -1
 
             nhc_positions_out = []
             for R in nhc_positions:
-                nhc_positions_out.append(jax_md.space.transform(box=BOXSIZE, R=R))
+                if use_pbc:
+                    R = space.transform(box=BOXSIZE, R=R)  # wrap for output
+                nhc_positions_out.append(R)
             return steps_completed, jnp.stack(nhc_positions_out)
 
         return run_sim
