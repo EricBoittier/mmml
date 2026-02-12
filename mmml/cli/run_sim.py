@@ -777,38 +777,48 @@ inbfrq -1 imgfrq -1
                 wrapped_energy_fn, shift, dt_start=0.001, dt_max=0.001
             )
             pbc_unwrapped_step_fn = jit(pbc_unwrapped_step_fn)
-            # Start PBC minimization from best position (valid even if first min hit NaN)
-            pbc_fire_state = pbc_unwrapped_init_fn(minimized_pos)
+            # Start from wrapped positions so we're in the cell (first min can drift)
+            pbc_start_pos = pbc_map_fn(minimized_pos) if (use_pbc and pbc_map_fn) else minimized_pos
+            pbc_fire_state = pbc_unwrapped_init_fn(pbc_start_pos)
             pbc_fire_positions = []
             
-            # Run PBC minimization
-            NMIN_PBC = 100  # Fewer steps since we're already close to minimum
+            # Run PBC minimization (track if it helps; fall back to first min if it worsens)
+            NMIN_PBC = 100
+            max_force_start = float(jnp.abs(jax.grad(wrapped_energy_fn)(pbc_start_pos)).max())
+            best_pbc_pos = pbc_start_pos
+            best_pbc_max_f = max_force_start
             for i in range(NMIN_PBC):
                 pbc_fire_positions.append(pbc_fire_state.position)
                 pbc_fire_state = pbc_unwrapped_step_fn(pbc_fire_state)
-                
+                energy = float(wrapped_energy_fn(pbc_fire_state.position))
+                max_force = float(jnp.abs(jax.grad(wrapped_energy_fn)(pbc_fire_state.position)).max())
+                if max_force < best_pbc_max_f:
+                    best_pbc_max_f = max_force
+                    best_pbc_pos = pbc_fire_state.position
                 if i % (NMIN_PBC // 10) == 0:
-                    energy = float(wrapped_energy_fn(pbc_fire_state.position))
-                    max_force = float(jnp.abs(jax.grad(wrapped_energy_fn)(pbc_fire_state.position)).max())
                     print(f"{i}/{NMIN_PBC}: E={energy:.6f} eV, max|F|={max_force:.6f}")
                 
-                # Check for nans
                 if jnp.isnan(energy):
                     print("NaN energy caught in PBC minimization, using last valid position")
                     break
             
+            # Use first-min result if PBC minimization worsened structure (max_force increased)
+            if best_pbc_max_f > max_force_start * 1.1:
+                md_pos = pbc_map_fn(minimized_pos) if (use_pbc and pbc_map_fn) else minimized_pos
+                print(f"PBC minimization increased max|F| ({max_force_start:.4f} -> {best_pbc_max_f:.4f}); using first-min wrapped structure")
+            else:
+                md_pos = best_pbc_pos
             # Save PBC minimized structure
             pbc_current_time = datetime.now().strftime("%H:%M:%S")
             ase_io.write(f"{args.output_prefix}_pbc_minimized_{pbc_current_time}.pdb", atoms)
-            print(f"PBC minimization complete. Final energy: {energy:.6f} eV")
+            print(f"PBC minimization complete. Final energy: {float(wrapped_energy_fn(md_pos)):.6f} eV")
 
             # Use last valid positions if minimization produced NaN
-            md_pos = pbc_fire_state.position
             if jnp.any(~jnp.isfinite(md_pos)) and pbc_fire_positions:
                 md_pos = pbc_fire_positions[-1]
                 print("Warning: NaN in PBC minimization, using last valid position from PBC")
             if jnp.any(~jnp.isfinite(md_pos)) and fire_positions:
-                md_pos = fire_positions[-1]
+                md_pos = pbc_map_fn(fire_positions[-1]) if (use_pbc and pbc_map_fn) else fire_positions[-1]
                 print("Warning: Using last valid position from first minimization")
             if jnp.any(~jnp.isfinite(md_pos)):
                 print("Error: No valid positions for NVE; skipping JAX-MD simulation")
