@@ -842,7 +842,7 @@ inbfrq -1 imgfrq -1
             print(f"Initial energy: {energy_initial:.6f} eV")
 
             print("*" * 10 + "\nNVE\n" + "*" * 10)
-            print("\t\tTime (ps)\tEnergy (eV)\tTemperature (K)")
+            print("\t\tTime (ps)\tSteps\tE_pot (eV)\tE_tot (eV)\tT (K)")
             
             # ========================================================================
             # MAIN SIMULATION LOOP
@@ -856,17 +856,23 @@ inbfrq -1 imgfrq -1
                 # Print progress every 10 steps
                 if i % 10 == 0:
                     time_ps = i * steps_per_recording * dt
+                    steps = i * steps_per_recording
                     T_curr = jax_md.quantity.temperature(
                         momentum=state.momentum,
                         mass=state.mass
                     ) / unit['temperature']
                     temp = float(T_curr)
-                    energy = float(wrapped_energy_fn(state.position))
-                    print(f"{time_ps:10.4f}\t{energy:10.4f}\t{temp:10.2f}")
+                    e_pot = float(wrapped_energy_fn(state.position))
+                    e_kin = float(jax_md.quantity.kinetic_energy(
+                        momentum=state.momentum,
+                        mass=state.mass
+                    ))
+                    e_tot = e_pot + e_kin
+                    print(f"{time_ps:10.4f}\t{steps:6d}\t{e_pot:10.4f}\t{e_tot:10.4f}\t{temp:10.2f}")
 
                     # Stop on numerical instability (NaN, Inf, or energy blow-up to 0)
-                    if not np.isfinite(energy) or not np.isfinite(temp):
-                        print(f"Numerical instability at step {i * steps_per_recording}; stopping.")
+                    if not np.isfinite(e_pot) or not np.isfinite(temp):
+                        print(f"Numerical instability at step {steps}; stopping.")
                         if len(nhc_positions) > 1:
                             nhc_positions = nhc_positions[:-1]
                             state = type(state)(
