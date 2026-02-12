@@ -388,7 +388,7 @@ class MessagePassingModel(nn.Module):
 
             coupling = jnp.sum( dipole * Ef , axis=-1)  # (B,)  mu·Ef_input
             coupling = coupling * self.field_scale * HARTREE_TO_EV
-            energy = energy - coupling
+            energy = energy + coupling * energy
 
         # Proxy energy for force differentiation
         return -jnp.sum(energy), energy, dipole
