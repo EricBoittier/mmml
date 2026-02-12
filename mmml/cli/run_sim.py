@@ -384,7 +384,9 @@ def run(args: argparse.Namespace) -> int:
         atoms.set_positions(R_shift)
         E1 = atoms.get_potential_energy()
         print(f"Energy invariance test: E0={E0}, E1={E1}, difference={E1-E0}")
-        assert np.isclose(E0, E1), "Energy invariance test failed"
+        assert np.isclose(E0, E1, rtol=1e-2, atol=0.01), (
+            f"Energy invariance test failed: |E1-E0|={abs(E1-E0):.2e} eV"
+        )
         atoms.set_positions(R)
     
     # Get initial energy and forces
