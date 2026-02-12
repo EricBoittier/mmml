@@ -870,10 +870,9 @@ inbfrq -1 imgfrq -1
                 if i % 10 == 0:
                     time = i * steps_per_recording * dt
                     
-                    # Temperature: T = (2/3) * <KE> / (N * kB), KE = 0.5 * p^2 / m
-                    kinetic_energy = 0.5 * jnp.sum(state.momentum**2 / Si_mass[:, None])
-                    n_atoms = len(Si_mass)
-                    temp = float(2.0 * kinetic_energy / (3.0 * n_atoms * K_B))
+                    # Temperature: T = 2*KE/(3*N*kB); quantity.temperature returns kT (eV)
+                    kT_curr = quantity.temperature(momentum=state.momentum, mass=Si_mass)
+                    temp = float(kT_curr / K_B)
                     
                     energy = float(wrapped_energy_fn(state.position))
                     print(f"{time:10.2f}\t{energy:10.4f}\t{temp:10.2f}")
