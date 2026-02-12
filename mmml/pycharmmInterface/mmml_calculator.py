@@ -1037,26 +1037,28 @@ def setup_calculator(
             return constant * qq / r_safe
         
 
+        n_pairs_per_dimer = ATOMS_PER_MONOMER * ATOMS_PER_MONOMER
+
         def get_switching_function(
             ml_cutoff_distance: float = ml_cutoff_distance,
             mm_switch_on: float = mm_switch_on,
             mm_cutoff: float = mm_cutoff,
             complementary_handoff: bool = complementary_handoff,
         ):
-            """MM scale: complementary (1-s_ML) over handoff, then taper to 0 at mm_switch_on+mm_cutoff; or legacy."""
+            """MM scale: complementary (1-s_ML) over handoff, then taper to 0 at mm_switch_on+mm_cutoff; or legacy.
+            Per-dimer: each dimer pair (i,j) gets its own mm_scale based on COM distance."""
             @jax.jit
             def apply_switching_function(positions: Array, pair_energies: Array) -> Array:
-                com1 = jnp.mean(positions[:ATOMS_PER_MONOMER], axis=0)
-                com2 = jnp.mean(positions[ATOMS_PER_MONOMER:2*ATOMS_PER_MONOMER], axis=0)
+                coms = positions.reshape(N_MONOMERS, ATOMS_PER_MONOMER, 3).mean(axis=1)
+                com_i = coms[dimer_perms[:, 0]]
+                com_j = coms[dimer_perms[:, 1]]
                 if pbc_cell is not None:
-                    d = mic_displacement(com1, com2, pbc_cell)
-                    r = jnp.linalg.norm(d)
+                    d_vec = jax.vmap(lambda a, b: mic_displacement(a, b, pbc_cell))(com_i, com_j)
+                    r = jnp.linalg.norm(d_vec, axis=1)
                 else:
-                    r = jnp.linalg.norm(com2 - com1)
+                    r = jnp.linalg.norm(com_j - com_i, axis=1)
                 if complementary_handoff:
-                    # handoff: s_MM = 1 - s_ML over [mm_switch_on - ml_cutoff, mm_switch_on]
                     handoff = _sharpstep(r, mm_switch_on - ml_cutoff_distance, mm_switch_on, gamma=GAMMA_ON)
-                    # taper to 0 at mm_switch_on + mm_cutoff so energies/forces go to 0
                     mm_taper = 1.0 - _sharpstep(
                         r, mm_switch_on, mm_switch_on + mm_cutoff, gamma=GAMMA_OFF
                     )
@@ -1065,7 +1067,8 @@ def setup_calculator(
                     mm_on = _sharpstep(r, mm_switch_on, mm_switch_on + mm_cutoff, gamma=GAMMA_ON)
                     mm_off = _sharpstep(r, mm_switch_on + mm_cutoff, mm_switch_on + 2.0 * mm_cutoff, gamma=GAMMA_OFF)
                     mm_scale = mm_on * (1.0 - mm_off)
-                return (pair_energies * mm_scale).sum()
+                mm_scale_expanded = jnp.repeat(mm_scale, n_pairs_per_dimer)
+                return (pair_energies * mm_scale_expanded).sum()
             return apply_switching_function
 
         apply_switching_function = get_switching_function(
