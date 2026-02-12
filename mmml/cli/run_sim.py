@@ -716,8 +716,7 @@ inbfrq -1 imgfrq -1
         # ========================================================================
         unit = units.metal_unit_system()
         # dt must be in ps: args.timestep is fs, 1 fs = 0.001 ps
-        # Use smaller dt for PBC to improve stability (large forces at boundaries)
-        dt_fs = args.timestep * (0.5 if use_pbc else 1.0)
+        dt_fs = args.timestep
         dt = dt_fs * 0.001
         kT = T * unit['temperature']
         steps_per_recording = 25
