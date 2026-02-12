@@ -827,11 +827,17 @@ def setup_calculator(
 
     if cell:
         MODEL.use_pbc = True
-        cell = float(cell)
-        # somewhere in your factory / calculator init
         from mmml.pycharmmInterface.pbc_prep_factory import make_pbc_mapper
-        # turn the length into a 3x3 matrix for a cubic cell
-        cell = jnp.asarray([[cell, 0, 0], [0, cell, 0], [0, 0, cell]])
+        cell_arr = jnp.asarray(cell)
+        if cell_arr.ndim == 0:
+            cell = jnp.asarray([[float(cell), 0, 0], [0, float(cell), 0], [0, 0, float(cell)]])
+        elif cell_arr.shape == (3,):
+            a, b, c = float(cell_arr[0]), float(cell_arr[1]), float(cell_arr[2])
+            cell = jnp.asarray([[a, 0, 0], [0, b, 0], [0, 0, c]])
+        elif cell_arr.shape == (3, 3):
+            cell = jnp.asarray(cell_arr, dtype=jnp.float64)
+        else:
+            raise ValueError(f"cell must be scalar, (3,), or (3,3); got {cell_arr.shape}")
         mol_id = None
         try:
             # for now just use a simple array of integers for the molecule id

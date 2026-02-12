@@ -395,11 +395,13 @@ def build_hybrid_calculator(
         cutoff_params=cutoff_params,
         doML=True,
         doMM=args.include_mm,
-        doML_dimer=True, #not args.skip_ml_dimers,
+        doML_dimer=True,  # not args.skip_ml_dimers,
         backprop=True,
         debug=args.debug,
         energy_conversion_factor=1,
         force_conversion_factor=1,
+        do_pbc_map=getattr(calculator_factory, "do_pbc_map", args.cell is not None),
+        pbc_map=getattr(calculator_factory, "pbc_map", None),
     )
     return calc
 
