@@ -653,10 +653,39 @@ inbfrq -1 imgfrq -1
         pbc_map_fn = getattr(atoms.calc, "pbc_map", None) if atoms.calc else None
         print(f"JAX-MD BOXSIZE: {BOXSIZE} Å, PBC: {use_pbc}, pbc_map: {pbc_map_fn is not None}")
 
-        # Energy: pass positions directly; calculator applies pbc_map internally.
-        @jit
-        def wrapped_energy_fn(position, **kwargs):
-            return jax_md_energy_fn(jnp.array(position), **kwargs)
+        # Energy: for PBC, apply pbc_map before calculator and transform_forces for gradient
+        # (match ASE). The raw spherical_cutoff_calculator does NOT apply pbc_map; only the
+        # ASE wrapper does. Without this, forces are in wrong space and NVE blows up.
+        if use_pbc and pbc_map_fn is not None:
+            @jax.custom_vjp
+            def wrapped_energy_fn(position, **kwargs):
+                pos = jnp.array(position)
+                return jax_md_energy_fn(pbc_map_fn(pos), **kwargs)
+
+            def wrapped_energy_fn_fwd(position, **kwargs):
+                pos = jnp.array(position)
+                R_mapped = pbc_map_fn(pos)
+                E = jax_md_energy_fn(R_mapped, **kwargs)
+                return E, (pos, R_mapped)
+
+            def wrapped_energy_fn_bwd(res, g, **kwargs):
+                pos, R_mapped = res
+                result = evaluate_energies_and_forces(
+                    atomic_numbers=atomic_numbers,
+                    positions=R_mapped,
+                    dst_idx=dst_idx,
+                    src_idx=src_idx,
+                )
+                F_mapped = result.forces
+                F_orig = pbc_map_fn.transform_forces(pos, F_mapped)
+                return (-F_orig,)
+
+            wrapped_energy_fn.defvjp(wrapped_energy_fn_fwd, wrapped_energy_fn_bwd)
+            wrapped_energy_fn = jit(wrapped_energy_fn)
+        else:
+            @jit
+            def wrapped_energy_fn(position, **kwargs):
+                return jax_md_energy_fn(jnp.array(position), **kwargs)
 
         # Shift: do NOT wrap every timestep (same as ASE). pbc_map is discontinuous;
         # wrapping after each step creates inconsistent phase-space (positions jumped,
