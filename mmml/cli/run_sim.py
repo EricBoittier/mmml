@@ -782,11 +782,13 @@ inbfrq -1 imgfrq -1
             pbc_fire_state = pbc_unwrapped_init_fn(pbc_start_pos)
             pbc_fire_positions = []
             
-            # Run PBC minimization (track if it helps; fall back to first min if it worsens)
+            # Run PBC minimization (track best; stop early if forces increase - FIRE+unwrapped can wander)
             NMIN_PBC = 100
             max_force_start = float(jnp.abs(jax.grad(wrapped_energy_fn)(pbc_start_pos)).max())
             best_pbc_pos = pbc_start_pos
             best_pbc_max_f = max_force_start
+            worsen_count = 0
+            prev_max_f = max_force_start
             for i in range(NMIN_PBC):
                 pbc_fire_positions.append(pbc_fire_state.position)
                 pbc_fire_state = pbc_unwrapped_step_fn(pbc_fire_state)
@@ -795,11 +797,17 @@ inbfrq -1 imgfrq -1
                 if max_force < best_pbc_max_f:
                     best_pbc_max_f = max_force
                     best_pbc_pos = pbc_fire_state.position
+                    worsen_count = 0
+                else:
+                    worsen_count = worsen_count + 1 if max_force > prev_max_f else 0
+                prev_max_f = max_force
                 if i % (NMIN_PBC // 10) == 0:
                     print(f"{i}/{NMIN_PBC}: E={energy:.6f} eV, max|F|={max_force:.6f}")
-                
                 if jnp.isnan(energy):
                     print("NaN energy caught in PBC minimization, using last valid position")
+                    break
+                if worsen_count >= 10:
+                    print(f"PBC minimization: max|F| increased for 10 steps; stopping early at step {i} (best max|F|={best_pbc_max_f:.4f})")
                     break
             
             # Use first-min result if PBC minimization worsened structure (max_force increased)
