@@ -862,7 +862,7 @@ inbfrq -1 imgfrq -1
                 md_pos = fire_state.position
                 if jnp.any(~jnp.isfinite(md_pos)):
                     print("Error: No valid positions for NVE; skipping JAX-MD simulation")
-                    return 0, jnp.stack([])
+                    return 0, jnp.array([]).reshape(0, len(md_pos), 3)
 
             # NVE init then manual momentum override for target temperature
             target_temp = 100.0  # K
@@ -878,14 +878,14 @@ inbfrq -1 imgfrq -1
                 mass=state.mass,
                 force=state.force
             )
-            print(f"Manually initialized momenta for target temperature: {target_temp} K")
+            print(f"Momentum initialized for {target_temp} K")
             nhc_positions = []
 
             # get energy of initial state
             energy_initial = float(wrapped_energy_fn(state.position))
             print(f"Initial energy: {energy_initial:.6f} eV")
 
-            print("*" * 10 + "\nNVT\n" + "*" * 10)
+            print("*" * 10 + "\nNVE\n" + "*" * 10)
             print("\t\tTime (ps)\tEnergy (eV)\tTemperature (K)")
             
             # ========================================================================
