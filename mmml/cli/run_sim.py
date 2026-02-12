@@ -737,43 +737,14 @@ inbfrq -1 imgfrq -1
         # ========================================================================
         # These parameters control the molecular dynamics simulation behavior
         
-        timestep = 1e-5  # Time step in ps - reduced for better stability
-        T_init = 100  # Initial temperature in Kelvin
-        # Reduce initial temperature for momentum generation to account for unit scaling
-        T_init_momentum = 300 / 37  # Scale down by the observed ratio
-        pressure_init = 1.01325  # Target pressure in bars (atmospheric pressure) 
-
-        chain = 3  # Number of chains in the Nose-Hoover chain.
-        chain_steps = 2  # Number of steps per chain.
-        sy_steps = 3
-
-        # Dictionary with the NHC settings.
-        new_nhc_kwargs = {
-            'chain_length': chain, 
-            'chain_steps': chain_steps, 
-            'sy_steps': sy_steps
-        }
-
-        # Convert to metal unit system.
-        unit = units.metal_unit_system()
-
-        timestep = timestep * unit['time']
-        T_init = T_init * unit['temperature']
-        pressure = pressure_init * unit['pressure']
-
-        rng_key = jax.random.PRNGKey(0)
-
+        # Metal units: eV, Å, ps, amu (JAX-MD standard)
+        K_B = 8.617333262e-5  # eV/K
+        dt = 0.001  # 1 fs = 0.001 ps
+        target_temp_K = 100.0
+        kT = K_B * target_temp_K  # eV
         steps_per_recording = 25
-        # Use the correct Boltzmann constant for JAX-MD
-        # JAX-MD uses internal units, so we need to be careful about units
-        # Let's use the standard value but check if JAX-MD expects different units
-        K_B = 8.617333262e-5  # eV/K - standard value
-        print(f"Using Boltzmann constant: {K_B} eV/K")
-        dt = timestep 
-        kT = T_init  # Use scaled temperature for momentum generation
-        print(f"kT value for momentum initialization: {kT}")
-        print(f"T_init value: {T_init}")
-        print(f"unit['temperature']: {unit['temperature']}")
+        rng_key = jax.random.PRNGKey(0)
+        print(f"JAX-MD NVE: dt={dt} ps (1 fs), kT={kT:.6f} eV ({target_temp_K} K)")
 
         # NVE uses same displacement/shift as minimization
         init_fn, apply_fn = simulate.nve(wrapped_energy_fn, shift, dt)
@@ -869,7 +840,7 @@ inbfrq -1 imgfrq -1
             kT_target = K_B * target_temp  # eV
             state = init_fn(key, md_pos, kT_target, mass=Si_mass)
             # Overwrite momentum for controlled temperature
-            momentum_scale = jnp.sqrt(Si_mass[:, None] * kT_target)
+            momentum_scale = jnp.sqrt(Si_mass[:, None] * kT)
             key, mkey = jax.random.split(key)
             scaled_momenta = momentum_scale * jax.random.normal(mkey, md_pos.shape)
             state = type(state)(
@@ -878,7 +849,7 @@ inbfrq -1 imgfrq -1
                 mass=state.mass,
                 force=state.force
             )
-            print(f"Momentum initialized for {target_temp} K")
+            print(f"Momentum initialized for {target_temp_K} K")
             nhc_positions = []
 
             # get energy of initial state
