@@ -578,14 +578,7 @@ inbfrq -1 imgfrq -1
             if (i != 0) and (i % args.write_interval == 0):
                 if args.cell is not None:
                     traj.write(ase_atoms)
-                    # # Wrap for output only (does not affect integration; preserves NVE)
-                    # atoms_to_write = ase_atoms.copy()
-                    # atoms_to_write.set_positions(wrap_positions_for_pbc(ase_atoms.get_positions()))
-                    # atoms_to_write.set_forces(wrap_positions_for_pbc(ase_atoms.get_forces()))
-                    # atoms_to_write.set_potential_energy(potential_energy[i])
-                    # atoms_to_write.set_kinetic_energy(kinetic_energy[i])
-                    # atoms_to_write.set_total_energy(total_energy[i])
-                    # traj.write(atoms_to_write)
+
                 else:
                     traj.write(ase_atoms)
             if args.ensemble == "nvt":
