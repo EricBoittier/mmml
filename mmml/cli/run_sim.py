@@ -771,13 +771,14 @@ inbfrq -1 imgfrq -1
 
                 # check for nans
                 if jnp.isnan(energy):
-                    print("NaN energy caught")
-                    print(f"Simulation terminated: E={energy:.4f}eV")
-                    
-                    # TODO: fix nans, by going back to the previous state?
-                    fire_state = unwrapped_step_fn(fire_positions[-1])
+                    print("NaN energy caught in minimization, using last valid position")
                     break
-            # save pdb 
+            # Best position from first minimization (last valid if NaN occurred)
+            minimized_pos = fire_state.position
+            if jnp.any(~jnp.isfinite(minimized_pos)) and fire_positions:
+                minimized_pos = fire_positions[-1]
+                print("Using last valid position from first minimization")
+            # save pdb
             from datetime import datetime
             now = datetime.now()
             current_time = now.strftime("%H:%M:%S")
@@ -791,9 +792,8 @@ inbfrq -1 imgfrq -1
                 wrapped_energy_fn, shift, dt_start=0.001, dt_max=0.001
             )
             pbc_unwrapped_step_fn = jit(pbc_unwrapped_step_fn)
-            
-            # Start PBC minimization from the current minimized position
-            pbc_fire_state = pbc_unwrapped_init_fn(fire_state.position)
+            # Start PBC minimization from best position (valid even if first min hit NaN)
+            pbc_fire_state = pbc_unwrapped_init_fn(minimized_pos)
             pbc_fire_positions = []
             
             # Run PBC minimization
@@ -822,9 +822,9 @@ inbfrq -1 imgfrq -1
             if jnp.any(~jnp.isfinite(md_pos)) and pbc_fire_positions:
                 md_pos = pbc_fire_positions[-1]
                 print("Warning: NaN in PBC minimization, using last valid position from PBC")
-            if jnp.any(~jnp.isfinite(md_pos)):
-                md_pos = fire_state.position
-                print("Warning: Using positions from first minimization (no PBC)")
+            if jnp.any(~jnp.isfinite(md_pos)) and fire_positions:
+                md_pos = fire_positions[-1]
+                print("Warning: Using last valid position from first minimization")
             if jnp.any(~jnp.isfinite(md_pos)):
                 print("Error: No valid positions for NVE; skipping JAX-MD simulation")
                 return 0, jnp.array([]).reshape(0, len(md_pos), 3)
