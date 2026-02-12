@@ -809,9 +809,7 @@ inbfrq -1 imgfrq -1
                 
                 # Check for nans
                 if jnp.isnan(energy):
-                    print("NaN energy caught in PBC minimization")
-                    print(f"PBC minimization terminated: E={energy:.4f}eV")
-                    pbc_fire_state = pbc_unwrapped_step_fn(pbc_fire_positions[-1])
+                    print("NaN energy caught in PBC minimization, using last valid position")
                     break
             
             # Save PBC minimized structure
@@ -821,12 +819,15 @@ inbfrq -1 imgfrq -1
 
             # Use last valid positions if minimization produced NaN
             md_pos = pbc_fire_state.position
+            if jnp.any(~jnp.isfinite(md_pos)) and pbc_fire_positions:
+                md_pos = pbc_fire_positions[-1]
+                print("Warning: NaN in PBC minimization, using last valid position from PBC")
             if jnp.any(~jnp.isfinite(md_pos)):
-                print("Warning: NaN/Inf in minimized positions, using last valid state")
                 md_pos = fire_state.position
-                if jnp.any(~jnp.isfinite(md_pos)):
-                    print("Error: No valid positions for NVE; skipping JAX-MD simulation")
-                    return 0, jnp.array([]).reshape(0, len(md_pos), 3)
+                print("Warning: Using positions from first minimization (no PBC)")
+            if jnp.any(~jnp.isfinite(md_pos)):
+                print("Error: No valid positions for NVE; skipping JAX-MD simulation")
+                return 0, jnp.array([]).reshape(0, len(md_pos), 3)
 
             # NVE init then manual momentum override for target temperature
             state = init_fn(key, md_pos, kT, mass=Si_mass)
