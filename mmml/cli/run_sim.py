@@ -888,7 +888,9 @@ inbfrq -1 imgfrq -1
             nhc_positions_out = []
             for R in nhc_positions:
                 if use_pbc:
-                    R = space.transform(box=BOXSIZE, R=R)  # wrap for output
+                    # Wrap positions into [0, BOXSIZE) for trajectory output.
+                    # space.transform multiplies R*box (wrong); use mod to wrap.
+                    R = jnp.mod(R, BOXSIZE)
                 nhc_positions_out.append(R)
             return steps_completed, jnp.stack(nhc_positions_out)
 
@@ -932,6 +934,8 @@ inbfrq -1 imgfrq -1
         sim_key, data_key = jax.random.split(data_key, 2)
         s = set_up_nhc_sim_routine(atoms, T=temperature)
         out_positions, _ = run_sim_loop(s, sim_key)
+
+        print(f"Out positions: {out_positions}")
 
         for i in range(len(out_positions)):
             traj_filename = f'{args.output_prefix}_md_trajectory_{j}_{i}.traj'
