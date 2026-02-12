@@ -220,7 +220,7 @@ def run(args: argparse.Namespace) -> int:
         import pandas as pd
         from mmml.pycharmmInterface.import_pycharmm import minimize
         import jax_md
-        from jax_md import space, quantity, simulate, partition
+        from jax_md import space, quantity, simulate, partition, units
         from ase.units import _amu
 
         import jax.numpy as jnp
@@ -733,18 +733,17 @@ inbfrq -1 imgfrq -1
 
 
         # ========================================================================
-        # SIMULATION PARAMETERS
+        # SIMULATION PARAMETERS (metal unit system from JAX-MD example)
         # ========================================================================
-        # These parameters control the molecular dynamics simulation behavior
-        
-        # Metal units: eV, Å, ps, amu (JAX-MD standard)
-        K_B = 8.617333262e-5  # eV/K
-        dt = args.timestep * 0.001  # args.timestep is in fs; JAX-MD uses ps (1 fs = 0.001 ps)
-        target_temp_K = T
-        kT = K_B * target_temp_K  # eV
+        unit = units.metal_unit_system()
+        timestep_fs = args.timestep  # fs, same as ASE
+        dt = timestep_fs * unit['time']
+        T_init = T * unit['temperature']
+        kT = T_init
+        K_B = 8.617333262e-5  # eV/K (for temp display only)
         steps_per_recording = 25
         rng_key = jax.random.PRNGKey(0)
-        print(f"JAX-MD NVE: dt={dt} ps ({args.timestep} fs, same as ASE), kT={kT:.6f} eV ({target_temp_K} K)")
+        print(f"JAX-MD NVE: dt={dt} (metal units), kT={kT} ({T} K), same timestep as ASE")
 
         # NVE uses same displacement/shift as minimization
         init_fn, apply_fn = simulate.nve(wrapped_energy_fn, shift, dt)
@@ -847,7 +846,7 @@ inbfrq -1 imgfrq -1
                 mass=state.mass,
                 force=state.force
             )
-            print(f"Momentum initialized for {target_temp_K} K")
+            print(f"Momentum initialized for {T} K")
             nhc_positions = []
 
             # get energy of initial state
