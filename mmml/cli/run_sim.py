@@ -678,7 +678,7 @@ inbfrq -1 imgfrq -1
                 )
                 F_mapped = result.forces
                 F_orig = pbc_map_fn.transform_forces(pos, F_mapped)
-                return (-F_orig,)
+                return (F_orig,)
 
             wrapped_energy_fn.defvjp(wrapped_energy_fn_fwd, wrapped_energy_fn_bwd)
             wrapped_energy_fn = jit(wrapped_energy_fn)
