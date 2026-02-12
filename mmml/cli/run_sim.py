@@ -658,15 +658,13 @@ inbfrq -1 imgfrq -1
         def wrapped_energy_fn(position, **kwargs):
             return jax_md_energy_fn(jnp.array(position), **kwargs)
 
-        # Shift: use pbc_map to wrap molecules (keeps monomers intact, coregisters correctly)
+        # Shift: do NOT wrap every timestep (same as ASE). pbc_map is discontinuous;
+        # wrapping after each step creates inconsistent phase-space (positions jumped,
+        # velocities unchanged) and breaks NVE energy conservation. Calculator applies
+        # pbc_map internally for forces; integration uses unwrapped coordinates.
         _displacement, _shift_free = space.free()
-        if use_pbc and pbc_map_fn is not None:
-            def shift(R, dR, **kwargs):
-                return pbc_map_fn(R + dR)
-            displacement = _displacement
-        else:
-            shift = _shift_free
-            displacement = _displacement
+        shift = _shift_free
+        displacement = _displacement
 
         unwrapped_init_fn, unwrapped_step_fn = jax_md.minimize.fire_descent(
             wrapped_energy_fn, shift, dt_start=0.001, dt_max=0.001
