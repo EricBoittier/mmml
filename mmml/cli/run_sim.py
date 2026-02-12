@@ -219,9 +219,8 @@ def run(args: argparse.Namespace) -> int:
         from mmml.pycharmmInterface.setupBox import setup_box_generic
         import pandas as pd
         from mmml.pycharmmInterface.import_pycharmm import minimize
-        # import jax_md
-        # # JAX-MD imports
-        # from jax_md import space, smap, energy, quantity, simulate, partition, units
+        import jax_md
+        from jax_md import space, quantity, simulate, partition, units
         from ase.units import _amu
 
         import jax.numpy as jnp
@@ -346,7 +345,7 @@ def run(args: argparse.Namespace) -> int:
 
 
     # Create hybrid calculator (pbc_map/do_pbc_map from factory when cell is set)
-    hybrid_calc, _ = calculator_factory(
+    hybrid_calc, spherical_cutoff_calculator = calculator_factory(
         atomic_numbers=Z,
         atomic_positions=R,
         n_monomers=args.n_monomers,
@@ -608,7 +607,7 @@ inbfrq -1 imgfrq -1
     def set_up_nhc_sim_routine(atoms, T=args.temperature, dt=5e-3, steps_per_recording=250):
         @jax.jit
         def evaluate_energies_and_forces(atomic_numbers, positions, dst_idx, src_idx):
-            return _spherical_cutoff_calculator(
+            return spherical_cutoff_calculator(
                 atomic_numbers=atomic_numbers,
                 positions=positions,
                 n_monomers=args.n_monomers,
@@ -1044,7 +1043,8 @@ inbfrq -1 imgfrq -1
 
 def main() -> int:
     """CLI entry point: parse args and run simulation."""
-    return run(parse_args())
+    run(parse_args())
+    return 0
 
 
 if __name__ == "__main__":
