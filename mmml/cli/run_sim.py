@@ -220,7 +220,7 @@ def run(args: argparse.Namespace) -> int:
         import pandas as pd
         from mmml.pycharmmInterface.import_pycharmm import minimize
         import jax_md
-        from jax_md import space, quantity, simulate, partition, units
+        from jax_md import space, quantity, simulate, partition, units, units
         from ase.units import _amu
 
         import jax.numpy as jnp
@@ -757,8 +757,9 @@ inbfrq -1 imgfrq -1
         ):
             total_records = total_steps // steps_per_recording
 
-            # Center positions before minimization
-            initial_pos = R - R.mean(axis=0)
+            # Translate to center of mass before minimization
+            com = jnp.sum(Si_mass[:, None] * R, axis=0) / Si_mass.sum()
+            initial_pos = R - com
             fire_state = unwrapped_init_fn(initial_pos)
             fire_positions = []
 
