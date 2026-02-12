@@ -733,7 +733,6 @@ inbfrq -1 imgfrq -1
         dt = timestep_fs * unit['time']
         T_init = T * unit['temperature']
         kT = T_init
-        K_B = 8.617333262e-5  # eV/K (for temp display only)
         steps_per_recording = 25
         rng_key = jax.random.PRNGKey(0)
         print(f"JAX-MD NVE: dt={dt} (metal units), kT={kT} ({T} K), same timestep as ASE")
@@ -865,7 +864,7 @@ inbfrq -1 imgfrq -1
                     time_ps = i * steps_per_recording * dt
                     # Temperature: quantity.temperature needs mass to broadcast with momentum (n,3)
                     kT_curr = quantity.temperature(momentum=state.momentum, mass=Si_mass[:, None])
-                    temp = float(kT_curr / K_B)
+                    temp = float(kT_curr / unit['temperature'])
                     energy = float(wrapped_energy_fn(state.position))
                     print(f"{time_ps:10.4f}\t{energy:10.4f}\t{temp:10.2f}")
 
