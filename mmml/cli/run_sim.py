@@ -870,8 +870,8 @@ inbfrq -1 imgfrq -1
                 if i % 10 == 0:
                     time = i * steps_per_recording * dt
                     
-                    # Temperature: T = 2*KE/(3*N*kB); quantity.temperature returns kT (eV)
-                    kT_curr = quantity.temperature(momentum=state.momentum, mass=Si_mass)
+                    # Temperature: quantity.temperature needs mass to broadcast with momentum (n,3)
+                    kT_curr = quantity.temperature(momentum=state.momentum, mass=Si_mass[:, None])
                     temp = float(kT_curr / K_B)
                     
                     energy = float(wrapped_energy_fn(state.position))
