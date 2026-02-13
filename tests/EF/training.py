@@ -293,6 +293,8 @@ class MessagePassingModel(nn.Module):
         # Embed atoms (flattened) - atomic_numbers_flat is already ensured to be 1D above
         x = e3x.nn.Embed(num_embeddings=self.max_atomic_number + 1, features=self.features)(atomic_numbers_flat)
 
+        
+
         # Message passing loop
         for i in range(self.num_iterations):
             y = e3x.nn.MessagePass(
@@ -308,23 +310,18 @@ class MessagePassingModel(nn.Module):
             x = e3x.nn.add(x, xEF)
             x = e3x.nn.TensorDense(max_degree=self.max_degree)(x)
             x = e3x.nn.add(x, y)
-
-        for i in range(4):
-            x = e3x.nn.Dense(self.features)(x)
+            x = e3x.nn.TensorDense(max_degree=self.max_degree)(x)
             x = e3x.nn.silu(x)
-        x = e3x.nn.Dense(self.features)(x)
-
+            
         # Save original x before reduction for dipole prediction
         x_orig = x  # (B*N, 2, (max_degree+1)^2, features)
-        
         # Reduce to scalars per atom for energy prediction
-        x = e3x.nn.change_max_degree_or_type(x, max_degree=0, include_pseudotensors=False)
-
         # Predict atomic charges (scalar per atom)
         # Use a separate branch from the same features
-        x_charge = x  # (B*N, 1, 1, features)
+        x_charge = e3x.nn.change_max_degree_or_type(x, max_degree=0, include_pseudotensors=False)  # (B*N, 1, 1, features)
 
-        atomic_charges = nn.Dense(1, use_bias=False, kernel_init=jax.nn.initializers.zeros)(x_charge)
+        atomic_charges = nn.Dense(1, use_bias=True, kernel_init=jax.nn.initializers.zeros)(x_charge)
+        atomic_charges = e3x.nn.silu(atomic_charges)
         atomic_charges = jnp.squeeze(atomic_charges, axis=(-1, -2, -3))  # (B*N,)
 
         # Predict atomic dipoles (3D vector per atom)
@@ -332,10 +329,12 @@ class MessagePassingModel(nn.Module):
         x_dipole = e3x.nn.change_max_degree_or_type(x_orig, max_degree=1, include_pseudotensors=False)
         # run through a tensor dense layer to get the dipole in the correct shape
         x_dipole = e3x.nn.TensorDense(max_degree=1)(x_dipole)
+        x_dipole = e3x.nn.silu(x_dipole)
         # x_dipole shape: (B*N, parity, 4, features) where 4 = (lmax+1)^2 = (1+1)^2
         # Index 0: l=0 (scalar), indices 1-3: l=1 (dipole, 3 components)
         # Apply Dense to reduce features dimension: (B*N, parity, 4, features) -> (B*N, parity, 4, 1)
         x_dipole = e3x.nn.Dense(1, use_bias=False, kernel_init=jax.nn.initializers.zeros)(x_dipole)
+        x_dipole = e3x.nn.silu(x_dipole)
         # Extract l=1 components (indices 1-3) and take real part (first parity dimension, index 0)
         # Shape: (B*N, parity, 3, 1) -> take parity=0 (real part) -> (B*N, 3, 1) -> squeeze -> (B*N, 3)
         atomic_dipoles = x_dipole[:, 0, 1:4, 0]  # (B*N, 3) - take first parity (real), l=1 components, squeeze features
@@ -366,7 +365,7 @@ class MessagePassingModel(nn.Module):
             lambda rng, shape: jnp.zeros(shape, dtype=positions.dtype),
             (self.max_atomic_number + 1,)
         )
-        atomic_energies = nn.Dense(1, use_bias=False, kernel_init=jax.nn.initializers.zeros)(x)
+        atomic_energies = nn.Dense(1, use_bias=True, kernel_init=jax.nn.initializers.zeros)(x)
         atomic_energies = jnp.squeeze(atomic_energies, axis=(-1, -2, -3))  # (B*N,)
         atomic_energies = atomic_energies + element_bias[atomic_numbers_flat]
         energy = atomic_energies.reshape(B, N).sum(axis=1)  # (B,)
@@ -376,19 +375,18 @@ class MessagePassingModel(nn.Module):
         r_ij = jnp.linalg.norm(displacements, axis=-1)  # (B*E,)
         q_src = atomic_charges[src_idx_flat]  # (B*E,)
         q_dst = atomic_charges[dst_idx_flat]  # (B*E,)
-        pair_coulomb = q_src * q_dst / (r_ij + 1e-10)  # (B*E,)
+        pair_coulomb = (q_src * q_dst) / (r_ij + 1e-10)  # (B*E,)
         # Sum per molecule (each pair counted twice in neighbor list, so divide by 2)
         edge_batch = batch_segments[dst_idx_flat]  # (B*E,) batch index per edge
         coulomb_energy = jax.ops.segment_sum(pair_coulomb, edge_batch, num_segments=B) / 2.0  # (B,)
-        energy = energy + coulomb_energy * 14.399645  # Coulomb constant in eV·Å/e²
+        energy = energy + coulomb_energy * 7.199822675975274 # 1/(4π*ε₀) in atomic units
 
 
         # Optional explicit dipole-field coupling:
         if self.dipole_field_coupling:
-
             coupling = jnp.sum( dipole * Ef , axis=-1)  # (B,)  mu·Ef_input
             coupling = coupling * self.field_scale * HARTREE_TO_EV
-            energy = energy + coupling * energy
+            energy = energy + coupling
 
         # Proxy energy for force differentiation
         return -jnp.sum(energy), energy, dipole
