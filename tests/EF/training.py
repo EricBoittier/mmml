@@ -359,13 +359,14 @@ class MessagePassingModel(nn.Module):
         self.sow('intermediates', 'atomic_charges', charges_batched)      # (B, N)
         self.sow('intermediates', 'atomic_dipoles', dipoles_batched)      # (B, N, 3)
 
-        # Predict atomic energies
+        # Predict atomic energies (reduce to scalar per atom like x_charge)
+        x_energy = e3x.nn.change_max_degree_or_type(x, max_degree=0, include_pseudotensors=False)  # (B*N, 1, 1, features)
         element_bias = self.param(
             "element_bias",
             lambda rng, shape: jnp.zeros(shape, dtype=positions.dtype),
             (self.max_atomic_number + 1,)
         )
-        atomic_energies = nn.Dense(1, use_bias=True, kernel_init=jax.nn.initializers.zeros)(x)
+        atomic_energies = nn.Dense(1, use_bias=True, kernel_init=jax.nn.initializers.zeros)(x_energy)
         atomic_energies = jnp.squeeze(atomic_energies, axis=(-1, -2, -3))  # (B*N,)
         atomic_energies = atomic_energies + element_bias[atomic_numbers_flat]
         energy = atomic_energies.reshape(B, N).sum(axis=1)  # (B,)
