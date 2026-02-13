@@ -745,7 +745,7 @@ inbfrq -1 imgfrq -1
 
             # FIRE minimization
             print("*" * 10 + "\nMinimization\n" + "*" * 10)
-            NMIN = 100
+            NMIN = 1000
             for i in range(NMIN):
                 fire_positions.append(fire_state.position)
                 fire_state = unwrapped_step_fn(fire_state)
@@ -785,7 +785,7 @@ inbfrq -1 imgfrq -1
             pbc_fire_positions = []
             
             # Run PBC minimization (track best; stop early if forces increase - FIRE+unwrapped can wander)
-            NMIN_PBC = 100
+            NMIN_PBC = 1000
             max_force_start = float(jnp.abs(jax.grad(wrapped_energy_fn)(pbc_start_pos)).max())
             best_pbc_pos = pbc_start_pos
             best_pbc_max_f = max_force_start
