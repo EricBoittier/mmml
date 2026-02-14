@@ -126,6 +126,7 @@ def train_model(
     batch_args_dict=None,
     data_keys=("R", "Z", "F", "E", "N",  "D", "dst_idx", "src_idx", "batch_segments"),
     early_stop_patience=None,
+    init_params=None,
 ):
     """
     Train a PhysNetJax model with comprehensive logging and checkpointing.
@@ -194,6 +195,11 @@ def train_model(
     early_stop_patience : int | None, optional
         If set, stop training early when the objective has not improved for
         this many consecutive epochs.  None disables early stopping (default).
+    init_params : dict | None, optional
+        If provided, use these parameters instead of freshly initialised ones.
+        Useful for warm-starting from transplanted parameters (progressive
+        training).  The optimizer and EMA are initialised from these params.
+        Ignored when ``restart`` is set.
         
     Returns
     -------
@@ -328,13 +334,20 @@ def train_model(
         jax.debug.print("D: {x}", x=valid_data["D"])
 
     dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(num_atoms)
-    params = model.init(
+    fresh_params = model.init(
         init_key,
         atomic_numbers=train_data["Z"][0],
         positions=train_data["R"][0],
         dst_idx=dst_idx,
         src_idx=src_idx,
     )
+    # Use caller-supplied params (e.g. transplanted from a previous stage)
+    # when available, falling back to fresh random init.
+    if init_params is not None and not restart:
+        params = _merge_params(fresh_params, init_params)
+    else:
+        params = fresh_params
+
     # load from restart
     if restart:
         (
@@ -349,15 +362,15 @@ def train_model(
             state,
         ) = restart_training(restart, transform, optimizer, num_atoms)
         # Fill missing params (e.g. repulsion) from old checkpoints that lack newer submodules
-        init_params = model.init(
+        fresh_restart_params = model.init(
             init_key,
             atomic_numbers=train_data["Z"][0],
             positions=train_data["R"][0],
             dst_idx=dst_idx,
             src_idx=src_idx,
         )
-        params = _merge_params(init_params, params)
-        ema_params = _merge_params(init_params, ema_params)
+        params = _merge_params(fresh_restart_params, params)
+        ema_params = _merge_params(fresh_restart_params, ema_params)
     # initialize
     else:
         ema_params = params
