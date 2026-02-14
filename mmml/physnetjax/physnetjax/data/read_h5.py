@@ -34,9 +34,13 @@ def _cache_key(
     force_key: str,
     dipole_key: str,
     max_structures: Optional[int],
+    charge_filter: Optional[float] = None,
 ) -> str:
     """Build a deterministic hash string for cache directory naming."""
-    parts = f"{filepath.resolve()}|{natoms}|{energy_key}|{force_key}|{dipole_key}|{max_structures}"
+    parts = (
+        f"{filepath.resolve()}|{natoms}|{energy_key}|{force_key}"
+        f"|{dipole_key}|{max_structures}|{charge_filter}"
+    )
     return hashlib.sha256(parts.encode()).hexdigest()[:16]
 
 
@@ -55,6 +59,7 @@ def load_h5(
     force_key: str = "total_forces",
     dipole_key: str = "dipole",
     max_structures: Optional[int] = None,
+    charge_filter: Optional[float] = None,
     cache: bool = True,
     cache_dir: Optional[str | Path] = None,
     verbose: bool = False,
@@ -82,6 +87,10 @@ def load_h5(
         HDF5 dataset name to use for dipoles, by default 'dipole'.
     max_structures : int or None, optional
         Maximum number of structures to load. None loads all structures.
+    charge_filter : float or None, optional
+        If set, only include structures whose total charge equals this value.
+        For example, ``charge_filter=0.0`` keeps only neutral molecules.
+        Default None (no filtering).
     cache : bool, optional
         Whether to cache the processed arrays via orbax, by default True.
     cache_dir : str or Path or None, optional
@@ -117,6 +126,7 @@ def load_h5(
             force_key=force_key,
             dipole_key=dipole_key,
             max_structures=max_structures,
+            charge_filter=charge_filter,
         )
         if cache_path.exists():
             if verbose:
@@ -150,6 +160,8 @@ def load_h5(
 
         if verbose:
             print(f"Loading {len(mol_keys)} structures from {filepath.name}")
+            if charge_filter is not None:
+                print(f"Filtering by charge == {charge_filter}")
             # Print available datasets from first molecule
             if mol_keys:
                 print(f"Available datasets in '{mol_keys[0]}':")
@@ -158,6 +170,7 @@ def load_h5(
                     print(f"  {ds_name}: shape={ds.shape}, dtype={ds.dtype}")
 
         n_skipped = 0
+        n_charge_filtered = 0
         for i, mol_name in enumerate(mol_keys):
             grp = f[mol_name]
 
@@ -209,8 +222,22 @@ def load_h5(
             # Total charge: scalar -- optional
             if has_charge is None:
                 has_charge = "charge" in grp
+            charge = None
             if has_charge and "charge" in grp:
                 charge = float(grp["charge"][()])
+
+            # Filter by charge if requested
+            if charge_filter is not None:
+                if charge is None:
+                    raise ValueError(
+                        f"charge_filter={charge_filter} requested but "
+                        f"'{mol_name}' has no 'charge' dataset."
+                    )
+                if abs(charge - charge_filter) > 1e-6:
+                    n_charge_filtered += 1
+                    continue
+
+            if charge is not None:
                 all_Q.append(charge)
 
             all_R.append(R_padded)
@@ -224,6 +251,8 @@ def load_h5(
 
         if verbose and n_skipped > 0:
             print(f"  Skipped {n_skipped} structures with > {natoms} atoms")
+        if verbose and n_charge_filtered > 0:
+            print(f"  Filtered out {n_charge_filtered} structures with charge != {charge_filter}")
 
     n_samples = len(all_R)
     if n_samples == 0:
@@ -258,6 +287,7 @@ def load_h5(
             force_key=force_key,
             dipole_key=dipole_key,
             max_structures=max_structures,
+            charge_filter=charge_filter,
         )
         if verbose:
             print(f"Saving orbax cache to: {cache_path}")
@@ -298,6 +328,7 @@ def prepare_h5_datasets(
     force_key: str = "total_forces",
     dipole_key: str = "dipole",
     max_structures: Optional[int] = None,
+    charge_filter: Optional[float] = None,
     cache: bool = True,
     cache_dir: Optional[str | Path] = None,
     verbose: bool = False,
@@ -330,6 +361,10 @@ def prepare_h5_datasets(
         HDF5 dataset name for dipoles, by default 'dipole'.
     max_structures : int or None, optional
         Maximum number of structures to load from the file.
+    charge_filter : float or None, optional
+        If set, only include structures whose total charge equals this value.
+        For example, ``charge_filter=0.0`` keeps only neutral molecules.
+        Default None (no filtering).
     cache : bool, optional
         Whether to cache the processed arrays via orbax, by default True.
     cache_dir : str or Path or None, optional
@@ -374,6 +409,7 @@ def prepare_h5_datasets(
         force_key=force_key,
         dipole_key=dipole_key,
         max_structures=max_structures,
+        charge_filter=charge_filter,
         cache=cache,
         cache_dir=cache_dir,
         verbose=verbose,

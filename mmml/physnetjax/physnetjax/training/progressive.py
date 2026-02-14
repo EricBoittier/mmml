@@ -135,6 +135,8 @@ def train_model_progressive(
     growth_patience: int = 50,
     num_epochs: int = 500,
     name: str = "progressive",
+    resume_stage: int = 0,
+    resume_checkpoint: str = None,
     verbose: bool = True,
     **train_kwargs,
 ):
@@ -176,6 +178,16 @@ def train_model_progressive(
     name : str, optional
         Base experiment name for checkpointing.  Each stage appends a
         suffix like ``-stage0``, ``-stage1``, etc.
+    resume_stage : int, optional
+        Stage index to resume from.  Stages before this index are
+        skipped.  Use together with *resume_checkpoint* to supply
+        the learned parameters from the last completed stage.
+        Default 0 (start from the beginning).
+    resume_checkpoint : str, optional
+        Path to an orbax checkpoint directory from a previously
+        completed stage.  The ``ema_params`` are loaded and used as
+        ``prev_ema_params`` so that the *resume_stage* can transplant
+        from them.  Ignored when *resume_stage* is 0.
     verbose : bool, optional
         Print stage transition information.
     **train_kwargs
@@ -192,7 +204,33 @@ def train_model_progressive(
     best_loss = float("inf")
     num_atoms = base_model_kwargs.get("natoms", 60)
 
+    # ------------------------------------------------------------------
+    # Resume: load params from a completed stage's checkpoint
+    # ------------------------------------------------------------------
+    if resume_stage > 0 and resume_checkpoint is not None:
+        from mmml.physnetjax.physnetjax.restart.restart import (
+            get_last,
+            get_params_model,
+        )
+        ckpt_path = get_last(resume_checkpoint)
+        params_loaded, _ = get_params_model(ckpt_path, num_atoms)
+        prev_ema_params = params_loaded
+        if verbose:
+            print(f"Resuming from stage {resume_stage}, loaded params from "
+                  f"{ckpt_path}")
+    elif resume_stage > 0:
+        raise ValueError(
+            f"resume_stage={resume_stage} but no resume_checkpoint provided. "
+            "Pass the checkpoint path from the last completed stage."
+        )
+
     for stage_idx, stage_overrides in enumerate(growth_stages):
+        # Skip already-completed stages when resuming
+        if stage_idx < resume_stage:
+            if verbose:
+                print(f"Skipping stage {stage_idx} (already completed)")
+            continue
+
         # -----------------------------------------------------------------
         # Build model for this stage
         # -----------------------------------------------------------------
@@ -242,6 +280,9 @@ def train_model_progressive(
         # Build train_model kwargs; let caller override everything except
         # the progressive-specific ones we control.
         tm_kwargs = dict(train_kwargs)
+        # Never forward ``restart`` -- each stage must start fresh (warm-
+        # started via init_params when transplanted params are available).
+        tm_kwargs.pop("restart", None)
         tm_kwargs.update(
             num_epochs=num_epochs,
             num_atoms=num_atoms,
@@ -249,153 +290,24 @@ def train_model_progressive(
             early_stop_patience=growth_patience,
         )
 
-        # If we have transplanted params, we need to inject them. Since
-        # train_model initialises params internally, we pass the model and
-        # let train_model do its own init.  We then rely on the restart /
-        # _merge_params path.  However, the cleanest approach is to pass
-        # pre-initialised params via a restart-like mechanism.
-        #
-        # For simplicity we use a direct approach: let train_model init
-        # as usual, then the progressive wrapper re-initialises the
-        # optimizer with transplanted params.  We achieve this by passing
-        # restart=False and doing the transplant inside train_model's
-        # param init.  Since we can't do that without modifying train_model
-        # further, we use a pragmatic alternative: save transplanted params
-        # to a temporary orbax checkpoint and pass it as restart.
-        #
-        # ACTUALLY the simplest correct approach: since train_model inits
-        # params at line 326 and then optionally overwrites via restart,
-        # we can monkey-patch the init result.  But that's fragile.
-        #
-        # Instead we use the most robust approach: call train_model as
-        # normal (it will init fresh params) and rely on the fact that
-        # _merge_params(init, loaded) prefers loaded.  We accomplish this
-        # by wrapping in a thin helper that patches params after init.
-        #
-        # The cleanest way: pass transplanted as initial params by
-        # temporarily setting restart to inject them.  Since this is
-        # complex, let's just call train_model with a small wrapper.
-
-        ema_params, stage_best_loss = _train_stage(
+        ema_params, stage_best_loss = train_model(
             key=train_key,
             model=model,
             train_data=train_data,
             valid_data=valid_data,
-            transplanted_params=transplanted,
+            init_params=transplanted,
             **tm_kwargs,
         )
 
         if verbose:
             print(f"Stage {stage_idx} finished: best {tm_kwargs.get('objective', 'valid_forces_mae')} "
-                  f"= {stage_best_loss:.6f}")
+                  f"= {float(stage_best_loss):.6f}")
 
         prev_ema_params = ema_params
         best_loss = stage_best_loss
 
     return ema_params, best_loss
 
-
-def _train_stage(
-    key,
-    model,
-    train_data,
-    valid_data,
-    transplanted_params=None,
-    **train_kwargs,
-):
-    """
-    Train a single stage, optionally warm-starting from transplanted params.
-
-    This wraps ``train_model`` and, if *transplanted_params* is provided,
-    injects them by temporarily saving to an orbax checkpoint that
-    ``train_model`` can load via its restart mechanism.
-
-    For the case where transplanted_params is None, it simply calls
-    train_model directly.
-    """
-    import tempfile
-    import warnings
-    from pathlib import Path
-
-    from flax.training import orbax_utils, train_state
-    from mmml.physnetjax.physnetjax.restart.restart import orbax_checkpointer
-
-    if transplanted_params is None:
-        return train_model(
-            key=key,
-            model=model,
-            train_data=train_data,
-            valid_data=valid_data,
-            **train_kwargs,
-        )
-
-    # Save transplanted params to a temporary checkpoint so that
-    # train_model's restart logic picks them up.
-    num_atoms = train_kwargs.get("num_atoms", model.natoms)
-    dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(num_atoms)
-
-    key, init_key = jax.random.split(key)
-    init_params = model.init(
-        init_key,
-        atomic_numbers=train_data["Z"][0],
-        positions=train_data["R"][0],
-        dst_idx=dst_idx,
-        src_idx=src_idx,
-    )
-
-    # Use transplanted params as both params and ema_params
-    from mmml.physnetjax.physnetjax.training.training import _merge_params
-    merged_params = _merge_params(init_params, transplanted_params)
-
-    optimizer_obj = train_kwargs.get("optimizer", None)
-    from mmml.physnetjax.physnetjax.training.optimizer import get_optimizer
-    opt, tfm, sched, _ = get_optimizer(
-        learning_rate=train_kwargs.get("learning_rate", 0.001),
-        schedule_fn=train_kwargs.get("schedule_fn", None),
-        optimizer=optimizer_obj,
-        transform=train_kwargs.get("transform", None),
-    )
-
-    state = train_state.TrainState.create(
-        apply_fn=model.apply, params=merged_params, tx=opt
-    )
-
-    ckpt = {
-        "model": state,
-        "model_attributes": model.return_attributes(),
-        "transform_state": tfm.init(merged_params),
-        "ema_params": merged_params,
-        "params": merged_params,
-        "epoch": 0,
-        "opt_state": opt.init(merged_params),
-        "best_loss": float("inf"),
-        "lr_eff": 0.001,
-        "objectives": {},
-    }
-
-    tmp_dir = Path(tempfile.mkdtemp(prefix="progressive_ckpt_"))
-    ckpt_path = tmp_dir / "epoch-0"
-
-    save_args = orbax_utils.save_args_from_target(ckpt)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", RuntimeWarning)
-        orbax_checkpointer.save(ckpt_path, ckpt, save_args=save_args)
-
-    # Train with restart pointing to the temp checkpoint
-    result = train_model(
-        key=key,
-        model=model,
-        train_data=train_data,
-        valid_data=valid_data,
-        restart=str(tmp_dir),
-        **train_kwargs,
-    )
-
-    # Clean up temp checkpoint
-    import shutil
-    shutil.rmtree(tmp_dir, ignore_errors=True)
-
-    return result
 
 
 # ---------------------------------------------------------------------------
