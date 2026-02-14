@@ -53,11 +53,11 @@ def sort_names_safe(x) -> int:
     return -1
 
 def get_files(path: str) -> List[Path]:
-    """Get sorted directory paths excluding tmp directories."""
-    dirs = list(Path(path).glob("*/"))
-    dirs = [_ for _ in dirs if "tfevent" not in str(_)]
+    """Get sorted epoch checkpoint directories, ignoring orbax-internal dirs."""
+    dirs = list(Path(path).glob("epoch-*/"))
+    dirs = [d for d in dirs if "tfevent" not in str(d) and "tmp" not in str(d)]
     dirs.sort(key=lambda x: sort_names_safe(str(x)))
-    return [_ for _ in dirs if "tmp" not in str(_)]
+    return dirs
 
 
 def _process_model_attributes(

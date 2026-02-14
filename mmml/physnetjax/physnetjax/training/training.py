@@ -125,6 +125,7 @@ def train_model(
     batch_method=None,
     batch_args_dict=None,
     data_keys=("R", "Z", "F", "E", "N",  "D", "dst_idx", "src_idx", "batch_segments"),
+    early_stop_patience=None,
 ):
     """
     Train a PhysNetJax model with comprehensive logging and checkpointing.
@@ -190,11 +191,15 @@ def train_model(
         Additional batch arguments, by default None
     data_keys : tuple, optional
         Keys for data dictionary, by default ("R", "Z", "F", "E", "D", "dst_idx", "src_idx", "batch_segments")
+    early_stop_patience : int | None, optional
+        If set, stop training early when the objective has not improved for
+        this many consecutive epochs.  None disables early stopping (default).
         
     Returns
     -------
-    Any
-        Final EMA parameters
+    tuple
+        (ema_params, best_loss) -- final EMA parameters and the best
+        objective value achieved during training.
         
     Notes
     -----
@@ -365,6 +370,8 @@ def train_model(
     if best_loss is None or restart:
         best_loss = float('inf')
 
+    epochs_without_improvement = 0
+
     train_time1 = time.time()
     epoch_printer = Printer()
     ckp = None
@@ -521,6 +528,7 @@ def train_model(
                 ckp = CKPT_DIR / f"epoch-{epoch}"
                 # update best loss
                 best_loss = obj_res[objective]
+                epochs_without_improvement = 0
                 model_attributes = model.return_attributes()
 
                 ckpt = {
@@ -544,6 +552,8 @@ def train_model(
                     )
 
                 best_ = True
+            else:
+                epochs_without_improvement += 1
 
             if best_ or (epoch % print_freq == 0) and console is not None:
                 combined = epoch_printer.update(
@@ -573,5 +583,14 @@ def train_model(
                 if PROFILE:
                     jax.profiler.save_device_memory_profile(f"{save_time}-memory-{epoch}.prof")
 
-    # Return final model parameters.
-    return ema_params
+            # Early stopping check
+            if early_stop_patience is not None and epochs_without_improvement >= early_stop_patience:
+                if console is not None:
+                    console.print(
+                        f"Early stopping: no improvement for {early_stop_patience} epochs "
+                        f"(best {objective}={best_loss:.6f})"
+                    )
+                break
+
+    # Return final model parameters and best objective value.
+    return ema_params, best_loss

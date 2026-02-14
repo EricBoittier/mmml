@@ -57,8 +57,18 @@ def get_last(path: str) -> Path:
         Path to the most recent checkpoint directory
     """
     dirs = get_files(path)
+    if not dirs:
+        raise FileNotFoundError(
+            f"No checkpoint directories (epoch-*/) found in '{path}'. "
+            "Cannot restart training without an existing checkpoint."
+        )
     if "tmp" in str(dirs[-1]):
         dirs.pop()
+    if not dirs:
+        raise FileNotFoundError(
+            f"Only temporary checkpoint directories found in '{path}'. "
+            "No valid checkpoint to restart from."
+        )
     return dirs[-1]
 
 
