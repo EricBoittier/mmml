@@ -12,7 +12,7 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 config = {
     # Molecule types and counts
-    "residues": ["MEOH", "ACET"],
+    "residues": ["ACO", "DCM"],
     "counts": [10, 10],
     # Box
     "L": 23.0,          # cubic box side length (Å)
