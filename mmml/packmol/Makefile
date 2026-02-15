@@ -14,7 +14,7 @@
 # If you want to compile with some specific fortran compiler, you must 
 # change the line below to the path of your fortran compiler. 
 #
-FORTRAN=/opt/gcc-14.2.0/build/bin/gfortran
+FORTRAN=/usr/bin/gfortran
 #
 # Change the flags of the compilation if you want:
 #
