@@ -197,8 +197,7 @@ kcalmol2ev = 1.0 / ev2kcalmol
 # Module-level configuration ------------------------------------------------
 
 SPATIAL_DIMS: int = 3  # Number of spatial dimensions (x, y, z)
-GAMMA_ON = 1.0
-GAMMA_OFF = 3.0
+from mmml.pycharmmInterface.cutoffs import GAMMA_ON, GAMMA_OFF  # canonical values
 
 if jax is not None:  # pragma: no branch - keeps default behaviour when JAX present
     # If you want to perform simulations in float64 you have to call this before
