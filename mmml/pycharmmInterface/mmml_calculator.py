@@ -1332,21 +1332,6 @@ def setup_calculator(
         # Final validation: check for NaN/Inf in final forces
         final_forces = outputs["out_F"]
         
-        # # Debug: Check force accumulation (jax.debug.print handles conditional execution)
-        ml_force_norm = jnp.linalg.norm(outputs.get("out_F", jnp.zeros((n_atoms, 3)))) if "out_F" in outputs else 0.0
-        mm_force_norm = jnp.linalg.norm(outputs.get("mm_F", jnp.zeros((n_atoms, 3)))) if "mm_F" in outputs else 0.0
-        # jax.debug.print("Before final check - ML force norm: {ml}, MM force norm: {mm}, n_atoms: {n}",
-        # ml=ml_force_norm, mm=mm_force_norm, n=n_atoms,
-        # ordered=False)
-        ml_non_zero = jnp.sum(jnp.any(jnp.abs(outputs.get("out_F", jnp.zeros((n_atoms, 3)))) > 1e-10, axis=1)) if "out_F" in outputs else 0
-        # jax.debug.print("ML forces non-zero atoms: {c} / {t}", c=ml_non_zero, t=n_atoms, ordered=False)
-        
-        # Debug: Check which specific atoms have zero forces BEFORE final NaN check
-        final_force_mags_before = jnp.linalg.norm(final_forces, axis=1)
-        zero_count_before = jnp.sum(final_force_mags_before < 1e-10)
-
-
-        
         final_forces = jnp.where(jnp.isfinite(final_forces), final_forces, 0.0)
 
         # Total energy: combined ML (monomer+dimer switched) + MM
@@ -2287,13 +2272,6 @@ def setup_calculator(
         return processed_forces
 
 
-    def dimer_repulsion(
-        positions: Array,
-        cutoff_params: CutoffParameters,
-        debug: bool
-    ) -> Array:
-        """Calculate dimer repulsion forces."""
-        return 0.0
 
     def apply_dimer_switching(
         positions: Array,
