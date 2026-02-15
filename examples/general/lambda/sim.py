@@ -95,7 +95,7 @@ from mmml.cli.base import (  # noqa: E402
 import ase.io  # noqa: E402
 import jax.numpy as jnp  # noqa: E402
 
-checkpoint = "/home/ericb/mmml/mmml/physnetjax/ckpts/progressive-stage2-9a3b53e8-80c5-4069-a1a9-e8a89899b016/"
+checkpoint = "/home/ericb/mmml/mmml/physnetjax/ckpts/DESdimers/"
 pdbfile = nb_dir / "pdb" / "init-packmol.pdb"
 
 base_ckpt_dir, epoch_dir = resolve_checkpoint_paths(checkpoint)
