@@ -1,0 +1,60 @@
+PSF EXT CMAP XPLOR
+
+         2 !NTITLE
+* EXECUTING CHARMM SCRIPT FROM PYTHON                                           
+*  DATE:     2/15/26     10:46:28      CREATED BY USER: ericb                   
+
+         9 !NATOM
+         1 IMIA     1        IMIA     CG       CG2R51  -0.500000E-01   12.0110           0
+         2 IMIA     1        IMIA     HG       HGR52    0.900000E-01   1.00800           0
+         3 IMIA     1        IMIA     CD2      CG2R51   0.220000       12.0110           0
+         4 IMIA     1        IMIA     HD2      HGR52    0.100000       1.00800           0
+         5 IMIA     1        IMIA     ND1      NG2R51  -0.360000       14.0070           0
+         6 IMIA     1        IMIA     HD1      HGP1     0.320000       1.00800           0
+         7 IMIA     1        IMIA     CE1      CG2R53   0.250000       12.0110           0
+         8 IMIA     1        IMIA     HE1      HGR52    0.130000       1.00800           0
+         9 IMIA     1        IMIA     NE2      NG2R50  -0.700000       14.0070           0
+
+         9 !NBOND: bonds
+         9         3         5         1         7         5         1         2
+         9         7         3         1         5         6         3         4
+         7         8
+
+        13 !NTHETA: angles
+         2         1         3         2         1         5         3         1         5
+         1         3         4         1         3         9         4         3         9
+         1         5         6         1         5         7         6         5         7
+         5         7         8         5         7         9         8         7         9
+         3         9         7
+
+        16 !NPHI: dihedrals
+         1         3         9         7         1         5         7         8
+         1         5         7         9         2         1         3         4
+         2         1         3         9         2         1         5         6
+         2         1         5         7         3         1         5         6
+         3         1         5         7         3         9         7         5
+         3         9         7         8         4         3         1         5
+         4         3         9         7         5         1         3         9
+         6         5         7         8         6         5         7         9
+
+         0 !NIMPHI: impropers
+
+
+         3 !NDON: donors
+         5         6         7         8         1         2
+
+         4 !NACC: acceptors
+         9         0         7         0         5         0         3         0
+
+         0 !NNB
+
+         0         0         0         0         0         0         0         0
+         0
+
+         1         0 !NGRP NST2
+         0         1         0
+
+         0         0 !NUMLP NUMLPH
+
+         0 !NCRTERM: cross-terms
+

@@ -1,0 +1,67 @@
+PSF EXT CMAP XPLOR
+
+         2 !NTITLE
+* EXECUTING CHARMM SCRIPT FROM PYTHON                                           
+*  DATE:     2/15/26     16:35:53      CREATED BY USER: ericb                   
+
+        11 !NATOM
+         1 DIOL     1        DIOL     O1       OG3C51  -0.400000       15.9994           0
+         2 DIOL     1        DIOL     C2       CG3C52   0.160000       12.0110           0
+         3 DIOL     1        DIOL     H21      HGA2     0.900000E-01   1.00800           0
+         4 DIOL     1        DIOL     H22      HGA2     0.900000E-01   1.00800           0
+         5 DIOL     1        DIOL     O3       OG3C51  -0.400000       15.9994           0
+         6 DIOL     1        DIOL     C4       CG3C52   0.500000E-01   12.0110           0
+         7 DIOL     1        DIOL     H41      HGA2     0.900000E-01   1.00800           0
+         8 DIOL     1        DIOL     H42      HGA2     0.900000E-01   1.00800           0
+         9 DIOL     1        DIOL     C5       CG3C52   0.500000E-01   12.0110           0
+        10 DIOL     1        DIOL     H51      HGA2     0.900000E-01   1.00800           0
+        11 DIOL     1        DIOL     H52      HGA2     0.900000E-01   1.00800           0
+
+        11 !NBOND: bonds
+         1         2         2         5         5         6         6         9
+         9         1         2         3         2         4         6         7
+         6         8         9        10         9        11
+
+        20 !NTHETA: angles
+         2         1         9         1         2         3         1         2         4
+         1         2         5         3         2         4         3         2         5
+         4         2         5         2         5         6         5         6         7
+         5         6         8         5         6         9         7         6         8
+         7         6         9         8         6         9         1         9         6
+         1         9        10         1         9        11         6         9        10
+         6         9        11        10         9        11
+
+        21 !NPHI: dihedrals
+         1         2         5         6         1         9         6         5
+         1         9         6         7         1         9         6         8
+         2         1         9         6         2         1         9        10
+         2         1         9        11         2         5         6         7
+         2         5         6         8         2         5         6         9
+         3         2         1         9         3         2         5         6
+         4         2         1         9         4         2         5         6
+         5         2         1         9         5         6         9        10
+         5         6         9        11         7         6         9        10
+         7         6         9        11         8         6         9        10
+         8         6         9        11
+
+         0 !NIMPHI: impropers
+
+
+         0 !NDON: donors
+
+
+         0 !NACC: acceptors
+
+
+         0 !NNB
+
+         0         0         0         0         0         0         0         0
+         0         0         0
+
+         1         0 !NGRP NST2
+         0         1         0
+
+         0         0 !NUMLP NUMLPH
+
+         0 !NCRTERM: cross-terms
+

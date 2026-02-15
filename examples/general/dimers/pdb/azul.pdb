@@ -1,0 +1,22 @@
+REMARK  EXECUTING CHARMM SCRIPT FROM PYTHON                                           
+REMARK   DATE:     2/15/26     16:39:14      CREATED BY USER: ericb                   
+ATOM      1  C1  AZUL    1       0.405   0.607   0.362  1.00  0.00      AZUL
+ATOM      2  H1  AZUL    1       0.467   0.763   0.165  1.00  0.00      AZUL
+ATOM      3  C2  AZUL    1       0.143   0.781   0.914  1.00  0.00      AZUL
+ATOM      4  H2  AZUL    1       0.531   1.392   0.195  1.00  0.00      AZUL
+ATOM      5  C3  AZUL    1       0.093   0.010   0.499  1.00  0.00      AZUL
+ATOM      6  H3  AZUL    1       0.014   0.446   0.012  1.00  0.00      AZUL
+ATOM      7  C4  AZUL    1       0.297   0.187   0.554  1.00  0.00      AZUL
+ATOM      8  C5  AZUL    1       0.002   0.034   0.141  1.00  0.00      AZUL
+ATOM      9  H5  AZUL    1       0.082   0.637   0.600  1.00  0.00      AZUL
+ATOM     10  C6  AZUL    1       1.089   0.931   0.176  1.00  0.00      AZUL
+ATOM     11  H6  AZUL    1       0.307   1.566   0.509  1.00  0.00      AZUL
+ATOM     12  C7  AZUL    1       0.703   0.133   0.012  1.00  0.00      AZUL
+ATOM     13  H7  AZUL    1       1.347   0.470   0.109  1.00  0.00      AZUL
+ATOM     14  C8  AZUL    1       0.060   0.013   0.384  1.00  0.00      AZUL
+ATOM     15  H8  AZUL    1       0.126   0.289   0.347  1.00  0.00      AZUL
+ATOM     16  C9  AZUL    1       0.741   0.004   0.496  1.00  0.00      AZUL
+ATOM     17  H9  AZUL    1       0.400   0.569   0.733  1.00  0.00      AZUL
+ATOM     18  C10 AZUL    1       1.081   0.529   0.872  1.00  0.00      AZUL
+TER      19      AZUL     1
+END
