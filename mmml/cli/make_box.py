@@ -76,6 +76,7 @@ inbfrq -1 imgfrq -1
     pycharmm.lingo.charmm_script(nbonds)
     safe_energy_show()
     setupBox.minimize_box()
+    
 
 
 def main():

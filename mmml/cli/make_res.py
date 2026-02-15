@@ -64,11 +64,13 @@ def main_loop(args):
         energy.show()
     else:
         print("Skipping energy.show() (--skip-energy-show, SKIP_CHARMM_ENERGY_SHOW, or SLURM).")
+    return atoms
 
 def main():
     args = parse_args()
     print(args)
-    main_loop(args)
+    atoms = main_loop(args)
+    return atoms
 
 if __name__ == "__main__":
     main()
