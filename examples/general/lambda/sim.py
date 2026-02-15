@@ -176,6 +176,14 @@ n_prod = config["nsteps_prod"]
 
 results = []
 
+# Directory for per-window trajectories
+traj_dir = Path("trajectories")
+traj_dir.mkdir(exist_ok=True)
+
+from ase.io.trajectory import Trajectory  # noqa: E402
+from ase.md.langevin import Langevin  # noqa: E402
+from ase import units  # noqa: E402
+
 print(f"\n{'='*60}")
 print(f"Starting lambda dynamics: decoupling monomer {decouple_idx}")
 print(f"{'='*60}\n")
@@ -190,9 +198,12 @@ for wi, lam in enumerate(lambda_windows):
           f"lambda[{decouple_idx}] = {lam:.2f} ---")
     print(f"lambda_monomer = {hybrid_calc.lambda_monomer_values}")
 
+    # Trajectory files for this window
+    traj_equil_path = traj_dir / f"window_{wi:02d}_lam{lam:.2f}_equil.traj"
+    traj_prod_path = traj_dir / f"window_{wi:02d}_lam{lam:.2f}_prod.traj"
+
     # Equilibration
-    from ase.md.langevin import Langevin  # noqa: E402
-    from ase import units  # noqa: E402
+    traj_equil = Trajectory(str(traj_equil_path), "w", pdb_ase_atoms)
 
     dyn = Langevin(
         pdb_ase_atoms,
@@ -200,15 +211,20 @@ for wi, lam in enumerate(lambda_windows):
         temperature_K=298.0,
         friction=0.01 / units.fs,
     )
+    dyn.attach(traj_equil.write, interval=50)
 
     print(f"  Equilibrating {n_equil} steps ...")
     dyn.run(n_equil)
+    traj_equil.close()
+    print(f"  -> {traj_equil_path}")
 
-    # Production: collect energies for TI / FEP
+    # Production: collect energies for TI / FEP and save trajectory
     energies_at_lambda = []
 
     def _collect_energy(atoms=pdb_ase_atoms):
         energies_at_lambda.append(float(atoms.get_potential_energy()))
+
+    traj_prod = Trajectory(str(traj_prod_path), "w", pdb_ase_atoms)
 
     dyn_prod = Langevin(
         pdb_ase_atoms,
@@ -217,9 +233,12 @@ for wi, lam in enumerate(lambda_windows):
         friction=0.01 / units.fs,
     )
     dyn_prod.attach(_collect_energy, interval=10)
+    dyn_prod.attach(traj_prod.write, interval=10)
 
     print(f"  Production {n_prod} steps ...")
     dyn_prod.run(n_prod)
+    traj_prod.close()
+    print(f"  -> {traj_prod_path}")
 
     mean_E = np.mean(energies_at_lambda)
     std_E = np.std(energies_at_lambda)
