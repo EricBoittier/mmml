@@ -32,8 +32,8 @@ import numpy as np
 # ---------------------------------------------------------------------------
 config = {
     "RES": "MEOH",
-    "N": 20,
-    "L": 23.0,
+    "N": 30,
+    "L": 20.0,
     "skip_energy_show": False,
     # Lambda schedule: scale monomer 0 from fully coupled (1) to decoupled (0)
     "lambda_windows": [1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.0],
@@ -253,7 +253,7 @@ if len(lambdas) > 1:
     # TI: integrate <dU/dλ> from λ=0 to λ=1
     # Note: our windows go 1→0, so reverse for integration from 0→1
     sort_idx = np.argsort(lambdas)
-    delta_F_TI = np.trapz(dEdl[sort_idx], lambdas[sort_idx])
+    delta_F_TI = np.trapezoid(dEdl[sort_idx], lambdas[sort_idx])
     print(f"\nTI estimate ΔF = {delta_F_TI:.4f} eV "
           f"({delta_F_TI * 23.0609:.2f} kcal/mol)")
 
