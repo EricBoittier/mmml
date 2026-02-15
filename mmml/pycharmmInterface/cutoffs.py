@@ -29,7 +29,10 @@ energy is conserved only if forces are F = -dE_hybrid/dR.
 import numpy as np
 from pathlib import Path
 
-from mmml.pycharmmInterface.mmml_calculator import GAMMA_ON, GAMMA_OFF
+# Switching-function exponents (canonical values used by both calculators).
+# Defined here to avoid circular imports between cutoffs ↔ mmml_calculator.
+GAMMA_ON: float = 1.0
+GAMMA_OFF: float = 3.0
 
 class CutoffParameters:
     """Parameters for ML and MM cutoffs and switching functions"""
