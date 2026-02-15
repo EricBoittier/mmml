@@ -11,7 +11,8 @@ uv.lock
 
 # Generated outputs and checkpoints (do not version large artifacts)
 outputs/
-mmml/physnetjax/ckpts/
+mmml/physnetjax/ckpts/*
+!mmml/physnetjax/ckpts/DESdimers/
 
 # Training data files (too large for GitHub)
 examples/co2/training_data/
