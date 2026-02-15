@@ -1219,8 +1219,27 @@ def setup_calculator(
 
         return calculate_mm_energy_and_forces
 
+    # Lazy cache for the pre-computed MM energy/force function.
+    # Must be built once with *concrete* positions (outside JIT) so that
+    # the cell-list path can call NumPy without hitting TracerArrayConversion.
+    _cached_mm_fn = [None]          # [0] = calculate_mm_energy_and_forces | None
+    _cached_mm_cutoff_key = [None]  # hashable key to detect cutoff-param changes
 
-    
+    def _ensure_mm_fn(positions_concrete, cutoff_params):
+        """Build the MM energy/force function if not yet cached (or if cutoffs changed)."""
+        key = (cutoff_params.ml_cutoff, cutoff_params.mm_switch_on, cutoff_params.mm_cutoff,
+               getattr(cutoff_params, "complementary_handoff", True))
+        if _cached_mm_fn[0] is None or _cached_mm_cutoff_key[0] != key:
+            _cached_mm_fn[0] = get_MM_energy_forces_fns(
+                positions_concrete,
+                N_MONOMERS=n_monomers,
+                ml_cutoff_distance=cutoff_params.ml_cutoff,
+                mm_switch_on=cutoff_params.mm_switch_on,
+                mm_cutoff=cutoff_params.mm_cutoff,
+                complementary_handoff=getattr(cutoff_params, "complementary_handoff", True),
+            )
+            _cached_mm_cutoff_key[0] = key
+
     @partial(jax.jit, static_argnames=['n_monomers', 'cutoff_params', 'doML', 'doMM', 'doML_dimer', 'debug',])
     def spherical_cutoff_calculator(
         positions: Array,  # Shape: (n_atoms, 3)
@@ -1678,22 +1697,17 @@ def setup_calculator(
         cutoff_params: CutoffParameters,
         debug: bool
     ) -> Dict[str, Array]:
-        """Calculate MM energy and force contributions (converted to eV)."""
+        """Calculate MM energy and force contributions (converted to eV).
+
+        Uses the pre-computed MM function from ``_cached_mm_fn`` (built
+        outside JIT by ``_ensure_mm_fn``) so that cell-list pair generation
+        never runs inside a JAX trace.
+        """
         
         # Ensure positions are finite
         positions = jnp.where(jnp.isfinite(positions), positions, 0.0)
 
-        MM_energy_and_gradient = get_MM_energy_forces_fns(
-            positions,
-            N_MONOMERS=n_monomers,
-            ml_cutoff_distance=cutoff_params.ml_cutoff,
-            mm_switch_on=cutoff_params.mm_switch_on,
-            mm_cutoff=cutoff_params.mm_cutoff,
-            complementary_handoff=getattr(cutoff_params, "complementary_handoff", True),
-        )
-        
-        
-        mm_E, mm_grad = MM_energy_and_gradient(positions)
+        mm_E, mm_grad = _cached_mm_fn[0](positions)
         
         # Check for NaN/Inf in MM energy and forces
         mm_E = jnp.where(jnp.isfinite(mm_E), mm_E, 0.0)
@@ -1835,7 +1849,12 @@ def setup_calculator(
                 
 
                 R_mapped = self.pbc_map(R) if (self.do_pbc_map and self.pbc_map is not None) else R
-                
+
+                # Pre-build MM function with concrete positions (outside JIT)
+                # so cell-list pair generation can use NumPy safely.
+                if self.doMM:
+                    _ensure_mm_fn(np.asarray(R_mapped), self.cutoff_params)
+
                 # Compute ModelOutput to get forces directly (more stable)
                 out = spherical_cutoff_calculator(
                     positions=R_mapped,
