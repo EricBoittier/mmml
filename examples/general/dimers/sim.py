@@ -56,7 +56,7 @@ except Exception:
 
 config = {
     "pdbfile": nb_dir / "pdb" / "init-packmol.pdb",
-    "checkpoint": "/home/ericb/mmml/mmml/physnetjax/ckpts/progressive-stage2-9a3b53e8-80c5-4069-a1a9-e8a89899b016/", #nb_dir / "ACO-b4f39bb9-8ca7-485e-bf51-2e5236e51b56",
+    "checkpoint": "/home/ericb/mmml/mmml/physnetjax/ckpts/DESdimers/", #nb_dir / "ACO-b4f39bb9-8ca7-485e-bf51-2e5236e51b56",
     "n_monomers": config["N"],
     "n_atoms_monomer": n_atoms_monomer,
     "cell": config["L"],  # cubic box side length (Å), or None

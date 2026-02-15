@@ -43,9 +43,10 @@ model = EF(features=32, num_iterations=2, max_degree=0, natoms=natoms, cutoff=6.
 train_model(
     key, model, train_data, valid_data,
     num_epochs=1000,
-    restart="/home/ericb/mmml/mmml/physnetjax/ckpts/DESdimers/epoch-289", #nb_dir / "ACO-b4f39bb9-8ca7-485e-bf51-2e5236e51b56",
+    restart="/home/ericb/mmml/mmml/physnetjax/ckpts/progressive-stage2-9a3b53e8-80c5-4069-a1a9-e8a89899b016", #nb_dir / "ACO-b4f39bb9-8ca7-485e-bf51-2e5236e51b56",
     batch_size=248,
     num_atoms=natoms,
+    learning_rate=0.0001,
     batch_method="default",
     data_keys=("R", "Z", "F", "E", "N", "D", "dst_idx", "src_idx", "batch_segments"),
     log_tb=False,

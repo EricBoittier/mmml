@@ -51,7 +51,7 @@ print(f"N_total = {N_total}, total_atoms = {sum(atoms_per_monomer)}")
 # ---------------------------------------------------------------------------
 sim_config = {
     "pdbfile": nb_dir / box_result["pdb_path"],
-    "checkpoint": "/home/ericb/mmml/mmml/physnetjax/ckpts/progressive-stage2-9a3b53e8-80c5-4069-a1a9-e8a89899b016/",
+    "checkpoint": "/home/ericb/mmml/mmml/physnetjax/ckpts/DESdimers/",
     "n_monomers": N_total,
     "atoms_per_monomer": atoms_per_monomer,
     "cell": config["L"],
