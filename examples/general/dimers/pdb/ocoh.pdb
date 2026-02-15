@@ -1,0 +1,31 @@
+REMARK  EXECUTING CHARMM SCRIPT FROM PYTHON                                           
+REMARK   DATE:     2/15/26     16:53:59      CREATED BY USER: ericb                   
+ATOM      1  C1  OCOH    1       0.009   0.010   0.269  1.00  0.00      OCOH
+ATOM      2  H11 OCOH    1       1.066   1.457   0.755  1.00  0.00      OCOH
+ATOM      3  H12 OCOH    1       0.857   1.090   0.266  1.00  0.00      OCOH
+ATOM      4  O1  OCOH    1       0.142   0.121   0.024  1.00  0.00      OCOH
+ATOM      5  HO1 OCOH    1       0.129   1.213   0.729  1.00  0.00      OCOH
+ATOM      6  C2  OCOH    1       0.050   1.431   1.256  1.00  0.00      OCOH
+ATOM      7  H21 OCOH    1       0.092   0.079   0.781  1.00  0.00      OCOH
+ATOM      8  H22 OCOH    1       0.164   0.308   0.106  1.00  0.00      OCOH
+ATOM      9  C3  OCOH    1       0.574   0.064   1.508  1.00  0.00      OCOH
+ATOM     10  H31 OCOH    1       0.929   0.801   0.255  1.00  0.00      OCOH
+ATOM     11  H32 OCOH    1       0.485   1.149   1.287  1.00  0.00      OCOH
+ATOM     12  C4  OCOH    1       0.061   0.027   0.003  1.00  0.00      OCOH
+ATOM     13  H41 OCOH    1       0.201   0.418   0.490  1.00  0.00      OCOH
+ATOM     14  H42 OCOH    1       0.020   0.196   0.139  1.00  0.00      OCOH
+ATOM     15  C5  OCOH    1       0.826   0.042   0.167  1.00  0.00      OCOH
+ATOM     16  H51 OCOH    1       0.243   0.725   0.284  1.00  0.00      OCOH
+ATOM     17  H52 OCOH    1       1.013   0.398   0.044  1.00  0.00      OCOH
+ATOM     18  C6  OCOH    1       0.743   0.096   1.047  1.00  0.00      OCOH
+ATOM     19  H61 OCOH    1       0.576   1.069   0.780  1.00  0.00      OCOH
+ATOM     20  H62 OCOH    1       0.259   0.862   1.098  1.00  0.00      OCOH
+ATOM     21  C7  OCOH    1       1.531   0.217   0.094  1.00  0.00      OCOH
+ATOM     22  H71 OCOH    1       0.066   1.036   0.561  1.00  0.00      OCOH
+ATOM     23  H72 OCOH    1       0.269   0.373   1.323  1.00  0.00      OCOH
+ATOM     24  C8  OCOH    1       0.890   0.011   0.672  1.00  0.00      OCOH
+ATOM     25  H81 OCOH    1       0.076   0.498   0.010  1.00  0.00      OCOH
+ATOM     26  H82 OCOH    1       0.159   0.313   0.379  1.00  0.00      OCOH
+ATOM     27  H83 OCOH    1       0.128   1.153   1.659  1.00  0.00      OCOH
+TER      28      OCOH     1
+END

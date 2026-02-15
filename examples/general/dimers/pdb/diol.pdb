@@ -1,0 +1,15 @@
+REMARK  EXECUTING CHARMM SCRIPT FROM PYTHON                                           
+REMARK   DATE:     2/15/26     16:35:53      CREATED BY USER: ericb                   
+ATOM      1  O1  DIOL    1       1.635   0.329   0.072  1.00  0.00      DIOL
+ATOM      2  C2  DIOL    1       0.284   0.062   0.290  1.00  0.00      DIOL
+ATOM      3  H21 DIOL    1       0.021   0.864   0.089  1.00  0.00      DIOL
+ATOM      4  H22 DIOL    1       0.815   0.512   0.756  1.00  0.00      DIOL
+ATOM      5  O3  DIOL    1       0.776   0.304   0.422  1.00  0.00      DIOL
+ATOM      6  C4  DIOL    1       1.100   0.356   0.016  1.00  0.00      DIOL
+ATOM      7  H41 DIOL    1       0.125   0.045   0.180  1.00  0.00      DIOL
+ATOM      8  H42 DIOL    1       0.197   0.002   1.133  1.00  0.00      DIOL
+ATOM      9  C5  DIOL    1       0.049   0.527   1.032  1.00  0.00      DIOL
+ATOM     10  H51 DIOL    1       0.410   1.615   0.287  1.00  0.00      DIOL
+ATOM     11  H52 DIOL    1       0.999   0.086   0.946  1.00  0.00      DIOL
+TER      12      DIOL     1
+END
