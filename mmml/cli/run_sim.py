@@ -287,66 +287,66 @@ def run(args: argparse.Namespace) -> int:
     pdb_ase_atoms = ase_io.read(pdbfilename)
 
     print(f"Loaded PDB file: {pdb_ase_atoms}")
+
+    # --- Normalise n_atoms_monomer: int or list ---------------------------------
+    raw_n_atoms_monomer = args.n_atoms_monomer
+    if isinstance(raw_n_atoms_monomer, (list, tuple, np.ndarray)):
+        atoms_per_monomer_list = [int(x) for x in raw_n_atoms_monomer]
+        n_monomers = len(atoms_per_monomer_list)
+        total_atoms = sum(atoms_per_monomer_list)
+        n_atoms_first = atoms_per_monomer_list[0]  # for single-monomer test calc
+    else:
+        n_atoms_first = int(raw_n_atoms_monomer)
+        n_monomers = args.n_monomers
+        atoms_per_monomer_list = [n_atoms_first] * n_monomers
+        total_atoms = n_atoms_first * n_monomers
+    # Build monomer offsets for slicing
+    monomer_offsets = np.zeros(n_monomers + 1, dtype=int)
+    for _mi, _na in enumerate(atoms_per_monomer_list):
+        monomer_offsets[_mi + 1] = monomer_offsets[_mi] + _na
+    print(f"[run_sim] atoms_per_monomer_list={atoms_per_monomer_list}, "
+          f"n_monomers={n_monomers}, total_atoms={total_atoms}")
     
     # ========================================================================
     # MASS SETUP FOR JAX-MD SIMULATION
     # ========================================================================
-    # JAX-MD requires proper mass arrays for temperature calculation and dynamics
-    
-    # Get atomic masses from ASE (in atomic mass units)
     raw_masses = pdb_ase_atoms.get_masses()
     print(f"Raw masses from ASE: {raw_masses}")
-    # get the masses from the psf and check if they match the ASE masses
     psf_masses = psf.get_amass()
     print(f"PSF masses: {psf_masses}")
     print(f"PSF masses sum: {sum(psf_masses)}")
     print("Setting the elements and masses from the psf")
-    # set the elements and masses from the psf
     pdb_ase_atoms.set_masses(psf_masses)
     psf_masses_arr = np.array(psf_masses)[:, np.newaxis]
     correct_atomic_numbers_from_mass = np.argmin(np.abs(ase.data.atomic_masses_common[np.newaxis, :] - psf_masses_arr), axis=1)
     pdb_ase_atoms.set_atomic_numbers(correct_atomic_numbers_from_mass)
     print(f"PDB ASE atoms: {pdb_ase_atoms}")
-    print(f"PDB ASE atoms masses: {pdb_ase_atoms.get_masses()}")
-    print(f"PDB ASE atoms atomic numbers: {pdb_ase_atoms.get_atomic_numbers()}")
 
-    Si_mass = jnp.array(correct_atomic_numbers_from_mass)  # Use ASE masses directly (in amu)
+    Si_mass = jnp.array(correct_atomic_numbers_from_mass)
     Si_mass_sum = Si_mass.sum()
     print(f"Si_mass (ASE masses in amu): {Si_mass}")
-    print(f"Si_mass sum: {Si_mass_sum}")
     
-    # Expand mass array to match momentum dimensions for JAX-MD broadcasting
-    # Momentum has shape (n_atoms, 3), so mass must also have shape (n_atoms, 3)
-    Si_mass_expanded = jnp.repeat(Si_mass[:, None], 3, axis=1)  # Shape: (20, 3)
+    Si_mass_expanded = jnp.repeat(Si_mass[:, None], 3, axis=1)
     print(f"Si_mass_expanded shape: {Si_mass_expanded.shape}")
-    print(f"Si_mass_expanded sample: {Si_mass_expanded[0]}")
-
 
     print(f"PyCHARMM coordinates: {coor.get_positions()}")
     print(f"Ase coordinates: {pdb_ase_atoms.get_positions()}")
-    print(f"{coor.get_positions() == pdb_ase_atoms.get_positions()}")
 
     print(coor.get_positions())
-    ase_monomer = pdb_ase_atoms[0:args.n_atoms_monomer]
-    params, model = load_model_parameters(epoch_dir, args.n_atoms_monomer)
+    # Use the first monomer for the quick single-monomer test calculator
+    ase_monomer = pdb_ase_atoms[0:n_atoms_first]
+    params, model = load_model_parameters(epoch_dir, n_atoms_first)
     simple_physnet_calculator = get_ase_calc(params, model, ase_monomer)
     print(f"Simple physnet calculator: {simple_physnet_calculator}")
     ase_monomer.calc = simple_physnet_calculator
-    print(f"ASE monomer: {ase_monomer}")
     print(f"ASE monomer energy: {ase_monomer.get_potential_energy()}")
-    print(f"ASE monomer forces: {ase_monomer.get_forces()}")
-    print(f"ASE monomer positions: {ase_monomer.get_positions()}")
-    print(f"ASE monomer cell: {ase_monomer.get_cell()}")
-    print(f"ASE monomer pbc: {ase_monomer.get_pbc()}")
-    print(f"ASE monomer calculator: {ase_monomer.calc}")
-    print(f"ASE monomer calculator type: {type(ase_monomer.calc)}")
 
-
-    # Load model parameters
+    # Load model parameters for the full system
     natoms = len(pdb_ase_atoms)
-    n_monomers = args.n_monomers
-    n_atoms_monomer = args.n_atoms_monomer
-    assert n_atoms_monomer * n_monomers == natoms, "n_atoms_monomer * n_monomers != natoms"
+    assert total_atoms == natoms, (
+        f"total_atoms ({total_atoms}) != natoms from PDB ({natoms}). "
+        f"atoms_per_monomer_list={atoms_per_monomer_list}"
+    )
     params, model = load_model_parameters(epoch_dir, natoms)
     model.natoms = natoms
     print(f"Model loaded: {model}")
@@ -375,10 +375,10 @@ def run(args: argparse.Namespace) -> int:
         print("No cell provided")
 
 
-    # Setup calculator factory
+    # Setup calculator factory (pass list for heterogeneous, int for uniform)
     calculator_factory = setup_calculator(
-        ATOMS_PER_MONOMER=args.n_atoms_monomer,
-        N_MONOMERS=args.n_monomers,
+        ATOMS_PER_MONOMER=atoms_per_monomer_list,
+        N_MONOMERS=n_monomers,
         ml_cutoff_distance=args.ml_cutoff,
         mm_switch_on=args.mm_switch_on,
         mm_cutoff=args.mm_cutoff,
@@ -387,7 +387,7 @@ def run(args: argparse.Namespace) -> int:
         doML_dimer=not args.skip_ml_dimers,
         debug=args.debug,
         model_restart_path=base_ckpt_dir,
-        MAX_ATOMS_PER_SYSTEM=args.n_monomers * args.n_atoms_monomer,
+        MAX_ATOMS_PER_SYSTEM=total_atoms,
         ml_energy_conversion_factor=1,
         ml_force_conversion_factor=1,
         cell=args.cell,
@@ -410,7 +410,7 @@ def run(args: argparse.Namespace) -> int:
     hybrid_calc, spherical_cutoff_calculator = calculator_factory(
         atomic_numbers=Z,
         atomic_positions=R,
-        n_monomers=args.n_monomers,
+        n_monomers=n_monomers,
         cutoff_params=CUTOFF_PARAMS,
         doML=True,
         doMM=args.include_mm,
@@ -440,7 +440,7 @@ def run(args: argparse.Namespace) -> int:
     if args.cell is not None:
         E0 = atoms.get_potential_energy()
         a = np.array([float(args.cell), 0.0, 0.0])  # first lattice vector for cubic cell
-        g0 = np.where(np.arange(len(atoms)) < (len(atoms) // args.n_monomers))[0]
+        g0 = np.arange(int(monomer_offsets[1]))  # first monomer's atoms
         R_shift = R.copy()
         R_shift[g0] += a
         atoms.set_positions(R_shift)
@@ -521,12 +521,14 @@ inbfrq -1 imgfrq -1
         
     def optimize_as_monomers(atoms, run_index=0, nsteps=60, fmax=0.0006):
         optimized_atoms_positions = np.zeros_like(atoms.get_positions())
-        # use ase and the original physnet calculator to optimize the structure, one monomer at a time
-        for i in range(args.n_monomers):
-            monomer_atoms = atoms[i*args.n_atoms_monomer:(i+1)*args.n_atoms_monomer]
+        # Use ASE and the original physnet calculator to optimize, one monomer at a time
+        for i in range(n_monomers):
+            off = int(monomer_offsets[i])
+            n_i = atoms_per_monomer_list[i]
+            monomer_atoms = atoms[off:off + n_i]
             monomer_atoms.calc = simple_physnet_calculator
             _ = ase_opt.BFGS(monomer_atoms).run(fmax=fmax, steps=nsteps)
-            optimized_atoms_positions[i*args.n_atoms_monomer:(i+1)*args.n_atoms_monomer] = monomer_atoms.get_positions()
+            optimized_atoms_positions[off:off + n_i] = monomer_atoms.get_positions()
 
         atoms.set_positions(optimized_atoms_positions)
         # Wrap positions into cell after monomer optimization (avoids unwrapped coords for PBC)
@@ -617,8 +619,8 @@ inbfrq -1 imgfrq -1
                 print(f"Timestep: {timestep_fs} fs")
                 print(f"Number of steps: {num_steps}")
                 print(f"Number of atoms: {len(ase_atoms)}")
-                print(f"Number of monomers: {args.n_monomers}")
-                print(f"Number of atoms per monomer: {args.n_atoms_monomer}")
+                print(f"Number of monomers: {n_monomers}")
+                print(f"Atoms per monomer: {atoms_per_monomer_list}")
                 print(f"ML cutoff: {args.ml_cutoff} Å")
                 print(f"MM switch on: {args.mm_switch_on} Å")
                 print(f"MM cutoff: {args.mm_cutoff} Å")
@@ -667,7 +669,7 @@ inbfrq -1 imgfrq -1
             return spherical_cutoff_calculator(
                 atomic_numbers=atomic_numbers,
                 positions=positions,
-                n_monomers=args.n_monomers,
+                n_monomers=n_monomers,
                 cutoff_params=CUTOFF_PARAMS,
                 doML=True,
                 doMM=args.include_mm,
