@@ -375,23 +375,47 @@ def run(args: argparse.Namespace) -> int:
         print("No cell provided")
 
 
-    # Setup calculator factory (pass list for heterogeneous, int for uniform)
-    calculator_factory = setup_calculator(
-        ATOMS_PER_MONOMER=atoms_per_monomer_list,
-        N_MONOMERS=n_monomers,
-        ml_cutoff_distance=args.ml_cutoff,
-        mm_switch_on=args.mm_switch_on,
-        mm_cutoff=args.mm_cutoff,
-        doML=True,
-        doMM=args.include_mm,
-        doML_dimer=not args.skip_ml_dimers,
-        debug=args.debug,
-        model_restart_path=base_ckpt_dir,
-        MAX_ATOMS_PER_SYSTEM=total_atoms,
-        ml_energy_conversion_factor=1,
-        ml_force_conversion_factor=1,
-        cell=args.cell,
-    )
+    # Decide which calculator to use: general (heterogeneous) vs original (uniform)
+    is_heterogeneous = len(set(atoms_per_monomer_list)) > 1
+    if is_heterogeneous:
+        # Use the general calculator that supports variable monomer sizes
+        from mmml.pycharmmInterface.mmml_calculator_general import (
+            setup_calculator as setup_calculator_general,
+        )
+        calculator_factory = setup_calculator_general(
+            ATOMS_PER_MONOMER=atoms_per_monomer_list,
+            N_MONOMERS=n_monomers,
+            ml_cutoff_distance=args.ml_cutoff,
+            mm_switch_on=args.mm_switch_on,
+            mm_cutoff=args.mm_cutoff,
+            doML=True,
+            doMM=args.include_mm,
+            doML_dimer=not args.skip_ml_dimers,
+            debug=args.debug,
+            model_restart_path=base_ckpt_dir,
+            MAX_ATOMS_PER_SYSTEM=total_atoms,
+            ml_energy_conversion_factor=1,
+            ml_force_conversion_factor=1,
+            cell=args.cell,
+        )
+    else:
+        # Uniform monomer sizes: use original calculator with a plain int
+        calculator_factory = setup_calculator(
+            ATOMS_PER_MONOMER=atoms_per_monomer_list[0],
+            N_MONOMERS=n_monomers,
+            ml_cutoff_distance=args.ml_cutoff,
+            mm_switch_on=args.mm_switch_on,
+            mm_cutoff=args.mm_cutoff,
+            doML=True,
+            doMM=args.include_mm,
+            doML_dimer=not args.skip_ml_dimers,
+            debug=args.debug,
+            model_restart_path=base_ckpt_dir,
+            MAX_ATOMS_PER_SYSTEM=total_atoms,
+            ml_energy_conversion_factor=1,
+            ml_force_conversion_factor=1,
+            cell=args.cell,
+        )
     
 
     CUTOFF_PARAMS = CutoffParameters(
