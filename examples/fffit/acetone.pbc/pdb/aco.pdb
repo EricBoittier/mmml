@@ -1,0 +1,14 @@
+REMARK  EXECUTING CHARMM SCRIPT FROM PYTHON                                           
+REMARK   DATE:     2/14/26     21:32:29      CREATED BY USER: ericb                   
+ATOM      1  O1  ACO     1       1.094   0.076   0.571  1.00  0.00      ACO 
+ATOM      2  C1  ACO     1       0.281   0.459   0.520  1.00  0.00      ACO 
+ATOM      3  C2  ACO     1       1.028   0.347   1.045  1.00  0.00      ACO 
+ATOM      4  C3  ACO     1       1.266   0.034   0.129  1.00  0.00      ACO 
+ATOM      5  H21 ACO     1       0.110   0.431   0.376  1.00  0.00      ACO 
+ATOM      6  H22 ACO     1       0.352   0.305   0.046  1.00  0.00      ACO 
+ATOM      7  H23 ACO     1       0.001   0.655   0.109  1.00  0.00      ACO 
+ATOM      8  H31 ACO     1       0.608   0.009   1.461  1.00  0.00      ACO 
+ATOM      9  H32 ACO     1       0.161   0.120   0.442  1.00  0.00      ACO 
+ATOM     10  H33 ACO     1       0.139   1.059   0.079  1.00  0.00      ACO 
+TER      11      ACO      1
+END

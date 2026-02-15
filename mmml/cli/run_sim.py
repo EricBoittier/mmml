@@ -182,6 +182,32 @@ def parse_args() -> argparse.Namespace:
         help="Ensemble to run the simulation in (default: nvt).",
     )
 
+    # Nose-Hoover chain (NHC) thermostat parameters for NVT ensemble
+    parser.add_argument(
+        "--nhc-chain-length",
+        type=int,
+        default=3,
+        help="Number of chains in the Nose-Hoover chain thermostat (default: 3).",
+    )
+    parser.add_argument(
+        "--nhc-chain-steps",
+        type=int,
+        default=2,
+        help="Number of steps per chain in the Nose-Hoover chain thermostat (default: 2).",
+    )
+    parser.add_argument(
+        "--nhc-sy-steps",
+        type=int,
+        default=3,
+        help="Number of Suzuki-Yoshida steps in the Nose-Hoover chain thermostat (default: 3).",
+    )
+    parser.add_argument(
+        "--nhc-tau",
+        type=float,
+        default=100.0,
+        help="Thermostat coupling time multiplier (tau = nhc_tau * dt) (default: 100).",
+    )
+
     parser.add_argument(
         "--heating_interval",
         type=int,
@@ -198,6 +224,27 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def default_nhc_kwargs(tau, overrides=None):
+    """Build Nose-Hoover chain kwargs dict with sensible defaults.
+
+    Args:
+        tau: Thermostat coupling timescale (typically ``nhc_tau * dt``).
+        overrides: Optional dict to override individual defaults.
+
+    Returns:
+        Dict with keys ``chain_length``, ``chain_steps``, ``sy_steps``, ``tau``.
+    """
+    default_kwargs = {
+        'chain_length': 3,
+        'chain_steps': 2,
+        'sy_steps': 3,
+        'tau': tau,
+    }
+    if overrides is None:
+        return default_kwargs
+    return {k: overrides.get(k, default_kwargs[k]) for k in default_kwargs}
+
+
 def run(args: argparse.Namespace) -> int:
     """Run MD simulation with the given arguments (CLI or notebook)."""
     base_ckpt_dir, epoch_dir = resolve_checkpoint_paths(args.checkpoint)
@@ -209,6 +256,7 @@ def run(args: argparse.Namespace) -> int:
     # Additional imports for this demo
     try:
         import pycharmm
+        import pycharmm.psf as psf
         import ase
         import ase.calculators.calculator as ase_calc
         import ase.io as ase_io
@@ -248,7 +296,21 @@ def run(args: argparse.Namespace) -> int:
     # Get atomic masses from ASE (in atomic mass units)
     raw_masses = pdb_ase_atoms.get_masses()
     print(f"Raw masses from ASE: {raw_masses}")
-    Si_mass = jnp.array(raw_masses)  # Use ASE masses directly (in amu)
+    # get the masses from the psf and check if they match the ASE masses
+    psf_masses = psf.get_amass()
+    print(f"PSF masses: {psf_masses}")
+    print(f"PSF masses sum: {sum(psf_masses)}")
+    print("Setting the elements and masses from the psf")
+    # set the elements and masses from the psf
+    pdb_ase_atoms.set_masses(psf_masses)
+    psf_masses_arr = np.array(psf_masses)[:, np.newaxis]
+    correct_atomic_numbers_from_mass = np.argmin(np.abs(ase.data.atomic_masses_common[np.newaxis, :] - psf_masses_arr), axis=1)
+    pdb_ase_atoms.set_atomic_numbers(correct_atomic_numbers_from_mass)
+    print(f"PDB ASE atoms: {pdb_ase_atoms}")
+    print(f"PDB ASE atoms masses: {pdb_ase_atoms.get_masses()}")
+    print(f"PDB ASE atoms atomic numbers: {pdb_ase_atoms.get_atomic_numbers()}")
+
+    Si_mass = jnp.array(correct_atomic_numbers_from_mass)  # Use ASE masses directly (in amu)
     Si_mass_sum = Si_mass.sum()
     print(f"Si_mass (ASE masses in amu): {Si_mass}")
     print(f"Si_mass sum: {Si_mass_sum}")
@@ -706,6 +768,8 @@ inbfrq -1 imgfrq -1
         @jit
         def sim(state):
             def step(i, s):
+                # kT is already captured in the NVT closure; passing it via kwargs
+                # would leak through to force_fn -> wrapped_energy_fn which doesn't accept it.
                 return apply_fn(s)
 
             return lax.fori_loop(0, steps_per_recording, step, state)
@@ -723,10 +787,30 @@ inbfrq -1 imgfrq -1
         kT = T * unit['temperature']
         steps_per_recording = 25
         rng_key = jax.random.PRNGKey(0)
-        print(f"JAX-MD NVE: dt={dt} ps ({dt_fs} fs), kT={kT} ({T} K)")
+        print(f"JAX-MD {args.ensemble.upper()}: dt={dt} ps ({dt_fs} fs), kT={kT} ({T} K)")
 
-        # NVE uses same displacement/shift as minimization
-        init_fn, apply_fn = simulate.nve(wrapped_energy_fn, shift, dt)
+        # Select integrator based on ensemble
+        if args.ensemble == "nvt":
+            nhc_chain_length = getattr(args, 'nhc_chain_length', 3)
+            nhc_chain_steps = getattr(args, 'nhc_chain_steps', 2)
+            nhc_sy_steps = getattr(args, 'nhc_sy_steps', 3)
+            nhc_tau = getattr(args, 'nhc_tau', 100.0)
+            nhc_kwargs = {
+                'chain_length': nhc_chain_length,
+                'chain_steps': nhc_chain_steps,
+                'sy_steps': nhc_sy_steps,
+            }
+            init_fn, apply_fn = simulate.nvt_nose_hoover(
+                wrapped_energy_fn, shift, dt=dt, kT=kT,
+                thermostat_kwargs=default_nhc_kwargs(
+                    jnp.array(nhc_tau * dt), nhc_kwargs
+                ),
+            )
+            print(f"NVT Nose-Hoover chain: chain_length={nhc_chain_length}, "
+                  f"chain_steps={nhc_chain_steps}, sy_steps={nhc_sy_steps}, "
+                  f"tau={nhc_tau * dt:.6f} ps")
+        else:  # nve
+            init_fn, apply_fn = simulate.nve(wrapped_energy_fn, shift, dt)
         apply_fn = jit(apply_fn)
 
         def run_sim(
@@ -831,11 +915,17 @@ inbfrq -1 imgfrq -1
                 md_pos = pbc_map_fn(fire_positions[-1]) if (use_pbc and pbc_map_fn) else fire_positions[-1]
                 print("Warning: Using last valid position from first minimization")
             if jnp.any(~jnp.isfinite(md_pos)):
-                print("Error: No valid positions for NVE; skipping JAX-MD simulation")
+                print(f"Error: No valid positions for {args.ensemble.upper()}; skipping JAX-MD simulation")
                 return 0, jnp.array([]).reshape(0, len(md_pos), 3)
 
-            # NVE init with temperature from metal units (init_fn handles momentum scaling)
-            state = init_fn(key, md_pos, kT, mass=Si_mass)
+            # Init with temperature from metal units (init_fn handles momentum scaling)
+            # NVE init_fn: (key, R, kT, mass=...) -- kT is a positional arg
+            # NVT init_fn: (key, R, mass=..., **kwargs) -- kT is already captured in the closure
+            #   Do NOT pass kT here; **kwargs gets forwarded to force_fn which doesn't accept kT
+            if args.ensemble == "nvt":
+                state = init_fn(key, md_pos, mass=Si_mass)
+            else:
+                state = init_fn(key, md_pos, kT, mass=Si_mass)
             print(f"Momentum initialized for {T} K")
             nhc_positions = []
 
@@ -843,7 +933,7 @@ inbfrq -1 imgfrq -1
             energy_initial = float(wrapped_energy_fn(state.position))
             print(f"Initial energy: {energy_initial:.6f} eV")
 
-            print("*" * 10 + "\nNVE\n" + "*" * 10)
+            print("*" * 10 + f"\n{args.ensemble.upper()}\n" + "*" * 10)
             print("\t\tTime (ps)\tSteps\tE_pot (eV)\tE_tot (eV)\tT (K)")
             
             # ========================================================================
