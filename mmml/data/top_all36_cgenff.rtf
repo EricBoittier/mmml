@@ -18329,37 +18329,7 @@ IC  C2 HA3 *CA HA1     0.0000    0.00  120.00    0.00   0.0000
 IC  C2 HA3 *CA HA2     0.0000    0.00 -120.00    0.00   0.0000
 
 DEFAULT FIRST NONE LAST NONE
-!<<<<<<<<<<<</PEG>>>>>>>>>>>>
-!End acyclic ethers from top_all27_carb_jul2o.inp
 
-!New compounds from the sugar force field
-RESI ACO           0.00 ! C3H6O, Acetone, adm, Oct 08
-GROUP
-ATOM O1  OG2D3   -0.48
-ATOM C1  CG2O5    0.40
-ATOM C2  CG331   -0.23 !             O1
-ATOM C3  CG331   -0.23 !             ||
-ATOM H21 HGA3     0.09 !             C1
-ATOM H22 HGA3     0.09 !            /  \
-ATOM H23 HGA3     0.09 !     H21--C2    C3--H31
-ATOM H31 HGA3     0.09 !         / |    | \
-ATOM H32 HGA3     0.09 !      H22 H32  H33 H32
-ATOM H33 HGA3     0.09
-
-BOND    C1 C2   C1 C3
-BOND    C2 H21  C2 H22   C2 H23
-BOND    C3 H31  C3 H32   C3 H33
-DOUBLE  O1 C1
-IMPR    C1 C2 C3 O1
-ACCE    O1
-IC C2   C1   C3  H31        1.5366  110.58  135.22  109.51   1.1328
-IC O1   C1   C3  H31        1.2237  122.95  -42.47  109.51   1.1328
-IC O1   C1   C3  H32        1.2237  122.95   77.28  104.63   1.1325
-IC O1   C1   C3  H33        1.2237  122.95 -161.85  105.76   1.0732
-IC C3   C1   C2  H21        1.5233  110.58 -153.74  111.52   1.1204
-IC O1   C1   C2  H21        1.2237  126.42   23.85  111.52   1.1204
-IC O1   C1   C2  H22        1.2237  126.42  148.26  114.11   1.1296
-IC O1   C1   C2  H23        1.2237  126.42  -90.21  101.67   1.1375
 
 RESI IPAA          0.00 ! C5H11NO, og isopropyl acetamide, based on NMA
 GROUP                 !    n.b.: CL, HL, CR, HR vdw params != c22

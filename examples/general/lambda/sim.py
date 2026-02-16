@@ -10,8 +10,9 @@ Demonstrates how to scale the potential of individual monomers using the
 The workflow:
   1. Build a single-residue box (e.g. 20 MEOH molecules).
   2. For each lambda window, set ``lambda_monomer`` so that the *first*
-     monomer has its interactions scaled by λ (from 1 → 0), while all
-     other monomers remain fully coupled (λ = 1).
+     monomer has its *inter-monomer* interactions scaled by λ (from 1 → 0),
+     while all other monomers remain fully coupled (λ = 1).  Internal
+     monomer energy is never decoupled.
   3. Run a short equilibration + production at each window.
   4. Collect ⟨dU/dλ⟩ at each window for TI, or ΔU for FEP.
 
@@ -35,11 +36,12 @@ config = {
     "N": 30,
     "L": 20.0,
     "skip_energy_show": False,
-    # Lambda schedule: scale monomer 0 from fully coupled (1) to decoupled (0)
+    # Lambda schedule: scale monomer 0's inter-monomer interactions from coupled (1) to decoupled (0)
     "lambda_windows": [1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.0],
     # Which monomer to decouple (0-indexed)
     "decouple_monomer": 0,
     # Per-window simulation length
+    "nsteps_min": 50,       # minimization steps before each equil
     "nsteps_equil": 500,    # equilibration steps per window
     "nsteps_prod": 1000,    # production steps per window
 }
@@ -171,6 +173,7 @@ pdb_ase_atoms.calc = hybrid_calc
 # ---------------------------------------------------------------------------
 decouple_idx = config["decouple_monomer"]
 lambda_windows = config["lambda_windows"]
+n_min = config["nsteps_min"]
 n_equil = config["nsteps_equil"]
 n_prod = config["nsteps_prod"]
 
@@ -183,6 +186,7 @@ traj_dir.mkdir(exist_ok=True)
 from ase.io.trajectory import Trajectory  # noqa: E402
 from ase.md.langevin import Langevin  # noqa: E402
 from ase import units  # noqa: E402
+from ase.optimize import BFGS  # noqa: E402
 
 print(f"\n{'='*60}")
 print(f"Starting lambda dynamics: decoupling monomer {decouple_idx}")
@@ -201,6 +205,10 @@ for wi, lam in enumerate(lambda_windows):
     # Trajectory files for this window
     traj_equil_path = traj_dir / f"window_{wi:02d}_lam{lam:.2f}_equil.traj"
     traj_prod_path = traj_dir / f"window_{wi:02d}_lam{lam:.2f}_prod.traj"
+
+    # Small minimization before equil
+    print(f"  Minimizing {n_min} steps ...")
+    BFGS(pdb_ase_atoms).run(fmax=0.05, steps=n_min)
 
     # Equilibration
     traj_equil = Trajectory(str(traj_equil_path), "w", pdb_ase_atoms)

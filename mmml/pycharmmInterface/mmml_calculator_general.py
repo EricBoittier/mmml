@@ -26,6 +26,7 @@ from scipy.optimize import minimize as scipy_minimize
 # In your module that defines spherical_cutoff_calculator
 import jax.numpy as jnp
 from mmml.pycharmmInterface.pbc_prep_factory import make_pbc_mapper
+from mmml.pycharmmInterface.mmml_calculator import _ase_cell_to_3x3
 from mmml.pycharmmInterface.pbc_utils_jax import (
     mic_displacement,
     mic_displacements_batched,
@@ -637,8 +638,10 @@ def setup_calculator(
             list/sequence of ints giving the atom count for each monomer.  When
             a list is provided its length is used as *N_MONOMERS*.
         lambda_monomer: Optional array of shape ``(N_MONOMERS,)`` with values
-            in [0, 1].  Scales all contributions (ML internal, ML dimer, MM)
-            for each monomer.  ``None`` (default) is equivalent to all ones.
+            in [0, 1].  Scales inter-monomer contributions (ML dimer, MM
+            non-bonded) for each monomer.  Internal monomer energy is NOT
+            scaled (decouple only inter-monomer interactions in FEP/TI).
+            ``None`` (default) is equivalent to all ones.
     """
     if model_restart_path is None:
         raise ValueError("model_restart_path must be provided")
@@ -1640,12 +1643,11 @@ def setup_calculator(
         """Calculate energy and force contributions from monomers.
 
         Supports heterogeneous monomer sizes via ``atoms_per_monomer_list``
-        and ``monomer_offsets``.  Lambda scaling is applied per-monomer.
+        and ``monomer_offsets``.  Internal energy is NOT scaled by lambda
+        (only inter-monomer interactions are decoupled in FEP/TI).
         """
         ml_monomer_energy = jnp.array(e[:n_monomers]).flatten()
-
-        # Apply lambda scaling to each monomer energy
-        ml_monomer_energy = ml_monomer_energy * lambda_monomer
+        # Internal monomer energy is NOT scaled by lambda (decouple only inter-monomer)
 
         ml_monomer_forces = f[:max_atoms * n_monomers]
         
@@ -1667,17 +1669,7 @@ def setup_calculator(
             debug=debug,
         )
 
-        # Apply per-atom lambda scaling to forces (each atom inherits its monomer's lambda)
-        atom_lambda = jnp.concatenate([
-            jnp.full((atoms_per_monomer_list[i],), lambda_monomer[i])
-            for i in range(n_monomers)
-        ])
-        # Pad/truncate to match monomer_forces shape
-        if atom_lambda.shape[0] < monomer_forces.shape[0]:
-            atom_lambda = jnp.concatenate([atom_lambda, jnp.ones(monomer_forces.shape[0] - atom_lambda.shape[0])])
-        elif atom_lambda.shape[0] > monomer_forces.shape[0]:
-            atom_lambda = atom_lambda[:monomer_forces.shape[0]]
-        monomer_forces = monomer_forces * atom_lambda[:, None]
+        # Internal monomer forces are NOT scaled by lambda (decouple only inter-monomer)
 
         debug_print(debug, "Monomer Contributions:",
             ml_monomer_energy=ml_monomer_energy,
@@ -1755,12 +1747,15 @@ def setup_calculator(
                 force_conversion_factor: float = 1.0,
                 do_pbc_map: bool = False,
                 pbc_map = None,
+                pbc_cell = None,
                 verbose: bool = True,
             ):
                 """Initialize calculator with configuration parameters
-                
+
                 Args:
-                    verbose: If True, store full ModelOutput breakdown (ml_2b_E/F, mm_E/F, etc.) 
+                    pbc_cell: Setup-time cell (3x3) for PBC; used for consistency check
+                              and fallback when atoms.cell is not available.
+                    verbose: If True, store full ModelOutput breakdown (ml_2b_E/F, mm_E/F, etc.)
                              in self.results for analysis/testing. Adds overhead.
                 """
 
@@ -1778,6 +1773,9 @@ def setup_calculator(
                 self.force_conversion_factor = force_conversion_factor
                 self.do_pbc_map = do_pbc_map
                 self.pbc_map = pbc_map
+                self.pbc_cell = np.asarray(pbc_cell) if pbc_cell is not None else None
+                self._pbc_map_cache = None
+                self._pbc_map_cache_cell = None
                 self.verbose = verbose
                 # Expose heterogeneous info
                 self.atoms_per_monomer_list = atoms_per_monomer_list
@@ -1825,6 +1823,45 @@ def setup_calculator(
                 R = atoms.get_positions()
                 Z = atoms.get_atomic_numbers()
 
+                # PBC: prefer atoms.cell when available; fallback to setup pbc_map.
+                # Cache pbc_map when cell is unchanged to avoid recreating it every step.
+                pbc_map_to_use = self.pbc_map
+                if self.do_pbc_map and self.pbc_map is not None:
+                    atoms_cell = _ase_cell_to_3x3(atoms)
+                    if atoms_cell is not None:
+                        if self.pbc_cell is not None:
+                            if not np.allclose(atoms_cell, self.pbc_cell, atol=1e-6, rtol=1e-5):
+                                warnings.warn(
+                                    f"atoms.cell differs from setup cell: max |diff| = "
+                                    f"{np.max(np.abs(atoms_cell - self.pbc_cell)):.4e} Å. "
+                                    "Using atoms.cell for this step.",
+                                    UserWarning,
+                                    stacklevel=2,
+                                )
+                        if (
+                            self._pbc_map_cache is not None
+                            and self._pbc_map_cache_cell is not None
+                            and np.allclose(atoms_cell, self._pbc_map_cache_cell, atol=1e-8, rtol=1e-8)
+                        ):
+                            pbc_map_to_use = self._pbc_map_cache
+                        else:
+                            mol_id = None
+                            if hasattr(self, "atoms_per_monomer_list") and self.atoms_per_monomer_list:
+                                mol_id_parts = [
+                                    jnp.full(int(self.atoms_per_monomer_list[i]), i, dtype=jnp.int32)
+                                    for i in range(self.n_monomers)
+                                ]
+                                mol_id = jnp.concatenate(mol_id_parts)
+                            pbc_map_to_use = make_pbc_mapper(
+                                cell=jnp.asarray(atoms_cell),
+                                mol_id=mol_id,
+                                n_monomers=self.n_monomers,
+                            )
+                            self._pbc_map_cache = pbc_map_to_use
+                            self._pbc_map_cache_cell = atoms_cell.copy()
+                    elif self.pbc_map is None:
+                        self.do_pbc_map = False
+
                 expected_atoms = self.total_atoms
                 if len(Z) != expected_atoms:
                     raise ValueError(
@@ -1846,9 +1883,8 @@ def setup_calculator(
                     )
 
                 out = {}
-                
 
-                R_mapped = self.pbc_map(R) if (self.do_pbc_map and self.pbc_map is not None) else R
+                R_mapped = pbc_map_to_use(R) if (self.do_pbc_map and pbc_map_to_use is not None) else R
 
                 # Pre-build MM function with concrete positions (outside JIT)
                 # so cell-list pair generation can use NumPy safely.
@@ -1870,8 +1906,8 @@ def setup_calculator(
                 # Use forces directly from ModelOutput (computed via explicit gradients, more stable)
                 F = out.forces
                 # Transform forces from R_mapped space back to R space (chain rule: F_orig = J^T F_mapped)
-                if self.do_pbc_map and self.pbc_map is not None and hasattr(self.pbc_map, "transform_forces"):
-                    F = self.pbc_map.transform_forces(R, F)
+                if self.do_pbc_map and pbc_map_to_use is not None and hasattr(pbc_map_to_use, "transform_forces"):
+                    F = pbc_map_to_use.transform_forces(R, F)
                 
                 # For energy, we can still use autodiff if needed, but for now use directly
                 # The energy from ModelOutput is already correct
@@ -2142,6 +2178,11 @@ def setup_calculator(
                 verbose: If True, store full ModelOutput breakdown in results.
                          If None, defaults to debug value.
             """
+            pbc_cell = (
+                np.asarray(cell).reshape(3, 3)
+                if (do_pbc_map and cell is not None and np.size(cell) >= 9)
+                else None
+            )
 
             calculator = AseDimerCalculator(
                 n_monomers=n_monomers,
@@ -2155,6 +2196,7 @@ def setup_calculator(
                 force_conversion_factor=force_conversion_factor,
                 do_pbc_map=do_pbc_map,
                 pbc_map=pbc_map,
+                pbc_cell=pbc_cell,
                 verbose=verbose,
             )
 

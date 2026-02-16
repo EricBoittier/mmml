@@ -112,7 +112,7 @@ class AseCalculatorEF(ase_calc.Calculator):
                 model_keys = {'features', 'max_degree', 'num_iterations',
                               'num_basis_functions', 'cutoff', 'max_atomic_number',
                               'include_pseudotensors',
-                              'dipole_field_coupling', 'field_scale'}
+                              'dipole_field_coupling', 'field_scale', 'zbl'}
                 if 'model' in config and isinstance(config['model'], dict):
                     model_config = {k: v for k, v in config['model'].items()
                                     if k in model_keys}
@@ -141,6 +141,7 @@ class AseCalculatorEF(ase_calc.Calculator):
                 'cutoff': 10.0,
                 'max_atomic_number': 55,
                 'include_pseudotensors': True,
+                'zbl': False,
             }
         
         # Apply runtime overrides

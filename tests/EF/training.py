@@ -11,6 +11,7 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 import argparse
 import functools
 import json
+import sys
 import uuid
 from pathlib import Path
 from types import SimpleNamespace
@@ -26,6 +27,15 @@ from optax import tree_utils as otu
 from flax import linen as nn
 
 import e3x
+
+# ZBL repulsion (optional short-range nuclear repulsion)
+try:
+    from mmml.physnetjax.physnetjax.models.zbl import ZBLRepulsion
+except ImportError:
+    _root = Path(__file__).resolve().parents[2]
+    if str(_root) not in sys.path:
+        sys.path.insert(0, str(_root))
+    from mmml.physnetjax.physnetjax.models.zbl import ZBLRepulsion
 
 import matplotlib.pyplot as plt  # optional; kept because you had it
 import ase  # optional; kept because you had it
@@ -141,7 +151,8 @@ def get_args(**overrides):
     parser.add_argument("--num_valid", type=int, default=1000)
     parser.add_argument("--num_epochs", type=int, default=100)
     parser.add_argument("--learning_rate", type=float, default=0.0004)
-    parser.add_argument("--batch_size", type=int, default=1000)
+    parser.add_argument("--batch_size", type=int, default=256,
+                       help="Batch size (default 256; use 128 or 64 if OOM)")
 
     parser.add_argument("--clip_norm", type=float, default=10000.0)
     parser.add_argument("--ema_decay", type=float, default=0.5)
@@ -168,6 +179,10 @@ def get_args(**overrides):
                        help="Add explicit E_total = E_nn + mu·Ef coupling")
     parser.add_argument("--field_scale", type=float, default=0.001,
                        help="Ef_phys = Ef_input * field_scale (au)")
+    parser.add_argument("--zbl", action="store_true",
+                       help="Add ZBL nuclear repulsion for short-range stability")
+    parser.add_argument("--gradient-checkpoint", action="store_true",
+                       help="Use gradient checkpointing to reduce GPU memory (slower training)")
     args, _ = parser.parse_known_args()
 
     # Apply keyword overrides (for notebook usage)
@@ -231,6 +246,12 @@ class MessagePassingModel(nn.Module):
     # When False (default) the existing implicit coupling through features is used.
     dipole_field_coupling: bool = False
     field_scale: float = 0.001  # Ef_phys [au] = Ef_input * field_scale
+    # ZBL: Ziegler-Biersack-Littmark nuclear repulsion for short-range stability
+    zbl: bool = False
+
+    def setup(self):
+        if self.zbl:
+            self.repulsion = ZBLRepulsion(cutoff=self.cutoff, trainable=True)
 
     def EFD(self, atomic_numbers, positions, Ef, dst_idx_flat, src_idx_flat, batch_segments, batch_size, dst_idx=None, src_idx=None):
         """
@@ -369,6 +390,28 @@ class MessagePassingModel(nn.Module):
         atomic_energies = nn.Dense(1, use_bias=True, kernel_init=jax.nn.initializers.zeros)(x_energy)
         atomic_energies = jnp.squeeze(atomic_energies, axis=(-1, -2, -3))  # (B*N,)
         atomic_energies = atomic_energies + element_bias[atomic_numbers_flat]
+
+        # ZBL nuclear repulsion (short-range, prevents atomic overlap)
+        if self.zbl:
+            distances = jnp.linalg.norm(displacements, axis=-1)  # (B*E,)
+            distances = jnp.maximum(distances, 1e-8)
+            atom_mask = jnp.ones(B * N, dtype=positions_flat.dtype)
+            batch_mask = jnp.ones_like(distances, dtype=positions_flat.dtype)
+            repulsion = self.repulsion(
+                atomic_numbers_flat,
+                distances,
+                None,  # use ZBL internal switch
+                None,
+                dst_idx_flat,
+                src_idx_flat,
+                atom_mask,
+                batch_mask,
+                batch_segments,
+                batch_size,
+            )
+            repulsion = jnp.squeeze(repulsion, axis=(-1, -2, -3))  # (B*N,)
+            atomic_energies = atomic_energies + repulsion
+
         energy = atomic_energies.reshape(B, N).sum(axis=1)  # (B,)
 
         # add a Coulomb term to the energy
@@ -563,8 +606,8 @@ def prepare_batches(key, data, batch_size, num_atoms=29, dst_idx_flat=None, src_
 # -------------------------
 # Train / Eval steps
 # -------------------------
-@functools.partial(jax.jit, static_argnames=("model_apply", "optimizer_update", "batch_size", "ema_decay", "energy_weight", "forces_weight", "dipole_weight", "charge_weight"))
-def train_step(model_apply, optimizer_update, batch, batch_size, opt_state, params, ema_params, transform_state, ema_decay=0.999, energy_weight=1.0, forces_weight=100.0, dipole_weight=10.0, charge_weight=1.0):
+@functools.partial(jax.jit, static_argnames=("model_apply", "optimizer_update", "batch_size", "ema_decay", "energy_weight", "forces_weight", "dipole_weight", "charge_weight", "gradient_checkpoint"))
+def train_step(model_apply, optimizer_update, batch, batch_size, opt_state, params, ema_params, transform_state, ema_decay=0.999, energy_weight=1.0, forces_weight=100.0, dipole_weight=10.0, charge_weight=1.0, gradient_checkpoint=False):
     def loss_fn(params):
         # Forward pass with mutable intermediates to capture atomic charges
         def energy_fn(pos):
@@ -580,6 +623,13 @@ def train_step(model_apply, optimizer_update, batch, batch_size, opt_state, para
                 mutable=['intermediates'],
             )
             return -jnp.sum(energy), (energy, dipole, state)
+
+        if gradient_checkpoint:
+            try:
+                policy = jax.checkpoint_policies.nothing_saveable
+            except AttributeError:
+                policy = None  # older JAX: default remat behavior
+            energy_fn = jax.checkpoint(energy_fn, policy=policy)
 
         (_, (energy, dipole, state)), forces = jax.value_and_grad(
             energy_fn, has_aux=True
@@ -754,7 +804,8 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
                 clip_norm=10.0, ema_decay=0.999, early_stopping_patience=None, early_stopping_min_delta=0.0,
                 reduce_on_plateau_patience=5, reduce_on_plateau_cooldown=5, reduce_on_plateau_factor=0.9,
                 reduce_on_plateau_rtol=1e-4, reduce_on_plateau_accumulation_size=5, reduce_on_plateau_min_scale=0.01,
-                energy_weight=1.0, forces_weight=100.0, dipole_weight=10.0, charge_weight=1.0, initial_params=None):
+                energy_weight=1.0, forces_weight=100.0, dipole_weight=10.0, charge_weight=1.0, initial_params=None,
+                gradient_checkpoint=False):
     """
     Train model with EMA, gradient clipping, early stopping, and learning rate reduction on plateau.
     
@@ -977,6 +1028,7 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
                 forces_weight=forces_weight,
                 dipole_weight=dipole_weight,
                 charge_weight=charge_weight,
+                gradient_checkpoint=gradient_checkpoint,
             )
             # Don't block - let JAX execute asynchronously for maximum throughput
             # Only convert to Python float at the end for logging
@@ -1087,6 +1139,8 @@ def main(args=None):
     # print the hyperparameters
     print("Hyperparameters:")
     print(f"  restart: {args.restart}")
+    if args.gradient_checkpoint:
+        print(f"  gradient_checkpoint: ON (reduces memory, ~2x slower)")
     print(f"  features: {args.features}")
     print(f"  max_degree: {args.max_degree}")
     print(f"  num_iterations: {args.num_iterations}")
@@ -1137,6 +1191,7 @@ def main(args=None):
         cutoff=args.cutoff,
         dipole_field_coupling=args.dipole_field_coupling,
         field_scale=args.field_scale,
+        zbl=args.zbl,
     )
 
     # Load restart parameters if provided
@@ -1177,6 +1232,7 @@ def main(args=None):
         dipole_weight=args.dipole_weight,
         charge_weight=args.charge_weight,
         initial_params=initial_params,
+        gradient_checkpoint=args.gradient_checkpoint,
     )
 
     # Prepare model config
@@ -1192,6 +1248,7 @@ def main(args=None):
             'include_pseudotensors': True,  # Fixed in model
             'dipole_field_coupling': args.dipole_field_coupling,
             'field_scale': args.field_scale,
+            'zbl': args.zbl,
         },
         'training': {
             'num_train': args.num_train,
