@@ -1,9 +1,9 @@
 REMARK  EXECUTING CHARMM SCRIPT FROM PYTHON                                           
-REMARK   DATE:     2/16/26     15:16: 1      CREATED BY USER: boittier                
-ATOM      1  C   DCM     1       0.428   0.643   0.226  1.00  0.00      DCM 
-ATOM      2  H1  DCM     1       1.046   1.006  -0.630  1.00  0.00      DCM 
-ATOM      3  H2  DCM     1      -0.637   0.900   0.085  1.00  0.00      DCM 
-ATOM      4  CL1 DCM     1       0.591  -1.132   0.338  1.00  0.00      DCM 
-ATOM      5  CL2 DCM     1       1.022   1.402   1.727  1.00  0.00      DCM 
+REMARK   DATE:     2/16/26     15:33:23      CREATED BY USER: boittier                
+ATOM      1  C   DCM     1       0.565   0.422   0.283  1.00  0.00      DCM 
+ATOM      2  H1  DCM     1       1.439   1.035  -0.030  1.00  0.00      DCM 
+ATOM      3  H2  DCM     1       0.879  -0.510   0.792  1.00  0.00      DCM 
+ATOM      4  CL1 DCM     1      -0.439   1.386   1.401  1.00  0.00      DCM 
+ATOM      5  CL2 DCM     1      -0.390  -0.001  -1.171  1.00  0.00      DCM 
 TER       6      DCM      1
 END
