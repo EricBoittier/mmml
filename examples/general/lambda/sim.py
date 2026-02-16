@@ -34,7 +34,7 @@ import numpy as np
 config = {
     "RES": "BENZ",
     "N": 10,
-    "L": 20.0,
+    "L": 22.0,
     "skip_energy_show": False,
     # Lambda schedule: scale monomer 0's inter-monomer interactions from coupled (1) to decoupled (0)
     "lambda_windows": [1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.0],
@@ -162,12 +162,12 @@ for _mi, _na in enumerate(atoms_per_monomer_list):
 calculator_factory = setup_calculator_general(
     ATOMS_PER_MONOMER=atoms_per_monomer_list,
     N_MONOMERS=N,
-    ml_cutoff_distance=0.01,
+    ml_cutoff_distance=0.1,
     mm_switch_on=6.0,
-    mm_cutoff=2.0,
+    mm_cutoff=3.0,
     doML=True,
     doMM=True,
-    doML_dimer=False,
+    doML_dimer=True,
     debug=False,
     model_restart_path=base_ckpt_dir,
     MAX_ATOMS_PER_SYSTEM=natoms,
@@ -302,7 +302,7 @@ for wi, lam in enumerate(lambda_windows):
 
     dyn = Langevin(
         pdb_ase_atoms,
-        timestep=0.5 * units.fs,
+        timestep=0.25 * units.fs,
         temperature_K=298.0,
         friction=0.01 / units.fs,
     )
