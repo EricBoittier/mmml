@@ -32,8 +32,8 @@ import numpy as np
 # 1. Configuration
 # ---------------------------------------------------------------------------
 config = {
-    "RES": "MEOH",
-    "N": 30,
+    "RES": "BENZ",
+    "N": 10,
     "L": 20.0,
     "skip_energy_show": False,
     # Lambda schedule: scale monomer 0's inter-monomer interactions from coupled (1) to decoupled (0)
@@ -108,7 +108,7 @@ import pandas as pd  # noqa: E402
 
 _, _, _, get_ase_calc = setup_mmml_imports()
 
-checkpoint = "/home/ericb/mmml/mmml/physnetjax/ckpts/DESdimers/"
+checkpoint = "/pchem-data/meuwly/boittier/home/mmml/mmml/physnetjax/ckpts/DESdimers/"
 pdbfile = nb_dir / "pdb" / "init-packmol.pdb"
 
 base_ckpt_dir, epoch_dir = resolve_checkpoint_paths(checkpoint)
