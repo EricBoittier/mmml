@@ -17,6 +17,14 @@ class PBCMapper:
 
     map_positions(R): unwrap → coregister → wrap (molecular groups preserved).
     transform_forces(R, F_mapped): applies J^T to map forces from R_mapped space back to R.
+
+    Note on energy drift: The wrap step uses floor(S_com), which is discontinuous when
+    a monomer's COM crosses a cell boundary. At the boundary, the force transform
+    (VJP) can be incorrect, potentially causing NVE energy drift. If drift persists
+    after using atoms.cell and cell consistency checks, consider a MIC-only approach:
+    do not wrap positions for the energy; use MIC only for pairwise displacements.
+    That avoids discontinuous coordinate maps but requires cell-list pair generation
+    to handle unwrapped coordinates correctly.
     """
 
     def __init__(self, map_positions_fn: Callable[[Array], Array]):
