@@ -1,16 +1,16 @@
 REMARK  EXECUTING CHARMM SCRIPT FROM PYTHON                                           
-REMARK   DATE:     2/16/26     14:31: 0      CREATED BY USER: boittier                
-ATOM      1  CG  BENZ    1       0.800   0.199   0.193  1.00  0.00      BENZ
-ATOM      2  HG  BENZ    1       0.516   1.170   1.694  1.00  0.00      BENZ
-ATOM      3  CD1 BENZ    1       0.074   0.537   0.327  1.00  0.00      BENZ
-ATOM      4  HD1 BENZ    1       0.095   0.043   0.175  1.00  0.00      BENZ
-ATOM      5  CD2 BENZ    1       0.985   0.934   0.579  1.00  0.00      BENZ
-ATOM      6  HD2 BENZ    1       0.241   0.743   0.519  1.00  0.00      BENZ
-ATOM      7  CE1 BENZ    1       0.088   1.398   0.005  1.00  0.00      BENZ
-ATOM      8  HE1 BENZ    1       0.544   0.303   0.185  1.00  0.00      BENZ
-ATOM      9  CE2 BENZ    1       0.229   0.079   0.272  1.00  0.00      BENZ
-ATOM     10  HE2 BENZ    1       0.323   0.179   0.082  1.00  0.00      BENZ
-ATOM     11  CZ  BENZ    1       0.946   0.211   0.414  1.00  0.00      BENZ
-ATOM     12  HZ  BENZ    1       0.194   0.461   0.607  1.00  0.00      BENZ
+REMARK   DATE:     2/16/26     14:50:53      CREATED BY USER: boittier                
+ATOM      1  CG  BENZ    1       1.767   0.050   0.993  1.00  0.00      BENZ
+ATOM      2  HG  BENZ    1       0.985   0.278   0.090  1.00  0.00      BENZ
+ATOM      3  CD1 BENZ    1       0.244   0.328   0.080  1.00  0.00      BENZ
+ATOM      4  HD1 BENZ    1       0.053   0.517   0.093  1.00  0.00      BENZ
+ATOM      5  CD2 BENZ    1       0.140   0.028   1.189  1.00  0.00      BENZ
+ATOM      6  HD2 BENZ    1       1.034   0.519   0.991  1.00  0.00      BENZ
+ATOM      7  CE1 BENZ    1       0.030   0.868   0.331  1.00  0.00      BENZ
+ATOM      8  HE1 BENZ    1       1.190   0.153   0.241  1.00  0.00      BENZ
+ATOM      9  CE2 BENZ    1       0.480   1.280   1.373  1.00  0.00      BENZ
+ATOM     10  HE2 BENZ    1       0.004   0.883   0.245  1.00  0.00      BENZ
+ATOM     11  CZ  BENZ    1       0.508   0.088   0.112  1.00  0.00      BENZ
+ATOM     12  HZ  BENZ    1       0.472   0.265   0.051  1.00  0.00      BENZ
 TER      13      BENZ     1
 END
