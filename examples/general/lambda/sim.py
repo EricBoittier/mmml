@@ -32,17 +32,17 @@ import numpy as np
 # 1. Configuration
 # ---------------------------------------------------------------------------
 config = {
-    "RES": "BENZ",
-    "N": 10,
-    "L": 22.0,
+    "RES": "DCM",
+    "N": 40,
+    "L": 20.0,
     "skip_energy_show": False,
     # Lambda schedule: scale monomer 0's inter-monomer interactions from coupled (1) to decoupled (0)
     "lambda_windows": [1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.0],
     # Which monomer to decouple (0-indexed)
     "decouple_monomer": 0,
     # Per-window simulation length
-    "nsteps_min": 50,       # minimization steps before each equil
-    "nsteps_equil": 500,    # equilibration steps per window
+    "nsteps_min": 10,       # minimization steps before each equil
+    "nsteps_equil": 100,    # equilibration steps per window
     "nsteps_prod": 1000,    # production steps per window
 }
 
@@ -162,7 +162,7 @@ for _mi, _na in enumerate(atoms_per_monomer_list):
 calculator_factory = setup_calculator_general(
     ATOMS_PER_MONOMER=atoms_per_monomer_list,
     N_MONOMERS=N,
-    ml_cutoff_distance=0.1,
+    ml_cutoff_distance=0.01,
     mm_switch_on=6.0,
     mm_cutoff=3.0,
     doML=True,
@@ -323,8 +323,8 @@ for wi, lam in enumerate(lambda_windows):
 
     dyn_prod = Langevin(
         pdb_ase_atoms,
-        timestep=0.5 * units.fs,
-        temperature_K=298.0,
+        timestep=0.1 * units.fs,
+        temperature_K=250.0,
         friction=0.01 / units.fs,
     )
     dyn_prod.attach(_collect_energy, interval=10)

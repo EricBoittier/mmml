@@ -3,124 +3,129 @@ TITLE     Built with Packmol
 REMARK   Packmol generated pdb file 
 REMARK   Home-Page: http://m3g.iqm.unicamp.br/packmol
 REMARK
-ATOM      1  CG  BENZA   1       8.816   2.824   3.047  1.00  0.00      BENZ    
-ATOM      2  HG  BENZA   1       7.738   2.782   3.052  1.00  0.00      BENZ    
-ATOM      3  CD1 BENZA   1       9.519   2.714   1.839  1.00  0.00      BENZ    
-ATOM      4  HD1 BENZA   1       8.980   2.589   0.911  1.00  0.00      BENZ    
-ATOM      5  CD2 BENZA   1       9.519   2.988   4.251  1.00  0.00      BENZ    
-ATOM      6  HD2 BENZA   1       8.977   3.071   5.183  1.00  0.00      BENZ    
-ATOM      7  CE1 BENZA   1      10.918   2.768   1.833  1.00  0.00      BENZ    
-ATOM      8  HE1 BENZA   1      11.460   2.682   0.902  1.00  0.00      BENZ    
-ATOM      9  CE2 BENZA   1      10.917   3.042   4.247  1.00  0.00      BENZ    
-ATOM     10  HE2 BENZA   1      11.456   3.170   5.173  1.00  0.00      BENZ    
-ATOM     11  CZ  BENZA   1      11.617   2.933   3.038  1.00  0.00      BENZ    
-ATOM     12  HZ  BENZA   1      12.699   2.974   3.034  1.00  0.00      BENZ    
-ATOM     13  CG  BENZA   2      19.147   3.841   3.732  1.00  0.00      BENZ    
-ATOM     14  HG  BENZA   2      20.099   3.907   3.227  1.00  0.00      BENZ    
-ATOM     15  CD1 BENZA   2      18.878   2.766   4.590  1.00  0.00      BENZ    
-ATOM     16  HD1 BENZA   2      19.625   2.001   4.746  1.00  0.00      BENZ    
-ATOM     17  CD2 BENZA   2      18.175   4.834   3.531  1.00  0.00      BENZ    
-ATOM     18  HD2 BENZA   2      18.382   5.663   2.868  1.00  0.00      BENZ    
-ATOM     19  CE1 BENZA   2      17.643   2.681   5.244  1.00  0.00      BENZ    
-ATOM     20  HE1 BENZA   2      17.435   1.852   5.905  1.00  0.00      BENZ    
-ATOM     21  CE2 BENZA   2      16.941   4.751   4.185  1.00  0.00      BENZ    
-ATOM     22  HE2 BENZA   2      16.195   5.516   4.030  1.00  0.00      BENZ    
-ATOM     23  CZ  BENZA   2      16.675   3.676   5.042  1.00  0.00      BENZ    
-ATOM     24  HZ  BENZA   2      15.719   3.610   5.548  1.00  0.00      BENZ    
-ATOM     25  CG  BENZA   3      11.878  15.229   4.071  1.00  0.00      BENZ    
-ATOM     26  HG  BENZA   3      12.612  15.706   4.701  1.00  0.00      BENZ    
-ATOM     27  CD1 BENZA   3      12.182  14.935   2.734  1.00  0.00      BENZ    
-ATOM     28  HD1 BENZA   3      13.154  15.186   2.335  1.00  0.00      BENZ    
-ATOM     29  CD2 BENZA   3      10.614  14.901   4.588  1.00  0.00      BENZ    
-ATOM     30  HD2 BENZA   3      10.379  15.129   5.619  1.00  0.00      BENZ    
-ATOM     31  CE1 BENZA   3      11.228  14.316   1.917  1.00  0.00      BENZ    
-ATOM     32  HE1 BENZA   3      11.462  14.090   0.886  1.00  0.00      BENZ    
-ATOM     33  CE2 BENZA   3       9.661  14.281   3.773  1.00  0.00      BENZ    
-ATOM     34  HE2 BENZA   3       8.690  14.028   4.172  1.00  0.00      BENZ    
-ATOM     35  CZ  BENZA   3       9.967  13.988   2.437  1.00  0.00      BENZ    
-ATOM     36  HZ  BENZA   3       9.230  13.510   1.805  1.00  0.00      BENZ    
-ATOM     37  CG  BENZA   4       9.969  12.068  15.775  1.00  0.00      BENZ    
-ATOM     38  HG  BENZA   4      10.330  12.791  15.060  1.00  0.00      BENZ    
-ATOM     39  CD1 BENZA   4       9.086  11.058  15.369  1.00  0.00      BENZ    
-ATOM     40  HD1 BENZA   4       8.767  11.002  14.338  1.00  0.00      BENZ    
-ATOM     41  CD2 BENZA   4      10.381  12.138  17.115  1.00  0.00      BENZ    
-ATOM     42  HD2 BENZA   4      11.061  12.918  17.429  1.00  0.00      BENZ    
-ATOM     43  CE1 BENZA   4       8.617  10.120  16.297  1.00  0.00      BENZ    
-ATOM     44  HE1 BENZA   4       7.936   9.342  15.985  1.00  0.00      BENZ    
-ATOM     45  CE2 BENZA   4       9.914  11.201  18.043  1.00  0.00      BENZ    
-ATOM     46  HE2 BENZA   4      10.233  11.254  19.074  1.00  0.00      BENZ    
-ATOM     47  CZ  BENZA   4       9.032  10.192  17.635  1.00  0.00      BENZ    
-ATOM     48  HZ  BENZA   4       8.669   9.467  18.353  1.00  0.00      BENZ    
-ATOM     49  CG  BENZA   5      16.206  18.839   0.573  1.00  0.00      BENZ    
-ATOM     50  HG  BENZA   5      16.924  18.056   0.380  1.00  0.00      BENZ    
-ATOM     51  CD1 BENZA   5      14.838  18.604   0.374  1.00  0.00      BENZ    
-ATOM     52  HD1 BENZA   5      14.502  17.637   0.028  1.00  0.00      BENZ    
-ATOM     53  CD2 BENZA   5      16.640  20.096   1.023  1.00  0.00      BENZ    
-ATOM     54  HD2 BENZA   5      17.695  20.277   1.175  1.00  0.00      BENZ    
-ATOM     55  CE1 BENZA   5      13.907  19.619   0.624  1.00  0.00      BENZ    
-ATOM     56  HE1 BENZA   5      12.853  19.439   0.470  1.00  0.00      BENZ    
-ATOM     57  CE2 BENZA   5      15.711  21.111   1.274  1.00  0.00      BENZ    
-ATOM     58  HE2 BENZA   5      16.046  22.077   1.622  1.00  0.00      BENZ    
-ATOM     59  CZ  BENZA   5      14.345  20.874   1.075  1.00  0.00      BENZ    
-ATOM     60  HZ  BENZA   5      13.625  21.659   1.268  1.00  0.00      BENZ    
-ATOM     61  CG  BENZA   6       1.731  11.561   7.323  1.00  0.00      BENZ    
-ATOM     62  HG  BENZA   6       1.354  12.373   6.722  1.00  0.00      BENZ    
-ATOM     63  CD1 BENZA   6       1.579  11.587   8.717  1.00  0.00      BENZ    
-ATOM     64  HD1 BENZA   6       1.081  12.422   9.189  1.00  0.00      BENZ    
-ATOM     65  CD2 BENZA   6       2.378  10.474   6.713  1.00  0.00      BENZ    
-ATOM     66  HD2 BENZA   6       2.497  10.455   5.638  1.00  0.00      BENZ    
-ATOM     67  CE1 BENZA   6       2.069  10.533   9.497  1.00  0.00      BENZ    
-ATOM     68  HE1 BENZA   6       1.953  10.554  10.571  1.00  0.00      BENZ    
-ATOM     69  CE2 BENZA   6       2.868   9.420   7.491  1.00  0.00      BENZ    
-ATOM     70  HE2 BENZA   6       3.363   8.585   7.020  1.00  0.00      BENZ    
-ATOM     71  CZ  BENZA   6       2.714   9.449   8.883  1.00  0.00      BENZ    
-ATOM     72  HZ  BENZA   6       3.094   8.634   9.487  1.00  0.00      BENZ    
-ATOM     73  CG  BENZA   7      21.639  13.043  11.755  1.00  0.00      BENZ    
-ATOM     74  HG  BENZA   7      21.660  14.049  11.365  1.00  0.00      BENZ    
-ATOM     75  CD1 BENZA   7      21.833  11.951  10.896  1.00  0.00      BENZ    
-ATOM     76  HD1 BENZA   7      22.005  12.118   9.843  1.00  0.00      BENZ    
-ATOM     77  CD2 BENZA   7      21.416  12.824  13.123  1.00  0.00      BENZ    
-ATOM     78  HD2 BENZA   7      21.264  13.666  13.785  1.00  0.00      BENZ    
-ATOM     79  CE1 BENZA   7      21.805  10.646  11.403  1.00  0.00      BENZ    
-ATOM     80  HE1 BENZA   7      21.954   9.805  10.742  1.00  0.00      BENZ    
-ATOM     81  CE2 BENZA   7      21.389  11.521  13.630  1.00  0.00      BENZ    
-ATOM     82  HE2 BENZA   7      21.218  11.353  14.684  1.00  0.00      BENZ    
-ATOM     83  CZ  BENZA   7      21.583  10.432  12.771  1.00  0.00      BENZ    
-ATOM     84  HZ  BENZA   7      21.562   9.422  13.163  1.00  0.00      BENZ    
-ATOM     85  CG  BENZA   8      16.036  13.914  12.810  1.00  0.00      BENZ    
-ATOM     86  HG  BENZA   8      15.657  13.925  13.820  1.00  0.00      BENZ    
-ATOM     87  CD1 BENZA   8      15.166  13.682  11.734  1.00  0.00      BENZ    
-ATOM     88  HD1 BENZA   8      14.115  13.515  11.918  1.00  0.00      BENZ    
-ATOM     89  CD2 BENZA   8      17.401  14.133  12.568  1.00  0.00      BENZ    
-ATOM     90  HD2 BENZA   8      18.072  14.311  13.398  1.00  0.00      BENZ    
-ATOM     91  CE1 BENZA   8      15.658  13.669  10.424  1.00  0.00      BENZ    
-ATOM     92  HE1 BENZA   8      14.989  13.489   9.595  1.00  0.00      BENZ    
-ATOM     93  CE2 BENZA   8      17.894  14.120  11.259  1.00  0.00      BENZ    
-ATOM     94  HE2 BENZA   8      18.944  14.290  11.075  1.00  0.00      BENZ    
-ATOM     95  CZ  BENZA   8      17.023  13.889  10.187  1.00  0.00      BENZ    
-ATOM     96  HZ  BENZA   8      17.404  13.878   9.173  1.00  0.00      BENZ    
-ATOM     97  CG  BENZA   9      10.082   5.481  11.681  1.00  0.00      BENZ    
-ATOM     98  HG  BENZA   9       9.736   4.571  11.215  1.00  0.00      BENZ    
-ATOM     99  CD1 BENZA   9      11.163   5.448  12.573  1.00  0.00      BENZ    
-ATOM    100  HD1 BENZA   9      11.652   4.510  12.794  1.00  0.00      BENZ    
-ATOM    101  CD2 BENZA   9       9.450   6.701  11.395  1.00  0.00      BENZ    
-ATOM    102  HD2 BENZA   9       8.615   6.726  10.708  1.00  0.00      BENZ    
-ATOM    103  CE1 BENZA   9      11.611   6.629  13.177  1.00  0.00      BENZ    
-ATOM    104  HE1 BENZA   9      12.444   6.604  13.865  1.00  0.00      BENZ    
-ATOM    105  CE2 BENZA   9       9.897   7.882  11.997  1.00  0.00      BENZ    
-ATOM    106  HE2 BENZA   9       9.411   8.820  11.776  1.00  0.00      BENZ    
-ATOM    107  CZ  BENZA   9      10.978   7.847  12.888  1.00  0.00      BENZ    
-ATOM    108  HZ  BENZA   9      11.324   8.760  13.356  1.00  0.00      BENZ    
-ATOM    109  CG  BENZA  10       6.226  17.456  11.125  1.00  0.00      BENZ    
-ATOM    110  HG  BENZA  10       6.518  18.149  11.898  1.00  0.00      BENZ    
-ATOM    111  CD1 BENZA  10       5.146  17.755  10.282  1.00  0.00      BENZ    
-ATOM    112  HD1 BENZA  10       4.606  18.682  10.407  1.00  0.00      BENZ    
-ATOM    113  CD2 BENZA  10       6.927  16.250  10.959  1.00  0.00      BENZ    
-ATOM    114  HD2 BENZA  10       7.759  16.019  11.610  1.00  0.00      BENZ    
-ATOM    115  CE1 BENZA  10       4.767  16.855   9.279  1.00  0.00      BENZ    
-ATOM    116  HE1 BENZA  10       3.934  17.085   8.630  1.00  0.00      BENZ    
-ATOM    117  CE2 BENZA  10       6.550  15.351   9.957  1.00  0.00      BENZ    
-ATOM    118  HE2 BENZA  10       7.091  14.425   9.830  1.00  0.00      BENZ    
-ATOM    119  CZ  BENZA  10       5.471  15.652   9.116  1.00  0.00      BENZ    
-ATOM    120  HZ  BENZA  10       5.177  14.956   8.340  1.00  0.00      BENZ    
+ATOM      1  C   DCM A   1       2.741  15.209   9.331  1.00  0.00      DCM     
+ATOM      2  H1  DCM A   1       3.834  15.257   9.554  1.00  0.00      DCM     
+ATOM      3  H2  DCM A   1       2.256  16.186   9.505  1.00  0.00      DCM     
+ATOM      4  CL1 DCM A   1       2.526  14.747   7.619  1.00  0.00      DCM     
+ATOM      5  CL2 DCM A   1       1.991  13.983  10.388  1.00  0.00      DCM     
+ATOM      6  C   DCM A   2       9.007   5.007  17.458  1.00  0.00      DCM     
+ATOM      7  H1  DCM A   2       8.502   4.928  16.465  1.00  0.00      DCM     
+ATOM      8  H2  DCM A   2       9.101   4.016  17.937  1.00  0.00      DCM     
+ATOM      9  CL1 DCM A   2      10.636   5.698  17.220  1.00  0.00      DCM     
+ATOM     10  CL2 DCM A   2       8.042   6.078  18.509  1.00  0.00      DCM     
+ATOM     11  C   DCM A   3       5.553   1.512   7.351  1.00  0.00      DCM     
+ATOM     12  H1  DCM A   3       4.930   0.887   6.667  1.00  0.00      DCM     
+ATOM     13  H2  DCM A   3       5.178   1.460   8.389  1.00  0.00      DCM     
+ATOM     14  CL1 DCM A   3       7.234   0.910   7.306  1.00  0.00      DCM     
+ATOM     15  CL2 DCM A   3       5.500   3.205   6.790  1.00  0.00      DCM     
+ATOM     16  C   DCM A   4      11.605  12.806   0.643  1.00  0.00      DCM     
+ATOM     17  H1  DCM A   4      12.551  12.253   0.853  1.00  0.00      DCM     
+ATOM     18  H2  DCM A   4      10.967  12.249  -0.066  1.00  0.00      DCM     
+ATOM     19  CL1 DCM A   4      10.718  13.027   2.178  1.00  0.00      DCM     
+ATOM     20  CL2 DCM A   4      12.011  14.396  -0.056  1.00  0.00      DCM     
+ATOM     21  C   DCM A   5      17.702   9.661  13.079  1.00  0.00      DCM     
+ATOM     22  H1  DCM A   5      18.767   9.908  12.854  1.00  0.00      DCM     
+ATOM     23  H2  DCM A   5      17.156  10.550  13.444  1.00  0.00      DCM     
+ATOM     24  CL1 DCM A   5      16.922   9.070  11.585  1.00  0.00      DCM     
+ATOM     25  CL2 DCM A   5      17.658   8.390  14.330  1.00  0.00      DCM     
+ATOM     26  C   DCM A   6       9.778   1.562   5.520  1.00  0.00      DCM     
+ATOM     27  H1  DCM A   6       9.434   2.589   5.248  1.00  0.00      DCM     
+ATOM     28  H2  DCM A   6      10.789   1.364   5.122  1.00  0.00      DCM     
+ATOM     29  CL1 DCM A   6       9.814   1.423   7.300  1.00  0.00      DCM     
+ATOM     30  CL2 DCM A   6       8.635   0.373   4.841  1.00  0.00      DCM     
+ATOM     31  C   DCM A   7      15.560  15.491   2.126  1.00  0.00      DCM     
+ATOM     32  H1  DCM A   7      15.507  14.376   2.136  1.00  0.00      DCM     
+ATOM     33  H2  DCM A   7      16.076  15.873   3.025  1.00  0.00      DCM     
+ATOM     34  CL1 DCM A   7      16.460  16.007   0.672  1.00  0.00      DCM     
+ATOM     35  CL2 DCM A   7      13.902  16.146   2.076  1.00  0.00      DCM     
+ATOM     36  C   DCM A   8      18.445   1.205  15.749  1.00  0.00      DCM     
+ATOM     37  H1  DCM A   8      18.657   2.141  15.178  1.00  0.00      DCM     
+ATOM     38  H2  DCM A   8      17.456   0.792  15.482  1.00  0.00      DCM     
+ATOM     39  CL1 DCM A   8      19.705   0.000  15.364  1.00  0.00      DCM     
+ATOM     40  CL2 DCM A   8      18.475   1.577  17.493  1.00  0.00      DCM     
+ATOM     41  C   DCM A   9      12.165  12.780   4.381  1.00  0.00      DCM     
+ATOM     42  H1  DCM A   9      12.898  13.005   5.192  1.00  0.00      DCM     
+ATOM     43  H2  DCM A   9      11.365  12.109   4.742  1.00  0.00      DCM     
+ATOM     44  CL1 DCM A   9      11.435  14.313   3.827  1.00  0.00      DCM     
+ATOM     45  CL2 DCM A   9      13.025  11.995   3.030  1.00  0.00      DCM     
+ATOM     46  C   DCM A  10       5.636  16.683  17.837  1.00  0.00      DCM     
+ATOM     47  H1  DCM A  10       6.284  17.071  18.659  1.00  0.00      DCM     
+ATOM     48  H2  DCM A  10       6.150  15.889  17.267  1.00  0.00      DCM     
+ATOM     49  CL1 DCM A  10       4.142  16.014  18.553  1.00  0.00      DCM     
+ATOM     50  CL2 DCM A  10       5.231  18.028  16.738  1.00  0.00      DCM     
+ATOM     51  C   DCM A  11      18.615  16.585  18.395  1.00  0.00      DCM     
+ATOM     52  H1  DCM A  11      19.040  15.970  19.224  1.00  0.00      DCM     
+ATOM     53  H2  DCM A  11      17.518  16.676  18.489  1.00  0.00      DCM     
+ATOM     54  CL1 DCM A  11      19.343  18.215  18.462  1.00  0.00      DCM     
+ATOM     55  CL2 DCM A  11      19.010  15.808  16.839  1.00  0.00      DCM     
+ATOM     56  C   DCM A  12      11.173   5.937   9.058  1.00  0.00      DCM     
+ATOM     57  H1  DCM A  12      12.022   5.213   9.021  1.00  0.00      DCM     
+ATOM     58  H2  DCM A  12      11.215   6.644   8.210  1.00  0.00      DCM     
+ATOM     59  CL1 DCM A  12       9.638   5.026   8.984  1.00  0.00      DCM     
+ATOM     60  CL2 DCM A  12      11.262   6.850  10.588  1.00  0.00      DCM     
+ATOM     61  C   DCM A  13      16.589  19.705   1.064  1.00  0.00      DCM     
+ATOM     62  H1  DCM A  13      16.316  18.807   0.461  1.00  0.00      DCM     
+ATOM     63  H2  DCM A  13      15.694  20.167   1.517  1.00  0.00      DCM     
+ATOM     64  CL1 DCM A  13      17.708  19.204   2.363  1.00  0.00      DCM     
+ATOM     65  CL2 DCM A  13      17.389  20.892   0.000  1.00  0.00      DCM     
+ATOM     66  C   DCM A  14       6.953  14.111  20.459  1.00  0.00      DCM     
+ATOM     67  H1  DCM A  14       6.099  14.464  21.085  1.00  0.00      DCM     
+ATOM     68  H2  DCM A  14       7.835  14.765  20.585  1.00  0.00      DCM     
+ATOM     69  CL1 DCM A  14       7.381  12.450  20.957  1.00  0.00      DCM     
+ATOM     70  CL2 DCM A  14       6.455  14.121  18.746  1.00  0.00      DCM     
+ATOM     71  C   DCM A  15      19.976   7.655   6.305  1.00  0.00      DCM     
+ATOM     72  H1  DCM A  15      20.999   8.039   6.534  1.00  0.00      DCM     
+ATOM     73  H2  DCM A  15      19.379   8.411   5.764  1.00  0.00      DCM     
+ATOM     74  CL1 DCM A  15      20.126   6.194   5.288  1.00  0.00      DCM     
+ATOM     75  CL2 DCM A  15      19.158   7.246   7.836  1.00  0.00      DCM     
+ATOM     76  C   DCM A  16      14.658   3.849   7.323  1.00  0.00      DCM     
+ATOM     77  H1  DCM A  16      14.324   3.626   6.281  1.00  0.00      DCM     
+ATOM     78  H2  DCM A  16      15.748   3.705   7.431  1.00  0.00      DCM     
+ATOM     79  CL1 DCM A  16      14.252   5.546   7.703  1.00  0.00      DCM     
+ATOM     80  CL2 DCM A  16      13.807   2.755   8.446  1.00  0.00      DCM     
+ATOM     81  C   DCM A  17       5.422   7.487  12.208  1.00  0.00      DCM     
+ATOM     82  H1  DCM A  17       4.799   7.336  13.123  1.00  0.00      DCM     
+ATOM     83  H2  DCM A  17       6.339   8.056  12.442  1.00  0.00      DCM     
+ATOM     84  CL1 DCM A  17       5.877   5.888  11.555  1.00  0.00      DCM     
+ATOM     85  CL2 DCM A  17       4.463   8.385  11.001  1.00  0.00      DCM     
+ATOM     86  C   DCM A  18      14.554   6.817   0.593  1.00  0.00      DCM     
+ATOM     87  H1  DCM A  18      14.296   7.716  -0.016  1.00  0.00      DCM     
+ATOM     88  H2  DCM A  18      14.441   5.891   0.001  1.00  0.00      DCM     
+ATOM     89  CL1 DCM A  18      16.249   6.959   1.136  1.00  0.00      DCM     
+ATOM     90  CL2 DCM A  18      13.468   6.748   2.006  1.00  0.00      DCM     
+ATOM     91  C   DCM A  19      19.771   1.848   4.085  1.00  0.00      DCM     
+ATOM     92  H1  DCM A  19      19.170   1.743   5.019  1.00  0.00      DCM     
+ATOM     93  H2  DCM A  19      19.131   1.772   3.188  1.00  0.00      DCM     
+ATOM     94  CL1 DCM A  19      20.573   3.444   4.096  1.00  0.00      DCM     
+ATOM     95  CL2 DCM A  19      20.999   0.554   4.042  1.00  0.00      DCM     
+ATOM     96  C   DCM A  20      15.439  15.169   9.825  1.00  0.00      DCM     
+ATOM     97  H1  DCM A  20      14.771  15.082  10.715  1.00  0.00      DCM     
+ATOM     98  H2  DCM A  20      15.957  16.144   9.810  1.00  0.00      DCM     
+ATOM     99  CL1 DCM A  20      16.654  13.861   9.890  1.00  0.00      DCM     
+ATOM    100  CL2 DCM A  20      14.452  15.006   8.348  1.00  0.00      DCM     
+ATOM    101  C   DCM A  21      12.049   9.776   2.244  1.00  0.00      DCM     
+ATOM    102  H1  DCM A  21      11.445  10.708   2.130  1.00  0.00      DCM     
+ATOM    103  H2  DCM A  21      11.554   8.918   1.756  1.00  0.00      DCM     
+ATOM    104  CL1 DCM A  21      13.648  10.035   1.490  1.00  0.00      DCM     
+ATOM    105  CL2 DCM A  21      12.248   9.429   3.982  1.00  0.00      DCM     
+ATOM    106  C   DCM A  22      20.378  11.834   5.398  1.00  0.00      DCM     
+ATOM    107  H1  DCM A  22      19.263  11.773   5.402  1.00  0.00      DCM     
+ATOM    108  H2  DCM A  22      20.719  12.877   5.521  1.00  0.00      DCM     
+ATOM    109  CL1 DCM A  22      21.010  10.849   6.747  1.00  0.00      DCM     
+ATOM    110  CL2 DCM A  22      20.984  11.197   3.846  1.00  0.00      DCM     
+ATOM    111  C   DCM A  23      20.194  16.519   8.809  1.00  0.00      DCM     
+ATOM    112  H1  DCM A  23      19.584  16.905   7.957  1.00  0.00      DCM     
+ATOM    113  H2  DCM A  23      20.963  15.808   8.458  1.00  0.00      DCM     
+ATOM    114  CL1 DCM A  23      20.995  17.899   9.611  1.00  0.00      DCM     
+ATOM    115  CL2 DCM A  23      19.113  15.692   9.962  1.00  0.00      DCM     
+ATOM    116  C   DCM A  24       1.157   8.250  15.391  1.00  0.00      DCM     
+ATOM    117  H1  DCM A  24       1.446   7.952  16.427  1.00  0.00      DCM     
+ATOM    118  H2  DCM A  24       2.042   8.557  14.804  1.00  0.00      DCM     
+ATOM    119  CL1 DCM A  24       0.379   6.857  14.588  1.00  0.00      DCM     
+ATOM    120  CL2 DCM A  24       0.012   9.614  15.483  1.00  0.00      DCM     
+ATOM    121  C   DCM A  25       7.725  17.263   9.327  1.00  0.00      DCM     
+ATOM    122  H1  DCM A  25       7.704  16.451  10.093  1.00  0.00      DCM     
+ATOM    123  H2  DCM A  25       8.162  16.904   8.379  1.00  0.00      DCM     
+ATOM    124  CL1 DCM A  25       6.051  17.811   9.029  1.00  0.00      DCM     
+ATOM    125  CL2 DCM A  25       8.704  18.617   9.951  1.00  0.00      DCM     
 END
