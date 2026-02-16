@@ -41,6 +41,7 @@ config = {
     # Which monomer to decouple (0-indexed)
     "decouple_monomer": 0,
     # Per-window simulation length
+    "nsteps_min": 50,       # minimization steps before each equil
     "nsteps_equil": 500,    # equilibration steps per window
     "nsteps_prod": 1000,    # production steps per window
 }
@@ -172,6 +173,7 @@ pdb_ase_atoms.calc = hybrid_calc
 # ---------------------------------------------------------------------------
 decouple_idx = config["decouple_monomer"]
 lambda_windows = config["lambda_windows"]
+n_min = config["nsteps_min"]
 n_equil = config["nsteps_equil"]
 n_prod = config["nsteps_prod"]
 
@@ -184,6 +186,7 @@ traj_dir.mkdir(exist_ok=True)
 from ase.io.trajectory import Trajectory  # noqa: E402
 from ase.md.langevin import Langevin  # noqa: E402
 from ase import units  # noqa: E402
+from ase.optimize import BFGS  # noqa: E402
 
 print(f"\n{'='*60}")
 print(f"Starting lambda dynamics: decoupling monomer {decouple_idx}")
@@ -202,6 +205,10 @@ for wi, lam in enumerate(lambda_windows):
     # Trajectory files for this window
     traj_equil_path = traj_dir / f"window_{wi:02d}_lam{lam:.2f}_equil.traj"
     traj_prod_path = traj_dir / f"window_{wi:02d}_lam{lam:.2f}_prod.traj"
+
+    # Small minimization before equil
+    print(f"  Minimizing {n_min} steps ...")
+    BFGS(pdb_ase_atoms).run(fmax=0.05, steps=n_min)
 
     # Equilibration
     traj_equil = Trajectory(str(traj_equil_path), "w", pdb_ase_atoms)
