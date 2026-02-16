@@ -79,6 +79,12 @@ args_box = argparse.Namespace(
 make_box.main_loop(args_box)
 print("Box setup done.")
 
+from mmml.pycharmmInterface.import_pycharmm import (  # noqa: E402
+    pycharmm,
+    coor,
+    safe_energy_show,
+)
+
 # ---------------------------------------------------------------------------
 # 3. Set up the simulation (single pass — reuse calculator across windows)
 # ---------------------------------------------------------------------------
@@ -92,10 +98,15 @@ from mmml.pycharmmInterface.mmml_calculator_general import (  # noqa: E402
 from mmml.cli.base import (  # noqa: E402
     load_model_parameters,
     resolve_checkpoint_paths,
+    setup_mmml_imports,
 )
 
 import ase.io  # noqa: E402
+import jax  # noqa: E402
 import jax.numpy as jnp  # noqa: E402
+import pandas as pd  # noqa: E402
+
+_, _, _, get_ase_calc = setup_mmml_imports()
 
 checkpoint = "/home/ericb/mmml/mmml/physnetjax/ckpts/DESdimers/"
 pdbfile = nb_dir / "pdb" / "init-packmol.pdb"
@@ -137,6 +148,16 @@ model.natoms = natoms
 # Build the general calculator with lambda_monomer = all ones initially
 atoms_per_monomer_list = [n_atoms_monomer] * N
 initial_lambda = np.ones(N, dtype=np.float32)
+
+# Single-monomer PhysNet calculator for optimize_as_monomers
+params_monomer, model_monomer = load_model_parameters(epoch_dir, n_atoms_monomer)
+ase_monomer = pdb_ase_atoms[0:n_atoms_monomer].copy()
+simple_physnet_calculator = get_ase_calc(params_monomer, model_monomer, ase_monomer)
+
+# Monomer offsets for optimize_as_monomers
+monomer_offsets = np.zeros(N + 1, dtype=int)
+for _mi, _na in enumerate(atoms_per_monomer_list):
+    monomer_offsets[_mi + 1] = monomer_offsets[_mi] + _na
 
 calculator_factory = setup_calculator_general(
     ATOMS_PER_MONOMER=atoms_per_monomer_list,
@@ -186,7 +207,59 @@ traj_dir.mkdir(exist_ok=True)
 from ase.io.trajectory import Trajectory  # noqa: E402
 from ase.md.langevin import Langevin  # noqa: E402
 from ase import units  # noqa: E402
-from ase.optimize import BFGS  # noqa: E402
+import ase.optimize as ase_opt  # noqa: E402
+
+
+def wrap_positions_for_pbc(positions):
+    """Apply PBC mapping to wrap positions into the cell (molecular wrapping)."""
+    pbc_map_fn = getattr(hybrid_calc, "pbc_map", None)
+    if pbc_map_fn is None or not getattr(hybrid_calc, "do_pbc_map", False):
+        return positions
+    R_mapped = pbc_map_fn(jnp.asarray(positions))
+    return np.asarray(jax.device_get(R_mapped))
+
+
+def optimize_as_monomers(atoms, run_index=0, nsteps=60, fmax=0.0006):
+    """Optimize each monomer in isolation with PhysNet, then wrap into cell."""
+    optimized_atoms_positions = np.zeros_like(atoms.get_positions())
+    for i in range(N):
+        off = int(monomer_offsets[i])
+        n_i = atoms_per_monomer_list[i]
+        monomer_atoms = atoms[off : off + n_i].copy()
+        monomer_atoms.calc = simple_physnet_calculator
+        _ = ase_opt.BFGS(monomer_atoms).run(fmax=fmax, steps=nsteps)
+        optimized_atoms_positions[off : off + n_i] = monomer_atoms.get_positions()
+
+    atoms.set_positions(optimized_atoms_positions)
+    wrapped = wrap_positions_for_pbc(atoms.get_positions())
+    atoms.set_positions(wrapped)
+    xyz = pd.DataFrame(wrapped, columns=["x", "y", "z"])
+    coor.set_positions(xyz)
+    return atoms
+
+
+def minimize_structure(atoms, run_index=0, nsteps=60, fmax=0.0006, charmm=False, output_prefix="lambda"):
+    """Minimize structure: CHARMM ABNR + monomer optimization (if charmm=True), then BFGS with hybrid."""
+    if charmm:
+        pycharmm.minimize.run_abnr(nstep=10000, tolenr=1e-6, tolgrd=1e-6)
+        pycharmm.lingo.charmm_script("ENER")
+        safe_energy_show()
+        atoms.set_positions(coor.get_positions())
+        atoms = optimize_as_monomers(atoms, run_index=run_index, nsteps=100, fmax=0.0006)
+
+    traj_path = traj_dir / f"bfgs_{run_index}_{output_prefix}_minimized.traj"
+    traj = ase.io.Trajectory(str(traj_path), "w")
+    print("Minimizing structure with hybrid calculator")
+    print(f"Running BFGS for {nsteps} steps")
+    print(f"Running BFGS with fmax: {fmax}")
+    _ = ase_opt.BFGS(atoms, trajectory=traj).run(fmax=fmax, steps=nsteps)
+    traj.close()
+    # Sync with PyCHARMM
+    xyz = pd.DataFrame(atoms.get_positions(), columns=["x", "y", "z"])
+    coor.set_positions(xyz)
+    return atoms
+
+
 
 print(f"\n{'='*60}")
 print(f"Starting lambda dynamics: decoupling monomer {decouple_idx}")
@@ -206,9 +279,23 @@ for wi, lam in enumerate(lambda_windows):
     traj_equil_path = traj_dir / f"window_{wi:02d}_lam{lam:.2f}_equil.traj"
     traj_prod_path = traj_dir / f"window_{wi:02d}_lam{lam:.2f}_prod.traj"
 
-    # Small minimization before equil
-    print(f"  Minimizing {n_min} steps ...")
-    BFGS(pdb_ase_atoms).run(fmax=0.05, steps=n_min)
+    # Minimization before equil (CHARMM ABNR + monomer opt + BFGS)
+    print(f"  Minimizing (charmm=True) {n_min} steps ...")
+    minimize_structure(
+        pdb_ase_atoms,
+        run_index=wi,
+        nsteps=n_min,
+        fmax=0.0006,
+        charmm=True,
+        output_prefix="lambda",
+    )
+    # Wrap positions into cell after BFGS (avoids unwrapped coords for PBC)
+    pdb_ase_atoms.set_positions(
+        pdb_ase_atoms.get_positions() - pdb_ase_atoms.get_positions().mean(axis=0)
+    )
+    wrapped = wrap_positions_for_pbc(pdb_ase_atoms.get_positions())
+    pdb_ase_atoms.set_positions(wrapped)
+    coor.set_positions(pd.DataFrame(wrapped, columns=["x", "y", "z"]))
 
     # Equilibration
     traj_equil = Trajectory(str(traj_equil_path), "w", pdb_ase_atoms)
