@@ -10,8 +10,9 @@ Demonstrates how to scale the potential of individual monomers using the
 The workflow:
   1. Build a single-residue box (e.g. 20 MEOH molecules).
   2. For each lambda window, set ``lambda_monomer`` so that the *first*
-     monomer has its interactions scaled by λ (from 1 → 0), while all
-     other monomers remain fully coupled (λ = 1).
+     monomer has its *inter-monomer* interactions scaled by λ (from 1 → 0),
+     while all other monomers remain fully coupled (λ = 1).  Internal
+     monomer energy is never decoupled.
   3. Run a short equilibration + production at each window.
   4. Collect ⟨dU/dλ⟩ at each window for TI, or ΔU for FEP.
 
@@ -35,7 +36,7 @@ config = {
     "N": 30,
     "L": 20.0,
     "skip_energy_show": False,
-    # Lambda schedule: scale monomer 0 from fully coupled (1) to decoupled (0)
+    # Lambda schedule: scale monomer 0's inter-monomer interactions from coupled (1) to decoupled (0)
     "lambda_windows": [1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.0],
     # Which monomer to decouple (0-indexed)
     "decouple_monomer": 0,

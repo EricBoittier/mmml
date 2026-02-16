@@ -638,8 +638,10 @@ def setup_calculator(
             list/sequence of ints giving the atom count for each monomer.  When
             a list is provided its length is used as *N_MONOMERS*.
         lambda_monomer: Optional array of shape ``(N_MONOMERS,)`` with values
-            in [0, 1].  Scales all contributions (ML internal, ML dimer, MM)
-            for each monomer.  ``None`` (default) is equivalent to all ones.
+            in [0, 1].  Scales inter-monomer contributions (ML dimer, MM
+            non-bonded) for each monomer.  Internal monomer energy is NOT
+            scaled (decouple only inter-monomer interactions in FEP/TI).
+            ``None`` (default) is equivalent to all ones.
     """
     if model_restart_path is None:
         raise ValueError("model_restart_path must be provided")
@@ -1641,12 +1643,11 @@ def setup_calculator(
         """Calculate energy and force contributions from monomers.
 
         Supports heterogeneous monomer sizes via ``atoms_per_monomer_list``
-        and ``monomer_offsets``.  Lambda scaling is applied per-monomer.
+        and ``monomer_offsets``.  Internal energy is NOT scaled by lambda
+        (only inter-monomer interactions are decoupled in FEP/TI).
         """
         ml_monomer_energy = jnp.array(e[:n_monomers]).flatten()
-
-        # Apply lambda scaling to each monomer energy
-        ml_monomer_energy = ml_monomer_energy * lambda_monomer
+        # Internal monomer energy is NOT scaled by lambda (decouple only inter-monomer)
 
         ml_monomer_forces = f[:max_atoms * n_monomers]
         
@@ -1668,17 +1669,7 @@ def setup_calculator(
             debug=debug,
         )
 
-        # Apply per-atom lambda scaling to forces (each atom inherits its monomer's lambda)
-        atom_lambda = jnp.concatenate([
-            jnp.full((atoms_per_monomer_list[i],), lambda_monomer[i])
-            for i in range(n_monomers)
-        ])
-        # Pad/truncate to match monomer_forces shape
-        if atom_lambda.shape[0] < monomer_forces.shape[0]:
-            atom_lambda = jnp.concatenate([atom_lambda, jnp.ones(monomer_forces.shape[0] - atom_lambda.shape[0])])
-        elif atom_lambda.shape[0] > monomer_forces.shape[0]:
-            atom_lambda = atom_lambda[:monomer_forces.shape[0]]
-        monomer_forces = monomer_forces * atom_lambda[:, None]
+        # Internal monomer forces are NOT scaled by lambda (decouple only inter-monomer)
 
         debug_print(debug, "Monomer Contributions:",
             ml_monomer_energy=ml_monomer_energy,
