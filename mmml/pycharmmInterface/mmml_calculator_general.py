@@ -1774,6 +1774,8 @@ def setup_calculator(
                 self.do_pbc_map = do_pbc_map
                 self.pbc_map = pbc_map
                 self.pbc_cell = np.asarray(pbc_cell) if pbc_cell is not None else None
+                self._pbc_map_cache = None
+                self._pbc_map_cache_cell = None
                 self.verbose = verbose
                 # Expose heterogeneous info
                 self.atoms_per_monomer_list = atoms_per_monomer_list
@@ -1821,7 +1823,8 @@ def setup_calculator(
                 R = atoms.get_positions()
                 Z = atoms.get_atomic_numbers()
 
-                # PBC: prefer atoms.cell when available; fallback to setup pbc_map
+                # PBC: prefer atoms.cell when available; fallback to setup pbc_map.
+                # Cache pbc_map when cell is unchanged to avoid recreating it every step.
                 pbc_map_to_use = self.pbc_map
                 if self.do_pbc_map and self.pbc_map is not None:
                     atoms_cell = _ase_cell_to_3x3(atoms)
@@ -1835,18 +1838,27 @@ def setup_calculator(
                                     UserWarning,
                                     stacklevel=2,
                                 )
-                        mol_id = None
-                        if hasattr(self, "atoms_per_monomer_list") and self.atoms_per_monomer_list:
-                            mol_id_parts = [
-                                jnp.full(int(self.atoms_per_monomer_list[i]), i, dtype=jnp.int32)
-                                for i in range(self.n_monomers)
-                            ]
-                            mol_id = jnp.concatenate(mol_id_parts)
-                        pbc_map_to_use = make_pbc_mapper(
-                            cell=jnp.asarray(atoms_cell),
-                            mol_id=mol_id,
-                            n_monomers=self.n_monomers,
-                        )
+                        if (
+                            self._pbc_map_cache is not None
+                            and self._pbc_map_cache_cell is not None
+                            and np.allclose(atoms_cell, self._pbc_map_cache_cell, atol=1e-8, rtol=1e-8)
+                        ):
+                            pbc_map_to_use = self._pbc_map_cache
+                        else:
+                            mol_id = None
+                            if hasattr(self, "atoms_per_monomer_list") and self.atoms_per_monomer_list:
+                                mol_id_parts = [
+                                    jnp.full(int(self.atoms_per_monomer_list[i]), i, dtype=jnp.int32)
+                                    for i in range(self.n_monomers)
+                                ]
+                                mol_id = jnp.concatenate(mol_id_parts)
+                            pbc_map_to_use = make_pbc_mapper(
+                                cell=jnp.asarray(atoms_cell),
+                                mol_id=mol_id,
+                                n_monomers=self.n_monomers,
+                            )
+                            self._pbc_map_cache = pbc_map_to_use
+                            self._pbc_map_cache_cell = atoms_cell.copy()
                     elif self.pbc_map is None:
                         self.do_pbc_map = False
 
