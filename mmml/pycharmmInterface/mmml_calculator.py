@@ -641,8 +641,7 @@ def setup_calculator(
     all_monomer_idxs = []
     for a in range(1, n_monomers + 1):
         all_monomer_idxs.append(indices_of_monomer(a, n_atoms=ATOMS_PER_MONOMER, n_mol=n_monomers))
-    # print("all_monomer_idxs", all_monomer_idxs)
-    # print("all_dimer_idxs", all_dimer_idxs)
+
     dimer_perms = dimer_permutations(n_monomers)
 
     print("len(dimer_perms)", len(dimer_perms))
@@ -650,7 +649,7 @@ def setup_calculator(
     N_MONOMERS = n_monomers
     # Batch processing constants
     BATCH_SIZE: int = N_MONOMERS + len(dimer_perms)  # Number of systems per batch
-    # print(BATCH_SIZE)
+
     restart_path = Path(model_restart_path) if type(model_restart_path) == str else model_restart_path
     
     # Check if this is a JSON checkpoint (has params.json file)
