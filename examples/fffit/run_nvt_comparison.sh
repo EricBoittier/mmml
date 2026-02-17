@@ -86,8 +86,9 @@ Options:
   --res NAME            Residue name (default: $RES)
   --side-length L       Box side length in Å (required)
   --n NUM               Number of molecules in the box (default: $N)
-  --density DENS        Target density in g/cm³ (overrides --n; computes
-                        N from density, side-length, and molecular weight)
+  --density DENS        Target density in kg/m³ (overrides --n; computes
+                        N from density, side-length, and molecular weight.
+                        E.g. water=997, methanol=791, acetone=784)
   --natoms-monomer N    Atoms per monomer (default: $NATOMS_MONOMER)
   --checkpoint PATH     Path to model checkpoint directory (required)
   --temperature T       Temperature in K (default: $TEMPERATURE)
@@ -155,7 +156,7 @@ echo "========================================================================"
 echo "  Residue:           $RES"
 echo "  Box side length:   $SIDE_LENGTH Å"
 if [[ -n "$DENSITY" ]]; then
-echo "  Density:           $DENSITY g/cm³  (will compute N after residue is built)"
+echo "  Density:           $DENSITY kg/m³  (will compute N after residue is built)"
 else
 echo "  N molecules:       $N"
 fi
@@ -211,7 +212,7 @@ echo "[OK] Residue $RES created."
 # ======================================================================
 if [[ -n "$DENSITY" ]]; then
     echo ""
-    echo "[run_nvt_comparison] Computing N from density=${DENSITY} g/cm³, L=${SIDE_LENGTH} Å"
+    echo "[run_nvt_comparison] Computing N from density=${DENSITY} kg/m³, L=${SIDE_LENGTH} Å"
     N=$(python3 -c "
 import ase, ase.io, sys
 try:
@@ -219,16 +220,27 @@ try:
 except Exception:
     print('ERROR: pdb/initial.pdb not found after make_res.', file=sys.stderr)
     sys.exit(1)
-M = mol.get_masses().sum()       # amu = g/mol
-rho = float('${DENSITY}')        # g/cm³
-L   = float('${SIDE_LENGTH}')    # Å
-NA  = 6.02214076e23
-V_cm3 = (L * 1e-8) ** 3          # Å -> cm
-N = rho * V_cm3 * NA / M
+M = mol.get_masses().sum()           # amu = g/mol
+rho_kgm3 = float('${DENSITY}')      # kg/m³
+L_ang    = float('${SIDE_LENGTH}')   # Å
+NA = 6.02214076e23
+# Volume in m³:  (L_ang * 1e-10)^3
+V_m3 = (L_ang * 1e-10) ** 3
+# mass_in_box [kg] = rho * V;  convert to g -> * 1000
+# moles = mass_g / M;  N = moles * NA
+N = rho_kgm3 * V_m3 * 1000.0 * NA / M
 N = max(1, round(N))
-print(N)
+print(f'{N}', file=sys.stdout)
+# Sanity check
+print(f'  Molecular weight: {M:.2f} g/mol', file=sys.stderr)
+print(f'  Box volume: {V_m3:.4e} m³ = {(L_ang**3):.1f} Å³', file=sys.stderr)
+print(f'  N molecules: {N}', file=sys.stderr)
+if N > 5000:
+    print(f'  WARNING: N={N} seems very large for L={L_ang} Å. Check density units (should be kg/m³).', file=sys.stderr)
+if N < 2:
+    print(f'  WARNING: N={N} seems very small. Check density and side-length.', file=sys.stderr)
 ")
-    echo "[run_nvt_comparison] Computed N = ${N} molecules (density=${DENSITY} g/cm³, L=${SIDE_LENGTH} Å)"
+    echo "[run_nvt_comparison] Computed N = ${N} molecules (density=${DENSITY} kg/m³, L=${SIDE_LENGTH} Å)"
 fi
 
 # ======================================================================
@@ -326,7 +338,7 @@ echo "========================================================================"
 echo ""
 echo "  Residue: $RES, N=$N molecules, L=$SIDE_LENGTH Å"
 if [[ -n "$DENSITY" ]]; then
-echo "  Density: $DENSITY g/cm³ (N computed from density)"
+echo "  Density: $DENSITY kg/m³ (N computed from density)"
 fi
 echo ""
 echo "  Normal (dimers ON):  nvt_normal/"
