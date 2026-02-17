@@ -587,7 +587,9 @@ shake bonh para sele all end
             atoms = optimize_as_monomers(atoms, run_index=run_index, nsteps=100, fmax=0.0006)
 
         if ase:
-            traj = ase_io.Trajectory(f'bfgs_{run_index}_{args.output_prefix}_minimized.traj', 'w')
+            traj_path = Path(f'bfgs_{run_index}_{args.output_prefix}_minimized.traj')
+            traj_path.parent.mkdir(parents=True, exist_ok=True)
+            traj = ase_io.Trajectory(str(traj_path), 'w')
             print("Minimizing structure with hybrid calculator")
             print(f"Running BFGS for {nsteps} steps")
             print(f"Running BFGS with fmax: {fmax}")
@@ -664,6 +666,7 @@ shake bonh para sele all end
 
         # Open trajectory file
         traj_filename = f'{run_index}_{args.output_prefix}_{temperature}K_{num_steps}steps_P{dt}.traj'
+        Path(traj_filename).parent.mkdir(parents=True, exist_ok=True)
         traj = ase_io.Trajectory(traj_filename, 'w')
 
         # Run molecular dynamics
@@ -936,7 +939,9 @@ shake bonh para sele all end
             from datetime import datetime
             now = datetime.now()
             current_time = now.strftime("%H:%M:%S")
-            ase_io.write(f"{args.output_prefix}_minimized_{current_time}.pdb", atoms)
+            min_pdb_path = Path(f"{args.output_prefix}_minimized_{current_time}.pdb")
+            min_pdb_path.parent.mkdir(parents=True, exist_ok=True)
+            ase_io.write(str(min_pdb_path), atoms)
 
             # ========================================================================
             # PBC MINIMIZATION (when PBC enabled)
@@ -987,7 +992,9 @@ shake bonh para sele all end
                 md_pos = best_pbc_pos
             # Save PBC minimized structure
             pbc_current_time = datetime.now().strftime("%H:%M:%S")
-            ase_io.write(f"{args.output_prefix}_pbc_minimized_{pbc_current_time}.pdb", atoms)
+            pbc_pdb_path = Path(f"{args.output_prefix}_pbc_minimized_{pbc_current_time}.pdb")
+            pbc_pdb_path.parent.mkdir(parents=True, exist_ok=True)
+            ase_io.write(str(pbc_pdb_path), atoms)
             print(f"PBC minimization complete. Final energy: {float(wrapped_energy_fn(md_pos)):.6f} eV")
 
             # Use last valid positions if minimization produced NaN
