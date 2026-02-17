@@ -627,6 +627,8 @@ def setup_calculator(
     ml_reorder_indices=None,
     at_codes_override=None,
     lambda_monomer: Optional[np.ndarray] = None,
+    cell_list_safety_factor: float = 2.5,
+    max_pairs: Optional[int] = None,
 ):
     """Create hybrid ML/MM calculator with outputs in eV/eV-A.
 
@@ -642,6 +644,11 @@ def setup_calculator(
             non-bonded) for each monomer.  Internal monomer energy is NOT
             scaled (decouple only inter-monomer interactions in FEP/TI).
             ``None`` (default) is equivalent to all ones.
+        cell_list_safety_factor: Multiplicative safety margin for cell-list
+            pair count estimation (PBC).  Increase if you see
+            "Truncating. Increase max_pairs" warnings.  Default 2.5.
+        max_pairs: If set, use this value directly for cell-list max_pairs
+            instead of estimating.  Use when safety_factor is insufficient.
     """
     if model_restart_path is None:
         raise ValueError("model_restart_path must be provided")
@@ -955,7 +962,12 @@ def setup_calculator(
         if _use_cell_list:
             # --- Cell-list path (PBC) -----------------------------------
             _mm_cutoff_dist = mm_switch_on + mm_cutoff
-            _max_pairs = _estimate_max_pairs(total_atoms, cutoff=_mm_cutoff_dist)
+            if max_pairs is not None:
+                _max_pairs = int(max_pairs)
+            else:
+                _max_pairs = _estimate_max_pairs(
+                    total_atoms, cutoff=_mm_cutoff_dist, safety_factor=cell_list_safety_factor
+                )
             _offsets_np = np.array([int(monomer_offsets[k]) for k in range(len(monomer_offsets))])
             _cl_i, _cl_j, _cl_mask, _n_valid = _cell_list_pairs(
                 np.asarray(R),

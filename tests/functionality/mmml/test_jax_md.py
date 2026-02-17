@@ -11,12 +11,21 @@ import pytest
 import numpy as np
 
 
+def _can_import(name: str) -> bool:
+    """Return True only if *name* can be fully imported (not just found)."""
+    try:
+        __import__(name)
+        return True
+    except Exception:
+        return False
+
+
 @pytest.mark.skipif(
-    importlib.util.find_spec("pycharmm") is None,
+    not _can_import("pycharmm"),
     reason="pycharmm not available in this environment",
 )
 @pytest.mark.skipif(
-    importlib.util.find_spec("jax_md") is None,
+    not _can_import("jax_md"),
     reason="jax_md not available in this environment",
 )
 def test_jax_md_fire_minimization_smoke():
@@ -24,9 +33,9 @@ def test_jax_md_fire_minimization_smoke():
     Run a few FIRE minimization steps with the MMML calculator as energy function.
     Asserts energy is finite and forces decrease (or energy decreases).
     """
-    if importlib.util.find_spec("jax") is None:
+    if not _can_import("jax"):
         pytest.skip("jax not available in this environment")
-    if importlib.util.find_spec("e3x") is None:
+    if not _can_import("e3x"):
         pytest.skip("e3x not available in this environment")
 
     ckpt_env = os.environ.get("MMML_CKPT")
@@ -102,11 +111,11 @@ def test_jax_md_fire_minimization_smoke():
 
 
 @pytest.mark.skipif(
-    importlib.util.find_spec("pycharmm") is None,
+    not _can_import("pycharmm"),
     reason="pycharmm not available in this environment",
 )
 @pytest.mark.skipif(
-    importlib.util.find_spec("jax_md") is None,
+    not _can_import("jax_md"),
     reason="jax_md not available in this environment",
 )
 def test_jax_md_nve_few_steps():
@@ -114,9 +123,9 @@ def test_jax_md_nve_few_steps():
     Run a few NVE steps with the MMML calculator.
     Asserts energy is finite and total energy is approximately conserved.
     """
-    if importlib.util.find_spec("jax") is None:
+    if not _can_import("jax"):
         pytest.skip("jax not available in this environment")
-    if importlib.util.find_spec("e3x") is None:
+    if not _can_import("e3x"):
         pytest.skip("e3x not available in this environment")
 
     ckpt_env = os.environ.get("MMML_CKPT")
