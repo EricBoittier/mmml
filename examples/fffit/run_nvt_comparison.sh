@@ -173,6 +173,25 @@ echo "  NHC tau:           $NHC_TAU"
 echo "========================================================================"
 
 # ======================================================================
+# Ensure crystal_image.str is in the working directory (required by CHARMM)
+# ======================================================================
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CRYSTAL_IMAGE="${SCRIPT_DIR}/crystal_image.str"
+
+if [[ ! -f crystal_image.str ]]; then
+    if [[ -f "$CRYSTAL_IMAGE" ]]; then
+        cp "$CRYSTAL_IMAGE" crystal_image.str
+        echo "[run_nvt_comparison] Copied crystal_image.str into working directory"
+    else
+        echo "ERROR: crystal_image.str not found in working directory or at ${CRYSTAL_IMAGE}" >&2
+        echo "       CHARMM requires this file for periodic image setup." >&2
+        exit 1
+    fi
+else
+    echo "[run_nvt_comparison] crystal_image.str already present in working directory"
+fi
+
+# ======================================================================
 # Step 1: Create residue
 # ======================================================================
 echo ""
