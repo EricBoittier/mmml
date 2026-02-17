@@ -33,7 +33,15 @@ set -euo pipefail
 #
 
 # ======================================================================
-# Defaults
+# Source site-specific settings first (CLI args override these below)
+# ======================================================================
+if [[ -f settings.source ]]; then
+    echo "[run_nvt_comparison] Sourcing settings.source"
+    source settings.source
+fi
+
+# ======================================================================
+# Defaults (env vars from settings.source take effect here)
 # ======================================================================
 RES="${RES:-ACO}"
 N="${N:-50}"
@@ -60,8 +68,12 @@ NHC_TAU="${NHC_TAU:-100.0}"
 INCLUDE_MM="${INCLUDE_MM:-true}"
 DEBUG="${DEBUG:-false}"
 
+# Python CLI path
+PY="${PY:-python -m mmml.cli}"
+PDBFILE="pdb/init-packmol.pdb"
+
 # ======================================================================
-# Parse command-line overrides
+# Parse command-line overrides (these take priority over everything)
 # ======================================================================
 usage() {
     cat <<EOF
@@ -74,8 +86,8 @@ Options:
   --res NAME            Residue name (default: $RES)
   --side-length L       Box side length in Å (required)
   --n NUM               Number of molecules in the box (default: $N)
-  --density DENS        Target density in g/cm³ (overrides --n; requires
-                        --side-length and residue PDB to exist)
+  --density DENS        Target density in g/cm³ (overrides --n; computes
+                        N from density, side-length, and molecular weight)
   --natoms-monomer N    Atoms per monomer (default: $NATOMS_MONOMER)
   --checkpoint PATH     Path to model checkpoint directory (required)
   --temperature T       Temperature in K (default: $TEMPERATURE)
@@ -118,16 +130,6 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
-
-# Source site-specific settings if available (can override defaults above)
-if [[ -f settings.source ]]; then
-    echo "[run_nvt_comparison] Sourcing settings.source"
-    source settings.source
-fi
-
-# Python CLI path (fall back to python -m)
-PY="${PY:-python -m mmml.cli}"
-PDBFILE="pdb/init-packmol.pdb"
 
 # ======================================================================
 # Validate
