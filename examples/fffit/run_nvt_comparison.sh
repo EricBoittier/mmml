@@ -214,13 +214,20 @@ if [[ -n "$DENSITY" ]]; then
     echo ""
     echo "[run_nvt_comparison] Computing N from density=${DENSITY} kg/m³, L=${SIDE_LENGTH} Å"
     N=$(python3 -c "
-import ase, ase.io, sys
-try:
-    mol = ase.io.read('pdb/initial.pdb')
-except Exception:
-    print('ERROR: pdb/initial.pdb not found after make_res.', file=sys.stderr)
+import ase, ase.io, sys, os
+# Prefer xyz/initial.xyz (has correct atomic numbers from PSF).
+# Fall back to pdb/initial.pdb (CHARMM PDB may have wrong element types).
+mol = None
+for path in ['xyz/initial.xyz', 'pdb/initial.pdb']:
+    if os.path.exists(path):
+        mol = ase.io.read(path)
+        print(f'  Read molecule from {path}', file=sys.stderr)
+        break
+if mol is None:
+    print('ERROR: neither xyz/initial.xyz nor pdb/initial.pdb found after make_res.', file=sys.stderr)
     sys.exit(1)
 M = mol.get_masses().sum()           # amu = g/mol
+formula = mol.get_chemical_formula()
 rho_kgm3 = float('${DENSITY}')      # kg/m³
 L_ang    = float('${SIDE_LENGTH}')   # Å
 NA = 6.02214076e23
@@ -232,7 +239,7 @@ N = rho_kgm3 * V_m3 * 1000.0 * NA / M
 N = max(1, round(N))
 print(f'{N}', file=sys.stdout)
 # Sanity check
-print(f'  Molecular weight: {M:.2f} g/mol', file=sys.stderr)
+print(f'  Formula: {formula}, molecular weight: {M:.2f} g/mol', file=sys.stderr)
 print(f'  Box volume: {V_m3:.4e} m³ = {(L_ang**3):.1f} Å³', file=sys.stderr)
 print(f'  N molecules: {N}', file=sys.stderr)
 if N > 5000:
