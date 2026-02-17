@@ -90,9 +90,12 @@ gpu = [
 ]
 
 # GPU/CUDA support (CUDA 13)
+# JAX CUDA 13 uses separate plugin/pjrt packages (no jaxlib[cuda13] extra)
 gpu-cuda13 = [
-    "jax[cuda13]>=0.4.20",
-    "jaxlib[cuda13]>=0.4.20",
+    "jax>=0.9.0",
+    "jaxlib>=0.9.0",
+    "jax-cuda13-plugin>=0.9.0",
+    "jax-cuda13-pjrt>=0.9.0",
     "cupy-cuda13x>=13.0.0",
     "cutensor-cu13>=2.0.0",
 ]
@@ -113,12 +116,6 @@ quantum-gpu = [
     "gpu4pyscf-libxc-cuda12x",
 ]
 
-# GPU-accelerated quantum chemistry (CUDA 13)
-quantum-gpu-cuda13 = [
-    "mmml[quantum]",
-    "gpu4pyscf-cuda13x",
-    "gpu4pyscf-libxc-cuda13x",
-]
 
 # Machine learning extras
 ml = [
@@ -195,7 +192,7 @@ all = [
 
 # Full installation with all optional dependencies (CUDA 13)
 all-cuda13 = [
-    "mmml[gpu-cuda13,quantum,quantum-gpu-cuda13,ml,viz,md,chem,data,notebooks,experiments,plotting,tensorboard]",
+    "mmml[gpu-cuda13,quantum,ml,viz,md,chem,data,notebooks,experiments,plotting,tensorboard]",
 ]
 
 # CPU-only full installation (no GPU dependencies)

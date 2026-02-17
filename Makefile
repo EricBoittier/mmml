@@ -57,7 +57,7 @@ install-gpu:
 	uv sync --extra gpu
 
 install-gpu-cuda13:
-	uv pip install --find-links https://storage.googleapis.com/jax-releases/jax_cuda_releases.html "jax[cuda13]" "jaxlib[cuda13]"
+	uv pip install --find-links https://storage.googleapis.com/jax-releases/jax_cuda_releases.html jax jaxlib jax-cuda13-plugin jax-cuda13-pjrt
 	uv sync --extra gpu-cuda13
 
 install-dev:
