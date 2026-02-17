@@ -15,7 +15,7 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
 ]
-requires-python = ">=3.11,<3.13"
+requires-python = ">=3.11,<3.15"
 
 # Core dependencies - minimal set required for basic functionality
 dependencies = [
@@ -89,6 +89,14 @@ gpu = [
     "cutensor-cu12>=2.0.0",
 ]
 
+# GPU/CUDA support (CUDA 13)
+gpu-cuda13 = [
+    "jax[cuda13]>=0.5.0",
+    "jaxlib[cuda13]>=0.5.0",
+    "cupy-cuda13x>=14.0.0",
+    "cutensor-cu13>=3.0.0",
+]
+
 # Quantum chemistry calculations
 quantum = [
     "pyscf>=2.8.0",
@@ -98,11 +106,18 @@ quantum = [
     "dscribe",
 ]
 
-# GPU-accelerated quantum chemistry
+# GPU-accelerated quantum chemistry (CUDA 12)
 quantum-gpu = [
     "mmml[quantum]",
     "gpu4pyscf-cuda12x",
     "gpu4pyscf-libxc-cuda12x",
+]
+
+# GPU-accelerated quantum chemistry (CUDA 13)
+quantum-gpu-cuda13 = [
+    "mmml[quantum]",
+    "gpu4pyscf-cuda13x",
+    "gpu4pyscf-libxc-cuda13x",
 ]
 
 # Machine learning extras
@@ -173,9 +188,14 @@ dev = [
     "ipykernel>=6.30.1",
 ]
 
-# Full installation with all optional dependencies
+# Full installation with all optional dependencies (CUDA 12)
 all = [
     "mmml[gpu,quantum,quantum-gpu,ml,viz,md,chem,data,notebooks,experiments,plotting,tensorboard]",
+]
+
+# Full installation with all optional dependencies (CUDA 13)
+all-cuda13 = [
+    "mmml[gpu-cuda13,quantum,quantum-gpu-cuda13,ml,viz,md,chem,data,notebooks,experiments,plotting,tensorboard]",
 ]
 
 # CPU-only full installation (no GPU dependencies)

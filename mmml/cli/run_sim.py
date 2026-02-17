@@ -811,7 +811,7 @@ inbfrq -1 imgfrq -1
         dt_fs = args.timestep
         dt = dt_fs * 0.001
         kT = T * unit['temperature']
-        steps_per_recording = 25
+        steps_per_recording = 1000
         rng_key = jax.random.PRNGKey(0)
         print(f"JAX-MD {args.ensemble.upper()}: dt={dt} ps ({dt_fs} fs), kT={kT} ({T} K)")
 

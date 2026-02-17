@@ -4,6 +4,7 @@
 
 ARG BASE_IMAGE=python:3.11-slim
 ARG CUDA_VERSION=12.1.1
+ARG CUDA13_VERSION=13.0.0
 
 # ============================================================================
 # Stage 1: Base image with system dependencies
@@ -88,7 +89,7 @@ RUN ln -s /workspace/mmml /root/mmml
 CMD ["bash"]
 
 # ============================================================================
-# Stage 4: GPU variant (CUDA)
+# Stage 4: GPU variant (CUDA 12)
 # ============================================================================
 FROM nvidia/cuda:${CUDA_VERSION}-cudnn8-devel-ubuntu22.04 AS runtime-gpu
 
@@ -144,6 +145,85 @@ COPY . .
 
 # Install the project with GPU extras
 RUN uv sync --frozen --extra gpu
+
+# Set up environment variables
+ENV VIRTUAL_ENV=/workspace/mmml/.venv \
+    PATH="/workspace/mmml/.venv/bin:${PATH}" \
+    CHARMM_HOME=/workspace/mmml/setup/charmm \
+    CHARMM_LIB_DIR=/workspace/mmml/setup/charmm \
+    LD_LIBRARY_PATH=/workspace/mmml/setup/charmm \
+    CUDA_HOME=/usr/local/cuda \
+    XLA_FLAGS="--xla_gpu_cuda_data_dir=/usr/local/cuda"
+
+# Create CHARMM setup file
+RUN printf 'export CHARMM_HOME=%s\nexport CHARMM_LIB_DIR=%s\n' \
+    "$CHARMM_HOME" "$CHARMM_LIB_DIR" > mmml/CHARMMSETUP
+
+# Create a convenient symlink
+RUN ln -s /workspace/mmml /root/mmml
+
+CMD ["bash"]
+
+# ============================================================================
+# Stage 5: GPU variant (CUDA 13 + Python 3.14)
+# ============================================================================
+FROM nvidia/cuda:${CUDA13_VERSION}-cudnn9-devel-ubuntu24.04 AS runtime-gpu-cuda13
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PYTHON=python3.14
+
+# Install Python 3.14 and system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    software-properties-common \
+    && add-apt-repository ppa:deadsnakes/ppa \
+    && apt-get update && apt-get install -y --no-install-recommends \
+    python3.14 \
+    python3.14-dev \
+    python3.14-venv \
+    build-essential \
+    gfortran \
+    cmake \
+    ninja-build \
+    git \
+    curl \
+    wget \
+    pkg-config \
+    libopenblas-dev \
+    liblapack-dev \
+    libxc-dev \
+    libhdf5-dev \
+    libffi-dev \
+    libssl-dev \
+    libbz2-dev \
+    liblzma-dev \
+    libsqlite3-dev \
+    libreadline-dev \
+    zlib1g-dev \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
+    mv /root/.local/bin/uv /usr/local/bin/uv && \
+    rm -rf /root/.local/share
+
+WORKDIR /workspace/mmml
+
+# Copy dependency files
+COPY pyproject.toml uv.lock ./
+COPY setup ./setup
+
+# Install dependencies with CUDA 13 GPU extras
+RUN uv sync --frozen --no-install-project --extra gpu-cuda13
+
+# Copy the entire project
+COPY . .
+
+# Install the project with CUDA 13 GPU extras
+RUN uv sync --frozen --extra gpu-cuda13
 
 # Set up environment variables
 ENV VIRTUAL_ENV=/workspace/mmml/.venv \
