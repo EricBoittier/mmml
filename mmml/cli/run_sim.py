@@ -91,8 +91,9 @@ def parse_args() -> argparse.Namespace:
 
     parser.add_argument(
         "--cell",
+        type=float,
         default=None,
-        help="Use cell for the simulation (default: False) as a float for a cubic cell length (Å).",
+        help="Cubic cell side length in Å for periodic boundary conditions (default: None = no PBC).",
     )
 
     parser.add_argument(
