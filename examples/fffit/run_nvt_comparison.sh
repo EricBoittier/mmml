@@ -322,6 +322,18 @@ build_sim_cmd() {
         CMD="$CMD --debug"
     fi
 
+    if [[ "$CHARMM_HEAT" == "true" ]]; then
+        CMD="$CMD --charmm_heat"
+    fi
+
+    if [[ "$CHARMM_EQUIL" == "true" ]]; then
+        CMD="$CMD --charmm_equilibration"
+    fi
+
+    if [[ "$CHARMM_PROD" == "true" ]]; then
+        CMD="$CMD --charmm_production"
+    fi
+
     echo "$CMD"
 }
 
