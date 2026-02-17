@@ -222,6 +222,22 @@ def parse_args() -> argparse.Namespace:
         help="Interval to write the trajectory in ASE (default: 100).",
     )
 
+    parser.add_argument(
+        "--charmm_heat",
+        action="store_true",
+        help="Run CHARMM heat (default: False).",
+    )
+    parser.add_argument(
+        "--charmm_equilibration",
+        action="store_true",
+        help="Run CHARMM equilibration (default: False).",
+    )
+    parser.add_argument(
+        "--charmm_production",
+        action="store_true",
+        help="Run CHARMM production (default: False).",
+    )
+
     return parser.parse_args()
 
 
@@ -496,23 +512,59 @@ def run(args: argparse.Namespace) -> int:
 !#########################################
 
 ! Non-bonding parameters
-nbonds atom cutnb 14.0  ctofnb 12.0 ctonnb 10.0 -
+nbonds atom cutnb 10.0  ctofnb 9.0 ctonnb 8.0 -
 vswitch NBXMOD 5 -
 inbfrq -1 imgfrq -1
+
+shake bonh para sele all end
+
 """
     pycharmm.lingo.charmm_script(nbonds)
     safe_energy_show()
     pycharmm.minimize.run_abnr(nstep=1000, tolenr=1e-2, tolgrd=1e-2)
     pycharmm.lingo.charmm_script("ENER")
     safe_energy_show()
-    from mmml.pycharmmInterface.pycharmmCommands import heat
-    # pycharmm.lingo.charmm_script(heat)
-    atoms.set_positions(coor.get_positions())
-    safe_energy_show()
-    pycharmm.minimize.run_abnr(nstep=1000, tolenr=1e-2, tolgrd=1e-2)
-    safe_energy_show()
-    pycharmm.lingo.charmm_script("ENER")
 
+    def run_heat(): 
+        from mmml.pycharmmInterface.pycharmmCommands import heat
+        pycharmm.lingo.charmm_script(heat)
+        atoms.set_positions(coor.get_positions())
+        safe_energy_show()
+        pycharmm.minimize.run_abnr(nstep=1000, tolenr=1e-2, tolgrd=1e-2)
+        safe_energy_show()
+        pycharmm.lingo.charmm_script("ENER")
+        atoms.set_positions(coor.get_positions())
+        return atoms
+
+    def run_equilibration():
+        from mmml.pycharmmInterface.pycharmmCommands import equi
+        pycharmm.lingo.charmm_script(equi)
+        atoms.set_positions(coor.get_positions())
+        safe_energy_show()
+        pycharmm.minimize.run_abnr(nstep=1000, tolenr=1e-2, tolgrd=1e-2)
+        safe_energy_show()
+        pycharmm.lingo.charmm_script("ENER")
+        atoms.set_positions(coor.get_positions())
+        return atoms
+
+    def run_production():
+        from mmml.pycharmmInterface.pycharmmCommands import production
+        pycharmm.lingo.charmm_script(production)
+        atoms.set_positions(coor.get_positions())
+        safe_energy_show()
+        pycharmm.minimize.run_abnr(nstep=1000, tolenr=1e-2, tolgrd=1e-2)
+        safe_energy_show()
+        pycharmm.lingo.charmm_script("ENER")
+        atoms.set_positions(coor.get_positions())
+        return atoms
+
+    if args.charmm_heat:
+        atoms = run_heat()
+    if args.charmm_equilibration:
+        atoms = run_equilibration()
+    if args.charmm_production:
+        atoms = run_production()
+    
     # Minimize structure if requested
     # if args.minimize_first:
     def wrap_positions_for_pbc(positions):
@@ -525,7 +577,7 @@ inbfrq -1 imgfrq -1
         R_mapped = pbc_map_fn(jnp.asarray(positions))
         return np.asarray(jax.device_get(R_mapped))
 
-    def minimize_structure(atoms, run_index=0, nsteps=60, fmax=0.0006, charmm=False):
+    def minimize_structure(atoms, run_index=0, nsteps=60, fmax=0.0006, charmm=False, ase=True):
 
         if charmm:
             pycharmm.minimize.run_abnr(nstep=10000, tolenr=1e-6, tolgrd=1e-6)
@@ -534,15 +586,18 @@ inbfrq -1 imgfrq -1
             atoms.set_positions(coor.get_positions())
             atoms = optimize_as_monomers(atoms, run_index=run_index, nsteps=100, fmax=0.0006)
 
-        traj = ase_io.Trajectory(f'bfgs_{run_index}_{args.output_prefix}_minimized.traj', 'w')
-        print("Minimizing structure with hybrid calculator")
-        print(f"Running BFGS for {nsteps} steps")
-        print(f"Running BFGS with fmax: {fmax}")
-        _ = ase_opt.BFGS(atoms, trajectory=traj).run(fmax=fmax, steps=nsteps)
-        # Sync with PyCHARMM
-        xyz = pd.DataFrame(atoms.get_positions(), columns=["x", "y", "z"])
-        coor.set_positions(xyz)
-        traj.close()
+        if ase:
+            traj = ase_io.Trajectory(f'bfgs_{run_index}_{args.output_prefix}_minimized.traj', 'w')
+            print("Minimizing structure with hybrid calculator")
+            print(f"Running BFGS for {nsteps} steps")
+            print(f"Running BFGS with fmax: {fmax}")
+            _ = ase_opt.BFGS(atoms, trajectory=traj).run(fmax=fmax, steps=nsteps)
+            # Sync with PyCHARMM
+            xyz = pd.DataFrame(atoms.get_positions(), columns=["x", "y", "z"])
+            coor.set_positions(xyz)
+            traj.close()
+            return atoms
+        
         return atoms
         
     def optimize_as_monomers(atoms, run_index=0, nsteps=60, fmax=0.0006):
@@ -1086,25 +1141,25 @@ inbfrq -1 imgfrq -1
 
     sim_key, data_key = jax.random.split(jax.random.PRNGKey(42), 2)
     temperature = args.temperature
-    for i in range(1):
-        run_ase_md(atoms, run_index=i, temperature=temperature)
+    if len(args.nsteps_ase) > 0:
+        for i in range(1):
+            run_ase_md(atoms, run_index=i, temperature=temperature)
 
 
-    
-    # Main JAXMD simulation loop
-    for j in range(1):
-        sim_key, data_key = jax.random.split(data_key, 2)
-        s = set_up_nhc_sim_routine(atoms, T=temperature)
-        out_positions, _ = run_sim_loop(s, sim_key)
+    if len(args.nsteps_jaxmd) > 0:
+        for i in range(1):
+            sim_key, data_key = jax.random.split(data_key, 2)
+            s = set_up_nhc_sim_routine(atoms, T=temperature)
+            out_positions, _ = run_sim_loop(s, sim_key)
 
-        print(f"Out positions: {out_positions}")
+            print(f"Out positions: {out_positions}")
 
-        for i in range(len(out_positions)):
-            traj_filename = f'{args.output_prefix}_md_trajectory_{j}_{i}.traj'
-            print(f"Saving trajectory to: {traj_filename}")
-            save_trajectory(out_positions[i], atoms, filename=traj_filename)
+            for i in range(len(out_positions)):
+                traj_filename = f'{args.output_prefix}_md_trajectory_{j}_{i}.traj'
+                print(f"Saving trajectory to: {traj_filename}")
+                save_trajectory(out_positions[i], atoms, filename=traj_filename)
 
-        # atoms = minimize_structure(atoms)
+            # atoms = minimize_structure(atoms)
 
     print("Trajectories saved!")
 
