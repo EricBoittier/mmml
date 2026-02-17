@@ -67,6 +67,9 @@ NHC_TAU="${NHC_TAU:-100.0}"
 # Flags
 INCLUDE_MM="${INCLUDE_MM:-true}"
 DEBUG="${DEBUG:-false}"
+CHARMM_HEAT="${CHARMM_HEAT:-false}"
+CHARMM_EQUIL="${CHARMM_EQUIL:-false}"
+CHARMM_PROD="${CHARMM_PROD:-false}"
 
 # Python CLI path
 PY="${PY:-python -m mmml.cli}"
@@ -99,6 +102,9 @@ Options:
   --mm-switch-on D      MM switch-on distance (default: $MM_SWITCH_ON)
   --mm-cutoff D         MM cutoff width (default: $MM_CUTOFF)
   --nhc-tau TAU         NHC thermostat tau multiplier (default: $NHC_TAU)
+  --charmm-heat         Run CHARMM heating stage before MD
+  --charmm-equilibration Run CHARMM equilibration stage before MD
+  --charmm-production   Run CHARMM production stage before MD
   --no-mm               Disable MM contributions
   --debug               Enable debug output
   -h, --help            Show this help message
@@ -122,6 +128,9 @@ while [[ $# -gt 0 ]]; do
         --mm-switch-on)   MM_SWITCH_ON="$2";     shift 2 ;;
         --mm-cutoff)      MM_CUTOFF="$2";        shift 2 ;;
         --nhc-tau)        NHC_TAU="$2";          shift 2 ;;
+        --charmm-heat)           CHARMM_HEAT="true";   shift ;;
+        --charmm-equilibration)  CHARMM_EQUIL="true";  shift ;;
+        --charmm-production)     CHARMM_PROD="true";   shift ;;
         --no-mm)          INCLUDE_MM="false";    shift   ;;
         --debug)          DEBUG="true";          shift   ;;
         -h|--help)        usage ;;
@@ -171,6 +180,9 @@ echo "  MM switch-on:      $MM_SWITCH_ON"
 echo "  MM cutoff:         $MM_CUTOFF"
 echo "  Include MM:        $INCLUDE_MM"
 echo "  NHC tau:           $NHC_TAU"
+echo "  CHARMM heat:       $CHARMM_HEAT"
+echo "  CHARMM equil:      $CHARMM_EQUIL"
+echo "  CHARMM production: $CHARMM_PROD"
 echo "========================================================================"
 
 # ======================================================================

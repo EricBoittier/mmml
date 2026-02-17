@@ -1029,9 +1029,10 @@ shake bonh para sele all end
             # ========================================================================
             # HDF5 REPORTER SETUP
             # ========================================================================
-            hdf5_path = f"{args.output_prefix}_{args.ensemble}_trajectory.h5"
+            hdf5_path = Path(f"{args.output_prefix}_{args.ensemble}_trajectory.h5")
+            hdf5_path.parent.mkdir(parents=True, exist_ok=True)
             hdf5_reporter = make_jaxmd_reporter(
-                hdf5_path,
+                str(hdf5_path),
                 n_atoms=len(atoms),
                 buffer_size=min(100, total_records),
                 include_positions=True,
@@ -1163,6 +1164,7 @@ shake bonh para sele all end
 
             for i in range(len(out_positions)):
                 traj_filename = f'{args.output_prefix}_md_trajectory_{j}_{i}.traj'
+                Path(traj_filename).parent.mkdir(parents=True, exist_ok=True)
                 print(f"Saving trajectory to: {traj_filename}")
                 save_trajectory(out_positions[i], atoms, filename=traj_filename)
 
