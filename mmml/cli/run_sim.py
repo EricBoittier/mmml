@@ -1149,12 +1149,12 @@ shake bonh para sele all end
 
     sim_key, data_key = jax.random.split(jax.random.PRNGKey(42), 2)
     temperature = args.temperature
-    if len(args.nsteps_ase) > 0:
+    if args.nsteps_ase > 0:
         for i in range(1):
             run_ase_md(atoms, run_index=i, temperature=temperature)
 
 
-    if len(args.nsteps_jaxmd) > 0:
+    if args.nsteps_jaxmd > 0:
         for i in range(1):
             sim_key, data_key = jax.random.split(data_key, 2)
             s = set_up_nhc_sim_routine(atoms, T=temperature)
