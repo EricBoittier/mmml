@@ -91,10 +91,10 @@ gpu = [
 
 # GPU/CUDA support (CUDA 13)
 gpu-cuda13 = [
-    "jax[cuda13]>=0.5.0",
-    "jaxlib[cuda13]>=0.5.0",
-    "cupy-cuda13x>=14.0.0",
-    "cutensor-cu13>=3.0.0",
+    "jax[cuda13]>=0.4.20",
+    "jaxlib[cuda13]>=0.4.20",
+    "cupy-cuda13x>=13.0.0",
+    "cutensor-cu13>=2.0.0",
 ]
 
 # Quantum chemistry calculations
