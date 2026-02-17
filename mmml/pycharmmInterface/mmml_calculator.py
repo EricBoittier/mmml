@@ -644,9 +644,6 @@ def setup_calculator(
     # print("all_monomer_idxs", all_monomer_idxs)
     # print("all_dimer_idxs", all_dimer_idxs)
     dimer_perms = dimer_permutations(n_monomers)
-    # Print all dimer pairs for verification
-    for a, b in dimer_perms:
-        print(a, b)
 
     print("len(dimer_perms)", len(dimer_perms))
 
