@@ -1,11 +1,15 @@
-# Main conda environment for MMML (CPU version)
-# For GPU support, use environment-gpu.yml instead
-name: mmml
+# Conda environment for MMML with GPU support (CUDA 13)
+name: mmml-gpu-cuda13
 channels:
   - conda-forge
+  - nvidia
   - defaults
 dependencies:
-  - python>=3.11,<3.15
+  - python>=3.14,<3.15
+  
+  # CUDA toolkit
+  - cuda-toolkit=13
+  - cudnn>=9
   
   # Core scientific computing
   - numpy
@@ -13,13 +17,7 @@ dependencies:
   - pandas
   - matplotlib>=3.5
   
-  # JAX ecosystem (CPU version)
-  - jax
-  - jaxlib
-  
-  # ML utilities
-  - pip
-  - git
+  # JAX ecosystem (GPU will be installed via pip for better CUDA compatibility)
   
   # Chemistry and visualization
   - ase
@@ -28,15 +26,28 @@ dependencies:
   # Utilities
   - tqdm
   - rich-cli
+  - pip
+  - git
   
-  # Build tools
+  # Build tools for compiling extensions
   - gfortran
   - cmake
   - make
+  - openblas
+  - liblapack
   
-  # PIP-only dependencies that are not available in conda or better installed via pip
+  # PIP-only dependencies
   - pip:
-      # JAX ecosystem extensions
+      # JAX with CUDA 13 support (must be installed from specific index)
+      - --find-links https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+      - jax[cuda13]>=0.5.0
+      - jaxlib[cuda13]>=0.5.0
+      - cupy-cuda13x>=14.0.0
+      - cutensor-cu13>=3.0.0
+      - e3x
+      - plotnine
+      - patchworklib
+      # JAX ecosystem
       - dm-haiku
       - flax
       - optax
@@ -63,4 +74,3 @@ dependencies:
       
       # Install mmml in editable mode (run this from the repo root)
       - -e .
-

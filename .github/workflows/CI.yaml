@@ -17,11 +17,11 @@ on:
 
 jobs:
   test:
-    name: Test on ubuntu-latest, Python 3.12
+    name: Test on ubuntu-latest, Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.12"]
+        python-version: ["3.12", "3.14"]
 
     steps:
       - uses: actions/checkout@v4
