@@ -14,8 +14,8 @@ set -euo pipefail
 # and then overrides with command-line arguments.
 #
 # Usage:
-#   ./run_nvt_comparison.sh                     # uses defaults
-#   ./run_nvt_comparison.sh --res MEOH --n 50 --density 0.79 --checkpoint /path/to/ckpt
+#   ./run_nvt_comparison.sh --checkpoint /path/to/ckpt --side-length 30
+#   ./run_nvt_comparison.sh --res MEOH --density 0.79 --side-length 25 --checkpoint /path/to/ckpt
 #   ./run_nvt_comparison.sh --help
 #
 # Requirements:
@@ -37,8 +37,8 @@ set -euo pipefail
 # ======================================================================
 RES="${RES:-ACO}"
 N="${N:-50}"
-DENSITY="${DENSITY:-}"           # g/cm³; empty = use side_length directly
-SIDE_LENGTH="${L:-40.0}"
+DENSITY="${DENSITY:-}"           # g/cm³; empty = use --n directly
+SIDE_LENGTH="${L:-}"             # required; no default
 NATOMS_MONOMER="${NATOMS:-10}"
 CHECKPOINT="${CHECKPOINT:-}"
 
@@ -72,9 +72,10 @@ Create a residue, build a periodic box, and run two NVT simulations
 
 Options:
   --res NAME            Residue name (default: $RES)
+  --side-length L       Box side length in Å (required)
   --n NUM               Number of molecules in the box (default: $N)
-  --density DENS        Target density in g/cm³ (overrides --side-length)
-  --side-length L       Box side length in Å (default: $SIDE_LENGTH)
+  --density DENS        Target density in g/cm³ (overrides --n; requires
+                        --side-length and residue PDB to exist)
   --natoms-monomer N    Atoms per monomer (default: $NATOMS_MONOMER)
   --checkpoint PATH     Path to model checkpoint directory (required)
   --temperature T       Temperature in K (default: $TEMPERATURE)
@@ -141,40 +142,21 @@ if [[ ! -d "$CHECKPOINT" ]]; then
     exit 1
 fi
 
-# ======================================================================
-# Compute box side length from density if requested
-# ======================================================================
-if [[ -n "$DENSITY" ]]; then
-    echo "[run_nvt_comparison] Computing side length from density=${DENSITY} g/cm³"
-    # Use Python one-liner to compute L from density, N, and molecular weight.
-    # L = (N * M / (rho * N_A))^(1/3)  converted to Å
-    SIDE_LENGTH=$(python3 -c "
-import numpy as np, ase, ase.io, sys
-try:
-    mol = ase.io.read('pdb/initial.pdb')
-except Exception:
-    # If residue PDB doesn't exist yet, estimate from residue name
-    print('${SIDE_LENGTH}')
-    sys.exit(0)
-M = mol.get_masses().sum()       # amu = g/mol
-rho = float('${DENSITY}')        # g/cm³
-N = int('${N}')
-NA = 6.02214076e23
-# V = N * M / (rho * NA) in cm³, then convert to ų
-V_cm3 = N * M / (rho * NA)
-V_ang3 = V_cm3 * 1e24            # 1 cm = 1e8 Å -> 1 cm³ = 1e24 ų
-L = V_ang3 ** (1.0/3.0)
-print(f'{L:.2f}')
-")
-    echo "[run_nvt_comparison] Computed side length: ${SIDE_LENGTH} Å"
+if [[ -z "$SIDE_LENGTH" ]]; then
+    echo "ERROR: --side-length is required (box side length in Å)." >&2
+    exit 1
 fi
 
 echo "========================================================================"
 echo "  NVT Comparison Workflow"
 echo "========================================================================"
 echo "  Residue:           $RES"
-echo "  N molecules:       $N"
 echo "  Box side length:   $SIDE_LENGTH Å"
+if [[ -n "$DENSITY" ]]; then
+echo "  Density:           $DENSITY g/cm³  (will compute N after residue is built)"
+else
+echo "  N molecules:       $N"
+fi
 echo "  Atoms/monomer:     $NATOMS_MONOMER"
 echo "  Checkpoint:        $CHECKPOINT"
 echo "  Temperature:       $TEMPERATURE K"
@@ -201,6 +183,32 @@ else
         2>&1 | tee make_res.log
 fi
 echo "[OK] Residue $RES created."
+
+# ======================================================================
+# Compute N from density if requested  (density + side_length -> N)
+# This runs after make_res so pdb/initial.pdb exists for mass lookup.
+# ======================================================================
+if [[ -n "$DENSITY" ]]; then
+    echo ""
+    echo "[run_nvt_comparison] Computing N from density=${DENSITY} g/cm³, L=${SIDE_LENGTH} Å"
+    N=$(python3 -c "
+import ase, ase.io, sys
+try:
+    mol = ase.io.read('pdb/initial.pdb')
+except Exception:
+    print('ERROR: pdb/initial.pdb not found after make_res.', file=sys.stderr)
+    sys.exit(1)
+M = mol.get_masses().sum()       # amu = g/mol
+rho = float('${DENSITY}')        # g/cm³
+L   = float('${SIDE_LENGTH}')    # Å
+NA  = 6.02214076e23
+V_cm3 = (L * 1e-8) ** 3          # Å -> cm
+N = rho * V_cm3 * NA / M
+N = max(1, round(N))
+print(N)
+")
+    echo "[run_nvt_comparison] Computed N = ${N} molecules (density=${DENSITY} g/cm³, L=${SIDE_LENGTH} Å)"
+fi
 
 # ======================================================================
 # Step 2: Build box
@@ -294,6 +302,11 @@ echo ""
 echo "========================================================================"
 echo "  DONE — NVT Comparison"
 echo "========================================================================"
+echo ""
+echo "  Residue: $RES, N=$N molecules, L=$SIDE_LENGTH Å"
+if [[ -n "$DENSITY" ]]; then
+echo "  Density: $DENSITY g/cm³ (N computed from density)"
+fi
 echo ""
 echo "  Normal (dimers ON):  nvt_normal/"
 echo "  No-dimer (OFF):      nvt_nodimer/"
