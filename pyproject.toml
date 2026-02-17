@@ -119,9 +119,7 @@ quantum-gpu = [
 
 # Machine learning extras
 ml = [
-    "torch",
-    "torchani",
-    "e3nn-jax",
+
     "e3x",
     "lovely-jax",
 ]
