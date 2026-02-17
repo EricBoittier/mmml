@@ -368,7 +368,7 @@ echo "[OK] Normal NVT simulation complete -> nvt_normal/"
 echo ""
 echo "========== STEP 3b: NVT simulation (ML/MM dimers OFF) =========="
 mkdir -p nvt_nodimer
-SIM_CMD_NODIMER=$(build_sim_cmd "nvt_nodimer/sim" "true")
+SIM_CMD_NODIMER=$(build_sim_cmd "nvt_nodimer/sim" "true" "$NSTEPS_JAXMD_NODIMER" "$NSTEPS_ASE_NODIMER")
 echo "Running: $SIM_CMD_NODIMER"
 eval "$SIM_CMD_NODIMER" 2>&1 | tee nvt_nodimer/simulation.log
 echo "[OK] No-dimer NVT simulation complete -> nvt_nodimer/"
