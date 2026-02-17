@@ -55,6 +55,8 @@ TEMPERATURE="${TEMPERATURE:-298.0}"
 TIMESTEP="${TIMESTEP:-0.3}"
 NSTEPS_ASE="${NSTEPS_ASE:-5000}"
 NSTEPS_JAXMD="${NSTEPS_JAXMD:-50000}"
+NSTEPS_ASE_NODIMER="${NSTEPS_ASE_NODIMER:-}"       # empty = same as NSTEPS_ASE
+NSTEPS_JAXMD_NODIMER="${NSTEPS_JAXMD_NODIMER:-}"   # empty = same as NSTEPS_JAXMD
 ENSEMBLE="nvt"
 ML_CUTOFF="${ML_CUTOFF:-0.1}"
 MM_SWITCH_ON="${MM_SWITCH_ON:-5.0}"
@@ -98,6 +100,8 @@ Options:
   --timestep DT         Timestep in fs (default: $TIMESTEP)
   --nsteps-ase N        ASE equilibration steps (default: $NSTEPS_ASE)
   --nsteps-jaxmd N      JAX-MD production steps (default: $NSTEPS_JAXMD)
+  --nsteps-ase-nodimer N    ASE steps for no-dimer run (default: same as --nsteps-ase)
+  --nsteps-jaxmd-nodimer N  JAX-MD steps for no-dimer run (default: same as --nsteps-jaxmd)
   --ml-cutoff D         ML cutoff distance (default: $ML_CUTOFF)
   --mm-switch-on D      MM switch-on distance (default: $MM_SWITCH_ON)
   --mm-cutoff D         MM cutoff width (default: $MM_CUTOFF)
@@ -124,6 +128,8 @@ while [[ $# -gt 0 ]]; do
         --timestep)       TIMESTEP="$2";         shift 2 ;;
         --nsteps-ase)     NSTEPS_ASE="$2";       shift 2 ;;
         --nsteps-jaxmd)   NSTEPS_JAXMD="$2";     shift 2 ;;
+        --nsteps-ase-nodimer)   NSTEPS_ASE_NODIMER="$2";    shift 2 ;;
+        --nsteps-jaxmd-nodimer) NSTEPS_JAXMD_NODIMER="$2";  shift 2 ;;
         --ml-cutoff)      ML_CUTOFF="$2";        shift 2 ;;
         --mm-switch-on)   MM_SWITCH_ON="$2";     shift 2 ;;
         --mm-cutoff)      MM_CUTOFF="$2";        shift 2 ;;
@@ -159,6 +165,10 @@ if [[ -z "$SIDE_LENGTH" ]]; then
     exit 1
 fi
 
+# Resolve no-dimer step counts (default to normal counts)
+NSTEPS_ASE_NODIMER="${NSTEPS_ASE_NODIMER:-$NSTEPS_ASE}"
+NSTEPS_JAXMD_NODIMER="${NSTEPS_JAXMD_NODIMER:-$NSTEPS_JAXMD}"
+
 echo "========================================================================"
 echo "  NVT Comparison Workflow"
 echo "========================================================================"
@@ -175,6 +185,8 @@ echo "  Temperature:       $TEMPERATURE K"
 echo "  Timestep:          $TIMESTEP fs"
 echo "  ASE steps:         $NSTEPS_ASE"
 echo "  JAX-MD steps:      $NSTEPS_JAXMD"
+echo "  ASE steps (nodimer):   $NSTEPS_ASE_NODIMER"
+echo "  JAX-MD steps (nodimer):$NSTEPS_JAXMD_NODIMER"
 echo "  ML cutoff:         $ML_CUTOFF"
 echo "  MM switch-on:      $MM_SWITCH_ON"
 echo "  MM cutoff:         $MM_CUTOFF"
@@ -282,6 +294,8 @@ echo "[OK] Box created: $PDBFILE"
 build_sim_cmd() {
     local prefix="$1"
     local skip_dimers="$2"  # "true" or "false"
+    local nsteps_jaxmd="$3"
+    local nsteps_ase="$4"
 
     local CMD=""
     if [[ "$PY" == "python -m mmml.cli" ]]; then
@@ -303,8 +317,8 @@ build_sim_cmd() {
   --energy-catch ${ENERGY_CATCH} \
   --temperature ${TEMPERATURE} \
   --timestep ${TIMESTEP} \
-  --nsteps_jaxmd ${NSTEPS_JAXMD} \
-  --nsteps_ase ${NSTEPS_ASE} \
+  --nsteps_jaxmd ${nsteps_jaxmd} \
+  --nsteps_ase ${nsteps_ase} \
   --heating_interval ${HEATING_INTERVAL} \
   --write_interval ${WRITE_INTERVAL} \
   --nhc-tau ${NHC_TAU} \
@@ -343,7 +357,7 @@ build_sim_cmd() {
 echo ""
 echo "========== STEP 3a: NVT simulation (ML/MM dimers ON) =========="
 mkdir -p nvt_normal
-SIM_CMD_NORMAL=$(build_sim_cmd "nvt_normal/sim" "false")
+SIM_CMD_NORMAL=$(build_sim_cmd "nvt_normal/sim" "false" "$NSTEPS_JAXMD" "$NSTEPS_ASE")
 echo "Running: $SIM_CMD_NORMAL"
 eval "$SIM_CMD_NORMAL" 2>&1 | tee nvt_normal/simulation.log
 echo "[OK] Normal NVT simulation complete -> nvt_normal/"
