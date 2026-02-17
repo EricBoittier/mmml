@@ -12,6 +12,12 @@ from mmml.utils.model_checkpoint import (
     to_jsonable,
 )
 
+from mmml.utils.hdf5_reporter import (
+    HDF5Reporter,
+    DatasetSpec,
+    make_jaxmd_reporter,
+)
+
 __all__ = [
     'save_model_checkpoint',
     'load_model_checkpoint',
@@ -20,5 +26,8 @@ __all__ = [
     'quick_load',
     'extract_model_config',
     'to_jsonable',
+    'HDF5Reporter',
+    'DatasetSpec',
+    'make_jaxmd_reporter',
 ]
 

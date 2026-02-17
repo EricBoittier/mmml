@@ -277,6 +277,7 @@ def run(args: argparse.Namespace) -> int:
         from jax import jit, grad, lax, ops, random
         import jax.numpy as jnp
         from ase.io import Trajectory
+        from mmml.utils.hdf5_reporter import make_jaxmd_reporter
     except ModuleNotFoundError as exc:
         sys.exit(f"Required modules not available: {exc}")
 
@@ -961,7 +962,27 @@ inbfrq -1 imgfrq -1
 
             print("*" * 10 + f"\n{args.ensemble.upper()}\n" + "*" * 10)
             print("\t\tTime (ps)\tSteps\tE_pot (eV)\tE_tot (eV)\tT (K)")
-            
+
+            # ========================================================================
+            # HDF5 REPORTER SETUP
+            # ========================================================================
+            hdf5_path = f"{args.output_prefix}_{args.ensemble}_trajectory.h5"
+            hdf5_reporter = make_jaxmd_reporter(
+                hdf5_path,
+                n_atoms=len(atoms),
+                buffer_size=min(100, total_records),
+                include_positions=True,
+                include_velocities=False,
+                scalar_quantities=["total_energy", "time_ps"],
+                attrs={
+                    "ensemble": args.ensemble,
+                    "temperature_target": T,
+                    "dt_ps": dt,
+                    "steps_per_recording": steps_per_recording,
+                    "n_atoms": len(atoms),
+                },
+            )
+
             # ========================================================================
             # MAIN SIMULATION LOOP
             # ========================================================================
@@ -988,6 +1009,17 @@ inbfrq -1 imgfrq -1
                     e_tot = e_pot + e_kin
                     print(f"{time_ps:10.4f}\t{steps:6d}\t{e_pot:10.4f}\t{e_tot:10.4f}\t{temp:10.2f}")
 
+                    # Record to HDF5
+                    hdf5_reporter.report(
+                        potential_energy=e_pot,
+                        kinetic_energy=e_kin,
+                        temperature=temp,
+                        invariant=e_tot,
+                        total_energy=e_tot,
+                        time_ps=time_ps,
+                        positions=state.position,
+                    )
+
                     # Stop on numerical instability (NaN, Inf, or energy blow-up to 0)
                     if not np.isfinite(e_pot) or not np.isfinite(temp):
                         print(f"Numerical instability at step {steps}; stopping.")
@@ -1009,6 +1041,9 @@ inbfrq -1 imgfrq -1
                                 mass=state.mass
                             )
                         break
+
+            hdf5_reporter.close()
+            print(f"HDF5 trajectory saved to: {hdf5_path}")
 
             steps_completed = i * steps_per_recording
             print(f"\nSimulated {steps_completed} steps ({steps_completed * dt:.2f} ps)")
