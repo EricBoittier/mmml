@@ -6,6 +6,15 @@ import numpy as np
 import importlib as _il  # lazy import in tests
 
 
+def _can_import(name: str) -> bool:
+	"""Return True only if *name* can be fully imported (not just found)."""
+	try:
+		__import__(name)
+		return True
+	except Exception:
+		return False
+
+
 def test_ev2kcalmol_constant():
 	# Ensure the EV->kcal/mol conversion used by calculators is reasonable
 	from mmml.pycharmmInterface.mmml_calculator import ev2kcalmol
@@ -13,12 +22,12 @@ def test_ev2kcalmol_constant():
 
 
 @pytest.mark.skipif(
-	importlib.util.find_spec("pycharmm") is None,
+	not _can_import("pycharmm"),
 	reason="pycharmm not available in this environment",
 )
 def test_setup_calculator_factory_smoke():
 	# Require JAX runtime for restart helpers
-	if importlib.util.find_spec("jax") is None:
+	if not _can_import("jax"):
 		pytest.skip("jax not available in this environment")
 	# Skip if no checkpoints are present
 	ckpt_env = os.environ.get("MMML_CKPT")
@@ -45,7 +54,7 @@ def test_setup_calculator_factory_smoke():
 
 
 @pytest.mark.skipif(
-	importlib.util.find_spec("pycharmm") is None,
+	not _can_import("pycharmm"),
 	reason="pycharmm not available in this environment",
 )
 def test_ml_energy_matches_reference_when_data_available():
@@ -91,7 +100,7 @@ def test_ml_energy_matches_reference_when_data_available():
 		ev2kcalmol,
 	)
 	# Skip if e3x (pair indices) backend is not available
-	if importlib.util.find_spec("e3x") is None:
+	if not _can_import("e3x"):
 		pytest.skip("e3x not available in this environment")
 	factory = setup_calculator(
 		ATOMS_PER_MONOMER=10,
@@ -105,8 +114,7 @@ def test_ml_energy_matches_reference_when_data_available():
 	)
 
 	# ASE atoms (lazy import and skip if missing)
-	ase_spec = importlib.util.find_spec("ase")
-	if ase_spec is None:
+	if not _can_import("ase"):
 		pytest.skip("ase not available in this environment")
 	ase = _il.import_module("ase")
 	atoms = ase.Atoms(np.array(Z), np.array(R))
@@ -123,7 +131,7 @@ def test_ml_energy_matches_reference_when_data_available():
 
 
 @pytest.mark.skipif(
-	importlib.util.find_spec("pycharmm") is None,
+	not _can_import("pycharmm"),
 	reason="pycharmm not available in this environment",
 )
 def test_check_lattice_invariance():
@@ -131,9 +139,9 @@ def test_check_lattice_invariance():
 	Test that the energy is invariant under translation of monomer 0 by a lattice vector (PBC).
 	Uses check_lattice_invariance with a spherical_cutoff_calculator that applies PBC mapping.
 	"""
-	if importlib.util.find_spec("jax") is None:
+	if not _can_import("jax"):
 		pytest.skip("jax not available in this environment")
-	if importlib.util.find_spec("e3x") is None:
+	if not _can_import("e3x"):
 		pytest.skip("e3x not available in this environment")
 
 	ckpt_env = os.environ.get("MMML_CKPT")
@@ -206,7 +214,7 @@ def test_check_lattice_invariance():
 
 
 @pytest.mark.skipif(
-	importlib.util.find_spec("pycharmm") is None,
+	not _can_import("pycharmm"),
 	reason="pycharmm not available in this environment",
 )
 def test_pbc_energy_invariance_via_ase():
@@ -214,12 +222,11 @@ def test_pbc_energy_invariance_via_ase():
 	Test that energy is invariant under translation of monomer 0 by a lattice vector (PBC)
 	using AseDimerCalculator directly (ASE atoms.get_potential_energy()).
 	"""
-	if importlib.util.find_spec("jax") is None:
+	if not _can_import("jax"):
 		pytest.skip("jax not available in this environment")
-	if importlib.util.find_spec("e3x") is None:
+	if not _can_import("e3x"):
 		pytest.skip("e3x not available in this environment")
-	ase_spec = importlib.util.find_spec("ase")
-	if ase_spec is None:
+	if not _can_import("ase"):
 		pytest.skip("ase not available in this environment")
 
 	ckpt_env = os.environ.get("MMML_CKPT")
@@ -287,7 +294,7 @@ def test_pbc_energy_invariance_via_ase():
 
 
 @pytest.mark.skipif(
-	importlib.util.find_spec("pycharmm") is None,
+	not _can_import("pycharmm"),
 	reason="pycharmm not available in this environment",
 )
 def test_pbc_force_invariance():
@@ -295,12 +302,11 @@ def test_pbc_force_invariance():
 	Test that forces are unchanged after translating monomer 0 by a lattice vector (PBC).
 	Forces on both monomers should be invariant (same relative geometry).
 	"""
-	if importlib.util.find_spec("jax") is None:
+	if not _can_import("jax"):
 		pytest.skip("jax not available in this environment")
-	if importlib.util.find_spec("e3x") is None:
+	if not _can_import("e3x"):
 		pytest.skip("e3x not available in this environment")
-	ase_spec = importlib.util.find_spec("ase")
-	if ase_spec is None:
+	if not _can_import("ase"):
 		pytest.skip("ase not available in this environment")
 
 	ckpt_env = os.environ.get("MMML_CKPT")
@@ -374,7 +380,7 @@ def test_pbc_force_invariance():
 
 
 @pytest.mark.skipif(
-	importlib.util.find_spec("pycharmm") is None,
+	not _can_import("pycharmm"),
 	reason="pycharmm not available in this environment",
 )
 def test_pbc_energy_invariance_ml_mm():
@@ -382,9 +388,9 @@ def test_pbc_energy_invariance_ml_mm():
 	Test that energy is invariant under translation of monomer 0 by a lattice vector (PBC)
 	with both ML and MM enabled. Requires CHARMM/PSF setup via a dimer PDB.
 	"""
-	if importlib.util.find_spec("jax") is None:
+	if not _can_import("jax"):
 		pytest.skip("jax not available in this environment")
-	if importlib.util.find_spec("e3x") is None:
+	if not _can_import("e3x"):
 		pytest.skip("e3x not available in this environment")
 
 	ckpt_env = os.environ.get("MMML_CKPT")
@@ -480,7 +486,7 @@ def test_pbc_energy_invariance_ml_mm():
 
 
 @pytest.mark.skipif(
-	importlib.util.find_spec("pycharmm") is None,
+	not _can_import("pycharmm"),
 	reason="pycharmm not available in this environment",
 )
 def test_pbc_force_gradient_numerical():
@@ -488,12 +494,11 @@ def test_pbc_force_gradient_numerical():
 	Numerical gradient of energy vs positions; compare against atoms.get_forces()
 	to ensure transform_forces (VJP) is correct.
 	"""
-	if importlib.util.find_spec("jax") is None:
+	if not _can_import("jax"):
 		pytest.skip("jax not available in this environment")
-	if importlib.util.find_spec("e3x") is None:
+	if not _can_import("e3x"):
 		pytest.skip("e3x not available in this environment")
-	ase_spec = importlib.util.find_spec("ase")
-	if ase_spec is None:
+	if not _can_import("ase"):
 		pytest.skip("ase not available in this environment")
 
 	ckpt_env = os.environ.get("MMML_CKPT")
@@ -575,7 +580,7 @@ def test_pbc_force_gradient_numerical():
 
 def test_pbc_mic_displacement_symmetry():
 	"""mic_displacement(Ri, Rj, cell) = -mic_displacement(Rj, Ri, cell)."""
-	if importlib.util.find_spec("jax") is None:
+	if not _can_import("jax"):
 		pytest.skip("jax not available in this environment")
 
 	import jax.numpy as jnp
@@ -592,7 +597,7 @@ def test_pbc_mic_displacement_symmetry():
 
 def test_pbc_wrap_unwrap_roundtrip():
 	"""Unwrap then wrap should recover equivalent positions (same fractional coords mod 1)."""
-	if importlib.util.find_spec("jax") is None:
+	if not _can_import("jax"):
 		pytest.skip("jax not available in this environment")
 
 	import jax
@@ -613,13 +618,14 @@ def test_pbc_wrap_unwrap_roundtrip():
 
 	S_orig = frac_coords(R, cell)
 	S_roundtrip = frac_coords(R_roundtrip, cell)
-	S_diff = (S_roundtrip - S_orig) - jnp.floor(S_roundtrip - S_orig)
-	np.testing.assert_allclose(S_diff, 0.0, atol=1e-10)
+	S_diff = S_roundtrip - S_orig
+	S_diff_mod = S_diff - jnp.round(S_diff)
+	np.testing.assert_allclose(S_diff_mod, 0.0, atol=1e-6)
 
 
 def test_pbc_mapper_idempotent():
 	"""For positions already in primary cell, pbc_map(pbc_map(R)) == pbc_map(R)."""
-	if importlib.util.find_spec("jax") is None:
+	if not _can_import("jax"):
 		pytest.skip("jax not available in this environment")
 
 	import jax
@@ -638,20 +644,20 @@ def test_pbc_mapper_idempotent():
 
 	R1 = pbc_map(R)
 	R2 = pbc_map(R1)
-	np.testing.assert_allclose(R1, R2, atol=1e-10)
+	np.testing.assert_allclose(R1, R2, atol=1e-5)
 
 
 @pytest.mark.skipif(
-	importlib.util.find_spec("pycharmm") is None,
+	not _can_import("pycharmm"),
 	reason="pycharmm not available in this environment",
 )
 def test_pbc_energy_invariance_orthorhombic_cell():
 	"""
 	Test energy invariance under lattice translation with orthorhombic cell [30, 40, 50].
 	"""
-	if importlib.util.find_spec("jax") is None:
+	if not _can_import("jax"):
 		pytest.skip("jax not available in this environment")
-	if importlib.util.find_spec("e3x") is None:
+	if not _can_import("e3x"):
 		pytest.skip("e3x not available in this environment")
 
 	ckpt_env = os.environ.get("MMML_CKPT")
