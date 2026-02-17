@@ -47,7 +47,7 @@ RES="${RES:-ACO}"
 N="${N:-50}"
 DENSITY="${DENSITY:-}"           # g/cm³; empty = use --n directly
 SIDE_LENGTH="${L:-}"             # required; no default
-NATOMS_MONOMER="${NATOMS:-10}"
+NATOMS_MONOMER="${NATOMS:-}"  # auto-detected from residue; CLI override available
 CHECKPOINT="${CHECKPOINT:-}"
 
 # Simulation defaults
@@ -94,7 +94,7 @@ Options:
   --density DENS        Target density in kg/m³ (overrides --n; computes
                         N from density, side-length, and molecular weight.
                         E.g. water=997, methanol=791, acetone=784)
-  --natoms-monomer N    Atoms per monomer (default: $NATOMS_MONOMER)
+  --natoms-monomer N    Atoms per monomer (auto-detected from residue)
   --checkpoint PATH     Path to model checkpoint directory (required)
   --temperature T       Temperature in K (default: $TEMPERATURE)
   --timestep DT         Timestep in fs (default: $TIMESTEP)
@@ -179,7 +179,11 @@ echo "  Density:           $DENSITY kg/m³  (will compute N after residue is bui
 else
 echo "  N molecules:       $N"
 fi
-echo "  Atoms/monomer:     $NATOMS_MONOMER"
+if [[ -n "$NATOMS_MONOMER" ]]; then
+echo "  Atoms/monomer:     $NATOMS_MONOMER (manual override)"
+else
+echo "  Atoms/monomer:     (will auto-detect from residue)"
+fi
 echo "  Checkpoint:        $CHECKPOINT"
 echo "  Temperature:       $TEMPERATURE K"
 echo "  Timestep:          $TIMESTEP fs"
@@ -231,16 +235,13 @@ fi
 echo "[OK] Residue $RES created."
 
 # ======================================================================
-# Compute N from density if requested  (density + side_length -> N)
-# This runs after make_res so pdb/initial.pdb exists for mass lookup.
+# Read monomer info from residue files (atoms per monomer, mol weight)
+# This runs after make_res so xyz/initial.xyz or pdb/initial.pdb exist.
 # ======================================================================
-if [[ -n "$DENSITY" ]]; then
-    echo ""
-    echo "[run_nvt_comparison] Computing N from density=${DENSITY} kg/m³, L=${SIDE_LENGTH} Å"
-    N=$(python3 -c "
+echo ""
+echo "[run_nvt_comparison] Reading monomer info from residue files..."
+read NATOMS_AUTO MW_AUTO FORMULA_AUTO < <(python3 -c "
 import ase, ase.io, sys, os
-# Prefer xyz/initial.xyz (has correct atomic numbers from PSF).
-# Fall back to pdb/initial.pdb (CHARMM PDB may have wrong element types).
 mol = None
 for path in ['xyz/initial.xyz', 'pdb/initial.pdb']:
     if os.path.exists(path):
@@ -250,20 +251,35 @@ for path in ['xyz/initial.xyz', 'pdb/initial.pdb']:
 if mol is None:
     print('ERROR: neither xyz/initial.xyz nor pdb/initial.pdb found after make_res.', file=sys.stderr)
     sys.exit(1)
-M = mol.get_masses().sum()           # amu = g/mol
+natoms = len(mol)
+M = mol.get_masses().sum()
 formula = mol.get_chemical_formula()
+print(f'{natoms} {M:.4f} {formula}', file=sys.stdout)
+print(f'  Monomer: {formula}, {natoms} atoms, MW = {M:.2f} g/mol', file=sys.stderr)
+")
+if [[ -z "$NATOMS_MONOMER" ]]; then
+    NATOMS_MONOMER="$NATOMS_AUTO"
+    echo "[run_nvt_comparison] Atoms/monomer: ${NATOMS_MONOMER} (auto-detected from ${FORMULA_AUTO}, MW=${MW_AUTO} g/mol)"
+else
+    echo "[run_nvt_comparison] Atoms/monomer: ${NATOMS_MONOMER} (manual override; residue has ${NATOMS_AUTO} atoms, ${FORMULA_AUTO}, MW=${MW_AUTO} g/mol)"
+fi
+
+# ======================================================================
+# Compute N from density if requested  (density + side_length -> N)
+# ======================================================================
+if [[ -n "$DENSITY" ]]; then
+    echo ""
+    echo "[run_nvt_comparison] Computing N from density=${DENSITY} kg/m³, L=${SIDE_LENGTH} Å"
+    N=$(python3 -c "
+import sys
+M        = float('${MW_AUTO}')
 rho_kgm3 = float('${DENSITY}')      # kg/m³
 L_ang    = float('${SIDE_LENGTH}')   # Å
 NA = 6.02214076e23
-# Volume in m³:  (L_ang * 1e-10)^3
 V_m3 = (L_ang * 1e-10) ** 3
-# mass_in_box [kg] = rho * V;  convert to g -> * 1000
-# moles = mass_g / M;  N = moles * NA
 N = rho_kgm3 * V_m3 * 1000.0 * NA / M
 N = max(1, round(N))
 print(f'{N}', file=sys.stdout)
-# Sanity check
-print(f'  Formula: {formula}, molecular weight: {M:.2f} g/mol', file=sys.stderr)
 print(f'  Box volume: {V_m3:.4e} m³ = {(L_ang**3):.1f} Å³', file=sys.stderr)
 print(f'  N molecules: {N}', file=sys.stderr)
 if N > 5000:
