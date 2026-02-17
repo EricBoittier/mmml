@@ -1,13 +1,13 @@
-# ReadTheDocs build requirements
+# ReadTheDocs / CI build requirements
 
-# MkDocs and theme
-mkdocs>=1.5.0
-mkdocs-material>=9.0.0
+# Sphinx and theme
+sphinx>=7.0
+pydata-sphinx-theme>=0.14
 
-# Documentation plugins
-mkdocstrings[python]>=0.24.0
-pymdown-extensions>=10.0
+# Sphinx extensions used in conf.py
+sphinx-design>=0.5
+sphinx-copybutton>=0.5
 
-# For API documentation
+# For API documentation (autodoc imports)
 numpy
 scipy
