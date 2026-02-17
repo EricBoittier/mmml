@@ -33,7 +33,7 @@ import numpy as np
 # ---------------------------------------------------------------------------
 config = {
     "RES": "DCM",
-    "N": 40,
+    "N": 100,
     "L": 20.0,
     "skip_energy_show": False,
     # Lambda schedule: scale monomer 0's inter-monomer interactions from coupled (1) to decoupled (0)
@@ -41,9 +41,9 @@ config = {
     # Which monomer to decouple (0-indexed)
     "decouple_monomer": 0,
     # Per-window simulation length
-    "nsteps_min": 10,       # minimization steps before each equil
-    "nsteps_equil": 100,    # equilibration steps per window
-    "nsteps_prod": 1000,    # production steps per window
+    "nsteps_min": 50,       # minimization steps before each equil
+    "nsteps_equil": 1000,    # equilibration steps per window
+    "nsteps_prod": 10000,    # production steps per window
 }
 
 nb_dir = Path.cwd()
@@ -279,16 +279,17 @@ for wi, lam in enumerate(lambda_windows):
     traj_equil_path = traj_dir / f"window_{wi:02d}_lam{lam:.2f}_equil.traj"
     traj_prod_path = traj_dir / f"window_{wi:02d}_lam{lam:.2f}_prod.traj"
 
-    # Minimization before equil (CHARMM ABNR + monomer opt + BFGS)
-    print(f"  Minimizing (charmm=True) {n_min} steps ...")
-    minimize_structure(
-        pdb_ase_atoms,
-        run_index=wi,
-        nsteps=n_min,
-        fmax=0.0006,
-        charmm=True,
-        output_prefix="lambda",
-    )
+    if wi == 0:
+        # Minimization before equil (CHARMM ABNR + monomer opt + BFGS)
+        print(f"  Minimizing (charmm=True) {n_min} steps ...")
+        minimize_structure(
+            pdb_ase_atoms,
+            run_index=wi,
+            nsteps=n_min,
+            fmax=0.01,
+            charmm=True,
+            output_prefix="lambda",
+        )
     # Wrap positions into cell after BFGS (avoids unwrapped coords for PBC)
     pdb_ase_atoms.set_positions(
         pdb_ase_atoms.get_positions() - pdb_ase_atoms.get_positions().mean(axis=0)
@@ -302,8 +303,8 @@ for wi, lam in enumerate(lambda_windows):
 
     dyn = Langevin(
         pdb_ase_atoms,
-        timestep=0.25 * units.fs,
-        temperature_K=298.0,
+        timestep=0.1 * units.fs,
+        temperature_K=250.0,
         friction=0.01 / units.fs,
     )
     dyn.attach(traj_equil.write, interval=50)
