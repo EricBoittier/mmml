@@ -93,8 +93,8 @@ gpu = [
 # GPU/CUDA support (CUDA 13)
 # JAX CUDA 13 uses separate plugin/pjrt packages (no jaxlib[cuda13] extra)
 gpu-cuda13 = [
-    "jax>=0.9.0",
-    "jaxlib>=0.9.0",
+    "jax[cuda13]",
+    "jaxlib",
     "jax-cuda13-plugin>=0.9.0",
     "jax-cuda13-pjrt>=0.9.0",
     "cupy-cuda13x>=13.0.0",
