@@ -6,20 +6,24 @@ help:
 	@echo ""
 	@echo "Installation:"
 	@echo "  make install          - Install with uv (CPU only)"
-	@echo "  make install-gpu      - Install with uv (GPU support)"
+	@echo "  make install-gpu      - Install with uv (GPU/CUDA 12)"
+	@echo "  make install-gpu-cuda13 - Install with uv (GPU/CUDA 13)"
 	@echo "  make install-dev      - Install with development dependencies"
 	@echo "  make install-all      - Install all optional dependencies"
 	@echo ""
 	@echo "Conda:"
 	@echo "  make conda-create     - Create conda environment (CPU)"
-	@echo "  make conda-create-gpu - Create conda environment (GPU)"
+	@echo "  make conda-create-gpu - Create conda environment (GPU/CUDA 12)"
+	@echo "  make conda-create-gpu-cuda13 - Create conda environment (GPU/CUDA 13)"
 	@echo "  make conda-create-full - Create conda environment (all features)"
 	@echo ""
 	@echo "Docker:"
 	@echo "  make docker-build-cpu  - Build CPU Docker image"
-	@echo "  make docker-build-gpu  - Build GPU Docker image"
+	@echo "  make docker-build-gpu  - Build GPU Docker image (CUDA 12)"
+	@echo "  make docker-build-gpu-cuda13 - Build GPU Docker image (CUDA 13 + Python 3.14)"
 	@echo "  make docker-run-cpu    - Run CPU Docker container"
-	@echo "  make docker-run-gpu    - Run GPU Docker container"
+	@echo "  make docker-run-gpu    - Run GPU Docker container (CUDA 12)"
+	@echo "  make docker-run-gpu-cuda13 - Run GPU Docker container (CUDA 13 + Python 3.14)"
 	@echo "  make docker-jupyter    - Start Jupyter Lab in Docker"
 	@echo "  make docker-clean      - Remove all Docker containers and images"
 	@echo ""
@@ -52,6 +56,10 @@ install-gpu:
 	uv pip install --find-links https://storage.googleapis.com/jax-releases/jax_cuda_releases.html "jax[cuda12]" "jaxlib[cuda12]"
 	uv sync --extra gpu
 
+install-gpu-cuda13:
+	uv pip install --find-links https://storage.googleapis.com/jax-releases/jax_cuda_releases.html jax jaxlib jax-cuda13-plugin jax-cuda13-pjrt
+	uv sync --extra gpu-cuda13
+
 install-dev:
 	uv sync --extra dev
 
@@ -67,6 +75,9 @@ conda-create:
 
 conda-create-gpu:
 	conda env create -f environment-gpu.yml
+
+conda-create-gpu-cuda13:
+	conda env create -f environment-gpu-cuda13.yml
 
 conda-create-full:
 	conda env create -f environment-full.yml
@@ -87,11 +98,17 @@ docker-build-cpu:
 docker-build-gpu:
 	docker build --target runtime-gpu -t mmml:gpu .
 
+docker-build-gpu-cuda13:
+	docker build --target runtime-gpu-cuda13 -t mmml:gpu-cuda13 .
+
 docker-run-cpu:
 	docker run -it --rm -v $$(pwd):/workspace/mmml mmml:cpu
 
 docker-run-gpu:
 	docker run -it --rm --gpus all -v $$(pwd):/workspace/mmml mmml:gpu
+
+docker-run-gpu-cuda13:
+	docker run -it --rm --gpus all -v $$(pwd):/workspace/mmml mmml:gpu-cuda13
 
 docker-compose-up:
 	docker-compose up -d
@@ -105,7 +122,7 @@ docker-jupyter:
 
 docker-clean:
 	docker-compose down -v
-	docker rmi mmml:cpu mmml:gpu mmml:jupyter 2>/dev/null || true
+	docker rmi mmml:cpu mmml:gpu mmml:gpu-cuda13 mmml:jupyter 2>/dev/null || true
 
 # ==============================================================================
 # Testing

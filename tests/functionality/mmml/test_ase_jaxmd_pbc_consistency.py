@@ -12,17 +12,26 @@ import pytest
 import numpy as np
 
 
+def _can_import(name: str) -> bool:
+    """Return True only if *name* can be fully imported (not just found)."""
+    try:
+        __import__(name)
+        return True
+    except Exception:
+        return False
+
+
 def _get_ckpt():
     ckpt_env = os.environ.get("MMML_CKPT")
     return Path(ckpt_env) if ckpt_env else Path("mmml/physnetjax/ckpts")
 
 
 @pytest.mark.skipif(
-    importlib.util.find_spec("pycharmm") is None,
+    not _can_import("pycharmm"),
     reason="pycharmm not available in this environment",
 )
 @pytest.mark.skipif(
-    importlib.util.find_spec("jax_md") is None,
+    not _can_import("jax_md"),
     reason="jax_md not available in this environment",
 )
 def test_ase_jaxmd_pbc_energy_forces_consistency():
@@ -32,11 +41,11 @@ def test_ase_jaxmd_pbc_energy_forces_consistency():
     Uses the same pbc_map and spherical_cutoff_calculator for both paths, mirroring the
     setup in run_sim.py. Asserts energies and forces match within tolerance.
     """
-    if importlib.util.find_spec("jax") is None:
+    if not _can_import("jax"):
         pytest.skip("jax not available in this environment")
-    if importlib.util.find_spec("e3x") is None:
+    if not _can_import("e3x"):
         pytest.skip("e3x not available in this environment")
-    if importlib.util.find_spec("ase") is None:
+    if not _can_import("ase"):
         pytest.skip("ase not available in this environment")
 
     ckpt = _get_ckpt()
