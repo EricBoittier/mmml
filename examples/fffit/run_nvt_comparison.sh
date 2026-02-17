@@ -312,6 +312,7 @@ build_sim_cmd() {
     local skip_dimers="$2"  # "true" or "false"
     local nsteps_jaxmd="$3"
     local nsteps_ase="$4"
+    local include_mm="$5"   # "true" or "false"
 
     local CMD=""
     if [[ "$PY" == "python -m mmml.cli" ]]; then
@@ -340,7 +341,7 @@ build_sim_cmd() {
   --nhc-tau ${NHC_TAU} \
   --output-prefix ${prefix}"
 
-    if [[ "$INCLUDE_MM" == "true" ]]; then
+    if [[ "$include_mm" == "true" ]]; then
         CMD="$CMD --include-mm"
     fi
 
@@ -373,7 +374,7 @@ build_sim_cmd() {
 echo ""
 echo "========== STEP 3a: NVT simulation (ML/MM dimers ON) =========="
 mkdir -p nvt_normal
-SIM_CMD_NORMAL=$(build_sim_cmd "nvt_normal/sim" "false" "$NSTEPS_JAXMD" "$NSTEPS_ASE")
+SIM_CMD_NORMAL=$(build_sim_cmd "nvt_normal/sim" "false" "$NSTEPS_JAXMD" "$NSTEPS_ASE" "$INCLUDE_MM")
 echo "Running: $SIM_CMD_NORMAL"
 eval "$SIM_CMD_NORMAL" 2>&1 | tee nvt_normal/simulation.log
 echo "[OK] Normal NVT simulation complete -> nvt_normal/"
@@ -384,7 +385,7 @@ echo "[OK] Normal NVT simulation complete -> nvt_normal/"
 echo ""
 echo "========== STEP 3b: NVT simulation (ML/MM dimers OFF) =========="
 mkdir -p nvt_nodimer
-SIM_CMD_NODIMER=$(build_sim_cmd "nvt_nodimer/sim" "true" "$NSTEPS_JAXMD_NODIMER" "$NSTEPS_ASE_NODIMER")
+SIM_CMD_NODIMER=$(build_sim_cmd "nvt_nodimer/sim" "true" "$NSTEPS_JAXMD_NODIMER" "$NSTEPS_ASE_NODIMER" "false")
 echo "Running: $SIM_CMD_NODIMER"
 eval "$SIM_CMD_NODIMER" 2>&1 | tee nvt_nodimer/simulation.log
 echo "[OK] No-dimer NVT simulation complete -> nvt_nodimer/"

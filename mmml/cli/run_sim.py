@@ -1155,7 +1155,7 @@ shake bonh para sele all end
 
 
     if args.nsteps_jaxmd > 0:
-        for i in range(1):
+        for j in range(1):
             sim_key, data_key = jax.random.split(data_key, 2)
             s = set_up_nhc_sim_routine(atoms, T=temperature)
             out_positions, _ = run_sim_loop(s, sim_key)
