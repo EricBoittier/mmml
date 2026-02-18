@@ -1085,6 +1085,14 @@ shake bonh para sele all end
             # get energy of initial state
             energy_initial = float(wrapped_energy_fn(state.position))
             print(f"Initial energy: {energy_initial:.6f} eV")
+            # Debug: forces from gradient (what NVE uses), velocity, and first-step displacement
+            forces_jax = -jax.grad(wrapped_energy_fn)(state.position)
+            print(f"JAX-MD initial forces (from -grad):\n{forces_jax}")
+            # velocity = momentum / mass; position update = R + dt * v (half-step in VV)
+            vel = state.momentum / state.mass
+            disp_first = dt * vel
+            print(f"JAX-MD velocity (p/m) sample [0]: {vel[0]}")
+            print(f"JAX-MD first-step displacement dt*v [0]: {disp_first[0]}, max|disp|: {float(jnp.max(jnp.abs(disp_first))):.6f}")
 
             # Single-step diagnostic: catch NaN on first step (common with wrong mass/units)
             state_one = apply_fn(state)
