@@ -913,14 +913,8 @@ def setup_calculator(
         rmins_per_system = jnp.take(at_flat_rm, at_codes) 
         epsilons_per_system = jnp.take(at_flat_ep, at_codes)
 
-        rs = distances
         q_per_system = jnp.take(at_flat_q, at_codes)
         q_per_system = charges
-        # # make sure the system is charge neutral
-        # if jnp.sum(q_per_system) != 0:
-        #     raise ValueError(
-        #         "System is not charge neutral. Please check the charges in the PSF file."
-        #     )
 
         q_a = jnp.take(q_per_system, pair_idx_atom_atom[:, 0])
         q_b = jnp.take(q_per_system, pair_idx_atom_atom[:, 1])
