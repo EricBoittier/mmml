@@ -16,6 +16,8 @@ from mmml.utils.hdf5_reporter import (
     HDF5Reporter,
     DatasetSpec,
     make_jaxmd_reporter,
+    load_hdf5_trajectory,
+    summarize_hdf5,
 )
 
 __all__ = [
@@ -29,5 +31,7 @@ __all__ = [
     'HDF5Reporter',
     'DatasetSpec',
     'make_jaxmd_reporter',
+    'load_hdf5_trajectory',
+    'summarize_hdf5',
 ]
 

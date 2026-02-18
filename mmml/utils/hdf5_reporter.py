@@ -461,6 +461,97 @@ def make_jaxmd_reporter(
 
 
 # ---------------------------------------------------------------------------
+# Loading / reading back trajectory files
+# ---------------------------------------------------------------------------
+
+def load_hdf5_trajectory(
+    path: Union[str, "os.PathLike[str]"],
+    datasets: Optional[Sequence[str]] = None,
+    start: Optional[int] = None,
+    stop: Optional[int] = None,
+    step: Optional[int] = None,
+) -> Dict[str, np.ndarray]:
+    """Load data from an HDF5 trajectory written by :class:`HDF5Reporter`.
+
+    Parameters
+    ----------
+    path : str | PathLike
+        Path to the HDF5 file.
+    datasets : sequence of str | None
+        Names of datasets to load.  ``None`` loads all datasets found in
+        the file.
+    start, stop, step : int | None
+        Slice parameters applied along the frame axis (axis 0) of every
+        dataset, e.g. ``start=100, stop=500, step=2`` loads every other
+        frame from frame 100 to 500.
+
+    Returns
+    -------
+    dict[str, np.ndarray]
+        Mapping of dataset name to NumPy array.
+
+    Examples
+    --------
+    >>> data = load_hdf5_trajectory("trajectory.h5")
+    >>> data["potential_energy"]   # shape (n_frames,)
+    >>> data["positions"]          # shape (n_frames, n_atoms, 3)
+
+    Load only energies from the last 1000 frames::
+
+        data = load_hdf5_trajectory("traj.h5",
+                                    datasets=["potential_energy", "kinetic_energy"],
+                                    start=-1000)
+    """
+    sl = slice(start, stop, step)
+
+    with h5py.File(str(path), "r") as f:
+        names = list(datasets) if datasets is not None else list(f.keys())
+        result: Dict[str, np.ndarray] = {}
+        for name in names:
+            if name not in f:
+                raise KeyError(
+                    f"Dataset '{name}' not found in {path}. "
+                    f"Available datasets: {list(f.keys())}"
+                )
+            result[name] = f[name][sl]
+
+    return result
+
+
+def summarize_hdf5(path: Union[str, "os.PathLike[str]"]) -> Dict[str, Any]:
+    """Return a summary dict describing an HDF5 trajectory file.
+
+    The returned dict contains:
+    - ``"path"``: file path
+    - ``"n_frames"``: number of frames (from the longest dataset)
+    - ``"datasets"``: dict mapping name -> ``{"shape": ..., "dtype": ...}``
+    - ``"attrs"``: dict of top-level HDF5 attributes
+
+    Parameters
+    ----------
+    path : str | PathLike
+        Path to the HDF5 file.
+    """
+    info: Dict[str, Any] = {"path": str(path), "datasets": {}, "attrs": {}}
+    n_frames = 0
+
+    with h5py.File(str(path), "r") as f:
+        for name in f.keys():
+            ds = f[name]
+            info["datasets"][name] = {
+                "shape": ds.shape,
+                "dtype": str(ds.dtype),
+            }
+            if ds.shape and ds.shape[0] > n_frames:
+                n_frames = ds.shape[0]
+        for k, v in f.attrs.items():
+            info["attrs"][k] = v
+
+    info["n_frames"] = n_frames
+    return info
+
+
+# ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
 
