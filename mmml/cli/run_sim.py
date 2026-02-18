@@ -933,50 +933,56 @@ shake bonh para sele all end
             total_steps=args.nsteps_jaxmd,
             steps_per_recording=steps_per_recording,
             R=R,
+            skip_minimization=False,
         ):
             total_records = total_steps // steps_per_recording
 
-            # Translate to center of mass before minimization (use actual masses)
-            com = jnp.sum(Si_mass[:, None] * R, axis=0) / Si_mass.sum()
-            initial_pos = jnp.asarray(R - com, dtype=jnp.float32)
-            # Sanity check: ensure energy/gradient are finite at start; else use R directly
-            try:
-                _e0 = float(wrapped_energy_fn(initial_pos))
-                _f0 = jax.grad(wrapped_energy_fn)(initial_pos)
-                if not (np.isfinite(_e0) and np.all(np.isfinite(np.asarray(_f0)))):
+            # When ASE already ran (nsteps_ase > 0), R is ASE-minimized; skip JAX-MD minimization
+            if skip_minimization:
+                minimized_pos = jnp.asarray(R, dtype=jnp.float32)
+                print("Skipping JAX-MD minimization (using ASE positions)")
+            else:
+                # Translate to center of mass before minimization (use actual masses)
+                com = jnp.sum(Si_mass[:, None] * R, axis=0) / Si_mass.sum()
+                initial_pos = jnp.asarray(R - com, dtype=jnp.float32)
+                # Sanity check: ensure energy/gradient are finite at start; else use R directly
+                try:
+                    _e0 = float(wrapped_energy_fn(initial_pos))
+                    _f0 = jax.grad(wrapped_energy_fn)(initial_pos)
+                    if not (np.isfinite(_e0) and np.all(np.isfinite(np.asarray(_f0)))):
+                        initial_pos = jnp.asarray(R, dtype=jnp.float32)
+                        print("Non-finite energy/forces at COM-centered pos; using R directly for minimization")
+                except Exception:
                     initial_pos = jnp.asarray(R, dtype=jnp.float32)
-                    print("Non-finite energy/forces at COM-centered pos; using R directly for minimization")
-            except Exception:
-                initial_pos = jnp.asarray(R, dtype=jnp.float32)
-                print("Fallback: using R directly for minimization")
-            fire_state = unwrapped_init_fn(initial_pos)
-            fire_positions = []
+                    print("Fallback: using R directly for minimization")
+                fire_state = unwrapped_init_fn(initial_pos, mass=Si_mass)
+                fire_positions = []
 
-            # FIRE minimization with step rejection (reject steps that produce NaN)
-            print("*" * 10 + "\nMinimization\n" + "*" * 10)
-            NMIN = 1000
-            for i in range(NMIN):
-                fire_positions.append(fire_state.position)
-                new_state = unwrapped_step_fn(fire_state)
-                # Reject step if it produces NaN/Inf positions
-                if not jnp.all(jnp.isfinite(new_state.position)):
-                    print("FIRE step produced NaN/Inf positions; rejecting and stopping")
-                    break
-                # Check energy/forces at new position before accepting
-                energy = float(wrapped_energy_fn(new_state.position))
-                max_force = float(jnp.abs(jax.grad(wrapped_energy_fn)(new_state.position)).max())
-                if not (np.isfinite(energy) and np.isfinite(max_force)):
-                    print("FIRE step led to NaN/Inf energy or forces; rejecting and stopping")
-                    break
-                fire_state = new_state
+                # FIRE minimization with step rejection (reject steps that produce NaN)
+                print("*" * 10 + "\nMinimization\n" + "*" * 10)
+                NMIN = 1000
+                for i in range(NMIN):
+                    fire_positions.append(fire_state.position)
+                    new_state = unwrapped_step_fn(fire_state)
+                    # Reject step if it produces NaN/Inf positions
+                    if not jnp.all(jnp.isfinite(new_state.position)):
+                        print("FIRE step produced NaN/Inf positions; rejecting and stopping")
+                        break
+                    # Check energy/forces at new position before accepting
+                    energy = float(wrapped_energy_fn(new_state.position))
+                    max_force = float(jnp.abs(jax.grad(wrapped_energy_fn)(new_state.position)).max())
+                    if not (np.isfinite(energy) and np.isfinite(max_force)):
+                        print("FIRE step led to NaN/Inf energy or forces; rejecting and stopping")
+                        break
+                    fire_state = new_state
 
-                if i % (NMIN // 10) == 0:
-                    print(f"{i}/{NMIN}: E={energy:.6f} eV, max|F|={max_force:.6f}")
-            # fire_state always holds last valid position (we reject bad steps)
-            minimized_pos = fire_state.position
-            if jnp.any(~jnp.isfinite(minimized_pos)) and fire_positions:
-                minimized_pos = fire_positions[-1]
-                print("Using last valid position from first minimization")
+                    if i % (NMIN // 10) == 0:
+                        print(f"{i}/{NMIN}: E={energy:.6f} eV, max|F|={max_force:.6f}")
+                # fire_state always holds last valid position (we reject bad steps)
+                minimized_pos = fire_state.position
+                if jnp.any(~jnp.isfinite(minimized_pos)) and fire_positions:
+                    minimized_pos = fire_positions[-1]
+                    print("Using last valid position from first minimization")
             # save pdb
             from datetime import datetime
             now = datetime.now()
@@ -1001,7 +1007,7 @@ shake bonh para sele all end
                 pbc_unwrapped_step_fn = jit(pbc_unwrapped_step_fn)
                 # Start from wrapped positions so we're in the cell (first min can drift)
                 pbc_start_pos = pbc_map_fn(minimized_pos) if pbc_map_fn else minimized_pos
-                pbc_fire_state = pbc_unwrapped_init_fn(pbc_start_pos)
+                pbc_fire_state = pbc_unwrapped_init_fn(pbc_start_pos, mass=Si_mass)
 
                 # Run PBC minimization (track best; stop early if forces increase - FIRE+unwrapped can wander)
                 # Skip when first minimization already failed (minimized_pos invalid)
@@ -1191,7 +1197,7 @@ shake bonh para sele all end
         trajectory.close()
 
 
-    def run_sim_loop(run_sim, sim_key, nsim=1):
+    def run_sim_loop(run_sim, sim_key, nsim=1, skip_minimization=False):
         """
         Run the simulation for the given indices and save the trajectory.
         Uses current atoms positions (after ASE MD if run) as initial positions.
@@ -1200,7 +1206,7 @@ shake bonh para sele all end
         max_is = []
         pos = np.asarray(atoms.get_positions(), dtype=np.float32)
         for i in range(nsim):
-            mi, pos = run_sim(sim_key, R=pos)
+            mi, pos = run_sim(sim_key, R=pos, skip_minimization=skip_minimization)
         out_positions.append(pos)
         max_is.append(mi)
 
@@ -1218,7 +1224,9 @@ shake bonh para sele all end
         for j in range(1):
             sim_key, data_key = jax.random.split(data_key, 2)
             s = set_up_nhc_sim_routine(atoms, T=temperature)
-            out_positions, _ = run_sim_loop(s, sim_key)
+            # Skip JAX-MD minimization when ASE already ran (positions are ASE-minimized)
+            skip_jaxmd_min = args.nsteps_ase > 0
+            out_positions, _ = run_sim_loop(s, sim_key, skip_minimization=skip_jaxmd_min)
 
             print(f"Out positions: {out_positions}")
 

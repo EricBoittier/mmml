@@ -1442,27 +1442,7 @@ def setup_calculator(
         monomer_forces_safe = jnp.where(jnp.isfinite(monomer_contribs["out_F"]), monomer_contribs["out_F"], 0.0)
         dimer_forces_safe = jnp.where(jnp.isfinite(dimer_contribs["out_F"]), dimer_contribs["out_F"], 0.0)
         
-        # Ensure shapes match - both should be (n_monomers * ATOMS_PER_MONOMER, 3)
-        # If they don't match, we need to pad/truncate to the expected size, not min_size
-        expected_force_size = n_monomers * ATOMS_PER_MONOMER
-        if monomer_forces_safe.shape[0] != dimer_forces_safe.shape[0]:
-            # jax.debug.print("ERROR: Shape mismatch in combine! monomer: {m}, dimer: {d}, expected: {e}",
-            # m=monomer_forces_safe.shape, d=dimer_forces_safe.shape, e=expected_force_size,
-            # ordered=False)
-            # Fix both to expected size (not min_size, as that could cut off atoms incorrectly)
-            # Fix monomer_forces_safe
-            if monomer_forces_safe.shape[0] < expected_force_size:
-                padding = jnp.zeros((expected_force_size - monomer_forces_safe.shape[0], 3))
-                monomer_forces_safe = jnp.concatenate([monomer_forces_safe, padding], axis=0)
-            elif monomer_forces_safe.shape[0] > expected_force_size:
-                monomer_forces_safe = monomer_forces_safe[:expected_force_size]
-            # Fix dimer_forces_safe
-            if dimer_forces_safe.shape[0] < expected_force_size:
-                padding = jnp.zeros((expected_force_size - dimer_forces_safe.shape[0], 3))
-                dimer_forces_safe = jnp.concatenate([dimer_forces_safe, padding], axis=0)
-            elif dimer_forces_safe.shape[0] > expected_force_size:
-                dimer_forces_safe = dimer_forces_safe[:expected_force_size]
-        
+       
         combined_forces = monomer_forces_safe + dimer_forces_safe
         
         # Ensure combined forces are finite
