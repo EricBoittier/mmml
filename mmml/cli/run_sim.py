@@ -943,23 +943,27 @@ shake bonh para sele all end
             fire_state = unwrapped_init_fn(initial_pos)
             fire_positions = []
 
-            # FIRE minimization
+            # FIRE minimization with step rejection (reject steps that produce NaN)
             print("*" * 10 + "\nMinimization\n" + "*" * 10)
             NMIN = 1000
             for i in range(NMIN):
                 fire_positions.append(fire_state.position)
-                fire_state = unwrapped_step_fn(fire_state)
-                
-                if i % (NMIN // 10) == 0:
-                    energy = float(wrapped_energy_fn(fire_state.position))
-                    max_force = float(jnp.abs(jax.grad(wrapped_energy_fn)(fire_state.position)).max())
-                    print(f"{i}/{NMIN}: E={energy:.6f} eV, max|F|={max_force:.6f}")
-
-                # check for nans
-                if not jnp.isfinite(energy) or not jnp.isfinite(max_force):
-                    print("NaN/Inf energy or forces in minimization, using last valid position")
+                new_state = unwrapped_step_fn(fire_state)
+                # Reject step if it produces NaN/Inf positions
+                if not jnp.all(jnp.isfinite(new_state.position)):
+                    print("FIRE step produced NaN/Inf positions; rejecting and stopping")
                     break
-            # Best position from first minimization (last valid if NaN occurred)
+                # Check energy/forces at new position before accepting
+                energy = float(wrapped_energy_fn(new_state.position))
+                max_force = float(jnp.abs(jax.grad(wrapped_energy_fn)(new_state.position)).max())
+                if not (np.isfinite(energy) and np.isfinite(max_force)):
+                    print("FIRE step led to NaN/Inf energy or forces; rejecting and stopping")
+                    break
+                fire_state = new_state
+
+                if i % (NMIN // 10) == 0:
+                    print(f"{i}/{NMIN}: E={energy:.6f} eV, max|F|={max_force:.6f}")
+            # fire_state always holds last valid position (we reject bad steps)
             minimized_pos = fire_state.position
             if jnp.any(~jnp.isfinite(minimized_pos)) and fire_positions:
                 minimized_pos = fire_positions[-1]
@@ -986,39 +990,50 @@ shake bonh para sele all end
             pbc_fire_positions = []
             
             # Run PBC minimization (track best; stop early if forces increase - FIRE+unwrapped can wander)
+            # Skip when first minimization already failed (minimized_pos invalid)
             NMIN_PBC = 1000
-            max_force_start = float(jnp.abs(jax.grad(wrapped_energy_fn)(pbc_start_pos)).max())
-            best_pbc_pos = pbc_start_pos
-            best_pbc_max_f = max_force_start
-            worsen_count = 0
-            prev_max_f = max_force_start
-            for i in range(NMIN_PBC):
-                pbc_fire_positions.append(pbc_fire_state.position)
-                pbc_fire_state = pbc_unwrapped_step_fn(pbc_fire_state)
-                energy = float(wrapped_energy_fn(pbc_fire_state.position))
-                max_force = float(jnp.abs(jax.grad(wrapped_energy_fn)(pbc_fire_state.position)).max())
-                if max_force < best_pbc_max_f:
-                    best_pbc_max_f = max_force
-                    best_pbc_pos = pbc_fire_state.position
-                    worsen_count = 0
-                else:
-                    worsen_count = worsen_count + 1 if max_force > prev_max_f else 0
-                prev_max_f = max_force
-                if i % (NMIN_PBC // 10) == 0:
-                    print(f"{i}/{NMIN_PBC}: E={energy:.6f} eV, max|F|={max_force:.6f}")
-                if jnp.isnan(energy):
-                    print("NaN energy caught in PBC minimization, using last valid position")
-                    break
-                if worsen_count >= 10:
-                    print(f"PBC minimization: max|F| increased for 10 steps; stopping early at step {i} (best max|F|={best_pbc_max_f:.4f})")
-                    break
-            
-            # Use first-min result if PBC minimization worsened structure (max_force increased)
-            if best_pbc_max_f > max_force_start * 1.1:
-                md_pos = pbc_map_fn(minimized_pos) if (use_pbc and pbc_map_fn) else minimized_pos
-                print(f"PBC minimization increased max|F| ({max_force_start:.4f} -> {best_pbc_max_f:.4f}); using first-min wrapped structure")
+            if jnp.any(~jnp.isfinite(pbc_start_pos)):
+                print("Skipping PBC minimization (no valid start position)")
+                md_pos = minimized_pos
             else:
-                md_pos = best_pbc_pos
+                max_force_start = float(jnp.abs(jax.grad(wrapped_energy_fn)(pbc_start_pos)).max())
+                best_pbc_pos = pbc_start_pos
+                best_pbc_max_f = max_force_start
+                worsen_count = 0
+                prev_max_f = max_force_start
+                for i in range(NMIN_PBC):
+                    pbc_fire_positions.append(pbc_fire_state.position)
+                    new_pbc_state = pbc_unwrapped_step_fn(pbc_fire_state)
+                    # Reject step if it produces NaN
+                    if not jnp.all(jnp.isfinite(new_pbc_state.position)):
+                        print("PBC FIRE step produced NaN; using first-min result")
+                        break
+                    energy = float(wrapped_energy_fn(new_pbc_state.position))
+                    max_force = float(jnp.abs(jax.grad(wrapped_energy_fn)(new_pbc_state.position)).max())
+                    if not (np.isfinite(energy) and np.isfinite(max_force)):
+                        print("PBC minimization hit NaN energy/forces; using first-min result")
+                        break
+                    pbc_fire_state = new_pbc_state
+                    if max_force < best_pbc_max_f:
+                        best_pbc_max_f = max_force
+                        best_pbc_pos = pbc_fire_state.position
+                        worsen_count = 0
+                    else:
+                        worsen_count = worsen_count + 1 if max_force > prev_max_f else 0
+                    prev_max_f = max_force
+                    if i % (NMIN_PBC // 10) == 0:
+                        print(f"{i}/{NMIN_PBC}: E={energy:.6f} eV, max|F|={max_force:.6f}")
+                    if worsen_count >= 10:
+                        print(f"PBC minimization: max|F| increased for 10 steps; stopping early at step {i} (best max|F|={best_pbc_max_f:.4f})")
+                        break
+
+                # Use first-min result if PBC minimization worsened structure (max_force increased)
+                if best_pbc_max_f > max_force_start * 1.1:
+                    md_pos = pbc_map_fn(minimized_pos) if (use_pbc and pbc_map_fn) else minimized_pos
+                    print(f"PBC minimization increased max|F| ({max_force_start:.4f} -> {best_pbc_max_f:.4f}); using first-min wrapped structure")
+                else:
+                    md_pos = best_pbc_pos
+
             # Save PBC minimized structure
             pbc_current_time = datetime.now().strftime("%H:%M:%S")
             pbc_pdb_path = Path(f"{args.output_prefix}_pbc_minimized_{pbc_current_time}.pdb")
