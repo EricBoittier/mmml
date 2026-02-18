@@ -355,12 +355,14 @@ def run(args: argparse.Namespace) -> int:
     pdb_ase_atoms.set_atomic_numbers(correct_atomic_numbers_from_mass)
     print(f"PDB ASE atoms: {pdb_ase_atoms}")
 
-    Si_mass = jnp.array(correct_atomic_numbers_from_mass)
+    # Actual masses for COM (Si_mass was misnamed - it held atomic numbers before)
+    masses_jax = jnp.array(psf_masses[:total_atoms], dtype=jnp.float32)
+    Si_mass = masses_jax  # keep name for compatibility with JAX-MD closure
     Si_mass_sum = Si_mass.sum()
-    print(f"Si_mass (ASE masses in amu): {Si_mass}")
+    print(f"Masses (amu) for JAX-MD: sum={float(Si_mass_sum):.2f}")
     
     Si_mass_expanded = jnp.repeat(Si_mass[:, None], 3, axis=1)
-    print(f"Si_mass_expanded shape: {Si_mass_expanded.shape}")
+    print(f"Masses expanded shape: {Si_mass_expanded.shape}")
 
     print(f"PyCHARMM coordinates: {coor.get_positions()}")
     print(f"Ase coordinates: {pdb_ase_atoms.get_positions()}")
@@ -782,13 +784,12 @@ shake bonh para sele all end
 
 
         dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(len(atoms))
-        atomic_numbers = atoms.get_atomic_numbers()
-        R = atoms.get_positions()
+        atomic_numbers = jnp.asarray(atoms.get_atomic_numbers(), dtype=jnp.int32)
+        R = jnp.asarray(atoms.get_positions(), dtype=jnp.float32)
 
         @jit
         def jax_md_energy_fn(position, **kwargs):
-            # Ensure position is a JAX array
-            position = jnp.array(position)
+            position = jnp.asarray(position, dtype=jnp.float32)
             # l_nbrs = nbrs.update(position)
             result = evaluate_energies_and_forces(
                 atomic_numbers=atomic_numbers,
@@ -926,9 +927,19 @@ shake bonh para sele all end
         ):
             total_records = total_steps // steps_per_recording
 
-            # Translate to center of mass before minimization
+            # Translate to center of mass before minimization (use actual masses)
             com = jnp.sum(Si_mass[:, None] * R, axis=0) / Si_mass.sum()
-            initial_pos = R - com
+            initial_pos = jnp.asarray(R - com, dtype=jnp.float32)
+            # Sanity check: ensure energy/gradient are finite at start; else use R directly
+            try:
+                _e0 = float(wrapped_energy_fn(initial_pos))
+                _f0 = jax.grad(wrapped_energy_fn)(initial_pos)
+                if not (jnp.isfinite(_e0).all() and jnp.all(jnp.isfinite(_f0))):
+                    initial_pos = jnp.asarray(R, dtype=jnp.float32)
+                    print("Non-finite energy/forces at COM-centered pos; using R directly for minimization")
+            except Exception:
+                initial_pos = jnp.asarray(R, dtype=jnp.float32)
+                print("Fallback: using R directly for minimization")
             fire_state = unwrapped_init_fn(initial_pos)
             fire_positions = []
 
@@ -944,10 +955,9 @@ shake bonh para sele all end
                     max_force = float(jnp.abs(jax.grad(wrapped_energy_fn)(fire_state.position)).max())
                     print(f"{i}/{NMIN}: E={energy:.6f} eV, max|F|={max_force:.6f}")
 
-
                 # check for nans
-                if jnp.isnan(energy):
-                    print("NaN energy caught in minimization, using last valid position")
+                if not jnp.isfinite(energy) or not jnp.isfinite(max_force):
+                    print("NaN/Inf energy or forces in minimization, using last valid position")
                     break
             # Best position from first minimization (last valid if NaN occurred)
             minimized_pos = fire_state.position
