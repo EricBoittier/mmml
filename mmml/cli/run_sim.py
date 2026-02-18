@@ -799,7 +799,6 @@ shake bonh para sele all end
         @jit
         def jax_md_energy_fn(position, **kwargs):
             position = jnp.asarray(position, dtype=jnp.float32)
-            # l_nbrs = nbrs.update(position)
             result = evaluate_energies_and_forces(
                 atomic_numbers=atomic_numbers,
                 positions=position,
@@ -807,8 +806,18 @@ shake bonh para sele all end
                 src_idx=src_idx,
             )
             return result.energy.reshape(-1)[0]
-        
-        # jax_md_grad_fn = jax.grad(jax_md_energy_fn)
+
+        @jit
+        def jax_md_force_fn(position, **kwargs):
+            """Return forces from calculator (no autodiff). jax.grad(energy_fn) produces NaN."""
+            position = jnp.asarray(position, dtype=jnp.float32)
+            result = evaluate_energies_and_forces(
+                atomic_numbers=atomic_numbers,
+                positions=position,
+                dst_idx=dst_idx,
+                src_idx=src_idx,
+            )
+            return result.forces
 
         # evaluate_energies_and_forces
         result = evaluate_energies_and_forces(
@@ -833,9 +842,8 @@ shake bonh para sele all end
         else:
             print(f"JAX-MD: free space (no PBC), pbc_map: False")
 
-        # Energy: for PBC, apply pbc_map before calculator and transform_forces for gradient
-        # (match ASE). The raw spherical_cutoff_calculator does NOT apply pbc_map; only the
-        # ASE wrapper does. Without this, forces are in wrong space and NVE blows up.
+        # Energy and force: use calculator's explicit forces (jax.grad through calculator gives NaN).
+        # For PBC, apply pbc_map before calculator and transform_forces for output.
         if use_pbc and pbc_map_fn is not None:
             @jax.custom_vjp
             def wrapped_energy_fn(position, **kwargs):
@@ -862,10 +870,19 @@ shake bonh para sele all end
 
             wrapped_energy_fn.defvjp(wrapped_energy_fn_fwd, wrapped_energy_fn_bwd)
             wrapped_energy_fn = jit(wrapped_energy_fn)
+
+            @jit
+            def wrapped_force_fn(position, **kwargs):
+                pos = jnp.array(position)
+                R_mapped = pbc_map_fn(pos)
+                F_mapped = jax_md_force_fn(R_mapped, **kwargs)
+                return pbc_map_fn.transform_forces(pos, F_mapped)
         else:
             @jit
             def wrapped_energy_fn(position, **kwargs):
                 return jax_md_energy_fn(jnp.array(position), **kwargs)
+
+            wrapped_force_fn = jax_md_force_fn
 
         # Shift: do NOT wrap every timestep (same as ASE). pbc_map is discontinuous;
         # wrapping after each step creates inconsistent phase-space (positions jumped,
@@ -876,7 +893,7 @@ shake bonh para sele all end
         displacement = _displacement
 
         unwrapped_init_fn, unwrapped_step_fn = jax_md.minimize.fire_descent(
-            wrapped_energy_fn, shift, dt_start=0.001, dt_max=0.001
+            wrapped_force_fn, shift, dt_start=0.001, dt_max=0.001
         )
         unwrapped_step_fn = jit(unwrapped_step_fn)
 
@@ -917,7 +934,7 @@ shake bonh para sele all end
                 'sy_steps': nhc_sy_steps,
             }
             init_fn, apply_fn = simulate.nvt_nose_hoover(
-                wrapped_energy_fn, shift, dt=dt, kT=kT,
+                wrapped_force_fn, shift, dt=dt, kT=kT,
                 thermostat_kwargs=default_nhc_kwargs(
                     jnp.array(nhc_tau * dt), nhc_kwargs
                 ),
@@ -926,7 +943,7 @@ shake bonh para sele all end
                   f"chain_steps={nhc_chain_steps}, sy_steps={nhc_sy_steps}, "
                   f"tau={nhc_tau * dt:.6f} ps")
         else:  # nve
-            init_fn, apply_fn = simulate.nve(wrapped_energy_fn, shift, dt)
+            init_fn, apply_fn = simulate.nve(wrapped_force_fn, shift, dt)
         apply_fn = jit(apply_fn)
 
         def run_sim(
