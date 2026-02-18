@@ -615,6 +615,8 @@ def setup_calculator(
     verbose: bool = False,
     ml_reorder_indices=None,
     at_codes_override=None,
+    flat_bottom_radius: float | None = None,
+    flat_bottom_force_const: float = 1.0,
 ):
     """Create hybrid ML/MM calculator with outputs in eV/eV-A.
 
@@ -1260,6 +1262,29 @@ def setup_calculator(
         if isinstance(final_energy, (int, float)):
             final_energy = jnp.array(final_energy)
         final_energy = jnp.where(jnp.isfinite(final_energy), final_energy, 0.0)
+
+        # Flat bottom potential: constrain COM to center (e.g. box center for PBC)
+        # V = 0 when |d| <= R, else V = k * (|d| - R)^2
+        _pbc_cell = cell if do_pbc_map else None
+        if flat_bottom_radius is not None and flat_bottom_radius > 0:
+            from ase.data import atomic_masses as ase_atomic_masses
+            masses = jnp.take(jnp.array(ase_atomic_masses), atomic_numbers)
+            M = jnp.sum(masses)
+            com = jnp.sum(positions * masses[:, None], axis=0) / M
+            if _pbc_cell is not None:
+                center = (_pbc_cell[0] + _pbc_cell[1] + _pbc_cell[2]) / 2.0
+                d = mic_displacement(center, com, _pbc_cell)
+            else:
+                center = jnp.zeros(3)
+                d = com - center
+            dist = jnp.linalg.norm(d) + 1e-12
+            excess = jnp.maximum(0.0, dist - flat_bottom_radius)
+            flat_E = flat_bottom_force_const * excess ** 2
+            unit_d = d / dist
+            F_com = -flat_bottom_force_const * 2.0 * excess * unit_d
+            flat_F = (masses[:, None] / M) * F_com[None, :]
+            final_energy = final_energy + flat_E
+            final_forces = final_forces + flat_F
         
         # Compute energy sum safely
         if hasattr(final_energy, 'sum'):

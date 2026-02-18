@@ -95,6 +95,21 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Cubic cell side length in Å for periodic boundary conditions (default: None = no PBC).",
     )
+    parser.add_argument(
+        "--flat-bottom-radius",
+        type=float,
+        default=None,
+        metavar="Å",
+        help="Radius of flat bottom potential to constrain system COM to center (default: None = disabled). "
+        "When set, V=0 for |d|<=R and V=k*(|d|-R)^2 for |d|>R. With --cell, center=box center; else origin.",
+    )
+    parser.add_argument(
+        "--flat-bottom-k",
+        type=float,
+        default=1.0,
+        metavar="eV/Å²",
+        help="Force constant for flat bottom potential when outside radius (default: 1.0).",
+    )
 
     parser.add_argument(
         "--n-monomers",
@@ -415,6 +430,8 @@ def run(args: argparse.Namespace) -> int:
             ml_energy_conversion_factor=1,
             ml_force_conversion_factor=1,
             cell=args.cell,
+            flat_bottom_radius=args.flat_bottom_radius,
+            flat_bottom_force_const=args.flat_bottom_k,
         )
     else:
         # Uniform monomer sizes: use original calculator with a plain int
@@ -433,6 +450,8 @@ def run(args: argparse.Namespace) -> int:
             ml_energy_conversion_factor=1,
             ml_force_conversion_factor=1,
             cell=args.cell,
+            flat_bottom_radius=args.flat_bottom_radius,
+            flat_bottom_force_const=args.flat_bottom_k,
         )
     
 
