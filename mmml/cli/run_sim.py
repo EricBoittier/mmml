@@ -1185,10 +1185,11 @@ shake bonh para sele all end
     def run_sim_loop(run_sim, sim_key, nsim=1):
         """
         Run the simulation for the given indices and save the trajectory.
+        Uses current atoms positions (after ASE MD if run) as initial positions.
         """
         out_positions = []
         max_is = []
-        pos = R
+        pos = np.asarray(atoms.get_positions(), dtype=np.float32)
         for i in range(nsim):
             mi, pos = run_sim(sim_key, R=pos)
         out_positions.append(pos)
