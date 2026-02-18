@@ -1198,16 +1198,13 @@ def setup_calculator(
                     ml_forces = ml_forces[:n_atoms]
                     ml_internal_F = ml_internal_F[:n_atoms]
                     ml_2b_F = ml_2b_F[:n_atoms]
-
-            nan_count = jnp.sum(~jnp.isfinite(ml_forces))
-           
+         
             outputs["out_F"] = outputs["out_F"] + ml_forces
             outputs["internal_F"] = outputs["internal_F"] + ml_internal_F
             
             # Final verification: check for any atoms that have zero forces when they shouldn't
             # (This is a debug check - not for fixing, just for warning)
             force_magnitudes = jnp.linalg.norm(outputs["out_F"], axis=1)
-            near_zero_atoms = jnp.sum(force_magnitudes < 1e-8)
 
             
             # ml_2b_F is stored separately for analysis but is already included in ml_forces
