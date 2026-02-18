@@ -545,6 +545,8 @@ shake bonh para sele all end
     pycharmm.minimize.run_abnr(nstep=1000, tolenr=1e-2, tolgrd=1e-2)
     pycharmm.lingo.charmm_script("ENER")
     safe_energy_show()
+    # Sync ASE atoms from PyCHARMM so BFGS/ASE MD start from CHARMM-minimized structure
+    atoms.set_positions(coor.get_positions())
 
     def run_heat(): 
         from mmml.pycharmmInterface.pycharmmCommands import heat
