@@ -966,7 +966,7 @@ shake bonh para sele all end
                 # Sanity check: ensure energy/gradient are finite at start; else use R directly
                 try:
                     _e0 = float(wrapped_energy_fn(initial_pos))
-                    _f0 = jax.grad(wrapped_energy_fn)(initial_pos)
+                    _f0 = wrapped_force_fn(initial_pos)
                     if not (np.isfinite(_e0) and np.all(np.isfinite(np.asarray(_f0)))):
                         initial_pos = jnp.asarray(R, dtype=jnp.float32)
                         print("Non-finite energy/forces at COM-centered pos; using R directly for minimization")
@@ -988,7 +988,7 @@ shake bonh para sele all end
                         break
                     # Check energy/forces at new position before accepting
                     energy = float(wrapped_energy_fn(new_state.position))
-                    max_force = float(jnp.abs(jax.grad(wrapped_energy_fn)(new_state.position)).max())
+                    max_force = float(jnp.abs(wrapped_force_fn(new_state.position)).max())
                     if not (np.isfinite(energy) and np.isfinite(max_force)):
                         print("FIRE step led to NaN/Inf energy or forces; rejecting and stopping")
                         break
@@ -1020,7 +1020,7 @@ shake bonh para sele all end
             else:
                 print("*" * 10 + "\nPBC Minimization\n" + "*" * 10)
                 pbc_unwrapped_init_fn, pbc_unwrapped_step_fn = jax_md.minimize.fire_descent(
-                    wrapped_energy_fn, shift, dt_start=0.001, dt_max=0.001
+                    wrapped_force_fn, shift, dt_start=0.001, dt_max=0.001
                 )
                 pbc_unwrapped_step_fn = jit(pbc_unwrapped_step_fn)
                 # Start from wrapped positions so we're in the cell (first min can drift)
@@ -1034,7 +1034,7 @@ shake bonh para sele all end
                     print("Skipping PBC minimization (no valid start position)")
                     md_pos = minimized_pos
                 else:
-                    max_force_start = float(jnp.abs(jax.grad(wrapped_energy_fn)(pbc_start_pos)).max())
+                    max_force_start = float(jnp.abs(wrapped_force_fn(pbc_start_pos)).max())
                     best_pbc_pos = pbc_start_pos
                     best_pbc_max_f = max_force_start
                     worsen_count = 0
@@ -1047,7 +1047,7 @@ shake bonh para sele all end
                             print("PBC FIRE step produced NaN; using first-min result")
                             break
                         energy = float(wrapped_energy_fn(new_pbc_state.position))
-                        max_force = float(jnp.abs(jax.grad(wrapped_energy_fn)(new_pbc_state.position)).max())
+                        max_force = float(jnp.abs(wrapped_force_fn(new_pbc_state.position)).max())
                         if not (np.isfinite(energy) and np.isfinite(max_force)):
                             print("PBC minimization hit NaN energy/forces; using first-min result")
                             break
@@ -1102,9 +1102,9 @@ shake bonh para sele all end
             # get energy of initial state
             energy_initial = float(wrapped_energy_fn(state.position))
             print(f"Initial energy: {energy_initial:.6f} eV")
-            # Debug: forces from gradient (what NVE uses), velocity, and first-step displacement
-            forces_jax = -jax.grad(wrapped_energy_fn)(state.position)
-            print(f"JAX-MD initial forces (from -grad):\n{forces_jax}")
+            # Debug: forces from calculator (used by NVE; jax.grad gives NaN)
+            forces_jax = wrapped_force_fn(state.position)
+            print(f"JAX-MD initial forces (from calculator):\n{forces_jax}")
             # velocity = momentum / mass; position update = R + dt * v (half-step in VV)
             vel = state.momentum / state.mass
             disp_first = dt * vel
