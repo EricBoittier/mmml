@@ -1086,6 +1086,16 @@ shake bonh para sele all end
             energy_initial = float(wrapped_energy_fn(state.position))
             print(f"Initial energy: {energy_initial:.6f} eV")
 
+            # Single-step diagnostic: catch NaN on first step (common with wrong mass/units)
+            state_one = apply_fn(state)
+            if not jnp.all(jnp.isfinite(state_one.position)):
+                print("ERROR: First NVE step produced NaN positions. Skipping JAX-MD.")
+                print("  Check: mass in amu, dt in ps, energy_fn returns eV.")
+                print(f"  mass shape: {state.mass.shape}, min/max: {float(jnp.min(state.mass)):.4f}/{float(jnp.max(state.mass)):.4f}")
+                return 0, jnp.stack([state.position])
+            e1 = float(wrapped_energy_fn(state_one.position))
+            print(f"First step OK: E_pot={e1:.6f} eV")
+
             print("*" * 10 + f"\n{args.ensemble.upper()}\n" + "*" * 10)
             print("\t\tTime (ps)\tSteps\tE_pot (eV)\tE_tot (eV)\tT (K)")
 
