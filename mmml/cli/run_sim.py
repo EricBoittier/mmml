@@ -669,6 +669,7 @@ shake bonh para sele all end
          nsteps=100 if run_index == 0 else 10, fmax=0.0006 if run_index == 0 else 0.001)
         # Wrap positions into cell after BFGS (avoids unwrapped coords for PBC)
         if args.cell is not None:
+            print(f"Wrapping positions into cell: {args.cell} Å")
             # translate to the center of the cell
             atoms.set_positions(atoms.get_positions() - atoms.get_positions().mean(axis=0))
             wrapped = wrap_positions_for_pbc(atoms.get_positions())
