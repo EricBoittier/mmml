@@ -934,7 +934,7 @@ shake bonh para sele all end
             try:
                 _e0 = float(wrapped_energy_fn(initial_pos))
                 _f0 = jax.grad(wrapped_energy_fn)(initial_pos)
-                if not (jnp.isfinite(_e0).all() and jnp.all(jnp.isfinite(_f0))):
+                if not (np.isfinite(_e0) and np.all(np.isfinite(np.asarray(_f0)))):
                     initial_pos = jnp.asarray(R, dtype=jnp.float32)
                     print("Non-finite energy/forces at COM-centered pos; using R directly for minimization")
             except Exception:
