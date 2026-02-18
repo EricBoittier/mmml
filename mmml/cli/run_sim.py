@@ -190,6 +190,13 @@ def parse_args() -> argparse.Namespace:
         default=10000,
         help="Number of steps to run in ASE (default: 10000).",
     )
+    parser.add_argument(
+        "--optimize-monomers",
+        action="store_true",
+        help="If set, run monomer-wise optimization with simple_physnet before hybrid BFGS. "
+        "Default: skip (use hybrid BFGS from CHARMM structure). Monomer optimization ignores "
+        "inter-monomer interactions and can produce overlapping geometries.",
+    )
 
     parser.add_argument(
         "--ensemble",
@@ -652,12 +659,11 @@ shake bonh para sele all end
         
     def run_ase_md(atoms, run_index=0, temperature=args.temperature):
         
-        if run_index == 0:
+        if run_index == 0 and args.optimize_monomers:
             atoms = optimize_as_monomers(atoms, run_index=run_index, nsteps=100, fmax=0.0006)
 
         
-        print(f"Optimized atoms energy: {atoms.get_potential_energy()}")
-        print(f"Optimized atoms forces: {atoms.get_forces()}")
+        print(f"Pre-BFGS energy: {atoms.get_potential_energy():.6f} eV")
 
         atoms = minimize_structure(atoms, run_index=run_index,
          nsteps=100 if run_index == 0 else 10, fmax=0.0006 if run_index == 0 else 0.001)
