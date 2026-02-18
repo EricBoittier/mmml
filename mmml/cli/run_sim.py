@@ -823,14 +823,15 @@ shake bonh para sele all end
         print(f"Initial energy: {init_energy:.6f} eV")
         print(f"Initial forces: {init_forces}")
 
-        # Use actual cell size when PBC is set; otherwise fallback for non-periodic
-        BOXSIZE = float(args.cell) if args.cell is not None else 1000.0
         use_pbc = args.cell is not None
         # Use the calculator's pbc_map for PBC (unwrap→coregister→wrap) to avoid
         # monomer overlap. Our custom wrap_molecules wrapped each COM to [0,L)
         # independently, causing monomers in different images to overlap → E=0, F=nan.
         pbc_map_fn = getattr(atoms.calc, "pbc_map", None) if atoms.calc else None
-        print(f"JAX-MD BOXSIZE: {BOXSIZE} Å, PBC: {use_pbc}, pbc_map: {pbc_map_fn is not None}")
+        if use_pbc:
+            print(f"JAX-MD BOXSIZE: {float(args.cell)} Å, PBC: True, pbc_map: {pbc_map_fn is not None}")
+        else:
+            print(f"JAX-MD: free space (no PBC), pbc_map: False")
 
         # Energy: for PBC, apply pbc_map before calculator and transform_forces for gradient
         # (match ASE). The raw spherical_cutoff_calculator does NOT apply pbc_map; only the
@@ -1073,10 +1074,7 @@ shake bonh para sele all end
                 print(f"Error: No valid positions for {args.ensemble.upper()}; skipping JAX-MD simulation")
                 return 0, jnp.array([]).reshape(0, len(md_pos), 3)
 
-            # Init with temperature from metal units (init_fn handles momentum scaling)
-            # NVE init_fn: (key, R, kT, mass=...) -- kT is a positional arg
-            # NVT init_fn: (key, R, mass=..., **kwargs) -- kT is already captured in the closure
-            #   Do NOT pass kT here; **kwargs gets forwarded to force_fn which doesn't accept kT
+            
             if args.ensemble == "nvt":
                 state = init_fn(key, md_pos, mass=Si_mass)
             else:
