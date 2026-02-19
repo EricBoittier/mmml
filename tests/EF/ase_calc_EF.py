@@ -260,8 +260,8 @@ class AseCalculatorEF(ase_calc.Calculator):
         
         # Store results
         self.results = {
-            'energy': energy,
-            'forces': forces,
+            'energy': energy ,
+            'forces': forces ,
             'dipole': dipole,
         }
     
