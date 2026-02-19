@@ -476,7 +476,7 @@ def run(args: argparse.Namespace) -> int:
 
 
 
-    # Create hybrid calculator (pbc_map/do_pbc_map from factory when cell is set)
+    # Create hybrid calculator (MIC-only: factory uses pbc_cell for PBC, no pbc_map/transform)
     hybrid_calc, spherical_cutoff_calculator = calculator_factory(
         atomic_numbers=Z,
         atomic_positions=R,
@@ -598,7 +598,7 @@ shake bonh para sele all end
     # Minimize structure if requested
     # if args.minimize_first:
     def wrap_positions_for_pbc(positions):
-        """Apply PBC mapping to wrap positions into the cell (molecular wrapping)."""
+        """Wrap positions into cell when using pbc_map (legacy). MIC-only: no-op."""
         if args.cell is None:
             return positions
         pbc_map_fn = getattr(hybrid_calc, "pbc_map", None)
@@ -709,11 +709,9 @@ shake bonh para sele all end
         for i in range(num_steps):
             # Run 1 time step
             integrator.run(1)
-            # Do NOT wrap positions every timestep: pbc_map applies a discontinuous coordinate
-            # transformation. Replacing R with wrapped(R) after integration creates an inconsistent
-            # phase-space point (velocities unchanged, positions jumped) and breaks NVE energy
-            # conservation. The calculator applies pbc_map internally for forces; integration uses
-            # unwrapped coordinates. Wrap only for trajectory output if needed (see traj.write).
+            # Do NOT wrap positions every timestep. The calculator uses MIC internally for
+            # energy/forces (no coordinate transform). Integration uses unwrapped coordinates.
+            # Wrap only for trajectory output if needed (see traj.write).
             # Save current frame and keep track of energies
             frames[i] = ase_atoms.get_positions()
             potential_energy[i] = ase_atoms.get_potential_energy()
@@ -833,17 +831,15 @@ shake bonh para sele all end
         print(f"Initial forces: {init_forces}")
 
         use_pbc = args.cell is not None
-        # Use the calculator's pbc_map for PBC (unwrap→coregister→wrap) to avoid
-        # monomer overlap. Our custom wrap_molecules wrapped each COM to [0,L)
-        # independently, causing monomers in different images to overlap → E=0, F=nan.
+        # MIC-only PBC: calculator uses minimum-image convention, no coordinate transform.
         pbc_map_fn = getattr(atoms.calc, "pbc_map", None) if atoms.calc else None
         if use_pbc:
-            print(f"JAX-MD BOXSIZE: {float(args.cell)} Å, PBC: True, pbc_map: {pbc_map_fn is not None}")
+            print(f"JAX-MD BOXSIZE: {float(args.cell)} Å, PBC: True (MIC-only)")
         else:
             print(f"JAX-MD: free space (no PBC), pbc_map: False")
 
         # Energy and force: use calculator's explicit forces (jax.grad through calculator gives NaN).
-        # For PBC, apply pbc_map before calculator and transform_forces for output.
+        # MIC-only PBC: no coordinate transform; calculator uses MIC internally.
         if use_pbc and pbc_map_fn is not None:
             @jax.custom_vjp
             def wrapped_energy_fn(position, **kwargs):
@@ -884,10 +880,8 @@ shake bonh para sele all end
 
             wrapped_force_fn = jax_md_force_fn
 
-        # Shift: do NOT wrap every timestep (same as ASE). pbc_map is discontinuous;
-        # wrapping after each step creates inconsistent phase-space (positions jumped,
-        # velocities unchanged) and breaks NVE energy conservation. Calculator applies
-        # pbc_map internally for forces; integration uses unwrapped coordinates.
+        # Shift: do NOT wrap every timestep (same as ASE). Integration uses unwrapped
+        # coordinates; calculator applies MIC internally for energy/forces.
         _displacement, _shift_free = space.free()
         shift = _shift_free
         displacement = _displacement

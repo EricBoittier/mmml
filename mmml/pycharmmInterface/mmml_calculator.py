@@ -25,7 +25,6 @@ from scipy.optimize import minimize as scipy_minimize
 
 # In your module that defines spherical_cutoff_calculator
 import jax.numpy as jnp
-from mmml.pycharmmInterface.pbc_prep_factory import make_pbc_mapper
 from mmml.pycharmmInterface.pbc_utils_jax import (
     mic_displacement,
     mic_displacements_batched,
@@ -750,7 +749,6 @@ def setup_calculator(
 
     if cell:
         MODEL.use_pbc = True
-        from mmml.pycharmmInterface.pbc_prep_factory import make_pbc_mapper
         cell_arr = jnp.asarray(cell)
         if cell_arr.ndim == 0:
             cell = jnp.asarray([[float(cell), 0, 0], [0, float(cell), 0], [0, 0, float(cell)]])
@@ -761,19 +759,12 @@ def setup_calculator(
             cell = jnp.asarray(cell_arr, dtype=jnp.float64)
         else:
             raise ValueError(f"cell must be scalar, (3,), or (3,3); got {cell_arr.shape}")
-        mol_id = None
-        try:
-            # for now just use a simple array of integers for the molecule id
-            # in order e.g. [0, 0, 0, 1, 1, 1, 2, 2, 2, ...] for n_atoms_monomer = 3
-            mol_id_np = jnp.asarray([i * jnp.ones(ATOMS_PER_MONOMER,
-             dtype=jnp.int32) for i in np.arange(n_monomers)], dtype=jnp.int32)
-            mol_id = jnp.asarray(mol_id_np, dtype=jnp.int32)
-        except Exception:
-            print("No mol_id provided")
-            mol_id = None
-        do_pbc_map = True
-        pbc_map = make_pbc_mapper(cell=cell, mol_id=mol_id, n_monomers=n_monomers)
+        # MIC-only PBC: no coordinate transform, avoids boundary discontinuity.
+        pbc_cell = cell
+        do_pbc_map = False
+        pbc_map = None
     else:
+        pbc_cell = None
         pbc_map = do_pbc_map = False
 
 
@@ -875,7 +866,6 @@ def setup_calculator(
         pair_idx_atom_atom = pair_idxs_np[:, None, :] + pair_idxs_product[None,...]
         pair_idx_atom_atom = pair_idx_atom_atom.reshape(-1, 2)
         
-        pbc_cell = cell if do_pbc_map else None
         if pbc_cell is not None:
             pos_dst = R[pair_idx_atom_atom[:, 1]]
             pos_src = R[pair_idx_atom_atom[:, 0]]
@@ -1256,7 +1246,7 @@ def setup_calculator(
 
         # Flat bottom potential: constrain COM to center (e.g. box center for PBC)
         # V = 0 when |d| <= R, else V = k * (|d| - R)^2
-        _pbc_cell = cell if do_pbc_map else None
+        _pbc_cell = pbc_cell
         if flat_bottom_radius is not None and flat_bottom_radius > 0:
             from ase.data import atomic_masses as ase_atomic_masses
             masses = jnp.take(jnp.array(ase_atomic_masses), atomic_numbers)
@@ -1374,7 +1364,7 @@ def setup_calculator(
                 batch_size=BATCH_SIZE,
                 batch_mask=batches["batch_mask"],
                 atom_mask=batches["atom_mask"],
-                cell=cell if do_pbc_map else None,
+                cell=pbc_cell,
             )
     
         return apply_model, batches
@@ -1623,38 +1613,7 @@ def setup_calculator(
                 R = atoms.get_positions()
                 Z = atoms.get_atomic_numbers()
 
-                # PBC: prefer atoms.cell when available; fallback to setup pbc_map.
-                # Cache pbc_map when cell is unchanged to avoid recreating it every step.
-                pbc_map_to_use = self.pbc_map
-                if self.do_pbc_map and self.pbc_map is not None:
-                    atoms_cell = _ase_cell_to_3x3(atoms)
-                    if atoms_cell is not None:
-                        if self.pbc_cell is not None:
-                            if not np.allclose(atoms_cell, self.pbc_cell, atol=1e-6, rtol=1e-5):
-                                warnings.warn(
-                                    f"atoms.cell differs from setup cell: max |diff| = "
-                                    f"{np.max(np.abs(atoms_cell - self.pbc_cell)):.4e} Å. "
-                                    "Using atoms.cell for this step.",
-                                    UserWarning,
-                                    stacklevel=2,
-                                )
-                        if (
-                            self._pbc_map_cache is not None
-                            and self._pbc_map_cache_cell is not None
-                            and np.allclose(atoms_cell, self._pbc_map_cache_cell, atol=1e-8, rtol=1e-8)
-                        ):
-                            pbc_map_to_use = self._pbc_map_cache
-                        else:
-                            pbc_map_to_use = make_pbc_mapper(
-                                cell=jnp.asarray(atoms_cell),
-                                mol_id=None,
-                                n_monomers=self.n_monomers,
-                            )
-                            self._pbc_map_cache = pbc_map_to_use
-                            self._pbc_map_cache_cell = atoms_cell.copy()
-                    elif self.pbc_map is None:
-                        self.do_pbc_map = False
-
+                # MIC-only PBC: pass R directly, no coordinate transform.
                 expected_atoms = self.n_monomers * self.atoms_per_monomer
                 if len(Z) != expected_atoms:
                     raise ValueError(
@@ -1677,11 +1636,9 @@ def setup_calculator(
 
                 out = {}
 
-                R_mapped = pbc_map_to_use(R) if (self.do_pbc_map and pbc_map_to_use is not None) else R
-                
                 # Compute ModelOutput to get forces directly (more stable)
                 out = spherical_cutoff_calculator(
-                    positions=R_mapped,
+                    positions=R,
                     atomic_numbers=Z,
                     n_monomers=self.n_monomers,
                     cutoff_params=self.cutoff_params,
@@ -1691,12 +1648,9 @@ def setup_calculator(
                     debug=self.debug,
                 )
                 
-                # Use forces directly from ModelOutput (computed via explicit gradients, more stable)
+                # Use forces directly from ModelOutput (MIC-only: no force transform needed)
                 F = out.forces
-                # Transform forces from R_mapped space back to R space (chain rule: F_orig = J^T F_mapped)
-                if self.do_pbc_map and pbc_map_to_use is not None and hasattr(pbc_map_to_use, "transform_forces"):
-                    F = pbc_map_to_use.transform_forces(R, F)
-                
+
                 # For energy, we can still use autodiff if needed, but for now use directly
                 # The energy from ModelOutput is already correct
                 E = out.energy
@@ -1967,11 +1921,7 @@ def setup_calculator(
                 verbose: If True, store full ModelOutput breakdown in results.
                          If None, defaults to debug value.
             """
-            pbc_cell = (
-                np.asarray(cell).reshape(3, 3)
-                if (do_pbc_map and cell is not None and np.size(cell) >= 9)
-                else None
-            )
+            pbc_cell_for_calc = np.asarray(pbc_cell) if pbc_cell is not None else None
 
             calculator = AseDimerCalculator(
                 n_monomers=n_monomers,
@@ -1985,7 +1935,7 @@ def setup_calculator(
                 force_conversion_factor=force_conversion_factor,
                 do_pbc_map=do_pbc_map,
                 pbc_map=pbc_map,
-                pbc_cell=pbc_cell,
+                pbc_cell=pbc_cell_for_calc,
                 verbose=verbose,
             )
 

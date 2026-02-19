@@ -1,9 +1,8 @@
 """
 Test that ASE calculator and JAX-MD produce consistent energies and forces for PBC.
 
-Verifies that the ASE AseDimerCalculator (used in ASE MD) and the JAX-MD wrapped_energy_fn
-(used in JAX-MD simulations) yield the same energy and forces for the same configuration.
-This ensures PBC handling is aligned between both code paths.
+Verifies that the ASE AseDimerCalculator and JAX-MD energy_fn yield the same energy
+and forces for the same configuration. Uses MIC-only PBC (no coordinate transform).
 """
 import importlib.util
 from pathlib import Path
@@ -36,10 +35,10 @@ def _get_ckpt():
 )
 def test_ase_jaxmd_pbc_energy_forces_consistency():
     """
-    Compare ASE calculator energy/forces with JAX-MD wrapped_energy_fn for the same PBC config.
+    Compare ASE calculator energy/forces with JAX-MD energy_fn for the same PBC config.
 
-    Uses the same pbc_map and spherical_cutoff_calculator for both paths, mirroring the
-    setup in run_sim.py. Asserts energies and forces match within tolerance.
+    Uses MIC-only PBC (no coordinate transform). Both paths use spherical_cutoff_calculator
+    with positions directly; MIC is applied internally. Asserts energies and forces match.
     """
     if not _can_import("jax"):
         pytest.skip("jax not available in this environment")
@@ -59,7 +58,6 @@ def test_ase_jaxmd_pbc_energy_forces_consistency():
 
     from mmml.pycharmmInterface.mmml_calculator import setup_calculator
     from mmml.pycharmmInterface.cutoffs import CutoffParameters
-    from mmml.pycharmmInterface.pbc_prep_factory import make_pbc_mapper
 
     n_monomers = 2
     n_atoms_monomer = 10
@@ -81,11 +79,6 @@ def test_ase_jaxmd_pbc_energy_forces_consistency():
         [0, cell_length, 0],
         [0, 0, cell_length],
     ])
-    mol_id = jnp.array([
-        i * jnp.ones(n_atoms_monomer, dtype=jnp.int32)
-        for i in range(n_monomers)
-    ], dtype=jnp.int32)
-    pbc_map = make_pbc_mapper(cell=cell_matrix, mol_id=mol_id, n_monomers=n_monomers)
 
     cutoff_params = CutoffParameters()
     key = jax.random.PRNGKey(42)
@@ -100,8 +93,6 @@ def test_ase_jaxmd_pbc_energy_forces_consistency():
         atomic_positions=np.array(R),
         n_monomers=n_monomers,
         cutoff_params=cutoff_params,
-        do_pbc_map=True,
-        pbc_map=pbc_map,
     )
 
     atoms = ase.Atoms(np.array(Z), np.array(R), cell=np.array(cell_matrix), pbc=True)
@@ -124,38 +115,8 @@ def test_ase_jaxmd_pbc_energy_forces_consistency():
         )
         return result.energy.reshape(-1)[0]
 
-    @jax.custom_vjp
-    def wrapped_energy_fn(position, **kwargs):
-        pos = jnp.array(position)
-        return jax_md_energy_fn(pbc_map(pos), **kwargs)
-
-    def wrapped_energy_fn_fwd(position, **kwargs):
-        pos = jnp.array(position)
-        R_mapped = pbc_map(pos)
-        E = jax_md_energy_fn(R_mapped, **kwargs)
-        return E, (pos, R_mapped)
-
-    def wrapped_energy_fn_bwd(res, g, **kwargs):
-        pos, R_mapped = res
-        result = spherical_cutoff_calculator(
-            atomic_numbers=Z,
-            positions=R_mapped,
-            n_monomers=n_monomers,
-            cutoff_params=cutoff_params,
-            doML=True,
-            doMM=False,
-            doML_dimer=True,
-            debug=False,
-        )
-        F_mapped = result.forces
-        F_orig = pbc_map.transform_forces(pos, F_mapped)
-        return (F_orig,)
-
-    wrapped_energy_fn.defvjp(wrapped_energy_fn_fwd, wrapped_energy_fn_bwd)
-    wrapped_energy_fn = jit(wrapped_energy_fn)
-
-    E_jax = float(wrapped_energy_fn(R))
-    F_jax = np.array(-jax.grad(wrapped_energy_fn)(R))
+    E_jax = float(jax_md_energy_fn(R))
+    F_jax = np.array(-jax.grad(jax_md_energy_fn)(R))
 
     rtol, atol = 1e-4, 1e-3
     assert np.isclose(E_ase, E_jax, rtol=rtol, atol=atol), (

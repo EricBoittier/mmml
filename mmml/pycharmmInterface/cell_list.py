@@ -32,6 +32,35 @@ except ModuleNotFoundError:
 
 
 # ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _wrap_groups_np(
+    positions: np.ndarray,
+    cell_matrix: np.ndarray,
+    monomer_offsets: np.ndarray,
+) -> np.ndarray:
+    """Wrap each monomer as a unit into the primary cell (keeps molecules intact).
+
+    For each monomer: wrap COM to [0,1)^3, apply same shift to all atoms in group.
+    """
+    R = np.asarray(positions, dtype=np.float64).copy()
+    inv_cell = np.linalg.inv(cell_matrix)
+    n_monomers = len(monomer_offsets) - 1
+    for mi in range(n_monomers):
+        start, end = int(monomer_offsets[mi]), int(monomer_offsets[mi + 1])
+        g = np.arange(start, end)
+        com = R[g].mean(axis=0)
+        frac_com = (inv_cell.T @ com)  # fractional coords of COM
+        frac_wrapped = frac_com - np.floor(frac_com)
+        com_wrapped = frac_wrapped @ cell_matrix
+        shift = com_wrapped - com
+        R[g] += shift
+    return R
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -72,7 +101,11 @@ def build_cell_list(
     N = positions.shape[0]
     inv_cell = np.linalg.inv(cell_matrix)
 
-    # Fractional coordinates
+    # When monomer_offsets provided: wrap by molecule for binning (keeps molecules intact)
+    if monomer_offsets is not None:
+        positions = _wrap_groups_np(positions, cell_matrix, np.asarray(monomer_offsets))
+
+    # Fractional coordinates for cell assignment
     frac = positions @ inv_cell.T
     frac = frac - np.floor(frac)  # wrap into [0, 1)
 

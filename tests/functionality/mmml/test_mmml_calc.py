@@ -155,9 +155,8 @@ def test_check_lattice_invariance():
 		check_lattice_invariance,
 	)
 	from mmml.pycharmmInterface.cutoffs import CutoffParameters
-	from mmml.pycharmmInterface.pbc_prep_factory import make_pbc_mapper
 
-	# Setup calculator with PBC (cell=40 Å cubic)
+	# Setup calculator with PBC (cell=40 Å cubic), MIC-only
 	cell_length = 40.0
 	factory = setup_calculator(
 		ATOMS_PER_MONOMER=10,
@@ -168,17 +167,11 @@ def test_check_lattice_invariance():
 		MAX_ATOMS_PER_SYSTEM=20,
 		cell=cell_length,
 	)
-	# Build pbc_map (factory does not expose it; create with same params)
 	cell_matrix = jnp.array([
 		[cell_length, 0, 0],
 		[0, cell_length, 0],
 		[0, 0, cell_length],
 	])
-	mol_id = jnp.array([
-		i * jnp.ones(10, dtype=jnp.int32)
-		for i in range(2)
-	], dtype=jnp.int32)
-	pbc_map = make_pbc_mapper(cell=cell_matrix, mol_id=mol_id, n_monomers=2)
 
 	# Create test positions and atomic numbers (2 monomers × 10 atoms)
 	import jax
@@ -192,14 +185,11 @@ def test_check_lattice_invariance():
 		atomic_positions=np.array(R),
 		n_monomers=2,
 		cutoff_params=cutoff_params,
-		do_pbc_map=True,
-		pbc_map=pbc_map,
 	)
 
 	def sc_fn(R_in, Z_in, n_monomers, cutoff_params_in):
-		R_mapped = pbc_map(R_in)
 		return spherical_cutoff_calculator(
-			positions=R_mapped,
+			positions=R_in,
 			atomic_numbers=Z_in,
 			n_monomers=n_monomers,
 			cutoff_params=cutoff_params_in,
@@ -239,8 +229,6 @@ def test_pbc_energy_invariance_via_ase():
 	import ase
 	from mmml.pycharmmInterface.mmml_calculator import setup_calculator
 	from mmml.pycharmmInterface.cutoffs import CutoffParameters
-	from mmml.pycharmmInterface.pbc_prep_factory import make_pbc_mapper
-
 	cell_length = 40.0
 	factory = setup_calculator(
 		ATOMS_PER_MONOMER=10,
@@ -256,12 +244,6 @@ def test_pbc_energy_invariance_via_ase():
 		[0, cell_length, 0],
 		[0, 0, cell_length],
 	])
-	mol_id = jnp.array([
-		i * jnp.ones(10, dtype=jnp.int32)
-		for i in range(2)
-	], dtype=jnp.int32)
-	pbc_map = make_pbc_mapper(cell=cell_matrix, mol_id=mol_id, n_monomers=2)
-
 	key = jax.random.PRNGKey(42)
 	R = np.asarray(jax.random.uniform(key, (20, 3), minval=2.0, maxval=cell_length - 2.0))
 	Z = np.array([6] * 20)
@@ -272,8 +254,6 @@ def test_pbc_energy_invariance_via_ase():
 		atomic_positions=R,
 		n_monomers=2,
 		cutoff_params=cutoff_params,
-		do_pbc_map=True,
-		pbc_map=pbc_map,
 	)
 
 	atoms = ase.Atoms(Z, R, cell=cell_matrix, pbc=True)
@@ -319,8 +299,6 @@ def test_pbc_force_invariance():
 	import ase
 	from mmml.pycharmmInterface.mmml_calculator import setup_calculator
 	from mmml.pycharmmInterface.cutoffs import CutoffParameters
-	from mmml.pycharmmInterface.pbc_prep_factory import make_pbc_mapper
-
 	cell_length = 40.0
 	factory = setup_calculator(
 		ATOMS_PER_MONOMER=10,
@@ -336,12 +314,6 @@ def test_pbc_force_invariance():
 		[0, cell_length, 0],
 		[0, 0, cell_length],
 	])
-	mol_id = jnp.array([
-		i * jnp.ones(10, dtype=jnp.int32)
-		for i in range(2)
-	], dtype=jnp.int32)
-	pbc_map = make_pbc_mapper(cell=cell_matrix, mol_id=mol_id, n_monomers=2)
-
 	key = jax.random.PRNGKey(42)
 	R = np.asarray(jax.random.uniform(key, (20, 3), minval=2.0, maxval=cell_length - 2.0))
 	Z = np.array([6] * 20)
@@ -352,8 +324,6 @@ def test_pbc_force_invariance():
 		atomic_positions=R,
 		n_monomers=2,
 		cutoff_params=cutoff_params,
-		do_pbc_map=True,
-		pbc_map=pbc_map,
 	)
 
 	atoms = ase.Atoms(Z, R, cell=cell_matrix, pbc=True)
@@ -411,7 +381,6 @@ def test_pbc_energy_invariance_ml_mm():
 		check_lattice_invariance,
 	)
 	from mmml.pycharmmInterface.cutoffs import CutoffParameters
-	from mmml.pycharmmInterface.pbc_prep_factory import make_pbc_mapper
 
 	try:
 		from mmml.pycharmmInterface.setupBox import setup_box_generic
@@ -452,11 +421,6 @@ def test_pbc_energy_invariance_ml_mm():
 		[0, cell_length, 0],
 		[0, 0, cell_length],
 	])
-	mol_id = jnp.array([
-		i * jnp.ones(10, dtype=jnp.int32)
-		for i in range(2)
-	], dtype=jnp.int32)
-	pbc_map = make_pbc_mapper(cell=cell_matrix, mol_id=mol_id, n_monomers=2)
 
 	cutoff_params = CutoffParameters()
 	calc, spherical_cutoff_calculator = factory(
@@ -464,14 +428,11 @@ def test_pbc_energy_invariance_ml_mm():
 		atomic_positions=R,
 		n_monomers=2,
 		cutoff_params=cutoff_params,
-		do_pbc_map=True,
-		pbc_map=pbc_map,
 	)
 
 	def sc_fn(R_in, Z_in, n_monomers, cutoff_params_in):
-		R_mapped = pbc_map(R_in)
 		return spherical_cutoff_calculator(
-			positions=R_mapped,
+			positions=R_in,
 			atomic_numbers=Z_in,
 			n_monomers=n_monomers,
 			cutoff_params=cutoff_params_in,
@@ -492,7 +453,7 @@ def test_pbc_energy_invariance_ml_mm():
 def test_pbc_force_gradient_numerical():
 	"""
 	Numerical gradient of energy vs positions; compare against atoms.get_forces()
-	to ensure transform_forces (VJP) is correct.
+	to ensure forces match -dE/dR (MIC-only, no coordinate transform).
 	"""
 	if not _can_import("jax"):
 		pytest.skip("jax not available in this environment")
@@ -511,8 +472,6 @@ def test_pbc_force_gradient_numerical():
 	import ase
 	from mmml.pycharmmInterface.mmml_calculator import setup_calculator
 	from mmml.pycharmmInterface.cutoffs import CutoffParameters
-	from mmml.pycharmmInterface.pbc_prep_factory import make_pbc_mapper
-
 	cell_length = 40.0
 	factory = setup_calculator(
 		ATOMS_PER_MONOMER=10,
@@ -528,12 +487,6 @@ def test_pbc_force_gradient_numerical():
 		[0, cell_length, 0],
 		[0, 0, cell_length],
 	])
-	mol_id = jnp.array([
-		i * jnp.ones(10, dtype=jnp.int32)
-		for i in range(2)
-	], dtype=jnp.int32)
-	pbc_map = make_pbc_mapper(cell=cell_matrix, mol_id=mol_id, n_monomers=2)
-
 	key = jax.random.PRNGKey(42)
 	R = np.asarray(jax.random.uniform(key, (20, 3), minval=2.0, maxval=cell_length - 2.0))
 	Z = np.array([6] * 20)
@@ -544,8 +497,6 @@ def test_pbc_force_gradient_numerical():
 		atomic_positions=R,
 		n_monomers=2,
 		cutoff_params=cutoff_params,
-		do_pbc_map=True,
-		pbc_map=pbc_map,
 	)
 
 	atoms = ase.Atoms(Z, R, cell=cell_matrix, pbc=True)
@@ -672,7 +623,6 @@ def test_pbc_energy_invariance_orthorhombic_cell():
 		check_lattice_invariance,
 	)
 	from mmml.pycharmmInterface.cutoffs import CutoffParameters
-	from mmml.pycharmmInterface.pbc_prep_factory import make_pbc_mapper
 
 	cell_lengths = (30.0, 40.0, 50.0)
 	cell_matrix = jnp.array([
@@ -689,11 +639,6 @@ def test_pbc_energy_invariance_orthorhombic_cell():
 		MAX_ATOMS_PER_SYSTEM=20,
 		cell=cell_lengths,
 	)
-	mol_id = jnp.array([
-		i * jnp.ones(10, dtype=jnp.int32)
-		for i in range(2)
-	], dtype=jnp.int32)
-	pbc_map = make_pbc_mapper(cell=cell_matrix, mol_id=mol_id, n_monomers=2)
 
 	key = jax.random.PRNGKey(123)
 	R = jax.random.uniform(
@@ -709,14 +654,11 @@ def test_pbc_energy_invariance_orthorhombic_cell():
 		atomic_positions=np.array(R),
 		n_monomers=2,
 		cutoff_params=cutoff_params,
-		do_pbc_map=True,
-		pbc_map=pbc_map,
 	)
 
 	def sc_fn(R_in, Z_in, n_monomers, cutoff_params_in):
-		R_mapped = pbc_map(R_in)
 		return spherical_cutoff_calculator(
-			positions=R_mapped,
+			positions=R_in,
 			atomic_numbers=Z_in,
 			n_monomers=n_monomers,
 			cutoff_params=cutoff_params_in,
