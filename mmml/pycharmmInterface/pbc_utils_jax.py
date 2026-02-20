@@ -39,7 +39,7 @@ def wrap_groups(R: Array, groups: list[Array], cell: Array) -> Array:
     ``cart_coords(S_wrapped) - com`` formulation."""
     R_out = R
     for g in groups:
-        com = R[g].mean(axis=0)
+        com = jnp.sum(R[g], axis=0, dtype=R.dtype) / g.shape[0]
         S_com = frac_coords(com[None, :], cell)[0]
         lattice_shift = -jnp.floor(S_com)
         cart_shift = cart_coords(lattice_shift[None, :], cell)[0]
