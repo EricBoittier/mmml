@@ -311,6 +311,7 @@ def run(args: argparse.Namespace) -> int:
         from ase.units import _amu
 
         import jax.numpy as jnp
+        from mmml.pycharmmInterface.pbc_utils_jax import wrap_groups
 
         import jax, e3x
         from jax import jit, grad, lax, ops, random
@@ -1141,11 +1142,27 @@ shake bonh para sele all end
             )
 
             # ========================================================================
+            # PBC WRAPPING SETUP
+            # ========================================================================
+            if use_pbc:
+                _cell_jax = jnp.asarray(atoms.get_cell()[:], dtype=jnp.float64)
+                _monomer_groups = [
+                    jnp.arange(int(monomer_offsets[m]), int(monomer_offsets[m + 1]))
+                    for m in range(n_monomers)
+                ]
+                print(f"PBC wrapping enabled: {n_monomers} monomer groups, "
+                      f"wrapping every {steps_per_recording} steps")
+
+            # ========================================================================
             # MAIN SIMULATION LOOP
             # ========================================================================
             for i in range(total_records):
                 state = sim(state)
-                
+
+                if use_pbc:
+                    wrapped_pos = wrap_groups(state.position, _monomer_groups, _cell_jax)
+                    state = state.set(position=wrapped_pos)
+
                 # Store current position for trajectory analysis
                 nhc_positions.append(state.position)
                     
