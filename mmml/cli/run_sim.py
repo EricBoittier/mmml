@@ -1128,7 +1128,7 @@ shake bonh para sele all end
                 n_atoms=len(atoms),
                 buffer_size=min(100, total_records),
                 include_positions=True,
-                include_velocities=False,
+                include_velocities=True,
                 scalar_quantities=["total_energy", "time_ps"],
                 attrs={
                     "ensemble": args.ensemble,
@@ -1136,6 +1136,7 @@ shake bonh para sele all end
                     "dt_ps": dt,
                     "steps_per_recording": steps_per_recording,
                     "n_atoms": len(atoms),
+                    "atomic_numbers": atoms.get_atomic_numbers(),
                 },
             )
 
@@ -1174,6 +1175,7 @@ shake bonh para sele all end
                         total_energy=e_tot,
                         time_ps=time_ps,
                         positions=state.position,
+                        velocities=state.momentum / state.mass,
                     )
 
                     # Stop on numerical instability (NaN, Inf, or energy blow-up to 0)

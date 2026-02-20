@@ -56,6 +56,12 @@ import ase.io
 from ase.io.trajectory import Trajectory
 from ase.data import atomic_masses as ASE_ATOMIC_MASSES
 
+try:
+    import h5py
+    _HAS_H5PY = True
+except ImportError:
+    _HAS_H5PY = False
+
 import sys
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -150,6 +156,98 @@ def compute_magnetic_dipoles(positions, velocities, charges):
         cross = np.cross(positions[t], velocities[t])   # (N, 3)
         m[t] = np.sum(charges[t, :, None] * cross, axis=0) / (2.0 * C_AU)
     return m
+
+
+# =====================================================================
+# HDF5 trajectory loading
+# =====================================================================
+def load_hdf5_trajectory(path):
+    """Load positions, velocities, and metadata from an HDF5 trajectory.
+
+    Reads files written by ``mmml.utils.hdf5_reporter.HDF5Reporter``.
+
+    Returns
+    -------
+    positions  : (T, N, 3)
+    velocities : (T, N, 3) or None
+    dt_fs      : float or None  (timestep in fs, if stored)
+    metadata   : dict           (all scalar time-series and HDF5 attrs)
+    """
+    if not _HAS_H5PY:
+        raise ImportError("h5py is required to load HDF5 trajectories")
+
+    with h5py.File(str(path), "r") as f:
+        positions = f["positions"][:]              # (T, N, 3)
+
+        velocities = None
+        if "velocities" in f:
+            velocities = f["velocities"][:]        # (T, N, 3)
+
+        metadata = {}
+        for k in f.keys():
+            if k not in ("positions", "velocities"):
+                metadata[k] = f[k][:]
+        for k, v in f.attrs.items():
+            metadata[f"attr_{k}"] = v
+
+        dt_fs = None
+        if "attr_dt_ps" in metadata:
+            dt_fs = float(metadata["attr_dt_ps"]) * 1000.0
+        elif "time_ps" in metadata and len(metadata["time_ps"]) > 1:
+            dt_fs = float(metadata["time_ps"][1] - metadata["time_ps"][0]) * 1000.0
+
+        n_steps_per_rec = metadata.get("attr_steps_per_recording", None)
+        if dt_fs is not None and n_steps_per_rec is not None:
+            dt_fs = dt_fs / float(n_steps_per_rec)
+
+    return positions, velocities, dt_fs, metadata
+
+
+def extract_properties_hdf5(positions, velocities, calc, atomic_numbers,
+                            recompute_dipole=False):
+    """Compute dipoles and charges from HDF5-loaded positions/velocities.
+
+    Parameters
+    ----------
+    positions      : (T, N, 3)
+    velocities     : (T, N, 3) or None
+    calc           : ASE calculator with dipole/charge support
+    atomic_numbers : (N,) int array
+    recompute_dipole : bool
+
+    Returns
+    -------
+    positions, velocities, dipoles, charges  (same convention as extract_properties)
+    """
+    T, N, _ = positions.shape
+
+    if velocities is None:
+        velocities = np.zeros_like(positions)
+        print("    WARNING: HDF5 has no velocities — "
+              "VCD from correlation functions will be zero.")
+
+    dipoles = np.zeros((T, 3))
+    charges = np.zeros((T, N))
+
+    dummy = ase.Atoms(numbers=atomic_numbers,
+                      positions=positions[0])
+    dummy.calc = calc
+
+    for i in range(T):
+        dummy.set_positions(positions[i])
+        dummy.get_potential_energy()
+        dipoles[i] = calc.results.get("dipole", np.zeros(3))
+
+        if hasattr(calc, "get_atomic_charges"):
+            q, _ = calc.get_atomic_charges(dummy)
+            charges[i] = q
+        else:
+            charges[i] = atomic_numbers.astype(float)
+
+        if (i + 1) % 200 == 0 or i == 0:
+            print(f"      frame {i+1}/{T}")
+
+    return positions, velocities, dipoles, charges
 
 
 # =====================================================================
@@ -707,19 +805,35 @@ def main(args=None):
     # ---- load trajectory -----------------------------------------------
     print(f"\n  Trajectory : {args.trajectory}")
     traj_path = Path(args.trajectory)
-    if traj_path.suffix == '.traj':
-        traj_frames = list(Trajectory(str(traj_path)))
-    else:
-        traj_frames = ase.io.read(str(traj_path), index=':')
+    is_hdf5 = traj_path.suffix in ('.h5', '.hdf5')
 
-    T = len(traj_frames)
-    N = len(traj_frames[0])
+    if is_hdf5:
+        hdf5_pos, hdf5_vel, hdf5_dt, hdf5_meta = load_hdf5_trajectory(traj_path)
+        T, N = hdf5_pos.shape[:2]
+        traj_frames = None
+        print(f"  Format     : HDF5")
+        if hdf5_vel is not None:
+            print(f"  Velocities : yes  ({hdf5_vel.shape})")
+        else:
+            print(f"  Velocities : no")
+    else:
+        if traj_path.suffix == '.traj':
+            traj_frames = list(Trajectory(str(traj_path)))
+        else:
+            traj_frames = ase.io.read(str(traj_path), index=':')
+        T = len(traj_frames)
+        N = len(traj_frames[0])
+        hdf5_pos = hdf5_vel = hdf5_dt = hdf5_meta = None
+
     print(f"  Frames     : {T}")
     print(f"  Atoms      : {N}")
 
     # ---- timestep ------------------------------------------------------
     dt_fs = args.dt
-    if dt_fs is None:
+    if dt_fs is None and is_hdf5 and hdf5_dt is not None:
+        dt_fs = hdf5_dt
+        print(f"  Timestep   : {dt_fs} fs  (from HDF5 metadata)")
+    elif dt_fs is None:
         dt_fs = 0.5
         print(f"  Timestep   : {dt_fs} fs  (default — use --dt to override)")
     else:
@@ -737,14 +851,24 @@ def main(args=None):
     # ================================================================
     # 1.  Extract  μ(t), q(t), r(t), v(t)
     # ================================================================
-    need_calc = (args.recompute_dipole or args.recompute_charges
-                 or args.method in ('correlation', 'both'))
     print(f"\n[1] Extracting trajectory properties ...")
-    positions, velocities, dipoles, charges = extract_properties(
-        traj_frames, calc=calc,
-        recompute_dipole=args.recompute_dipole,
-        recompute_charges=args.recompute_charges,
-    )
+    if is_hdf5:
+        atomic_numbers = hdf5_meta.get("attr_atomic_numbers", None)
+        if atomic_numbers is None:
+            raise ValueError(
+                "HDF5 file has no 'atomic_numbers' attribute. "
+                "Pass --atomic-numbers or add it to the HDF5 attrs.")
+        positions, velocities, dipoles, charges = extract_properties_hdf5(
+            hdf5_pos, hdf5_vel, calc,
+            atomic_numbers=np.asarray(atomic_numbers, dtype=int),
+            recompute_dipole=args.recompute_dipole,
+        )
+    else:
+        positions, velocities, dipoles, charges = extract_properties(
+            traj_frames, calc=calc,
+            recompute_dipole=args.recompute_dipole,
+            recompute_charges=args.recompute_charges,
+        )
 
     # ================================================================
     # 2.  Magnetic dipoles  m(t)
@@ -914,10 +1038,16 @@ def main(args=None):
 
         for si, idx in enumerate(snap_idx):
             t_fs = idx * dt_fs
-            atoms = traj_frames[idx].copy()
-            if 'electric_field' not in atoms.info:
-                atoms.info['electric_field'] = \
-                    traj_frames[0].info.get('electric_field', [0, 0, 0])
+            if is_hdf5:
+                atoms = ase.Atoms(
+                    numbers=np.asarray(hdf5_meta["attr_atomic_numbers"], dtype=int),
+                    positions=hdf5_pos[idx])
+                atoms.info['electric_field'] = [0, 0, 0]
+            else:
+                atoms = traj_frames[idx].copy()
+                if 'electric_field' not in atoms.info:
+                    atoms.info['electric_field'] = \
+                        traj_frames[0].info.get('electric_field', [0, 0, 0])
             atoms.calc = calc
 
             Z = atoms.get_atomic_numbers()
