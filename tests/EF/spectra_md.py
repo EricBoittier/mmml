@@ -578,7 +578,7 @@ def get_args(**kwargs):
         "window_fn": "hann",
         "zero_pad": 4,
         "transient": False,
-        "window_size": 500,
+        "window_size": 20,
         "stride": 100,
         "spectra_2d": False,
         "waiting_times": [0, 50, 200],
