@@ -30,15 +30,20 @@ def wrap_positions(R: Array, cell: Array) -> Array:
 
 def wrap_groups(R: Array, groups: list[Array], cell: Array) -> Array:
     """Wrap each group (monomer) as a unit into the primary cell.
-    Keeps monomers intact: wrap CoM into cell, then apply same shift to all atoms in group."""
+    Keeps monomers intact: shift all atoms by the same integer-lattice translation
+    so the group's CoM lands in [0,1)^3.
+
+    Numerically stable: the shift is ``cart_coords(-floor(S_com))``, which is
+    exactly zero for in-box molecules (floor==0) and an exact lattice vector
+    otherwise. This avoids the frac->cart round-trip noise of the naive
+    ``cart_coords(S_wrapped) - com`` formulation."""
     R_out = R
     for g in groups:
         com = R[g].mean(axis=0)
         S_com = frac_coords(com[None, :], cell)[0]
-        S_wrapped = S_com - jnp.floor(S_com)
-        com_wrapped = cart_coords(S_wrapped[None, :], cell)[0]
-        shift = com_wrapped - com
-        R_out = R_out.at[g].add(shift)
+        lattice_shift = -jnp.floor(S_com)
+        cart_shift = cart_coords(lattice_shift[None, :], cell)[0]
+        R_out = R_out.at[g].add(cart_shift)
     return R_out
 
 

@@ -1145,7 +1145,7 @@ shake bonh para sele all end
             # PBC WRAPPING SETUP
             # ========================================================================
             if use_pbc:
-                _cell_jax = jnp.asarray(atoms.get_cell()[:], dtype=jnp.float64)
+                _cell_jax = jnp.asarray(atoms.get_cell()[:], dtype=jnp.float32)
                 _monomer_groups = [
                     jnp.arange(int(monomer_offsets[m]), int(monomer_offsets[m + 1]))
                     for m in range(n_monomers)
