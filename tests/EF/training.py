@@ -345,25 +345,32 @@ class MessagePassingModel(nn.Module):
         atomic_charges = e3x.nn.silu(atomic_charges)
         atomic_charges = jnp.squeeze(atomic_charges, axis=(-1, -2, -3))  # (B*N,)
 
-        # Predict atomic dipoles (3D vector per atom)
-        # Use original x_orig and change max_degree to 1
-        x_dipole = e3x.nn.change_max_degree_or_type(x_orig, max_degree=1, include_pseudotensors=False)
-        # run through a tensor dense layer to get the dipole in the correct shape
-        x_dipole = e3x.nn.TensorDense(max_degree=1)(x_dipole)
-        x_dipole = e3x.nn.silu(x_dipole)
-        # x_dipole shape: (B*N, parity, 4, features) where 4 = (lmax+1)^2 = (1+1)^2
-        # Index 0: l=0 (scalar), indices 1-3: l=1 (dipole, 3 components)
-        # Apply Dense to reduce features dimension: (B*N, parity, 4, features) -> (B*N, parity, 4, 1)
-        x_dipole = e3x.nn.Dense(1, use_bias=False, kernel_init=jax.nn.initializers.zeros)(x_dipole)
-        x_dipole = e3x.nn.silu(x_dipole)
-        # Extract l=1 components (indices 1-3) and take real part (first parity dimension, index 0)
-        # Shape: (B*N, parity, 3, 1) -> take parity=0 (real part) -> (B*N, 3, 1) -> squeeze -> (B*N, 3)
-        atomic_dipoles = x_dipole[:, 0, 1:4, 0]  # (B*N, 3) - take first parity (real), l=1 components, squeeze features
+        if self.max_degree > 0:
+            # if max degree > 0
+            # Predict atomic dipoles (3D vector per atom)
+            # Use original x_orig and change max_degree to 1
+            x_dipole = e3x.nn.change_max_degree_or_type(x_orig, max_degree=1, include_pseudotensors=False)
+            # run through a tensor dense layer to get the dipole in the correct shape
+            x_dipole = e3x.nn.TensorDense(max_degree=1)(x_dipole)
+            x_dipole = e3x.nn.silu(x_dipole)
+            # x_dipole shape: (B*N, parity, 4, features) where 4 = (lmax+1)^2 = (1+1)^2
+            # Index 0: l=0 (scalar), indices 1-3: l=1 (dipole, 3 components)
+            # Apply Dense to reduce features dimension: (B*N, parity, 4, features) -> (B*N, parity, 4, 1)
+            x_dipole = e3x.nn.Dense(1, use_bias=False, kernel_init=jax.nn.initializers.zeros)(x_dipole)
+            x_dipole = e3x.nn.silu(x_dipole)
+            # Extract l=1 components (indices 1-3) and take real part (first parity dimension, index 0)
+            # Shape: (B*N, parity, 3, 1) -> take parity=0 (real part) -> (B*N, 3, 1) -> squeeze -> (B*N, 3)
+            atomic_dipoles = x_dipole[:, 0, 1:4, 0]  # (B*N, 3) - take first parity (real), l=1 components, squeeze features
+            dipoles_batched = atomic_dipoles.reshape(B, N, 3)  # (B, N, 3)
+        else:
+            dipoles_batched = jnp.zeros((B, N, 3))
+
+
+
         # Compute molecular dipole: μ = Σ(q_i * (r_i - COM)) + Σ(μ_i)
         # Reshape to (B, N, 3) for positions and dipoles, (B, N) for charges
         positions_batched = positions_flat.reshape(B, N, 3)  # (B, N, 3)
         charges_batched = atomic_charges.reshape(B, N)  # (B, N)
-        dipoles_batched = atomic_dipoles.reshape(B, N, 3)  # (B, N, 3)
 
         # Center of mass (using atomic masses or uniform weighting)
         # For simplicity, use uniform weighting (geometric center)
