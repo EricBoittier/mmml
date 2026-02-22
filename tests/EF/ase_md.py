@@ -195,6 +195,10 @@ def main_batched(args):
     print(f"  Backend     : {jax.default_backend()}")
 
     # ---- load initial geometry ------------------------------------------
+    # XYZ → single geometry, tiled to all replicas.
+    # Dataset with >= B structures → each replica gets a distinct geometry.
+    # Dataset with < B structures → single geometry, tiled.
+    R_multi = None  # (B, N, 3) when distinct geometries are available
     if args.xyz is not None:
         atoms_init = ase_io.read(args.xyz)
         Z = jnp.asarray(atoms_init.get_atomic_numbers(), dtype=jnp.int32)
@@ -202,14 +206,30 @@ def main_batched(args):
     else:
         dataset = np.load(args.data, allow_pickle=True)
         Z = jnp.asarray(dataset["Z"][args.index].astype(int), dtype=jnp.int32)
-        R_single = jnp.asarray(dataset["R"][args.index].astype(float),
-                                dtype=jnp.float32)
-        if R_single.ndim == 3:
-            R_single = R_single.squeeze(0)
+        n_dataset = len(dataset["R"])
+
+        if n_dataset >= args.index + B:
+            R_all = np.asarray(dataset["R"][args.index:args.index + B],
+                               dtype=np.float64)
+            R_multi = jnp.asarray(R_all, dtype=jnp.float32)
+            if R_multi.ndim == 4:
+                R_multi = R_multi.squeeze(1)
+            R_single = R_multi[0]
+        else:
+            R_single = jnp.asarray(dataset["R"][args.index].astype(float),
+                                    dtype=jnp.float32)
+            if R_single.ndim == 3:
+                R_single = R_single.squeeze(0)
 
     N = len(Z)
     print(f"  Atoms       : {N}")
     print(f"  Replicas    : {B}")
+    if R_multi is not None:
+        print(f"  Init geoms  : {B} distinct (dataset indices "
+              f"{args.index}..{args.index + B - 1})")
+    else:
+        src = "XYZ file" if args.xyz else "dataset"
+        print(f"  Init geoms  : single geometry from {src}, tiled")
 
     # ---- electric field -------------------------------------------------
     if args.electric_field is not None:
@@ -300,7 +320,11 @@ def main_batched(args):
         return energy, forces, dipole
 
     # ---- warm-up (JIT compile) ------------------------------------------
-    R0 = jnp.tile(R_single[None, :, :], (B, 1, 1))  # (B, N, 3)
+    if R_multi is not None:
+        R0 = R_multi                                    # (B, N, 3)
+    else:
+        R0 = jnp.tile(R_single[None, :, :], (B, 1, 1)) # (B, N, 3)
+
     print(f"\n  Warming up batched force function ...")
     t0 = time.perf_counter()
     E_w, F_w, mu_w = force_fn(R0)
@@ -311,6 +335,10 @@ def main_batched(args):
 
     # ---- optional geometry optimisation (single copy, then replicate) ---
     if args.optimize:
+        if R_multi is not None:
+            print("\n  WARNING: --optimize with distinct starting geometries "
+                  "only optimises the first structure and replicates it. "
+                  "Pre-optimise your dataset if you need per-replica minima.")
         from ase.optimize import BFGS, FIRE
         opt_cls = FIRE if args.optimizer == "fire" else BFGS
         print(f"\n  Geometry optimisation ({args.optimizer.upper()}, "
@@ -327,6 +355,7 @@ def main_batched(args):
         opt.run(fmax=args.fmax, steps=args.opt_steps)
         R_single = jnp.asarray(opt_atoms.get_positions(), dtype=jnp.float32)
         R0 = jnp.tile(R_single[None, :, :], (B, 1, 1))
+        R_multi = None
         del opt_calc
         E_opt, _, _ = force_fn(R0)
         print(f"  Optimised E = {float(E_opt[0]):.6f} eV")
