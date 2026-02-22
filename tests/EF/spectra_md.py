@@ -251,6 +251,172 @@ def extract_properties_hdf5(positions, velocities, calc, atomic_numbers,
 
 
 # =====================================================================
+# GPU-batched polarizability  α(t) = dμ/dEf  (for Raman)
+# =====================================================================
+def compute_polarizability_batched(positions, atomic_numbers, Ef,
+                                    model, params, chunk_size=32,
+                                    field_scale=0.001):
+    """Compute polarizability α(t) for every frame, GPU-batched.
+
+    Processes `chunk_size` frames in parallel through the model,
+    computing the Jacobian dμ/dEf via a shared-field trick that
+    avoids redundant cross-replica derivatives.
+
+    Parameters
+    ----------
+    positions      : (T, N, 3) float
+    atomic_numbers : (N,) int
+    Ef             : (3,) float — electric field in model input units
+    model          : MessagePassingModel
+    params         : model parameters
+    chunk_size     : int — frames per GPU batch
+    field_scale    : float — Ef_physical = Ef_input * field_scale
+
+    Returns
+    -------
+    alpha : (T, 3, 3) polarizability in atomic units (Bohr³)
+    """
+    import jax
+    import jax.numpy as jnp
+    import e3x
+    import functools
+    import time
+
+    T, N, _ = positions.shape
+    Z = jnp.asarray(atomic_numbers, dtype=jnp.int32)
+    Ef_jax = jnp.asarray(Ef, dtype=jnp.float32).reshape(3)
+
+    dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(N)
+    dst_idx = jnp.asarray(dst_idx, dtype=jnp.int32)
+    src_idx = jnp.asarray(src_idx, dtype=jnp.int32)
+
+    B = chunk_size
+    batch_segments = jnp.repeat(jnp.arange(B, dtype=jnp.int32), N)
+    offsets = jnp.arange(B, dtype=jnp.int32) * N
+    dst_flat = (dst_idx[None, :] + offsets[:, None]).reshape(-1)
+    src_flat = (src_idx[None, :] + offsets[:, None]).reshape(-1)
+    Z_batch = jnp.tile(Z[None, :], (B, 1))
+
+    @functools.partial(jax.jit, static_argnames=("batch_size",))
+    def _model_apply(params, atomic_numbers, positions, Ef,
+                     dst_idx_flat, src_idx_flat, batch_segments, batch_size,
+                     dst_idx=None, src_idx=None):
+        return model.apply(
+            params, atomic_numbers, positions, Ef,
+            dst_idx_flat=dst_idx_flat, src_idx_flat=src_idx_flat,
+            batch_segments=batch_segments, batch_size=batch_size,
+            dst_idx=dst_idx, src_idx=src_idx)
+
+    @jax.jit
+    def alpha_chunk(pos_batch):
+        """(B, N, 3) -> (B, 3, 3) polarizability."""
+        def dipole_fn(ef_shared):
+            ef_b = jnp.tile(ef_shared[None, :], (B, 1))
+            _, dipole = _model_apply(
+                params, Z_batch, pos_batch, ef_b,
+                dst_flat, src_flat, batch_segments, B,
+                dst_idx, src_idx)
+            return dipole  # (B, 3)
+        return jax.jacrev(dipole_fn)(Ef_jax)  # (B, 3, 3)
+
+    alpha_all = np.zeros((T, 3, 3), dtype=np.float32)
+    n_chunks = (T + B - 1) // B
+
+    t0 = time.perf_counter()
+    for ci in range(n_chunks):
+        start = ci * B
+        end = min(start + B, T)
+        actual = end - start
+
+        pos_pad = np.zeros((B, N, 3), dtype=np.float32)
+        pos_pad[:actual] = positions[start:end]
+
+        jac = alpha_chunk(jnp.asarray(pos_pad))
+        alpha_all[start:end] = np.asarray(jac)[:actual] / field_scale
+
+        if (ci + 1) % max(1, n_chunks // 10) == 0 or ci == 0:
+            print(f"      chunk {ci+1}/{n_chunks}")
+
+    print(f"      Done in {time.perf_counter() - t0:.2f} s")
+    return alpha_all
+
+
+def extract_dipoles_batched(positions, atomic_numbers, Ef,
+                             model, params, chunk_size=32):
+    """GPU-batched extraction of dipoles and charges from positions.
+
+    Much faster than per-frame ASE calculator calls when properties
+    are not already stored in the trajectory.
+
+    Returns
+    -------
+    dipoles        : (T, 3)
+    charges        : (T, N)
+    atomic_dipoles : (T, N, 3)
+    """
+    import jax
+    import jax.numpy as jnp
+    import e3x
+    import time
+
+    T, N, _ = positions.shape
+    Z = jnp.asarray(atomic_numbers, dtype=jnp.int32)
+    Ef_jax = jnp.asarray(Ef, dtype=jnp.float32).reshape(3)
+
+    dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(N)
+    dst_idx = jnp.asarray(dst_idx, dtype=jnp.int32)
+    src_idx = jnp.asarray(src_idx, dtype=jnp.int32)
+
+    B = chunk_size
+
+    dipoles = np.zeros((T, 3), dtype=np.float32)
+    charges = np.zeros((T, N), dtype=np.float32)
+    at_dipoles = np.zeros((T, N, 3), dtype=np.float32)
+
+    n_chunks = (T + B - 1) // B
+    t0 = time.perf_counter()
+
+    for ci in range(n_chunks):
+        start = ci * B
+        end = min(start + B, T)
+        actual = end - start
+
+        pos_pad = np.zeros((B, N, 3), dtype=np.float32)
+        pos_pad[:actual] = positions[start:end]
+
+        batch_segments = jnp.repeat(jnp.arange(B, dtype=jnp.int32), N)
+        offsets = jnp.arange(B, dtype=jnp.int32) * N
+        dst_flat = (dst_idx[None, :] + offsets[:, None]).reshape(-1)
+        src_flat = (src_idx[None, :] + offsets[:, None]).reshape(-1)
+        Z_batch = jnp.tile(Z[None, :], (B, 1))
+        Ef_batch = jnp.tile(Ef_jax[None, :], (B, 1))
+
+        (energy, dipole), state = model.apply(
+            params,
+            Z_batch, jnp.asarray(pos_pad), Ef_batch,
+            dst_idx_flat=dst_flat, src_idx_flat=src_flat,
+            batch_segments=batch_segments, batch_size=B,
+            dst_idx=dst_idx, src_idx=src_idx,
+            mutable=['intermediates'])
+
+        intermediates = state.get('intermediates', {})
+        q = intermediates.get('atomic_charges', (None,))[-1]
+        mu_at = intermediates.get('atomic_dipoles', (None,))[-1]
+
+        dipoles[start:end] = np.asarray(dipole)[:actual]
+        if q is not None:
+            charges[start:end] = np.asarray(q)[:actual]
+        if mu_at is not None:
+            at_dipoles[start:end] = np.asarray(mu_at)[:actual]
+
+        if (ci + 1) % max(1, n_chunks // 10) == 0 or ci == 0:
+            print(f"      chunk {ci+1}/{n_chunks}")
+
+    print(f"      Done in {time.perf_counter() - t0:.2f} s")
+    return dipoles, charges, at_dipoles
+
+
+# =====================================================================
 # FFT-based correlation functions
 # =====================================================================
 def _next_pow2(n):
@@ -280,6 +446,63 @@ def cross_correlation(a, b):
         ccf += np.fft.irfft(fa * np.conj(fb), n=n_fft)[:T]
     ccf /= np.arange(T, 0, -1)
     return ccf
+
+
+# =====================================================================
+# Raman from polarizability autocorrelation
+# =====================================================================
+def polarizability_autocorrelation(alpha_traj):
+    """Isotropic and anisotropic ACFs of the polarizability tensor.
+
+    Parameters
+    ----------
+    alpha_traj : (T, 3, 3) polarizability in atomic units
+
+    Returns
+    -------
+    acf_iso   : (T,) — ⟨ᾱ(0)·ᾱ(τ)⟩   where ᾱ = (1/3)Tr(α)
+    acf_aniso : (T,) — ⟨β(0):β(τ)⟩    where β = α - ᾱ·I  (traceless part)
+    """
+    T = len(alpha_traj)
+    n_fft = _next_pow2(2 * T)
+    norm = np.arange(T, 0, -1, dtype=float)
+
+    alpha_iso = np.trace(alpha_traj, axis1=1, axis2=2) / 3.0  # (T,)
+    ft = np.fft.rfft(alpha_iso, n=n_fft)
+    acf_iso = np.fft.irfft(ft * np.conj(ft), n=n_fft)[:T] / norm
+
+    beta = alpha_traj - alpha_iso[:, None, None] * np.eye(3)[None, :, :]
+    beta_flat = beta.reshape(T, 9)
+    acf_aniso = np.zeros(T)
+    for k in range(9):
+        ft = np.fft.rfft(beta_flat[:, k], n=n_fft)
+        acf_aniso += np.fft.irfft(ft * np.conj(ft), n=n_fft)[:T]
+    acf_aniso /= norm
+
+    return acf_iso, acf_aniso
+
+
+def raman_to_spectrum(acf_iso, acf_aniso, dt_fs,
+                      window='hann', zero_pad=4):
+    """Raman spectrum from isotropic/anisotropic polarizability ACFs.
+
+    Returns
+    -------
+    freq_cm     : (F,)
+    raman_par   : (F,) — I_∥  ∝ 45 ᾱ² + 4 γ²
+    raman_perp  : (F,) — I_⊥  ∝ 3 γ²
+    raman_total : (F,) — I_∥ + I_⊥
+    """
+    freq_cm, spec_iso = correlation_to_spectrum(
+        acf_iso, dt_fs, window=window, zero_pad=zero_pad, qcf=None)
+    _, spec_aniso = correlation_to_spectrum(
+        acf_aniso, dt_fs, window=window, zero_pad=zero_pad, qcf=None)
+
+    omega = np.where(freq_cm > 0, freq_cm, 0.0)
+    raman_par   = (45.0 * spec_iso + 4.0 * spec_aniso) * omega
+    raman_perp  = 3.0 * spec_aniso * omega
+    raman_total = raman_par + raman_perp
+    return freq_cm, raman_par, raman_perp, raman_total
 
 
 # =====================================================================
@@ -591,6 +814,9 @@ def get_args(**kwargs):
         "freq_min": 0.0,
         "freq_max": 4000.0,
         "output_dir": "spectra_md",
+        "raman": False,
+        "trajectories": None,
+        "batch_size": 32,
     }
     
     # Check if we're in a notebook/IPython environment
@@ -617,6 +843,10 @@ def get_args(**kwargs):
         g = p.add_argument_group("input")
         g.add_argument("--trajectory", required=True,
                        help=".traj or multi-frame .xyz")
+        g.add_argument("--trajectories", default=defaults["trajectories"],
+                       help="Glob pattern for replica trajectories to average "
+                            "(e.g. 'md_replica*.traj'). Spectra are averaged "
+                            "over all matching files.")
         g.add_argument("--params",  default=defaults["params"])
         g.add_argument("--config",  default=defaults["config"])
         g.add_argument("--field-scale", type=float, default=defaults["field_scale"])
@@ -668,6 +898,14 @@ def get_args(**kwargs):
         g.add_argument("--broadening", type=float, default=defaults["broadening"],
                        help="Lorentzian HWHM for harmonic spectra (cm⁻¹)")
 
+        g = p.add_argument_group("Raman")
+        g.add_argument("--raman", action="store_true",
+                       help="Compute Raman spectrum from polarizability ACF "
+                            "(GPU-batched dmu/dEf)")
+        g.add_argument("--batch-size", type=int, default=defaults["batch_size"],
+                       help="Frames per GPU batch for Raman polarizability "
+                            "and batched dipole extraction")
+
         g = p.add_argument_group("output")
         g.add_argument("--freq-min", type=float, default=defaults["freq_min"])
         g.add_argument("--freq-max", type=float, default=defaults["freq_max"])
@@ -700,6 +938,9 @@ def get_args(**kwargs):
             freq_min=args.freq_min,
             freq_max=args.freq_max,
             output_dir=args.output_dir,
+            raman=args.raman,
+            trajectories=args.trajectories,
+            batch_size=args.batch_size,
         )
     
     # Otherwise, use notebook mode (defaults only)
@@ -789,6 +1030,64 @@ def plot_harmonic_snapshots(t_arr, freq_ax, ir_gram, vcd_gram, path):
     plt.close(fig)
 
 
+def plot_raman(freq, raman_par, raman_perp, raman_total,
+               n_frames, total_fs, path, n_traj=1):
+    fig, axes = plt.subplots(3, 1, figsize=(12, 9), sharex=True)
+    label = (f'{n_frames} frames, {total_fs:.0f} fs'
+             + (f', {n_traj} replicas' if n_traj > 1 else ''))
+
+    axes[0].plot(freq, raman_total, 'b-', lw=1)
+    axes[0].fill_between(freq, raman_total, alpha=0.25)
+    axes[0].set_ylabel('Total Raman (arb. u.)')
+    axes[0].set_title(f'Raman — polarizability ACF  ({label})')
+
+    axes[1].plot(freq, raman_par, 'r-', lw=1, label='I_∥')
+    axes[1].fill_between(freq, raman_par, alpha=0.2, color='red')
+    axes[1].set_ylabel('I_∥  (arb. u.)')
+    axes[1].legend(frameon=False)
+
+    axes[2].plot(freq, raman_perp, 'g-', lw=1, label='I_⊥')
+    axes[2].fill_between(freq, raman_perp, alpha=0.2, color='green')
+    axes[2].set_ylabel('I_⊥  (arb. u.)')
+    axes[2].set_xlabel('Frequency (cm⁻¹)')
+    axes[2].legend(frameon=False)
+
+    for ax in axes:
+        ax.invert_xaxis()
+    plt.tight_layout()
+    fig.savefig(path, dpi=300, bbox_inches='tight')
+    plt.close(fig)
+
+
+def plot_correlation_averaged(freq, ir, vcd, n_frames, total_fs,
+                               path, n_traj=1):
+    """Same as plot_correlation but with replica count in title."""
+    label = (f'{n_frames} frames, {total_fs:.0f} fs'
+             + (f', {n_traj} replicas' if n_traj > 1 else ''))
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 7), sharex=True)
+
+    ax1.plot(freq, ir, 'b-', lw=1)
+    ax1.fill_between(freq, ir, alpha=0.25)
+    ax1.set_ylabel('IR intensity (arb. u.)')
+    ax1.set_title(f'IR — dipole autocorrelation  ({label})')
+    ax1.invert_xaxis()
+
+    ax2.plot(freq, vcd, 'k-', lw=1)
+    ax2.fill_between(freq, 0, vcd,
+                     where=(vcd >= 0), color='red', alpha=0.3)
+    ax2.fill_between(freq, 0, vcd,
+                     where=(vcd < 0), color='blue', alpha=0.3)
+    ax2.axhline(0, color='grey', lw=0.5)
+    ax2.set_ylabel('VCD rot. strength (arb. u.)')
+    ax2.set_title('VCD — dipole / magnetic-dipole cross-correlation')
+    ax2.set_xlabel('Frequency (cm⁻¹)')
+    ax2.invert_xaxis()
+
+    plt.tight_layout()
+    fig.savefig(path, dpi=300, bbox_inches='tight')
+    plt.close(fig)
+
+
 # =====================================================================
 # Main
 # =====================================================================
@@ -802,44 +1101,34 @@ def main(args=None):
     print("  Spectra from MD Trajectory")
     print("=" * 70)
 
-    # ---- load trajectory -----------------------------------------------
-    print(f"\n  Trajectory : {args.trajectory}")
-    traj_path = Path(args.trajectory)
-    is_hdf5 = traj_path.suffix in ('.h5', '.hdf5')
+    # ---- Build trajectory list -----------------------------------------
+    import glob as glob_mod
 
-    if is_hdf5:
-        hdf5_pos, hdf5_vel, hdf5_dt, hdf5_meta = load_hdf5_trajectory(traj_path)
-        T, N = hdf5_pos.shape[:2]
-        traj_frames = None
-        print(f"  Format     : HDF5")
-        if hdf5_vel is not None:
-            print(f"  Velocities : yes  ({hdf5_vel.shape})")
-        else:
-            print(f"  Velocities : no")
-    else:
-        if traj_path.suffix == '.traj':
-            traj_frames = list(Trajectory(str(traj_path)))
-        else:
-            traj_frames = ase.io.read(str(traj_path), index=':')
-        T = len(traj_frames)
-        N = len(traj_frames[0])
-        hdf5_pos = hdf5_vel = hdf5_dt = hdf5_meta = None
+    traj_paths = [args.trajectory]
+    if getattr(args, 'trajectories', None):
+        extra = sorted(glob_mod.glob(args.trajectories))
+        if extra:
+            traj_paths = extra
+    n_traj = len(traj_paths)
 
-    print(f"  Frames     : {T}")
-    print(f"  Atoms      : {N}")
+    print(f"\n  Trajectories : {n_traj}")
+    for tp in traj_paths:
+        print(f"    - {tp}")
 
-    # ---- timestep ------------------------------------------------------
+    # ---- timestep (from first trajectory or CLI) -----------------------
     dt_fs = args.dt
-    if dt_fs is None and is_hdf5 and hdf5_dt is not None:
-        dt_fs = hdf5_dt
-        print(f"  Timestep   : {dt_fs} fs  (from HDF5 metadata)")
-    elif dt_fs is None:
+    first_path = Path(traj_paths[0])
+    is_hdf5 = first_path.suffix in ('.h5', '.hdf5')
+
+    if dt_fs is None and is_hdf5:
+        _, _, hdf5_dt, _ = load_hdf5_trajectory(first_path)
+        if hdf5_dt is not None:
+            dt_fs = hdf5_dt
+    if dt_fs is None:
         dt_fs = 0.5
-        print(f"  Timestep   : {dt_fs} fs  (default — use --dt to override)")
+        print(f"  Timestep     : {dt_fs} fs  (default — use --dt to override)")
     else:
-        print(f"  Timestep   : {dt_fs} fs")
-    total_fs = (T - 1) * dt_fs
-    print(f"  Total time : {total_fs:.1f} fs  ({total_fs / 1000:.2f} ps)")
+        print(f"  Timestep     : {dt_fs} fs")
 
     # ---- calculator ----------------------------------------------------
     print(f"\n  Loading calculator from {args.params} ...")
@@ -848,76 +1137,219 @@ def main(args=None):
         field_scale=args.field_scale,
     )
 
-    # ================================================================
-    # 1.  Extract  μ(t), q(t), r(t), v(t)
-    # ================================================================
-    print(f"\n[1] Extracting trajectory properties ...")
-    if is_hdf5:
-        atomic_numbers = hdf5_meta.get("attr_atomic_numbers", None)
-        if atomic_numbers is None:
-            raise ValueError(
-                "HDF5 file has no 'atomic_numbers' attribute. "
-                "Pass --atomic-numbers or add it to the HDF5 attrs.")
-        positions, velocities, dipoles, charges = extract_properties_hdf5(
-            hdf5_pos, hdf5_vel, calc,
-            atomic_numbers=np.asarray(atomic_numbers, dtype=int),
-            recompute_dipole=args.recompute_dipole,
-        )
-    else:
-        positions, velocities, dipoles, charges = extract_properties(
-            traj_frames, calc=calc,
-            recompute_dipole=args.recompute_dipole,
-            recompute_charges=args.recompute_charges,
-        )
+    # For Raman, we also need the raw model & params
+    raman_model = raman_params = None
+    if getattr(args, 'raman', False):
+        from ase_calc_EF import load_params, load_config
+        from training import MessagePassingModel
+
+        params_path = Path(args.params)
+        raman_params = load_params(params_path)
+        config_path = args.config
+        if config_path is None:
+            if params_path.stem.startswith("params-") and len(params_path.stem) > 7:
+                uuid_part = params_path.stem[7:]
+                cand = params_path.parent / f"config-{uuid_part}.json"
+                if cand.exists():
+                    config_path = str(cand)
+                elif (params_path.parent / "config.json").exists():
+                    config_path = str(params_path.parent / "config.json")
+        model_keys = {
+            "features", "max_degree", "num_iterations",
+            "num_basis_functions", "cutoff", "max_atomic_number",
+            "include_pseudotensors", "dipole_field_coupling", "field_scale",
+        }
+        if config_path is not None:
+            config = load_config(config_path)
+            if "model" in config and isinstance(config["model"], dict):
+                mc = {k: v for k, v in config["model"].items()
+                      if k in model_keys}
+            elif "model_config" in config:
+                mc = {k: v for k, v in config["model_config"].items()
+                      if k in model_keys}
+            else:
+                mc = {k: v for k, v in config.items() if k in model_keys}
+        else:
+            mc = dict(features=64, max_degree=2, num_iterations=2,
+                      num_basis_functions=64, cutoff=10.0,
+                      max_atomic_number=55, include_pseudotensors=True)
+        raman_model = MessagePassingModel(**mc)
 
     # ================================================================
-    # 2.  Magnetic dipoles  m(t)
+    # 1–2.  Extract properties + magnetic dipoles from each trajectory
     # ================================================================
-    print(f"\n[2] Computing magnetic dipoles  m(t) = Σ (q/2c) r×v ...")
-    mag_dipoles = compute_magnetic_dipoles(positions, velocities, charges)
-    mu_norm = np.linalg.norm(dipoles, axis=1)
-    m_norm  = np.linalg.norm(mag_dipoles, axis=1)
-    print(f"    |μ| : {mu_norm.min():.4f} – {mu_norm.max():.4f}")
-    print(f"    |m| : {m_norm.min():.6f} – {m_norm.max():.6f}")
+    all_acfs, all_ccfs = [], []
+    all_raman_iso, all_raman_aniso = [], []
+
+    # Keep first trajectory's data for transient / 2D / harmonic
+    first_dipoles = first_mag = None
+    first_traj_frames = None
+    T = N = 0
+
+    for ti, tp in enumerate(traj_paths):
+        tag = f"[{ti+1}/{n_traj}]" if n_traj > 1 else ""
+        traj_path = Path(tp)
+        is_hdf5_i = traj_path.suffix in ('.h5', '.hdf5')
+
+        print(f"\n{tag} Loading {traj_path} ...")
+
+        if is_hdf5_i:
+            hdf5_pos, hdf5_vel, _, hdf5_meta = load_hdf5_trajectory(traj_path)
+            Ti, N = hdf5_pos.shape[:2]
+            traj_frames_i = None
+        else:
+            if traj_path.suffix == '.traj':
+                traj_frames_i = list(Trajectory(str(traj_path)))
+            else:
+                traj_frames_i = ase.io.read(str(traj_path), index=':')
+            Ti = len(traj_frames_i)
+            N = len(traj_frames_i[0])
+            hdf5_pos = hdf5_vel = hdf5_meta = None
+
+        print(f"    Frames : {Ti},  Atoms : {N}")
+
+        # ---- extract μ, q, r, v ----------------------------------------
+        if is_hdf5_i:
+            atomic_numbers = hdf5_meta.get("attr_atomic_numbers", None)
+            if atomic_numbers is None:
+                raise ValueError(
+                    "HDF5 file has no 'atomic_numbers' attribute.")
+            positions, velocities, dipoles, charges = extract_properties_hdf5(
+                hdf5_pos, hdf5_vel, calc,
+                atomic_numbers=np.asarray(atomic_numbers, dtype=int),
+                recompute_dipole=args.recompute_dipole,
+            )
+        else:
+            positions, velocities, dipoles, charges = extract_properties(
+                traj_frames_i, calc=calc,
+                recompute_dipole=args.recompute_dipole,
+                recompute_charges=args.recompute_charges,
+            )
+
+        # ---- magnetic dipoles -------------------------------------------
+        mag_dipoles = compute_magnetic_dipoles(positions, velocities, charges)
+        mu_norm = np.linalg.norm(dipoles, axis=1)
+        m_norm  = np.linalg.norm(mag_dipoles, axis=1)
+        print(f"    |μ| : {mu_norm.min():.4f} – {mu_norm.max():.4f}")
+        print(f"    |m| : {m_norm.min():.6f} – {m_norm.max():.6f}")
+
+        # ---- IR / VCD correlation functions -----------------------------
+        if args.method in ('correlation', 'both'):
+            acf = autocorrelation(dipoles)
+            ccf = cross_correlation(dipoles, mag_dipoles)
+            all_acfs.append(acf)
+            all_ccfs.append(ccf)
+
+        # ---- Raman polarizability ACF -----------------------------------
+        if getattr(args, 'raman', False) and raman_model is not None:
+            Z_np = (np.asarray(atomic_numbers, dtype=int) if is_hdf5_i
+                    else traj_frames_i[0].get_atomic_numbers())
+            Ef_np = np.zeros(3, dtype=np.float32)
+            if not is_hdf5_i and 'electric_field' in traj_frames_i[0].info:
+                Ef_np = np.asarray(
+                    traj_frames_i[0].info['electric_field'], dtype=np.float32)
+
+            print(f"    Computing polarizability α(t) "
+                  f"(batch_size={args.batch_size}) ...")
+            alpha = compute_polarizability_batched(
+                positions, Z_np, Ef_np,
+                raman_model, raman_params,
+                chunk_size=args.batch_size,
+                field_scale=args.field_scale)
+
+            acf_iso, acf_aniso = polarizability_autocorrelation(alpha)
+            all_raman_iso.append(acf_iso)
+            all_raman_aniso.append(acf_aniso)
+
+        # ---- store first trajectory's data ------------------------------
+        if ti == 0:
+            T = Ti
+            first_dipoles = dipoles
+            first_mag = mag_dipoles
+            first_traj_frames = traj_frames_i
+            first_is_hdf5 = is_hdf5_i
+            if is_hdf5_i:
+                first_hdf5_pos = hdf5_pos
+                first_hdf5_meta = hdf5_meta
+
+    total_fs = (T - 1) * dt_fs
+    print(f"\n  Frames per trajectory : {T}")
+    print(f"  Total time            : {total_fs:.1f} fs  "
+          f"({total_fs / 1000:.2f} ps)")
 
     # ================================================================
-    # 3.  Correlation spectra
+    # 3.  Averaged correlation spectra  (IR + VCD)
     # ================================================================
-    if args.method in ('correlation', 'both'):
-        print(f"\n[3] Correlation spectra  (window={args.window_fn}, "
-              f"zero-pad ×{args.zero_pad}) ...")
-
-        acf = autocorrelation(dipoles)
-        ccf = cross_correlation(dipoles, mag_dipoles)
+    if args.method in ('correlation', 'both') and all_acfs:
+        min_len = min(len(a) for a in all_acfs)
+        avg_acf = np.mean([a[:min_len] for a in all_acfs], axis=0)
+        avg_ccf = np.mean([c[:min_len] for c in all_ccfs], axis=0)
 
         win = args.window_fn if args.window_fn != 'none' else None
+        print(f"\n[3] Correlation spectra  (window={args.window_fn}, "
+              f"zero-pad x{args.zero_pad}, {n_traj} trajectory(s)) ...")
+
         freq_cm, ir_spec = correlation_to_spectrum(
-            acf, dt_fs, window=win, zero_pad=args.zero_pad)
+            avg_acf, dt_fs, window=win, zero_pad=args.zero_pad)
         _, vcd_spec = correlation_to_spectrum(
-            ccf, dt_fs, window=win, zero_pad=args.zero_pad)
+            avg_ccf, dt_fs, window=win, zero_pad=args.zero_pad)
 
         fm = _freq_mask(freq_cm, args.freq_min, args.freq_max)
         freq_p, ir_p, vcd_p = freq_cm[fm], ir_spec[fm], vcd_spec[fm]
 
         res = freq_cm[1] - freq_cm[0]
-        print(f"    Resolution : {res:.2f} cm⁻¹")
+        print(f"    Resolution : {res:.2f} cm-1")
 
         np.savez(out / "correlation_spectra.npz",
                  freq_cm=freq_p, ir=ir_p, vcd=vcd_p,
-                 acf=acf, ccf=ccf)
-        print(f"    Data → {out / 'correlation_spectra.npz'}")
+                 acf=avg_acf, ccf=avg_ccf, n_trajectories=n_traj)
+        print(f"    Data -> {out / 'correlation_spectra.npz'}")
 
-        plot_correlation(freq_p, ir_p, vcd_p, T, total_fs,
-                         out / "correlation_spectra.png")
-        print(f"    Plot → {out / 'correlation_spectra.png'}")
+        plot_correlation_averaged(freq_p, ir_p, vcd_p, T, total_fs,
+                                  out / "correlation_spectra.png",
+                                  n_traj=n_traj)
+        print(f"    Plot -> {out / 'correlation_spectra.png'}")
 
     # ================================================================
-    # 4.  Transient (windowed) spectra
+    # 3b.  Averaged Raman spectrum
     # ================================================================
-    if args.transient:
+    if getattr(args, 'raman', False) and all_raman_iso:
+        min_len = min(len(a) for a in all_raman_iso)
+        avg_iso = np.mean([a[:min_len] for a in all_raman_iso], axis=0)
+        avg_aniso = np.mean([a[:min_len] for a in all_raman_aniso], axis=0)
+
+        win = args.window_fn if args.window_fn != 'none' else None
+        print(f"\n[3b] Raman spectrum  ({n_traj} trajectory(s)) ...")
+
+        freq_cm, raman_par, raman_perp, raman_total = raman_to_spectrum(
+            avg_iso, avg_aniso, dt_fs,
+            window=win, zero_pad=args.zero_pad)
+
+        fm = _freq_mask(freq_cm, args.freq_min, args.freq_max)
+        freq_r = freq_cm[fm]
+        rp, rpp, rt = raman_par[fm], raman_perp[fm], raman_total[fm]
+
+        np.savez(out / "raman_spectrum.npz",
+                 freq_cm=freq_r, raman_parallel=rp,
+                 raman_perpendicular=rpp, raman_total=rt,
+                 acf_iso=avg_iso, acf_aniso=avg_aniso,
+                 n_trajectories=n_traj)
+        print(f"    Data -> {out / 'raman_spectrum.npz'}")
+
+        plot_raman(freq_r, rp, rpp, rt, T, total_fs,
+                   out / "raman_spectrum.png", n_traj=n_traj)
+        print(f"    Plot -> {out / 'raman_spectrum.png'}")
+
+    # ================================================================
+    # 4.  Transient (windowed) spectra  — from first trajectory
+    # ================================================================
+    dipoles = first_dipoles
+    mag_dipoles = first_mag
+
+    if args.transient and dipoles is not None:
         ws = args.window_size
         if ws > T:
-            print(f"\n  ⚠  --window-size {ws} > trajectory length {T}. "
+            print(f"\n  WARNING: --window-size {ws} > trajectory length {T}. "
                   f"Clamping to {T}.")
             ws = T
         print(f"\n[4] Transient spectra  (window={ws} frames, "
@@ -928,7 +1360,7 @@ def main(args=None):
             window_frames=ws,
             stride_frames=args.stride,
             fft_window=args.window_fn if args.window_fn != 'none' else None,
-            zero_pad=min(args.zero_pad, 2),   # keep spectrograms compact
+            zero_pad=min(args.zero_pad, 2),
         )
 
         fm = _freq_mask(freq_t, args.freq_min, args.freq_max)
@@ -939,42 +1371,40 @@ def main(args=None):
         np.savez(out / "transient_spectra.npz",
                  time_fs=t_cen, freq_cm=freq_tp,
                  ir_spectrogram=ir_gp, vcd_spectrogram=vcd_gp)
-        print(f"    Data → {out / 'transient_spectra.npz'}")
+        print(f"    Data -> {out / 'transient_spectra.npz'}")
 
         plot_transient(t_cen, freq_tp, ir_gp, vcd_gp,
                        out / "transient_spectra.png")
-        print(f"    Plot → {out / 'transient_spectra.png'}")
+        print(f"    Plot -> {out / 'transient_spectra.png'}")
 
     # ================================================================
     # 4b.  Noda 2D generalised correlation  (from transient spectrograms)
     # ================================================================
     if args.noda:
         if not args.transient:
-            print("\n  ⚠  --noda requires --transient  (skipping)")
+            print("\n  WARNING: --noda requires --transient  (skipping)")
         else:
             print(f"\n[4b] Noda 2D correlation spectroscopy ...")
-            # IR synchronous / asynchronous
             sync_ir, async_ir = noda_2d(ir_gp)
             plot_noda(freq_tp, sync_ir, async_ir, "IR",
                       out / "noda_2d_ir.png")
             np.savez(out / "noda_2d_ir.npz",
                      freq_cm=freq_tp, synchronous=sync_ir,
                      asynchronous=async_ir)
-            print(f"    IR   → {out / 'noda_2d_ir.png'}")
+            print(f"    IR   -> {out / 'noda_2d_ir.png'}")
 
-            # VCD synchronous / asynchronous
             sync_vcd, async_vcd = noda_2d(vcd_gp)
             plot_noda(freq_tp, sync_vcd, async_vcd, "VCD",
                       out / "noda_2d_vcd.png")
             np.savez(out / "noda_2d_vcd.npz",
                      freq_cm=freq_tp, synchronous=sync_vcd,
                      asynchronous=async_vcd)
-            print(f"    VCD  → {out / 'noda_2d_vcd.png'}")
+            print(f"    VCD  -> {out / 'noda_2d_vcd.png'}")
 
     # ================================================================
     # 4c.  2D IR / VCD from STFT frequency–frequency correlation
     # ================================================================
-    if args.spectra_2d:
+    if args.spectra_2d and dipoles is not None:
         print(f"\n[4c] 2D spectra  (STFT window={args.stft_window} frames, "
               f"stride={args.stft_stride}) ...")
 
@@ -1020,11 +1450,12 @@ def main(args=None):
             np.savez(out / f"2d_spectra_{tag}.npz",
                      freq_cm=freq_2d, ir_2d=ir_2d, vcd_2d=vcd_2d,
                      waiting_time_fs=T_fs)
-            print(f"→ {out / f'2d_spectra_{tag}.png'}")
+            print(f"-> {out / f'2d_spectra_{tag}.png'}")
 
     # ================================================================
-    # 5.  Harmonic snapshots
+    # 5.  Harmonic snapshots  — from first trajectory
     # ================================================================
+    traj_frames = first_traj_frames
     if args.method in ('harmonic', 'both'):
         from calc_spectra import (compute_normal_modes, compute_ir,
                                   compute_vcd, hessian_fd, broaden)
@@ -1038,10 +1469,11 @@ def main(args=None):
 
         for si, idx in enumerate(snap_idx):
             t_fs = idx * dt_fs
-            if is_hdf5:
+            if first_is_hdf5:
                 atoms = ase.Atoms(
-                    numbers=np.asarray(hdf5_meta["attr_atomic_numbers"], dtype=int),
-                    positions=hdf5_pos[idx])
+                    numbers=np.asarray(
+                        first_hdf5_meta["attr_atomic_numbers"], dtype=int),
+                    positions=first_hdf5_pos[idx])
                 atoms.info['electric_field'] = [0, 0, 0]
             else:
                 atoms = traj_frames[idx].copy()
@@ -1081,9 +1513,8 @@ def main(args=None):
                  times_fs=all_t, frequencies=all_freqs,
                  ir_intensities=all_ir,
                  vcd_rotational_strengths=all_vcd)
-        print(f"    Data → {out / 'harmonic_snapshots.npz'}")
+        print(f"    Data -> {out / 'harmonic_snapshots.npz'}")
 
-        # Build broadened spectrograms
         freq_ax = np.linspace(args.freq_min, args.freq_max, 2000)
         gamma   = args.broadening
         ir_sgram  = np.zeros((len(all_t), len(freq_ax)))
@@ -1094,7 +1525,7 @@ def main(args=None):
 
         plot_harmonic_snapshots(all_t, freq_ax, ir_sgram, vcd_sgram,
                                 out / "harmonic_snapshots.png")
-        print(f"    Plot → {out / 'harmonic_snapshots.png'}")
+        print(f"    Plot -> {out / 'harmonic_snapshots.png'}")
 
     # ================================================================
     print(f"\n{'=' * 70}")
