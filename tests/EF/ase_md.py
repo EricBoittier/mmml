@@ -63,6 +63,7 @@ def get_args(**kwargs):
         "fmax": 0.05,
         "opt_steps": 2000,
         "maxstep": 0.04,
+        "n_replicas": 1,
     }
     
     # Check if we're in a notebook/IPython environment
@@ -127,6 +128,9 @@ def get_args(**kwargs):
                            help="Max optimisation steps")
         parser.add_argument("--maxstep", type=float, default=defaults["maxstep"],
                            help="Max step size in Å (default 0.04; ASE default 0.2)")
+        parser.add_argument("--n-replicas", type=int, default=defaults["n_replicas"],
+                           help="Run N independent replicas in a single GPU-batched "
+                                "JIT-compiled loop (requires JAX). Default 1 = standard ASE MD.")
         
         args = parser.parse_args()
         return SimpleNamespace(
@@ -151,15 +155,372 @@ def get_args(**kwargs):
             fmax=args.fmax,
             opt_steps=args.opt_steps,
             maxstep=args.maxstep,
+            n_replicas=args.n_replicas,
         )
     
     # Otherwise, use notebook mode (defaults only)
     return SimpleNamespace(**defaults)
 
 
+def main_batched(args):
+    """Run B independent MD replicas in one JIT-compiled GPU batch.
+
+    All replicas share the same molecule and electric field but evolve
+    from independent Maxwell-Boltzmann velocity draws.  Force evaluations
+    for all replicas are fused into a single model forward pass, giving
+    near-linear GPU throughput scaling with the number of replicas.
+
+    Outputs one ASE .traj file per replica:
+        <output>_replica0.traj, <output>_replica1.traj, ...
+    """
+    import jax
+    import jax.numpy as jnp
+    import e3x
+    import time
+    import functools
+    from ase.data import atomic_masses as _ase_masses
+    from ase.calculators.singlepoint import SinglePointCalculator
+    from ase_calc_EF import load_params, load_config
+    from training import MessagePassingModel
+
+    BOLTZMANN_EV = 8.617333262e-5
+    AMU_TO_EV_FS2_ANG2 = 103.6427
+
+    B = args.n_replicas
+
+    print("=" * 70)
+    print(f"  Batched MD — {B} non-interacting replicas (JIT-compiled)")
+    print("=" * 70)
+    print(f"  JAX devices : {jax.devices()}")
+    print(f"  Backend     : {jax.default_backend()}")
+
+    # ---- load initial geometry ------------------------------------------
+    if args.xyz is not None:
+        atoms_init = ase_io.read(args.xyz)
+        Z = jnp.asarray(atoms_init.get_atomic_numbers(), dtype=jnp.int32)
+        R_single = jnp.asarray(atoms_init.get_positions(), dtype=jnp.float32)
+    else:
+        dataset = np.load(args.data, allow_pickle=True)
+        Z = jnp.asarray(dataset["Z"][args.index].astype(int), dtype=jnp.int32)
+        R_single = jnp.asarray(dataset["R"][args.index].astype(float),
+                                dtype=jnp.float32)
+        if R_single.ndim == 3:
+            R_single = R_single.squeeze(0)
+
+    N = len(Z)
+    print(f"  Atoms       : {N}")
+    print(f"  Replicas    : {B}")
+
+    # ---- electric field -------------------------------------------------
+    if args.electric_field is not None:
+        Ef = jnp.asarray(args.electric_field, dtype=jnp.float32)
+    elif args.xyz is None:
+        dataset = np.load(args.data, allow_pickle=True)
+        Ef = (jnp.asarray(dataset["Ef"][args.index].astype(float),
+                           dtype=jnp.float32)
+              if "Ef" in dataset.files
+              else jnp.zeros(3, dtype=jnp.float32))
+    else:
+        Ef = jnp.zeros(3, dtype=jnp.float32)
+    print(f"  Ef          : {np.asarray(Ef)}")
+
+    # ---- build model ----------------------------------------------------
+    params_path = Path(args.params)
+    params = load_params(params_path)
+
+    config_path = args.config
+    if config_path is None:
+        if params_path.stem.startswith("params-") and len(params_path.stem) > 7:
+            uuid_part = params_path.stem[7:]
+            cand = params_path.parent / f"config-{uuid_part}.json"
+            if cand.exists():
+                config_path = str(cand)
+            elif (params_path.parent / "config.json").exists():
+                config_path = str(params_path.parent / "config.json")
+
+    model_keys = {
+        "features", "max_degree", "num_iterations", "num_basis_functions",
+        "cutoff", "max_atomic_number", "include_pseudotensors",
+        "dipole_field_coupling", "field_scale",
+    }
+    if config_path is not None:
+        config = load_config(config_path)
+        if "model" in config and isinstance(config["model"], dict):
+            mc = {k: v for k, v in config["model"].items() if k in model_keys}
+        elif "model_config" in config:
+            mc = {k: v for k, v in config["model_config"].items()
+                  if k in model_keys}
+        else:
+            mc = {k: v for k, v in config.items() if k in model_keys}
+    else:
+        mc = dict(features=64, max_degree=2, num_iterations=2,
+                  num_basis_functions=64, cutoff=10.0,
+                  max_atomic_number=55, include_pseudotensors=True)
+
+    model = MessagePassingModel(**mc)
+    print(f"  Model       : {mc}")
+
+    # ---- batched graph (B non-interacting copies) -----------------------
+    # Each replica gets its own atom indices; batch_segments assigns atoms
+    # to replicas so the model's internal aggregations stay per-replica.
+    dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(N)
+    dst_idx = jnp.asarray(dst_idx, dtype=jnp.int32)
+    src_idx = jnp.asarray(src_idx, dtype=jnp.int32)
+
+    batch_segments = jnp.repeat(jnp.arange(B, dtype=jnp.int32), N)
+    offsets = jnp.arange(B, dtype=jnp.int32) * N
+    dst_idx_flat = (dst_idx[None, :] + offsets[:, None]).reshape(-1)
+    src_idx_flat = (src_idx[None, :] + offsets[:, None]).reshape(-1)
+
+    Z_batched = jnp.tile(Z[None, :], (B, 1))       # (B, N)
+    Ef_batched = jnp.tile(Ef[None, :], (B, 1))      # (B, 3)
+
+    # ---- JIT-compiled batched force function ----------------------------
+    @functools.partial(jax.jit, static_argnames=("batch_size",))
+    def model_apply(params, atomic_numbers, positions, Ef_arg,
+                    dst_idx_flat, src_idx_flat, batch_segments, batch_size,
+                    dst_idx=None, src_idx=None):
+        return model.apply(
+            params, atomic_numbers, positions, Ef_arg,
+            dst_idx_flat=dst_idx_flat, src_idx_flat=src_idx_flat,
+            batch_segments=batch_segments, batch_size=batch_size,
+            dst_idx=dst_idx, src_idx=src_idx)
+
+    @jax.jit
+    def force_fn(positions):
+        """(B, N, 3) -> energy (B,), forces (B, N, 3), dipole (B, 3)"""
+        def energy_fn(pos):
+            energy, dipole = model_apply(
+                params, Z_batched, pos, Ef_batched,
+                dst_idx_flat, src_idx_flat, batch_segments, B,
+                dst_idx, src_idx)
+            return -jnp.sum(energy), (energy, dipole)
+        (_, (energy, dipole)), forces = jax.value_and_grad(
+            energy_fn, has_aux=True)(positions)
+        return energy, forces, dipole
+
+    # ---- warm-up (JIT compile) ------------------------------------------
+    R0 = jnp.tile(R_single[None, :, :], (B, 1, 1))  # (B, N, 3)
+    print(f"\n  Warming up batched force function ...")
+    t0 = time.perf_counter()
+    E_w, F_w, mu_w = force_fn(R0)
+    E_w.block_until_ready()
+    print(f"  JIT compiled in {time.perf_counter() - t0:.2f} s")
+    print(f"  E[0] = {float(E_w[0]):.6f} eV,  "
+          f"max|F| = {float(jnp.max(jnp.abs(F_w))):.6f} eV/Å")
+
+    # ---- optional geometry optimisation (single copy, then replicate) ---
+    if args.optimize:
+        from ase.optimize import BFGS, FIRE
+        opt_cls = FIRE if args.optimizer == "fire" else BFGS
+        print(f"\n  Geometry optimisation ({args.optimizer.upper()}, "
+              f"fmax={args.fmax} eV/Å) ...")
+        opt_atoms = ase.Atoms(numbers=np.asarray(Z),
+                              positions=np.asarray(R_single))
+        opt_atoms.info["electric_field"] = np.asarray(Ef)
+        opt_calc = AseCalculatorEF(params_path=str(params_path),
+                                   config_path=config_path)
+        opt_atoms.calc = opt_calc
+        opt_traj = str(Path(args.output).with_suffix(".opt.traj"))
+        opt = opt_cls(opt_atoms, trajectory=opt_traj, logfile="-",
+                      maxstep=args.maxstep)
+        opt.run(fmax=args.fmax, steps=args.opt_steps)
+        R_single = jnp.asarray(opt_atoms.get_positions(), dtype=jnp.float32)
+        R0 = jnp.tile(R_single[None, :, :], (B, 1, 1))
+        del opt_calc
+        E_opt, _, _ = force_fn(R0)
+        print(f"  Optimised E = {float(E_opt[0]):.6f} eV")
+
+    # ---- initial velocities (independent per replica) -------------------
+    masses_amu = jnp.asarray(_ase_masses[np.asarray(Z)], dtype=jnp.float32)
+    inv_masses = 1.0 / (masses_amu[:, None] * AMU_TO_EV_FS2_ANG2)  # (N, 1)
+
+    rng = jax.random.PRNGKey(args.seed)
+    keys = jax.random.split(rng, B + 1)
+    rng, vel_keys = keys[0], keys[1:]
+
+    kT = BOLTZMANN_EV * args.temperature
+    sigma_v = jnp.sqrt(kT / (masses_amu[:, None] * AMU_TO_EV_FS2_ANG2))
+    total_mass = jnp.sum(masses_amu)
+
+    def _sample_v(key):
+        v = sigma_v * jax.random.normal(key, shape=(N, 3))
+        v_com = jnp.sum(masses_amu[:, None] * v, axis=0) / total_mass
+        return v - v_com[None, :]
+
+    V0 = jax.vmap(_sample_v)(vel_keys)  # (B, N, 3)
+
+    Ekin0 = 0.5 * jnp.sum(
+        masses_amu[None, :, None] * AMU_TO_EV_FS2_ANG2 * V0**2, axis=(1, 2))
+    T0 = 2.0 * Ekin0 / (3.0 * N * BOLTZMANN_EV)
+    print(f"\n  Initial T   : {float(T0.mean()):.1f} K mean  "
+          f"[{float(T0.min()):.1f}, {float(T0.max()):.1f}]")
+
+    # ---- integration parameters -----------------------------------------
+    dt = args.dt
+    si = args.traj_interval
+    n_saved = args.steps // si + 1
+
+    print(f"\n  Thermostat  : {args.thermostat}")
+    print(f"  dt          : {dt} fs")
+    print(f"  Steps       : {args.steps}")
+    print(f"  Save every  : {si} steps -> {n_saved} frames")
+    print(f"  Total time  : {args.steps * dt:.1f} fs "
+          f"({args.steps * dt / 1000:.2f} ps)")
+    print()
+
+    # ---- initial forces -------------------------------------------------
+    E0, F0, mu0 = force_fn(R0)
+
+    # ---- save buffers ---------------------------------------------------
+    R_buf  = jnp.zeros((n_saved, B, N, 3), dtype=jnp.float32).at[0].set(R0)
+    V_buf  = jnp.zeros((n_saved, B, N, 3), dtype=jnp.float32).at[0].set(V0)
+    E_buf  = jnp.zeros((n_saved, B),       dtype=jnp.float32).at[0].set(E0)
+    mu_buf = jnp.zeros((n_saved, B, 3),    dtype=jnp.float32).at[0].set(mu0)
+
+    def _save_cond(should, buf, idx, val):
+        return jax.lax.cond(should,
+                            lambda b: b.at[idx].set(val),
+                            lambda b: b, buf)
+
+    # ---- integration loop -----------------------------------------------
+    if args.thermostat == "langevin":
+        gamma = args.friction
+
+        def body_fn(i, carry):
+            (R, V, F), (sR, sV, sE, sM), step_rng = carry
+            step_rng, key = jax.random.split(step_rng)
+            # BAOAB Langevin splitting
+            V = V + 0.5 * dt * F * inv_masses
+            R = R + 0.5 * dt * V
+            c1 = jnp.exp(-gamma * dt)
+            ns = jnp.sqrt(kT * inv_masses * (1.0 - c1**2))
+            V = c1 * V + ns * jax.random.normal(key, V.shape)
+            R = R + 0.5 * dt * V
+            E, Fn, mu = force_fn(R)
+            V = V + 0.5 * dt * Fn * inv_masses
+            fi = (i + 1) // si
+            sv = ((i + 1) % si == 0)
+            return ((R, V, Fn),
+                    (_save_cond(sv, sR, fi, R), _save_cond(sv, sV, fi, V),
+                     _save_cond(sv, sE, fi, E), _save_cond(sv, sM, fi, mu)),
+                    step_rng)
+
+        rng, md_key = jax.random.split(rng)
+        carry0 = ((R0, V0, F0), (R_buf, V_buf, E_buf, mu_buf), md_key)
+        label = "Langevin"
+    else:
+        def body_fn(i, carry):
+            (R, V, F), (sR, sV, sE, sM) = carry
+            # Velocity Verlet
+            V = V + 0.5 * dt * F * inv_masses
+            R = R + dt * V
+            E, Fn, mu = force_fn(R)
+            V = V + 0.5 * dt * Fn * inv_masses
+            fi = (i + 1) // si
+            sv = ((i + 1) % si == 0)
+            return ((R, V, Fn),
+                    (_save_cond(sv, sR, fi, R), _save_cond(sv, sV, fi, V),
+                     _save_cond(sv, sE, fi, E), _save_cond(sv, sM, fi, mu)))
+
+        carry0 = ((R0, V0, F0), (R_buf, V_buf, E_buf, mu_buf))
+        label = "NVE"
+
+    print(f"  JIT-compiling batched {label} "
+          f"({args.steps} steps x {B} replicas) ...")
+    t_start = time.perf_counter()
+    final = jax.lax.fori_loop(0, args.steps, body_fn, carry0)
+    if args.thermostat == "langevin":
+        _, (R_traj, V_traj, E_traj, mu_traj), _ = final
+    else:
+        _, (R_traj, V_traj, E_traj, mu_traj) = final
+    E_traj.block_until_ready()
+    t_end = time.perf_counter()
+
+    wall = t_end - t_start
+    total_steps = args.steps * B
+    ns_per_day = (args.steps * dt * 1e-6) / (wall / 86400.0)
+
+    print(f"\n  Wall time        : {wall:.2f} s")
+    print(f"  Steps (total)    : {total_steps} ({args.steps} x {B})")
+    print(f"  Aggregate rate   : {total_steps / wall:.0f} steps/s")
+    print(f"  Throughput       : {ns_per_day * B:.3f} ns/day (total)")
+    print(f"                   : {ns_per_day:.3f} ns/day (per replica)")
+
+    # ---- summary statistics ---------------------------------------------
+    E_np = np.asarray(E_traj)           # (n_saved, B)
+    V_np = np.asarray(V_traj)           # (n_saved, B, N, 3)
+    masses_np = np.asarray(masses_amu)   # (N,)
+
+    Ekin = 0.5 * np.sum(
+        masses_np[None, None, :, None] * AMU_TO_EV_FS2_ANG2 * V_np**2,
+        axis=(2, 3))                     # (n_saved, B)
+    T_arr = 2.0 * Ekin / (3.0 * N * BOLTZMANN_EV)
+    Etot = E_np + Ekin
+
+    pi = max(1, n_saved // 20)
+    print(f"\n  {'frame':>6s} {'time(fs)':>10s}", end="")
+    for b in range(min(B, 4)):
+        print(f" {'E_pot['+str(b)+'](eV)':>14s} {'T['+str(b)+'](K)':>8s}", end="")
+    if B > 4:
+        print("  ...", end="")
+    print()
+    print("  " + "-" * (18 + min(B, 4) * 24))
+    for i in range(0, n_saved, pi):
+        t_fs = i * si * dt
+        print(f"  {i:6d} {t_fs:10.1f}", end="")
+        for b in range(min(B, 4)):
+            print(f" {E_np[i, b]:14.6f} {T_arr[i, b]:8.1f}", end="")
+        print()
+    if (n_saved - 1) % pi != 0:
+        i = n_saved - 1
+        t_fs = i * si * dt
+        print(f"  {i:6d} {t_fs:10.1f}", end="")
+        for b in range(min(B, 4)):
+            print(f" {E_np[i, b]:14.6f} {T_arr[i, b]:8.1f}", end="")
+        print()
+
+    print(f"\n  T range (all)    : {T_arr.min():.1f} - {T_arr.max():.1f} K "
+          f"(mean {T_arr.mean():.1f} K)")
+
+    # ---- save per-replica trajectories ----------------------------------
+    R_np = np.asarray(R_traj)           # (n_saved, B, N, 3)
+    mu_np = np.asarray(mu_traj)          # (n_saved, B, 3)
+    Z_np = np.asarray(Z)
+    Ef_np = np.asarray(Ef)
+
+    out = Path(args.output)
+    stem, sfx = out.stem, (out.suffix or ".traj")
+    print()
+    for b in range(B):
+        fpath = out.parent / f"{stem}_replica{b}{sfx}"
+        traj = Trajectory(str(fpath), "w")
+        for i in range(n_saved):
+            a = ase.Atoms(numbers=Z_np, positions=R_np[i, b])
+            v_ase = V_np[i, b] * np.sqrt(AMU_TO_EV_FS2_ANG2)
+            a.set_momenta(masses_np[:, None] * v_ase)
+            a.info["electric_field"] = Ef_np
+            a.info["ml_dipole"] = mu_np[i, b]
+            a.info["step"] = i * si
+            a.info["time_fs"] = i * si * dt
+            a.info["replica"] = b
+            sp = SinglePointCalculator(a, energy=float(E_np[i, b]))
+            sp.results["dipole"] = mu_np[i, b]
+            a.calc = sp
+            traj.write(a)
+        traj.close()
+        print(f"  Replica {b:3d} -> {fpath} ({n_saved} frames)")
+
+    print(f"\n{'=' * 70}")
+    print(f"  Batched MD complete — {B} trajectories x {n_saved} frames saved.")
+    print(f"{'=' * 70}")
+
+
 def main(args=None):
     if args is None:
         args = get_args()
+    if getattr(args, "n_replicas", 1) > 1:
+        return main_batched(args)
     """Run molecular dynamics simulation."""
     print("=" * 60)
     print("ASE Molecular Dynamics with Electric Field Model")
