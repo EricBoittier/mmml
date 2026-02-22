@@ -542,39 +542,40 @@ def main_batched(args):
             print(f"    frame {i+1}/{n_saved}")
     print(f"  Done in {time.perf_counter() - t0:.2f} s")
 
-    # ---- save per-replica trajectories ----------------------------------
-    R_np = np.asarray(R_traj)           # (n_saved, B, N, 3)
-    mu_np = np.asarray(mu_traj)          # (n_saved, B, 3)
+    # ---- save all replicas to a single .npz ------------------------------
+    R_np = np.asarray(R_traj)            # (n_saved, B, N, 3)
+    mu_np = np.asarray(mu_traj)           # (n_saved, B, 3)
     Z_np = np.asarray(Z)
     Ef_np = np.asarray(Ef)
 
     out = Path(args.output)
-    stem, sfx = out.stem, (out.suffix or ".traj")
-    print()
-    for b in range(B):
-        fpath = out.parent / f"{stem}_replica{b}{sfx}"
-        traj = Trajectory(str(fpath), "w")
-        for i in range(n_saved):
-            a = ase.Atoms(numbers=Z_np, positions=R_np[i, b])
-            v_ase = V_np[i, b] * np.sqrt(AMU_TO_EV_FS2_ANG2)
-            a.set_momenta(masses_np[:, None] * v_ase)
-            a.arrays["velocities"] = V_np[i, b]
-            a.arrays["ml_charges"] = charges_all[i, b]
-            a.arrays["ml_atomic_dipoles"] = at_dipoles_all[i, b]
-            a.info["electric_field"] = Ef_np
-            a.info["ml_dipole"] = mu_np[i, b]
-            a.info["step"] = i * si
-            a.info["time_fs"] = i * si * dt
-            a.info["replica"] = b
-            sp = SinglePointCalculator(a, energy=float(E_np[i, b]))
-            sp.results["dipole"] = mu_np[i, b]
-            a.calc = sp
-            traj.write(a)
-        traj.close()
-        print(f"  Replica {b:3d} -> {fpath} ({n_saved} frames)")
+    npz_path = out.parent / (out.stem + ".npz")
+
+    t0 = time.perf_counter()
+    np.savez(
+        npz_path,
+        Z=Z_np,                           # (N,)
+        R=R_np,                           # (n_saved, B, N, 3)  positions [Å]
+        V=V_np,                           # (n_saved, B, N, 3)  velocities [Å/fs]
+        E=E_np,                           # (n_saved, B)        potential energy [eV]
+        D=mu_np,                          # (n_saved, B, 3)     dipole [a.u.]
+        Q=charges_all,                    # (n_saved, B, N)     atomic charges [e]
+        AD=at_dipoles_all,                # (n_saved, B, N, 3)  atomic dipoles [a.u.]
+        Ef=Ef_np,                         # (3,)
+        masses=masses_np,                 # (N,)
+        dt_fs=np.float64(dt),
+        save_interval=np.int32(si),
+        n_replicas=np.int32(B),
+        thermostat=np.array(args.thermostat),
+        temperature=np.float64(args.temperature),
+    )
+    print(f"\n  Saved {npz_path}  ({n_saved} frames x {B} replicas, "
+          f"{npz_path.stat().st_size / 1e6:.1f} MB, "
+          f"{time.perf_counter() - t0:.2f} s)")
 
     print(f"\n{'=' * 70}")
-    print(f"  Batched MD complete — {B} trajectories x {n_saved} frames saved.")
+    print(f"  Batched MD complete — {n_saved} frames x {B} replicas.")
+    print(f"  Output: {npz_path}")
     print(f"{'=' * 70}")
 
 
