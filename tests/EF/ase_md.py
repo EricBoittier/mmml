@@ -483,6 +483,36 @@ def main_batched(args):
     print(f"\n  T range (all)    : {T_arr.min():.1f} - {T_arr.max():.1f} K "
           f"(mean {T_arr.mean():.1f} K)")
 
+    # ---- compute atomic charges & dipoles (post-hoc) --------------------
+    # Uses Flax's mutable='intermediates' to extract the sow'd values.
+    # One batched call per saved frame (all B replicas at once).
+    @jax.jit
+    def get_charges_batch(positions):
+        """(B, N, 3) -> charges (B, N), atomic_dipoles (B, N, 3)"""
+        (_energy, _dipole), state = model.apply(
+            params, Z_batched, positions, Ef_batched,
+            dst_idx_flat=dst_idx_flat, src_idx_flat=src_idx_flat,
+            batch_segments=batch_segments, batch_size=B,
+            dst_idx=dst_idx, src_idx=src_idx,
+            mutable=['intermediates'])
+        intermediates = state.get('intermediates', {})
+        charges = intermediates.get('atomic_charges', (None,))[-1]
+        at_dip = intermediates.get('atomic_dipoles', (None,))[-1]
+        return charges, at_dip
+
+    print(f"\n  Computing atomic charges for {n_saved} frames x {B} replicas ...")
+    charges_all = np.zeros((n_saved, B, N), dtype=np.float32)
+    at_dipoles_all = np.zeros((n_saved, B, N, 3), dtype=np.float32)
+
+    t0 = time.perf_counter()
+    for i in range(n_saved):
+        q, mu_at = get_charges_batch(R_traj[i])
+        charges_all[i] = np.asarray(q)
+        at_dipoles_all[i] = np.asarray(mu_at)
+        if (i + 1) % max(1, n_saved // 10) == 0 or i == 0:
+            print(f"    frame {i+1}/{n_saved}")
+    print(f"  Done in {time.perf_counter() - t0:.2f} s")
+
     # ---- save per-replica trajectories ----------------------------------
     R_np = np.asarray(R_traj)           # (n_saved, B, N, 3)
     mu_np = np.asarray(mu_traj)          # (n_saved, B, 3)
@@ -499,6 +529,9 @@ def main_batched(args):
             a = ase.Atoms(numbers=Z_np, positions=R_np[i, b])
             v_ase = V_np[i, b] * np.sqrt(AMU_TO_EV_FS2_ANG2)
             a.set_momenta(masses_np[:, None] * v_ase)
+            a.arrays["velocities"] = V_np[i, b]
+            a.arrays["ml_charges"] = charges_all[i, b]
+            a.arrays["ml_atomic_dipoles"] = at_dipoles_all[i, b]
             a.info["electric_field"] = Ef_np
             a.info["ml_dipole"] = mu_np[i, b]
             a.info["step"] = i * si
