@@ -178,6 +178,49 @@ def dipole_derivative_field(
     return jax.jacrev(dipole_fn)(Ef)
 
 
+def dipole_derivative_field_batched(
+    model_apply, params, atomic_numbers, positions, Ef,
+    dst_idx_flat, src_idx_flat, batch_segments, batch_size,
+    dst_idx=None, src_idx=None,
+):
+    """Batched polarizability:  alpha_ab = d(mu_a)/d(Ef_b) for B geometries.
+
+    Uses a shared-field trick: differentiates w.r.t. a single Ef vector (3,)
+    that is tiled to all B geometries, yielding a (B, 3, 3) Jacobian directly
+    instead of (B, 3, B, 3) — avoiding O(B²) redundant cross-molecule terms.
+
+    All inputs must be pre-batched for B geometries (the model's native batch
+    format), except Ef which is a single (3,) vector shared across the batch.
+
+    Parameters
+    ----------
+    atomic_numbers : (B, N)
+    positions      : (B, N, 3)
+    Ef             : (3,)  — single shared electric field (tiled internally)
+    dst_idx_flat   : pre-computed flat indices for batch_size = B
+    src_idx_flat   : pre-computed flat indices for batch_size = B
+    batch_segments : (B*N,)
+    batch_size     : B
+
+    Returns
+    -------
+    alpha : (B, 3, 3) — d(mu)/d(Ef) per geometry (in raw model units;
+            divide by field_scale for physical au polarizability).
+    """
+    def dipole_fn(ef_shared):
+        ef_batch = jnp.tile(ef_shared[None, :], (batch_size, 1))
+        _energy, dipole = model_apply(
+            params,
+            atomic_numbers=atomic_numbers, positions=positions, Ef=ef_batch,
+            dst_idx_flat=dst_idx_flat, src_idx_flat=src_idx_flat,
+            batch_segments=batch_segments, batch_size=batch_size,
+            dst_idx=dst_idx, src_idx=src_idx,
+        )
+        return dipole  # (B, 3)
+
+    return jax.jacrev(dipole_fn)(Ef)  # (B, 3, 3)
+
+
 def dipole_derivative_positions(
     model_apply, params, atomic_numbers, positions, Ef,
     dst_idx_flat, src_idx_flat, batch_segments, batch_size,
