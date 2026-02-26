@@ -37,24 +37,20 @@ class MessagePassingModel(nn.Module):
     num_iterations: int = 3
     num_basis_functions: int = 8
     cutoff: float = 5.0
-    max_atomic_number: int = 55  
+    max_atomic_number: int = 22  
     include_pseudotensors: bool = True
 
     def handedness(self, atomic_numbers, positions, dst_idx, src_idx, batch_segments, batch_size):
         num_atoms = positions.shape[1]
-    
         # Flatten batch
         positions_flat = positions.reshape(-1, 3)       # (batch_size*num_atoms, 3)
         atomic_numbers_flat = atomic_numbers.reshape(-1)  # (batch_size*num_atoms,)
-    
         # Adjust indices for batching
         offsets = jnp.arange(batch_size) * num_atoms
         dst_idx_flat = (dst_idx[None, :] + offsets[:, None]).reshape(-1)
         src_idx_flat = (src_idx[None, :] + offsets[:, None]).reshape(-1)
-    
         # Compute displacements
         displacements = positions_flat[src_idx_flat] - positions_flat[dst_idx_flat]
-    
         # Compute basis
         basis = e3x.nn.basis(
             displacements,
@@ -63,15 +59,13 @@ class MessagePassingModel(nn.Module):
             radial_fn=e3x.nn.reciprocal_bernstein,
             cutoff_fn=functools.partial(e3x.nn.smooth_cutoff, cutoff=self.cutoff)
         )
-    
         # Embed atomic numbers
         x = e3x.nn.Embed(num_embeddings=self.max_atomic_number+1,
                          features=self.features)(atomic_numbers_flat)
-        # x.shape == (num_atoms_flat, features) → correct for MessagePass
-    
         # Message-passing
         for i in range(self.num_iterations):
-            y = e3x.nn.MessagePass(include_pseudotensors=self.include_pseudotensors,max_degree=self.max_degree if i < self.num_iterations-1 else 0)(
+            y = e3x.nn.MessagePass(include_pseudotensors=self.include_pseudotensors,
+                                   max_degree=self.max_degree)(
                 x, basis, dst_idx=dst_idx_flat, src_idx=src_idx_flat
             )
     
@@ -85,16 +79,7 @@ class MessagePassingModel(nn.Module):
         # element_bias = self.param('element_bias', lambda rng, shape: jnp.zeros(shape), (self.max_atomic_number+1,))
         atomic_energies = nn.Dense(1, use_bias=False, kernel_init=jax.nn.initializers.zeros)(x)
         atomic_energies = jnp.squeeze(atomic_energies, axis=-1)
-        # atomic_energies += element_bias[atomic_numbers_flat]
-    
-        # Sum per batch
-        # energy = jax.ops.segment_sum(atomic_energies, segment_ids=batch_segments, num_segments=batch_size)
-        # energy = energy.reshape((batch_size, 1, 1))
         final = e3x.nn.activations.hard_tanh(atomic_energies)
-
-
-        # jax.debug.print("{x} {y}", x=final, y=final.sum())
-        
         return final.sum()
 
 
@@ -123,12 +108,12 @@ def prepare_datasets(key, num_train, num_valid, dataset):
 
   # Collect and return train and validation sets.
   train_data = dict(
-    handedness=jnp.asarray([-1.0 if _ == "R" else 1.0 for _ in dataset["handedness"]],dtype=jnp.float32)[train_choice],
+    handedness=jnp.asarray([_ for _ in dataset["handedness"]],dtype=jnp.float32)[train_choice],
     atomic_numbers=jnp.asarray(dataset['Z'], dtype=jnp.int32)[train_choice],
     positions=jnp.asarray(dataset['R'], dtype=jnp.float32)[train_choice],
   )
   valid_data = dict(
-    handedness=jnp.asarray([-1 if _ == "R" else 1 for _ in dataset["handedness"]], dtype=jnp.float32)[valid_choice],
+    handedness=jnp.asarray([ _ for _ in dataset["handedness"]], dtype=jnp.float32)[valid_choice],
     atomic_numbers=jnp.asarray(dataset['Z'], dtype=jnp.int32)[valid_choice],
     positions=jnp.asarray(dataset['R'], dtype=jnp.float32)[valid_choice],
   )
@@ -283,7 +268,7 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
 
 
   # Return final model parameters.
-  return params
+  return params, model, valid_batches
 
 
 
@@ -299,16 +284,16 @@ def main(args):
      num_basis_functions=args.num_basis_functions, 
      cutoff=args.cutoff)
 
-  params = train_model(
+  params, model, valid_batches = train_model(
     key, model, train_data, valid_data,
      args.num_epochs, 
      args.learning_rate, 
      args.batch_size)
      
-  return params
+  return params, model, valid_batches
 
 
 if __name__ == "__main__":
   args = get_args()
-  params = main(args)
+  params, model, valid_batches = main(args)
   print(params)
