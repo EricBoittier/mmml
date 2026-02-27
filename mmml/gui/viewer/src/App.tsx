@@ -7,16 +7,22 @@ import PropertyChart from './components/PropertyChart';
 import ScatterPlot from './components/ScatterPlot';
 import PCAProjection from './components/PCAProjection';
 import FileSidebar from './components/FileSidebar';
+import HiddenStatesPanel from './components/HiddenStatesPanel';
+import GeometryDatasetPanel, { GeometryDatasetPoint } from './components/GeometryDatasetPanel';
 import {
   listFiles,
   getFileMetadata,
   getFrame,
   getProperties,
-  getFramesBatch,
+  getFramesChunk,
+  getGeometryDataset,
+  getConfig,
+  getHiddenStates,
   FileInfo,
   FileMetadata,
   FrameData,
   Properties,
+  HiddenStatesResponse,
 } from './api/client';
 
 // Number of frames to preload in each direction
@@ -27,6 +33,7 @@ function App() {
   const [files, setFiles] = useState<FileInfo[]>([]);
   const [selectedFile, setSelectedFile] = useState<FileInfo | null>(null);
   const [metadata, setMetadata] = useState<FileMetadata | null>(null);
+  const replicaCount = metadata?.n_replicas ?? 1;
   
   // Frame state
   const [currentFrame, setCurrentFrame] = useState(0);
@@ -34,7 +41,7 @@ function App() {
   const [properties, setProperties] = useState<Properties | null>(null);
   
   // Frame cache for preloading
-  const frameCache = useRef<Map<number, FrameData>>(new Map());
+  const frameCache = useRef<Map<string, FrameData>>(new Map());
   const preloadingRef = useRef<Set<number>>(new Set());
   
   // UI state
@@ -46,6 +53,23 @@ function App() {
   const [showDipole, setShowDipole] = useState(true);
   const [showElectricField, setShowElectricField] = useState(true);
   const [showForces, setShowForces] = useState(true);
+  const [selectedReplica, setSelectedReplica] = useState(0);
+  const [showAllReplicasInView, setShowAllReplicasInView] = useState(false);
+  const [highlightSelectedReplica, setHighlightSelectedReplica] = useState(true);
+  const [showHiddenPanel, setShowHiddenPanel] = useState(false);
+  const [hiddenModelAvailable, setHiddenModelAvailable] = useState(false);
+  const [hiddenCompareEnabled, setHiddenCompareEnabled] = useState(false);
+  const [hiddenCompareFrame, setHiddenCompareFrame] = useState(0);
+  const [hiddenCompareReplica, setHiddenCompareReplica] = useState(0);
+  const [hiddenData, setHiddenData] = useState<HiddenStatesResponse | null>(null);
+  const [hiddenLoading, setHiddenLoading] = useState(false);
+  const [hiddenError, setHiddenError] = useState<string | null>(null);
+  const hiddenCache = useRef<Map<string, HiddenStatesResponse>>(new Map());
+  const [selectedAtoms, setSelectedAtoms] = useState<number[]>([]);
+  const [geometryDataset, setGeometryDataset] = useState<GeometryDatasetPoint[] | null>(null);
+  const [geometryLoading, setGeometryLoading] = useState(false);
+  const [geometryError, setGeometryError] = useState<string | null>(null);
+  const [geometryStride, setGeometryStride] = useState(1);
   
   // Panel visibility
   const [showStructurePanel, setShowStructurePanel] = useState(false);
@@ -137,6 +161,11 @@ function App() {
   // Load file list on mount
   useEffect(() => {
     loadFiles();
+    loadConfig();
+  }, []);
+
+  const buildFrameCacheKey = useCallback((frame: number, replica: number, includeAllReplicas: boolean, includePdb: boolean) => {
+    return `${frame}|${replica}|${includeAllReplicas ? 1 : 0}|${includePdb ? 1 : 0}`;
   }, []);
 
   const loadFiles = async () => {
@@ -153,11 +182,32 @@ function App() {
     }
   };
 
+  const loadConfig = async () => {
+    try {
+      const cfg = await getConfig();
+      setHiddenModelAvailable(Boolean(cfg.hidden_model_available));
+    } catch {
+      setHiddenModelAvailable(false);
+    }
+  };
+
   const selectFile = async (file: FileInfo) => {
     setLoading(true);
     setError(null);
     setSelectedFile(file);
     setCurrentFrame(0);
+    setSelectedReplica(0);
+    setShowAllReplicasInView(false);
+    setHighlightSelectedReplica(true);
+    setHiddenCompareEnabled(false);
+    setHiddenCompareFrame(0);
+    setHiddenCompareReplica(0);
+    setHiddenData(null);
+    setHiddenError(null);
+    setSelectedAtoms([]);
+    setGeometryDataset(null);
+    setGeometryError(null);
+    setGeometryStride(1);
     
     // Clear frame cache for new file
     frameCache.current.clear();
@@ -169,16 +219,17 @@ function App() {
       setMetadata(meta);
       
       // Load first frame
-      const frame = await getFrame(file.path, 0);
+      const includePdb = showStructurePanel;
+      const frame = await getFrame(file.path, 0, 0, false, includePdb);
       setFrameData(frame);
-      frameCache.current.set(0, frame);
+      frameCache.current.set(buildFrameCacheKey(0, 0, false, includePdb), frame);
       
       // Load properties for charts
       const props = await getProperties(file.path);
       setProperties(props);
       
       // Preload nearby frames in background
-      preloadFrames(file.path, 0, meta.n_frames);
+      preloadFrames(file.path, 0, meta.n_frames, 0, false, includePdb);
     } catch (err) {
       setError(`Failed to load file: ${err}`);
     } finally {
@@ -187,39 +238,43 @@ function App() {
   };
 
   // Preload frames around a given index
-  const preloadFrames = useCallback(async (filePath: string, centerIndex: number, totalFrames: number) => {
-    const indicesToLoad: number[] = [];
-    
-    for (let i = 1; i <= PRELOAD_WINDOW; i++) {
-      // Forward frames
-      const forward = centerIndex + i;
-      if (forward < totalFrames && !frameCache.current.has(forward) && !preloadingRef.current.has(forward)) {
-        indicesToLoad.push(forward);
-        preloadingRef.current.add(forward);
-      }
-      // Backward frames
-      const backward = centerIndex - i;
-      if (backward >= 0 && !frameCache.current.has(backward) && !preloadingRef.current.has(backward)) {
-        indicesToLoad.push(backward);
-        preloadingRef.current.add(backward);
+  const preloadFrames = useCallback(async (
+    filePath: string,
+    centerIndex: number,
+    totalFrames: number,
+    replica: number,
+    includeAllReplicas: boolean,
+    includePdb: boolean,
+  ) => {
+    const start = Math.max(0, centerIndex - PRELOAD_WINDOW);
+    const end = Math.min(totalFrames, centerIndex + PRELOAD_WINDOW + 1);
+    const missingIndices: number[] = [];
+    for (let idx = start; idx < end; idx++) {
+      if (idx === centerIndex) continue;
+      const key = buildFrameCacheKey(idx, replica, includeAllReplicas, includePdb);
+      if (!frameCache.current.has(key) && !preloadingRef.current.has(idx)) {
+        missingIndices.push(idx);
+        preloadingRef.current.add(idx);
       }
     }
-    
-    if (indicesToLoad.length === 0) return;
+
+    if (missingIndices.length === 0) return;
     
     try {
-      const frames = await getFramesBatch(filePath, indicesToLoad);
-      for (const [idxStr, frame] of Object.entries(frames)) {
-        const idx = parseInt(idxStr, 10);
-        frameCache.current.set(idx, frame);
+      const chunk = await getFramesChunk(filePath, start, end, 1, replica, includeAllReplicas, includePdb);
+      chunk.frame_indices.forEach((idx, i) => {
+        const frame = chunk.frames[i];
+        frameCache.current.set(buildFrameCacheKey(idx, replica, includeAllReplicas, includePdb), frame);
         preloadingRef.current.delete(idx);
-      }
+      });
+      // Clean up any requested indices not returned.
+      missingIndices.forEach((idx) => preloadingRef.current.delete(idx));
     } catch (err) {
       // Silent failure for preloading
       console.warn('Preload failed:', err);
-      indicesToLoad.forEach(idx => preloadingRef.current.delete(idx));
+      missingIndices.forEach(idx => preloadingRef.current.delete(idx));
     }
-  }, []);
+  }, [buildFrameCacheKey]);
 
   const handleFrameChange = useCallback(async (frameIndex: number) => {
     if (!selectedFile || !metadata) return;
@@ -227,25 +282,188 @@ function App() {
     setCurrentFrame(frameIndex);
     
     // Check cache first
-    const cached = frameCache.current.get(frameIndex);
+    const includePdb = showStructurePanel;
+    const cacheKey = buildFrameCacheKey(frameIndex, selectedReplica, showAllReplicasInView, includePdb);
+    const cached = frameCache.current.get(cacheKey);
     if (cached) {
       setFrameData(cached);
       // Still preload nearby frames
-      preloadFrames(selectedFile.path, frameIndex, metadata.n_frames);
+      preloadFrames(selectedFile.path, frameIndex, metadata.n_frames, selectedReplica, showAllReplicasInView, includePdb);
       return;
     }
     
     try {
-      const frame = await getFrame(selectedFile.path, frameIndex);
+      const frame = await getFrame(
+        selectedFile.path,
+        frameIndex,
+        selectedReplica,
+        showAllReplicasInView,
+        includePdb
+      );
       setFrameData(frame);
-      frameCache.current.set(frameIndex, frame);
+      frameCache.current.set(cacheKey, frame);
       
       // Preload nearby frames
-      preloadFrames(selectedFile.path, frameIndex, metadata.n_frames);
+      preloadFrames(selectedFile.path, frameIndex, metadata.n_frames, selectedReplica, showAllReplicasInView, includePdb);
     } catch (err) {
       setError(`Failed to load frame: ${err}`);
     }
-  }, [selectedFile, metadata, preloadFrames]);
+  }, [selectedFile, metadata, preloadFrames, selectedReplica, showAllReplicasInView, buildFrameCacheKey, showStructurePanel]);
+
+  useEffect(() => {
+    if (!selectedFile || !metadata) return;
+    handleFrameChange(currentFrame);
+  }, [selectedReplica, showAllReplicasInView, selectedFile, metadata, currentFrame, handleFrameChange, showStructurePanel]);
+
+  const metricKind = selectedAtoms.length === 2 ? 'bond' : selectedAtoms.length === 3 ? 'angle' : selectedAtoms.length === 4 ? 'dihedral' : null;
+  const metricUnit = metricKind === 'bond' ? 'A' : 'deg';
+  const metricLabel = metricKind ? metricKind[0].toUpperCase() + metricKind.slice(1) : 'Geometry';
+
+  const computeMetric = useCallback((positions: number[][], atoms: number[]): number | null => {
+    if (atoms.length < 2 || atoms.length > 4) return null;
+    const p = atoms.map((idx) => positions[idx]).filter(Boolean);
+    if (p.length !== atoms.length) return null;
+    const v = (a: number[], b: number[]) => [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+    const norm = (x: number[]) => Math.sqrt(x[0] ** 2 + x[1] ** 2 + x[2] ** 2);
+    const dot = (a: number[], b: number[]) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    const cross = (a: number[], b: number[]) => [
+      a[1] * b[2] - a[2] * b[1],
+      a[2] * b[0] - a[0] * b[2],
+      a[0] * b[1] - a[1] * b[0],
+    ];
+    const clamp = (x: number) => Math.max(-1, Math.min(1, x));
+
+    if (atoms.length === 2) {
+      return norm(v(p[0], p[1]));
+    }
+    if (atoms.length === 3) {
+      const ba = v(p[1], p[0]);
+      const bc = v(p[1], p[2]);
+      const val = clamp(dot(ba, bc) / (norm(ba) * norm(bc)));
+      return (Math.acos(val) * 180) / Math.PI;
+    }
+    // Signed torsion angle in degrees, in [-180, 180].
+    const b0 = v(p[1], p[0]);
+    const b1 = v(p[1], p[2]);
+    const b2 = v(p[2], p[3]);
+    const b1norm = norm(b1) || 1;
+    const b1n = b1.map((x) => x / b1norm);
+
+    const proj = (a: number[], n: number[]) => {
+      const d = dot(a, n);
+      return [a[0] - d * n[0], a[1] - d * n[1], a[2] - d * n[2]];
+    };
+    const vv = proj(b0, b1n);
+    const ww = proj(b2, b1n);
+
+    const x = dot(vv, ww);
+    const y = dot(cross(b1n, vv), ww);
+    let angle = (Math.atan2(y, x) * 180) / Math.PI;
+    if (angle > 180) angle -= 360;
+    if (angle < -180) angle += 360;
+    return angle;
+  }, []);
+
+  const currentMetricValue = useMemo(() => {
+    if (!frameData?.positions || !metricKind) return null;
+    return computeMetric(frameData.positions, selectedAtoms);
+  }, [frameData, metricKind, computeMetric, selectedAtoms]);
+
+  const geometryDisabledReason = useMemo(() => {
+    if (!selectedFile || !metadata) return 'No file selected.';
+    if (showAllReplicasInView) return 'Disable "All replicas (3D)" to select atoms.';
+    if (selectedAtoms.length < 2) return 'Select at least 2 atoms.';
+    if (selectedAtoms.length > 4) return 'Use up to 4 atoms.';
+    return null;
+  }, [selectedFile, metadata, showAllReplicasInView, selectedAtoms]);
+
+  const handleAtomPick = useCallback((atomIndex: number) => {
+    setSelectedAtoms((prev) => {
+      if (prev.includes(atomIndex)) {
+        return prev.filter((i) => i !== atomIndex);
+      }
+      const next = [...prev, atomIndex];
+      if (next.length > 4) next.shift();
+      return next;
+    });
+    setGeometryDataset(null);
+    setGeometryError(null);
+  }, []);
+
+  const createGeometryDataset = useCallback(async () => {
+    if (!selectedFile || !metadata || geometryDisabledReason || !metricKind) return;
+    try {
+      setGeometryLoading(true);
+      setGeometryError(null);
+      const resp = await getGeometryDataset(
+        selectedFile.path,
+        selectedAtoms,
+        metricKind as 'bond' | 'angle' | 'dihedral',
+        selectedReplica,
+        0,
+        metadata.n_frames,
+        geometryStride
+      );
+      setGeometryDataset(resp.points);
+    } catch (err) {
+      setGeometryError(`Failed to create dataset: ${err}`);
+    } finally {
+      setGeometryLoading(false);
+    }
+  }, [selectedFile, metadata, geometryDisabledReason, metricKind, selectedReplica, selectedAtoms, geometryStride]);
+
+  const exportGeometryCsv = useCallback(() => {
+    if (!geometryDataset || geometryDataset.length === 0) return;
+    const header = `frame,${metricKind ?? 'metric'},energy,force_max,force_mean,dipole_magnitude`;
+    const lines = geometryDataset.map((d) => `${d.frame},${d.value},${d.energy ?? ''},${d.force_max ?? ''},${d.force_mean ?? ''},${d.dipole_magnitude ?? ''}`);
+    const blob = new Blob([[header, ...lines].join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${metricKind ?? 'geometry'}_dataset.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [geometryDataset, metricKind]);
+
+  useEffect(() => {
+    const loadHidden = async () => {
+      if (!showHiddenPanel || !hiddenModelAvailable || !selectedFile) return;
+      const cacheKey = `${selectedFile.path}|${currentFrame}|${selectedReplica}|${hiddenCompareEnabled ? hiddenCompareFrame : 'none'}|${hiddenCompareEnabled ? hiddenCompareReplica : 'none'}`;
+      const cached = hiddenCache.current.get(cacheKey);
+      if (cached) {
+        setHiddenData(cached);
+        setHiddenError(null);
+        return;
+      }
+      try {
+        setHiddenLoading(true);
+        setHiddenError(null);
+        const resp = await getHiddenStates(
+          selectedFile.path,
+          currentFrame,
+          selectedReplica,
+          hiddenCompareEnabled ? hiddenCompareFrame : undefined,
+          hiddenCompareEnabled ? hiddenCompareReplica : undefined
+        );
+        hiddenCache.current.set(cacheKey, resp);
+        setHiddenData(resp);
+      } catch (err) {
+        setHiddenError(`Failed to load hidden states: ${err}`);
+      } finally {
+        setHiddenLoading(false);
+      }
+    };
+    loadHidden();
+  }, [
+    showHiddenPanel,
+    hiddenModelAvailable,
+    selectedFile,
+    currentFrame,
+    selectedReplica,
+    hiddenCompareEnabled,
+    hiddenCompareFrame,
+    hiddenCompareReplica,
+  ]);
 
   // Handle slider change in sorted view - converts sorted position to actual frame
   const handleSortedFrameChange = useCallback((sortedPosition: number) => {
@@ -281,6 +499,7 @@ function App() {
             <div className="text-sm text-slate-600 dark:text-slate-400">
               {selectedFile.filename}
               {metadata && ` • ${metadata.n_frames} frames • ${metadata.n_atoms} atoms`}
+              {metadata && replicaCount > 1 && ` • ${replicaCount} replicas`}
             </div>
           )}
         </div>
@@ -352,6 +571,45 @@ function App() {
                 </button>
                 
                 <div className="w-px h-5 bg-slate-300 dark:bg-slate-600" />
+
+                {metadata && replicaCount > 1 && (
+                  <>
+                    <span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Replicas:</span>
+                    <select
+                      value={selectedReplica}
+                      onChange={(e) => setSelectedReplica(parseInt(e.target.value, 10))}
+                      className="text-sm bg-slate-100 dark:bg-slate-700 border-none rounded px-2 py-1 text-slate-700 dark:text-slate-300"
+                    >
+                      {Array.from({ length: replicaCount }, (_, i) => (
+                        <option key={i} value={i}>Replica {i}</option>
+                      ))}
+                    </select>
+                    <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={showAllReplicasInView}
+                        onChange={(e) => setShowAllReplicasInView(e.target.checked)}
+                        className="w-4 h-4 rounded border-slate-300 text-indigo-500 focus:ring-indigo-500"
+                      />
+                      <span className="text-indigo-500">All replicas (3D)</span>
+                    </label>
+                    <label className={`flex items-center gap-2 text-sm cursor-pointer ${
+                      showAllReplicasInView
+                        ? 'text-slate-600 dark:text-slate-400'
+                        : 'text-slate-400 dark:text-slate-500'
+                    }`}>
+                      <input
+                        type="checkbox"
+                        checked={highlightSelectedReplica}
+                        disabled={!showAllReplicasInView}
+                        onChange={(e) => setHighlightSelectedReplica(e.target.checked)}
+                        className="w-4 h-4 rounded border-slate-300 text-emerald-500 focus:ring-emerald-500 disabled:opacity-50"
+                      />
+                      <span className="text-emerald-500">Highlight selected</span>
+                    </label>
+                    <div className="w-px h-5 bg-slate-300 dark:bg-slate-600" />
+                  </>
+                )}
                 
                 {/* Vector visualization toggles */}
                 <span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Show:</span>
@@ -398,6 +656,20 @@ function App() {
                   </label>
                 )}
                 
+                <div className="w-px h-5 bg-slate-300 dark:bg-slate-600" />
+
+                {hiddenModelAvailable && (
+                  <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={showHiddenPanel}
+                      onChange={(e) => setShowHiddenPanel(e.target.checked)}
+                      className="w-4 h-4 rounded border-slate-300 text-violet-500 focus:ring-violet-500"
+                    />
+                    <span className="text-violet-500">Model states</span>
+                  </label>
+                )}
+
                 <div className="w-px h-5 bg-slate-300 dark:bg-slate-600" />
                 
                 {/* Sort order selector */}
@@ -482,12 +754,18 @@ function App() {
                       <VectorViewer3D
                         positions={frameData?.positions || null}
                         atomicNumbers={frameData?.atomic_numbers || null}
+                        replicaFrames={frameData?.replica_frames || null}
+                        selectedReplica={selectedReplica}
+                        highlightSelectedReplica={highlightSelectedReplica}
                         forces={frameData?.forces || null}
                         dipole={frameData?.dipole || null}
                         electricField={frameData?.electric_field || null}
                         showForces={showForces}
                         showDipole={showDipole}
                         showElectricField={showElectricField}
+                        viewSessionKey={`${selectedFile?.path ?? ''}|${showAllReplicasInView ? 'all' : 'single'}`}
+                        selectedAtomIndices={selectedAtoms}
+                        onAtomPick={handleAtomPick}
                       />
                     </div>
                   )}
@@ -542,6 +820,47 @@ function App() {
                   properties={properties}
                   currentFrame={currentFrame}
                   onFrameClick={handleChartClick}
+                />
+              )}
+
+              {showHiddenPanel && metadata && selectedFile && (
+                <HiddenStatesPanel
+                  data={hiddenData}
+                  loading={hiddenLoading}
+                  error={hiddenError}
+                  currentFrame={currentFrame}
+                  currentReplica={selectedReplica}
+                  totalFrames={metadata.n_frames}
+                  replicaCount={replicaCount}
+                  compareEnabled={hiddenCompareEnabled}
+                  compareFrame={hiddenCompareFrame}
+                  compareReplica={hiddenCompareReplica}
+                  onCompareEnabledChange={setHiddenCompareEnabled}
+                  onCompareFrameChange={setHiddenCompareFrame}
+                  onCompareReplicaChange={setHiddenCompareReplica}
+                />
+              )}
+
+              {metadata && selectedFile && (
+                <GeometryDatasetPanel
+                  selectedAtoms={selectedAtoms}
+                  atomicNumbers={frameData?.atomic_numbers ?? null}
+                  metricLabel={metricLabel}
+                  metricUnit={metricUnit}
+                  currentValue={currentMetricValue}
+                  dataset={geometryDataset}
+                  loading={geometryLoading}
+                  error={geometryError}
+                  disabledReason={geometryDisabledReason}
+                  stride={geometryStride}
+                  onStrideChange={setGeometryStride}
+                  onCreateDataset={createGeometryDataset}
+                  onExportCsv={exportGeometryCsv}
+                  onClearSelection={() => {
+                    setSelectedAtoms([]);
+                    setGeometryDataset(null);
+                    setGeometryError(null);
+                  }}
                 />
               )}
             </>

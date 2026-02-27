@@ -78,6 +78,18 @@ Supported file formats:
         action='store_true',
         help='Do not open browser automatically'
     )
+    parser.add_argument(
+        '--model-params',
+        type=Path,
+        default=None,
+        help='Path to model parameters JSON for hidden-state inspection'
+    )
+    parser.add_argument(
+        '--model-config',
+        type=Path,
+        default=None,
+        help='Optional path to model config JSON for hidden-state inspection'
+    )
     
     args = parser.parse_args()
     
@@ -88,6 +100,12 @@ Supported file formats:
     
     if args.file and not args.file.exists():
         print(f"Error: File not found: {args.file}", file=sys.stderr)
+        return 1
+    if args.model_params and not args.model_params.exists():
+        print(f"Error: Model params file not found: {args.model_params}", file=sys.stderr)
+        return 1
+    if args.model_config and not args.model_config.exists():
+        print(f"Error: Model config file not found: {args.model_config}", file=sys.stderr)
         return 1
     
     # Check dependencies
@@ -128,6 +146,8 @@ Supported file formats:
         data_dir=str(args.data_dir) if args.data_dir else None,
         single_file=str(args.file) if args.file else None,
         static_dir=static_dir,
+        model_params=str(args.model_params) if args.model_params else None,
+        model_config=str(args.model_config) if args.model_config else None,
     )
     
     # Print startup message
@@ -155,6 +175,7 @@ Supported file formats:
     print(f"  GET /api/file/{{path}} - Get file metadata")
     print(f"  GET /api/frame/{{path}}?index=N - Get frame data")
     print(f"  GET /api/properties/{{path}} - Get all properties")
+    print(f"  GET /api/hidden/{{path}}?index=N - Get hidden-state summaries")
     print("=" * 60)
     print()
     

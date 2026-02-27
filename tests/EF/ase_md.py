@@ -64,6 +64,9 @@ def get_args(**kwargs):
         "opt_steps": 2000,
         "maxstep": 0.04,
         "n_replicas": 1,
+        "ramp_field_axis": None,
+        "ramp_field_peak": None,
+        "ramp_field_start": None,
     }
     
     # Check if we're in a notebook/IPython environment
@@ -131,6 +134,15 @@ def get_args(**kwargs):
         parser.add_argument("--n-replicas", type=int, default=defaults["n_replicas"],
                            help="Run N independent replicas in a single GPU-batched "
                                 "JIT-compiled loop (requires JAX). Default 1 = standard ASE MD.")
+        parser.add_argument("--ramp-field-axis", type=str, choices=["x", "y", "z"],
+                           default=defaults["ramp_field_axis"],
+                           help="Enable electric-field ramp mode on this axis.")
+        parser.add_argument("--ramp-field-peak", type=float, default=defaults["ramp_field_peak"],
+                           help="Peak electric-field value reached halfway through MD "
+                                "for the selected ramp axis.")
+        parser.add_argument("--ramp-field-start", type=float, default=defaults["ramp_field_start"],
+                           help="Optional ramp start value on selected axis. "
+                                "If omitted, uses initial field component.")
         
         args = parser.parse_args()
         return SimpleNamespace(
@@ -156,6 +168,9 @@ def get_args(**kwargs):
             opt_steps=args.opt_steps,
             maxstep=args.maxstep,
             n_replicas=args.n_replicas,
+            ramp_field_axis=args.ramp_field_axis,
+            ramp_field_peak=args.ramp_field_peak,
+            ramp_field_start=args.ramp_field_start,
         )
     
     # Otherwise, use notebook mode (defaults only)
@@ -582,7 +597,16 @@ def main_batched(args):
 def main(args=None):
     if args is None:
         args = get_args()
+    ramp_requested = (
+        getattr(args, "ramp_field_axis", None) is not None
+        or getattr(args, "ramp_field_peak", None) is not None
+        or getattr(args, "ramp_field_start", None) is not None
+    )
     if getattr(args, "n_replicas", 1) > 1:
+        if ramp_requested:
+            raise NotImplementedError(
+                "Electric-field ramp is currently supported only for n_replicas=1."
+            )
         return main_batched(args)
     """Run molecular dynamics simulation."""
     print("=" * 60)
@@ -618,10 +642,32 @@ def main(args=None):
         Ef = np.zeros(3, dtype=np.float64)
         print(f"  Electric field (default): {Ef}")
     atoms.info['electric_field'] = Ef
+    axis_map = {"x": 0, "y": 1, "z": 2}
+    ramp_axis = getattr(args, "ramp_field_axis", None)
+    ramp_peak = getattr(args, "ramp_field_peak", None)
+    ramp_start_arg = getattr(args, "ramp_field_start", None)
+    ramp_enabled = ramp_axis is not None or ramp_peak is not None or ramp_start_arg is not None
+
+    if ramp_enabled and (ramp_axis is None or ramp_peak is None):
+        raise ValueError(
+            "Ramp mode requires both --ramp-field-axis and --ramp-field-peak."
+        )
+
+    if ramp_enabled:
+        ramp_axis_idx = axis_map[ramp_axis]
+        ramp_axis_start = float(Ef[ramp_axis_idx]) if ramp_start_arg is None else float(ramp_start_arg)
+        ramp_axis_peak = float(ramp_peak)
+        Ef[ramp_axis_idx] = ramp_axis_start
+        atoms.info['electric_field'] = Ef.copy()
 
     print(f"  Number of atoms: {len(atoms)}")
     print(f"  Atomic numbers: {atoms.get_atomic_numbers()}")
     print(f"  Electric field: {Ef}")
+    if ramp_enabled:
+        print(
+            "  Field ramp     : enabled "
+            f"(axis={ramp_axis}, start={ramp_axis_start:.6f}, peak={ramp_axis_peak:.6f})"
+        )
 
     # --- Create calculator ---
     print(f"\nInitializing calculator from {args.params}...")
@@ -699,7 +745,34 @@ def main(args=None):
         e_tot = e_pot + e_kin
         temp = e_kin / (1.5 * units.kB * len(atoms))
         max_force = np.max(np.abs(atoms.get_forces()))
-        print(f"{step:8d} {time_fs:10.2f} {e_pot:12.6f} {e_kin:12.6f} {e_tot:12.6f} {temp:8.1f} {max_force:12.6f}")
+        ef_now = np.array(atoms.info.get("electric_field", Ef), dtype=np.float64)
+        ef_label = f" Ef[{ramp_axis}]={ef_now[ramp_axis_idx]: .6f}" if ramp_enabled else ""
+        print(
+            f"{step:8d} {time_fs:10.2f} {e_pot:12.6f} {e_kin:12.6f} "
+            f"{e_tot:12.6f} {temp:8.1f} {max_force:12.6f}{ef_label}"
+        )
+
+    def update_ramped_electric_field():
+        """Triangular ramp on one axis: start -> peak -> start over full trajectory."""
+        if not ramp_enabled:
+            return
+
+        if args.steps <= 1:
+            phase = 0.0
+        else:
+            phase = min(float(dyn.nsteps) / float(args.steps - 1), 1.0)
+
+        if phase <= 0.5:
+            frac = phase / 0.5
+            axis_value = ramp_axis_start + frac * (ramp_axis_peak - ramp_axis_start)
+        else:
+            frac = (phase - 0.5) / 0.5
+            axis_value = ramp_axis_peak + frac * (ramp_axis_start - ramp_axis_peak)
+
+        ef_step = np.array(Ef, dtype=np.float64)
+        ef_step[ramp_axis_idx] = axis_value
+        atoms.info["electric_field"] = ef_step
+        calc.set_electric_field(ef_step)
 
     # --- Property-saving callback (dipole always, charges optional) ---
     def save_properties():
@@ -721,6 +794,7 @@ def main(args=None):
     traj.write()
 
     # Attach callbacks — save_properties BEFORE traj.write
+    dyn.attach(update_ramped_electric_field, interval=1)
     dyn.attach(print_status, interval=args.log_interval)
     dyn.attach(save_properties, interval=args.traj_interval)
     dyn.attach(traj.write, interval=args.traj_interval)

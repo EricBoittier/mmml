@@ -17,6 +17,8 @@ def create_app(
     data_dir: Optional[str] = None,
     single_file: Optional[str] = None,
     static_dir: Optional[str] = None,
+    model_params: Optional[str] = None,
+    model_config: Optional[str] = None,
 ) -> FastAPI:
     """
     Create and configure the FastAPI application.
@@ -54,6 +56,9 @@ def create_app(
     app.state.data_dir = Path(data_dir).resolve() if data_dir else None
     app.state.single_file = Path(single_file).resolve() if single_file else None
     app.state.parsers = {}  # Cache for file parsers
+    app.state.model_params = Path(model_params).resolve() if model_params else None
+    app.state.model_config = Path(model_config).resolve() if model_config else None
+    app.state.hidden_inspector = None
     
     # API Routes
     @app.get("/api/health")
@@ -67,6 +72,9 @@ def create_app(
         return {
             "data_dir": str(app.state.data_dir) if app.state.data_dir else None,
             "single_file": str(app.state.single_file) if app.state.single_file else None,
+            "model_params": str(app.state.model_params) if app.state.model_params else None,
+            "model_config": str(app.state.model_config) if app.state.model_config else None,
+            "hidden_model_available": app.state.model_params is not None,
         }
     
     @app.get("/api/files")
@@ -105,6 +113,9 @@ def create_app(
     async def get_frame(
         path: str,
         index: int = Query(0, ge=0, description="Frame index"),
+        replica: int = Query(0, ge=0, description="Replica index"),
+        include_all_replicas: bool = Query(False, description="Include all replica coordinates"),
+        include_pdb: bool = Query(True, description="Include PDB string"),
     ):
         """Get a specific frame from a molecular file."""
         file_path = _resolve_path(app, path)
@@ -118,7 +129,12 @@ def create_app(
                 detail=f"Frame index {index} out of range (0-{metadata.n_frames-1})"
             )
         
-        frame = parser.get_frame(index)
+        frame = parser.get_frame(
+            index,
+            replica_index=replica,
+            include_all_replicas=include_all_replicas,
+            include_pdb=include_pdb,
+        )
         return frame.to_dict()
     
     @app.get("/api/properties/{path:path}")
@@ -148,6 +164,9 @@ def create_app(
     async def get_frames_batch(
         path: str,
         indices: str = Query(..., description="Comma-separated frame indices"),
+        replica: int = Query(0, ge=0, description="Replica index"),
+        include_all_replicas: bool = Query(False, description="Include all replica coordinates"),
+        include_pdb: bool = Query(True, description="Include PDB string"),
     ):
         """Get multiple frames at once for preloading."""
         file_path = _resolve_path(app, path)
@@ -165,10 +184,152 @@ def create_app(
         frames = {}
         for idx in frame_indices:
             if 0 <= idx < metadata.n_frames:
-                frame = parser.get_frame(idx)
+                frame = parser.get_frame(
+                    idx,
+                    replica_index=replica,
+                    include_all_replicas=include_all_replicas,
+                    include_pdb=include_pdb,
+                )
                 frames[str(idx)] = frame.to_dict()
         
         return frames
+
+    @app.get("/api/frames_chunk/{path:path}")
+    async def get_frames_chunk(
+        path: str,
+        start: int = Query(0, ge=0, description="Start frame index (inclusive)"),
+        end: int = Query(..., ge=0, description="End frame index (exclusive)"),
+        stride: int = Query(1, ge=1, description="Frame stride"),
+        replica: int = Query(0, ge=0, description="Replica index"),
+        include_all_replicas: bool = Query(False, description="Include all replica coordinates"),
+        include_pdb: bool = Query(False, description="Include PDB string"),
+    ):
+        """Get a contiguous frame chunk as packed arrays."""
+        file_path = _resolve_path(app, path)
+
+        parser = _get_parser(app, file_path)
+        metadata = parser.get_metadata()
+
+        if end <= start:
+            raise HTTPException(status_code=400, detail="end must be greater than start")
+        if start >= metadata.n_frames:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Start index {start} out of range (0-{metadata.n_frames-1})"
+            )
+        end = min(end, metadata.n_frames)
+
+        frame_indices = list(range(start, end, stride))
+        frames = []
+        for idx in frame_indices:
+            frame = parser.get_frame(
+                idx,
+                replica_index=replica,
+                include_all_replicas=include_all_replicas,
+                include_pdb=include_pdb,
+            )
+            frames.append(frame.to_dict())
+
+        return {
+            "start": start,
+            "end": end,
+            "stride": stride,
+            "frame_indices": frame_indices,
+            "frames": frames,
+        }
+
+    @app.get("/api/hidden/{path:path}")
+    async def get_hidden_states(
+        path: str,
+        index: int = Query(0, ge=0, description="Primary frame index"),
+        replica: int = Query(0, ge=0, description="Primary replica index"),
+        compare_index: Optional[int] = Query(None, ge=0, description="Comparison frame index"),
+        compare_replica: int = Query(0, ge=0, description="Comparison replica index"),
+    ):
+        """Get model hidden-state summaries for one or two selected frames."""
+        if app.state.model_params is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Hidden-state model not configured. Start GUI with --model-params.",
+            )
+
+        file_path = _resolve_path(app, path)
+        parser = _get_parser(app, file_path)
+        metadata = parser.get_metadata()
+
+        if index >= metadata.n_frames:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Frame index {index} out of range (0-{metadata.n_frames-1})",
+            )
+        if compare_index is not None and compare_index >= metadata.n_frames:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Compare frame index {compare_index} out of range (0-{metadata.n_frames-1})",
+            )
+
+        if app.state.hidden_inspector is None:
+            from .hidden import HiddenStateInspector
+            app.state.hidden_inspector = HiddenStateInspector(
+                params_path=app.state.model_params,
+                config_path=app.state.model_config,
+            )
+
+        primary_frame = parser.get_frame(index, replica_index=replica, include_all_replicas=False)
+        primary = app.state.hidden_inspector.inspect_frame(
+            positions=primary_frame.positions,
+            atomic_numbers=primary_frame.atomic_numbers,
+            electric_field=primary_frame.electric_field,
+        )
+
+        compare = None
+        if compare_index is not None:
+            compare_frame = parser.get_frame(compare_index, replica_index=compare_replica, include_all_replicas=False)
+            compare = app.state.hidden_inspector.inspect_frame(
+                positions=compare_frame.positions,
+                atomic_numbers=compare_frame.atomic_numbers,
+                electric_field=compare_frame.electric_field,
+            )
+
+        return {
+            "primary_index": index,
+            "primary_replica": replica,
+            "compare_index": compare_index,
+            "compare_replica": compare_replica if compare_index is not None else None,
+            "primary": primary,
+            "compare": compare,
+        }
+
+    @app.get("/api/geometry_dataset/{path:path}")
+    async def get_geometry_dataset(
+        path: str,
+        atoms: str = Query(..., description="Comma-separated atom indices (2-4 atoms)"),
+        metric: Optional[str] = Query(None, description="bond|angle|dihedral (optional; inferred from atom count)"),
+        replica: int = Query(0, ge=0, description="Replica index"),
+        start: int = Query(0, ge=0, description="Start frame index (inclusive)"),
+        end: Optional[int] = Query(None, ge=0, description="End frame index (exclusive)"),
+        stride: int = Query(1, ge=1, description="Frame stride"),
+    ):
+        """Compute bond/angle/dihedral dataset server-side for fast analysis."""
+        file_path = _resolve_path(app, path)
+        parser = _get_parser(app, file_path)
+
+        try:
+            atom_indices = [int(x.strip()) for x in atoms.split(",") if x.strip() != ""]
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid atoms format; expected comma-separated integers")
+
+        try:
+            return parser.get_geometry_dataset(
+                atoms=atom_indices,
+                metric=metric,
+                replica_index=replica,
+                start=start,
+                end=end,
+                stride=stride,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
     
     # Serve static files if directory provided
     if static_dir and Path(static_dir).exists():
