@@ -44,6 +44,7 @@ class FrameData:
     electric_field: Optional[List[float]] = None
     positions: Optional[List[List[float]]] = None
     atomic_numbers: Optional[List[int]] = None
+    replica_frames: Optional[List[Dict[str, Any]]] = None
     
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -56,6 +57,7 @@ class FrameData:
             'electric_field': self.electric_field,
             'positions': self.positions,
             'atomic_numbers': self.atomic_numbers,
+            'replica_frames': self.replica_frames,
         }
 
 
@@ -70,6 +72,7 @@ class FileMetadata:
     available_properties: List[str]
     elements: List[str] = field(default_factory=list)
     energy_range: Optional[Dict[str, float]] = None
+    n_replicas: int = 1
     
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -81,6 +84,7 @@ class FileMetadata:
             'available_properties': self.available_properties,
             'elements': self.elements,
             'energy_range': self.energy_range,
+            'n_replicas': self.n_replicas,
         }
 
 
@@ -133,6 +137,27 @@ def npz_frame_to_atoms(
     return Atoms(numbers=atomic_numbers, positions=positions)
 
 
+def _get_npz_n_replicas(data: Any) -> int:
+    """Infer replica count from NPZ arrays."""
+    if 'n_replicas' in data:
+        try:
+            return max(1, int(np.asarray(data['n_replicas']).reshape(-1)[0]))
+        except Exception:
+            pass
+
+    if 'R' in data:
+        r_shape = np.asarray(data['R']).shape
+        if len(r_shape) == 4:
+            return int(r_shape[1])
+
+    if 'E' in data:
+        e_shape = np.asarray(data['E']).shape
+        if len(e_shape) == 2:
+            return int(e_shape[1])
+
+    return 1
+
+
 class MolecularFileParser:
     """
     Parser for molecular data files.
@@ -147,7 +172,7 @@ class MolecularFileParser:
         self.file_type = self._detect_file_type()
         self._data = None
         self._metadata = None
-        self._frame_cache: Dict[int, FrameData] = {}  # Cache for computed frames
+        self._frame_cache: Dict[tuple, FrameData] = {}  # Cache for computed frames
         self._max_cache_size = 100  # Maximum frames to cache
     
     def _detect_file_type(self) -> str:
@@ -205,6 +230,7 @@ class MolecularFileParser:
         n_frames = len(data['E']) if 'E' in data else len(data['R'])
         Z_arr = data['Z']
         n_atoms = Z_arr.shape[1] if len(Z_arr.shape) > 1 else len(Z_arr)
+        n_replicas = _get_npz_n_replicas(data)
         
         # Available properties
         properties = ['structure']
@@ -215,6 +241,8 @@ class MolecularFileParser:
         if 'D' in data or 'Dxyz' in data:
             properties.append('dipole')
         if 'mono' in data:
+            properties.append('charges')
+        elif 'Q' in data:
             properties.append('charges')
         if 'esp' in data:
             properties.append('esp')
@@ -230,7 +258,9 @@ class MolecularFileParser:
         # Energy range
         energy_range = None
         if 'E' in data:
-            E = data['E']
+            E = np.asarray(data['E'], dtype=np.float64)
+            if E.ndim > 1:
+                E = E[:, 0]
             energy_range = {
                 'min': float(np.min(E)),
                 'max': float(np.max(E)),
@@ -246,6 +276,7 @@ class MolecularFileParser:
             available_properties=properties,
             elements=elements,
             energy_range=energy_range,
+            n_replicas=n_replicas,
         )
     
     def _get_ase_metadata(self) -> FileMetadata:
@@ -289,7 +320,13 @@ class MolecularFileParser:
             energy_range=energy_range,
         )
     
-    def get_frame(self, index: int) -> FrameData:
+    def get_frame(
+        self,
+        index: int,
+        replica_index: int = 0,
+        include_all_replicas: bool = False,
+        include_pdb: bool = True,
+    ) -> FrameData:
         """
         Get data for a specific frame.
         
@@ -304,37 +341,63 @@ class MolecularFileParser:
             Frame data including PDB string and properties
         """
         # Check cache first
-        if index in self._frame_cache:
-            return self._frame_cache[index]
+        cache_key = (index, replica_index, include_all_replicas, include_pdb)
+        if cache_key in self._frame_cache:
+            return self._frame_cache[cache_key]
         
         self._load_data()
         
         if self.file_type == 'npz':
-            frame = self._get_npz_frame(index)
+            frame = self._get_npz_frame(
+                index,
+                replica_index=replica_index,
+                include_all_replicas=include_all_replicas,
+                include_pdb=include_pdb,
+            )
         else:
-            frame = self._get_ase_frame(index)
+            frame = self._get_ase_frame(index, include_pdb=include_pdb)
         
         # Add to cache (with simple LRU eviction)
         if len(self._frame_cache) >= self._max_cache_size:
             # Remove oldest entry
             oldest_key = next(iter(self._frame_cache))
             del self._frame_cache[oldest_key]
-        self._frame_cache[index] = frame
+        self._frame_cache[cache_key] = frame
         
         return frame
     
-    def _get_npz_frame(self, index: int) -> FrameData:
+    def _get_npz_frame(
+        self,
+        index: int,
+        replica_index: int = 0,
+        include_all_replicas: bool = False,
+        include_pdb: bool = True,
+    ) -> FrameData:
         """Get frame from NPZ file."""
         data = self._data
-        
+
+        n_replicas = _get_npz_n_replicas(data)
+        replica_idx = min(max(replica_index, 0), max(n_replicas - 1, 0))
+
         # Get coordinates and atomic numbers (handle object dtype)
         R = np.asarray(data['R'][index], dtype=np.float64)
         Z = np.asarray(data['Z'][index] if len(data['Z'].shape) > 1 else data['Z'], dtype=np.int64)
-        N = int(data['N'][index]) if 'N' in data else None
-        
-        # Handle extra dimensions in R (e.g., shape (1, n_atoms, 3) -> (n_atoms, 3))
+        N = None
+        raw_N = None
+        if 'N' in data:
+            raw_N = np.asarray(data['N'][index])
+            if raw_N.ndim == 0:
+                N = int(raw_N)
+            elif raw_N.ndim == 1 and raw_N.size > 0:
+                N = int(raw_N[min(replica_idx, raw_N.size - 1)])
+
+        # Handle extra dimensions in R:
+        # - (1, n_atoms, 3) -> (n_atoms, 3)
+        # - (n_replicas, n_atoms, 3) -> select replica
         while R.ndim > 2 and R.shape[0] == 1:
             R = R.squeeze(axis=0)
+        if R.ndim == 3 and n_replicas > 1:
+            R = R[min(replica_idx, R.shape[0] - 1)]
         
         # Create mask for valid atoms
         mask = Z > 0
@@ -345,7 +408,7 @@ class MolecularFileParser:
         
         # Convert to Atoms and PDB
         atoms = npz_frame_to_atoms(R, Z, N)
-        pdb_string = atoms_to_pdb(atoms)
+        pdb_string = atoms_to_pdb(atoms) if include_pdb else ""
         
         # Extract positions and atomic numbers for 3D visualization
         positions = R[mask].tolist()
@@ -354,33 +417,88 @@ class MolecularFileParser:
         # Get properties
         energy = None
         if 'E' in data:
-            energy = float(data['E'][index])
+            frame_energy = np.asarray(data['E'][index], dtype=np.float64)
+            if frame_energy.ndim == 0:
+                energy = float(frame_energy)
+            elif frame_energy.size > 0:
+                energy = float(frame_energy[min(replica_idx, frame_energy.size - 1)])
         
         forces = None
         if 'F' in data:
             F = np.asarray(data['F'][index], dtype=np.float64)
-            # Handle extra dimensions in F (e.g., shape (1, n_atoms, 3) -> (n_atoms, 3))
+            # Handle extra dimensions in F:
+            # - (1, n_atoms, 3) -> (n_atoms, 3)
+            # - (n_replicas, n_atoms, 3) -> select replica
             while F.ndim > 2 and F.shape[0] == 1:
                 F = F.squeeze(axis=0)
+            if F.ndim == 3 and n_replicas > 1:
+                F = F[min(replica_idx, F.shape[0] - 1)]
             forces = F[mask].tolist()
         
         dipole = None
         if 'D' in data:
-            dipole = np.asarray(data['D'][index], dtype=np.float64).tolist()
+            frame_dipole = np.asarray(data['D'][index], dtype=np.float64)
+            if frame_dipole.ndim == 1:
+                dipole = frame_dipole.tolist()
+            elif frame_dipole.ndim >= 2:
+                dipole = frame_dipole[min(replica_idx, frame_dipole.shape[0] - 1)].tolist()
         elif 'Dxyz' in data:
-            dipole = np.asarray(data['Dxyz'][index], dtype=np.float64).tolist()
+            frame_dipole = np.asarray(data['Dxyz'][index], dtype=np.float64)
+            if frame_dipole.ndim == 1:
+                dipole = frame_dipole.tolist()
+            elif frame_dipole.ndim >= 2:
+                dipole = frame_dipole[min(replica_idx, frame_dipole.shape[0] - 1)].tolist()
         
         charges = None
         if 'mono' in data:
             mono = np.asarray(data['mono'][index], dtype=np.float64)
-            # Handle extra dimensions in mono (e.g., shape (1, n_atoms) -> (n_atoms,))
+            # Handle extra dimensions in mono:
+            # - (1, n_atoms) -> (n_atoms,)
+            # - (n_replicas, n_atoms) -> select replica
             while mono.ndim > 1 and mono.shape[0] == 1:
                 mono = mono.squeeze(axis=0)
+            if mono.ndim == 2 and n_replicas > 1:
+                mono = mono[min(replica_idx, mono.shape[0] - 1)]
             charges = mono[mask].tolist()
+        elif 'Q' in data:
+            Q = np.asarray(data['Q'][index], dtype=np.float64)
+            if Q.ndim == 2 and n_replicas > 1:
+                Q = Q[min(replica_idx, Q.shape[0] - 1)]
+            charges = Q[mask].tolist()
         
         electric_field = None
         if 'Ef' in data:
-            electric_field = np.asarray(data['Ef'][index], dtype=np.float64).tolist()
+            ef = np.asarray(data['Ef'], dtype=np.float64)
+            if ef.ndim == 1:
+                electric_field = ef.tolist()
+            elif ef.ndim == 2:
+                electric_field = ef[index].tolist()
+            elif ef.ndim == 3:
+                electric_field = ef[index, min(replica_idx, ef.shape[1] - 1)].tolist()
+
+        replica_frames = None
+        if include_all_replicas and n_replicas > 1 and data['R'][index].ndim >= 3:
+            R_all = np.asarray(data['R'][index], dtype=np.float64)
+            while R_all.ndim > 3 and R_all.shape[0] == 1:
+                R_all = R_all.squeeze(axis=0)
+            if R_all.ndim == 3:
+                replica_frames = []
+                for rep in range(min(n_replicas, R_all.shape[0])):
+                    rep_mask = Z > 0
+                    if raw_N is not None:
+                        if np.asarray(raw_N).ndim == 0:
+                            rep_n = int(raw_N)
+                        else:
+                            rep_arr = np.asarray(raw_N).reshape(-1)
+                            rep_n = int(rep_arr[min(rep, rep_arr.size - 1)])
+                        rep_mask = np.zeros_like(Z, dtype=bool)
+                        rep_mask[:rep_n] = True
+                        rep_mask = rep_mask & (Z > 0)
+                    replica_frames.append({
+                        'replica_index': rep,
+                        'positions': R_all[rep][rep_mask].tolist(),
+                        'atomic_numbers': Z[rep_mask].tolist(),
+                    })
         
         return FrameData(
             pdb_string=pdb_string,
@@ -392,12 +510,13 @@ class MolecularFileParser:
             electric_field=electric_field,
             positions=positions,
             atomic_numbers=atomic_numbers,
+            replica_frames=replica_frames,
         )
     
-    def _get_ase_frame(self, index: int) -> FrameData:
+    def _get_ase_frame(self, index: int, include_pdb: bool = True) -> FrameData:
         """Get frame from ASE trajectory or PDB file."""
         atoms = self._data[index]
-        pdb_string = atoms_to_pdb(atoms)
+        pdb_string = atoms_to_pdb(atoms) if include_pdb else ""
         
         energy = atoms.info.get('energy')
         forces = atoms.arrays.get('forces')
@@ -438,27 +557,59 @@ class MolecularFileParser:
     def _get_npz_properties(self) -> Dict[str, List]:
         """Get all properties from NPZ file."""
         data = self._data
+        n_replicas = _get_npz_n_replicas(data)
+        replica_idx = 0
         
         properties = {
             'frame_indices': list(range(len(data['E']) if 'E' in data else len(data['R']))),
         }
+        if n_replicas > 1:
+            properties['replica_indices'] = list(range(n_replicas))
+            properties['replica_series'] = {}
         
         if 'E' in data:
-            E = np.asarray([float(e) for e in data['E']])
-            properties['energy'] = E.tolist()
+            E = np.asarray(data['E'], dtype=np.float64)
+            if E.ndim == 1:
+                properties['energy'] = E.tolist()
+            elif E.ndim >= 2:
+                properties['energy'] = E[:, min(replica_idx, E.shape[1] - 1)].tolist()
+                if n_replicas > 1:
+                    properties['replica_series']['energy'] = E.T.tolist()
         
         if 'D' in data:
-            D = np.stack([np.asarray(d, dtype=np.float64) for d in data['D']])
-            properties['dipole_magnitude'] = np.linalg.norm(D, axis=1).tolist()
-            properties['dipole_x'] = D[:, 0].tolist()
-            properties['dipole_y'] = D[:, 1].tolist()
-            properties['dipole_z'] = D[:, 2].tolist()
+            D = np.asarray(data['D'], dtype=np.float64)
+            if D.ndim == 2 and D.shape[1] == 3:
+                D_plot = D
+            elif D.ndim == 3 and D.shape[2] == 3:
+                D_plot = D[:, min(replica_idx, D.shape[1] - 1), :]
+                if n_replicas > 1:
+                    properties['replica_series']['dipole_magnitude'] = [
+                        np.linalg.norm(D[:, rep, :], axis=1).tolist()
+                        for rep in range(D.shape[1])
+                    ]
+            else:
+                D_plot = np.zeros((len(properties['frame_indices']), 3), dtype=np.float64)
+            properties['dipole_magnitude'] = np.linalg.norm(D_plot, axis=1).tolist()
+            properties['dipole_x'] = D_plot[:, 0].tolist()
+            properties['dipole_y'] = D_plot[:, 1].tolist()
+            properties['dipole_z'] = D_plot[:, 2].tolist()
         elif 'Dxyz' in data:
-            D = np.stack([np.asarray(d, dtype=np.float64) for d in data['Dxyz']])
-            properties['dipole_magnitude'] = np.linalg.norm(D, axis=1).tolist()
-            properties['dipole_x'] = D[:, 0].tolist()
-            properties['dipole_y'] = D[:, 1].tolist()
-            properties['dipole_z'] = D[:, 2].tolist()
+            D = np.asarray(data['Dxyz'], dtype=np.float64)
+            if D.ndim == 2 and D.shape[1] == 3:
+                D_plot = D
+            elif D.ndim == 3 and D.shape[2] == 3:
+                D_plot = D[:, min(replica_idx, D.shape[1] - 1), :]
+                if n_replicas > 1:
+                    properties['replica_series']['dipole_magnitude'] = [
+                        np.linalg.norm(D[:, rep, :], axis=1).tolist()
+                        for rep in range(D.shape[1])
+                    ]
+            else:
+                D_plot = np.zeros((len(properties['frame_indices']), 3), dtype=np.float64)
+            properties['dipole_magnitude'] = np.linalg.norm(D_plot, axis=1).tolist()
+            properties['dipole_x'] = D_plot[:, 0].tolist()
+            properties['dipole_y'] = D_plot[:, 1].tolist()
+            properties['dipole_z'] = D_plot[:, 2].tolist()
         
         if 'F' in data:
             # Compute force magnitudes per frame
@@ -471,34 +622,82 @@ class MolecularFileParser:
             
             max_forces = []
             mean_forces = []
+            max_forces_by_replica = [[] for _ in range(n_replicas)] if n_replicas > 1 else None
+            mean_forces_by_replica = [[] for _ in range(n_replicas)] if n_replicas > 1 else None
             
             for i in range(n_frames):
                 frame_F = np.asarray(F[i], dtype=np.float64)
-                # Handle extra dimensions in frame_F (e.g., shape (1, n_atoms, 3) -> (n_atoms, 3))
+                # Handle extra dimensions in frame_F:
+                # - (1, n_atoms, 3) -> (n_atoms, 3)
+                # - (n_replicas, n_atoms, 3) -> select replica
                 while frame_F.ndim > 2 and frame_F.shape[0] == 1:
                     frame_F = frame_F.squeeze(axis=0)
                 
                 frame_Z = np.asarray(Z[i] if len(Z.shape) > 1 else Z, dtype=np.int64)
                 mask = frame_Z > 0
+                n_atoms_i = None
                 if N is not None:
-                    mask = np.zeros_like(frame_Z, dtype=bool)
-                    mask[:int(N[i])] = True
-                    mask = mask & (frame_Z > 0)
-                
-                frame_F = frame_F[mask]
-                force_mags = np.linalg.norm(frame_F, axis=1)
-                max_forces.append(float(np.max(force_mags)))
-                mean_forces.append(float(np.mean(force_mags)))
+                    frame_N = np.asarray(N[i])
+                    if frame_N.ndim == 0:
+                        n_atoms_i = int(frame_N)
+                    elif frame_N.ndim >= 1 and frame_N.size > 0:
+                        n_atoms_i = int(frame_N[min(replica_idx, frame_N.size - 1)])
+
+                if frame_F.ndim == 3 and n_replicas > 1:
+                    for rep in range(frame_F.shape[0]):
+                        rep_mask = frame_Z > 0
+                        if N is not None:
+                            if frame_N.ndim == 0:
+                                n_atoms_rep = int(frame_N)
+                            elif frame_N.ndim >= 1 and frame_N.size > 0:
+                                n_atoms_rep = int(frame_N[min(rep, frame_N.size - 1)])
+                            else:
+                                n_atoms_rep = int(np.asarray(frame_N).reshape(-1)[0])
+                            rep_mask = np.zeros_like(frame_Z, dtype=bool)
+                            rep_mask[:n_atoms_rep] = True
+                            rep_mask = rep_mask & (frame_Z > 0)
+                        rep_force_mags = np.linalg.norm(frame_F[rep][rep_mask], axis=1)
+                        max_forces_by_replica[rep].append(float(np.max(rep_force_mags)))
+                        mean_forces_by_replica[rep].append(float(np.mean(rep_force_mags)))
+
+                    if n_atoms_i is not None:
+                        mask = np.zeros_like(frame_Z, dtype=bool)
+                        mask[:n_atoms_i] = True
+                        mask = mask & (frame_Z > 0)
+                    force_mags = np.linalg.norm(frame_F[replica_idx][mask], axis=1)
+                    max_forces.append(float(np.max(force_mags)))
+                    mean_forces.append(float(np.mean(force_mags)))
+                else:
+                    if n_atoms_i is not None:
+                        mask = np.zeros_like(frame_Z, dtype=bool)
+                        mask[:n_atoms_i] = True
+                        mask = mask & (frame_Z > 0)
+                    frame_F_masked = frame_F[mask]
+                    force_mags = np.linalg.norm(frame_F_masked, axis=1)
+                    max_forces.append(float(np.max(force_mags)))
+                    mean_forces.append(float(np.mean(force_mags)))
             
             properties['force_max'] = max_forces
             properties['force_mean'] = mean_forces
+            if n_replicas > 1 and max_forces_by_replica is not None and mean_forces_by_replica is not None:
+                properties['replica_series']['force_max'] = max_forces_by_replica
+                properties['replica_series']['force_mean'] = mean_forces_by_replica
         
         if 'Ef' in data:
-            Ef = np.stack([np.asarray(ef, dtype=np.float64) for ef in data['Ef']])
-            properties['efield_magnitude'] = np.linalg.norm(Ef, axis=1).tolist()
-            properties['efield_x'] = Ef[:, 0].tolist()
-            properties['efield_y'] = Ef[:, 1].tolist()
-            properties['efield_z'] = Ef[:, 2].tolist()
+            Ef = np.asarray(data['Ef'], dtype=np.float64)
+            n_frames = len(properties['frame_indices'])
+            if Ef.ndim == 1 and Ef.shape[0] == 3:
+                Ef_plot = np.tile(Ef[None, :], (n_frames, 1))
+            elif Ef.ndim == 2 and Ef.shape[1] == 3:
+                Ef_plot = Ef
+            elif Ef.ndim == 3 and Ef.shape[2] == 3:
+                Ef_plot = Ef[:, min(replica_idx, Ef.shape[1] - 1), :]
+            else:
+                Ef_plot = np.zeros((n_frames, 3), dtype=np.float64)
+            properties['efield_magnitude'] = np.linalg.norm(Ef_plot, axis=1).tolist()
+            properties['efield_x'] = Ef_plot[:, 0].tolist()
+            properties['efield_y'] = Ef_plot[:, 1].tolist()
+            properties['efield_z'] = Ef_plot[:, 2].tolist()
         
         return properties
     
@@ -553,10 +752,254 @@ class MolecularFileParser:
             return self._get_npz_pca(n_components)
         else:
             return self._get_ase_pca(n_components)
+
+    def get_geometry_dataset(
+        self,
+        atoms: List[int],
+        metric: Optional[str] = None,
+        replica_index: int = 0,
+        start: int = 0,
+        end: Optional[int] = None,
+        stride: int = 1,
+    ) -> Dict[str, Any]:
+        """
+        Compute geometry metric dataset over a frame range.
+
+        Parameters
+        ----------
+        atoms : list[int]
+            Atom indices (2=bond, 3=angle, 4=dihedral)
+        metric : str, optional
+            Explicit metric kind ('bond', 'angle', 'dihedral')
+        replica_index : int
+            Replica index for NPZ data
+        start : int
+            Start frame (inclusive)
+        end : int, optional
+            End frame (exclusive), defaults to total number of frames
+        stride : int
+            Frame stride
+        """
+        if len(atoms) < 2 or len(atoms) > 4:
+            raise ValueError("atoms must contain 2-4 indices")
+        if len(set(atoms)) != len(atoms):
+            raise ValueError("atoms must be unique")
+
+        inferred = {2: 'bond', 3: 'angle', 4: 'dihedral'}[len(atoms)]
+        metric_kind = metric or inferred
+        if metric_kind != inferred:
+            raise ValueError(f"metric '{metric_kind}' does not match {len(atoms)} selected atoms")
+
+        metadata = self.get_metadata()
+        total_frames = metadata.n_frames
+        end = total_frames if end is None else min(end, total_frames)
+        if start < 0 or start >= total_frames:
+            raise ValueError(f"start index {start} out of range (0-{total_frames-1})")
+        if end <= start:
+            raise ValueError("end must be greater than start")
+        if stride < 1:
+            raise ValueError("stride must be >= 1")
+
+        frame_indices = list(range(start, end, stride))
+        props = self.get_all_properties()
+        energies = props.get('energy')
+        force_max = props.get('force_max')
+        force_mean = props.get('force_mean')
+        dipole_mag = props.get('dipole_magnitude')
+
+        if self.file_type == 'npz':
+            points = self._get_npz_geometry_dataset_points(frame_indices, atoms, metric_kind, replica_index)
+        else:
+            points = self._get_ase_geometry_dataset_points(frame_indices, atoms, metric_kind)
+
+        def _pick(series: Optional[List[Any]], idx: int) -> Optional[float]:
+            if series is None or idx >= len(series):
+                return None
+            val = series[idx]
+            try:
+                return float(val) if val is not None else None
+            except Exception:
+                return None
+
+        return {
+            'metric': metric_kind,
+            'atoms': atoms,
+            'start': start,
+            'end': end,
+            'stride': stride,
+            'frame_indices': frame_indices,
+            'points': [
+                {
+                    'frame': fi,
+                    'value': points[i],
+                    'energy': _pick(energies, fi),
+                    'force_max': _pick(force_max, fi),
+                    'force_mean': _pick(force_mean, fi),
+                    'dipole_magnitude': _pick(dipole_mag, fi),
+                }
+                for i, fi in enumerate(frame_indices)
+            ],
+        }
+
+    def _compute_metric(self, coords: np.ndarray, atoms: List[int], metric_kind: str) -> float:
+        if np.max(atoms) >= coords.shape[0]:
+            raise ValueError("atom index out of bounds for one or more frames")
+        p = coords[atoms, :]
+
+        def _norm(x: np.ndarray) -> float:
+            return float(np.linalg.norm(x))
+
+        if metric_kind == 'bond':
+            return _norm(p[1] - p[0])
+        if metric_kind == 'angle':
+            ba = p[0] - p[1]
+            bc = p[2] - p[1]
+            denom = max(_norm(ba) * _norm(bc), 1e-12)
+            c = float(np.dot(ba, bc) / denom)
+            c = max(-1.0, min(1.0, c))
+            return float(np.degrees(np.arccos(c)))
+        if metric_kind == 'dihedral':
+            # Signed torsion angle in degrees, using a standard [-180, 180] convention.
+            b0 = p[0] - p[1]
+            b1 = p[2] - p[1]
+            b2 = p[3] - p[2]
+
+            b1n = b1 / max(_norm(b1), 1e-12)
+            v = b0 - np.dot(b0, b1n) * b1n
+            w = b2 - np.dot(b2, b1n) * b1n
+
+            x = float(np.dot(v, w))
+            y = float(np.dot(np.cross(b1n, v), w))
+            angle = float(np.degrees(np.arctan2(y, x)))
+            if angle > 180.0:
+                angle -= 360.0
+            elif angle < -180.0:
+                angle += 360.0
+            return angle
+        raise ValueError(f"Unknown metric '{metric_kind}'")
+
+    def _compute_metric_batch(self, coords: np.ndarray, atoms: List[int], metric_kind: str) -> np.ndarray:
+        """
+        Vectorized metric computation over leading dimensions.
+
+        Expected coords shape: (..., n_atoms, 3)
+        Returns shape: (...)
+        """
+        if coords.ndim < 3 or coords.shape[-1] != 3:
+            raise ValueError(f"Invalid coords shape for batched metric: {coords.shape}")
+        if np.max(atoms) >= coords.shape[-2]:
+            raise ValueError("atom index out of bounds for one or more frames")
+
+        p = coords[..., atoms, :]  # (..., k, 3)
+
+        if metric_kind == 'bond':
+            return np.linalg.norm(p[..., 1, :] - p[..., 0, :], axis=-1)
+        if metric_kind == 'angle':
+            ba = p[..., 0, :] - p[..., 1, :]
+            bc = p[..., 2, :] - p[..., 1, :]
+            denom = np.maximum(np.linalg.norm(ba, axis=-1) * np.linalg.norm(bc, axis=-1), 1e-12)
+            c = np.sum(ba * bc, axis=-1) / denom
+            c = np.clip(c, -1.0, 1.0)
+            return np.degrees(np.arccos(c))
+        if metric_kind == 'dihedral':
+            # Signed torsion angle in degrees. Works for arbitrary leading dims
+            # (e.g. [frame, replica, ...]) similar to a vmap over those axes.
+            b0 = p[..., 0, :] - p[..., 1, :]
+            b1 = p[..., 2, :] - p[..., 1, :]
+            b2 = p[..., 3, :] - p[..., 2, :]
+
+            b1_norm = np.maximum(np.linalg.norm(b1, axis=-1, keepdims=True), 1e-12)
+            b1n = b1 / b1_norm
+
+            v = b0 - np.sum(b0 * b1n, axis=-1, keepdims=True) * b1n
+            w = b2 - np.sum(b2 * b1n, axis=-1, keepdims=True) * b1n
+
+            x = np.sum(v * w, axis=-1)
+            y = np.sum(np.cross(b1n, v) * w, axis=-1)
+            ang = np.degrees(np.arctan2(y, x))
+            return ((ang + 180.0) % 360.0) - 180.0
+        raise ValueError(f"Unknown metric '{metric_kind}'")
+
+    def _get_npz_geometry_dataset_points(
+        self,
+        frame_indices: List[int],
+        atoms: List[int],
+        metric_kind: str,
+        replica_index: int,
+    ) -> List[float]:
+        data = self._data
+        n_replicas = _get_npz_n_replicas(data)
+        rep_idx = min(max(replica_index, 0), max(n_replicas - 1, 0))
+        # Fast path: batch over frame (and replica axis when present), then select replica.
+        R_batch = np.asarray(data['R'][frame_indices], dtype=np.float64)
+        while R_batch.ndim > 4 and R_batch.shape[1] == 1:
+            R_batch = np.squeeze(R_batch, axis=1)
+
+        if R_batch.ndim == 4:
+            # [frame, replica, atom, xyz] -> vmap-like over (frame, replica)
+            rep_used = min(rep_idx, R_batch.shape[1] - 1)
+            coords = R_batch[:, rep_used, :, :]
+        elif R_batch.ndim == 3:
+            # [frame, atom, xyz]
+            coords = R_batch
+        else:
+            # Fallback to per-frame logic for unusual layouts.
+            points: List[float] = []
+            for fi in frame_indices:
+                R = np.asarray(data['R'][fi], dtype=np.float64)
+                Z = np.asarray(data['Z'][fi] if len(data['Z'].shape) > 1 else data['Z'], dtype=np.int64)
+                N = None
+                if 'N' in data:
+                    raw_N = np.asarray(data['N'][fi])
+                    if raw_N.ndim == 0:
+                        N = int(raw_N)
+                    elif raw_N.ndim >= 1 and raw_N.size > 0:
+                        N = int(raw_N[min(rep_idx, raw_N.size - 1)])
+                while R.ndim > 2 and R.shape[0] == 1:
+                    R = R.squeeze(axis=0)
+                if R.ndim == 3 and n_replicas > 1:
+                    R = R[min(rep_idx, R.shape[0] - 1)]
+                mask = Z > 0
+                if N is not None:
+                    mask = np.zeros_like(Z, dtype=bool)
+                    mask[:N] = True
+                    mask = mask & (Z > 0)
+                points.append(self._compute_metric(R[mask], atoms, metric_kind))
+            return points
+
+        # Validate selected atoms against per-frame valid counts (if N provided).
+        if 'N' in data:
+            N_sel = np.asarray(data['N'][frame_indices])
+            if N_sel.ndim == 2:
+                N_sel = N_sel[:, min(rep_idx, N_sel.shape[1] - 1)]
+            elif N_sel.ndim > 2:
+                N_sel = np.asarray([np.asarray(data['N'][fi]).reshape(-1)[min(rep_idx, np.asarray(data['N'][fi]).size - 1)] for fi in frame_indices])
+            n_valid = N_sel.astype(np.int64).reshape(-1)
+            if np.any(np.max(atoms) >= n_valid):
+                raise ValueError("atom index out of bounds for one or more frames")
+        elif np.max(atoms) >= coords.shape[1]:
+            raise ValueError("atom index out of bounds for one or more frames")
+
+        return self._compute_metric_batch(coords, atoms, metric_kind).astype(np.float64).tolist()
+
+    def _get_ase_geometry_dataset_points(
+        self,
+        frame_indices: List[int],
+        atoms: List[int],
+        metric_kind: str,
+    ) -> List[float]:
+        frames = self._data
+        points: List[float] = []
+        for fi in frame_indices:
+            coords = np.asarray(frames[fi].get_positions(), dtype=np.float64)
+            points.append(self._compute_metric(coords, atoms, metric_kind))
+        return points
     
     def _get_npz_pca(self, n_components: int) -> Dict[str, Any]:
         """Compute PCA for NPZ file."""
         data = self._data
+        n_replicas = _get_npz_n_replicas(data)
+        replica_idx = 0
         
         # Get coordinates
         R_raw = data['R']
@@ -569,9 +1012,13 @@ class MolecularFileParser:
             R = np.asarray(R_raw[i], dtype=np.float64)
             Z = np.asarray(Z_raw[i] if len(Z_raw.shape) > 1 else Z_raw, dtype=np.int64)
             
-            # Handle extra dimensions
+            # Handle extra dimensions:
+            # - (1, n_atoms, 3) -> (n_atoms, 3)
+            # - (n_replicas, n_atoms, 3) -> select replica
             while R.ndim > 2 and R.shape[0] == 1:
                 R = R.squeeze(axis=0)
+            if R.ndim == 3 and n_replicas > 1:
+                R = R[min(replica_idx, R.shape[0] - 1)]
             
             # Mask out padding
             mask = Z > 0

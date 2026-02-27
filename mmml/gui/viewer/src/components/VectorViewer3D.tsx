@@ -33,27 +33,46 @@ const ELEMENT_RADII: Record<number, number> = {
 };
 
 const DEFAULT_RADIUS = 0.35;
+const ELEMENT_SYMBOLS: Record<number, string> = {
+  1: 'H', 6: 'C', 7: 'N', 8: 'O', 9: 'F', 15: 'P', 16: 'S', 17: 'Cl', 35: 'Br', 53: 'I',
+};
 
 interface VectorViewer3DProps {
   positions: number[][] | null;
   atomicNumbers: number[] | null;
+  replicaFrames?: {
+    replica_index: number;
+    positions: number[][];
+    atomic_numbers: number[];
+  }[] | null;
+  selectedReplica?: number;
+  highlightSelectedReplica?: boolean;
   forces: number[][] | null;
   dipole: number[] | null;
   electricField: number[] | null;
   showForces?: boolean;
   showDipole?: boolean;
   showElectricField?: boolean;
+  viewSessionKey?: string;
+  selectedAtomIndices?: number[];
+  onAtomPick?: (atomIndex: number) => void;
 }
 
 function VectorViewer3D({
   positions,
   atomicNumbers,
+  replicaFrames,
+  selectedReplica = 0,
+  highlightSelectedReplica = false,
   forces,
   dipole,
   electricField,
   showForces = true,
   showDipole = true,
   showElectricField = true,
+  viewSessionKey = 'default',
+  selectedAtomIndices = [],
+  onAtomPick,
 }: VectorViewer3DProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -61,12 +80,16 @@ function VectorViewer3D({
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
   const animationIdRef = useRef<number | null>(null);
+  const lastAutoFitKeyRef = useRef<string | null>(null);
   
   // Groups for different object types
   const atomsGroupRef = useRef<THREE.Group | null>(null);
+  const labelsGroupRef = useRef<THREE.Group | null>(null);
   const forcesGroupRef = useRef<THREE.Group | null>(null);
   const dipoleGroupRef = useRef<THREE.Group | null>(null);
   const efieldGroupRef = useRef<THREE.Group | null>(null);
+  const atomMeshesRef = useRef<THREE.Mesh[]>([]);
+  const atomSignatureRef = useRef<string | null>(null);
 
   // Initialize Three.js scene
   const initScene = useCallback(() => {
@@ -114,11 +137,13 @@ function VectorViewer3D({
     
     // Create groups for objects
     atomsGroupRef.current = new THREE.Group();
+    labelsGroupRef.current = new THREE.Group();
     forcesGroupRef.current = new THREE.Group();
     dipoleGroupRef.current = new THREE.Group();
     efieldGroupRef.current = new THREE.Group();
     
     scene.add(atomsGroupRef.current);
+    scene.add(labelsGroupRef.current);
     scene.add(forcesGroupRef.current);
     scene.add(dipoleGroupRef.current);
     scene.add(efieldGroupRef.current);
@@ -145,21 +170,6 @@ function VectorViewer3D({
     };
   }, []);
 
-  // Clean up Three.js resources
-  useEffect(() => {
-    initScene();
-    
-    return () => {
-      if (animationIdRef.current) {
-        cancelAnimationFrame(animationIdRef.current);
-      }
-      if (rendererRef.current && containerRef.current) {
-        containerRef.current.removeChild(rendererRef.current.domElement);
-        rendererRef.current.dispose();
-      }
-    };
-  }, [initScene]);
-
   // Create an arrow helper with custom styling
   const createArrow = useCallback((
     origin: THREE.Vector3,
@@ -184,50 +194,265 @@ function VectorViewer3D({
     return arrow;
   }, []);
 
-  // Update atoms
-  useEffect(() => {
-    if (!atomsGroupRef.current || !positions || !atomicNumbers) return;
-    
-    // Clear existing atoms
-    while (atomsGroupRef.current.children.length > 0) {
-      const child = atomsGroupRef.current.children[0];
-      atomsGroupRef.current.remove(child);
-      if (child instanceof THREE.Mesh) {
-        child.geometry.dispose();
-        if (child.material instanceof THREE.Material) {
-          child.material.dispose();
-        }
+  const createTextLabelSprite = (text: string, borderColor: string = 'rgba(16, 185, 129, 0.95)') => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = 3;
+    ctx.strokeRect(1.5, 1.5, canvas.width - 3, canvas.height - 3);
+
+    ctx.font = 'bold 30px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#e2e8f0';
+    ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.minFilter = THREE.LinearFilter;
+    const material = new THREE.SpriteMaterial({
+      map: texture,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+    });
+    const sprite = new THREE.Sprite(material);
+    sprite.scale.set(2.6, 0.65, 1);
+    return sprite;
+  };
+
+  const getReplicaColorScale = (replicaIdx: number, nReplicas: number) => {
+    if (nReplicas <= 1) return new THREE.Color(1, 1, 1);
+    const hue = (replicaIdx / nReplicas) % 1.0;
+    return new THREE.Color().setHSL(hue, 0.45, 0.55);
+  };
+
+  const clearAtomMeshes = useCallback(() => {
+    if (!atomsGroupRef.current) return;
+    atomMeshesRef.current.forEach((mesh) => {
+      atomsGroupRef.current!.remove(mesh);
+      mesh.geometry.dispose();
+      if (mesh.material instanceof THREE.Material) {
+        mesh.material.dispose();
+      }
+    });
+    atomMeshesRef.current = [];
+    atomSignatureRef.current = null;
+  }, []);
+
+  const clearLabels = useCallback(() => {
+    if (!labelsGroupRef.current) return;
+    while (labelsGroupRef.current.children.length > 0) {
+      const child = labelsGroupRef.current.children[0];
+      labelsGroupRef.current.remove(child);
+      if (child instanceof THREE.Sprite && child.material instanceof THREE.SpriteMaterial) {
+        child.material.map?.dispose();
+        child.material.dispose();
       }
     }
+  }, []);
+
+  // Clean up Three.js resources
+  useEffect(() => {
+    initScene();
     
-    // Create atom spheres
-    positions.forEach((pos, i) => {
-      const atomicNumber = atomicNumbers[i] || 6;
-      const color = ELEMENT_COLORS[atomicNumber] ?? DEFAULT_ATOM_COLOR;
-      const radius = ELEMENT_RADII[atomicNumber] ?? DEFAULT_RADIUS;
-      
-      const geometry = new THREE.SphereGeometry(radius, 32, 32);
-      const material = new THREE.MeshPhongMaterial({ 
-        color,
-        shininess: 30,
+    return () => {
+      clearAtomMeshes();
+      clearLabels();
+      if (animationIdRef.current) {
+        cancelAnimationFrame(animationIdRef.current);
+      }
+      if (rendererRef.current && containerRef.current) {
+        containerRef.current.removeChild(rendererRef.current.domElement);
+        rendererRef.current.dispose();
+      }
+    };
+  }, [initScene, clearAtomMeshes, clearLabels]);
+
+  // Update atoms
+  useEffect(() => {
+    if (!atomsGroupRef.current) return;
+
+    clearLabels();
+
+    type AtomRenderData = {
+      x: number;
+      y: number;
+      z: number;
+      atomicNumber: number;
+      replicaIdx: number;
+      nReplicas: number;
+      isSelected: boolean;
+      atomIndex: number | null;
+      isPicked: boolean;
+      pickOrder: number;
+      atomLabel: string | null;
+    };
+    const atomsToRender: AtomRenderData[] = [];
+    let cameraFitPoints: THREE.Vector3[] = [];
+
+    // Display all replicas in a tiled layout when replica data is available.
+    if (replicaFrames && replicaFrames.length > 0) {
+      const nReplicas = replicaFrames.length;
+      const cols = Math.ceil(Math.sqrt(nReplicas));
+
+      let minX = Infinity;
+      let minY = Infinity;
+      let minZ = Infinity;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
+      let maxZ = -Infinity;
+
+      replicaFrames.forEach((rep) => {
+        rep.positions.forEach((p) => {
+          minX = Math.min(minX, p[0]);
+          minY = Math.min(minY, p[1]);
+          minZ = Math.min(minZ, p[2]);
+          maxX = Math.max(maxX, p[0]);
+          maxY = Math.max(maxY, p[1]);
+          maxZ = Math.max(maxZ, p[2]);
+        });
       });
-      const sphere = new THREE.Mesh(geometry, material);
-      sphere.position.set(pos[0], pos[1], pos[2]);
-      atomsGroupRef.current!.add(sphere);
+
+      const spanX = Math.max(1.0, maxX - minX);
+      const spanY = Math.max(1.0, maxY - minY);
+      const spanZ = Math.max(1.0, maxZ - minZ);
+      const tileSpacing = Math.max(spanX, spanY, spanZ) + 4.0;
+
+      replicaFrames.forEach((rep, idx) => {
+        const row = Math.floor(idx / cols);
+        const col = idx % cols;
+        const offset = new THREE.Vector3(col * tileSpacing, -row * tileSpacing, 0);
+        const isSelected = highlightSelectedReplica && idx === selectedReplica;
+
+        let repCenter = new THREE.Vector3();
+        let repCount = 0;
+        let repMaxZ = -Infinity;
+
+        rep.positions.forEach((pos, i) => {
+          const atomicNumber = rep.atomic_numbers[i] || 6;
+          const x = pos[0] + offset.x;
+          const y = pos[1] + offset.y;
+          const z = pos[2] + offset.z;
+          atomsToRender.push({
+            x,
+            y,
+            z,
+            atomicNumber,
+            replicaIdx: idx,
+            nReplicas,
+            isSelected,
+            atomIndex: null,
+            isPicked: false,
+            pickOrder: 0,
+            atomLabel: null,
+          });
+          const p = new THREE.Vector3(x, y, z);
+          cameraFitPoints.push(p);
+          repCenter.add(p);
+          repCount += 1;
+          repMaxZ = Math.max(repMaxZ, z);
+        });
+
+        if (isSelected && repCount > 0) {
+          repCenter.divideScalar(repCount);
+          const label = createTextLabelSprite(`Replica ${selectedReplica}`, 'rgba(16, 185, 129, 0.95)');
+          if (label) {
+            label.position.set(repCenter.x, repCenter.y + tileSpacing * 0.28, repMaxZ + 0.4);
+            labelsGroupRef.current?.add(label);
+            cameraFitPoints.push(label.position.clone());
+          }
+        }
+      });
+    } else if (positions && atomicNumbers) {
+      // Create atom spheres for single-replica mode
+      positions.forEach((pos, i) => {
+        const atomicNumber = atomicNumbers[i] || 6;
+        const x = pos[0];
+        const y = pos[1];
+        const z = pos[2];
+        atomsToRender.push({
+          x,
+          y,
+          z,
+          atomicNumber,
+          replicaIdx: 0,
+          nReplicas: 1,
+          isSelected: false,
+          atomIndex: i,
+          isPicked: selectedAtomIndices.includes(i),
+          pickOrder: selectedAtomIndices.indexOf(i) + 1,
+          atomLabel: `#${i} ${ELEMENT_SYMBOLS[atomicNumber] ?? `Z${atomicNumber}`}`,
+        });
+        cameraFitPoints.push(new THREE.Vector3(x, y, z));
+      });
+    }
+
+    const signature = atomsToRender
+      .map((a) => `${a.atomicNumber}:${a.replicaIdx}:${a.nReplicas}`)
+      .join('|');
+    const topologyChanged =
+      atomSignatureRef.current !== signature || atomMeshesRef.current.length !== atomsToRender.length;
+
+    if (topologyChanged) {
+      clearAtomMeshes();
+      atomsToRender.forEach((a) => {
+        const radius = ELEMENT_RADII[a.atomicNumber] ?? DEFAULT_RADIUS;
+        const geometry = new THREE.SphereGeometry(radius, 20, 20);
+        const material = new THREE.MeshPhongMaterial({ shininess: 30 });
+        const sphere = new THREE.Mesh(geometry, material);
+        atomsGroupRef.current!.add(sphere);
+        atomMeshesRef.current.push(sphere);
+      });
+      atomSignatureRef.current = signature;
+    }
+
+    // Transform-only frame updates: reuse existing meshes and update transform/material only.
+    atomMeshesRef.current.forEach((mesh, i) => {
+      const a = atomsToRender[i];
+      mesh.position.set(a.x, a.y, a.z);
+      mesh.scale.setScalar(a.isSelected ? 1.06 : 1.0);
+      const tint = getReplicaColorScale(a.replicaIdx, a.nReplicas);
+      const baseColor = new THREE.Color(ELEMENT_COLORS[a.atomicNumber] ?? DEFAULT_ATOM_COLOR);
+      const color = baseColor.clone().lerp(tint, a.isSelected ? 0.55 : 0.25);
+      const mat = mesh.material as THREE.MeshPhongMaterial;
+      mat.color.copy(color);
+      if (a.isPicked) {
+        mat.emissive.set(0x22d3ee);
+        mat.emissiveIntensity = 0.6;
+      } else {
+        mat.emissive.set(a.isSelected ? 0x10b981 : 0x000000);
+        mat.emissiveIntensity = a.isSelected ? 0.2 : 0.0;
+      }
+      mesh.userData.atomIndex = a.atomIndex;
+      if (a.isPicked && a.atomLabel && labelsGroupRef.current) {
+        const atomLabel = createTextLabelSprite(`${a.pickOrder}: ${a.atomLabel}`, 'rgba(6, 182, 212, 0.95)');
+        if (atomLabel) {
+          atomLabel.position.set(a.x, a.y + 0.9, a.z + 0.2);
+          labelsGroupRef.current.add(atomLabel);
+        }
+      }
     });
-    
-    // Fit camera to molecule
-    if (positions.length > 0 && cameraRef.current && controlsRef.current) {
+
+    // Keep viewing angle stable during frame playback:
+    // only auto-fit on a new viewing session (e.g., file switch or mode switch).
+    const shouldAutoFit = lastAutoFitKeyRef.current !== viewSessionKey;
+    if (cameraFitPoints.length > 0 && cameraRef.current && controlsRef.current && shouldAutoFit) {
       const center = new THREE.Vector3();
       let maxDist = 0;
-      
-      positions.forEach(pos => {
-        center.add(new THREE.Vector3(pos[0], pos[1], pos[2]));
+
+      cameraFitPoints.forEach((p) => {
+        center.add(p);
       });
-      center.divideScalar(positions.length);
-      
-      positions.forEach(pos => {
-        const dist = new THREE.Vector3(pos[0], pos[1], pos[2]).distanceTo(center);
+      center.divideScalar(cameraFitPoints.length);
+
+      cameraFitPoints.forEach((p) => {
+        const dist = p.distanceTo(center);
         maxDist = Math.max(maxDist, dist);
       });
       
@@ -239,8 +464,49 @@ function VectorViewer3D({
       );
       controlsRef.current.target.copy(center);
       controlsRef.current.update();
+      lastAutoFitKeyRef.current = viewSessionKey;
     }
-  }, [positions, atomicNumbers]);
+  }, [
+    positions,
+    atomicNumbers,
+    replicaFrames,
+    selectedReplica,
+    highlightSelectedReplica,
+    viewSessionKey,
+    clearAtomMeshes,
+    clearLabels,
+    selectedAtomIndices,
+  ]);
+
+  useEffect(() => {
+    if (!rendererRef.current || !cameraRef.current || !sceneRef.current) return;
+    const dom = rendererRef.current.domElement;
+    const camera = cameraRef.current;
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!onAtomPick) return;
+      if (replicaFrames && replicaFrames.length > 0) return;
+
+      const rect = dom.getBoundingClientRect();
+      pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(pointer, camera);
+
+      const intersects = raycaster.intersectObjects(atomMeshesRef.current, false);
+      if (intersects.length === 0) return;
+      const atomIndex = intersects[0].object.userData.atomIndex;
+      if (typeof atomIndex === 'number') {
+        onAtomPick(atomIndex);
+      }
+    };
+
+    dom.addEventListener('pointerdown', handlePointerDown);
+    return () => {
+      dom.removeEventListener('pointerdown', handlePointerDown);
+    };
+  }, [onAtomPick, replicaFrames]);
 
   // Update force vectors
   useEffect(() => {
@@ -255,6 +521,7 @@ function VectorViewer3D({
       }
     }
     
+    if (replicaFrames && replicaFrames.length > 0) return;
     if (!showForces || !forces || forces.length !== positions.length) return;
     
     // Find max force magnitude for scaling
@@ -283,7 +550,7 @@ function VectorViewer3D({
       const arrow = createArrow(origin, direction, length, 0xef4444); // Red
       forcesGroupRef.current!.add(arrow);
     });
-  }, [positions, forces, showForces, createArrow]);
+  }, [positions, forces, showForces, createArrow, replicaFrames]);
 
   // Update dipole vector
   useEffect(() => {
@@ -298,6 +565,7 @@ function VectorViewer3D({
       }
     }
     
+    if (replicaFrames && replicaFrames.length > 0) return;
     if (!showDipole || !dipole || dipole.length !== 3) return;
     
     const dipoleMag = Math.sqrt(dipole[0] ** 2 + dipole[1] ** 2 + dipole[2] ** 2);
@@ -317,7 +585,7 @@ function VectorViewer3D({
     const direction = new THREE.Vector3(dipole[0], dipole[1], dipole[2]);
     const arrow = createArrow(center, direction, length, 0x3b82f6, length * 0.25, length * 0.15); // Blue
     dipoleGroupRef.current.add(arrow);
-  }, [positions, dipole, showDipole, createArrow]);
+  }, [positions, dipole, showDipole, createArrow, replicaFrames]);
 
   // Update electric field vector
   useEffect(() => {
@@ -332,6 +600,7 @@ function VectorViewer3D({
       }
     }
     
+    if (replicaFrames && replicaFrames.length > 0) return;
     if (!showElectricField || !electricField || electricField.length !== 3) return;
     
     const efMag = Math.sqrt(electricField[0] ** 2 + electricField[1] ** 2 + electricField[2] ** 2);
@@ -351,7 +620,7 @@ function VectorViewer3D({
     const direction = new THREE.Vector3(electricField[0], electricField[1], electricField[2]);
     const arrow = createArrow(center, direction, length, 0xf59e0b, length * 0.25, length * 0.15); // Amber
     efieldGroupRef.current.add(arrow);
-  }, [positions, electricField, showElectricField, createArrow]);
+  }, [positions, electricField, showElectricField, createArrow, replicaFrames]);
 
   // Toggle visibility based on props
   useEffect(() => {
@@ -372,7 +641,9 @@ function VectorViewer3D({
     }
   }, [showElectricField]);
 
-  if (!positions || positions.length === 0) {
+  const hasSingle = Boolean(positions && positions.length > 0);
+  const hasReplicaGrid = Boolean(replicaFrames && replicaFrames.length > 0);
+  if (!hasSingle && !hasReplicaGrid) {
     return (
       <div className="w-full h-full flex items-center justify-center bg-slate-800 text-slate-400">
         <p>No structure to display</p>
@@ -404,6 +675,16 @@ function VectorViewer3D({
             <div className="flex items-center gap-2">
               <div className="w-4 h-0.5 bg-amber-500" />
               <span className="text-slate-400">E-Field</span>
+            </div>
+          )}
+          {hasReplicaGrid && (
+            <div className="pt-1 text-slate-500">
+              Showing {replicaFrames!.length} replicas
+            </div>
+          )}
+          {hasReplicaGrid && highlightSelectedReplica && (
+            <div className="text-emerald-400">
+              Highlighting replica {selectedReplica}
             </div>
           )}
         </div>
