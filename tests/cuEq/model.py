@@ -7,7 +7,6 @@ from cuequivariance_jax import (
     spherical_harmonics,
     triangle_multiplicative_update,
     equivariant_polynomial,
-    triangle_attention,
 )
 
 
@@ -101,9 +100,6 @@ class TriangleMultiplicativeLayer(nn.Module):
 class TriangleAttentionBlock(nn.Module):
     """Triangle-style attention over pair features using cuequivariance_jax.triangle_attention."""
 
-    num_heads: int = 4
-    head_dim: int = 32
-
     @nn.compact
     def __call__(self, pair_features, atom_mask=None):
         """Apply triangle attention to pairwise features.
@@ -161,8 +157,6 @@ class EnergyForceModel(nn.Module):
     hidden_dim: int = 248
     num_layers: int = 3
     ls: tuple = (0, 1, 2, 3, 4)
-    num_heads: int = 4
-    head_dim: int = 32
 
     @nn.compact
     def __call__(self, positions, atomic_numbers, total_charge, atom_mask=None):
@@ -207,13 +201,10 @@ class EnergyForceModel(nn.Module):
         # Combine radial and angular information into per-pair features
         pair_features = jnp.concatenate([distances, sh, sh_poly, Z_i, Z_j, Q], axis=-1)
 
-        # Triangle-style attention over pair features, then per-atom residual MLP.
-        atom_features = TriangleAttentionBlock(
-            num_heads=self.num_heads,
-            head_dim=self.head_dim,
-            name="triangle_attn",
-        )(pair_features, atom_mask=atom_mask)
-
+        # Per-atom features and residual MLP (no triangle ops in the energy path,
+        # because current cuEquivariance JAX triangle primitives lack differentiation
+        # rules needed for forces via autodiff).
+        atom_features = pair_features.reshape(n_atoms, -1)
         x = nn.Dense(self.hidden_dim, name="in_proj")(atom_features)
 
         for layer in range(self.num_layers):
