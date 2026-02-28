@@ -36,6 +36,8 @@ dependencies = [
     "jmp",
     "jraph",
     "orbax-checkpoint",
+    "cuequivariance",
+    "cuequivariance-jax",
     # ML utilities
     "ml-dtypes",
     "ml-collections",
@@ -88,6 +90,7 @@ gpu = [
     "jaxlib[cuda12]>=0.4.20",
     "cupy-cuda12x>=13.0.0",
     "cutensor-cu12>=2.0.0",
+    "cuequivariance-ops-jax-cu12",
 ]
 
 # GPU/CUDA support (CUDA 13)
@@ -99,6 +102,7 @@ gpu-cuda13 = [
     "jax-cuda13-pjrt>=0.9.0",
     "cupy-cuda13x>=13.0.0",
     "cutensor-cu13>=2.0.0",
+    "cuequivariance-ops-jax-cu13",
 ]
 
 # Quantum chemistry calculations
