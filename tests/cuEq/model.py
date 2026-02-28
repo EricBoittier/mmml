@@ -128,10 +128,13 @@ class EnergyForceModel(nn.Module):
 
         # Angular features via spherical harmonics (SO(3)-aware features)
         unit_vectors = disp / (distances + 1e-9)
-        sh = spherical_harmonics(self.ls, unit_vectors, normalize=True)
-
-        # Additional angular features via equivariant_polynomial on RepArray inputs
+        # Wrap vectors as an SO(3) irreps array before calling spherical_harmonics
         with cue.assume(cue.SO3, cue.ir_mul):
+            vec_rep = cuex.RepArray("1", unit_vectors)
+            sh_rep = spherical_harmonics(self.ls, vec_rep, normalize=True)
+            sh = sh_rep.array
+
+            # Additional angular features via equivariant_polynomial on RepArray inputs
             poly = cue.descriptors.spherical_harmonics(cue.SO3(1), list(self.ls))
             rep_in = cuex.RepArray("1", unit_vectors.reshape(-1, 3))
             sh_poly_rep = equivariant_polynomial(poly, [rep_in], method="naive")
