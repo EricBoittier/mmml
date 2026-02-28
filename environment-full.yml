@@ -76,6 +76,11 @@ dependencies:
       - orbax-checkpoint
       - jax-md @ git+https://github.com/google/jax-md.git@05221c551e71f1b5f64458c0e3533452c22efec0
       
+      # cuEquivariance (JAX frontend + core + CUDA ops for CUDA 12)
+      - cuequivariance
+      - cuequivariance-jax
+      - cuequivariance-ops-jax-cu12
+      
       # ML utilities
       - ml-dtypes
       - ml-collections
