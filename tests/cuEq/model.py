@@ -153,21 +153,27 @@ class EnergyForceModel(nn.Module):
         # Combine radial and angular information into per-pair features
         pair_features = jnp.concatenate([distances, sh, sh_poly, Z_i, Z_j, Q], axis=-1)
 
-        # Triangle multiplicative update over pairwise features (AlphaFold2-style).
-        # We treat this as a fixed, non-trainable feature transform by stopping
-        # gradients through its output, because the current CUDA primitives lack
-        # full differentiation rules in this environment.
-        pair_features = TriangleMultiplicativeLayer()(pair_features)
-        pair_features = jax.lax.stop_gradient(pair_features)
+        # Initial per-atom features from raw pairwise representation
+        base_atom_features = pair_features.reshape(n_atoms, -1)
+        x = nn.Dense(self.hidden_dim, name="in_proj")(base_atom_features)
 
-        # Aggregate neighbor information per atom and feed through an MLP
-        atom_features = pair_features.reshape(n_atoms, -1)
+        # Stack of triangle + per-atom residual blocks
+        for layer in range(self.num_layers):
+            # Triangle multiplicative update over pairwise features (AlphaFold2-style).
+            # We stop gradients through this branch to avoid unsupported JAX primitives.
+            pair_features = TriangleMultiplicativeLayer(name=f"triangle_{layer}")(
+                pair_features
+            )
+            pair_features = jax.lax.stop_gradient(pair_features)
+            atom_features_l = pair_features.reshape(n_atoms, -1)
 
-        # Standard LayerNorm on per-atom features (invariant channels)
-        x = nn.LayerNorm()(atom_features)
-        for _ in range(self.num_layers):
-            x = nn.Dense(self.hidden_dim)(x)
-            x = nn.silu(x)
+            # Project triangle-updated atom features into hidden_dim
+            h = nn.Dense(self.hidden_dim, name=f"tri_proj_{layer}")(atom_features_l)
+            h = nn.LayerNorm(name=f"ln_{layer}")(h)
+            h = nn.silu(h)
+
+            # Residual connection
+            x = x + h
 
         # Predict per-atom energies and forces directly
         per_atom_energy = nn.Dense(1)(x)   # (n_atoms, 1)
