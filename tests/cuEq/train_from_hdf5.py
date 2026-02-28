@@ -37,13 +37,17 @@ import optax
 from flax.training import train_state, checkpoints
 import h5py
 
-# Make project root importable so we can import tests.cuEq.model
+# Make project root importable for mmml.* and tests.cuEq / cuEq
 import sys as _sys
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in _sys.path:
     _sys.path.insert(0, str(ROOT))
 
-from tests.cuEq.model import EnergyForceModel, energy_fn, forces_fn
+try:
+    from tests.cuEq.model import EnergyForceModel, energy_fn, forces_fn
+except ModuleNotFoundError:
+    from cuEq.model import EnergyForceModel, energy_fn, forces_fn
+
 from mmml.utils.hdf5_reporter import load_hdf5_trajectory
 
 
