@@ -8,7 +8,6 @@ from cuequivariance_jax import (
     triangle_multiplicative_update,
     equivariant_polynomial,
 )
-from cuequivariance_jax.flax_linen import LayerNorm
 
 
 class TriangleMultiplicativeLayer(nn.Module):
@@ -158,8 +157,8 @@ class EnergyForceModel(nn.Module):
         # Aggregate neighbor information per atom and feed through an MLP
         atom_features = pair_features.reshape(n_atoms, -1)
 
-        # Equivariant LayerNorm on per-atom features
-        x = LayerNorm()(atom_features)
+        # Standard LayerNorm on per-atom features (invariant channels)
+        x = nn.LayerNorm()(atom_features)
         for _ in range(self.num_layers):
             x = nn.Dense(self.hidden_dim)(x)
             x = nn.silu(x)
