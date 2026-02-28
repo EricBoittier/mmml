@@ -157,6 +157,8 @@ class EnergyForceModel(nn.Module):
     hidden_dim: int = 248
     num_layers: int = 3
     ls: tuple = (0, 1, 2, 3, 4)
+    num_heads: int = 4
+    head_dim: int = 32
 
     @nn.compact
     def __call__(self, positions, atomic_numbers, total_charge, atom_mask=None):
@@ -201,10 +203,13 @@ class EnergyForceModel(nn.Module):
         # Combine radial and angular information into per-pair features
         pair_features = jnp.concatenate([distances, sh, sh_poly, Z_i, Z_j, Q], axis=-1)
 
-        # Per-atom features and residual MLP (no triangle ops in the energy path,
-        # because current cuEquivariance JAX triangle primitives lack differentiation
-        # rules needed for forces via autodiff).
-        atom_features = pair_features.reshape(n_atoms, -1)
+        # Pure-JAX attention over pair features, then per-atom residual MLP.
+        atom_features = PairSelfAttentionBlock(
+            num_heads=self.num_heads,
+            head_dim=self.head_dim,
+            name="pair_attn",
+        )(pair_features, atom_mask=atom_mask)
+
         x = nn.Dense(self.hidden_dim, name="in_proj")(atom_features)
 
         for layer in range(self.num_layers):
@@ -223,6 +228,64 @@ class EnergyForceModel(nn.Module):
             energy = jnp.sum(per_atom_energy)
 
         return energy
+
+
+class PairSelfAttentionBlock(nn.Module):
+    """Pure-JAX multi-head self-attention over pairwise features.
+
+    This block operates on pair features of shape (n_atoms, n_atoms, D_in) and
+    returns per-atom features of shape (n_atoms, num_heads * head_dim). It is
+    implemented only with standard JAX/Flax ops, so it is fully compatible with
+    JAX autodiff for forces.
+    """
+
+    num_heads: int = 4
+    head_dim: int = 32
+
+    @nn.compact
+    def __call__(self, pair_features, atom_mask=None):
+        """Apply self-attention to pairwise features.
+
+        Args:
+            pair_features: array of shape (n_atoms, n_atoms, D_in)
+            atom_mask: optional (n_atoms,) mask; 1 for real atoms, 0 for padding.
+        """
+        n_atoms = pair_features.shape[0]
+        d_in = pair_features.shape[-1]
+        S = n_atoms * n_atoms
+        H = self.num_heads
+        D = self.head_dim
+
+        # Flatten (i, j) pairs into a single sequence dimension S.
+        x = pair_features.reshape(S, d_in)  # (S, D_in)
+
+        # Linear projections to queries/keys/values
+        q = nn.Dense(H * D, name="q_proj")(x).reshape(H, S, D)  # (H, S, D)
+        k = nn.Dense(H * D, name="k_proj")(x).reshape(H, S, D)  # (H, S, D)
+        v = nn.Dense(H * D, name="v_proj")(x).reshape(H, S, D)  # (H, S, D)
+
+        # Scaled dot-product attention: scores shape (H, S_q, S_k)
+        scale = 1.0 / jnp.sqrt(jnp.asarray(D, dtype=x.dtype))
+        scores = jnp.einsum("hqd,hkd->hqk", q, k) * scale  # (H, S, S)
+
+        if atom_mask is not None:
+            # Build a mask over key positions based on valid atoms.
+            atom_valid = jnp.asarray(atom_mask, dtype=bool).reshape(n_atoms)
+            pair_valid = (atom_valid[:, None] & atom_valid[None, :]).reshape(S)  # (S,)
+            key_mask = pair_valid[None, None, :]  # (1, 1, S_k)
+            large_neg = jnp.asarray(-1e9, dtype=scores.dtype)
+            scores = jnp.where(key_mask, scores, large_neg)
+
+        # Attention weights and output
+        attn_weights = nn.softmax(scores, axis=-1)  # (H, S_q, S_k)
+        attn_out = jnp.einsum("hqk,hkd->hqd", attn_weights, v)  # (H, S, D)
+
+        attn_out = attn_out.reshape(S, H * D)
+        attn_out = attn_out.reshape(n_atoms, n_atoms, H * D)
+
+        # Reduce over neighbor dimension to obtain per-atom features
+        atom_features = attn_out.sum(axis=1)  # (n_atoms, H * D)
+        return atom_features
 
 
 def energy_fn(params, positions, atomic_numbers, total_charge, atom_mask=None):
