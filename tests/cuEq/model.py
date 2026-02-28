@@ -175,33 +175,30 @@ class EnergyForceModel(nn.Module):
             # Residual connection
             x = x + h
 
-        # Predict per-atom energies and forces directly
+        # Predict per-atom energies; forces come from autodiff of energy
         per_atom_energy = nn.Dense(1)(x)   # (n_atoms, 1)
-        per_atom_forces = nn.Dense(3)(x)   # (n_atoms, 3)
 
         if atom_mask is not None:
             mask = jnp.asarray(atom_mask, dtype=jnp.float32).reshape(-1, 1)
             energy = jnp.sum(per_atom_energy * mask)
-            forces = per_atom_forces * mask
         else:
             energy = jnp.sum(per_atom_energy)
-            forces = per_atom_forces
 
-        return energy, forces
+        return energy
 
 
 def energy_fn(params, positions, atomic_numbers, total_charge, atom_mask=None):
     """Convenience wrapper: energy(params, R, Z, Q)."""
     model = EnergyForceModel()
-    energy, _ = model.apply(params, positions, atomic_numbers, total_charge, atom_mask)
-    return energy
+    return model.apply(params, positions, atomic_numbers, total_charge, atom_mask)
 
 
 def forces_fn(params, positions, atomic_numbers, total_charge, atom_mask=None):
-    """Predict forces directly from the model (no energy gradient)."""
-    model = EnergyForceModel()
-    _, forces = model.apply(params, positions, atomic_numbers, total_charge, atom_mask)
-    return forces
+    """Compute forces as negative gradient of energy w.r.t. positions."""
+    grad_energy_wrt_positions = jax.grad(energy_fn, argnums=1)(
+        params, positions, atomic_numbers, total_charge, atom_mask
+    )
+    return -grad_energy_wrt_positions
 
 
 if __name__ == "__main__":
@@ -215,7 +212,8 @@ if __name__ == "__main__":
     model = EnergyForceModel()
     params = model.init(key, positions, atomic_numbers, total_charge)
 
-    energy, forces = model.apply(params, positions, atomic_numbers, total_charge)
+    energy = energy_fn(params, positions, atomic_numbers, total_charge)
+    forces = forces_fn(params, positions, atomic_numbers, total_charge)
 
     print("Energy:", energy)
     print("Forces shape:", forces.shape)
