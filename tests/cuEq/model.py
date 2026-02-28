@@ -155,7 +155,7 @@ class EnergyForceModel(nn.Module):
     """
 
     hidden_dim: int = 64
-    num_layers: int = 5
+    num_layers: int = 32
     ls: tuple = (0, 1, 2)
     num_heads: int = 4
     head_dim: int = 32
