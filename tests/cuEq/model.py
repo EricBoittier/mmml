@@ -153,27 +153,16 @@ class EnergyForceModel(nn.Module):
         # Combine radial and angular information into per-pair features
         pair_features = jnp.concatenate([distances, sh, sh_poly, Z_i, Z_j, Q], axis=-1)
 
-        # Initial per-atom features from raw pairwise representation
-        base_atom_features = pair_features.reshape(n_atoms, -1)
-        x = nn.Dense(self.hidden_dim, name="in_proj")(base_atom_features)
+        # Per-atom features and residual MLP (no triangle: cuEquivariance triangle
+        # primitives lack JAX differentiation rules, so autodiff forces would fail)
+        atom_features = pair_features.reshape(n_atoms, -1)
+        x = nn.Dense(self.hidden_dim, name="in_proj")(atom_features)
 
-        # Stack of triangle + per-atom residual blocks
         for layer in range(self.num_layers):
-            # Triangle multiplicative update over pairwise features (AlphaFold2-style).
-            # We stop gradients through this branch to avoid unsupported JAX primitives.
-            pair_features = TriangleMultiplicativeLayer(name=f"triangle_{layer}")(
-                pair_features
-            )
-            pair_features = jax.lax.stop_gradient(pair_features)
-            atom_features_l = pair_features.reshape(n_atoms, -1)
-
-            # Project triangle-updated atom features into hidden_dim
-            h = nn.Dense(self.hidden_dim, name=f"tri_proj_{layer}")(atom_features_l)
+            h = nn.Dense(self.hidden_dim, name=f"dense_{layer}")(x)
             h = nn.LayerNorm(name=f"ln_{layer}")(h)
             h = nn.silu(h)
-
-            # Residual connection
-            x = x + h
+            x = x + h  # residual
 
         # Predict per-atom energies; forces come from autodiff of energy
         per_atom_energy = nn.Dense(1)(x)   # (n_atoms, 1)
