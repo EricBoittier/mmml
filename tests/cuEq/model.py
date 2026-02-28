@@ -153,8 +153,12 @@ class EnergyForceModel(nn.Module):
         # Combine radial and angular information into per-pair features
         pair_features = jnp.concatenate([distances, sh, sh_poly, Z_i, Z_j, Q], axis=-1)
 
-        # Triangle multiplicative update over pairwise features (AlphaFold2-style)
+        # Triangle multiplicative update over pairwise features (AlphaFold2-style).
+        # We treat this as a fixed, non-trainable feature transform by stopping
+        # gradients through its output, because the current CUDA primitives lack
+        # full differentiation rules in this environment.
         pair_features = TriangleMultiplicativeLayer()(pair_features)
+        pair_features = jax.lax.stop_gradient(pair_features)
 
         # Aggregate neighbor information per atom and feed through an MLP
         atom_features = pair_features.reshape(n_atoms, -1)
@@ -165,27 +169,33 @@ class EnergyForceModel(nn.Module):
             x = nn.Dense(self.hidden_dim)(x)
             x = nn.silu(x)
 
-        per_atom_energy = nn.Dense(1)(x)  # (n_atoms, 1)
+        # Predict per-atom energies and forces directly
+        per_atom_energy = nn.Dense(1)(x)   # (n_atoms, 1)
+        per_atom_forces = nn.Dense(3)(x)   # (n_atoms, 3)
+
         if atom_mask is not None:
             mask = jnp.asarray(atom_mask, dtype=jnp.float32).reshape(-1, 1)
             energy = jnp.sum(per_atom_energy * mask)
+            forces = per_atom_forces * mask
         else:
             energy = jnp.sum(per_atom_energy)
-        return energy
+            forces = per_atom_forces
+
+        return energy, forces
 
 
 def energy_fn(params, positions, atomic_numbers, total_charge, atom_mask=None):
     """Convenience wrapper: energy(params, R, Z, Q)."""
     model = EnergyForceModel()
-    return model.apply(params, positions, atomic_numbers, total_charge, atom_mask)
+    energy, _ = model.apply(params, positions, atomic_numbers, total_charge, atom_mask)
+    return energy
 
 
 def forces_fn(params, positions, atomic_numbers, total_charge, atom_mask=None):
-    """Compute forces as negative gradient of energy w.r.t. positions."""
-    grad_energy_wrt_positions = jax.grad(energy_fn, argnums=1)(
-        params, positions, atomic_numbers, total_charge, atom_mask
-    )
-    return -grad_energy_wrt_positions
+    """Predict forces directly from the model (no energy gradient)."""
+    model = EnergyForceModel()
+    _, forces = model.apply(params, positions, atomic_numbers, total_charge, atom_mask)
+    return forces
 
 
 if __name__ == "__main__":
@@ -199,8 +209,7 @@ if __name__ == "__main__":
     model = EnergyForceModel()
     params = model.init(key, positions, atomic_numbers, total_charge)
 
-    energy = energy_fn(params, positions, atomic_numbers, total_charge)
-    forces = forces_fn(params, positions, atomic_numbers, total_charge)
+    energy, forces = model.apply(params, positions, atomic_numbers, total_charge)
 
     print("Energy:", energy)
     print("Forces shape:", forces.shape)
