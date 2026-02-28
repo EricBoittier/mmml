@@ -155,8 +155,8 @@ class EnergyForceModel(nn.Module):
     """
 
     hidden_dim: int = 64
-    num_layers: int = 32
-    ls: tuple = (0, 1, 2)
+    num_layers: int = 6
+    ls: tuple = (0, 1, 2, 3, 4, 5)
     num_heads: int = 4
     head_dim: int = 32
 
@@ -209,7 +209,7 @@ class EnergyForceModel(nn.Module):
 
         for layer in range(self.num_layers):
             h = nn.Dense(self.hidden_dim, name=f"dense_{layer}")(x)
-            h = nn.LayerNorm(name=f"ln_{layer}")(h)
+            # h = nn.LayerNorm(name=f"ln_{layer}")(h)
             h = nn.silu(h)
             x = x + h  # residual
 
