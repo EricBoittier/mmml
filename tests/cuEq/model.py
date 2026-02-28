@@ -203,13 +203,8 @@ class EnergyForceModel(nn.Module):
         # Combine radial and angular information into per-pair features
         pair_features = jnp.concatenate([distances, sh, sh_poly, Z_i, Z_j, Q], axis=-1)
 
-        # Pure-JAX attention over pair features, then per-atom residual MLP.
-        atom_features = PairSelfAttentionBlock(
-            num_heads=self.num_heads,
-            head_dim=self.head_dim,
-            name="pair_attn",
-        )(pair_features, atom_mask=atom_mask)
-
+        # Simple per-atom features and residual MLP (no attention for speed/stability).
+        atom_features = pair_features.reshape(n_atoms, -1)
         x = nn.Dense(self.hidden_dim, name="in_proj")(atom_features)
 
         for layer in range(self.num_layers):
