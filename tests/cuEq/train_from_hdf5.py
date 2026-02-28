@@ -280,6 +280,7 @@ def train_model_cueq(
     batch_size: int = 32,
     seed: int = 0,
     log_interval: int = 100,
+    max_grad_norm: float = 1.0,
 ) -> Tuple[TrainState, Dict[str, List[float]]]:
     """Train EnergyForceModel on data from prepare_h5_datasets.
 
@@ -308,6 +309,8 @@ def train_model_cueq(
         PRNG seed (overrides key if key is from split).
     log_interval : int
         Steps between logging.
+    max_grad_norm : float
+        If > 0, clip gradients by this global L2 norm before applying Adam.
 
     Returns
     -------
@@ -396,7 +399,14 @@ def train_model_cueq(
     example_Q = float(Q_train[0])
 
     params = model.init(init_key, example_R, example_Z, example_Q)
-    tx = optax.adam(learning_rate)
+    # Optimizer with optional global-norm gradient clipping for stability
+    if max_grad_norm is not None and max_grad_norm > 0.0:
+        tx = optax.chain(
+            optax.clip_by_global_norm(max_grad_norm),
+            optax.adam(learning_rate),
+        )
+    else:
+        tx = optax.adam(learning_rate)
     state = TrainState.create(apply_fn=model.apply, params=params, tx=tx)
 
     history: Dict[str, List[float]] = {"step": [], "loss": [], "e_loss": [], "f_loss": []}
