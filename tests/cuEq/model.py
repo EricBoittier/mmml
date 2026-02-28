@@ -154,8 +154,8 @@ class EnergyForceModel(nn.Module):
       total_charge (Q): scalar
     """
 
-    hidden_dim: int = 248
-    num_layers: int = 3
+    hidden_dim: int = 128
+    num_layers: int = 2
     ls: tuple = (0, 1, 2, 3, 4)
     num_heads: int = 4
     head_dim: int = 32
