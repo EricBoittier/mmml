@@ -201,7 +201,7 @@ class EnergyForceModel(nn.Module):
         )
 
         # Combine radial and angular information into per-pair features
-        pair_features = jnp.concatenate([distances, sh, sh_poly, Z_i, Z_j, Q], axis=-1)
+        pair_features = jnp.concatenate([distances, sh, sh_poly, Z_i* Z_j, Q], axis=-1)
 
         # Simple per-atom features and residual MLP (no attention for speed/stability).
         atom_features = pair_features.reshape(n_atoms, -1)
