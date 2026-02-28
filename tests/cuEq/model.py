@@ -106,9 +106,9 @@ class EnergyForceModel(nn.Module):
       total_charge (Q): scalar
     """
 
-    hidden_dim: int = 64
-    num_layers: int = 3
-    ls: tuple = (0, 1, 2)
+    hidden_dim: int = 248
+    num_layers: int = 2
+    ls: tuple = (0, 1, 2, 3, 4)
 
     @nn.compact
     def __call__(self, positions, atomic_numbers, total_charge, atom_mask=None):
