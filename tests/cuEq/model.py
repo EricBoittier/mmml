@@ -1,7 +1,13 @@
 import jax
 import jax.numpy as jnp
 import flax.linen as nn
-from cuequivariance_jax import spherical_harmonics, triangle_multiplicative_update
+import cuequivariance as cue
+import cuequivariance_jax as cuex
+from cuequivariance_jax import (
+    spherical_harmonics,
+    triangle_multiplicative_update,
+    equivariant_polynomial,
+)
 from cuequivariance_jax.flax_linen import LayerNorm
 
 
@@ -112,8 +118,15 @@ class EnergyForceModel(nn.Module):
         unit_vectors = disp / (distances + 1e-9)
         sh = spherical_harmonics(self.ls, unit_vectors, normalize=True)
 
+        # Additional angular features via equivariant_polynomial on RepArray inputs
+        with cue.assume(cue.SO3, cue.ir_mul):
+            poly = cue.descriptors.spherical_harmonics(cue.SO3(1), list(self.ls))
+            rep_in = cuex.RepArray("1", unit_vectors.reshape(-1, 3))
+            sh_poly_rep = equivariant_polynomial(poly, [rep_in], method="naive")
+            sh_poly = sh_poly_rep.array.reshape(n_atoms, n_atoms, -1)
+
         # Combine radial and angular information into per-pair features
-        pair_features = jnp.concatenate([distances, sh], axis=-1)
+        pair_features = jnp.concatenate([distances, sh, sh_poly], axis=-1)
 
         # Triangle multiplicative update over pairwise features (AlphaFold2-style)
         pair_features = TriangleMultiplicativeLayer()(pair_features)
