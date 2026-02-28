@@ -137,7 +137,9 @@ class TriangleAttentionBlock(nn.Module):
         else:
             mask = jnp.ones((1, 1, 1, 1, S), dtype=bool)
 
-        scale = 1.0 / jnp.sqrt(float(D))
+        # scale must be a Python float (hashable attribute for the primitive),
+        # not a JAX array scalar
+        scale = 1.0 / (float(D) ** 0.5)
 
         attn_out, _, _ = triangle_attention(q, k, v, bias, mask, scale)  # (1, 1, H, S, D)
         attn_out = attn_out.reshape(n_atoms, n_atoms, H * D)
