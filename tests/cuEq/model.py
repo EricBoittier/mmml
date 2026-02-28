@@ -2,6 +2,7 @@ import jax
 import jax.numpy as jnp
 import flax.linen as nn
 from cuequivariance_jax import spherical_harmonics, triangle_multiplicative_update
+from cuequivariance_jax.flax_linen import LayerNorm
 
 
 class TriangleMultiplicativeLayer(nn.Module):
@@ -120,7 +121,8 @@ class EnergyForceModel(nn.Module):
         # Aggregate neighbor information per atom and feed through an MLP
         atom_features = pair_features.reshape(n_atoms, -1)
 
-        x = atom_features
+        # Equivariant LayerNorm on per-atom features
+        x = LayerNorm()(atom_features)
         for _ in range(self.num_layers):
             x = nn.Dense(self.hidden_dim)(x)
             x = nn.silu(x)
