@@ -92,6 +92,8 @@ class TriangleMultiplicativeLayer(nn.Module):
             g_out_weight=g_out_weight,
             g_out_bias=g_out_bias,
             eps=self.eps,
+            # Use pure-JAX fallback implementation so gradients are defined
+            fallback=True,
         )
 
 
