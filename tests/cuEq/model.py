@@ -1,0 +1,158 @@
+import jax
+import jax.numpy as jnp
+import flax.linen as nn
+from cuequivariance_jax import spherical_harmonics, triangle_multiplicative_update
+
+
+class TriangleMultiplicativeLayer(nn.Module):
+    """Flax wrapper around cuequivariance_jax.triangle_multiplicative_update."""
+
+    direction: str = "outgoing"
+    eps: float = 1e-5
+
+    @nn.compact
+    def __call__(self, x, mask=None):
+        """Apply triangle multiplicative update.
+
+        Args:
+            x: array of shape (..., N, N, D_in)
+            mask: optional array broadcastable to (..., N, N)
+        """
+        d_in = x.shape[-1]
+
+        # Input norm/gating parameters
+        norm_in_weight = self.param(
+            "norm_in_weight", lambda key: jnp.ones((d_in,))
+        )
+        norm_in_bias = self.param(
+            "norm_in_bias", lambda key: jnp.zeros((d_in,))
+        )
+
+        p_in_weight = self.param(
+            "p_in_weight",
+            lambda key: nn.initializers.lecun_normal()(key, (2 * d_in, d_in)),
+        )
+        p_in_bias = self.param(
+            "p_in_bias", lambda key: jnp.zeros((2 * d_in,))
+        )
+
+        g_in_weight = self.param(
+            "g_in_weight",
+            lambda key: nn.initializers.lecun_normal()(key, (2 * d_in, d_in)),
+        )
+        g_in_bias = self.param(
+            "g_in_bias", lambda key: jnp.zeros((2 * d_in,))
+        )
+
+        # Output norm/gating parameters (keep D_out = D_in for simplicity)
+        norm_out_weight = self.param(
+            "norm_out_weight", lambda key: jnp.ones((d_in,))
+        )
+        norm_out_bias = self.param(
+            "norm_out_bias", lambda key: jnp.zeros((d_in,))
+        )
+
+        p_out_weight = self.param(
+            "p_out_weight",
+            lambda key: nn.initializers.lecun_normal()(key, (d_in, d_in)),
+        )
+        p_out_bias = self.param(
+            "p_out_bias", lambda key: jnp.zeros((d_in,))
+        )
+
+        g_out_weight = self.param(
+            "g_out_weight",
+            lambda key: nn.initializers.lecun_normal()(key, (d_in, d_in)),
+        )
+        g_out_bias = self.param(
+            "g_out_bias", lambda key: jnp.zeros((d_in,))
+        )
+
+        return triangle_multiplicative_update(
+            x=x,
+            direction=self.direction,
+            key=None,  # all weights are provided explicitly
+            mask=mask,
+            norm_in_weight=norm_in_weight,
+            norm_in_bias=norm_in_bias,
+            p_in_weight=p_in_weight,
+            p_in_bias=p_in_bias,
+            g_in_weight=g_in_weight,
+            g_in_bias=g_in_bias,
+            norm_out_weight=norm_out_weight,
+            norm_out_bias=norm_out_bias,
+            p_out_weight=p_out_weight,
+            p_out_bias=p_out_bias,
+            g_out_weight=g_out_weight,
+            g_out_bias=g_out_bias,
+            eps=self.eps,
+        )
+
+
+class EnergyForceModel(nn.Module):
+    hidden_dim: int = 64
+    num_layers: int = 3
+    ls: tuple = (0, 1, 2)
+
+    @nn.compact
+    def __call__(self, positions):
+        """Predict a scalar potential energy from atomic positions.
+
+        Args:
+            positions: array of shape (n_atoms, 3) with Cartesian coordinates.
+        """
+        n_atoms = positions.shape[-2]
+
+        # Pairwise displacements and distances
+        disp = positions[:, None, :] - positions[None, :, :]  # (n_atoms, n_atoms, 3)
+        distances = jnp.linalg.norm(disp + 1e-9, axis=-1, keepdims=True)
+
+        # Angular features via spherical harmonics (SO(3)-aware features)
+        unit_vectors = disp / (distances + 1e-9)
+        sh = spherical_harmonics(self.ls, unit_vectors, normalize=True)
+
+        # Combine radial and angular information into per-pair features
+        pair_features = jnp.concatenate([distances, sh], axis=-1)
+
+        # Triangle multiplicative update over pairwise features (AlphaFold2-style)
+        pair_features = TriangleMultiplicativeLayer()(pair_features)
+
+        # Aggregate neighbor information per atom and feed through an MLP
+        atom_features = pair_features.reshape(n_atoms, -1)
+
+        x = atom_features
+        for _ in range(self.num_layers):
+            x = nn.Dense(self.hidden_dim)(x)
+            x = nn.silu(x)
+
+        per_atom_energy = nn.Dense(1)(x)  # (n_atoms, 1)
+        energy = jnp.sum(per_atom_energy)  # scalar total energy
+        return energy
+
+
+def energy_fn(params, positions):
+    """Convenience wrapper: energy(params, R)."""
+    model = EnergyForceModel()
+    return model.apply(params, positions)
+
+
+def forces_fn(params, positions):
+    """Compute forces as negative gradient of energy w.r.t. positions."""
+    grad_energy_wrt_positions = jax.grad(energy_fn, argnums=1)(params, positions)
+    return -grad_energy_wrt_positions
+
+
+if __name__ == "__main__":
+    # Small demo: initialize the model and compute energy and forces
+    key = jax.random.key(0)
+    n_atoms = 4
+    positions = jax.random.normal(key, (n_atoms, 3))
+
+    model = EnergyForceModel()
+    params = model.init(key, positions)
+
+    energy = energy_fn(params, positions)
+    forces = forces_fn(params, positions)
+
+    print("Energy:", energy)
+    print("Forces shape:", forces.shape)
