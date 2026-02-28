@@ -7,6 +7,7 @@ from cuequivariance_jax import (
     spherical_harmonics,
     triangle_multiplicative_update,
     equivariant_polynomial,
+    triangle_attention,
 )
 
 
@@ -97,6 +98,55 @@ class TriangleMultiplicativeLayer(nn.Module):
         )
 
 
+class TriangleAttentionBlock(nn.Module):
+    """Triangle-style attention over pair features using cuequivariance_jax.triangle_attention."""
+
+    num_heads: int = 4
+    head_dim: int = 32
+
+    @nn.compact
+    def __call__(self, pair_features, atom_mask=None):
+        """Apply triangle attention to pairwise features.
+
+        Args:
+            pair_features: array of shape (n_atoms, n_atoms, D_in)
+            atom_mask: optional (n_atoms,) mask; 1 for real atoms, 0 for padding.
+        """
+        n_atoms = pair_features.shape[0]
+        d_in = pair_features.shape[-1]
+        S = n_atoms * n_atoms
+        H = self.num_heads
+        D = self.head_dim
+
+        # Flatten pair indices into a single sequence dimension S_qo = S_kv.
+        x = pair_features.reshape(1, 1, S, d_in)  # (B=1, N=1, S, D_in)
+
+        # Linear projections to queries/keys/values
+        q = nn.Dense(H * D, name="q_proj")(x).reshape(1, 1, H, S, D)
+        k = nn.Dense(H * D, name="k_proj")(x).reshape(1, 1, H, S, D)
+        v = nn.Dense(H * D, name="v_proj")(x).reshape(1, 1, H, S, D)
+
+        # Bias: no extra bias beyond mask, so use zeros
+        bias = jnp.zeros((1, 1, H, S, S), dtype=x.dtype)
+
+        # Mask: propagate atom_mask to pair-wise validity if provided
+        if atom_mask is not None:
+            atom_valid = jnp.asarray(atom_mask, dtype=bool).reshape(n_atoms)
+            pair_valid = (atom_valid[:, None] & atom_valid[None, :]).reshape(S)
+            mask = pair_valid.reshape(1, 1, 1, 1, S)
+        else:
+            mask = jnp.ones((1, 1, 1, 1, S), dtype=bool)
+
+        scale = 1.0 / jnp.sqrt(float(D))
+
+        attn_out, _, _ = triangle_attention(q, k, v, bias, mask, scale)  # (1, 1, H, S, D)
+        attn_out = attn_out.reshape(n_atoms, n_atoms, H * D)
+
+        # Reduce over neighbor dimension to obtain per-atom features
+        atom_features = attn_out.sum(axis=1)  # (n_atoms, H * D)
+        return atom_features
+
+
 class EnergyForceModel(nn.Module):
     """cuEquivariance-based energy/force model.
 
@@ -109,6 +159,8 @@ class EnergyForceModel(nn.Module):
     hidden_dim: int = 248
     num_layers: int = 3
     ls: tuple = (0, 1, 2, 3, 4)
+    num_heads: int = 4
+    head_dim: int = 32
 
     @nn.compact
     def __call__(self, positions, atomic_numbers, total_charge, atom_mask=None):
@@ -153,9 +205,13 @@ class EnergyForceModel(nn.Module):
         # Combine radial and angular information into per-pair features
         pair_features = jnp.concatenate([distances, sh, sh_poly, Z_i, Z_j, Q], axis=-1)
 
-        # Per-atom features and residual MLP (no triangle: cuEquivariance triangle
-        # primitives lack JAX differentiation rules, so autodiff forces would fail)
-        atom_features = pair_features.reshape(n_atoms, -1)
+        # Triangle-style attention over pair features, then per-atom residual MLP.
+        atom_features = TriangleAttentionBlock(
+            num_heads=self.num_heads,
+            head_dim=self.head_dim,
+            name="triangle_attn",
+        )(pair_features, atom_mask=atom_mask)
+
         x = nn.Dense(self.hidden_dim, name="in_proj")(atom_features)
 
         for layer in range(self.num_layers):
