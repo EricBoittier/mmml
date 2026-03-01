@@ -54,16 +54,16 @@ class EF(nn.Module):
         debug: Debug flags (False or list of debug areas)
     """
 
-    features: int = 32
-    max_degree: int = 1
-    num_iterations: int = 3
+    features: int = 128
+    max_degree: int = 2
+    num_iterations: int = 2
     num_basis_functions: int = 32
     cutoff: float = 6.0
     max_atomic_number: int = 87
     charges: bool = False
     natoms: int = 35
     total_charge: float = 0
-    n_res: int = 5
+    n_res: int = 2
     zbl: bool = True
     debug: bool | List[str] = False
     efa: bool = False

@@ -205,7 +205,7 @@ def main():
     chunk_ckpt_root.mkdir(parents=True, exist_ok=True)
 
     def _save_chunk_checkpoint(state_to_save, step_to_save, epoch_to_save, chunk_to_save):
-        """Save one Orbax checkpoint after each completed chunk."""
+        """Save params and metadata after selected chunks."""
         chunk_dir = chunk_ckpt_root / f"epoch-{epoch_to_save:04d}-chunk-{chunk_to_save:06d}-step-{step_to_save:08d}"
         if chunk_dir.exists():
             shutil.rmtree(chunk_dir)
