@@ -75,10 +75,10 @@ def main():
         )
 
     # Longer default run over more examples.
-    num_examples = 20000
+    num_examples = 2000000
     batch_size = 32
-    num_steps = 5000
-    log_interval = 50
+    num_steps = 1000 * 2000000 // batch_size
+    log_interval = 5000
     learning_rate = 1e-3
 
     force_field_ds = force_field_ds.take(num_examples)
