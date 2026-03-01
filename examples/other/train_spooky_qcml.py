@@ -86,76 +86,68 @@ def main():
     # Avoid one huge molecule forcing massive padding.
     max_atoms_cap = NATOMS
 
-    force_field_ds = force_field_ds.take(num_examples)
+    # Stream fixed-size chunks from TFDS to bound host/GPU memory usage.
+    chunk_examples = 8192
+    print(f"\n2. Online chunked loading (chunk_examples={chunk_examples})...")
 
-    # 2) Materialize a fixed-shape cached dataset for faster training.
-    # This removes per-step TF->NumPy conversion overhead and enables larger batches.
-    print("\n2. Caching dataset to dense padded arrays...")
-    examples = []
-    max_atoms = 0
+    def _finalize_chunk(examples_chunk):
+        if not examples_chunk:
+            return None
+        max_atoms = max(int(e["atomic_numbers"].shape[0]) for e in examples_chunk)
+        n_samples = len(examples_chunk)
+        Z = np.zeros((n_samples, max_atoms), dtype=np.int32)
+        R = np.zeros((n_samples, max_atoms, 3), dtype=np.float32)
+        F = np.zeros((n_samples, max_atoms, 3), dtype=np.float32)
+        E = np.zeros((n_samples,), dtype=np.float32)
+        Q = np.zeros((n_samples,), dtype=np.float32)
+        S = np.zeros((n_samples,), dtype=np.float32)
+        for i, e in enumerate(examples_chunk):
+            z = np.asarray(e["atomic_numbers"], dtype=np.int32)
+            r = np.asarray(e["positions"], dtype=np.float32)
+            f = np.asarray(e["pbe0_forces"], dtype=np.float32)
+            n_i = z.shape[0]
+            Z[i, :n_i] = z
+            R[i, :n_i, :] = r
+            F[i, :n_i, :] = f
+            E[i] = np.asarray(e[energy_key], dtype=np.float32)
+            Q[i] = np.asarray(e["charge"], dtype=np.float32)
+            S[i] = np.asarray(e["multiplicity"], dtype=np.float32)
+        return {"Z": Z, "R": R, "F": F, "E": E, "Q": Q, "S": S}
+
+    chunks = []
+    chunk_buf = []
+    seen = 0
+    kept = 0
     skipped_large = 0
+    skipped_outlier = 0
     for example in force_field_ds:
+        if seen >= num_examples:
+            break
+        seen += 1
         e = {k: v.numpy() for k, v in example.items()}
         if bool(e.get("is_outlier", False)):
+            skipped_outlier += 1
             continue
         n_atoms = int(e["atomic_numbers"].shape[0])
         if n_atoms > max_atoms_cap:
             skipped_large += 1
             continue
-        examples.append(e)
-        max_atoms = max(max_atoms, n_atoms)
+        chunk_buf.append(e)
+        kept += 1
+        if len(chunk_buf) >= chunk_examples:
+            chunks.append(_finalize_chunk(chunk_buf))
+            chunk_buf = []
+    if chunk_buf:
+        chunks.append(_finalize_chunk(chunk_buf))
 
-    if not examples:
-        raise ValueError("No usable examples found (all filtered as outliers?).")
-
-    n_samples = len(examples)
-    # Keep large cache arrays on host memory to avoid GPU OOM.
-    Z_all = np.zeros((n_samples, max_atoms), dtype=np.int32)
-    R_all = np.zeros((n_samples, max_atoms, 3), dtype=np.float32)
-    F_all = np.zeros((n_samples, max_atoms, 3), dtype=np.float32)
-    E_all = np.zeros((n_samples,), dtype=np.float32)
-    Q_all = np.zeros((n_samples,), dtype=np.float32)
-    S_all = np.zeros((n_samples,), dtype=np.float32)
-
-    for i, e in enumerate(examples):
-        z = np.asarray(e["atomic_numbers"], dtype=np.int32)
-        r = np.asarray(e["positions"], dtype=np.float32)
-        f = np.asarray(e["pbe0_forces"], dtype=np.float32)
-        n_i = z.shape[0]
-        Z_all[i, :n_i] = z
-        R_all[i, :n_i, :] = r
-        F_all[i, :n_i, :] = f
-        E_all[i] = np.asarray(e[energy_key], dtype=np.float32)
-        Q_all[i] = np.asarray(e["charge"], dtype=np.float32)
-        S_all[i] = np.asarray(e["multiplicity"], dtype=np.float32)
+    if not chunks:
+        raise ValueError("No usable examples found after filtering.")
 
     print(
-        f"   Cached {n_samples} examples, max_atoms={max_atoms}, "
-        f"batch_size={batch_size}, skipped_large={skipped_large}"
+        f"   Prepared {len(chunks)} chunks from {seen} examples "
+        f"(kept={kept}, outliers={skipped_outlier}, skipped_large={skipped_large})"
     )
-
-    # Orbax checkpoint: cached dataset arrays
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    dataset_ckpt_dir = OUTPUT_DIR / "dataset_cache"
-    if dataset_ckpt_dir.exists():
-        shutil.rmtree(dataset_ckpt_dir)
-    dataset_ckpt = {
-        "Z": Z_all,
-        "R": R_all,
-        "F": F_all,
-        "E": E_all,
-        "Q": Q_all,
-        "S": S_all,
-        "n_samples": jnp.asarray(n_samples),
-        "max_atoms": jnp.asarray(max_atoms),
-    }
     checkpointer = ocp.PyTreeCheckpointer()
-    checkpointer.save(
-        str(dataset_ckpt_dir),
-        dataset_ckpt,
-        save_args=orbax_utils.save_args_from_target(dataset_ckpt),
-    )
-    print(f"   Saved dataset cache checkpoint: {dataset_ckpt_dir}")
 
     # 3) Instantiate spooky model
     print("\n3. Instantiating spooky EF model...")
@@ -163,14 +155,16 @@ def main():
 
     # 4) Build one batched example to initialize params
     print("\n4. Building initialization batch and initializing parameters...")
-    init_bs = min(batch_size, n_samples)
+    first_chunk = chunks[0]
+    n_init = first_chunk["Z"].shape[0]
+    init_bs = min(batch_size, n_init)
     init_batch = build_spooky_batch_from_padded_arrays(
-        Z_all[:init_bs],
-        R_all[:init_bs],
-        E_all[:init_bs],
-        F_all[:init_bs],
-        Q_all[:init_bs],
-        S_all[:init_bs],
+        first_chunk["Z"][:init_bs],
+        first_chunk["R"][:init_bs],
+        first_chunk["E"][:init_bs],
+        first_chunk["F"][:init_bs],
+        first_chunk["Q"][:init_bs],
+        first_chunk["S"][:init_bs],
     )
 
     key = jax.random.PRNGKey(0)
@@ -193,34 +187,72 @@ def main():
         apply_fn=model.apply, params=params, tx=tx
     )
 
-    # 5) Training loop (random minibatches from cached dense arrays)
+    # 5) Training loop (stream through each chunk before loading next).
     print("\n5. Training...")
     train_step = make_spooky_train_step(
         model, forces_weight=52.91, energy_weight=1.0, batch_size=batch_size
     )
 
     rng = np.random.default_rng(0)
-    for step in range(1, num_steps + 1):
-        replace = batch_size > n_samples
-        idx = rng.choice(n_samples, size=(batch_size,), replace=replace)
-        batch = build_spooky_batch_from_padded_arrays(
-            Z_all[idx],
-            R_all[idx],
-            E_all[idx],
-            F_all[idx],
-            Q_all[idx],
-            S_all[idx],
-        )
-        state, loss_val, metrics = train_step(state, batch)
+    step = 0
+    chunk_idx = 0
+    while step < num_steps:
+        chunk = chunks[chunk_idx % len(chunks)]
+        chunk_idx += 1
+        n_chunk = chunk["Z"].shape[0]
+        order = rng.permutation(n_chunk)
+        full_batches = n_chunk // batch_size
+        rem = n_chunk % batch_size
 
-        if step % log_interval == 0 or step == 1 or step == num_steps:
-            loss_f = float(loss_val)
-            e_loss = float(metrics["e_loss"])
-            f_loss = float(metrics["f_loss"])
-            print(
-                f"  Step {step:4d}  loss = {loss_f:.6f}  "
-                f"E_loss = {e_loss:.6f}  F_loss = {f_loss:.6f}"
+        # Pass through all structures in this chunk once (no replacement).
+        for b in range(full_batches):
+            idx = order[b * batch_size : (b + 1) * batch_size]
+            batch = build_spooky_batch_from_padded_arrays(
+                chunk["Z"][idx],
+                chunk["R"][idx],
+                chunk["E"][idx],
+                chunk["F"][idx],
+                chunk["Q"][idx],
+                chunk["S"][idx],
             )
+            state, loss_val, metrics = train_step(state, batch)
+            step += 1
+            if step % log_interval == 0 or step == 1 or step == num_steps:
+                loss_f = float(loss_val)
+                e_loss = float(metrics["e_loss"])
+                f_loss = float(metrics["f_loss"])
+                print(
+                    f"  Step {step:6d}  chunk={chunk_idx:4d}  "
+                    f"loss = {loss_f:.6f}  E_loss = {e_loss:.6f}  F_loss = {f_loss:.6f}"
+                )
+            if step >= num_steps:
+                break
+        if step >= num_steps:
+            break
+
+        # Handle remainder with deterministic top-up to fixed batch size.
+        if rem > 0:
+            idx = order[full_batches * batch_size :]
+            top_up = rng.choice(order, size=(batch_size - rem,), replace=True)
+            idx = np.concatenate([idx, top_up], axis=0)
+            batch = build_spooky_batch_from_padded_arrays(
+                chunk["Z"][idx],
+                chunk["R"][idx],
+                chunk["E"][idx],
+                chunk["F"][idx],
+                chunk["Q"][idx],
+                chunk["S"][idx],
+            )
+            state, loss_val, metrics = train_step(state, batch)
+            step += 1
+            if step % log_interval == 0 or step == 1 or step == num_steps:
+                loss_f = float(loss_val)
+                e_loss = float(metrics["e_loss"])
+                f_loss = float(metrics["f_loss"])
+                print(
+                    f"  Step {step:6d}  chunk={chunk_idx:4d}  "
+                    f"loss = {loss_f:.6f}  E_loss = {e_loss:.6f}  F_loss = {f_loss:.6f}"
+                )
 
     # Orbax checkpoint: final trained parameters
     params_ckpt_dir = OUTPUT_DIR / "final_params"
