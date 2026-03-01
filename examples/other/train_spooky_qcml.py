@@ -75,10 +75,10 @@ def main():
         )
 
     # Longer default run over more examples.
-    num_examples = 1_000_000
+    num_examples = 10_000_000
     batch_size = 64
     NATOMS = 30
-    num_steps = 200000 * 4
+    num_steps = 200000 * 20
     log_interval = 1000
     learning_rate = 1e-3
     energy_key = "pbe0_formation_energy"
