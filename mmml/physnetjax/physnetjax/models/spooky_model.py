@@ -55,7 +55,7 @@ class EF(nn.Module):
     """
 
     features: int = 128
-    max_degree: int = 2
+    max_degree: int = 1
     num_iterations: int = 2
     num_basis_functions: int = 32
     cutoff: float = 6.0
