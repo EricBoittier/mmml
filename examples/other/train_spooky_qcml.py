@@ -80,7 +80,7 @@ def main():
     NATOMS = 30
     num_steps = 200000 * 20
     log_interval = 1000
-    learning_rate = 1e-3
+    learning_rate = 3.1e-4
     energy_key = "pbe0_formation_energy"
     chunk_ckpt_interval = 10
     # Avoid one huge molecule forcing massive padding.
