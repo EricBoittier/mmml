@@ -74,11 +74,11 @@ def main():
             "qcml/dft_force_field", split="full", data_dir=LOCAL_DATA_DIR
         )
 
-    # Optional: take a subset for a quick run.
-    num_examples = 4096
-    batch_size = 32
-    num_steps = 1000
-    log_interval = 20
+    # Longer default run over more examples.
+    num_examples = 20000
+    batch_size = 128
+    num_steps = 5000
+    log_interval = 50
     learning_rate = 1e-3
 
     force_field_ds = force_field_ds.take(num_examples)
