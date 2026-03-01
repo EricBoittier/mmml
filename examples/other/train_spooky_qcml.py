@@ -20,6 +20,7 @@ To use a different energy/forces key (e.g. for other QCML configs):
 
 from __future__ import annotations
 
+import argparse
 import os
 import shutil
 from pathlib import Path
@@ -45,49 +46,78 @@ GCP_PROJECT = "deepmind-opensource"
 OUTPUT_DIR = Path("ckpts_spooky_qcml").resolve()
 
 
-def download_qcml_dft_force_field():
+def parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(
+        description="Train spooky PhysNetJAX on QCML dft_force_field with online chunked loading."
+    )
+    p.add_argument("--dataset", type=str, default="qcml/dft_force_field", help="TFDS dataset name.")
+    p.add_argument("--split", type=str, default="full", help="TFDS split.")
+    p.add_argument("--data-dir", type=str, default=LOCAL_DATA_DIR, help="Local TFDS data dir.")
+    p.add_argument("--num-examples", type=int, default=10_000_000, help="Max examples to stream per epoch.")
+    p.add_argument("--batch-size", type=int, default=64, help="Training batch size.")
+    p.add_argument("--natoms", type=int, default=30, help="Model natoms and max atom cap.")
+    p.add_argument("--num-steps", type=int, default=200000 * 20, help="Total optimization steps.")
+    p.add_argument("--log-interval", type=int, default=1000, help="Steps between logs.")
+    p.add_argument("--learning-rate", type=float, default=3.1e-4, help="Adam learning rate.")
+    p.add_argument("--energy-key", type=str, default="pbe0_formation_energy", help="Energy field key in TFDS examples.")
+    p.add_argument("--chunk-examples", type=int, default=200000, help="Examples per streamed chunk.")
+    p.add_argument("--chunk-ckpt-interval", type=int, default=10, help="Save chunk checkpoint every N chunks.")
+    p.add_argument("--resume", type=str, default=None, help='Checkpoint dir to resume from, or "latest".')
+    p.add_argument("--output-dir", type=str, default=str(OUTPUT_DIR), help="Checkpoint output directory.")
+    p.add_argument("--qcml-data-dir", type=str, default=QCML_DATA_DIR, help="Remote QCML gs:// root for download.")
+    p.add_argument("--gcp-project", type=str, default=GCP_PROJECT, help="GCP project for gcloud storage cp.")
+    return p.parse_args()
+
+
+def download_qcml_dft_force_field(local_data_dir: str, qcml_data_dir: str, gcp_project: str):
     """Download QCML dft_force_field dataset locally."""
     os.system("gcloud config set auth/disable_credentials True")
-    os.system(f"mkdir -p {LOCAL_DATA_DIR}/qcml/dft_force_field/")
+    os.system(f"mkdir -p {local_data_dir}/qcml/dft_force_field/")
     os.system(
-        f"gcloud storage cp -r {QCML_DATA_DIR}/qcml/dft_force_field/1.0.0 "
-        f"{LOCAL_DATA_DIR}/qcml/dft_force_field/ --project={GCP_PROJECT}"
+        f"gcloud storage cp -r {qcml_data_dir}/qcml/dft_force_field/1.0.0 "
+        f"{local_data_dir}/qcml/dft_force_field/ --project={gcp_project}"
     )
 
 
-def main():
+def main(args: argparse.Namespace):
     print("=" * 60)
     print("Spooky PhysNetJAX training on QCML dft_force_field")
     print("=" * 60)
+    output_dir = Path(args.output_dir).resolve()
 
     # 1) Load QCML dataset (download first if needed)
     print("\n1. Loading QCML dft_force_field dataset...")
     try:
         force_field_ds = tfds.load(
-            "qcml/dft_force_field", split="full", data_dir=LOCAL_DATA_DIR
+            args.dataset, split=args.split, data_dir=args.data_dir
         )
     except Exception as e:
         print(f"   Dataset not found. Run download_qcml_dft_force_field() first: {e}")
         print("   Attempting download...")
-        download_qcml_dft_force_field()
+        download_qcml_dft_force_field(
+            local_data_dir=args.data_dir,
+            qcml_data_dir=args.qcml_data_dir,
+            gcp_project=args.gcp_project,
+        )
         force_field_ds = tfds.load(
-            "qcml/dft_force_field", split="full", data_dir=LOCAL_DATA_DIR
+            args.dataset, split=args.split, data_dir=args.data_dir
         )
 
-    # Longer default run over more examples.
-    num_examples = 10_000_000
-    batch_size = 64
-    NATOMS = 30
-    num_steps = 200000 * 20
-    log_interval = 1000
-    learning_rate = 3.1e-4
-    energy_key = "pbe0_formation_energy"
-    chunk_ckpt_interval = 10
+    # Training and loading configuration from CLI.
+    num_examples = args.num_examples
+    batch_size = args.batch_size
+    NATOMS = args.natoms
+    num_steps = args.num_steps
+    log_interval = args.log_interval
+    learning_rate = args.learning_rate
+    energy_key = args.energy_key
+    chunk_ckpt_interval = args.chunk_ckpt_interval
+    resume_checkpoint = args.resume
     # Avoid one huge molecule forcing massive padding.
     max_atoms_cap = NATOMS
 
     # Stream fixed-size chunks from TFDS to bound host/GPU memory usage.
-    chunk_examples = 200000
+    chunk_examples = args.chunk_examples
     print(f"\n2. Online chunked loading (chunk_examples={chunk_examples})...")
 
     def _finalize_chunk(examples_chunk):
@@ -195,13 +225,51 @@ def main():
     state = train_state.TrainState.create(
         apply_fn=model.apply, params=params, tx=tx
     )
+    resume_step = 0
+    resume_epoch = 1
+    resume_chunk = 0
+
+    if resume_checkpoint is not None:
+        if resume_checkpoint == "latest":
+            chunk_root = output_dir / "chunk_checkpoints"
+            if not chunk_root.exists():
+                raise ValueError(
+                    f"Cannot resume from latest: {chunk_root} does not exist."
+                )
+            ckpt_dirs = sorted([p for p in chunk_root.iterdir() if p.is_dir()])
+            if not ckpt_dirs:
+                raise ValueError(
+                    f"Cannot resume from latest: no checkpoint dirs in {chunk_root}."
+                )
+            resume_path = ckpt_dirs[-1]
+        else:
+            resume_path = Path(resume_checkpoint)
+            if not resume_path.is_absolute():
+                resume_path = (Path.cwd() / resume_path).resolve()
+
+        print(f"\nResuming from checkpoint: {resume_path}")
+        restored = checkpointer.restore(str(resume_path))
+        if isinstance(restored, dict) and "params" in restored:
+            state = state.replace(params=restored["params"])
+            if "opt_state" in restored:
+                state = state.replace(opt_state=restored["opt_state"])
+            resume_step = int(np.asarray(restored.get("step", 0)))
+            resume_epoch = int(np.asarray(restored.get("epoch", 1)))
+            resume_chunk = int(np.asarray(restored.get("chunk", 0)))
+        else:
+            # Backward compatibility with params-only checkpoints.
+            state = state.replace(params=restored)
+        print(
+            f"   Restored metadata: step={resume_step}, "
+            f"epoch={resume_epoch}, chunk={resume_chunk}"
+        )
 
     # 5) Training loop (stream through each chunk before loading next).
     print("\n5. Training...")
     train_step = make_spooky_train_step(
         model, forces_weight=52.91, energy_weight=1.0, batch_size=batch_size
     )
-    chunk_ckpt_root = OUTPUT_DIR / "chunk_checkpoints"
+    chunk_ckpt_root = output_dir / "chunk_checkpoints"
     chunk_ckpt_root.mkdir(parents=True, exist_ok=True)
 
     def _save_chunk_checkpoint(state_to_save, step_to_save, epoch_to_save, chunk_to_save):
@@ -211,6 +279,7 @@ def main():
             shutil.rmtree(chunk_dir)
         payload = {
             "params": state_to_save.params,
+            "opt_state": state_to_save.opt_state,
             "step": np.asarray(step_to_save, dtype=np.int32),
             "epoch": np.asarray(epoch_to_save, dtype=np.int32),
             "chunk": np.asarray(chunk_to_save, dtype=np.int32),
@@ -280,18 +349,32 @@ def main():
             _save_chunk_checkpoint(state_holder["state"], step, epoch_idx, chunk_idx)
         return step
 
-    step = 0
-    epoch_idx = 1
+    step = resume_step
+    epoch_idx = resume_epoch
     state_holder = {"state": state}
 
-    # Continue first epoch from the first chunk already loaded for init.
-    chunk_idx = 1
-    step = _train_chunk(first_chunk, step, chunk_idx, epoch_idx)
-    for chunk in first_epoch_iter:
-        if step >= num_steps:
-            break
-        chunk_idx += 1
-        step = _train_chunk(chunk, step, chunk_idx, epoch_idx)
+    if resume_step == 0:
+        # Fresh run: continue first epoch from the first chunk already loaded for init.
+        chunk_idx = 1
+        step = _train_chunk(first_chunk, step, chunk_idx, epoch_idx)
+        for chunk in first_epoch_iter:
+            if step >= num_steps:
+                break
+            chunk_idx += 1
+            step = _train_chunk(chunk, step, chunk_idx, epoch_idx)
+    else:
+        # Resume run: skip already completed chunks in the resumed epoch.
+        print(
+            f"   Skipping first {resume_chunk} chunk(s) of resumed epoch {epoch_idx}."
+        )
+        chunk_idx = 0
+        for chunk in _stream_epoch_chunks():
+            if step >= num_steps:
+                break
+            chunk_idx += 1
+            if chunk_idx <= resume_chunk:
+                continue
+            step = _train_chunk(chunk, step, chunk_idx, epoch_idx)
 
     # Additional epochs if needed.
     while step < num_steps:
@@ -306,7 +389,7 @@ def main():
     state = state_holder["state"]
 
     # Orbax checkpoint: final trained parameters
-    params_ckpt_dir = OUTPUT_DIR / "final_params"
+    params_ckpt_dir = output_dir / "final_params"
     if params_ckpt_dir.exists():
         shutil.rmtree(params_ckpt_dir)
     checkpointer.save(
@@ -319,4 +402,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main(parse_args())
