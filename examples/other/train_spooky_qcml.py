@@ -200,6 +200,25 @@ def main():
     train_step = make_spooky_train_step(
         model, forces_weight=52.91, energy_weight=1.0, batch_size=batch_size
     )
+    chunk_ckpt_root = OUTPUT_DIR / "chunk_checkpoints"
+    chunk_ckpt_root.mkdir(parents=True, exist_ok=True)
+
+    def _save_chunk_checkpoint(state_to_save, step_to_save, epoch_to_save, chunk_to_save):
+        """Save one Orbax checkpoint after each completed chunk."""
+        chunk_dir = chunk_ckpt_root / f"epoch-{epoch_to_save:04d}-chunk-{chunk_to_save:06d}-step-{step_to_save:08d}"
+        if chunk_dir.exists():
+            shutil.rmtree(chunk_dir)
+        payload = {
+            "params": state_to_save.params,
+            "step": np.asarray(step_to_save, dtype=np.int32),
+            "epoch": np.asarray(epoch_to_save, dtype=np.int32),
+            "chunk": np.asarray(chunk_to_save, dtype=np.int32),
+        }
+        checkpointer.save(
+            str(chunk_dir),
+            payload,
+            save_args=orbax_utils.save_args_from_target(payload),
+        )
 
     rng = np.random.default_rng(0)
     def _train_chunk(chunk, step, chunk_idx, epoch_idx):
@@ -256,6 +275,7 @@ def main():
                     f"  Step {step:6d}  epoch={epoch_idx:3d}  chunk={chunk_idx:4d}  "
                     f"loss = {loss_f:.6f}  E_loss = {e_loss:.6f}  F_loss = {f_loss:.6f}"
                 )
+        _save_chunk_checkpoint(state_holder["state"], step, epoch_idx, chunk_idx)
         return step
 
     step = 0
