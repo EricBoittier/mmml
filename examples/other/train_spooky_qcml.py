@@ -78,11 +78,12 @@ def main():
     # Longer default run over more examples.
     num_examples = 200000
     batch_size = 64
+    NATOMS = 30
     num_steps = max(5000, 4 * num_examples // batch_size)
     log_interval = 200
     learning_rate = 1e-3
     # Avoid one huge molecule forcing massive padding.
-    max_atoms_cap = 128
+    max_atoms_cap = NATOMS
 
     force_field_ds = force_field_ds.take(num_examples)
 
@@ -157,7 +158,7 @@ def main():
 
     # 3) Instantiate spooky model
     print("\n3. Instantiating spooky EF model...")
-    model = SpookyEF(charges=True, natoms=60, debug=False)
+    model = SpookyEF(charges=True, natoms=NATOMS, debug=False)
 
     # 4) Build one batched example to initialize params
     print("\n4. Building initialization batch and initializing parameters...")
