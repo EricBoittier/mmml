@@ -42,7 +42,7 @@ from mmml.physnetjax.physnetjax.training.spooky_training import (
 LOCAL_DATA_DIR = "."
 QCML_DATA_DIR = "gs://qcml-datasets/tfds"
 GCP_PROJECT = "deepmind-opensource"
-OUTPUT_DIR = Path("ckpts_spooky_qcml")
+OUTPUT_DIR = Path("ckpts_spooky_qcml").resolve()
 
 
 def download_qcml_dft_force_field():
