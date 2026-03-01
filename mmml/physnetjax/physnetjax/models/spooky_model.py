@@ -59,9 +59,9 @@ class EF(nn.Module):
     num_iterations: int = 2
     num_basis_functions: int = 64
     cutoff: float = 6.0
-    max_atomic_number: int = 118
+    max_atomic_number: int = 87
     charges: bool = False
-    natoms: int = 60
+    natoms: int = 35
     total_charge: float = 0
     n_res: int = 3
     zbl: bool = True
