@@ -75,10 +75,10 @@ def main():
         )
 
     # Longer default run over more examples.
-    num_examples = 200000
+    num_examples = 1_000_000
     batch_size = 64
     NATOMS = 30
-    num_steps = 200000 
+    num_steps = 200000 * 4
     log_interval = 1000
     learning_rate = 1e-3
     energy_key = "pbe0_formation_energy"
@@ -86,7 +86,7 @@ def main():
     max_atoms_cap = NATOMS
 
     # Stream fixed-size chunks from TFDS to bound host/GPU memory usage.
-    chunk_examples = 8192
+    chunk_examples = 200000
     print(f"\n2. Online chunked loading (chunk_examples={chunk_examples})...")
 
     def _finalize_chunk(examples_chunk):
