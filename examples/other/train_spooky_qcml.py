@@ -79,7 +79,7 @@ def main():
     num_examples = 200000
     batch_size = 64
     NATOMS = 30
-    num_steps = 200000 * 100
+    num_steps = 200000 
     log_interval = 200
     learning_rate = 1e-3
     energy_key = "pbe0_formation_energy"
