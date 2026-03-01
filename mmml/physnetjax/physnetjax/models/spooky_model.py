@@ -127,6 +127,8 @@ class EF(nn.Module):
     def energy(
         self,
         atomic_numbers: jnp.ndarray,
+        charges: jnp.ndarray,
+        spins: jnp.ndarray,
         positions: jnp.ndarray,
         dst_idx: jnp.ndarray,
         src_idx: jnp.ndarray,
@@ -191,8 +193,6 @@ class EF(nn.Module):
         return self._calculate(
             x,
             atomic_numbers,
-            charges,
-            spins,
             displacements,
             dst_idx,
             src_idx,
@@ -205,8 +205,6 @@ class EF(nn.Module):
     def _calculate_geometric_features(
         self,
         positions: jnp.ndarray,
-        charges: jnp.ndarray,
-        spins: jnp.ndarray,
         dst_idx: jnp.ndarray,
         src_idx: jnp.ndarray,
         cell: Optional[jnp.ndarray] = None,
