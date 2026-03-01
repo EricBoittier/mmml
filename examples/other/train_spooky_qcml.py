@@ -76,7 +76,7 @@ def main():
 
     # Longer default run over more examples.
     num_examples = 20000
-    batch_size = 64
+    batch_size = 32
     num_steps = 5000
     log_interval = 50
     learning_rate = 1e-3

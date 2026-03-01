@@ -55,9 +55,9 @@ class EF(nn.Module):
     """
 
     features: int = 32
-    max_degree: int = 2
+    max_degree: int = 1
     num_iterations: int = 2
-    num_basis_functions: int = 16
+    num_basis_functions: int = 64
     cutoff: float = 6.0
     max_atomic_number: int = 118
     charges: bool = False
