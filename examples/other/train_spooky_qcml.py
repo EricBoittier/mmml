@@ -82,6 +82,7 @@ def main():
     log_interval = 1000
     learning_rate = 1e-3
     energy_key = "pbe0_formation_energy"
+    chunk_ckpt_interval = 10
     # Avoid one huge molecule forcing massive padding.
     max_atoms_cap = NATOMS
 
@@ -275,7 +276,8 @@ def main():
                     f"  Step {step:6d}  epoch={epoch_idx:3d}  chunk={chunk_idx:4d}  "
                     f"loss = {loss_f:.6f}  E_loss = {e_loss:.6f}  F_loss = {f_loss:.6f}"
                 )
-        _save_chunk_checkpoint(state_holder["state"], step, epoch_idx, chunk_idx)
+        if (chunk_idx % chunk_ckpt_interval == 0) or (step >= num_steps):
+            _save_chunk_checkpoint(state_holder["state"], step, epoch_idx, chunk_idx)
         return step
 
     step = 0
