@@ -80,7 +80,7 @@ def main():
     batch_size = 64
     NATOMS = 30
     num_steps = 200000 
-    log_interval = 200
+    log_interval = 1000
     learning_rate = 1e-3
     energy_key = "pbe0_formation_energy"
     # Avoid one huge molecule forcing massive padding.
