@@ -93,8 +93,9 @@ def build_spooky_batch_from_example(
     Q = float(_to_array(example["charge"]))
     S = float(_to_array(example["multiplicity"]))
 
-    Q_atoms = jnp.full((N,), Q, dtype=jnp.float32)
-    S_atoms = jnp.full((N,), S, dtype=jnp.float32)
+    # Per-atom conditioning as column vectors to keep shape explicit.
+    Q_atoms = jnp.full((N, 1), Q, dtype=jnp.float32)
+    S_atoms = jnp.full((N, 1), S, dtype=jnp.float32)
 
     # Graph indices for this single structure
     dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(N)  # (n_pairs,)
