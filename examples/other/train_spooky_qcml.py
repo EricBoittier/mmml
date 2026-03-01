@@ -27,7 +27,6 @@ from pathlib import Path
 import jax
 import jax.numpy as jnp
 import optax
-import tensorflow as tf
 import tensorflow_datasets as tfds
 from flax.training import train_state
 from flax.training import orbax_utils
@@ -35,7 +34,6 @@ import orbax.checkpoint as ocp
 
 from mmml.physnetjax.physnetjax.models.spooky_model import EF as SpookyEF
 from mmml.physnetjax.physnetjax.training.spooky_training import (
-    build_spooky_batch_from_example,
     build_spooky_batch_from_padded_arrays,
     make_spooky_train_step,
 )
