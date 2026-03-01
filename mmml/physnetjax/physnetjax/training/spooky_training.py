@@ -121,6 +121,85 @@ def build_spooky_batch_from_example(
     return batch
 
 
+def build_spooky_batch_from_padded_arrays(
+    atomic_numbers: jnp.ndarray,
+    positions: jnp.ndarray,
+    energies: jnp.ndarray,
+    forces: jnp.ndarray,
+    total_charges: jnp.ndarray,
+    total_spins: jnp.ndarray,
+) -> Dict[str, Any]:
+    """
+    Build a spooky batch from padded batched arrays.
+
+    Parameters
+    ----------
+    atomic_numbers
+        Shape (B, A), zero-padded atom types.
+    positions
+        Shape (B, A, 3), padded coordinates.
+    energies
+        Shape (B,) or (B, 1), per-structure energies.
+    forces
+        Shape (B, A, 3), padded forces.
+    total_charges
+        Shape (B,), system charges.
+    total_spins
+        Shape (B,), spin multiplicities.
+
+    Returns
+    -------
+    Dict[str, Any]
+        Flattened batch compatible with spooky EF forward call.
+    """
+    Z = jnp.asarray(atomic_numbers, dtype=jnp.int32)
+    R = jnp.asarray(positions, dtype=jnp.float32)
+    E = jnp.asarray(energies, dtype=jnp.float32).reshape(-1, 1)
+    F = jnp.asarray(forces, dtype=jnp.float32)
+    Q = jnp.asarray(total_charges, dtype=jnp.float32).reshape(-1)
+    S = jnp.asarray(total_spins, dtype=jnp.float32).reshape(-1)
+
+    batch_size, max_atoms = Z.shape
+    atom_mask_2d = (Z > 0).astype(jnp.float32)  # (B, A)
+
+    # Flatten atom-wise arrays to (B*A, ...)
+    Z_flat = Z.reshape(batch_size * max_atoms)
+    R_flat = R.reshape(batch_size * max_atoms, 3)
+    F_flat = F.reshape(batch_size * max_atoms, 3)
+    atom_mask = atom_mask_2d.reshape(batch_size * max_atoms)
+
+    # Broadcast per-graph conditioning to per-atom column vectors (B*A, 1)
+    Q_atoms = jnp.repeat(Q[:, None], max_atoms, axis=1).reshape(batch_size * max_atoms, 1)
+    S_atoms = jnp.repeat(S[:, None], max_atoms, axis=1).reshape(batch_size * max_atoms, 1)
+
+    # Build pair indices for each graph and offset into flattened indexing.
+    local_dst, local_src = e3x.ops.sparse_pairwise_indices(max_atoms)  # (P,), (P,)
+    offsets = jnp.arange(batch_size, dtype=jnp.int32) * max_atoms
+    dst_idx = (local_dst[None, :] + offsets[:, None]).reshape(-1)
+    src_idx = (local_src[None, :] + offsets[:, None]).reshape(-1)
+
+    # Pair mask keeps only real-atom interactions (ignores padded atoms).
+    valid_pairs = (atom_mask_2d[:, local_dst] > 0) & (atom_mask_2d[:, local_src] > 0)
+    batch_mask = valid_pairs.astype(jnp.float32).reshape(-1)
+
+    batch_segments = jnp.repeat(jnp.arange(batch_size, dtype=jnp.int32), max_atoms)
+
+    return {
+        "Z": Z_flat,
+        "R": R_flat,
+        "Q_atoms": Q_atoms,
+        "S_atoms": S_atoms,
+        "E": E,
+        "F": F_flat,
+        "dst_idx": dst_idx,
+        "src_idx": src_idx,
+        "batch_segments": batch_segments,
+        "batch_mask": batch_mask,
+        "atom_mask": atom_mask,
+        "batch_size": int(batch_size),
+    }
+
+
 def make_spooky_train_step(model, forces_weight: float = 52.91, energy_weight: float = 1.0):
     """
     Create a single optimisation step function for the spooky EF model.
@@ -156,14 +235,17 @@ def make_spooky_train_step(model, forces_weight: float = 52.91, energy_weight: f
         # The spooky model's `energy` helper returns a negative total; its `__call__`
         # already takes care of that convention and exposes `out["energy"]` as the
         # quantity we should train against.
-        E_pred = out["energy"].reshape(())               # scalar
-        F_pred = out["forces"].reshape(batch["F"].shape) # (N, 3)
+        E_pred = out["energy"].reshape(-1, 1)            # (B, 1)
+        F_pred = out["forces"].reshape(batch["F"].shape) # (B*A, 3)
 
-        e_loss = (E_pred - batch["E"]) ** 2
-        f_loss = jnp.mean((F_pred - batch["F"]) ** 2)
+        e_loss = jnp.mean((E_pred - batch["E"].reshape(-1, 1)) ** 2)
+        f_sq = (F_pred - batch["F"]) ** 2
+        force_mask = batch["atom_mask"][:, None]
+        f_loss = jnp.sum(f_sq * force_mask) / (jnp.sum(force_mask) * 3.0 + 1e-8)
         total = energy_weight * e_loss + forces_weight * f_loss
         return total, {"e_loss": e_loss, "f_loss": f_loss}
 
+    @jax.jit
     def train_step(state, batch):
         (loss_val, metrics), grads = jax.value_and_grad(loss_fn, has_aux=True)(
             state.params, batch
