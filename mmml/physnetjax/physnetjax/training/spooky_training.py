@@ -200,7 +200,12 @@ def build_spooky_batch_from_padded_arrays(
     }
 
 
-def make_spooky_train_step(model, forces_weight: float = 52.91, energy_weight: float = 1.0):
+def make_spooky_train_step(
+    model,
+    forces_weight: float = 52.91,
+    energy_weight: float = 1.0,
+    batch_size: int = 1,
+):
     """
     Create a single optimisation step function for the spooky EF model.
 
@@ -215,6 +220,9 @@ def make_spooky_train_step(model, forces_weight: float = 52.91, energy_weight: f
         Relative weight of the force MSE term in the loss.
     energy_weight
         Relative weight of the energy MSE term in the loss.
+    batch_size
+        Fixed batch size used for JIT-compiled training. This is passed as a
+        Python int to keep shape creation in the model static.
     """
 
     def loss_fn(params, batch):
@@ -227,7 +235,7 @@ def make_spooky_train_step(model, forces_weight: float = 52.91, energy_weight: f
             dst_idx=batch["dst_idx"],
             src_idx=batch["src_idx"],
             batch_segments=batch["batch_segments"],
-            batch_size=batch["batch_size"],
+            batch_size=batch_size,
             batch_mask=batch["batch_mask"],
             atom_mask=batch["atom_mask"],
         )
