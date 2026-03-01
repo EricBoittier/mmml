@@ -26,6 +26,7 @@ from pathlib import Path
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import optax
 import tensorflow_datasets as tfds
 from flax.training import train_state
@@ -75,11 +76,13 @@ def main():
         )
 
     # Longer default run over more examples.
-    num_examples = 2000000
-    batch_size = 32
-    num_steps = 1000 * 2000000 // batch_size
-    log_interval = 5000
+    num_examples = 200000
+    batch_size = 64
+    num_steps = max(5000, 4 * num_examples // batch_size)
+    log_interval = 200
     learning_rate = 1e-3
+    # Avoid one huge molecule forcing massive padding.
+    max_atoms_cap = 128
 
     force_field_ds = force_field_ds.take(num_examples)
 
@@ -88,37 +91,46 @@ def main():
     print("\n2. Caching dataset to dense padded arrays...")
     examples = []
     max_atoms = 0
+    skipped_large = 0
     for example in force_field_ds:
         e = {k: v.numpy() for k, v in example.items()}
         if bool(e.get("is_outlier", False)):
             continue
+        n_atoms = int(e["atomic_numbers"].shape[0])
+        if n_atoms > max_atoms_cap:
+            skipped_large += 1
+            continue
         examples.append(e)
-        max_atoms = max(max_atoms, int(e["atomic_numbers"].shape[0]))
+        max_atoms = max(max_atoms, n_atoms)
 
     if not examples:
         raise ValueError("No usable examples found (all filtered as outliers?).")
 
     n_samples = len(examples)
-    Z_all = jnp.zeros((n_samples, max_atoms), dtype=jnp.int32)
-    R_all = jnp.zeros((n_samples, max_atoms, 3), dtype=jnp.float32)
-    F_all = jnp.zeros((n_samples, max_atoms, 3), dtype=jnp.float32)
-    E_all = jnp.zeros((n_samples,), dtype=jnp.float32)
-    Q_all = jnp.zeros((n_samples,), dtype=jnp.float32)
-    S_all = jnp.zeros((n_samples,), dtype=jnp.float32)
+    # Keep large cache arrays on host memory to avoid GPU OOM.
+    Z_all = np.zeros((n_samples, max_atoms), dtype=np.int32)
+    R_all = np.zeros((n_samples, max_atoms, 3), dtype=np.float32)
+    F_all = np.zeros((n_samples, max_atoms, 3), dtype=np.float32)
+    E_all = np.zeros((n_samples,), dtype=np.float32)
+    Q_all = np.zeros((n_samples,), dtype=np.float32)
+    S_all = np.zeros((n_samples,), dtype=np.float32)
 
     for i, e in enumerate(examples):
-        z = jnp.asarray(e["atomic_numbers"], dtype=jnp.int32)
-        r = jnp.asarray(e["positions"], dtype=jnp.float32)
-        f = jnp.asarray(e["pbe0_forces"], dtype=jnp.float32)
+        z = np.asarray(e["atomic_numbers"], dtype=np.int32)
+        r = np.asarray(e["positions"], dtype=np.float32)
+        f = np.asarray(e["pbe0_forces"], dtype=np.float32)
         n_i = z.shape[0]
-        Z_all = Z_all.at[i, :n_i].set(z)
-        R_all = R_all.at[i, :n_i, :].set(r)
-        F_all = F_all.at[i, :n_i, :].set(f)
-        E_all = E_all.at[i].set(jnp.asarray(e["pbe0_energy"], dtype=jnp.float32))
-        Q_all = Q_all.at[i].set(jnp.asarray(e["charge"], dtype=jnp.float32))
-        S_all = S_all.at[i].set(jnp.asarray(e["multiplicity"], dtype=jnp.float32))
+        Z_all[i, :n_i] = z
+        R_all[i, :n_i, :] = r
+        F_all[i, :n_i, :] = f
+        E_all[i] = np.asarray(e["pbe0_energy"], dtype=np.float32)
+        Q_all[i] = np.asarray(e["charge"], dtype=np.float32)
+        S_all[i] = np.asarray(e["multiplicity"], dtype=np.float32)
 
-    print(f"   Cached {n_samples} examples, max_atoms={max_atoms}, batch_size={batch_size}")
+    print(
+        f"   Cached {n_samples} examples, max_atoms={max_atoms}, "
+        f"batch_size={batch_size}, skipped_large={skipped_large}"
+    )
 
     # Orbax checkpoint: cached dataset arrays
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -185,12 +197,10 @@ def main():
         model, forces_weight=52.91, energy_weight=1.0, batch_size=batch_size
     )
 
+    rng = np.random.default_rng(0)
     for step in range(1, num_steps + 1):
-        key, subkey = jax.random.split(key)
         replace = batch_size > n_samples
-        idx = jax.random.choice(
-            subkey, n_samples, shape=(batch_size,), replace=replace
-        )
+        idx = rng.choice(n_samples, size=(batch_size,), replace=replace)
         batch = build_spooky_batch_from_padded_arrays(
             Z_all[idx],
             R_all[idx],
