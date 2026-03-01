@@ -54,7 +54,7 @@ class EF(nn.Module):
         debug: Debug flags (False or list of debug areas)
     """
 
-    features: int = 128
+    features: int = 64
     max_degree: int = 1
     num_iterations: int = 2
     num_basis_functions: int = 32
