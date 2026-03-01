@@ -1006,7 +1006,9 @@ class EF(nn.Module):
 
         # Since we want to also predict forces, i.e. the gradient of the energy w.r.t. positions (argument 1), we use
         # jax.value_and_grad to create a function for predicting both energy and forces for us.
-        energy_and_forces = jax.value_and_grad(self.energy, argnums=1, has_aux=True)
+        # energy signature is (atomic_numbers, charges, spins, positions, ...),
+        # so positions are argument index 3.
+        energy_and_forces = jax.value_and_grad(self.energy, argnums=3, has_aux=True)
 
         # Debug input shapes
         # if not self.debug and "idx" in self.debug:
