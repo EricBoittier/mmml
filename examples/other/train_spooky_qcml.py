@@ -79,7 +79,7 @@ def main():
     num_examples = 200000
     batch_size = 64
     NATOMS = 30
-    num_steps = max(5000, 4 * num_examples // batch_size)
+    num_steps = 200000 * 100
     log_interval = 200
     learning_rate = 1e-3
     # Avoid one huge molecule forcing massive padding.
