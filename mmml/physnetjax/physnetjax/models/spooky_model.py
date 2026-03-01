@@ -3,6 +3,9 @@ Energy and Forces Neural Network Model implementation.
 
 This module implements a neural network model for predicting molecular energies 
 and forces using message passing and equivariant transformations.
+
+The spooky model is trained on positions R, atomic numbers Z, and forces F, energies E,
+and Charge Q and Spin (Multiplicity) S.
 """
 
 import functools
@@ -175,6 +178,8 @@ class EF(nn.Module):
         # Embed and process atomic features
         x = self._process_atomic_features(
             atomic_numbers,
+            charges,
+            spins,
             basis,
             dst_idx,
             src_idx,
@@ -186,6 +191,8 @@ class EF(nn.Module):
         return self._calculate(
             x,
             atomic_numbers,
+            charges,
+            spins,
             displacements,
             dst_idx,
             src_idx,
@@ -198,6 +205,8 @@ class EF(nn.Module):
     def _calculate_geometric_features(
         self,
         positions: jnp.ndarray,
+        charges: jnp.ndarray,
+        spins: jnp.ndarray,
         dst_idx: jnp.ndarray,
         src_idx: jnp.ndarray,
         cell: Optional[jnp.ndarray] = None,
@@ -245,6 +254,8 @@ class EF(nn.Module):
     def _process_atomic_features(
         self,
         atomic_numbers: jnp.ndarray,
+        charges: jnp.ndarray,
+        spins: jnp.ndarray,
         basis: jnp.ndarray,
         dst_idx: jnp.ndarray,
         src_idx: jnp.ndarray,
@@ -283,7 +294,9 @@ class EF(nn.Module):
             dtype=DTYPE,
         )
         x = embed(atomic_numbers)
-
+        x = e3x.nn.add(x, charges)
+        x = e3x.nn.add(x, spins)
+        
         for i in range(self.num_iterations):
             x = self._message_passing_iteration(
                 x, basis, dst_idx, src_idx, i, positions, batch_segments, graph_mask
@@ -900,6 +913,8 @@ class EF(nn.Module):
     def __call__(
         self,
         atomic_numbers: jnp.ndarray,
+        charges: jnp.ndarray,
+        spins: jnp.ndarray,
         positions: jnp.ndarray,
         dst_idx: jnp.ndarray,
         src_idx: jnp.ndarray,
@@ -985,6 +1000,8 @@ class EF(nn.Module):
         # Calculate energies and forces
         (_, (energy, charges, electrostatics, repulsion, state)), gradient = energy_and_forces(
             atomic_numbers,
+            charges,
+            spins,
             positions,
             dst_idx,
             src_idx,
