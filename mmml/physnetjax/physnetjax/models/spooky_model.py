@@ -292,8 +292,33 @@ class EF(nn.Module):
             dtype=DTYPE,
         )
         x = embed(atomic_numbers)
-        x = e3x.nn.add(x, charges)
-        x = e3x.nn.add(x, spins)
+
+        # Project per-atom scalar charge/spin conditioning to e3x feature format
+        # before adding to atomic embeddings.
+        n_atoms = atomic_numbers.shape[0]
+        charge_inputs = jnp.asarray(charges, dtype=DTYPE).reshape(n_atoms, -1)
+        spin_inputs = jnp.asarray(spins, dtype=DTYPE).reshape(n_atoms, -1)
+
+        charge_proj = nn.Dense(
+            self.features,
+            dtype=DTYPE,
+            name="charge_feature_projection",
+        )(charge_inputs)
+        spin_proj = nn.Dense(
+            self.features,
+            dtype=DTYPE,
+            name="spin_feature_projection",
+        )(spin_inputs)
+
+        cond_features = charge_proj + spin_proj  # (n_atoms, features)
+        cond_e3x = jnp.expand_dims(cond_features, axis=(1, 2))  # (n_atoms, 1, 1, features)
+        cond_e3x = jnp.pad(
+            cond_e3x,
+            ((0, 0), (0, 0), (0, x.shape[2] - 1), (0, 0)),
+            mode="constant",
+            constant_values=0,
+        )  # (n_atoms, 1, max_degree+1, features)
+        x = e3x.nn.add(x, cond_e3x)
         
         for i in range(self.num_iterations):
             x = self._message_passing_iteration(
