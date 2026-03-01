@@ -82,6 +82,7 @@ def main():
     num_steps = 200000 * 100
     log_interval = 200
     learning_rate = 1e-3
+    energy_key = "pbe0_formation_energy"
     # Avoid one huge molecule forcing massive padding.
     max_atoms_cap = NATOMS
 
@@ -124,7 +125,7 @@ def main():
         Z_all[i, :n_i] = z
         R_all[i, :n_i, :] = r
         F_all[i, :n_i, :] = f
-        E_all[i] = np.asarray(e["pbe0_energy"], dtype=np.float32)
+        E_all[i] = np.asarray(e[energy_key], dtype=np.float32)
         Q_all[i] = np.asarray(e["charge"], dtype=np.float32)
         S_all[i] = np.asarray(e["multiplicity"], dtype=np.float32)
 
