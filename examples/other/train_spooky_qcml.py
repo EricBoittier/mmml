@@ -182,7 +182,7 @@ def main():
     # 5) Training loop (random minibatches from cached dense arrays)
     print("\n5. Training...")
     train_step = make_spooky_train_step(
-        model, forces_weight=52.91, energy_weight=1.0
+        model, forces_weight=52.91, energy_weight=1.0, batch_size=batch_size
     )
 
     for step in range(1, num_steps + 1):
