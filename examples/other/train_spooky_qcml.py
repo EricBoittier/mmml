@@ -25,7 +25,6 @@ import shutil
 from pathlib import Path
 
 import jax
-import jax.numpy as jnp
 import numpy as np
 import optax
 import tensorflow_datasets as tfds
@@ -114,38 +113,48 @@ def main():
             S[i] = np.asarray(e["multiplicity"], dtype=np.float32)
         return {"Z": Z, "R": R, "F": F, "E": E, "Q": Q, "S": S}
 
-    chunks = []
-    chunk_buf = []
-    seen = 0
-    kept = 0
-    skipped_large = 0
-    skipped_outlier = 0
-    for example in force_field_ds:
-        if seen >= num_examples:
-            break
-        seen += 1
-        e = {k: v.numpy() for k, v in example.items()}
-        if bool(e.get("is_outlier", False)):
-            skipped_outlier += 1
-            continue
-        n_atoms = int(e["atomic_numbers"].shape[0])
-        if n_atoms > max_atoms_cap:
-            skipped_large += 1
-            continue
-        chunk_buf.append(e)
-        kept += 1
-        if len(chunk_buf) >= chunk_examples:
-            chunks.append(_finalize_chunk(chunk_buf))
-            chunk_buf = []
-    if chunk_buf:
-        chunks.append(_finalize_chunk(chunk_buf))
+    def _stream_epoch_chunks():
+        """Yield chunks online for a single pass over up to num_examples."""
+        chunk_buf = []
+        seen = 0
+        kept = 0
+        skipped_large = 0
+        skipped_outlier = 0
+        for example in force_field_ds:
+            if seen >= num_examples:
+                break
+            seen += 1
+            e = {k: v.numpy() for k, v in example.items()}
+            if bool(e.get("is_outlier", False)):
+                skipped_outlier += 1
+                continue
+            n_atoms = int(e["atomic_numbers"].shape[0])
+            if n_atoms > max_atoms_cap:
+                skipped_large += 1
+                continue
+            chunk_buf.append(e)
+            kept += 1
+            if len(chunk_buf) >= chunk_examples:
+                chunk = _finalize_chunk(chunk_buf)
+                chunk_buf = []
+                if chunk is not None:
+                    yield chunk
+        if chunk_buf:
+            chunk = _finalize_chunk(chunk_buf)
+            if chunk is not None:
+                yield chunk
+        print(
+            f"   Epoch stream summary: seen={seen}, kept={kept}, "
+            f"outliers={skipped_outlier}, skipped_large={skipped_large}"
+        )
 
-    if not chunks:
+    first_epoch_iter = _stream_epoch_chunks()
+    first_chunk = next(first_epoch_iter, None)
+    if first_chunk is None:
         raise ValueError("No usable examples found after filtering.")
-
     print(
-        f"   Prepared {len(chunks)} chunks from {seen} examples "
-        f"(kept={kept}, outliers={skipped_outlier}, skipped_large={skipped_large})"
+        f"   First chunk prepared with {first_chunk['Z'].shape[0]} structures, "
+        f"max_atoms={first_chunk['Z'].shape[1]}, batch_size={batch_size}"
     )
     checkpointer = ocp.PyTreeCheckpointer()
 
@@ -155,7 +164,6 @@ def main():
 
     # 4) Build one batched example to initialize params
     print("\n4. Building initialization batch and initializing parameters...")
-    first_chunk = chunks[0]
     n_init = first_chunk["Z"].shape[0]
     init_bs = min(batch_size, n_init)
     init_batch = build_spooky_batch_from_padded_arrays(
@@ -194,11 +202,7 @@ def main():
     )
 
     rng = np.random.default_rng(0)
-    step = 0
-    chunk_idx = 0
-    while step < num_steps:
-        chunk = chunks[chunk_idx % len(chunks)]
-        chunk_idx += 1
+    def _train_chunk(chunk, step, chunk_idx, epoch_idx):
         n_chunk = chunk["Z"].shape[0]
         order = rng.permutation(n_chunk)
         full_batches = n_chunk // batch_size
@@ -215,23 +219,21 @@ def main():
                 chunk["Q"][idx],
                 chunk["S"][idx],
             )
-            state, loss_val, metrics = train_step(state, batch)
+            state_local, loss_val, metrics = train_step(state_holder["state"], batch)
+            state_holder["state"] = state_local
             step += 1
             if step % log_interval == 0 or step == 1 or step == num_steps:
                 loss_f = float(loss_val)
                 e_loss = float(metrics["e_loss"])
                 f_loss = float(metrics["f_loss"])
                 print(
-                    f"  Step {step:6d}  chunk={chunk_idx:4d}  "
+                    f"  Step {step:6d}  epoch={epoch_idx:3d}  chunk={chunk_idx:4d}  "
                     f"loss = {loss_f:.6f}  E_loss = {e_loss:.6f}  F_loss = {f_loss:.6f}"
                 )
             if step >= num_steps:
-                break
-        if step >= num_steps:
-            break
+                return step
 
-        # Handle remainder with deterministic top-up to fixed batch size.
-        if rem > 0:
+        if rem > 0 and step < num_steps:
             idx = order[full_batches * batch_size :]
             top_up = rng.choice(order, size=(batch_size - rem,), replace=True)
             idx = np.concatenate([idx, top_up], axis=0)
@@ -243,16 +245,43 @@ def main():
                 chunk["Q"][idx],
                 chunk["S"][idx],
             )
-            state, loss_val, metrics = train_step(state, batch)
+            state_local, loss_val, metrics = train_step(state_holder["state"], batch)
+            state_holder["state"] = state_local
             step += 1
             if step % log_interval == 0 or step == 1 or step == num_steps:
                 loss_f = float(loss_val)
                 e_loss = float(metrics["e_loss"])
                 f_loss = float(metrics["f_loss"])
                 print(
-                    f"  Step {step:6d}  chunk={chunk_idx:4d}  "
+                    f"  Step {step:6d}  epoch={epoch_idx:3d}  chunk={chunk_idx:4d}  "
                     f"loss = {loss_f:.6f}  E_loss = {e_loss:.6f}  F_loss = {f_loss:.6f}"
                 )
+        return step
+
+    step = 0
+    epoch_idx = 1
+    state_holder = {"state": state}
+
+    # Continue first epoch from the first chunk already loaded for init.
+    chunk_idx = 1
+    step = _train_chunk(first_chunk, step, chunk_idx, epoch_idx)
+    for chunk in first_epoch_iter:
+        if step >= num_steps:
+            break
+        chunk_idx += 1
+        step = _train_chunk(chunk, step, chunk_idx, epoch_idx)
+
+    # Additional epochs if needed.
+    while step < num_steps:
+        epoch_idx += 1
+        chunk_idx = 0
+        for chunk in _stream_epoch_chunks():
+            if step >= num_steps:
+                break
+            chunk_idx += 1
+            step = _train_chunk(chunk, step, chunk_idx, epoch_idx)
+
+    state = state_holder["state"]
 
     # Orbax checkpoint: final trained parameters
     params_ckpt_dir = OUTPUT_DIR / "final_params"
