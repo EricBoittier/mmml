@@ -191,15 +191,55 @@ def main(args: argparse.Namespace):
     )
     checkpointer = ocp.PyTreeCheckpointer()
 
-    # 3) Instantiate spooky model
+    # 2.5) If resuming, restore checkpoint early to extract model config
+    restored = None
+    resume_path = None
+    if resume_checkpoint is not None:
+        if resume_checkpoint == "latest":
+            chunk_root = output_dir / "chunk_checkpoints"
+            if not chunk_root.exists():
+                raise ValueError(
+                    f"Cannot resume from latest: {chunk_root} does not exist."
+                )
+            ckpt_dirs = sorted([p for p in chunk_root.iterdir() if p.is_dir()])
+            if not ckpt_dirs:
+                raise ValueError(
+                    f"Cannot resume from latest: no checkpoint dirs in {chunk_root}."
+                )
+            resume_path = ckpt_dirs[-1]
+        else:
+            resume_path = Path(resume_checkpoint)
+            if not resume_path.is_absolute():
+                resume_path = (Path.cwd() / resume_path).resolve()
+
+        print(f"\nRestoring checkpoint (for config): {resume_path}")
+        restored = checkpointer.restore(str(resume_path))
+        if not isinstance(restored, dict):
+            restored = {"params": restored}
+
+    # 3) Instantiate spooky model (use config from checkpoint when resuming)
     print("\n3. Instantiating spooky EF model...")
-    model = SpookyEF(
-        charges=True,
-        natoms=NATOMS,
-        max_atomic_number=args.max_atomic_number,
-        features=args.features,
-        debug=False,
-    )
+    model_config = restored.get("config") if restored else None
+    if model_config is not None:
+        # Convert numpy scalars to Python natives for model constructor
+        def _to_native(v):
+            if isinstance(v, np.integer):
+                return int(v)
+            if isinstance(v, np.floating):
+                return float(v)
+            return v
+
+        model_kwargs = {k: _to_native(v) for k, v in model_config.items()}
+        model = SpookyEF(**model_kwargs)
+        print(f"   Using config from checkpoint: max_atomic_number={model.max_atomic_number}, features={model.features}")
+    else:
+        model = SpookyEF(
+            charges=True,
+            natoms=NATOMS,
+            max_atomic_number=args.max_atomic_number,
+            features=args.features,
+            debug=False,
+        )
 
     # 4) Build one batched example to initialize params
     print("\n4. Building initialization batch and initializing parameters...")
@@ -237,36 +277,13 @@ def main(args: argparse.Namespace):
     resume_epoch = 1
     resume_chunk = 0
 
-    if resume_checkpoint is not None:
-        if resume_checkpoint == "latest":
-            chunk_root = output_dir / "chunk_checkpoints"
-            if not chunk_root.exists():
-                raise ValueError(
-                    f"Cannot resume from latest: {chunk_root} does not exist."
-                )
-            ckpt_dirs = sorted([p for p in chunk_root.iterdir() if p.is_dir()])
-            if not ckpt_dirs:
-                raise ValueError(
-                    f"Cannot resume from latest: no checkpoint dirs in {chunk_root}."
-                )
-            resume_path = ckpt_dirs[-1]
-        else:
-            resume_path = Path(resume_checkpoint)
-            if not resume_path.is_absolute():
-                resume_path = (Path.cwd() / resume_path).resolve()
-
-        print(f"\nResuming from checkpoint: {resume_path}")
-        restored = checkpointer.restore(str(resume_path))
-        if isinstance(restored, dict) and "params" in restored:
-            state = state.replace(params=restored["params"])
-            if "opt_state" in restored:
-                state = state.replace(opt_state=restored["opt_state"])
-            resume_step = int(np.asarray(restored.get("step", 0)))
-            resume_epoch = int(np.asarray(restored.get("epoch", 1)))
-            resume_chunk = int(np.asarray(restored.get("chunk", 0)))
-        else:
-            # Backward compatibility with params-only checkpoints.
-            state = state.replace(params=restored)
+    if restored is not None:
+        state = state.replace(params=restored["params"])
+        if "opt_state" in restored:
+            state = state.replace(opt_state=restored["opt_state"])
+        resume_step = int(np.asarray(restored.get("step", 0)))
+        resume_epoch = int(np.asarray(restored.get("epoch", 1)))
+        resume_chunk = int(np.asarray(restored.get("chunk", 0)))
         print(
             f"   Restored metadata: step={resume_step}, "
             f"epoch={resume_epoch}, chunk={resume_chunk}"
@@ -281,7 +298,7 @@ def main(args: argparse.Namespace):
     chunk_ckpt_root.mkdir(parents=True, exist_ok=True)
 
     def _save_chunk_checkpoint(state_to_save, step_to_save, epoch_to_save, chunk_to_save):
-        """Save params and metadata after selected chunks."""
+        """Save params, metadata, and model config after selected chunks."""
         chunk_dir = chunk_ckpt_root / f"epoch-{epoch_to_save:04d}-chunk-{chunk_to_save:06d}-step-{step_to_save:08d}"
         if chunk_dir.exists():
             shutil.rmtree(chunk_dir)
@@ -291,6 +308,7 @@ def main(args: argparse.Namespace):
             "step": np.asarray(step_to_save, dtype=np.int32),
             "epoch": np.asarray(epoch_to_save, dtype=np.int32),
             "chunk": np.asarray(chunk_to_save, dtype=np.int32),
+            "config": model.return_attributes(),
         }
         checkpointer.save(
             str(chunk_dir),
