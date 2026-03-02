@@ -63,6 +63,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--chunk-examples", type=int, default=200000, help="Examples per streamed chunk.")
     p.add_argument("--chunk-ckpt-interval", type=int, default=10, help="Save chunk checkpoint every N chunks.")
     p.add_argument("--resume", type=str, default=None, help='Checkpoint dir to resume from, or "latest".')
+    p.add_argument("--max-atomic-number", type=int, default=87, help="Max atomic number (Z) for embedding. Must match checkpoint when resuming.")
+    p.add_argument("--features", type=int, default=64, help="Model feature dimension. Must match checkpoint when resuming.")
     p.add_argument("--output-dir", type=str, default=str(OUTPUT_DIR), help="Checkpoint output directory.")
     p.add_argument("--qcml-data-dir", type=str, default=QCML_DATA_DIR, help="Remote QCML gs:// root for download.")
     p.add_argument("--gcp-project", type=str, default=GCP_PROJECT, help="GCP project for gcloud storage cp.")
@@ -191,7 +193,13 @@ def main(args: argparse.Namespace):
 
     # 3) Instantiate spooky model
     print("\n3. Instantiating spooky EF model...")
-    model = SpookyEF(charges=True, natoms=NATOMS, debug=False)
+    model = SpookyEF(
+        charges=True,
+        natoms=NATOMS,
+        max_atomic_number=args.max_atomic_number,
+        features=args.features,
+        debug=False,
+    )
 
     # 4) Build one batched example to initialize params
     print("\n4. Building initialization batch and initializing parameters...")
