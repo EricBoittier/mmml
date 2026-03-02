@@ -63,6 +63,31 @@ def check_charmm() -> Tuple[bool, str]:
     except Exception as e:
         return False, f"Error importing pycharmm: {e}"
 
+
+def check_jax_float64() -> Tuple[bool, str]:
+    """Check if JAX float64 (jax_enable_x64) works when enabled."""
+    try:
+        import subprocess
+        import sys
+        # JAX_ENABLE_X64 must be set before jax is imported
+        env = {**os.environ, "JAX_ENABLE_X64": "true"}
+        code = """
+import jax.numpy as jnp
+x = jnp.array([1.0], dtype=jnp.float64)
+assert x.dtype == jnp.float64, f"expected float64, got {x.dtype}"
+"""
+        r = subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True,
+            timeout=10,
+            env=env,
+        )
+        if r.returncode == 0:
+            return True, "JAX float64 works (set JAX_ENABLE_X64=true or jax.config.update)"
+        return False, f"JAX float64 check failed: {(r.stderr or r.stdout or b'').decode()[:200]}"
+    except Exception as e:
+        return False, f"Error checking JAX float64: {e}"
+
 def print_header(text: str):
     """Print a section header."""
     print(f"\n{BLUE}{'='*60}{RESET}")
@@ -121,6 +146,13 @@ def main():
     print_header("GPU Support")
     gpu_ok, gpu_msg = check_gpu()
     print_check("GPU/CUDA", gpu_ok, gpu_msg)
+
+    # Check JAX float64
+    print_header("JAX Precision")
+    x64_ok, x64_msg = check_jax_float64()
+    print_check("JAX float64 (jax_enable_x64)", x64_ok, x64_msg)
+    if not x64_ok:
+        print(f"  {YELLOW}For float64: export JAX_ENABLE_X64=true{RESET}")
     
     # Optional dependencies
     print_header("Optional Dependencies")
