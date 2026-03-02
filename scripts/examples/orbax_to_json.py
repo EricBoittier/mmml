@@ -7,19 +7,20 @@ numerical stability. The conversion must be run on a machine that can load
 the checkpoint (GPU-saved checkpoints require GPU for conversion).
 
 Usage:
-    # Convert orbax checkpoint to JSON
+    # Convert orbax checkpoint to JSON (includes model config from model_attributes)
     python scripts/examples/orbax_to_json.py \\
         --checkpoint mmml/physnetjax/ckpts/DESdimers/final2 \\
         --output ckpts_json/DESdimers_params.json
 
-    # Load the JSON checkpoint (works on CPU, any precision)
+    # Use with run_sim: pass the JSON file or a directory containing params.json
+    args = argparse.Namespace(checkpoint=Path("ckpts_json/DESdimers_params.json"), ...)
+    run(args)
+
+    # Or load directly (works on CPU, any precision)
     from mmml.utils.model_checkpoint import json_to_params, load_model_checkpoint
 
-    # As numpy float64 (CPU, double precision)
     ckpt = json_to_params("ckpts_json/DESdimers_params.json", dtype="float64")
-
-    # Or via load_model_checkpoint (from directory containing params.json)
-    ckpt = load_model_checkpoint("ckpts_json/", dtype="float64")
+    ckpt = load_model_checkpoint("ckpts_json/", dtype="float64")  # dir with params.json
 """
 
 from __future__ import annotations

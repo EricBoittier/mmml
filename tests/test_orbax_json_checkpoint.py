@@ -114,6 +114,19 @@ def test_load_model_checkpoint_json_with_dtype(temp_dir):
     assert ckpt["params"]["embedding"].dtype == np.float64
 
 
+def test_load_model_checkpoint_from_json_file_path(temp_dir):
+    """load_model_checkpoint accepts path to a .json file directly."""
+    params = _create_synthetic_params()
+    json_path = temp_dir / "DESdimers_params.json"
+    with open(json_path, "w") as f:
+        json.dump({"params": to_jsonable(params), "config": {"features": 64}}, f, indent=2)
+
+    ckpt = load_model_checkpoint(json_path)
+    assert "params" in ckpt
+    assert "config" in ckpt
+    assert ckpt["config"]["features"] == 64
+
+
 def test_orbax_to_json_with_config_and_metadata(temp_dir):
     """orbax_to_json includes config and metadata when provided."""
     pytest.importorskip("orbax")
