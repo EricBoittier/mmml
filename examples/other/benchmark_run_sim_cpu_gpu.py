@@ -34,6 +34,21 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 
+def _resolve_jax_platform(backend: str, env: Dict[str, str] | None = None) -> str:
+    """Map user backend label to a concrete JAX platform string."""
+    if backend == "cpu":
+        return "cpu"
+    if backend != "gpu":
+        return backend
+    source_env = env if env is not None else os.environ
+    # Allows explicit override on clusters where ROCm is the GPU backend.
+    override = source_env.get("MMML_JAX_GPU_PLATFORM")
+    if override:
+        return override
+    # Default to CUDA because current JAX wheels typically expose 'cuda'.
+    return "cuda"
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Benchmark run_sim on CPU/GPU.")
     parser.add_argument(
@@ -187,8 +202,9 @@ def run_both(args: argparse.Namespace) -> int:
         print(f"\n=== Running backend: {backend} ===")
         cmd = _child_command(args, backend)
         env = os.environ.copy()
-        env["JAX_PLATFORMS"] = backend
-        env["JAX_PLATFORM_NAME"] = backend
+        platform = _resolve_jax_platform(backend, env=env)
+        env["JAX_PLATFORMS"] = platform
+        env["JAX_PLATFORM_NAME"] = platform
 
         proc = subprocess.run(
             cmd,
@@ -240,8 +256,9 @@ def run_both(args: argparse.Namespace) -> int:
 
 def run_single_backend(args: argparse.Namespace) -> int:
     # Configure backend before importing JAX-dependent modules.
-    os.environ.setdefault("JAX_PLATFORMS", args.backend)
-    os.environ.setdefault("JAX_PLATFORM_NAME", args.backend)
+    platform = _resolve_jax_platform(args.backend)
+    os.environ["JAX_PLATFORMS"] = platform
+    os.environ["JAX_PLATFORM_NAME"] = platform
 
     import jax
     from mmml.cli import make_box
@@ -249,6 +266,7 @@ def run_single_backend(args: argparse.Namespace) -> int:
     from mmml.cli.run_sim import run
 
     print(f"Requested backend: {args.backend}")
+    print(f"Resolved JAX platform: {platform}")
     print(f"JAX default backend: {jax.default_backend()}")
     print(f"JAX devices: {[str(d) for d in jax.devices()]}")
 
