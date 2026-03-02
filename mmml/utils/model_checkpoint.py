@@ -249,6 +249,7 @@ def load_model_checkpoint(
     load_config: bool = True,
     load_metadata: bool = True,
     use_orbax: bool = False,
+    dtype: Optional[Union[str, np.dtype]] = None,
 ) -> Dict[str, Any]:
     """
     Load model checkpoint from disk.
@@ -265,6 +266,9 @@ def load_model_checkpoint(
         Whether to load metadata
     use_orbax : bool, default=False
         If True, use orbax for parameter loading
+    dtype : Optional[Union[str, np.dtype]], optional
+        When loading from params.json, convert float arrays to this dtype
+        (e.g. "float64" for double precision). Ignored for orbax/pickle.
         
     Returns
     -------
@@ -300,19 +304,16 @@ def load_model_checkpoint(
             # Try JSON file first (preferred for portability)
             json_params_path = checkpoint_dir / "params.json"
             if json_params_path.exists():
-                with open(json_params_path, 'r') as f:
-                    checkpoint_data = json.load(f)
-                
-                # Extract params if checkpoint is a dict
-                if isinstance(checkpoint_data, dict):
-                    if 'params' in checkpoint_data:
-                        result['params'] = checkpoint_data['params']
-                    elif 'ema_params' in checkpoint_data:
-                        result['params'] = checkpoint_data['ema_params']
-                    else:
-                        result['params'] = checkpoint_data
-                else:
-                    result['params'] = checkpoint_data
+                json_loaded = json_to_params(
+                    json_params_path,
+                    dtype=dtype,
+                    backend="numpy",
+                )
+                result["params"] = json_loaded["params"]
+                if "config" in json_loaded and load_config:
+                    result["config"] = json_loaded["config"]
+                if "metadata" in json_loaded and load_metadata:
+                    result["metadata"] = json_loaded["metadata"]
             else:
                 # Fall back to pickle file
                 params_path = checkpoint_dir / "params.pkl"
@@ -455,6 +456,144 @@ def quick_save(
         save_dir = save_path
     
     return save_model_checkpoint(params, model, save_dir, **kwargs)
+
+
+def orbax_to_json(
+    orbax_checkpoint_dir: Union[str, Path],
+    output_path: Union[str, Path],
+    params_key: str = "params",
+    config: Optional[Dict[str, Any]] = None,
+    metadata: Optional[Dict[str, Any]] = None,
+) -> Path:
+    """
+    Convert an orbax checkpoint to a JSON file for CPU/portable use.
+
+    Loads the checkpoint (requires same device topology for GPU-saved checkpoints),
+    converts parameters to JSON-serializable format, and saves to output_path.
+    The resulting JSON can be loaded on CPU with arbitrary precision (e.g. float64).
+
+    Parameters
+    ----------
+    orbax_checkpoint_dir : Union[str, Path]
+        Path to orbax checkpoint directory (e.g. final2, or a chunk checkpoint).
+        Can be a flat params checkpoint or a dict with 'params' key.
+    output_path : Union[str, Path]
+        Path to output JSON file (e.g. params.json).
+    params_key : str, default="params"
+        Key to extract params from restored dict. Use "params" for standard format.
+    config : Optional[Dict[str, Any]], optional
+        Model config to include in the JSON (saved under "config" key).
+    metadata : Optional[Dict[str, Any]], optional
+        Additional metadata to include (saved under "metadata" key).
+
+    Returns
+    -------
+    Path
+        Path to the saved JSON file.
+
+    Raises
+    ------
+    FileNotFoundError
+        If checkpoint directory does not exist.
+    ValueError
+        If orbax restore fails (e.g. GPU checkpoint on CPU-only machine).
+    """
+    orbax_checkpoint_dir = Path(orbax_checkpoint_dir).resolve()
+    output_path = Path(output_path).resolve()
+
+    if not orbax_checkpoint_dir.exists():
+        raise FileNotFoundError(f"Checkpoint directory not found: {orbax_checkpoint_dir}")
+
+    try:
+        import orbax.checkpoint as ocp
+    except ImportError as e:
+        raise ImportError("orbax-checkpoint is required for orbax_to_json") from e
+
+    checkpointer = ocp.PyTreeCheckpointer()
+    restored = checkpointer.restore(str(orbax_checkpoint_dir))
+
+    if isinstance(restored, dict) and params_key in restored:
+        params = restored[params_key]
+        if config is None and "config" in restored:
+            config = restored["config"]
+        if metadata is None and "metadata" in restored:
+            metadata = restored["metadata"]
+    elif isinstance(restored, dict):
+        params = restored
+    else:
+        params = restored
+
+    payload = {"params": to_jsonable(params)}
+    if config is not None:
+        payload["config"] = to_jsonable(config)
+    if metadata is not None:
+        payload["metadata"] = to_jsonable(metadata)
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "w") as f:
+        json.dump(payload, f, indent=2)
+
+    return output_path
+
+
+def json_to_params(
+    json_path: Union[str, Path],
+    dtype: Optional[Union[str, np.dtype]] = None,
+    backend: str = "numpy",
+) -> Dict[str, Any]:
+    """
+    Load parameters from a JSON file (e.g. from orbax_to_json).
+
+    Converts JSON lists to numpy/JAX arrays. Enables CPU-only loading and
+    custom precision (e.g. float64 for numerical stability).
+
+    Parameters
+    ----------
+    json_path : Union[str, Path]
+        Path to params.json file.
+    dtype : Optional[Union[str, np.dtype]], optional
+        Target dtype for float arrays (e.g. "float64" or np.float64).
+        If None, uses float32 for floats.
+    backend : str, default="numpy"
+        "numpy" for numpy.ndarray, "jax" for jax.numpy arrays.
+
+    Returns
+    -------
+    Dict[str, Any]
+        Loaded checkpoint with keys: params, config (if present), metadata (if present).
+    """
+    json_path = Path(json_path)
+    if not json_path.exists():
+        raise FileNotFoundError(f"JSON file not found: {json_path}")
+
+    with open(json_path) as f:
+        data = json.load(f)
+
+    def _to_array(obj: Any) -> Any:
+        if isinstance(obj, dict):
+            return {k: _to_array(v) for k, v in obj.items()}
+        if isinstance(obj, list):
+            if len(obj) > 0 and isinstance(obj[0], (list, int, float)):
+                arr = np.array(obj)
+                if dtype is not None and np.issubdtype(arr.dtype, np.floating):
+                    arr = arr.astype(dtype)
+                if backend == "jax":
+                    arr = jax.numpy.asarray(arr)
+                return arr
+            return [_to_array(x) for x in obj]
+        return obj
+
+    result = {}
+    if "params" in data:
+        result["params"] = _to_array(data["params"])
+    else:
+        result["params"] = _to_array(data)
+    if "config" in data:
+        result["config"] = data["config"]
+    if "metadata" in data:
+        result["metadata"] = data["metadata"]
+
+    return result
 
 
 # Convenience function for quick load
