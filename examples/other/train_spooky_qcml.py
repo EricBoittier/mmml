@@ -29,6 +29,7 @@ import jax
 import numpy as np
 import optax
 import tensorflow_datasets as tfds
+from flax import serialization
 from flax.training import train_state
 from flax.training import orbax_utils
 import orbax.checkpoint as ocp
@@ -280,7 +281,21 @@ def main(args: argparse.Namespace):
     if restored is not None:
         state = state.replace(params=restored["params"])
         if "opt_state" in restored:
-            state = state.replace(opt_state=restored["opt_state"])
+            restored_opt_state = restored["opt_state"]
+            # Orbax can restore PyTrees as plain dicts; map back to the typed
+            # Optax state structure expected by state.apply_gradients().
+            if isinstance(restored_opt_state, dict):
+                try:
+                    restored_opt_state = serialization.from_state_dict(
+                        state.opt_state, restored_opt_state
+                    )
+                except Exception as exc:
+                    raise ValueError(
+                        "Failed to restore optimizer state from checkpoint. "
+                        "This usually means the checkpoint was created with a "
+                        "different optimizer/state structure."
+                    ) from exc
+            state = state.replace(opt_state=restored_opt_state)
         resume_step = int(np.asarray(restored.get("step", 0)))
         resume_epoch = int(np.asarray(restored.get("epoch", 1)))
         resume_chunk = int(np.asarray(restored.get("chunk", 0)))
