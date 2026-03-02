@@ -120,7 +120,11 @@ def resolve_dataset_path(arg: Path | None) -> Path:
 
 
 def resolve_checkpoint_paths(arg: Path | str | None) -> Tuple[Path, Path]:
-    """Return (factory_base_dir, epoch_dir) for the supplied checkpoint."""
+    """Return (factory_base_dir, epoch_dir) for the supplied checkpoint.
+
+    Supports both orbax checkpoints (manifest.ocdbt) and JSON checkpoints
+    (params.json or a .json file from orbax_to_json).
+    """
     from mmml.physnetjax.physnetjax.restart.restart import get_last
 
     # Convert string to Path if needed
@@ -130,13 +134,24 @@ def resolve_checkpoint_paths(arg: Path | str | None) -> Tuple[Path, Path]:
         candidate = Path(arg)
     else:
         candidate = arg
-    
+
     if not candidate.exists():
         sys.exit(f"Checkpoint directory not found: {candidate}")
 
     candidate = candidate.resolve()
+
+    # JSON checkpoint: directory with params.json, or direct path to .json file
+    if candidate.is_file() and candidate.suffix == ".json":
+        # Path to a JSON file (e.g. ckpts_json/DESdimers_params.json)
+        # Both base and epoch point to the file so calculator and load_model_parameters can use it
+        return candidate, candidate
+    if candidate.is_dir():
+        params_json = candidate / "params.json"
+        if params_json.exists():
+            return candidate, candidate
+
     if not candidate.is_dir():
-        sys.exit(f"Checkpoint path is not a directory: {candidate}")
+        sys.exit(f"Checkpoint path is not a directory or JSON file: {candidate}")
 
     def last_dir(path: Path) -> Path:
         return Path(get_last(str(path)))
@@ -180,7 +195,58 @@ def load_configuration(npz_path: Path, index: int) -> Tuple[np.ndarray, np.ndarr
 
 
 def load_model_parameters(epoch_dir: Path, natoms: int):
-    """Load model parameters from checkpoint."""
+    """Load model parameters from checkpoint (orbax or JSON format)."""
+    import jax.numpy as jnp
+
+    epoch_path = Path(epoch_dir)
+    is_json = (
+        (epoch_path.is_file() and epoch_path.suffix == ".json")
+        or (epoch_path.is_dir() and (epoch_path / "params.json").exists())
+    )
+
+    if is_json:
+        from mmml.physnetjax.physnetjax.models.model import EF
+        from mmml.utils.model_checkpoint import load_model_checkpoint
+
+        checkpoint = load_model_checkpoint(
+            epoch_path, use_orbax=False, load_params=True, load_config=True
+        )
+        params = checkpoint.get("params")
+        config = checkpoint.get("config", {})
+
+        if params is None:
+            sys.exit("Checkpoint does not contain params; cannot load model.")
+        if not config:
+            sys.exit(
+                "JSON checkpoint does not contain model config; cannot construct model. "
+                "Use orbax_to_json with a checkpoint that has model_attributes, or "
+                "ensure model_config.json exists in the checkpoint directory."
+            )
+
+        def _to_jax(obj):
+            if isinstance(obj, dict):
+                return {k: _to_jax(v) for k, v in obj.items()}
+            if isinstance(obj, list) and len(obj) > 0 and isinstance(obj[0], (list, int, float)):
+                return jnp.array(obj)
+            if isinstance(obj, list):
+                return [_to_jax(x) for x in obj]
+            return obj
+
+        params = _to_jax(params)
+        if isinstance(params, dict) and "params" not in params:
+            params = {"params": params}
+
+        model_attrs = [
+            "features", "max_degree", "num_iterations", "num_basis_functions",
+            "cutoff", "max_atomic_number", "n_res", "zbl", "efa", "charges",
+            "natoms", "total_charge", "n_dcm", "include_pseudotensors",
+        ]
+        model_config = {k: v for k, v in config.items() if k in model_attrs}
+        model_config["natoms"] = natoms
+        model = EF(**model_config)
+        model.natoms = natoms
+        return params, model
+
     from mmml.physnetjax.physnetjax.restart.restart import get_params_model
 
     params, model = get_params_model(str(epoch_dir), natoms=natoms)

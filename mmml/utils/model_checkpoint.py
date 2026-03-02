@@ -279,12 +279,20 @@ def load_model_checkpoint(
         - 'metadata': Metadata dict (if load_metadata=True and exists)
     """
     checkpoint_dir = Path(checkpoint_dir)
-    
+
     if not checkpoint_dir.exists():
-        raise FileNotFoundError(f"Checkpoint directory not found: {checkpoint_dir}")
-    
+        raise FileNotFoundError(f"Checkpoint path not found: {checkpoint_dir}")
+
+    # Allow path to a .json file directly (e.g. from orbax_to_json output)
+    json_params_path = None
+    if checkpoint_dir.is_file() and checkpoint_dir.suffix == ".json":
+        json_params_path = checkpoint_dir
+        checkpoint_dir = checkpoint_dir.parent
+    elif (checkpoint_dir / "params.json").exists():
+        json_params_path = checkpoint_dir / "params.json"
+
     result = {}
-    
+
     # Load parameters
     if load_params:
         if use_orbax:
@@ -302,8 +310,7 @@ def load_model_checkpoint(
         
         if not use_orbax:
             # Try JSON file first (preferred for portability)
-            json_params_path = checkpoint_dir / "params.json"
-            if json_params_path.exists():
+            if json_params_path is not None and json_params_path.exists():
                 json_loaded = json_to_params(
                     json_params_path,
                     dtype=dtype,
@@ -516,6 +523,9 @@ def orbax_to_json(
         params = restored[params_key]
         if config is None and "config" in restored:
             config = restored["config"]
+        elif config is None and "model_attributes" in restored:
+            # PhysNetJax checkpoints use model_attributes; use as config
+            config = restored["model_attributes"]
         if metadata is None and "metadata" in restored:
             metadata = restored["metadata"]
     elif isinstance(restored, dict):

@@ -652,10 +652,12 @@ def setup_calculator(
     BATCH_SIZE: int = N_MONOMERS + len(dimer_perms)  # Number of systems per batch
 
     restart_path = Path(model_restart_path) if type(model_restart_path) == str else model_restart_path
-    
-    # Check if this is a JSON checkpoint (has params.json file)
-    json_params_path = restart_path / "params.json"
-    is_json_checkpoint = json_params_path.exists()
+
+    # Check if this is a JSON checkpoint (params.json in dir, or path to .json file)
+    is_json_checkpoint = (
+        (restart_path.is_file() and restart_path.suffix == ".json")
+        or ((restart_path / "params.json").exists())
+    )
     
     if is_json_checkpoint:
         # This is a JSON checkpoint - use it directly
