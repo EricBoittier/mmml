@@ -37,6 +37,7 @@ from mmml.physnetjax.physnetjax.models.spooky_model import EF as SpookyEF
 from mmml.physnetjax.physnetjax.training.spooky_training import (
     build_spooky_batch_from_padded_arrays,
     make_spooky_train_step,
+    restart_params_only,
 )
 
 # QCML dataset paths
@@ -212,10 +213,15 @@ def main(args: argparse.Namespace):
             if not resume_path.is_absolute():
                 resume_path = (Path.cwd() / resume_path).resolve()
 
-        print(f"\nRestoring checkpoint (for config): {resume_path}")
-        restored = checkpointer.restore(str(resume_path))
-        if not isinstance(restored, dict):
-            restored = {"params": restored}
+        print(f"\nRestoring checkpoint (params-only, no optimizer state): {resume_path}")
+        restored_params, restored_config, resume_step, resume_epoch, resume_chunk = restart_params_only(
+            resume_path, checkpointer
+        )
+        restored = {"params": restored_params, "config": restored_config}
+    else:
+        resume_step = 0
+        resume_epoch = 1
+        resume_chunk = 0
 
     # 3) Instantiate spooky model (use config from checkpoint when resuming)
     print("\n3. Instantiating spooky EF model...")
@@ -273,19 +279,13 @@ def main(args: argparse.Namespace):
     state = train_state.TrainState.create(
         apply_fn=model.apply, params=params, tx=tx
     )
-    resume_step = 0
-    resume_epoch = 1
-    resume_chunk = 0
 
     if restored is not None:
         state = state.replace(params=restored["params"])
-        if "opt_state" in restored:
-            state = state.replace(opt_state=restored["opt_state"])
-        resume_step = int(np.asarray(restored.get("step", 0)))
-        resume_epoch = int(np.asarray(restored.get("epoch", 1)))
-        resume_chunk = int(np.asarray(restored.get("chunk", 0)))
+        # Optimizer state is never restored (params-only restart) to avoid
+        # mismatches when checkpoint used different optimizer or optax version.
         print(
-            f"   Restored metadata: step={resume_step}, "
+            f"   Restored params: step={resume_step}, "
             f"epoch={resume_epoch}, chunk={resume_chunk}"
         )
 

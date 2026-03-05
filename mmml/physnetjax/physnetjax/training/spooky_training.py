@@ -28,11 +28,57 @@ We map this to the spooky model inputs:
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from pathlib import Path
+from typing import Any, Dict, Tuple
 
 import e3x
 import jax
 import jax.numpy as jnp
+
+
+def restart_params_only(
+    checkpoint_path: str | Path,
+    checkpointer,
+) -> Tuple[Any, Dict[str, Any] | None, int, int, int]:
+    """
+    Load model parameters and metadata from a checkpoint for params-only restart.
+
+    Does not restore optimizer state, avoiding mismatches when the checkpoint
+    was saved with a different optimizer (e.g. Adam vs AdamW) or different
+    optax version. The caller should create a fresh TrainState with the
+    loaded params so the optimizer is reinitialized.
+
+    Parameters
+    ----------
+    checkpoint_path
+        Path to the orbax checkpoint directory.
+    checkpointer
+        orbax PyTreeCheckpointer instance (e.g. ocp.PyTreeCheckpointer()).
+
+    Returns
+    -------
+    params
+        Model parameters from the checkpoint.
+    config
+        Model config dict if present, else None.
+    step
+        Training step from checkpoint (for resuming position).
+    epoch
+        Epoch index from checkpoint.
+    chunk
+        Chunk index from checkpoint.
+    """
+    restored = checkpointer.restore(str(checkpoint_path))
+    if not isinstance(restored, dict):
+        restored = {"params": restored}
+    params = restored.get("params")
+    if params is None:
+        raise ValueError(f"Checkpoint at {checkpoint_path} has no 'params' key.")
+    config = restored.get("config")
+    step = int(jnp.asarray(restored.get("step", 0)))
+    epoch = int(jnp.asarray(restored.get("epoch", 1)))
+    chunk = int(jnp.asarray(restored.get("chunk", 0)))
+    return params, config, step, epoch, chunk
 
 
 def _to_array(x: Any) -> Any:
