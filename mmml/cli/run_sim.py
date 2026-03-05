@@ -261,6 +261,12 @@ def parse_args() -> argparse.Namespace:
         help="Run CHARMM production (default: False).",
     )
 
+    parser.add_argument(
+        "--use_physnet_calculator_for_full_system",
+        action="store_true",
+        help="Use the physnet calculator for the full system (default: False).",
+    )
+
     return parser.parse_args()
 
 
