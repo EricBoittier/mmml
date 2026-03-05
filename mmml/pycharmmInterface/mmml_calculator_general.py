@@ -746,7 +746,8 @@ def setup_calculator(
                 raise FileNotFoundError(f"model_config not found in JSON checkpoint at {restart_path}")
             
             # Reconstruct model from config
-            from mmml.physnetjax.physnetjax.models.model import EF
+            from mmml.physnetjax.physnetjax.models.model import EF as StandardEF
+            from mmml.physnetjax.physnetjax.models.spooky_model import EF as SpookyEF
             
             # Convert JSON arrays back to JAX arrays for model config
             def json_to_jax_config(obj):
@@ -763,7 +764,12 @@ def setup_calculator(
             model_config['natoms'] = MAX_ATOMS_PER_SYSTEM
             if cell:
                 model_config['use_pbc'] = True
-            MODEL = EF(**model_config)
+            is_spooky_model = (
+                str(config.get("model_type", "")).lower() == "spooky"
+                or "spooky" in str(restart_path).lower()
+            )
+            model_cls = SpookyEF if is_spooky_model else StandardEF
+            MODEL = model_cls(**model_config)
             MODEL.natoms = MAX_ATOMS_PER_SYSTEM
             
             # Convert JSON params back to JAX arrays
@@ -819,6 +825,7 @@ def setup_calculator(
         # Setup monomer model using orbax
         params, MODEL = get_params_model(restart)
     MODEL.natoms = MAX_ATOMS_PER_SYSTEM
+    is_spooky_model = "spooky_model" in type(MODEL).__module__
 
     if cell:
         MODEL.use_pbc = True
@@ -1541,6 +1548,24 @@ def setup_calculator(
             positions: Array,  # Shape: (batch_size * num_atoms, 3)
         ) -> Dict[str, Array]:
             """Applies the ML model to batched inputs."""
+            if is_spooky_model:
+                atom_mask = batches["atom_mask"].astype(jnp.float32)
+                q_atoms = jnp.zeros((atom_mask.shape[0], 1), dtype=jnp.float32)
+                s_atoms = atom_mask.reshape(-1, 1)  # neutral singlet: multiplicity 1 on real atoms
+                return MODEL.apply(
+                    params,
+                    atomic_numbers=atomic_numbers,
+                    charges=q_atoms,
+                    spins=s_atoms,
+                    positions=positions,
+                    dst_idx=batches["dst_idx"],
+                    src_idx=batches["src_idx"],
+                    batch_segments=batches["batch_segments"],
+                    batch_size=BATCH_SIZE,
+                    batch_mask=batches["batch_mask"],
+                    atom_mask=atom_mask,
+                    cell=pbc_cell,
+                )
             return MODEL.apply(
                 params,
                 atomic_numbers=atomic_numbers,

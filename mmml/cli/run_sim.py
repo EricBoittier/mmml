@@ -44,6 +44,7 @@ import jax
 
 import argparse
 import sys
+import time
 from pathlib import Path
 
 import numpy as np
@@ -707,6 +708,7 @@ shake bonh para sele all end
         total_energy = np.zeros((num_steps,))
 
         breakcount = 0
+        ase_loop_start = time.perf_counter()
         for i in range(num_steps):
             # Run 1 time step
             integrator.run(1)
@@ -767,7 +769,23 @@ shake bonh para sele all end
                     MaxwellBoltzmannDistribution(ase_atoms, temperature_K=temperature)
                     print(f"Temperature adjusted to: {temperature} K")
             if i % 100 == 0:
-                print(f"step {i:5d} epot {potential_energy[i]: 5.3f} ekin {kinetic_energy[i]: 5.3f} etot {total_energy[i]: 5.3f}")
+                elapsed_s = time.perf_counter() - ase_loop_start
+                completed_steps = i + 1
+                simulated_ns = completed_steps * timestep_fs * 1e-6
+                if simulated_ns > 0 and elapsed_s > 0:
+                    avg_speed_ns_per_day = simulated_ns * 86400.0 / elapsed_s
+                    time_per_ns_s = elapsed_s / simulated_ns
+                    perf_msg = (
+                        f"avg_speed {avg_speed_ns_per_day:8.4f} ns/day "
+                        f"time_per_ns {time_per_ns_s:10.2f} s/ns"
+                    )
+                else:
+                    perf_msg = "avg_speed n/a time_per_ns n/a"
+                print(
+                    f"step {i:5d} epot {potential_energy[i]: 5.3f} "
+                    f"ekin {kinetic_energy[i]: 5.3f} etot {total_energy[i]: 5.3f} | "
+                    f"{perf_msg}"
+                )
 
         
         # Close trajectory file
@@ -1117,7 +1135,7 @@ shake bonh para sele all end
             print(f"First step OK: E_pot={e1:.6f} eV")
 
             print("*" * 10 + f"\n{args.ensemble.upper()}\n" + "*" * 10)
-            print("\t\tTime (ps)\tSteps\tE_pot (eV)\tE_tot (eV)\tT (K)")
+            print("\t\tTime (ps)\tSteps\tE_pot (eV)\tE_tot (eV)\tT (K)\tt/ns (s)\tavg(ns/day)")
 
             # ========================================================================
             # HDF5 REPORTER SETUP
@@ -1156,6 +1174,7 @@ shake bonh para sele all end
             # ========================================================================
             # MAIN SIMULATION LOOP
             # ========================================================================
+            jaxmd_loop_start = time.perf_counter()
             for i in range(total_records):
                 state = sim(state)
 
@@ -1168,8 +1187,8 @@ shake bonh para sele all end
                     
                 # Print progress every 10 steps
                 if i % 10 == 0:
-                    time_ps = i * steps_per_recording * dt
-                    steps = i * steps_per_recording
+                    steps = (i + 1) * steps_per_recording
+                    time_ps = steps * dt
                     T_curr = jax_md.quantity.temperature(
                         momentum=state.momentum,
                         mass=state.mass
@@ -1181,7 +1200,18 @@ shake bonh para sele all end
                         mass=state.mass
                     ))
                     e_tot = e_pot + e_kin
-                    print(f"{time_ps:10.4f}\t{steps:6d}\t{e_pot:10.4f}\t{e_tot:10.4f}\t{temp:10.2f}")
+                    elapsed_s = time.perf_counter() - jaxmd_loop_start
+                    simulated_ns = steps * dt_fs * 1e-6
+                    if simulated_ns > 0 and elapsed_s > 0:
+                        avg_speed_ns_per_day = simulated_ns * 86400.0 / elapsed_s
+                        time_per_ns_s = elapsed_s / simulated_ns
+                    else:
+                        avg_speed_ns_per_day = float("nan")
+                        time_per_ns_s = float("nan")
+                    print(
+                        f"{time_ps:10.4f}\t{steps:6d}\t{e_pot:10.4f}\t{e_tot:10.4f}\t{temp:10.2f}\t"
+                        f"{time_per_ns_s:10.2f}\t{avg_speed_ns_per_day:10.4f}"
+                    )
 
                     # Record to HDF5
                     hdf5_reporter.report(

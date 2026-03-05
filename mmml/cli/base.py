@@ -205,7 +205,8 @@ def load_model_parameters(epoch_dir: Path, natoms: int):
     )
 
     if is_json:
-        from mmml.physnetjax.physnetjax.models.model import EF
+        from mmml.physnetjax.physnetjax.models.model import EF as StandardEF
+        from mmml.physnetjax.physnetjax.models.spooky_model import EF as SpookyEF
         from mmml.utils.model_checkpoint import load_model_checkpoint
 
         checkpoint = load_model_checkpoint(
@@ -240,10 +241,17 @@ def load_model_parameters(epoch_dir: Path, natoms: int):
             "features", "max_degree", "num_iterations", "num_basis_functions",
             "cutoff", "max_atomic_number", "n_res", "zbl", "efa", "charges",
             "natoms", "total_charge", "n_dcm", "include_pseudotensors",
+            "use_energy_bias", "use_pbc", "debug",
         ]
         model_config = {k: v for k, v in config.items() if k in model_attrs}
         model_config["natoms"] = natoms
-        model = EF(**model_config)
+        epoch_path_str = str(epoch_path).lower()
+        is_spooky = (
+            str(config.get("model_type", "")).lower() == "spooky"
+            or "spooky" in epoch_path_str
+        )
+        model_cls = SpookyEF if is_spooky else StandardEF
+        model = model_cls(**model_config)
         model.natoms = natoms
         return params, model
 
