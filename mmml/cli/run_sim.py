@@ -385,6 +385,9 @@ def run(args: argparse.Namespace) -> int:
     ase_monomer.calc = simple_physnet_calculator
     print(f"ASE monomer energy: {ase_monomer.get_potential_energy()}")
 
+
+
+
     # Load model parameters for the full system
     natoms = len(pdb_ase_atoms)
     assert total_atoms == natoms, (
@@ -523,6 +526,12 @@ def run(args: argparse.Namespace) -> int:
         )
         atoms.set_positions(R)
     
+    ##### add an option to just use the physnet calculator for the full system
+    if args.use_physnet_calculator_for_full_system:
+        atoms.calc = simple_physnet_calculator
+        print("Using physnet calculator for the full system")
+
+
     # Get initial energy and forces
     hybrid_energy = float(atoms.get_potential_energy())
     hybrid_forces = np.asarray(atoms.get_forces())
