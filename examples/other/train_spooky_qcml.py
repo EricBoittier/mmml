@@ -29,6 +29,7 @@ import jax
 import numpy as np
 import optax
 import tensorflow_datasets as tfds
+from flax import serialization
 from flax.training import train_state
 from flax.training import orbax_utils
 import orbax.checkpoint as ocp

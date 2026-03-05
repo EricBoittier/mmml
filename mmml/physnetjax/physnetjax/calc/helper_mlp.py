@@ -36,9 +36,31 @@ implemented_properties = implemented_properties):
     print(implemented_properties)
 
     assert model.natoms == len(ase_mol.get_atomic_numbers())
+    is_spooky_model = "spooky_model" in type(model).__module__
 
     @jax.jit
     def evaluate_energies_and_forces(atomic_numbers, positions, dst_idx, src_idx):
+        if is_spooky_model:
+            n_atoms = atomic_numbers.shape[0]
+            atom_mask = jax.numpy.ones((n_atoms,), dtype=jax.numpy.float32)
+            batch_segments = jax.numpy.zeros((n_atoms,), dtype=jax.numpy.int32)
+            batch_mask = jax.numpy.ones_like(dst_idx, dtype=jax.numpy.float32)
+            # Neutral singlets by default: Q=0 and multiplicity=1 per atom.
+            q_atoms = jax.numpy.zeros((n_atoms, 1), dtype=jax.numpy.float32)
+            s_atoms = jax.numpy.ones((n_atoms, 1), dtype=jax.numpy.float32)
+            return model.apply(
+                params,
+                atomic_numbers=atomic_numbers,
+                charges=q_atoms,
+                spins=s_atoms,
+                positions=positions,
+                dst_idx=dst_idx,
+                src_idx=src_idx,
+                batch_segments=batch_segments,
+                batch_size=1,
+                batch_mask=batch_mask,
+                atom_mask=atom_mask,
+            )
         return model.apply(
             params,
             atomic_numbers=atomic_numbers,
@@ -104,13 +126,38 @@ def get_pyc(params, model, ase_mol, conversion=pycharmm_conversion):
 
     @jax.jit
     def model_calc(batch):
-        output = model.apply(
-            params,
-            atomic_numbers=jax.numpy.array(batch["atomic_numbers"]),
-            positions=jax.numpy.array(batch["positions"]),
-            dst_idx=jax.numpy.array(batch["dst_idx"]),
-            src_idx=jax.numpy.array(batch["src_idx"]),
-        )
+        atomic_numbers = jax.numpy.array(batch["atomic_numbers"])
+        positions = jax.numpy.array(batch["positions"])
+        dst_idx = jax.numpy.array(batch["dst_idx"])
+        src_idx = jax.numpy.array(batch["src_idx"])
+        if "spooky_model" in type(model).__module__:
+            n_atoms = atomic_numbers.shape[0]
+            atom_mask = jax.numpy.ones((n_atoms,), dtype=jax.numpy.float32)
+            batch_segments = jax.numpy.zeros((n_atoms,), dtype=jax.numpy.int32)
+            batch_mask = jax.numpy.ones_like(dst_idx, dtype=jax.numpy.float32)
+            q_atoms = jax.numpy.zeros((n_atoms, 1), dtype=jax.numpy.float32)
+            s_atoms = jax.numpy.ones((n_atoms, 1), dtype=jax.numpy.float32)
+            output = model.apply(
+                params,
+                atomic_numbers=atomic_numbers,
+                charges=q_atoms,
+                spins=s_atoms,
+                positions=positions,
+                dst_idx=dst_idx,
+                src_idx=src_idx,
+                batch_segments=batch_segments,
+                batch_size=1,
+                batch_mask=batch_mask,
+                atom_mask=atom_mask,
+            )
+        else:
+            output = model.apply(
+                params,
+                atomic_numbers=atomic_numbers,
+                positions=positions,
+                dst_idx=dst_idx,
+                src_idx=src_idx,
+            )
         output["energy"] = output["energy"].squeeze()
         output["forces"] = output["forces"].squeeze()
         output["energy"] *= conversion["energy"]
