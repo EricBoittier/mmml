@@ -20,6 +20,11 @@ Examples:
       --backend gpu \
       --checkpoint /path/to/checkpoint \
       --res DCM --n 10 --L 22.0 --n-atoms-monomer 5 --mode kernel
+
+    # Use physnet calculator for full system (no hybrid MM/ML)
+    python examples/other/benchmark_run_sim_cpu_gpu.py \
+      --backend both --use-physnet --checkpoint /path/to/ckpt \
+      --res DCM --n 10 --L 22.0 --n-atoms-monomer 5 --mode full
 """
 
 from __future__ import annotations
@@ -123,6 +128,12 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Skip ML dimer correction in hybrid calculator.",
     )
+    parser.add_argument(
+        "--use-physnet",
+        action="store_true",
+        dest="use_physnet_calculator_for_full_system",
+        help="Use physnet calculator for full system instead of hybrid (run_sim --use_physnet_calculator_for_full_system).",
+    )
     parser.add_argument("--ml-cutoff", type=float, default=0.01)
     parser.add_argument("--mm-switch-on", type=float, default=6.0)
     parser.add_argument("--mm-cutoff", type=float, default=3.0)
@@ -181,6 +192,8 @@ def _child_command(args: argparse.Namespace, backend: str) -> List[str]:
         cmd.append("--include-mm")
     if args.skip_ml_dimers:
         cmd.append("--skip-ml-dimers")
+    if args.use_physnet_calculator_for_full_system:
+        cmd.append("--use-physnet")
     return cmd
 
 
@@ -321,6 +334,7 @@ def run_single_backend(args: argparse.Namespace) -> int:
         validate=False,
         include_mm=args.include_mm,
         skip_ml_dimers=args.skip_ml_dimers,
+        use_physnet_calculator_for_full_system=args.use_physnet_calculator_for_full_system,
         debug=False,
         ml_cutoff=args.ml_cutoff,
         mm_switch_on=args.mm_switch_on,
@@ -344,6 +358,7 @@ def run_single_backend(args: argparse.Namespace) -> int:
             "n_monomers": args.n,
             "n_atoms_monomer": args.n_atoms_monomer,
             "cell_A": args.L,
+            "use_physnet_calculator_for_full_system": args.use_physnet_calculator_for_full_system,
             "temperature_K": args.temperature,
             "timestep_fs": args.timestep,
             "nsteps_jaxmd": args.nsteps_jaxmd,
