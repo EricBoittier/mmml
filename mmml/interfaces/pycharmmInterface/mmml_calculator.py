@@ -1356,21 +1356,9 @@ def setup_calculator(
                 ase_calc.Calculator.calculate(self, atoms, properties, system_changes)
                 R = np.asarray(atoms.get_positions(), dtype=np.float64)
 
-                # Option A: Wrap positions into cell before each evaluation (keeps BFGS in primary cell)
-                if self.pbc_cell is not None:
-                    from mmml.interfaces.pycharmmInterface.cell_list import _wrap_groups_np
-                    cell_matrix = np.asarray(self.pbc_cell, dtype=np.float64)
-                    if cell_matrix.ndim == 0:
-                        L = float(cell_matrix)
-                        cell_matrix = np.array([[L, 0, 0], [0, L, 0], [0, 0, L]], dtype=np.float64)
-                    elif cell_matrix.shape == (3,):
-                        cell_matrix = np.diag(np.asarray(cell_matrix, dtype=np.float64))
-                    monomer_offsets_arr = np.concatenate(
-                        [[0], np.cumsum(self.atoms_per_monomer_list)]
-                    ).astype(np.int64)
-                    masses = np.asarray(atoms.get_masses(), dtype=np.float64)
-                    R = _wrap_groups_np(R, cell_matrix, monomer_offsets_arr, masses=masses)
-                    atoms.set_positions(R)
+                # Do NOT wrap positions during energy/force evaluation. MIC handles unwrapped
+                # coordinates; wrapping causes discontinuous energy jumps during BFGS when
+                # monomers cross cell boundaries. Wrap only for output (trajectories, structures).
 
                 Z = atoms.get_atomic_numbers()
 
