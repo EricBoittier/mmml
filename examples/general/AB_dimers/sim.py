@@ -5,6 +5,7 @@ Creates a box with two different residue types (e.g. MEOH + ACET) using
 calculator which supports heterogeneous monomer sizes and lambda scaling.
 """
 import argparse
+import os
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -26,6 +27,42 @@ except Exception:
     pass
 
 print(f"residues = {config['residues']}, counts = {config['counts']}, L = {config['L']}")
+
+
+def resolve_checkpoint_path() -> str:
+    """Resolve checkpoint path without machine-specific hardcoding."""
+    ckpt_env = os.environ.get("MMML_CKPT")
+    if ckpt_env:
+        return str(Path(ckpt_env).expanduser().resolve())
+
+    # Prefer installed package location when available.
+    try:
+        import mmml as mmml_pkg
+
+        package_ckpt = (
+            Path(mmml_pkg.__file__).resolve().parent / "physnetjax" / "ckpts" / "DESdimers"
+        )
+        if package_ckpt.exists():
+            return str(package_ckpt.resolve())
+    except Exception:
+        pass
+
+    # Fallback for local repo execution (e.g., running from source tree).
+    search_roots = []
+    if "__file__" in globals():
+        script_dir = Path(__file__).resolve().parent
+        search_roots.extend([script_dir, *script_dir.parents])
+    cwd = Path.cwd().resolve()
+    search_roots.extend([cwd, *cwd.parents])
+
+    for root in search_roots:
+        candidate = root / "mmml" / "physnetjax" / "ckpts" / "DESdimers"
+        if candidate.exists():
+            return str(candidate.resolve())
+
+    raise FileNotFoundError(
+        "Could not locate checkpoint. Set MMML_CKPT to a valid checkpoint path."
+    )
 
 # ---------------------------------------------------------------------------
 # 2. Build the mixed box (residue generation + packmol + CHARMM setup)
@@ -51,13 +88,13 @@ print(f"N_total = {N_total}, total_atoms = {sum(atoms_per_monomer)}")
 # ---------------------------------------------------------------------------
 sim_config = {
     "pdbfile": nb_dir / box_result["pdb_path"],
-    "checkpoint": "/home/ericb/mmml/mmml/physnetjax/ckpts/DESdimers/",
+    "checkpoint": resolve_checkpoint_path(),
     "n_monomers": N_total,
     "atoms_per_monomer": atoms_per_monomer,
     "cell": config["L"],
     "temperature": 298.0,
     "timestep": 0.5,
-    "nsteps_jaxmd": 10_000,
+    "nsteps_jaxmd": 1000,
     "nsteps_ase": 100,
     "ensemble": "nvt",
     "output_prefix": f"AB_{'_'.join(config['residues'])}",
