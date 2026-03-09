@@ -1,10 +1,9 @@
 """"""
 import jax
 
-from mmml.physnetjax.physnetjax.data.read_h5 import prepare_h5_datasets
-from mmml.physnetjax.physnetjax.models.model import EF
-from mmml.physnetjax.physnetjax.training.training import train_model
-from mmml.physnetjax.physnetjax.training.progressive import train_model_progressive
+from mmml.models.physnetjax.physnetjax.data.read_h5 import prepare_h5_datasets
+from mmml.models.physnetjax.physnetjax.models.model import EF
+from mmml.models.physnetjax.physnetjax.training.training import train_model
 
 key = jax.random.PRNGKey(40)
 
@@ -20,6 +19,7 @@ train_data, valid_data, natoms = prepare_h5_datasets(
 
 model = EF(features=32, num_iterations=2, max_degree=0, natoms=natoms, cutoff=6.0)
 
+# from mmml.models.physnetjax.physnetjax.training.progressive import train_model_progressive
 #ema_params, best_loss = train_model_progressive(
 #    key, train_data, valid_data,
 #    growth_stages=[
@@ -43,7 +43,7 @@ model = EF(features=32, num_iterations=2, max_degree=0, natoms=natoms, cutoff=6.
 train_model(
     key, model, train_data, valid_data,
     num_epochs=1000,
-    restart="/home/ericb/mmml/mmml/physnetjax/ckpts/progressive-stage2-9a3b53e8-80c5-4069-a1a9-e8a89899b016", #nb_dir / "ACO-b4f39bb9-8ca7-485e-bf51-2e5236e51b56",
+    restart=None, #nb_dir / "ACO-b4f39bb9-8ca7-485e-bf51-2e5236e51b56",
     batch_size=248,
     num_atoms=natoms,
     learning_rate=0.0001,
