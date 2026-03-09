@@ -13,7 +13,7 @@ from pathlib import Path
 config = {
     # Molecule types and counts
     "residues": ["ACO", "DCM"],
-    "counts": [10, 10],
+    "counts": [2, 2],
     # Box
     "L": 23.0,          # cubic box side length (Å)
     "skip_energy_show": False,

@@ -197,3 +197,6 @@ tests/pdb/tip3.pdb
 tests/psf/initial.psf
 tests/psf/system-tip3.psf
 tests/psf/tip3-1.psf
+examples/general/abdimers/AB_ACO_DCM_minimized_16:15:58.pdb
+examples/general/abdimers/AB_ACO_DCM_nvt_trajectory.h5
+examples/general/abdimers/AB_ACO_DCM_pbc_minimized_16:17:48.pdb

@@ -1,0 +1,36 @@
+HEADER 
+TITLE     Built with Packmol                                             
+REMARK   Packmol generated pdb file 
+REMARK   Home-Page: http://m3g.iqm.unicamp.br/packmol
+REMARK
+ATOM      1  O1  ACO A   1      11.760  14.492   9.693  1.00  0.00      ACO     
+ATOM      2  C1  ACO A   1      12.475  14.292  10.670  1.00  0.00      ACO     
+ATOM      3  C2  ACO A   1      12.627  15.314  11.742  1.00  0.00      ACO     
+ATOM      4  C3  ACO A   1      13.240  13.025  10.835  1.00  0.00      ACO     
+ATOM      5  H21 ACO A   1      11.893  16.130  11.577  1.00  0.00      ACO     
+ATOM      6  H22 ACO A   1      12.442  14.852  12.739  1.00  0.00      ACO     
+ATOM      7  H23 ACO A   1      13.654  15.736  11.713  1.00  0.00      ACO     
+ATOM      8  H31 ACO A   1      14.291  13.256  11.112  1.00  0.00      ACO     
+ATOM      9  H32 ACO A   1      12.773  12.403  11.620  1.00  0.00      ACO     
+ATOM     10  H33 ACO A   1      13.229  12.472   9.875  1.00  0.00      ACO     
+ATOM     11  O1  ACO A   2      11.084  13.882   5.227  1.00  0.00      ACO     
+ATOM     12  C1  ACO A   2      11.294  12.712   4.923  1.00  0.00      ACO     
+ATOM     13  C2  ACO A   2      10.327  11.635   5.277  1.00  0.00      ACO     
+ATOM     14  C3  ACO A   2      12.526  12.299   4.198  1.00  0.00      ACO     
+ATOM     15  H21 ACO A   2       9.396  12.093   5.668  1.00  0.00      ACO     
+ATOM     16  H22 ACO A   2      10.086  11.028   4.375  1.00  0.00      ACO     
+ATOM     17  H23 ACO A   2      10.768  10.980   6.058  1.00  0.00      ACO     
+ATOM     18  H31 ACO A   2      12.977  11.416   4.698  1.00  0.00      ACO     
+ATOM     19  H32 ACO A   2      12.279  12.051   3.149  1.00  0.00      ACO     
+ATOM     20  H33 ACO A   2      13.250  13.138   4.215  1.00  0.00      ACO     
+ATOM     21  C   DCM A   3      21.922   1.135  20.641  1.00  0.00      DCM     
+ATOM     22  H1  DCM A   3      22.300   1.047  21.685  1.00  0.00      DCM     
+ATOM     23  H2  DCM A   3      22.027   2.167  20.283  1.00  0.00      DCM     
+ATOM     24  CL1 DCM A   3      20.195   0.661  20.605  1.00  0.00      DCM     
+ATOM     25  CL2 DCM A   3      22.869   0.041  19.594  1.00  0.00      DCM     
+ATOM     26  C   DCM A   4      21.729   1.153  11.495  1.00  0.00      DCM     
+ATOM     27  H1  DCM A   4      20.911   1.907  11.549  1.00  0.00      DCM     
+ATOM     28  H2  DCM A   4      22.708   1.649  11.526  1.00  0.00      DCM     
+ATOM     29  CL1 DCM A   4      21.571   0.232   9.968  1.00  0.00      DCM     
+ATOM     30  CL2 DCM A   4      21.579   0.044  12.887  1.00  0.00      DCM     
+END
