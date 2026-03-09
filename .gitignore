@@ -189,3 +189,11 @@ pdb/tip3.pdb
 pdb/initial.pdb
 pdb/init-packmol.pdb
 packmol/packmol.inp
+tests/packmol/packmol.inp
+tests/pdb/init-packmol.pdb
+tests/pdb/init-tip3.pdb
+tests/pdb/initial.pdb
+tests/pdb/tip3.pdb
+tests/psf/initial.psf
+tests/psf/system-tip3.psf
+tests/psf/tip3-1.psf
