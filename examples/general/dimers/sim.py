@@ -4,7 +4,7 @@ from pathlib import Path
 
 config = {
     "RES": "MEOH",   # residue name
-    "N": 200,        # number of molecules in box
+    "N": 20,        # number of molecules in box
     "L": 23.0,      # box side length (Å)
     "skip_energy_show": False,  # set True on clusters/SLURM to avoid CHARMM segfault
 }
@@ -66,7 +66,7 @@ config = {
     "timestep": 0.25,
     "nsteps_jaxmd": 1000,
     "nsteps_ase": 10,
-    "ensemble": "nvt",
+    "ensemble": "npt",
     "output_prefix": "test_run",
     "energy_catch": 0.5,
     "ml_cutoff": 0.01,
