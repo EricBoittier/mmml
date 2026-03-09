@@ -15,6 +15,25 @@ def _can_import(name: str) -> bool:
 		return False
 
 
+def _resolve_ckpt_path() -> Path | None:
+	"""Resolve a usable checkpoint path across legacy and JSON locations."""
+	candidates = []
+	ckpt_env = os.environ.get("MMML_CKPT")
+	if ckpt_env:
+		candidates.append(Path(ckpt_env))
+	candidates.extend(
+		[
+			Path("ckpts_json/DES"),
+			Path("ckpts_json"),
+			Path("mmml/physnetjax/ckpts"),
+		]
+	)
+	for ckpt in candidates:
+		if ckpt.exists():
+			return ckpt
+	return None
+
+
 def test_ev2kcalmol_constant():
 	# Ensure the EV->kcal/mol conversion used by calculators is reasonable
 	from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol
@@ -30,25 +49,24 @@ def test_setup_calculator_factory_smoke():
 	if not _can_import("jax"):
 		pytest.skip("jax not available in this environment")
 	# Skip if no checkpoints are present
-	ckpt_env = os.environ.get("MMML_CKPT")
-	if ckpt_env:
-		ckpt = Path(ckpt_env)
-	else:
-		ckpt = Path("mmml/physnetjax/ckpts")
-	if not ckpt.exists():
+	ckpt = _resolve_ckpt_path()
+	if ckpt is None:
 		pytest.skip("No checkpoints present for ML model")
 
 	from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
 
 	# Create factory without touching MM (avoids CHARMM setup during smoke test)
-	factory = setup_calculator(
-		ATOMS_PER_MONOMER=2,
-		N_MONOMERS=2,
-		doML=True,
-		doMM=False,
-		model_restart_path=ckpt,
-		MAX_ATOMS_PER_SYSTEM=8,
-	)
+	try:
+		factory = setup_calculator(
+			ATOMS_PER_MONOMER=2,
+			N_MONOMERS=2,
+			doML=True,
+			doMM=False,
+			model_restart_path=ckpt,
+			MAX_ATOMS_PER_SYSTEM=8,
+		)
+	except ModuleNotFoundError as exc:
+		pytest.skip(f"Required ML runtime not available: {exc}")
 
 	assert callable(factory)
 
@@ -102,12 +120,15 @@ def test_ml_energy_matches_reference_when_data_available():
 	# Skip if e3x (pair indices) backend is not available
 	if not _can_import("e3x"):
 		pytest.skip("e3x not available in this environment")
+	ckpt = _resolve_ckpt_path()
+	if ckpt is None:
+		pytest.skip("No checkpoints present for ML model")
 	factory = setup_calculator(
 		ATOMS_PER_MONOMER=10,
 		N_MONOMERS=2,
 		doML=True,
 		doMM=False,
-		model_restart_path=Path("mmml/physnetjax/ckpts"),
+		model_restart_path=ckpt,
 		MAX_ATOMS_PER_SYSTEM=20,
 		ml_energy_conversion_factor=ev2kcalmol,
 		ml_force_conversion_factor=ev2kcalmol,
@@ -144,9 +165,8 @@ def test_check_lattice_invariance():
 	if not _can_import("e3x"):
 		pytest.skip("e3x not available in this environment")
 
-	ckpt_env = os.environ.get("MMML_CKPT")
-	ckpt = Path(ckpt_env) if ckpt_env else Path("mmml/physnetjax/ckpts")
-	if not ckpt.exists():
+	ckpt = _resolve_ckpt_path()
+	if ckpt is None:
 		pytest.skip("No checkpoints present for ML model")
 
 	import jax.numpy as jnp
@@ -219,9 +239,8 @@ def test_pbc_energy_invariance_via_ase():
 	if not _can_import("ase"):
 		pytest.skip("ase not available in this environment")
 
-	ckpt_env = os.environ.get("MMML_CKPT")
-	ckpt = Path(ckpt_env) if ckpt_env else Path("mmml/physnetjax/ckpts")
-	if not ckpt.exists():
+	ckpt = _resolve_ckpt_path()
+	if ckpt is None:
 		pytest.skip("No checkpoints present for ML model")
 
 	import jax
@@ -289,9 +308,8 @@ def test_pbc_force_invariance():
 	if not _can_import("ase"):
 		pytest.skip("ase not available in this environment")
 
-	ckpt_env = os.environ.get("MMML_CKPT")
-	ckpt = Path(ckpt_env) if ckpt_env else Path("mmml/physnetjax/ckpts")
-	if not ckpt.exists():
+	ckpt = _resolve_ckpt_path()
+	if ckpt is None:
 		pytest.skip("No checkpoints present for ML model")
 
 	import jax
@@ -363,9 +381,8 @@ def test_pbc_energy_invariance_ml_mm():
 	if not _can_import("e3x"):
 		pytest.skip("e3x not available in this environment")
 
-	ckpt_env = os.environ.get("MMML_CKPT")
-	ckpt = Path(ckpt_env) if ckpt_env else Path("mmml/physnetjax/ckpts")
-	if not ckpt.exists():
+	ckpt = _resolve_ckpt_path()
+	if ckpt is None:
 		pytest.skip("No checkpoints present for ML model")
 
 	repo_root = Path(__file__).resolve().parent.parent.parent.parent
@@ -462,9 +479,8 @@ def test_pbc_force_gradient_numerical():
 	if not _can_import("ase"):
 		pytest.skip("ase not available in this environment")
 
-	ckpt_env = os.environ.get("MMML_CKPT")
-	ckpt = Path(ckpt_env) if ckpt_env else Path("mmml/physnetjax/ckpts")
-	if not ckpt.exists():
+	ckpt = _resolve_ckpt_path()
+	if ckpt is None:
 		pytest.skip("No checkpoints present for ML model")
 
 	import jax
@@ -611,9 +627,8 @@ def test_pbc_energy_invariance_orthorhombic_cell():
 	if not _can_import("e3x"):
 		pytest.skip("e3x not available in this environment")
 
-	ckpt_env = os.environ.get("MMML_CKPT")
-	ckpt = Path(ckpt_env) if ckpt_env else Path("mmml/physnetjax/ckpts")
-	if not ckpt.exists():
+	ckpt = _resolve_ckpt_path()
+	if ckpt is None:
 		pytest.skip("No checkpoints present for ML model")
 
 	import jax
