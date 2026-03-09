@@ -67,14 +67,6 @@ def test_setup_calculator_factory_smoke():
 	ckpt = _resolve_ckpt_path()
 	if ckpt is None:
 		pytest.skip("No checkpoints present for ML model")
-	if ckpt.is_file() and ckpt.suffix == ".json":
-		pytest.skip("Strict lattice/force checks require full checkpoint directory, not JSON params")
-	if ckpt.is_file() and ckpt.suffix == ".json":
-		pytest.skip("Strict lattice/force checks require full checkpoint directory, not JSON params")
-	if ckpt.is_file() and ckpt.suffix == ".json":
-		pytest.skip("Strict lattice/force checks require full checkpoint directory, not JSON params")
-	if ckpt.is_file() and ckpt.suffix == ".json":
-		pytest.skip("Strict lattice/force checks require full checkpoint directory, not JSON params")
 
 	from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
 
@@ -90,6 +82,11 @@ def test_setup_calculator_factory_smoke():
 		)
 	except ModuleNotFoundError as exc:
 		pytest.skip(f"Required ML runtime not available: {exc}")
+	except FileNotFoundError as exc:
+		msg = str(exc)
+		if "e3x" in msg or "model_config.json" in msg:
+			pytest.skip(f"Checkpoint/runtime not compatible for smoke test: {exc}")
+		raise
 
 	assert callable(factory)
 
@@ -146,12 +143,6 @@ def test_ml_energy_matches_reference_when_data_available():
 	ckpt = _resolve_ckpt_path()
 	if ckpt is None:
 		pytest.skip("No checkpoints present for ML model")
-	if ckpt.is_file() and ckpt.suffix == ".json":
-		pytest.skip("Strict lattice/force checks require full checkpoint directory, not JSON params")
-	if ckpt.is_file() and ckpt.suffix == ".json":
-		pytest.skip("Strict lattice/force checks require full checkpoint directory, not JSON params")
-	if ckpt.is_file() and ckpt.suffix == ".json":
-		pytest.skip("Strict lattice/force checks require full checkpoint directory, not JSON params")
 	factory = setup_calculator(
 		ATOMS_PER_MONOMER=10,
 		N_MONOMERS=2,
