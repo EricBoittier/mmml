@@ -1,4 +1,4 @@
-seed 658406
+seed 900513
 output pdb/init-packmol.pdb
 filetype pdb
 tolerance 2.0
@@ -6,13 +6,13 @@ tolerance 2.0
 structure pdb/aco.pdb
   chain A
   resnumbers 2
-  number 10
+  number 2
   inside box 0.0 0.0 0.0 23.0 23.0 23.0
 end structure
 
 structure pdb/dcm.pdb
   chain A
   resnumbers 2
-  number 10
+  number 2
   inside box 0.0 0.0 0.0 23.0 23.0 23.0
 end structure

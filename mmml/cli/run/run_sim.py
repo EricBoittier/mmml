@@ -441,8 +441,8 @@ def run(args: argparse.Namespace) -> int:
         ml_energy_conversion_factor=1,
         ml_force_conversion_factor=1,
         cell=args.cell,
-        flat_bottom_radius=args.flat_bottom_radius,
-        flat_bottom_force_const=args.flat_bottom_k,
+        flat_bottom_radius=getattr(args, "flat_bottom_radius", None),
+        flat_bottom_force_const=getattr(args, "flat_bottom_k", 1.0),
     )
     
 
@@ -504,7 +504,7 @@ def run(args: argparse.Namespace) -> int:
         atoms.set_positions(R)
     
     ##### add an option to just use the physnet calculator for the full system
-    if args.use_physnet_calculator_for_full_system:
+    if getattr(args, "use_physnet_calculator_for_full_system", False):
         atoms.calc = simple_physnet_calculator
         print("Using physnet calculator for the full system")
 
@@ -576,11 +576,11 @@ shake bonh para sele all end
         atoms.set_positions(coor.get_positions())
         return atoms
 
-    if args.charmm_heat:
+    if getattr(args, "charmm_heat", False):
         atoms = run_heat()
-    if args.charmm_equilibration:
+    if getattr(args, "charmm_equilibration", False):
         atoms = run_equilibration()
-    if args.charmm_production:
+    if getattr(args, "charmm_production", False):
         atoms = run_production()
     
     # Minimize structure if requested
@@ -647,7 +647,7 @@ shake bonh para sele all end
         
     def run_ase_md(atoms, run_index=0, temperature=args.temperature):
         
-        if run_index == 0 and args.optimize_monomers:
+        if run_index == 0 and getattr(args, "optimize_monomers", False):
             atoms = optimize_as_monomers(atoms, run_index=run_index, nsteps=100, fmax=0.0006)
 
         
