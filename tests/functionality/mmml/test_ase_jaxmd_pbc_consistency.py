@@ -22,6 +22,14 @@ def _can_import(name: str) -> bool:
         return False
 
 
+def _can_import_e3x_nn() -> bool:
+    try:
+        __import__("e3x.nn.modules", fromlist=["initializers"])
+        return True
+    except Exception:
+        return False
+
+
 def _get_ckpt():
     ckpt_env = os.environ.get("MMML_CKPT")
     candidates = []
@@ -60,8 +68,8 @@ def test_ase_jaxmd_pbc_energy_forces_consistency():
     """
     if not _can_import("jax"):
         pytest.skip("jax not available in this environment")
-    if not _can_import("e3x"):
-        pytest.skip("e3x not available in this environment")
+    if not _can_import_e3x_nn():
+        pytest.skip("e3x.nn not available in this environment")
     if not _can_import("ase"):
         pytest.skip("ase not available in this environment")
 

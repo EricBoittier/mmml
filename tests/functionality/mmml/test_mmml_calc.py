@@ -17,6 +17,15 @@ def _can_import(name: str) -> bool:
 		return False
 
 
+def _can_import_e3x_nn() -> bool:
+	"""Return True only if e3x.nn modules are importable."""
+	try:
+		__import__("e3x.nn.modules", fromlist=["initializers"])
+		return True
+	except Exception:
+		return False
+
+
 def _resolve_ckpt_path() -> Path | None:
 	"""Resolve a usable checkpoint path across legacy and JSON locations."""
 	candidates = []
@@ -167,8 +176,8 @@ def test_ml_energy_matches_reference_when_data_available():
 		ev2kcalmol,
 	)
 	# Skip if e3x (pair indices) backend is not available
-	if not _can_import("e3x"):
-		pytest.skip("e3x not available in this environment")
+	if not _can_import_e3x_nn():
+		pytest.skip("e3x.nn not available in this environment")
 	ckpt = _resolve_ckpt_path()
 	if ckpt is None:
 		pytest.skip("No checkpoints present for ML model")
@@ -211,8 +220,8 @@ def test_check_lattice_invariance():
 	"""
 	if not _can_import("jax"):
 		pytest.skip("jax not available in this environment")
-	if not _can_import("e3x"):
-		pytest.skip("e3x not available in this environment")
+	if not _can_import_e3x_nn():
+		pytest.skip("e3x.nn not available in this environment")
 
 	ckpt = _resolve_ckpt_path()
 	if ckpt is None:
@@ -290,8 +299,8 @@ def test_pbc_energy_invariance_via_ase():
 	"""
 	if not _can_import("jax"):
 		pytest.skip("jax not available in this environment")
-	if not _can_import("e3x"):
-		pytest.skip("e3x not available in this environment")
+	if not _can_import_e3x_nn():
+		pytest.skip("e3x.nn not available in this environment")
 	if not _can_import("ase"):
 		pytest.skip("ase not available in this environment")
 
@@ -369,8 +378,8 @@ def test_pbc_force_invariance():
 	"""
 	if not _can_import("jax"):
 		pytest.skip("jax not available in this environment")
-	if not _can_import("e3x"):
-		pytest.skip("e3x not available in this environment")
+	if not _can_import_e3x_nn():
+		pytest.skip("e3x.nn not available in this environment")
 	if not _can_import("ase"):
 		pytest.skip("ase not available in this environment")
 
@@ -454,17 +463,21 @@ def test_pbc_energy_invariance_ml_mm():
 	"""
 	if not _can_import("jax"):
 		pytest.skip("jax not available in this environment")
-	if not _can_import("e3x"):
-		pytest.skip("e3x not available in this environment")
+	if not _can_import_e3x_nn():
+		pytest.skip("e3x.nn not available in this environment")
 
 	ckpt = _resolve_ckpt_path()
 	if ckpt is None:
 		pytest.skip("No checkpoints present for ML model")
 
-	repo_root = Path(__file__).resolve().parent.parent.parent.parent
-	pdb_path = repo_root / "notebooks/ffFIT/example-acetone/pdb/init-packmol.pdb"
-	if not pdb_path.exists():
-		pytest.skip(f"PDB not found at {pdb_path} for MM setup")
+	pdb_candidates = [
+		PROJECT_ROOT / "tests/pdb/init-packmol.pdb",
+		PROJECT_ROOT / "pdb/init-packmol.pdb",
+		PROJECT_ROOT / "notebooks/ffFIT/example-acetone/pdb/init-packmol.pdb",
+	]
+	pdb_path = next((p for p in pdb_candidates if p.exists()), None)
+	if pdb_path is None:
+		pytest.skip(f"PDB not found in any expected location: {pdb_candidates}")
 
 	import tempfile
 	import jax.numpy as jnp
@@ -550,8 +563,8 @@ def test_pbc_force_gradient_numerical():
 	"""
 	if not _can_import("jax"):
 		pytest.skip("jax not available in this environment")
-	if not _can_import("e3x"):
-		pytest.skip("e3x not available in this environment")
+	if not _can_import_e3x_nn():
+		pytest.skip("e3x.nn not available in this environment")
 	if not _can_import("ase"):
 		pytest.skip("ase not available in this environment")
 
@@ -713,8 +726,8 @@ def test_pbc_energy_invariance_orthorhombic_cell():
 	"""
 	if not _can_import("jax"):
 		pytest.skip("jax not available in this environment")
-	if not _can_import("e3x"):
-		pytest.skip("e3x not available in this environment")
+	if not _can_import_e3x_nn():
+		pytest.skip("e3x.nn not available in this environment")
 
 	ckpt = _resolve_ckpt_path()
 	if ckpt is None:
