@@ -642,7 +642,7 @@ def setup_calculator(
         Supports heterogeneous monomer sizes via the outer ``atoms_per_monomer_list``
         and ``monomer_offsets``.
         """
-        return build_mm_energy_forces_fn(
+        result = build_mm_energy_forces_fn(
             R,
             total_atoms=total_atoms,
             n_monomers=N_MONOMERS,
@@ -660,13 +660,18 @@ def setup_calculator(
             max_pairs=max_pairs,
             cell_list_safety_factor=cell_list_safety_factor,
             use_smooth_mic=use_smooth_mic,
+            use_jax_md_neighbor_list=True,
             debug=debug,
         )
+        if isinstance(result, tuple):
+            return result[0], result[1]
+        return result, None
 
     # Lazy cache for the pre-computed MM energy/force function.
     # Must be built once with *concrete* positions (outside JIT) so that
     # the cell-list path can call NumPy without hitting TracerArrayConversion.
     _cached_mm_fn = [None]          # [0] = calculate_mm_energy_and_forces | None
+    _cached_update_mm_pairs = [None]  # [0] = update_mm_pairs | None (jax_md path)
     _cached_mm_cutoff_key = [None]  # hashable key to detect cutoff-param changes
 
     def _ensure_mm_fn(positions_concrete, cutoff_params):
@@ -674,7 +679,7 @@ def setup_calculator(
         key = (cutoff_params.ml_cutoff, cutoff_params.mm_switch_on, cutoff_params.mm_cutoff,
                getattr(cutoff_params, "complementary_handoff", True))
         if _cached_mm_fn[0] is None or _cached_mm_cutoff_key[0] != key:
-            _cached_mm_fn[0] = get_MM_energy_forces_fns(
+            mm_fn, update_fn = get_MM_energy_forces_fns(
                 positions_concrete,
                 N_MONOMERS=n_monomers,
                 ml_cutoff_distance=cutoff_params.ml_cutoff,
@@ -682,6 +687,8 @@ def setup_calculator(
                 mm_cutoff=cutoff_params.mm_cutoff,
                 complementary_handoff=getattr(cutoff_params, "complementary_handoff", True),
             )
+            _cached_mm_fn[0] = mm_fn
+            _cached_update_mm_pairs[0] = update_fn
             _cached_mm_cutoff_key[0] = key
 
     @partial(jax.jit, static_argnames=['n_monomers', 'cutoff_params', 'doML', 'doMM', 'doML_dimer', 'debug',])
@@ -694,6 +701,8 @@ def setup_calculator(
         doMM: bool = True,
         doML_dimer: bool = True,
         debug: bool = False,
+        mm_pair_idx: Optional[Array] = None,
+        mm_pair_mask: Optional[Array] = None,
     ) -> ModelOutput:
         """Calculates energy and forces using combined ML/MM potential.
         
@@ -841,7 +850,9 @@ def setup_calculator(
             mm_out = calculate_mm_contributions(
                 positions,
                 cutoff_params=cutoff_params,
-                debug=debug
+                debug=debug,
+                mm_pair_idx=mm_pair_idx,
+                mm_pair_mask=mm_pair_mask,
             )
             # Preserve separate MM terms and add to totals instead of overwriting
             mm_E = mm_out.get("mm_E", 0)
@@ -1170,7 +1181,9 @@ def setup_calculator(
     def calculate_mm_contributions(
         positions: Array,
         cutoff_params: CutoffParameters,
-        debug: bool
+        debug: bool,
+        mm_pair_idx: Optional[Array] = None,
+        mm_pair_mask: Optional[Array] = None,
     ) -> Dict[str, Array]:
         """Calculate MM energy and force contributions (converted to eV).
 
@@ -1182,7 +1195,10 @@ def setup_calculator(
         # Ensure positions are finite
         positions = jnp.where(jnp.isfinite(positions), positions, 0.0)
 
-        mm_E, mm_grad = _cached_mm_fn[0](positions)
+        if mm_pair_idx is not None and mm_pair_mask is not None:
+            mm_E, mm_grad = _cached_mm_fn[0](positions, mm_pair_idx, mm_pair_mask)
+        else:
+            mm_E, mm_grad = _cached_mm_fn[0](positions)
         
         # Check for NaN/Inf in MM energy and forces
         mm_E = jnp.where(jnp.isfinite(mm_E), mm_E, 0.0)
@@ -1346,8 +1362,12 @@ def setup_calculator(
                 out = {}
 
                 # Pre-build MM function: cell list uses wrap-by-molecule for binning (monomer_offsets).
+                mm_pair_idx, mm_pair_mask = None, None
                 if self.doMM:
                     _ensure_mm_fn(np.asarray(R), self.cutoff_params)
+                    update_fn = _cached_update_mm_pairs[0]
+                    if update_fn is not None:
+                        mm_pair_idx, mm_pair_mask = update_fn(R)
 
                 # Compute ModelOutput to get forces directly (more stable)
                 out = spherical_cutoff_calculator(
@@ -1359,6 +1379,8 @@ def setup_calculator(
                     doMM=self.doMM,
                     doML_dimer=self.doML_dimer,
                     debug=self.debug,
+                    mm_pair_idx=mm_pair_idx,
+                    mm_pair_mask=mm_pair_mask,
                 )
                 
                 # Use forces directly from ModelOutput (MIC-only: no force transform needed)
