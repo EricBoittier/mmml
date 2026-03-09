@@ -1654,8 +1654,9 @@ shake bonh para sele all end
         return run_sim
 
 
-    def save_trajectory(out_positions, atoms, filename="nhc_trajectory", format="traj", boxes=None):
-        """Save trajectory in real (Cartesian) space. For NPT, pass boxes to set cell per frame."""
+    def save_trajectory(out_positions, atoms, filename="nhc_trajectory", format="traj", boxes=None, save_energy_forces=True):
+        """Save trajectory in real (Cartesian) space. For NPT, pass boxes to set cell per frame.
+        When save_energy_forces=True, recalculates and stores energy and forces for each frame."""
         trajectory = Trajectory(f"{filename}.{format}", "a")
         out_positions = np.asarray(out_positions).reshape(-1, len(atoms), 3)
         for i, R in enumerate(out_positions):
@@ -1667,6 +1668,9 @@ shake bonh para sele all end
                     atoms.set_cell(box)
                 elif box.size >= 3:
                     atoms.set_cell(np.diag(np.asarray(box).reshape(3)))
+            if save_energy_forces and atoms.calc is not None:
+                _ = atoms.get_potential_energy()
+                _ = atoms.get_forces()
             trajectory.write(atoms)
         trajectory.close()
 
