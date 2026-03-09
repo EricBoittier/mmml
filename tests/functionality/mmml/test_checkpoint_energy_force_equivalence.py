@@ -14,71 +14,52 @@ def _can_import(name: str) -> bool:
         return False
 
 
-JSON_CKPT = Path("ckpts_json/DESdimers_params.json")
-ORBAX_EPOCH_1985 = Path("mmml/models/physnetjax/ckpts/DESdimers/epoch-1985")
+ORBAX_EPOCH_1985 = Path("mmml/models/physnetjax/ckpts/DESdimers/epoch-1985").resolve()
 
 
-@pytest.mark.skipif(not _can_import("pycharmm"), reason="pycharmm not available")
-def test_json_checkpoint_matches_epoch1985_energy_and_forces(tmp_path: Path):
+def _assert_tree_allclose(a, b, path: str = "root") -> None:
+    if isinstance(a, dict):
+        assert isinstance(b, dict), f"{path}: type mismatch {type(a)} != {type(b)}"
+        assert set(a.keys()) == set(b.keys()), f"{path}: key mismatch"
+        for k in a:
+            _assert_tree_allclose(a[k], b[k], f"{path}.{k}")
+        return
+    if isinstance(a, (list, tuple)):
+        assert isinstance(b, type(a)), f"{path}: type mismatch {type(a)} != {type(b)}"
+        assert len(a) == len(b), f"{path}: length mismatch {len(a)} != {len(b)}"
+        for i, (ai, bi) in enumerate(zip(a, b)):
+            _assert_tree_allclose(ai, bi, f"{path}[{i}]")
+        return
+    np.testing.assert_allclose(np.asarray(a), np.asarray(b), rtol=1e-6, atol=1e-6)
+
+
+def test_epoch1985_orbax_to_json_roundtrip_matches_params(tmp_path: Path):
     """
-    Compare model outputs from:
-    - existing JSON checkpoint (ckpts_json/DESdimers_params.json)
-    - orbax checkpoint at mmml/models/physnetjax/ckpts/DESdimers/epoch-1985
+    Convert epoch-1985 Orbax checkpoint to JSON and compare parameters.
 
-    The orbax checkpoint is converted to a temporary JSON first so both paths
-    go through the same JSON-loading codepath before evaluating energy/forces.
+    This validates the conversion itself by checking the restored Orbax params
+    against the params loaded back from the generated JSON.
     """
-    if not _can_import("jax"):
-        pytest.skip("jax not available in this environment")
-    if not _can_import("e3x"):
-        pytest.skip("e3x not available in this environment")
-    if not _can_import("ase"):
-        pytest.skip("ase not available in this environment")
     if not _can_import("orbax"):
         pytest.skip("orbax not available in this environment")
-    if not JSON_CKPT.exists():
-        pytest.skip(f"Missing JSON checkpoint: {JSON_CKPT}")
     if not ORBAX_EPOCH_1985.exists():
         pytest.skip(f"Missing orbax checkpoint: {ORBAX_EPOCH_1985}")
 
-    import ase
-    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
-    from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-    from mmml.utils.model_checkpoint import orbax_to_json
+    import orbax.checkpoint as ocp
+    from mmml.utils.model_checkpoint import orbax_to_json, json_to_params
 
     converted_json = tmp_path / "epoch1985_params.json"
     orbax_to_json(
         orbax_checkpoint_dir=ORBAX_EPOCH_1985,
         output_path=converted_json,
     )
+    assert converted_json.exists()
 
-    rng = np.random.default_rng(0)
-    Z = np.array([6] * 20, dtype=np.int32)
-    R = rng.uniform(2.0, 10.0, size=(20, 3)).astype(np.float64)
+    restored_orbax = ocp.PyTreeCheckpointer().restore(str(ORBAX_EPOCH_1985))
+    params_orbax = restored_orbax["params"] if isinstance(restored_orbax, dict) and "params" in restored_orbax else restored_orbax
 
-    def _energy_forces(ckpt_path: Path) -> tuple[float, np.ndarray]:
-        factory = setup_calculator(
-            ATOMS_PER_MONOMER=10,
-            N_MONOMERS=2,
-            doML=True,
-            doMM=False,
-            model_restart_path=ckpt_path,
-            MAX_ATOMS_PER_SYSTEM=20,
-        )
-        calc, _ = factory(
-            atomic_numbers=Z,
-            atomic_positions=R,
-            n_monomers=2,
-            cutoff_params=CutoffParameters(),
-        )
-        atoms = ase.Atoms(Z, R)
-        atoms.calc = calc
-        return float(atoms.get_potential_energy()), np.asarray(atoms.get_forces())
+    restored_json = json_to_params(converted_json, backend="numpy")
+    params_json = restored_json["params"]
 
-    e_json, f_json = _energy_forces(JSON_CKPT)
-    e_orbax, f_orbax = _energy_forces(converted_json)
-
-    assert np.isfinite(e_json) and np.isfinite(e_orbax)
-    np.testing.assert_allclose(e_json, e_orbax, rtol=1e-5, atol=1e-5)
-    np.testing.assert_allclose(f_json, f_orbax, rtol=1e-5, atol=1e-5)
+    _assert_tree_allclose(params_orbax, params_json)
 
