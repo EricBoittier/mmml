@@ -1375,7 +1375,7 @@ shake bonh para sele all end
                 print("Warning: Using last valid position from first minimization")
             if jnp.any(~jnp.isfinite(md_pos)):
                 print(f"Error: No valid positions for {args.ensemble.upper()}; skipping JAX-MD simulation")
-                return 0, jnp.array([]).reshape(0, len(md_pos), 3)
+                return 0, jnp.array([]).reshape(0, len(md_pos), 3), None
 
             
             if args.ensemble == "npt" and use_pbc:
@@ -1468,7 +1468,8 @@ shake bonh para sele all end
                 print("  Check: mass in amu, dt in ps, energy_fn returns eV.")
                 print(f"  mass shape: {state.mass.shape}, min/max: {float(jnp.min(state.mass)):.4f}/{float(jnp.max(state.mass)):.4f}")
                 pos_out = space.transform(simulate.npt_box(state), state.position) if is_npt else state.position
-                return 0, jnp.stack([pos_out])
+                box_out = [np.asarray(jax.device_get(simulate.npt_box(state)))] if is_npt else None
+                return 0, np.stack([np.asarray(jax.device_get(pos_out))]), box_out
             if is_npt and npt_pair_idx is not None:
                 box_one = simulate.npt_box(state_one)
                 e1 = float(npt_energy_fn(state_one.position, box=box_one, neighbor=(npt_pair_idx, npt_pair_mask)))
@@ -1638,23 +1639,34 @@ shake bonh para sele all end
 
 
             nhc_positions_out = []
+            nhc_boxes_out = []  # NPT: real-space box per frame for trajectory cell
             for idx, R in enumerate(nhc_positions):
                 if is_npt:
                     # NPT: convert fractional to real using box at this step
-                    R = space.transform(nhc_boxes[idx], R)
+                    box_i = nhc_boxes[idx]
+                    R = space.transform(box_i, R)
+                    nhc_boxes_out.append(np.asarray(jax.device_get(box_i)))
                 elif use_pbc and pbc_map_fn is not None:
                     R = pbc_map_fn(R)
-                nhc_positions_out.append(R)
-            return steps_completed, jnp.stack(nhc_positions_out)
+                nhc_positions_out.append(np.asarray(jax.device_get(R)))
+            return steps_completed, np.stack(nhc_positions_out), nhc_boxes_out if is_npt else None
 
         return run_sim
 
 
-    def save_trajectory(out_positions, atoms, filename="nhc_trajectory", format="traj"):
+    def save_trajectory(out_positions, atoms, filename="nhc_trajectory", format="traj", boxes=None):
+        """Save trajectory in real (Cartesian) space. For NPT, pass boxes to set cell per frame."""
         trajectory = Trajectory(f"{filename}.{format}", "a")
-        out_positions = out_positions.reshape(-1, len(atoms),3)
-        for R in out_positions:
-            atoms.set_positions(R)
+        out_positions = np.asarray(out_positions).reshape(-1, len(atoms), 3)
+        for i, R in enumerate(out_positions):
+            atoms.set_positions(np.asarray(R))
+            if boxes is not None and i < len(boxes):
+                # NPT: set cell to match box at this frame (positions are in real space)
+                box = np.asarray(boxes[i])
+                if box.ndim == 2:
+                    atoms.set_cell(box)
+                elif box.size >= 3:
+                    atoms.set_cell(np.diag(np.asarray(box).reshape(3)))
             trajectory.write(atoms)
         trajectory.close()
 
@@ -1665,14 +1677,16 @@ shake bonh para sele all end
         Uses current atoms positions (after ASE MD if run) as initial positions.
         """
         out_positions = []
+        out_boxes = []  # NPT: boxes per frame for trajectory cell
         max_is = []
         pos = np.asarray(atoms.get_positions(), dtype=np.float32)
         for i in range(nsim):
-            mi, pos = run_sim(sim_key, R=pos, skip_minimization=skip_minimization)
-        out_positions.append(pos)
-        max_is.append(mi)
+            mi, pos, boxes = run_sim(sim_key, R=pos, skip_minimization=skip_minimization)
+            out_positions.append(pos)
+            out_boxes.append(boxes)
+            max_is.append(mi)
 
-        return out_positions, max_is
+        return out_positions, out_boxes, max_is
 
 
     sim_key, data_key = jax.random.split(jax.random.PRNGKey(42), 2)
@@ -1688,7 +1702,7 @@ shake bonh para sele all end
             s = set_up_nhc_sim_routine(atoms, T=temperature)
             # Skip JAX-MD minimization when ASE already ran (positions are ASE-minimized)
             skip_jaxmd_min = args.nsteps_ase > 0
-            out_positions, _ = run_sim_loop(s, sim_key, skip_minimization=skip_jaxmd_min)
+            out_positions, out_boxes, _ = run_sim_loop(s, sim_key, skip_minimization=skip_jaxmd_min)
 
             print(f"Out positions: {out_positions}")
 
@@ -1696,7 +1710,10 @@ shake bonh para sele all end
                 traj_filename = f'{args.output_prefix}_md_trajectory_{j}_{i}'
                 Path(traj_filename).parent.mkdir(parents=True, exist_ok=True)
                 print(f"Saving trajectory to: {traj_filename}.traj")
-                save_trajectory(out_positions[i], atoms, filename=traj_filename)
+                save_trajectory(
+                    out_positions[i], atoms, filename=traj_filename,
+                    boxes=out_boxes[i] if out_boxes and out_boxes[i] is not None else None,
+                )
 
             # atoms = minimize_structure(atoms)
 

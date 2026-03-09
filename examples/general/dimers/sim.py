@@ -4,7 +4,7 @@ from pathlib import Path
 
 config = {
     "RES": "DCM",   # residue name
-    "N": 20,        # number of molecules in box
+    "N": 50,        # number of molecules in box
     "L": 23.0,      # box side length (Å)
     "skip_energy_show": False,  # set True on clusters/SLURM to avoid CHARMM segfault
 }
