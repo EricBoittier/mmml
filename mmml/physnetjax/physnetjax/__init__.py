@@ -1,1 +1,0 @@
-"""PhysNet JAX core package."""

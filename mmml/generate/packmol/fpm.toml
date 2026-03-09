@@ -1,0 +1,19 @@
+name = "packmol"
+version = "21.1.0"
+license = "MIT"
+author = "Leandro Martinez, Ernesto Birgin, Jose Mario Martinez"
+maintainer = "Leandro Martinez"
+copyright = "University of Campinas - Brazil"
+
+[build]
+auto-executables = true
+auto-tests = true
+auto-examples = true
+
+[[executable]]
+name = "packmol"
+source-dir = "app"
+main = "packmol.f90"
+
+[install]
+library = false
