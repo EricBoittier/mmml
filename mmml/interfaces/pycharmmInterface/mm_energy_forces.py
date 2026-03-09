@@ -19,8 +19,12 @@ from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
 
 try:
     from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM, CGENFF_RTF
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet
+    pycharmm_quiet()
 except Exception:
     CGENFF_PRM = CGENFF_RTF = None
+    def pycharmm_quiet():
+        pass
 
 try:
     from mmml.interfaces.pycharmmInterface.cell_list import (
@@ -70,7 +74,7 @@ def build_mm_energy_forces_fn(
 
     import pycharmm.param as param
     from mmml.interfaces.pycharmmInterface.import_pycharmm import read, reset_block, settings
-
+    pycharmm_quiet()
     reset_block()
     read.rtf(CGENFF_RTF)
     bl = settings.set_bomb_level(-2)
