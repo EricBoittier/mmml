@@ -10,6 +10,8 @@ import os
 import pytest
 import numpy as np
 
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+
 
 def _can_import(name: str) -> bool:
     """Return True only if *name* can be fully imported (not just found)."""
@@ -27,12 +29,12 @@ def _resolve_ckpt_path() -> Path | None:
         candidates.append(Path(ckpt_env))
     candidates.extend(
         [
-            Path("mmml/models/physnetjax/ckpts/DESdimers"),
-            Path("mmml/models/physnetjax/ckpts/DESdimers/epoch-1985"),
-            Path("mmml/models/physnetjax/ckpts"),
-            Path("ckpts_json/DESdimers_params.json"),
-            Path("ckpts_json"),
-            Path("mmml/physnetjax/ckpts"),
+            PROJECT_ROOT / "mmml/models/physnetjax/ckpts/DESdimers",
+            PROJECT_ROOT / "mmml/models/physnetjax/ckpts/DESdimers/epoch-1985",
+            PROJECT_ROOT / "mmml/models/physnetjax/ckpts",
+            PROJECT_ROOT / "ckpts_json/DESdimers_params.json",
+            PROJECT_ROOT / "ckpts_json",
+            PROJECT_ROOT / "mmml/physnetjax/ckpts",
         ]
     )
     for ckpt in candidates:
