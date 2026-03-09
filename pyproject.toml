@@ -169,6 +169,8 @@ experiments = [
 dev = [
     "pytest>=6.1.2",
     "ipykernel>=6.30.1",
+    "mkdocs>=1.6,<2.0",
+    "mkdocs-material>=9.7",
 ]
 
 # Full installation with all optional dependencies (CUDA 12)

@@ -1,0 +1,26 @@
+site_name: MMML Documentation
+site_description: Molecular Mechanics and Machine-Learned Force-Field Toolkit
+site_url: https://mmml.readthedocs.io/
+repo_url: https://github.com/EricBoittier/mmml
+repo_name: EricBoittier/mmml
+
+theme:
+  name: material
+  features:
+    - navigation.instant
+    - navigation.sections
+    - navigation.expand
+    - content.code.copy
+
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Development: development.md
