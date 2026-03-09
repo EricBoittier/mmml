@@ -691,6 +691,10 @@ def test_pbc_energy_invariance_orthorhombic_cell():
 	ckpt = _resolve_ckpt_path()
 	if ckpt is None:
 		pytest.skip("No checkpoints present for ML model")
+	if ckpt.is_file() and ckpt.suffix == ".json":
+		pytest.skip("Strict lattice/force checks require full checkpoint directory, not JSON params")
+	if not ckpt.is_file() and not (ckpt / "model_config.json").exists():
+		pytest.skip("Strict lattice/force checks require checkpoint directory with model_config.json")
 
 	import jax
 	import jax.numpy as jnp

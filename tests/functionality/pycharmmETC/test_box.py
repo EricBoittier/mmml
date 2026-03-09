@@ -18,6 +18,9 @@ def test_setup_box_generic_smoke():
     pdb_path = Path("pdb/init-packmol.pdb")
     if not pdb_path.exists():
         pytest.skip(f"Missing input pdb: {pdb_path}")
+    crystal_script = Path("crystal_image.str")
+    if not crystal_script.exists():
+        pytest.skip(f"Missing CHARMM crystal script: {crystal_script}")
 
     atoms = setupBox.setup_box_generic(str(pdb_path), side_length=10.0, tag="tip3")
     assert atoms is not None
