@@ -63,9 +63,9 @@ config = {
     "n_atoms_monomer": n_atoms_monomer,
     "cell": config["L"],  # cubic box side length (Å), or None
     "temperature": 298.0,
-    "timestep": 0.5,
-    "nsteps_jaxmd": 10_000,
-    "nsteps_ase": 10000,
+    "timestep": 0.25,
+    "nsteps_jaxmd": 1000,
+    "nsteps_ase": 10,
     "ensemble": "nvt",
     "output_prefix": "test_run",
     "energy_catch": 0.5,
