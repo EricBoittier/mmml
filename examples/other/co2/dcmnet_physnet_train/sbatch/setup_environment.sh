@@ -37,14 +37,14 @@ read -p "Enter choice [1]: " ENV_CHOICE
 ENV_CHOICE=${ENV_CHOICE:-1}
 
 if [ "$ENV_CHOICE" = "1" ]; then
-    ENV_FILE="environment-gpu.yml"
+    ENV_FILE="setup/environment-gpu.yml"
     echo "Using GPU environment"
 elif [ "$ENV_CHOICE" = "2" ]; then
-    ENV_FILE="environment.yml"
+    ENV_FILE="setup/environment.yml"
     echo "Using CPU environment"
 else
     echo "Invalid choice, using GPU environment"
-    ENV_FILE="environment-gpu.yml"
+    ENV_FILE="setup/environment-gpu.yml"
 fi
 
 echo ""

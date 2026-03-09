@@ -36,11 +36,11 @@ make install-gpu
 ### Using Conda
 
 ```bash
-conda env create -f environment.yml
+conda env create -f setup/environment.yml
 conda activate mmml
 
 # For GPU support
-conda env create -f environment-gpu.yml
+conda env create -f setup/environment-gpu.yml
 conda activate mmml-gpu
 ```
 
