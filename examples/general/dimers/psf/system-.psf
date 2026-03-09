@@ -2,9 +2,9 @@ PSF EXT CMAP XPLOR
 
          2 !NTITLE
 * EXECUTING CHARMM SCRIPT FROM PYTHON                                           
-*  DATE:     3/ 9/26     19:45:19      CREATED BY USER: ericb                   
+*  DATE:     3/ 9/26     21: 6: 4      CREATED BY USER: ericb                   
 
-        60 !NATOM
+       600 !NATOM
          1 SYS      1        MEOH     CB       CG331   -0.400000E-01   12.0110           0
          2 SYS      1        MEOH     OG       OG311   -0.650000       15.9994           0
          3 SYS      1        MEOH     HG1      HGP1     0.420000       1.00800           0
@@ -65,8 +65,548 @@ PSF EXT CMAP XPLOR
         58 SYS      10       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
         59 SYS      10       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
         60 SYS      10       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+        61 SYS      11       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+        62 SYS      11       MEOH     OG       OG311   -0.650000       15.9994           0
+        63 SYS      11       MEOH     HG1      HGP1     0.420000       1.00800           0
+        64 SYS      11       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+        65 SYS      11       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+        66 SYS      11       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+        67 SYS      12       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+        68 SYS      12       MEOH     OG       OG311   -0.650000       15.9994           0
+        69 SYS      12       MEOH     HG1      HGP1     0.420000       1.00800           0
+        70 SYS      12       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+        71 SYS      12       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+        72 SYS      12       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+        73 SYS      13       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+        74 SYS      13       MEOH     OG       OG311   -0.650000       15.9994           0
+        75 SYS      13       MEOH     HG1      HGP1     0.420000       1.00800           0
+        76 SYS      13       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+        77 SYS      13       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+        78 SYS      13       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+        79 SYS      14       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+        80 SYS      14       MEOH     OG       OG311   -0.650000       15.9994           0
+        81 SYS      14       MEOH     HG1      HGP1     0.420000       1.00800           0
+        82 SYS      14       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+        83 SYS      14       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+        84 SYS      14       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+        85 SYS      15       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+        86 SYS      15       MEOH     OG       OG311   -0.650000       15.9994           0
+        87 SYS      15       MEOH     HG1      HGP1     0.420000       1.00800           0
+        88 SYS      15       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+        89 SYS      15       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+        90 SYS      15       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+        91 SYS      16       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+        92 SYS      16       MEOH     OG       OG311   -0.650000       15.9994           0
+        93 SYS      16       MEOH     HG1      HGP1     0.420000       1.00800           0
+        94 SYS      16       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+        95 SYS      16       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+        96 SYS      16       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+        97 SYS      17       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+        98 SYS      17       MEOH     OG       OG311   -0.650000       15.9994           0
+        99 SYS      17       MEOH     HG1      HGP1     0.420000       1.00800           0
+       100 SYS      17       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       101 SYS      17       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       102 SYS      17       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       103 SYS      18       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       104 SYS      18       MEOH     OG       OG311   -0.650000       15.9994           0
+       105 SYS      18       MEOH     HG1      HGP1     0.420000       1.00800           0
+       106 SYS      18       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       107 SYS      18       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       108 SYS      18       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       109 SYS      19       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       110 SYS      19       MEOH     OG       OG311   -0.650000       15.9994           0
+       111 SYS      19       MEOH     HG1      HGP1     0.420000       1.00800           0
+       112 SYS      19       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       113 SYS      19       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       114 SYS      19       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       115 SYS      20       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       116 SYS      20       MEOH     OG       OG311   -0.650000       15.9994           0
+       117 SYS      20       MEOH     HG1      HGP1     0.420000       1.00800           0
+       118 SYS      20       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       119 SYS      20       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       120 SYS      20       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       121 SYS      21       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       122 SYS      21       MEOH     OG       OG311   -0.650000       15.9994           0
+       123 SYS      21       MEOH     HG1      HGP1     0.420000       1.00800           0
+       124 SYS      21       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       125 SYS      21       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       126 SYS      21       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       127 SYS      22       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       128 SYS      22       MEOH     OG       OG311   -0.650000       15.9994           0
+       129 SYS      22       MEOH     HG1      HGP1     0.420000       1.00800           0
+       130 SYS      22       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       131 SYS      22       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       132 SYS      22       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       133 SYS      23       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       134 SYS      23       MEOH     OG       OG311   -0.650000       15.9994           0
+       135 SYS      23       MEOH     HG1      HGP1     0.420000       1.00800           0
+       136 SYS      23       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       137 SYS      23       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       138 SYS      23       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       139 SYS      24       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       140 SYS      24       MEOH     OG       OG311   -0.650000       15.9994           0
+       141 SYS      24       MEOH     HG1      HGP1     0.420000       1.00800           0
+       142 SYS      24       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       143 SYS      24       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       144 SYS      24       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       145 SYS      25       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       146 SYS      25       MEOH     OG       OG311   -0.650000       15.9994           0
+       147 SYS      25       MEOH     HG1      HGP1     0.420000       1.00800           0
+       148 SYS      25       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       149 SYS      25       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       150 SYS      25       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       151 SYS      26       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       152 SYS      26       MEOH     OG       OG311   -0.650000       15.9994           0
+       153 SYS      26       MEOH     HG1      HGP1     0.420000       1.00800           0
+       154 SYS      26       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       155 SYS      26       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       156 SYS      26       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       157 SYS      27       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       158 SYS      27       MEOH     OG       OG311   -0.650000       15.9994           0
+       159 SYS      27       MEOH     HG1      HGP1     0.420000       1.00800           0
+       160 SYS      27       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       161 SYS      27       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       162 SYS      27       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       163 SYS      28       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       164 SYS      28       MEOH     OG       OG311   -0.650000       15.9994           0
+       165 SYS      28       MEOH     HG1      HGP1     0.420000       1.00800           0
+       166 SYS      28       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       167 SYS      28       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       168 SYS      28       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       169 SYS      29       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       170 SYS      29       MEOH     OG       OG311   -0.650000       15.9994           0
+       171 SYS      29       MEOH     HG1      HGP1     0.420000       1.00800           0
+       172 SYS      29       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       173 SYS      29       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       174 SYS      29       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       175 SYS      30       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       176 SYS      30       MEOH     OG       OG311   -0.650000       15.9994           0
+       177 SYS      30       MEOH     HG1      HGP1     0.420000       1.00800           0
+       178 SYS      30       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       179 SYS      30       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       180 SYS      30       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       181 SYS      31       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       182 SYS      31       MEOH     OG       OG311   -0.650000       15.9994           0
+       183 SYS      31       MEOH     HG1      HGP1     0.420000       1.00800           0
+       184 SYS      31       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       185 SYS      31       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       186 SYS      31       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       187 SYS      32       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       188 SYS      32       MEOH     OG       OG311   -0.650000       15.9994           0
+       189 SYS      32       MEOH     HG1      HGP1     0.420000       1.00800           0
+       190 SYS      32       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       191 SYS      32       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       192 SYS      32       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       193 SYS      33       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       194 SYS      33       MEOH     OG       OG311   -0.650000       15.9994           0
+       195 SYS      33       MEOH     HG1      HGP1     0.420000       1.00800           0
+       196 SYS      33       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       197 SYS      33       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       198 SYS      33       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       199 SYS      34       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       200 SYS      34       MEOH     OG       OG311   -0.650000       15.9994           0
+       201 SYS      34       MEOH     HG1      HGP1     0.420000       1.00800           0
+       202 SYS      34       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       203 SYS      34       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       204 SYS      34       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       205 SYS      35       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       206 SYS      35       MEOH     OG       OG311   -0.650000       15.9994           0
+       207 SYS      35       MEOH     HG1      HGP1     0.420000       1.00800           0
+       208 SYS      35       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       209 SYS      35       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       210 SYS      35       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       211 SYS      36       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       212 SYS      36       MEOH     OG       OG311   -0.650000       15.9994           0
+       213 SYS      36       MEOH     HG1      HGP1     0.420000       1.00800           0
+       214 SYS      36       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       215 SYS      36       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       216 SYS      36       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       217 SYS      37       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       218 SYS      37       MEOH     OG       OG311   -0.650000       15.9994           0
+       219 SYS      37       MEOH     HG1      HGP1     0.420000       1.00800           0
+       220 SYS      37       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       221 SYS      37       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       222 SYS      37       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       223 SYS      38       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       224 SYS      38       MEOH     OG       OG311   -0.650000       15.9994           0
+       225 SYS      38       MEOH     HG1      HGP1     0.420000       1.00800           0
+       226 SYS      38       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       227 SYS      38       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       228 SYS      38       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       229 SYS      39       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       230 SYS      39       MEOH     OG       OG311   -0.650000       15.9994           0
+       231 SYS      39       MEOH     HG1      HGP1     0.420000       1.00800           0
+       232 SYS      39       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       233 SYS      39       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       234 SYS      39       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       235 SYS      40       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       236 SYS      40       MEOH     OG       OG311   -0.650000       15.9994           0
+       237 SYS      40       MEOH     HG1      HGP1     0.420000       1.00800           0
+       238 SYS      40       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       239 SYS      40       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       240 SYS      40       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       241 SYS      41       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       242 SYS      41       MEOH     OG       OG311   -0.650000       15.9994           0
+       243 SYS      41       MEOH     HG1      HGP1     0.420000       1.00800           0
+       244 SYS      41       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       245 SYS      41       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       246 SYS      41       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       247 SYS      42       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       248 SYS      42       MEOH     OG       OG311   -0.650000       15.9994           0
+       249 SYS      42       MEOH     HG1      HGP1     0.420000       1.00800           0
+       250 SYS      42       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       251 SYS      42       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       252 SYS      42       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       253 SYS      43       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       254 SYS      43       MEOH     OG       OG311   -0.650000       15.9994           0
+       255 SYS      43       MEOH     HG1      HGP1     0.420000       1.00800           0
+       256 SYS      43       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       257 SYS      43       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       258 SYS      43       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       259 SYS      44       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       260 SYS      44       MEOH     OG       OG311   -0.650000       15.9994           0
+       261 SYS      44       MEOH     HG1      HGP1     0.420000       1.00800           0
+       262 SYS      44       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       263 SYS      44       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       264 SYS      44       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       265 SYS      45       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       266 SYS      45       MEOH     OG       OG311   -0.650000       15.9994           0
+       267 SYS      45       MEOH     HG1      HGP1     0.420000       1.00800           0
+       268 SYS      45       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       269 SYS      45       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       270 SYS      45       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       271 SYS      46       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       272 SYS      46       MEOH     OG       OG311   -0.650000       15.9994           0
+       273 SYS      46       MEOH     HG1      HGP1     0.420000       1.00800           0
+       274 SYS      46       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       275 SYS      46       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       276 SYS      46       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       277 SYS      47       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       278 SYS      47       MEOH     OG       OG311   -0.650000       15.9994           0
+       279 SYS      47       MEOH     HG1      HGP1     0.420000       1.00800           0
+       280 SYS      47       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       281 SYS      47       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       282 SYS      47       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       283 SYS      48       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       284 SYS      48       MEOH     OG       OG311   -0.650000       15.9994           0
+       285 SYS      48       MEOH     HG1      HGP1     0.420000       1.00800           0
+       286 SYS      48       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       287 SYS      48       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       288 SYS      48       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       289 SYS      49       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       290 SYS      49       MEOH     OG       OG311   -0.650000       15.9994           0
+       291 SYS      49       MEOH     HG1      HGP1     0.420000       1.00800           0
+       292 SYS      49       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       293 SYS      49       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       294 SYS      49       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       295 SYS      50       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       296 SYS      50       MEOH     OG       OG311   -0.650000       15.9994           0
+       297 SYS      50       MEOH     HG1      HGP1     0.420000       1.00800           0
+       298 SYS      50       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       299 SYS      50       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       300 SYS      50       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       301 SYS      51       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       302 SYS      51       MEOH     OG       OG311   -0.650000       15.9994           0
+       303 SYS      51       MEOH     HG1      HGP1     0.420000       1.00800           0
+       304 SYS      51       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       305 SYS      51       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       306 SYS      51       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       307 SYS      52       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       308 SYS      52       MEOH     OG       OG311   -0.650000       15.9994           0
+       309 SYS      52       MEOH     HG1      HGP1     0.420000       1.00800           0
+       310 SYS      52       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       311 SYS      52       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       312 SYS      52       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       313 SYS      53       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       314 SYS      53       MEOH     OG       OG311   -0.650000       15.9994           0
+       315 SYS      53       MEOH     HG1      HGP1     0.420000       1.00800           0
+       316 SYS      53       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       317 SYS      53       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       318 SYS      53       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       319 SYS      54       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       320 SYS      54       MEOH     OG       OG311   -0.650000       15.9994           0
+       321 SYS      54       MEOH     HG1      HGP1     0.420000       1.00800           0
+       322 SYS      54       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       323 SYS      54       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       324 SYS      54       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       325 SYS      55       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       326 SYS      55       MEOH     OG       OG311   -0.650000       15.9994           0
+       327 SYS      55       MEOH     HG1      HGP1     0.420000       1.00800           0
+       328 SYS      55       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       329 SYS      55       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       330 SYS      55       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       331 SYS      56       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       332 SYS      56       MEOH     OG       OG311   -0.650000       15.9994           0
+       333 SYS      56       MEOH     HG1      HGP1     0.420000       1.00800           0
+       334 SYS      56       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       335 SYS      56       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       336 SYS      56       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       337 SYS      57       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       338 SYS      57       MEOH     OG       OG311   -0.650000       15.9994           0
+       339 SYS      57       MEOH     HG1      HGP1     0.420000       1.00800           0
+       340 SYS      57       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       341 SYS      57       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       342 SYS      57       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       343 SYS      58       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       344 SYS      58       MEOH     OG       OG311   -0.650000       15.9994           0
+       345 SYS      58       MEOH     HG1      HGP1     0.420000       1.00800           0
+       346 SYS      58       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       347 SYS      58       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       348 SYS      58       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       349 SYS      59       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       350 SYS      59       MEOH     OG       OG311   -0.650000       15.9994           0
+       351 SYS      59       MEOH     HG1      HGP1     0.420000       1.00800           0
+       352 SYS      59       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       353 SYS      59       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       354 SYS      59       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       355 SYS      60       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       356 SYS      60       MEOH     OG       OG311   -0.650000       15.9994           0
+       357 SYS      60       MEOH     HG1      HGP1     0.420000       1.00800           0
+       358 SYS      60       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       359 SYS      60       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       360 SYS      60       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       361 SYS      61       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       362 SYS      61       MEOH     OG       OG311   -0.650000       15.9994           0
+       363 SYS      61       MEOH     HG1      HGP1     0.420000       1.00800           0
+       364 SYS      61       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       365 SYS      61       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       366 SYS      61       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       367 SYS      62       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       368 SYS      62       MEOH     OG       OG311   -0.650000       15.9994           0
+       369 SYS      62       MEOH     HG1      HGP1     0.420000       1.00800           0
+       370 SYS      62       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       371 SYS      62       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       372 SYS      62       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       373 SYS      63       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       374 SYS      63       MEOH     OG       OG311   -0.650000       15.9994           0
+       375 SYS      63       MEOH     HG1      HGP1     0.420000       1.00800           0
+       376 SYS      63       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       377 SYS      63       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       378 SYS      63       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       379 SYS      64       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       380 SYS      64       MEOH     OG       OG311   -0.650000       15.9994           0
+       381 SYS      64       MEOH     HG1      HGP1     0.420000       1.00800           0
+       382 SYS      64       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       383 SYS      64       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       384 SYS      64       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       385 SYS      65       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       386 SYS      65       MEOH     OG       OG311   -0.650000       15.9994           0
+       387 SYS      65       MEOH     HG1      HGP1     0.420000       1.00800           0
+       388 SYS      65       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       389 SYS      65       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       390 SYS      65       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       391 SYS      66       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       392 SYS      66       MEOH     OG       OG311   -0.650000       15.9994           0
+       393 SYS      66       MEOH     HG1      HGP1     0.420000       1.00800           0
+       394 SYS      66       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       395 SYS      66       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       396 SYS      66       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       397 SYS      67       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       398 SYS      67       MEOH     OG       OG311   -0.650000       15.9994           0
+       399 SYS      67       MEOH     HG1      HGP1     0.420000       1.00800           0
+       400 SYS      67       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       401 SYS      67       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       402 SYS      67       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       403 SYS      68       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       404 SYS      68       MEOH     OG       OG311   -0.650000       15.9994           0
+       405 SYS      68       MEOH     HG1      HGP1     0.420000       1.00800           0
+       406 SYS      68       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       407 SYS      68       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       408 SYS      68       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       409 SYS      69       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       410 SYS      69       MEOH     OG       OG311   -0.650000       15.9994           0
+       411 SYS      69       MEOH     HG1      HGP1     0.420000       1.00800           0
+       412 SYS      69       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       413 SYS      69       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       414 SYS      69       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       415 SYS      70       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       416 SYS      70       MEOH     OG       OG311   -0.650000       15.9994           0
+       417 SYS      70       MEOH     HG1      HGP1     0.420000       1.00800           0
+       418 SYS      70       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       419 SYS      70       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       420 SYS      70       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       421 SYS      71       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       422 SYS      71       MEOH     OG       OG311   -0.650000       15.9994           0
+       423 SYS      71       MEOH     HG1      HGP1     0.420000       1.00800           0
+       424 SYS      71       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       425 SYS      71       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       426 SYS      71       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       427 SYS      72       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       428 SYS      72       MEOH     OG       OG311   -0.650000       15.9994           0
+       429 SYS      72       MEOH     HG1      HGP1     0.420000       1.00800           0
+       430 SYS      72       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       431 SYS      72       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       432 SYS      72       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       433 SYS      73       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       434 SYS      73       MEOH     OG       OG311   -0.650000       15.9994           0
+       435 SYS      73       MEOH     HG1      HGP1     0.420000       1.00800           0
+       436 SYS      73       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       437 SYS      73       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       438 SYS      73       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       439 SYS      74       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       440 SYS      74       MEOH     OG       OG311   -0.650000       15.9994           0
+       441 SYS      74       MEOH     HG1      HGP1     0.420000       1.00800           0
+       442 SYS      74       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       443 SYS      74       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       444 SYS      74       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       445 SYS      75       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       446 SYS      75       MEOH     OG       OG311   -0.650000       15.9994           0
+       447 SYS      75       MEOH     HG1      HGP1     0.420000       1.00800           0
+       448 SYS      75       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       449 SYS      75       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       450 SYS      75       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       451 SYS      76       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       452 SYS      76       MEOH     OG       OG311   -0.650000       15.9994           0
+       453 SYS      76       MEOH     HG1      HGP1     0.420000       1.00800           0
+       454 SYS      76       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       455 SYS      76       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       456 SYS      76       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       457 SYS      77       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       458 SYS      77       MEOH     OG       OG311   -0.650000       15.9994           0
+       459 SYS      77       MEOH     HG1      HGP1     0.420000       1.00800           0
+       460 SYS      77       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       461 SYS      77       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       462 SYS      77       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       463 SYS      78       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       464 SYS      78       MEOH     OG       OG311   -0.650000       15.9994           0
+       465 SYS      78       MEOH     HG1      HGP1     0.420000       1.00800           0
+       466 SYS      78       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       467 SYS      78       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       468 SYS      78       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       469 SYS      79       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       470 SYS      79       MEOH     OG       OG311   -0.650000       15.9994           0
+       471 SYS      79       MEOH     HG1      HGP1     0.420000       1.00800           0
+       472 SYS      79       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       473 SYS      79       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       474 SYS      79       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       475 SYS      80       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       476 SYS      80       MEOH     OG       OG311   -0.650000       15.9994           0
+       477 SYS      80       MEOH     HG1      HGP1     0.420000       1.00800           0
+       478 SYS      80       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       479 SYS      80       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       480 SYS      80       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       481 SYS      81       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       482 SYS      81       MEOH     OG       OG311   -0.650000       15.9994           0
+       483 SYS      81       MEOH     HG1      HGP1     0.420000       1.00800           0
+       484 SYS      81       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       485 SYS      81       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       486 SYS      81       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       487 SYS      82       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       488 SYS      82       MEOH     OG       OG311   -0.650000       15.9994           0
+       489 SYS      82       MEOH     HG1      HGP1     0.420000       1.00800           0
+       490 SYS      82       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       491 SYS      82       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       492 SYS      82       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       493 SYS      83       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       494 SYS      83       MEOH     OG       OG311   -0.650000       15.9994           0
+       495 SYS      83       MEOH     HG1      HGP1     0.420000       1.00800           0
+       496 SYS      83       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       497 SYS      83       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       498 SYS      83       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       499 SYS      84       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       500 SYS      84       MEOH     OG       OG311   -0.650000       15.9994           0
+       501 SYS      84       MEOH     HG1      HGP1     0.420000       1.00800           0
+       502 SYS      84       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       503 SYS      84       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       504 SYS      84       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       505 SYS      85       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       506 SYS      85       MEOH     OG       OG311   -0.650000       15.9994           0
+       507 SYS      85       MEOH     HG1      HGP1     0.420000       1.00800           0
+       508 SYS      85       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       509 SYS      85       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       510 SYS      85       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       511 SYS      86       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       512 SYS      86       MEOH     OG       OG311   -0.650000       15.9994           0
+       513 SYS      86       MEOH     HG1      HGP1     0.420000       1.00800           0
+       514 SYS      86       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       515 SYS      86       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       516 SYS      86       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       517 SYS      87       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       518 SYS      87       MEOH     OG       OG311   -0.650000       15.9994           0
+       519 SYS      87       MEOH     HG1      HGP1     0.420000       1.00800           0
+       520 SYS      87       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       521 SYS      87       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       522 SYS      87       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       523 SYS      88       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       524 SYS      88       MEOH     OG       OG311   -0.650000       15.9994           0
+       525 SYS      88       MEOH     HG1      HGP1     0.420000       1.00800           0
+       526 SYS      88       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       527 SYS      88       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       528 SYS      88       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       529 SYS      89       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       530 SYS      89       MEOH     OG       OG311   -0.650000       15.9994           0
+       531 SYS      89       MEOH     HG1      HGP1     0.420000       1.00800           0
+       532 SYS      89       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       533 SYS      89       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       534 SYS      89       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       535 SYS      90       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       536 SYS      90       MEOH     OG       OG311   -0.650000       15.9994           0
+       537 SYS      90       MEOH     HG1      HGP1     0.420000       1.00800           0
+       538 SYS      90       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       539 SYS      90       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       540 SYS      90       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       541 SYS      91       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       542 SYS      91       MEOH     OG       OG311   -0.650000       15.9994           0
+       543 SYS      91       MEOH     HG1      HGP1     0.420000       1.00800           0
+       544 SYS      91       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       545 SYS      91       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       546 SYS      91       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       547 SYS      92       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       548 SYS      92       MEOH     OG       OG311   -0.650000       15.9994           0
+       549 SYS      92       MEOH     HG1      HGP1     0.420000       1.00800           0
+       550 SYS      92       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       551 SYS      92       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       552 SYS      92       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       553 SYS      93       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       554 SYS      93       MEOH     OG       OG311   -0.650000       15.9994           0
+       555 SYS      93       MEOH     HG1      HGP1     0.420000       1.00800           0
+       556 SYS      93       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       557 SYS      93       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       558 SYS      93       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       559 SYS      94       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       560 SYS      94       MEOH     OG       OG311   -0.650000       15.9994           0
+       561 SYS      94       MEOH     HG1      HGP1     0.420000       1.00800           0
+       562 SYS      94       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       563 SYS      94       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       564 SYS      94       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       565 SYS      95       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       566 SYS      95       MEOH     OG       OG311   -0.650000       15.9994           0
+       567 SYS      95       MEOH     HG1      HGP1     0.420000       1.00800           0
+       568 SYS      95       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       569 SYS      95       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       570 SYS      95       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       571 SYS      96       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       572 SYS      96       MEOH     OG       OG311   -0.650000       15.9994           0
+       573 SYS      96       MEOH     HG1      HGP1     0.420000       1.00800           0
+       574 SYS      96       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       575 SYS      96       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       576 SYS      96       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       577 SYS      97       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       578 SYS      97       MEOH     OG       OG311   -0.650000       15.9994           0
+       579 SYS      97       MEOH     HG1      HGP1     0.420000       1.00800           0
+       580 SYS      97       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       581 SYS      97       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       582 SYS      97       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       583 SYS      98       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       584 SYS      98       MEOH     OG       OG311   -0.650000       15.9994           0
+       585 SYS      98       MEOH     HG1      HGP1     0.420000       1.00800           0
+       586 SYS      98       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       587 SYS      98       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       588 SYS      98       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       589 SYS      99       MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       590 SYS      99       MEOH     OG       OG311   -0.650000       15.9994           0
+       591 SYS      99       MEOH     HG1      HGP1     0.420000       1.00800           0
+       592 SYS      99       MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       593 SYS      99       MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       594 SYS      99       MEOH     HB3      HGA3     0.900000E-01   1.00800           0
+       595 SYS      100      MEOH     CB       CG331   -0.400000E-01   12.0110           0
+       596 SYS      100      MEOH     OG       OG311   -0.650000       15.9994           0
+       597 SYS      100      MEOH     HG1      HGP1     0.420000       1.00800           0
+       598 SYS      100      MEOH     HB1      HGA3     0.900000E-01   1.00800           0
+       599 SYS      100      MEOH     HB2      HGA3     0.900000E-01   1.00800           0
+       600 SYS      100      MEOH     HB3      HGA3     0.900000E-01   1.00800           0
 
-        50 !NBOND: bonds
+       500 !NBOND: bonds
          1         2         2         3         1         4         1         5
          1         6         7         8         8         9         7        10
          7        11         7        12        13        14        14        15
@@ -79,9 +619,121 @@ PSF EXT CMAP XPLOR
         44        45        43        46        43        47        43        48
         49        50        50        51        49        52        49        53
         49        54        55        56        56        57        55        58
-        55        59        55        60
+        55        59        55        60        61        62        62        63
+        61        64        61        65        61        66        67        68
+        68        69        67        70        67        71        67        72
+        73        74        74        75        73        76        73        77
+        73        78        79        80        80        81        79        82
+        79        83        79        84        85        86        86        87
+        85        88        85        89        85        90        91        92
+        92        93        91        94        91        95        91        96
+        97        98        98        99        97       100        97       101
+        97       102       103       104       104       105       103       106
+       103       107       103       108       109       110       110       111
+       109       112       109       113       109       114       115       116
+       116       117       115       118       115       119       115       120
+       121       122       122       123       121       124       121       125
+       121       126       127       128       128       129       127       130
+       127       131       127       132       133       134       134       135
+       133       136       133       137       133       138       139       140
+       140       141       139       142       139       143       139       144
+       145       146       146       147       145       148       145       149
+       145       150       151       152       152       153       151       154
+       151       155       151       156       157       158       158       159
+       157       160       157       161       157       162       163       164
+       164       165       163       166       163       167       163       168
+       169       170       170       171       169       172       169       173
+       169       174       175       176       176       177       175       178
+       175       179       175       180       181       182       182       183
+       181       184       181       185       181       186       187       188
+       188       189       187       190       187       191       187       192
+       193       194       194       195       193       196       193       197
+       193       198       199       200       200       201       199       202
+       199       203       199       204       205       206       206       207
+       205       208       205       209       205       210       211       212
+       212       213       211       214       211       215       211       216
+       217       218       218       219       217       220       217       221
+       217       222       223       224       224       225       223       226
+       223       227       223       228       229       230       230       231
+       229       232       229       233       229       234       235       236
+       236       237       235       238       235       239       235       240
+       241       242       242       243       241       244       241       245
+       241       246       247       248       248       249       247       250
+       247       251       247       252       253       254       254       255
+       253       256       253       257       253       258       259       260
+       260       261       259       262       259       263       259       264
+       265       266       266       267       265       268       265       269
+       265       270       271       272       272       273       271       274
+       271       275       271       276       277       278       278       279
+       277       280       277       281       277       282       283       284
+       284       285       283       286       283       287       283       288
+       289       290       290       291       289       292       289       293
+       289       294       295       296       296       297       295       298
+       295       299       295       300       301       302       302       303
+       301       304       301       305       301       306       307       308
+       308       309       307       310       307       311       307       312
+       313       314       314       315       313       316       313       317
+       313       318       319       320       320       321       319       322
+       319       323       319       324       325       326       326       327
+       325       328       325       329       325       330       331       332
+       332       333       331       334       331       335       331       336
+       337       338       338       339       337       340       337       341
+       337       342       343       344       344       345       343       346
+       343       347       343       348       349       350       350       351
+       349       352       349       353       349       354       355       356
+       356       357       355       358       355       359       355       360
+       361       362       362       363       361       364       361       365
+       361       366       367       368       368       369       367       370
+       367       371       367       372       373       374       374       375
+       373       376       373       377       373       378       379       380
+       380       381       379       382       379       383       379       384
+       385       386       386       387       385       388       385       389
+       385       390       391       392       392       393       391       394
+       391       395       391       396       397       398       398       399
+       397       400       397       401       397       402       403       404
+       404       405       403       406       403       407       403       408
+       409       410       410       411       409       412       409       413
+       409       414       415       416       416       417       415       418
+       415       419       415       420       421       422       422       423
+       421       424       421       425       421       426       427       428
+       428       429       427       430       427       431       427       432
+       433       434       434       435       433       436       433       437
+       433       438       439       440       440       441       439       442
+       439       443       439       444       445       446       446       447
+       445       448       445       449       445       450       451       452
+       452       453       451       454       451       455       451       456
+       457       458       458       459       457       460       457       461
+       457       462       463       464       464       465       463       466
+       463       467       463       468       469       470       470       471
+       469       472       469       473       469       474       475       476
+       476       477       475       478       475       479       475       480
+       481       482       482       483       481       484       481       485
+       481       486       487       488       488       489       487       490
+       487       491       487       492       493       494       494       495
+       493       496       493       497       493       498       499       500
+       500       501       499       502       499       503       499       504
+       505       506       506       507       505       508       505       509
+       505       510       511       512       512       513       511       514
+       511       515       511       516       517       518       518       519
+       517       520       517       521       517       522       523       524
+       524       525       523       526       523       527       523       528
+       529       530       530       531       529       532       529       533
+       529       534       535       536       536       537       535       538
+       535       539       535       540       541       542       542       543
+       541       544       541       545       541       546       547       548
+       548       549       547       550       547       551       547       552
+       553       554       554       555       553       556       553       557
+       553       558       559       560       560       561       559       562
+       559       563       559       564       565       566       566       567
+       565       568       565       569       565       570       571       572
+       572       573       571       574       571       575       571       576
+       577       578       578       579       577       580       577       581
+       577       582       583       584       584       585       583       586
+       583       587       583       588       589       590       590       591
+       589       592       589       593       589       594       595       596
+       596       597       595       598       595       599       595       600
 
-        70 !NTHETA: angles
+       700 !NTHETA: angles
          2         1         4         2         1         5         2         1         6
          4         1         5         4         1         6         5         1         6
          1         2         3         8         7        10         8         7        11
@@ -105,9 +757,219 @@ PSF EXT CMAP XPLOR
         52        49        54        53        49        54        49        50        51
         56        55        58        56        55        59        56        55        60
         58        55        59        58        55        60        59        55        60
-        55        56        57
+        55        56        57        62        61        64        62        61        65
+        62        61        66        64        61        65        64        61        66
+        65        61        66        61        62        63        68        67        70
+        68        67        71        68        67        72        70        67        71
+        70        67        72        71        67        72        67        68        69
+        74        73        76        74        73        77        74        73        78
+        76        73        77        76        73        78        77        73        78
+        73        74        75        80        79        82        80        79        83
+        80        79        84        82        79        83        82        79        84
+        83        79        84        79        80        81        86        85        88
+        86        85        89        86        85        90        88        85        89
+        88        85        90        89        85        90        85        86        87
+        92        91        94        92        91        95        92        91        96
+        94        91        95        94        91        96        95        91        96
+        91        92        93        98        97       100        98        97       101
+        98        97       102       100        97       101       100        97       102
+       101        97       102        97        98        99       104       103       106
+       104       103       107       104       103       108       106       103       107
+       106       103       108       107       103       108       103       104       105
+       110       109       112       110       109       113       110       109       114
+       112       109       113       112       109       114       113       109       114
+       109       110       111       116       115       118       116       115       119
+       116       115       120       118       115       119       118       115       120
+       119       115       120       115       116       117       122       121       124
+       122       121       125       122       121       126       124       121       125
+       124       121       126       125       121       126       121       122       123
+       128       127       130       128       127       131       128       127       132
+       130       127       131       130       127       132       131       127       132
+       127       128       129       134       133       136       134       133       137
+       134       133       138       136       133       137       136       133       138
+       137       133       138       133       134       135       140       139       142
+       140       139       143       140       139       144       142       139       143
+       142       139       144       143       139       144       139       140       141
+       146       145       148       146       145       149       146       145       150
+       148       145       149       148       145       150       149       145       150
+       145       146       147       152       151       154       152       151       155
+       152       151       156       154       151       155       154       151       156
+       155       151       156       151       152       153       158       157       160
+       158       157       161       158       157       162       160       157       161
+       160       157       162       161       157       162       157       158       159
+       164       163       166       164       163       167       164       163       168
+       166       163       167       166       163       168       167       163       168
+       163       164       165       170       169       172       170       169       173
+       170       169       174       172       169       173       172       169       174
+       173       169       174       169       170       171       176       175       178
+       176       175       179       176       175       180       178       175       179
+       178       175       180       179       175       180       175       176       177
+       182       181       184       182       181       185       182       181       186
+       184       181       185       184       181       186       185       181       186
+       181       182       183       188       187       190       188       187       191
+       188       187       192       190       187       191       190       187       192
+       191       187       192       187       188       189       194       193       196
+       194       193       197       194       193       198       196       193       197
+       196       193       198       197       193       198       193       194       195
+       200       199       202       200       199       203       200       199       204
+       202       199       203       202       199       204       203       199       204
+       199       200       201       206       205       208       206       205       209
+       206       205       210       208       205       209       208       205       210
+       209       205       210       205       206       207       212       211       214
+       212       211       215       212       211       216       214       211       215
+       214       211       216       215       211       216       211       212       213
+       218       217       220       218       217       221       218       217       222
+       220       217       221       220       217       222       221       217       222
+       217       218       219       224       223       226       224       223       227
+       224       223       228       226       223       227       226       223       228
+       227       223       228       223       224       225       230       229       232
+       230       229       233       230       229       234       232       229       233
+       232       229       234       233       229       234       229       230       231
+       236       235       238       236       235       239       236       235       240
+       238       235       239       238       235       240       239       235       240
+       235       236       237       242       241       244       242       241       245
+       242       241       246       244       241       245       244       241       246
+       245       241       246       241       242       243       248       247       250
+       248       247       251       248       247       252       250       247       251
+       250       247       252       251       247       252       247       248       249
+       254       253       256       254       253       257       254       253       258
+       256       253       257       256       253       258       257       253       258
+       253       254       255       260       259       262       260       259       263
+       260       259       264       262       259       263       262       259       264
+       263       259       264       259       260       261       266       265       268
+       266       265       269       266       265       270       268       265       269
+       268       265       270       269       265       270       265       266       267
+       272       271       274       272       271       275       272       271       276
+       274       271       275       274       271       276       275       271       276
+       271       272       273       278       277       280       278       277       281
+       278       277       282       280       277       281       280       277       282
+       281       277       282       277       278       279       284       283       286
+       284       283       287       284       283       288       286       283       287
+       286       283       288       287       283       288       283       284       285
+       290       289       292       290       289       293       290       289       294
+       292       289       293       292       289       294       293       289       294
+       289       290       291       296       295       298       296       295       299
+       296       295       300       298       295       299       298       295       300
+       299       295       300       295       296       297       302       301       304
+       302       301       305       302       301       306       304       301       305
+       304       301       306       305       301       306       301       302       303
+       308       307       310       308       307       311       308       307       312
+       310       307       311       310       307       312       311       307       312
+       307       308       309       314       313       316       314       313       317
+       314       313       318       316       313       317       316       313       318
+       317       313       318       313       314       315       320       319       322
+       320       319       323       320       319       324       322       319       323
+       322       319       324       323       319       324       319       320       321
+       326       325       328       326       325       329       326       325       330
+       328       325       329       328       325       330       329       325       330
+       325       326       327       332       331       334       332       331       335
+       332       331       336       334       331       335       334       331       336
+       335       331       336       331       332       333       338       337       340
+       338       337       341       338       337       342       340       337       341
+       340       337       342       341       337       342       337       338       339
+       344       343       346       344       343       347       344       343       348
+       346       343       347       346       343       348       347       343       348
+       343       344       345       350       349       352       350       349       353
+       350       349       354       352       349       353       352       349       354
+       353       349       354       349       350       351       356       355       358
+       356       355       359       356       355       360       358       355       359
+       358       355       360       359       355       360       355       356       357
+       362       361       364       362       361       365       362       361       366
+       364       361       365       364       361       366       365       361       366
+       361       362       363       368       367       370       368       367       371
+       368       367       372       370       367       371       370       367       372
+       371       367       372       367       368       369       374       373       376
+       374       373       377       374       373       378       376       373       377
+       376       373       378       377       373       378       373       374       375
+       380       379       382       380       379       383       380       379       384
+       382       379       383       382       379       384       383       379       384
+       379       380       381       386       385       388       386       385       389
+       386       385       390       388       385       389       388       385       390
+       389       385       390       385       386       387       392       391       394
+       392       391       395       392       391       396       394       391       395
+       394       391       396       395       391       396       391       392       393
+       398       397       400       398       397       401       398       397       402
+       400       397       401       400       397       402       401       397       402
+       397       398       399       404       403       406       404       403       407
+       404       403       408       406       403       407       406       403       408
+       407       403       408       403       404       405       410       409       412
+       410       409       413       410       409       414       412       409       413
+       412       409       414       413       409       414       409       410       411
+       416       415       418       416       415       419       416       415       420
+       418       415       419       418       415       420       419       415       420
+       415       416       417       422       421       424       422       421       425
+       422       421       426       424       421       425       424       421       426
+       425       421       426       421       422       423       428       427       430
+       428       427       431       428       427       432       430       427       431
+       430       427       432       431       427       432       427       428       429
+       434       433       436       434       433       437       434       433       438
+       436       433       437       436       433       438       437       433       438
+       433       434       435       440       439       442       440       439       443
+       440       439       444       442       439       443       442       439       444
+       443       439       444       439       440       441       446       445       448
+       446       445       449       446       445       450       448       445       449
+       448       445       450       449       445       450       445       446       447
+       452       451       454       452       451       455       452       451       456
+       454       451       455       454       451       456       455       451       456
+       451       452       453       458       457       460       458       457       461
+       458       457       462       460       457       461       460       457       462
+       461       457       462       457       458       459       464       463       466
+       464       463       467       464       463       468       466       463       467
+       466       463       468       467       463       468       463       464       465
+       470       469       472       470       469       473       470       469       474
+       472       469       473       472       469       474       473       469       474
+       469       470       471       476       475       478       476       475       479
+       476       475       480       478       475       479       478       475       480
+       479       475       480       475       476       477       482       481       484
+       482       481       485       482       481       486       484       481       485
+       484       481       486       485       481       486       481       482       483
+       488       487       490       488       487       491       488       487       492
+       490       487       491       490       487       492       491       487       492
+       487       488       489       494       493       496       494       493       497
+       494       493       498       496       493       497       496       493       498
+       497       493       498       493       494       495       500       499       502
+       500       499       503       500       499       504       502       499       503
+       502       499       504       503       499       504       499       500       501
+       506       505       508       506       505       509       506       505       510
+       508       505       509       508       505       510       509       505       510
+       505       506       507       512       511       514       512       511       515
+       512       511       516       514       511       515       514       511       516
+       515       511       516       511       512       513       518       517       520
+       518       517       521       518       517       522       520       517       521
+       520       517       522       521       517       522       517       518       519
+       524       523       526       524       523       527       524       523       528
+       526       523       527       526       523       528       527       523       528
+       523       524       525       530       529       532       530       529       533
+       530       529       534       532       529       533       532       529       534
+       533       529       534       529       530       531       536       535       538
+       536       535       539       536       535       540       538       535       539
+       538       535       540       539       535       540       535       536       537
+       542       541       544       542       541       545       542       541       546
+       544       541       545       544       541       546       545       541       546
+       541       542       543       548       547       550       548       547       551
+       548       547       552       550       547       551       550       547       552
+       551       547       552       547       548       549       554       553       556
+       554       553       557       554       553       558       556       553       557
+       556       553       558       557       553       558       553       554       555
+       560       559       562       560       559       563       560       559       564
+       562       559       563       562       559       564       563       559       564
+       559       560       561       566       565       568       566       565       569
+       566       565       570       568       565       569       568       565       570
+       569       565       570       565       566       567       572       571       574
+       572       571       575       572       571       576       574       571       575
+       574       571       576       575       571       576       571       572       573
+       578       577       580       578       577       581       578       577       582
+       580       577       581       580       577       582       581       577       582
+       577       578       579       584       583       586       584       583       587
+       584       583       588       586       583       587       586       583       588
+       587       583       588       583       584       585       590       589       592
+       590       589       593       590       589       594       592       589       593
+       592       589       594       593       589       594       589       590       591
+       596       595       598       596       595       599       596       595       600
+       598       595       599       598       595       600       599       595       600
+       595       596       597
 
-        30 !NPHI: dihedrals
+       300 !NPHI: dihedrals
          3         2         1         4         3         2         1         5
          3         2         1         6         9         8         7        10
          9         8         7        11         9         8         7        12
@@ -123,19 +985,198 @@ PSF EXT CMAP XPLOR
         51        50        49        52        51        50        49        53
         51        50        49        54        57        56        55        58
         57        56        55        59        57        56        55        60
+        63        62        61        64        63        62        61        65
+        63        62        61        66        69        68        67        70
+        69        68        67        71        69        68        67        72
+        75        74        73        76        75        74        73        77
+        75        74        73        78        81        80        79        82
+        81        80        79        83        81        80        79        84
+        87        86        85        88        87        86        85        89
+        87        86        85        90        93        92        91        94
+        93        92        91        95        93        92        91        96
+        99        98        97       100        99        98        97       101
+        99        98        97       102       105       104       103       106
+       105       104       103       107       105       104       103       108
+       111       110       109       112       111       110       109       113
+       111       110       109       114       117       116       115       118
+       117       116       115       119       117       116       115       120
+       123       122       121       124       123       122       121       125
+       123       122       121       126       129       128       127       130
+       129       128       127       131       129       128       127       132
+       135       134       133       136       135       134       133       137
+       135       134       133       138       141       140       139       142
+       141       140       139       143       141       140       139       144
+       147       146       145       148       147       146       145       149
+       147       146       145       150       153       152       151       154
+       153       152       151       155       153       152       151       156
+       159       158       157       160       159       158       157       161
+       159       158       157       162       165       164       163       166
+       165       164       163       167       165       164       163       168
+       171       170       169       172       171       170       169       173
+       171       170       169       174       177       176       175       178
+       177       176       175       179       177       176       175       180
+       183       182       181       184       183       182       181       185
+       183       182       181       186       189       188       187       190
+       189       188       187       191       189       188       187       192
+       195       194       193       196       195       194       193       197
+       195       194       193       198       201       200       199       202
+       201       200       199       203       201       200       199       204
+       207       206       205       208       207       206       205       209
+       207       206       205       210       213       212       211       214
+       213       212       211       215       213       212       211       216
+       219       218       217       220       219       218       217       221
+       219       218       217       222       225       224       223       226
+       225       224       223       227       225       224       223       228
+       231       230       229       232       231       230       229       233
+       231       230       229       234       237       236       235       238
+       237       236       235       239       237       236       235       240
+       243       242       241       244       243       242       241       245
+       243       242       241       246       249       248       247       250
+       249       248       247       251       249       248       247       252
+       255       254       253       256       255       254       253       257
+       255       254       253       258       261       260       259       262
+       261       260       259       263       261       260       259       264
+       267       266       265       268       267       266       265       269
+       267       266       265       270       273       272       271       274
+       273       272       271       275       273       272       271       276
+       279       278       277       280       279       278       277       281
+       279       278       277       282       285       284       283       286
+       285       284       283       287       285       284       283       288
+       291       290       289       292       291       290       289       293
+       291       290       289       294       297       296       295       298
+       297       296       295       299       297       296       295       300
+       303       302       301       304       303       302       301       305
+       303       302       301       306       309       308       307       310
+       309       308       307       311       309       308       307       312
+       315       314       313       316       315       314       313       317
+       315       314       313       318       321       320       319       322
+       321       320       319       323       321       320       319       324
+       327       326       325       328       327       326       325       329
+       327       326       325       330       333       332       331       334
+       333       332       331       335       333       332       331       336
+       339       338       337       340       339       338       337       341
+       339       338       337       342       345       344       343       346
+       345       344       343       347       345       344       343       348
+       351       350       349       352       351       350       349       353
+       351       350       349       354       357       356       355       358
+       357       356       355       359       357       356       355       360
+       363       362       361       364       363       362       361       365
+       363       362       361       366       369       368       367       370
+       369       368       367       371       369       368       367       372
+       375       374       373       376       375       374       373       377
+       375       374       373       378       381       380       379       382
+       381       380       379       383       381       380       379       384
+       387       386       385       388       387       386       385       389
+       387       386       385       390       393       392       391       394
+       393       392       391       395       393       392       391       396
+       399       398       397       400       399       398       397       401
+       399       398       397       402       405       404       403       406
+       405       404       403       407       405       404       403       408
+       411       410       409       412       411       410       409       413
+       411       410       409       414       417       416       415       418
+       417       416       415       419       417       416       415       420
+       423       422       421       424       423       422       421       425
+       423       422       421       426       429       428       427       430
+       429       428       427       431       429       428       427       432
+       435       434       433       436       435       434       433       437
+       435       434       433       438       441       440       439       442
+       441       440       439       443       441       440       439       444
+       447       446       445       448       447       446       445       449
+       447       446       445       450       453       452       451       454
+       453       452       451       455       453       452       451       456
+       459       458       457       460       459       458       457       461
+       459       458       457       462       465       464       463       466
+       465       464       463       467       465       464       463       468
+       471       470       469       472       471       470       469       473
+       471       470       469       474       477       476       475       478
+       477       476       475       479       477       476       475       480
+       483       482       481       484       483       482       481       485
+       483       482       481       486       489       488       487       490
+       489       488       487       491       489       488       487       492
+       495       494       493       496       495       494       493       497
+       495       494       493       498       501       500       499       502
+       501       500       499       503       501       500       499       504
+       507       506       505       508       507       506       505       509
+       507       506       505       510       513       512       511       514
+       513       512       511       515       513       512       511       516
+       519       518       517       520       519       518       517       521
+       519       518       517       522       525       524       523       526
+       525       524       523       527       525       524       523       528
+       531       530       529       532       531       530       529       533
+       531       530       529       534       537       536       535       538
+       537       536       535       539       537       536       535       540
+       543       542       541       544       543       542       541       545
+       543       542       541       546       549       548       547       550
+       549       548       547       551       549       548       547       552
+       555       554       553       556       555       554       553       557
+       555       554       553       558       561       560       559       562
+       561       560       559       563       561       560       559       564
+       567       566       565       568       567       566       565       569
+       567       566       565       570       573       572       571       574
+       573       572       571       575       573       572       571       576
+       579       578       577       580       579       578       577       581
+       579       578       577       582       585       584       583       586
+       585       584       583       587       585       584       583       588
+       591       590       589       592       591       590       589       593
+       591       590       589       594       597       596       595       598
+       597       596       595       599       597       596       595       600
 
          0 !NIMPHI: impropers
 
 
-        10 !NDON: donors
+       100 !NDON: donors
          2         3         8         9        14        15        20        21
         26        27        32        33        38        39        44        45
-        50        51        56        57
+        50        51        56        57        62        63        68        69
+        74        75        80        81        86        87        92        93
+        98        99       104       105       110       111       116       117
+       122       123       128       129       134       135       140       141
+       146       147       152       153       158       159       164       165
+       170       171       176       177       182       183       188       189
+       194       195       200       201       206       207       212       213
+       218       219       224       225       230       231       236       237
+       242       243       248       249       254       255       260       261
+       266       267       272       273       278       279       284       285
+       290       291       296       297       302       303       308       309
+       314       315       320       321       326       327       332       333
+       338       339       344       345       350       351       356       357
+       362       363       368       369       374       375       380       381
+       386       387       392       393       398       399       404       405
+       410       411       416       417       422       423       428       429
+       434       435       440       441       446       447       452       453
+       458       459       464       465       470       471       476       477
+       482       483       488       489       494       495       500       501
+       506       507       512       513       518       519       524       525
+       530       531       536       537       542       543       548       549
+       554       555       560       561       566       567       572       573
+       578       579       584       585       590       591       596       597
 
-        10 !NACC: acceptors
+       100 !NACC: acceptors
          2         0         8         0        14         0        20         0
         26         0        32         0        38         0        44         0
-        50         0        56         0
+        50         0        56         0        62         0        68         0
+        74         0        80         0        86         0        92         0
+        98         0       104         0       110         0       116         0
+       122         0       128         0       134         0       140         0
+       146         0       152         0       158         0       164         0
+       170         0       176         0       182         0       188         0
+       194         0       200         0       206         0       212         0
+       218         0       224         0       230         0       236         0
+       242         0       248         0       254         0       260         0
+       266         0       272         0       278         0       284         0
+       290         0       296         0       302         0       308         0
+       314         0       320         0       326         0       332         0
+       338         0       344         0       350         0       356         0
+       362         0       368         0       374         0       380         0
+       386         0       392         0       398         0       404         0
+       410         0       416         0       422         0       428         0
+       434         0       440         0       446         0       452         0
+       458         0       464         0       470         0       476         0
+       482         0       488         0       494         0       500         0
+       506         0       512         0       518         0       524         0
+       530         0       536         0       542         0       548         0
+       554         0       560         0       566         0       572         0
+       578         0       584         0       590         0       596         0
 
          0 !NNB
 
@@ -146,13 +1187,110 @@ PSF EXT CMAP XPLOR
          0         0         0         0         0         0         0         0
          0         0         0         0         0         0         0         0
          0         0         0         0         0         0         0         0
-         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
 
-        10         0 !NGRP NST2
+       100         0 !NGRP NST2
          0         1         0         6         1         0        12         1         0
         18         1         0        24         1         0        30         1         0
         36         1         0        42         1         0        48         1         0
-        54         1         0
+        54         1         0        60         1         0        66         1         0
+        72         1         0        78         1         0        84         1         0
+        90         1         0        96         1         0       102         1         0
+       108         1         0       114         1         0       120         1         0
+       126         1         0       132         1         0       138         1         0
+       144         1         0       150         1         0       156         1         0
+       162         1         0       168         1         0       174         1         0
+       180         1         0       186         1         0       192         1         0
+       198         1         0       204         1         0       210         1         0
+       216         1         0       222         1         0       228         1         0
+       234         1         0       240         1         0       246         1         0
+       252         1         0       258         1         0       264         1         0
+       270         1         0       276         1         0       282         1         0
+       288         1         0       294         1         0       300         1         0
+       306         1         0       312         1         0       318         1         0
+       324         1         0       330         1         0       336         1         0
+       342         1         0       348         1         0       354         1         0
+       360         1         0       366         1         0       372         1         0
+       378         1         0       384         1         0       390         1         0
+       396         1         0       402         1         0       408         1         0
+       414         1         0       420         1         0       426         1         0
+       432         1         0       438         1         0       444         1         0
+       450         1         0       456         1         0       462         1         0
+       468         1         0       474         1         0       480         1         0
+       486         1         0       492         1         0       498         1         0
+       504         1         0       510         1         0       516         1         0
+       522         1         0       528         1         0       534         1         0
+       540         1         0       546         1         0       552         1         0
+       558         1         0       564         1         0       570         1         0
+       576         1         0       582         1         0       588         1         0
+       594         1         0
 
          0         0 !NUMLP NUMLPH
 
