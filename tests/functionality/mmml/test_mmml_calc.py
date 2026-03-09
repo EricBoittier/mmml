@@ -23,6 +23,7 @@ def _resolve_ckpt_path() -> Path | None:
 		candidates.append(Path(ckpt_env))
 	candidates.extend(
 		[
+			Path("ckpts_json/DESdimers_params.json"),
 			Path("ckpts_json/DES"),
 			Path("ckpts_json"),
 			Path("mmml/physnetjax/ckpts"),
