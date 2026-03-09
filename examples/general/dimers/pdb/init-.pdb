@@ -1,34 +1,34 @@
 REMARK  EXECUTING CHARMM SCRIPT FROM PYTHON                                           
-REMARK   DATE:     3/ 9/26     18:22:55      CREATED BY USER: ericb                   
-ATOM      1  CB  MEOH    1      -6.805   1.708   5.313  1.00  0.00      SYS 
-ATOM      2  OG  MEOH    1      -6.681   1.266   3.962  1.00  0.00      SYS 
-ATOM      3  HG1 MEOH    1      -7.552   0.986   3.657  1.00  0.00      SYS 
-ATOM      4  HB1 MEOH    1      -5.812   2.035   5.688  1.00  0.00      SYS 
-ATOM      5  HB2 MEOH    1      -7.174   0.881   5.961  1.00  0.00      SYS 
-ATOM      6  HB3 MEOH    1      -7.509   2.566   5.377  1.00  0.00      SYS 
-ATOM      7  CB  MEOH    2      -1.272  -3.907  -0.294  1.00  0.00      SYS 
-ATOM      8  OG  MEOH    2      -1.098  -5.024  -1.165  1.00  0.00      SYS 
-ATOM      9  HG1 MEOH    2      -1.362  -5.819  -0.689  1.00  0.00      SYS 
-ATOM     10  HB1 MEOH    2      -0.972  -2.976  -0.821  1.00  0.00      SYS 
-ATOM     11  HB2 MEOH    2      -0.640  -4.020   0.615  1.00  0.00      SYS 
-ATOM     12  HB3 MEOH    2      -2.338  -3.815   0.009  1.00  0.00      SYS 
-ATOM     13  CB  MEOH    3      -0.980  -7.468  -3.745  1.00  0.00      SYS 
-ATOM     14  OG  MEOH    3      -2.385  -7.325  -3.946  1.00  0.00      SYS 
-ATOM     15  HG1 MEOH    3      -2.618  -7.777  -4.766  1.00  0.00      SYS 
-ATOM     16  HB1 MEOH    3      -0.686  -6.953  -2.806  1.00  0.00      SYS 
-ATOM     17  HB2 MEOH    3      -0.417  -7.013  -4.590  1.00  0.00      SYS 
-ATOM     18  HB3 MEOH    3      -0.709  -8.543  -3.660  1.00  0.00      SYS 
-ATOM     19  CB  MEOH    4      -5.018  -3.972  -1.038  1.00  0.00      SYS 
-ATOM     20  OG  MEOH    4      -4.852  -2.570  -0.831  1.00  0.00      SYS 
-ATOM     21  HG1 MEOH    4      -5.371  -2.105  -1.498  1.00  0.00      SYS 
-ATOM     22  HB1 MEOH    4      -4.427  -4.531  -0.282  1.00  0.00      SYS 
-ATOM     23  HB2 MEOH    4      -4.660  -4.261  -2.052  1.00  0.00      SYS 
-ATOM     24  HB3 MEOH    4      -6.088  -4.255  -0.933  1.00  0.00      SYS 
-ATOM     25  CB  MEOH    5       4.174   3.977   0.811  1.00  0.00      SYS 
-ATOM     26  OG  MEOH    5       5.030   4.938   1.427  1.00  0.00      SYS 
-ATOM     27  HG1 MEOH    5       5.066   5.716   0.858  1.00  0.00      SYS 
-ATOM     28  HB1 MEOH    5       4.118   3.069   1.448  1.00  0.00      SYS 
-ATOM     29  HB2 MEOH    5       4.569   3.686  -0.188  1.00  0.00      SYS 
-ATOM     30  HB3 MEOH    5       3.148   4.392   0.693  1.00  0.00      SYS 
+REMARK   DATE:     3/ 9/26     18:57:55      CREATED BY USER: ericb                   
+ATOM      1  CB  MEOH    1       2.470   3.006  -0.116  1.00  0.00      SYS 
+ATOM      2  OG  MEOH    1       3.135   3.439  -1.299  1.00  0.00      SYS 
+ATOM      3  HG1 MEOH    1       4.011   3.747  -1.056  1.00  0.00      SYS 
+ATOM      4  HB1 MEOH    1       2.373   3.846   0.609  1.00  0.00      SYS 
+ATOM      5  HB2 MEOH    1       1.450   2.641  -0.371  1.00  0.00      SYS 
+ATOM      6  HB3 MEOH    1       3.033   2.171   0.365  1.00  0.00      SYS 
+ATOM      7  CB  MEOH    2       1.905  -7.155  -4.635  1.00  0.00      SYS 
+ATOM      8  OG  MEOH    2       1.249  -6.814  -5.853  1.00  0.00      SYS 
+ATOM      9  HG1 MEOH    2       1.908  -6.787  -6.552  1.00  0.00      SYS 
+ATOM     10  HB1 MEOH    2       2.676  -6.394  -4.379  1.00  0.00      SYS 
+ATOM     11  HB2 MEOH    2       1.161  -7.196  -3.808  1.00  0.00      SYS 
+ATOM     12  HB3 MEOH    2       2.392  -8.155  -4.721  1.00  0.00      SYS 
+ATOM     13  CB  MEOH    3       5.292  -2.507   5.992  1.00  0.00      SYS 
+ATOM     14  OG  MEOH    3       4.318  -3.206   5.223  1.00  0.00      SYS 
+ATOM     15  HG1 MEOH    3       4.586  -4.126   5.163  1.00  0.00      SYS 
+ATOM     16  HB1 MEOH    3       6.292  -2.564   5.505  1.00  0.00      SYS 
+ATOM     17  HB2 MEOH    3       5.003  -1.436   6.080  1.00  0.00      SYS 
+ATOM     18  HB3 MEOH    3       5.362  -2.938   7.019  1.00  0.00      SYS 
+ATOM     19  CB  MEOH    4      -8.144  -2.022   5.261  1.00  0.00      SYS 
+ATOM     20  OG  MEOH    4      -9.219  -2.485   6.073  1.00  0.00      SYS 
+ATOM     21  HG1 MEOH    4      -9.907  -1.814   6.072  1.00  0.00      SYS 
+ATOM     22  HB1 MEOH    4      -7.727  -1.073   5.666  1.00  0.00      SYS 
+ATOM     23  HB2 MEOH    4      -7.333  -2.785   5.242  1.00  0.00      SYS 
+ATOM     24  HB3 MEOH    4      -8.491  -1.852   4.214  1.00  0.00      SYS 
+ATOM     25  CB  MEOH    5      -5.118  -2.075  -2.314  1.00  0.00      SYS 
+ATOM     26  OG  MEOH    5      -5.461  -1.130  -1.305  1.00  0.00      SYS 
+ATOM     27  HG1 MEOH    5      -6.304  -0.733  -1.538  1.00  0.00      SYS 
+ATOM     28  HB1 MEOH    5      -5.024  -1.575  -3.304  1.00  0.00      SYS 
+ATOM     29  HB2 MEOH    5      -4.144  -2.552  -2.065  1.00  0.00      SYS 
+ATOM     30  HB3 MEOH    5      -5.895  -2.874  -2.380  1.00  0.00      SYS 
 TER      31      MEOH     5
 END
