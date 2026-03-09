@@ -20,13 +20,6 @@ import numpy as np
 import argparse
 
 
-def _should_skip_energy_show(args) -> bool:
-    """True if CHARMM energy.show() should be skipped to avoid segfault."""
-    if getattr(args, "skip_energy_show", False):
-        return True
-    from mmml.pycharmmInterface.import_pycharmm import should_skip_charmm_energy_show
-    return should_skip_charmm_energy_show()
-
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -60,10 +53,7 @@ def main_loop(args):
     reset_block()
     reset_block_no_internal()
     reset_block()
-    if not _should_skip_energy_show(args):
-        energy.show()
-    else:
-        print("Skipping energy.show() (--skip-energy-show, SKIP_CHARMM_ENERGY_SHOW, or SLURM).")
+
     return atoms
 
 def main():
