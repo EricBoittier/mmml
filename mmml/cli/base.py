@@ -125,11 +125,6 @@ def resolve_checkpoint_paths(arg: Path | str | None) -> Tuple[Path, Path]:
     Supports both orbax checkpoints (manifest.ocdbt) and JSON checkpoints
     (params.json or a .json file from orbax_to_json).
     """
-    try:
-        from mmml.models.physnetjax.physnetjax.restart.restart import get_last
-    except ModuleNotFoundError:
-        from mmml.physnetjax.physnetjax.restart.restart import get_last
-
     # Convert string to Path if needed
     if arg is None:
         ckpt_env = os.environ.get("MMML_CKPT")
@@ -163,7 +158,25 @@ def resolve_checkpoint_paths(arg: Path | str | None) -> Tuple[Path, Path]:
         sys.exit(f"Checkpoint path is not a directory or JSON file: {candidate}")
 
     def last_dir(path: Path) -> Path:
-        return Path(get_last(str(path)))
+        dirs = [d for d in path.iterdir() if d.is_dir() and "tmp" not in d.name]
+        if not dirs:
+            raise FileNotFoundError(
+                f"No checkpoint directories found under: {path}"
+            )
+
+        def _epoch_key(d: Path) -> tuple[int, str]:
+            name = d.name
+            if name.startswith("epoch-"):
+                try:
+                    return (int(name.split("epoch-")[-1]), name)
+                except ValueError:
+                    pass
+            return (-1, name)
+
+        epoch_dirs = [d for d in dirs if d.name.startswith("epoch-")]
+        if epoch_dirs:
+            return max(epoch_dirs, key=_epoch_key)
+        return max(dirs, key=lambda d: d.name)
 
     # Allow pointing directly at an epoch directory containing manifest files
     if (candidate / "manifest.ocdbt").exists():
