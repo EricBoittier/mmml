@@ -22,7 +22,23 @@ def _can_import(name: str) -> bool:
 
 def _get_ckpt():
     ckpt_env = os.environ.get("MMML_CKPT")
-    return Path(ckpt_env) if ckpt_env else Path("mmml/physnetjax/ckpts")
+    candidates = []
+    if ckpt_env:
+        candidates.append(Path(ckpt_env))
+    candidates.extend(
+        [
+            Path("mmml/models/physnetjax/ckpts/DESdimers"),
+            Path("mmml/models/physnetjax/ckpts/DESdimers/epoch-1985"),
+            Path("mmml/models/physnetjax/ckpts"),
+            Path("ckpts_json/DESdimers_params.json"),
+            Path("ckpts_json"),
+            Path("mmml/physnetjax/ckpts"),
+        ]
+    )
+    for ckpt in candidates:
+        if ckpt.exists():
+            return ckpt
+    return None
 
 
 @pytest.mark.skipif(
@@ -48,7 +64,7 @@ def test_ase_jaxmd_pbc_energy_forces_consistency():
         pytest.skip("ase not available in this environment")
 
     ckpt = _get_ckpt()
-    if not ckpt.exists():
+    if ckpt is None:
         pytest.skip("No checkpoints present for ML model")
 
     import jax
