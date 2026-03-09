@@ -466,7 +466,8 @@ def build_mm_energy_forces_fn(
             kwargs = {} if box is None else {"box": jnp.asarray(box)}
             nbrs = nbrs.update(R, **kwargs)
             for _ in range(3):
-                if not bool(np.asarray(nbrs.did_buffer_overflow)):
+                overflow = np.asarray(jax.device_get(nbrs.did_buffer_overflow))
+                if not (bool(overflow) if overflow.ndim == 0 else bool(overflow.any())):
                     break
                 nbrs = _neighbor_fn.allocate(R, **kwargs)
                 nbrs = nbrs.update(R, **kwargs)
