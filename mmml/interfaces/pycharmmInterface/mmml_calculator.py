@@ -636,12 +636,15 @@ def setup_calculator(
         complementary_handoff=True,
         sig_scale=sig_scale,
         ep_scale=ep_scale,
+        pbc_cell_override=None,
     ):
         """Creates functions for calculating MM energies and forces with switching.
 
         Supports heterogeneous monomer sizes via the outer ``atoms_per_monomer_list``
-        and ``monomer_offsets``.
+        and ``monomer_offsets``. When pbc_cell_override is provided (e.g. for NPT),
+        use it instead of the closure's pbc_cell.
         """
+        cell_for_build = pbc_cell_override if pbc_cell_override is not None else pbc_cell
         result_jaxmd = build_mm_energy_forces_fn(
             R,
             total_atoms=total_atoms,
@@ -656,7 +659,7 @@ def setup_calculator(
             ep_scale=ep_scale,
             sig_scale=sig_scale,
             at_codes_override=at_codes_override,
-            pbc_cell=pbc_cell,
+            pbc_cell=cell_for_build,
             max_pairs=max_pairs,
             cell_list_safety_factor=cell_list_safety_factor,
             use_smooth_mic=use_smooth_mic,
@@ -678,12 +681,12 @@ def setup_calculator(
                 complementary_handoff=complementary_handoff,
                 ep_scale=ep_scale,
                 sig_scale=sig_scale,
-                at_codes_override=at_codes_override,
-                pbc_cell=pbc_cell,
-                max_pairs=max_pairs,
-                cell_list_safety_factor=cell_list_safety_factor,
-                use_smooth_mic=use_smooth_mic,
-                use_jax_md_neighbor_list=False,
+            at_codes_override=at_codes_override,
+            pbc_cell=cell_for_build,
+            max_pairs=max_pairs,
+            cell_list_safety_factor=cell_list_safety_factor,
+            use_smooth_mic=use_smooth_mic,
+            use_jax_md_neighbor_list=False,
                 debug=debug,
             )
             return (mm_fn_jaxmd, mm_fn_cell), update_fn
@@ -725,6 +728,7 @@ def setup_calculator(
         debug: bool = False,
         mm_pair_idx: Optional[Array] = None,
         mm_pair_mask: Optional[Array] = None,
+        box: Optional[Array] = None,
     ) -> ModelOutput:
         """Calculates energy and forces using combined ML/MM potential.
         
@@ -875,6 +879,7 @@ def setup_calculator(
                 debug=debug,
                 mm_pair_idx=mm_pair_idx,
                 mm_pair_mask=mm_pair_mask,
+                box=box,
             )
             # Preserve separate MM terms and add to totals instead of overwriting
             mm_E = mm_out.get("mm_E", 0)
@@ -1206,12 +1211,14 @@ def setup_calculator(
         debug: bool,
         mm_pair_idx: Optional[Array] = None,
         mm_pair_mask: Optional[Array] = None,
+        box: Optional[Array] = None,
     ) -> Dict[str, Array]:
         """Calculate MM energy and force contributions (converted to eV).
 
         Uses the pre-computed MM function from ``_cached_mm_fn`` (built
         outside JIT by ``_ensure_mm_fn``) so that cell-list pair generation
-        never runs inside a JAX trace.
+        never runs inside a JAX trace. When box is provided (NPT), rebuild
+        with that box (no cache).
         """
         
         # Ensure positions are finite
@@ -1221,7 +1228,7 @@ def setup_calculator(
         if isinstance(mm_fn_val, tuple):
             mm_fn_jaxmd, mm_fn_cell = mm_fn_val
             if mm_pair_idx is not None and mm_pair_mask is not None:
-                mm_E, mm_grad = mm_fn_jaxmd(positions, mm_pair_idx, mm_pair_mask)
+                mm_E, mm_grad = mm_fn_jaxmd(positions, mm_pair_idx, mm_pair_mask, box_override=box)
             else:
                 mm_E, mm_grad = mm_fn_cell(positions)
         else:
