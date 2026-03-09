@@ -56,19 +56,18 @@ def _dimer_permutations(n_mol: int) -> List[Tuple[int, int]]:
 
 
 def _box_to_cell_3x3(box: Array) -> Array:
-    """Convert box (scalar, (1,), (3,), or (3,3)) to 3x3 cell matrix for MIC/frac_coords."""
+    """Convert box (scalar, (1,), (3,), or (3,3)) to 3x3 cell matrix for MIC/frac_coords.
+    JIT-safe: uses only JAX ops, no Python float() on traced values."""
     b = jnp.asarray(box)
-    if b.ndim == 0:
-        L = float(b)
-        return jnp.diag(jnp.array([L, L, L], dtype=b.dtype))
-    if b.shape == (1,):
-        L = float(b[0])
-        return jnp.diag(jnp.array([L, L, L], dtype=b.dtype))
-    if b.shape == (3,):
-        return jnp.diag(jnp.asarray(b, dtype=b.dtype))
-    if b.shape == (3, 3):
-        return jnp.asarray(b, dtype=b.dtype)
-    raise ValueError(f"box must be scalar, (1,), (3,), or (3,3); got shape {b.shape}")
+    # L for isotropic: first element (works for (), (1,), (3,), (3,3))
+    L = b.reshape(-1)[0]
+    diag_iso = jnp.diag(jnp.broadcast_to(L, (3,)))
+    diag_3 = jnp.diag(b) if b.ndim == 1 and b.shape[0] == 3 else diag_iso
+    return jnp.where(
+        b.ndim == 2,
+        jnp.asarray(b, dtype=b.dtype),
+        jnp.where(b.ndim == 1, diag_3, diag_iso),
+    )
 
 
 def build_mm_energy_forces_fn(
