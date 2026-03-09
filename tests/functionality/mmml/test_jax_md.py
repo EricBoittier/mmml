@@ -9,7 +9,7 @@ from pathlib import Path
 import os
 import pytest
 import numpy as np
-
+import e3x
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 
