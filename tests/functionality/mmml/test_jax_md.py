@@ -105,8 +105,9 @@ def test_jax_md_fire_minimization_smoke():
     )
 
     key = jax.random.PRNGKey(42)
+    # Use spread-out initial positions to avoid overlapping atoms and NaN from repulsion
     R0 = jnp.asarray(
-        jax.random.uniform(key, (n_atoms, 3), minval=0.0, maxval=10.0),
+        jax.random.uniform(key, (n_atoms, 3), minval=2.0, maxval=8.0),
         dtype=jnp.float32,
     )
 
@@ -125,7 +126,7 @@ def test_jax_md_fire_minimization_smoke():
 
     displacement, shift = space.free()
     init_fn, step_fn = jax_md.minimize.fire_descent(
-        jax_md_energy_fn, shift, dt_start=0.001, dt_max=0.001
+        jax_md_energy_fn, shift, dt_start=0.01, dt_max=0.01
     )
     step_fn = jit(step_fn)
 
@@ -194,8 +195,9 @@ def test_jax_md_nve_few_steps():
     )
 
     key = jax.random.PRNGKey(123)
+    # Use spread-out initial positions to avoid overlapping atoms and NaN from repulsion
     R0 = jnp.asarray(
-        jax.random.uniform(key, (n_atoms, 3), minval=0.0, maxval=10.0),
+        jax.random.uniform(key, (n_atoms, 3), minval=2.0, maxval=8.0),
         dtype=jnp.float32,
     )
 
