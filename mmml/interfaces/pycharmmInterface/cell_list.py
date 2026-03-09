@@ -40,18 +40,25 @@ def _wrap_groups_np(
     positions: np.ndarray,
     cell_matrix: np.ndarray,
     monomer_offsets: np.ndarray,
+    masses: Optional[np.ndarray] = None,
 ) -> np.ndarray:
     """Wrap each monomer as a unit into the primary cell (keeps molecules intact).
 
-    For each monomer: wrap COM to [0,1)^3, apply same shift to all atoms in group.
+    For each monomer: wrap center of mass to [0,1)^3, apply same shift to all atoms in group.
+    Uses mass-weighted COM when masses provided; otherwise uses mean of positions.
     """
     R = np.asarray(positions, dtype=np.float64).copy()
     inv_cell = np.linalg.inv(cell_matrix)
     n_monomers = len(monomer_offsets) - 1
+    m = np.asarray(masses, dtype=np.float64) if masses is not None else None
     for mi in range(n_monomers):
         start, end = int(monomer_offsets[mi]), int(monomer_offsets[mi + 1])
         g = np.arange(start, end)
-        com = R[g].mean(axis=0)
+        if m is not None:
+            m_g = m[g].reshape(-1, 1)
+            com = (R[g] * m_g).sum(axis=0) / m_g.sum()
+        else:
+            com = R[g].mean(axis=0)
         frac_com = (inv_cell.T @ com)  # fractional coords of COM
         frac_wrapped = frac_com - np.floor(frac_com)
         com_wrapped = frac_wrapped @ cell_matrix

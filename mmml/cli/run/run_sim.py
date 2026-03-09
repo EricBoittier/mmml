@@ -324,6 +324,7 @@ def run(args: argparse.Namespace) -> int:
         from mmml.interfaces.pycharmmInterface.setupBox import setup_box_generic
         import pandas as pd
         from mmml.interfaces.pycharmmInterface.import_pycharmm import minimize
+        from mmml.interfaces.pycharmmInterface.cell_list import _wrap_groups_np
         import jax_md
         from jax_md import space, quantity, simulate, partition, units, units
         from ase.units import _amu
@@ -458,6 +459,7 @@ def run(args: argparse.Namespace) -> int:
         cell=args.cell,
         flat_bottom_radius=getattr(args, "flat_bottom_radius", None),
         flat_bottom_force_const=getattr(args, "flat_bottom_k", 1.0),
+        ensemble=getattr(args, "ensemble", "nve"),
     )
     
 
@@ -605,15 +607,22 @@ shake bonh para sele all end
     
     # Minimize structure if requested
     # if args.minimize_first:
-    def wrap_positions_for_pbc(positions):
-        """Wrap positions into cell when using pbc_map (legacy). MIC-only: no-op."""
+    def wrap_positions_for_pbc(positions, masses=None):
+        """Wrap positions into cell. Uses pbc_map when available; otherwise wrap by monomer (MIC-only).
+        Uses mass-weighted center of mass when masses provided."""
         if args.cell is None:
             return positions
         pbc_map_fn = getattr(hybrid_calc, "pbc_map", None)
-        if pbc_map_fn is None or not getattr(hybrid_calc, "do_pbc_map", False):
-            return positions
-        R_mapped = pbc_map_fn(jnp.asarray(positions))
-        return np.asarray(jax.device_get(R_mapped))
+        if pbc_map_fn is not None and getattr(hybrid_calc, "do_pbc_map", False):
+            R_mapped = pbc_map_fn(jnp.asarray(positions))
+            return np.asarray(jax.device_get(R_mapped))
+        # MIC-only: wrap by monomer into primary cell (COM-based)
+        cell_matrix = np.diag([float(args.cell)] * 3) if np.isscalar(args.cell) else np.asarray(args.cell, dtype=np.float64)
+        if cell_matrix.ndim == 1 and cell_matrix.shape[0] == 3:
+            cell_matrix = np.diag(cell_matrix)
+        return _wrap_groups_np(
+            np.asarray(positions, dtype=np.float64), cell_matrix, monomer_offsets, masses=masses
+        )
 
     def minimize_structure(atoms, run_index=0, nsteps=60, fmax=0.0006, charmm=False, ase=True):
 
@@ -654,7 +663,7 @@ shake bonh para sele all end
         atoms.set_positions(optimized_atoms_positions)
         # Wrap positions into cell after monomer optimization (avoids unwrapped coords for PBC)
         if args.cell is not None:
-            wrapped = wrap_positions_for_pbc(atoms.get_positions())
+            wrapped = wrap_positions_for_pbc(atoms.get_positions(), masses=atoms.get_masses())
             atoms.set_positions(wrapped)
             xyz = pd.DataFrame(wrapped, columns=["x", "y", "z"])
         else:
@@ -678,9 +687,7 @@ shake bonh para sele all end
         # Wrap positions into cell after BFGS (avoids unwrapped coords for PBC)
         if args.cell is not None:
             print(f"Wrapping positions into cell: {args.cell} Å")
-            # translate to the center of the cell
-            atoms.set_positions(atoms.get_positions() - atoms.get_positions().mean(axis=0))
-            wrapped = wrap_positions_for_pbc(atoms.get_positions())
+            wrapped = wrap_positions_for_pbc(atoms.get_positions(), masses=atoms.get_masses())
             atoms.set_positions(wrapped)
             xyz = pd.DataFrame(wrapped, columns=["x", "y", "z"])
             coor.set_positions(xyz)
@@ -861,11 +868,20 @@ shake bonh para sele all end
 
         # evaluate_energies_and_forces (initial call - get update_fn if available)
         use_pbc = args.cell is not None
+        is_npt = args.ensemble == "npt" and use_pbc
         update_fn = get_update_fn(R, CUTOFF_PARAMS) if get_update_fn else None
         pair_idx, pair_mask = None, None
         box_init = jnp.array([float(args.cell)]) if args.cell else None
-        if update_fn is not None and use_pbc and box_init is not None:
-            pair_idx, pair_mask = update_fn(np.asarray(R), box=np.asarray(box_init))
+        if update_fn is not None and use_pbc:
+            if is_npt:
+                # NPT: neighbor list uses fractional_coordinates; pass frac pos and box [L,L,L]
+                L = float(args.cell)
+                R_frac = np.asarray(R) / L
+                box_nl = np.array([L, L, L], dtype=np.float64)
+                pair_idx, pair_mask = update_fn(R_frac, box=box_nl)
+            else:
+                # NVT/NVE: fixed box, do not pass box to update
+                pair_idx, pair_mask = update_fn(np.asarray(R))
         result = evaluate_energies_and_forces(
             atomic_numbers=atomic_numbers,
             positions=R,
@@ -1121,7 +1137,18 @@ shake bonh para sele all end
                 )
                 pbc_unwrapped_step_fn = jit(pbc_unwrapped_step_fn)
                 # Start from wrapped positions so we're in the cell (first min can drift)
-                pbc_start_pos = pbc_map_fn(minimized_pos) if pbc_map_fn else minimized_pos
+                if pbc_map_fn is not None:
+                    pbc_start_pos = pbc_map_fn(minimized_pos)
+                else:
+                    # MIC-only: wrap by monomer into cell
+                    _cell_jax = jnp.asarray(atoms.get_cell()[:], dtype=jnp.float32)
+                    _monomer_groups = [
+                        jnp.arange(int(monomer_offsets[m]), int(monomer_offsets[m + 1]))
+                        for m in range(n_monomers)
+                    ]
+                    pbc_start_pos = wrap_groups(
+                        jnp.asarray(minimized_pos), _monomer_groups, _cell_jax, mass=Si_mass
+                    )
                 pbc_fire_state = pbc_unwrapped_init_fn(pbc_start_pos, mass=Si_mass)
 
                 # Run PBC minimization (track best; stop early if forces increase - FIRE+unwrapped can wander)
@@ -1190,10 +1217,18 @@ shake bonh para sele all end
 
             
             if args.ensemble == "npt" and use_pbc:
-                # NPT: positions in fractional coords; convert md_pos (real) to fractional
+                # NPT: positions in fractional coords; wrap md_pos into cell first, then convert to fractional
                 box_curr = box_npt
-                md_pos_frac = md_pos / float(args.cell)
-                pair_idx, pair_mask = update_fn(np.asarray(md_pos), box=np.asarray(box_curr))
+                _cell_jax = jnp.asarray(atoms.get_cell()[:], dtype=jnp.float32)
+                _monomer_groups = [
+                    jnp.arange(int(monomer_offsets[m]), int(monomer_offsets[m + 1]))
+                    for m in range(n_monomers)
+                ]
+                md_pos_wrapped = wrap_groups(
+                    jnp.asarray(md_pos), _monomer_groups, _cell_jax, mass=Si_mass
+                )
+                md_pos_frac = md_pos_wrapped / float(args.cell)  # cubic: frac = R / L
+                pair_idx, pair_mask = update_fn(np.asarray(md_pos_wrapped), box=np.asarray(box_curr))
                 state = init_fn(
                     key, md_pos_frac, box=box_curr,
                     neighbor=(pair_idx, pair_mask), kT=kT, mass=Si_mass
@@ -1300,7 +1335,9 @@ shake bonh para sele all end
                         wrapped_frac = frac_pos - jnp.floor(frac_pos)
                         state = state.set(position=wrapped_frac)
                     else:
-                        wrapped_pos = wrap_groups(state.position, _monomer_groups, _cell_jax)
+                        wrapped_pos = wrap_groups(
+                            state.position, _monomer_groups, _cell_jax, mass=Si_mass
+                        )
                         state = state.set(position=wrapped_pos)
 
                 # Store current position for trajectory analysis

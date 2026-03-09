@@ -352,6 +352,7 @@ def setup_calculator(
     flat_bottom_radius: float | None = None,
     flat_bottom_force_const: float = 1.0,
     use_smooth_mic: Optional[bool] = None,
+    ensemble: str = "nve",
 ):
     """Create hybrid ML/MM calculator with outputs in eV/eV-A.
 
@@ -626,6 +627,8 @@ def setup_calculator(
     switch_ML_grad = jax.grad(switch_ML)
 
     
+    _fractional_coordinates = ensemble == "npt"
+
     def get_MM_energy_forces_fns(
         R,
         ATOMS_PER_MONOMER_ARG=None,
@@ -664,6 +667,7 @@ def setup_calculator(
             cell_list_safety_factor=cell_list_safety_factor,
             use_smooth_mic=use_smooth_mic,
             use_jax_md_neighbor_list=True,
+            fractional_coordinates=_fractional_coordinates,
             debug=debug,
         )
         if isinstance(result_jaxmd, tuple):
@@ -687,7 +691,7 @@ def setup_calculator(
             cell_list_safety_factor=cell_list_safety_factor,
             use_smooth_mic=use_smooth_mic,
             use_jax_md_neighbor_list=False,
-                debug=debug,
+            debug=debug,
             )
             return (mm_fn_jaxmd, mm_fn_cell), update_fn
         return result_jaxmd, None
@@ -1367,7 +1371,8 @@ def setup_calculator(
                     monomer_offsets_arr = np.concatenate(
                         [[0], np.cumsum(self.atoms_per_monomer_list)]
                     ).astype(np.int64)
-                    R = _wrap_groups_np(R, cell_matrix, monomer_offsets_arr)
+                    masses = np.asarray(atoms.get_masses(), dtype=np.float64)
+                    R = _wrap_groups_np(R, cell_matrix, monomer_offsets_arr, masses=masses)
                     atoms.set_positions(R)
 
                 Z = atoms.get_atomic_numbers()
