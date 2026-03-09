@@ -71,14 +71,20 @@ except ModuleNotFoundError:  # pragma: no cover - ML stack optional for docs
     def EF(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[override]
         raise ModuleNotFoundError("jax is required for EF model")
 
-    def get_files(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[override]
-        raise ModuleNotFoundError("jax is required for restart helpers")
+    # Keep restart helpers available whenever possible, even when model imports
+    # fail due to optional extras such as e3x.
+    try:
+        from mmml.models.physnetjax.physnetjax.restart.restart import get_files, get_last, get_params_model
+    except ModuleNotFoundError:
 
-    def get_last(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[override]
-        raise ModuleNotFoundError("jax is required for restart helpers")
+        def get_files(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[override]
+            raise ModuleNotFoundError("jax is required for restart helpers")
 
-    def get_params_model(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[override]
-        raise ModuleNotFoundError("jax is required for restart helpers")
+        def get_last(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[override]
+            raise ModuleNotFoundError("jax is required for restart helpers")
+
+        def get_params_model(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[override]
+            raise ModuleNotFoundError("jax is required for restart helpers")
 
     def dipole_calc(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[override]
         raise ModuleNotFoundError("jax is required for dipole calculations")

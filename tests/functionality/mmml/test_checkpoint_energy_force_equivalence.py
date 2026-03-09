@@ -5,6 +5,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+
 
 def _can_import(name: str) -> bool:
     try:
@@ -14,7 +16,7 @@ def _can_import(name: str) -> bool:
         return False
 
 
-ORBAX_EPOCH_1985 = Path("mmml/models/physnetjax/ckpts/DESdimers/epoch-1985").resolve()
+ORBAX_EPOCH_1985 = (PROJECT_ROOT / "mmml/models/physnetjax/ckpts/DESdimers/epoch-1985").resolve()
 
 
 def _assert_tree_allclose(a, b, path: str = "root") -> None:
