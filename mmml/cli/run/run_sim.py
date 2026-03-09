@@ -1152,16 +1152,20 @@ shake bonh para sele all end
                 return result.energy.reshape(-1)[0]
 
             @jax.custom_vjp
-            def npt_energy_fn(frac_pos, box=None, neighbor=None, perturbation=None, **kwargs):
-                """NPT energy with custom VJP: use explicit calculator forces (jax.grad gives NaN)."""
-                return _npt_energy_fn_raw(frac_pos, box=box, neighbor=neighbor, perturbation=perturbation, **kwargs)
+            def npt_energy_fn(frac_pos, **kwargs):
+                """NPT energy with custom VJP: use explicit calculator forces (jax.grad gives NaN).
+                Single positional arg (frac_pos) so JAX grad can resolve kwargs (kT, neighbor, etc.)."""
+                return _npt_energy_fn_raw(frac_pos, **kwargs)
 
-            def npt_energy_fn_fwd(frac_pos, box, neighbor, perturbation, **kwargs):
-                E = _npt_energy_fn_raw(frac_pos, box=box, neighbor=neighbor, perturbation=perturbation, **kwargs)
-                return E, (frac_pos, box, neighbor, perturbation)
+            def npt_energy_fn_fwd(frac_pos, **kwargs):
+                E = _npt_energy_fn_raw(frac_pos, **kwargs)
+                return E, (frac_pos, kwargs)
 
             def npt_energy_fn_bwd(res, g):
-                frac_pos, box, neighbor, perturbation, _ = res
+                frac_pos, kwargs = res
+                box = kwargs.get('box')
+                neighbor = kwargs.get('neighbor')
+                perturbation = kwargs.get('perturbation')
                 box_eff = jnp.asarray(box, dtype=jnp.float32)
                 if perturbation is not None:
                     scale = jnp.power(jnp.asarray(perturbation, dtype=jnp.float32), 1.0 / 3.0)
@@ -1176,7 +1180,7 @@ shake bonh para sele all end
                 )
                 # grad(E) = -F; quantity.force = -grad, so we supply -F as grad
                 grad_frac = -F * g
-                return (grad_frac, None, None, None)
+                return (grad_frac,)
 
             npt_energy_fn.defvjp(npt_energy_fn_fwd, npt_energy_fn_bwd)
             npt_energy_fn = jit(npt_energy_fn)
