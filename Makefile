@@ -129,7 +129,7 @@ docker-clean:
 # ==============================================================================
 
 test:
-	uv run pytest tests/
+	cd tests && uv run pytest .
 
 test-quick:
 	uv run pytest -q tests/functionality/mmml/test_mmml_calc.py::test_ev2kcalmol_constant
