@@ -64,9 +64,9 @@ config = {
     "cell": config["L"],  # cubic box side length (Å), or None
     "temperature": 298.0,
     "timestep": 0.25,
-    "nsteps_jaxmd": 1000,
+    "nsteps_jaxmd": 100000,
     "nsteps_ase": 10,
-    "ensemble": "nvt",
+    "ensemble": "npt",
     "output_prefix": "test_run",
     "energy_catch": 0.5,
     "ml_cutoff": 0.01,
