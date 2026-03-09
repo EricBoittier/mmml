@@ -37,7 +37,7 @@ def _get_ckpt():
     )
     for ckpt in candidates:
         if ckpt.exists():
-            return ckpt
+            return ckpt.resolve()
     return None
 
 

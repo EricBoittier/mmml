@@ -37,7 +37,7 @@ def _resolve_ckpt_path() -> Path | None:
     )
     for ckpt in candidates:
         if ckpt.exists():
-            return ckpt
+            return ckpt.resolve()
     return None
 
 
