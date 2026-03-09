@@ -949,8 +949,9 @@ shake bonh para sele all end
         # Shift and displacement: NPT uses periodic_general with fractional coords; NVT/NVE use free or periodic
         is_npt = args.ensemble == "npt" and use_pbc
         if is_npt:
-            # NPT requires fractional coordinates; box as dim-1 array for npt_box
-            box_npt = jnp.array([float(args.cell)])
+            # NPT requires fractional coordinates; box [L,L,L] for correct volume (L^3)
+            L_npt = float(args.cell)
+            box_npt = jnp.array([L_npt, L_npt, L_npt], dtype=jnp.float32)
             displacement, shift = space.periodic_general(box=box_npt, fractional_coordinates=True)
         else:
             _displacement, _shift_free = space.free()
@@ -1009,9 +1010,15 @@ shake bonh para sele all end
                 'sy_steps': nhc_sy_steps,
             }
 
-            def npt_energy_fn(frac_pos, box=None, neighbor=None, **kwargs):
-                """Energy in fractional coords: transform to real, then evaluate."""
-                real_pos = space.transform(box, frac_pos)
+            def npt_energy_fn(frac_pos, box=None, neighbor=None, perturbation=None, **kwargs):
+                """Energy in fractional coords: transform to real, then evaluate.
+                Supports perturbation=(1+eps) for NPT barostat stress (dU/dV)."""
+                box_eff = jnp.asarray(box, dtype=jnp.float32)
+                if perturbation is not None:
+                    # Isotropic: V' = V * perturbation, so L' = L * perturbation^(1/3)
+                    scale = jnp.power(jnp.asarray(perturbation, dtype=jnp.float32), 1.0 / 3.0)
+                    box_eff = box_eff * scale
+                real_pos = space.transform(box_eff, frac_pos)
                 pair_idx, pair_mask = neighbor if neighbor is not None else (None, None)
                 result = evaluate_energies_and_forces(
                     atomic_numbers=atomic_numbers,
@@ -1020,7 +1027,7 @@ shake bonh para sele all end
                     src_idx=src_idx,
                     mm_pair_idx=pair_idx,
                     mm_pair_mask=pair_mask,
-                    box=box,
+                    box=box_eff,
                 )
                 return result.energy.reshape(-1)[0]
 
