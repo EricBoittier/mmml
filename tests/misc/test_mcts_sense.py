@@ -2,7 +2,11 @@ import numpy as np
 import jax.numpy as jnp
 import jax
 
-from mmml.dcmnet.dcmnet_mcts import DCMNETSelectionEnv, CONVERSION_FACTOR, optimize_dcmnet_combination
+from mmml.models.dcmnet.dcmnet_mcts import (
+    CONVERSION_FACTOR,
+    DCMNETSelectionEnv,
+    optimize_dcmnet_combination,
+)
 
 
 def small_env():
