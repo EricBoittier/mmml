@@ -490,6 +490,23 @@ def build_mm_energy_forces_fn(
 
         def update_mm_pairs(positions: np.ndarray, box: Optional[np.ndarray] = None) -> Tuple[Array, Array]:
             R = np.asarray(positions, dtype=np.float64)
+            # When fractional_coordinates=True but box is None (ASE calculator), convert Cartesian to fractional
+            if fractional_coordinates and box is None:
+                cell_np = np.asarray(pbc_cell, dtype=np.float64)
+                if cell_np.ndim == 0:
+                    L = float(cell_np)
+                    cell_3x3 = np.diag([L, L, L])
+                elif cell_np.shape == (1,):
+                    L = float(cell_np[0])
+                    cell_3x3 = np.diag([L, L, L])
+                elif cell_np.shape == (3,):
+                    cell_3x3 = np.diag(cell_np)
+                else:
+                    cell_3x3 = cell_np
+                inv_cell = np.linalg.inv(cell_3x3)
+                R_frac = (R @ inv_cell.T) - np.floor(R @ inv_cell.T)
+                R = np.asarray(R_frac, dtype=np.float64)
+                box = np.diagonal(cell_3x3).astype(np.float64)
             nbrs = _nbrs[0]
             kwargs = {} if box is None else {"box": jnp.asarray(box)}
             nbrs = nbrs.update(R, **kwargs)
