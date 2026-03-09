@@ -306,16 +306,16 @@ def run(args: argparse.Namespace) -> int:
         from ase.md.velocitydistribution import MaxwellBoltzmannDistribution, Stationary, ZeroRotation
         from ase.md.verlet import VelocityVerlet
         import ase.optimize as ase_opt
-        from mmml.pycharmmInterface.import_pycharmm import coor
-        from mmml.pycharmmInterface.setupBox import setup_box_generic
+        from mmml.interfaces.pycharmmInterface.import_pycharmm import coor
+        from mmml.interfaces.pycharmmInterface.setupBox import setup_box_generic
         import pandas as pd
-        from mmml.pycharmmInterface.import_pycharmm import minimize
+        from mmml.interfaces.pycharmmInterface.import_pycharmm import minimize
         import jax_md
         from jax_md import space, quantity, simulate, partition, units, units
         from ase.units import _amu
 
         import jax.numpy as jnp
-        from mmml.pycharmmInterface.pbc_utils_jax import wrap_groups
+        from mmml.interfaces.pycharmmInterface.pbc_utils_jax import wrap_groups
 
         import jax, e3x
         from jax import jit, grad, lax, ops, random
@@ -363,7 +363,8 @@ def run(args: argparse.Namespace) -> int:
     print("Setting the elements and masses from the psf")
     pdb_ase_atoms.set_masses(psf_masses)
     psf_masses_arr = np.array(psf_masses)[:, np.newaxis]
-    correct_atomic_numbers_from_mass = np.argmin(np.abs(ase.data.atomic_masses_common[np.newaxis, :] - psf_masses_arr), axis=1)
+    correct_atomic_numbers_from_mass = np.argmin(
+        np.abs(ase.data.atomic_masses_common[np.newaxis, :] - psf_masses_arr), axis=1)
     pdb_ase_atoms.set_atomic_numbers(correct_atomic_numbers_from_mass)
     print(f"PDB ASE atoms: {pdb_ase_atoms}")
 
