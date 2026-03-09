@@ -1130,7 +1130,7 @@ shake bonh para sele all end
                 'sy_steps': nhc_sy_steps,
             }
 
-            def npt_energy_fn(frac_pos, box=None, neighbor=None, perturbation=None, **kwargs):
+            def _npt_energy_fn_raw(frac_pos, box=None, neighbor=None, perturbation=None, **kwargs):
                 """Energy in fractional coords: transform to real, then evaluate.
                 Supports perturbation=(1+eps) for NPT barostat stress (dU/dV)."""
                 box_eff = jnp.asarray(box, dtype=jnp.float32)
@@ -1151,6 +1151,34 @@ shake bonh para sele all end
                 )
                 return result.energy.reshape(-1)[0]
 
+            @jax.custom_vjp
+            def npt_energy_fn(frac_pos, box=None, neighbor=None, perturbation=None, **kwargs):
+                """NPT energy with custom VJP: use explicit calculator forces (jax.grad gives NaN)."""
+                return _npt_energy_fn_raw(frac_pos, box=box, neighbor=neighbor, perturbation=perturbation, **kwargs)
+
+            def npt_energy_fn_fwd(frac_pos, box, neighbor, perturbation, **kwargs):
+                E = _npt_energy_fn_raw(frac_pos, box=box, neighbor=neighbor, perturbation=perturbation, **kwargs)
+                return E, (frac_pos, box, neighbor, perturbation)
+
+            def npt_energy_fn_bwd(res, g):
+                frac_pos, box, neighbor, perturbation, _ = res
+                box_eff = jnp.asarray(box, dtype=jnp.float32)
+                if perturbation is not None:
+                    scale = jnp.power(jnp.asarray(perturbation, dtype=jnp.float32), 1.0 / 3.0)
+                    box_eff = box_eff * scale
+                real_pos = space.transform(box_eff, frac_pos)
+                pair_idx, pair_mask = neighbor if neighbor is not None else (None, None)
+                F = jax_md_force_fn(
+                    real_pos,
+                    mm_pair_idx=pair_idx,
+                    mm_pair_mask=pair_mask,
+                    box=box_eff,
+                )
+                # grad(E) = -F; quantity.force = -grad, so we supply -F as grad
+                grad_frac = -F * g
+                return (grad_frac, None, None, None)
+
+            npt_energy_fn.defvjp(npt_energy_fn_fwd, npt_energy_fn_bwd)
             npt_energy_fn = jit(npt_energy_fn)
             init_fn, apply_fn = simulate.npt_nose_hoover(
                 npt_energy_fn,
