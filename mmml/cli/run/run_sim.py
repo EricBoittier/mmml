@@ -242,6 +242,11 @@ def parse_args() -> argparse.Namespace:
         default=1000.0,
         help="Barostat coupling time multiplier for NPT (tau = nhc_barostat_tau * dt) (default: 1000).",
     )
+    parser.add_argument(
+        "--npt-diagnose",
+        action="store_true",
+        help="Run NPT diagnostic tests before simulation (energy, stress, shift, step).",
+    )
 
     parser.add_argument(
         "--heating_interval",
@@ -300,6 +305,101 @@ def default_nhc_kwargs(tau, overrides=None):
     if overrides is None:
         return default_kwargs
     return {k: overrides.get(k, default_kwargs[k]) for k in default_kwargs}
+
+
+def _run_npt_diagnostics(
+    *,
+    state,
+    npt_energy_fn,
+    jax_md_force_fn,
+    shift,
+    space,
+    simulate,
+    quantity,
+    npt_pair_idx,
+    npt_pair_mask,
+    npt_pressure,
+    dt,
+    kT,
+    grad,
+):
+    """Run NPT diagnostic tests to locate instabilities. Call with --npt-diagnose."""
+    import jax.numpy as jnp
+    import numpy as np
+
+    neighbor = (npt_pair_idx, npt_pair_mask)
+    box_curr = simulate.npt_box(state)
+    R = state.position
+    P = state.momentum
+    M = state.mass
+    N, dim = R.shape
+
+    print("\n" + "=" * 60)
+    print("NPT DIAGNOSTIC TESTS (--npt-diagnose)")
+    print("=" * 60)
+
+    # 1. Energy and forces sanity
+    print("\n[1] Energy and forces at initial state")
+    E0 = float(npt_energy_fn(R, box=box_curr, neighbor=neighbor))
+    real_pos = space.transform(box_curr, R)
+    F_calc = jax_md_force_fn(real_pos, mm_pair_idx=npt_pair_idx, mm_pair_mask=npt_pair_mask, box=box_curr)
+    F_grad = -grad(lambda r: npt_energy_fn(r, box=box_curr, neighbor=neighbor))(R)
+    print(f"    E = {E0:.6f} eV")
+    print(f"    max|F_calc| = {float(np.max(np.abs(F_calc))):.6f}")
+    print(f"    max|F_grad| = {float(np.max(np.abs(F_grad))):.6f}")
+    print(f"    F_calc finite: {np.all(np.isfinite(F_calc))}, F_grad finite: {np.all(np.isfinite(F_grad))}")
+
+    # 2. Perturbation / stress (dUdV)
+    print("\n[2] Stress (dU/dV) via perturbation")
+    eps_vals = [0.0, 1e-6, 1e-5, 1e-4]
+    for eps in eps_vals:
+        pert = 1.0 + eps
+        E_pert = float(npt_energy_fn(R, box=box_curr, neighbor=neighbor, perturbation=pert))
+        print(f"    eps={eps:.0e}: E = {E_pert:.6f} eV")
+    dE = float(npt_energy_fn(R, box=box_curr, neighbor=neighbor, perturbation=1.0 + 1e-5)) - E0
+    vol = float(quantity.volume(dim, box_curr))
+    dUdV_fd = dE / (vol * 1e-5)  # finite-diff approx
+    print(f"    dUdV (finite diff) ≈ {dUdV_fd:.4f} eV/Å³")
+    print(f"    volume = {vol:.2f} Å³")
+
+    # 3. Shift function with fractional R and Cartesian dR
+    print("\n[3] Shift function (frac R + Cartesian dR)")
+    dR_cart = dt * (P / M)  # small Cartesian displacement
+    R_shifted = shift(R, dR_cart, box=box_curr)
+    in_cube = np.all((R_shifted >= 0) & (R_shifted < 1.001))
+    print(f"    R_shifted in [0,1)^3: {in_cube}")
+    print(f"    R_shifted finite: {np.all(np.isfinite(R_shifted))}")
+    print(f"    R_shifted sample [0]: {np.asarray(R_shifted[0])}")
+
+    # 4. exp_iL1-like displacement (barostat scaling term)
+    print("\n[4] Barostat scaling term R*(exp(x)-1) + dt*V*... (x=V_b*dt)")
+    V_b = 0.0  # box velocity at start
+    x = V_b * dt
+    scale = np.exp(x) - 1
+    term1 = R * scale  # fractional * scalar
+    term2 = dt * (P / M) * np.exp(x / 2)  # velocity term
+    dR_mixed = term1 + term2
+    print(f"    x={x}, exp(x)-1={scale}")
+    print(f"    max|term1|={float(np.max(np.abs(term1))):.6e}, max|term2|={float(np.max(np.abs(term2))):.6e}")
+    R_after_scale = shift(R, dR_mixed, box=box_curr)
+    print(f"    R_after_scale finite: {np.all(np.isfinite(R_after_scale))}")
+    print(f"    R_after_scale in [0,1): {np.all((R_after_scale >= 0) & (R_after_scale < 1.001))}")
+
+    # 5. Box and volume
+    print("\n[5] Box and volume")
+    print(f"    box shape: {np.asarray(box_curr).shape}")
+    print(f"    box diag: {np.diagonal(np.asarray(box_curr))}")
+    print(f"    box_position (log V/V0): {float(state.box_position)}")
+    print(f"    box_momentum: {float(state.box_momentum)}")
+
+    # 6. State components
+    print("\n[6] State components")
+    print(f"    position finite: {np.all(np.isfinite(R))}")
+    print(f"    momentum finite: {np.all(np.isfinite(P))}")
+    print(f"    force finite: {np.all(np.isfinite(state.force))}")
+    print(f"    mass shape: {M.shape}, all positive: {np.all(M > 0)}")
+
+    print("\n" + "=" * 60 + "\n")
 
 
 def run(args: argparse.Namespace) -> int:
@@ -1281,6 +1381,26 @@ shake bonh para sele all end
             disp_first = dt * vel
             print(f"JAX-MD velocity (p/m) sample [0]: {vel[0]}")
             print(f"JAX-MD first-step displacement dt*v [0]: {disp_first[0]}, max|disp|: {float(jnp.max(jnp.abs(disp_first))):.6f}")
+
+            # ========================================================================
+            # NPT DIAGNOSTIC TESTS (--npt-diagnose)
+            # ========================================================================
+            if is_npt and npt_pair_idx is not None and getattr(args, "npt_diagnose", False):
+                _run_npt_diagnostics(
+                    state=state,
+                    npt_energy_fn=npt_energy_fn,
+                    jax_md_force_fn=jax_md_force_fn,
+                    shift=shift,
+                    space=space,
+                    simulate=simulate,
+                    quantity=quantity,
+                    npt_pair_idx=npt_pair_idx,
+                    npt_pair_mask=npt_pair_mask,
+                    npt_pressure=npt_pressure,
+                    dt=dt,
+                    kT=kT,
+                    grad=grad,
+                )
 
             # Single-step diagnostic: catch NaN on first step (common with wrong mass/units)
             if is_npt and npt_pair_idx is not None:
