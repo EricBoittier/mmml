@@ -67,6 +67,8 @@ def test_setup_calculator_factory_smoke():
 	ckpt = _resolve_ckpt_path()
 	if ckpt is None:
 		pytest.skip("No checkpoints present for ML model")
+	if ckpt.is_file() and ckpt.suffix == ".json":
+		pytest.skip("Strict lattice/force checks require full checkpoint directory, not JSON params")
 
 	from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
 
@@ -138,6 +140,8 @@ def test_ml_energy_matches_reference_when_data_available():
 	ckpt = _resolve_ckpt_path()
 	if ckpt is None:
 		pytest.skip("No checkpoints present for ML model")
+	if ckpt.is_file() and ckpt.suffix == ".json":
+		pytest.skip("Strict lattice/force checks require full checkpoint directory, not JSON params")
 	factory = setup_calculator(
 		ATOMS_PER_MONOMER=10,
 		N_MONOMERS=2,
@@ -183,6 +187,8 @@ def test_check_lattice_invariance():
 	ckpt = _resolve_ckpt_path()
 	if ckpt is None:
 		pytest.skip("No checkpoints present for ML model")
+	if ckpt.is_file() and ckpt.suffix == ".json":
+		pytest.skip("Strict lattice/force checks require full checkpoint directory, not JSON params")
 
 	import jax.numpy as jnp
 	from mmml.interfaces.pycharmmInterface.mmml_calculator import (
@@ -260,6 +266,8 @@ def test_pbc_energy_invariance_via_ase():
 	ckpt = _resolve_ckpt_path()
 	if ckpt is None:
 		pytest.skip("No checkpoints present for ML model")
+	if ckpt.is_file() and ckpt.suffix == ".json":
+		pytest.skip("Strict lattice/force checks require full checkpoint directory, not JSON params")
 
 	import jax
 	import jax.numpy as jnp
@@ -335,6 +343,8 @@ def test_pbc_force_invariance():
 	ckpt = _resolve_ckpt_path()
 	if ckpt is None:
 		pytest.skip("No checkpoints present for ML model")
+	if ckpt.is_file() and ckpt.suffix == ".json":
+		pytest.skip("Strict lattice/force checks require full checkpoint directory, not JSON params")
 
 	import jax
 	import jax.numpy as jnp
