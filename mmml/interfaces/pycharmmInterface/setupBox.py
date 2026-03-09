@@ -321,6 +321,10 @@ def setup_box_generic(pdb_path, rtf=CGENFF_RTF, prm=CGENFF_PRM, side_length: flo
     write.psf_card(f"psf/system-{tag}.psf")
     write.coor_pdb(f"pdb/init-{tag}.pdb")
     print(f"wrote pdb/init-{tag}.pdb")
+    atoms = ase.io.read(f"pdb/init-{tag}.pdb")
+    atoms.set_cell(np.eye(3) * side_length)
+    atoms.set_pbc(True)
+    return atoms
 
 
 
