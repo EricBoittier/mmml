@@ -39,7 +39,6 @@ model = EF(features=32, num_iterations=2, max_degree=0, natoms=natoms, cutoff=6.
 #    data_keys=("R", "Z", "F", "E", "N", "D", "dst_idx", "src_idx", "batch_segments"),
 #)
 
-
 train_model(
     key, model, train_data, valid_data,
     num_epochs=1000,
