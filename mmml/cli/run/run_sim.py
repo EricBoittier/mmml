@@ -229,6 +229,20 @@ def parse_args() -> argparse.Namespace:
         help="Thermostat coupling time multiplier (tau = nhc_tau * dt) (default: 100).",
     )
 
+    # NPT barostat parameters
+    parser.add_argument(
+        "--pressure",
+        type=float,
+        default=1.01325,
+        help="Target pressure in bar for NPT ensemble (default: 1.01325).",
+    )
+    parser.add_argument(
+        "--nhc-barostat-tau",
+        type=float,
+        default=1000.0,
+        help="Barostat coupling time multiplier for NPT (tau = nhc_barostat_tau * dt) (default: 1000).",
+    )
+
     parser.add_argument(
         "--heating_interval",
         type=int,
@@ -460,7 +474,7 @@ def run(args: argparse.Namespace) -> int:
 
 
     # Create hybrid calculator (MIC-only: factory uses pbc_cell for PBC, no pbc_map/transform)
-    hybrid_calc, spherical_cutoff_calculator = calculator_factory(
+    calc_result = calculator_factory(
         atomic_numbers=Z,
         atomic_positions=R,
         n_monomers=n_monomers,
@@ -476,7 +490,12 @@ def run(args: argparse.Namespace) -> int:
         do_pbc_map=getattr(calculator_factory, "do_pbc_map", args.cell is not None),
         pbc_map=getattr(calculator_factory, "pbc_map", None),
     )
- 
+    if len(calc_result) == 3:
+        hybrid_calc, spherical_cutoff_calculator, get_update_fn = calc_result
+    else:
+        hybrid_calc, spherical_cutoff_calculator = calc_result
+        get_update_fn = None
+
     print(f"Hybrid calculator created: {hybrid_calc}")
     atoms = pdb_ase_atoms
 

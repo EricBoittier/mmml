@@ -1716,7 +1716,13 @@ def setup_calculator(
                 doML_dimer=doML_dimer,
                 debug=debug,
             )
-            return calculator, configured_spherical_cutoff
+
+            def get_update_fn(positions, cutoff_params_arg):
+                """Ensure MM fn is built and return update_mm_pairs, or None for cell-list path."""
+                _ensure_mm_fn(np.asarray(positions), cutoff_params_arg)
+                return _cached_update_mm_pairs[0]
+
+            return calculator, configured_spherical_cutoff, get_update_fn
 
     else:  # pragma: no cover - exercised when ASE not installed
 
