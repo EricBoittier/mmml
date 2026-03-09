@@ -40,6 +40,9 @@ def test_physnetjax_calculator_smoke():
     from ase.io import read
     import mmml
 
+    if not hasattr(mmml, "PhysNetJaxCalculator"):
+        pytest.skip("mmml.PhysNetJaxCalculator is not exposed in this build")
+
     pdb_path = Path("pdb/init-packmol.pdb")
     if not pdb_path.exists():
         pytest.skip(f"Missing test structure: {pdb_path}")
