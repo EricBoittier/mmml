@@ -325,6 +325,7 @@ def build_mm_energy_forces_fn(
             positions: Array,
             pair_energies: Array,
             pair_dimer_idx_arg: Optional[Array] = None,
+            box_override: Optional[Array] = None,
         ) -> Array:
             coms = jnp.stack([
                 positions[monomer_offsets[k]:monomer_offsets[k + 1]].mean(axis=0)
@@ -332,9 +333,10 @@ def build_mm_energy_forces_fn(
             ])
             com_i = coms[_dimer_perms_np[:, 0]]
             com_j = coms[_dimer_perms_np[:, 1]]
-            if pbc_cell is not None:
+            cell_for_com = box_override if box_override is not None else pbc_cell
+            if cell_for_com is not None:
                 mic_fn = mic_displacement_smooth if use_smooth_mic else mic_displacement
-                d_vec = jax.vmap(lambda a, b: mic_fn(a, b, pbc_cell))(com_i, com_j)
+                d_vec = jax.vmap(lambda a, b: mic_fn(a, b, cell_for_com))(com_i, com_j)
                 r = jnp.linalg.norm(d_vec, axis=1)
             else:
                 r = jnp.linalg.norm(com_j - com_i, axis=1)
@@ -406,6 +408,7 @@ def build_mm_energy_forces_fn(
             positions: Array,
             pair_idx: Array,
             pair_mask: Array,
+            cell_for_mic: Optional[Array] = None,
         ) -> Array:
             pair_i = pair_idx[:, 0]
             pair_j = pair_idx[:, 1]
@@ -423,10 +426,11 @@ def build_mm_energy_forces_fn(
             pair_rm_dyn = rm_a + rm_b
             pair_ep_dyn = (ep_a * ep_b) ** 0.5 * pair_lambda_mm_dyn
 
+            _cell = cell_for_mic if cell_for_mic is not None else _pbc_cell_jnp
             pos_dst = positions[pair_j]
             pos_src = positions[pair_i]
             mic_batched = mic_displacements_batched_smooth if use_smooth_mic else mic_displacements_batched
-            displacements = mic_batched(pos_dst, pos_src, _pbc_cell_jnp)
+            displacements = mic_batched(pos_dst, pos_src, _cell)
             distances = jnp.linalg.norm(displacements, axis=1)
             distances = jnp.where(pair_mask > 0, distances, 1e6)
 
@@ -440,6 +444,7 @@ def build_mm_energy_forces_fn(
             positions: Array,
             pair_idx: Array,
             pair_mask: Array,
+            box_override: Optional[Array] = None,
         ) -> Tuple[Array, Array]:
             pair_i = pair_idx[:, 0]
             pair_j = pair_idx[:, 1]
@@ -447,15 +452,17 @@ def build_mm_energy_forces_fn(
             mid_j = _monomer_id_jnp[pair_j]
             pair_dimer_idx_dyn = _dimer_lookup_arr[mid_i, mid_j]
 
-            pair_energies = calculate_mm_pair_energies_dynamic(positions, pair_idx, pair_mask)
+            _cell_for_mic = box_override if box_override is not None else _pbc_cell_jnp
+            pair_energies = calculate_mm_pair_energies_dynamic(
+                positions, pair_idx, pair_mask, cell_for_mic=_cell_for_mic
+            )
             switched_energy = apply_switching_function(
-                positions, pair_energies, pair_dimer_idx_arg=pair_dimer_idx_dyn
+                positions, pair_energies, pair_dimer_idx_arg=pair_dimer_idx_dyn, box_override=_cell_for_mic
             )
-            switched_mm_energy_dyn = lambda pos: apply_switching_function(
-                pos,
-                calculate_mm_pair_energies_dynamic(pos, pair_idx, pair_mask),
-                pair_dimer_idx_arg=pair_dimer_idx_dyn,
-            )
+            def _switched_dyn(pos, cell):
+                pe = calculate_mm_pair_energies_dynamic(pos, pair_idx, pair_mask, cell_for_mic=cell)
+                return apply_switching_function(pos, pe, pair_dimer_idx_arg=pair_dimer_idx_dyn, box_override=cell)
+            switched_mm_energy_dyn = lambda pos: _switched_dyn(pos, _cell_for_mic)
             forces = -1.0 * jax.grad(switched_mm_energy_dyn)(positions)
             forces = jnp.where(jnp.isfinite(forces), forces, 0.0)
             return switched_energy, forces
