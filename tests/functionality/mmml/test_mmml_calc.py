@@ -138,18 +138,24 @@ def test_ml_energy_matches_reference_when_data_available():
 	Optional: use the original dataset to sanity-check ML energy path.
 	Skips if data is not present.
 	"""
-	# Resolve data path: env MMML_DATA or the original relative path used before cleanup
-	data_path = os.environ.get(
-		"MMML_DATA",
-		"mmml/data/fixed-acetone-only_MP2_21000.npz",
+	# Resolve data path: env MMML_DATA first, then repo-local fallbacks.
+	data_candidates = []
+	if env_data := os.environ.get("MMML_DATA"):
+		env_path = Path(env_data)
+		data_candidates.append(env_path if env_path.is_absolute() else PROJECT_ROOT / env_path)
+	data_candidates.extend(
+		[
+			PROJECT_ROOT / "mmml/data/qcml/fixed-acetone-only_MP2_21000.npz",
+			PROJECT_ROOT / "mmml/data/fixed-acetone-only_MP2_21000.npz",
+		]
 	)
-	p = Path(data_path)
-	if not p.exists():
-		pytest.skip(f"Dataset not found at {p}")
+	p = next((cand for cand in data_candidates if cand.exists()), None)
+	if p is None:
+		pytest.skip(f"Dataset not found in expected locations: {data_candidates}")
 
 	# Lightweight import to prepare one batch
-	from mmml.interfaces.physnetjax.data.data import prepare_datasets
-	from mmml.interfaces.physnetjax.data.batches import prepare_batches_jit
+	from mmml.models.physnetjax.physnetjax.data.data import prepare_datasets
+	from mmml.models.physnetjax.physnetjax.data.batches import prepare_batches_jit
 	import jax
 	import jax.numpy as jnp
 
