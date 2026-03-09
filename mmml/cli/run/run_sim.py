@@ -830,16 +830,6 @@ shake bonh para sele all end
         atomic_numbers = jnp.asarray(atoms.get_atomic_numbers(), dtype=jnp.int32)
         R = jnp.asarray(atoms.get_positions(), dtype=jnp.float32)
 
-        def _eval_kwargs(mm_pair_idx=None, mm_pair_mask=None, box=None):
-            kw = {}
-            if mm_pair_idx is not None:
-                kw["mm_pair_idx"] = mm_pair_idx
-            if mm_pair_mask is not None:
-                kw["mm_pair_mask"] = mm_pair_mask
-            if box is not None:
-                kw["box"] = box
-            return kw
-
         @jit
         def jax_md_energy_fn(position, mm_pair_idx=None, mm_pair_mask=None, box=None, **kwargs):
             position = jnp.asarray(position, dtype=jnp.float32)
@@ -958,13 +948,16 @@ shake bonh para sele all end
 
 
         @jit
-        def sim(state):
-            def step(i, s):
-                # kT is already captured in the NVT closure; passing it via kwargs
-                # would leak through to force_fn -> wrapped_energy_fn which doesn't accept it.
+        def sim(state, neighbor=None, pressure=None):
+            """Step function: for NPT pass neighbor and pressure; for NVT/NVE no kwargs."""
+            def step_nve(i, s):
                 return apply_fn(s)
 
-            return lax.fori_loop(0, steps_per_recording, step, state)
+            def step_npt(i, s):
+                return apply_fn(s, neighbor=neighbor, pressure=pressure)
+
+            step_fn = step_npt if (neighbor is not None and pressure is not None) else step_nve
+            return lax.fori_loop(0, steps_per_recording, step_fn, state)
 
 
 
@@ -1196,7 +1189,16 @@ shake bonh para sele all end
                 return 0, jnp.array([]).reshape(0, len(md_pos), 3)
 
             
-            if args.ensemble == "nvt":
+            if args.ensemble == "npt" and use_pbc:
+                # NPT: positions in fractional coords; convert md_pos (real) to fractional
+                box_curr = box_npt
+                md_pos_frac = md_pos / float(args.cell)
+                pair_idx, pair_mask = update_fn(np.asarray(md_pos), box=np.asarray(box_curr))
+                state = init_fn(
+                    key, md_pos_frac, box=box_curr,
+                    neighbor=(pair_idx, pair_mask), kT=kT, mass=Si_mass
+                )
+            elif args.ensemble == "nvt":
                 state = init_fn(key, md_pos, mass=Si_mass)
             else:
                 state = init_fn(key, md_pos, kT, mass=Si_mass)
@@ -1204,7 +1206,11 @@ shake bonh para sele all end
             nhc_positions = []
 
             # get energy of initial state
-            energy_initial = float(wrapped_energy_fn(state.position))
+            if is_npt and npt_pair_idx is not None:
+                box_curr = simulate.npt_box(state)
+                energy_initial = float(npt_energy_fn(state.position, box=box_curr, neighbor=(npt_pair_idx, npt_pair_mask)))
+            else:
+                energy_initial = float(wrapped_energy_fn(state.position))
             print(f"Initial energy: {energy_initial:.6f} eV")
             # Debug: forces from calculator (used by NVE; jax.grad gives NaN)
             forces_jax = wrapped_force_fn(state.position)
@@ -1216,13 +1222,21 @@ shake bonh para sele all end
             print(f"JAX-MD first-step displacement dt*v [0]: {disp_first[0]}, max|disp|: {float(jnp.max(jnp.abs(disp_first))):.6f}")
 
             # Single-step diagnostic: catch NaN on first step (common with wrong mass/units)
-            state_one = apply_fn(state)
+            if is_npt and npt_pair_idx is not None:
+                state_one = apply_fn(state, neighbor=(npt_pair_idx, npt_pair_mask), pressure=npt_pressure)
+            else:
+                state_one = apply_fn(state)
             if not jnp.all(jnp.isfinite(state_one.position)):
-                print("ERROR: First NVE step produced NaN positions. Skipping JAX-MD.")
+                print("ERROR: First step produced NaN positions. Skipping JAX-MD.")
                 print("  Check: mass in amu, dt in ps, energy_fn returns eV.")
                 print(f"  mass shape: {state.mass.shape}, min/max: {float(jnp.min(state.mass)):.4f}/{float(jnp.max(state.mass)):.4f}")
-                return 0, jnp.stack([state.position])
-            e1 = float(wrapped_energy_fn(state_one.position))
+                pos_out = space.transform(simulate.npt_box(state), state.position) if is_npt else state.position
+                return 0, jnp.stack([pos_out])
+            if is_npt and npt_pair_idx is not None:
+                box_one = simulate.npt_box(state_one)
+                e1 = float(npt_energy_fn(state_one.position, box=box_one, neighbor=(npt_pair_idx, npt_pair_mask)))
+            else:
+                e1 = float(wrapped_energy_fn(state_one.position))
             print(f"First step OK: E_pot={e1:.6f} eV")
 
             print("*" * 10 + f"\n{args.ensemble.upper()}\n" + "*" * 10)
@@ -1266,12 +1280,28 @@ shake bonh para sele all end
             # MAIN SIMULATION LOOP
             # ========================================================================
             jaxmd_loop_start = time.perf_counter()
+            npt_pair_idx, npt_pair_mask = (pair_idx, pair_mask) if (is_npt and pair_idx is not None) else (None, None)
+            npt_pressure = getattr(args, 'pressure', 1.01325) * unit['pressure'] if is_npt else None
+
             for i in range(total_records):
-                state = sim(state)
+                if is_npt and update_fn is not None:
+                    box_curr = simulate.npt_box(state)
+                    real_pos = np.asarray(space.transform(box_curr, state.position))
+                    npt_pair_idx, npt_pair_mask = update_fn(real_pos, box=np.asarray(box_curr))
+                    state = sim(state, neighbor=(npt_pair_idx, npt_pair_mask), pressure=npt_pressure)
+                else:
+                    state = sim(state)
 
                 if use_pbc:
-                    wrapped_pos = wrap_groups(state.position, _monomer_groups, _cell_jax)
-                    state = state.set(position=wrapped_pos)
+                    if is_npt:
+                        # NPT: wrap fractional coords to [0,1)
+                        box_curr = simulate.npt_box(state)
+                        frac_pos = state.position
+                        wrapped_frac = frac_pos - jnp.floor(frac_pos)
+                        state = state.set(position=wrapped_frac)
+                    else:
+                        wrapped_pos = wrap_groups(state.position, _monomer_groups, _cell_jax)
+                        state = state.set(position=wrapped_pos)
 
                 # Store current position for trajectory analysis
                 nhc_positions.append(state.position)
@@ -1285,7 +1315,11 @@ shake bonh para sele all end
                         mass=state.mass
                     ) / unit['temperature']
                     temp = float(T_curr)
-                    e_pot = float(wrapped_energy_fn(state.position))
+                    if is_npt and npt_pair_idx is not None:
+                        box_curr = simulate.npt_box(state)
+                        e_pot = float(npt_energy_fn(state.position, box=box_curr, neighbor=(npt_pair_idx, npt_pair_mask)))
+                    else:
+                        e_pot = float(wrapped_energy_fn(state.position))
                     e_kin = float(jax_md.quantity.kinetic_energy(
                         momentum=state.momentum,
                         mass=state.mass
@@ -1304,7 +1338,11 @@ shake bonh para sele all end
                         f"{time_per_ns_s:10.2f}\t{avg_speed_ns_per_day:10.4f}"
                     )
 
-                    # Record to HDF5
+                    # Record to HDF5 (NPT: save real positions via transform)
+                    pos_for_h5 = state.position
+                    if is_npt:
+                        box_curr = simulate.npt_box(state)
+                        pos_for_h5 = space.transform(box_curr, state.position)
                     hdf5_reporter.report(
                         potential_energy=e_pot,
                         kinetic_energy=e_kin,
@@ -1312,7 +1350,7 @@ shake bonh para sele all end
                         invariant=e_tot,
                         total_energy=e_tot,
                         time_ps=time_ps,
-                        positions=state.position,
+                        positions=pos_for_h5,
                         velocities=state.momentum / state.mass,
                     )
 
@@ -1347,7 +1385,11 @@ shake bonh para sele all end
 
             nhc_positions_out = []
             for R in nhc_positions:
-                if use_pbc and pbc_map_fn is not None:
+                if is_npt:
+                    # NPT: convert fractional to real (use last box from state)
+                    box_final = simulate.npt_box(state)
+                    R = space.transform(box_final, R)
+                elif use_pbc and pbc_map_fn is not None:
                     R = pbc_map_fn(R)
                 nhc_positions_out.append(R)
             return steps_completed, jnp.stack(nhc_positions_out)
