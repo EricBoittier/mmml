@@ -125,11 +125,20 @@ def resolve_checkpoint_paths(arg: Path | str | None) -> Tuple[Path, Path]:
     Supports both orbax checkpoints (manifest.ocdbt) and JSON checkpoints
     (params.json or a .json file from orbax_to_json).
     """
-    from mmml.physnetjax.physnetjax.restart.restart import get_last
+    try:
+        from mmml.models.physnetjax.physnetjax.restart.restart import get_last
+    except ModuleNotFoundError:
+        from mmml.physnetjax.physnetjax.restart.restart import get_last
 
     # Convert string to Path if needed
     if arg is None:
-        candidate = Path(os.environ.get("MMML_CKPT", "mmml/physnetjax/ckpts"))
+        ckpt_env = os.environ.get("MMML_CKPT")
+        if ckpt_env:
+            candidate = Path(ckpt_env)
+        else:
+            candidate_models = Path("mmml/models/physnetjax/ckpts")
+            candidate_legacy = Path("mmml/physnetjax/ckpts")
+            candidate = candidate_models if candidate_models.exists() else candidate_legacy
     elif isinstance(arg, str):
         candidate = Path(arg)
     else:
@@ -254,8 +263,12 @@ def load_model_parameters(epoch_dir: Path, natoms: int):
     )
 
     if is_json:
-        from mmml.physnetjax.physnetjax.models.model import EF as StandardEF
-        from mmml.physnetjax.physnetjax.models.spooky_model import EF as SpookyEF
+        try:
+            from mmml.models.physnetjax.physnetjax.models.model import EF as StandardEF
+            from mmml.models.physnetjax.physnetjax.models.spooky_model import EF as SpookyEF
+        except ModuleNotFoundError:
+            from mmml.physnetjax.physnetjax.models.model import EF as StandardEF
+            from mmml.physnetjax.physnetjax.models.spooky_model import EF as SpookyEF
         from mmml.utils.model_checkpoint import load_model_checkpoint
 
         checkpoint = load_model_checkpoint(
@@ -304,7 +317,10 @@ def load_model_parameters(epoch_dir: Path, natoms: int):
         model.natoms = natoms
         return params, model
 
-    from mmml.physnetjax.physnetjax.restart.restart import get_params_model
+    try:
+        from mmml.models.physnetjax.physnetjax.restart.restart import get_params_model
+    except ModuleNotFoundError:
+        from mmml.physnetjax.physnetjax.restart.restart import get_params_model
 
     params, model = get_params_model(str(epoch_dir), natoms=natoms)
     if model is None:
@@ -345,7 +361,10 @@ def setup_mmml_imports():
             ev2kcalmol,
             setup_calculator,
         )
-        from mmml.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
+        try:
+            from mmml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
+        except ModuleNotFoundError:
+            from mmml.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
         return CutoffParameters, ev2kcalmol, setup_calculator, get_ase_calc
     except ModuleNotFoundError as exc:
         sys.exit(f"Required MMML modules not available: {exc}")
