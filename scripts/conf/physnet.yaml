@@ -52,5 +52,4 @@ logging:
   name: physnet_run
   save_best: true
   print_freq: 1
-  tensorboard: false
 

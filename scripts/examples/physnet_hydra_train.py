@@ -145,7 +145,6 @@ def main(cfg: DictConfig) -> None:
         schedule_fn=cfg.optimizer.schedule,
         objective=cfg.train.objective,
         ckpt_dir=BASE_CKPT_DIR,
-        log_tb=bool(cfg.logging.tensorboard),
         batch_method=batch_method,
         batch_args_dict=batch_args,
         data_keys=tuple(data_keys),

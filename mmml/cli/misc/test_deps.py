@@ -79,18 +79,6 @@ def check_optional_dependencies():
         available['asciichartpy'] = False
         available['polars'] = False
     
-    # Check TensorBoard dependencies
-    try:
-        from mmml.physnetjax.physnetjax.logger.tensorboard_interface import HAS_TENSORBOARD, HAS_TENSORFLOW
-        available['tensorboard'] = HAS_TENSORBOARD
-        available['tensorflow'] = HAS_TENSORFLOW
-        print(f"{'✅' if HAS_TENSORBOARD else '❌'} tensorboard: {HAS_TENSORBOARD}")
-        print(f"{'✅' if HAS_TENSORFLOW else '❌'} tensorflow: {HAS_TENSORFLOW}")
-    except Exception as e:
-        print(f"❌ Could not check TensorBoard dependencies: {e}")
-        available['tensorboard'] = False
-        available['tensorflow'] = False
-    
     return available
 
 
@@ -116,21 +104,13 @@ def print_summary(core_tests, optional_deps):
     # Optional dependencies
     print(f"\nOptional Dependencies:")
     plotting_available = optional_deps.get('asciichartpy', False) and optional_deps.get('polars', False)
-    tensorboard_available = optional_deps.get('tensorboard', False) and optional_deps.get('tensorflow', False)
     
     print(f"  {'✅' if plotting_available else '❌'} Plotting support (asciichartpy + polars)")
-    print(f"  {'✅' if tensorboard_available else '❌'} TensorBoard support (tensorboard + tensorflow + polars)")
     
     # Installation recommendations
-    if not plotting_available and not tensorboard_available:
+    if not plotting_available:
         print("\n💡 Recommendations:")
         print("   For plotting: pip install -e '.[plotting]'")
-        print("   For TensorBoard: pip install -e '.[tensorboard]'")
-        print("   For both: pip install -e '.[plotting,tensorboard]'")
-    elif not plotting_available:
-        print("\n💡 To add plotting: pip install -e '.[plotting]'")
-    elif not tensorboard_available:
-        print("\n💡 To add TensorBoard: pip install -e '.[tensorboard]'")
     else:
         print("\n✨ All optional features available!")
     

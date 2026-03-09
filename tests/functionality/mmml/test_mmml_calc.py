@@ -17,7 +17,7 @@ def _can_import(name: str) -> bool:
 
 def test_ev2kcalmol_constant():
 	# Ensure the EV->kcal/mol conversion used by calculators is reasonable
-	from mmml.pycharmmInterface.mmml_calculator import ev2kcalmol
+	from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol
 	assert abs(ev2kcalmol - 23.0605) < 0.05
 
 
@@ -38,7 +38,7 @@ def test_setup_calculator_factory_smoke():
 	if not ckpt.exists():
 		pytest.skip("No checkpoints present for ML model")
 
-	from mmml.pycharmmInterface.mmml_calculator import setup_calculator
+	from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
 
 	# Create factory without touching MM (avoids CHARMM setup during smoke test)
 	factory = setup_calculator(
@@ -72,8 +72,8 @@ def test_ml_energy_matches_reference_when_data_available():
 		pytest.skip(f"Dataset not found at {p}")
 
 	# Lightweight import to prepare one batch
-	from mmml.physnetjax.physnetjax.data.data import prepare_datasets
-	from mmml.physnetjax.physnetjax.data.batches import prepare_batches_jit
+	from mmml.interfaces.physnetjax.data.data import prepare_datasets
+	from mmml.interfaces.physnetjax.data.batches import prepare_batches_jit
 	import jax
 	import jax.numpy as jnp
 
@@ -95,7 +95,7 @@ def test_ml_energy_matches_reference_when_data_available():
 	R = jnp.array(batch["R"]).reshape(-1, 3)[:20]
 
 	# Build ML-only calculator factory
-	from mmml.pycharmmInterface.mmml_calculator import (
+	from mmml.interfaces.pycharmmInterface.mmml_calculator import (
 		setup_calculator,
 		ev2kcalmol,
 	)
@@ -150,11 +150,11 @@ def test_check_lattice_invariance():
 		pytest.skip("No checkpoints present for ML model")
 
 	import jax.numpy as jnp
-	from mmml.pycharmmInterface.mmml_calculator import (
+	from mmml.interfaces.pycharmmInterface.mmml_calculator import (
 		setup_calculator,
 		check_lattice_invariance,
 	)
-	from mmml.pycharmmInterface.cutoffs import CutoffParameters
+	from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
 
 	# Setup calculator with PBC (cell=40 Å cubic), MIC-only
 	cell_length = 40.0
@@ -227,8 +227,8 @@ def test_pbc_energy_invariance_via_ase():
 	import jax
 	import jax.numpy as jnp
 	import ase
-	from mmml.pycharmmInterface.mmml_calculator import setup_calculator
-	from mmml.pycharmmInterface.cutoffs import CutoffParameters
+	from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+	from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
 	cell_length = 40.0
 	factory = setup_calculator(
 		ATOMS_PER_MONOMER=10,
@@ -297,8 +297,8 @@ def test_pbc_force_invariance():
 	import jax
 	import jax.numpy as jnp
 	import ase
-	from mmml.pycharmmInterface.mmml_calculator import setup_calculator
-	from mmml.pycharmmInterface.cutoffs import CutoffParameters
+	from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+	from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
 	cell_length = 40.0
 	factory = setup_calculator(
 		ATOMS_PER_MONOMER=10,
@@ -376,14 +376,14 @@ def test_pbc_energy_invariance_ml_mm():
 	import tempfile
 	import jax.numpy as jnp
 	import ase.io
-	from mmml.pycharmmInterface.mmml_calculator import (
+	from mmml.interfaces.pycharmmInterface.mmml_calculator import (
 		setup_calculator,
 		check_lattice_invariance,
 	)
-	from mmml.pycharmmInterface.cutoffs import CutoffParameters
+	from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
 
 	try:
-		from mmml.pycharmmInterface.setupBox import setup_box_generic
+		from mmml.interfaces.pycharmmInterface.setupBox import setup_box_generic
 	except ImportError:
 		pytest.skip("setup_box_generic not available")
 
@@ -470,8 +470,8 @@ def test_pbc_force_gradient_numerical():
 	import jax
 	import jax.numpy as jnp
 	import ase
-	from mmml.pycharmmInterface.mmml_calculator import setup_calculator
-	from mmml.pycharmmInterface.cutoffs import CutoffParameters
+	from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+	from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
 	cell_length = 40.0
 	factory = setup_calculator(
 		ATOMS_PER_MONOMER=10,
@@ -535,7 +535,7 @@ def test_pbc_mic_displacement_symmetry():
 		pytest.skip("jax not available in this environment")
 
 	import jax.numpy as jnp
-	from mmml.pycharmmInterface.pbc_utils_jax import mic_displacement
+	from mmml.interfaces.pycharmmInterface.pbc_utils_jax import mic_displacement
 
 	cell = jnp.array([[10.0, 0, 0], [0, 10.0, 0], [0, 0, 10.0]])
 	Ri = jnp.array([1.0, 2.0, 3.0])
@@ -553,7 +553,7 @@ def test_pbc_wrap_unwrap_roundtrip():
 
 	import jax
 	import jax.numpy as jnp
-	from mmml.pycharmmInterface.pbc_utils_jax import (
+	from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
 		frac_coords,
 		unwrap_groups,
 		wrap_groups,
@@ -581,7 +581,7 @@ def test_pbc_mapper_idempotent():
 
 	import jax
 	import jax.numpy as jnp
-	from mmml.pycharmmInterface.pbc_prep_factory import make_pbc_mapper
+	from mmml.interfaces.pycharmmInterface.pbc_prep_factory import make_pbc_mapper
 
 	cell = jnp.array([[40.0, 0, 0], [0, 40.0, 0], [0, 0, 40.0]])
 	mol_id = jnp.array([
@@ -618,11 +618,11 @@ def test_pbc_energy_invariance_orthorhombic_cell():
 
 	import jax
 	import jax.numpy as jnp
-	from mmml.pycharmmInterface.mmml_calculator import (
+	from mmml.interfaces.pycharmmInterface.mmml_calculator import (
 		setup_calculator,
 		check_lattice_invariance,
 	)
-	from mmml.pycharmmInterface.cutoffs import CutoffParameters
+	from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
 
 	cell_lengths = (30.0, 40.0, 50.0)
 	cell_matrix = jnp.array([
