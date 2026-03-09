@@ -177,6 +177,55 @@ def resolve_checkpoint_paths(arg: Path | str | None) -> Tuple[Path, Path]:
     sys.exit("Could not locate an epoch directory under the supplied checkpoint path.")
 
 
+def resolve_desdimers_checkpoint(script_file: str | Path | None = None) -> Path:
+    """Resolve a default DES-family checkpoint path without hardcoding."""
+    ckpt_env = os.environ.get("MMML_CKPT")
+    if ckpt_env:
+        return Path(ckpt_env).expanduser().resolve()
+
+    # Prefer installed package location when available.
+    try:
+        import mmml as mmml_pkg
+
+        package_root = Path(mmml_pkg.__file__).resolve().parent
+        for rel_root in (
+            ("models", "physnetjax", "ckpts"),
+            ("physnetjax", "ckpts"),
+        ):
+            for ckpt_name in ("DES", "DESdimers"):
+                package_ckpt = package_root.joinpath(*rel_root, ckpt_name)
+                if package_ckpt.exists():
+                    return package_ckpt.resolve()
+    except Exception:
+        pass
+
+    # Fallback for local repo execution.
+    search_roots: list[Path] = []
+    if script_file is not None:
+        script_dir = Path(script_file).resolve().parent
+        search_roots.extend([script_dir, *script_dir.parents])
+    cwd = Path.cwd().resolve()
+    search_roots.extend([cwd, *cwd.parents])
+
+    seen: set[Path] = set()
+    for root in search_roots:
+        if root in seen:
+            continue
+        seen.add(root)
+        for rel_root in (
+            ("mmml", "models", "physnetjax", "ckpts"),
+            ("mmml", "physnetjax", "ckpts"),
+        ):
+            for ckpt_name in ("DES", "DESdimers"):
+                candidate = root.joinpath(*rel_root, ckpt_name)
+                if candidate.exists():
+                    return candidate.resolve()
+
+    raise FileNotFoundError(
+        "Could not locate checkpoint. Set MMML_CKPT to a valid checkpoint path."
+    )
+
+
 def load_configuration(npz_path: Path, index: int) -> Tuple[np.ndarray, np.ndarray, Dict[str, np.ndarray]]:
     """Load a configuration from the dataset."""
     data = np.load(npz_path)

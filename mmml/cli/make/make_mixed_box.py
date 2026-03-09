@@ -84,8 +84,8 @@ def _generate_residue_pdbs(
 
     Returns a dict mapping residue name -> {"pdb": Path, "n_atoms": int, "atoms": Atoms}.
     """
-    from mmml.cli import make_res
-    from mmml.pycharmmInterface.pycharmmCommands import CLEAR_CHARMM
+    from mmml.cli.make import make_res
+    from mmml.interfaces.pycharmmInterface.pycharmmCommands import CLEAR_CHARMM
 
     os.makedirs("pdb", exist_ok=True)
     os.makedirs("xyz", exist_ok=True)
@@ -121,7 +121,7 @@ def _run_packmol_mixed(
 
     Returns the path to the output PDB.
     """
-    from mmml.pycharmmInterface.setupBox import PACKMOL_PATH
+    from mmml.interfaces.pycharmmInterface.setupBox import PACKMOL_PATH
 
     os.makedirs("packmol", exist_ok=True)
     os.makedirs(str(Path(output_pdb).parent), exist_ok=True)
@@ -167,14 +167,14 @@ def _setup_charmm_box(
     tag: str,
 ) -> None:
     """Read the mixed PDB into PyCHARMM, set up PSF / PBC, and minimise."""
-    from mmml.pycharmmInterface import setupBox
-    from mmml.pycharmmInterface.import_pycharmm import (
+    from mmml.interfaces.pycharmmInterface import setupBox
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import (
         pycharmm,
         reset_block,
         reset_block_no_internal,
         safe_energy_show,
     )
-    from mmml.pycharmmInterface.pycharmmCommands import CLEAR_CHARMM
+    from mmml.interfaces.pycharmmInterface.pycharmmCommands import CLEAR_CHARMM
 
     CLEAR_CHARMM()
     setupBox.setup_box_generic(pdb_path, side_length=side_length, tag=tag)
