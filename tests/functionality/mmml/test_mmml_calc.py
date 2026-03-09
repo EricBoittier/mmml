@@ -484,9 +484,15 @@ def test_pbc_energy_invariance_ml_mm():
 	pdb_path = next((p for p in pdb_candidates if p.exists()), None)
 	if pdb_path is None:
 		pytest.skip(f"PDB not found in any expected location: {pdb_candidates}")
-	crystal_script = PROJECT_ROOT / "crystal_image.str"
-	if not crystal_script.exists():
-		pytest.skip(f"Missing CHARMM crystal script: {crystal_script}")
+	crystal_candidates = [
+		PROJECT_ROOT / "tests/crystal_image.str",
+		PROJECT_ROOT / "tests/functionality/pycharmmETC/crystal_image.str",
+		PROJECT_ROOT / "mmml/data/charmm/crystal_image.str",
+		PROJECT_ROOT / "crystal_image.str",
+	]
+	crystal_script = next((p for p in crystal_candidates if p.exists()), None)
+	if crystal_script is None:
+		pytest.skip(f"Missing CHARMM crystal script in expected locations: {crystal_candidates}")
 
 	import tempfile
 	import jax.numpy as jnp
@@ -504,11 +510,13 @@ def test_pbc_energy_invariance_ml_mm():
 
 	with tempfile.TemporaryDirectory() as tmpdir:
 		import os as os_module
+		import shutil
 		orig_cwd = os_module.getcwd()
 		try:
 			os_module.chdir(tmpdir)
 			os_module.makedirs("psf", exist_ok=True)
 			os_module.makedirs("pdb", exist_ok=True)
+			shutil.copyfile(str(crystal_script), "crystal_image.str")
 			setup_box_generic(str(pdb_path), side_length=40.0, tag="pbcmm")
 		except Exception as e:
 			pytest.skip(f"CHARMM/PSF setup failed: {e}")
