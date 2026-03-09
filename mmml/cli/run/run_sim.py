@@ -1034,7 +1034,7 @@ shake bonh para sele all end
                 barostat_kwargs=default_nhc_kwargs(jnp.array(barostat_tau), nhc_kwargs),
                 thermostat_kwargs=default_nhc_kwargs(jnp.array(nhc_tau * dt), nhc_kwargs),
             )
-            print(f"NPT Nose-Hoover: pressure={args.pressure} bar, barostat_tau={barostat_tau:.6f} ps, "
+            print(f"NPT Nose-Hoover: pressure={getattr(args, 'pressure', 1.01325)} bar, barostat_tau={barostat_tau:.6f} ps, "
                   f"thermostat tau={nhc_tau * dt:.6f} ps")
         elif args.ensemble == "nvt":
             nhc_chain_length = getattr(args, 'nhc_chain_length', 3)

@@ -1,10 +1,10 @@
 REMARK  EXECUTING CHARMM SCRIPT FROM PYTHON                                           
-REMARK   DATE:     3/ 9/26     17:42:26      CREATED BY USER: ericb                   
-ATOM      1  CB  MEOH    1       0.834   0.503   1.092  1.00  0.00      MEOH
-ATOM      2  OG  MEOH    1       0.237   1.344   1.135  1.00  0.00      MEOH
-ATOM      3  HG1 MEOH    1       0.109   0.008   0.112  1.00  0.00      MEOH
-ATOM      4  HB1 MEOH    1       0.869   0.825   0.402  1.00  0.00      MEOH
-ATOM      5  HB2 MEOH    1       0.643   0.017   0.139  1.00  0.00      MEOH
-ATOM      6  HB3 MEOH    1       0.043   0.394   0.920  1.00  0.00      MEOH
+REMARK   DATE:     3/ 9/26     17:45: 6      CREATED BY USER: ericb                   
+ATOM      1  CB  MEOH    1       0.691   0.015   0.018  1.00  0.00      MEOH
+ATOM      2  OG  MEOH    1       0.377   0.179   0.610  1.00  0.00      MEOH
+ATOM      3  HG1 MEOH    1       0.085   0.090   0.280  1.00  0.00      MEOH
+ATOM      4  HB1 MEOH    1       0.026   0.029   0.071  1.00  0.00      MEOH
+ATOM      5  HB2 MEOH    1       0.857   0.154   0.177  1.00  0.00      MEOH
+ATOM      6  HB3 MEOH    1       1.095   0.439   0.094  1.00  0.00      MEOH
 TER       7      MEOH     1
 END
