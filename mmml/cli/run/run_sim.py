@@ -1236,12 +1236,15 @@ shake bonh para sele all end
                     neighbor=(pair_idx, pair_mask), kT=kT, mass=Si_mass
                 )
                 npt_pair_idx, npt_pair_mask = pair_idx, pair_mask
+                npt_pressure = getattr(args, 'pressure', 1.01325) * unit['pressure']
             elif args.ensemble == "nvt":
                 state = init_fn(key, md_pos, mass=Si_mass)
                 npt_pair_idx, npt_pair_mask = None, None
+                npt_pressure = None
             else:
                 state = init_fn(key, md_pos, kT, mass=Si_mass)
                 npt_pair_idx, npt_pair_mask = None, None
+                npt_pressure = None
             print(f"Momentum initialized for {T} K")
             nhc_positions = []
 
@@ -1320,8 +1323,8 @@ shake bonh para sele all end
             # MAIN SIMULATION LOOP
             # ========================================================================
             jaxmd_loop_start = time.perf_counter()
-            npt_pair_idx, npt_pair_mask = (pair_idx, pair_mask) if (is_npt and pair_idx is not None) else (None, None)
-            npt_pressure = getattr(args, 'pressure', 1.01325) * unit['pressure'] if is_npt else None
+            if is_npt and pair_idx is not None:
+                npt_pair_idx, npt_pair_mask = pair_idx, pair_mask
 
             for i in range(total_records):
                 if is_npt and update_fn is not None:
