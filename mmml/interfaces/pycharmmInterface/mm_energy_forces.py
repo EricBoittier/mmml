@@ -89,7 +89,7 @@ def build_mm_energy_forces_fn(
     pbc_cell: Optional[np.ndarray] = None,
     max_pairs: Optional[int] = None,
     cell_list_safety_factor: float = 2.5,
-    use_smooth_mic: bool = False,
+    use_smooth_mic: Optional[bool] = None,
     use_jax_md_neighbor_list: bool = True,
     fractional_coordinates: bool = False,
     debug: bool = False,
@@ -154,6 +154,8 @@ def build_mm_energy_forces_fn(
     at_flat_rm = np.array(at_rm)
 
     _dp = _dimer_permutations(n_monomers)
+    # Smooth MIC avoids discontinuities at cell boundaries during minimization
+    _use_smooth_mic = use_smooth_mic if use_smooth_mic is not None else (pbc_cell is not None)
     _use_jax_md_nbrs = (
         pbc_cell is not None
         and use_jax_md_neighbor_list
@@ -353,7 +355,7 @@ def build_mm_energy_forces_fn(
             com_j = coms[_dimer_perms_np[:, 1]]
             cell_for_com = box_override if box_override is not None else pbc_cell
             if cell_for_com is not None:
-                mic_fn = mic_displacement_smooth if use_smooth_mic else mic_displacement
+                mic_fn = mic_displacement_smooth if _use_smooth_mic else mic_displacement
                 d_vec = jax.vmap(lambda a, b: mic_fn(a, b, cell_for_com))(com_i, com_j)
                 r = jnp.linalg.norm(d_vec, axis=1)
             else:
@@ -388,7 +390,7 @@ def build_mm_energy_forces_fn(
         if pbc_cell is not None:
             pos_dst = positions[pair_idx_atom_atom[:, 1]]
             pos_src = positions[pair_idx_atom_atom[:, 0]]
-            mic_batched = mic_displacements_batched_smooth if use_smooth_mic else mic_displacements_batched
+            mic_batched = mic_displacements_batched_smooth if _use_smooth_mic else mic_displacements_batched
             displacements = mic_batched(pos_dst, pos_src, pbc_cell)
         else:
             displacements = positions[pair_idx_atom_atom[:, 0]] - positions[pair_idx_atom_atom[:, 1]]
@@ -448,7 +450,7 @@ def build_mm_energy_forces_fn(
             _cell = _box_to_cell_3x3(_cell_raw)
             pos_dst = positions[pair_j]
             pos_src = positions[pair_i]
-            mic_batched = mic_displacements_batched_smooth if use_smooth_mic else mic_displacements_batched
+            mic_batched = mic_displacements_batched_smooth if _use_smooth_mic else mic_displacements_batched
             displacements = mic_batched(pos_dst, pos_src, _cell)
             distances = jnp.linalg.norm(displacements, axis=1)
             distances = jnp.where(pair_mask > 0, distances, 1e6)
