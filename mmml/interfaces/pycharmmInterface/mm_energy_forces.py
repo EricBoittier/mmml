@@ -75,6 +75,7 @@ def build_mm_energy_forces_fn(
     cell_list_safety_factor: float = 2.5,
     use_smooth_mic: bool = False,
     use_jax_md_neighbor_list: bool = True,
+    fractional_coordinates: bool = False,
     debug: bool = False,
 ) -> Any:
     """Build MM energy/forces function with switching.
@@ -156,6 +157,7 @@ def build_mm_energy_forces_fn(
             monomer_offsets=np.asarray(monomer_offsets),
             dr_threshold=0.5,
             capacity_multiplier=1.25,
+            fractional_coordinates=fractional_coordinates,
         )
         if jax_md_result is not None:
             _neighbor_fn, _filter_fn, _monomer_id_jnp = jax_md_result

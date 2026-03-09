@@ -1,5 +1,7 @@
 # pbc_utils_jax.py
 """PBC utilities for JAX. Includes smooth MIC for differentiable optimization under PBC."""
+from typing import Optional
+
 import jax
 import jax.numpy as jnp
 import jax.scipy.linalg
@@ -50,18 +52,24 @@ def wrap_positions(R: Array, cell: Array) -> Array:
     return cart_coords(S_wrapped, cell)
 
 
-def wrap_groups(R: Array, groups: list[Array], cell: Array) -> Array:
+def wrap_groups(
+    R: Array, groups: list[Array], cell: Array, mass: Optional[Array] = None
+) -> Array:
     """Wrap each group (monomer) as a unit into the primary cell.
     Keeps monomers intact: shift all atoms by the same integer-lattice translation
-    so the group's CoM lands in [0,1)^3.
+    so the group's center of mass lands in [0,1)^3.
 
+    Uses mass-weighted COM when mass is provided; otherwise uses mean of positions.
     Numerically stable: the shift is ``cart_coords(-floor(S_com))``, which is
     exactly zero for in-box molecules (floor==0) and an exact lattice vector
-    otherwise. This avoids the frac->cart round-trip noise of the naive
-    ``cart_coords(S_wrapped) - com`` formulation."""
+    otherwise."""
     R_out = R
     for g in groups:
-        com = jnp.sum(R[g], axis=0, dtype=R.dtype) / g.shape[0]
+        if mass is not None:
+            m_g = mass[g]
+            com = jnp.sum(R[g] * m_g[:, None], axis=0, dtype=R.dtype) / jnp.sum(m_g)
+        else:
+            com = jnp.sum(R[g], axis=0, dtype=R.dtype) / g.shape[0]
         S_com = frac_coords(com[None, :], cell)[0]
         lattice_shift = -jnp.floor(S_com)
         cart_shift = cart_coords(lattice_shift[None, :], cell)[0]

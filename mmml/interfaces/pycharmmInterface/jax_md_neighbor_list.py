@@ -48,8 +48,12 @@ def create_jax_md_neighbor_list(
     monomer_offsets: np.ndarray,
     dr_threshold: float = 0.5,
     capacity_multiplier: float = 1.25,
+    fractional_coordinates: bool = False,
 ):
     """Create jax_md neighbor list with inter-monomer filtering.
+
+    When fractional_coordinates=True (needed for NPT with dynamic box), the neighbor list
+    accepts a box keyword in update() and expects positions in fractional coords [0,1)^3.
 
     Returns (neighbor_fn, filter_inter_monomer_fn, monomer_id_jnp) or None if jax_md unavailable.
     """
@@ -57,7 +61,10 @@ def create_jax_md_neighbor_list(
         return None
 
     box = _pbc_cell_to_box(pbc_cell)
-    displacement, _ = space.periodic(box)
+    if fractional_coordinates:
+        displacement, _ = space.periodic_general(box=box, fractional_coordinates=True)
+    else:
+        displacement, _ = space.periodic(box)
 
     neighbor_fn = partition.neighbor_list(
         displacement,
@@ -66,6 +73,7 @@ def create_jax_md_neighbor_list(
         dr_threshold=dr_threshold,
         capacity_multiplier=capacity_multiplier,
         format=partition.NeighborListFormat.OrderedSparse,
+        fractional_coordinates=fractional_coordinates,
     )
 
     n_monomers = len(monomer_offsets) - 1
