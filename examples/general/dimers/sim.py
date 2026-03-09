@@ -65,7 +65,7 @@ config = {
     "temperature": 298.0,
     "timestep": 0.25,
     "nsteps_jaxmd": 100000,
-    "nsteps_ase": 10,
+    "nsteps_ase": 1000,
     "ensemble": "npt",
     "output_prefix": "test_run",
     "energy_catch": 0.5,
