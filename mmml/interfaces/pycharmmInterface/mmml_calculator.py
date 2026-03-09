@@ -462,13 +462,30 @@ def setup_calculator(
             
             if params is None:
                 raise FileNotFoundError(f"params not found in JSON checkpoint at {restart_path}")
+            # Use default PhysNet EF config when config is missing (params-only checkpoint)
             if not config:
-                raise FileNotFoundError(f"model_config not found in JSON checkpoint at {restart_path}")
-            
+                config = {
+                    "features": 32,
+                    "max_degree": 3,
+                    "num_iterations": 2,
+                    "num_basis_functions": 16,
+                    "cutoff": 6.0,
+                    "max_atomic_number": 118,
+                    "charges": False,
+                    "natoms": MAX_ATOMS_PER_SYSTEM,
+                    "total_charge": 0,
+                    "n_res": 3,
+                    "zbl": True,
+                    "debug": False,
+                    "efa": False,
+                    "use_energy_bias": False,
+                    "use_pbc": bool(cell),
+                }
+
             # Reconstruct model from config
             from mmml.physnetjax.physnetjax.models.model import EF as StandardEF
             from mmml.physnetjax.physnetjax.models.spooky_model import EF as SpookyEF
-            
+
             # Convert JSON arrays back to JAX arrays for model config
             def json_to_jax_config(obj):
                 """Convert JSON config values back to appropriate types."""
