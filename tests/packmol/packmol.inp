@@ -1,5 +1,5 @@
 
-seed 742532
+seed 402808
     output pdb/init-packmol.pdb
     filetype pdb
     tolerance 2.0
