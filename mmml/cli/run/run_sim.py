@@ -1727,9 +1727,6 @@ shake bonh para sele all end
     print("JAX-MD simulation complete!")
     return atoms
 
-
-
-
 def main() -> int:
     """CLI entry point: parse args and run simulation."""
     run(parse_args())
