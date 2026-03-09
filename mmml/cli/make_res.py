@@ -34,8 +34,8 @@ def parse_args():
 
 
 def main_loop(args):
-    from mmml.pycharmmInterface import setupRes
-    from mmml.pycharmmInterface.import_pycharmm import (
+    from mmml.interfaces.pycharmmInterface import setupRes
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import (
         reset_block,
         reset_block_no_internal,
         energy,

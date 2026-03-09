@@ -1,7 +1,7 @@
 import mmml
-from mmml.pycharmmInterface import import_pycharmm
-from mmml.pycharmmInterface import setupRes
-from mmml.pycharmmInterface.import_pycharmm import (
+from mmml.interfaces.pycharmmInterface import import_pycharmm
+from mmml.interfaces.pycharmmInterface import setupRes
+from mmml.interfaces.pycharmmInterface.import_pycharmm import (
     reset_block,
     reset_block_no_internal,
     energy,
