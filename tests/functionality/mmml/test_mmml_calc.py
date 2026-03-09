@@ -39,6 +39,31 @@ def _resolve_ckpt_path() -> Path | None:
 	return None
 
 
+def _resolve_full_ckpt_path() -> Path | None:
+	"""Resolve a full checkpoint directory suitable for strict invariance tests."""
+	ckpt_env = os.environ.get("MMML_CKPT")
+	candidates = []
+	if ckpt_env:
+		candidates.append(Path(ckpt_env))
+	candidates.extend(
+		[
+			PROJECT_ROOT / "mmml/models/physnetjax/ckpts/DESdimers",
+			PROJECT_ROOT / "mmml/models/physnetjax/ckpts",
+			PROJECT_ROOT / "mmml/physnetjax/ckpts",
+		]
+	)
+	for ckpt in candidates:
+		if not ckpt.exists():
+			continue
+		ckpt = ckpt.resolve()
+		if ckpt.is_dir():
+			if any(p.name.startswith("epoch-") for p in ckpt.iterdir()):
+				return ckpt
+			if (ckpt / "model_config.json").exists():
+				return ckpt
+	return None
+
+
 def _skip_if_runtime_incompatible(exc: Exception) -> None:
 	"""Skip optional heavy tests when checkpoint/runtime combination is incompatible."""
 	msg = str(exc)
@@ -193,7 +218,9 @@ def test_check_lattice_invariance():
 	if ckpt is None:
 		pytest.skip("No checkpoints present for ML model")
 	if ckpt.is_file() and ckpt.suffix == ".json":
-		pytest.skip("Strict lattice/force checks require full checkpoint directory, not JSON params")
+		ckpt = _resolve_full_ckpt_path()
+		if ckpt is None:
+			pytest.skip("Strict lattice/force checks require full checkpoint directory, not JSON params")
 
 	import jax.numpy as jnp
 	from mmml.interfaces.pycharmmInterface.mmml_calculator import (
@@ -272,7 +299,9 @@ def test_pbc_energy_invariance_via_ase():
 	if ckpt is None:
 		pytest.skip("No checkpoints present for ML model")
 	if ckpt.is_file() and ckpt.suffix == ".json":
-		pytest.skip("Strict lattice/force checks require full checkpoint directory, not JSON params")
+		ckpt = _resolve_full_ckpt_path()
+		if ckpt is None:
+			pytest.skip("Strict lattice/force checks require full checkpoint directory, not JSON params")
 
 	import jax
 	import jax.numpy as jnp
@@ -349,7 +378,9 @@ def test_pbc_force_invariance():
 	if ckpt is None:
 		pytest.skip("No checkpoints present for ML model")
 	if ckpt.is_file() and ckpt.suffix == ".json":
-		pytest.skip("Strict lattice/force checks require full checkpoint directory, not JSON params")
+		ckpt = _resolve_full_ckpt_path()
+		if ckpt is None:
+			pytest.skip("Strict lattice/force checks require full checkpoint directory, not JSON params")
 
 	import jax
 	import jax.numpy as jnp
@@ -528,7 +559,9 @@ def test_pbc_force_gradient_numerical():
 	if ckpt is None:
 		pytest.skip("No checkpoints present for ML model")
 	if ckpt.is_file() and ckpt.suffix == ".json":
-		pytest.skip("Strict lattice/force checks require full checkpoint directory, not JSON params")
+		ckpt = _resolve_full_ckpt_path()
+		if ckpt is None:
+			pytest.skip("Strict lattice/force checks require full checkpoint directory, not JSON params")
 
 	import jax
 	import jax.numpy as jnp
@@ -687,7 +720,9 @@ def test_pbc_energy_invariance_orthorhombic_cell():
 	if ckpt is None:
 		pytest.skip("No checkpoints present for ML model")
 	if ckpt.is_file() and ckpt.suffix == ".json":
-		pytest.skip("Strict lattice/force checks require full checkpoint directory, not JSON params")
+		ckpt = _resolve_full_ckpt_path()
+		if ckpt is None:
+			pytest.skip("Strict lattice/force checks require full checkpoint directory, not JSON params")
 	if not ckpt.is_file() and not (ckpt / "model_config.json").exists():
 		pytest.skip("Strict lattice/force checks require checkpoint directory with model_config.json")
 
