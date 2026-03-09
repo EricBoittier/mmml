@@ -1256,7 +1256,17 @@ shake bonh para sele all end
                 energy_initial = float(wrapped_energy_fn(state.position))
             print(f"Initial energy: {energy_initial:.6f} eV")
             # Debug: forces from calculator (used by NVE; jax.grad gives NaN)
-            forces_jax = wrapped_force_fn(state.position)
+            if is_npt and npt_pair_idx is not None:
+                box_curr = simulate.npt_box(state)
+                real_pos = space.transform(box_curr, state.position)
+                forces_jax = jax_md_force_fn(
+                    real_pos,
+                    mm_pair_idx=npt_pair_idx,
+                    mm_pair_mask=npt_pair_mask,
+                    box=box_curr,
+                )
+            else:
+                forces_jax = wrapped_force_fn(state.position)
             print(f"JAX-MD initial forces (from calculator):\n{forces_jax}")
             # velocity = momentum / mass; position update = R + dt * v (half-step in VV)
             vel = state.momentum / state.mass
