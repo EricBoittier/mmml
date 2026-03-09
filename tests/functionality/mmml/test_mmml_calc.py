@@ -478,6 +478,9 @@ def test_pbc_energy_invariance_ml_mm():
 	pdb_path = next((p for p in pdb_candidates if p.exists()), None)
 	if pdb_path is None:
 		pytest.skip(f"PDB not found in any expected location: {pdb_candidates}")
+	crystal_script = PROJECT_ROOT / "crystal_image.str"
+	if not crystal_script.exists():
+		pytest.skip(f"Missing CHARMM crystal script: {crystal_script}")
 
 	import tempfile
 	import jax.numpy as jnp
