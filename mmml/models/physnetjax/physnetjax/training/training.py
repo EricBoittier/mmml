@@ -10,7 +10,6 @@ import ase.units
 import e3x
 import jax
 import lovely_jax as lj
-# import tensorflow as tf
 from flax.training import orbax_utils, train_state
 from jax.experimental import mesh_utils
 from jax.sharding import Mesh, NamedSharding, PartitionSpec as P
@@ -25,7 +24,6 @@ warnings.filterwarnings("ignore", category=RuntimeWarning, message=".*Task was d
 
 from mmml.physnetjax.physnetjax.data.data import print_shapes
 from mmml.physnetjax.physnetjax.directories import BASE_CKPT_DIR, print_paths
-# from mmml.physnetjax.physnetjax.logger.tensorboard_logging import write_tb_log
 from mmml.physnetjax.physnetjax.restart.restart import orbax_checkpointer, restart_training
 from mmml.physnetjax.physnetjax.training.evalstep import eval_step
 from mmml.physnetjax.physnetjax.training.optimizer import (
@@ -121,7 +119,7 @@ def train_model(
     schedule_fn=None,
     objective="valid_forces_mae",
     ckpt_dir=BASE_CKPT_DIR,
-    log_tb=True,
+    log_tb=False,
     batch_method=None,
     batch_args_dict=None,
     data_keys=("R", "Z", "F", "E", "N",  "D", "dst_idx", "src_idx", "batch_segments"),
@@ -132,8 +130,8 @@ def train_model(
     Train a PhysNetJax model with comprehensive logging and checkpointing.
     
     This function implements the main training loop for PhysNetJax models,
-    including data batching, optimization, validation, checkpointing, and
-    TensorBoard logging. Supports both standard energy/force prediction
+    including data batching, optimization, validation, and checkpointing.
+    Supports both standard energy/force prediction
     and charge/dipole prediction modes.
     
     Parameters
@@ -185,7 +183,7 @@ def train_model(
     ckpt_dir : pathlib.Path, optional
         Checkpoint directory, by default BASE_CKPT_DIR
     log_tb : bool, optional
-        Whether to log to TensorBoard, by default True
+        Deprecated and ignored. TensorBoard logging has been removed.
     batch_method : str | None, optional
         Batching method ("advanced" or None), by default None
     batch_args_dict : dict | None, optional
@@ -215,7 +213,6 @@ def train_model(
     - Training loop with gradient updates
     - Validation after each epoch
     - Checkpointing of best models
-    - TensorBoard logging
     - Progress monitoring with rich console output
     """
     data_keys = tuple(data_keys)
@@ -526,11 +523,6 @@ def train_model(
                 "dipole_w": dipole_weight,
                 "forces_w": forces_weight,
             }
-
-            if log_tb:
-                writer = tf.summary.create_file_writer(str(CKPT_DIR / "tfevents"))
-                writer.set_as_default()
-                write_tb_log(writer, obj_res, epoch)  # Call your logger function here
 
             best_ = False
 

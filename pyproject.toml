@@ -28,33 +28,19 @@ dependencies = [
     "jax",
     "jaxlib",
     "jax-md",
-    "dm-haiku",
     "flax",
     "optax",
-    "chex",
     "jaxtyping",
-    "jmp",
-    "jraph",
     "orbax-checkpoint",
-    "cuequivariance",
-    "cuequivariance-jax",
     # ML utilities
     "ml-dtypes",
-    "ml-collections",
-    "tensorflow>=2.11.0",
-    "tensorflow-datasets>=4.9.0",
-    "einops",
     # Chemistry core
     "ase",
     "pyyaml",
     # Hydra configuration
-    "hydra-core>=1.3.0",
-    "omegaconf>=2.3.0",
     # Utilities
     "tqdm",
     "rich",
-    "tabulate",
-    "typing-extensions",
     "pint",
     "h5py>=3.8.0",
     "e3x>=1.0.2",
@@ -64,6 +50,7 @@ dependencies = [
     # Web/API (for GUI)
     "fastapi",
     "uvicorn",
+    "pytest>=9.0.2",
 ]
 
 [project.optional-dependencies]
@@ -76,12 +63,6 @@ plotting = [
     "polars",
 ]
 
-# TensorBoard logging and analysis
-tensorboard = [
-    "tensorboard>=2.11.0",
-    "tensorflow>=2.11.0",
-    "polars",
-]
 # GPU/CUDA support (CUDA 12)
 # Note: JAX with CUDA requires installation from specific index
 # Install with: pip install -e ".[gpu]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
@@ -179,6 +160,8 @@ notebooks = [
 # Experiment tracking and optimization
 experiments = [
     "wandb>=0.15.0",
+    "hydra-core>=1.3.0",
+    "omegaconf>=2.3.0",
     "hydra-optuna-sweeper>=1.2.0",
 ]
 
@@ -190,17 +173,17 @@ dev = [
 
 # Full installation with all optional dependencies (CUDA 12)
 all = [
-    "mmml[gpu,quantum,quantum-gpu,ml,viz,md,chem,data,notebooks,experiments,plotting,tensorboard]",
+    "mmml[gpu,quantum,quantum-gpu,ml,viz,md,chem,data,notebooks,experiments,plotting]",
 ]
 
 # Full installation with all optional dependencies (CUDA 13)
 all-cuda13 = [
-    "mmml[gpu-cuda13,quantum,ml,viz,md,chem,data,notebooks,experiments,plotting,tensorboard]",
+    "mmml[gpu-cuda13,quantum,ml,viz,md,chem,data,notebooks,experiments,plotting]",
 ]
 
 # CPU-only full installation (no GPU dependencies)
 all-cpu = [
-    "mmml[quantum,ml,viz,md,chem,data,notebooks,experiments,plotting,tensorboard]",
+    "mmml[quantum,ml,viz,md,chem,data,notebooks,experiments,plotting]",
 ]
 
 [tool.uv.sources]
