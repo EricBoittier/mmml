@@ -642,7 +642,7 @@ def setup_calculator(
         Supports heterogeneous monomer sizes via the outer ``atoms_per_monomer_list``
         and ``monomer_offsets``.
         """
-        result = build_mm_energy_forces_fn(
+        result_jaxmd = build_mm_energy_forces_fn(
             R,
             total_atoms=total_atoms,
             n_monomers=N_MONOMERS,
@@ -663,9 +663,31 @@ def setup_calculator(
             use_jax_md_neighbor_list=True,
             debug=debug,
         )
-        if isinstance(result, tuple):
-            return result[0], result[1]
-        return result, None
+        if isinstance(result_jaxmd, tuple):
+            mm_fn_jaxmd, update_fn = result_jaxmd
+            mm_fn_cell = build_mm_energy_forces_fn(
+                R,
+                total_atoms=total_atoms,
+                n_monomers=N_MONOMERS,
+                monomer_offsets=monomer_offsets,
+                atoms_per_monomer_list=atoms_per_monomer_list,
+                lambda_monomer=lambda_monomer,
+                ml_cutoff_distance=ml_cutoff_distance,
+                mm_switch_on=mm_switch_on,
+                mm_cutoff=mm_cutoff,
+                complementary_handoff=complementary_handoff,
+                ep_scale=ep_scale,
+                sig_scale=sig_scale,
+                at_codes_override=at_codes_override,
+                pbc_cell=pbc_cell,
+                max_pairs=max_pairs,
+                cell_list_safety_factor=cell_list_safety_factor,
+                use_smooth_mic=use_smooth_mic,
+                use_jax_md_neighbor_list=False,
+                debug=debug,
+            )
+            return (mm_fn_jaxmd, mm_fn_cell), update_fn
+        return result_jaxmd, None
 
     # Lazy cache for the pre-computed MM energy/force function.
     # Must be built once with *concrete* positions (outside JIT) so that
@@ -679,7 +701,7 @@ def setup_calculator(
         key = (cutoff_params.ml_cutoff, cutoff_params.mm_switch_on, cutoff_params.mm_cutoff,
                getattr(cutoff_params, "complementary_handoff", True))
         if _cached_mm_fn[0] is None or _cached_mm_cutoff_key[0] != key:
-            mm_fn, update_fn = get_MM_energy_forces_fns(
+            mm_result, update_fn = get_MM_energy_forces_fns(
                 positions_concrete,
                 N_MONOMERS=n_monomers,
                 ml_cutoff_distance=cutoff_params.ml_cutoff,
@@ -687,7 +709,7 @@ def setup_calculator(
                 mm_cutoff=cutoff_params.mm_cutoff,
                 complementary_handoff=getattr(cutoff_params, "complementary_handoff", True),
             )
-            _cached_mm_fn[0] = mm_fn
+            _cached_mm_fn[0] = mm_result
             _cached_update_mm_pairs[0] = update_fn
             _cached_mm_cutoff_key[0] = key
 
@@ -1195,10 +1217,15 @@ def setup_calculator(
         # Ensure positions are finite
         positions = jnp.where(jnp.isfinite(positions), positions, 0.0)
 
-        if mm_pair_idx is not None and mm_pair_mask is not None:
-            mm_E, mm_grad = _cached_mm_fn[0](positions, mm_pair_idx, mm_pair_mask)
+        mm_fn_val = _cached_mm_fn[0]
+        if isinstance(mm_fn_val, tuple):
+            mm_fn_jaxmd, mm_fn_cell = mm_fn_val
+            if mm_pair_idx is not None and mm_pair_mask is not None:
+                mm_E, mm_grad = mm_fn_jaxmd(positions, mm_pair_idx, mm_pair_mask)
+            else:
+                mm_E, mm_grad = mm_fn_cell(positions)
         else:
-            mm_E, mm_grad = _cached_mm_fn[0](positions)
+            mm_E, mm_grad = mm_fn_val(positions)
         
         # Check for NaN/Inf in MM energy and forces
         mm_E = jnp.where(jnp.isfinite(mm_E), mm_E, 0.0)
