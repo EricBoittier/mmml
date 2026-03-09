@@ -23,8 +23,10 @@ from mmml.utils.model_checkpoint import (
     to_jsonable,
 )
 
-# Path to DESdimers final2 checkpoint (may not exist or be loadable on CPU)
-DESDIMERS_CKPT = Path(__file__).parent.parent / "mmml" / "physnetjax" / "ckpts" / "DESdimers" / "final2"
+# Path to DESdimers checkpoint (may not exist or be loadable on CPU)
+# Uses epoch-1985 to match other tests; final2 is not present in repo
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DESDIMERS_CKPT = _PROJECT_ROOT / "mmml" / "models" / "physnetjax" / "ckpts" / "DESdimers" / "epoch-1985"
 
 
 def _create_synthetic_params():
@@ -158,11 +160,11 @@ def test_orbax_to_json_with_config_and_metadata(temp_dir):
 
 @pytest.mark.skipif(
     not DESDIMERS_CKPT.exists(),
-    reason="DESdimers final2 checkpoint not found",
+    reason="DESdimers checkpoint not found",
 )
 def test_desdimers_orbax_to_json_if_loadable(temp_dir):
     """
-    Convert DESdimers final2 to JSON when loadable.
+    Convert DESdimers orbax checkpoint to JSON when loadable.
 
     This test is skipped if the checkpoint doesn't exist.
     It may fail on CPU-only machines if the checkpoint was saved with GPU sharding.
