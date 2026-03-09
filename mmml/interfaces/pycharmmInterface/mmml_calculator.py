@@ -71,16 +71,27 @@ except ModuleNotFoundError:  # pragma: no cover - ML stack optional for docs
     # fail due to optional extras such as e3x.
     try:
         from mmml.models.physnetjax.physnetjax.restart.restart import get_files, get_last, get_params_model
-    except ModuleNotFoundError:
+    except ModuleNotFoundError as exc_restart:
+        _restart_import_error = exc_restart
+
+        def _raise_restart_import_error() -> None:
+            missing = getattr(_restart_import_error, "name", None)
+            if missing:
+                raise ModuleNotFoundError(
+                    f"restart helpers unavailable; missing dependency '{missing}'"
+                ) from _restart_import_error
+            raise ModuleNotFoundError(
+                f"restart helpers unavailable: {_restart_import_error}"
+            ) from _restart_import_error
 
         def get_files(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[override]
-            raise ModuleNotFoundError("jax is required for restart helpers")
+            _raise_restart_import_error()
 
         def get_last(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[override]
-            raise ModuleNotFoundError("jax is required for restart helpers")
+            _raise_restart_import_error()
 
         def get_params_model(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[override]
-            raise ModuleNotFoundError("jax is required for restart helpers")
+            _raise_restart_import_error()
 
     def dipole_calc(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[override]
         raise ModuleNotFoundError("jax is required for dipole calculations")
