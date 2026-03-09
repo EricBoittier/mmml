@@ -71,7 +71,6 @@ def setup_calculator(
             unique_res_ids.append(a)
             unique_res_ids.append(b)
             collect_monomers.append(1)
-            print(a,b)
         else:
             collect_monomers.append(0)
 

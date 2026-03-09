@@ -1228,7 +1228,9 @@ shake bonh para sele all end
                     jnp.asarray(md_pos), _monomer_groups, _cell_jax, mass=Si_mass
                 )
                 md_pos_frac = md_pos_wrapped / float(args.cell)  # cubic: frac = R / L
-                pair_idx, pair_mask = update_fn(np.asarray(md_pos_wrapped), box=np.asarray(box_curr))
+                # Neighbor list with fractional_coordinates expects frac pos and box [L,L,L]
+                box_nl = np.array([float(args.cell)] * 3, dtype=np.float64)
+                pair_idx, pair_mask = update_fn(np.asarray(md_pos_frac), box=box_nl)
                 state = init_fn(
                     key, md_pos_frac, box=box_curr,
                     neighbor=(pair_idx, pair_mask), kT=kT, mass=Si_mass
@@ -1321,8 +1323,14 @@ shake bonh para sele all end
             for i in range(total_records):
                 if is_npt and update_fn is not None:
                     box_curr = simulate.npt_box(state)
-                    real_pos = np.asarray(space.transform(box_curr, state.position))
-                    npt_pair_idx, npt_pair_mask = update_fn(real_pos, box=np.asarray(box_curr))
+                    # Neighbor list with fractional_coordinates expects frac pos and box [L,L,L]
+                    box_nl = np.asarray(box_curr)
+                    if box_nl.shape == (1,) or box_nl.ndim == 0:
+                        L = float(box_nl.reshape(-1)[0])
+                        box_nl = np.array([L, L, L], dtype=np.float64)
+                    npt_pair_idx, npt_pair_mask = update_fn(
+                        np.asarray(state.position), box=box_nl
+                    )
                     state = sim(state, neighbor=(npt_pair_idx, npt_pair_mask), pressure=npt_pressure)
                 else:
                     state = sim(state)
