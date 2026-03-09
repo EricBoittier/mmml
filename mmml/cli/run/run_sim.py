@@ -949,9 +949,9 @@ shake bonh para sele all end
         # Shift and displacement: NPT uses periodic_general with fractional coords; NVT/NVE use free or periodic
         is_npt = args.ensemble == "npt" and use_pbc
         if is_npt:
-            # NPT requires fractional coordinates; box [L,L,L] for correct volume (L^3)
+            # NPT: box as 3x3 diagonal (matches jax_md metal/Si example); volume = L^3
             L_npt = float(args.cell)
-            box_npt = jnp.array([L_npt, L_npt, L_npt], dtype=jnp.float32)
+            box_npt = jnp.eye(3, dtype=jnp.float32) * L_npt
             displacement, shift = space.periodic_general(box=box_npt, fractional_coordinates=True)
         else:
             _displacement, _shift_free = space.free()
@@ -999,7 +999,8 @@ shake bonh para sele all end
                     "Ensure jax_md is installed and pbc_cell is set."
                 )
             pressure = getattr(args, 'pressure', 1.01325) * unit['pressure']
-            barostat_tau = getattr(args, 'nhc_barostat_tau', 1000.0) * dt
+            # Barostat tau: 10000*dt (2.5 ps at 0.25 fs) avoids NaN from aggressive box scaling
+            barostat_tau = getattr(args, 'nhc_barostat_tau', 10000.0) * dt
             nhc_chain_length = getattr(args, 'nhc_chain_length', 3)
             nhc_chain_steps = getattr(args, 'nhc_chain_steps', 2)
             nhc_sy_steps = getattr(args, 'nhc_sy_steps', 3)
