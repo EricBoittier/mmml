@@ -2,6 +2,24 @@
 
 Provides JAX-native, GPU-capable neighbor lists with incremental updates.
 Falls back to the custom cell list when jax_md is unavailable.
+
+Neighbor list behavior
+----------------------
+- allocate(): initial build; run once at setup.
+- update(): incremental update when positions move > dr_threshold.
+- Buffer overflow: if pairs exceed capacity, reallocate with larger capacity.
+
+Optimization options
+--------------------
+- dr_threshold (default 0.5): larger = fewer updates, but risk of missing pairs.
+  Use ~0.3 * r_cutoff for safety; 0.5 Å is typical for MM cutoffs ~10–12 Å.
+- capacity_multiplier (default 1.25): larger = fewer overflows, more memory.
+  Increase to 1.5–2.0 if overflow occurs frequently.
+- Update frequency: NPT updates every record block (steps_per_recording steps).
+  For long blocks, consider updating more often if dr_threshold is small.
+- fractional_coordinates: required for NPT (dynamic box); NVT uses Cartesian.
+
+Debug: use --debug to enable neighbor list prints (allocate, update, overflow, n_valid).
 """
 
 from __future__ import annotations
@@ -54,6 +72,11 @@ def create_jax_md_neighbor_list(
 
     When fractional_coordinates=True (needed for NPT with dynamic box), the neighbor list
     accepts a box keyword in update() and expects positions in fractional coords [0,1)^3.
+
+    Args:
+        dr_threshold: Incremental update when max displacement > this (Å). Larger = fewer
+            updates but risk of missing pairs. 0.5 Å typical for MM cutoffs.
+        capacity_multiplier: Buffer size = estimated pairs * this. Increase if overflow occurs.
 
     Returns (neighbor_fn, filter_inter_monomer_fn, monomer_id_jnp) or None if jax_md unavailable.
     """

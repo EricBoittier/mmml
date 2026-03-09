@@ -992,6 +992,8 @@ shake bonh para sele all end
         pair_idx, pair_mask = None, None
         box_init = jnp.array([float(args.cell)]) if args.cell else None
         if update_fn is not None and use_pbc:
+            if getattr(args, "debug", False):
+                print("[nbr] Initial neighbor list update (PBC)")
             if is_npt:
                 # NPT: neighbor list uses fractional_coordinates; pass frac pos and box [L,L,L]
                 L = float(args.cell)
@@ -1524,6 +1526,8 @@ shake bonh para sele all end
                     if box_nl.shape == (1,) or box_nl.ndim == 0:
                         L = float(box_nl.reshape(-1)[0])
                         box_nl = np.array([L, L, L], dtype=np.float64)
+                    if getattr(args, "debug", False) and (i < 3 or i % 50 == 0):
+                        print(f"[nbr] NPT record {i}: updating neighbor list, box L={float(box_nl[0]):.4f}")
                     npt_pair_idx, npt_pair_mask = update_fn(
                         np.asarray(state.position), box=box_nl
                     )

@@ -240,6 +240,10 @@ def build_mm_energy_forces_fn(
         idx = nbrs_init.idx
         pair_i, pair_j, mask = _filter_fn(idx)
         _max_pairs = idx.shape[1]
+        if debug:
+            n_valid_init = int(np.sum(np.asarray(jax.device_get(mask))))
+            print(f"[nbr] allocate: capacity={_max_pairs}, n_valid={n_valid_init}, "
+                  f"frac_coords={fractional_coordinates}, r_cutoff={mm_switch_on + mm_cutoff:.2f}")
         pair_idx_atom_atom = jnp.stack([pair_i, pair_j], axis=1)
         _cl_mask_jnp = jnp.asarray(mask, dtype=jnp.float32)
         _pair_idx_cell[0] = pair_idx_atom_atom
@@ -490,6 +494,7 @@ def build_mm_energy_forces_fn(
 
         def update_mm_pairs(positions: np.ndarray, box: Optional[np.ndarray] = None) -> Tuple[Array, Array]:
             R = np.asarray(positions, dtype=np.float64)
+            _nbr_debug = debug  # capture for closure
             # When fractional_coordinates=True but box is None (ASE calculator), convert Cartesian to fractional
             if fractional_coordinates and box is None:
                 cell_np = np.asarray(pbc_cell, dtype=np.float64)
@@ -510,10 +515,16 @@ def build_mm_energy_forces_fn(
             nbrs = _nbrs[0]
             kwargs = {} if box is None else {"box": jnp.asarray(box)}
             nbrs = nbrs.update(R, **kwargs)
+            realloc_count = 0
             for _ in range(3):
                 overflow = np.asarray(jax.device_get(nbrs.did_buffer_overflow))
-                if not (bool(overflow) if overflow.ndim == 0 else bool(overflow.any())):
+                did_overflow = bool(overflow) if overflow.ndim == 0 else bool(overflow.any())
+                if _nbr_debug:
+                    print(f"[nbr] update: overflow={did_overflow}, realloc={realloc_count}, "
+                          f"box={'None' if box is None else np.asarray(box).tolist()}")
+                if not did_overflow:
                     break
+                realloc_count += 1
                 nbrs = _neighbor_fn.allocate(R, **kwargs)
                 nbrs = nbrs.update(R, **kwargs)
             else:
@@ -522,6 +533,11 @@ def build_mm_energy_forces_fn(
             pair_i, pair_j, mask = _filter_fn(nbrs.idx)
             pair_idx = jnp.stack([pair_i, pair_j], axis=1)
             pair_mask = jnp.asarray(mask, dtype=jnp.float32)
+            n_valid = int(np.sum(np.asarray(jax.device_get(mask))))
+            if _nbr_debug:
+                capacity = pair_idx.shape[0] if hasattr(pair_idx, 'shape') else len(pair_i)
+                print(f"[nbr] pairs: n_valid={n_valid}, capacity={capacity}, "
+                      f"frac_coords={fractional_coordinates}")
             return pair_idx, pair_mask
 
         return (calculate_mm_energy_and_forces_dynamic, update_mm_pairs)
