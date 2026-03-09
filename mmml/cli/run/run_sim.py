@@ -239,8 +239,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--nhc-barostat-tau",
         type=float,
-        default=1000.0,
-        help="Barostat coupling time multiplier for NPT (tau = nhc_barostat_tau * dt) (default: 1000).",
+        default=10000.0,
+        help="Barostat coupling time multiplier for NPT (tau = nhc_barostat_tau * dt) (default: 10000).",
     )
     parser.add_argument(
         "--npt-diagnose",
@@ -312,6 +312,7 @@ def _run_npt_diagnostics(
     state,
     npt_energy_fn,
     jax_md_force_fn,
+    apply_fn,
     shift,
     space,
     simulate,
@@ -398,6 +399,24 @@ def _run_npt_diagnostics(
     print(f"    momentum finite: {np.all(np.isfinite(P))}")
     print(f"    force finite: {np.all(np.isfinite(state.force))}")
     print(f"    mass shape: {M.shape}, all positive: {np.all(M > 0)}")
+
+    # 7. First step (apply_fn) and NaN location
+    print("\n[7] First NPT step (apply_fn)")
+    neighbor = (npt_pair_idx, npt_pair_mask)
+    try:
+        state_one = apply_fn(state, neighbor=neighbor, pressure=npt_pressure)
+        pos_ok = np.all(np.isfinite(np.asarray(state_one.position)))
+        mom_ok = np.all(np.isfinite(np.asarray(state_one.momentum)))
+        box_ok = np.all(np.isfinite(np.asarray(simulate.npt_box(state_one))))
+        print(f"    Step completed. position OK: {pos_ok}, momentum OK: {mom_ok}, box OK: {box_ok}")
+        if not pos_ok:
+            nan_count = np.sum(~np.isfinite(np.asarray(state_one.position)))
+            print(f"    NaN in position: {nan_count} elements")
+            first_nan = np.where(~np.isfinite(np.asarray(state_one.position)))
+            if len(first_nan[0]) > 0:
+                print(f"    First NaN at index: ({first_nan[0][0]}, {first_nan[1][0]})")
+    except Exception as e:
+        print(f"    apply_fn raised: {type(e).__name__}: {e}")
 
     print("\n" + "=" * 60 + "\n")
 
@@ -1390,6 +1409,7 @@ shake bonh para sele all end
                     state=state,
                     npt_energy_fn=npt_energy_fn,
                     jax_md_force_fn=jax_md_force_fn,
+                    apply_fn=apply_fn,
                     shift=shift,
                     space=space,
                     simulate=simulate,

@@ -78,6 +78,7 @@ config = {
     "skip_ml_dimers": False,
     "validate": False,
     "debug": False,
+    "npt_diagnose": True,  # Run NPT diagnostics when ensemble=npt
 }
 print("pdbfile =", config["pdbfile"], "| checkpoint =", config["checkpoint"])
 
@@ -98,6 +99,7 @@ args = argparse.Namespace(
     include_mm=config["include_mm"],
     skip_ml_dimers=config["skip_ml_dimers"],
     debug=config["debug"],
+    npt_diagnose=config.get("npt_diagnose", False),
     temperature=config["temperature"],
     timestep=config["timestep"],
     nsteps_jaxmd=config["nsteps_jaxmd"],
