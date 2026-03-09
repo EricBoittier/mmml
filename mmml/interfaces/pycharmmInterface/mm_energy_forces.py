@@ -55,6 +55,22 @@ def _dimer_permutations(n_mol: int) -> List[Tuple[int, int]]:
     return list(combinations(range(n_mol), 2))
 
 
+def _box_to_cell_3x3(box: Array) -> Array:
+    """Convert box (scalar, (1,), (3,), or (3,3)) to 3x3 cell matrix for MIC/frac_coords."""
+    b = jnp.asarray(box)
+    if b.ndim == 0:
+        L = float(b)
+        return jnp.diag(jnp.array([L, L, L], dtype=b.dtype))
+    if b.shape == (1,):
+        L = float(b[0])
+        return jnp.diag(jnp.array([L, L, L], dtype=b.dtype))
+    if b.shape == (3,):
+        return jnp.diag(jnp.asarray(b, dtype=b.dtype))
+    if b.shape == (3, 3):
+        return jnp.asarray(b, dtype=b.dtype)
+    raise ValueError(f"box must be scalar, (1,), (3,), or (3,3); got shape {b.shape}")
+
+
 def build_mm_energy_forces_fn(
     R: np.ndarray,
     *,
@@ -428,7 +444,8 @@ def build_mm_energy_forces_fn(
             pair_rm_dyn = rm_a + rm_b
             pair_ep_dyn = (ep_a * ep_b) ** 0.5 * pair_lambda_mm_dyn
 
-            _cell = cell_for_mic if cell_for_mic is not None else _pbc_cell_jnp
+            _cell_raw = cell_for_mic if cell_for_mic is not None else _pbc_cell_jnp
+            _cell = _box_to_cell_3x3(_cell_raw)
             pos_dst = positions[pair_j]
             pos_src = positions[pair_i]
             mic_batched = mic_displacements_batched_smooth if use_smooth_mic else mic_displacements_batched
@@ -454,7 +471,8 @@ def build_mm_energy_forces_fn(
             mid_j = _monomer_id_jnp[pair_j]
             pair_dimer_idx_dyn = _dimer_lookup_arr[mid_i, mid_j]
 
-            _cell_for_mic = box_override if box_override is not None else _pbc_cell_jnp
+            _cell_raw = box_override if box_override is not None else _pbc_cell_jnp
+            _cell_for_mic = _box_to_cell_3x3(_cell_raw)
             pair_energies = calculate_mm_pair_energies_dynamic(
                 positions, pair_idx, pair_mask, cell_for_mic=_cell_for_mic
             )
