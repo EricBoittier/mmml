@@ -37,6 +37,18 @@ except Exception:
     _cell_list_pairs = None
     _estimate_max_pairs = None
 
+try:
+    from mmml.interfaces.pycharmmInterface.jax_md_neighbor_list import (
+        have_jax_md,
+        create_jax_md_neighbor_list,
+    )
+except Exception:
+    def have_jax_md():
+        return False
+
+    def create_jax_md_neighbor_list(*args, **kwargs):
+        return None
+
 
 def _dimer_permutations(n_mol: int) -> List[Tuple[int, int]]:
     from itertools import combinations
@@ -62,15 +74,19 @@ def build_mm_energy_forces_fn(
     max_pairs: Optional[int] = None,
     cell_list_safety_factor: float = 2.5,
     use_smooth_mic: bool = False,
+    use_jax_md_neighbor_list: bool = True,
     debug: bool = False,
-) -> Callable[[Array], Tuple[Array, Array]]:
+) -> Any:
     """Build MM energy/forces function with switching.
 
     Supports heterogeneous monomer sizes via monomer_offsets and atoms_per_monomer_list.
     Uses cell list for PBC when pbc_cell is provided, otherwise all-pairs.
 
     Returns:
-        calculate_mm_energy_and_forces(positions) -> (energy, forces)
+        When use_jax_md_neighbor_list and jax_md available: (mm_fn, update_fn) where
+        mm_fn(positions, pair_idx, pair_mask) -> (energy, forces) and
+        update_fn(positions, box=None) -> (pair_idx, pair_mask).
+        Otherwise: mm_fn(positions) -> (energy, forces) (single callable).
     """
     if CGENFF_PRM is None or CGENFF_RTF is None:
         raise RuntimeError("CGENFF parameters not available; PyCHARMM may not be initialized")
@@ -121,7 +137,34 @@ def build_mm_energy_forces_fn(
     at_flat_rm = np.array(at_rm)
 
     _dp = _dimer_permutations(n_monomers)
-    _use_cell_list = pbc_cell is not None and _cell_list_pairs is not None
+    _use_jax_md_nbrs = (
+        pbc_cell is not None
+        and use_jax_md_neighbor_list
+        and have_jax_md()
+    )
+    _use_cell_list = (
+        pbc_cell is not None
+        and not _use_jax_md_nbrs
+        and _cell_list_pairs is not None
+    )
+
+    if _use_jax_md_nbrs:
+        # jax_md path: pair list is updated externally; mm_fn will accept pair_idx, pair_mask
+        jax_md_result = create_jax_md_neighbor_list(
+            np.asarray(pbc_cell),
+            r_cutoff=mm_switch_on + mm_cutoff,
+            monomer_offsets=np.asarray(monomer_offsets),
+            dr_threshold=0.5,
+            capacity_multiplier=1.25,
+        )
+        if jax_md_result is not None:
+            _neighbor_fn, _filter_fn, _monomer_id_jnp = jax_md_result
+            _nbrs = [None]  # mutable cell for neighbor list state
+            _pair_idx_cell = [None]
+            _pair_mask_cell = [None]
+        else:
+            _use_jax_md_nbrs = False
+            _use_cell_list = pbc_cell is not None and _cell_list_pairs is not None
 
     if _use_cell_list:
         _mm_cutoff_dist = mm_switch_on + mm_cutoff
@@ -170,6 +213,28 @@ def build_mm_energy_forces_fn(
                 _n_pairs_per_dimer_count[di_idx] += 1
         n_pairs_per_dimer_arr = _n_pairs_per_dimer_count
         pair_dimer_idx = jnp.array(_pair_dimer_idx)
+    elif _use_jax_md_nbrs:
+        _mm_cutoff_dist = mm_switch_on + mm_cutoff
+        _offsets_np = np.array([int(monomer_offsets[k]) for k in range(len(monomer_offsets))])
+        nbrs_init = _neighbor_fn.allocate(np.asarray(R))
+        _nbrs[0] = nbrs_init
+        idx = nbrs_init.idx
+        pair_i, pair_j, mask = _filter_fn(idx)
+        _max_pairs = idx.shape[1]
+        pair_idx_atom_atom = jnp.stack([pair_i, pair_j], axis=1)
+        _cl_mask_jnp = jnp.asarray(mask, dtype=jnp.float32)
+        _pair_idx_cell[0] = pair_idx_atom_atom
+        _pair_mask_cell[0] = _cl_mask_jnp
+        _monomer_id_np = np.empty(total_atoms, dtype=np.int32)
+        for mi in range(n_monomers):
+            _monomer_id_np[_offsets_np[mi]:_offsets_np[mi + 1]] = mi
+        _monomer_id_jnp = jnp.array(_monomer_id_np)
+        _dimer_lookup_arr = np.full((n_monomers, n_monomers), -1, dtype=np.int32)
+        for di, (mi, mj) in enumerate(_dp):
+            _dimer_lookup_arr[mi, mj] = _dimer_lookup_arr[mj, mi] = di
+        _dimer_lookup_arr = jnp.array(_dimer_lookup_arr)
+        pair_dimer_idx = None
+        n_pairs_per_dimer_arr = np.zeros(len(_dp), dtype=np.int32)
     else:
         pair_idx_list = []
         pair_lambda_list = []
@@ -220,18 +285,19 @@ def build_mm_energy_forces_fn(
 
     rmins_per_system = jnp.take(at_flat_rm, at_codes)
     epsilons_per_system = jnp.take(at_flat_ep, at_codes)
-    q_per_system = charges
+    q_per_system = jnp.array(charges)
 
-    q_a = jnp.take(q_per_system, pair_idx_atom_atom[:, 0])
-    q_b = jnp.take(q_per_system, pair_idx_atom_atom[:, 1])
-    rm_a = jnp.take(rmins_per_system, pair_idx_atom_atom[:, 0])
-    rm_b = jnp.take(rmins_per_system, pair_idx_atom_atom[:, 1])
-    ep_a = jnp.take(epsilons_per_system, pair_idx_atom_atom[:, 0])
-    ep_b = jnp.take(epsilons_per_system, pair_idx_atom_atom[:, 1])
+    if not _use_jax_md_nbrs:
+        q_a = jnp.take(q_per_system, pair_idx_atom_atom[:, 0])
+        q_b = jnp.take(q_per_system, pair_idx_atom_atom[:, 1])
+        rm_a = jnp.take(rmins_per_system, pair_idx_atom_atom[:, 0])
+        rm_b = jnp.take(rmins_per_system, pair_idx_atom_atom[:, 1])
+        ep_a = jnp.take(epsilons_per_system, pair_idx_atom_atom[:, 0])
+        ep_b = jnp.take(epsilons_per_system, pair_idx_atom_atom[:, 1])
 
-    pair_qq = q_a * q_b * pair_lambda_mm
-    pair_rm = rm_a + rm_b
-    pair_ep = (ep_a * ep_b) ** 0.5 * pair_lambda_mm
+        pair_qq = q_a * q_b * pair_lambda_mm
+        pair_rm = rm_a + rm_b
+        pair_ep = (ep_a * ep_b) ** 0.5 * pair_lambda_mm
 
     def lennard_jones(r: Array, sig: Array, ep: Array) -> Array:
         lj_epsilon = 1e-10
@@ -253,9 +319,13 @@ def build_mm_energy_forces_fn(
         mm_switch_on: float = mm_switch_on,
         mm_cutoff: float = mm_cutoff,
         complementary_handoff: bool = complementary_handoff,
-    ) -> Callable[[Array, Array], Array]:
+    ) -> Callable[..., Array]:
         @jax.jit
-        def apply_switching_function(positions: Array, pair_energies: Array) -> Array:
+        def apply_switching_function(
+            positions: Array,
+            pair_energies: Array,
+            pair_dimer_idx_arg: Optional[Array] = None,
+        ) -> Array:
             coms = jnp.stack([
                 positions[monomer_offsets[k]:monomer_offsets[k + 1]].mean(axis=0)
                 for k in range(n_monomers)
@@ -277,9 +347,11 @@ def build_mm_energy_forces_fn(
                 mm_off = _sharpstep(r, mm_switch_on + mm_cutoff, mm_switch_on + 2.0 * mm_cutoff, gamma=GAMMA_OFF)
                 mm_scale = mm_on * (1.0 - mm_off)
 
-            if pair_dimer_idx is not None:
+            use_dimer_idx = (pair_dimer_idx_arg is not None) or (pair_dimer_idx is not None)
+            pdi = pair_dimer_idx_arg if pair_dimer_idx_arg is not None else pair_dimer_idx
+            if use_dimer_idx and pdi is not None:
                 mm_scale_with_dummy = jnp.concatenate([mm_scale, jnp.zeros(1)])
-                safe_idx = jnp.where(pair_dimer_idx >= 0, pair_dimer_idx, len(mm_scale))
+                safe_idx = jnp.where(pdi >= 0, pdi, len(mm_scale))
                 mm_scale_expanded = mm_scale_with_dummy[safe_idx]
             else:
                 mm_scale_expanded = jnp.concatenate([
@@ -323,5 +395,89 @@ def build_mm_energy_forces_fn(
         forces = -1.0 * switched_mm_grad(positions)
         forces = jnp.where(jnp.isfinite(forces), forces, 0.0)
         return switched_energy, forces
+
+    if _use_jax_md_nbrs:
+        # Dynamic path: compute pair quantities from pair_idx, pair_mask
+        _pbc_cell_jnp = jnp.asarray(pbc_cell)
+        _lambda_monomer_jnp = jnp.asarray(lambda_monomer)
+
+        @jax.jit
+        def calculate_mm_pair_energies_dynamic(
+            positions: Array,
+            pair_idx: Array,
+            pair_mask: Array,
+        ) -> Array:
+            pair_i = pair_idx[:, 0]
+            pair_j = pair_idx[:, 1]
+            lam_a = jnp.take(_lambda_monomer_jnp, _monomer_id_jnp[pair_i])
+            lam_b = jnp.take(_lambda_monomer_jnp, _monomer_id_jnp[pair_j])
+            pair_lambda_mm_dyn = lam_a * lam_b * pair_mask
+
+            q_a = jnp.take(q_per_system, pair_i)
+            q_b = jnp.take(q_per_system, pair_j)
+            rm_a = jnp.take(rmins_per_system, pair_i)
+            rm_b = jnp.take(rmins_per_system, pair_j)
+            ep_a = jnp.take(epsilons_per_system, pair_i)
+            ep_b = jnp.take(epsilons_per_system, pair_j)
+            pair_qq_dyn = q_a * q_b * pair_lambda_mm_dyn
+            pair_rm_dyn = rm_a + rm_b
+            pair_ep_dyn = (ep_a * ep_b) ** 0.5 * pair_lambda_mm_dyn
+
+            pos_dst = positions[pair_j]
+            pos_src = positions[pair_i]
+            mic_batched = mic_displacements_batched_smooth if use_smooth_mic else mic_displacements_batched
+            displacements = mic_batched(pos_dst, pos_src, _pbc_cell_jnp)
+            distances = jnp.linalg.norm(displacements, axis=1)
+            distances = jnp.where(pair_mask > 0, distances, 1e6)
+
+            pair_mask_ij = (pair_i < pair_j)
+            vdw = lennard_jones(distances, pair_rm_dyn, pair_ep_dyn) * pair_mask_ij
+            elec = coulomb(distances, pair_qq_dyn) * pair_mask_ij
+            return vdw + elec
+
+        @jax.jit
+        def calculate_mm_energy_and_forces_dynamic(
+            positions: Array,
+            pair_idx: Array,
+            pair_mask: Array,
+        ) -> Tuple[Array, Array]:
+            pair_i = pair_idx[:, 0]
+            pair_j = pair_idx[:, 1]
+            mid_i = _monomer_id_jnp[pair_i]
+            mid_j = _monomer_id_jnp[pair_j]
+            pair_dimer_idx_dyn = _dimer_lookup_arr[mid_i, mid_j]
+
+            pair_energies = calculate_mm_pair_energies_dynamic(positions, pair_idx, pair_mask)
+            switched_energy = apply_switching_function(
+                positions, pair_energies, pair_dimer_idx_arg=pair_dimer_idx_dyn
+            )
+            switched_mm_energy_dyn = lambda pos: apply_switching_function(
+                pos,
+                calculate_mm_pair_energies_dynamic(pos, pair_idx, pair_mask),
+                pair_dimer_idx_arg=pair_dimer_idx_dyn,
+            )
+            forces = -1.0 * jax.grad(switched_mm_energy_dyn)(positions)
+            forces = jnp.where(jnp.isfinite(forces), forces, 0.0)
+            return switched_energy, forces
+
+        def update_mm_pairs(positions: np.ndarray, box: Optional[np.ndarray] = None) -> Tuple[Array, Array]:
+            R = np.asarray(positions, dtype=np.float64)
+            nbrs = _nbrs[0]
+            kwargs = {} if box is None else {"box": jnp.asarray(box)}
+            nbrs = nbrs.update(R, **kwargs)
+            for _ in range(3):
+                if not bool(np.asarray(nbrs.did_buffer_overflow)):
+                    break
+                nbrs = _neighbor_fn.allocate(R, **kwargs)
+                nbrs = nbrs.update(R, **kwargs)
+            else:
+                raise RuntimeError("Neighbor list buffer overflow persisted after reallocation")
+            _nbrs[0] = nbrs
+            pair_i, pair_j, mask = _filter_fn(nbrs.idx)
+            pair_idx = jnp.stack([pair_i, pair_j], axis=1)
+            pair_mask = jnp.asarray(mask, dtype=jnp.float32)
+            return pair_idx, pair_mask
+
+        return (calculate_mm_energy_and_forces_dynamic, update_mm_pairs)
 
     return calculate_mm_energy_and_forces
