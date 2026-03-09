@@ -3,6 +3,12 @@
 # Add imports here
 from .mmml import *
 
+# Compatibility: mmml.pycharmmInterface -> mmml.interfaces.pycharmmInterface
+import sys
+if "mmml.pycharmmInterface" not in sys.modules:
+    from mmml.interfaces import pycharmmInterface
+    sys.modules["mmml.pycharmmInterface"] = pycharmmInterface
+
 # Handle version import gracefully
 try:
     from ._version import __version__

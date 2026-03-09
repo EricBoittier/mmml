@@ -13,29 +13,32 @@ import jax
 import jax.numpy as jnp
 import optax
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Sequence, Tuple, Union, Any
 from itertools import product
 import matplotlib.pyplot as plt
 
 
 def extract_lj_parameters_from_calculator(
-    ATOMS_PER_MONOMER: int,
-    N_MONOMERS: int,
+    ATOMS_PER_MONOMER: Union[int, List[int], Sequence[int]],
+    N_MONOMERS: Optional[int] = None,
 ) -> Dict[str, np.ndarray]:
     """
     Extract base LJ parameters and indices from the calculator setup.
-    
+
+    Supports both uniform (single int) and heterogeneous (list of ints) systems.
+
     This should be called once after calculator_factory is created to extract
     the base parameters that will be scaled during optimization.
-    
+
     IMPORTANT: This function extracts parameters ONLY for atom types that are
     actually used in the system (based on at_codes from the PSF). This ensures
     we only optimize the parameters that are needed.
-    
+
     Args:
-        ATOMS_PER_MONOMER: Number of atoms per monomer
-        N_MONOMERS: Number of monomers
-    
+        ATOMS_PER_MONOMER: Number of atoms per monomer (int) or list of counts
+            per monomer. When a list, N_MONOMERS is inferred from its length.
+        N_MONOMERS: Number of monomers. Required when ATOMS_PER_MONOMER is int.
+
     Returns:
         dict with keys:
             atc_epsilons: Base epsilon values for each atom type (only used types)
@@ -48,7 +51,23 @@ def extract_lj_parameters_from_calculator(
     """
     import pycharmm.param as param
     from mmml.pycharmmInterface.import_pycharmm import psf, CGENFF_RTF, CGENFF_PRM, read, settings, reset_block
-    
+    from mmml.pycharmmInterface.mmml_calculator import dimer_permutations
+
+    # Normalize ATOMS_PER_MONOMER to atoms_per_monomer_list
+    if isinstance(ATOMS_PER_MONOMER, (list, tuple, np.ndarray)):
+        atoms_per_monomer_list = [int(x) for x in ATOMS_PER_MONOMER]
+        n_monomers = len(atoms_per_monomer_list)
+    else:
+        if N_MONOMERS is None:
+            raise ValueError("N_MONOMERS must be provided when ATOMS_PER_MONOMER is an int")
+        n_monomers = N_MONOMERS
+        atoms_per_monomer_list = [int(ATOMS_PER_MONOMER)] * n_monomers
+
+    monomer_offsets = np.zeros(n_monomers + 1, dtype=int)
+    for i, n in enumerate(atoms_per_monomer_list):
+        monomer_offsets[i + 1] = monomer_offsets[i] + n
+    n_atoms_expected = int(monomer_offsets[-1])
+
     # Get atom type codes from PSF (these are IAC codes, 1-indexed in PyCHARMM)
     try:
         iac_codes_raw = np.array(psf.get_iac())
@@ -57,15 +76,14 @@ def extract_lj_parameters_from_calculator(
             f"Failed to get IAC codes from PSF. Make sure PyCHARMM is initialized "
             f"and the PSF structure is built before calling this function. Error: {e}"
         )
-    
-    n_atoms_expected = N_MONOMERS * ATOMS_PER_MONOMER
+
     if len(iac_codes_raw) < n_atoms_expected:
         raise RuntimeError(
             f"PSF has {len(iac_codes_raw)} atoms, but expected {n_atoms_expected} "
-            f"(N_MONOMERS={N_MONOMERS} * ATOMS_PER_MONOMER={ATOMS_PER_MONOMER}). "
+            f"(atoms_per_monomer_list={atoms_per_monomer_list}). "
             f"Make sure PyCHARMM is fully initialized with the correct number of atoms."
         )
-    
+
     iac_codes_raw = iac_codes_raw[:n_atoms_expected]
     
     # Convert IAC codes to 0-indexed if needed
@@ -148,12 +166,18 @@ def extract_lj_parameters_from_calculator(
     atc_qs = np.array([cgenff_params_dict_q.get(_, 0.0) for _ in atc_used])
     
     # Compute pair indices (matching the calculator setup)
-    from mmml.pycharmmInterface.mmml_calculator import dimer_permutations
-    pair_idxs_product = np.array([(a,b) for a,b in list(product(np.arange(ATOMS_PER_MONOMER), repeat=2))])
-    dimer_perms = np.array(dimer_permutations(N_MONOMERS))
-    pair_idxs_np = dimer_perms * ATOMS_PER_MONOMER
-    pair_idx_atom_atom = pair_idxs_np[:, None, :] + pair_idxs_product[None,...]
-    pair_idx_atom_atom = pair_idx_atom_atom.reshape(-1, 2)
+    pair_idx_list = []
+    for mi, mj in dimer_permutations(n_monomers):
+        off_i = int(monomer_offsets[mi])
+        off_j = int(monomer_offsets[mj])
+        n_i = atoms_per_monomer_list[mi]
+        n_j = atoms_per_monomer_list[mj]
+        local_pairs = np.array(
+            [(a + off_i, b + off_j) for a in range(n_i) for b in range(n_j)],
+            dtype=np.int32,
+        )
+        pair_idx_list.append(local_pairs)
+    pair_idx_atom_atom = np.concatenate(pair_idx_list, axis=0)
     
     return {
         "atc_epsilons": atc_epsilons,
@@ -418,62 +442,77 @@ def create_hybrid_fitting_factory(
                     indices_of_monomer,
                     indices_of_pairs,
                 )
-                
-                # Determine ATOMS_PER_MONOMER from the system
-                ATOMS_PER_MONOMER_val = len(Z) // n_monomers_val if n_monomers_val > 0 else len(Z)
-                
+
+                # Derive atoms_per_monomer_list from args (uniform or heterogeneous)
+                if args and hasattr(args, 'atoms_per_monomer_list') and args.atoms_per_monomer_list is not None:
+                    atoms_per_monomer_list_val = [int(x) for x in args.atoms_per_monomer_list]
+                    n_monomers_val = len(atoms_per_monomer_list_val)
+                else:
+                    apm = len(Z) // n_monomers_val if n_monomers_val > 0 else len(Z)
+                    atoms_per_monomer_list_val = [apm] * n_monomers_val
+
+                monomer_offsets_val = np.zeros(n_monomers_val + 1, dtype=int)
+                for i, n in enumerate(atoms_per_monomer_list_val):
+                    monomer_offsets_val[i + 1] = monomer_offsets_val[i] + n
+
                 # Prepare monomer and dimer indices (matching calculator logic)
                 all_monomer_idxs = []
                 for a in range(1, n_monomers_val + 1):
-                    idxs = indices_of_monomer(a, n_atoms=ATOMS_PER_MONOMER_val, n_mol=n_monomers_val)
+                    idxs = indices_of_monomer(
+                        a, n_mol=n_monomers_val,
+                        monomer_offsets=monomer_offsets_val,
+                        atoms_per_monomer_list=atoms_per_monomer_list_val,
+                    )
                     all_monomer_idxs.append(jnp.array(idxs))
-                
+
                 all_dimer_idxs = []
+                dimer_atom_counts = []
                 if not skip_ml_dimers:
                     for a, b in dimer_permutations(n_monomers_val):
-                        idxs = indices_of_pairs(a + 1, b + 1, n_atoms=ATOMS_PER_MONOMER_val, n_mol=n_monomers_val)
+                        idxs = indices_of_pairs(
+                            a + 1, b + 1, n_mol=n_monomers_val,
+                            monomer_offsets=monomer_offsets_val,
+                            atoms_per_monomer_list=atoms_per_monomer_list_val,
+                        )
                         all_dimer_idxs.append(jnp.array(idxs))
-                
-                # Prepare batch data
-                max_atoms = max(ATOMS_PER_MONOMER_val, 2 * ATOMS_PER_MONOMER_val)
+                        n_a = atoms_per_monomer_list_val[a]
+                        n_b = atoms_per_monomer_list_val[b]
+                        dimer_atom_counts.append(n_a + n_b)
+
+                max_atoms = max(atoms_per_monomer_list_val + dimer_atom_counts) if dimer_atom_counts else max(atoms_per_monomer_list_val)
                 SPATIAL_DIMS = 3
                 
                 # Monomer positions and atomic numbers
                 monomer_positions = jnp.zeros((n_monomers_val, max_atoms, SPATIAL_DIMS))
                 for i, idxs in enumerate(all_monomer_idxs):
-                    monomer_positions = monomer_positions.at[i, :ATOMS_PER_MONOMER_val].set(
-                        R[idxs]
-                    )
+                    n_i = atoms_per_monomer_list_val[i]
+                    monomer_positions = monomer_positions.at[i, :n_i].set(R[idxs])
                 monomer_atomic = jnp.zeros((n_monomers_val, max_atoms), dtype=jnp.int32)
                 for i, idxs in enumerate(all_monomer_idxs):
-                    monomer_atomic = monomer_atomic.at[i, :ATOMS_PER_MONOMER_val].set(
-                        Z[idxs]
-                    )
-                
+                    n_i = atoms_per_monomer_list_val[i]
+                    monomer_atomic = monomer_atomic.at[i, :n_i].set(Z[idxs])
+
                 # Dimer positions and atomic numbers
                 n_dimers = len(all_dimer_idxs)
                 dimer_positions = jnp.zeros((n_dimers, max_atoms, SPATIAL_DIMS))
                 if n_dimers > 0:
                     for i, idxs in enumerate(all_dimer_idxs):
-                        dimer_positions = dimer_positions.at[i, :2 * ATOMS_PER_MONOMER_val].set(
-                            R[idxs]
-                        )
+                        n_d = dimer_atom_counts[i]
+                        dimer_positions = dimer_positions.at[i, :n_d].set(R[idxs])
                     dimer_atomic = jnp.zeros((n_dimers, max_atoms), dtype=jnp.int32)
                     for i, idxs in enumerate(all_dimer_idxs):
-                        dimer_atomic = dimer_atomic.at[i, :2 * ATOMS_PER_MONOMER_val].set(
-                            Z[idxs]
-                        )
+                        n_d = dimer_atom_counts[i]
+                        dimer_atomic = dimer_atomic.at[i, :n_d].set(Z[idxs])
                 else:
                     dimer_atomic = jnp.zeros((0, max_atoms), dtype=jnp.int32)
-                
+
                 # Combine monomer and dimer data
+                monomer_N = jnp.array(atoms_per_monomer_list_val)
+                dimer_N = jnp.array(dimer_atom_counts) if dimer_atom_counts else jnp.zeros((0,), dtype=jnp.int32)
                 batch_data = {
                     "R": jnp.concatenate([monomer_positions, dimer_positions]) if n_dimers > 0 else monomer_positions,
                     "Z": jnp.concatenate([monomer_atomic, dimer_atomic]) if n_dimers > 0 else monomer_atomic,
-                    "N": jnp.concatenate([
-                        jnp.full((n_monomers_val,), ATOMS_PER_MONOMER_val),
-                        jnp.full((n_dimers,), 2 * ATOMS_PER_MONOMER_val)
-                    ]) if n_dimers > 0 else jnp.full((n_monomers_val,), ATOMS_PER_MONOMER_val),
+                    "N": jnp.concatenate([monomer_N, dimer_N]) if n_dimers > 0 else monomer_N,
                 }
                 
                 BATCH_SIZE = n_monomers_val + n_dimers
@@ -531,58 +570,66 @@ def create_hybrid_fitting_factory(
                 
                 # Map monomer forces back to full system (using segment_sum with proper indices)
                 monomer_segment_idxs = jnp.concatenate([
-                    jnp.arange(ATOMS_PER_MONOMER_val) + i * ATOMS_PER_MONOMER_val 
+                    jnp.arange(atoms_per_monomer_list_val[i]) + int(monomer_offsets_val[i])
                     for i in range(n_monomers_val)
                 ])
-                
+
                 # Reshape monomer forces and extract only valid atoms
                 monomer_forces_reshaped = ml_monomer_forces_batched.reshape(n_monomers_val, max_atoms, 3)
-                atom_mask = jnp.arange(max_atoms)[None, :] < ATOMS_PER_MONOMER_val
+                atom_mask = jnp.arange(max_atoms)[None, :] < jnp.array(atoms_per_monomer_list_val)[:, None]
                 monomer_forces_masked = jnp.where(
                     atom_mask[..., None],
                     monomer_forces_reshaped,
                     0.0
                 )
-                # Sum forces using segment_sum
-                monomer_forces_flat = monomer_forces_masked[:, :ATOMS_PER_MONOMER_val].reshape(-1, 3)
+                # Sum forces using segment_sum (variable atoms per monomer)
+                total_atoms_val = int(monomer_offsets_val[-1])
+                monomer_forces_flat = jnp.concatenate([
+                    monomer_forces_masked[i, :atoms_per_monomer_list_val[i], :].reshape(-1, 3)
+                    for i in range(n_monomers_val)
+                ])
                 ml_monomer_forces = jax.ops.segment_sum(
                     monomer_forces_flat,
                     monomer_segment_idxs,
-                    num_segments=n_monomers_val * ATOMS_PER_MONOMER_val
+                    num_segments=total_atoms_val
                 )
                 
                 # Step 2: Extract and map dimer forces (if dimers exist)
                 if n_dimers > 0 and not skip_ml_dimers:
-                    # Calculate force segments for dimers (matching calculator logic)
-                    dimer_perms_arr = jnp.array(dimer_perms)
-                    first_indices = ATOMS_PER_MONOMER_val * dimer_perms_arr[:, 0:1]
-                    second_indices = ATOMS_PER_MONOMER_val * dimer_perms_arr[:, 1:2]
-                    atom_offsets = jnp.arange(ATOMS_PER_MONOMER_val)
-                    dimer_force_segments = jnp.concatenate([
-                        first_indices + atom_offsets[None, :],
-                        second_indices + atom_offsets[None, :]
-                    ], axis=1).reshape(-1)
-                    
+                    # Calculate force segments for dimers (heterogeneous: use monomer_offsets)
+                    dimer_perms_list = dimer_permutations(n_monomers_val)
+                    dimer_force_segments_list = []
+                    for di, (mi, mj) in enumerate(dimer_perms_list):
+                        n_a = atoms_per_monomer_list_val[mi]
+                        n_b = atoms_per_monomer_list_val[mj]
+                        off_a = int(monomer_offsets_val[mi])
+                        off_b = int(monomer_offsets_val[mj])
+                        dimer_force_segments_list.extend(
+                            [off_a + a for a in range(n_a)] + [off_b + b for b in range(n_b)]
+                        )
+                    dimer_force_segments = jnp.array(dimer_force_segments_list)
+
                     # Extract dimer forces (after monomer forces in batched array)
                     dimer_start_idx = n_monomer_atoms_batched
                     dimer_end_idx = dimer_start_idx + n_dimers * max_atoms
                     if ml_forces_batched.shape[0] >= dimer_end_idx:
                         ml_dimer_forces_batched = ml_forces_batched[dimer_start_idx:dimer_end_idx]
-                        
-                        # Reshape and extract valid atoms
+
+                        # Reshape and extract valid atoms per dimer
                         dimer_forces_reshaped = ml_dimer_forces_batched.reshape(n_dimers, max_atoms, 3)
-                        dimer_forces_valid = dimer_forces_reshaped[:, :2 * ATOMS_PER_MONOMER_val, :]
-                        dimer_forces_flat = dimer_forces_valid.reshape(-1, 3)
-                        
+                        dimer_forces_flat = jnp.concatenate([
+                            dimer_forces_reshaped[i, :dimer_atom_counts[i], :].reshape(-1, 3)
+                            for i in range(n_dimers)
+                        ])
+
                         # Map dimer forces back to full system
                         ml_dimer_forces = jax.ops.segment_sum(
                             dimer_forces_flat,
                             dimer_force_segments,
-                            num_segments=n_monomers_val * ATOMS_PER_MONOMER_val
+                            num_segments=total_atoms_val
                         )
                     else:
-                        # If dimer forces not available, set to zero
-                        ml_dimer_forces = jnp.zeros((n_monomers_val * ATOMS_PER_MONOMER_val, 3))
+                        ml_dimer_forces = jnp.zeros((total_atoms_val, 3))
                     
                     # Combine monomer and dimer forces
                     ml_forces = ml_monomer_forces + ml_dimer_forces
@@ -635,7 +682,7 @@ def create_hybrid_fitting_factory(
         # Apply cutoff-dependent switching if optimizing cutoffs
         if optimize_mode == "cutoff_only":
             # Import switching functions
-            from mmml.pycharmmInterface.mmml_calculator import ml_switch_simple, mm_switch_simple
+            from mmml.interfaces.pycharmmInterface.mmml_calculator import ml_switch_simple, mm_switch_simple
             
             # Ensure cutoff parameters are valid (positive, finite)
             ml_cutoff_val = jnp.maximum(ml_cutoff_val, 0.1)  # Minimum 0.1 Å
@@ -712,36 +759,44 @@ def create_hybrid_fitting_factory(
     return compute_energy_forces
 
 
-def compute_com_distance(R: np.ndarray, Z: np.ndarray, n_monomers: int, atoms_per_monomer: int) -> float:
+def compute_com_distance(
+    R: np.ndarray,
+    Z: np.ndarray,
+    n_monomers: int,
+    atoms_per_monomer: int,
+    monomer_offsets: Optional[np.ndarray] = None,
+) -> float:
     """
     Compute center of mass distance between first two monomers.
-    
+
     Args:
         R: Atomic positions (n_atoms, 3)
         Z: Atomic numbers (n_atoms,)
         n_monomers: Number of monomers
-        atoms_per_monomer: Number of atoms per monomer
-    
+        atoms_per_monomer: Number of atoms per monomer (used when monomer_offsets is None)
+        monomer_offsets: Optional cumulative offsets for heterogeneous systems.
+            If provided, monomer i has atoms from monomer_offsets[i] to monomer_offsets[i+1]-1.
+            Uses monomer_offsets[0:2] for first monomer and monomer_offsets[1:3] for second.
+
     Returns:
         COM distance in Angstroms
     """
     import ase.data
-    
+
     if n_monomers < 2:
         return 0.0
-    
-    # Get masses for each atom
+
     masses = np.array([ase.data.atomic_masses[z] for z in Z])
-    
-    # Compute COM for first monomer
-    monomer1_indices = np.arange(0, atoms_per_monomer)
+
+    if monomer_offsets is not None and len(monomer_offsets) >= 3:
+        monomer1_indices = np.arange(monomer_offsets[0], monomer_offsets[1])
+        monomer2_indices = np.arange(monomer_offsets[1], monomer_offsets[2])
+    else:
+        monomer1_indices = np.arange(0, atoms_per_monomer)
+        monomer2_indices = np.arange(atoms_per_monomer, 2 * atoms_per_monomer)
+
     com1 = np.average(R[monomer1_indices], axis=0, weights=masses[monomer1_indices])
-    
-    # Compute COM for second monomer
-    monomer2_indices = np.arange(atoms_per_monomer, 2 * atoms_per_monomer)
     com2 = np.average(R[monomer2_indices], axis=0, weights=masses[monomer2_indices])
-    
-    # Return distance
     return np.linalg.norm(com2 - com1)
 
 

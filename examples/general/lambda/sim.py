@@ -79,7 +79,7 @@ args_box = argparse.Namespace(
 make_box.main_loop(args_box)
 print("Box setup done.")
 
-from mmml.pycharmmInterface.import_pycharmm import (  # noqa: E402
+from mmml.interfaces.pycharmmInterface.import_pycharmm import (  # noqa: E402
     pycharmm,
     coor,
     safe_energy_show,
@@ -88,12 +88,12 @@ from mmml.pycharmmInterface.import_pycharmm import (  # noqa: E402
 # ---------------------------------------------------------------------------
 # 3. Set up the simulation (single pass — reuse calculator across windows)
 # ---------------------------------------------------------------------------
-from mmml.cli.run_sim import run  # noqa: E402
+from mmml.cli.run.run_sim import run  # noqa: E402
 
-# We import the general calculator's setup directly so we can access
+# We import the calculator's setup directly so we can access
 # the calculator object and call set_lambda_monomer between windows.
-from mmml.pycharmmInterface.mmml_calculator_general import (  # noqa: E402
-    setup_calculator as setup_calculator_general,
+from mmml.interfaces.pycharmmInterface.mmml_calculator import (  # noqa: E402
+    setup_calculator,
 )
 from mmml.cli.base import (  # noqa: E402
     load_model_parameters,
@@ -107,8 +107,8 @@ import jax.numpy as jnp  # noqa: E402
 import pandas as pd  # noqa: E402
 
 _, _, _, get_ase_calc = setup_mmml_imports()
-
-checkpoint = "/pchem-data/meuwly/boittier/home/mmml/mmml/physnetjax/ckpts/DESdimers/"
+from mmml.cli.base import resolve_desdimers_checkpoint  # noqa: E402
+checkpoint = resolve_desdimers_checkpoint(__file__ if "__file__" in globals() else None)
 pdbfile = nb_dir / "pdb" / "init-packmol.pdb"
 
 base_ckpt_dir, epoch_dir = resolve_checkpoint_paths(checkpoint)
@@ -159,7 +159,7 @@ monomer_offsets = np.zeros(N + 1, dtype=int)
 for _mi, _na in enumerate(atoms_per_monomer_list):
     monomer_offsets[_mi + 1] = monomer_offsets[_mi] + _na
 
-calculator_factory = setup_calculator_general(
+calculator_factory = setup_calculator(
     ATOMS_PER_MONOMER=atoms_per_monomer_list,
     N_MONOMERS=N,
     ml_cutoff_distance=0.01,
