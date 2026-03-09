@@ -1,7 +1,7 @@
 REMARK  EXECUTING CHARMM SCRIPT FROM PYTHON                                           
-REMARK   DATE:     3/ 9/26     15:58:50      CREATED BY USER: ericb                   
-ATOM      1  OH2 TIP3    1       0.046   0.215   0.406  1.00  0.00      TIP3
-ATOM      2  H1  TIP3    1       0.054   0.130   0.484  1.00  0.00      TIP3
-ATOM      3  H2  TIP3    1       0.544   0.047   0.253  1.00  0.00      TIP3
+REMARK   DATE:     3/ 9/26     16: 5:56      CREATED BY USER: ericb                   
+ATOM      1  OH2 TIP3    1       0.495   0.257   0.017  1.00  0.00      TIP3
+ATOM      2  H1  TIP3    1       0.005   0.331   0.336  1.00  0.00      TIP3
+ATOM      3  H2  TIP3    1       0.232   0.162   0.575  1.00  0.00      TIP3
 TER       4      TIP3     1
 END
