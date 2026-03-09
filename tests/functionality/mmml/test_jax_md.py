@@ -20,6 +20,27 @@ def _can_import(name: str) -> bool:
         return False
 
 
+def _resolve_ckpt_path() -> Path | None:
+    ckpt_env = os.environ.get("MMML_CKPT")
+    candidates = []
+    if ckpt_env:
+        candidates.append(Path(ckpt_env))
+    candidates.extend(
+        [
+            Path("mmml/models/physnetjax/ckpts/DESdimers"),
+            Path("mmml/models/physnetjax/ckpts/DESdimers/epoch-1985"),
+            Path("mmml/models/physnetjax/ckpts"),
+            Path("ckpts_json/DESdimers_params.json"),
+            Path("ckpts_json"),
+            Path("mmml/physnetjax/ckpts"),
+        ]
+    )
+    for ckpt in candidates:
+        if ckpt.exists():
+            return ckpt
+    return None
+
+
 @pytest.mark.skipif(
     not _can_import("pycharmm"),
     reason="pycharmm not available in this environment",
@@ -38,9 +59,8 @@ def test_jax_md_fire_minimization_smoke():
     if not _can_import("e3x"):
         pytest.skip("e3x not available in this environment")
 
-    ckpt_env = os.environ.get("MMML_CKPT")
-    ckpt = Path(ckpt_env) if ckpt_env else Path("mmml/physnetjax/ckpts")
-    if not ckpt.exists():
+    ckpt = _resolve_ckpt_path()
+    if ckpt is None:
         pytest.skip("No checkpoints present for ML model")
 
     import jax
@@ -128,9 +148,8 @@ def test_jax_md_nve_few_steps():
     if not _can_import("e3x"):
         pytest.skip("e3x not available in this environment")
 
-    ckpt_env = os.environ.get("MMML_CKPT")
-    ckpt = Path(ckpt_env) if ckpt_env else Path("mmml/physnetjax/ckpts")
-    if not ckpt.exists():
+    ckpt = _resolve_ckpt_path()
+    if ckpt is None:
         pytest.skip("No checkpoints present for ML model")
 
     import jax
