@@ -26,15 +26,19 @@ def have_jax_md() -> bool:
 
 
 def _pbc_cell_to_box(pbc_cell: np.ndarray):
-    """Convert pbc_cell (3x3 or scalar) to jax_md box format."""
+    """Convert pbc_cell (3x3, (3,), or scalar) to jax_md box format for space.periodic.
+
+    space.periodic expects a float (cubic) or ndarray of shape [spatial_dim].
+    A 3x3 diagonal matrix is converted to [Lx, Ly, Lz].
+    """
     cell = np.asarray(pbc_cell, dtype=np.float64)
     if cell.ndim == 0:
         L = float(cell)
-        return jnp.array(L)
+        return jnp.array([L, L, L])
     if cell.shape == (3,):
         return jnp.array(cell)
     if cell.shape == (3, 3):
-        return jnp.array(cell)
+        return jnp.array([float(cell[0, 0]), float(cell[1, 1]), float(cell[2, 2])])
     raise ValueError(f"pbc_cell must be scalar, (3,) or (3,3); got {cell.shape}")
 
 
