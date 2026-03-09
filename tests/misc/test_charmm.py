@@ -50,14 +50,3 @@ def test_mmml_calculator_charmm_flag():
     assert hasattr(mmml_calculator, "_HAVE_PYCHARMM")
     assert mmml_calculator._HAVE_PYCHARMM is True
 
-
-@pytest.mark.skipif(
-    not _can_import_pycharmm(),
-    reason="pycharmm not available in this environment",
-)
-def test_mmml_calculator_general_charmm_flag():
-    """General MMML calculator module exposes _HAVE_PYCHARMM."""
-    from mmml.pycharmmInterface import mmml_calculator_general
-
-    assert hasattr(mmml_calculator_general, "_HAVE_PYCHARMM")
-    assert mmml_calculator_general._HAVE_PYCHARMM is True

@@ -38,9 +38,6 @@ from __future__ import annotations
 This demo loads PDB files and runs molecular dynamics simulations using
 the hybrid MM/ML calculator with PyCHARMM integration.
 """
-import jax
-# jax.config.update("jax_enable_x64", True)
-
 
 import argparse
 import sys
@@ -428,51 +425,25 @@ def run(args: argparse.Namespace) -> int:
         print("No cell provided")
 
 
-    # Decide which calculator to use: general (heterogeneous) vs original (uniform)
-    is_heterogeneous = len(set(atoms_per_monomer_list)) > 1
-    if is_heterogeneous:
-        # Use the general calculator that supports variable monomer sizes
-        from mmml.pycharmmInterface.mmml_calculator_general import (
-            setup_calculator as setup_calculator_general,
-        )
-        calculator_factory = setup_calculator_general(
-            ATOMS_PER_MONOMER=atoms_per_monomer_list,
-            N_MONOMERS=n_monomers,
-            ml_cutoff_distance=args.ml_cutoff,
-            mm_switch_on=args.mm_switch_on,
-            mm_cutoff=args.mm_cutoff,
-            doML=True,
-            doMM=args.include_mm,
-            doML_dimer=not args.skip_ml_dimers,
-            debug=args.debug,
-            model_restart_path=base_ckpt_dir,
-            MAX_ATOMS_PER_SYSTEM=total_atoms,
-            ml_energy_conversion_factor=1,
-            ml_force_conversion_factor=1,
-            cell=args.cell,
-            flat_bottom_radius=args.flat_bottom_radius,
-            flat_bottom_force_const=args.flat_bottom_k,
-        )
-    else:
-        # Uniform monomer sizes: use original calculator with a plain int
-        calculator_factory = setup_calculator(
-            ATOMS_PER_MONOMER=atoms_per_monomer_list[0],
-            N_MONOMERS=n_monomers,
-            ml_cutoff_distance=args.ml_cutoff,
-            mm_switch_on=args.mm_switch_on,
-            mm_cutoff=args.mm_cutoff,
-            doML=True,
-            doMM=args.include_mm,
-            doML_dimer=not args.skip_ml_dimers,
-            debug=args.debug,
-            model_restart_path=base_ckpt_dir,
-            MAX_ATOMS_PER_SYSTEM=total_atoms,
-            ml_energy_conversion_factor=1,
-            ml_force_conversion_factor=1,
-            cell=args.cell,
-            flat_bottom_radius=args.flat_bottom_radius,
-            flat_bottom_force_const=args.flat_bottom_k,
-        )
+    # Unified calculator supports both uniform and heterogeneous monomer sizes
+    calculator_factory = setup_calculator(
+        ATOMS_PER_MONOMER=atoms_per_monomer_list,
+        N_MONOMERS=n_monomers,
+        ml_cutoff_distance=args.ml_cutoff,
+        mm_switch_on=args.mm_switch_on,
+        mm_cutoff=args.mm_cutoff,
+        doML=True,
+        doMM=args.include_mm,
+        doML_dimer=not args.skip_ml_dimers,
+        debug=args.debug,
+        model_restart_path=base_ckpt_dir,
+        MAX_ATOMS_PER_SYSTEM=total_atoms,
+        ml_energy_conversion_factor=1,
+        ml_force_conversion_factor=1,
+        cell=args.cell,
+        flat_bottom_radius=args.flat_bottom_radius,
+        flat_bottom_force_const=args.flat_bottom_k,
+    )
     
 
     CUTOFF_PARAMS = CutoffParameters(
@@ -545,7 +516,7 @@ def run(args: argparse.Namespace) -> int:
     print(f"Initial forces: {hybrid_forces}")
     
 
-    from mmml.pycharmmInterface.import_pycharmm import (
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import (
         reset_block,
         reset_block_no_internal,
         pycharmm,
@@ -573,7 +544,7 @@ shake bonh para sele all end
     atoms.set_positions(coor.get_positions())
 
     def run_heat(): 
-        from mmml.pycharmmInterface.pycharmmCommands import heat
+        from mmml.interfaces.pycharmmInterface.pycharmmCommands import heat
         pycharmm.lingo.charmm_script(heat)
         atoms.set_positions(coor.get_positions())
         safe_energy_show()
@@ -584,7 +555,7 @@ shake bonh para sele all end
         return atoms
 
     def run_equilibration():
-        from mmml.pycharmmInterface.pycharmmCommands import equi
+        from mmml.interfaces.pycharmmInterface.pycharmmCommands import equi
         pycharmm.lingo.charmm_script(equi)
         atoms.set_positions(coor.get_positions())
         safe_energy_show()
@@ -595,7 +566,7 @@ shake bonh para sele all end
         return atoms
 
     def run_production():
-        from mmml.pycharmmInterface.pycharmmCommands import production
+        from mmml.interfaces.pycharmmInterface.pycharmmCommands import production
         pycharmm.lingo.charmm_script(production)
         atoms.set_positions(coor.get_positions())
         safe_energy_show()
