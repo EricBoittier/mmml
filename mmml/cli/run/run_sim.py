@@ -1235,10 +1235,13 @@ shake bonh para sele all end
                     key, md_pos_frac, box=box_curr,
                     neighbor=(pair_idx, pair_mask), kT=kT, mass=Si_mass
                 )
+                npt_pair_idx, npt_pair_mask = pair_idx, pair_mask
             elif args.ensemble == "nvt":
                 state = init_fn(key, md_pos, mass=Si_mass)
+                npt_pair_idx, npt_pair_mask = None, None
             else:
                 state = init_fn(key, md_pos, kT, mass=Si_mass)
+                npt_pair_idx, npt_pair_mask = None, None
             print(f"Momentum initialized for {T} K")
             nhc_positions = []
 
