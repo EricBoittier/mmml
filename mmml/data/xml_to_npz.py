@@ -15,8 +15,7 @@ from datetime import datetime
 from tqdm import tqdm
 
 # Import the excellent Molpro parser
-sys.path.insert(0, str(Path(__file__).parent.parent / 'parse_molpro'))
-from read_molden import read_molpro_xml, MolproData
+from mmml.interfaces.parse_molpro.read_molden import read_molpro_xml, MolproData
 
 from .npz_schema import validate_npz, NPZSchema
 
