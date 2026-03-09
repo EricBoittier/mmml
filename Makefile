@@ -71,19 +71,19 @@ install-all:
 # ==============================================================================
 
 conda-create:
-	conda env create -f environment.yml
+	conda env create -f setup/environment.yml
 
 conda-create-gpu:
-	conda env create -f environment-gpu.yml
+	conda env create -f setup/environment-gpu.yml
 
 conda-create-gpu-cuda13:
-	conda env create -f environment-gpu-cuda13.yml
+	conda env create -f setup/environment-gpu-cuda13.yml
 
 conda-create-full:
-	conda env create -f environment-full.yml
+	conda env create -f setup/environment-full.yml
 
 conda-update:
-	conda env update -f environment.yml --prune
+	conda env update -f setup/environment.yml --prune
 
 conda-remove:
 	conda env remove -n mmml -y
