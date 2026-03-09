@@ -6,7 +6,7 @@ import numpy as np
 import importlib as _il  # lazy import in tests
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-
+import e3x
 
 def _can_import(name: str) -> bool:
 	"""Return True only if *name* can be fully imported (not just found)."""
