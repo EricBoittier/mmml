@@ -14,7 +14,9 @@ from mmml.interfaces.pycharmmInterface.calculator_utils import _sharpstep
 from mmml.interfaces.pycharmmInterface.cutoffs import GAMMA_OFF, GAMMA_ON
 from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
     mic_displacement,
+    mic_displacement_smooth,
     mic_displacements_batched,
+    mic_displacements_batched_smooth,
 )
 
 try:
@@ -59,6 +61,7 @@ def build_mm_energy_forces_fn(
     pbc_cell: Optional[np.ndarray] = None,
     max_pairs: Optional[int] = None,
     cell_list_safety_factor: float = 2.5,
+    use_smooth_mic: bool = False,
     debug: bool = False,
 ) -> Callable[[Array], Tuple[Array, Array]]:
     """Build MM energy/forces function with switching.
@@ -260,7 +263,8 @@ def build_mm_energy_forces_fn(
             com_i = coms[_dimer_perms_np[:, 0]]
             com_j = coms[_dimer_perms_np[:, 1]]
             if pbc_cell is not None:
-                d_vec = jax.vmap(lambda a, b: mic_displacement(a, b, pbc_cell))(com_i, com_j)
+                mic_fn = mic_displacement_smooth if use_smooth_mic else mic_displacement
+                d_vec = jax.vmap(lambda a, b: mic_fn(a, b, pbc_cell))(com_i, com_j)
                 r = jnp.linalg.norm(d_vec, axis=1)
             else:
                 r = jnp.linalg.norm(com_j - com_i, axis=1)
@@ -292,7 +296,8 @@ def build_mm_energy_forces_fn(
         if pbc_cell is not None:
             pos_dst = positions[pair_idx_atom_atom[:, 1]]
             pos_src = positions[pair_idx_atom_atom[:, 0]]
-            displacements = mic_displacements_batched(pos_dst, pos_src, pbc_cell)
+            mic_batched = mic_displacements_batched_smooth if use_smooth_mic else mic_displacements_batched
+            displacements = mic_batched(pos_dst, pos_src, pbc_cell)
         else:
             displacements = positions[pair_idx_atom_atom[:, 0]] - positions[pair_idx_atom_atom[:, 1]]
         distances = jnp.linalg.norm(displacements, axis=1)

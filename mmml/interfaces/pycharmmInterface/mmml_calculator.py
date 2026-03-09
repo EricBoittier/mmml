@@ -27,7 +27,9 @@ from scipy.optimize import minimize as scipy_minimize
 import jax.numpy as jnp
 from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
     mic_displacement,
+    mic_displacement_smooth,
     mic_displacements_batched,
+    mic_displacements_batched_smooth,
 )
 from mmml.interfaces.pycharmmInterface.calculator_utils import (
     ModelOutput,
@@ -349,6 +351,7 @@ def setup_calculator(
     max_pairs: Optional[int] = None,
     flat_bottom_radius: float | None = None,
     flat_bottom_force_const: float = 1.0,
+    use_smooth_mic: Optional[bool] = None,
 ):
     """Create hybrid ML/MM calculator with outputs in eV/eV-A.
 
@@ -564,6 +567,9 @@ def setup_calculator(
     MODEL.natoms = MAX_ATOMS_PER_SYSTEM
     is_spooky_model = "spooky_model" in type(MODEL).__module__
 
+    if use_smooth_mic is None:
+        use_smooth_mic = bool(cell)
+
     if cell:
         MODEL.use_pbc = True
         cell_arr = jnp.asarray(cell)
@@ -606,7 +612,8 @@ def setup_calculator(
         com1 = jnp.mean(X[:n_atoms_a], axis=0)
         com2 = jnp.mean(X[n_atoms_a:n_atoms_a + n_atoms_b], axis=0)
         if pbc_cell is not None:
-            d = mic_displacement(com1, com2, pbc_cell)
+            mic_fn = mic_displacement_smooth if use_smooth_mic else mic_displacement
+            d = mic_fn(com1, com2, pbc_cell)
             r = jnp.linalg.norm(d)
         else:
             r = jnp.linalg.norm(com2 - com1)
@@ -652,6 +659,7 @@ def setup_calculator(
             pbc_cell=pbc_cell,
             max_pairs=max_pairs,
             cell_list_safety_factor=cell_list_safety_factor,
+            use_smooth_mic=use_smooth_mic,
             debug=debug,
         )
 
@@ -877,7 +885,8 @@ def setup_calculator(
             com = jnp.sum(positions * masses[:, None], axis=0) / M
             if _pbc_cell is not None:
                 center = (_pbc_cell[0] + _pbc_cell[1] + _pbc_cell[2]) / 2.0
-                d = mic_displacement(center, com, _pbc_cell)
+                mic_fn = mic_displacement_smooth if use_smooth_mic else mic_displacement
+                d = mic_fn(center, com, _pbc_cell)
             else:
                 center = jnp.zeros(3)
                 d = com - center
@@ -1294,7 +1303,23 @@ def setup_calculator(
                 """Calculate energy and forces for given atomic configuration"""
 
                 ase_calc.Calculator.calculate(self, atoms, properties, system_changes)
-                R = atoms.get_positions()
+                R = np.asarray(atoms.get_positions(), dtype=np.float64)
+
+                # Option A: Wrap positions into cell before each evaluation (keeps BFGS in primary cell)
+                if self.pbc_cell is not None:
+                    from mmml.interfaces.pycharmmInterface.cell_list import _wrap_groups_np
+                    cell_matrix = np.asarray(self.pbc_cell, dtype=np.float64)
+                    if cell_matrix.ndim == 0:
+                        L = float(cell_matrix)
+                        cell_matrix = np.array([[L, 0, 0], [0, L, 0], [0, 0, L]], dtype=np.float64)
+                    elif cell_matrix.shape == (3,):
+                        cell_matrix = np.diag(np.asarray(cell_matrix, dtype=np.float64))
+                    monomer_offsets_arr = np.concatenate(
+                        [[0], np.cumsum(self.atoms_per_monomer_list)]
+                    ).astype(np.int64)
+                    R = _wrap_groups_np(R, cell_matrix, monomer_offsets_arr)
+                    atoms.set_positions(R)
+
                 Z = atoms.get_atomic_numbers()
 
                 # MIC-only PBC: pass R directly. Cell list wraps by molecule for binning.

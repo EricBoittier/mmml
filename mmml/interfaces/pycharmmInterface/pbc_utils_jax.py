@@ -1,9 +1,31 @@
 # pbc_utils_jax.py
+"""PBC utilities for JAX. Includes smooth MIC for differentiable optimization under PBC."""
 import jax
 import jax.numpy as jnp
 import jax.scipy.linalg
 
 Array = jnp.ndarray
+
+# Sharpness of smooth MIC transition (higher = closer to exact round, narrower transition)
+SMOOTH_MIC_K = 20.0
+
+
+def _smooth_round_frac(frac: Array, k: float = SMOOTH_MIC_K) -> Array:
+    """Smooth approximation to round for fractional part in [0, 1).
+
+    Replaces the discontinuous round at frac=0.5 with a tanh transition.
+    Output: 0 when frac < 0.5, 1 when frac > 0.5, smooth in between.
+    """
+    return 0.5 + 0.5 * jnp.tanh(k * (frac - 0.5))
+
+
+def _smooth_frac_to_mic(frac: Array, k: float = SMOOTH_MIC_K) -> Array:
+    """Smooth fractional part to (-0.5, 0.5] for MIC.
+
+    Replaces: frac - round(frac) which jumps at 0.5.
+    Uses: frac - 0.5 - 0.5*tanh(k*(frac-0.5)) for smooth transition.
+    """
+    return frac - 0.5 - 0.5 * jnp.tanh(k * (frac - 0.5))
 
 
 @jax.jit
@@ -57,11 +79,33 @@ def mic_displacement(Ri: Array, Rj: Array, cell: Array) -> Array:
 
 
 @jax.jit
+def mic_displacement_smooth(Ri: Array, Rj: Array, cell: Array, k: float = SMOOTH_MIC_K) -> Array:
+    """Smooth (differentiable) MIC displacement. Use for BFGS/minimization under PBC."""
+    dR = Rj - Ri
+    dS = frac_coords(dR, cell)
+    frac = dS - jnp.floor(dS)  # fractional part in [0, 1)
+    dS_mic = _smooth_frac_to_mic(frac, k)
+    return cart_coords(dS_mic, cell)
+
+
+@jax.jit
 def mic_displacements_batched(positions_dst: Array, positions_src: Array, cell: Array) -> Array:
     """MIC displacement for batched pairs. positions_dst/src shape (n_edges, 3)."""
     dR = positions_src - positions_dst
     dS = frac_coords(dR, cell)
     dS_mic = dS - jnp.round(dS)
+    return cart_coords(dS_mic, cell)
+
+
+@jax.jit
+def mic_displacements_batched_smooth(
+    positions_dst: Array, positions_src: Array, cell: Array, k: float = SMOOTH_MIC_K
+) -> Array:
+    """Smooth MIC displacement for batched pairs. Use for minimization under PBC."""
+    dR = positions_src - positions_dst
+    dS = frac_coords(dR, cell)
+    frac = dS - jnp.floor(dS)
+    dS_mic = _smooth_frac_to_mic(frac, k)
     return cart_coords(dS_mic, cell)
 
 
