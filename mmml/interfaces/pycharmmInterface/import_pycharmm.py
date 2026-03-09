@@ -221,3 +221,4 @@ def pycharmm_loud():
     cmd = "PRNLev 9\nWRNLev 9"
     pycharmm.lingo.charmm_script(cmd)
 
+pycharmm_quiet()

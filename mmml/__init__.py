@@ -9,6 +9,11 @@ if "mmml.pycharmmInterface" not in sys.modules:
     from mmml.interfaces import pycharmmInterface
     sys.modules["mmml.pycharmmInterface"] = pycharmmInterface
 
+# Compatibility: mmml.physnetjax -> mmml.models.physnetjax
+if "mmml.physnetjax" not in sys.modules:
+    from mmml.models import physnetjax
+    sys.modules["mmml.physnetjax"] = physnetjax
+
 # Handle version import gracefully
 try:
     from ._version import __version__
