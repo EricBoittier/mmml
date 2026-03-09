@@ -7,9 +7,11 @@ from mmml.models.physnetjax.physnetjax.training.training import train_model
 
 key = jax.random.PRNGKey(40)
 
+DATA = "/run/media/ericb/5416-320D/qcell_dimers.h5"
+
 train_data, valid_data, natoms = prepare_h5_datasets(
     key,
-    filepath="/run/media/ericb/5416-320D/qcell_dimers.h5",
+    filepath=DATA,
     train_size=100000,
     valid_size=300,
     charge_filter=0.0,   # only neutral molecules
