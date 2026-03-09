@@ -802,7 +802,15 @@ shake bonh para sele all end
 
     def set_up_nhc_sim_routine(atoms, T=args.temperature, dt=5e-3, steps_per_recording=250):
         @jax.jit
-        def evaluate_energies_and_forces(atomic_numbers, positions, dst_idx, src_idx):
+        def evaluate_energies_and_forces(
+            atomic_numbers,
+            positions,
+            dst_idx,
+            src_idx,
+            mm_pair_idx=None,
+            mm_pair_mask=None,
+            box=None,
+        ):
             return spherical_cutoff_calculator(
                 atomic_numbers=atomic_numbers,
                 positions=positions,
@@ -812,6 +820,9 @@ shake bonh para sele all end
                 doMM=args.include_mm,
                 doML_dimer=not args.skip_ml_dimers,
                 debug=args.debug,
+                mm_pair_idx=mm_pair_idx,
+                mm_pair_mask=mm_pair_mask,
+                box=box,
             )
 
 
@@ -819,19 +830,32 @@ shake bonh para sele all end
         atomic_numbers = jnp.asarray(atoms.get_atomic_numbers(), dtype=jnp.int32)
         R = jnp.asarray(atoms.get_positions(), dtype=jnp.float32)
 
+        def _eval_kwargs(mm_pair_idx=None, mm_pair_mask=None, box=None):
+            kw = {}
+            if mm_pair_idx is not None:
+                kw["mm_pair_idx"] = mm_pair_idx
+            if mm_pair_mask is not None:
+                kw["mm_pair_mask"] = mm_pair_mask
+            if box is not None:
+                kw["box"] = box
+            return kw
+
         @jit
-        def jax_md_energy_fn(position, **kwargs):
+        def jax_md_energy_fn(position, mm_pair_idx=None, mm_pair_mask=None, box=None, **kwargs):
             position = jnp.asarray(position, dtype=jnp.float32)
             result = evaluate_energies_and_forces(
                 atomic_numbers=atomic_numbers,
                 positions=position,
                 dst_idx=dst_idx,
                 src_idx=src_idx,
+                mm_pair_idx=mm_pair_idx,
+                mm_pair_mask=mm_pair_mask,
+                box=box,
             )
             return result.energy.reshape(-1)[0]
 
         @jit
-        def jax_md_force_fn(position, **kwargs):
+        def jax_md_force_fn(position, mm_pair_idx=None, mm_pair_mask=None, box=None, **kwargs):
             """Return forces from calculator (no autodiff). jax.grad(energy_fn) produces NaN."""
             position = jnp.asarray(position, dtype=jnp.float32)
             result = evaluate_energies_and_forces(
@@ -839,15 +863,27 @@ shake bonh para sele all end
                 positions=position,
                 dst_idx=dst_idx,
                 src_idx=src_idx,
+                mm_pair_idx=mm_pair_idx,
+                mm_pair_mask=mm_pair_mask,
+                box=box,
             )
             return result.forces
 
-        # evaluate_energies_and_forces
+        # evaluate_energies_and_forces (initial call - get update_fn if available)
+        use_pbc = args.cell is not None
+        update_fn = get_update_fn(R, CUTOFF_PARAMS) if get_update_fn else None
+        pair_idx, pair_mask = None, None
+        box_init = jnp.array([float(args.cell)]) if args.cell else None
+        if update_fn is not None and use_pbc and box_init is not None:
+            pair_idx, pair_mask = update_fn(np.asarray(R), box=np.asarray(box_init))
         result = evaluate_energies_and_forces(
             atomic_numbers=atomic_numbers,
             positions=R,
             dst_idx=dst_idx,
             src_idx=src_idx,
+            mm_pair_idx=pair_idx,
+            mm_pair_mask=pair_mask,
+            box=box_init,
         )
         print(f"Result: {result}")
         init_energy = result.energy.reshape(-1)[0]
@@ -855,7 +891,6 @@ shake bonh para sele all end
         print(f"Initial energy: {init_energy:.6f} eV")
         print(f"Initial forces: {init_forces}")
 
-        use_pbc = args.cell is not None
         # MIC-only PBC: calculator uses minimum-image convention, no coordinate transform.
         pbc_map_fn = getattr(atoms.calc, "pbc_map", None) if atoms.calc else None
         if use_pbc:
@@ -905,11 +940,16 @@ shake bonh para sele all end
 
             wrapped_force_fn = jax_md_force_fn
 
-        # Shift: do NOT wrap every timestep (same as ASE). Integration uses unwrapped
-        # coordinates; calculator applies MIC internally for energy/forces.
-        _displacement, _shift_free = space.free()
-        shift = _shift_free
-        displacement = _displacement
+        # Shift and displacement: NPT uses periodic_general with fractional coords; NVT/NVE use free or periodic
+        is_npt = args.ensemble == "npt" and use_pbc
+        if is_npt:
+            # NPT requires fractional coordinates; box as dim-1 array for npt_box
+            box_npt = jnp.array([float(args.cell)])
+            displacement, shift = space.periodic_general(box=box_npt, fractional_coordinates=True)
+        else:
+            _displacement, _shift_free = space.free()
+            shift = _shift_free
+            displacement = _displacement
 
         unwrapped_init_fn, unwrapped_step_fn = jax_md.minimize.fire_descent(
             wrapped_force_fn, shift, dt_start=0.001, dt_max=0.001
@@ -942,7 +982,52 @@ shake bonh para sele all end
         print(f"JAX-MD {args.ensemble.upper()}: dt={dt} ps ({dt_fs} fs), kT={kT} ({T} K)")
 
         # Select integrator based on ensemble
-        if args.ensemble == "nvt":
+        if args.ensemble == "npt" and use_pbc:
+            if update_fn is None:
+                raise ValueError(
+                    "NPT requires jax_md neighbor list (cell list cannot handle dynamic box). "
+                    "Ensure jax_md is installed and pbc_cell is set."
+                )
+            pressure = getattr(args, 'pressure', 1.01325) * unit['pressure']
+            barostat_tau = getattr(args, 'nhc_barostat_tau', 1000.0) * dt
+            nhc_chain_length = getattr(args, 'nhc_chain_length', 3)
+            nhc_chain_steps = getattr(args, 'nhc_chain_steps', 2)
+            nhc_sy_steps = getattr(args, 'nhc_sy_steps', 3)
+            nhc_tau = getattr(args, 'nhc_tau', 100.0)
+            nhc_kwargs = {
+                'chain_length': nhc_chain_length,
+                'chain_steps': nhc_chain_steps,
+                'sy_steps': nhc_sy_steps,
+            }
+
+            def npt_energy_fn(frac_pos, box=None, neighbor=None, **kwargs):
+                """Energy in fractional coords: transform to real, then evaluate."""
+                real_pos = space.transform(box, frac_pos)
+                pair_idx, pair_mask = neighbor if neighbor is not None else (None, None)
+                result = evaluate_energies_and_forces(
+                    atomic_numbers=atomic_numbers,
+                    positions=real_pos,
+                    dst_idx=dst_idx,
+                    src_idx=src_idx,
+                    mm_pair_idx=pair_idx,
+                    mm_pair_mask=pair_mask,
+                    box=box,
+                )
+                return result.energy.reshape(-1)[0]
+
+            npt_energy_fn = jit(npt_energy_fn)
+            init_fn, apply_fn = simulate.npt_nose_hoover(
+                npt_energy_fn,
+                shift,
+                dt=dt,
+                pressure=pressure,
+                kT=kT,
+                barostat_kwargs=default_nhc_kwargs(jnp.array(barostat_tau), nhc_kwargs),
+                thermostat_kwargs=default_nhc_kwargs(jnp.array(nhc_tau * dt), nhc_kwargs),
+            )
+            print(f"NPT Nose-Hoover: pressure={args.pressure} bar, barostat_tau={barostat_tau:.6f} ps, "
+                  f"thermostat tau={nhc_tau * dt:.6f} ps")
+        elif args.ensemble == "nvt":
             nhc_chain_length = getattr(args, 'nhc_chain_length', 3)
             nhc_chain_steps = getattr(args, 'nhc_chain_steps', 2)
             nhc_sy_steps = getattr(args, 'nhc_sy_steps', 3)
