@@ -173,3 +173,10 @@ mmml/packmol/packmol
 fort.1
 pdb/init-packmol.pdb
 packmol/packmol.inp
+packmol/packmol.inp
+pdb/init-packmol.pdb
+pdb/initial.pdb
+pdb/tip3.pdb
+psf/initial.psf
+psf/tip3-1.psf
+packmol/packmol.inp
