@@ -14,7 +14,11 @@ DEFAULT_REFERENCE_LEVEL = "wb97m-d3(bj)/def2-tzvp"
 DEFAULT_CHARGE_STATE = 0
 DEFAULT_UNIT = "hartree"
 
-_DATA_PATH = Path(__file__).resolve().with_name("atomic_reference_energies.json")
+_HERE = Path(__file__).resolve().parent
+_DATA_PATH = _HERE / "atomic_reference_energies.json"
+if not _DATA_PATH.exists():
+    # Backward-compatible fallback for repos storing the table under data/qcml/.
+    _DATA_PATH = _HERE / "qcml" / "atomic_reference_energies.json"
 
 _UNIT_FACTORS = {
     "hartree": 1.0,
