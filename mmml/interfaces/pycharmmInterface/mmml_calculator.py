@@ -1983,7 +1983,16 @@ def setup_calculator(
                 verbose=verbose,
             )
 
-            return calculator, spherical_cutoff_calculator
+            # Bind setup-time defaults so direct callers of the returned function
+            # (e.g., JAX-MD tests) inherit doML/doMM/doML_dimer/debug configuration.
+            configured_spherical_cutoff = partial(
+                spherical_cutoff_calculator,
+                doML=doML,
+                doMM=doMM,
+                doML_dimer=doML_dimer,
+                debug=debug,
+            )
+            return calculator, configured_spherical_cutoff
 
     else:  # pragma: no cover - exercised when ASE not installed
 
