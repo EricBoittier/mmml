@@ -1,2 +1,0 @@
-DATA=/home/ericb/mmml/filtered_acetone_3-8A.npz
-CHECKPOINT=./mmml/physnetjax/ckpts/test-9af0d71b-4140-4d4b-83e3-ce07c652d048
