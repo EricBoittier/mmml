@@ -1407,6 +1407,7 @@ shake bonh para sele all end
                 npt_pressure = None
             print(f"Momentum initialized for {T} K")
             nhc_positions = []
+            nhc_boxes = []  # NPT: box at each record step (for frac→real when saving)
 
             # get energy of initial state
             if is_npt and npt_pair_idx is not None:
@@ -1543,8 +1544,13 @@ shake bonh para sele all end
                         )
                         state = state.set(position=wrapped_pos)
 
-                # Store current position for trajectory analysis
-                nhc_positions.append(state.position)
+                # Store current position (NPT: fractional + box for correct real coords at save)
+                if is_npt:
+                    box_curr = simulate.npt_box(state)
+                    nhc_positions.append(state.position)
+                    nhc_boxes.append(box_curr)
+                else:
+                    nhc_positions.append(state.position)
                     
                 # Print progress every 10 steps
                 if i % 10 == 0:
@@ -1599,6 +1605,8 @@ shake bonh para sele all end
                         print(f"Numerical instability at step {steps}; stopping.")
                         if len(nhc_positions) > 1:
                             nhc_positions = nhc_positions[:-1]
+                            if is_npt:
+                                nhc_boxes = nhc_boxes[:-1]
                             state = type(state)(
                                 position=nhc_positions[-1],
                                 momentum=state.momentum,
@@ -1609,6 +1617,8 @@ shake bonh para sele all end
                         print(f"Energy blow-up at step {steps} (E_pot={e_pot:.4f}); stopping.")
                         if len(nhc_positions) > 1:
                             nhc_positions = nhc_positions[:-1]
+                            if is_npt:
+                                nhc_boxes = nhc_boxes[:-1]
                             state = type(state)(
                                 position=nhc_positions[-1],
                                 momentum=state.momentum,
@@ -1624,11 +1634,10 @@ shake bonh para sele all end
 
 
             nhc_positions_out = []
-            for R in nhc_positions:
+            for idx, R in enumerate(nhc_positions):
                 if is_npt:
-                    # NPT: convert fractional to real (use last box from state)
-                    box_final = simulate.npt_box(state)
-                    R = space.transform(box_final, R)
+                    # NPT: convert fractional to real using box at this step
+                    R = space.transform(nhc_boxes[idx], R)
                 elif use_pbc and pbc_map_fn is not None:
                     R = pbc_map_fn(R)
                 nhc_positions_out.append(R)
@@ -1680,9 +1689,9 @@ shake bonh para sele all end
             print(f"Out positions: {out_positions}")
 
             for i in range(len(out_positions)):
-                traj_filename = f'{args.output_prefix}_md_trajectory_{j}_{i}.traj'
+                traj_filename = f'{args.output_prefix}_md_trajectory_{j}_{i}'
                 Path(traj_filename).parent.mkdir(parents=True, exist_ok=True)
-                print(f"Saving trajectory to: {traj_filename}")
+                print(f"Saving trajectory to: {traj_filename}.traj")
                 save_trajectory(out_positions[i], atoms, filename=traj_filename)
 
             # atoms = minimize_structure(atoms)
