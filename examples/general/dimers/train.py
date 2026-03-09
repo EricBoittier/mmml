@@ -1,10 +1,10 @@
 """"""
 import jax
 
-from mmml.physnetjax.physnetjax.data.read_h5 import prepare_h5_datasets
-from mmml.physnetjax.physnetjax.models.model import EF
-from mmml.physnetjax.physnetjax.training.training import train_model
-from mmml.physnetjax.physnetjax.training.progressive import train_model_progressive
+from mmml.models.physnetjax.physnetjax.data.read_h5 import prepare_h5_datasets
+from mmml.models.physnetjax.physnetjax.models.model import EF
+from mmml.models.physnetjax.physnetjax.training.training import train_model
+from mmml.models.physnetjax.physnetjax.training.progressive import train_model_progressive
 
 key = jax.random.PRNGKey(40)
 

@@ -1,0 +1,37 @@
+{
+  "uuid": "a95793a2-6ac3-432c-9114-2f9e8e7b0d3e",
+  "model": {
+    "features": 8,
+    "max_degree": 2,
+    "num_iterations": 2,
+    "num_basis_functions": 8,
+    "cutoff": 10.0,
+    "max_atomic_number": 55,
+    "include_pseudotensors": true,
+    "dipole_field_coupling": true,
+    "field_scale": 0.001
+  },
+  "training": {
+    "num_train": 1000,
+    "num_valid": 200,
+    "num_epochs": 300,
+    "learning_rate": 0.001,
+    "batch_size": 200,
+    "clip_norm": 1000.0,
+    "ema_decay": 0.5,
+    "early_stopping_patience": null,
+    "early_stopping_min_delta": 0.0,
+    "reduce_on_plateau_patience": 5,
+    "reduce_on_plateau_cooldown": 5,
+    "reduce_on_plateau_factor": 0.9,
+    "reduce_on_plateau_rtol": 0.0001,
+    "reduce_on_plateau_accumulation_size": 5,
+    "reduce_on_plateau_min_scale": 0.01,
+    "energy_weight": 1.0,
+    "forces_weight": 1000.0,
+    "dipole_weight": 1.0
+  },
+  "data": {
+    "dataset": "data-full.npz"
+  }
+}
