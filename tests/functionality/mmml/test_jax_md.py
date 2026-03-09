@@ -170,8 +170,8 @@ def test_jax_md_nve_few_steps():
     import jax.numpy as jnp
     from jax import jit
 
-    from mmml.pycharmmInterface.mmml_calculator import setup_calculator
-    from mmml.pycharmmInterface.cutoffs import CutoffParameters
+    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+    from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
 
     n_monomers = 2
     n_atoms_monomer = 10

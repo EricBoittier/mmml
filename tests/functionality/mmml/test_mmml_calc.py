@@ -538,37 +538,37 @@ def test_pbc_energy_invariance_ml_mm():
 			pytest.skip(f"CHARMM/PSF setup failed: {e}")
 		try:
 			factory = setup_calculator(
-			ATOMS_PER_MONOMER=10,
-			N_MONOMERS=2,
-			doML=True,
-			doMM=True,
-			model_restart_path=ckpt,
-			MAX_ATOMS_PER_SYSTEM=20,
-			cell=cell_length,
-		)
-		calc, spherical_cutoff_calculator = factory(
-			atomic_numbers=Z,
-			atomic_positions=R,
-			n_monomers=2,
-			cutoff_params=cutoff_params,
-		)
-		if spherical_cutoff_calculator is None:
-			pytest.skip("spherical_cutoff_calculator not available (MM-only path)")
-
-		def sc_fn(R_in, Z_in, n_monomers, cutoff_params_in):
-			return spherical_cutoff_calculator(
-				positions=R_in,
-				atomic_numbers=Z_in,
-				n_monomers=n_monomers,
-				cutoff_params=cutoff_params_in,
+				ATOMS_PER_MONOMER=10,
+				N_MONOMERS=2,
+				doML=True,
+				doMM=True,
+				model_restart_path=ckpt,
+				MAX_ATOMS_PER_SYSTEM=20,
+				cell=cell_length,
 			)
+			calc, spherical_cutoff_calculator = factory(
+				atomic_numbers=Z,
+				atomic_positions=R,
+				n_monomers=2,
+				cutoff_params=cutoff_params,
+			)
+			if spherical_cutoff_calculator is None:
+				pytest.skip("spherical_cutoff_calculator not available (MM-only path)")
 
-		delta_E = check_lattice_invariance(
-			sc_fn, R, Z, 2, cutoff_params, cell_matrix
-		)
-		assert abs(delta_E) < 1e-3, (
-			f"ML+MM lattice invariance violated: |E0 - E1| = {abs(delta_E):.6e} (expected < 1e-3)"
-		)
+			def sc_fn(R_in, Z_in, n_monomers, cutoff_params_in):
+				return spherical_cutoff_calculator(
+					positions=R_in,
+					atomic_numbers=Z_in,
+					n_monomers=n_monomers,
+					cutoff_params=cutoff_params_in,
+				)
+
+			delta_E = check_lattice_invariance(
+				sc_fn, R, Z, 2, cutoff_params, cell_matrix
+			)
+			assert abs(delta_E) < 1e-3, (
+				f"ML+MM lattice invariance violated: |E0 - E1| = {abs(delta_E):.6e} (expected < 1e-3)"
+			)
 		finally:
 			os_module.chdir(orig_cwd)
 
