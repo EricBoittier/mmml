@@ -21,10 +21,10 @@ from ase.visualize.plot import plot_atoms
 from ase.io import read
 from ase.visualize import view
 
-from mmml.pycharmmInterface.import_pycharmm import (
+from mmml.interfaces.pycharmmInterface.import_pycharmm import (
     CGENFF_RTF, CGENFF_PRM, CHARMM_HOME, CHARMM_LIB_DIR
 )
-from mmml.pycharmmInterface.pycharmmCommands import (
+from mmml.interfaces.pycharmmInterface.pycharmmCommands import (
     pbcset, pbcs
 )
 os.environ["CHARMM_HOME"] = CHARMM_HOME
@@ -59,7 +59,7 @@ import pycharmm.scalar as scalar
 import pycharmm.lingo
 
 # import simple scripts
-from mmml.pycharmmInterface.pycharmmCommands import CLEAR_CHARMM
+from mmml.interfaces.pycharmmInterface.pycharmmCommands import CLEAR_CHARMM
 
 
 # unit registry
@@ -80,10 +80,12 @@ except ImportError:
         ImportWarning
     )
 
-PACKMOL_PATH = "~/mmml/mmml/packmol/packmol"
+
 cwd = Path(__file__).parent
-water_pdb_path = cwd / ".." / "data" / "tip3.pdb"
-octanol_pdb_path = cwd / ".." / "data" / "ocoh.pdb"
+
+PACKMOL_PATH = Path("~/mmml/mmml/generate/packmol/packmol").expanduser()
+water_pdb_path = cwd / ".." / ".." / "data" / "charmm" / "tip3.pdb"
+octanol_pdb_path = cwd / ".." / ".." / "data" / "charmm" / "ocoh.pdb"
 ase_water = ase.io.read(water_pdb_path)
 ase_octanol = ase.io.read(octanol_pdb_path)
 
@@ -94,12 +96,8 @@ def correct_names(atoms: Atoms) -> Atoms:
     problem_symbols = ["CL", "HO"]
     e = atoms.get_chemical_symbols()
     e = [_[:1] if _.upper() in problem_symbols else _ for _ in e]
-    print(e)
     e = [_ if _[0] != "H" else "H" for _ in e]
-    print(e)
-    # atomic numbers
     an = [ase.data.chemical_symbols.index(_) for _ in e]
-    print(an)
     atoms.set_atomic_numbers(an)
     return atoms
 
@@ -284,7 +282,7 @@ def run_packmol(n_molecules: int, side_length: float) -> None:
     print(f"{PACKMOL_PATH} < packmol/packmol.inp")
     output = os.system(
         " ".join(
-            [PACKMOL_PATH, " < ", "packmol/packmol.inp"]
+            [str(PACKMOL_PATH), " < ", "packmol/packmol.inp"]
         )
     )
     print(output)
