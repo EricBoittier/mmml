@@ -22,6 +22,14 @@ def _can_import(name: str) -> bool:
         return False
 
 
+def _can_import_e3x_nn() -> bool:
+    try:
+        __import__("e3x.nn.modules", fromlist=["initializers"])
+        return True
+    except Exception:
+        return False
+
+
 def _resolve_ckpt_path() -> Path | None:
     ckpt_env = os.environ.get("MMML_CKPT")
     candidates = []
@@ -58,8 +66,8 @@ def test_jax_md_fire_minimization_smoke():
     """
     if not _can_import("jax"):
         pytest.skip("jax not available in this environment")
-    if not _can_import("e3x"):
-        pytest.skip("e3x not available in this environment")
+    if not _can_import_e3x_nn():
+        pytest.skip("e3x.nn not available in this environment")
 
     ckpt = _resolve_ckpt_path()
     if ckpt is None:
@@ -147,8 +155,8 @@ def test_jax_md_nve_few_steps():
     """
     if not _can_import("jax"):
         pytest.skip("jax not available in this environment")
-    if not _can_import("e3x"):
-        pytest.skip("e3x not available in this environment")
+    if not _can_import_e3x_nn():
+        pytest.skip("e3x.nn not available in this environment")
 
     ckpt = _resolve_ckpt_path()
     if ckpt is None:
