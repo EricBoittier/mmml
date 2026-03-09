@@ -30,10 +30,8 @@ import pandas as pd
 import signal
 import sys
 
-# Import DCMNET components
-from .dcmnet.models import DCM1, DCM2, DCM3, DCM4, dcm1_params, dcm2_params, dcm3_params, dcm4_params
-from .dcmnet.loss import esp_mono_loss
-from .dcmnet.electrostatics import calc_esp
+# Import DCMNET components lazily where needed. Avoid eager loading
+# pre-trained parameter files at module import time.
 
 
 CONVERSION_FACTOR = 1 #1.88973
