@@ -1,1 +1,0 @@
-rm -rf qm omm pdb xyz res *log *out packmol *sh dcd psf clusters md_sampling *dat

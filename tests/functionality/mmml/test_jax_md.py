@@ -37,6 +37,9 @@ def _resolve_ckpt_path() -> Path | None:
         candidates.append(Path(ckpt_env))
     candidates.extend(
         [
+            PROJECT_ROOT / "examples/ckpts_json/DESdimers_params.json",
+            PROJECT_ROOT / "examples/ckpts_json/DES",
+            PROJECT_ROOT / "examples/ckpts_json",
             PROJECT_ROOT / "mmml/models/physnetjax/ckpts/DESdimers",
             PROJECT_ROOT / "mmml/models/physnetjax/ckpts/DESdimers/epoch-1985",
             PROJECT_ROOT / "mmml/models/physnetjax/ckpts",

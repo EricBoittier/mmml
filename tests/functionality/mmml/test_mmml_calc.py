@@ -34,6 +34,9 @@ def _resolve_ckpt_path() -> Path | None:
 		candidates.append(Path(ckpt_env))
 	candidates.extend(
 		[
+			PROJECT_ROOT / "examples/ckpts_json/DESdimers_params.json",
+			PROJECT_ROOT / "examples/ckpts_json/DES",
+			PROJECT_ROOT / "examples/ckpts_json",
 			PROJECT_ROOT / "ckpts_json/DESdimers_params.json",
 			PROJECT_ROOT / "ckpts_json/DES",
 			PROJECT_ROOT / "ckpts_json",
@@ -526,8 +529,8 @@ def test_pbc_energy_invariance_ml_mm():
 	atoms_loaded = ase.io.read(str(pdb_path))
 	R_full = atoms_loaded.get_positions()
 	Z_full = atoms_loaded.get_atomic_numbers()
-	R = np.asarray(R_full[:20])
-	Z = np.asarray(Z_full[:20])
+	R = jnp.asarray(R_full[:20])
+	Z = jnp.asarray(Z_full[:20])
 	cell_length = 40.0
 
 	factory = setup_calculator(
