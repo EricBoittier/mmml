@@ -1323,8 +1323,6 @@ shake bonh para sele all end
             # MAIN SIMULATION LOOP
             # ========================================================================
             jaxmd_loop_start = time.perf_counter()
-            if is_npt and pair_idx is not None:
-                npt_pair_idx, npt_pair_mask = pair_idx, pair_mask
 
             for i in range(total_records):
                 if is_npt and update_fn is not None:
