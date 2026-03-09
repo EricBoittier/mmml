@@ -1,11 +1,11 @@
 
-seed 97247
+seed 179786
     output pdb/init-packmol.pdb
     filetype pdb
     tolerance 2.0
     structure pdb/initial.pdb 
     chain A
-    number 5
+    number 10
     inside box 0.0 0.0 0.0 23.0 23.0 23.0
     end structure
     
