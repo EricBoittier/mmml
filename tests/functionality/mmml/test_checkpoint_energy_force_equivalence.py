@@ -47,14 +47,24 @@ def test_epoch1985_orbax_to_json_roundtrip_matches_params(tmp_path: Path):
     if not ORBAX_EPOCH_1985.exists():
         pytest.skip(f"Missing orbax checkpoint: {ORBAX_EPOCH_1985}")
 
-    import orbax.checkpoint as ocp
+    try:
+        import orbax.checkpoint as ocp
+    except Exception as e:
+        pytest.skip(f"orbax.checkpoint not loadable in this environment: {e}")
     from mmml.utils.model_checkpoint import orbax_to_json, json_to_params
 
     converted_json = tmp_path / "epoch1985_params.json"
-    orbax_to_json(
-        orbax_checkpoint_dir=ORBAX_EPOCH_1985,
-        output_path=converted_json,
-    )
+    try:
+        orbax_to_json(
+            orbax_checkpoint_dir=ORBAX_EPOCH_1985,
+            output_path=converted_json,
+        )
+    except (ValueError, OSError) as e:
+        # Some Orbax checkpoints are saved with GPU-only sharding metadata
+        # and cannot be restored on CPU-only CI workers.
+        if "cuda" in str(e).lower() or "sharding" in str(e).lower():
+            pytest.skip(f"Checkpoint requires GPU to load: {e}")
+        raise
     assert converted_json.exists()
 
     restored_orbax = ocp.PyTreeCheckpointer().restore(str(ORBAX_EPOCH_1985))

@@ -829,7 +829,9 @@ def _selection_net_forward(params: Dict[str, np.ndarray], x: np.ndarray) -> Tupl
     h1 = _relu(x @ params['W1'] + params['b1'])
     h2 = _relu(h1 @ params['W2'] + params['b2'])
     logits = h2 @ params['Wp'] + params['bp']
-    value = float(np.tanh(float(h2 @ params['Wv'] + params['bv'])))
+    # Keep this robust across NumPy versions where float(np.array([x])) may fail.
+    value_raw = np.asarray(h2 @ params['Wv'] + params['bv']).reshape(-1)
+    value = float(np.tanh(value_raw[0]))
     dq = h2 @ params['Wdq'] + params['bdq']
     dr = h2 @ params['Wdr'] + params['bdr']
     refine_logits = h2 @ params['Wrefine'] + params['brefine']
