@@ -42,13 +42,16 @@ config = {
     "decouple_monomer": 0,
     # Per-window simulation length
     "nsteps_min": 50,       # minimization steps before each equil
-    "nsteps_equil": 1000,    # equilibration steps per window
-    "nsteps_prod": 10000,    # production steps per window
+    "nsteps_equil": 10,    # equilibration steps per window
+    "nsteps_prod": 100,    # production steps per window
 }
 
 nb_dir = Path.cwd()
 try:
-    nb_dir = Path(get_ipython().ev("os.getcwd()"))  # noqa: F821
+    from IPython import get_ipython
+    ip = get_ipython()
+    if ip is not None:
+        nb_dir = Path(ip.ev("os.getcwd()"))
 except Exception:
     pass
 
@@ -88,7 +91,7 @@ from mmml.interfaces.pycharmmInterface.import_pycharmm import (  # noqa: E402
 # ---------------------------------------------------------------------------
 # 3. Set up the simulation (single pass — reuse calculator across windows)
 # ---------------------------------------------------------------------------
-from mmml.cli.run.run_sim import run  # noqa: E402
+from mmml.cli import run  # noqa: E402
 
 # We import the calculator's setup directly so we can access
 # the calculator object and call set_lambda_monomer between windows.

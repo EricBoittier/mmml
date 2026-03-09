@@ -10,7 +10,7 @@ config = {
 }
 
 # Optional: run from this dir (default = notebook’s dir)
-nb_dir = Path("__file__").resolve().parent if "__file__" in dir() else Path.cwd()
+nb_dir = Path(__file__).resolve().parent if "__file__" in dir() else Path.cwd()
 try:
     nb_dir = Path(get_ipython().ev("os.getcwd()"))  # noqa
 except Exception:
@@ -82,7 +82,7 @@ config = {
 print("pdbfile =", config["pdbfile"], "| checkpoint =", config["checkpoint"])
 
 # run_sim.py with args from config (same as: python -m mmml.cli.run_sim --pdbfile ... --checkpoint ...)
-from mmml.cli.run_sim import run
+from mmml.cli import run
 
 args = argparse.Namespace(
     pdbfile=config["pdbfile"],
