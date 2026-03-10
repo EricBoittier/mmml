@@ -213,6 +213,12 @@ def pycharmm_quiet():
     cmd = "PRNLev 0\nWRNLev 0"
     pycharmm.lingo.charmm_script(cmd)
 
+
+def pycharmm_soft():
+    cmd = "PRNLev 1\nWRNLev 1"
+    pycharmm.lingo.charmm_script(cmd)
+
+
 def pycharmm_verbose():
     cmd = "PRNLev 5\nWRNLev 5"
     pycharmm.lingo.charmm_script(cmd)
