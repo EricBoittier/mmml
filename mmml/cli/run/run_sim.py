@@ -52,6 +52,7 @@ from mmml.cli.base import (
     setup_ase_imports,
     setup_mmml_imports,
 )
+from mmml.cli.run.shared import save_trajectory
 
 
 def parse_args() -> argparse.Namespace:
@@ -290,6 +291,14 @@ def parse_args() -> argparse.Namespace:
         help="Use the physnet calculator for the full system (default: False).",
     )
 
+    parser.add_argument(
+        "--trajectory-format",
+        type=str,
+        choices=["traj", "dcd"],
+        default="traj",
+        help="Output trajectory format: traj (ASE) or dcd (CHARMM-readable, pure Python) (default: traj).",
+    )
+
     return parser.parse_args()
 
 
@@ -326,7 +335,6 @@ def run(args: argparse.Namespace) -> int:
         import jax, e3x
         from jax import jit, grad, lax, ops, random
         import jax.numpy as jnp
-        from ase.io import Trajectory
         from mmml.utils.hdf5_reporter import make_jaxmd_reporter
     except ModuleNotFoundError as exc:
         sys.exit(f"Required modules not available: {exc}")
@@ -613,27 +621,6 @@ shake bonh para sele all end
             temperature=temperature,
         )
 
-    def save_trajectory(out_positions, atoms, filename="nhc_trajectory", format="traj", boxes=None, save_energy_forces=True):
-        """Save trajectory in real (Cartesian) space. For NPT, pass boxes to set cell per frame.
-        When save_energy_forces=True, recalculates and stores energy and forces for each frame."""
-        trajectory = Trajectory(f"{filename}.{format}", "a")
-        out_positions = np.asarray(out_positions).reshape(-1, len(atoms), 3)
-        for i, R in enumerate(out_positions):
-            atoms.set_positions(np.asarray(R))
-            if boxes is not None and i < len(boxes):
-                # NPT: set cell to match box at this frame (positions are in real space)
-                box = np.asarray(boxes[i])
-                if box.ndim == 2:
-                    atoms.set_cell(box)
-                elif box.size >= 3:
-                    atoms.set_cell(np.diag(np.asarray(box).reshape(3)))
-            if save_energy_forces and atoms.calc is not None:
-                _ = atoms.get_potential_energy()
-                _ = atoms.get_forces()
-            trajectory.write(atoms)
-        trajectory.close()
-
-
     def run_sim_loop(run_sim, sim_key, nsim=1, skip_minimization=False):
         """
         Run the simulation for the given indices and save the trajectory.
@@ -672,13 +659,22 @@ shake bonh para sele all end
 
             print(f"Out positions: {out_positions}")
 
+            steps_per_frame = getattr(args, "steps_per_recording", None) or (
+                25 if (args.ensemble == "npt" and args.cell is not None) else 1000
+            )
             for i in range(len(out_positions)):
                 traj_filename = f'{args.output_prefix}_md_trajectory_{j}_{i}'
                 Path(traj_filename).parent.mkdir(parents=True, exist_ok=True)
-                print(f"Saving trajectory to: {traj_filename}.traj")
+                ext = "dcd" if args.trajectory_format == "dcd" else "traj"
+                print(f"Saving trajectory to: {traj_filename}.{ext}")
                 save_trajectory(
-                    out_positions[i], atoms, filename=traj_filename,
+                    out_positions[i],
+                    atoms,
+                    filename=traj_filename,
+                    format=args.trajectory_format,
                     boxes=out_boxes[i] if out_boxes and out_boxes[i] is not None else None,
+                    dt_ps=args.timestep * 0.001,
+                    steps_per_frame=steps_per_frame,
                 )
 
             # atoms = minimize_structure(atoms)

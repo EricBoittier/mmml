@@ -769,7 +769,10 @@ def set_up_nhc_sim_routine(
         print(f"First step OK: E_pot={e1:.6f} eV")
 
         print("*" * 10 + f"\n{args.ensemble.upper()}\n" + "*" * 10)
-        print("\t\tTime (ps)\tSteps\tE_pot (eV)\tE_tot (eV)\tT (K)\tt/ns (s)\tavg(ns/day)")
+        if is_npt:
+            print("\t\tTime (ps)\tSteps\tE_pot (eV)\tE_tot (eV)\tT (K)\tL (Å)\tV (Å³)\tP_tgt (bar)\tt/ns (s)\tavg(ns/day)")
+        else:
+            print("\t\tTime (ps)\tSteps\tE_pot (eV)\tE_tot (eV)\tT (K)\tt/ns (s)\tavg(ns/day)")
 
         # ========================================================================
         # HDF5 REPORTER SETUP
@@ -875,10 +878,21 @@ def set_up_nhc_sim_routine(
                 else:
                     avg_speed_ns_per_day = float("nan")
                     time_per_ns_s = float("nan")
-                print(
-                    f"{time_ps:10.4f}\t{steps:6d}\t{e_pot:10.4f}\t{e_tot:10.4f}\t{temp:10.2f}\t"
-                    f"{time_per_ns_s:10.2f}\t{avg_speed_ns_per_day:10.4f}"
-                )
+                if is_npt and npt_pair_idx is not None:
+                    vol = float(quantity.volume(3, box_curr))
+                    box_diag = np.diagonal(np.asarray(box_curr)[:3, :3])
+                    L = float(box_diag[0]) if box_diag.size > 0 else float("nan")
+                    p_tgt_bar = float(npt_pressure / unit["pressure"])
+                    print(
+                        f"{time_ps:10.4f}\t{steps:6d}\t{e_pot:10.4f}\t{e_tot:10.4f}\t{temp:10.2f}\t"
+                        f"{L:8.2f}\t{vol:10.1f}\t{p_tgt_bar:8.2f}\t"
+                        f"{time_per_ns_s:10.2f}\t{avg_speed_ns_per_day:10.4f}"
+                    )
+                else:
+                    print(
+                        f"{time_ps:10.4f}\t{steps:6d}\t{e_pot:10.4f}\t{e_tot:10.4f}\t{temp:10.2f}\t"
+                        f"{time_per_ns_s:10.2f}\t{avg_speed_ns_per_day:10.4f}"
+                    )
 
                 # Record to HDF5 (NPT: save real positions via transform)
                 pos_for_h5 = state.position
