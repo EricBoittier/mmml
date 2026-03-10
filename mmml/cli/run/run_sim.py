@@ -568,7 +568,13 @@ def run(args: argparse.Namespace) -> int:
         pycharmm,
         safe_energy_show,
     )
-    if getattr(args, "pycharmm_minimize", True):
+    # Support both pycharmm_minimize (argparse) and no_pycharmm_minimize (config dict)
+    _do_pycharmm_min = getattr(args, "pycharmm_minimize", None)
+    if _do_pycharmm_min is None and getattr(args, "no_pycharmm_minimize", False):
+        _do_pycharmm_min = False
+    if _do_pycharmm_min is None:
+        _do_pycharmm_min = True
+    if _do_pycharmm_min:
         reset_block()
         nbonds = """!#########################################
 ! Bonded/Non-bonded Options & Constraints
