@@ -369,10 +369,15 @@ def set_up_nhc_sim_routine(
     # dt must be in ps: args.timestep is fs, 1 fs = 0.001 ps
     dt_fs = args.timestep
     dt = dt_fs * 0.001
-    steps_per_recording = 1000
+    # NPT: neighbor list must be updated frequently (box changes every step).
+    # Using 1000 steps with a stale neighbor list causes wrong forces → NaN.
+    steps_per_recording = (
+        getattr(args, "steps_per_recording", None)
+        or (25 if (args.ensemble == "npt" and use_pbc) else 1000)
+    )
     kT = T * unit['temperature']
     rng_key = jax.random.PRNGKey(0)
-    print(f"JAX-MD {args.ensemble.upper()}: dt={dt} ps ({dt_fs} fs), kT={kT} ({T} K)")
+    print(f"JAX-MD {args.ensemble.upper()}: dt={dt} ps ({dt_fs} fs), kT={kT} ({T} K), steps_per_recording={steps_per_recording}")
 
     @jit
     def sim(state, neighbor=None, pressure=None):
