@@ -1,3 +1,5 @@
+CHARMMSETUP
+
 # Core dump files (from program crashes)
 core.*
 *.core

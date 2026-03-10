@@ -1,2 +1,2 @@
-export CHARMM_HOME=/home/ericb/mmml/setup/charmm
-export CHARMM_LIB_DIR=/home/ericb/mmml/setup/charmm
+export CHARMM_HOME=/scicore/home/meuwly/boitti0000/mmml/setup/charmm
+export CHARMM_LIB_DIR=/scicore/home/meuwly/boitti0000/mmml/setup/charmm
