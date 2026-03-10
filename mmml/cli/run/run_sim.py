@@ -242,7 +242,8 @@ def parse_args() -> argparse.Namespace:
         "--pressure",
         type=float,
         default=1.01325,
-        help="Target pressure in bar for NPT ensemble (default: 1.01325).",
+        help="Target pressure in bar for NPT ensemble (default: 1.01325). "
+        "Use 0 to preserve initial density (P = N*kT/V for N molecules).",
     )
     parser.add_argument(
         "--nhc-barostat-tau",
