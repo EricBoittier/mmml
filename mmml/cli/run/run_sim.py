@@ -371,9 +371,9 @@ def run(args: argparse.Namespace) -> int:
     # MASS SETUP FOR JAX-MD SIMULATION
     # ========================================================================
     raw_masses = pdb_ase_atoms.get_masses()
-    print(f"Raw masses from ASE: {raw_masses}")
+    # print(f"Raw masses from ASE: {raw_masses}")
     psf_masses = psf.get_amass()
-    print(f"PSF masses: {psf_masses}")
+    # print(f"PSF masses: {psf_masses}")
     print(f"PSF masses sum: {sum(psf_masses)}")
     print("Setting the elements and masses from the psf")
     pdb_ase_atoms.set_masses(psf_masses)
@@ -381,31 +381,28 @@ def run(args: argparse.Namespace) -> int:
     correct_atomic_numbers_from_mass = np.argmin(
         np.abs(ase.data.atomic_masses_common[np.newaxis, :] - psf_masses_arr), axis=1)
     pdb_ase_atoms.set_atomic_numbers(correct_atomic_numbers_from_mass)
-    print(f"PDB ASE atoms: {pdb_ase_atoms}")
+    # print(f"PDB ASE atoms: {pdb_ase_atoms}")
 
     # Actual masses for COM (Si_mass was misnamed - it held atomic numbers before)
     masses_jax = jnp.array(psf_masses[:total_atoms], dtype=jnp.float32)
     Si_mass = masses_jax  # keep name for compatibility with JAX-MD closure
     Si_mass_sum = Si_mass.sum()
-    print(f"Masses (amu) for JAX-MD: sum={float(Si_mass_sum):.2f}")
+    # print(f"Masses (amu) for JAX-MD: sum={float(Si_mass_sum):.2f}")
     
     Si_mass_expanded = jnp.repeat(Si_mass[:, None], 3, axis=1)
-    print(f"Masses expanded shape: {Si_mass_expanded.shape}")
+    # print(f"Masses expanded shape: {Si_mass_expanded.shape}")
 
-    print(f"PyCHARMM coordinates: {coor.get_positions()}")
-    print(f"Ase coordinates: {pdb_ase_atoms.get_positions()}")
+    # print(f"PyCHARMM coordinates: {coor.get_positions()}")
+    # print(f"Ase coordinates: {pdb_ase_atoms.get_positions()}")
 
-    print(coor.get_positions())
+    # print(coor.get_positions())
     # Use the first monomer for the quick single-monomer test calculator
     ase_monomer = pdb_ase_atoms[0:n_atoms_first]
     params, model = load_model_parameters(epoch_dir, n_atoms_first)
     simple_physnet_calculator = get_ase_calc(params, model, ase_monomer)
-    print(f"Simple physnet calculator: {simple_physnet_calculator}")
+    # print(f"Simple physnet calculator: {simple_physnet_calculator}")
     ase_monomer.calc = simple_physnet_calculator
-    print(f"ASE monomer energy: {ase_monomer.get_potential_energy()}")
-
-
-
+    # print(f"ASE monomer energy: {ase_monomer.get_potential_energy()}")
 
     # Load model parameters for the full system
     natoms = len(pdb_ase_atoms)
@@ -470,10 +467,6 @@ def run(args: argparse.Namespace) -> int:
         )
 
     print(f"Cutoff parameters: {CUTOFF_PARAMS}")
-
-
-
-
 
     # Create hybrid calculator (MIC-only: factory uses pbc_cell for PBC, no pbc_map/transform)
     calc_result = calculator_factory(
