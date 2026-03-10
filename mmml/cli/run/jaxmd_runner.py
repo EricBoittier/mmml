@@ -236,6 +236,7 @@ def set_up_nhc_sim_routine(
     L_cell = float(args.cell) if args.cell else None
     box_init = jnp.array([L_cell, L_cell, L_cell], dtype=jnp.float32) if L_cell else None
     box_nl = np.array([L_cell, L_cell, L_cell], dtype=np.float64) if L_cell else None
+    pbc_box_nl = box_nl  # Capture for run_sim PBC minimization (avoids UnboundLocalError from later box_nl assignments)
     if update_fn is not None and use_pbc:
         if getattr(args, "debug", False):
             print("[nbr] Initial neighbor list update (PBC)")
@@ -586,7 +587,7 @@ def set_up_nhc_sim_routine(
             # Recompute neighbor list for wrapped start positions (Fix A)
             if update_fn is not None:
                 pbc_pair_idx, pbc_pair_mask = update_fn(
-                    np.asarray(pbc_start_pos), box=box_nl
+                    np.asarray(pbc_start_pos), box=pbc_box_nl
                 )
                 _pbc_state["pair_idx"] = pbc_pair_idx
                 _pbc_state["pair_mask"] = pbc_pair_mask
