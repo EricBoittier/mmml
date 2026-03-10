@@ -241,8 +241,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--pressure",
         type=float,
-        default=1.01325,
-        help="Target pressure in bar for NPT ensemble (default: 1.01325). "
+        default=1.0,
+        help="Target pressure in atm for NPT ensemble (default: 1.0). "
         "Use 0 to preserve initial density (P = N*kT/V for N molecules).",
     )
     parser.add_argument(
