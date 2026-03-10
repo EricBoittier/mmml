@@ -55,6 +55,7 @@ def _run_npt_diagnostics(
     npt_pair_idx,
     npt_pair_mask,
     npt_pressure,
+    unit,
     dt,
     kT,
     grad,
@@ -132,8 +133,24 @@ def _run_npt_diagnostics(
     print(f"    force finite: {np.all(np.isfinite(state.force))}")
     print(f"    mass shape: {M.shape}, all positive: {np.all(M > 0)}")
 
-    # 7. First step (apply_fn) and NaN location
-    print("\n[7] First NPT step (apply_fn)")
+    # 7. Measured vs target pressure (drives box expansion/contraction)
+    print("\n[7] Pressure (measured vs target)")
+    KE = quantity.kinetic_energy(momentum=P, mass=M)
+    try:
+        p_meas = quantity.pressure(
+            npt_energy_fn, R, box_curr, kinetic_energy=KE,
+            neighbor=(npt_pair_idx, npt_pair_mask)
+        )
+        p_meas_bar = float(p_meas / unit["pressure"])
+        p_tgt_bar = float(npt_pressure / unit["pressure"])
+        print(f"    P_measured = {p_meas_bar:.2f} bar")
+        print(f"    P_target   = {p_tgt_bar:.2f} bar")
+        print(f"    P_meas > P_tgt → barostat expands; P_meas < P_tgt → barostat contracts")
+    except Exception as e:
+        print(f"    quantity.pressure failed: {e}")
+
+    # 8. First step (apply_fn) and NaN location
+    print("\n[8] First NPT step (apply_fn)")
     neighbor = (npt_pair_idx, npt_pair_mask)
     try:
         state_one = apply_fn(state, neighbor=neighbor, pressure=npt_pressure)
@@ -411,9 +428,6 @@ def set_up_nhc_sim_routine(
             V_init = float(L_cell_val ** 3)
             p_bar = float(n_monomers * kT / V_init / unit['pressure'])
             print(f"NPT: pressure=0 → using density-preserving P={p_bar:.2f} bar (N={n_monomers}, V={V_init:.0f} Å³)")
-        elif n_monomers < 30 and p_bar <= 2:
-            print(f"NPT: small system (N={n_monomers}) at {p_bar} bar will expand significantly. "
-                  f"Use --pressure 0 to preserve density or NVT for fixed box.")
         pressure = p_bar * unit['pressure']
         # Barostat tau: 10000*dt (2.5 ps at 0.25 fs) avoids NaN from aggressive box scaling
         barostat_tau = getattr(args, 'nhc_barostat_tau', 10000.0) * dt
@@ -759,6 +773,7 @@ def set_up_nhc_sim_routine(
                 npt_pair_idx=npt_pair_idx,
                 npt_pair_mask=npt_pair_mask,
                 npt_pressure=npt_pressure,
+                unit=unit,
                 dt=dt,
                 kT=kT,
                 grad=grad,
@@ -785,7 +800,7 @@ def set_up_nhc_sim_routine(
 
         print("*" * 10 + f"\n{args.ensemble.upper()}\n" + "*" * 10)
         if is_npt:
-            print("\t\tTime (ps)\tSteps\tE_pot (eV)\tE_tot (eV)\tT (K)\tL (Å)\tV (Å³)\tP_tgt (bar)\tt/ns (s)\tavg(ns/day)")
+            print("\t\tTime (ps)\tSteps\tE_pot (eV)\tE_tot (eV)\tT (K)\tL (Å)\tV (Å³)\tP_tgt (bar)\tP_meas (bar)\tt/ns (s)\tavg(ns/day)")
         else:
             print("\t\tTime (ps)\tSteps\tE_pot (eV)\tE_tot (eV)\tT (K)\tt/ns (s)\tavg(ns/day)")
 
@@ -898,9 +913,18 @@ def set_up_nhc_sim_routine(
                     box_diag = np.diagonal(np.asarray(box_curr)[:3, :3])
                     L = float(box_diag[0]) if box_diag.size > 0 else float("nan")
                     p_tgt_bar = float(npt_pressure / unit["pressure"])
+                    # Measured pressure (virial + kinetic) for diagnostics
+                    try:
+                        p_meas = quantity.pressure(
+                            npt_energy_fn, state.position, box_curr,
+                            kinetic_energy=e_kin, neighbor=(npt_pair_idx, npt_pair_mask)
+                        )
+                        p_meas_bar = float(p_meas / unit["pressure"])
+                    except Exception:
+                        p_meas_bar = float("nan")
                     print(
                         f"{time_ps:10.4f}\t{steps:6d}\t{e_pot:10.4f}\t{e_tot:10.4f}\t{temp:10.2f}\t"
-                        f"{L:8.2f}\t{vol:10.1f}\t{p_tgt_bar:8.2f}\t"
+                        f"{L:8.2f}\t{vol:10.1f}\t{p_tgt_bar:8.2f}\t{p_meas_bar:8.2f}\t"
                         f"{time_per_ns_s:10.2f}\t{avg_speed_ns_per_day:10.4f}"
                     )
                 else:
