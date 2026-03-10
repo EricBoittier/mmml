@@ -269,6 +269,7 @@ def set_up_nhc_sim_routine(
         else:
             # NVT/NVE: fixed box, pass box for neighbor list consistency
             pair_idx, pair_mask = update_fn(np.asarray(R), box=box_nl)
+    print("Compiling JAX energy/force (first run may take minutes)...")
     result = evaluate_energies_and_forces(
         atomic_numbers=atomic_numbers,
         positions=R,
@@ -278,6 +279,7 @@ def set_up_nhc_sim_routine(
         mm_pair_mask=pair_mask,
         box=box_init,
     )
+    print("JAX compilation done.")
     print(f"Result: {result}")
     init_energy = result.energy.reshape(-1)[0]
     init_forces = result.forces.reshape(-1, 3)
@@ -569,8 +571,11 @@ def set_up_nhc_sim_routine(
             fire_state = unwrapped_init_fn(initial_pos, mass=Si_mass)
 
             # FIRE minimization with step rejection (reject steps that produce NaN)
-            print("*" * 10 + "\nMinimization\n" + "*" * 10)
-            NMIN = 1000
+            NMIN = getattr(args, "jaxmd_minimize_steps", 1000)
+            if NMIN <= 0:
+                print("Skipping first minimization (0 steps requested)")
+            else:
+                print("*" * 10 + "\nMinimization\n" + "*" * 10)
             for i in range(NMIN):
                 fire_positions.append(fire_state.position)
                 new_state = unwrapped_step_fn(fire_state)
@@ -586,7 +591,7 @@ def set_up_nhc_sim_routine(
                     break
                 fire_state = new_state
 
-                if i % (NMIN // 10) == 0:
+                if i % max(1, NMIN // 10) == 0:
                     print(f"{i}/{NMIN}: E={energy:.6f} eV, max|F|={max_force:.6f}")
             # fire_state always holds last valid position (we reject bad steps)
             minimized_pos = fire_state.position
@@ -609,7 +614,9 @@ def set_up_nhc_sim_routine(
             print("No cell: skipping PBC minimization, using first-min result")
             atoms.set_positions(np.asarray(md_pos))
         else:
-            print("*" * 10 + "\nPBC Minimization\n" + "*" * 10)
+            NMIN_PBC = getattr(args, "jaxmd_pbc_minimize_steps", 1000)
+            if NMIN_PBC > 0:
+                print("*" * 10 + "\nPBC Minimization\n" + "*" * 10)
             # Molecular shift: wrap by monomer after each step so monomers stay intact.
             # space.periodic wraps atoms individually → monomers break across boundaries.
             _cell_jax = jnp.asarray(atoms.get_cell()[:], dtype=jnp.float32)
@@ -644,10 +651,10 @@ def set_up_nhc_sim_routine(
 
             # Run PBC minimization (track best; stop early if forces increase - FIRE+unwrapped can wander)
             # Skip when first minimization already failed (minimized_pos invalid)
-            NMIN_PBC = 1000
-            if jnp.any(~jnp.isfinite(pbc_start_pos)):
-                print("Skipping PBC minimization (no valid start position)")
-                md_pos = minimized_pos
+            if NMIN_PBC <= 0 or jnp.any(~jnp.isfinite(pbc_start_pos)):
+                reason = "0 steps requested" if NMIN_PBC <= 0 else "no valid start position"
+                print(f"Skipping PBC minimization ({reason})")
+                md_pos = pbc_start_pos if jnp.all(jnp.isfinite(pbc_start_pos)) else minimized_pos
             else:
                 max_force_start = float(jnp.abs(wrapped_force_fn(pbc_start_pos)).max())
                 best_pbc_pos = pbc_start_pos
@@ -674,7 +681,7 @@ def set_up_nhc_sim_routine(
                     else:
                         worsen_count = worsen_count + 1 if max_force > prev_max_f else 0
                     prev_max_f = max_force
-                    if i % (NMIN_PBC // 10) == 0:
+                    if i % max(1, NMIN_PBC // 10) == 0:
                         print(f"{i}/{NMIN_PBC}: E={energy:.6f} eV, max|F|={max_force:.6f}")
                     if worsen_count >= 10:
                         print(f"PBC minimization: max|F| increased for 10 steps; stopping early at step {i} (best max|F|={best_pbc_max_f:.4f})")
