@@ -293,6 +293,7 @@ def setup_box_generic(pdb_path, rtf=CGENFF_RTF, prm=CGENFF_PRM, side_length: flo
     """
     Sets up the box
     """
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import charmm_quiet
     CLEAR_CHARMM()
     read.rtf(rtf)
     bl = settings.set_bomb_level(-2)
@@ -321,6 +322,9 @@ def setup_box_generic(pdb_path, rtf=CGENFF_RTF, prm=CGENFF_PRM, side_length: flo
     write.psf_card(f"psf/system-{tag}.psf")
     write.coor_pdb(f"pdb/init-{tag}.pdb")
     print(f"wrote pdb/init-{tag}.pdb")
+
+
+    charmm_quiet()
     atoms = ase.io.read(f"pdb/init-{tag}.pdb")
     atoms.set_cell(np.eye(3) * side_length)
     atoms.set_pbc(True)
@@ -332,6 +336,7 @@ def initialize_psf(resid: str, n_molecules: int, side_length: float, solvent: st
     """
     Initializes the PSF file
     """
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import charmm_quiet
     CLEAR_CHARMM()
     if pdb_path is None:
         pdbfilename = f"pdb/init-packmol.pdb"
@@ -346,6 +351,7 @@ def initialize_psf(resid: str, n_molecules: int, side_length: float, solvent: st
     settings.set_warn_level(wl)
     pycharmm.lingo.charmm_script("bomlev 0")
 
+    charmm_quiet()
     if solvent is not None:
         resstr = " ".join([solvent.upper()]*(n_molecules-1))    
         resstr = f"{resid.upper()} {solvent.upper()}"
