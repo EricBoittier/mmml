@@ -256,6 +256,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Run NPT diagnostic tests before simulation (energy, stress, shift, step).",
     )
+    parser.add_argument(
+        "--nbr-monitor",
+        action="store_true",
+        help="Monitor neighbor list: log n_valid pairs, capacity, fill ratio to progress and HDF5 (NPT only).",
+    )
 
     parser.add_argument(
         "--heating_interval",

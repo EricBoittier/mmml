@@ -804,9 +804,13 @@ def set_up_nhc_sim_routine(
             e1 = float(wrapped_energy_fn(state_one.position))
         print(f"First step OK: E_pot={e1:.6f} eV")
 
+        nbr_monitor = getattr(args, "nbr_monitor", False)
         print("*" * 10 + f"\n{args.ensemble.upper()}\n" + "*" * 10)
         if is_npt:
-            print("\t\tTime (ps)\tSteps\tE_pot (eV)\tE_tot (eV)\tT (K)\tL (Å)\tV (Å³)\tP_tgt (bar)\tP_meas (bar)\tt/ns (s)\tavg(ns/day)")
+            hdr = "\t\tTime (ps)\tSteps\tE_pot (eV)\tE_tot (eV)\tT (K)\tL (Å)\tV (Å³)\tP_tgt (bar)\tP_meas (bar)\tt/ns (s)\tavg(ns/day)"
+            if nbr_monitor:
+                hdr += "\tn_valid\tcapacity\tfill%"
+            print(hdr)
         else:
             print("\t\tTime (ps)\tSteps\tE_pot (eV)\tE_tot (eV)\tT (K)\tt/ns (s)\tavg(ns/day)")
 
@@ -815,13 +819,16 @@ def set_up_nhc_sim_routine(
         # ========================================================================
         hdf5_path = Path(f"{args.output_prefix}_{args.ensemble}_trajectory.h5")
         hdf5_path.parent.mkdir(parents=True, exist_ok=True)
+        scalar_quantities = ["total_energy", "time_ps"]
+        if nbr_monitor and is_npt:
+            scalar_quantities.extend(["nbr_n_valid", "nbr_capacity", "nbr_fill_ratio"])
         hdf5_reporter = make_jaxmd_reporter(
             str(hdf5_path),
             n_atoms=len(atoms),
             buffer_size=min(100, total_records),
             include_positions=True,
             include_velocities=True,
-            scalar_quantities=["total_energy", "time_ps"],
+            scalar_quantities=scalar_quantities,
             attrs={
                 "ensemble": args.ensemble,
                 "temperature_target": T,
@@ -888,6 +895,7 @@ def set_up_nhc_sim_routine(
                 nhc_positions.append(state.position)
 
             # Print progress every 10 steps
+            nbr_n_valid = nbr_capacity = nbr_fill_ratio = None
             if i % 10 == 0:
                 steps = (i + 1) * steps_per_recording
                 time_ps = steps * dt
@@ -928,11 +936,17 @@ def set_up_nhc_sim_routine(
                         p_meas_bar = float(p_meas / unit["pressure"])
                     except Exception:
                         p_meas_bar = float("nan")
-                    print(
+                    line = (
                         f"{time_ps:10.4f}\t{steps:6d}\t{e_pot:10.4f}\t{e_tot:10.4f}\t{temp:10.2f}\t"
                         f"{L:8.2f}\t{vol:10.1f}\t{p_tgt_bar:8.2f}\t{p_meas_bar:8.2f}\t"
                         f"{time_per_ns_s:10.2f}\t{avg_speed_ns_per_day:10.4f}"
                     )
+                    if nbr_monitor:
+                        nbr_n_valid = int(np.sum(np.asarray(jax.device_get(npt_pair_mask))))
+                        nbr_capacity = npt_pair_idx.shape[0]
+                        nbr_fill_ratio = nbr_n_valid / nbr_capacity if nbr_capacity > 0 else 0.0
+                        line += f"\t{nbr_n_valid}\t{nbr_capacity}\t{100.0 * nbr_fill_ratio:.1f}%"
+                    print(line)
                 else:
                     print(
                         f"{time_ps:10.4f}\t{steps:6d}\t{e_pot:10.4f}\t{e_tot:10.4f}\t{temp:10.2f}\t"
@@ -944,7 +958,7 @@ def set_up_nhc_sim_routine(
                 if is_npt:
                     box_curr = simulate.npt_box(state)
                     pos_for_h5 = space.transform(box_curr, state.position)
-                hdf5_reporter.report(
+                report_kw = dict(
                     potential_energy=e_pot,
                     kinetic_energy=e_kin,
                     temperature=temp,
@@ -954,6 +968,11 @@ def set_up_nhc_sim_routine(
                     positions=pos_for_h5,
                     velocities=state.momentum / state.mass,
                 )
+                if nbr_monitor and is_npt and npt_pair_idx is not None and nbr_n_valid is not None:
+                    report_kw["nbr_n_valid"] = nbr_n_valid
+                    report_kw["nbr_capacity"] = nbr_capacity
+                    report_kw["nbr_fill_ratio"] = nbr_fill_ratio
+                hdf5_reporter.report(**report_kw)
 
                 # Stop on numerical instability (NaN, Inf, or energy blow-up to 0)
                 if not np.isfinite(e_pot) or not np.isfinite(temp):
