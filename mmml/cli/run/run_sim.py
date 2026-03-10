@@ -177,6 +177,13 @@ def parse_args() -> argparse.Namespace:
         help="Number of MD steps to run in JAX-MD (default: 100000).",
     )
     parser.add_argument(
+        "--steps-per-recording",
+        type=int,
+        default=None,
+        help="Steps between recording blocks (default: 25 for NPT, 1000 for NVT/NVE). "
+        "NPT requires frequent neighbor list updates; use smaller values if unstable.",
+    )
+    parser.add_argument(
         "--output-prefix",
         type=str,
         default="md_simulation",
