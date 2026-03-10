@@ -295,7 +295,16 @@ def parse_args() -> argparse.Namespace:
         dest="pycharmm_minimize",
         default=True,
         action=argparse.BooleanOptionalAction,
-        help="Run PyCHARMM nbonds/minimize before ASE/JAX-MD (default: True).",
+        help="Run PyCHARMM nbonds/minimize before ASE/JAX-MD (default: True). "
+        "Use --no-pycharmm-minimize to skip when going straight to JAX-MD (e.g. with --nsteps_ase 0) to avoid slow single-threaded CHARMM phase.",
+    )
+    parser.add_argument(
+        "--pycharmm-minimize-steps",
+        type=int,
+        default=1000,
+        metavar="N",
+        help="Number of ABNR minimization steps when PyCHARMM minimize is enabled (default: 1000). "
+        "Use fewer (e.g. 100) for faster startup when structure is already reasonable.",
     )
 
     parser.add_argument(
@@ -578,7 +587,10 @@ shake bonh para sele all end
         print("Running PyCHARMM minimize")
         from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_soft
         pycharmm_soft()
-        pycharmm.minimize.run_abnr(nstep=1000, tolenr=1e-2, tolgrd=1e-2)
+        pycharmm.minimize.run_abnr(
+            nstep=getattr(args, "pycharmm_minimize_steps", 1000),
+            tolenr=1e-2, tolgrd=1e-2
+        )
         from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet    
         pycharmm_quiet()
         pycharmm.lingo.charmm_script("ENER")
@@ -595,7 +607,10 @@ shake bonh para sele all end
         safe_energy_show()
         from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_soft
         pycharmm_soft()
-        pycharmm.minimize.run_abnr(nstep=1000, tolenr=1e-2, tolgrd=1e-2)
+        pycharmm.minimize.run_abnr(
+            nstep=getattr(args, "pycharmm_minimize_steps", 1000),
+            tolenr=1e-2, tolgrd=1e-2
+        )
         from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet    
         pycharmm_quiet()
         safe_energy_show()
@@ -610,7 +625,10 @@ shake bonh para sele all end
         safe_energy_show()
         from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_soft
         pycharmm_soft()
-        pycharmm.minimize.run_abnr(nstep=1000, tolenr=1e-2, tolgrd=1e-2)
+        pycharmm.minimize.run_abnr(
+            nstep=getattr(args, "pycharmm_minimize_steps", 1000),
+            tolenr=1e-2, tolgrd=1e-2
+        )
         from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet    
         pycharmm_quiet()
         safe_energy_show()
@@ -625,7 +643,10 @@ shake bonh para sele all end
         safe_energy_show()
         from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_soft
         pycharmm_soft()
-        pycharmm.minimize.run_abnr(nstep=1000, tolenr=1e-2, tolgrd=1e-2)
+        pycharmm.minimize.run_abnr(
+            nstep=getattr(args, "pycharmm_minimize_steps", 1000),
+            tolenr=1e-2, tolgrd=1e-2
+        )
         from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet    
         pycharmm_quiet()
         safe_energy_show()
