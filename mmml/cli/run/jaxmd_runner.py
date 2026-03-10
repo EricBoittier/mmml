@@ -143,12 +143,13 @@ def _run_npt_diagnostics(
         )
         p_meas_raw = float(p_meas)
         p_tgt_raw = float(npt_pressure)
+        BAR_PER_ATM = 1.01325
         unit_p = float(unit["pressure"])
-        p_meas_bar = p_meas_raw / unit_p
-        p_tgt_bar = p_tgt_raw / unit_p
+        p_meas_atm = p_meas_raw / (unit_p * BAR_PER_ATM)
+        p_tgt_atm = p_tgt_raw / (unit_p * BAR_PER_ATM)
         print(f"    P_measured (raw) = {p_meas_raw:.6e}, P_target (raw) = {p_tgt_raw:.6e}")
         print(f"    unit['pressure'] = {unit_p:.6e} (bar → internal)")
-        print(f"    P_measured = {p_meas_bar:.2f} bar, P_target = {p_tgt_bar:.2f} bar")
+        print(f"    P_measured = {p_meas_atm:.2f} atm, P_target = {p_tgt_atm:.2f} atm")
         print(f"    P_meas > P_tgt → barostat expands; P_meas < P_tgt → barostat contracts")
     except Exception as e:
         print(f"    quantity.pressure failed: {e}")
@@ -426,15 +427,16 @@ def set_up_nhc_sim_routine(
                 "NPT requires jax_md neighbor list (cell list cannot handle dynamic box). "
                 "Ensure jax_md is installed and pbc_cell is set."
             )
-        p_bar = getattr(args, 'pressure', 1.01325)
-        if p_bar <= 0:
+        BAR_PER_ATM = 1.01325
+        p_atm = getattr(args, 'pressure', 1.0)
+        if p_atm <= 0:
             # Preserve initial density: P = N*kT/V (ideal gas) so box stays ~constant
             V_init = float(L_cell_val ** 3)
-            p_bar = float(n_monomers * kT / V_init / unit['pressure'])
-            print(f"NPT: pressure=0 → using density-preserving P={p_bar:.2f} bar (N={n_monomers}, V={V_init:.0f} Å³)")
+            p_atm = float(n_monomers * kT / V_init / (unit['pressure'] * BAR_PER_ATM))
+            print(f"NPT: pressure=0 → using density-preserving P={p_atm:.2f} atm (N={n_monomers}, V={V_init:.0f} Å³)")
         # Pressure for npt_nose_hoover: jax_md uses same units as energy/volume.
-        # Metal: energy=eV, V=Å³ → pressure in eV/Å³. 1 bar = unit['pressure'] eV/Å³.
-        pressure = jnp.array(p_bar * unit['pressure'], dtype=jnp.float32)
+        # Metal: energy=eV, V=Å³ → pressure in eV/Å³. 1 bar = unit['pressure'] eV/Å³; 1 atm = 1.01325 bar.
+        pressure = jnp.array(p_atm * BAR_PER_ATM * unit['pressure'], dtype=jnp.float32)
         # Barostat tau: 10000*dt (2.5 ps at 0.25 fs) avoids NaN from aggressive box scaling
         barostat_tau = getattr(args, 'nhc_barostat_tau', 10000.0) * dt
         nhc_chain_length = getattr(args, 'nhc_chain_length', 3)
@@ -511,7 +513,7 @@ def set_up_nhc_sim_routine(
             barostat_kwargs=default_nhc_kwargs(jnp.array(barostat_tau), nhc_kwargs),
             thermostat_kwargs=default_nhc_kwargs(jnp.array(nhc_tau * dt), nhc_kwargs),
         )
-        print(f"NPT Nose-Hoover: pressure={p_bar:.2f} bar, barostat_tau={barostat_tau:.6f} ps, "
+        print(f"NPT Nose-Hoover: pressure={p_atm:.2f} atm, barostat_tau={barostat_tau:.6f} ps, "
               f"thermostat tau={nhc_tau * dt:.6f} ps")
     elif args.ensemble == "nvt":
         nhc_chain_length = getattr(args, 'nhc_chain_length', 3)
@@ -807,7 +809,7 @@ def set_up_nhc_sim_routine(
         nbr_monitor = getattr(args, "nbr_monitor", False)
         print("*" * 10 + f"\n{args.ensemble.upper()}\n" + "*" * 10)
         if is_npt:
-            hdr = "\t\tTime (ps)\tSteps\tE_pot (eV)\tE_tot (eV)\tT (K)\tL (Å)\tV (Å³)\tP_tgt (bar)\tP_meas (bar)\tt/ns (s)\tavg(ns/day)"
+            hdr = "\t\tTime (ps)\tSteps\tE_pot (eV)\tE_tot (eV)\tT (K)\tL (Å)\tV (Å³)\tP_tgt (atm)\tP_meas (atm)\tt/ns (s)\tavg(ns/day)"
             if nbr_monitor:
                 hdr += "\tn_valid\tcapacity\tfill%"
             print(hdr)
@@ -926,19 +928,21 @@ def set_up_nhc_sim_routine(
                     vol = float(quantity.volume(3, box_curr))
                     box_diag = np.diagonal(np.asarray(box_curr)[:3, :3])
                     L = float(box_diag[0]) if box_diag.size > 0 else float("nan")
-                    p_tgt_bar = float(npt_pressure / unit["pressure"])
+                    BAR_PER_ATM = 1.01325
+                    unit_p = float(unit["pressure"])
+                    p_tgt_atm = float(npt_pressure / (unit_p * BAR_PER_ATM))
                     # Measured pressure (virial + kinetic) for diagnostics
                     try:
                         p_meas = quantity.pressure(
                             npt_energy_fn, state.position, box_curr,
                             kinetic_energy=e_kin, neighbor=(npt_pair_idx, npt_pair_mask)
                         )
-                        p_meas_bar = float(p_meas / unit["pressure"])
+                        p_meas_atm = float(p_meas / (unit_p * BAR_PER_ATM))
                     except Exception:
-                        p_meas_bar = float("nan")
+                        p_meas_atm = float("nan")
                     line = (
                         f"{time_ps:10.4f}\t{steps:6d}\t{e_pot:10.4f}\t{e_tot:10.4f}\t{temp:10.2f}\t"
-                        f"{L:8.2f}\t{vol:10.1f}\t{p_tgt_bar:8.2f}\t{p_meas_bar:8.2f}\t"
+                        f"{L:8.2f}\t{vol:10.1f}\t{p_tgt_atm:8.2f}\t{p_meas_atm:8.2f}\t"
                         f"{time_per_ns_s:10.2f}\t{avg_speed_ns_per_day:10.4f}"
                     )
                     if nbr_monitor:
