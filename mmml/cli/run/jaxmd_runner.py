@@ -6,7 +6,6 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-import e3x
 import jax
 import jax_md
 import numpy as np
@@ -196,8 +195,6 @@ def set_up_nhc_sim_routine(
     def evaluate_energies_and_forces(
         atomic_numbers,
         positions,
-        dst_idx,
-        src_idx,
         mm_pair_idx=None,
         mm_pair_mask=None,
         box=None,
@@ -216,7 +213,6 @@ def set_up_nhc_sim_routine(
             box=box,
         )
 
-    dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(len(atoms))
     atomic_numbers = jnp.asarray(atoms.get_atomic_numbers(), dtype=jnp.int32)
     R = jnp.asarray(atoms.get_positions(), dtype=jnp.float32)
 
@@ -226,8 +222,6 @@ def set_up_nhc_sim_routine(
         result = evaluate_energies_and_forces(
             atomic_numbers=atomic_numbers,
             positions=position,
-            dst_idx=dst_idx,
-            src_idx=src_idx,
             mm_pair_idx=mm_pair_idx,
             mm_pair_mask=mm_pair_mask,
             box=box,
@@ -241,8 +235,6 @@ def set_up_nhc_sim_routine(
         result = evaluate_energies_and_forces(
             atomic_numbers=atomic_numbers,
             positions=position,
-            dst_idx=dst_idx,
-            src_idx=src_idx,
             mm_pair_idx=mm_pair_idx,
             mm_pair_mask=mm_pair_mask,
             box=box,
@@ -273,8 +265,6 @@ def set_up_nhc_sim_routine(
     result = evaluate_energies_and_forces(
         atomic_numbers=atomic_numbers,
         positions=R,
-        dst_idx=dst_idx,
-        src_idx=src_idx,
         mm_pair_idx=pair_idx,
         mm_pair_mask=pair_mask,
         box=box_init,
@@ -325,8 +315,6 @@ def set_up_nhc_sim_routine(
             result = evaluate_energies_and_forces(
                 atomic_numbers=atomic_numbers,
                 positions=R_mapped,
-                dst_idx=dst_idx,
-                src_idx=src_idx,
                 mm_pair_idx=_pbc_state["pair_idx"],
                 mm_pair_mask=_pbc_state["pair_mask"],
                 box=_pbc_state["box"],
@@ -464,8 +452,6 @@ def set_up_nhc_sim_routine(
             result = evaluate_energies_and_forces(
                 atomic_numbers=atomic_numbers,
                 positions=real_pos,
-                dst_idx=dst_idx,
-                src_idx=src_idx,
                 mm_pair_idx=pair_idx,
                 mm_pair_mask=pair_mask,
                 box=box_eff,
