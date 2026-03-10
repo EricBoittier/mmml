@@ -707,3 +707,63 @@ def test_pbc_energy_invariance_orthorhombic_cell():
 	)
 
 
+def test_pbc_force_direction_mic():
+	"""
+	For two monomers near opposite faces of the cell, verify that MIC displacement
+	points toward the nearest image (shorter vector through PBC).
+	"""
+	if not _can_import("jax"):
+		pytest.skip("jax not available in this environment")
+
+	import jax.numpy as jnp
+	from mmml.interfaces.pycharmmInterface.pbc_utils_jax import mic_displacement
+
+	L = 20.0
+	cell = jnp.diag(jnp.array([L, L, L]))
+	# Atom A near origin, atom B near opposite face - MIC should give short displacement
+	Ri = jnp.array([1.0, 1.0, 1.0])
+	Rj = jnp.array([19.0, 19.0, 19.0])  # far in Cartesian
+	d_mic = mic_displacement(Ri, Rj, cell)
+	# Through PBC, nearest image of Rj is at (19-L, 19-L, 19-L) = (-1,-1,-1)
+	# So d_mic should be ~ (-2,-2,-2), length ~ 3.46, not ~ 31 (Cartesian)
+	d_cart = Rj - Ri
+	assert jnp.linalg.norm(d_mic) < jnp.linalg.norm(d_cart), (
+		f"MIC displacement {d_mic} (norm={jnp.linalg.norm(d_mic):.4f}) should be "
+		f"shorter than Cartesian {d_cart} (norm={jnp.linalg.norm(d_cart):.4f})"
+	)
+	np.testing.assert_allclose(d_mic, jnp.array([-2.0, -2.0, -2.0]), atol=1e-5)
+
+
+def test_pbc_wrap_groups_com_near_boundary():
+	"""
+	Test wrap_groups when a monomer's COM is near a cell face.
+	Wrap should shift by lattice vector so COM lands in [0,1)^3.
+	"""
+	if not _can_import("jax"):
+		pytest.skip("jax not available in this environment")
+
+	import jax.numpy as jnp
+	from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
+		frac_coords,
+		wrap_groups,
+	)
+
+	cell = jnp.array([[10.0, 0, 0], [0, 10.0, 0], [0, 0, 10.0]])
+	groups = [jnp.arange(0, 3), jnp.arange(3, 6)]
+	# Place group 0 with COM at ~(9.5, 9.5, 9.5) - near upper boundary
+	R = jnp.array([
+		[9.0, 9.0, 9.0],
+		[10.0, 10.0, 10.0],
+		[9.5, 9.5, 9.5],
+		[1.0, 1.0, 1.0],
+		[2.0, 2.0, 2.0],
+		[1.5, 1.5, 1.5],
+	])
+	R_wrapped = wrap_groups(R, groups, cell)
+	S = frac_coords(R_wrapped, cell)
+	# All fractional coords should be in [0, 1)
+	assert jnp.all(S >= 0) and jnp.all(S < 1.01), (
+		f"Wrapped fractional coords should be in [0,1), got min={S.min():.4f} max={S.max():.4f}"
+	)
+
+
