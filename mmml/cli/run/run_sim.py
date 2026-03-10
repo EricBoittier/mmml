@@ -401,13 +401,17 @@ def run(args: argparse.Namespace) -> int:
     # print(f"Ase coordinates: {pdb_ase_atoms.get_positions()}")
 
     # print(coor.get_positions())
-    # Use the first monomer for the quick single-monomer test calculator
-    ase_monomer = pdb_ase_atoms[0:n_atoms_first]
-    params, model = load_model_parameters(epoch_dir, n_atoms_first)
-    simple_physnet_calculator = get_ase_calc(params, model, ase_monomer)
-    # print(f"Simple physnet calculator: {simple_physnet_calculator}")
-    ase_monomer.calc = simple_physnet_calculator
-    # print(f"ASE monomer energy: {ase_monomer.get_potential_energy()}")
+    # Defer simple_physnet_calculator creation when nsteps_ase == 0 to avoid slow first-use JIT
+    use_ase_calculator = args.nsteps_ase > 0 or getattr(
+        args, "use_physnet_calculator_for_full_system", False
+    )
+    if use_ase_calculator:
+        ase_monomer = pdb_ase_atoms[0:n_atoms_first]
+        params_monomer, model_monomer = load_model_parameters(epoch_dir, n_atoms_first)
+        simple_physnet_calculator = get_ase_calc(params_monomer, model_monomer, ase_monomer)
+        ase_monomer.calc = simple_physnet_calculator
+    else:
+        simple_physnet_calculator = None
 
     # Load model parameters for the full system
     natoms = len(pdb_ase_atoms)
@@ -497,6 +501,8 @@ def run(args: argparse.Namespace) -> int:
         get_update_fn = None
 
     print(f"Hybrid calculator created: {hybrid_calc}")
+    print(f"Spherical cutoff calculator: {spherical_cutoff_calculator}, "
+          f"get_update_fn: {get_update_fn}")
     atoms = pdb_ase_atoms
 
     print(f"ASE atoms: {atoms}")
@@ -509,7 +515,8 @@ def run(args: argparse.Namespace) -> int:
 
 
     # Test invariance of energy under translation of monomer 0 by a lattice vector (PBC)
-    if args.cell is not None:
+    # Skip when nsteps_ase == 0 to avoid slow first-use JIT; JAX-MD will trigger it anyway
+    if args.cell is not None and args.nsteps_ase > 0:
         E0 = atoms.get_potential_energy()
         a = np.array([float(args.cell), 0.0, 0.0])  # first lattice vector for cubic cell
         g0 = np.arange(int(monomer_offsets[1]))  # first monomer's atoms
@@ -528,12 +535,13 @@ def run(args: argparse.Namespace) -> int:
         atoms.calc = simple_physnet_calculator
         print("Using physnet calculator for the full system")
 
-
-    # Get initial energy and forces
-    hybrid_energy = float(atoms.get_potential_energy())
-    hybrid_forces = np.asarray(atoms.get_forces())
-    print(f"Initial energy: {hybrid_energy:.6f} eV")
-    print(f"Initial forces: {hybrid_forces}")
+    # Get initial energy and forces (skip when nsteps_ase == 0 to avoid slow first-use JIT;
+    # JAX-MD will trigger compilation on its first step anyway)
+    if args.nsteps_ase > 0:
+        hybrid_energy = float(atoms.get_potential_energy())
+        hybrid_forces = np.asarray(atoms.get_forces())
+        print(f"Initial energy: {hybrid_energy:.6f} eV")
+        print(f"Initial forces: {hybrid_forces}")
     
 
     from mmml.interfaces.pycharmmInterface.import_pycharmm import (
