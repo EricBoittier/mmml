@@ -20,6 +20,8 @@ Optimization options
 - fractional_coordinates: required for NPT (dynamic box); NVT uses Cartesian.
 
 Debug: use --debug to enable neighbor list prints (allocate, update, overflow, n_valid).
+Monitor: use --nbr-monitor (NPT) to log n_valid, capacity, fill_ratio to progress and HDF5
+for workload analysis and tuning dr_threshold / capacity_multiplier.
 """
 
 from __future__ import annotations
