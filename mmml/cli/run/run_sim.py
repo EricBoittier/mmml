@@ -290,6 +290,13 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Run CHARMM production (default: False).",
     )
+    parser.add_argument(
+        "--pycharmm-minimize/--no-pycharmm-minimize",
+        dest="pycharmm_minimize",
+        default=True,
+        action=argparse.BooleanOptionalAction,
+        help="Run PyCHARMM nbonds/minimize before ASE/JAX-MD (default: True).",
+    )
 
     parser.add_argument(
         "--use_physnet_calculator_for_full_system",
@@ -478,6 +485,7 @@ def run(args: argparse.Namespace) -> int:
     print(f"Cutoff parameters: {CUTOFF_PARAMS}")
 
     # Create hybrid calculator (MIC-only: factory uses pbc_cell for PBC, no pbc_map/transform)
+    # Skip ASE calculator when nsteps_ase == 0; use minimal pbc_map-only object for JAX-MD
     calc_result = calculator_factory(
         atomic_numbers=Z,
         atomic_positions=R,
@@ -493,6 +501,7 @@ def run(args: argparse.Namespace) -> int:
         force_conversion_factor=1.0,
         do_pbc_map=getattr(calculator_factory, "do_pbc_map", args.cell is not None),
         pbc_map=getattr(calculator_factory, "pbc_map", None),
+        create_ase_calculator=use_ase_calculator,
     )
     if len(calc_result) == 3:
         hybrid_calc, spherical_cutoff_calculator, get_update_fn = calc_result
@@ -500,7 +509,7 @@ def run(args: argparse.Namespace) -> int:
         hybrid_calc, spherical_cutoff_calculator = calc_result
         get_update_fn = None
 
-    print(f"Hybrid calculator created: {hybrid_calc}")
+    print(f"{'Hybrid calculator' if use_ase_calculator else 'PbcMap-only'} created: {hybrid_calc}")
     print(f"Spherical cutoff calculator: {spherical_cutoff_calculator}, "
           f"get_update_fn: {get_update_fn}")
     atoms = pdb_ase_atoms
@@ -550,8 +559,9 @@ def run(args: argparse.Namespace) -> int:
         pycharmm,
         safe_energy_show,
     )
-    reset_block()
-    nbonds = """!#########################################
+    if getattr(args, "pycharmm_minimize", True):
+        reset_block()
+        nbonds = """!#########################################
 ! Bonded/Non-bonded Options & Constraints
 !#########################################
 
@@ -563,11 +573,13 @@ inbfrq -1 imgfrq -1
 shake bonh para sele all end
 
 """
-    pycharmm.lingo.charmm_script(nbonds)
-    safe_energy_show()
-    pycharmm.minimize.run_abnr(nstep=1000, tolenr=1e-2, tolgrd=1e-2)
-    pycharmm.lingo.charmm_script("ENER")
-    safe_energy_show()
+        pycharmm.lingo.charmm_script(nbonds)
+        safe_energy_show()
+        pycharmm.minimize.run_abnr(nstep=1000, tolenr=1e-2, tolgrd=1e-2)
+        pycharmm.lingo.charmm_script("ENER")
+        safe_energy_show()
+    else:
+        print("Skipping PyCHARMM nbonds/minimize (--pycharmm-minimize False); using PDB positions.")
     # Sync ASE atoms from PyCHARMM so BFGS/ASE MD start from CHARMM-minimized structure
     atoms.set_positions(coor.get_positions())
 

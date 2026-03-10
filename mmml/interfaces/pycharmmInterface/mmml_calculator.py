@@ -1669,7 +1669,8 @@ def setup_calculator(
             verbose: bool = None,
             do_pbc_map: bool = False,
             pbc_map = None,
-        ) -> Tuple[AseDimerCalculator, Callable]:
+            create_ase_calculator: bool = True,
+        ) -> Tuple[Any, Callable]:
             """Factory function to create calculator instances.
 
             doML, doMM, doML_dimer, debug default to the values passed to setup_calculator.
@@ -1678,24 +1679,34 @@ def setup_calculator(
             Args:
                 verbose: If True, store full ModelOutput breakdown in results.
                          If None, defaults to debug value.
+                create_ase_calculator: If False, return a minimal object with pbc_map/do_pbc_map
+                    only (for JAX-MD when ASE MD is not run). Saves overhead when nsteps_ase == 0.
             """
             pbc_cell_for_calc = np.asarray(pbc_cell) if pbc_cell is not None else None
 
-            calculator = AseDimerCalculator(
-                n_monomers=n_monomers,
-                cutoff_params=cutoff_params,
-                doML=doML,
-                doMM=doMM,
-                doML_dimer=doML_dimer,
-                backprop=backprop,
-                debug=debug,
-                energy_conversion_factor=energy_conversion_factor,
-                force_conversion_factor=force_conversion_factor,
-                do_pbc_map=do_pbc_map,
-                pbc_map=pbc_map,
-                pbc_cell=pbc_cell_for_calc,
-                verbose=verbose,
-            )
+            if create_ase_calculator:
+                calculator = AseDimerCalculator(
+                    n_monomers=n_monomers,
+                    cutoff_params=cutoff_params,
+                    doML=doML,
+                    doMM=doMM,
+                    doML_dimer=doML_dimer,
+                    backprop=backprop,
+                    debug=debug,
+                    energy_conversion_factor=energy_conversion_factor,
+                    force_conversion_factor=force_conversion_factor,
+                    do_pbc_map=do_pbc_map,
+                    pbc_map=pbc_map,
+                    pbc_cell=pbc_cell_for_calc,
+                    verbose=verbose,
+                )
+            else:
+                # Minimal object for JAX-MD pbc_map only
+                class _PbcMapOnly:
+                    def __init__(self, pbc_map_fn, do_pbc_map_val: bool):
+                        self.pbc_map = pbc_map_fn
+                        self.do_pbc_map = do_pbc_map_val
+                calculator = _PbcMapOnly(pbc_map, do_pbc_map)
 
             # Bind setup-time defaults so direct callers of the returned function
             # inherit doML/doMM/doML_dimer/debug configuration.
