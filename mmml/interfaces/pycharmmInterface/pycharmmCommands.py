@@ -432,7 +432,10 @@ close unit 35
 
 """
 
+from mmml.interfaces.pycharmmInterface.import_pycharmm import charmm_quiet
+
 def CLEAR_CHARMM():
+    charmm_quiet()
     s = """DELETE ATOM SELE ALL END"""
     pycharmm.lingo.charmm_script(s)
     s = """DELETE PSF SELE ALL END"""
