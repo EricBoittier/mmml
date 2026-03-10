@@ -665,13 +665,14 @@ shake bonh para sele all end
             for i in range(len(out_positions)):
                 traj_filename = f'{args.output_prefix}_md_trajectory_{j}_{i}'
                 Path(traj_filename).parent.mkdir(parents=True, exist_ok=True)
-                ext = "dcd" if args.trajectory_format == "dcd" else "traj"
+                traj_format = getattr(args, "trajectory_format", "traj")
+                ext = "dcd" if traj_format == "dcd" else "traj"
                 print(f"Saving trajectory to: {traj_filename}.{ext}")
                 save_trajectory(
                     out_positions[i],
                     atoms,
                     filename=traj_filename,
-                    format=args.trajectory_format,
+                    format=traj_format,
                     boxes=out_boxes[i] if out_boxes and out_boxes[i] is not None else None,
                     dt_ps=args.timestep * 0.001,
                     steps_per_frame=steps_per_frame,

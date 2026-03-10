@@ -579,8 +579,19 @@ def set_up_nhc_sim_routine(
             atoms.set_positions(np.asarray(md_pos))
         else:
             print("*" * 10 + "\nPBC Minimization\n" + "*" * 10)
+            # Molecular shift: wrap by monomer after each step so monomers stay intact.
+            # space.periodic wraps atoms individually → monomers break across boundaries.
+            _cell_jax = jnp.asarray(atoms.get_cell()[:], dtype=jnp.float32)
+            _monomer_groups = [
+                jnp.arange(int(monomer_offsets[m]), int(monomer_offsets[m + 1]))
+                for m in range(n_monomers)
+            ]
+
+            def shift_molecular(R, dR, **kwargs):
+                return wrap_groups(R + dR, _monomer_groups, _cell_jax, mass=Si_mass)
+
             pbc_unwrapped_init_fn, pbc_unwrapped_step_fn = jax_md.minimize.fire_descent(
-                wrapped_force_fn, shift_min, dt_start=0.001, dt_max=0.001
+                wrapped_force_fn, shift_molecular, dt_start=0.001, dt_max=0.001
             )
             pbc_unwrapped_step_fn = jit(pbc_unwrapped_step_fn)
             # Start from wrapped positions so we're in the cell (first min can drift)
@@ -588,11 +599,6 @@ def set_up_nhc_sim_routine(
                 pbc_start_pos = pbc_map_fn(minimized_pos)
             else:
                 # MIC-only: wrap by monomer into cell
-                _cell_jax = jnp.asarray(atoms.get_cell()[:], dtype=jnp.float32)
-                _monomer_groups = [
-                    jnp.arange(int(monomer_offsets[m]), int(monomer_offsets[m + 1]))
-                    for m in range(n_monomers)
-                ]
                 pbc_start_pos = wrap_groups(
                     jnp.asarray(minimized_pos), _monomer_groups, _cell_jax, mass=Si_mass
                 )
