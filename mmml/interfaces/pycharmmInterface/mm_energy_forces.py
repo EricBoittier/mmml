@@ -513,7 +513,8 @@ def build_mm_energy_forces_fn(
                 R = np.asarray(R_frac, dtype=np.float64)
                 box = np.diagonal(cell_3x3).astype(np.float64)
             nbrs = _nbrs[0]
-            kwargs = {} if box is None else {"box": jnp.asarray(box)}
+            # jax_md: box keyword only allowed when fractional_coordinates=True (NPT)
+            kwargs = {} if (box is None or not fractional_coordinates) else {"box": jnp.asarray(box)}
             nbrs = nbrs.update(R, **kwargs)
             realloc_count = 0
             for _ in range(3):
