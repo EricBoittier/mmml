@@ -405,7 +405,16 @@ def set_up_nhc_sim_routine(
                 "NPT requires jax_md neighbor list (cell list cannot handle dynamic box). "
                 "Ensure jax_md is installed and pbc_cell is set."
             )
-        pressure = getattr(args, 'pressure', 1.01325) * unit['pressure']
+        p_bar = getattr(args, 'pressure', 1.01325)
+        if p_bar <= 0:
+            # Preserve initial density: P = N*kT/V (ideal gas) so box stays ~constant
+            V_init = float(L_cell_val ** 3)
+            p_bar = float(n_monomers * kT / V_init / unit['pressure'])
+            print(f"NPT: pressure=0 → using density-preserving P={p_bar:.2f} bar (N={n_monomers}, V={V_init:.0f} Å³)")
+        elif n_monomers < 30 and p_bar <= 2:
+            print(f"NPT: small system (N={n_monomers}) at {p_bar} bar will expand significantly. "
+                  f"Use --pressure 0 to preserve density or NVT for fixed box.")
+        pressure = p_bar * unit['pressure']
         # Barostat tau: 10000*dt (2.5 ps at 0.25 fs) avoids NaN from aggressive box scaling
         barostat_tau = getattr(args, 'nhc_barostat_tau', 10000.0) * dt
         nhc_chain_length = getattr(args, 'nhc_chain_length', 3)
@@ -482,7 +491,7 @@ def set_up_nhc_sim_routine(
             barostat_kwargs=default_nhc_kwargs(jnp.array(barostat_tau), nhc_kwargs),
             thermostat_kwargs=default_nhc_kwargs(jnp.array(nhc_tau * dt), nhc_kwargs),
         )
-        print(f"NPT Nose-Hoover: pressure={getattr(args, 'pressure', 1.01325)} bar, barostat_tau={barostat_tau:.6f} ps, "
+        print(f"NPT Nose-Hoover: pressure={p_bar:.2f} bar, barostat_tau={barostat_tau:.6f} ps, "
               f"thermostat tau={nhc_tau * dt:.6f} ps")
     elif args.ensemble == "nvt":
         nhc_chain_length = getattr(args, 'nhc_chain_length', 3)
@@ -695,7 +704,7 @@ def set_up_nhc_sim_routine(
                 neighbor=(pair_idx, pair_mask), kT=kT, mass=Si_mass
             )
             npt_pair_idx, npt_pair_mask = pair_idx, pair_mask
-            npt_pressure = getattr(args, 'pressure', 1.01325) * unit['pressure']
+            npt_pressure = pressure  # Use same pressure as NPT block (handles --pressure 0)
         elif args.ensemble == "nvt":
             state = init_fn(key, md_pos, mass=Si_mass)
             npt_pair_idx, npt_pair_mask = None, None
