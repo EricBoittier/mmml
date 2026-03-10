@@ -575,7 +575,12 @@ shake bonh para sele all end
 """
         pycharmm.lingo.charmm_script(nbonds)
         safe_energy_show()
+        print("Running PyCHARMM minimize")
+        from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_soft
+        pycharmm_soft()
         pycharmm.minimize.run_abnr(nstep=1000, tolenr=1e-2, tolgrd=1e-2)
+        from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet    
+        pycharmm_quiet()
         pycharmm.lingo.charmm_script("ENER")
         safe_energy_show()
     else:
@@ -588,7 +593,11 @@ shake bonh para sele all end
         pycharmm.lingo.charmm_script(heat)
         atoms.set_positions(coor.get_positions())
         safe_energy_show()
+        from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_soft
+        pycharmm_soft()
         pycharmm.minimize.run_abnr(nstep=1000, tolenr=1e-2, tolgrd=1e-2)
+        from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet    
+        pycharmm_quiet()
         safe_energy_show()
         pycharmm.lingo.charmm_script("ENER")
         atoms.set_positions(coor.get_positions())
@@ -599,7 +608,11 @@ shake bonh para sele all end
         pycharmm.lingo.charmm_script(equi)
         atoms.set_positions(coor.get_positions())
         safe_energy_show()
+        from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_soft
+        pycharmm_soft()
         pycharmm.minimize.run_abnr(nstep=1000, tolenr=1e-2, tolgrd=1e-2)
+        from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet    
+        pycharmm_quiet()
         safe_energy_show()
         pycharmm.lingo.charmm_script("ENER")
         atoms.set_positions(coor.get_positions())
@@ -610,7 +623,11 @@ shake bonh para sele all end
         pycharmm.lingo.charmm_script(production)
         atoms.set_positions(coor.get_positions())
         safe_energy_show()
+        from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_soft
+        pycharmm_soft()
         pycharmm.minimize.run_abnr(nstep=1000, tolenr=1e-2, tolgrd=1e-2)
+        from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet    
+        pycharmm_quiet()
         safe_energy_show()
         pycharmm.lingo.charmm_script("ENER")
         atoms.set_positions(coor.get_positions())
