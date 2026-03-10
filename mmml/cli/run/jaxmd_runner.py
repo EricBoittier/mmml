@@ -345,20 +345,27 @@ def set_up_nhc_sim_routine(
                 box=_pbc_state["box"],
             )
 
-    # Shift and displacement: NPT uses periodic_general with fractional coords; NVT/NVE use free or periodic
+    # Shift and displacement for minimization and simulation
+    # Minimization: energy/force use Cartesian (MIC). Use space.periodic when PBC so positions
+    # stay in box; avoids coordinate mismatch (fractional shift + Cartesian energy → oscillation).
+    # Simulation: NPT uses fractional; NVT/NVE use free or periodic.
     is_npt = args.ensemble == "npt" and use_pbc
+    L_cell_val = float(args.cell) if args.cell else None
     if is_npt:
-        # NPT: box as 3x3 diagonal (matches jax_md metal/Si example); volume = L^3
-        L_npt = float(args.cell)
+        L_npt = L_cell_val
         box_npt = jnp.eye(3, dtype=jnp.float32) * L_npt
         displacement, shift = space.periodic_general(box=box_npt, fractional_coordinates=True)
     else:
-        _displacement, _shift_free = space.free()
-        shift = _shift_free
-        displacement = _displacement
+        displacement, shift = space.free()
+
+    # Minimization shift: Cartesian + periodic when PBC (matches MIC energy/force)
+    if use_pbc and L_cell_val is not None:
+        _, shift_min = space.periodic(L_cell_val)
+    else:
+        shift_min = shift
 
     unwrapped_init_fn, unwrapped_step_fn = jax_md.minimize.fire_descent(
-        wrapped_force_fn, shift, dt_start=0.001, dt_max=0.001
+        wrapped_force_fn, shift_min, dt_start=0.001, dt_max=0.001
     )
     unwrapped_step_fn = jit(unwrapped_step_fn)
 
@@ -573,7 +580,7 @@ def set_up_nhc_sim_routine(
         else:
             print("*" * 10 + "\nPBC Minimization\n" + "*" * 10)
             pbc_unwrapped_init_fn, pbc_unwrapped_step_fn = jax_md.minimize.fire_descent(
-                wrapped_force_fn, shift, dt_start=0.001, dt_max=0.001
+                wrapped_force_fn, shift_min, dt_start=0.001, dt_max=0.001
             )
             pbc_unwrapped_step_fn = jit(pbc_unwrapped_step_fn)
             # Start from wrapped positions so we're in the cell (first min can drift)
@@ -896,11 +903,6 @@ def set_up_nhc_sim_routine(
                         nhc_positions = nhc_positions[:-1]
                         if is_npt:
                             nhc_boxes = nhc_boxes[:-1]
-                        state = type(state)(
-                            position=nhc_positions[-1],
-                            momentum=state.momentum,
-                            mass=state.mass
-                        )
                     break
                 if e_pot >= 0 and energy_initial < 0:
                     print(f"Energy blow-up at step {steps} (E_pot={e_pot:.4f}); stopping.")
@@ -908,11 +910,6 @@ def set_up_nhc_sim_routine(
                         nhc_positions = nhc_positions[:-1]
                         if is_npt:
                             nhc_boxes = nhc_boxes[:-1]
-                        state = type(state)(
-                            position=nhc_positions[-1],
-                            momentum=state.momentum,
-                            mass=state.mass
-                        )
                     break
 
         hdf5_reporter.close()
