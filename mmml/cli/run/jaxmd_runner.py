@@ -141,10 +141,14 @@ def _run_npt_diagnostics(
             npt_energy_fn, R, box_curr, kinetic_energy=KE,
             neighbor=(npt_pair_idx, npt_pair_mask)
         )
-        p_meas_bar = float(p_meas / unit["pressure"])
-        p_tgt_bar = float(npt_pressure / unit["pressure"])
-        print(f"    P_measured = {p_meas_bar:.2f} bar")
-        print(f"    P_target   = {p_tgt_bar:.2f} bar")
+        p_meas_raw = float(p_meas)
+        p_tgt_raw = float(npt_pressure)
+        unit_p = float(unit["pressure"])
+        p_meas_bar = p_meas_raw / unit_p
+        p_tgt_bar = p_tgt_raw / unit_p
+        print(f"    P_measured (raw) = {p_meas_raw:.6e}, P_target (raw) = {p_tgt_raw:.6e}")
+        print(f"    unit['pressure'] = {unit_p:.6e} (bar → internal)")
+        print(f"    P_measured = {p_meas_bar:.2f} bar, P_target = {p_tgt_bar:.2f} bar")
         print(f"    P_meas > P_tgt → barostat expands; P_meas < P_tgt → barostat contracts")
     except Exception as e:
         print(f"    quantity.pressure failed: {e}")
@@ -428,7 +432,9 @@ def set_up_nhc_sim_routine(
             V_init = float(L_cell_val ** 3)
             p_bar = float(n_monomers * kT / V_init / unit['pressure'])
             print(f"NPT: pressure=0 → using density-preserving P={p_bar:.2f} bar (N={n_monomers}, V={V_init:.0f} Å³)")
-        pressure = p_bar * unit['pressure']
+        # Pressure for npt_nose_hoover: jax_md uses same units as energy/volume.
+        # Metal: energy=eV, V=Å³ → pressure in eV/Å³. 1 bar = unit['pressure'] eV/Å³.
+        pressure = jnp.array(p_bar * unit['pressure'], dtype=jnp.float32)
         # Barostat tau: 10000*dt (2.5 ps at 0.25 fs) avoids NaN from aggressive box scaling
         barostat_tau = getattr(args, 'nhc_barostat_tau', 10000.0) * dt
         nhc_chain_length = getattr(args, 'nhc_chain_length', 3)
