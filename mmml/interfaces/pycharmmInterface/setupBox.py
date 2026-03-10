@@ -289,9 +289,13 @@ def run_packmol(n_molecules: int, side_length: float) -> None:
     print("Generated initial.pdb")
 
 
-def setup_box_generic(pdb_path, rtf=CGENFF_RTF, prm=CGENFF_PRM, side_length: float = 30, tag=""):
+def setup_box_generic(pdb_path, rtf=CGENFF_RTF, prm=CGENFF_PRM, side_length: float = 30, tag="", skip_energy_show: bool = False):
     """
     Sets up the box
+
+    Args:
+        skip_energy_show: If True, skip energy.show() to avoid slow CHARMM energy evaluation
+            (Drude setup). Use for faster startup when validation is not needed.
     """
     from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet
     CLEAR_CHARMM()
@@ -318,7 +322,8 @@ def setup_box_generic(pdb_path, rtf=CGENFF_RTF, prm=CGENFF_PRM, side_length: flo
     pycharmm.lingo.charmm_script(header)
     pycharmm.lingo.charmm_script(pbcset.format(SIDELENGTH=side_length))
     pycharmm.lingo.charmm_script(pbcs)
-    energy.show()
+    if not skip_energy_show:
+        energy.show()
     write.psf_card(f"psf/system-{tag}.psf")
     write.coor_pdb(f"pdb/init-{tag}.pdb")
     print(f"wrote pdb/init-{tag}.pdb")

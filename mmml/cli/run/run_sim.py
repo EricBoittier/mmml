@@ -2,6 +2,12 @@
 Runs an MD simulation.
 
 Requires the box size and system (as a pdb file) to be specified.
+
+Performance tips:
+    - Set JAX_COMPILATION_CACHE_DIR for persistent JAX JIT cache (subsequent runs reuse
+      compiled code; first run may take minutes to compile).
+    - Use --skip-setup-energy-show to avoid slow CHARMM energy.show() during setup
+      (less validation of the initial structure).
 Temperature, pressure, and density can be specified.
 If no solvent is specified, the system will be vacuum.
 If no temperature is specified, the system will be at room temperature.
@@ -306,6 +312,26 @@ def parse_args() -> argparse.Namespace:
         help="Number of ABNR minimization steps when PyCHARMM minimize is enabled (default: 1000). "
         "Use fewer (e.g. 100) for faster startup when structure is already reasonable.",
     )
+    parser.add_argument(
+        "--skip-setup-energy-show",
+        action="store_true",
+        help="Skip energy.show() in setup_box to avoid slow CHARMM energy evaluation (Drude setup). "
+        "Use for faster startup; less validation of the initial structure.",
+    )
+    parser.add_argument(
+        "--jaxmd-minimize-steps",
+        type=int,
+        default=1000,
+        metavar="N",
+        help="Number of FIRE minimization steps before JAX-MD (default: 1000). Use 0 to skip.",
+    )
+    parser.add_argument(
+        "--jaxmd-pbc-minimize-steps",
+        type=int,
+        default=1000,
+        metavar="N",
+        help="Number of PBC FIRE minimization steps when --cell is set (default: 1000). Use 0 to skip.",
+    )
 
     parser.add_argument(
         "--use_physnet_calculator_for_full_system",
@@ -364,7 +390,8 @@ def run(args: argparse.Namespace) -> int:
     pdbfilename = str(args.pdbfile)
     
     # Setup box and load PDB
-    setup_box_generic(pdbfilename, side_length=1000)
+    skip_energy_show = getattr(args, "skip_setup_energy_show", False)
+    setup_box_generic(pdbfilename, side_length=1000, skip_energy_show=skip_energy_show)
     pdb_ase_atoms = ase_io.read(pdbfilename)
 
     print(f"Loaded PDB file: {pdb_ase_atoms}")
