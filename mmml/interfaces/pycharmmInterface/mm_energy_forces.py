@@ -88,6 +88,7 @@ def build_mm_energy_forces_fn(
     pbc_cell: Optional[np.ndarray] = None,
     max_pairs: Optional[int] = None,
     cell_list_safety_factor: float = 2.5,
+    cell_list_density_estimate: Optional[float] = None,
     use_smooth_mic: Optional[bool] = None,
     use_jax_md_neighbor_list: bool = True,
     fractional_coordinates: bool = False,
@@ -191,7 +192,10 @@ def build_mm_energy_forces_fn(
             _max_pairs = int(max_pairs)
         else:
             _max_pairs = _estimate_max_pairs(
-                total_atoms, cutoff=_mm_cutoff_dist, safety_factor=cell_list_safety_factor
+                total_atoms,
+                cutoff=_mm_cutoff_dist,
+                safety_factor=cell_list_safety_factor,
+                density_estimate=cell_list_density_estimate,
             )
         _offsets_np = np.array([int(monomer_offsets[k]) for k in range(len(monomer_offsets))])
         _cl_i, _cl_j, _cl_mask, _n_valid = _cell_list_pairs(

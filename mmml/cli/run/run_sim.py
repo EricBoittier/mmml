@@ -347,6 +347,12 @@ def parse_args() -> argparse.Namespace:
         default="traj",
         help="Output trajectory format: traj (ASE) or dcd (CHARMM-readable, pure Python) (default: traj).",
     )
+    parser.add_argument(
+        "--precompile",
+        action="store_true",
+        help="Compile JAX energy/force once and exit without running simulation. "
+        "Use to separate slow first-run compilation from production MD.",
+    )
 
     return parser.parse_args()
 
@@ -602,13 +608,16 @@ def run(args: argparse.Namespace) -> int:
             )
 
 
-    if args.nsteps_jaxmd > 0:
+    if args.nsteps_jaxmd > 0 or getattr(args, "precompile", False):
         for j in range(1):
             sim_key, data_key = jax.random.split(data_key, 2)
             s = set_up_nhc_sim_routine(
                 atoms, args, spherical_cutoff_calculator, get_update_fn,
                 CUTOFF_PARAMS, n_monomers, monomer_offsets, Si_mass
             )
+            if getattr(args, "precompile", False):
+                print("Precompile done. Exiting (no simulation).")
+                return atoms
             # Skip JAX-MD minimization when ASE already ran (positions are ASE-minimized)
             skip_jaxmd_min = args.nsteps_ase > 0
             out_positions, out_boxes, _ = run_sim_loop(
