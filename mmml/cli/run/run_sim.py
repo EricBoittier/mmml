@@ -619,66 +619,14 @@ shake bonh para sele all end
     # Sync ASE atoms from PyCHARMM so BFGS/ASE MD start from CHARMM-minimized structure
     atoms.set_positions(coor.get_positions())
 
-    def run_heat(): 
-        from mmml.interfaces.pycharmmInterface.pycharmmCommands import heat
-        pycharmm.lingo.charmm_script(heat)
-        atoms.set_positions(coor.get_positions())
-        safe_energy_show()
-        from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_soft
-        pycharmm_soft()
-        pycharmm.minimize.run_abnr(
-            nstep=getattr(args, "pycharmm_minimize_steps", 1000),
-            tolenr=1e-2, tolgrd=1e-2
-        )
-        from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet    
-        pycharmm_quiet()
-        safe_energy_show()
-        pycharmm.lingo.charmm_script("ENER")
-        atoms.set_positions(coor.get_positions())
-        return atoms
-
-    def run_equilibration():
-        from mmml.interfaces.pycharmmInterface.pycharmmCommands import equi
-        pycharmm.lingo.charmm_script(equi)
-        atoms.set_positions(coor.get_positions())
-        safe_energy_show()
-        from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_soft
-        pycharmm_soft()
-        pycharmm.minimize.run_abnr(
-            nstep=getattr(args, "pycharmm_minimize_steps", 1000),
-            tolenr=1e-2, tolgrd=1e-2
-        )
-        from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet    
-        pycharmm_quiet()
-        safe_energy_show()
-        pycharmm.lingo.charmm_script("ENER")
-        atoms.set_positions(coor.get_positions())
-        return atoms
-
-    def run_production():
-        from mmml.interfaces.pycharmmInterface.pycharmmCommands import production
-        pycharmm.lingo.charmm_script(production)
-        atoms.set_positions(coor.get_positions())
-        safe_energy_show()
-        from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_soft
-        pycharmm_soft()
-        pycharmm.minimize.run_abnr(
-            nstep=getattr(args, "pycharmm_minimize_steps", 1000),
-            tolenr=1e-2, tolgrd=1e-2
-        )
-        from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet    
-        pycharmm_quiet()
-        safe_energy_show()
-        pycharmm.lingo.charmm_script("ENER")
-        atoms.set_positions(coor.get_positions())
-        return atoms
+    from mmml.cli.run.pycharmm_runner import run_equilibration, run_heat, run_production
 
     if getattr(args, "charmm_heat", False):
-        atoms = run_heat()
+        atoms = run_heat(atoms, args)
     if getattr(args, "charmm_equilibration", False):
-        atoms = run_equilibration()
+        atoms = run_equilibration(atoms, args)
     if getattr(args, "charmm_production", False):
-        atoms = run_production()
+        atoms = run_production(atoms, args)
     
     # Minimize structure if requested
     from mmml.cli.run.ase_runner import run_ase_md
