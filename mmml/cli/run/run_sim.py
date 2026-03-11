@@ -434,17 +434,7 @@ def run(args: argparse.Namespace) -> int:
     # Actual masses for COM (Si_mass was misnamed - it held atomic numbers before)
     masses_jax = jnp.array(psf_masses[:total_atoms], dtype=jnp.float32)
     Si_mass = masses_jax  # keep name for compatibility with JAX-MD closure
-    Si_mass_sum = Si_mass.sum()
-    # print(f"Masses (amu) for JAX-MD: sum={float(Si_mass_sum):.2f}")
-    
-    Si_mass_expanded = jnp.repeat(Si_mass[:, None], 3, axis=1)
-    # print(f"Masses expanded shape: {Si_mass_expanded.shape}")
 
-    # print(f"PyCHARMM coordinates: {coor.get_positions()}")
-    # print(f"Ase coordinates: {pdb_ase_atoms.get_positions()}")
-
-    # print(coor.get_positions())
-    # Defer simple_physnet_calculator creation when nsteps_ase == 0 to avoid slow first-use JIT
     use_ase_calculator = args.nsteps_ase > 0 or getattr(
         args, "use_physnet_calculator_for_full_system", False
     )
@@ -591,7 +581,6 @@ def run(args: argparse.Namespace) -> int:
 
     from mmml.interfaces.pycharmmInterface.import_pycharmm import (
         reset_block,
-        reset_block_no_internal,
         pycharmm,
         safe_energy_show,
     )
