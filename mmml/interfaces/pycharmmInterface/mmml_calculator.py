@@ -231,25 +231,6 @@ kcalmol2ev = 1.0 / ev2kcalmol
 SPATIAL_DIMS: int = 3  # Number of spatial dimensions (x, y, z)
 from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters, GAMMA_OFF, GAMMA_ON
 
-if jax is not None:  # pragma: no branch - keeps default behaviour when JAX present
-    # If you want to perform simulations in float64 you have to call this before
-    # any JAX computation.
-    # jax.config.update('jax_enable_x64', True)
-    data_key, train_key = jax.random.split(jax.random.PRNGKey(42), 2)
-
-    # Debug helpers that used to be printed on import are now toggled via
-    # explicit logging to avoid side effects during import.
-    try:
-        devices = jax.local_devices()
-        default_backend = jax.default_backend()
-    except Exception:  # pragma: no cover - only hit when runtime misconfigured
-        devices = []
-        default_backend = "unknown"
-else:  # pragma: no cover - executed in docs/test environments without JAX
-    data_key = train_key = None
-    devices = []
-    default_backend = "unavailable"
-
 
 def set_pycharmm_xyz(atom_positions):
     xyz = pd.DataFrame(atom_positions, columns=["x", "y", "z"])
