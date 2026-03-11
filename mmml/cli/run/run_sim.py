@@ -368,7 +368,6 @@ def run(args: argparse.Namespace) -> int:
         from ase.md.velocitydistribution import MaxwellBoltzmannDistribution, Stationary, ZeroRotation
         from ase.md.verlet import VelocityVerlet
         import ase.optimize as ase_opt
-        from mmml.interfaces.pycharmmInterface.import_pycharmm import coor
         from mmml.interfaces.pycharmmInterface.setupBox import setup_box_generic
         import pandas as pd
         from mmml.interfaces.pycharmmInterface.import_pycharmm import minimize
@@ -579,47 +578,13 @@ def run(args: argparse.Namespace) -> int:
         print(f"Initial forces: {hybrid_forces}")
     
 
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import (
-        reset_block,
-        pycharmm,
-        safe_energy_show,
+    from mmml.cli.run.pycharmm_runner import (
+        run_equilibration,
+        run_heat,
+        run_production,
+        run_pycharmm_setup_and_minimize,
     )
-    # Support both pycharmm_minimize (argparse) and no_pycharmm_minimize (config dict)
-    _do_pycharmm_min = getattr(args, "pycharmm_minimize", None)
-    if _do_pycharmm_min is None and getattr(args, "no_pycharmm_minimize", False):
-        _do_pycharmm_min = False
-    if _do_pycharmm_min is None:
-        _do_pycharmm_min = True
-    if _do_pycharmm_min:
-        reset_block()
-        nbonds = """!#########################################
-! Bonded/Non-bonded Options & Constraints
-!#########################################
-! Non-bonding parameters
-nbonds atom cutnb 10.0  ctofnb 9.0 ctonnb 8.0 -
-vswitch NBXMOD 5 -
-inbfrq -1 imgfrq -1
-shake bonh para sele all end
-"""
-        pycharmm.lingo.charmm_script(nbonds)
-        safe_energy_show()
-        print("Running PyCHARMM minimize")
-        from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_soft
-        pycharmm_soft()
-        pycharmm.minimize.run_abnr(
-            nstep=getattr(args, "pycharmm_minimize_steps", 1000),
-            tolenr=1e-2, tolgrd=1e-2
-        )
-        from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet    
-        pycharmm_quiet()
-        pycharmm.lingo.charmm_script("ENER")
-        safe_energy_show()
-    else:
-        print("Skipping PyCHARMM nbonds/minimize (--pycharmm-minimize False); using PDB positions.")
-    # Sync ASE atoms from PyCHARMM so BFGS/ASE MD start from CHARMM-minimized structure
-    atoms.set_positions(coor.get_positions())
-
-    from mmml.cli.run.pycharmm_runner import run_equilibration, run_heat, run_production
+    atoms = run_pycharmm_setup_and_minimize(atoms, args)
 
     if getattr(args, "charmm_heat", False):
         atoms = run_heat(atoms, args)
