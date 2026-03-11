@@ -9,7 +9,7 @@ dependencies:
   
   # CUDA toolkit
   - cuda-toolkit=13
-  - cudnn>=9
+  - cudnn>=9.10.1
   
   # Core scientific computing
   - numpy
