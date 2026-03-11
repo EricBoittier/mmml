@@ -1000,8 +1000,9 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
                                     src_idx_flat=src_idx_flat,
                                     batch_segments=batch_segments)
 
-    for k in valid_batches[0].keys():
-        print(f"    valid batch {k}: {valid_batches[0][k]}")
+    from mmml.physnetjax.physnetjax.data.data import print_shapes
+
+    print_shapes(valid_batches[0], name="Validation Batch[0]")
 
     # Early stopping tracking
     best_valid_loss = float('inf')

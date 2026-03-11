@@ -13,6 +13,9 @@ from mmml.data.atomic_references import (
     DEFAULT_REFERENCE_LEVEL,
     get_atomic_reference_array,
 )
+from rich.console import Console
+from rich.table import Table
+
 from mmml.physnetjax.physnetjax.utils.pretty_printer import print_dict_as_table
 
 # Atomic energies in Hartree sourced from reference table
@@ -381,18 +384,43 @@ def make_dicts(data, keys, train_choice, valid_choice):
     return train_data, valid_data
 
 
+def _array_summary(v):
+    """Format array as shape + summary statistics (min, max, mean, std)."""
+    try:
+        arr = np.asarray(v)
+    except (ValueError, TypeError):
+        return str(v)[:80]
+    if not hasattr(arr, "shape"):
+        return str(v)[:80]
+    shape_str = f"shape={arr.shape}"
+    if arr.size == 0:
+        return shape_str
+    dtype = arr.dtype
+    if np.issubdtype(dtype, np.floating):
+        return (
+            f"{shape_str} x∈[{float(np.min(arr)):.4g}, {float(np.max(arr)):.4g}] "
+            f"μ={float(np.mean(arr)):.4g} σ={float(np.std(arr)):.4g}"
+        )
+    if np.issubdtype(dtype, np.integer):
+        return f"{shape_str} x∈[{int(np.min(arr))}, {int(np.max(arr))}]"
+    return shape_str
+
+
 def print_shapes(dict, name="Data Shapes"):
     """
-    Print the shapes of train and validation data.
+    Print the shapes and summary statistics of train/validation data or batches.
+
+    For numeric arrays: shape, min, max, mean, std.
+    For integer arrays: shape, min, max.
 
     Args:
-        dict (dict): Dictionary containing training data.
-
-    Returns:
-        tuple: A tuple containing train_data and valid_data dictionaries.
+        dict (dict): Dictionary containing arrays (numpy or JAX).
+        name (str): Title for the output table.
     """
-    shapes_dict = {}
+    table = Table(title=name)
+    table.add_column("Key", style="cyan", no_wrap=True)
+    table.add_column("Shape + Stats", style="green", no_wrap=False)
     for k, v in dict.items():
-        shapes_dict[k] = v.shape
-
-    print_dict_as_table(shapes_dict, title=name, plot=True)
+        table.add_row(k, _array_summary(v))
+    console = Console()
+    console.print(table)
