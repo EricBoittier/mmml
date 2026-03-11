@@ -136,7 +136,7 @@ md = [
 chem = [
     "chemcoord",
     "pubchempy",
-    "pyxtal",
+    #"pyxtal",
     "molzip",
     "sphynx>=0.0.3",
 ]
