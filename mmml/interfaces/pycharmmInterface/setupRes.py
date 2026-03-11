@@ -21,7 +21,7 @@ from ase.visualize.plot import plot_atoms
 from ase.io import read
 from ase.visualize import view
 
-from mmml.interfaces.pycharmmInterface.import_pycharmm import *
+from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet, pycharmm_loud
 from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_RTF, CGENFF_PRM, CHARMM_HOME, CHARMM_LIB_DIR
 from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf, set_up_directories
 
@@ -136,11 +136,13 @@ def generate_coordinates() -> Atoms:
 
     xyz = coor.get_positions()
     coor.set_positions(xyz)
-    # coor.show()
+    coor.show()
     xyz *= 0
     xyz += 2 * np.random.random(xyz.to_numpy().shape)
     coor.set_positions(xyz)
     _ = coor.get_positions()
+    coor.show()
+    pycharmm_loud()
     energy.get_energy()
     start_energy = pycharmm.lingo.get_energy_value("ENER")
     mini(nbxmod=1)
