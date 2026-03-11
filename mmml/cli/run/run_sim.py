@@ -632,6 +632,7 @@ def run(args: argparse.Namespace) -> int:
                     boxes=out_boxes[i] if out_boxes and out_boxes[i] is not None else None,
                     dt_ps=args.timestep * 0.001,
                     steps_per_frame=steps_per_frame,
+                    save_energy_forces=use_ase_calculator,
                 )
 
             # atoms = minimize_structure(atoms)
