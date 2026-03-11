@@ -18,7 +18,7 @@ from mmml.interfaces.pycharmmInterface.pbc_utils_jax import wrap_groups
 from mmml.utils.hdf5_reporter import make_jaxmd_reporter
 
 import ase.io as ase_io
-
+WORSE_COUNT_THRESHOLD = 100
 
 def default_nhc_kwargs(tau, overrides=None):
     """Build Nose-Hoover chain kwargs dict with sensible defaults.
@@ -669,8 +669,8 @@ def set_up_nhc_sim_routine(
                     prev_max_f = max_force
                     if i % max(1, NMIN_PBC // 10) == 0:
                         print(f"{i}/{NMIN_PBC}: E={energy:.6f} eV, max|F|={max_force:.6f}")
-                    if worsen_count >= 10:
-                        print(f"PBC minimization: max|F| increased for 10 steps; stopping early at step {i} (best max|F|={best_pbc_max_f:.4f})")
+                    if worsen_count >= WORSE_COUNT_THRESHOLD:
+                        print(f"PBC minimization: max|F| increased for {WORSE_COUNT_THRESHOLD} steps; stopping early at step {i} (best max|F|={best_pbc_max_f:.4f})")
                         break
 
                 # Use first-min result if PBC minimization worsened structure (max_force increased)
