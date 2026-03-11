@@ -325,14 +325,6 @@ def train_model(
                                          data_keys=data_keys)
 
     print_shapes(valid_batches[0], name="Validation Batch[0]")
-    jax.debug.print("Extra Validation Info:")
-    jax.debug.print("Z: {x}", x=valid_data["Z"])
-    jax.debug.print("R: {x}", x=valid_data["R"])
-    jax.debug.print("E: {x}", x=valid_data["E"])
-    jax.debug.print("N: {x}", x=valid_data["N"])
-    jax.debug.print("F: {x}", x=valid_data["F"])
-    if model.charges:
-        jax.debug.print("D: {x}", x=valid_data["D"])
 
     dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(num_atoms)
     fresh_params = model.init(
