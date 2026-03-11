@@ -9,8 +9,14 @@ import warnings
 import ase.units
 import e3x
 import jax
-import lovely_jax as lj
 from flax.training import orbax_utils, train_state
+
+# Try to enable lovely_jax for better array printing (optional; may fail with lovely-numpy>=0.2.19)
+try:
+    import lovely_jax as lj
+    lj.monkey_patch()
+except ImportError:
+    lj = None  # type: ignore[assignment]
 from jax.experimental import mesh_utils
 from jax.sharding import Mesh, NamedSharding, PartitionSpec as P
 from rich.console import Console
@@ -44,8 +50,6 @@ from mmml.physnetjax.physnetjax.utils.pretty_printer import (
 PROFILE = False
 if PROFILE:
     import jax.profiler
-
-lj.monkey_patch()
 
 schedule_fn = base_schedule_fn
 transform = base_transform
