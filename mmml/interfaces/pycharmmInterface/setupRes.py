@@ -135,40 +135,25 @@ def generate_coordinates() -> Atoms:
     coor.show()
 
     xyz = coor.get_positions()
-    print("positions:")
-    print(xyz)
     coor.set_positions(xyz)
-    coor.show()
-
+    # coor.show()
     xyz *= 0
     xyz += 2 * np.random.random(xyz.to_numpy().shape)
     coor.set_positions(xyz)
     _ = coor.get_positions()
     energy.get_energy()
     start_energy = pycharmm.lingo.get_energy_value("ENER")
-    print("start_energy:")
-    print(start_energy)
-
     mini(nbxmod=1)
-
-    print("positions:")
-    print(xyz)
-
     xyz = coor.get_positions()
     xyz *= 1 * np.random.random(xyz.to_numpy().shape)
     coor.set_positions(xyz)
     coor.show()
     mini(nbxmod=5)
 
-    print("positions:")
     xyz = coor.get_positions()
-    print(xyz)
     coor.show()
     end_energy = pycharmm.lingo.get_energy_value("ENER")
-    print("end_energy:")
-    print(end_energy)
     energy_diff = end_energy - start_energy
-    print(f"Energy difference: {energy_diff}")
     if energy_diff > 0:
         print("WARNING: Energy difference is positive, something may have gone wrong")
 
@@ -178,7 +163,6 @@ def generate_coordinates() -> Atoms:
     # read pdb file
     mol = ase.io.read("pdb/initial.pdb")
     Z = get_Z_from_psf()
-    print(Z)
     mol.set_atomic_numbers(Z)
 
     atoms = ase.Atoms(
