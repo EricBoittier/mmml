@@ -64,7 +64,8 @@ plotting = [
 ]
 
 # GPU/CUDA support (CUDA 13, default)
-# JAX CUDA 13 uses separate plugin/pjrt packages (no jaxlib[cuda13] extra)
+# JAX CUDA 13 uses separate plugin/pjrt packages (no jaxlib[cuda13] extra).
+# Runtime requirement: cuDNN >= 9.10.1 (older versions are rejected by JAX CUDA13 plugin).
 gpu = [
     "jax[cuda13]",
     "jaxlib",
