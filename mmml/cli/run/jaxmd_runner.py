@@ -262,6 +262,7 @@ def set_up_nhc_sim_routine(
             # NVT/NVE: fixed box, pass box for neighbor list consistency
             pair_idx, pair_mask = update_fn(np.asarray(R), box=box_nl)
     print("Compiling JAX energy/force (first run may take minutes)...")
+    t0 = time.perf_counter()
     result = evaluate_energies_and_forces(
         atomic_numbers=atomic_numbers,
         positions=R,
@@ -269,7 +270,8 @@ def set_up_nhc_sim_routine(
         mm_pair_mask=pair_mask,
         box=box_init,
     )
-    print("JAX compilation done.")
+    elapsed = time.perf_counter() - t0
+    print(f"JAX compilation done in {elapsed:.2f} s.")
     print(f"Result: {result}")
     init_energy = result.energy.reshape(-1)[0]
     init_forces = result.forces.reshape(-1, 3)
