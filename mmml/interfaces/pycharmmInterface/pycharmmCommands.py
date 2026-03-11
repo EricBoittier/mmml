@@ -265,9 +265,7 @@ nbonds_script = """!#########################################
 !#########################################
 
 ! Non-bonding parameters
- nbonds atom ewald pmewald kappa 0.43  -
-   fftx 32 ffty 32 fftz 32 order 4 -
-   cutnb 14.0  ctofnb 12.0 ctonnb 10.0 -
+ nbonds atom cutnb 14.0  ctofnb 12.0 ctonnb 10.0 -
    lrc vdw vswitch -
    inbfrq -1 imgfrq -1
 
