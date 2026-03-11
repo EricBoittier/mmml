@@ -194,7 +194,7 @@ def mini(nbxmod=5):
         vatom=True,
         fswitch=True,
         vfswitch=True,
-        nbxmod=nbxmod, # remove all exclusions
+        # nbxmod=nbxmod, # remove all exclusions
     )
 
     # Implement these non-bonded parameters by "running" them.
