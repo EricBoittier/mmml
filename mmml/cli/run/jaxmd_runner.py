@@ -802,12 +802,12 @@ def set_up_nhc_sim_routine(
         nbr_monitor = getattr(args, "nbr_monitor", False)
         print("*" * 10 + f"\n{args.ensemble.upper()}\n" + "*" * 10)
         if is_npt:
-            hdr = "\t\tTime (ps)\tSteps\tE_pot (eV)\tE_tot (eV)\tT (K)\tL (Å)\tV (Å³)\tP_tgt (atm)\tP_meas (atm)\tt/ns (s)\tavg(ns/day)"
+            hdr = "\t\tTime (ps)\tSteps\tE_pot (eV)\tE_tot (eV)\tT (K)\tL (Å)\tV (Å³)\tP_tgt (atm)\tP_meas (atm)\tavg(ns/day)"
             if nbr_monitor:
                 hdr += "\tn_valid\tcapacity\tfill%"
             print(hdr)
         else:
-            print("\t\tTime (ps)\tSteps\tE_pot (eV)\tE_tot (eV)\tT (K)\tt/ns (s)\tavg(ns/day)")
+            print("\t\tTime (ps)\tSteps\tE_pot (eV)\tE_tot (eV)\tT (K)\tavg(ns/day)")
 
         # ========================================================================
         # HDF5 REPORTER SETUP
@@ -913,10 +913,8 @@ def set_up_nhc_sim_routine(
                 simulated_ns = steps * dt_fs * 1e-6
                 if simulated_ns > 0 and elapsed_s > 0:
                     avg_speed_ns_per_day = simulated_ns * 86400.0 / elapsed_s
-                    time_per_ns_s = elapsed_s / simulated_ns
                 else:
                     avg_speed_ns_per_day = float("nan")
-                    time_per_ns_s = float("nan")
                 if is_npt and npt_pair_idx is not None:
                     vol = float(quantity.volume(3, box_curr))
                     box_diag = np.diagonal(np.asarray(box_curr)[:3, :3])
@@ -936,7 +934,7 @@ def set_up_nhc_sim_routine(
                     line = (
                         f"{time_ps:10.4f}\t{steps:6d}\t{e_pot:10.4f}\t{e_tot:10.4f}\t{temp:10.2f}\t"
                         f"{L:8.2f}\t{vol:10.1f}\t{p_tgt_atm:8.2f}\t{p_meas_atm:8.2f}\t"
-                        f"{time_per_ns_s:10.2f}\t{avg_speed_ns_per_day:10.4f}"
+                        f"{avg_speed_ns_per_day:10.4f}"
                     )
                     if nbr_monitor:
                         nbr_n_valid = int(np.sum(np.asarray(jax.device_get(npt_pair_mask))))
@@ -947,7 +945,7 @@ def set_up_nhc_sim_routine(
                 else:
                     print(
                         f"{time_ps:10.4f}\t{steps:6d}\t{e_pot:10.4f}\t{e_tot:10.4f}\t{temp:10.2f}\t"
-                        f"{time_per_ns_s:10.2f}\t{avg_speed_ns_per_day:10.4f}"
+                        f"{avg_speed_ns_per_day:10.4f}"
                     )
 
                 # Record to HDF5 (NPT: save real positions via transform)
