@@ -143,8 +143,8 @@ def generate_coordinates() -> Atoms:
     _ = coor.get_positions()
     coor.show()
     pycharmm_loud()
-    energy.get_energy()
-    start_energy = pycharmm.lingo.get_energy_value("ENER")
+    # energy.get_energy()
+    # start_energy = pycharmm.lingo.get_energy_value("ENER")
     mini(nbxmod=1)
     xyz = coor.get_positions()
     xyz *= 1 * np.random.random(xyz.to_numpy().shape)
@@ -154,10 +154,10 @@ def generate_coordinates() -> Atoms:
 
     xyz = coor.get_positions()
     coor.show()
-    end_energy = pycharmm.lingo.get_energy_value("ENER")
-    energy_diff = end_energy - start_energy
-    if energy_diff > 0:
-        print("WARNING: Energy difference is positive, something may have gone wrong")
+    # end_energy = pycharmm.lingo.get_energy_value("ENER")
+    # energy_diff = end_energy - start_energy
+    # if energy_diff > 0:
+        # print("WARNING: Energy difference is positive, something may have gone wrong")
 
     # save pycharmm coordinates as pdb file
     write.coor_pdb("pdb/initial.pdb")
