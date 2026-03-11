@@ -1,11 +1,9 @@
 # monomer_graph_jax.py
-import jax
 import jax.numpy as jnp
 from pbc_utils_jax import frac_coords, cart_coords
 
 Array = jnp.ndarray
 
-@jax.jit
 def monomer_COMs(R: Array, groups: list[Array], masses: Array | None, cell: Array) -> Array:
     """COMs for monomers (wrapped consistently), mass-weighted if masses provided."""
     if masses is None:
@@ -17,7 +15,6 @@ def monomer_COMs(R: Array, groups: list[Array], masses: Array | None, cell: Arra
     S = S - jnp.floor(S)
     return cart_coords(S, cell)
 
-@jax.jit
 def monomer_pairwise_mic(coms: Array, cell: Array):
     """All-pairs MIC displacement and distances between monomer COMs."""
     dR = coms[None, :, :] - coms[:, None, :]

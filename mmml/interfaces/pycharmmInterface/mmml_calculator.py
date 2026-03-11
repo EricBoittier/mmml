@@ -575,7 +575,6 @@ def setup_calculator(
 
 
 
-    @partial(jax.jit, static_argnames=['ml_cutoff', 'mm_switch_on', 'n_atoms_a', 'n_atoms_b'])
     def switch_ML(X,
         ml_energy,
         ml_cutoff=ml_cutoff_distance,
@@ -1000,7 +999,6 @@ def setup_calculator(
         BATCH_SIZE = n_monomers + n_dimers
         batches = prepare_batches_md(batch_data, batch_size=BATCH_SIZE, num_atoms=max_atoms)[0]
 
-        @jax.jit
         def apply_model(
             atomic_numbers: Array,  # Shape: (batch_size * num_atoms,)
             positions: Array,  # Shape: (batch_size * num_atoms, 3)

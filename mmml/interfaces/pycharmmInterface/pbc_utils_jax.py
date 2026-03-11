@@ -30,20 +30,17 @@ def _smooth_frac_to_mic(frac: Array, k: float = SMOOTH_MIC_K) -> Array:
     return frac - 0.5 - 0.5 * jnp.tanh(k * (frac - 0.5))
 
 
-@jax.jit
 def frac_coords(R: Array, cell: Array) -> Array:
     """Cartesian -> fractional (row-vectors) using a stable linear solve."""
     S_T = jax.scipy.linalg.solve(cell.T, R.T, assume_a='gen')
     return S_T.T
 
 
-@jax.jit
 def cart_coords(S: Array, cell: Array) -> Array:
     """Fractional -> Cartesian (row-vectors)."""
     return S @ cell
 
 
-@jax.jit
 def wrap_positions(R: Array, cell: Array) -> Array:
     """Wrap positions into the primary cell [0,1)^3 (C∞ in interiors; piecewise at faces).
     Wraps each atom individually - use wrap_groups for molecular wrapping."""
@@ -77,7 +74,6 @@ def wrap_groups(
     return R_out
 
 
-@jax.jit
 def mic_displacement(Ri: Array, Rj: Array, cell: Array) -> Array:
     """Minimum-image displacement vector r_j - r_i under PBC."""
     dR = Rj - Ri
@@ -86,7 +82,6 @@ def mic_displacement(Ri: Array, Rj: Array, cell: Array) -> Array:
     return cart_coords(dS_mic, cell)
 
 
-@jax.jit
 def mic_displacement_smooth(Ri: Array, Rj: Array, cell: Array, k: float = SMOOTH_MIC_K) -> Array:
     """Smooth (differentiable) MIC displacement. Use for BFGS/minimization under PBC."""
     dR = Rj - Ri
@@ -96,7 +91,6 @@ def mic_displacement_smooth(Ri: Array, Rj: Array, cell: Array, k: float = SMOOTH
     return cart_coords(dS_mic, cell)
 
 
-@jax.jit
 def mic_displacements_batched(positions_dst: Array, positions_src: Array, cell: Array) -> Array:
     """MIC displacement for batched pairs. positions_dst/src shape (n_edges, 3)."""
     dR = positions_src - positions_dst
@@ -105,7 +99,6 @@ def mic_displacements_batched(positions_dst: Array, positions_src: Array, cell: 
     return cart_coords(dS_mic, cell)
 
 
-@jax.jit
 def mic_displacements_batched_smooth(
     positions_dst: Array, positions_src: Array, cell: Array, k: float = SMOOTH_MIC_K
 ) -> Array:
@@ -117,7 +110,6 @@ def mic_displacements_batched_smooth(
     return cart_coords(dS_mic, cell)
 
 
-@jax.jit
 def pairwise_mic(R: Array, cell: Array):
     """All-pairs MIC displacement and distance. Returns (dR_ij, d_ij)."""
     dR = R[None, :, :] - R[:, None, :]
@@ -128,7 +120,6 @@ def pairwise_mic(R: Array, cell: Array):
     return dR_mic, dij
 
 
-@jax.jit
 def unwrap_group(R: Array, idx: Array, cell: Array) -> Array:
     """Unwrap a *single* group so its atoms are contiguous; uses idx[0] as reference."""
     ref = idx[0]
