@@ -347,7 +347,6 @@ def build_mm_energy_forces_fn(
         mm_cutoff: float = mm_cutoff,
         complementary_handoff: bool = complementary_handoff,
     ) -> Callable[..., Array]:
-        @jax.jit
         def apply_switching_function(
             positions: Array,
             pair_energies: Array,
@@ -392,7 +391,6 @@ def build_mm_energy_forces_fn(
 
     apply_switching_function = get_switching_function()
 
-    @jax.jit
     def calculate_mm_pair_energies(positions: Array) -> Array:
         if pbc_cell is not None:
             pos_dst = positions[pair_idx_atom_atom[:, 1]]
@@ -430,7 +428,6 @@ def build_mm_energy_forces_fn(
         _pbc_cell_jnp = jnp.asarray(pbc_cell)
         _lambda_monomer_jnp = jnp.asarray(lambda_monomer)
 
-        @jax.jit
         def calculate_mm_pair_energies_dynamic(
             positions: Array,
             pair_idx: Array,
