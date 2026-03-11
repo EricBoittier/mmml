@@ -281,7 +281,7 @@ def cell_list_pairs(
 
 def estimate_max_pairs(
     n_atoms: int,
-    density_estimate: float = 0.03,
+    density_estimate: Optional[float] = None,
     cutoff: float = 10.0,
     safety_factor: float = 1.5,
 ) -> int:
@@ -291,9 +291,10 @@ def estimate_max_pairs(
     ----------
     n_atoms : int
         Total number of atoms.
-    density_estimate : float
+    density_estimate : float, optional
         Approximate number density (atoms / A^3).  Default 0.03 is reasonable
-        for condensed-phase organic liquids.
+        for condensed-phase organic liquids.  Use higher values (e.g. 0.04-0.05)
+        for denser systems.
     cutoff : float
         Pair cutoff in Angstroms.
     safety_factor : float
@@ -304,6 +305,8 @@ def estimate_max_pairs(
     int : suggested ``max_pairs``.
     """
     import math
+    if density_estimate is None:
+        density_estimate = 0.03
     vol_sphere = (4.0 / 3.0) * math.pi * cutoff**3
     avg_neighbours = density_estimate * vol_sphere
     # Each atom has ~avg_neighbours neighbours; total unique pairs ~ N * avg / 2

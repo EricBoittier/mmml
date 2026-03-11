@@ -328,7 +328,8 @@ def setup_calculator(
     ml_reorder_indices=None,
     at_codes_override=None,
     lambda_monomer: Optional[np.ndarray] = None,
-    cell_list_safety_factor: float = 2.5,
+    cell_list_safety_factor: float = 3.0,
+    cell_list_density_estimate: Optional[float] = None,
     max_pairs: Optional[int] = None,
     flat_bottom_radius: float | None = None,
     flat_bottom_force_const: float = 1.0,
@@ -351,7 +352,10 @@ def setup_calculator(
             ``None`` (default) is equivalent to all ones.
         cell_list_safety_factor: Multiplicative safety margin for cell-list
             pair count estimation (PBC).  Increase if you see
-            "Truncating. Increase max_pairs" warnings.  Default 2.5.
+            "Truncating. Increase max_pairs" warnings.  Default 3.0.
+        cell_list_density_estimate: Atom density (atoms/A^3) for max_pairs
+            heuristic.  Default 0.03.  Use higher (e.g. 0.04-0.05) for
+            denser systems.
         max_pairs: If set, use this value directly for cell-list max_pairs
             instead of estimating.  Use when safety_factor is insufficient.
     """
@@ -643,6 +647,7 @@ def setup_calculator(
             pbc_cell=cell_for_build,
             max_pairs=max_pairs,
             cell_list_safety_factor=cell_list_safety_factor,
+            cell_list_density_estimate=cell_list_density_estimate,
             use_smooth_mic=use_smooth_mic,
             use_jax_md_neighbor_list=True,
             fractional_coordinates=_fractional_coordinates,
@@ -667,6 +672,7 @@ def setup_calculator(
             pbc_cell=cell_for_build,
             max_pairs=max_pairs,
             cell_list_safety_factor=cell_list_safety_factor,
+            cell_list_density_estimate=cell_list_density_estimate,
             use_smooth_mic=use_smooth_mic,
             use_jax_md_neighbor_list=False,
             debug=debug,
@@ -1754,11 +1760,15 @@ def setup_calculator(
             valid_forces_parts.append(monomer_forces[mi, :n_i, :])
         forces_flat = jnp.concatenate(valid_forces_parts, axis=0)  # (sum(n_i), 3)
 
-        # Scatter to global positions
+        # Scatter to global positions. indices_are_sorted=True since monomer
+        # segment indices are [0..n0-1, n0..n0+n1-1, ...] (sorted).
+        # optimization_barrier discourages XLA constant folding of segment_ids.
+        seg_ids = jax.lax.optimization_barrier(monomer_segment_idxs)
         processed_forces = jax.ops.segment_sum(
             forces_flat,
-            monomer_segment_idxs,
-            num_segments=total_atoms
+            seg_ids,
+            num_segments=total_atoms,
+            indices_are_sorted=True,
         )
 
         # Ensure all forces are finite
@@ -1900,9 +1910,11 @@ def setup_calculator(
             valid_parts.append(dimer_forces_2d[di, :n_d, :])
         forces_flat = jnp.concatenate(valid_parts, axis=0)
 
+        # optimization_barrier discourages XLA constant folding of segment_ids.
+        seg_ids = jax.lax.optimization_barrier(force_segments)
         processed_forces = jax.ops.segment_sum(
             forces_flat,
-            force_segments,
+            seg_ids,
             num_segments=total_atoms
         )
 
@@ -1977,9 +1989,11 @@ def setup_calculator(
             grad_parts.append(switched_grad[di, :n_d, :])
         dimer_switching_grads_flat = jnp.concatenate(grad_parts, axis=0)
 
+        # optimization_barrier discourages XLA constant folding of segment_ids.
+        seg_ids = jax.lax.optimization_barrier(force_segments)
         energy_weighted_grad = jax.ops.segment_sum(
             dimer_switching_grads_flat,
-            force_segments,
+            seg_ids,
             num_segments=total_atoms
         )
 
@@ -1991,10 +2005,10 @@ def setup_calculator(
         switching_scales_per_atom = jnp.concatenate(scale_parts)
 
         atom_switching_scales_sum = jax.ops.segment_sum(
-            switching_scales_per_atom, force_segments, num_segments=total_atoms
+            switching_scales_per_atom, seg_ids, num_segments=total_atoms
         )
         atom_dimer_counts = jax.ops.segment_sum(
-            jnp.ones_like(switching_scales_per_atom), force_segments, num_segments=total_atoms
+            jnp.ones_like(switching_scales_per_atom), seg_ids, num_segments=total_atoms
         )
 
         safe_counts = jnp.maximum(atom_dimer_counts, 1.0)
