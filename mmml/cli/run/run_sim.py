@@ -595,14 +595,11 @@ def run(args: argparse.Namespace) -> int:
         nbonds = """!#########################################
 ! Bonded/Non-bonded Options & Constraints
 !#########################################
-
 ! Non-bonding parameters
 nbonds atom cutnb 10.0  ctofnb 9.0 ctonnb 8.0 -
 vswitch NBXMOD 5 -
 inbfrq -1 imgfrq -1
-
 shake bonh para sele all end
-
 """
         pycharmm.lingo.charmm_script(nbonds)
         safe_energy_show()
