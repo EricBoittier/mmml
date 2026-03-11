@@ -58,7 +58,8 @@ from mmml.cli.base import (
     setup_ase_imports,
     setup_mmml_imports,
 )
-from mmml.cli.run.shared import save_trajectory
+from mmml.cli.run.shared import run_sim_loop, save_trajectory
+from mmml.cli.run.utils import get_steps_per_frame, normalize_n_atoms_monomer
 
 
 def parse_args() -> argparse.Namespace:
@@ -395,22 +396,9 @@ def run(args: argparse.Namespace) -> int:
 
     print(f"Loaded PDB file: {pdb_ase_atoms}")
 
-    # --- Normalise n_atoms_monomer: int or list ---------------------------------
-    raw_n_atoms_monomer = args.n_atoms_monomer
-    if isinstance(raw_n_atoms_monomer, (list, tuple, np.ndarray)):
-        atoms_per_monomer_list = [int(x) for x in raw_n_atoms_monomer]
-        n_monomers = len(atoms_per_monomer_list)
-        total_atoms = sum(atoms_per_monomer_list)
-        n_atoms_first = atoms_per_monomer_list[0]  # for single-monomer test calc
-    else:
-        n_atoms_first = int(raw_n_atoms_monomer)
-        n_monomers = args.n_monomers
-        atoms_per_monomer_list = [n_atoms_first] * n_monomers
-        total_atoms = n_atoms_first * n_monomers
-    # Build monomer offsets for slicing
-    monomer_offsets = np.zeros(n_monomers + 1, dtype=int)
-    for _mi, _na in enumerate(atoms_per_monomer_list):
-        monomer_offsets[_mi + 1] = monomer_offsets[_mi] + _na
+    atoms_per_monomer_list, n_monomers, total_atoms, n_atoms_first, monomer_offsets = (
+        normalize_n_atoms_monomer(args.n_atoms_monomer, args.n_monomers)
+    )
     print(f"[run_sim] atoms_per_monomer_list={atoms_per_monomer_list}, "
           f"n_monomers={n_monomers}, total_atoms={total_atoms}")
     
@@ -597,42 +585,21 @@ def run(args: argparse.Namespace) -> int:
     from mmml.cli.run.ase_runner import run_ase_md
     from mmml.cli.run.jaxmd_runner import set_up_nhc_sim_routine
 
-    def _run_ase_md(atoms, run_index=0, temperature=args.temperature):
-        run_ase_md(
-            atoms,
-            args=args,
-            hybrid_calc=hybrid_calc,
-            monomer_offsets=monomer_offsets,
-            n_monomers=n_monomers,
-            atoms_per_monomer_list=atoms_per_monomer_list,
-            simple_physnet_calculator=simple_physnet_calculator,
-            run_index=run_index,
-            temperature=temperature,
-        )
-
-    def run_sim_loop(run_sim, sim_key, nsim=1, skip_minimization=False):
-        """
-        Run the simulation for the given indices and save the trajectory.
-        Uses current atoms positions (after ASE MD if run) as initial positions.
-        """
-        out_positions = []
-        out_boxes = []  # NPT: boxes per frame for trajectory cell
-        max_is = []
-        pos = np.asarray(atoms.get_positions(), dtype=np.float32)
-        for i in range(nsim):
-            mi, pos, boxes = run_sim(sim_key, R=pos, skip_minimization=skip_minimization)
-            out_positions.append(pos)
-            out_boxes.append(boxes)
-            max_is.append(mi)
-
-        return out_positions, out_boxes, max_is
-
-
     sim_key, data_key = jax.random.split(jax.random.PRNGKey(42), 2)
     temperature = args.temperature
     if args.nsteps_ase > 0:
         for i in range(1):
-            _run_ase_md(atoms, run_index=i, temperature=temperature)
+            run_ase_md(
+                atoms,
+                args=args,
+                hybrid_calc=hybrid_calc,
+                monomer_offsets=monomer_offsets,
+                n_monomers=n_monomers,
+                atoms_per_monomer_list=atoms_per_monomer_list,
+                simple_physnet_calculator=simple_physnet_calculator,
+                run_index=i,
+                temperature=temperature,
+            )
 
 
     if args.nsteps_jaxmd > 0:
@@ -644,13 +611,13 @@ def run(args: argparse.Namespace) -> int:
             )
             # Skip JAX-MD minimization when ASE already ran (positions are ASE-minimized)
             skip_jaxmd_min = args.nsteps_ase > 0
-            out_positions, out_boxes, _ = run_sim_loop(s, sim_key, skip_minimization=skip_jaxmd_min)
+            out_positions, out_boxes, _ = run_sim_loop(
+                s, sim_key, atoms, skip_minimization=skip_jaxmd_min
+            )
 
             print(f"Out positions: {out_positions}")
 
-            steps_per_frame = getattr(args, "steps_per_recording", None) or (
-                25 if (args.ensemble == "npt" and args.cell is not None) else 1000
-            )
+            steps_per_frame = get_steps_per_frame(args)
             for i in range(len(out_positions)):
                 traj_filename = f'{args.output_prefix}_md_trajectory_{j}_{i}'
                 Path(traj_filename).parent.mkdir(parents=True, exist_ok=True)
