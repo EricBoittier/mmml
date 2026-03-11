@@ -144,8 +144,8 @@ def generate_coordinates() -> Atoms:
     coor.show()
     pycharmm_loud()
 
-    from mmml.interfaces.pycharmmInterface.pycharmmCommands import nbonds_script
-    pycharmm.lingo.charmm_script(nbonds_script)
+    # from mmml.interfaces.pycharmmInterface.pycharmmCommands import nbonds_script
+    # pycharmm.lingo.charmm_script(nbonds_script)
     # start_energy = pycharmm.lingo.get_energy_value("ENER")
     mini(nbxmod=1)
     xyz = coor.get_positions()
