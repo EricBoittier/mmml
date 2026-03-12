@@ -1,0 +1,21 @@
+
+seed 118818
+    output pdb/init-octanolbox.pdb
+    filetype pdb
+    tolerance 2.0
+    structure pdb/initial.pdb 
+    number 1
+    resnumbers 2
+    chain A
+    inside sphere 12.5 12.5 12.5 2.7332987972655074
+    end structure
+    structure pdb/octanol.pdb 
+    number 15
+    resnumbers 2
+    chain A
+    outside sphere 12.5 12.5 12.5 2.7332987972655074
+    inside sphere 12.5 12.5 12.5 10.865703656525078
+    end structure
+
+
+    
