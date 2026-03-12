@@ -424,6 +424,17 @@ def setup_calculator(
 
     print("len(dimer_perms)", len(dimer_perms))
 
+    # max_atoms: largest single system (monomer or dimer) the ML model processes.
+    # Used for model natoms and batching; NOT the total system size.
+    _dimer_atom_counts = [
+        atoms_per_monomer_list[a] + atoms_per_monomer_list[b]
+        for a, b in dimer_perms
+    ]
+    max_monomer_atoms = max(atoms_per_monomer_list)
+    max_dimer_atoms = max(_dimer_atom_counts) if _dimer_atom_counts else 2 * max_monomer_atoms
+    max_atoms = max(max_monomer_atoms, max_dimer_atoms)
+    print(f"[setup_calculator] max_atoms (model natoms)={max_atoms} (max monomer/dimer size)")
+
     N_MONOMERS = n_monomers
     # Batch processing constants
     BATCH_SIZE: int = N_MONOMERS + len(dimer_perms)  # Number of systems per batch
@@ -458,7 +469,7 @@ def setup_calculator(
                     "cutoff": 6.0,
                     "max_atomic_number": 118,
                     "charges": False,
-                    "natoms": MAX_ATOMS_PER_SYSTEM,
+                    "natoms": max_atoms,
                     "total_charge": 0,
                     "n_res": 3,
                     "zbl": True,
@@ -484,7 +495,7 @@ def setup_calculator(
                     return obj
             
             model_config = json_to_jax_config(config)
-            model_config['natoms'] = MAX_ATOMS_PER_SYSTEM
+            model_config['natoms'] = max_atoms
             if cell:
                 model_config['use_pbc'] = True
             is_spooky_model = (
@@ -493,7 +504,7 @@ def setup_calculator(
             )
             model_cls = SpookyEF if is_spooky_model else StandardEF
             MODEL = model_cls(**model_config)
-            MODEL.natoms = MAX_ATOMS_PER_SYSTEM
+            MODEL.natoms = max_atoms
             
             # Convert JSON params back to JAX arrays
             def json_to_jax_params(obj):
@@ -546,8 +557,8 @@ def setup_calculator(
                 f"If this is a JSON checkpoint, make sure params.json exists in the directory."
             ) from e
         # Setup monomer model using orbax
-        params, MODEL = get_params_model(restart)
-    MODEL.natoms = MAX_ATOMS_PER_SYSTEM
+        params, MODEL = get_params_model(restart, natoms=max_atoms)
+    MODEL.natoms = max_atoms
     is_spooky_model = "spooky_model" in type(MODEL).__module__
 
     if use_smooth_mic is None:
