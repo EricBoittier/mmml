@@ -248,7 +248,7 @@ def run_packmol_solvation(n_molecules: int, side_length: float, solvent: str) ->
     print(f"{PACKMOL_PATH} < packmol/packmol-{solvent}.inp")
     output = os.system(
         " ".join(
-            [PACKMOL_PATH, " < ", f"packmol/packmol-{solvent}.inp"]
+            [str(PACKMOL_PATH), " < ", f"packmol/packmol-{solvent}.inp"]
         )
     )
     print(output)

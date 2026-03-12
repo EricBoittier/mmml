@@ -36,23 +36,29 @@ def main_loop(args):
     cwd = Path(os.getcwd())
 
     if args.pdb is not None:
+        import ase.io
         mol = ase.io.read(args.pdb)
         print(mol)
         print(mol.get_chemical_symbols())
-
+        pdb_path = args.pdb
     else:
         mol = setupBox.read_initial_pdb(cwd)
         print(mol)
         print(mol.get_chemical_symbols())
 
         if args.solvent is None:
-            n_molecules = args.n 
+            n_molecules = args.n
             setupBox.run_packmol(n_molecules, args.side_length)
+            pdb_path = "pdb/init-packmol.pdb"
         else:
-            n_molecules =  setupBox.determine_n_molecules_from_density(args.density, mol, 
-            args.side_length, args.solvent)
+            if args.density is not None:
+                n_molecules = setupBox.determine_n_molecules_from_density(
+                    args.density, mol, args.side_length, args.solvent
+                )
+            else:
+                n_molecules = args.n
             setupBox.run_packmol_solvation(n_molecules, args.side_length, args.solvent)
-    pdb_path = args.pdb if args.pdb is not None else "pdb/init-packmol.pdb"
+            pdb_path = f"pdb/init-{args.solvent}box.pdb"
     setupBox.setup_box_generic(pdb_path, side_length=args.side_length, tag=str(args.res).lower())
     
     from mmml.pycharmmInterface.import_pycharmm import (
