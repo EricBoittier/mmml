@@ -76,6 +76,7 @@ config = {
     "write_interval": 50,
     "include_mm": True,
     "skip_ml_dimers": False,
+    "ml_batch_size": None,  # e.g. 512 to chunk ML batches and reduce GPU memory
     "validate": False,
     "debug": False,
     "npt_diagnose": True,  # Run NPT diagnostics when ensemble=npt
@@ -98,6 +99,7 @@ args = argparse.Namespace(
     mm_cutoff=config["mm_cutoff"],
     include_mm=config["include_mm"],
     skip_ml_dimers=config["skip_ml_dimers"],
+    ml_batch_size=config.get("ml_batch_size"),
     debug=config["debug"],
     npt_diagnose=config.get("npt_diagnose", False),
     temperature=config["temperature"],

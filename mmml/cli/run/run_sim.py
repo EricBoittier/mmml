@@ -31,7 +31,8 @@ Run from a notebook:
         n_monomers=50,
         n_atoms_monomer=10,
         cell=40.0,
-        # optional: temperature=200.0, timestep=0.3, ensemble="nve", ...
+        # optional: temperature=200.0, timestep=0.3, ensemble="nve",
+        # ml_batch_size=512,  # chunk ML batches to reduce GPU memory
     )
     run(args)
 """
@@ -159,6 +160,14 @@ def parse_args() -> argparse.Namespace:
         "--skip-ml-dimers",
         action="store_true",
         help="If set, skip the ML dimer correction in the hybrid calculator.",
+    )
+    parser.add_argument(
+        "--ml-batch-size",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Max systems per ML forward pass. When set, chunk large batches to reduce memory. "
+        "Default: None (no chunking). Suggested: 256–512 for 8–16 GB GPU, 512–1024 for 24 GB+.",
     )
     parser.add_argument(
         "--debug",
@@ -489,6 +498,7 @@ def run(args: argparse.Namespace) -> int:
         flat_bottom_radius=getattr(args, "flat_bottom_radius", None),
         flat_bottom_force_const=getattr(args, "flat_bottom_k", 1.0),
         ensemble=getattr(args, "ensemble", "nve"),
+        ml_batch_size=getattr(args, "ml_batch_size", None),
     )
     
 
