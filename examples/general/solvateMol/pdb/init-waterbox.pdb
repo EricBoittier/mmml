@@ -1,0 +1,41 @@
+HEADER 
+TITLE     Built with Packmol                                             
+REMARK   Packmol generated pdb file 
+REMARK   Home-Page: http://m3g.iqm.unicamp.br/packmol
+REMARK
+ATOM      1  C   DCM A   1       5.160   7.049   1.617  1.00  0.00      DCM     
+ATOM      2  H1  DCM A   1       4.561   6.127   1.519  1.00  0.00      DCM     
+ATOM      3  H2  DCM A   1       5.173   7.409   2.670  1.00  0.00      DCM     
+ATOM      4  CL1 DCM A   1       6.849   6.706   1.109  1.00  0.00      DCM     
+ATOM      5  CL2 DCM A   1       4.462   8.322   0.582  1.00  0.00      DCM     
+ATOM      6  OH2 TIP3A   2       4.818  16.787  15.092  1.00  0.00           O  
+ATOM      7   H1 TIP3A   2       4.782  16.290  14.276  1.00  0.00           H  
+ATOM      8   H2 TIP3A   2       5.737  17.037  15.180  1.00  0.00           H  
+ATOM      9  OH2 TIP3A   3      20.287   3.251   5.162  1.00  0.00           O  
+ATOM     10   H1 TIP3A   3      20.911   3.933   5.410  1.00  0.00           H  
+ATOM     11   H2 TIP3A   3      20.296   3.253   4.206  1.00  0.00           H  
+ATOM     12  OH2 TIP3A   4       6.652  17.912   6.542  1.00  0.00           O  
+ATOM     13   H1 TIP3A   4       7.339  17.358   6.911  1.00  0.00           H  
+ATOM     14   H2 TIP3A   4       6.068  18.093   7.277  1.00  0.00           H  
+ATOM     15  OH2 TIP3A   5      14.940  18.229   5.885  1.00  0.00           O  
+ATOM     16   H1 TIP3A   5      14.728  17.413   6.336  1.00  0.00           H  
+ATOM     17   H2 TIP3A   5      15.676  18.592   6.377  1.00  0.00           H  
+ATOM     18  OH2 TIP3A   6       2.690  12.346   3.436  1.00  0.00           O  
+ATOM     19   H1 TIP3A   6       3.645  12.285   3.437  1.00  0.00           H  
+ATOM     20   H2 TIP3A   6       2.462  12.545   4.344  1.00  0.00           H  
+ATOM     21  OH2 TIP3A   7       2.355  19.336   9.308  1.00  0.00           O  
+ATOM     22   H1 TIP3A   7       2.035  18.445   9.443  1.00  0.00           H  
+ATOM     23   H2 TIP3A   7       2.764  19.574  10.140  1.00  0.00           H  
+ATOM     24  OH2 TIP3A   8      12.153  13.155  11.097  1.00  0.00           O  
+ATOM     25   H1 TIP3A   8      12.040  14.055  10.794  1.00  0.00           H  
+ATOM     26   H2 TIP3A   8      13.068  13.109  11.375  1.00  0.00           H  
+ATOM     27  OH2 TIP3A   9      19.799   2.863  15.207  1.00  0.00           O  
+ATOM     28   H1 TIP3A   9      19.422   3.622  15.650  1.00  0.00           H  
+ATOM     29   H2 TIP3A   9      19.389   2.860  14.343  1.00  0.00           H  
+ATOM     30  OH2 TIP3A  10       8.101   2.605  13.574  1.00  0.00           O  
+ATOM     31   H1 TIP3A  10       7.675   1.883  14.035  1.00  0.00           H  
+ATOM     32   H2 TIP3A  10       7.612   2.690  12.756  1.00  0.00           H  
+ATOM     33  OH2 TIP3A  11      21.083   9.911   4.091  1.00  0.00           O  
+ATOM     34   H1 TIP3A  11      20.422   9.233   4.231  1.00  0.00           H  
+ATOM     35   H2 TIP3A  11      21.890   9.428   3.915  1.00  0.00           H  
+END
