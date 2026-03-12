@@ -171,7 +171,6 @@ examples/heme/co2_*/
 devtools/.DS_Store
 .vscode/settings.json
 mmml/packmol/packmol
->>>>>>> 9e4472215e92126d15a49e2c777a808ed09f67b9
 fort.1
 pdb/init-packmol.pdb
 packmol/packmol.inp
