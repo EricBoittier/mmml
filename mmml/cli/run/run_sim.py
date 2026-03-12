@@ -439,15 +439,12 @@ def run(args: argparse.Namespace) -> int:
     else:
         simple_physnet_calculator = None
 
-    # Load model parameters for the full system
     natoms = len(pdb_ase_atoms)
     assert total_atoms == natoms, (
         f"total_atoms ({total_atoms}) != natoms from PDB ({natoms}). "
         f"atoms_per_monomer_list={atoms_per_monomer_list}"
     )
-    params, model = load_model_parameters(epoch_dir, natoms)
-    model.natoms = natoms
-    print(f"Model loaded: {model}")
+    # Calculator loads its own model from model_restart_path with natoms=max(monomer,dimer) size
     # Get atomic numbers and positions
     Z, R = pdb_ase_atoms.get_atomic_numbers(), pdb_ase_atoms.get_positions()
     atoms = pdb_ase_atoms

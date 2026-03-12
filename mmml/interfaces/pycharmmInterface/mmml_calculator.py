@@ -559,6 +559,7 @@ def setup_calculator(
         # Setup monomer model using orbax
         params, MODEL = get_params_model(restart, natoms=max_atoms)
     MODEL.natoms = max_atoms
+    print(f"[setup_calculator] Model loaded: {MODEL}")
     is_spooky_model = "spooky_model" in type(MODEL).__module__
 
     if use_smooth_mic is None:
