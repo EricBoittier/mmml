@@ -43,7 +43,7 @@ from mmml.interfaces.pycharmmInterface.calculator_utils import (
     parse_non_int,
     _sharpstep,
 )
-from mmml.interfaces.pycharmmInterface.ml_batching import prepare_batches_md
+from mmml.interfaces.pycharmmInterface.ml_batching import prepare_batches_md, prepare_batch_structure
 from mmml.interfaces.pycharmmInterface.mm_energy_forces import build_mm_energy_forces_fn
 
 
@@ -335,6 +335,8 @@ def setup_calculator(
     flat_bottom_force_const: float = 1.0,
     use_smooth_mic: Optional[bool] = None,
     ensemble: str = "nve",
+    ml_sparse_dimers: bool = True,
+    ml_batch_size: Optional[int] = None,
 ):
     """Create hybrid ML/MM calculator with outputs in eV/eV-A.
 
@@ -358,6 +360,10 @@ def setup_calculator(
             denser systems.
         max_pairs: If set, use this value directly for cell-list max_pairs
             instead of estimating.  Use when safety_factor is insufficient.
+        ml_sparse_dimers: If True (default), only evaluate ML for dimers within
+            mm_switch_on COM-COM distance. Saves compute in dilute systems.
+        ml_batch_size: Max systems per ML forward pass. When None, process all
+            monomers+dimers in one batch. Set to reduce memory for large systems.
     """
     if model_restart_path is None:
         raise ValueError("model_restart_path must be provided")
@@ -449,6 +455,7 @@ def setup_calculator(
         dimer_idx_arr[di, n_d:] = idxs[0] if n_d > 0 else 0
     monomer_idx_arr_jnp = jnp.array(monomer_idx_arr)
     dimer_idx_arr_jnp = jnp.array(dimer_idx_arr)
+    padded_dimer_idx_arr_jnp = jnp.array(dimer_idx_arr)  # same as dimer_idx_arr for apply_dimer_switching
 
     N_MONOMERS = n_monomers
     # Batch processing constants
@@ -576,6 +583,16 @@ def setup_calculator(
     MODEL.natoms = max_atoms
     print(f"[setup_calculator] Model loaded: {MODEL}")
     is_spooky_model = "spooky_model" in type(MODEL).__module__
+
+    # Precompute batch structure for full batch (used when not sparse)
+    n_dimers_total = len(dimer_perms)
+    full_batch_size = n_monomers + n_dimers_total
+    _cached_batch_structure = None
+    try:
+        _cached_batch_structure = prepare_batch_structure(full_batch_size, max_atoms)
+    except Exception:
+        pass
+
 
     if use_smooth_mic is None:
         use_smooth_mic = bool(cell)
@@ -1021,7 +1038,8 @@ def setup_calculator(
         dimer_N = jnp.array(_dimer_atom_counts) if _dimer_atom_counts else jnp.zeros((0,), dtype=jnp.int32)
         batch_data["N"] = jnp.concatenate([monomer_N_arr, dimer_N])
         BATCH_SIZE = n_monomers + n_dimers
-        batches = prepare_batches_md(batch_data, batch_size=BATCH_SIZE, num_atoms=max_atoms)[0]
+        cached = _cached_batch_structure if (_cached_batch_structure is not None and BATCH_SIZE == full_batch_size) else None
+        batches = prepare_batches_md(batch_data, batch_size=BATCH_SIZE, num_atoms=max_atoms, cached_structure=cached)[0]
 
         def apply_model(
             atomic_numbers: Array,  # Shape: (batch_size * num_atoms,)
@@ -1964,45 +1982,32 @@ def setup_calculator(
         dimer_n_atoms_a = [atoms_per_monomer_list[a] for a, b in dimer_perms]
         dimer_n_atoms_b = [atoms_per_monomer_list[b] for a, b in dimer_perms]
 
-        # Pad dimer indices to max_atoms for uniform array shape
-        _padded_dimer_idxs = []
-        for idxs in all_dimer_idxs:
-            n_d = len(idxs)
-            if n_d < max_atoms:
-                padded = np.concatenate([idxs, np.zeros(max_atoms - n_d, dtype=int)])
-            else:
-                padded = idxs[:max_atoms]
-            _padded_dimer_idxs.append(padded)
-        padded_dimer_idx_arr = jnp.array(_padded_dimer_idxs)  # (n_dimers, max_atoms)
-
         # Gather dimer positions: (n_dimers, max_atoms, 3)
-        dimer_pos_padded = positions[padded_dimer_idx_arr]
+        dimer_pos_padded = positions[padded_dimer_idx_arr_jnp]
 
-        # --- switched energy, scale, grad per dimer (loop, not vmap, for variable n_atoms_a/b) ---
-        switched_energy_list = []
-        switching_scale_list = []
-        switched_grad_list = []
-        for di in range(n_dimers):
-            na = dimer_n_atoms_a[di]
-            nb = dimer_n_atoms_b[di]
-            x = dimer_pos_padded[di]  # (max_atoms, 3)
-            e_di = dimer_energies[di]
-            se = switch_ML(x, e_di, ml_cutoff=cutoff_params.ml_cutoff,
-                           mm_switch_on=cutoff_params.mm_switch_on,
-                           n_atoms_a=na, n_atoms_b=nb, pbc_cell=pbc_cell)
-            ss = switch_ML(x, 1.0, ml_cutoff=cutoff_params.ml_cutoff,
-                           mm_switch_on=cutoff_params.mm_switch_on,
-                           n_atoms_a=na, n_atoms_b=nb, pbc_cell=pbc_cell)
-            sg = switch_ML_grad(x, e_di, ml_cutoff=cutoff_params.ml_cutoff,
-                                mm_switch_on=cutoff_params.mm_switch_on,
-                                n_atoms_a=na, n_atoms_b=nb, pbc_cell=pbc_cell)
-            switched_energy_list.append(se)
-            switching_scale_list.append(ss)
-            switched_grad_list.append(sg)
+        # vmap switch_ML over dimers (avoids Python loop)
+        na_arr = jnp.array(dimer_n_atoms_a)
+        nb_arr = jnp.array(dimer_n_atoms_b)
 
-        switched_energy = jnp.array(switched_energy_list)
-        switching_scales = jnp.array(switching_scale_list)
-        switched_grad = jnp.stack(switched_grad_list)  # (n_dimers, max_atoms, 3)
+        def _switch_ml_vmapped(x, e, na, nb):
+            return switch_ML(x, e, ml_cutoff=cutoff_params.ml_cutoff,
+                            mm_switch_on=cutoff_params.mm_switch_on,
+                            n_atoms_a=na, n_atoms_b=nb, pbc_cell=pbc_cell)
+
+        def _switch_ml_grad_vmapped(x, e, na, nb):
+            return switch_ML_grad(x, e, ml_cutoff=cutoff_params.ml_cutoff,
+                                 mm_switch_on=cutoff_params.mm_switch_on,
+                                 n_atoms_a=na, n_atoms_b=nb, pbc_cell=pbc_cell)
+
+        switched_energy = jax.vmap(_switch_ml_vmapped, in_axes=(0, 0, 0, 0))(
+            dimer_pos_padded, dimer_energies, na_arr, nb_arr)
+        switching_scales = jax.vmap(
+            lambda x, na, nb: switch_ML(x, 1.0, ml_cutoff=cutoff_params.ml_cutoff,
+                                        mm_switch_on=cutoff_params.mm_switch_on,
+                                        n_atoms_a=na, n_atoms_b=nb, pbc_cell=pbc_cell),
+            in_axes=(0, 0, 0))(dimer_pos_padded, na_arr, nb_arr)
+        switched_grad = jax.vmap(_switch_ml_grad_vmapped, in_axes=(0, 0, 0, 0))(
+            dimer_pos_padded, dimer_energies, na_arr, nb_arr)  # (n_dimers, max_atoms, 3)
 
         # Extract valid atoms per dimer from switched_grad and flatten for segment_sum
         grad_parts = []

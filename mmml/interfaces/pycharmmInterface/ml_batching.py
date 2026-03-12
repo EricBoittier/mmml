@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import jax.numpy as jnp
 
@@ -12,6 +12,36 @@ except ModuleNotFoundError:
     e3x = None  # type: ignore[assignment]
 
 
+def prepare_batch_structure(
+    batch_size: int,
+    num_atoms: int,
+    dst_idx: Optional[jnp.ndarray] = None,
+    src_idx: Optional[jnp.ndarray] = None,
+) -> Dict[str, jnp.ndarray]:
+    """Precompute static batch indices for JIT-friendly reuse.
+
+    Returns dst_idx, src_idx, batch_segments (flattened). Data-dependent
+    batch_mask and atom_mask must be computed per-call from R, Z, N.
+    """
+    if e3x is None:
+        raise ModuleNotFoundError("e3x is required for prepare_batch_structure")
+
+    batch_segments = jnp.repeat(jnp.arange(batch_size), num_atoms)
+    offsets = jnp.arange(batch_size) * num_atoms
+
+    if dst_idx is None or src_idx is None:
+        dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(num_atoms)
+
+    dst_idx = dst_idx + offsets[:, None]
+    src_idx = src_idx + offsets[:, None]
+
+    return {
+        "dst_idx": dst_idx.flatten(),
+        "src_idx": src_idx.flatten(),
+        "batch_segments": batch_segments,
+    }
+
+
 def prepare_batches_md(
     data: Dict[str, Any],
     batch_size: int,
@@ -19,6 +49,7 @@ def prepare_batches_md(
     num_atoms: int = 60,
     dst_idx: Optional[jnp.ndarray] = None,
     src_idx: Optional[jnp.ndarray] = None,
+    cached_structure: Optional[Dict[str, jnp.ndarray]] = None,
     include_id: bool = False,
     debug_mode: bool = False,
 ) -> List[Dict[str, Any]]:
@@ -62,14 +93,21 @@ def prepare_batches_md(
     perms = perms[: steps_per_epoch * batch_size]
     perms = perms.reshape((steps_per_epoch, batch_size))
 
-    batch_segments = jnp.repeat(jnp.arange(batch_size), num_atoms)
-    offsets = jnp.arange(batch_size) * num_atoms
-
-    if dst_idx is None or src_idx is None:
-        dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(num_atoms)
-
-    dst_idx = dst_idx + offsets[:, None]
-    src_idx = src_idx + offsets[:, None]
+    # Use cached structure if provided, else build
+    if cached_structure is not None:
+        dst_idx = cached_structure["dst_idx"]
+        src_idx = cached_structure["src_idx"]
+        batch_segments = cached_structure["batch_segments"]
+    else:
+        batch_segments = jnp.repeat(jnp.arange(batch_size), num_atoms)
+        offsets = jnp.arange(batch_size) * num_atoms
+        if dst_idx is None or src_idx is None:
+            dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(num_atoms)
+        if dst_idx.ndim == 2:
+            dst_idx = dst_idx + offsets[:, None]
+            src_idx = src_idx + offsets[:, None]
+            dst_idx = dst_idx.flatten()
+            src_idx = src_idx.flatten()
 
     reshape_rules = {
         "R": (batch_size * num_atoms, 3),
