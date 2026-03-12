@@ -28,7 +28,7 @@ def parse_args():
     return parser.parse_args()
 
 def main_loop(args):
-    from mmml.pycharmmInterface import setupBox
+    from mmml.interfaces.pycharmmInterface import setupBox
 
     for arg in vars(args):
         print(f"{arg}: {getattr(args, arg)} {type(getattr(args, arg))}")
@@ -57,11 +57,13 @@ def main_loop(args):
                 )
             else:
                 n_molecules = args.n
-            setupBox.run_packmol_solvation(n_molecules, args.side_length, args.solvent)
+            setupBox.run_packmol_solvation(
+                n_molecules, args.side_length, args.solvent, solute_mol=mol
+            )
             pdb_path = f"pdb/init-{args.solvent}box.pdb"
     setupBox.setup_box_generic(pdb_path, side_length=args.side_length, tag=str(args.res).lower())
     
-    from mmml.pycharmmInterface.import_pycharmm import (
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import (
         reset_block,
         reset_block_no_internal,
         pycharmm,
