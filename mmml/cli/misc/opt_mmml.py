@@ -191,6 +191,13 @@ def parse_args() -> argparse.Namespace:
         help="If set, skip the ML dimer correction in the hybrid calculator.",
     )
     parser.add_argument(
+        "--ml-batch-size",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Max systems per ML forward pass. When set, chunk large batches to reduce memory.",
+    )
+    parser.add_argument(
         "--debug",
         action="store_true",
         help="Enable verbose debug output inside the calculator factory.",
@@ -376,6 +383,7 @@ def build_calculator_factory(
         ml_energy_conversion_factor=1,
         ml_force_conversion_factor=1,
         cell=args.cell,
+        ml_batch_size=getattr(args, "ml_batch_size", None),
     )
 
 

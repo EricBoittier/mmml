@@ -1051,8 +1051,15 @@ def setup_calculator(
             mic_fn = mic_displacement_smooth if use_smooth_mic else mic_displacement
 
             def _dimer_com_dist(pos_di, na, nb):
-                com_a = jnp.mean(pos_di[:na], axis=0)
-                com_b = jnp.mean(pos_di[na:na + nb], axis=0)
+                # Masked reduction for vmap compatibility (na, nb can be traced)
+                max_n = pos_di.shape[0]
+                i = jnp.arange(max_n, dtype=jnp.int32)
+                mask_a = (i < na).astype(pos_di.dtype)
+                mask_b = ((i >= na) & (i < na + nb)).astype(pos_di.dtype)
+                n_a = jnp.maximum(jnp.sum(mask_a), 1e-10)
+                n_b = jnp.maximum(jnp.sum(mask_b), 1e-10)
+                com_a = jnp.sum(pos_di * mask_a[:, None], axis=0) / n_a
+                com_b = jnp.sum(pos_di * mask_b[:, None], axis=0) / n_b
                 d = mic_fn(com_a, com_b, pbc_cell) if pbc_cell is not None else com_b - com_a
                 return jnp.linalg.norm(d)
 
@@ -1198,8 +1205,8 @@ def setup_calculator(
             n_dimers_full = batches["_sparse_n_dimers"]
             n_mono = n_monomers
             sparse_batch_size = n_mono + active_indices.shape[0]
-            e_mono = e[:n_mono]
-            e_sparse_dimer = e[n_mono:]
+            e_mono = jnp.reshape(e[:n_mono], -1)
+            e_sparse_dimer = jnp.reshape(e[n_mono:], -1)  # flatten (batch,1)->(batch,) for scatter
             f_mono = f[:n_mono * max_atoms]
             f_sparse_dimer = f[n_mono * max_atoms:sparse_batch_size * max_atoms]
             f_sparse_dimer_2d = f_sparse_dimer.reshape(-1, max_atoms, 3)
