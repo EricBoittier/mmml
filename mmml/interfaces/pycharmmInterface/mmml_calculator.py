@@ -1205,8 +1205,8 @@ def setup_calculator(
             n_dimers_full = batches["_sparse_n_dimers"]
             n_mono = n_monomers
             sparse_batch_size = n_mono + active_indices.shape[0]
-            e_mono = e[:n_mono]
-            e_sparse_dimer = e[n_mono:]
+            e_mono = jnp.reshape(e[:n_mono], -1)
+            e_sparse_dimer = jnp.reshape(e[n_mono:], -1)  # flatten (batch,1)->(batch,) for scatter
             f_mono = f[:n_mono * max_atoms]
             f_sparse_dimer = f[n_mono * max_atoms:sparse_batch_size * max_atoms]
             f_sparse_dimer_2d = f_sparse_dimer.reshape(-1, max_atoms, 3)
