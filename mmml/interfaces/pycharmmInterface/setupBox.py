@@ -143,6 +143,54 @@ def determine_box_size_from_mol(mol: Atoms) -> float:
     return np.max(dists)
 
 
+def solute_radius_from_mol(mol: Atoms, buffer: float = 1.0) -> float:
+    """
+    Compute the radius of a sphere that encompasses the solute.
+
+    Uses center of mass and max distance to any atom, plus a buffer for packing.
+    """
+    com = mol.get_center_of_mass()
+    radii = np.linalg.norm(mol.positions - com, axis=1)
+    return float(np.max(radii)) + buffer
+
+
+def volume_per_solvent_molecule_ang3(solvent: str) -> float:
+    """
+    Approximate volume per solvent molecule in Å³ from density and molecular weight.
+    """
+    if solvent not in solvents_ase:
+        raise ValueError(f"Solvent {solvent} not found in {solvents_ase.keys()}")
+    atoms = solvents_ase[solvent]
+    density_kg_m3 = solvents_density[solvent]
+    density_g_cm3 = density_kg_m3 / 1000.0
+    mw = atoms.get_masses().sum()
+    # cm³/mol -> Å³/molecule: (MW/density) / N_A * 1e24
+    molar_vol_cm3 = mw / density_g_cm3
+    vol_ang3 = molar_vol_cm3 / 6.022e23 * 1e24
+    return vol_ang3
+
+
+def outer_radius_from_n_solvent(
+    n_molecules: int,
+    inner_radius: float,
+    solvent: str,
+    buffer: float = 1.0,
+) -> float:
+    """
+    Outer radius of solvent shell to fit n_molecules around a solute.
+
+    Solvent occupies a spherical shell between inner_radius and outer_radius.
+    Volume of shell = (4/3)*pi*(R_outer³ - R_inner³) = n * V_solvent
+    """
+    vol_per_mol = volume_per_solvent_molecule_ang3(solvent)
+    shell_volume = n_molecules * vol_per_mol
+    # (4/3)*pi*R_outer³ = shell_volume + (4/3)*pi*R_inner³
+    inner_vol = (4.0 / 3.0) * np.pi * (inner_radius**3)
+    outer_vol = shell_volume + inner_vol
+    outer_radius = (3.0 * outer_vol / (4.0 * np.pi)) ** (1.0 / 3.0)
+    return outer_radius + buffer
+
+
 def setup_box(mol: Atoms) -> None:
     """Sets up the box"""
     box_size = determine_box_size_from_mol(mol)
@@ -204,14 +252,49 @@ def determine_n_molecules_from_density(
     return n_molecules
 
 
-def run_packmol_solvation(n_molecules: int, side_length: float, solvent: str) -> None:
-    
+def run_packmol_solvation(
+    n_molecules: int,
+    side_length: float,
+    solvent: str,
+    solute_mol: Atoms | None = None,
+    inner_radius: float | None = None,
+    outer_radius: float | None = None,
+    solute_buffer: float = 1.0,
+    solvent_buffer: float = 1.0,
+) -> None:
+    """
+    Pack 1 solute molecule surrounded by n_molecules of solvent in a spherical shell.
+
+    Radii are computed from solute geometry and solvent density unless overridden.
+    """
     if solvent not in solvents_ase:
         raise ValueError(f"Solvent {solvent} not found in {solvents_ase.keys()}")
 
     solvent_pdb = solvents_ase[solvent]
     solvent_pdb_path = f"pdb/{solvent}.pdb"
     solvent_pdb.write(solvent_pdb_path)
+
+    center = side_length / 2
+    cx, cy, cz = center, center, center
+
+    if inner_radius is None:
+        if solute_mol is None:
+            solute_mol = read_initial_pdb(Path.cwd())
+        inner_radius = solute_radius_from_mol(solute_mol, buffer=solute_buffer)
+    if outer_radius is None:
+        outer_radius = outer_radius_from_n_solvent(
+            n_molecules, inner_radius, solvent, buffer=solvent_buffer
+        )
+
+    max_radius = center - 0.5
+    if outer_radius > max_radius:
+        print(
+            f"Warning: outer_radius {outer_radius:.2f} Å exceeds box; capping to {max_radius:.2f} Å. "
+            "Consider increasing side_length or reducing n_molecules."
+        )
+        outer_radius = max_radius
+
+    print(f"Solvation radii: inner={inner_radius:.2f} Å, outer={outer_radius:.2f} Å")
 
     packmol_input = f"""
 
@@ -222,13 +305,14 @@ def run_packmol_solvation(n_molecules: int, side_length: float, solvent: str) ->
     number 1
     resnumbers 2
     chain A
-    inside box 0.0 0.0 0.0 {side_length} {side_length} {side_length}
+    inside sphere {cx} {cy} {cz} {inner_radius}
     end structure
     structure pdb/{solvent}.pdb 
     number {n_molecules}
     resnumbers 2
     chain A
-    inside box 0.0 0.0 0.0 {side_length} {side_length} {side_length}
+    outside sphere {cx} {cy} {cz} {inner_radius}
+    inside sphere {cx} {cy} {cz} {outer_radius}
     end structure
 
 
@@ -248,7 +332,7 @@ def run_packmol_solvation(n_molecules: int, side_length: float, solvent: str) ->
     print(f"{PACKMOL_PATH} < packmol/packmol-{solvent}.inp")
     output = os.system(
         " ".join(
-            [PACKMOL_PATH, " < ", f"packmol/packmol-{solvent}.inp"]
+            [str(PACKMOL_PATH), " < ", f"packmol/packmol-{solvent}.inp"]
         )
     )
     print(output)
@@ -297,7 +381,7 @@ def setup_box_generic(pdb_path, rtf=CGENFF_RTF, prm=CGENFF_PRM, side_length: flo
         skip_energy_show: If True, skip energy.show() to avoid slow CHARMM energy evaluation
             (Drude setup). Use for faster startup when validation is not needed.
     """
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet, safe_energy_show
     CLEAR_CHARMM()
     read.rtf(rtf)
     bl = settings.set_bomb_level(-2)
@@ -321,9 +405,13 @@ def setup_box_generic(pdb_path, rtf=CGENFF_RTF, prm=CGENFF_PRM, side_length: flo
     """
     pycharmm.lingo.charmm_script(header)
     pycharmm.lingo.charmm_script(pbcset.format(SIDELENGTH=side_length))
+    # Set nbonds with fswitch before IMAGE (in pbcs) to avoid bus error on macOS
+    pycharmm.lingo.charmm_script(
+        "nbonds atom cutnb 14.0 ctofnb 12.0 ctonnb 10.0 fswitch vswitch NBXMOD 5 inbfrq -1 imgfrq -1"
+    )
     pycharmm.lingo.charmm_script(pbcs)
     if not skip_energy_show:
-        energy.show()
+        safe_energy_show()
     write.psf_card(f"psf/system-{tag}.psf")
     write.coor_pdb(f"pdb/init-{tag}.pdb")
     print(f"wrote pdb/init-{tag}.pdb")
@@ -412,7 +500,7 @@ def main(density: float, side_length: float, residue: str, solvent: str):
         run_packmol(n_molecules, side_length)
     else:
         n_molecules = determine_n_molecules_from_density(density, mol, side_length, solvent)
-        run_packmol_solvation(n_molecules, side_length, solvent)
+        run_packmol_solvation(n_molecules, side_length, solvent, solute_mol=mol)
     initialize_psf(residue, n_molecules, side_length, solvent)
     # minimize_box()
 

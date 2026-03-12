@@ -46,7 +46,6 @@ from typing import Any
 import numpy as np
 
 from mmml.cli.base import (
-    load_model_parameters,
     resolve_checkpoint_paths,
     setup_ase_imports,
     setup_mmml_imports,
@@ -644,11 +643,7 @@ def run(args: argparse.Namespace) -> OptContext:
 
     natoms = len(pdb_ase_atoms)
     assert args.n_atoms_monomer * args.n_monomers == natoms, "n_atoms_monomer * n_monomers != natoms"
-    params, model = load_model_parameters(epoch_dir, natoms)
-    model.natoms = natoms
-    ctx.params = params
-    ctx.model = model
-    print(f"Model loaded: {model}")
+    # Calculator loads its own model from checkpoint with natoms=max(monomer,dimer) size
 
     Z, R = pdb_ase_atoms.get_atomic_numbers(), pdb_ase_atoms.get_positions()
 
