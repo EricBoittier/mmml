@@ -70,7 +70,7 @@ def main_loop(args):
 
 ! Non-bonding parameters
 nbonds atom cutnb 14.0  ctofnb 12.0 ctonnb 10.0 -
-vswitch NBXMOD 3 -
+fswitch vswitch NBXMOD 3 -
 inbfrq -1 imgfrq -1
 """
     pycharmm.lingo.charmm_script(nbonds)
