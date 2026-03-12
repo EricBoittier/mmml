@@ -24,6 +24,7 @@ import pandas as pd
 from scipy.optimize import minimize as scipy_minimize
 
 # In your module that defines spherical_cutoff_calculator
+import jax
 import jax.numpy as jnp
 from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
     mic_displacement,
@@ -43,7 +44,7 @@ from mmml.interfaces.pycharmmInterface.calculator_utils import (
     parse_non_int,
     _sharpstep,
 )
-from mmml.interfaces.pycharmmInterface.ml_batching import prepare_batches_md
+from mmml.interfaces.pycharmmInterface.ml_batching import prepare_batches_md, prepare_batch_structure
 from mmml.interfaces.pycharmmInterface.mm_energy_forces import build_mm_energy_forces_fn
 
 
@@ -335,6 +336,8 @@ def setup_calculator(
     flat_bottom_force_const: float = 1.0,
     use_smooth_mic: Optional[bool] = None,
     ensemble: str = "nve",
+    ml_sparse_dimers: bool = True,
+    ml_batch_size: Optional[int] = None,
 ):
     """Create hybrid ML/MM calculator with outputs in eV/eV-A.
 
@@ -358,6 +361,10 @@ def setup_calculator(
             denser systems.
         max_pairs: If set, use this value directly for cell-list max_pairs
             instead of estimating.  Use when safety_factor is insufficient.
+        ml_sparse_dimers: If True (default), only evaluate ML for dimers within
+            mm_switch_on COM-COM distance. Saves compute in dilute systems.
+        ml_batch_size: Max systems per ML forward pass. When None, process all
+            monomers+dimers in one batch. Set to reduce memory for large systems.
     """
     if model_restart_path is None:
         raise ValueError("model_restart_path must be provided")
@@ -424,6 +431,33 @@ def setup_calculator(
 
     print("len(dimer_perms)", len(dimer_perms))
 
+    # max_atoms: largest single system (monomer or dimer) the ML model processes.
+    # Used for model natoms and batching; NOT the total system size.
+    _dimer_atom_counts = [
+        atoms_per_monomer_list[a] + atoms_per_monomer_list[b]
+        for a, b in dimer_perms
+    ]
+    max_monomer_atoms = max(atoms_per_monomer_list)
+    max_dimer_atoms = max(_dimer_atom_counts) if _dimer_atom_counts else 2 * max_monomer_atoms
+    max_atoms = max(max_monomer_atoms, max_dimer_atoms)
+    print(f"[setup_calculator] max_atoms (model natoms)={max_atoms} (max monomer/dimer size)")
+
+    # Precompute padded index arrays for vectorized gather (avoids Python loops in get_ML_energy_fn)
+    monomer_idx_arr = np.zeros((n_monomers, max_atoms), dtype=np.int32)
+    for mi in range(n_monomers):
+        idxs = all_monomer_idxs[mi]
+        n_i = len(idxs)
+        monomer_idx_arr[mi, :n_i] = idxs
+        monomer_idx_arr[mi, n_i:] = idxs[0] if n_i > 0 else 0  # safe padding
+    dimer_idx_arr = np.zeros((len(all_dimer_idxs), max_atoms), dtype=np.int32)
+    for di, idxs in enumerate(all_dimer_idxs):
+        n_d = len(idxs)
+        dimer_idx_arr[di, :n_d] = idxs
+        dimer_idx_arr[di, n_d:] = idxs[0] if n_d > 0 else 0
+    monomer_idx_arr_jnp = jnp.array(monomer_idx_arr)
+    dimer_idx_arr_jnp = jnp.array(dimer_idx_arr)
+    padded_dimer_idx_arr_jnp = jnp.array(dimer_idx_arr)  # same as dimer_idx_arr for apply_dimer_switching
+
     N_MONOMERS = n_monomers
     # Batch processing constants
     BATCH_SIZE: int = N_MONOMERS + len(dimer_perms)  # Number of systems per batch
@@ -458,7 +492,7 @@ def setup_calculator(
                     "cutoff": 6.0,
                     "max_atomic_number": 118,
                     "charges": False,
-                    "natoms": MAX_ATOMS_PER_SYSTEM,
+                    "natoms": max_atoms,
                     "total_charge": 0,
                     "n_res": 3,
                     "zbl": True,
@@ -484,7 +518,7 @@ def setup_calculator(
                     return obj
             
             model_config = json_to_jax_config(config)
-            model_config['natoms'] = MAX_ATOMS_PER_SYSTEM
+            model_config['natoms'] = max_atoms
             if cell:
                 model_config['use_pbc'] = True
             is_spooky_model = (
@@ -493,7 +527,7 @@ def setup_calculator(
             )
             model_cls = SpookyEF if is_spooky_model else StandardEF
             MODEL = model_cls(**model_config)
-            MODEL.natoms = MAX_ATOMS_PER_SYSTEM
+            MODEL.natoms = max_atoms
             
             # Convert JSON params back to JAX arrays
             def json_to_jax_params(obj):
@@ -546,9 +580,29 @@ def setup_calculator(
                 f"If this is a JSON checkpoint, make sure params.json exists in the directory."
             ) from e
         # Setup monomer model using orbax
-        params, MODEL = get_params_model(restart)
-    MODEL.natoms = MAX_ATOMS_PER_SYSTEM
+        params, MODEL = get_params_model(restart, natoms=max_atoms)
+    MODEL.natoms = max_atoms
+    print(f"[setup_calculator] Model loaded: {MODEL}")
     is_spooky_model = "spooky_model" in type(MODEL).__module__
+
+    # Precompute batch structure for full batch (used when not sparse)
+    n_dimers_total = len(dimer_perms)
+    full_batch_size = n_monomers + n_dimers_total
+    _cached_batch_structure = None
+    try:
+        _cached_batch_structure = prepare_batch_structure(full_batch_size, max_atoms)
+    except Exception:
+        pass
+
+    # Sparse dimers: max active for JIT (cap for memory)
+    _max_active_dimers = min(n_dimers_total, max(500, 3 * n_monomers)) if ml_sparse_dimers else n_dimers_total
+    _cached_sparse_batch_structure = None
+    if ml_sparse_dimers and _max_active_dimers < n_dimers_total:
+        try:
+            _cached_sparse_batch_structure = prepare_batch_structure(n_monomers + _max_active_dimers, max_atoms)
+        except Exception:
+            pass
+
 
     if use_smooth_mic is None:
         use_smooth_mic = bool(cell)
@@ -946,19 +1000,13 @@ def setup_calculator(
         atomic_numbers: Array,  # Shape: (n_atoms,)
         positions: Array,  # Shape: (n_atoms, 3)
         BATCH_SIZE,
+        cutoff_params: Optional[Any] = None,
     ) -> Tuple[Any, Dict[str, Array]]:
         """Prepares the ML model and batching for energy calculations.
 
         Supports heterogeneous monomer sizes: each monomer/dimer system is
         padded individually to ``max_atoms`` (the largest dimer atom count).
-
-        Args:
-            atomic_numbers: Array of atomic numbers
-            positions: Atomic positions in Angstroms
-
-        Returns:
-            Tuple of (model_apply_fn, batched_inputs)
-        """
+        When ml_sparse_dimers=True, only evaluates dimers within mm_switch_on. """
         batch_data: Dict[str, Array] = {}
 
         # max_atoms must accommodate the largest single system (dimer).
@@ -966,44 +1014,116 @@ def setup_calculator(
             atoms_per_monomer_list[a] + atoms_per_monomer_list[b]
             for a, b in dimer_perms
         ]
+        dimer_n_a = jnp.array([atoms_per_monomer_list[a] for a, _ in dimer_perms])
+        dimer_n_b = jnp.array([atoms_per_monomer_list[b] for _, b in dimer_perms])
         max_monomer_atoms = max(atoms_per_monomer_list)
         max_dimer_atoms = max(_dimer_atom_counts) if _dimer_atom_counts else 2 * max_monomer_atoms
         max_atoms = max(max_monomer_atoms, max_dimer_atoms)
 
-        # --- Monomer data (variable sizes, padded to max_atoms) ---
-        monomer_positions = jnp.zeros((n_monomers, max_atoms, SPATIAL_DIMS))
-        monomer_atomic = jnp.zeros((n_monomers, max_atoms), dtype=jnp.int32)
-        for mi in range(n_monomers):
-            idxs = all_monomer_idxs[mi]
-            n_i = len(idxs)
-            monomer_positions = monomer_positions.at[mi, :n_i].set(positions[jnp.array(idxs)])
-            monomer_atomic = monomer_atomic.at[mi, :n_i].set(atomic_numbers[jnp.array(idxs)])
+        # --- Monomer data (vectorized gather via precomputed index arrays) ---
+        monomer_positions = positions[monomer_idx_arr_jnp]  # (n_monomers, max_atoms, 3)
+        monomer_atomic = atomic_numbers[monomer_idx_arr_jnp]  # (n_monomers, max_atoms)
+        monomer_N_arr = jnp.array([atoms_per_monomer_list[i] for i in range(n_monomers)])
+        monomer_mask = jnp.arange(max_atoms)[None, :] < monomer_N_arr[:, None]
+        monomer_positions = jnp.where(monomer_mask[:, :, None], monomer_positions, 0.0)
+        monomer_atomic = jnp.where(monomer_mask, monomer_atomic, 0)
 
-        # --- Dimer data (variable sizes, padded to max_atoms) ---
+        # --- Dimer data (vectorized gather) ---
         n_dimers = len(all_dimer_idxs)
-        dimer_positions = jnp.zeros((n_dimers, max_atoms, SPATIAL_DIMS))
-        dimer_atomic = jnp.zeros((n_dimers, max_atoms), dtype=jnp.int32)
-        for di in range(n_dimers):
-            idxs = all_dimer_idxs[di]
-            n_d = len(idxs)
-            dimer_positions = dimer_positions.at[di, :n_d].set(positions[jnp.array(idxs)])
-            dimer_atomic = dimer_atomic.at[di, :n_d].set(atomic_numbers[jnp.array(idxs)])
+        dimer_positions = positions[dimer_idx_arr_jnp]  # (n_dimers, max_atoms, 3)
+        dimer_atomic = atomic_numbers[dimer_idx_arr_jnp]
+        dimer_N_arr = jnp.array(_dimer_atom_counts)
+        dimer_mask = jnp.arange(max_atoms)[None, :] < dimer_N_arr[:, None]
+        dimer_positions = jnp.where(dimer_mask[:, :, None], dimer_positions, 0.0)
+        dimer_atomic = jnp.where(dimer_mask, dimer_atomic, 0)
 
-        # Combine monomer and dimer data
-        batch_data["R"] = jnp.concatenate([monomer_positions, dimer_positions])
-        batch_data["Z"] = jnp.concatenate([monomer_atomic, dimer_atomic])
-        # N: actual atom count per system (variable)
-        monomer_N = jnp.array([atoms_per_monomer_list[i] for i in range(n_monomers)])
-        dimer_N = jnp.array(_dimer_atom_counts) if _dimer_atom_counts else jnp.zeros((0,), dtype=jnp.int32)
-        batch_data["N"] = jnp.concatenate([monomer_N, dimer_N])
-        BATCH_SIZE = n_monomers + n_dimers
-        batches = prepare_batches_md(batch_data, batch_size=BATCH_SIZE, num_atoms=max_atoms)[0]
+        # Sparse: only include dimers within mm_switch_on
+        use_sparse = ml_sparse_dimers and _max_active_dimers < n_dimers and cutoff_params is not None
+        if use_sparse:
+            mm_switch_on = cutoff_params.mm_switch_on
+            mic_fn = mic_displacement_smooth if use_smooth_mic else mic_displacement
+
+            def _dimer_com_dist(pos_di, na, nb):
+                com_a = jnp.mean(pos_di[:na], axis=0)
+                com_b = jnp.mean(pos_di[na:na + nb], axis=0)
+                d = mic_fn(com_a, com_b, pbc_cell) if pbc_cell is not None else com_b - com_a
+                return jnp.linalg.norm(d)
+
+            com_dists = jax.vmap(_dimer_com_dist, in_axes=(0, 0, 0))(
+                dimer_positions, dimer_n_a, dimer_n_b)
+            active_mask = com_dists < mm_switch_on
+            active_indices = jnp.nonzero(active_mask, size=_max_active_dimers, fill_value=n_dimers)[0]
+            active_indices_safe = jnp.where(active_indices < n_dimers, active_indices, 0)
+            sparse_dimer_positions = dimer_positions[active_indices_safe]
+            sparse_dimer_atomic = dimer_atomic[active_indices_safe]
+            sparse_dimer_N = jnp.where(active_indices < n_dimers, dimer_N_arr[active_indices], dimer_N_arr[0])
+            batch_data["R"] = jnp.concatenate([monomer_positions, sparse_dimer_positions])
+            batch_data["Z"] = jnp.concatenate([monomer_atomic, sparse_dimer_atomic])
+            batch_data["N"] = jnp.concatenate([monomer_N_arr, sparse_dimer_N])
+            sparse_batch_size = n_monomers + _max_active_dimers
+            cached = _cached_sparse_batch_structure if _cached_sparse_batch_structure is not None else None
+            batches = prepare_batches_md(batch_data, batch_size=sparse_batch_size, num_atoms=max_atoms, cached_structure=cached)[0]
+            batches["_sparse_active_indices"] = active_indices
+            batches["_sparse_n_dimers"] = n_dimers
+            _effective_batch_size = sparse_batch_size
+        else:
+            batch_data["R"] = jnp.concatenate([monomer_positions, dimer_positions])
+            batch_data["Z"] = jnp.concatenate([monomer_atomic, dimer_atomic])
+            dimer_N = jnp.array(_dimer_atom_counts) if _dimer_atom_counts else jnp.zeros((0,), dtype=jnp.int32)
+            batch_data["N"] = jnp.concatenate([monomer_N_arr, dimer_N])
+            _effective_batch_size = n_monomers + n_dimers
+            cached = _cached_batch_structure if (_cached_batch_structure is not None and _effective_batch_size == full_batch_size) else None
+            batches = prepare_batches_md(batch_data, batch_size=_effective_batch_size, num_atoms=max_atoms, cached_structure=cached)[0]
+
+        _chunk_size = ml_batch_size
+        _do_chunked = _chunk_size is not None and _effective_batch_size > _chunk_size
+        _n_chunks = int(np.ceil(_effective_batch_size / _chunk_size)) if (_chunk_size and _do_chunked) else 1
 
         def apply_model(
             atomic_numbers: Array,  # Shape: (batch_size * num_atoms,)
             positions: Array,  # Shape: (batch_size * num_atoms, 3)
         ) -> Dict[str, Array]:
-            """Applies the ML model to batched inputs."""
+            """Applies the ML model to batched inputs (with optional chunking)."""
+            if _do_chunked:
+                R_full = positions.reshape(_effective_batch_size, max_atoms, 3)
+                Z_full = atomic_numbers.reshape(_effective_batch_size, max_atoms)
+                N_full = batches["N"]
+                pad_to = _n_chunks * _chunk_size
+                R_pad = jnp.concatenate([R_full, jnp.zeros((pad_to - _effective_batch_size, max_atoms, 3))])
+                Z_pad = jnp.concatenate([Z_full, jnp.zeros((pad_to - _effective_batch_size, max_atoms), dtype=jnp.int32)])
+                N_pad = jnp.concatenate([N_full, jnp.ones(pad_to - _effective_batch_size, dtype=jnp.int32)])
+                R_chunks = R_pad.reshape(_n_chunks, _chunk_size, max_atoms, 3)
+                Z_chunks = Z_pad.reshape(_n_chunks, _chunk_size, max_atoms)
+                N_chunks = N_pad.reshape(_n_chunks, _chunk_size)
+
+                def process_chunk(i):
+                    chunk_data = {"R": R_chunks[i], "Z": Z_chunks[i], "N": N_chunks[i]}
+                    chunk_batches = prepare_batches_md(chunk_data, batch_size=_chunk_size, num_atoms=max_atoms)[0]
+                    if is_spooky_model:
+                        am = chunk_batches["atom_mask"].astype(jnp.float32)
+                        out = MODEL.apply(
+                            params, atomic_numbers=chunk_batches["Z"], positions=chunk_batches["R"],
+                            charges=jnp.zeros((am.shape[0], 1), dtype=jnp.float32),
+                            spins=am.reshape(-1, 1),
+                            dst_idx=chunk_batches["dst_idx"], src_idx=chunk_batches["src_idx"],
+                            batch_segments=chunk_batches["batch_segments"], batch_size=_chunk_size,
+                            batch_mask=chunk_batches["batch_mask"], atom_mask=am, cell=pbc_cell,
+                        )
+                    else:
+                        out = MODEL.apply(
+                            params, atomic_numbers=chunk_batches["Z"], positions=chunk_batches["R"],
+                            dst_idx=chunk_batches["dst_idx"], src_idx=chunk_batches["src_idx"],
+                            batch_segments=chunk_batches["batch_segments"], batch_size=_chunk_size,
+                            batch_mask=chunk_batches["batch_mask"], atom_mask=chunk_batches["atom_mask"],
+                            cell=pbc_cell,
+                        )
+                    return out["energy"], out["forces"]
+
+                e_list, f_list = jax.lax.map(process_chunk, jnp.arange(_n_chunks))
+                e_out = jnp.reshape(e_list, -1)[:_effective_batch_size]
+                f_out = jnp.reshape(f_list, (-1, 3))[:_effective_batch_size * max_atoms]
+                return {"energy": e_out, "forces": f_out}
+
             if is_spooky_model:
                 atom_mask = batches["atom_mask"].astype(jnp.float32)
                 q_atoms = jnp.zeros((atom_mask.shape[0], 1), dtype=jnp.float32)
@@ -1017,7 +1137,7 @@ def setup_calculator(
                     dst_idx=batches["dst_idx"],
                     src_idx=batches["src_idx"],
                     batch_segments=batches["batch_segments"],
-                    batch_size=BATCH_SIZE,
+                    batch_size=_effective_batch_size,
                     batch_mask=batches["batch_mask"],
                     atom_mask=atom_mask,
                     cell=pbc_cell,
@@ -1029,7 +1149,7 @@ def setup_calculator(
                 dst_idx=batches["dst_idx"],
                 src_idx=batches["src_idx"],
                 batch_segments=batches["batch_segments"],
-                batch_size=BATCH_SIZE,
+                batch_size=_effective_batch_size,
                 batch_mask=batches["batch_mask"],
                 atom_mask=batches["atom_mask"],
                 cell=pbc_cell,
@@ -1059,11 +1179,27 @@ def setup_calculator(
         max_atoms = max(max_monomer_atoms, max_dimer_atoms)
 
         # Get model predictions
-        apply_model, batches = get_ML_energy_fn(atomic_numbers, positions, n_dimers + n_monomers)
+        apply_model, batches = get_ML_energy_fn(atomic_numbers, positions, n_dimers + n_monomers, cutoff_params)
         output = apply_model(batches["Z"], batches["R"])
 
         f = output["forces"] * ml_force_conversion_factor
         e = output["energy"] * ml_energy_conversion_factor
+
+        # Scatter sparse dimer output back to full format when applicable
+        if "_sparse_active_indices" in batches:
+            active_indices = batches["_sparse_active_indices"]
+            n_dimers_full = batches["_sparse_n_dimers"]
+            n_mono = n_monomers
+            sparse_batch_size = n_mono + active_indices.shape[0]
+            e_mono = e[:n_mono]
+            e_sparse_dimer = e[n_mono:]
+            f_mono = f[:n_mono * max_atoms]
+            f_sparse_dimer = f[n_mono * max_atoms:sparse_batch_size * max_atoms]
+            f_sparse_dimer_2d = f_sparse_dimer.reshape(-1, max_atoms, 3)
+            full_dimer_e = jnp.zeros(n_dimers_full + 1).at[active_indices].set(e_sparse_dimer)[:-1]
+            full_dimer_f = jnp.zeros((n_dimers_full + 1, max_atoms, 3)).at[active_indices].set(f_sparse_dimer_2d)[:-1]
+            e = jnp.concatenate([e_mono, full_dimer_e])
+            f = jnp.concatenate([f_mono, full_dimer_f.reshape(-1, 3)])
 
         # Calculate monomer contributions (flatten variable-size monomer indices)
         monomer_atomic_numbers_flat = jnp.concatenate([
@@ -1940,45 +2076,32 @@ def setup_calculator(
         dimer_n_atoms_a = [atoms_per_monomer_list[a] for a, b in dimer_perms]
         dimer_n_atoms_b = [atoms_per_monomer_list[b] for a, b in dimer_perms]
 
-        # Pad dimer indices to max_atoms for uniform array shape
-        _padded_dimer_idxs = []
-        for idxs in all_dimer_idxs:
-            n_d = len(idxs)
-            if n_d < max_atoms:
-                padded = np.concatenate([idxs, np.zeros(max_atoms - n_d, dtype=int)])
-            else:
-                padded = idxs[:max_atoms]
-            _padded_dimer_idxs.append(padded)
-        padded_dimer_idx_arr = jnp.array(_padded_dimer_idxs)  # (n_dimers, max_atoms)
-
         # Gather dimer positions: (n_dimers, max_atoms, 3)
-        dimer_pos_padded = positions[padded_dimer_idx_arr]
+        dimer_pos_padded = positions[padded_dimer_idx_arr_jnp]
 
-        # --- switched energy, scale, grad per dimer (loop, not vmap, for variable n_atoms_a/b) ---
-        switched_energy_list = []
-        switching_scale_list = []
-        switched_grad_list = []
-        for di in range(n_dimers):
-            na = dimer_n_atoms_a[di]
-            nb = dimer_n_atoms_b[di]
-            x = dimer_pos_padded[di]  # (max_atoms, 3)
-            e_di = dimer_energies[di]
-            se = switch_ML(x, e_di, ml_cutoff=cutoff_params.ml_cutoff,
-                           mm_switch_on=cutoff_params.mm_switch_on,
-                           n_atoms_a=na, n_atoms_b=nb, pbc_cell=pbc_cell)
-            ss = switch_ML(x, 1.0, ml_cutoff=cutoff_params.ml_cutoff,
-                           mm_switch_on=cutoff_params.mm_switch_on,
-                           n_atoms_a=na, n_atoms_b=nb, pbc_cell=pbc_cell)
-            sg = switch_ML_grad(x, e_di, ml_cutoff=cutoff_params.ml_cutoff,
-                                mm_switch_on=cutoff_params.mm_switch_on,
-                                n_atoms_a=na, n_atoms_b=nb, pbc_cell=pbc_cell)
-            switched_energy_list.append(se)
-            switching_scale_list.append(ss)
-            switched_grad_list.append(sg)
+        # vmap switch_ML over dimers (avoids Python loop)
+        na_arr = jnp.array(dimer_n_atoms_a)
+        nb_arr = jnp.array(dimer_n_atoms_b)
 
-        switched_energy = jnp.array(switched_energy_list)
-        switching_scales = jnp.array(switching_scale_list)
-        switched_grad = jnp.stack(switched_grad_list)  # (n_dimers, max_atoms, 3)
+        def _switch_ml_vmapped(x, e, na, nb):
+            return switch_ML(x, e, ml_cutoff=cutoff_params.ml_cutoff,
+                            mm_switch_on=cutoff_params.mm_switch_on,
+                            n_atoms_a=na, n_atoms_b=nb, pbc_cell=pbc_cell)
+
+        def _switch_ml_grad_vmapped(x, e, na, nb):
+            return switch_ML_grad(x, e, ml_cutoff=cutoff_params.ml_cutoff,
+                                 mm_switch_on=cutoff_params.mm_switch_on,
+                                 n_atoms_a=na, n_atoms_b=nb, pbc_cell=pbc_cell)
+
+        switched_energy = jax.vmap(_switch_ml_vmapped, in_axes=(0, 0, 0, 0))(
+            dimer_pos_padded, dimer_energies, na_arr, nb_arr)
+        switching_scales = jax.vmap(
+            lambda x, na, nb: switch_ML(x, 1.0, ml_cutoff=cutoff_params.ml_cutoff,
+                                        mm_switch_on=cutoff_params.mm_switch_on,
+                                        n_atoms_a=na, n_atoms_b=nb, pbc_cell=pbc_cell),
+            in_axes=(0, 0, 0))(dimer_pos_padded, na_arr, nb_arr)
+        switched_grad = jax.vmap(_switch_ml_grad_vmapped, in_axes=(0, 0, 0, 0))(
+            dimer_pos_padded, dimer_energies, na_arr, nb_arr)  # (n_dimers, max_atoms, 3)
 
         # Extract valid atoms per dimer from switched_grad and flatten for segment_sum
         grad_parts = []

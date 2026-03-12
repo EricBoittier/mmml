@@ -28,7 +28,7 @@ def parse_args():
     return parser.parse_args()
 
 def main_loop(args):
-    from mmml.pycharmmInterface import setupBox
+    from mmml.interfaces.pycharmmInterface import setupBox
 
     for arg in vars(args):
         print(f"{arg}: {getattr(args, arg)} {type(getattr(args, arg))}")
@@ -36,26 +36,34 @@ def main_loop(args):
     cwd = Path(os.getcwd())
 
     if args.pdb is not None:
+        import ase.io
         mol = ase.io.read(args.pdb)
         print(mol)
         print(mol.get_chemical_symbols())
-
+        pdb_path = args.pdb
     else:
         mol = setupBox.read_initial_pdb(cwd)
         print(mol)
         print(mol.get_chemical_symbols())
 
         if args.solvent is None:
-            n_molecules = args.n 
+            n_molecules = args.n
             setupBox.run_packmol(n_molecules, args.side_length)
+            pdb_path = "pdb/init-packmol.pdb"
         else:
-            n_molecules =  setupBox.determine_n_molecules_from_density(args.density, mol, 
-            args.side_length, args.solvent)
-            setupBox.run_packmol_solvation(n_molecules, args.side_length, args.solvent)
-    pdb_path = args.pdb if args.pdb is not None else "pdb/init-packmol.pdb"
+            if args.density is not None:
+                n_molecules = setupBox.determine_n_molecules_from_density(
+                    args.density, mol, args.side_length, args.solvent
+                )
+            else:
+                n_molecules = args.n
+            setupBox.run_packmol_solvation(
+                n_molecules, args.side_length, args.solvent, solute_mol=mol
+            )
+            pdb_path = f"pdb/init-{args.solvent}box.pdb"
     setupBox.setup_box_generic(pdb_path, side_length=args.side_length, tag=str(args.res).lower())
     
-    from mmml.pycharmmInterface.import_pycharmm import (
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import (
         reset_block,
         reset_block_no_internal,
         pycharmm,
@@ -70,7 +78,7 @@ def main_loop(args):
 
 ! Non-bonding parameters
 nbonds atom cutnb 14.0  ctofnb 12.0 ctonnb 10.0 -
-vswitch NBXMOD 3 -
+fswitch vswitch NBXMOD 3 -
 inbfrq -1 imgfrq -1
 """
     pycharmm.lingo.charmm_script(nbonds)
