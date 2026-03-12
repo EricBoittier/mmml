@@ -152,6 +152,12 @@ def parse_args() -> argparse.Namespace:
         help="MM cutoff width for the hybrid calculator (default: 1.0 Å).",
     )
     parser.add_argument(
+        "--no-complementary-handoff",
+        action="store_true",
+        help="Use legacy MM switching (MM only in [mm_switch_on, mm_switch_on+mm_cutoff]). "
+        "When set, mm_r_min defaults to mm_switch_on to exclude close monomers.",
+    )
+    parser.add_argument(
         "--include-mm",
         action="store_true",
         help="Keep MM contributions enabled when evaluating the hybrid calculator.",
@@ -160,6 +166,14 @@ def parse_args() -> argparse.Namespace:
         "--skip-ml-dimers",
         action="store_true",
         help="If set, skip the ML dimer correction in the hybrid calculator.",
+    )
+    parser.add_argument(
+        "--mm-r-min",
+        type=float,
+        default=None,
+        metavar="Å",
+        help="MM inner cutoff: exclude pairs with dimer COM < this. Defaults: legacy mode "
+        "-> mm_switch_on*0.9; complementary -> (mm_switch_on-ml_cutoff)*0.9.",
     )
     parser.add_argument(
         "--ml-batch-size",
@@ -486,6 +500,7 @@ def run(args: argparse.Namespace) -> int:
         ml_cutoff_distance=args.ml_cutoff,
         mm_switch_on=args.mm_switch_on,
         mm_cutoff=args.mm_cutoff,
+        complementary_handoff=not getattr(args, "no_complementary_handoff", False),
         doML=True,
         doMM=args.include_mm,
         doML_dimer=not args.skip_ml_dimers,
@@ -499,6 +514,7 @@ def run(args: argparse.Namespace) -> int:
         flat_bottom_force_const=getattr(args, "flat_bottom_k", 1.0),
         ensemble=getattr(args, "ensemble", "nve"),
         ml_batch_size=getattr(args, "ml_batch_size", None),
+        mm_r_min=getattr(args, "mm_r_min", None),
     )
     
 
@@ -506,6 +522,7 @@ def run(args: argparse.Namespace) -> int:
             ml_cutoff=args.ml_cutoff,
             mm_switch_on=args.mm_switch_on,
             mm_cutoff=args.mm_cutoff,
+            complementary_handoff=not getattr(args, "no_complementary_handoff", False),
         )
 
     print(f"Cutoff parameters: {CUTOFF_PARAMS}")

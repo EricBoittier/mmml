@@ -1,5 +1,5 @@
 
-seed 695659
+seed 1253
     output pdb/init-waterbox.pdb
     filetype pdb
     tolerance 2.0
@@ -7,14 +7,14 @@ seed 695659
     number 1
     resnumbers 2
     chain A
-    inside sphere 12.5 12.5 12.5 2.7342896752879096
+    inside sphere 12.5 12.5 12.5 2.734249108333107
     end structure
     structure pdb/water.pdb 
-    number 50
+    number 30
     resnumbers 2
     chain A
-    outside sphere 12.5 12.5 12.5 2.7342896752879096
-    inside sphere 12.5 12.5 12.5 8.22743005752465
+    outside sphere 12.5 12.5 12.5 2.734249108333107
+    inside sphere 12.5 12.5 12.5 7.168327893608772
     end structure
 
 
