@@ -99,15 +99,19 @@ def should_skip_charmm_energy_show() -> bool:
     Segfaults in CHARMM's bond routines (e.g. ebondfs) are known on SLURM, some
     cluster nodes, or with certain MPI/threading. Set SKIP_CHARMM_ENERGY_SHOW=1
     (or "yes"/"true") to skip. When SLURM_JOB_ID is set, skip by default unless
-    RUN_CHARMM_ENERGY_SHOW=1 is set.
+    RUN_CHARMM_ENERGY_SHOW=1 is set. On macOS (darwin), skip by default due to
+    bus errors in CHARMM's native code; set RUN_CHARMM_ENERGY_SHOW=1 to force.
     """
     ev = (os.environ.get("SKIP_CHARMM_ENERGY_SHOW") or "").strip().lower()
     if ev in ("1", "yes", "true"):
         return True
+    force = (os.environ.get("RUN_CHARMM_ENERGY_SHOW") or "").strip().lower()
+    if force in ("1", "yes", "true"):
+        return False
     if os.environ.get("SLURM_JOB_ID"):
-        force = (os.environ.get("RUN_CHARMM_ENERGY_SHOW") or "").strip().lower()
-        if force not in ("1", "yes", "true"):
-            return True
+        return True
+    if sys.platform == "darwin":
+        return True
     return False
 
 
@@ -117,7 +121,7 @@ def safe_energy_show():
     Use when CHARMM energy evaluation may crash (e.g. under SLURM / on some clusters).
     """
     if should_skip_charmm_energy_show():
-        print("Skipping energy.show() (SKIP_CHARMM_ENERGY_SHOW or SLURM).")
+        print("Skipping energy.show() (SKIP_CHARMM_ENERGY_SHOW, SLURM, or macOS).")
     else:
         energy.show()
 

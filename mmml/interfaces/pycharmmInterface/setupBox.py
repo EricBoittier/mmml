@@ -297,7 +297,7 @@ def setup_box_generic(pdb_path, rtf=CGENFF_RTF, prm=CGENFF_PRM, side_length: flo
         skip_energy_show: If True, skip energy.show() to avoid slow CHARMM energy evaluation
             (Drude setup). Use for faster startup when validation is not needed.
     """
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet, safe_energy_show
     CLEAR_CHARMM()
     read.rtf(rtf)
     bl = settings.set_bomb_level(-2)
@@ -321,9 +321,13 @@ def setup_box_generic(pdb_path, rtf=CGENFF_RTF, prm=CGENFF_PRM, side_length: flo
     """
     pycharmm.lingo.charmm_script(header)
     pycharmm.lingo.charmm_script(pbcset.format(SIDELENGTH=side_length))
+    # Set nbonds with fswitch before IMAGE (in pbcs) to avoid bus error on macOS
+    pycharmm.lingo.charmm_script(
+        "nbonds atom cutnb 14.0 ctofnb 12.0 ctonnb 10.0 fswitch vswitch NBXMOD 5 inbfrq -1 imgfrq -1"
+    )
     pycharmm.lingo.charmm_script(pbcs)
     if not skip_energy_show:
-        energy.show()
+        safe_energy_show()
     write.psf_card(f"psf/system-{tag}.psf")
     write.coor_pdb(f"pdb/init-{tag}.pdb")
     print(f"wrote pdb/init-{tag}.pdb")
