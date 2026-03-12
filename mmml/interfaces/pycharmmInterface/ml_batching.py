@@ -93,6 +93,9 @@ def prepare_batches_md(
     perms = perms[: steps_per_epoch * batch_size]
     perms = perms.reshape((steps_per_epoch, batch_size))
 
+    # offsets needed for batch_mask (expanded_n); always compute
+    offsets = jnp.arange(batch_size) * num_atoms
+
     # Use cached structure if provided, else build
     if cached_structure is not None:
         dst_idx = cached_structure["dst_idx"]
@@ -100,7 +103,6 @@ def prepare_batches_md(
         batch_segments = cached_structure["batch_segments"]
     else:
         batch_segments = jnp.repeat(jnp.arange(batch_size), num_atoms)
-        offsets = jnp.arange(batch_size) * num_atoms
         if dst_idx is None or src_idx is None:
             dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(num_atoms)
         if dst_idx.ndim == 2:
@@ -137,16 +139,21 @@ def prepare_batches_md(
 
         N = batch["N"]
         expanded_n = N[:, None] + offsets[:, None]
-        valid_dst = dst_idx < expanded_n
-        valid_src = src_idx < expanded_n
+        # Reshape to (batch_size, n_pairs) for comparison when flattened (cached)
+        dst_2d = dst_idx.reshape(batch_size, -1) if dst_idx.ndim == 1 else dst_idx
+        src_2d = src_idx.reshape(batch_size, -1) if src_idx.ndim == 1 else src_idx
+        valid_dst = dst_2d < expanded_n
+        valid_src = src_2d < expanded_n
         good_pairs = (valid_dst & valid_src).astype(jnp.int32)
         good_indices = good_pairs.reshape(-1)
 
         atom_mask = jnp.where(batch["Z"] > 0, 1, 0)
+        dst_flat = dst_idx if dst_idx.ndim == 1 else dst_idx.flatten()
+        src_flat = src_idx if src_idx.ndim == 1 else src_idx.flatten()
         batch.update(
             {
-                "dst_idx": dst_idx.flatten(),
-                "src_idx": src_idx.flatten(),
+                "dst_idx": dst_flat,
+                "src_idx": src_flat,
                 "batch_mask": good_indices,
                 "batch_segments": batch_segments,
                 "atom_mask": atom_mask,
