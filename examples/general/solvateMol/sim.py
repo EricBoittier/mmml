@@ -4,7 +4,7 @@ from pathlib import Path
 
 config = {
     "RES": "DCM",       # solute residue name
-    "N_SOLVENT": 50,    # number of water molecules around the solute
+    "N_SOLVENT": 30,    # number of water molecules around the solute
     "L": 25.0,          # box side length (Å)
     "skip_energy_show": False,  # set True on clusters/SLURM to avoid CHARMM segfault
 }

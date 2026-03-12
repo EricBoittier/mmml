@@ -55,6 +55,55 @@ def _dimer_permutations(n_mol: int) -> List[Tuple[int, int]]:
     return list(combinations(range(n_mol), 2))
 
 
+def _filter_pairs_by_com_min(
+    positions: np.ndarray,
+    pair_i: np.ndarray,
+    pair_j: np.ndarray,
+    mask: np.ndarray,
+    monomer_offsets: np.ndarray,
+    monomer_id: np.ndarray,
+    mm_r_min: float,
+    pbc_cell: Optional[np.ndarray] = None,
+) -> np.ndarray:
+    """Exclude pairs where dimer COM distance < mm_r_min. Returns updated mask."""
+    R = np.asarray(positions, dtype=np.float64)
+    n_monomers = len(monomer_offsets) - 1
+    coms = np.zeros((n_monomers, 3), dtype=np.float64)
+    for k in range(n_monomers):
+        start, end = int(monomer_offsets[k]), int(monomer_offsets[k + 1])
+        coms[k] = R[start:end].mean(axis=0)
+
+    if pbc_cell is not None:
+        cell = np.asarray(pbc_cell, dtype=np.float64)
+        if cell.ndim == 0:
+            cell = np.diag([float(cell)] * 3)
+        elif cell.ndim == 1 and cell.shape[0] == 3:
+            cell = np.diag(cell)
+        inv_cell = np.linalg.inv(cell)
+    else:
+        cell = inv_cell = None
+
+    out_mask = mask.copy()
+    n_pairs = mask.shape[0]
+    for k in range(n_pairs):
+        if not mask[k]:
+            continue
+        ai, aj = int(pair_i[k]), int(pair_j[k])
+        mi = int(monomer_id[ai])
+        mj = int(monomer_id[aj])
+        com_i = coms[mi]
+        com_j = coms[mj]
+        dr = com_j - com_i
+        if inv_cell is not None:
+            frac_dr = dr @ inv_cell.T
+            frac_dr = frac_dr - np.round(frac_dr)
+            dr = frac_dr @ cell
+        r = float(np.linalg.norm(dr))
+        if r < mm_r_min:
+            out_mask[k] = False
+    return out_mask
+
+
 def _box_to_cell_3x3(box: Array) -> Array:
     """Convert box (scalar, (1,), (3,), or (3,3)) to 3x3 cell matrix for MIC/frac_coords.
     JIT-safe: uses only JAX ops, no Python float() on traced values."""
@@ -92,12 +141,20 @@ def build_mm_energy_forces_fn(
     use_smooth_mic: Optional[bool] = None,
     use_jax_md_neighbor_list: bool = True,
     fractional_coordinates: bool = False,
+    mm_r_min: Optional[float] = None,
     debug: bool = False,
 ) -> Any:
     """Build MM energy/forces function with switching.
 
     Supports heterogeneous monomer sizes via monomer_offsets and atoms_per_monomer_list.
     Uses cell list for PBC when pbc_cell is provided, otherwise all-pairs.
+
+    Args:
+        mm_r_min: Optional inner cutoff (Å). Pairs with dimer COM distance < mm_r_min
+            are excluded from the MM neighbor list. Use mm_switch_on to exclude close
+            monomers (MM only in switching region). Note: with complementary_handoff,
+            mm_scale is nonzero for r in [mm_switch_on - ml_cutoff, mm_switch_on];
+            mm_r_min >= mm_switch_on will break the handoff.
 
     Returns:
         When use_jax_md_neighbor_list and jax_md available: (mm_fn, update_fn) where
@@ -207,6 +264,20 @@ def build_mm_energy_forces_fn(
             atoms_per_monomer_list=atoms_per_monomer_list,
             exclude_intra_monomer=True,
         )
+        if mm_r_min is not None:
+            _monomer_id_for_filter = np.empty(total_atoms, dtype=np.int32)
+            for mi in range(n_monomers):
+                _monomer_id_for_filter[_offsets_np[mi]:_offsets_np[mi + 1]] = mi
+            _cl_mask = _filter_pairs_by_com_min(
+                np.asarray(R),
+                np.asarray(_cl_i),
+                np.asarray(_cl_j),
+                np.asarray(_cl_mask, dtype=bool),
+                _offsets_np,
+                _monomer_id_for_filter,
+                mm_r_min,
+                pbc_cell=np.asarray(pbc_cell) if pbc_cell is not None else None,
+            )
         pair_idx_atom_atom = jnp.stack([_cl_i, _cl_j], axis=1)
         _cl_mask_jnp = jnp.asarray(_cl_mask, dtype=jnp.float32)
 
@@ -341,6 +412,8 @@ def build_mm_energy_forces_fn(
 
     _dimer_perms_np = jnp.array(_dp)
 
+    _mm_r_min = mm_r_min  # capture for closure
+
     def get_switching_function(
         ml_cutoff_distance: float = ml_cutoff_distance,
         mm_switch_on: float = mm_switch_on,
@@ -366,6 +439,10 @@ def build_mm_energy_forces_fn(
                 r = jnp.linalg.norm(d_vec, axis=1)
             else:
                 r = jnp.linalg.norm(com_j - com_i, axis=1)
+            if _mm_r_min is not None:
+                r_min_mask = (r >= _mm_r_min)
+            else:
+                r_min_mask = None
             if complementary_handoff:
                 handoff = _sharpstep(r, mm_switch_on - ml_cutoff_distance, mm_switch_on, gamma=GAMMA_ON)
                 mm_taper = 1.0 - _sharpstep(r, mm_switch_on, mm_switch_on + mm_cutoff, gamma=GAMMA_OFF)
@@ -374,6 +451,8 @@ def build_mm_energy_forces_fn(
                 mm_on = _sharpstep(r, mm_switch_on, mm_switch_on + mm_cutoff, gamma=GAMMA_ON)
                 mm_off = _sharpstep(r, mm_switch_on + mm_cutoff, mm_switch_on + 2.0 * mm_cutoff, gamma=GAMMA_OFF)
                 mm_scale = mm_on * (1.0 - mm_off)
+            if r_min_mask is not None:
+                mm_scale = mm_scale * r_min_mask.astype(mm_scale.dtype)
 
             use_dimer_idx = (pair_dimer_idx_arg is not None) or (pair_dimer_idx is not None)
             pdi = pair_dimer_idx_arg if pair_dimer_idx_arg is not None else pair_dimer_idx
@@ -533,6 +612,37 @@ def build_mm_energy_forces_fn(
                 raise RuntimeError("Neighbor list buffer overflow persisted after reallocation")
             _nbrs[0] = nbrs
             pair_i, pair_j, mask = _filter_fn(nbrs.idx)
+            if mm_r_min is not None:
+                R_for_filter = np.asarray(R, dtype=np.float64)
+                if fractional_coordinates and box is not None:
+                    cell_np = np.asarray(box, dtype=np.float64)
+                    if cell_np.ndim == 1:
+                        cell_3x3 = np.diag(cell_np)
+                    else:
+                        cell_3x3 = cell_np
+                    R_for_filter = np.asarray(R_for_filter @ cell_3x3, dtype=np.float64)
+                elif fractional_coordinates and box is None:
+                    cell_np = np.asarray(pbc_cell, dtype=np.float64)
+                    if cell_np.ndim == 0:
+                        cell_3x3 = np.diag([float(cell_np)] * 3)
+                    elif cell_np.shape == (3,):
+                        cell_3x3 = np.diag(cell_np)
+                    else:
+                        cell_3x3 = cell_np
+                    R_for_filter = np.asarray(R_for_filter @ cell_3x3, dtype=np.float64)
+                pbc_for_filter = np.asarray(pbc_cell) if pbc_cell is not None else None
+                if fractional_coordinates and box is not None:
+                    pbc_for_filter = np.diag(box) if np.asarray(box).ndim == 1 else np.asarray(box)
+                mask = _filter_pairs_by_com_min(
+                    R_for_filter,
+                    np.asarray(jax.device_get(pair_i)),
+                    np.asarray(jax.device_get(pair_j)),
+                    np.asarray(jax.device_get(mask), dtype=bool),
+                    _offsets_np,
+                    np.asarray(_monomer_id_jnp),
+                    mm_r_min,
+                    pbc_cell=pbc_for_filter,
+                )
             pair_idx = jnp.stack([pair_i, pair_j], axis=1)
             pair_mask = jnp.asarray(mask, dtype=jnp.float32)
             n_valid = int(np.sum(np.asarray(jax.device_get(mask))))

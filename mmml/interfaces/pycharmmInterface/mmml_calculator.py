@@ -338,6 +338,7 @@ def setup_calculator(
     ensemble: str = "nve",
     ml_sparse_dimers: bool = True,
     ml_batch_size: Optional[int] = None,
+    mm_r_min: Optional[float] = None,
 ):
     """Create hybrid ML/MM calculator with outputs in eV/eV-A.
 
@@ -365,6 +366,10 @@ def setup_calculator(
             mm_switch_on COM-COM distance. Saves compute in dilute systems.
         ml_batch_size: Max systems per ML forward pass. When None, process all
             monomers+dimers in one batch. Set to reduce memory for large systems.
+        mm_r_min: Optional inner cutoff (Å) for MM neighbor list. Pairs with dimer
+            COM distance < mm_r_min are excluded. Defaults: complementary_handoff=False
+            -> mm_switch_on * 0.9; complementary_handoff=True -> (mm_switch_on - ml_cutoff) * 0.9
+            (exclude pure ML region; handoff preserved). Pass explicit value to override.
     """
     if model_restart_path is None:
         raise ValueError("model_restart_path must be provided")
@@ -403,10 +408,20 @@ def setup_calculator(
     cutoffparameters = CutoffParameters(
         ml_cutoff_distance, mm_switch_on, mm_cutoff, complementary_handoff=complementary_handoff
     )
+    # Default mm_r_min: exclude pairs in pure ML region (MM contributes 0 there)
+    if mm_r_min is None and not complementary_handoff:
+        mm_r_min = mm_switch_on * 0.9  # 10% buffer below mm_switch_on for numerical safety
+    elif mm_r_min is None and complementary_handoff:
+        # Exclude r < handoff_start (pure ML); keep handoff [mm_switch_on - ml_cutoff, mm_switch_on]
+        handoff_start = mm_switch_on - ml_cutoff_distance
+        mm_r_min = handoff_start * 0.9 if handoff_start > 0 else None
+
     print(
         "[setup_calculator] Cutoff inputs -> ml_cutoff=%.4f, mm_switch_on=%.4f, mm_cutoff=%.4f, complementary_handoff=%s"
         % (ml_cutoff_distance, mm_switch_on, mm_cutoff, complementary_handoff)
     )
+    if mm_r_min is not None:
+        print(f"[setup_calculator] mm_r_min={mm_r_min} (exclude pairs with dimer COM < this)")
     print(f"[setup_calculator] atoms_per_monomer={atoms_per_monomer_list}, total_atoms={total_atoms}")
     print(f"[setup_calculator] lambda_monomer={lambda_monomer}")
 
@@ -682,6 +697,7 @@ def setup_calculator(
         sig_scale=sig_scale,
         ep_scale=ep_scale,
         pbc_cell_override=None,
+        mm_r_min=mm_r_min,
     ):
         """Creates functions for calculating MM energies and forces with switching.
 
@@ -711,6 +727,7 @@ def setup_calculator(
             use_smooth_mic=use_smooth_mic,
             use_jax_md_neighbor_list=True,
             fractional_coordinates=_fractional_coordinates,
+            mm_r_min=mm_r_min,
             debug=debug,
         )
         if isinstance(result_jaxmd, tuple):
@@ -735,6 +752,7 @@ def setup_calculator(
             cell_list_density_estimate=cell_list_density_estimate,
             use_smooth_mic=use_smooth_mic,
             use_jax_md_neighbor_list=False,
+            mm_r_min=mm_r_min,
             debug=debug,
             )
             return (mm_fn_jaxmd, mm_fn_cell), update_fn
@@ -750,7 +768,7 @@ def setup_calculator(
     def _ensure_mm_fn(positions_concrete, cutoff_params):
         """Build the MM energy/force function if not yet cached (or if cutoffs changed)."""
         key = (cutoff_params.ml_cutoff, cutoff_params.mm_switch_on, cutoff_params.mm_cutoff,
-               getattr(cutoff_params, "complementary_handoff", True))
+               getattr(cutoff_params, "complementary_handoff", True), mm_r_min)
         if _cached_mm_fn[0] is None or _cached_mm_cutoff_key[0] != key:
             mm_result, update_fn = get_MM_energy_forces_fns(
                 positions_concrete,
@@ -759,6 +777,7 @@ def setup_calculator(
                 mm_switch_on=cutoff_params.mm_switch_on,
                 mm_cutoff=cutoff_params.mm_cutoff,
                 complementary_handoff=getattr(cutoff_params, "complementary_handoff", True),
+                mm_r_min=mm_r_min,
             )
             _cached_mm_fn[0] = mm_result
             _cached_update_mm_pairs[0] = update_fn

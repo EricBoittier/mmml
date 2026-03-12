@@ -186,9 +186,21 @@ def parse_args() -> argparse.Namespace:
         help="Keep MM contributions enabled when evaluating the hybrid calculator.",
     )
     parser.add_argument(
+        "--no-complementary-handoff",
+        action="store_true",
+        help="Use legacy MM switching. When set, mm_r_min defaults to mm_switch_on.",
+    )
+    parser.add_argument(
         "--skip-ml-dimers",
         action="store_true",
         help="If set, skip the ML dimer correction in the hybrid calculator.",
+    )
+    parser.add_argument(
+        "--mm-r-min",
+        type=float,
+        default=None,
+        metavar="Å",
+        help="MM inner cutoff: exclude pairs with dimer COM < this.",
     )
     parser.add_argument(
         "--ml-batch-size",
@@ -373,6 +385,7 @@ def build_calculator_factory(
         ml_cutoff_distance=args.ml_cutoff,
         mm_switch_on=args.mm_switch_on,
         mm_cutoff=args.mm_cutoff,
+        complementary_handoff=not getattr(args, "no_complementary_handoff", False),
         doML=True,
         doMM=args.include_mm,
         doML_dimer=not args.skip_ml_dimers,
@@ -384,6 +397,7 @@ def build_calculator_factory(
         ml_force_conversion_factor=1,
         cell=args.cell,
         ml_batch_size=getattr(args, "ml_batch_size", None),
+        mm_r_min=getattr(args, "mm_r_min", None),
     )
 
 
