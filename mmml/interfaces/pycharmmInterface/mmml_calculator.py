@@ -435,6 +435,21 @@ def setup_calculator(
     max_atoms = max(max_monomer_atoms, max_dimer_atoms)
     print(f"[setup_calculator] max_atoms (model natoms)={max_atoms} (max monomer/dimer size)")
 
+    # Precompute padded index arrays for vectorized gather (avoids Python loops in get_ML_energy_fn)
+    monomer_idx_arr = np.zeros((n_monomers, max_atoms), dtype=np.int32)
+    for mi in range(n_monomers):
+        idxs = all_monomer_idxs[mi]
+        n_i = len(idxs)
+        monomer_idx_arr[mi, :n_i] = idxs
+        monomer_idx_arr[mi, n_i:] = idxs[0] if n_i > 0 else 0  # safe padding
+    dimer_idx_arr = np.zeros((len(all_dimer_idxs), max_atoms), dtype=np.int32)
+    for di, idxs in enumerate(all_dimer_idxs):
+        n_d = len(idxs)
+        dimer_idx_arr[di, :n_d] = idxs
+        dimer_idx_arr[di, n_d:] = idxs[0] if n_d > 0 else 0
+    monomer_idx_arr_jnp = jnp.array(monomer_idx_arr)
+    dimer_idx_arr_jnp = jnp.array(dimer_idx_arr)
+
     N_MONOMERS = n_monomers
     # Batch processing constants
     BATCH_SIZE: int = N_MONOMERS + len(dimer_perms)  # Number of systems per batch
@@ -982,32 +997,29 @@ def setup_calculator(
         max_dimer_atoms = max(_dimer_atom_counts) if _dimer_atom_counts else 2 * max_monomer_atoms
         max_atoms = max(max_monomer_atoms, max_dimer_atoms)
 
-        # --- Monomer data (variable sizes, padded to max_atoms) ---
-        monomer_positions = jnp.zeros((n_monomers, max_atoms, SPATIAL_DIMS))
-        monomer_atomic = jnp.zeros((n_monomers, max_atoms), dtype=jnp.int32)
-        for mi in range(n_monomers):
-            idxs = all_monomer_idxs[mi]
-            n_i = len(idxs)
-            monomer_positions = monomer_positions.at[mi, :n_i].set(positions[jnp.array(idxs)])
-            monomer_atomic = monomer_atomic.at[mi, :n_i].set(atomic_numbers[jnp.array(idxs)])
+        # --- Monomer data (vectorized gather via precomputed index arrays) ---
+        monomer_positions = positions[monomer_idx_arr_jnp]  # (n_monomers, max_atoms, 3)
+        monomer_atomic = atomic_numbers[monomer_idx_arr_jnp]  # (n_monomers, max_atoms)
+        monomer_N_arr = jnp.array([atoms_per_monomer_list[i] for i in range(n_monomers)])
+        monomer_mask = jnp.arange(max_atoms)[None, :] < monomer_N_arr[:, None]
+        monomer_positions = jnp.where(monomer_mask[:, :, None], monomer_positions, 0.0)
+        monomer_atomic = jnp.where(monomer_mask, monomer_atomic, 0)
 
-        # --- Dimer data (variable sizes, padded to max_atoms) ---
+        # --- Dimer data (vectorized gather) ---
         n_dimers = len(all_dimer_idxs)
-        dimer_positions = jnp.zeros((n_dimers, max_atoms, SPATIAL_DIMS))
-        dimer_atomic = jnp.zeros((n_dimers, max_atoms), dtype=jnp.int32)
-        for di in range(n_dimers):
-            idxs = all_dimer_idxs[di]
-            n_d = len(idxs)
-            dimer_positions = dimer_positions.at[di, :n_d].set(positions[jnp.array(idxs)])
-            dimer_atomic = dimer_atomic.at[di, :n_d].set(atomic_numbers[jnp.array(idxs)])
+        dimer_positions = positions[dimer_idx_arr_jnp]  # (n_dimers, max_atoms, 3)
+        dimer_atomic = atomic_numbers[dimer_idx_arr_jnp]
+        dimer_N_arr = jnp.array(_dimer_atom_counts)
+        dimer_mask = jnp.arange(max_atoms)[None, :] < dimer_N_arr[:, None]
+        dimer_positions = jnp.where(dimer_mask[:, :, None], dimer_positions, 0.0)
+        dimer_atomic = jnp.where(dimer_mask, dimer_atomic, 0)
 
         # Combine monomer and dimer data
         batch_data["R"] = jnp.concatenate([monomer_positions, dimer_positions])
         batch_data["Z"] = jnp.concatenate([monomer_atomic, dimer_atomic])
         # N: actual atom count per system (variable)
-        monomer_N = jnp.array([atoms_per_monomer_list[i] for i in range(n_monomers)])
         dimer_N = jnp.array(_dimer_atom_counts) if _dimer_atom_counts else jnp.zeros((0,), dtype=jnp.int32)
-        batch_data["N"] = jnp.concatenate([monomer_N, dimer_N])
+        batch_data["N"] = jnp.concatenate([monomer_N_arr, dimer_N])
         BATCH_SIZE = n_monomers + n_dimers
         batches = prepare_batches_md(batch_data, batch_size=BATCH_SIZE, num_atoms=max_atoms)[0]
 
