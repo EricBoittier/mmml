@@ -31,7 +31,8 @@ Run from a notebook:
         n_monomers=50,
         n_atoms_monomer=10,
         cell=40.0,
-        # optional: temperature=200.0, timestep=0.3, ensemble="nve", ...
+        # optional: temperature=200.0, timestep=0.3, ensemble="nve",
+        # ml_batch_size=512,  # chunk ML batches to reduce GPU memory
     )
     run(args)
 """
