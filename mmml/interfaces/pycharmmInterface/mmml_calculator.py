@@ -1051,8 +1051,15 @@ def setup_calculator(
             mic_fn = mic_displacement_smooth if use_smooth_mic else mic_displacement
 
             def _dimer_com_dist(pos_di, na, nb):
-                com_a = jnp.mean(pos_di[:na], axis=0)
-                com_b = jnp.mean(pos_di[na:na + nb], axis=0)
+                # Masked reduction for vmap compatibility (na, nb can be traced)
+                max_n = pos_di.shape[0]
+                i = jnp.arange(max_n, dtype=jnp.int32)
+                mask_a = (i < na).astype(pos_di.dtype)
+                mask_b = ((i >= na) & (i < na + nb)).astype(pos_di.dtype)
+                n_a = jnp.maximum(jnp.sum(mask_a), 1e-10)
+                n_b = jnp.maximum(jnp.sum(mask_b), 1e-10)
+                com_a = jnp.sum(pos_di * mask_a[:, None], axis=0) / n_a
+                com_b = jnp.sum(pos_di * mask_b[:, None], axis=0) / n_b
                 d = mic_fn(com_a, com_b, pbc_cell) if pbc_cell is not None else com_b - com_a
                 return jnp.linalg.norm(d)
 
