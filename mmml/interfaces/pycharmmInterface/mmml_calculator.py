@@ -645,8 +645,11 @@ def setup_calculator(
             n_atoms_b: Number of atoms in the second monomer.
         """
         # COM–COM distance (used for ML taper; must match debug "dimer COM distance")
-        com1 = jnp.mean(X[:n_atoms_a], axis=0)
-        com2 = jnp.mean(X[n_atoms_a:n_atoms_a + n_atoms_b], axis=0)
+        # Use dynamic_slice for vmap compatibility (na, nb can be traced)
+        pos_a = jax.lax.dynamic_slice(X, (0, 0), (n_atoms_a, 3))
+        pos_b = jax.lax.dynamic_slice(X, (n_atoms_a, 0), (n_atoms_b, 3))
+        com1 = jnp.mean(pos_a, axis=0)
+        com2 = jnp.mean(pos_b, axis=0)
         if pbc_cell is not None:
             mic_fn = mic_displacement_smooth if use_smooth_mic else mic_displacement
             d = mic_fn(com1, com2, pbc_cell)
