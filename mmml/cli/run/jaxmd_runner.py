@@ -213,12 +213,15 @@ def set_up_nhc_sim_routine(
     n_monomers,
     monomer_offsets,
     Si_mass,
+    show_frame=None,
+    atoms_template=None,
 ):
     """Set up the Nose-Hoover chain simulation routine.
 
     Returns:
         The run_sim function.
     """
+    atoms_template = atoms_template if atoms_template is not None else atoms
     T = args.temperature
 
     @jax.jit
@@ -940,6 +943,20 @@ def set_up_nhc_sim_routine(
                 nhc_boxes.append(box_curr)
             else:
                 nhc_positions.append(state.position)
+
+            # Braille viewer: update at each recording block
+            if show_frame is not None and atoms_template is not None:
+                steps = (i + 1) * steps_per_recording
+                if is_npt:
+                    box_curr = simulate.npt_box(state)
+                    pos_real = space.transform(box_curr, state.position)
+                    pos_real = wrap_groups(pos_real, _monomer_groups, box_curr, mass=Si_mass)
+                else:
+                    pos_real = state.position
+                    if use_pbc:
+                        pos_real = wrap_groups(pos_real, _monomer_groups, _cell_jax, mass=Si_mass)
+                atoms_template.set_positions(np.asarray(jax.device_get(pos_real)))
+                show_frame(atoms_template, steps, "jaxmd")
 
             # Print progress every 10 steps
             nbr_n_valid = nbr_capacity = nbr_fill_ratio = None

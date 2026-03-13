@@ -311,6 +311,11 @@ def parse_args() -> argparse.Namespace:
         default=100,
         help="Interval to write the trajectory in ASE (default: 100).",
     )
+    parser.add_argument(
+        "--view-braille",
+        action="store_true",
+        help="Display braille molecular viewer at each timestep/minimization step (width=height=164).",
+    )
 
     parser.add_argument(
         "--charmm_heat",
@@ -385,6 +390,23 @@ def parse_args() -> argparse.Namespace:
     )
 
     return parser.parse_args()
+
+
+def _make_braille_show_frame(live, args):
+    """Return show_frame callback for braille viewer, or None if view_braille disabled."""
+    if not getattr(args, "view_braille", False):
+        return None
+    from mmml.utils.visualize.braille_molecule import render_atoms_braille
+    from rich.panel import Panel
+    from rich.text import Text
+
+    w = h = 164
+
+    def show_frame(atoms, step, phase="md"):
+        s = render_atoms_braille(atoms, width=w, height=h)
+        live.update(Panel(Text.from_ansi(s), title=f"Step {step} ({phase})", border_style="cyan"))
+
+    return show_frame
 
 
 def run(args: argparse.Namespace) -> int:
@@ -609,77 +631,95 @@ def run(args: argparse.Namespace) -> int:
         run_production,
         run_pycharmm_setup_and_minimize,
     )
-    atoms = run_pycharmm_setup_and_minimize(atoms, args)
-
-    if getattr(args, "charmm_heat", False):
-        atoms = run_heat(atoms, args)
-    if getattr(args, "charmm_equilibration", False):
-        atoms = run_equilibration(atoms, args)
-    if getattr(args, "charmm_production", False):
-        atoms = run_production(atoms, args)
-    
-    # Minimize structure if requested
     from mmml.cli.run.ase_runner import run_ase_md
     from mmml.cli.run.jaxmd_runner import set_up_nhc_sim_routine
 
-    sim_key, data_key = jax.random.split(jax.random.PRNGKey(42), 2)
-    temperature = args.temperature
-    if args.nsteps_ase > 0:
-        for i in range(1):
-            run_ase_md(
-                atoms,
-                args=args,
-                hybrid_calc=hybrid_calc,
-                monomer_offsets=monomer_offsets,
-                n_monomers=n_monomers,
-                atoms_per_monomer_list=atoms_per_monomer_list,
-                simple_physnet_calculator=simple_physnet_calculator,
-                run_index=i,
-                temperature=temperature,
-            )
+    view_braille = getattr(args, "view_braille", False)
+    if view_braille:
+        from rich.console import Console
+        from rich.live import Live
+        from rich.console import Group
+        live_cm = Live(Group(), refresh_per_second=8, console=Console())
+    else:
+        from contextlib import nullcontext
+        live_cm = nullcontext(None)
 
+    with live_cm as live:
+        show_frame = _make_braille_show_frame(live, args) if live is not None else None
 
-    if args.nsteps_jaxmd > 0 or getattr(args, "precompile", False):
-        for j in range(1):
-            sim_key, data_key = jax.random.split(data_key, 2)
-            s = set_up_nhc_sim_routine(
-                atoms, args, spherical_cutoff_calculator, get_update_fn,
-                CUTOFF_PARAMS, n_monomers, monomer_offsets, Si_mass
-            )
-            if getattr(args, "precompile", False):
-                print("Precompile done. Exiting (no simulation).")
-                return atoms
-            # Skip JAX-MD minimization when ASE already ran (positions are ASE-minimized)
-            skip_jaxmd_min = args.nsteps_ase > 0
-            out_positions, out_boxes, _ = run_sim_loop(
-                s, sim_key, atoms, skip_minimization=skip_jaxmd_min
-            )
+        atoms = run_pycharmm_setup_and_minimize(atoms, args, show_frame=show_frame)
 
-            for idx, pos_block in enumerate(out_positions):
-                print_positions_summary(pos_block, atoms=atoms, title=f"Trajectory positions (block {idx})")
+        if getattr(args, "charmm_heat", False):
+            atoms = run_heat(atoms, args, show_frame=show_frame)
+        if getattr(args, "charmm_equilibration", False):
+            atoms = run_equilibration(atoms, args, show_frame=show_frame)
+        if getattr(args, "charmm_production", False):
+            atoms = run_production(atoms, args, show_frame=show_frame)
 
-            steps_per_frame = get_steps_per_frame(args)
-            for i in range(len(out_positions)):
-                traj_filename = f"{args.output_prefix}_md_{j}_{i}"
-                Path(traj_filename).parent.mkdir(parents=True, exist_ok=True)
-                traj_format = getattr(args, "trajectory_format", "traj")
-                ext = "dcd" if traj_format == "dcd" else "traj"
-                print(f"Saving trajectory to: {traj_filename}.{ext}")
-                save_trajectory(
-                    out_positions[i],
+        sim_key, data_key = jax.random.split(jax.random.PRNGKey(42), 2)
+        temperature = args.temperature
+        if args.nsteps_ase > 0:
+            for i in range(1):
+                run_ase_md(
                     atoms,
-                    filename=traj_filename,
-                    format=traj_format,
-                    boxes=out_boxes[i] if out_boxes and out_boxes[i] is not None else None,
-                    dt_ps=args.timestep * 0.001,
-                    steps_per_frame=steps_per_frame,
-                    save_energy_forces=use_ase_calculator,
+                    args=args,
+                    hybrid_calc=hybrid_calc,
                     monomer_offsets=monomer_offsets,
-                    cell=args.cell,
-                    masses=np.asarray(atoms.get_masses()) if hasattr(atoms, "get_masses") else None,
+                    n_monomers=n_monomers,
+                    atoms_per_monomer_list=atoms_per_monomer_list,
+                    simple_physnet_calculator=simple_physnet_calculator,
+                    run_index=i,
+                    temperature=temperature,
+                    show_frame=show_frame,
                 )
 
-            # atoms = minimize_structure(atoms)
+        if args.nsteps_jaxmd > 0 or getattr(args, "precompile", False):
+            for j in range(1):
+                sim_key, data_key = jax.random.split(data_key, 2)
+                s = set_up_nhc_sim_routine(
+                    atoms,
+                    args,
+                    spherical_cutoff_calculator,
+                    get_update_fn,
+                    CUTOFF_PARAMS,
+                    n_monomers,
+                    monomer_offsets,
+                    Si_mass,
+                    show_frame=show_frame,
+                    atoms_template=atoms,
+                )
+                if getattr(args, "precompile", False):
+                    print("Precompile done. Exiting (no simulation).")
+                    return atoms
+                # Skip JAX-MD minimization when ASE already ran (positions are ASE-minimized)
+                skip_jaxmd_min = args.nsteps_ase > 0
+                out_positions, out_boxes, _ = run_sim_loop(
+                    s, sim_key, atoms, skip_minimization=skip_jaxmd_min
+                )
+
+                for idx, pos_block in enumerate(out_positions):
+                    print_positions_summary(pos_block, atoms=atoms, title=f"Trajectory positions (block {idx})")
+
+                steps_per_frame = get_steps_per_frame(args)
+                for i in range(len(out_positions)):
+                    traj_filename = f"{args.output_prefix}_md_{j}_{i}"
+                    Path(traj_filename).parent.mkdir(parents=True, exist_ok=True)
+                    traj_format = getattr(args, "trajectory_format", "traj")
+                    ext = "dcd" if traj_format == "dcd" else "traj"
+                    print(f"Saving trajectory to: {traj_filename}.{ext}")
+                    save_trajectory(
+                        out_positions[i],
+                        atoms,
+                        filename=traj_filename,
+                        format=traj_format,
+                        boxes=out_boxes[i] if out_boxes and out_boxes[i] is not None else None,
+                        dt_ps=args.timestep * 0.001,
+                        steps_per_frame=steps_per_frame,
+                        save_energy_forces=use_ase_calculator,
+                        monomer_offsets=monomer_offsets,
+                        cell=args.cell,
+                        masses=np.asarray(atoms.get_masses()) if hasattr(atoms, "get_masses") else None,
+                    )
 
     print("Trajectories saved!")
 
