@@ -89,6 +89,17 @@ def minimize_structure(
         )
 
     if ase:
+        # Wrap initial positions into primary cell so BFGS starts in consistent coords.
+        # (Avoids cell-list/MIC issues when CHARMM outputs centered/unwrapped positions.)
+        if args.cell is not None:
+            wrapped = wrap_positions_for_pbc(
+                atoms.get_positions(),
+                cell=args.cell,
+                hybrid_calc=hybrid_calc,
+                monomer_offsets=monomer_offsets,
+                masses=atoms.get_masses(),
+            )
+            atoms.set_positions(wrapped)
         traj_path = Path(f"{output_prefix}_bfgs_{run_index}.traj")
         traj_path.parent.mkdir(parents=True, exist_ok=True)
         traj = ase_io.Trajectory(str(traj_path), 'w')
