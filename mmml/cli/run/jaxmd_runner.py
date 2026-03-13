@@ -845,6 +845,8 @@ def set_up_nhc_sim_routine(
         c.print(Panel(f"First step OK: E_pot={e1:.6f} eV", title="[bold green]JAX-MD[/bold green]", border_style="green"))
 
         nbr_monitor = getattr(args, "nbr_monitor", False)
+        if use_pbc:
+            c.print(Panel(f"{n_monomers} monomer groups, wrapping every {steps_per_recording} steps", title="[bold]PBC Wrapping[/bold]", border_style="blue"))
         c.print(Panel(f"Starting {args.ensemble.upper()} simulation", title="[bold cyan]JAX-MD[/bold cyan]", border_style="cyan"))
         if is_npt:
             hdr = "\t\tTime (ps)\tSteps\tE_pot (eV)\tE_tot (eV)\tT (K)\tL (Å)\tV (Å³)\tP_tgt (atm)\tP_meas (atm)\tavg(ns/day)"
@@ -888,7 +890,6 @@ def set_up_nhc_sim_routine(
                 jnp.arange(int(monomer_offsets[m]), int(monomer_offsets[m + 1]))
                 for m in range(n_monomers)
             ]
-            c.print(Panel(f"{n_monomers} monomer groups, wrapping every {steps_per_recording} steps", title="[bold]PBC Wrapping[/bold]", border_style="blue"))
 
         # ========================================================================
         # MAIN SIMULATION LOOP
