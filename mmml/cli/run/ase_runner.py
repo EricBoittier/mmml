@@ -109,7 +109,8 @@ def minimize_structure(
             title="[bold cyan]ASE Minimization[/bold cyan]",
             border_style="cyan",
         ))
-        opt = ase_opt.BFGS(atoms, trajectory=traj)
+        # Smaller maxstep reduces fmax oscillations with PBC (default 0.2 Å can overshoot).
+        opt = ase_opt.BFGS(atoms, trajectory=traj, maxstep=0.05)
         if show_frame is not None:
             step_ref = [0]
 
@@ -118,74 +119,6 @@ def minimize_structure(
                 show_frame(opt.atoms, step_ref[0], "min")
 
             opt.attach(braille_obs, interval=1)
-
-        # #region agent log
-        _log_path = "/home/ericb/mmml/.cursor/debug.log"
-        _eps = 1e-5
-
-        def _write_bfgs_log(a: Any, step: int, E0: float, F: np.ndarray, force_sign_ok: bool | None) -> None:
-            import json
-            R = np.asarray(a.get_positions())
-            fmax = float(np.max(np.linalg.norm(F, axis=1)))
-            cell = getattr(a, "cell", None)
-            cell_len = float(cell[0, 0]) if cell is not None and cell.size > 0 else None
-            pos_in_cell = (
-                bool(np.all(R >= -0.01) and (cell_len is None or np.all(R < cell_len + 0.01)))
-            ) if cell_len is not None else None
-            try:
-                with open(_log_path, "a") as f:
-                    f.write(json.dumps({
-                        "hypothesisId": "A",
-                        "location": "ase_runner:minimize_structure",
-                        "message": "BFGS step",
-                        "data": {
-                            "step": step,
-                            "energy": E0,
-                            "fmax": fmax,
-                            "pos_min": float(R.min()),
-                            "pos_max": float(R.max()),
-                            "cell_len": cell_len,
-                            "pos_in_cell": pos_in_cell,
-                            "force_sign_ok": force_sign_ok,
-                        },
-                    }) + "\n")
-            except Exception:
-                pass
-
-        def _bfgs_debug_cb() -> None:
-            a = opt.atoms
-            step = getattr(opt, "nsteps", -1)
-            R = np.asarray(a.get_positions())
-            E0 = float(a.get_potential_energy())
-            F = np.asarray(a.get_forces())
-            force_sign_ok = None
-            if np.any(np.linalg.norm(F, axis=1) > 1e-6):
-                imax = int(np.argmax(np.linalg.norm(F, axis=1)))
-                F_unit = F[imax] / (np.linalg.norm(F[imax]) + 1e-12)
-                R_pert = R.copy()
-                R_pert[imax] += _eps * F_unit
-                a.set_positions(R_pert)
-                E_pert = float(a.get_potential_energy())
-                a.set_positions(R)
-                force_sign_ok = E_pert < E0
-            _write_bfgs_log(a, step, E0, F, force_sign_ok)
-
-        opt.attach(_bfgs_debug_cb, interval=1)
-        R0 = np.asarray(atoms.get_positions()).copy()
-        E0_init = float(atoms.get_potential_energy())
-        F0 = np.asarray(atoms.get_forces())
-        _sign_ok = None
-        if np.any(np.linalg.norm(F0, axis=1) > 1e-6):
-            imax = int(np.argmax(np.linalg.norm(F0, axis=1)))
-            Fu = F0[imax] / (np.linalg.norm(F0[imax]) + 1e-12)
-            R_pert = R0.copy()
-            R_pert[imax] += _eps * Fu
-            atoms.set_positions(R_pert)
-            Ep = float(atoms.get_potential_energy())
-            atoms.set_positions(R0)
-            _sign_ok = Ep < E0_init
-        _write_bfgs_log(atoms, 0, E0_init, F0, _sign_ok)
-        # #endregion
 
         opt.run(fmax=fmax, steps=nsteps)
         xyz = pd.DataFrame(atoms.get_positions(), columns=["x", "y", "z"])
