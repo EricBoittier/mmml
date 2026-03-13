@@ -5,7 +5,7 @@ Extracted from run_sim.py to separate PyCHARMM-specific code paths.
 """
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable, Optional
 
 import pycharmm
 from rich.console import Console
@@ -55,7 +55,11 @@ def run_pycharmm_nbonds_minimize(args: Any) -> None:
     pycharmm_quiet()
 
 
-def run_pycharmm_setup_and_minimize(atoms: Any, args: Any) -> Any:
+def run_pycharmm_setup_and_minimize(
+    atoms: Any,
+    args: Any,
+    show_frame: Optional[Callable[[Any, int, str], None]] = None,
+) -> Any:
     """Run PyCHARMM nbonds+minimize if enabled, sync atoms from coor."""
     _do_pycharmm_min = getattr(args, "pycharmm_minimize", None)
     if _do_pycharmm_min is None and getattr(args, "no_pycharmm_minimize", False):
@@ -71,10 +75,18 @@ def run_pycharmm_setup_and_minimize(atoms: Any, args: Any) -> Any:
             border_style="yellow",
         ))
     atoms.set_positions(coor.get_positions())
+    if show_frame is not None:
+        show_frame(atoms, 0, "pycharmm_min")
     return atoms
 
 
-def _run_charmm_phase(script: str, atoms: Any, args: Any) -> Any:
+def _run_charmm_phase(
+    script: str,
+    atoms: Any,
+    args: Any,
+    show_frame: Optional[Callable[[Any, int, str], None]] = None,
+    phase_step: int = 0,
+) -> Any:
     """Common pattern: run CHARMM script, minimize, sync positions."""
     pycharmm.lingo.charmm_script(script)
     atoms.set_positions(coor.get_positions())
@@ -89,28 +101,42 @@ def _run_charmm_phase(script: str, atoms: Any, args: Any) -> Any:
     safe_energy_show()
     pycharmm.lingo.charmm_script("ENER")
     atoms.set_positions(coor.get_positions())
+    if show_frame is not None:
+        show_frame(atoms, phase_step, "pycharmm")
     return atoms
 
 
-def run_heat(atoms: Any, args: Any) -> Any:
+def run_heat(
+    atoms: Any,
+    args: Any,
+    show_frame: Optional[Callable[[Any, int, str], None]] = None,
+) -> Any:
     """Run CHARMM heat phase."""
     from mmml.interfaces.pycharmmInterface.pycharmmCommands import heat
 
     Console().print(Panel("Running heat phase", title="[bold cyan]CHARMM Heat[/bold cyan]", border_style="cyan"))
-    return _run_charmm_phase(heat, atoms, args)
+    return _run_charmm_phase(heat, atoms, args, show_frame=show_frame, phase_step=1)
 
 
-def run_equilibration(atoms: Any, args: Any) -> Any:
+def run_equilibration(
+    atoms: Any,
+    args: Any,
+    show_frame: Optional[Callable[[Any, int, str], None]] = None,
+) -> Any:
     """Run CHARMM equilibration phase."""
     from mmml.interfaces.pycharmmInterface.pycharmmCommands import equi
 
     Console().print(Panel("Running equilibration", title="[bold cyan]CHARMM Equilibration[/bold cyan]", border_style="cyan"))
-    return _run_charmm_phase(equi, atoms, args)
+    return _run_charmm_phase(equi, atoms, args, show_frame=show_frame, phase_step=2)
 
 
-def run_production(atoms: Any, args: Any) -> Any:
+def run_production(
+    atoms: Any,
+    args: Any,
+    show_frame: Optional[Callable[[Any, int, str], None]] = None,
+) -> Any:
     """Run CHARMM production phase."""
     from mmml.interfaces.pycharmmInterface.pycharmmCommands import production
 
     Console().print(Panel("Running production", title="[bold cyan]CHARMM Production[/bold cyan]", border_style="cyan"))
-    return _run_charmm_phase(production, atoms, args)
+    return _run_charmm_phase(production, atoms, args, show_frame=show_frame, phase_step=3)

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 import numpy as np
 from rich.console import Console
@@ -60,6 +60,7 @@ def minimize_structure(
     fmax: float = 0.0006,
     charmm: bool = False,
     ase: bool = True,
+    show_frame: Optional[Callable[[Any, int, str], None]] = None,
 ) -> Any:
     """Minimize structure using CHARMM and/or ASE BFGS."""
     import ase.io as ase_io
@@ -97,7 +98,16 @@ def minimize_structure(
             title="[bold cyan]ASE Minimization[/bold cyan]",
             border_style="cyan",
         ))
-        _ = ase_opt.BFGS(atoms, trajectory=traj).run(fmax=fmax, steps=nsteps)
+        opt = ase_opt.BFGS(atoms, trajectory=traj)
+        if show_frame is not None:
+            step_ref = [0]
+
+            def braille_obs(a: Any) -> None:
+                step_ref[0] += 1
+                show_frame(a, step_ref[0], "min")
+
+            opt.attach(braille_obs, interval=1)
+        opt.run(fmax=fmax, steps=nsteps)
         xyz = pd.DataFrame(atoms.get_positions(), columns=["x", "y", "z"])
         coor.set_positions(xyz)
         traj.close()
@@ -161,6 +171,7 @@ def run_ase_md(
     simple_physnet_calculator: Any,
     run_index: int = 0,
     temperature: float = 300.0,
+    show_frame: Optional[Callable[[Any, int, str], None]] = None,
 ) -> None:
     """Run ASE MD simulation with Velocity Verlet."""
     import ase
@@ -197,6 +208,7 @@ def run_ase_md(
         run_index=run_index,
         nsteps=100 if run_index == 0 else 10,
         fmax=0.0006 if run_index == 0 else 0.001,
+        show_frame=show_frame,
     )
     if args.cell is not None:
         c.print(Panel(f"Wrapping positions into cell: {args.cell} Å", title="[bold]PBC[/bold]", border_style="blue"))
@@ -248,6 +260,9 @@ def run_ase_md(
         kinetic_energy[i] = ase_atoms.get_kinetic_energy()
         total_energy[i] = ase_atoms.get_total_energy()
 
+        if show_frame is not None:
+            show_frame(ase_atoms, i, "md")
+
         if i > 10 and (kinetic_energy[i] > 300 or potential_energy[i] > 0):
             t_spike = Table(title="Energy spike - re-minimizing")
             t_spike.add_column("Property", style="red")
@@ -276,6 +291,7 @@ def run_ase_md(
                 nsteps=20 if run_index == 0 else 10,
                 fmax=0.0006 if run_index == 0 else 0.001,
                 charmm=True,
+                show_frame=show_frame,
             )
             cur_eng = ase_atoms.get_potential_energy()
             c.print(f"[dim]Re-minimized energy: {cur_eng:.6f} eV[/dim]")
