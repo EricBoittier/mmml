@@ -60,6 +60,13 @@ from mmml.cli.base import (
     setup_mmml_imports,
 )
 from mmml.cli.run.shared import run_sim_loop, save_trajectory
+from mmml.cli.run.summaries import (
+    print_charges_summary,
+    print_forces_summary,
+    print_masses_summary,
+    print_positions_summary,
+    print_system_summary,
+)
 from mmml.cli.run.utils import get_steps_per_frame, normalize_n_atoms_monomer
 
 
@@ -423,24 +430,24 @@ def run(args: argparse.Namespace) -> int:
     setup_box_generic(pdbfilename, side_length=1000, skip_energy_show=skip_energy_show)
     pdb_ase_atoms = ase_io.read(pdbfilename)
 
-    print(f"Loaded PDB file: {pdb_ase_atoms}")
-
     atoms_per_monomer_list, n_monomers, total_atoms, n_atoms_first, monomer_offsets = (
         normalize_n_atoms_monomer(args.n_atoms_monomer, args.n_monomers)
     )
-    print(f"[run_sim] atoms_per_monomer_list={atoms_per_monomer_list}, "
-          f"n_monomers={n_monomers}, total_atoms={total_atoms}")
+    print_system_summary(
+        pdb_ase_atoms,
+        n_monomers=n_monomers,
+        atoms_per_monomer_list=atoms_per_monomer_list,
+        cell=None,
+        calculator_info=None,
+    )
     
     # ========================================================================
     # MASS SETUP FOR JAX-MD SIMULATION
     # ========================================================================
     raw_masses = pdb_ase_atoms.get_masses()
-    # print(f"Raw masses from ASE: {raw_masses}")
     psf_masses = psf.get_amass()
-    # print(f"PSF masses: {psf_masses}")
-    print(f"PSF masses sum: {sum(psf_masses)}")
-    print("Setting the elements and masses from the psf")
     pdb_ase_atoms.set_masses(psf_masses)
+    print_masses_summary(np.array(psf_masses[:total_atoms]))
     psf_masses_arr = np.array(psf_masses)[:, np.newaxis]
     correct_atomic_numbers_from_mass = np.argmin(
         np.abs(ase.data.atomic_masses_common[np.newaxis, :] - psf_masses_arr), axis=1)
@@ -471,26 +478,14 @@ def run(args: argparse.Namespace) -> int:
     # Get atomic numbers and positions
     Z, R = pdb_ase_atoms.get_atomic_numbers(), pdb_ase_atoms.get_positions()
     atoms = pdb_ase_atoms
+    print_positions_summary(R, atoms=atoms, title="Initial positions")
     if args.cell is not None:
-        print("Setting cell")
         from ase.cell import Cell
-        print("Creating cell")
         cell = Cell.fromcellpar([float(args.cell), float(args.cell), float(args.cell), 90., 90., 90.])
         atoms.set_cell(cell)
-        # Enable periodic boundary conditions
         atoms.set_pbc(True)
-        print(f"Cell: {cell}")
-        print(f"PBC enabled: {atoms.pbc}")
-        print(f"Cell shape: {cell.shape}")
-        print(f"Cell type: {type(cell)}")
-        print(f"Cell dtype: {cell.dtype}")
-        print(f"Cell size: {cell.size}")
-        print(f"Cell dtype: {cell.dtype}")
-        print(f"Cell ndim: {cell.ndim}")
-        print(f"Cell dtype: {cell.dtype}")
     else:
         cell = None
-        print("No cell provided")
 
 
     # Unified calculator supports both uniform and heterogeneous monomer sizes
@@ -525,7 +520,12 @@ def run(args: argparse.Namespace) -> int:
             complementary_handoff=not getattr(args, "no_complementary_handoff", False),
         )
 
-    print(f"Cutoff parameters: {CUTOFF_PARAMS}")
+    # Print charges from PSF if available
+    try:
+        psf_charges = np.array(psf.get_charges())[:total_atoms]
+        print_charges_summary(psf_charges)
+    except Exception:
+        pass
 
     # Create hybrid calculator (MIC-only: factory uses pbc_cell for PBC, no pbc_map/transform)
     # Skip ASE calculator when nsteps_ase == 0; use minimal pbc_map-only object for JAX-MD
@@ -552,17 +552,17 @@ def run(args: argparse.Namespace) -> int:
         hybrid_calc, spherical_cutoff_calculator = calc_result
         get_update_fn = None
 
-    print(f"{'Hybrid calculator' if use_ase_calculator else 'PbcMap-only'} created: {hybrid_calc}")
-    print(f"Spherical cutoff calculator: {spherical_cutoff_calculator}, "
-          f"get_update_fn: {get_update_fn}")
+    calc_type = "Hybrid calculator" if use_ase_calculator else "PbcMap-only"
+    print_system_summary(
+        atoms,
+        n_monomers=n_monomers,
+        atoms_per_monomer_list=atoms_per_monomer_list,
+        cell=atoms.cell if hasattr(atoms, "cell") else cell,
+        cutoff_params=CUTOFF_PARAMS,
+        calculator_info=f"{calc_type} (do_pbc_map={getattr(hybrid_calc, 'do_pbc_map', 'N/A')})",
+    )
     atoms = pdb_ase_atoms
-
-    print(f"ASE atoms: {atoms}")
     atoms.calc = hybrid_calc
-
-    # After: atoms.calc = hybrid_calc
-    print(f"PBC status: cell={args.cell}, atoms.pbc={atoms.pbc}, "
-        f"calc.do_pbc_map={getattr(hybrid_calc, 'do_pbc_map', 'N/A')}")
 
 
 
@@ -576,7 +576,15 @@ def run(args: argparse.Namespace) -> int:
         R_shift[g0] += a
         atoms.set_positions(R_shift)
         E1 = atoms.get_potential_energy()
-        print(f"Energy invariance test: E0={E0}, E1={E1}, difference={E1-E0}")
+        from rich.console import Console
+        from rich.table import Table
+        t = Table(title="Energy invariance (PBC)")
+        t.add_column("E0 (eV)", justify="right")
+        t.add_column("E1 (eV)", justify="right")
+        t.add_column("ΔE (eV)", justify="right")
+        t.add_column("OK", justify="center")
+        t.add_row(f"{E0:.6f}", f"{E1:.6f}", f"{E1-E0:.2e}", "✓" if np.isclose(E0, E1, rtol=1e-2, atol=0.01) else "✗")
+        Console().print(t)
         assert np.isclose(E0, E1, rtol=1e-2, atol=0.01), (
             f"Energy invariance test failed: |E1-E0|={abs(E1-E0):.2e} eV"
         )
@@ -592,8 +600,7 @@ def run(args: argparse.Namespace) -> int:
     if args.nsteps_ase > 0:
         hybrid_energy = float(atoms.get_potential_energy())
         hybrid_forces = np.asarray(atoms.get_forces())
-        print(f"Initial energy: {hybrid_energy:.6f} eV")
-        print(f"Initial forces: {hybrid_forces}")
+        print_forces_summary(hybrid_forces, energy_eV=hybrid_energy)
     
 
     from mmml.cli.run.pycharmm_runner import (
@@ -648,7 +655,8 @@ def run(args: argparse.Namespace) -> int:
                 s, sim_key, atoms, skip_minimization=skip_jaxmd_min
             )
 
-            print(f"Out positions: {out_positions}")
+            for idx, pos_block in enumerate(out_positions):
+                print_positions_summary(pos_block, atoms=atoms, title=f"Trajectory positions (block {idx})")
 
             steps_per_frame = get_steps_per_frame(args)
             for i in range(len(out_positions)):
