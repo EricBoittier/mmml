@@ -46,12 +46,12 @@ def print_system_summary(
         cell_arr = np.asarray(cell)
         if cell_arr.size >= 3:
             if cell_arr.ndim == 1:
-                a, b, c = cell_arr.flat[:3]
+                a_len, b_len, c_len = cell_arr.flat[:3]
             else:
-                a = np.linalg.norm(cell_arr[0])
-                b = np.linalg.norm(cell_arr[1])
-                c = np.linalg.norm(cell_arr[2])
-            table.add_row("Cell (Å)", f"a={a:.2f}, b={b:.2f}, c={c:.2f}")
+                a_len = np.linalg.norm(cell_arr[0])
+                b_len = np.linalg.norm(cell_arr[1])
+                c_len = np.linalg.norm(cell_arr[2])
+            table.add_row("Cell (Å)", f"a={a_len:.2f}, b={b_len:.2f}, c={c_len:.2f}")
         table.add_row("PBC", str(getattr(atoms, "pbc", False)))
     else:
         table.add_row("Cell", "None (non-periodic)")
