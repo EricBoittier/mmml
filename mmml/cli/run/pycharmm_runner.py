@@ -8,6 +8,8 @@ from __future__ import annotations
 from typing import Any
 
 import pycharmm
+from rich.console import Console
+from rich.panel import Panel
 
 from mmml.interfaces.pycharmmInterface.import_pycharmm import (
     coor,
@@ -33,18 +35,24 @@ def run_pycharmm_nbonds_minimize(args: Any) -> None:
     from mmml.interfaces.pycharmmInterface.import_pycharmm import reset_block
 
     reset_block()
+    pycharmm_soft()
     pycharmm.lingo.charmm_script(NBONDS_SCRIPT)
     safe_energy_show()
-    print("Running PyCHARMM minimize")
-    pycharmm_soft()
+    Console().print(Panel(
+        f"ABNR minimization ({getattr(args, 'pycharmm_minimize_steps', 1000)} steps)",
+        title="[bold cyan]PyCHARMM[/bold cyan]",
+        border_style="cyan",
+    ))
+
     pycharmm.minimize.run_abnr(
         nstep=getattr(args, "pycharmm_minimize_steps", 1000),
         tolenr=1e-2,
         tolgrd=1e-2,
     )
-    pycharmm_quiet()
+    
     pycharmm.lingo.charmm_script("ENER")
     safe_energy_show()
+    pycharmm_quiet()
 
 
 def run_pycharmm_setup_and_minimize(atoms: Any, args: Any) -> Any:
@@ -57,7 +65,11 @@ def run_pycharmm_setup_and_minimize(atoms: Any, args: Any) -> Any:
     if _do_pycharmm_min:
         run_pycharmm_nbonds_minimize(args)
     else:
-        print("Skipping PyCHARMM nbonds/minimize (--pycharmm-minimize False); using PDB positions.")
+        Console().print(Panel(
+            "Skipping nbonds/minimize (--no-pycharmm-minimize); using PDB positions.",
+            title="[bold yellow]PyCHARMM[/bold yellow]",
+            border_style="yellow",
+        ))
     atoms.set_positions(coor.get_positions())
     return atoms
 
@@ -84,6 +96,7 @@ def run_heat(atoms: Any, args: Any) -> Any:
     """Run CHARMM heat phase."""
     from mmml.interfaces.pycharmmInterface.pycharmmCommands import heat
 
+    Console().print(Panel("Running heat phase", title="[bold cyan]CHARMM Heat[/bold cyan]", border_style="cyan"))
     return _run_charmm_phase(heat, atoms, args)
 
 
@@ -91,6 +104,7 @@ def run_equilibration(atoms: Any, args: Any) -> Any:
     """Run CHARMM equilibration phase."""
     from mmml.interfaces.pycharmmInterface.pycharmmCommands import equi
 
+    Console().print(Panel("Running equilibration", title="[bold cyan]CHARMM Equilibration[/bold cyan]", border_style="cyan"))
     return _run_charmm_phase(equi, atoms, args)
 
 
@@ -98,4 +112,5 @@ def run_production(atoms: Any, args: Any) -> Any:
     """Run CHARMM production phase."""
     from mmml.interfaces.pycharmmInterface.pycharmmCommands import production
 
+    Console().print(Panel("Running production", title="[bold cyan]CHARMM Production[/bold cyan]", border_style="cyan"))
     return _run_charmm_phase(production, atoms, args)
