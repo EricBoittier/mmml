@@ -572,6 +572,10 @@ def set_up_nhc_sim_routine(
         skip_minimization=False,
     ):
         total_records = total_steps // steps_per_recording
+        _monomer_groups = [
+            jnp.arange(int(monomer_offsets[m]), int(monomer_offsets[m + 1]))
+            for m in range(n_monomers)
+        ]
 
         # When ASE already ran (nsteps_ase > 0), R is ASE-minimized; skip JAX-MD minimization
         fire_positions = []
@@ -622,11 +626,15 @@ def set_up_nhc_sim_routine(
             if jnp.any(~jnp.isfinite(minimized_pos)) and fire_positions:
                 minimized_pos = fire_positions[-1]
                 c.print(Panel("Using last valid position from first minimization", title="[bold yellow]Warning[/bold yellow]", border_style="yellow"))
-        # save pdb
-        now = datetime.now()
-        current_time = now.strftime("%H:%M:%S")
-        min_pdb_path = Path(f"{args.output_prefix}_minimized_{current_time}.pdb")
+        # save pdb (wrap by monomer when PBC so molecules stay intact)
+        min_pdb_path = Path(f"{args.output_prefix}_minimized.pdb")
         min_pdb_path.parent.mkdir(parents=True, exist_ok=True)
+        if use_pbc:
+            _cell_for_pdb = jnp.asarray(atoms.get_cell()[:], dtype=jnp.float32)
+            pos_wrapped = wrap_groups(
+                jnp.asarray(minimized_pos), _monomer_groups, _cell_for_pdb, mass=Si_mass
+            )
+            atoms.set_positions(np.asarray(jax.device_get(pos_wrapped)))
         ase_io.write(str(min_pdb_path), atoms)
 
         # ========================================================================
@@ -718,10 +726,9 @@ def set_up_nhc_sim_routine(
                 else:
                     md_pos = best_pbc_pos
 
-            # Save PBC minimized structure
+            # Save PBC minimized structure (md_pos already wrapped by monomer)
             atoms.set_positions(np.asarray(md_pos))
-            pbc_current_time = datetime.now().strftime("%H:%M:%S")
-            pbc_pdb_path = Path(f"{args.output_prefix}_pbc_minimized_{pbc_current_time}.pdb")
+            pbc_pdb_path = Path(f"{args.output_prefix}_pbc_minimized.pdb")
             pbc_pdb_path.parent.mkdir(parents=True, exist_ok=True)
             ase_io.write(str(pbc_pdb_path), atoms)
             c.print(Panel(f"Complete. Final energy: {float(wrapped_energy_fn(md_pos)):.6f} eV", title="[bold green]PBC Minimization[/bold green]", border_style="green"))
@@ -859,7 +866,7 @@ def set_up_nhc_sim_routine(
         # ========================================================================
         # HDF5 REPORTER SETUP
         # ========================================================================
-        hdf5_path = Path(f"{args.output_prefix}_{args.ensemble}_trajectory.h5")
+        hdf5_path = Path(f"{args.output_prefix}_{args.ensemble}.h5")
         hdf5_path.parent.mkdir(parents=True, exist_ok=True)
         scalar_quantities = ["total_energy", "time_ps"]
         if nbr_monitor and is_npt:
@@ -993,11 +1000,12 @@ def set_up_nhc_sim_routine(
                         f"{avg_speed_ns_per_day:10.4f}"
                     )
 
-                # Record to HDF5 (NPT: save real positions via transform)
+                # Record to HDF5 (NPT: save real positions via transform, wrap by monomer)
                 pos_for_h5 = state.position
                 if is_npt:
                     box_curr = simulate.npt_box(state)
                     pos_for_h5 = space.transform(box_curr, state.position)
+                    pos_for_h5 = wrap_groups(pos_for_h5, _monomer_groups, box_curr, mass=Si_mass)
                 report_kw = dict(
                     potential_energy=e_pot,
                     kinetic_energy=e_kin,
@@ -1043,6 +1051,8 @@ def set_up_nhc_sim_routine(
                 # NPT: convert fractional to real using box at this step
                 box_i = nhc_boxes[idx]
                 R = space.transform(box_i, R)
+                # Wrap by monomer so molecules stay intact (frac wrap was per-atom)
+                R = wrap_groups(R, _monomer_groups, box_i, mass=Si_mass)
                 nhc_boxes_out.append(np.asarray(jax.device_get(box_i)))
             elif use_pbc and pbc_map_fn is not None:
                 R = pbc_map_fn(R)

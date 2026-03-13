@@ -88,7 +88,7 @@ def minimize_structure(
         )
 
     if ase:
-        traj_path = Path(f'bfgs_{run_index}_{output_prefix}_minimized.traj')
+        traj_path = Path(f"{output_prefix}_bfgs_{run_index}.traj")
         traj_path.parent.mkdir(parents=True, exist_ok=True)
         traj = ase_io.Trajectory(str(traj_path), 'w')
         c = Console()
@@ -230,7 +230,7 @@ def run_ase_md(
     ))
     integrator = VelocityVerlet(ase_atoms, timestep=dt)
 
-    traj_filename = f'{run_index}_{args.output_prefix}_{temperature}K_{num_steps}steps_P{dt}.traj'
+    traj_filename = f"{args.output_prefix}_ase_{run_index}_{int(temperature)}K.traj"
     Path(traj_filename).parent.mkdir(parents=True, exist_ok=True)
     traj = ase_io.Trajectory(traj_filename, 'w')
 
@@ -287,7 +287,17 @@ def run_ase_md(
             break
         if (i != 0) and (i % args.write_interval == 0):
             if args.cell is not None:
+                wrapped = wrap_positions_for_pbc(
+                    ase_atoms.get_positions(),
+                    cell=args.cell,
+                    hybrid_calc=hybrid_calc,
+                    monomer_offsets=monomer_offsets,
+                    masses=ase_atoms.get_masses(),
+                )
+                orig_pos = ase_atoms.get_positions().copy()
+                ase_atoms.set_positions(wrapped)
                 traj.write(ase_atoms)
+                ase_atoms.set_positions(orig_pos)
             else:
                 traj.write(ase_atoms)
         if args.ensemble == "nvt":

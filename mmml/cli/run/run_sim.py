@@ -660,7 +660,7 @@ def run(args: argparse.Namespace) -> int:
 
             steps_per_frame = get_steps_per_frame(args)
             for i in range(len(out_positions)):
-                traj_filename = f'{args.output_prefix}_md_trajectory_{j}_{i}'
+                traj_filename = f"{args.output_prefix}_md_{j}_{i}"
                 Path(traj_filename).parent.mkdir(parents=True, exist_ok=True)
                 traj_format = getattr(args, "trajectory_format", "traj")
                 ext = "dcd" if traj_format == "dcd" else "traj"
@@ -674,6 +674,9 @@ def run(args: argparse.Namespace) -> int:
                     dt_ps=args.timestep * 0.001,
                     steps_per_frame=steps_per_frame,
                     save_energy_forces=use_ase_calculator,
+                    monomer_offsets=monomer_offsets,
+                    cell=args.cell,
+                    masses=np.asarray(atoms.get_masses()) if hasattr(atoms, "get_masses") else None,
                 )
 
             # atoms = minimize_structure(atoms)
