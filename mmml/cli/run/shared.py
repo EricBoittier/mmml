@@ -28,8 +28,22 @@ def save_trajectory(
 
     Supports format="dcd" for CHARMM-readable DCD files (pure Python, no extra deps).
     For DCD, dt_ps and steps_per_frame are used in the file header.
+
+    Frames with NaN or Inf positions are skipped (e.g. after numerical instability).
     """
     out_positions = np.asarray(out_positions).reshape(-1, len(atoms), 3)
+
+    # Drop frames with NaN/Inf (e.g. from numerical instability before early stop)
+    valid = np.all(np.isfinite(out_positions), axis=(1, 2))
+    n_dropped = int(np.sum(~valid))
+    if n_dropped > 0:
+        out_positions = out_positions[valid]
+        if boxes is not None:
+            boxes = [b for b, v in zip(boxes, valid) if v]
+        print(f"Dropped {n_dropped} frame(s) with NaN/Inf positions.")
+    if len(out_positions) == 0:
+        print("No valid frames to save; skipping trajectory.")
+        return
 
     if format == "dcd":
         from mmml.utils.dcd_writer import save_trajectory_dcd
