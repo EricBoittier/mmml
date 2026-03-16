@@ -314,7 +314,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--view-braille",
         action="store_true",
-        help="Display braille molecular viewer at each timestep/minimization step (width=height=164).",
+        help="Display braille molecular viewer at each timestep/minimization step (width=height=100).",
     )
 
     parser.add_argument(
@@ -400,7 +400,7 @@ def _make_braille_show_frame(live, args):
     from rich.panel import Panel
     from rich.text import Text
 
-    w = h = 164
+    w = h = 100
 
     def show_frame(atoms, step, phase="md"):
         s = render_atoms_braille(atoms, width=w, height=h)
