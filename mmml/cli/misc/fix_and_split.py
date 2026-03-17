@@ -628,17 +628,36 @@ def fix_and_split_data(
             if verbose:
                 print(f"\n⚠️  Missing grid keys: {missing_keys}")
                 print(f"  Available keys: {list(grid_data.keys())}")
-                print(f"  Skipping grid conversion - grid data may already be in Angstroms")
-            # Try to use vdw_surface or vdw_grid directly if they exist
+            # Grid from pyscf-evaluate (esp/esp_grid) is in Bohr; convert to Angstrom
+            # Grid from other sources: assume Angstrom if no metadata
+            grid_from_pyscf = 'esp' in grid_data and ('vdw_surface' in grid_data or 'vdw_grid' in grid_data)
             if 'vdw_surface' in grid_data:
-                vdw_surface_angstrom = grid_data['vdw_surface']
-                if verbose:
-                    print(f"  Using existing vdw_surface from grid file")
+                vdw_raw = grid_data['vdw_surface']
+                if grid_from_pyscf:
+                    vdw_surface_angstrom = vdw_raw * BOHR_TO_ANGSTROM
+                    if verbose:
+                        valid = np.all(np.abs(vdw_raw) < 1e5, axis=-1)
+                        if valid.any():
+                            ext_bohr = np.abs(vdw_raw[valid]).max()
+                            ext_ang = np.abs(vdw_surface_angstrom[valid]).max()
+                            print(f"  Converting vdw_surface from Bohr to Angstrom (pyscf-evaluate format)")
+                            print(f"  Grid extent: ~{ext_bohr:.2f} Bohr → ~{ext_ang:.2f} Angstrom")
+                        else:
+                            print(f"  Converting vdw_surface from Bohr to Angstrom (pyscf-evaluate format)")
+                else:
+                    vdw_surface_angstrom = vdw_raw
+                    if verbose:
+                        print(f"  Using existing vdw_surface (assuming Angstroms)")
             elif 'vdw_grid' in grid_data:
-                # Assume it's already in Angstroms if grid metadata is missing
-                vdw_surface_angstrom = grid_data['vdw_grid']
-                if verbose:
-                    print(f"  Using vdw_grid directly (assuming already in Angstroms)")
+                vdw_raw = grid_data['vdw_grid']
+                if grid_from_pyscf:
+                    vdw_surface_angstrom = vdw_raw * BOHR_TO_ANGSTROM
+                    if verbose:
+                        print(f"  Converting vdw_grid from Bohr to Angstrom (pyscf-evaluate format)")
+                else:
+                    vdw_surface_angstrom = vdw_raw
+                    if verbose:
+                        print(f"  Using vdw_grid directly (assuming Angstroms)")
         else:
             if verbose:
                 print(f"\nCube file parameters:")
@@ -667,10 +686,13 @@ def fix_and_split_data(
                     print(f"\n⚠️  Error converting grid: {e}")
                     print(f"  Falling back to using grid data as-is")
                 # Fallback: use grid data as-is
+                grid_from_pyscf_fb = 'esp' in grid_data and ('vdw_surface' in grid_data or 'vdw_grid' in grid_data)
                 if 'vdw_surface' in grid_data:
-                    vdw_surface_angstrom = grid_data['vdw_surface']
+                    vdw_raw = grid_data['vdw_surface']
+                    vdw_surface_angstrom = vdw_raw * BOHR_TO_ANGSTROM if grid_from_pyscf_fb else vdw_raw
                 elif 'vdw_grid' in grid_data:
-                    vdw_surface_angstrom = grid_data['vdw_grid']
+                    vdw_raw = grid_data['vdw_grid']
+                    vdw_surface_angstrom = vdw_raw * BOHR_TO_ANGSTROM if grid_from_pyscf_fb else vdw_raw
     else:
         if verbose:
             print(f"\n{'#'*70}")
