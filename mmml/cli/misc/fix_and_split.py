@@ -138,13 +138,14 @@ def reduce_esp_grid(
     esp_grid: np.ndarray,
     R: np.ndarray,
     n_grid_points: int = 3000,
-    esp_max_abs: float = 25.0,
+    esp_sd_sigma: float = 3.0,
     min_dist_to_atoms: float = 1.0,
     seed: int = 42,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Reduce ESP grid to fixed number of points per sample.
-    Excludes points with |esp| > esp_max_abs and points too close to atomic centers.
+    Excludes points beyond ±esp_sd_sigma standard deviations from the mean (ignores
+    distribution tails) and points too close to atomic centers.
     """
     rng = np.random.default_rng(seed)
     n_samples = esp.shape[0]
@@ -160,7 +161,6 @@ def reduce_esp_grid(
 
         # Mask padding (esp_grid uses 1e6 for padding)
         valid = np.all(np.abs(grid_i) < 1e5, axis=1)
-        valid &= np.abs(esp_i) < esp_max_abs
 
         # Exclude points too close to any atom
         atoms_valid = np.any(r_i != 0, axis=1)
@@ -168,6 +168,14 @@ def reduce_esp_grid(
             dists = cdist(grid_i, r_i[atoms_valid])
             min_d = dists.min(axis=1)
             valid &= min_d > min_dist_to_atoms
+
+        # Exclude distribution tails: keep only points within ±esp_sd_sigma SD of mean
+        valid_esp = esp_i[valid]
+        if len(valid_esp) > 0:
+            mean_esp = np.mean(valid_esp)
+            std_esp = np.std(valid_esp)
+            if std_esp > 0:
+                valid &= np.abs(esp_i - mean_esp) <= esp_sd_sigma * std_esp
 
         idx = np.where(valid)[0]
         if len(idx) >= n_grid_points:
@@ -385,7 +393,7 @@ def fix_and_split_data(
     atomic_ref: Optional[str] = None,
     atomic_ref_units: str = "hartree",
     n_grid_points: int = 3000,
-    esp_max_abs: float = 25.0,
+    esp_sd_sigma: float = 3.0,
     min_dist_to_atoms: float = 1.0,
     verbose: bool = True
 ) -> bool:
@@ -419,10 +427,10 @@ def fix_and_split_data(
         Units of refs in JSON: "hartree" (default) or "ev". If "ev", refs are converted
         before subtraction. Schemes like pbe0/sz may use eV; pbe0/def2-tzvp uses Hartree.
     n_grid_points : int
-        Target number of ESP grid points per sample (default 3000). Points with high |esp|
-        or too close to atoms are excluded, then subsampled.
-    esp_max_abs : float
-        Exclude grid points with |esp| > this (default 25.0, Hartree/e).
+        Target number of ESP grid points per sample (default 3000). Points beyond ±esp_sd_sigma
+        SD from the mean or too close to atoms are excluded, then subsampled.
+    esp_sd_sigma : float
+        Exclude grid points beyond ±this many standard deviations from the mean (default 3.0).
     min_dist_to_atoms : float
         Exclude grid points closer than this to any atom in Å (default 1.0).
     verbose : bool
@@ -733,14 +741,14 @@ def fix_and_split_data(
             print("# Step 5b: Reducing ESP Grid")
             print(f"{'#'*70}")
             print(f"  Target points: {n_grid_points}")
-            print(f"  Exclude |esp| > {esp_max_abs} (Hartree/e)")
+            print(f"  Exclude points beyond ±{esp_sd_sigma} SD from mean")
             print(f"  Exclude points < {min_dist_to_atoms} Å from atoms")
         esp_reduced, grid_reduced = reduce_esp_grid(
             esp_raw,
             vdw_surface_angstrom,
             R_angstrom,
             n_grid_points=n_grid_points,
-            esp_max_abs=esp_max_abs,
+            esp_sd_sigma=esp_sd_sigma,
             min_dist_to_atoms=min_dist_to_atoms,
             seed=seed,
         )
@@ -1168,14 +1176,14 @@ Examples:
         type=int,
         default=3000,
         metavar='N',
-        help='Target number of ESP grid points per sample (default 3000). Excludes high |esp| and points near atoms.'
+        help='Target number of ESP grid points per sample (default 3000). Excludes tails (±SD) and points near atoms.'
     )
     parser.add_argument(
-        '--esp-max-abs',
+        '--esp-sd-sigma',
         type=float,
-        default=25.0,
-        metavar='X',
-        help='Exclude grid points with |esp| > X in Hartree/e (default 25.0)'
+        default=3.0,
+        metavar='N',
+        help='Exclude grid points beyond ±N SD from mean (default 3.0, ignores distribution tails)'
     )
     parser.add_argument(
         '--min-dist-to-atoms',
