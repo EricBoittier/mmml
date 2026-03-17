@@ -100,8 +100,15 @@ quantum = [
     "dscribe",
 ]
 
-# GPU-accelerated quantum chemistry (CUDA 12)
+# GPU-accelerated quantum chemistry (CUDA 13, default)
 quantum-gpu = [
+    "mmml[quantum]",
+    "gpu4pyscf-cuda13x",
+    "gpu4pyscf-libxc-cuda13x",
+]
+
+# GPU-accelerated quantum chemistry (CUDA 12)
+quantum-gpu-cuda12 = [
     "mmml[quantum]",
     "gpu4pyscf-cuda12x",
     "gpu4pyscf-libxc-cuda12x",
@@ -179,17 +186,17 @@ dev = [
 
 # Full installation with all optional dependencies (CUDA 13 default)
 all = [
-    "mmml[gpu,quantum,ml,viz,md,chem,data,notebooks,experiments,plotting]",
+    "mmml[gpu,quantum,quantum-gpu,ml,viz,md,chem,data,notebooks,experiments,plotting]",
 ]
 
 # Full installation with all optional dependencies (CUDA 12)
 all-cuda12 = [
-    "mmml[gpu-cuda12,quantum,quantum-gpu,ml,viz,md,chem,data,notebooks,experiments,plotting]",
+    "mmml[gpu-cuda12,quantum,quantum-gpu-cuda12,ml,viz,md,chem,data,notebooks,experiments,plotting]",
 ]
 
 # Alias for all (CUDA 13); same as all
 all-cuda13 = [
-    "mmml[gpu,quantum,ml,viz,md,chem,data,notebooks,experiments,plotting]",
+    "mmml[gpu,quantum,quantum-gpu,ml,viz,md,chem,data,notebooks,experiments,plotting]",
 ]
 
 # CPU-only full installation (no GPU dependencies)
