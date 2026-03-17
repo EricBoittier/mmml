@@ -1,4 +1,4 @@
-.PHONY: help install install-gpu install-dev install-all clean test docker-build docker-run conda-create docker-clean
+.PHONY: help install install-gpu install-dev install-all clean test docker-build docker-run micromamba-create micromamba-create-gpu micromamba-create-gpu-cuda13 micromamba-create-full micromamba-update micromamba-remove docker-clean
 
 help:
 	@echo "MMML - Makefile Commands"
@@ -11,11 +11,11 @@ help:
 	@echo "  make install-dev      - Install with development dependencies"
 	@echo "  make install-all      - Install all optional dependencies"
 	@echo ""
-	@echo "Conda:"
-	@echo "  make conda-create     - Create conda environment (CPU)"
-	@echo "  make conda-create-gpu - Create conda environment (GPU/CUDA 12)"
-	@echo "  make conda-create-gpu-cuda13 - Create conda environment (GPU/CUDA 13)"
-	@echo "  make conda-create-full - Create conda environment (all features)"
+	@echo "Micromamba:"
+	@echo "  make micromamba-create     - Create micromamba environment (CPU)"
+	@echo "  make micromamba-create-gpu - Create micromamba environment (GPU/CUDA 12)"
+	@echo "  make micromamba-create-gpu-cuda13 - Create micromamba environment (GPU/CUDA 13)"
+	@echo "  make micromamba-create-full - Create micromamba environment (all features)"
 	@echo ""
 	@echo "Docker:"
 	@echo "  make docker-build-cpu  - Build CPU Docker image"
@@ -67,26 +67,26 @@ install-all:
 	uv sync --extra all
 
 # ==============================================================================
-# Conda environments
+# Micromamba environments
 # ==============================================================================
 
-conda-create:
-	conda env create -f setup/environment.yml
+micromamba-create:
+	micromamba env create -f setup/environment.yml
 
-conda-create-gpu:
-	conda env create -f setup/environment-gpu.yml
+micromamba-create-gpu:
+	micromamba env create -f setup/environment-gpu.yml
 
-conda-create-gpu-cuda13:
-	conda env create -f setup/environment-gpu-cuda13.yml
+micromamba-create-gpu-cuda13:
+	micromamba env create -f setup/environment-gpu-cuda13.yml
 
-conda-create-full:
-	conda env create -f setup/environment-full.yml
+micromamba-create-full:
+	micromamba env create -f setup/environment-full.yml
 
-conda-update:
-	conda env update -f setup/environment.yml --prune
+micromamba-update:
+	micromamba env update -f setup/environment.yml --prune
 
-conda-remove:
-	conda env remove -n mmml -y
+micromamba-remove:
+	micromamba env remove -n mmml -y
 
 # ==============================================================================
 # Docker
