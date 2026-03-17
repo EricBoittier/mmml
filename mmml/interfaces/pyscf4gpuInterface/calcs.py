@@ -1,6 +1,7 @@
 import argparse
 
 import numpy as np
+from tqdm import tqdm
 import pyscf
 from pyscf.hessian import thermo
 from pyscf import gto
@@ -361,7 +362,7 @@ def compute_dft_batch(
     esps = []
     esp_grids = []
 
-    for i in range(n):
+    for i in tqdm(range(n), desc="pyscf-dft", unit="geom"):
         out = compute_dft_single(
             R_batch[i],
             Z,
