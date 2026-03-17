@@ -74,5 +74,5 @@ dependencies:
       - typing-extensions
       - pint
       
-      # Install mmml in editable mode (run this from the repo root)
-      - -e .
+      # Install mmml in editable mode (pip runs from setup/, so use .. for project root)
+      - -e ..
