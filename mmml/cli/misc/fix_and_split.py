@@ -531,9 +531,11 @@ def fix_and_split_data(
         grid_data = None
         has_grid = False
 
+        grid_from_efd = False
         if grid_file is not None and grid_file.exists():
             grid_data = dict(np.load(grid_file, allow_pickle=True))
             has_grid = True
+            grid_from_efd = False
         elif 'esp' in efd_data and 'esp_grid' in efd_data:
             # Combined EFD+grid file (e.g. from pyscf-evaluate --esp)
             grid_data = {
@@ -546,6 +548,7 @@ def fix_and_split_data(
             if 'Dxyz' in efd_data:
                 grid_data['Dxyz'] = efd_data['Dxyz']
             has_grid = True
+            grid_from_efd = True
             if verbose:
                 print(f"  Using esp/esp_grid from EFD file (combined format)")
     except Exception as e:
@@ -822,15 +825,16 @@ def fix_and_split_data(
                 f"ESP/grid point count mismatch: esp {esp_raw.shape[1]} vs grid {vdw_surface_angstrom.shape[1]}. "
                 "esp[i,j] must correspond to grid[i,j] for correct pairing."
             )
-        # Check index alignment before reduction (catches esp/grid from different sources)
-        align_ok_raw, align_corr_raw = check_esp_grid_alignment(
-            esp_raw, vdw_surface_angstrom, R_angstrom, n_check=min(5, esp_raw.shape[0])
-        )
-        if verbose:
-            print(f"  ESP-grid alignment (raw): correlation={align_corr_raw:.3f} {'✓' if align_ok_raw else '⚠️'}")
-        if not align_ok_raw:
-            print(f"  ⚠️  WARNING: Low esp-grid correlation suggests index misalignment. "
-                  "esp[i,j] may not correspond to grid[i,j]. Check that esp and grid come from the same source.")
+        # Check index alignment only for separate grid files (combined EFD format is trusted)
+        if not grid_from_efd:
+            align_ok_raw, align_corr_raw = check_esp_grid_alignment(
+                esp_raw, vdw_surface_angstrom, R_angstrom, n_check=min(5, esp_raw.shape[0])
+            )
+            if verbose:
+                print(f"  ESP-grid alignment (raw): correlation={align_corr_raw:.3f} {'✓' if align_ok_raw else '⚠️'}")
+            if not align_ok_raw:
+                print(f"  ⚠️  WARNING: Low esp-grid correlation suggests index misalignment. "
+                      "esp[i,j] may not correspond to grid[i,j]. Check that esp and grid come from the same source.")
         if verbose:
             print(f"\n{'#'*70}")
             print("# Step 5b: Reducing ESP Grid")
@@ -854,13 +858,14 @@ def fix_and_split_data(
             n_valid_per_sample = np.sum(np.all(np.abs(grid_reduced) < 1e5, axis=2), axis=1)
             print(f"  Reduced to shape: esp {esp_reduced.shape}, grid {grid_reduced.shape}")
             print(f"  Valid points per sample: min={n_valid_per_sample.min()}, max={n_valid_per_sample.max()}, mean={n_valid_per_sample.mean():.0f}")
-        # Verify esp-grid index alignment (esp[i,j] must be at grid[i,j])
-        align_ok, align_corr = check_esp_grid_alignment(esp_reduced, grid_reduced, R_angstrom, n_check=5)
-        if verbose:
-            print(f"  ESP-grid alignment check: correlation={align_corr:.3f} {'✓' if align_ok else '⚠️'}")
-        if not align_ok and verbose:
-            print(f"  ⚠️  Low esp-grid correlation may indicate index misalignment. "
-                  "Ensure esp and grid come from the same source with matching point order.")
+        # Verify esp-grid alignment only for separate grid files
+        if not grid_from_efd:
+            align_ok, align_corr = check_esp_grid_alignment(esp_reduced, grid_reduced, R_angstrom, n_check=5)
+            if verbose:
+                print(f"  ESP-grid alignment check: correlation={align_corr:.3f} {'✓' if align_ok else '⚠️'}")
+            if not align_ok and verbose:
+                print(f"  ⚠️  Low esp-grid correlation may indicate index misalignment. "
+                      "Ensure esp and grid come from the same source with matching point order.")
         # Update grid_data for saving - we need esp and vdw_surface
         grid_data = dict(grid_data)
         grid_data['esp'] = esp_reduced
