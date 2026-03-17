@@ -20,6 +20,9 @@ mmml/physnetjax/ckpts/*
 examples/co2/training_data/
 examples/co2/training_data_fixed/
 examples/co2/charge_files/
+
+# Large testdata (858 MB) - use make data-testdata or see scripts/README_DATA.md
+examples/other/testdata/grids_esp.npz
 **/training_data/*.npz
 **/training_data_fixed/*.npz
 *.traj
@@ -149,6 +152,9 @@ ENV/
 
 # mypy
 .mypy_cache/
+
+# Generated LFS audit
+lfs_audit.txt
 
 # profraw files from LLVM? Unclear exactly what triggers this
 # There are reports this comes from LLVM profiling, but also Xcode 9.
