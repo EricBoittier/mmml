@@ -24,6 +24,7 @@ Available commands:
   validate    Validate NPZ files against schema
   fix-and-split  Fix units and create train/valid/test splits from NPZ data
   pyscf-dft   GPU-accelerated DFT calculations (energy, gradient, hessian, etc.)
+  pyscf-mp2   GPU-accelerated MP2 (post-HF) calculations
   gui         Start the molecular viewer GUI
 
 Examples:
@@ -43,7 +44,7 @@ For help on a specific command:
     
     parser.add_argument(
         'command',
-        choices=['xml2npz', 'validate', 'train', 'evaluate', 'downstream', 'fix-and-split', 'pyscf-dft', 'gui'],
+        choices=['xml2npz', 'validate', 'train', 'evaluate', 'downstream', 'fix-and-split', 'pyscf-dft', 'pyscf-mp2', 'gui'],
         help='Command to run'
     )
     parser.add_argument(
@@ -102,7 +103,12 @@ For help on a specific command:
         from .misc import pyscf_dft
         sys.argv = ['mmml pyscf-dft'] + args.args
         return pyscf_dft.main()
-    
+
+    elif args.command == 'pyscf-mp2':
+        from .misc import pyscf_mp2
+        sys.argv = ['mmml pyscf-mp2'] + args.args
+        return pyscf_mp2.main()
+
     elif args.command == 'gui':
         from . import gui
         sys.argv = ['mmml gui'] + args.args

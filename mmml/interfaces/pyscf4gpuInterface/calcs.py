@@ -389,12 +389,50 @@ def process_calcs(args):
 
     return calcs, extra
 
+
+def compute_mp2(mol_str: str, basis: str = "def2-SVP", spin: int = 0, charge: int = 0,
+                energy: bool = True, gradient: bool = False, log_file: str = "pyscf.log") -> dict:
+    """
+    Run DF-MP2 calculation via gpu4pyscf (post-HF, not DFT).
+
+    Returns dict with R, Z, N, energy, gradient (if requested), etc.
+    """
+    import pyscf
+    from gpu4pyscf.scf import RHF
+    from gpu4pyscf.mp import dfmp2
+
+    mol = pyscf.M(atom=mol_str, basis=basis, spin=spin, charge=charge, output=log_file, verbose=6)
+    mf = RHF(mol).density_fit()
+    e_hf = mf.kernel()
+
+    pt = dfmp2.DFMP2(mf)
+    e_corr, _ = pt.kernel()
+    e_mp2 = e_hf + e_corr
+
+    output = {
+        "mol": mol,
+        "energy": np.array(e_mp2),
+        "energy_hf": np.array(e_hf),
+        "energy_corr": np.array(e_corr),
+        "R": np.asarray(mol.atom_coords(unit="ANG")),
+        "Z": np.asarray(mol.atom_charges()),
+        "N": np.array(len(mol.atom_charges())),
+    }
+
+    if gradient:
+        g = pt.nuc_grad_method()
+        g_mp2 = g.kernel()
+        output["gradient"] = g_mp2.get() if hasattr(g_mp2, "get") else np.asarray(g_mp2)
+
+    return output
+
+
 def get_dummy_args(mol: str, calcs: list[CALCS]):
     # instead of parsing the args, trick python into thinking we have parsed the args
     class Args:
         def __init__(self):
             self.mol = mol
-            self.output = "output.pkl"
+            self.output = "output"
             self.log_file = "pyscf.log"
             self.monomer_a = ""
             self.monomer_b = ""
