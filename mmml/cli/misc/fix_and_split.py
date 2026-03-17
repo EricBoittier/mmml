@@ -139,13 +139,15 @@ def reduce_esp_grid(
     R: np.ndarray,
     n_grid_points: int = 3000,
     esp_sd_sigma: float = 3.0,
+    esp_max_abs_kcal_mol: float = 10.0,
     min_dist_to_atoms: float = 1.0,
     seed: int = 42,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Reduce ESP grid to fixed number of points per sample.
     Excludes points beyond ±esp_sd_sigma standard deviations from the mean (ignores
-    distribution tails) and points too close to atomic centers.
+    distribution tails), points with |esp| > esp_max_abs_kcal_mol (kcal/mol/e), and
+    points too close to atomic centers.
     """
     rng = np.random.default_rng(seed)
     n_samples = esp.shape[0]
@@ -176,6 +178,11 @@ def reduce_esp_grid(
             std_esp = np.std(valid_esp)
             if std_esp > 0:
                 valid &= np.abs(esp_i - mean_esp) <= esp_sd_sigma * std_esp
+
+        # Exclude points with |esp| > esp_max_abs_kcal_mol (kcal/mol/e)
+        from mmml.data.units import KCAL_MOL_TO_HARTREE
+        esp_max_hartree = esp_max_abs_kcal_mol * KCAL_MOL_TO_HARTREE
+        valid &= np.abs(esp_i) <= esp_max_hartree
 
         idx = np.where(valid)[0]
         if len(idx) >= n_grid_points:
@@ -394,6 +401,7 @@ def fix_and_split_data(
     atomic_ref_units: str = "hartree",
     n_grid_points: int = 3000,
     esp_sd_sigma: float = 3.0,
+    esp_max_abs_kcal_mol: float = 10.0,
     min_dist_to_atoms: float = 1.0,
     verbose: bool = True
 ) -> bool:
@@ -431,6 +439,8 @@ def fix_and_split_data(
         SD from the mean or too close to atoms are excluded, then subsampled.
     esp_sd_sigma : float
         Exclude grid points beyond ±this many standard deviations from the mean (default 3.0).
+    esp_max_abs_kcal_mol : float
+        Exclude grid points with |esp| > this in kcal/mol/e (default 10.0).
     min_dist_to_atoms : float
         Exclude grid points closer than this to any atom in Å (default 1.0).
     verbose : bool
@@ -742,6 +752,7 @@ def fix_and_split_data(
             print(f"{'#'*70}")
             print(f"  Target points: {n_grid_points}")
             print(f"  Exclude points beyond ±{esp_sd_sigma} SD from mean")
+            print(f"  Exclude |esp| > {esp_max_abs_kcal_mol} kcal/mol/e")
             print(f"  Exclude points < {min_dist_to_atoms} Å from atoms")
         esp_reduced, grid_reduced = reduce_esp_grid(
             esp_raw,
@@ -749,6 +760,7 @@ def fix_and_split_data(
             R_angstrom,
             n_grid_points=n_grid_points,
             esp_sd_sigma=esp_sd_sigma,
+            esp_max_abs_kcal_mol=esp_max_abs_kcal_mol,
             min_dist_to_atoms=min_dist_to_atoms,
             seed=seed,
         )
@@ -1186,6 +1198,13 @@ Examples:
         help='Exclude grid points beyond ±N SD from mean (default 3.0, ignores distribution tails)'
     )
     parser.add_argument(
+        '--esp-max-abs-kcal-mol',
+        type=float,
+        default=10.0,
+        metavar='X',
+        help='Exclude grid points with |esp| > X kcal/mol/e (default 10.0)'
+    )
+    parser.add_argument(
         '--min-dist-to-atoms',
         type=float,
         default=1.0,
@@ -1231,6 +1250,7 @@ Examples:
         atomic_ref_units=getattr(args, 'atomic_ref_units', 'hartree'),
         n_grid_points=getattr(args, 'n_grid_points', 3000),
         esp_sd_sigma=getattr(args, 'esp_sd_sigma', 3.0),
+        esp_max_abs_kcal_mol=getattr(args, 'esp_max_abs_kcal_mol', 10.0),
         min_dist_to_atoms=getattr(args, 'min_dist_to_atoms', 1.0),
         verbose=not args.quiet
     )
