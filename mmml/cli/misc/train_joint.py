@@ -2590,7 +2590,7 @@ def plot_validation_results(
         
         if len(grid_pos) == 0:
             plt.close(fig)
-            print(f"  ⚠️  ESP example {idx}: no valid grid points (all padding), skipping 3D plot")
+            print(f"  ⚠️  ESP example {idx}: no valid grid points (all padding), skipping 3D/multi-scale/radial plots")
         else:
             # No centering needed - grid and atoms should already be aligned after Bohr→Å conversion
             
