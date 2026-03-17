@@ -1080,7 +1080,7 @@ class JointPhysNetDCMNet(nn.Module):
         }
 
 
-def load_combined_data(efd_file: Path, esp_file: Path, subtract_atom_energies: bool = True, verbose: bool = False) -> Dict[str, np.ndarray]:
+def load_combined_data(efd_file: Path, esp_file: Path, subtract_atom_energies: bool = False, verbose: bool = False) -> Dict[str, np.ndarray]:
     """
     Load and combine EFD and ESP data from separate NPZ files.
     
@@ -3544,8 +3544,8 @@ def main():
                        help='Validation energies/forces/dipoles NPZ file')
     parser.add_argument('--valid-esp', type=Path, required=True,
                        help='Validation ESP grids NPZ file')
-    parser.add_argument('--no-subtract-atom-energies', action='store_true', default=False,
-                       help='Disable subtraction of reference atomic energies (default: subtract)')
+    parser.add_argument('--subtract-atom-energies', action='store_true',
+                       help='Subtract reference atomic energies from total energies (default: do not subtract)')
     
     # PhysNet hyperparameters
     parser.add_argument('--physnet-features', type=int, default=64,
@@ -3740,7 +3740,7 @@ def main():
     print(f"{'#'*70}\n")
     
     print("Loading training data...")
-    subtract_atom_energies = not args.no_subtract_atom_energies
+    subtract_atom_energies = args.subtract_atom_energies
     train_data = load_combined_data(args.train_efd, args.train_esp, 
                                     subtract_atom_energies=subtract_atom_energies, 
                                     verbose=args.verbose)
