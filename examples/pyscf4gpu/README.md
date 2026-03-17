@@ -25,11 +25,14 @@ uv run python examples/pyscf4gpu/water_energy.py
 # Energy only
 make pyscf-dft
 
-# Or with custom molecule and options:
-uv run mmml pyscf-dft --mol "O 0 0 0; H 0.96 0 0; H -0.24 0.93 0" --energy --output results.pkl
+# Or with custom molecule and options (default basis: def2-SVP):
+uv run mmml pyscf-dft --mol "O 0 0 0; H 0.96 0 0; H -0.24 0.93 0" --energy --output results
 
 # Energy + gradient + hessian + harmonic analysis
 uv run mmml pyscf-dft --mol water.xyz --energy --gradient --hessian --harmonic --thermo
+
+# MP2 (post-HF, not DFT):
+uv run mmml pyscf-mp2 --mol "O 0 0 0; H 0.96 0 0; H -0.24 0.93 0" --energy --gradient
 ```
 
 ## Programmatic usage
@@ -40,7 +43,7 @@ from mmml.interfaces.pyscf4gpuInterface.enums import CALCS
 
 mol_str = "O 0 0 0; H 0.96 0 0; H -0.24 0.93 0"
 args = get_dummy_args(mol_str, [CALCS.ENERGY, CALCS.GRADIENT])
-args.basis = "def2-tzvp"
+args.basis = "def2-TZVP"  # default is def2-SVP
 args.xc = "PBE0"
 
 output = compute_dft(args, [CALCS.ENERGY, CALCS.GRADIENT])

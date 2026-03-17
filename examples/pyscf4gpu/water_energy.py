@@ -34,11 +34,11 @@ def main():
 
     # Build args (same as CLI would parse)
     args = get_dummy_args(mol_str.strip(), [CALCS.ENERGY, CALCS.GRADIENT])
-    args.basis = "def2-tzvp"
+    args.basis = "def2-TZVP"
     args.xc = "PBE0"
     args.output = "water_dft_output"
 
-    print("Computing DFT energy and gradient for water (PBE0/def2-TZVP)")
+    print("Computing DFT energy and gradient for water (PBE0/def2-TZVP, override default def2-SVP)")
     print("-" * 60)
 
     output = compute_dft(args, [CALCS.ENERGY, CALCS.GRADIENT], extra=None)
