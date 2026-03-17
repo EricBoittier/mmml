@@ -323,7 +323,7 @@ def compute_dft_single(
         rinv = 1.0 / r
         intopt = int3c2e.VHFOpt(mol, fakemol, "int2e")
         intopt.build(1e-14, diag_block_with_triu=False, aosym=True, group_size=256)
-        v_grids_e = 2.0 * int3c2e.get_j_int3c2e_pass1(intopt, dm, sort_j=False)
+        v_grids_e = 2.0 * int3c2e.get_j_int3c2e_pass1(intopt, dm, sort_j=True)
         v_grids_n = cupy.dot(charges, rinv)
         res = v_grids_n - v_grids_e
         out["esp"] = res.get()
