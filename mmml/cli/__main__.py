@@ -23,6 +23,7 @@ Available commands:
   evaluate    Evaluate trained models (coming soon)
   validate    Validate NPZ files against schema
   fix-and-split  Fix units and create train/valid/test splits from NPZ data
+  pyscf-dft   GPU-accelerated DFT calculations (energy, gradient, hessian, etc.)
   gui         Start the molecular viewer GUI
 
 Examples:
@@ -33,6 +34,7 @@ Examples:
   mmml fix-and-split --efd data.npz --grid grids.npz --output-dir ./splits
   mmml gui --data-dir ./trajectories
   mmml gui --file simulation.npz
+  mmml pyscf-dft --mol "O 0 0 0; H 0.96 0 0; H -0.24 0.93 0" --energy
   
 For help on a specific command:
   mmml <command> --help
@@ -41,7 +43,7 @@ For help on a specific command:
     
     parser.add_argument(
         'command',
-        choices=['xml2npz', 'validate', 'train', 'evaluate', 'downstream', 'fix-and-split', 'gui'],
+        choices=['xml2npz', 'validate', 'train', 'evaluate', 'downstream', 'fix-and-split', 'pyscf-dft', 'gui'],
         help='Command to run'
     )
     parser.add_argument(
@@ -54,7 +56,7 @@ For help on a specific command:
     
     # Dispatch to appropriate command
     if args.command == 'xml2npz':
-        from . import xml2npz
+        from .misc import xml2npz
         sys.argv = ['mmml xml2npz'] + args.args
         return xml2npz.main()
     
@@ -92,9 +94,14 @@ For help on a specific command:
         return downstream.main()
     
     elif args.command == 'fix-and-split':
-        from . import fix_and_split
+        from .misc import fix_and_split
         sys.argv = ['mmml fix-and-split'] + args.args
         return fix_and_split.main()
+    
+    elif args.command == 'pyscf-dft':
+        from .misc import pyscf_dft
+        sys.argv = ['mmml pyscf-dft'] + args.args
+        return pyscf_dft.main()
     
     elif args.command == 'gui':
         from . import gui

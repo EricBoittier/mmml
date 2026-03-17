@@ -1,3 +1,5 @@
+import argparse
+
 import numpy as np
 import pyscf
 from pyscf.hessian import thermo
@@ -10,9 +12,9 @@ from gpu4pyscf.properties import ir, shielding, polarizability
 
 import cupy
 
-from mmml.pyscf4gpuInterface.enums import *
-from mmml.pyscf4gpuInterface.helperfunctions import *
-from mmml.pyscf4gpuInterface.esp_helpers import balance_array
+from mmml.interfaces.pyscf4gpuInterface.enums import *
+from mmml.interfaces.pyscf4gpuInterface.helperfunctions import *
+from mmml.interfaces.pyscf4gpuInterface.esp_helpers import balance_array
 
 def setup_mol(atoms, basis, xc, spin, charge, log_file='./pyscf.log', 
     verbose=6, 
@@ -55,7 +57,7 @@ def compute_dft(args, calcs, extra=None):
     engine, mol = setup_mol(args.mol, args.basis, args.xc, args.spin, args.charge)
 
     print(mol)
-    from mmml.pyscf4gpuInterface.helperfunctions import print_basis
+    from mmml.interfaces.pyscf4gpuInterface.helperfunctions import print_basis
     print_basis(mol)
 
     opt_callback = None
@@ -481,8 +483,6 @@ def save_output(output_path: str, data: dict, save_option: str = "pkl") -> None:
 
 
 if __name__ == "__main__":
-    import argparse
-    import json
     args = parse_args()
     calcs, extra = process_calcs(args)
     print(calcs, extra)
