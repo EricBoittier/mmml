@@ -31,7 +31,8 @@ def compute_esp_at_grid_pyscf(R_angstrom: np.ndarray, Z: np.ndarray, grid_angstr
     mol = pyscf.gto.M(atom=atom, basis=basis, unit="Angstrom", verbose=0)
     mf = rks.RKS(mol, xc=xc).run()
 
-    grid_bohr = grid_angstrom * 0.529177
+    from mmml.data.units import ANGSTROM_TO_BOHR
+    grid_bohr = grid_angstrom * ANGSTROM_TO_BOHR
     dm = mf.make_rdm1()
     coords = mol.atom_coords(unit="Bohr")
     charges = mol.atom_charges()
@@ -123,9 +124,9 @@ def main() -> int:
     rmse = np.sqrt(np.mean((esp_stored - esp_recomputed) ** 2))
 
     # Isolate V_nuc (no SCF): V_nuc = sum Z_a / |r - R_a|. If aligned, stored_esp = V_nuc - V_elec.
-    BOHR = 0.529177
-    coords_bohr = grid_subset_angstrom * BOHR
-    R_bohr = R_i * BOHR
+    from mmml.data.units import ANGSTROM_TO_BOHR
+    coords_bohr = grid_subset_angstrom * ANGSTROM_TO_BOHR
+    R_bohr = R_i * ANGSTROM_TO_BOHR
     atoms_valid = np.any(R_i != 0, axis=1)
     Z_arr = np.asarray(Z)
     if Z_arr.ndim == 0 or (Z_arr.ndim == 1 and Z_arr.shape[0] != R_i.shape[0]):
