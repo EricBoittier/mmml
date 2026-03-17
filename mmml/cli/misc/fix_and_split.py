@@ -190,14 +190,17 @@ def validate_fixed_data(
     # Check ESP grid (only if grid data exists)
     if has_grid and vdw_grid_ang is not None:
         grid0 = vdw_grid_ang[0]
-        grid_extent = (grid0.max(axis=0) - grid0.min(axis=0)).mean()
+        # Mask out padding (e.g. 1e6 used for variable-length grids)
+        valid_mask = np.all(np.abs(grid0) < 1e5, axis=1)
+        grid0_valid = grid0[valid_mask] if np.any(valid_mask) else grid0
+        grid_extent = (grid0_valid.max(axis=0) - grid0_valid.min(axis=0)).mean()
         
         if verbose:
             print(f"\nESP Grid Coordinates:")
             print(f"  Average extent: {grid_extent:.4f} Angstrom")
-            print(f"  X range: [{grid0[:, 0].min():.4f}, {grid0[:, 0].max():.4f}]")
-            print(f"  Y range: [{grid0[:, 1].min():.4f}, {grid0[:, 1].max():.4f}]")
-            print(f"  Z range: [{grid0[:, 2].min():.4f}, {grid0[:, 2].max():.4f}]")
+            print(f"  X range: [{grid0_valid[:, 0].min():.4f}, {grid0_valid[:, 0].max():.4f}]")
+            print(f"  Y range: [{grid0_valid[:, 1].min():.4f}, {grid0_valid[:, 1].max():.4f}]")
+            print(f"  Z range: [{grid0_valid[:, 2].min():.4f}, {grid0_valid[:, 2].max():.4f}]")
         
         # Expect reasonable grid extent for molecular systems (2-20 Angstroms)
         if 2.0 < grid_extent < 50.0:
@@ -217,8 +220,8 @@ def validate_fixed_data(
         
         if len(valid_pos) > 0:
             mol_center = valid_pos.mean(axis=0)
-            grid_min = grid0.min(axis=0)
-            grid_max = grid0.max(axis=0)
+            grid_min = grid0_valid.min(axis=0)
+            grid_max = grid0_valid.max(axis=0)
             
             if verbose:
                 print(f"\nSpatial relationship:")
@@ -228,7 +231,7 @@ def validate_fixed_data(
                       f"Z[{grid_min[2]:.2f}, {grid_max[2]:.2f}]")
             
             # Check if molecule is within or near grid bounds
-            max_min_dist = max([np.min(np.linalg.norm(grid0 - atom_pos, axis=1)) 
+            max_min_dist = max([np.min(np.linalg.norm(grid0_valid - atom_pos, axis=1)) 
                                for atom_pos in valid_pos])
             
             if max_min_dist < 10.0:
@@ -336,13 +339,27 @@ def fix_and_split_data(
         print(f"{'#'*70}")
     
     try:
-        efd_data = dict(np.load(efd_file))
+        efd_data = dict(np.load(efd_file, allow_pickle=True))
         grid_data = None
         has_grid = False
-        
+
         if grid_file is not None and grid_file.exists():
-            grid_data = dict(np.load(grid_file))
+            grid_data = dict(np.load(grid_file, allow_pickle=True))
             has_grid = True
+        elif 'esp' in efd_data and 'esp_grid' in efd_data:
+            # Combined EFD+grid file (e.g. from pyscf-evaluate --esp)
+            grid_data = {
+                'esp': efd_data['esp'],
+                'vdw_surface': efd_data['esp_grid'],
+                'R': efd_data['R'],
+                'Z': efd_data['Z'],
+                'N': efd_data['N'],
+            }
+            if 'Dxyz' in efd_data:
+                grid_data['Dxyz'] = efd_data['Dxyz']
+            has_grid = True
+            if verbose:
+                print(f"  Using esp/esp_grid from EFD file (combined format)")
     except Exception as e:
         print(f"\n❌ Error loading data: {e}")
         return False
