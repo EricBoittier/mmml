@@ -328,7 +328,7 @@ def compute_dft_single(
             # GPU path: int1e_grids (direct grid evaluation, correct ordering)
             # + V_nuc. Avoids get_j_int3c2e_pass1 aux basis ordering bug.
             v_elec = int1e_grids(mol, coords, dm=dm)
-            v_elec = np.asarray(v_elec) if hasattr(v_elec, "get") else v_elec
+            v_elec = v_elec.get() if hasattr(v_elec, "get") else np.asarray(v_elec)
             charges = mol.atom_charges()
             atom_coords = mol.atom_coords(unit="Bohr")
             v_nuc = np.array(

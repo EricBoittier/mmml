@@ -58,7 +58,7 @@ def esp_gpu_int3c2e(mol, dm, grid_bohr):
 def esp_gpu_int1e_grids(mol, dm, grid_bohr):
     """ESP at grid points via int1e_grids (direct grid, correct ordering)."""
     v_elec = int1e_grids(mol, grid_bohr, dm=dm)
-    v_elec = np.asarray(v_elec) if hasattr(v_elec, "get") else v_elec
+    v_elec = v_elec.get() if hasattr(v_elec, "get") else np.asarray(v_elec)
     charges = mol.atom_charges()
     atom_coords = mol.atom_coords(unit="Bohr")
     v_nuc = np.array(
