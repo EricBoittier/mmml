@@ -2,7 +2,11 @@
 
 Examples using `mmml.interfaces.pyscf4gpuInterface` for GPU-accelerated quantum chemistry.
 
-**Requirements:** gpu4pyscf, pyscf (install via `make micromamba-create-full` or `uv sync --extra quantum-gpu`)
+**Requirements:** cupy, gpu4pyscf, pyscf. Install with:
+```bash
+uv sync --extra quantum-gpu   # or --extra all
+# Or: make micromamba-create-full
+```
 
 ## Example script
 
