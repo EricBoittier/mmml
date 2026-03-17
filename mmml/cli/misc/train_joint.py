@@ -4055,6 +4055,12 @@ def main():
         # Create validation plots if requested
         if args.plot_results:
             if HAS_MATPLOTLIB:
+                # Pre-compute edge lists for validation data (needed for prepare_batch_data)
+                valid_data = precompute_edge_lists(
+                    valid_data,
+                    cutoff=max(args.physnet_cutoff, args.dcmnet_cutoff),
+                    verbose=False,
+                )
                 # Load best parameters
                 best_params_path = ckpt_dir / args.name / 'best_params.pkl'
                 if best_params_path.exists():
