@@ -759,6 +759,12 @@ def fix_and_split_data(
     efd_fixed['R'] = R_angstrom
     efd_fixed['E'] = E_ev
     efd_fixed['F'] = F_ev_ang
+    # PhysNet expects N with shape (n_samples,); pyscf-evaluate outputs scalar
+    N_raw = efd_data['N']
+    if (np.isscalar(N_raw) or (isinstance(N_raw, np.ndarray) and N_raw.size == 1) or
+            (isinstance(N_raw, np.ndarray) and N_raw.shape[0] != n_samples)):
+        n_atoms = int(np.asarray(N_raw).flat[0])
+        efd_fixed['N'] = np.full(n_samples, n_atoms, dtype=np.int32)
     
     # Update grid data with fixed coordinates (if grid exists)
     grid_fixed = None
