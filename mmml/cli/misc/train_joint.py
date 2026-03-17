@@ -2705,118 +2705,119 @@ def plot_validation_results(
             # Create multi-scale error visualization (3 rows at different percentiles)
             esp_error_physnet_valid = esp_pred_physnet_valid - esp_true_valid
             esp_error_dcmnet_valid = esp_pred_dcmnet_valid - esp_true_valid
+            error_absmax_valid = max(abs(esp_error_dcmnet_valid).max(), abs(esp_error_physnet_valid).max()) if len(esp_error_physnet_valid) > 0 else 0.01
+            p95_max_valid = max(np.percentile(np.abs(esp_error_dcmnet_valid), 95), np.percentile(np.abs(esp_error_physnet_valid), 95)) if len(esp_error_physnet_valid) > 0 else 0.01
+            p75_max_valid = max(np.percentile(np.abs(esp_error_dcmnet_valid), 75), np.percentile(np.abs(esp_error_physnet_valid), 75)) if len(esp_error_physnet_valid) > 0 else 0.01
             fig, axes = plt.subplots(3, 2, figsize=(14, 12))
             
             # Row 1: 100% range (all data)
             ax = axes[0, 0]
             sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 2],
                        c=esp_error_physnet_valid, cmap='RdBu_r', s=5, alpha=0.6,
-                       vmin=-error_absmax, vmax=error_absmax)
-        ax.set_xlabel('X (Å)')
-        ax.set_ylabel('Z (Å)')
-        ax.set_title(f'PhysNet Error (100% range){epoch_str}')
-        plt.colorbar(sc, ax=ax, label='Error (Ha/e)')
-        ax.grid(True, alpha=0.3)
-        # Add atom positions for reference
-        ax.scatter(atom_positions[:, 0], atom_positions[:, 2],
-                  c='black', s=100, marker='o', edgecolors='lime', linewidths=2, alpha=1.0, zorder=10)
-        
+                       vmin=-error_absmax_valid, vmax=error_absmax_valid)
+            ax.set_xlabel('X (Å)')
+            ax.set_ylabel('Z (Å)')
+            ax.set_title(f'PhysNet Error (100% range){epoch_str}')
+            plt.colorbar(sc, ax=ax, label='Error (Ha/e)')
+            ax.grid(True, alpha=0.3)
+            ax.scatter(atom_positions[:, 0], atom_positions[:, 2],
+                      c='black', s=100, marker='o', edgecolors='lime', linewidths=2, alpha=1.0, zorder=10)
+            
             ax = axes[0, 1]
             sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 2],
                        c=esp_error_dcmnet_valid, cmap='RdBu_r', s=20, alpha=0.8,
-                       vmin=-error_absmax, vmax=error_absmax)
-        ax.set_xlabel('X (Å)')
-        ax.set_ylabel('Z (Å)')
-        ax.set_title(f'DCMNet Error (100% range){epoch_str}')
-        plt.colorbar(sc, ax=ax, label='Error (Ha/e)')
-        ax.grid(True, alpha=0.3)
-        # Add atom positions for reference
-        ax.scatter(atom_positions[:, 0], atom_positions[:, 2],
-                  c='black', s=100, marker='o', edgecolors='cyan', linewidths=2, alpha=1.0, zorder=10)
-        
-        # Row 2: 95th percentile
-        ax = axes[1, 0]
-        sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 2],
-                       c=esp_error_physnet, cmap='RdBu_r', s=20, alpha=0.8,
-                       vmin=-p95_max, vmax=p95_max)
-        ax.set_xlabel('X (Å)')
-        ax.set_ylabel('Z (Å)')
-        ax.set_title(f'PhysNet Error (95th %-ile){epoch_str}')
-        plt.colorbar(sc, ax=ax, label='Error (Ha/e)')
-        ax.grid(True, alpha=0.3)
-        ax.scatter(atom_positions[:, 0], atom_positions[:, 2],
-                  c='black', s=100, marker='o', edgecolors='lime', linewidths=2, alpha=1.0, zorder=10)
-        
-        ax = axes[1, 1]
-        sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 2],
-                       c=esp_error_dcmnet, cmap='RdBu_r', s=20, alpha=0.8,
-                       vmin=-p95_max, vmax=p95_max)
-        ax.set_xlabel('X (Å)')
-        ax.set_ylabel('Z (Å)')
-        ax.set_title(f'DCMNet Error (95th %-ile){epoch_str}')
-        plt.colorbar(sc, ax=ax, label='Error (Ha/e)')
-        ax.grid(True, alpha=0.3)
-        ax.scatter(atom_positions[:, 0], atom_positions[:, 2],
-                  c='black', s=100, marker='o', edgecolors='cyan', linewidths=2, alpha=1.0, zorder=10)
-        
-        # Row 3: 75th percentile
-        ax = axes[2, 0]
-        sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 2],
-                       c=esp_error_physnet, cmap='RdBu_r', s=20, alpha=0.8,
-                       vmin=-p75_max, vmax=p75_max)
-        ax.set_xlabel('X (Å)')
-        ax.set_ylabel('Z (Å)')
-        ax.set_title(f'PhysNet Error (75th %-ile){epoch_str}')
-        plt.colorbar(sc, ax=ax, label='Error (Ha/e)')
-        ax.grid(True, alpha=0.3)
-        ax.scatter(atom_positions[:, 0], atom_positions[:, 2],
-                  c='black', s=100, marker='o', edgecolors='lime', linewidths=2, alpha=1.0, zorder=10)
-        
-        ax = axes[2, 1]
-        sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 2],
-                       c=esp_error_dcmnet, cmap='RdBu_r', s=20, alpha=0.8,
-                       vmin=-p75_max, vmax=p75_max)
-        ax.set_xlabel('X (Å)')
-        ax.set_ylabel('Z (Å)')
-        ax.set_title(f'DCMNet Error (75th %-ile){epoch_str}')
-        plt.colorbar(sc, ax=ax, label='Error (Ha/e)')
-        ax.grid(True, alpha=0.3)
-        ax.scatter(atom_positions[:, 0], atom_positions[:, 2],
-                  c='black', s=100, marker='o', edgecolors='cyan', linewidths=2, alpha=1.0, zorder=10)
-        
-        plt.tight_layout()
-        esp_scales_path = save_dir / f'esp_example_{idx}_error_scales{suffix}.png'
-        plt.savefig(esp_scales_path, dpi=150, bbox_inches='tight')
-        plt.close()
-        print(f"  ✅ Saved multi-scale ESP errors {idx}: {esp_scales_path}")
-        
-        # Create radial ESP error plots (error vs distance from each atom)
-        batch_for_radial = prepare_batch_data(valid_data, np.array([idx]), cutoff=cutoff)
-        n_atoms = int(batch_for_radial['N'][0])
-        atom_positions = np.array(batch_for_radial['R'][:n_atoms])  # (natoms, 3)
-        atomic_nums = np.array(batch_for_radial['Z'][:n_atoms])
-        
-        # Create figure with one subplot per atom + combined view
-        fig, axes = plt.subplots(1, n_atoms + 1, figsize=(6*(n_atoms+1), 5))
-        if n_atoms == 1:
-            axes = [axes]
-        
-        # Get atomic radii for visualization
-        import ase.data
-        atomic_radii_np = np.array([ase.data.covalent_radii[int(z)] for z in atomic_nums])
-        
-        # For each atom, plot error vs distance
-        for atom_idx in range(n_atoms):
-            ax = axes[atom_idx]
+                       vmin=-error_absmax_valid, vmax=error_absmax_valid)
+            ax.set_xlabel('X (Å)')
+            ax.set_ylabel('Z (Å)')
+            ax.set_title(f'DCMNet Error (100% range){epoch_str}')
+            plt.colorbar(sc, ax=ax, label='Error (Ha/e)')
+            ax.grid(True, alpha=0.3)
+            ax.scatter(atom_positions[:, 0], atom_positions[:, 2],
+                      c='black', s=100, marker='o', edgecolors='cyan', linewidths=2, alpha=1.0, zorder=10)
             
-            # Compute distances from this atom to all grid points
-            distances_to_atom = np.linalg.norm(grid_pos - atom_positions[atom_idx], axis=1)
+            # Row 2: 95th percentile
+            ax = axes[1, 0]
+            sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 2],
+                       c=esp_error_physnet_valid, cmap='RdBu_r', s=20, alpha=0.8,
+                       vmin=-p95_max_valid, vmax=p95_max_valid)
+            ax.set_xlabel('X (Å)')
+            ax.set_ylabel('Z (Å)')
+            ax.set_title(f'PhysNet Error (95th %-ile){epoch_str}')
+            plt.colorbar(sc, ax=ax, label='Error (Ha/e)')
+            ax.grid(True, alpha=0.3)
+            ax.scatter(atom_positions[:, 0], atom_positions[:, 2],
+                      c='black', s=100, marker='o', edgecolors='lime', linewidths=2, alpha=1.0, zorder=10)
             
-            # Plot errors
-            ax.scatter(distances_to_atom, esp_error_physnet, alpha=0.4, s=15, 
-                      color='green', label='PhysNet', edgecolors='none')
-            ax.scatter(distances_to_atom, esp_error_dcmnet, alpha=0.4, s=15, 
-                      color='purple', label='DCMNet', edgecolors='none')
+            ax = axes[1, 1]
+            sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 2],
+                       c=esp_error_dcmnet_valid, cmap='RdBu_r', s=20, alpha=0.8,
+                       vmin=-p95_max_valid, vmax=p95_max_valid)
+            ax.set_xlabel('X (Å)')
+            ax.set_ylabel('Z (Å)')
+            ax.set_title(f'DCMNet Error (95th %-ile){epoch_str}')
+            plt.colorbar(sc, ax=ax, label='Error (Ha/e)')
+            ax.grid(True, alpha=0.3)
+            ax.scatter(atom_positions[:, 0], atom_positions[:, 2],
+                      c='black', s=100, marker='o', edgecolors='cyan', linewidths=2, alpha=1.0, zorder=10)
+            
+            # Row 3: 75th percentile
+            ax = axes[2, 0]
+            sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 2],
+                       c=esp_error_physnet_valid, cmap='RdBu_r', s=20, alpha=0.8,
+                       vmin=-p75_max_valid, vmax=p75_max_valid)
+            ax.set_xlabel('X (Å)')
+            ax.set_ylabel('Z (Å)')
+            ax.set_title(f'PhysNet Error (75th %-ile){epoch_str}')
+            plt.colorbar(sc, ax=ax, label='Error (Ha/e)')
+            ax.grid(True, alpha=0.3)
+            ax.scatter(atom_positions[:, 0], atom_positions[:, 2],
+                      c='black', s=100, marker='o', edgecolors='lime', linewidths=2, alpha=1.0, zorder=10)
+            
+            ax = axes[2, 1]
+            sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 2],
+                       c=esp_error_dcmnet_valid, cmap='RdBu_r', s=20, alpha=0.8,
+                       vmin=-p75_max_valid, vmax=p75_max_valid)
+            ax.set_xlabel('X (Å)')
+            ax.set_ylabel('Z (Å)')
+            ax.set_title(f'DCMNet Error (75th %-ile){epoch_str}')
+            plt.colorbar(sc, ax=ax, label='Error (Ha/e)')
+            ax.grid(True, alpha=0.3)
+            ax.scatter(atom_positions[:, 0], atom_positions[:, 2],
+                      c='black', s=100, marker='o', edgecolors='cyan', linewidths=2, alpha=1.0, zorder=10)
+            
+            plt.tight_layout()
+            esp_scales_path = save_dir / f'esp_example_{idx}_error_scales{suffix}.png'
+            plt.savefig(esp_scales_path, dpi=150, bbox_inches='tight')
+            plt.close()
+            print(f"  ✅ Saved multi-scale ESP errors {idx}: {esp_scales_path}")
+        
+            # Create radial ESP error plots (error vs distance from each atom)
+            batch_for_radial = prepare_batch_data(valid_data, np.array([idx]), cutoff=cutoff)
+            n_atoms_rad = int(batch_for_radial['N'][0])
+            atom_positions_rad = np.array(batch_for_radial['R'][:n_atoms_rad])  # (natoms, 3)
+            atomic_nums_rad = np.array(batch_for_radial['Z'][:n_atoms_rad])
+            
+            # Create figure with one subplot per atom + combined view
+            fig, axes = plt.subplots(1, n_atoms_rad + 1, figsize=(6*(n_atoms_rad+1), 5))
+            if n_atoms_rad == 1:
+                axes = [axes]
+            
+            # Get atomic radii for visualization
+            import ase.data
+            atomic_radii_np = np.array([ase.data.covalent_radii[int(z)] for z in atomic_nums_rad])
+            
+            # For each atom, plot error vs distance
+            for atom_idx in range(n_atoms_rad):
+                ax = axes[atom_idx]
+                
+                # Compute distances from this atom to all grid points
+                distances_to_atom = np.linalg.norm(grid_pos - atom_positions_rad[atom_idx], axis=1)
+                
+                # Plot errors
+                ax.scatter(distances_to_atom, esp_error_physnet_valid, alpha=0.4, s=15, 
+                          color='green', label='PhysNet', edgecolors='none')
+                ax.scatter(distances_to_atom, esp_error_dcmnet_valid, alpha=0.4, s=15, 
+                          color='purple', label='DCMNet', edgecolors='none')
             
             # Add horizontal line at zero error
             ax.axhline(0, color='red', linestyle='--', linewidth=2, alpha=0.5)
