@@ -52,6 +52,7 @@ help:
 	@echo "  make lfs-summary       - Show LFS file count and total size"
 	@echo "  make lfs-audit         - Save LFS file list (sorted by size) to lfs_audit.txt"
 	@echo "  make lfs-setup-symlinks - Replace duplicate grids_esp with symlinks to preclassified_data"
+	@echo "  make lfs-remove-hooks  - Remove LFS hooks (silence warning when git-lfs not installed)"
 	@echo ""
 
 # ==============================================================================
@@ -250,6 +251,16 @@ lfs-audit:
 
 lfs-setup-symlinks:
 	bash scripts/setup_grid_symlinks.sh
+
+# Remove LFS hooks to silence "git-lfs not found" warning when LFS is not installed.
+# Run: make lfs-remove-hooks
+lfs-remove-hooks:
+	@for h in post-checkout post-commit pre-push post-merge; do \
+	  if [ -f .git/hooks/$$h ]; then \
+	    rm .git/hooks/$$h && echo "Removed .git/hooks/$$h"; \
+	  fi; \
+	done
+	@echo "LFS hooks removed. git pull/checkout will no longer warn about missing git-lfs."
 
 # ==============================================================================
 # Data utilities
