@@ -139,7 +139,7 @@ def reduce_esp_grid(
     R: np.ndarray,
     n_grid_points: int = 3000,
     esp_sd_sigma: float = 3.0,
-    esp_max_abs_kcal_mol: float = 10.0,
+    esp_max_abs_kcal_mol: float = 100.0,
     min_dist_to_atoms: float = 1.0,
     seed: int = 42,
 ) -> Tuple[np.ndarray, np.ndarray]:
@@ -401,7 +401,7 @@ def fix_and_split_data(
     atomic_ref_units: str = "hartree",
     n_grid_points: int = 3000,
     esp_sd_sigma: float = 3.0,
-    esp_max_abs_kcal_mol: float = 10.0,
+    esp_max_abs_kcal_mol: float = 100.0,
     min_dist_to_atoms: float = 1.0,
     verbose: bool = True
 ) -> bool:
@@ -440,7 +440,7 @@ def fix_and_split_data(
     esp_sd_sigma : float
         Exclude grid points beyond ±this many standard deviations from the mean (default 3.0).
     esp_max_abs_kcal_mol : float
-        Exclude grid points with |esp| > this in kcal/mol/e (default 10.0).
+        Exclude grid points with |esp| > this in kcal/mol/e (default 100.0).
     min_dist_to_atoms : float
         Exclude grid points closer than this to any atom in Å (default 1.0).
     verbose : bool
@@ -1200,9 +1200,9 @@ Examples:
     parser.add_argument(
         '--esp-max-abs-kcal-mol',
         type=float,
-        default=10.0,
+        default=100.0,
         metavar='X',
-        help='Exclude grid points with |esp| > X kcal/mol/e (default 10.0)'
+        help='Exclude grid points with |esp| > X kcal/mol/e (default 100.0)'
     )
     parser.add_argument(
         '--min-dist-to-atoms',
@@ -1250,7 +1250,7 @@ Examples:
         atomic_ref_units=getattr(args, 'atomic_ref_units', 'hartree'),
         n_grid_points=getattr(args, 'n_grid_points', 3000),
         esp_sd_sigma=getattr(args, 'esp_sd_sigma', 3.0),
-        esp_max_abs_kcal_mol=getattr(args, 'esp_max_abs_kcal_mol', 10.0),
+        esp_max_abs_kcal_mol=getattr(args, 'esp_max_abs_kcal_mol', 100.0),
         min_dist_to_atoms=getattr(args, 'min_dist_to_atoms', 1.0),
         verbose=not args.quiet
     )
