@@ -198,6 +198,59 @@ def reduce_esp_grid(
     return esp_out, esp_grid_out
 
 
+def verify_reduction_preserves_alignment(
+    esp_raw: np.ndarray,
+    grid_raw: np.ndarray,
+    esp_reduced: np.ndarray,
+    grid_reduced: np.ndarray,
+    R: np.ndarray,
+    n_grid_points: int = 3000,
+    esp_sd_sigma: float = 3.0,
+    esp_max_abs_kcal_mol: float = 100.0,
+    min_dist_to_atoms: float = 1.0,
+    seed: int = 42,
+    n_spot_check: int = 3,
+) -> bool:
+    """
+    Verify that reduce_esp_grid used the same indices for esp and grid (alignment preserved).
+    Recomputes the selection logic and checks that output pairs match input pairs.
+    """
+    from mmml.data.units import KCAL_MOL_TO_HARTREE
+    rng = np.random.default_rng(seed)
+    for i in range(min(n_spot_check, esp_raw.shape[0])):
+        esp_i = esp_raw[i]
+        grid_i = grid_raw[i]
+        r_i = R[i]
+        valid = np.all(np.abs(grid_i) < 1e5, axis=1)
+        atoms_valid = np.any(r_i != 0, axis=1)
+        if np.any(atoms_valid):
+            dists = cdist(grid_i, r_i[atoms_valid])
+            valid &= dists.min(axis=1) > min_dist_to_atoms
+        valid_esp = esp_i[valid]
+        if len(valid_esp) > 0:
+            mean_esp = np.mean(valid_esp)
+            std_esp = np.std(valid_esp)
+            if std_esp > 0:
+                valid &= np.abs(esp_i - mean_esp) <= esp_sd_sigma * std_esp
+        esp_max_hartree = esp_max_abs_kcal_mol * KCAL_MOL_TO_HARTREE
+        valid &= np.abs(esp_i) <= esp_max_hartree
+        idx = np.where(valid)[0]
+        if len(idx) < 3:
+            continue
+        if len(idx) >= n_grid_points:
+            chosen = rng.choice(idx, size=n_grid_points, replace=False)
+            n_check = n_grid_points
+        else:
+            chosen = idx
+            n_check = len(idx)
+        for k in range(n_check):
+            if not np.isclose(esp_reduced[i, k], esp_i[chosen[k]]):
+                return False
+            if not np.allclose(grid_reduced[i, k], grid_i[chosen[k]]):
+                return False
+    return True
+
+
 def convert_grid_indices_to_angstrom(
     vdw_grid_indices: np.ndarray,
     origin: np.ndarray,
@@ -853,6 +906,20 @@ def fix_and_split_data(
             min_dist_to_atoms=min_dist_to_atoms,
             seed=seed,
         )
+        # Verify reduction preserved esp-grid alignment (same indices used for both)
+        reduction_ok = verify_reduction_preserves_alignment(
+            esp_raw, vdw_surface_angstrom, esp_reduced, grid_reduced, R_angstrom,
+            n_grid_points=n_grid_points, esp_sd_sigma=esp_sd_sigma,
+            esp_max_abs_kcal_mol=esp_max_abs_kcal_mol, min_dist_to_atoms=min_dist_to_atoms,
+            seed=seed, n_spot_check=3,
+        )
+        if not reduction_ok:
+            raise RuntimeError(
+                "reduce_esp_grid verification failed: esp and grid output pairs do not match input. "
+                "This indicates a bug in the reduction logic."
+            )
+        if verbose:
+            print(f"  ✓ Reduction preserves esp-grid alignment (verified)")
         vdw_surface_angstrom = grid_reduced
         if verbose:
             n_valid_per_sample = np.sum(np.all(np.abs(grid_reduced) < 1e5, axis=2), axis=1)
