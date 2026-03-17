@@ -9,36 +9,44 @@ uv sync --extra quantum-gpu   # or --extra all
 ```
 If `uv` is not in PATH (e.g. HPC): use full path, e.g. `~/micromamba/bin/uv sync --extra all`.
 
-## Example script
+## Example scripts
 
+| # | CLI | Programmatic |
+|---|-----|--------------|
+| 01 | `01_pyscf_dft_cli.sh` | `01_pyscf_dft_programmatic.py` |
+| 02 | `02_pyscf_dft_cli_full.sh` | `02_pyscf_dft_programmatic.py` |
+| 03 | `03_pyscf_mp2_cli.sh` | `03_pyscf_mp2_programmatic.py` |
+
+Run from project root, e.g.:
 ```bash
-# Run water energy + gradient
-make pyscf-example
+bash examples/pyscf4gpu/01_pyscf_dft_cli.sh
+uv run python examples/pyscf4gpu/01_pyscf_dft_programmatic.py
+```
 
-# Or directly:
+Or use the legacy water example:
+```bash
+make pyscf-example
 uv run python examples/pyscf4gpu/water_energy.py
 ```
 
 ## CLI
 
 ```bash
-# Energy only
+# 01: Energy only
 make pyscf-dft
-
-# Or with custom molecule and options (default basis: def2-SVP):
 uv run mmml pyscf-dft --mol "O 0 0 0; H 0.96 0 0; H -0.24 0.93 0" --energy --output results
 
-# Energy + gradient + hessian + harmonic analysis
+# 02: Energy + gradient + hessian + harmonic analysis
 uv run mmml pyscf-dft --mol water.xyz --energy --gradient --hessian --harmonic --thermo
 
-# MP2 (post-HF, not DFT):
+# 03: MP2 (post-HF, not DFT)
 uv run mmml pyscf-mp2 --mol "O 0 0 0; H 0.96 0 0; H -0.24 0.93 0" --energy --gradient
 ```
 
 ## Programmatic usage
 
 ```python
-from mmml.interfaces.pyscf4gpuInterface.calcs import setup_mol, compute_dft, get_dummy_args
+from mmml.interfaces.pyscf4gpuInterface.calcs import compute_dft, get_dummy_args, save_pyscf_results
 from mmml.interfaces.pyscf4gpuInterface.enums import CALCS
 
 mol_str = "O 0 0 0; H 0.96 0 0; H -0.24 0.93 0"
@@ -48,6 +56,7 @@ args.xc = "PBE0"
 
 output = compute_dft(args, [CALCS.ENERGY, CALCS.GRADIENT])
 print(f"Energy: {output['energy']} Hartree")
+save_pyscf_results("output", output)
 ```
 
 ## Troubleshooting
