@@ -83,9 +83,9 @@ def main() -> int:
         help="Compute ESP on density-selected grid (slower)",
     )
     parser.add_argument(
-        "--no-esp-cpu-fallback",
+        "--esp-cpu-fallback",
         action="store_true",
-        help="Use GPU path for ESP (may have esp/grid misalignment; default: CPU for correct alignment)",
+        help="Use CPU path for ESP (slower; default: GPU int1e_grids)",
     )
 
     args = parser.parse_args()
@@ -126,7 +126,7 @@ def main() -> int:
         gradient=not args.no_gradient,
         dipole=not args.no_dipole,
         dens_esp=args.esp,
-        esp_cpu_fallback=not args.no_esp_cpu_fallback,
+        esp_cpu_fallback=args.esp_cpu_fallback,
         verbose=0,
     )
 
