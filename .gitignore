@@ -203,3 +203,4 @@ examples/general/abdimers/AB_ACO_DCM_nvt_trajectory.h5
 examples/general/abdimers/AB_ACO_DCM_pbc_minimized_16:17:48.pdb
 .cursor/plans/jax_md_nl_and_npt_combined.plan.md
 mmml/generate/packmol/packmol
+mmml/generate/packmol/packmol

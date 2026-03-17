@@ -7,9 +7,12 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 import numpy as np
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
 
 
 def wrap_positions_for_pbc(
@@ -57,6 +60,7 @@ def minimize_structure(
     fmax: float = 0.0006,
     charmm: bool = False,
     ase: bool = True,
+    show_frame: Optional[Callable[[Any, int, str], None]] = None,
 ) -> Any:
     """Minimize structure using CHARMM and/or ASE BFGS."""
     import ase.io as ase_io
@@ -85,13 +89,38 @@ def minimize_structure(
         )
 
     if ase:
-        traj_path = Path(f'bfgs_{run_index}_{output_prefix}_minimized.traj')
+        # Wrap initial positions into primary cell so BFGS starts in consistent coords.
+        # (Avoids cell-list/MIC issues when CHARMM outputs centered/unwrapped positions.)
+        if args.cell is not None:
+            wrapped = wrap_positions_for_pbc(
+                atoms.get_positions(),
+                cell=args.cell,
+                hybrid_calc=hybrid_calc,
+                monomer_offsets=monomer_offsets,
+                masses=atoms.get_masses(),
+            )
+            atoms.set_positions(wrapped)
+        traj_path = Path(f"{output_prefix}_bfgs_{run_index}.traj")
         traj_path.parent.mkdir(parents=True, exist_ok=True)
         traj = ase_io.Trajectory(str(traj_path), 'w')
-        print("Minimizing structure with hybrid calculator")
-        print(f"Running BFGS for {nsteps} steps")
-        print(f"Running BFGS with fmax: {fmax}")
-        _ = ase_opt.BFGS(atoms, trajectory=traj).run(fmax=fmax, steps=nsteps)
+        c = Console()
+        c.print(Panel(
+            f"BFGS: {nsteps} steps, fmax={fmax}",
+            title="[bold cyan]ASE Minimization[/bold cyan]",
+            border_style="cyan",
+        ))
+        # Smaller maxstep reduces fmax oscillations with PBC (default 0.2 Å can overshoot).
+        opt = ase_opt.BFGS(atoms, trajectory=traj, maxstep=0.05)
+        if show_frame is not None:
+            step_ref = [0]
+
+            def braille_obs() -> None:
+                step_ref[0] += 1
+                show_frame(opt.atoms, step_ref[0], "min")
+
+            opt.attach(braille_obs, interval=1)
+
+        opt.run(fmax=fmax, steps=nsteps)
         xyz = pd.DataFrame(atoms.get_positions(), columns=["x", "y", "z"])
         coor.set_positions(xyz)
         traj.close()
@@ -155,6 +184,7 @@ def run_ase_md(
     simple_physnet_calculator: Any,
     run_index: int = 0,
     temperature: float = 300.0,
+    show_frame: Optional[Callable[[Any, int, str], None]] = None,
 ) -> None:
     """Run ASE MD simulation with Velocity Verlet."""
     import ase
@@ -176,7 +206,8 @@ def run_ase_md(
             fmax=0.0006,
         )
 
-    print(f"Pre-BFGS energy: {atoms.get_potential_energy():.6f} eV")
+    c = Console()
+    c.print(Panel(f"Pre-BFGS energy: {atoms.get_potential_energy():.6f} eV", title="[bold]ASE[/bold]", border_style="blue"))
 
     atoms = minimize_structure(
         atoms,
@@ -190,9 +221,10 @@ def run_ase_md(
         run_index=run_index,
         nsteps=100 if run_index == 0 else 10,
         fmax=0.0006 if run_index == 0 else 0.001,
+        show_frame=show_frame,
     )
     if args.cell is not None:
-        print(f"Wrapping positions into cell: {args.cell} Å")
+        c.print(Panel(f"Wrapping positions into cell: {args.cell} Å", title="[bold]PBC[/bold]", border_style="blue"))
         wrapped = wrap_positions_for_pbc(
             atoms.get_positions(),
             cell=args.cell,
@@ -216,10 +248,14 @@ def run_ase_md(
         ZeroRotation(ase_atoms)
 
     dt = timestep_fs * ase.units.fs
-    print(f"Running ASE MD with timestep: {dt} (ase units)")
+    c.print(Panel(
+        f"Velocity Verlet | dt={dt} (ase units) | T={temperature} K | {num_steps} steps",
+        title="[bold cyan]ASE MD[/bold cyan]",
+        border_style="cyan",
+    ))
     integrator = VelocityVerlet(ase_atoms, timestep=dt)
 
-    traj_filename = f'{run_index}_{args.output_prefix}_{temperature}K_{num_steps}steps_P{dt}.traj'
+    traj_filename = f"{args.output_prefix}_ase_{run_index}_{int(temperature)}K.traj"
     Path(traj_filename).parent.mkdir(parents=True, exist_ok=True)
     traj = ase_io.Trajectory(traj_filename, 'w')
 
@@ -237,26 +273,23 @@ def run_ase_md(
         kinetic_energy[i] = ase_atoms.get_kinetic_energy()
         total_energy[i] = ase_atoms.get_total_energy()
 
+        if show_frame is not None:
+            show_frame(ase_atoms, i, "md")
+
         if i > 10 and (kinetic_energy[i] > 300 or potential_energy[i] > 0):
-            print(f"Energy spike detected at step {i}, re-minimizing...")
-            print(f"Kinetic energy: {kinetic_energy[i]:.6f} eV")
-            print(f"Potential energy: {potential_energy[i]:.6f} eV")
-            print(f"Total energy: {total_energy[i]:.6f} eV")
-            print(f"Step: {i}")
-            print(f"Breakcount: {breakcount}")
-            print(f"Run index: {run_index}")
-            print(f"Temperature: {temperature} K")
-            print(f"Timestep: {timestep_fs} fs")
-            print(f"Number of steps: {num_steps}")
-            print(f"Number of atoms: {len(ase_atoms)}")
-            print(f"Number of monomers: {n_monomers}")
-            print(f"Atoms per monomer: {atoms_per_monomer_list}")
-            print(f"ML cutoff: {args.ml_cutoff} Å")
-            print(f"MM switch on: {args.mm_switch_on} Å")
-            print(f"MM cutoff: {args.mm_cutoff} Å")
-            print(f"Include MM: {args.include_mm}")
-            print(f"Skip ML dimers: {args.skip_ml_dimers}")
-            print(f"Debug: {args.debug}")
+            t_spike = Table(title="Energy spike - re-minimizing")
+            t_spike.add_column("Property", style="red")
+            t_spike.add_column("Value", style="white")
+            t_spike.add_row("Step", str(i))
+            t_spike.add_row("E_kin (eV)", f"{kinetic_energy[i]:.6f}")
+            t_spike.add_row("E_pot (eV)", f"{potential_energy[i]:.6f}")
+            t_spike.add_row("E_tot (eV)", f"{total_energy[i]:.6f}")
+            t_spike.add_row("Breakcount", str(breakcount))
+            t_spike.add_row("T (K)", f"{temperature}")
+            t_spike.add_row("dt (fs)", f"{timestep_fs}")
+            t_spike.add_row("Atoms", str(len(ase_atoms)))
+            t_spike.add_row("Monomers", str(n_monomers))
+            c.print(Panel(t_spike, title="[bold red]Energy spike detected[/bold red]", border_style="red"))
 
             minimize_structure(
                 ase_atoms,
@@ -271,18 +304,29 @@ def run_ase_md(
                 nsteps=20 if run_index == 0 else 10,
                 fmax=0.0006 if run_index == 0 else 0.001,
                 charmm=True,
+                show_frame=show_frame,
             )
             cur_eng = ase_atoms.get_potential_energy()
-            print(f"Current energy: {cur_eng:.6f} eV")
+            c.print(f"[dim]Re-minimized energy: {cur_eng:.6f} eV[/dim]")
             Stationary(ase_atoms)
             ZeroRotation(ase_atoms)
             breakcount += 1
         if breakcount > 1:
-            print("Maximum number of breaks reached")
+            c.print(Panel("Maximum number of breaks reached", title="[bold red]ASE MD[/bold red]", border_style="red"))
             break
         if (i != 0) and (i % args.write_interval == 0):
             if args.cell is not None:
+                wrapped = wrap_positions_for_pbc(
+                    ase_atoms.get_positions(),
+                    cell=args.cell,
+                    hybrid_calc=hybrid_calc,
+                    monomer_offsets=monomer_offsets,
+                    masses=ase_atoms.get_masses(),
+                )
+                orig_pos = ase_atoms.get_positions().copy()
+                ase_atoms.set_positions(wrapped)
                 traj.write(ase_atoms)
+                ase_atoms.set_positions(orig_pos)
             else:
                 traj.write(ase_atoms)
         if args.ensemble == "nvt":
@@ -290,7 +334,7 @@ def run_ase_md(
                 Stationary(ase_atoms)
                 ZeroRotation(ase_atoms)
                 MaxwellBoltzmannDistribution(ase_atoms, temperature_K=temperature)
-                print(f"Temperature adjusted to: {temperature} K")
+                c.print(f"[dim]Temperature adjusted to {temperature} K[/dim]")
         if i % 100 == 0:
             elapsed_s = time.perf_counter() - ase_loop_start
             completed_steps = i + 1
@@ -304,12 +348,12 @@ def run_ase_md(
                 )
             else:
                 perf_msg = "avg_speed n/a time_per_ns n/a"
-            print(
-                f"step {i:5d} epot {potential_energy[i]: 5.3f} "
+            c.print(
+                f"[dim]step {i:5d}[/dim] epot {potential_energy[i]: 5.3f} "
                 f"ekin {kinetic_energy[i]: 5.3f} etot {total_energy[i]: 5.3f} | "
                 f"{perf_msg}"
             )
 
     traj.close()
-    print(f"Trajectory saved to: {traj_filename}")
-    print("ASE MD simulation complete!")
+    c.print(Panel(str(traj_filename), title="[bold green]Trajectory saved[/bold green]", border_style="green"))
+    c.print(Panel("ASE MD simulation complete!", title="[bold green]ASE[/bold green]", border_style="green"))
