@@ -958,6 +958,14 @@ Examples:
     )
     
     parser.add_argument(
+        '--atomic-ref',
+        type=str,
+        default=None,
+        metavar='SCHEME',
+        help='Subtract per-atom reference energies (e.g. pbe0/sz for PBE0/SZ, matches pyscf-evaluate default)'
+    )
+    
+    parser.add_argument(
         '--quiet', '-q',
         action='store_true',
         help='Suppress detailed output'
@@ -991,7 +999,7 @@ Examples:
         seed=args.seed,
         cube_spacing_bohr=args.cube_spacing,
         skip_validation=args.skip_validation,
-        atomic_ref=args.atomic_ref,
+        atomic_ref=getattr(args, 'atomic_ref', None),
         verbose=not args.quiet
     )
     
