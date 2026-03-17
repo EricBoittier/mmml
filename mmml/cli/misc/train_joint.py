@@ -1436,6 +1436,7 @@ def compute_loss(
     energy_w: float,
     forces_w: float,
     mono_w: float,
+    charge_reg_w: float,
     batch_size: int,
     n_dcm: int,
     dipole_terms: Sequence[LossTerm],
@@ -1542,6 +1543,12 @@ def compute_loss(
     loss_mono = optax.l2_loss(mono_sum_masked, charges_masked).mean()
     losses["monopole"] = loss_mono
 
+    # L2 regularization on DCMNet charge magnitudes to prevent blow-up
+    # (monopole loss only constrains sum per atom, so model can use huge cancelling charges)
+    mono_masked = output["mono_dist"] * batch["atom_mask"][:, None]
+    loss_charge_reg = jnp.mean(mono_masked ** 2)
+    losses["charge_reg"] = loss_charge_reg
+
     total_loss = (
         energy_w * loss_energy
         + forces_w * loss_forces
@@ -1549,6 +1556,7 @@ def compute_loss(
         + total_esp_loss
         + mono_w * loss_mono
         + mono_w * loss_total_charge
+        + charge_reg_w * loss_charge_reg
     )
 
     losses["coulomb_energy"] = output.get("coulomb_energy", jnp.array(0.0))
@@ -1586,6 +1594,7 @@ def train_step(
     energy_w: float,
     forces_w: float,
     mono_w: float,
+    charge_reg_w: float,
     batch_size: int,
     n_dcm: int,
     dipole_terms: Sequence[LossTerm],
@@ -1614,6 +1623,7 @@ def train_step(
             energy_w,
             forces_w,
             mono_w,
+            charge_reg_w,
             batch_size,
             n_dcm,
             dipole_terms,
@@ -1657,6 +1667,7 @@ def eval_step(
     energy_w: float,
     forces_w: float,
     mono_w: float,
+    charge_reg_w: float,
     batch_size: int,
     n_dcm: int,
     dipole_terms: Sequence[LossTerm],
@@ -1684,6 +1695,7 @@ def eval_step(
         energy_w,
         forces_w,
         mono_w,
+        charge_reg_w,
         batch_size,
         n_dcm,
         dipole_terms,
@@ -3020,6 +3032,7 @@ def train_model(
     dipole_w: float,
     esp_w: float,
     mono_w: float,
+    charge_reg_w: float,
     n_dcm: int,
     cutoff: float,
     seed: int,
