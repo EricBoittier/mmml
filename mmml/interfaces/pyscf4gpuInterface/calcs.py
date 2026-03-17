@@ -16,6 +16,15 @@ from mmml.interfaces.pyscf4gpuInterface.enums import *
 from mmml.interfaces.pyscf4gpuInterface.helperfunctions import *
 from mmml.interfaces.pyscf4gpuInterface.esp_helpers import balance_array
 
+
+def _RZ_to_atom(R, Z):
+    """Convert R (n_atoms, 3) in Angstrom and Z (n_atoms) to PySCF atom list [(symbol, (x,y,z)), ...]."""
+    from ase.data import chemical_symbols
+    R = np.asarray(R)
+    Z = np.asarray(Z, dtype=int)
+    return [(chemical_symbols[z], tuple(row)) for z, row in zip(Z, R)]
+
+
 def setup_mol(atoms, basis, xc, spin, charge, log_file='./pyscf.log', 
     verbose=6, 
     lebedev_grids=(99,590),
@@ -240,6 +249,158 @@ def compute_dft(args, calcs, extra=None):
     return output
 
 
+def compute_dft_single(
+    R: np.ndarray,
+    Z: np.ndarray,
+    basis: str = "def2-SVP",
+    xc: str = "PBE0",
+    spin: int = 0,
+    charge: int = 0,
+    energy: bool = True,
+    gradient: bool = True,
+    dipole: bool = True,
+    dens_esp: bool = False,
+    verbose: int = 0,
+) -> dict:
+    """
+    Run DFT for a single geometry (R, Z). Used for batch evaluation.
+
+    Returns dict with energy, gradient, D (dipole), esp, esp_grid (if dens_esp), R, Z, N.
+    All in same process/GPU context for efficient batch loops.
+    """
+    atom = _RZ_to_atom(R, Z)
+    mol = pyscf.M(
+        atom=atom,
+        basis=basis,
+        spin=spin,
+        charge=charge,
+        unit="Angstrom",
+        verbose=verbose,
+    )
+    engine, mol = setup_mol(mol, basis, xc, spin, charge, verbose=verbose)
+
+    # SCF must run before gradient/dipole/ESP
+    run_scf = energy or gradient or dipole or dens_esp
+    if run_scf:
+        e = engine.kernel()
+        if energy:
+            out = {"energy": np.array(e)}
+        else:
+            out = {}
+    else:
+        out = {}
+    out["R"] = np.asarray(R)
+    out["Z"] = np.asarray(Z)
+    out["N"] = np.array(len(Z))
+
+    if gradient:
+        g = engine.nuc_grad_method()
+        g_dft = g.kernel()
+        out["gradient"] = _to_numpy(g_dft)
+
+    if dipole:
+        dm = engine.make_rdm1()
+        out["D"] = _to_numpy(engine.dip_moment(unit="DEBYE", dm=dm))
+
+    if dens_esp:
+        dm = engine.make_rdm1()
+        grids = engine.grids
+        grid_coords = grids.coords.get()
+        density = engine._numint.get_rho(mol, dm, grids).get()
+        grid_indices = np.where(
+            np.less(density, 0.001) & np.greater_equal(density, 0.0001)
+        )[0]
+        grid_positions_a = grid_coords[grid_indices]
+        coords = grid_positions_a
+        fakemol = gto.fakemol_for_charges(coords)
+        coords_bohr = fakemol.atom_coords(unit="B")
+        charges = mol.atom_charges()
+        charges = cupy.asarray(charges)
+        coords_cp = cupy.asarray(coords)
+        mol_coords = cupy.asarray(mol.atom_coords(unit="ANG"))
+        r = dist_matrix(mol_coords, coords_bohr)
+        rinv = 1.0 / r
+        intopt = int3c2e.VHFOpt(mol, fakemol, "int2e")
+        intopt.build(1e-14, diag_block_with_triu=False, aosym=True, group_size=256)
+        v_grids_e = 2.0 * int3c2e.get_j_int3c2e_pass1(intopt, dm, sort_j=False)
+        v_grids_n = cupy.dot(charges, rinv)
+        res = v_grids_n - v_grids_e
+        out["esp"] = res.get()
+        out["esp_grid"] = coords_cp.get()
+        out["density"] = density
+        out["density_grid"] = grid_coords
+
+    return out
+
+
+def compute_dft_batch(
+    R_batch: np.ndarray,
+    Z: np.ndarray,
+    basis: str = "def2-SVP",
+    xc: str = "PBE0",
+    spin: int = 0,
+    charge: int = 0,
+    energy: bool = True,
+    gradient: bool = True,
+    dipole: bool = True,
+    dens_esp: bool = False,
+    verbose: int = 0,
+) -> dict:
+    """
+    Run DFT for multiple geometries in one process (same GPU context).
+    Loops over R_batch, aggregates E, F, Dxyz, esp into batch arrays.
+    """
+    n = R_batch.shape[0]
+    Z = np.asarray(Z)
+    if R_batch.ndim == 2:
+        R_batch = R_batch[np.newaxis, ...]
+
+    energies = []
+    gradients = []
+    dipoles = []
+    esps = []
+    esp_grids = []
+
+    for i in range(n):
+        out = compute_dft_single(
+            R_batch[i],
+            Z,
+            basis=basis,
+            xc=xc,
+            spin=spin,
+            charge=charge,
+            energy=energy,
+            gradient=gradient,
+            dipole=dipole,
+            dens_esp=dens_esp,
+            verbose=verbose,
+        )
+        if energy:
+            energies.append(out["energy"])
+        if gradient:
+            gradients.append(out["gradient"])
+        if dipole:
+            dipoles.append(out["D"])
+        if dens_esp:
+            esps.append(out["esp"])
+            esp_grids.append(out["esp_grid"])
+
+    result = {
+        "R": R_batch,
+        "Z": np.asarray(Z),
+        "N": np.array(len(Z)),
+    }
+    if energy:
+        result["E"] = np.stack(energies)
+    if gradient:
+        result["F"] = -np.stack(gradients)  # forces = -gradient
+    if dipole:
+        result["Dxyz"] = np.stack(dipoles)
+    if dens_esp:
+        result["esp"] = np.stack(esps)
+        result["esp_grid"] = np.stack(esp_grids)
+
+    return result
 
 
 def compute_interaction_energy(monomer_a, monomer_b, basis='cc-pVDZ', xc='PBE0'):
