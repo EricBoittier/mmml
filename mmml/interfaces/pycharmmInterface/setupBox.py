@@ -373,6 +373,21 @@ def run_packmol(n_molecules: int, side_length: float) -> None:
     print("Generated initial.pdb")
 
 
+def _ensure_crystal_image_str() -> None:
+    """Copy crystal_image.str to cwd if missing (required by CHARMM for periodic images)."""
+    dst = Path("crystal_image.str")
+    if dst.exists():
+        return
+    src = Path(__file__).resolve().parents[2] / "data" / "charmm" / "crystal_image.str"
+    if src.exists():
+        shutil.copy2(src, dst)
+    else:
+        raise FileNotFoundError(
+            f"crystal_image.str not found in cwd and source {src} does not exist. "
+            "CHARMM requires this file for periodic box setup."
+        )
+
+
 def setup_box_generic(pdb_path, rtf=CGENFF_RTF, prm=CGENFF_PRM, side_length: float = 30, tag="", skip_energy_show: bool = False):
     """
     Sets up the box
@@ -382,6 +397,8 @@ def setup_box_generic(pdb_path, rtf=CGENFF_RTF, prm=CGENFF_PRM, side_length: flo
             (Drude setup). Use for faster startup when validation is not needed.
     """
     from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet, safe_energy_show
+
+    _ensure_crystal_image_str()
     CLEAR_CHARMM()
     read.rtf(rtf)
     bl = settings.set_bomb_level(-2)
