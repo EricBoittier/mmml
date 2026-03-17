@@ -3071,7 +3071,7 @@ def train_model(
     esp_max_value: float = 1e10,
     restart_params: Any = None,
     start_epoch: int = 1,
-    optimizer_name: str = 'adamw',
+    optimizer_name: str = 'adam',
     optimizer_kwargs: Optional[Dict[str, Any]] = None,
 ) -> Any:
     """
@@ -3583,9 +3583,9 @@ def main():
                        help='Batch size (start with 1 for debugging)')
     parser.add_argument('--epochs', type=int, default=100,
                        help='Number of epochs')
-    parser.add_argument('--optimizer', type=str, default='adamw',
+    parser.add_argument('--optimizer', type=str, default='adam',
                        choices=['adam', 'adamw', 'rmsprop', 'muon'],
-                       help='Optimizer choice (default: adamw)')
+                       help='Optimizer choice (default: adam)')
     parser.add_argument('--learning-rate', '--lr', type=float, default=None,
                        help='Learning rate (default: auto-select based on dataset and optimizer)')
     parser.add_argument('--weight-decay', type=float, default=None,
