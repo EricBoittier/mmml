@@ -126,6 +126,40 @@ from mmml.dcmnet.dcmnet.electrostatics import calc_esp
 
 # Import data utilities
 from mmml.data import load_npz, DataConfig
+from mmml.utils.model_checkpoint import load_model_checkpoint
+
+
+def _load_physnet_params(path: Path) -> Dict[str, Any]:
+    """Load PhysNet parameters from orbax or JSON checkpoint."""
+    path = Path(path).resolve()
+    if not path.exists():
+        raise FileNotFoundError(f"PhysNet checkpoint not found: {path}")
+
+    # JSON: params.json or .json file
+    if path.suffix == ".json" or (path.is_dir() and (path / "params.json").exists()):
+        json_path = path if path.suffix == ".json" else path / "params.json"
+        ckpt = load_model_checkpoint(json_path, use_orbax=False, load_config=False)
+        return ckpt["params"]
+
+    # Orbax: find epoch dir and restore
+    epoch_dir = path
+    if path.is_dir():
+        epoch_dirs = sorted(path.glob("epoch-*/"), key=lambda d: int(d.name.split("-")[-1]) if d.name.startswith("epoch-") else -1)
+        epoch_dirs = [d for d in epoch_dirs if "tmp" not in d.name]
+        if epoch_dirs:
+            epoch_dir = epoch_dirs[-1]
+    try:
+        import orbax.checkpoint as ocp
+        checkpointer = ocp.PyTreeCheckpointer()
+        restored = checkpointer.restore(str(epoch_dir))
+        # Prefer ema_params for inference
+        if isinstance(restored, dict) and "ema_params" in restored:
+            return restored["ema_params"]
+        if isinstance(restored, dict) and "params" in restored:
+            return restored["params"]
+        return restored
+    except Exception as e:
+        raise RuntimeError(f"Failed to load PhysNet checkpoint from {path}: {e}") from e
 
 
 EPS = 1e-8
@@ -3586,6 +3620,9 @@ def main():
                        help='Checkpoint directory')
     parser.add_argument('--restart', type=Path, default=None,
                        help='Restart from checkpoint (path to best_params.pkl or checkpoint directory)')
+    parser.add_argument('--physnet-checkpoint', type=Path, default=None,
+                       help='Load PhysNet params from a pre-trained checkpoint (e.g. from step 09). '
+                            'Path to orbax experiment dir (cybz_physnet-xxx) or epoch dir, or JSON.')
     parser.add_argument('--print-freq', type=int, default=1,
                        help='Print frequency (epochs)')
     parser.add_argument('--plot-results', action='store_true', default=False,
@@ -3870,9 +3907,20 @@ def main():
     print(f"\nTraining stability:")
     print(f"  Gradient clipping: {args.grad_clip_norm if args.grad_clip_norm else 'disabled'}")
     
-    # Handle restart
+    # Handle restart or PhysNet init
     restart_params = None
     start_epoch = 1
+    
+    if args.physnet_checkpoint and not args.restart:
+        # Load PhysNet params from pre-trained checkpoint (e.g. step 09)
+        physnet_ckpt = Path(args.physnet_checkpoint).resolve()
+        if not physnet_ckpt.exists():
+            print(f"\n❌ Error: PhysNet checkpoint not found: {physnet_ckpt}")
+            sys.exit(1)
+        print(f"\n🔄 Loading PhysNet params from: {physnet_ckpt}")
+        physnet_params = _load_physnet_params(physnet_ckpt)
+        restart_params = {"physnet": physnet_params}
+        print(f"✅ Loaded PhysNet params ({sum(x.size for x in jax.tree_util.tree_leaves(physnet_params)):,} parameters)")
     
     if args.restart:
         # Determine restart path
