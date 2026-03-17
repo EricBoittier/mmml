@@ -26,7 +26,7 @@ def main() -> int:
     args = parse_args()
     atoms = main_loop(args)
     print(f"Generated {len(atoms)} atoms")
-    print("Output: pdb/initial.pdb, psf/initial.psf, CHARMM topology files")
+    print("Output: pdb/initial.pdb, psf/initial.psf, xyz/initial.xyz, CHARMM topology files")
     return 0
 
 
