@@ -20,6 +20,8 @@ def main():
 Available commands:
   make-res    Generate residue (PDB, PSF, topology) via PyCHARMM/CGENFF
   make-box    Pack molecules into periodic box (vacuum or solvated)
+  run         MM/ML simulation (ASE + JAX-MD with hybrid calculator)
+  run-pycharmm  Pure CHARMM heating and equilibration (no ML)
   xml2npz     Convert Molpro XML files to NPZ format
   train       Train DCMNet or PhysNetJAX models (coming soon)
   evaluate    Evaluate trained models (coming soon)
@@ -52,7 +54,7 @@ For help on a specific command:
     
     parser.add_argument(
         'command',
-        choices=['make-res', 'make-box', 'xml2npz', 'validate', 'train', 'evaluate', 'downstream', 'fix-and-split', 'pyscf-dft', 'pyscf-mp2', 'pyscf-evaluate', 'normal-mode-sample', 'gui'],
+        choices=['make-res', 'make-box', 'run', 'run-pycharmm', 'xml2npz', 'validate', 'train', 'evaluate', 'downstream', 'fix-and-split', 'pyscf-dft', 'pyscf-mp2', 'pyscf-evaluate', 'normal-mode-sample', 'gui'],
         help='Command to run'
     )
     parser.add_argument(
@@ -73,6 +75,16 @@ For help on a specific command:
         from .misc import make_box_cli
         sys.argv = ['mmml make-box'] + args.args
         return make_box_cli.main()
+
+    elif args.command == 'run':
+        from .run.run_sim import main as run_sim_main
+        sys.argv = ['mmml run'] + args.args
+        return run_sim_main()
+
+    elif args.command == 'run-pycharmm':
+        from .run.run_pycharmm import main
+        sys.argv = ['mmml run-pycharmm'] + args.args
+        return main()
 
     elif args.command == 'xml2npz':
         from .misc import xml2npz
