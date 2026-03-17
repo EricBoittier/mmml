@@ -6,8 +6,8 @@ help:
 	@echo ""
 	@echo "Installation:"
 	@echo "  make install          - Install with uv (CPU only)"
-	@echo "  make install-gpu      - Install with uv (GPU/CUDA 12)"
-	@echo "  make install-gpu-cuda13 - Install with uv (GPU/CUDA 13)"
+	@echo "  make install-gpu      - Install with uv (GPU/CUDA 13, default)"
+	@echo "  make install-gpu-cuda12 - Install with uv (GPU/CUDA 12)"
 	@echo "  make install-dev      - Install with development dependencies"
 	@echo "  make install-all      - Install all optional dependencies"
 	@echo ""
@@ -15,7 +15,7 @@ help:
 	@echo "  make micromamba-create     - Create micromamba environment (CPU)"
 	@echo "  make micromamba-create-gpu - Create micromamba environment (GPU/CUDA 12)"
 	@echo "  make micromamba-create-gpu-cuda13 - Create micromamba environment (GPU/CUDA 13)"
-	@echo "  make micromamba-create-full - Create micromamba environment (all features)"
+	@echo "  make micromamba-create-full - Create micromamba environment (all features, CUDA 13)"
 	@echo ""
 	@echo "Docker:"
 	@echo "  make docker-build-cpu  - Build CPU Docker image"
@@ -47,6 +47,7 @@ help:
 	@echo "PySCF/GPU4PySCF (requires GPU + gpu4pyscf):"
 	@echo "  make pyscf-example    - Run water DFT example (energy + gradient)"
 	@echo "  make pyscf-dft        - Run pyscf-dft CLI on water (energy only)"
+	@echo "  make pyscf-check-gpu  - Check CuPy/CUDA compatibility"
 	@echo ""
 	@echo "Git LFS:"
 	@echo "  make lfs-summary       - Show LFS file count and total size"
@@ -63,12 +64,12 @@ install:
 	uv sync
 
 install-gpu:
-	uv pip install --find-links https://storage.googleapis.com/jax-releases/jax_cuda_releases.html "jax[cuda12]" "jaxlib[cuda12]"
+	uv pip install --find-links https://storage.googleapis.com/jax-releases/jax_cuda_releases.html jax jaxlib jax-cuda13-plugin jax-cuda13-pjrt
 	uv sync --extra gpu
 
-install-gpu-cuda13:
-	uv pip install --find-links https://storage.googleapis.com/jax-releases/jax_cuda_releases.html jax jaxlib jax-cuda13-plugin jax-cuda13-pjrt
-	uv sync --extra gpu-cuda13
+install-gpu-cuda12:
+	uv pip install --find-links https://storage.googleapis.com/jax-releases/jax_cuda_releases.html "jax[cuda12]" "jaxlib[cuda12]"
+	uv sync --extra gpu-cuda12
 
 install-dev:
 	uv sync --extra dev
@@ -283,6 +284,10 @@ pyscf-example:
 
 pyscf-dft:
 	$(PY) -m mmml.cli pyscf-dft --mol $(PYSCF_MOL) --energy --output pyscf_water_output.pkl
+
+# Diagnose CuPy/CUDA compatibility (run on GPU node if using pyscf-dft)
+pyscf-check-gpu:
+	$(PY) scripts/check_cupy_gpu.py
 
 # ==============================================================================
 # Training helpers (PhysNetJAX via Hydra)

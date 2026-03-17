@@ -41,3 +41,34 @@ args.xc = "PBE0"
 output = compute_dft(args, [CALCS.ENERGY, CALCS.GRADIENT])
 print(f"Energy: {output['energy']} Hartree")
 ```
+
+## Troubleshooting
+
+### `CUDA_ERROR_NO_BINARY_FOR_GPU: no kernel image is available for execution on the device`
+
+This means CuPy was built for different GPU architectures than your machine. Common causes:
+
+1. **New GPU (e.g. RTX 5080 / Blackwell sm_120)** – Needs CUDA 12.8+ and a matching CuPy. Check for conda/CUDA version conflicts: `conda list | grep cuda`; ensure CuPy links to the same CUDA toolkit as `nvcc --version`.
+
+2. **Clear CuPy cache** – Stale JIT cache can cause mismatches:
+   ```bash
+   rm -rf ~/.cupy/kernel_cache
+   # or set: export CUPY_CACHE_DIR=/tmp/cupy_cache
+   ```
+
+3. **Check GPU and CuPy compatibility:**
+   ```bash
+   nvidia-smi  # GPU model and driver
+   python -c "import cupy; p=cupy.cuda.runtime.getDeviceProperties(0); print(f'Compute: {p.major}.{p.minor}')"
+   ```
+
+4. **Upgrade CuPy** – Newer wheels support more architectures:
+   ```bash
+   pip install --upgrade cupy-cuda13x
+   ```
+
+5. **HPC clusters** – Load the correct CUDA module before installing:
+   ```bash
+   module load cuda/12.2  # or your cluster's version
+   pip install cupy-cuda13x
+   ```
