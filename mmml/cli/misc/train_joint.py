@@ -2578,9 +2578,9 @@ def plot_validation_results(
         grid_pos_full = esp_grid_positions_list[idx]  # (ngrid, 3)
         valid_mask = np.all(np.abs(grid_pos_full) < 1e5, axis=1)
         grid_pos = grid_pos_full[valid_mask]
-        esp_true_valid = esp_true[valid_mask] if valid_mask.any() else np.array([])
-        esp_pred_physnet_valid = esp_pred_physnet[valid_mask] if valid_mask.any() else np.array([])
-        esp_pred_dcmnet_valid = esp_pred_dcmnet[valid_mask] if valid_mask.any() else np.array([])
+        esp_true_valid = esp_true[valid_mask]
+        esp_pred_physnet_valid = esp_pred_physnet[valid_mask]
+        esp_pred_dcmnet_valid = esp_pred_dcmnet[valid_mask]
         
         # Get atom positions and atomic numbers for this molecule
         batch_for_atoms = prepare_batch_data(valid_data, np.array([idx]), cutoff=cutoff)
@@ -2588,10 +2588,14 @@ def plot_validation_results(
         atom_positions = np.array(batch_for_atoms['R'][:n_atoms])  # (n_atoms, 3) in Angstroms
         atomic_nums = np.array(batch_for_atoms['Z'][:n_atoms])
         
-        # No centering needed - grid and atoms should already be aligned after Bohr→Å conversion
-        
-        # True ESP in 3D
-        ax = fig.add_subplot(131, projection='3d')
+        if len(grid_pos) == 0:
+            plt.close(fig)
+            print(f"  ⚠️  ESP example {idx}: no valid grid points (all padding), skipping 3D plot")
+        else:
+            # No centering needed - grid and atoms should already be aligned after Bohr→Å conversion
+            
+            # True ESP in 3D
+            ax = fig.add_subplot(131, projection='3d')
         sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 1], grid_pos[:, 2],
                        c=esp_true_valid, cmap='RdBu_r', s=3, alpha=0.5, 
                        vmin=esp_vmin, vmax=esp_vmax)
