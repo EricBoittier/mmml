@@ -499,6 +499,10 @@ def _compute_esp_single(
     
     if esp_max_value < 1e9:
         distance_mask = distance_mask * (jnp.abs(esp_target) <= esp_max_value).astype(jnp.float32)
+
+    # Exclude padding: grid uses 1e6 for invalid points (from reduce_esp_grid)
+    valid_grid = jnp.all(jnp.abs(vdw_mol) < 1e5, axis=1).astype(jnp.float32)
+    distance_mask = distance_mask * valid_grid
     
     # PhysNet ESP: sum over atoms with masking
     # V = q/r in Hartree/e when r is in Bohr. Coords are Angstrom -> r_bohr = r_angstrom * ANGSTROM_TO_BOHR
@@ -2570,8 +2574,13 @@ def plot_validation_results(
         
         fig = plt.figure(figsize=(18, 6))
         
-        # Get grid positions and ESP values
-        grid_pos = esp_grid_positions_list[idx]  # (ngrid, 3) - already in Angstroms after conversion
+        # Get grid positions and ESP values; filter out padding (grid uses 1e6 for invalid points)
+        grid_pos_full = esp_grid_positions_list[idx]  # (ngrid, 3)
+        valid_mask = np.all(np.abs(grid_pos_full) < 1e5, axis=1)
+        grid_pos = grid_pos_full[valid_mask]
+        esp_true_valid = esp_true[valid_mask] if valid_mask.any() else np.array([])
+        esp_pred_physnet_valid = esp_pred_physnet[valid_mask] if valid_mask.any() else np.array([])
+        esp_pred_dcmnet_valid = esp_pred_dcmnet[valid_mask] if valid_mask.any() else np.array([])
         
         # Get atom positions and atomic numbers for this molecule
         batch_for_atoms = prepare_batch_data(valid_data, np.array([idx]), cutoff=cutoff)
@@ -2584,7 +2593,7 @@ def plot_validation_results(
         # True ESP in 3D
         ax = fig.add_subplot(131, projection='3d')
         sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 1], grid_pos[:, 2],
-                       c=esp_true, cmap='RdBu_r', s=3, alpha=0.5, 
+                       c=esp_true_valid, cmap='RdBu_r', s=3, alpha=0.5, 
                        vmin=esp_vmin, vmax=esp_vmax)
         # Add atom positions
         ax.scatter(atom_positions[:, 0], atom_positions[:, 1], atom_positions[:, 2],
@@ -2606,7 +2615,7 @@ def plot_validation_results(
         # PhysNet ESP in 3D
         ax = fig.add_subplot(132, projection='3d')
         sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 1], grid_pos[:, 2],
-                       c=esp_pred_physnet, cmap='RdBu_r', s=3, alpha=0.5,
+                       c=esp_pred_physnet_valid, cmap='RdBu_r', s=3, alpha=0.5,
                        vmin=esp_vmin, vmax=esp_vmax)
         # Add atom positions (PhysNet charges are AT atom centers)
         ax.scatter(atom_positions[:, 0], atom_positions[:, 1], atom_positions[:, 2],
@@ -2628,7 +2637,7 @@ def plot_validation_results(
         # DCMNet ESP in 3D
         ax = fig.add_subplot(133, projection='3d')
         sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 1], grid_pos[:, 2],
-                       c=esp_pred_dcmnet, cmap='RdBu_r', s=3, alpha=0.5,
+                       c=esp_pred_dcmnet_valid, cmap='RdBu_r', s=3, alpha=0.5,
                        vmin=esp_vmin, vmax=esp_vmax)
         # Add atom positions
         ax.scatter(atom_positions[:, 0], atom_positions[:, 1], atom_positions[:, 2],
