@@ -127,11 +127,11 @@ def main() -> int:
     coords_bohr = grid_subset_angstrom * BOHR
     R_bohr = R_i * BOHR
     atoms_valid = np.any(R_i != 0, axis=1)
-    charges = np.asarray(Z)
-    if charges.ndim == 0 or charges.size == 1:
-        charges = np.full(np.sum(atoms_valid), int(np.asarray(Z).flat[0]))
+    Z_arr = np.asarray(Z)
+    if Z_arr.ndim == 0 or (Z_arr.ndim == 1 and Z_arr.shape[0] != R_i.shape[0]):
+        charges = np.full(np.sum(atoms_valid), int(Z_arr.flat[0]))
     else:
-        charges = np.asarray(Z)[atoms_valid]
+        charges = Z_arr[atoms_valid] if Z_arr.ndim > 0 else np.full(np.sum(atoms_valid), int(Z_arr))
     R_valid = R_bohr[atoms_valid]
     v_nuc_at_grid = np.zeros(len(grid_subset_angstrom))
     for j, r in enumerate(coords_bohr):
