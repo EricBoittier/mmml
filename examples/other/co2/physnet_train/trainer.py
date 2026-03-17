@@ -268,10 +268,10 @@ def main():
     parser.add_argument('--optimizer', type=str, default='amsgrad',
                        choices=['adam', 'adamw', 'amsgrad'],
                        help='Optimizer type')
-    parser.add_argument('--schedule', type=str, default='warmup',
+    parser.add_argument('--schedule', type=str, default='constant',
                        choices=['warmup', 'cosine_annealing', 'exponential',
                                'polynomial', 'cosine', 'warmup_cosine', 'constant'],
-                       help='Learning rate schedule')
+                       help='Learning rate schedule (default: constant)')
     parser.add_argument('--transform', type=str, default='reduce_on_plateau',
                        help='Learning rate transform')
     
