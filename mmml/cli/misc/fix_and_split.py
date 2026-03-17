@@ -1230,7 +1230,7 @@ Examples:
         atomic_ref=getattr(args, 'atomic_ref', None),
         atomic_ref_units=getattr(args, 'atomic_ref_units', 'hartree'),
         n_grid_points=getattr(args, 'n_grid_points', 3000),
-        esp_max_abs=getattr(args, 'esp_max_abs', 25.0),
+        esp_sd_sigma=getattr(args, 'esp_sd_sigma', 3.0),
         min_dist_to_atoms=getattr(args, 'min_dist_to_atoms', 1.0),
         verbose=not args.quiet
     )
