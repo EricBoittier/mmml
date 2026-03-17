@@ -145,7 +145,7 @@ def compute_dft(args, calcs, extra=None):
         intopt.build(1e-14, diag_block_with_triu=False, aosym=True, group_size=256)
         # electronic grids
         print("electronic grids")
-        v_grids_e = 2.0 * int3c2e.get_j_int3c2e_pass1(intopt, dm, sort_j=False)
+        v_grids_e = 2.0 * int3c2e.get_j_int3c2e_pass1(intopt, dm, sort_j=True)
         # nuclear grids
         print("nuclear grids")
         v_grids_n = cupy.dot(charges, rinv)
