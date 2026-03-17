@@ -49,6 +49,7 @@ def sample_normal_modes(
     freq_min: float = 50.0,
     include_equilibrium: bool = False,
     samples_per_mode: int = 2,
+    max_samples: int | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Generate displaced geometries along vibrational modes.
@@ -71,6 +72,8 @@ def sample_normal_modes(
         Include R_eq as first sample.
     samples_per_mode : int
         2 for +/- amplitude; 1 for + only.
+    max_samples : int, optional
+        Maximum number of structures to generate (None = no limit).
 
     Returns
     -------
@@ -94,10 +97,16 @@ def sample_normal_modes(
         samples.append(R_eq.copy())
 
     for k in mode_indices:
+        if max_samples is not None and len(samples) >= max_samples:
+            break
         mode_k = mode_ang[k]  # (n_atoms, 3)
         for amp in amplitudes:
+            if max_samples is not None and len(samples) >= max_samples:
+                break
             if samples_per_mode >= 2:
                 samples.append(R_eq + amp * mode_k)
+                if max_samples is not None and len(samples) >= max_samples:
+                    break
                 samples.append(R_eq - amp * mode_k)
             else:
                 samples.append(R_eq + amp * mode_k)
@@ -156,6 +165,13 @@ def main() -> int:
         default=2,
         help="2 for +/- amplitude (default), 1 for + only",
     )
+    parser.add_argument(
+        "--max-samples",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Maximum number of structures to generate (default: no limit)",
+    )
 
     args = parser.parse_args()
     t0 = time.perf_counter()
@@ -190,6 +206,7 @@ def main() -> int:
         freq_min=args.freq_min,
         include_equilibrium=args.include_equilibrium,
         samples_per_mode=args.samples_per_mode,
+        max_samples=args.max_samples,
     )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
