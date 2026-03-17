@@ -122,7 +122,30 @@ def main() -> int:
     corr = np.corrcoef(esp_stored, esp_recomputed)[0, 1]
     rmse = np.sqrt(np.mean((esp_stored - esp_recomputed) ** 2))
 
-    print(f"  Pearson correlation: {corr:.4f}")
+    # Isolate V_nuc (no SCF): V_nuc = sum Z_a / |r - R_a|. If aligned, stored_esp = V_nuc - V_elec.
+    BOHR = 0.529177
+    coords_bohr = grid_subset_angstrom * BOHR
+    R_bohr = R_i * BOHR
+    atoms_valid = np.any(R_i != 0, axis=1)
+    charges = np.asarray(Z)
+    if charges.ndim == 0 or charges.size == 1:
+        charges = np.full(np.sum(atoms_valid), int(np.asarray(Z).flat[0]))
+    else:
+        charges = np.asarray(Z)[atoms_valid]
+    R_valid = R_bohr[atoms_valid]
+    v_nuc_at_grid = np.zeros(len(grid_subset_angstrom))
+    for j, r in enumerate(coords_bohr):
+        dist = np.linalg.norm(R_valid - r[None, :], axis=1) + 1e-12
+        v_nuc_at_grid[j] = np.sum(charges / dist)
+    corr_nuc = np.corrcoef(esp_stored, v_nuc_at_grid)[0, 1]
+    # Implied V_elec from stored: stored_esp = V_nuc - V_elec => V_elec = V_nuc - stored_esp
+    v_elec_recomputed = v_nuc_at_grid - esp_recomputed
+    v_elec_implied = v_nuc_at_grid - esp_stored
+    corr_elec = np.corrcoef(v_elec_implied, v_elec_recomputed)[0, 1]
+
+    print(f"  Pearson correlation (full ESP): {corr:.4f}")
+    print(f"  Pearson correlation (V_nuc only): {corr_nuc:.4f}")
+    print(f"  Pearson correlation (V_elec implied vs recomputed): {corr_elec:.4f}")
     print(f"  RMSE (Hartree/e):   {rmse:.6e}")
     if corr > 0.99:
         print("  ✓ Alignment OK: esp and grid are correctly paired (data generation is fine)")
