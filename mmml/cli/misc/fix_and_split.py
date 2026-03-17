@@ -777,6 +777,18 @@ def fix_and_split_data(
         if vdw_surface_angstrom is not None:
             grid_fixed['vdw_surface'] = vdw_surface_angstrom
             grid_fixed['vdw_grid'] = vdw_surface_angstrom  # Backward compatibility
+        # Align Z and N with EFD (per-sample shapes for PhysNet)
+        if 'N' in grid_fixed:
+            N_g = grid_fixed['N']
+            if (np.isscalar(N_g) or (isinstance(N_g, np.ndarray) and N_g.size == 1) or
+                    (isinstance(N_g, np.ndarray) and N_g.ndim == 0) or
+                    (isinstance(N_g, np.ndarray) and N_g.shape[0] != n_samples)):
+                n_a = int(np.asarray(N_g).flat[0]) if np.asarray(N_g).size else R_angstrom.shape[1]
+                grid_fixed['N'] = np.full(n_samples, n_a, dtype=np.int32)
+        if 'Z' in grid_fixed:
+            Z_g = grid_fixed['Z']
+            if Z_g.ndim == 1:
+                grid_fixed['Z'] = np.broadcast_to(Z_g[np.newaxis, :], (n_samples, Z_g.shape[0]))
     
     # =========================================================================
     # Save split datasets

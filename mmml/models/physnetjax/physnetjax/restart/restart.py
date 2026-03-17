@@ -200,7 +200,7 @@ def restart_training(restart: str, transform, optimizer, num_atoms: int):
     step = restored["epoch"] + 1
     best_loss = restored["best_loss"]
     print(f"Training resumed from step {step - 1}, best_loss {best_loss}")
-    CKPT_DIR = Path(restart).parent
+    CKPT_DIR = Path(restart).parent.resolve()  # Orbax requires absolute paths
     return (
         ema_params,
         model,
