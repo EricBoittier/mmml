@@ -21,8 +21,8 @@ Example scripts live in `examples/mmml_tutorial/` (numbered by README order):
 
 Run from project root, e.g.:
 ```bash
-bash examples/mmml_tutorial/03_pyscf_dft_cli.sh
-uv run python examples/mmml_tutorial/03_pyscf_dft_programmatic.py
+bash examples/mmml_tutorial/cli/03_pyscf_dft_cli.sh
+uv run python examples/mmml_tutorial/programmatic/03_pyscf_dft_programmatic.py
 ```
 
 Or use the legacy water example:

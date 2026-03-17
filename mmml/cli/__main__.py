@@ -27,6 +27,7 @@ Available commands:
   fix-and-split  Fix units and create train/valid/test splits from NPZ data
   pyscf-dft   GPU-accelerated DFT calculations (energy, gradient, hessian, etc.)
   pyscf-mp2   GPU-accelerated MP2 (post-HF) calculations
+  normal-mode-sample  Sample geometries along vibrational modes
   gui         Start the molecular viewer GUI
 
 Examples:
@@ -40,7 +41,8 @@ Examples:
   mmml gui --data-dir ./trajectories
   mmml gui --file simulation.npz
   mmml pyscf-dft --mol "O 0 0 0; H 0.96 0 0; H -0.24 0.93 0" --energy
-  
+  mmml normal-mode-sample -i out/04_results.h5 -o out/06_sampled.npz --amplitude 0.1
+
 For help on a specific command:
   mmml <command> --help
         """
@@ -48,7 +50,7 @@ For help on a specific command:
     
     parser.add_argument(
         'command',
-        choices=['make-res', 'make-box', 'xml2npz', 'validate', 'train', 'evaluate', 'downstream', 'fix-and-split', 'pyscf-dft', 'pyscf-mp2', 'gui'],
+        choices=['make-res', 'make-box', 'xml2npz', 'validate', 'train', 'evaluate', 'downstream', 'fix-and-split', 'pyscf-dft', 'pyscf-mp2', 'normal-mode-sample', 'gui'],
         help='Command to run'
     )
     parser.add_argument(
@@ -122,6 +124,11 @@ For help on a specific command:
         from .misc import pyscf_mp2
         sys.argv = ['mmml pyscf-mp2'] + args.args
         return pyscf_mp2.main()
+
+    elif args.command == 'normal-mode-sample':
+        from .misc import normal_mode_sample
+        sys.argv = ['mmml normal-mode-sample'] + args.args
+        return normal_mode_sample.main()
 
     elif args.command == 'gui':
         from . import gui

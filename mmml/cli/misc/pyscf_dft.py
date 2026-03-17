@@ -11,12 +11,14 @@ Requires: gpu4pyscf, pyscf (GPU/quantum environment)
 """
 
 import sys
+import time
 import argparse
 from pathlib import Path
 
 
 def main() -> int:
     """Run pyscf-dft CLI."""
+    t0 = time.perf_counter()
     try:
         from mmml.interfaces.pyscf4gpuInterface.calcs import (
             parse_args,
@@ -42,8 +44,10 @@ def main() -> int:
 
     output = compute_dft(args, calcs, extra)
     save_pyscf_results(args.output, output)
+    elapsed = time.perf_counter() - t0
     base = Path(args.output).with_suffix("").name
     print(f"Results saved to {base}.npz (ML keys) and {base}.h5 (all arrays)")
+    print(f"Elapsed: {elapsed:.2f} s")
     return 0
 
 
