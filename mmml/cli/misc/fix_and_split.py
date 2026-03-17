@@ -33,6 +33,7 @@ ASE Standard Units:
 - ESP grid (vdw_surface): Angstrom
 """
 
+import json
 import sys
 import argparse
 from pathlib import Path
@@ -42,6 +43,8 @@ from typing import Dict, Tuple, Optional
 # Add parent directory to path
 repo_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(repo_root.resolve()))
+
+ATOMIC_REF_PATH = Path(__file__).parent.parent.parent / "data" / "qcml" / "atomic_reference_energies.json"
 
 
 def create_splits(n_samples: int, train_frac=0.8, valid_frac=0.1, test_frac=0.1, seed=42):
@@ -72,6 +75,47 @@ def convert_forces_hartree_bohr_to_ev_angstrom(F_hartree_bohr: np.ndarray) -> np
     """Convert forces from Hartree/Bohr to eV/Angstrom (ASE standard)."""
     HARTREE_BOHR_TO_EV_ANGSTROM = 51.42208
     return F_hartree_bohr * HARTREE_BOHR_TO_EV_ANGSTROM
+
+
+def load_atomic_reference_energies(scheme: str) -> Dict[str, float]:
+    """Load per-atom reference energies (Hartree) for a given scheme from atomic_reference_energies.json."""
+    with open(ATOMIC_REF_PATH) as f:
+        all_refs = json.load(f)
+    if scheme not in all_refs:
+        raise ValueError(
+            f"Unknown atomic ref scheme '{scheme}'. "
+            f"Available: {list(all_refs.keys())[:10]}..."
+        )
+    return all_refs[scheme]
+
+
+def subtract_atomic_references(
+    E_hartree: np.ndarray,
+    Z: np.ndarray,
+    scheme: str,
+) -> np.ndarray:
+    """
+    Subtract per-atom reference energies from total energies.
+    E_corrected = E - sum(E_ref[Z_i]) for each molecule.
+    Refs are in Hartree; returns corrected energies in Hartree.
+    """
+    from ase.data import chemical_symbols
+
+    refs = load_atomic_reference_energies(scheme)
+    E_ref_per_sample = np.zeros(len(E_hartree), dtype=np.float64)
+
+    for i in range(len(E_hartree)):
+        z = Z[i] if Z.ndim > 1 else Z
+        for zi in z:
+            if zi <= 0:
+                continue
+            sym = chemical_symbols[zi]
+            key = f"{sym}:0"
+            if key not in refs:
+                raise ValueError(f"No reference for {key} in scheme '{scheme}'")
+            E_ref_per_sample[i] += refs[key]
+
+    return E_hartree - E_ref_per_sample
 
 
 def convert_grid_indices_to_angstrom(
@@ -111,46 +155,38 @@ def validate_fixed_data(
         print("POST-FIX VALIDATION")
         print(f"{'='*70}")
     
-    # Check atomic coordinates across multiple samples
-    co_bonds_check = []
+    # Check atomic coordinates (shortest interatomic distance)
+    min_dists = []
     for i in range(min(100, len(R_ang))):
         r = R_ang[i]
-        z = Z[i]
-        valid = z > 0
-        vz = z[valid]
+        valid = np.any(r != 0, axis=1)
         vpos = r[valid]
-        
-        if len(vz) >= 3 and 6 in vz and np.sum(vz == 8) >= 2:
-            c_idx = np.where(vz == 6)[0][0]
-            o_idx = np.where(vz == 8)[0]
-            for oi in o_idx:
-                co_bonds_check.append(np.linalg.norm(vpos[c_idx] - vpos[oi]))
-    
-    co_bonds_check = np.array(co_bonds_check)
-    
+        if len(vpos) < 2:
+            continue
+        d = vpos[:, np.newaxis, :] - vpos[np.newaxis, :, :]
+        norms = np.linalg.norm(d, axis=2)
+        norms[np.triu_indices_from(norms, k=0)] = np.inf
+        min_dists.append(norms.min())
+    min_dists = np.array(min_dists) if min_dists else np.array([])
+
     coords_ok = False
     energy_ok = False
     force_ok = False
     grid_ok = True  # Default to True if no grid
     spatial_ok = True  # Default to True if no grid
-    
-    if len(co_bonds_check) > 0:
+
+    if len(min_dists) > 0:
         if verbose:
             print(f"\nAtomic Coordinates (up to 100 samples):")
-            print(f"  C-O bonds: mean={co_bonds_check.mean():.4f} Å, "
-                  f"range=[{co_bonds_check.min():.4f}, {co_bonds_check.max():.4f}]")
-        
-        if 1.0 <= co_bonds_check.mean() <= 1.5:
-            if verbose:
-                print(f"  ✓ Coordinates in Angstroms with varying geometries")
-            coords_ok = True
-        else:
-            if verbose:
-                print(f"  ❌ Coordinates outside expected range!")
+            print(f"  Shortest distance: mean={min_dists.mean():.4f} Å, "
+                  f"range=[{min_dists.min():.4f}, {min_dists.max():.4f}]")
+        coords_ok = 0.5 <= min_dists.mean() <= 3.0
+        if verbose and coords_ok:
+            print(f"  ✓ Coordinates in reasonable range")
+        elif verbose:
+            print(f"  ⚠️  Coordinates outside expected range")
     else:
-        if verbose:
-            print(f"\n⚠️  Could not find CO2 molecules for coordinate validation")
-        coords_ok = True  # Skip this check if not CO2
+        coords_ok = True
     
     # Check energies
     if verbose:
@@ -158,8 +194,7 @@ def validate_fixed_data(
         print(f"  Value: {E_ev[0]:.6f} eV")
         print(f"  Dataset mean: {E_ev.mean():.6f} eV")
     
-    # For CO2, expect energies around -5100 to -5000 eV (from -187.5 Ha)
-    # For other molecules, just check that conversion happened (values are reasonable in eV)
+    # Check that energies are in reasonable range for molecular systems (eV)
     if -10000 < E_ev.mean() < 1000:
         if verbose:
             print(f"  ✓ Energies in reasonable range for molecular energies in eV")
@@ -282,6 +317,7 @@ def fix_and_split_data(
     seed: int = 42,
     cube_spacing_bohr: float = 0.25,
     skip_validation: bool = False,
+    atomic_ref: Optional[str] = None,
     verbose: bool = True
 ) -> bool:
     """
@@ -307,6 +343,9 @@ def fix_and_split_data(
         Grid spacing in Bohr from original cube files (default 0.25)
     skip_validation : bool
         Skip validation checks (default False)
+    atomic_ref : str, optional
+        Subtract per-atom reference energies using scheme from atomic_reference_energies.json
+        (e.g. "pbe0/sz" for PBE0/SZ, closest to pyscf-evaluate default). Default: None.
     verbose : bool
         Print detailed progress (default True)
         
@@ -403,69 +442,74 @@ def fix_and_split_data(
                 print(f"  esp: mean={valid_esp.mean():.6e}, range=[{valid_esp.min():.6e}, {valid_esp.max():.6e}]")
 
     # =========================================================================
-    # Check atomic coordinates
+    # Check atomic coordinates (Bohr vs Angstrom)
     # =========================================================================
     if verbose:
         print(f"\n{'#'*70}")
         print("# Step 2: Checking Atomic Coordinates")
         print(f"{'#'*70}")
     
-    # Calculate C-O bond statistics to determine if conversion needed
-    co_bonds = []
-    for i in range(min(1000, len(efd_data['R']))):
+    # Use shortest interatomic distance to infer units (generic, not molecule-specific)
+    min_dists = []
+    for i in range(min(100, len(efd_data['R']))):
         r = efd_data['R'][i]
-        z = Z_expanded[i]
-        valid = z > 0
-        vz = z[valid]
+        valid = np.any(r != 0, axis=1)
         vpos = r[valid]
-        
-        if len(vz) >= 3 and 6 in vz and np.sum(vz == 8) >= 2:
-            c_idx = np.where(vz == 6)[0][0]
-            o_idx = np.where(vz == 8)[0]
-            for oi in o_idx:
-                co_bonds.append(np.linalg.norm(vpos[c_idx] - vpos[oi]))
-    
-    co_bonds = np.array(co_bonds)
-    
-    if len(co_bonds) > 0:
+        if len(vpos) < 2:
+            continue
+        # Pairwise distances (upper triangle)
+        d = vpos[:, np.newaxis, :] - vpos[np.newaxis, :, :]
+        norms = np.linalg.norm(d, axis=2)
+        norms[np.triu_indices_from(norms, k=0)] = np.inf
+        min_dists.append(norms.min())
+    min_dists = np.array(min_dists) if min_dists else np.array([])
+
+    if len(min_dists) > 0:
+        d_mean = min_dists.mean()
         if verbose:
-            print(f"\nC-O Bond Statistics (up to 1000 samples):")
-            print(f"  Mean:   {co_bonds.mean():.6f}")
-            print(f"  Std:    {co_bonds.std():.6f}")
-            print(f"  Min:    {co_bonds.min():.6f}")
-            print(f"  Max:    {co_bonds.max():.6f}")
-        
-        if 1.0 < co_bonds.mean() < 1.5:
+            print(f"\nShortest interatomic distance: mean={d_mean:.4f}, range=[{min_dists.min():.4f}, {min_dists.max():.4f}]")
+        if 0.8 < d_mean < 2.5:
             if verbose:
-                print(f"\n✓ Coordinates are ALREADY in Angstroms!")
+                print(f"✓ Coordinates in Angstroms")
             R_angstrom = efd_data['R']
-        elif 2.0 < co_bonds.mean() < 2.7:
+        elif 1.8 < d_mean < 2.9:
             if verbose:
-                print(f"\n→ Converting from Bohr to Angstroms...")
+                print(f"→ Converting from Bohr to Angstroms...")
             R_angstrom = efd_data['R'] * 0.529177
         else:
-            print(f"\n❌ Unclear units! Mean C-O = {co_bonds.mean():.4f}")
-            return False
+            if verbose:
+                print(f"⚠️  Ambiguous units (d={d_mean:.4f}), assuming Angstroms")
+            R_angstrom = efd_data['R']
     else:
         if verbose:
-            print(f"\n⚠️  Could not determine molecule type, assuming coordinates are in Angstroms")
+            print(f"\n⚠️  Could not compute distances, assuming coordinates in Angstroms")
         R_angstrom = efd_data['R']
     
     # =========================================================================
-    # Convert energies: Hartree → eV
+    # Convert energies: Hartree → eV (optionally subtract atomic references)
     # =========================================================================
     if verbose:
         print(f"\n{'#'*70}")
         print("# Step 3: Converting Energies from Hartree to eV")
         print(f"{'#'*70}")
     
-    E_ev = convert_energy_hartree_to_ev(efd_data['E'])
+    E_hartree = np.asarray(efd_data['E']).copy()
+    if atomic_ref:
+        if verbose:
+            print(f"\nSubtracting atomic reference energies (scheme: {atomic_ref})")
+        E_hartree = subtract_atomic_references(E_hartree, Z_expanded, atomic_ref)
+        if verbose:
+            print(f"  E (after ref subtraction): mean={E_hartree.mean():.6f} Ha, "
+                  f"range=[{E_hartree.min():.6f}, {E_hartree.max():.6f}]")
+    E_ev = convert_energy_hartree_to_ev(E_hartree)
     
     if verbose:
         HARTREE_TO_EV = 27.211386
         print(f"\nConversion factor: {HARTREE_TO_EV}")
         print(f"Original (Hartree): mean={efd_data['E'].mean():.6f}, "
               f"range=[{efd_data['E'].min():.6f}, {efd_data['E'].max():.6f}]")
+        if atomic_ref:
+            print(f"After atomic ref subtraction: mean={E_hartree.mean():.6f} Ha")
         print(f"Converted (eV):     mean={E_ev.mean():.6f}, "
               f"range=[{E_ev.min():.6f}, {E_ev.max():.6f}]")
         print(f"✓ Energies converted to eV")
@@ -628,13 +672,22 @@ def fix_and_split_data(
         print("# Step 9: Saving Split Datasets")
         print(f"{'#'*70}")
     
+    def _index_if_sample_dim(v, indices):
+        """Index array by split if it has n_samples in first dim; else pass through."""
+        if not isinstance(v, np.ndarray):
+            return v
+        if v.ndim == 0:
+            return v
+        if v.shape[0] == n_samples:
+            return v[indices]
+        return v
+
     for split_name, split_indices in splits.items():
         if verbose:
             print(f"\nSaving {split_name} split ({len(split_indices)} samples)...")
         
         # Create EFD split
-        efd_split = {k: v[split_indices] if (isinstance(v, np.ndarray) and v.shape[0] == n_samples) else v 
-                     for k, v in efd_fixed.items()}
+        efd_split = {k: _index_if_sample_dim(v, split_indices) for k, v in efd_fixed.items()}
         efd_out = output_dir / f"energies_forces_dipoles_{split_name}.npz"
         np.savez_compressed(efd_out, **efd_split)
         
@@ -644,8 +697,7 @@ def fix_and_split_data(
         
         # Create grid split (only if grid data exists)
         if has_grid and grid_fixed is not None:
-            grid_split = {k: v[split_indices] if (isinstance(v, np.ndarray) and v.shape[0] == n_samples) else v
-                          for k, v in grid_fixed.items()}
+            grid_split = {k: _index_if_sample_dim(v, split_indices) for k, v in grid_fixed.items()}
             grid_out = output_dir / f"grids_esp_{split_name}.npz"
             np.savez_compressed(grid_out, **grid_split)
             
@@ -939,6 +991,7 @@ Examples:
         seed=args.seed,
         cube_spacing_bohr=args.cube_spacing,
         skip_validation=args.skip_validation,
+        atomic_ref=args.atomic_ref,
         verbose=not args.quiet
     )
     
