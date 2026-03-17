@@ -26,6 +26,7 @@ EV_TO_HARTREE = 1.0 / HARTREE_TO_EV
 EV_TO_KCAL_MOL = 23.060549
 # 1 Hartree = 627.509474 kcal/mol
 HARTREE_TO_KCAL_MOL = 627.509474
+KCAL_MOL_TO_HARTREE = 1.0 / HARTREE_TO_KCAL_MOL
 
 # -----------------------------------------------------------------------------
 # Forces
