@@ -57,6 +57,12 @@ def main_loop(args):
     reset_block_no_internal()
     reset_block()
 
+    # ensure xyz files exist for downstream use
+    import ase.io
+    resid = args.res.upper()
+    ase.io.write("xyz/initial.xyz", atoms)
+    ase.io.write(f"xyz/{resid.lower()}.xyz", atoms)
+
     return atoms
 
 def main():
