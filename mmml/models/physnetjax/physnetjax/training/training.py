@@ -5,6 +5,7 @@ import logging
 import time
 import uuid
 import warnings
+from pathlib import Path
 
 import ase.units
 import e3x
@@ -301,6 +302,8 @@ def train_model(
         print_dict_as_table(train_params_dict, title="Training Parameters", plot=True)
         print_dict_as_table(training_style_dict, title="Training Style", plot=True)
 
+    # Orbax requires absolute checkpoint paths
+    ckpt_dir = Path(ckpt_dir).resolve()
     uuid_ = str(uuid.uuid4())
     CKPT_DIR = ckpt_dir / f"{name}-{uuid_}"
 
