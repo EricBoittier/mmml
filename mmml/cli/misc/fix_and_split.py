@@ -224,6 +224,58 @@ def convert_grid_indices_to_angstrom(
     return vdw_grid_angstrom
 
 
+def check_esp_grid_alignment(
+    esp: np.ndarray,
+    grid: np.ndarray,
+    R: np.ndarray,
+    n_check: int = 5,
+) -> Tuple[bool, float]:
+    """
+    Verify that esp[i,j] corresponds to grid[i,j] (same physical point).
+    
+    Uses spatial consistency: |esp| tends to be larger near atoms (1/r decay).
+    If esp and grid are misaligned (wrong index order), this correlation drops.
+    
+    Returns
+    -------
+    ok : bool
+        True if alignment appears correct (mean correlation > 0.3)
+    mean_corr : float
+        Mean Pearson correlation across checked samples
+    """
+    from scipy.stats import pearsonr
+    BOHR_TO_ANGSTROM = 0.529177
+    ANGSTROM_TO_BOHR = 1.0 / BOHR_TO_ANGSTROM
+    correlations = []
+    n_samples = min(n_check, esp.shape[0])
+    for i in range(n_samples):
+        esp_i = esp[i]
+        grid_i = grid[i]
+        r_i = R[i]
+        valid = np.all(np.abs(grid_i) < 1e5, axis=1)
+        if np.sum(valid) < 10:
+            continue
+        esp_valid = np.abs(esp_i[valid])
+        grid_valid = grid_i[valid]
+        atoms_valid = np.any(r_i != 0, axis=1)
+        if not np.any(atoms_valid):
+            continue
+        dists = cdist(grid_valid, r_i[atoms_valid])
+        min_dist = dists.min(axis=1)
+        inv_dist = 1.0 / (min_dist + 0.5)
+        try:
+            corr, _ = pearsonr(esp_valid, inv_dist)
+            if not np.isnan(corr):
+                correlations.append(float(corr))
+        except Exception:
+            pass
+    if not correlations:
+        return True, 0.0
+    mean_corr = float(np.mean(correlations))
+    ok = mean_corr > 0.2
+    return ok, mean_corr
+
+
 def validate_fixed_data(
     R_ang, E_ev, F_ev_ang, vdw_grid_ang, Z, N, 
     has_grid: bool = True,
@@ -770,6 +822,15 @@ def fix_and_split_data(
                 f"ESP/grid point count mismatch: esp {esp_raw.shape[1]} vs grid {vdw_surface_angstrom.shape[1]}. "
                 "esp[i,j] must correspond to grid[i,j] for correct pairing."
             )
+        # Check index alignment before reduction (catches esp/grid from different sources)
+        align_ok_raw, align_corr_raw = check_esp_grid_alignment(
+            esp_raw, vdw_surface_angstrom, R_angstrom, n_check=min(5, esp_raw.shape[0])
+        )
+        if verbose:
+            print(f"  ESP-grid alignment (raw): correlation={align_corr_raw:.3f} {'✓' if align_ok_raw else '⚠️'}")
+        if not align_ok_raw:
+            print(f"  ⚠️  WARNING: Low esp-grid correlation suggests index misalignment. "
+                  "esp[i,j] may not correspond to grid[i,j]. Check that esp and grid come from the same source.")
         if verbose:
             print(f"\n{'#'*70}")
             print("# Step 5b: Reducing ESP Grid")
@@ -793,6 +854,13 @@ def fix_and_split_data(
             n_valid_per_sample = np.sum(np.all(np.abs(grid_reduced) < 1e5, axis=2), axis=1)
             print(f"  Reduced to shape: esp {esp_reduced.shape}, grid {grid_reduced.shape}")
             print(f"  Valid points per sample: min={n_valid_per_sample.min()}, max={n_valid_per_sample.max()}, mean={n_valid_per_sample.mean():.0f}")
+        # Verify esp-grid index alignment (esp[i,j] must be at grid[i,j])
+        align_ok, align_corr = check_esp_grid_alignment(esp_reduced, grid_reduced, R_angstrom, n_check=5)
+        if verbose:
+            print(f"  ESP-grid alignment check: correlation={align_corr:.3f} {'✓' if align_ok else '⚠️'}")
+        if not align_ok and verbose:
+            print(f"  ⚠️  Low esp-grid correlation may indicate index misalignment. "
+                  "Ensure esp and grid come from the same source with matching point order.")
         # Update grid_data for saving - we need esp and vdw_surface
         grid_data = dict(grid_data)
         grid_data['esp'] = esp_reduced
