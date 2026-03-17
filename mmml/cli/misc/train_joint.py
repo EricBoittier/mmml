@@ -2657,19 +2657,19 @@ def plot_validation_results(
             if idx < n_esp_examples:
                 # Get distributed charges for this molecule (need to recompute)
                 _, _, output_dcm = eval_step(
-                params=params,
-                batch=batch_for_atoms,
-                model_apply=model.apply,
-                energy_w=energy_w,
-                forces_w=forces_w,
-                mono_w=mono_w,
-                charge_reg_w=charge_reg_w,
-                batch_size=1,
-                n_dcm=n_dcm,
-                dipole_terms=dipole_terms,
-                esp_terms=esp_terms,
-                esp_min_distance=0.0,
-                esp_max_value=1e10,
+                    params=params,
+                    batch=batch_for_atoms,
+                    model_apply=model.apply,
+                    energy_w=energy_w,
+                    forces_w=forces_w,
+                    mono_w=mono_w,
+                    charge_reg_w=charge_reg_w,
+                    batch_size=1,
+                    n_dcm=n_dcm,
+                    dipole_terms=dipole_terms,
+                    esp_terms=esp_terms,
+                    esp_min_distance=0.0,
+                    esp_max_value=1e10,
                 )
                 # Extract only real atoms (output is already (batch*natoms, n_dcm) format)
                 mono_dcm = output_dcm["mono_dist"][:n_atoms]  # (n_atoms, n_dcm)
@@ -2701,14 +2701,16 @@ def plot_validation_results(
             plt.savefig(esp_3d_path, dpi=150, bbox_inches='tight')
             plt.close()
             print(f"  ✅ Saved 3D ESP example {idx}: {esp_3d_path}")
-        
-        # Create multi-scale error visualization (3 rows at different percentiles)
-        fig, axes = plt.subplots(3, 2, figsize=(14, 12))
-        
-        # Row 1: 100% range (all data)
-        ax = axes[0, 0]
-        sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 2],
-                       c=esp_error_physnet, cmap='RdBu_r', s=5, alpha=0.6,
+            
+            # Create multi-scale error visualization (3 rows at different percentiles)
+            esp_error_physnet_valid = esp_pred_physnet_valid - esp_true_valid
+            esp_error_dcmnet_valid = esp_pred_dcmnet_valid - esp_true_valid
+            fig, axes = plt.subplots(3, 2, figsize=(14, 12))
+            
+            # Row 1: 100% range (all data)
+            ax = axes[0, 0]
+            sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 2],
+                       c=esp_error_physnet_valid, cmap='RdBu_r', s=5, alpha=0.6,
                        vmin=-error_absmax, vmax=error_absmax)
         ax.set_xlabel('X (Å)')
         ax.set_ylabel('Z (Å)')
@@ -2719,9 +2721,9 @@ def plot_validation_results(
         ax.scatter(atom_positions[:, 0], atom_positions[:, 2],
                   c='black', s=100, marker='o', edgecolors='lime', linewidths=2, alpha=1.0, zorder=10)
         
-        ax = axes[0, 1]
-        sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 2],
-                       c=esp_error_dcmnet, cmap='RdBu_r', s=20, alpha=0.8,
+            ax = axes[0, 1]
+            sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 2],
+                       c=esp_error_dcmnet_valid, cmap='RdBu_r', s=20, alpha=0.8,
                        vmin=-error_absmax, vmax=error_absmax)
         ax.set_xlabel('X (Å)')
         ax.set_ylabel('Z (Å)')
