@@ -42,7 +42,6 @@ def _resolve_ckpt_path() -> Path | None:
 			PROJECT_ROOT / "ckpts_json",
 			PROJECT_ROOT / "mmml/models/physnetjax/ckpts/DESdimers",
 			PROJECT_ROOT / "mmml/models/physnetjax/ckpts",
-			PROJECT_ROOT / "mmml/physnetjax/ckpts",
 		]
 	)
 	for ckpt in candidates:
@@ -61,7 +60,6 @@ def _resolve_full_ckpt_path() -> Path | None:
 		[
 			PROJECT_ROOT / "mmml/models/physnetjax/ckpts/DESdimers",
 			PROJECT_ROOT / "mmml/models/physnetjax/ckpts",
-			PROJECT_ROOT / "mmml/physnetjax/ckpts",
 		]
 	)
 	for ckpt in candidates:
