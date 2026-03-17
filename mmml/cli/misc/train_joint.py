@@ -3365,6 +3365,8 @@ def train_model(
             print(f"    Dipole: {train_loss_avg['dipole']:.6f}")
             print(f"    ESP: {train_loss_avg['esp']:.6f}")
             print(f"    Monopole: {train_loss_avg['monopole']:.6f}")
+            if 'charge_reg' in train_loss_avg:
+                print(f"    Charge Reg: {train_loss_avg['charge_reg']:.6f}")
             print(f"    Total Charge: {train_loss_avg['total_charge']:.6f}")
             print(f"  Valid Loss: {valid_loss_avg['total']:.6f}")
             
