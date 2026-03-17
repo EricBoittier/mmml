@@ -96,6 +96,9 @@ def sample_normal_modes(
     if include_equilibrium:
         samples.append(R_eq.copy())
 
+    n_modes = len(mode_indices)
+
+    # 1. Single-mode displacements
     for k in mode_indices:
         if max_samples is not None and len(samples) >= max_samples:
             break
@@ -110,6 +113,27 @@ def sample_normal_modes(
                 samples.append(R_eq - amp * mode_k)
             else:
                 samples.append(R_eq + amp * mode_k)
+
+    # 2. Two-mode combination displacements (when max_samples exceeds single-mode count)
+    if max_samples is not None and len(samples) < max_samples and n_modes >= 2:
+        scale = 1.0 / np.sqrt(2)  # keep similar displacement magnitude
+        for i in range(n_modes):
+            if max_samples is not None and len(samples) >= max_samples:
+                break
+            mode_i = mode_ang[mode_indices[i]]
+            for j in range(i + 1, n_modes):
+                if max_samples is not None and len(samples) >= max_samples:
+                    break
+                mode_j = mode_ang[mode_indices[j]]
+                for amp in amplitudes:
+                    if max_samples is not None and len(samples) >= max_samples:
+                        break
+                    disp = scale * amp * (mode_i + mode_j)
+                    samples.append(R_eq + disp)
+                    if max_samples is not None and len(samples) >= max_samples:
+                        break
+                    disp = scale * amp * (mode_i - mode_j)
+                    samples.append(R_eq + disp)
 
     R_samples = np.stack(samples, axis=0)
     return R_samples, Z
