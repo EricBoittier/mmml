@@ -7,6 +7,7 @@ from pyscf.hessian import thermo
 from pyscf import gto
 from pyscf.data import radii
 from gpu4pyscf.df import int3c2e
+from gpu4pyscf.gto.int3c1e import int1e_grids
 from gpu4pyscf.lib.cupy_helper import dist_matrix
 from gpu4pyscf.dft import rks
 from gpu4pyscf.properties import ir, shielding, polarizability
@@ -321,24 +322,23 @@ def compute_dft_single(
 
         if esp_cpu_fallback:
             # CPU int1e_rinv: guaranteed correct esp[i] <-> grid[i] alignment.
-            # Avoids gpu4pyscf get_j_int3c2e_pass1 aux basis ordering bug (see
-            # https://github.com/pyscf/gpu4pyscf/blob/master/gpu4pyscf/df/int3c2e.py#L685)
             dm_np = dm.get() if hasattr(dm, "get") else np.asarray(dm)
             res = _compute_esp_grid_cpu(mol, dm_np, coords)
         else:
-            # GPU path (may have esp/grid misalignment with fakemol aux basis)
-            fakemol = gto.fakemol_for_charges(coords)
-            coords_bohr = fakemol.atom_coords(unit="B")
+            # GPU path: int1e_grids (direct grid evaluation, correct ordering)
+            # + V_nuc. Avoids get_j_int3c2e_pass1 aux basis ordering bug.
+            v_elec = int1e_grids(mol, coords, dm=dm)
+            v_elec = np.asarray(v_elec) if hasattr(v_elec, "get") else v_elec
             charges = mol.atom_charges()
-            charges = cupy.asarray(charges)
-            mol_coords_bohr = cupy.asarray(mol.atom_coords(unit="B"))
-            r = dist_matrix(mol_coords_bohr, coords_bohr)
-            rinv = 1.0 / r
-            intopt = int3c2e.VHFOpt(mol, fakemol, "int2e")
-            intopt.build(1e-14, diag_block_with_triu=False, aosym=True, group_size=256)
-            v_grids_e = 2.0 * int3c2e.get_j_int3c2e_pass1(intopt, dm, sort_j=True)
-            v_grids_n = cupy.dot(charges, rinv)
-            res = (v_grids_n - v_grids_e).get()
+            atom_coords = mol.atom_coords(unit="Bohr")
+            v_nuc = np.array(
+                [
+                    np.sum(charges / (np.linalg.norm(atom_coords - r, axis=1) + 1e-12))
+                    for r in coords
+                ],
+                dtype=np.float64,
+            )
+            res = v_nuc - v_elec
 
         out["esp"] = np.asarray(res)
         out["esp_grid"] = np.asarray(coords)
