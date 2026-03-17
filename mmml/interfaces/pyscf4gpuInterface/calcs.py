@@ -266,7 +266,7 @@ def compute_dft_single(
     gradient: bool = True,
     dipole: bool = True,
     dens_esp: bool = False,
-    esp_cpu_fallback: bool = True,
+    esp_cpu_fallback: bool = False,
     verbose: int = 0,
 ) -> dict:
     """
@@ -359,7 +359,7 @@ def compute_dft_batch(
     gradient: bool = True,
     dipole: bool = True,
     dens_esp: bool = False,
-    esp_cpu_fallback: bool = True,
+    esp_cpu_fallback: bool = False,
     verbose: int = 0,
 ) -> dict:
     """
