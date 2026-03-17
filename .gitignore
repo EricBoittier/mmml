@@ -9,7 +9,6 @@ core.*
 .DS_Store*
 # project specific gitignore files
 CHARMMSETUP
-uv.lock
 
 # Generated outputs and checkpoints (do not version large artifacts)
 outputs/
