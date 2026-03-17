@@ -22,7 +22,7 @@ def main() -> int:
             parse_args,
             process_calcs,
             compute_dft,
-            save_output,
+            save_pyscf_results,
         )
     except ModuleNotFoundError as e:
         if "cupy" in str(e).lower() or "gpu4pyscf" in str(e).lower():
@@ -41,8 +41,9 @@ def main() -> int:
         return 1
 
     output = compute_dft(args, calcs, extra)
-    save_output(args.output, output, args.save_option)
-    print(f"Results saved to {args.output}")
+    save_pyscf_results(args.output, output)
+    base = Path(args.output).with_suffix("").name
+    print(f"Results saved to {base}.npz (ML keys) and {base}.h5 (all arrays)")
     return 0
 
 

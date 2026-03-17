@@ -229,6 +229,14 @@ def compute_dft(args, calcs, extra=None):
         e_interaction = compute_interaction_energy(mol, extra)
         output['interaction'] = e_interaction
 
+    # Always add R, Z, N for ML compatibility (from final mol, e.g. after optimization)
+    mol_final = output.get('mol', mol)
+    R = np.asarray(mol_final.atom_coords(unit="ANG"))
+    Z = np.asarray(mol_final.atom_charges())
+    output['R'] = R
+    output['Z'] = Z
+    output['N'] = np.array(len(Z))
+
     return output
 
 
@@ -312,7 +320,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
     # molecule
     parser.add_argument("--mol", type=str, required=True)
-    parser.add_argument("--output", type=str, default="output.pkl")
+    parser.add_argument("--output", type=str, default="output")
     parser.add_argument("--log_file", type=str, default="pyscf.log")
     parser.add_argument("--monomer_a", type=str, default="")
     parser.add_argument("--monomer_b", type=str, default="")
@@ -428,6 +436,124 @@ def _to_numpy(value):
     if isinstance(value, (list, tuple)) and all(isinstance(x, (int, float, np.number)) for x in value):
         return np.asarray(value)
     return None
+
+
+def build_ml_dict(data: dict) -> dict:
+    """Build ML-style dict with keys R, Z, N, E, F, Dxyz, etc. from compute_dft output.
+
+    Uses (1, ...) leading dimension for single-structure compatibility with batch schema.
+    Units: R [Angstrom], E [Hartree], F [Hartree/Bohr], Dxyz [Debye].
+    """
+    out = {}
+    for k, v in data.items():
+        arr = _to_numpy(v)
+        if arr is not None:
+            out[k] = arr
+
+    ml = {}
+    if "R" in out:
+        R = out["R"]
+        ml["R"] = R[np.newaxis, ...] if R.ndim == 2 else R
+    if "Z" in out:
+        Z = out["Z"]
+        ml["Z"] = Z[np.newaxis, ...] if Z.ndim == 1 else Z
+    if "N" in out:
+        N = out["N"]
+        ml["N"] = np.atleast_1d(N)
+    if "energy" in out:
+        ml["E"] = np.atleast_1d(out["energy"])
+    if "gradient" in out:
+        # F = -gradient (forces in Hartree/Bohr)
+        g = out["gradient"]
+        ml["F"] = (-g)[np.newaxis, ...] if g.ndim == 2 else np.atleast_2d(-g)
+    if "D" in out:
+        D = out["D"]
+        ml["Dxyz"] = D[np.newaxis, ...] if D.ndim == 1 else D
+    if "Q" in out:
+        ml["Q"] = out["Q"][np.newaxis, ...] if out["Q"].ndim == 2 else out["Q"]
+    if "esp" in out:
+        ml["esp"] = out["esp"][np.newaxis, ...] if out["esp"].ndim == 1 else out["esp"]
+    if "esp_grid" in out:
+        g = out["esp_grid"]
+        ml["esp_grid"] = g[np.newaxis, ...] if g.ndim == 2 else g
+    if "vdw_surface" in out:
+        ml["vdw_surface"] = out["vdw_surface"]
+    if "shielding" in out:
+        ml["shielding"] = out["shielding"]
+    if "polarizability" in out:
+        ml["polarizability"] = out["polarizability"]
+    if "hessian" in out:
+        ml["hessian"] = out["hessian"]
+    if "freq" in out:
+        ml["freq"] = out["freq"]
+    if "intensity" in out:
+        ml["intensity"] = out["intensity"]
+    if "density" in out:
+        ml["density"] = out["density"]
+    if "density_grid" in out:
+        dg = out["density_grid"]
+        arr = _to_numpy(dg)
+        if arr is not None:
+            ml["density_grid"] = arr
+
+    return {k: v for k, v in ml.items() if v is not None}
+
+
+def _arrays_only(data: dict) -> dict:
+    """Extract all array-like values from data (top-level only)."""
+    result = {}
+    for k, v in data.items():
+        if k == "mol":
+            continue
+        arr = _to_numpy(v)
+        if arr is not None:
+            result[k] = arr
+    return result
+
+
+def save_pyscf_results(base_path: str, data: dict) -> None:
+    """
+    Save pyscf-dft results as both NPZ (ML-style keys) and H5 (all arrays).
+
+    Writes:
+    - {base_path}.npz: ML dict with R, Z, N, E, F, Dxyz, esp, etc.
+    - {base_path}.h5: All array-like data (original keys)
+    """
+    import os as _os
+
+    base = _os.path.splitext(base_path)[0]
+    if base.endswith(".h5") or base.endswith(".hdf5"):
+        base = _os.path.splitext(base)[0]
+    if _os.path.dirname(base) != "":
+        _os.makedirs(_os.path.dirname(base), exist_ok=True)
+
+    ml_dict = build_ml_dict(data)
+    if ml_dict:
+        np.savez_compressed(f"{base}.npz", **ml_dict)
+
+    arrays = _arrays_only(data)
+    if arrays:
+        import h5py as _h5py
+
+        def _write(parent, d):
+            for k, v in d.items():
+                arr = _to_numpy(v)
+                if arr is not None:
+                    parent.create_dataset(str(k), data=arr)
+                elif isinstance(v, dict):
+                    grp = parent.create_group(str(k))
+                    _write(grp, v)
+
+        with _h5py.File(f"{base}.h5", "w") as h5f:
+            for k, v in data.items():
+                if k == "mol":
+                    continue
+                arr = _to_numpy(v)
+                if arr is not None:
+                    h5f.create_dataset(str(k), data=arr)
+                elif isinstance(v, dict):
+                    grp = h5f.create_group(str(k))
+                    _write(grp, v)
 
 
 def save_output(output_path: str, data: dict, save_option: str = "pkl") -> None:

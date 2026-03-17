@@ -283,7 +283,7 @@ pyscf-example:
 	$(PY) examples/pyscf4gpu/water_energy.py
 
 pyscf-dft:
-	$(PY) -m mmml.cli pyscf-dft --mol $(PYSCF_MOL) --energy --output pyscf_water_output.pkl
+	$(PY) -m mmml.cli pyscf-dft --mol $(PYSCF_MOL) --energy --output pyscf_water_output
 
 # Diagnose CuPy/CUDA compatibility (run on GPU node if using pyscf-dft)
 pyscf-check-gpu:
