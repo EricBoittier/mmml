@@ -137,9 +137,9 @@ def compute_dft(args, calcs, extra=None):
         charges = mol.atom_charges()
         charges = cupy.asarray(charges)
         coords = cupy.asarray(coords)
-        mol_coords = cupy.asarray(mol.atom_coords(unit="ANG"))
+        mol_coords_bohr = cupy.asarray(mol.atom_coords(unit="B"))
         print("distance matrix")
-        r = dist_matrix(mol_coords, coords_bohr)
+        r = dist_matrix(mol_coords_bohr, coords_bohr)
         rinv = 1.0 / r
         intopt = int3c2e.VHFOpt(mol, fakemol, "int2e")
         intopt.build(1e-14, diag_block_with_triu=False, aosym=True, group_size=256)
@@ -318,8 +318,8 @@ def compute_dft_single(
         charges = mol.atom_charges()
         charges = cupy.asarray(charges)
         coords_cp = cupy.asarray(coords)
-        mol_coords = cupy.asarray(mol.atom_coords(unit="ANG"))
-        r = dist_matrix(mol_coords, coords_bohr)
+        mol_coords_bohr = cupy.asarray(mol.atom_coords(unit="B"))
+        r = dist_matrix(mol_coords_bohr, coords_bohr)
         rinv = 1.0 / r
         intopt = int3c2e.VHFOpt(mol, fakemol, "int2e")
         intopt.build(1e-14, diag_block_with_triu=False, aosym=True, group_size=256)
