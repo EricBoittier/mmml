@@ -11,6 +11,8 @@ If `uv` is not in PATH (e.g. HPC): use full path, e.g. `~/micromamba/bin/uv sync
 
 ## Example scripts
 
+Example scripts live in `examples/mmml_tutorial/`:
+
 | # | CLI | Programmatic |
 |---|-----|--------------|
 | 01 | `01_pyscf_dft_cli.sh` | `01_pyscf_dft_programmatic.py` |
@@ -19,8 +21,8 @@ If `uv` is not in PATH (e.g. HPC): use full path, e.g. `~/micromamba/bin/uv sync
 
 Run from project root, e.g.:
 ```bash
-bash examples/pyscf4gpu/01_pyscf_dft_cli.sh
-uv run python examples/pyscf4gpu/01_pyscf_dft_programmatic.py
+bash examples/mmml_tutorial/01_pyscf_dft_cli.sh
+uv run python examples/mmml_tutorial/01_pyscf_dft_programmatic.py
 ```
 
 Or use the legacy water example:
