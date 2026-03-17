@@ -129,8 +129,9 @@ from mmml.data import load_npz, DataConfig
 from mmml.utils.model_checkpoint import load_model_checkpoint
 
 
-def _load_physnet_params(path: Path) -> Dict[str, Any]:
-    """Load PhysNet parameters from orbax or JSON checkpoint."""
+def _load_physnet_checkpoint(path: Path) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]]]:
+    """Load PhysNet parameters and config from orbax or JSON checkpoint.
+    Returns (params, config). config is None if not available."""
     path = Path(path).resolve()
     if not path.exists():
         raise FileNotFoundError(f"PhysNet checkpoint not found: {path}")
@@ -138,8 +139,10 @@ def _load_physnet_params(path: Path) -> Dict[str, Any]:
     # JSON: params.json or .json file
     if path.suffix == ".json" or (path.is_dir() and (path / "params.json").exists()):
         json_path = path if path.suffix == ".json" else path / "params.json"
-        ckpt = load_model_checkpoint(json_path, use_orbax=False, load_config=False)
-        return ckpt["params"]
+        ckpt = load_model_checkpoint(json_path, use_orbax=False, load_config=True)
+        params = ckpt["params"]
+        config = ckpt.get("config") if isinstance(ckpt.get("config"), dict) else None
+        return params, config
 
     # Orbax: find epoch dir and restore
     epoch_dir = path
@@ -154,10 +157,15 @@ def _load_physnet_params(path: Path) -> Dict[str, Any]:
         restored = checkpointer.restore(str(epoch_dir))
         # Prefer ema_params for inference
         if isinstance(restored, dict) and "ema_params" in restored:
-            return restored["ema_params"]
-        if isinstance(restored, dict) and "params" in restored:
-            return restored["params"]
-        return restored
+            params = restored["ema_params"]
+        elif isinstance(restored, dict) and "params" in restored:
+            params = restored["params"]
+        else:
+            params = restored
+        config = None
+        if isinstance(restored, dict) and "model_attributes" in restored:
+            config = dict(restored["model_attributes"])
+        return params, config
     except Exception as e:
         raise RuntimeError(f"Failed to load PhysNet checkpoint from {path}: {e}") from e
 
@@ -3798,6 +3806,22 @@ def main():
         if args.weight_decay is None:
             args.weight_decay = 1e-4 if args.optimizer == 'adamw' else 0.0
     
+    # Load PhysNet checkpoint early if provided (config for model architecture, params for init)
+    physnet_ckpt_config = None
+    physnet_ckpt_params = None
+    if args.physnet_checkpoint and not args.restart:
+        physnet_ckpt_path = Path(args.physnet_checkpoint).resolve()
+        if not physnet_ckpt_path.exists():
+            print(f"\n❌ Error: PhysNet checkpoint not found: {physnet_ckpt_path}")
+            sys.exit(1)
+        try:
+            physnet_ckpt_params, physnet_ckpt_config = _load_physnet_checkpoint(physnet_ckpt_path)
+            if physnet_ckpt_config:
+                print(f"\n📁 Loaded PhysNet config from checkpoint (will match architecture)")
+        except Exception as e:
+            print(f"\n❌ Failed to load PhysNet checkpoint: {e}")
+            sys.exit(1)
+    
     # Build models
     print(f"\n{'#'*70}")
     print("# Building Joint Model")
@@ -3819,6 +3843,14 @@ def main():
         'debug': False,
         'efa': False,
     }
+    # Override with checkpoint config when loading pre-trained PhysNet (ensures param shapes match)
+    if physnet_ckpt_config:
+        for key in ('features', 'max_degree', 'num_iterations', 'num_basis_functions',
+                    'cutoff', 'max_atomic_number', 'n_res', 'zbl', 'use_energy_bias'):
+            if key in physnet_ckpt_config:
+                physnet_config[key] = physnet_ckpt_config[key]
+        physnet_config['natoms'] = args.natoms  # Keep data padding
+        physnet_config['charges'] = True  # Required for joint model
     
     print("PhysNet configuration:")
     for k, v in physnet_config.items():
@@ -3916,19 +3948,15 @@ def main():
     restart_params = None
     start_epoch = 1
     
-    if args.physnet_checkpoint and not args.restart:
-        # Load PhysNet params from pre-trained checkpoint (e.g. step 09)
-        physnet_ckpt = Path(args.physnet_checkpoint).resolve()
-        if not physnet_ckpt.exists():
-            print(f"\n❌ Error: PhysNet checkpoint not found: {physnet_ckpt}")
-            sys.exit(1)
-        print(f"\n🔄 Loading PhysNet params from: {physnet_ckpt}")
-        physnet_params = _load_physnet_params(physnet_ckpt)
+    if physnet_ckpt_params is not None:
+        # Use PhysNet params loaded earlier (config already applied to model build)
+        physnet_params = physnet_ckpt_params
         # Standalone PhysNet checkpoint nests params under 'params'; joint model expects flat under physnet
         if isinstance(physnet_params, dict) and "params" in physnet_params:
             physnet_params = physnet_params["params"]
         # Flax joint model: {'params': {'physnet': ..., 'dcmnet': ..., ...}}
         restart_params = {"params": {"physnet": physnet_params}}
+        print(f"\n🔄 Merging PhysNet params into joint model...")
         print(f"✅ Loaded PhysNet params ({sum(x.size for x in jax.tree_util.tree_leaves(physnet_params)):,} parameters)")
     
     if args.restart:
