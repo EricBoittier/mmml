@@ -17,12 +17,20 @@ from pathlib import Path
 
 def main() -> int:
     """Run pyscf-dft CLI."""
-    from mmml.interfaces.pyscf4gpuInterface.calcs import (
-        parse_args,
-        process_calcs,
-        compute_dft,
-        save_output,
-    )
+    try:
+        from mmml.interfaces.pyscf4gpuInterface.calcs import (
+            parse_args,
+            process_calcs,
+            compute_dft,
+            save_output,
+        )
+    except ModuleNotFoundError as e:
+        if "cupy" in str(e).lower() or "gpu4pyscf" in str(e).lower():
+            print("Error: pyscf-dft requires cupy and gpu4pyscf.", file=sys.stderr)
+            print("Install with: uv sync --extra quantum-gpu", file=sys.stderr)
+            print("Or: uv pip install cupy-cuda13x gpu4pyscf-cuda13x", file=sys.stderr)
+            return 1
+        raise
 
     args = parse_args()
     calcs, extra = process_calcs(args)
