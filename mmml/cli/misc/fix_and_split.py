@@ -672,7 +672,10 @@ def fix_and_split_data(
                 print(f"  Available keys: {list(grid_data.keys())}")
             # Grid from pyscf-evaluate (esp/esp_grid) is in Bohr; convert to Angstrom
             # Grid from other sources: assume Angstrom if no metadata
-            grid_from_pyscf = 'esp' in grid_data and ('vdw_surface' in grid_data or 'vdw_grid' in grid_data)
+            # pyscf-evaluate saves esp_grid; also accept vdw_surface or vdw_grid
+            grid_from_pyscf = 'esp' in grid_data and (
+                'vdw_surface' in grid_data or 'vdw_grid' in grid_data or 'esp_grid' in grid_data
+            )
             if 'vdw_surface' in grid_data:
                 vdw_raw = grid_data['vdw_surface']
                 if grid_from_pyscf:
@@ -700,6 +703,16 @@ def fix_and_split_data(
                     vdw_surface_angstrom = vdw_raw
                     if verbose:
                         print(f"  Using vdw_grid directly (assuming Angstroms)")
+            elif 'esp_grid' in grid_data:
+                vdw_raw = grid_data['esp_grid']
+                if grid_from_pyscf:
+                    vdw_surface_angstrom = vdw_raw * BOHR_TO_ANGSTROM
+                    if verbose:
+                        print(f"  Using esp_grid as grid; converting from Bohr to Angstrom (pyscf format)")
+                else:
+                    vdw_surface_angstrom = vdw_raw
+                    if verbose:
+                        print(f"  Using esp_grid as grid (assuming Angstroms)")
         else:
             if verbose:
                 print(f"\nCube file parameters:")
@@ -746,6 +759,17 @@ def fix_and_split_data(
     # =========================================================================
     if has_grid and vdw_surface_angstrom is not None:
         esp_raw = grid_data['esp']
+        # Sanity check: esp and grid must have matching shapes (esp[i,j] pairs with grid[i,j])
+        if esp_raw.shape[0] != vdw_surface_angstrom.shape[0]:
+            raise ValueError(
+                f"ESP/grid sample count mismatch: esp {esp_raw.shape[0]} vs grid {vdw_surface_angstrom.shape[0]}. "
+                "Check that EFD and grid files have the same samples in the same order."
+            )
+        if esp_raw.shape[1] != vdw_surface_angstrom.shape[1]:
+            raise ValueError(
+                f"ESP/grid point count mismatch: esp {esp_raw.shape[1]} vs grid {vdw_surface_angstrom.shape[1]}. "
+                "esp[i,j] must correspond to grid[i,j] for correct pairing."
+            )
         if verbose:
             print(f"\n{'#'*70}")
             print("# Step 5b: Reducing ESP Grid")
