@@ -324,7 +324,7 @@ def parse_args():
     parser.add_argument("--log_file", type=str, default="pyscf.log")
     parser.add_argument("--monomer_a", type=str, default="")
     parser.add_argument("--monomer_b", type=str, default="")
-    parser.add_argument("--basis", type=str, default="def2-tzvp")
+    parser.add_argument("--basis", type=str, default="def2-SVP")
     parser.add_argument("--xc", type=str, default="wB97m-v")
     parser.add_argument("--spin", type=int, default=0)
     parser.add_argument("--charge", type=int, default=0)
@@ -398,7 +398,7 @@ def get_dummy_args(mol: str, calcs: list[CALCS]):
             self.log_file = "pyscf.log"
             self.monomer_a = ""
             self.monomer_b = ""
-            self.basis = "def2-tzvp"
+            self.basis = "def2-SVP"
             self.xc = "wB97m-v"
             self.spin = 0
             self.charge = 0 
