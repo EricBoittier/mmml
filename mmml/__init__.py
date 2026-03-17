@@ -14,6 +14,11 @@ if "mmml.physnetjax" not in sys.modules:
     from mmml.models import physnetjax
     sys.modules["mmml.physnetjax"] = physnetjax
 
+# Compatibility: mmml.dcmnet -> mmml.models.dcmnet
+if "mmml.dcmnet" not in sys.modules:
+    from mmml.models import dcmnet
+    sys.modules["mmml.dcmnet"] = dcmnet
+
 # Handle version import gracefully
 try:
     from ._version import __version__
