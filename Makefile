@@ -1,4 +1,4 @@
-.PHONY: help install install-gpu install-dev install-all clean test docker-build docker-run micromamba-create micromamba-create-gpu micromamba-create-gpu-cuda13 micromamba-create-full micromamba-update micromamba-remove docker-clean
+.PHONY: help install install-gpu install-dev install-all clean test docker-build docker-run micromamba-create micromamba-create-gpu micromamba-create-gpu-cuda13 micromamba-create-full micromamba-update micromamba-remove docker-clean lfs-summary lfs-audit lfs-setup-symlinks
 
 help:
 	@echo "MMML - Makefile Commands"
@@ -43,6 +43,11 @@ help:
 	@echo ""
 	@echo "Data Utilities:"
 	@echo "  make split-8-1-1       - Split an NPZ into 8:1:1 train/valid/test"
+	@echo ""
+	@echo "Git LFS:"
+	@echo "  make lfs-summary       - Show LFS file count and total size"
+	@echo "  make lfs-audit         - Save LFS file list (sorted by size) to lfs_audit.txt"
+	@echo "  make lfs-setup-symlinks - Replace duplicate grids_esp with symlinks to preclassified_data"
 	@echo ""
 
 # ==============================================================================
@@ -223,6 +228,24 @@ freeze:
 
 upgrade:
 	uv sync --upgrade
+
+# ==============================================================================
+# Git LFS
+# ==============================================================================
+
+lfs-summary:
+	@echo "LFS files: $$(git lfs ls-files 2>/dev/null | wc -l)"
+	@git lfs ls-files -s 2>/dev/null | grep -oE '\([0-9.]+ (KB|MB|GB)\)' | \
+	  awk -F'[ ()]' '{u=$$3; v=$$2; \
+	    if(u=="KB")t+=v*1024; else if(u=="MB")t+=v*1024*1024; else if(u=="GB")t+=v*1024*1024*1024} \
+	    END{printf "Total: %.1f MB\n", t/1024/1024}'
+
+lfs-audit:
+	git lfs ls-files -s 2>/dev/null | grep -E '\([0-9.]+ (KB|MB|GB)\)' | sort -t'(' -k2 -V -r > lfs_audit.txt
+	@echo "Saved to lfs_audit.txt ($$(wc -l < lfs_audit.txt) files)"
+
+lfs-setup-symlinks:
+	bash scripts/setup_grid_symlinks.sh
 
 # ==============================================================================
 # Data utilities
