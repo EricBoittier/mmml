@@ -35,6 +35,9 @@ def parse_args():
 
 def main_loop(args):
     from mmml.interfaces.pycharmmInterface import setupRes
+    from mmml.interfaces.pycharmmInterface.utils import set_up_directories
+
+    set_up_directories()  # ensure pdb/, psf/, xyz/, res/, dcd/ exist before CHARMM
     from mmml.interfaces.pycharmmInterface.import_pycharmm import (
         reset_block,
         reset_block_no_internal,
