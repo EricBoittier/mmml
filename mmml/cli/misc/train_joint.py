@@ -3924,7 +3924,10 @@ def main():
             sys.exit(1)
         print(f"\n🔄 Loading PhysNet params from: {physnet_ckpt}")
         physnet_params = _load_physnet_params(physnet_ckpt)
-        # Flax returns {'params': {'physnet': ..., 'dcmnet': ..., ...}}; nest under 'params'
+        # Standalone PhysNet checkpoint nests params under 'params'; joint model expects flat under physnet
+        if isinstance(physnet_params, dict) and "params" in physnet_params:
+            physnet_params = physnet_params["params"]
+        # Flax joint model: {'params': {'physnet': ..., 'dcmnet': ..., ...}}
         restart_params = {"params": {"physnet": physnet_params}}
         print(f"✅ Loaded PhysNet params ({sum(x.size for x in jax.tree_util.tree_leaves(physnet_params)):,} parameters)")
     
