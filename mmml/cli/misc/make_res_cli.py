@@ -10,10 +10,12 @@ Requires: CHARMM, PyCHARMM (charmm-interface)
 """
 
 import sys
+import time
 
 
 def main() -> int:
     """Run make-res CLI."""
+    t0 = time.perf_counter()
     try:
         from mmml.cli.make.make_res import parse_args, main_loop
     except ModuleNotFoundError as e:
@@ -25,8 +27,10 @@ def main() -> int:
 
     args = parse_args()
     atoms = main_loop(args)
+    elapsed = time.perf_counter() - t0
     print(f"Generated {len(atoms)} atoms")
     print("Output: pdb/initial.pdb, psf/initial.psf, xyz/initial.xyz, CHARMM topology files")
+    print(f"Elapsed: {elapsed:.2f} s")
     return 0
 
 

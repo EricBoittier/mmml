@@ -10,10 +10,12 @@ Requires: CHARMM, PyCHARMM, PackMol (charmm-interface)
 """
 
 import sys
+import time
 
 
 def main() -> int:
     """Run make-box CLI."""
+    t0 = time.perf_counter()
     try:
         from mmml.cli.make.make_box import parse_args, main_loop
     except ModuleNotFoundError as e:
@@ -25,7 +27,9 @@ def main() -> int:
 
     args = parse_args()
     main_loop(args)
+    elapsed = time.perf_counter() - t0
     print("Output: pdb/init-packmol.pdb (or pdb/init-TIP3box.pdb if solvated)")
+    print(f"Elapsed: {elapsed:.2f} s")
     return 0
 
 
