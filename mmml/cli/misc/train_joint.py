@@ -1095,36 +1095,42 @@ def load_combined_data(efd_file: Path, esp_file: Path, subtract_atom_energies: b
     
     if verbose:
         print(f"  Loading ESP: {esp_file}")
-    esp_data = np.load(esp_file)
+    esp_data = dict(np.load(esp_file))
     
-    # Reference atomic energies (in eV) from PBE/def2-TZVP
-    # These are approximate isolated atom energies
-    ATOM_ENERGIES = {
-        1: -13.587,      # H
-        6: -1029.499,    # C
-        7: -1484.274,    # N
-        8: -2041.878,    # O
-        9: -2713.473,    # F
-        15: -8978.229,   # P
-        16: -10831.086,  # S
-        17: -12516.444,  # Cl
-    }
+    # Normalize N and Z to per-sample shapes (handle scalar/1D from older data)
+    n_samples = esp_data['R'].shape[0]
+    natoms_max = esp_data['R'].shape[1]
+    N_raw = esp_data['N']
+    Z_raw = esp_data['Z']
+    if (np.isscalar(N_raw) or (isinstance(N_raw, np.ndarray) and N_raw.ndim == 0) or
+            (isinstance(N_raw, np.ndarray) and N_raw.size == 1) or
+            (isinstance(N_raw, np.ndarray) and N_raw.shape[0] != n_samples)):
+        n_atoms_val = int(np.asarray(N_raw).flat[0]) if np.asarray(N_raw).size else natoms_max
+        N = np.full(n_samples, n_atoms_val, dtype=np.int32)
+    else:
+        N = np.asarray(N_raw, dtype=np.int32)
+    if Z_raw.ndim == 1:
+        Z = np.broadcast_to(Z_raw[np.newaxis, :], (n_samples, Z_raw.shape[0]))
+    else:
+        Z = np.asarray(Z_raw)
+    esp_data['N'] = N
+    esp_data['Z'] = Z
     
     energies = efd_data['E'].copy()
     
-    # Subtract atomic energies
+    # Subtract atomic energies using mmml reference table
     if subtract_atom_energies:
-        Z = esp_data['Z']  # (n_samples, natoms)
-        N = esp_data['N']  # (n_samples,)
-        
-        for i in range(len(energies)):
-            n_atoms = int(N[i])
-            atomic_nums = Z[i, :n_atoms]
-            atom_energy_sum = sum(ATOM_ENERGIES.get(int(z), 0.0) for z in atomic_nums)
-            energies[i] -= atom_energy_sum
-        
-        if verbose:
-            print(f"  ✅ Subtracted atomic energies (now relative to isolated atoms)")
+        try:
+            from mmml.data.atomic_references import get_atomic_reference_dict
+            from mmml.data.preprocessing import subtract_atomic_energies as subtract_ae
+            atomic_refs = get_atomic_reference_dict(unit="eV")
+            energies = subtract_ae(energies, Z, N, atomic_refs)
+        except (FileNotFoundError, ValueError) as e:
+            if verbose:
+                print(f"  ⚠️  Could not load atomic references ({e}), skipping subtraction")
+        else:
+            if verbose:
+                print(f"  ✅ Subtracted atomic energies (now relative to isolated atoms)")
     
     # Align coordinate frames: center grid on molecular COM (VECTORIZED)
     # ESP grids and atom positions may be in different reference frames
@@ -1134,8 +1140,7 @@ def load_combined_data(efd_file: Path, esp_file: Path, subtract_atom_energies: b
         print(f"  Aligning ESP grids to molecular reference frames...")
     
     # Vectorized computation of atom COMs
-    # Create mask for real atoms
-    n_samples = len(esp_data['N'])
+    # Create mask for real atoms (N and Z already normalized to per-sample above)
     natoms_max = esp_data['R'].shape[1]
     atom_mask = np.arange(natoms_max)[None, :] < esp_data['N'][:, None]  # (n_samples, natoms)
     
@@ -3505,7 +3510,7 @@ def train_model(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Joint PhysNet-DCMNet training for CO2 data",
+        description="Joint PhysNet-DCMNet training",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
     
@@ -3614,7 +3619,7 @@ def main():
                        help='Maximum atomic number')
     parser.add_argument('--grad-clip-norm', type=float, default=1.0,
                        help='Gradient clipping norm (None to disable)')
-    parser.add_argument('--name', type=str, default='co2_joint_physnet_dcmnet',
+    parser.add_argument('--name', type=str, default='joint_physnet_dcmnet',
                        help='Experiment name')
     parser.add_argument('--ckpt-dir', type=Path, default=None,
                        help='Checkpoint directory')
@@ -3622,7 +3627,7 @@ def main():
                        help='Restart from checkpoint (path to best_params.pkl or checkpoint directory)')
     parser.add_argument('--physnet-checkpoint', type=Path, default=None,
                        help='Load PhysNet params from a pre-trained checkpoint (e.g. from step 09). '
-                            'Path to orbax experiment dir (cybz_physnet-xxx) or epoch dir, or JSON.')
+                            'Path to orbax experiment dir (e.g. <name>-<uuid>) or epoch dir, or JSON.')
     parser.add_argument('--print-freq', type=int, default=1,
                        help='Print frequency (epochs)')
     parser.add_argument('--plot-results', action='store_true', default=False,
@@ -3679,7 +3684,7 @@ def main():
     args.esp_terms = esp_terms
     
     print("="*70)
-    print("Joint PhysNet-DCMNet Training - CO2 Data")
+    print("Joint PhysNet-DCMNet Training")
     print("="*70)
     
     # Validate input files
