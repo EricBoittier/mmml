@@ -365,12 +365,43 @@ def fix_and_split_data(
         return False
     
     n_samples = efd_data['R'].shape[0]
+
+    # Normalize Z: pyscf-evaluate outputs Z as (n_atoms,) for same molecule; broadcast to (n_samples, n_atoms)
+    Z_raw = efd_data['Z']
+    if Z_raw.ndim == 1:
+        Z_expanded = np.broadcast_to(Z_raw[np.newaxis, :], (n_samples, Z_raw.shape[0]))
+    else:
+        Z_expanded = Z_raw
+
     if verbose:
         print(f"\nLoaded {n_samples} samples")
         print(f"  Keys in EFD: {list(efd_data.keys())}")
         if has_grid:
             print(f"  Keys in Grid: {list(grid_data.keys())}")
-    
+        print(f"\nShapes:")
+        for k in ['R', 'Z', 'E', 'F', 'Dxyz']:
+            if k in efd_data:
+                v = efd_data[k]
+                print(f"  {k}: {v.shape}")
+        if has_grid and grid_data:
+            if 'esp' in grid_data:
+                print(f"  esp: {grid_data['esp'].shape}")
+            if 'vdw_surface' in grid_data:
+                print(f"  esp_grid (vdw_surface): {grid_data['vdw_surface'].shape}")
+        print(f"\nSummary statistics:")
+        print(f"  E:  mean={efd_data['E'].mean():.6f}, std={efd_data['E'].std():.6f}, "
+              f"range=[{efd_data['E'].min():.6f}, {efd_data['E'].max():.6f}]")
+        f_norms = np.linalg.norm(efd_data['F'].reshape(-1, 3), axis=1)
+        print(f"  F:  mean_norm={f_norms.mean():.6e}, max_norm={f_norms.max():.6e}")
+        if 'Dxyz' in efd_data:
+            d_norms = np.linalg.norm(efd_data['Dxyz'].reshape(-1, 3), axis=1)
+            print(f"  Dxyz: mean_norm={d_norms.mean():.4f}, max_norm={d_norms.max():.4f} Debye")
+        if has_grid and 'esp' in (grid_data or {}):
+            esp_flat = grid_data['esp'].flatten()
+            valid_esp = esp_flat[np.abs(esp_flat) < 1e5]  # exclude padding
+            if len(valid_esp) > 0:
+                print(f"  esp: mean={valid_esp.mean():.6e}, range=[{valid_esp.min():.6e}, {valid_esp.max():.6e}]")
+
     # =========================================================================
     # Check atomic coordinates
     # =========================================================================
@@ -383,7 +414,7 @@ def fix_and_split_data(
     co_bonds = []
     for i in range(min(1000, len(efd_data['R']))):
         r = efd_data['R'][i]
-        z = efd_data['Z'][i]
+        z = Z_expanded[i]
         valid = z > 0
         vz = z[valid]
         vpos = r[valid]
@@ -540,7 +571,7 @@ def fix_and_split_data(
         
         is_valid = validate_fixed_data(
             R_angstrom, E_ev, F_ev_ang, vdw_surface_angstrom,
-            efd_data['Z'], efd_data['N'], 
+            Z_expanded, efd_data['N'], 
             has_grid=has_grid,
             verbose=verbose
         )
