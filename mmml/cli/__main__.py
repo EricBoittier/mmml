@@ -18,6 +18,8 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Available commands:
+  make-res    Generate residue (PDB, PSF, topology) via PyCHARMM/CGENFF
+  make-box    Pack molecules into periodic box (vacuum or solvated)
   xml2npz     Convert Molpro XML files to NPZ format
   train       Train DCMNet or PhysNetJAX models (coming soon)
   evaluate    Evaluate trained models (coming soon)
@@ -28,6 +30,8 @@ Available commands:
   gui         Start the molecular viewer GUI
 
 Examples:
+  mmml make-res --res CYBZ
+  mmml make-box --res CYBZ --n 50 --side_length 25.0
   mmml xml2npz input.xml -o output.npz
   mmml xml2npz inputs/*.xml -o dataset.npz --validate
   mmml validate dataset.npz
@@ -44,7 +48,7 @@ For help on a specific command:
     
     parser.add_argument(
         'command',
-        choices=['xml2npz', 'validate', 'train', 'evaluate', 'downstream', 'fix-and-split', 'pyscf-dft', 'pyscf-mp2', 'gui'],
+        choices=['make-res', 'make-box', 'xml2npz', 'validate', 'train', 'evaluate', 'downstream', 'fix-and-split', 'pyscf-dft', 'pyscf-mp2', 'gui'],
         help='Command to run'
     )
     parser.add_argument(
@@ -56,7 +60,17 @@ For help on a specific command:
     args = parser.parse_args()
     
     # Dispatch to appropriate command
-    if args.command == 'xml2npz':
+    if args.command == 'make-res':
+        from .misc import make_res_cli
+        sys.argv = ['mmml make-res'] + args.args
+        return make_res_cli.main()
+
+    elif args.command == 'make-box':
+        from .misc import make_box_cli
+        sys.argv = ['mmml make-box'] + args.args
+        return make_box_cli.main()
+
+    elif args.command == 'xml2npz':
         from .misc import xml2npz
         sys.argv = ['mmml xml2npz'] + args.args
         return xml2npz.main()
