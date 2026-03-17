@@ -399,8 +399,8 @@ def compute_dft_batch(
     if dens_esp:
         # ESP grid size can vary per geometry; pad to max length
         max_n = max(e.size for e in esps)
-        esp_padded = np.full((n, max_n), np.nan, dtype=np.float64)
-        esp_grid_padded = np.full((n, max_n, 3), np.nan, dtype=np.float64)
+        esp_padded = np.zeros((n, max_n), dtype=np.float64)
+        esp_grid_padded = np.full((n, max_n, 3), 1e6, dtype=np.float64)
         for i, (e, g) in enumerate(zip(esps, esp_grids)):
             esp_padded[i, : e.size] = e
             esp_grid_padded[i, : g.shape[0], :] = g
