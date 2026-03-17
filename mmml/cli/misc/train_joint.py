@@ -2818,56 +2818,56 @@ def plot_validation_results(
                           color='green', label='PhysNet', edgecolors='none')
                 ax.scatter(distances_to_atom, esp_error_dcmnet_valid, alpha=0.4, s=15, 
                           color='purple', label='DCMNet', edgecolors='none')
+                
+                # Add horizontal line at zero error
+                ax.axhline(0, color='red', linestyle='--', linewidth=2, alpha=0.5)
+                
+                # Mark the atomic radius zones
+                r_cov = atomic_radii_np[atom_idx]
+                ax.axvline(r_cov, color='orange', linestyle=':', linewidth=2, alpha=0.7, label=f'r_cov ({r_cov:.2f} Å)')
+                ax.axvline(2*r_cov, color='blue', linestyle=':', linewidth=2, alpha=0.7, label=f'2×r_cov ({2*r_cov:.2f} Å)')
+                ax.axvspan(0, 2*r_cov, alpha=0.1, color='red', label='Excluded zone')
+                
+                ax.set_xlabel('Distance from Atom (Å)')
+                ax.set_ylabel('ESP Error (Ha/e)')
+                ax.set_title(f'Atom {atom_idx} (Z={int(atomic_nums_rad[atom_idx])}){epoch_str}')
+                ax.legend(fontsize=8)
+                ax.grid(True, alpha=0.3)
+                ax.set_xlim(0, min(10, distances_to_atom.max()))
             
-            # Add horizontal line at zero error
-            ax.axhline(0, color='red', linestyle='--', linewidth=2, alpha=0.5)
-            
-            # Mark the atomic radius zones
-            r_cov = atomic_radii_np[atom_idx]
-            ax.axvline(r_cov, color='orange', linestyle=':', linewidth=2, alpha=0.7, label=f'r_cov ({r_cov:.2f} Å)')
-            ax.axvline(2*r_cov, color='blue', linestyle=':', linewidth=2, alpha=0.7, label=f'2×r_cov ({2*r_cov:.2f} Å)')
-            ax.axvspan(0, 2*r_cov, alpha=0.1, color='red', label='Excluded zone')
+            # Combined plot showing all atoms
+            ax = axes[n_atoms_rad]
+            colors = ['red', 'blue', 'green', 'orange', 'purple', 'brown', 'pink']
+            for atom_idx in range(n_atoms_rad):
+                distances_to_atom = np.linalg.norm(grid_pos - atom_positions_rad[atom_idx], axis=1)
+                
+                # Plot absolute error
+                abs_error_physnet = np.abs(esp_error_physnet_valid)
+                abs_error_dcmnet = np.abs(esp_error_dcmnet_valid)
+                
+                color = colors[atom_idx % len(colors)]
+                ax.scatter(distances_to_atom, abs_error_physnet, alpha=0.3, s=10, 
+                          color=color, marker='o', label=f'Atom {atom_idx} (Z={int(atomic_nums_rad[atom_idx])})', 
+                          edgecolors='none')
+                
+                # Mark 2×r_cov for this atom
+                r_cov = atomic_radii_np[atom_idx]
+                ax.axvline(2*r_cov, color=color, linestyle=':', linewidth=1, alpha=0.5)
             
             ax.set_xlabel('Distance from Atom (Å)')
-            ax.set_ylabel('ESP Error (Ha/e)')
-            ax.set_title(f'Atom {atom_idx} (Z={int(atomic_nums[atom_idx])}){epoch_str}')
+            ax.set_ylabel('|ESP Error| (Ha/e)')
+            ax.set_title(f'All Atoms - Radial Error Distribution{epoch_str}')
             ax.legend(fontsize=8)
             ax.grid(True, alpha=0.3)
-            ax.set_xlim(0, min(10, distances_to_atom.max()))
+            ax.set_xlim(0, min(10, np.linalg.norm(grid_pos - atom_positions_rad[0], axis=1).max()))
+            ax.set_yscale('log')
             
-        # Combined plot showing all atoms
-        ax = axes[n_atoms]
-        colors = ['red', 'blue', 'green', 'orange', 'purple', 'brown', 'pink']
-        for atom_idx in range(n_atoms):
-            distances_to_atom = np.linalg.norm(grid_pos - atom_positions[atom_idx], axis=1)
-            
-            # Plot absolute error
-            abs_error_physnet = np.abs(esp_error_physnet)
-            abs_error_dcmnet = np.abs(esp_error_dcmnet)
-            
-            color = colors[atom_idx % len(colors)]
-            ax.scatter(distances_to_atom, abs_error_physnet, alpha=0.3, s=10, 
-                      color=color, marker='o', label=f'Atom {atom_idx} (Z={int(atomic_nums[atom_idx])})', 
-                      edgecolors='none')
-            
-            # Mark 2×r_cov for this atom
-            r_cov = atomic_radii_np[atom_idx]
-            ax.axvline(2*r_cov, color=color, linestyle=':', linewidth=1, alpha=0.5)
-        
-        ax.set_xlabel('Distance from Atom (Å)')
-        ax.set_ylabel('|ESP Error| (Ha/e)')
-        ax.set_title(f'All Atoms - Radial Error Distribution{epoch_str}')
-        ax.legend(fontsize=8)
-        ax.grid(True, alpha=0.3)
-        ax.set_xlim(0, min(10, np.linalg.norm(grid_pos - atom_positions[0], axis=1).max()))
-        ax.set_yscale('log')
-        
-        plt.suptitle(f'Radial ESP Error Analysis (Sample {idx}){epoch_str}', fontsize=14, weight='bold')
-        plt.tight_layout()
-        radial_path = save_dir / f'esp_radial_{idx}{suffix}.png'
-        plt.savefig(radial_path, dpi=150, bbox_inches='tight')
-        plt.close()
-        print(f"  ✅ Saved radial ESP error plot {idx}: {radial_path}")
+            plt.suptitle(f'Radial ESP Error Analysis (Sample {idx}){epoch_str}', fontsize=14, weight='bold')
+            plt.tight_layout()
+            radial_path = save_dir / f'esp_radial_{idx}{suffix}.png'
+            plt.savefig(radial_path, dpi=150, bbox_inches='tight')
+            plt.close()
+            print(f"  ✅ Saved radial ESP error plot {idx}: {radial_path}")
         
         # Create distributed charge visualization
         # Reuse atom positions and atomic_nums from above
