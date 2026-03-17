@@ -397,8 +397,15 @@ def compute_dft_batch(
     if dipole:
         result["Dxyz"] = np.stack(dipoles)
     if dens_esp:
-        result["esp"] = np.stack(esps)
-        result["esp_grid"] = np.stack(esp_grids)
+        # ESP grid size can vary per geometry; pad to max length
+        max_n = max(e.size for e in esps)
+        esp_padded = np.full((n, max_n), np.nan, dtype=np.float64)
+        esp_grid_padded = np.full((n, max_n, 3), np.nan, dtype=np.float64)
+        for i, (e, g) in enumerate(zip(esps, esp_grids)):
+            esp_padded[i, : e.size] = e
+            esp_grid_padded[i, : g.shape[0], :] = g
+        result["esp"] = esp_padded
+        result["esp_grid"] = esp_grid_padded
 
     return result
 
