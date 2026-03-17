@@ -78,6 +78,12 @@ def convert_forces_hartree_bohr_to_ev_angstrom(F_hartree_bohr: np.ndarray) -> np
     return F_hartree_bohr * HARTREE_BOHR_TO_EV_ANGSTROM
 
 
+def convert_dipole_debye_to_eA(D_debye: np.ndarray) -> np.ndarray:
+    """Convert dipole moments from Debye to e·Å (PhysNet/DCMNet standard)."""
+    DEBYE_TO_EANGSTROM = 0.208194  # 1 D = 0.208194 e·Å
+    return D_debye * DEBYE_TO_EANGSTROM
+
+
 def load_atomic_reference_energies(scheme: str) -> Dict[str, float]:
     """Load per-atom reference energies (Hartree) for a given scheme from atomic_reference_energies.json."""
     with open(ATOMIC_REF_PATH) as f:
@@ -608,6 +614,24 @@ def fix_and_split_data(
         print(f"✓ Forces converted to eV/Angstrom")
     
     # =========================================================================
+    # Convert dipoles: Debye → e·Å (PhysNet/DCMNet standard)
+    # =========================================================================
+    if 'Dxyz' in efd_data:
+        D_eA = convert_dipole_debye_to_eA(efd_data['Dxyz'])
+        if verbose:
+            d_norms_before = np.linalg.norm(efd_data['Dxyz'].reshape(-1, 3), axis=1)
+            d_norms_after = np.linalg.norm(D_eA.reshape(-1, 3), axis=1)
+            print(f"\n{'#'*70}")
+            print("# Step 4b: Converting Dipoles from Debye to e·Å")
+            print(f"{'#'*70}")
+            print(f"  Conversion: 1 D = 0.208194 e·Å")
+            print(f"  Original (Debye): mean |D|={d_norms_before.mean():.4f}, max={d_norms_before.max():.4f}")
+            print(f"  Converted (e·Å):  mean |D|={d_norms_after.mean():.4f}, max={d_norms_after.max():.4f}")
+            print(f"✓ Dipoles converted to e·Å")
+    else:
+        D_eA = None
+    
+    # =========================================================================
     # Fix ESP grid: index space → physical Angstroms (if grid data exists)
     # =========================================================================
     vdw_surface_angstrom = None
@@ -781,6 +805,8 @@ def fix_and_split_data(
     efd_fixed['R'] = R_angstrom
     efd_fixed['E'] = E_ev
     efd_fixed['F'] = F_ev_ang
+    if D_eA is not None:
+        efd_fixed['Dxyz'] = D_eA
     # PhysNet expects N (n_samples,) and Z (n_samples, n_atoms); pyscf-evaluate outputs scalar N and 1D Z
     N_raw = efd_data['N']
     if (np.isscalar(N_raw) or (isinstance(N_raw, np.ndarray) and N_raw.size == 1) or
@@ -799,6 +825,8 @@ def fix_and_split_data(
         if vdw_surface_angstrom is not None:
             grid_fixed['vdw_surface'] = vdw_surface_angstrom
             grid_fixed['vdw_grid'] = vdw_surface_angstrom  # Backward compatibility
+        if D_eA is not None and 'Dxyz' in grid_fixed:
+            grid_fixed['Dxyz'] = D_eA
         # Align Z and N with EFD (per-sample shapes for PhysNet)
         if 'N' in grid_fixed:
             N_g = grid_fixed['N']
@@ -917,7 +945,7 @@ Each contains:
 - `N`: Number of atoms [int]
 - `E`: Energies [eV] ← CONVERTED from Hartree
 - `F`: Forces [eV/Angstrom] ← CONVERTED from Hartree/Bohr
-- `Dxyz`: Dipole moments [Debye]
+- `Dxyz`: Dipole moments [e·Å] ← CONVERTED from Debye
 """
     
     if has_grid:
@@ -937,7 +965,7 @@ Each contains:
 - `grid_dims`: Original cube dimensions (if available)
 - `grid_origin`: Original cube origins [Bohr] (if available)
 - `grid_axes`: Original cube axes (if available)
-- `Dxyz`: Dipole moments [Debye]
+- `Dxyz`: Dipole moments [e·Å] ← CONVERTED from Debye
 """
     
     readme_content += f"""
@@ -948,7 +976,7 @@ Each contains:
 | R (coordinates) | Angstrom | ✓ Correct |
 | E (energy) | eV | ✓ Converted |
 | F (forces) | eV/Angstrom | ✓ Converted |
-| Dxyz (dipoles) | Debye | ✓ Correct |
+| Dxyz (dipoles) | e·Å | ✓ Converted from Debye |
 """
     
     if has_grid:
@@ -969,7 +997,7 @@ train_props = np.load('energies_forces_dipoles_train.npz')
 R = train_props['R']  # Angstroms
 E = train_props['E']  # eV
 F = train_props['F']  # eV/Angstrom
-Dxyz = train_props['Dxyz']  # Debye
+Dxyz = train_props['Dxyz']  # e·Å (converted from Debye)
 """
     
     if has_grid:
