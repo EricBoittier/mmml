@@ -1119,6 +1119,12 @@ def load_combined_data(efd_file: Path, esp_file: Path, subtract_atom_energies: b
     
     # Normalize N and Z to per-sample shapes (handle scalar/1D from older data)
     n_samples = esp_data['R'].shape[0]
+    n_efd = len(efd_data['E'])
+    if n_samples != n_efd:
+        raise ValueError(
+            f"Sample count mismatch: EFD has {n_efd} samples, ESP/grid has {n_samples}. "
+            "Ensure both files have the same samples in the same order (e.g. from fix-and-split)."
+        )
     natoms_max = esp_data['R'].shape[1]
     N_raw = esp_data['N']
     Z_raw = esp_data['Z']
