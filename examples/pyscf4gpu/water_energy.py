@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from mmml.interfaces.pyscf4gpuInterface.calcs import (
     setup_mol,
     compute_dft,
-    save_output,
+    save_pyscf_results,
     get_dummy_args,
 )
 from mmml.interfaces.pyscf4gpuInterface.enums import CALCS
@@ -36,7 +36,7 @@ def main():
     args = get_dummy_args(mol_str.strip(), [CALCS.ENERGY, CALCS.GRADIENT])
     args.basis = "def2-tzvp"
     args.xc = "PBE0"
-    args.output = "water_dft_output.pkl"
+    args.output = "water_dft_output"
 
     print("Computing DFT energy and gradient for water (PBE0/def2-TZVP)")
     print("-" * 60)
@@ -47,8 +47,8 @@ def main():
     print(f"Energy: {output['energy']:.10f} Hartree")
     print(f"Gradient shape: {output['gradient'].shape}")
 
-    save_output(args.output, output, "pkl")
-    print(f"\nResults saved to {args.output}")
+    save_pyscf_results(args.output, output)
+    print(f"\nResults saved to {args.output}.npz (ML keys) and {args.output}.h5 (all arrays)")
 
 
 if __name__ == "__main__":
