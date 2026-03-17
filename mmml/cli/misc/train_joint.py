@@ -1143,46 +1143,7 @@ def load_combined_data(efd_file: Path, esp_file: Path, subtract_atom_energies: b
             if verbose:
                 print(f"  ✅ Subtracted atomic energies (now relative to isolated atoms)")
     
-    # Align coordinate frames: center grid on molecular COM (VECTORIZED)
-    # ESP grids and atom positions may be in different reference frames
-    # Solution: shift vdw_surface so its COM matches atom COM for each molecule
-    
-    if verbose:
-        print(f"  Aligning ESP grids to molecular reference frames...")
-    
-    # Vectorized computation of atom COMs
-    # Create mask for real atoms (N and Z already normalized to per-sample above)
-    natoms_max = esp_data['R'].shape[1]
-    atom_mask = np.arange(natoms_max)[None, :] < esp_data['N'][:, None]  # (n_samples, natoms)
-    
-    # Compute atom COM for each molecule (handling variable number of atoms)
-    atom_positions_masked = esp_data['R'] * atom_mask[:, :, None]  # Zero out padding
-    atom_com = atom_positions_masked.sum(axis=1) / esp_data['N'][:, None]  # (n_samples, 3)
-    
-    # Compute grid COM for each molecule (exclude padding: vdw_surface uses 1e6 for invalid points)
-    vdw = esp_data['vdw_surface']
-    grid_valid = np.all(np.abs(vdw) < 1e5, axis=-1)  # (n_samples, ngrid)
-    grid_com = np.zeros((vdw.shape[0], 3), dtype=vdw.dtype)
-    for i in range(vdw.shape[0]):
-        v = vdw[i][grid_valid[i]]
-        grid_com[i] = v.mean(axis=0) if len(v) > 0 else atom_com[i]
-    
-    # Compute offset for each molecule
-    offset = grid_com - atom_com  # (n_samples, 3)
-    
-    # Apply alignment (broadcast over grid points)
-    vdw_surface_aligned = esp_data['vdw_surface'] - offset[:, None, :]  # (n_samples, ngrid, 3)
-    
-    if verbose:
-        print(f"  ✅ Aligned ESP grids to molecular reference frames")
-        # Show example alignment
-        print(f"     Sample 0 - Atom COM: {atom_com[0]}")
-        print(f"     Sample 0 - Grid COM before: {grid_com[0]}")
-        print(f"     Sample 0 - Grid COM after: {vdw_surface_aligned[0].mean(axis=0)}")
-        print(f"     Sample 0 - Offset corrected: {offset[0]} Å")
-    
-    # Combine data - ESP file should have R, Z, N as well
-    # NOTE: vdw_surface is in Angstroms (do NOT convert from Bohr!)
+    # PySCF data: grid and atoms are in the same coordinate frame (no COM alignment needed)
     combined = {
         # Molecular properties
         'R': esp_data['R'],  # Angstroms
@@ -1193,7 +1154,7 @@ def load_combined_data(efd_file: Path, esp_file: Path, subtract_atom_energies: b
         'Dxyz': efd_data.get('Dxyz', efd_data.get('D')),  # e·Å
         # ESP properties
         'esp': esp_data['esp'],  # Hartree/e
-        'vdw_surface': vdw_surface_aligned,  # Angstroms, aligned to molecular frame
+        'vdw_surface': esp_data['vdw_surface'],  # Angstroms, same frame as R (from PySCF)
     }
     
     if verbose:
