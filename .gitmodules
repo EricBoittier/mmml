@@ -1,3 +1,6 @@
 [submodule "mmml/github/JaxPycharmm"]
 	path = mmml/github/JaxPycharmm
 	url = https://github.com/EricBoittier/JaxPycharmm.git
+[submodule "examples/mmml_tutorial"]
+	path = examples/mmml_tutorial
+	url = https://github.com/EricBoittier/mmml_tutorial.git
