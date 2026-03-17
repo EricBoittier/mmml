@@ -80,7 +80,7 @@ def convert_forces_hartree_bohr_to_ev_angstrom(F_hartree_bohr: np.ndarray) -> np
 
 def convert_dipole_debye_to_eA(D_debye: np.ndarray) -> np.ndarray:
     """Convert dipole moments from Debye to e·Å (PhysNet/DCMNet standard)."""
-    DEBYE_TO_EANGSTROM = 0.208194  # 1 D = 0.208194 e·Å
+    from mmml.data.units import DEBYE_TO_EANGSTROM
     return D_debye * DEBYE_TO_EANGSTROM
 
 

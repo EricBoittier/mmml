@@ -126,6 +126,13 @@ from mmml.dcmnet.dcmnet.electrostatics import calc_esp
 
 # Import data utilities
 from mmml.data import load_npz, DataConfig
+from mmml.data.units import (
+    ANGSTROM_TO_BOHR,
+    HARTREE_TO_EV,
+    EANGSTROM_TO_DEBYE,
+    EV_TO_KCAL_MOL,
+    HARTREE_TO_KCAL_MOL,
+)
 from mmml.utils.model_checkpoint import load_model_checkpoint
 
 
@@ -172,8 +179,6 @@ def _load_physnet_checkpoint(path: Path) -> Tuple[Dict[str, Any], Optional[Dict[
 
 EPS = 1e-8
 RADII_TABLE = jnp.array(ase.data.covalent_radii)
-# Angstrom to Bohr: 1 Bohr = 0.529177 Angstrom -> 1 Angstrom = 1.88973 Bohr
-ANGSTROM_TO_BOHR = 1.88973
 
 
 # ============================================================================
@@ -795,9 +800,10 @@ class JointPhysNetNonEquivariant(nn.Module):
                 diff = positions[:, None, :] - positions[None, :, :]
                 distances = jnp.linalg.norm(diff, axis=-1)
                 distances = jnp.where(distances < 1e-6, 1e6, distances)
-                pairwise_energy = charges[:, None] * charges[None, :] / (distances * 1.88973)
+                r_bohr = distances * ANGSTROM_TO_BOHR
+                pairwise_energy = charges[:, None] * charges[None, :] / (r_bohr + 1e-10)
                 coulomb_energy_hartree = 0.5 * jnp.sum(pairwise_energy)
-                return coulomb_energy_hartree * 27.2114
+                return coulomb_energy_hartree * HARTREE_TO_EV
             
             coulomb_energies = jax.vmap(compute_coulomb_single)(charges_reshaped, positions_reshaped)
             lambda_val = self.coulomb_lambda[0]
@@ -1007,12 +1013,11 @@ class JointPhysNetDCMNet(nn.Module):
                 distances = jnp.linalg.norm(diff, axis=-1)  # (N, N)
                 # Avoid self-interaction
                 distances = jnp.where(distances < 1e-6, 1e6, distances)
-                # Coulomb energy: E = (1/2) Σᵢⱼ qᵢqⱼ/rᵢⱼ
-                # Convert distance from Angstrom to Bohr (rᵢⱼ * 1.88973)
-                # Energy in Hartree, then convert to eV (* 27.2114)
-                pairwise_energy = charges[:, None] * charges[None, :] / (distances * 1.88973)
+                # Coulomb energy: E = (1/2) Σᵢⱼ qᵢqⱼ/rᵢⱼ [Ha], r in Bohr
+                r_bohr = distances * ANGSTROM_TO_BOHR
+                pairwise_energy = charges[:, None] * charges[None, :] / (r_bohr + 1e-10)
                 coulomb_energy_hartree = 0.5 * jnp.sum(pairwise_energy)
-                return coulomb_energy_hartree * 27.2114  # Convert Ha to eV
+                return coulomb_energy_hartree * HARTREE_TO_EV
             
             # Vectorize over batch dimension
             coulomb_energies = jax.vmap(compute_coulomb_single)(charges_reshaped, positions_reshaped)  # (batch_size,)
@@ -3377,9 +3382,9 @@ def train_model(
                 print(f"    E_coulomb: {valid_loss_avg['coulomb_energy']:.6f} eV")
             if 'mae_energy' in valid_loss_avg:
                 # Conversion factors
-                eV_to_kcal = 23.0605        # 1 eV = 23.0605 kcal/mol
-                Ha_to_kcal = 627.509        # 1 Hartree = 627.509 kcal/mol
-                eA_to_Debye = 1.0 / 0.208194  # 1 e·Å = 4.8032 Debye
+                eV_to_kcal = EV_TO_KCAL_MOL
+                Ha_to_kcal = HARTREE_TO_KCAL_MOL
+                eA_to_Debye = EANGSTROM_TO_DEBYE
                 
                 mae_energy_ev = valid_loss_avg['mae_energy']
                 mae_forces_ev = valid_loss_avg['mae_forces']

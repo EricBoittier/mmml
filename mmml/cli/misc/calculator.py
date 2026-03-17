@@ -41,6 +41,8 @@ except ImportError:
     print("Install with: pip install ase")
     sys.exit(1)
 
+from mmml.data.units import EANGSTROM_TO_DEBYE
+
 
 class MMMLCalculator(Calculator):
     """
@@ -374,7 +376,7 @@ Examples:
         print(f"\n📊 Results:")
         print(f"   Energy: {energy:.6f} eV")
         print(f"   Max force: {np.abs(forces).max():.6f} eV/Å")
-        print(f"   Dipole magnitude: {np.linalg.norm(dipole):.6f} e·Å ({np.linalg.norm(dipole) * 4.8032:.4f} Debye)")
+        print(f"   Dipole magnitude: {np.linalg.norm(dipole):.6f} e·Å ({np.linalg.norm(dipole) * EANGSTROM_TO_DEBYE:.4f} Debye)")
         print(f"   Total charge: {charges.sum():.6f} e")
         print(f"   Charge range: [{charges.min():.6f}, {charges.max():.6f}] e")
         

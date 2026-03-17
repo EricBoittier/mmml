@@ -32,6 +32,7 @@ from .preprocessing import (
     denormalize_energies,
     create_esp_mask
 )
+from . import units
 
 __version__ = "0.1.0"
 
