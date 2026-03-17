@@ -129,31 +129,14 @@ def compute_dft(args, calcs, extra=None):
         print(grid_positions_a.min(), grid_positions_a.max())
         print('------------------ ESP ----------------------------')
         dm = engine.make_rdm1()  # compute one-electron density matrix
-        coords = grid_positions_a
+        coords = grid_positions_a  # in Bohr (PySCF grids convention)
         print(coords.shape)
-        fakemol = gto.fakemol_for_charges(coords)
-        coords_bohr = fakemol.atom_coords(unit="B")
-        mol_coords_angstrom = mol.atom_coords(unit="ANG")
-        charges = mol.atom_charges()
-        charges = cupy.asarray(charges)
-        coords = cupy.asarray(coords)
-        mol_coords_bohr = cupy.asarray(mol.atom_coords(unit="B"))
-        print("distance matrix")
-        r = dist_matrix(mol_coords_bohr, coords_bohr)
-        rinv = 1.0 / r
-        intopt = int3c2e.VHFOpt(mol, fakemol, "int2e")
-        intopt.build(1e-14, diag_block_with_triu=False, aosym=True, group_size=256)
-        # electronic grids
-        print("electronic grids")
-        v_grids_e = 2.0 * int3c2e.get_j_int3c2e_pass1(intopt, dm, sort_j=True)
-        # nuclear grids
-        print("nuclear grids")
-        v_grids_n = cupy.dot(charges, rinv)
-        res = v_grids_n - v_grids_e
-        res = res.get()
+        # Use CPU int1e_rinv for correct esp/grid alignment (gpu4pyscf int3c2e bug)
+        dm_np = dm.get() if hasattr(dm, "get") else np.asarray(dm)
+        res = _compute_esp_grid_cpu(mol, dm_np, coords)
         output['esp'] = res
-        output['esp_grid'] = coords.get()
-        output['R'] = mol_coords_angstrom
+        output['esp_grid'] = np.asarray(coords)
+        output['R'] = mol.atom_coords(unit="ANG")
         output['Z'] = mol.atom_charges()
         output['D'] = engine.dip_moment(unit="DEBYE", dm=dm )
         output['Q'] = engine.quad_moment(unit="DEBYE-ANG", dm=dm )
@@ -250,6 +233,27 @@ def compute_dft(args, calcs, extra=None):
     return output
 
 
+def _compute_esp_grid_cpu(mol, dm, grid_bohr: np.ndarray) -> np.ndarray:
+    """
+    Compute ESP at grid points using CPU int1e_rinv.
+    Guaranteed correct esp[i] <-> grid[i] alignment (avoids gpu4pyscf int3c2e ordering bug).
+    Returns ESP in Hartree/e.
+    """
+    dm_np = np.asarray(dm) if hasattr(dm, "get") else np.asarray(dm)
+    coords = mol.atom_coords(unit="Bohr")
+    charges = mol.atom_charges()
+    esp = np.zeros(len(grid_bohr), dtype=np.float64)
+    for i, r in enumerate(grid_bohr):
+        dr = coords - r[None, :]
+        dist = np.linalg.norm(dr, axis=1) + 1e-12
+        v_nuc = np.sum(charges / dist)
+        with mol.with_rinv_origin(r):
+            v_mat = mol.intor("int1e_rinv")
+        v_elec = np.einsum("ij,ij", dm_np, v_mat)
+        esp[i] = v_nuc - v_elec
+    return esp
+
+
 def compute_dft_single(
     R: np.ndarray,
     Z: np.ndarray,
@@ -261,6 +265,7 @@ def compute_dft_single(
     gradient: bool = True,
     dipole: bool = True,
     dens_esp: bool = False,
+    esp_cpu_fallback: bool = True,
     verbose: int = 0,
 ) -> dict:
     """
@@ -312,22 +317,31 @@ def compute_dft_single(
             np.less(density, 0.001) & np.greater_equal(density, 0.0001)
         )[0]
         grid_positions_a = grid_coords[grid_indices]
-        coords = grid_positions_a
-        fakemol = gto.fakemol_for_charges(coords)
-        coords_bohr = fakemol.atom_coords(unit="B")
-        charges = mol.atom_charges()
-        charges = cupy.asarray(charges)
-        coords_cp = cupy.asarray(coords)
-        mol_coords_bohr = cupy.asarray(mol.atom_coords(unit="B"))
-        r = dist_matrix(mol_coords_bohr, coords_bohr)
-        rinv = 1.0 / r
-        intopt = int3c2e.VHFOpt(mol, fakemol, "int2e")
-        intopt.build(1e-14, diag_block_with_triu=False, aosym=True, group_size=256)
-        v_grids_e = 2.0 * int3c2e.get_j_int3c2e_pass1(intopt, dm, sort_j=True)
-        v_grids_n = cupy.dot(charges, rinv)
-        res = v_grids_n - v_grids_e
-        out["esp"] = res.get()
-        out["esp_grid"] = coords_cp.get()
+        coords = grid_positions_a  # in Bohr (PySCF grids convention)
+
+        if esp_cpu_fallback:
+            # CPU int1e_rinv: guaranteed correct esp[i] <-> grid[i] alignment.
+            # Avoids gpu4pyscf get_j_int3c2e_pass1 aux basis ordering bug (see
+            # https://github.com/pyscf/gpu4pyscf/blob/master/gpu4pyscf/df/int3c2e.py#L685)
+            dm_np = dm.get() if hasattr(dm, "get") else np.asarray(dm)
+            res = _compute_esp_grid_cpu(mol, dm_np, coords)
+        else:
+            # GPU path (may have esp/grid misalignment with fakemol aux basis)
+            fakemol = gto.fakemol_for_charges(coords)
+            coords_bohr = fakemol.atom_coords(unit="B")
+            charges = mol.atom_charges()
+            charges = cupy.asarray(charges)
+            mol_coords_bohr = cupy.asarray(mol.atom_coords(unit="B"))
+            r = dist_matrix(mol_coords_bohr, coords_bohr)
+            rinv = 1.0 / r
+            intopt = int3c2e.VHFOpt(mol, fakemol, "int2e")
+            intopt.build(1e-14, diag_block_with_triu=False, aosym=True, group_size=256)
+            v_grids_e = 2.0 * int3c2e.get_j_int3c2e_pass1(intopt, dm, sort_j=True)
+            v_grids_n = cupy.dot(charges, rinv)
+            res = (v_grids_n - v_grids_e).get()
+
+        out["esp"] = np.asarray(res)
+        out["esp_grid"] = np.asarray(coords)
         out["density"] = density
         out["density_grid"] = grid_coords
 
@@ -345,6 +359,7 @@ def compute_dft_batch(
     gradient: bool = True,
     dipole: bool = True,
     dens_esp: bool = False,
+    esp_cpu_fallback: bool = True,
     verbose: int = 0,
 ) -> dict:
     """
@@ -374,6 +389,7 @@ def compute_dft_batch(
             gradient=gradient,
             dipole=dipole,
             dens_esp=dens_esp,
+            esp_cpu_fallback=esp_cpu_fallback,
             verbose=verbose,
         )
         if energy:
