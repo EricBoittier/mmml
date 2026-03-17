@@ -7,6 +7,7 @@ Examples using `mmml.interfaces.pyscf4gpuInterface` for GPU-accelerated quantum 
 uv sync --extra quantum-gpu   # or --extra all
 # Or: make micromamba-create-full
 ```
+If `uv` is not in PATH (e.g. HPC): use full path, e.g. `~/micromamba/bin/uv sync --extra all`.
 
 ## Example script
 
