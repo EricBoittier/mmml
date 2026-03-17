@@ -94,14 +94,19 @@ def subtract_atomic_references(
     E_hartree: np.ndarray,
     Z: np.ndarray,
     scheme: str,
+    ref_units: str = "hartree",
 ) -> np.ndarray:
     """
     Subtract per-atom reference energies from total energies.
     E_corrected = E - sum(E_ref[Z_i]) for each molecule.
-    Refs are in Hartree; returns corrected energies in Hartree.
+    Returns corrected energies in Hartree.
+
+    ref_units: "hartree" (default) or "ev". If "ev", refs are converted to Hartree
+    before subtraction (E_ref_Ha = E_ref_eV / 27.211386).
     """
     from ase.data import chemical_symbols
 
+    HARTREE_TO_EV = 27.211386
     refs = load_atomic_reference_energies(scheme)
     E_ref_per_sample = np.zeros(len(E_hartree), dtype=np.float64)
 
@@ -114,7 +119,10 @@ def subtract_atomic_references(
             key = f"{sym}:0"
             if key not in refs:
                 raise ValueError(f"No reference for {key} in scheme '{scheme}'")
-            E_ref_per_sample[i] += refs[key]
+            val = refs[key]
+            if ref_units.lower() == "ev":
+                val = val / HARTREE_TO_EV
+            E_ref_per_sample[i] += val
 
     return E_hartree - E_ref_per_sample
 
@@ -369,6 +377,7 @@ def fix_and_split_data(
     cube_spacing_bohr: float = 0.25,
     skip_validation: bool = False,
     atomic_ref: Optional[str] = None,
+    atomic_ref_units: str = "hartree",
     n_grid_points: int = 3000,
     esp_max_abs: float = 25.0,
     min_dist_to_atoms: float = 1.0,
@@ -399,7 +408,10 @@ def fix_and_split_data(
         Skip validation checks (default False)
     atomic_ref : str, optional
         Subtract per-atom reference energies using scheme from atomic_reference_energies.json
-        (e.g. "pbe0/sz" for PBE0/SZ, closest to pyscf-evaluate default). Default: None.
+        (e.g. "pbe0/sz" for PBE0/SZ, "pbe0/def2-tzvp" for Hartree). Default: None.
+    atomic_ref_units : str
+        Units of refs in JSON: "hartree" (default) or "ev". If "ev", refs are converted
+        before subtraction. Schemes like pbe0/sz may use eV; pbe0/def2-tzvp uses Hartree.
     n_grid_points : int
         Target number of ESP grid points per sample (default 3000). Points with high |esp|
         or too close to atoms are excluded, then subsampled.
@@ -557,8 +569,8 @@ def fix_and_split_data(
     E_hartree = np.asarray(efd_data['E']).copy()
     if atomic_ref:
         if verbose:
-            print(f"\nSubtracting atomic reference energies (scheme: {atomic_ref})")
-        E_hartree = subtract_atomic_references(E_hartree, Z_expanded, atomic_ref)
+            print(f"\nSubtracting atomic reference energies (scheme: {atomic_ref}, units: {atomic_ref_units})")
+        E_hartree = subtract_atomic_references(E_hartree, Z_expanded, atomic_ref, ref_units=atomic_ref_units)
         if verbose:
             print(f"  E (after ref subtraction): mean={E_hartree.mean():.6f} Ha, "
                   f"range=[{E_hartree.min():.6f}, {E_hartree.max():.6f}]")
@@ -1055,7 +1067,14 @@ Examples:
         type=str,
         default=None,
         metavar='SCHEME',
-        help='Subtract per-atom reference energies (e.g. pbe0/sz for PBE0/SZ, matches pyscf-evaluate default)'
+        help='Subtract per-atom reference energies (e.g. pbe0/sz, pbe0/def2-tzvp)'
+    )
+    parser.add_argument(
+        '--atomic-ref-units',
+        type=str,
+        choices=['hartree', 'ev'],
+        default='hartree',
+        help='Units of refs in JSON: hartree (pbe0/def2-tzvp) or ev (pbe0/sz may use eV; default: hartree)'
     )
     
     parser.add_argument(
@@ -1115,6 +1134,7 @@ Examples:
         cube_spacing_bohr=args.cube_spacing,
         skip_validation=args.skip_validation,
         atomic_ref=getattr(args, 'atomic_ref', None),
+        atomic_ref_units=getattr(args, 'atomic_ref_units', 'hartree'),
         n_grid_points=getattr(args, 'n_grid_points', 3000),
         esp_max_abs=getattr(args, 'esp_max_abs', 25.0),
         min_dist_to_atoms=getattr(args, 'min_dist_to_atoms', 1.0),
