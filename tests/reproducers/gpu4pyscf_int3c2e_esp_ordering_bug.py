@@ -1,24 +1,23 @@
 #!/usr/bin/env python
 """
-Minimal reproducer for gpu4pyscf get_j_int3c2e_pass1 ESP/grid ordering bug.
+Minimal reproducer for gpu4pyscf ESP methods.
 
-When using fakemol_for_charges(coords) as auxmol, the output of get_j_int3c2e_pass1
-with sort_j=True does NOT match the grid point order. esp[i] is not the ESP at grid[i].
+Tests:
+1. get_j_int3c2e_pass1 (fakemol aux): BUG - esp/grid misalignment
+2. int1e_grids (direct grid): expected correct alignment
 
 Reference: CPU int1e_rinv gives correct esp[i] <-> grid[i] pairing.
-GPU path: get_j_int3c2e_pass1 gives misaligned output.
 
 Run: python tests/reproducers/gpu4pyscf_int3c2e_esp_ordering_bug.py
 
 Requires: pyscf, gpu4pyscf, cupy (and CUDA-capable GPU)
-
-For GitHub issue, paste this script and the output showing low correlation.
 """
 
 import numpy as np
 from pyscf import gto
 from pyscf.dft import rks
 from gpu4pyscf.df import int3c2e
+from gpu4pyscf.gto.int3c1e import int1e_grids
 from gpu4pyscf.lib.cupy_helper import dist_matrix
 import cupy
 
@@ -56,6 +55,22 @@ def esp_gpu_int3c2e(mol, dm, grid_bohr):
     return (v_grids_n - v_grids_e).get()
 
 
+def esp_gpu_int1e_grids(mol, dm, grid_bohr):
+    """ESP at grid points via int1e_grids (direct grid, correct ordering)."""
+    v_elec = int1e_grids(mol, grid_bohr, dm=dm)
+    v_elec = np.asarray(v_elec) if hasattr(v_elec, "get") else v_elec
+    charges = mol.atom_charges()
+    atom_coords = mol.atom_coords(unit="Bohr")
+    v_nuc = np.array(
+        [
+            np.sum(charges / (np.linalg.norm(atom_coords - r, axis=1) + 1e-12))
+            for r in grid_bohr
+        ],
+        dtype=np.float64,
+    )
+    return v_nuc - v_elec
+
+
 def main():
     # Water molecule
     mol = gto.M(
@@ -90,26 +105,28 @@ def main():
 
     # GPU: get_j_int3c2e_pass1 (buggy ordering)
     dm_gpu = cupy.asarray(dm)
-    esp_gpu = esp_gpu_int3c2e(mol, dm_gpu, grid_bohr)
+    esp_int3c2e = esp_gpu_int3c2e(mol, dm_gpu, grid_bohr)
+
+    # GPU: int1e_grids (direct grid, expected correct)
+    esp_int1e = esp_gpu_int1e_grids(mol, dm_gpu, grid_bohr)
 
     # Compare
-    corr = np.corrcoef(esp_cpu, esp_gpu)[0, 1]
-    rmse = np.sqrt(np.mean((esp_cpu - esp_gpu) ** 2))
+    corr_int3c2e = np.corrcoef(esp_cpu, esp_int3c2e)[0, 1]
+    corr_int1e = np.corrcoef(esp_cpu, esp_int1e)[0, 1]
+    rmse_int3c2e = np.sqrt(np.mean((esp_cpu - esp_int3c2e) ** 2))
+    rmse_int1e = np.sqrt(np.mean((esp_cpu - esp_int1e) ** 2))
 
-    print("gpu4pyscf int3c2e ESP ordering bug reproducer")
+    print("gpu4pyscf ESP methods comparison")
     print("=" * 60)
     print(f"Grid points: {len(grid_bohr)}")
-    print(f"  CPU (int1e_rinv):     {esp_cpu}")
-    print(f"  GPU (get_j_int3c2e):  {esp_gpu}")
-    print(f"  Pearson correlation:  {corr:.6f}")
-    print(f"  RMSE (Hartree/e):     {rmse:.6e}")
-    if corr > 0.99:
-        print("  ✓ PASS: esp and grid align correctly")
-    else:
-        print("  ✗ BUG: esp[i] does not correspond to grid[i]")
-        print("  Expected: correlation ~1.0 when alignment is correct")
+    print(f"  CPU (int1e_rinv):      {esp_cpu}")
+    print(f"  GPU (get_j_int3c2e):   {esp_int3c2e}  corr={corr_int3c2e:.4f} rmse={rmse_int3c2e:.2e}")
+    print(f"  GPU (int1e_grids):    {esp_int1e}  corr={corr_int1e:.4f} rmse={rmse_int1e:.2e}")
+    print("-" * 60)
+    print(f"  int3c2e: {'✓ PASS' if corr_int3c2e > 0.99 else '✗ BUG (misaligned)'}")
+    print(f"  int1e_grids: {'✓ PASS' if corr_int1e > 0.99 else '✗ FAIL'}")
     print("=" * 60)
-    return 0 if corr > 0.99 else 1
+    return 0 if corr_int1e > 0.99 else 1
 
 
 if __name__ == "__main__":
