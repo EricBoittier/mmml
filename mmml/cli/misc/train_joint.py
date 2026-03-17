@@ -1159,8 +1159,13 @@ def load_combined_data(efd_file: Path, esp_file: Path, subtract_atom_energies: b
     atom_positions_masked = esp_data['R'] * atom_mask[:, :, None]  # Zero out padding
     atom_com = atom_positions_masked.sum(axis=1) / esp_data['N'][:, None]  # (n_samples, 3)
     
-    # Compute grid COM for each molecule
-    grid_com = esp_data['vdw_surface'].mean(axis=1)  # (n_samples, 3)
+    # Compute grid COM for each molecule (exclude padding: vdw_surface uses 1e6 for invalid points)
+    vdw = esp_data['vdw_surface']
+    grid_valid = np.all(np.abs(vdw) < 1e5, axis=-1)  # (n_samples, ngrid)
+    grid_com = np.zeros((vdw.shape[0], 3), dtype=vdw.dtype)
+    for i in range(vdw.shape[0]):
+        v = vdw[i][grid_valid[i]]
+        grid_com[i] = v.mean(axis=0) if len(v) > 0 else atom_com[i]
     
     # Compute offset for each molecule
     offset = grid_com - atom_com  # (n_samples, 3)
