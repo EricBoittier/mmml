@@ -3,10 +3,14 @@ import jax
 import jax.numpy as jnp
 from jax import vmap
 
+from mmml.data.units import ANGSTROM_TO_BOHR
+
 
 @functools.partial(jax.jit)
 def coulomb_potential(q, r):
-    return q / (r * 1.88973)
+    """V = q/r [Hartree/e] when r is in Angstrom. Converts r to Bohr internally."""
+    r_bohr = r * ANGSTROM_TO_BOHR
+    return q / (r_bohr + 1e-10)
 
 
 # @functools.partial(jax.jit, static_argnames=('grid_positions'))
