@@ -29,6 +29,9 @@ def parse_args():
 
 def main_loop(args):
     from mmml.interfaces.pycharmmInterface import setupBox
+    from mmml.interfaces.pycharmmInterface.utils import set_up_directories
+
+    set_up_directories()  # ensure pdb/, psf/, xyz/, res/, dcd/ exist
 
     for arg in vars(args):
         print(f"{arg}: {getattr(args, arg)} {type(getattr(args, arg))}")
