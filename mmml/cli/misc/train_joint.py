@@ -2465,9 +2465,9 @@ def plot_validation_results(
         
         fig, axes = plt.subplots(2, 3, figsize=(18, 10))
         
-        esp_true = esp_true_list[idx]
-        esp_pred_dcmnet = esp_pred_dcmnet_list[idx]
-        esp_pred_physnet = esp_pred_physnet_list[idx]
+        esp_true = np.asarray(esp_true_list[idx]).flatten()
+        esp_pred_dcmnet = np.asarray(esp_pred_dcmnet_list[idx]).flatten()
+        esp_pred_physnet = np.asarray(esp_pred_physnet_list[idx]).flatten()
         esp_error_dcmnet = esp_pred_dcmnet - esp_true
         esp_error_physnet = esp_pred_physnet - esp_true
         
@@ -3924,7 +3924,8 @@ def main():
             sys.exit(1)
         print(f"\n🔄 Loading PhysNet params from: {physnet_ckpt}")
         physnet_params = _load_physnet_params(physnet_ckpt)
-        restart_params = {"physnet": physnet_params}
+        # Flax returns {'params': {'physnet': ..., 'dcmnet': ..., ...}}; nest under 'params'
+        restart_params = {"params": {"physnet": physnet_params}}
         print(f"✅ Loaded PhysNet params ({sum(x.size for x in jax.tree_util.tree_leaves(physnet_params)):,} parameters)")
     
     if args.restart:
