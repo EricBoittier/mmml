@@ -38,6 +38,7 @@ import sys
 import argparse
 from pathlib import Path
 import numpy as np
+from scipy.spatial.distance import cdist
 from typing import Dict, Tuple, Optional
 
 # Add parent directory to path
@@ -116,6 +117,56 @@ def subtract_atomic_references(
             E_ref_per_sample[i] += refs[key]
 
     return E_hartree - E_ref_per_sample
+
+
+def reduce_esp_grid(
+    esp: np.ndarray,
+    esp_grid: np.ndarray,
+    R: np.ndarray,
+    n_grid_points: int = 3000,
+    esp_max_abs: float = 25.0,
+    min_dist_to_atoms: float = 1.0,
+    seed: int = 42,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Reduce ESP grid to fixed number of points per sample.
+    Excludes points with |esp| > esp_max_abs and points too close to atomic centers.
+    """
+    rng = np.random.default_rng(seed)
+    n_samples = esp.shape[0]
+    n_atoms = R.shape[1]
+
+    esp_out = np.zeros((n_samples, n_grid_points), dtype=esp.dtype)
+    esp_grid_out = np.full((n_samples, n_grid_points, 3), 1e6, dtype=esp_grid.dtype)
+
+    for i in range(n_samples):
+        esp_i = esp[i]
+        grid_i = esp_grid[i]
+        r_i = R[i]
+
+        # Mask padding (esp_grid uses 1e6 for padding)
+        valid = np.all(np.abs(grid_i) < 1e5, axis=1)
+        valid &= np.abs(esp_i) < esp_max_abs
+
+        # Exclude points too close to any atom
+        atoms_valid = np.any(r_i != 0, axis=1)
+        if np.any(atoms_valid):
+            dists = cdist(grid_i, r_i[atoms_valid])
+            min_d = dists.min(axis=1)
+            valid &= min_d > min_dist_to_atoms
+
+        idx = np.where(valid)[0]
+        if len(idx) >= n_grid_points:
+            chosen = rng.choice(idx, size=n_grid_points, replace=False)
+            esp_out[i] = esp_i[chosen]
+            esp_grid_out[i] = grid_i[chosen]
+        elif len(idx) > 0:
+            n_take = len(idx)
+            esp_out[i, :n_take] = esp_i[idx]
+            esp_grid_out[i, :n_take, :] = grid_i[idx]
+            # Rest stays as padding (zeros for esp, 1e6 for grid)
+
+    return esp_out, esp_grid_out
 
 
 def convert_grid_indices_to_angstrom(
@@ -318,6 +369,9 @@ def fix_and_split_data(
     cube_spacing_bohr: float = 0.25,
     skip_validation: bool = False,
     atomic_ref: Optional[str] = None,
+    n_grid_points: int = 3000,
+    esp_max_abs: float = 25.0,
+    min_dist_to_atoms: float = 1.0,
     verbose: bool = True
 ) -> bool:
     """
@@ -346,6 +400,13 @@ def fix_and_split_data(
     atomic_ref : str, optional
         Subtract per-atom reference energies using scheme from atomic_reference_energies.json
         (e.g. "pbe0/sz" for PBE0/SZ, closest to pyscf-evaluate default). Default: None.
+    n_grid_points : int
+        Target number of ESP grid points per sample (default 3000). Points with high |esp|
+        or too close to atoms are excluded, then subsampled.
+    esp_max_abs : float
+        Exclude grid points with |esp| > this (default 25.0, Hartree/e).
+    min_dist_to_atoms : float
+        Exclude grid points closer than this to any atom in Å (default 1.0).
     verbose : bool
         Print detailed progress (default True)
         
@@ -603,6 +664,38 @@ def fix_and_split_data(
             print(f"\n{'#'*70}")
             print("# Step 5: ESP Grid (skipped - no grid data provided)")
             print(f"{'#'*70}")
+    
+    # =========================================================================
+    # Reduce ESP grid to fixed number of points (if grid exists)
+    # =========================================================================
+    if has_grid and vdw_surface_angstrom is not None:
+        esp_raw = grid_data['esp']
+        if verbose:
+            print(f"\n{'#'*70}")
+            print("# Step 5b: Reducing ESP Grid")
+            print(f"{'#'*70}")
+            print(f"  Target points: {n_grid_points}")
+            print(f"  Exclude |esp| > {esp_max_abs} (Hartree/e)")
+            print(f"  Exclude points < {min_dist_to_atoms} Å from atoms")
+        esp_reduced, grid_reduced = reduce_esp_grid(
+            esp_raw,
+            vdw_surface_angstrom,
+            R_angstrom,
+            n_grid_points=n_grid_points,
+            esp_max_abs=esp_max_abs,
+            min_dist_to_atoms=min_dist_to_atoms,
+            seed=seed,
+        )
+        vdw_surface_angstrom = grid_reduced
+        if verbose:
+            n_valid_per_sample = np.sum(np.all(np.abs(grid_reduced) < 1e5, axis=2), axis=1)
+            print(f"  Reduced to shape: esp {esp_reduced.shape}, grid {grid_reduced.shape}")
+            print(f"  Valid points per sample: min={n_valid_per_sample.min()}, max={n_valid_per_sample.max()}, mean={n_valid_per_sample.mean():.0f}")
+        # Update grid_data for saving - we need esp and vdw_surface
+        grid_data = dict(grid_data)
+        grid_data['esp'] = esp_reduced
+        grid_data['vdw_surface'] = grid_reduced
+        grid_data['esp_grid'] = grid_reduced
     
     # =========================================================================
     # Validate fixed data
@@ -966,6 +1059,28 @@ Examples:
     )
     
     parser.add_argument(
+        '--n-grid-points',
+        type=int,
+        default=3000,
+        metavar='N',
+        help='Target number of ESP grid points per sample (default 3000). Excludes high |esp| and points near atoms.'
+    )
+    parser.add_argument(
+        '--esp-max-abs',
+        type=float,
+        default=25.0,
+        metavar='X',
+        help='Exclude grid points with |esp| > X in Hartree/e (default 25.0)'
+    )
+    parser.add_argument(
+        '--min-dist-to-atoms',
+        type=float,
+        default=1.0,
+        metavar='Å',
+        help='Exclude grid points closer than this to any atom in Å (default 1.0)'
+    )
+    
+    parser.add_argument(
         '--quiet', '-q',
         action='store_true',
         help='Suppress detailed output'
@@ -1000,6 +1115,9 @@ Examples:
         cube_spacing_bohr=args.cube_spacing,
         skip_validation=args.skip_validation,
         atomic_ref=getattr(args, 'atomic_ref', None),
+        n_grid_points=getattr(args, 'n_grid_points', 3000),
+        esp_max_abs=getattr(args, 'esp_max_abs', 25.0),
+        min_dist_to_atoms=getattr(args, 'min_dist_to_atoms', 1.0),
         verbose=not args.quiet
     )
     
