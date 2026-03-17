@@ -6,6 +6,7 @@ Compares:
 2. Point-charge Coulomb energy: E = q1*q2/r [Hartree], r in Bohr
 3. DCMNet calc_esp and Coulomb energy from train_joint formula
 4. Dipole: point charges vs PySCF
+5. PySCF ESP vs point-charge ESP at grid points (Hartree/e)
 
 Reference: Two point charges +1 and -1 at 10 Å
 - r = 10 * 1.88973 = 18.897 Bohr
@@ -110,6 +111,48 @@ def run_pyscf_isolated_ions():
     return mf_na.e_tot, mf_cl.e_tot
 
 
+def pyscf_esp_at_grid_points(mol, mf, grid_angstrom: np.ndarray) -> np.ndarray:
+    """
+    Compute PySCF electrostatic potential at grid points [Hartree/e].
+
+    ESP(r) = V_nuc(r) - V_elec(r) where V_elec is the Coulomb potential from
+    the electron density. Uses int1e_rinv with rinv_origin at each grid point.
+
+    Parameters
+    ----------
+    mol : pyscf.gto.Mole
+        Molecule (coordinates in Bohr)
+    mf : pyscf.scf.SCF
+        Converged mean-field object
+    grid_angstrom : np.ndarray
+        Grid points (N, 3) in Angstrom
+
+    Returns
+    -------
+    np.ndarray
+        ESP values (N,) in Hartree/e
+    """
+    grid_bohr = grid_angstrom * ANGSTROM_TO_BOHR
+    dm = mf.make_rdm1()
+    coords = mol.atom_coords(unit="Bohr")
+    charges = mol.atom_charges()
+
+    esp = np.zeros(len(grid_angstrom))
+    for i, r in enumerate(grid_bohr):
+        # Nuclear: V_nuc = sum_A Z_A / |r - R_A|
+        dr = coords - r[None, :]
+        dist = np.linalg.norm(dr, axis=1) + 1e-12
+        v_nuc = np.sum(charges / dist)
+
+        # Electronic: V_elec = trace(DM @ int1e_rinv)
+        with mol.with_rinv_origin(r):
+            v_mat = mol.intor("int1e_rinv")
+        v_elec = np.einsum("ij,ij", dm, v_mat)
+
+        esp[i] = v_nuc - v_elec
+    return esp
+
+
 class TestNaClCoulombRegression:
     """Regression tests for Na+ Cl- vs point-charge Coulomb/dipole."""
 
@@ -198,3 +241,72 @@ class TestNaClCoulombRegression:
     def test_units_consistency(self):
         """Sanity check: 10 e·Å = 48 D."""
         assert np.isclose(10.0 * EANGSTROM_TO_DEBYE, 48.03, rtol=1e-2)
+
+    def test_pyscf_esp_vs_point_charge_midpoint(self):
+        """PySCF ESP at midpoint (5,0,0) should be close to point-charge (≈0)."""
+        import pyscf.gto
+        import pyscf.scf
+        import jax.numpy as jnp
+
+        r_bohr = SEPARATION_ANGSTROM * ANGSTROM_TO_BOHR
+        mol = pyscf.gto.M(
+            atom=[
+                ["Na", (0.0, 0.0, 0.0)],
+                ["Cl", (r_bohr, 0.0, 0.0)],
+            ],
+            basis="sto3g",
+            charge=0,
+            spin=0,
+            unit="Bohr",
+        )
+        mf = pyscf.scf.RHF(mol)
+        mf.kernel()
+
+        grid = np.array([[5.0, 0.0, 0.0]])  # Midpoint
+        esp_pyscf = pyscf_esp_at_grid_points(mol, mf, grid)
+        esp_point = calc_esp(
+            jnp.array(R_PAIR),
+            jnp.array([1.0, -1.0]),
+            jnp.array(grid),
+        )
+
+        # At midpoint, both should be ~0. Point-charge exact; PySCF has screening
+        assert np.isclose(float(esp_point[0]), 0.0, atol=1e-10)
+        assert np.abs(esp_pyscf[0]) < 0.01, (
+            f"PySCF ESP at midpoint {esp_pyscf[0]:.6f} Ha/e should be ~0"
+        )
+
+    def test_pyscf_esp_vs_point_charge_near_na(self):
+        """PySCF ESP at 1 Å from Na+ should be close to point-charge ESP."""
+        import pyscf.gto
+        import pyscf.scf
+        import jax.numpy as jnp
+
+        r_bohr = SEPARATION_ANGSTROM * ANGSTROM_TO_BOHR
+        mol = pyscf.gto.M(
+            atom=[
+                ["Na", (0.0, 0.0, 0.0)],
+                ["Cl", (r_bohr, 0.0, 0.0)],
+            ],
+            basis="sto3g",
+            charge=0,
+            spin=0,
+            unit="Bohr",
+        )
+        mf = pyscf.scf.RHF(mol)
+        mf.kernel()
+
+        grid = np.array([[1.0, 0.0, 0.0]])  # 1 Å from Na+
+        esp_pyscf = pyscf_esp_at_grid_points(mol, mf, grid)
+        v_point = 1.0 / (1.0 * ANGSTROM_TO_BOHR) + (-1.0) / (9.0 * ANGSTROM_TO_BOHR)
+        esp_point = calc_esp(
+            jnp.array(R_PAIR),
+            jnp.array([1.0, -1.0]),
+            jnp.array(grid),
+        )
+
+        # At 10 Å separation, electronic screening is modest; allow 20% deviation
+        assert np.isclose(float(esp_point[0]), v_point, rtol=1e-5)
+        assert np.isclose(esp_pyscf[0], v_point, rtol=0.25), (
+            f"PySCF ESP {esp_pyscf[0]:.6f} vs point-charge {v_point:.6f} Ha/e"
+        )
