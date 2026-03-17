@@ -30,6 +30,7 @@ Available commands:
   pyscf-dft   GPU-accelerated DFT calculations (energy, gradient, hessian, etc.)
   pyscf-mp2   GPU-accelerated MP2 (post-HF) calculations
   pyscf-evaluate  Evaluate geometries (E, F, D, ESP) in batch
+  verify-esp-alignment  Verify esp-grid alignment in evaluated NPZ (data generation check)
   normal-mode-sample  Sample geometries along vibrational modes
   gui         Start the molecular viewer GUI
 
@@ -54,7 +55,7 @@ For help on a specific command:
     
     parser.add_argument(
         'command',
-        choices=['make-res', 'make-box', 'run', 'run-pycharmm', 'xml2npz', 'validate', 'train', 'evaluate', 'downstream', 'fix-and-split', 'pyscf-dft', 'pyscf-mp2', 'pyscf-evaluate', 'normal-mode-sample', 'gui'],
+        choices=['make-res', 'make-box', 'run', 'run-pycharmm', 'xml2npz', 'validate', 'train', 'evaluate', 'downstream', 'fix-and-split', 'pyscf-dft', 'pyscf-mp2', 'pyscf-evaluate', 'verify-esp-alignment', 'normal-mode-sample', 'gui'],
         help='Command to run'
     )
     parser.add_argument(
@@ -143,6 +144,11 @@ For help on a specific command:
         from .misc import pyscf_evaluate
         sys.argv = ['mmml pyscf-evaluate'] + args.args
         return pyscf_evaluate.main()
+
+    elif args.command == 'verify-esp-alignment':
+        from .misc import verify_esp_alignment
+        sys.argv = ['mmml verify-esp-alignment'] + args.args
+        return verify_esp_alignment.main()
 
     elif args.command == 'normal-mode-sample':
         from .misc import normal_mode_sample
