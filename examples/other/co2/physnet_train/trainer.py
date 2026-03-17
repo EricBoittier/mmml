@@ -279,7 +279,9 @@ def main():
     parser.add_argument('--zbl', action='store_true', default=False,
                        help='Use ZBL repulsion')
     parser.add_argument('--charges', action='store_true',
-                       help='Predict atomic charges')
+                       help='Predict atomic charges (required for PhysNet-DCMnet)')
+    parser.add_argument('--charges-weight', type=float, default=14.39,
+                       help='Weight for charge-neutrality loss when --charges (default: 14.39)')
     parser.add_argument('--no-energy-bias', action='store_true',
                        help='Disable learnable per-element atomic energy bias (useful when energies already have atomic references subtracted)')
     parser.add_argument('--center-coordinates', action='store_true',
@@ -546,10 +548,12 @@ def main():
                 print(f"  Adjusting energy weight: {args.energy_weight:.3f} → {energy_weight:.6f}")
                 print(f"  (Scale factor: {scale_factor:.6f})")
     
+    charges_weight = args.charges_weight if args.charges else 0.0
     print(f"\nLoss weights:")
     print(f"  Energy: {energy_weight}")
     print(f"  Forces: {forces_weight}")
     print(f"  Dipole: {args.dipole_weight}")
+    print(f"  Charges: {charges_weight}")
     
     # Initialize JAX random key
     key = jax.random.PRNGKey(args.seed)
@@ -575,7 +579,7 @@ def main():
             energy_weight=energy_weight,
             forces_weight=forces_weight,
             dipole_weight=args.dipole_weight,
-            charges_weight=0.0,  # Not predicting charges by default
+            charges_weight=charges_weight,
             batch_size=args.batch_size,
             num_atoms=args.natoms,
             restart=args.restart,
