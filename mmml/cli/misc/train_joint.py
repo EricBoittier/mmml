@@ -172,6 +172,8 @@ def _load_physnet_checkpoint(path: Path) -> Tuple[Dict[str, Any], Optional[Dict[
 
 EPS = 1e-8
 RADII_TABLE = jnp.array(ase.data.covalent_radii)
+# Angstrom to Bohr: 1 Bohr = 0.529177 Angstrom -> 1 Angstrom = 1.88973 Bohr
+ANGSTROM_TO_BOHR = 1.88973
 
 
 # ============================================================================
@@ -182,7 +184,7 @@ def get_recommended_optimizer_config(
     dataset_size: int,
     num_features: int,
     num_atoms: int,
-    optimizer_name: str = 'adamw'
+    optimizer_name: str = 'adam'
 ) -> Dict[str, Any]:
     """
     Get recommended optimizer hyperparameters based on dataset properties.
@@ -494,9 +496,10 @@ def _compute_esp_single(
         distance_mask = distance_mask * (jnp.abs(esp_target) <= esp_max_value).astype(jnp.float32)
     
     # PhysNet ESP: sum over atoms with masking
-    # Use masked charges and distances
+    # V = q/r in Hartree/e when r is in Bohr. Coords are Angstrom -> r_bohr = r_angstrom * ANGSTROM_TO_BOHR
     charges_masked = phys_charges * atom_mask_mol  # (natoms,)
-    esp_pred_phys = jnp.sum(charges_masked[None, :] / (distances + 1e-10), axis=1)
+    r_bohr = (distances + 1e-10) * ANGSTROM_TO_BOHR
+    esp_pred_phys = jnp.sum(charges_masked[None, :] / r_bohr, axis=1)
     
     return esp_pred_dcm, esp_pred_phys, distance_mask
 
@@ -1194,6 +1197,11 @@ def load_combined_data(efd_file: Path, esp_file: Path, subtract_atom_energies: b
             print(f"    {key}: {val.shape}")
         print(f"  Data padding: {combined['R'].shape[1]} atoms")
         print(f"  Max actual atoms: {int(np.max(combined['N']))}")
+        # Unit sanity check (expected: E eV, esp Ha/e, Dxyz e·Å, R Å)
+        e_mean, e_std = float(np.mean(combined['E'])), float(np.std(combined['E']))
+        esp_mean, esp_std = float(np.mean(combined['esp'])), float(np.std(combined['esp']))
+        d_mean = float(np.mean(np.linalg.norm(combined['Dxyz'], axis=1)))
+        print(f"  Unit check: E μ={e_mean:.1f} eV σ={e_std:.1f} | esp μ={esp_mean:.4f} Ha/e σ={esp_std:.4f} | |D| μ={d_mean:.3f} e·Å")
     
     return combined
 
