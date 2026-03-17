@@ -44,7 +44,6 @@ def _get_ckpt():
             PROJECT_ROOT / "mmml/models/physnetjax/ckpts",
             PROJECT_ROOT / "ckpts_json/DESdimers_params.json",
             PROJECT_ROOT / "ckpts_json",
-            PROJECT_ROOT / "mmml/physnetjax/ckpts",
         ]
     )
     for ckpt in candidates:

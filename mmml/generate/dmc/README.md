@@ -41,7 +41,7 @@ python -m mmml.dmc.dmc \
   --nstep 5000 \
   --eqstep 1000 \
   --alpha 1200.0 \
-  --checkpoint mmml/physnetjax/ckpts/<your-experiment>/epoch-000123 \
+  --checkpoint mmml/models/physnetjax/ckpts/<your-experiment>/epoch-000123 \
   --max-batch 512 \
   --input mmml/dmc/examples/acetone_dmc.extxyz
 ```

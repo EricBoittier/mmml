@@ -36,7 +36,7 @@ def parse_base_args() -> argparse.Namespace:
         default=None,
         help=(
             "Checkpoint directory used for the ML model. Defaults to $MMML_CKPT "
-            "or mmml/physnetjax/ckpts."
+            "or mmml/models/physnetjax/ckpts."
         ),
     )
     parser.add_argument(
@@ -131,9 +131,7 @@ def resolve_checkpoint_paths(arg: Path | str | None) -> Tuple[Path, Path]:
         if ckpt_env:
             candidate = Path(ckpt_env)
         else:
-            candidate_models = Path("mmml/models/physnetjax/ckpts")
-            candidate_legacy = Path("mmml/physnetjax/ckpts")
-            candidate = candidate_models if candidate_models.exists() else candidate_legacy
+            candidate = Path("mmml/models/physnetjax/ckpts")
     elif isinstance(arg, str):
         candidate = Path(arg)
     else:
