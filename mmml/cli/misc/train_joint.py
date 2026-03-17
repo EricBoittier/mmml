@@ -2596,67 +2596,67 @@ def plot_validation_results(
             
             # True ESP in 3D
             ax = fig.add_subplot(131, projection='3d')
-        sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 1], grid_pos[:, 2],
-                       c=esp_true_valid, cmap='RdBu_r', s=3, alpha=0.5, 
-                       vmin=esp_vmin, vmax=esp_vmax)
-        # Add atom positions
-        ax.scatter(atom_positions[:, 0], atom_positions[:, 1], atom_positions[:, 2],
-                  c='black', s=300, marker='o', edgecolors='yellow', linewidths=3, 
-                  alpha=1.0, label='Atoms')
-        # Label atoms
-        for i, (pos, Z) in enumerate(zip(atom_positions, atomic_nums)):
-            ax.text(pos[0], pos[1], pos[2], f'  {int(Z)}', fontsize=10, 
-                   color='black', weight='bold', bbox=dict(boxstyle='round,pad=0.3', 
-                   facecolor='yellow', alpha=0.7))
-        ax.set_xlabel('X (Å)')
-        ax.set_ylabel('Y (Å)')
-        ax.set_zlabel('Z (Å)')
-        ax.set_title(f'True ESP (3D){epoch_str}\nESP range: [{esp_vmin},{esp_vmax}] Ha/e')
-        ax.view_init(elev=35, azim=45)  # Isometric view
-        plt.colorbar(sc, ax=ax, label='ESP (Ha/e)', shrink=0.6)
-        ax.legend()
-        
-        # PhysNet ESP in 3D
-        ax = fig.add_subplot(132, projection='3d')
-        sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 1], grid_pos[:, 2],
-                       c=esp_pred_physnet_valid, cmap='RdBu_r', s=3, alpha=0.5,
-                       vmin=esp_vmin, vmax=esp_vmax)
-        # Add atom positions (PhysNet charges are AT atom centers)
-        ax.scatter(atom_positions[:, 0], atom_positions[:, 1], atom_positions[:, 2],
-                  c='black', s=300, marker='o', edgecolors='lime', linewidths=3, 
-                  alpha=1.0, label='Atoms (charge centers)')
-        # Label atoms
-        for i, (pos, Z) in enumerate(zip(atom_positions, atomic_nums)):
-            ax.text(pos[0], pos[1], pos[2], f'  {int(Z)}\n(q)', fontsize=9, 
-                   color='black', weight='bold', bbox=dict(boxstyle='round,pad=0.3', 
-                   facecolor='lime', alpha=0.7))
-        ax.set_xlabel('X (Å)')
-        ax.set_ylabel('Y (Å)')
-        ax.set_zlabel('Z (Å)')
-        ax.set_title(f'PhysNet ESP (3D){epoch_str}\nESP range: [{esp_vmin},{esp_vmax}] Ha/e')
-        ax.view_init(elev=35, azim=45)  # Isometric view
-        plt.colorbar(sc, ax=ax, label='ESP (Ha/e)', shrink=0.6)
-        ax.legend()
-        
-        # DCMNet ESP in 3D
-        ax = fig.add_subplot(133, projection='3d')
-        sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 1], grid_pos[:, 2],
-                       c=esp_pred_dcmnet_valid, cmap='RdBu_r', s=3, alpha=0.5,
-                       vmin=esp_vmin, vmax=esp_vmax)
-        # Add atom positions
-        ax.scatter(atom_positions[:, 0], atom_positions[:, 1], atom_positions[:, 2],
-                  c='black', s=300, marker='o', edgecolors='cyan', linewidths=3, 
-                  alpha=1.0, label='Atoms')
-        # Label atoms
-        for i, (pos, Z) in enumerate(zip(atom_positions, atomic_nums)):
-            ax.text(pos[0], pos[1], pos[2], f'  {int(Z)}', fontsize=10, 
-                   color='black', weight='bold', bbox=dict(boxstyle='round,pad=0.3', 
-                   facecolor='cyan', alpha=0.7))
-        
-        # Add distributed charge positions if available
-        if idx < n_esp_examples:
-            # Get distributed charges for this molecule (need to recompute)
-            _, _, output_dcm = eval_step(
+            sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 1], grid_pos[:, 2],
+                           c=esp_true_valid, cmap='RdBu_r', s=3, alpha=0.5, 
+                           vmin=esp_vmin, vmax=esp_vmax)
+            # Add atom positions
+            ax.scatter(atom_positions[:, 0], atom_positions[:, 1], atom_positions[:, 2],
+                      c='black', s=300, marker='o', edgecolors='yellow', linewidths=3, 
+                      alpha=1.0, label='Atoms')
+            # Label atoms
+            for i, (pos, Z) in enumerate(zip(atom_positions, atomic_nums)):
+                ax.text(pos[0], pos[1], pos[2], f'  {int(Z)}', fontsize=10, 
+                       color='black', weight='bold', bbox=dict(boxstyle='round,pad=0.3', 
+                       facecolor='yellow', alpha=0.7))
+            ax.set_xlabel('X (Å)')
+            ax.set_ylabel('Y (Å)')
+            ax.set_zlabel('Z (Å)')
+            ax.set_title(f'True ESP (3D){epoch_str}\nESP range: [{esp_vmin},{esp_vmax}] Ha/e')
+            ax.view_init(elev=35, azim=45)  # Isometric view
+            plt.colorbar(sc, ax=ax, label='ESP (Ha/e)', shrink=0.6)
+            ax.legend()
+            
+            # PhysNet ESP in 3D
+            ax = fig.add_subplot(132, projection='3d')
+            sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 1], grid_pos[:, 2],
+                           c=esp_pred_physnet_valid, cmap='RdBu_r', s=3, alpha=0.5,
+                           vmin=esp_vmin, vmax=esp_vmax)
+            # Add atom positions (PhysNet charges are AT atom centers)
+            ax.scatter(atom_positions[:, 0], atom_positions[:, 1], atom_positions[:, 2],
+                      c='black', s=300, marker='o', edgecolors='lime', linewidths=3, 
+                      alpha=1.0, label='Atoms (charge centers)')
+            # Label atoms
+            for i, (pos, Z) in enumerate(zip(atom_positions, atomic_nums)):
+                ax.text(pos[0], pos[1], pos[2], f'  {int(Z)}\n(q)', fontsize=9, 
+                       color='black', weight='bold', bbox=dict(boxstyle='round,pad=0.3', 
+                       facecolor='lime', alpha=0.7))
+            ax.set_xlabel('X (Å)')
+            ax.set_ylabel('Y (Å)')
+            ax.set_zlabel('Z (Å)')
+            ax.set_title(f'PhysNet ESP (3D){epoch_str}\nESP range: [{esp_vmin},{esp_vmax}] Ha/e')
+            ax.view_init(elev=35, azim=45)  # Isometric view
+            plt.colorbar(sc, ax=ax, label='ESP (Ha/e)', shrink=0.6)
+            ax.legend()
+            
+            # DCMNet ESP in 3D
+            ax = fig.add_subplot(133, projection='3d')
+            sc = ax.scatter(grid_pos[:, 0], grid_pos[:, 1], grid_pos[:, 2],
+                           c=esp_pred_dcmnet_valid, cmap='RdBu_r', s=3, alpha=0.5,
+                           vmin=esp_vmin, vmax=esp_vmax)
+            # Add atom positions
+            ax.scatter(atom_positions[:, 0], atom_positions[:, 1], atom_positions[:, 2],
+                      c='black', s=300, marker='o', edgecolors='cyan', linewidths=3, 
+                      alpha=1.0, label='Atoms')
+            # Label atoms
+            for i, (pos, Z) in enumerate(zip(atom_positions, atomic_nums)):
+                ax.text(pos[0], pos[1], pos[2], f'  {int(Z)}', fontsize=10, 
+                       color='black', weight='bold', bbox=dict(boxstyle='round,pad=0.3', 
+                       facecolor='cyan', alpha=0.7))
+            
+            # Add distributed charge positions if available
+            if idx < n_esp_examples:
+                # Get distributed charges for this molecule (need to recompute)
+                _, _, output_dcm = eval_step(
                 params=params,
                 batch=batch_for_atoms,
                 model_apply=model.apply,
@@ -2670,37 +2670,37 @@ def plot_validation_results(
                 esp_terms=esp_terms,
                 esp_min_distance=0.0,
                 esp_max_value=1e10,
-            )
-            # Extract only real atoms (output is already (batch*natoms, n_dcm) format)
-            mono_dcm = output_dcm["mono_dist"][:n_atoms]  # (n_atoms, n_dcm)
-            dipo_dcm = output_dcm["dipo_dist"][:n_atoms]  # (n_atoms, n_dcm, 3)
+                )
+                # Extract only real atoms (output is already (batch*natoms, n_dcm) format)
+                mono_dcm = output_dcm["mono_dist"][:n_atoms]  # (n_atoms, n_dcm)
+                dipo_dcm = output_dcm["dipo_dist"][:n_atoms]  # (n_atoms, n_dcm, 3)
+                
+                # Plot distributed charges
+                charges_flat = np.array(mono_dcm).flatten()
+                positions_flat = np.array(dipo_dcm).reshape(-1, 3)
+                # Only plot charges with significant magnitude
+                significant = np.abs(charges_flat) > 0.01
+                if np.any(significant):
+                    ax.scatter(positions_flat[significant, 0], 
+                              positions_flat[significant, 1], 
+                              positions_flat[significant, 2],
+                              c=charges_flat[significant], cmap='RdBu_r', s=50, 
+                              marker='^', edgecolors='white', linewidths=1,
+                              vmin=-0.5, vmax=0.5, alpha=0.9, label='Dist. charges')
             
-            # Plot distributed charges
-            charges_flat = np.array(mono_dcm).flatten()
-            positions_flat = np.array(dipo_dcm).reshape(-1, 3)
-            # Only plot charges with significant magnitude
-            significant = np.abs(charges_flat) > 0.01
-            if np.any(significant):
-                ax.scatter(positions_flat[significant, 0], 
-                          positions_flat[significant, 1], 
-                          positions_flat[significant, 2],
-                          c=charges_flat[significant], cmap='RdBu_r', s=50, 
-                          marker='^', edgecolors='white', linewidths=1,
-                          vmin=-0.5, vmax=0.5, alpha=0.9, label='Dist. charges')
-        
-        ax.set_xlabel('X (Å)')
-        ax.set_ylabel('Y (Å)')
-        ax.set_zlabel('Z (Å)')
-        ax.set_title(f'DCMNet ESP (3D){epoch_str}\nESP range: [{esp_vmin},{esp_vmax}] Ha/e')
-        ax.view_init(elev=35, azim=45)  # Isometric view
-        plt.colorbar(sc, ax=ax, label='ESP (Ha/e)', shrink=0.6)
-        ax.legend()
-        
-        plt.tight_layout()
-        esp_3d_path = save_dir / f'esp_example_{idx}_3d{suffix}.png'
-        plt.savefig(esp_3d_path, dpi=150, bbox_inches='tight')
-        plt.close()
-        print(f"  ✅ Saved 3D ESP example {idx}: {esp_3d_path}")
+            ax.set_xlabel('X (Å)')
+            ax.set_ylabel('Y (Å)')
+            ax.set_zlabel('Z (Å)')
+            ax.set_title(f'DCMNet ESP (3D){epoch_str}\nESP range: [{esp_vmin},{esp_vmax}] Ha/e')
+            ax.view_init(elev=35, azim=45)  # Isometric view
+            plt.colorbar(sc, ax=ax, label='ESP (Ha/e)', shrink=0.6)
+            ax.legend()
+            
+            plt.tight_layout()
+            esp_3d_path = save_dir / f'esp_example_{idx}_3d{suffix}.png'
+            plt.savefig(esp_3d_path, dpi=150, bbox_inches='tight')
+            plt.close()
+            print(f"  ✅ Saved 3D ESP example {idx}: {esp_3d_path}")
         
         # Create multi-scale error visualization (3 rows at different percentiles)
         fig, axes = plt.subplots(3, 2, figsize=(14, 12))
