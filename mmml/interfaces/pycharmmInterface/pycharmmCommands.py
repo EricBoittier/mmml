@@ -135,8 +135,8 @@ calc tmass = @pmass * 10
 
 calc tmin = 300 * 0.2 
 
-open write unit 31 card name heat.res       ! Restart file
-open write unit 32 file name heat.dcd       ! Coordinates file
+open write unit 31 card name res/heat.res       ! Restart file
+open write unit 32 file name dcd/heat.dcd       ! Coordinates file
 
 dyna leap verlet start -
    timestp 0.002 nstep 50000 -
@@ -147,11 +147,11 @@ dyna leap verlet start -
    echeck 100.0   -
    iunrea -1 iunwri 31 iuncrd 32 iunvel -1
 
-open unit 1 write card name heat.crd
+open unit 1 write card name dcd/heat.crd
 write coor card unit 1
 close unit 1
 
-open write unit 10 card name heat.pdb
+open write unit 10 card name pdb/heat.pdb
 write coor unit 10 pdb
 
 """
@@ -160,11 +160,11 @@ equi = """!#########################################
 ! Equilibration - NpT
 !#########################################
 
-open read  unit 30 card name heat.res      ! Restart file
-open write unit 31 card name equi.res      ! Restart file
-open write unit 32 file name equi.dcd      ! Coordinates file
+open read  unit 30 card name res/heat.res      ! Restart file
+open write unit 31 card name res/equi.res      ! Restart file
+open write unit 32 file name dcd/equi.dcd      ! Coordinates file
 
-dyna restart leap cpt nstep 1000 timestp 0.0002 -
+dyna restart leap cpt nstep 50000 timestp 0.002 -
   nprint 1000 nsavc 1000 ntrfrq 200 -
   iprfrq 500 inbfrq 10 imgfrq 50 ixtfrq 1000 -
   ihtfrq 0 ieqfrq 0 -
@@ -174,11 +174,11 @@ dyna restart leap cpt nstep 1000 timestp 0.0002 -
   iunrea 30 iunwri 31 iuncrd 32 iunvel -1
 
 
-open unit 1 write card name equi.crd
+open unit 1 write card name dcd/equi.crd
 write coor card unit 1
 close unit 1
 
-open write unit 10 card name equi.pdb
+open write unit 10 card name pdb/equi.pdb
 write coor unit 10 pdb
 
 close unit 30
@@ -194,17 +194,17 @@ set ndcd {NDCD}
 
 if @ndcd .eq. 0 then
   set m @ndcd
-  open read unit 33 card name equi.res        ! Restart file
-  open write unit 34 card name dyna.@ndcd.res ! Restart file
-  open write unit 35 file name dyna.@ndcd.dcd ! Coordinates file
+  open read unit 33 card name res/equi.res        ! Restart file
+  open write unit 34 card name res/dyna.@ndcd.res ! Restart file
+  open write unit 35 file name dcd/dyna.@ndcd.dcd ! Coordinates file
 else
   calc m @ndcd-1
-  open read unit 33 card name dyna.@m.res
-  open write unit 34 card name dyna.@ndcd.res
-  open write unit 35 file name dyna.@ndcd.dcd
+  open read unit 33 card name res/dyna.@m.res
+  open write unit 34 card name res/dyna.@ndcd.res
+  open write unit 35 file name dcd/dyna.@ndcd.dcd
 endif
 
-dyna restart leap res nstep 10000 timestp 0.0002 -
+dyna restart leap res nstep 10000 timestp 0.002 -
   nprint 100 nsavc 10 ntrfrq 200 -
   iprfrq 1000 inbfrq -1 imgfrq 50 ixtfrq 1000 -
   ihtfrq 0 ieqfrq 0 -
@@ -213,11 +213,11 @@ dyna restart leap res nstep 10000 timestp 0.0002 -
    iseed  {iseed} -
   IUNREA 33 IUNWRI 34 IUNCRD 35 IUNVEL -1
   
-open unit 1 write card name dyna.@ndcd.crd
+open unit 1 write card name dcd/dyna.@ndcd.crd
 write coor card unit 1
 close unit 1
 
-open write unit 10 card name dyna.@ndcd.pdb
+open write unit 10 card name pdb/dyna.@ndcd.pdb
 write coor unit 10 pdb
 
 close unit 33
