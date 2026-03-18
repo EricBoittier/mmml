@@ -24,6 +24,7 @@ from mmml.utils.electrostatics import (
 )
 from mmml.cli.misc.train_joint import (
     load_combined_data,
+    precompute_edge_lists,
     prepare_batch_data,
     eval_step,
     JointPhysNetDCMNet,
@@ -140,6 +141,7 @@ def main() -> int:
         subtract_atom_energies=args.subtract_atom_energies,
         verbose=True,
     )
+    valid_data = precompute_edge_lists(valid_data, cutoff=args.cutoff, verbose=True)
     natoms = valid_data["R"].shape[1]
     n_samples_total = len(valid_data["E"])
     n_total = min(args.n_samples, n_samples_total)
