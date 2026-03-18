@@ -106,6 +106,7 @@ def _run_charmm_phase(
     return atoms
 
 
+
 def run_heat(
     atoms: Any,
     args: Any,
@@ -154,3 +155,53 @@ def run_dyna(
     dyna = dyna.format(iseed=iseed, NDCD=ndcd)
     Console().print(Panel("Running dyna", title="[bold cyan]CHARMM dyna[/bold cyan]", border_style="cyan"))
     return _run_charmm_phase(dyna, atoms, args, show_frame=show_frame, phase_step=3)
+
+
+
+"""
+PSF helpers
+- `get_natom` -- get the current total number of atoms from CHARMM
+- `get_nres` -- get the current total number of residues from CHARMM
+- `get_nseg` -- get the current total number of segments from CHARMM
+- `get_ngrp` -- get the current total number of groups from CHARMM
+- `get_iac` -- export a copy of iac (param type codes)
+- `get_amass` -- export a copy of amass (atom masses)
+- `get_charges` -- export a copy of cg (atom charges)
+- `get_ibase` -- export a copy of ibase (last atom of each residue)
+- `get_atype` -- export a copy of atype (atom name array)
+- `get_res` -- export a copy of res (residue name array)
+- `get_resid` -- export a copy of resid (residue identifier array)
+- `get_segid` -- export a copy of segid (segment identifier array)
+- `get_nictot` -- export a copy of nictot (nres for each seg)
+- `get_igpbs` -- export a copy of igpbs (pointer for 1st atom in each group)
+- `get_igptyp` -- export a copy of gptyp (code type of each group)
+"""
+import numpy as np
+
+def get_charge_array() -> np.ndarray:
+    """Get the charge array from the PSF file."""
+    return np.array(pycharmm.psf.get_charges())
+
+def get_atomtype_array() -> np.ndarray:
+    """Get the atomtype array from the PSF file."""
+    return np.array(pycharmm.psf.get_atype())
+
+def get_resid_array() -> np.ndarray:
+    """Get the resid array from the PSF file."""
+    return np.array(pycharmm.psf.get_resid())
+
+def get_segid_array() -> np.ndarray:
+    """Get the segid array from the PSF file."""
+    return np.array(pycharmm.psf.get_segid())
+
+def get_nictot_array() -> np.ndarray:
+    """Get the nictot array from the PSF file."""
+    return np.array(pycharmm.psf.get_nictot())
+
+def get_igpbs_array() -> np.ndarray:
+    """Get the igpbs array from the PSF file."""
+    return np.array(pycharmm.psf.get_igpbs())
+
+def get_igptyp_array() -> np.ndarray:
+    """Get the igptyp array from the PSF file."""
+    return np.array(pycharmm.psf.get_igptyp())
