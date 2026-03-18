@@ -140,3 +140,17 @@ def run_production(
 
     Console().print(Panel("Running production", title="[bold cyan]CHARMM Production[/bold cyan]", border_style="cyan"))
     return _run_charmm_phase(production, atoms, args, show_frame=show_frame, phase_step=3)
+
+def run_dyna(
+    atoms: Any,
+    args: Any,
+    show_frame: Optional[Callable[[Any, int, str], None]] = None,
+    ndcd: int = 1,
+) -> Any:
+    """Run CHARMM production phase."""
+    from mmml.interfaces.pycharmmInterface.pycharmmCommands import dyna
+    import numpy as np
+    iseed = np.random.randint(1, 1000000)
+    dyna = dyna.format(iseed=iseed, NDCD=ndcd)
+    Console().print(Panel("Running dyna", title="[bold cyan]CHARMM dyna[/bold cyan]", border_style="cyan"))
+    return _run_charmm_phase(dyna, atoms, args, show_frame=show_frame, phase_step=3)
