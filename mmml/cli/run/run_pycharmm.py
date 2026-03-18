@@ -23,6 +23,7 @@ from mmml.interfaces.pycharmmInterface.setupBox import setup_box_generic
 from mmml.cli.run.pycharmm_runner import (
     run_equilibration,
     run_heat,
+    run_dyna,
     run_pycharmm_setup_and_minimize,
 )
 
@@ -141,7 +142,9 @@ def run_pycharmm(args: argparse.Namespace):
         atoms = run_pycharmm_setup_and_minimize(atoms, args, show_frame=show_frame)
         atoms = run_heat(atoms, args, show_frame=show_frame)
         atoms = run_equilibration(atoms, args, show_frame=show_frame)
-
+        
+        atoms = run_dyna(atoms, args, show_frame=show_frame, ndcd=1)
+        
     # Sync final positions from CHARMM
     atoms.set_positions(coor.get_positions())
     _organize_outputs()
