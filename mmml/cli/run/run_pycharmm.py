@@ -14,6 +14,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import shutil
 import sys
 from pathlib import Path
 
@@ -72,6 +73,29 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _organize_outputs() -> None:
+    """Move heat/equi outputs into pdb/, dcd/, and res/ subdirectories."""
+    cwd = Path.cwd()
+    pdb_dir = cwd / "pdb"
+    dcd_dir = cwd / "dcd"
+    res_dir = cwd / "res"
+    pdb_dir.mkdir(exist_ok=True)
+    dcd_dir.mkdir(exist_ok=True)
+    res_dir.mkdir(exist_ok=True)
+    for f in ("heat.pdb", "equi.pdb"):
+        src = cwd / f
+        if src.exists():
+            shutil.move(str(src), str(pdb_dir / f))
+    for f in ("heat.dcd", "equi.dcd", "heat.crd", "equi.crd"):
+        src = cwd / f
+        if src.exists():
+            shutil.move(str(src), str(dcd_dir / f))
+    for f in ("heat.res", "equi.res"):
+        src = cwd / f
+        if src.exists():
+            shutil.move(str(src), str(res_dir / f))
+
+
 def _make_braille_show_frame(live, args):
     """Return show_frame callback for braille viewer, or None if disabled."""
     if not getattr(args, "view_braille", False):
@@ -120,6 +144,7 @@ def run_pycharmm(args: argparse.Namespace):
 
     # Sync final positions from CHARMM
     atoms.set_positions(coor.get_positions())
+    _organize_outputs()
     return atoms
 
 
