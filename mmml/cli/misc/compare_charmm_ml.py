@@ -10,6 +10,7 @@ QM reference.
 import argparse
 import sys
 from pathlib import Path
+from typing import Any, Tuple
 
 import numpy as np
 import jax
