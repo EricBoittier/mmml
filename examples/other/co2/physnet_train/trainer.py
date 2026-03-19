@@ -9,6 +9,11 @@ Usage:
     python trainer.py --train ../preclassified_data/energies_forces_dipoles_train.npz \
                       --valid ../preclassified_data/energies_forces_dipoles_valid.npz
     
+    # Multiple train/valid files (concatenated):
+    python trainer.py --train out/splits/train.npz splits_extended/train.npz \
+                      --valid out/splits/valid.npz splits_extended/test.npz \
+                      --natoms 16 --epochs 1000
+    
     # Or with custom settings:
     python trainer.py --train ../preclassified_data/energies_forces_dipoles_train.npz \
                       --valid ../preclassified_data/energies_forces_dipoles_valid.npz \
@@ -19,6 +24,7 @@ Usage:
 
 import sys
 import argparse
+from dataclasses import replace
 from pathlib import Path
 import numpy as np
 from typing import Dict
@@ -29,7 +35,7 @@ sys.path.insert(0, str(repo_root.resolve()))
 
 import jax
 import jax.numpy as jnp
-from mmml.data import load_npz, DataConfig
+from mmml.data import load_npz, load_multiple_npz, DataConfig
 from mmml.physnetjax.physnetjax.models.model import EF
 from mmml.physnetjax.physnetjax.training.training import train_model
 from mmml.physnetjax.physnetjax.directories import BASE_CKPT_DIR
@@ -197,14 +203,16 @@ def main():
     parser.add_argument(
         '--train', '--train-file',
         type=Path,
+        nargs='+',
         required=True,
-        help='Path to training NPZ file'
+        help='Path(s) to training NPZ file(s). Multiple files are concatenated.'
     )
     parser.add_argument(
         '--valid', '--valid-file',
         type=Path,
+        nargs='+',
         required=True,
-        help='Path to validation NPZ file'
+        help='Path(s) to validation NPZ file(s). Multiple files are concatenated.'
     )
     
     # Model hyperparameters
@@ -246,8 +254,9 @@ def main():
                        help='Weight for dipole loss')
     
     # Training options
-    parser.add_argument('--restart', action='store_true',
-                       help='Restart from checkpoint')
+    parser.add_argument('--restart', nargs='?', default=False, const=True,
+                       type=lambda x: str(Path(x).expanduser()) if x else True,
+                       help='Restart from checkpoint. Pass path to resume from specific checkpoint dir (e.g. ~/ckpts/cybz_physnet-uuid).')
     parser.add_argument('--name', type=str, default='co2_physnet',
                        help='Experiment name for checkpointing')
     parser.add_argument('--ckpt-dir', type=Path, default=None,
@@ -315,18 +324,23 @@ def main():
     print("PhysNetJax Training - CO2 Data")
     print("="*70)
     
-    # Validate input files
-    if not args.train.exists():
-        print(f"❌ Error: Training file not found: {args.train}")
-        sys.exit(1)
+    # nargs='+' always gives a list
+    train_paths = list(args.train)
+    valid_paths = list(args.valid)
     
-    if not args.valid.exists():
-        print(f"❌ Error: Validation file not found: {args.valid}")
-        sys.exit(1)
+    # Validate input files
+    for p in train_paths:
+        if not Path(p).exists():
+            print(f"❌ Error: Training file not found: {p}")
+            sys.exit(1)
+    for p in valid_paths:
+        if not Path(p).exists():
+            print(f"❌ Error: Validation file not found: {p}")
+            sys.exit(1)
     
     print(f"\n📁 Data Files:")
-    print(f"  Train: {args.train}")
-    print(f"  Valid: {args.valid}")
+    print(f"  Train: {train_paths}")
+    print(f"  Valid: {valid_paths}")
     
     # Setup checkpoint directory
     if args.ckpt_dir is None:
@@ -378,7 +392,33 @@ def main():
     
     if args.verbose:
         print(f"\nLoading training data...")
-    train_raw = load_npz(args.train, config=dc, validate=True, verbose=args.verbose)
+    # When multiple train files + subtract_atomic_energies (linear_regression/mean),
+    # we must load without AE subtraction first, combine, then compute AE from combined data.
+    if (len(train_paths) > 1 and args.subtract_atomic_energies and
+            args.atomic_energy_method in ('linear_regression', 'mean')):
+        dc_no_ae = replace(dc, subtract_atomic_energies=False)
+        train_raw = load_multiple_npz(train_paths, config=dc_no_ae, combine=True, validate=True, verbose=args.verbose)
+        from mmml.data.preprocessing import compute_atomic_energies, subtract_atomic_energies
+        atomic_energy_refs = compute_atomic_energies(
+            train_raw['E'], train_raw['Z'], train_raw['N'],
+            method=args.atomic_energy_method
+        )
+        train_raw['E'] = subtract_atomic_energies(
+            train_raw['E'], train_raw['Z'], train_raw['N'], atomic_energy_refs
+        )
+        if 'metadata' not in train_raw:
+            train_raw['metadata'] = np.array([{}], dtype=object)
+        meta = train_raw['metadata'][0] if len(train_raw['metadata']) > 0 else {}
+        meta['atomic_energies'] = atomic_energy_refs
+        meta['atomic_energy_method'] = args.atomic_energy_method
+        train_raw['metadata'] = np.array([meta], dtype=object)
+        if args.verbose:
+            print(f"\n  Atomic energies computed from combined training data:")
+            for z, e in sorted(atomic_energy_refs.items()):
+                element_symbol = {6: 'C', 7: 'N', 8: 'O', 1: 'H'}.get(z, f'Z{z}')
+                print(f"    {element_symbol} (Z={z}): {e:.4f} eV")
+    else:
+        train_raw = load_multiple_npz(train_paths, config=dc, combine=True, validate=True, verbose=args.verbose)
     
     # If atomic energies were computed, extract them from training metadata
     # and apply the SAME references to validation data
@@ -412,7 +452,7 @@ def main():
             scale_by_atoms=args.scale_by_atoms,
             esp_mask_vdw=False,
         )
-        valid_raw = load_npz(args.valid, config=dc_valid, validate=True, verbose=args.verbose)
+        valid_raw = load_multiple_npz(valid_paths, config=dc_valid, combine=True, validate=True, verbose=args.verbose)
         
         # Manually apply the training set's atomic energies
         if 'E' in valid_raw and 'Z' in valid_raw and 'N' in valid_raw:
@@ -432,7 +472,7 @@ def main():
             valid_raw['metadata'] = np.array([valid_metadata], dtype=object)
     else:
         # No atomic energy preprocessing, load normally
-        valid_raw = load_npz(args.valid, config=dc, validate=True, verbose=args.verbose)
+        valid_raw = load_multiple_npz(valid_paths, config=dc, combine=True, validate=True, verbose=args.verbose)
     
     # Ensure standard keys
     train_data = ensure_standard_keys(train_raw, verbose=args.verbose)
