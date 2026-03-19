@@ -327,6 +327,9 @@ def main() -> int:
         print("\n--- JAX-MD: skipped (--skip-jaxmd) ---")
         return 0
 
+    # Enable float64 for JAX-MD (avoids NaN from float32 truncation in Nose-Hoover)
+    jax.config.update("jax_enable_x64", True)
+
     try:
         from jax_md import space, quantity, simulate
     except ImportError:
@@ -338,7 +341,8 @@ def main() -> int:
     masses = np.array([atomic_masses[z] for z in Z])
     K_B = 8.617333e-5  # eV/K
     kT = K_B * args.temperature
-    dt = args.timestep * 1e-3  # fs -> ps
+    # dt in fs (jax_md with eV/Å/amu uses fs; jaxmd_dynamics passes timestep_fs directly)
+    dt = args.timestep
 
     if n_replicas > 1:
         # Batched: all replicas in one JIT-compiled simulation (like jaxmd_dynamics, ase_md main_batched)
@@ -355,14 +359,16 @@ def main() -> int:
 
         batch_segments = jnp.repeat(jnp.arange(B, dtype=jnp.int32), n_atoms)
         Z_batched = jnp.tile(jnp.array(Z, dtype=jnp.int32), B)
-        masses_batched = jnp.tile(jnp.array(masses, dtype=jnp.float32), B)
+        masses_batched = jnp.tile(jnp.array(masses, dtype=jnp.float64), B)
         batch_mask = jnp.ones(len(dst_idx), dtype=jnp.float32)
         atom_mask = jnp.ones(B * n_atoms, dtype=jnp.float32)
 
         if R_multi is not None:
-            R0_packed = jnp.array(R_multi.reshape(B * n_atoms, 3), dtype=jnp.float32)
+            R0_packed = jnp.array(R_multi.reshape(B * n_atoms, 3), dtype=jnp.float64)
         else:
-            R0_packed = jnp.tile(R0_initial[None, :, :], (B, 1, 1)).reshape(B * n_atoms, 3)
+            R0_packed = jnp.tile(
+                jnp.asarray(R0_initial, dtype=jnp.float64)[None, :, :], (B, 1, 1)
+            ).reshape(B * n_atoms, 3)
 
         @jax.jit
         def model_apply_batched(positions):
@@ -408,7 +414,7 @@ def main() -> int:
     else:
         # Single replica
         print("\n--- JAX-MD: NVT Nose-Hoover ---")
-        R0 = R0_initial
+        R0 = jnp.asarray(R0_initial, dtype=jnp.float64)
         Z_jnp = jnp.array(Z, dtype=jnp.int32)
         dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(n_atoms)
         dst_idx = jnp.array(dst_idx, dtype=jnp.int32)
@@ -428,12 +434,20 @@ def main() -> int:
             out = model_apply(position)
             return jnp.squeeze(out["energy"])
 
+        # Sanity check: initial energy should be finite
+        E0 = float(energy_fn(R0))
+        if not np.isfinite(E0):
+            print(f"  ERROR: Initial energy is {E0} (non-finite). Check geometry.", file=sys.stderr)
+            return 1
+        print(f"  Initial E={E0:.4f} eV")
+
         _, shift = space.free()
         init_fn, apply_fn = simulate.nvt_nose_hoover(energy_fn, shift, dt, kT)
         apply_fn = jax.jit(apply_fn)
 
+        masses_jnp = jnp.asarray(masses, dtype=jnp.float64)
         key = jax.random.PRNGKey(42)
-        state = init_fn(key, R0, mass=masses)
+        state = init_fn(key, R0, mass=masses_jnp)
 
         positions_jaxmd = [R0]
         for i in range(args.nsteps_jaxmd):
@@ -446,7 +460,7 @@ def main() -> int:
 
         traj_jaxmd = args.output_dir / "physnet_jaxmd.xyz"
         for i, R_frame in enumerate(positions_jaxmd):
-            at = Atoms(numbers=Z, positions=R_frame)
+            at = Atoms(numbers=Z, positions=np.asarray(R_frame))
             write(traj_jaxmd, at, append=(i > 0))
         print(f"  Saved JAX-MD trajectory: {traj_jaxmd}")
 
