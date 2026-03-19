@@ -165,13 +165,13 @@ def main() -> int:
     parser.add_argument(
         "--nsteps-ase",
         type=int,
-        default=1000,
+        default=100,
         help="ASE Langevin steps (default: 100)",
     )
     parser.add_argument(
         "--nsteps-jaxmd",
         type=int,
-        default=1000,
+        default=100,
         help="JAX-MD Nose-Hoover steps (default: 200)",
     )
     parser.add_argument(
@@ -395,7 +395,7 @@ def main() -> int:
             if (i + 1) % args.printfreq == 0:
                 pos_batch = np.array(state.position).reshape(B, n_atoms, 3)
                 positions_jaxmd.append(pos_batch)
-                T_curr = float(quantity.temperature(state.momentum, mass=masses_batched) / K_B)
+                T_curr = float(quantity.temperature(momentum=state.momentum, mass=masses_batched) / K_B)
                 E_total = float(energy_sum_fn(state.position))
                 print(f"  step {i+1:4d}  E_total={E_total:.4f} eV  T={T_curr:.1f} K")
 
@@ -440,7 +440,7 @@ def main() -> int:
             state = apply_fn(state)
             if (i + 1) % args.printfreq == 0:
                 positions_jaxmd.append(np.array(state.position))
-                T_curr = float(quantity.temperature(state.momentum, mass=masses) / K_B)
+                T_curr = float(quantity.temperature(momentum=state.momentum, mass=masses) / K_B)
                 E = float(energy_fn(state.position))
                 print(f"  step {i+1:4d}  E={E:.4f} eV  T={T_curr:.1f} K")
 
