@@ -492,6 +492,16 @@ def validate_fixed_data(
     return overall_ok
 
 
+def _normalize_for_concat(arr: np.ndarray, n_samples: int, key: str) -> np.ndarray:
+    """Ensure array has at least 1 dim for concatenation. Scalar/0-d -> (n_samples,)."""
+    arr = np.asarray(arr)
+    if arr.ndim == 0:
+        return np.full(n_samples, arr.flat[0], dtype=arr.dtype)
+    if arr.ndim == 1 and arr.shape[0] == 1 and key in ('N',):
+        return np.full(n_samples, arr[0], dtype=arr.dtype)
+    return arr
+
+
 def _load_and_merge_efd(efd_files: Union[Path, List[Path]]) -> Dict:
     """Load one or more EFD npz files and concatenate along sample dimension."""
     if isinstance(efd_files, (str, Path)):
@@ -509,14 +519,29 @@ def _load_and_merge_efd(efd_files: Union[Path, List[Path]]) -> Dict:
     if grid_key:
         concat_keys.append(grid_key)
 
+    all_keys = set()
+    for p in parts:
+        all_keys.update(p.keys())
     merged = {}
-    for k in parts[0].keys():
+    for k in all_keys:
         if k == 'Z':
             merged[k] = np.asarray(parts[0][k])
         elif k in concat_keys and all(k in p for p in parts):
-            merged[k] = np.concatenate([np.asarray(p[k]) for p in parts], axis=0)
-        elif k in parts[0]:
-            merged[k] = np.asarray(parts[0][k])
+            # Normalize shapes: pyscf-evaluate may have N as scalar (0-d), fix-and-split has (n,)
+            to_concat = []
+            for p in parts:
+                arr = np.asarray(p[k])
+                n_samples = p['R'].shape[0]  # sample count from R
+                if arr.ndim == 0 or (arr.ndim == 1 and arr.shape[0] != n_samples and k == 'N'):
+                    arr = _normalize_for_concat(arr, n_samples, k)
+                to_concat.append(arr)
+            merged[k] = np.concatenate(to_concat, axis=0)
+        else:
+            # Key in some but not all parts, or not concat-able: use first part that has it
+            for p in parts:
+                if k in p:
+                    merged[k] = np.asarray(p[k])
+                    break
     return merged
 
 
