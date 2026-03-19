@@ -43,6 +43,11 @@ def _load_trajectory_frames(path: Path):
     path = Path(path)
     if not path.exists():
         raise FileNotFoundError(f"Trajectory not found: {path}")
+    if path.is_dir():
+        raise ValueError(
+            f"Expected a trajectory file, got directory: {path}\n"
+            f"Use a .traj or .xyz file, e.g. programmatic/out/physnet_md/physnet_ase.traj"
+        )
 
     if path.suffix.lower() == ".traj":
         from ase.io.trajectory import Trajectory
