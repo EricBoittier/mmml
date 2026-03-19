@@ -252,13 +252,13 @@ def main() -> int:
     atoms.calc = calc
 
     # -------------------------------------------------------------------------
-    # 1. ASE sampling (NVT Langevin)
+    # 1. ASE sampling 
     # -------------------------------------------------------------------------
-    print("=== PhysNet MD sampling (ASE + JAX-MD) ===")
+    print("=== PhysNet MD sampling  ===")
 
     if n_replicas > 1:
         # Parallel: run replicas in separate processes (like joint_trainer)
-        print(f"\n--- ASE: NVT Langevin ({n_replicas} replicas in parallel) ---")
+        print(f"\n--- ASE: ({n_replicas} replicas in parallel) ---")
         if R_multi is None:
             R_multi = np.tile(R[np.newaxis, :, :], (n_replicas, 1, 1))
 
