@@ -159,25 +159,25 @@ def main() -> int:
     parser.add_argument(
         "--timestep",
         type=float,
-        default=0.5,
+        default=0.1,
         help="Timestep in fs (default: 0.5)",
     )
     parser.add_argument(
         "--nsteps-ase",
         type=int,
-        default=100,
+        default=1000,
         help="ASE Langevin steps (default: 100)",
     )
     parser.add_argument(
         "--nsteps-jaxmd",
         type=int,
-        default=200,
+        default=1000,
         help="JAX-MD Nose-Hoover steps (default: 200)",
     )
     parser.add_argument(
         "--printfreq",
         type=int,
-        default=25,
+        default=1,
         help="Print/save interval (default: 25)",
     )
     parser.add_argument(
@@ -234,6 +234,7 @@ def main() -> int:
     from ase import Atoms, units
     from ase.md.langevin import Langevin
     from ase.md.velocitydistribution import MaxwellBoltzmannDistribution, Stationary, ZeroRotation
+    from ase.md.verlet import VelocityVerlet
     from ase.io import write
     from ase.io.trajectory import Trajectory
 
@@ -293,12 +294,14 @@ def main() -> int:
         Stationary(atoms)
         ZeroRotation(atoms)
 
-        dyn = Langevin(
-            atoms,
-            timestep=args.timestep * units.fs,
-            temperature_K=args.temperature,
-            friction=0.01,
-        )
+        # dyn = Langevin(
+        #     atoms,
+        #     timestep=args.timestep * units.fs,
+        #     temperature_K=args.temperature,
+        #     friction=0.01,
+        # )
+
+        dyn = VelocityVerlet(atoms, timestep=args.timestep * units.fs)
         traj_ase = args.output_dir / "physnet_ase.traj"
         traj_writer = Trajectory(traj_ase, "w", atoms)
         traj_writer.write()
