@@ -39,7 +39,7 @@ import argparse
 from pathlib import Path
 import numpy as np
 from scipy.spatial.distance import cdist
-from typing import Dict, Tuple, Optional
+from typing import Dict, List, Optional, Tuple, Union
 
 # Add parent directory to path
 repo_root = Path(__file__).parent.parent.parent
@@ -492,8 +492,36 @@ def validate_fixed_data(
     return overall_ok
 
 
+def _load_and_merge_efd(efd_files: Union[Path, List[Path]]) -> Dict:
+    """Load one or more EFD npz files and concatenate along sample dimension."""
+    if isinstance(efd_files, (str, Path)):
+        efd_files = [Path(efd_files)]
+    else:
+        efd_files = [Path(f) for f in efd_files]
+
+    if len(efd_files) == 1:
+        return dict(np.load(efd_files[0], allow_pickle=True))
+
+    # Concatenate multiple files
+    parts = [dict(np.load(f, allow_pickle=True)) for f in efd_files]
+    concat_keys = ['R', 'E', 'F', 'N', 'Dxyz', 'esp']
+    grid_key = 'esp_grid' if 'esp_grid' in parts[0] else ('vdw_surface' if 'vdw_surface' in parts[0] else None)
+    if grid_key:
+        concat_keys.append(grid_key)
+
+    merged = {}
+    for k in parts[0].keys():
+        if k == 'Z':
+            merged[k] = np.asarray(parts[0][k])
+        elif k in concat_keys and all(k in p for p in parts):
+            merged[k] = np.concatenate([np.asarray(p[k]) for p in parts], axis=0)
+        elif k in parts[0]:
+            merged[k] = np.asarray(parts[0][k])
+    return merged
+
+
 def fix_and_split_data(
-    efd_file: Path,
+    efd_file: Union[Path, List[Path]],
     grid_file: Optional[Path] = None,
     output_dir: Path = None,
     train_frac: float = 0.8,
@@ -561,7 +589,10 @@ def fix_and_split_data(
         print("Molecular Data Unit Conversion and Splitting")
         print("="*70)
         print(f"\nInput files:")
-        print(f"  EFD:  {efd_file}")
+        if isinstance(efd_file, (list, tuple)):
+            print(f"  EFD:  {[str(p) for p in efd_file]}")
+        else:
+            print(f"  EFD:  {efd_file}")
         if grid_file:
             print(f"  Grid: {grid_file}")
         else:
@@ -580,7 +611,7 @@ def fix_and_split_data(
         print(f"{'#'*70}")
     
     try:
-        efd_data = dict(np.load(efd_file, allow_pickle=True))
+        efd_data = _load_and_merge_efd(efd_file)
         grid_data = None
         has_grid = False
 
@@ -1267,14 +1298,19 @@ Examples:
   # Skip validation for speed
   %(prog)s --efd data.npz --output-dir ./training_data \\
     --skip-validation
+
+  # Concatenate multiple NPZ files (e.g. extend training set with MD samples)
+  %(prog)s --efd train.npz md_evaluated.npz --output-dir ./splits_extended
 """
     )
     
     parser.add_argument(
         '--efd', '--energies-forces-dipoles',
         type=Path,
+        nargs='+',
         required=True,
-        help='Path to energies_forces_dipoles.npz file'
+        metavar='FILE',
+        help='Path(s) to energies_forces_dipoles.npz file(s). Multiple files are concatenated.'
     )
     
     parser.add_argument(
@@ -1385,9 +1421,11 @@ Examples:
     args = parser.parse_args()
     
     # Validate inputs
-    if not args.efd.exists():
-        print(f"❌ Error: EFD file not found: {args.efd}")
-        sys.exit(1)
+    efd_files = args.efd if isinstance(args.efd, list) else [args.efd]
+    for f in efd_files:
+        if not Path(f).exists():
+            print(f"❌ Error: EFD file not found: {f}")
+            sys.exit(1)
     
     if args.grid is not None and not args.grid.exists():
         print(f"❌ Error: Grid file not found: {args.grid}")
@@ -1401,7 +1439,7 @@ Examples:
     
     # Run the conversion
     success = fix_and_split_data(
-        efd_file=args.efd,
+        efd_file=efd_files if len(efd_files) > 1 else efd_files[0],
         grid_file=args.grid,
         output_dir=args.output_dir,
         train_frac=args.train_frac,
