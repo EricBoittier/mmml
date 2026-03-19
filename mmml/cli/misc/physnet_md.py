@@ -240,6 +240,7 @@ def main() -> int:
 
     atoms = Atoms(numbers=Z, positions=R)
     atoms.center(vacuum=5.0)
+    R0_initial = np.array(atoms.get_positions(), dtype=np.float32)  # same start for ASE and JAX-MD
 
     calc = get_ase_calc(
         params,
@@ -361,8 +362,7 @@ def main() -> int:
         if R_multi is not None:
             R0_packed = jnp.array(R_multi.reshape(B * n_atoms, 3), dtype=jnp.float32)
         else:
-            R0_single = np.array(atoms.get_positions(), dtype=np.float32)
-            R0_packed = jnp.tile(R0_single[None, :, :], (B, 1, 1)).reshape(B * n_atoms, 3)
+            R0_packed = jnp.tile(R0_initial[None, :, :], (B, 1, 1)).reshape(B * n_atoms, 3)
 
         @jax.jit
         def model_apply_batched(positions):
@@ -408,7 +408,7 @@ def main() -> int:
     else:
         # Single replica
         print("\n--- JAX-MD: NVT Nose-Hoover ---")
-        R0 = np.array(atoms.get_positions())
+        R0 = R0_initial
         Z_jnp = jnp.array(Z, dtype=jnp.int32)
         dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(n_atoms)
         dst_idx = jnp.array(dst_idx, dtype=jnp.int32)
