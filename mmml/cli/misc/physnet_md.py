@@ -416,7 +416,7 @@ def main() -> int:
             return model.apply(
                 params,
                 atomic_numbers=Z_jnp,
-                positions=positions[None, :, :],
+                positions=positions,
                 dst_idx=dst_idx,
                 src_idx=src_idx,
             )
