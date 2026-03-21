@@ -156,7 +156,7 @@ class MessagePassingModel(nn.Module):
         atomic_mono = atomic_mono.squeeze(axis=1)
         atomic_mono += element_bias[atomic_numbers][:, None]
 
-        x = e3x.nn.hard_tanh(x) * 0.175
+        x = e3x.nn.hard_tanh(x) * 0.075
         
         # Extract dipole components: shape (n_atoms, 3, n_dcm)
         # Then transpose to (n_atoms, n_dcm, 3) for consistency

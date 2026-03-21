@@ -156,7 +156,7 @@ chem = [
 data = [
     "polars",
     "pyarrow",
-    "fastparquet",
+    "fastparquet<2026",  # 2026.3.0 lacks Linux x86_64 wheels
 ]
 
 # Jupyter notebook support

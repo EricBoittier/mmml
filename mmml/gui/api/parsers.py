@@ -385,7 +385,8 @@ class MolecularFileParser:
         N = None
         raw_N = None
         if 'N' in data:
-            raw_N = np.asarray(data['N'][index])
+            arr_N = data['N']
+            raw_N = np.asarray(arr_N[index] if arr_N.ndim > 0 else arr_N)
             if raw_N.ndim == 0:
                 N = int(raw_N)
             elif raw_N.ndim == 1 and raw_N.size > 0:
