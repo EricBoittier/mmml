@@ -14,7 +14,7 @@ Each structure group contains datasets such as:
 
 import hashlib
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Sequence, Tuple, Union
 
 import h5py
 import jax
@@ -35,11 +35,12 @@ def _cache_key(
     dipole_key: str,
     max_structures: Optional[int],
     charge_filter: Optional[float] = None,
+    spin_key: Optional[str] = None,
 ) -> str:
     """Build a deterministic hash string for cache directory naming."""
     parts = (
         f"{filepath.resolve()}|{natoms}|{energy_key}|{force_key}"
-        f"|{dipole_key}|{max_structures}|{charge_filter}"
+        f"|{dipole_key}|{max_structures}|{charge_filter}|{spin_key}"
     )
     return hashlib.sha256(parts.encode()).hexdigest()[:16]
 
@@ -52,65 +53,34 @@ def _get_cache_dir(filepath: Path, cache_dir: Optional[Path], **key_kwargs) -> P
     return cache_dir / f"{filepath.stem}_{h}"
 
 
-def load_h5(
-    filepath: str | Path,
+def _concatenate_data_dicts(
+    data_list: Sequence[Dict[str, np.ndarray]],
+) -> Dict[str, np.ndarray]:
+    """Concatenate multiple load_h5 result dicts along axis 0."""
+    if not data_list:
+        raise ValueError("Cannot concatenate empty list of data dicts")
+    # Use only keys present in all dicts (D may be absent in some files)
+    keys = [k for k in data_list[0].keys() if all(k in d for d in data_list)]
+    out = {}
+    for k in keys:
+        out[k] = np.concatenate([d[k] for d in data_list], axis=0)
+    return out
+
+
+def _load_single_h5(
+    filepath: Path,
     natoms: int,
     energy_key: str = "formation_energy",
     force_key: str = "total_forces",
     dipole_key: str = "dipole",
+    spin_key: Optional[str] = None,
     max_structures: Optional[int] = None,
     charge_filter: Optional[float] = None,
     cache: bool = True,
-    cache_dir: Optional[str | Path] = None,
+    cache_dir: Optional[Path] = None,
     verbose: bool = False,
 ) -> Dict[str, np.ndarray]:
-    """
-    Load molecular data from an HDF5 file into PhysNetJAX-compatible arrays.
-
-    On the first call the HDF5 file is read structure-by-structure and the
-    processed arrays are saved to an orbax checkpoint.  Subsequent calls with
-    the same parameters load directly from the cache, which is much faster.
-
-    Parameters
-    ----------
-    filepath : str or Path
-        Path to the HDF5 file.
-    natoms : int
-        Maximum number of atoms per structure. Arrays are zero-padded to this size.
-    energy_key : str, optional
-        HDF5 dataset name to use for energies, by default 'formation_energy'.
-        Other options: 'total_energy', 'kinetic_energy', etc.
-    force_key : str, optional
-        HDF5 dataset name to use for forces, by default 'total_forces'.
-        Other options: 'hellmann_feynman_forces', 'ionic_forces', etc.
-    dipole_key : str, optional
-        HDF5 dataset name to use for dipoles, by default 'dipole'.
-    max_structures : int or None, optional
-        Maximum number of structures to load. None loads all structures.
-    charge_filter : float or None, optional
-        If set, only include structures whose total charge equals this value.
-        For example, ``charge_filter=0.0`` keeps only neutral molecules.
-        Default None (no filtering).
-    cache : bool, optional
-        Whether to cache the processed arrays via orbax, by default True.
-    cache_dir : str or Path or None, optional
-        Directory to store the orbax cache.  Defaults to ``<h5_parent>/.h5_cache/``.
-    verbose : bool, optional
-        Print progress information during loading.
-
-    Returns
-    -------
-    dict
-        Dictionary with keys:
-        - 'R': positions, shape (n_samples, natoms, 3)
-        - 'Z': atomic numbers, shape (n_samples, natoms)
-        - 'F': forces, shape (n_samples, natoms, 3)
-        - 'E': energies, shape (n_samples, 1)
-        - 'N': number of atoms per sample, shape (n_samples, 1)
-        - 'D': dipole vectors, shape (n_samples, 3) (if available)
-        - 'Q': total charge, shape (n_samples, 1) (if available)
-    """
-    filepath = Path(filepath)
+    """Load a single HDF5 file. Internal helper for load_h5."""
     if not filepath.exists():
         raise FileNotFoundError(f"HDF5 file not found: {filepath}")
 
@@ -120,20 +90,26 @@ def load_h5(
     if cache:
         cache_path = _get_cache_dir(
             filepath,
-            Path(cache_dir) if cache_dir is not None else None,
+            cache_dir,
             natoms=natoms,
             energy_key=energy_key,
             force_key=force_key,
             dipole_key=dipole_key,
             max_structures=max_structures,
             charge_filter=charge_filter,
+            spin_key=spin_key,
         )
         if cache_path.exists():
             if verbose:
                 print(f"Loading from orbax cache: {cache_path}")
             data = _dataset_checkpointer.restore(cache_path)
-            # orbax may restore as jax arrays; convert back to numpy
             data = {k: np.asarray(v) for k, v in data.items()}
+            # Ensure Q and S for spooky (older caches may lack them)
+            n_samples = len(data["R"])
+            if "Q" not in data:
+                data["Q"] = np.zeros((n_samples, 1), dtype=np.float64)
+            if "S" not in data:
+                data["S"] = np.ones((n_samples, 1), dtype=np.float64)
             if verbose:
                 _print_data_summary(data, filepath.name)
             return data
@@ -148,13 +124,11 @@ def load_h5(
     all_N = []
     all_D = []
     all_Q = []
+    all_S = []
     has_dipoles = None
-    has_charge = None
 
     with h5py.File(filepath, "r") as f:
-        # Collect molecule group names (sorted for deterministic ordering)
         mol_keys = sorted([k for k in f.keys() if k.startswith("mol_")])
-
         if max_structures is not None:
             mol_keys = mol_keys[:max_structures]
 
@@ -162,7 +136,6 @@ def load_h5(
             print(f"Loading {len(mol_keys)} structures from {filepath.name}")
             if charge_filter is not None:
                 print(f"Filtering by charge == {charge_filter}")
-            # Print available datasets from first molecule
             if mol_keys:
                 print(f"Available datasets in '{mol_keys[0]}':")
                 for ds_name in sorted(f[mol_keys[0]].keys()):
@@ -174,7 +147,6 @@ def load_h5(
         for i, mol_name in enumerate(mol_keys):
             grp = f[mol_name]
 
-            # Read atomic numbers and determine real atom count
             atomic_numbers = grp["atomic_numbers"][()]
             n_atoms = len(atomic_numbers)
 
@@ -186,16 +158,16 @@ def load_h5(
                     )
                 continue
 
-            # Positions: (n_atoms, 3) -> zero-pad to (natoms, 3)
+            # Positions
             positions = grp["positions"][()]
             R_padded = np.zeros((natoms, 3), dtype=np.float64)
             R_padded[:n_atoms] = positions
 
-            # Atomic numbers: (n_atoms,) -> zero-pad to (natoms,)
+            # Atomic numbers
             Z_padded = np.zeros(natoms, dtype=np.int32)
             Z_padded[:n_atoms] = atomic_numbers
 
-            # Forces: (n_atoms, 3) -> zero-pad to (natoms, 3)
+            # Forces
             if force_key in grp:
                 forces = grp[force_key][()]
                 F_padded = np.zeros((natoms, 3), dtype=np.float64)
@@ -203,7 +175,7 @@ def load_h5(
             else:
                 F_padded = np.zeros((natoms, 3), dtype=np.float64)
 
-            # Energy: scalar -> (1,)
+            # Energy
             if energy_key in grp:
                 energy = float(grp[energy_key][()])
             else:
@@ -212,34 +184,31 @@ def load_h5(
                     f"Available keys: {list(grp.keys())}"
                 )
 
-            # Dipole: (3,) -- optional
+            # Dipole (optional)
             if has_dipoles is None:
                 has_dipoles = dipole_key in grp
             if has_dipoles and dipole_key in grp:
                 dipole = grp[dipole_key][()]
                 all_D.append(dipole)
 
-            # Total charge: scalar -- optional
-            if has_charge is None:
-                has_charge = "charge" in grp
-            charge = None
-            if has_charge and "charge" in grp:
+            # Total charge (optional, default 0 for spooky)
+            charge = 0.0
+            if "charge" in grp:
                 charge = float(grp["charge"][()])
+
+            # Spin/multiplicity (optional, default 1 singlet for spooky)
+            spin = 1.0
+            if spin_key is not None and spin_key in grp:
+                spin = float(grp[spin_key][()])
 
             # Filter by charge if requested
             if charge_filter is not None:
-                if charge is None:
-                    raise ValueError(
-                        f"charge_filter={charge_filter} requested but "
-                        f"'{mol_name}' has no 'charge' dataset."
-                    )
                 if abs(charge - charge_filter) > 1e-6:
                     n_charge_filtered += 1
                     continue
 
-            if charge is not None:
-                all_Q.append(charge)
-
+            all_Q.append(charge)
+            all_S.append(spin)
             all_R.append(R_padded)
             all_Z.append(Z_padded)
             all_F.append(F_padded)
@@ -252,7 +221,9 @@ def load_h5(
         if verbose and n_skipped > 0:
             print(f"  Skipped {n_skipped} structures with > {natoms} atoms")
         if verbose and n_charge_filtered > 0:
-            print(f"  Filtered out {n_charge_filtered} structures with charge != {charge_filter}")
+            print(
+                f"  Filtered out {n_charge_filtered} structures with charge != {charge_filter}"
+            )
 
     n_samples = len(all_R)
     if n_samples == 0:
@@ -262,18 +233,17 @@ def load_h5(
         )
 
     data = {
-        "R": np.array(all_R, dtype=np.float64),                 # (n_samples, natoms, 3)
-        "Z": np.array(all_Z, dtype=np.int32),                    # (n_samples, natoms)
-        "F": np.array(all_F, dtype=np.float64),                  # (n_samples, natoms, 3)
-        "E": np.array(all_E, dtype=np.float64).reshape(-1, 1),   # (n_samples, 1)
-        "N": np.array(all_N, dtype=np.int32).reshape(-1, 1),     # (n_samples, 1)
+        "R": np.array(all_R, dtype=np.float64),
+        "Z": np.array(all_Z, dtype=np.int32),
+        "F": np.array(all_F, dtype=np.float64),
+        "E": np.array(all_E, dtype=np.float64).reshape(-1, 1),
+        "N": np.array(all_N, dtype=np.int32).reshape(-1, 1),
+        "Q": np.array(all_Q, dtype=np.float64).reshape(-1, 1),
+        "S": np.array(all_S, dtype=np.float64).reshape(-1, 1),
     }
 
     if has_dipoles and all_D:
-        data["D"] = np.array(all_D, dtype=np.float64)  # (n_samples, 3)
-
-    if has_charge and all_Q:
-        data["Q"] = np.array(all_Q, dtype=np.float64).reshape(-1, 1)  # (n_samples, 1)
+        data["D"] = np.array(all_D, dtype=np.float64)
 
     # ------------------------------------------------------------------
     # Save to orbax cache
@@ -281,17 +251,19 @@ def load_h5(
     if cache:
         cache_path = _get_cache_dir(
             filepath,
-            Path(cache_dir) if cache_dir is not None else None,
+            cache_dir,
             natoms=natoms,
             energy_key=energy_key,
             force_key=force_key,
             dipole_key=dipole_key,
             max_structures=max_structures,
             charge_filter=charge_filter,
+            spin_key=spin_key,
         )
         if verbose:
             print(f"Saving orbax cache to: {cache_path}")
         from flax.training import orbax_utils
+
         save_args = orbax_utils.save_args_from_target(data)
         _dataset_checkpointer.save(cache_path, data, save_args=save_args)
         if verbose:
@@ -301,6 +273,105 @@ def load_h5(
         _print_data_summary(data, filepath.name)
 
     return data
+
+
+def load_h5(
+    filepath: Union[str, Path, Sequence[Union[str, Path]]],
+    natoms: int,
+    energy_key: str = "formation_energy",
+    force_key: str = "total_forces",
+    dipole_key: str = "dipole",
+    spin_key: Optional[str] = None,
+    max_structures: Optional[int] = None,
+    charge_filter: Optional[float] = None,
+    cache: bool = True,
+    cache_dir: Optional[Union[str, Path]] = None,
+    verbose: bool = False,
+) -> Dict[str, np.ndarray]:
+    """
+    Load molecular data from one or more HDF5 files into PhysNetJAX-compatible arrays.
+
+    On the first call each HDF5 file is read structure-by-structure and the
+    processed arrays are saved to per-file orbax caches.  Subsequent calls load
+    from cache. When multiple files are given, results are concatenated.
+
+    Parameters
+    ----------
+    filepath : str, Path, or sequence of paths
+        Path(s) to HDF5 file(s). Pass a list for multi-file loading.
+    natoms : int
+        Maximum number of atoms per structure. Arrays are zero-padded to this size.
+    energy_key : str, optional
+        HDF5 dataset name for energies, by default 'formation_energy'.
+    force_key : str, optional
+        HDF5 dataset name for forces, by default 'total_forces'.
+    dipole_key : str, optional
+        HDF5 dataset name for dipoles, by default 'dipole'.
+    spin_key : str or None, optional
+        HDF5 dataset name for spin multiplicity (2S+1). If None or absent, use 1 (singlet).
+    max_structures : int or None, optional
+        Maximum number of structures to load per file. None loads all.
+    charge_filter : float or None, optional
+        If set, only include structures whose total charge equals this value.
+    cache : bool, optional
+        Whether to cache via orbax, by default True.
+    cache_dir : str or Path or None, optional
+        Directory for orbax cache. Defaults to ``<h5_parent>/.h5_cache/``.
+    verbose : bool, optional
+        Print progress information during loading.
+
+    Returns
+    -------
+    dict
+        Dictionary with keys R, Z, F, E, N, Q, S, and optionally D.
+        - 'Q': total charge, always present (default 0 if missing in H5).
+        - 'S': spin multiplicity, always present (default 1 if spin_key None/absent).
+    """
+    if isinstance(filepath, (str, Path)):
+        paths = [Path(filepath)]
+    else:
+        paths = [Path(p) for p in filepath]
+
+    cache_dir_resolved = Path(cache_dir) if cache_dir is not None else None
+
+    if len(paths) == 1:
+        return _load_single_h5(
+            paths[0],
+            natoms=natoms,
+            energy_key=energy_key,
+            force_key=force_key,
+            dipole_key=dipole_key,
+            spin_key=spin_key,
+            max_structures=max_structures,
+            charge_filter=charge_filter,
+            cache=cache,
+            cache_dir=cache_dir_resolved,
+            verbose=verbose,
+        )
+
+    # Multi-file: load each, then concatenate
+    all_data = []
+    for p in paths:
+        d = _load_single_h5(
+            p,
+            natoms=natoms,
+            energy_key=energy_key,
+            force_key=force_key,
+            dipole_key=dipole_key,
+            spin_key=spin_key,
+            max_structures=max_structures,
+            charge_filter=charge_filter,
+            cache=cache,
+            cache_dir=cache_dir_resolved,
+            verbose=verbose,
+        )
+        all_data.append(d)
+
+    result = _concatenate_data_dicts(all_data)
+    if verbose:
+        total = len(result["R"])
+        print(f"\nConcatenated {len(paths)} files: {total} total structures")
+    return result
 
 
 def _print_data_summary(data: Dict[str, np.ndarray], name: str) -> None:
@@ -316,71 +387,74 @@ def _print_data_summary(data: Dict[str, np.ndarray], name: str) -> None:
     if "Q" in data:
         unique_q = np.unique(data["Q"])
         print(f"Charges present: {unique_q.tolist()}")
+    if "S" in data:
+        unique_s = np.unique(data["S"])
+        print(f"Spins present: {unique_s.tolist()}")
 
 
 def prepare_h5_datasets(
     key,
-    filepath: str | Path,
+    filepath: Union[str, Path, Sequence[Union[str, Path]]],
     train_size: int,
     valid_size: int,
     natoms: Optional[int] = None,
     energy_key: str = "formation_energy",
     force_key: str = "total_forces",
     dipole_key: str = "dipole",
+    spin_key: Optional[str] = None,
     max_structures: Optional[int] = None,
     charge_filter: Optional[float] = None,
     cache: bool = True,
-    cache_dir: Optional[str | Path] = None,
+    cache_dir: Optional[Union[str, Path]] = None,
     verbose: bool = False,
 ) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray], int]:
     """
-    Load an HDF5 file and split into train/validation dictionaries.
+    Load one or more HDF5 files and split into train/validation dictionaries.
 
     This is the main entry point for using HDF5 data with PhysNetJAX training.
-    It produces train_data and valid_data dicts that can be passed directly
-    to ``train_model()``.
+    It produces train_data and valid_data dicts with keys R, Z, F, E, N, Q, S
+    (and optionally D) suitable for spooky model training.
 
     Parameters
     ----------
     key : jax.random.PRNGKey
         Random key for shuffling and splitting.
-    filepath : str or Path
-        Path to the HDF5 file.
+    filepath : str, Path, or sequence of paths
+        Path(s) to HDF5 file(s). Pass a list for multi-file loading.
     train_size : int
         Number of training samples.
     valid_size : int
         Number of validation samples.
     natoms : int or None, optional
         Maximum number of atoms per structure (padding size).
-        If None, automatically determined from the largest molecule in the file.
+        If None, auto-detected as max across all files.
     energy_key : str, optional
         HDF5 dataset name for energies, by default 'formation_energy'.
     force_key : str, optional
         HDF5 dataset name for forces, by default 'total_forces'.
     dipole_key : str, optional
         HDF5 dataset name for dipoles, by default 'dipole'.
+    spin_key : str or None, optional
+        HDF5 dataset name for spin multiplicity. If None or absent, use 1 (singlet).
     max_structures : int or None, optional
-        Maximum number of structures to load from the file.
+        Maximum number of structures to load per file.
     charge_filter : float or None, optional
         If set, only include structures whose total charge equals this value.
-        For example, ``charge_filter=0.0`` keeps only neutral molecules.
-        Default None (no filtering).
     cache : bool, optional
         Whether to cache the processed arrays via orbax, by default True.
     cache_dir : str or Path or None, optional
-        Directory to store the orbax cache.  Defaults to ``<h5_parent>/.h5_cache/``.
+        Directory for orbax cache.  Defaults to ``<h5_parent>/.h5_cache/``.
     verbose : bool, optional
         Print progress and shape information.
 
     Returns
     -------
     train_data : dict
-        Training data dictionary with keys R, Z, F, E, N, (D), (Q).
+        Training data with keys R, Z, F, E, N, Q, S, (D).
     valid_data : dict
-        Validation data dictionary with keys R, Z, F, E, N, (D), (Q).
+        Validation data with keys R, Z, F, E, N, Q, S, (D).
     natoms : int
-        The padding size used (= max atoms in the dataset when auto-detected).
-        Use this value for ``EF(natoms=...)`` and ``train_model(num_atoms=...)``.
+        The padding size used. Use for ``EF(natoms=...)`` and ``train_model(num_atoms=...)``.
 
     Examples
     --------
@@ -408,6 +482,7 @@ def prepare_h5_datasets(
         energy_key=energy_key,
         force_key=force_key,
         dipole_key=dipole_key,
+        spin_key=spin_key,
         max_structures=max_structures,
         charge_filter=charge_filter,
         cache=cache,
@@ -443,41 +518,48 @@ def prepare_h5_datasets(
 
 
 def _detect_natoms(
-    filepath: str | Path,
+    filepath: Union[str, Path, Sequence[Union[str, Path]]],
     max_structures: Optional[int] = None,
     verbose: bool = False,
 ) -> int:
     """
-    Scan an HDF5 file to find the maximum number of atoms across all structures.
+    Scan HDF5 file(s) to find the maximum number of atoms across all structures.
 
     Parameters
     ----------
-    filepath : str or Path
-        Path to the HDF5 file.
+    filepath : str, Path, or sequence of paths
+        Path(s) to HDF5 file(s). For multiple files, returns max across all.
     max_structures : int or None
-        If set, only scan the first N structures.
+        If set, only scan the first N structures per file.
     verbose : bool
         Print detection info.
 
     Returns
     -------
     int
-        Maximum atom count found in the file.
+        Maximum atom count found across the file(s).
     """
-    filepath = Path(filepath)
+    if isinstance(filepath, (str, Path)):
+        paths = [Path(filepath)]
+    else:
+        paths = [Path(p) for p in filepath]
+
     max_n = 0
-    with h5py.File(filepath, "r") as f:
-        mol_keys = sorted([k for k in f.keys() if k.startswith("mol_")])
-        if max_structures is not None:
-            mol_keys = mol_keys[:max_structures]
-        for mol_name in mol_keys:
-            n = len(f[mol_name]["atomic_numbers"][()])
-            if n > max_n:
-                max_n = n
+    for p in paths:
+        with h5py.File(p, "r") as f:
+            mol_keys = sorted([k for k in f.keys() if k.startswith("mol_")])
+            if max_structures is not None:
+                mol_keys = mol_keys[:max_structures]
+            for mol_name in mol_keys:
+                n = len(f[mol_name]["atomic_numbers"][()])
+                if n > max_n:
+                    max_n = n
+
     if max_n == 0:
-        raise ValueError(f"No molecule groups found in {filepath}")
+        raise ValueError(f"No molecule groups found in {paths}")
     if verbose:
-        print(f"Auto-detected natoms={max_n} from {filepath.name}")
+        names = ", ".join(p.name for p in paths)
+        print(f"Auto-detected natoms={max_n} from {names}")
     return max_n
 
 
@@ -537,6 +619,9 @@ if __name__ == "__main__":
     if "Q" in data:
         unique_q = np.unique(data["Q"])
         print(f"  Charges present: {unique_q.tolist()}")
+    if "S" in data:
+        unique_s = np.unique(data["S"])
+        print(f"  Spins present: {unique_s.tolist()}")
 
     # Check that padding is correct (Z should be 0 beyond N atoms)
     sample_idx = 0
