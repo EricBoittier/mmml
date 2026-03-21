@@ -638,7 +638,7 @@ class MolecularFileParser:
                 mask = frame_Z > 0
                 n_atoms_i = None
                 if N is not None:
-                    frame_N = np.asarray(N[i])
+                    frame_N = np.asarray(N[i] if N.ndim > 0 else N)
                     if frame_N.ndim == 0:
                         n_atoms_i = int(frame_N)
                     elif frame_N.ndim >= 1 and frame_N.size > 0:
@@ -951,7 +951,8 @@ class MolecularFileParser:
                 Z = np.asarray(data['Z'][fi] if len(data['Z'].shape) > 1 else data['Z'], dtype=np.int64)
                 N = None
                 if 'N' in data:
-                    raw_N = np.asarray(data['N'][fi])
+                    arr_N = data['N']
+                    raw_N = np.asarray(arr_N[fi] if arr_N.ndim > 0 else arr_N)
                     if raw_N.ndim == 0:
                         N = int(raw_N)
                     elif raw_N.ndim >= 1 and raw_N.size > 0:
@@ -970,11 +971,18 @@ class MolecularFileParser:
 
         # Validate selected atoms against per-frame valid counts (if N provided).
         if 'N' in data:
-            N_sel = np.asarray(data['N'][frame_indices])
-            if N_sel.ndim == 2:
-                N_sel = N_sel[:, min(rep_idx, N_sel.shape[1] - 1)]
-            elif N_sel.ndim > 2:
-                N_sel = np.asarray([np.asarray(data['N'][fi]).reshape(-1)[min(rep_idx, np.asarray(data['N'][fi]).size - 1)] for fi in frame_indices])
+            arr_N = data['N']
+            if arr_N.ndim == 0:
+                N_sel = np.full(len(frame_indices), int(arr_N))
+            else:
+                N_sel = np.asarray(arr_N[frame_indices])
+                if N_sel.ndim == 2:
+                    N_sel = N_sel[:, min(rep_idx, N_sel.shape[1] - 1)]
+                elif N_sel.ndim > 2:
+                    N_sel = np.asarray([
+                        np.asarray(arr_N[fi]).reshape(-1)[min(rep_idx, np.asarray(arr_N[fi]).size - 1)]
+                        for fi in frame_indices
+                    ])
             n_valid = N_sel.astype(np.int64).reshape(-1)
             if np.any(np.max(atoms) >= n_valid):
                 raise ValueError("atom index out of bounds for one or more frames")

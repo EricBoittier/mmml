@@ -369,6 +369,69 @@ def main() -> int:
         plt.close()
         print(f"  Saved: {args.out_dir / 'charmm_ml_comparison.png'}")
 
+        # plot slices of the ESP for each model and the reference
+        fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+        ax = axes[0, 0]
+        ax.scatter(esp_true_valid, esp_physnet_valid, alpha=0.3, s=5, label="PhysNet", color="green")
+        ax.scatter(esp_true_valid, esp_dcmnet_valid, alpha=0.3, s=5, label="DCMNet", color="purple")
+        ax.scatter(esp_true_valid, esp_charmm_valid, alpha=0.3, s=5, label="CHARMM", color="orange")
+        lims = [
+            min(esp_true_valid.min(), esp_physnet_valid.min(), esp_dcmnet_valid.min(), esp_charmm_valid.min()),
+            max(esp_true_valid.max(), esp_physnet_valid.max(), esp_dcmnet_valid.max(), esp_charmm_valid.max()),
+        ]
+        ax.plot(lims, lims, "r--", alpha=0.5, label="Perfect")
+        ax.set_xlabel("True ESP (Hartree/e)")
+        ax.set_ylabel("Predicted ESP (Hartree/e)")
+        ax.set_title("ESP: True vs PhysNet / DCMNet / CHARMM")
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(args.out_dir / "charmm_ml_comparison_slices.png", dpi=150, bbox_inches="tight")
+        plt.close()
+        print(f"  Saved: {args.out_dir / 'charmm_ml_comparison_slices.png'}")
+
+        # plot in 3D with equal scale for all models and the reference
+        fig = plt.figure(figsize=(12, 10))
+        ax = fig.add_subplot(1, 1, 1, projection="3d")
+        ax.scatter(esp_true_valid, esp_physnet_valid, alpha=0.3, s=5, label="PhysNet", color="green")
+        ax.scatter(esp_true_valid, esp_dcmnet_valid, alpha=0.3, s=5, label="DCMNet", color="purple")
+        ax.scatter(esp_true_valid, esp_charmm_valid, alpha=0.3, s=5, label="CHARMM", color="orange")
+        lims = [
+            min(esp_true_valid.min(), esp_physnet_valid.min(), esp_dcmnet_valid.min(), esp_charmm_valid.min()),
+            max(esp_true_valid.max(), esp_physnet_valid.max(), esp_dcmnet_valid.max(), esp_charmm_valid.max()),
+        ]
+        ax.plot(lims, lims, "r--", alpha=0.5, label="Perfect")
+        ax.set_xlabel("True ESP (Hartree/e)")
+        ax.set_ylabel("Predicted ESP (Hartree/e)")
+        ax.set_title("ESP: True vs PhysNet / DCMNet / CHARMM")
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(args.out_dir / "charmm_ml_comparison_3d.png", dpi=150, bbox_inches="tight")
+        plt.close()
+        print(f"  Saved: {args.out_dir / 'charmm_ml_comparison_3d.png'}")
+
+        # plot in 3D with equal scale for all models and the reference
+        fig = plt.figure(figsize=(12, 10))
+        ax = fig.add_subplot(1, 1, 1, projection="3d")
+        ax.scatter(esp_true_valid, esp_physnet_valid, alpha=0.3, s=5, label="PhysNet", color="green")
+        ax.scatter(esp_true_valid, esp_dcmnet_valid, alpha=0.3, s=5, label="DCMNet", color="purple")
+        ax.scatter(esp_true_valid, esp_charmm_valid, alpha=0.3, s=5, label="CHARMM", color="orange")
+        lims = [
+            min(esp_true_valid.min(), esp_physnet_valid.min(), esp_dcmnet_valid.min(), esp_charmm_valid.min()),
+            max(esp_true_valid.max(), esp_physnet_valid.max(), esp_dcmnet_valid.max(), esp_charmm_valid.max()),
+        ]
+        ax.plot(lims, lims, "r--", alpha=0.5, label="Perfect")
+        ax.set_xlabel("True ESP (Hartree/e)")
+        ax.set_ylabel("Predicted ESP (Hartree/e)")
+        ax.set_title("ESP: True vs PhysNet / DCMNet / CHARMM")
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(args.out_dir / "charmm_ml_comparison_3d_equal.png", dpi=150, bbox_inches="tight")
+        plt.close()
+        print(f"  Saved: {args.out_dir / 'charmm_ml_comparison_3d_equal.png'}")
+
     print("\nDone.")
     return 0
 
