@@ -10,10 +10,13 @@ Prerequisites:
   - jax, flax, optax, e3x, h5py
 
 Usage:
+  # Load all qcell_*.h5 from a directory
+  python examples/other/train_spooky_h5.py --data-dir /scicore/home/meuwly/boitti0000/qcell
+
   # Single file
   python examples/other/train_spooky_h5.py --filepath /path/to/qcell_dimers.h5
 
-  # Multiple files
+  # Multiple files explicitly
   python examples/other/train_spooky_h5.py \\
     --filepath /path/to/qcell_sugars.h5 /path/to/qcell_dimers.h5 \\
     --train-size 100000 --valid-size 1000
@@ -46,12 +49,17 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description="Train spooky PhysNetJAX on qcell HDF5 data (single or multi-file)."
     )
-    p.add_argument(
+    grp = p.add_mutually_exclusive_group(required=True)
+    grp.add_argument(
         "--filepath",
         type=str,
         nargs="+",
-        required=True,
         help="Path(s) to HDF5 file(s). Pass multiple for multi-file loading.",
+    )
+    grp.add_argument(
+        "--data-dir",
+        type=str,
+        help="Directory containing qcell_*.h5 files. All matching files are loaded.",
     )
     p.add_argument("--train-size", type=int, default=270_000)
     p.add_argument("--valid-size", type=int, default=1000)
@@ -77,12 +85,23 @@ def main(args: argparse.Namespace):
     print("Spooky PhysNetJAX training on qcell HDF5")
     print("=" * 60)
 
-    filepaths = [Path(p) for p in args.filepath]
-    if len(filepaths) == 1:
-        filepath_arg = filepaths[0]
-    else:
+    if args.data_dir is not None:
+        data_dir = Path(args.data_dir).resolve()
+        filepaths = sorted(data_dir.glob("qcell_*.h5"))
+        if not filepaths:
+            raise FileNotFoundError(
+                f"No qcell_*.h5 files found in {data_dir}"
+            )
         filepath_arg = [str(p) for p in filepaths]
-    print(f"\nData: {filepath_arg}")
+        print(f"\nData dir: {data_dir}")
+    else:
+        filepaths = [Path(p) for p in args.filepath]
+        if len(filepaths) == 1:
+            filepath_arg = filepaths[0]
+        else:
+            filepath_arg = [str(p) for p in filepaths]
+
+    print(f"Files: {filepath_arg}")
 
     key = jax.random.PRNGKey(42)
 
