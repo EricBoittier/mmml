@@ -68,9 +68,7 @@ def run_kernel_fit_pipeline(
     residue_name : str
         Residue name for .mdcm (e.g. MEOH)
     nkfr : int, optional
-        NKFR for .kmdcm. CHARMM sets FLXFRS(1..NKFR)=1 so those frames get
-        kernel-predicted AQ,BQ,CQ. Must equal RNFRAME (frames per residue).
-        Default: len(frames)
+        NKFR for .kmdcm header. Default: 3
 
     Returns
     -------
@@ -149,9 +147,8 @@ def run_kernel_fit_pipeline(
         out_mdcm = out_dir / f"{residue_name}.mdcm"
     if out_kmdcm is None:
         out_kmdcm = out_dir / f"{residue_name}.kmdcm"
-    # NKFR must equal number of frames so CHARMM sets FLXFRS(1..NF)=1 for all frames
     if nkfr is None:
-        nkfr = len(frames)
+        nkfr = 3
 
     result = {
         "X_fit": X_fit,
