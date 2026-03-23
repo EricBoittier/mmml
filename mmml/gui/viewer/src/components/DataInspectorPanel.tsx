@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   getInspection,
   getArray,
+  getMetadataValue,
   InspectionData,
   NpzInspectionData,
   AseInspectionData,
@@ -11,6 +12,84 @@ interface DataInspectorPanelProps {
   filePath: string | null;
   currentFrame: number;
   nFrames: number;
+  /** When true (e.g. data-only file with no structure), keep expanded for easy array inspection */
+  defaultExpanded?: boolean;
+}
+
+function isObject(val: unknown): val is Record<string, unknown> {
+  return val !== null && typeof val === 'object' && !Array.isArray(val);
+}
+
+function MetadataTree({ value, depth = 0 }: { value: unknown; depth?: number }) {
+  if (value === null || value === undefined) {
+    return <span className="text-slate-500 italic">null</span>;
+  }
+  if (typeof value === 'boolean' || typeof value === 'number' || typeof value === 'string') {
+    return (
+      <span className="font-mono text-xs text-slate-700 dark:text-slate-300">
+        {typeof value === 'string' ? `"${value}"` : String(value)}
+      </span>
+    );
+  }
+  if (Array.isArray(value)) {
+    const isPrimitive = value.length === 0 || typeof value[0] !== 'object' || value[0] === null;
+    if (isPrimitive && value.length <= 12) {
+      const preview = value.length > 8 ? `${value.slice(0, 8).join(', ')}... (${value.length} items)` : value.join(', ');
+      return <span className="font-mono text-xs text-slate-600 dark:text-slate-400">[{preview}]</span>;
+    }
+    if (isPrimitive) {
+      return (
+        <span className="font-mono text-xs text-slate-600 dark:text-slate-400">
+          [{value.slice(0, 6).join(', ')}... ] ({value.length} items)
+        </span>
+      );
+    }
+    return (
+      <div className="space-y-1 pl-2 border-l border-slate-200 dark:border-slate-600">
+        {value.slice(0, 20).map((item, i) => (
+          <div key={i} className="text-xs">
+            <span className="font-mono text-slate-500">[{i}]:</span> <MetadataTree value={item} depth={depth + 1} />
+          </div>
+        ))}
+        {value.length > 20 && (
+          <span className="text-xs text-slate-500">... and {value.length - 20} more</span>
+        )}
+      </div>
+    );
+  }
+  if (isObject(value)) {
+    if (value._error) {
+      return <span className="text-xs text-red-500">{String(value._error)}</span>;
+    }
+    if (value._array && value.shape) {
+      return (
+        <span className="font-mono text-xs text-slate-500">
+          array shape {JSON.stringify(value.shape)}
+          {value.truncated ? ' (truncated)' : ''}
+        </span>
+      );
+    }
+    if (value._dataset) {
+      return (
+        <span className="font-mono text-xs text-slate-500">
+          dataset {value.shape ? `shape ${JSON.stringify(value.shape)}` : ''} {value.dtype || ''}
+          {value.min != null ? ` min=${value.min} max=${value.max}` : ''}
+        </span>
+      );
+    }
+    const entries = Object.entries(value);
+    return (
+      <div className="space-y-1 pl-2 border-l border-slate-200 dark:border-slate-600">
+        {entries.map(([k, v]) => (
+          <div key={k} className="text-xs">
+            <span className="font-mono font-medium text-slate-600 dark:text-slate-400">{k}:</span>{' '}
+            <MetadataTree value={v} depth={depth + 1} />
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return <span className="text-xs text-slate-500">{String(value)}</span>;
 }
 
 function formatPreview(arr: number[] | number[][], maxRows = 10, maxCols = 6): string {
@@ -35,13 +114,19 @@ function formatPreview(arr: number[] | number[][], maxRows = 10, maxCols = 6): s
   return `[${vals.slice(0, maxCols).map((v) => (typeof v === 'number' ? v.toFixed(4) : v)).join(', ')}, ... ] (${vals.length} total)`;
 }
 
-function DataInspectorPanel({ filePath, currentFrame }: DataInspectorPanelProps) {
+function DataInspectorPanel({ filePath, currentFrame, nFrames, defaultExpanded }: DataInspectorPanelProps) {
   const [data, setData] = useState<InspectionData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(defaultExpanded ?? true);
+
+  useEffect(() => {
+    if (defaultExpanded === true) setExpanded(true);
+  }, [defaultExpanded]);
   const [loadedArray, setLoadedArray] = useState<{ key: string; preview: string } | null>(null);
   const [arrayLoading, setArrayLoading] = useState(false);
+  const [expandedMetadata, setExpandedMetadata] = useState<Record<string, unknown>>({});
+  const [metadataLoading, setMetadataLoading] = useState<Record<string, boolean>>({});
 
   const loadInspection = useCallback(async () => {
     if (!filePath) {
@@ -65,6 +150,11 @@ function DataInspectorPanel({ filePath, currentFrame }: DataInspectorPanelProps)
     loadInspection();
   }, [loadInspection]);
 
+  useEffect(() => {
+    setExpandedMetadata({});
+    setMetadataLoading({});
+  }, [filePath]);
+
   const handleLoadArray = useCallback(
     async (key: string, frame?: number) => {
       if (!filePath) return;
@@ -81,6 +171,31 @@ function DataInspectorPanel({ filePath, currentFrame }: DataInspectorPanelProps)
     },
     [filePath]
   );
+
+  const handleExpandMetadata = useCallback(
+    async (key: string) => {
+      if (!filePath || expandedMetadata[key] !== undefined) return;
+      setMetadataLoading((prev) => ({ ...prev, [key]: true }));
+      try {
+        const res = await getMetadataValue(filePath, key);
+        setExpandedMetadata((prev) => ({ ...prev, [key]: res.value }));
+      } catch (err) {
+        setError(`Failed to load metadata ${key}: ${err}`);
+        setExpandedMetadata((prev) => ({ ...prev, [key]: { _error: String(err) } }));
+      } finally {
+        setMetadataLoading((prev) => ({ ...prev, [key]: false }));
+      }
+    },
+    [filePath]
+  );
+
+  const handleCollapseMetadata = useCallback((key: string) => {
+    setExpandedMetadata((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  }, []);
 
   const isNpz = (d: InspectionData): d is NpzInspectionData => 'keys' in d && 'arrays' in d;
   const isAse = (d: InspectionData): d is AseInspectionData => 'info_keys' in d && 'arrays_keys' in d;
@@ -185,17 +300,39 @@ function DataInspectorPanel({ filePath, currentFrame }: DataInspectorPanelProps)
                   {data.metadata_keys.length > 0 && (
                     <div>
                       <h4 className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">
-                        Metadata keys
+                        Metadata keys (click to expand)
                       </h4>
-                      <div className="flex flex-wrap gap-2">
-                        {data.metadata_keys.map((k) => (
-                          <span
-                            key={k}
-                            className="px-2 py-0.5 text-xs font-mono bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 rounded"
-                          >
-                            {k}
-                          </span>
-                        ))}
+                      <div className="space-y-1">
+                        {data.metadata_keys.map((k) => {
+                          const isExpanded = expandedMetadata[k] !== undefined;
+                          const loading = metadataLoading[k];
+                          return (
+                            <div key={k} className="border border-amber-200 dark:border-amber-800 rounded overflow-hidden">
+                              <button
+                                onClick={() => (isExpanded ? handleCollapseMetadata(k) : handleExpandMetadata(k))}
+                                className="w-full px-3 py-2 flex items-center justify-between text-left hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors"
+                              >
+                                <span className="text-xs font-mono text-amber-800 dark:text-amber-200">{k}</span>
+                                <span className="flex items-center gap-2">
+                                  {loading && <span className="text-xs text-slate-400">Loading...</span>}
+                                  <svg
+                                    className={`w-3 h-3 text-amber-600 dark:text-amber-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                  </svg>
+                                </span>
+                              </button>
+                              {isExpanded && expandedMetadata[k] !== undefined && !loading && (
+                                <div className="px-3 py-2 bg-slate-50 dark:bg-slate-900/50 border-t border-amber-200 dark:border-amber-800">
+                                  <MetadataTree value={expandedMetadata[k]} />
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   )}

@@ -233,18 +233,21 @@ function App() {
       const meta = await getFileMetadata(file.path);
       setMetadata(meta);
       
-      // Load first frame
-      const includePdb = showStructurePanel;
-      const frame = await getFrame(file.path, 0, 0, false, includePdb);
-      setFrameData(frame);
-      frameCache.current.set(buildFrameCacheKey(0, 0, false, includePdb), frame);
-      
-      // Load properties for charts
-      const props = await getProperties(file.path);
-      setProperties(props);
-      
-      // Preload nearby frames in background
-      preloadFrames(file.path, 0, meta.n_frames, 0, false, includePdb);
+      // Skip frame/properties for non-molecular files (n_frames=0, e.g. split_indices.npz)
+      if (meta.n_frames > 0) {
+        const includePdb = showStructurePanel;
+        const frame = await getFrame(file.path, 0, 0, false, includePdb);
+        setFrameData(frame);
+        frameCache.current.set(buildFrameCacheKey(0, 0, false, includePdb), frame);
+        
+        const props = await getProperties(file.path);
+        setProperties(props);
+        
+        preloadFrames(file.path, 0, meta.n_frames, 0, false, includePdb);
+      } else {
+        setFrameData(null);
+        setProperties(null);
+      }
     } catch (err) {
       setError(`Failed to load file: ${err}`);
     } finally {
@@ -869,8 +872,8 @@ function App() {
               <div className="flex-1 flex overflow-hidden">
                 {/* 3D Viewers - Side by Side */}
                 <div className="flex-1 flex">
-                  {/* Structure Viewer (Miew) */}
-                  {showStructurePanel && (
+                  {/* Structure Viewer (Miew) - hidden for data-only files (no R/E) */}
+                  {showStructurePanel && metadata?.n_frames !== 0 && (
                     <div className={`flex-1 relative ${showVectorPanel ? 'border-r border-slate-700' : ''}`}>
                       <div className="absolute top-2 left-2 z-10 bg-slate-900/70 backdrop-blur-sm rounded px-2 py-1 text-xs text-slate-300 pointer-events-none">
                         Structure
@@ -885,8 +888,8 @@ function App() {
                     </div>
                   )}
                   
-                  {/* Vector Viewer (Three.js) */}
-                  {showVectorPanel && (
+                  {/* Vector Viewer (Three.js) - hidden for data-only files (no R/E) */}
+                  {showVectorPanel && metadata?.n_frames !== 0 && (
                     <div className="flex-1 relative">
                       <div className="absolute top-2 left-2 z-10 bg-slate-900/70 backdrop-blur-sm rounded px-2 py-1 text-xs text-slate-300 pointer-events-none">
                         Vectors
@@ -919,12 +922,16 @@ function App() {
                     </div>
                   )}
                   
-                  {/* Placeholder when both panels are hidden */}
-                  {!showStructurePanel && !showVectorPanel && (
+                  {/* Placeholder when both panels hidden, or data-only file (no structure) */}
+                  {(!showStructurePanel && !showVectorPanel) || metadata?.n_frames === 0 ? (
                     <div className="flex-1 flex items-center justify-center bg-slate-800 text-slate-400">
-                      <p className="text-sm">Enable a panel to view the molecule</p>
+                      <p className="text-sm text-center max-w-md">
+                        {metadata?.n_frames === 0
+                          ? 'No molecular structure in this file. Use Data Inspector below to view arrays.'
+                          : 'Enable a panel to view the molecule'}
+                      </p>
                     </div>
-                  )}
+                  ) : null}
                 </div>
 
                 {/* Property panel */}
@@ -995,6 +1002,7 @@ function App() {
                   filePath={selectedFile.path}
                   currentFrame={currentFrame}
                   nFrames={metadata.n_frames}
+                  defaultExpanded={metadata.n_frames === 0}
                 />
               )}
 

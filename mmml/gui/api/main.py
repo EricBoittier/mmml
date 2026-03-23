@@ -117,6 +117,23 @@ def create_app(
         parser = _get_parser(app, file_path)
         return parser.get_inspection_data()
 
+    @app.get("/api/metadata/{path:path}")
+    async def get_metadata_value(
+        path: str,
+        key: str = Query(..., description="Metadata key (e.g. harmonic, thermo)"),
+    ):
+        """Get expandable contents of a metadata key (nested dict/group structure)."""
+        file_path = _resolve_path(app, path)
+        parser = _get_parser(app, file_path)
+        inspection = parser.get_inspection_data()
+        valid = set(inspection.get('metadata_keys', []))
+        if key not in valid:
+            raise HTTPException(status_code=404, detail=f"Metadata key '{key}' not found")
+        try:
+            return parser.get_metadata_value(key)
+        except KeyError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+
     @app.get("/api/array/{path:path}")
     async def get_array(
         path: str,

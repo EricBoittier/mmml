@@ -240,6 +240,20 @@ class MolecularFileParser:
         """Get metadata from NPZ file."""
         data = self._data
         
+        # Non-molecular NPZ (e.g. split_indices.npz) - no R, E; just open for data inspection
+        if 'R' not in data and 'E' not in data:
+            return FileMetadata(
+                path=str(self.file_path),
+                filename=self.file_path.name,
+                file_type='npz',
+                n_frames=0,
+                n_atoms=0,
+                available_properties=[],
+                elements=[],
+                energy_range=None,
+                n_replicas=1,
+            )
+        
         # Get basic info
         n_frames = len(data['E']) if 'E' in data else len(data['R'])
         Z_arr = data['Z']
@@ -335,18 +349,23 @@ class MolecularFileParser:
         )
     
     def _get_h5_metadata(self) -> FileMetadata:
-        """Get metadata from HDF5 file (e.g. compare_charmm_ml output)."""
+        """Get metadata from HDF5 file (e.g. compare_charmm_ml or pyscf-dft output)."""
         f = self._data
-        # Infer n_frames from R or first esp_* dataset
-        n_frames = 0
-        if 'R' in f:
-            n_frames = f['R'].shape[0]
+        R_shape = f['R'].shape if 'R' in f else ()
+        if len(R_shape) == 2:
+            n_frames = 1
+            n_atoms = R_shape[0]
+        elif len(R_shape) >= 3:
+            n_frames = R_shape[0]
+            n_atoms = R_shape[1]
         else:
+            n_frames = 0
+            n_atoms = 0
+        if n_frames == 0:
             for key in ('esp_physnet', 'esp_dcmnet', 'esp_charmm', 'esp_reference', 'esp'):
                 if key in f:
                     n_frames = f[key].shape[0]
                     break
-        n_atoms = f['R'].shape[1] if 'R' in f else 0
         properties = ['structure']
         esp_keys = [k for k in f.keys() if isinstance(f[k], h5py.Dataset) and
                     (k == 'esp' or k.startswith('esp_') or k.startswith('esp_errors_'))]
@@ -356,7 +375,8 @@ class MolecularFileParser:
             properties.append('dcmnet_charges')
         elements = []
         if 'Z' in f:
-            Z0 = np.asarray(f['Z'][0]).ravel()
+            Z_arr = np.asarray(f['Z'])
+            Z0 = Z_arr[0].ravel() if Z_arr.ndim > 1 else Z_arr.ravel()
             unique_z = np.unique(Z0[Z0 > 0])
             elements = [ELEMENT_SYMBOLS.get(int(z), f'X{z}') for z in unique_z]
         return FileMetadata(
@@ -568,11 +588,25 @@ class MolecularFileParser:
         )
     
     def _get_h5_frame(self, index: int, include_pdb: bool = True) -> FrameData:
-        """Get frame from HDF5 file (e.g. compare_charmm_ml output)."""
+        """Get frame from HDF5 file (e.g. compare_charmm_ml or pyscf-dft output)."""
         f = self._data
-        R = np.asarray(f['R'][index], dtype=np.float64)
-        Z = np.asarray(f['Z'][index], dtype=np.int64)
-        N = int(f['N'][index]) if 'N' in f else None
+        R_raw = np.asarray(f['R'])
+        Z_raw = np.asarray(f['Z'])
+        if R_raw.ndim == 2:
+            R = np.asarray(R_raw, dtype=np.float64)
+            Z = np.asarray(Z_raw, dtype=np.int64)
+        else:
+            R = np.asarray(R_raw[index], dtype=np.float64)
+            Z = (
+                np.asarray(Z_raw[index], dtype=np.int64)
+                if Z_raw.ndim > 1
+                else np.asarray(Z_raw, dtype=np.int64)
+            )
+        N = None
+        if 'N' in f:
+            arr = np.asarray(f['N']).ravel()
+            if arr.size > 0:
+                N = int(arr[min(index, arr.size - 1)])
         atoms = npz_frame_to_atoms(R, Z, N)
         pdb_string = atoms_to_pdb(atoms) if include_pdb else ""
         mask = Z > 0
@@ -788,7 +822,69 @@ class MolecularFileParser:
             'arrays': arrays_meta,
             'n_frames': len(frames),
         }
-    
+
+    def get_metadata_value(self, key: str) -> Dict[str, Any]:
+        """
+        Get JSON-serializable contents of a metadata key (e.g. harmonic, thermo).
+        For H5 groups, returns nested structure; for NPZ pickled objects, returns converted dict.
+        """
+        self._load_data()
+        inspection = self.get_inspection_data()
+        valid = set(inspection.get('metadata_keys', []))
+        if key not in valid:
+            raise KeyError(f"Metadata key '{key}' not found or not a metadata key")
+        if self.file_type == 'npz':
+            return self._get_npz_metadata_value(key)
+        elif self.file_type == 'h5':
+            return self._get_h5_metadata_value(key)
+        else:
+            raise ValueError("Metadata values only supported for NPZ and H5 files")
+
+    def _to_json_safe(self, obj: Any, max_array_items: int = 1000) -> Any:
+        """Convert Python/numpy objects to JSON-serializable form."""
+        if obj is None or isinstance(obj, (bool, str)):
+            return obj
+        if isinstance(obj, (int, float)):
+            if isinstance(obj, (np.integer, np.floating)):
+                return float(obj) if np.issubdtype(type(obj), np.floating) else int(obj)
+            return obj
+        if isinstance(obj, np.ndarray):
+            if obj.size > max_array_items:
+                return {'_array': True, 'shape': list(obj.shape), 'dtype': str(obj.dtype), 'truncated': True}
+            return obj.tolist()
+        if isinstance(obj, dict):
+            return {str(k): self._to_json_safe(v, max_array_items) for k, v in obj.items()}
+        if isinstance(obj, (list, tuple)):
+            return [self._to_json_safe(v, max_array_items) for v in obj]
+        if isinstance(obj, (np.integer, np.floating)):
+            return float(obj) if np.issubdtype(type(obj), np.floating) else int(obj)
+        return str(obj)
+
+    def _get_npz_metadata_value(self, key: str) -> Dict[str, Any]:
+        data = self._data
+        val = data[key]
+        if isinstance(val, np.ndarray) and val.dtype == object:
+            val = val.item() if val.size == 1 else val.tolist()
+        return {'key': key, 'value': self._to_json_safe(val)}
+
+    def _get_h5_metadata_value(self, key: str) -> Dict[str, Any]:
+        f = self._data
+
+        def walk(obj) -> Any:
+            if isinstance(obj, h5py.Dataset):
+                arr = np.asarray(obj)
+                if arr.dtype == object or arr.dtype.kind in ('O', 'U', 'S'):
+                    return {'_dataset': True, 'dtype': str(arr.dtype), 'shape': list(arr.shape)}
+                if arr.size > 500:
+                    return {'_dataset': True, 'shape': list(arr.shape), 'dtype': str(arr.dtype), 'min': float(np.min(arr)), 'max': float(np.max(arr))}
+                return arr.tolist()
+            if isinstance(obj, h5py.Group):
+                return {k: walk(obj[k]) for k in obj.keys()}
+            return str(obj)
+
+        root = f[key]
+        return {'key': key, 'value': walk(root)}
+
     def get_array(
         self,
         key: str,
@@ -865,7 +961,11 @@ class MolecularFileParser:
         dset = f[key]
         if not isinstance(dset, h5py.Dataset):
             raise KeyError(f"'{key}' is not a dataset")
-        arr = np.asarray(dset[frame] if frame is not None else dset[:], dtype=np.float64)
+        arr_full = np.asarray(dset[:], dtype=np.float64)
+        if frame is not None and arr_full.ndim > 0:
+            arr = arr_full[min(frame, arr_full.shape[0] - 1)]
+        else:
+            arr = arr_full
         flat = arr.ravel()
         if limit is not None and flat.size > limit:
             idx = np.linspace(0, flat.size - 1, num=min(limit, flat.size), dtype=int)
@@ -1208,7 +1308,12 @@ class MolecularFileParser:
     def _get_h5_properties(self) -> Dict[str, List]:
         """Get properties from H5 file (minimal - compare_charmm_ml has no E/F/D)."""
         f = self._data
-        n_frames = f['R'].shape[0] if 'R' in f else 0
+        if 'R' not in f:
+            n_frames = 0
+        elif len(f['R'].shape) == 2:
+            n_frames = 1
+        else:
+            n_frames = f['R'].shape[0]
         if n_frames == 0 and 'esp_physnet' in f:
             n_frames = f['esp_physnet'].shape[0]
         return {'frame_indices': list(range(n_frames))}
@@ -1527,9 +1632,20 @@ class MolecularFileParser:
     ) -> List[float]:
         """Compute geometry metric points for H5 file."""
         f = self._data
-        R = np.asarray(f['R'][frame_indices], dtype=np.float64)
-        Z = np.asarray(f['Z'][frame_indices], dtype=np.int64)
-        N = np.asarray(f['N'][frame_indices], dtype=np.int32) if 'N' in f else None
+        R_raw = np.asarray(f['R'])
+        Z_raw = np.asarray(f['Z'])
+        if R_raw.ndim == 2:
+            R_raw = R_raw[np.newaxis, :, :]
+        if Z_raw.ndim == 1:
+            Z_raw = Z_raw[np.newaxis, :]
+        R = np.asarray(R_raw[frame_indices], dtype=np.float64)
+        Z = np.asarray(Z_raw[frame_indices], dtype=np.int64)
+        N = None
+        if 'N' in f:
+            N_arr = np.asarray(f['N']).ravel()
+            if N_arr.size > 0:
+                idx = np.minimum(frame_indices, N_arr.size - 1)
+                N = N_arr[idx].astype(np.int32)
         points: List[float] = []
         for i, fi in enumerate(frame_indices):
             coords = R[i]
@@ -1548,15 +1664,19 @@ class MolecularFileParser:
         f = self._data
         R = np.asarray(f['R'][:], dtype=np.float64)
         Z = np.asarray(f['Z'][:], dtype=np.int64)
-        N = np.asarray(f['N'][:], dtype=np.int32) if 'N' in f else None
+        if R.ndim == 2:
+            R = R[np.newaxis, :, :]
+        if Z.ndim == 1:
+            Z = Z[np.newaxis, :]
+        N_arr = np.asarray(f['N']).ravel() if 'N' in f else None
         n_frames = R.shape[0]
         coords_list = []
         for i in range(n_frames):
             Ri = R[i]
             Zi = Z[i]
             mask = Zi > 0
-            if N is not None:
-                n = int(N[i])
+            if N_arr is not None and N_arr.size > 0:
+                n = int(N_arr[min(i, N_arr.size - 1)])
                 mask = np.zeros_like(Zi, dtype=bool)
                 mask[:n] = True
                 mask = mask & (Zi > 0)
