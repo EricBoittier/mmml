@@ -208,7 +208,7 @@ def write_kmdcm(
     nkernc: int,
     nkfr: int,
     natmk: int,
-    use_relative_paths: bool = True,
+    use_relative_paths: bool = False,
 ) -> Path:
     """
     Write CHARMM kernel .kmdcm file (DCM KERN input).
@@ -228,7 +228,8 @@ def write_kmdcm(
     ntrain, nkernc, nkfr, natmk : int
         CHARMM kernel header values
     use_relative_paths : bool
-        If True, paths in kmdcm are relative to kmdcm file location
+        If True, use paths relative to kmdcm (require same cwd when CHARMM runs).
+        If False, use absolute paths so CHARMM finds files regardless of cwd.
     """
     out_path = Path(out_path)
     out_dir = Path(out_dir).resolve()
