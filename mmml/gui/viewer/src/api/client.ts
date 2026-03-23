@@ -226,6 +226,25 @@ export async function getInspection(path: string): Promise<InspectionData> {
   return response.json();
 }
 
+/** Metadata value response (expandable nested structure). */
+export interface MetadataValueResponse {
+  key: string;
+  value: unknown;
+}
+
+/**
+ * Get expandable contents of a metadata key (e.g. harmonic, thermo).
+ */
+export async function getMetadataValue(path: string, key: string): Promise<MetadataValueResponse> {
+  const encodedPath = encodeURIComponent(path);
+  const params = new URLSearchParams({ key });
+  const response = await fetch(`${API_BASE}/metadata/${encodedPath}?${params.toString()}`);
+  if (!response.ok) {
+    throw new Error(`Failed to get metadata: ${response.statusText}`);
+  }
+  return response.json();
+}
+
 /**
  * Get raw array data for a key, optionally sliced by frame.
  */
