@@ -68,7 +68,7 @@ def run_kernel_fit_pipeline(
     residue_name : str
         Residue name for .mdcm (e.g. MEOH)
     nkfr : int, optional
-        NKFR for .kmdcm header. Default: 3
+        NKFR for .kmdcm header. Default: number of frames (len(frames))
 
     Returns
     -------
@@ -148,7 +148,7 @@ def run_kernel_fit_pipeline(
     if out_kmdcm is None:
         out_kmdcm = out_dir / f"{residue_name}.kmdcm"
     if nkfr is None:
-        nkfr = 3
+        nkfr = len(frames)
 
     result = {
         "X_fit": X_fit,
