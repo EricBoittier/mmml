@@ -35,7 +35,7 @@ def run_kernel_fit_pipeline(
     sigma: float = 1.0,
     base_name: str = "x_fit",
     residue_name: str = "MEOH",
-    nkfr: int = 3,
+    nkfr: Optional[int] = None,
 ) -> dict:
     """
     Full pipeline: (optional) optimize -> fit kernel -> write CHARMM files -> evaluate H5.
@@ -65,6 +65,12 @@ def run_kernel_fit_pipeline(
         Kernel ridge params
     base_name : str
         Prefix for x_fit/coefs filenames
+    residue_name : str
+        Residue name for .mdcm (e.g. MEOH)
+    nkfr : int, optional
+        NKFR for .kmdcm. CHARMM sets FLXFRS(1..NKFR)=1 so those frames get
+        kernel-predicted AQ,BQ,CQ. Must equal RNFRAME (frames per residue).
+        Default: len(frames)
 
     Returns
     -------
@@ -137,6 +143,9 @@ def run_kernel_fit_pipeline(
         out_mdcm = out_dir / f"{residue_name}.mdcm"
     if out_kmdcm is None:
         out_kmdcm = out_dir / f"{residue_name}.kmdcm"
+    # NKFR must equal number of frames so CHARMM sets FLXFRS(1..NF)=1 for all frames
+    if nkfr is None:
+        nkfr = len(frames)
 
     result = {
         "X_fit": X_fit,
