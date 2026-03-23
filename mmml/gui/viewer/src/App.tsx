@@ -295,7 +295,7 @@ function App() {
   }, [buildFrameCacheKey]);
 
   const handleFrameChange = useCallback(async (frameIndex: number) => {
-    if (!selectedFile || !metadata) return;
+    if (!selectedFile || !metadata || metadata.n_frames === 0) return;
     
     setCurrentFrame(frameIndex);
     
@@ -329,7 +329,7 @@ function App() {
   }, [selectedFile, metadata, preloadFrames, selectedReplica, showAllReplicasInView, buildFrameCacheKey, showStructurePanel]);
 
   useEffect(() => {
-    if (!selectedFile || !metadata) return;
+    if (!selectedFile || !metadata || metadata.n_frames === 0) return;
     handleFrameChange(currentFrame);
   }, [selectedReplica, showAllReplicasInView, selectedFile, metadata, currentFrame, handleFrameChange, showStructurePanel]);
 
