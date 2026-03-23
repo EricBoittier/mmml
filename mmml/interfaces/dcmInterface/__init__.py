@@ -9,6 +9,7 @@ from .kernel_fit import (
     fit_kernel_from_training_data,
     predict_charges_from_kernel,
     write_kernel_files,
+    write_kmdcm,
 )
 from .evaluate_h5 import evaluate_and_write_h5
 from .kernel_pipeline import run_kernel_fit_pipeline
@@ -30,6 +31,7 @@ __all__ = [
     "run_kernel_fit_pipeline",
     "write_mdcm",
     "write_kernel_files",
+    "write_kmdcm",
     "dcmnet_to_mdcm",
     "get_connectivity",
     "get_frames",

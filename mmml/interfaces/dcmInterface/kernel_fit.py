@@ -153,11 +153,17 @@ def write_kernel_files(
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     written = []
-    x_path = out_dir / f"{base_name}_x_fit.txt"
+    # Use CHARMM-style names: x_fit.txt, coefs0.txt when base_name is "x_fit"
+    if base_name == "x_fit":
+        x_path = out_dir / "x_fit.txt"
+        coef_fmt = "coefs{i}.txt"
+    else:
+        x_path = out_dir / f"{base_name}_x_fit.txt"
+        coef_fmt = f"{base_name}_coefs{{i}}.txt"
     np.savetxt(x_path, X_fit, fmt="%.8e")
     written.append(x_path)
     for i in range(alphas.shape[0]):
-        coef_path = out_dir / f"{base_name}_coefs{i}.txt"
+        coef_path = out_dir / coef_fmt.format(i=i)
         np.savetxt(coef_path, alphas[i], fmt="%.8e")
         written.append(coef_path)
     return written
@@ -173,6 +179,17 @@ def build_kernel_header_line(
     return f"{ntrain} {nkernc} {nkfr} {natmk}"
 
 
+def _kernel_filenames(out_dir: Path, base_name: str, nkernc: int) -> List[str]:
+    """Filenames for x_fit and coefs (matches write_kernel_files)."""
+    if base_name == "x_fit":
+        return [str(out_dir / "x_fit.txt")] + [
+            str(out_dir / f"coefs{i}.txt") for i in range(nkernc * 3)
+        ]
+    return [str(out_dir / f"{base_name}_x_fit.txt")] + [
+        str(out_dir / f"{base_name}_coefs{i}.txt") for i in range(nkernc * 3)
+    ]
+
+
 def build_kernel_filename_lines(
     out_dir: Union[str, Path],
     base_name: str,
@@ -180,10 +197,64 @@ def build_kernel_filename_lines(
 ) -> List[str]:
     """Lines 2..NKERNC*3+1: paths to x_fit, coefs0, coefs1, ..."""
     out_dir = Path(out_dir).resolve()
-    lines = [str(out_dir / f"{base_name}_x_fit.txt")]
-    for i in range(nkernc * 3):
-        lines.append(str(out_dir / f"{base_name}_coefs{i}.txt"))
-    return lines
+    return _kernel_filenames(out_dir, base_name, nkernc)
+
+
+def write_kmdcm(
+    out_path: Union[str, Path],
+    out_dir: Union[str, Path],
+    base_name: str,
+    ntrain: int,
+    nkernc: int,
+    nkfr: int,
+    natmk: int,
+    use_relative_paths: bool = True,
+) -> Path:
+    """
+    Write CHARMM kernel .kmdcm file (DCM KERN input).
+
+    Format:
+        Line 1: NTRAIN NKERNC NKFR NATMK
+        Lines 2..: path to x_fit.txt, coefs0.txt, coefs1.txt, ...
+
+    Parameters
+    ----------
+    out_path : path
+        Output .kmdcm file path
+    out_dir : path
+        Directory containing x_fit.txt, coefs*.txt
+    base_name : str
+        Filename prefix (x_fit_x_fit.txt, x_fit_coefs0.txt, ...)
+    ntrain, nkernc, nkfr, natmk : int
+        CHARMM kernel header values
+    use_relative_paths : bool
+        If True, paths in kmdcm are relative to kmdcm file location
+    """
+    out_path = Path(out_path)
+    out_dir = Path(out_dir).resolve()
+    kmdcm_dir = out_path.resolve().parent
+
+    lines = [build_kernel_header_line(ntrain, nkernc, nkfr, natmk)]
+    fnames = _kernel_filenames(out_dir, base_name, nkernc)
+    if use_relative_paths and out_dir == kmdcm_dir:
+        # Same dir: just filenames
+        for p in fnames:
+            lines.append(Path(p).name)
+    elif use_relative_paths:
+        # out_dir is subdir of kmdcm dir or sibling
+        try:
+            rel = out_dir.relative_to(kmdcm_dir)
+            prefix = str(rel) + "/"
+        except ValueError:
+            prefix = str(out_dir) + "/"
+        for p in fnames:
+            lines.append(prefix + Path(p).name)
+    else:
+        lines.extend(fnames)
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text("\n".join(lines) + "\n")
+    return out_path
 
 
 def _cpf_to_abc_flat(cpf: List) -> np.ndarray:

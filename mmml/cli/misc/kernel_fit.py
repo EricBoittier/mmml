@@ -15,6 +15,14 @@ def main():
                         help="Number of atoms for distance matrix (e.g. 6 for benzene)")
     parser.add_argument("--out-h5", type=Path, default=None,
                         help="If set, evaluate and write H5 for GUI")
+    parser.add_argument("--out-mdcm", type=Path, default=None,
+                        help="Write .mdcm file (default: out_dir/RESIDUE.mdcm)")
+    parser.add_argument("--out-kmdcm", type=Path, default=None,
+                        help="Write .kmdcm kernel file (default: out_dir/RESIDUE.kmdcm)")
+    parser.add_argument("--residue-name", default="MEOH",
+                        help="Residue name for mdcm header and default filenames")
+    parser.add_argument("--nkfr", type=int, default=3,
+                        help="NKFR for kmdcm header (e.g. 3)")
     parser.add_argument("--optimize", action="store_true",
                         help="Optimize (AQ,BQ,CQ) per frame before fitting")
     parser.add_argument("--train-frames", type=str, default=None,
@@ -35,11 +43,15 @@ def main():
         out_dir=args.out_dir,
         natmk=args.natmk,
         out_h5=args.out_h5,
+        out_mdcm=args.out_mdcm,
+        out_kmdcm=args.out_kmdcm,
         optimize_positions=args.optimize,
         train_frame_indices=train_indices,
         lam=args.lam,
         sigma=args.sigma,
         base_name=args.base_name,
+        residue_name=args.residue_name,
+        nkfr=args.nkfr,
     )
 
     # Print fit errors (AQ, BQ, CQ)
@@ -70,6 +82,10 @@ def main():
     print(f"Wrote kernel files to {args.out_dir}:")
     for p in result["paths"]:
         print(f"  {p}")
+    if "out_mdcm_path" in result:
+        print(f"Wrote .mdcm: {result['out_mdcm_path']}")
+    if "out_kmdcm_path" in result:
+        print(f"Wrote .kmdcm: {result['out_kmdcm_path']}")
     if "out_h5_path" in result:
         print(f"Wrote H5 for GUI: {result['out_h5_path']}")
         print("  (esp_rmse_kernel, esp_mae_kernel, esp_r2_kernel in H5)")

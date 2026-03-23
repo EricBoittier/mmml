@@ -14,8 +14,10 @@ from .evaluate_h5 import evaluate_and_write_h5
 from .kernel_fit import (
     fit_kernel_from_training_data,
     compute_fit_metrics,
+    write_kmdcm,
     _cpf_to_abc_flat,
 )
+from .mdcm_writer import write_mdcm
 from .optimize import optimize_charge_positions
 from .topology import get_frames_meoh_like
 
@@ -25,11 +27,15 @@ def run_kernel_fit_pipeline(
     out_dir: Union[str, Path],
     natmk: int,
     out_h5: Optional[Union[str, Path]] = None,
+    out_mdcm: Optional[Union[str, Path]] = None,
+    out_kmdcm: Optional[Union[str, Path]] = None,
     optimize_positions: bool = False,
     train_frame_indices: Optional[Sequence[int]] = None,
     lam: float = 1e-6,
     sigma: float = 1.0,
     base_name: str = "x_fit",
+    residue_name: str = "MEOH",
+    nkfr: int = 3,
 ) -> dict:
     """
     Full pipeline: (optional) optimize -> fit kernel -> write CHARMM files -> evaluate H5.
@@ -123,12 +129,53 @@ def run_kernel_fit_pipeline(
     Y_target = np.array([_cpf_to_abc_flat(cpf) for cpf in charges_per_frame_list]).T
     fit_metrics = compute_fit_metrics(X_fit, Y_target, alphas, sigma=sigma)
 
+    ntrain = len(charges_per_frame_list)
+    nkernc = Y_target.shape[0] // 3
+
+    # Default output paths for .mdcm and .kmdcm when not specified
+    if out_mdcm is None:
+        out_mdcm = out_dir / f"{residue_name}.mdcm"
+    if out_kmdcm is None:
+        out_kmdcm = out_dir / f"{residue_name}.kmdcm"
+
     result = {
         "X_fit": X_fit,
         "alphas": alphas,
         "paths": paths,
         "fit_metrics": fit_metrics,
     }
+
+    # Write .mdcm (averaged charges over training frames)
+    if out_mdcm is not None:
+        out_mdcm = Path(out_mdcm)
+        n_frames = len(frames)
+        charges_per_frame = []
+        for fr_idx in range(n_frames):
+            n_q = len(charges_per_frame_list[0][fr_idx])
+            frame_avg = []
+            for c in range(n_q):
+                vals = np.array(
+                    [charges_per_frame_list[i][fr_idx][c] for i in range(ntrain)],
+                    dtype=float,
+                )
+                frame_avg.append(tuple(float(np.mean(vals[:, k])) for k in range(4)))
+            charges_per_frame.append(frame_avg)
+        write_mdcm(out_mdcm, residue_name, frames, charges_per_frame)
+        result["out_mdcm_path"] = out_mdcm
+
+    # Write .kmdcm (CHARMM kernel file list)
+    if out_kmdcm is not None:
+        out_kmdcm = Path(out_kmdcm)
+        write_kmdcm(
+            out_path=out_kmdcm,
+            out_dir=out_dir,
+            base_name=base_name,
+            ntrain=ntrain,
+            nkernc=nkernc,
+            nkfr=nkfr,
+            natmk=natmk,
+        )
+        result["out_kmdcm_path"] = out_kmdcm
 
     if out_h5 is not None:
         out_h5 = Path(out_h5)
