@@ -108,6 +108,80 @@ def create_app(
         metadata = parser.get_metadata()
         
         return metadata.to_dict()
+
+    @app.get("/api/inspect/{path:path}")
+    async def inspect_file(path: str):
+        """Get raw keys, array metadata, and summary statistics for data inspection."""
+        file_path = _resolve_path(app, path)
+        
+        parser = _get_parser(app, file_path)
+        return parser.get_inspection_data()
+
+    @app.get("/api/array/{path:path}")
+    async def get_array(
+        path: str,
+        key: str = Query(..., description="Array key"),
+        frame: Optional[int] = Query(None, ge=0, description="Frame index (optional)"),
+        replica: int = Query(0, ge=0, description="Replica index"),
+        limit: Optional[int] = Query(None, ge=1, le=500_000, description="Max elements for preview"),
+    ):
+        """Get raw array data for a specific key, optionally sliced by frame."""
+        file_path = _resolve_path(app, path)
+        
+        parser = _get_parser(app, file_path)
+        inspection = parser.get_inspection_data()
+        
+        # Security: only serve keys that exist in the file
+        if 'keys' in inspection:
+            valid_keys = set(inspection['keys'])
+        elif 'arrays_keys' in inspection and 'info_keys' in inspection:
+            valid_keys = set(inspection['arrays_keys']) | set(inspection['info_keys'])
+        else:
+            valid_keys = set()
+        
+        if key not in valid_keys:
+            raise HTTPException(status_code=404, detail=f"Key '{key}' not found in file")
+        
+        metadata = parser.get_metadata()
+        if frame is not None and frame >= metadata.n_frames:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Frame index {frame} out of range (0-{metadata.n_frames-1})"
+            )
+        
+        try:
+            arr = parser.get_array(key=key, frame=frame, replica_index=replica, limit=limit)
+        except KeyError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+        
+        return arr.tolist()
+
+    @app.get("/api/esp/{path:path}")
+    async def get_esp(
+        path: str,
+        index: int = Query(0, ge=0, description="Frame index"),
+        replica: int = Query(0, ge=0, description="Replica index"),
+        subsample: Optional[int] = Query(None, ge=100, le=50_000, description="Downsample to N points for viz"),
+    ):
+        """Get ESP values and grid coordinates for a frame (NPZ with esp/esp_grid only)."""
+        file_path = _resolve_path(app, path)
+        
+        parser = _get_parser(app, file_path)
+        metadata = parser.get_metadata()
+        
+        if index >= metadata.n_frames:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Frame index {index} out of range (0-{metadata.n_frames-1})"
+            )
+        
+        if 'esp' not in metadata.available_properties:
+            raise HTTPException(status_code=400, detail="File does not contain ESP data")
+        
+        try:
+            return parser.get_esp_frame(index=index, replica_index=replica, subsample=subsample)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
     
     @app.get("/api/frame/{path:path}")
     async def get_frame(
