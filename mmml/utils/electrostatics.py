@@ -88,3 +88,40 @@ def compute_esp_from_point_charges(
     esp = np.where(valid_grid, esp, np.nan)
 
     return esp
+
+
+def compute_esp_from_distributed_charges(
+    charge_values: np.ndarray,
+    charge_positions: np.ndarray,
+    grid_positions: np.ndarray,
+) -> np.ndarray:
+    """
+    Compute ESP at grid points from distributed (DCM) point charges.
+
+    V = Σ q_i / r_bohr in Hartree/e when r is in Bohr.
+
+    Parameters
+    ----------
+    charge_values : np.ndarray
+        (n_charges,) in electron charge units
+    charge_positions : np.ndarray
+        (n_charges, 3) in Angstrom
+    grid_positions : np.ndarray
+        (ngrid, 3) in Angstrom
+
+    Returns
+    -------
+    np.ndarray
+        ESP (ngrid,) in Hartree/e
+    """
+    charge_values = np.asarray(charge_values).flatten()
+    charge_positions = np.asarray(charge_positions).reshape(-1, 3)
+    grid_positions = np.asarray(grid_positions).reshape(-1, 3)
+    diff = grid_positions[:, None, :] - charge_positions[None, :, :]
+    distances = np.linalg.norm(diff, axis=-1)
+    distances = np.where(distances < 1e-10, 1e10, distances)
+    r_bohr = distances * ANGSTROM_TO_BOHR
+    esp = np.sum(charge_values[None, :] / r_bohr, axis=1)
+    valid_grid = np.all(np.abs(grid_positions) < 1e5, axis=1)
+    esp = np.where(valid_grid, esp, np.nan)
+    return esp
