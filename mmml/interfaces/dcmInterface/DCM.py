@@ -2,25 +2,25 @@
 Example: build mdcm from DCMNet H5 and run CHARMM DCM.
 
 Usage:
-    from mmml.interfaces.dcmInterface import dcmnet_to_mdcm, generate_dcm_xyz
+    from mmml.interfaces.dcmInterface import build_mdcm_from_dcmnet, generate_dcm_xyz
+
+    # Single frame:
+    frames, charges_per_frame = build_mdcm_from_dcmnet(
+        "charmm_ml_comparison.h5", frame_idx=0, out_mdcm="meoh.mdcm"
+    )
+
+    # Average over all conformations:
+    frames, charges_per_frame = build_mdcm_from_dcmnet(
+        "charmm_ml_comparison.h5",
+        out_mdcm="meoh_avg.mdcm",
+        average_over_frames=True,
+        frame_indices=None,  # None = all frames
+    )
+    # Python dcm.xyz (without CHARMM):
     import h5py
-
     with h5py.File("charmm_ml_comparison.h5", "r") as f:
-        R = f["R"][frame_idx]
-        Z = f["Z"][frame_idx]
-        charges = f["dcmnet_charges"][frame_idx]
-        positions = f["dcmnet_charge_positions"][frame_idx]
-
-    dcmnet_to_mdcm(R, Z, charges, positions, "MEOH", "meoh.mdcm")
-    # Python-side dcm.xyz (for regression without CHARMM):
-    from mmml.interfaces.dcmInterface.topology import get_frames_meoh_like
-    from mmml.interfaces.dcmInterface.dcmnet_to_mdcm import dcmnet_to_mdcm
-    from mmml.interfaces.dcmInterface.dcm_xyz import generate_dcm_xyz
-    from mmml.interfaces.dcmInterface.convert import global_to_local
-    from mmml.interfaces.dcmInterface.frame import compute_dcm_frame
-    from mmml.interfaces.dcmInterface.mdcm_writer import write_mdcm
-
-    # See tests/integration/test_dcm_charmm_regression.py for full flow.
+        R = f["R"][0][:int(f["N"][0])]
+    generate_dcm_xyz(R, frames, charges_per_frame, "dcm.xyz")
 """
 
 # *AN EXAMPLE OF LOADING THE DCM MODULE IN pycharmm*

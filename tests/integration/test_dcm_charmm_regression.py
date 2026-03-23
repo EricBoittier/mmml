@@ -138,6 +138,52 @@ def test_dcmnet_to_mdcm_and_xyz_roundtrip(tmp_path):
     np.testing.assert_allclose(py_positions, orig_flat, atol=1e-4)
 
 
+def test_build_mdcm_average_over_frames(tmp_path):
+    """build_mdcm_from_dcmnet with average_over_frames=True produces mdcm."""
+    import h5py
+
+    from mmml.interfaces.dcmInterface import build_mdcm_from_dcmnet, generate_dcm_xyz
+
+    R, Z, charges, positions = _synthetic_meoh_data()
+    # Create 3 conformations (slight geometric variation)
+    np.random.seed(123)
+    R_list = [R + np.random.randn(*R.shape).astype(np.float32) * 0.05 for _ in range(3)]
+    charges_list = [charges + np.random.randn(*charges.shape).astype(np.float32) * 0.02 for _ in range(3)]
+    positions_list = [
+        R_list[i][:, None, :] + np.random.randn(6, 3, 3).astype(np.float32) * 0.05
+        for i in range(3)
+    ]
+    h5_path = tmp_path / "multi.h5"
+    with h5py.File(h5_path, "w") as f:
+        f.create_dataset("R", data=np.array(R_list, dtype=np.float32))
+        f.create_dataset("Z", data=np.array([Z] * 3, dtype=np.int32))
+        f.create_dataset("N", data=np.array([6, 6, 6], dtype=np.int32))
+        f.create_dataset("dcmnet_charges", data=np.array(charges_list, dtype=np.float32))
+        f.create_dataset("dcmnet_charge_positions", data=np.array(positions_list, dtype=np.float32))
+
+    mdcm_path = tmp_path / "meoh_avg.mdcm"
+    frames, charges_per_frame = build_mdcm_from_dcmnet(
+        h5_path,
+        frame_idx=0,
+        out_mdcm=mdcm_path,
+        residue_name="MEOH",
+        average_over_frames=True,
+        frame_indices=[0, 1, 2],
+    )
+    assert mdcm_path.exists()
+    content = mdcm_path.read_text()
+    assert "MEOH" in content
+    assert "BO" in content
+    # Can generate dcm.xyz with averaged charges (use first frame's R as ref)
+    xyz_path = tmp_path / "dcm_avg.xyz"
+    R_ref = np.asarray(R_list[0], dtype=float)
+    generate_dcm_xyz(R_ref, frames, charges_per_frame, xyz_path)
+    assert xyz_path.exists()
+    lines = xyz_path.read_text().strip().split("\n")
+    n_total = int(lines[0])
+    assert n_total == 6 + 18  # 6 atoms + 18 charges
+
+
 @pytest.mark.skipif(
     not os.environ.get("CHARMM_HOME") or not os.path.exists(os.environ.get("CHARMM_HOME", "")),
     reason="CHARMM_HOME not set or path missing",
