@@ -22,6 +22,12 @@ try:
 except ImportError:
     HAS_ASE = False
 
+try:
+    import h5py
+    HAS_H5PY = True
+except ImportError:
+    HAS_H5PY = False
+
 
 # Periodic table for element symbols
 ELEMENT_SYMBOLS = {
@@ -165,7 +171,7 @@ class MolecularFileParser:
     Supports NPZ, ASE trajectory, and PDB formats.
     """
     
-    SUPPORTED_EXTENSIONS = {'.npz', '.traj', '.pdb'}
+    SUPPORTED_EXTENSIONS = {'.npz', '.traj', '.pdb', '.h5', '.hdf5'}
     
     def __init__(self, file_path: Union[str, Path]):
         self.file_path = Path(file_path)
@@ -184,6 +190,10 @@ class MolecularFileParser:
             return 'ase_traj'
         elif ext == '.pdb':
             return 'pdb'
+        elif ext in ('.h5', '.hdf5'):
+            if not HAS_H5PY:
+                raise ImportError("h5py is required for HDF5 files. Install with: pip install h5py")
+            return 'h5'
         else:
             raise ValueError(f"Unsupported file type: {ext}")
     
@@ -207,6 +217,8 @@ class MolecularFileParser:
             except Exception:
                 # Single frame PDB
                 self._data = [ase_read(str(self.file_path))]
+        elif self.file_type == 'h5':
+            self._data = h5py.File(str(self.file_path), 'r')
     
     def get_metadata(self) -> FileMetadata:
         """Get file metadata."""
@@ -217,6 +229,8 @@ class MolecularFileParser:
         
         if self.file_type == 'npz':
             self._metadata = self._get_npz_metadata()
+        elif self.file_type == 'h5':
+            self._metadata = self._get_h5_metadata()
         else:
             self._metadata = self._get_ase_metadata()
         
@@ -320,6 +334,43 @@ class MolecularFileParser:
             energy_range=energy_range,
         )
     
+    def _get_h5_metadata(self) -> FileMetadata:
+        """Get metadata from HDF5 file (e.g. compare_charmm_ml output)."""
+        f = self._data
+        # Infer n_frames from R or first esp_* dataset
+        n_frames = 0
+        if 'R' in f:
+            n_frames = f['R'].shape[0]
+        else:
+            for key in ('esp_physnet', 'esp_dcmnet', 'esp_charmm', 'esp_reference', 'esp'):
+                if key in f:
+                    n_frames = f[key].shape[0]
+                    break
+        n_atoms = f['R'].shape[1] if 'R' in f else 0
+        properties = ['structure']
+        esp_keys = [k for k in f.keys() if isinstance(f[k], h5py.Dataset) and
+                    (k == 'esp' or k.startswith('esp_') or k.startswith('esp_errors_'))]
+        if esp_keys:
+            properties.append('esp')
+        if 'dcmnet_charges' in f and 'dcmnet_charge_positions' in f:
+            properties.append('dcmnet_charges')
+        elements = []
+        if 'Z' in f:
+            Z0 = np.asarray(f['Z'][0]).ravel()
+            unique_z = np.unique(Z0[Z0 > 0])
+            elements = [ELEMENT_SYMBOLS.get(int(z), f'X{z}') for z in unique_z]
+        return FileMetadata(
+            path=str(self.file_path),
+            filename=self.file_path.name,
+            file_type='h5',
+            n_frames=n_frames,
+            n_atoms=n_atoms,
+            available_properties=properties,
+            elements=elements,
+            energy_range=None,
+            n_replicas=1,
+        )
+    
     def get_frame(
         self,
         index: int,
@@ -354,6 +405,8 @@ class MolecularFileParser:
                 include_all_replicas=include_all_replicas,
                 include_pdb=include_pdb,
             )
+        elif self.file_type == 'h5':
+            frame = self._get_h5_frame(index, include_pdb=include_pdb)
         else:
             frame = self._get_ase_frame(index, include_pdb=include_pdb)
         
@@ -514,6 +567,34 @@ class MolecularFileParser:
             replica_frames=replica_frames,
         )
     
+    def _get_h5_frame(self, index: int, include_pdb: bool = True) -> FrameData:
+        """Get frame from HDF5 file (e.g. compare_charmm_ml output)."""
+        f = self._data
+        R = np.asarray(f['R'][index], dtype=np.float64)
+        Z = np.asarray(f['Z'][index], dtype=np.int64)
+        N = int(f['N'][index]) if 'N' in f else None
+        atoms = npz_frame_to_atoms(R, Z, N)
+        pdb_string = atoms_to_pdb(atoms) if include_pdb else ""
+        mask = Z > 0
+        if N is not None:
+            mask = np.zeros_like(Z, dtype=bool)
+            mask[:N] = True
+            mask = mask & (Z > 0)
+        positions = R[mask].tolist()
+        atomic_numbers = Z[mask].tolist()
+        return FrameData(
+            pdb_string=pdb_string,
+            n_atoms=len(atoms),
+            energy=None,
+            forces=None,
+            dipole=None,
+            charges=None,
+            electric_field=None,
+            positions=positions,
+            atomic_numbers=atomic_numbers,
+            replica_frames=None,
+        )
+    
     def _get_ase_frame(self, index: int, include_pdb: bool = True) -> FrameData:
         """Get frame from ASE trajectory or PDB file."""
         atoms = self._data[index]
@@ -554,6 +635,8 @@ class MolecularFileParser:
         
         if self.file_type == 'npz':
             return self._get_npz_inspection()
+        elif self.file_type == 'h5':
+            return self._get_h5_inspection()
         else:
             return self._get_ase_inspection()
     
@@ -612,6 +695,46 @@ class MolecularFileParser:
             
             result['arrays'][key] = entry
         
+        return result
+    
+    def _get_h5_inspection(self) -> Dict[str, Any]:
+        """Inspection data for H5 files."""
+        f = self._data
+        result: Dict[str, Any] = {'keys': [], 'arrays': {}, 'metadata_keys': []}
+        for key in f.keys():
+            obj = f[key]
+            if not isinstance(obj, h5py.Dataset):
+                result['metadata_keys'].append(key)
+                continue
+            arr = np.asarray(obj)
+            if arr.dtype == object or arr.dtype.kind in ('O', 'U', 'S'):
+                result['metadata_keys'].append(key)
+                continue
+            result['keys'].append(key)
+            size_mb = round(arr.nbytes / (1024 * 1024), 4)
+            entry: Dict[str, Any] = {
+                'shape': list(arr.shape),
+                'dtype': str(arr.dtype),
+                'size_mb': size_mb,
+            }
+            if np.issubdtype(arr.dtype, np.floating) or np.issubdtype(arr.dtype, np.integer):
+                flat = arr.ravel()
+                n_elems = flat.size
+                if n_elems <= 500_000 and n_elems > 0:
+                    valid = flat[np.isfinite(flat)] if np.issubdtype(arr.dtype, np.floating) else flat
+                    if valid.size > 0:
+                        entry['min'] = float(np.min(valid))
+                        entry['max'] = float(np.max(valid))
+                        entry['mean'] = float(np.mean(valid))
+                elif n_elems > 0:
+                    sample = np.random.default_rng(42).choice(flat, size=min(100_000, n_elems), replace=False)
+                    valid = sample[np.isfinite(sample)] if np.issubdtype(arr.dtype, np.floating) else np.asarray(sample)
+                    if valid.size > 0:
+                        entry['min'] = float(np.min(valid))
+                        entry['max'] = float(np.max(valid))
+                        entry['mean'] = float(np.mean(valid))
+                    entry['stats_sampled'] = True
+            result['arrays'][key] = entry
         return result
     
     def _get_ase_inspection(self) -> Dict[str, Any]:
@@ -695,6 +818,8 @@ class MolecularFileParser:
         
         if self.file_type == 'npz':
             return self._get_npz_array(key, frame, replica_index, limit)
+        elif self.file_type == 'h5':
+            return self._get_h5_array(key, frame, limit)
         else:
             return self._get_ase_array(key, frame, limit)
     
@@ -725,6 +850,26 @@ class MolecularFileParser:
             idx = np.linspace(0, flat.size - 1, num=min(limit, flat.size), dtype=int)
             return flat[idx]
         
+        return arr
+    
+    def _get_h5_array(
+        self,
+        key: str,
+        frame: Optional[int],
+        limit: Optional[int],
+    ) -> np.ndarray:
+        """Get array from H5 file."""
+        f = self._data
+        if key not in f:
+            raise KeyError(f"Key '{key}' not found in H5 file")
+        dset = f[key]
+        if not isinstance(dset, h5py.Dataset):
+            raise KeyError(f"'{key}' is not a dataset")
+        arr = np.asarray(dset[frame] if frame is not None else dset[:], dtype=np.float64)
+        flat = arr.ravel()
+        if limit is not None and flat.size > limit:
+            idx = np.linspace(0, flat.size - 1, num=min(limit, flat.size), dtype=int)
+            return flat[idx]
         return arr
     
     def _get_ase_array(
@@ -763,9 +908,10 @@ class MolecularFileParser:
         index: int,
         replica_index: int = 0,
         subsample: Optional[int] = None,
+        dataset: Optional[str] = None,
     ) -> Dict[str, List]:
         """
-        Get ESP values and grid coordinates for a specific frame (NPZ only).
+        Get ESP values and grid coordinates for a specific frame.
         
         Parameters
         ----------
@@ -775,6 +921,9 @@ class MolecularFileParser:
             Replica index when data has replica dimension
         subsample : int, optional
             If set, downsample to this many points for visualization
+        dataset : str, optional
+            Dataset key for H5 (e.g. 'esp_physnet', 'esp_errors_physnet').
+            For NPZ defaults to 'esp'. For H5, required if multiple ESP datasets exist.
         
         Returns
         -------
@@ -782,14 +931,17 @@ class MolecularFileParser:
             {'esp': [...], 'esp_grid': [[x,y,z], ...]}
         """
         self._load_data()
+        if self.file_type == 'h5':
+            return self._get_h5_esp_frame(index, subsample=subsample, dataset=dataset)
         if self.file_type != 'npz':
-            raise ValueError("ESP data is only available for NPZ files")
+            raise ValueError("ESP data is only available for NPZ or H5 files")
         
         data = self._data
-        if 'esp' not in data or 'esp_grid' not in data:
-            raise ValueError("File does not contain esp and esp_grid")
+        esp_key = dataset if dataset else 'esp'
+        if esp_key not in data or 'esp_grid' not in data:
+            raise ValueError(f"File does not contain {esp_key} and esp_grid")
         
-        esp = np.asarray(data['esp'][index], dtype=np.float64)
+        esp = np.asarray(data[esp_key][index], dtype=np.float64)
         esp_grid = np.asarray(data['esp_grid'][index], dtype=np.float64)
         
         while esp.ndim > 1 and esp.shape[0] == 1:
@@ -824,6 +976,70 @@ class MolecularFileParser:
         
         return {'esp': esp, 'esp_grid': esp_grid}
     
+    def _get_h5_esp_frame(
+        self,
+        index: int,
+        subsample: Optional[int] = None,
+        dataset: Optional[str] = None,
+    ) -> Dict[str, List]:
+        """Get ESP frame from H5 file."""
+        f = self._data
+        if 'esp_grid' not in f:
+            raise ValueError("H5 file does not contain esp_grid")
+        esp_keys = self.get_available_esp_datasets()
+        if not esp_keys:
+            raise ValueError("H5 file has no ESP datasets")
+        esp_key = dataset if dataset else esp_keys[0]
+        if esp_key not in f:
+            raise ValueError(f"Dataset '{esp_key}' not found. Available: {esp_keys}")
+        esp = np.asarray(f[esp_key][index], dtype=np.float64).ravel()
+        esp_grid = np.asarray(f['esp_grid'][index], dtype=np.float64)
+        n_points = esp_grid.shape[0]
+        if len(esp) != n_points:
+            esp = esp[:n_points]
+        if subsample is not None and n_points > subsample:
+            idx = np.linspace(0, n_points - 1, num=subsample, dtype=int)
+            esp = esp[idx].tolist()
+            esp_grid = esp_grid[idx].tolist()
+        else:
+            esp = esp.tolist()
+            esp_grid = esp_grid.tolist()
+        return {'esp': esp, 'esp_grid': esp_grid}
+    
+    def get_available_esp_datasets(self) -> List[str]:
+        """Return list of ESP dataset keys (e.g. esp_physnet, esp_errors_physnet)."""
+        self._load_data()
+        if self.file_type == 'npz':
+            return ['esp'] if 'esp' in self._data else []
+        if self.file_type == 'h5':
+            f = self._data
+            return [k for k in f.keys() if isinstance(f.get(k), h5py.Dataset) and
+                    (k == 'esp' or k.startswith('esp_') or k.startswith('esp_errors_'))]
+        return []
+    
+    def get_dcmnet_charges_frame(self, index: int) -> Dict[str, Any]:
+        """Get DCMNet distributed charges and positions for a frame."""
+        self._load_data()
+        if self.file_type != 'h5':
+            raise ValueError("DCMNet charges are only available in H5 files")
+        f = self._data
+        if 'dcmnet_charges' not in f or 'dcmnet_charge_positions' not in f:
+            raise ValueError("H5 file does not contain dcmnet_charges or dcmnet_charge_positions")
+        charges = np.asarray(f['dcmnet_charges'][index], dtype=np.float64)
+        positions = np.asarray(f['dcmnet_charge_positions'][index], dtype=np.float64)
+        # Flatten to (n_charges,) and (n_charges, 3)
+        charges_flat = charges.ravel()
+        positions_flat = positions.reshape(-1, 3)
+        return {'charges': charges_flat.tolist(), 'positions': positions_flat.tolist()}
+    
+    def has_dcmnet_charges(self) -> bool:
+        """Check if file has DCMNet distributed charges."""
+        self._load_data()
+        if self.file_type != 'h5':
+            return False
+        f = self._data
+        return 'dcmnet_charges' in f and 'dcmnet_charge_positions' in f
+    
     def get_all_properties(self) -> Dict[str, List]:
         """
         Get all properties for all frames (for plotting).
@@ -837,6 +1053,8 @@ class MolecularFileParser:
         
         if self.file_type == 'npz':
             return self._get_npz_properties()
+        elif self.file_type == 'h5':
+            return self._get_h5_properties()
         else:
             return self._get_ase_properties()
     
@@ -987,6 +1205,14 @@ class MolecularFileParser:
         
         return properties
     
+    def _get_h5_properties(self) -> Dict[str, List]:
+        """Get properties from H5 file (minimal - compare_charmm_ml has no E/F/D)."""
+        f = self._data
+        n_frames = f['R'].shape[0] if 'R' in f else 0
+        if n_frames == 0 and 'esp_physnet' in f:
+            n_frames = f['esp_physnet'].shape[0]
+        return {'frame_indices': list(range(n_frames))}
+    
     def _get_ase_properties(self) -> Dict[str, List]:
         """Get all properties from ASE trajectory."""
         frames = self._data
@@ -1036,6 +1262,8 @@ class MolecularFileParser:
         
         if self.file_type == 'npz':
             return self._get_npz_pca(n_components)
+        elif self.file_type == 'h5':
+            return self._get_h5_pca(n_components)
         else:
             return self._get_ase_pca(n_components)
 
@@ -1095,6 +1323,8 @@ class MolecularFileParser:
 
         if self.file_type == 'npz':
             points = self._get_npz_geometry_dataset_points(frame_indices, atoms, metric_kind, replica_index)
+        elif self.file_type == 'h5':
+            points = self._get_h5_geometry_dataset_points(frame_indices, atoms, metric_kind)
         else:
             points = self._get_ase_geometry_dataset_points(frame_indices, atoms, metric_kind)
 
@@ -1288,6 +1518,70 @@ class MolecularFileParser:
             coords = np.asarray(frames[fi].get_positions(), dtype=np.float64)
             points.append(self._compute_metric(coords, atoms, metric_kind))
         return points
+    
+    def _get_h5_geometry_dataset_points(
+        self,
+        frame_indices: List[int],
+        atoms: List[int],
+        metric_kind: str,
+    ) -> List[float]:
+        """Compute geometry metric points for H5 file."""
+        f = self._data
+        R = np.asarray(f['R'][frame_indices], dtype=np.float64)
+        Z = np.asarray(f['Z'][frame_indices], dtype=np.int64)
+        N = np.asarray(f['N'][frame_indices], dtype=np.int32) if 'N' in f else None
+        points: List[float] = []
+        for i, fi in enumerate(frame_indices):
+            coords = R[i]
+            mask = Z[i] > 0
+            if N is not None:
+                n = int(N[i])
+                mask = np.zeros_like(Z[i], dtype=bool)
+                mask[:n] = True
+                mask = mask & (Z[i] > 0)
+            coords_masked = coords[mask]
+            points.append(self._compute_metric(coords_masked, atoms, metric_kind))
+        return points
+    
+    def _get_h5_pca(self, n_components: int) -> Dict[str, Any]:
+        """Compute PCA for H5 file."""
+        f = self._data
+        R = np.asarray(f['R'][:], dtype=np.float64)
+        Z = np.asarray(f['Z'][:], dtype=np.int64)
+        N = np.asarray(f['N'][:], dtype=np.int32) if 'N' in f else None
+        n_frames = R.shape[0]
+        coords_list = []
+        for i in range(n_frames):
+            Ri = R[i]
+            Zi = Z[i]
+            mask = Zi > 0
+            if N is not None:
+                n = int(N[i])
+                mask = np.zeros_like(Zi, dtype=bool)
+                mask[:n] = True
+                mask = mask & (Zi > 0)
+            R_masked = Ri[mask]
+            coords_list.append(R_masked.flatten())
+        max_len = max(len(c) for c in coords_list)
+        coords_padded = np.zeros((n_frames, max_len))
+        for i, c in enumerate(coords_list):
+            coords_padded[i, :len(c)] = c
+        coords_centered = coords_padded - coords_padded.mean(axis=0)
+        U, S, Vt = np.linalg.svd(coords_centered, full_matrices=False)
+        projections = coords_centered @ Vt.T[:, :n_components]
+        explained_variance = (S[:n_components] ** 2) / max(n_frames - 1, 1)
+        total_variance = np.sum(S ** 2) / max(n_frames - 1, 1)
+        explained_variance_ratio = explained_variance / total_variance
+        result = {
+            'frame_indices': list(range(n_frames)),
+            'pc1': projections[:, 0].tolist(),
+            'pc2': projections[:, 1].tolist(),
+            'explained_variance': explained_variance.tolist(),
+            'explained_variance_ratio': explained_variance_ratio.tolist(),
+        }
+        if n_components >= 3:
+            result['pc3'] = projections[:, 2].tolist()
+        return result
     
     def _get_npz_pca(self, n_components: int) -> Dict[str, Any]:
         """Compute PCA for NPZ file."""

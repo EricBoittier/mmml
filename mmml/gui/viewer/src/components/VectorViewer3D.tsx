@@ -56,6 +56,8 @@ interface VectorViewer3DProps {
   dipole: number[] | null;
   electricField: number[] | null;
   espData?: EspDataProp | null;
+  espLimits?: { min: number; max: number } | null;
+  dcmnetCharges?: { charges: number[]; positions: number[][] } | null;
   showForces?: boolean;
   showDipole?: boolean;
   showElectricField?: boolean;
@@ -75,6 +77,8 @@ function VectorViewer3D({
   dipole,
   electricField,
   espData,
+  espLimits = null,
+  dcmnetCharges = null,
   showForces = true,
   showDipole = true,
   showElectricField = true,
@@ -98,6 +102,7 @@ function VectorViewer3D({
   const dipoleGroupRef = useRef<THREE.Group | null>(null);
   const efieldGroupRef = useRef<THREE.Group | null>(null);
   const espGroupRef = useRef<THREE.Points | null>(null);
+  const dcmnetChargesGroupRef = useRef<THREE.Group | null>(null);
   const atomMeshesRef = useRef<THREE.Mesh[]>([]);
   const atomSignatureRef = useRef<string | null>(null);
 
@@ -159,6 +164,8 @@ function VectorViewer3D({
     scene.add(efieldGroupRef.current);
     espGroupRef.current = new THREE.Points();
     scene.add(espGroupRef.current);
+    dcmnetChargesGroupRef.current = new THREE.Group();
+    scene.add(dcmnetChargesGroupRef.current);
     
     // Animation loop
     const animate = () => {
@@ -667,7 +674,17 @@ function VectorViewer3D({
         maxV = Math.max(maxV, v);
       }
     }
-    const range = maxV - minV || 1;
+    let rangeMin = minV;
+    let rangeMax = maxV;
+    if (espLimits) {
+      rangeMin = espLimits.min;
+      rangeMax = espLimits.max;
+    } else {
+      const lim = Math.max(Math.abs(minV), Math.abs(maxV), 1e-10);
+      rangeMin = -lim;
+      rangeMax = lim;
+    }
+    const range = rangeMax - rangeMin || 1;
 
     for (let i = 0; i < n; i++) {
       positions[i * 3] = grid[i][0];
@@ -675,8 +692,8 @@ function VectorViewer3D({
       positions[i * 3 + 2] = grid[i][2];
 
       const v = esp[i] ?? 0;
-      const t = Number.isFinite(v) ? (v - minV) / range : 0;
-      const hue = 0.66 - t * 0.66;
+      const t = Number.isFinite(v) ? (v - rangeMin) / range : 0;
+      const hue = 0.66 - Math.max(0, Math.min(1, t)) * 0.66;
       const c = new THREE.Color().setHSL(hue, 0.8, 0.5);
       colors[i * 3] = c.r;
       colors[i * 3 + 1] = c.g;
@@ -698,7 +715,42 @@ function VectorViewer3D({
     espGroupRef.current.geometry = geometry;
     espGroupRef.current.material = material;
     espGroupRef.current.visible = true;
-  }, [showEsp, espData]);
+  }, [showEsp, espData, espLimits]);
+
+  // Update DCMNet distributed charges
+  useEffect(() => {
+    if (!dcmnetChargesGroupRef.current) return;
+    while (dcmnetChargesGroupRef.current.children.length > 0) {
+      const child = dcmnetChargesGroupRef.current.children[0];
+      dcmnetChargesGroupRef.current.remove(child);
+      if (child instanceof THREE.Mesh) {
+        child.geometry?.dispose();
+        (child.material as THREE.Material)?.dispose();
+      }
+    }
+    if (!dcmnetCharges || !dcmnetCharges.positions || dcmnetCharges.positions.length === 0) {
+      dcmnetChargesGroupRef.current.visible = false;
+      return;
+    }
+    const { charges, positions: posList } = dcmnetCharges;
+    const maxAbsQ = Math.max(...charges.map((q) => Math.abs(q)), 0.01);
+    const sphereGeo = new THREE.SphereGeometry(0.08, 8, 6);
+    for (let i = 0; i < posList.length; i++) {
+      const q = charges[i] ?? 0;
+      if (Math.abs(q) < 1e-6) continue;
+      const pos = posList[i];
+      if (!pos || pos.length < 3) continue;
+      const color = q >= 0 ? 0xe74c3c : 0x3498db;
+      const mat = new THREE.MeshBasicMaterial({ color });
+      const mesh = new THREE.Mesh(sphereGeo.clone(), mat);
+      mesh.position.set(pos[0], pos[1], pos[2]);
+      const scale = 0.5 + 0.5 * (Math.abs(q) / maxAbsQ);
+      mesh.scale.setScalar(scale);
+      dcmnetChargesGroupRef.current!.add(mesh);
+    }
+    sphereGeo.dispose();
+    dcmnetChargesGroupRef.current!.visible = true;
+  }, [dcmnetCharges]);
 
   // Toggle visibility based on props
   useEffect(() => {
@@ -762,9 +814,42 @@ function VectorViewer3D({
             </div>
           )}
           {showEsp && espData && espData.esp_grid?.length > 0 && (
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-0.5 bg-teal-500" />
+                <span className="text-slate-400">ESP grid</span>
+              </div>
+              {(() => {
+                const esp = espData.esp;
+                let lo = Infinity, hi = -Infinity;
+                for (let i = 0; i < esp.length; i++) {
+                  if (Number.isFinite(esp[i])) {
+                    lo = Math.min(lo, esp[i]);
+                    hi = Math.max(hi, esp[i]);
+                  }
+                }
+                if (espLimits) {
+                  lo = espLimits.min;
+                  hi = espLimits.max;
+                } else if (lo !== Infinity) {
+                  const lim = Math.max(Math.abs(lo), Math.abs(hi), 1e-10);
+                  lo = -lim;
+                  hi = lim;
+                }
+                return Number.isFinite(lo) && Number.isFinite(hi) ? (
+                  <div className="text-slate-500 text-[10px]">
+                    {lo.toExponential(1)} — {hi.toExponential(1)}
+                  </div>
+                ) : null;
+              })()}
+            </div>
+          )}
+          {dcmnetCharges && dcmnetCharges.positions?.length > 0 && (
             <div className="flex items-center gap-2">
-              <div className="w-4 h-0.5 bg-teal-500" />
-              <span className="text-slate-400">ESP grid</span>
+              <div className="w-2 h-2 rounded-full bg-red-500" />
+              <span className="text-slate-500">+</span>
+              <div className="w-2 h-2 rounded-full bg-blue-500" />
+              <span className="text-slate-500">− charges</span>
             </div>
           )}
           {hasReplicaGrid && (

@@ -20,6 +20,8 @@ import {
   getConfig,
   getHiddenStates,
   getEsp,
+  getEspDatasets,
+  getDcmnetCharges,
   FileInfo,
   FileMetadata,
   FrameData,
@@ -58,6 +60,12 @@ function App() {
   const [showForces, setShowForces] = useState(true);
   const [showEsp, setShowEsp] = useState(false);
   const [espData, setEspData] = useState<EspData | null>(null);
+  const [selectedEspDataset, setSelectedEspDataset] = useState<string>('');
+  const [espColorMin, setEspColorMin] = useState<number | null>(null);
+  const [espColorMax, setEspColorMax] = useState<number | null>(null);
+  const [espDatasets, setEspDatasets] = useState<string[]>([]);
+  const [showDcmnetCharges, setShowDcmnetCharges] = useState(false);
+  const [dcmnetChargesData, setDcmnetChargesData] = useState<{ charges: number[]; positions: number[][] } | null>(null);
   const [selectedReplica, setSelectedReplica] = useState(0);
   const [showAllReplicasInView, setShowAllReplicasInView] = useState(false);
   const [highlightSelectedReplica, setHighlightSelectedReplica] = useState(true);
@@ -471,6 +479,24 @@ function App() {
     hiddenCompareReplica,
   ]);
 
+  // Fetch available ESP datasets when file has ESP
+  useEffect(() => {
+    const fetchDatasets = async () => {
+      if (!selectedFile || !metadata?.available_properties?.includes('esp')) {
+        setEspDatasets([]);
+        return;
+      }
+      try {
+        const { datasets } = await getEspDatasets(selectedFile.path);
+        setEspDatasets(datasets);
+        setSelectedEspDataset(prev => (datasets.includes(prev) ? prev : (datasets[0] ?? '')));
+      } catch {
+        setEspDatasets([]);
+      }
+    };
+    fetchDatasets();
+  }, [selectedFile, metadata?.available_properties]);
+
   // Load ESP when toggle is on and file has ESP
   useEffect(() => {
     const loadEsp = async () => {
@@ -479,14 +505,37 @@ function App() {
         return;
       }
       try {
-        const data = await getEsp(selectedFile.path, currentFrame, selectedReplica, 3000);
+        const data = await getEsp(
+          selectedFile.path,
+          currentFrame,
+          selectedReplica,
+          3000,
+          selectedEspDataset || undefined
+        );
         setEspData(data);
       } catch {
         setEspData(null);
       }
     };
     loadEsp();
-  }, [showEsp, selectedFile, metadata?.available_properties, currentFrame, selectedReplica]);
+  }, [showEsp, selectedFile, metadata?.available_properties, currentFrame, selectedReplica, selectedEspDataset]);
+
+  // Load DCMNet charges when toggle is on
+  useEffect(() => {
+    const loadCharges = async () => {
+      if (!showDcmnetCharges || !selectedFile || !metadata?.available_properties?.includes('dcmnet_charges')) {
+        setDcmnetChargesData(null);
+        return;
+      }
+      try {
+        const data = await getDcmnetCharges(selectedFile.path, currentFrame);
+        setDcmnetChargesData(data);
+      } catch {
+        setDcmnetChargesData(null);
+      }
+    };
+    loadCharges();
+  }, [showDcmnetCharges, selectedFile, metadata?.available_properties, currentFrame]);
 
   // Handle slider change in sorted view - converts sorted position to actual frame
   const handleSortedFrameChange = useCallback((sortedPosition: number) => {
@@ -680,14 +729,60 @@ function App() {
                 )}
 
                 {metadata?.available_properties?.includes('esp') && (
+                  <>
+                    <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={showEsp}
+                        onChange={(e) => setShowEsp(e.target.checked)}
+                        className="w-4 h-4 rounded border-slate-300 text-teal-500 focus:ring-teal-500"
+                      />
+                      <span className="text-teal-500">ESP</span>
+                    </label>
+                    {showEsp && espDatasets.length > 1 && (
+                      <select
+                        value={selectedEspDataset}
+                        onChange={(e) => setSelectedEspDataset(e.target.value)}
+                        className="text-sm bg-slate-100 dark:bg-slate-700 border-none rounded px-2 py-1 text-slate-700 dark:text-slate-300"
+                      >
+                        {espDatasets.map((d) => (
+                          <option key={d} value={d}>{d}</option>
+                        ))}
+                      </select>
+                    )}
+                    {showEsp && (
+                      <div className="flex items-center gap-1 text-xs">
+                        <span className="text-slate-500">Min:</span>
+                        <input
+                          type="number"
+                          step="any"
+                          placeholder="auto"
+                          value={espColorMin ?? ''}
+                          onChange={(e) => setEspColorMin(e.target.value === '' ? null : parseFloat(e.target.value))}
+                          className="w-16 px-1 py-0.5 bg-slate-100 dark:bg-slate-700 rounded text-slate-700 dark:text-slate-300"
+                        />
+                        <span className="text-slate-500">Max:</span>
+                        <input
+                          type="number"
+                          step="any"
+                          placeholder="auto"
+                          value={espColorMax ?? ''}
+                          onChange={(e) => setEspColorMax(e.target.value === '' ? null : parseFloat(e.target.value))}
+                          className="w-16 px-1 py-0.5 bg-slate-100 dark:bg-slate-700 rounded text-slate-700 dark:text-slate-300"
+                        />
+                      </div>
+                    )}
+                  </>
+                )}
+                {metadata?.available_properties?.includes('dcmnet_charges') && (
                   <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer">
                     <input
                       type="checkbox"
-                      checked={showEsp}
-                      onChange={(e) => setShowEsp(e.target.checked)}
-                      className="w-4 h-4 rounded border-slate-300 text-teal-500 focus:ring-teal-500"
+                      checked={showDcmnetCharges}
+                      onChange={(e) => setShowDcmnetCharges(e.target.checked)}
+                      className="w-4 h-4 rounded border-slate-300 text-cyan-500 focus:ring-cyan-500"
                     />
-                    <span className="text-teal-500">ESP</span>
+                    <span className="text-cyan-500">DCMNet charges</span>
                   </label>
                 )}
                 
@@ -796,6 +891,12 @@ function App() {
                         dipole={frameData?.dipole || null}
                         electricField={frameData?.electric_field || null}
                         espData={espData}
+                        espLimits={
+                          espColorMin != null && espColorMax != null
+                            ? { min: espColorMin, max: espColorMax }
+                            : null
+                        }
+                        dcmnetCharges={showDcmnetCharges ? dcmnetChargesData : null}
                         showForces={showForces}
                         showDipole={showDipole}
                         showElectricField={showElectricField}
