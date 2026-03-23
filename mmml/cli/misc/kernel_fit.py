@@ -11,8 +11,8 @@ def main():
     parser.add_argument("h5", type=Path, help="charmm_ml_comparison.h5 or similar")
     parser.add_argument("--out-dir", "-o", type=Path, default=Path("kernel_out"),
                         help="Directory for x_fit.txt, coefs*.txt")
-    parser.add_argument("--natmk", type=int, required=True,
-                        help="Number of atoms for distance matrix (e.g. 6 for benzene)")
+    parser.add_argument("--natmk", type=int, default=None,
+                        help="Number of atoms for distance matrix (default: from H5)")
     parser.add_argument("--out-h5", type=Path, default=None,
                         help="If set, evaluate and write H5 for GUI")
     parser.add_argument("--out-mdcm", type=Path, default=None,
@@ -41,7 +41,7 @@ def main():
     result = run_kernel_fit_pipeline(
         h5_path=args.h5,
         out_dir=args.out_dir,
-        natmk=args.natmk,
+        natmk=args.natmk if args.natmk is not None else None,
         out_h5=args.out_h5,
         out_mdcm=args.out_mdcm,
         out_kmdcm=args.out_kmdcm,

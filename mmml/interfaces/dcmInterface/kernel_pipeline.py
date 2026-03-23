@@ -25,7 +25,7 @@ from .topology import get_frames_meoh_like
 def run_kernel_fit_pipeline(
     h5_path: Union[str, Path],
     out_dir: Union[str, Path],
-    natmk: int,
+    natmk: Optional[int] = None,
     out_h5: Optional[Union[str, Path]] = None,
     out_mdcm: Optional[Union[str, Path]] = None,
     out_kmdcm: Optional[Union[str, Path]] = None,
@@ -53,8 +53,8 @@ def run_kernel_fit_pipeline(
         charmm_ml_comparison.h5 or similar (R, Z, N, dcmnet_*, esp_grid, esp_reference)
     out_dir : path
         Directory for x_fit.txt, coefs*.txt
-    natmk : int
-        Number of atoms for distance matrix (e.g. 6 for benzene)
+    natmk : int, optional
+        Number of atoms for distance matrix. Default: n_atoms from first frame
     out_h5 : path, optional
         If set, evaluate kernel on all frames and write H5 for GUI
     optimize_positions : bool
@@ -93,6 +93,12 @@ def run_kernel_fit_pipeline(
 
     if train_frame_indices is None:
         train_frame_indices = list(range(n_total))
+
+    # Infer natmk from first frame if not given
+    with h5py.File(h5_path, "r") as f:
+        n_atoms_first = int(f["N"][train_frame_indices[0]]) if has_n else f["R"].shape[1]
+    if natmk is None:
+        natmk = n_atoms_first
 
     # Load training data
     R_list = []
