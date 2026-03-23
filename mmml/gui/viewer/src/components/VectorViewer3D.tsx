@@ -58,6 +58,7 @@ interface VectorViewer3DProps {
   espData?: EspDataProp | null;
   espLimits?: { min: number; max: number } | null;
   dcmnetCharges?: { charges: number[]; positions: number[][] } | null;
+  atomsWireframe?: boolean;
   showForces?: boolean;
   showDipole?: boolean;
   showElectricField?: boolean;
@@ -79,6 +80,7 @@ function VectorViewer3D({
   espData,
   espLimits = null,
   dcmnetCharges = null,
+  atomsWireframe = false,
   showForces = true,
   showDipole = true,
   showElectricField = true,
@@ -423,7 +425,10 @@ function VectorViewer3D({
       atomsToRender.forEach((a) => {
         const radius = ELEMENT_RADII[a.atomicNumber] ?? DEFAULT_RADIUS;
         const geometry = new THREE.SphereGeometry(radius, 20, 20);
-        const material = new THREE.MeshPhongMaterial({ shininess: 30 });
+        const material = new THREE.MeshPhongMaterial({
+          shininess: 30,
+          wireframe: atomsWireframe,
+        });
         const sphere = new THREE.Mesh(geometry, material);
         atomsGroupRef.current!.add(sphere);
         atomMeshesRef.current.push(sphere);
@@ -440,6 +445,7 @@ function VectorViewer3D({
       const baseColor = new THREE.Color(ELEMENT_COLORS[a.atomicNumber] ?? DEFAULT_ATOM_COLOR);
       const color = baseColor.clone().lerp(tint, a.isSelected ? 0.55 : 0.25);
       const mat = mesh.material as THREE.MeshPhongMaterial;
+      mat.wireframe = atomsWireframe;
       mat.color.copy(color);
       if (a.isPicked) {
         mat.emissive.set(0x22d3ee);
@@ -495,6 +501,7 @@ function VectorViewer3D({
     clearAtomMeshes,
     clearLabels,
     selectedAtomIndices,
+    atomsWireframe,
   ]);
 
   useEffect(() => {
@@ -851,6 +858,9 @@ function VectorViewer3D({
               <div className="w-2 h-2 rounded-full bg-blue-500" />
               <span className="text-slate-500">− charges</span>
             </div>
+          )}
+          {atomsWireframe && (
+            <div className="text-slate-500 text-[10px]">Atoms: wireframe</div>
           )}
           {hasReplicaGrid && (
             <div className="pt-1 text-slate-500">

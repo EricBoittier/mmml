@@ -66,6 +66,7 @@ function App() {
   const [espDatasets, setEspDatasets] = useState<string[]>([]);
   const [showDcmnetCharges, setShowDcmnetCharges] = useState(false);
   const [dcmnetChargesData, setDcmnetChargesData] = useState<{ charges: number[]; positions: number[][] } | null>(null);
+  const [showAtomsWireframe, setShowAtomsWireframe] = useState(false);
   const [selectedReplica, setSelectedReplica] = useState(0);
   const [showAllReplicasInView, setShowAllReplicasInView] = useState(false);
   const [highlightSelectedReplica, setHighlightSelectedReplica] = useState(true);
@@ -785,6 +786,15 @@ function App() {
                     <span className="text-cyan-500">DCMNet charges</span>
                   </label>
                 )}
+                <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer" title="Show atoms as wireframe to see distributed charges inside">
+                  <input
+                    type="checkbox"
+                    checked={showAtomsWireframe}
+                    onChange={(e) => setShowAtomsWireframe(e.target.checked)}
+                    className="w-4 h-4 rounded border-slate-300 text-slate-400 focus:ring-slate-400"
+                  />
+                  <span className="text-slate-400">Wireframe atoms</span>
+                </label>
                 
                 <div className="w-px h-5 bg-slate-300 dark:bg-slate-600" />
 
@@ -897,6 +907,7 @@ function App() {
                             : null
                         }
                         dcmnetCharges={showDcmnetCharges ? dcmnetChargesData : null}
+                        atomsWireframe={showAtomsWireframe}
                         showForces={showForces}
                         showDipole={showDipole}
                         showElectricField={showElectricField}
