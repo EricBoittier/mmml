@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 from typing import Any, Tuple
 
+import h5py
 import numpy as np
 import jax
 
@@ -199,6 +200,11 @@ def main() -> int:
     esp_charmm_list = []
     esp_true_list = []
     esp_grid_list = []
+    dcmnet_charges_list = []
+    dcmnet_positions_list = []
+    R_list = []
+    Z_list = []
+    N_list = []
 
     print(f"\nEvaluating {n_total} samples...")
     for i in range(n_total):
@@ -240,11 +246,58 @@ def main() -> int:
         esp_true_list.append(np.array(batch["esp"][0]))
         esp_grid_list.append(vdw)
 
+        # DCMNet distributed charges (mono_dist, dipo_dist) - already absolute positions
+        n_atoms_pad = int(batch["R"].reshape(-1, 3).shape[0])
+        mono = np.array(output["mono_dist"]).reshape(n_atoms_pad, n_dcm)
+        dipo = np.array(output["dipo_dist"]).reshape(n_atoms_pad, n_dcm, 3)
+        dcmnet_charges_list.append(mono)
+        dcmnet_positions_list.append(dipo)
+
+        # Structure for this frame (batch["R"] is flattened as batch_size*natoms x 3)
+        R_frame = np.array(batch["R"]).reshape(natoms, 3)
+        Z_frame = np.array(batch["Z"]).flatten()[:natoms]
+        R_list.append(R_frame)
+        Z_list.append(Z_frame)
+        N_list.append(n_atoms)
+
     # Convert to arrays
     dipoles_physnet = np.array(dipoles_physnet)
     dipoles_dcmnet = np.array(dipoles_dcmnet)
     dipoles_charmm = np.array(dipoles_charmm)
     dipoles_true = np.array(dipoles_true)
+
+    R_arr = np.array(R_list)
+    Z_arr = np.array(Z_list)
+    N_arr = np.array(N_list, dtype=np.int32)
+    esp_grid_arr = np.array(esp_grid_list)
+    esp_physnet_arr = np.array(esp_physnet_list)
+    esp_dcmnet_arr = np.array(esp_dcmnet_list)
+    esp_charmm_arr = np.array(esp_charmm_list)
+    esp_reference_arr = np.array(esp_true_list)
+    esp_errors_physnet_arr = esp_physnet_arr - esp_reference_arr
+    esp_errors_dcmnet_arr = esp_dcmnet_arr - esp_reference_arr
+    esp_errors_charmm_arr = esp_charmm_arr - esp_reference_arr
+    dcmnet_charges_arr = np.array(dcmnet_charges_list)
+    dcmnet_charge_positions_arr = np.array(dcmnet_positions_list)
+
+    # Save H5 to results dir
+    args.out_dir.mkdir(parents=True, exist_ok=True)
+    h5_path = args.out_dir / "charmm_ml_comparison.h5"
+    with h5py.File(h5_path, "w") as f:
+        f.create_dataset("R", data=R_arr)
+        f.create_dataset("Z", data=Z_arr)
+        f.create_dataset("N", data=N_arr)
+        f.create_dataset("esp_grid", data=esp_grid_arr)
+        f.create_dataset("esp_physnet", data=esp_physnet_arr)
+        f.create_dataset("esp_dcmnet", data=esp_dcmnet_arr)
+        f.create_dataset("esp_charmm", data=esp_charmm_arr)
+        f.create_dataset("esp_reference", data=esp_reference_arr)
+        f.create_dataset("esp_errors_physnet", data=esp_errors_physnet_arr)
+        f.create_dataset("esp_errors_dcmnet", data=esp_errors_dcmnet_arr)
+        f.create_dataset("esp_errors_charmm", data=esp_errors_charmm_arr)
+        f.create_dataset("dcmnet_charges", data=dcmnet_charges_arr)
+        f.create_dataset("dcmnet_charge_positions", data=dcmnet_charge_positions_arr)
+    print(f"\nSaved: {h5_path}")
 
     esp_physnet_flat = np.concatenate([e.reshape(-1) for e in esp_physnet_list])
     esp_dcmnet_flat = np.concatenate([e.reshape(-1) for e in esp_dcmnet_list])

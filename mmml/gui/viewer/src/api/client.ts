@@ -254,21 +254,52 @@ export interface EspData {
 }
 
 /**
- * Get ESP values and grid for a frame (NPZ with esp/esp_grid).
+ * Get ESP values and grid for a frame.
+ * @param dataset - Dataset key for files with multiple ESP variants (e.g. esp_physnet, esp_errors_physnet)
  */
 export async function getEsp(
   path: string,
   index: number,
   replica?: number,
-  subsample?: number
+  subsample?: number,
+  dataset?: string
 ): Promise<EspData> {
   const encodedPath = encodeURIComponent(path);
   const params = new URLSearchParams({ index: String(index) });
   if (replica !== undefined) params.set('replica', String(replica));
   if (subsample !== undefined) params.set('subsample', String(subsample));
+  if (dataset !== undefined) params.set('dataset', dataset);
   const response = await fetch(`${API_BASE}/esp/${encodedPath}?${params.toString()}`);
   if (!response.ok) {
     throw new Error(`Failed to get ESP: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+/**
+ * Get list of available ESP dataset keys (for files with multiple ESP variants).
+ */
+export async function getEspDatasets(path: string): Promise<{ datasets: string[] }> {
+  const encodedPath = encodeURIComponent(path);
+  const response = await fetch(`${API_BASE}/esp_datasets/${encodedPath}`);
+  if (!response.ok) {
+    throw new Error(`Failed to get ESP datasets: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+/**
+ * Get DCMNet distributed charges and positions for a frame.
+ */
+export async function getDcmnetCharges(
+  path: string,
+  index: number
+): Promise<{ charges: number[]; positions: number[][] }> {
+  const encodedPath = encodeURIComponent(path);
+  const params = new URLSearchParams({ index: String(index) });
+  const response = await fetch(`${API_BASE}/dcmnet_charges/${encodedPath}?${params.toString()}`);
+  if (!response.ok) {
+    throw new Error(`Failed to get DCMNet charges: ${response.statusText}`);
   }
   return response.json();
 }

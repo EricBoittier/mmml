@@ -162,8 +162,9 @@ def create_app(
         index: int = Query(0, ge=0, description="Frame index"),
         replica: int = Query(0, ge=0, description="Replica index"),
         subsample: Optional[int] = Query(None, ge=100, le=50_000, description="Downsample to N points for viz"),
+        dataset: Optional[str] = Query(None, description="ESP dataset key (e.g. esp_physnet, esp_errors_physnet)"),
     ):
-        """Get ESP values and grid coordinates for a frame (NPZ with esp/esp_grid only)."""
+        """Get ESP values and grid coordinates for a frame."""
         file_path = _resolve_path(app, path)
         
         parser = _get_parser(app, file_path)
@@ -179,7 +180,41 @@ def create_app(
             raise HTTPException(status_code=400, detail="File does not contain ESP data")
         
         try:
-            return parser.get_esp_frame(index=index, replica_index=replica, subsample=subsample)
+            return parser.get_esp_frame(
+                index=index,
+                replica_index=replica,
+                subsample=subsample,
+                dataset=dataset,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    @app.get("/api/esp_datasets/{path:path}")
+    async def get_esp_datasets(path: str):
+        """Get list of available ESP dataset keys (for files with multiple ESP variants)."""
+        file_path = _resolve_path(app, path)
+        parser = _get_parser(app, file_path)
+        datasets = parser.get_available_esp_datasets()
+        return {"datasets": datasets}
+
+    @app.get("/api/dcmnet_charges/{path:path}")
+    async def get_dcmnet_charges(
+        path: str,
+        index: int = Query(0, ge=0, description="Frame index"),
+    ):
+        """Get DCMNet distributed charges and positions for a frame."""
+        file_path = _resolve_path(app, path)
+        parser = _get_parser(app, file_path)
+        metadata = parser.get_metadata()
+        if index >= metadata.n_frames:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Frame index {index} out of range (0-{metadata.n_frames-1})"
+            )
+        if not parser.has_dcmnet_charges():
+            raise HTTPException(status_code=400, detail="File does not contain DCMNet charges")
+        try:
+            return parser.get_dcmnet_charges_frame(index=index)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
     
