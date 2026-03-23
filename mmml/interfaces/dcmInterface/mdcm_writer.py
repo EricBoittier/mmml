@@ -38,6 +38,7 @@ def write_mdcm(
 
     lines = [
         "1 0",
+        "",
         residue_name,
         str(n_frames),
     ]
