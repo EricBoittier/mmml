@@ -21,8 +21,8 @@ def main():
                         help="Write .kmdcm kernel file (default: out_dir/RESIDUE.kmdcm)")
     parser.add_argument("--residue-name", default="MEOH",
                         help="Residue name for mdcm header and default filenames")
-    parser.add_argument("--nkfr", type=int, default=3,
-                        help="NKFR for kmdcm header (e.g. 3)")
+    parser.add_argument("--nkfr", type=int, default=None,
+                        help="NKFR for kmdcm (default: number of frames in residue)")
     parser.add_argument("--optimize", action="store_true",
                         help="Optimize (AQ,BQ,CQ) per frame before fitting")
     parser.add_argument("--train-frames", type=str, default=None,
