@@ -60,7 +60,7 @@ For help on a specific command:
     
     parser.add_argument(
         'command',
-        choices=['make-res', 'make-box', 'run', 'run-pycharmm', 'xml2npz', 'validate', 'train', 'evaluate', 'downstream', 'fix-and-split', 'pyscf-dft', 'pyscf-mp2', 'pyscf-evaluate', 'verify-esp-alignment', 'normal-mode-sample', 'physnet-md', 'active-learning', 'gui'],
+        choices=['make-res', 'make-box', 'run', 'run-pycharmm', 'xml2npz', 'validate', 'train', 'evaluate', 'downstream', 'fix-and-split', 'pyscf-dft', 'pyscf-mp2', 'pyscf-evaluate', 'verify-esp-alignment', 'normal-mode-sample', 'physnet-md', 'active-learning', 'kernel-fit', 'gui'],
         help='Command to run'
     )
     parser.add_argument(
@@ -169,6 +169,11 @@ For help on a specific command:
         from .misc import active_learning
         sys.argv = ['mmml active-learning'] + args.args
         return active_learning.main()
+
+    elif args.command == 'kernel-fit':
+        from .misc import kernel_fit
+        sys.argv = ['mmml kernel-fit'] + args.args
+        return kernel_fit.main()
 
     elif args.command == 'gui':
         from . import gui
