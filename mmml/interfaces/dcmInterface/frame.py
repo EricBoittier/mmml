@@ -55,11 +55,11 @@ def compute_dcm_frame(
             raise ValueError(f"Collinear frame: atoms {atm1},{atm2},{atm3}")
         Y_vec = Y_vec / rey
 
-        # X = cross(Y, Z) for each atom
-        X1 = np.cross(Y_vec, Z1)
+        # X = EZ CROSS EY (CHARMM comment: "LOCAL X-AXIS = EZ CROSS EY")
+        X1 = np.cross(Z1, Y_vec)
         X1 = X1 / np.linalg.norm(X1)
         X2 = X1
-        X3 = np.cross(Y_vec, Z3)
+        X3 = np.cross(Z3, Y_vec)
         X3 = X3 / np.linalg.norm(X3)
 
         return {
