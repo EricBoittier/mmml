@@ -539,6 +539,291 @@ class MolecularFileParser:
             atomic_numbers=atomic_numbers,
         )
     
+    def get_inspection_data(self) -> Dict[str, Any]:
+        """
+        Get raw keys, array metadata, and summary statistics for data inspection.
+        Used by the Data Inspector panel.
+        
+        Returns
+        -------
+        dict
+            keys, arrays (per-key metadata), metadata_keys (for NPZ)
+            or info_keys, arrays_keys with per-key info (for ASE)
+        """
+        self._load_data()
+        
+        if self.file_type == 'npz':
+            return self._get_npz_inspection()
+        else:
+            return self._get_ase_inspection()
+    
+    def _get_npz_inspection(self) -> Dict[str, Any]:
+        """Inspection data for NPZ files."""
+        data = self._data
+        MAX_ELEMENTS_FOR_STATS = 500_000  # Sample if larger
+        
+        result: Dict[str, Any] = {
+            'keys': [],
+            'arrays': {},
+            'metadata_keys': [],
+        }
+        
+        keys = list(data.files) if hasattr(data, 'files') else list(data.keys())
+        result['keys'] = keys
+        
+        for key in keys:
+            try:
+                arr = np.asarray(data[key])
+            except Exception:
+                result['metadata_keys'].append(key)
+                continue
+            
+            if arr.dtype == object or arr.dtype.kind in ('O', 'U', 'S'):
+                result['metadata_keys'].append(key)
+                continue
+            
+            nbytes = arr.nbytes
+            size_mb = round(nbytes / (1024 * 1024), 4)
+            entry: Dict[str, Any] = {
+                'shape': list(arr.shape),
+                'dtype': str(arr.dtype),
+                'size_mb': size_mb,
+            }
+            
+            if np.issubdtype(arr.dtype, np.floating) or np.issubdtype(arr.dtype, np.integer):
+                flat = arr.ravel()
+                n_elems = flat.size
+                if n_elems <= MAX_ELEMENTS_FOR_STATS:
+                    valid = flat[np.isfinite(flat)] if np.issubdtype(arr.dtype, np.floating) else flat
+                    if valid.size > 0:
+                        entry['min'] = float(np.min(valid))
+                        entry['max'] = float(np.max(valid))
+                        entry['mean'] = float(np.mean(valid))
+                        entry['std'] = float(np.std(valid))
+                else:
+                    sample = np.random.default_rng(42).choice(flat, size=min(100_000, n_elems), replace=False)
+                    valid = sample[np.isfinite(sample)] if np.issubdtype(arr.dtype, np.floating) else np.asarray(sample)
+                    if valid.size > 0:
+                        entry['min'] = float(np.min(valid))
+                        entry['max'] = float(np.max(valid))
+                        entry['mean'] = float(np.mean(valid))
+                        entry['std'] = float(np.std(valid))
+                    entry['stats_sampled'] = True
+            
+            result['arrays'][key] = entry
+        
+        return result
+    
+    def _get_ase_inspection(self) -> Dict[str, Any]:
+        """Inspection data for ASE trajectory/PDB files."""
+        frames = self._data
+        if not frames:
+            return {'info_keys': [], 'arrays_keys': [], 'info': {}, 'arrays': {}}
+        
+        atoms = frames[0]
+        info_keys = list(atoms.info.keys())
+        arrays_keys = list(atoms.arrays.keys())
+        
+        info_meta: Dict[str, Any] = {}
+        for k in info_keys:
+            v = atoms.info[k]
+            if isinstance(v, (int, float, str, bool)) or v is None:
+                info_meta[k] = {'type': type(v).__name__, 'sample': str(v)[:100]}
+            elif isinstance(v, np.ndarray):
+                info_meta[k] = {
+                    'type': 'ndarray',
+                    'shape': list(v.shape),
+                    'dtype': str(v.dtype),
+                }
+            else:
+                info_meta[k] = {'type': type(v).__name__}
+        
+        arrays_meta: Dict[str, Any] = {}
+        for k in arrays_keys:
+            arr = atoms.arrays[k]
+            nbytes = arr.nbytes
+            size_mb = round(nbytes / (1024 * 1024), 4)
+            entry: Dict[str, Any] = {
+                'shape': list(arr.shape),
+                'dtype': str(arr.dtype),
+                'size_mb': size_mb,
+            }
+            if np.issubdtype(arr.dtype, np.floating) or np.issubdtype(arr.dtype, np.integer):
+                flat = arr.ravel()
+                if flat.size <= 100_000 and flat.size > 0:
+                    valid = flat[np.isfinite(flat)] if np.issubdtype(arr.dtype, np.floating) else flat
+                    if valid.size > 0:
+                        entry['min'] = float(np.min(valid))
+                        entry['max'] = float(np.max(valid))
+                        entry['mean'] = float(np.mean(valid))
+            arrays_meta[k] = entry
+        
+        return {
+            'info_keys': info_keys,
+            'arrays_keys': arrays_keys,
+            'info': info_meta,
+            'arrays': arrays_meta,
+            'n_frames': len(frames),
+        }
+    
+    def get_array(
+        self,
+        key: str,
+        frame: Optional[int] = None,
+        replica_index: int = 0,
+        limit: Optional[int] = None,
+    ) -> np.ndarray:
+        """
+        Get a raw array slice from the file.
+        
+        Parameters
+        ----------
+        key : str
+            Array key (e.g. 'R', 'E', 'esp', 'esp_grid')
+        frame : int, optional
+            Frame index (for per-frame arrays). If None, returns full array.
+        replica_index : int
+            Replica index when array has replica dimension.
+        limit : int, optional
+            Max elements to return (for preview/truncation).
+        
+        Returns
+        -------
+        np.ndarray
+        """
+        self._load_data()
+        
+        if self.file_type == 'npz':
+            return self._get_npz_array(key, frame, replica_index, limit)
+        else:
+            return self._get_ase_array(key, frame, limit)
+    
+    def _get_npz_array(
+        self,
+        key: str,
+        frame: Optional[int],
+        replica_index: int,
+        limit: Optional[int],
+    ) -> np.ndarray:
+        data = self._data
+        if key not in data:
+            raise KeyError(f"Key '{key}' not found in NPZ file")
+        
+        arr = np.asarray(data[key], dtype=np.float64)
+        n_replicas = _get_npz_n_replicas(data)
+        rep_idx = min(max(replica_index, 0), max(n_replicas - 1, 0))
+        
+        if frame is not None:
+            arr = arr[frame]
+            while arr.ndim > 2 and arr.shape[0] == 1:
+                arr = arr.squeeze(axis=0)
+            if arr.ndim == 3 and n_replicas > 1:
+                arr = arr[min(rep_idx, arr.shape[0] - 1)]
+        
+        flat = arr.ravel()
+        if limit is not None and flat.size > limit:
+            idx = np.linspace(0, flat.size - 1, num=min(limit, flat.size), dtype=int)
+            return flat[idx]
+        
+        return arr
+    
+    def _get_ase_array(
+        self,
+        key: str,
+        frame: Optional[int],
+        limit: Optional[int],
+    ) -> np.ndarray:
+        frames = self._data
+        if not frames:
+            raise ValueError("Empty trajectory")
+        
+        if key in frames[0].arrays:
+            if frame is not None:
+                arr = np.asarray(frames[frame].arrays[key])
+            else:
+                arr = np.array([np.asarray(f.arrays[key]) for f in frames])
+        elif key in frames[0].info:
+            if frame is not None:
+                val = frames[frame].info[key]
+            else:
+                val = [f.info[key] for f in frames]
+            arr = np.asarray(val)
+        else:
+            raise KeyError(f"Key '{key}' not found in ASE trajectory (info or arrays)")
+        
+        flat = arr.ravel()
+        if limit is not None and flat.size > limit:
+            idx = np.linspace(0, flat.size - 1, num=min(limit, flat.size), dtype=int)
+            return flat[idx]
+        
+        return arr
+    
+    def get_esp_frame(
+        self,
+        index: int,
+        replica_index: int = 0,
+        subsample: Optional[int] = None,
+    ) -> Dict[str, List]:
+        """
+        Get ESP values and grid coordinates for a specific frame (NPZ only).
+        
+        Parameters
+        ----------
+        index : int
+            Frame index
+        replica_index : int
+            Replica index when data has replica dimension
+        subsample : int, optional
+            If set, downsample to this many points for visualization
+        
+        Returns
+        -------
+        dict
+            {'esp': [...], 'esp_grid': [[x,y,z], ...]}
+        """
+        self._load_data()
+        if self.file_type != 'npz':
+            raise ValueError("ESP data is only available for NPZ files")
+        
+        data = self._data
+        if 'esp' not in data or 'esp_grid' not in data:
+            raise ValueError("File does not contain esp and esp_grid")
+        
+        esp = np.asarray(data['esp'][index], dtype=np.float64)
+        esp_grid = np.asarray(data['esp_grid'][index], dtype=np.float64)
+        
+        while esp.ndim > 1 and esp.shape[0] == 1:
+            esp = esp.squeeze(axis=0)
+        if esp.ndim > 1:
+            n_replicas = _get_npz_n_replicas(data)
+            rep_idx = min(max(replica_index, 0), max(n_replicas - 1, 0))
+            esp = esp[min(rep_idx, esp.shape[0] - 1)]
+        
+        while esp_grid.ndim > 2 and esp_grid.shape[0] == 1:
+            esp_grid = esp_grid.squeeze(axis=0)
+        if esp_grid.ndim == 3:
+            n_replicas = _get_npz_n_replicas(data)
+            rep_idx = min(max(replica_index, 0), max(n_replicas - 1, 0))
+            esp_grid = esp_grid[min(rep_idx, esp_grid.shape[0] - 1)]
+        
+        esp = np.asarray(esp).ravel()
+        n_grid = esp_grid.shape[0]
+        if len(esp) != n_grid:
+            esp = esp[:n_grid]
+            n_points = n_grid
+        else:
+            n_points = len(esp)
+        
+        if subsample is not None and n_points > subsample:
+            idx = np.linspace(0, n_points - 1, num=subsample, dtype=int)
+            esp = esp[idx].tolist()
+            esp_grid = esp_grid[idx].tolist()
+        else:
+            esp = esp.tolist()
+            esp_grid = esp_grid.tolist()
+        
+        return {'esp': esp, 'esp_grid': esp_grid}
+    
     def get_all_properties(self) -> Dict[str, List]:
         """
         Get all properties for all frames (for plotting).

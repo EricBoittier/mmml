@@ -6,6 +6,7 @@ Starts a FastAPI server that serves the React frontend and provides
 API endpoints for viewing molecular data files (NPZ, ASE traj, PDB).
 
 Usage:
+    mmml gui                    # Data dir defaults to cwd; load files from file browser
     mmml gui --data-dir ./data --port 8000
     mmml gui --file trajectory.npz
     mmml gui --data-dir ./data --dev  # Development mode (no static files)
@@ -23,15 +24,18 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Serve all molecular files from a directory
+  # Use current directory as data dir; load files from file browser
+  mmml gui
+
+  # Serve all molecular files from a specific directory
   mmml gui --data-dir ./trajectories
-  
-  # Serve a single file
+
+  # Pre-load a single file
   mmml gui --file simulation.npz
-  
+
   # Custom port
   mmml gui --data-dir ./data --port 8080
-  
+
   # Development mode (React dev server handles frontend)
   mmml gui --data-dir ./data --dev
 
@@ -42,17 +46,19 @@ Supported file formats:
         """
     )
     
-    # Data source arguments (mutually exclusive)
-    source_group = parser.add_mutually_exclusive_group(required=True)
+    # Data source arguments (mutually exclusive; default: data-dir = cwd)
+    source_group = parser.add_mutually_exclusive_group(required=False)
     source_group.add_argument(
         '--data-dir', '-d',
         type=Path,
-        help='Directory containing molecular data files'
+        default=None,
+        help='Directory containing molecular data files (default: current directory)'
     )
     source_group.add_argument(
         '--file', '-f',
         type=Path,
-        help='Single molecular file to view'
+        default=None,
+        help='Single molecular file to view (pre-load instead of browsing)'
     )
     
     # Server configuration
@@ -92,7 +98,11 @@ Supported file formats:
     )
     
     args = parser.parse_args()
-    
+
+    # Default data_dir to cwd when neither --data-dir nor --file is given
+    if args.data_dir is None and args.file is None:
+        args.data_dir = Path.cwd()
+
     # Validate paths
     if args.data_dir and not args.data_dir.exists():
         print(f"Error: Directory not found: {args.data_dir}", file=sys.stderr)

@@ -184,6 +184,95 @@ export async function getFileMetadata(path: string): Promise<FileMetadata> {
   return response.json();
 }
 
+/** Array metadata from inspect (NPZ or ASE arrays). */
+export interface ArrayInspectionEntry {
+  shape: number[];
+  dtype: string;
+  size_mb: number;
+  min?: number;
+  max?: number;
+  mean?: number;
+  std?: number;
+  stats_sampled?: boolean;
+}
+
+/** NPZ inspection response. */
+export interface NpzInspectionData {
+  keys: string[];
+  arrays: Record<string, ArrayInspectionEntry>;
+  metadata_keys: string[];
+}
+
+/** ASE inspection response. */
+export interface AseInspectionData {
+  info_keys: string[];
+  arrays_keys: string[];
+  info: Record<string, { type: string; sample?: string }>;
+  arrays: Record<string, ArrayInspectionEntry>;
+  n_frames: number;
+}
+
+export type InspectionData = NpzInspectionData | AseInspectionData;
+
+/**
+ * Get raw keys, array metadata, and summary statistics for a file.
+ */
+export async function getInspection(path: string): Promise<InspectionData> {
+  const encodedPath = encodeURIComponent(path);
+  const response = await fetch(`${API_BASE}/inspect/${encodedPath}`);
+  if (!response.ok) {
+    throw new Error(`Failed to inspect file: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+/**
+ * Get raw array data for a key, optionally sliced by frame.
+ */
+export async function getArray(
+  path: string,
+  key: string,
+  frame?: number,
+  replica?: number,
+  limit?: number
+): Promise<number[] | number[][]> {
+  const encodedPath = encodeURIComponent(path);
+  const params = new URLSearchParams({ key });
+  if (frame !== undefined) params.set('frame', String(frame));
+  if (replica !== undefined) params.set('replica', String(replica));
+  if (limit !== undefined) params.set('limit', String(limit));
+  const response = await fetch(`${API_BASE}/array/${encodedPath}?${params.toString()}`);
+  if (!response.ok) {
+    throw new Error(`Failed to get array: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+export interface EspData {
+  esp: number[];
+  esp_grid: number[][];
+}
+
+/**
+ * Get ESP values and grid for a frame (NPZ with esp/esp_grid).
+ */
+export async function getEsp(
+  path: string,
+  index: number,
+  replica?: number,
+  subsample?: number
+): Promise<EspData> {
+  const encodedPath = encodeURIComponent(path);
+  const params = new URLSearchParams({ index: String(index) });
+  if (replica !== undefined) params.set('replica', String(replica));
+  if (subsample !== undefined) params.set('subsample', String(subsample));
+  const response = await fetch(`${API_BASE}/esp/${encodedPath}?${params.toString()}`);
+  if (!response.ok) {
+    throw new Error(`Failed to get ESP: ${response.statusText}`);
+  }
+  return response.json();
+}
+
 /**
  * Get a specific frame from a file.
  */

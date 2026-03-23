@@ -43,6 +43,7 @@ Examples:
   mmml validate dataset.npz
   mmml fix-and-split --efd data.npz --output-dir ./splits
   mmml fix-and-split --efd data.npz --grid grids.npz --output-dir ./splits
+  mmml gui                    # data dir defaults to cwd; load files from file browser
   mmml gui --data-dir ./trajectories
   mmml gui --file simulation.npz
   mmml pyscf-dft --mol "O 0 0 0; H 0.96 0 0; H -0.24 0.93 0" --energy

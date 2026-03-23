@@ -37,6 +37,11 @@ const ELEMENT_SYMBOLS: Record<number, string> = {
   1: 'H', 6: 'C', 7: 'N', 8: 'O', 9: 'F', 15: 'P', 16: 'S', 17: 'Cl', 35: 'Br', 53: 'I',
 };
 
+interface EspDataProp {
+  esp: number[];
+  esp_grid: number[][];
+}
+
 interface VectorViewer3DProps {
   positions: number[][] | null;
   atomicNumbers: number[] | null;
@@ -50,9 +55,11 @@ interface VectorViewer3DProps {
   forces: number[][] | null;
   dipole: number[] | null;
   electricField: number[] | null;
+  espData?: EspDataProp | null;
   showForces?: boolean;
   showDipole?: boolean;
   showElectricField?: boolean;
+  showEsp?: boolean;
   viewSessionKey?: string;
   selectedAtomIndices?: number[];
   onAtomPick?: (atomIndex: number) => void;
@@ -67,9 +74,11 @@ function VectorViewer3D({
   forces,
   dipole,
   electricField,
+  espData,
   showForces = true,
   showDipole = true,
   showElectricField = true,
+  showEsp = false,
   viewSessionKey = 'default',
   selectedAtomIndices = [],
   onAtomPick,
@@ -88,6 +97,7 @@ function VectorViewer3D({
   const forcesGroupRef = useRef<THREE.Group | null>(null);
   const dipoleGroupRef = useRef<THREE.Group | null>(null);
   const efieldGroupRef = useRef<THREE.Group | null>(null);
+  const espGroupRef = useRef<THREE.Points | null>(null);
   const atomMeshesRef = useRef<THREE.Mesh[]>([]);
   const atomSignatureRef = useRef<string | null>(null);
 
@@ -147,6 +157,8 @@ function VectorViewer3D({
     scene.add(forcesGroupRef.current);
     scene.add(dipoleGroupRef.current);
     scene.add(efieldGroupRef.current);
+    espGroupRef.current = new THREE.Points();
+    scene.add(espGroupRef.current);
     
     // Animation loop
     const animate = () => {
@@ -622,6 +634,72 @@ function VectorViewer3D({
     efieldGroupRef.current.add(arrow);
   }, [positions, electricField, showElectricField, createArrow, replicaFrames]);
 
+  // Update ESP point cloud
+  useEffect(() => {
+    if (!espGroupRef.current) return;
+
+    // Clear existing ESP points
+    if (espGroupRef.current.geometry) {
+      espGroupRef.current.geometry.dispose();
+      if (espGroupRef.current.material instanceof THREE.Material) {
+        espGroupRef.current.material.dispose();
+      }
+    }
+
+    if (!showEsp || !espData || !espData.esp_grid || espData.esp_grid.length === 0) {
+      espGroupRef.current.visible = false;
+      return;
+    }
+
+    const grid = espData.esp_grid;
+    const esp = espData.esp;
+    const n = grid.length;
+
+    const positions = new Float32Array(n * 3);
+    const colors = new Float32Array(n * 3);
+
+    let minV = Infinity;
+    let maxV = -Infinity;
+    for (let i = 0; i < esp.length; i++) {
+      const v = esp[i];
+      if (Number.isFinite(v)) {
+        minV = Math.min(minV, v);
+        maxV = Math.max(maxV, v);
+      }
+    }
+    const range = maxV - minV || 1;
+
+    for (let i = 0; i < n; i++) {
+      positions[i * 3] = grid[i][0];
+      positions[i * 3 + 1] = grid[i][1];
+      positions[i * 3 + 2] = grid[i][2];
+
+      const v = esp[i] ?? 0;
+      const t = Number.isFinite(v) ? (v - minV) / range : 0;
+      const hue = 0.66 - t * 0.66;
+      const c = new THREE.Color().setHSL(hue, 0.8, 0.5);
+      colors[i * 3] = c.r;
+      colors[i * 3 + 1] = c.g;
+      colors[i * 3 + 2] = c.b;
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+    const material = new THREE.PointsMaterial({
+      size: 0.15,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.7,
+      depthWrite: false,
+    });
+
+    espGroupRef.current.geometry = geometry;
+    espGroupRef.current.material = material;
+    espGroupRef.current.visible = true;
+  }, [showEsp, espData]);
+
   // Toggle visibility based on props
   useEffect(() => {
     if (forcesGroupRef.current) {
@@ -640,6 +718,12 @@ function VectorViewer3D({
       efieldGroupRef.current.visible = showElectricField;
     }
   }, [showElectricField]);
+
+  useEffect(() => {
+    if (espGroupRef.current) {
+      espGroupRef.current.visible = Boolean(showEsp && espData && espData.esp_grid?.length > 0);
+    }
+  }, [showEsp, espData]);
 
   const hasSingle = Boolean(positions && positions.length > 0);
   const hasReplicaGrid = Boolean(replicaFrames && replicaFrames.length > 0);
@@ -675,6 +759,12 @@ function VectorViewer3D({
             <div className="flex items-center gap-2">
               <div className="w-4 h-0.5 bg-amber-500" />
               <span className="text-slate-400">E-Field</span>
+            </div>
+          )}
+          {showEsp && espData && espData.esp_grid?.length > 0 && (
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-0.5 bg-teal-500" />
+              <span className="text-slate-400">ESP grid</span>
             </div>
           )}
           {hasReplicaGrid && (

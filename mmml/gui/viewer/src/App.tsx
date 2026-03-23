@@ -9,6 +9,7 @@ import PCAProjection from './components/PCAProjection';
 import FileSidebar from './components/FileSidebar';
 import HiddenStatesPanel from './components/HiddenStatesPanel';
 import GeometryDatasetPanel, { GeometryDatasetPoint } from './components/GeometryDatasetPanel';
+import DataInspectorPanel from './components/DataInspectorPanel';
 import {
   listFiles,
   getFileMetadata,
@@ -18,11 +19,13 @@ import {
   getGeometryDataset,
   getConfig,
   getHiddenStates,
+  getEsp,
   FileInfo,
   FileMetadata,
   FrameData,
   Properties,
   HiddenStatesResponse,
+  EspData,
 } from './api/client';
 
 // Number of frames to preload in each direction
@@ -53,6 +56,8 @@ function App() {
   const [showDipole, setShowDipole] = useState(true);
   const [showElectricField, setShowElectricField] = useState(true);
   const [showForces, setShowForces] = useState(true);
+  const [showEsp, setShowEsp] = useState(false);
+  const [espData, setEspData] = useState<EspData | null>(null);
   const [selectedReplica, setSelectedReplica] = useState(0);
   const [showAllReplicasInView, setShowAllReplicasInView] = useState(false);
   const [highlightSelectedReplica, setHighlightSelectedReplica] = useState(true);
@@ -207,6 +212,7 @@ function App() {
     setSelectedAtoms([]);
     setGeometryDataset(null);
     setGeometryError(null);
+    setEspData(null);
     setGeometryStride(1);
     
     // Clear frame cache for new file
@@ -465,6 +471,23 @@ function App() {
     hiddenCompareReplica,
   ]);
 
+  // Load ESP when toggle is on and file has ESP
+  useEffect(() => {
+    const loadEsp = async () => {
+      if (!showEsp || !selectedFile || !metadata?.available_properties?.includes('esp')) {
+        setEspData(null);
+        return;
+      }
+      try {
+        const data = await getEsp(selectedFile.path, currentFrame, selectedReplica, 3000);
+        setEspData(data);
+      } catch {
+        setEspData(null);
+      }
+    };
+    loadEsp();
+  }, [showEsp, selectedFile, metadata?.available_properties, currentFrame, selectedReplica]);
+
   // Handle slider change in sorted view - converts sorted position to actual frame
   const handleSortedFrameChange = useCallback((sortedPosition: number) => {
     const actualFrame = getActualFrameIndex(sortedPosition);
@@ -655,6 +678,18 @@ function App() {
                     </span>
                   </label>
                 )}
+
+                {metadata?.available_properties?.includes('esp') && (
+                  <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={showEsp}
+                      onChange={(e) => setShowEsp(e.target.checked)}
+                      className="w-4 h-4 rounded border-slate-300 text-teal-500 focus:ring-teal-500"
+                    />
+                    <span className="text-teal-500">ESP</span>
+                  </label>
+                )}
                 
                 <div className="w-px h-5 bg-slate-300 dark:bg-slate-600" />
 
@@ -760,9 +795,11 @@ function App() {
                         forces={frameData?.forces || null}
                         dipole={frameData?.dipole || null}
                         electricField={frameData?.electric_field || null}
+                        espData={espData}
                         showForces={showForces}
                         showDipole={showDipole}
                         showElectricField={showElectricField}
+                        showEsp={showEsp}
                         viewSessionKey={`${selectedFile?.path ?? ''}|${showAllReplicasInView ? 'all' : 'single'}`}
                         selectedAtomIndices={selectedAtoms}
                         onAtomPick={handleAtomPick}
@@ -838,6 +875,14 @@ function App() {
                   onCompareEnabledChange={setHiddenCompareEnabled}
                   onCompareFrameChange={setHiddenCompareFrame}
                   onCompareReplicaChange={setHiddenCompareReplica}
+                />
+              )}
+
+              {metadata && selectedFile && (
+                <DataInspectorPanel
+                  filePath={selectedFile.path}
+                  currentFrame={currentFrame}
+                  nFrames={metadata.n_frames}
                 />
               )}
 
