@@ -194,6 +194,7 @@ def main_batched(args):
     from ase.calculators.singlepoint import SinglePointCalculator
     from mmml.models.EF.ase_calc_EF import load_params, load_config
     from mmml.models.EF.training import MessagePassingModel
+    from mmml.models.EF.model_functions import energy_and_forces
 
     BOLTZMANN_EV = 8.617333262e-5
     AMU_TO_EV_FS2_ANG2 = 103.6427
@@ -211,14 +212,27 @@ def main_batched(args):
     # Dataset with >= B structures → each replica gets a distinct geometry.
     # Dataset with < B structures → single geometry, tiled.
     R_multi = None  # (B, N, 3) when distinct geometries are available
+    dataset = None
     if args.xyz is not None:
         atoms_init = ase_io.read(args.xyz)
         Z = jnp.asarray(atoms_init.get_atomic_numbers(), dtype=jnp.int32)
         R_single = jnp.asarray(atoms_init.get_positions(), dtype=jnp.float32)
+        Z_batched = jnp.tile(Z[None, :], (B, 1))
+        n_dataset = 0
     else:
         dataset = np.load(args.data, allow_pickle=True)
-        Z = jnp.asarray(dataset["Z"][args.index].astype(int), dtype=jnp.int32)
         n_dataset = len(dataset["R"])
+        z_arr = np.asarray(dataset["Z"])
+        if z_arr.ndim == 2 and n_dataset >= args.index + B:
+            Z_batched_np = z_arr[args.index: args.index + B].astype(np.int32)
+        elif z_arr.ndim == 1:
+            z0 = z_arr.reshape(-1)
+            Z_batched_np = np.tile(z0[np.newaxis, :], (B, 1))
+        else:
+            z0 = np.asarray(z_arr[args.index]).reshape(-1)
+            Z_batched_np = np.tile(z0[np.newaxis, :], (B, 1))
+        Z_batched = jnp.asarray(Z_batched_np, dtype=jnp.int32)
+        Z = Z_batched[0]
 
         if n_dataset >= args.index + B:
             R_all = np.asarray(dataset["R"][args.index:args.index + B],
@@ -233,7 +247,7 @@ def main_batched(args):
             if R_single.ndim == 3:
                 R_single = R_single.squeeze(0)
 
-    N = len(Z)
+    N = int(Z_batched.shape[1])
     print(f"  Atoms       : {N}")
     print(f"  Replicas    : {B}")
     if R_multi is not None:
@@ -245,16 +259,21 @@ def main_batched(args):
 
     # ---- electric field -------------------------------------------------
     if args.electric_field is not None:
-        Ef = jnp.asarray(args.electric_field, dtype=jnp.float32)
-    elif args.xyz is None:
-        dataset = np.load(args.data, allow_pickle=True)
-        Ef = (jnp.asarray(dataset["Ef"][args.index].astype(float),
-                           dtype=jnp.float32)
-              if "Ef" in dataset.files
-              else jnp.zeros(3, dtype=jnp.float32))
+        Ef_batched = jnp.tile(
+            jnp.asarray(args.electric_field, dtype=jnp.float32)[None, :], (B, 1)
+        )
+    elif args.xyz is None and dataset is not None and "Ef" in dataset.files:
+        ef_arr = np.asarray(dataset["Ef"], dtype=np.float64)
+        if ef_arr.ndim == 2 and len(ef_arr) >= args.index + B:
+            Ef_batched = jnp.asarray(
+                ef_arr[args.index: args.index + B], dtype=jnp.float32
+            )
+        else:
+            ef0 = ef_arr[args.index] if ef_arr.ndim > 1 else ef_arr
+            Ef_batched = jnp.tile(jnp.asarray(ef0, dtype=jnp.float32)[None, :], (B, 1))
     else:
-        Ef = jnp.zeros(3, dtype=jnp.float32)
-    print(f"  Ef          : {np.asarray(Ef)}")
+        Ef_batched = jnp.zeros((B, 3), dtype=jnp.float32)
+    print(f"  Ef (replica 0): {np.asarray(Ef_batched[0])}")
 
     # ---- build model ----------------------------------------------------
     params_path = Path(args.params)
@@ -304,8 +323,7 @@ def main_batched(args):
     dst_idx_flat = (dst_idx[None, :] + offsets[:, None]).reshape(-1)
     src_idx_flat = (src_idx[None, :] + offsets[:, None]).reshape(-1)
 
-    Z_batched = jnp.tile(Z[None, :], (B, 1))       # (B, N)
-    Ef_batched = jnp.tile(Ef[None, :], (B, 1))      # (B, 3)
+    # Z_batched / Ef_batched set above (per-replica when dataset has rows)
 
     # ---- JIT-compiled batched force function ----------------------------
     @functools.partial(jax.jit, static_argnames=("batch_size",))
@@ -318,17 +336,29 @@ def main_batched(args):
             batch_segments=batch_segments, batch_size=batch_size,
             dst_idx=dst_idx, src_idx=src_idx)
 
+    pad_mask = (Z_batched > 0).astype(jnp.float32)
+
     @jax.jit
     def force_fn(positions):
-        """(B, N, 3) -> energy (B,), forces (B, N, 3), dipole (B, 3)"""
-        def energy_fn(pos):
-            energy, dipole = model_apply(
-                params, Z_batched, pos, Ef_batched,
-                dst_idx_flat, src_idx_flat, batch_segments, B,
-                dst_idx, src_idx)
-            return -jnp.sum(energy), (energy, dipole)
-        (_, (energy, dipole)), forces = jax.value_and_grad(
-            energy_fn, has_aux=True)(positions)
+        """(B, N, 3) -> energy (B,), forces (B, N, 3), dipole (B, 3).
+
+        Forces on padded sites (Z<=0) are zeroed so ghost atoms do not
+        receive infinite accelerations from inv_mass blow-ups.
+        """
+        energy, forces, dipole = energy_and_forces(
+            model_apply,
+            params,
+            atomic_numbers=Z_batched,
+            positions=positions,
+            Ef=Ef_batched,
+            dst_idx_flat=dst_idx_flat,
+            src_idx_flat=src_idx_flat,
+            batch_segments=batch_segments,
+            batch_size=B,
+            dst_idx=dst_idx,
+            src_idx=src_idx,
+        )
+        forces = forces * pad_mask[..., None]
         return energy, forces, dipole
 
     # ---- warm-up (JIT compile) ------------------------------------------
@@ -357,7 +387,7 @@ def main_batched(args):
               f"fmax={args.fmax} eV/Å) ...")
         opt_atoms = ase.Atoms(numbers=np.asarray(Z),
                               positions=np.asarray(R_single))
-        opt_atoms.info["electric_field"] = np.asarray(Ef)
+        opt_atoms.info["electric_field"] = np.asarray(Ef_batched[0])
         opt_calc = AseCalculatorEF(params_path=str(params_path),
                                    config_path=config_path)
         opt_atoms.calc = opt_calc
@@ -373,27 +403,49 @@ def main_batched(args):
         print(f"  Optimised E = {float(E_opt[0]):.6f} eV")
 
     # ---- initial velocities (independent per replica) -------------------
-    masses_amu = jnp.asarray(_ase_masses[np.asarray(Z)], dtype=jnp.float32)
-    inv_masses = 1.0 / (masses_amu[:, None] * AMU_TO_EV_FS2_ANG2)  # (N, 1)
+    # Per-replica (B, N) masses; padded atoms (Z<=0) get zero mass / inv_mass
+    # so they never receive infinite accelerations from ASE mass[0]==0.
+    ref_m_table = jnp.asarray(_ase_masses, dtype=jnp.float32)
+    z_clip = jnp.clip(Z_batched, 0, ref_m_table.shape[0] - 1)
+    masses_bn = jnp.where(Z_batched > 0, ref_m_table[z_clip], 0.0)
+    inv_masses_bn = jnp.where(
+        masses_bn[..., None] > 1e-9,
+        1.0 / (masses_bn[..., None] * AMU_TO_EV_FS2_ANG2),
+        0.0,
+    )
 
     rng = jax.random.PRNGKey(args.seed)
     keys = jax.random.split(rng, B + 1)
     rng, vel_keys = keys[0], keys[1:]
 
     kT = BOLTZMANN_EV * args.temperature
-    sigma_v = jnp.sqrt(kT / (masses_amu[:, None] * AMU_TO_EV_FS2_ANG2))
-    total_mass = jnp.sum(masses_amu)
 
-    def _sample_v(key):
+    def _sample_v(key, masses_row, z_row):
+        sigma_v = jnp.sqrt(
+            kT / (jnp.maximum(masses_row[:, None], 1e-12) * AMU_TO_EV_FS2_ANG2)
+        )
+        sigma_v = jnp.where(z_row[:, None] > 0, sigma_v, 0.0)
         v = sigma_v * jax.random.normal(key, shape=(N, 3))
-        v_com = jnp.sum(masses_amu[:, None] * v, axis=0) / total_mass
-        return v - v_com[None, :]
+        tm = jnp.sum(jnp.where(z_row > 0, masses_row, 0.0))
+        v_com = jnp.sum(
+            jnp.where(z_row[:, None] > 0, masses_row[:, None] * v, 0.0), axis=0
+        )
+        v_com = v_com / jnp.maximum(tm, 1e-12)
+        v = jnp.where(z_row[:, None] > 0, v - v_com, 0.0)
+        return v
 
-    V0 = jax.vmap(_sample_v)(vel_keys)  # (B, N, 3)
+    V0 = jax.vmap(_sample_v, in_axes=(0, 0, 0))(vel_keys, masses_bn, Z_batched)
 
     Ekin0 = 0.5 * jnp.sum(
-        masses_amu[None, :, None] * AMU_TO_EV_FS2_ANG2 * V0**2, axis=(1, 2))
-    T0 = 2.0 * Ekin0 / (3.0 * N * BOLTZMANN_EV)
+        jnp.where(
+            Z_batched[..., None] > 0,
+            masses_bn[..., None] * AMU_TO_EV_FS2_ANG2 * V0**2,
+            0.0,
+        ),
+        axis=(1, 2),
+    )
+    n_real = jnp.sum(Z_batched > 0, axis=1).astype(jnp.float32)
+    T0 = 2.0 * Ekin0 / (3.0 * jnp.maximum(n_real, 1.0) * BOLTZMANN_EV)
     print(f"\n  Initial T   : {float(T0.mean()):.1f} K mean  "
           f"[{float(T0.min()):.1f}, {float(T0.max()):.1f}]")
 
@@ -432,14 +484,14 @@ def main_batched(args):
             (R, V, F), (sR, sV, sE, sM), step_rng = carry
             step_rng, key = jax.random.split(step_rng)
             # BAOAB Langevin splitting
-            V = V + 0.5 * dt * F * inv_masses
+            V = V + 0.5 * dt * F * inv_masses_bn
             R = R + 0.5 * dt * V
             c1 = jnp.exp(-gamma * dt)
-            ns = jnp.sqrt(kT * inv_masses * (1.0 - c1**2))
+            ns = jnp.sqrt(kT * inv_masses_bn * (1.0 - c1**2))
             V = c1 * V + ns * jax.random.normal(key, V.shape)
             R = R + 0.5 * dt * V
             E, Fn, mu = force_fn(R)
-            V = V + 0.5 * dt * Fn * inv_masses
+            V = V + 0.5 * dt * Fn * inv_masses_bn
             fi = (i + 1) // si
             sv = ((i + 1) % si == 0)
             return ((R, V, Fn),
@@ -454,10 +506,10 @@ def main_batched(args):
         def body_fn(i, carry):
             (R, V, F), (sR, sV, sE, sM) = carry
             # Velocity Verlet
-            V = V + 0.5 * dt * F * inv_masses
+            V = V + 0.5 * dt * F * inv_masses_bn
             R = R + dt * V
             E, Fn, mu = force_fn(R)
-            V = V + 0.5 * dt * Fn * inv_masses
+            V = V + 0.5 * dt * Fn * inv_masses_bn
             fi = (i + 1) // si
             sv = ((i + 1) % si == 0)
             return ((R, V, Fn),
@@ -491,12 +543,19 @@ def main_batched(args):
     # ---- summary statistics ---------------------------------------------
     E_np = np.asarray(E_traj)           # (n_saved, B)
     V_np = np.asarray(V_traj)           # (n_saved, B, N, 3)
-    masses_np = np.asarray(masses_amu)   # (N,)
+    Z_np = np.asarray(Z_batched)        # (B, N)
+    masses_np = np.asarray(masses_bn)   # (B, N)
+    zm = (Z_np > 0).astype(np.float64)
 
     Ekin = 0.5 * np.sum(
-        masses_np[None, None, :, None] * AMU_TO_EV_FS2_ANG2 * V_np**2,
-        axis=(2, 3))                     # (n_saved, B)
-    T_arr = 2.0 * Ekin / (3.0 * N * BOLTZMANN_EV)
+        zm[None, :, :, None]
+        * masses_np[None, :, :, None]
+        * AMU_TO_EV_FS2_ANG2
+        * V_np**2,
+        axis=(2, 3),
+    )  # (n_saved, B)
+    n_real_np = np.maximum(np.sum(Z_np > 0, axis=1), 1).astype(np.float64)
+    T_arr = 2.0 * Ekin / (3.0 * n_real_np[None, :] * BOLTZMANN_EV)
     Etot = E_np + Ekin
 
     pi = max(1, n_saved // 20)
@@ -557,8 +616,7 @@ def main_batched(args):
     # ---- save all replicas to a single .npz ------------------------------
     R_np = np.asarray(R_traj)            # (n_saved, B, N, 3)
     mu_np = np.asarray(mu_traj)           # (n_saved, B, 3)
-    Z_np = np.asarray(Z)
-    Ef_np = np.asarray(Ef)
+    Ef_np = np.asarray(Ef_batched)        # (B, 3) per-replica field when available
 
     out = Path(args.output)
     npz_path = out.parent / (out.stem + ".npz")
@@ -566,15 +624,15 @@ def main_batched(args):
     t0 = time.perf_counter()
     np.savez(
         npz_path,
-        Z=Z_np,                           # (N,)
+        Z=Z_np,                           # (B, N) atomic numbers (row = replica)
         R=R_np,                           # (n_saved, B, N, 3)  positions [Å]
         V=V_np,                           # (n_saved, B, N, 3)  velocities [Å/fs]
         E=E_np,                           # (n_saved, B)        potential energy [eV]
         D=mu_np,                          # (n_saved, B, 3)     dipole [a.u.]
         Q=charges_all,                    # (n_saved, B, N)     atomic charges [e]
         AD=at_dipoles_all,                # (n_saved, B, N, 3)  atomic dipoles [a.u.]
-        Ef=Ef_np,                         # (3,)
-        masses=masses_np,                 # (N,)
+        Ef=Ef_np,                         # (B, 3) or (1, 3) if single field tiled
+        masses=masses_np,                 # (B, N) amu
         dt_fs=np.float64(dt),
         save_interval=np.int32(si),
         n_replicas=np.int32(B),
