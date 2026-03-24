@@ -347,7 +347,7 @@ class MessagePassingModel(nn.Module):
         for i in range(self.num_iterations):
             y = e3x.nn.MessagePass(
                 include_pseudotensors=self.include_pseudotensors,
-                max_degree=self.max_degree if i < self.num_iterations - 1 else 0
+                max_degree=self.max_degree
             )(x, basis, dst_idx=dst_idx_flat, src_idx=src_idx_flat)
             x = e3x.nn.add(x, y)
             x = e3x.nn.silu(x)
