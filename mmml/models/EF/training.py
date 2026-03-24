@@ -50,8 +50,7 @@ except:
     print("CUDA graph capture is not supported in this JAX version")
     pass  # Not available in this JAX version
 
-
-import json
+from mmml.data.units import ANGSTROM_TO_BOHR, EV_TO_KCAL_MOL, HARTREE_TO_EV
 from mmml.utils.model_checkpoint import to_jsonable
 
 
@@ -262,9 +261,6 @@ def mean_absolute_error_forces(prediction, target, mask=None):
 # -------------------------
 # Model
 # -------------------------
-HARTREE_TO_EV = 27.211386245988
-
-
 class MessagePassingModel(nn.Module):
     features: int = 32
     max_degree: int = 2
@@ -452,16 +448,17 @@ class MessagePassingModel(nn.Module):
 
         energy = atomic_energies.reshape(B, N).sum(axis=1)  # (B,)
 
-        # add a Coulomb term to the energy
-        # Pairwise Coulomb: E_coul = 0.5 * Σ_{i≠j} q_i * q_j / r_ij
-        r_ij = jnp.linalg.norm(displacements, axis=-1)  # (B*E,)
+        # Coulomb energy from predicted charges (same convention as train_joint / mmml.data.units):
+        # E_coul = (1/2) Σ q_i q_j / r_ij in Hartree with r_ij in Bohr; positions here are Å.
+        r_ij_angstrom = jnp.linalg.norm(displacements, axis=-1)  # (B*E,)
+        r_ij_bohr = r_ij_angstrom * ANGSTROM_TO_BOHR
         q_src = atomic_charges[src_idx_flat]  # (B*E,)
         q_dst = atomic_charges[dst_idx_flat]  # (B*E,)
-        pair_coulomb = (q_src * q_dst) / (r_ij + 1e-10)  # (B*E,)
-        # Sum per molecule (each pair counted twice in neighbor list, so divide by 2)
+        pair_coulomb_ha = (q_src * q_dst) / (r_ij_bohr + 1e-10)  # (B*E,) [Ha]
+        # Neighbor list counts each undirected pair twice → divide by 2
         edge_batch = batch_segments[dst_idx_flat]  # (B*E,) batch index per edge
-        coulomb_energy = jax.ops.segment_sum(pair_coulomb, edge_batch, num_segments=B) / 2.0  # (B,)
-        energy = energy + coulomb_energy * 7.199822675975274 # 1/(4π*ε₀) in atomic units
+        coulomb_ha = jax.ops.segment_sum(pair_coulomb_ha, edge_batch, num_segments=B) / 2.0  # (B,)
+        energy = energy + coulomb_ha * HARTREE_TO_EV  # match NN energy / targets in eV
 
 
         # Optional explicit dipole-field coupling:
@@ -1242,10 +1239,10 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
 
 
         # Convert to Python floats only once for logging (performance optimization)
-        valid_energy_mae_val = float(valid_energy_mae * 23.0609)
-        valid_forces_mae_val = float(valid_forces_mae * 23.0609)
-        train_energy_mae_val = float(train_energy_mae * 23.0609)
-        train_forces_mae_val = float(train_forces_mae * 23.0609)
+        valid_energy_mae_val = float(valid_energy_mae * EV_TO_KCAL_MOL)
+        valid_forces_mae_val = float(valid_forces_mae * EV_TO_KCAL_MOL)
+        train_energy_mae_val = float(train_energy_mae * EV_TO_KCAL_MOL)
+        train_forces_mae_val = float(train_forces_mae * EV_TO_KCAL_MOL)
         
         # Block once at the end of epoch for logging (allows async execution during training)
         jax.block_until_ready(valid_loss)
