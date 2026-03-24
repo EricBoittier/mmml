@@ -327,11 +327,11 @@ def main_batched(args):
 
     # ---- JIT-compiled batched force function ----------------------------
     @functools.partial(jax.jit, static_argnames=("batch_size",))
-    def model_apply(params, atomic_numbers, positions, Ef_arg,
+    def model_apply(params, atomic_numbers, positions, Ef,
                     dst_idx_flat, src_idx_flat, batch_segments, batch_size,
                     dst_idx=None, src_idx=None):
         return model.apply(
-            params, atomic_numbers, positions, Ef_arg,
+            params, atomic_numbers, positions, Ef,
             dst_idx_flat=dst_idx_flat, src_idx_flat=src_idx_flat,
             batch_segments=batch_segments, batch_size=batch_size,
             dst_idx=dst_idx, src_idx=src_idx)
