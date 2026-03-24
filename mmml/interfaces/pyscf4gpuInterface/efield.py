@@ -153,8 +153,8 @@ def scf_efield_energy_forces_dipole(
         E, mol, dm_init_guess, xc=xc, include_nuclear_field_energy=include_nuclear_field_energy
     )
     Evec = np.asarray(E, dtype=np.float64).reshape(3)
-    dip_primary = mf.dip_moment(unit=dipole_unit)
-    dip_au = np.asarray(mf.dip_moment(unit="AU"), dtype=np.float64).ravel()[:3]
+    dip_primary = mf.dip_moment(unit=dipole_unit, verbose=0)
+    dip_au = np.asarray(mf.dip_moment(unit="AU", verbose=0), dtype=np.float64).ravel()[:3]
 
     out: dict = {
         "Ef": Evec.copy(),
@@ -242,7 +242,7 @@ def maxwell_eval_ir_freq_intensity(
     )
     E = np.asarray(E, dtype=np.float64).reshape(3)
 
-    dip_m = mf.dip_moment(unit="AU")
+    dip_m = mf.dip_moment(unit="AU", verbose=0)
     dip_au = np.asarray(dip_m, dtype=np.float64).ravel()[:3]
     polar = polarizability.eval_polarizability(mf)
     summary: dict = {
