@@ -15,13 +15,8 @@ import json
 from pathlib import Path
 from flax import linen as nn
 
-# Import model and functions from training script
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent))
-
-from training import MessagePassingModel
-from model_functions import energy_and_forces
+from mmml.models.EF.training import MessagePassingModel
+from mmml.models.EF.model_functions import energy_and_forces
 
 
 def load_params(params_path):
@@ -347,7 +342,7 @@ class AseCalculatorEF(ase_calc.Calculator):
         alpha : np.ndarray, shape (3, 3)
             Polarizability in atomic units (Bohr³).
         """
-        from model_functions import dipole_derivative_field
+        from mmml.models.EF.model_functions import dipole_derivative_field
         raw = self._call_model_fn(dipole_derivative_field, atoms)
         # raw shape: (1, 3, 1, 3) -> extract (3, 3) and convert units
         alpha = np.asarray(raw)[0, :, 0, :] / self.field_scale
@@ -367,7 +362,7 @@ class AseCalculatorEF(ase_calc.Calculator):
             apt[a, s, b] = d(mu_a) / d(R_{s,b}).
             Units: au_dipole / Angstrom.
         """
-        from model_functions import dipole_derivative_positions
+        from mmml.models.EF.model_functions import dipole_derivative_positions
         raw = self._call_model_fn(dipole_derivative_positions, atoms)
         # raw shape: (1, 3, 1, N, 3) -> (3, N, 3)
         return np.asarray(raw)[0, :, 0, :, :]
@@ -383,7 +378,7 @@ class AseCalculatorEF(ase_calc.Calculator):
         hess : np.ndarray, shape (N, 3, N, 3)
             Units: eV / Angstrom².
         """
-        from model_functions import hessian_matrix
+        from mmml.models.EF.model_functions import hessian_matrix
         raw = self._call_model_fn(hessian_matrix, atoms)
         # raw shape: (1, N, 3, 1, N, 3) -> (N, 3, N, 3)
         return np.asarray(raw)[0, :, :, 0, :, :]
@@ -402,7 +397,7 @@ class AseCalculatorEF(ase_calc.Calculator):
         charges : np.ndarray, shape (N,)
         atomic_dipoles : np.ndarray, shape (N, 3)
         """
-        from model_functions import get_atomic_properties
+        from mmml.models.EF.model_functions import get_atomic_properties
 
         if atoms is None:
             atoms = self.atoms
@@ -437,7 +432,7 @@ class AseCalculatorEF(ase_calc.Calculator):
         -------
         aat : np.ndarray, shape (N, 3, 3)
         """
-        from model_functions import aat_nuclear
+        from mmml.models.EF.model_functions import aat_nuclear
 
         if atoms is None:
             atoms = self.atoms
@@ -461,7 +456,7 @@ class AseCalculatorEF(ase_calc.Calculator):
         aat : np.ndarray, shape (N, 3, 3)
         q_eff : np.ndarray, shape (N,)
         """
-        from model_functions import aat_born
+        from mmml.models.EF.model_functions import aat_born
 
         apt = self.get_atomic_polar_tensor(atoms)
         if atoms is None:
@@ -483,7 +478,7 @@ class AseCalculatorEF(ase_calc.Calculator):
         aat : np.ndarray, shape (N, 3, 3)
         charges : np.ndarray, shape (N,)  — the ML charges used.
         """
-        from model_functions import aat_ml_charges
+        from mmml.models.EF.model_functions import aat_ml_charges
 
         charges, _atomic_dipoles = self.get_atomic_charges(atoms)
         if atoms is None:
@@ -512,7 +507,7 @@ class AseCalculatorEF(ase_calc.Calculator):
         -------
         dEdEf : np.ndarray, shape (3,)
         """
-        from model_functions import energy_and_dipole_from_field_derivative
+        from mmml.models.EF.model_functions import energy_and_dipole_from_field_derivative
         _, dEdEf = self._call_model_fn(
             energy_and_dipole_from_field_derivative, atoms
         )
@@ -528,7 +523,7 @@ class AseCalculatorEF(ase_calc.Calculator):
         -------
         hess : np.ndarray, shape (3, 3)
         """
-        from model_functions import polarizability_from_energy_hessian
+        from mmml.models.EF.model_functions import polarizability_from_energy_hessian
         raw = self._call_model_fn(polarizability_from_energy_hessian, atoms)
         return np.asarray(raw).squeeze()
 

@@ -36,12 +36,9 @@ import jax
 import jax.numpy as jnp
 import e3x
 
-import sys
-sys.path.insert(0, str(Path(__file__).parent))
-
-from ase_calc_EF import load_params, load_config
-from training import MessagePassingModel
-from model_functions import energy_and_forces, get_atomic_properties
+from mmml.models.EF.ase_calc_EF import load_params, load_config
+from mmml.models.EF.training import MessagePassingModel
+from mmml.models.EF.model_functions import energy_and_forces, get_atomic_properties
 
 # ---------------------------------------------------------------------------
 # Physical constants  (ASE convention: eV, Å, fs, amu)
@@ -659,7 +656,7 @@ def main(args=None):
     if args.optimize:
         import ase
         from ase.optimize import BFGS
-        from ase_calc_EF import AseCalculatorEF
+        from mmml.models.EF.ase_calc_EF import AseCalculatorEF
 
         from ase.optimize import FIRE
         opt_cls = FIRE if args.optimizer == 'fire' else BFGS
@@ -788,7 +785,7 @@ def main(args=None):
     charges_traj = None
     if args.save_charges:
         print(f"\n  Recomputing atomic charges for {n_saved} frames ...")
-        from ase_calc_EF import AseCalculatorEF
+        from mmml.models.EF.ase_calc_EF import AseCalculatorEF
         calc = AseCalculatorEF(
             params_path=args.params, config_path=config_path,
             field_scale=args.field_scale)
