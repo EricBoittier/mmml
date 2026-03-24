@@ -20,11 +20,30 @@ from mmml.interfaces.pyscf4gpuInterface.esp_helpers import balance_array
 
 
 def _RZ_to_atom(R, Z):
-    """Convert R (n_atoms, 3) in Angstrom and Z (n_atoms) to PySCF atom list [(symbol, (x,y,z)), ...]."""
+    """Convert R (n_atoms, 3) in Angstrom and Z (n_atoms) to PySCF atom list [(symbol, (x,y,z)), ...].
+
+    Z may be atomic numbers (integer-like) or chemical symbols (str / bytes), as in ASE NPZ output.
+    """
     from ase.data import chemical_symbols
-    R = np.asarray(R)
-    Z = np.asarray(Z, dtype=int)
-    return [(chemical_symbols[z], tuple(row)) for z, row in zip(Z, R)]
+
+    R = np.asarray(R, dtype=np.float64)
+    Z = np.asarray(Z)
+
+    atoms = []
+    for z, row in zip(np.ravel(Z), R):
+        if isinstance(z, (bytes, np.bytes_)):
+            sym = z.decode("ascii", errors="replace").strip()
+        else:
+            try:
+                zi = int(z)
+            except (TypeError, ValueError):
+                sym = str(z).strip()
+            else:
+                if zi < 0 or zi >= len(chemical_symbols):
+                    raise ValueError(f"Invalid atomic number: {zi}")
+                sym = chemical_symbols[zi]
+        atoms.append((sym, tuple(row)))
+    return atoms
 
 
 def setup_mol(atoms, basis, xc, spin, charge, log_file='./pyscf.log', 
