@@ -188,6 +188,26 @@ def _ef_md_active_columns(zb: np.ndarray) -> int:
     return max(ncols, 1)
 
 
+def _ef_md_pairwise_indices_active(N: int, z_ref):
+    """Directed pairwise indices, dropping any edge with an endpoint Z<=0.
+
+    Matches a graph built only on real atoms (e.g. ASE). The full
+    ``N*(N-1)`` list still includes padding sites when columns are unused
+    but not trimmed, which skews message passing and Coulomb.
+    """
+    import e3x
+    import jax.numpy as jnp
+
+    zr = jnp.asarray(z_ref, dtype=jnp.int32)
+    dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(N)
+    dst_idx = jnp.asarray(dst_idx, dtype=jnp.int32)
+    src_idx = jnp.asarray(src_idx, dtype=jnp.int32)
+    ok = (zr[dst_idx] > 0) & (zr[src_idx] > 0)
+    n_full = int(dst_idx.shape[0])
+    n_kept = int(jnp.sum(ok))
+    return dst_idx[ok], src_idx[ok], n_full, n_kept
+
+
 def main_batched(args):
     """Run B independent MD replicas in one JIT-compiled GPU batch.
 
@@ -348,9 +368,21 @@ def main_batched(args):
     # ---- batched graph (B non-interacting copies) -----------------------
     # Each replica gets its own atom indices; batch_segments assigns atoms
     # to replicas so the model's internal aggregations stay per-replica.
-    dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(N)
-    dst_idx = jnp.asarray(dst_idx, dtype=jnp.int32)
-    src_idx = jnp.asarray(src_idx, dtype=jnp.int32)
+    zb_chk = np.asarray(Z_batched)
+    if B > 1 and not np.all(zb_chk == zb_chk[0]):
+        print(
+            "  WARNING: Z differs across replicas; inactive-atom edge mask "
+            "uses replica 0 only — use distinct geometries only with identical "
+            "Z padding patterns, or n-replicas=1."
+        )
+    dst_idx, src_idx, n_edge_full, n_edge_kept = _ef_md_pairwise_indices_active(
+        N, zb_chk[0]
+    )
+    if n_edge_kept < n_edge_full:
+        print(
+            f"  Edge filter    : {n_edge_full} → {n_edge_kept} directed edges "
+            f"(no edges through Z<=0 sites; matches real-atom graph)"
+        )
 
     batch_segments = jnp.repeat(jnp.arange(B, dtype=jnp.int32), N)
     offsets = jnp.arange(B, dtype=jnp.int32) * N

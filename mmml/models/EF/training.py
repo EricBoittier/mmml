@@ -443,7 +443,10 @@ class MessagePassingModel(nn.Module):
             repulsion = jnp.squeeze(repulsion, axis=(-1, -2, -3))  # (B*N,)
             atomic_energies = atomic_energies + repulsion
 
-        energy = atomic_energies.reshape(B, N).sum(axis=1)  # (B,)
+        # Omit padding / inactive sites (Z<=0) from the total — same as ASE on
+        # real atoms only; padded batches would otherwise double-count NN heads.
+        valid_atom = (atomic_numbers_flat > 0).astype(atomic_energies.dtype)
+        energy = (atomic_energies * valid_atom).reshape(B, N).sum(axis=1)  # (B,)
 
         # E_coul = (1/2) Σ q_i q_j / r_ij in Hartree with r_ij in Bohr; positions here are Å.
         r_ij_angstrom = jnp.linalg.norm(displacements, axis=-1)  # (B*E,)
