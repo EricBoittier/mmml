@@ -19,7 +19,7 @@ Usage:
 This script:
 1. Validates atomic coordinates are in Angstroms
 2. Converts energies from Hartree to eV (ASE standard)
-3. Converts forces from Hartree/Bohr to eV/Angstrom (ASE standard)
+3. Converts forces from Hartree/Bohr to eV/Angstrom (ASE standard); optional --flip-forces if F stores ∂E/∂R (gradient) instead of −∇E
 4. Converts ESP grid coordinates from index space to physical Angstroms (if grid data provided)
 5. Creates train/valid/test splits
 6. Saves data in ASE-compatible format
@@ -615,7 +615,8 @@ def fix_and_split_data(
     esp_sd_sigma: float = 3.0,
     esp_max_abs_kcal_mol: float = 100.0,
     min_dist_to_atoms: float = 1.0,
-    verbose: bool = True
+    flip_forces: bool = False,
+    verbose: bool = True,
 ) -> bool:
     """
     Main workflow to fix units and create splits.
@@ -655,6 +656,9 @@ def fix_and_split_data(
         Exclude grid points with |esp| > this in kcal/mol/e (default 100.0).
     min_dist_to_atoms : float
         Exclude grid points closer than this to any atom in Å (default 1.0).
+    flip_forces : bool
+        If True, negate ``F`` before converting units (use when NPZ stores PySCF-style
+        energy gradient ∂E/∂R in Ha/Bohr instead of forces F = −∇E). Default False.
     verbose : bool
         Print detailed progress (default True)
         
@@ -837,16 +841,22 @@ def fix_and_split_data(
         print("# Step 4: Converting Forces from Hartree/Bohr to eV/Angstrom")
         print(f"{'#'*70}")
     
-    F_ev_ang = convert_forces_hartree_bohr_to_ev_angstrom(efd_data['F'])
-    
+    F_hartree_bohr = np.asarray(efd_data["F"], dtype=np.float64).copy()
+    if flip_forces:
+        F_hartree_bohr = -F_hartree_bohr
+        if verbose:
+            print("  --flip-forces: negating F before conversion (gradient ∂E/∂R → force −∇E)")
+
+    F_ev_ang = convert_forces_hartree_bohr_to_ev_angstrom(F_hartree_bohr)
+
     if verbose:
         HARTREE_BOHR_TO_EV_ANG = 51.42208
-        f_orig_norms = np.linalg.norm(efd_data['F'][:10, :3, :].reshape(-1, 3), axis=1)
+        f_orig_norms = np.linalg.norm(F_hartree_bohr[:10, :3, :].reshape(-1, 3), axis=1)
         f_conv_norms = np.linalg.norm(F_ev_ang[:10, :3, :].reshape(-1, 3), axis=1)
-        
+
         print(f"\nConversion factor: {HARTREE_BOHR_TO_EV_ANG}")
-        print(f"Original (Ha/Bohr): mean norm={f_orig_norms.mean():.6e}")
-        print(f"Converted (eV/Å):   mean norm={f_conv_norms.mean():.6e}")
+        print(f"Input to convert (Ha/Bohr): mean norm={f_orig_norms.mean():.6e}")
+        print(f"Converted (eV/Å):           mean norm={f_conv_norms.mean():.6e}")
         print(f"✓ Forces converted to eV/Angstrom")
     
     # =========================================================================
@@ -1199,7 +1209,14 @@ def fix_and_split_data(
 - **Fixed**: Physical Angstroms
 - **Conversion**: Applied proper grid spacing ({cube_spacing_bohr} Bohr = {cube_spacing_bohr * 0.529177:.6f} Å)
 """
-    
+
+    forces_sign_readme = ""
+    if flip_forces:
+        forces_sign_readme = (
+            "- **Sign**: `F` was negated (`--flip-forces`) so output is force −∇E, "
+            "not raw gradient ∂E/∂R.\n"
+        )
+
     readme_content = f"""# Training Data (Unit-Corrected)
 
 This directory contains molecular data with **corrected units** ready for DCMnet/PhysnetJax training.
@@ -1220,7 +1237,7 @@ This directory contains molecular data with **corrected units** ready for DCMnet
 - **Original**: Hartree/Bohr
 - **Converted**: eV/Angstrom (ASE standard)
 - **Factor**: ×51.42208
-{grid_section}
+{forces_sign_readme}{grid_section}
 ## Data Splits
 
 - **Train**: {len(splits['train'])} samples ({train_frac*100:.0f}%)
@@ -1382,6 +1399,9 @@ Examples:
 
   # Concatenate multiple NPZ files (e.g. extend training set with MD samples)
   %(prog)s --efd train.npz md_evaluated.npz --output-dir ./splits_extended
+
+  # NPZ has raw PySCF gradient in F (not forces): negate before converting to eV/Å
+  %(prog)s --efd raw.npz --output-dir ./out --flip-forces
 """
     )
     
@@ -1498,7 +1518,16 @@ Examples:
         action='store_true',
         help='Suppress detailed output'
     )
-    
+
+    parser.add_argument(
+        '--flip-forces',
+        action='store_true',
+        help=(
+            'Negate F before unit conversion (Ha/Bohr → eV/Å). Use when F stores the PySCF energy '
+            'gradient ∂E/∂R instead of forces F = −∇E. mmml pyscf-evaluate NPZ already uses −gradient.'
+        ),
+    )
+
     args = parser.parse_args()
     
     # Validate inputs
@@ -1535,7 +1564,8 @@ Examples:
         esp_sd_sigma=getattr(args, 'esp_sd_sigma', 3.0),
         esp_max_abs_kcal_mol=getattr(args, 'esp_max_abs_kcal_mol', 100.0),
         min_dist_to_atoms=getattr(args, 'min_dist_to_atoms', 1.0),
-        verbose=not args.quiet
+        flip_forces=getattr(args, 'flip_forces', False),
+        verbose=not args.quiet,
     )
     
     if not success:
