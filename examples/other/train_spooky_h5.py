@@ -39,6 +39,7 @@ from mmml.models.physnetjax.physnetjax.models.spooky_model import EF as SpookyEF
 from mmml.models.physnetjax.physnetjax.training.spooky_training import (
     build_spooky_batch_from_padded_arrays,
     make_spooky_train_step,
+    restart_params_only,
 )
 from flax.training import train_state
 
@@ -76,6 +77,17 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--energy-key", type=str, default="formation_energy")
     p.add_argument("--force-key", type=str, default="total_forces")
     p.add_argument("--output-dir", type=str, default=str(OUTPUT_DIR))
+    p.add_argument(
+        "--resume",
+        "--restart",
+        dest="resume",
+        type=str,
+        default=None,
+        help=(
+            "Orbax checkpoint directory to load params from (params-only; optimizer "
+            'starts fresh). Same as --restart. Use "latest" for OUTPUT_DIR/final_params.'
+        ),
+    )
     p.add_argument("--verbose", action="store_true")
     return p.parse_args()
 
@@ -122,16 +134,63 @@ def main(args: argparse.Namespace):
     n_valid = len(valid_data["R"])
     print(f"\nTrain: {n_train}, Valid: {n_valid}, natoms: {natoms}")
 
-    # Build model
-    model = SpookyEF(
-        charges=True,
-        natoms=natoms,
-        max_atomic_number=87,
-        features=64,
-        debug=False,
-    )
+    output_dir = Path(args.output_dir).resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    checkpointer = ocp.PyTreeCheckpointer()
 
-    # Initialize with first batch
+    resume_path: Path | None = None
+    if args.resume is not None:
+        if args.resume == "latest":
+            resume_path = output_dir / "final_params"
+            if not resume_path.is_dir():
+                raise ValueError(
+                    f'Cannot resume from "latest": {resume_path} does not exist or is not a directory.'
+                )
+        else:
+            resume_path = Path(args.resume)
+            if not resume_path.is_absolute():
+                resume_path = (Path.cwd() / resume_path).resolve()
+
+    restored_params = None
+    restored_config = None
+    if resume_path is not None:
+        print(f"\nRestoring checkpoint (params-only, fresh optimizer): {resume_path}")
+        restored_params, restored_config, _step, _epoch, _chunk = restart_params_only(
+            resume_path, checkpointer
+        )
+        if restored_config is None:
+            raise ValueError(
+                f"Checkpoint at {resume_path} has no 'config'; cannot rebuild SpookyEF."
+            )
+
+    def _to_native(v):
+        if isinstance(v, np.integer):
+            return int(v)
+        if isinstance(v, np.floating):
+            return float(v)
+        return v
+
+    # Build model (from checkpoint when resuming)
+    if restored_config is not None:
+        model_kwargs = {k: _to_native(v) for k, v in restored_config.items()}
+        model = SpookyEF(**model_kwargs)
+        if int(model.natoms) != int(natoms):
+            raise ValueError(
+                f"Checkpoint natoms={model.natoms} does not match dataset natoms={natoms}."
+            )
+        print(
+            f"   Using config from checkpoint: max_atomic_number={model.max_atomic_number}, "
+            f"features={model.features}, natoms={model.natoms}"
+        )
+    else:
+        model = SpookyEF(
+            charges=True,
+            natoms=natoms,
+            max_atomic_number=87,
+            features=64,
+            debug=False,
+        )
+
     batch_size = args.batch_size
     init_bs = min(batch_size, n_train)
     init_batch = build_spooky_batch_from_padded_arrays(
@@ -143,20 +202,23 @@ def main(args: argparse.Namespace):
         train_data["S"][:init_bs].flatten(),
     )
 
-    key, init_key = jax.random.split(key)
-    params = model.init(
-        init_key,
-        atomic_numbers=init_batch["Z"],
-        charges=init_batch["Q_atoms"],
-        spins=init_batch["S_atoms"],
-        positions=init_batch["R"],
-        dst_idx=init_batch["dst_idx"],
-        src_idx=init_batch["src_idx"],
-        batch_segments=init_batch["batch_segments"],
-        batch_size=init_batch["batch_size"],
-        batch_mask=init_batch["batch_mask"],
-        atom_mask=init_batch["atom_mask"],
-    )
+    if restored_params is not None:
+        params = restored_params
+    else:
+        key, init_key = jax.random.split(key)
+        params = model.init(
+            init_key,
+            atomic_numbers=init_batch["Z"],
+            charges=init_batch["Q_atoms"],
+            spins=init_batch["S_atoms"],
+            positions=init_batch["R"],
+            dst_idx=init_batch["dst_idx"],
+            src_idx=init_batch["src_idx"],
+            batch_segments=init_batch["batch_segments"],
+            batch_size=init_batch["batch_size"],
+            batch_mask=init_batch["batch_mask"],
+            atom_mask=init_batch["atom_mask"],
+        )
 
     tx = optax.adam(args.learning_rate)
     state = train_state.TrainState.create(apply_fn=model.apply, params=params, tx=tx)
@@ -167,10 +229,6 @@ def main(args: argparse.Namespace):
         energy_weight=1.0,
         batch_size=batch_size,
     )
-
-    output_dir = Path(args.output_dir).resolve()
-    output_dir.mkdir(parents=True, exist_ok=True)
-    checkpointer = ocp.PyTreeCheckpointer()
 
     rng = np.random.default_rng(0)
     steps_per_epoch = max(n_train // batch_size, 1)
