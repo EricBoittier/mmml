@@ -158,8 +158,8 @@ def compute_dft(args, calcs, extra=None):
         output['esp_grid'] = np.asarray(coords)
         output['R'] = mol.atom_coords(unit="ANG")
         output['Z'] = mol.atom_charges()
-        output['D'] = engine.dip_moment(unit="DEBYE", dm=dm )
-        output['Q'] = engine.quad_moment(unit="DEBYE-ANG", dm=dm )
+        output['D'] = engine.dip_moment(unit="DEBYE", dm=dm, verbose=0)
+        output['Q'] = engine.quad_moment(unit="DEBYE-ANG", dm=dm)
         output['density'] = density
         output['density_grid'] = grid_coords
 
@@ -415,7 +415,7 @@ def compute_dft_single(
 
         if dipole:
             dm = mf.make_rdm1()
-            out["D"] = _to_numpy(mf.dip_moment(unit="DEBYE", dm=dm))
+            out["D"] = _to_numpy(mf.dip_moment(unit="DEBYE", dm=dm, verbose=0))
 
         if dens_esp:
             dm = mf.make_rdm1()
@@ -473,7 +473,7 @@ def compute_dft_single(
 
     if dipole:
         dm = engine.make_rdm1()
-        out["D"] = _to_numpy(engine.dip_moment(unit="DEBYE", dm=dm))
+        out["D"] = _to_numpy(engine.dip_moment(unit="DEBYE", dm=dm, verbose=0))
 
     if dens_esp:
         dm = engine.make_rdm1()
