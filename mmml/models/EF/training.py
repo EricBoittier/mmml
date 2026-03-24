@@ -312,7 +312,10 @@ class MessagePassingModel(nn.Module):
         # Build an EF tensor of shape compatible with e3x.nn.Tensor()
         # e3x format is (num_atoms, parity, (lmax+1)^2, features)
         # Start with (B, 4) -> expand to (B*N, 2, 4, features) for parity=2 (pseudotensors)
-        pad_ef = jnp.zeros((B, 1), dtype=positions_flat.dtype)
+        pad_ef = jnp.ones((B, 1), dtype=positions_flat.dtype)
+
+        Ef = Ef * self.field_scale
+        
         xEF = jnp.concatenate((pad_ef, Ef), axis=-1)   # (B, 4) - [1, Ef_x, Ef_y, Ef_z]
         xEF = xEF[:, None, :, None]                  # (B, 1, 4, 1)
         xEF = jnp.tile(xEF, (1, 1, 1, self.features)) # (B, 1, 4, features)
