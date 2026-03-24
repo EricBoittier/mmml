@@ -1369,6 +1369,9 @@ def main(args=None):
         zbl=args.zbl,
     )
 
+
+    print(f"Message passing model: {message_passing_model}")
+
     # Load restart parameters if provided
     initial_params = None
     if args.restart is not None:
