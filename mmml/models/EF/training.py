@@ -1150,10 +1150,10 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
     from mmml.physnetjax.physnetjax.data.data import print_shapes
 
     print_shapes(valid_batches[0], name="Validation Batch[0]")
-    print(
-        "Loss terms: energy/force MSE use the same units as targets — typically E [eV], F [eV/Å]; "
-        "dipole MSE is squared NPZ dipole units. Weighted total mixes terms via energy_weight, forces_weight, …"
-    )
+    # print(
+    #     "Loss terms: energy/force MSE use the same units as targets — typically E [eV], F [eV/Å]; "
+    #     "dipole MSE is squared NPZ dipole units. Weighted total mixes terms via energy_weight, forces_weight, …"
+    # )
 
     # Early stopping tracking
     best_valid_loss = float('inf')
