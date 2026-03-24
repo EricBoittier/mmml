@@ -20,9 +20,10 @@ This script:
 1. Validates atomic coordinates are in Angstroms
 2. Converts energies from Hartree to eV (ASE standard)
 3. Converts forces from Hartree/Bohr to eV/Angstrom (ASE standard); optional --flip-forces if F stores ∂E/∂R (gradient) instead of −∇E
-4. Converts ESP grid coordinates from index space to physical Angstroms (if grid data provided)
-5. Creates train/valid/test splits
-6. Saves data in ASE-compatible format
+4. Optional extra multipliers (--energy-scale, --force-scale, --dipole-scale, --efield-scale, --esp-scale, --charge-scale) after the standard conversions (and on matching auxiliary NPZ keys)
+5. Converts ESP grid coordinates from index space to physical Angstroms (if grid data provided)
+6. Creates train/valid/test splits
+7. Saves data in ASE-compatible format
 
 ASE Standard Units:
 - Coordinates (R): Angstrom
@@ -82,6 +83,27 @@ def convert_dipole_debye_to_eA(D_debye: np.ndarray) -> np.ndarray:
     """Convert dipole moments from Debye to e·Å (PhysNet/DCMNet standard)."""
     from mmml.data.units import DEBYE_TO_EANGSTROM
     return D_debye * DEBYE_TO_EANGSTROM
+
+
+def _scale_ndarrays_in_dict(
+    data: Dict[str, Any],
+    keys: Tuple[str, ...],
+    factor: float,
+) -> List[str]:
+    """In-place multiply numeric ndarrays for keys by factor if factor != 1. Skips missing keys and non-numeric dtypes."""
+    f = float(factor)
+    if f == 1.0:
+        return []
+    out: List[str] = []
+    for k in keys:
+        if k not in data:
+            continue
+        v = data[k]
+        if not isinstance(v, np.ndarray) or v.dtype.kind not in "biufc":
+            continue
+        data[k] = np.asarray(v, dtype=np.float64) * f
+        out.append(f"{k}×{f:g}")
+    return out
 
 
 def load_atomic_reference_energies(scheme: str) -> Dict[str, float]:
@@ -616,6 +638,12 @@ def fix_and_split_data(
     esp_max_abs_kcal_mol: float = 100.0,
     min_dist_to_atoms: float = 1.0,
     flip_forces: bool = False,
+    energy_scale: float = 1.0,
+    force_scale: float = 1.0,
+    dipole_scale: float = 1.0,
+    efield_scale: float = 1.0,
+    esp_scale: float = 1.0,
+    charge_scale: float = 1.0,
     verbose: bool = True,
 ) -> bool:
     """
@@ -659,6 +687,20 @@ def fix_and_split_data(
     flip_forces : bool
         If True, negate ``F`` before converting units (use when NPZ stores PySCF-style
         energy gradient ∂E/∂R in Ha/Bohr instead of forces F = −∇E). Default False.
+    energy_scale : float
+        Multiply ``E`` after Hartree→eV (and after atomic-ref). Also ``efield_energy``, ``efield_scf_energy`` if present. Default 1.0.
+    force_scale : float
+        Multiply ``F`` after Ha/Bohr→eV/Å. Also ``efield_scf_F`` if present. Default 1.0.
+    dipole_scale : float
+        Multiply ``Dxyz`` after Debye→e·Å (ignored if no Dxyz). Same factor on ``D``, ``efield_scf_D``, ``efield_D`` (Debye) if present. Not applied to ``efield_D_au``. Default 1.0.
+    efield_scale : float
+        Multiply external-field vectors ``Ef``, ``efield_Ef``, ``efield_scf_Ef`` if present. Default 1.0.
+    esp_scale : float
+        Multiply ``esp`` (Hartree/e) on grid output and on EFD if that key is present (combined NPZ). Default 1.0.
+    charge_scale : float
+        Multiply NPZ key ``Q`` if present. Intended for **total molecular charge** when your files
+        use ``Q`` for that. Note: PySCF ``dens_esp`` export may store **quadrupole** under ``Q``;
+        only use this scale when ``Q`` matches your intended quantity. Default 1.0.
     verbose : bool
         Print detailed progress (default True)
         
@@ -876,7 +918,41 @@ def fix_and_split_data(
             print(f"✓ Dipoles converted to e·Å")
     else:
         D_eA = None
-    
+
+    # =========================================================================
+    # Optional extra scales (after standard conversions; before validation / ESP)
+    # =========================================================================
+    es = float(energy_scale)
+    fs = float(force_scale)
+    ds = float(dipole_scale)
+    if es != 1.0:
+        E_ev = E_ev * es
+    if fs != 1.0:
+        F_ev_ang = F_ev_ang * fs
+    if D_eA is not None and ds != 1.0:
+        D_eA = D_eA * ds
+    ef_s = float(efield_scale)
+    esp_s = float(esp_scale)
+    q_s = float(charge_scale)
+    if verbose and (es != 1.0 or fs != 1.0 or ds != 1.0 or ef_s != 1.0 or esp_s != 1.0 or q_s != 1.0):
+        print(f"\n{'#'*70}")
+        print("# Extra property scales (applied after standard unit conversion)")
+        print(f"{'#'*70}")
+        if es != 1.0:
+            print(f"  E:     × {es}  (eV); also efield_energy, efield_scf_energy when present")
+        if fs != 1.0:
+            print(f"  F:     × {fs}  (eV/Å); also efield_scf_F when present")
+        if D_eA is not None and ds != 1.0:
+            print(f"  Dxyz:  × {ds}  (after Debye→e·Å); also D, efield_scf_D, efield_D when present")
+        elif ds != 1.0:
+            print(f"  D/efield dipoles: × {ds}  (Debye vectors, if present)")
+        if ef_s != 1.0:
+            print(f"  Ef:    × {ef_s}  (Ef, efield_Ef, efield_scf_Ef)")
+        if esp_s != 1.0:
+            print(f"  esp:   × {esp_s}  (Hartree/e on grid and on EFD if present)")
+        if q_s != 1.0:
+            print(f"  Q:     × {q_s}  (NPZ key Q; use for total charge—PySCF may use Q for quadrupole)")
+
     # =========================================================================
     # Fix ESP grid: index space → physical Angstroms (if grid data exists)
     # =========================================================================
@@ -1146,6 +1222,19 @@ def fix_and_split_data(
                 grid_fixed['Z'] = np.broadcast_to(Z_g[np.newaxis, :], (n_samples, Z_g.shape[0]))
             grid_fixed['Z'] = npz_z_array_to_atomic_numbers(np.asarray(grid_fixed['Z']))
 
+    # Same extra factors on auxiliary NPZ keys (pass-through arrays not unit-converted here)
+    aux_scaled: List[str] = []
+    aux_scaled.extend(_scale_ndarrays_in_dict(efd_fixed, ("Ef", "efield_Ef", "efield_scf_Ef"), efield_scale))
+    aux_scaled.extend(_scale_ndarrays_in_dict(efd_fixed, ("efield_energy", "efield_scf_energy"), energy_scale))
+    aux_scaled.extend(_scale_ndarrays_in_dict(efd_fixed, ("efield_scf_F",), force_scale))
+    aux_scaled.extend(_scale_ndarrays_in_dict(efd_fixed, ("efield_scf_D", "efield_D", "D"), dipole_scale))
+    aux_scaled.extend(_scale_ndarrays_in_dict(efd_fixed, ("Q",), charge_scale))
+    aux_scaled.extend(_scale_ndarrays_in_dict(efd_fixed, ("esp",), esp_scale))
+    if grid_fixed is not None:
+        aux_scaled.extend(_scale_ndarrays_in_dict(grid_fixed, ("esp",), esp_scale))
+    if verbose and aux_scaled:
+        print(f"\n  Auxiliary/grid arrays scaled: {', '.join(dict.fromkeys(aux_scaled))}")
+
     # =========================================================================
     # Save split datasets
     # =========================================================================
@@ -1217,6 +1306,33 @@ def fix_and_split_data(
             "not raw gradient ∂E/∂R.\n"
         )
 
+    extra_scales_readme = ""
+    _es_r, _fs_r, _ds_r = float(energy_scale), float(force_scale), float(dipole_scale)
+    _ef_r, _esp_r, _q_r = float(efield_scale), float(esp_scale), float(charge_scale)
+    _scale_lines = []
+    if _es_r != 1.0:
+        _scale_lines.append(
+            f"- **E**: × {_es_r:g} after Hartree→eV; same factor on `efield_energy`, `efield_scf_energy` if present"
+        )
+    if _fs_r != 1.0:
+        _scale_lines.append(
+            f"- **F**: × {_fs_r:g} after Ha/Bohr→eV/Å; same factor on `efield_scf_F` if present"
+        )
+    if _ds_r != 1.0:
+        _scale_lines.append(
+            f"- **Dxyz**: × {_ds_r:g} after Debye→e·Å; same factor on `D`, `efield_scf_D`, `efield_D` if present"
+        )
+    if _ef_r != 1.0:
+        _scale_lines.append(f"- **Ef** (field vectors): × {_ef_r:g} on `Ef`, `efield_Ef`, `efield_scf_Ef` if present")
+    if _esp_r != 1.0:
+        _scale_lines.append(f"- **esp**: × {_esp_r:g} [Hartree/e] on grid NPZ and EFD NPZ if present")
+    if _q_r != 1.0:
+        _scale_lines.append(
+            f"- **Q** (NPZ key): × {_q_r:g} — for total charge in your convention; PySCF may use Q for quadrupole"
+        )
+    if _scale_lines:
+        extra_scales_readme = "\n### 3b. Extra property scales\n" + "\n".join(_scale_lines) + "\n"
+
     readme_content = f"""# Training Data (Unit-Corrected)
 
 This directory contains molecular data with **corrected units** ready for DCMnet/PhysnetJax training.
@@ -1237,7 +1353,7 @@ This directory contains molecular data with **corrected units** ready for DCMnet
 - **Original**: Hartree/Bohr
 - **Converted**: eV/Angstrom (ASE standard)
 - **Factor**: ×51.42208
-{forces_sign_readme}{grid_section}
+{forces_sign_readme}{extra_scales_readme}{grid_section}
 ## Data Splits
 
 - **Train**: {len(splits['train'])} samples ({train_frac*100:.0f}%)
@@ -1402,6 +1518,9 @@ Examples:
 
   # NPZ has raw PySCF gradient in F (not forces): negate before converting to eV/Å
   %(prog)s --efd raw.npz --output-dir ./out --flip-forces
+
+  # Correct a systematic factor after normal conversion (e.g. duplicate unit fix upstream)
+  %(prog)s --efd data.npz --output-dir ./out --energy-scale 0.5 --force-scale 1.0
 """
     )
     
@@ -1528,7 +1647,67 @@ Examples:
         ),
     )
 
+    parser.add_argument(
+        '--energy-scale',
+        type=float,
+        default=1.0,
+        metavar='X',
+        help='Multiply E by X after Hartree→eV. Also efield_energy, efield_scf_energy if present (default 1.0).',
+    )
+    parser.add_argument(
+        '--force-scale',
+        type=float,
+        default=1.0,
+        metavar='X',
+        help='Multiply F by X after Ha/Bohr→eV/Å. Also efield_scf_F if present (default 1.0).',
+    )
+    parser.add_argument(
+        '--dipole-scale',
+        type=float,
+        default=1.0,
+        metavar='X',
+        help=(
+            'Multiply Dxyz by X after Debye→e·Å if present. Also scales D, efield_scf_D, efield_D (Debye) if present.'
+        ),
+    )
+    parser.add_argument(
+        '--efield-scale',
+        type=float,
+        default=1.0,
+        metavar='X',
+        help='Multiply Ef, efield_Ef, efield_scf_Ef by X if present (default 1.0).',
+    )
+    parser.add_argument(
+        '--esp-scale',
+        type=float,
+        default=1.0,
+        metavar='X',
+        help='Multiply esp by X [Hartree/e] on grid splits and on EFD if esp is stored there (default 1.0).',
+    )
+    parser.add_argument(
+        '--charge-scale',
+        type=float,
+        default=1.0,
+        metavar='X',
+        help=(
+            'Multiply NPZ key Q by X if present. For total molecular charge when Q stores charge. '
+            'PySCF ESP export may use Q for quadrupole—verify your file (default 1.0).'
+        ),
+    )
+    parser.add_argument(
+        '--quadrupole-scale',
+        type=float,
+        default=None,
+        metavar='X',
+        help=argparse.SUPPRESS,
+    )
+
     args = parser.parse_args()
+
+    if args.quadrupole_scale is not None:
+        if args.charge_scale != 1.0:
+            parser.error("--quadrupole-scale is deprecated (was misnamed); use --charge-scale only, not both.")
+        args.charge_scale = args.quadrupole_scale
     
     # Validate inputs
     efd_files = args.efd if isinstance(args.efd, list) else [args.efd]
@@ -1565,6 +1744,12 @@ Examples:
         esp_max_abs_kcal_mol=getattr(args, 'esp_max_abs_kcal_mol', 100.0),
         min_dist_to_atoms=getattr(args, 'min_dist_to_atoms', 1.0),
         flip_forces=getattr(args, 'flip_forces', False),
+        energy_scale=getattr(args, 'energy_scale', 1.0),
+        force_scale=getattr(args, 'force_scale', 1.0),
+        dipole_scale=getattr(args, 'dipole_scale', 1.0),
+        efield_scale=getattr(args, 'efield_scale', 1.0),
+        esp_scale=getattr(args, 'esp_scale', 1.0),
+        charge_scale=getattr(args, 'charge_scale', 1.0),
         verbose=not args.quiet,
     )
     
