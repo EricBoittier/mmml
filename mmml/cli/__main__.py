@@ -29,7 +29,7 @@ Available commands:
   fix-and-split  Fix units and create train/valid/test splits from NPZ data
   pyscf-dft   GPU-accelerated DFT calculations (energy, gradient, hessian, etc.)
   pyscf-mp2   GPU-accelerated MP2 (post-HF) calculations
-  pyscf-evaluate  Evaluate geometries (E, F, D, ESP) in batch
+  pyscf-evaluate  Evaluate geometries (E, F, D, ESP) in batch; optional --EF, --add-random-noise
   verify-esp-alignment  Verify esp-grid alignment in evaluated NPZ (data generation check)
   normal-mode-sample  Sample geometries along vibrational modes
   physnet-md  PhysNet MD sampling (ASE + JAX-MD)
@@ -50,6 +50,7 @@ Examples:
   mmml pyscf-dft --mol "O 0 0 0; H 0.96 0 0; H -0.24 0.93 0" --energy
   mmml normal-mode-sample -i out/04_results.h5 -o out/06_sampled.npz --amplitude 0.1
   mmml pyscf-evaluate -i out/06_sampled.npz -o out/07_evaluated.npz
+  mmml pyscf-evaluate -i traj.npz -o out.npz --EF --esp
   mmml physnet-md --checkpoint out/ckpts/cybz_physnet --data out/splits/energies_forces_dipoles_train.npz -o out/
   mmml active-learning -i out/physnet_md/physnet_ase.traj -o md_sampled.npz --max-temp 300
   mmml pyscf-evaluate -i md_sampled.npz -o md_evaluated.npz

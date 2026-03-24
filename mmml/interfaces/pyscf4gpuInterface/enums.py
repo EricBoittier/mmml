@@ -24,6 +24,8 @@ class CALCS(ENUM):
     IR = 8
     SHIELDING = 9
     POLARIZABILITY = 10
+    IR_EFIELD = 11  # IR under external E-field + optional E-field scan (responsive)
+    EFIELD_SCF = 12  # SCF in uniform E-field: energy, forces, dipole only (no Hessian/IR)
 
 all_theory = [THEORY.DFT, THEORY.HF, THEORY.MP2, THEORY.CCSD, THEORY.MP3]
 all_basis = [BASIS.def2_tzvpp, BASIS.def2_tzvp]
@@ -38,5 +40,7 @@ all_calcs = [
     CALCS.DENS_ESP,
     CALCS.IR,
     CALCS.SHIELDING, 
-    CALCS.POLARIZABILITY
+    CALCS.POLARIZABILITY,
+    CALCS.IR_EFIELD,
+    CALCS.EFIELD_SCF,
 ]

@@ -4,11 +4,14 @@ CLI to evaluate sampled geometries with pyscf-dft (energy, forces, dipoles, ESP)
 
 Runs all geometries in one process (same GPU context) for speed.
 Input: NPZ with R (n_samples, n_atoms, 3), Z, N (e.g. from normal-mode-sample)
-Output: NPZ with R, Z, N, E, F, Dxyz, esp, esp_grid (if --esp)
+Output: NPZ with R, Z, N, E, F, Dxyz, esp, esp_grid (if --esp), Ef (if --EF)
 
 Usage:
     mmml pyscf-evaluate -i out/06_sampled.npz -o out/07_evaluated.npz
     mmml pyscf-evaluate -i out/06_sampled.npz -o out/07_evaluated.npz --esp
+    mmml pyscf-evaluate -i traj.npz -o out.npz --EF
+    mmml pyscf-evaluate -i traj.npz -o out.npz --EF --efield 0,0,0.01
+    mmml pyscf-evaluate -i traj.npz -o out.npz --add-random-noise 0.1
 """
 
 import argparse
@@ -17,6 +20,13 @@ import time
 from pathlib import Path
 
 import numpy as np
+
+
+def _parse_efield_vector(s: str) -> np.ndarray:
+    p = [float(x.strip()) for x in s.replace(" ", "").split(",")]
+    if len(p) != 3:
+        raise ValueError(f"Expected Ex,Ey,Ez comma-separated, got {s!r}")
+    return np.array(p, dtype=np.float64)
 
 
 def main() -> int:
@@ -87,6 +97,42 @@ def main() -> int:
         action="store_true",
         help="Use CPU path for ESP (slower; default: GPU int1e_grids)",
     )
+    parser.add_argument(
+        "--EF",
+        dest="efield_enabled",
+        action="store_true",
+        help=(
+            "Include uniform electric field in the Hamiltonian (atomic units). "
+            "Without --efield, draw a random (Ex,Ey,Ez) per geometry (see --efield-sigma). "
+            "Giving --efield alone also enables the field (same vector for all frames)."
+        ),
+    )
+    parser.add_argument(
+        "--efield",
+        type=str,
+        default=None,
+        metavar="Ex,Ey,Ez",
+        help="Fixed field in a.u., same for all geometries (enables E-field even without --EF)",
+    )
+    parser.add_argument(
+        "--efield-sigma",
+        type=float,
+        default=0.01,
+        help="Std dev (a.u.) per component for random fields when --EF is set without --efield (default: 0.01)",
+    )
+    parser.add_argument(
+        "--add-random-noise",
+        type=float,
+        default=None,
+        metavar="SIGMA",
+        help="Gaussian noise std dev in Angstrom added to all R components before evaluation",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="RNG seed for --add-random-noise and random --EF draws",
+    )
 
     args = parser.parse_args()
     t0 = time.perf_counter()
@@ -94,6 +140,9 @@ def main() -> int:
     if not args.input.exists():
         print(f"Error: Input file not found: {args.input}", file=sys.stderr)
         return 1
+
+    if args.efield:
+        args.efield_enabled = True
 
     try:
         from mmml.interfaces.pyscf4gpuInterface.calcs import compute_dft_batch
@@ -105,7 +154,7 @@ def main() -> int:
         raise
 
     data = np.load(args.input, allow_pickle=True)
-    R = np.asarray(data["R"])
+    R = np.asarray(data["R"], dtype=np.float64)
     Z = np.asarray(data["Z"])
     if R.ndim == 2:
         R = R[np.newaxis, ...]
@@ -113,7 +162,33 @@ def main() -> int:
         Z = Z[0]
 
     n_samples = R.shape[0]
+    rng = np.random.default_rng(args.seed)
+
+    if args.add_random_noise is not None:
+        if args.add_random_noise < 0:
+            print("Error: --add-random-noise must be >= 0", file=sys.stderr)
+            return 1
+        if args.add_random_noise > 0:
+            R = R + rng.normal(0.0, args.add_random_noise, size=R.shape)
+
+    efield_pass = None
+    if args.efield_enabled:
+        if args.efield:
+            try:
+                efield_pass = _parse_efield_vector(args.efield)
+            except ValueError as err:
+                print(f"Error: {err}", file=sys.stderr)
+                return 1
+        else:
+            efield_pass = rng.normal(0.0, args.efield_sigma, size=(n_samples, 3))
+
     print(f"Evaluating {n_samples} geometries with pyscf-dft (GPU)...")
+    if args.efield_enabled:
+        print(
+            f"  E-field: {'fixed ' + str(efield_pass) if args.efield else f'random per frame (sigma={args.efield_sigma} a.u.)'}"
+        )
+    if args.add_random_noise and args.add_random_noise > 0:
+        print(f"  Position noise: Gaussian sigma={args.add_random_noise} Angstrom on R")
 
     result = compute_dft_batch(
         R,
@@ -128,6 +203,7 @@ def main() -> int:
         dens_esp=args.esp,
         esp_cpu_fallback=args.esp_cpu_fallback,
         verbose=0,
+        efield=efield_pass,
     )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -136,6 +212,8 @@ def main() -> int:
     elapsed = time.perf_counter() - t0
     print(f"Saved to {args.output}")
     print(f"  R: {result['R'].shape}, E: {result.get('E', np.array([])).shape}, F: {result.get('F', np.array([])).shape}")
+    if "Ef" in result:
+        print(f"  Ef: {result['Ef'].shape}")
     print(f"Elapsed: {elapsed:.2f} s")
     return 0
 

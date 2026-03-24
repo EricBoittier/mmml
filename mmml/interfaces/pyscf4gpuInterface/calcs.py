@@ -202,6 +202,73 @@ def compute_dft(args, calcs, extra=None):
         output['freq'] = freq
         output['intensity'] = intensity
 
+    if CALCS.IR_EFIELD in calcs:
+        print("-"*100)
+        print("Computing IR under external electric field (E-field scan)")
+        print("-"*100)
+        from mmml.interfaces.pyscf4gpuInterface.efield import (
+            efield_ir_scan,
+            efield_response_finite_difference,
+            parse_efield_points,
+        )
+
+        spec = getattr(args, "efield_points", None) or "0,0,0"
+        efields = parse_efield_points(spec)
+        fd_axis = int(getattr(args, "efield_fd_axis", 2))
+        print(f"  Field points (a.u.): {efields.shape[0]} rows; FD axis index = {fd_axis}")
+        scan = efield_ir_scan(mol, efields, xc=args.xc)
+        scan["efield_response_fd"] = efield_response_finite_difference(
+            scan, axis=fd_axis
+        )
+        output["efield_ir_scan"] = scan
+        output["efield_Ef"] = scan["Ef"]
+        output["efield_energy"] = scan["energy"]
+        output["efield_D_au"] = scan["D_au"]
+        if scan.get("polarizability") is not None:
+            output["efield_polarizability"] = scan["polarizability"]
+        output["efield_response_fd"] = scan["efield_response_fd"]
+
+    if CALCS.EFIELD_SCF in calcs:
+        print("-" * 100)
+        print("Computing SCF in uniform E-field (energy, dipole, forces — no Hessian/IR)")
+        print("-" * 100)
+        from mmml.interfaces.pyscf4gpuInterface.efield import (
+            efield_response_finite_difference,
+            efield_scf_scan,
+            parse_efield_points,
+        )
+
+        spec = getattr(args, "efield_points", None) or "0,0,0"
+        efields = parse_efield_points(spec)
+        fd_axis = int(getattr(args, "efield_fd_axis", 2))
+        dip_u = getattr(args, "efield_dipole_unit", "DEBYE")
+        do_forces = not getattr(args, "efield_scf_no_forces", False)
+        print(
+            f"  Field points (a.u.): {efields.shape[0]}; dipole unit={dip_u}; "
+            f"forces={'on' if do_forces else 'off'}"
+        )
+        scan = efield_scf_scan(
+            mol,
+            efields,
+            xc=args.xc,
+            dipole_unit=dip_u,
+            forces=do_forces,
+        )
+        scan["efield_response_fd"] = efield_response_finite_difference(
+            scan, axis=fd_axis
+        )
+        output["efield_scf_scan"] = scan
+        output["efield_scf_Ef"] = scan["Ef"]
+        output["efield_scf_energy"] = scan["energy"]
+        output["efield_scf_D_au"] = scan["D_au"]
+        D_rows = [
+            np.asarray(s["D"], dtype=np.float64).ravel()[:3] for s in scan["summaries"]
+        ]
+        output["efield_scf_D"] = np.stack(D_rows, axis=0)
+        if do_forces and "F" in scan:
+            output["efield_scf_F"] = scan["F"]
+        output["efield_scf_response_fd"] = scan["efield_response_fd"]
+
     if CALCS.SHIELDING in calcs:
         assert CALCS.ENERGY in calcs, "Energy must be computed for shielding"
         print("-"*100)
@@ -287,12 +354,18 @@ def compute_dft_single(
     dens_esp: bool = False,
     esp_cpu_fallback: bool = False,
     verbose: int = 0,
+    efield: np.ndarray | None = None,
 ) -> dict:
     """
     Run DFT for a single geometry (R, Z). Used for batch evaluation.
 
     Returns dict with energy, gradient, D (dipole), esp, esp_grid (if dens_esp), R, Z, N.
     All in same process/GPU context for efficient batch loops.
+
+    efield
+        If set, shape (3,) electric field in **atomic units** (uniform field in the
+        Hamiltonian). SCF uses hcore + E·μ; dipole/gradient/ESP use the converged
+        field-polarized state.
     """
     atom = _RZ_to_atom(R, Z)
     mol = pyscf.M(
@@ -305,7 +378,66 @@ def compute_dft_single(
     )
     engine, mol = setup_mol(mol, basis, xc, spin, charge, verbose=verbose)
 
-    # SCF must run before gradient/dipole/ESP
+    efield = None if efield is None else np.asarray(efield, dtype=np.float64).reshape(3)
+
+    # SCF in uniform electric field (modified core Hamiltonian)
+    if efield is not None:
+        from mmml.interfaces.pyscf4gpuInterface.efield import run_scf_uniform_efield
+
+        mf, e_tot = run_scf_uniform_efield(efield, mol, xc=xc)
+        out: dict = {}
+        if energy:
+            out["energy"] = np.array(e_tot)
+        out["R"] = np.asarray(R)
+        out["Z"] = np.asarray(Z)
+        out["N"] = np.array(len(Z))
+        out["Ef"] = efield.copy()
+
+        if gradient:
+            g = mf.nuc_grad_method()
+            g_dft = g.kernel()
+            out["gradient"] = _to_numpy(g_dft)
+
+        if dipole:
+            dm = mf.make_rdm1()
+            out["D"] = _to_numpy(mf.dip_moment(unit="DEBYE", dm=dm))
+
+        if dens_esp:
+            dm = mf.make_rdm1()
+            grids = mf.grids
+            grid_coords = grids.coords.get()
+            density = mf._numint.get_rho(mol, dm, grids).get()
+            grid_indices = np.where(
+                np.less(density, 0.001) & np.greater_equal(density, 0.0001)
+            )[0]
+            grid_positions_a = grid_coords[grid_indices]
+            coords = grid_positions_a
+
+            if esp_cpu_fallback:
+                dm_np = dm.get() if hasattr(dm, "get") else np.asarray(dm)
+                res = _compute_esp_grid_cpu(mol, dm_np, coords)
+            else:
+                v_elec = int1e_grids(mol, coords, dm=dm)
+                v_elec = v_elec.get() if hasattr(v_elec, "get") else np.asarray(v_elec)
+                charges = mol.atom_charges()
+                atom_coords = mol.atom_coords(unit="Bohr")
+                v_nuc = np.array(
+                    [
+                        np.sum(charges / (np.linalg.norm(atom_coords - r, axis=1) + 1e-12))
+                        for r in coords
+                    ],
+                    dtype=np.float64,
+                )
+                res = v_nuc - v_elec
+
+            out["esp"] = np.asarray(res)
+            out["esp_grid"] = np.asarray(coords)
+            out["density"] = density
+            out["density_grid"] = grid_coords
+
+        return out
+
+    # Zero-field SCF
     run_scf = energy or gradient or dipole or dens_esp
     if run_scf:
         e = engine.kernel()
@@ -380,6 +512,7 @@ def compute_dft_batch(
     dens_esp: bool = False,
     esp_cpu_fallback: bool = False,
     verbose: int = 0,
+    efield: np.ndarray | None = None,
 ) -> dict:
     """
     Run DFT for multiple geometries in one process (same GPU context).
@@ -390,13 +523,25 @@ def compute_dft_batch(
     if R_batch.ndim == 2:
         R_batch = R_batch[np.newaxis, ...]
 
+    efield_arr: np.ndarray | None = None
+    if efield is not None:
+        efield_arr = np.asarray(efield, dtype=np.float64)
+        if efield_arr.shape == (3,):
+            efield_arr = np.broadcast_to(efield_arr, (n, 3)).copy()
+        elif efield_arr.shape != (n, 3):
+            raise ValueError(
+                f"efield must be (3,) or (n,3) with n={n}, got {efield_arr.shape}"
+            )
+
     energies = []
     gradients = []
     dipoles = []
     esps = []
     esp_grids = []
+    efs = []
 
     for i in tqdm(range(n), desc="pyscf-dft", unit="geom"):
+        ef_i = None if efield_arr is None else efield_arr[i]
         out = compute_dft_single(
             R_batch[i],
             Z,
@@ -410,6 +555,7 @@ def compute_dft_batch(
             dens_esp=dens_esp,
             esp_cpu_fallback=esp_cpu_fallback,
             verbose=verbose,
+            efield=ef_i,
         )
         if energy:
             energies.append(out["energy"])
@@ -420,12 +566,16 @@ def compute_dft_batch(
         if dens_esp:
             esps.append(out["esp"])
             esp_grids.append(out["esp_grid"])
+        if "Ef" in out:
+            efs.append(out["Ef"])
 
     result = {
         "R": R_batch,
         "Z": np.asarray(Z),
         "N": np.array(len(Z)),
     }
+    if efs:
+        result["Ef"] = np.stack(efs, axis=0)
     if energy:
         result["E"] = np.stack(energies)
     if gradient:
@@ -544,6 +694,42 @@ def parse_args():
     parser.add_argument("--ir", default=False, action="store_true")
     parser.add_argument("--shielding", default=False, action="store_true")
     parser.add_argument("--polarizability", default=False, action="store_true")
+    parser.add_argument(
+        "--ir-efield",
+        default=False,
+        action="store_true",
+        help="IR + Hessian pipeline in a uniform E-field; scan fields from --efield-points",
+    )
+    parser.add_argument(
+        "--efield-points",
+        type=str,
+        default="0,0,0",
+        help="Semicolon-separated Ex,Ey,Ez in a.u., e.g. '0,0,0;0,0,0.001;0,0,-0.001'",
+    )
+    parser.add_argument(
+        "--efield-fd-axis",
+        type=int,
+        default=2,
+        help="Cartesian axis (0=x,1=y,2=z) for finite-difference dμ/dE from the scan",
+    )
+    parser.add_argument(
+        "--efield-scf",
+        default=False,
+        action="store_true",
+        help="SCF only in uniform E-field: energy, dipole, forces (use --efield-points); no IR/Hessian",
+    )
+    parser.add_argument(
+        "--efield-scf-no-forces",
+        default=False,
+        action="store_true",
+        help="With --efield-scf, skip nuclear gradient (energy + dipole only)",
+    )
+    parser.add_argument(
+        "--efield-dipole-unit",
+        type=str,
+        default="DEBYE",
+        help="Dipole unit for --efield-scf (e.g. DEBYE, AU)",
+    )
     parser.add_argument("--save_option", type=str, default="hdf5")
     args = parser.parse_args()
 
@@ -586,6 +772,12 @@ def process_calcs(args):
 
     if args.polarizability:
         calcs.append(CALCS.POLARIZABILITY)
+
+    if getattr(args, "ir_efield", False):
+        calcs.append(CALCS.IR_EFIELD)
+
+    if getattr(args, "efield_scf", False):
+        calcs.append(CALCS.EFIELD_SCF)
 
     if args.interaction:
         calcs.append(CALCS.INTERACTION)
@@ -654,6 +846,12 @@ def get_dummy_args(mol: str, calcs: list[CALCS]):
             self.ir = CALCS.IR in calcs
             self.shielding = CALCS.SHIELDING in calcs
             self.polarizability = CALCS.POLARIZABILITY in calcs
+            self.ir_efield = CALCS.IR_EFIELD in calcs
+            self.efield_scf = CALCS.EFIELD_SCF in calcs
+            self.efield_points = "0,0,0"
+            self.efield_fd_axis = 2
+            self.efield_scf_no_forces = False
+            self.efield_dipole_unit = "DEBYE"
             self.interaction = CALCS.INTERACTION in calcs
             self.save_option = "pkl"
 
@@ -730,6 +928,24 @@ def build_ml_dict(data: dict) -> dict:
         ml["freq"] = out["freq"]
     if "intensity" in out:
         ml["intensity"] = out["intensity"]
+    if "efield_Ef" in out:
+        ml["efield_Ef"] = out["efield_Ef"]
+    if "efield_energy" in out:
+        ml["efield_energy"] = out["efield_energy"]
+    if "efield_D_au" in out:
+        ml["efield_D_au"] = out["efield_D_au"]
+    if "efield_scf_energy" in out:
+        ml["efield_scf_energy"] = out["efield_scf_energy"]
+    if "efield_scf_D" in out:
+        ml["efield_scf_D"] = out["efield_scf_D"]
+    if "efield_scf_D_au" in out:
+        ml["efield_scf_D_au"] = out["efield_scf_D_au"]
+    if "efield_scf_F" in out:
+        ml["efield_scf_F"] = out["efield_scf_F"]
+    if "efield_scf_Ef" in out:
+        ml["efield_scf_Ef"] = out["efield_scf_Ef"]
+    if "Ef" in out:
+        ml["Ef"] = out["Ef"]
     if "density" in out:
         ml["density"] = out["density"]
     if "density_grid" in out:
