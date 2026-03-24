@@ -38,6 +38,7 @@ import functools
 
 from mmml.models.EF.training import (
     MessagePassingModel,
+    mean_absolute_error_forces,
     prepare_batches,
     print_params_structure,
 )
@@ -403,13 +404,15 @@ def evaluate_dataset(model, params, data, batch_size=64, dataset_name="test"):
         print(f"\n  [DIAG] force shapes: pred={all_force_predictions.shape}, targ={all_force_targets.shape}")
         print(f"  [DIAG] target stats: mean={np.mean(all_force_targets):.6f}, std={np.std(all_force_targets):.6f}, max|F|={np.max(np.abs(all_force_targets)):.6f} eV/Å")
         print(f"  [DIAG] pred   stats: mean={np.mean(all_force_predictions):.6f}, std={np.std(all_force_predictions):.6f}, max|F|={np.max(np.abs(all_force_predictions)):.6f} eV/Å")
-        try:
-            from training import mean_absolute_error_forces
-            training_mae = float(mean_absolute_error_forces(
-                jnp.asarray(all_force_predictions), jnp.asarray(all_force_targets)))
-            print(f"  [DIAG] training.mean_absolute_error_forces: {training_mae:.6f} eV/Å ({training_mae * 23.06:.4f} kcal/mol/Å)")
-        except Exception as e:
-            print(f"  [DIAG] Could not import training MAE function: {e}")
+        training_mae = float(
+            mean_absolute_error_forces(
+                jnp.asarray(all_force_predictions), jnp.asarray(all_force_targets)
+            )
+        )
+        print(
+            f"  [DIAG] training.mean_absolute_error_forces: {training_mae:.6f} eV/Å "
+            f"({training_mae * EV_TO_KCAL_MOL:.4f} kcal/mol/Å)"
+        )
         
         force_metrics = compute_force_metrics(all_force_predictions, all_force_targets)
         
@@ -470,9 +473,7 @@ def evaluate_dataset(model, params, data, batch_size=64, dataset_name="test"):
         # Correlation coefficient R
         dipole_metrics['r'] = np.corrcoef(dipole_pred_flat, dipole_target_flat)[0, 1]
         
-        # Convert to Debye (assuming input is in Debye, or atomic units)
-        # Note: dipole is typically in Debye units, so no conversion needed
-        # But we'll add Debye suffix for clarity
+        # Aliases for JSON/back-compat (_debye name is historical; units = dataset / training targets)
         dipole_metrics['mae_overall_debye'] = dipole_metrics['mae_overall']
         dipole_metrics['rmse_overall_debye'] = dipole_metrics['rmse_overall']
         dipole_metrics['mae_x_debye'] = dipole_metrics['mae_x']
@@ -482,16 +483,15 @@ def evaluate_dataset(model, params, data, batch_size=64, dataset_name="test"):
         dipole_metrics['rmse_magnitude_debye'] = dipole_metrics['rmse_magnitude']
         
         print(f"\nDipole Metrics for {dataset_name}:")
-        print(f"  MAE (overall): {dipole_metrics['mae_overall_debye']:.4f} Debye")
-        print(f"  RMSE (overall): {dipole_metrics['rmse_overall_debye']:.4f} Debye")
+        print("  (same units as NPZ / training targets — usually e·Å after fix-and-split)")
+        print(f"  MAE (overall): {dipole_metrics['mae_overall']:.6f}")
+        print(f"  RMSE (overall): {dipole_metrics['rmse_overall']:.6f}")
         print(f"  R²:   {dipole_metrics['r2']:.6f}")
         print(f"  R:    {dipole_metrics['r']:.6f}")
-        print(f"  MAE (magnitude): {dipole_metrics['mae_magnitude_debye']:.4f} Debye")
-        print(f"  RMSE (magnitude): {dipole_metrics['rmse_magnitude_debye']:.4f} Debye")
+        print(f"  MAE (magnitude): {dipole_metrics['mae_magnitude']:.6f}")
+        print(f"  RMSE (magnitude): {dipole_metrics['rmse_magnitude']:.6f}")
         print(f"  MAE per component:")
-        print(f"    X: {dipole_metrics['mae_x_debye']:.4f} Debye")
-        print(f"    Y: {dipole_metrics['mae_y_debye']:.4f} Debye")
-        print(f"    Z: {dipole_metrics['mae_z_debye']:.4f} Debye")
+        print(f"    X: {dipole_metrics['mae_x']:.6f}  Y: {dipole_metrics['mae_y']:.6f}  Z: {dipole_metrics['mae_z']:.6f}")
     else:
         all_dipole_predictions = None
         all_dipole_targets = None
@@ -746,11 +746,14 @@ def plot_dipole_scatter(predictions, targets, metrics, save_path=None, ax=None):
     correlation_matrix = np.corrcoef(target_flat, pred_flat)
     r = correlation_matrix[0, 1] if correlation_matrix.size > 1 else 0.0
     
-    ax.set_xlabel('True Dipole Component (Debye)', fontsize=12)
-    ax.set_ylabel('Predicted Dipole Component (Debye)', fontsize=12)
+    ax.set_xlabel('True dipole component (dataset units)', fontsize=12)
+    ax.set_ylabel('Predicted dipole component (dataset units)', fontsize=12)
     mae_overall = metrics.get('mae_overall_debye', metrics.get('mae_overall', 0.0))
     rmse_overall = metrics.get('rmse_overall_debye', metrics.get('rmse_overall', 0.0))
-    ax.set_title(f'Dipole Component Predictions\nMAE: {mae_overall:.4f} | RMSE: {rmse_overall:.4f} Debye | R²: {r2:.6f} | R: {r:.6f}', fontsize=11)
+    ax.set_title(
+        f'Dipole component predictions\nMAE: {mae_overall:.4f} | RMSE: {rmse_overall:.4f} | R²: {r2:.6f} | R: {r:.6f}',
+        fontsize=11,
+    )
     ax.legend(fontsize=10)
     ax.grid(True, alpha=0.3)
     ax.set_aspect('equal', adjustable='box')
@@ -767,7 +770,7 @@ def plot_dipole_component_errors(predictions, targets, metrics, save_path=None, 
     if ax is None:
         fig, ax = plt.subplots(figsize=(8, 6))
     
-    errors = predictions - targets  # Already in Debye
+    errors = predictions - targets
     
     components = ['X', 'Y', 'Z']
     mae_values = [
@@ -777,7 +780,7 @@ def plot_dipole_component_errors(predictions, targets, metrics, save_path=None, 
     ]
     
     bars = ax.bar(components, mae_values, alpha=0.7, edgecolor='black', linewidth=1)
-    ax.set_ylabel('MAE (Debye)', fontsize=12)
+    ax.set_ylabel('MAE (dataset units)', fontsize=12)
     ax.set_title('Dipole Error per Component', fontsize=11)
     ax.grid(True, alpha=0.3, axis='y')
     
@@ -806,10 +809,10 @@ def plot_dipole_magnitude_scatter(predictions, targets, metrics, save_path=None,
     ax.scatter(target_mags, mag_errors, alpha=0.5, s=20, edgecolors='none')
     ax.axhline(0, color='r', linestyle='--', linewidth=2, label='Zero error')
     
-    ax.set_xlabel('True Dipole Magnitude (Debye)', fontsize=12)
-    ax.set_ylabel('Error (Predicted - True) [Debye]', fontsize=12)
+    ax.set_xlabel('True dipole magnitude (dataset units)', fontsize=12)
+    ax.set_ylabel('Error (predicted − true) [dataset units]', fontsize=12)
     mae_mag = metrics.get('mae_magnitude_debye', metrics.get('mae_magnitude', 0.0))
-    ax.set_title(f'Dipole Magnitude Error vs Magnitude\nMAE: {mae_mag:.4f} Debye', fontsize=11)
+    ax.set_title(f'Dipole magnitude error vs magnitude\nMAE: {mae_mag:.4f}', fontsize=11)
     ax.legend(fontsize=10)
     ax.grid(True, alpha=0.3)
     
@@ -833,9 +836,12 @@ def plot_dipole_error_distribution(predictions, targets, metrics, save_path=None
     
     mae_overall = metrics.get('mae_overall_debye', metrics.get('mae_overall', 0.0))
     rmse_overall = metrics.get('rmse_overall_debye', metrics.get('rmse_overall', 0.0))
-    ax.set_xlabel('Dipole Error Magnitude (Debye)', fontsize=12)
+    ax.set_xlabel('Dipole error ‖Δμ‖ (dataset units)', fontsize=12)
     ax.set_ylabel('Frequency', fontsize=12)
-    ax.set_title(f'Dipole Error Distribution\nMAE: {mae_overall:.4f} | RMSE: {rmse_overall:.4f} Debye', fontsize=11)
+    ax.set_title(
+        f'Dipole error distribution\nMAE: {mae_overall:.4f} | RMSE: {rmse_overall:.4f}',
+        fontsize=11,
+    )
     ax.grid(True, alpha=0.3, axis='y')
     
     if save_path:
@@ -866,10 +872,10 @@ def plot_dipole_component_comparison(predictions, targets, metrics, save_path=No
     lims = [min(all_targets.min(), all_preds.min()), max(all_targets.max(), all_preds.max())]
     ax.plot(lims, lims, 'k--', alpha=0.75, linewidth=2, label='Perfect prediction')
     
-    ax.set_xlabel('True Dipole Component (Debye)', fontsize=12)
-    ax.set_ylabel('Predicted Dipole Component (Debye)', fontsize=12)
+    ax.set_xlabel('True dipole component (dataset units)', fontsize=12)
+    ax.set_ylabel('Predicted dipole component (dataset units)', fontsize=12)
     mae_overall = metrics.get('mae_overall_debye', metrics.get('mae_overall', 0.0))
-    ax.set_title(f'Dipole Component Predictions\nMAE: {mae_overall:.4f} Debye', fontsize=11)
+    ax.set_title(f'Dipole component predictions\nMAE: {mae_overall:.4f}', fontsize=11)
     ax.legend(fontsize=10)
     ax.grid(True, alpha=0.3)
     ax.set_aspect('equal', adjustable='box')
@@ -1150,21 +1156,22 @@ def main(args=None):
         print("Warning: No forces (F) found in dataset. Force evaluation will be skipped.")
         test_data['forces'] = None
     
-    # Handle dipoles: key "D" in dataset
-    if 'D' in dataset.files:
-        dipoles_raw = jnp.asarray(dataset['D'], dtype=jnp.float32)
+    # Dipoles: D (e·Å or legacy) or Dxyz from pyscf-evaluate / fix-and-split (same as training.load_ef_npz)
+    dip_key = "D" if "D" in dataset.files else ("Dxyz" if "Dxyz" in dataset.files else None)
+    if dip_key is not None:
+        dipoles_raw = jnp.asarray(dataset[dip_key], dtype=jnp.float32)
         if dipoles_raw.ndim == 3 and dipoles_raw.shape[1] == 1:
-            dipoles_raw = dipoles_raw.squeeze(axis=1)  # (num_data, 3)
-        
+            dipoles_raw = dipoles_raw.squeeze(axis=1)  # (num_data, 1, 3) -> (num_data, 3)
         if indices is None:
-            test_data['dipoles'] = dipoles_raw
-            test_data['D'] = dipoles_raw  # Also add as 'D' for prepare_batches compatibility
+            test_data["dipoles"] = dipoles_raw
+            test_data["D"] = dipoles_raw
         else:
-            test_data['dipoles'] = dipoles_raw[indices]
-            test_data['D'] = dipoles_raw[indices]  # Also add as 'D' for prepare_batches compatibility
+            test_data["dipoles"] = dipoles_raw[indices]
+            test_data["D"] = dipoles_raw[indices]
     else:
-        test_data['dipoles'] = None
-        test_data['D'] = None
+        test_data["dipoles"] = None
+        test_data["D"] = None
+        print("Warning: No dipoles (D or Dxyz) in dataset. Dipole evaluation will be skipped.")
     
     print(f"Test data size: {len(test_data['energies'])}")
     if test_data['forces'] is not None:
