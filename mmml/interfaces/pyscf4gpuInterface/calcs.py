@@ -216,7 +216,10 @@ def compute_dft(args, calcs, extra=None):
         efields = parse_efield_points(spec)
         fd_axis = int(getattr(args, "efield_fd_axis", 2))
         print(f"  Field points (a.u.): {efields.shape[0]} rows; FD axis index = {fd_axis}")
-        scan = efield_ir_scan(mol, efields, xc=args.xc)
+        inc_nuc = getattr(args, "efield_include_nuclear_energy", False)
+        scan = efield_ir_scan(
+            mol, efields, xc=args.xc, include_nuclear_field_energy=inc_nuc
+        )
         scan["efield_response_fd"] = efield_response_finite_difference(
             scan, axis=fd_axis
         )
@@ -253,6 +256,9 @@ def compute_dft(args, calcs, extra=None):
             xc=args.xc,
             dipole_unit=dip_u,
             forces=do_forces,
+            include_nuclear_field_energy=getattr(
+                args, "efield_include_nuclear_energy", False
+            ),
         )
         scan["efield_response_fd"] = efield_response_finite_difference(
             scan, axis=fd_axis
@@ -355,6 +361,7 @@ def compute_dft_single(
     esp_cpu_fallback: bool = False,
     verbose: int = 0,
     efield: np.ndarray | None = None,
+    efield_include_nuclear_energy: bool = False,
 ) -> dict:
     """
     Run DFT for a single geometry (R, Z). Used for batch evaluation.
@@ -366,6 +373,9 @@ def compute_dft_single(
         If set, shape (3,) electric field in **atomic units** (uniform field in the
         Hamiltonian). SCF uses hcore + E·μ; dipole/gradient/ESP use the converged
         field-polarized state.
+    efield_include_nuclear_energy
+        If True (with ``efield``), add nuclear-field energy to ``energy`` after SCF
+        (:func:`mmml.interfaces.pyscf4gpuInterface.efield.nuclear_field_energy_correction_hartree`).
     """
     atom = _RZ_to_atom(R, Z)
     mol = pyscf.M(
@@ -384,7 +394,12 @@ def compute_dft_single(
     if efield is not None:
         from mmml.interfaces.pyscf4gpuInterface.efield import run_scf_uniform_efield
 
-        mf, e_tot = run_scf_uniform_efield(efield, mol, xc=xc)
+        mf, e_tot = run_scf_uniform_efield(
+            efield,
+            mol,
+            xc=xc,
+            include_nuclear_field_energy=efield_include_nuclear_energy,
+        )
         out: dict = {}
         if energy:
             out["energy"] = np.array(e_tot)
@@ -513,6 +528,7 @@ def compute_dft_batch(
     esp_cpu_fallback: bool = False,
     verbose: int = 0,
     efield: np.ndarray | None = None,
+    efield_include_nuclear_energy: bool = False,
 ) -> dict:
     """
     Run DFT for multiple geometries in one process (same GPU context).
@@ -556,6 +572,7 @@ def compute_dft_batch(
             esp_cpu_fallback=esp_cpu_fallback,
             verbose=verbose,
             efield=ef_i,
+            efield_include_nuclear_energy=efield_include_nuclear_energy,
         )
         if energy:
             energies.append(out["energy"])
@@ -730,6 +747,15 @@ def parse_args():
         default="DEBYE",
         help="Dipole unit for --efield-scf (e.g. DEBYE, AU)",
     )
+    parser.add_argument(
+        "--efield-include-nuclear-energy",
+        default=False,
+        action="store_true",
+        help=(
+            "After SCF in a uniform field, add nuclear-field energy term to reported E "
+            "(gpu4pyscf polarizability convention; linear in E for fixed geometry)"
+        ),
+    )
     parser.add_argument("--save_option", type=str, default="hdf5")
     args = parser.parse_args()
 
@@ -852,6 +878,7 @@ def get_dummy_args(mol: str, calcs: list[CALCS]):
             self.efield_fd_axis = 2
             self.efield_scf_no_forces = False
             self.efield_dipole_unit = "DEBYE"
+            self.efield_include_nuclear_energy = False
             self.interaction = CALCS.INTERACTION in calcs
             self.save_option = "pkl"
 
