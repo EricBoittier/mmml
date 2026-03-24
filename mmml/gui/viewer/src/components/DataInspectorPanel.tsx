@@ -72,7 +72,8 @@ function MetadataTree({ value, depth = 0 }: { value: unknown; depth?: number }) 
     if (value._dataset) {
       return (
         <span className="font-mono text-xs text-slate-500">
-          dataset {value.shape ? `shape ${JSON.stringify(value.shape)}` : ''} {value.dtype || ''}
+          dataset {value.shape ? `shape ${JSON.stringify(value.shape)}` : ''}{' '}
+          {String(value.dtype ?? '')}
           {value.min != null ? ` min=${value.min} max=${value.max}` : ''}
         </span>
       );
@@ -114,7 +115,7 @@ function formatPreview(arr: number[] | number[][], maxRows = 10, maxCols = 6): s
   return `[${vals.slice(0, maxCols).map((v) => (typeof v === 'number' ? v.toFixed(4) : v)).join(', ')}, ... ] (${vals.length} total)`;
 }
 
-function DataInspectorPanel({ filePath, currentFrame, nFrames, defaultExpanded }: DataInspectorPanelProps) {
+function DataInspectorPanel({ filePath, currentFrame, defaultExpanded }: DataInspectorPanelProps) {
   const [data, setData] = useState<InspectionData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
