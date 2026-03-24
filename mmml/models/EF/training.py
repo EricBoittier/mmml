@@ -649,7 +649,7 @@ def prepare_datasets(key, num_train, num_valid, dataset):
     return train_data, valid_data
 
 
-def prepare_batches(key, data, batch_size, num_atoms=29, dst_idx_flat=None, src_idx_flat=None, batch_segments=None):
+def prepare_batches(key, data, batch_size, num_atoms=None, dst_idx_flat=None, src_idx_flat=None, batch_segments=None):
     """
     Returns list of batch dicts with consistent shapes:
       atomic_numbers: (B*N,) flattened
@@ -662,9 +662,21 @@ def prepare_batches(key, data, batch_size, num_atoms=29, dst_idx_flat=None, src_
     
     Parameters
     ----------
+    num_atoms : int, optional
+        Atoms per system; defaults to the second axis of ``data['positions']``.
     dst_idx_flat, src_idx_flat, batch_segments : optional pre-computed arrays
-        If provided, these are reused instead of recomputing (performance optimization)
+        If provided, these are reused instead of recomputing (performance optimization).
+        Must match ``batch_size`` and the atom count implied by ``data`` (see below).
     """
+    n_atoms_data = int(data["positions"].shape[1])
+    if num_atoms is None:
+        num_atoms = n_atoms_data
+    elif num_atoms != n_atoms_data:
+        raise ValueError(
+            f"prepare_batches: num_atoms={num_atoms} does not match data positions "
+            f"(N={n_atoms_data} atoms per molecule)."
+        )
+
     data_size = len(data["electric_field"])
     steps_per_epoch = data_size // batch_size
 
@@ -685,6 +697,15 @@ def prepare_batches(key, data, batch_size, num_atoms=29, dst_idx_flat=None, src_
         src_idx_flat = (src_idx[None, :] + offsets[:, None]).reshape(-1)
 
         batch_segments = jnp.repeat(jnp.arange(batch_size, dtype=jnp.int32), num_atoms)
+    else:
+        seg_atoms = int(batch_segments.shape[0]) // batch_size
+        if seg_atoms != num_atoms:
+            raise ValueError(
+                "prepare_batches: precomputed batch_segments imply "
+                f"{seg_atoms} atoms/molecule (batch_size={batch_size}), but data has "
+                f"{num_atoms}. Build separate index tensors for train vs valid when "
+                "atom counts differ."
+            )
 
     # Pre-allocate list for better performance
     batches = [None] * steps_per_epoch
@@ -1081,22 +1102,32 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
     # Initialize EMA parameters
     ema_params = params
 
-    # Pre-compute indices once (performance optimization - reuse across epochs)
-    num_atoms = train_data["positions"].shape[1]
-    dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(num_atoms)
-    dst_idx = jnp.asarray(dst_idx, dtype=jnp.int32)
-    src_idx = jnp.asarray(src_idx, dtype=jnp.int32)
-    offsets = jnp.arange(batch_size, dtype=jnp.int32) * num_atoms
-    dst_idx_flat = (dst_idx[None, :] + offsets[:, None]).reshape(-1)
-    src_idx_flat = (src_idx[None, :] + offsets[:, None]).reshape(-1)
-    batch_segments = jnp.repeat(jnp.arange(batch_size, dtype=jnp.int32), num_atoms)
+    # Pre-compute indices once per split (train vs valid can differ in N_atoms)
+    def _batch_index_tensors(n_atoms: int):
+        dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(n_atoms)
+        dst_idx = jnp.asarray(dst_idx, dtype=jnp.int32)
+        src_idx = jnp.asarray(src_idx, dtype=jnp.int32)
+        offsets = jnp.arange(batch_size, dtype=jnp.int32) * n_atoms
+        d_flat = (dst_idx[None, :] + offsets[:, None]).reshape(-1)
+        s_flat = (src_idx[None, :] + offsets[:, None]).reshape(-1)
+        b_seg = jnp.repeat(jnp.arange(batch_size, dtype=jnp.int32), n_atoms)
+        return d_flat, s_flat, b_seg
+
+    train_n = int(train_data["positions"].shape[1])
+    valid_n = int(valid_data["positions"].shape[1])
+    train_dst_idx_flat, train_src_idx_flat, train_batch_segments = _batch_index_tensors(train_n)
+    valid_dst_idx_flat, valid_src_idx_flat, valid_batch_segments = _batch_index_tensors(valid_n)
 
     # Validation batches prepared once
     key, valid_key = jax.random.split(key)
-    valid_batches = prepare_batches(valid_key, valid_data, batch_size, 
-                                    dst_idx_flat=dst_idx_flat, 
-                                    src_idx_flat=src_idx_flat,
-                                    batch_segments=batch_segments)
+    valid_batches = prepare_batches(
+        valid_key,
+        valid_data,
+        batch_size,
+        dst_idx_flat=valid_dst_idx_flat,
+        src_idx_flat=valid_src_idx_flat,
+        batch_segments=valid_batch_segments,
+    )
 
     from mmml.physnetjax.physnetjax.data.data import print_shapes
 
@@ -1109,10 +1140,14 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
 
     for epoch in range(1, num_epochs + 1):
         key, shuffle_key = jax.random.split(key)
-        train_batches = prepare_batches(shuffle_key, train_data, batch_size,
-                                       dst_idx_flat=dst_idx_flat,
-                                       src_idx_flat=src_idx_flat,
-                                       batch_segments=batch_segments)
+        train_batches = prepare_batches(
+            shuffle_key,
+            train_data,
+            batch_size,
+            dst_idx_flat=train_dst_idx_flat,
+            src_idx_flat=train_src_idx_flat,
+            batch_segments=train_batch_segments,
+        )
 
         train_loss = 0.0
         train_energy_mae = 0.0
