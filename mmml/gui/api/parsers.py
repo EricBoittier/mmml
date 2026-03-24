@@ -38,6 +38,69 @@ ELEMENT_SYMBOLS = {
 }
 
 
+def _normalize_element_symbol(s: str) -> str:
+    s = s.strip()
+    if not s:
+        return ""
+    if len(s) == 1:
+        return s.upper()
+    return s[0].upper() + s[1:].lower()
+
+
+def _npz_z_scalar_to_atomic_number(x: Any) -> int:
+    """Map one NPZ Z entry to atomic number (0 = padding / unknown)."""
+    if x is None:
+        return 0
+    if isinstance(x, (bytes, np.bytes_)):
+        try:
+            x = x.decode("ascii").strip()
+        except Exception:
+            return 0
+    if isinstance(x, str) or isinstance(x, np.str_):
+        s = str(x).strip()
+        if not s or s.lower() in ("none", "nan", ""):
+            return 0
+        try:
+            zi = int(float(s))
+            return zi if zi > 0 else 0
+        except ValueError:
+            pass
+        if HAS_ASE:
+            from ase.data import atomic_numbers
+
+            sym = _normalize_element_symbol(s)
+            return int(atomic_numbers.get(sym, 0))
+        return 0
+    try:
+        zi = int(np.asarray(x).item())
+        return zi if zi > 0 else 0
+    except (ValueError, TypeError, OverflowError):
+        return 0
+
+
+def npz_z_to_atomic_numbers(Z: np.ndarray) -> np.ndarray:
+    """
+    Convert NPZ atomic-species array to int64 atomic numbers.
+
+    Supports integer/float Z and string element symbols (e.g. 'C', 'Cl').
+    Non-positive values and unknown symbols become 0 (padding).
+    """
+    Z = np.asarray(Z)
+    if Z.size == 0:
+        return np.zeros(Z.shape, dtype=np.int64)
+    # Fast path: already numeric
+    if Z.dtype.kind in "iuf" and Z.dtype != object:
+        Zn = np.asarray(Z, dtype=np.int64)
+        return np.where(Zn > 0, Zn, 0).astype(np.int64)
+    flat = Z.ravel()
+    out = np.fromiter(
+        (_npz_z_scalar_to_atomic_number(x) for x in flat),
+        dtype=np.int64,
+        count=flat.size,
+    )
+    return out.reshape(Z.shape)
+
+
 @dataclass
 class FrameData:
     """Data for a single molecular frame."""
@@ -128,7 +191,9 @@ def npz_frame_to_atoms(
     """
     if not HAS_ASE:
         raise ImportError("ASE is required for molecular file parsing")
-    
+
+    Z = npz_z_to_atomic_numbers(np.asarray(Z))
+
     # Handle padding - remove zero atomic numbers
     mask = Z > 0
     if N is not None:
@@ -277,10 +342,10 @@ class MolecularFileParser:
         if 'Ef' in data:
             properties.append('electric_field')
         
-        # Get unique elements (handle object dtype)
+        # Get unique elements (atomic numbers or string symbols in Z)
         Z = np.asarray(Z_arr[0] if len(Z_arr.shape) > 1 else Z_arr)
-        Z = Z.astype(np.int64)  # Ensure numeric type for comparison
-        unique_Z = np.unique(Z[Z > 0])
+        Zn = npz_z_to_atomic_numbers(Z)
+        unique_Z = np.unique(Zn[Zn > 0])
         elements = [ELEMENT_SYMBOLS.get(int(z), f'X{z}') for z in unique_Z]
         
         # Energy range
@@ -452,9 +517,11 @@ class MolecularFileParser:
         n_replicas = _get_npz_n_replicas(data)
         replica_idx = min(max(replica_index, 0), max(n_replicas - 1, 0))
 
-        # Get coordinates and atomic numbers (handle object dtype)
+        # Get coordinates and atomic numbers (handle object dtype / symbol Z)
         R = np.asarray(data['R'][index], dtype=np.float64)
-        Z = np.asarray(data['Z'][index] if len(data['Z'].shape) > 1 else data['Z'], dtype=np.int64)
+        Z = npz_z_to_atomic_numbers(
+            np.asarray(data['Z'][index] if len(data['Z'].shape) > 1 else data['Z'])
+        )
         N = None
         raw_N = None
         if 'N' in data:
@@ -1237,7 +1304,9 @@ class MolecularFileParser:
                 while frame_F.ndim > 2 and frame_F.shape[0] == 1:
                     frame_F = frame_F.squeeze(axis=0)
                 
-                frame_Z = np.asarray(Z[i] if len(Z.shape) > 1 else Z, dtype=np.int64)
+                frame_Z = npz_z_to_atomic_numbers(
+                    np.asarray(Z[i] if len(Z.shape) > 1 else Z)
+                )
                 mask = frame_Z > 0
                 n_atoms_i = None
                 if N is not None:
@@ -1568,7 +1637,9 @@ class MolecularFileParser:
             points: List[float] = []
             for fi in frame_indices:
                 R = np.asarray(data['R'][fi], dtype=np.float64)
-                Z = np.asarray(data['Z'][fi] if len(data['Z'].shape) > 1 else data['Z'], dtype=np.int64)
+                Z = npz_z_to_atomic_numbers(
+                    np.asarray(data['Z'][fi] if len(data['Z'].shape) > 1 else data['Z'])
+                )
                 N = None
                 if 'N' in data:
                     arr_N = data['N']
@@ -1718,7 +1789,9 @@ class MolecularFileParser:
         coords_list = []
         for i in range(n_frames):
             R = np.asarray(R_raw[i], dtype=np.float64)
-            Z = np.asarray(Z_raw[i] if len(Z_raw.shape) > 1 else Z_raw, dtype=np.int64)
+            Z = npz_z_to_atomic_numbers(
+                np.asarray(Z_raw[i] if len(Z_raw.shape) > 1 else Z_raw)
+            )
             
             # Handle extra dimensions:
             # - (1, n_atoms, 3) -> (n_atoms, 3)
