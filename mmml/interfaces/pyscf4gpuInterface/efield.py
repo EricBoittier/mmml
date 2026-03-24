@@ -27,6 +27,26 @@ from gpu4pyscf.properties import polarizability
 LINDEP_THRESHOLD = 1e-7
 
 
+def nuclear_field_energy_correction_hartree(mol, E: np.ndarray) -> float:
+    """
+    Classical interaction of point nuclei with uniform field **E** (atomic units), in Hartree.
+
+    Matches gpu4pyscf polarizability examples: after SCF with ``H += E·μ_el``, add
+    ``energy += nuclear_dipole @ E`` with ``nuclear_dipole = (-atom_charges) @ coords``
+    at the same origin used for the dipole integrals (here [0,0,0]).
+
+    This term is **linear in E** for fixed geometry; it does not change the converged
+    density or ∂μ/∂E, but shifts total energy to a common “interaction” convention.
+    """
+    E = np.asarray(E, dtype=np.float64).reshape(3)
+    mol.set_common_orig([0, 0, 0])
+    nuclear_charge = -mol.atom_charges()
+    nuclear_coords = mol.atom_coords()
+    origin = np.zeros(3)
+    nuclear_dipole = nuclear_charge @ (nuclear_coords - origin[None, :])
+    return float(np.dot(nuclear_dipole, E))
+
+
 def _dm_kernel_guess(dm_init_guess: Any) -> Any:
     if dm_init_guess is None:
         return None
@@ -64,9 +84,16 @@ def run_scf_uniform_efield(
     dm_init_guess: Any = None,
     *,
     xc: str = "PBE0",
+    include_nuclear_field_energy: bool = False,
 ) -> Tuple[Any, float]:
     """
     Build RKS with hcore = T + Vnuc + E·μ and run SCF.
+
+    Parameters
+    ----------
+    include_nuclear_field_energy
+        If True, add :func:`nuclear_field_energy_correction_hartree` to ``e_tot`` after SCF
+        (gpu4pyscf-style total interaction energy).
 
     Returns
     -------
@@ -81,6 +108,8 @@ def run_scf_uniform_efield(
     mf.get_hcore = lambda *args, hc=h_core: hc
     dm0_in = _dm_kernel_guess(dm_init_guess)
     e_tot = float(mf.kernel(dm0_in))
+    if include_nuclear_field_energy:
+        e_tot += nuclear_field_energy_correction_hartree(mf.mol, E)
     return mf, e_tot
 
 
@@ -98,6 +127,7 @@ def scf_efield_energy_forces_dipole(
     xc: str = "PBE0",
     dipole_unit: str = "AU",
     forces: bool = True,
+    include_nuclear_field_energy: bool = False,
 ) -> Tuple[dict, Any]:
     """
     SCF in a uniform electric field **E** (atomic units); return energy, dipole, and optionally forces.
@@ -110,6 +140,8 @@ def scf_efield_energy_forces_dipole(
         Passed to ``mf.dip_moment`` (e.g. ``"AU"``, ``"DEBYE"``).
     forces
         If False, skip nuclear gradient (only energy + dipole).
+    include_nuclear_field_energy
+        Passed to :func:`run_scf_uniform_efield`.
 
     Returns
     -------
@@ -117,7 +149,9 @@ def scf_efield_energy_forces_dipole(
         ``summary`` keys: ``Ef``, ``E`` (energy), ``D`` (dipole in ``dipole_unit``), ``D_au`` (always),
         ``F`` (Hartree/Bohr, numpy) if ``forces``, ``R`` (Å), ``Z``.
     """
-    mf, e_tot = run_scf_uniform_efield(E, mol, dm_init_guess, xc=xc)
+    mf, e_tot = run_scf_uniform_efield(
+        E, mol, dm_init_guess, xc=xc, include_nuclear_field_energy=include_nuclear_field_energy
+    )
     Evec = np.asarray(E, dtype=np.float64).reshape(3)
     dip_primary = mf.dip_moment(unit=dipole_unit)
     dip_au = np.asarray(mf.dip_moment(unit="AU"), dtype=np.float64).ravel()[:3]
@@ -147,6 +181,7 @@ def efield_scf_scan(
     dm0_start: Any = None,
     dipole_unit: str = "AU",
     forces: bool = True,
+    include_nuclear_field_energy: bool = False,
 ) -> dict:
     """
     Like :func:`efield_ir_scan` but only SCF properties (energy, dipole, forces) per field point.
@@ -166,6 +201,7 @@ def efield_scf_scan(
             xc=xc,
             dipole_unit=dipole_unit,
             forces=forces,
+            include_nuclear_field_energy=include_nuclear_field_energy,
         )
         summaries.append(s)
 
@@ -188,6 +224,7 @@ def maxwell_eval_ir_freq_intensity(
     dm_init_guess: Any = None,
     *,
     xc: str = "PBE0",
+    include_nuclear_field_energy: bool = False,
 ) -> Tuple[dict, Any]:
     """Calculate IR frequencies and intensities in a static uniform electric field E (a.u.).
 
@@ -200,7 +237,9 @@ def maxwell_eval_ir_freq_intensity(
     Returns:
         (summary_dict, dm) where summary contains Ef, D, D_au, E, H, A, F, freq, intensity, dDdR, R, Z.
     """
-    mf, e_tot = run_scf_uniform_efield(E, mol, dm_init_guess, xc=xc)
+    mf, e_tot = run_scf_uniform_efield(
+        E, mol, dm_init_guess, xc=xc, include_nuclear_field_energy=include_nuclear_field_energy
+    )
     E = np.asarray(E, dtype=np.float64).reshape(3)
 
     dip_m = mf.dip_moment(unit="AU")
@@ -335,6 +374,7 @@ def efield_ir_scan(
     *,
     xc: str = "PBE0",
     dm0_start: Any = None,
+    include_nuclear_field_energy: bool = False,
 ) -> dict:
     """
     Run :func:`maxwell_eval_ir_freq_intensity` for each row of ``efields`` (n, 3), reusing
@@ -348,7 +388,11 @@ def efield_ir_scan(
 
     for row in efields:
         s, dm_guess = maxwell_eval_ir_freq_intensity(
-            row, mol, dm_init_guess=[dm_guess], xc=xc
+            row,
+            mol,
+            dm_init_guess=[dm_guess],
+            xc=xc,
+            include_nuclear_field_energy=include_nuclear_field_energy,
         )
         summaries.append(s)
 
