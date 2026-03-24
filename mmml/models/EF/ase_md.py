@@ -23,12 +23,9 @@ from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
 from ase.md.verlet import VelocityVerlet
 from ase.md.langevin import Langevin
 from ase import units
-
-import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent))
 
-from ase_calc_EF import AseCalculatorEF
+from mmml.models.EF.ase_calc_EF import AseCalculatorEF
 
 
 def get_args(**kwargs):
@@ -195,8 +192,8 @@ def main_batched(args):
     import functools
     from ase.data import atomic_masses as _ase_masses
     from ase.calculators.singlepoint import SinglePointCalculator
-    from ase_calc_EF import load_params, load_config
-    from training import MessagePassingModel
+    from mmml.models.EF.ase_calc_EF import load_params, load_config
+    from mmml.models.EF.training import MessagePassingModel
 
     BOLTZMANN_EV = 8.617333262e-5
     AMU_TO_EV_FS2_ANG2 = 103.6427

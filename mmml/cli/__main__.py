@@ -35,6 +35,7 @@ Available commands:
   physnet-md  PhysNet MD sampling (ASE + JAX-MD)
   ef-train    Train EF (electric-field) equivariant model from NPZ splits or single file
   ef-evaluate Evaluate trained EF model (metrics + plots from test NPZ)
+  ef-md       MD with trained EF model (ASE or JIT JAX; replicas, field ramp, etc.)
   interpolate-xyz  Interpolate two XYZ structures via Z-matrix; write NPZ trajectory
   gui         Start the molecular viewer GUI
 
@@ -56,6 +57,8 @@ Examples:
   mmml physnet-md --checkpoint out/ckpts/cybz_physnet --data out/splits/energies_forces_dipoles_train.npz -o out/
   mmml ef-train --train-npz splits/train.npz --valid-npz splits/valid.npz --output-dir ./ef_run
   mmml ef-evaluate --params ./ef_run/params.json --data splits/test.npz --output-dir ./ef_eval --output-h5 ./ef_eval/eval_gui.h5
+  mmml ef-md --params ./ef_run/params.json --data splits/train.npz --steps 5000 --output md.traj
+  mmml ef-md -b jax --params ./ef_run/params.json --xyz mol.xyz --thermostat langevin --steps 10000
   mmml active-learning -i out/physnet_md/physnet_ase.traj -o md_sampled.npz --max-temp 300
   mmml pyscf-evaluate -i md_sampled.npz -o md_evaluated.npz
   mmml interpolate-xyz reactants.xyz products.xyz -o path.npz --steps 500
@@ -67,7 +70,7 @@ For help on a specific command:
     
     parser.add_argument(
         'command',
-        choices=['make-res', 'make-box', 'run', 'run-pycharmm', 'xml2npz', 'validate', 'train', 'evaluate', 'downstream', 'fix-and-split', 'pyscf-dft', 'pyscf-mp2', 'pyscf-evaluate', 'verify-esp-alignment', 'normal-mode-sample', 'physnet-md', 'ef-train', 'ef-evaluate', 'active-learning', 'kernel-fit', 'interpolate-xyz', 'gui'],
+        choices=['make-res', 'make-box', 'run', 'run-pycharmm', 'xml2npz', 'validate', 'train', 'evaluate', 'downstream', 'fix-and-split', 'pyscf-dft', 'pyscf-mp2', 'pyscf-evaluate', 'verify-esp-alignment', 'normal-mode-sample', 'physnet-md', 'ef-train', 'ef-evaluate', 'ef-md', 'active-learning', 'kernel-fit', 'interpolate-xyz', 'gui'],
         help='Command to run'
     )
     parser.add_argument(
@@ -181,6 +184,11 @@ For help on a specific command:
         from .misc import ef_evaluate
         sys.argv = ['mmml ef-evaluate'] + args.args
         return ef_evaluate.main()
+
+    elif args.command == 'ef-md':
+        from .misc import ef_md
+        sys.argv = ['mmml ef-md'] + args.args
+        return ef_md.main()
 
     elif args.command == 'active-learning':
         from .misc import active_learning
