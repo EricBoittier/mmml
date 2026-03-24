@@ -7,7 +7,8 @@ Creates scatter plots and computes metrics (MAE, RMSE, R²) for energy predictio
 Note: Expects input data in eV/angstrom units. All errors are reported in kcal/mol.
 
 Usage:
-    python evaluate.py --params params.json --data data-full.npz --output-dir results/
+    mmml ef-evaluate --params params.json --data test.npz --output-dir results/
+    python -m mmml.models.EF.evaluate --params params.json --data test.npz --output-dir results/
 """
 
 import os
@@ -35,13 +36,11 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import functools
 
-# Import model and utilities from training script
-import sys
-from pathlib import Path
-# Add parent directory to path to import training module
-sys.path.insert(0, str(Path(__file__).parent))
-
-from training import MessagePassingModel, prepare_batches, print_params_structure
+from mmml.models.EF.training import (
+    MessagePassingModel,
+    prepare_batches,
+    print_params_structure,
+)
 
 # Set style for better plots
 sns.set_style("whitegrid")
@@ -126,7 +125,7 @@ def get_args(**kwargs):
         parser.add_argument("--save-output-npz", action="store_true",
                            help="Save evaluation outputs (predictions, targets) to NPZ file")
         
-        args = parser.parse_args()
+        args, _unknown = parser.parse_known_args()
         return SimpleNamespace(
             params=args.params,
             config=args.config,
