@@ -55,8 +55,11 @@ import json
 from mmml.utils.model_checkpoint import to_jsonable
 
 
-def print_params_structure(params, label="params", max_depth=3):
-    """Print the pytree structure of params for debugging."""
+def print_params_structure(params, label="params", max_depth=3, verbose=False):
+    """Print the pytree structure of params for debugging ([STRUCT] lines)."""
+    if not verbose:
+        return
+
     def _print(obj, prefix="", depth=0):
         if depth > max_depth:
             print(f"{prefix}...")
@@ -86,7 +89,7 @@ def print_params_structure(params, label="params", max_depth=3):
     _print(params, prefix="[STRUCT]   ")
 
 
-def load_params(params_path):
+def load_params(params_path, verbose=False):
     """Load parameters from JSON file.
     
     Handles the Flax sow() tuple-to-array conversion issue:
@@ -121,7 +124,7 @@ def load_params(params_path):
         print(f"  Stripping 'intermediates' key from loaded params (sow artifacts)")
         params = {k: v for k, v in params.items() if k != 'intermediates'}
     
-    print_params_structure(params, f"loaded from {params_path}")
+    print_params_structure(params, f"loaded from {params_path}", verbose=verbose)
     return params
 
 
@@ -212,6 +215,11 @@ def get_args(**overrides):
                        help="Add ZBL nuclear repulsion for short-range stability")
     parser.add_argument("--gradient-checkpoint", action="store_true",
                        help="Use gradient checkpointing to reduce GPU memory (slower training)")
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Print extra debug output (e.g. [STRUCT] parameter tree dumps)",
+    )
     args, _ = parser.parse_known_args()
 
     # Apply keyword overrides (for notebook usage)
@@ -931,7 +939,7 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
                 reduce_on_plateau_patience=5, reduce_on_plateau_cooldown=5, reduce_on_plateau_factor=0.9,
                 reduce_on_plateau_rtol=1e-4, reduce_on_plateau_accumulation_size=5, reduce_on_plateau_min_scale=0.01,
                 energy_weight=1.0, forces_weight=100.0, dipole_weight=10.0, charge_weight=1.0, initial_params=None,
-                gradient_checkpoint=False):
+                gradient_checkpoint=False, verbose=False):
     """
     Train model with EMA, gradient clipping, early stopping, and learning rate reduction on plateau.
     
@@ -974,6 +982,8 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
     initial_params : dict, optional
         Initial parameters to start training from (for restart).
         If None, parameters are initialized from scratch (default: None)
+    verbose : bool, optional
+        If True, print ``[STRUCT]`` parameter tree dumps (default: False).
     
     Returns
     -------
@@ -1058,7 +1068,7 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
             params = dict(ref_params)  # copy structure from init
             params['params'] = initial_params['params']  # plug in loaded weights
             print("  ✓ Merged loaded weights with fresh intermediates")
-            print_params_structure(params, "restart params (merged)")
+            print_params_structure(params, "restart params (merged)", verbose=verbose)
         else:
             params = initial_params
     else:
@@ -1093,7 +1103,7 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
             dst_idx=dst_idx,
             src_idx=src_idx,
         )
-        print_params_structure(params, "model.init() output")
+        print_params_structure(params, "model.init() output", verbose=verbose)
     opt_state = optimizer.init(params)
     
     # Initialize transform state for reduce on plateau
@@ -1366,7 +1376,7 @@ def main(args=None):
     initial_params = None
     if args.restart is not None:
         print(f"\nLoading restart parameters from {args.restart}...")
-        initial_params = load_params(args.restart)
+        initial_params = load_params(args.restart, verbose=args.verbose)
         print("✓ Restart parameters loaded")
 
     # Generate UUID for this training run
@@ -1401,6 +1411,7 @@ def main(args=None):
         charge_weight=args.charge_weight,
         initial_params=initial_params,
         gradient_checkpoint=args.gradient_checkpoint,
+        verbose=args.verbose,
     )
 
     # Prepare model config
@@ -1463,14 +1474,16 @@ def main(args=None):
         print(f"  Stripped 'intermediates' from params before saving (sow artifacts)")
     
     params_filename = str(out_dir / f'params-{run_uuid}.json')
-    print_params_structure(params_to_save, "params being saved (intermediates stripped)")
+    print_params_structure(
+        params_to_save, "params being saved (intermediates stripped)", verbose=args.verbose
+    )
     params_dict = to_jsonable(params_to_save)
     with open(params_filename, 'w') as f:
         json.dump(params_dict, f)
     print(f"✓ Parameters saved to {params_filename}")
     
     # Verify round-trip: load back and check structure
-    params_reloaded = load_params(params_filename)
+    params_reloaded = load_params(params_filename, verbose=args.verbose)
     # Quick sanity check: compare leaf values
     orig_leaves = jax.tree_util.tree_leaves(params_to_save)
     try:
