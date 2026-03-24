@@ -286,7 +286,7 @@ class MessagePassingModel(nn.Module):
           atomic_numbers: (B*N,) flattened
           positions:      (B*N, 3) flattened
           Ef:             (B, 3)
-          dst_idx_flat/src_idx_flat: (B*E,) pre-computed flattened indices (CUDA-graph-friendly)
+          dst_idx_flat/src_idx_flat: (B*E,) pre-computed flattened indices
           batch_segments: (B*N,) segment ids 0..B-1 repeated per atom
           batch_size:     int (static)
           dst_idx/src_idx: (E,) optional - only needed when batch_segments is None
