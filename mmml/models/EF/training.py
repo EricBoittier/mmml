@@ -1,6 +1,6 @@
-import os
+from __future__ import annotations
 
-from pandas._testing import at
+import os
 
 # --- Environment (must be set before importing jax) ---
 os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".99"
@@ -126,8 +126,8 @@ def load_params(params_path):
 
 
 print("JAX devices:", jax.devices())
-import lovely_jax as lj
-lj.monkey_patch()
+# import lovely_jax as lj
+# lj.monkey_patch()
 
 
 
@@ -140,7 +140,36 @@ def get_args(**overrides):
         args = get_args(features=32, cutoff=8.0)   # override specific params
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data", type=str, default="data-full.npz")
+    parser.add_argument(
+        "--data",
+        type=str,
+        default=None,
+        help="Single merged NPZ; random train/valid split via --num-train / --num-valid",
+    )
+    parser.add_argument(
+        "--train-npz",
+        type=str,
+        default=None,
+        help="Training split NPZ (R,Z,N,E,F,Ef[,Dxyz|D]) — use with --valid-npz instead of --data",
+    )
+    parser.add_argument(
+        "--valid-npz",
+        type=str,
+        default=None,
+        help="Validation split NPZ (same keys as train)",
+    )
+    parser.add_argument(
+        "--test-npz",
+        type=str,
+        default=None,
+        help="Optional test NPZ: only print shapes (not used for training)",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default=".",
+        help="Directory for params-*.json, config-*.json, and symlinks",
+    )
     parser.add_argument("--features", type=int, default=10)
     parser.add_argument("--max_degree", type=int, default=4)
     parser.add_argument("--num_iterations", type=int, default=2)
@@ -192,12 +221,6 @@ def get_args(**overrides):
         setattr(args, key, value)
 
     return args
-
-
-# Load dataset
-# -------------------------
-dataset = np.load("data-full.npz", allow_pickle=True)
-print("Dataset keys:", dataset.files)
 
 
 # -------------------------
@@ -494,6 +517,80 @@ def energy_and_forces(model_apply, params, atomic_numbers, positions, Ef, dst_id
 # -------------------------
 # Dataset prep
 # -------------------------
+def load_ef_npz(path: str | Path) -> dict:
+    """
+    Load one NPZ from fix-and-split / pyscf-evaluate style splits into the dict format
+    expected by train_model / prepare_batches.
+
+    Required keys: R, Z, E, F, Ef. Dipoles: D or Dxyz (Debye), optional.
+    """
+    path = Path(path)
+    if not path.is_file():
+        raise FileNotFoundError(f"NPZ not found: {path}")
+    raw = np.load(path, allow_pickle=True)
+
+    def _need(k: str) -> np.ndarray:
+        if k not in raw:
+            raise KeyError(f"{path}: missing required array {k!r} (have {raw.files})")
+        return np.asarray(raw[k])
+
+    R = _need("R")
+    Z = _need("Z")
+    E = np.asarray(_need("E"), dtype=np.float64).ravel()
+    F = _need("F")
+    Ef = _need("Ef")
+
+    R = np.asarray(R, dtype=np.float32)
+    if R.ndim == 4 and R.shape[1] == 1:
+        R = R[:, 0, :, :]
+    if R.ndim != 3:
+        raise ValueError(f"{path}: R must be (n, natoms, 3), got {R.shape}")
+
+    F = np.asarray(F, dtype=np.float32)
+    if F.ndim == 4 and F.shape[1] == 1:
+        F = F[:, 0, :, :]
+    if F.shape != R.shape:
+        raise ValueError(f"{path}: F shape {F.shape} != R shape {R.shape}")
+
+    Z = np.asarray(Z)
+    if Z.ndim == 1:
+        Z = np.broadcast_to(Z, (R.shape[0], Z.shape[0]))
+    Z = np.asarray(Z, dtype=np.int32)
+    if Z.shape[:2] != R.shape[:2]:
+        raise ValueError(f"{path}: Z shape {Z.shape} incompatible with R {R.shape}")
+
+    Ef = np.asarray(Ef, dtype=np.float32)
+    if Ef.ndim == 1:
+        Ef = np.broadcast_to(Ef, (R.shape[0], 3))
+    if Ef.shape != (R.shape[0], 3):
+        raise ValueError(f"{path}: Ef must be (n, 3), got {Ef.shape}")
+
+    if E.shape[0] != R.shape[0]:
+        raise ValueError(f"{path}: len(E)={E.shape[0]} != n_samples={R.shape[0]}")
+
+    dip = None
+    if "D" in raw:
+        dip = np.asarray(raw["D"], dtype=np.float32)
+    elif "Dxyz" in raw:
+        dip = np.asarray(raw["Dxyz"], dtype=np.float32)
+    if dip is not None:
+        if dip.ndim == 3:
+            dip = dip.squeeze(axis=1)
+        if dip.shape != (R.shape[0], 3):
+            raise ValueError(f"{path}: dipole shape {dip.shape}, expected ({R.shape[0]}, 3)")
+
+    out = {
+        "atomic_numbers": jnp.asarray(Z, dtype=jnp.int32),
+        "positions": jnp.asarray(R, dtype=jnp.float32),
+        "electric_field": jnp.asarray(Ef, dtype=jnp.float32),
+        "energies": jnp.asarray(E, dtype=jnp.float32),
+        "forces": jnp.asarray(F, dtype=jnp.float32),
+    }
+    if dip is not None:
+        out["D"] = jnp.asarray(dip, dtype=jnp.float32)
+    return out
+
+
 def prepare_datasets(key, num_train, num_valid, dataset):
     num_data = len(dataset["R"])
     num_draw = num_train + num_valid
@@ -516,10 +613,11 @@ def prepare_datasets(key, num_train, num_valid, dataset):
     if forces_raw.ndim == 4 and forces_raw.shape[1] == 1:
         forces_raw = forces_raw.squeeze(axis=1)  # (num_data, N, 3)
     
-    # Load dipoles if available (key "D" in dataset)
+    # Load dipoles if available (D or Dxyz from pyscf-evaluate / fix-and-split)
     dipoles = None
-    if "D" in dataset:
-        dipoles_raw = jnp.asarray(dataset["D"], dtype=jnp.float32)
+    dip_key = "D" if "D" in dataset else ("Dxyz" if "Dxyz" in dataset else None)
+    if dip_key is not None:
+        dipoles_raw = jnp.asarray(dataset[dip_key], dtype=jnp.float32)
         if dipoles_raw.ndim == 2 and dipoles_raw.shape[1] == 3:
             # Shape is (num_data, 3) - already correct
             dipoles = dipoles_raw
@@ -1176,13 +1274,40 @@ def main(args=None):
     # -------------------------
     data_key, train_key = jax.random.split(jax.random.PRNGKey(0), 2)
 
-    # Load dataset
-    dataset = np.load(args.data, allow_pickle=True)
-    
-    train_data, valid_data = prepare_datasets(
-        data_key, num_train=args.num_train, num_valid=args.num_valid, dataset=dataset
-    )
+    out_dir = Path(args.output_dir).expanduser().resolve()
+    out_dir.mkdir(parents=True, exist_ok=True)
 
+    if bool(args.train_npz) ^ bool(args.valid_npz):
+        print(
+            "Error: provide both --train-npz and --valid-npz (or use --data alone).",
+            file=sys.stderr,
+        )
+        return None
+
+    if args.train_npz and args.valid_npz:
+        print(f"Loading splits:\n  train: {args.train_npz}\n  valid: {args.valid_npz}")
+        train_data = load_ef_npz(args.train_npz)
+        valid_data = load_ef_npz(args.valid_npz)
+        args.num_train = int(train_data["positions"].shape[0])
+        args.num_valid = int(valid_data["positions"].shape[0])
+    elif args.data:
+        dataset = np.load(args.data, allow_pickle=True)
+        train_data, valid_data = prepare_datasets(
+            data_key, num_train=args.num_train, num_valid=args.num_valid, dataset=dataset
+        )
+    else:
+        print(
+            "Error: provide either --data (single NPZ + random split) or both "
+            "--train-npz and --valid-npz.",
+            file=sys.stderr,
+        )
+        return None
+
+    if args.test_npz:
+        test_data = load_ef_npz(args.test_npz)
+        print("\nTest split (informational only, not used in training):")
+        for k, v in test_data.items():
+            print(f"  {k}: {v.shape}")
 
     print("\nPrepared data shapes:")
     print(f"  train atomic_numbers: {train_data['atomic_numbers'].shape}")
@@ -1281,11 +1406,14 @@ def main(args=None):
         },
         'data': {
             'dataset': args.data,
+            'train_npz': args.train_npz,
+            'valid_npz': args.valid_npz,
+            'test_npz': args.test_npz,
         }
     }
 
     # Save config file
-    config_filename = f'config-{run_uuid}.json'
+    config_filename = str(out_dir / f"config-{run_uuid}.json")
     with open(config_filename, 'w') as f:
         json.dump(model_config, f, indent=2)
     print(f"\n✓ Model config saved to {config_filename}")
@@ -1299,7 +1427,7 @@ def main(args=None):
         params_to_save = {k: v for k, v in params.items() if k != 'intermediates'}
         print(f"  Stripped 'intermediates' from params before saving (sow artifacts)")
     
-    params_filename = f'params-{run_uuid}.json'
+    params_filename = str(out_dir / f'params-{run_uuid}.json')
     print_params_structure(params_to_save, "params being saved (intermediates stripped)")
     params_dict = to_jsonable(params_to_save)
     with open(params_filename, 'w') as f:
@@ -1324,14 +1452,15 @@ def main(args=None):
 
     # Also save symlinks for convenience (params.json and config.json)
     try:
-        if Path('params.json').exists():
-            Path('params.json').unlink()
-        if Path('config.json').exists():
-            Path('config.json').unlink()
-        Path('params.json').symlink_to(params_filename)
-        Path('config.json').symlink_to(config_filename)
-        print(f"✓ Created symlinks: params.json -> {params_filename}")
-        print(f"✓ Created symlinks: config.json -> {config_filename}")
+        link_params = out_dir / "params.json"
+        link_cfg = out_dir / "config.json"
+        if link_params.exists() or link_params.is_symlink():
+            link_params.unlink()
+        if link_cfg.exists() or link_cfg.is_symlink():
+            link_cfg.unlink()
+        link_params.symlink_to(Path(params_filename).name)
+        link_cfg.symlink_to(Path(config_filename).name)
+        print(f"✓ Created symlinks in {out_dir}: params.json, config.json")
     except Exception as e:
         print(f"Note: Could not create symlinks: {e}")
 
@@ -1347,4 +1476,5 @@ def main(args=None):
 
 if __name__ == "__main__":
     args = get_args()
-    main(args)
+    rc = 0 if main(args) is not None else 1
+    sys.exit(rc)
