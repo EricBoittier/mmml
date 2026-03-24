@@ -166,7 +166,10 @@ def interpolate_xyzs_to_npz(xyz1: str, xyz2: str, steps: int = 1000, out_fn="int
     # interpolate between structures
     mixed = interpolate_zmats(lala_zm, rala_zm, steps)
     mixed_ccs = [_.get_cartesian() for _ in  mixed]
-    ase_atoms_list = [ase.Atoms(mixed_ccs[i]["atom"], mixed_ccs[i][["x", "y", "z"]]) for i in range(steps)]
+    ase_atoms_list = [
+        ase.Atoms(mixed_ccs[i]["atom"], mixed_ccs[i][["x", "y", "z"]])
+        for i in range(len(mixed_ccs))
+    ]
 
     # write
     out_dict = {
