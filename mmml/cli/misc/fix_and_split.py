@@ -39,7 +39,7 @@ import argparse
 from pathlib import Path
 import numpy as np
 from scipy.spatial.distance import cdist
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 # Add parent directory to path
 repo_root = Path(__file__).parent.parent.parent
@@ -96,6 +96,57 @@ def load_atomic_reference_energies(scheme: str) -> Dict[str, float]:
     return all_refs[scheme]
 
 
+def _species_entry_to_atomic_number(zi: Any) -> int:
+    """Map one Z entry (atomic number or element symbol) to atomic number; 0 = padding."""
+    if zi is None:
+        return 0
+    if isinstance(zi, (bytes, np.bytes_)):
+        try:
+            zi = zi.decode("ascii").strip()
+        except Exception:
+            return 0
+    if isinstance(zi, str) or isinstance(zi, np.str_):
+        s = str(zi).strip()
+        if not s or s.lower() in ("none", "nan"):
+            return 0
+        try:
+            n = int(float(s))
+            return n if n > 0 else 0
+        except ValueError:
+            pass
+        from ase.data import atomic_numbers
+
+        sym = s[0].upper() + s[1:].lower() if len(s) > 1 else s.upper()
+        return int(atomic_numbers.get(sym, 0))
+    try:
+        n = int(np.asarray(zi).item())
+        return n if n > 0 else 0
+    except (ValueError, TypeError, OverflowError):
+        return 0
+
+
+def npz_z_array_to_atomic_numbers(Z: np.ndarray) -> np.ndarray:
+    """
+    Convert NPZ Z array to int64 atomic numbers.
+
+    Integer/float Z uses a fast path; object / Unicode arrays (e.g. 'C', 'H') are
+    mapped via ASE. Non-positive and unknown species become 0 (padding).
+    """
+    Z = np.asarray(Z)
+    if Z.size == 0:
+        return np.zeros(Z.shape, dtype=np.int64)
+    if Z.dtype.kind in "iuf" and Z.dtype != object:
+        Zn = np.asarray(Z, dtype=np.int64)
+        return np.where(Zn > 0, Zn, 0).astype(np.int64)
+    flat = Z.ravel()
+    out = np.fromiter(
+        (_species_entry_to_atomic_number(x) for x in flat),
+        dtype=np.int64,
+        count=flat.size,
+    )
+    return out.reshape(Z.shape)
+
+
 def subtract_atomic_references(
     E_hartree: np.ndarray,
     Z: np.ndarray,
@@ -115,13 +166,15 @@ def subtract_atomic_references(
     HARTREE_TO_EV = 27.211386
     refs = load_atomic_reference_energies(scheme)
     E_ref_per_sample = np.zeros(len(E_hartree), dtype=np.float64)
+    Z = npz_z_array_to_atomic_numbers(np.asarray(Z))
 
     for i in range(len(E_hartree)):
         z = Z[i] if Z.ndim > 1 else Z
         for zi in z:
-            if zi <= 0:
+            zn = int(zi)
+            if zn <= 0:
                 continue
-            sym = chemical_symbols[zi]
+            sym = chemical_symbols[zn]
             key = f"{sym}:0"
             if key not in refs:
                 raise ValueError(f"No reference for {key} in scheme '{scheme}'")
@@ -434,8 +487,9 @@ def validate_fixed_data(
         
         # Check spatial relationship
         r0 = R_ang[0]
-        z0 = Z[0]
-        valid = z0 > 0
+        z0 = np.asarray(Z[0] if Z.ndim > 1 else Z)
+        zn0 = npz_z_array_to_atomic_numbers(z0)
+        valid = zn0 > 0
         valid_pos = r0[valid]
         
         if len(valid_pos) > 0:
@@ -1056,7 +1110,8 @@ def fix_and_split_data(
     Z_raw = efd_fixed['Z']
     if Z_raw.ndim == 1:
         efd_fixed['Z'] = np.broadcast_to(Z_raw[np.newaxis, :], (n_samples, Z_raw.shape[0]))
-    
+    efd_fixed['Z'] = npz_z_array_to_atomic_numbers(np.asarray(efd_fixed['Z']))
+
     # Update grid data with fixed coordinates (if grid exists)
     grid_fixed = None
     if has_grid and grid_data is not None:
@@ -1079,7 +1134,8 @@ def fix_and_split_data(
             Z_g = grid_fixed['Z']
             if Z_g.ndim == 1:
                 grid_fixed['Z'] = np.broadcast_to(Z_g[np.newaxis, :], (n_samples, Z_g.shape[0]))
-    
+            grid_fixed['Z'] = npz_z_array_to_atomic_numbers(np.asarray(grid_fixed['Z']))
+
     # =========================================================================
     # Save split datasets
     # =========================================================================
