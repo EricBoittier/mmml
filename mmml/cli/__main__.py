@@ -55,7 +55,7 @@ Examples:
   mmml pyscf-evaluate -i traj.npz -o out.npz --EF --esp
   mmml physnet-md --checkpoint out/ckpts/cybz_physnet --data out/splits/energies_forces_dipoles_train.npz -o out/
   mmml ef-train --train-npz splits/train.npz --valid-npz splits/valid.npz --output-dir ./ef_run
-  mmml ef-evaluate --params ./ef_run/params.json --data splits/test.npz --output-dir ./ef_eval
+  mmml ef-evaluate --params ./ef_run/params.json --data splits/test.npz --output-dir ./ef_eval --output-h5 ./ef_eval/eval_gui.h5
   mmml active-learning -i out/physnet_md/physnet_ase.traj -o md_sampled.npz --max-temp 300
   mmml pyscf-evaluate -i md_sampled.npz -o md_evaluated.npz
   mmml interpolate-xyz reactants.xyz products.xyz -o path.npz --steps 500
