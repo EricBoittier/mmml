@@ -33,6 +33,7 @@ Available commands:
   verify-esp-alignment  Verify esp-grid alignment in evaluated NPZ (data generation check)
   normal-mode-sample  Sample geometries along vibrational modes
   physnet-md  PhysNet MD sampling (ASE + JAX-MD)
+  physnet-evaluate  Evaluate PhysNet checkpoint on NPZ (E, F, dipole metrics + predictions)
   ef-train    Train EF (electric-field) equivariant model from NPZ splits or single file
   ef-evaluate Evaluate trained EF model (metrics + plots from test NPZ)
   ef-md       MD with trained EF model (ASE or JIT JAX; replicas, field ramp, etc.)
@@ -55,6 +56,7 @@ Examples:
   mmml pyscf-evaluate -i out/06_sampled.npz -o out/07_evaluated.npz
   mmml pyscf-evaluate -i traj.npz -o out.npz --EF --esp
   mmml physnet-md --checkpoint out/ckpts/cybz_physnet --data out/splits/energies_forces_dipoles_train.npz -o out/
+  mmml physnet-evaluate --checkpoint out/ckpts/cybz_physnet --data out/splits/test.npz -o out/physnet_eval
   mmml ef-train --train-npz splits/train.npz --valid-npz splits/valid.npz --output-dir ./ef_run
   mmml ef-evaluate --params ./ef_run/params.json --data splits/test.npz --output-dir ./ef_eval --output-h5 ./ef_eval/eval_gui.h5
   mmml ef-md --params ./ef_run/params.json --data splits/train.npz --steps 5000 --output md.traj
@@ -70,7 +72,7 @@ For help on a specific command:
     
     parser.add_argument(
         'command',
-        choices=['make-res', 'make-box', 'run', 'run-pycharmm', 'xml2npz', 'validate', 'train', 'evaluate', 'downstream', 'fix-and-split', 'pyscf-dft', 'pyscf-mp2', 'pyscf-evaluate', 'verify-esp-alignment', 'normal-mode-sample', 'physnet-md', 'ef-train', 'ef-evaluate', 'ef-md', 'active-learning', 'kernel-fit', 'interpolate-xyz', 'gui'],
+        choices=['make-res', 'make-box', 'run', 'run-pycharmm', 'xml2npz', 'validate', 'train', 'evaluate', 'downstream', 'fix-and-split', 'pyscf-dft', 'pyscf-mp2', 'pyscf-evaluate', 'verify-esp-alignment', 'normal-mode-sample', 'physnet-md', 'physnet-evaluate', 'ef-train', 'ef-evaluate', 'ef-md', 'active-learning', 'kernel-fit', 'interpolate-xyz', 'gui'],
         help='Command to run'
     )
     parser.add_argument(
@@ -174,6 +176,11 @@ For help on a specific command:
         from .misc import physnet_md
         sys.argv = ['mmml physnet-md'] + args.args
         return physnet_md.main()
+
+    elif args.command == 'physnet-evaluate':
+        from .misc import physnet_evaluate
+        sys.argv = ['mmml physnet-evaluate'] + args.args
+        return physnet_evaluate.main()
 
     elif args.command == 'ef-train':
         from .misc import ef_train
