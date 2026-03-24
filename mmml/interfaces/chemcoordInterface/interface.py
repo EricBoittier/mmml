@@ -157,16 +157,16 @@ def interpolate_zmats(z1, z2, steps):
 
     return out
 
-def interpolate_xyzs_to_npz(xyz1: str, xyz2: str, out_fn="interpolated.npz"):
+def interpolate_xyzs_to_npz(xyz1: str, xyz2: str, steps: int = 1000, out_fn="interpolated.npz"):
 
     lala_zm = cc.Cartesian.read_xyz(xyz1).get_zmat()
     rala_cc = cc.Cartesian.read_xyz(xyz2)
     c_table = lala_zm.loc[:, ["b", "a", "d"]]
     rala_zm = rala_cc.get_zmat(c_table)
     # interpolate between structures
-    mixed = interpolate_zmats(lala_zm, rala_zm, 1000)
+    mixed = interpolate_zmats(lala_zm, rala_zm, steps)
     mixed_ccs = [_.get_cartesian() for _ in  mixed]
-    ase_atoms_list = [ase.Atoms(mixed_ccs[i]["atom"], mixed_ccs[i][["x", "y", "z"]]) for i in range(STEPS)]
+    ase_atoms_list = [ase.Atoms(mixed_ccs[i]["atom"], mixed_ccs[i][["x", "y", "z"]]) for i in range(steps)]
 
     # write
     out_dict = {
