@@ -14,7 +14,14 @@
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    "baseUrl": ".",
+    "paths": {
+      "three": ["./node_modules/@types/three/build/three.module.d.ts"],
+      "three/examples/jsm/controls/OrbitControls.js": [
+        "./node_modules/@types/three/examples/jsm/controls/OrbitControls.d.ts"
+      ]
+    }
   },
   "include": ["src"],
   "references": [{ "path": "./tsconfig.node.json" }]
