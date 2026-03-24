@@ -454,7 +454,7 @@ class MessagePassingModel(nn.Module):
         # Neighbor list counts each undirected pair twice → divide by 2
         edge_batch = batch_segments[dst_idx_flat]  # (B*E,) batch index per edge
         coulomb_ha = jax.ops.segment_sum(pair_coulomb_ha, edge_batch, num_segments=B) / 2.0  # (B,)
-        energy = energy + coulomb_ha * HARTREE_TO_EV  # match NN energy / targets in eV
+        energy = energy + coulomb_ha * HARTREE_TO_EV  * 0.0 # match NN energy / targets in eV
 
 
         # Optional explicit dipole-field coupling:
