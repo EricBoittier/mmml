@@ -174,6 +174,20 @@ def get_args(**kwargs):
     return SimpleNamespace(**defaults)
 
 
+def _ef_md_active_columns(zb: np.ndarray) -> int:
+    """Columns [0, n) covering every Z>0 in each row (trailing pad stripped)."""
+    zb = np.asarray(zb, dtype=np.int32)
+    if zb.ndim == 1:
+        pos = np.where(zb > 0)[0]
+        return int(pos.max()) + 1 if len(pos) else 1
+    ncols = 1
+    for b in range(zb.shape[0]):
+        pos = np.where(zb[b] > 0)[0]
+        if len(pos):
+            ncols = max(ncols, int(pos.max()) + 1)
+    return max(ncols, 1)
+
+
 def main_batched(args):
     """Run B independent MD replicas in one JIT-compiled GPU batch.
 
@@ -246,6 +260,26 @@ def main_batched(args):
                                     dtype=jnp.float32)
             if R_single.ndim == 3:
                 R_single = R_single.squeeze(0)
+
+    # Drop trailing padded atom slots (Z<=0) so the e3x graph matches
+    # unpadded ASE / n_replicas=1 physics. Full-width padded batches
+    # include ghost pairs in message passing and extra atomic energies,
+    # which shifts the potential vs single-molecule MD.
+    zb_np = np.asarray(Z_batched)
+    n_active = _ef_md_active_columns(zb_np)
+    n_full = zb_np.shape[1]
+    if n_active < n_full:
+        print(
+            f"  Trim padding   : {n_full} → {n_active} atom slots "
+            f"(trailing Z<=0 columns removed for graph / energy consistency)"
+        )
+    Z_batched = jnp.asarray(zb_np[:, :n_active], dtype=jnp.int32)
+    Z = Z_batched[0]
+    if R_multi is not None:
+        R_multi = R_multi[:, :n_active, :]
+        R_single = R_multi[0]
+    else:
+        R_single = R_single[:n_active]
 
     N = int(Z_batched.shape[1])
     print(f"  Atoms       : {N}")
