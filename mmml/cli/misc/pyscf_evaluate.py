@@ -11,7 +11,7 @@ Usage:
     mmml pyscf-evaluate -i out/06_sampled.npz -o out/07_evaluated.npz --esp
     mmml pyscf-evaluate -i traj.npz -o out.npz --EF
     mmml pyscf-evaluate -i traj.npz -o out.npz --EF --efield 0,0,0.01
-    mmml pyscf-evaluate -i traj.npz -o out.npz --EF --efield-include-nuclear-energy
+    mmml pyscf-evaluate -i traj.npz -o out.npz --EF --no-efield-include-nuclear-energy
     mmml pyscf-evaluate -i traj.npz -o out.npz --add-random-noise 0.1
 """
 
@@ -135,13 +135,12 @@ def main() -> int:
         help="RNG seed for --add-random-noise and random --EF draws",
     )
     parser.add_argument(
-        "--efield-include-nuclear-energy",
-        action="store_true",
-        help=(
-            "With --EF/--efield: add nuclear-field energy to E after SCF (gpu4pyscf convention). "
-            "Shifts energy by O(E) for fixed geometry; try if energy targets are hard to fit."
-        ),
+        "--no-efield-include-nuclear-energy",
+        dest="efield_include_nuclear_energy",
+        action="store_false",
+        help="With --EF/--efield: use mf.kernel energy only (omit nuclear-field term after SCF).",
     )
+    parser.set_defaults(efield_include_nuclear_energy=True)
 
     args = parser.parse_args()
     t0 = time.perf_counter()
@@ -196,8 +195,8 @@ def main() -> int:
         print(
             f"  E-field: {'fixed ' + str(efield_pass) if args.efield else f'random per frame (sigma={args.efield_sigma} a.u.)'}"
         )
-        if args.efield_include_nuclear_energy:
-            print("  E-field energy: including nuclear-field term after SCF")
+        if not args.efield_include_nuclear_energy:
+            print("  E-field energy: mf.kernel only (--no-efield-include-nuclear-energy)")
     if args.add_random_noise and args.add_random_noise > 0:
         print(f"  Position noise: Gaussian sigma={args.add_random_noise} Angstrom on R")
 

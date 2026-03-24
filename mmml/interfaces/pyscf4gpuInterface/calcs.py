@@ -216,7 +216,7 @@ def compute_dft(args, calcs, extra=None):
         efields = parse_efield_points(spec)
         fd_axis = int(getattr(args, "efield_fd_axis", 2))
         print(f"  Field points (a.u.): {efields.shape[0]} rows; FD axis index = {fd_axis}")
-        inc_nuc = getattr(args, "efield_include_nuclear_energy", False)
+        inc_nuc = getattr(args, "efield_include_nuclear_energy", True)
         scan = efield_ir_scan(
             mol, efields, xc=args.xc, include_nuclear_field_energy=inc_nuc
         )
@@ -257,7 +257,7 @@ def compute_dft(args, calcs, extra=None):
             dipole_unit=dip_u,
             forces=do_forces,
             include_nuclear_field_energy=getattr(
-                args, "efield_include_nuclear_energy", False
+                args, "efield_include_nuclear_energy", True
             ),
         )
         scan["efield_response_fd"] = efield_response_finite_difference(
@@ -361,7 +361,7 @@ def compute_dft_single(
     esp_cpu_fallback: bool = False,
     verbose: int = 0,
     efield: np.ndarray | None = None,
-    efield_include_nuclear_energy: bool = False,
+    efield_include_nuclear_energy: bool = True,
 ) -> dict:
     """
     Run DFT for a single geometry (R, Z). Used for batch evaluation.
@@ -374,7 +374,7 @@ def compute_dft_single(
         Hamiltonian). SCF uses hcore + E·μ; dipole/gradient/ESP use the converged
         field-polarized state.
     efield_include_nuclear_energy
-        If True (with ``efield``), add nuclear-field energy to ``energy`` after SCF
+        If True (default, with ``efield``), add nuclear-field energy to ``energy`` after SCF
         (:func:`mmml.interfaces.pyscf4gpuInterface.efield.nuclear_field_energy_correction_hartree`).
     """
     atom = _RZ_to_atom(R, Z)
@@ -528,7 +528,7 @@ def compute_dft_batch(
     esp_cpu_fallback: bool = False,
     verbose: int = 0,
     efield: np.ndarray | None = None,
-    efield_include_nuclear_energy: bool = False,
+    efield_include_nuclear_energy: bool = True,
 ) -> dict:
     """
     Run DFT for multiple geometries in one process (same GPU context).
@@ -748,14 +748,14 @@ def parse_args():
         help="Dipole unit for --efield-scf (e.g. DEBYE, AU)",
     )
     parser.add_argument(
-        "--efield-include-nuclear-energy",
-        default=False,
-        action="store_true",
+        "--no-efield-include-nuclear-energy",
+        dest="efield_include_nuclear_energy",
+        action="store_false",
         help=(
-            "After SCF in a uniform field, add nuclear-field energy term to reported E "
-            "(gpu4pyscf polarizability convention; linear in E for fixed geometry)"
+            "After SCF in a uniform field, omit nuclear-field energy (use mf.kernel energy only)."
         ),
     )
+    parser.set_defaults(efield_include_nuclear_energy=True)
     parser.add_argument("--save_option", type=str, default="hdf5")
     args = parser.parse_args()
 
@@ -878,7 +878,7 @@ def get_dummy_args(mol: str, calcs: list[CALCS]):
             self.efield_fd_axis = 2
             self.efield_scf_no_forces = False
             self.efield_dipole_unit = "DEBYE"
-            self.efield_include_nuclear_energy = False
+            self.efield_include_nuclear_energy = True
             self.interaction = CALCS.INTERACTION in calcs
             self.save_option = "pkl"
 

@@ -525,9 +525,9 @@ def load_ef_npz(path: str | Path) -> dict:
 
     Required keys: R, Z, E, F, Ef. Dipoles: D or Dxyz (same units as NPZ; often e·Å after fix-and-split), optional.
 
-    Energy convention (E-field runs): default ``pyscf-evaluate`` uses SCF energy from ``mf.kernel()`` only;
-    pass ``--efield-include-nuclear-energy`` when generating data if you want the extra nuclear-field
-    term (gpu4pyscf polarizability scripts). Match whatever you use when training.
+    Energy convention (E-field runs): default ``pyscf-evaluate`` adds the nuclear-field energy term
+    after SCF (gpu4pyscf-style). Use ``--no-efield-include-nuclear-energy`` for legacy ``mf.kernel``-only
+    energies. Match whatever you use when training.
     """
     path = Path(path)
     if not path.is_file():

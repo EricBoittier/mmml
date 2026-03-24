@@ -84,7 +84,7 @@ def run_scf_uniform_efield(
     dm_init_guess: Any = None,
     *,
     xc: str = "PBE0",
-    include_nuclear_field_energy: bool = False,
+    include_nuclear_field_energy: bool = True,
 ) -> Tuple[Any, float]:
     """
     Build RKS with hcore = T + Vnuc + E·μ and run SCF.
@@ -92,7 +92,7 @@ def run_scf_uniform_efield(
     Parameters
     ----------
     include_nuclear_field_energy
-        If True, add :func:`nuclear_field_energy_correction_hartree` to ``e_tot`` after SCF
+        If True (default), add :func:`nuclear_field_energy_correction_hartree` to ``e_tot`` after SCF
         (gpu4pyscf-style total interaction energy).
 
     Returns
@@ -127,7 +127,7 @@ def scf_efield_energy_forces_dipole(
     xc: str = "PBE0",
     dipole_unit: str = "AU",
     forces: bool = True,
-    include_nuclear_field_energy: bool = False,
+    include_nuclear_field_energy: bool = True,
 ) -> Tuple[dict, Any]:
     """
     SCF in a uniform electric field **E** (atomic units); return energy, dipole, and optionally forces.
@@ -181,7 +181,7 @@ def efield_scf_scan(
     dm0_start: Any = None,
     dipole_unit: str = "AU",
     forces: bool = True,
-    include_nuclear_field_energy: bool = False,
+    include_nuclear_field_energy: bool = True,
 ) -> dict:
     """
     Like :func:`efield_ir_scan` but only SCF properties (energy, dipole, forces) per field point.
@@ -224,7 +224,7 @@ def maxwell_eval_ir_freq_intensity(
     dm_init_guess: Any = None,
     *,
     xc: str = "PBE0",
-    include_nuclear_field_energy: bool = False,
+    include_nuclear_field_energy: bool = True,
 ) -> Tuple[dict, Any]:
     """Calculate IR frequencies and intensities in a static uniform electric field E (a.u.).
 
@@ -374,7 +374,7 @@ def efield_ir_scan(
     *,
     xc: str = "PBE0",
     dm0_start: Any = None,
-    include_nuclear_field_energy: bool = False,
+    include_nuclear_field_energy: bool = True,
 ) -> dict:
     """
     Run :func:`maxwell_eval_ir_freq_intensity` for each row of ``efields`` (n, 3), reusing
