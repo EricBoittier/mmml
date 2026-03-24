@@ -414,7 +414,7 @@ class MolecularFileParser:
         )
     
     def _get_h5_metadata(self) -> FileMetadata:
-        """Get metadata from HDF5 file (e.g. compare_charmm_ml or pyscf-dft output)."""
+        """Get metadata from HDF5 file (e.g. compare_charmm_ml, pyscf-dft, EF evaluation)."""
         f = self._data
         R_shape = f['R'].shape if 'R' in f else ()
         if len(R_shape) == 2:
@@ -432,6 +432,14 @@ class MolecularFileParser:
                     n_frames = f[key].shape[0]
                     break
         properties = ['structure']
+        if 'E' in f:
+            properties.append('energy')
+        if 'F' in f:
+            properties.append('forces')
+        if 'D' in f or 'Dxyz' in f:
+            properties.append('dipole')
+        if 'Ef' in f:
+            properties.append('electric_field')
         esp_keys = [k for k in f.keys() if isinstance(f[k], h5py.Dataset) and
                     (k == 'esp' or k.startswith('esp_') or k.startswith('esp_errors_'))]
         if esp_keys:
@@ -444,6 +452,15 @@ class MolecularFileParser:
             Z0 = Z_arr[0].ravel() if Z_arr.ndim > 1 else Z_arr.ravel()
             unique_z = np.unique(Z0[Z0 > 0])
             elements = [ELEMENT_SYMBOLS.get(int(z), f'X{z}') for z in unique_z]
+        energy_range = None
+        if 'E' in f:
+            E = np.asarray(f['E'], dtype=np.float64).ravel()
+            if E.size > 0:
+                energy_range = {
+                    'min': float(np.min(E)),
+                    'max': float(np.max(E)),
+                    'mean': float(np.mean(E)),
+                }
         return FileMetadata(
             path=str(self.file_path),
             filename=self.file_path.name,
@@ -452,7 +469,7 @@ class MolecularFileParser:
             n_atoms=n_atoms,
             available_properties=properties,
             elements=elements,
-            energy_range=None,
+            energy_range=energy_range,
             n_replicas=1,
         )
     
@@ -655,25 +672,25 @@ class MolecularFileParser:
         )
     
     def _get_h5_frame(self, index: int, include_pdb: bool = True) -> FrameData:
-        """Get frame from HDF5 file (e.g. compare_charmm_ml or pyscf-dft output)."""
+        """Get frame from HDF5 (structure + optional E, F, D/Dxyz, Ef — NPZ-like layout)."""
         f = self._data
         R_raw = np.asarray(f['R'])
-        Z_raw = np.asarray(f['Z'])
         if R_raw.ndim == 2:
             R = np.asarray(R_raw, dtype=np.float64)
-            Z = np.asarray(Z_raw, dtype=np.int64)
+            fi = 0
         else:
             R = np.asarray(R_raw[index], dtype=np.float64)
-            Z = (
-                np.asarray(Z_raw[index], dtype=np.int64)
-                if Z_raw.ndim > 1
-                else np.asarray(Z_raw, dtype=np.int64)
-            )
+            fi = index
+        Z_raw = np.asarray(f['Z'])
+        if Z_raw.ndim == 1:
+            Z = np.asarray(Z_raw, dtype=np.int64)
+        else:
+            Z = np.asarray(Z_raw[fi], dtype=np.int64)
         N = None
         if 'N' in f:
             arr = np.asarray(f['N']).ravel()
             if arr.size > 0:
-                N = int(arr[min(index, arr.size - 1)])
+                N = int(arr[min(fi, arr.size - 1)])
         atoms = npz_frame_to_atoms(R, Z, N)
         pdb_string = atoms_to_pdb(atoms) if include_pdb else ""
         mask = Z > 0
@@ -683,14 +700,50 @@ class MolecularFileParser:
             mask = mask & (Z > 0)
         positions = R[mask].tolist()
         atomic_numbers = Z[mask].tolist()
+
+        energy = None
+        if 'E' in f:
+            E_arr = np.asarray(f['E'], dtype=np.float64).ravel()
+            if E_arr.size > 0:
+                energy = float(E_arr[min(fi, E_arr.size - 1)])
+
+        forces = None
+        if 'F' in f:
+            F_raw = np.asarray(f['F'], dtype=np.float64)
+            if F_raw.ndim == 2:
+                F = F_raw
+            else:
+                F = np.asarray(F_raw[fi], dtype=np.float64)
+            forces = F[mask].tolist()
+
+        dipole = None
+        for dk in ('Dxyz', 'D'):
+            if dk not in f:
+                continue
+            D_raw = np.asarray(f[dk], dtype=np.float64)
+            if D_raw.ndim == 1:
+                dipole = D_raw.tolist()
+            else:
+                row = min(fi, D_raw.shape[0] - 1)
+                dipole = np.asarray(D_raw[row], dtype=np.float64).ravel()[:3].tolist()
+            break
+
+        electric_field = None
+        if 'Ef' in f:
+            ef = np.asarray(f['Ef'], dtype=np.float64)
+            if ef.ndim == 1 and ef.size == 3:
+                electric_field = ef.tolist()
+            elif ef.ndim == 2:
+                electric_field = ef[min(fi, ef.shape[0] - 1)].tolist()
+
         return FrameData(
             pdb_string=pdb_string,
             n_atoms=len(atoms),
-            energy=None,
-            forces=None,
-            dipole=None,
+            energy=energy,
+            forces=forces,
+            dipole=dipole,
             charges=None,
-            electric_field=None,
+            electric_field=electric_field,
             positions=positions,
             atomic_numbers=atomic_numbers,
             replica_frames=None,
@@ -1375,7 +1428,7 @@ class MolecularFileParser:
         return properties
     
     def _get_h5_properties(self) -> Dict[str, List]:
-        """Get properties from H5 file (minimal - compare_charmm_ml has no E/F/D)."""
+        """Get per-frame properties from H5 (NPZ-like: E, F, Dxyz, Ef; optional E_pred)."""
         f = self._data
         if 'R' not in f:
             n_frames = 0
@@ -1385,7 +1438,69 @@ class MolecularFileParser:
             n_frames = f['R'].shape[0]
         if n_frames == 0 and 'esp_physnet' in f:
             n_frames = f['esp_physnet'].shape[0]
-        return {'frame_indices': list(range(n_frames))}
+        properties: Dict[str, List] = {'frame_indices': list(range(n_frames))}
+        if n_frames == 0:
+            return properties
+
+        if 'E' in f:
+            E = np.asarray(f['E'], dtype=np.float64).ravel()
+            if E.size >= n_frames:
+                properties['energy'] = E[:n_frames].tolist()
+        if 'E_pred' in f:
+            Ep = np.asarray(f['E_pred'], dtype=np.float64).ravel()
+            if Ep.size >= n_frames:
+                properties['energy_pred'] = Ep[:n_frames].tolist()
+
+        for dk in ('Dxyz', 'D'):
+            if dk not in f:
+                continue
+            D = np.asarray(f[dk], dtype=np.float64)
+            if D.ndim == 2 and D.shape[1] == 3 and D.shape[0] >= n_frames:
+                D_plot = D[:n_frames]
+                properties['dipole_magnitude'] = np.linalg.norm(D_plot, axis=1).tolist()
+                properties['dipole_x'] = D_plot[:, 0].tolist()
+                properties['dipole_y'] = D_plot[:, 1].tolist()
+                properties['dipole_z'] = D_plot[:, 2].tolist()
+            break
+
+        if 'Ef' in f:
+            Ef = np.asarray(f['Ef'], dtype=np.float64)
+            if Ef.ndim == 1 and Ef.size == 3:
+                Ef_plot = np.tile(Ef[None, :], (n_frames, 1))
+            elif Ef.ndim == 2 and Ef.shape[1] == 3 and Ef.shape[0] >= n_frames:
+                Ef_plot = Ef[:n_frames]
+            else:
+                Ef_plot = np.zeros((n_frames, 3), dtype=np.float64)
+            properties['efield_magnitude'] = np.linalg.norm(Ef_plot, axis=1).tolist()
+            properties['efield_x'] = Ef_plot[:, 0].tolist()
+            properties['efield_y'] = Ef_plot[:, 1].tolist()
+            properties['efield_z'] = Ef_plot[:, 2].tolist()
+
+        if 'F' in f and 'Z' in f:
+            F_all = np.asarray(f['F'], dtype=np.float64)
+            Z_arr = np.asarray(f['Z'])
+            N_arr = np.asarray(f['N']).ravel() if 'N' in f else None
+            max_forces: List[float] = []
+            mean_forces: List[float] = []
+            for i in range(n_frames):
+                Fi = F_all if F_all.ndim == 2 else np.asarray(F_all[i], dtype=np.float64)
+                if Z_arr.ndim == 1:
+                    Zi = Z_arr
+                else:
+                    Zi = np.asarray(Z_arr[i], dtype=np.int64)
+                mask = Zi > 0
+                if N_arr is not None and N_arr.size > 0:
+                    n_i = int(N_arr[min(i, N_arr.size - 1)])
+                    mask = np.zeros_like(Zi, dtype=bool)
+                    mask[:n_i] = True
+                    mask = mask & (Zi > 0)
+                mags = np.linalg.norm(Fi[mask], axis=1)
+                max_forces.append(float(np.max(mags)) if mags.size > 0 else 0.0)
+                mean_forces.append(float(np.mean(mags)) if mags.size > 0 else 0.0)
+            properties['force_max'] = max_forces
+            properties['force_mean'] = mean_forces
+
+        return properties
     
     def _get_ase_properties(self) -> Dict[str, List]:
         """Get all properties from ASE trajectory."""

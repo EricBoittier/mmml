@@ -7,7 +7,7 @@ Creates scatter plots and computes metrics (MAE, RMSE, R²) for energy predictio
 Note: Expects input data in eV/angstrom units. All errors are reported in kcal/mol.
 
 Usage:
-    mmml ef-evaluate --params params.json --data test.npz --output-dir results/
+    mmml ef-evaluate --params params.json --data test.npz --output-dir results/ --output-h5 eval_gui.h5
     python -m mmml.models.EF.evaluate --params params.json --data test.npz --output-dir results/
 """
 
@@ -77,6 +77,7 @@ def get_args(**kwargs):
         "cutoff": None,
         "max_atomic_number": None,
         "save_output_npz": False,
+        "output_h5": None,
     }
     
     # Check if we're in a notebook/IPython environment
@@ -125,7 +126,14 @@ def get_args(**kwargs):
                            help="Max atomic number (default: 55)")
         parser.add_argument("--save-output-npz", action="store_true",
                            help="Save evaluation outputs (predictions, targets) to NPZ file")
-        
+        parser.add_argument(
+            "--output-h5",
+            type=str,
+            default=None,
+            metavar="PATH",
+            help="Write HDF5 trajectory for mmml gui (R,Z,N,E,E_pred,F,F_pred,Dxyz,Dxyz_pred,Ef). Requires h5py.",
+        )
+
         args, _unknown = parser.parse_known_args()
         return SimpleNamespace(
             params=args.params,
@@ -142,6 +150,7 @@ def get_args(**kwargs):
             cutoff=args.cutoff,
             max_atomic_number=args.max_atomic_number,
             save_output_npz=args.save_output_npz,
+            output_h5=args.output_h5,
         )
     
     # Otherwise, use notebook mode (defaults only)
@@ -169,6 +178,84 @@ def load_params(params_path):
     
     params = convert_to_jax(params_dict)
     return params
+
+
+def save_ef_evaluation_h5(path: Path, d: dict) -> None:
+    """
+    Write an HDF5 file readable by mmml gui (same dataset names as NPZ trajectories:
+    R, Z, N, E, F, Dxyz, Ef; plus E_pred, F_pred, Dxyz_pred when present).
+    """
+    try:
+        import h5py
+    except ImportError as exc:
+        raise ImportError(
+            "Writing --output-h5 requires h5py. Install with: pip install h5py"
+        ) from exc
+
+    def arr(key: str):
+        v = d.get(key)
+        if v is None:
+            return None
+        return np.asarray(v)
+
+    R = arr("R")
+    if R.ndim != 3:
+        raise ValueError(f"H5 export expected R (n_frames, n_atoms, 3), got shape {R.shape}")
+    n, nat = R.shape[0], R.shape[1]
+    Z = arr("Z")
+    if Z.ndim == 1:
+        Z = np.broadcast_to(Z, (n, Z.shape[0])).copy()
+    elif Z.shape[0] != n:
+        raise ValueError(f"Z shape {Z.shape} incompatible with R.shape[0]={n}")
+
+    Eg = arr("energy_targets")
+    if Eg is None:
+        Eg = arr("E")
+    if Eg is None:
+        raise ValueError("H5 export needs energies (energy_targets or E)")
+    Eg = Eg.reshape(-1)
+    if Eg.shape[0] != n:
+        raise ValueError(f"Energy length {Eg.shape[0]} != n_frames {n}")
+
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    comp = {"compression": "gzip", "compression_opts": 4}
+
+    with h5py.File(path, "w") as hf:
+        hf.attrs["mmml_format"] = "ef_evaluation_v1"
+        hf.attrs["description"] = (
+            "EF evaluation: targets (E,F,Dxyz,Ef) and model predictions (*_pred). Units match input NPZ."
+        )
+        hf.create_dataset("R", data=R.astype(np.float64), **comp)
+        hf.create_dataset("Z", data=Z.astype(np.int32), **comp)
+        hf.create_dataset("N", data=np.full((n,), nat, dtype=np.int32), **comp)
+        hf.create_dataset("E", data=Eg.astype(np.float64), **comp)
+
+        Ep = arr("energy_pred")
+        if Ep is not None:
+            hf.create_dataset("E_pred", data=Ep.reshape(-1).astype(np.float64), **comp)
+
+        Fg = arr("force_targets")
+        if Fg is None:
+            Fg = arr("F")
+        if Fg is not None:
+            hf.create_dataset("F", data=np.asarray(Fg, dtype=np.float64), **comp)
+        Fp = arr("force_pred")
+        if Fp is not None:
+            hf.create_dataset("F_pred", data=np.asarray(Fp, dtype=np.float64), **comp)
+
+        Dg = arr("dipole_targets")
+        if Dg is None:
+            Dg = arr("D")
+        if Dg is not None:
+            hf.create_dataset("Dxyz", data=np.asarray(Dg, dtype=np.float64), **comp)
+        Dp = arr("dipole_pred")
+        if Dp is not None:
+            hf.create_dataset("Dxyz_pred", data=np.asarray(Dp, dtype=np.float64), **comp)
+
+        Ef = arr("Ef")
+        if Ef is not None:
+            hf.create_dataset("Ef", data=np.asarray(Ef, dtype=np.float64), **comp)
 
 
 def compute_metrics(predictions, targets, convert_to_kcal_mol=True):
@@ -1433,6 +1520,8 @@ def main(args=None):
     if dipole_pred is not None and dipole_targets is not None:
         print(f"  - Dipole scatter plot (flattened components): {dipole_scatter_path}")
     print(f"  - Summary: {combined_path}")
+    if getattr(args, "output_h5", None):
+        print(f"  - GUI HDF5: {Path(args.output_h5).expanduser().resolve()}")
 
 
 
@@ -1457,6 +1546,11 @@ def main(args=None):
         output_npz = output_dir / "evaluation_output.npz"
         np.savez_compressed(output_npz, **output_dict)
         print(f"✓ Saved output to {output_npz}")
+
+    if getattr(args, "output_h5", None):
+        h5_path = Path(args.output_h5).expanduser().resolve()
+        save_ef_evaluation_h5(h5_path, output_dict)
+        print(f"✓ Saved GUI HDF5 to {h5_path}")
 
     return output_dict
 
