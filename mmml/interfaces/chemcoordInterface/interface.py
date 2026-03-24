@@ -90,6 +90,20 @@ def patch_chemcoord_for_pandas3():
 
     gz.CartesianGetZmat._build_zmat = _build_zmat_patched
 
+    # --- Patch 1b: construction table mixes magic strings (origin, e_z) with int
+    # atom indices; pandas 2.2+ may infer StringDtype and reject ints (e.g. "got int64"). ---
+    _orig_get_frag_constr_table = gz.CartesianGetZmat._get_frag_constr_table
+
+    def _get_frag_constr_table_patched(self, *args, **kwargs):
+        out = _orig_get_frag_constr_table(self, *args, **kwargs)
+        out = out.copy()
+        for col in ("b", "a", "d"):
+            if col in out.columns:
+                out[col] = out[col].astype(object)
+        return out
+
+    gz.CartesianGetZmat._get_frag_constr_table = _get_frag_constr_table_patched
+
     # --- Patch 2: force writable numeric arrays in get_cartesian ---
     def get_cartesian_patched(self):
         c_table = self.loc[:, ["b", "a", "d"]].copy()
@@ -161,7 +175,9 @@ def interpolate_xyzs_to_npz(xyz1: str, xyz2: str, steps: int = 1000, out_fn="int
 
     lala_zm = cc.Cartesian.read_xyz(xyz1).get_zmat()
     rala_cc = cc.Cartesian.read_xyz(xyz2)
-    c_table = lala_zm.loc[:, ["b", "a", "d"]]
+    c_table = lala_zm.loc[:, ["b", "a", "d"]].copy()
+    for col in ("b", "a", "d"):
+        c_table[col] = c_table[col].astype(object)
     rala_zm = rala_cc.get_zmat(c_table)
     # interpolate between structures
     mixed = interpolate_zmats(lala_zm, rala_zm, steps)
