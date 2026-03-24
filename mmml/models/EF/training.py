@@ -341,8 +341,6 @@ class MessagePassingModel(nn.Module):
         # Embed atoms (flattened) - atomic_numbers_flat is already ensured to be 1D above
         x = e3x.nn.Embed(num_embeddings=self.max_atomic_number + 1, features=self.features)(atomic_numbers_flat)
 
-        
-
         # Message passing loop
         for i in range(self.num_iterations):
             y = e3x.nn.MessagePass(
@@ -351,15 +349,11 @@ class MessagePassingModel(nn.Module):
             )(x, basis, dst_idx=dst_idx_flat, src_idx=src_idx_flat)
             x = e3x.nn.add(x, y)
             x = e3x.nn.silu(x)
-            x = e3x.nn.Dense(self.features)(x)
-            x = e3x.nn.silu(x)
             # Couple EF - xEF already has correct shape (B*N, 2, 4, features) matching x
             xEF = e3x.nn.Tensor()(x, xEF)
             x = e3x.nn.add(x, xEF)
             x = e3x.nn.TensorDense(max_degree=self.max_degree)(x)
             x = e3x.nn.add(x, y)
-            x = e3x.nn.TensorDense(max_degree=self.max_degree)(x)
-            x = e3x.nn.silu(x)
             
         # Save original x before reduction for dipole prediction
         x_orig = x  # (B*N, 2, (max_degree+1)^2, features)
@@ -448,7 +442,6 @@ class MessagePassingModel(nn.Module):
 
         energy = atomic_energies.reshape(B, N).sum(axis=1)  # (B,)
 
-        # Coulomb energy from predicted charges (same convention as train_joint / mmml.data.units):
         # E_coul = (1/2) Σ q_i q_j / r_ij in Hartree with r_ij in Bohr; positions here are Å.
         r_ij_angstrom = jnp.linalg.norm(displacements, axis=-1)  # (B*E,)
         r_ij_bohr = r_ij_angstrom * ANGSTROM_TO_BOHR
@@ -527,7 +520,7 @@ def load_ef_npz(path: str | Path) -> dict:
     Load one NPZ from fix-and-split / pyscf-evaluate style splits into the dict format
     expected by train_model / prepare_batches.
 
-    Required keys: R, Z, E, F, Ef. Dipoles: D or Dxyz (Debye), optional.
+    Required keys: R, Z, E, F, Ef. Dipoles: D or Dxyz (same units as NPZ; often e·Å after fix-and-split), optional.
     """
     path = Path(path)
     if not path.is_file():
@@ -1256,7 +1249,7 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
         print(f"    forces mae [kcal/mol/Å]       {train_forces_mae_val: 8.6f} {valid_forces_mae_val: 8.6f}")
         print(f"    forces R²               {'N/A':>8s} {float(valid_forces_r2): 8.6f}")
         if train_dipole_mae > 0.0 or valid_dipole_mae > 0.0:
-            print(f"    dipole mae [Debye]      {float(train_dipole_mae): 8.6f} {float(valid_dipole_mae): 8.6f}")
+            print(f"    dipole mae [tgt units]  {float(train_dipole_mae): 8.6f} {float(valid_dipole_mae): 8.6f}")
             print(f"    dipole R²               {'N/A':>8s} {float(valid_dipole_r2): 8.6f}")
             print(f"    dipole loss [a.u.]      {float(train_dipole_mae**2): 8.6f} {float(valid_dipole_loss): 8.6f}")
         print(f"    charge loss [e²]        {float(train_charge_loss): 8.6f} {float(valid_charge_loss): 8.6f}")
