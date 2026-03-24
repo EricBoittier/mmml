@@ -454,7 +454,7 @@ class MessagePassingModel(nn.Module):
         # Neighbor list counts each undirected pair twice → divide by 2
         edge_batch = batch_segments[dst_idx_flat]  # (B*E,) batch index per edge
         coulomb_ha = jax.ops.segment_sum(pair_coulomb_ha, edge_batch, num_segments=B) / 2.0  # (B,)
-        energy = energy + coulomb_ha * HARTREE_TO_EV  * 0.0 # match NN energy / targets in eV
+        energy = energy - coulomb_ha * HARTREE_TO_EV  # Coulomb in eV to match NN / targets
 
 
         # Optional explicit dipole-field coupling:
@@ -782,9 +782,9 @@ def train_step(model_apply, optimizer_update, batch, batch_size, opt_state, para
         if "dipoles" in batch:
             total_loss = total_loss + dipole_weight * dipole_loss
         
-        return total_loss, (energy, forces, dipole, charge_sum_sq)
+        return total_loss, (energy, forces, dipole, charge_sum_sq, energy_loss, force_loss, dipole_loss)
 
-    (loss, (energy, forces, dipole, charge_sum_sq)), grad = jax.value_and_grad(loss_fn, has_aux=True)(params)
+    (loss, (energy, forces, dipole, charge_sum_sq, energy_loss, force_loss, dipole_loss)), grad = jax.value_and_grad(loss_fn, has_aux=True)(params)
     
     # Check for NaN/Inf in loss
     loss_finite = jnp.isfinite(loss)
@@ -842,7 +842,22 @@ def train_step(model_apply, optimizer_update, batch, batch_size, opt_state, para
     forces_r2 = 0.0
     dipole_r2 = 0.0
     
-    return params, ema_params, opt_state, loss, energy_mae, forces_mae, dipole_mae, charge_sum_sq, energy_r2, forces_r2, dipole_r2
+    return (
+        params,
+        ema_params,
+        opt_state,
+        loss,
+        energy_mae,
+        forces_mae,
+        dipole_mae,
+        charge_sum_sq,
+        energy_r2,
+        forces_r2,
+        dipole_r2,
+        energy_loss,
+        force_loss,
+        dipole_loss,
+    )
 
 
 @functools.partial(jax.jit, static_argnames=("model_apply", "batch_size", "energy_weight", "forces_weight", "dipole_weight", "charge_weight"))
@@ -1135,6 +1150,10 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
     from mmml.physnetjax.physnetjax.data.data import print_shapes
 
     print_shapes(valid_batches[0], name="Validation Batch[0]")
+    print(
+        "Loss terms: energy/force MSE use the same units as targets — typically E [eV], F [eV/Å]; "
+        "dipole MSE is squared NPZ dipole units. Weighted total mixes terms via energy_weight, forces_weight, …"
+    )
 
     # Early stopping tracking
     best_valid_loss = float('inf')
@@ -1157,8 +1176,26 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
         train_forces_mae = 0.0
         train_dipole_mae = 0.0
         train_charge_loss = 0.0
+        train_energy_loss = 0.0
+        train_force_loss = 0.0
+        train_dipole_loss = 0.0
         for i, batch in enumerate(train_batches):
-            params, ema_params, opt_state, loss, energy_mae, forces_mae, dipole_mae, charge_loss_val, energy_r2, forces_r2, dipole_r2 = train_step(
+            (
+                params,
+                ema_params,
+                opt_state,
+                loss,
+                energy_mae,
+                forces_mae,
+                dipole_mae,
+                charge_loss_val,
+                energy_r2,
+                forces_r2,
+                dipole_r2,
+                energy_loss_batch,
+                force_loss_batch,
+                dipole_loss_batch,
+            ) = train_step(
                 model_apply=model.apply,
                 optimizer_update=optimizer.update,
                 batch=batch,
@@ -1181,6 +1218,9 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
             train_forces_mae += (forces_mae - train_forces_mae) / (i + 1)
             train_dipole_mae += (dipole_mae - train_dipole_mae) / (i + 1)
             train_charge_loss += (charge_loss_val - train_charge_loss) / (i + 1)
+            train_energy_loss += (energy_loss_batch - train_energy_loss) / (i + 1)
+            train_force_loss += (force_loss_batch - train_force_loss) / (i + 1)
+            train_dipole_loss += (dipole_loss_batch - train_dipole_loss) / (i + 1)
 
         valid_loss = 0.0
         valid_energy_loss = 0.0
@@ -1244,9 +1284,9 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
         jax.block_until_ready(valid_loss)
         
         print(f"epoch: {epoch:3d}                    train:   valid:")
-        print(f"    loss [a.u.]             {float(train_loss): 8.6f} {float(valid_loss): 8.6f}")
-        print(f"    energy loss [a.u.]      {float(train_energy_mae**2): 8.6f} {float(valid_energy_loss): 8.6f}")
-        print(f"    force loss [a.u.]       {float(train_forces_mae**2): 8.6f} {float(valid_force_loss): 8.6f}")
+        print(f"    weighted total loss     {float(train_loss): 8.6f} {float(valid_loss): 8.6f}")
+        print(f"    energy MSE [eV²]        {float(train_energy_loss): 8.6f} {float(valid_energy_loss): 8.6f}")
+        print(f"    force MSE [(eV/Å)²]     {float(train_force_loss): 8.6f} {float(valid_force_loss): 8.6f}")
         print(f"    energy mae [kcal/mol]         {train_energy_mae_val: 8.6f} {valid_energy_mae_val: 8.6f}")
         print(f"    energy R²               {'N/A':>8s} {float(valid_energy_r2): 8.6f}")
         print(f"    forces mae [kcal/mol/Å]       {train_forces_mae_val: 8.6f} {valid_forces_mae_val: 8.6f}")
@@ -1254,7 +1294,7 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
         if train_dipole_mae > 0.0 or valid_dipole_mae > 0.0:
             print(f"    dipole mae [tgt units]  {float(train_dipole_mae): 8.6f} {float(valid_dipole_mae): 8.6f}")
             print(f"    dipole R²               {'N/A':>8s} {float(valid_dipole_r2): 8.6f}")
-            print(f"    dipole loss [a.u.]      {float(train_dipole_mae**2): 8.6f} {float(valid_dipole_loss): 8.6f}")
+            print(f"    dipole MSE [tgt²]       {float(train_dipole_loss): 8.6f} {float(valid_dipole_loss): 8.6f}")
         print(f"    charge loss [e²]        {float(train_charge_loss): 8.6f} {float(valid_charge_loss): 8.6f}")
         print(f"    charge RMSE [e]         {float(jnp.sqrt(train_charge_loss)): 8.6f} {float(jnp.sqrt(valid_charge_loss)): 8.6f}")
         print(f"    LR scale: {float(lr_scale): 8.6f}, effective LR: {float(learning_rate * lr_scale): 8.6f}")
