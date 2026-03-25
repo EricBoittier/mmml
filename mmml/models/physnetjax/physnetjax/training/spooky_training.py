@@ -246,6 +246,31 @@ def build_spooky_batch_from_padded_arrays(
     }
 
 
+def forward_spooky_batch(model, params, batch: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Run a forward pass on one spooky batch (same ``model.apply`` kwargs as training).
+
+    ``batch`` must come from :func:`build_spooky_batch_from_padded_arrays` or
+    :func:`build_spooky_batch_from_example`. Uses ``batch["batch_size"]`` so variable
+    batch sizes (e.g. a final partial batch at eval time) match the graph count.
+    """
+    bs = batch["batch_size"]
+    bs = int(jnp.asarray(bs).item())
+    return model.apply(
+        params,
+        atomic_numbers=batch["Z"],
+        charges=batch["Q_atoms"],
+        spins=batch["S_atoms"],
+        positions=batch["R"],
+        dst_idx=batch["dst_idx"],
+        src_idx=batch["src_idx"],
+        batch_segments=batch["batch_segments"],
+        batch_size=bs,
+        batch_mask=batch["batch_mask"],
+        atom_mask=batch["atom_mask"],
+    )
+
+
 def make_spooky_train_step(
     model,
     forces_weight: float = 52.91,
