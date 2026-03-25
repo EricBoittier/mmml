@@ -672,7 +672,15 @@ class MolecularFileParser:
             if ef.ndim == 1:
                 electric_field = ef.tolist()
             elif ef.ndim == 2:
-                electric_field = ef[index].tolist()
+                # (n_frames, 3) or (n_replicas, 3) for batched MD — compare to R layout
+                R_src = data['R']
+                n0 = ef.shape[0]
+                if R_src.ndim == 4 and n0 == R_src.shape[1]:
+                    electric_field = ef[min(replica_idx, n0 - 1)].tolist()
+                elif R_src.ndim == 4 and n0 == R_src.shape[0]:
+                    electric_field = ef[min(index, n0 - 1)].tolist()
+                else:
+                    electric_field = ef[min(index, n0 - 1)].tolist()
             elif ef.ndim == 3:
                 electric_field = ef[index, min(replica_idx, ef.shape[1] - 1)].tolist()
 
@@ -1452,10 +1460,19 @@ class MolecularFileParser:
         if 'Ef' in data:
             Ef = np.asarray(data['Ef'], dtype=np.float64)
             n_frames = len(properties['frame_indices'])
+            R_np = data['R']
             if Ef.ndim == 1 and Ef.shape[0] == 3:
                 Ef_plot = np.tile(Ef[None, :], (n_frames, 1))
             elif Ef.ndim == 2 and Ef.shape[1] == 3:
-                Ef_plot = Ef
+                if Ef.shape[0] == n_frames:
+                    Ef_plot = Ef
+                elif R_np.ndim == 4 and Ef.shape[0] == R_np.shape[1]:
+                    er = Ef[min(replica_idx, Ef.shape[0] - 1)]
+                    Ef_plot = np.tile(er[np.newaxis, :], (n_frames, 1))
+                elif Ef.shape[0] == 1:
+                    Ef_plot = np.tile(Ef, (n_frames, 1))
+                else:
+                    Ef_plot = np.zeros((n_frames, 3), dtype=np.float64)
             elif Ef.ndim == 3 and Ef.shape[2] == 3:
                 Ef_plot = Ef[:, min(replica_idx, Ef.shape[1] - 1), :]
             else:
