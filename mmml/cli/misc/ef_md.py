@@ -38,7 +38,8 @@ Backends:
 Common forwarded flags (both backends):
   --params, --config, --data, --xyz, --index, --electric-field,
   --thermostat, --temperature, --friction, --dt, --steps, --output, --seed,
-  --optimize, --optimizer, --fmax, --opt-steps, --maxstep, --save-charges
+  --optimize, --optimizer, --fmax, --opt-steps, --maxstep,
+  --save-charges / --no-save-charges (default: do not save atomic charges)
 
 ASE-only examples:
   --n-replicas 4          Independent replicas (batched on GPU when > 1)

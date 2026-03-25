@@ -496,9 +496,12 @@ def get_args(**kwargs):
                        help="Save every N steps")
         g.add_argument("--output", default=defaults["output"],
                        help="Output ASE .traj file")
-        g.add_argument("--save-charges", action="store_true",
-                       help="Recompute & save atomic charges for each saved frame "
-                            "(post-hoc, slower)")
+        g.add_argument(
+            "--save-charges",
+            action=argparse.BooleanOptionalAction,
+            default=False,
+            help="Recompute & save atomic charges for each saved frame "
+                 "(post-hoc, slower). Default: off.")
 
         g = p.add_argument_group("geometry optimisation")
         g.add_argument("--optimize", action="store_true",
