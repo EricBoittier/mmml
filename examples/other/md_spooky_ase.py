@@ -20,6 +20,14 @@ Example::
   python examples/other/md_spooky_ase.py \\
     --checkpoint ckpts_spooky_h5/final_params --structure mol.xyz \\
     --charge 0 --multiplicity 2
+
+  # BFGS relaxation then MD (min trajectory: spooky_bfgs.traj)
+  python examples/other/md_spooky_ase.py \\
+    --checkpoint ckpts_spooky_h5/final_params --structure mol.xyz \\
+    --bfgs-steps 300 --bfgs-fmax 0.05
+
+  # Relaxation only (no Langevin)
+  python examples/other/md_spooky_ase.py ... --bfgs-steps 500 --nsteps 0
 """
 
 from __future__ import annotations
@@ -92,6 +100,18 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Do not call atoms.center(vacuum=...) before dynamics.",
     )
+    p.add_argument(
+        "--bfgs-steps",
+        type=int,
+        default=0,
+        help="If > 0, run BFGS relaxation first and save spooky_bfgs.traj (default: 0, skip).",
+    )
+    p.add_argument(
+        "--bfgs-fmax",
+        type=float,
+        default=0.05,
+        help="BFGS convergence: max force magnitude (same units as calculator forces).",
+    )
     return p.parse_args()
 
 
@@ -131,6 +151,7 @@ def main() -> int:
         Stationary,
         ZeroRotation,
     )
+    from ase.optimize import BFGS
 
     args = parse_args()
     ckpt = _resolve_checkpoint(args)
@@ -177,12 +198,34 @@ def main() -> int:
     )
     atoms.calc = calc
 
+    out_dir = Path(args.output_dir).resolve()
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    if int(args.bfgs_steps) <= 0 and int(args.nsteps) <= 0:
+        print(
+            "Nothing to do: use --bfgs-steps > 0 and/or --nsteps > 0.",
+            file=sys.stderr,
+        )
+        return 1
+
+    if int(args.bfgs_steps) > 0:
+        bfgs_traj = out_dir / "spooky_bfgs.traj"
+        opt = BFGS(atoms, trajectory=str(bfgs_traj))
+        print(
+            f"BFGS: max {args.bfgs_steps} steps, fmax={args.bfgs_fmax} "
+            f"(forces in calculator units) -> {bfgs_traj}"
+        )
+        opt.run(fmax=float(args.bfgs_fmax), steps=int(args.bfgs_steps))
+        write(out_dir / "spooky_bfgs_final.xyz", atoms)
+        print(f"Wrote {bfgs_traj} and {out_dir / 'spooky_bfgs_final.xyz'}")
+
+    if int(args.nsteps) <= 0:
+        print("Skipping MD (--nsteps 0).")
+        return 0
+
     MaxwellBoltzmannDistribution(atoms, temperature_K=args.temperature)
     Stationary(atoms)
     ZeroRotation(atoms)
-
-    out_dir = Path(args.output_dir).resolve()
-    out_dir.mkdir(parents=True, exist_ok=True)
 
     dyn = Langevin(
         atoms,
