@@ -32,7 +32,7 @@ def main() -> int:
         epilog="""
 Backends:
   ase  ASE Langevin / Velocity-Verlet with AseCalculatorEF. Supports electric-field
-       ramps and --n-replicas > 1 (GPU-batched JAX loop, multi-replica NPZ output).
+       ramps and --n-replicas > 1 (GPU-batched JAX loop, multi-replica HDF5 output).
   jax  Single-replica NVE / Langevin in one compiled loop; writes an ASE .traj after the run.
 
 Common forwarded flags (both backends):
