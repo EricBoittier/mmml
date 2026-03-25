@@ -130,7 +130,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument(
         "--save-predictions",
         action="store_true",
-        help="Write predictions.npz with E and flattened masked F.",
+        help="Write predictions.npz: E, F (masked flat), Z, R, Q, S (per structure scored).",
     )
     p.add_argument("--verbose", action="store_true")
     return p.parse_args()
@@ -418,12 +418,17 @@ def main() -> int:
 
     if args.save_predictions:
         pred_path = out_dir / "predictions.npz"
+        n_scored = int(e_t.shape[0])
         np.savez(
             pred_path,
             E_ref=e_t,
             E_pred=e_p,
             F_ref=f_t,
             F_pred=f_p,
+            Z=z[:n_scored],
+            R=r[:n_scored],
+            Q=q[:n_scored],
+            S=s[:n_scored],
         )
         print(f"Wrote {pred_path}")
 
