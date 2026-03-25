@@ -123,8 +123,12 @@ def get_args(**kwargs):
                            help="Output trajectory file (ASE .traj format)")
         parser.add_argument("--seed", type=int, default=defaults["seed"],
                            help="Random seed for initial velocities")
-        parser.add_argument("--save-charges", action="store_true",
-                           help="Save ML atomic charges per frame (slower, for VCD)")
+        parser.add_argument(
+            "--save-charges",
+            action=argparse.BooleanOptionalAction,
+            default=False,
+            help="Save ML atomic charges per frame (slower, for VCD). Default: off.",
+        )
         parser.add_argument("--optimize", action="store_true",
                            help="Geometry-optimise before starting MD")
         parser.add_argument("--optimizer", choices=["bfgs", "fire"], default=defaults["optimizer"],
@@ -621,35 +625,38 @@ def main_batched(args):
     print(f"\n  T range (all)    : {T_arr.min():.1f} - {T_arr.max():.1f} K "
           f"(mean {T_arr.mean():.1f} K)")
 
-    # ---- compute atomic charges & dipoles (post-hoc) --------------------
-    # Uses Flax's mutable='intermediates' to extract the sow'd values.
-    # One batched call per saved frame (all B replicas at once).
-    @jax.jit
-    def get_charges_batch(positions):
-        """(B, N, 3) -> charges (B, N), atomic_dipoles (B, N, 3)"""
-        (_energy, _dipole), state = model.apply(
-            params, Z_batched, positions, Ef_batched,
-            dst_idx_flat=dst_idx_flat, src_idx_flat=src_idx_flat,
-            batch_segments=batch_segments, batch_size=B,
-            dst_idx=dst_idx, src_idx=src_idx,
-            mutable=['intermediates'])
-        intermediates = state.get('intermediates', {})
-        charges = intermediates.get('atomic_charges', (None,))[-1]
-        at_dip = intermediates.get('atomic_dipoles', (None,))[-1]
-        return charges, at_dip
+    charges_all = None
+    at_dipoles_all = None
+    if args.save_charges:
+        # ---- compute atomic charges & dipoles (post-hoc) --------------------
+        # Uses Flax's mutable='intermediates' to extract the sow'd values.
+        # One batched call per saved frame (all B replicas at once).
+        @jax.jit
+        def get_charges_batch(positions):
+            """(B, N, 3) -> charges (B, N), atomic_dipoles (B, N, 3)"""
+            (_energy, _dipole), state = model.apply(
+                params, Z_batched, positions, Ef_batched,
+                dst_idx_flat=dst_idx_flat, src_idx_flat=src_idx_flat,
+                batch_segments=batch_segments, batch_size=B,
+                dst_idx=dst_idx, src_idx=src_idx,
+                mutable=['intermediates'])
+            intermediates = state.get('intermediates', {})
+            charges = intermediates.get('atomic_charges', (None,))[-1]
+            at_dip = intermediates.get('atomic_dipoles', (None,))[-1]
+            return charges, at_dip
 
-    print(f"\n  Computing atomic charges for {n_saved} frames x {B} replicas ...")
-    charges_all = np.zeros((n_saved, B, N), dtype=np.float32)
-    at_dipoles_all = np.zeros((n_saved, B, N, 3), dtype=np.float32)
+        print(f"\n  Computing atomic charges for {n_saved} frames x {B} replicas ...")
+        charges_all = np.zeros((n_saved, B, N), dtype=np.float32)
+        at_dipoles_all = np.zeros((n_saved, B, N, 3), dtype=np.float32)
 
-    t0 = time.perf_counter()
-    for i in range(n_saved):
-        q, mu_at = get_charges_batch(R_traj[i])
-        charges_all[i] = np.asarray(q)
-        at_dipoles_all[i] = np.asarray(mu_at)
-        if (i + 1) % max(1, n_saved // 10) == 0 or i == 0:
-            print(f"    frame {i+1}/{n_saved}")
-    print(f"  Done in {time.perf_counter() - t0:.2f} s")
+        t0 = time.perf_counter()
+        for i in range(n_saved):
+            q, mu_at = get_charges_batch(R_traj[i])
+            charges_all[i] = np.asarray(q)
+            at_dipoles_all[i] = np.asarray(mu_at)
+            if (i + 1) % max(1, n_saved // 10) == 0 or i == 0:
+                print(f"    frame {i+1}/{n_saved}")
+        print(f"  Done in {time.perf_counter() - t0:.2f} s")
 
     # ---- save all replicas to a single .h5 ------------------------------
     R_np = np.asarray(R_traj)            # (n_saved, B, N, 3)
@@ -664,13 +671,15 @@ def main_batched(args):
     with h5py.File(h5_path, "w") as hf:
         hf.attrs["mmml_format"] = "ef_md_batched_v1"
         hf.attrs["thermostat"] = str(args.thermostat)
+        hf.attrs["save_charges"] = bool(args.save_charges)
         hf.create_dataset("Z", data=Z_np, **comp)  # (B, N) atomic numbers (row = replica)
         hf.create_dataset("R", data=R_np, **comp)  # (n_saved, B, N, 3)  positions [Å]
         hf.create_dataset("V", data=V_np, **comp)  # (n_saved, B, N, 3)  velocities [Å/fs]
         hf.create_dataset("E", data=E_np, **comp)  # (n_saved, B)        potential energy [eV]
         hf.create_dataset("D", data=mu_np, **comp)  # (n_saved, B, 3)     dipole [a.u.]
-        hf.create_dataset("Q", data=charges_all, **comp)  # (n_saved, B, N)     atomic charges [e]
-        hf.create_dataset("AD", data=at_dipoles_all, **comp)  # (n_saved, B, N, 3)  atomic dipoles [a.u.]
+        if charges_all is not None and at_dipoles_all is not None:
+            hf.create_dataset("Q", data=charges_all, **comp)  # (n_saved, B, N) atomic charges [e]
+            hf.create_dataset("AD", data=at_dipoles_all, **comp)  # (n_saved, B, N, 3) atomic dipoles [a.u.]
         hf.create_dataset("Ef", data=Ef_np, **comp)  # (B, 3) or (1, 3) if single field tiled
         hf.create_dataset("masses", data=masses_np, **comp)  # (B, N) amu
         hf.create_dataset("dt_fs", data=np.float64(dt))
