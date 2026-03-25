@@ -78,6 +78,13 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--nsteps", type=int, default=200)
     p.add_argument("--printfreq", type=int, default=10, help="Trajectory write interval.")
     p.add_argument(
+        "--log-interval",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Print energies/temp every N MD steps (default: same as --printfreq).",
+    )
+    p.add_argument(
         "--friction",
         type=float,
         default=0.02,
@@ -145,6 +152,7 @@ def main() -> int:
     from ase.io import write
     from ase.io.trajectory import Trajectory
     from ase.io import read as ase_read
+    from ase.md import MDLogger
     from ase.md.langevin import Langevin
     from ase.md.velocitydistribution import (
         MaxwellBoltzmannDistribution,
@@ -238,10 +246,19 @@ def main() -> int:
     tw.write()
     dyn.attach(tw.write, interval=int(args.printfreq))
 
+    log_iv = int(args.log_interval if args.log_interval is not None else args.printfreq)
+    if log_iv > 0:
+        dyn.attach(
+            MDLogger(dyn, atoms, "-", header=True, stress=False),
+            interval=log_iv,
+        )
+
     print(
         f"Running Langevin: T={args.temperature} K, dt={args.timestep} fs, "
         f"nsteps={args.nsteps}, natoms={natoms} (padded), checkpoint={ckpt}"
     )
+    if log_iv > 0:
+        print(f"MD log to stdout every {log_iv} step(s) (ASE MDLogger).")
     dyn.run(int(args.nsteps))
     tw.close()
 
