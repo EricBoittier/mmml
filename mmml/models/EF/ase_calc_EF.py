@@ -48,6 +48,40 @@ def load_config(config_path):
     return config
 
 
+def ef_active_column_count(zb) -> int:
+    """Columns [0, n) covering every Z>0 in each row (trailing pad stripped)."""
+    zb = np.asarray(zb, dtype=np.int32)
+    if zb.ndim == 1:
+        pos = np.where(zb > 0)[0]
+        return int(pos.max()) + 1 if len(pos) else 1
+    ncols = 1
+    for b in range(zb.shape[0]):
+        pos = np.where(zb[b] > 0)[0]
+        if len(pos):
+            ncols = max(ncols, int(pos.max()) + 1)
+    return max(ncols, 1)
+
+
+def ef_sparse_pairwise_indices_active(N: int, z_ref):
+    """Directed e3x pairwise indices with edges through Z<=0 removed.
+
+    Padded batches must not let ghosts appear in message passing or Coulomb;
+    otherwise real atoms see spurious neighbours and energy drifts (~2× vs ASE).
+    """
+    dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(N)
+    dst_idx = jnp.asarray(dst_idx, dtype=jnp.int32)
+    src_idx = jnp.asarray(src_idx, dtype=jnp.int32)
+    zr = jnp.asarray(z_ref, dtype=jnp.int32).reshape(-1)
+    if zr.shape[0] != N:
+        raise ValueError(
+            f"ef_sparse_pairwise_indices_active: len(Z)={zr.shape[0]} != N={N}"
+        )
+    ok = (zr[dst_idx] > 0) & (zr[src_idx] > 0)
+    n_full = int(dst_idx.shape[0])
+    n_kept = int(jnp.sum(ok))
+    return dst_idx[ok], src_idx[ok], n_full, n_kept
+
+
 class AseCalculatorEF(ase_calc.Calculator):
     """ASE calculator for electric field model."""
     
@@ -216,10 +250,10 @@ class AseCalculatorEF(ase_calc.Calculator):
         # Ensure Ef has shape (3,)
         Ef = Ef.reshape(3)
         
-        # Create indices for message passing
-        dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(n_atoms)
-        dst_idx = jnp.asarray(dst_idx, dtype=jnp.int32)
-        src_idx = jnp.asarray(src_idx, dtype=jnp.int32)
+        # Same active-atom graph as batched JAX MD (no edges through Z<=0)
+        dst_idx, src_idx, _nf, _nk = ef_sparse_pairwise_indices_active(
+            n_atoms, atomic_numbers
+        )
         
         # Set up batch (single molecule, batch_size=1)
         batch_size = 1
@@ -292,9 +326,9 @@ class AseCalculatorEF(ase_calc.Calculator):
             raise ValueError("Electric field not provided.")
         Ef = Ef.reshape(3)
 
-        dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(n_atoms)
-        dst_idx = jnp.asarray(dst_idx, dtype=jnp.int32)
-        src_idx = jnp.asarray(src_idx, dtype=jnp.int32)
+        dst_idx, src_idx, _nf, _nk = ef_sparse_pairwise_indices_active(
+            n_atoms, atomic_numbers
+        )
 
         batch_size = 1
         batch_segments = jnp.zeros(n_atoms, dtype=jnp.int32)

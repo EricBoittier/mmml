@@ -34,9 +34,12 @@ from pathlib import Path
 import numpy as np
 import jax
 import jax.numpy as jnp
-import e3x
-
-from mmml.models.EF.ase_calc_EF import load_params, load_config
+from mmml.models.EF.ase_calc_EF import (
+    load_params,
+    load_config,
+    ef_active_column_count,
+    ef_sparse_pairwise_indices_active,
+)
 from mmml.models.EF.training import MessagePassingModel
 from mmml.models.EF.model_functions import energy_and_forces, get_atomic_properties
 
@@ -62,19 +65,23 @@ def _get_masses():
 # Graph construction  (done once, outside JIT)
 # =====================================================================
 
-def build_graph(n_atoms):
-    """Build sparse pairwise indices for a single molecule."""
-    dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(n_atoms)
-    dst_idx = jnp.asarray(dst_idx, dtype=jnp.int32)
-    src_idx = jnp.asarray(src_idx, dtype=jnp.int32)
+def build_graph(z_atomic):
+    """Build sparse pairwise indices for a single molecule (active atoms only).
+
+    ``z_atomic`` is length ``n``; edges through ``Z<=0`` are omitted so padded
+    NPZs match ``AseCalculatorEF`` / batched MD.
+    """
+    z = jnp.asarray(z_atomic, dtype=jnp.int32).reshape(-1)
+    n_atoms = int(z.shape[0])
+    dst_idx, src_idx, _nf, _nk = ef_sparse_pairwise_indices_active(n_atoms, z)
     batch_segments = jnp.zeros(n_atoms, dtype=jnp.int32)
-    offsets = jnp.zeros(1, dtype=jnp.int32)
-    dst_idx_flat = dst_idx + 0
-    src_idx_flat = src_idx + 0
+    dst_idx_flat = dst_idx
+    src_idx_flat = src_idx
     return dict(
         dst_idx=dst_idx, src_idx=src_idx,
         dst_idx_flat=dst_idx_flat, src_idx_flat=src_idx_flat,
         batch_segments=batch_segments,
+        Z_batched=z[None, :],
     )
 
 
@@ -82,7 +89,7 @@ def build_graph(n_atoms):
 # Force function  (JIT-friendly)
 # =====================================================================
 
-def make_force_fn(model, params, graph, n_atoms, Ef):
+def make_force_fn(model, params, graph, Ef):
     """Return a JIT-compiled function  R -> (E, F, mu)  for a fixed graph."""
 
     @functools.partial(jax.jit)
@@ -562,19 +569,38 @@ def main(args=None):
     if args.xyz is not None:
         import ase.io as ase_io
         atoms = ase_io.read(args.xyz)
-        Z = jnp.asarray(atoms.get_atomic_numbers(), dtype=jnp.int32)
+        Z = jnp.asarray(np.asarray(atoms.get_atomic_numbers(), dtype=np.int32).ravel(),
+                        dtype=jnp.int32)
         R0 = jnp.asarray(atoms.get_positions(), dtype=jnp.float32)
+        if R0.ndim != 2 or R0.shape[1] != 3:
+            R0 = jnp.asarray(np.asarray(R0, dtype=np.float64).reshape(-1, 3),
+                             dtype=jnp.float32)
     else:
         print(f"\n  Loading geometry from {args.data} (index {args.index}) ...")
         data = np.load(args.data, allow_pickle=True)
-        Z = jnp.asarray(np.asarray(data['Z'][args.index], dtype=int),
-                         dtype=jnp.int32)
-        R0 = jnp.asarray(np.asarray(data['R'][args.index], dtype=float),
-                          dtype=jnp.float32)
-        if R0.ndim == 3:
-            R0 = R0.squeeze(0)
+        z_np = np.asarray(data["Z"][args.index], dtype=np.int32).ravel()
+        r_np = np.asarray(data["R"][args.index], dtype=np.float64)
+        r_np = np.squeeze(r_np)
+        if r_np.ndim == 3 and r_np.shape[0] == 1:
+            r_np = r_np[0]
+        r_np = np.asarray(r_np, dtype=np.float64).reshape(-1, 3)
+        if r_np.shape[0] != z_np.size:
+            raise ValueError(
+                f"Z length {z_np.size} != R rows {r_np.shape[0]} "
+                f"(use 1D Z and (n,3) positions for this index)"
+            )
+        n_act = ef_active_column_count(z_np)
+        if n_act < z_np.size:
+            print(
+                f"  Trim padding (NPZ): {z_np.size} → {n_act} atom slots "
+                f"(trailing Z<=0)"
+            )
+            z_np = z_np[:n_act]
+            r_np = r_np[:n_act]
+        Z = jnp.asarray(z_np, dtype=jnp.int32)
+        R0 = jnp.asarray(r_np, dtype=jnp.float32)
 
-    N = len(Z)
+    N = int(Z.shape[0])
     print(f"  Atoms       : {N}")
     print(f"  Z           : {np.asarray(Z)}")
 
@@ -610,7 +636,8 @@ def main(args=None):
 
     model_keys = {'features', 'max_degree', 'num_iterations',
                   'num_basis_functions', 'cutoff', 'max_atomic_number',
-                  'include_pseudotensors', 'dipole_field_coupling', 'field_scale'}
+                  'include_pseudotensors', 'dipole_field_coupling', 'field_scale',
+                  'zbl'}
 
     if config_path is not None:
         config = load_config(config_path)
@@ -635,11 +662,10 @@ def main(args=None):
     print(f"  Model       : {mc}")
 
     # ---- Build graph (once) ---------------------------------------------
-    graph = build_graph(N)
-    graph['Z_batched'] = Z[None, :]   # (1, N)
+    graph = build_graph(Z)
 
     # ---- Force function -------------------------------------------------
-    force_fn = make_force_fn(model, params, graph, N, Ef)
+    force_fn = make_force_fn(model, params, graph, Ef)
 
     # Warm up (first call triggers JIT compilation of force_fn)
     print("\n  Warming up force function (JIT compile) ...")
