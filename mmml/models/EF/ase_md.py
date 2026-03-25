@@ -16,6 +16,7 @@ import argparse
 import sys
 from types import SimpleNamespace
 import numpy as np
+import h5py
 import ase
 import ase.io as ase_io
 from ase.io.trajectory import Trajectory
@@ -650,39 +651,39 @@ def main_batched(args):
             print(f"    frame {i+1}/{n_saved}")
     print(f"  Done in {time.perf_counter() - t0:.2f} s")
 
-    # ---- save all replicas to a single .npz ------------------------------
+    # ---- save all replicas to a single .h5 ------------------------------
     R_np = np.asarray(R_traj)            # (n_saved, B, N, 3)
     mu_np = np.asarray(mu_traj)           # (n_saved, B, 3)
     Ef_np = np.asarray(Ef_batched)        # (B, 3) per-replica field when available
 
     out = Path(args.output)
-    npz_path = out.parent / (out.stem + ".npz")
+    h5_path = out.parent / (out.stem + ".h5")
 
     t0 = time.perf_counter()
-    np.savez(
-        npz_path,
-        Z=Z_np,                           # (B, N) atomic numbers (row = replica)
-        R=R_np,                           # (n_saved, B, N, 3)  positions [Å]
-        V=V_np,                           # (n_saved, B, N, 3)  velocities [Å/fs]
-        E=E_np,                           # (n_saved, B)        potential energy [eV]
-        D=mu_np,                          # (n_saved, B, 3)     dipole [a.u.]
-        Q=charges_all,                    # (n_saved, B, N)     atomic charges [e]
-        AD=at_dipoles_all,                # (n_saved, B, N, 3)  atomic dipoles [a.u.]
-        Ef=Ef_np,                         # (B, 3) or (1, 3) if single field tiled
-        masses=masses_np,                 # (B, N) amu
-        dt_fs=np.float64(dt),
-        save_interval=np.int32(si),
-        n_replicas=np.int32(B),
-        thermostat=np.array(args.thermostat),
-        temperature=np.float64(args.temperature),
-    )
-    print(f"\n  Saved {npz_path}  ({n_saved} frames x {B} replicas, "
-          f"{npz_path.stat().st_size / 1e6:.1f} MB, "
+    comp = {"compression": "gzip", "compression_opts": 4}
+    with h5py.File(h5_path, "w") as hf:
+        hf.attrs["mmml_format"] = "ef_md_batched_v1"
+        hf.attrs["thermostat"] = str(args.thermostat)
+        hf.create_dataset("Z", data=Z_np, **comp)  # (B, N) atomic numbers (row = replica)
+        hf.create_dataset("R", data=R_np, **comp)  # (n_saved, B, N, 3)  positions [Å]
+        hf.create_dataset("V", data=V_np, **comp)  # (n_saved, B, N, 3)  velocities [Å/fs]
+        hf.create_dataset("E", data=E_np, **comp)  # (n_saved, B)        potential energy [eV]
+        hf.create_dataset("D", data=mu_np, **comp)  # (n_saved, B, 3)     dipole [a.u.]
+        hf.create_dataset("Q", data=charges_all, **comp)  # (n_saved, B, N)     atomic charges [e]
+        hf.create_dataset("AD", data=at_dipoles_all, **comp)  # (n_saved, B, N, 3)  atomic dipoles [a.u.]
+        hf.create_dataset("Ef", data=Ef_np, **comp)  # (B, 3) or (1, 3) if single field tiled
+        hf.create_dataset("masses", data=masses_np, **comp)  # (B, N) amu
+        hf.create_dataset("dt_fs", data=np.float64(dt))
+        hf.create_dataset("save_interval", data=np.int32(si))
+        hf.create_dataset("n_replicas", data=np.int32(B))
+        hf.create_dataset("temperature", data=np.float64(args.temperature))
+    print(f"\n  Saved {h5_path}  ({n_saved} frames x {B} replicas, "
+          f"{h5_path.stat().st_size / 1e6:.1f} MB, "
           f"{time.perf_counter() - t0:.2f} s)")
 
     print(f"\n{'=' * 70}")
     print(f"  Batched MD complete — {n_saved} frames x {B} replicas.")
-    print(f"  Output: {npz_path}")
+    print(f"  Output: {h5_path}")
     print(f"{'=' * 70}")
 
 
