@@ -17,9 +17,16 @@ conversion = {
 }
 implemented_properties = ["energy", "forces", "dipole"]
 
-def get_ase_calc(params, model, ase_mol, 
-conversion=conversion, 
-implemented_properties = implemented_properties):
+def get_ase_calc(
+    params,
+    model,
+    ase_mol,
+    conversion=conversion,
+    implemented_properties=implemented_properties,
+    *,
+    spooky_charge: float = 0.0,
+    spooky_multiplicity: float = 1.0,
+):
     """Ase calculator implementation for physnetjax model
 
     Args:
@@ -28,6 +35,8 @@ implemented_properties = implemented_properties):
     ase_mol: ase molecule
     conversion: conversion factor for the energy, forces, and dipole
     implemented_properties: implemented properties for the ase calculator
+    spooky_charge: total system charge (broadcast per atom) for spooky EF models.
+    spooky_multiplicity: spin multiplicity (broadcast per atom) for spooky EF models.
 
     Returns:
     Ase calculator implementation for physnetjax model
@@ -42,12 +51,20 @@ implemented_properties = implemented_properties):
     def evaluate_energies_and_forces(atomic_numbers, positions, dst_idx, src_idx):
         if is_spooky_model:
             n_atoms = atomic_numbers.shape[0]
-            atom_mask = jax.numpy.ones((n_atoms,), dtype=jax.numpy.float32)
+            z = atomic_numbers
+            atom_mask = (z > 0).astype(jax.numpy.float32)
             batch_segments = jax.numpy.zeros((n_atoms,), dtype=jax.numpy.int32)
-            batch_mask = jax.numpy.ones_like(dst_idx, dtype=jax.numpy.float32)
-            # Neutral singlets by default: Q=0 and multiplicity=1 per atom.
-            q_atoms = jax.numpy.zeros((n_atoms, 1), dtype=jax.numpy.float32)
-            s_atoms = jax.numpy.ones((n_atoms, 1), dtype=jax.numpy.float32)
+            atom_mask_2d = (z > 0).astype(jax.numpy.float32)[None, :]
+            valid_pairs = (atom_mask_2d[:, dst_idx] > 0) & (
+                atom_mask_2d[:, src_idx] > 0
+            )
+            batch_mask = valid_pairs.astype(jax.numpy.float32).reshape(-1)
+            q_atoms = jax.numpy.full(
+                (n_atoms, 1), spooky_charge, dtype=jax.numpy.float32
+            )
+            s_atoms = jax.numpy.full(
+                (n_atoms, 1), spooky_multiplicity, dtype=jax.numpy.float32
+            )
             return model.apply(
                 params,
                 atomic_numbers=atomic_numbers,
