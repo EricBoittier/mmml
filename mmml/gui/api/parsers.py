@@ -229,6 +229,35 @@ def _get_npz_n_replicas(data: Any) -> int:
     return 1
 
 
+def _npz_z_slice_for_frame(data: Any, frame_index: int, replica_index: int) -> np.ndarray:
+    """
+    Select Z for one frame/replica.
+
+    Batched MD (e.g. ase_md main_batched) stores R as (n_frames, n_replicas, n_atoms, 3)
+    but Z as (n_replicas, n_atoms) — one composition per replica, not per frame.
+    """
+    Z_arr = np.asarray(data['Z'])
+    if Z_arr.ndim <= 1:
+        return Z_arr
+    R = np.asarray(data['R'])
+    fi = int(frame_index)
+    ri = int(replica_index)
+
+    if Z_arr.ndim == 3 and R.ndim == 4:
+        if Z_arr.shape[0] == R.shape[0] and Z_arr.shape[1] == R.shape[1]:
+            fi = min(max(fi, 0), Z_arr.shape[0] - 1)
+            rj = min(max(ri, 0), Z_arr.shape[1] - 1)
+            return Z_arr[fi, rj]
+    if R.ndim == 4 and Z_arr.ndim == 2 and Z_arr.shape[0] == R.shape[1]:
+        rj = min(max(ri, 0), Z_arr.shape[0] - 1)
+        return Z_arr[rj]
+    if Z_arr.ndim >= 2 and Z_arr.shape[0] == R.shape[0]:
+        fi = min(max(fi, 0), Z_arr.shape[0] - 1)
+        return Z_arr[fi]
+    fi = min(max(fi, 0), Z_arr.shape[0] - 1)
+    return Z_arr[fi]
+
+
 class MolecularFileParser:
     """
     Parser for molecular data files.
@@ -536,9 +565,7 @@ class MolecularFileParser:
 
         # Get coordinates and atomic numbers (handle object dtype / symbol Z)
         R = np.asarray(data['R'][index], dtype=np.float64)
-        Z = npz_z_to_atomic_numbers(
-            np.asarray(data['Z'][index] if len(data['Z'].shape) > 1 else data['Z'])
-        )
+        Z = npz_z_to_atomic_numbers(np.asarray(_npz_z_slice_for_frame(data, index, replica_idx)))
         N = None
         raw_N = None
         if 'N' in data:
@@ -1358,7 +1385,7 @@ class MolecularFileParser:
                     frame_F = frame_F.squeeze(axis=0)
                 
                 frame_Z = npz_z_to_atomic_numbers(
-                    np.asarray(Z[i] if len(Z.shape) > 1 else Z)
+                    np.asarray(_npz_z_slice_for_frame(data, i, replica_idx))
                 )
                 mask = frame_Z > 0
                 n_atoms_i = None
@@ -1753,7 +1780,7 @@ class MolecularFileParser:
             for fi in frame_indices:
                 R = np.asarray(data['R'][fi], dtype=np.float64)
                 Z = npz_z_to_atomic_numbers(
-                    np.asarray(data['Z'][fi] if len(data['Z'].shape) > 1 else data['Z'])
+                    np.asarray(_npz_z_slice_for_frame(data, fi, rep_idx))
                 )
                 N = None
                 if 'N' in data:
@@ -1905,7 +1932,7 @@ class MolecularFileParser:
         for i in range(n_frames):
             R = np.asarray(R_raw[i], dtype=np.float64)
             Z = npz_z_to_atomic_numbers(
-                np.asarray(Z_raw[i] if len(Z_raw.shape) > 1 else Z_raw)
+                np.asarray(_npz_z_slice_for_frame(data, i, replica_idx))
             )
             
             # Handle extra dimensions:
