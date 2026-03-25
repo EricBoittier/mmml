@@ -25,7 +25,13 @@ from ase.md.langevin import Langevin
 from ase import units
 from pathlib import Path
 
-from mmml.models.EF.ase_calc_EF import AseCalculatorEF
+from mmml.models.EF.ase_calc_EF import (
+    AseCalculatorEF,
+    ef_active_column_count,
+    ef_sparse_pairwise_indices_active,
+    load_config,
+    load_params,
+)
 
 
 def get_args(**kwargs):
@@ -174,40 +180,6 @@ def get_args(**kwargs):
     return SimpleNamespace(**defaults)
 
 
-def _ef_md_active_columns(zb: np.ndarray) -> int:
-    """Columns [0, n) covering every Z>0 in each row (trailing pad stripped)."""
-    zb = np.asarray(zb, dtype=np.int32)
-    if zb.ndim == 1:
-        pos = np.where(zb > 0)[0]
-        return int(pos.max()) + 1 if len(pos) else 1
-    ncols = 1
-    for b in range(zb.shape[0]):
-        pos = np.where(zb[b] > 0)[0]
-        if len(pos):
-            ncols = max(ncols, int(pos.max()) + 1)
-    return max(ncols, 1)
-
-
-def _ef_md_pairwise_indices_active(N: int, z_ref):
-    """Directed pairwise indices, dropping any edge with an endpoint Z<=0.
-
-    Matches a graph built only on real atoms (e.g. ASE). The full
-    ``N*(N-1)`` list still includes padding sites when columns are unused
-    but not trimmed, which skews message passing and Coulomb.
-    """
-    import e3x
-    import jax.numpy as jnp
-
-    zr = jnp.asarray(z_ref, dtype=jnp.int32)
-    dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(N)
-    dst_idx = jnp.asarray(dst_idx, dtype=jnp.int32)
-    src_idx = jnp.asarray(src_idx, dtype=jnp.int32)
-    ok = (zr[dst_idx] > 0) & (zr[src_idx] > 0)
-    n_full = int(dst_idx.shape[0])
-    n_kept = int(jnp.sum(ok))
-    return dst_idx[ok], src_idx[ok], n_full, n_kept
-
-
 def main_batched(args):
     """Run B independent MD replicas in one JIT-compiled GPU batch.
 
@@ -226,7 +198,6 @@ def main_batched(args):
     import functools
     from ase.data import atomic_masses as _ase_masses
     from ase.calculators.singlepoint import SinglePointCalculator
-    from mmml.models.EF.ase_calc_EF import load_params, load_config
     from mmml.models.EF.training import MessagePassingModel
     from mmml.models.EF.model_functions import energy_and_forces
 
@@ -286,7 +257,7 @@ def main_batched(args):
     # include ghost pairs in message passing and extra atomic energies,
     # which shifts the potential vs single-molecule MD.
     zb_np = np.asarray(Z_batched)
-    n_active = _ef_md_active_columns(zb_np)
+    n_active = ef_active_column_count(zb_np)
     n_full = zb_np.shape[1]
     if n_active < n_full:
         print(
@@ -346,7 +317,7 @@ def main_batched(args):
     model_keys = {
         "features", "max_degree", "num_iterations", "num_basis_functions",
         "cutoff", "max_atomic_number", "include_pseudotensors",
-        "dipole_field_coupling", "field_scale",
+        "dipole_field_coupling", "field_scale", "zbl",
     }
     if config_path is not None:
         config = load_config(config_path)
@@ -375,7 +346,7 @@ def main_batched(args):
             "uses replica 0 only — use distinct geometries only with identical "
             "Z padding patterns, or n-replicas=1."
         )
-    dst_idx, src_idx, n_edge_full, n_edge_kept = _ef_md_pairwise_indices_active(
+    dst_idx, src_idx, n_edge_full, n_edge_kept = ef_sparse_pairwise_indices_active(
         N, zb_chk[0]
     )
     if n_edge_kept < n_edge_full:
@@ -741,10 +712,20 @@ def main(args=None):
     else:
         print(f"\nLoading initial geometry from {args.data} (index={args.index})...")
         dataset = np.load(args.data, allow_pickle=True)
-        Z = dataset["Z"][args.index]
-        R = dataset["R"][args.index]
+        Z = np.asarray(dataset["Z"][args.index], dtype=np.int32).ravel()
+        R = np.asarray(dataset["R"][args.index], dtype=np.float64)
+        R = np.squeeze(R)
         if R.ndim == 3 and R.shape[0] == 1:
-            R = R.squeeze(0)
+            R = R[0]
+        R = np.asarray(R, dtype=np.float64).reshape(-1, 3)
+        n_active = ef_active_column_count(Z)
+        if n_active < Z.size:
+            print(
+                f"  Trim padding (NPZ): {Z.size} → {n_active} atom slots "
+                f"(trailing Z<=0; matches JAX / calculator graph)"
+            )
+            Z = Z[:n_active]
+            R = R[:n_active]
         atoms = ase.Atoms(numbers=Z, positions=R)
 
     # Set electric field
