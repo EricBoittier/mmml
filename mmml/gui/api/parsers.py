@@ -236,10 +236,10 @@ def _npz_z_slice_for_frame(data: Any, frame_index: int, replica_index: int) -> n
     Batched MD (e.g. ase_md main_batched) stores R as (n_frames, n_replicas, n_atoms, 3)
     but Z as (n_replicas, n_atoms) — one composition per replica, not per frame.
     """
-    Z_arr = np.asarray(data['Z'])
+    Z_arr = data['Z']
     if Z_arr.ndim <= 1:
-        return Z_arr
-    R = np.asarray(data['R'])
+        return np.asarray(Z_arr)
+    R = data['R']
     fi = int(frame_index)
     ri = int(replica_index)
 
@@ -247,15 +247,15 @@ def _npz_z_slice_for_frame(data: Any, frame_index: int, replica_index: int) -> n
         if Z_arr.shape[0] == R.shape[0] and Z_arr.shape[1] == R.shape[1]:
             fi = min(max(fi, 0), Z_arr.shape[0] - 1)
             rj = min(max(ri, 0), Z_arr.shape[1] - 1)
-            return Z_arr[fi, rj]
+            return np.asarray(Z_arr[fi, rj])
     if R.ndim == 4 and Z_arr.ndim == 2 and Z_arr.shape[0] == R.shape[1]:
         rj = min(max(ri, 0), Z_arr.shape[0] - 1)
-        return Z_arr[rj]
+        return np.asarray(Z_arr[rj])
     if Z_arr.ndim >= 2 and Z_arr.shape[0] == R.shape[0]:
         fi = min(max(fi, 0), Z_arr.shape[0] - 1)
-        return Z_arr[fi]
+        return np.asarray(Z_arr[fi])
     fi = min(max(fi, 0), Z_arr.shape[0] - 1)
-    return Z_arr[fi]
+    return np.asarray(Z_arr[fi])
 
 
 class MolecularFileParser:
@@ -274,6 +274,21 @@ class MolecularFileParser:
         self._metadata = None
         self._frame_cache: Dict[tuple, FrameData] = {}  # Cache for computed frames
         self._max_cache_size = 100  # Maximum frames to cache
+        # Per-replica Z (atomic numbers) for NPZ layouts where Z is (n_replicas, n_atoms)
+        self._npz_z_int_by_replica: Optional[Dict[int, np.ndarray]] = None
+    
+    def _npz_z_as_ints(self, data: Any, frame_index: int, replica_index: int) -> np.ndarray:
+        """Z as int atomic numbers; caches per-replica Z for batched MD (same Z every frame)."""
+        R = data['R']
+        Z_np = data['Z']
+        if R.ndim == 4 and Z_np.ndim == 2 and Z_np.shape[0] == R.shape[1]:
+            ri = min(max(int(replica_index), 0), Z_np.shape[0] - 1)
+            if self._npz_z_int_by_replica is None:
+                self._npz_z_int_by_replica = {}
+            if ri not in self._npz_z_int_by_replica:
+                self._npz_z_int_by_replica[ri] = npz_z_to_atomic_numbers(np.asarray(Z_np[ri]))
+            return self._npz_z_int_by_replica[ri]
+        return npz_z_to_atomic_numbers(np.asarray(_npz_z_slice_for_frame(data, frame_index, replica_index)))
     
     def _detect_file_type(self) -> str:
         """Detect file type from extension."""
@@ -560,12 +575,12 @@ class MolecularFileParser:
         """Get frame from NPZ file."""
         data = self._data
 
-        n_replicas = _get_npz_n_replicas(data)
+        n_replicas = self.get_metadata().n_replicas
         replica_idx = min(max(replica_index, 0), max(n_replicas - 1, 0))
 
         # Get coordinates and atomic numbers (handle object dtype / symbol Z)
         R = np.asarray(data['R'][index], dtype=np.float64)
-        Z = npz_z_to_atomic_numbers(np.asarray(_npz_z_slice_for_frame(data, index, replica_idx)))
+        Z = self._npz_z_as_ints(data, index, replica_idx)
         N = None
         raw_N = None
         if 'N' in data:
@@ -1384,9 +1399,7 @@ class MolecularFileParser:
                 while frame_F.ndim > 2 and frame_F.shape[0] == 1:
                     frame_F = frame_F.squeeze(axis=0)
                 
-                frame_Z = npz_z_to_atomic_numbers(
-                    np.asarray(_npz_z_slice_for_frame(data, i, replica_idx))
-                )
+                frame_Z = self._npz_z_as_ints(data, i, replica_idx)
                 mask = frame_Z > 0
                 n_atoms_i = None
                 if N is not None:
@@ -1779,9 +1792,7 @@ class MolecularFileParser:
             points: List[float] = []
             for fi in frame_indices:
                 R = np.asarray(data['R'][fi], dtype=np.float64)
-                Z = npz_z_to_atomic_numbers(
-                    np.asarray(_npz_z_slice_for_frame(data, fi, rep_idx))
-                )
+                Z = self._npz_z_as_ints(data, fi, rep_idx)
                 N = None
                 if 'N' in data:
                     arr_N = data['N']
@@ -1931,9 +1942,7 @@ class MolecularFileParser:
         coords_list = []
         for i in range(n_frames):
             R = np.asarray(R_raw[i], dtype=np.float64)
-            Z = npz_z_to_atomic_numbers(
-                np.asarray(_npz_z_slice_for_frame(data, i, replica_idx))
-            )
+            Z = self._npz_z_as_ints(data, i, replica_idx)
             
             # Handle extra dimensions:
             # - (1, n_atoms, 3) -> (n_atoms, 3)
