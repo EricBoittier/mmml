@@ -44,9 +44,12 @@ from mmml.models.physnetjax.physnetjax.data.read_h5 import (
 )
 from mmml.models.physnetjax.physnetjax.models.spooky_model import EF as SpookyEF
 from mmml.models.physnetjax.physnetjax.training.spooky_training import (
+    bucket_flat_molecule_indices_by_natoms,
     build_spooky_batch_from_flat_data,
     build_spooky_batch_from_padded_arrays,
+    iter_homogeneous_natoms_flat_batches,
     make_spooky_train_step,
+    pick_flat_init_indices_homogeneous,
     restart_params_only,
 )
 from flax.training import train_state
@@ -103,6 +106,16 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Use zero-padded (n_mol, natoms, …) HDF5 arrays and padded batching. "
             "Default is flat concatenated atoms with mol_offsets and per-molecule pair lists."
+        ),
+    )
+    p.add_argument(
+        "--flat-bucketing",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Flat HDF5 only (default: on): each batch contains only molecules with the "
+            "same atom count, so JAX sees stable shapes (fewer XLA recompiles). "
+            "Use --no-flat-bucketing for fully random mixing."
         ),
     )
     return p.parse_args()
@@ -163,6 +176,28 @@ def main(args: argparse.Namespace):
     n_valid = len(valid_data["E"])
     layout = "legacy padded" if args.legacy_padded else "flat (default)"
     print(f"\nTrain: {n_train}, Valid: {n_valid}, natoms: {natoms}  [{layout}]")
+    use_flat_bucketing = (not args.legacy_padded) and args.flat_bucketing
+    bucket_map = None
+    if use_flat_bucketing:
+        bucket_map = bucket_flat_molecule_indices_by_natoms(train_data["N"])
+        n_full = sum(len(bucket_map[k]) // args.batch_size for k in bucket_map)
+        if n_full == 0:
+            raise ValueError(
+                f"No atom-count bucket has at least batch_size={args.batch_size} structures. "
+                "Lower --batch-size or use --no-flat-bucketing."
+            )
+        n_remain = n_train - sum(
+            (len(bucket_map[k]) // args.batch_size) * args.batch_size for k in bucket_map
+        )
+        print(
+            f"Flat bucketing: {len(bucket_map)} atom-count buckets, "
+            f"~{n_full} full batches/epoch (~{n_remain} samples/epoch not in a full batch)."
+        )
+    elif not args.legacy_padded:
+        print(
+            "Note: --no-flat-bucketing mixes molecule sizes → frequent XLA recompiles. "
+            "Prefer default --flat-bucketing or --legacy-padded."
+        )
 
     output_dir = Path(args.output_dir).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -236,7 +271,10 @@ def main(args: argparse.Namespace):
             )
         return build_spooky_batch_from_flat_data(train_data, mol_idx)
 
-    init_batch = _make_batch(np.arange(init_bs, dtype=np.int64))
+    if use_flat_bucketing and bucket_map is not None:
+        init_batch = _make_batch(pick_flat_init_indices_homogeneous(bucket_map, init_bs))
+    else:
+        init_batch = _make_batch(np.arange(init_bs, dtype=np.int64))
 
     if restored_params is not None:
         params = restored_params
@@ -270,16 +308,26 @@ def main(args: argparse.Namespace):
     steps_per_epoch = max(n_train // batch_size, 1)
 
     for epoch in range(args.num_epochs):
-        perm = rng.permutation(n_train)
         epoch_loss = 0.0
         n_batches = 0
-
-        for b in range(steps_per_epoch):
-            idx = perm[b * batch_size : (b + 1) * batch_size]
-            batch = _make_batch(idx)
-            state, loss_val, metrics = train_step(state, batch)
-            epoch_loss += float(loss_val)
-            n_batches += 1
+        if use_flat_bucketing and bucket_map is not None:
+            for idx in iter_homogeneous_natoms_flat_batches(
+                bucket_map, batch_size, rng, drop_partial=True
+            ):
+                batch = _make_batch(idx)
+                state, loss_val, metrics = train_step(state, batch)
+                epoch_loss += float(loss_val)
+                n_batches += 1
+            if n_batches == 0:
+                raise RuntimeError("Flat bucketing produced no batches this epoch.")
+        else:
+            perm = rng.permutation(n_train)
+            for b in range(steps_per_epoch):
+                idx = perm[b * batch_size : (b + 1) * batch_size]
+                batch = _make_batch(idx)
+                state, loss_val, metrics = train_step(state, batch)
+                epoch_loss += float(loss_val)
+                n_batches += 1
 
         mean_loss = epoch_loss / n_batches
         print(f"Epoch {epoch + 1}/{args.num_epochs}  loss={mean_loss:.6f}")
