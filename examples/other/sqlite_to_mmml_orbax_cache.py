@@ -30,6 +30,12 @@ Usage
   python examples/other/sqlite_to_mmml_orbax_cache.py /path/to/data.db \\
     --cache-dir /path/to/.sqlite_cache
 
+  # Per-atom reference subtraction (binding-style energies), PBE0/def2-TZVP table
+  python examples/other/sqlite_to_mmml_orbax_cache.py data.db \\
+    --atomic-ref pbe0/def2-tzvp
+
+  python examples/other/sqlite_to_mmml_orbax_cache.py --list-atomic-refs
+
 Restore in Python::
 
   import orbax.checkpoint as ocp
@@ -44,15 +50,21 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import sys
+from collections import Counter
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
-try:
-    import apsw
-except ImportError as e:
-    raise ImportError("This script requires apsw: pip install apsw") from e
+
+def _import_apsw():
+    """Import APSW only when opening a database (so ``--list-atomic-refs`` works without it)."""
+    try:
+        import apsw
+    except ImportError as e:
+        raise ImportError("This script requires apsw: pip install apsw") from e
+    return apsw
 
 
 def _deblob(buffer: bytes, dtype: np.dtype, shape: Optional[Sequence[int]] = None) -> np.ndarray:
@@ -78,6 +90,189 @@ def _unpack_data_tuple(data: Tuple[Any, ...]) -> Tuple[np.ndarray, ...]:
     else:
         d = _deblob(data[7], dtype=np.float32, shape=(1, 3))
     return q, s, z, r, e, f, d
+
+
+def scan_sqlite_dataset_stats(
+    database: Path,
+    natoms: int,
+    max_structures: Optional[int] = None,
+    charge_filter: Optional[float] = None,
+    spin_mode: str = "unpaired_plus_one",
+) -> Dict[str, Any]:
+    """
+    Single pass over the SQLite ``data`` table with the same filters as loading.
+
+    Returns counts, per-structure arrays (accepted only), and atom-element histograms.
+    Energies are **raw** from the DB (eV), before any atomic-reference subtraction.
+    """
+    apsw = _import_apsw()
+    conn = apsw.Connection(str(database), flags=apsw.SQLITE_OPEN_READONLY)
+    cur = conn.cursor()
+
+    es: List[float] = []
+    ns: List[int] = []
+    qs: List[float] = []
+    ss: List[float] = []
+    elem_counter: Counter[int] = Counter()
+    n_skipped_large = 0
+    n_charge_filtered = 0
+    n_rows_seen = 0
+    n_accepted = 0
+
+    for row in cur.execute("SELECT * FROM data ORDER BY id"):
+        n_rows_seen += 1
+        if max_structures is not None and n_accepted >= max_structures:
+            break
+        q, s, z, r, e, f, d = _unpack_data_tuple(row)
+        n_atoms = int(z.shape[0])
+        if n_atoms > natoms:
+            n_skipped_large += 1
+            continue
+
+        charge = float(q[0])
+        if charge_filter is not None and abs(charge - charge_filter) > 1e-6:
+            n_charge_filtered += 1
+            continue
+
+        n_accepted += 1
+        es.append(float(e[0]))
+        ns.append(n_atoms)
+        qs.append(charge)
+        ss.append(_spin_for_mmml(float(s[0]), spin_mode))
+        for zi in np.asarray(z, dtype=np.int32).ravel():
+            zn = int(zi)
+            if zn > 0:
+                elem_counter[zn] += 1
+
+    return {
+        "database": str(database.resolve()),
+        "natoms_cap": natoms,
+        "max_structures": max_structures,
+        "charge_filter": charge_filter,
+        "spin_mode": spin_mode,
+        "n_rows_seen": n_rows_seen,
+        "n_structures": len(es),
+        "n_skipped_large": n_skipped_large,
+        "n_charge_filtered": n_charge_filtered,
+        "E_eV": np.asarray(es, dtype=np.float64),
+        "N": np.asarray(ns, dtype=np.int32),
+        "Q": np.asarray(qs, dtype=np.float64),
+        "S": np.asarray(ss, dtype=np.float64),
+        "element_counts": elem_counter,
+    }
+
+
+def print_sqlite_dataset_stats(stats: Dict[str, Any], *, title: str = "SQLite dataset (filters applied)") -> None:
+    """Pretty-print output from :func:`scan_sqlite_dataset_stats`."""
+    print(f"\n{'=' * 60}\n{title}\n{'=' * 60}", flush=True)
+    print(f"Database: {stats['database']}", flush=True)
+    print(f"Max atoms cap (natoms): {stats['natoms_cap']}", flush=True)
+    if stats.get("max_structures") is not None:
+        print(f"max_structures limit: {stats['max_structures']}", flush=True)
+    if stats.get("charge_filter") is not None:
+        print(f"charge_filter: {stats['charge_filter']}", flush=True)
+    print(f"Rows scanned in `data` table: {stats['n_rows_seen']}", flush=True)
+    print(f"Accepted structures: {stats['n_structures']}", flush=True)
+    print(f"Skipped (n_atoms > natoms cap): {stats['n_skipped_large']}", flush=True)
+    print(f"Skipped (charge filter): {stats['n_charge_filtered']}", flush=True)
+
+    E = stats["E_eV"]
+    N = stats["N"]
+    if E.size == 0:
+        print("No accepted structures — nothing to summarize.", flush=True)
+        return
+
+    print("\nEnergy E [eV] (raw, from DB):", flush=True)
+    print(
+        f"  min={float(E.min()):.6f}  max={float(E.max()):.6f}  "
+        f"mean={float(E.mean()):.6f}  std={float(E.std()):.6f}",
+        flush=True,
+    )
+
+    print("\nAtom count N per structure:", flush=True)
+    print(
+        f"  min={int(N.min())}  max={int(N.max())}  mean={float(N.mean()):.4f}",
+        flush=True,
+    )
+    uniq, counts = np.unique(N, return_counts=True)
+    top = sorted(zip(uniq.tolist(), counts.tolist()), key=lambda x: -x[1])[:15]
+    print("  histogram (N -> count): " + ", ".join(f"{int(n)}:{c}" for n, c in top), flush=True)
+    if len(top) < len(uniq):
+        print(f"  ({len(uniq)} distinct N values; showing top {len(top)} by count)", flush=True)
+
+    print("\nTotal charge Q:", flush=True)
+    print(
+        f"  min={float(stats['Q'].min()):.6f}  max={float(stats['Q'].max()):.6f}",
+        flush=True,
+    )
+
+    print("\nSpin S (after spin-mode mapping):", flush=True)
+    print(
+        f"  min={float(stats['S'].min()):.6f}  max={float(stats['S'].max()):.6f}",
+        flush=True,
+    )
+
+    ec: Counter[int] = stats["element_counts"]
+    try:
+        from ase.data import chemical_symbols as _ase_sym
+    except ImportError:
+        print("\nAtom-type counts (Z):", flush=True)
+        for z in sorted(ec.keys()):
+            print(f"  Z={z}: {ec[z]}", flush=True)
+    else:
+        print("\nAtom-type counts (element × occurrences in all structures):", flush=True)
+        for z in sorted(ec.keys()):
+            sym = _ase_sym[z] if z < len(_ase_sym) else "?"
+            print(f"  {sym} (Z={z}): {ec[z]}", flush=True)
+
+
+def _apply_atomic_reference_to_energies_eV(
+    data: Dict[str, np.ndarray],
+    level: str,
+) -> None:
+    """
+    In-place: ``E`` -= sum E_ref(atom) per molecule, using ``mmml.data.atomic_references``.
+
+    Expects ``E`` in eV. References are loaded in eV for subtraction.
+    """
+    from mmml.data.atomic_references import get_atomic_reference_dict
+
+    refs = get_atomic_reference_dict(level=level, unit="ev", charge_state=0)
+
+    if "mol_offsets" in data:
+        E = data["E"].reshape(-1).astype(np.float64, copy=True)
+        mo = np.asarray(data["mol_offsets"], dtype=np.int64)
+        Zf = np.asarray(data["Z"], dtype=np.int32)
+        for i in range(len(E)):
+            a0, a1 = int(mo[i]), int(mo[i + 1])
+            for zi in Zf[a0:a1]:
+                zn = int(zi)
+                if zn <= 0:
+                    continue
+                if zn not in refs:
+                    raise ValueError(
+                        f"No atomic reference energy for atomic number Z={zn} at level "
+                        f"'{level}'. Choose another --atomic-ref or extend the JSON table."
+                    )
+                E[i] -= refs[zn]
+        data["E"] = E.reshape(-1, 1)
+    else:
+        E = data["E"].reshape(-1).astype(np.float64, copy=True)
+        Z = np.asarray(data["Z"], dtype=np.int32)
+        N = np.asarray(data["N"], dtype=np.int32).reshape(-1)
+        for i in range(len(E)):
+            n = int(N[i])
+            for j in range(n):
+                zn = int(Z[i, j])
+                if zn <= 0:
+                    continue
+                if zn not in refs:
+                    raise ValueError(
+                        f"No atomic reference energy for atomic number Z={zn} at level "
+                        f"'{level}'. Choose another --atomic-ref or extend the JSON table."
+                    )
+                E[i] -= refs[zn]
+        data["E"] = E.reshape(-1, 1)
 
 
 def _spin_for_mmml(s_raw: float, mode: str) -> float:
@@ -107,6 +302,7 @@ def sqlite_rows_to_mmml_arrays(
     """
     Load all structures from SQLite into one padded dict (MMML / load_h5 format).
     """
+    apsw = _import_apsw()
     conn = apsw.Connection(str(database), flags=apsw.SQLITE_OPEN_READONLY)
     cur = conn.cursor()
 
@@ -210,6 +406,7 @@ def sqlite_rows_to_mmml_flat_arrays(
     No padding: ``R``, ``Z``, ``F`` are concatenated over molecules; ``mol_offsets``
     indexes each structure, same as HDF5 flat loading in ``read_h5.py``.
     """
+    apsw = _import_apsw()
     conn = apsw.Connection(str(database), flags=apsw.SQLITE_OPEN_READONLY)
     cur = conn.cursor()
 
@@ -307,9 +504,12 @@ def _cache_key_sqlite(
     max_structures: Optional[int],
     charge_filter: Optional[float],
     spin_mode: str,
+    atomic_ref: Optional[str],
 ) -> str:
+    ar = atomic_ref if atomic_ref else ""
     parts = (
-        f"{layout}|{filepath.resolve()}|{natoms}|{max_structures}|{charge_filter}|{spin_mode}"
+        f"{layout}|{filepath.resolve()}|{natoms}|{max_structures}|{charge_filter}|"
+        f"{spin_mode}|{ar}"
     )
     return hashlib.sha256(parts.encode()).hexdigest()[:16]
 
@@ -322,11 +522,12 @@ def _get_cache_dir(
     max_structures: Optional[int],
     charge_filter: Optional[float],
     spin_mode: str,
+    atomic_ref: Optional[str] = None,
 ) -> Path:
     if cache_dir is None:
         cache_dir = filepath.parent / ".sqlite_cache"
     h = _cache_key_sqlite(
-        filepath, layout, natoms, max_structures, charge_filter, spin_mode
+        filepath, layout, natoms, max_structures, charge_filter, spin_mode, atomic_ref
     )
     if layout == "flat":
         return cache_dir / f"{filepath.stem}_flat_{h}"
@@ -337,6 +538,7 @@ def _get_cache_dir(
 
 def max_atoms_in_sqlite(database: Path) -> int:
     """Single pass: maximum atom count from Z blobs (for --natoms auto)."""
+    apsw = _import_apsw()
     conn = apsw.Connection(str(database), flags=apsw.SQLITE_OPEN_READONLY)
     cur = conn.cursor()
     m = 0
@@ -355,6 +557,7 @@ def load_or_save_sqlite_orbax_cache(
     charge_filter: Optional[float] = None,
     spin_mode: str = "unpaired_plus_one",
     layout: str = "flat",
+    atomic_ref: Optional[str] = None,
     cache: bool = True,
     verbose: bool = False,
 ) -> Tuple[Dict[str, np.ndarray], Path]:
@@ -366,6 +569,9 @@ def load_or_save_sqlite_orbax_cache(
     layout
         ``\"flat\"`` (default): concatenated atoms + ``mol_offsets``, no padding.
         ``\"padded\"``: zero-padded ``(n_mol, natoms, …)`` arrays.
+    atomic_ref
+        If set (e.g. ``\"pbe0/def2-tzvp\"``), subtract per-atom reference energies
+        from ``E`` (eV) using :mod:`mmml.data.atomic_references` before saving.
 
     Returns (data dict, cache path used or that would be used).
     """
@@ -383,6 +589,7 @@ def load_or_save_sqlite_orbax_cache(
         max_structures,
         charge_filter,
         spin_mode,
+        atomic_ref,
     )
     checkpointer = orbax.checkpoint.PyTreeCheckpointer()
 
@@ -412,6 +619,17 @@ def load_or_save_sqlite_orbax_cache(
             verbose=verbose,
         )
 
+    if atomic_ref:
+        if verbose:
+            print(f"Subtracting atomic reference energies (level={atomic_ref!r}, unit=eV)")
+        _apply_atomic_reference_to_energies_eV(data, atomic_ref)
+        if verbose:
+            E = data["E"].reshape(-1)
+            print(
+                f"  E after subtraction [eV]: min={float(E.min()):.6f} max={float(E.max()):.6f} "
+                f"mean={float(E.mean()):.6f} std={float(E.std()):.6f}"
+            )
+
     if cache:
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         if verbose:
@@ -428,7 +646,13 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description="Build MMML-compatible Orbax dataset cache from a QCML SQLite DB."
     )
-    p.add_argument("database", type=str, help="Path to .sqlite / .db file")
+    p.add_argument(
+        "database",
+        type=str,
+        nargs="?",
+        default=None,
+        help="Path to .sqlite / .db file (not required with --list-atomic-refs).",
+    )
     p.add_argument(
         "--natoms",
         type=int,
@@ -472,12 +696,48 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Only print summary (still loads DB; use with small tests).",
     )
+    p.add_argument(
+        "--atomic-ref",
+        type=str,
+        default=None,
+        metavar="LEVEL",
+        help=(
+            "Subtract per-atom reference energies from E (eV) using mmml.data.atomic_references "
+            '(e.g. "pbe0/def2-tzvp"). Must cover every element in the dataset. '
+            "See also --list-atomic-refs."
+        ),
+    )
+    p.add_argument(
+        "--list-atomic-refs",
+        action="store_true",
+        help="List available reference level strings from the JSON table and exit.",
+    )
+    p.add_argument(
+        "--skip-stats",
+        action="store_true",
+        help="Do not print dataset statistics before loading/building the cache.",
+    )
     p.add_argument("-v", "--verbose", action="store_true")
     return p.parse_args()
 
 
 def main() -> None:
     args = parse_args()
+    if args.list_atomic_refs:
+        from mmml.data.atomic_references import list_reference_levels
+
+        levels = list_reference_levels()
+        print("Available --atomic-ref levels (subset):")
+        for lev in sorted(levels):
+            print(f"  {lev}")
+        print(f"\nTotal: {len(levels)} levels.")
+        sys.exit(0)
+
+    if args.database is None:
+        raise SystemExit(
+            "error: database path is required unless --list-atomic-refs is passed"
+        )
+
     db = Path(args.database).resolve()
     if not db.is_file():
         raise FileNotFoundError(db)
@@ -489,6 +749,22 @@ def main() -> None:
             print(f"Auto natoms (max atoms in DB) = {natoms}")
 
     cache_dir = Path(args.cache_dir).resolve() if args.cache_dir else None
+
+    if not args.skip_stats:
+        stats = scan_sqlite_dataset_stats(
+            db,
+            natoms=natoms,
+            max_structures=args.max_structures,
+            charge_filter=args.charge_filter,
+            spin_mode=args.spin_mode,
+        )
+        print_sqlite_dataset_stats(stats, title="Pre-cache scan (raw DB energies, eV)")
+        if args.atomic_ref:
+            print(
+                f"\nAtomic-reference subtraction will be applied when building arrays: "
+                f"level={args.atomic_ref!r} (neutral atoms, energies in eV).\n",
+                flush=True,
+            )
 
     if args.no_save:
         if args.layout == "flat":
@@ -509,6 +785,14 @@ def main() -> None:
                 spin_mode=args.spin_mode,
                 verbose=args.verbose,
             )
+        if args.atomic_ref:
+            _apply_atomic_reference_to_energies_eV(data, args.atomic_ref)
+            E = data["E"].reshape(-1)
+            print(
+                f"E after atomic ref [eV]: min={float(E.min()):.6f} max={float(E.max()):.6f} "
+                f"mean={float(E.mean()):.6f} std={float(E.std()):.6f}\n",
+                flush=True,
+            )
         cache_path = _get_cache_dir(
             db,
             cache_dir,
@@ -517,6 +801,7 @@ def main() -> None:
             args.max_structures,
             args.charge_filter,
             args.spin_mode,
+            args.atomic_ref,
         )
         print(f"Would write cache to: {cache_path}")
     else:
@@ -528,6 +813,7 @@ def main() -> None:
             charge_filter=args.charge_filter,
             spin_mode=args.spin_mode,
             layout=args.layout,
+            atomic_ref=args.atomic_ref,
             cache=True,
             verbose=args.verbose,
         )
