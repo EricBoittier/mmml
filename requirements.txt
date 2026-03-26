@@ -4,6 +4,7 @@ pandas>=2.0
 matplotlib>=3.8
 
 pyyaml
+apsw>=3.45.0
 
 jax[cuda12]
 
