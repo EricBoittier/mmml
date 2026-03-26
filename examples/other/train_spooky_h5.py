@@ -3,8 +3,8 @@
 Example: Train the spooky PhysNetJAX model on qcell HDF5 data.
 
 This script demonstrates loading qcell_*.h5 files (single or multiple) via
-prepare_h5_datasets and training the spooky EF model, which uses system charge
-and spin multiplicity as inputs.
+prepare_h5_datasets_flat (concatenated atoms, no padding) and training the
+spooky EF model, which uses system charge and spin multiplicity as inputs.
 
 Prerequisites:
   - jax, flax, optax, e3x, h5py
@@ -34,10 +34,10 @@ import optax
 from flax.training import orbax_utils
 import orbax.checkpoint as ocp
 
-from mmml.models.physnetjax.physnetjax.data.read_h5 import prepare_h5_datasets
+from mmml.models.physnetjax.physnetjax.data.read_h5 import prepare_h5_datasets_flat
 from mmml.models.physnetjax.physnetjax.models.spooky_model import EF as SpookyEF
 from mmml.models.physnetjax.physnetjax.training.spooky_training import (
-    build_spooky_batch_from_padded_arrays,
+    build_spooky_batch_from_flat_data,
     make_spooky_train_step,
     restart_params_only,
 )
@@ -118,7 +118,7 @@ def main(args: argparse.Namespace):
     key = jax.random.PRNGKey(42)
 
     # Load data (supports single or multi-file)
-    train_data, valid_data, natoms = prepare_h5_datasets(
+    train_data, valid_data, natoms = prepare_h5_datasets_flat(
         key,
         filepath=filepath_arg,
         train_size=args.train_size,
@@ -130,8 +130,8 @@ def main(args: argparse.Namespace):
         verbose=args.verbose,
     )
 
-    n_train = len(train_data["R"])
-    n_valid = len(valid_data["R"])
+    n_train = len(train_data["E"])
+    n_valid = len(valid_data["E"])
     print(f"\nTrain: {n_train}, Valid: {n_valid}, natoms: {natoms}")
 
     output_dir = Path(args.output_dir).resolve()
@@ -193,13 +193,9 @@ def main(args: argparse.Namespace):
 
     batch_size = args.batch_size
     init_bs = min(batch_size, n_train)
-    init_batch = build_spooky_batch_from_padded_arrays(
-        train_data["Z"][:init_bs],
-        train_data["R"][:init_bs],
-        train_data["E"][:init_bs],
-        train_data["F"][:init_bs],
-        train_data["Q"][:init_bs].flatten(),
-        train_data["S"][:init_bs].flatten(),
+    init_batch = build_spooky_batch_from_flat_data(
+        train_data,
+        np.arange(init_bs, dtype=np.int64),
     )
 
     if restored_params is not None:
@@ -240,14 +236,7 @@ def main(args: argparse.Namespace):
 
         for b in range(steps_per_epoch):
             idx = perm[b * batch_size : (b + 1) * batch_size]
-            batch = build_spooky_batch_from_padded_arrays(
-                train_data["Z"][idx],
-                train_data["R"][idx],
-                train_data["E"][idx],
-                train_data["F"][idx],
-                train_data["Q"][idx].flatten(),
-                train_data["S"][idx].flatten(),
-            )
+            batch = build_spooky_batch_from_flat_data(train_data, idx)
             state, loss_val, metrics = train_step(state, batch)
             epoch_loss += float(loss_val)
             n_batches += 1

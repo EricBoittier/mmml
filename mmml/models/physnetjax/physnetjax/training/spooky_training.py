@@ -29,11 +29,12 @@ We map this to the spooky model inputs:
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Tuple, Union
 
 import e3x
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 
 def restart_params_only(
@@ -246,12 +247,107 @@ def build_spooky_batch_from_padded_arrays(
     }
 
 
+def build_spooky_batch_from_flat_data(
+    data_dict: Dict[str, Any],
+    mol_indices: Union[np.ndarray, Any],
+) -> Dict[str, Any]:
+    """
+    Build a spooky batch from flat storage (``mol_offsets`` + concatenated ``R``/``Z``/``F``).
+
+    Pair indices use :func:`e3x.ops.sparse_pairwise_indices` per molecule with real atom
+    counts only (no padding). Use with :func:`prepare_h5_datasets_flat` output.
+
+    Parameters
+    ----------
+    data_dict
+        Must contain ``mol_offsets``, ``R``, ``Z``, ``F``, ``E``, ``Q``, ``S``.
+    mol_indices
+        Shape ``(B,)``, indices of molecules within ``data_dict`` (e.g. a batch slice).
+
+    Returns
+    -------
+    dict
+        Same keys as :func:`build_spooky_batch_from_padded_arrays` (``Z``, ``R``, ``E``,
+        ``F``, ``dst_idx``, ``src_idx``, ``batch_segments``, ``batch_mask``, ``atom_mask``,
+        ``batch_size``).
+    """
+    mol_indices = np.asarray(mol_indices, dtype=np.int64)
+    if mol_indices.size == 0:
+        raise ValueError("mol_indices must be non-empty")
+
+    mol_offsets = np.asarray(data_dict["mol_offsets"], dtype=np.int64)
+    r_np = np.asarray(data_dict["R"], dtype=np.float64)
+    z_np = np.asarray(data_dict["Z"], dtype=np.int32)
+    f_np = np.asarray(data_dict["F"], dtype=np.float64)
+    e_np = np.asarray(data_dict["E"], dtype=np.float64).reshape(-1)
+    q_np = np.asarray(data_dict["Q"], dtype=np.float64).reshape(-1)
+    s_np = np.asarray(data_dict["S"], dtype=np.float64).reshape(-1)
+
+    batch_size = int(mol_indices.shape[0])
+    dst_parts: list[np.ndarray] = []
+    src_parts: list[np.ndarray] = []
+    r_parts: list[np.ndarray] = []
+    z_parts: list[np.ndarray] = []
+    f_parts: list[np.ndarray] = []
+    q_parts: list[np.ndarray] = []
+    s_parts: list[np.ndarray] = []
+    seg_parts: list[np.ndarray] = []
+    e_rows: list[float] = []
+
+    atom_offset = 0
+    for b, mi in enumerate(np.asarray(mol_indices).reshape(-1)):
+        mi = int(mi)
+        a0, a1 = int(mol_offsets[mi]), int(mol_offsets[mi + 1])
+        n = a1 - a0
+        if n <= 0:
+            raise ValueError(f"Empty molecule at index {mi}")
+        ld, ls = e3x.ops.sparse_pairwise_indices(n)
+        ld = np.asarray(ld, dtype=np.int32)
+        ls = np.asarray(ls, dtype=np.int32)
+        dst_parts.append(ld + atom_offset)
+        src_parts.append(ls + atom_offset)
+        r_parts.append(r_np[a0:a1])
+        z_parts.append(z_np[a0:a1])
+        f_parts.append(f_np[a0:a1])
+        q_parts.append(np.full((n, 1), q_np[mi], dtype=np.float32))
+        s_parts.append(np.full((n, 1), s_np[mi], dtype=np.float32))
+        seg_parts.append(np.full((n,), b, dtype=np.int32))
+        e_rows.append(e_np[mi])
+        atom_offset += n
+
+    dst_idx_np = np.concatenate(dst_parts, axis=0)
+    src_idx_np = np.concatenate(src_parts, axis=0)
+    r_cat = np.concatenate(r_parts, axis=0)
+    z_cat = np.concatenate(z_parts, axis=0)
+    f_cat = np.concatenate(f_parts, axis=0)
+    q_atoms_np = np.concatenate(q_parts, axis=0)
+    s_atoms_np = np.concatenate(s_parts, axis=0)
+    batch_segments_np = np.concatenate(seg_parts, axis=0)
+    e_batch = np.array(e_rows, dtype=np.float64).reshape(-1, 1)
+
+    return {
+        "Z": jnp.asarray(z_cat, dtype=jnp.int32),
+        "R": jnp.asarray(r_cat, dtype=jnp.float32),
+        "Q_atoms": jnp.asarray(q_atoms_np, dtype=jnp.float32),
+        "S_atoms": jnp.asarray(s_atoms_np, dtype=jnp.float32),
+        "E": jnp.asarray(e_batch, dtype=jnp.float32),
+        "F": jnp.asarray(f_cat, dtype=jnp.float32),
+        "dst_idx": jnp.asarray(dst_idx_np, dtype=jnp.int32),
+        "src_idx": jnp.asarray(src_idx_np, dtype=jnp.int32),
+        "batch_segments": jnp.asarray(batch_segments_np, dtype=jnp.int32),
+        "batch_mask": jnp.ones(dst_idx_np.shape[0], dtype=jnp.float32),
+        "atom_mask": jnp.ones(z_cat.shape[0], dtype=jnp.float32),
+        "batch_size": batch_size,
+    }
+
+
 def forward_spooky_batch(model, params, batch: Dict[str, Any]) -> Dict[str, Any]:
     """
     Run a forward pass on one spooky batch (same ``model.apply`` kwargs as training).
 
-    ``batch`` must come from :func:`build_spooky_batch_from_padded_arrays` or
-    :func:`build_spooky_batch_from_example`. Uses ``batch["batch_size"]`` so variable
+    ``batch`` must come from :func:`build_spooky_batch_from_padded_arrays`,
+    :func:`build_spooky_batch_from_flat_data`, or :func:`build_spooky_batch_from_example`.
+    Uses ``batch["batch_size"]`` so variable
     batch sizes (e.g. a final partial batch at eval time) match the graph count.
     """
     bs = batch["batch_size"]
@@ -294,6 +390,13 @@ def make_spooky_train_step(
     batch_size
         Fixed batch size used for JIT-compiled training. This is passed as a
         Python int to keep shape creation in the model static.
+
+    Notes
+    -----
+    Batches from :func:`build_spooky_batch_from_flat_data` have variable numbers of
+    atoms and pair indices per step (depending on molecule sizes). That can cause
+    JAX to recompile ``train_step`` when shapes change. If that becomes a bottleneck,
+    consider batching similarly sized molecules or padding only at batch construction.
     """
 
     def loss_fn(params, batch):
