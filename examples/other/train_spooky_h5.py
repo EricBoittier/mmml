@@ -2,9 +2,13 @@
 """
 Example: Train the spooky PhysNetJAX model on qcell HDF5 data.
 
-This script demonstrates loading qcell_*.h5 files (single or multiple) via
-prepare_h5_datasets_flat (concatenated atoms, no padding) and training the
-spooky EF model, which uses system charge and spin multiplicity as inputs.
+By default this script uses flat data and batching: concatenated atoms with
+``mol_offsets``, and ``build_spooky_batch_from_flat_data`` (sparse pairs per real
+molecule size). Pass ``--legacy-padded`` to use zero-padded arrays and
+``build_spooky_batch_from_padded_arrays`` instead.
+
+It loads qcell_*.h5 files (single or multiple) and trains the spooky EF model,
+which uses system charge and spin multiplicity as inputs.
 
 Prerequisites:
   - jax, flax, optax, e3x, h5py
@@ -34,10 +38,14 @@ import optax
 from flax.training import orbax_utils
 import orbax.checkpoint as ocp
 
-from mmml.models.physnetjax.physnetjax.data.read_h5 import prepare_h5_datasets_flat
+from mmml.models.physnetjax.physnetjax.data.read_h5 import (
+    prepare_h5_datasets,
+    prepare_h5_datasets_flat,
+)
 from mmml.models.physnetjax.physnetjax.models.spooky_model import EF as SpookyEF
 from mmml.models.physnetjax.physnetjax.training.spooky_training import (
     build_spooky_batch_from_flat_data,
+    build_spooky_batch_from_padded_arrays,
     make_spooky_train_step,
     restart_params_only,
 )
@@ -89,6 +97,14 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     p.add_argument("--verbose", action="store_true")
+    p.add_argument(
+        "--legacy-padded",
+        action="store_true",
+        help=(
+            "Use zero-padded (n_mol, natoms, …) HDF5 arrays and padded batching. "
+            "Default is flat concatenated atoms with mol_offsets and per-molecule pair lists."
+        ),
+    )
     return p.parse_args()
 
 
@@ -117,22 +133,36 @@ def main(args: argparse.Namespace):
 
     key = jax.random.PRNGKey(42)
 
-    # Load data (supports single or multi-file)
-    train_data, valid_data, natoms = prepare_h5_datasets_flat(
-        key,
-        filepath=filepath_arg,
-        train_size=args.train_size,
-        valid_size=args.valid_size,
-        natoms=args.natoms,
-        energy_key=args.energy_key,
-        force_key=args.force_key,
-        charge_filter=args.charge_filter,
-        verbose=args.verbose,
-    )
+    # Load data (supports single or multi-file). Default: flat layout + flat batching.
+    if args.legacy_padded:
+        train_data, valid_data, natoms = prepare_h5_datasets(
+            key,
+            filepath=filepath_arg,
+            train_size=args.train_size,
+            valid_size=args.valid_size,
+            natoms=args.natoms,
+            energy_key=args.energy_key,
+            force_key=args.force_key,
+            charge_filter=args.charge_filter,
+            verbose=args.verbose,
+        )
+    else:
+        train_data, valid_data, natoms = prepare_h5_datasets_flat(
+            key,
+            filepath=filepath_arg,
+            train_size=args.train_size,
+            valid_size=args.valid_size,
+            natoms=args.natoms,
+            energy_key=args.energy_key,
+            force_key=args.force_key,
+            charge_filter=args.charge_filter,
+            verbose=args.verbose,
+        )
 
     n_train = len(train_data["E"])
     n_valid = len(valid_data["E"])
-    print(f"\nTrain: {n_train}, Valid: {n_valid}, natoms: {natoms}")
+    layout = "legacy padded" if args.legacy_padded else "flat (default)"
+    print(f"\nTrain: {n_train}, Valid: {n_valid}, natoms: {natoms}  [{layout}]")
 
     output_dir = Path(args.output_dir).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -193,10 +223,20 @@ def main(args: argparse.Namespace):
 
     batch_size = args.batch_size
     init_bs = min(batch_size, n_train)
-    init_batch = build_spooky_batch_from_flat_data(
-        train_data,
-        np.arange(init_bs, dtype=np.int64),
-    )
+
+    def _make_batch(mol_idx: np.ndarray):
+        if args.legacy_padded:
+            return build_spooky_batch_from_padded_arrays(
+                train_data["Z"][mol_idx],
+                train_data["R"][mol_idx],
+                train_data["E"][mol_idx],
+                train_data["F"][mol_idx],
+                train_data["Q"][mol_idx].flatten(),
+                train_data["S"][mol_idx].flatten(),
+            )
+        return build_spooky_batch_from_flat_data(train_data, mol_idx)
+
+    init_batch = _make_batch(np.arange(init_bs, dtype=np.int64))
 
     if restored_params is not None:
         params = restored_params
@@ -236,7 +276,7 @@ def main(args: argparse.Namespace):
 
         for b in range(steps_per_epoch):
             idx = perm[b * batch_size : (b + 1) * batch_size]
-            batch = build_spooky_batch_from_flat_data(train_data, idx)
+            batch = _make_batch(idx)
             state, loss_val, metrics = train_step(state, batch)
             epoch_loss += float(loss_val)
             n_batches += 1
