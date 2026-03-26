@@ -5,21 +5,21 @@ Train the spooky PhysNetJAX model on data from:
   (1) An Orbax dataset directory produced by ``sqlite_to_mmml_orbax_cache.py``, or
   (2) A SQLite database directly (will use/create the same orbax cache as that script).
 
-This uses **padded** arrays ``(n_mol, natoms, …)`` and ``build_spooky_batch_from_padded_arrays``,
-equivalent to ``train_spooky_h5.py --legacy-padded``.
+**Default is flat storage** (concatenated ``R``/``Z``/``F`` + ``mol_offsets``), matching
+``train_spooky_h5.py`` without ``--legacy-padded`` and ``prepare_h5_datasets_flat``.
 
-The default ``train_spooky_h5.py`` path uses **flat** HDF5 data; do not mix that with this
-pipeline without converting formats.
+Caches without ``mol_offsets`` and with ``R`` of shape ``(n_mol, natoms, 3)`` are
+treated as padded (older ``--layout padded`` builds).
 
 Examples
 --------
-  # From SQLite (builds/loads cache under .sqlite_cache by default)
+  # From SQLite (default: flat cache under .sqlite_cache)
   python examples/other/train_spooky_from_orbax.py --sqlite /path/to/data.db \\
     --train-size 10000 --valid-size 500
 
-  # From an existing orbax dataset directory
+  # From an existing flat orbax dataset directory (*_flat_<hash>)
   python examples/other/train_spooky_from_orbax.py \\
-    --orbax-cache /path/to/.sqlite_cache/mydb_abc123def4567890
+    --orbax-cache /path/to/.sqlite_cache/mydb_flat_abc123def4567890
 
 Prerequisites: jax, flax, optax, e3x, orbax, numpy; and apsw if using --sqlite.
 """
@@ -43,8 +43,10 @@ import orbax.checkpoint as ocp
 from flax.training import orbax_utils, train_state
 
 from mmml.models.physnetjax.physnetjax.data.data import get_choices, make_dicts
+from mmml.models.physnetjax.physnetjax.data.read_h5 import _subset_flat_dataset
 from mmml.models.physnetjax.physnetjax.models.spooky_model import EF as SpookyEF
 from mmml.models.physnetjax.physnetjax.training.spooky_training import (
+    build_spooky_batch_from_flat_data,
     build_spooky_batch_from_padded_arrays,
     make_spooky_train_step,
     restart_params_only,
@@ -56,8 +58,8 @@ from sqlite_to_mmml_orbax_cache import (
 )
 
 
-def load_padded_dict_from_orbax(cache_dir: Path) -> dict:
-    """Restore MMML padded dataset dict (R, Z, F, E, N, Q, S, [D])."""
+def load_orbax_dataset(cache_dir: Path) -> dict:
+    """Restore MMML dataset dict from orbax (flat or padded)."""
     data = ocp.PyTreeCheckpointer().restore(str(cache_dir))
     return {k: np.asarray(v) for k, v in data.items()}
 
@@ -67,25 +69,35 @@ def split_train_valid(
     data_dict: dict,
     train_size: int,
     valid_size: int,
+    *,
+    legacy_padded: bool,
 ) -> tuple[dict, dict, int]:
-    n_samples = len(data_dict["R"])
+    n_samples = len(data_dict["E"])
     total = train_size + valid_size
     if total > n_samples:
         raise ValueError(
             f"Requested {train_size} + {valid_size} = {total} samples, "
             f"but dataset has only {n_samples}."
         )
-    natoms = int(data_dict["R"].shape[1])
-    keys = list(data_dict.keys())
-    data = [data_dict[k] for k in keys]
+
     train_choice, valid_choice = get_choices(key, n_samples, train_size, valid_size)
-    train_data, valid_data = make_dicts(data, keys, train_choice, valid_choice)
+
+    if legacy_padded:
+        natoms = int(data_dict["R"].shape[1])
+        keys = list(data_dict.keys())
+        data = [data_dict[k] for k in keys]
+        train_data, valid_data = make_dicts(data, keys, train_choice, valid_choice)
+    else:
+        natoms = int(np.max(data_dict["N"]))
+        train_data = _subset_flat_dataset(data_dict, train_choice)
+        valid_data = _subset_flat_dataset(data_dict, valid_choice)
+
     return train_data, valid_data, natoms
 
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
-        description="Train spooky PhysNetJAX on orbax/SQLite MMML padded data."
+        description="Train spooky PhysNetJAX on orbax/SQLite MMML data (flat by default)."
     )
     src = p.add_mutually_exclusive_group(required=True)
     src.add_argument(
@@ -103,6 +115,12 @@ def parse_args() -> argparse.Namespace:
         type=str,
         default=None,
         help="SQLite orbax parent dir (same as sqlite_to_mmml_orbax_cache --cache-dir).",
+    )
+    p.add_argument(
+        "--sqlite-layout",
+        choices=("flat", "padded"),
+        default="flat",
+        help="Cache layout when reading/writing SQLite orbax cache (default: flat).",
     )
     p.add_argument("--max-structures", type=int, default=None)
     p.add_argument("--charge-filter", type=float, default=None)
@@ -131,40 +149,54 @@ def main() -> None:
 
     if args.sqlite is not None:
         db = Path(args.sqlite).resolve()
-        natoms = args.natoms
-        if natoms is None:
-            natoms = max_atoms_in_sqlite(db)
+        natoms_cap = args.natoms
+        if natoms_cap is None:
+            natoms_cap = max_atoms_in_sqlite(db)
             if args.verbose:
-                print(f"Auto natoms = {natoms}")
+                print(f"Auto natoms (max atoms in DB) = {natoms_cap}")
         cache_parent = Path(args.cache_dir).resolve() if args.cache_dir else None
         data_dict, cache_path = load_or_save_sqlite_orbax_cache(
             db,
-            natoms=natoms,
+            natoms=natoms_cap,
             cache_dir=cache_parent,
             max_structures=args.max_structures,
             charge_filter=args.charge_filter,
             spin_mode=args.spin_mode,
+            layout=args.sqlite_layout,
             cache=True,
             verbose=args.verbose,
         )
+        legacy_padded = args.sqlite_layout == "padded"
         if args.verbose:
             print(f"Data from SQLite / cache: {cache_path}")
     else:
         cache_dir = Path(args.orbax_cache).resolve()
         if not cache_dir.is_dir():
             raise FileNotFoundError(f"Not a directory: {cache_dir}")
-        data_dict = load_padded_dict_from_orbax(cache_dir)
-        if args.verbose:
-            print(f"Loaded orbax dataset: {cache_dir}")
+        data_dict = load_orbax_dataset(cache_dir)
+        if "mol_offsets" in data_dict:
+            legacy_padded = False
+        elif data_dict["R"].ndim == 3:
+            legacy_padded = True
+        else:
+            raise ValueError(
+                "Unrecognized orbax dataset: expected key 'mol_offsets' (flat) or "
+                f"R.ndim==3 (padded); got R.shape={data_dict['R'].shape}."
+            )
 
     train_data, valid_data, natoms = split_train_valid(
-        key, data_dict, args.train_size, args.valid_size
+        key,
+        data_dict,
+        args.train_size,
+        args.valid_size,
+        legacy_padded=legacy_padded,
     )
     key, _ = jax.random.split(key)
 
     n_train = len(train_data["E"])
     n_valid = len(valid_data["E"])
-    print(f"Train: {n_train}, Valid: {n_valid}, natoms (padding): {natoms}")
+    layout_name = "padded" if legacy_padded else "flat (mol_offsets)"
+    print(f"Train: {n_train}, Valid: {n_valid}, natoms (max per mol): {natoms}  [{layout_name}]")
 
     output_dir = Path(args.output_dir).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -217,15 +249,22 @@ def main() -> None:
     batch_size = args.batch_size
     init_bs = min(batch_size, n_train)
 
-    def _make_batch(mol_idx: np.ndarray):
-        return build_spooky_batch_from_padded_arrays(
-            train_data["Z"][mol_idx],
-            train_data["R"][mol_idx],
-            train_data["E"][mol_idx],
-            train_data["F"][mol_idx],
-            train_data["Q"][mol_idx].flatten(),
-            train_data["S"][mol_idx].flatten(),
-        )
+    if legacy_padded:
+
+        def _make_batch(mol_idx: np.ndarray):
+            return build_spooky_batch_from_padded_arrays(
+                train_data["Z"][mol_idx],
+                train_data["R"][mol_idx],
+                train_data["E"][mol_idx],
+                train_data["F"][mol_idx],
+                train_data["Q"][mol_idx].flatten(),
+                train_data["S"][mol_idx].flatten(),
+            )
+
+    else:
+
+        def _make_batch(mol_idx: np.ndarray):
+            return build_spooky_batch_from_flat_data(train_data, mol_idx)
 
     init_batch = _make_batch(np.arange(init_bs, dtype=np.int64))
 
