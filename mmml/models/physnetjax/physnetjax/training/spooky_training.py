@@ -29,7 +29,7 @@ We map this to the spooky model inputs:
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, Tuple, Union
+from typing import Any, Dict, Iterator, Tuple, Union
 
 import e3x
 import jax
@@ -341,6 +341,88 @@ def build_spooky_batch_from_flat_data(
     }
 
 
+def bucket_flat_molecule_indices_by_natoms(N: Union[np.ndarray, Any]) -> Dict[int, np.ndarray]:
+    """
+    Group training molecule indices by atom count for flat datasets.
+
+    ``N`` is per-molecule atom count, shape ``(n_mol,)`` or ``(n_mol, 1)`` (as in
+    ``prepare_h5_datasets_flat`` / ``mol_offsets`` data).
+    """
+    n = np.asarray(N, dtype=np.int32).reshape(-1)
+    buckets: Dict[int, list[int]] = {}
+    for i, na in enumerate(n):
+        k = int(na)
+        buckets.setdefault(k, []).append(i)
+    return {k: np.asarray(idxs, dtype=np.int64) for k, idxs in buckets.items()}
+
+
+def pick_flat_init_indices_homogeneous(
+    bucket_map: Dict[int, np.ndarray],
+    want: int,
+) -> np.ndarray:
+    """
+    Pick ``want`` molecule indices from a single bucket so a flat batch has uniform
+    atom counts (stable shapes for :func:`model.init`).
+    """
+    if want <= 0:
+        raise ValueError("want must be positive")
+    for _n_atoms in sorted(bucket_map.keys(), key=lambda k: len(bucket_map[k]), reverse=True):
+        idx = bucket_map[_n_atoms]
+        if len(idx) >= want:
+            return np.asarray(idx[:want], dtype=np.int64)
+    raise ValueError(
+        f"No atom-count bucket has at least {want} structures. "
+        f"Largest bucket size: {max(len(v) for v in bucket_map.values()) if bucket_map else 0}."
+    )
+
+
+def iter_homogeneous_natoms_flat_batches(
+    bucket_map: Dict[int, np.ndarray],
+    batch_size: int,
+    rng: np.random.Generator,
+    *,
+    drop_partial: bool = True,
+) -> Iterator[np.ndarray]:
+    """
+    Yield molecule-index arrays of length ``batch_size`` for flat spooky training.
+
+    Every molecule in a yielded batch has the same atom count, so
+    :func:`build_spooky_batch_from_flat_data` produces **identical** JAX array shapes
+    for fixed ``batch_size`` (avoids XLA recompilation from variable-size flat batches).
+
+    Buckets with fewer than ``batch_size`` structures are skipped. Remainders within a
+    bucket are dropped if ``drop_partial`` (recommended for JIT).
+
+    Parameters
+    ----------
+    bucket_map
+        From :func:`bucket_flat_molecule_indices_by_natoms`.
+    batch_size
+        Must match the ``batch_size`` passed to :func:`make_spooky_train_step`.
+    rng
+        Shuffles bucket order and indices within each bucket each epoch.
+    drop_partial
+        If True (default), only yield full batches; remainder molecules in each bucket
+        are not used in that epoch.
+    """
+    if batch_size <= 0:
+        raise ValueError("batch_size must be positive")
+    keys = list(bucket_map.keys())
+    rng.shuffle(keys)
+    for n_atoms in keys:
+        idx = np.asarray(bucket_map[n_atoms], dtype=np.int64)
+        rng.shuffle(idx)
+        if len(idx) < batch_size:
+            continue
+        if drop_partial:
+            n_full = (len(idx) // batch_size) * batch_size
+            idx = idx[:n_full]
+        for b in range(0, len(idx), batch_size):
+            chunk = idx[b : b + batch_size]
+            if len(chunk) == batch_size:
+                yield chunk
+
+
 def forward_spooky_batch(model, params, batch: Dict[str, Any]) -> Dict[str, Any]:
     """
     Run a forward pass on one spooky batch (same ``model.apply`` kwargs as training).
@@ -397,10 +479,12 @@ def make_spooky_train_step(
     atoms and pair indices per step (depending on molecule sizes). That can cause
     JAX/XLA to **recompile** ``train_step`` whenever those shapes change, which often
     looks like low GPU utilization (host-side compilation, ``xtile_compiler`` /
-    Triton logs) and slow epochs. For steady-state GPU usage, prefer
-    :func:`build_spooky_batch_from_padded_arrays` with fixed ``batch_size`` and
-    ``natoms`` so tensor shapes are identical every step. You can still overlap host
-    work with :func:`jax.device_put` and a small prefetch queue on the batch dict.
+    Triton logs) and slow epochs.     For steady-state GPU usage with **flat** data, batch molecules with the same atom
+    count (see :func:`iter_homogeneous_natoms_flat_batches` / ``--flat-bucketing`` in
+    the training examples) so shapes repeat; there is still one XLA specialization per
+    distinct atom count. Alternatively use :func:`build_spooky_batch_from_padded_arrays`
+    with fixed ``batch_size`` and ``natoms``. Overlap host work with
+    :func:`jax.device_put` and prefetch where helpful.
     """
 
     def loss_fn(params, batch):

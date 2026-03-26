@@ -8,12 +8,11 @@ Train the spooky PhysNetJAX model on data from:
 **Default is flat storage** (concatenated ``R``/``Z``/``F`` + ``mol_offsets``), matching
 ``train_spooky_h5.py`` without ``--legacy-padded`` and ``prepare_h5_datasets_flat``.
 
-**GPU performance:** Flat batches change the number of atoms and pair indices every
-step, so JAX often **recompiles** XLA/Triton kernels and utilization stays low. For
-training, prefer ``--sqlite-layout padded`` (and a padded orbax cache) so every step
-has the same array shapes; then raise ``--batch-size`` if memory allows. This script
-also moves batches to the device with ``jax.device_put`` and can prefetch the next
-batch on a background thread (``--prefetch``).
+**GPU performance (flat):** Random flat batches change atom/pair counts every step →
+XLA recompiles. Mitigations: (1) ``--sqlite-layout padded``, or (2) stay flat and use
+``--flat-bucketing`` (default): each batch only contains molecules with the **same**
+atom count so shapes repeat every step (one compile per distinct atom count). This
+script also uses ``jax.device_put`` and optional ``--prefetch``.
 
 Caches without ``mol_offsets`` and with ``R`` of shape ``(n_mol, natoms, 3)`` are
 treated as padded (older ``--layout padded`` builds).
@@ -56,9 +55,12 @@ from mmml.models.physnetjax.physnetjax.data.data import get_choices, make_dicts
 from mmml.models.physnetjax.physnetjax.data.read_h5 import _subset_flat_dataset
 from mmml.models.physnetjax.physnetjax.models.spooky_model import EF as SpookyEF
 from mmml.models.physnetjax.physnetjax.training.spooky_training import (
+    bucket_flat_molecule_indices_by_natoms,
     build_spooky_batch_from_flat_data,
     build_spooky_batch_from_padded_arrays,
+    iter_homogeneous_natoms_flat_batches,
     make_spooky_train_step,
+    pick_flat_init_indices_homogeneous,
     restart_params_only,
 )
 
@@ -170,6 +172,17 @@ def parse_args() -> argparse.Namespace:
             "XLA recompilation from variable-size flat batches."
         ),
     )
+    p.add_argument(
+        "--flat-bucketing",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Flat data only (default: on): group each batch by identical atom count "
+            "so JAX sees stable shapes (avoids recompilation per step). Remainders "
+            "per bucket are skipped each epoch. Use --no-flat-bucketing for random "
+            "mixing (slow JIT)."
+        ),
+    )
     p.add_argument("-v", "--verbose", action="store_true")
     return p.parse_args()
 
@@ -227,12 +240,29 @@ def main() -> None:
     n_train = len(train_data["E"])
     n_valid = len(valid_data["E"])
     layout_name = "padded" if legacy_padded else "flat (mol_offsets)"
+    use_flat_bucketing = (not legacy_padded) and args.flat_bucketing
     print(f"Train: {n_train}, Valid: {n_valid}, natoms (max per mol): {natoms}  [{layout_name}]")
-    if not legacy_padded:
+    bucket_map: dict[int, np.ndarray] | None = None
+    if use_flat_bucketing:
+        bucket_map = bucket_flat_molecule_indices_by_natoms(train_data["N"])
+        n_full_steps = sum(len(bucket_map[k]) // args.batch_size for k in bucket_map)
+        if n_full_steps == 0:
+            raise ValueError(
+                f"No flat bucket has at least batch_size={args.batch_size} structures. "
+                "Lower --batch-size, add data, or use --no-flat-bucketing."
+            )
+        n_remain = n_train - sum(
+            (len(bucket_map[k]) // args.batch_size) * args.batch_size for k in bucket_map
+        )
         print(
-            "Note: flat batches often trigger XLA recompilation each step (low GPU use). "
-            "For faster training: sqlite_to_mmml_orbax_cache --layout padded and "
-            "train_spooky_from_orbax.py --sqlite-layout padded (see script docstring).",
+            f"Flat bucketing: {len(bucket_map)} atom-count buckets, "
+            f"~{n_full_steps} full batches/epoch (~{n_remain} samples/epoch not in a full batch).",
+            flush=True,
+        )
+    elif not legacy_padded:
+        print(
+            "Note: --no-flat-bucketing mixes molecule sizes each step → XLA may recompile "
+            "often (low GPU). Prefer default --flat-bucketing or --sqlite-layout padded.",
             flush=True,
         )
 
@@ -304,7 +334,10 @@ def main() -> None:
         def _make_batch(mol_idx: np.ndarray):
             return build_spooky_batch_from_flat_data(train_data, mol_idx)
 
-    init_batch = _make_batch(np.arange(init_bs, dtype=np.int64))
+    if use_flat_bucketing and bucket_map is not None:
+        init_batch = _make_batch(pick_flat_init_indices_homogeneous(bucket_map, init_bs))
+    else:
+        init_batch = _make_batch(np.arange(init_bs, dtype=np.int64))
 
     if restored_params is not None:
         params = restored_params
@@ -337,9 +370,52 @@ def main() -> None:
     steps_per_epoch = max(n_train // batch_size, 1)
 
     for epoch in range(args.num_epochs):
-        perm = rng.permutation(n_train)
-        if args.prefetch and steps_per_epoch > 1:
-            q: queue.Queue = queue.Queue(maxsize=2)
+        if use_flat_bucketing and bucket_map is not None:
+            epoch_idx = list(
+                iter_homogeneous_natoms_flat_batches(
+                    bucket_map, batch_size, rng, drop_partial=True
+                )
+            )
+            n_ep = len(epoch_idx)
+            if n_ep == 0:
+                raise RuntimeError("Flat bucketing produced no batches this epoch.")
+        else:
+            epoch_idx = None  # use perm + steps_per_epoch below
+
+        if use_flat_bucketing and epoch_idx is not None:
+            n_steps = n_ep
+            if args.prefetch and n_steps > 1:
+                q: queue.Queue = queue.Queue(maxsize=2)
+                _sentinel = object()
+
+                def _producer_b() -> None:
+                    for idx in epoch_idx:
+                        q.put(_device_put_batch(_make_batch(idx)))
+                    q.put(_sentinel)
+
+                t = threading.Thread(target=_producer_b, daemon=True)
+                t.start()
+                epoch_loss = 0.0
+                n_batches = 0
+                while True:
+                    batch = q.get()
+                    if batch is _sentinel:
+                        break
+                    state, loss_val, _metrics = train_step(state, batch)
+                    epoch_loss += float(loss_val)
+                    n_batches += 1
+                t.join()
+            else:
+                epoch_loss = 0.0
+                n_batches = 0
+                for idx in epoch_idx:
+                    batch = _device_put_batch(_make_batch(idx))
+                    state, loss_val, _metrics = train_step(state, batch)
+                    epoch_loss += float(loss_val)
+                    n_batches += 1
+        elif args.prefetch and steps_per_epoch > 1:
+            perm = rng.permutation(n_train)
+            q = queue.Queue(maxsize=2)
             _sentinel = object()
 
             def _producer() -> None:
@@ -361,6 +437,7 @@ def main() -> None:
                 n_batches += 1
             t.join()
         else:
+            perm = rng.permutation(n_train)
             epoch_loss = 0.0
             n_batches = 0
             for b in range(steps_per_epoch):
