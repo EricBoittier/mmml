@@ -41,12 +41,12 @@ import orbax.checkpoint as ocp
 
 from mmml.models.physnetjax.physnetjax.data.read_h5 import (
     _detect_natoms,
-    load_h5,
-    prepare_h5_datasets,
+    load_h5_flat,
+    prepare_h5_datasets_flat,
 )
 from mmml.models.physnetjax.physnetjax.models.spooky_model import EF as SpookyEF
 from mmml.models.physnetjax.physnetjax.training.spooky_training import (
-    build_spooky_batch_from_padded_arrays,
+    build_spooky_batch_from_flat_data,
     forward_spooky_batch,
     restart_params_only,
 )
@@ -165,6 +165,20 @@ def _resolve_checkpoint_path(args: argparse.Namespace) -> Path:
 
 
 def _slice_data(data: dict[str, np.ndarray], n: int) -> dict[str, np.ndarray]:
+    """Slice to the first ``n`` molecules (works for flat ``mol_offsets`` layout)."""
+    if "mol_offsets" in data:
+        n = min(int(n), len(data["E"]))
+        mo = np.asarray(data["mol_offsets"])
+        end_atoms = int(mo[n])
+        out = {}
+        for k, v in data.items():
+            if k == "mol_offsets":
+                out[k] = mo[: n + 1].copy()
+            elif k in ("R", "Z", "F"):
+                out[k] = np.asarray(v)[:end_atoms].copy()
+            else:
+                out[k] = np.asarray(v)[:n].copy()
+        return out
     out = {}
     for k, v in data.items():
         out[k] = np.asarray(v)[:n]
@@ -172,31 +186,51 @@ def _slice_data(data: dict[str, np.ndarray], n: int) -> dict[str, np.ndarray]:
 
 
 def _print_dataset_stats(name: str, data: dict[str, np.ndarray]) -> None:
-    z = np.asarray(data["Z"])
-    r = np.asarray(data["R"])
     e = np.asarray(data["E"]).reshape(-1)
-    f = np.asarray(data["F"])
     n_struct = len(e)
-    n_atoms_real = np.sum(z > 0, axis=1)
-
     print(f"\n--- Dataset statistics ({name}, n={n_struct}) ---")
-    print(f"  natoms (padding width): {z.shape[1]}")
-    print(
-        f"  Real atoms per structure: min={int(n_atoms_real.min())} "
-        f"max={int(n_atoms_real.max())} mean={float(n_atoms_real.mean()):.2f}"
-    )
-    print(
-        f"  Energy E: min={e.min():.6g} max={e.max():.6g} "
-        f"mean={e.mean():.6g} std={e.std():.6g}"
-    )
-    mask = z > 0
-    f_real = f[mask]
-    print(
-        f"  Forces (real atoms, all components): min={f_real.min():.6g} "
-        f"max={f_real.max():.6g} mean={f_real.mean():.6g} std={f_real.std():.6g}"
-    )
-    fnorm = np.linalg.norm(f, axis=-1)[mask]
-    print(f"  |F| per atom: mean={float(fnorm.mean()):.6g} std={float(fnorm.std()):.6g}")
+
+    if "mol_offsets" in data:
+        mo = np.asarray(data["mol_offsets"])
+        n_per = np.diff(mo)
+        f = np.asarray(data["F"])
+        print("  Layout: flat (concatenated atoms, mol_offsets)")
+        print(
+            f"  Atoms per structure: min={int(n_per.min())} "
+            f"max={int(n_per.max())} mean={float(n_per.mean()):.2f}"
+        )
+        print(
+            f"  Energy E: min={e.min():.6g} max={e.max():.6g} "
+            f"mean={e.mean():.6g} std={e.std():.6g}"
+        )
+        print(
+            f"  Forces (all real atoms): min={f.min():.6g} max={f.max():.6g} "
+            f"mean={f.mean():.6g} std={f.std():.6g}"
+        )
+        fnorm = np.linalg.norm(f.reshape(-1, 3), axis=-1)
+        print(f"  |F| per atom: mean={float(fnorm.mean()):.6g} std={float(fnorm.std()):.6g}")
+    else:
+        z = np.asarray(data["Z"])
+        r = np.asarray(data["R"])
+        f = np.asarray(data["F"])
+        n_atoms_real = np.sum(z > 0, axis=1)
+        print(f"  natoms (padding width): {z.shape[1]}")
+        print(
+            f"  Real atoms per structure: min={int(n_atoms_real.min())} "
+            f"max={int(n_atoms_real.max())} mean={float(n_atoms_real.mean()):.2f}"
+        )
+        print(
+            f"  Energy E: min={e.min():.6g} max={e.max():.6g} "
+            f"mean={e.mean():.6g} std={e.std():.6g}"
+        )
+        mask = z > 0
+        f_real = f[mask]
+        print(
+            f"  Forces (real atoms, all components): min={f_real.min():.6g} "
+            f"max={f_real.max():.6g} mean={f_real.mean():.6g} std={f_real.std():.6g}"
+        )
+        fnorm = np.linalg.norm(f, axis=-1)[mask]
+        print(f"  |F| per atom: mean={float(fnorm.mean()):.6g} std={float(fnorm.std()):.6g}")
 
     if "Q" in data:
         q = np.asarray(data["Q"]).reshape(-1)
@@ -256,7 +290,7 @@ def main() -> int:
                 max_structures=args.max_structures,
                 verbose=args.verbose,
             )
-        eval_data = load_h5(
+        eval_data = load_h5_flat(
             filepath=filepath_arg,
             natoms=natoms_opt,
             energy_key=args.energy_key,
@@ -269,7 +303,7 @@ def main() -> int:
         natoms = natoms_opt
         split_label = "all"
     else:
-        train_data, valid_data, natoms = prepare_h5_datasets(
+        train_data, valid_data, natoms = prepare_h5_datasets_flat(
             key,
             filepath=filepath_arg,
             train_size=args.train_size,
@@ -284,7 +318,7 @@ def main() -> int:
         eval_data = valid_data if args.eval_on == "valid" else train_data
         split_label = args.eval_on
 
-    n_avail = len(eval_data["R"])
+    n_avail = len(eval_data["E"])
     if args.num_samples is not None:
         n_use = min(int(args.num_samples), n_avail)
         eval_data = _slice_data(eval_data, n_use)
@@ -316,13 +350,6 @@ def main() -> int:
             f"Checkpoint natoms={model.natoms} does not match dataset natoms={natoms}."
         )
 
-    z = np.asarray(eval_data["Z"], dtype=np.int32)
-    r = np.asarray(eval_data["R"], dtype=np.float32)
-    e = np.asarray(eval_data["E"], dtype=np.float32)
-    f = np.asarray(eval_data["F"], dtype=np.float32)
-    q = np.asarray(eval_data["Q"], dtype=np.float32)
-    s = np.asarray(eval_data["S"], dtype=np.float32)
-
     bs = args.batch_size
     n_full = (n_eval // bs) * bs
     n_skipped = n_eval - n_full if not args.include_partial else 0
@@ -348,14 +375,9 @@ def main() -> int:
     f_pred_all: list[np.ndarray] = []
 
     def run_batch(i0: int, i1: int) -> None:
-        sl = slice(i0, i1)
-        batch = build_spooky_batch_from_padded_arrays(
-            z[sl],
-            r[sl],
-            e[sl],
-            f[sl],
-            q[sl].flatten(),
-            s[sl].flatten(),
+        batch = build_spooky_batch_from_flat_data(
+            eval_data,
+            np.arange(i0, i1, dtype=np.int64),
         )
         out = forward_spooky_batch(model, restored_params, batch)
         e_pred = np.asarray(out["energy"], dtype=np.float64).reshape(-1)
@@ -419,16 +441,19 @@ def main() -> int:
     if args.save_predictions:
         pred_path = out_dir / "predictions.npz"
         n_scored = int(e_t.shape[0])
+        mo = np.asarray(eval_data["mol_offsets"])
+        end_atoms = int(mo[n_scored])
         np.savez(
             pred_path,
             E_ref=e_t,
             E_pred=e_p,
             F_ref=f_t,
             F_pred=f_p,
-            Z=z[:n_scored],
-            R=r[:n_scored],
-            Q=q[:n_scored],
-            S=s[:n_scored],
+            mol_offsets=mo[: n_scored + 1],
+            Z_flat=np.asarray(eval_data["Z"])[:end_atoms],
+            R_flat=np.asarray(eval_data["R"])[:end_atoms],
+            Q=np.asarray(eval_data["Q"])[:n_scored],
+            S=np.asarray(eval_data["S"])[:n_scored],
         )
         print(f"Wrote {pred_path}")
 
