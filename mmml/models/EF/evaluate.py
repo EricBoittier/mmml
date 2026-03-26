@@ -422,7 +422,10 @@ def evaluate_dataset(model, params, data, batch_size=64, dataset_name="test"):
     
     # Prepare batches
     key = jax.random.PRNGKey(42)
-    batches = prepare_batches(key, data, batch_size)
+    # Sequential batches, include final partial batch so len(pred)==n_frames; aligns with R for H5.
+    batches = prepare_batches(
+        key, data, batch_size, shuffle=False, drop_last=False
+    )
     
     # Collect predictions and targets
     all_energy_predictions = []
@@ -437,10 +440,11 @@ def evaluate_dataset(model, params, data, batch_size=64, dataset_name="test"):
         if (i + 1) % 10 == 0:
             print(f"  Batch {i+1}/{len(batches)}")
         
+        bs = int(batch["electric_field"].shape[0])
         energy_pred, forces_pred, dipole_pred = inference_step(
             model_apply=model.apply,
             batch=batch,
-            batch_size=batch_size,
+            batch_size=bs,
             params=params,
         )
         

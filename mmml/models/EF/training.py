@@ -657,7 +657,30 @@ def prepare_datasets(key, num_train, num_valid, dataset):
     return train_data, valid_data
 
 
-def prepare_batches(key, data, batch_size, num_atoms=None, dst_idx_flat=None, src_idx_flat=None, batch_segments=None):
+def _flat_pairwise_indices(bs_b: int, num_atoms: int):
+    """Flattened dst/src indices and batch_segments for a batch of ``bs_b`` systems."""
+    dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(num_atoms)
+    dst_idx = jnp.asarray(dst_idx, dtype=jnp.int32)
+    src_idx = jnp.asarray(src_idx, dtype=jnp.int32)
+    offsets = jnp.arange(bs_b, dtype=jnp.int32) * num_atoms
+    dst_idx_flat = (dst_idx[None, :] + offsets[:, None]).reshape(-1)
+    src_idx_flat = (src_idx[None, :] + offsets[:, None]).reshape(-1)
+    batch_segments = jnp.repeat(jnp.arange(bs_b, dtype=jnp.int32), num_atoms)
+    return dst_idx_flat, src_idx_flat, batch_segments
+
+
+def prepare_batches(
+    key,
+    data,
+    batch_size,
+    num_atoms=None,
+    dst_idx_flat=None,
+    src_idx_flat=None,
+    batch_segments=None,
+    *,
+    shuffle=True,
+    drop_last=True,
+):
     """
     Returns list of batch dicts with consistent shapes:
       atomic_numbers: (B*N,) flattened
@@ -675,6 +698,11 @@ def prepare_batches(key, data, batch_size, num_atoms=None, dst_idx_flat=None, sr
     dst_idx_flat, src_idx_flat, batch_segments : optional pre-computed arrays
         If provided, these are reused instead of recomputing (performance optimization).
         Must match ``batch_size`` and the atom count implied by ``data`` (see below).
+    shuffle : bool, default True
+        If True, shuffle sample order (training). If False, use frame order (evaluation).
+    drop_last : bool, default True
+        If True, drop the final partial batch (training default). If False, emit a smaller
+        last batch so every sample is covered (evaluation / full-dataset inference).
     """
     n_atoms_data = int(data["positions"].shape[1])
     if num_atoms is None:
@@ -686,26 +714,27 @@ def prepare_batches(key, data, batch_size, num_atoms=None, dst_idx_flat=None, sr
         )
 
     data_size = len(data["electric_field"])
-    steps_per_epoch = data_size // batch_size
+    has_forces = data.get("forces") is not None
+    if not has_forces:
+        raise ValueError("prepare_batches: data['forces'] is required (use zeros if unused).")
 
-    perms = jax.random.permutation(key, data_size)
-    perms = perms[: steps_per_epoch * batch_size]  # drop incomplete last batch
-    perms = perms.reshape((steps_per_epoch, batch_size))
-
-    # Pre-compute indices only if not provided (performance optimization)
-    if dst_idx_flat is None or src_idx_flat is None or batch_segments is None:
-        dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(num_atoms)
-        # Ensure these are jax arrays with explicit dtype
-        dst_idx = jnp.asarray(dst_idx, dtype=jnp.int32)
-        src_idx = jnp.asarray(src_idx, dtype=jnp.int32)
-
-        # Pre-compute flattened indices (CUDA-graph-friendly: computed outside JIT)
-        offsets = jnp.arange(batch_size, dtype=jnp.int32) * num_atoms
-        dst_idx_flat = (dst_idx[None, :] + offsets[:, None]).reshape(-1)
-        src_idx_flat = (src_idx[None, :] + offsets[:, None]).reshape(-1)
-
-        batch_segments = jnp.repeat(jnp.arange(batch_size, dtype=jnp.int32), num_atoms)
+    if shuffle:
+        perm = jax.random.permutation(key, data_size)
     else:
+        perm = jnp.arange(data_size, dtype=jnp.int32)
+
+    if drop_last:
+        n_used = (data_size // batch_size) * batch_size
+        perm = perm[:n_used]
+    else:
+        n_used = data_size
+
+    precomputed_ok = (
+        dst_idx_flat is not None
+        and src_idx_flat is not None
+        and batch_segments is not None
+    )
+    if precomputed_ok:
         seg_atoms = int(batch_segments.shape[0]) // batch_size
         if seg_atoms != num_atoms:
             raise ValueError(
@@ -715,25 +744,48 @@ def prepare_batches(key, data, batch_size, num_atoms=None, dst_idx_flat=None, sr
                 "atom counts differ."
             )
 
-    # Pre-allocate list for better performance
-    batches = [None] * steps_per_epoch
     has_dipoles = "D" in data and data["D"] is not None
-    
-    for idx, perm in enumerate(perms):
-        # Create batch dict directly (avoid intermediate variables)
+    batches = []
+    offset = 0
+    while offset + batch_size <= n_used:
+        idx = perm[offset : offset + batch_size]
+        if precomputed_ok:
+            d_flat, s_flat, b_seg = dst_idx_flat, src_idx_flat, batch_segments
+        else:
+            d_flat, s_flat, b_seg = _flat_pairwise_indices(batch_size, num_atoms)
         batch_dict = {
-            "atomic_numbers": data["atomic_numbers"][perm].reshape(batch_size * num_atoms),
-            "positions": data["positions"][perm].reshape(batch_size * num_atoms, 3),
-            "energies": data["energies"][perm],
-            "forces": data["forces"][perm].reshape(batch_size * num_atoms, 3),
-            "electric_field": data["electric_field"][perm],
-            "dst_idx_flat": dst_idx_flat,
-            "src_idx_flat": src_idx_flat,
-            "batch_segments": batch_segments,
+            "atomic_numbers": data["atomic_numbers"][idx].reshape(batch_size * num_atoms),
+            "positions": data["positions"][idx].reshape(batch_size * num_atoms, 3),
+            "energies": data["energies"][idx],
+            "forces": data["forces"][idx].reshape(batch_size * num_atoms, 3),
+            "electric_field": data["electric_field"][idx],
+            "dst_idx_flat": d_flat,
+            "src_idx_flat": s_flat,
+            "batch_segments": b_seg,
         }
         if has_dipoles:
-            batch_dict["dipoles"] = data["D"][perm]
-        batches[idx] = batch_dict
+            batch_dict["dipoles"] = data["D"][idx]
+        batches.append(batch_dict)
+        offset += batch_size
+
+    if offset < n_used:
+        bs_rem = int(n_used - offset)
+        idx = perm[offset:n_used]
+        d_flat, s_flat, b_seg = _flat_pairwise_indices(bs_rem, num_atoms)
+        batch_dict = {
+            "atomic_numbers": data["atomic_numbers"][idx].reshape(bs_rem * num_atoms),
+            "positions": data["positions"][idx].reshape(bs_rem * num_atoms, 3),
+            "energies": data["energies"][idx],
+            "forces": data["forces"][idx].reshape(bs_rem * num_atoms, 3),
+            "electric_field": data["electric_field"][idx],
+            "dst_idx_flat": d_flat,
+            "src_idx_flat": s_flat,
+            "batch_segments": b_seg,
+        }
+        if has_dipoles:
+            batch_dict["dipoles"] = data["D"][idx]
+        batches.append(batch_dict)
+
     return batches
 
 

@@ -395,8 +395,12 @@ def make_spooky_train_step(
     -----
     Batches from :func:`build_spooky_batch_from_flat_data` have variable numbers of
     atoms and pair indices per step (depending on molecule sizes). That can cause
-    JAX to recompile ``train_step`` when shapes change. If that becomes a bottleneck,
-    consider batching similarly sized molecules or padding only at batch construction.
+    JAX/XLA to **recompile** ``train_step`` whenever those shapes change, which often
+    looks like low GPU utilization (host-side compilation, ``xtile_compiler`` /
+    Triton logs) and slow epochs. For steady-state GPU usage, prefer
+    :func:`build_spooky_batch_from_padded_arrays` with fixed ``batch_size`` and
+    ``natoms`` so tensor shapes are identical every step. You can still overlap host
+    work with :func:`jax.device_put` and a small prefetch queue on the batch dict.
     """
 
     def loss_fn(params, batch):

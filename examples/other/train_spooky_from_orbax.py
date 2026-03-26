@@ -8,6 +8,13 @@ Train the spooky PhysNetJAX model on data from:
 **Default is flat storage** (concatenated ``R``/``Z``/``F`` + ``mol_offsets``), matching
 ``train_spooky_h5.py`` without ``--legacy-padded`` and ``prepare_h5_datasets_flat``.
 
+**GPU performance:** Flat batches change the number of atoms and pair indices every
+step, so JAX often **recompiles** XLA/Triton kernels and utilization stays low. For
+training, prefer ``--sqlite-layout padded`` (and a padded orbax cache) so every step
+has the same array shapes; then raise ``--batch-size`` if memory allows. This script
+also moves batches to the device with ``jax.device_put`` and can prefetch the next
+batch on a background thread (``--prefetch``).
+
 Caches without ``mol_offsets`` and with ``R`` of shape ``(n_mol, natoms, 3)`` are
 treated as padded (older ``--layout padded`` builds).
 
@@ -27,8 +34,10 @@ Prerequisites: jax, flax, optax, e3x, orbax, numpy; and apsw if using --sqlite.
 from __future__ import annotations
 
 import argparse
+import queue
 import shutil
 import sys
+import threading
 from pathlib import Path
 
 # Same directory as sqlite_to_mmml_orbax_cache.py
@@ -37,6 +46,7 @@ if str(_EX_DIR) not in sys.path:
     sys.path.insert(0, str(_EX_DIR))
 
 import jax
+import jax.numpy as jnp
 import numpy as np
 import optax
 import orbax.checkpoint as ocp
@@ -56,6 +66,17 @@ from sqlite_to_mmml_orbax_cache import (
     load_or_save_sqlite_orbax_cache,
     max_atoms_in_sqlite,
 )
+
+
+def _device_put_batch(batch: dict) -> dict:
+    """Copy array leaves to the default JAX device (async where supported)."""
+
+    def _put(x):
+        if isinstance(x, (np.ndarray, jnp.ndarray)):
+            return jax.device_put(x)
+        return x
+
+    return jax.tree.map(_put, batch)
 
 
 def load_orbax_dataset(cache_dir: Path) -> dict:
@@ -139,6 +160,16 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help='Orbax params dir or "latest" for OUTPUT_DIR/final_params.',
     )
+    p.add_argument(
+        "--prefetch",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Prefetch the next batch on a background thread while the GPU runs "
+            "train_step (default: on). Helps CPU-side batch building; does not fix "
+            "XLA recompilation from variable-size flat batches."
+        ),
+    )
     p.add_argument("-v", "--verbose", action="store_true")
     return p.parse_args()
 
@@ -197,6 +228,13 @@ def main() -> None:
     n_valid = len(valid_data["E"])
     layout_name = "padded" if legacy_padded else "flat (mol_offsets)"
     print(f"Train: {n_train}, Valid: {n_valid}, natoms (max per mol): {natoms}  [{layout_name}]")
+    if not legacy_padded:
+        print(
+            "Note: flat batches often trigger XLA recompilation each step (low GPU use). "
+            "For faster training: sqlite_to_mmml_orbax_cache --layout padded and "
+            "train_spooky_from_orbax.py --sqlite-layout padded (see script docstring).",
+            flush=True,
+        )
 
     output_dir = Path(args.output_dir).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -300,14 +338,37 @@ def main() -> None:
 
     for epoch in range(args.num_epochs):
         perm = rng.permutation(n_train)
-        epoch_loss = 0.0
-        n_batches = 0
-        for b in range(steps_per_epoch):
-            idx = perm[b * batch_size : (b + 1) * batch_size]
-            batch = _make_batch(idx)
-            state, loss_val, _metrics = train_step(state, batch)
-            epoch_loss += float(loss_val)
-            n_batches += 1
+        if args.prefetch and steps_per_epoch > 1:
+            q: queue.Queue = queue.Queue(maxsize=2)
+            _sentinel = object()
+
+            def _producer() -> None:
+                for b in range(steps_per_epoch):
+                    idx = perm[b * batch_size : (b + 1) * batch_size]
+                    q.put(_device_put_batch(_make_batch(idx)))
+                q.put(_sentinel)
+
+            t = threading.Thread(target=_producer, daemon=True)
+            t.start()
+            epoch_loss = 0.0
+            n_batches = 0
+            while True:
+                batch = q.get()
+                if batch is _sentinel:
+                    break
+                state, loss_val, _metrics = train_step(state, batch)
+                epoch_loss += float(loss_val)
+                n_batches += 1
+            t.join()
+        else:
+            epoch_loss = 0.0
+            n_batches = 0
+            for b in range(steps_per_epoch):
+                idx = perm[b * batch_size : (b + 1) * batch_size]
+                batch = _device_put_batch(_make_batch(idx))
+                state, loss_val, _metrics = train_step(state, batch)
+                epoch_loss += float(loss_val)
+                n_batches += 1
         print(f"Epoch {epoch + 1}/{args.num_epochs}  loss={epoch_loss / n_batches:.6f}")
 
     ckpt_dir = output_dir / "final_params"
