@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import chemcoord as cc
 import importlib
+import warnings
 
 
 def patch_chemcoord_for_pandas3():
@@ -10,6 +11,9 @@ def patch_chemcoord_for_pandas3():
     )
     zc = importlib.import_module(
         "chemcoord.internal_coordinates._zmat_class_core"
+    )
+    idx = importlib.import_module(
+        "chemcoord.internal_coordinates._indexers"
     )
 
     # Resolve internals from the module namespace first, instead of guessing paths
@@ -116,10 +120,7 @@ def patch_chemcoord_for_pandas3():
             .T
         )
 
-        C = self.loc[:, ["bond", "angle", "dihedral"]].to_numpy(
-            dtype=np.float64,
-            copy=True,
-        ).T
+        C = self.loc[:, ["bond", "angle", "dihedral"]].to_numpy(copy=True).T
 
         C[[1, 2], :] = np.radians(C[[1, 2], :])
 
@@ -139,6 +140,37 @@ def patch_chemcoord_for_pandas3():
         return Cartesian_cls(cartesian)
 
     zc.ZmatCore.get_cartesian = get_cartesian_patched
+
+    # --- Patch 3: pandas 3 now raises TypeError (not FutureWarning) on lossy setitem ---
+    def _unsafe_setitem_patched(self, key, value):
+        try:
+            with warnings.catch_warnings():
+                # Treat pandas/chemcoord future/dep warnings as errors so we
+                # can handle them in a single place, instead of spamming output.
+                warnings.simplefilter("error", category=FutureWarning)
+                warnings.simplefilter("error", category=DeprecationWarning)
+
+                indexer = getattr(self.molecule._frame, self.indexer)
+                if isinstance(key, tuple):
+                    indexer[key[0], key[1]] = value
+                else:
+                    indexer[key] = value
+        except (FutureWarning, DeprecationWarning, TypeError):
+            # Mixed assignment (e.g. symbol/string into float columns) now errors in pandas 3.
+            # Cast addressed column(s) to object and retry once.
+            if isinstance(key, tuple):
+                if type(key[1]) is not str and idx.is_iterable(key[1]):
+                    self.molecule._frame = self.molecule._frame.astype(
+                        {k: "O" for k in key[1]}
+                    )
+                else:
+                    self.molecule._frame = self.molecule._frame.astype({key[1]: "O"})
+                indexer = getattr(self.molecule._frame, self.indexer)
+                indexer[key[0], key[1]] = value
+            else:
+                raise TypeError("Assignment not supported.")
+
+    idx._Unsafe_base.__setitem__ = _unsafe_setitem_patched
 
 
 patch_chemcoord_for_pandas3()
