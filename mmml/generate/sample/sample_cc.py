@@ -1,20 +1,23 @@
-"""
-create a 2D representation of the vdw surface of two (2) molecules - called a "mesh"
-
-use symmetry to reduce the number of points in the mesh
-
-using the cartesian product of the two "meshes" - determine the geometry of the dimer 
-by using the normal of the surface at the point of contact
-
-
-"""
-
 from mmml.interfaces.chemcoordInterface.interface import patch_chemcoord_for_pandas3
+
 patch_chemcoord_for_pandas3()
+
 import chemcoord as cc
 import ase
 from ase.data import vdw_radii
 import numpy as np
+import pandas as pd
+
+
+DEFAULT_NOISE_SCALE = 0.01
+
+
+def make_rng(seed: int | None = 0) -> np.random.Generator:
+    """
+    Create a numpy random number generator with an optional seed.
+    """
+    return np.random.default_rng(seed)
+
 
 def load_molecule_xyz(filename: str) -> cc.Cartesian:
     return cc.Cartesian.read_xyz(filename)
@@ -172,7 +175,9 @@ def has_inter_monomer_overlap(
     return bool(np.any(dists < thresholds))
 
 
-def candidate_point_pairs(n_points: int, *, rng: np.random.Generator, max_pairs: int) -> list[tuple[int, int]]:
+def candidate_point_pairs(
+    n_points: int, *, rng: np.random.Generator, max_pairs: int
+) -> list[tuple[int, int]]:
     pairs = [(i, j) for i in range(n_points) for j in range(n_points) if i != j]
     if len(pairs) <= max_pairs:
         return pairs
@@ -180,7 +185,7 @@ def candidate_point_pairs(n_points: int, *, rng: np.random.Generator, max_pairs:
     return [pairs[int(k)] for k in chosen]
 
 
-def generate_dimers(
+def generate_dimers_mesh(
     mesh_points: np.ndarray,
     normals: np.ndarray,
     mol_cart: cc.Cartesian,
@@ -188,7 +193,8 @@ def generate_dimers(
     max_dimers: int = 100,
     output_xyz: str = "dimers.xyz",
     overlap_tolerance: float = 0.1,
-    seed: int = 0,
+    seed: int | None = 0,
+    noise_scale: float = DEFAULT_NOISE_SCALE,
 ):
     """
     Generate approximate dimer geometries by placing two copies of the molecule
@@ -203,7 +209,7 @@ def generate_dimers(
     if n_points == 0:
         return
 
-    rng = np.random.default_rng(seed)
+    rng = make_rng(seed)
     candidate_indices = candidate_point_pairs(n_points, rng=rng, max_pairs=max_dimers)
 
     with open(output_xyz, "w") as f:
@@ -219,16 +225,24 @@ def generate_dimers(
             # translation so that the rotated mesh point at p2 lands on p1
             t = p1 - R @ p2
 
-            # coordinates of monomer A: as-is, but shifted so that its center is at origin already
+            # coordinates of monomer A: as-is
             coords_A = positions.copy()
             # coordinates of monomer B
             coords_B = (R @ positions.T).T + t
 
-            if has_inter_monomer_overlap(coords_A, coords_B, radii, overlap_tolerance=overlap_tolerance):
+            if has_inter_monomer_overlap(
+                coords_A, coords_B, radii, overlap_tolerance=overlap_tolerance
+            ):
                 continue
 
             all_coords = np.vstack([coords_A, coords_B])
             all_atoms = np.concatenate([atoms, atoms])
+
+            # add small random noise consistent with internal-coordinate sampler
+            if noise_scale and noise_scale > 0.0:
+                all_coords = all_coords + rng.normal(
+                    scale=noise_scale, size=all_coords.shape
+                )
 
             f.write(f"{len(all_atoms)}\n")
             f.write(f"dimer {idx} from mesh points {i} and {j}\n")
@@ -236,31 +250,106 @@ def generate_dimers(
                 f.write(f"{sym:2s} {x:15.8f} {y:15.8f} {z:15.8f}\n")
 
 
-def main():
-    filename = "old/meoh.xyz"
+def sample_dimer_cc(
+    xyz_file: str,
+    mol_r_scale: float = 1.0,
+    *,
+    seed: int | None = 0,
+    noise_scale: float = DEFAULT_NOISE_SCALE,
+):
+    """
+    Chemcoord-based sampling of dimers based on internal coordinates.
+    Returns a list of XYZ pandas.DataFrame objects.
+    """
+    import sympy
 
-    molecule = load_molecule_xyz(filename)
-    eq = symmetrize_molecule(molecule, max_n=25, tolerance=0.3, epsilon=1e-5)
+    rng = make_rng(seed)
 
-    sym_mol = eq["sym_mol"]
-    positions = sym_mol[["x", "y", "z"]].to_numpy()
-    radii = vdw_radii_for_cartesian(sym_mol)
+    cc_mol_xyz = cc.Cartesian.read_xyz(xyz_file)
 
-    atom_meshes = mesh_points_for_atoms(positions, radii, n_radial=10, n_angular=10, radii_scale=1.0)
-    mesh_points = unique_mesh_points_from_symmetry(eq, atom_meshes)
-    normals = normals_from_nearest_neighbors(mesh_points)
-
-    generate_dimers(
-        mesh_points,
-        normals,
-        sym_mol,
-        max_dimers=10000,
-        output_xyz="meoh_dimers_mesh_sampled.xyz",
-        overlap_tolerance=0.1,
-        seed=0,
+    mol_r = (
+        cc_mol_xyz[["x", "y", "z"]].max().max()
+        - cc_mol_xyz[["x", "y", "z"]].min().min()
     )
+    mol_r = mol_r / 2 * mol_r_scale
+    print("mol_r", mol_r)
+    fragments = cc_mol_xyz.fragmentate()
 
+    sympy.init_printing()
+    ba = sympy.Symbol("ba")
+    bb = sympy.Symbol("bb")
+    aa = sympy.Symbol("aa")
+    ab = sympy.Symbol("ab")
+    da = sympy.Symbol("da")
+    db = sympy.Symbol("db")
 
-if __name__ == "__main__":
-    main()
+    ba_val = 5
+    bb_val = 5
+    aa_val = 90
+    ab_val = -90
+    da_val = 0
+    db_val = 0
+
+    zmat1 = fragments[0].to_zmat()
+    zmat2 = zmat1.copy()
+
+    zmat1.safe_loc[zmat1.index[0], "bond"] = ba
+    zmat1.safe_loc[zmat1.index[0], "angle"] = aa
+    zmat1.safe_loc[zmat1.index[0], "dihedral"] = da
+
+    zmat2.safe_loc[zmat2.index[0], "bond"] = bb
+    zmat2.safe_loc[zmat2.index[0], "angle"] = ab
+    zmat2.safe_loc[zmat2.index[0], "dihedral"] = db
+
+    ba_vals = np.arange(mol_r, mol_r + 3, 2)
+    bb_vals = np.arange(mol_r, mol_r + 3, 2)
+    aa_vals = np.arange(0, 90, 33)
+    ab_vals = np.arange(-90, 0, 33)
+    da_vals = np.arange(0, 180, 33)
+    db_vals = np.arange(-181, 0, 33)
+
+    def make_conf(ba_val, bb_val, aa_val, ab_val, da_val, db_val):
+        a = (
+            zmat1.subs(ba, ba_val + rng.normal() / 100.0)
+            .subs(aa, aa_val + rng.normal())
+            .subs(da, da_val + rng.normal())
+            .get_cartesian()[["x", "y", "z"]]
+            .sort_index()
+        )
+        a = a.to_numpy()
+
+        b = (
+            zmat2.subs(bb, bb_val)
+            .subs(ab, ab_val)
+            .subs(db, db_val)
+            .get_cartesian()[["x", "y", "z"]]
+            .sort_index()
+        )
+        b = b.to_numpy()
+
+        combined = np.concatenate([a, b])
+        if noise_scale and noise_scale > 0.0:
+            combined = combined + rng.normal(
+                scale=noise_scale, size=combined.shape
+            )
+
+        XYZ = pd.DataFrame(combined, columns=["x", "y", "z"])
+        return XYZ
+
+    xyzs = []
+
+    for ba_val in ba_vals:
+        for bb_val in bb_vals:
+            for aa_val in aa_vals:
+                for ab_val in ab_vals:
+                    for da_val in da_vals:
+                        for db_val in db_vals:
+                            XYZ = make_conf(
+                                ba_val, bb_val, aa_val, ab_val, da_val, db_val
+                            )
+                            # center the dimer
+                            XYZ = XYZ - XYZ.mean()
+                            xyzs.append(XYZ)
+
+    return xyzs
 

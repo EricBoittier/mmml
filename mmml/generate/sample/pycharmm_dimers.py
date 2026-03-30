@@ -18,11 +18,10 @@ from pycharmm import energy
 
 from mmml.interfaces.chemcoordInterface import interface
 from mmml.interfaces.chemcoordInterface.interface import patch_chemcoord_for_pandas3
+from mmml.generate.sample.sample_cc import sample_dimer_cc as sample_dimer
+
 patch_chemcoord_for_pandas3()
-import chemcoord as cc
 
-
-# In[80]:
 
 def make_dimer_pdb(resid):
     reset_block()
@@ -60,14 +59,11 @@ def make_dimer_pdb(resid):
 
 
 
-
-# In[411]:
-
-def sample_dimer(xyz_file):
+def sample_dimer(xyz_file, mol_r_scale = 1.0):
     cc_mol_xyz = cc.Cartesian.read_xyz(xyz_file)
     
     mol_r = cc_mol_xyz[["x", "y", "z"]].max().max() - cc_mol_xyz[["x", "y", "z"]].min().min()
-    mol_r = mol_r / 2
+    mol_r = mol_r / 2 * mol_r_scale
     print("mol_r", mol_r)
     fragments = cc_mol_xyz.fragmentate()
     import sympy
@@ -183,7 +179,7 @@ if __name__ == "__main__":
     make_dimer_pdb(resid)
     reset_block()
     make_dimer_pdb(resid)
-    xyzs = sample_dimer(f"{resid.lower()}_dimer.xyz")
+    xyzs = sample_dimer(f"{resid.lower()}_dimer.xyz", mol_r_scale=1.0)
     print(len(xyzs))
     atomic_numbers = get_Z_from_psf()
     with open(f"{resid.lower()}_dimers_sampled.xyz", "w") as f:
