@@ -16,11 +16,18 @@ import pycharmm
 from pycharmm import energy
 
 
+from mmml.interfaces.chemcoordInterface import interface
+from mmml.interfaces.chemcoordInterface.interface import patch_chemcoord_for_pandas3
+patch_chemcoord_for_pandas3()
+import chemcoord as cc
+
+
 # In[80]:
 
 def make_dimer_pdb(resid):
     reset_block()
-    setupRes.main(resid)
+    atoms = setupRes.main(resid)
+    N = len(atoms)
     pycharmm.read.sequence_string(resid)
     pycharmm.gen.new_segment(seg_name=resid, setup_ic=True)
     pycharmm.ic.prm_fill(replace_all=True)
@@ -28,57 +35,41 @@ def make_dimer_pdb(resid):
 
     positions = pycharmm.coor.get_positions()
 
-    import numpy as np
     positions_np = positions.to_numpy()
     positions_np_copy = np.zeros_like(positions_np)
-    positions_np_copy[:12] = positions_np[:12]
-    positions_np_copy[12:] = positions_np[:12]
-
-    positions_np_copy[12:,0] += 10
-    positions_np_copy
+    positions_np_copy[:N] = positions_np[:N]
+    positions_np_copy[N:] = positions_np[:N]
+    positions_np_copy[N:,0] += 10
+    
     positions[['x', 'y', 'z']] = positions_np_copy
     pycharmm.coor.set_positions(positions)
     setupRes.mini(nbxmod=5)
-
-
     pycharmm_soft()
-
-
     setupRes.mini(nbxmod=1)
-
-
     pycharmm.energy.show()
-
-
-
     view_pycharmm_state()
-
     pycharmm.coor.show()
-
     pycharmm.write.coor_pdb(f"{resid.lower()}_dimer.pdb")
-
     atoms = ase.io.read(f"{resid.lower()}_dimer.pdb")
 
     R = atoms.get_positions()
     Z= get_Z_from_psf()
     atoms = ase.Atoms(Z, R)
 
-    ase.io.write("benz_dimer.xyz", atoms)
+    ase.io.write(f"{resid.lower()}_dimer.xyz", atoms)
 
 
-
-
-from mmml.interfaces.chemcoordInterface import interface
-from mmml.interfaces.chemcoordInterface.interface import patch_chemcoord_for_pandas3
-patch_chemcoord_for_pandas3()
-import chemcoord as cc
 
 
 # In[411]:
 
 def sample_dimer(xyz_file):
     cc_mol_xyz = cc.Cartesian.read_xyz(xyz_file)
-
+    
+    mol_r = cc_mol_xyz[["x", "y", "z"]].max().max() - cc_mol_xyz[["x", "y", "z"]].min().min()
+    mol_r = mol_r / 2
+    print("mol_r", mol_r)
+    fragments = cc_mol_xyz.fragmentate()
     import sympy
 
     sympy.init_printing()
@@ -108,12 +99,12 @@ def sample_dimer(xyz_file):
     zmat2.safe_loc[zmat2.index[0], "dihedral"] = db
 
 
-    ba_vals = np.arange(5, 8, 2)
-    bb_vals = np.arange(7, 11, 2)
+    ba_vals = np.arange(mol_r, mol_r + 3, 2)
+    bb_vals = np.arange(mol_r, mol_r + 3, 2)
     aa_vals = np.arange(0, 90, 33)
-    ab_vals = np.arange(-90, 0, 45)
+    ab_vals = np.arange(-90, 0, 33)
     da_vals = np.arange(0, 180, 33)
-    db_vals = np.arange(-181, 0, 45)
+    db_vals = np.arange(-181, 0, 33)
 
 
     def make_conf(ba_val, bb_val, aa_val, ab_val, da_val, db_val):
@@ -185,4 +176,19 @@ def sample_dimer_energies(xyzs):
 
 
 
-
+if __name__ == "__main__":
+    resid = "MEOH"
+    make_dimer_pdb(resid)
+    reset_block()
+    make_dimer_pdb(resid)
+    xyzs = sample_dimer(f"{resid.lower()}_dimer.xyz")
+    print(len(xyzs))
+    atomic_numbers = get_Z_from_psf()
+    with open(f"{resid.lower()}_dimers_sampled.xyz", "w") as f:
+    # save xyzs to an xyz file
+        for idx, XYZ in enumerate(xyzs):
+            f.write(f"{len(XYZ)}\n")
+            f.write(f"dimer {idx}\n")
+            for sym, (x, y, z) in zip(atomic_numbers, XYZ[["x", "y", "z"]].to_numpy()):
+                sym = ase.data.chemical_symbols[sym]
+                f.write(f"{sym:2s} {x:15.8f} {y:15.8f} {z:15.8f}\n")
