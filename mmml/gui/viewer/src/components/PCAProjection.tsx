@@ -44,26 +44,29 @@ function PCAProjection({ filePath, properties, currentFrame, onFrameClick }: PCA
   const [pcaData, setPcaData] = useState<PCAData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isExpanded, setIsExpanded] = useState(true);
+  /** Collapsed by default; PCA is expensive on the server for large trajectories. */
+  const [isExpanded, setIsExpanded] = useState(false);
   const [colorBy, setColorBy] = useState('energy');
 
-  // Load PCA data
+  // Reset when file changes; do not auto-fetch PCA (opt-in via button).
   useEffect(() => {
-    const loadPCA = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const data = await getPCA(filePath, 2);
-        setPcaData(data);
-      } catch (err) {
-        setError(`Failed to load PCA: ${err}`);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    loadPCA();
+    setPcaData(null);
+    setError(null);
+    setLoading(false);
   }, [filePath]);
+
+  const loadPCA = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await getPCA(filePath, 2);
+      setPcaData(data);
+    } catch (err) {
+      setError(`Failed to load PCA: ${err}`);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Filter available color options
   const availableColorOptions = useMemo(() => {
@@ -145,6 +148,25 @@ function PCAProjection({ filePath, properties, currentFrame, onFrameClick }: PCA
 
       {isExpanded && (
         <div className="px-4 pb-4">
+          {!pcaData && !loading && !error && (
+            <div className="py-3 space-y-2">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Coordinate PCA runs on the server (SVD over all frames). Large trajectories can take
+                several seconds and transfer a big payload—compute only when needed.
+              </p>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void loadPCA();
+                }}
+                className="text-sm px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-500 text-white"
+              >
+                Compute coordinate PCA
+              </button>
+            </div>
+          )}
+
           {loading && (
             <div className="h-48 flex items-center justify-center">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
