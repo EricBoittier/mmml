@@ -7,7 +7,7 @@ including atom reordering to match PyCHARMM's internal ordering.
 
 import numpy as np
 import pandas as pd
-from typing import Tuple, Optional
+from typing import Any, Tuple, Optional
 import ase
 
 
@@ -354,9 +354,9 @@ def reorder_atoms_to_match_pycharmm(
 
 def initialize_simulation_from_batch(
     batch: dict,
-    calculator_factory,
-    cutoff_params,
-    args,
+    calculator_factory: Any,
+    cutoff_params: Any,
+    args: Any,
     pycharmm_atypes: Optional[np.ndarray] = None,
     pycharmm_resids: Optional[np.ndarray] = None,
     ATOMS_PER_MONOMER: Optional[int] = None,
@@ -664,9 +664,9 @@ def initialize_simulation_from_batch(
 
 def initialize_multiple_simulations(
     valid_batches: list,
-    calculator_factory,
-    cutoff_params,
-    args,
+    calculator_factory: Any,
+    cutoff_params: Any,
+    args: Any,
     n_simulations: int = 5,
     pycharmm_atypes: Optional[np.ndarray] = None,
     pycharmm_resids: Optional[np.ndarray] = None,
