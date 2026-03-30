@@ -20,7 +20,20 @@ markdown_extensions:
   - pymdownx.inlinehilite
   - pymdownx.superfences
 
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_root_heading: true
+            show_source: false
+            show_submodules: false
+            members_order: source
+
 nav:
   - Home: index.md
   - Getting Started: getting-started.md
   - Development: development.md
+  - Units Summary: UNITS_SUMMARY.md
+  - API Reference: api.md
