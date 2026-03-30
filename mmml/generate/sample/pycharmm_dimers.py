@@ -146,6 +146,8 @@ def sample_dimer(xyz_file):
                         for db_val in db_vals:
 
                             XYZ = make_conf(ba_val, bb_val, aa_val, ab_val, da_val, db_val)
+                            # center the dimer
+                            XYZ = XYZ - XYZ.mean()
                             xyzs.append(XYZ)
 
     return xyzs
