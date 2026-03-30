@@ -1,0 +1,7 @@
+method,scale,seconds,n_dimers,output_xyz
+cc,1.0,28.787498130011954,1296,benchmark_out/cc_scale_1.000.xyz
+cc,1.5,28.631377149999025,1296,benchmark_out/cc_scale_1.500.xyz
+cc,2.0,28.581830327995704,1296,benchmark_out/cc_scale_2.000.xyz
+mesh,1.0,0.8934890490054386,562,benchmark_out/mesh_scale_1.000.xyz
+mesh,1.5,1.030246852998971,3541,benchmark_out/mesh_scale_1.500.xyz
+mesh,2.0,1.039624894008739,5271,benchmark_out/mesh_scale_2.000.xyz

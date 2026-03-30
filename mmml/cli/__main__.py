@@ -38,6 +38,7 @@ Available commands:
   ef-evaluate Evaluate trained EF model (metrics + plots from test NPZ)
   ef-md       MD with trained EF model (ASE or JIT JAX; replicas, field ramp, etc.)
   interpolate-xyz  Interpolate two XYZ structures via Z-matrix; write NPZ trajectory
+  sample-diverse-xyz  Pick N diverse structures from XYZ(s); write sampled.npz (SOAP)
   gui         Start the molecular viewer GUI
 
 Examples:
@@ -72,7 +73,7 @@ For help on a specific command:
     
     parser.add_argument(
         'command',
-        choices=['make-res', 'make-box', 'run', 'run-pycharmm', 'xml2npz', 'validate', 'train', 'evaluate', 'downstream', 'fix-and-split', 'pyscf-dft', 'pyscf-mp2', 'pyscf-evaluate', 'verify-esp-alignment', 'normal-mode-sample', 'physnet-md', 'physnet-evaluate', 'ef-train', 'ef-evaluate', 'ef-md', 'active-learning', 'kernel-fit', 'interpolate-xyz', 'gui'],
+        choices=['make-res', 'make-box', 'run', 'run-pycharmm', 'xml2npz', 'validate', 'train', 'evaluate', 'downstream', 'fix-and-split', 'pyscf-dft', 'pyscf-mp2', 'pyscf-evaluate', 'verify-esp-alignment', 'normal-mode-sample', 'physnet-md', 'physnet-evaluate', 'ef-train', 'ef-evaluate', 'ef-md', 'active-learning', 'kernel-fit', 'interpolate-xyz', 'sample-diverse-xyz', 'gui'],
         help='Command to run'
     )
     parser.add_argument(
@@ -211,6 +212,11 @@ For help on a specific command:
         from .misc import interpolate_xyz
         sys.argv = ['mmml interpolate-xyz'] + args.args
         return interpolate_xyz.main()
+
+    elif args.command == 'sample-diverse-xyz':
+        from mmml.generate.sample import sample_diverse_xyz
+        sys.argv = ['mmml sample-diverse-xyz'] + args.args
+        return sample_diverse_xyz.main()
 
     elif args.command == 'gui':
         from . import gui
