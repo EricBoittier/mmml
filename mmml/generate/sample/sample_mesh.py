@@ -10,6 +10,8 @@ by using the normal of the surface at the point of contact
 """
 
 from mmml.interfaces.chemcoordInterface.interface import patch_chemcoord_for_pandas3
+from mmml.generate.sample import sample_cc
+
 patch_chemcoord_for_pandas3()
 import chemcoord as cc
 import ase
@@ -191,49 +193,18 @@ def generate_dimers(
     seed: int = 0,
 ):
     """
-    Generate approximate dimer geometries by placing two copies of the molecule
-    so that a pair of mesh points touch and their surface normals are antiparallel.
-    Results are written to a multi-structure XYZ file.
+    Wrapper that delegates to the shared mesh-based dimer generator in
+    sample_cc so that sampling criteria and random noise are consistent.
     """
-    positions = mol_cart[["x", "y", "z"]].to_numpy()
-    atoms = mol_cart["atom"].to_numpy()
-    radii = vdw_radii_for_cartesian(mol_cart)
-
-    n_points = len(mesh_points)
-    if n_points == 0:
-        return
-
-    rng = np.random.default_rng(seed)
-    candidate_indices = candidate_point_pairs(n_points, rng=rng, max_pairs=max_dimers)
-
-    with open(output_xyz, "w") as f:
-        for idx, (i, j) in enumerate(candidate_indices):
-            p1 = mesh_points[i]
-            n1 = normals[i]
-            p2 = mesh_points[j]
-            n2 = normals[j]
-
-            # rotate copy B such that its normal at p2 points opposite to n1
-            R = rotation_between_vectors(n2, -n1)
-
-            # translation so that the rotated mesh point at p2 lands on p1
-            t = p1 - R @ p2
-
-            # coordinates of monomer A: as-is, but shifted so that its center is at origin already
-            coords_A = positions.copy()
-            # coordinates of monomer B
-            coords_B = (R @ positions.T).T + t
-
-            if has_inter_monomer_overlap(coords_A, coords_B, radii, overlap_tolerance=overlap_tolerance):
-                continue
-
-            all_coords = np.vstack([coords_A, coords_B])
-            all_atoms = np.concatenate([atoms, atoms])
-
-            f.write(f"{len(all_atoms)}\n")
-            f.write(f"dimer {idx} from mesh points {i} and {j}\n")
-            for sym, (x, y, z) in zip(all_atoms, all_coords):
-                f.write(f"{sym:2s} {x:15.8f} {y:15.8f} {z:15.8f}\n")
+    sample_cc.generate_dimers_mesh(
+        mesh_points=mesh_points,
+        normals=normals,
+        mol_cart=mol_cart,
+        max_dimers=max_dimers,
+        output_xyz=output_xyz,
+        overlap_tolerance=overlap_tolerance,
+        seed=seed,
+    )
 
 
 def main():
