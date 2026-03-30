@@ -18,7 +18,7 @@ from pycharmm import energy
 
 from mmml.interfaces.chemcoordInterface import interface
 from mmml.interfaces.chemcoordInterface.interface import patch_chemcoord_for_pandas3
-from mmml.generate.sample.sample_cc import sample_dimer_cc as sample_dimer
+from mmml.generate.sample import sample_cc
 
 patch_chemcoord_for_pandas3()
 
@@ -60,93 +60,14 @@ def make_dimer_pdb(resid):
 
 
 def sample_dimer(xyz_file, mol_r_scale = 1.0):
-    cc_mol_xyz = cc.Cartesian.read_xyz(xyz_file)
-    
-    mol_r = cc_mol_xyz[["x", "y", "z"]].max().max() - cc_mol_xyz[["x", "y", "z"]].min().min()
-    mol_r = mol_r / 2 * mol_r_scale
-    print("mol_r", mol_r)
-    fragments = cc_mol_xyz.fragmentate()
-    import sympy
-
-    sympy.init_printing()
-    ba = sympy.Symbol("ba")
-    bb = sympy.Symbol("bb")
-    aa = sympy.Symbol("aa")
-    ab = sympy.Symbol("ab")
-    da = sympy.Symbol("da")
-    db = sympy.Symbol("db")
-
-    ba_val = 5
-    bb_val = 5
-    aa_val = 90
-    ab_val = -90
-    da_val = 0
-    db_val = 0
-
-    zmat1 = fragments[0].to_zmat()
-    zmat2 = zmat1.copy()
-
-    zmat1.safe_loc[zmat1.index[0], "bond"] = ba
-    zmat1.safe_loc[zmat1.index[0], "angle"] = aa
-    zmat1.safe_loc[zmat1.index[0], "dihedral"] = da
-
-    zmat2.safe_loc[zmat2.index[0], "bond"] = bb
-    zmat2.safe_loc[zmat2.index[0], "angle"] = ab
-    zmat2.safe_loc[zmat2.index[0], "dihedral"] = db
-
-
-    ba_vals = np.arange(mol_r, mol_r + 3, 2)
-    bb_vals = np.arange(mol_r, mol_r + 3, 2)
-    aa_vals = np.arange(0, 90, 33)
-    ab_vals = np.arange(-90, 0, 33)
-    da_vals = np.arange(0, 180, 33)
-    db_vals = np.arange(-181, 0, 33)
-
-
-    def make_conf(ba_val, bb_val, aa_val, ab_val, da_val, db_val):
-
-
-        a = zmat1.subs(
-            ba, ba_val + np.random.normal()/100 ).subs(
-            aa, aa_val + np.random.normal()).subs(
-            da, da_val + np.random.normal()).get_cartesian()[["x", "y", "z"]].sort_index()
-        a = a.to_numpy()
-
-        b = zmat2.subs(bb, bb_val).subs(ab, ab_val).subs(db, db_val).get_cartesian()[["x", "y", "z"]].sort_index()
-        b = b.to_numpy()
-
-        combined = np.concat([a, b])
-        combined += np.random.normal(size=combined.shape)/100
-
-        XYZ = pd.DataFrame(combined, columns=["x", "y", "z"])
-        return XYZ
-
-
-    setupRes.mini(nbxmod=1)
-    energy = pycharmm.energy.get_energy()
-    energy = energy[['ENER', 'VDW', 'ELEC']]
-
-    view_pycharmm_state()
-
-
-    xyzs = []
-    fragments = cc_mol_xyz.fragmentate()
-    pycharmm_quiet()
-
-
-    for ba_val in ba_vals:
-        for bb_val in bb_vals:
-            for aa_val in aa_vals:
-                for ab_val in ab_vals:
-                    for da_val in da_vals:
-                        for db_val in db_vals:
-
-                            XYZ = make_conf(ba_val, bb_val, aa_val, ab_val, da_val, db_val)
-                            # center the dimer
-                            XYZ = XYZ - XYZ.mean()
-                            xyzs.append(XYZ)
-
-    return xyzs
+    """
+    Delegate to shared chemcoord-based sampler in sample_cc so that
+    sampling logic and random noise are harmonized with other scripts.
+    """
+    return sample_cc.sample_dimer_cc(
+        xyz_file,
+        mol_r_scale=mol_r_scale,
+    )
 
 
 def sample_dimer_energies(xyzs):
