@@ -69,8 +69,9 @@ plotting = [
 ]
 
 # GPU/CUDA support (CUDA 13, default)
-# JAX CUDA 13 uses separate plugin/pjrt packages (no jaxlib[cuda13] extra).
-# Runtime requirement: cuDNN >= 9.10.1 (older versions are rejected by JAX CUDA13 plugin).
+# JAX CUDA 13 uses plugin/pjrt wheels (jax[cuda13]); there is no jaxlib[cuda13] extra.
+# GPU requirement: NVIDIA SM 7.5+ (Turing or newer). Pascal/Volta (e.g. CC 6.x) are not supported — use gpu-cuda12.
+# Runtime: cuDNN >= 9.10.1 (older versions are rejected by the JAX CUDA 13 plugin).
 gpu = [
     "jax[cuda13]",
     "jaxlib",
@@ -81,12 +82,13 @@ gpu = [
 #    "cuequivariance-ops-jax-cu13",
 ]
 
-# GPU/CUDA support (CUDA 12)
-# Note: JAX with CUDA 12 requires installation from specific index
-# Install with: pip install -e ".[gpu-cuda12]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+# GPU/CUDA support (CUDA 12) — use for Maxwell/Pascal/Volta (SM 5.2–7.2) and driver >= 525 on Linux.
+# jaxlib has no [cuda12] extra in JAX 0.9+; jax[cuda12] pulls jax-cuda12-plugin[with-cuda] + jaxlib from PyPI.
 gpu-cuda12 = [
-    "jax[cuda12]>=0.4.20",
-    "jaxlib[cuda12]>=0.4.20",
+    "jax[cuda12]>=0.9.0",
+    "jaxlib",
+    "jax-cuda12-plugin>=0.9.0",
+    "jax-cuda12-pjrt>=0.9.0",
     "cupy-cuda12x>=13.0.0",
     "cutensor-cu12>=2.0.0",
 #    "cuequivariance-ops-jax-cu12",

@@ -575,6 +575,19 @@ def _normalize_for_concat(arr: np.ndarray, n_samples: int, key: str) -> np.ndarr
         return np.full(n_samples, arr.flat[0], dtype=arr.dtype)
     if arr.ndim == 1 and arr.shape[0] == 1 and key in ('N',):
         return np.full(n_samples, arr[0], dtype=arr.dtype)
+    if key in ('Ef', 'efield_Ef', 'efield_scf_Ef'):
+        if arr.shape[0] == n_samples:
+            return arr
+        if arr.size == 3 or (arr.ndim == 1 and arr.shape[0] == 3):
+            v = np.asarray(arr, dtype=np.float64).reshape(1, 3)
+            return np.broadcast_to(v, (n_samples, 3))
+        if arr.ndim == 2 and arr.shape[0] == 1 and arr.shape[1] == 3:
+            v = np.asarray(arr, dtype=np.float64).reshape(1, 3)
+            return np.broadcast_to(v, (n_samples, 3))
+        raise ValueError(
+            f"Cannot merge {key}: need (n_samples, 3) with n_samples={n_samples}, "
+            f"or a single (3,) / (1, 3) field to broadcast; got {arr.shape}"
+        )
     return arr
 
 
@@ -590,7 +603,7 @@ def _load_and_merge_efd(efd_files: Union[Path, List[Path]]) -> Dict:
 
     # Concatenate multiple files
     parts = [dict(np.load(f, allow_pickle=True)) for f in efd_files]
-    concat_keys = ['R', 'E', 'F', 'N', 'Dxyz', 'esp']
+    concat_keys = ['R', 'E', 'F', 'N', 'Dxyz', 'esp', 'Ef', 'efield_Ef', 'efield_scf_Ef']
     grid_key = 'esp_grid' if 'esp_grid' in parts[0] else ('vdw_surface' if 'vdw_surface' in parts[0] else None)
     if grid_key:
         concat_keys.append(grid_key)
@@ -609,6 +622,8 @@ def _load_and_merge_efd(efd_files: Union[Path, List[Path]]) -> Dict:
                 arr = np.asarray(p[k])
                 n_samples = p['R'].shape[0]  # sample count from R
                 if arr.ndim == 0 or (arr.ndim == 1 and arr.shape[0] != n_samples and k == 'N'):
+                    arr = _normalize_for_concat(arr, n_samples, k)
+                elif k in ('Ef', 'efield_Ef', 'efield_scf_Ef') and arr.shape[0] != n_samples:
                     arr = _normalize_for_concat(arr, n_samples, k)
                 to_concat.append(arr)
             merged[k] = np.concatenate(to_concat, axis=0)
