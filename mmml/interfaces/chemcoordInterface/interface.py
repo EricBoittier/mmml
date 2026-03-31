@@ -172,6 +172,54 @@ def patch_chemcoord_for_pandas3():
 
     idx._Unsafe_base.__setitem__ = _unsafe_setitem_patched
 
+    # --- Patch 4: get_grad_zmat → apply_grad_zmat_tensor uses numpy str dtypes which
+    # become pandas Arrow string columns; they reject mixed int/str construction refs.
+    xyz_functions = importlib.import_module(
+        "chemcoord.cartesian_coordinates.xyz_functions"
+    )
+
+    def apply_grad_zmat_tensor_patched(grad_C, construction_table, cart_dist):
+        import sympy
+
+        if (construction_table.index != cart_dist.index).any():
+            message = "construction_table and cart_dist must use the same index"
+            raise ValueError(message)
+        from chemcoord.internal_coordinates.zmat_class_main import Zmat
+
+        dtypes = [
+            ("atom", object),
+            ("b", object),
+            ("bond", float),
+            ("a", object),
+            ("angle", float),
+            ("d", object),
+            ("dihedral", float),
+        ]
+        new = pd.DataFrame(
+            np.empty(len(construction_table), dtype=dtypes),
+            index=cart_dist.index,
+        )
+
+        X_dist = cart_dist.loc[:, ["x", "y", "z"]].values.T
+        C_dist = np.tensordot(grad_C, X_dist, axes=([3, 2], [0, 1])).T
+        if C_dist.dtype == np.dtype("i8"):
+            C_dist = C_dist.astype("f8")
+        try:
+            C_dist[:, [1, 2]] = np.rad2deg(C_dist[:, [1, 2]])
+        except (AttributeError, TypeError):
+            C_dist[:, [1, 2]] = sympy.deg(C_dist[:, [1, 2]])
+            new = new.astype({k: "O" for k in ["bond", "angle", "dihedral"]})
+
+        ct = construction_table.loc[:, ["b", "a", "d"]].copy()
+        for col in ("b", "a", "d"):
+            ct[col] = ct[col].astype(object)
+        new.loc[:, ["b", "a", "d"]] = ct
+        new.loc[:, "atom"] = cart_dist.loc[:, "atom"].astype(object)
+        new.loc[:, ["bond", "angle", "dihedral"]] = C_dist
+        return Zmat(new, _metadata={"last_valid_cartesian": cart_dist})
+
+    xyz_functions.apply_grad_zmat_tensor = apply_grad_zmat_tensor_patched
+
 
 patch_chemcoord_for_pandas3()
 
