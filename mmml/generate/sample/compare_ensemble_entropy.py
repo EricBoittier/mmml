@@ -664,17 +664,23 @@ def process_ensemble_frames(
     *,
     label: str,
     c_table: pd.DataFrame,
-    ref_positions_com: np.ndarray | None,
-    kabsch: bool,
-    soap_engine: Any | None,
-    max_frames: int | None,
-    rng: np.random.Generator,
-    hist_bins: int,
+    ref_positions_com: np.ndarray | None = None,
+    kabsch: bool = False,
+    soap_engine: Any | None = None,
+    max_frames: int | None = None,
+    rng: np.random.Generator | None = None,
+    hist_bins: int = 32,
 ) -> dict[str, Any]:
     """
     Same metrics as :func:`process_ensemble`, but on an in-memory ASE trajectory
     (avoids writing a large multi-frame XYZ).
+
+    Optional controls default to no Kabsch alignment, no SOAP (pass ``soap_engine``
+    from :func:`_make_soap` for SOAP metrics), no subsampling, and ``hist_bins=32``.
+    If ``rng`` is omitted, ``numpy.random.default_rng(0)`` is used for subsampling.
     """
+    if rng is None:
+        rng = np.random.default_rng(0)
     if not frames:
         z = np.zeros((0, 0), dtype=np.float64)
         return {
@@ -973,12 +979,12 @@ def main() -> None:
 
     try:
         soap_engine = _make_soap(
-            DEFAULT_SPECIES,
-            args.r_cut,
-            args.n_max,
-            args.l_max,
-            args.sigma,
-        )
+                DEFAULT_SPECIES,
+                args.r_cut,
+                args.n_max,
+                args.l_max,
+                args.sigma,
+            )
     except ImportError as e:
         raise SystemExit(
             "dscribe is required for SOAP metrics. Install with: pip install -e '.[quantum]'"
