@@ -659,9 +659,10 @@ def _make_soap(
     )
 
 
-def process_ensemble(
-    path: Path,
+def process_ensemble_frames(
+    frames: list[Any],
     *,
+    label: str,
     c_table: pd.DataFrame,
     ref_positions_com: np.ndarray | None,
     kabsch: bool,
@@ -670,11 +671,14 @@ def process_ensemble(
     rng: np.random.Generator,
     hist_bins: int,
 ) -> dict[str, Any]:
-    frames = load_xyz_frames(path)
+    """
+    Same metrics as :func:`process_ensemble`, but on an in-memory ASE trajectory
+    (avoids writing a large multi-frame XYZ).
+    """
     if not frames:
         z = np.zeros((0, 0), dtype=np.float64)
         return {
-            "path": str(path),
+            "path": label,
             "n_frames": 0,
             "zmat_failures": 0,
             "gzip_bytes_cart": 0,
@@ -716,7 +720,7 @@ def process_ensemble(
             zmat_bytes.extend(bytes_float64(zv))
         except Exception as e:
             zmat_fail += 1
-            logger.debug("Z-matrix failed for frame in %s: %s", path, e)
+            logger.debug("Z-matrix failed for frame in %s: %s", label, e)
 
         cc_dists.append(inter_fragment_c_c_distance(pos))
 
@@ -755,17 +759,19 @@ def process_ensemble(
     if soap_arr.size and len(soap_arr) >= 2:
         sh_pca2d, ipr_pca2d = joint_pca_histogram_entropy(soap_arr, bins=hist_bins)
 
-    # 1D C–C distance entropy on 50 bins
+    # 1D C–C distance entropy on 50 bins (skip if metric undefined, e.g. all NaN)
     sh_cc_h = np.nan
-    if len(cc_dists) >= 2:
-        h, _ = np.histogram(cc_dists, bins=50)
+    cc_arr = np.asarray(cc_dists, dtype=np.float64)
+    cc_finite = cc_arr[np.isfinite(cc_arr)]
+    if len(cc_finite) >= 2:
+        h, _ = np.histogram(cc_finite, bins=50)
         p = h.astype(np.float64)
         p = p[p > 0]
         p = p / p.sum()
         sh_cc_h = shannon_entropy_from_probs(p)
 
     return {
-        "path": str(path),
+        "path": label,
         "n_frames": n_frames,
         "zmat_failures": zmat_fail,
         "gzip_bytes_cart": gzip_cart,
@@ -780,6 +786,31 @@ def process_ensemble(
         "soap_dim": int(soap_arr.shape[1]) if soap_arr.size else 0,
         "soap_array": soap_arr,
     }
+
+
+def process_ensemble(
+    path: Path,
+    *,
+    c_table: pd.DataFrame,
+    ref_positions_com: np.ndarray | None,
+    kabsch: bool,
+    soap_engine: Any | None,
+    max_frames: int | None,
+    rng: np.random.Generator,
+    hist_bins: int,
+) -> dict[str, Any]:
+    frames = load_xyz_frames(path)
+    return process_ensemble_frames(
+        frames,
+        label=str(path),
+        c_table=c_table,
+        ref_positions_com=ref_positions_com,
+        kabsch=kabsch,
+        soap_engine=soap_engine,
+        max_frames=max_frames,
+        rng=rng,
+        hist_bins=hist_bins,
+    )
 
 
 def parse_scale_from_name(path: Path) -> float | None:
