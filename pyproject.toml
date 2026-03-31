@@ -186,8 +186,6 @@ dev = [
     "mkdocs>=1.6,<2.0",
     "mkdocs-material>=9.7",
     "mkdocstrings[python]>=0.30",
-    # Required so mkdocstrings can import mmml.interfaces.openmmInterface.interface during docs build
-    "openmm>=8.0",
 ]
 
 # Full installation with all optional dependencies (CUDA 13 default)

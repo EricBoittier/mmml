@@ -44,7 +44,9 @@ The previous version of this page only listed a minimal subset while docs genera
 
 ### OpenMM Interface
 
-::: mmml.interfaces.openmmInterface.interface
+The OpenMM integration provides helpers to set up and run CHARMM/OpenMM simulations (PSF/PDB, parameter sets, integrators, and schedules). It depends on the optional [OpenMM](https://openmm.org/) Python package (`pip install openmm`).
+
+Source: [`mmml/interfaces/openmmInterface/interface.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/openmmInterface/interface.py).
 
 ### PyCHARMM Setup Box
 
