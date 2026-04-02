@@ -89,6 +89,34 @@ def print_params_structure(params, label="params", max_depth=3, verbose=False):
     _print(params, prefix="[STRUCT]   ")
 
 
+_FLAX_VARIABLE_COLLECTION_KEYS = frozenset({"params", "intermediates", "batch_stats"})
+
+
+def sanitize_flax_variables_dict(params):
+    """Keep only Flax variable collections; drop metadata (e.g. ``uuid``) from checkpoint JSON.
+
+    Flax ``apply`` / ``jax.jit`` require variables to contain only known collections, not extra
+    string keys at the top level.
+    """
+    if not isinstance(params, dict):
+        return params
+    out = {k: v for k, v in params.items() if k in _FLAX_VARIABLE_COLLECTION_KEYS}
+    if "params" in out:
+        return out
+    if {"uuid", "model", "training", "data"}.intersection(params.keys()):
+        raise ValueError(
+            "This file looks like a CONFIG (keys uuid/model/training/data), not weights. "
+            "Use a params JSON with top-level 'params' (e.g. params-<uuid>.json)."
+        )
+    leaves = jax.tree_util.tree_leaves(params)
+    if not any(hasattr(leaf, "shape") for leaf in leaves):
+        raise ValueError(
+            "Params JSON has no top-level 'params' key and no array leaves. "
+            f"Top-level keys: {list(params.keys())}"
+        )
+    return {"params": params}
+
+
 def load_params(params_path, verbose=False):
     """Load parameters from JSON file.
     
@@ -114,7 +142,7 @@ def load_params(params_path, verbose=False):
             return jnp.array(arr)
         return obj
     
-    params = convert_to_jax(params_dict)
+    params = sanitize_flax_variables_dict(convert_to_jax(params_dict))
     
     # Strip 'intermediates' key if present — these are sow() artifacts that
     # get corrupted during JSON round-trip (tuples become arrays, changing

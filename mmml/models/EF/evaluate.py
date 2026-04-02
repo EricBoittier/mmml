@@ -42,6 +42,7 @@ from mmml.models.EF.training import (
     mean_absolute_error_forces,
     prepare_batches,
     print_params_structure,
+    sanitize_flax_variables_dict,
 )
 
 # Set style for better plots
@@ -159,12 +160,11 @@ def get_args(**kwargs):
     return SimpleNamespace(**defaults)
 
 
-
 def load_params(params_path):
-    """Load parameters from JSON file."""
+    """Load parameters from JSON file (Flax ``{'params': ...}`` only; strips metadata and intermediates)."""
     with open(params_path, 'r') as f:
         params_dict = json.load(f)
-    
+
     # Convert numpy arrays back from lists
     def convert_to_jax(obj):
         if isinstance(obj, dict):
@@ -177,8 +177,11 @@ def load_params(params_path):
                 return jnp.array(arr, dtype=jnp.int32)
             return jnp.array(arr)
         return obj
-    
-    params = convert_to_jax(params_dict)
+
+    params = sanitize_flax_variables_dict(convert_to_jax(params_dict))
+    # Strip intermediates (sow() JSON round-trip); recomputed each forward — same as training.load_params
+    if isinstance(params, dict) and "intermediates" in params:
+        params = {k: v for k, v in params.items() if k != "intermediates"}
     return params
 
 
@@ -1099,18 +1102,31 @@ def main(args=None):
     
     # Try to infer features from params if not loaded from config or features missing
     if not config_loaded or 'features' not in model_config or model_config.get('features') is None:
-        try:
-            def get_shape(obj):
-                """Get shape from JAX array, numpy array, or list."""
-                if hasattr(obj, 'shape'):
-                    return obj.shape
-                elif isinstance(obj, (list, tuple)):
-                    if len(obj) > 0 and isinstance(obj[0], (list, tuple)):
-                        # Nested list, try to get shape
-                        return tuple(len(obj) if isinstance(obj, (list, tuple)) else 1 for _ in range(4))
-                    return None
-            return None
+        def _infer_features_from_params_tree(p):
+            """Best-effort: read embedding width from Flax ``params`` tree."""
+            inner = p.get("params", p) if isinstance(p, dict) else p
 
+            def walk(d):
+                if isinstance(d, dict):
+                    emb = d.get("embedding")
+                    if hasattr(emb, "shape") and len(emb.shape) >= 2:
+                        return int(emb.shape[-1])
+                    for v in d.values():
+                        r = walk(v)
+                        if r is not None:
+                            return r
+                return None
+
+            return walk(inner) if isinstance(inner, dict) else None
+
+        try:
+            inferred = _infer_features_from_params_tree(params)
+            if inferred is not None:
+                model_config['features'] = inferred
+                print(f"  Inferred features from params: {inferred}")
+            else:
+                model_config['features'] = 64
+                print("  Could not infer features from params; using default 64")
         except Exception as e:
             import traceback
             print(f"Warning: Error inferring features: {e}")

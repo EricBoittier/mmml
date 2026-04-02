@@ -15,7 +15,7 @@ import json
 from pathlib import Path
 from flax import linen as nn
 
-from mmml.models.EF.training import MessagePassingModel
+from mmml.models.EF.training import MessagePassingModel, sanitize_flax_variables_dict
 from mmml.models.EF.model_functions import energy_and_forces
 
 
@@ -37,7 +37,9 @@ def load_params(params_path):
             return jnp.array(arr)
         return obj
     
-    params = convert_to_jax(params_dict)
+    params = sanitize_flax_variables_dict(convert_to_jax(params_dict))
+    if isinstance(params, dict) and "intermediates" in params:
+        params = {k: v for k, v in params.items() if k != "intermediates"}
     return params
 
 
