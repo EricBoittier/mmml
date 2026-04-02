@@ -229,6 +229,13 @@ def get_args(**overrides):
                        help="Ef_phys = Ef_input * field_scale (au)")
     parser.add_argument("--zbl", action="store_true",
                        help="Add ZBL nuclear repulsion for short-range stability")
+    parser.add_argument(
+        "--include-pseudotensors",
+        dest="include_pseudotensors",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Equivariant parity dimension in e3x MessagePass / tensors (default: on)",
+    )
     parser.add_argument("--gradient-checkpoint", action="store_true",
                        help="Use gradient checkpointing to reduce GPU memory (slower training)")
     parser.add_argument(
@@ -336,7 +343,7 @@ class MessagePassingModel(nn.Module):
 
         # Build an EF tensor of shape compatible with e3x.nn.Tensor()
         # e3x format is (num_atoms, parity, (lmax+1)^2, features)
-        # Start with (B, 4) -> expand to (B*N, 2, 4, features) for parity=2 (pseudotensors)
+        # Start with (B, 4) -> expand to (B*N, parity, 4, features) (parity 2 with pseudotensors, else 1)
         pad_ef = jnp.ones((B, 1), dtype=positions_flat.dtype)
 
         Ef = Ef * self.field_scale
@@ -349,9 +356,9 @@ class MessagePassingModel(nn.Module):
         xEF = xEF[:, None, :, :]  # (B, 1, 1, 4, features) - add dimension
         xEF = jnp.repeat(xEF, N, axis=1)  # (B, N, 1, 4, features) - repeat N times
         xEF = xEF.reshape(B * N, 1, 4, self.features)  # (B*N, 1, 4, features)
-        # Expand parity dimension from 1 to 2 to match x (since include_pseudotensors=True)
-        # xEF is (B*N, 1, 4, features), need (B*N, 2, 4, features) - broadcast the parity dimension
-        xEF = jnp.broadcast_to(xEF, (B * N, 2, 4, self.features))
+        # Broadcast parity dim to match x (1 if no pseudotensors, 2 if include_pseudotensors)
+        parity_dim = 2 if self.include_pseudotensors else 1
+        xEF = jnp.broadcast_to(xEF, (B * N, parity_dim, 4, self.features))
 
 
         xEF = e3x.nn.change_max_degree_or_type(xEF, max_degree=self.max_degree,
@@ -377,7 +384,7 @@ class MessagePassingModel(nn.Module):
             )(x, basis, dst_idx=dst_idx_flat, src_idx=src_idx_flat)
             x = e3x.nn.add(x, y)
             x = e3x.nn.silu(x)
-            # Couple EF - xEF already has correct shape (B*N, 2, 4, features) matching x
+            # Couple EF - xEF shape matches x on the parity axis
             xEF = e3x.nn.Tensor()(x, xEF)
             x = e3x.nn.add(x, xEF)
             x = e3x.nn.TensorDense(max_degree=self.max_degree)(x)
@@ -1527,6 +1534,7 @@ def main(args=None):
         num_iterations=args.num_iterations,
         num_basis_functions=args.num_basis_functions,
         cutoff=args.cutoff,
+        include_pseudotensors=args.include_pseudotensors,
         dipole_field_coupling=args.dipole_field_coupling,
         field_scale=args.field_scale,
         zbl=args.zbl,
@@ -1591,7 +1599,7 @@ def main(args=None):
             'num_basis_functions': args.num_basis_functions,
             'cutoff': args.cutoff,
             'max_atomic_number': 55,  # Fixed in model
-            'include_pseudotensors': True,  # Fixed in model
+            'include_pseudotensors': args.include_pseudotensors,
             'dipole_field_coupling': args.dipole_field_coupling,
             'field_scale': args.field_scale,
             'zbl': args.zbl,
