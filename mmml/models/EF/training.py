@@ -127,6 +127,22 @@ def load_params(params_path, verbose=False):
     return params
 
 
+def save_params_json(path: str | Path, params, *, verbose: bool = False) -> None:
+    """Write params to JSON; strips ``intermediates`` (sow artifacts)."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    params_to_save = params
+    if isinstance(params, dict) and "intermediates" in params:
+        params_to_save = {k: v for k, v in params.items() if k != "intermediates"}
+        if verbose:
+            print("  Stripped 'intermediates' from params before saving (sow artifacts)")
+    if verbose:
+        print_params_structure(params_to_save, f"params being saved -> {path}", verbose=True)
+    jax.block_until_ready(params_to_save)
+    with open(path, "w") as f:
+        json.dump(to_jsonable(params_to_save), f)
+
+
 print("JAX devices:", jax.devices())
 # import lovely_jax as lj
 # lj.monkey_patch()
@@ -218,6 +234,13 @@ def get_args(**overrides):
         "--verbose",
         action="store_true",
         help="Print extra debug output (e.g. [STRUCT] parameter tree dumps)",
+    )
+    parser.add_argument(
+        "--save-every",
+        type=int,
+        default=0,
+        metavar="N",
+        help="Save EMA checkpoint every N epochs to params-epoch-NNNN-<uuid>.json (0 = no periodic saves)",
     )
     args, _ = parser.parse_known_args()
 
@@ -1006,7 +1029,9 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
                 reduce_on_plateau_patience=5, reduce_on_plateau_cooldown=5, reduce_on_plateau_factor=0.9,
                 reduce_on_plateau_rtol=1e-4, reduce_on_plateau_accumulation_size=5, reduce_on_plateau_min_scale=0.01,
                 energy_weight=1.0, forces_weight=100.0, dipole_weight=10.0, charge_weight=1.0, initial_params=None,
-                gradient_checkpoint=False, verbose=False):
+                gradient_checkpoint=False, verbose=False,
+                checkpoint_dir: str | Path | None = None, run_uuid: str | None = None,
+                save_every_n_epochs: int = 0, save_best: bool = True):
     """
     Train model with EMA, gradient clipping, early stopping, and learning rate reduction on plateau.
     
@@ -1051,6 +1076,15 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
         If None, parameters are initialized from scratch (default: None)
     verbose : bool, optional
         If True, print ``[STRUCT]`` parameter tree dumps (default: False).
+    checkpoint_dir : str or Path, optional
+        If set with ``run_uuid``, write checkpoints under this directory.
+    run_uuid : str, optional
+        Run id for checkpoint filenames (required if ``checkpoint_dir`` is set).
+    save_every_n_epochs : int, optional
+        If > 0, save current EMA params every N epochs (``params-epoch-NNNN-<uuid>.json``).
+    save_best : bool, optional
+        If True (default), when validation improves save ``params-best-<uuid>.json`` and
+        ``best-valid-<uuid>.json`` (best weighted valid loss and epoch).
     
     Returns
     -------
@@ -1216,8 +1250,14 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
 
     # Early stopping tracking
     best_valid_loss = float('inf')
+    best_epoch = 0
     patience_counter = 0
     best_ema_params = ema_params
+
+    _ckpt_dir = Path(checkpoint_dir).expanduser().resolve() if checkpoint_dir is not None else None
+    _can_ckpt = _ckpt_dir is not None and run_uuid is not None
+    if (save_every_n_epochs > 0 or save_best) and checkpoint_dir and not run_uuid:
+        print("  Warning: checkpoint_dir set but run_uuid is None — skipping on-disk checkpoints.")
 
     for epoch in range(1, num_epochs + 1):
         key, shuffle_key = jax.random.split(key)
@@ -1327,6 +1367,7 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
         if valid_loss < best_valid_loss - early_stopping_min_delta:
             best_valid_loss = valid_loss
             best_ema_params = ema_params
+            best_epoch = epoch
             patience_counter = 0
             improved = True
         else:
@@ -1359,8 +1400,32 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
         print(f"    LR scale: {float(lr_scale): 8.6f}, effective LR: {float(learning_rate * lr_scale): 8.6f}")
         if early_stopping_patience is not None:
             print(f"    best valid loss: {float(best_valid_loss): 8.6f}, patience: {patience_counter}/{early_stopping_patience}")
-            if improved:
-                print(f"    ✓ Improved! Saving best model.")
+            if improved and not (_can_ckpt and save_best):
+                print(f"    ✓ Improved!")
+
+        # On-disk checkpoints (EMA weights + best validation metrics) after metrics log
+        if _can_ckpt and save_every_n_epochs > 0 and epoch % save_every_n_epochs == 0:
+            ck_path = _ckpt_dir / f"params-epoch-{epoch:04d}-{run_uuid}.json"
+            save_params_json(ck_path, ema_params, verbose=False)
+            print(f"    ✓ Periodic checkpoint: {ck_path.name}")
+        if _can_ckpt and save_best and improved:
+            best_path = _ckpt_dir / f"params-best-{run_uuid}.json"
+            save_params_json(best_path, best_ema_params, verbose=False)
+            metrics_path = _ckpt_dir / f"best-valid-{run_uuid}.json"
+            with open(metrics_path, "w") as f:
+                json.dump(
+                    {
+                        "best_valid_loss": float(best_valid_loss),
+                        "best_epoch": int(best_epoch),
+                        "uuid": run_uuid,
+                    },
+                    f,
+                    indent=2,
+                )
+            print(
+                f"    ✓ Best valid checkpoint: {best_path.name} "
+                f"(weighted loss={float(best_valid_loss):.6f}, epoch {best_epoch})"
+            )
         
         # Early stopping check
         if early_stopping_patience is not None and patience_counter >= early_stopping_patience:
@@ -1404,6 +1469,7 @@ def main(args=None):
     print(f"  reduce_on_plateau_rtol: {args.reduce_on_plateau_rtol}")
     print(f"  reduce_on_plateau_accumulation_size: {args.reduce_on_plateau_accumulation_size}")
     print(f"  reduce_on_plateau_min_scale: {args.reduce_on_plateau_min_scale}")
+    print(f"  save_every: {args.save_every}")
 
 
     # -------------------------
@@ -1507,6 +1573,10 @@ def main(args=None):
         initial_params=initial_params,
         gradient_checkpoint=args.gradient_checkpoint,
         verbose=args.verbose,
+        checkpoint_dir=out_dir,
+        run_uuid=run_uuid,
+        save_every_n_epochs=args.save_every,
+        save_best=True,
     )
 
     # Prepare model config
@@ -1544,6 +1614,7 @@ def main(args=None):
             'forces_weight': args.forces_weight,
             'dipole_weight': args.dipole_weight,
             'charge_weight': args.charge_weight,
+            'save_every': args.save_every,
         },
         'data': {
             'dataset': args.data,
@@ -1559,26 +1630,16 @@ def main(args=None):
         json.dump(model_config, f, indent=2)
     print(f"\n✓ Model config saved to {config_filename}")
 
-    # Save parameters with UUID
-    # Strip intermediates before saving — they are sow() artifacts that
-    # get corrupted during JSON round-trip (tuples → arrays) and are
-    # recomputed during every forward pass anyway.
-    params_to_save = params
-    if isinstance(params, dict) and 'intermediates' in params:
-        params_to_save = {k: v for k, v in params.items() if k != 'intermediates'}
-        print(f"  Stripped 'intermediates' from params before saving (sow artifacts)")
-    
-    params_filename = str(out_dir / f'params-{run_uuid}.json')
-    print_params_structure(
-        params_to_save, "params being saved (intermediates stripped)", verbose=args.verbose
-    )
-    params_dict = to_jsonable(params_to_save)
-    with open(params_filename, 'w') as f:
-        json.dump(params_dict, f)
+    # Save parameters with UUID (same stripping as save_params_json / checkpoints)
+    params_filename = str(out_dir / f"params-{run_uuid}.json")
+    save_params_json(params_filename, params, verbose=args.verbose)
     print(f"✓ Parameters saved to {params_filename}")
     
     # Verify round-trip: load back and check structure
     params_reloaded = load_params(params_filename, verbose=args.verbose)
+    params_to_save = params
+    if isinstance(params, dict) and "intermediates" in params:
+        params_to_save = {k: v for k, v in params.items() if k != "intermediates"}
     # Quick sanity check: compare leaf values
     orig_leaves = jax.tree_util.tree_leaves(params_to_save)
     try:
@@ -1593,17 +1654,34 @@ def main(args=None):
     except Exception as e:
         print(f"⚠ WARNING: round-trip structure mismatch: {e}")
 
-    # Also save symlinks for convenience (params.json and config.json)
+    # Also save symlinks for convenience (params.json, config.json, best checkpoints)
     try:
         link_params = out_dir / "params.json"
         link_cfg = out_dir / "config.json"
+        link_best = out_dir / "params-best.json"
+        link_best_metrics = out_dir / "best-valid.json"
         if link_params.exists() or link_params.is_symlink():
             link_params.unlink()
         if link_cfg.exists() or link_cfg.is_symlink():
             link_cfg.unlink()
+        if link_best.exists() or link_best.is_symlink():
+            link_best.unlink()
+        if link_best_metrics.exists() or link_best_metrics.is_symlink():
+            link_best_metrics.unlink()
         link_params.symlink_to(Path(params_filename).name)
         link_cfg.symlink_to(Path(config_filename).name)
-        print(f"✓ Created symlinks in {out_dir}: params.json, config.json")
+        best_params_name = f"params-best-{run_uuid}.json"
+        best_metrics_name = f"best-valid-{run_uuid}.json"
+        if (out_dir / best_params_name).is_file():
+            link_best.symlink_to(best_params_name)
+        if (out_dir / best_metrics_name).is_file():
+            link_best_metrics.symlink_to(best_metrics_name)
+        msg = f"✓ Created symlinks in {out_dir}: params.json, config.json"
+        if (out_dir / best_params_name).is_file():
+            msg += ", params-best.json"
+        if (out_dir / best_metrics_name).is_file():
+            msg += ", best-valid.json"
+        print(msg)
     except Exception as e:
         print(f"Note: Could not create symlinks: {e}")
 

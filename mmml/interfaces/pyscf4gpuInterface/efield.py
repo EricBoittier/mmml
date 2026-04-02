@@ -79,7 +79,7 @@ def parse_efield_points(spec: str) -> np.ndarray:
 
 
 def run_scf_uniform_efield(
-    E: np.ndarray,
+    E: np.ndarray, # efield in atomic units
     mol,
     dm_init_guess: Any = None,
     *,
