@@ -36,6 +36,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import functools
 
+from mmml.utils.cli_args import exit_if_unknown_long_options
 from mmml.models.EF.training import (
     MessagePassingModel,
     mean_absolute_error_forces,
@@ -134,7 +135,8 @@ def get_args(**kwargs):
             help="Write HDF5 trajectory for mmml gui (R,Z,N,E,E_pred,F,F_pred,Dxyz,Dxyz_pred,Ef). Requires h5py.",
         )
 
-        args, _unknown = parser.parse_known_args()
+        args, unknown = parser.parse_known_args()
+        exit_if_unknown_long_options(unknown, prog="mmml ef-evaluate")
         return SimpleNamespace(
             params=args.params,
             config=args.config,

@@ -51,6 +51,7 @@ except:
     pass  # Not available in this JAX version
 
 from mmml.data.units import ANGSTROM_TO_BOHR, EV_TO_KCAL_MOL, HARTREE_TO_EV
+from mmml.utils.cli_args import exit_if_unknown_long_options
 from mmml.utils.model_checkpoint import to_jsonable
 
 
@@ -242,7 +243,8 @@ def get_args(**overrides):
         metavar="N",
         help="Save EMA checkpoint every N epochs to params-epoch-NNNN-<uuid>.json (0 = no periodic saves)",
     )
-    args, _ = parser.parse_known_args()
+    args, unknown = parser.parse_known_args()
+    exit_if_unknown_long_options(unknown, prog="mmml ef-train")
 
     # Apply keyword overrides (for notebook usage)
     for key, value in overrides.items():
