@@ -1,0 +1,57 @@
+\documentclass{standalone}
+\input{../shared/shared.tex}
+
+\begin{document}
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+  auto,
+  node distance=\mainNodeSep and \mainNodeSep,
+  line width=0.95pt,
+  >=Latex,
+  ->,
+  font=\sffamily\small
+]
+  \MMMLSharedStyles
+
+  \node[embedding] (embed) {Atomic Embedding};
+  \node[basis, left=\colGap of embed] (basis) {RBF Basis};
+  \node[message, below=\rowGap of embed] (mp) {MessagePass ($L>0 \rightarrow L=0$)};
+  \node[dense, below=\rowGap of mp] (refine) {Residual Refinement};
+  \node[message, below=\rowGap of refine] (head) {Energy/Charge Heads};
+  \node[output, right=\colGap of head] (energy) {Energy};
+  \node[output, right=\colGap of refine] (forces) {Forces};
+  \node[output, right=\colGap of mp] (dipoles) {Dipoles};
+
+  \draw[->] (basis.east) -- (embed.west);
+  \draw[->] (embed) -- (mp);
+  \draw[->] (mp) -- (refine);
+  \draw[->] (refine) -- (head);
+  \draw[->] (head) -- (energy);
+  \draw[->] (refine) -- (forces);
+  \draw[->] (mp) -- (dipoles);
+
+  \node[draw=violet!70!black, rounded corners=6pt, dashed, line width=1.0pt, inner sep=0.2cm,
+    fit=(embed) (mp) (refine)] (loop) {};
+  \node[anchor=south, font=\sffamily\small\bfseries, text=violet!70!black] at (loop.north) {Iterative Message Passing};
+
+  \path (current bounding box.north east) coordinate (figNE);
+  \node[draw=black!50, rounded corners=3pt, fill=black!2, minimum width=\legendPanelW, minimum height=\legendPanelH, anchor=north west]
+    (legendpanel) at ($(figNE)+(\legendOffsetX,0)$) {};
+  \coordinate (legStart) at ($(legendpanel.north west)+(\legendPadX,-\legendTopInset)$);
+  \coordinate (legEnd) at ($(legendpanel.south west)+(\legendPadX,\legendBottomInset)$);
+  \coordinate (leg2) at ($(legStart)!0.25!(legEnd)$);
+  \coordinate (leg3) at ($(legStart)!0.5!(legEnd)$);
+  \coordinate (leg4) at ($(legStart)!0.75!(legEnd)$);
+
+  \node[anchor=north west, font=\sffamily\bfseries\huge] at ($(legendpanel.north west)+(0.45,-0.45)$) {PhysNet Dictionary};
+  \node[legendbox, fill=blue!25, anchor=west] (lg1) at (legStart) {};
+  \node[legendtext, right=0.35cm of lg1.east, anchor=west] {Embedding: $x=\mathrm{Embed}(Z)$};
+  \node[legendbox, fill=cyan!25, anchor=west] (lg2) at (leg2) {};
+  \node[legendtext, right=0.35cm of lg2.east, anchor=west] {Basis: $b=\mathrm{basis}(\Delta r)$};
+  \node[legendbox, fill=green!30, anchor=west] (lg3) at (leg3) {};
+  \node[legendtext, right=0.35cm of lg3.east, anchor=west] {Message passing + refinement iterations};
+  \node[legendbox, fill=green!25, anchor=west] (lg4) at (leg4) {};
+  \node[legendtext, right=0.35cm of lg4.east, anchor=west] {Outputs: energy, forces, charges/dipoles};
+\end{tikzpicture}%
+}
+\end{document}
