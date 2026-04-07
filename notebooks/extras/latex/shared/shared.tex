@@ -1,0 +1,60 @@
+\usepackage{tikz}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usetikzlibrary{positioning, shapes.geometric, shapes.multipart, arrows.meta, calc, fit}
+
+% Global layout controls
+\def\mainNodeSep{0.95cm}
+\def\rowGap{0.42cm}
+\def\colGap{0.9cm}
+\def\legendOffsetX{1.2cm}
+\def\legendPanelW{14.8cm}
+\def\legendPanelH{10.2cm}
+\def\legendPadX{0.6cm}
+\def\legendTopInset{1.6cm}
+\def\legendBottomInset{1.0cm}
+\def\curveRound{5pt}
+
+\newcommand{\MMMLSharedStyles}{
+  \tikzset{
+    basebox/.style={
+      rectangle,
+      rounded corners=2.5pt,
+      draw=black!70,
+      minimum height=0.95cm,
+      minimum width=2.1cm,
+      align=center
+    },
+    dense/.style={basebox, fill=orange!25,  minimum height=1.0cm, minimum width=1.2cm, text width=1.9cm},
+    process/.style={dense},
+    process2/.style={basebox, fill=orange!15, minimum height=0.8cm, text width=3.9cm},
+    silu/.style={
+      circle, draw=black!70, fill=white, minimum size=1.0cm,
+      path picture={
+        \draw[-, line width=0.9pt] (path picture bounding box.center) circle (0.28cm);
+        \begin{scope}
+          \clip (path picture bounding box.center) circle (0.28cm);
+          \draw[-, domain=-2:2,smooth,variable=\x,line width=0.7pt]
+            plot ({0.11*\x},{0.11*(\x/(1+exp(-\x)))});
+        \end{scope}
+      }
+    },
+    plusop/.style={
+      circle, draw=black!70, fill=white, minimum size=1cm,
+      path picture={
+        \draw[-, line width=0.9pt]
+          (path picture bounding box.west) -- (path picture bounding box.east);
+        \draw[-, line width=0.9pt]
+          (path picture bounding box.south) -- (path picture bounding box.north);
+      }
+    },
+    basis/.style={basebox, fill=cyan!25, minimum height=1.0cm, minimum width=3.2cm},
+    message/.style={basebox, fill=green!30, minimum height=1.2cm, minimum width=4.2cm},
+    tensor/.style={basebox, fill=red!25, minimum height=1.2cm, minimum width=2.2cm},
+    extra/.style={basebox, fill=gray!25, minimum height=1.2cm, minimum width=2.2cm},
+    embedding/.style={basebox, fill=blue!25, minimum height=1.2cm, minimum width=4.2cm},
+    output/.style={basebox, fill=yellow!25, minimum height=0.95cm, minimum width=0.8cm, align=center, font=\sffamily\Large},
+    legendbox/.style={rectangle, draw=black!60, rounded corners=1.5pt, minimum width=0.8cm, minimum height=0.55cm},
+    legendtext/.style={anchor=west, font=\sffamily\Large, align=left, text width=12.8cm}
+  }
+}
