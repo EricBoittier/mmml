@@ -1,4 +1,5 @@
 import argparse
+from pathlib import Path
 
 import numpy as np
 from tqdm import tqdm
@@ -55,16 +56,32 @@ def setup_mol(atoms, basis, xc, spin, charge, log_file='./pyscf.log',
     conv_tol=1e-10,
     conv_tol_cpscf=1e-3,
     ):
-    if type(atoms) == str:
-        mol = pyscf.M(
-        atom=atoms,                         # water molecule
-        basis=basis,                # basis set
+    _mol_kw = dict(
+        basis=basis,
         spin=spin,
         charge=charge,
-        output=log_file,              # save log file
-        verbose=verbose                          # control the level of print info
-        )
+        output=log_file,
+        verbose=verbose,
+    )
+    if isinstance(atoms, str):
+        path = Path(atoms).expanduser()
+        if path.is_file():
+            import ase.io
 
+            ase_atoms = ase.io.read(str(path))
+            atom_spec = _RZ_to_atom(
+                ase_atoms.get_positions(),
+                np.asarray(ase_atoms.get_atomic_numbers()),
+            )
+            mol = pyscf.M(atom=atom_spec, unit="Ang", **_mol_kw)
+        else:
+            suff = path.suffix.lower()
+            if suff in (".xyz", ".mol", ".gjf", ".com", ".cif", ".extxyz"):
+                raise FileNotFoundError(
+                    f"--mol file not found: {path.resolve()}. "
+                    "Pass a path relative to the job working directory, or an absolute path."
+                )
+            mol = pyscf.M(atom=atoms, **_mol_kw)
     else:
         mol = atoms
         
