@@ -297,3 +297,8 @@ def to_chemcord(Z, R):
 
 def ase_to_chemcord(atoms):
     return to_chemcord(atoms.get_chemical_symbols(), atoms.get_positions())
+
+
+
+def chemcoord_to_ase(cart: cc.Cartesian):
+    return ase.Atoms(cart["atom"], cart[["x", "y", "z"]])
