@@ -16,7 +16,7 @@ from pathlib import Path
 from flax import linen as nn
 
 from mmml.models.EF.training import MessagePassingModel, sanitize_flax_variables_dict
-from mmml.models.EF.model_functions import energy_and_forces
+from mmml.models.EF.model_functions import energy_and_forces, dipole_derivative_field
 
 
 def load_params(params_path):
@@ -87,7 +87,7 @@ def ef_sparse_pairwise_indices_active(N: int, z_ref):
 class AseCalculatorEF(ase_calc.Calculator):
     """ASE calculator for electric field model."""
     
-    implemented_properties = ["energy", "forces", "dipole"]
+    implemented_properties = ["energy", "forces", "dipole", "polarizability"]
     
     def __init__(self, params_path, config_path=None, electric_field=None,
                  field_scale=0.001, dipole_field_coupling=None, **kwargs):
@@ -295,6 +295,25 @@ class AseCalculatorEF(ase_calc.Calculator):
             'forces': forces ,
             'dipole': dipole,
         }
+
+        # Optional response property requested through ASE API
+        if 'polarizability' in properties:
+            raw_alpha = dipole_derivative_field(
+                self.model_apply, self.params,
+                atomic_numbers=atomic_numbers_batched,
+                positions=positions_batched,
+                Ef=Ef_batched,
+                dst_idx=dst_idx,
+                src_idx=src_idx,
+                dst_idx_flat=dst_idx_flat,
+                src_idx_flat=src_idx_flat,
+                batch_segments=batch_segments,
+                batch_size=batch_size,
+            )
+            # raw shape: (1, 3, 1, 3) -> (3, 3), convert to physical au
+            self.results['polarizability'] = (
+                np.asarray(raw_alpha)[0, :, 0, :] / self.field_scale
+            )
     
     def set_electric_field(self, electric_field):
         """Set the default electric field for calculations."""
@@ -378,11 +397,9 @@ class AseCalculatorEF(ase_calc.Calculator):
         alpha : np.ndarray, shape (3, 3)
             Polarizability in atomic units (Bohr³).
         """
-        from mmml.models.EF.model_functions import dipole_derivative_field
-        raw = self._call_model_fn(dipole_derivative_field, atoms)
-        # raw shape: (1, 3, 1, 3) -> extract (3, 3) and convert units
-        alpha = np.asarray(raw)[0, :, 0, :] / self.field_scale
-        return alpha
+        if atoms is None:
+            atoms = self.atoms
+        return self.get_property("polarizability", atoms)
 
     # ------------------------------------------------------------------
     # Atomic Polar Tensor  APT = d(mu)/d(R)
