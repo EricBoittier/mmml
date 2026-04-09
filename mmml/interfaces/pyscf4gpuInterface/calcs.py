@@ -375,6 +375,7 @@ def compute_dft_single(
     gradient: bool = True,
     dipole: bool = True,
     dens_esp: bool = False,
+    compute_polarizability: bool = False,
     esp_cpu_fallback: bool = False,
     verbose: int = 0,
     efield: np.ndarray | None = None,
@@ -467,6 +468,11 @@ def compute_dft_single(
             out["density"] = density
             out["density_grid"] = grid_coords
 
+        if compute_polarizability:
+            out["polarizability"] = _to_numpy(
+                polarizability.eval_polarizability(mf)
+            )
+
         return out
 
     # Zero-field SCF
@@ -528,6 +534,11 @@ def compute_dft_single(
         out["density"] = density
         out["density_grid"] = grid_coords
 
+    if compute_polarizability:
+        out["polarizability"] = _to_numpy(
+            polarizability.eval_polarizability(engine)
+        )
+
     return out
 
 
@@ -542,6 +553,7 @@ def compute_dft_batch(
     gradient: bool = True,
     dipole: bool = True,
     dens_esp: bool = False,
+    compute_polarizability: bool = False,
     esp_cpu_fallback: bool = False,
     verbose: int = 0,
     efield: np.ndarray | None = None,
@@ -569,6 +581,7 @@ def compute_dft_batch(
     energies = []
     gradients = []
     dipoles = []
+    polarizabilities = []
     esps = []
     esp_grids = []
     efs = []
@@ -586,6 +599,7 @@ def compute_dft_batch(
             gradient=gradient,
             dipole=dipole,
             dens_esp=dens_esp,
+            compute_polarizability=compute_polarizability,
             esp_cpu_fallback=esp_cpu_fallback,
             verbose=verbose,
             efield=ef_i,
@@ -597,6 +611,8 @@ def compute_dft_batch(
             gradients.append(out["gradient"])
         if dipole:
             dipoles.append(out["D"])
+        if compute_polarizability:
+            polarizabilities.append(out["polarizability"])
         if dens_esp:
             esps.append(out["esp"])
             esp_grids.append(out["esp_grid"])
@@ -616,6 +632,8 @@ def compute_dft_batch(
         result["F"] = -np.stack(gradients)  # forces = -gradient
     if dipole:
         result["Dxyz"] = np.stack(dipoles)
+    if compute_polarizability:
+        result["polarizability"] = np.stack(polarizabilities)
     if dens_esp:
         # ESP grid size can vary per geometry; pad to max length
         max_n = max(e.size for e in esps)
