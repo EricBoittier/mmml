@@ -99,6 +99,11 @@ def main() -> int:
         help="Use CPU path for ESP (slower; default: GPU int1e_grids)",
     )
     parser.add_argument(
+        "--polarizability",
+        action="store_true",
+        help="Compute molecular polarizability tensor for each geometry",
+    )
+    parser.add_argument(
         "--EF",
         dest="efield_enabled",
         action="store_true",
@@ -211,6 +216,7 @@ def main() -> int:
         gradient=not args.no_gradient,
         dipole=not args.no_dipole,
         dens_esp=args.esp,
+        compute_polarizability=args.polarizability,
         esp_cpu_fallback=args.esp_cpu_fallback,
         verbose=0,
         efield=efield_pass,
@@ -223,6 +229,8 @@ def main() -> int:
     elapsed = time.perf_counter() - t0
     print(f"Saved to {args.output}")
     print(f"  R: {result['R'].shape}, E: {result.get('E', np.array([])).shape}, F: {result.get('F', np.array([])).shape}")
+    if "polarizability" in result:
+        print(f"  polarizability: {result['polarizability'].shape}")
     if "Ef" in result:
         print(f"  Ef: {result['Ef'].shape}")
     print(f"Elapsed: {elapsed:.2f} s")
