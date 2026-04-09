@@ -11,9 +11,12 @@ Usage:
     mmml pyscf-evaluate -i out/06_sampled.npz -o out/07_evaluated.npz --esp
     mmml pyscf-evaluate -i traj.npz -o out.npz --EF
     mmml pyscf-evaluate -i traj.npz -o out.npz --EF --efield 0,0,0.01
+    mmml pyscf-evaluate -i traj.npz -o out.npz --efield=-0.01,0,0
     mmml pyscf-evaluate -i traj.npz -o out.npz --EF --no-efield-include-nuclear-energy
     mmml pyscf-evaluate -i traj.npz -o out.npz --add-random-noise 0.1
 """
+
+from __future__ import annotations
 
 import argparse
 import sys
@@ -28,6 +31,25 @@ def _parse_efield_vector(s: str) -> np.ndarray:
     if len(p) != 3:
         raise ValueError(f"Expected Ex,Ey,Ez comma-separated, got {s!r}")
     return np.array(p, dtype=np.float64)
+
+
+def _fix_argv_efield_negative(argv: list[str]) -> list[str]:
+    """Make `--efield -0.01,0,0` work with argparse (otherwise `-0.01,...` looks like a new option).
+
+    Also accepts the explicit form `--efield=-0.01,0,0` (no fix needed).
+    """
+    out: list[str] = []
+    i = 0
+    while i < len(argv):
+        if argv[i] == "--efield" and i + 1 < len(argv):
+            nxt = argv[i + 1]
+            if not nxt.startswith("--") and "," in nxt:
+                out.append(f"--efield={nxt}")
+                i += 2
+                continue
+        out.append(argv[i])
+        i += 1
+    return out
 
 
 def main() -> int:
@@ -118,7 +140,11 @@ def main() -> int:
         type=str,
         default=None,
         metavar="Ex,Ey,Ez",
-        help="Fixed field in a.u., same for all geometries (enables E-field even without --EF)",
+        help=(
+            "Fixed field in a.u., same for all geometries (enables E-field even without --EF). "
+            "If the first component is negative, use equals form, e.g. --efield=-0.01,0,0 "
+            "(argparse otherwise treats -0.01,... as a separate flag)."
+        ),
     )
     parser.add_argument(
         "--efield-sigma",
@@ -147,7 +173,7 @@ def main() -> int:
     )
     parser.set_defaults(efield_include_nuclear_energy=True)
 
-    args = parser.parse_args()
+    args = parser.parse_args(_fix_argv_efield_negative(sys.argv[1:]))
     t0 = time.perf_counter()
 
     if not args.input.exists():
