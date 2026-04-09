@@ -37,6 +37,7 @@ dependencies = [
     # Chemistry core
     "ase",
     "pyyaml",
+    "chemcoord",
     # Hydra configuration
     # Utilities
     "tqdm",
