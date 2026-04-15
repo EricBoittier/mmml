@@ -85,13 +85,14 @@ def _rasterize_line(
     """Bresenham-style line rasterization with thickness."""
     h, w = buf_r.shape
     steps = int(max(abs(x1 - x0), abs(y1 - y0), 1) * 2)
+    radius = max(1, int(round(thickness)))
     for i in range(steps + 1):
         t = i / steps
         x = x0 + t * (x1 - x0)
         y = y0 + t * (y1 - y0)
         ix, iy = int(x), int(y)
-        for dy in range(-1, 2):
-            for dx in range(-1, 2):
+        for dy in range(-radius, radius + 1):
+            for dx in range(-radius, radius + 1):
                 px, py = ix + dx, iy + dy
                 if 0 <= px < w and 0 <= py < h:
                     buf_r[py, px] = r

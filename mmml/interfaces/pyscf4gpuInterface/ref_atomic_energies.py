@@ -97,6 +97,7 @@ def setup_mol(atom, basis, xc, log_file='./pyscf.log',
               spin=0,
               charge=1,
     ):
+    _ = (cpscf_tol, conv_tol)  # Kept for backward-compatible API.
     if type(atom) == str:
         mol = create_mol(atom, basis, spin=spin, charge=charge)
     else:

@@ -339,6 +339,7 @@ def convert_grid_indices_to_angstrom(
     The vdw_grid currently contains values like 0-49 which are grid indices.
     We need to convert to physical coordinates using the cube metadata.
     """
+    _ = dims  # Reserved for future non-cubic grid handling.
     n_samples = vdw_grid_indices.shape[0]
     bohr_to_angstrom = 0.529177
     
