@@ -9,7 +9,7 @@ Provides comprehensive analysis including:
 - Training history visualization
 """
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Dict, List, Optional, Any
 import pickle
 import json
 
@@ -21,7 +21,6 @@ from tqdm import tqdm
 
 from .data import prepare_batches
 from .loss import esp_mono_loss
-from .training_config import ExperimentConfig
 
 
 def load_checkpoint(checkpoint_path: Path) -> Dict[str, Any]:
@@ -430,7 +429,7 @@ def batch_analysis_summary(
         history = analyze_training_history(exp_dir)
         
         if 'best_epoch' in history:
-            print(f"\nTraining History Summary:")
+            print("\nTraining History Summary:")
             print(f"  Total Epochs: {history['total_epochs']}")
             print(f"  Best Epoch: {history['best_epoch']}")
             print(f"  Best Valid Loss: {history['best_valid_loss']:.6e}")

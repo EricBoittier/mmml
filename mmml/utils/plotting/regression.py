@@ -11,7 +11,6 @@ from typing import Type
 import statsmodels
 import statsmodels.formula.api as smf
 import pandas as pd
-import statsmodels.api as sm
 
 style_talk = "seaborn-talk"  # refer to plt.style.available
 
@@ -162,7 +161,7 @@ class LinearRegDiagnostic:
         # annotations
         residual_abs = np.abs(self.residual)
         abs_resid = np.flip(np.argsort(residual_abs), 0)
-        abs_resid_top_3 = abs_resid[:3]
+        abs_resid[:3]
 
         ax.set_title("Residuals vs Fitted", fontsize=8)
         ax.set_xlabel("Fitted values", fontsize=8)
@@ -180,11 +179,11 @@ class LinearRegDiagnostic:
             fig, ax = plt.subplots()
 
         QQ = ProbPlot(self.residual_norm)
-        fig = QQ.qqplot(line="45", alpha=0.5, lw=1, ax=ax)
+        QQ.qqplot(line="45", alpha=0.5, lw=1, ax=ax)
 
         # annotations
         abs_norm_resid = np.flip(np.argsort(np.abs(self.residual_norm)), 0)
-        abs_norm_resid_top_3 = abs_norm_resid[:3]
+        abs_norm_resid[:3]
         # for i, x, y in self.__qq_top_resid(QQ.theoretical_quantiles, abs_norm_resid_top_3):
         #     ax.annotate(
         #         i,
@@ -373,7 +372,7 @@ def reg_plot(ax, df, key1, key2):
     mi, ma = all_vals.min(), all_vals.max()
     RMSE = np.sqrt(np.mean((X - y) ** 2))
     MAE = np.mean(np.abs(X - y))
-    drng = np.arange(mi, ma, 0.1)
+    np.arange(mi, ma, 0.1)
 
     ax.scatter(y, X, alpha=0.1, color="b")
     ax.set_aspect("equal")
@@ -387,7 +386,6 @@ def reg_plot(ax, df, key1, key2):
         fontsize=8,
         alpha=0.85,
     )
-    import matplotlib.pyplot as plt
     from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
     inset_ax = inset_axes(ax, width="25%", height="25%", loc="upper left", borderpad=4)

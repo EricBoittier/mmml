@@ -19,8 +19,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from mmml.data import (
     batch_convert_xml,
-    validate_npz,
-    MolproConverter
+    validate_npz
 )
 
 
@@ -194,7 +193,7 @@ Examples:
     
     # Perform conversion
     if not args.quiet:
-        print(f"\n🔄 Converting to NPZ format...")
+        print("\n🔄 Converting to NPZ format...")
         print(f"   Output: {args.output}")
         print(f"   Padding: {args.padding} atoms")
         print(f"   Variables: {'No' if args.no_variables else 'Yes'}")
@@ -224,7 +223,7 @@ Examples:
     # Validate if requested
     if args.validate or not args.no_validate:
         if not args.quiet:
-            print(f"\n✓ Validating output...")
+            print("\n✓ Validating output...")
         
         try:
             is_valid, info = validate_npz(
@@ -242,7 +241,7 @@ Examples:
                 
                 # Print summary
                 if info:
-                    print(f"\n📊 Dataset Summary:")
+                    print("\n📊 Dataset Summary:")
                     print(f"   Structures: {info['n_structures']}")
                     print(f"   Atoms: {info['n_atoms']}")
                     print(f"   Properties: {', '.join(info['properties'][:10])}")
@@ -283,13 +282,13 @@ Examples:
                 json.dump(summary, f, indent=2, default=str)
             
             if not args.quiet:
-                print(f"✓ Summary saved")
+                print("✓ Summary saved")
                 
         except Exception as e:
             print(f"⚠️  Could not save summary: {e}", file=sys.stderr)
     
     if not args.quiet:
-        print(f"\n✅ Conversion complete!")
+        print("\n✅ Conversion complete!")
         print(f"   Output: {args.output}")
     
     return 0

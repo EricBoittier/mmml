@@ -6,9 +6,7 @@ particularly for dimer systems by varying center-of-mass distances.
 """
 
 import numpy as np
-import jax.numpy as jnp
-from typing import Tuple, Dict, List, Optional
-import ase
+from typing import Dict, List, Optional
 from ase import Atoms
 import matplotlib.pyplot as plt
 from pathlib import Path
@@ -294,7 +292,7 @@ def scan_potential_with_calculator(
                             # ML = internal + dimer
                             results["ml_energies"][i] = results["internal_energies"][i] + results["ml_2b_energies"][i]
                         
-                    except Exception as e:
+                    except Exception:
                         # Fallback: try direct attribute access
                         try:
                             if hasattr(model_out, 'ml_2b_E'):
@@ -311,7 +309,7 @@ def scan_potential_with_calculator(
                                     results["ml_energies"][i] = results["ml_2b_energies"][i]
                                 else:
                                     results["ml_energies"][i] = dH_val
-                        except Exception as e2:
+                        except Exception:
                             # If extraction fails, leave as zeros
                             pass
                 

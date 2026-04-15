@@ -2,9 +2,8 @@ from pyxtal import pyxtal
 
 import numpy as np
 from ase import Atoms
-from xtb_ase import XTB
 from pyxtal.molecule import pyxtal_molecule
-from mmml.chemcoordInterface.interface import ase_to_chemcord, sym_to_ase
+from mmml.chemcoordInterface.interface import ase_to_chemcord
 
 def generate_from_crystal_syms(fn, n_repeats=1, dimensions=(1,2,3), space_group_numbers=list(range(1,171))):
     m = pyxtal_molecule(fn)
@@ -224,7 +223,6 @@ def get_rog(a):
     return Rg
 
 
-import itertools
 
 # def get_all_atoms(sym_scans):
 #     all_atoms = []

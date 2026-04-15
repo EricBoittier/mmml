@@ -2,21 +2,17 @@
 # coding: utf-8
 
 
-import mmml
-from mmml.pycharmmInterface import import_pycharmm
 from mmml.pycharmmInterface.import_pycharmm import reset_block, pycharmm_quiet, pycharmm_soft
 pycharmm_quiet()
-from mmml.pycharmmInterface import utils, setupRes
+from mmml.pycharmmInterface import setupRes
 from mmml.pycharmmInterface.utils import view_pycharmm_state, get_Z_from_psf
 import ase
 import pandas as pd
 import numpy as np
 
 import pycharmm
-from pycharmm import energy
 
 
-from mmml.interfaces.chemcoordInterface import interface
 from mmml.interfaces.chemcoordInterface.interface import patch_chemcoord_for_pandas3
 from mmml.generate.sample import sample_cc
 
@@ -90,7 +86,7 @@ def sample_dimer_energies(xyzs):
     energies_df.index = range(len(energies_df))
 
 
-    xyzs_np = np.array(xyzs)
+    np.array(xyzs)
 
 
 

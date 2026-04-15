@@ -830,7 +830,7 @@ def prepare_h5_datasets(
     train_data, valid_data = make_dicts(data, keys, train_choice, valid_choice)
 
     if verbose:
-        print(f"\nTrain/Valid split:")
+        print("\nTrain/Valid split:")
         print(f"  Training samples:   {train_size}")
         print(f"  Validation samples: {valid_size}")
         print(f"  natoms (padding):   {natoms}")
@@ -1075,6 +1075,6 @@ if __name__ == "__main__":
     for k in valid_data:
         print(f"  valid {k}: {valid_data[k].shape}")
 
-    print(f"\nUse these values for model and training:")
+    print("\nUse these values for model and training:")
     print(f"  model = EF(natoms={detected_natoms}, ...)")
     print(f"  train_model(..., num_atoms={detected_natoms}, ...)")

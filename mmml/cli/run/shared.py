@@ -5,7 +5,6 @@ Contains common helpers: trajectory saving, simulation loop orchestration.
 """
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any, List, Optional
 
 import numpy as np

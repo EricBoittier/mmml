@@ -2,26 +2,17 @@
 import os
 import sys
 import shutil
-import pickle
-import itertools
 from pathlib import Path
-from io import BytesIO
 
 # Third-party scientific computing
 import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.offsetbox import AnnotationBbox, OffsetImage
 
 # ASE imports
 import ase
-from ase import Atoms, io
-from ase.data import covalent_radii
-from ase.io.pov import get_bondpairs, set_high_bondorder_pairs
-from ase.visualize.plot import plot_atoms
+from ase import Atoms
 from ase.io import read
-from ase.visualize import view
 
-from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet, pycharmm_loud
+from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_loud
 from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_RTF, CGENFF_PRM, CHARMM_HOME, CHARMM_LIB_DIR
 from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf, set_up_directories
 
@@ -42,21 +33,10 @@ import pycharmm.generate as gen
 import pycharmm.ic as ic
 import pycharmm.coor as coor
 import pycharmm.energy as energy
-import pycharmm.dynamics as dyn
-import pycharmm.nbonds as nbonds
 import pycharmm.minimize as minimize
-import pycharmm.crystal as crystal
-import pycharmm.select as select
-import pycharmm.image as image
-import pycharmm.psf as psf
-import pycharmm.param as param
 import pycharmm.read as read
 import pycharmm.write as write
 import pycharmm.settings as settings
-import pycharmm.cons_harm as cons_harm
-import pycharmm.cons_fix as cons_fix
-import pycharmm.shake as shake
-import pycharmm.scalar as scalar
 import pycharmm.lingo
 
 
@@ -103,7 +83,6 @@ def get_residue_atoms() -> dict[str, list[list[float]]]:
             k = _[1]
         elif _[0] == "IC":
             x[k].append(_[1:4])
-    resi2atoms = x
 
 
 def generate_residue(resid) -> None:

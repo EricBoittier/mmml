@@ -14,7 +14,6 @@ import jax.numpy as jnp
 import optax
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple, Union, Any
-from itertools import product
 import matplotlib.pyplot as plt
 
 
@@ -674,7 +673,7 @@ def create_hybrid_fitting_factory(
                     ml_energy = jnp.sum(ml_energy) if ml_energy.size > 0 else jnp.array(0.0)
                 
                 ml_forces = jnp.asarray(ml_forces_raw)
-        except Exception as e:
+        except Exception:
             # If ML computation fails, set to zero (allows MM-only fitting)
             ml_energy = jnp.array(0.0)
             ml_forces = jnp.zeros_like(R)
@@ -2149,7 +2148,7 @@ def fit_hybrid_potential_to_training_data_jax(
                         print(f"  Warning: Force validation failed: {e}")
     
     if verbose:
-        print(f"\n✓ Optimization complete!")
+        print("\n✓ Optimization complete!")
         print(f"  Final loss: {best_loss:.6f}")
         if optimize_mode in ["lj_only", "both"]:
             print(f"  Optimized ep_scale: {best_params['ep_scale']}")
@@ -2411,7 +2410,7 @@ def fit_hybrid_parameters_iteratively(
         # Step 2: Optimize cutoff parameters using current LJ parameters
         if verbose:
             print(f"\n[Iteration {iteration + 1}] Step 2: Optimizing cutoff parameters...")
-            print(f"  Using optimized LJ parameters from Step 1")
+            print("  Using optimized LJ parameters from Step 1")
         
         result_cutoff = fit_hybrid_potential_to_training_data_jax(
             train_batches=train_batches,
@@ -2478,7 +2477,7 @@ def fit_hybrid_parameters_iteratively(
         print(f"\n{'='*80}")
         print("ITERATIVE OPTIMIZATION COMPLETE")
         print(f"{'='*80}")
-        print(f"Final parameters:")
+        print("Final parameters:")
         print(f"  ep_scale: {current_ep_scale}")
         print(f"  sig_scale: {current_sig_scale}")
         print(f"  Cutoff parameters: {current_cutoff_params}")
@@ -2659,7 +2658,7 @@ def fit_hybrid_parameters_iteratively(
         # Step 2: Optimize cutoff parameters using current LJ parameters
         if verbose:
             print(f"\n[Iteration {iteration + 1}] Step 2: Optimizing cutoff parameters...")
-            print(f"  Using optimized LJ parameters from Step 1")
+            print("  Using optimized LJ parameters from Step 1")
         
         result_cutoff = fit_hybrid_potential_to_training_data_jax(
             train_batches=train_batches,
@@ -2726,7 +2725,7 @@ def fit_hybrid_parameters_iteratively(
         print(f"\n{'='*80}")
         print("ITERATIVE OPTIMIZATION COMPLETE")
         print(f"{'='*80}")
-        print(f"Final parameters:")
+        print("Final parameters:")
         print(f"  ep_scale: {current_ep_scale}")
         print(f"  sig_scale: {current_sig_scale}")
         print(f"  Cutoff parameters: {current_cutoff_params}")

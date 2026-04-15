@@ -1,6 +1,5 @@
 from typing import List, Optional
 
-import jax
 import numpy as np
 
 __all__ = ["PyCharmm_Calculator"]
@@ -174,10 +173,10 @@ class PyCharmm_Calculator:
         # Assign all positions
         if Ntrans:
             mlmm_R = np.array([x[:Natim], y[:Natim], z[:Natim]]).T
-            mlmm_idxp = idxp[:Natim]
+            idxp[:Natim]
         else:
             mlmm_R = np.array([x[:Natom], y[:Natom], z[:Natom]]).T
-            mlmm_idxp = idxp[:Natom]
+            idxp[:Natom]
 
         # Assign indices
         # ML-ML pair indices
@@ -187,11 +186,11 @@ class PyCharmm_Calculator:
         ml_idxjp = np.array(idxjp[:Nmlp], dtype=np.int32)
         ml_sysi = np.zeros(self.ml_num_atoms, dtype=np.int32)
         # ML-MM pair indices and pointer
-        mlmm_idxu = np.array(idxu[:Nmlmmp], dtype=np.int32)
-        mlmm_idxv = np.array(idxv[:Nmlmmp], dtype=np.int32)
-        mlmm_idxup = np.array(idxup[:Nmlmmp], dtype=np.int32)
-        mlmm_idxvp = np.array(idxvp[:Nmlmmp], dtype=np.int32)
-        mlmm_idxvp = np.array(idxvp[:Nmlmmp], dtype=np.int64)
+        np.array(idxu[:Nmlmmp], dtype=np.int32)
+        np.array(idxv[:Nmlmmp], dtype=np.int32)
+        np.array(idxup[:Nmlmmp], dtype=np.int32)
+        np.array(idxvp[:Nmlmmp], dtype=np.int32)
+        np.array(idxvp[:Nmlmmp], dtype=np.int64)
 
         # Create batch for evaluating the model
         atoms_batch = {}

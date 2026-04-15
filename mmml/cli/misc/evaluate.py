@@ -12,7 +12,7 @@ import argparse
 from pathlib import Path
 import json
 import numpy as np
-from typing import Dict, List, Optional
+from typing import Dict, List
 from dataclasses import dataclass
 import time
 
@@ -335,7 +335,7 @@ Examples:
             
             # Save results
             if not args.quiet:
-                print(f"\n💾 Saving results...")
+                print("\n💾 Saving results...")
             
             model_output_dir = output_dir / model_name if len(args.model) > 1 else output_dir
             
@@ -358,7 +358,7 @@ Examples:
     
     # Summary
     if not args.quiet:
-        print(f"\n✅ Evaluation complete!")
+        print("\n✅ Evaluation complete!")
         print(f"   Models evaluated: {len(all_results)}")
         print(f"   Results saved to: {output_dir}")
     

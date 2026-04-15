@@ -102,7 +102,6 @@ def _make_braille_show_frame(live, args):
     if not getattr(args, "view_braille", False):
         return None
     from mmml.utils.visualize.braille_molecule import render_atoms_braille
-    from rich.console import Group
     from rich.panel import Panel
     from rich.text import Text
 

@@ -93,7 +93,7 @@ try:
             span[span == 0] = 1.0
             uv = (uv - uvmin) / span
             lscm_ok = True
-except Exception as e:
+except Exception:
     # libigl not available or failed; will fall back
     lscm_ok = False
 
@@ -123,7 +123,7 @@ def lambert_azimuthal_equal_area(xyz, center=None):
 
     # Cosine of angular distance
     cos_k = U @ c
-    k = np.arccos(np.clip(cos_k, -1.0, 1.0))
+    np.arccos(np.clip(cos_k, -1.0, 1.0))
     denom = 1.0 + cos_k
     # Lambert AEA radius factor
     R = np.sqrt(2.0 / np.maximum(denom, 1e-12))

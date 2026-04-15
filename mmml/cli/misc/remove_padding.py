@@ -62,14 +62,14 @@ def remove_padding(
         padding = current_atoms - max_atoms
         
         if verbose:
-            print(f"\nPadding analysis:")
+            print("\nPadding analysis:")
             print(f"   Current atoms per structure: {current_atoms}")
             print(f"   Actual atoms (max): {max_atoms}")
             print(f"   Padding atoms: {padding}")
         
         if padding <= 0:
             if verbose:
-                print(f"\n✅ No padding detected - dataset already compact")
+                print("\n✅ No padding detected - dataset already compact")
             return data
     
     # Remove padding from relevant fields
@@ -160,7 +160,7 @@ Examples:
     
     # Save
     if verbose:
-        print(f"\n💾 Saving unpadded dataset...")
+        print("\n💾 Saving unpadded dataset...")
     
     args.output.parent.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(args.output, **unpadded)

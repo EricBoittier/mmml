@@ -126,7 +126,7 @@ Supported file formats:
         return 1
     
     try:
-        from fastapi import FastAPI
+        pass
     except ImportError:
         print("Error: FastAPI not installed. Install with: pip install fastapi", file=sys.stderr)
         return 1
@@ -175,17 +175,17 @@ Supported file formats:
         print()
         print("Development mode: API only")
         print("Start frontend with: cd mmml/gui/viewer && npm run dev")
-        print(f"Frontend will be at: http://localhost:5173")
+        print("Frontend will be at: http://localhost:5173")
     elif static_dir:
         print(f"Static files: {static_dir}")
     
     print()
     print("API endpoints:")
-    print(f"  GET /api/files        - List available files")
-    print(f"  GET /api/file/{{path}} - Get file metadata")
-    print(f"  GET /api/frame/{{path}}?index=N - Get frame data")
-    print(f"  GET /api/properties/{{path}} - Get all properties")
-    print(f"  GET /api/hidden/{{path}}?index=N - Get hidden-state summaries")
+    print("  GET /api/files        - List available files")
+    print("  GET /api/file/{path} - Get file metadata")
+    print("  GET /api/frame/{path}?index=N - Get frame data")
+    print("  GET /api/properties/{path} - Get all properties")
+    print("  GET /api/hidden/{path}?index=N - Get hidden-state summaries")
     print("=" * 60)
     print()
     

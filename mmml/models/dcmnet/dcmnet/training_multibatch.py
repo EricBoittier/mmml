@@ -11,18 +11,17 @@ Provides enhanced training capabilities including:
 import functools
 import pickle
 from pathlib import Path
-from typing import Dict, List, Tuple, Any, Optional
+from typing import Dict, Tuple, Any, Optional
 import time
 
 import e3x
 import jax
 import jax.numpy as jnp
 import optax
-from jax import vmap
 
-from .loss import esp_mono_loss, dipo_esp_mono_loss
+from .loss import esp_mono_loss
 from .data import prepare_batches
-from .training_config import ExperimentConfig, TrainingConfig, ModelConfig
+from .training_config import ExperimentConfig, TrainingConfig
 
 # Try to enable lovely_jax
 try:

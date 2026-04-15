@@ -75,7 +75,7 @@ def evaluate_dc(
         mono_pred_ = monos_pred[mbID]
         non_zero = np.nonzero(mono_gt)
 
-        vdws = batch["vdw_surface"][mbID]
+        batch["vdw_surface"][mbID]
 
         idx_cut = batch["espMask"][0]
         loss1 = (
@@ -164,7 +164,7 @@ def evaluate_dc(
                 ax_rdkit.imshow(images[mbID])
             ax_rdkit.axis("off")
 
-            s = ax1.scatter(
+            ax1.scatter(
                 *batch["vdw_surface"][mbID][idx_cut].T,
                 c=clip_colors(batch["esp"][mbID][idx_cut]),
                 vmin=-0.015,
@@ -173,7 +173,7 @@ def evaluate_dc(
             if id:
                 ax1.set_title(f"GT ({batch['id'][mbID]})")
 
-            s = ax2.scatter(
+            ax2.scatter(
                 *batch["vdw_surface"][mbID][idx_cut].T,
                 c=clip_colors(esp_dc_pred[mbID][idx_cut]),
                 vmin=-0.015,
@@ -181,7 +181,7 @@ def evaluate_dc(
             )
             ax2.set_title(f"dcmnet: {loss1:.1f} (kcal/mol)/$e$")
 
-            s = ax4.scatter(
+            ax4.scatter(
                 *batch["vdw_surface"][mbID][idx_cut].T,
                 c=clip_colors(
                     esp_dc_pred[mbID][idx_cut]
@@ -199,8 +199,8 @@ def evaluate_dc(
             no_dummy = batch["vdw_surface"] < 10000
             max_vals = np.min(vdw * no_dummy, axis=1)
             min_vals = np.max(vdw * no_dummy, axis=1)
-            Rmax_vals = np.min(xyz, axis=0)
-            Rmin_vals = np.max(xyz, axis=0)
+            np.min(xyz, axis=0)
+            np.max(xyz, axis=0)
             translate = - xyz.mean(axis=0) + (max_vals - min_vals)/2
             xyz = xyz + translate
             CELL = (max_vals - min_vals) * np.eye(3)
@@ -211,7 +211,6 @@ def evaluate_dc(
                 cell = CELL
             )
 
-            import dcmnet.utils
             d = dipo
             from matplotlib import cm
             from matplotlib.colors import Normalize
@@ -267,7 +266,7 @@ def evaluate_dc(
             )
             axmol3.axis("off")
 
-            s = ax3.scatter(
+            ax3.scatter(
                 *batch["vdw_surface"][mbID][idx_cut].T,
                 c=clip_colors(mono_pred[mbID][idx_cut]),
                 vmin=-0.015,
@@ -275,7 +274,7 @@ def evaluate_dc(
             )
             ax3.set_title(f"mono.: {loss2:.1f} (kcal/mol)/$e$")
 
-            s = ax5.scatter(
+            ax5.scatter(
                 *batch["vdw_surface"][mbID][idx_cut].T,
                 c=clip_colors(
                     mono_pred[mbID][idx_cut]
@@ -473,7 +472,7 @@ def plot_esp(esp, batch, batch_size, rcut=4.0, charges=None):
     
     # Subplots 2-6: ESP visualizations
     ax1 = fig.add_subplot(162, projection="3d")
-    s = ax1.scatter(
+    ax1.scatter(
         *batch["vdw_surface"][mbID][: batch["n_grid"][mbID]][idx_cut].T,
         c=clip_colors(batch["esp"][mbID][: batch["n_grid"][mbID]][idx_cut]),
         vmin=-0.015,
@@ -483,7 +482,7 @@ def plot_esp(esp, batch, batch_size, rcut=4.0, charges=None):
     ax1.set_title(f"GT ESP {mbID}")
 
     ax2 = fig.add_subplot(163, projection="3d")
-    s = ax2.scatter(
+    ax2.scatter(
         *batch["vdw_surface"][mbID][: batch["n_grid"][mbID]][idx_cut].T,
         c=clip_colors(esp[idx_cut]),
         vmin=-0.015,
@@ -493,7 +492,7 @@ def plot_esp(esp, batch, batch_size, rcut=4.0, charges=None):
     ax2.set_title(f'DC Pred\nRMSE: {loss_dc:.3f}')
 
     ax4 = fig.add_subplot(164, projection="3d")
-    s = ax4.scatter(
+    ax4.scatter(
         *batch["vdw_surface"][mbID][: batch["n_grid"][mbID]][idx_cut].T,
         c=clip_colors(
             esp[idx_cut] - batch["esp"][mbID][: batch["n_grid"][mbID]][idx_cut]
@@ -505,7 +504,7 @@ def plot_esp(esp, batch, batch_size, rcut=4.0, charges=None):
     ax4.set_title('DC Error')
 
     ax3 = fig.add_subplot(165, projection="3d")
-    s = ax3.scatter(
+    ax3.scatter(
         *batch["vdw_surface"][mbID][: batch["n_grid"][mbID]][idx_cut].T,
         c=clip_colors(mono_pred[mbID][: batch["n_grid"][mbID]][idx_cut]),
         vmin=-0.015,
@@ -515,7 +514,7 @@ def plot_esp(esp, batch, batch_size, rcut=4.0, charges=None):
     ax3.set_title(f'Mono Pred\nRMSE: {loss_mono:.3f}')
 
     ax5 = fig.add_subplot(166, projection="3d")
-    s = ax5.scatter(
+    ax5.scatter(
         *batch["vdw_surface"][mbID][: batch["n_grid"][mbID]][idx_cut].T,
         c=clip_colors(
             mono_pred[mbID][: batch["n_grid"][mbID]][idx_cut]

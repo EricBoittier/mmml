@@ -9,7 +9,6 @@ warnings.simplefilter(action="ignore", category=FutureWarning)
 import matplotlib.pyplot as plt
 
 plt.set_cmap("bwr")
-import jax.numpy as jnp
 
 batch_size = 1
 
@@ -20,7 +19,7 @@ def make_charge_xyz(mono, dipo, batch, batch_size, n_dcm):
     
     # n_dcm = mono.shape[1]
     i = 0
-    b1_ = batch["atomic_numbers"].reshape(batch_size, num_atoms)[i]
+    batch["atomic_numbers"].reshape(batch_size, num_atoms)[i]
     c1_ = batch["mono"].reshape(batch_size, num_atoms)[i]
     # print(b1_)
     nonzero = np.nonzero(c1_)
@@ -76,7 +75,6 @@ def get_atoms_dcmol(batch, mono, d, nDCM):
     return atoms, dcmol, end
 
 
-from scipy.spatial.distance import cdist
 
 
 def get_esp_rmse(atomwise_charge_array2, batch):
@@ -112,7 +110,7 @@ def combine_chg_arrays(batch, atomwise_charge_array1, atomwise_charge_array2):
     
     i = 0
     nonzero = np.nonzero(batch["atomic_numbers"].reshape(batch_size, num_atoms)[i])
-    xyz = batch["positions"].reshape(batch_size, num_atoms, 3)[i][nonzero]
+    batch["positions"].reshape(batch_size, num_atoms, 3)[i][nonzero]
     elem = batch["atomic_numbers"].reshape(batch_size, num_atoms)[i][nonzero]
 
     chg_qs = []
@@ -136,7 +134,7 @@ def combine_chg_arrays_indexed(
     
     i = 0
     nonzero = np.nonzero(batch["atomic_numbers"].reshape(batch_size, num_atoms)[i])
-    xyz = batch["positions"].reshape(batch_size, num_atoms, 3)[i][nonzero]
+    batch["positions"].reshape(batch_size, num_atoms, 3)[i][nonzero]
     elem = batch["atomic_numbers"].reshape(batch_size, num_atoms)[i][nonzero]
 
     chg_qs = []

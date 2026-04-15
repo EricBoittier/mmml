@@ -8,7 +8,7 @@ def plot_3d_molecule(batch, batch_size):
     num_atoms = len(batch["Z"]) // batch_size
     
     i = 0
-    b1_ = batch["Z"].reshape(batch_size, num_atoms)[i]
+    batch["Z"].reshape(batch_size, num_atoms)[i]
     c1_ = batch["mono"].reshape(batch_size, num_atoms)[i]
     nonzero = np.nonzero(c1_)
     i = 0
@@ -27,7 +27,7 @@ def plot_3d_models(mono, dc, dcq, batch, batch_size):
     n_dcm = mono.shape[-1]
     i = 0
     b1_ = batch["Z"].reshape(batch_size, num_atoms)[i]
-    c1_ = batch["mono"].reshape(batch_size, num_atoms)[i]
+    batch["mono"].reshape(batch_size, num_atoms)[i]
     nonzero = np.nonzero(b1_)
     print(nonzero)
     i = 0

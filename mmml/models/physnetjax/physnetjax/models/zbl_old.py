@@ -7,12 +7,9 @@ using the ZBL potential with smooth cutoffs.
 
 from typing import Any, Optional
 
-import e3x
 import flax.linen as nn
 import jax
 import jax.numpy as jnp
-from jax import lax
-from jax.nn import standardize
 
 # Constants
 BOHR_TO_ANGSTROM = 0.529177249  # Conversion factor from Bohr to Angstrom

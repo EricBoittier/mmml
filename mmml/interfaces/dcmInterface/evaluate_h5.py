@@ -5,7 +5,7 @@ Evaluate fitted/optimized DCM: compute ESP and charge positions, write H5 for GU
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 

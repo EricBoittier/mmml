@@ -6,17 +6,9 @@ sys.path.append("/home/boittier/jaxeq/dcmnet")
 import functools
 
 import ase
-import e3x
-import flax.linen as nn
 import jax
 import jax.numpy as jnp
-import matplotlib.pyplot as plt
-import numpy as np
 import optax
-from jax.random import randint
-from optax import contrib
-from optax import tree_utils as otu
-from tqdm import tqdm
 
 # from jax import config
 # config.update('jax_enable_x64', True)

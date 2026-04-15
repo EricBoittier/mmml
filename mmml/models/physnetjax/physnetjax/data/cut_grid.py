@@ -1,6 +1,5 @@
 import ase
 import numpy as np
-from ase import data
 from scipy.spatial.distance import cdist
 
 

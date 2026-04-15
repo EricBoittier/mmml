@@ -27,7 +27,7 @@ Usage:
 import argparse
 import sys
 from pathlib import Path
-from typing import Dict, Tuple, List
+from typing import Dict
 import numpy as np
 
 
@@ -112,7 +112,7 @@ def convert_units(
     
     if convert_energy and 'E' in data:
         if verbose:
-            print(f"\n🔄 Converting energies: Hartree → eV")
+            print("\n🔄 Converting energies: Hartree → eV")
             print(f"   Before: mean={data['E'].mean():.6f} Ha")
         converted['E'] = data['E'] * HARTREE_TO_EV
         if verbose:
@@ -120,7 +120,7 @@ def convert_units(
     
     if convert_forces and 'F' in data:
         if verbose:
-            print(f"\n🔄 Converting forces: Hartree/Bohr → eV/Å")
+            print("\n🔄 Converting forces: Hartree/Bohr → eV/Å")
             f_before = np.linalg.norm(data['F'].reshape(-1, 3), axis=1).mean()
             print(f"   Before: mean norm={f_before:.6e} Ha/Bohr")
         converted['F'] = data['F'] * HARTREE_BOHR_TO_EV_ANG
@@ -384,7 +384,7 @@ Examples:
         print("✅ SPLITTING COMPLETE!")
         print(f"{'='*70}")
         print(f"\nOutput directory: {args.output_dir}")
-        print(f"Files created:")
+        print("Files created:")
         for f in sorted(args.output_dir.glob("*.npz")):
             size_mb = f.stat().st_size / 1024 / 1024
             print(f"  - {f.name} ({size_mb:.1f} MB)")

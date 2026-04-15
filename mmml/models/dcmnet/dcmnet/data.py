@@ -181,13 +181,13 @@ def prepare_multiple_datasets(
         dataMono = np.zeros((n_molecules, natoms))
         data.append(dataMono)
         keys.append("mono")
-        print(f"⚠️  No 'mono' field found in dataset")
+        print("⚠️  No 'mono' field found in dataset")
         print(f"   Creating zero charges for {n_molecules} molecules × {natoms} atoms")
         if "N" in keys:
             n_idx = keys.index("N")
-            actual_atoms = data[n_idx]
-            print(f"   Actual atoms per molecule will be respected (from 'N' field)")
-        print(f"   Note: Q field (if present) is quadrupole, not monopole charges")
+            data[n_idx]
+            print("   Actual atoms per molecule will be respected (from 'N' field)")
+        print("   Note: Q field (if present) is quadrupole, not monopole charges")
     if "esp" in datasets[0].keys():
         if clip_esp:
             dataEsp = np.concatenate([dataset["esp"][:1000] for dataset in datasets])[
@@ -299,7 +299,7 @@ def prepare_multiple_datasets(
                 # (n_samples * natoms,) -> atom-centered charges (same as mono!)
                 dataQ = dataQ.reshape(-1, natoms)
                 print(f"⚠️  Q field: appears to be atomic charges (shape: {dataQ.shape})")
-                print(f"   If this is correct, consider renaming to 'mono' in your dataset")
+                print("   If this is correct, consider renaming to 'mono' in your dataset")
             else:
                 print(f"⚠️  Q field has unexpected size: {total_size}")
                 print(f"   Expected: {n_molecules} (charge), {n_molecules*6} (moment), {n_molecules*9} (tensor)")

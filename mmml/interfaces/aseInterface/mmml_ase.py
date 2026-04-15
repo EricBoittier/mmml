@@ -1,5 +1,5 @@
-from itertools import combinations, permutations, product
-from typing import Dict, Tuple, List, Any, NamedTuple
+from itertools import combinations, product
+from typing import Dict, Tuple, Any, NamedTuple
 import jax
 import jax.numpy as jnp
 from jax import Array
@@ -25,31 +25,21 @@ print(devices)
 print(jax.default_backend())
 print(jax.devices())
 
-import sys
 import e3x
 import jax
 import numpy as np
-import optax
 import orbax
 from pathlib import Path
 import pandas as pd
 
 # Add custom path
 # sys.path.append("/pchem-data/meuwly/boittier/home/pycharmm_test")
-import  mmml.physnetjax.physnetjax
 
 # sys.path.append("/pchem-data/meuwly/boittier/home/dcm-lj-data")
 # from pycharmm_lingo_scripts import script1, script2, script3, load_dcm
-from mmml.physnetjax.physnetjax.restart.restart import get_last, get_files, get_params_model
-from mmml.physnetjax.physnetjax.analysis.analysis import plot_stats
+from mmml.physnetjax.physnetjax.restart.restart import get_last, get_params_model
 
-from mmml.physnetjax.physnetjax.data.data import prepare_datasets
-from mmml.physnetjax.physnetjax.training.loss import dipole_calc
 from mmml.physnetjax.physnetjax.models.model import EF
-from mmml.physnetjax.physnetjax.training.training import train_model  # from model import dipole_calc
-from mmml.physnetjax.physnetjax.data.batches import (
-    _prepare_batches as prepare_batches,
-)  # prepare_batches, prepare_datasets
 
 orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
 
@@ -99,30 +89,14 @@ model = EF(
 import pycharmm
 
 import pycharmm
-import pycharmm.generate as gen
-import pycharmm.ic as ic
 import pycharmm.coor as coor
 import pycharmm.energy as energy
-import pycharmm.dynamics as dyn
-import pycharmm.nbonds as nbonds
 import pycharmm.minimize as minimize
-import pycharmm.crystal as crystal
-import pycharmm.image as image
 import pycharmm.psf as psf
-import pycharmm.read as read
-import pycharmm.write as write
-import pycharmm.settings as settings
-import pycharmm.cons_harm as cons_harm
-import pycharmm.cons_fix as cons_fix
-import pycharmm.select as select
-import pycharmm.shake as shake
 
-from pycharmm.lib import charmm as libcharmm
 
 
 import ase
-from ase.io import read as read_ase
-from ase import visualize
 from ase.visualize import view
 
 
@@ -251,7 +225,7 @@ END
 
 
 def reset_block():
-    block = f"""BLOCK 
+    block = """BLOCK 
         CALL 1 SELE ALL END
           COEFF 1 1 1.0 
         END
@@ -260,7 +234,7 @@ def reset_block():
 
 
 def reset_block_no_internal():
-    block = f"""BLOCK 
+    block = """BLOCK 
         CALL 1 SELE ALL END
           COEFF 1 1 1.0 BOND 0.0 ANGL 0.0 DIHEdral 0.0 
         END
@@ -275,10 +249,10 @@ import MDAnalysis as mda
 
 
 def load_pdb_data(pdb_file):
-    loaded_pdb = mda.coordinates.PDB.PDBReader(pdb_file)
-    loaded_pdb = mda.topology.PDBParser.PDBParser(pdb_file)
+    mda.coordinates.PDB.PDBReader(pdb_file)
+    mda.topology.PDBParser.PDBParser(pdb_file)
     atypes = psf.get_atype()
-    atc = pycharmm.param.get_atc()
+    pycharmm.param.get_atc()
     residues = psf.get_res()
     psf.get_natom()
     # nl_info = capture_neighbour_list()
@@ -494,14 +468,13 @@ def calc_energies_forces(
     ase_atom_full_system = ase.Atoms(atomic_numbers, atom_positions)
 
     result = None
-    summed_2body = None
     mmml_energy = None
     charmm = None
 
     if DO_MM:
         # Calculate CHARMM energies and forces first
         result = calc_pycharmm_dimers(forces=True)
-        summed_2body = result["mm_forces"].sum(axis=0)
+        result["mm_forces"].sum(axis=0)
         mm_forces = result["mm_forces"]
 
     all_coordinates = ase_atom_full_system.get_positions()
@@ -934,17 +907,17 @@ def get_MM_energy_forces_fns(R):
     pair_idx_atom_atom = pair_idx_atom_atom.reshape(-1, 2)
 
     displacements = R[pair_idx_atom_atom[:, 0]] - R[pair_idx_atom_atom[:, 1]]
-    distances = jnp.linalg.norm(displacements, axis=1)
+    jnp.linalg.norm(displacements, axis=1)
     at_perms = [_ for _ in list(product(params, repeat=2)) if _[0] <= _[1]]
 
-    charges = np.array(psf.get_charges())
-    masses = np.array(psf.get_amass())
+    np.array(psf.get_charges())
+    np.array(psf.get_amass())
     at_codes = np.array(psf.get_iac())
-    atomtype_codes = np.array(psf.get_atype())
+    np.array(psf.get_atype())
 
     at_perms_ep = [(at_ep[a] * at_ep[b]) ** 0.5 for a, b in at_perms]
     at_perms_rm = [(at_rm[a] + at_rm[b]) for a, b in at_perms]
-    at_perms_qq = [(at_q[a] * at_q[b]) for a, b in at_perms]
+    [(at_q[a] * at_q[b]) for a, b in at_perms]
     at_perms_ep, at_perms_rm
 
     rmins_per_system = jnp.take(
@@ -954,7 +927,6 @@ def get_MM_energy_forces_fns(R):
         at_flat_ep, at_codes
     )  # jnp.array([ NBL["pair_ep"][k] for k in atom_keys ])
 
-    rs = distances
     q_per_system = jnp.take(at_flat_q, at_codes)
 
     q_a = jnp.take(q_per_system, pair_idx_atom_atom[:, 0])
@@ -1098,7 +1070,7 @@ def get_MM_energy_forces_fns(R):
             Tuple[Array, Array]: (Total energy, Forces per atom)
         """
         # Calculate base MM energies
-        mm_energy = calculate_mm_energy(positions)
+        calculate_mm_energy(positions)
         pair_energies = calculate_mm_pair_energies(positions)
 
         # Apply switching function
@@ -1471,7 +1443,6 @@ def get_spherical_cutoff_calculator(
         """
         n_monomers = 20
         n_dimers = 190
-        output_list: List[Dict[str, Array]] = []
         out_E = 0
         out_F = 0
 

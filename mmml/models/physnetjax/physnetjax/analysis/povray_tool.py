@@ -1,6 +1,5 @@
 import os
 import shutil
-from io import BytesIO
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -8,7 +7,6 @@ import numpy as np
 from ase import Atoms, io
 from ase.data import covalent_radii
 from ase.io.pov import get_bondpairs, set_high_bondorder_pairs
-from ase.visualize.plot import plot_atoms
 from matplotlib.offsetbox import AnnotationBbox, OffsetImage
 from sklearn.decomposition import PCA
 
@@ -78,7 +76,7 @@ def render_povray(
                 _z[_[1]] == 1 and (_z[_[0]] == 7 or _z[_[0]] == 8)
             ):
                 if 1.0 < distance < 3.5:
-                    print(f"Adding bond between", map[_[0]], map[_[1]])
+                    print("Adding bond between", map[_[0]], map[_[1]])
                     good_bonds.append(_)
 
     good_bonds = set_high_bondorder_pairs(good_bonds)
@@ -152,7 +150,7 @@ def annotate_ebc(ebc, energies, ase_atoms):
 
         for idx, i in enumerate(cm[:4]):
             # Use OffsetImage to embed the image into the PCA plot
-            png_name = render_povray(
+            render_povray(
                 ase_atoms[i], f"test-{i}-{idx}-{idk}-{cluster_key}.pov"
             )
             image = plt.imread(f"test-{i}-{idx}-{idk}-{cluster_key}.png")

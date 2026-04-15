@@ -8,7 +8,6 @@ allowing training to be resumed from previous states.
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Tuple
 
 import e3x
 import jax

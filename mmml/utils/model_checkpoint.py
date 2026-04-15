@@ -206,7 +206,7 @@ def save_model_checkpoint(
     # Save parameters
     if use_orbax:
         try:
-            from orbax.checkpoint import Checkpointer, PyTreeCheckpointer
+            from orbax.checkpoint import PyTreeCheckpointer
             checkpointer = PyTreeCheckpointer()
             params_path = save_dir / "params"
             checkpointer.save(params_path, params)

@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Optional
 import jax
 
-from .training_config import ExperimentConfig, TrainingConfig, ModelConfig, create_default_config
+from .training_config import ExperimentConfig, TrainingConfig, ModelConfig
 from .training_multibatch import train_model_multibatch
 from .data import prepare_datasets
 from .analysis import create_model

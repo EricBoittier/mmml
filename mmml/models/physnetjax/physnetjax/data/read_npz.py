@@ -1,12 +1,9 @@
 from pathlib import Path
-from typing import Dict, List, Tuple, Union
+from typing import Tuple, Union
 
 import ase
 import numpy as np
-from ase.units import Bohr, Hartree, kcal
-from numpy.ma.core import nonzero
-from numpy.typing import NDArray
-from tqdm import tqdm
+from ase.units import Bohr, Hartree
 
 from physnetjax.utils.enums import (
     check_keys,
@@ -20,7 +17,7 @@ from physnetjax.utils.enums import (
     ESP_KEYS,
     Q_KEYS,
 )
-from physnetjax.utils.enums import KEY_TRANSLATION, MolecularData
+from physnetjax.utils.enums import MolecularData
 
 # Constants
 HARTREE_PER_BOHR_TO_EV_PER_ANGSTROM = Hartree / Bohr

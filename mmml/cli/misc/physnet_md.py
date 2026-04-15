@@ -232,7 +232,6 @@ def main() -> int:
     params, model = get_params_model(str(restart), natoms=n_atoms)
 
     from ase import Atoms, units
-    from ase.md.langevin import Langevin
     from ase.md.velocitydistribution import MaxwellBoltzmannDistribution, Stationary, ZeroRotation
     from ase.md.verlet import VelocityVerlet
     from ase.io import write

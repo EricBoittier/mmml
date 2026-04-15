@@ -5,19 +5,13 @@ import numpy as np
 from tqdm import tqdm
 import pyscf
 from pyscf.hessian import thermo
-from pyscf import gto
-from pyscf.data import radii
-from gpu4pyscf.df import int3c2e
 from gpu4pyscf.gto.int3c1e import int1e_grids
-from gpu4pyscf.lib.cupy_helper import dist_matrix
 from gpu4pyscf.dft import rks
 from gpu4pyscf.properties import ir, shielding, polarizability
 
-import cupy
 
 from mmml.interfaces.pyscf4gpuInterface.enums import *
 from mmml.interfaces.pyscf4gpuInterface.helperfunctions import *
-from mmml.interfaces.pyscf4gpuInterface.esp_helpers import balance_array
 
 
 def _RZ_to_atom(R, Z):

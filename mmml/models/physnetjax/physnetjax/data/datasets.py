@@ -1,6 +1,5 @@
-import ase
 import numpy as np
-from ase.units import Bohr, Hartree, kcal
+from ase.units import Bohr, Hartree
 from numpy.typing import NDArray
 from tqdm import tqdm
 

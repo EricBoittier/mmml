@@ -11,7 +11,7 @@ This module provides utilities to safely handle JAX operations in async contexts
 
 import jax
 import jax.numpy as jnp
-from typing import Any, Tuple, Dict, Union
+from typing import Any
 
 
 def block_jax_until_ready(*arrays: Any) -> None:

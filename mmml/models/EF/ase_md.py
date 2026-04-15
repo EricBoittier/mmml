@@ -198,11 +198,9 @@ def main_batched(args):
     """
     import jax
     import jax.numpy as jnp
-    import e3x
     import time
     import functools
     from ase.data import atomic_masses as _ase_masses
-    from ase.calculators.singlepoint import SinglePointCalculator
     from mmml.models.EF.training import MessagePassingModel
     from mmml.models.EF.model_functions import energy_and_forces
 
@@ -409,7 +407,7 @@ def main_batched(args):
     else:
         R0 = jnp.tile(R_single[None, :, :], (B, 1, 1)) # (B, N, 3)
 
-    print(f"\n  Warming up batched force function ...")
+    print("\n  Warming up batched force function ...")
     t0 = time.perf_counter()
     E_w, F_w, mu_w = force_fn(R0)
     E_w.block_until_ready()
@@ -598,7 +596,7 @@ def main_batched(args):
     )  # (n_saved, B)
     n_real_np = np.maximum(np.sum(Z_np > 0, axis=1), 1).astype(np.float64)
     T_arr = 2.0 * Ekin / (3.0 * n_real_np[None, :] * BOLTZMANN_EV)
-    Etot = E_np + Ekin
+    E_np + Ekin
 
     pi = max(1, n_saved // 20)
     print(f"\n  {'frame':>6s} {'time(fs)':>10s}", end="")
@@ -813,7 +811,7 @@ def main(args=None):
         else:
             print(f"  WARNING: not converged after {opt.nsteps} steps  "
                   f"(max |F| = {fmax_final:.6f} eV/Å)")
-            print(f"  Consider increasing --opt-steps or relaxing --fmax.")
+            print("  Consider increasing --opt-steps or relaxing --fmax.")
         energy = atoms.get_potential_energy()
         print(f"  Optimised energy: {energy:.6f} eV")
         print(f"  Optimised max|F|: {np.max(np.abs(atoms.get_forces())):.6f} eV/Å")

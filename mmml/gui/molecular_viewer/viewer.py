@@ -21,10 +21,8 @@ except ImportError:
 
 import argparse
 import math
-import sys
 import time
 from pathlib import Path
-from typing import Sequence
 
 import glfw
 

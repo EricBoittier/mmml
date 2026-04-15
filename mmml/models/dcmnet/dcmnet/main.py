@@ -48,12 +48,9 @@ if __name__ == "__main__":
     import sys
 
 
-    import pandas as pd
 
-    import dcmnet
 
     print(sys.path)
-    import pickle
     import time
     from pathlib import Path
 

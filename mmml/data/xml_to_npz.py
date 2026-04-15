@@ -10,14 +10,13 @@ import numpy as np
 from pathlib import Path
 from typing import List, Dict, Optional, Union
 from dataclasses import dataclass
-import json
 from datetime import datetime
 from tqdm import tqdm
 
 # Import the excellent Molpro parser
 from mmml.interfaces.parse_molpro.read_molden import read_molpro_xml, MolproData
 
-from .npz_schema import validate_npz, NPZSchema
+from .npz_schema import NPZSchema
 
 
 @dataclass
@@ -410,7 +409,7 @@ class MolproConverter:
             schema = NPZSchema()
             is_valid, errors = schema.validate(data)
             if not is_valid:
-                print(f"Warning: Data validation failed:")
+                print("Warning: Data validation failed:")
                 for error in errors:
                     print(f"  - {error}")
                 print("Saving anyway...")

@@ -1,4 +1,3 @@
-import matplotlib.pyplot as plt
 import seaborn as sns
 
 from physnetjax.utils.pretty_printer import get_panel

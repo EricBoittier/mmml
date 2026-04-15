@@ -1,5 +1,4 @@
 from contextlib import nullcontext
-import asyncio
 import gc
 import logging
 import time
@@ -18,8 +17,6 @@ try:
     lj.monkey_patch()
 except ImportError:
     lj = None  # type: ignore[assignment]
-from jax.experimental import mesh_utils
-from jax.sharding import Mesh, NamedSharding, PartitionSpec as P
 from rich.console import Console
 from rich.live import Live
 
@@ -43,9 +40,7 @@ from mmml.physnetjax.physnetjax.training.trainstep import train_step
 from mmml.physnetjax.physnetjax.utils.ascii import computer 
 from mmml.physnetjax.physnetjax.utils.pretty_printer import (
     Printer,
-    pretty_print_optimizer,
     print_dict_as_table,
-    training_printer,
 )
 
 PROFILE = False

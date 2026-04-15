@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import time
-from datetime import datetime
 from pathlib import Path
 
 import jax
@@ -427,7 +426,7 @@ def set_up_nhc_sim_routine(
         or (25 if (args.ensemble == "npt" and use_pbc) else 1000)
     )
     kT = T * unit['temperature']
-    rng_key = jax.random.PRNGKey(0)
+    jax.random.PRNGKey(0)
     c.print(Panel(
         f"Ensemble: {args.ensemble.upper()} | dt={dt} ps ({dt_fs} fs) | kT={kT} ({T} K) | steps_per_recording={steps_per_recording}",
         title="[bold]JAX-MD Simulation[/bold]",

@@ -206,7 +206,7 @@ def build_mm_energy_forces_fn(
 
     at_ep = -1 * np.abs(atc_epsilons) * ep_scale
     at_rm = atc_rmins * sig_scale
-    at_flat_q = np.array(atc_qs)
+    np.array(atc_qs)
     at_flat_ep = np.array(at_ep)
     at_flat_rm = np.array(at_rm)
 

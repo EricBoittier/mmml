@@ -1,8 +1,5 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-from matplotlib import cm
-from matplotlib.colors import Normalize
 
 def pretty_histogram(data, bins=None, alpha=0.7, edgecolor='black', title=None):
     """

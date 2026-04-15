@@ -160,7 +160,7 @@ class MessagePassingModel(nn.Module):
         
         # Extract dipole components: shape (n_atoms, 3, n_dcm)
         # Then transpose to (n_atoms, n_dcm, 3) for consistency
-        n_atoms = x.shape[0]
+        x.shape[0]
         atomic_dipo = x[:, 1, 1:4, :].transpose(0, 2, 1)
         
         # Add positions: positions shape is (n_atoms, 3)

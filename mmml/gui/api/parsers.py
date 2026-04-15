@@ -12,12 +12,10 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any, Union
 from dataclasses import dataclass, field
 from io import StringIO
-import json
 
 try:
     from ase import Atoms
     from ase.io import read as ase_read, write as ase_write
-    from ase.io.trajectory import Trajectory
     HAS_ASE = True
 except ImportError:
     HAS_ASE = False
@@ -1388,7 +1386,7 @@ class MolecularFileParser:
         if 'F' in data:
             # Compute force magnitudes per frame
             F = data['F']
-            Z = data['Z']
+            data['Z']
             N = data.get('N')
             
             # Determine number of frames (use same logic as frame_indices)
@@ -1952,7 +1950,7 @@ class MolecularFileParser:
         
         # Get coordinates
         R_raw = data['R']
-        Z_raw = data['Z']
+        data['Z']
         n_frames = len(R_raw)
         
         # Flatten coordinates per frame

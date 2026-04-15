@@ -28,12 +28,10 @@ Usage
 
 from __future__ import annotations
 
-import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import e3x
 import jax
-import jax.numpy as jnp
 import numpy as np
 
 from mmml.physnetjax.physnetjax.models.model import EF
@@ -324,7 +322,7 @@ def _count_transplanted(old_params, new_params, transplanted, _prefix=""):
         n_total = 1
         old_arr = np.asarray(old_params)
         new_arr = np.asarray(new_params)
-        tra_arr = np.asarray(transplanted)
+        np.asarray(transplanted)
         # If transplanted differs from new_params init, we transplanted something
         if old_arr.shape == new_arr.shape or (old_arr.ndim == new_arr.ndim):
             n_transplanted = 1

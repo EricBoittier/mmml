@@ -9,7 +9,6 @@ and Charge Q and Spin (Multiplicity) S.
 """
 
 import functools
-from typing import Union
 from typing import Dict, List, Optional, Tuple
 
 import e3x
@@ -470,7 +469,7 @@ class EF(nn.Module):
         jnp.ndarray
             Refined features
         """
-        x1 = e3x.nn.silu(x)
+        e3x.nn.silu(x)
         for _ in range(abs(self.n_res)):
             y = e3x.nn.silu(x)
             y = e3x.nn.add(x, y)

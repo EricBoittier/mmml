@@ -7,9 +7,8 @@ from __future__ import annotations
 
 import math
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterator
 
 
 @dataclass
@@ -314,7 +313,6 @@ def load_structure(path: str | Path) -> tuple[list[Atom] | list[list[Atom]], tup
     """
     path = Path(path)
     suf = path.suffix.lower()
-    empty_meta: list[dict] = []
     if suf == ".pdb":
         atoms, cell = load_pdb(path)
         return [atoms], [cell], [{}]

@@ -276,7 +276,6 @@ def interpolate_xyzs_to_npz(xyz1: str, xyz2: str, steps: int = 1000, out_fn="int
     np.savez_compressed(out_fn, **out_dict)
 
 
-import time
 import ase
 from io import StringIO
 import pandas as pd

@@ -12,7 +12,6 @@ import argparse
 from pathlib import Path
 import yaml
 from typing import Dict, Any, Optional
-import json
 from dataclasses import dataclass, asdict
 import time
 
@@ -21,8 +20,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from mmml.data import (
     load_npz,
-    train_valid_split,
-    DataConfig
+    train_valid_split
 )
 
 
@@ -417,7 +415,7 @@ Examples:
     
     # Load training data
     if verbose:
-        print(f"\n📂 Loading training data...")
+        print("\n📂 Loading training data...")
     
     try:
         train_data = load_npz(
@@ -432,7 +430,7 @@ Examples:
     # Load or split validation data
     if config.valid_file:
         if verbose:
-            print(f"📂 Loading validation data...")
+            print("📂 Loading validation data...")
         try:
             valid_data = load_npz(
                 config.valid_file,
@@ -453,7 +451,7 @@ Examples:
         )
     
     if verbose:
-        print(f"\n✓ Data loaded:")
+        print("\n✓ Data loaded:")
         print(f"   Train: {len(train_data['E'])} structures")
         print(f"   Valid: {len(valid_data['E'])} structures")
     
@@ -479,11 +477,11 @@ Examples:
     
     if success:
         if not args.quiet:
-            print(f"\n✅ Training complete!")
+            print("\n✅ Training complete!")
             print(f"   Time: {elapsed:.2f}s")
         return 0
     else:
-        print(f"\n❌ Training failed", file=sys.stderr)
+        print("\n❌ Training failed", file=sys.stderr)
         return 1
 
 

@@ -24,7 +24,7 @@ Usage:
 import argparse
 import sys
 from pathlib import Path
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any
 import numpy as np
 
 try:
@@ -53,7 +53,7 @@ def print_summary(data: Dict[str, np.ndarray], verbose: bool = True):
             break
     
     print(f"\nTotal samples: {n_samples}")
-    print(f"\nFields:")
+    print("\nFields:")
     for key, value in data.items():
         if isinstance(value, np.ndarray) and hasattr(value, 'shape'):
             print(f"  {key:20s}: {str(value.shape):30s} {value.dtype}")
@@ -116,9 +116,9 @@ def analyze_forces(F: np.ndarray, N: np.ndarray = None, verbose: bool = True) ->
         
         # Check if forces are balanced
         if max(abs(c) for c in stats['mean_components']) < 1e-3:
-            print(f"  ✅ Forces well-balanced (mean ≈ 0)")
+            print("  ✅ Forces well-balanced (mean ≈ 0)")
         else:
-            print(f"  ⚠️  Non-zero mean components detected")
+            print("  ⚠️  Non-zero mean components detected")
     
     return stats
 

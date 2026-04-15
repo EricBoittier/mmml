@@ -42,7 +42,7 @@ def example_save():
     
     # Save checkpoint
     save_dir = Path("example_checkpoint")
-    saved_paths = save_model_checkpoint(
+    save_model_checkpoint(
         params=params,
         model=model,
         save_dir=save_dir,

@@ -125,7 +125,6 @@ from mmml.dcmnet.dcmnet.modules import MessagePassingModel
 from mmml.dcmnet.dcmnet.electrostatics import calc_esp
 
 # Import data utilities
-from mmml.data import load_npz, DataConfig
 from mmml.data.units import (
     ANGSTROM_TO_BOHR,
     HARTREE_TO_EV,
@@ -1156,7 +1155,7 @@ def load_combined_data(efd_file: Path, esp_file: Path, subtract_atom_energies: b
                 print(f"  ⚠️  Could not load atomic references ({e}), skipping subtraction")
         else:
             if verbose:
-                print(f"  ✅ Subtracted atomic energies (now relative to isolated atoms)")
+                print("  ✅ Subtracted atomic energies (now relative to isolated atoms)")
     
     # PySCF data: grid and atoms are in the same coordinate frame (no COM alignment needed)
     combined = {
@@ -1173,7 +1172,7 @@ def load_combined_data(efd_file: Path, esp_file: Path, subtract_atom_energies: b
     }
     
     if verbose:
-        print(f"  Combined data shapes:")
+        print("  Combined data shapes:")
         for key, val in combined.items():
             print(f"    {key}: {val.shape}")
         print(f"  Data padding: {combined['R'].shape[1]} atoms")
@@ -1297,7 +1296,7 @@ def precompute_edge_lists(
     R = data['R']  # (n_samples, natoms, 3)
     N = data['N']  # (n_samples,)
     n_samples = len(N)
-    natoms = R.shape[1]
+    R.shape[1]
     
     # Pre-compute edge lists for each sample
     all_dst_idx = []
@@ -1385,7 +1384,7 @@ def prepare_batch_data(
     
     # batch_mask needs to be per-edge for PhysNet, but create it per-batch for now
     # It will be expanded to match edges in the edge list
-    batch_mask = np.ones(batch_size, dtype=np.float32)
+    np.ones(batch_size, dtype=np.float32)
     
     # Flatten batch dimension
     R_flat = R.reshape(-1, 3)
@@ -2576,7 +2575,6 @@ def plot_validation_results(
         print(f"  ✅ Saved ESP example {idx}: {esp_path}")
         
         # Create 3D scatter plots for this ESP example
-        from mpl_toolkits.mplot3d import Axes3D
         
         fig = plt.figure(figsize=(18, 6))
         
@@ -2910,7 +2908,6 @@ def plot_validation_results(
         positions_flat = np.array(positions_dist.reshape(-1, 3))
         
         # Create figure with multiple views
-        from mpl_toolkits.mplot3d import Axes3D
         fig = plt.figure(figsize=(18, 12))
         
         # Compute symmetric color scale for charges
@@ -3399,7 +3396,7 @@ def train_model(
             
             # Print Coulomb mixing info if enabled
             if 'coulomb_energy' in valid_loss_avg and valid_loss_avg.get('coulomb_lambda', 0) != 0:
-                print(f"  Coulomb Mixing:")
+                print("  Coulomb Mixing:")
                 print(f"    λ (learned): {valid_loss_avg['coulomb_lambda']:.6f}")
                 print(f"    E_coulomb: {valid_loss_avg['coulomb_energy']:.6f} eV")
             if 'mae_energy' in valid_loss_avg:
@@ -3448,7 +3445,7 @@ def train_model(
             
             # Print charge diagnostics (first validation sample)
             if epoch % (print_freq * 10) == 0 or epoch == 1:  # Every 10 print_freq epochs
-                print(f"\n  💡 Charge Diagnostics (first validation sample):")
+                print("\n  💡 Charge Diagnostics (first validation sample):")
                 diag_batch = prepare_batch_data(valid_data, np.array([0]), cutoff=cutoff)
                 _, _, diag_output = eval_step(
                     params=ema_params,  # Use EMA parameters
@@ -3732,7 +3729,7 @@ def main():
             print(f"❌ Error: {name} file not found: {path}")
             sys.exit(1)
     
-    print(f"\n📁 Data Files:")
+    print("\n📁 Data Files:")
     print(f"  Train EFD:  {args.train_efd}")
     print(f"  Train ESP:  {args.train_esp}")
     print(f"  Valid EFD:  {args.valid_efd}")
@@ -3789,7 +3786,7 @@ def main():
             train_data = resize_data_padding(train_data, args.natoms, verbose=args.verbose)
             valid_data = resize_data_padding(valid_data, args.natoms, verbose=args.verbose)
     
-    print(f"\n✅ Data loaded:")
+    print("\n✅ Data loaded:")
     print(f"  Training samples: {len(train_data['E'])}")
     print(f"  Validation samples: {len(valid_data['E'])}")
     print(f"  Padded to: {args.natoms} atoms")
@@ -3843,7 +3840,7 @@ def main():
         try:
             physnet_ckpt_params, physnet_ckpt_config = _load_physnet_checkpoint(physnet_ckpt_path)
             if physnet_ckpt_config:
-                print(f"\n📁 Loaded PhysNet config from checkpoint (will match architecture)")
+                print("\n📁 Loaded PhysNet config from checkpoint (will match architecture)")
         except Exception as e:
             print(f"\n❌ Failed to load PhysNet checkpoint: {e}")
             sys.exit(1)
@@ -3904,7 +3901,7 @@ def main():
             mix_coulomb_energy=args.mix_coulomb_energy,
         )
         
-        print(f"\n✅ Joint PhysNet + Non-Equivariant model created")
+        print("\n✅ Joint PhysNet + Non-Equivariant model created")
     else:
         # Use equivariant DCMNet (default)
         dcmnet_config = {
@@ -3928,14 +3925,14 @@ def main():
             mix_coulomb_energy=args.mix_coulomb_energy,
         )
         
-        print(f"\n✅ Joint PhysNet + DCMNet model created")
+        print("\n✅ Joint PhysNet + DCMNet model created")
     
     # Training setup
     print(f"\n{'#'*70}")
     print("# Training Setup")
     print(f"{'#'*70}\n")
     
-    print(f"Training hyperparameters:")
+    print("Training hyperparameters:")
     print(f"  Optimizer: {args.optimizer.upper()}")
     if optimizer_kwargs:
         for k, v in optimizer_kwargs.items():
@@ -3946,7 +3943,7 @@ def main():
     print(f"  Weight decay: {args.weight_decay}")
     print(f"  Random seed: {args.seed}")
     
-    print(f"\nLoss configuration:")
+    print("\nLoss configuration:")
     print(f"  Energy weight: {args.energy_weight} (mix Coulomb: {args.mix_coulomb_energy})")
     print(f"  Forces weight: {args.forces_weight}")
     print(f"  Monopole weight: {args.mono_weight}")
@@ -3967,7 +3964,7 @@ def main():
             f"    (ESP magnitude filter: |ESP| <= {args.esp_max_value:.4f} Ha/e)"
         )
     
-    print(f"\nTraining stability:")
+    print("\nTraining stability:")
     print(f"  Gradient clipping: {args.grad_clip_norm if args.grad_clip_norm else 'disabled'}")
     
     # Handle restart or PhysNet init
@@ -3982,7 +3979,7 @@ def main():
             physnet_params = physnet_params["params"]
         # Flax joint model: {'params': {'physnet': ..., 'dcmnet': ..., ...}}
         restart_params = {"params": {"physnet": physnet_params}}
-        print(f"\n🔄 Merging PhysNet params into joint model...")
+        print("\n🔄 Merging PhysNet params into joint model...")
         print(f"✅ Loaded PhysNet params ({sum(x.size for x in jax.tree_util.tree_leaves(physnet_params)):,} parameters)")
     
     if args.restart:
@@ -4003,8 +4000,8 @@ def main():
         
         # Try to determine start epoch from checkpoint directory name or metadata
         # For now, user should manually adjust --epochs if needed
-        print(f"⚠️  Starting from epoch 1 (adjust --epochs if continuing a longer run)")
-        print(f"   Example: if you ran 50 epochs before, use --epochs 100 to train 50 more")
+        print("⚠️  Starting from epoch 1 (adjust --epochs if continuing a longer run)")
+        print("   Example: if you ran 50 epochs before, use --epochs 100 to train 50 more")
     
     # Start training
     print(f"\n{'='*70}")
@@ -4090,11 +4087,11 @@ def main():
                 print("   Install with: pip install matplotlib")
         
     except KeyboardInterrupt:
-        print(f"\n\n⚠️  Training interrupted by user")
+        print("\n\n⚠️  Training interrupted by user")
         print(f"Checkpoints saved to: {ckpt_dir / args.name}")
         sys.exit(0)
     except Exception as e:
-        print(f"\n\n❌ Training failed with error:")
+        print("\n\n❌ Training failed with error:")
         print(f"  {e}")
         import traceback
         traceback.print_exc()

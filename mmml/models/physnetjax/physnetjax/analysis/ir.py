@@ -5,7 +5,6 @@ Statistics and Miscellaneous utilities for scientific calculations.
 from typing import List, Tuple
 
 import ase.units as units
-import matplotlib.pyplot as plt
 import numpy as np
 import pint
 from scipy.signal import find_peaks

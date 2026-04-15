@@ -7,7 +7,6 @@ Provides a unified interface for all MMML command-line tools.
 
 import sys
 import argparse
-from pathlib import Path
 
 
 def main():

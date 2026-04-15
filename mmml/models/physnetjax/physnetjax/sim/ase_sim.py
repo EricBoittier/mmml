@@ -1,12 +1,6 @@
-import io
 
 import ase
-import ase.calculators.calculator as ase_calc
-import ase.io as ase_io
-import ase.optimize as ase_opt
-import matplotlib.pyplot as plt
 import numpy as np
-import py3Dmol
 from ase.md.velocitydistribution import (
     MaxwellBoltzmannDistribution,
     Stationary,

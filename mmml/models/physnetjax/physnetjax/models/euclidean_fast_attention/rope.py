@@ -215,7 +215,6 @@ def apply(
         else:
             y = jnp.einsum("nmd,mdv->nmv", q, kv)  # (N, M, Dv)
 
-    num_parity_v_out = 2 if include_pseudotensors_v else 1
     # Bring back into E3x convention.
     y = jnp.reshape(y, (*y.shape[:-1], num_parity_v, num_degrees_v, num_features_v))
     # (N, P, L, F)    if do_integration = True

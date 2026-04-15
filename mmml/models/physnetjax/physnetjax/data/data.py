@@ -1,12 +1,8 @@
 from pathlib import Path
 
-import ase.data
-import e3x
 import jax
-import jax.numpy as jnp
 import numpy as np
 import pandas as pd
-from scipy.spatial.distance import cdist
 
 from mmml.data.atomic_references import (
     DEFAULT_CHARGE_STATE,

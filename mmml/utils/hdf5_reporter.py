@@ -48,7 +48,7 @@ Or as a context manager::
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, Optional, Sequence, Tuple, Union
 
 import numpy as np
@@ -63,7 +63,6 @@ except ImportError as exc:
 # Optional JAX import – the reporter works with plain numpy arrays too.
 try:
     import jax
-    import jax.numpy as jnp
 
     _HAS_JAX = True
 except ImportError:

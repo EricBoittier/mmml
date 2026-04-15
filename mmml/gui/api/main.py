@@ -7,8 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pathlib import Path
-from typing import Optional, List
-import os
+from typing import Optional
 
 from .parsers import MolecularFileParser, list_molecular_files
 

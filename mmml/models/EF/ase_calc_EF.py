@@ -6,14 +6,12 @@ import functools
 
 import ase
 import ase.calculators.calculator as ase_calc
-import ase.io as ase_io
 import e3x
 import jax
 import jax.numpy as jnp
 import numpy as np
 import json
 from pathlib import Path
-from flax import linen as nn
 
 from mmml.models.EF.training import MessagePassingModel, sanitize_flax_variables_dict
 from mmml.models.EF.model_functions import energy_and_forces, dipole_derivative_field
@@ -747,7 +745,7 @@ def main(args=None):
     try:
         aat_Z = calc.get_aat_nuclear(atoms)
         norms_Z = np.array([np.linalg.norm(aat_Z[s]) for s in range(aat_Z.shape[0])])
-        print(f"\n  1) Nuclear charges Z_s (crudest):")
+        print("\n  1) Nuclear charges Z_s (crudest):")
         print(f"     |AAT|:  min={norms_Z.min():.6f}  max={norms_Z.max():.6f}  mean={norms_Z.mean():.6f}")
     except Exception as e:
         print(f"  Nuclear AAT error: {e}")
@@ -755,7 +753,7 @@ def main(args=None):
     try:
         aat_born, q_eff = calc.get_aat_born(atoms)
         norms_born = np.array([np.linalg.norm(aat_born[s]) for s in range(aat_born.shape[0])])
-        print(f"\n  2) Born effective charges q_eff = (1/3)Tr(APT) (includes electronic screening):")
+        print("\n  2) Born effective charges q_eff = (1/3)Tr(APT) (includes electronic screening):")
         print(f"     q_eff: {q_eff}")
         print(f"     |AAT|:  min={norms_born.min():.6f}  max={norms_born.max():.6f}  mean={norms_born.mean():.6f}")
     except Exception as e:
@@ -764,7 +762,7 @@ def main(args=None):
     try:
         aat_ml, ml_q = calc.get_aat_ml_charges(atoms)
         norms_ml = np.array([np.linalg.norm(aat_ml[s]) for s in range(aat_ml.shape[0])])
-        print(f"\n  3) ML-predicted charges (from model's dipole head):")
+        print("\n  3) ML-predicted charges (from model's dipole head):")
         print(f"     q_ML: {ml_q}")
         print(f"     |AAT|:  min={norms_ml.min():.6f}  max={norms_ml.max():.6f}  mean={norms_ml.mean():.6f}")
     except Exception as e:
@@ -776,7 +774,7 @@ def main(args=None):
         dEdEf = calc.get_dipole_from_field(atoms)
         print(f"  -dE/dEf (raw):   {dEdEf}")
         print(f"  Predicted dipole: {dipole}")
-        print(f"  These differ because the model does NOT have E = E0 - mu*Ef coupling.")
+        print("  These differ because the model does NOT have E = E0 - mu*Ef coupling.")
     except Exception as e:
         print(f"  Error: {e}")
 

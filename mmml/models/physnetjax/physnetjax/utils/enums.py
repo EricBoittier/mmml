@@ -1,6 +1,5 @@
-from enum import Enum, auto
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from enum import Enum
+from typing import List, Optional
 
 
 class MolecularData(Enum):

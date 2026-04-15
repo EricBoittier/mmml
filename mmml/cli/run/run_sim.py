@@ -48,7 +48,6 @@ the hybrid MM/ML calculator with PyCHARMM integration.
 
 import argparse
 import sys
-import time
 from pathlib import Path
 
 import numpy as np
@@ -414,34 +413,17 @@ def run(args: argparse.Namespace) -> int:
     base_ckpt_dir, epoch_dir = resolve_checkpoint_paths(args.checkpoint)
 
     # Setup imports
-    Atoms = setup_ase_imports()
+    setup_ase_imports()
     CutoffParameters, ev2kcalmol, setup_calculator, get_ase_calc = setup_mmml_imports()
     
     # Additional imports for this demo
     try:
-        import pycharmm
         import pycharmm.psf as psf
         import ase
-        import ase.calculators.calculator as ase_calc
         import ase.io as ase_io
-        from ase.md.velocitydistribution import MaxwellBoltzmannDistribution, Stationary, ZeroRotation
-        from ase.md.verlet import VelocityVerlet
-        import ase.optimize as ase_opt
         from mmml.interfaces.pycharmmInterface.setupBox import setup_box_generic
-        import pandas as pd
-        from mmml.interfaces.pycharmmInterface.import_pycharmm import minimize
-        from mmml.interfaces.pycharmmInterface.cell_list import _wrap_groups_np
-        import jax_md
-        from jax_md import space, quantity, simulate, partition, units, units
-        from ase.units import _amu
-
+        import jax
         import jax.numpy as jnp
-        from mmml.interfaces.pycharmmInterface.pbc_utils_jax import wrap_groups
-
-        import jax, e3x
-        from jax import jit, grad, lax, ops, random
-        import jax.numpy as jnp
-        from mmml.utils.hdf5_reporter import make_jaxmd_reporter
     except ModuleNotFoundError as exc:
         sys.exit(f"Required modules not available: {exc}")
 
@@ -466,7 +448,7 @@ def run(args: argparse.Namespace) -> int:
     # ========================================================================
     # MASS SETUP FOR JAX-MD SIMULATION
     # ========================================================================
-    raw_masses = pdb_ase_atoms.get_masses()
+    pdb_ase_atoms.get_masses()
     psf_masses = psf.get_amass()
     pdb_ase_atoms.set_masses(psf_masses)
     print_masses_summary(np.array(psf_masses[:total_atoms]))

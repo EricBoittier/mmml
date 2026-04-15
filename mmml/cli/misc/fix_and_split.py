@@ -226,7 +226,7 @@ def reduce_esp_grid(
     """
     rng = np.random.default_rng(seed)
     n_samples = esp.shape[0]
-    n_atoms = R.shape[1]
+    R.shape[1]
 
     esp_out = np.zeros((n_samples, n_grid_points), dtype=esp.dtype)
     esp_grid_out = np.full((n_samples, n_grid_points, 3), 1e6, dtype=esp_grid.dtype)
@@ -373,7 +373,7 @@ def check_esp_grid_alignment(
     """
     from scipy.stats import pearsonr
     BOHR_TO_ANGSTROM = 0.529177
-    ANGSTROM_TO_BOHR = 1.0 / BOHR_TO_ANGSTROM
+    1.0 / BOHR_TO_ANGSTROM
     correlations = []
     n_samples = min(n_check, esp.shape[0])
     for i in range(n_samples):
@@ -437,31 +437,31 @@ def validate_fixed_data(
 
     if len(min_dists) > 0:
         if verbose:
-            print(f"\nAtomic Coordinates (up to 100 samples):")
+            print("\nAtomic Coordinates (up to 100 samples):")
             print(f"  Shortest distance: mean={min_dists.mean():.4f} Å, "
                   f"range=[{min_dists.min():.4f}, {min_dists.max():.4f}]")
         coords_ok = 0.5 <= min_dists.mean() <= 3.0
         if verbose and coords_ok:
-            print(f"  ✓ Coordinates in reasonable range")
+            print("  ✓ Coordinates in reasonable range")
         elif verbose:
-            print(f"  ⚠️  Coordinates outside expected range")
+            print("  ⚠️  Coordinates outside expected range")
     else:
         coords_ok = True
     
     # Check energies
     if verbose:
-        print(f"\nEnergies (sample 0):")
+        print("\nEnergies (sample 0):")
         print(f"  Value: {E_ev[0]:.6f} eV")
         print(f"  Dataset mean: {E_ev.mean():.6f} eV")
     
     # Check that energies are in reasonable range for molecular systems (eV)
     if -10000 < E_ev.mean() < 1000:
         if verbose:
-            print(f"  ✓ Energies in reasonable range for molecular energies in eV")
+            print("  ✓ Energies in reasonable range for molecular energies in eV")
         energy_ok = True
     else:
         if verbose:
-            print(f"  ⚠️  Energy range unexpected")
+            print("  ⚠️  Energy range unexpected")
         energy_ok = False
     
     # Check forces
@@ -469,17 +469,17 @@ def validate_fixed_data(
     f_norm = np.linalg.norm(f_sample.reshape(-1, 3), axis=1).mean()
     
     if verbose:
-        print(f"\nForces (sample 0):")
+        print("\nForces (sample 0):")
         print(f"  Mean norm: {f_norm:.6e} eV/Angstrom")
     
     # For geometry scans, forces can be large (up to 50-100 eV/Å far from equilibrium)
     if 1e-6 < f_norm < 1000:
         if verbose:
-            print(f"  ✓ Force magnitudes in reasonable range")
+            print("  ✓ Force magnitudes in reasonable range")
         force_ok = True
     else:
         if verbose:
-            print(f"  ⚠️  Force magnitudes outside expected range")
+            print("  ⚠️  Force magnitudes outside expected range")
         force_ok = False
     
     # Check ESP grid (only if grid data exists)
@@ -491,7 +491,7 @@ def validate_fixed_data(
         grid_extent = (grid0_valid.max(axis=0) - grid0_valid.min(axis=0)).mean()
         
         if verbose:
-            print(f"\nESP Grid Coordinates:")
+            print("\nESP Grid Coordinates:")
             print(f"  Average extent: {grid_extent:.4f} Angstrom")
             print(f"  X range: [{grid0_valid[:, 0].min():.4f}, {grid0_valid[:, 0].max():.4f}]")
             print(f"  Y range: [{grid0_valid[:, 1].min():.4f}, {grid0_valid[:, 1].max():.4f}]")
@@ -500,11 +500,11 @@ def validate_fixed_data(
         # Expect reasonable grid extent for molecular systems (2-20 Angstroms)
         if 2.0 < grid_extent < 50.0:
             if verbose:
-                print(f"  ✓ Grid extent in reasonable range")
+                print("  ✓ Grid extent in reasonable range")
             grid_ok = True
         else:
             if verbose:
-                print(f"  ⚠️  Grid extent outside expected range")
+                print("  ⚠️  Grid extent outside expected range")
             grid_ok = False
         
         # Check spatial relationship
@@ -520,7 +520,7 @@ def validate_fixed_data(
             grid_max = grid0_valid.max(axis=0)
             
             if verbose:
-                print(f"\nSpatial relationship:")
+                print("\nSpatial relationship:")
                 print(f"  Molecule center: [{mol_center[0]:.2f}, {mol_center[1]:.2f}, {mol_center[2]:.2f}]")
                 print(f"  Grid bounds: X[{grid_min[0]:.2f}, {grid_max[0]:.2f}], "
                       f"Y[{grid_min[1]:.2f}, {grid_max[1]:.2f}], "
@@ -540,11 +540,11 @@ def validate_fixed_data(
                 spatial_ok = False
         else:
             if verbose:
-                print(f"\n⚠️  Could not validate spatial relationship")
+                print("\n⚠️  Could not validate spatial relationship")
             spatial_ok = True
     else:
         if verbose:
-            print(f"\nESP Grid: Skipped (no grid data provided)")
+            print("\nESP Grid: Skipped (no grid data provided)")
     
     overall_ok = coords_ok and energy_ok and force_ok and grid_ok and spatial_ok
     
@@ -560,9 +560,9 @@ def validate_fixed_data(
             print(f"  Spatial:     {'✓' if spatial_ok else '❌'}")
         
         if overall_ok:
-            print(f"\n✅ ALL VALIDATIONS PASSED - Data ready for training!")
+            print("\n✅ ALL VALIDATIONS PASSED - Data ready for training!")
         else:
-            print(f"\n⚠️  SOME VALIDATIONS FAILED - Review above")
+            print("\n⚠️  SOME VALIDATIONS FAILED - Review above")
         print(f"{'='*70}")
     
     return overall_ok
@@ -728,7 +728,7 @@ def fix_and_split_data(
         print("\n" + "="*70)
         print("Molecular Data Unit Conversion and Splitting")
         print("="*70)
-        print(f"\nInput files:")
+        print("\nInput files:")
         if isinstance(efd_file, (list, tuple)):
             print(f"  EFD:  {[str(p) for p in efd_file]}")
         else:
@@ -736,7 +736,7 @@ def fix_and_split_data(
         if grid_file:
             print(f"  Grid: {grid_file}")
         else:
-            print(f"  Grid: (not provided)")
+            print("  Grid: (not provided)")
         print(f"Output directory: {output_dir}")
     
     # Create output directory
@@ -774,7 +774,7 @@ def fix_and_split_data(
             has_grid = True
             grid_from_efd = True
             if verbose:
-                print(f"  Using esp/esp_grid from EFD file (combined format)")
+                print("  Using esp/esp_grid from EFD file (combined format)")
     except Exception as e:
         print(f"\n❌ Error loading data: {e}")
         return False
@@ -793,7 +793,7 @@ def fix_and_split_data(
         print(f"  Keys in EFD: {list(efd_data.keys())}")
         if has_grid:
             print(f"  Keys in Grid: {list(grid_data.keys())}")
-        print(f"\nShapes:")
+        print("\nShapes:")
         for k in ['R', 'Z', 'E', 'F', 'Dxyz']:
             if k in efd_data:
                 v = efd_data[k]
@@ -803,7 +803,7 @@ def fix_and_split_data(
                 print(f"  esp: {grid_data['esp'].shape}")
             if 'vdw_surface' in grid_data:
                 print(f"  esp_grid (vdw_surface): {grid_data['vdw_surface'].shape}")
-        print(f"\nSummary statistics:")
+        print("\nSummary statistics:")
         print(f"  E:  mean={efd_data['E'].mean():.6f}, std={efd_data['E'].std():.6f}, "
               f"range=[{efd_data['E'].min():.6f}, {efd_data['E'].max():.6f}]")
         f_norms = np.linalg.norm(efd_data['F'].reshape(-1, 3), axis=1)
@@ -846,11 +846,11 @@ def fix_and_split_data(
             print(f"\nShortest interatomic distance: mean={d_mean:.4f}, range=[{min_dists.min():.4f}, {min_dists.max():.4f}]")
         if 0.8 < d_mean < 2.5:
             if verbose:
-                print(f"✓ Coordinates in Angstroms")
+                print("✓ Coordinates in Angstroms")
             R_angstrom = efd_data['R']
         elif 1.8 < d_mean < 2.9:
             if verbose:
-                print(f"→ Converting from Bohr to Angstroms...")
+                print("→ Converting from Bohr to Angstroms...")
             R_angstrom = efd_data['R'] * 0.529177
         else:
             if verbose:
@@ -858,7 +858,7 @@ def fix_and_split_data(
             R_angstrom = efd_data['R']
     else:
         if verbose:
-            print(f"\n⚠️  Could not compute distances, assuming coordinates in Angstroms")
+            print("\n⚠️  Could not compute distances, assuming coordinates in Angstroms")
         R_angstrom = efd_data['R']
     
     # =========================================================================
@@ -888,7 +888,7 @@ def fix_and_split_data(
             print(f"After atomic ref subtraction: mean={E_hartree.mean():.6f} Ha")
         print(f"Converted (eV):     mean={E_ev.mean():.6f}, "
               f"range=[{E_ev.min():.6f}, {E_ev.max():.6f}]")
-        print(f"✓ Energies converted to eV")
+        print("✓ Energies converted to eV")
     
     # =========================================================================
     # Convert forces: Hartree/Bohr → eV/Angstrom
@@ -914,7 +914,7 @@ def fix_and_split_data(
         print(f"\nConversion factor: {HARTREE_BOHR_TO_EV_ANG}")
         print(f"Input to convert (Ha/Bohr): mean norm={f_orig_norms.mean():.6e}")
         print(f"Converted (eV/Å):           mean norm={f_conv_norms.mean():.6e}")
-        print(f"✓ Forces converted to eV/Angstrom")
+        print("✓ Forces converted to eV/Angstrom")
     
     # =========================================================================
     # Convert dipoles: Debye → e·Å (PhysNet/DCMNet standard)
@@ -927,10 +927,10 @@ def fix_and_split_data(
             print(f"\n{'#'*70}")
             print("# Step 4b: Converting Dipoles from Debye to e·Å")
             print(f"{'#'*70}")
-            print(f"  Conversion: 1 D = 0.208194 e·Å")
+            print("  Conversion: 1 D = 0.208194 e·Å")
             print(f"  Original (Debye): mean |D|={d_norms_before.mean():.4f}, max={d_norms_before.max():.4f}")
             print(f"  Converted (e·Å):  mean |D|={d_norms_after.mean():.4f}, max={d_norms_after.max():.4f}")
-            print(f"✓ Dipoles converted to e·Å")
+            print("✓ Dipoles converted to e·Å")
     else:
         D_eA = None
 
@@ -1004,37 +1004,37 @@ def fix_and_split_data(
                         if valid.any():
                             ext_bohr = np.abs(vdw_raw[valid]).max()
                             ext_ang = np.abs(vdw_surface_angstrom[valid]).max()
-                            print(f"  Converting vdw_surface from Bohr to Angstrom (pyscf-evaluate format)")
+                            print("  Converting vdw_surface from Bohr to Angstrom (pyscf-evaluate format)")
                             print(f"  Grid extent: ~{ext_bohr:.2f} Bohr → ~{ext_ang:.2f} Angstrom")
                         else:
-                            print(f"  Converting vdw_surface from Bohr to Angstrom (pyscf-evaluate format)")
+                            print("  Converting vdw_surface from Bohr to Angstrom (pyscf-evaluate format)")
                 else:
                     vdw_surface_angstrom = vdw_raw
                     if verbose:
-                        print(f"  Using existing vdw_surface (assuming Angstroms)")
+                        print("  Using existing vdw_surface (assuming Angstroms)")
             elif 'vdw_grid' in grid_data:
                 vdw_raw = grid_data['vdw_grid']
                 if grid_from_pyscf:
                     vdw_surface_angstrom = vdw_raw * BOHR_TO_ANGSTROM
                     if verbose:
-                        print(f"  Converting vdw_grid from Bohr to Angstrom (pyscf-evaluate format)")
+                        print("  Converting vdw_grid from Bohr to Angstrom (pyscf-evaluate format)")
                 else:
                     vdw_surface_angstrom = vdw_raw
                     if verbose:
-                        print(f"  Using vdw_grid directly (assuming Angstroms)")
+                        print("  Using vdw_grid directly (assuming Angstroms)")
             elif 'esp_grid' in grid_data:
                 vdw_raw = grid_data['esp_grid']
                 if grid_from_pyscf:
                     vdw_surface_angstrom = vdw_raw * BOHR_TO_ANGSTROM
                     if verbose:
-                        print(f"  Using esp_grid as grid; converting from Bohr to Angstrom (pyscf format)")
+                        print("  Using esp_grid as grid; converting from Bohr to Angstrom (pyscf format)")
                 else:
                     vdw_surface_angstrom = vdw_raw
                     if verbose:
-                        print(f"  Using esp_grid as grid (assuming Angstroms)")
+                        print("  Using esp_grid as grid (assuming Angstroms)")
         else:
             if verbose:
-                print(f"\nCube file parameters:")
+                print("\nCube file parameters:")
                 print(f"  Spacing: {cube_spacing_bohr} Bohr = {cube_spacing_bohr * BOHR_TO_ANGSTROM:.6f} Angstrom")
                 print(f"  Dimensions: {grid_data['grid_dims'][0]}")
                 print(f"  Original origin (Bohr): {grid_data['grid_origin'][0]}")
@@ -1054,11 +1054,11 @@ def fix_and_split_data(
                     
                     print(f"\nOriginal grid extent: {(grid0_original.max(axis=0) - grid0_original.min(axis=0)).mean():.4f}")
                     print(f"Fixed grid extent: {(grid0_fixed.max(axis=0) - grid0_fixed.min(axis=0)).mean():.4f} Angstrom")
-                    print(f"✓ ESP grid converted to physical Angstroms")
+                    print("✓ ESP grid converted to physical Angstroms")
             except Exception as e:
                 if verbose:
                     print(f"\n⚠️  Error converting grid: {e}")
-                    print(f"  Falling back to using grid data as-is")
+                    print("  Falling back to using grid data as-is")
                 # Fallback: use grid data as-is
                 grid_from_pyscf_fb = 'esp' in grid_data and ('vdw_surface' in grid_data or 'vdw_grid' in grid_data)
                 if 'vdw_surface' in grid_data:
@@ -1097,7 +1097,7 @@ def fix_and_split_data(
             if verbose:
                 print(f"  ESP-grid alignment (raw): correlation={align_corr_raw:.3f} {'✓' if align_ok_raw else '⚠️'}")
             if not align_ok_raw:
-                print(f"  ⚠️  WARNING: Low esp-grid correlation suggests index misalignment. "
+                print("  ⚠️  WARNING: Low esp-grid correlation suggests index misalignment. "
                       "esp[i,j] may not correspond to grid[i,j]. Check that esp and grid come from the same source.")
         if verbose:
             print(f"\n{'#'*70}")
@@ -1130,7 +1130,7 @@ def fix_and_split_data(
                 "This indicates a bug in the reduction logic."
             )
         if verbose:
-            print(f"  ✓ Reduction preserves esp-grid alignment (verified)")
+            print("  ✓ Reduction preserves esp-grid alignment (verified)")
         vdw_surface_angstrom = grid_reduced
         if verbose:
             n_valid_per_sample = np.sum(np.all(np.abs(grid_reduced) < 1e5, axis=2), axis=1)
@@ -1142,7 +1142,7 @@ def fix_and_split_data(
             if verbose:
                 print(f"  ESP-grid alignment check: correlation={align_corr:.3f} {'✓' if align_ok else '⚠️'}")
             if not align_ok and verbose:
-                print(f"  ⚠️  Low esp-grid correlation may indicate index misalignment. "
+                print("  ⚠️  Low esp-grid correlation may indicate index misalignment. "
                       "Ensure esp and grid come from the same source with matching point order.")
         # Update grid_data for saving - we need esp and vdw_surface
         grid_data = dict(grid_data)
@@ -1412,7 +1412,7 @@ Each contains:
 - `Dxyz`: Dipole moments [e·Å] ← CONVERTED from Debye
 """
     
-    readme_content += f"""
+    readme_content += """
 ## Units Summary (ASE Standard)
 
 | Property | Unit | Status |
@@ -1472,11 +1472,11 @@ Generated by: mmml.cli.fix_and_split
         print(f"{'='*70}")
         print(f"\nOutput files in: {output_dir}")
         print("\nTrain/Valid/Test splits:")
-        print(f"  - energies_forces_dipoles_{{train,valid,test}}.npz")
+        print("  - energies_forces_dipoles_{train,valid,test}.npz")
         if has_grid:
-            print(f"  - grids_esp_{{train,valid,test}}.npz")
-        print(f"  - split_indices.npz")
-        print(f"  - README.md")
+            print("  - grids_esp_{train,valid,test}.npz")
+        print("  - split_indices.npz")
+        print("  - README.md")
         print("\n✅ IMPORTANT: All units are now ASE-standard compliant!")
         print("   - Energies: eV (converted from Hartree)")
         print("   - Forces: eV/Angstrom (converted from Hartree/Bohr)")
@@ -1736,7 +1736,7 @@ Examples:
         sys.exit(1)
     
     if abs(args.train_frac + args.valid_frac + args.test_frac - 1.0) > 1e-6:
-        print(f"❌ Error: Split fractions must sum to 1.0")
+        print("❌ Error: Split fractions must sum to 1.0")
         print(f"   Got: {args.train_frac} + {args.valid_frac} + {args.test_frac} = "
               f"{args.train_frac + args.valid_frac + args.test_frac}")
         sys.exit(1)

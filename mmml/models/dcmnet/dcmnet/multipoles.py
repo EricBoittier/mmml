@@ -3,9 +3,7 @@ from pathlib import Path
 import ase.visualize
 import matplotlib.pyplot as plt
 import numpy as np
-import patchworklib as pw
 from ase.visualize.plot import plot_atoms
-from patchworklib import Brick
 
 # set colormap
 plt.set_cmap("bwr")
@@ -141,7 +139,7 @@ def plot_3d(grid, esp, atoms=None):
             ax1.get_children()[0], cax=cbar_ax, label="Electrostatic Potential (a.u.)"
         )
 
-        spec5 = fig.add_gridspec(
+        fig.add_gridspec(
             ncols=2, nrows=3, width_ratios=[1, 0.5], height_ratios=[1, 1, 1]
         )
 

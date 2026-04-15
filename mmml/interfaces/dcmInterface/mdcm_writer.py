@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Sequence, Tuple, Union
+from typing import List, Tuple, Union
 
 
 def write_mdcm(

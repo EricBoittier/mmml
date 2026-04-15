@@ -15,13 +15,11 @@ from __future__ import annotations
 
 import warnings
 from functools import partial
-from itertools import combinations, permutations, product
 from pathlib import Path
-from typing import Any, Callable, Dict, List, NamedTuple, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pandas as pd
-from scipy.optimize import minimize as scipy_minimize
 
 # In your module that defines spherical_cutoff_calculator
 import jax
@@ -29,19 +27,13 @@ import jax.numpy as jnp
 from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
     mic_displacement,
     mic_displacement_smooth,
-    mic_displacements_batched,
-    mic_displacements_batched_smooth,
 )
 from mmml.interfaces.pycharmmInterface.calculator_utils import (
     ModelOutput,
     debug_print,
     dimer_permutations,
-    epsilon,
     indices_of_monomer,
     indices_of_pairs,
-    ml_switch_simple,
-    mm_switch_simple,
-    parse_non_int,
     _sharpstep,
 )
 from mmml.interfaces.pycharmmInterface.ml_batching import prepare_batches_md, prepare_batch_structure
@@ -230,7 +222,7 @@ kcalmol2ev = 1.0 / ev2kcalmol
 # Module-level configuration ------------------------------------------------
 
 SPATIAL_DIMS: int = 3  # Number of spatial dimensions (x, y, z)
-from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters, GAMMA_OFF, GAMMA_ON
+from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters, GAMMA_ON
 
 
 def set_pycharmm_xyz(atom_positions):
@@ -405,7 +397,7 @@ def setup_calculator(
                 f"got {lambda_monomer.shape}"
             )
 
-    cutoffparameters = CutoffParameters(
+    CutoffParameters(
         ml_cutoff_distance, mm_switch_on, mm_cutoff, complementary_handoff=complementary_handoff
     )
     # Default mm_r_min: exclude pairs in pure ML region (MM contributes 0 there)
@@ -475,7 +467,7 @@ def setup_calculator(
 
     N_MONOMERS = n_monomers
     # Batch processing constants
-    BATCH_SIZE: int = N_MONOMERS + len(dimer_perms)  # Number of systems per batch
+    N_MONOMERS + len(dimer_perms)  # Number of systems per batch
     # print(BATCH_SIZE)
     restart_path = Path(model_restart_path) if type(model_restart_path) == str else model_restart_path
 
@@ -879,7 +871,7 @@ def setup_calculator(
             ml_2b_F = jnp.where(jnp.isfinite(ml_2b_F_raw), ml_2b_F_raw, 0.0)
             
             # Debug: Check for NaN in raw forces (jax.debug.print handles conditional execution)
-            nan_count_raw = jnp.sum(~jnp.isfinite(ml_forces_raw))
+            jnp.sum(~jnp.isfinite(ml_forces_raw))
             # jax.debug.print("CRITICAL: Found {n} NaN/Inf in ml_forces from calculate_ml_contributions!",
             # n=nan_count_raw, ordered=False)
             
@@ -919,7 +911,7 @@ def setup_calculator(
                     ml_internal_F = ml_internal_F[:n_atoms]
                     ml_2b_F = ml_2b_F[:n_atoms]
 
-            nan_count = jnp.sum(~jnp.isfinite(ml_forces))
+            jnp.sum(~jnp.isfinite(ml_forces))
            
             outputs["out_F"] = outputs["out_F"] + ml_forces
             outputs["internal_F"] = outputs["internal_F"] + ml_internal_F
@@ -927,7 +919,7 @@ def setup_calculator(
             # Final verification: check for any atoms that have zero forces when they shouldn't
             # (This is a debug check - not for fixing, just for warning)
             force_magnitudes = jnp.linalg.norm(outputs["out_F"], axis=1)
-            near_zero_atoms = jnp.sum(force_magnitudes < 1e-8)
+            jnp.sum(force_magnitudes < 1e-8)
 
             
             # ml_2b_F is stored separately for analysis but is already included in ml_forces

@@ -123,7 +123,7 @@ class NPZSchema:
         if 'N' in data and 'Z' in data:
             n_atoms_from_z = data['Z'].shape[1] if len(data['Z'].shape) > 1 else data['Z'].shape[0]
             if not np.all(data['N'] <= n_atoms_from_z):
-                errors.append(f"'N' values exceed array dimensions")
+                errors.append("'N' values exceed array dimensions")
         
         # Validate energy shape
         if 'E' in data:
@@ -247,7 +247,7 @@ def validate_npz(
         info = schema.get_info(data) if is_valid else None
         
         if verbose and info:
-            print(f"\nDataset Summary:")
+            print("\nDataset Summary:")
             print(f"  Structures: {info['n_structures']}")
             print(f"  Atoms per structure: {info['n_atoms']}")
             print(f"  Properties: {', '.join(info['properties'])}")

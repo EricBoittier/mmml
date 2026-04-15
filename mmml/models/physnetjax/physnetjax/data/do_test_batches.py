@@ -1,6 +1,5 @@
 import time
 
-import e3x.ops
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -85,7 +84,7 @@ def performance_comparison(original_func, optimized_func, data, batch_size=32):
                 raise e
 
     # Performance comparison
-    print(f"\nPerformance Comparison:")
+    print("\nPerformance Comparison:")
     print(f"Original Function Time: {original_time:.4f} seconds")
     print(f"Optimized Function Time: {optimized_time:.4f} seconds")
     print(f"Speedup: {original_time / optimized_time:.2f}x")

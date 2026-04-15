@@ -248,7 +248,7 @@ def model_apply_jit(model: TTTNet, params, feats: jnp.ndarray, legal_mask: jnp.n
 
 # Wrapper to create a policy_value_fn compatible with PUCT_MCTS
 def make_flax_policy_value_fn(model: TTTNet, params):
-    rng = np.random.default_rng()
+    np.random.default_rng()
 
     def policy_value_fn(env: TicTacToe):
         legal = env.legal_actions()
@@ -445,7 +445,6 @@ def self_play_game(mcts, model, params, temperature: float = 1.0, temp_moves: in
         >>> for i, (feat, pi, z) in enumerate(samples):
         ...     print(f"Move {i}: value={z:.2f}, best_move={pi.argmax()}")
     """
-    from copy import deepcopy
     env = TicTacToe()
     samples = []
 
@@ -457,7 +456,7 @@ def self_play_game(mcts, model, params, temperature: float = 1.0, temp_moves: in
         tau = temperature if move_idx < temp_moves else 1e-9
 
         # Run MCTS with current params (wrap a flax policy/value fn)
-        pv_fn = make_flax_policy_value_fn(model, params)
+        make_flax_policy_value_fn(model, params)
         action = mcts.search(env, n_simulations=200, temperature=tau)  # you can tune sims
 
         # Grab pi from the root (visit counts distribution)
@@ -924,7 +923,6 @@ def mcts_search_with_leaf_batching(root_env: TicTacToe, mcts: PUCT_MCTS,
     mcts._add_root_dirichlet_noise(root)
     mcts.last_root = root  # keep for visit extraction
 
-    pending = []   # list of (path, leaf_env, parent_node_for_child, action_taken)
     done = 0
 
     while done < n_simulations:

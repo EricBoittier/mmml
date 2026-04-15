@@ -419,7 +419,6 @@ def remove_mean_from_multimodal_distribution(data, n_modes=2):
 
     kmeans = KMeans(n_clusters=n_modes, random_state=0).fit(data)
     labels = kmeans.labels_
-    centers = kmeans.cluster_centers_
     # Calculate the mean of each cluster
     means = []
     for i in range(n_modes):

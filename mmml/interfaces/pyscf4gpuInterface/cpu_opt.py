@@ -1,5 +1,4 @@
 from pyscf.geomopt.geometric_solver import optimize
-import ase
 
 def rotate_dimers(atoms, n_atoms_a, n_atoms_b):
     """

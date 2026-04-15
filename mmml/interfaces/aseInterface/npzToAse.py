@@ -1,6 +1,4 @@
 import ase 
-from ase.io import read
-import numpy as np
 
 def npzToAse(data_dict):
     R = data_dict['R']

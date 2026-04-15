@@ -9,7 +9,6 @@ from physnetjax.analysis.analysis import (
 def get_soap_atoms(coordinates, atomic_numbers):
     species = np.unique(np.concatenate(atomic_numbers))
     # Apply PCA
-    labels = None
     soap_descr, ase_atoms = compute_soap_descriptors(
         coordinates, atomic_numbers, species, r_cut=10.0, n_max=16, l_max=5, sigma=0.5
     )
@@ -18,7 +17,7 @@ def get_soap_atoms(coordinates, atomic_numbers):
 
 def get_ebc(soap_descr, energies_mean_removed, n=10):
     ebc = EBC(n_clusters=n)
-    labels = ebc.fit_transform(soap_descr[:, :], energies_mean_removed)
+    ebc.fit_transform(soap_descr[:, :], energies_mean_removed)
     _ = ebc.show()
     plt.show()
     cluster_members_energy = {

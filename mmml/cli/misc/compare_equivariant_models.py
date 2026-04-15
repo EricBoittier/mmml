@@ -247,7 +247,7 @@ def plot_accuracy_vs_params(
         
         # Plot DCMNet
         if dcm_params:
-            scatter = ax.scatter(dcm_params, dcm_values, alpha=0.7, s=100,
+            ax.scatter(dcm_params, dcm_values, alpha=0.7, s=100,
                                 label='DCMNet (Equivariant)', marker='o', color='#0072B2')
             # Annotate some points
             for i in range(0, len(dcm_params), max(1, len(dcm_params)//5)):
@@ -258,7 +258,7 @@ def plot_accuracy_vs_params(
         
         # Plot NonEq
         if noneq_params:
-            scatter = ax.scatter(noneq_params, noneq_values, alpha=0.7, s=100,
+            ax.scatter(noneq_params, noneq_values, alpha=0.7, s=100,
                                 label='NonEquivariant', marker='s', color='#D55E00')
             # Annotate some points
             for i in range(0, len(noneq_params), max(1, len(noneq_params)//5)):
