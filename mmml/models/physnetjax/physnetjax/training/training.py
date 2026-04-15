@@ -215,6 +215,7 @@ def train_model(
     - Checkpointing of best models
     - Progress monitoring with rich console output
     """
+    _ = log_tb  # Deprecated argument retained for backward compatibility.
     data_keys = tuple(data_keys)
 
     print_shapes(train_data, name="Train Data")

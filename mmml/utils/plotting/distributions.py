@@ -10,7 +10,7 @@ def pretty_histogram(data, bins=None, alpha=0.7, edgecolor='black', title=None):
     if bins is None:
         bins = np.histogram_bin_edges(data, bins='auto')
 
-    plt.hist(data, bins=bins, alpha=alpha, edgecolor='black')
+    plt.hist(data, bins=bins, alpha=alpha, edgecolor=edgecolor)
     plt.xlabel('Value')
     plt.ylabel('Frequency')
     if title is not None:   

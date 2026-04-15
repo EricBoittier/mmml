@@ -60,7 +60,6 @@ try:
     from mmml.models.physnetjax.physnetjax.data.data import prepare_datasets
     from mmml.models.physnetjax.physnetjax.models.model import EF
     from mmml.models.physnetjax.physnetjax.restart.restart import get_files, get_last, get_params_model
-    from mmml.models.physnetjax.physnetjax.training.loss import dipole_calc
     # Skip training import that requires lovely_jax
     # from mmml.physnetjax.physnetjax.training.training import train_model
     def train_model(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[override]
@@ -102,9 +101,6 @@ except ModuleNotFoundError:  # pragma: no cover - ML stack optional for docs
         def get_params_model(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[override]
             _raise_restart_import_error()
 
-    def dipole_calc(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[override]
-        raise ModuleNotFoundError("jax is required for dipole calculations")
-
     def train_model(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[override]
         raise ModuleNotFoundError("jax and optax are required for training")
 
@@ -133,15 +129,11 @@ except ModuleNotFoundError:  # pragma: no cover - plotting disabled without matp
 try:  # ASE is optional for documentation/tests that only need constants
     import ase  # type: ignore[import-not-found]
     import ase.calculators.calculator as ase_calc
-    from ase import visualize
-    from ase.io import read as read_ase
     from ase.visualize import view
     _HAVE_ASE = True
 except ModuleNotFoundError:  # pragma: no cover - exercised during doc builds
     ase = None  # type: ignore[assignment]
     ase_calc = None  # type: ignore[assignment]
-    visualize = None  # type: ignore[assignment]
-    read_ase = None  # type: ignore[assignment]
 
     def view(*_args: Any, **_kwargs: Any) -> None:  # type: ignore[override]
         raise ModuleNotFoundError("ase is required for visualisation support")
@@ -151,10 +143,7 @@ except ModuleNotFoundError:  # pragma: no cover - exercised during doc builds
 
 try:  # PyCHARMM is optional and only required for the MM plumbing
     import pycharmm  # type: ignore[import-not-found]
-    import pycharmm.cons_fix as cons_fix
-    import pycharmm.cons_harm as cons_harm
     import pycharmm.coor as coor
-    import pycharmm.crystal as crystal
     import pycharmm.dynamics as dyn
     import pycharmm.energy as energy
     import pycharmm.generate as gen
@@ -166,16 +155,11 @@ try:  # PyCHARMM is optional and only required for the MM plumbing
     import pycharmm.read as read
     import pycharmm.select as select
     import pycharmm.settings as settings
-    import pycharmm.shake as shake
     import pycharmm.write as write
-    from pycharmm.lib import charmm as libcharmm
     _HAVE_PYCHARMM = True
 except Exception:  # pragma: no cover - exercised when PyCHARMM missing
     pycharmm = None  # type: ignore[assignment]
-    cons_fix = None  # type: ignore[assignment]
-    cons_harm = None  # type: ignore[assignment]
     coor = None  # type: ignore[assignment]
-    crystal = None  # type: ignore[assignment]
     dyn = None  # type: ignore[assignment]
     energy = None  # type: ignore[assignment]
     gen = None  # type: ignore[assignment]
@@ -187,9 +171,7 @@ except Exception:  # pragma: no cover - exercised when PyCHARMM missing
     read = None  # type: ignore[assignment]
     select = None  # type: ignore[assignment]
     settings = None  # type: ignore[assignment]
-    shake = None  # type: ignore[assignment]
     write = None  # type: ignore[assignment]
-    libcharmm = None  # type: ignore[assignment]
     _HAVE_PYCHARMM = False
 
 
@@ -697,6 +679,7 @@ def setup_calculator(
         and ``monomer_offsets``. When pbc_cell_override is provided (e.g. for NPT),
         use it instead of the closure's pbc_cell.
         """
+        _ = ATOMS_PER_MONOMER_ARG  # Legacy arg retained for compatibility.
         cell_for_build = pbc_cell_override if pbc_cell_override is not None else pbc_cell
         result_jaxmd = build_mm_energy_forces_fn(
             R,

@@ -123,7 +123,7 @@ def set_up_nhc_sim_routine(params, model, test_data, atoms, T=300, dt=5e-3, step
 
     def run_sim(
         key, 
-        test_idx, 
+        _test_idx, 
         e_catch, 
         t_fact=5, 
         total_steps=100000, 

@@ -333,7 +333,7 @@ class HDF5Reporter:
     def __enter__(self) -> "HDF5Reporter":
         return self
 
-    def __exit__(self, *exc_info: Any) -> None:
+    def __exit__(self, *_exc_info: Any) -> None:
         self.close()
 
     def __del__(self) -> None:

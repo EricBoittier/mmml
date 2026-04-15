@@ -143,7 +143,7 @@ class MolecularViewer:
         glfw.make_context_current(win)
         init_gl()
 
-        def on_mouse_button(w, button, action, mods):
+        def on_mouse_button(w, button, action, _mods):
             if button == glfw.MOUSE_BUTTON_LEFT:
                 self._mouse_down = action == glfw.PRESS
             elif button == glfw.MOUSE_BUTTON_RIGHT:
@@ -161,7 +161,7 @@ class MolecularViewer:
                 self._pan_y += dy * 0.5
             self._last_mouse = (x, y)
 
-        def on_scroll(w, xoff, yoff):
+        def on_scroll(w, _xoff, yoff):
             self._zoom *= 1.0 + yoff * 0.1
             self._zoom = max(0.01, min(100.0, self._zoom))
 
@@ -179,7 +179,7 @@ class MolecularViewer:
             glfw.KEY_Z: (0, -ROTATE_DELTA),
         }
 
-        def on_key(w, key, scancode, action, mods):
+        def on_key(w, key, _scancode, action, _mods):
             if action != glfw.PRESS:
                 return
             if key == glfw.KEY_ESCAPE:
