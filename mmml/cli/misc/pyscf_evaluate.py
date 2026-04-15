@@ -26,6 +26,21 @@ from pathlib import Path
 import numpy as np
 
 
+def _next_available_path(path: Path) -> Path:
+    """Return `path` or a suffixed variant that does not exist."""
+    if not path.exists():
+        return path
+    stem = path.stem
+    suffix = path.suffix
+    parent = path.parent
+    idx = 1
+    while True:
+        candidate = parent / f"{stem}_{idx}{suffix}"
+        if not candidate.exists():
+            return candidate
+        idx += 1
+
+
 def _parse_efield_vector(s: str) -> np.ndarray:
     p = [float(x.strip()) for x in s.replace(" ", "").split(",")]
     if len(p) != 3:
@@ -249,11 +264,14 @@ def main() -> int:
         efield_include_nuclear_energy=args.efield_include_nuclear_energy,
     )
 
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(args.output, **result)
+    output_path = _next_available_path(args.output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(output_path, **result)
 
     elapsed = time.perf_counter() - t0
-    print(f"Saved to {args.output}")
+    if output_path != args.output:
+        print(f"Output exists, using {output_path} instead of {args.output}")
+    print(f"Saved to {output_path}")
     print(f"  R: {result['R'].shape}, E: {result.get('E', np.array([])).shape}, F: {result.get('F', np.array([])).shape}")
     if "polarizability" in result:
         print(f"  polarizability: {result['polarizability'].shape}")

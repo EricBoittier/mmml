@@ -16,6 +16,24 @@ import argparse
 from pathlib import Path
 
 
+def _normalize_output_base(path: Path) -> Path:
+    """Return output base path without .npz/.h5/.hdf5 suffix."""
+    if path.suffix.lower() in {".npz", ".h5", ".hdf5"}:
+        return path.with_suffix("")
+    return path
+
+
+def _next_available_output_base(path: Path) -> Path:
+    """Return base path whose .npz/.h5 outputs do not already exist."""
+    base = _normalize_output_base(path)
+    candidate = base
+    idx = 1
+    while candidate.with_suffix(".npz").exists() or candidate.with_suffix(".h5").exists():
+        candidate = base.with_name(f"{base.name}_{idx}")
+        idx += 1
+    return candidate
+
+
 def main() -> int:
     """Run pyscf-dft CLI."""
     t0 = time.perf_counter()
@@ -43,10 +61,12 @@ def main() -> int:
         return 1
 
     output = compute_dft(args, calcs, extra)
-    save_pyscf_results(args.output, output)
+    output_base = _next_available_output_base(Path(args.output))
+    save_pyscf_results(str(output_base), output)
     elapsed = time.perf_counter() - t0
-    base = Path(args.output).with_suffix("").name
-    print(f"Results saved to {base}.npz (ML keys) and {base}.h5 (all arrays)")
+    if output_base != _normalize_output_base(Path(args.output)):
+        print(f"Output exists, using {output_base} instead of {args.output}")
+    print(f"Results saved to {output_base}.npz (ML keys) and {output_base}.h5 (all arrays)")
     print(f"Elapsed: {elapsed:.2f} s")
     return 0
 
