@@ -35,7 +35,6 @@ Usage:
 
 import numpy as np
 import jax.numpy as jnp
-import jax
 from ase.calculators.calculator import Calculator, all_changes
 
 try:
@@ -180,7 +179,7 @@ class DCMNetCalculator(Calculator):
         # Flatten distributed multipoles
         # monopoles: (n_atoms, n_dcm) -> (n_atoms * n_dcm,)
         # dipole_positions: (n_atoms, n_dcm, 3) -> (n_atoms * n_dcm, 3)
-        n_atoms = self._last_monopoles.shape[0]
+        self._last_monopoles.shape[0]
         monopoles_flat = self._last_monopoles.reshape(-1)  # (n_atoms * n_dcm,)
         dipole_positions_flat = self._last_dipole_positions.reshape(-1, 3)  # (n_atoms * n_dcm, 3)
         
@@ -327,7 +326,7 @@ if __name__ == '__main__':
     charges = atoms.get_charges()
     dipole = atoms.get_dipole_moment()
     
-    print(f"\nResults:")
+    print("\nResults:")
     print(f"  Atomic charges: {charges}")
     print(f"  Total charge: {charges.sum():.6f} e")
     print(f"  Molecular dipole: {dipole} Debye")
@@ -346,13 +345,13 @@ if __name__ == '__main__':
     ])
     
     esp = calc.get_electrostatic_potential(grid_points)
-    print(f"\nESP at grid points (Hartree/e):")
+    print("\nESP at grid points (Hartree/e):")
     for i, (point, esp_val) in enumerate(zip(grid_points, esp)):
         print(f"  Point {i+1} [{point[0]:.2f}, {point[1]:.2f}, {point[2]:.2f}]: {esp_val:.6f}")
     
     # Get distributed multipoles
     multipoles = calc.get_distributed_multipoles()
-    print(f"\nDistributed multipoles:")
+    print("\nDistributed multipoles:")
     print(f"  Monopoles shape: {multipoles['monopoles'].shape}")
     print(f"  Dipole positions shape: {multipoles['dipole_positions'].shape}")
     print(f"  Atomic charges: {multipoles['atomic_charges']}")

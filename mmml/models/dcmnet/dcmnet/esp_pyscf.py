@@ -1,5 +1,4 @@
 
-from tqdm import tqdm
 import jax
 
 jax.config.update("jax_default_device", jax.devices("cpu")[0])
@@ -19,21 +18,15 @@ from gpu4pyscf.dft import rks
 
 from gpu4pyscf.properties import polarizability
 
-import pandas as pd
-import e3x
 import os
 
 # os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".99"
 os.environ["CUDA_VISIBLE_DEVICES"] = "None"
-import pandas as pd
-import dcmnet
 import sys
 
 sys.path.append("/pchem-data/meuwly/boittier/jaxeq/dcmnet")
 print(sys.path)
 # from dcmnet.models import DCM1, DCM2, DCM3, DCM4, dcm1_params, dcm2_params, dcm3_params, dcm4_params
-from dcmnet.modules import MessagePassingModel
-from dcmnet.data import prepare_datasets
 
 import numpy as np
 
@@ -47,30 +40,12 @@ def atom_centered_dipole(dcm, com, q):
 
 
 import jax
-import jax.numpy as jnp
-import pickle
 
-import time
 
-from dcmnet.utils import safe_mkdir
-from dcmnet.training import train_model
-from dcmnet.training_dipole import train_model_dipo
-from pathlib import Path
-from dcmnet.data import prepare_batches, prepare_datasets
-from dcmnet.utils import apply_model
 
-import optax
-from dcmnet.analysis import create_model_and_params
-import matplotlib.pyplot as plt
-from tqdm import tqdm
-import random
 import jax
 
-from pyscf import df
 
-from dcmnet.loss import (
-    esp_loss_eval,
-)
 
 devices = jax.local_devices()
 

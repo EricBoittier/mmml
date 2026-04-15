@@ -31,6 +31,8 @@ help:
 	@echo "  make test              - Run all tests"
 	@echo "  make test-quick        - Run quick tests only"
 	@echo "  make test-coverage     - Run tests with coverage report"
+	@echo "  make deadcode          - Report dead/unused code (Ruff + Vulture)"
+	@echo "  make deadcode-fix      - Auto-fix safe unused-code issues with Ruff"
 	@echo ""
 	@echo "Training (PhysNetJAX):"
 	@echo "  make physnet-train         TRAIN=train.npz [VALID=valid.npz] [NATOMS=60] [BATCH=32] [EPOCHS=100] [LR=0.001] [NAME=run] [CHARGES=false]"
@@ -160,13 +162,20 @@ test-data:
 # ==============================================================================
 
 lint:
-	uv run ruff check mmml/
+	uv run ruff check mmml/ scripts/
 
 format:
-	uv run ruff format mmml/
+	uv run ruff format mmml/ scripts/
 
 type-check:
 	uv run mypy mmml/
+
+deadcode:
+	uv run ruff check --select F401,F841,F541 mmml/ scripts/
+	uvx vulture mmml scripts --min-confidence 80
+
+deadcode-fix:
+	uv run ruff check --fix --select F401,F841,F541 mmml/ scripts/
 
 # ==============================================================================
 # Documentation
@@ -267,11 +276,9 @@ lfs-remove-hooks:
 # Data utilities
 # ==============================================================================
 
-INPUT ?=
-OUTDIR ?=
 split-8-1-1:
-	@if [ -z "$(INPUT)" ]; then echo "Error: set INPUT=<data.npz>"; exit 1; fi
-	uv run python scripts/split_npz_8_1_1.py $(INPUT) $(if $(OUTDIR),--out-dir $(OUTDIR),)
+	@echo "split-8-1-1 is deprecated: scripts/split_npz_8_1_1.py was removed."
+	@echo "Use the dataset split commands in mmml.cli.misc.split_dataset instead."
 
 # ==============================================================================
 # PySCF/GPU4PySCF examples
@@ -311,42 +318,13 @@ BATCH_SHAPE ?= 512
 NBLEN ?= 16384
 
 physnet-train:
-	@if [ -z "$(TRAIN)" ]; then echo "Error: set TRAIN=<train.npz>"; exit 1; fi
-	$(PY) scripts/physnet_hydra_train.py \
-	  data.train_file=$(TRAIN) \
-	  $(if $(VALID),data.valid_file=$(VALID),) \
-	  model.natoms=$(NATOMS) \
-	  train.batch_size=$(BATCH) \
-	  train.max_epochs=$(EPOCHS) \
-	  train.learning_rate=$(LR) \
-	  logging.name=$(NAME) \
-	  train.seed=$(SEED) \
-	  model.charges=$(CHARGES)
+	@echo "physnet-train is deprecated: scripts/physnet_hydra_train.py was removed."
+	@echo "Use mmml.cli.train.train or current training entrypoints under mmml/cli/."
 
 physnet-train-adv:
-	@if [ -z "$(TRAIN)" ]; then echo "Error: set TRAIN=<train.npz>"; exit 1; fi
-	$(PY) scripts/physnet_hydra_train.py \
-	  data.train_file=$(TRAIN) \
-	  $(if $(VALID),data.valid_file=$(VALID),) \
-	  model.natoms=$(NATOMS) \
-	  train.batch_size=$(BATCH) \
-	  train.max_epochs=$(EPOCHS) \
-	  train.learning_rate=$(LR) \
-	  logging.name=$(NAME) \
-	  train.seed=$(SEED) \
-	  model.charges=$(CHARGES) \
-	  batching.method=advanced batching.batch_shape=$(BATCH_SHAPE) batching.batch_nbl_len=$(NBLEN)
+	@echo "physnet-train-adv is deprecated: scripts/physnet_hydra_train.py was removed."
+	@echo "Use mmml.cli.train.train or current training entrypoints under mmml/cli/."
 
 physnet-train-chg:
-	@if [ -z "$(TRAIN)" ]; then echo "Error: set TRAIN=<train.npz>"; exit 1; fi
-	$(PY) scripts/physnet_hydra_train.py \
-	  data.train_file=$(TRAIN) \
-	  $(if $(VALID),data.valid_file=$(VALID),) \
-	  model.natoms=$(NATOMS) \
-	  train.batch_size=$(BATCH) \
-	  train.max_epochs=$(EPOCHS) \
-	  train.learning_rate=$(LR) \
-	  logging.name=$(NAME) \
-	  train.seed=$(SEED) \
-	  model.charges=true \
-	  loss.dipole_weight=25.0 loss.charges_weight=10.0
+	@echo "physnet-train-chg is deprecated: scripts/physnet_hydra_train.py was removed."
+	@echo "Use mmml.cli.train.train or current training entrypoints under mmml/cli/."

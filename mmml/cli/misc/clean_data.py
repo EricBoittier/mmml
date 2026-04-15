@@ -25,7 +25,7 @@ import argparse
 import sys
 from pathlib import Path
 import numpy as np
-from typing import Dict, List, Tuple
+from typing import Dict, Tuple
 
 
 def validate_structure(
@@ -184,13 +184,13 @@ def clean_dataset(
     n_removed = n_total - n_valid
     
     if verbose:
-        print(f"\n📊 Results:")
+        print("\n📊 Results:")
         print(f"   Total structures: {n_total}")
         print(f"   Valid structures: {n_valid}")
         print(f"   Removed: {n_removed} ({n_removed/n_total*100:.1f}%)")
         
         if failure_reasons:
-            print(f"\n   Failure breakdown:")
+            print("\n   Failure breakdown:")
             for reason, count in sorted(failure_reasons.items(), key=lambda x: -x[1]):
                 print(f"     • {reason}: {count}")
     
@@ -236,7 +236,7 @@ def clean_dataset(
     np.savez_compressed(output_file, **cleaned_data)
     
     if verbose:
-        print(f"✅ Cleaned dataset saved!")
+        print("✅ Cleaned dataset saved!")
         print(f"   Output size: {output_file.stat().st_size / 1024 / 1024:.1f} MB")
     
     return {

@@ -14,10 +14,8 @@ import json
 import sys
 import uuid
 from pathlib import Path
-from types import SimpleNamespace
 
 import numpy as np
-import pandas as pd
 
 import jax
 import jax.numpy as jnp
@@ -37,8 +35,6 @@ except ImportError:
         sys.path.insert(0, str(_root))
     from mmml.physnetjax.physnetjax.models.zbl import ZBLRepulsion
 
-import matplotlib.pyplot as plt  # optional; kept because you had it
-import ase  # optional; kept because you had it
 from ase.visualize import view as view  # optional; kept because you had it
 
 # Disable CUDA graph capture to avoid "library was not initialized" errors
@@ -149,7 +145,7 @@ def load_params(params_path, verbose=False):
     # the pytree structure). They are recomputed during every forward pass
     # and are NOT needed for inference or restart.
     if isinstance(params, dict) and 'intermediates' in params:
-        print(f"  Stripping 'intermediates' key from loaded params (sow artifacts)")
+        print("  Stripping 'intermediates' key from loaded params (sow artifacts)")
         params = {k: v for k, v in params.items() if k != 'intermediates'}
     
     print_params_structure(params, f"loaded from {params_path}", verbose=verbose)
@@ -1438,7 +1434,7 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
         if early_stopping_patience is not None:
             print(f"    best valid loss: {float(best_valid_loss): 8.6f}, patience: {patience_counter}/{early_stopping_patience}")
             if improved and not (_can_ckpt and save_best):
-                print(f"    ✓ Improved!")
+                print("    ✓ Improved!")
 
         # On-disk checkpoints (EMA weights + best validation metrics) after metrics log
         if _can_ckpt and save_every_n_epochs > 0 and epoch % save_every_n_epochs == 0:
@@ -1485,7 +1481,7 @@ def main(args=None):
     print("Hyperparameters:")
     print(f"  restart: {args.restart}")
     if args.gradient_checkpoint:
-        print(f"  gradient_checkpoint: ON (reduces memory, ~2x slower)")
+        print("  gradient_checkpoint: ON (reduces memory, ~2x slower)")
     print(f"  features: {args.features}")
     print(f"  max_degree: {args.max_degree}")
     print(f"  num_iterations: {args.num_iterations}")
@@ -1724,7 +1720,7 @@ def main(args=None):
         print(f"Note: Could not create symlinks: {e}")
 
     print(f"\n{'='*60}")
-    print(f"Training complete!")
+    print("Training complete!")
     print(f"UUID: {run_uuid}")
     print(f"Config: {config_filename}")
     print(f"Params: {params_filename}")

@@ -1,6 +1,5 @@
 import bpy
 import numpy as np
-import mathutils
 import matplotlib.pyplot as plt
 
 default_color_dict = {
@@ -178,7 +177,7 @@ def ESPBLENDER(loaded):
     from ase.data import covalent_radii as covalent_radii
     ans = np.array(atom_types, dtype=int).flatten()
     element_colors = jmol[ans] #[default_color_dict[int(_[0])] for _ in atom_types]# Get colors for each element
-    radii = covalent_radii[ans]
+    covalent_radii[ans]
     # --- Clear any existing objects ---
     #bpy.ops.object.select_all(action='SELECT')
     #bpy.ops.object.delete(use_global=False)

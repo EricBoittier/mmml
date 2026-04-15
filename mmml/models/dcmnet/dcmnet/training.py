@@ -1,7 +1,5 @@
 import functools
 import pickle
-import hashlib
-import os
 from pathlib import Path
 
 import e3x
@@ -10,11 +8,10 @@ import jax.numpy as jnp
 import optax
 import numpy as np
 from .loss import esp_mono_loss
-from .electrostatics import calc_esp
 
-from .data import prepare_batches, prepare_datasets
+from .data import prepare_batches
 
-from typing import Callable, Any, Optional
+from typing import Callable, Optional
 from functools import partial
 
 import ase
@@ -196,7 +193,7 @@ def print_statistics_table(train_stats, valid_stats, epoch):
                 print(f"{key:<20} {train_val:>15.6e} {valid_val:>15.6e} {diff:>15.6e}")
     
     print(f"{'-'*80}")
-    print(f"Monopole Prediction Statistics:")
+    print("Monopole Prediction Statistics:")
     print(f"  Train: mean={train_stats.get('mono_mean', 0):.6e}, "
           f"std={train_stats.get('mono_std', 0):.6e}, "
           f"min={train_stats.get('mono_min', 0):.6e}, "
@@ -261,16 +258,16 @@ def print_statistics_table(train_stats, valid_stats, epoch):
     
     # Check for scale mismatch
     valid_std_ratio = valid_stats.get('std_ratio', 1.0)
-    train_std_ratio = train_stats.get('std_ratio', 1.0)
+    train_stats.get('std_ratio', 1.0)
     if valid_std_ratio < 0.5:
         warnings.append(f"⚠️  Scale mismatch: validation predicted std ({valid_stats.get('esp_pred_std', 0):.6f}) is "
                        f"{valid_std_ratio:.2f}x smaller than target std ({valid_stats.get('esp_target_std', 0):.6f}) - predictions have too little variance")
         if valid_std_ratio < 0.1:
             warnings.append(f"      CRITICAL: Predicted variance is {1/valid_std_ratio:.1f}x too small - model may be collapsing!")
-            warnings.append(f"      Possible causes:")
+            warnings.append("      Possible causes:")
             warnings.append(f"      - ESP loss weight ({train_stats.get('esp_loss_weighted', 0):.2e}) may be too high, causing gradient issues")
-            warnings.append(f"      - Learning rate may be too high, causing instability")
-            warnings.append(f"      - Model may not be expressive enough for ESP prediction")
+            warnings.append("      - Learning rate may be too high, causing instability")
+            warnings.append("      - Model may not be expressive enough for ESP prediction")
             warnings.append(f"      - Check if predictions are nearly constant: pred_mean={valid_stats.get('esp_pred_mean', 0):.6f}, pred_std={valid_stats.get('esp_pred_std', 0):.6f}")
     elif valid_std_ratio > 2.0:
         warnings.append(f"⚠️  Scale mismatch: validation predicted std ({valid_stats.get('esp_pred_std', 0):.6f}) is "
@@ -281,10 +278,10 @@ def print_statistics_table(train_stats, valid_stats, epoch):
     train_r2_unmasked = train_stats.get('esp_r2_unmasked', 0)
     if valid_r2_unmasked < -0.5 and valid_std_ratio < 0.1:
         warnings.append(f"⚠️  MODEL COLLAPSE DETECTED: R²={valid_r2_unmasked:.4f}, std_ratio={valid_std_ratio:.4f}")
-        warnings.append(f"      The model is predicting nearly constant values. Immediate actions:")
+        warnings.append("      The model is predicting nearly constant values. Immediate actions:")
         warnings.append(f"      1. Reduce ESP loss weight (currently {train_stats.get('esp_loss_weighted', 0):.2e})")
-        warnings.append(f"      2. Check learning rate (may need to reduce)")
-        warnings.append(f"      3. Verify model architecture can express ESP variation")
+        warnings.append("      2. Check learning rate (may need to reduce)")
+        warnings.append("      3. Verify model architecture can express ESP variation")
         warnings.append(f"      4. Check if monopole predictions are reasonable (mono_rmse={valid_stats.get('mono_rmse', 0):.4f})")
     
     # Check for systematic bias
@@ -469,7 +466,7 @@ def verify_esp_grid_alignment(train_data, valid_data, num_atoms=60, verbose=True
             
             if n_masked_samples > 0:
                 print(f"  ⚠️  {dataset_name}: {n_masked_samples}/{n_check} samples have ESP points too close to atoms")
-                print(f"      (These should be masked by atomic_radii_mask)")
+                print("      (These should be masked by atomic_radii_mask)")
             else:
                 print(f"  ✓  {dataset_name}: ESP masking OK (no points too close to atoms)")
     
@@ -628,7 +625,7 @@ def train_model(
     except:
         train_n_grid = 0
     
-    print(f"\nTraining Data:")
+    print("\nTraining Data:")
     print(f"  Samples: {train_n_samples}")
     print(f"  Atoms per sample: {train_n_atoms}")
     print(f"  Grid points per sample: {train_n_grid}")
@@ -669,7 +666,7 @@ def train_model(
     except:
         valid_n_grid = 0
     
-    print(f"\nValidation Data:")
+    print("\nValidation Data:")
     print(f"  Samples: {valid_n_samples}")
     print(f"  Atoms per sample: {valid_n_atoms}")
     print(f"  Grid points per sample: {valid_n_grid}")
@@ -679,7 +676,7 @@ def train_model(
     print(f"        range=[{valid_esp_min:.6f}, {valid_esp_max:.6f}] Ha/e")
     print(f"        range=[{valid_esp_min*627.5:.3f}, {valid_esp_max*627.5:.3f}] kcal/mol/e")
     
-    print(f"\nTraining Configuration:")
+    print("\nTraining Configuration:")
     print(f"  Batch size: {batch_size}")
     print(f"  Steps per epoch: {train_n_samples // batch_size}")
     print(f"  ESP weight: {esp_w}")
@@ -1372,7 +1369,7 @@ def preprocess_monopoles(data, mono_imputation_fn, num_atoms=60, batch_size=1000
     imputed_monopoles = []
     
     # Use a dummy key for deterministic batching (order doesn't matter for imputation)
-    dummy_key = jax.random.PRNGKey(0)
+    jax.random.PRNGKey(0)
     
     # Process in batches
     for i in range(0, n_samples, batch_size):

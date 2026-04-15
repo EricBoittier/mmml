@@ -1,4 +1,4 @@
-from pyscf.tools.molden import orbital_coeff, header, order_ao_index
+from pyscf.tools.molden import orbital_coeff, header
 
 # Write Molden file
 with open('output.molden', 'w') as f:

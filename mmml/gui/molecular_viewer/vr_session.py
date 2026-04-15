@@ -277,7 +277,7 @@ def run_vr_session(
             def get_atoms():
                 if not frames:
                     return [], None, None
-                idx = frame_idx[0] % len(frames)
+                frame_idx[0] % len(frames)
                 now = time.monotonic()
                 if len(frames) > 1 and (now - last_advance[0]) >= 1.0 / playback_fps:
                     frame_idx[0] = (frame_idx[0] + 1) % len(frames)

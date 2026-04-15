@@ -16,7 +16,7 @@ cons_command = "cons dihe {} force {} min {:4.2f}'".format(
 
 
 def add_waters(n_waters: int = 4):
-    add_water_script = f"""! Generate a water segment
+    add_water_script = """! Generate a water segment
 read sequence tip3 1
 generate WAT setup angle 109.47
 ic param

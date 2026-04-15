@@ -1,5 +1,4 @@
 import re
-from collections import defaultdict
 
 def parse_cp_output(text):
     blocks = re.split(r'-{10,}\s+CP\s+\d+,\s+Type\s+\([^)]+\)\s+-{10,}', text)

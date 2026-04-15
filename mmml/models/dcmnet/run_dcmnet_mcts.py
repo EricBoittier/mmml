@@ -6,8 +6,6 @@ This script shows how to integrate the MCTS-based model selection
 into your existing DCMNET workflow.
 """
 
-import numpy as np
-import jax
 import jax.numpy as jnp
 import sys
 import os
@@ -15,7 +13,7 @@ import os
 # Add the dcmnet directory to the path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from dcmnet_mcts import optimize_dcmnet_combination, DCMNETSelectionEnv
+from dcmnet_mcts import optimize_dcmnet_combination
 from dcmnet_ensemble_example import DCMNETEnsembleOptimizer
 
 def quick_optimization_example():
@@ -159,7 +157,7 @@ def main():
         quick_optimization_example()
         
         # Advanced example
-        optimizer = advanced_optimization_example()
+        advanced_optimization_example()
         
         # Integration guide
         integration_with_your_workflow()

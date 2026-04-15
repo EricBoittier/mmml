@@ -14,7 +14,6 @@ import flax.linen as nn
 import jax
 import jax.numpy as jnp
 from jax import Array
-import ase.data
 
 from mmml.physnetjax.physnetjax.models.euclidean_fast_attention import fast_attention as efa
 from mmml.physnetjax.physnetjax.models.zbl import ZBLRepulsion

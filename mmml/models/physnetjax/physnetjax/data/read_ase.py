@@ -1,23 +1,7 @@
-import ase
 from ase.io import read
-from pathlib import Path
 import numpy as np
 from ase.io import read
 
-from physnetjax.utils.enums import (
-    check_keys,
-    KEY_TRANSLATION,
-    Z_KEYS,
-    R_KEYS,
-    F_KEYS,
-    D_KEYS,
-    E_KEYS,
-    COM_KEYS,
-    ESP_GRID_KEYS,
-    ESP_KEYS,
-    Q_KEYS,
-    N_KEYS,
-)
 
 def save_traj_to_npz(traj_file, output_file, FORCES=True, ENERGY=True):
     """Efficiently saves ASE trajectory data to compressed NPZ format."""

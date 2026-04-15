@@ -60,7 +60,7 @@ def npz_to_trajectory(
         Print progress
     """
     if verbose:
-        print(f"\n🔄 Converting NPZ to trajectory...")
+        print("\n🔄 Converting NPZ to trajectory...")
         print(f"   Input: {npz_file}")
         print(f"   Output: {output_file}")
     
@@ -133,7 +133,7 @@ def npz_to_trajectory(
         write(str(output_file), atoms_list)
     
     if verbose:
-        print(f"\n✅ Conversion complete!")
+        print("\n✅ Conversion complete!")
         print(f"   Output: {output_file}")
         print(f"   Structures: {len(atoms_list)}")
         print(f"   File size: {output_file.stat().st_size / 1024 / 1024:.1f} MB")

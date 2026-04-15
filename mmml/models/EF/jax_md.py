@@ -41,7 +41,7 @@ from mmml.models.EF.ase_calc_EF import (
     ef_sparse_pairwise_indices_active,
 )
 from mmml.models.EF.training import MessagePassingModel
-from mmml.models.EF.model_functions import energy_and_forces, get_atomic_properties
+from mmml.models.EF.model_functions import energy_and_forces
 
 # ---------------------------------------------------------------------------
 # Physical constants  (ASE convention: eV, Å, fs, amu)
@@ -714,7 +714,7 @@ def main(args=None):
         else:
             print(f"  WARNING: not converged after {opt.nsteps} steps  "
                   f"(max |F| = {fmax_final:.6f} eV/Å)")
-            print(f"  Consider increasing --opt-steps or relaxing --fmax.")
+            print("  Consider increasing --opt-steps or relaxing --fmax.")
 
         e_opt = opt_atoms.get_potential_energy()
         f_max = np.max(np.abs(opt_atoms.get_forces()))

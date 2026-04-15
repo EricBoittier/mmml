@@ -30,7 +30,7 @@ import json
 import sys
 import pickle
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Any
 import numpy as np
 from collections import defaultdict
 
@@ -45,9 +45,6 @@ except ImportError:
     sys.exit(1)
 
 try:
-    import jax
-    import jax.numpy as jnp
-    from jax.tree_util import tree_flatten, tree_map, tree_structure
     HAS_JAX = True
 except ImportError:
     HAS_JAX = False
@@ -394,14 +391,14 @@ def print_training_summary(history: Dict[str, List], name: str = "Model"):
     best_val = np.min(history['val_loss'])
     best_epoch = np.argmin(history['val_loss']) + 1
     
-    print(f"\nLoss:")
+    print("\nLoss:")
     print(f"  Final Train Loss: {final_train:.4f}")
     print(f"  Final Val Loss:   {final_val:.4f}")
     print(f"  Best Val Loss:    {best_val:.4f} @ Epoch {best_epoch}")
     
     # MAE metrics (if available)
     if 'val_energy_mae' in history:
-        print(f"\nFinal Validation MAE:")
+        print("\nFinal Validation MAE:")
         if 'val_energy_mae' in history:
             print(f"  Energy: {history['val_energy_mae'][-1]:.6f} eV")
         if 'val_forces_mae' in history:
@@ -411,7 +408,7 @@ def print_training_summary(history: Dict[str, List], name: str = "Model"):
         if 'val_esp_mae' in history:
             print(f"  ESP:    {history['val_esp_mae'][-1]:.6f} Ha/e")
         
-        print(f"\nBest Validation MAE:")
+        print("\nBest Validation MAE:")
         if 'val_energy_mae' in history:
             print(f"  Energy: {np.min(history['val_energy_mae']):.6f} eV @ Epoch {np.argmin(history['val_energy_mae']) + 1}")
         if 'val_forces_mae' in history:
@@ -427,7 +424,7 @@ def print_training_summary(history: Dict[str, List], name: str = "Model"):
         times_clean = times[(times > 0) & (times < np.percentile(times[times > 0], 95))] if len(times) > 0 else times
         
         if len(times_clean) > 0:
-            print(f"\nTraining Speed:")
+            print("\nTraining Speed:")
             print(f"  Avg time per epoch: {np.mean(times_clean):.2f}s")
             print(f"  Min time per epoch: {np.min(times_clean):.2f}s")
             print(f"  Max time per epoch: {np.max(times_clean):.2f}s")
@@ -507,7 +504,7 @@ Examples:
         names = ['Model']
     
     # Load histories
-    print(f"\n📊 Loading training history...")
+    print("\n📊 Loading training history...")
     histories = [load_history(f) for f in args.history_files]
     
     # Print summaries
@@ -521,7 +518,7 @@ Examples:
     output_dir = args.output_dir or args.history_files[0].parent
     output_dir.mkdir(exist_ok=True, parents=True)
     
-    print(f"🎨 Creating plots...")
+    print("🎨 Creating plots...")
     print(f"  Output directory: {output_dir}")
     print(f"  Format: {args.format}, DPI: {args.dpi}")
     if args.smoothing > 0:
@@ -543,7 +540,7 @@ Examples:
     
     # Parameter analysis
     if args.analyze_params and args.params:
-        print(f"\n🔍 Analyzing parameters...")
+        print("\n🔍 Analyzing parameters...")
         
         for param_file, name in zip(args.params, names):
             print(f"  Loading: {param_file}")
@@ -553,7 +550,7 @@ Examples:
                 print(f"    Total parameters: {total:,} ({total/1e6:.2f}M)")
     
     print(f"\n✅ All plots saved to: {output_dir}")
-    print(f"\nFiles created:")
+    print("\nFiles created:")
     for f in sorted(output_dir.glob(f'*.{args.format}')):
         if f.name.startswith('training_'):
             print(f"  - {f.name}")

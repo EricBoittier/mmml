@@ -21,28 +21,19 @@ print(jax.default_backend())
 print(jax.devices())
 
 import sys
-import e3x
 import jax
 import numpy as np
-import optax
 import orbax
 from pathlib import Path
 import pandas as pd
 
 # Add custom path
 sys.path.append("/pchem-data/meuwly/boittier/home/pycharmm_test")
-import physnetjax
 
 sys.path.append("/pchem-data/meuwly/boittier/home/dcm-lj-data")
-from pycharmm_lingo_scripts import script1, script2, script3, load_dcm
+from pycharmm_lingo_scripts import script1, script2, load_dcm
 
-from physnetjax.data.data import prepare_datasets
-from physnetjax.training.loss import dipole_calc
 from physnetjax.models.model import EF
-from physnetjax.training.training import train_model  # from model import dipole_calc
-from physnetjax.data.batches import (
-    _prepare_batches as prepare_batches,
-)  # prepare_batches, prepare_datasets
 
 orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
 
@@ -91,30 +82,14 @@ model = EF(
 import pycharmm
 
 import pycharmm
-import pycharmm.generate as gen
-import pycharmm.ic as ic
 import pycharmm.coor as coor
 import pycharmm.energy as energy
-import pycharmm.dynamics as dyn
-import pycharmm.nbonds as nbonds
 import pycharmm.minimize as minimize
-import pycharmm.crystal as crystal
-import pycharmm.image as image
 import pycharmm.psf as psf
-import pycharmm.read as read
-import pycharmm.write as write
-import pycharmm.settings as settings
-import pycharmm.cons_harm as cons_harm
-import pycharmm.cons_fix as cons_fix
-import pycharmm.select as select
-import pycharmm.shake as shake
 
-from pycharmm.lib import charmm as libcharmm
 
 
 import ase
-from ase.io import read as read_ase
-from ase import visualize
 from ase.visualize import view
 
 
@@ -241,7 +216,7 @@ END
 
 
 def reset_block():
-    block = f"""BLOCK 
+    block = """BLOCK 
         CALL 1 SELE ALL END
           COEFF 1 1 1.0 
         END
@@ -250,7 +225,7 @@ def reset_block():
 
 
 def reset_block_no_internal():
-    block = f"""BLOCK 
+    block = """BLOCK 
         CALL 1 SELE ALL END
           COEFF 1 1 1.0 BOND 0.0 ANGL 0.0 DIHEdral 0.0 
         END
@@ -265,10 +240,10 @@ import MDAnalysis as mda
 
 
 def load_pdb_data(pdb_file):
-    loaded_pdb = mda.coordinates.PDB.PDBReader(pdb_file)
-    loaded_pdb = mda.topology.PDBParser.PDBParser(pdb_file)
+    mda.coordinates.PDB.PDBReader(pdb_file)
+    mda.topology.PDBParser.PDBParser(pdb_file)
     atypes = psf.get_atype()
-    atc = pycharmm.param.get_atc()
+    pycharmm.param.get_atc()
     residues = psf.get_res()
     psf.get_natom()
     # nl_info = capture_neighbour_list()
@@ -484,14 +459,13 @@ def calc_energies_forces(
     ase_atom_full_system = ase.Atoms(atomic_numbers, atom_positions)
 
     result = None
-    summed_2body = None
     mmml_energy = None
     charmm = None
 
     if DO_MM:
         # Calculate CHARMM energies and forces first
         result = calc_pycharmm_dimers(forces=True)
-        summed_2body = result["mm_forces"].sum(axis=0)
+        result["mm_forces"].sum(axis=0)
         mm_forces = result["mm_forces"]
 
     all_coordinates = ase_atom_full_system.get_positions()
@@ -767,8 +741,7 @@ def get_bounds(x0, scale=0.1):
     return b
 
 
-from physnetjax.restart.restart import get_last, get_files, get_params_model
-from physnetjax.analysis.analysis import plot_stats
+from physnetjax.restart.restart import get_last, get_params_model
 
 
 def get_block(a, b):
@@ -897,10 +870,9 @@ def get_dimer_calculator(
 
     def calc_dimer_energy_forces(R, Z, ase_atoms_dimer, ase_atoms_monomer):
         # Recalculate center-of-mass distance
-        r = jnp.linalg.norm(
+        jnp.linalg.norm(
             R[:N_ATOMS_MONOMER].T.mean(axis=1) - R[N_ATOMS_MONOMER:].T.mean(axis=1)
         )
-        takeidx = 0
 
         # Set up CHARMM coordinates and calculate MM energy
         tmp_coord = coor.get_positions().to_numpy() * 0
@@ -937,7 +909,7 @@ def get_dimer_calculator(
         # Combine monomer forces and calculate errors
         ase_dimers_1body_forces = np.concatenate([ase_monomer_F1, ase_monomer_F2])
         # Calculate mixed 1-body/2-body forces and errors
-        mixed_1b2b = (2 * ase_dimers_1body_forces) - ase_dimer_forces
+        (2 * ase_dimers_1body_forces) - ase_dimer_forces
 
         # Calculate interaction energy (difference between dimer and monomers)
         final_energy = (

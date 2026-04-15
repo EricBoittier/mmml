@@ -25,13 +25,10 @@ Usage:
 import argparse
 import sys
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 import numpy as np
-import pickle
 
 try:
-    import jax
-    import jax.numpy as jnp
     HAS_JAX = True
 except ImportError:
     HAS_JAX = False
@@ -39,7 +36,6 @@ except ImportError:
     sys.exit(1)
 
 try:
-    import matplotlib.pyplot as plt
     import matplotlib
     matplotlib.use('Agg')
     HAS_MATPLOTLIB = True

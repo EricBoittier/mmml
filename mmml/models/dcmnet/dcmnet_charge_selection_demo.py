@@ -7,7 +7,6 @@ charges from different DCMNET models, not entire models.
 """
 
 import numpy as np
-import jax
 import jax.numpy as jnp
 import sys
 import os
@@ -37,7 +36,7 @@ def create_example_data():
     vdw_surface = jnp.random.normal(0, 2, (100, 3))
     
     # Example model charges - each model predicts different numbers of charges per atom
-    n_atoms = len(molecular_data['atomic_numbers'])
+    len(molecular_data['atomic_numbers'])
     model_charges = {
         0: jnp.array([[0.5], [0.1], [0.1], [0.1], [0.1]]),  # DCM1: 1 charge per atom
         1: jnp.array([[0.3, 0.2], [0.05, 0.05], [0.05, 0.05], [0.05, 0.05], [0.05, 0.05]]),  # DCM2: 2 charges per atom
@@ -88,11 +87,11 @@ def demonstrate_charge_selection():
         temperature=1.0
     )
     
-    print(f"\n5. Results:")
+    print("\n5. Results:")
     print(f"   - Best ESP loss: {best_loss:.6f}")
     print(f"   - Selection matrix shape: {best_selection.shape}")
     
-    print(f"\n6. Selected Charges per Atom:")
+    print("\n6. Selected Charges per Atom:")
     for atom_idx in range(len(molecular_data['atomic_numbers'])):
         selected_charges = np.where(best_selection[atom_idx])[0]
         print(f"   Atom {atom_idx} (atomic number {molecular_data['atomic_numbers'][atom_idx]}):")
@@ -104,7 +103,7 @@ def demonstrate_charge_selection():
             charge_value = model_charges[model_id][atom_idx, charge_within_model]
             print(f"       Charge {charge_idx} -> DCM{model_id+1}, charge {charge_within_model} = {charge_value:.3f}")
     
-    print(f"\n7. Summary:")
+    print("\n7. Summary:")
     total_selected = np.sum(best_selection)
     print(f"   - Total charges selected: {total_selected}")
     print(f"   - Average charges per atom: {total_selected / len(molecular_data['atomic_numbers']):.1f}")

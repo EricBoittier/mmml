@@ -7,16 +7,14 @@ with your existing DCMNET workflow.
 """
 
 import numpy as np
-import jax
 import jax.numpy as jnp
 from typing import Dict, Any, Tuple, List
 import pandas as pd
 
 # Import your existing DCMNET components
 from dcmnet.models import DCM1, DCM2, DCM3, DCM4, dcm1_params, dcm2_params, dcm3_params, dcm4_params
-from dcmnet.loss import esp_mono_loss
 from dcmnet.electrostatics import calc_esp
-from dcmnet_mcts import DCMNETSelectionEnv, DCMNET_MCTS, optimize_dcmnet_combination
+from dcmnet_mcts import DCMNETSelectionEnv, DCMNET_MCTS
 
 class DCMNETEnsembleOptimizer:
     """
@@ -242,12 +240,12 @@ class DCMNETEnsembleOptimizer:
             print("No optimization results available.")
             return
         
-        print(f"\n=== DCMNET Ensemble Optimization Results ===")
+        print("\n=== DCMNET Ensemble Optimization Results ===")
         print(f"Best ESP Loss: {self.best_loss:.6f}")
         print(f"Best Model Combination: {self.get_best_models()}")
         print(f"Number of Models Used: {np.sum(self.best_combination)}")
         
-        print(f"\n=== Optimization History ===")
+        print("\n=== Optimization History ===")
         for result in self.optimization_history:
             print(f"Run {result['run']}: Loss = {result['loss']:.6f}, "
                   f"Models = {result['selected_models']}")

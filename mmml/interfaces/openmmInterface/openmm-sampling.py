@@ -68,7 +68,7 @@ def setup_simulation(
     pdb = PDBFile(pdb_file)
     pdb.topology.setPeriodicBoxVectors(box_vectors)
     params = CharmmParameterSet(rtf_file, prm_file)
-    params2 = ForceField("charmm36/tip3p-pme-f.xml")
+    ForceField("charmm36/tip3p-pme-f.xml")
     
     # Create the system
     system = psf.createSystem(
@@ -299,7 +299,7 @@ if __name__ == "__main__":
     current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
     import os
     os.makedirs(Path(args.working_dir) / "omm", exist_ok=True)
-    jsonout = Path(args.working_dir) / "omm" / f"openmm.json"
+    jsonout = Path(args.working_dir) / "omm" / "openmm.json"
     args_dict = vars(args)
     args_dict["dcd_files"] = dcd_files
     args_dict["report_files"] = report_files

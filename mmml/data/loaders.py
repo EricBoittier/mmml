@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Union, Tuple
 from dataclasses import dataclass, field
 
-from .npz_schema import validate_npz, NPZSchema
+from .npz_schema import NPZSchema
 from .atomic_references import DEFAULT_CHARGE_STATE, DEFAULT_REFERENCE_LEVEL
 
 

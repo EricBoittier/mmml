@@ -22,13 +22,8 @@ import jsonpickle
 
 
 import pyscf
-import time
 import argparse
-from pyscf import lib
 from gpu4pyscf import dft
-import numpy as np
-from ase import Atoms
-from ase.optimize import LBFGS
 
 # from pyscf4gpuInterface.aseInterface import PYSCF, parameters
 

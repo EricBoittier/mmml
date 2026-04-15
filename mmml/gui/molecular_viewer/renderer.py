@@ -34,7 +34,6 @@ from OpenGL.GL import (
     GL_SPECULAR,
     GL_SRC_ALPHA,
     GL_TEXTURE_2D,
-    GL_TRIANGLES,
     GL_TEXTURE_MAG_FILTER,
     GL_TEXTURE_MIN_FILTER,
     GL_TEXTURE_WRAP_S,
@@ -60,7 +59,6 @@ from OpenGL.GL import (
     glMatrixMode,
     GL_MODELVIEW,
     GL_PROJECTION,
-    glNormal3f,
     glPopMatrix,
     glShadeModel,
     glPushMatrix,
@@ -401,8 +399,8 @@ def _build_font_texture() -> int:
     data = np.zeros((tex_h, tex_w, 4), dtype=np.uint8)
     for ci, ch in enumerate(_FONT_CHARS):
         glyph = _FONT_5X7.get(ch, _FONT_5X7["0"])
-        gw = max(len(row) for row in glyph) if glyph else 3
-        gh = len(glyph)
+        max(len(row) for row in glyph) if glyph else 3
+        len(glyph)
         ox = ci * _FONT_W + 1
         oy = 1
         for y, row in enumerate(glyph):

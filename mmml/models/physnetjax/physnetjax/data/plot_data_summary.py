@@ -1,14 +1,11 @@
-import numpy as np
 import matplotlib.pyplot as plt
 
 from physnetjax.utils.enums import (
     check_keys,
-    KEY_TRANSLATION,
     Z_KEYS,
     R_KEYS,
     F_KEYS,
     N_KEYS,
-    D_KEYS,
     E_KEYS,
     COM_KEYS,
     ESP_GRID_KEYS,

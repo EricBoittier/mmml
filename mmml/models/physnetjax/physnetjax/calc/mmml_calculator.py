@@ -110,13 +110,13 @@ def get_MM_energy_forces_fns(R, ATOMS_PER_MONOMER=5, N_MONOMERS=2):
     pair_idx_atom_atom = pair_idx_atom_atom.reshape(-1, 2)
     
     displacements = R[pair_idx_atom_atom[:,0]] - R[pair_idx_atom_atom[:,1]]
-    distances = jnp.linalg.norm(displacements, axis=1)
+    jnp.linalg.norm(displacements, axis=1)
     at_perms = [_ for _ in list(product(params, repeat=2)) if _[0] <= _[1]]
     print("at_perms", at_perms)
-    charges = np.array(psf.get_charges())[:N_MONOMERS*ATOMS_PER_MONOMER]
-    masses = np.array(psf.get_amass())[:N_MONOMERS*ATOMS_PER_MONOMER]
+    np.array(psf.get_charges())[:N_MONOMERS*ATOMS_PER_MONOMER]
+    np.array(psf.get_amass())[:N_MONOMERS*ATOMS_PER_MONOMER]
     at_codes = np.array(psf.get_iac())[:N_MONOMERS*ATOMS_PER_MONOMER]
-    atomtype_codes = np.array(psf.get_atype())[:N_MONOMERS*ATOMS_PER_MONOMER]
+    np.array(psf.get_atype())[:N_MONOMERS*ATOMS_PER_MONOMER]
 
     print("at_codes", at_codes)
     print(list(set(at_codes)))
@@ -125,14 +125,13 @@ def get_MM_energy_forces_fns(R, ATOMS_PER_MONOMER=5, N_MONOMERS=2):
     print(at_rm[list(set(at_codes))])
     print(at_q[list(set(at_codes))])
     
-    at_perms_ep = [ (at_ep[a] * at_ep[b])**0.5 for a,b in at_perms]
-    at_perms_rm = [ (at_rm[a] + at_rm[b]) for a,b in at_perms]
-    at_perms_qq = [ (at_q[a] * at_q[b]) for a,b in at_perms]
+    [ (at_ep[a] * at_ep[b])**0.5 for a,b in at_perms]
+    [ (at_rm[a] + at_rm[b]) for a,b in at_perms]
+    [ (at_q[a] * at_q[b]) for a,b in at_perms]
 
     rmins_per_system = jnp.take(at_flat_rm, at_codes) #jnp.array([ NBL["pair_rm"][k] for k in atom_keys ])
     epsilons_per_system = jnp.take(at_flat_ep, at_codes) #jnp.array([ NBL["pair_ep"][k] for k in atom_keys ])
 
-    rs = distances
     q_per_system = jnp.take(at_flat_q, at_codes)
 
 
@@ -658,7 +657,6 @@ def get_spherical_cutoff_calculator(
         """
         # n_monomers = 20
         n_dimers = len(dimer_permutations(n_monomers))
-        output_list: List[Dict[str, Array]] = []
         out_E = 0
         out_F = 0
         dH = 0
@@ -884,7 +882,6 @@ def get_spherical_cutoff_calculator(
             
 
     return AseDimerCalculator(), spherical_cutoff_calculator
-import matplotlib.pyplot as plt
 
 # def validate_forces(forces):
 #     """Validate forces and replace NaNs with zeros."""

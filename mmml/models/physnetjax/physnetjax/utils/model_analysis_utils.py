@@ -4,7 +4,6 @@ import argparse
 import os
 import pickle
 from pathlib import Path
-from tabnanny import verbose
 
 import matplotlib.pyplot as plt
 
@@ -370,7 +369,7 @@ def main():
 
     # Analyze model
     combined_test_batches = data.get("test", {})
-    result = analyse_trained(
+    analyse_trained(
         restart,
         combined_test_batches,
         natoms,

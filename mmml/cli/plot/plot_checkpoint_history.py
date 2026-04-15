@@ -21,7 +21,7 @@ Usage:
 import argparse
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List
 import numpy as np
 import re
 
@@ -36,7 +36,6 @@ except ImportError:
     sys.exit(1)
 
 try:
-    from flax.training import orbax_utils
     from orbax.checkpoint import PyTreeCheckpointer
     HAS_ORBAX = True
 except ImportError:
@@ -47,7 +46,7 @@ def load_checkpoint_minimal(epoch_dir: Path) -> Dict:
     """Load minimal info from checkpoint without full restoration."""
     try:
         if HAS_ORBAX:
-            checkpointer = PyTreeCheckpointer()
+            PyTreeCheckpointer()
             # Try to load metadata or manifest
             manifest = epoch_dir / "manifest.ocdbt"
             if manifest.exists():
@@ -124,7 +123,7 @@ def count_parameters_from_checkpoint(epoch_dir: Path) -> int:
         return None
     
     try:
-        checkpointer = PyTreeCheckpointer()
+        PyTreeCheckpointer()
         # This is a simplified attempt - may need model structure
         # For now, estimate from checkpoint size
         total_size = sum(f.stat().st_size for f in epoch_dir.rglob('*') if f.is_file())
@@ -226,7 +225,7 @@ def plot_training_progress(
     milestones = [10, 25, 50, 75, 90]
     for milestone in milestones:
         if milestone in epochs:
-            idx = list(epochs).index(milestone)
+            list(epochs).index(milestone)
             ax4.axvline(milestone, color='red', linestyle='--', alpha=0.4, linewidth=1.5)
             ax4.text(milestone, ax4.get_ylim()[1] * 0.95, f'Epoch {milestone}',
                     rotation=90, fontsize=8, va='top', ha='right')
@@ -262,7 +261,7 @@ def create_summary_report(ckpt_dir: Path, metrics: Dict, output_dir: Path):
     report_lines.append("CHECKPOINT STATISTICS")
     report_lines.append("-"*80)
     sizes_mb = np.array(metrics['checkpoint_sizes']) / 1024 / 1024
-    report_lines.append(f"Checkpoint sizes:")
+    report_lines.append("Checkpoint sizes:")
     report_lines.append(f"  Mean: {np.mean(sizes_mb):.2f} MB")
     report_lines.append(f"  Std:  {np.std(sizes_mb):.2f} MB")
     report_lines.append(f"  Min:  {np.min(sizes_mb):.2f} MB (epoch {metrics['epochs'][np.argmin(sizes_mb)]})")
@@ -273,7 +272,7 @@ def create_summary_report(ckpt_dir: Path, metrics: Dict, output_dir: Path):
     report_lines.append("SAVE FREQUENCY")
     report_lines.append("-"*80)
     gaps = np.diff(metrics['epochs'])
-    report_lines.append(f"Epochs between saves:")
+    report_lines.append("Epochs between saves:")
     report_lines.append(f"  Mean: {np.mean(gaps):.1f}")
     report_lines.append(f"  Median: {np.median(gaps):.1f}")
     report_lines.append(f"  Min: {np.min(gaps)} (most frequent)")
@@ -312,9 +311,9 @@ def create_summary_report(ckpt_dir: Path, metrics: Dict, output_dir: Path):
     report_lines.append(f"  python -m mmml.cli.plot_training {ckpt_dir.parent.parent}")
     report_lines.append("")
     report_lines.append("To evaluate best checkpoint:")
-    report_lines.append(f"  python -m mmml.cli.evaluate_model \\")
+    report_lines.append("  python -m mmml.cli.evaluate_model \\")
     report_lines.append(f"      {ckpt_dir}/epoch-{max(metrics['epochs'])} \\")
-    report_lines.append(f"      --test-data splits/data_test.npz")
+    report_lines.append("      --test-data splits/data_test.npz")
     report_lines.append("")
     report_lines.append("="*80)
     
@@ -414,7 +413,7 @@ Examples:
         print("\n" + "="*80)
         print("✅ ANALYSIS COMPLETE!")
         print("="*80)
-        print(f"\nGenerated files:")
+        print("\nGenerated files:")
         print(f"  - {args.output}")
         print(f"  - {args.output_dir / 'training_summary.txt'}")
     

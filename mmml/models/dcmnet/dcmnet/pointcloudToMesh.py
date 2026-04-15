@@ -112,7 +112,7 @@ def principal_axis(points):
 def reconstruct_mesh_open3d(P, k_normals=30, method="auto"):
     try:
         import open3d as o3d
-    except Exception as e:
+    except Exception:
         print("[warn] open3d not available; skipping mesh reconstruction.")
         return None, None
 

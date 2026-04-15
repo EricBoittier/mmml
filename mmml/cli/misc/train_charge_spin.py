@@ -14,7 +14,6 @@ Usage:
 """
 
 import argparse
-import os
 import time
 from pathlib import Path
 from typing import Dict
@@ -22,7 +21,6 @@ from typing import Dict
 import e3x
 import jax
 import jax.numpy as jnp
-import numpy as np
 from flax.training import orbax_utils, train_state
 
 from mmml.physnetjax.physnetjax.models.model_charge_spin import EF_ChargeSpinConditioned
@@ -379,7 +377,7 @@ def main():
         # Save best checkpoint
         if valid_loss < best_valid_loss:
             best_valid_loss = valid_loss
-            print(f"  → New best validation loss! Saving checkpoint...")
+            print("  → New best validation loss! Saving checkpoint...")
             
             state_obj = train_state.TrainState.create(
                 apply_fn=model.apply, params=params, tx=optimizer

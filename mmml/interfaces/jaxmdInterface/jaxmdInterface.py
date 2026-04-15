@@ -11,41 +11,23 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import sys
 sys.path.append("/pchem-data/meuwly/boittier/home/pycharmm_test")
 
-from itertools import combinations, permutations, product
-from pathlib import Path
-from typing import Dict, Tuple, List, Any, NamedTuple
 
 # Third-party imports
 import numpy as np
 import jax
 import jax.numpy as jnp
-from jax import Array, jit, grad, lax, ops, random
-import optax
+from jax import jit, lax
 import orbax
-import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-from ase.io import read as ase_read
 
-import ase.calculators.calculator as ase_calc
 from ase.io import Trajectory
 
 # JAX-MD imports
-from jax_md import space, smap, energy, minimize, quantity, simulate, partition, units
+from jax_md import space, minimize, quantity, simulate, partition
 
 # Local imports
 import e3x
 import jax
-import physnetjax
-from physnetjax.data.data import prepare_datasets
-from physnetjax.training.loss import dipole_calc
-from physnetjax.models.model import EF
-from physnetjax.training.training import train_model
-from physnetjax.data.batches import _prepare_batches as prepare_batches
-from physnetjax.calc.helper_mlp import get_ase_calc
-from physnetjax.data.read_ase import save_traj_to_npz
-from physnetjax.restart.restart import get_last, get_files, get_params_model
-from physnetjax.analysis.analysis import plot_stats
+from physnetjax.restart.restart import get_last, get_params_model
 
 
 
@@ -58,7 +40,6 @@ print(jax.devices())
 
 
 sys.path.append("/pchem-data/meuwly/boittier/home/dcm-lj-data")
-from pycharmm_lingo_scripts import script1, script2, script3, load_dcm
 
 
 orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
@@ -88,12 +69,11 @@ def set_up_nhc_sim_routine(params, model, test_data, atoms, T=300, dt=5e-3, step
             src_idx=src_idx,
         )
 
-    TESTIDX = 0
     dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(len(atoms))
     # atomic_numbers = test_data["Z"][TESTIDX]
     # position = R = test_data["R"][TESTIDX]
     atomic_numbers = atoms.get_atomic_numbers()
-    R = position = atoms.get_positions()
+    R = atoms.get_positions()
 
     @jit
     def jax_md_energy_fn(position, **kwargs):
@@ -109,7 +89,6 @@ def set_up_nhc_sim_routine(params, model, test_data, atoms, T=300, dt=5e-3, step
         return result["energy"].reshape(-1)[0]
     
     jax_md_grad_fn = jax.grad(jax_md_energy_fn)
-    BOXSIZE = 100
     displacement, shift = space.free()
     neighbor_fn = partition.neighbor_list(
         displacement, None, 30 / 2, format=partition.Sparse
@@ -130,7 +109,7 @@ def set_up_nhc_sim_routine(params, model, test_data, atoms, T=300, dt=5e-3, step
 
         return lax.fori_loop(0, steps_per_recording, step, (state, nbrs))
 
-    Ecatch = test_data["E"].min() * 1.05
+    test_data["E"].min() * 1.05
     steps_per_recording = 25
 
     K_B = 8.617e-5

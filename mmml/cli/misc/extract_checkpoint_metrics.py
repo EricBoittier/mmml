@@ -18,7 +18,6 @@ from pathlib import Path
 from typing import Dict, List
 import numpy as np
 import re
-import pickle
 
 try:
     import matplotlib.pyplot as plt
@@ -53,7 +52,7 @@ def extract_metrics_from_orbax(epoch_dir: Path) -> Dict:
             }
             
             return metrics
-    except Exception as e:
+    except Exception:
         return None
 
 
@@ -321,13 +320,13 @@ def print_metrics_summary(metrics: Dict[str, np.ndarray], ckpt_dir: Path):
     
     print("LOSS STATISTICS")
     print("-"*80)
-    print(f"Training Loss:")
+    print("Training Loss:")
     print(f"  Initial: {train_loss[0]:.6f}")
     print(f"  Final:   {train_loss[-1]:.6f}")
     print(f"  Best:    {np.nanmin(train_loss):.6f} (epoch {epochs_valid[np.nanargmin(train_loss)]})")
     print(f"  Improvement: {(train_loss[0] - train_loss[-1])/train_loss[0]*100:.1f}%")
     print("")
-    print(f"Validation Loss:")
+    print("Validation Loss:")
     print(f"  Initial: {valid_loss[0]:.6f}")
     print(f"  Final:   {valid_loss[-1]:.6f}")
     print(f"  Best:    {np.nanmin(valid_loss):.6f} (epoch {epochs_valid[np.nanargmin(valid_loss)]})")
@@ -375,17 +374,17 @@ def print_metrics_summary(metrics: Dict[str, np.ndarray], ckpt_dir: Path):
         last_10_mean = np.mean(valid_loss[-10:])
         relative_std = last_10_std / last_10_mean * 100
         
-        print(f"Last 10 epochs:")
+        print("Last 10 epochs:")
         print(f"  Mean loss: {last_10_mean:.6f}")
         print(f"  Std dev:   {last_10_std:.6f}")
         print(f"  Relative std: {relative_std:.2f}%")
         
         if relative_std < 1.0:
-            print(f"  ✅ Converged (std < 1%)")
+            print("  ✅ Converged (std < 1%)")
         elif relative_std < 5.0:
-            print(f"  ⚠️  Nearly converged (std < 5%)")
+            print("  ⚠️  Nearly converged (std < 5%)")
         else:
-            print(f"  ❌ Not converged (std > 5%) - consider more epochs")
+            print("  ❌ Not converged (std > 5%) - consider more epochs")
     
     print("\n" + "="*80)
 
@@ -468,11 +467,11 @@ Examples:
     
     if verbose:
         print("\n✅ ANALYSIS COMPLETE!")
-        print(f"\nTo evaluate the best checkpoint:")
+        print("\nTo evaluate the best checkpoint:")
         best_epoch = int(metrics['epochs'][np.nanargmin(metrics['valid_loss'])])
-        print(f"  python -m mmml.cli.evaluate_model \\")
+        print("  python -m mmml.cli.evaluate_model \\")
         print(f"      {args.checkpoint_dir}/epoch-{best_epoch} \\")
-        print(f"      --test-data splits/data_test.npz")
+        print("      --test-data splits/data_test.npz")
     
     return 0
 

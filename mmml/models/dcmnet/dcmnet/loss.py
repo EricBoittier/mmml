@@ -4,12 +4,10 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import optax
-from jax.random import randint
 import ase.data
 
 from .electrostatics import batched_electrostatic_potential, calc_esp
 
-from .utils import reshape_dipole
 
 # Constants for ESP masking
 EPS = 1e-8
@@ -300,15 +298,15 @@ def esp_mono_loss(
     # They might be (batch_size, ngrid) or flattened
     if batched_pred.ndim > 1:
         # Keep batch dimension for proper masking
-        batched_pred_shape = batched_pred.shape
+        pass
     else:
         # Flattened - will need to reshape based on ngrid
-        batched_pred_shape = (batch_size, -1)
+        pass
     
     if esp_target.ndim > 1:
-        esp_target_shape = esp_target.shape
+        pass
     else:
-        esp_target_shape = (batch_size, -1)
+        pass
     
     # Compute per-grid-point errors (difference, not squared)
     esp_errors = batched_pred - esp_target
@@ -437,17 +435,15 @@ def esp_mono_loss(
         if vdw_surface.ndim == 2:
             # Single sample: (ngrid, 3) -> add batch dimension
             vdw = vdw_surface[None, :, :]  # (1, ngrid, 3)
-            esp_mask_expanded = esp_mask[None, :] if esp_mask.ndim == 1 else esp_mask
+            esp_mask[None, :] if esp_mask.ndim == 1 else esp_mask
             esp_target_expanded = esp_target[None, :] if esp_target.ndim == 1 else esp_target
         elif vdw_surface.ndim == 3:
             # Already batched: (batch_size, ngrid, 3)
             vdw = vdw_surface
-            esp_mask_expanded = esp_mask
             esp_target_expanded = esp_target
         else:
             # Unexpected shape - try to handle gracefully
             vdw = vdw_surface.reshape(batch_size, -1, 3)
-            esp_mask_expanded = esp_mask
             esp_target_expanded = esp_target
         
         # Compute distances from grid to all atoms: (batch_size, ngrid, natoms)

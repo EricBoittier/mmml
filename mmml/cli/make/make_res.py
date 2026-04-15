@@ -9,13 +9,7 @@ To avoid the segfault: use --skip-energy-show, or set SKIP_CHARMM_ENERGY_SHOW=1
 unless RUN_CHARMM_ENERGY_SHOW=1 is set.
 """
 
-import os
-import sys
-import tempfile
-from pathlib import Path
-from typing import List, Dict, Any
 
-import numpy as np
 
 import argparse
 
@@ -41,7 +35,6 @@ def main_loop(args):
     from mmml.interfaces.pycharmmInterface.import_pycharmm import (
         reset_block,
         reset_block_no_internal,
-        energy,
     )
     atoms = setupRes.main(args.res)
     atoms = setupRes.generate_coordinates()

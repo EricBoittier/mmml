@@ -77,7 +77,7 @@ def fit_kernel_ridge(
     single = Y_train.ndim == 1
     if single:
         Y_train = Y_train.reshape(1, -1)
-    n_out = Y_train.shape[0]
+    Y_train.shape[0]
     alphas = np.linalg.solve(K.T + lam * np.eye(K.shape[0]), Y_train.T).T
     return alphas[0] if single else alphas
 
@@ -312,13 +312,13 @@ def fit_kernel_from_training_data(
     -------
     X_fit, alphas, paths
     """
-    ntrain = len(R_list)
+    len(R_list)
     X_fit = np.array([compute_distance_matrix_upper(R, natmk) for R in R_list])
     # Build Y: (NKERNC*3, NTRAIN)
     abc_list = [_cpf_to_abc_flat(cpf) for cpf in charges_per_frame_list]
     nkernc3 = len(abc_list[0])
     Y_train = np.array(abc_list).T  # (NKERNC*3, NTRAIN)
-    nkernc = nkernc3 // 3
+    nkernc3 // 3
     alphas = fit_kernel_ridge(X_fit, Y_train, lam=lam, sigma=sigma)
     paths = write_kernel_files(out_dir, X_fit, alphas, base_name=base_name)
     return X_fit, alphas, paths

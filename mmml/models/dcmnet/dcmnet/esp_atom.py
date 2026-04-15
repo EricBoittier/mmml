@@ -1,4 +1,3 @@
-import matplotlib.pyplot as plt
 import numpy as np
 
 h2kcal = 627.5096080306
@@ -220,7 +219,6 @@ def esp_rmse_atoms_model(data, esp):
     atom_types = ["H", "C", "N", "O", "F"]
 
     mono_res = []
-    esp_mav = []
     nps = []
     for i, at in enumerate(atom_types):
         mask_at = closest_atom_type == Zs[i]

@@ -1,23 +1,11 @@
-import pyscf
 import numpy as np
-from pyscf import gto
-from gpu4pyscf.dft import rks, uks
-from pyscf.geomopt.geometric_solver import optimize
 
-import ase
-from ase.io import read
 
 import numpy as np
 from scipy.spatial import distance_matrix
 
-import cupy
-from pyscf import gto
 from pyscf.data import radii
-from gpu4pyscf.df import int3c2e
-from gpu4pyscf.lib.cupy_helper import dist_matrix
 
-import time
-from ase.data import chemical_symbols
 #modified_Bondi = radii.VDW.copy()
 #modified_Bondi[1] = 1.1/radii.BOHR      # modified version
 
@@ -136,7 +124,6 @@ def balance_array(q, sorted_idxs, positions, ref_dipole, ref_quadrupole, N=None)
     best_alignment = -float('inf')  # Start with a very low alignment score
     best_quadrupole_alignment = -float('inf')
     best_s = float("inf")
-    best_subset = None
     s = q[sorted_idxs[a:b]].sum()
     tries = 0
     while((tries < 40) | (len(sorted_idxs[a:b]) > 8000)):
@@ -169,7 +156,7 @@ def balance_array(q, sorted_idxs, positions, ref_dipole, ref_quadrupole, N=None)
         if dipole_alignment > best_alignment-0.05 and quadrupole_alignment > best_quadrupole_alignment-0.05 and abs(s) < best_s:
             best_alignment = dipole_alignment.sum()
             best_quadrupole_alignment = quadrupole_alignment.sum()
-            best_subset = (sorted_idxs[:N], sorted_idxs[a:b], sorted_idxs[-N:])
+            (sorted_idxs[:N], sorted_idxs[a:b], sorted_idxs[-N:])
             best_s = abs(s)
         
         # If the sum is positive, shrink the middle range

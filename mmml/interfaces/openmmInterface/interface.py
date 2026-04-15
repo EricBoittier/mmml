@@ -1,6 +1,5 @@
 import os
 from openmm.app.internal.unitcell import computePeriodicBoxVectors
-from pathlib import Path
 import argparse
 import numpy as np
 from datetime import datetime
@@ -124,12 +123,11 @@ def equilibrate(
     nheat=100,
 ):
     print("Equilibrating...")
-    nsteps_equil = steps
     temp_start, temp_final = 150, temperature
     print(f"Running NPT simulation... {nheat} steps")
     system = simulation.system
     print("Adding barostat...")
-    barostat = system.addForce(
+    system.addForce(
         MonteCarloBarostat(pressure * atmosphere, temperature * kelvin)
     )
     simulation.context.reinitialize(True)

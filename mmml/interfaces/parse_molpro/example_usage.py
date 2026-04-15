@@ -35,7 +35,7 @@ def basic_example():
         if len(unoccupied) > 0:
             print(f"LUMO energy: {unoccupied[0]:.6f} Ha")
         else:
-            print(f"LUMO: Not available (all orbitals occupied)")
+            print("LUMO: Not available (all orbitals occupied)")
     
     # Access properties
     if data.dipole_moment is not None:
@@ -129,7 +129,7 @@ def batch_processing_example():
     
     if all_energies:
         all_energies = np.array(all_energies)
-        print(f"\nEnergy statistics:")
+        print("\nEnergy statistics:")
         print(f"  Mean: {np.mean(all_energies):.6f} Ha")
         print(f"  Std:  {np.std(all_energies):.6f} Ha")
         print(f"  Min:  {np.min(all_energies):.6f} Ha")
@@ -137,7 +137,7 @@ def batch_processing_example():
     
     if all_dipoles:
         all_dipoles = np.array(all_dipoles)
-        print(f"\nDipole magnitude statistics:")
+        print("\nDipole magnitude statistics:")
         print(f"  Mean: {np.mean(all_dipoles):.6f} Debye")
         print(f"  Std:  {np.std(all_dipoles):.6f} Debye")
 

@@ -2,24 +2,15 @@
 import os
 import sys
 import shutil
-import pickle
-import itertools
 from pathlib import Path
-from io import BytesIO
 
 # Third-party scientific computing
 import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.offsetbox import AnnotationBbox, OffsetImage
 
 # ASE imports
 import ase
-from ase import Atoms, io
-from ase.data import covalent_radii
-from ase.io.pov import get_bondpairs, set_high_bondorder_pairs
-from ase.visualize.plot import plot_atoms
+from ase import Atoms
 from ase.io import read
-from ase.visualize import view
 
 from mmml.interfaces.pycharmmInterface.import_pycharmm import (
     CGENFF_RTF, CGENFF_PRM, CHARMM_HOME, CHARMM_LIB_DIR
@@ -37,25 +28,11 @@ sys.path.append(str(Path(CHARMM_HOME) / "tool" / "pycharmm"))
 
 # CHARMM imports
 import pycharmm
-import pycharmm.generate as gen
-import pycharmm.ic as ic
-import pycharmm.coor as coor
 import pycharmm.energy as energy
-import pycharmm.dynamics as dyn
-import pycharmm.nbonds as nbonds
 import pycharmm.minimize as minimize
-import pycharmm.crystal as crystal
-import pycharmm.select as select
-import pycharmm.image as image
-import pycharmm.psf as psf
-import pycharmm.param as param
 import pycharmm.read as read
 import pycharmm.write as write
 import pycharmm.settings as settings
-import pycharmm.cons_harm as cons_harm
-import pycharmm.cons_fix as cons_fix
-import pycharmm.shake as shake
-import pycharmm.scalar as scalar
 import pycharmm.lingo
 
 # import simple scripts
@@ -326,7 +303,6 @@ def run_packmol_solvation(
     with open(f"packmol/packmol-{solvent}.inp", "w") as f:
         f.writelines(packmol_script)
 
-    import subprocess
     import os
 
     print(f"{PACKMOL_PATH} < packmol/packmol-{solvent}.inp")
@@ -360,7 +336,6 @@ def run_packmol(n_molecules: int, side_length: float) -> None:
     with open("packmol/packmol.inp", "w") as f:
         f.writelines(packmol_script)
 
-    import subprocess
     import os
 
     print(f"{PACKMOL_PATH} < packmol/packmol.inp")
@@ -449,7 +424,7 @@ def initialize_psf(resid: str, n_molecules: int, side_length: float, solvent: st
     from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet
     CLEAR_CHARMM()
     if pdb_path is None:
-        pdbfilename = f"pdb/init-packmol.pdb"
+        pdbfilename = "pdb/init-packmol.pdb"
     else:
         pdbfilename = pdb_path
 
@@ -463,11 +438,11 @@ def initialize_psf(resid: str, n_molecules: int, side_length: float, solvent: st
 
     pycharmm_quiet()
     if solvent is not None:
-        resstr = " ".join([solvent.upper()]*(n_molecules-1))    
-        resstr = f"{resid.upper()} {solvent.upper()}"
+        " ".join([solvent.upper()]*(n_molecules-1))    
+        f"{resid.upper()} {solvent.upper()}"
         pdb_path = pdbfilename
     else:
-        resstr = " ".join([resid.upper()]*n_molecules)
+        " ".join([resid.upper()]*n_molecules)
         pdb_path = pdbfilename
 
     header = f"""bomlev -2
@@ -493,9 +468,9 @@ def initialize_psf(resid: str, n_molecules: int, side_length: float, solvent: st
     # print("read energy")
     # pycharmm.lingo.charmm_script(write_system_psf)
     
-    write.psf_card(f"psf/init.box.psf")
-    write.psf_card(f"psf/init.box.psf")
-    write.coor_pdb(f"pdb/init.box.pdb")
+    write.psf_card("psf/init.box.psf")
+    write.psf_card("psf/init.box.psf")
+    write.coor_pdb("pdb/init.box.pdb")
     print("wrote pdb/init.box.pdb")
 
 

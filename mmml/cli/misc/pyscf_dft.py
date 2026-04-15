@@ -12,7 +12,6 @@ Requires: gpu4pyscf, pyscf (GPU/quantum environment)
 
 import sys
 import time
-import argparse
 from pathlib import Path
 
 

@@ -522,7 +522,6 @@ def pad_arrays(
 
 if __name__ == '__main__':
     # Test preprocessing functions
-    import sys
     
     # Create test data
     coords = np.random.randn(10, 5, 3)

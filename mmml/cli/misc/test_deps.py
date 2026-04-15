@@ -20,7 +20,7 @@ def test_core_imports():
     # Test model creation
     try:
         from mmml.physnetjax.physnetjax.models.model import EF
-        model = EF(features=64, natoms=3)
+        EF(features=64, natoms=3)
         tests.append(("Model creation", True, None))
         print("✅ Model creation works")
     except Exception as e:
@@ -29,7 +29,6 @@ def test_core_imports():
     
     # Test restart utilities
     try:
-        from mmml.physnetjax.physnetjax.restart.restart import get_params_model
         tests.append(("Restart utilities", True, None))
         print("✅ Restart utilities work")
     except Exception as e:
@@ -38,8 +37,8 @@ def test_core_imports():
     
     # Test data loading
     try:
-        from mmml.data import DataConfig, load_npz
-        config = DataConfig()
+        from mmml.data import DataConfig
+        DataConfig()
         tests.append(("Data loading", True, None))
         print("✅ Data loading utilities work")
     except Exception as e:
@@ -48,8 +47,8 @@ def test_core_imports():
     
     # Test training utilities
     try:
-        from mmml.physnetjax.physnetjax.utils.pretty_printer import init_table, print_dict_as_table
-        table = init_table(doCharges=False)
+        from mmml.physnetjax.physnetjax.utils.pretty_printer import init_table
+        init_table(doCharges=False)
         tests.append(("Training utilities", True, None))
         print("✅ Training utilities work")
     except Exception as e:
@@ -102,7 +101,7 @@ def print_summary(core_tests, optional_deps):
                 print(f"   - {test_name}: {error}")
     
     # Optional dependencies
-    print(f"\nOptional Dependencies:")
+    print("\nOptional Dependencies:")
     plotting_available = optional_deps.get('asciichartpy', False) and optional_deps.get('polars', False)
     
     print(f"  {'✅' if plotting_available else '❌'} Plotting support (asciichartpy + polars)")

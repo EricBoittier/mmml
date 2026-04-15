@@ -36,9 +36,8 @@ Usage:
 import sys
 import argparse
 from pathlib import Path
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Optional
 import numpy as np
-import pickle
 
 # Try importing JAX and frameworks
 try:
@@ -52,7 +51,7 @@ except ImportError:
 
 try:
     from ase import Atoms, units
-    from ase.calculators.calculator import Calculator, all_changes
+    from ase.calculators.calculator import Calculator
     from ase.optimize import BFGS, LBFGS, BFGSLineSearch, FIRE
     from ase.vibrations import Vibrations
     from ase.md.verlet import VelocityVerlet
@@ -66,7 +65,6 @@ except ImportError:
     Atoms = None
 
 try:
-    from jax_md import space, simulate, partition
     HAS_JAXMD = True
 except ImportError:
     HAS_JAXMD = False
@@ -180,7 +178,7 @@ def optimize_geometry(
     """
     if verbose:
         print(f"\n{'='*70}")
-        print(f"GEOMETRY OPTIMIZATION")
+        print("GEOMETRY OPTIMIZATION")
         print(f"{'='*70}")
         print(f"Optimizer: {optimizer.upper()}")
         print(f"Force criterion: {fmax} eV/Å")
@@ -271,7 +269,7 @@ def calculate_frequencies(
     """
     if verbose:
         print(f"\n{'='*70}")
-        print(f"VIBRATIONAL FREQUENCY ANALYSIS")
+        print("VIBRATIONAL FREQUENCY ANALYSIS")
         print(f"{'='*70}")
         print(f"Displacement: {delta} Å")
         print(f"Free DOF: {nfree}")
@@ -334,7 +332,7 @@ def calculate_ir_spectrum(
     """
     if verbose:
         print(f"\n{'='*70}")
-        print(f"IR SPECTRUM CALCULATION")
+        print("IR SPECTRUM CALCULATION")
         print(f"{'='*70}")
     
     # Get IR intensities
@@ -343,7 +341,7 @@ def calculate_ir_spectrum(
     frequencies = vibrations.get_frequencies()
     
     if verbose:
-        print(f"\n✅ IR spectrum calculated")
+        print("\n✅ IR spectrum calculated")
         print(f"   Active modes: {np.sum(intensities > 0.001)}")
     
     # Plot if requested
@@ -414,7 +412,7 @@ def run_md_ase(
     """
     if verbose:
         print(f"\n{'='*70}")
-        print(f"MOLECULAR DYNAMICS (ASE)")
+        print("MOLECULAR DYNAMICS (ASE)")
         print(f"{'='*70}")
         print(f"Ensemble: {ensemble.upper()}")
         print(f"Temperature: {temperature} K")
@@ -528,7 +526,7 @@ def run_md_jaxmd(
     
     if verbose:
         print(f"\n{'='*70}")
-        print(f"MOLECULAR DYNAMICS (JAX MD - GPU ACCELERATED)")
+        print("MOLECULAR DYNAMICS (JAX MD - GPU ACCELERATED)")
         print(f"{'='*70}")
         print(f"Ensemble: {ensemble.upper()}")
         print(f"Temperature: {temperature} K")
@@ -690,7 +688,7 @@ Examples:
     
     # Run tasks
     if args.optimize:
-        opt_result = optimize_geometry(
+        optimize_geometry(
             atoms, calc,
             optimizer=args.optimizer,
             fmax=args.fmax,
@@ -707,7 +705,7 @@ Examples:
         )
         
         if args.ir_spectra:
-            ir_result = calculate_ir_spectrum(
+            calculate_ir_spectrum(
                 atoms,
                 freq_result['vibrations'],
                 output_file=output_dir / 'ir_spectrum.png',
@@ -716,7 +714,7 @@ Examples:
     
     if args.md:
         if args.framework == 'ase':
-            md_result = run_md_ase(
+            run_md_ase(
                 atoms, calc,
                 ensemble=args.ensemble,
                 temperature=args.temperature,
@@ -733,7 +731,7 @@ Examples:
             return 1
     
     if verbose:
-        print(f"\n✅ All tasks completed!")
+        print("\n✅ All tasks completed!")
         print(f"   Output directory: {output_dir}")
     
     return 0

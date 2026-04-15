@@ -1,5 +1,4 @@
 import os
-import subprocess
 from pathlib import Path
 import sys
 
@@ -48,28 +47,10 @@ print("CHARMM_LIB_DIR", CHARMM_LIB_DIR)
 import pycharmm
 
 import pycharmm
-import pycharmm.generate as gen
-import pycharmm.ic as ic
 import pycharmm.coor as coor
 import pycharmm.energy as energy
-import pycharmm.dynamics as dyn
-import pycharmm.nbonds as nbonds
-import pycharmm.minimize as minimize
-import pycharmm.crystal as crystal
-import pycharmm.image as image
-import pycharmm.psf as psf
-import pycharmm.read as read
-import pycharmm.write as write
-import pycharmm.settings as settings
-import pycharmm.cons_harm as cons_harm
-import pycharmm.cons_fix as cons_fix
-import pycharmm.select as select
-import pycharmm.shake as shake
 
-from pycharmm.lib import charmm as libcharmm
 import ase
-from ase.io import read as read_ase
-from ase import visualize
 from ase.visualize import view
 
 def get_block(a,b):
@@ -84,7 +65,7 @@ END
     return block
 
 def reset_block():
-    block = f"""BLOCK 
+    block = """BLOCK 
         CALL 1 SELE ALL END
           COEFF 1 1 1.0 
         END

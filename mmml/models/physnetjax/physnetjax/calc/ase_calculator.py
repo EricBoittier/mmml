@@ -2,10 +2,8 @@
 # config.update('jax_enable_x64', True)
 import ase
 import ase.calculators.calculator as ase_calc
-import ase.io as ase_io
 import e3x
 import jax
-import numpy as np
 
 
 @jax.jit

@@ -1,14 +1,9 @@
 from pathlib import Path
-from typing import Dict, List, Tuple, Union
+from typing import List
 
-import ase
-import numpy as np
-from ase.units import Bohr, Hartree, kcal
-from numpy.typing import NDArray
-from tqdm import tqdm
+from ase.units import Bohr, Hartree
 
 from physnetjax.data.datasets import process_dataset
-from physnetjax.utils.enums import KEY_TRANSLATION, MolecularData
 
 # Constants
 HARTREE_PER_BOHR_TO_EV_PER_ANGSTROM = Hartree / Bohr
@@ -16,7 +11,6 @@ MAX_N_ATOMS = 37
 MAX_GRID_POINTS = 10000
 BOHR_TO_ANGSTROM = 0.529177
 
-from physnetjax.data.data import ATOM_ENERGIES_HARTREE
 
 
 def sort_func(filepath: Path) -> int:

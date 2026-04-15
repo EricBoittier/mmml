@@ -2,11 +2,9 @@ import numpy as np
 import pyscf
 from pyscf.hessian import thermo
 from gpu4pyscf.dft import rks
-from pyscf import gto
  
 import pyscf
 
-import sys
 import numpy as np
 import pyscf
 from pyscf.hessian import thermo
@@ -120,11 +118,6 @@ def setup_mol(atom, basis, xc, log_file='./pyscf.log',
 
 def get_erefs(basis, xc):
     # Flat arrays for Nα and Nβ values
-    elements = [
-        'Hydrogen', 'Helium', 'Lithium', 'Beryllium', 'Boron', 'Carbon', 'Nitrogen', 
-        'Oxygen', 'Fluorine', 'Neon', 'Sodium', 'Magnesium', 'Aluminum', 'Silicon', 
-        'Phosphorus', 'Sulfur', 'Chlorine'
-    ]
     
     Nalpha = [1, 0, 1, 0, 1, 1, 2, 2, 2, 0, 1, 0, 1, 1, 2, 2, 2]
     Nbeta  = [0, 0, 0, 0, 0, 1, 1, 2, 3, 0, 0, 0, 0, 1, 1, 2, 3]
@@ -142,7 +135,7 @@ def get_erefs(basis, xc):
 
 
 def save_ref(basis, xc):
-    Erefs = get_erefs(basis, xc)
+    get_erefs(basis, xc)
     np.savez("Eref-{xc}-{basis}", Eref = Eref)
 
 

@@ -68,7 +68,6 @@ def hessian_fd(calc, atoms, delta=0.001):
     -------
     hessian : (N, 3, N, 3)  in eV/Å²
     """
-    import copy
     N = len(atoms)
     ndof = 3 * N
     pos0 = atoms.get_positions().copy()
@@ -475,7 +474,7 @@ def main(args=None):
         else:
             print(f"    ✗ NOT converged after {n_steps} steps "
                   f"(fmax target {args.fmax}, got {fmax_final:.6f} eV/Å)")
-            print(f"      Try increasing --opt-steps or relaxing --fmax")
+            print("      Try increasing --opt-steps or relaxing --fmax")
         print(f"    Final energy  = {energy_final:.6f} eV")
         print(f"    Final max |F| = {fmax_final:.6f} eV/Å")
     else:
@@ -485,7 +484,7 @@ def main(args=None):
         if fmax > 0.05:
             print(f"\n  ⚠  max |F| = {fmax:.4f} eV/Å  — structure is NOT "
                   f"at a minimum!")
-            print(f"     Consider adding --optimize for meaningful spectra.")
+            print("     Consider adding --optimize for meaningful spectra.")
 
     # ================================================================
     # 1.  Hessian  →  normal modes
@@ -540,7 +539,7 @@ def main(args=None):
     # ================================================================
     rot_str = np.zeros(3 * N)
     if args.vcd:
-        print(f"\n[5] AAT  →  VCD ...")
+        print("\n[5] AAT  →  VCD ...")
         # Try ML charges first, fall back to Born charges
         try:
             aat, ml_q = calc.get_aat_ml_charges(atoms)

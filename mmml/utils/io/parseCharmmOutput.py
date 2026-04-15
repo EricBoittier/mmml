@@ -1,4 +1,3 @@
-import os
 import matplotlib.pyplot as plt
 import polars as pl
 import numpy as np
@@ -229,7 +228,7 @@ def plot_simulation_distribution_overview(dyna_df, press_df, subfig=None):
 
     # subsample the data into blocks of 25% and plot the distribution of the mean of each block
     for i in range(0, 4):
-        block = dyna_df.slice(i * len(dyna_df) // 4, (i + 1) * len(dyna_df) // 4)
+        dyna_df.slice(i * len(dyna_df) // 4, (i + 1) * len(dyna_df) // 4)
         # plot_distribution(block, "temperature", axs[0, 2], color=kinetic_color)
         # plot_distribution(block, "total_energy", axs[1, 2], color=spatial_color)
 

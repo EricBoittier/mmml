@@ -26,7 +26,6 @@ from typing import Any, Dict, Optional
 import numpy as np
 
 try:
-    import jax
     import jax.numpy as jnp
 except ImportError:
     print("❌ Error: JAX not installed")
@@ -122,7 +121,7 @@ class MMMLCalculator(Calculator):
             )
         except Exception as e:
             print(f"⚠️  Error during model.apply: {e}")
-            print(f"Attempting alternative calling convention...")
+            print("Attempting alternative calling convention...")
             # Try alternative calling convention
             try:
                 output = self.model.apply(
@@ -373,7 +372,7 @@ Examples:
         dipole = atoms.get_dipole_moment()
         charges = atoms.get_charges()
         
-        print(f"\n📊 Results:")
+        print("\n📊 Results:")
         print(f"   Energy: {energy:.6f} eV")
         print(f"   Max force: {np.abs(forces).max():.6f} eV/Å")
         print(f"   Dipole magnitude: {np.linalg.norm(dipole):.6f} e·Å ({np.linalg.norm(dipole) * EANGSTROM_TO_DEBYE:.4f} Debye)")

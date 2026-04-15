@@ -1,6 +1,5 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from rdkit import Chem
 from rdkit.Chem.Draw import rdMolDraw2D
 import pandas as pd
 from sklearn.linear_model import LinearRegression

@@ -1,7 +1,6 @@
 import bpy
 import sys
 import sys
-import subprocess
 
 # subprocess.run([sys.executable, '-m', 'pip', 'install', 'ase', '-t',
 #    'C:\\Users\\Eric\\AppData\\Roaming\\Blender Foundation\\Blender\\4.4\\scripts\\modules'])
@@ -13,9 +12,7 @@ import numpy as np
 import bpy
 import numpy as np
 
-import itertools
 
-import molecularnodes as mn
 import bpy
 import numpy as np
 from mathutils import Vector
@@ -220,7 +217,7 @@ def load_traj():
     m[1] += m[1] / 5
     m[2] += m[2] / 3.5
     # Example usage: create a 3D text at the origin
-    text_obj = create_3d_text(
+    create_3d_text(
         f"ID:\t{CURRENT_FRAME}\nE:\t{e:.3e}", location=(m[0], m[1], m[2]), size=0.005
     )
 

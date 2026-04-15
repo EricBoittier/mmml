@@ -51,7 +51,7 @@ def extract_metrics_from_orbax(epoch_dir: Path) -> Dict:
             }
             
             return metrics
-    except Exception as e:
+    except Exception:
         return None
 
 

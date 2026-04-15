@@ -348,9 +348,6 @@ def main():
     print(f"Learning rate: {args.learning_rate}")
     print("="*80)
     
-    # Initialize random key
-    key = jax.random.PRNGKey(args.seed)
-    
     # Create data loaders
     print("\nLoading data...")
     loader = PackedMemmapLoader(
@@ -410,7 +407,7 @@ def main():
     )
     
     # Initialize parameters
-    key, init_key = jax.random.PRNGKey(args.seed), jax.random.PRNGKey(args.seed + 1)
+    init_key = jax.random.PRNGKey(args.seed + 1)
     dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(args.num_atoms)
     
     # Get a sample batch to initialize
@@ -493,7 +490,7 @@ def main():
         # Save checkpoint if best
         if valid_loss < best_valid_loss:
             best_valid_loss = valid_loss
-            print(f"  → New best validation loss! Saving checkpoint...")
+            print("  → New best validation loss! Saving checkpoint...")
             
             state = train_state.TrainState.create(
                 apply_fn=model.apply, params=params, tx=optimizer

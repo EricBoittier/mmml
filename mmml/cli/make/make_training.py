@@ -21,18 +21,12 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
-import sys
-import tempfile
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import Any
 
 from datetime import datetime
 import jax
 
-import mmml
-import ase
-import os
 
 # from mmml.physnetjax.physnetjax.models import model as model
 from mmml.physnetjax.physnetjax.models.model import EF
@@ -160,7 +154,7 @@ def main_loop(args):
                 padded_atoms = int(data['R'].shape[1])
                 if padded_atoms > max_n:
                     print(f"  ⚠️  Data is PADDED: {padded_atoms} atoms in array (padding: {padded_atoms - max_n})")
-                    print(f"  🔧 Auto-removing padding to train efficiently...")
+                    print("  🔧 Auto-removing padding to train efficiently...")
                     
                     # Remove padding from dataset
                     data_unpadded = {}
@@ -178,7 +172,7 @@ def main_loop(args):
                     unpadded_path = Path(args.data).parent / f"{Path(args.data).stem}_unpadded.npz"
                     np.savez_compressed(unpadded_path, **data_unpadded)
                     print(f"  ✅ Saved unpadded data to: {unpadded_path}")
-                    print(f"  📝 Using unpadded version for training")
+                    print("  📝 Using unpadded version for training")
                     
                     # Update args.data to point to unpadded file
                     args.data = str(unpadded_path)
@@ -204,7 +198,7 @@ def main_loop(args):
             max_n = int(np.max(data['N']))
             if 'R' in data and data['R'].shape[1] > max_n and natoms == max_n:
                 print(f"  🔧 Specified num_atoms ({natoms}) < padded size ({data['R'].shape[1]})")
-                print(f"  🔧 Auto-removing padding...")
+                print("  🔧 Auto-removing padding...")
                 
                 # Remove padding
                 data_unpadded = {}

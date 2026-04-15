@@ -6,13 +6,9 @@ Sets up a box for an MD simulation.
 Sets up a residue for an MD simulation.
 """
 
-import sys
-import tempfile
 from pathlib import Path
-from typing import List, Dict, Any
 import os
 
-import numpy as np
 
 import argparse
 

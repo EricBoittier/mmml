@@ -30,7 +30,6 @@ def concat_trajectory(files, output_path, selected=None):
     if selected is None:
         selected = list(range(len(files)))
 
-    traj = []
 
 
 def get_descriptor(system, species, plot=True):
@@ -472,9 +471,8 @@ def sample_and_save(results, output_path, key="test", tag="", descriptors=False)
 
     ase_io.write(output_path / f"{key}.traj", ase_atoms)
 
-    npz_collection = {}
     dict_keys = ase_dicts[0].keys()
-    dtypes = [
+    [
         (k, ase_dicts[0][k].dtype, np.stack([ase_dicts[0][k] for _ in range(N)]).shape)
         for k in dict_keys
     ]

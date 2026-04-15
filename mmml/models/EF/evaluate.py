@@ -29,7 +29,6 @@ from pathlib import Path
 import numpy as np
 import jax
 import jax.numpy as jnp
-from flax import linen as nn
 
 import e3x
 import matplotlib.pyplot as plt
@@ -530,7 +529,7 @@ def evaluate_dataset(model, params, data, batch_size=64, dataset_name="test"):
         print(f"  MAE (magnitude): {force_metrics['mae_magnitude_kcal_mol_ang']:.4f} kcal/(mol·Å) ({force_metrics['mae_magnitude']:.6f} eV/Å)")
         print(f"  RMSE (magnitude): {force_metrics['rmse_magnitude_kcal_mol_ang']:.4f} kcal/(mol·Å) ({force_metrics['rmse_magnitude']:.6f} eV/Å)")
         print(f"  R² (magnitude): {force_metrics['r2_magnitude']:.6f}")
-        print(f"  MAE per component:")
+        print("  MAE per component:")
         print(f"    X: {force_metrics['mae_x_kcal_mol_ang']:.4f} kcal/(mol·Å) ({force_metrics['mae_x']:.6f} eV/Å)  R²: {force_metrics['r2_x']:.6f}")
         print(f"    Y: {force_metrics['mae_y_kcal_mol_ang']:.4f} kcal/(mol·Å) ({force_metrics['mae_y']:.6f} eV/Å)  R²: {force_metrics['r2_y']:.6f}")
         print(f"    Z: {force_metrics['mae_z_kcal_mol_ang']:.4f} kcal/(mol·Å) ({force_metrics['mae_z']:.6f} eV/Å)  R²: {force_metrics['r2_z']:.6f}")
@@ -586,7 +585,7 @@ def evaluate_dataset(model, params, data, batch_size=64, dataset_name="test"):
         print(f"  R:    {dipole_metrics['r']:.6f}")
         print(f"  MAE (magnitude): {dipole_metrics['mae_magnitude']:.6f}")
         print(f"  RMSE (magnitude): {dipole_metrics['rmse_magnitude']:.6f}")
-        print(f"  MAE per component:")
+        print("  MAE per component:")
         print(f"    X: {dipole_metrics['mae_x']:.6f}  Y: {dipole_metrics['mae_y']:.6f}  Z: {dipole_metrics['mae_z']:.6f}")
     else:
         all_dipole_predictions = None
@@ -739,7 +738,7 @@ def plot_force_component_errors(predictions, targets, metrics, save_path=None, a
     if ax is None:
         fig, ax = plt.subplots(figsize=(8, 6))
     
-    errors = (predictions - targets) * EV_TO_KCAL_MOL  # Convert to kcal/(mol·Å)
+    (predictions - targets) * EV_TO_KCAL_MOL  # Convert to kcal/(mol·Å)
     
     components = ['X', 'Y', 'Z']
     mae_values = [
@@ -866,7 +865,7 @@ def plot_dipole_component_errors(predictions, targets, metrics, save_path=None, 
     if ax is None:
         fig, ax = plt.subplots(figsize=(8, 6))
     
-    errors = predictions - targets
+    predictions - targets
     
     components = ['X', 'Y', 'Z']
     mae_values = [
@@ -1036,7 +1035,7 @@ def main(args=None):
     print(f"\nLoading dataset from {args.data}...")
     dataset = np.load(args.data, allow_pickle=True)
     print(f"Dataset keys: {dataset.files}")
-    print(f"Dataset shapes:")
+    print("Dataset shapes:")
     for key in dataset.files:
         print(f"  {key}: {dataset[key].shape}")
     
@@ -1154,7 +1153,7 @@ def main(args=None):
     if args.max_atomic_number is not None:
         model_config['max_atomic_number'] = args.max_atomic_number
     
-    print(f"\nModel configuration:")
+    print("\nModel configuration:")
     for key, value in model_config.items():
         print(f"  {key}: {value}")
     
@@ -1212,7 +1211,7 @@ def main(args=None):
         print(f"[DIAG] Loaded params: {len(loaded_leaves)} leaves")
         print(f"[DIAG] model.init():  {len(ref_leaves)} leaves")
         if len(loaded_leaves) != len(ref_leaves):
-            print(f"⚠ TREE STRUCTURE MISMATCH! This is likely a bug.")
+            print("⚠ TREE STRUCTURE MISMATCH! This is likely a bug.")
             for i, (ll, rl) in enumerate(zip(loaded_leaves, ref_leaves)):
                 if hasattr(ll, 'shape') and hasattr(rl, 'shape'):
                     match = "✓" if ll.shape == rl.shape else "✗ MISMATCH"
@@ -1225,7 +1224,7 @@ def main(args=None):
         traceback.print_exc()
     
     # Prepare test data
-    print(f"\nPreparing test data...")
+    print("\nPreparing test data...")
     key = jax.random.PRNGKey(0)
     
     # Use all data as test if num_test is None, otherwise use first num_test
@@ -1328,7 +1327,7 @@ def main(args=None):
     print(f"\n✓ Saved metrics to {metrics_path}")
     
     # Create plots
-    print(f"\nCreating plots...")
+    print("\nCreating plots...")
     
     # Energy scatter plot
     scatter_path = output_dir / "scatter_energy.png"

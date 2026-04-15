@@ -183,7 +183,7 @@ class CutoffParameters:
         ax.set_ylabel("Scale factor")
         ax.set_ylim(-0.05, 1.2)
         title = (
-            f"ML/MM handoff (complementary: s_MM→0 at mm_on+mm_cut)"
+            "ML/MM handoff (complementary: s_MM→0 at mm_on+mm_cut)"
             if comp
             else "ML/MM handoff (legacy)"
         )

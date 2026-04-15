@@ -5,7 +5,7 @@ Pipeline: optimize charge positions -> fit kernel (distance matrix -> AQ,BQ,CQ) 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Optional, Sequence, Union
+from typing import Optional, Sequence, Union
 
 import numpy as np
 

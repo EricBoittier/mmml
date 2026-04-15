@@ -127,7 +127,7 @@ def reorder_atoms_to_match_pycharmm(
     try:
         xyz_initial = pd.DataFrame(R, columns=["x", "y", "z"])
         coor.set_positions(xyz_initial)
-        print(f"  Set initial coordinates from batch data")
+        print("  Set initial coordinates from batch data")
     except Exception as e:
         print(f"  Warning: Could not set initial coordinates: {e}")
         # Continue anyway - will try to set for each ordering
@@ -151,7 +151,7 @@ def reorder_atoms_to_match_pycharmm(
         pass
     
     if not coordinates_set:
-        print(f"  Warning: Coordinates may still be undefined, will set for each ordering")
+        print("  Warning: Coordinates may still be undefined, will set for each ordering")
     
     try:
         # Try to get energy terms with error handling to prevent crashes
@@ -205,7 +205,7 @@ def reorder_atoms_to_match_pycharmm(
             
     except Exception as e:
         print(f"  Warning: Could not determine available energy terms: {e}")
-        print(f"  Will try to use IMPR, BOND, ANGLE, or DIHE during evaluation")
+        print("  Will try to use IMPR, BOND, ANGLE, or DIHE during evaluation")
         # Don't set a default - let the evaluation loop try to find available terms
         available_energy_terms = ["IMPR", "BOND", "ANGLE", "DIHE"]
         primary_term = "IMPR"  # Default for display, but may not be used
@@ -409,7 +409,7 @@ def initialize_simulation_from_batch(
         R = R[:n_atoms_expected]
         Z = Z[:n_atoms_expected]
     
-    print(f"Initializing simulation from batch")
+    print("Initializing simulation from batch")
     print(f"  Positions shape: {R.shape}")
     print(f"  Atomic numbers shape: {Z.shape}")
     print(f"  Number of atoms: {len(R)}")
@@ -423,17 +423,17 @@ def initialize_simulation_from_batch(
             try:
                 _ = psf.get_atype()
                 pycharmm_available = True
-                print(f"  PyCHARMM is responsive")
+                print("  PyCHARMM is responsive")
             except (AttributeError, RuntimeError, OSError, SystemError) as e:
                 print(f"  WARNING: PyCHARMM test call failed: {e}")
-                print(f"  PyCHARMM may have crashed or is not properly initialized")
-                print(f"  Disabling MM contributions to prevent further crashes")
+                print("  PyCHARMM may have crashed or is not properly initialized")
+                print("  Disabling MM contributions to prevent further crashes")
                 # Disable MM to prevent crashes
                 if hasattr(args, 'include_mm'):
                     args.include_mm = False
                 pycharmm_available = False
         except ImportError:
-            print(f"  PyCHARMM not available (ImportError)")
+            print("  PyCHARMM not available (ImportError)")
             pycharmm_available = False
         except Exception as e:
             print(f"  WARNING: Unexpected error testing PyCHARMM: {e}")
@@ -452,15 +452,15 @@ def initialize_simulation_from_batch(
                     pycharmm_atypes = np.array(test_atypes)
                 if pycharmm_resids is None:
                     pycharmm_resids = np.array(psf.get_resid())
-                print(f"  Retrieved PyCHARMM atom types and residue IDs from PSF")
+                print("  Retrieved PyCHARMM atom types and residue IDs from PSF")
             except (AttributeError, RuntimeError, OSError, SystemError) as e:
                 print(f"  Warning: PyCHARMM call failed (may have crashed): {e}")
-                print(f"  PyCHARMM may not be properly initialized or may have segfaulted")
+                print("  PyCHARMM may not be properly initialized or may have segfaulted")
                 # Set to None to disable reordering
                 pycharmm_atypes = None
                 pycharmm_resids = None
         except ImportError:
-            print(f"  PyCHARMM not available (ImportError)")
+            print("  PyCHARMM not available (ImportError)")
             pycharmm_atypes = None
             pycharmm_resids = None
         except Exception as e:
@@ -486,7 +486,7 @@ def initialize_simulation_from_batch(
        pycharmm_atypes is not None and \
        ATOMS_PER_MONOMER is not None and \
        N_MONOMERS is not None:
-        print(f"  Attempting to reorder atoms to match PyCHARMM ordering...")
+        print("  Attempting to reorder atoms to match PyCHARMM ordering...")
         print(f"    ATOMS_PER_MONOMER: {ATOMS_PER_MONOMER}, N_MONOMERS: {N_MONOMERS}")
         print(f"    PyCHARMM atom types shape: {pycharmm_atypes.shape if pycharmm_atypes is not None else None}")
         try:
@@ -494,13 +494,13 @@ def initialize_simulation_from_batch(
                 R, Z, pycharmm_atypes, pycharmm_resids,
                 ATOMS_PER_MONOMER, N_MONOMERS
             )
-            print(f"  ✓ Atoms reordered to match PyCHARMM ordering")
+            print("  ✓ Atoms reordered to match PyCHARMM ordering")
         except KeyboardInterrupt:
             # Re-raise keyboard interrupts
             raise
         except Exception as e:
             print(f"  Warning: Reordering failed: {e}")
-            print(f"  Continuing without reordering (this may cause issues)")
+            print("  Continuing without reordering (this may cause issues)")
             import traceback
             traceback.print_exc()
             # Don't re-raise - allow continuation without reordering
@@ -550,18 +550,18 @@ def initialize_simulation_from_batch(
                 if len(pycharmm_atomic_numbers) == len(Z):
                     matches = np.allclose(pycharmm_atomic_numbers, Z, atol=0.1)
                     if not matches:
-                        print(f"  Warning: Atomic number mismatch between batch and PyCHARMM!")
+                        print("  Warning: Atomic number mismatch between batch and PyCHARMM!")
                         print(f"    Batch Z: {Z}")
                         print(f"    PyCHARMM Z (from PSF): {pycharmm_atomic_numbers}")
                         print(f"    PyCHARMM atom types: {pycharmm_atypes[:len(Z)]}")
-                        print(f"    This may cause force calculation issues.")
-                        print(f"    Note: This warning may be safe to ignore if atom types are correct.")
+                        print("    This may cause force calculation issues.")
+                        print("    Note: This warning may be safe to ignore if atom types are correct.")
                     else:
-                        print(f"  ✓ Atomic numbers match between batch and PyCHARMM")
+                        print("  ✓ Atomic numbers match between batch and PyCHARMM")
             except (AttributeError, RuntimeError, OSError, SystemError) as e:
                 print(f"  Warning: Could not validate atomic numbers (PyCHARMM may have crashed): {e}")
         except ImportError:
-            print(f"  Warning: PyCHARMM not available for atomic number validation")
+            print("  Warning: PyCHARMM not available for atomic number validation")
         except Exception as e:
             print(f"  Warning: Could not validate atomic numbers: {e}")
             import traceback
@@ -583,10 +583,10 @@ def initialize_simulation_from_batch(
                 print("  Synced positions with PyCHARMM")
             except (AttributeError, RuntimeError, OSError, SystemError) as e:
                 print(f"  Warning: Could not sync positions with PyCHARMM: {e}")
-                print(f"  PyCHARMM may have crashed or is in an invalid state")
+                print("  PyCHARMM may have crashed or is in an invalid state")
                 # Don't raise - continue without syncing
         except ImportError:
-            print(f"  Warning: PyCHARMM not available for position sync")
+            print("  Warning: PyCHARMM not available for position sync")
         except Exception as e:
             print(f"  Warning: Unexpected error syncing positions: {e}")
             import traceback
@@ -644,7 +644,7 @@ def initialize_simulation_from_batch(
         if np.any(~np.isfinite(hybrid_forces)):
             nan_count = np.sum(~np.isfinite(hybrid_forces))
             print(f"  WARNING: {nan_count} NaN/Inf values found in forces!")
-            print(f"  This may indicate atom ordering or indexing issues.")
+            print("  This may indicate atom ordering or indexing issues.")
         else:
             print(f"Max force: {np.abs(hybrid_forces).max():.6f} eV/Å")
             

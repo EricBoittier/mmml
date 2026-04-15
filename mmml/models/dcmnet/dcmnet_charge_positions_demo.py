@@ -7,7 +7,6 @@ charges from different DCMNET models, including their 3D positions.
 """
 
 import numpy as np
-import jax
 import jax.numpy as jnp
 import sys
 import os
@@ -36,7 +35,7 @@ def create_example_data_with_positions():
     esp_target = jnp.random.normal(0, 1, (100,))
     vdw_surface = jnp.random.normal(0, 2, (100, 3))
     
-    n_atoms = len(molecular_data['atomic_numbers'])
+    len(molecular_data['atomic_numbers'])
     
     # Example model charges - each model predicts different numbers of charges per atom
     model_charges = {
@@ -86,7 +85,7 @@ def demonstrate_charge_selection_with_positions():
     print("1. Molecular System:")
     print(f"   - {len(molecular_data['atomic_numbers'])} atoms")
     print(f"   - Atomic numbers: {molecular_data['atomic_numbers']}")
-    print(f"   - Atom positions:")
+    print("   - Atom positions:")
     for i, pos in enumerate(molecular_data['positions']):
         print(f"     Atom {i}: {pos}")
     
@@ -97,7 +96,7 @@ def demonstrate_charge_selection_with_positions():
         total_charges += n_charges
         print(f"   - DCM{model_id+1}: {n_charges} charges per atom")
         print(f"     Example charges for atom 0: {charges[0].tolist()}")
-        print(f"     Example positions for atom 0:")
+        print("     Example positions for atom 0:")
         for j, pos in enumerate(model_positions[model_id][0]):
             print(f"       Charge {j}: {pos}")
     
@@ -122,11 +121,11 @@ def demonstrate_charge_selection_with_positions():
         temperature=1.0
     )
     
-    print(f"\n5. Results:")
+    print("\n5. Results:")
     print(f"   - Best ESP loss: {best_loss:.6f}")
     print(f"   - Selection matrix shape: {best_selection.shape}")
     
-    print(f"\n6. Selected Charges per Atom:")
+    print("\n6. Selected Charges per Atom:")
     for atom_idx in range(len(molecular_data['atomic_numbers'])):
         selected_charges = np.where(best_selection[atom_idx])[0]
         print(f"   Atom {atom_idx} (atomic number {molecular_data['atomic_numbers'][atom_idx]}):")
@@ -141,7 +140,7 @@ def demonstrate_charge_selection_with_positions():
             print(f"         Value: {charge_value:.3f}")
             print(f"         Position: [{charge_position[0]:.3f}, {charge_position[1]:.3f}, {charge_position[2]:.3f}]")
     
-    print(f"\n7. Summary:")
+    print("\n7. Summary:")
     total_selected = np.sum(best_selection)
     print(f"   - Total charges selected: {total_selected}")
     print(f"   - Average charges per atom: {total_selected / len(molecular_data['atomic_numbers']):.1f}")

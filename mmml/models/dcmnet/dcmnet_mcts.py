@@ -22,13 +22,9 @@ Highlights:
 import numpy as np
 import jax
 import jax.numpy as jnp
-import optax
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Tuple, List, Any
-from functools import partial
-import pandas as pd
 import signal
-import sys
 
 # Import DCMNET components lazily where needed. Avoid eager loading
 # pre-trained parameter files at module import time.
@@ -196,15 +192,15 @@ class DCMNETSelectionEnv:
         J_np = (-(diff) / (r3[..., None] * CONVERSION_FACTOR)).reshape(sp.shape[0], -1)  # (Ns, 3L)
         self.J_surface_to_candidates = J_np
         # Prepare fast loss path (JAX JIT, static shapes)
-        K_jax = jnp.asarray(self.K_surface_to_candidates, dtype=jnp.float32)
-        target_jax = jnp.asarray(self.esp_target, dtype=jnp.float32)
+        jnp.asarray(self.K_surface_to_candidates, dtype=jnp.float32)
+        jnp.asarray(self.esp_target, dtype=jnp.float32)
 
         K = jnp.asarray(self.K_surface_to_candidates, dtype=jnp.float32)
         J = jnp.asarray(self.J_surface_to_candidates, dtype=jnp.float32)
         tgt = jnp.asarray(self.esp_target, dtype=jnp.float32)
         # Precompute mask to zero displacement corrections on hydrogen atoms (size 3L)
         h_mask_flat = jnp.asarray(np.repeat(self.hydrogen_mask_atoms.astype(np.float32), self.total_charges_per_atom))
-        dr_mask = 1.0 - jnp.repeat(h_mask_flat, 3)  # 0 for H entries
+        1.0 - jnp.repeat(h_mask_flat, 3)  # 0 for H entries
 
         @jax.jit
         def _fast_loss(s_flat: jnp.ndarray, v_flat: jnp.ndarray, lam: jnp.ndarray,
@@ -451,7 +447,7 @@ class DCMNETSelectionEnv:
             ESP loss value (lower is better)
         """
         # Check if each atom has at least one charge selected
-        charges_per_atom = np.sum(self.selected_charges, axis=1)
+        np.sum(self.selected_charges, axis=1)
         # if np.any(charges_per_atom == 0):
         #     return float('inf')  # Some atoms have no charges
         
@@ -1010,7 +1006,7 @@ def optimize_dcmnet_combination(molecular_data: Dict[str, Any],
         nonlocal interrupted
         interrupted = True
         if verbose:
-            print(f"\n[INTERRUPT] Ctrl+C detected. Saving best result found so far...")
+            print("\n[INTERRUPT] Ctrl+C detected. Saving best result found so far...")
     
     # Set up signal handler for graceful interruption
     original_handler = signal.signal(signal.SIGINT, signal_handler)
@@ -1067,7 +1063,7 @@ def optimize_dcmnet_combination(molecular_data: Dict[str, Any],
         nn_params = _init_selection_net_params(input_dim=input_dim, hidden_dim=64, n_actions=n_actions,
                                                l_size=L, dr_size=3*L, n_atoms=base_env.n_atoms, seed=0)
         if verbose and run_dir is not None:
-            print(f"[NN] Initialized new parameters")
+            print("[NN] Initialized new parameters")
     # Simple in-memory replay buffer
     replay_X: List[np.ndarray] = []
     replay_idx: List[np.ndarray] = []

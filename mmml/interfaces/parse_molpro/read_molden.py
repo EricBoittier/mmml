@@ -412,7 +412,7 @@ class MolproXMLParser:
         for variables_container in self._find_all('.//variables'):
             for var in variables_container.findall('variable' if not self.ns else 'molpro:variable', self.ns):
                 name = var.get('name')
-                var_type = var.get('type')
+                var.get('type')
                 length = var.get('length')
                 
                 # Get value from value element or text content
@@ -656,7 +656,7 @@ if __name__ == '__main__':
     print("\n" + "="*60)
     
     if data.atomic_numbers is not None:
-        print(f"\nMolecular Geometry:")
+        print("\nMolecular Geometry:")
         print(f"  Number of atoms: {len(data.atomic_numbers)}")
         print(f"  Atomic numbers: {data.atomic_numbers}")
         if data.coordinates is not None:
@@ -664,40 +664,40 @@ if __name__ == '__main__':
             print(f"  Coordinates:\n{data.coordinates}")
     
     if data.energies:
-        print(f"\nEnergies:")
+        print("\nEnergies:")
         for method, energy in data.energies.items():
             print(f"  {method}: {energy:.10f} Hartree")
     
     if data.orbital_energies is not None:
-        print(f"\nMolecular Orbitals:")
+        print("\nMolecular Orbitals:")
         print(f"  Number of orbitals: {len(data.orbital_energies)}")
         print(f"  Orbital energies (first 5): {data.orbital_energies[:5]}")
         if data.mo_coefficients is not None:
             print(f"  MO coefficients shape: {data.mo_coefficients.shape}")
     
     if data.frequencies is not None:
-        print(f"\nVibrational Frequencies:")
+        print("\nVibrational Frequencies:")
         print(f"  Number of modes: {len(data.frequencies)}")
         print(f"  Frequencies (cm⁻¹): {data.frequencies}")
         if data.normal_modes is not None:
             print(f"  Normal modes shape: {data.normal_modes.shape}")
     
     if data.dipole_moment is not None:
-        print(f"\nDipole Moment:")
+        print("\nDipole Moment:")
         print(f"  {data.dipole_moment}")
         print(f"  Magnitude: {np.linalg.norm(data.dipole_moment):.6f} Debye")
     
     if data.gradient is not None:
-        print(f"\nGradient:")
+        print("\nGradient:")
         print(f"  Shape: {data.gradient.shape}")
         print(f"  Max gradient component: {np.max(np.abs(data.gradient)):.6e}")
     
     if data.hessian is not None:
-        print(f"\nHessian:")
+        print("\nHessian:")
         print(f"  Shape: {data.hessian.shape}")
     
     if data.variables:
-        print(f"\nMolpro Variables:")
+        print("\nMolpro Variables:")
         print(f"  Number of variables: {len(data.variables)}")
         # Show first few variables
         for i, (name, value) in enumerate(data.variables.items()):

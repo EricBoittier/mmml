@@ -21,7 +21,6 @@ from typing import Dict, List, Tuple, Any
 
 try:
     import jax
-    import jax.numpy as jnp
     HAS_JAX = True
 except ImportError:
     HAS_JAX = False

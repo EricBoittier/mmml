@@ -16,7 +16,6 @@ else:
     os.environ["CHARMM_LIB_DIR"] = str(PYCHARMM_DIR / "build" / "cmake")
 
 import ase
-import ase.io as io
 import ase.units as units
 import jax
 import numpy as np

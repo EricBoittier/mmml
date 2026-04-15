@@ -354,7 +354,6 @@ def extract_dipoles_batched(positions, atomic_numbers, Ef,
     charges        : (T, N)
     atomic_dipoles : (T, N, 3)
     """
-    import jax
     import jax.numpy as jnp
     import e3x
     import time
@@ -1384,7 +1383,7 @@ def main(args=None):
         if not args.transient:
             print("\n  WARNING: --noda requires --transient  (skipping)")
         else:
-            print(f"\n[4b] Noda 2D correlation spectroscopy ...")
+            print("\n[4b] Noda 2D correlation spectroscopy ...")
             sync_ir, async_ir = noda_2d(ir_gp)
             plot_noda(freq_tp, sync_ir, async_ir, "IR",
                       out / "noda_2d_ir.png")

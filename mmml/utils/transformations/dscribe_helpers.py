@@ -1,16 +1,8 @@
-from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
-import MDAnalysis as mda
 import ase
-from ase import io as ase_io
 from ase.data import atomic_masses as ase_data_masses
 from dscribe.descriptors import MBTR
-from MDAnalysis.analysis.distances import dist
-import argparse
-import random
-from tqdm import tqdm
-import os
 
 from ase import Atoms
 
@@ -127,7 +119,6 @@ def concat_trajectory(files, output_path, selected=None):
     if selected is None:
         selected = list(range(len(files)))
 
-    traj = []
 
 
 def get_descriptor(system, species, plot=True):
