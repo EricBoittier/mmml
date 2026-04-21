@@ -4,6 +4,8 @@ import ase
 import numpy as np
 
 def get_Z_from_psf():
+    import pycharmm.psf as psf
+
     masses = psf.get_amass()
     Z = []
     for m in masses:
