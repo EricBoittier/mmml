@@ -26,19 +26,27 @@ The previous version of this page only listed a minimal subset while docs genera
 
 ### Electrostatics
 
-::: mmml.utils.electrostatics
+This module requires optional JAX dependencies at import time, so it is not auto-rendered by mkdocstrings in the default docs build environment.
+
+Source: [`mmml/utils/electrostatics.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/utils/electrostatics.py).
 
 ### Simulation Utilities
 
-::: mmml.utils.simulation_utils
+This module requires optional JAX dependencies at import time, so it is not auto-rendered by mkdocstrings in the default docs build environment.
+
+Source: [`mmml/utils/simulation_utils.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/utils/simulation_utils.py).
 
 ### HDF5 Reporter
 
-::: mmml.utils.hdf5_reporter
+This module requires optional JAX dependencies at import time, so it is not auto-rendered by mkdocstrings in the default docs build environment.
+
+Source: [`mmml/utils/hdf5_reporter.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/utils/hdf5_reporter.py).
 
 ### Model Checkpoint Utilities
 
-::: mmml.utils.model_checkpoint
+This module requires optional JAX dependencies at import time, so it is not auto-rendered by mkdocstrings in the default docs build environment.
+
+Source: [`mmml/utils/model_checkpoint.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/utils/model_checkpoint.py).
 
 ## Interfaces
 
@@ -68,21 +76,29 @@ Source: [`mmml/interfaces/pycharmmInterface/pycharmmCommands.py`](https://github
 
 ### PySCF4GPU Calculations
 
-::: mmml.interfaces.pyscf4gpuInterface.calcs
+This module requires optional PySCF dependencies at import time, so it is not auto-rendered by mkdocstrings in the default docs build environment.
+
+Source: [`mmml/interfaces/pyscf4gpuInterface/calcs.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/pyscf4gpuInterface/calcs.py).
 
 ## Models
 
 ### EF Model
 
-::: mmml.models.EF.model
+This module requires optional JAX dependencies at import time, so it is not auto-rendered by mkdocstrings in the default docs build environment.
+
+Source: [`mmml/models/EF/model.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/models/EF/model.py).
 
 ### EF Training
 
-::: mmml.models.EF.training
+This module requires optional JAX dependencies at import time, so it is not auto-rendered by mkdocstrings in the default docs build environment.
+
+Source: [`mmml/models/EF/training.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/models/EF/training.py).
 
 ### EF Evaluation
 
-::: mmml.models.EF.evaluate
+This module requires optional JAX dependencies at import time, so it is not auto-rendered by mkdocstrings in the default docs build environment.
+
+Source: [`mmml/models/EF/evaluate.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/models/EF/evaluate.py).
 
 ## CLI
 
