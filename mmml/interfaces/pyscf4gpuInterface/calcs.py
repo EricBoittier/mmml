@@ -115,21 +115,34 @@ def compute_dft(args, calcs, extra=None):
         gradients = []
         energies = []
         coords = []
+        coords_bohr = []
+        printed_env_keys = False
         def callback(envs):
-            print(list(envs.keys()))
-            gradients.append(envs['gradients'])
-            energies.append(envs['energy'])
-            coords.append(envs['coords'])
+            nonlocal printed_env_keys
+            if not printed_env_keys:
+                print(f"Optimizer callback keys: {sorted(envs.keys())}")
+                print(
+                    "Optimizer callback coordinate units: Bohr "
+                    "(stored in Angstrom under opt_callback['coords'])."
+                )
+                printed_env_keys = True
+            gradients.append(np.asarray(envs["gradients"], dtype=np.float64))
+            energies.append(float(envs["energy"]))
+            step_coords_bohr = np.asarray(envs["coords"], dtype=np.float64)
+            coords_bohr.append(step_coords_bohr)
+            coords.append(step_coords_bohr * float(pyscf.lib.parameters.BOHR))
 
         start_time = time.time()
         mol = optimize(engine, maxsteps=20, callback=callback)
-        print("Optimized coordinate:")
-        print(mol.atom_coords())
+        print("Optimized coordinate (Angstrom):")
+        print(mol.atom_coords(unit="ANG"))
         print('Geometry optimization took', time.time() - start_time, 's')
         opt_callback = {
             'gradients': gradients,
             'energies': energies,
-            'coords': coords
+            'coords': coords,
+            'coords_bohr': coords_bohr,
+            'coords_unit': 'Angstrom',
         }
 
     output = {"mol": mol, "calcs": calcs, "opt_callback": opt_callback}
