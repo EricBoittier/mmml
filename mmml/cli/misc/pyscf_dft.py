@@ -13,7 +13,6 @@ Requires: gpu4pyscf, pyscf (GPU/quantum environment)
 import sys
 import time
 from pathlib import Path
-import re
 
 
 def _normalize_output_base(path: Path) -> Path:
@@ -23,41 +22,11 @@ def _normalize_output_base(path: Path) -> Path:
     return path
 
 
-def _next_available_output_base(path: Path) -> Path:
-    """Return base path whose .npz/.h5 outputs do not already exist.
-
-    Uses one directory scan instead of repeated `.exists()` probes to avoid
-    slow linear filesystem checks when many prior outputs are present.
-    """
+def _ensure_output_does_not_exist(path: Path) -> tuple[bool, list[Path]]:
+    """Return whether output base is available and list conflicting files."""
     base = _normalize_output_base(path)
-    parent = base.parent
-    stem = base.name
-
-    try:
-        existing_names = {p.name for p in parent.iterdir()}
-    except OSError:
-        # Fall back to the original direct probe behavior if directory listing
-        # is unavailable (permissions, transient IO errors, etc).
-        candidate = base
-        idx = 1
-        while candidate.with_suffix(".npz").exists() or candidate.with_suffix(".h5").exists():
-            candidate = base.with_name(f"{stem}_{idx}")
-            idx += 1
-        return candidate
-
-    base_npz = f"{stem}.npz"
-    base_h5 = f"{stem}.h5"
-    if base_npz not in existing_names and base_h5 not in existing_names:
-        return base
-
-    pat = re.compile(rf"^{re.escape(stem)}_(\d+)\.(?:npz|h5)$")
-    max_idx = 0
-    for name in existing_names:
-        m = pat.match(name)
-        if m:
-            max_idx = max(max_idx, int(m.group(1)))
-
-    return base.with_name(f"{stem}_{max_idx + 1}")
+    conflicts = [p for p in (base.with_suffix(".npz"), base.with_suffix(".h5")) if p.exists()]
+    return len(conflicts) == 0, conflicts
 
 
 def main() -> int:
@@ -86,12 +55,21 @@ def main() -> int:
         print("Use --energy, --gradient, --hessian, --optimize, etc.", file=sys.stderr)
         return 1
 
+    output_base = _normalize_output_base(Path(args.output))
+    available, conflicts = _ensure_output_does_not_exist(Path(args.output))
+    if not available:
+        conflicts_str = ", ".join(str(p) for p in conflicts)
+        print("Error: Output target already exists.", file=sys.stderr)
+        print(f"Conflicting files: {conflicts_str}", file=sys.stderr)
+        print(
+            "Choose a different --output path or remove existing files.",
+            file=sys.stderr,
+        )
+        return 1
+
     output = compute_dft(args, calcs, extra)
-    output_base = _next_available_output_base(Path(args.output))
     save_pyscf_results(str(output_base), output)
     elapsed = time.perf_counter() - t0
-    if output_base != _normalize_output_base(Path(args.output)):
-        print(f"Output exists, using {output_base} instead of {args.output}")
     print(f"Results saved to {output_base}.npz (ML keys) and {output_base}.h5 (all arrays)")
     print(f"Elapsed: {elapsed:.2f} s")
     return 0
