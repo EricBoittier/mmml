@@ -592,6 +592,26 @@ def _normalize_for_concat(arr: np.ndarray, n_samples: int, key: str) -> np.ndarr
     return arr
 
 
+def _pad_concat_axis1(arr: np.ndarray, target_size: int, key: str, pad_value: float) -> np.ndarray:
+    """
+    Pad axis=1 to ``target_size`` for variable-length ESP/grid arrays before concat.
+
+    ``esp`` uses 0 padding; grid coordinate arrays use a large sentinel (1e6).
+    """
+    arr = np.asarray(arr)
+    if arr.ndim < 2:
+        raise ValueError(f"Cannot pad {key}: expected at least 2D array, got shape {arr.shape}")
+    if arr.shape[1] > target_size:
+        raise ValueError(
+            f"Cannot pad {key}: current axis-1 size {arr.shape[1]} exceeds target {target_size}"
+        )
+    if arr.shape[1] == target_size:
+        return arr
+    pad_width = [(0, 0)] * arr.ndim
+    pad_width[1] = (0, target_size - arr.shape[1])
+    return np.pad(arr, pad_width, mode="constant", constant_values=pad_value)
+
+
 def _load_and_merge_efd(efd_files: Union[Path, List[Path]]) -> Dict:
     """Load one or more EFD npz files and concatenate along sample dimension."""
     if isinstance(efd_files, (str, Path)):
@@ -608,6 +628,16 @@ def _load_and_merge_efd(efd_files: Union[Path, List[Path]]) -> Dict:
     grid_key = 'esp_grid' if 'esp_grid' in parts[0] else ('vdw_surface' if 'vdw_surface' in parts[0] else None)
     if grid_key:
         concat_keys.append(grid_key)
+    variable_grid_like_keys = {'esp', 'esp_grid', 'vdw_surface', 'vdw_grid'}
+    axis1_targets = {}
+    for k in variable_grid_like_keys:
+        sizes = [
+            np.asarray(p[k]).shape[1]
+            for p in parts
+            if k in p and np.asarray(p[k]).ndim >= 2
+        ]
+        if sizes:
+            axis1_targets[k] = max(sizes)
 
     all_keys = set()
     for p in parts:
@@ -626,6 +656,9 @@ def _load_and_merge_efd(efd_files: Union[Path, List[Path]]) -> Dict:
                     arr = _normalize_for_concat(arr, n_samples, k)
                 elif k in ('Ef', 'efield_Ef', 'efield_scf_Ef') and arr.shape[0] != n_samples:
                     arr = _normalize_for_concat(arr, n_samples, k)
+                if k in axis1_targets and arr.ndim >= 2:
+                    pad_value = 0.0 if k == 'esp' else 1e6
+                    arr = _pad_concat_axis1(arr, axis1_targets[k], k, pad_value=pad_value)
                 to_concat.append(arr)
             merged[k] = np.concatenate(to_concat, axis=0)
         else:
