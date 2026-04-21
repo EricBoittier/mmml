@@ -96,7 +96,14 @@ def setup_mol(atoms, basis, xc, spin, charge, log_file='./pyscf.log',
 
 def compute_dft(args, calcs, extra=None):
 
-    engine, mol = setup_mol(args.mol, args.basis, args.xc, args.spin, args.charge)
+    engine, mol = setup_mol(
+        args.mol,
+        args.basis,
+        args.xc,
+        args.spin,
+        args.charge,
+        log_file=getattr(args, "log_file", "./pyscf.log"),
+    )
 
     print(mol)
     from mmml.interfaces.pyscf4gpuInterface.helperfunctions import print_basis
@@ -137,6 +144,16 @@ def compute_dft(args, calcs, extra=None):
         print("Optimized coordinate (Angstrom):")
         print(mol.atom_coords(unit="ANG"))
         print('Geometry optimization took', time.time() - start_time, 's')
+        # Rebuild the SCF engine on the optimized geometry so all downstream
+        # quantities are evaluated at the same final structure.
+        engine, mol = setup_mol(
+            mol,
+            args.basis,
+            args.xc,
+            args.spin,
+            args.charge,
+            log_file=getattr(args, "log_file", "./pyscf.log"),
+        )
         opt_callback = {
             'gradients': gradients,
             'energies': energies,
