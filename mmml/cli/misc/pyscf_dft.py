@@ -13,6 +13,7 @@ Requires: gpu4pyscf, pyscf (GPU/quantum environment)
 import sys
 import time
 from pathlib import Path
+import re
 
 
 def _normalize_output_base(path: Path) -> Path:
@@ -23,14 +24,40 @@ def _normalize_output_base(path: Path) -> Path:
 
 
 def _next_available_output_base(path: Path) -> Path:
-    """Return base path whose .npz/.h5 outputs do not already exist."""
+    """Return base path whose .npz/.h5 outputs do not already exist.
+
+    Uses one directory scan instead of repeated `.exists()` probes to avoid
+    slow linear filesystem checks when many prior outputs are present.
+    """
     base = _normalize_output_base(path)
-    candidate = base
-    idx = 1
-    while candidate.with_suffix(".npz").exists() or candidate.with_suffix(".h5").exists():
-        candidate = base.with_name(f"{base.name}_{idx}")
-        idx += 1
-    return candidate
+    parent = base.parent
+    stem = base.name
+
+    try:
+        existing_names = {p.name for p in parent.iterdir()}
+    except OSError:
+        # Fall back to the original direct probe behavior if directory listing
+        # is unavailable (permissions, transient IO errors, etc).
+        candidate = base
+        idx = 1
+        while candidate.with_suffix(".npz").exists() or candidate.with_suffix(".h5").exists():
+            candidate = base.with_name(f"{stem}_{idx}")
+            idx += 1
+        return candidate
+
+    base_npz = f"{stem}.npz"
+    base_h5 = f"{stem}.h5"
+    if base_npz not in existing_names and base_h5 not in existing_names:
+        return base
+
+    pat = re.compile(rf"^{re.escape(stem)}_(\d+)\.(?:npz|h5)$")
+    max_idx = 0
+    for name in existing_names:
+        m = pat.match(name)
+        if m:
+            max_idx = max(max_idx, int(m.group(1)))
+
+    return base.with_name(f"{stem}_{max_idx + 1}")
 
 
 def main() -> int:
