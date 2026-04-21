@@ -14,6 +14,7 @@ Each structure group contains datasets such as:
 
 import hashlib
 from pathlib import Path
+import shutil
 from typing import Dict, Optional, Sequence, Tuple, Union
 
 import h5py
@@ -25,6 +26,50 @@ from mmml.physnetjax.physnetjax.data.data import get_choices, make_dicts
 
 # Orbax checkpointer for dataset caching
 _dataset_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
+
+
+def _restore_from_cache(cache_path: Path, *, verbose: bool, label: str = "") -> Optional[Dict[str, np.ndarray]]:
+    """Best-effort orbax cache restore; return None on cache/tooling incompatibility."""
+    if not cache_path.exists():
+        return None
+
+    if verbose:
+        prefix = " (flat)" if label else ""
+        print(f"Loading from orbax cache{prefix}: {cache_path}")
+    try:
+        data = _dataset_checkpointer.restore(cache_path)
+        return {k: np.asarray(v) for k, v in data.items()}
+    except Exception as e:
+        if verbose:
+            print(f"Warning: failed to restore orbax cache at {cache_path}: {e!r}")
+            print("Falling back to reading directly from HDF5.")
+        # Clear incompatible or corrupted cache so next run doesn't hit the same failure.
+        try:
+            shutil.rmtree(cache_path)
+            if verbose:
+                print(f"Removed stale cache directory: {cache_path}")
+        except OSError:
+            if verbose:
+                print(f"Warning: could not remove stale cache directory: {cache_path}")
+        return None
+
+
+def _save_to_cache(cache_path: Path, data: Dict[str, np.ndarray], *, verbose: bool, label: str = "") -> None:
+    """Best-effort orbax cache save; failures should not block data loading."""
+    if verbose:
+        prefix = " (flat)" if label else ""
+        print(f"Saving orbax cache{prefix} to: {cache_path}")
+    try:
+        from flax.training import orbax_utils
+
+        save_args = orbax_utils.save_args_from_target(data)
+        _dataset_checkpointer.save(cache_path, data, save_args=save_args)
+        if verbose:
+            print("  Cache saved.")
+    except Exception as e:
+        if verbose:
+            print(f"Warning: failed to save orbax cache at {cache_path}: {e!r}")
+            print("Continuing without cache.")
 
 
 def _cache_key(
@@ -166,11 +211,8 @@ def _load_single_h5(
             charge_filter=charge_filter,
             spin_key=spin_key,
         )
-        if cache_path.exists():
-            if verbose:
-                print(f"Loading from orbax cache: {cache_path}")
-            data = _dataset_checkpointer.restore(cache_path)
-            data = {k: np.asarray(v) for k, v in data.items()}
+        data = _restore_from_cache(cache_path, verbose=verbose)
+        if data is not None:
             # Ensure Q and S for spooky (older caches may lack them)
             n_samples = len(data["R"])
             if "Q" not in data:
@@ -327,14 +369,7 @@ def _load_single_h5(
             charge_filter=charge_filter,
             spin_key=spin_key,
         )
-        if verbose:
-            print(f"Saving orbax cache to: {cache_path}")
-        from flax.training import orbax_utils
-
-        save_args = orbax_utils.save_args_from_target(data)
-        _dataset_checkpointer.save(cache_path, data, save_args=save_args)
-        if verbose:
-            print("  Cache saved.")
+        _save_to_cache(cache_path, data, verbose=verbose)
 
     if verbose:
         _print_data_summary(data, filepath.name)
@@ -371,11 +406,8 @@ def _load_single_h5_flat(
             charge_filter=charge_filter,
             spin_key=spin_key,
         )
-        if cache_path.exists():
-            if verbose:
-                print(f"Loading from orbax cache (flat): {cache_path}")
-            data = _dataset_checkpointer.restore(cache_path)
-            data = {k: np.asarray(v) for k, v in data.items()}
+        data = _restore_from_cache(cache_path, verbose=verbose, label="flat")
+        if data is not None:
             n_mols = len(data["E"])
             if "Q" not in data:
                 data["Q"] = np.zeros((n_mols, 1), dtype=np.float64)
@@ -513,14 +545,7 @@ def _load_single_h5_flat(
             charge_filter=charge_filter,
             spin_key=spin_key,
         )
-        if verbose:
-            print(f"Saving orbax cache (flat) to: {cache_path}")
-        from flax.training import orbax_utils
-
-        save_args = orbax_utils.save_args_from_target(data)
-        _dataset_checkpointer.save(cache_path, data, save_args=save_args)
-        if verbose:
-            print("  Cache saved.")
+        _save_to_cache(cache_path, data, verbose=verbose, label="flat")
 
     if verbose:
         _print_data_summary_flat(data, filepath.name)
