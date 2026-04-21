@@ -45,15 +45,19 @@ function FileSidebar({ files, selectedFile, onSelectFile }: FileSidebarProps) {
   };
 
   return (
-    <aside className="w-64 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 overflow-y-auto">
-      <div className="p-4">
+    <aside className="w-64 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex flex-col min-h-0">
+      <div className="p-4 pb-3">
         <h2 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">
           Files
         </h2>
-        
-        {files.length === 0 ? (
+
+        {files.length === 0 && (
           <p className="text-sm text-slate-500 dark:text-slate-400">No files available</p>
-        ) : (
+        )}
+      </div>
+
+      {files.length > 0 && (
+        <div className="flex-1 overflow-y-auto px-4 pb-4">
           <div className="space-y-4">
             {Object.entries(groupedFiles).map(([type, typeFiles]) => (
               <div key={type}>
@@ -84,8 +88,8 @@ function FileSidebar({ files, selectedFile, onSelectFile }: FileSidebarProps) {
               </div>
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </aside>
   );
 }

@@ -552,7 +552,7 @@ function App() {
   }, [handleFrameChange]);
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-900">
+    <div className="h-screen flex flex-col bg-slate-50 dark:bg-slate-900">
       {/* Header */}
       <header className="bg-white dark:bg-slate-800 shadow-sm border-b border-slate-200 dark:border-slate-700">
         <div className="px-4 py-3 flex items-center justify-between">
@@ -582,7 +582,7 @@ function App() {
       </header>
 
       {/* Main content */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden min-h-0">
         {/* Sidebar */}
         {sidebarOpen && (
           <FileSidebar
