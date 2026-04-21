@@ -208,8 +208,20 @@ def generate_dimers(
 
 
 def main():
-    filename = "old/meoh.xyz"
-
+    from argparse import ArgumentParser
+    parser = ArgumentParser()
+    parser.add_argument("--filename", type=str, default="old/meoh.xyz")
+    parser.add_argument("--max_dimers", type=int, default=10000)
+    parser.add_argument("--output_xyz", type=str, default="meoh_dimers_mesh_sampled.xyz")
+    parser.add_argument("--overlap_tolerance", type=float, default=0.1)
+    parser.add_argument("--seed", type=int, default=0)
+    args = parser.parse_args()
+    filename = args.filename
+    max_dimers = args.max_dimers
+    output_xyz = args.output_xyz
+    overlap_tolerance = args.overlap_tolerance
+    seed = args.seed
+    
     molecule = load_molecule_xyz(filename)
     eq = symmetrize_molecule(molecule, max_n=25, tolerance=0.3, epsilon=1e-5)
 
@@ -225,10 +237,10 @@ def main():
         mesh_points,
         normals,
         sym_mol,
-        max_dimers=10000,
-        output_xyz="meoh_dimers_mesh_sampled.xyz",
-        overlap_tolerance=0.1,
-        seed=0,
+        max_dimers=max_dimers,
+        output_xyz=output_xyz,
+        overlap_tolerance=overlap_tolerance,
+        seed=seed,
     )
 
 
