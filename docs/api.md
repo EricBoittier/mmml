@@ -50,15 +50,21 @@ Source: [`mmml/interfaces/openmmInterface/interface.py`](https://github.com/Eric
 
 ### PyCHARMM Setup Box
 
-::: mmml.interfaces.pycharmmInterface.setupBox
+This module currently requires a local PyCHARMM installation at import time, so it is not auto-rendered by mkdocstrings in the default docs build environment.
+
+Source: [`mmml/interfaces/pycharmmInterface/setupBox.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/pycharmmInterface/setupBox.py).
 
 ### PyCHARMM Setup Residue
 
-::: mmml.interfaces.pycharmmInterface.setupRes
+This module currently requires a local PyCHARMM installation at import time, so it is not auto-rendered by mkdocstrings in the default docs build environment.
+
+Source: [`mmml/interfaces/pycharmmInterface/setupRes.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/pycharmmInterface/setupRes.py).
 
 ### PyCHARMM Commands
 
-::: mmml.interfaces.pycharmmInterface.pycharmmCommands
+This module currently requires a local PyCHARMM installation at import time, so it is not auto-rendered by mkdocstrings in the default docs build environment.
+
+Source: [`mmml/interfaces/pycharmmInterface/pycharmmCommands.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/pycharmmInterface/pycharmmCommands.py).
 
 ### PySCF4GPU Calculations
 
