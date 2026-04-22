@@ -3864,7 +3864,7 @@ def main():
         'max_atomic_number': args.max_atomic_number,
         'charges': True,  # MUST be True for charge prediction
         'natoms': args.natoms,
-        'total_charge': 0.0,
+        'total_charge': 0.0, #TODO: Add total charge as input
         'n_res': args.physnet_n_res,
         'zbl': args.zbl,
         'use_energy_bias': True,
