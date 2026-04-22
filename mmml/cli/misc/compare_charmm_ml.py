@@ -51,7 +51,7 @@ def _check_pycharmm():
         return False, None, None
 
 
-def load_checkpoint_and_model(checkpoint_path: Path) -> Tuple[Any, Any]:
+def load_checkpoint_and_model(checkpoint_path: Path, natoms_override: int | None = None) -> Tuple[Any, Any]:
     """Load model params and rebuild model from checkpoint directory."""
     checkpoint_path = Path(checkpoint_path).resolve()
     if checkpoint_path.is_file():
@@ -79,6 +79,10 @@ def load_checkpoint_and_model(checkpoint_path: Path) -> Tuple[Any, Any]:
 
     physnet_config = dict(model_config["physnet_config"])
     physnet_config.setdefault("natoms", 64)
+    if natoms_override is not None:
+        # Ensure static PhysNet atom count is large enough for evaluation data.
+        # This avoids shape mismatches in electrostatics segment reductions.
+        physnet_config["natoms"] = max(int(physnet_config["natoms"]), int(natoms_override))
     mix_coulomb_energy = model_config.get("mix_coulomb_energy", False)
 
     if "dcmnet_config" in model_config:
@@ -151,11 +155,12 @@ def main() -> int:
 
     # Load model and params
     print("\nLoading checkpoint...")
-    params, model = load_checkpoint_and_model(args.checkpoint)
+    params, model = load_checkpoint_and_model(args.checkpoint, natoms_override=natoms)
     if hasattr(model, "dcmnet_config"):
         n_dcm = model.dcmnet_config["n_dcm"]
     else:
         n_dcm = model.noneq_config["n_dcm"]
+    print(f"  PhysNet natoms (effective): {model.physnet_config.get('natoms')}")
 
     # Default loss terms for eval_step
     dipole_terms = (LossTerm(source="physnet", weight=1.0), LossTerm(source="dcmnet", weight=1.0))
