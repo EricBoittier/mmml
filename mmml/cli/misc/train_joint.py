@@ -3566,6 +3566,11 @@ def main():
                        help='PhysNet: cutoff distance (Angstroms)')
     parser.add_argument('--physnet-n-res', type=int, default=3,
                        help='PhysNet: number of residual blocks')
+    parser.add_argument('--zbl', dest='zbl', action='store_true',
+                       help='Enable PhysNet ZBL short-range repulsion')
+    parser.add_argument('--no-zbl', dest='zbl', action='store_false',
+                       help='Disable PhysNet ZBL short-range repulsion')
+    parser.set_defaults(zbl=True)
     
     # DCMNet hyperparameters
     parser.add_argument('--dcmnet-features', type=int, default=128,
@@ -3861,7 +3866,7 @@ def main():
         'natoms': args.natoms,
         'total_charge': 0.0,
         'n_res': args.physnet_n_res,
-        'zbl': False,
+        'zbl': args.zbl,
         'use_energy_bias': True,
         'debug': False,
         'efa': False,
@@ -3869,11 +3874,12 @@ def main():
     # Override with checkpoint config when loading pre-trained PhysNet (ensures param shapes match)
     if physnet_ckpt_config:
         for key in ('features', 'max_degree', 'num_iterations', 'num_basis_functions',
-                    'cutoff', 'max_atomic_number', 'n_res', 'zbl', 'use_energy_bias'):
+                    'cutoff', 'max_atomic_number', 'n_res', 'use_energy_bias'):
             if key in physnet_ckpt_config:
                 physnet_config[key] = physnet_ckpt_config[key]
         physnet_config['natoms'] = args.natoms  # Keep data padding
         physnet_config['charges'] = True  # Required for joint model
+        physnet_config['zbl'] = args.zbl  # Keep explicit CLI choice
     
     print("PhysNet configuration:")
     for k, v in physnet_config.items():
