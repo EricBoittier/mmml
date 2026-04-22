@@ -231,22 +231,36 @@ def create_calculator_from_checkpoint(
     if not checkpoint_path.exists():
         raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
 
-    repo_root = Path(__file__).resolve().parents[2]
-    example_dir = repo_root / "examples" / "co2" / "dcmnet_physnet_train"
-    trainer_path = example_dir / "trainer.py"
+    # Prefer canonical package path first (stable in installed/editable environments).
+    try:
+        from mmml.cli.misc.train_joint import (
+            JointPhysNetDCMNet,
+            JointPhysNetNonEquivariant,
+        )
+    except Exception:
+        # Fallback for legacy/local workflows where only example trainer exists.
+        repo_root = Path(__file__).resolve().parents[3]
+        trainer_candidates = [
+            repo_root / "examples" / "other" / "co2" / "dcmnet_physnet_train" / "trainer.py",
+            repo_root / "examples" / "co2" / "dcmnet_physnet_train" / "trainer.py",
+        ]
+        trainer_path = next((p for p in trainer_candidates if p.exists()), None)
+        if trainer_path is None:
+            raise FileNotFoundError(
+                "Could not locate trainer module. Tried package import "
+                "`mmml.cli.misc.train_joint` and example trainer paths: "
+                + ", ".join(str(p) for p in trainer_candidates)
+            )
 
-    if not trainer_path.exists():
-        raise FileNotFoundError(f"Trainer module not found at {trainer_path}")
+        spec = importlib.util.spec_from_file_location("dcmnet_trainer", trainer_path)
+        if spec is None or spec.loader is None:
+            raise ImportError(f"Could not load trainer module from {trainer_path}")
+        trainer = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = trainer
+        spec.loader.exec_module(trainer)
 
-    spec = importlib.util.spec_from_file_location("dcmnet_trainer", trainer_path)
-    if spec is None or spec.loader is None:
-        raise ImportError(f"Could not load trainer module from {trainer_path}")
-    trainer = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = trainer
-    spec.loader.exec_module(trainer)
-
-    JointPhysNetDCMNet = trainer.JointPhysNetDCMNet  # type: ignore[attr-defined]
-    JointPhysNetNonEquivariant = trainer.JointPhysNetNonEquivariant  # type: ignore[attr-defined]
+        JointPhysNetDCMNet = trainer.JointPhysNetDCMNet  # type: ignore[attr-defined]
+        JointPhysNetNonEquivariant = trainer.JointPhysNetNonEquivariant  # type: ignore[attr-defined]
 
     with checkpoint_path.open("rb") as f:
         checkpoint_data = pickle.load(f)
