@@ -22,7 +22,7 @@ class SimpleInferenceCalculator(Calculator):
     checkpoint is not exceeded).
     """
 
-    implemented_properties = ["energy", "forces", "dipole", "charges"]
+    implemented_properties = ["energy", "forces", "dipole", "charges", "multipoles"]
 
     def __init__(
         self,
@@ -37,6 +37,10 @@ class SimpleInferenceCalculator(Calculator):
         self.params = params
         self.cutoff = cutoff
         self.use_dcmnet_dipole = use_dcmnet_dipole
+        self._last_positions: Optional[np.ndarray] = None
+        self._last_atomic_numbers: Optional[np.ndarray] = None
+        self._last_monopoles: Optional[np.ndarray] = None
+        self._last_dipole_positions: Optional[np.ndarray] = None
 
         phys_cfg = getattr(model, "physnet_config", {})
         self.natoms: Optional[int] = phys_cfg.get("natoms")
@@ -61,6 +65,8 @@ class SimpleInferenceCalculator(Calculator):
         positions = atoms.get_positions()
         atomic_numbers = atoms.get_atomic_numbers()
         n_atoms = len(atoms)
+        self._last_positions = np.array(positions, copy=True)
+        self._last_atomic_numbers = np.array(atomic_numbers, copy=True)
 
         if n_atoms > self.natoms:
             raise ValueError(
@@ -116,11 +122,27 @@ class SimpleInferenceCalculator(Calculator):
             charges = np.zeros(n_atoms)
         self.results["charges"] = charges
 
+        if "mono_dist" in output and "dipo_dist" in output:
+            mono_dist = np.array(output["mono_dist"])[:n_atoms]
+            dipo_dist = np.array(output["dipo_dist"])[:n_atoms]
+            self._last_monopoles = mono_dist
+            self._last_dipole_positions = dipo_dist
+            self.results["multipoles"] = {
+                "monopoles": mono_dist,
+                "dipole_positions": dipo_dist,
+                "atomic_charges": mono_dist.sum(axis=-1),
+            }
+        else:
+            self._last_monopoles = None
+            self._last_dipole_positions = None
+            self.results["multipoles"] = None
+
         if self.use_dcmnet_dipole:
             if "mono_dist" in output and "dipo_dist" in output:
-                mono_dist = np.array(output["mono_dist"])
-                dipo_dist = np.array(output["dipo_dist"])
-                dipole = np.sum(mono_dist[:n_atoms, ..., None] * dipo_dist[:n_atoms], axis=(0, 1))
+                dipole = np.sum(
+                    self._last_monopoles[..., None] * self._last_dipole_positions,
+                    axis=(0, 1),
+                )
             elif "dipole_dcm" in output:
                 dipole = np.array(output["dipole_dcm"][0])
             else:
@@ -134,6 +156,67 @@ class SimpleInferenceCalculator(Calculator):
                 dipole = np.sum(charges[:, None] * positions, axis=0)
 
         self.results["dipole"] = dipole
+
+    def get_distributed_multipoles(self) -> dict[str, np.ndarray]:
+        """Return distributed multipoles from the most recent calculation."""
+        if self._last_monopoles is None or self._last_dipole_positions is None:
+            raise RuntimeError(
+                "No distributed multipoles available. Run a calculation on a joint "
+                "PhysNet+DCMNet/NonEquivariant model first."
+            )
+        return {
+            "monopoles": self._last_monopoles.copy(),
+            "dipole_positions": self._last_dipole_positions.copy(),
+            "atomic_charges": self._last_monopoles.sum(axis=-1),
+        }
+
+    def get_electrostatic_potential(
+        self,
+        grid_points: np.ndarray,
+        source: str = "dcmnet",
+    ) -> np.ndarray:
+        """Compute ESP on grid points from the latest prediction.
+
+        Parameters
+        ----------
+        grid_points
+            Grid points with shape (n_grid, 3) in Angstrom.
+        source
+            'dcmnet' (distributed charges) or 'physnet' (atomic point charges).
+        """
+        grid_points = np.asarray(grid_points, dtype=np.float32).reshape(-1, 3)
+        source_norm = source.lower()
+
+        if source_norm == "dcmnet":
+            if self._last_monopoles is None or self._last_dipole_positions is None:
+                raise RuntimeError(
+                    "No DCMNet multipoles available. Run a calculation first."
+                )
+            from mmml.dcmnet.dcmnet.electrostatics import calc_esp
+
+            charge_values = self._last_monopoles.reshape(-1)
+            charge_positions = self._last_dipole_positions.reshape(-1, 3)
+            esp = calc_esp(
+                charge_positions=jnp.array(charge_positions),
+                charge_values=jnp.array(charge_values),
+                grid_positions=jnp.array(grid_points),
+            )
+            return np.array(esp)
+
+        if source_norm == "physnet":
+            if self._last_positions is None:
+                raise RuntimeError("No cached structure available. Run a calculation first.")
+            from mmml.utils.electrostatics import compute_esp_from_point_charges
+
+            charges = np.asarray(self.results.get("charges"))
+            return compute_esp_from_point_charges(
+                charges=charges,
+                atom_pos=self._last_positions,
+                grid_positions=grid_points,
+                atom_mask=None,
+            )
+
+        raise ValueError("source must be 'dcmnet' or 'physnet'")
 
 
 def create_calculator_from_checkpoint(
