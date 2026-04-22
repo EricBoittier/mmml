@@ -575,7 +575,7 @@ class NonEquivariantChargeModel(nn.Module):
     n_dcm: int
     max_atomic_number: int
     num_layers: int = 3
-    max_displacement: float = 1.0
+    max_displacement: float = 0.5
     
     @nn.compact
     def __call__(
