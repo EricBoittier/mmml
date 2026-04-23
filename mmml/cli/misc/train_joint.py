@@ -472,6 +472,7 @@ def _compute_esp_single(
     mono_flat = mono_masked.reshape(-1)  # (natoms*n_dcm,)
     dipo_flat = dipo_masked.reshape(-1, 3)  # (natoms*n_dcm, 3)
     esp_pred_dcm = calc_esp(dipo_flat, mono_flat, vdw_mol)
+    esp_pred_dcm = jnp.nan_to_num(esp_pred_dcm, nan=0.0, posinf=0.0, neginf=0.0)
     
     # Compute distances from grid to all atoms (including masked)
     distances = jnp.linalg.norm(vdw_mol[:, None, :] - atom_pos[None, :, :], axis=2)  # (ngrid, natoms)
@@ -508,6 +509,7 @@ def _compute_esp_single(
     charges_masked = phys_charges * atom_mask_mol  # (natoms,)
     r_bohr = (distances + 1e-10) * ANGSTROM_TO_BOHR
     esp_pred_phys = jnp.sum(charges_masked[None, :] / r_bohr, axis=1)
+    esp_pred_phys = jnp.nan_to_num(esp_pred_phys, nan=0.0, posinf=0.0, neginf=0.0)
     
     return esp_pred_dcm, esp_pred_phys, distance_mask
 
@@ -805,15 +807,21 @@ class JointPhysNetNonEquivariant(nn.Module):
             def compute_coulomb_single(charges, positions):
                 diff = positions[:, None, :] - positions[None, :, :]
                 distances = jnp.linalg.norm(diff, axis=-1)
-                distances = jnp.where(distances < 1e-6, 1e6, distances)
-                r_bohr = distances * ANGSTROM_TO_BOHR
-                pairwise_energy = charges[:, None] * charges[None, :] / (r_bohr + 1e-10)
+                n_charges = charges.shape[0]
+                # Softened Coulomb denominator avoids singular energy/gradients when
+                # two distributed charges overlap during early training.
+                r_bohr = jnp.maximum(distances * ANGSTROM_TO_BOHR, 0.5)
+                pair_mask = 1.0 - jnp.eye(n_charges, dtype=charges.dtype)
+                pairwise_energy = (
+                    (charges[:, None] * charges[None, :]) / (r_bohr + 1e-10)
+                ) * pair_mask
                 coulomb_energy_hartree = 0.5 * jnp.sum(pairwise_energy)
                 return coulomb_energy_hartree * HARTREE_TO_EV
             
             coulomb_energies = jax.vmap(compute_coulomb_single)(charges_reshaped, positions_reshaped)
             coulomb_energies = jnp.nan_to_num(coulomb_energies, nan=0.0, posinf=0.0, neginf=0.0)
-            lambda_val = self.coulomb_lambda[0]
+            lambda_val = jnp.clip(self.coulomb_lambda[0], 0.0, 1.0)
+            lambda_val = jnp.nan_to_num(lambda_val, nan=0.0, posinf=1.0, neginf=0.0)
             energy_reshaped = energy_reshaped + lambda_val * coulomb_energies
             coulomb_energy_out = jnp.mean(coulomb_energies)
             lambda_out = lambda_val
@@ -1018,14 +1026,16 @@ class JointPhysNetDCMNet(nn.Module):
             # Compute Coulomb energy per molecule using vmap
             def compute_coulomb_single(charges, positions):
                 """Compute Coulomb energy for a single molecule."""
-                # Pairwise distances between all distributed charges
                 diff = positions[:, None, :] - positions[None, :, :]  # (N, N, 3)
                 distances = jnp.linalg.norm(diff, axis=-1)  # (N, N)
-                # Avoid self-interaction
-                distances = jnp.where(distances < 1e-6, 1e6, distances)
-                # Coulomb energy: E = (1/2) Σᵢⱼ qᵢqⱼ/rᵢⱼ [Ha], r in Bohr
-                r_bohr = distances * ANGSTROM_TO_BOHR
-                pairwise_energy = charges[:, None] * charges[None, :] / (r_bohr + 1e-10)
+                n_charges = charges.shape[0]
+                # Softened Coulomb denominator avoids singular energy/gradients when
+                # two distributed charges overlap during early training.
+                r_bohr = jnp.maximum(distances * ANGSTROM_TO_BOHR, 0.5)
+                pair_mask = 1.0 - jnp.eye(n_charges, dtype=charges.dtype)
+                pairwise_energy = (
+                    (charges[:, None] * charges[None, :]) / (r_bohr + 1e-10)
+                ) * pair_mask
                 coulomb_energy_hartree = 0.5 * jnp.sum(pairwise_energy)
                 return coulomb_energy_hartree * HARTREE_TO_EV
             
@@ -1034,7 +1044,8 @@ class JointPhysNetDCMNet(nn.Module):
             coulomb_energies = jnp.nan_to_num(coulomb_energies, nan=0.0, posinf=0.0, neginf=0.0)
             
             # Mix energies: E_total = E_physnet + λ * E_coulomb
-            lambda_val = self.coulomb_lambda[0]
+            lambda_val = jnp.clip(self.coulomb_lambda[0], 0.0, 1.0)
+            lambda_val = jnp.nan_to_num(lambda_val, nan=0.0, posinf=1.0, neginf=0.0)
             energy_reshaped = energy_reshaped + lambda_val * coulomb_energies
             
             # Store for monitoring (mean across batch)
@@ -1541,7 +1552,10 @@ def compute_loss(
         pred = esp_predictions.get(term.source)
         if pred is None:
             raise ValueError(f"Unknown ESP source '{term.source}' in loss config")
-        diff = (pred - batch["esp"]) * esp_mask
+        pred = jnp.nan_to_num(pred, nan=0.0, posinf=0.0, neginf=0.0)
+        target_esp = jnp.nan_to_num(batch["esp"], nan=0.0, posinf=0.0, neginf=0.0)
+        # Use where-mask to avoid propagating NaN from masked-out grid points.
+        diff = jnp.where(esp_mask > 0.5, pred - target_esp, 0.0)
         if term.metric == "l2":
             loss_term = jnp.sum(diff ** 2) / mask_total
         elif term.metric == "mae":
@@ -1656,11 +1670,18 @@ def train_step(
         return total_loss, (output, losses)
 
     (loss, (output, losses)), grads = jax.value_and_grad(loss_fn, has_aux=True)(params)
+    grads = jax.tree_util.tree_map(
+        lambda g: jnp.where(jnp.isfinite(g), g, 0.0),
+        grads,
+    )
 
     if clip_norm is not None:
         grad_norm = optax.global_norm(grads)
+        safe_grad_norm = jnp.maximum(grad_norm, 1e-12)
+        clip_scale = jnp.minimum(clip_norm / safe_grad_norm, 1.0)
+        clip_scale = jnp.where(jnp.isfinite(clip_scale), clip_scale, 0.0)
         grads = jax.tree_util.tree_map(
-            lambda g: g * jnp.minimum(clip_norm / grad_norm, 1.0),
+            lambda g: g * clip_scale,
             grads,
         )
 
