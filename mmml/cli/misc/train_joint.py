@@ -85,6 +85,7 @@ import argparse
 from pathlib import Path
 import numpy as np
 import pickle
+from collections.abc import Mapping
 from typing import Dict, Tuple, Any, Sequence, Optional
 import time
 import json
@@ -3149,19 +3150,33 @@ def train_model(
         print("\n🔄 Merging checkpoint parameters...")
         
         # Deep merge: copy matching parameters from restart_params to params
+        def _is_mapping(x: Any) -> bool:
+            return isinstance(x, Mapping)
+
+        def _to_mutable_mapping(x: Any) -> Dict[str, Any]:
+            if isinstance(x, FrozenDict):
+                return unfreeze(x)
+            if isinstance(x, dict):
+                return x
+            return dict(x)
+
         def merge_params(new_tree, old_tree, path=""):
-            if isinstance(new_tree, dict):
+            if _is_mapping(new_tree):
+                if not _is_mapping(old_tree):
+                    return new_tree
+                new_map = _to_mutable_mapping(new_tree)
+                old_map = _to_mutable_mapping(old_tree)
                 merged = {}
-                for key in new_tree:
+                for key in new_map:
                     new_path = f"{path}/{key}" if path else key
-                    if key in old_tree:
-                        merged[key] = merge_params(new_tree[key], old_tree[key], new_path)
+                    if key in old_map:
+                        merged[key] = merge_params(new_map[key], old_map[key], new_path)
                     else:
                         print(f"  ⚠️  New parameter (initialized randomly): {new_path}")
-                        merged[key] = new_tree[key]
+                        merged[key] = new_map[key]
                 # Report old parameters not in new model
-                for key in old_tree:
-                    if key not in new_tree:
+                for key in old_map:
+                    if key not in new_map:
                         new_path = f"{path}/{key}" if path else key
                         print(f"  ⚠️  Dropped old parameter: {new_path}")
                 return merged
@@ -3174,8 +3189,42 @@ def train_model(
                         print(f"  ⚠️  Shape mismatch at {path}: old={old_tree.shape}, new={new_tree.shape} (using new)")
                         return new_tree
                 return old_tree
-        
+
         params = merge_params(params, restart_params)
+
+        # Backward-compatible fallback: if coulomb_lambda exists anywhere in the
+        # restart tree but was not aligned by structural merge, recover it.
+        # This prevents silent random re-init when older checkpoints used a
+        # different nesting layout.
+        def find_key_recursive(tree: Any, target: str) -> Optional[Any]:
+            if _is_mapping(tree):
+                tree_map = _to_mutable_mapping(tree)
+                if target in tree_map:
+                    return tree_map[target]
+                for value in tree_map.values():
+                    found = find_key_recursive(value, target)
+                    if found is not None:
+                        return found
+            return None
+
+        try:
+            has_mix_lambda = (
+                _is_mapping(params)
+                and "params" in params
+                and _is_mapping(params["params"])
+                and "coulomb_lambda" in params["params"]
+            )
+        except Exception:
+            has_mix_lambda = False
+
+        if has_mix_lambda:
+            current_lambda = params["params"]["coulomb_lambda"]
+            if jnp.allclose(jnp.asarray(current_lambda), 0.1):
+                recovered_lambda = find_key_recursive(restart_params, "coulomb_lambda")
+                if recovered_lambda is not None:
+                    params["params"]["coulomb_lambda"] = recovered_lambda
+                    print("  ✅ Recovered coulomb_lambda from restart checkpoint tree")
+
         print(f"✅ Merged checkpoint with {sum(x.size for x in jax.tree_util.tree_leaves(params)):,} parameters")
     else:
         print(f"✅ Model initialized with {sum(x.size for x in jax.tree_util.tree_leaves(params)):,} parameters")
