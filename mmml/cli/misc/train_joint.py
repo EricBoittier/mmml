@@ -788,6 +788,8 @@ class JointPhysNetNonEquivariant(nn.Module):
         
         # 4. Compute energies and mixing (same as DCMNet version)
         energy_reshaped = physnet_output["energy"].reshape(batch_size)
+        forces_reshaped = physnet_output["forces"].reshape(-1, 3)
+        forces_reshaped = physnet_output["forces"].reshape(-1, 3)
         natoms = charges_squeezed.shape[0] // batch_size
         n_dcm = mono_dist.shape[1]
         
@@ -807,23 +809,32 @@ class JointPhysNetNonEquivariant(nn.Module):
             
             def compute_coulomb_single(charges, positions):
                 diff = positions[:, None, :] - positions[None, :, :]
-                distances = jnp.linalg.norm(diff, axis=-1)
+                distances_bohr = jnp.linalg.norm(diff, axis=-1) * ANGSTROM_TO_BOHR
                 n_charges = charges.shape[0]
                 # Softened Coulomb denominator avoids singular energy/gradients when
                 # two distributed charges overlap during early training.
-                r_bohr = jnp.maximum(distances * ANGSTROM_TO_BOHR, 0.05)
+                r_bohr = jnp.maximum(distances_bohr, 0.05)
                 pair_mask = 1.0 - jnp.eye(n_charges, dtype=charges.dtype)
-                pairwise_energy = (
-                    (charges[:, None] * charges[None, :]) / (r_bohr + 1e-10)
-                ) * pair_mask
+                qq = (charges[:, None] * charges[None, :]) * pair_mask
+                pairwise_energy = qq / (r_bohr + 1e-10)
                 coulomb_energy_hartree = 0.5 * jnp.sum(pairwise_energy)
-                return coulomb_energy_hartree * HARTREE_TO_EV
+                diff_bohr = diff * ANGSTROM_TO_BOHR
+                inv_r3 = 1.0 / (r_bohr ** 3 + 1e-12)
+                force_bohr = jnp.sum(qq[:, :, None] * diff_bohr * inv_r3[:, :, None], axis=1)
+                force_ev_per_ang = force_bohr * HARTREE_TO_EV * ANGSTROM_TO_BOHR
+                return coulomb_energy_hartree * HARTREE_TO_EV, force_ev_per_ang
             
-            coulomb_energies = jax.vmap(compute_coulomb_single)(charges_reshaped, positions_reshaped)
+            coulomb_energies, coulomb_forces_dist = jax.vmap(compute_coulomb_single)(
+                charges_reshaped, positions_reshaped
+            )
             coulomb_energies = jnp.nan_to_num(coulomb_energies, nan=0.0, posinf=0.0, neginf=0.0)
+            coulomb_forces_dist = jnp.nan_to_num(coulomb_forces_dist, nan=0.0, posinf=0.0, neginf=0.0)
             lambda_val = jnp.clip(self.coulomb_lambda[0], 0.0, 1.0)
             lambda_val = jnp.nan_to_num(lambda_val, nan=0.0, posinf=1.0, neginf=0.0)
             energy_reshaped = energy_reshaped + lambda_val * coulomb_energies
+            coulomb_forces_atoms = coulomb_forces_dist.reshape(batch_size, natoms, n_dcm, 3).sum(axis=2)
+            coulomb_forces_flat = coulomb_forces_atoms.reshape(-1, 3) * atom_mask[:, None]
+            forces_reshaped = forces_reshaped + lambda_val * coulomb_forces_flat
             coulomb_energy_out = jnp.mean(coulomb_energies)
             lambda_out = lambda_val
         else:
@@ -856,7 +867,6 @@ class JointPhysNetNonEquivariant(nn.Module):
             + (1.0 - lambda_dipole[:, None]) * dipoles_physnet
         )
         
-        forces_reshaped = physnet_output["forces"].reshape(-1, 3)
         dipoles_reshaped = physnet_output["dipoles"].reshape(batch_size, 3)
         
         return {
@@ -1028,26 +1038,42 @@ class JointPhysNetDCMNet(nn.Module):
             def compute_coulomb_single(charges, positions):
                 """Compute Coulomb energy for a single molecule."""
                 diff = positions[:, None, :] - positions[None, :, :]  # (N, N, 3)
-                distances = jnp.linalg.norm(diff, axis=-1)  # (N, N)
+                distances_bohr = jnp.linalg.norm(diff, axis=-1) * ANGSTROM_TO_BOHR  # (N, N)
                 n_charges = charges.shape[0]
                 # Softened Coulomb denominator avoids singular energy/gradients when
                 # two distributed charges overlap during early training.
-                r_bohr = jnp.maximum(distances * ANGSTROM_TO_BOHR, 0.5)
+                r_bohr = jnp.maximum(distances_bohr, 0.5)
                 pair_mask = 1.0 - jnp.eye(n_charges, dtype=charges.dtype)
-                pairwise_energy = (
-                    (charges[:, None] * charges[None, :]) / (r_bohr + 1e-10)
-                ) * pair_mask
+                qq = (charges[:, None] * charges[None, :]) * pair_mask
+                pairwise_energy = qq / (r_bohr + 1e-10)
                 coulomb_energy_hartree = 0.5 * jnp.sum(pairwise_energy)
-                return coulomb_energy_hartree * HARTREE_TO_EV
+                
+                # Coulomb force on distributed charges (in eV/Angstrom).
+                diff_bohr = diff * ANGSTROM_TO_BOHR
+                inv_r3 = 1.0 / (r_bohr ** 3 + 1e-12)
+                force_bohr = jnp.sum(
+                    qq[:, :, None] * diff_bohr * inv_r3[:, :, None],
+                    axis=1,
+                )
+                force_ev_per_ang = force_bohr * HARTREE_TO_EV * ANGSTROM_TO_BOHR
+                return coulomb_energy_hartree * HARTREE_TO_EV, force_ev_per_ang
             
             # Vectorize over batch dimension
-            coulomb_energies = jax.vmap(compute_coulomb_single)(charges_reshaped, positions_reshaped)  # (batch_size,)
+            coulomb_energies, coulomb_forces_dist = jax.vmap(compute_coulomb_single)(
+                charges_reshaped, positions_reshaped
+            )  # (batch_size,), (batch_size, natoms*n_dcm, 3)
             coulomb_energies = jnp.nan_to_num(coulomb_energies, nan=0.0, posinf=0.0, neginf=0.0)
+            coulomb_forces_dist = jnp.nan_to_num(coulomb_forces_dist, nan=0.0, posinf=0.0, neginf=0.0)
             
             # Mix energies: E_total = E_physnet + λ * E_coulomb
             lambda_val = jnp.clip(self.coulomb_lambda[0], 0.0, 1.0)
             lambda_val = jnp.nan_to_num(lambda_val, nan=0.0, posinf=1.0, neginf=0.0)
             energy_reshaped = energy_reshaped + lambda_val * coulomb_energies
+            
+            # Sum distributed-charge forces back to per-atom forces.
+            coulomb_forces_atoms = coulomb_forces_dist.reshape(batch_size, natoms, n_dcm, 3).sum(axis=2)
+            coulomb_forces_flat = coulomb_forces_atoms.reshape(-1, 3) * atom_mask[:, None]
+            forces_reshaped = forces_reshaped + lambda_val * coulomb_forces_flat
             
             # Store for monitoring (mean across batch)
             coulomb_energy_out = jnp.mean(coulomb_energies)
@@ -1083,7 +1109,6 @@ class JointPhysNetDCMNet(nn.Module):
         # Reshape PhysNet outputs to proper shapes
         # PhysNet forces shape is (batch_size*natoms, 1, 1, 3) -> reshape to (batch_size*natoms, 3)
         # PhysNet dipoles shape is (batch_size, 1, 1, 3) -> reshape to (batch_size, 3)
-        forces_reshaped = physnet_output["forces"].reshape(-1, 3)
         dipoles_reshaped = physnet_output["dipoles"].reshape(batch_size, 3)
         
         return {
