@@ -811,7 +811,7 @@ class JointPhysNetNonEquivariant(nn.Module):
                 n_charges = charges.shape[0]
                 # Softened Coulomb denominator avoids singular energy/gradients when
                 # two distributed charges overlap during early training.
-                r_bohr = jnp.maximum(distances * ANGSTROM_TO_BOHR, 0.5)
+                r_bohr = jnp.maximum(distances * ANGSTROM_TO_BOHR, 0.05)
                 pair_mask = 1.0 - jnp.eye(n_charges, dtype=charges.dtype)
                 pairwise_energy = (
                     (charges[:, None] * charges[None, :]) / (r_bohr + 1e-10)
