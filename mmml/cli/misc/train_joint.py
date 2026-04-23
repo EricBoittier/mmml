@@ -3750,6 +3750,8 @@ def main():
                        help='Optional JSON or YAML file defining dipole/ESP loss terms (overrides individual loss source flags)')
     parser.add_argument('--mix-coulomb-energy', action='store_true', default=False,
                        help='Mix PhysNet energy with DCMNet Coulomb energy via learnable lambda')
+    parser.add_argument('--disable-physnet-point-coulomb', action='store_true', default=False,
+                       help='Disable PhysNet point-charge electrostatics term while still predicting charges')
     
     # General options
     parser.add_argument('--natoms', type=int, default=None,
@@ -3781,7 +3783,6 @@ def main():
                        help='Verbose output')
     
     args = parser.parse_args()
-    
     # Configure loss terms
     dipole_w = args.dipole_weight
     esp_w = args.esp_weight
@@ -3973,6 +3974,7 @@ def main():
         'use_energy_bias': True,
         'debug': False,
         'efa': False,
+        'include_electrostatics': not args.disable_physnet_point_coulomb,
     }
     # Override with checkpoint config when loading pre-trained PhysNet (ensures param shapes match)
     if physnet_ckpt_config:
@@ -4054,6 +4056,7 @@ def main():
     
     print("\nLoss configuration:")
     print(f"  Energy weight: {args.energy_weight} (mix Coulomb: {args.mix_coulomb_energy})")
+    print(f"  PhysNet point-charge Coulomb: {'disabled' if args.disable_physnet_point_coulomb else 'enabled'}")
     print(f"  Forces weight: {args.forces_weight}")
     print(f"  Monopole weight: {args.mono_weight}")
     print("  Dipole terms:")
