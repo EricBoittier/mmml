@@ -8,6 +8,7 @@ import jax.numpy as jnp
 from ase.calculators.calculator import Calculator, all_changes
 from pathlib import Path
 from typing import Any, Optional
+from collections.abc import Mapping
 import importlib.util
 import pickle
 import sys
@@ -364,10 +365,49 @@ def create_calculator_from_checkpoint(
     with checkpoint_path.open("rb") as f:
         checkpoint_data = pickle.load(f)
 
-    if isinstance(checkpoint_data, dict) and "params" in checkpoint_data:
-        params = checkpoint_data["params"]
-    else:
-        params = checkpoint_data
+    def _is_mapping(x: Any) -> bool:
+        return isinstance(x, Mapping)
+
+    def _to_dict(x: Any) -> dict[str, Any]:
+        if isinstance(x, dict):
+            return x
+        if _is_mapping(x):
+            return dict(x)
+        raise TypeError(f"Expected mapping, got {type(x)}")
+
+    def _extract_params_tree(tree: Any) -> Any:
+        # Common training checkpoint format: {"params": ...}
+        if _is_mapping(tree) and "params" in tree:
+            tree = tree["params"]
+        # Some checkpoints can be nested as {"params": {"params": ...}}
+        while _is_mapping(tree) and "params" in tree and len(_to_dict(tree)) == 1:
+            tree = tree["params"]
+        # model.apply expects variables tree with top-level "params"
+        if _is_mapping(tree):
+            tree_dict = _to_dict(tree)
+            model_param_roots = {
+                "physnet",
+                "dcmnet",
+                "noneq_model",
+                "charge_mixer",
+                "coulomb_lambda",
+            }
+            if "params" not in tree_dict and any(k in tree_dict for k in model_param_roots):
+                return {"params": tree}
+        return tree
+
+    def _find_key_recursive(tree: Any, key: str) -> Optional[Any]:
+        if _is_mapping(tree):
+            tree_dict = _to_dict(tree)
+            if key in tree_dict:
+                return tree_dict[key]
+            for value in tree_dict.values():
+                found = _find_key_recursive(value, key)
+                if found is not None:
+                    return found
+        return None
+
+    params = _extract_params_tree(checkpoint_data)
 
     config_path = checkpoint_path.parent / "model_config.pkl"
     if not config_path.exists():
@@ -394,10 +434,17 @@ def create_calculator_from_checkpoint(
             mix_coulomb_energy=mix_coulomb_energy,
         )
 
-    if isinstance(params, dict) and "params" not in params and (
-        "physnet" in params or "noneq_model" in params
-    ):
-        params = {"params": params}
+    # Backward-compatible fixup: recover learned coulomb_lambda if it exists in
+    # checkpoint_data but not in the normalized params location.
+    if mix_coulomb_energy and _is_mapping(params):
+        params_dict = _to_dict(params)
+        if "params" in params_dict and _is_mapping(params_dict["params"]):
+            inner = _to_dict(params_dict["params"])
+            if "coulomb_lambda" not in inner:
+                recovered_lambda = _find_key_recursive(checkpoint_data, "coulomb_lambda")
+                if recovered_lambda is not None:
+                    inner["coulomb_lambda"] = recovered_lambda
+                    params = {"params": inner}
 
     if cutoff is None:
         cutoff = physnet_config.get("cutoff", 6.0)
