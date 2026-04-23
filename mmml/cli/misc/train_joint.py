@@ -796,7 +796,10 @@ class JointPhysNetNonEquivariant(nn.Module):
         dipo_batched = dipo_dist.reshape(batch_size, natoms, n_dcm, 3)
         
         if self.mix_coulomb_energy:
-            charges_reshaped = mono_dist.reshape(batch_size, natoms * n_dcm)
+            # Mask padded atoms before Coulomb mixing; otherwise padded entries can
+            # contribute arbitrary charges and destabilize energy.
+            mono_masked_coulomb = mono_batched * atom_mask_batched[..., None]
+            charges_reshaped = mono_masked_coulomb.reshape(batch_size, natoms * n_dcm)
             positions_reshaped = dipo_dist.reshape(batch_size, natoms * n_dcm, 3)
             
             def compute_coulomb_single(charges, positions):
@@ -809,6 +812,7 @@ class JointPhysNetNonEquivariant(nn.Module):
                 return coulomb_energy_hartree * HARTREE_TO_EV
             
             coulomb_energies = jax.vmap(compute_coulomb_single)(charges_reshaped, positions_reshaped)
+            coulomb_energies = jnp.nan_to_num(coulomb_energies, nan=0.0, posinf=0.0, neginf=0.0)
             lambda_val = self.coulomb_lambda[0]
             energy_reshaped = energy_reshaped + lambda_val * coulomb_energies
             coulomb_energy_out = jnp.mean(coulomb_energies)
@@ -1005,7 +1009,10 @@ class JointPhysNetDCMNet(nn.Module):
             # Get all charge positions and values
             # mono_dist: (batch*natoms, n_dcm) - charge values
             # dipo_dist: (batch*natoms, n_dcm, 3) - charge positions in Angstrom
-            charges_reshaped = mono_dist.reshape(batch_size, natoms * n_dcm)  # (batch, natoms*n_dcm)
+            # Mask padded atoms before Coulomb mixing; otherwise padded entries can
+            # contribute arbitrary charges and destabilize energy.
+            mono_masked_coulomb = mono_batched * atom_mask_batched[..., None]
+            charges_reshaped = mono_masked_coulomb.reshape(batch_size, natoms * n_dcm)  # (batch, natoms*n_dcm)
             positions_reshaped = dipo_dist.reshape(batch_size, natoms * n_dcm, 3)  # (batch, natoms*n_dcm, 3)
             
             # Compute Coulomb energy per molecule using vmap
@@ -1024,6 +1031,7 @@ class JointPhysNetDCMNet(nn.Module):
             
             # Vectorize over batch dimension
             coulomb_energies = jax.vmap(compute_coulomb_single)(charges_reshaped, positions_reshaped)  # (batch_size,)
+            coulomb_energies = jnp.nan_to_num(coulomb_energies, nan=0.0, posinf=0.0, neginf=0.0)
             
             # Mix energies: E_total = E_physnet + λ * E_coulomb
             lambda_val = self.coulomb_lambda[0]
