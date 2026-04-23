@@ -65,6 +65,7 @@ class EF(nn.Module):
     efa: bool = False
     use_energy_bias: bool = False
     use_pbc: bool = False
+    include_electrostatics: bool = True
 
     def setup(self) -> None:
         """
@@ -118,6 +119,7 @@ class EF(nn.Module):
             "efa": self.efa,
             "use_energy_bias": self.use_energy_bias,
             "use_pbc": self.use_pbc,
+            "include_electrostatics": self.include_electrostatics,
         }
 
     def energy(
@@ -497,18 +499,22 @@ class EF(nn.Module):
             atomic_charges = self._calculate_atomic_charges(
                 x, atomic_numbers, atom_mask
             )
-            electrostatics, batch_electrostatics = self._calculate_electrostatics(
-                atomic_charges,
-                r,
-                off_dist,
-                eshift,
-                dst_idx,
-                src_idx,
-                atom_mask,
-                batch_mask,
-                batch_segments,
-                batch_size,
-            )
+            if self.include_electrostatics:
+                electrostatics, batch_electrostatics = self._calculate_electrostatics(
+                    atomic_charges,
+                    r,
+                    off_dist,
+                    eshift,
+                    dst_idx,
+                    src_idx,
+                    atom_mask,
+                    batch_mask,
+                    batch_segments,
+                    batch_size,
+                )
+            else:
+                electrostatics = jnp.zeros_like(atomic_energies)
+                batch_electrostatics = jnp.zeros((batch_size, 1, 1, 1), dtype=atomic_energies.dtype)
         else:
             atomic_charges = None
             electrostatics = 0.0

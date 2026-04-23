@@ -324,6 +324,7 @@ def create_calculator_from_checkpoint(
     is_noneq: bool = False,
     cutoff: Optional[float] = None,
     use_dcmnet_dipole: bool = False,
+    disable_physnet_point_coulomb: bool = False,
 ) -> SimpleInferenceCalculator:
     """Load model parameters and return a ready-to-use calculator."""
 
@@ -416,7 +417,9 @@ def create_calculator_from_checkpoint(
     with config_path.open("rb") as f:
         saved_config = pickle.load(f)
 
-    physnet_config = saved_config["physnet_config"]
+    physnet_config = dict(saved_config["physnet_config"])
+    if disable_physnet_point_coulomb:
+        physnet_config["include_electrostatics"] = False
     mix_coulomb_energy = saved_config.get("mix_coulomb_energy", False)
 
     if is_noneq:
