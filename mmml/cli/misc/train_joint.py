@@ -3673,6 +3673,8 @@ def main():
                        help='Enable PhysNet ZBL short-range repulsion')
     parser.add_argument('--no-zbl', dest='zbl', action='store_false',
                        help='Disable PhysNet ZBL short-range repulsion')
+    parser.add_argument('--physnet-max-degree', type=int, default=0,
+                       help='PhysNet: maximum spherical harmonic degree')
     parser.set_defaults(zbl=True)
     
     # DCMNet hyperparameters
@@ -3961,7 +3963,7 @@ def main():
     
     physnet_config = {
         'features': args.physnet_features,
-        'max_degree': 0,  # PhysNet typically uses degree 0
+        'max_degree': args.physnet_max_degree,  # PhysNet typically uses degree 0
         'num_iterations': args.physnet_iterations,
         'num_basis_functions': args.physnet_basis,
         'cutoff': args.physnet_cutoff,
@@ -3978,10 +3980,21 @@ def main():
     }
     # Override with checkpoint config when loading pre-trained PhysNet (ensures param shapes match)
     if physnet_ckpt_config:
+        requested_physnet_max_degree = physnet_config.get('max_degree')
         for key in ('features', 'max_degree', 'num_iterations', 'num_basis_functions',
                     'cutoff', 'max_atomic_number', 'n_res', 'use_energy_bias'):
             if key in physnet_ckpt_config:
                 physnet_config[key] = physnet_ckpt_config[key]
+        if (
+            requested_physnet_max_degree is not None
+            and 'max_degree' in physnet_ckpt_config
+            and requested_physnet_max_degree != physnet_ckpt_config['max_degree']
+        ):
+            print(
+                f"  ⚠️  Overriding CLI --physnet-max-degree={requested_physnet_max_degree} "
+                f"with checkpoint max_degree={physnet_ckpt_config['max_degree']} "
+                "(for parameter-shape compatibility)."
+            )
         physnet_config['natoms'] = args.natoms  # Keep data padding
         physnet_config['charges'] = True  # Required for joint model
         physnet_config['zbl'] = args.zbl  # Keep explicit CLI choice
