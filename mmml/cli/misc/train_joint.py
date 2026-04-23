@@ -3133,6 +3133,7 @@ def train_model(
     mix_warmup_start: int = 1,
     mix_warmup_end: int = 1,
     mix_weight_max: float = 1.0,
+    mix_schedule: str = "linear",
 ) -> Any:
     """
     Main training loop.
@@ -3143,7 +3144,7 @@ def train_model(
         Final model parameters
     """
     def get_mix_weight(epoch_idx: int) -> float:
-        """Linear schedule for Coulomb mixing weight."""
+        """Scheduled ramp for Coulomb mixing weight."""
         max_w = float(np.clip(mix_weight_max, 0.0, 1.0))
         if epoch_idx < mix_warmup_start:
             return 0.0
@@ -3152,7 +3153,13 @@ def train_model(
         if epoch_idx >= mix_warmup_end:
             return max_w
         alpha = (epoch_idx - mix_warmup_start) / float(mix_warmup_end - mix_warmup_start)
-        return max_w * float(np.clip(alpha, 0.0, 1.0))
+        alpha = float(np.clip(alpha, 0.0, 1.0))
+        if mix_schedule == "cosine":
+            # Half-cosine warmup from 0 -> 1 with zero slope at endpoints.
+            ramp = 0.5 * (1.0 - np.cos(np.pi * alpha))
+        else:
+            ramp = alpha
+        return max_w * ramp
 
     # Pre-compute edge lists for all data (huge speedup!)
     print("\nPre-computing edge lists...")
@@ -3775,6 +3782,8 @@ def main():
                        help='Epoch to finish ramping Coulomb mix weight')
     parser.add_argument('--mix-weight-max', type=float, default=1.0,
                        help='Maximum effective Coulomb mix weight (0-1)')
+    parser.add_argument('--mix-schedule', type=str, default='linear', choices=['linear', 'cosine'],
+                       help='Ramp shape for Coulomb mix warmup')
     
     # General options
     parser.add_argument('--natoms', type=int, default=None,
@@ -4100,7 +4109,7 @@ def main():
     )
     print(
         f"  Mix schedule: start={args.mix_warmup_start}, "
-        f"end={args.mix_warmup_end}, max={args.mix_weight_max}"
+        f"end={args.mix_warmup_end}, max={args.mix_weight_max}, mode={args.mix_schedule}"
     )
     print(f"  PhysNet point-charge Coulomb: {'disabled' if args.disable_physnet_point_coulomb else 'enabled'}")
     print(f"  Forces weight: {args.forces_weight}")
@@ -4203,6 +4212,7 @@ def main():
             mix_warmup_start=args.mix_warmup_start,
             mix_warmup_end=args.mix_warmup_end,
             mix_weight_max=args.mix_weight_max,
+            mix_schedule=args.mix_schedule,
         )
         
         print(f"\n{'='*70}")
