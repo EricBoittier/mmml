@@ -789,7 +789,6 @@ class JointPhysNetNonEquivariant(nn.Module):
         # 4. Compute energies and mixing (same as DCMNet version)
         energy_reshaped = physnet_output["energy"].reshape(batch_size)
         forces_reshaped = physnet_output["forces"].reshape(-1, 3)
-        forces_reshaped = physnet_output["forces"].reshape(-1, 3)
         natoms = charges_squeezed.shape[0] // batch_size
         n_dcm = mono_dist.shape[1]
         
@@ -1011,6 +1010,7 @@ class JointPhysNetDCMNet(nn.Module):
         
         # 4. Optionally compute and mix Coulomb energy from DCMNet charges
         energy_reshaped = physnet_output["energy"].reshape(batch_size)
+        forces_reshaped = physnet_output["forces"].reshape(-1, 3)
         natoms = charges_squeezed.shape[0] // batch_size
         n_dcm = mono_dist.shape[1]
 
