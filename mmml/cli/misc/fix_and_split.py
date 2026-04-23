@@ -592,6 +592,31 @@ def _normalize_for_concat(arr: np.ndarray, n_samples: int, key: str) -> np.ndarr
     return arr
 
 
+def _normalize_z_for_concat(arr: np.ndarray, n_samples: int, n_atoms: int) -> np.ndarray:
+    """
+    Normalize Z for concatenation to shape (n_samples, n_atoms) when needed.
+
+    Supports common encodings:
+    - (n_atoms,) shared composition for all samples -> broadcast
+    - (n_samples, n_atoms) already aligned -> pass through
+    - scalar/0-d -> broadcast to (n_samples, n_atoms)
+    """
+    arr = np.asarray(arr)
+    if arr.ndim == 0:
+        return np.full((n_samples, n_atoms), int(arr.flat[0]), dtype=np.int32)
+    if arr.ndim == 1:
+        if arr.shape[0] == n_atoms:
+            return np.broadcast_to(arr.reshape(1, n_atoms), (n_samples, n_atoms))
+        if arr.shape[0] == n_samples and n_atoms == 1:
+            return arr.reshape(n_samples, 1)
+    if arr.ndim == 2 and arr.shape[0] == n_samples:
+        return arr
+    raise ValueError(
+        f"Cannot merge Z: expected scalar, (n_atoms,), or (n_samples, n_atoms). "
+        f"Got shape {arr.shape} with n_samples={n_samples}, n_atoms={n_atoms}"
+    )
+
+
 def _pad_concat_axis1(arr: np.ndarray, target_size: int, key: str, pad_value: float) -> np.ndarray:
     """
     Pad axis=1 to ``target_size`` for variable-length ESP/grid arrays before concat.
@@ -629,6 +654,21 @@ def _load_and_merge_efd(efd_files: Union[Path, List[Path]]) -> Dict:
     if grid_key:
         concat_keys.append(grid_key)
     variable_grid_like_keys = {'esp', 'esp_grid', 'vdw_surface', 'vdw_grid'}
+    variable_atom_like_keys = {'R', 'F', 'Z'}
+    # For EFD merges we expect the same atom padding across files for R/F/Z.
+    # Mixed atom-axis sizes usually means mixed systems were provided accidentally.
+    for k in variable_atom_like_keys:
+        sizes = [
+            np.asarray(p[k]).shape[1]
+            for p in parts
+            if k in p and np.asarray(p[k]).ndim >= 2
+        ]
+        if sizes and len(set(sizes)) > 1:
+            raise ValueError(
+                f"Inconsistent atom-axis size for key '{k}' across EFD files: {sorted(set(sizes))}. "
+                "All merged EFD files must have the same padded natoms. "
+                "Split by composition/system first, or re-pad consistently before merging."
+            )
     axis1_targets = {}
     for k in variable_grid_like_keys:
         sizes = [
@@ -644,20 +684,25 @@ def _load_and_merge_efd(efd_files: Union[Path, List[Path]]) -> Dict:
         all_keys.update(p.keys())
     merged = {}
     for k in all_keys:
-        if k == 'Z':
-            merged[k] = np.asarray(parts[0][k])
-        elif k in concat_keys and all(k in p for p in parts):
+        if k in concat_keys and all(k in p for p in parts):
             # Normalize shapes: pyscf-evaluate may have N as scalar (0-d), fix-and-split has (n,)
             to_concat = []
             for p in parts:
                 arr = np.asarray(p[k])
                 n_samples = p['R'].shape[0]  # sample count from R
+                n_atoms = p['R'].shape[1] if np.asarray(p['R']).ndim >= 2 else 1
                 if arr.ndim == 0 or (arr.ndim == 1 and arr.shape[0] != n_samples and k == 'N'):
                     arr = _normalize_for_concat(arr, n_samples, k)
                 elif k in ('Ef', 'efield_Ef', 'efield_scf_Ef') and arr.shape[0] != n_samples:
                     arr = _normalize_for_concat(arr, n_samples, k)
+                elif k == 'Z':
+                    arr = _normalize_z_for_concat(arr, n_samples, n_atoms)
                 if k in axis1_targets and arr.ndim >= 2:
-                    pad_value = 0.0 if k == 'esp' else 1e6
+                    # ESP-like arrays use 0/1e6 semantics.
+                    if k == 'esp':
+                        pad_value = 0.0
+                    else:
+                        pad_value = 1e6
                     arr = _pad_concat_axis1(arr, axis1_targets[k], k, pad_value=pad_value)
                 to_concat.append(arr)
             merged[k] = np.concatenate(to_concat, axis=0)
