@@ -729,14 +729,7 @@ class JointPhysNetNonEquivariant(nn.Module):
         """Initialize PhysNet and non-equivariant charge model."""
         self.physnet = EF(**self.physnet_config)
         self.noneq_model = NonEquivariantChargeModel(**self.noneq_config)
-        
-        if self.mix_coulomb_energy:
-            self.coulomb_lambda = self.param(
-                "coulomb_lambda",
-                lambda rng, shape: jnp.ones(shape) * 0.1,
-                (1,)
-            )
-        
+
         mixer_cfg = self.mixer_config or {}
         self.charge_mixer = ChargeOrientationMixer(**mixer_cfg)
     
@@ -799,7 +792,8 @@ class JointPhysNetNonEquivariant(nn.Module):
         mono_batched = mono_dist.reshape(batch_size, natoms, n_dcm)
         dipo_batched = dipo_dist.reshape(batch_size, natoms, n_dcm, 3)
         
-        if self.mix_coulomb_energy:
+        do_coulomb_mix = self.mix_coulomb_energy and (not self.physnet_config.get("include_electrostatics", True))
+        if do_coulomb_mix:
             # Mask padded atoms before Coulomb mixing; otherwise padded entries can
             # contribute arbitrary charges and destabilize energy.
             mono_masked_coulomb = mono_batched * atom_mask_batched[..., None]
@@ -828,8 +822,7 @@ class JointPhysNetNonEquivariant(nn.Module):
             )
             coulomb_energies = jnp.nan_to_num(coulomb_energies, nan=0.0, posinf=0.0, neginf=0.0)
             coulomb_forces_dist = jnp.nan_to_num(coulomb_forces_dist, nan=0.0, posinf=0.0, neginf=0.0)
-            lambda_val = jnp.clip(self.coulomb_lambda[0], 0.0, 1.0)
-            lambda_val = jnp.nan_to_num(lambda_val, nan=0.0, posinf=1.0, neginf=0.0)
+            lambda_val = jnp.array(1.0, dtype=energy_reshaped.dtype)
             energy_reshaped = energy_reshaped + lambda_val * coulomb_energies
             coulomb_forces_atoms = coulomb_forces_dist.reshape(batch_size, natoms, n_dcm, 3).sum(axis=2)
             coulomb_forces_flat = coulomb_forces_atoms.reshape(-1, 3) * atom_mask[:, None]
@@ -917,14 +910,6 @@ class JointPhysNetDCMNet(nn.Module):
         # PhysNet must have charges=True to predict atomic charges
         self.physnet = EF(**self.physnet_config)
         self.dcmnet = MessagePassingModel(**self.dcmnet_config)
-        
-        # Learnable mixing parameter for Coulomb energy
-        if self.mix_coulomb_energy:
-            self.coulomb_lambda = self.param(
-                "coulomb_lambda",
-                lambda rng, shape: jnp.ones(shape) * 0.1,  # Initialize to 0.1
-                (1,)
-            )
 
         mixer_cfg = self.mixer_config or {}
         self.charge_mixer = ChargeOrientationMixer(**mixer_cfg)
@@ -1021,7 +1006,8 @@ class JointPhysNetDCMNet(nn.Module):
         mono_batched = mono_dist.reshape(batch_size, natoms, n_dcm)
         dipo_batched = dipo_dist.reshape(batch_size, natoms, n_dcm, 3)
         
-        if self.mix_coulomb_energy:
+        do_coulomb_mix = self.mix_coulomb_energy and (not self.physnet_config.get("include_electrostatics", True))
+        if do_coulomb_mix:
             # Compute Coulomb energy from DCMNet distributed charges
             # Note: dipo_dist contains the POSITIONS of distributed charges, not dipole moments!
             # E_coulomb = (1/2) Σᵢⱼ qᵢqⱼ/rᵢⱼ (pairwise interactions)
@@ -1066,8 +1052,7 @@ class JointPhysNetDCMNet(nn.Module):
             coulomb_forces_dist = jnp.nan_to_num(coulomb_forces_dist, nan=0.0, posinf=0.0, neginf=0.0)
             
             # Mix energies: E_total = E_physnet + λ * E_coulomb
-            lambda_val = jnp.clip(self.coulomb_lambda[0], 0.0, 1.0)
-            lambda_val = jnp.nan_to_num(lambda_val, nan=0.0, posinf=1.0, neginf=0.0)
+            lambda_val = jnp.array(1.0, dtype=energy_reshaped.dtype)
             energy_reshaped = energy_reshaped + lambda_val * coulomb_energies
             
             # Sum distributed-charge forces back to per-atom forces.
@@ -4003,6 +3988,11 @@ def main():
     for k, v in physnet_config.items():
         print(f"  {k}: {v}")
     
+    effective_mix_coulomb = args.mix_coulomb_energy and args.disable_physnet_point_coulomb
+    if args.mix_coulomb_energy and not args.disable_physnet_point_coulomb:
+        print("\n⚠️  Ignoring --mix-coulomb-energy because PhysNet point-charge Coulomb is enabled.")
+        print("   Use --disable-physnet-point-coulomb together with --mix-coulomb-energy to activate mixing.")
+
     if args.use_noneq_model:
         # Use non-equivariant charge model
         noneq_config = {
@@ -4022,7 +4012,7 @@ def main():
         model = JointPhysNetNonEquivariant(
             physnet_config=physnet_config,
             noneq_config=noneq_config,
-            mix_coulomb_energy=args.mix_coulomb_energy,
+            mix_coulomb_energy=effective_mix_coulomb,
         )
         
         print("\n✅ Joint PhysNet + Non-Equivariant model created")
@@ -4046,7 +4036,7 @@ def main():
         model = JointPhysNetDCMNet(
             physnet_config=physnet_config,
             dcmnet_config=dcmnet_config,
-            mix_coulomb_energy=args.mix_coulomb_energy,
+            mix_coulomb_energy=effective_mix_coulomb,
         )
         
         print("\n✅ Joint PhysNet + DCMNet model created")
@@ -4068,7 +4058,10 @@ def main():
     print(f"  Random seed: {args.seed}")
     
     print("\nLoss configuration:")
-    print(f"  Energy weight: {args.energy_weight} (mix Coulomb: {args.mix_coulomb_energy})")
+    print(
+        f"  Energy weight: {args.energy_weight} "
+        f"(mix Coulomb requested: {args.mix_coulomb_energy}, effective: {effective_mix_coulomb})"
+    )
     print(f"  PhysNet point-charge Coulomb: {'disabled' if args.disable_physnet_point_coulomb else 'enabled'}")
     print(f"  Forces weight: {args.forces_weight}")
     print(f"  Monopole weight: {args.mono_weight}")
