@@ -437,8 +437,8 @@ def create_calculator_from_checkpoint(
             mix_coulomb_energy=mix_coulomb_energy,
         )
 
-    # Backward-compatible fixup: recover learned coulomb_lambda if it exists in
-    # checkpoint_data but not in the normalized params location.
+    # Backward-compatible fixup for checkpoints/model variants that expect
+    # a root-level "coulomb_lambda" parameter when Coulomb mixing is enabled.
     if mix_coulomb_energy and _is_mapping(params):
         params_dict = _to_dict(params)
         if "params" in params_dict and _is_mapping(params_dict["params"]):
@@ -447,7 +447,11 @@ def create_calculator_from_checkpoint(
                 recovered_lambda = _find_key_recursive(checkpoint_data, "coulomb_lambda")
                 if recovered_lambda is not None:
                     inner["coulomb_lambda"] = recovered_lambda
-                    params = {"params": inner}
+                else:
+                    # Safe fallback for fixed-lambda or legacy checkpoints that
+                    # don't serialize this parameter explicitly.
+                    inner["coulomb_lambda"] = jnp.array([1.0], dtype=jnp.float32)
+                params = {"params": inner}
 
     if cutoff is None:
         cutoff = physnet_config.get("cutoff", 6.0)
