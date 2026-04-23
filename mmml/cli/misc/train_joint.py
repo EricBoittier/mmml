@@ -3593,7 +3593,7 @@ def main():
                        help='Non-equivariant model: hidden layer size')
     parser.add_argument('--noneq-layers', type=int, default=3,
                        help='Non-equivariant model: number of MLP layers')
-    parser.add_argument('--noneq-max-displacement', type=float, default=1.0,
+    parser.add_argument('--noneq-max-displacement', type=float, default=0.5,
                        help='Non-equivariant model: maximum displacement distance (Angstroms)')
     
     # Training hyperparameters
