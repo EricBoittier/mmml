@@ -744,6 +744,7 @@ class JointPhysNetNonEquivariant(nn.Module):
         batch_size: int,
         batch_mask: jnp.ndarray,
         atom_mask: jnp.ndarray,
+        mix_weight: float = 1.0,
     ) -> Dict[str, jnp.ndarray]:
         """Forward pass through both models."""
         
@@ -823,12 +824,14 @@ class JointPhysNetNonEquivariant(nn.Module):
             coulomb_energies = jnp.nan_to_num(coulomb_energies, nan=0.0, posinf=0.0, neginf=0.0)
             coulomb_forces_dist = jnp.nan_to_num(coulomb_forces_dist, nan=0.0, posinf=0.0, neginf=0.0)
             lambda_val = jnp.array(1.0, dtype=energy_reshaped.dtype)
-            energy_reshaped = energy_reshaped + lambda_val * coulomb_energies
+            mix_w = jnp.asarray(mix_weight, dtype=energy_reshaped.dtype)
+            mix_w = jnp.clip(mix_w, 0.0, 1.0)
+            energy_reshaped = energy_reshaped + (mix_w * lambda_val) * coulomb_energies
             coulomb_forces_atoms = coulomb_forces_dist.reshape(batch_size, natoms, n_dcm, 3).sum(axis=2)
             coulomb_forces_flat = coulomb_forces_atoms.reshape(-1, 3) * atom_mask[:, None]
-            forces_reshaped = forces_reshaped + lambda_val * coulomb_forces_flat
+            forces_reshaped = forces_reshaped + (mix_w * lambda_val) * coulomb_forces_flat
             coulomb_energy_out = jnp.mean(coulomb_energies)
-            lambda_out = lambda_val
+            lambda_out = mix_w * lambda_val
         else:
             coulomb_energy_out = jnp.array(0.0)
             lambda_out = jnp.array(0.0)
@@ -925,6 +928,7 @@ class JointPhysNetDCMNet(nn.Module):
         batch_size: int,
         batch_mask: jnp.ndarray,
         atom_mask: jnp.ndarray,
+        mix_weight: float = 1.0,
     ) -> Dict[str, jnp.ndarray]:
         """
         Forward pass through both models.
@@ -1053,16 +1057,18 @@ class JointPhysNetDCMNet(nn.Module):
             
             # Mix energies: E_total = E_physnet + λ * E_coulomb
             lambda_val = jnp.array(1.0, dtype=energy_reshaped.dtype)
-            energy_reshaped = energy_reshaped + lambda_val * coulomb_energies
+            mix_w = jnp.asarray(mix_weight, dtype=energy_reshaped.dtype)
+            mix_w = jnp.clip(mix_w, 0.0, 1.0)
+            energy_reshaped = energy_reshaped + (mix_w * lambda_val) * coulomb_energies
             
             # Sum distributed-charge forces back to per-atom forces.
             coulomb_forces_atoms = coulomb_forces_dist.reshape(batch_size, natoms, n_dcm, 3).sum(axis=2)
             coulomb_forces_flat = coulomb_forces_atoms.reshape(-1, 3) * atom_mask[:, None]
-            forces_reshaped = forces_reshaped + lambda_val * coulomb_forces_flat
+            forces_reshaped = forces_reshaped + (mix_w * lambda_val) * coulomb_forces_flat
             
             # Store for monitoring (mean across batch)
             coulomb_energy_out = jnp.mean(coulomb_energies)
-            lambda_out = lambda_val
+            lambda_out = mix_w * lambda_val
         else:
             coulomb_energy_out = jnp.array(0.0)
             lambda_out = jnp.array(0.0)
@@ -1646,6 +1652,7 @@ def train_step(
     n_dcm: int,
     dipole_terms: Sequence[LossTerm],
     esp_terms: Sequence[LossTerm],
+    mix_weight: float = 1.0,
     clip_norm: float = None,
     esp_min_distance: float = 0.0,
     esp_max_value: float = 1e10,
@@ -1663,6 +1670,7 @@ def train_step(
             batch_size=batch_size,
             batch_mask=batch["batch_mask"],
             atom_mask=batch["atom_mask"],
+            mix_weight=mix_weight,
         )
         total_loss, losses = compute_loss(
             output,
@@ -1726,6 +1734,7 @@ def eval_step(
     n_dcm: int,
     dipole_terms: Sequence[LossTerm],
     esp_terms: Sequence[LossTerm],
+    mix_weight: float = 1.0,
     esp_min_distance: float = 0.0,
     esp_max_value: float = 1e10,
 ) -> Tuple[jnp.ndarray, Dict[str, jnp.ndarray], Dict[str, jnp.ndarray]]:
@@ -1741,6 +1750,7 @@ def eval_step(
         batch_size=batch_size,
         batch_mask=batch["batch_mask"],
         atom_mask=batch["atom_mask"],
+        mix_weight=mix_weight,
     )
 
     total_loss, losses = compute_loss(
@@ -3120,6 +3130,9 @@ def train_model(
     start_epoch: int = 1,
     optimizer_name: str = 'adam',
     optimizer_kwargs: Optional[Dict[str, Any]] = None,
+    mix_warmup_start: int = 1,
+    mix_warmup_end: int = 1,
+    mix_weight_max: float = 1.0,
 ) -> Any:
     """
     Main training loop.
@@ -3129,6 +3142,18 @@ def train_model(
     Any
         Final model parameters
     """
+    def get_mix_weight(epoch_idx: int) -> float:
+        """Linear schedule for Coulomb mixing weight."""
+        max_w = float(np.clip(mix_weight_max, 0.0, 1.0))
+        if epoch_idx < mix_warmup_start:
+            return 0.0
+        if mix_warmup_end <= mix_warmup_start:
+            return max_w
+        if epoch_idx >= mix_warmup_end:
+            return max_w
+        alpha = (epoch_idx - mix_warmup_start) / float(mix_warmup_end - mix_warmup_start)
+        return max_w * float(np.clip(alpha, 0.0, 1.0))
+
     # Pre-compute edge lists for all data (huge speedup!)
     print("\nPre-computing edge lists...")
     train_data = precompute_edge_lists(train_data, cutoff=cutoff, verbose=True)
@@ -3295,6 +3320,7 @@ def train_model(
     
     for epoch in range(start_epoch, num_epochs + 1):
         epoch_start = time.time()
+        mix_weight_epoch = get_mix_weight(epoch)
         
         # Shuffle training data
         key, shuffle_key = jax.random.split(key)
@@ -3331,6 +3357,7 @@ def train_model(
                 n_dcm=n_dcm,
                 dipole_terms=dipole_terms,
                 esp_terms=esp_terms,
+                mix_weight=mix_weight_epoch,
                 clip_norm=grad_clip_norm,
                 esp_min_distance=esp_min_distance,
                 esp_max_value=esp_max_value,
@@ -3395,6 +3422,7 @@ def train_model(
                 n_dcm=n_dcm,
                 dipole_terms=dipole_terms,
                 esp_terms=esp_terms,
+                mix_weight=mix_weight_epoch,
                 esp_min_distance=esp_min_distance,
                 esp_max_value=esp_max_value,
             )
@@ -3472,6 +3500,7 @@ def train_model(
         if epoch % print_freq == 0:
             print(f"\nEpoch {epoch}/{num_epochs} ({epoch_time:.1f}s)")
             print(f"  Train Loss: {train_loss_avg['total']:.6f}")
+            print(f"  Mix weight: {mix_weight_epoch:.4f}")
             print(f"    Energy: {train_loss_avg['energy']:.6f}")
             print(f"    Forces: {train_loss_avg['forces']:.6f}")
             print(f"    Dipole: {train_loss_avg['dipole']:.6f}")
@@ -3485,7 +3514,7 @@ def train_model(
             # Print Coulomb mixing info if enabled
             if 'coulomb_energy' in valid_loss_avg and valid_loss_avg.get('coulomb_lambda', 0) != 0:
                 print("  Coulomb Mixing:")
-                print(f"    λ (learned): {valid_loss_avg['coulomb_lambda']:.6f}")
+                print(f"    λ (effective): {valid_loss_avg['coulomb_lambda']:.6f}")
                 print(f"    E_coulomb: {valid_loss_avg['coulomb_energy']:.6f} eV")
             if 'mae_energy' in valid_loss_avg:
                 # Conversion factors
@@ -3547,6 +3576,7 @@ def train_model(
                     n_dcm=n_dcm,
                     dipole_terms=dipole_terms,
                     esp_terms=esp_terms,
+                    mix_weight=mix_weight_epoch,
                     esp_min_distance=esp_min_distance,
                     esp_max_value=esp_max_value,
                 )
@@ -3736,9 +3766,15 @@ def main():
     parser.add_argument('--loss-config', type=Path, default=None,
                        help='Optional JSON or YAML file defining dipole/ESP loss terms (overrides individual loss source flags)')
     parser.add_argument('--mix-coulomb-energy', action='store_true', default=False,
-                       help='Mix PhysNet energy with DCMNet Coulomb energy via learnable lambda')
+                       help='Mix PhysNet energy with DCMNet Coulomb energy (fixed λ=1; optional warmup schedule)')
     parser.add_argument('--disable-physnet-point-coulomb', action='store_true', default=False,
                        help='Disable PhysNet point-charge electrostatics term while still predicting charges')
+    parser.add_argument('--mix-warmup-start', type=int, default=1,
+                       help='Epoch to start ramping Coulomb mix weight')
+    parser.add_argument('--mix-warmup-end', type=int, default=1,
+                       help='Epoch to finish ramping Coulomb mix weight')
+    parser.add_argument('--mix-weight-max', type=float, default=1.0,
+                       help='Maximum effective Coulomb mix weight (0-1)')
     
     # General options
     parser.add_argument('--natoms', type=int, default=None,
@@ -4062,6 +4098,10 @@ def main():
         f"  Energy weight: {args.energy_weight} "
         f"(mix Coulomb requested: {args.mix_coulomb_energy}, effective: {effective_mix_coulomb})"
     )
+    print(
+        f"  Mix schedule: start={args.mix_warmup_start}, "
+        f"end={args.mix_warmup_end}, max={args.mix_weight_max}"
+    )
     print(f"  PhysNet point-charge Coulomb: {'disabled' if args.disable_physnet_point_coulomb else 'enabled'}")
     print(f"  Forces weight: {args.forces_weight}")
     print(f"  Monopole weight: {args.mono_weight}")
@@ -4160,6 +4200,9 @@ def main():
             start_epoch=start_epoch,
             optimizer_name=args.optimizer,
             optimizer_kwargs=optimizer_kwargs,
+            mix_warmup_start=args.mix_warmup_start,
+            mix_warmup_end=args.mix_warmup_end,
+            mix_weight_max=args.mix_weight_max,
         )
         
         print(f"\n{'='*70}")
