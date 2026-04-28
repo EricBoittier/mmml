@@ -167,6 +167,7 @@ data = [
 notebooks = [
     "ipykernel",
     "ipython",
+    "ipywidgets",
     "jupyter-client",
     "jupyter-core",
     "nbformat",
