@@ -293,12 +293,13 @@ def _load_single_h5(
                     f"Available keys: {list(grp.keys())}"
                 )
 
-            # Dipole (optional)
+            # Dipole (optional) - defer append until after charge filtering so
+            # all_D stays aligned with R/Z/F/E/N/Q/S.
+            dipole = None
             if has_dipoles is None:
                 has_dipoles = dipole_key in grp
             if has_dipoles and dipole_key in grp:
                 dipole = grp[dipole_key][()]
-                all_D.append(dipole)
 
             # Total charge (optional, default 0 for spooky)
             charge = 0.0
@@ -323,6 +324,8 @@ def _load_single_h5(
             all_F.append(F_padded)
             all_E.append(energy)
             all_N.append(n_atoms)
+            if dipole is not None:
+                all_D.append(dipole)
 
             if verbose and (i + 1) % 10000 == 0:
                 print(f"  Loaded {i + 1}/{len(mol_keys)} structures...")
@@ -468,11 +471,13 @@ def _load_single_h5_flat(
                     f"Available keys: {list(grp.keys())}"
                 )
 
+            # Dipole (optional) - defer append until after charge filtering so
+            # all_D stays aligned with R/Z/F/E/N/Q/S.
+            dipole = None
             if has_dipoles is None:
                 has_dipoles = dipole_key in grp
             if has_dipoles and dipole_key in grp:
                 dipole = grp[dipole_key][()]
-                all_D.append(dipole)
 
             charge = 0.0
             if "charge" in grp:
@@ -494,6 +499,8 @@ def _load_single_h5_flat(
             all_F.append(forces.astype(np.float64, copy=False))
             all_E.append(energy)
             all_N.append(n_atoms)
+            if dipole is not None:
+                all_D.append(dipole)
 
             if verbose and (i + 1) % 10000 == 0:
                 print(f"  Loaded {i + 1}/{len(mol_keys)} structures...")
