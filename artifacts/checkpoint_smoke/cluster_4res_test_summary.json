@@ -1,0 +1,18 @@
+{
+  "epoch_used": "/home/ericb/.cache/huggingface/hub/datasets--EricBoi--MMML_CKPTS/snapshots/4efe2b0a34215b1a1a3552e2fb5aea37c21ffb22/test-b4064dca-8cbd-471c-9871-08887107a1d8/epoch-103",
+  "portable_checkpoint_json": "/home/ericb/mmml/artifacts/checkpoint_smoke/params_portable.json",
+  "cluster_psf": "/home/ericb/mmml/artifacts/checkpoint_smoke/cluster_4res.psf",
+  "cluster_pdb": "/home/ericb/mmml/artifacts/checkpoint_smoke/cluster_4res.pdb",
+  "cluster_xyz": "/home/ericb/mmml/artifacts/checkpoint_smoke/cluster_4res.xyz",
+  "residue": "ACO",
+  "n_molecules": 4,
+  "n_atoms": 40,
+  "physnetjax": {
+    "energy_eV": 4487803.5,
+    "max_force_eVA": 215.16378784179688
+  },
+  "mmml": {
+    "energy_eV": 5742873.0,
+    "max_force_eVA": 0.0
+  }
+}
