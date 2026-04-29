@@ -1,0 +1,14 @@
+{
+  "traj": "/home/ericb/mmml/artifacts/md_10mer_mmml_pbc_suite_smoke3/pbc_nve.traj",
+  "log": "/home/ericb/mmml/artifacts/md_10mer_mmml_pbc_suite_smoke3/pbc_nve.log",
+  "mode": "nve",
+  "frames_traj": 1,
+  "log_samples": 3,
+  "etot_start_eV": -249.93400695988197,
+  "etot_end_eV": -249.94286755047867,
+  "etot_drift_eV": -0.008860590596697193,
+  "etot_span_eV": 0.008860590596697193,
+  "temp_start_K": 8.385135775138398,
+  "temp_end_K": 16.43657633461778,
+  "temp_mean_K": 11.068949294964858
+}

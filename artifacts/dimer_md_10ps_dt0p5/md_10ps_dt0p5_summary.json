@@ -1,0 +1,30 @@
+{
+  "physnet": {
+    "traj": "/home/ericb/mmml/artifacts/dimer_md_10ps_dt0p5/physnet_10ps_dt0p5.traj",
+    "log": "/home/ericb/mmml/artifacts/dimer_md_10ps_dt0p5/physnet_10ps_dt0p5.log",
+    "steps": 20000,
+    "dt_fs": 0.5,
+    "sim_ps": 10.0,
+    "save_every": 40,
+    "frames": 502,
+    "pe_start_eV": -51.60080337524414,
+    "pe_end_eV": -54.33213424682617,
+    "fmax_start_eVA": 0.071078360080719,
+    "fmax_end_eVA": 3.494257688522339,
+    "fmax_max_eVA": 17.25051498413086
+  },
+  "mmml": {
+    "traj": "/home/ericb/mmml/artifacts/dimer_md_10ps_dt0p5/mmml_10ps_dt0p5.traj",
+    "log": "/home/ericb/mmml/artifacts/dimer_md_10ps_dt0p5/mmml_10ps_dt0p5.log",
+    "steps": 20000,
+    "dt_fs": 0.5,
+    "sim_ps": 10.0,
+    "save_every": 40,
+    "frames": 502,
+    "pe_start_eV": -49.02892303466797,
+    "pe_end_eV": -51.9672966003418,
+    "fmax_start_eVA": 0.08271099627017975,
+    "fmax_end_eVA": 2.9319896697998047,
+    "fmax_max_eVA": 7.190212249755859
+  }
+}

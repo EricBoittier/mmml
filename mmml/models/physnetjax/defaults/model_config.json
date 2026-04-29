@@ -1,0 +1,18 @@
+{
+  "charges": true,
+  "cutoff": 6.0,
+  "debug": false,
+  "efa": false,
+  "features": 64,
+  "include_electrostatics": true,
+  "max_atomic_number": 55,
+  "max_degree": 1,
+  "n_res": 3,
+  "natoms": 34,
+  "num_basis_functions": 32,
+  "num_iterations": 2,
+  "total_charge": 0,
+  "use_energy_bias": false,
+  "use_pbc": false,
+  "zbl": true
+}

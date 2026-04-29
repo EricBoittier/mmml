@@ -231,7 +231,7 @@ where = ["."]
 include = ["mmml*", "pycharmm*"]
 
 [tool.setuptools.package-data]
-mmml = ["py.typed"]
+mmml = ["py.typed", "models/physnetjax/defaults/*.json"]
 pycharmm = ["README.md", "LICENSE"]
 
 [tool.versioningit]

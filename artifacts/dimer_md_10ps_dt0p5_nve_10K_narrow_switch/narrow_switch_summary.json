@@ -1,0 +1,32 @@
+{
+  "cutoffs": {
+    "ml_cutoff_A": 5.0,
+    "mm_switch_on_A": 3.5,
+    "mm_cutoff_A": 3.0,
+    "switch_width_A": 0.5
+  },
+  "physnet": {
+    "traj": "/home/ericb/mmml/artifacts/dimer_md_10ps_dt0p5_nve_10K_narrow_switch/physnet_narrow_switch.traj",
+    "log": "/home/ericb/mmml/artifacts/dimer_md_10ps_dt0p5_nve_10K_narrow_switch/physnet_narrow_switch.log",
+    "frames": 502,
+    "temperature_start_K": 9.414430996258963,
+    "temperature_end_K": 73485.54176512551,
+    "etot_start_eV": -51.58621954160076,
+    "etot_end_eV": 74.7306882624885,
+    "etot_drift_eV": 126.31690780408925,
+    "etot_span_eV": 126.33447638374926,
+    "fmax_max_eVA": 27.0717716217041
+  },
+  "mmml": {
+    "traj": "/home/ericb/mmml/artifacts/dimer_md_10ps_dt0p5_nve_10K_narrow_switch/mmml_narrow_switch.traj",
+    "log": "/home/ericb/mmml/artifacts/dimer_md_10ps_dt0p5_nve_10K_narrow_switch/mmml_narrow_switch.log",
+    "frames": 502,
+    "temperature_start_K": 9.414430996258968,
+    "temperature_end_K": 157.65453341199924,
+    "etot_start_eV": -48.66321539121014,
+    "etot_end_eV": -48.66727462846776,
+    "etot_drift_eV": -0.004059237257621362,
+    "etot_span_eV": 0.01721483574115723,
+    "fmax_max_eVA": 3.176138162612915
+  }
+}
