@@ -91,6 +91,42 @@ def _energy_at_positions(calc, atoms: ase.Atoms, r: np.ndarray) -> float:
     return float(atoms.get_potential_energy())
 
 
+def _to_float_sum(value) -> float:
+    arr = np.asarray(value)
+    return float(arr.sum()) if arr.size > 1 else float(arr.reshape(()))
+
+
+def _interaction_energy_from_results(calc) -> float:
+    """Inter-monomer energy (eV): ML 2-body + MM (MM pair list excludes intra-monomer)."""
+    res = calc.results
+    out = res.get("out")
+    if out is not None:
+        ml = getattr(out, "ml_2b_E", None)
+        mm = getattr(out, "mm_E", None)
+        if ml is not None and mm is not None:
+            return _to_float_sum(ml) + _to_float_sum(mm)
+        if hasattr(out, "internal_E") and hasattr(out, "energy"):
+            return _to_float_sum(out.energy) - _to_float_sum(out.internal_E)
+    ml_k = res.get("model_ml_2b_E")
+    mm_k = res.get("model_mm_E")
+    if ml_k is not None and mm_k is not None:
+        return _to_float_sum(ml_k) + _to_float_sum(mm_k)
+    internal = res.get("model_internal_E")
+    if internal is not None and "energy" in res:
+        return float(res["energy"]) - _to_float_sum(internal)
+    raise KeyError(
+        "Cannot read interaction energy from calculator results "
+        "(expected results['out'].ml_2b_E/mm_E or model_ml_2b_E/model_mm_E)."
+    )
+
+
+def _interaction_energy_at_positions(calc, atoms: ase.Atoms, r: np.ndarray) -> float:
+    atoms.set_positions(r)
+    calc.results.clear()
+    atoms.get_potential_energy()
+    return _interaction_energy_from_results(calc)
+
+
 def _dUdlambda_at_R(
     calc_on: object,
     atoms_on: ase.Atoms,
@@ -98,10 +134,13 @@ def _dUdlambda_at_R(
     atoms_off: ase.Atoms,
     r: np.ndarray,
 ) -> float:
-    """Explicit ∂U/∂λ estimator at fixed R: U(λ_i=1) - U(λ_i=0)."""
-    e_on = _energy_at_positions(calc_on, atoms_on, r)
-    e_off = _energy_at_positions(calc_off, atoms_off, r)
-    return e_on - e_off
+    """Explicit ∂U/∂λ at fixed R: W(λ=1) - W(λ=0) with W = inter-monomer energy from the calculator.
+
+    Same as total-energy difference when internal monomer ML energy is λ-independent.
+    """
+    w_on = _interaction_energy_at_positions(calc_on, atoms_on, r)
+    w_off = _interaction_energy_at_positions(calc_off, atoms_off, r)
+    return w_on - w_off
 
 
 def _meoh_dimer_com_distance_A(r: np.ndarray) -> float:
@@ -302,10 +341,10 @@ def main() -> int:
         default=20,
         help="Sample ⟨∂U/∂λ⟩ every N production steps (extra energy evals).",
     )
-    parser.add_argument("--timestep-fs", type=float, default=0.25)
-    parser.add_argument("--temperature-K", type=float, default=200.0, help="Unused in NVE mode; kept for output compatibility.")
+    parser.add_argument("--timestep-fs", type=float, default=0.5)
+    parser.add_argument("--temperature-K", type=float, default=100.0, help="Unused in NVE mode; kept for output compatibility.")
     parser.add_argument("--friction", type=float, default=0.02, help="Unused in NVE mode; kept for output compatibility.")
-    parser.add_argument("--ml-cutoff", type=float, default=1.5)
+    parser.add_argument("--ml-cutoff", type=float, default=1.0)
     parser.add_argument("--mm-switch-on", type=float, default=5.0)
     parser.add_argument("--mm-cutoff", type=float, default=5.0)
     parser.add_argument(
