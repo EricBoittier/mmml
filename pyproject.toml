@@ -69,6 +69,12 @@ plotting = [
     "polars",
 ]
 
+# Multistate Bennett acceptance ratio (e.g. alchemical λ-windows)
+# Install: uv sync --extra mbar   or   pip install "mmml[mbar]"
+mbar = [
+    "pymbar>=4.0",
+]
+
 # GPU/CUDA support (CUDA 13, default)
 # JAX CUDA 13 uses plugin/pjrt wheels (jax[cuda13]); there is no jaxlib[cuda13] extra.
 # GPU requirement: NVIDIA SM 7.5+ (Turing or newer). Pascal/Volta (e.g. CC 6.x) are not supported — use gpu-cuda12.

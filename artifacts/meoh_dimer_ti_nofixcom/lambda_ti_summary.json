@@ -1,0 +1,69 @@
+{
+  "description": {
+    "delta_F_couple_eV": "TI integral \u222b_0^1 \u27e8\u2202U/\u2202\u03bb\u27e9 d\u03bb (turn on intermolecular coupling)",
+    "delta_F_diss_eV": "Negative of delta_F_couple (decouple along same path)",
+    "lambda_definition": "lambda_monomer[0] varies; lambda_monomer[1]=1"
+  },
+  "delta_F_couple_eV": 0.0,
+  "delta_F_couple_kcal_mol": 0.0,
+  "delta_F_diss_eV": -0.0,
+  "delta_F_diss_kcal_mol": -0.0,
+  "mbar": {
+    "Delta_f_lambda1_minus_lambda0_kT": 0.0,
+    "dDelta_f_kT": 0.0,
+    "Delta_F_couple_eV": 0.0,
+    "dDelta_F_couple_eV": 0.0,
+    "Delta_F_couple_kcal_mol": 0.0,
+    "dDelta_F_couple_kcal_mol": 0.0,
+    "Delta_F_diss_eV": -0.0,
+    "Delta_F_diss_kcal_mol": -0.0,
+    "N_k": [
+      4,
+      4
+    ],
+    "note": "Coupling \u0394F = F(\u03bb=1) - F(\u03bb=0) from MBAR; dissociation is the negative."
+  },
+  "windows": [
+    {
+      "window": 0,
+      "lambda_decoupled_monomer": 0.5,
+      "decouple_monomer_index": 0,
+      "mean_dUdlambda_eV": 0.0,
+      "std_dUdlambda_eV": 0.0,
+      "n_samples": 4,
+      "traj": "/home/ericb/mmml/artifacts/meoh_dimer_ti_nofixcom/trajectories/win_00_lam0.50_prod.traj"
+    },
+    {
+      "window": 1,
+      "lambda_decoupled_monomer": 1.0,
+      "decouple_monomer_index": 0,
+      "mean_dUdlambda_eV": 0.0,
+      "std_dUdlambda_eV": 0.0,
+      "n_samples": 4,
+      "traj": "/home/ericb/mmml/artifacts/meoh_dimer_ti_nofixcom/trajectories/win_01_lam1.00_prod.traj"
+    }
+  ],
+  "args": {
+    "checkpoint": null,
+    "output_dir": "artifacts/meoh_dimer_ti_nofixcom",
+    "template_pdb": "mmml/generate/sample/pdb/meoh.pdb",
+    "initial_sep": 3.2,
+    "decouple_monomer": 0,
+    "lambda_windows": [
+      0.5,
+      1.0
+    ],
+    "n_equil": 2,
+    "n_prod": 40,
+    "interval": 10,
+    "timestep_fs": 0.5,
+    "temperature_K": 300.0,
+    "friction": 0.02,
+    "ml_cutoff": 5.0,
+    "mm_switch_on": 5.0,
+    "mm_cutoff": 3.0,
+    "no_mbar": false,
+    "mbar_verbose": false,
+    "fix_com": false
+  }
+}

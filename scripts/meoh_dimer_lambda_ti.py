@@ -18,8 +18,17 @@ Thermodynamic integration (coupling the interaction, λ: 0 → 1):
 
 The free energy to decouple (dissociate along this path) is ΔF_diss = -ΔF_bind_path.
 
-**Caveats:** gas-phase dimer, fixed λ-Hamiltonian sampling per window; no standard-
-state correction, no analytical uncertainty (block bootstrap could be added).
+After sampling, **pymbar** (MBAR) recomputes potentials at every λ for each saved
+snapshot and estimates ΔF between end states with uncertainties (optional extra
+``mbar``; use ``--no-mbar`` to skip the post-processing pass).
+
+By default Langevin uses ASE's ``fixcm=True`` (may emit a FutureWarning for
+small systems). Pass ``--fix-com`` to use ``FixCom`` with ``fixcm=False`` per
+ASE 3.28+ NVT guidance.
+
+**Caveats:** gas-phase dimer; MBAR assumes uncorrelated snapshots (consider
+subsampling with ``pymbar.timeseries`` for production); pymbar may enable JAX
+64-bit mode in-process.
 """
 
 from __future__ import annotations
@@ -34,6 +43,7 @@ import pandas as pd
 import ase
 import numpy as np
 from ase import units
+from ase.constraints import FixCom
 from ase.io.trajectory import Trajectory
 from ase.md.langevin import Langevin
 
@@ -69,6 +79,16 @@ def _load_scan_module(repo_root: Path):
     assert spec.loader is not None
     spec.loader.exec_module(mod)
     return mod
+
+
+def _energy_at_lambda(calc, atoms: ase.Atoms, r: np.ndarray, dec_idx: int, lam_decoupled: float) -> float:
+    """Total potential energy (eV) at positions ``r`` with λ_decoupled on ``dec_idx``."""
+    lam_arr = np.ones(2, dtype=np.float32)
+    lam_arr[dec_idx] = float(lam_decoupled)
+    calc.set_lambda_monomer(lam_arr)
+    atoms.set_positions(r)
+    calc.results.clear()
+    return float(atoms.get_potential_energy())
 
 
 def _dUdlambda_at_R(calc, atoms: ase.Atoms, dec_idx: int, lam_restore: float) -> float:
@@ -130,6 +150,21 @@ def main() -> int:
     parser.add_argument("--ml-cutoff", type=float, default=5.0)
     parser.add_argument("--mm-switch-on", type=float, default=5.0)
     parser.add_argument("--mm-cutoff", type=float, default=3.0)
+    parser.add_argument(
+        "--no-mbar",
+        action="store_true",
+        help="Skip pymbar MBAR post-processing (no u_kln matrix or ΔF uncertainties).",
+    )
+    parser.add_argument(
+        "--mbar-verbose",
+        action="store_true",
+        help="Verbose pymbar solver output.",
+    )
+    parser.add_argument(
+        "--fix-com",
+        action="store_true",
+        help="Constrain system center of mass (use with fixcm=False; ASE 3.28+ small-system NVT).",
+    )
     args = parser.parse_args()
     if args.interval < 1:
         parser.error("--interval must be >= 1")
@@ -202,12 +237,15 @@ def main() -> int:
         verbose=False,
     )
     atoms.calc = hybrid_calc
+    if args.fix_com:
+        atoms.set_constraint(FixCom())
 
     lambda_windows = sorted(float(x) for x in args.lambda_windows)
     dec_idx = args.decouple_monomer
     other_idx = 1 - dec_idx
 
     rows: list[dict] = []
+    snapshots_per_window: list[list[np.ndarray]] = [[] for _ in range(len(lambda_windows))]
     traj_root = out_dir / "trajectories"
     traj_root.mkdir(exist_ok=True)
 
@@ -223,7 +261,13 @@ def main() -> int:
         prod_path = traj_root / f"win_{wi:02d}_lam{lam:.2f}_prod.traj"
         traj_prod = Trajectory(str(prod_path), "w", atoms)
 
-        dyn_eq = Langevin(atoms, timestep=dt, temperature_K=args.temperature_K, friction=friction)
+        dyn_eq = Langevin(
+            atoms,
+            timestep=dt,
+            temperature_K=args.temperature_K,
+            friction=friction,
+            fixcm=not args.fix_com,
+        )
         dyn_eq.run(args.n_equil)
 
         samples: list[float] = []
@@ -233,8 +277,15 @@ def main() -> int:
             step_count[0] += 1
             if step_count[0] % args.interval == 0:
                 samples.append(_dUdlambda_at_R(hybrid_calc, _atoms, dec_idx, lam))
+                snapshots_per_window[wi].append(_atoms.get_positions().copy())
 
-        dyn_prod = Langevin(atoms, timestep=dt, temperature_K=args.temperature_K, friction=friction)
+        dyn_prod = Langevin(
+            atoms,
+            timestep=dt,
+            temperature_K=args.temperature_K,
+            friction=friction,
+            fixcm=not args.fix_com,
+        )
         dyn_prod.attach(traj_prod.write, interval=max(1, args.interval))
         dyn_prod.attach(_on_step)
         dyn_prod.run(args.n_prod)
@@ -260,6 +311,56 @@ def main() -> int:
     delta_f_ev = float(np.trapezoid(mean_b, lam_col)) if len(lam_col) > 1 else float("nan")
     delta_f_kcal = delta_f_ev * _EV_TO_KCAL
 
+    mbar_block: dict | None = None
+    if not args.no_mbar:
+        try:
+            from pymbar import MBAR
+        except ImportError as exc:
+            raise SystemExit(
+                "pymbar is required unless --no-mbar is set. Install with: "
+                "uv sync --extra mbar   or   pip install 'pymbar>=4.0'"
+            ) from exc
+
+        K = len(lambda_windows)
+        N_k = np.array([len(snapshots_per_window[k]) for k in range(K)], dtype=np.int64)
+        if np.any(N_k == 0):
+            mbar_block = {
+                "error": "MBAR skipped: at least one λ-window has no snapshots (increase --n-prod or decrease --interval).",
+                "N_k": N_k.tolist(),
+            }
+        else:
+            N_max = int(N_k.max())
+            beta = 1.0 / (float(units.kB) * args.temperature_K)
+            u_kln = np.zeros((K, K, N_max), dtype=np.float64)
+            for k in range(K):
+                for n in range(int(N_k[k])):
+                    r_snap = snapshots_per_window[k][n]
+                    for l in range(K):
+                        u_kln[k, l, n] = beta * _energy_at_lambda(
+                            hybrid_calc, atoms, r_snap, dec_idx, lambda_windows[l]
+                        )
+            mbar = MBAR(u_kln, N_k, verbose=args.mbar_verbose)
+            fe = mbar.compute_free_energy_differences(compute_uncertainty=True)
+            # Delta_f[i,j] ≈ (f_j - f_i) / kT; i=0 (λ=0), j=K-1 (λ=1) => coupling free energy
+            i0, i1 = 0, K - 1
+            df_k = float(fe["Delta_f"][i0, i1])
+            ddf_k = float(fe["dDelta_f"][i0, i1])
+            kbt_ev = float(units.kB) * args.temperature_K
+            df_ev = df_k * kbt_ev
+            ddf_ev = ddf_k * kbt_ev
+            mbar_block = {
+                "Delta_f_lambda1_minus_lambda0_kT": df_k,
+                "dDelta_f_kT": ddf_k,
+                "Delta_F_couple_eV": df_ev,
+                "dDelta_F_couple_eV": ddf_ev,
+                "Delta_F_couple_kcal_mol": df_ev * _EV_TO_KCAL,
+                "dDelta_F_couple_kcal_mol": ddf_ev * _EV_TO_KCAL,
+                "Delta_F_diss_eV": -df_ev,
+                "Delta_F_diss_kcal_mol": -df_ev * _EV_TO_KCAL,
+                "N_k": N_k.tolist(),
+                "note": "Coupling ΔF = F(λ=1) - F(λ=0) from MBAR; dissociation is the negative.",
+            }
+
     args_json = {k: (str(v) if isinstance(v, Path) else v) for k, v in vars(args).items()}
     summary = {
         "description": {
@@ -271,6 +372,7 @@ def main() -> int:
         "delta_F_couple_kcal_mol": delta_f_kcal,
         "delta_F_diss_eV": -delta_f_ev,
         "delta_F_diss_kcal_mol": -delta_f_kcal,
+        "mbar": mbar_block,
         "windows": rows,
         "args": args_json,
     }
@@ -280,6 +382,15 @@ def main() -> int:
     print(json.dumps(summary["description"], indent=2))
     print(f"ΔF_couple (binding path, TI) = {delta_f_ev:.6f} eV = {delta_f_kcal:.4f} kcal/mol")
     print(f"ΔF_diss (decouple)          = {-delta_f_ev:.6f} eV = {-delta_f_kcal:.4f} kcal/mol")
+    if mbar_block and "error" not in mbar_block:
+        print(
+            f"ΔF_couple (MBAR)            = {mbar_block['Delta_F_couple_eV']:.6f} ± "
+            f"{mbar_block['dDelta_F_couple_eV']:.6f} eV = "
+            f"{mbar_block['Delta_F_couple_kcal_mol']:.4f} ± "
+            f"{mbar_block['dDelta_F_couple_kcal_mol']:.4f} kcal/mol"
+        )
+    elif mbar_block and "error" in mbar_block:
+        print(f"MBAR: {mbar_block['error']}")
     print(f"Wrote {out_json}")
     return 0
 
