@@ -27,8 +27,9 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
-import sys
 from pathlib import Path
+
+import pandas as pd
 
 import ase
 import numpy as np
@@ -49,8 +50,6 @@ from mmml.interfaces.pycharmmInterface.mmml_calculator import CutoffParameters, 
 from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 from mmml.models.physnetjax.physnetjax.restart.restart import get_params_model
 
-import pycharmm.generate as gen
-import pycharmm.ic as ic
 import pycharmm.param as param
 import pycharmm.psf as psf
 import pycharmm.read as read
@@ -72,18 +71,21 @@ def _load_scan_module(repo_root: Path):
     return mod
 
 
-def _dUdlambda_at_R(calc, atoms: ase.Atoms, lam_window: float) -> float:
-    """∂U/∂λ at fixed R for Hamiltonian with λ_0=lam_window, λ_1=1 (linear coupling)."""
+def _dUdlambda_at_R(calc, atoms: ase.Atoms, dec_idx: int, lam_restore: float) -> float:
+    """∂U/∂λ at fixed R: U(λ_i=1) - U(λ_i=0) with the partner monomer at λ=1 (linear coupling)."""
     r = atoms.get_positions().copy()
-    lam_full = np.array([1.0, 1.0], dtype=np.float32)
-    lam_off0 = np.array([0.0, 1.0], dtype=np.float32)
+    lam_full = np.ones(2, dtype=np.float32)
+    lam_off = np.ones(2, dtype=np.float32)
+    lam_off[dec_idx] = 0.0
     calc.set_lambda_monomer(lam_full)
     atoms.set_positions(r)
     e_on = float(atoms.get_potential_energy())
-    calc.set_lambda_monomer(lam_off0)
+    calc.set_lambda_monomer(lam_off)
     atoms.set_positions(r)
     e_off = float(atoms.get_potential_energy())
-    calc.set_lambda_monomer(np.array([lam_window, 1.0], dtype=np.float32))
+    lam_cur = np.ones(2, dtype=np.float32)
+    lam_cur[dec_idx] = float(lam_restore)
+    calc.set_lambda_monomer(lam_cur)
     atoms.set_positions(r)
     return e_on - e_off
 
@@ -108,11 +110,16 @@ def main() -> int:
         type=float,
         nargs="+",
         default=[0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
-        help="λ values for monomer 0 (other monomer fixed at 1).",
+        help="λ for the decoupled monomer (--decouple-monomer); partner stays at 1.",
     )
     parser.add_argument("--n-equil", type=int, default=500, help="Langevin steps per window (equil).")
     parser.add_argument("--n-prod", type=int, default=2000, help="Production steps per window.")
-    parser.add_argument("--interval", type=int, default=20, collect samples for dUdλ every N steps.")
+    parser.add_argument(
+        "--interval",
+        type=int,
+        default=20,
+        help="Sample ⟨∂U/∂λ⟩ every N production steps (extra energy evals).",
+    )
     parser.add_argument("--timestep-fs", type=float, default=0.5)
     parser.add_argument("--temperature-K", type=float, default=300.0)
     parser.add_argument("--friction", type=float, default=0.02, help="Langevin friction (1/fs).")
@@ -176,7 +183,7 @@ def main() -> int:
     )
 
     atoms = ase.Atoms(numbers=z, positions=r0)
-    hybrid_calc, _ = factory(
+    hybrid_calc, _, _ = factory(
         atomic_numbers=z,
         atomic_positions=r0,
         n_monomers=2,
@@ -207,7 +214,7 @@ def main() -> int:
         lam_arr = np.ones(2, dtype=np.float32)
         lam_arr[dec_idx] = lam
         hybrid_calc.set_lambda_monomer(lam_arr)
-        coor.set_positions(coor.get_positions().__class__(atoms.get_positions(), columns=["x", "y", "z"]))
+        coor.set_positions(pd.DataFrame(atoms.get_positions(), columns=["x", "y", "z"]))
 
         prod_path = traj_root / f"win_{wi:02d}_lam{lam:.2f}_prod.traj"
         traj_prod = Trajectory(str(prod_path), "w", atoms)
@@ -216,17 +223,12 @@ def main() -> int:
         dyn_eq.run(args.n_equil)
 
         samples: list[float] = []
-
-        def _sample(_atoms=atoms):
-            if len(samples) == 0 or len(samples) % args.interval == 0:
-                pass  # below we use attach with step counter
-
         step_count = [0]
 
         def _on_step(_atoms=atoms):
             step_count[0] += 1
             if step_count[0] % args.interval == 0:
-                samples.append(_dUdlambda_at_R(hybrid_calc, _atoms, lam))
+                samples.append(_dUdlambda_at_R(hybrid_calc, _atoms, dec_idx, lam))
 
         dyn_prod = Langevin(atoms, timestep=dt, temperature_K=args.temperature_K, friction=friction)
         dyn_prod.attach(traj_prod.write, interval=max(1, args.interval))
@@ -254,6 +256,7 @@ def main() -> int:
     delta_f_ev = float(np.trapezoid(mean_b, lam_col)) if len(lam_col) > 1 else float("nan")
     delta_f_kcal = delta_f_ev * _EV_TO_KCAL
 
+    args_json = {k: (str(v) if isinstance(v, Path) else v) for k, v in vars(args).items()}
     summary = {
         "description": {
             "delta_F_couple_eV": "TI integral ∫_0^1 ⟨∂U/∂λ⟩ dλ (turn on intermolecular coupling)",
@@ -265,7 +268,7 @@ def main() -> int:
         "delta_F_diss_eV": -delta_f_ev,
         "delta_F_diss_kcal_mol": -delta_f_kcal,
         "windows": rows,
-        "args": vars(args),
+        "args": args_json,
     }
 
     out_json = out_dir / "lambda_ti_summary.json"
