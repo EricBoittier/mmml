@@ -1,5 +1,5 @@
 REMARK  EXECUTING CHARMM SCRIPT FROM PYTHON                                           
-REMARK   DATE:     4/29/26     16:24: 2      CREATED BY USER: ericb                   
+REMARK   DATE:     4/29/26     16:26:54      CREATED BY USER: ericb                   
 ATOM      1  O1  ACO     1       0.000   0.000   0.000  1.00  0.00      CLST
 ATOM      2  C1  ACO     1       0.000   0.000   0.000  1.00  0.00      CLST
 ATOM      3  C2  ACO     1       0.000   0.000   0.000  1.00  0.00      CLST

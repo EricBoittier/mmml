@@ -21,6 +21,7 @@ import pandas as pd
 from ase.io import write
 
 from mmml.cli.base import resolve_checkpoint_paths
+import mmml.interfaces.pycharmmInterface.import_pycharmm as pyci
 from mmml.interfaces.pycharmmInterface.import_pycharmm import (
     CGENFF_PRM,
     CGENFF_RTF,
@@ -33,7 +34,6 @@ from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 from mmml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
 from mmml.models.physnetjax.physnetjax.restart.restart import get_params_model
 from mmml.utils.model_checkpoint import orbax_to_json
-from mmml.utils.hybrid_optimization import extract_lj_parameters_from_calculator
 
 import pycharmm.psf as psf
 import pycharmm.generate as gen
@@ -41,6 +41,12 @@ import pycharmm.ic as ic
 import pycharmm.read as read
 import pycharmm.settings as settings
 import pycharmm.write as pywrite
+
+# Some MMML modules import these names from import_pycharmm, but they are not
+# always exported there. Inject them for compatibility in this utility script.
+pyci.read = read
+pyci.settings = settings
+pyci.psf = psf
 
 
 def _latest_epoch_dir(ckpt_root: Path) -> Path:
@@ -126,11 +132,9 @@ def run(args: argparse.Namespace) -> int:
     phys_energy = float(atoms_phys.get_potential_energy())
     phys_forces = atoms_phys.get_forces()
 
-    lj = extract_lj_parameters_from_calculator(
-        ATOMS_PER_MONOMER=atoms_per_monomer,
-        N_MONOMERS=args.n_molecules,
-    )
-    n_types = len(lj["atc_epsilons"])
+    # Use PSF IAC atom-type indices directly (CHARMM 1-indexed -> 0-indexed).
+    at_codes = np.asarray(psf.get_iac(), dtype=int) - 1
+    n_types = int(at_codes.max()) + 1
     ep_scale = np.ones(n_types, dtype=float)
     sig_scale = np.ones(n_types, dtype=float)
 
@@ -149,14 +153,14 @@ def run(args: argparse.Namespace) -> int:
         cell=None,
         ep_scale=ep_scale,
         sig_scale=sig_scale,
-        at_codes_override=lj["at_codes"],
+        at_codes_override=at_codes,
     )
     cutoff = CutoffParameters(
         ml_cutoff=args.ml_cutoff,
         mm_switch_on=args.mm_switch_on,
         mm_cutoff=args.mm_cutoff,
     )
-    mmml_calc, _ = factory(
+    calc_result = factory(
         atomic_numbers=z,
         atomic_positions=r,
         n_monomers=args.n_molecules,
@@ -169,6 +173,10 @@ def run(args: argparse.Namespace) -> int:
         energy_conversion_factor=1.0,
         force_conversion_factor=1.0,
     )
+    if len(calc_result) == 3:
+        mmml_calc, _, _ = calc_result
+    else:
+        mmml_calc, _ = calc_result
     atoms_mmml = atoms.copy()
     atoms_mmml.calc = mmml_calc
     mmml_energy = float(atoms_mmml.get_potential_energy())
