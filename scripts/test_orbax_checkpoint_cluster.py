@@ -18,6 +18,7 @@ from pathlib import Path
 import ase
 import numpy as np
 import pandas as pd
+from ase.io import write
 
 from mmml.cli.base import resolve_checkpoint_paths
 from mmml.interfaces.pycharmmInterface.import_pycharmm import (
@@ -115,7 +116,7 @@ def run(args: argparse.Namespace) -> int:
     pywrite.coor_pdb(str(pdb_path))
 
     atoms = ase.Atoms(numbers=z, positions=r)
-    ase.io.write(str(xyz_path), atoms)
+    write(str(xyz_path), atoms)
 
     phys_params, phys_model = get_params_model(str(epoch_dir), natoms=n_atoms)
     phys_model.natoms = n_atoms
