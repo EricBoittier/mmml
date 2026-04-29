@@ -5,6 +5,11 @@ import jax.numpy as jnp
 import numpy as np
 import pandas as pd
 from scipy.spatial.distance import cdist
+from mmml.utils.rotations import (
+    rotate_batched_rank2_tensors,
+    rotate_batched_vectors,
+    sample_random_rotations,
+)
 
 
 def cut_vdw(grid, xyz, elements, vdw_scale=1.4):
@@ -605,7 +610,8 @@ def print_shapes(train_data, valid_data):
 def prepare_batches(
     key, data, batch_size, 
     include_id=False, data_keys=None, num_atoms=60,
-    dst_idx=None, src_idx=None, mono_imputation_fn=None
+    dst_idx=None, src_idx=None, mono_imputation_fn=None,
+    rot_augment: bool = False, rot_perturbation: float = 1.0
 ) -> list:
     """
     Prepare batches for training.
@@ -700,6 +706,34 @@ def prepare_batches(
                 else:
                     # print(k, v[perm].shape)
                     dict_[k] = v[perm]
+
+        if rot_augment:
+            rot_key = jax.random.fold_in(key, int(perm[0]))
+            rotations = sample_random_rotations(
+                rot_key, batch_size, perturbation=rot_perturbation
+            )
+            if "R" in dict_:
+                dict_["R"] = rotate_batched_vectors(
+                    dict_["R"].reshape(batch_size, num_atoms, 3), rotations
+                ).reshape(-1, 3)
+            if "vdw_surface" in dict_ and jnp.asarray(dict_["vdw_surface"]).ndim >= 3:
+                dict_["vdw_surface"] = rotate_batched_vectors(
+                    jnp.asarray(dict_["vdw_surface"]), rotations
+                )
+            if "esp_grid" in dict_ and jnp.asarray(dict_["esp_grid"]).ndim >= 3:
+                dict_["esp_grid"] = rotate_batched_vectors(
+                    jnp.asarray(dict_["esp_grid"]), rotations
+                )
+            for vec_key in ("D", "Dxyz", "com"):
+                if vec_key in dict_:
+                    arr = jnp.asarray(dict_[vec_key])
+                    if arr.ndim == 2 and arr.shape[-1] == 3:
+                        dict_[vec_key] = rotate_batched_vectors(arr, rotations)
+            for tensor_key in ("Q", "quadrupole", "polar"):
+                if tensor_key in dict_:
+                    arr = jnp.asarray(dict_[tensor_key])
+                    if arr.ndim == 3 and arr.shape[-2:] == (3, 3):
+                        dict_[tensor_key] = rotate_batched_rank2_tensors(arr, rotations)
 
         if len(dst_idx.shape) > 1:
             dict_["dst_idx"] = dst_idx[perm[0]]

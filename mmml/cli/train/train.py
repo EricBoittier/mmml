@@ -54,6 +54,8 @@ class TrainConfig:
     # Preprocessing
     center_coordinates: bool = False
     normalize_energy: bool = False
+    rot_augment: bool = False
+    rot_perturbation: float = 1.0
     
     # Model-specific (will be passed to model constructor)
     model_params: Dict[str, Any] = None
@@ -344,6 +346,17 @@ Examples:
         action='store_true',
         help='Normalize energies'
     )
+    parser.add_argument(
+        '--rot-augment',
+        action='store_true',
+        help='Enable SO(3) rotational augmentation in batch builders'
+    )
+    parser.add_argument(
+        '--rot-perturbation',
+        type=float,
+        default=1.0,
+        help='Rotation perturbation strength in [0,1] (default: 1.0)'
+    )
     
     # Options
     parser.add_argument(
@@ -392,6 +405,8 @@ Examples:
             log_interval=args.log_interval,
             center_coordinates=args.center_coords,
             normalize_energy=args.normalize_energy,
+            rot_augment=args.rot_augment,
+            rot_perturbation=args.rot_perturbation,
         )
     
     # Save config if requested

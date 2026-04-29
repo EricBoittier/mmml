@@ -5,6 +5,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from ase.units import Bohr, Hartree
+from mmml.utils.rotations import rotate_batched_vectors, sample_random_rotations
 
 # Constants
 HARTREE_PER_BOHR_TO_EV_PER_ANGSTROM = Hartree / Bohr
@@ -34,6 +35,8 @@ def prepare_batches_one(
     num_atoms=60,
     dst_idx=None,
     src_idx=None,
+    rot_augment: bool = False,
+    rot_perturbation: float = 1.0,
 ) -> list:
     """
     Prepare batches for training.
@@ -89,6 +92,22 @@ def prepare_batches_one(
                 else:
                     dict_[k] = v[perm]
 
+        if rot_augment:
+            rot_key = jax.random.fold_in(key, int(perm[0]))
+            rotations = sample_random_rotations(
+                rot_key, batch_size, perturbation=rot_perturbation
+            )
+            if "R" in dict_:
+                dict_["R"] = rotate_batched_vectors(
+                    dict_["R"].reshape(batch_size, num_atoms, 3), rotations
+                ).reshape(batch_size * num_atoms, 3)
+            if "F" in dict_:
+                dict_["F"] = rotate_batched_vectors(
+                    dict_["F"].reshape(batch_size, num_atoms, 3), rotations
+                ).reshape(batch_size * num_atoms, 3)
+            if "D" in dict_ and dict_["D"].ndim == 2 and dict_["D"].shape[-1] == 3:
+                dict_["D"] = rotate_batched_vectors(dict_["D"], rotations)
+
         good_indices = []
         for i, nat in enumerate(dict_["N"]):
             # print("nat", nat)
@@ -123,6 +142,8 @@ def prepare_batches_jit(
     src_idx: Optional[jnp.ndarray] = None,
     include_id: bool = False,
     debug_mode: bool = False,
+    rot_augment: bool = False,
+    rot_perturbation: float = 1.0,
 ) -> List[Dict[str, jnp.ndarray]]:
     """
     Efficiently prepare batches for training.
@@ -222,6 +243,22 @@ def prepare_batches_jit(
         # Optionally include 'id' if requested and present
         if include_id and "id" in data and "id" in data_keys:
             batch["id"] = data["id"][perm]
+
+        if rot_augment:
+            rot_key = jax.random.fold_in(key, int(perm[0]))
+            rotations = sample_random_rotations(
+                rot_key, batch_size, perturbation=rot_perturbation
+            )
+            if "R" in batch:
+                batch["R"] = rotate_batched_vectors(
+                    batch["R"].reshape(batch_size, num_atoms, 3), rotations
+                ).reshape(batch_size * num_atoms, 3)
+            if "F" in batch:
+                batch["F"] = rotate_batched_vectors(
+                    batch["F"].reshape(batch_size, num_atoms, 3), rotations
+                ).reshape(batch_size * num_atoms, 3)
+            if "D" in batch and batch["D"].ndim == 2 and batch["D"].shape[-1] == 3:
+                batch["D"] = rotate_batched_vectors(batch["D"], rotations)
 
         # Compute good_indices (mask for valid atom pairs)
         # Vectorized approach: We know N is shape (batch_size,)
@@ -426,6 +463,8 @@ def prepare_batches_advanced_minibatching(
     batch_nbl_len,
     data_keys=None,
     num_atoms=60,
+    rot_augment: bool = False,
+    rot_perturbation: float = 1.0,
 ) -> list:
     """
     Prepare batches for training.
@@ -444,18 +483,38 @@ def prepare_batches_advanced_minibatching(
     # Build batches
     output = []
     for perm in perms:
-        output.append(
-            create_batch(
-                perm,
-                dst_src_lookup,
-                data,
-                data_keys,
-                batch_shape,
-                batch_nbl_len,
-                num_atoms,
-                batch_size,
-            )
+        batch = create_batch(
+            perm,
+            dst_src_lookup,
+            data,
+            data_keys,
+            batch_shape,
+            batch_nbl_len,
+            num_atoms,
+            batch_size,
         )
+        if rot_augment:
+            rot_key = jax.random.fold_in(key, int(perm[0]))
+            rotations = sample_random_rotations(
+                rot_key, batch_size, perturbation=rot_perturbation
+            )
+            if "R" in batch:
+                batch["R"] = np.asarray(
+                    rotate_batched_vectors(
+                        jnp.asarray(batch["R"]).reshape(batch_size, -1, 3), rotations
+                    ).reshape(-1, 3)
+                )
+            if "F" in batch:
+                batch["F"] = np.asarray(
+                    rotate_batched_vectors(
+                        jnp.asarray(batch["F"]).reshape(batch_size, -1, 3), rotations
+                    ).reshape(-1, 3)
+                )
+            if "D" in batch:
+                d_arr = jnp.asarray(batch["D"])
+                if d_arr.ndim == 2 and d_arr.shape[-1] == 3:
+                    batch["D"] = np.asarray(rotate_batched_vectors(d_arr, rotations))
+        output.append(batch)
 
     return output
 

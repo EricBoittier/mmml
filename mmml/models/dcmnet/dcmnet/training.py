@@ -498,6 +498,8 @@ def train_model(
     distance_min=0.5,
     esp_magnitude_weighting=False,
     charge_conservation_w=1.0,
+    rot_augment: bool = False,
+    rot_perturbation: float = 1.0,
 ):
     """
     Train DCMNet model with ESP and monopole losses.
@@ -707,7 +709,15 @@ def train_model(
     
     # Batches for the validation set need to be prepared only once.
     key, shuffle_key = jax.random.split(key)
-    valid_batches = prepare_batches(shuffle_key, valid_data, batch_size, num_atoms=num_atoms, mono_imputation_fn=mono_imputation_fn)
+    valid_batches = prepare_batches(
+        shuffle_key,
+        valid_data,
+        batch_size,
+        num_atoms=num_atoms,
+        mono_imputation_fn=mono_imputation_fn,
+        rot_augment=rot_augment,
+        rot_perturbation=rot_perturbation,
+    )
 
     print("\nTraining")
     print("..................")
@@ -715,7 +725,15 @@ def train_model(
     for epoch in range(1, num_epochs + 1):
         # Prepare batches.
         key, shuffle_key = jax.random.split(key)
-        train_batches = prepare_batches(shuffle_key, train_data, batch_size, num_atoms=num_atoms, mono_imputation_fn=mono_imputation_fn)
+        train_batches = prepare_batches(
+            shuffle_key,
+            train_data,
+            batch_size,
+            num_atoms=num_atoms,
+            mono_imputation_fn=mono_imputation_fn,
+            rot_augment=rot_augment,
+            rot_perturbation=rot_perturbation,
+        )
         # Loop over train batches.
         train_loss = 0.0
         train_mono_preds = []
@@ -1714,6 +1732,8 @@ def train_model_dipo(
     ndcm,
     esp_w=1.0,
     restart_params=None,
+    rot_augment: bool = False,
+    rot_perturbation: float = 1.0,
 ):
     """
     Train DCMNet model with dipole-augmented losses.
@@ -1780,10 +1800,22 @@ def train_model_dipo(
     print("Preparing batches")
     print("..................")
     key, shuffle_key = jax.random.split(key)
-    valid_batches = prepare_batches(shuffle_key, valid_data, batch_size)
+    valid_batches = prepare_batches(
+        shuffle_key,
+        valid_data,
+        batch_size,
+        rot_augment=rot_augment,
+        rot_perturbation=rot_perturbation,
+    )
     for epoch in range(1, num_epochs + 1):
         key, shuffle_key = jax.random.split(key)
-        train_batches = prepare_batches(shuffle_key, train_data, batch_size)
+        train_batches = prepare_batches(
+            shuffle_key,
+            train_data,
+            batch_size,
+            rot_augment=rot_augment,
+            rot_perturbation=rot_perturbation,
+        )
         train_loss = 0.0
         train_esp_l = 0.0
         train_mono_l = 0.0
@@ -1932,6 +1964,8 @@ def train_model_general(
     save_best_params_with_ema: bool = False,
     extra_valid_args: dict = None,
     extra_train_args: dict = None,
+    rot_augment: bool = False,
+    rot_perturbation: float = 1.0,
 ):
     """
     Unified training loop for both default and dipole models.
@@ -2014,10 +2048,22 @@ def train_model_general(
         ema_params = initialize_ema_params(params)
     print("Preparing batches\n..................")
     key, shuffle_key = jax.random.split(key)
-    valid_batches = prepare_batches(shuffle_key, valid_data, batch_size)
+    valid_batches = prepare_batches(
+        shuffle_key,
+        valid_data,
+        batch_size,
+        rot_augment=rot_augment,
+        rot_perturbation=rot_perturbation,
+    )
     for epoch in range(1, num_epochs + 1):
         key, shuffle_key = jax.random.split(key)
-        train_batches = prepare_batches(shuffle_key, train_data, batch_size)
+        train_batches = prepare_batches(
+            shuffle_key,
+            train_data,
+            batch_size,
+            rot_augment=rot_augment,
+            rot_perturbation=rot_perturbation,
+        )
         # Training metrics
         train_metrics = {}
         for i, batch in enumerate(train_batches):

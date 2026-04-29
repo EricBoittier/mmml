@@ -25,6 +25,7 @@ from optax import tree_utils as otu
 from flax import linen as nn
 
 import e3x
+from mmml.utils.rotations import rotate_batched_vectors, sample_random_rotations
 
 # ZBL repulsion (optional short-range nuclear repulsion)
 try:
@@ -262,6 +263,17 @@ def get_args(**overrides):
     )
     parser.add_argument("--gradient-checkpoint", action="store_true",
                        help="Use gradient checkpointing to reduce GPU memory (slower training)")
+    parser.add_argument(
+        "--rot-augment",
+        action="store_true",
+        help="Apply random SO(3) rotation augmentation to batches (all splits)",
+    )
+    parser.add_argument(
+        "--rot-perturbation",
+        type=float,
+        default=1.0,
+        help="Rotation perturbation strength in [0, 1] (used with --rot-augment)",
+    )
     parser.add_argument(
         "--verbose",
         action="store_true",
@@ -736,6 +748,8 @@ def prepare_batches(
     *,
     shuffle=True,
     drop_last=True,
+    rot_augment: bool = False,
+    rot_perturbation: float = 1.0,
 ):
     """
     Returns list of batch dicts with consistent shapes:
@@ -805,41 +819,69 @@ def prepare_batches(
     offset = 0
     while offset + batch_size <= n_used:
         idx = perm[offset : offset + batch_size]
+        positions = data["positions"][idx]
+        forces = data["forces"][idx]
+        efield = data["electric_field"][idx]
+        dipoles = data["D"][idx] if has_dipoles else None
+        if rot_augment:
+            rot_key = jax.random.fold_in(key, int(idx[0]))
+            rotations = sample_random_rotations(
+                rot_key, batch_size, perturbation=rot_perturbation
+            )
+            positions = rotate_batched_vectors(positions, rotations)
+            forces = rotate_batched_vectors(forces, rotations)
+            efield = rotate_batched_vectors(efield, rotations)
+            if dipoles is not None:
+                dipoles = rotate_batched_vectors(dipoles, rotations)
         if precomputed_ok:
             d_flat, s_flat, b_seg = dst_idx_flat, src_idx_flat, batch_segments
         else:
             d_flat, s_flat, b_seg = _flat_pairwise_indices(batch_size, num_atoms)
         batch_dict = {
             "atomic_numbers": data["atomic_numbers"][idx].reshape(batch_size * num_atoms),
-            "positions": data["positions"][idx].reshape(batch_size * num_atoms, 3),
+            "positions": positions.reshape(batch_size * num_atoms, 3),
             "energies": data["energies"][idx],
-            "forces": data["forces"][idx].reshape(batch_size * num_atoms, 3),
-            "electric_field": data["electric_field"][idx],
+            "forces": forces.reshape(batch_size * num_atoms, 3),
+            "electric_field": efield,
             "dst_idx_flat": d_flat,
             "src_idx_flat": s_flat,
             "batch_segments": b_seg,
         }
         if has_dipoles:
-            batch_dict["dipoles"] = data["D"][idx]
+            batch_dict["dipoles"] = dipoles
         batches.append(batch_dict)
         offset += batch_size
 
     if offset < n_used:
         bs_rem = int(n_used - offset)
         idx = perm[offset:n_used]
+        positions = data["positions"][idx]
+        forces = data["forces"][idx]
+        efield = data["electric_field"][idx]
+        dipoles = data["D"][idx] if has_dipoles else None
+        if rot_augment:
+            rot_key = jax.random.fold_in(key, int(idx[0]))
+            rotations = sample_random_rotations(
+                rot_key, bs_rem, perturbation=rot_perturbation
+            )
+            positions = rotate_batched_vectors(positions, rotations)
+            forces = rotate_batched_vectors(forces, rotations)
+            efield = rotate_batched_vectors(efield, rotations)
+            if dipoles is not None:
+                dipoles = rotate_batched_vectors(dipoles, rotations)
         d_flat, s_flat, b_seg = _flat_pairwise_indices(bs_rem, num_atoms)
         batch_dict = {
             "atomic_numbers": data["atomic_numbers"][idx].reshape(bs_rem * num_atoms),
-            "positions": data["positions"][idx].reshape(bs_rem * num_atoms, 3),
+            "positions": positions.reshape(bs_rem * num_atoms, 3),
             "energies": data["energies"][idx],
-            "forces": data["forces"][idx].reshape(bs_rem * num_atoms, 3),
-            "electric_field": data["electric_field"][idx],
+            "forces": forces.reshape(bs_rem * num_atoms, 3),
+            "electric_field": efield,
             "dst_idx_flat": d_flat,
             "src_idx_flat": s_flat,
             "batch_segments": b_seg,
         }
         if has_dipoles:
-            batch_dict["dipoles"] = data["D"][idx]
+            batch_dict["dipoles"] = dipoles
         batches.append(batch_dict)
 
     return batches
@@ -1064,7 +1106,8 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
                 energy_weight=1.0, forces_weight=100.0, dipole_weight=10.0, charge_weight=1.0, initial_params=None,
                 gradient_checkpoint=False, verbose=False,
                 checkpoint_dir: str | Path | None = None, run_uuid: str | None = None,
-                save_every_n_epochs: int = 0, save_best: bool = True):
+                save_every_n_epochs: int = 0, save_best: bool = True,
+                rot_augment: bool = False, rot_perturbation: float = 1.0):
     """
     Train model with EMA, gradient clipping, early stopping, and learning rate reduction on plateau.
     
@@ -1271,6 +1314,8 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
         dst_idx_flat=valid_dst_idx_flat,
         src_idx_flat=valid_src_idx_flat,
         batch_segments=valid_batch_segments,
+        rot_augment=rot_augment,
+        rot_perturbation=rot_perturbation,
     )
 
     from mmml.physnetjax.physnetjax.data.data import print_shapes
@@ -1301,6 +1346,8 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
             dst_idx_flat=train_dst_idx_flat,
             src_idx_flat=train_src_idx_flat,
             batch_segments=train_batch_segments,
+            rot_augment=rot_augment,
+            rot_perturbation=rot_perturbation,
         )
 
         train_loss = 0.0
@@ -1503,6 +1550,8 @@ def main(args=None):
     print(f"  reduce_on_plateau_accumulation_size: {args.reduce_on_plateau_accumulation_size}")
     print(f"  reduce_on_plateau_min_scale: {args.reduce_on_plateau_min_scale}")
     print(f"  save_every: {args.save_every}")
+    print(f"  rot_augment: {args.rot_augment}")
+    print(f"  rot_perturbation: {args.rot_perturbation}")
 
 
     # -------------------------
@@ -1611,6 +1660,8 @@ def main(args=None):
         run_uuid=run_uuid,
         save_every_n_epochs=args.save_every,
         save_best=True,
+        rot_augment=args.rot_augment,
+        rot_perturbation=args.rot_perturbation,
     )
 
     # Prepare model config
@@ -1649,6 +1700,8 @@ def main(args=None):
             'dipole_weight': args.dipole_weight,
             'charge_weight': args.charge_weight,
             'save_every': args.save_every,
+            'rot_augment': args.rot_augment,
+            'rot_perturbation': args.rot_perturbation,
         },
         'data': {
             'dataset': args.data,
