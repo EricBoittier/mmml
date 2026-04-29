@@ -1,0 +1,141 @@
+{
+  "description": {
+    "delta_F_couple_eV": "TI integral \u222b_0^1 \u27e8\u2202U/\u2202\u03bb\u27e9 d\u03bb (turn on intermolecular coupling)",
+    "delta_F_diss_eV": "Negative of delta_F_couple (decouple along same path)",
+    "lambda_definition": "lambda_monomer[0] varies; lambda_monomer[1]=1"
+  },
+  "delta_F_couple_eV": 1.4905929565429685e-06,
+  "delta_F_couple_kcal_mol": 3.4374415111541746e-05,
+  "delta_F_diss_eV": -1.4905929565429685e-06,
+  "delta_F_diss_kcal_mol": -3.4374415111541746e-05,
+  "windows": [
+    {
+      "window": 0,
+      "lambda_decoupled_monomer": 0.0,
+      "decouple_monomer_index": 0,
+      "mean_dUdlambda_eV": 1.24359130859375e-05,
+      "std_dUdlambda_eV": 0.0004545517517770039,
+      "n_samples": 200,
+      "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_00_lam0.00_prod.traj"
+    },
+    {
+      "window": 1,
+      "lambda_decoupled_monomer": 0.1,
+      "decouple_monomer_index": 0,
+      "mean_dUdlambda_eV": 2.54058837890625e-05,
+      "std_dUdlambda_eV": 0.0003981309531359447,
+      "n_samples": 200,
+      "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_01_lam0.10_prod.traj"
+    },
+    {
+      "window": 2,
+      "lambda_decoupled_monomer": 0.2,
+      "decouple_monomer_index": 0,
+      "mean_dUdlambda_eV": 2.9850006103515626e-05,
+      "std_dUdlambda_eV": 0.0004104776339362031,
+      "n_samples": 200,
+      "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_02_lam0.20_prod.traj"
+    },
+    {
+      "window": 3,
+      "lambda_decoupled_monomer": 0.3,
+      "decouple_monomer_index": 0,
+      "mean_dUdlambda_eV": -4.14276123046875e-05,
+      "std_dUdlambda_eV": 0.0003687715495559272,
+      "n_samples": 200,
+      "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_03_lam0.30_prod.traj"
+    },
+    {
+      "window": 4,
+      "lambda_decoupled_monomer": 0.4,
+      "decouple_monomer_index": 0,
+      "mean_dUdlambda_eV": -4.70733642578125e-05,
+      "std_dUdlambda_eV": 0.0005041430128726127,
+      "n_samples": 200,
+      "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_04_lam0.40_prod.traj"
+    },
+    {
+      "window": 5,
+      "lambda_decoupled_monomer": 0.5,
+      "decouple_monomer_index": 0,
+      "mean_dUdlambda_eV": 7.404327392578125e-05,
+      "std_dUdlambda_eV": 0.0004742373263000993,
+      "n_samples": 200,
+      "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_05_lam0.50_prod.traj"
+    },
+    {
+      "window": 6,
+      "lambda_decoupled_monomer": 0.6,
+      "decouple_monomer_index": 0,
+      "mean_dUdlambda_eV": 2.51007080078125e-05,
+      "std_dUdlambda_eV": 0.0004191931164514239,
+      "n_samples": 200,
+      "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_06_lam0.60_prod.traj"
+    },
+    {
+      "window": 7,
+      "lambda_decoupled_monomer": 0.7,
+      "decouple_monomer_index": 0,
+      "mean_dUdlambda_eV": 3.0994415283203125e-05,
+      "std_dUdlambda_eV": 0.0004928988829496041,
+      "n_samples": 200,
+      "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_07_lam0.70_prod.traj"
+    },
+    {
+      "window": 8,
+      "lambda_decoupled_monomer": 0.8,
+      "decouple_monomer_index": 0,
+      "mean_dUdlambda_eV": -1.9245147705078125e-05,
+      "std_dUdlambda_eV": 0.00044082326968791075,
+      "n_samples": 200,
+      "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_08_lam0.80_prod.traj"
+    },
+    {
+      "window": 9,
+      "lambda_decoupled_monomer": 0.9,
+      "decouple_monomer_index": 0,
+      "mean_dUdlambda_eV": -7.999420166015625e-05,
+      "std_dUdlambda_eV": 0.0005448924723998076,
+      "n_samples": 200,
+      "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_09_lam0.90_prod.traj"
+    },
+    {
+      "window": 10,
+      "lambda_decoupled_monomer": 1.0,
+      "decouple_monomer_index": 0,
+      "mean_dUdlambda_eV": 2.2068023681640626e-05,
+      "std_dUdlambda_eV": 0.00044977592128995,
+      "n_samples": 200,
+      "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_10_lam1.00_prod.traj"
+    }
+  ],
+  "args": {
+    "checkpoint": null,
+    "output_dir": "artifacts/meoh_dimer_lambda_ti",
+    "template_pdb": "mmml/generate/sample/pdb/meoh.pdb",
+    "initial_sep": 3.2,
+    "decouple_monomer": 0,
+    "lambda_windows": [
+      0.0,
+      0.1,
+      0.2,
+      0.3,
+      0.4,
+      0.5,
+      0.6,
+      0.7,
+      0.8,
+      0.9,
+      1.0
+    ],
+    "n_equil": 2000,
+    "n_prod": 8000,
+    "interval": 40,
+    "timestep_fs": 0.5,
+    "temperature_K": 300.0,
+    "friction": 0.02,
+    "ml_cutoff": 5.0,
+    "mm_switch_on": 5.0,
+    "mm_cutoff": 3.0
+  }
+}
