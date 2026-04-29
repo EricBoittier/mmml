@@ -1,0 +1,92 @@
+{
+  "description": {
+    "delta_F_couple_eV": "TI integral \u222b_0^1 \u27e8\u2202U/\u2202\u03bb\u27e9 d\u03bb (turn on intermolecular coupling)",
+    "delta_F_diss_eV": "Negative of delta_F_couple (decouple along same path)",
+    "lambda_definition": "lambda_monomer[0] varies; lambda_monomer[1]=1"
+  },
+  "delta_F_couple_eV": 3.0517578125e-05,
+  "delta_F_couple_kcal_mol": 0.0007037628173828125,
+  "delta_F_diss_eV": -3.0517578125e-05,
+  "delta_F_diss_kcal_mol": -0.0007037628173828125,
+  "mbar": {
+    "Delta_f_lambda1_minus_lambda0_kT": 0.00166204729193975,
+    "dDelta_f_kT": 0.0016760995576540177,
+    "Delta_F_couple_eV": 4.2967231652166366e-05,
+    "dDelta_F_couple_eV": 4.3330510699104954e-05,
+    "Delta_F_couple_kcal_mol": 0.0009908630324074433,
+    "dDelta_F_couple_kcal_mol": 0.0009992405741809894,
+    "Delta_F_diss_eV": -4.2967231652166366e-05,
+    "Delta_F_diss_kcal_mol": -0.0009908630324074433,
+    "N_k": [
+      4,
+      4,
+      4
+    ],
+    "N_k_effective": [
+      4,
+      4,
+      4
+    ],
+    "g_k": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "note": "Coupling \u0394F = F(\u03bb=1) - F(\u03bb=0) from MBAR; dissociation is the negative."
+  },
+  "windows": [
+    {
+      "window": 0,
+      "lambda_decoupled_monomer": 0.0,
+      "decouple_monomer_index": 0,
+      "mean_dUdlambda_eV": 0.00024890899658203125,
+      "std_dUdlambda_eV": 0.00043112302854106616,
+      "n_samples": 4,
+      "traj": "/home/ericb/mmml/artifacts/meoh_ti_mbar_decor_smoke/trajectories/win_00_lam0.00_prod.traj"
+    },
+    {
+      "window": 1,
+      "lambda_decoupled_monomer": 0.5,
+      "decouple_monomer_index": 0,
+      "mean_dUdlambda_eV": -4.863739013671875e-05,
+      "std_dUdlambda_eV": 0.00010981343383578922,
+      "n_samples": 4,
+      "traj": "/home/ericb/mmml/artifacts/meoh_ti_mbar_decor_smoke/trajectories/win_01_lam0.50_prod.traj"
+    },
+    {
+      "window": 2,
+      "lambda_decoupled_monomer": 1.0,
+      "decouple_monomer_index": 0,
+      "mean_dUdlambda_eV": -2.956390380859375e-05,
+      "std_dUdlambda_eV": 5.120618346656341e-05,
+      "n_samples": 4,
+      "traj": "/home/ericb/mmml/artifacts/meoh_ti_mbar_decor_smoke/trajectories/win_02_lam1.00_prod.traj"
+    }
+  ],
+  "args": {
+    "checkpoint": null,
+    "output_dir": "artifacts/meoh_ti_mbar_decor_smoke",
+    "template_pdb": "mmml/generate/sample/pdb/meoh.pdb",
+    "initial_sep": 3.2,
+    "decouple_monomer": 0,
+    "lambda_windows": [
+      0.0,
+      0.5,
+      1.0
+    ],
+    "min_steps": 2,
+    "min_fmax": 0.03,
+    "n_equil": 2,
+    "n_prod": 20,
+    "interval": 5,
+    "timestep_fs": 0.5,
+    "temperature_K": 300.0,
+    "friction": 0.02,
+    "ml_cutoff": 5.0,
+    "mm_switch_on": 5.0,
+    "mm_cutoff": 3.0,
+    "no_mbar": false,
+    "mbar_verbose": false,
+    "no_fix_com": false
+  }
+}

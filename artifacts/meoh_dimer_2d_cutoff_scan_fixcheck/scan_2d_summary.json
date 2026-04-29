@@ -1,0 +1,56 @@
+{
+  "args": {
+    "dmin": 2.6,
+    "dmax": 8.0,
+    "n_dist": 8,
+    "lambda_windows": [
+      0.0,
+      0.5,
+      1.0
+    ],
+    "ml_cutoff": 5.0,
+    "mm_switch_on": 5.0,
+    "mm_cutoff": 3.0,
+    "cutoff_region_start_A": 0.0,
+    "cutoff_region_end_A": 5.0
+  },
+  "outputs": {
+    "csv": "/home/ericb/mmml/artifacts/meoh_dimer_2d_cutoff_scan_fixcheck/scan_2d_components.csv",
+    "plots": [
+      "/home/ericb/mmml/artifacts/meoh_dimer_2d_cutoff_scan_fixcheck/DeltaLambda_E_ml2b.png",
+      "/home/ericb/mmml/artifacts/meoh_dimer_2d_cutoff_scan_fixcheck/DeltaLambda_E_mm.png",
+      "/home/ericb/mmml/artifacts/meoh_dimer_2d_cutoff_scan_fixcheck/DeltaLambda_E_total.png",
+      "/home/ericb/mmml/artifacts/meoh_dimer_2d_cutoff_scan_fixcheck/DeltaLambda_F_ml2b.png",
+      "/home/ericb/mmml/artifacts/meoh_dimer_2d_cutoff_scan_fixcheck/DeltaLambda_F_mm.png",
+      "/home/ericb/mmml/artifacts/meoh_dimer_2d_cutoff_scan_fixcheck/DeltaLambda_F_total.png",
+      "/home/ericb/mmml/artifacts/meoh_dimer_2d_cutoff_scan_fixcheck/E_internal_2d.png",
+      "/home/ericb/mmml/artifacts/meoh_dimer_2d_cutoff_scan_fixcheck/E_ml2b_2d.png",
+      "/home/ericb/mmml/artifacts/meoh_dimer_2d_cutoff_scan_fixcheck/E_mm_2d.png",
+      "/home/ericb/mmml/artifacts/meoh_dimer_2d_cutoff_scan_fixcheck/E_total_2d.png",
+      "/home/ericb/mmml/artifacts/meoh_dimer_2d_cutoff_scan_fixcheck/F_internal_2d.png",
+      "/home/ericb/mmml/artifacts/meoh_dimer_2d_cutoff_scan_fixcheck/F_ml2b_2d.png",
+      "/home/ericb/mmml/artifacts/meoh_dimer_2d_cutoff_scan_fixcheck/F_mm_2d.png",
+      "/home/ericb/mmml/artifacts/meoh_dimer_2d_cutoff_scan_fixcheck/F_total_2d.png",
+      "/home/ericb/mmml/artifacts/meoh_dimer_2d_cutoff_scan_fixcheck/cutoff_component_slices.png",
+      "/home/ericb/mmml/artifacts/meoh_dimer_2d_cutoff_scan_fixcheck/cutoff_forceform_slices.png"
+    ]
+  },
+  "ranges": {
+    "E_ml2b_minmax_eV": [
+      -0.0,
+      -0.0
+    ],
+    "E_mm_minmax_eV": [
+      0.0,
+      0.0
+    ],
+    "dlambda_ml2b_minmax_eV": [
+      0.0,
+      0.0
+    ],
+    "dlambda_mm_minmax_eV": [
+      0.0,
+      0.0
+    ]
+  }
+}

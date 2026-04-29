@@ -1,0 +1,32 @@
+{
+  "args": {
+    "dmin": 2.6,
+    "dmax": 8.0,
+    "n_dist": 6,
+    "lambda_windows": [
+      0.0,
+      0.5,
+      1.0
+    ],
+    "ml_cutoff": 5.0,
+    "mm_switch_on": 5.0,
+    "mm_cutoff": 3.0,
+    "cutoff_region_start_A": 0.0,
+    "cutoff_region_end_A": 5.0
+  },
+  "outputs": {
+    "csv": "/home/ericb/mmml/artifacts/meoh_dimer_2d_cutoff_scan_smoke/scan_2d_components.csv",
+    "plots": [
+      "/home/ericb/mmml/artifacts/meoh_dimer_2d_cutoff_scan_smoke/E_internal_2d.png",
+      "/home/ericb/mmml/artifacts/meoh_dimer_2d_cutoff_scan_smoke/E_ml2b_2d.png",
+      "/home/ericb/mmml/artifacts/meoh_dimer_2d_cutoff_scan_smoke/E_mm_2d.png",
+      "/home/ericb/mmml/artifacts/meoh_dimer_2d_cutoff_scan_smoke/E_total_2d.png",
+      "/home/ericb/mmml/artifacts/meoh_dimer_2d_cutoff_scan_smoke/F_internal_2d.png",
+      "/home/ericb/mmml/artifacts/meoh_dimer_2d_cutoff_scan_smoke/F_ml2b_2d.png",
+      "/home/ericb/mmml/artifacts/meoh_dimer_2d_cutoff_scan_smoke/F_mm_2d.png",
+      "/home/ericb/mmml/artifacts/meoh_dimer_2d_cutoff_scan_smoke/F_total_2d.png",
+      "/home/ericb/mmml/artifacts/meoh_dimer_2d_cutoff_scan_smoke/cutoff_component_slices.png",
+      "/home/ericb/mmml/artifacts/meoh_dimer_2d_cutoff_scan_smoke/cutoff_forceform_slices.png"
+    ]
+  }
+}

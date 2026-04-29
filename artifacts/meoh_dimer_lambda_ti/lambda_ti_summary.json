@@ -1,119 +1,581 @@
 {
+  "geometry": {
+    "initial_com_separation_A": 3.5,
+    "seed_com_separation_A": 3.4999999999999996,
+    "note": "Every \u03bb window and repeat starts from the same seed with this COM separation (before minimization/MD)."
+  },
   "description": {
     "delta_F_couple_eV": "TI integral \u222b_0^1 \u27e8\u2202U/\u2202\u03bb\u27e9 d\u03bb (turn on intermolecular coupling)",
     "delta_F_diss_eV": "Negative of delta_F_couple (decouple along same path)",
     "lambda_definition": "lambda_monomer[0] varies; lambda_monomer[1]=1"
   },
-  "delta_F_couple_eV": 1.4905929565429685e-06,
-  "delta_F_couple_kcal_mol": 3.4374415111541746e-05,
-  "delta_F_diss_eV": -1.4905929565429685e-06,
-  "delta_F_diss_kcal_mol": -3.4374415111541746e-05,
+  "delta_F_couple_eV": -1.5721825744628906,
+  "delta_F_couple_kcal_mol": -36.255945131431275,
+  "delta_F_diss_eV": 1.5721825744628906,
+  "delta_F_diss_kcal_mol": 36.255945131431275,
+  "mbar": {
+    "Delta_f_lambda1_minus_lambda0_kT": -90.2959581986041,
+    "dDelta_f_kT": 0.7696056811586833,
+    "Delta_F_couple_eV": -1.5562201998258567,
+    "dDelta_F_couple_eV": 0.013263892767886877,
+    "Delta_F_couple_kcal_mol": -35.8878384061641,
+    "dDelta_F_couple_kcal_mol": 0.3058773047309625,
+    "Delta_F_diss_eV": 1.5562201998258567,
+    "Delta_F_diss_kcal_mol": 35.8878384061641,
+    "N_k": [
+      500,
+      500,
+      500,
+      500,
+      500,
+      500,
+      500,
+      500,
+      500,
+      500,
+      500
+    ],
+    "N_k_effective": [
+      16,
+      17,
+      17,
+      32,
+      49,
+      43,
+      19,
+      26,
+      32,
+      26,
+      22
+    ],
+    "g_k": [
+      33.21420158589044,
+      30.081097253100193,
+      31.193609792832113,
+      15.688891083481593,
+      10.25394543423627,
+      11.636377773167828,
+      26.807585803946303,
+      19.709554983521475,
+      15.702615296728053,
+      19.596714386295353,
+      23.773006455028273
+    ],
+    "note": "Coupling \u0394F = F(\u03bb=1) - F(\u03bb=0) from MBAR; dissociation is the negative."
+  },
   "windows": [
     {
       "window": 0,
       "lambda_decoupled_monomer": 0.0,
       "decouple_monomer_index": 0,
-      "mean_dUdlambda_eV": 1.24359130859375e-05,
-      "std_dUdlambda_eV": 0.0004545517517770039,
-      "n_samples": 200,
-      "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_00_lam0.00_prod.traj"
+      "repeats_per_window": 5,
+      "mean_dUdlambda_eV": -0.15330565643310548,
+      "std_dUdlambda_eV": 0.26146525457824876,
+      "n_samples": 500,
+      "repeat_stats": [
+        {
+          "repeat": 0,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -0.17818058013916016,
+          "std_dUdlambda_eV": 0.21849775833654864,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_00_rep00_lam0.00_prod.traj"
+        },
+        {
+          "repeat": 1,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": 0.0017376708984375,
+          "std_dUdlambda_eV": 0.003475849012765544,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_00_rep01_lam0.00_prod.traj"
+        },
+        {
+          "repeat": 2,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -0.24385459899902343,
+          "std_dUdlambda_eV": 0.2750426728057106,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_00_rep02_lam0.00_prod.traj"
+        },
+        {
+          "repeat": 3,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -0.043920707702636716,
+          "std_dUdlambda_eV": 0.12105894736902853,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_00_rep03_lam0.00_prod.traj"
+        },
+        {
+          "repeat": 4,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -0.30231006622314455,
+          "std_dUdlambda_eV": 0.3697832025752525,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_00_rep04_lam0.00_prod.traj"
+        }
+      ]
     },
     {
       "window": 1,
       "lambda_decoupled_monomer": 0.1,
       "decouple_monomer_index": 0,
-      "mean_dUdlambda_eV": 2.54058837890625e-05,
-      "std_dUdlambda_eV": 0.0003981309531359447,
-      "n_samples": 200,
-      "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_01_lam0.10_prod.traj"
+      "repeats_per_window": 5,
+      "mean_dUdlambda_eV": -0.3299870834350586,
+      "std_dUdlambda_eV": 0.5364620804249176,
+      "n_samples": 500,
+      "repeat_stats": [
+        {
+          "repeat": 0,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -0.4853136444091797,
+          "std_dUdlambda_eV": 0.6631041644336542,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_01_rep00_lam0.10_prod.traj"
+        },
+        {
+          "repeat": 1,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -0.48070392608642576,
+          "std_dUdlambda_eV": 0.6481485669908286,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_01_rep01_lam0.10_prod.traj"
+        },
+        {
+          "repeat": 2,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -0.012684783935546874,
+          "std_dUdlambda_eV": 0.03472745326725278,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_01_rep02_lam0.10_prod.traj"
+        },
+        {
+          "repeat": 3,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -0.26961986541748045,
+          "std_dUdlambda_eV": 0.35342272081070414,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_01_rep03_lam0.10_prod.traj"
+        },
+        {
+          "repeat": 4,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -0.4016131973266602,
+          "std_dUdlambda_eV": 0.5447415420353469,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_01_rep04_lam0.10_prod.traj"
+        }
+      ]
     },
     {
       "window": 2,
       "lambda_decoupled_monomer": 0.2,
       "decouple_monomer_index": 0,
-      "mean_dUdlambda_eV": 2.9850006103515626e-05,
-      "std_dUdlambda_eV": 0.0004104776339362031,
-      "n_samples": 200,
-      "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_02_lam0.20_prod.traj"
+      "repeats_per_window": 5,
+      "mean_dUdlambda_eV": -1.0441348037719727,
+      "std_dUdlambda_eV": 0.6877520174550221,
+      "n_samples": 500,
+      "repeat_stats": [
+        {
+          "repeat": 0,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -1.5768140792846679,
+          "std_dUdlambda_eV": 0.22935820292997647,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_02_rep00_lam0.20_prod.traj"
+        },
+        {
+          "repeat": 1,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -0.7610380554199219,
+          "std_dUdlambda_eV": 0.5520260306143324,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_02_rep01_lam0.20_prod.traj"
+        },
+        {
+          "repeat": 2,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -0.47957252502441405,
+          "std_dUdlambda_eV": 0.5684956817055185,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_02_rep02_lam0.20_prod.traj"
+        },
+        {
+          "repeat": 3,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -1.739346046447754,
+          "std_dUdlambda_eV": 0.27415947116726297,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_02_rep03_lam0.20_prod.traj"
+        },
+        {
+          "repeat": 4,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -0.6639033126831054,
+          "std_dUdlambda_eV": 0.5466345243947806,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_02_rep04_lam0.20_prod.traj"
+        }
+      ]
     },
     {
       "window": 3,
       "lambda_decoupled_monomer": 0.3,
       "decouple_monomer_index": 0,
-      "mean_dUdlambda_eV": -4.14276123046875e-05,
-      "std_dUdlambda_eV": 0.0003687715495559272,
-      "n_samples": 200,
-      "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_03_lam0.30_prod.traj"
+      "repeats_per_window": 5,
+      "mean_dUdlambda_eV": -1.6612583465576172,
+      "std_dUdlambda_eV": 0.5290715865522295,
+      "n_samples": 500,
+      "repeat_stats": [
+        {
+          "repeat": 0,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -1.4354006958007812,
+          "std_dUdlambda_eV": 0.40143897926781,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_03_rep00_lam0.30_prod.traj"
+        },
+        {
+          "repeat": 1,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -1.2466738891601563,
+          "std_dUdlambda_eV": 0.7825341569334267,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_03_rep01_lam0.30_prod.traj"
+        },
+        {
+          "repeat": 2,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -2.0640918731689455,
+          "std_dUdlambda_eV": 0.27229889215711484,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_03_rep02_lam0.30_prod.traj"
+        },
+        {
+          "repeat": 3,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -1.9277324676513672,
+          "std_dUdlambda_eV": 0.2487807621999872,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_03_rep03_lam0.30_prod.traj"
+        },
+        {
+          "repeat": 4,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -1.6323928070068359,
+          "std_dUdlambda_eV": 0.18172431279625245,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_03_rep04_lam0.30_prod.traj"
+        }
+      ]
     },
     {
       "window": 4,
       "lambda_decoupled_monomer": 0.4,
       "decouple_monomer_index": 0,
-      "mean_dUdlambda_eV": -4.70733642578125e-05,
-      "std_dUdlambda_eV": 0.0005041430128726127,
-      "n_samples": 200,
-      "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_04_lam0.40_prod.traj"
+      "repeats_per_window": 5,
+      "mean_dUdlambda_eV": -1.7956502151489258,
+      "std_dUdlambda_eV": 0.28199027208028454,
+      "n_samples": 500,
+      "repeat_stats": [
+        {
+          "repeat": 0,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -1.9352423095703124,
+          "std_dUdlambda_eV": 0.12987931764635938,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_04_rep00_lam0.40_prod.traj"
+        },
+        {
+          "repeat": 1,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -1.6633841705322265,
+          "std_dUdlambda_eV": 0.1794927988903434,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_04_rep01_lam0.40_prod.traj"
+        },
+        {
+          "repeat": 2,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -1.8137259292602539,
+          "std_dUdlambda_eV": 0.26917123245590535,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_04_rep02_lam0.40_prod.traj"
+        },
+        {
+          "repeat": 3,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -2.0301480865478516,
+          "std_dUdlambda_eV": 0.20909600435849068,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_04_rep03_lam0.40_prod.traj"
+        },
+        {
+          "repeat": 4,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -1.5357505798339843,
+          "std_dUdlambda_eV": 0.26923579138308695,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_04_rep04_lam0.40_prod.traj"
+        }
+      ]
     },
     {
       "window": 5,
       "lambda_decoupled_monomer": 0.5,
       "decouple_monomer_index": 0,
-      "mean_dUdlambda_eV": 7.404327392578125e-05,
-      "std_dUdlambda_eV": 0.0004742373263000993,
-      "n_samples": 200,
-      "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_05_lam0.50_prod.traj"
+      "repeats_per_window": 5,
+      "mean_dUdlambda_eV": -2.034914016723633,
+      "std_dUdlambda_eV": 0.20395688834349096,
+      "n_samples": 500,
+      "repeat_stats": [
+        {
+          "repeat": 0,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -1.9781309127807618,
+          "std_dUdlambda_eV": 0.21736649505607694,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_05_rep00_lam0.50_prod.traj"
+        },
+        {
+          "repeat": 1,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -2.176758041381836,
+          "std_dUdlambda_eV": 0.13455745683132772,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_05_rep01_lam0.50_prod.traj"
+        },
+        {
+          "repeat": 2,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -1.9697901153564452,
+          "std_dUdlambda_eV": 0.2013125329823592,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_05_rep02_lam0.50_prod.traj"
+        },
+        {
+          "repeat": 3,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -2.0527095794677734,
+          "std_dUdlambda_eV": 0.18594876406209274,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_05_rep03_lam0.50_prod.traj"
+        },
+        {
+          "repeat": 4,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -1.9971814346313477,
+          "std_dUdlambda_eV": 0.19547091804482347,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_05_rep04_lam0.50_prod.traj"
+        }
+      ]
     },
     {
       "window": 6,
       "lambda_decoupled_monomer": 0.6,
       "decouple_monomer_index": 0,
-      "mean_dUdlambda_eV": 2.51007080078125e-05,
-      "std_dUdlambda_eV": 0.0004191931164514239,
-      "n_samples": 200,
-      "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_06_lam0.60_prod.traj"
+      "repeats_per_window": 5,
+      "mean_dUdlambda_eV": -1.9230741424560547,
+      "std_dUdlambda_eV": 0.19227865015381426,
+      "n_samples": 500,
+      "repeat_stats": [
+        {
+          "repeat": 0,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -1.7466398239135743,
+          "std_dUdlambda_eV": 0.17089428574710994,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_06_rep00_lam0.60_prod.traj"
+        },
+        {
+          "repeat": 1,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -1.9186362838745117,
+          "std_dUdlambda_eV": 0.11861926241943017,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_06_rep01_lam0.60_prod.traj"
+        },
+        {
+          "repeat": 2,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -2.010805358886719,
+          "std_dUdlambda_eV": 0.15305867206734347,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_06_rep02_lam0.60_prod.traj"
+        },
+        {
+          "repeat": 3,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -2.102236099243164,
+          "std_dUdlambda_eV": 0.14077289512612037,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_06_rep03_lam0.60_prod.traj"
+        },
+        {
+          "repeat": 4,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -1.8370531463623048,
+          "std_dUdlambda_eV": 0.14139270453676683,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_06_rep04_lam0.60_prod.traj"
+        }
+      ]
     },
     {
       "window": 7,
       "lambda_decoupled_monomer": 0.7,
       "decouple_monomer_index": 0,
-      "mean_dUdlambda_eV": 3.0994415283203125e-05,
-      "std_dUdlambda_eV": 0.0004928988829496041,
-      "n_samples": 200,
-      "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_07_lam0.70_prod.traj"
+      "repeats_per_window": 5,
+      "mean_dUdlambda_eV": -2.00235538482666,
+      "std_dUdlambda_eV": 0.17204566721359255,
+      "n_samples": 500,
+      "repeat_stats": [
+        {
+          "repeat": 0,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -1.9628703308105468,
+          "std_dUdlambda_eV": 0.22560750848035319,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_07_rep00_lam0.70_prod.traj"
+        },
+        {
+          "repeat": 1,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -2.002347259521484,
+          "std_dUdlambda_eV": 0.1614196143518917,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_07_rep01_lam0.70_prod.traj"
+        },
+        {
+          "repeat": 2,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -1.966813507080078,
+          "std_dUdlambda_eV": 0.13364029255535623,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_07_rep02_lam0.70_prod.traj"
+        },
+        {
+          "repeat": 3,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -1.9879637908935548,
+          "std_dUdlambda_eV": 0.16030206511727366,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_07_rep03_lam0.70_prod.traj"
+        },
+        {
+          "repeat": 4,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -2.0917820358276367,
+          "std_dUdlambda_eV": 0.12829847958517054,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_07_rep04_lam0.70_prod.traj"
+        }
+      ]
     },
     {
       "window": 8,
       "lambda_decoupled_monomer": 0.8,
       "decouple_monomer_index": 0,
-      "mean_dUdlambda_eV": -1.9245147705078125e-05,
-      "std_dUdlambda_eV": 0.00044082326968791075,
-      "n_samples": 200,
-      "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_08_lam0.80_prod.traj"
+      "repeats_per_window": 5,
+      "mean_dUdlambda_eV": -1.9817566986083985,
+      "std_dUdlambda_eV": 0.14902942317749185,
+      "n_samples": 500,
+      "repeat_stats": [
+        {
+          "repeat": 0,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -1.9007620620727539,
+          "std_dUdlambda_eV": 0.07745832528791069,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_08_rep00_lam0.80_prod.traj"
+        },
+        {
+          "repeat": 1,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -2.061089668273926,
+          "std_dUdlambda_eV": 0.220906677567435,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_08_rep01_lam0.80_prod.traj"
+        },
+        {
+          "repeat": 2,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -1.9811729431152343,
+          "std_dUdlambda_eV": 0.10608524588403102,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_08_rep02_lam0.80_prod.traj"
+        },
+        {
+          "repeat": 3,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -2.018262252807617,
+          "std_dUdlambda_eV": 0.10224434630310639,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_08_rep03_lam0.80_prod.traj"
+        },
+        {
+          "repeat": 4,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -1.9474965667724609,
+          "std_dUdlambda_eV": 0.13849441379632615,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_08_rep04_lam0.80_prod.traj"
+        }
+      ]
     },
     {
       "window": 9,
       "lambda_decoupled_monomer": 0.9,
       "decouple_monomer_index": 0,
-      "mean_dUdlambda_eV": -7.999420166015625e-05,
-      "std_dUdlambda_eV": 0.0005448924723998076,
-      "n_samples": 200,
-      "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_09_lam0.90_prod.traj"
+      "repeats_per_window": 5,
+      "mean_dUdlambda_eV": -1.869975814819336,
+      "std_dUdlambda_eV": 0.5527762896198424,
+      "n_samples": 500,
+      "repeat_stats": [
+        {
+          "repeat": 0,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -2.067955856323242,
+          "std_dUdlambda_eV": 0.1235172306142588,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_09_rep00_lam0.90_prod.traj"
+        },
+        {
+          "repeat": 1,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -1.1474671936035157,
+          "std_dUdlambda_eV": 0.8459522828730717,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_09_rep01_lam0.90_prod.traj"
+        },
+        {
+          "repeat": 2,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -2.1479653549194335,
+          "std_dUdlambda_eV": 0.17451584875420864,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_09_rep02_lam0.90_prod.traj"
+        },
+        {
+          "repeat": 3,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -2.1495812225341795,
+          "std_dUdlambda_eV": 0.15049787842158602,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_09_rep03_lam0.90_prod.traj"
+        },
+        {
+          "repeat": 4,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -1.8369094467163085,
+          "std_dUdlambda_eV": 0.16138590429084673,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_09_rep04_lam0.90_prod.traj"
+        }
+      ]
     },
     {
       "window": 10,
       "lambda_decoupled_monomer": 1.0,
       "decouple_monomer_index": 0,
-      "mean_dUdlambda_eV": 2.2068023681640626e-05,
-      "std_dUdlambda_eV": 0.00044977592128995,
-      "n_samples": 200,
-      "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_10_lam1.00_prod.traj"
+      "repeats_per_window": 5,
+      "mean_dUdlambda_eV": -2.0041328201293944,
+      "std_dUdlambda_eV": 0.1654376693817903,
+      "n_samples": 500,
+      "repeat_stats": [
+        {
+          "repeat": 0,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -2.017984848022461,
+          "std_dUdlambda_eV": 0.19100215762655315,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_10_rep00_lam1.00_prod.traj"
+        },
+        {
+          "repeat": 1,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -1.8853797149658202,
+          "std_dUdlambda_eV": 0.11553041586503028,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_10_rep01_lam1.00_prod.traj"
+        },
+        {
+          "repeat": 2,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -2.003854522705078,
+          "std_dUdlambda_eV": 0.11463958167244288,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_10_rep02_lam1.00_prod.traj"
+        },
+        {
+          "repeat": 3,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -1.9829708099365235,
+          "std_dUdlambda_eV": 0.14529136978529023,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_10_rep03_lam1.00_prod.traj"
+        },
+        {
+          "repeat": 4,
+          "n_samples": 100,
+          "mean_dUdlambda_eV": -2.13047420501709,
+          "std_dUdlambda_eV": 0.14853606599539074,
+          "traj": "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/trajectories/win_10_rep04_lam1.00_prod.traj"
+        }
+      ]
     }
   ],
   "args": {
     "checkpoint": null,
     "output_dir": "artifacts/meoh_dimer_lambda_ti",
     "template_pdb": "mmml/generate/sample/pdb/meoh.pdb",
-    "initial_sep": 3.2,
+    "initial_sep": 3.5,
     "decouple_monomer": 0,
     "lambda_windows": [
       0.0,
@@ -128,14 +590,25 @@
       0.9,
       1.0
     ],
-    "n_equil": 2000,
-    "n_prod": 8000,
-    "interval": 40,
-    "timestep_fs": 0.5,
-    "temperature_K": 300.0,
+    "min_steps": 8,
+    "min_fmax": 0.03,
+    "n_equil": 500,
+    "n_prod": 2000,
+    "repeats_per_window": 5,
+    "interval": 20,
+    "timestep_fs": 0.25,
+    "temperature_K": 200.0,
     "friction": 0.02,
-    "ml_cutoff": 5.0,
+    "ml_cutoff": 1.5,
     "mm_switch_on": 5.0,
-    "mm_cutoff": 3.0
-  }
+    "mm_cutoff": 5.0,
+    "no_mbar": false,
+    "mbar_verbose": false,
+    "no_fix_com": false
+  },
+  "plots": [
+    "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/ti_components_per_window.png",
+    "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/ti_repeat_components_per_window.png",
+    "/home/ericb/mmml/artifacts/meoh_dimer_lambda_ti/mbar_per_window_diagnostics.png"
+  ]
 }
