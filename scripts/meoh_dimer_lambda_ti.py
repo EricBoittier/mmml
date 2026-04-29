@@ -79,14 +79,18 @@ def _dUdlambda_at_R(calc, atoms: ase.Atoms, dec_idx: int, lam_restore: float) ->
     lam_off[dec_idx] = 0.0
     calc.set_lambda_monomer(lam_full)
     atoms.set_positions(r)
+    # λ changed without moving atoms: ASE would reuse cached energy unless we invalidate.
+    calc.results.clear()
     e_on = float(atoms.get_potential_energy())
     calc.set_lambda_monomer(lam_off)
     atoms.set_positions(r)
+    calc.results.clear()
     e_off = float(atoms.get_potential_energy())
     lam_cur = np.ones(2, dtype=np.float32)
     lam_cur[dec_idx] = float(lam_restore)
     calc.set_lambda_monomer(lam_cur)
     atoms.set_positions(r)
+    calc.results.clear()
     return e_on - e_off
 
 
