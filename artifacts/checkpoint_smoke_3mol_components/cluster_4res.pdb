@@ -1,0 +1,34 @@
+REMARK  EXECUTING CHARMM SCRIPT FROM PYTHON                                           
+REMARK   DATE:     4/29/26     16:35:47      CREATED BY USER: ericb                   
+ATOM      1  O1  ACO     1      -0.000  -0.000   0.000  1.00  0.00      CLST
+ATOM      2  C1  ACO     1       0.000   0.000   0.000  1.00  0.00      CLST
+ATOM      3  C2  ACO     1       0.000   0.000   0.000  1.00  0.00      CLST
+ATOM      4  C3  ACO     1       0.000   0.000   0.000  1.00  0.00      CLST
+ATOM      5  H21 ACO     1       0.000   0.000   0.000  1.00  0.00      CLST
+ATOM      6  H22 ACO     1       0.000   0.000   0.000  1.00  0.00      CLST
+ATOM      7  H23 ACO     1       0.000   0.000   0.000  1.00  0.00      CLST
+ATOM      8  H31 ACO     1       0.000   0.000   0.000  1.00  0.00      CLST
+ATOM      9  H32 ACO     1       0.000   0.000   0.000  1.00  0.00      CLST
+ATOM     10  H33 ACO     1       0.000   0.000   0.000  1.00  0.00      CLST
+ATOM     11  O1  ACO     2       8.000   0.000   0.000  1.00  0.00      CLST
+ATOM     12  C1  ACO     2       8.000   0.000   0.000  1.00  0.00      CLST
+ATOM     13  C2  ACO     2       8.000   0.000   0.000  1.00  0.00      CLST
+ATOM     14  C3  ACO     2       8.000   0.000   0.000  1.00  0.00      CLST
+ATOM     15  H21 ACO     2       8.000   0.000   0.000  1.00  0.00      CLST
+ATOM     16  H22 ACO     2       8.000   0.000   0.000  1.00  0.00      CLST
+ATOM     17  H23 ACO     2       8.000   0.000   0.000  1.00  0.00      CLST
+ATOM     18  H31 ACO     2       8.000   0.000   0.000  1.00  0.00      CLST
+ATOM     19  H32 ACO     2       8.000   0.000   0.000  1.00  0.00      CLST
+ATOM     20  H33 ACO     2       8.000   0.000   0.000  1.00  0.00      CLST
+ATOM     21  O1  ACO     3       0.000   8.000   0.000  1.00  0.00      CLST
+ATOM     22  C1  ACO     3       0.000   8.000   0.000  1.00  0.00      CLST
+ATOM     23  C2  ACO     3       0.000   8.000   0.000  1.00  0.00      CLST
+ATOM     24  C3  ACO     3       0.000   8.000   0.000  1.00  0.00      CLST
+ATOM     25  H21 ACO     3       0.000   8.000   0.000  1.00  0.00      CLST
+ATOM     26  H22 ACO     3       0.000   8.000   0.000  1.00  0.00      CLST
+ATOM     27  H23 ACO     3       0.000   8.000   0.000  1.00  0.00      CLST
+ATOM     28  H31 ACO     3       0.000   8.000   0.000  1.00  0.00      CLST
+ATOM     29  H32 ACO     3       0.000   8.000   0.000  1.00  0.00      CLST
+ATOM     30  H33 ACO     3       0.000   8.000   0.000  1.00  0.00      CLST
+TER      31      ACO      3
+END
