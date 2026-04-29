@@ -22,9 +22,9 @@ After sampling, **pymbar** (MBAR) recomputes potentials at every λ for each sav
 snapshot and estimates ΔF between end states with uncertainties (optional extra
 ``mbar``; use ``--no-mbar`` to skip the post-processing pass).
 
-By default Langevin uses ASE's ``fixcm=True`` (may emit a FutureWarning for
-small systems). Pass ``--fix-com`` to use ``FixCom`` with ``fixcm=False`` per
-ASE 3.28+ NVT guidance.
+Langevin uses ``fixcm=False`` and ``ase.constraints.FixCom`` by default (ASE
+3.28+ small-system NVT; avoids the ``fixcm=True`` FutureWarning). Pass
+``--no-fix-com`` to drop the constraint if you need unconstrained COM motion.
 
 **Caveats:** gas-phase dimer; MBAR assumes uncorrelated snapshots (consider
 subsampling with ``pymbar.timeseries`` for production); pymbar may enable JAX
@@ -38,6 +38,7 @@ import importlib.util
 import json
 from pathlib import Path
 
+import matplotlib.pyplot as plt
 import pandas as pd
 
 import ase
@@ -45,7 +46,9 @@ import numpy as np
 from ase import units
 from ase.constraints import FixCom
 from ase.io.trajectory import Trajectory
-from ase.md.langevin import Langevin
+from ase.md.velocitydistribution import MaxwellBoltzmannDistribution, Stationary
+from ase.md.verlet import VelocityVerlet
+from ase.optimize import BFGS
 
 import mmml.interfaces.pycharmmInterface.import_pycharmm as pyci
 from mmml.cli.base import load_physnet_params_and_ef_model, resolve_checkpoint_paths
@@ -81,37 +84,174 @@ def _load_scan_module(repo_root: Path):
     return mod
 
 
-def _energy_at_lambda(calc, atoms: ase.Atoms, r: np.ndarray, dec_idx: int, lam_decoupled: float) -> float:
-    """Total potential energy (eV) at positions ``r`` with λ_decoupled on ``dec_idx``."""
-    lam_arr = np.ones(2, dtype=np.float32)
-    lam_arr[dec_idx] = float(lam_decoupled)
-    calc.set_lambda_monomer(lam_arr)
+def _energy_at_positions(calc, atoms: ase.Atoms, r: np.ndarray) -> float:
+    """Total potential energy (eV) at positions ``r`` using a fixed-lambda calculator."""
     atoms.set_positions(r)
     calc.results.clear()
     return float(atoms.get_potential_energy())
 
 
-def _dUdlambda_at_R(calc, atoms: ase.Atoms, dec_idx: int, lam_restore: float) -> float:
-    """∂U/∂λ at fixed R: U(λ_i=1) - U(λ_i=0) with the partner monomer at λ=1 (linear coupling)."""
-    r = atoms.get_positions().copy()
-    lam_full = np.ones(2, dtype=np.float32)
-    lam_off = np.ones(2, dtype=np.float32)
-    lam_off[dec_idx] = 0.0
-    calc.set_lambda_monomer(lam_full)
-    atoms.set_positions(r)
-    # λ changed without moving atoms: ASE would reuse cached energy unless we invalidate.
-    calc.results.clear()
-    e_on = float(atoms.get_potential_energy())
-    calc.set_lambda_monomer(lam_off)
-    atoms.set_positions(r)
-    calc.results.clear()
-    e_off = float(atoms.get_potential_energy())
-    lam_cur = np.ones(2, dtype=np.float32)
-    lam_cur[dec_idx] = float(lam_restore)
-    calc.set_lambda_monomer(lam_cur)
-    atoms.set_positions(r)
-    calc.results.clear()
+def _dUdlambda_at_R(
+    calc_on: object,
+    atoms_on: ase.Atoms,
+    calc_off: object,
+    atoms_off: ase.Atoms,
+    r: np.ndarray,
+) -> float:
+    """Explicit ∂U/∂λ estimator at fixed R: U(λ_i=1) - U(λ_i=0)."""
+    e_on = _energy_at_positions(calc_on, atoms_on, r)
+    e_off = _energy_at_positions(calc_off, atoms_off, r)
     return e_on - e_off
+
+
+def _meoh_dimer_com_distance_A(r: np.ndarray) -> float:
+    r = np.asarray(r, dtype=float)
+    com0 = r[:6].mean(axis=0)
+    com1 = r[6:12].mean(axis=0)
+    return float(np.linalg.norm(com1 - com0))
+
+
+def _meoh_dimer_set_com_separation(r: np.ndarray, sep_A: float) -> np.ndarray:
+    """Monomer 0 COM at origin, monomer 1 COM at (+sep_A, 0, 0); preserves intramolecular shape."""
+    r = np.asarray(r, dtype=float).copy()
+    m0, m1 = r[:6], r[6:12]
+    m0 = m0 - m0.mean(axis=0)
+    m1 = m1 - m1.mean(axis=0) + np.array([float(sep_A), 0.0, 0.0], dtype=float)
+    r[:6] = m0
+    r[6:12] = m1
+    return r
+
+
+def _build_fixed_lambda_calculator(
+    *,
+    atomic_numbers: np.ndarray,
+    atomic_positions: np.ndarray,
+    base_ckpt_dir: Path,
+    cutoff: CutoffParameters,
+    ml_cutoff: float,
+    mm_switch_on: float,
+    mm_cutoff: float,
+    at_codes: np.ndarray,
+    ep_scale: np.ndarray,
+    sig_scale: np.ndarray,
+    dec_idx: int,
+    lam_decoupled: float,
+) -> object:
+    """Create a fresh MMML ASE calculator with fixed lambda_monomer."""
+    lam_arr = np.ones(2, dtype=np.float32)
+    lam_arr[dec_idx] = float(lam_decoupled)
+    factory = setup_calculator(
+        ATOMS_PER_MONOMER=6,
+        N_MONOMERS=2,
+        ml_cutoff_distance=ml_cutoff,
+        mm_switch_on=mm_switch_on,
+        mm_cutoff=mm_cutoff,
+        doML=True,
+        doMM=True,
+        doML_dimer=True,
+        debug=False,
+        model_restart_path=base_ckpt_dir,
+        MAX_ATOMS_PER_SYSTEM=12,
+        cell=None,
+        ep_scale=ep_scale,
+        sig_scale=sig_scale,
+        at_codes_override=at_codes,
+        lambda_monomer=lam_arr,
+    )
+    calc, _, _ = factory(
+        atomic_numbers=atomic_numbers,
+        atomic_positions=atomic_positions,
+        n_monomers=2,
+        cutoff_params=cutoff,
+        doML=True,
+        doMM=True,
+        doML_dimer=True,
+        backprop=True,
+        debug=False,
+        energy_conversion_factor=1.0,
+        force_conversion_factor=1.0,
+        verbose=False,
+    )
+    return calc
+
+
+def _plot_window_components(
+    out_dir: Path,
+    rows: list[dict],
+    mbar_block: dict | None,
+) -> list[str]:
+    """Write per-window component and uncertainty plots."""
+    written: list[str] = []
+    if not rows:
+        return written
+
+    lam = np.array([float(r["lambda_decoupled_monomer"]) for r in rows], dtype=float)
+    mean = np.array([float(r["mean_dUdlambda_eV"]) for r in rows], dtype=float)
+    std = np.array([float(r["std_dUdlambda_eV"]) for r in rows], dtype=float)
+    n = np.array([max(1, int(r["n_samples"])) for r in rows], dtype=int)
+    sem = std / np.sqrt(n)
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.plot(lam, mean, marker="o", linewidth=1.5, label="Mean dU/dλ")
+    ax.errorbar(lam, mean, yerr=sem, fmt="none", ecolor="tab:blue", capsize=3, label="± SEM")
+    ax.fill_between(lam, mean - std, mean + std, alpha=0.2, color="tab:blue", label="± 1σ")
+    ax.set_xlabel("λ")
+    ax.set_ylabel("dU/dλ (eV)")
+    ax.set_title("TI components per window")
+    ax.grid(alpha=0.3)
+    ax.legend(loc="best")
+    fig.tight_layout()
+    p1 = out_dir / "ti_components_per_window.png"
+    fig.savefig(p1, dpi=160)
+    plt.close(fig)
+    written.append(str(p1))
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    for i, row in enumerate(rows):
+        rep = row.get("repeat_stats", [])
+        if isinstance(rep, list) and rep:
+            y = np.array([float(rr.get("mean_dUdlambda_eV", np.nan)) for rr in rep], dtype=float)
+            x = np.full_like(y, lam[i], dtype=float)
+            ax.scatter(x, y, s=25, alpha=0.7, color="tab:gray")
+    ax.plot(lam, mean, marker="o", linewidth=1.5, color="tab:red", label="Window mean")
+    ax.set_xlabel("λ")
+    ax.set_ylabel("dU/dλ (eV)")
+    ax.set_title("Per-repeat TI components")
+    ax.grid(alpha=0.3)
+    ax.legend(loc="best")
+    fig.tight_layout()
+    p2 = out_dir / "ti_repeat_components_per_window.png"
+    fig.savefig(p2, dpi=160)
+    plt.close(fig)
+    written.append(str(p2))
+
+    if mbar_block and "error" not in mbar_block and "N_k" in mbar_block:
+        n_k = np.array(mbar_block.get("N_k", []), dtype=float)
+        n_eff = np.array(mbar_block.get("N_k_effective", []), dtype=float)
+        g_k = np.array(mbar_block.get("g_k", []), dtype=float)
+        if n_k.size == lam.size:
+            fig, ax1 = plt.subplots(figsize=(8, 5))
+            ax1.plot(lam, n_k, marker="o", label="N_k")
+            if n_eff.size == lam.size:
+                ax1.plot(lam, n_eff, marker="o", label="N_k effective")
+            ax1.set_xlabel("λ")
+            ax1.set_ylabel("Sample counts")
+            ax1.grid(alpha=0.3)
+            ax2 = ax1.twinx()
+            if g_k.size == lam.size:
+                ax2.plot(lam, g_k, marker="s", linestyle="--", color="tab:green", label="g_k")
+                ax2.set_ylabel("Statistical inefficiency g")
+            lines1, labels1 = ax1.get_legend_handles_labels()
+            lines2, labels2 = ax2.get_legend_handles_labels()
+            ax1.legend(lines1 + lines2, labels1 + labels2, loc="best")
+            ax1.set_title("MBAR per-window sampling diagnostics")
+            fig.tight_layout()
+            p3 = out_dir / "mbar_per_window_diagnostics.png"
+            fig.savefig(p3, dpi=160)
+            plt.close(fig)
+            written.append(str(p3))
+
+    return written
 
 
 def main() -> int:
@@ -133,23 +273,41 @@ def main() -> int:
         "--lambda-windows",
         type=float,
         nargs="+",
-        default=[0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
+        default=[0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
         help="λ for the decoupled monomer (--decouple-monomer); partner stays at 1.",
+    )
+    parser.add_argument(
+        "--min-steps",
+        type=int,
+        default=10,
+        help="BFGS minimization steps at each lambda window before equilibration.",
+    )
+    parser.add_argument(
+        "--min-fmax",
+        type=float,
+        default=0.03,
+        help="BFGS convergence threshold (eV/Å) for per-window minimization.",
     )
     parser.add_argument("--n-equil", type=int, default=500, help="Langevin steps per window (equil).")
     parser.add_argument("--n-prod", type=int, default=2000, help="Production steps per window.")
+    parser.add_argument(
+        "--repeats-per-window",
+        type=int,
+        default=1,
+        help="Number of independent repeats per lambda window (all snapshots are pooled for MBAR).",
+    )
     parser.add_argument(
         "--interval",
         type=int,
         default=20,
         help="Sample ⟨∂U/∂λ⟩ every N production steps (extra energy evals).",
     )
-    parser.add_argument("--timestep-fs", type=float, default=0.5)
-    parser.add_argument("--temperature-K", type=float, default=300.0)
-    parser.add_argument("--friction", type=float, default=0.02, help="Langevin friction (1/fs).")
-    parser.add_argument("--ml-cutoff", type=float, default=5.0)
+    parser.add_argument("--timestep-fs", type=float, default=0.25)
+    parser.add_argument("--temperature-K", type=float, default=200.0, help="Unused in NVE mode; kept for output compatibility.")
+    parser.add_argument("--friction", type=float, default=0.02, help="Unused in NVE mode; kept for output compatibility.")
+    parser.add_argument("--ml-cutoff", type=float, default=1.5)
     parser.add_argument("--mm-switch-on", type=float, default=5.0)
-    parser.add_argument("--mm-cutoff", type=float, default=3.0)
+    parser.add_argument("--mm-cutoff", type=float, default=5.0)
     parser.add_argument(
         "--no-mbar",
         action="store_true",
@@ -161,13 +319,15 @@ def main() -> int:
         help="Verbose pymbar solver output.",
     )
     parser.add_argument(
-        "--fix-com",
+        "--no-fix-com",
         action="store_true",
-        help="Constrain system center of mass (use with fixcm=False; ASE 3.28+ small-system NVT).",
+        help="Do not use FixCom (keeps fixcm=False; only use if COM constraint causes issues).",
     )
     args = parser.parse_args()
     if args.interval < 1:
         parser.error("--interval must be >= 1")
+    if args.repeats_per_window < 1:
+        parser.error("--repeats-per-window must be >= 1")
 
     out_dir = args.output_dir.expanduser().resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -182,6 +342,8 @@ def main() -> int:
     if not tmpl.is_file():
         tmpl = repo_root / tmpl
     z, r0 = scan._setup_charmm_meoh_dimer(tmpl, initial_sep=args.initial_sep)
+    base_seed_positions = _meoh_dimer_set_com_separation(r0, args.initial_sep)
+    assert abs(_meoh_dimer_com_distance_A(base_seed_positions) - float(args.initial_sep)) < 1e-6
 
     if ckpt_root.is_file() and ckpt_root.suffix == ".json":
         phys_params, phys_model = load_physnet_params_and_ef_model(ckpt_root, natoms=len(z))
@@ -195,50 +357,13 @@ def main() -> int:
     ep_scale = np.ones(n_types, dtype=float)
     sig_scale = np.ones(n_types, dtype=float)
 
-    initial_lambda = np.ones(2, dtype=np.float32)
-    initial_lambda[args.decouple_monomer] = 1.0
-    factory = setup_calculator(
-        ATOMS_PER_MONOMER=6,
-        N_MONOMERS=2,
-        ml_cutoff_distance=args.ml_cutoff,
-        mm_switch_on=args.mm_switch_on,
-        mm_cutoff=args.mm_cutoff,
-        doML=True,
-        doMM=True,
-        doML_dimer=True,
-        debug=False,
-        model_restart_path=base_ckpt_dir,
-        MAX_ATOMS_PER_SYSTEM=12,
-        cell=None,
-        ep_scale=ep_scale,
-        sig_scale=sig_scale,
-        at_codes_override=at_codes,
-        lambda_monomer=initial_lambda,
-    )
     cutoff = CutoffParameters(
         ml_cutoff=args.ml_cutoff,
         mm_switch_on=args.mm_switch_on,
         mm_cutoff=args.mm_cutoff,
     )
 
-    atoms = ase.Atoms(numbers=z, positions=r0)
-    hybrid_calc, _, _ = factory(
-        atomic_numbers=z,
-        atomic_positions=r0,
-        n_monomers=2,
-        cutoff_params=cutoff,
-        doML=True,
-        doMM=True,
-        doML_dimer=True,
-        backprop=False,
-        debug=False,
-        energy_conversion_factor=1.0,
-        force_conversion_factor=1.0,
-        verbose=False,
-    )
-    atoms.calc = hybrid_calc
-    if args.fix_com:
-        atoms.set_constraint(FixCom())
+    use_fix_com = not args.no_fix_com
 
     lambda_windows = sorted(float(x) for x in args.lambda_windows)
     dec_idx = args.decouple_monomer
@@ -250,46 +375,109 @@ def main() -> int:
     traj_root.mkdir(exist_ok=True)
 
     dt = args.timestep_fs * units.fs
-    friction = args.friction / units.fs
-
     for wi, lam in enumerate(lambda_windows):
-        lam_arr = np.ones(2, dtype=np.float32)
-        lam_arr[dec_idx] = lam
-        hybrid_calc.set_lambda_monomer(lam_arr)
-        coor.set_positions(pd.DataFrame(atoms.get_positions(), columns=["x", "y", "z"]))
-
-        prod_path = traj_root / f"win_{wi:02d}_lam{lam:.2f}_prod.traj"
-        traj_prod = Trajectory(str(prod_path), "w", atoms)
-
-        dyn_eq = Langevin(
-            atoms,
-            timestep=dt,
-            temperature_K=args.temperature_K,
-            friction=friction,
-            fixcm=not args.fix_com,
-        )
-        dyn_eq.run(args.n_equil)
-
         samples: list[float] = []
-        step_count = [0]
+        repeat_stats: list[dict[str, float | int | str]] = []
+        for rep in range(args.repeats_per_window):
+            r_init = _meoh_dimer_set_com_separation(base_seed_positions, args.initial_sep)
+            atoms = ase.Atoms(numbers=z, positions=r_init)
+            if use_fix_com:
+                atoms.set_constraint(FixCom())
+            calc_dyn = _build_fixed_lambda_calculator(
+                atomic_numbers=z,
+                atomic_positions=atoms.get_positions(),
+                base_ckpt_dir=base_ckpt_dir,
+                cutoff=cutoff,
+                ml_cutoff=args.ml_cutoff,
+                mm_switch_on=args.mm_switch_on,
+                mm_cutoff=args.mm_cutoff,
+                at_codes=at_codes,
+                ep_scale=ep_scale,
+                sig_scale=sig_scale,
+                dec_idx=dec_idx,
+                lam_decoupled=lam,
+            )
+            atoms.calc = calc_dyn
+            # NVE setup: assign thermal velocities, then remove net COM drift.
+            MaxwellBoltzmannDistribution(atoms, temperature_K=args.temperature_K)
+            Stationary(atoms)
+            coor.set_positions(pd.DataFrame(atoms.get_positions(), columns=["x", "y", "z"]))
 
-        def _on_step(_atoms=atoms):
-            step_count[0] += 1
-            if step_count[0] % args.interval == 0:
-                samples.append(_dUdlambda_at_R(hybrid_calc, _atoms, dec_idx, lam))
-                snapshots_per_window[wi].append(_atoms.get_positions().copy())
+            min_traj_path = traj_root / f"win_{wi:02d}_rep{rep:02d}_lam{lam:.2f}_min.traj"
+            minimizer = BFGS(atoms, trajectory=str(min_traj_path), logfile=None)
+            minimizer.run(fmax=args.min_fmax, steps=args.min_steps)
+            coor.set_positions(pd.DataFrame(atoms.get_positions(), columns=["x", "y", "z"]))
 
-        dyn_prod = Langevin(
-            atoms,
-            timestep=dt,
-            temperature_K=args.temperature_K,
-            friction=friction,
-            fixcm=not args.fix_com,
-        )
-        dyn_prod.attach(traj_prod.write, interval=max(1, args.interval))
-        dyn_prod.attach(_on_step)
-        dyn_prod.run(args.n_prod)
-        traj_prod.close()
+            prod_path = traj_root / f"win_{wi:02d}_rep{rep:02d}_lam{lam:.2f}_prod.traj"
+            traj_prod = Trajectory(str(prod_path), "w", atoms)
+
+            dyn_eq = VelocityVerlet(atoms, timestep=dt)
+            dyn_eq.run(args.n_equil)
+
+            samples_rep: list[float] = []
+            step_count = [0]
+            atoms_probe_on = ase.Atoms(numbers=z, positions=atoms.get_positions().copy())
+            atoms_probe_off = ase.Atoms(numbers=z, positions=atoms.get_positions().copy())
+            calc_probe_on = _build_fixed_lambda_calculator(
+                atomic_numbers=z,
+                atomic_positions=atoms_probe_on.get_positions(),
+                base_ckpt_dir=base_ckpt_dir,
+                cutoff=cutoff,
+                ml_cutoff=args.ml_cutoff,
+                mm_switch_on=args.mm_switch_on,
+                mm_cutoff=args.mm_cutoff,
+                at_codes=at_codes,
+                ep_scale=ep_scale,
+                sig_scale=sig_scale,
+                dec_idx=dec_idx,
+                lam_decoupled=1.0,
+            )
+            calc_probe_off = _build_fixed_lambda_calculator(
+                atomic_numbers=z,
+                atomic_positions=atoms_probe_off.get_positions(),
+                base_ckpt_dir=base_ckpt_dir,
+                cutoff=cutoff,
+                ml_cutoff=args.ml_cutoff,
+                mm_switch_on=args.mm_switch_on,
+                mm_cutoff=args.mm_cutoff,
+                at_codes=at_codes,
+                ep_scale=ep_scale,
+                sig_scale=sig_scale,
+                dec_idx=dec_idx,
+                lam_decoupled=0.0,
+            )
+            atoms_probe_on.calc = calc_probe_on
+            atoms_probe_off.calc = calc_probe_off
+
+            def _on_step(_atoms=atoms):
+                step_count[0] += 1
+                if step_count[0] % args.interval == 0:
+                    d = _dUdlambda_at_R(
+                        calc_probe_on,
+                        atoms_probe_on,
+                        calc_probe_off,
+                        atoms_probe_off,
+                        _atoms.get_positions().copy(),
+                    )
+                    samples_rep.append(d)
+                    samples.append(d)
+                    snapshots_per_window[wi].append(_atoms.get_positions().copy())
+
+            dyn_prod = VelocityVerlet(atoms, timestep=dt)
+            dyn_prod.attach(traj_prod.write, interval=max(1, args.interval))
+            dyn_prod.attach(_on_step)
+            dyn_prod.run(args.n_prod)
+            traj_prod.close()
+
+            repeat_stats.append(
+                {
+                    "repeat": rep,
+                    "n_samples": len(samples_rep),
+                    "mean_dUdlambda_eV": float(np.mean(samples_rep)) if samples_rep else float("nan"),
+                    "std_dUdlambda_eV": float(np.std(samples_rep)) if len(samples_rep) > 1 else 0.0,
+                    "traj": str(prod_path),
+                }
+            )
 
         mean_b = float(np.mean(samples)) if samples else float("nan")
         std_b = float(np.std(samples)) if len(samples) > 1 else 0.0
@@ -298,10 +486,11 @@ def main() -> int:
                 "window": wi,
                 "lambda_decoupled_monomer": lam,
                 "decouple_monomer_index": dec_idx,
+                "repeats_per_window": args.repeats_per_window,
                 "mean_dUdlambda_eV": mean_b,
                 "std_dUdlambda_eV": std_b,
                 "n_samples": len(samples),
-                "traj": str(prod_path),
+                "repeat_stats": repeat_stats,
             }
         )
 
@@ -314,7 +503,7 @@ def main() -> int:
     mbar_block: dict | None = None
     if not args.no_mbar:
         try:
-            from pymbar import MBAR
+            from pymbar import MBAR, timeseries
         except ImportError as exc:
             raise SystemExit(
                 "pymbar is required unless --no-mbar is set. Install with: "
@@ -332,14 +521,64 @@ def main() -> int:
             N_max = int(N_k.max())
             beta = 1.0 / (float(units.kB) * args.temperature_K)
             u_kln = np.zeros((K, K, N_max), dtype=np.float64)
+            mbar_atoms_bank: list[ase.Atoms] = []
+            mbar_calc_bank: list[object] = []
+            for l in range(K):
+                atoms_l = ase.Atoms(numbers=z, positions=base_seed_positions.copy())
+                calc_l = _build_fixed_lambda_calculator(
+                    atomic_numbers=z,
+                    atomic_positions=atoms_l.get_positions(),
+                    base_ckpt_dir=base_ckpt_dir,
+                    cutoff=cutoff,
+                    ml_cutoff=args.ml_cutoff,
+                    mm_switch_on=args.mm_switch_on,
+                    mm_cutoff=args.mm_cutoff,
+                    at_codes=at_codes,
+                    ep_scale=ep_scale,
+                    sig_scale=sig_scale,
+                    dec_idx=dec_idx,
+                    lam_decoupled=lambda_windows[l],
+                )
+                atoms_l.calc = calc_l
+                mbar_atoms_bank.append(atoms_l)
+                mbar_calc_bank.append(calc_l)
             for k in range(K):
                 for n in range(int(N_k[k])):
                     r_snap = snapshots_per_window[k][n]
                     for l in range(K):
-                        u_kln[k, l, n] = beta * _energy_at_lambda(
-                            hybrid_calc, atoms, r_snap, dec_idx, lambda_windows[l]
+                        u_kln[k, l, n] = beta * _energy_at_positions(
+                            mbar_calc_bank[l],
+                            mbar_atoms_bank[l],
+                            r_snap,
                         )
-            mbar = MBAR(u_kln, N_k, verbose=args.mbar_verbose)
+            # Decorrelate per-window samples for MBAR (recommended by pymbar).
+            # We estimate statistical inefficiency from the sampled state's own
+            # reduced potential time series u_kln[k, k, :N_k[k]].
+            g_k: list[float] = []
+            selected_indices: list[np.ndarray] = []
+            for k in range(K):
+                u_self = u_kln[k, k, : int(N_k[k])]
+                if u_self.size < 2:
+                    g_est = 1.0
+                    idx = np.arange(u_self.size, dtype=int)
+                else:
+                    g_est = float(timeseries.statistical_inefficiency(u_self))
+                    g_est = max(1.0, g_est)
+                    idx = np.asarray(timeseries.subsample_correlated_data(u_self, g=g_est), dtype=int)
+                    if idx.size == 0:
+                        idx = np.array([u_self.size - 1], dtype=int)
+                g_k.append(g_est)
+                selected_indices.append(idx)
+
+            N_k_eff = np.array([idx.size for idx in selected_indices], dtype=np.int64)
+            N_max_eff = int(N_k_eff.max())
+            u_kln_eff = np.zeros((K, K, N_max_eff), dtype=np.float64)
+            for k in range(K):
+                idx = selected_indices[k]
+                for j, n_old in enumerate(idx):
+                    u_kln_eff[k, :, j] = u_kln[k, :, int(n_old)]
+
+            mbar = MBAR(u_kln_eff, N_k_eff, verbose=args.mbar_verbose)
             fe = mbar.compute_free_energy_differences(compute_uncertainty=True)
             # Delta_f[i,j] ≈ (f_j - f_i) / kT; i=0 (λ=0), j=K-1 (λ=1) => coupling free energy
             i0, i1 = 0, K - 1
@@ -358,11 +597,18 @@ def main() -> int:
                 "Delta_F_diss_eV": -df_ev,
                 "Delta_F_diss_kcal_mol": -df_ev * _EV_TO_KCAL,
                 "N_k": N_k.tolist(),
+                "N_k_effective": N_k_eff.tolist(),
+                "g_k": g_k,
                 "note": "Coupling ΔF = F(λ=1) - F(λ=0) from MBAR; dissociation is the negative.",
             }
 
     args_json = {k: (str(v) if isinstance(v, Path) else v) for k, v in vars(args).items()}
     summary = {
+        "geometry": {
+            "initial_com_separation_A": float(args.initial_sep),
+            "seed_com_separation_A": _meoh_dimer_com_distance_A(base_seed_positions),
+            "note": "Every λ window and repeat starts from the same seed with this COM separation (before minimization/MD).",
+        },
         "description": {
             "delta_F_couple_eV": "TI integral ∫_0^1 ⟨∂U/∂λ⟩ dλ (turn on intermolecular coupling)",
             "delta_F_diss_eV": "Negative of delta_F_couple (decouple along same path)",
@@ -376,6 +622,8 @@ def main() -> int:
         "windows": rows,
         "args": args_json,
     }
+    plot_files = _plot_window_components(out_dir, rows, mbar_block)
+    summary["plots"] = plot_files
 
     out_json = out_dir / "lambda_ti_summary.json"
     out_json.write_text(json.dumps(summary, indent=2), encoding="utf-8")

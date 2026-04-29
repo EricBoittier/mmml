@@ -53,6 +53,8 @@ dependencies = [
     "fastapi",
     "uvicorn",
     "pytest>=9.0.2",
+    # Alchemical / multistate free energy (e.g. scripts/meoh_dimer_lambda_ti.py)
+    "pymbar>=4.0",
 ]
 
 [project.optional-dependencies]
@@ -69,8 +71,7 @@ plotting = [
     "polars",
 ]
 
-# Multistate Bennett acceptance ratio (e.g. alchemical λ-windows)
-# Install: uv sync --extra mbar   or   pip install "mmml[mbar]"
+# Multistate Bennett acceptance ratio (also in core deps; kept for explicit installs)
 mbar = [
     "pymbar>=4.0",
 ]

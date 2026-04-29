@@ -321,6 +321,11 @@ def main() -> int:
         action="store_true",
         help="Do not run an extra energy eval before BFGS (mixes compile time into first BFGS steps).",
     )
+    parser.add_argument(
+        "--quiet-bfgs",
+        action="store_true",
+        help="Hide ASE BFGS per-step output (default: print steps to stdout; large 10-mers can spend hours here before MD).",
+    )
     args = parser.parse_args()
 
     t_suite0 = _tmark()
@@ -424,7 +429,13 @@ def main() -> int:
             run_timings["jit_warmup_first_potential_s"] = 0.0
 
         t_b = _tmark()
-        opt = BFGS(atoms, logfile=None)
+        _tlog(
+            f"{key}: BFGS starting (max {args.pre_min_steps} steps, fmax={args.pre_min_fmax}; "
+            "this is pre-MD minimization, not dynamics yet)",
+            timing_log,
+        )
+        bfgs_log = None if args.quiet_bfgs else "-"
+        opt = BFGS(atoms, logfile=bfgs_log)
         opt.run(fmax=args.pre_min_fmax, steps=args.pre_min_steps)
         run_timings["bfgs_wall_s"] = _tmark() - t_b
         fmin = float(np.abs(atoms.get_forces()).max())
