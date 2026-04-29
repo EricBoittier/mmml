@@ -36,6 +36,7 @@ from mmml.models.physnetjax.physnetjax.restart.restart import get_params_model
 from mmml.utils.model_checkpoint import orbax_to_json
 
 import pycharmm.psf as psf
+import pycharmm.param as param
 import pycharmm.generate as gen
 import pycharmm.ic as ic
 import pycharmm.read as read
@@ -134,7 +135,7 @@ def run(args: argparse.Namespace) -> int:
 
     # Use PSF IAC atom-type indices directly (CHARMM 1-indexed -> 0-indexed).
     at_codes = np.asarray(psf.get_iac(), dtype=int) - 1
-    n_types = int(at_codes.max()) + 1
+    n_types = len(param.get_atc())
     ep_scale = np.ones(n_types, dtype=float)
     sig_scale = np.ones(n_types, dtype=float)
 
