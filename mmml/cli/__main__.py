@@ -39,6 +39,7 @@ Available commands:
   interpolate-xyz  Interpolate two XYZ structures via Z-matrix; write NPZ trajectory
   sample-diverse-xyz  Pick N diverse structures from XYZ(s); write sampled.npz (SOAP)
   gui         Start the molecular viewer GUI
+  extract-checkpoint-metrics  Plot and print training metrics from Orbax checkpoints
 
 Examples:
   mmml make-res --res CYBZ
@@ -72,7 +73,7 @@ For help on a specific command:
     
     parser.add_argument(
         'command',
-        choices=['make-res', 'make-box', 'run', 'run-pycharmm', 'xml2npz', 'validate', 'train', 'evaluate', 'downstream', 'fix-and-split', 'pyscf-dft', 'pyscf-mp2', 'pyscf-evaluate', 'verify-esp-alignment', 'normal-mode-sample', 'physnet-md', 'physnet-evaluate', 'ef-train', 'ef-evaluate', 'ef-md', 'active-learning', 'kernel-fit', 'interpolate-xyz', 'sample-diverse-xyz', 'gui'],
+        choices=['make-res', 'make-box', 'run', 'run-pycharmm', 'xml2npz', 'validate', 'train', 'evaluate', 'downstream', 'fix-and-split', 'pyscf-dft', 'pyscf-mp2', 'pyscf-evaluate', 'verify-esp-alignment', 'normal-mode-sample', 'physnet-md', 'physnet-evaluate', 'ef-train', 'ef-evaluate', 'ef-md', 'active-learning', 'kernel-fit', 'interpolate-xyz', 'sample-diverse-xyz', 'gui', 'extract-checkpoint-metrics'],
         help='Command to run'
     )
     parser.add_argument(
@@ -221,6 +222,11 @@ For help on a specific command:
         from . import gui
         sys.argv = ['mmml gui'] + args.args
         return gui.main()
+
+    elif args.command == 'extract-checkpoint-metrics':
+        from .misc import extract_checkpoint_metrics
+        sys.argv = ['mmml extract-checkpoint-metrics'] + args.args
+        return extract_checkpoint_metrics.main()
     
     else:
         parser.print_help()
