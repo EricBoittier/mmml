@@ -72,7 +72,7 @@ def _build_psf_ordered_cluster(residue: str, n_molecules: int, spacing: float) -
 
     pos_df = coor.get_positions()
     positions = pos_df.to_numpy(dtype=float)
-    resid = np.asarray(psf.get_res(), dtype=int)
+    resid = np.asarray(psf.get_resid(), dtype=int)
     uniq = np.unique(resid)
 
     if len(uniq) != n_molecules:
