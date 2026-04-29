@@ -28,17 +28,23 @@ from mmml.interfaces.pycharmmInterface.import_pycharmm import (
     coor,
     pycharmm,
     reset_block,
+    reset_block_no_internal,
 )
+reset_block()
+reset_block_no_internal()
 from mmml.interfaces.pycharmmInterface.mmml_calculator import CutoffParameters, setup_calculator
 from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 from mmml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
 from mmml.models.physnetjax.physnetjax.restart.restart import get_params_model
 from mmml.utils.model_checkpoint import orbax_to_json
+from orbax.checkpoint import PyTreeCheckpointer
 
 import pycharmm.psf as psf
 import pycharmm.param as param
 import pycharmm.generate as gen
 import pycharmm.ic as ic
+import pycharmm.energy as energy
+import pycharmm.minimize as minimize
 import pycharmm.read as read
 import pycharmm.settings as settings
 import pycharmm.write as pywrite
@@ -59,7 +65,28 @@ def _latest_epoch_dir(ckpt_root: Path) -> Path:
     return max(epoch_dirs, key=lambda d: int(d.name.split("epoch-")[-1]))
 
 
-def _build_psf_ordered_cluster(residue: str, n_molecules: int, spacing: float) -> tuple[np.ndarray, np.ndarray]:
+def _load_template_pdb_coords(template_pdb: Path) -> dict[str, np.ndarray]:
+    """Load atom-name keyed coordinates from a PDB template."""
+    coords: dict[str, np.ndarray] = {}
+    for line in template_pdb.read_text(encoding="utf-8").splitlines():
+        if not (line.startswith("ATOM") or line.startswith("HETATM")):
+            continue
+        atom_name = line[12:16].strip()
+        x = float(line[30:38])
+        y = float(line[38:46])
+        z = float(line[46:54])
+        coords[atom_name] = np.array([x, y, z], dtype=float)
+    if not coords:
+        raise ValueError(f"No ATOM/HETATM coordinates found in template PDB: {template_pdb}")
+    return coords
+
+
+def _build_psf_ordered_cluster(
+    residue: str,
+    n_molecules: int,
+    spacing: float,
+    template_pdb: Path | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
     residue = residue.upper()
     sequence = " ".join([residue] * n_molecules)
 
@@ -90,6 +117,26 @@ def _build_psf_ordered_cluster(residue: str, n_molecules: int, spacing: float) -
 
     n_side = int(np.ceil(np.sqrt(n_molecules)))
     shifted = positions.copy()
+    atom_names = np.asarray(psf.get_atype())
+    if len(atom_names) != n_atoms:
+        raise RuntimeError(f"PSF atom-name count mismatch: {len(atom_names)} vs positions {n_atoms}")
+
+    if template_pdb is not None:
+        tmpl = _load_template_pdb_coords(template_pdb)
+        for i in range(n_molecules):
+            start = i * atoms_per_res
+            end = (i + 1) * atoms_per_res
+            local_names = atom_names[start:end]
+            local_coords = []
+            for nm in local_names:
+                if nm not in tmpl:
+                    raise KeyError(
+                        f"Template PDB {template_pdb} missing atom name '{nm}' required by PSF order. "
+                        f"Available: {sorted(tmpl.keys())}"
+                    )
+                local_coords.append(tmpl[nm])
+            shifted[start:end] = np.asarray(local_coords, dtype=float)
+
     for i in range(n_molecules):
         start = i * atoms_per_res
         end = (i + 1) * atoms_per_res
@@ -102,6 +149,22 @@ def _build_psf_ordered_cluster(residue: str, n_molecules: int, spacing: float) -
     return z, shifted
 
 
+def _collect_charmm_terms() -> dict[str, float]:
+    """Return active CHARMM energy terms as a flat dict."""
+    df = energy.get_energy()
+    row = df.iloc[0].to_dict()
+    terms: dict[str, float] = {}
+    for key, value in row.items():
+        if isinstance(value, (int, float, np.floating)):
+            terms[str(key)] = float(value)
+    return terms
+
+
+def _to_float(value) -> float:
+    arr = np.asarray(value)
+    return float(arr.sum()) if arr.size > 1 else float(arr.reshape(()))
+
+
 def run(args: argparse.Namespace) -> int:
     ckpt_root = args.checkpoint.expanduser().resolve()
     epoch_dir = _latest_epoch_dir(ckpt_root)
@@ -112,9 +175,43 @@ def run(args: argparse.Namespace) -> int:
     portable_json = out_dir / "params_portable.json"
     orbax_to_json(epoch_dir, portable_json)
 
-    z, r = _build_psf_ordered_cluster(args.residue, args.n_molecules, args.spacing)
+    restored = PyTreeCheckpointer().restore(str(epoch_dir))
+    ckpt_natoms = int(restored["model_attributes"].get("natoms", 0))
+    if ckpt_natoms <= 0:
+        raise ValueError("Checkpoint model_attributes missing valid natoms")
+
+    z, r = _build_psf_ordered_cluster(
+        args.residue,
+        args.n_molecules,
+        args.spacing,
+        template_pdb=args.template_pdb,
+    )
     n_atoms = len(z)
     atoms_per_monomer = n_atoms // args.n_molecules
+    if n_atoms > ckpt_natoms:
+        raise ValueError(
+            f"Cluster atom count ({n_atoms}) exceeds checkpoint natoms ({ckpt_natoms}). "
+            f"Reduce --n-molecules or use a checkpoint trained with >= {n_atoms} atoms."
+        )
+
+    # Setup PyCHARMM non-bonded parameters
+    reset_block()
+    reset_block_no_internal()
+    reset_block()
+    nbonds = """!#########################################
+    ! Bonded/Non-bonded Options & Constraints
+    !#########################################
+
+    ! Non-bonding parameters
+    nbonds atom cutnb 14.0  ctofnb 12.0 ctonnb 10.0 -
+    vswitch NBXMOD 3 -
+    inbfrq -1 imgfrq -1
+    """
+    pycharmm.lingo.charmm_script(nbonds)
+    charmm_pre = _collect_charmm_terms()
+    minimize.run_abnr(nstep=args.minimize_steps, tolenr=args.tolenr, tolgrd=args.tolgrd)
+    charmm_post = _collect_charmm_terms()
+    r = coor.get_positions().to_numpy(dtype=float)
 
     psf_path = out_dir / "cluster_4res.psf"
     pdb_path = out_dir / "cluster_4res.pdb"
@@ -173,6 +270,7 @@ def run(args: argparse.Namespace) -> int:
         debug=False,
         energy_conversion_factor=1.0,
         force_conversion_factor=1.0,
+        verbose=True,
     )
     if len(calc_result) == 3:
         mmml_calc, _, _ = calc_result
@@ -182,6 +280,21 @@ def run(args: argparse.Namespace) -> int:
     atoms_mmml.calc = mmml_calc
     mmml_energy = float(atoms_mmml.get_potential_energy())
     mmml_forces = atoms_mmml.get_forces()
+    mmml_max_force = float(np.abs(mmml_forces).max())
+    mmml_model = getattr(mmml_calc, "results", {})
+    mmml_components = {
+        "total_E_eV": _to_float(mmml_model.get("model_energy", mmml_energy)),
+        "internal_E_eV": _to_float(mmml_model.get("model_internal_E", 0.0)),
+        "ml_2b_E_eV": _to_float(mmml_model.get("model_ml_2b_E", 0.0)),
+        "mm_E_eV": _to_float(mmml_model.get("model_mm_E", 0.0)),
+        "internal_F_max_eVA": float(np.abs(np.asarray(mmml_model.get("model_internal_F", 0.0))).max()) if "model_internal_F" in mmml_model else 0.0,
+        "ml_2b_F_max_eVA": float(np.abs(np.asarray(mmml_model.get("model_ml_2b_F", 0.0))).max()) if "model_ml_2b_F" in mmml_model else 0.0,
+        "mm_F_max_eVA": float(np.abs(np.asarray(mmml_model.get("model_mm_F", 0.0))).max()) if "model_mm_F" in mmml_model else 0.0,
+    }
+    mmml_sanity_failed = (
+        mmml_max_force <= args.mmml_zero_force_threshold
+        and abs(mmml_energy) > args.mmml_high_energy_threshold
+    )
 
     summary = {
         "epoch_used": str(epoch_dir),
@@ -192,13 +305,20 @@ def run(args: argparse.Namespace) -> int:
         "residue": args.residue.upper(),
         "n_molecules": args.n_molecules,
         "n_atoms": n_atoms,
+        "charmm": {
+            "pre_minimization_terms": charmm_pre,
+            "post_minimization_terms": charmm_post,
+            "delta_ENER": float(charmm_post.get("ENER", 0.0) - charmm_pre.get("ENER", 0.0)),
+        },
         "physnetjax": {
             "energy_eV": phys_energy,
             "max_force_eVA": float(np.abs(phys_forces).max()),
         },
         "mmml": {
             "energy_eV": mmml_energy,
-            "max_force_eVA": float(np.abs(mmml_forces).max()),
+            "max_force_eVA": mmml_max_force,
+            "sanity_failed": bool(mmml_sanity_failed),
+            "components": mmml_components,
         },
     }
     summary_path = out_dir / "cluster_4res_test_summary.json"
@@ -207,11 +327,32 @@ def run(args: argparse.Namespace) -> int:
     print(f"Portable checkpoint: {portable_json}")
     print(f"CHARMM outputs: {psf_path} | {pdb_path}")
     print(f"PSF-order XYZ: {xyz_path}")
+    print(f"CHARMM ENER pre/post (kcal/mol): {charmm_pre.get('ENER', float('nan')):.6f} -> {charmm_post.get('ENER', float('nan')):.6f}")
     print(f"PhysNetJax energy (eV): {phys_energy:.8f}")
     print(f"PhysNetJax max |force| (eV/A): {np.abs(phys_forces).max():.8f}")
     print(f"MMML energy (eV): {mmml_energy:.8f}")
-    print(f"MMML max |force| (eV/A): {np.abs(mmml_forces).max():.8f}")
+    print(f"MMML max |force| (eV/A): {mmml_max_force:.8f}")
+    print(
+        "MMML components (eV): "
+        f"internal={mmml_components['internal_E_eV']:.6f}, "
+        f"ml_2b={mmml_components['ml_2b_E_eV']:.6f}, "
+        f"mm={mmml_components['mm_E_eV']:.6f}"
+    )
+    print(
+        "MMML component max|F| (eV/A): "
+        f"internal={mmml_components['internal_F_max_eVA']:.6e}, "
+        f"ml_2b={mmml_components['ml_2b_F_max_eVA']:.6e}, "
+        f"mm={mmml_components['mm_F_max_eVA']:.6e}"
+    )
     print(f"Summary: {summary_path}")
+    if mmml_sanity_failed:
+        msg = (
+            "MMML sanity check failed: near-zero max force with high absolute energy. "
+            f"(energy={mmml_energy:.6f} eV, max|F|={mmml_max_force:.3e} eV/A)"
+        )
+        if args.strict_mmml_sanity:
+            raise RuntimeError(msg)
+        print(f"WARNING: {msg}")
     return 0
 
 
@@ -222,11 +363,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--checkpoint", type=Path, required=True, help="Orbax checkpoint root or epoch-* directory")
     parser.add_argument("--output-dir", type=Path, default=Path("artifacts/checkpoint_smoke"), help="Output directory")
     parser.add_argument("--residue", type=str, default="ACO", help="CHARMM/CGenFF residue name (e.g., ACO)")
+    parser.add_argument(
+        "--template-pdb",
+        type=Path,
+        default=Path("mmml/generate/sample/pdb/meoh.pdb"),
+        help="Template PDB whose atom-name coordinates seed each residue (PSF order applied).",
+    )
     parser.add_argument("--n-molecules", type=int, default=4, help="Number of same residues in the cluster")
     parser.add_argument("--spacing", type=float, default=6.0, help="Residue COM grid spacing in Angstrom")
-    parser.add_argument("--ml-cutoff", type=float, default=2.0, help="MMML ML cutoff (Angstrom)")
+    parser.add_argument("--ml-cutoff", type=float, default=5.0, help="MMML ML cutoff (Angstrom)")
     parser.add_argument("--mm-switch-on", type=float, default=5.0, help="MMML switch-on (Angstrom)")
-    parser.add_argument("--mm-cutoff", type=float, default=1.0, help="MMML switch width (Angstrom)")
+    parser.add_argument("--mm-cutoff", type=float, default=3.0, help="MMML switch width (Angstrom)")
+    parser.add_argument("--minimize-steps", type=int, default=500, help="PyCHARMM ABNR minimization steps")
+    parser.add_argument("--tolenr", type=float, default=1e-3, help="ABNR energy tolerance")
+    parser.add_argument("--tolgrd", type=float, default=1e-3, help="ABNR gradient tolerance")
+    parser.add_argument("--mmml-zero-force-threshold", type=float, default=1e-8, help="Near-zero MMML max force threshold")
+    parser.add_argument("--mmml-high-energy-threshold", type=float, default=1e3, help="High-energy threshold for MMML sanity check")
+    parser.add_argument("--strict-mmml-sanity", action="store_true", help="Raise error when MMML sanity check fails")
     return parser.parse_args()
 
 

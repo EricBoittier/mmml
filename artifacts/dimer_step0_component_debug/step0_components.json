@@ -1,0 +1,86 @@
+{
+  "energy_eV": 861.6844482421875,
+  "max_force_eVA": 2028.17554376472,
+  "mean_force_eVA": 821.0543725254855,
+  "min_pair_dist_A": 0.0,
+  "min_pair_atoms": [
+    0,
+    6
+  ],
+  "min_inter_monomer_dist_A": 0.0,
+  "min_inter_pair_atoms": [
+    0,
+    6
+  ],
+  "components": {
+    "energy": 861.6844482421875
+  },
+  "top_force_outliers": [
+    {
+      "atom_index": 8,
+      "Z": 1,
+      "force_vec_eVA": [
+        -798.3500366210938,
+        -200.97598266601562,
+        1853.575439453125
+      ],
+      "force_mag_eVA": 2028.17554376472,
+      "res_monomer": 2
+    },
+    {
+      "atom_index": 2,
+      "Z": 1,
+      "force_vec_eVA": [
+        -798.3500366210938,
+        -200.97593688964844,
+        1853.5753173828125
+      ],
+      "force_mag_eVA": 2028.1754276670367,
+      "res_monomer": 1
+    },
+    {
+      "atom_index": 7,
+      "Z": 8,
+      "force_vec_eVA": [
+        455.5690002441406,
+        622.9608764648438,
+        -1702.9658203125
+      ],
+      "force_mag_eVA": 1869.6833830202156,
+      "res_monomer": 2
+    },
+    {
+      "atom_index": 1,
+      "Z": 8,
+      "force_vec_eVA": [
+        455.5690002441406,
+        622.9606323242188,
+        -1702.9658203125
+      ],
+      "force_mag_eVA": 1869.683301674875,
+      "res_monomer": 1
+    },
+    {
+      "atom_index": 4,
+      "Z": 1,
+      "force_vec_eVA": [
+        127.55266571044922,
+        14.917930603027344,
+        -280.6416931152344
+      ],
+      "force_mag_eVA": 308.6292064887958,
+      "res_monomer": 1
+    },
+    {
+      "atom_index": 10,
+      "Z": 1,
+      "force_vec_eVA": [
+        127.55274200439453,
+        14.917959213256836,
+        -280.6416320800781
+      ],
+      "force_mag_eVA": 308.62918390278315,
+      "res_monomer": 2
+    }
+  ]
+}
