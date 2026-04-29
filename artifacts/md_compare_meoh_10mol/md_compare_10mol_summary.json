@@ -1,0 +1,44 @@
+{
+  "system": {
+    "residue": "MEOH",
+    "n_molecules": 10,
+    "n_atoms": 60
+  },
+  "settings": {
+    "ensemble": "NVE",
+    "integrator": "VelocityVerlet",
+    "dt_fs": 0.5,
+    "steps": 10000,
+    "init_temp_K": 10.0,
+    "ml_cutoff_A": 5.0,
+    "mm_switch_on_A": 3.5,
+    "mm_cutoff_A": 3.0,
+    "premin_fmax_target_eVA": 0.001
+  },
+  "physnet": {
+    "traj": "/home/ericb/mmml/artifacts/md_compare_meoh_10mol/physnet_5ps_nve.traj",
+    "log": "/home/ericb/mmml/artifacts/md_compare_meoh_10mol/physnet_5ps_nve.log",
+    "frames": 502,
+    "fmax_after_min_eVA": 0.006407737731933594,
+    "etot_start_eV": -348.1153881854679,
+    "etot_end_eV": 108.4243335867983,
+    "etot_drift_eV": 456.5397217722662,
+    "etot_span_eV": 459.5278966580793,
+    "temp_start_K": 8.385135775138394,
+    "temp_end_K": 36045.23067048371,
+    "fmax_max_eVA": 59.69835662841797
+  },
+  "mmml": {
+    "traj": "/home/ericb/mmml/artifacts/md_compare_meoh_10mol/mmml_5ps_nve.traj",
+    "log": "/home/ericb/mmml/artifacts/md_compare_meoh_10mol/mmml_5ps_nve.log",
+    "frames": 502,
+    "fmax_after_min_eVA": 0.046792395412921906,
+    "etot_start_eV": -253.50097778507728,
+    "etot_end_eV": -253.50096204793542,
+    "etot_drift_eV": 1.573714186520192e-05,
+    "etot_span_eV": 0.03427934445682013,
+    "temp_start_K": 8.3851357751384,
+    "temp_end_K": 95.27194726897321,
+    "fmax_max_eVA": 1.9965699911117554
+  }
+}

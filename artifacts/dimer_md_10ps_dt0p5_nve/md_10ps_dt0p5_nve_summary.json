@@ -1,0 +1,34 @@
+{
+  "physnet": {
+    "traj": "/home/ericb/mmml/artifacts/dimer_md_10ps_dt0p5_nve/physnet_10ps_dt0p5_nve.traj",
+    "log": "/home/ericb/mmml/artifacts/dimer_md_10ps_dt0p5_nve/physnet_10ps_dt0p5_nve.log",
+    "steps": 20000,
+    "dt_fs": 0.5,
+    "sim_ps": 10.0,
+    "save_every": 40,
+    "frames": 502,
+    "etot_start_eV": -51.16524530564007,
+    "etot_end_eV": -36.12998130050996,
+    "etot_drift_eV": 15.03526400513011,
+    "etot_span_eV": 15.079687243119373,
+    "fmax_start_eVA": 0.1221623420715332,
+    "fmax_end_eVA": 8.334888458251953,
+    "fmax_max_eVA": 22.602088928222656
+  },
+  "mmml": {
+    "traj": "/home/ericb/mmml/artifacts/dimer_md_10ps_dt0p5_nve/mmml_10ps_dt0p5_nve.traj",
+    "log": "/home/ericb/mmml/artifacts/dimer_md_10ps_dt0p5_nve/mmml_10ps_dt0p5_nve.log",
+    "steps": 20000,
+    "dt_fs": 0.5,
+    "sim_ps": 10.0,
+    "save_every": 40,
+    "frames": 502,
+    "etot_start_eV": -48.57284952316937,
+    "etot_end_eV": -39.567811699693436,
+    "etot_drift_eV": 9.00503782347593,
+    "etot_span_eV": 9.509989903718441,
+    "fmax_start_eVA": 0.08446910977363586,
+    "fmax_end_eVA": 11.742630004882812,
+    "fmax_max_eVA": 26.612485885620117
+  }
+}

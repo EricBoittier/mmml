@@ -11,9 +11,15 @@ import argparse
 import os
 import sys
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Any, Dict, Tuple
 
 import numpy as np
+
+# Portable PhysNetJax weights + config (MEOH / dimer-style quickstart, no Orbax).
+_PKG_ROOT = Path(__file__).resolve().parent.parent
+BUNDLED_PORTABLE_MEOH_PATH = (
+    _PKG_ROOT / "models" / "physnetjax" / "defaults" / "meoh_dimer_portable.json"
+)
 
 
 def parse_base_args() -> argparse.Namespace:
@@ -130,6 +136,8 @@ def resolve_checkpoint_paths(arg: Path | str | None) -> Tuple[Path, Path]:
         ckpt_env = os.environ.get("MMML_CKPT")
         if ckpt_env:
             candidate = Path(ckpt_env)
+        elif BUNDLED_PORTABLE_MEOH_PATH.is_file():
+            candidate = BUNDLED_PORTABLE_MEOH_PATH
         else:
             candidate = Path("mmml/models/physnetjax/ckpts")
     elif isinstance(arg, str):
@@ -195,6 +203,46 @@ def resolve_checkpoint_paths(arg: Path | str | None) -> Tuple[Path, Path]:
         return subdir, epoch_dir
 
     sys.exit("Could not locate an epoch directory under the supplied checkpoint path.")
+
+
+def load_physnet_params_and_ef_model(
+    resolved_checkpoint: Path,
+    natoms: int,
+    *,
+    orbax_epoch_dir: Path | None = None,
+) -> Tuple[Any, Any]:
+    """Return ``(params, EF)`` for :func:`get_ase_calc`.
+
+    Parameters
+    ----------
+    resolved_checkpoint
+        Path to a portable ``.json`` checkpoint **or** an Orbax experiment root.
+    natoms
+        Atom count passed into the EF model (overrides config).
+    orbax_epoch_dir
+        When ``resolved_checkpoint`` is Orbax, pass ``_latest_epoch_dir(root)`` (or any
+        epoch directory). Ignored for ``.json`` checkpoints.
+    """
+    p = resolved_checkpoint
+    if p.is_file() and p.suffix == ".json":
+        from mmml.models.physnetjax.physnetjax.models.model import EF
+        from mmml.utils.model_checkpoint import load_model_checkpoint
+
+        ck = load_model_checkpoint(p, use_orbax=False)
+        cfg = dict(ck.get("config") or {})
+        cfg["natoms"] = natoms
+        model = EF(**cfg)
+        raw = ck["params"]
+        params = raw["params"] if isinstance(raw, dict) and "params" in raw else raw
+        return params, model
+
+    if orbax_epoch_dir is None:
+        raise ValueError(
+            "orbax_epoch_dir is required when resolved_checkpoint is not a .json file"
+        )
+    from mmml.models.physnetjax.physnetjax.restart.restart import get_params_model
+
+    return get_params_model(str(orbax_epoch_dir), natoms=natoms)
 
 
 def resolve_desdimers_checkpoint(script_file: str | Path | None = None) -> Path:

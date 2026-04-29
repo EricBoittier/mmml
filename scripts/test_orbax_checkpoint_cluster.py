@@ -20,7 +20,7 @@ import numpy as np
 import pandas as pd
 from ase.io import write
 
-from mmml.cli.base import resolve_checkpoint_paths
+from mmml.cli.base import load_physnet_params_and_ef_model, resolve_checkpoint_paths
 import mmml.interfaces.pycharmmInterface.import_pycharmm as pyci
 from mmml.interfaces.pycharmmInterface.import_pycharmm import (
     CGENFF_PRM,
@@ -166,17 +166,31 @@ def _to_float(value) -> float:
 
 
 def run(args: argparse.Namespace) -> int:
-    ckpt_root = args.checkpoint.expanduser().resolve()
-    epoch_dir = _latest_epoch_dir(ckpt_root)
-    base_ckpt_dir, _ = resolve_checkpoint_paths(ckpt_root)
+    if args.checkpoint is None:
+        ckpt_root, _ = resolve_checkpoint_paths(None)
+    else:
+        ckpt_root = args.checkpoint.expanduser().resolve()
     out_dir = args.output_dir.expanduser().resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
 
     portable_json = out_dir / "params_portable.json"
-    orbax_to_json(epoch_dir, portable_json)
+    epoch_dir: Path
+    if ckpt_root.is_file() and ckpt_root.suffix == ".json":
+        import shutil
 
-    restored = PyTreeCheckpointer().restore(str(epoch_dir))
-    ckpt_natoms = int(restored["model_attributes"].get("natoms", 0))
+        shutil.copy2(ckpt_root, portable_json)
+        from mmml.utils.model_checkpoint import load_model_checkpoint
+
+        ck_meta = load_model_checkpoint(ckpt_root, use_orbax=False)
+        ckpt_natoms = int((ck_meta.get("config") or {}).get("natoms", 0))
+        base_ckpt_dir, _ = resolve_checkpoint_paths(ckpt_root)
+        epoch_dir = ckpt_root
+    else:
+        epoch_dir = _latest_epoch_dir(ckpt_root)
+        base_ckpt_dir, _ = resolve_checkpoint_paths(ckpt_root)
+        orbax_to_json(epoch_dir, portable_json)
+        restored = PyTreeCheckpointer().restore(str(epoch_dir))
+        ckpt_natoms = int(restored["model_attributes"].get("natoms", 0))
     if ckpt_natoms <= 0:
         raise ValueError("Checkpoint model_attributes missing valid natoms")
 
@@ -189,9 +203,9 @@ def run(args: argparse.Namespace) -> int:
     n_atoms = len(z)
     atoms_per_monomer = n_atoms // args.n_molecules
     if n_atoms > ckpt_natoms:
-        raise ValueError(
-            f"Cluster atom count ({n_atoms}) exceeds checkpoint natoms ({ckpt_natoms}). "
-            f"Reduce --n-molecules or use a checkpoint trained with >= {n_atoms} atoms."
+        print(
+            "WARNING: Cluster atom count exceeds checkpoint natoms. "
+            f"Overriding runtime natoms from {ckpt_natoms} -> {n_atoms}."
         )
 
     # Setup PyCHARMM non-bonded parameters
@@ -222,7 +236,12 @@ def run(args: argparse.Namespace) -> int:
     atoms = ase.Atoms(numbers=z, positions=r)
     write(str(xyz_path), atoms)
 
-    phys_params, phys_model = get_params_model(str(epoch_dir), natoms=n_atoms)
+    if ckpt_root.is_file() and ckpt_root.suffix == ".json":
+        phys_params, phys_model = load_physnet_params_and_ef_model(
+            ckpt_root, natoms=n_atoms
+        )
+    else:
+        phys_params, phys_model = get_params_model(str(epoch_dir), natoms=n_atoms)
     phys_model.natoms = n_atoms
     phys_calc = get_ase_calc(phys_params, phys_model, atoms)
     atoms_phys = atoms.copy()
@@ -298,6 +317,7 @@ def run(args: argparse.Namespace) -> int:
 
     summary = {
         "epoch_used": str(epoch_dir),
+        "checkpoint_source": str(ckpt_root),
         "portable_checkpoint_json": str(portable_json),
         "cluster_psf": str(psf_path),
         "cluster_pdb": str(pdb_path),
@@ -360,7 +380,15 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Create PSF-ordered 4-residue cluster and test PhysNetJax + MMML calculators."
     )
-    parser.add_argument("--checkpoint", type=Path, required=True, help="Orbax checkpoint root or epoch-* directory")
+    parser.add_argument(
+        "--checkpoint",
+        type=Path,
+        default=None,
+        help=(
+            "Orbax root, epoch-* dir, or portable .json. "
+            "Default: bundled MEOH portable weights in the mmml package (or $MMML_CKPT)."
+        ),
+    )
     parser.add_argument("--output-dir", type=Path, default=Path("artifacts/checkpoint_smoke"), help="Output directory")
     parser.add_argument("--residue", type=str, default="ACO", help="CHARMM/CGenFF residue name (e.g., ACO)")
     parser.add_argument(

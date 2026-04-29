@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 
 import mmml.interfaces.pycharmmInterface.import_pycharmm as pyci
-from mmml.cli.base import resolve_checkpoint_paths
+from mmml.cli.base import load_physnet_params_and_ef_model, resolve_checkpoint_paths
 from mmml.interfaces.pycharmmInterface.import_pycharmm import (
     CGENFF_PRM,
     CGENFF_RTF,
@@ -142,9 +142,11 @@ def _to_float_sum(value) -> float:
 
 
 def main(args: argparse.Namespace) -> int:
-    ckpt_root = args.checkpoint.expanduser().resolve()
+    if args.checkpoint is None:
+        ckpt_root, _ = resolve_checkpoint_paths(None)
+    else:
+        ckpt_root = args.checkpoint.expanduser().resolve()
     base_ckpt_dir, _ = resolve_checkpoint_paths(ckpt_root)
-    epoch_dir = _latest_epoch_dir(ckpt_root)
 
     out_dir = args.output_dir.expanduser().resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -159,7 +161,11 @@ def main(args: argparse.Namespace) -> int:
     else:
         unit = unit / nrm
 
-    phys_params, phys_model = get_params_model(str(epoch_dir), natoms=len(z))
+    if ckpt_root.is_file() and ckpt_root.suffix == ".json":
+        phys_params, phys_model = load_physnet_params_and_ef_model(ckpt_root, natoms=len(z))
+    else:
+        epoch_dir = _latest_epoch_dir(ckpt_root)
+        phys_params, phys_model = get_params_model(str(epoch_dir), natoms=len(z))
     phys_model.natoms = len(z)
 
     at_codes = np.asarray(psf.get_iac(), dtype=int) - 1
@@ -301,7 +307,12 @@ def main(args: argparse.Namespace) -> int:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="MEOH dimer distance scan with CHARMM/PhysNet/MMML terms.")
-    parser.add_argument("--checkpoint", type=Path, required=True, help="Checkpoint root or epoch-* path")
+    parser.add_argument(
+        "--checkpoint",
+        type=Path,
+        default=None,
+        help="Orbax root, epoch-* dir, or portable .json (default: bundled MEOH portable or $MMML_CKPT).",
+    )
     parser.add_argument("--output-dir", type=Path, default=Path("artifacts/dimer_scan_meoh"))
     parser.add_argument("--template-pdb", type=Path, default=Path("mmml/generate/sample/pdb/meoh.pdb"))
     parser.add_argument("--dmin", type=float, default=3.0, help="Minimum COM distance (A)")

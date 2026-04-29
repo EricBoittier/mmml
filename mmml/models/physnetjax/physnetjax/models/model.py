@@ -594,7 +594,9 @@ class EF(nn.Module):
         atomic_charges = nn.Dense(
             1, use_bias=False, kernel_init=jax.nn.initializers.normal(stddev=0.01), dtype=DTYPE
         )(x)
-        atomic_charges += charge_bias[atomic_numbers][..., None, None, None]
+        atomic_charges += jnp.take(charge_bias, atomic_numbers, axis=0)[
+            ..., None, None, None
+        ]
         atomic_charges *= atom_mask[..., None, None, None]
         return atomic_charges
 

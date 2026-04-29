@@ -1,0 +1,26 @@
+{
+  "n_frames": 502,
+  "unstable_frame_index": 32,
+  "unstable_time_ps": 0.62,
+  "mmml_fmax_start_eVA": 0.0879,
+  "mmml_fmax_max_eVA": 28.7072,
+  "mmml_temp_end_K": 5162.0,
+  "phys_fmax_max_eVA": 2.8063,
+  "phys_temp_end_K": 1241.8,
+  "min_inter_min_A": 2.0330622598611097,
+  "min_inter_at_unstable_A": 4.901943309436182,
+  "com_dist_min_A": 2.8446839791945187,
+  "com_dist_max_A": 495.1670074856824,
+  "rmsd_mm_vs_phys_start_A": 1.312816571654275,
+  "rmsd_mm_vs_phys_end_A": 388.72356857054024,
+  "rmsd_mm_vs_phys_max_A": 388.72356857054024,
+  "cutoffs_used_A": {
+    "ml_cutoff": 5.0,
+    "mm_switch_on": 5.0,
+    "mm_cutoff": 3.0
+  },
+  "cutoff_assessment": {
+    "com_distance_enters_ml_cutoff": true,
+    "interatomic_enters_mm_cutoff": true
+  }
+}
