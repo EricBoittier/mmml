@@ -72,19 +72,22 @@ def _build_psf_ordered_cluster(residue: str, n_molecules: int, spacing: float) -
 
     pos_df = coor.get_positions()
     positions = pos_df.to_numpy(dtype=float)
-    resid = np.asarray(psf.get_resid(), dtype=int)
-    uniq = np.unique(resid)
-
-    if len(uniq) != n_molecules:
-        raise RuntimeError(f"Expected {n_molecules} residues, got {len(uniq)}")
+    n_atoms = positions.shape[0]
+    if n_atoms % n_molecules != 0:
+        raise RuntimeError(
+            f"Atom count {n_atoms} not divisible by n_molecules={n_molecules}; "
+            "cannot form equal same-residue chunks."
+        )
+    atoms_per_res = n_atoms // n_molecules
 
     n_side = int(np.ceil(np.sqrt(n_molecules)))
     shifted = positions.copy()
-    for i, rid in enumerate(uniq):
-        mask = resid == rid
-        com = shifted[mask].mean(axis=0)
+    for i in range(n_molecules):
+        start = i * atoms_per_res
+        end = (i + 1) * atoms_per_res
+        com = shifted[start:end].mean(axis=0)
         shift = np.array([(i % n_side) * spacing, (i // n_side) * spacing, 0.0], dtype=float)
-        shifted[mask] = shifted[mask] - com + shift
+        shifted[start:end] = shifted[start:end] - com + shift
 
     coor.set_positions(pd.DataFrame(shifted, columns=["x", "y", "z"]))
     z = np.asarray(get_Z_from_psf(), dtype=int)
