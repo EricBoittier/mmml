@@ -35,6 +35,7 @@ import e3x
 import jax
 import jax.numpy as jnp
 import numpy as np
+from mmml.utils.rotations import rotate_batched_vectors, sample_random_rotations
 
 
 def restart_params_only(
@@ -99,6 +100,9 @@ def build_spooky_batch_from_example(
     *,
     energy_key: str = "pbe0_energy",
     forces_key: str = "pbe0_forces",
+    rot_augment: bool = False,
+    rot_perturbation: float = 1.0,
+    rot_key: jax.Array | None = None,
 ) -> Dict[str, Any]:
     """
     Map a single dataset example dict to a spooky-model batch (batch_size = 1).
@@ -132,6 +136,13 @@ def build_spooky_batch_from_example(
     R = jnp.asarray(R_raw, dtype=jnp.float32)        # (N, 3)
     E_ref = jnp.asarray(E_raw, dtype=jnp.float32)    # ()
     F_ref = jnp.asarray(F_raw, dtype=jnp.float32)    # (N, 3)
+    if rot_augment:
+        key = jax.random.PRNGKey(0) if rot_key is None else rot_key
+        rotation = sample_random_rotations(
+            key, 1, perturbation=rot_perturbation
+        )[0]
+        R = jnp.einsum("ij,nj->ni", rotation, R)
+        F_ref = jnp.einsum("ij,nj->ni", rotation, F_ref)
 
     N = Z.shape[0]
     batch_size = 1
@@ -175,6 +186,10 @@ def build_spooky_batch_from_padded_arrays(
     forces: jnp.ndarray,
     total_charges: jnp.ndarray,
     total_spins: jnp.ndarray,
+    *,
+    rot_augment: bool = False,
+    rot_perturbation: float = 1.0,
+    rot_key: jax.Array | None = None,
 ) -> Dict[str, Any]:
     """
     Build a spooky batch from padded batched arrays.
@@ -207,6 +222,13 @@ def build_spooky_batch_from_padded_arrays(
     S = jnp.asarray(total_spins, dtype=jnp.float32).reshape(-1)
 
     batch_size, max_atoms = Z.shape
+    if rot_augment:
+        key = jax.random.PRNGKey(0) if rot_key is None else rot_key
+        rotations = sample_random_rotations(
+            key, batch_size, perturbation=rot_perturbation
+        )
+        R = rotate_batched_vectors(R, rotations)
+        F = rotate_batched_vectors(F, rotations)
     atom_mask_2d = (Z > 0).astype(jnp.float32)  # (B, A)
 
     # Flatten atom-wise arrays to (B*A, ...)
@@ -250,6 +272,10 @@ def build_spooky_batch_from_padded_arrays(
 def build_spooky_batch_from_flat_data(
     data_dict: Dict[str, Any],
     mol_indices: Union[np.ndarray, Any],
+    *,
+    rot_augment: bool = False,
+    rot_perturbation: float = 1.0,
+    rot_key: jax.Array | None = None,
 ) -> Dict[str, Any]:
     """
     Build a spooky batch from flat storage (``mol_offsets`` + concatenated ``R``/``Z``/``F``).
@@ -295,6 +321,9 @@ def build_spooky_batch_from_flat_data(
     e_rows: list[float] = []
 
     atom_offset = 0
+    key = None
+    if rot_augment:
+        key = jax.random.PRNGKey(0) if rot_key is None else rot_key
     for b, mi in enumerate(np.asarray(mol_indices).reshape(-1)):
         mi = int(mi)
         a0, a1 = int(mol_offsets[mi]), int(mol_offsets[mi + 1])
@@ -314,6 +343,14 @@ def build_spooky_batch_from_flat_data(
         seg_parts.append(np.full((n,), b, dtype=np.int32))
         e_rows.append(e_np[mi])
         atom_offset += n
+        if rot_augment:
+            rot_b = sample_random_rotations(
+                jax.random.fold_in(key, int(b)),
+                1,
+                perturbation=rot_perturbation,
+            )[0]
+            r_parts[-1] = np.asarray(jnp.einsum("ij,nj->ni", rot_b, jnp.asarray(r_parts[-1])))
+            f_parts[-1] = np.asarray(jnp.einsum("ij,nj->ni", rot_b, jnp.asarray(f_parts[-1])))
 
     dst_idx_np = np.concatenate(dst_parts, axis=0)
     src_idx_np = np.concatenate(src_parts, axis=0)

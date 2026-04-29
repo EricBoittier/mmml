@@ -127,6 +127,8 @@ def train_model(
     data_keys=("R", "Z", "F", "E", "N",  "D", "dst_idx", "src_idx", "batch_segments"),
     early_stop_patience=None,
     init_params=None,
+    rot_augment: bool = False,
+    rot_perturbation: float = 1.0,
 ):
     """
     Train a PhysNetJax model with comprehensive logging and checkpointing.
@@ -290,6 +292,8 @@ def train_model(
         "charges_weight": charges_weight,
         "batch_size": batch_size,
         "num_atoms": num_atoms,
+        "rot_augment": rot_augment,
+        "rot_perturbation": rot_perturbation,
     }
     if batch_method == "advanced":
         train_params_dict.update(batch_args_dict)
@@ -319,6 +323,8 @@ def train_model(
         "batch_size": batch_size,
         "num_atoms": num_atoms,
         "data_keys": data_keys,
+        "rot_augment": rot_augment,
+        "rot_perturbation": rot_perturbation,
     }
     if batch_method == "advanced":
         kwargs.update(batch_args_dict)
@@ -328,7 +334,9 @@ def train_model(
                                          data=valid_data,
                                          batch_size=batch_size,
                                          num_atoms=num_atoms,
-                                         data_keys=data_keys)
+                                         data_keys=data_keys,
+                                         rot_augment=rot_augment,
+                                         rot_perturbation=rot_perturbation)
 
     print_shapes(valid_batches[0], name="Validation Batch[0]")
 
@@ -407,6 +415,8 @@ def train_model(
                 "batch_size": batch_size,
                 "num_atoms": num_atoms,
                 "data_keys": data_keys,
+                "rot_augment": rot_augment,
+                "rot_perturbation": rot_perturbation,
             }
             if (
                 batch_method == "advanced"
@@ -424,7 +434,9 @@ def train_model(
                                                  data=train_data,
                                                  batch_size=batch_size,
                                                  num_atoms=num_atoms,
-                                                 data_keys=data_keys)
+                                                 data_keys=data_keys,
+                                                 rot_augment=rot_augment,
+                                                 rot_perturbation=rot_perturbation)
             # Loop over train batches.
             train_loss = 0.0
             train_energy_mae = 0.0
