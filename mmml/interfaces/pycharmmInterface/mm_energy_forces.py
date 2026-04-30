@@ -142,6 +142,10 @@ def build_mm_energy_forces_fn(
     use_jax_md_neighbor_list: bool = True,
     fractional_coordinates: bool = False,
     mm_r_min: Optional[float] = None,
+    jax_md_capacity_multiplier: float = 1.25,
+    jax_md_capacity_growth_factor: float = 1.5,
+    jax_md_max_overflow_retries: int = 4,
+    jax_md_overflow_fallback_to_cell_list: bool = True,
     debug: bool = False,
 ) -> Any:
     """Build MM energy/forces function with switching.
@@ -224,18 +228,24 @@ def build_mm_energy_forces_fn(
         and _cell_list_pairs is not None
     )
 
-    if _use_jax_md_nbrs:
-        # jax_md path: pair list is updated externally; mm_fn will accept pair_idx, pair_mask
-        jax_md_result = create_jax_md_neighbor_list(
+    def _create_jax_md_bundle(capacity_multiplier: float):
+        return create_jax_md_neighbor_list(
             np.asarray(pbc_cell),
             r_cutoff=mm_switch_on + mm_cutoff,
             monomer_offsets=np.asarray(monomer_offsets),
             dr_threshold=0.5,
-            capacity_multiplier=1.25,
+            capacity_multiplier=capacity_multiplier,
             fractional_coordinates=fractional_coordinates,
         )
+
+    if _use_jax_md_nbrs:
+        # jax_md path: pair list is updated externally; mm_fn will accept pair_idx, pair_mask
+        jax_md_result = _create_jax_md_bundle(float(jax_md_capacity_multiplier))
         if jax_md_result is not None:
             _neighbor_fn, _filter_fn, _monomer_id_jnp = jax_md_result
+            _neighbor_fn_cell = [_neighbor_fn]
+            _filter_fn_cell = [_filter_fn]
+            _current_capacity_multiplier = [float(jax_md_capacity_multiplier)]
             _nbrs = [None]  # mutable cell for neighbor list state
             _pair_idx_cell = [None]
             _pair_mask_cell = [None]
@@ -310,10 +320,10 @@ def build_mm_energy_forces_fn(
     elif _use_jax_md_nbrs:
         _mm_cutoff_dist = mm_switch_on + mm_cutoff
         _offsets_np = np.array([int(monomer_offsets[k]) for k in range(len(monomer_offsets))])
-        nbrs_init = _neighbor_fn.allocate(np.asarray(R))
+        nbrs_init = _neighbor_fn_cell[0].allocate(np.asarray(R))
         _nbrs[0] = nbrs_init
         idx = nbrs_init.idx
-        pair_i, pair_j, mask = _filter_fn(idx)
+        pair_i, pair_j, mask = _filter_fn_cell[0](idx)
         _max_pairs = idx.shape[1]
         if debug:
             n_valid_init = int(np.sum(np.asarray(jax.device_get(mask))))
@@ -597,7 +607,7 @@ def build_mm_energy_forces_fn(
             kwargs = {} if (box is None or not fractional_coordinates) else {"box": jnp.asarray(box)}
             nbrs = nbrs.update(R, **kwargs)
             realloc_count = 0
-            for _ in range(3):
+            for _ in range(int(jax_md_max_overflow_retries)):
                 overflow = np.asarray(jax.device_get(nbrs.did_buffer_overflow))
                 did_overflow = bool(overflow) if overflow.ndim == 0 else bool(overflow.any())
                 if _nbr_debug:
@@ -606,12 +616,62 @@ def build_mm_energy_forces_fn(
                 if not did_overflow:
                     break
                 realloc_count += 1
-                nbrs = _neighbor_fn.allocate(R, **kwargs)
+                next_multiplier = _current_capacity_multiplier[0] * float(jax_md_capacity_growth_factor)
+                rebuilt = _create_jax_md_bundle(next_multiplier)
+                if rebuilt is not None:
+                    _neighbor_fn_new, _filter_fn_new, _ = rebuilt
+                    _neighbor_fn_cell[0] = _neighbor_fn_new
+                    _filter_fn_cell[0] = _filter_fn_new
+                    _current_capacity_multiplier[0] = next_multiplier
+                nbrs = _neighbor_fn_cell[0].allocate(R, **kwargs)
                 nbrs = nbrs.update(R, **kwargs)
             else:
+                if (
+                    jax_md_overflow_fallback_to_cell_list
+                    and _cell_list_pairs is not None
+                    and _estimate_max_pairs is not None
+                ):
+                    cutoff = mm_switch_on + mm_cutoff
+                    fallback_max_pairs = int(max_pairs) if max_pairs is not None else int(
+                        _estimate_max_pairs(
+                            total_atoms,
+                            cutoff=cutoff,
+                            safety_factor=max(float(cell_list_safety_factor), 4.0),
+                            density_estimate=cell_list_density_estimate,
+                        )
+                    )
+                    cl_i, cl_j, cl_mask, _ = _cell_list_pairs(
+                        np.asarray(positions, dtype=np.float64),
+                        np.asarray(pbc_cell),
+                        cutoff=cutoff,
+                        max_pairs=fallback_max_pairs,
+                        monomer_offsets=_offsets_np,
+                        atoms_per_monomer_list=atoms_per_monomer_list,
+                        exclude_intra_monomer=True,
+                    )
+                    if mm_r_min is not None:
+                        cl_mask = _filter_pairs_by_com_min(
+                            np.asarray(positions, dtype=np.float64),
+                            np.asarray(cl_i),
+                            np.asarray(cl_j),
+                            np.asarray(cl_mask, dtype=bool),
+                            _offsets_np,
+                            np.asarray(_monomer_id_jnp),
+                            mm_r_min,
+                            pbc_cell=np.asarray(pbc_cell) if pbc_cell is not None else None,
+                        )
+                    if _nbr_debug:
+                        print(
+                            "[nbr] persistent overflow after retries; "
+                            f"fallback to cell-list max_pairs={fallback_max_pairs}"
+                        )
+                    return (
+                        jnp.stack([jnp.asarray(cl_i), jnp.asarray(cl_j)], axis=1),
+                        jnp.asarray(cl_mask, dtype=jnp.float32),
+                    )
                 raise RuntimeError("Neighbor list buffer overflow persisted after reallocation")
             _nbrs[0] = nbrs
-            pair_i, pair_j, mask = _filter_fn(nbrs.idx)
+            pair_i, pair_j, mask = _filter_fn_cell[0](nbrs.idx)
             if mm_r_min is not None:
                 R_for_filter = np.asarray(R, dtype=np.float64)
                 if fractional_coordinates and box is not None:
