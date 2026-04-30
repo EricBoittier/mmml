@@ -38,6 +38,7 @@ import time
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 from ase import Atoms, units
 from ase.io.trajectory import Trajectory
 from ase.md.langevin import Langevin
@@ -54,6 +55,8 @@ import pycharmm.param as param
 import pycharmm.psf as psf
 import pycharmm.read as read
 import pycharmm.settings as settings
+import pycharmm.coor as coor
+import pycharmm.minimize as charmm_minimize
 
 pyci.read = read
 pyci.settings = settings
@@ -159,6 +162,29 @@ def _factory_mmml(
     else:
         mmml_calc, _ = calc_result
     return mmml_calc
+
+
+def _run_charmm_minimize(
+    atoms: Atoms,
+    *,
+    nstep_sd: int,
+    nstep_abnr: int,
+    tolenr: float,
+    tolgrd: float,
+    timings: dict[str, float] | None = None,
+) -> None:
+    """Run optional CHARMM minimization and write updated coords back to ASE atoms."""
+    if nstep_sd <= 0 and nstep_abnr <= 0:
+        return
+    t0 = _tmark()
+    coor.set_positions(pd.DataFrame(atoms.get_positions(), columns=["x", "y", "z"]))
+    if nstep_sd > 0:
+        charmm_minimize.run_sd(nstep=nstep_sd, tolenr=tolenr, tolgrd=tolgrd)
+    if nstep_abnr > 0:
+        charmm_minimize.run_abnr(nstep=nstep_abnr, tolenr=tolenr, tolgrd=tolgrd)
+    atoms.set_positions(coor.get_positions().to_numpy(dtype=float))
+    if timings is not None:
+        timings["charmm_min_wall_s"] = _tmark() - t0
 
 
 def run_md(
@@ -309,9 +335,15 @@ def main() -> int:
     parser.add_argument("--traj-every", type=int, default=5000)
     parser.add_argument("--ml-cutoff", type=float, default=1.0)
     parser.add_argument("--mm-switch-on", type=float, default=5.5)
-    parser.add_argument("--mm-cutoff", type=float, default=5.0)
+    parser.add_argument("--mm-cutoff", type=float, default=2.0)
     parser.add_argument("--pre-min-fmax", type=float, default=0.001)
     parser.add_argument("--pre-min-steps", type=int, default=2000)
+    parser.add_argument("--bfgs-maxstep", type=float, default=0.05, help="ASE BFGS maxstep (A)")
+    parser.add_argument("--charmm-pre-minimize", action="store_true", help="Run CHARMM SD/ABNR before ASE BFGS.")
+    parser.add_argument("--charmm-sd-steps", type=int, default=25, help="CHARMM SD steps before ABNR.")
+    parser.add_argument("--charmm-abnr-steps", type=int, default=100, help="CHARMM ABNR steps before ASE BFGS.")
+    parser.add_argument("--charmm-tolenr", type=float, default=1e-3, help="CHARMM minimization energy tolerance.")
+    parser.add_argument("--charmm-tolgrd", type=float, default=1e-3, help="CHARMM minimization gradient tolerance.")
     parser.add_argument("--nvt-temp-K", type=float, default=300.0)
     parser.add_argument("--nve-temp-K", type=float, default=10.0)
     parser.add_argument("--langevin-friction", type=float, default=0.02)
@@ -428,6 +460,24 @@ def main() -> int:
             atoms.set_pbc(False)
 
         run_timings: dict[str, float] = {}
+        if args.charmm_pre_minimize:
+            _tlog(
+                f"{key}: CHARMM minimization starting (SD={args.charmm_sd_steps}, "
+                f"ABNR={args.charmm_abnr_steps}, tolenr={args.charmm_tolenr:g}, tolgrd={args.charmm_tolgrd:g})",
+                timing_log,
+            )
+            _run_charmm_minimize(
+                atoms,
+                nstep_sd=args.charmm_sd_steps,
+                nstep_abnr=args.charmm_abnr_steps,
+                tolenr=args.charmm_tolenr,
+                tolgrd=args.charmm_tolgrd,
+                timings=run_timings,
+            )
+            _tlog(
+                f"{key}: CHARMM minimization {run_timings.get('charmm_min_wall_s', 0.0):.3f} s",
+                timing_log,
+            )
         calc = _factory_mmml(
             z=z,
             r=atoms.get_positions(),
@@ -470,7 +520,7 @@ def main() -> int:
             timing_log,
         )
         bfgs_log = None if args.quiet_bfgs else "-"
-        opt = BFGS(atoms, logfile=bfgs_log)
+        opt = BFGS(atoms, logfile=bfgs_log, maxstep=args.bfgs_maxstep)
         opt.run(fmax=args.pre_min_fmax, steps=args.pre_min_steps)
         run_timings["bfgs_wall_s"] = _tmark() - t_b
         fmin = float(np.abs(atoms.get_forces()).max())
