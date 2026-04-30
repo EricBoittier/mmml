@@ -201,6 +201,7 @@ def run_md(
     nve_temp_K: float,
     langevin_friction: float,
     seed: int,
+    path_prefix: Path | None = None,
     timings: dict[str, float] | None = None,
 ) -> dict:
     dt = dt_fs * units.fs
@@ -293,9 +294,16 @@ def run_md(
 
     et = np.array([r["Etot_eV"] for r in rows])
     tk = np.array([r["T_K"] for r in rows])
+    if path_prefix is not None:
+        traj_ref = str(traj_path.relative_to(path_prefix))
+        log_ref = str(log_path.relative_to(path_prefix))
+    else:
+        traj_ref = str(traj_path)
+        log_ref = str(log_path)
+
     out = {
-        "traj": str(traj_path),
-        "log": str(log_path),
+        "traj": traj_ref,
+        "log": log_ref,
         "mode": mode,
         "frames_traj": 1 + nsteps // traj_every,
         "log_samples": len(rows),
@@ -338,6 +346,12 @@ def main() -> int:
     parser.add_argument("--mm-cutoff", type=float, default=2.0)
     parser.add_argument("--pre-min-fmax", type=float, default=0.001)
     parser.add_argument("--pre-min-steps", type=int, default=2000)
+    parser.add_argument(
+        "--max-fmax-after-min",
+        type=float,
+        default=2.0,
+        help="Abort before MD if post-minimization Fmax exceeds this threshold (eV/A).",
+    )
     parser.add_argument("--bfgs-maxstep", type=float, default=0.05, help="ASE BFGS maxstep (A)")
     parser.add_argument("--charmm-pre-minimize", action="store_true", help="Run CHARMM SD/ABNR before ASE BFGS.")
     parser.add_argument("--charmm-sd-steps", type=int, default=25, help="CHARMM SD steps before ABNR.")
@@ -392,7 +406,7 @@ def main() -> int:
     args = parser.parse_args()
 
     t_suite0 = _tmark()
-    out_dir = args.output_dir.expanduser().resolve()
+    out_dir = (Path.cwd() / args.output_dir.expanduser()).absolute()
     out_dir.mkdir(parents=True, exist_ok=True)
 
     if args.checkpoint is None:
@@ -530,6 +544,12 @@ def main() -> int:
             f"{key}: BFGS {run_timings['bfgs_wall_s']:.3f} s ({n_bfgs} iters)",
             timing_log,
         )
+        if fmin > args.max_fmax_after_min:
+            raise RuntimeError(
+                f"{key}: post-minimization fmax={fmin:.6f} eV/A exceeds "
+                f"--max-fmax-after-min={args.max_fmax_after_min:.6f}. "
+                "Increase minimization steps, tighten cutoffs, and/or enable --charmm-pre-minimize."
+            )
 
         res = run_md(
             name=key,
@@ -544,6 +564,7 @@ def main() -> int:
             nve_temp_K=args.nve_temp_K,
             langevin_friction=args.langevin_friction,
             seed=args.seed,
+            path_prefix=out_dir,
             timings=run_timings,
         )
         res["pbc"] = use_pbc
