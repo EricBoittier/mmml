@@ -101,6 +101,10 @@ def _factory_mmml(
     mm_cut: float,
     cell_scalar: float | None,
     verbose: bool,
+    jax_md_capacity_multiplier: float,
+    jax_md_capacity_growth_factor: float,
+    jax_md_max_overflow_retries: int,
+    jax_md_overflow_fallback_to_cell_list: bool,
     timings: dict[str, float] | None = None,
 ):
     at_codes = np.asarray(psf.get_iac(), dtype=int) - 1
@@ -125,6 +129,10 @@ def _factory_mmml(
         at_codes_override=at_codes,
         verbose=verbose,
         max_pairs=500_000,
+        jax_md_capacity_multiplier=jax_md_capacity_multiplier,
+        jax_md_capacity_growth_factor=jax_md_capacity_growth_factor,
+        jax_md_max_overflow_retries=jax_md_max_overflow_retries,
+        jax_md_overflow_fallback_to_cell_list=jax_md_overflow_fallback_to_cell_list,
     )
     t1 = _tmark()
     cutoff = CutoffParameters(ml_cutoff=ml_cut, mm_switch_on=mm_sw, mm_cutoff=mm_cut)
@@ -309,6 +317,29 @@ def main() -> int:
     parser.add_argument("--langevin-friction", type=float, default=0.02)
     parser.add_argument("--seed", type=int, default=123)
     parser.add_argument("--verbose-calc", action="store_true")
+    parser.add_argument(
+        "--jax-md-capacity-multiplier",
+        type=float,
+        default=1.25,
+        help="Initial jax-md neighbor-list capacity multiplier.",
+    )
+    parser.add_argument(
+        "--jax-md-capacity-growth-factor",
+        type=float,
+        default=1.5,
+        help="Capacity multiplier growth factor on overflow retries.",
+    )
+    parser.add_argument(
+        "--jax-md-max-overflow-retries",
+        type=int,
+        default=4,
+        help="Max overflow-triggered jax-md neighbor-list reallocations.",
+    )
+    parser.add_argument(
+        "--jax-md-disable-fallback",
+        action="store_true",
+        help="Disable fallback to cell-list pair generation after persistent jax-md overflow.",
+    )
     parser.add_argument("--all", action="store_true", help="Run all 6 combinations")
     parser.add_argument(
         "--only",
@@ -408,6 +439,10 @@ def main() -> int:
             mm_cut=args.mm_cutoff,
             cell_scalar=L if use_pbc else None,
             verbose=args.verbose_calc,
+            jax_md_capacity_multiplier=args.jax_md_capacity_multiplier,
+            jax_md_capacity_growth_factor=args.jax_md_capacity_growth_factor,
+            jax_md_max_overflow_retries=args.jax_md_max_overflow_retries,
+            jax_md_overflow_fallback_to_cell_list=not args.jax_md_disable_fallback,
             timings=run_timings,
         )
         atoms.calc = calc
