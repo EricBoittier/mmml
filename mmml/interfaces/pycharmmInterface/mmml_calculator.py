@@ -313,6 +313,10 @@ def setup_calculator(
     ml_sparse_dimers: bool = True,
     ml_batch_size: Optional[int] = None,
     mm_r_min: Optional[float] = None,
+    jax_md_capacity_multiplier: float = 1.25,
+    jax_md_capacity_growth_factor: float = 1.5,
+    jax_md_max_overflow_retries: int = 4,
+    jax_md_overflow_fallback_to_cell_list: bool = True,
 ):
     """Create hybrid ML/MM calculator with outputs in eV/eV-A.
 
@@ -344,6 +348,12 @@ def setup_calculator(
             COM distance < mm_r_min are excluded. Defaults: complementary_handoff=False
             -> mm_switch_on * 0.9; complementary_handoff=True -> (mm_switch_on - ml_cutoff) * 0.9
             (exclude pure ML region; handoff preserved). Pass explicit value to override.
+        jax_md_capacity_multiplier: Initial jax-md neighbor-list capacity multiplier.
+            Increase for dense systems to reduce overflow risk.
+        jax_md_capacity_growth_factor: Multiplicative growth used when overflow is detected.
+        jax_md_max_overflow_retries: Number of overflow-triggered reallocation attempts.
+        jax_md_overflow_fallback_to_cell_list: If True, fallback to cell-list pair generation
+            when jax-md still overflows after retries.
     """
     if model_restart_path is None:
         raise ValueError("model_restart_path must be provided")
@@ -703,6 +713,10 @@ def setup_calculator(
             use_jax_md_neighbor_list=True,
             fractional_coordinates=_fractional_coordinates,
             mm_r_min=mm_r_min,
+            jax_md_capacity_multiplier=jax_md_capacity_multiplier,
+            jax_md_capacity_growth_factor=jax_md_capacity_growth_factor,
+            jax_md_max_overflow_retries=jax_md_max_overflow_retries,
+            jax_md_overflow_fallback_to_cell_list=jax_md_overflow_fallback_to_cell_list,
             debug=debug,
         )
         if isinstance(result_jaxmd, tuple):
@@ -728,6 +742,10 @@ def setup_calculator(
             use_smooth_mic=use_smooth_mic,
             use_jax_md_neighbor_list=False,
             mm_r_min=mm_r_min,
+            jax_md_capacity_multiplier=jax_md_capacity_multiplier,
+            jax_md_capacity_growth_factor=jax_md_capacity_growth_factor,
+            jax_md_max_overflow_retries=jax_md_max_overflow_retries,
+            jax_md_overflow_fallback_to_cell_list=jax_md_overflow_fallback_to_cell_list,
             debug=debug,
             )
             return (mm_fn_jaxmd, mm_fn_cell), update_fn
