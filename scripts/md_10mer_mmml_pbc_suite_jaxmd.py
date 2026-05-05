@@ -21,6 +21,7 @@ _scripts_dir = Path(__file__).resolve().parent
 if str(_scripts_dir) not in sys.path:
     sys.path.insert(0, str(_scripts_dir))
 from md_10mer_mmml_pbc_suite import (  # noqa: E402
+    _build_psf_ordered_cluster,
     _build_cluster_from_composition,
     _parse_composition,
     _cubic_box_length,
@@ -102,12 +103,26 @@ def main() -> int:
         )
         n_molecules = len(atoms_per_list)
     else:
+        # Preserve legacy behavior for homogeneous MEOH systems: use template-seeded
+        # PSF-ordered builder for stable monomer geometry.
         composition = [("MEOH", int(args.n_molecules))]
-        z, r0, atoms_per_list, _ = _build_cluster_from_composition(
-            composition=composition,
-            spacing=args.spacing,
+        z, r0 = _build_psf_ordered_cluster(
+            "MEOH",
+            args.n_molecules,
+            args.spacing,
+            template_pdb=args.template_pdb.expanduser().resolve(),
         )
+        n_atoms_tmp = len(z)
+        atoms_per_uniform = n_atoms_tmp // args.n_molecules
+        atoms_per_list = [int(atoms_per_uniform)] * int(args.n_molecules)
+        if n_atoms_tmp != int(np.sum(np.asarray(atoms_per_list, dtype=int))):
+            raise RuntimeError(
+                f"Homogeneous atom partition mismatch: total_atoms={n_atoms_tmp}, "
+                f"n_molecules={args.n_molecules}, atoms_per={atoms_per_uniform}"
+            )
         n_molecules = int(args.n_molecules)
+        # Keep composition summary consistent with the actual count.
+        composition = [("MEOH", n_molecules)]
     monomer_offsets = np.zeros(n_molecules + 1, dtype=int)
     monomer_offsets[1:] = np.cumsum(np.asarray(atoms_per_list, dtype=int))
     r0 = _enforce_min_com_separation(r0, monomer_offsets, args.min_com_start_distance)

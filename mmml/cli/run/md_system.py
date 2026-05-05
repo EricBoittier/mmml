@@ -49,6 +49,12 @@ def parse_args() -> argparse.Namespace:
         help="Target temperature in K (NVT/NPT).",
     )
     parser.add_argument(
+        "--nvt-integrator",
+        choices=["auto", "nhc", "langevin"],
+        default="auto",
+        help="Integrator for NVT in ASE route. auto=nhc for homogeneous, langevin for mixed composition.",
+    )
+    parser.add_argument(
         "--pressure",
         type=float,
         default=1.0,
@@ -115,12 +121,20 @@ def build_command(args: argparse.Namespace) -> list[str]:
         elif args.setup == "free_nve":
             cmd.extend(["--only", "vac_nve"])
         elif args.setup == "free_nvt":
-            cmd.extend(["--only", "vac_nvt_nhc"])
+            if args.nvt_integrator == "auto":
+                use_langevin = bool(args.composition)
+            else:
+                use_langevin = args.nvt_integrator == "langevin"
+            cmd.extend(["--only", "vac_nvt_langevin" if use_langevin else "vac_nvt_nhc"])
             cmd.extend(["--nvt-temp-K", str(args.temperature)])
         elif args.setup == "pbc_nve":
             cmd.extend(["--only", "pbc_nve"])
         elif args.setup == "pbc_nvt":
-            cmd.extend(["--only", "pbc_nvt_nhc"])
+            if args.nvt_integrator == "auto":
+                use_langevin = bool(args.composition)
+            else:
+                use_langevin = args.nvt_integrator == "langevin"
+            cmd.extend(["--only", "pbc_nvt_langevin" if use_langevin else "pbc_nvt_nhc"])
             cmd.extend(["--nvt-temp-K", str(args.temperature)])
         else:
             raise ValueError(f"Unsupported setup: {args.setup}")
