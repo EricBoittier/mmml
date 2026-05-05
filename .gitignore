@@ -12,6 +12,7 @@ CHARMMSETUP
 
 # Generated outputs and checkpoints (do not version large artifacts)
 outputs/
+out/
 mmml/models/physnetjax/ckpts/*
 !mmml/models/physnetjax/ckpts/DESdimers/
 
