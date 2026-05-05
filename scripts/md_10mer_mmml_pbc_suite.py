@@ -336,12 +336,12 @@ def run_md(
         if mode == "nvt_nhc" and hasattr(dyn, "get_conserved_energy"):
             row["H_eV"] = float(dyn.get_conserved_energy())
         rows.append(row)
-        if step % traj_every == 0:
-            traj.write(atoms)
 
+    traj.write(atoms)  # initial frame
     snapshot(0)
     t_after_first_snapshot = _tmark()
     dyn.attach(lambda: snapshot(dyn.get_number_of_steps()), interval=log_every)
+    dyn.attach(lambda: traj.write(atoms), interval=max(1, traj_every))
     t_run0 = _tmark()
     dyn.run(nsteps)
     t_run1 = _tmark()
@@ -421,7 +421,7 @@ def main() -> int:
     parser.add_argument("--ps", type=float, default=1.0, help="Simulation length (ps)")
     parser.add_argument("--dt-fs", type=float, default=0.25)
     parser.add_argument("--log-every", type=int, default=50)
-    parser.add_argument("--traj-every", type=int, default=5000)
+    parser.add_argument("--traj-every", type=int, default=1)
     parser.add_argument("--ml-cutoff", type=float, default=0.1)
     parser.add_argument("--mm-switch-on", type=float, default=5.5)
     parser.add_argument("--mm-cutoff", type=float, default=2.0)
