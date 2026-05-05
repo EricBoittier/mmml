@@ -161,6 +161,15 @@ def _build_cluster_from_composition(
     composition: list[tuple[str, int]],
     spacing: float,
 ) -> tuple[np.ndarray, np.ndarray, list[int], list[str]]:
+    def _count_atoms_for_residue(residue: str) -> int:
+        pyci.pycharmm.lingo.charmm_script("DELETE ATOM SELE ALL END")
+        reset_block()
+        read.sequence_string(residue)
+        gen.new_segment(seg_name="TMP", setup_ic=True)
+        ic.prm_fill(replace_all=True)
+        ic.build()
+        return int(coor.get_positions().shape[0])
+
     read.rtf(pyci.CGENFF_RTF)
     bl = settings.set_bomb_level(-2)
     wl = settings.set_warn_level(-2)
@@ -179,20 +188,19 @@ def _build_cluster_from_composition(
     ic.build()
 
     positions = coor.get_positions().to_numpy(dtype=float)
-    atom_res = np.asarray(psf.get_res(), dtype=str)
-    if atom_res.shape[0] != positions.shape[0]:
-        raise RuntimeError("PSF residue labels length does not match coordinates")
-
     atoms_per_list: list[int] = []
     ordered_residue_names: list[str] = []
-    start = 0
-    for i in range(1, len(atom_res)):
-        if atom_res[i] != atom_res[start]:
-            atoms_per_list.append(i - start)
-            ordered_residue_names.append(str(atom_res[start]))
-            start = i
-    atoms_per_list.append(len(atom_res) - start)
-    ordered_residue_names.append(str(atom_res[start]))
+    for residue, count in composition:
+        n_atoms_res = _count_atoms_for_residue(residue)
+        for _ in range(int(count)):
+            atoms_per_list.append(int(n_atoms_res))
+            ordered_residue_names.append(residue)
+    expected_atoms = int(np.sum(np.asarray(atoms_per_list, dtype=int)))
+    if expected_atoms != int(positions.shape[0]):
+        raise RuntimeError(
+            f"Composition-derived atom count ({expected_atoms}) does not match built coordinates "
+            f"({positions.shape[0]}). Composition={composition}"
+        )
 
     n_molecules = len(atoms_per_list)
     n_side = int(np.ceil(np.sqrt(n_molecules)))
