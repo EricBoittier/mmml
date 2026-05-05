@@ -149,6 +149,8 @@ def _factory_mmml(
     jax_md_capacity_growth_factor: float,
     jax_md_max_overflow_retries: int,
     jax_md_overflow_fallback_to_cell_list: bool,
+    jax_md_update_interval: int,
+    jax_md_skin_distance: float,
     max_pairs: int,
     timings: dict[str, float] | None = None,
 ):
@@ -178,6 +180,8 @@ def _factory_mmml(
         jax_md_capacity_growth_factor=jax_md_capacity_growth_factor,
         jax_md_max_overflow_retries=jax_md_max_overflow_retries,
         jax_md_overflow_fallback_to_cell_list=jax_md_overflow_fallback_to_cell_list,
+        jax_md_update_interval=jax_md_update_interval,
+        jax_md_skin_distance=jax_md_skin_distance,
     )
     t1 = _tmark()
     cutoff = CutoffParameters(ml_cutoff=ml_cut, mm_switch_on=mm_sw, mm_cutoff=mm_cut)
@@ -530,6 +534,18 @@ def main() -> int:
         help="Disable fallback to cell-list pair generation after persistent jax-md overflow.",
     )
     parser.add_argument(
+        "--jax-md-update-interval",
+        type=int,
+        default=10,
+        help="Update MM neighbor pairs every N calculator calls (reuse cached pairs in between).",
+    )
+    parser.add_argument(
+        "--jax-md-skin-distance",
+        type=float,
+        default=0.2,
+        help="Reuse cached MM neighbor pairs while max displacement since last update is below this (A).",
+    )
+    parser.add_argument(
         "--max-pairs",
         type=int,
         default=20_000,
@@ -662,6 +678,8 @@ def main() -> int:
             jax_md_capacity_growth_factor=args.jax_md_capacity_growth_factor,
             jax_md_max_overflow_retries=args.jax_md_max_overflow_retries,
             jax_md_overflow_fallback_to_cell_list=not args.jax_md_disable_fallback,
+            jax_md_update_interval=args.jax_md_update_interval,
+            jax_md_skin_distance=args.jax_md_skin_distance,
             max_pairs=args.max_pairs,
             timings=run_timings,
         )
@@ -769,6 +787,10 @@ def main() -> int:
         res["pbc"] = use_pbc
         res["box_A"] = L if use_pbc else None
         res["fmax_after_min_eVA"] = fmin
+        if hasattr(calc, "get_mm_pair_update_stats"):
+            stats = calc.get_mm_pair_update_stats()
+            if stats:
+                res["mm_pair_update_stats"] = stats
         suite_summary["runs"][key] = res
         suite_summary["timing"]["runs"][key] = dict(run_timings)
         _tlog(

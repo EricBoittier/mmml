@@ -317,6 +317,8 @@ def setup_calculator(
     jax_md_capacity_growth_factor: float = 1.5,
     jax_md_max_overflow_retries: int = 4,
     jax_md_overflow_fallback_to_cell_list: bool = True,
+    jax_md_update_interval: int = 1,
+    jax_md_skin_distance: float = 0.0,
 ):
     """Create hybrid ML/MM calculator with outputs in eV/eV-A.
 
@@ -354,6 +356,10 @@ def setup_calculator(
         jax_md_max_overflow_retries: Number of overflow-triggered reallocation attempts.
         jax_md_overflow_fallback_to_cell_list: If True, fallback to cell-list pair generation
             when jax-md still overflows after retries.
+        jax_md_update_interval: Rebuild/update MM neighbor pairs every N calculator calls.
+            Intermediate calls reuse cached pairs.
+        jax_md_skin_distance: Additional displacement threshold (Å). When >0, cached pairs are
+            reused while max displacement since last update stays below this value.
     """
     if model_restart_path is None:
         raise ValueError("model_restart_path must be provided")
@@ -717,6 +723,8 @@ def setup_calculator(
             jax_md_capacity_growth_factor=jax_md_capacity_growth_factor,
             jax_md_max_overflow_retries=jax_md_max_overflow_retries,
             jax_md_overflow_fallback_to_cell_list=jax_md_overflow_fallback_to_cell_list,
+            jax_md_update_interval=jax_md_update_interval,
+            jax_md_skin_distance=jax_md_skin_distance,
             debug=debug,
         )
         if isinstance(result_jaxmd, tuple):
@@ -746,6 +754,8 @@ def setup_calculator(
             jax_md_capacity_growth_factor=jax_md_capacity_growth_factor,
             jax_md_max_overflow_retries=jax_md_max_overflow_retries,
             jax_md_overflow_fallback_to_cell_list=jax_md_overflow_fallback_to_cell_list,
+            jax_md_update_interval=jax_md_update_interval,
+            jax_md_skin_distance=jax_md_skin_distance,
             debug=debug,
             )
             return (mm_fn_jaxmd, mm_fn_cell), update_fn
@@ -1492,6 +1502,15 @@ def setup_calculator(
                     )
                 lambda_monomer = new_arr
 
+            def get_mm_pair_update_stats(self) -> dict:
+                update_fn = _cached_update_mm_pairs[0]
+                if update_fn is None:
+                    return {}
+                get_stats = getattr(update_fn, "get_stats", None)
+                if callable(get_stats):
+                    return dict(get_stats())
+                return {}
+
             def calculate(
                 self,
                 atoms,
@@ -1539,6 +1558,9 @@ def setup_calculator(
                     update_fn = _cached_update_mm_pairs[0]
                     if update_fn is not None:
                         mm_pair_idx, mm_pair_mask = update_fn(R)
+                        get_stats = getattr(update_fn, "get_stats", None)
+                        if callable(get_stats):
+                            self.results["mm_pair_update_stats"] = dict(get_stats())
 
                 # Compute ModelOutput to get forces directly (more stable)
                 out = spherical_cutoff_calculator(
