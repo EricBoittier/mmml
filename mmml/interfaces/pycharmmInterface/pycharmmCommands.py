@@ -365,6 +365,12 @@ equi = """!#########################################
 ! Equilibration - NpT {NDCD}
 !#########################################
 ! Paths must match `heat` above (res/, dcd/, pdb/).
+! Recreate pmass/tmass (substitution may not survive between Python script calls).
+! Loosen echeck vs default — tight default often trips "ENERGY CHANGE TOLERANCE EXCEEDED" on CPT restart.
+
+scalar mass stat
+calc pmass = int ( ?stot  /  50.0 )
+calc tmass = @pmass * 10
 
 open read  unit 30 card name res/heat.res      ! Restart file
 open write unit 31 card name res/equi.res      ! Restart file
@@ -374,6 +380,7 @@ dyna restart leap cpt nstep 100000 timestp 0.0002 -
   nprint 1000 nsavc 1000 ntrfrq 200 -
   iprfrq 500 inbfrq 10 imgfrq 50 ixtfrq 1000 -
   ihtfrq 0 ieqfrq 0 -
+  echeck 500.0 -
   pint pconst pref 1 pgamma 5 pmass @pmass -
    iseed  {iseed} -
   hoover reft 300 tmass @tmass firstt 300 -
@@ -416,6 +423,7 @@ dyna restart leap res nstep 10000 timestp 0.0002 -
   nprint 100 nsavc 10 ntrfrq 200 -
   iprfrq 1000 inbfrq -1 imgfrq 50 ixtfrq 1000 -
   ihtfrq 0 ieqfrq 0 -
+  echeck 500.0 -
   cpt pint pconst pref 1 pgamma 0 pmass @pmass -
   hoover reft 300 tmass @tmass -
    iseed  {iseed} -
