@@ -3235,12 +3235,15 @@ def train_model(
                 return merged
             else:
                 # Leaf node - use old value if shapes match
-                if hasattr(new_tree, 'shape') and hasattr(old_tree, 'shape'):
-                    if new_tree.shape == old_tree.shape:
-                        return old_tree
-                    else:
-                        print(f"  ⚠️  Shape mismatch at {path}: old={old_tree.shape}, new={new_tree.shape} (using new)")
-                        return new_tree
+                if hasattr(new_tree, 'shape'):
+                    old_arr = jnp.asarray(old_tree)
+                    if new_tree.shape == old_arr.shape:
+                        if hasattr(old_tree, 'shape'):
+                            return old_tree
+                        dtype = getattr(new_tree, "dtype", None)
+                        return jnp.asarray(old_tree, dtype=dtype)
+                    print(f"  ⚠️  Shape mismatch at {path}: old={old_arr.shape}, new={new_tree.shape} (using new)")
+                    return new_tree
                 return old_tree
 
         params = merge_params(params, restart_params)
@@ -3321,7 +3324,7 @@ def train_model(
     # Training loop with EMA
     best_valid_loss = float('inf')
     ema_decay = 0.999  # EMA decay factor (higher = slower update)
-    ema_params = jax.tree_util.tree_map(lambda x: x.copy(), params)  # Initialize EMA params
+    ema_params = jax.tree_util.tree_map(lambda x: x.copy() if hasattr(x, "copy") else jnp.asarray(x), params)
     
     # Track training history
     history = {
