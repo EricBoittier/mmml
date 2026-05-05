@@ -68,3 +68,36 @@ def test_cli_unwraps_h5_coordinates_to_fast_xyz(tmp_path: Path, monkeypatch: pyt
     frames = read(str(output), index=":")
     assert len(frames) == 2
     assert np.allclose([frame.positions[0, 0] for frame in frames], [9.5, 10.2])
+
+
+def test_cli_unwraps_coordinate_only_h5_with_reference(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    h5_path = tmp_path / "coords_only.h5"
+    with h5py.File(h5_path, "w") as handle:
+        handle.create_dataset("positions", data=np.array([[[9.5, 0.0, 0.0]], [[0.2, 0.0, 0.0]]]))
+
+    reference = tmp_path / "reference.traj"
+    with Trajectory(str(reference), "w") as traj:
+        traj.write(Atoms("H", positions=[[9.5, 0.0, 0.0]], cell=[10.0, 10.0, 10.0], pbc=True))
+
+    output = tmp_path / "unwrapped.extxyz"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "mmml unwrap-traj",
+            str(h5_path),
+            "-o",
+            str(output),
+            "--reference",
+            str(reference),
+            "--format",
+            "extxyz",
+            "--fast",
+            "--quiet",
+        ],
+    )
+
+    assert unwrap_traj.main() == 0
+    frames = read(str(output), index=":")
+    assert len(frames) == 2
+    assert np.allclose([frame.positions[0, 0] for frame in frames], [9.5, 10.2])
