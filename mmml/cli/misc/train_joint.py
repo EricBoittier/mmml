@@ -3810,6 +3810,9 @@ def main():
                        help='Experiment name')
     parser.add_argument('--ckpt-dir', type=Path, default=None,
                        help='Checkpoint directory')
+    parser.add_argument('--write-checkpoint-path', type=Path, default=None,
+                       help='After training, write the resolved run directory (ckpt-dir/name) '
+                            'to this file as a single line (for shell scripts and asset tools).')
     parser.add_argument('--restart', type=Path, default=None,
                        help='Restart from checkpoint (path to best_params.pkl or checkpoint directory)')
     parser.add_argument('--physnet-checkpoint', type=Path, default=None,
@@ -4242,7 +4245,13 @@ def main():
         print(f"\n{'='*70}")
         print("✅ TRAINING COMPLETE!")
         print(f"{'='*70}")
-        print(f"\nFinal parameters saved to: {ckpt_dir / args.name}")
+        run_root = (ckpt_dir / args.name).resolve()
+        print(f"\nFinal parameters saved to: {run_root}")
+        print(f"MMML_CHECKPOINT_DIR={run_root}")
+        if args.write_checkpoint_path is not None:
+            args.write_checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+            args.write_checkpoint_path.write_text(f"{run_root}\n", encoding="utf-8")
+            print(f"Wrote checkpoint path for scripts: {args.write_checkpoint_path.resolve()}")
         
         # Create validation plots if requested
         if args.plot_results:
@@ -4283,7 +4292,13 @@ def main():
         
     except KeyboardInterrupt:
         print("\n\n⚠️  Training interrupted by user")
-        print(f"Checkpoints saved to: {ckpt_dir / args.name}")
+        run_root = (ckpt_dir / args.name).resolve()
+        print(f"Checkpoints saved to: {run_root}")
+        print(f"MMML_CHECKPOINT_DIR={run_root}")
+        if args.write_checkpoint_path is not None:
+            args.write_checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+            args.write_checkpoint_path.write_text(f"{run_root}\n", encoding="utf-8")
+            print(f"Wrote checkpoint path for scripts: {args.write_checkpoint_path.resolve()}")
         sys.exit(0)
     except Exception as e:
         print("\n\n❌ Training failed with error:")
