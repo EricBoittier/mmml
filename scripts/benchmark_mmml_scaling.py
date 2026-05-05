@@ -26,6 +26,7 @@ def _run_case(
     python_exe: str,
     script_path: Path,
     backend: str,
+    ensemble: str,
     n_mol: int,
     ps: float,
     dt_fs: float,
@@ -58,7 +59,7 @@ def _run_case(
             python_exe,
             str(script_path / "md_10mer_mmml_pbc_suite_jaxmd.py"),
             "--ensemble",
-            "nvt",
+            ensemble,
             "--n-molecules",
             str(n_mol),
             "--ps",
@@ -129,6 +130,12 @@ def _run_case(
 def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--backend", choices=["ase", "jaxmd"], default="ase")
+    p.add_argument(
+        "--ensemble",
+        choices=["nve", "nvt", "npt"],
+        default="nvt",
+        help="Used for jaxmd backend; ignored for ase backend.",
+    )
     p.add_argument("--counts", type=str, default="10,20,30,40,50")
     p.add_argument("--ps", type=float, default=0.2)
     p.add_argument("--dt-fs", type=float, default=0.25)
@@ -149,6 +156,7 @@ def main() -> int:
             python_exe=sys.executable,
             script_path=scripts_dir,
             backend=args.backend,
+            ensemble=args.ensemble,
             n_mol=n_mol,
             ps=args.ps,
             dt_fs=args.dt_fs,
