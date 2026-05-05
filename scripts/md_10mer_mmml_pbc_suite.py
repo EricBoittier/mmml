@@ -389,7 +389,13 @@ def run_md(
         out["H_drift_eV"] = float(h[-1] - h[0])
         out["H_span_eV"] = float(h.max() - h.min())
     if timings is not None:
-        out["timings_s"] = {k: float(v) for k, v in timings.items()}
+        timings_payload: dict[str, float | int | str | bool] = {}
+        for k, v in timings.items():
+            if isinstance(v, (bool, int, float, str)):
+                timings_payload[k] = v
+            else:
+                timings_payload[k] = str(v)
+        out["timings_s"] = timings_payload
     summary_path.write_text(json.dumps(out, indent=2))
     return out
 
