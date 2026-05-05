@@ -189,6 +189,7 @@ close unit 32
 dyna = """!#########################################
 ! Production - NpT
 !#########################################
+! NDCD=0: restart from equilibration (res/equi.res). NDCD>=1: continue from res/dyna.(NDCD-1).res
 
 set ndcd {NDCD}
 

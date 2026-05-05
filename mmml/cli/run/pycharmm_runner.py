@@ -146,7 +146,7 @@ def run_dyna(
     atoms: Any,
     args: Any,
     show_frame: Optional[Callable[[Any, int, str], None]] = None,
-    ndcd: int = 1,
+    ndcd: int = 0,
 ) -> Any:
     """Run CHARMM production phase."""
     from mmml.interfaces.pycharmmInterface.pycharmmCommands import dyna
