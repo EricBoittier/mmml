@@ -147,7 +147,7 @@ def _factory_mmml(
         doML=True,
         doMM=True,
         doML_dimer=True,
-        backprop=True,
+        backprop=False,
         debug=False,
         energy_conversion_factor=1.0,
         force_conversion_factor=1.0,
@@ -185,6 +185,78 @@ def _run_charmm_minimize(
     atoms.set_positions(coor.get_positions().to_numpy(dtype=float))
     if timings is not None:
         timings["charmm_min_wall_s"] = _tmark() - t0
+
+
+def _save_cutoff_plot(
+    *,
+    out_dir: Path,
+    ml_cutoff: float,
+    mm_switch_on: float,
+    mm_cutoff: float,
+    log_lines: list[str] | None = None,
+) -> Path:
+    cutoff = CutoffParameters(
+        ml_cutoff=ml_cutoff,
+        mm_switch_on=mm_switch_on,
+        mm_cutoff=mm_cutoff,
+        complementary_handoff=True,
+    )
+    _ = cutoff.plot_cutoff_parameters(save_dir=out_dir)
+    out_path = out_dir / (
+        f"cutoffs_schematic_{float(ml_cutoff):.2f}_{float(mm_switch_on):.2f}_"
+        f"{float(mm_cutoff):.2f}_complementary.png"
+    )
+    _tlog(f"cutoff plot: {out_path}", log_lines)
+    return out_path
+
+
+def _force_fd_check(
+    atoms: Atoms,
+    *,
+    natoms_check: int,
+    dx: float,
+    log_lines: list[str] | None = None,
+    timings: dict[str, float] | None = None,
+) -> dict[str, float]:
+    """Compare analytic forces to central-difference numerical derivatives."""
+    if natoms_check <= 0:
+        return {}
+    t0 = _tmark()
+    x0 = atoms.get_positions().copy()
+    f_analytic = np.asarray(atoms.get_forces(), dtype=float)
+    n_check = min(int(natoms_check), len(atoms))
+    f_numeric = np.zeros((n_check, 3), dtype=float)
+    for i in range(n_check):
+        for a in range(3):
+            xp = x0.copy()
+            xm = x0.copy()
+            xp[i, a] += dx
+            xm[i, a] -= dx
+            atoms.set_positions(xp)
+            ep = float(atoms.get_potential_energy())
+            atoms.set_positions(xm)
+            em = float(atoms.get_potential_energy())
+            f_numeric[i, a] = -(ep - em) / (2.0 * dx)
+    atoms.set_positions(x0)
+    # Recompute once to restore calculator cache/consistency at original geometry.
+    _ = atoms.get_potential_energy()
+    err = np.abs(f_numeric - f_analytic[:n_check, :])
+    max_abs = float(np.max(err))
+    rms = float(np.sqrt(np.mean((f_numeric - f_analytic[:n_check, :]) ** 2)))
+    out = {
+        "fd_atoms_checked": float(n_check),
+        "fd_dx_A": float(dx),
+        "fd_force_max_abs_diff_eVA": max_abs,
+        "fd_force_rms_diff_eVA": rms,
+        "fd_check_wall_s": _tmark() - t0,
+    }
+    _tlog(
+        f"force FD check: n={n_check}, dx={dx:.4f} A, max|dF|={max_abs:.6f} eV/A, rms={rms:.6f} eV/A",
+        log_lines,
+    )
+    if timings is not None:
+        timings.update(out)
+    return out
 
 
 def run_md(
@@ -339,13 +411,13 @@ def main() -> int:
     parser.add_argument("--spacing", type=float, default=4.0)
     parser.add_argument("--ps", type=float, default=4.0, help="Simulation length (ps)")
     parser.add_argument("--dt-fs", type=float, default=1.0)
-    parser.add_argument("--log-every", type=int, default=500)
+    parser.add_argument("--log-every", type=int, default=50)
     parser.add_argument("--traj-every", type=int, default=5000)
     parser.add_argument("--ml-cutoff", type=float, default=1.0)
     parser.add_argument("--mm-switch-on", type=float, default=5.5)
     parser.add_argument("--mm-cutoff", type=float, default=2.0)
-    parser.add_argument("--pre-min-fmax", type=float, default=0.001)
-    parser.add_argument("--pre-min-steps", type=int, default=2000)
+    parser.add_argument("--pre-min-fmax", type=float, default=0.1)
+    parser.add_argument("--pre-min-steps", type=int, default=50)
     parser.add_argument(
         "--max-fmax-after-min",
         type=float,
@@ -362,6 +434,18 @@ def main() -> int:
     parser.add_argument("--nve-temp-K", type=float, default=10.0)
     parser.add_argument("--langevin-friction", type=float, default=0.02)
     parser.add_argument("--seed", type=int, default=123)
+    parser.add_argument(
+        "--fd-check-atoms",
+        type=int,
+        default=3,
+        help="Number of leading atoms for numerical-vs-analytic force check before MD (0 disables).",
+    )
+    parser.add_argument(
+        "--fd-check-dx",
+        type=float,
+        default=1e-3,
+        help="Finite-difference displacement in Angstrom for force check.",
+    )
     parser.add_argument("--verbose-calc", action="store_true")
     parser.add_argument(
         "--jax-md-capacity-multiplier",
@@ -510,6 +594,20 @@ def main() -> int:
             timings=run_timings,
         )
         atoms.calc = calc
+        _save_cutoff_plot(
+            out_dir=out_dir,
+            ml_cutoff=args.ml_cutoff,
+            mm_switch_on=args.mm_switch_on,
+            mm_cutoff=args.mm_cutoff,
+            log_lines=timing_log,
+        )
+        _force_fd_check(
+            atoms,
+            natoms_check=args.fd_check_atoms,
+            dx=args.fd_check_dx,
+            log_lines=timing_log,
+            timings=run_timings,
+        )
         _tlog(
             f"{key}: mmml setup_calculator {run_timings.get('mmml_setup_calculator_s', 0):.3f} s, "
             f"factory_call {run_timings.get('mmml_factory_call_s', 0):.3f} s",
@@ -533,10 +631,12 @@ def main() -> int:
             "this is pre-MD minimization, not dynamics yet)",
             timing_log,
         )
+        min_traj_path = out_dir / f"{key}_min.traj"
         bfgs_log = None if args.quiet_bfgs else "-"
-        opt = BFGS(atoms, logfile=bfgs_log, maxstep=args.bfgs_maxstep)
+        opt = BFGS(atoms, logfile=bfgs_log, trajectory=str(min_traj_path), maxstep=args.bfgs_maxstep)
         opt.run(fmax=args.pre_min_fmax, steps=args.pre_min_steps)
         run_timings["bfgs_wall_s"] = _tmark() - t_b
+        run_timings["bfgs_traj"] = str(min_traj_path.relative_to(out_dir))
         fmin = float(np.abs(atoms.get_forces()).max())
         n_bfgs = int(opt.get_number_of_steps())
         run_timings["bfgs_iterations"] = float(n_bfgs)
