@@ -120,6 +120,7 @@ except ImportError:
 # Import PhysNet components
 from mmml.physnetjax.physnetjax.models.model import EF
 from mmml.physnetjax.physnetjax.directories import BASE_CKPT_DIR
+from mmml.cli.base import BUNDLED_PORTABLE_MEOH_PATH
 
 # Import DCMNet components
 from mmml.dcmnet.dcmnet.modules import MessagePassingModel
@@ -3801,6 +3802,9 @@ def main():
     parser.add_argument('--physnet-checkpoint', type=Path, default=None,
                        help='Load PhysNet params from a pre-trained checkpoint (e.g. from step 09). '
                             'Path to orbax experiment dir (e.g. <name>-<uuid>) or epoch dir, or JSON.')
+    parser.add_argument('--use-repo-physnet-params', action='store_true', default=False,
+                       help='Initialize the PhysNet part of joint DCMNet training from the bundled '
+                            f'repo PhysNet parameters ({BUNDLED_PORTABLE_MEOH_PATH}).')
     parser.add_argument('--print-freq', type=int, default=1,
                        help='Print frequency (epochs)')
     parser.add_argument('--plot-results', action='store_true', default=False,
@@ -3815,6 +3819,13 @@ def main():
                        help='Verbose output')
     
     args = parser.parse_args()
+    if args.use_repo_physnet_params:
+        if args.restart:
+            parser.error("--use-repo-physnet-params cannot be combined with --restart")
+        if args.physnet_checkpoint is not None:
+            parser.error("--use-repo-physnet-params cannot be combined with --physnet-checkpoint")
+        args.physnet_checkpoint = BUNDLED_PORTABLE_MEOH_PATH
+
     # Configure loss terms
     dipole_w = args.dipole_weight
     esp_w = args.esp_weight
