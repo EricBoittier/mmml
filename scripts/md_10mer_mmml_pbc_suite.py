@@ -57,7 +57,10 @@ import pycharmm.psf as psf
 import pycharmm.read as read
 import pycharmm.settings as settings
 import pycharmm.coor as coor
+import pycharmm.generate as gen
+import pycharmm.ic as ic
 import pycharmm.minimize as charmm_minimize
+from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 
 pyci.read = read
 pyci.settings = settings
@@ -95,20 +98,20 @@ def _cubic_box_length(positions: np.ndarray, ml_cutoff: float, pad: float = 10.0
 
 def _enforce_min_com_separation(
     positions: np.ndarray,
-    n_molecules: int,
-    atoms_per_molecule: int,
+    monomer_offsets: np.ndarray,
     min_com_distance: float,
     max_passes: int = 10,
 ) -> np.ndarray:
     """Push monomer COMs apart so all pair distances are >= min_com_distance."""
+    n_molecules = int(len(monomer_offsets) - 1)
     if min_com_distance <= 0.0 or n_molecules <= 1:
         return positions
     pos = np.asarray(positions, dtype=float).copy()
     for _ in range(max_passes):
         coms = np.zeros((n_molecules, 3), dtype=float)
         for i in range(n_molecules):
-            s = i * atoms_per_molecule
-            e = s + atoms_per_molecule
+            s = int(monomer_offsets[i])
+            e = int(monomer_offsets[i + 1])
             coms[i] = pos[s:e].mean(axis=0)
         moved = False
         for i in range(n_molecules):
@@ -121,13 +124,85 @@ def _enforce_min_com_separation(
                 if dist < min_com_distance:
                     direction = dvec / dist
                     delta = 0.5 * (min_com_distance - dist) * direction
-                    si, ei = i * atoms_per_molecule, (i + 1) * atoms_per_molecule
-                    sj, ej = j * atoms_per_molecule, (j + 1) * atoms_per_molecule
+                    si, ei = int(monomer_offsets[i]), int(monomer_offsets[i + 1])
+                    sj, ej = int(monomer_offsets[j]), int(monomer_offsets[j + 1])
                     pos[si:ei] -= delta
                     pos[sj:ej] += delta
                     coms[i] -= delta
                     coms[j] += delta
                     moved = True
+def _parse_composition(spec: str) -> list[tuple[str, int]]:
+    out: list[tuple[str, int]] = []
+    for tok in spec.split(","):
+        tok = tok.strip()
+        if not tok:
+            continue
+        if ":" in tok:
+            residue, count_str = tok.split(":", 1)
+            count = int(count_str)
+        else:
+            residue, count = tok, 1
+        residue = residue.strip().upper()
+        if not residue or count <= 0:
+            raise ValueError(f"Invalid composition token: '{tok}'")
+        out.append((residue, count))
+    if not out:
+        raise ValueError("Empty composition")
+    return out
+
+
+def _build_cluster_from_composition(
+    *,
+    composition: list[tuple[str, int]],
+    spacing: float,
+) -> tuple[np.ndarray, np.ndarray, list[int], list[str]]:
+    read.rtf(pyci.CGENFF_RTF)
+    bl = settings.set_bomb_level(-2)
+    wl = settings.set_warn_level(-2)
+    read.prm(pyci.CGENFF_PRM)
+    settings.set_bomb_level(bl)
+    settings.set_warn_level(wl)
+    sequence_items: list[str] = []
+    for residue, count in composition:
+        sequence_items.extend([residue] * int(count))
+    sequence = " ".join(sequence_items)
+    pyci.pycharmm.lingo.charmm_script("DELETE ATOM SELE ALL END")
+    reset_block()
+    read.sequence_string(sequence)
+    gen.new_segment(seg_name="CLST", setup_ic=True)
+    ic.prm_fill(replace_all=True)
+    ic.build()
+
+    positions = coor.get_positions().to_numpy(dtype=float)
+    atom_res = np.asarray(psf.get_res(), dtype=str)
+    if atom_res.shape[0] != positions.shape[0]:
+        raise RuntimeError("PSF residue labels length does not match coordinates")
+
+    atoms_per_list: list[int] = []
+    ordered_residue_names: list[str] = []
+    start = 0
+    for i in range(1, len(atom_res)):
+        if atom_res[i] != atom_res[start]:
+            atoms_per_list.append(i - start)
+            ordered_residue_names.append(str(atom_res[start]))
+            start = i
+    atoms_per_list.append(len(atom_res) - start)
+    ordered_residue_names.append(str(atom_res[start]))
+
+    n_molecules = len(atoms_per_list)
+    n_side = int(np.ceil(np.sqrt(n_molecules)))
+    shifted = positions.copy()
+    offsets = np.zeros(n_molecules + 1, dtype=int)
+    offsets[1:] = np.cumsum(np.asarray(atoms_per_list, dtype=int))
+    for i in range(n_molecules):
+        s = int(offsets[i])
+        e = int(offsets[i + 1])
+        com = shifted[s:e].mean(axis=0)
+        shift = np.array([(i % n_side) * spacing, (i // n_side) * spacing, 0.0], dtype=float)
+        shifted[s:e] = shifted[s:e] - com + shift
+    coor.set_positions(pd.DataFrame(shifted, columns=["x", "y", "z"]))
+    z = np.asarray(get_Z_from_psf(), dtype=int)
+    return z, shifted, atoms_per_list, ordered_residue_names
         if not moved:
             break
     return pos
@@ -138,7 +213,7 @@ def _factory_mmml(
     z: np.ndarray,
     r: np.ndarray,
     n_mol: int,
-    atoms_per: int,
+    atoms_per: int | list[int],
     base_ckpt_dir: Path,
     ml_cut: float,
     mm_sw: float,
@@ -158,6 +233,10 @@ def _factory_mmml(
     n_types = len(param.get_atc())
     cell_arg = float(cell_scalar) if cell_scalar is not None else False
     t0 = _tmark()
+    if isinstance(atoms_per, int):
+        max_atoms_per = int(atoms_per)
+    else:
+        max_atoms_per = int(max(atoms_per))
     factory = setup_calculator(
         ATOMS_PER_MONOMER=atoms_per,
         N_MONOMERS=n_mol,
@@ -169,7 +248,7 @@ def _factory_mmml(
         doML_dimer=True,
         debug=False,
         model_restart_path=base_ckpt_dir,
-        MAX_ATOMS_PER_SYSTEM=atoms_per * 2,
+        MAX_ATOMS_PER_SYSTEM=max_atoms_per * 2,
         cell=cell_arg,
         ep_scale=np.ones(n_types),
         sig_scale=np.ones(n_types),
@@ -411,6 +490,12 @@ def main() -> int:
     parser.add_argument("--output-dir", type=Path, default=Path("artifacts/md_10mer_mmml_pbc_suite"))
     parser.add_argument("--template-pdb", type=Path, default=Path("mmml/generate/sample/pdb/meoh.pdb"))
     parser.add_argument("--n-molecules", type=int, default=10)
+    parser.add_argument(
+        "--composition",
+        type=str,
+        default=None,
+        help="Residue composition as RES:count comma list (e.g. MEOH:5,TIP3:5). Overrides --n-molecules.",
+    )
     parser.add_argument("--spacing", type=float, default=5.0)
     parser.add_argument(
         "--min-com-start-distance",
@@ -527,20 +612,35 @@ def main() -> int:
 
     timing_log: list[str] = []
     t_c0 = _tmark()
-    z, r0 = _build_psf_ordered_cluster(
-        "MEOH",
-        args.n_molecules,
-        args.spacing,
-        template_pdb=args.template_pdb.expanduser().resolve(),
-    )
+    if args.composition:
+        composition = _parse_composition(args.composition)
+        z, r0, atoms_per_list, residue_labels = _build_cluster_from_composition(
+            composition=composition,
+            spacing=args.spacing,
+        )
+        n_molecules = len(atoms_per_list)
+        composition_summary = {res: int(cnt) for res, cnt in composition}
+    else:
+        z, r0 = _build_psf_ordered_cluster(
+            "MEOH",
+            args.n_molecules,
+            args.spacing,
+            template_pdb=args.template_pdb.expanduser().resolve(),
+        )
+        n_atoms_tmp = len(z)
+        atoms_per_uniform = n_atoms_tmp // args.n_molecules
+        atoms_per_list = [int(atoms_per_uniform)] * int(args.n_molecules)
+        residue_labels = ["MEOH"] * int(args.n_molecules)
+        n_molecules = int(args.n_molecules)
+        composition_summary = {"MEOH": n_molecules}
     cluster_build_s = _tmark() - t_c0
     _tlog(f"cluster_build: {cluster_build_s:.3f} s", timing_log)
     n_atoms = len(z)
-    atoms_per = n_atoms // args.n_molecules
+    monomer_offsets = np.zeros(n_molecules + 1, dtype=int)
+    monomer_offsets[1:] = np.cumsum(np.asarray(atoms_per_list, dtype=int))
     r0 = _enforce_min_com_separation(
         r0,
-        n_molecules=args.n_molecules,
-        atoms_per_molecule=atoms_per,
+        monomer_offsets=monomer_offsets,
         min_com_distance=args.min_com_start_distance,
     )
 
@@ -553,8 +653,10 @@ def main() -> int:
 
     suite_summary: dict = {
         "system": {
-            "residue": "MEOH",
-            "n_molecules": args.n_molecules,
+            "residue": "mixed" if args.composition else "MEOH",
+            "composition": composition_summary,
+            "residue_labels": residue_labels,
+            "n_molecules": n_molecules,
             "n_atoms": n_atoms,
             "spacing_A": args.spacing,
         },
@@ -611,8 +713,8 @@ def main() -> int:
         calc = _factory_mmml(
             z=z,
             r=atoms.get_positions(),
-            n_mol=args.n_molecules,
-            atoms_per=atoms_per,
+            n_mol=n_molecules,
+            atoms_per=atoms_per_list,
             base_ckpt_dir=base_ckpt_dir,
             ml_cut=args.ml_cutoff,
             mm_sw=args.mm_switch_on,
