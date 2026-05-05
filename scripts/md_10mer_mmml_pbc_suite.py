@@ -149,6 +149,7 @@ def _factory_mmml(
     jax_md_capacity_growth_factor: float,
     jax_md_max_overflow_retries: int,
     jax_md_overflow_fallback_to_cell_list: bool,
+    max_pairs: int,
     timings: dict[str, float] | None = None,
 ):
     at_codes = np.asarray(psf.get_iac(), dtype=int) - 1
@@ -172,7 +173,7 @@ def _factory_mmml(
         sig_scale=np.ones(n_types),
         at_codes_override=at_codes,
         verbose=verbose,
-        max_pairs=500_000,
+        max_pairs=max_pairs,
         jax_md_capacity_multiplier=jax_md_capacity_multiplier,
         jax_md_capacity_growth_factor=jax_md_capacity_growth_factor,
         jax_md_max_overflow_retries=jax_md_max_overflow_retries,
@@ -528,6 +529,12 @@ def main() -> int:
         action="store_true",
         help="Disable fallback to cell-list pair generation after persistent jax-md overflow.",
     )
+    parser.add_argument(
+        "--max-pairs",
+        type=int,
+        default=20_000,
+        help="Upper bound for MM pair slots (lower this to reduce XLA/GPU memory pressure).",
+    )
     parser.add_argument("--all", action="store_true", help="Run all 6 combinations")
     parser.add_argument(
         "--only",
@@ -655,6 +662,7 @@ def main() -> int:
             jax_md_capacity_growth_factor=args.jax_md_capacity_growth_factor,
             jax_md_max_overflow_retries=args.jax_md_max_overflow_retries,
             jax_md_overflow_fallback_to_cell_list=not args.jax_md_disable_fallback,
+            max_pairs=args.max_pairs,
             timings=run_timings,
         )
         atoms.calc = calc
