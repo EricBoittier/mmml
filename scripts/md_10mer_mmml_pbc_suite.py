@@ -131,6 +131,11 @@ def _enforce_min_com_separation(
                     coms[i] -= delta
                     coms[j] += delta
                     moved = True
+        if not moved:
+            break
+    return pos
+
+
 def _parse_composition(spec: str) -> list[tuple[str, int]]:
     out: list[tuple[str, int]] = []
     for tok in spec.split(","):
@@ -203,9 +208,6 @@ def _build_cluster_from_composition(
     coor.set_positions(pd.DataFrame(shifted, columns=["x", "y", "z"]))
     z = np.asarray(get_Z_from_psf(), dtype=int)
     return z, shifted, atoms_per_list, ordered_residue_names
-        if not moved:
-            break
-    return pos
 
 
 def _factory_mmml(
