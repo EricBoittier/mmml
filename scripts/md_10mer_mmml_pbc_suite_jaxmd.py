@@ -21,7 +21,8 @@ _scripts_dir = Path(__file__).resolve().parent
 if str(_scripts_dir) not in sys.path:
     sys.path.insert(0, str(_scripts_dir))
 from md_10mer_mmml_pbc_suite import (  # noqa: E402
-    _build_psf_ordered_cluster,
+    _build_cluster_from_composition,
+    _parse_composition,
     _cubic_box_length,
     _enforce_min_com_separation,
     _run_charmm_minimize,
@@ -34,6 +35,12 @@ def main() -> int:
     p.add_argument("--output-dir", type=Path, default=Path("artifacts/md_10mer_mmml_pbc_suite_jaxmd"))
     p.add_argument("--template-pdb", type=Path, default=Path("mmml/generate/sample/pdb/meoh.pdb"))
     p.add_argument("--n-molecules", type=int, default=10)
+    p.add_argument(
+        "--composition",
+        type=str,
+        default=None,
+        help="Residue composition as RES:count comma list (e.g. MEOH:5,TIP3:5). Overrides --n-molecules.",
+    )
     p.add_argument("--spacing", type=float, default=5.0)
     p.add_argument("--min-com-start-distance", type=float, default=6.0)
     p.add_argument("--ps", type=float, default=1.0)
@@ -81,14 +88,23 @@ def main() -> int:
     else:
         base_ckpt_dir, _ = resolve_checkpoint_paths(args.checkpoint.expanduser().resolve())
 
-    z, r0 = _build_psf_ordered_cluster(
-        "MEOH",
-        args.n_molecules,
-        args.spacing,
-        template_pdb=args.template_pdb.expanduser().resolve(),
-    )
-    atoms_per = len(z) // args.n_molecules
-    r0 = _enforce_min_com_separation(r0, args.n_molecules, atoms_per, args.min_com_start_distance)
+    if args.composition:
+        composition = _parse_composition(args.composition)
+        z, r0, atoms_per_list, _ = _build_cluster_from_composition(
+            composition=composition,
+            spacing=args.spacing,
+        )
+        n_molecules = len(atoms_per_list)
+    else:
+        composition = [("MEOH", int(args.n_molecules))]
+        z, r0, atoms_per_list, _ = _build_cluster_from_composition(
+            composition=composition,
+            spacing=args.spacing,
+        )
+        n_molecules = int(args.n_molecules)
+    monomer_offsets = np.zeros(n_molecules + 1, dtype=int)
+    monomer_offsets[1:] = np.cumsum(np.asarray(atoms_per_list, dtype=int))
+    r0 = _enforce_min_com_separation(r0, monomer_offsets, args.min_com_start_distance)
     L = _cubic_box_length(r0, args.ml_cutoff)
     r = r0 - r0.mean(axis=0) + 0.5 * L
     atoms = Atoms(numbers=z, positions=r)
@@ -105,8 +121,8 @@ def main() -> int:
         )
 
     factory = setup_calculator(
-        ATOMS_PER_MONOMER=atoms_per,
-        N_MONOMERS=args.n_molecules,
+        ATOMS_PER_MONOMER=atoms_per_list,
+        N_MONOMERS=n_molecules,
         ml_cutoff_distance=args.ml_cutoff,
         mm_switch_on=args.mm_switch_on,
         mm_cutoff=args.mm_cutoff,
@@ -115,7 +131,7 @@ def main() -> int:
         doML_dimer=True,
         debug=False,
         model_restart_path=base_ckpt_dir,
-        MAX_ATOMS_PER_SYSTEM=atoms_per * 2,
+        MAX_ATOMS_PER_SYSTEM=max(atoms_per_list) * 2,
         cell=float(L),
         verbose=False,
         max_pairs=args.max_pairs,
@@ -138,7 +154,7 @@ def main() -> int:
     calc_result = factory(
         atomic_numbers=z,
         atomic_positions=atoms.get_positions(),
-        n_monomers=args.n_molecules,
+        n_monomers=n_molecules,
         cutoff_params=cutoff,
         doML=True,
         doMM=True,
@@ -191,8 +207,8 @@ def main() -> int:
         spherical_cutoff_calculator=spherical_cutoff_calculator,
         get_update_fn=get_update_fn,
         CUTOFF_PARAMS=cutoff,
-        n_monomers=args.n_molecules,
-        monomer_offsets=np.arange(0, len(z) + 1, atoms_per, dtype=int),
+        n_monomers=n_molecules,
+        monomer_offsets=monomer_offsets,
         Si_mass=np.asarray(atoms.get_masses(), dtype=np.float32),
         atoms_template=atoms.copy(),
     )
@@ -243,6 +259,7 @@ def main() -> int:
         "box_A": float(L),
         "pressure_atm": float(args.pressure),
         "temperature_K": float(args.temperature),
+        "composition": {res: int(cnt) for res, cnt in composition},
         "neighbor_update_interval_steps": int(max(1, args.steps_per_recording)) if args.ensemble == "npt" else None,
         "neighbor_expected_updates": int(nsteps // max(1, args.steps_per_recording)) if args.ensemble == "npt" else None,
         "neighbor_internal_update_interval_calls": effective_update_interval,
