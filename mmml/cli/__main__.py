@@ -20,6 +20,7 @@ Available commands:
   make-res    Generate residue (PDB, PSF, topology) via PyCHARMM/CGENFF
   make-box    Pack molecules into periodic box (vacuum or solvated)
   run         MM/ML simulation (ASE + JAX-MD with hybrid calculator)
+  md-10mer    Run md_10mer preset setups (free/pbc NVE/NVT + pbc NPT)
   run-pycharmm  Pure CHARMM heating and equilibration (no ML)
   xml2npz     Convert Molpro XML files to NPZ format
   train       Train DCMNet or PhysNetJAX models (coming soon)
@@ -37,6 +38,7 @@ Available commands:
   ef-evaluate Evaluate trained EF model (metrics + plots from test NPZ)
   ef-md       MD with trained EF model (ASE or JIT JAX; replicas, field ramp, etc.)
   interpolate-xyz  Interpolate two XYZ structures via Z-matrix; write NPZ trajectory
+  unwrap-traj Unwrap periodic trajectories; optionally fast-write XYZ/extxyz
   sample-diverse-xyz  Pick N diverse structures from XYZ(s); write sampled.npz (SOAP)
   gui         Start the molecular viewer GUI
   extract-checkpoint-metrics  Plot and print training metrics from Orbax checkpoints
@@ -44,6 +46,7 @@ Available commands:
 Examples:
   mmml make-res --res CYBZ
   mmml make-box --res CYBZ --n 50 --side_length 25.0
+  mmml md-10mer --setup pbc_npt --temperature 300 --pressure 1.0
   mmml xml2npz input.xml -o output.npz
   mmml xml2npz inputs/*.xml -o dataset.npz --validate
   mmml validate dataset.npz
@@ -65,6 +68,7 @@ Examples:
   mmml active-learning -i out/physnet_md/physnet_ase.traj -o md_sampled.npz --max-temp 300
   mmml pyscf-evaluate -i md_sampled.npz -o md_evaluated.npz
   mmml interpolate-xyz reactants.xyz products.xyz -o path.npz --steps 500
+  mmml unwrap-traj wrapped.traj -o unwrapped.extxyz --format extxyz --fast
 
 For help on a specific command:
   mmml <command> --help
@@ -73,7 +77,7 @@ For help on a specific command:
     
     parser.add_argument(
         'command',
-        choices=['make-res', 'make-box', 'run', 'run-pycharmm', 'xml2npz', 'validate', 'train', 'evaluate', 'downstream', 'fix-and-split', 'pyscf-dft', 'pyscf-mp2', 'pyscf-evaluate', 'verify-esp-alignment', 'normal-mode-sample', 'physnet-md', 'physnet-evaluate', 'ef-train', 'ef-evaluate', 'ef-md', 'active-learning', 'kernel-fit', 'interpolate-xyz', 'sample-diverse-xyz', 'gui', 'extract-checkpoint-metrics'],
+        choices=['make-res', 'make-box', 'run', 'md-10mer', 'run-pycharmm', 'xml2npz', 'validate', 'train', 'evaluate', 'downstream', 'fix-and-split', 'pyscf-dft', 'pyscf-mp2', 'pyscf-evaluate', 'verify-esp-alignment', 'normal-mode-sample', 'physnet-md', 'physnet-evaluate', 'ef-train', 'ef-evaluate', 'ef-md', 'active-learning', 'kernel-fit', 'interpolate-xyz', 'unwrap-traj', 'sample-diverse-xyz', 'gui', 'extract-checkpoint-metrics'],
         help='Command to run'
     )
     parser.add_argument(
@@ -99,6 +103,11 @@ For help on a specific command:
         from .run.run_sim import main as run_sim_main
         sys.argv = ['mmml run'] + args.args
         return run_sim_main()
+
+    elif args.command == 'md-10mer':
+        from .run import md_10mer
+        sys.argv = ['mmml md-10mer'] + args.args
+        return md_10mer.main()
 
     elif args.command == 'run-pycharmm':
         from .run.run_pycharmm import main
@@ -212,6 +221,11 @@ For help on a specific command:
         from .misc import interpolate_xyz
         sys.argv = ['mmml interpolate-xyz'] + args.args
         return interpolate_xyz.main()
+
+    elif args.command == 'unwrap-traj':
+        from .misc import unwrap_traj
+        sys.argv = ['mmml unwrap-traj'] + args.args
+        return unwrap_traj.main()
 
     elif args.command == 'sample-diverse-xyz':
         from mmml.generate.sample import sample_diverse_xyz
