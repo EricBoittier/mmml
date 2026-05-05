@@ -396,6 +396,7 @@ dyna = """!#########################################
 ! Production - NpT
 !#########################################
 ! Paths must match `equi` (res/, dcd/, pdb/).
+! NDCD=0: restart from res/equi.res. NDCD>=1: restart from res/dyna.(NDCD-1).res
 
 set ndcd {NDCD}
 
