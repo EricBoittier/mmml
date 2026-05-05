@@ -141,8 +141,9 @@ def run_pycharmm(args: argparse.Namespace):
         atoms = run_pycharmm_setup_and_minimize(atoms, args, show_frame=show_frame)
         atoms = run_heat(atoms, args, show_frame=show_frame)
         atoms = run_equilibration(atoms, args, show_frame=show_frame)
-        
-        atoms = run_dyna(atoms, args, show_frame=show_frame, ndcd=1)
+
+        # ndcd=0: read res/equi.res and write dyna.0.* ; ndcd>=1 expects res/dyna.(ndcd-1).res
+        atoms = run_dyna(atoms, args, show_frame=show_frame, ndcd=0)
         
     # Sync final positions from CHARMM
     atoms.set_positions(coor.get_positions())
