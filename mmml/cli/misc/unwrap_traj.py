@@ -4,7 +4,7 @@
 Examples:
   mmml unwrap-traj in.traj -o unwrapped.traj
   mmml unwrap-traj in.traj -o unwrapped.xyz --format xyz --fast
-  mmml unwrap-traj coords.h5 -o unwrapped.extxyz --format extxyz --cell 25,25,25
+  mmml unwrap-traj coords.h5 -o unwrapped.extxyz --reference wrapped.traj --fast
 """
 
 from __future__ import annotations
@@ -101,7 +101,7 @@ def _find_dataset(group: Any, names: tuple[str, ...]) -> Any | None:
     return None
 
 
-def _read_h5(path: Path, coord_key: str | None, numbers_key: str | None, cell_key: str | None) -> tuple[np.ndarray, np.ndarray, np.ndarray | None]:
+def _read_h5(path: Path, coord_key: str | None, numbers_key: str | None, cell_key: str | None) -> tuple[np.ndarray, np.ndarray | None, np.ndarray | None]:
     import h5py
 
     with h5py.File(path, "r") as handle:
@@ -142,14 +142,14 @@ def _read_h5(path: Path, coord_key: str | None, numbers_key: str | None, cell_ke
     if numbers_list:
         numbers = np.stack(numbers_list, axis=0)
     else:
-        raise ValueError("HDF5 input needs atomic numbers; use --numbers-key if they are not named Z/atomic_numbers")
+        numbers = None
     cells = np.stack(cells_list, axis=0) if cells_list else None
     return coords, numbers, cells
 
 
-def _numbers_from_dataset(dataset: Any | None, n_frames: int) -> np.ndarray:
+def _numbers_from_dataset(dataset: Any | None, n_frames: int) -> np.ndarray | None:
     if dataset is None:
-        raise ValueError("HDF5 input needs atomic numbers; use --numbers-key if they are not named Z/atomic_numbers")
+        return None
     numbers = np.asarray(dataset, dtype=int)
     if numbers.ndim == 1:
         return numbers
@@ -224,16 +224,43 @@ def _write_fast_xyz(path: Path, frames: Iterator[Any], extended: bool) -> int:
     return n_frames
 
 
+def _read_reference(path: Path | None) -> tuple[np.ndarray | None, np.ndarray | None]:
+    if path is None:
+        return None, None
+
+    from ase.io import read
+
+    atoms = read(str(path), index=0)
+    numbers = np.asarray(atoms.get_atomic_numbers(), dtype=int)
+    cell = np.asarray(atoms.cell.array, dtype=float)
+    return numbers, cell if _is_valid_cell(cell) else None
+
+
 def _h5_atoms_iter(path: Path, args: argparse.Namespace, override_cell: np.ndarray | None) -> Iterator[Any]:
     from ase import Atoms
 
     coords, numbers, cells = _read_h5(path, args.coord_key, args.numbers_key, args.cell_key)
+    ref_numbers, ref_cell = _read_reference(args.reference)
+    if numbers is None:
+        if ref_numbers is None:
+            raise ValueError(
+                "HDF5 input needs atomic numbers; use --numbers-key if present, "
+                "or --reference with an ASE-readable structure/trajectory"
+            )
+        numbers = ref_numbers
+    if np.asarray(numbers).shape[-1] != coords.shape[1]:
+        raise ValueError(
+            f"atomic-number count ({np.asarray(numbers).shape[-1]}) does not match HDF5 atom count ({coords.shape[1]})"
+        )
+
     cell = override_cell
     if cell is None and cells is not None:
         cells_arr = np.asarray(cells, dtype=float)
         if cells_arr.ndim == 1 or cells_arr.shape == (3, 3):
             cell = _cell_from_array(cells_arr)
             cells = None
+    if cell is None and cells is None:
+        cell = ref_cell
     unwrapped = unwrap_positions(coords, cells=cells, cell=cell)
 
     for i, positions in enumerate(unwrapped):
@@ -296,6 +323,7 @@ def main() -> int:
     parser.add_argument("--fast", action="store_true", help="Use direct streaming writer for xyz/extxyz outputs")
     parser.add_argument("--index", default=":", help="ASE input frame index/slice for non-HDF5 inputs (default: :)")
     parser.add_argument("--cell", help="Override cell as 'a,b,c' or 9 matrix values")
+    parser.add_argument("--reference", type=Path, help="ASE-readable file supplying atomic numbers and fallback cell for HDF5 inputs")
     parser.add_argument("--coord-key", help="HDF5 coordinate dataset key (default: R/positions/coordinates/coords/xyz)")
     parser.add_argument("--numbers-key", help="HDF5 atomic-number dataset key (default: Z/atomic_numbers/numbers)")
     parser.add_argument("--cell-key", help="HDF5 cell dataset key (default: cell/cells/lattice/lattices/box/boxes)")
@@ -306,6 +334,9 @@ def main() -> int:
 
     if not args.input.exists():
         print(f"Error: input not found: {args.input}", file=sys.stderr)
+        return 1
+    if args.reference is not None and not args.reference.exists():
+        print(f"Error: reference not found: {args.reference}", file=sys.stderr)
         return 1
 
     try:
