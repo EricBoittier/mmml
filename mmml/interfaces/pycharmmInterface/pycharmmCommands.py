@@ -363,10 +363,11 @@ pbcset = """ SET BOXTYPE  = RECT
 equi = """!#########################################
 ! Equilibration - NpT {NDCD}
 !#########################################
+! Paths must match `heat` above (res/, dcd/, pdb/).
 
-open read  unit 30 card name heat.res      ! Restart file
-open write unit 31 card name equi.res      ! Restart file
-open write unit 32 file name equi.dcd      ! Coordinates file
+open read  unit 30 card name res/heat.res      ! Restart file
+open write unit 31 card name res/equi.res      ! Restart file
+open write unit 32 file name dcd/equi.dcd      ! Coordinates file
 
 dyna restart leap cpt nstep 100000 timestp 0.0002 -
   nprint 1000 nsavc 1000 ntrfrq 200 -
@@ -378,11 +379,11 @@ dyna restart leap cpt nstep 100000 timestp 0.0002 -
   iunrea 30 iunwri 31 iuncrd 32 iunvel -1
 
 
-open unit 1 write card name equi.crd
+open unit 1 write card name dcd/equi.crd
 write coor card unit 1
 close unit 1
 
-open write unit 10 card name equi.pdb
+open write unit 10 card name pdb/equi.pdb
 write coor unit 10 pdb
 
 close unit 30
@@ -393,19 +394,20 @@ close unit 32
 dyna = """!#########################################
 ! Production - NpT
 !#########################################
+! Paths must match `equi` (res/, dcd/, pdb/).
 
 set ndcd {NDCD}
 
 if @ndcd .eq. 0 then
   set m @ndcd
-  open read unit 33 card name equi.res        ! Restart file
-  open write unit 34 card name dyna.@ndcd.res ! Restart file
-  open write unit 35 file name dyna.@ndcd.dcd ! Coordinates file
+  open read unit 33 card name res/equi.res        ! Restart file
+  open write unit 34 card name res/dyna.@ndcd.res ! Restart file
+  open write unit 35 file name dcd/dyna.@ndcd.dcd ! Coordinates file
 else
   calc m @ndcd-1
-  open read unit 33 card name dyna.@m.res
-  open write unit 34 card name dyna.@ndcd.res
-  open write unit 35 file name dyna.@ndcd.dcd
+  open read unit 33 card name res/dyna.@m.res
+  open write unit 34 card name res/dyna.@ndcd.res
+  open write unit 35 file name dcd/dyna.@ndcd.dcd
 endif
 
 dyna restart leap res nstep 10000 timestp 0.0002 -
@@ -417,11 +419,11 @@ dyna restart leap res nstep 10000 timestp 0.0002 -
    iseed  {iseed} -
   IUNREA 33 IUNWRI 34 IUNCRD 35 IUNVEL -1
   
-open unit 1 write card name dyna.@ndcd.crd
+open unit 1 write card name dcd/dyna.@ndcd.crd
 write coor card unit 1
 close unit 1
 
-open write unit 10 card name dyna.@ndcd.pdb
+open write unit 10 card name pdb/dyna.@ndcd.pdb
 write coor unit 10 pdb
 
 close unit 33
