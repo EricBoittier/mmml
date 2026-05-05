@@ -256,55 +256,6 @@ def _save_cutoff_plot(
     return out_path
 
 
-def _force_fd_check(
-    atoms: Atoms,
-    *,
-    natoms_check: int,
-    dx: float,
-    log_lines: list[str] | None = None,
-    timings: dict[str, float] | None = None,
-) -> dict[str, float]:
-    """Compare analytic forces to central-difference numerical derivatives."""
-    if natoms_check <= 0:
-        return {}
-    t0 = _tmark()
-    x0 = atoms.get_positions().copy()
-    f_analytic = np.asarray(atoms.get_forces(), dtype=float)
-    n_check = min(int(natoms_check), len(atoms))
-    f_numeric = np.zeros((n_check, 3), dtype=float)
-    for i in range(n_check):
-        for a in range(3):
-            xp = x0.copy()
-            xm = x0.copy()
-            xp[i, a] += dx
-            xm[i, a] -= dx
-            atoms.set_positions(xp)
-            ep = float(atoms.get_potential_energy())
-            atoms.set_positions(xm)
-            em = float(atoms.get_potential_energy())
-            f_numeric[i, a] = -(ep - em) / (2.0 * dx)
-    atoms.set_positions(x0)
-    # Recompute once to restore calculator cache/consistency at original geometry.
-    _ = atoms.get_potential_energy()
-    err = np.abs(f_numeric - f_analytic[:n_check, :])
-    max_abs = float(np.max(err))
-    rms = float(np.sqrt(np.mean((f_numeric - f_analytic[:n_check, :]) ** 2)))
-    out = {
-        "fd_atoms_checked": float(n_check),
-        "fd_dx_A": float(dx),
-        "fd_force_max_abs_diff_eVA": max_abs,
-        "fd_force_rms_diff_eVA": rms,
-        "fd_check_wall_s": _tmark() - t0,
-    }
-    _tlog(
-        f"force FD check: n={n_check}, dx={dx:.4f} A, max|dF|={max_abs:.6f} eV/A, rms={rms:.6f} eV/A",
-        log_lines,
-    )
-    if timings is not None:
-        timings.update(out)
-    return out
-
-
 def run_md(
     *,
     name: str,
@@ -461,8 +412,8 @@ def main() -> int:
         default=6.0,
         help="Minimum initial COM-COM distance (A) enforced before minimization.",
     )
-    parser.add_argument("--ps", type=float, default=4.0, help="Simulation length (ps)")
-    parser.add_argument("--dt-fs", type=float, default=1.0)
+    parser.add_argument("--ps", type=float, default=1.0, help="Simulation length (ps)")
+    parser.add_argument("--dt-fs", type=float, default=0.25)
     parser.add_argument("--log-every", type=int, default=50)
     parser.add_argument("--traj-every", type=int, default=5000)
     parser.add_argument("--ml-cutoff", type=float, default=0.1)
@@ -497,18 +448,6 @@ def main() -> int:
     parser.add_argument("--nve-temp-K", type=float, default=10.0)
     parser.add_argument("--langevin-friction", type=float, default=0.02)
     parser.add_argument("--seed", type=int, default=123)
-    parser.add_argument(
-        "--fd-check-atoms",
-        type=int,
-        default=3,
-        help="Number of leading atoms for numerical-vs-analytic force check before MD (0 disables).",
-    )
-    parser.add_argument(
-        "--fd-check-dx",
-        type=float,
-        default=1e-3,
-        help="Finite-difference displacement in Angstrom for force check.",
-    )
     parser.add_argument("--verbose-calc", action="store_true")
     parser.add_argument(
         "--jax-md-capacity-multiplier",
@@ -690,13 +629,6 @@ def main() -> int:
             mm_switch_on=args.mm_switch_on,
             mm_cutoff=args.mm_cutoff,
             log_lines=timing_log,
-        )
-        _force_fd_check(
-            atoms,
-            natoms_check=args.fd_check_atoms,
-            dx=args.fd_check_dx,
-            log_lines=timing_log,
-            timings=run_timings,
         )
         _tlog(
             f"{key}: mmml setup_calculator {run_timings.get('mmml_setup_calculator_s', 0):.3f} s, "
