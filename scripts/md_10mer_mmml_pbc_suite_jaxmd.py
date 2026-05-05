@@ -46,6 +46,12 @@ def main() -> int:
     p.add_argument("--ps", type=float, default=1.0)
     p.add_argument("--dt-fs", type=float, default=0.25)
     p.add_argument("--traj-every", type=int, default=1)
+    p.add_argument(
+        "--traj-chunk-frames",
+        type=int,
+        default=0,
+        help="Split output trajectory into chunks with at most this many frames each (0 = single file).",
+    )
     p.add_argument("--ensemble", type=str, default="npt", choices=["nve", "nvt", "npt"])
     p.add_argument("--temperature", type=float, default=300.0)
     p.add_argument("--pressure", type=float, default=1.0, help="atm (for NPT)")
@@ -236,26 +242,39 @@ def main() -> int:
     key = random.PRNGKey(args.seed)
     steps_completed, frames, boxes = run_sim(key, total_steps=nsteps)
 
-    traj_path = out_dir / f"pbc_{args.ensemble}.traj"
-    traj = Trajectory(str(traj_path), "w")
-    for i, xyz in enumerate(frames):
-        f = Atoms(numbers=z, positions=np.asarray(xyz))
-        if boxes is not None and i < len(boxes):
-            b = np.asarray(boxes[i], dtype=float)
-            f.set_cell(b)
-            f.set_pbc(True)
-        else:
-            f.set_cell([L, L, L])
-            f.set_pbc(True)
-        traj.write(f)
-    traj.close()
+    traj_chunk_frames = int(max(0, args.traj_chunk_frames))
+    traj_paths: list[Path] = []
+    if traj_chunk_frames <= 0:
+        traj_paths = [out_dir / f"pbc_{args.ensemble}.traj"]
+    else:
+        n_parts = max(1, int(np.ceil(len(frames) / traj_chunk_frames)))
+        traj_paths = [out_dir / f"pbc_{args.ensemble}.part{i:04d}.traj" for i in range(n_parts)]
+
+    for part_idx, traj_path in enumerate(traj_paths):
+        start = part_idx * traj_chunk_frames if traj_chunk_frames > 0 else 0
+        stop = min(len(frames), start + traj_chunk_frames) if traj_chunk_frames > 0 else len(frames)
+        traj = Trajectory(str(traj_path), "w")
+        for i in range(start, stop):
+            xyz = frames[i]
+            f = Atoms(numbers=z, positions=np.asarray(xyz))
+            if boxes is not None and i < len(boxes):
+                b = np.asarray(boxes[i], dtype=float)
+                f.set_cell(b)
+                f.set_pbc(True)
+            else:
+                f.set_cell([L, L, L])
+                f.set_pbc(True)
+            traj.write(f)
+        traj.close()
 
     summary = {
         "ensemble": args.ensemble,
         "nsteps_requested": nsteps,
         "nsteps_completed": int(steps_completed),
         "frames": int(len(frames)),
-        "traj": str(traj_path.relative_to(out_dir)),
+        "traj": str(traj_paths[0].relative_to(out_dir)),
+        "traj_parts": [str(p.relative_to(out_dir)) for p in traj_paths],
+        "traj_part_count": len(traj_paths),
         "box_A": float(L),
         "pressure_atm": float(args.pressure),
         "temperature_K": float(args.temperature),
@@ -272,7 +291,8 @@ def main() -> int:
             pass
     (out_dir / "suite_summary_jaxmd.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     print(json.dumps(summary, indent=2))
-    print(f"Wrote {traj_path}")
+    for traj_path in traj_paths:
+        print(f"Wrote {traj_path}")
     print(f"Wrote {out_dir / 'suite_summary_jaxmd.json'}")
     return 0
 
