@@ -1073,7 +1073,13 @@ def set_up_nhc_sim_routine(
             run_error = f"{type(exc).__name__}: {exc}"
             c.print(Panel(f"{run_error}\nSaving partial trajectory data.", title="[bold red]JAX-MD error[/bold red]", border_style="red"))
         finally:
-            hdf5_reporter.close()
+            try:
+                hdf5_reporter.close()
+            except Exception as exc:
+                close_error = f"{type(exc).__name__}: {exc}"
+                run_error = close_error if run_error is None else f"{run_error}; HDF5 close failed: {close_error}"
+                run_status = "error"
+                c.print(Panel(close_error, title="[bold red]HDF5 close failed[/bold red]", border_style="red"))
         c.print(Panel(str(hdf5_path), title="[bold green]HDF5 trajectory saved[/bold green]", border_style="green"))
 
         steps_completed = len(nhc_positions) * steps_per_recording
