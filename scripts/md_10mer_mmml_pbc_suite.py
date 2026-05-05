@@ -245,6 +245,8 @@ def _factory_mmml(
     jax_md_update_interval: int,
     jax_md_skin_distance: float,
     max_pairs: int,
+    do_ml: bool = True,
+    do_ml_dimer: bool = True,
     timings: dict[str, float] | None = None,
 ):
     at_codes = np.asarray(psf.get_iac(), dtype=int) - 1
@@ -261,9 +263,9 @@ def _factory_mmml(
         ml_cutoff_distance=ml_cut,
         mm_switch_on=mm_sw,
         mm_cutoff=mm_cut,
-        doML=True,
+        doML=do_ml,
         doMM=True,
-        doML_dimer=True,
+        doML_dimer=do_ml_dimer,
         debug=False,
         model_restart_path=base_ckpt_dir,
         MAX_ATOMS_PER_SYSTEM=max_atoms_per * 2,
@@ -287,9 +289,9 @@ def _factory_mmml(
         atomic_positions=r,
         n_monomers=n_mol,
         cutoff_params=cutoff,
-        doML=True,
+        doML=do_ml,
         doMM=True,
-        doML_dimer=True,
+        doML_dimer=do_ml_dimer,
         backprop=False,
         debug=False,
         energy_conversion_factor=1.0,
@@ -610,6 +612,11 @@ def main() -> int:
     parser.add_argument("--seed", type=int, default=123)
     parser.add_argument("--verbose-calc", action="store_true")
     parser.add_argument(
+        "--allow-ml-on-mixed",
+        action="store_true",
+        help="Allow ML terms for mixed compositions. Default behavior disables ML for non-MEOH mixed systems.",
+    )
+    parser.add_argument(
         "--jax-md-capacity-multiplier",
         type=float,
         default=1.25,
@@ -749,6 +756,18 @@ def main() -> int:
             "runs": {},
         },
     }
+    non_meoh_residues = sorted({r for r in residue_labels if r != "MEOH"})
+    use_ml_terms = True
+    use_ml_dimer_terms = True
+    if args.composition and non_meoh_residues and not args.allow_ml_on_mixed:
+        use_ml_terms = False
+        use_ml_dimer_terms = False
+        _tlog(
+            "mixed composition includes non-MEOH residues "
+            f"({non_meoh_residues}); using MM-only fallback. "
+            "Pass --allow-ml-on-mixed to force ML terms.",
+            timing_log,
+        )
 
     def do_one(key: str, use_pbc: bool, mode: str) -> None:
         r = r_pbc.copy() if use_pbc else r0.copy()
@@ -797,6 +816,8 @@ def main() -> int:
             jax_md_update_interval=args.jax_md_update_interval,
             jax_md_skin_distance=args.jax_md_skin_distance,
             max_pairs=args.max_pairs,
+            do_ml=use_ml_terms,
+            do_ml_dimer=use_ml_dimer_terms,
             timings=run_timings,
         )
         atoms.calc = calc
