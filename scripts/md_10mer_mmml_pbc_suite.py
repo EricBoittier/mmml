@@ -93,6 +93,46 @@ def _cubic_box_length(positions: np.ndarray, ml_cutoff: float, pad: float = 10.0
     return max(span + 2.0 * (r_cut + pad), 50.0)
 
 
+def _enforce_min_com_separation(
+    positions: np.ndarray,
+    n_molecules: int,
+    atoms_per_molecule: int,
+    min_com_distance: float,
+    max_passes: int = 10,
+) -> np.ndarray:
+    """Push monomer COMs apart so all pair distances are >= min_com_distance."""
+    if min_com_distance <= 0.0 or n_molecules <= 1:
+        return positions
+    pos = np.asarray(positions, dtype=float).copy()
+    for _ in range(max_passes):
+        coms = np.zeros((n_molecules, 3), dtype=float)
+        for i in range(n_molecules):
+            s = i * atoms_per_molecule
+            e = s + atoms_per_molecule
+            coms[i] = pos[s:e].mean(axis=0)
+        moved = False
+        for i in range(n_molecules):
+            for j in range(i + 1, n_molecules):
+                dvec = coms[j] - coms[i]
+                dist = float(np.linalg.norm(dvec))
+                if dist < 1e-12:
+                    dvec = np.array([1.0, 0.0, 0.0], dtype=float)
+                    dist = 1e-12
+                if dist < min_com_distance:
+                    direction = dvec / dist
+                    delta = 0.5 * (min_com_distance - dist) * direction
+                    si, ei = i * atoms_per_molecule, (i + 1) * atoms_per_molecule
+                    sj, ej = j * atoms_per_molecule, (j + 1) * atoms_per_molecule
+                    pos[si:ei] -= delta
+                    pos[sj:ej] += delta
+                    coms[i] -= delta
+                    coms[j] += delta
+                    moved = True
+        if not moved:
+            break
+    return pos
+
+
 def _factory_mmml(
     *,
     z: np.ndarray,
@@ -409,7 +449,13 @@ def main() -> int:
     parser.add_argument("--output-dir", type=Path, default=Path("artifacts/md_10mer_mmml_pbc_suite"))
     parser.add_argument("--template-pdb", type=Path, default=Path("mmml/generate/sample/pdb/meoh.pdb"))
     parser.add_argument("--n-molecules", type=int, default=10)
-    parser.add_argument("--spacing", type=float, default=4.0)
+    parser.add_argument("--spacing", type=float, default=5.0)
+    parser.add_argument(
+        "--min-com-start-distance",
+        type=float,
+        default=6.0,
+        help="Minimum initial COM-COM distance (A) enforced before minimization.",
+    )
     parser.add_argument("--ps", type=float, default=4.0, help="Simulation length (ps)")
     parser.add_argument("--dt-fs", type=float, default=1.0)
     parser.add_argument("--log-every", type=int, default=50)
@@ -523,6 +569,12 @@ def main() -> int:
     _tlog(f"cluster_build: {cluster_build_s:.3f} s", timing_log)
     n_atoms = len(z)
     atoms_per = n_atoms // args.n_molecules
+    r0 = _enforce_min_com_separation(
+        r0,
+        n_molecules=args.n_molecules,
+        atoms_per_molecule=atoms_per,
+        min_com_distance=args.min_com_start_distance,
+    )
 
     L = _cubic_box_length(r0, args.ml_cutoff)
     r_pbc = r0 - r0.mean(axis=0) + 0.5 * L
