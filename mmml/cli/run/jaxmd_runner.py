@@ -573,6 +573,9 @@ def set_up_nhc_sim_routine(
         R=R,
         skip_minimization=False,
     ):
+        run_sim.last_status = "running"
+        run_sim.last_error = None
+        run_sim.last_hdf5_path = None
         total_records = total_steps // steps_per_recording
         _monomer_groups = [
             jnp.arange(int(monomer_offsets[m]), int(monomer_offsets[m + 1]))
@@ -744,6 +747,8 @@ def set_up_nhc_sim_routine(
             c.print(Panel("Using last valid position from first minimization", title="[bold yellow]Warning[/bold yellow]", border_style="yellow"))
         if jnp.any(~jnp.isfinite(md_pos)):
             c.print(Panel(f"No valid positions for {args.ensemble.upper()}; skipping JAX-MD", title="[bold red]Error[/bold red]", border_style="red"))
+            run_sim.last_status = "error"
+            run_sim.last_error = "No valid positions for JAX-MD"
             return 0, jnp.array([]).reshape(0, len(md_pos), 3), None
 
         if args.ensemble == "npt" and use_pbc:
@@ -845,6 +850,8 @@ def set_up_nhc_sim_routine(
             c.print(Panel(t_err, title="[bold red]ERROR: First step produced NaN positions[/bold red]\nCheck: mass in amu, dt in ps, energy_fn returns eV.", border_style="red"))
             pos_out = space.transform(simulate.npt_box(state), state.position) if is_npt else state.position
             box_out = [np.asarray(jax.device_get(simulate.npt_box(state)))] if is_npt else None
+            run_sim.last_status = "error"
+            run_sim.last_error = "First step produced NaN positions"
             return 0, np.stack([np.asarray(jax.device_get(pos_out))]), box_out
         if is_npt and npt_pair_idx is not None:
             box_one = simulate.npt_box(state_one)
@@ -869,6 +876,7 @@ def set_up_nhc_sim_routine(
         # HDF5 REPORTER SETUP
         # ========================================================================
         hdf5_path = Path(f"{args.output_prefix}_{args.ensemble}.h5")
+        run_sim.last_hdf5_path = str(hdf5_path)
         hdf5_path.parent.mkdir(parents=True, exist_ok=True)
         scalar_quantities = ["total_energy", "time_ps"]
         if nbr_monitor and is_npt:
@@ -904,161 +912,175 @@ def set_up_nhc_sim_routine(
         # MAIN SIMULATION LOOP
         # ========================================================================
         jaxmd_loop_start = time.perf_counter()
+        run_status = "complete"
+        run_error = None
 
-        for i in range(total_records):
-            if is_npt and update_fn is not None:
-                box_curr = simulate.npt_box(state)
-                # Neighbor list with fractional_coordinates expects frac pos and box [L,L,L]
-                box_nl = np.asarray(box_curr)
-                if box_nl.shape == (1,) or box_nl.ndim == 0:
-                    L = float(box_nl.reshape(-1)[0])
-                    box_nl = np.array([L, L, L], dtype=np.float64)
-                if getattr(args, "debug", False) and (i < 3 or i % 50 == 0):
-                    print(f"[nbr] NPT record {i}: updating neighbor list, box L={float(box_nl[0]):.4f}")
-                npt_pair_idx, npt_pair_mask = update_fn(
-                    np.asarray(state.position), box=box_nl
-                )
-                state = sim(state, neighbor=(npt_pair_idx, npt_pair_mask), pressure=npt_pressure)
-            else:
-                state = sim(state)
-
-            if use_pbc:
-                if is_npt:
-                    # NPT: wrap fractional coords to [0,1)
+        try:
+            for i in range(total_records):
+                if is_npt and update_fn is not None:
                     box_curr = simulate.npt_box(state)
-                    frac_pos = state.position
-                    wrapped_frac = frac_pos - jnp.floor(frac_pos)
-                    state = state.set(position=wrapped_frac)
-                else:
-                    wrapped_pos = wrap_groups(
-                        state.position, _monomer_groups, _cell_jax, mass=Si_mass
+                    # Neighbor list with fractional_coordinates expects frac pos and box [L,L,L]
+                    box_nl = np.asarray(box_curr)
+                    if box_nl.shape == (1,) or box_nl.ndim == 0:
+                        L = float(box_nl.reshape(-1)[0])
+                        box_nl = np.array([L, L, L], dtype=np.float64)
+                    if getattr(args, "debug", False) and (i < 3 or i % 50 == 0):
+                        print(f"[nbr] NPT record {i}: updating neighbor list, box L={float(box_nl[0]):.4f}")
+                    npt_pair_idx, npt_pair_mask = update_fn(
+                        np.asarray(state.position), box=box_nl
                     )
-                    state = state.set(position=wrapped_pos)
-
-            # Store current position (NPT: fractional + box for correct real coords at save)
-            if is_npt:
-                box_curr = simulate.npt_box(state)
-                nhc_positions.append(state.position)
-                nhc_boxes.append(box_curr)
-            else:
-                nhc_positions.append(state.position)
-
-            # Braille viewer: update at each recording block
-            if show_frame is not None and atoms_template is not None:
-                steps = (i + 1) * steps_per_recording
-                if is_npt:
-                    box_curr = simulate.npt_box(state)
-                    pos_real = space.transform(box_curr, state.position)
-                    pos_real = wrap_groups(pos_real, _monomer_groups, box_curr, mass=Si_mass)
+                    state = sim(state, neighbor=(npt_pair_idx, npt_pair_mask), pressure=npt_pressure)
                 else:
-                    pos_real = state.position
-                    if use_pbc:
-                        pos_real = wrap_groups(pos_real, _monomer_groups, _cell_jax, mass=Si_mass)
-                atoms_template.set_positions(np.asarray(jax.device_get(pos_real)))
-                show_frame(atoms_template, steps, "jaxmd")
+                    state = sim(state)
 
-            # Print progress every 10 steps
-            nbr_n_valid = nbr_capacity = nbr_fill_ratio = None
-            if i % 10 == 0:
-                steps = (i + 1) * steps_per_recording
-                time_ps = steps * dt
-                T_curr = jax_md.quantity.temperature(
-                    momentum=state.momentum,
-                    mass=state.mass
-                ) / unit['temperature']
-                temp = float(T_curr)
-                if is_npt and npt_pair_idx is not None:
-                    box_curr = simulate.npt_box(state)
-                    e_pot = float(npt_energy_fn(state.position, box=box_curr, neighbor=(npt_pair_idx, npt_pair_mask)))
-                else:
-                    e_pot = float(wrapped_energy_fn(state.position))
-                e_kin = float(jax_md.quantity.kinetic_energy(
-                    momentum=state.momentum,
-                    mass=state.mass
-                ))
-                e_tot = e_pot + e_kin
-                elapsed_s = time.perf_counter() - jaxmd_loop_start
-                simulated_ns = steps * dt_fs * 1e-6
-                if simulated_ns > 0 and elapsed_s > 0:
-                    avg_speed_ns_per_day = simulated_ns * 86400.0 / elapsed_s
-                else:
-                    avg_speed_ns_per_day = float("nan")
-                if is_npt and npt_pair_idx is not None:
-                    vol = float(quantity.volume(3, box_curr))
-                    box_diag = np.diagonal(np.asarray(box_curr)[:3, :3])
-                    L = float(box_diag[0]) if box_diag.size > 0 else float("nan")
-                    BAR_PER_ATM = 1.01325
-                    unit_p = float(unit["pressure"])
-                    p_tgt_atm = float(npt_pressure / (unit_p * BAR_PER_ATM))
-                    # Measured pressure (virial + kinetic) for diagnostics
-                    try:
-                        p_meas = quantity.pressure(
-                            npt_energy_fn, state.position, box_curr,
-                            kinetic_energy=e_kin, neighbor=(npt_pair_idx, npt_pair_mask)
+                if use_pbc:
+                    if is_npt:
+                        # NPT: wrap fractional coords to [0,1)
+                        box_curr = simulate.npt_box(state)
+                        frac_pos = state.position
+                        wrapped_frac = frac_pos - jnp.floor(frac_pos)
+                        state = state.set(position=wrapped_frac)
+                    else:
+                        wrapped_pos = wrap_groups(
+                            state.position, _monomer_groups, _cell_jax, mass=Si_mass
                         )
-                        p_meas_atm = float(p_meas / (unit_p * BAR_PER_ATM))
-                    except Exception:
-                        p_meas_atm = float("nan")
-                    line = (
-                        f"{time_ps:10.4f}\t{steps:6d}\t{e_pot:10.4f}\t{e_tot:10.4f}\t{temp:10.2f}\t"
-                        f"{L:8.2f}\t{vol:10.1f}\t{p_tgt_atm:8.2f}\t{p_meas_atm:8.2f}\t"
-                        f"{avg_speed_ns_per_day:10.4f}"
-                    )
-                    if nbr_monitor:
-                        nbr_n_valid = int(np.sum(np.asarray(jax.device_get(npt_pair_mask))))
-                        nbr_capacity = npt_pair_idx.shape[0]
-                        nbr_fill_ratio = nbr_n_valid / nbr_capacity if nbr_capacity > 0 else 0.0
-                        line += f"\t{nbr_n_valid}\t{nbr_capacity}\t{100.0 * nbr_fill_ratio:.1f}%"
-                    print(line)
-                else:
-                    print(
-                        f"{time_ps:10.4f}\t{steps:6d}\t{e_pot:10.4f}\t{e_tot:10.4f}\t{temp:10.2f}\t"
-                        f"{avg_speed_ns_per_day:10.4f}"
-                    )
+                        state = state.set(position=wrapped_pos)
 
-                # Record to HDF5 (NPT: save real positions via transform, wrap by monomer)
-                pos_for_h5 = state.position
+                # Store current position (NPT: fractional + box for correct real coords at save)
                 if is_npt:
                     box_curr = simulate.npt_box(state)
-                    pos_for_h5 = space.transform(box_curr, state.position)
-                    pos_for_h5 = wrap_groups(pos_for_h5, _monomer_groups, box_curr, mass=Si_mass)
-                report_kw = dict(
-                    potential_energy=e_pot,
-                    kinetic_energy=e_kin,
-                    temperature=temp,
-                    invariant=e_tot,
-                    total_energy=e_tot,
-                    time_ps=time_ps,
-                    positions=pos_for_h5,
-                    velocities=state.momentum / state.mass,
-                )
-                if nbr_monitor and is_npt and npt_pair_idx is not None and nbr_n_valid is not None:
-                    report_kw["nbr_n_valid"] = nbr_n_valid
-                    report_kw["nbr_capacity"] = nbr_capacity
-                    report_kw["nbr_fill_ratio"] = nbr_fill_ratio
-                hdf5_reporter.report(**report_kw)
+                    nhc_positions.append(state.position)
+                    nhc_boxes.append(box_curr)
+                else:
+                    nhc_positions.append(state.position)
 
-                # Stop on numerical instability (NaN, Inf, or energy blow-up to 0)
-                if not np.isfinite(e_pot) or not np.isfinite(temp):
-                    print(f"Numerical instability at step {steps}; stopping.")
-                    if len(nhc_positions) > 1:
-                        nhc_positions = nhc_positions[:-1]
-                        if is_npt:
-                            nhc_boxes = nhc_boxes[:-1]
-                    break
-                if e_pot >= 0 and energy_initial < 0:
-                    c.print(Panel(f"Energy blow-up at step {steps} (E_pot={e_pot:.4f}); stopping.", title="[bold red]Error[/bold red]", border_style="red"))
-                    if len(nhc_positions) > 1:
-                        nhc_positions = nhc_positions[:-1]
-                        if is_npt:
-                            nhc_boxes = nhc_boxes[:-1]
-                    break
+                # Braille viewer: update at each recording block
+                if show_frame is not None and atoms_template is not None:
+                    steps = (i + 1) * steps_per_recording
+                    if is_npt:
+                        box_curr = simulate.npt_box(state)
+                        pos_real = space.transform(box_curr, state.position)
+                        pos_real = wrap_groups(pos_real, _monomer_groups, box_curr, mass=Si_mass)
+                    else:
+                        pos_real = state.position
+                        if use_pbc:
+                            pos_real = wrap_groups(pos_real, _monomer_groups, _cell_jax, mass=Si_mass)
+                    atoms_template.set_positions(np.asarray(jax.device_get(pos_real)))
+                    show_frame(atoms_template, steps, "jaxmd")
 
-        hdf5_reporter.close()
+                # Print progress every 10 steps
+                nbr_n_valid = nbr_capacity = nbr_fill_ratio = None
+                if i % 10 == 0:
+                    steps = (i + 1) * steps_per_recording
+                    time_ps = steps * dt
+                    T_curr = jax_md.quantity.temperature(
+                        momentum=state.momentum,
+                        mass=state.mass
+                    ) / unit['temperature']
+                    temp = float(T_curr)
+                    if is_npt and npt_pair_idx is not None:
+                        box_curr = simulate.npt_box(state)
+                        e_pot = float(npt_energy_fn(state.position, box=box_curr, neighbor=(npt_pair_idx, npt_pair_mask)))
+                    else:
+                        e_pot = float(wrapped_energy_fn(state.position))
+                    e_kin = float(jax_md.quantity.kinetic_energy(
+                        momentum=state.momentum,
+                        mass=state.mass
+                    ))
+                    e_tot = e_pot + e_kin
+                    elapsed_s = time.perf_counter() - jaxmd_loop_start
+                    simulated_ns = steps * dt_fs * 1e-6
+                    if simulated_ns > 0 and elapsed_s > 0:
+                        avg_speed_ns_per_day = simulated_ns * 86400.0 / elapsed_s
+                    else:
+                        avg_speed_ns_per_day = float("nan")
+                    if is_npt and npt_pair_idx is not None:
+                        vol = float(quantity.volume(3, box_curr))
+                        box_diag = np.diagonal(np.asarray(box_curr)[:3, :3])
+                        L = float(box_diag[0]) if box_diag.size > 0 else float("nan")
+                        BAR_PER_ATM = 1.01325
+                        unit_p = float(unit["pressure"])
+                        p_tgt_atm = float(npt_pressure / (unit_p * BAR_PER_ATM))
+                        # Measured pressure (virial + kinetic) for diagnostics
+                        try:
+                            p_meas = quantity.pressure(
+                                npt_energy_fn, state.position, box_curr,
+                                kinetic_energy=e_kin, neighbor=(npt_pair_idx, npt_pair_mask)
+                            )
+                            p_meas_atm = float(p_meas / (unit_p * BAR_PER_ATM))
+                        except Exception:
+                            p_meas_atm = float("nan")
+                        line = (
+                            f"{time_ps:10.4f}\t{steps:6d}\t{e_pot:10.4f}\t{e_tot:10.4f}\t{temp:10.2f}\t"
+                            f"{L:8.2f}\t{vol:10.1f}\t{p_tgt_atm:8.2f}\t{p_meas_atm:8.2f}\t"
+                            f"{avg_speed_ns_per_day:10.4f}"
+                        )
+                        if nbr_monitor:
+                            nbr_n_valid = int(np.sum(np.asarray(jax.device_get(npt_pair_mask))))
+                            nbr_capacity = npt_pair_idx.shape[0]
+                            nbr_fill_ratio = nbr_n_valid / nbr_capacity if nbr_capacity > 0 else 0.0
+                            line += f"\t{nbr_n_valid}\t{nbr_capacity}\t{100.0 * nbr_fill_ratio:.1f}%"
+                        print(line)
+                    else:
+                        print(
+                            f"{time_ps:10.4f}\t{steps:6d}\t{e_pot:10.4f}\t{e_tot:10.4f}\t{temp:10.2f}\t"
+                            f"{avg_speed_ns_per_day:10.4f}"
+                        )
+
+                    # Record to HDF5 (NPT: save real positions via transform, wrap by monomer)
+                    pos_for_h5 = state.position
+                    if is_npt:
+                        box_curr = simulate.npt_box(state)
+                        pos_for_h5 = space.transform(box_curr, state.position)
+                        pos_for_h5 = wrap_groups(pos_for_h5, _monomer_groups, box_curr, mass=Si_mass)
+                    report_kw = dict(
+                        potential_energy=e_pot,
+                        kinetic_energy=e_kin,
+                        temperature=temp,
+                        invariant=e_tot,
+                        total_energy=e_tot,
+                        time_ps=time_ps,
+                        positions=pos_for_h5,
+                        velocities=state.momentum / state.mass,
+                    )
+                    if nbr_monitor and is_npt and npt_pair_idx is not None and nbr_n_valid is not None:
+                        report_kw["nbr_n_valid"] = nbr_n_valid
+                        report_kw["nbr_capacity"] = nbr_capacity
+                        report_kw["nbr_fill_ratio"] = nbr_fill_ratio
+                    hdf5_reporter.report(**report_kw)
+
+                    # Stop on numerical instability (NaN, Inf, or energy blow-up to 0)
+                    if not np.isfinite(e_pot) or not np.isfinite(temp):
+                        print(f"Numerical instability at step {steps}; stopping.")
+                        if len(nhc_positions) > 1:
+                            nhc_positions = nhc_positions[:-1]
+                            if is_npt:
+                                nhc_boxes = nhc_boxes[:-1]
+                        break
+                    if e_pot >= 0 and energy_initial < 0:
+                        c.print(Panel(f"Energy blow-up at step {steps} (E_pot={e_pot:.4f}); stopping.", title="[bold red]Error[/bold red]", border_style="red"))
+                        if len(nhc_positions) > 1:
+                            nhc_positions = nhc_positions[:-1]
+                            if is_npt:
+                                nhc_boxes = nhc_boxes[:-1]
+                        break
+        except KeyboardInterrupt:
+            run_status = "interrupted"
+            run_error = "KeyboardInterrupt"
+            c.print(Panel("Interrupted; saving partial trajectory data.", title="[bold yellow]JAX-MD interrupted[/bold yellow]", border_style="yellow"))
+        except Exception as exc:
+            run_status = "error"
+            run_error = f"{type(exc).__name__}: {exc}"
+            c.print(Panel(f"{run_error}\nSaving partial trajectory data.", title="[bold red]JAX-MD error[/bold red]", border_style="red"))
+        finally:
+            hdf5_reporter.close()
         c.print(Panel(str(hdf5_path), title="[bold green]HDF5 trajectory saved[/bold green]", border_style="green"))
 
-        steps_completed = i * steps_per_recording
-        c.print(Panel(f"{steps_completed} steps ({steps_completed * dt:.2f} ps)", title="[bold]Simulation complete[/bold]", border_style="green"))
+        steps_completed = len(nhc_positions) * steps_per_recording
+        run_sim.last_status = run_status
+        run_sim.last_error = run_error
+        completion_title = "Simulation complete" if run_status == "complete" else "Partial simulation saved"
+        c.print(Panel(f"{steps_completed} steps ({steps_completed * dt:.2f} ps)", title=f"[bold]{completion_title}[/bold]", border_style="green"))
 
         nhc_positions_out = []
         nhc_boxes_out = []  # NPT: real-space box per frame for trajectory cell
@@ -1073,6 +1095,10 @@ def set_up_nhc_sim_routine(
             elif use_pbc and pbc_map_fn is not None:
                 R = pbc_map_fn(R)
             nhc_positions_out.append(np.asarray(jax.device_get(R)))
-        return steps_completed, np.stack(nhc_positions_out), nhc_boxes_out if is_npt else None
+        if nhc_positions_out:
+            positions_out = np.stack(nhc_positions_out)
+        else:
+            positions_out = np.empty((0, len(atoms), 3), dtype=np.float32)
+        return steps_completed, positions_out, nhc_boxes_out if is_npt else None
 
     return run_sim

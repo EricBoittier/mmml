@@ -241,6 +241,9 @@ def main() -> int:
     update_fn_live = get_update_fn(np.asarray(atoms.get_positions(), dtype=np.float64), cutoff) if get_update_fn else None
     key = random.PRNGKey(args.seed)
     steps_completed, frames, boxes = run_sim(key, total_steps=nsteps)
+    run_status = getattr(run_sim, "last_status", "complete")
+    run_error = getattr(run_sim, "last_error", None)
+    hdf5_path = Path(getattr(run_sim, "last_hdf5_path", f"{output_prefix}_{args.ensemble}.h5"))
 
     traj_chunk_frames = int(max(0, args.traj_chunk_frames))
     traj_paths: list[Path] = []
@@ -272,6 +275,9 @@ def main() -> int:
         "nsteps_requested": nsteps,
         "nsteps_completed": int(steps_completed),
         "frames": int(len(frames)),
+        "status": run_status,
+        "error": run_error,
+        "h5": str(hdf5_path.relative_to(out_dir) if hdf5_path.is_relative_to(out_dir) else hdf5_path),
         "traj": str(traj_paths[0].relative_to(out_dir)),
         "traj_parts": [str(p.relative_to(out_dir)) for p in traj_paths],
         "traj_part_count": len(traj_paths),
@@ -293,7 +299,13 @@ def main() -> int:
     print(json.dumps(summary, indent=2))
     for traj_path in traj_paths:
         print(f"Wrote {traj_path}")
+    if run_status != "complete":
+        print(f"Partial output saved after {run_status}: {run_error}")
     print(f"Wrote {out_dir / 'suite_summary_jaxmd.json'}")
+    if run_status == "interrupted":
+        return 130
+    if run_status == "error":
+        return 1
     return 0
 
 
