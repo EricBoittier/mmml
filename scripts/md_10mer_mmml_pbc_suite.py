@@ -46,6 +46,7 @@ from ase.md.nose_hoover_chain import NoseHooverChainNVT
 from ase.md.verlet import VelocityVerlet
 from ase.md.velocitydistribution import MaxwellBoltzmannDistribution, Stationary, ZeroRotation
 from ase.optimize import BFGS
+from ase.optimize.fire import FIRE
 
 import mmml.interfaces.pycharmmInterface.import_pycharmm as pyci
 from mmml.cli.base import resolve_checkpoint_paths
@@ -430,6 +431,17 @@ def main() -> int:
     parser.add_argument("--charmm-abnr-steps", type=int, default=100, help="CHARMM ABNR steps before ASE BFGS.")
     parser.add_argument("--charmm-tolenr", type=float, default=1e-3, help="CHARMM minimization energy tolerance.")
     parser.add_argument("--charmm-tolgrd", type=float, default=1e-3, help="CHARMM minimization gradient tolerance.")
+    parser.add_argument(
+        "--rescue-minimize",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="If post-BFGS fmax is too high, run rescue minimization (CHARMM + FIRE) before aborting.",
+    )
+    parser.add_argument("--rescue-charmm-sd-steps", type=int, default=100, help="Rescue CHARMM SD steps.")
+    parser.add_argument("--rescue-charmm-abnr-steps", type=int, default=300, help="Rescue CHARMM ABNR steps.")
+    parser.add_argument("--rescue-fire-steps", type=int, default=300, help="Rescue ASE FIRE steps.")
+    parser.add_argument("--rescue-fire-fmax", type=float, default=0.5, help="Rescue ASE FIRE fmax target (eV/A).")
+    parser.add_argument("--rescue-fire-maxstep", type=float, default=0.02, help="Rescue ASE FIRE maxstep (A).")
     parser.add_argument("--nvt-temp-K", type=float, default=300.0)
     parser.add_argument("--nve-temp-K", type=float, default=10.0)
     parser.add_argument("--langevin-friction", type=float, default=0.02)
@@ -645,11 +657,38 @@ def main() -> int:
             timing_log,
         )
         if fmin > args.max_fmax_after_min:
-            raise RuntimeError(
-                f"{key}: post-minimization fmax={fmin:.6f} eV/A exceeds "
-                f"--max-fmax-after-min={args.max_fmax_after_min:.6f}. "
-                "Increase minimization steps, tighten cutoffs, and/or enable --charmm-pre-minimize."
-            )
+            if args.rescue_minimize:
+                _tlog(
+                    f"{key}: rescue minimization triggered (fmax={fmin:.6f} > {args.max_fmax_after_min:.6f})",
+                    timing_log,
+                )
+                _run_charmm_minimize(
+                    atoms,
+                    nstep_sd=args.rescue_charmm_sd_steps,
+                    nstep_abnr=args.rescue_charmm_abnr_steps,
+                    tolenr=args.charmm_tolenr,
+                    tolgrd=args.charmm_tolgrd,
+                    timings=run_timings,
+                )
+                rescue_traj_path = out_dir / f"{key}_rescue_fire.traj"
+                t_fire0 = _tmark()
+                fire = FIRE(
+                    atoms,
+                    logfile=None if args.quiet_bfgs else "-",
+                    trajectory=str(rescue_traj_path),
+                    maxstep=args.rescue_fire_maxstep,
+                )
+                fire.run(fmax=args.rescue_fire_fmax, steps=args.rescue_fire_steps)
+                run_timings["rescue_fire_wall_s"] = _tmark() - t_fire0
+                run_timings["rescue_fire_traj"] = str(rescue_traj_path.relative_to(out_dir))
+                fmin = float(np.abs(atoms.get_forces()).max())
+                _tlog(f"{key}: rescue minimization done, fmax={fmin:.6f} eV/A", timing_log)
+            if fmin > args.max_fmax_after_min:
+                raise RuntimeError(
+                    f"{key}: post-minimization fmax={fmin:.6f} eV/A exceeds "
+                    f"--max-fmax-after-min={args.max_fmax_after_min:.6f} even after rescue. "
+                    "Increase minimization steps, tighten cutoffs, and/or reduce initial temperature."
+                )
 
         res = run_md(
             name=key,
