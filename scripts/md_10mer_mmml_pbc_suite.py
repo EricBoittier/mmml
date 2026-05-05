@@ -346,6 +346,7 @@ def run_md(
     nsteps: int,
     log_every: int,
     traj_every: int,
+    traj_chunk_frames: int,
     out_dir: Path,
     nvt_temp_K: float,
     nve_temp_K: float,
@@ -355,11 +356,14 @@ def run_md(
     timings: dict[str, float] | None = None,
 ) -> dict:
     dt = dt_fs * units.fs
-    traj_path = out_dir / f"{name}.traj"
+    traj_chunk_frames = int(max(0, traj_chunk_frames))
+    traj_paths: list[Path] = []
+    traj: Trajectory | None = None
+    traj_chunk_idx = -1
+    frames_in_chunk = 0
+    total_frames_written = 0
     log_path = out_dir / f"{name}.log"
     summary_path = out_dir / f"{name}_run.json"
-
-    traj = Trajectory(str(traj_path), "w", atoms)
     rows: list[dict] = []
     rng = np.random.default_rng(seed)
     t_md_entry = _tmark()
@@ -418,15 +422,36 @@ def run_md(
             row["H_eV"] = float(dyn.get_conserved_energy())
         rows.append(row)
 
-    traj.write(atoms)  # initial frame
+    def _open_chunk() -> None:
+        nonlocal traj, traj_chunk_idx, frames_in_chunk
+        traj_chunk_idx += 1
+        suffix = f".part{traj_chunk_idx:04d}.traj" if traj_chunk_frames > 0 else ".traj"
+        path = out_dir / f"{name}{suffix}"
+        traj_paths.append(path)
+        traj = Trajectory(str(path), "w", atoms)
+        frames_in_chunk = 0
+
+    def _write_frame() -> None:
+        nonlocal total_frames_written, frames_in_chunk
+        if traj is None or (traj_chunk_frames > 0 and frames_in_chunk >= traj_chunk_frames):
+            if traj is not None:
+                traj.close()
+            _open_chunk()
+        assert traj is not None
+        traj.write(atoms)
+        frames_in_chunk += 1
+        total_frames_written += 1
+
+    _write_frame()  # initial frame
     snapshot(0)
     t_after_first_snapshot = _tmark()
     dyn.attach(lambda: snapshot(dyn.get_number_of_steps()), interval=log_every)
-    dyn.attach(lambda: traj.write(atoms), interval=max(1, traj_every))
+    dyn.attach(_write_frame, interval=max(1, traj_every))
     t_run0 = _tmark()
     dyn.run(nsteps)
     t_run1 = _tmark()
-    traj.close()
+    if traj is not None:
+        traj.close()
     if timings is not None:
         timings["md_entry_to_integrator_ready_s"] = t_before_first_snapshot - t_md_entry
         timings["md_first_observable_snapshot_s"] = t_after_first_snapshot - t_before_first_snapshot
@@ -445,17 +470,19 @@ def run_md(
     et = np.array([r["Etot_eV"] for r in rows])
     tk = np.array([r["T_K"] for r in rows])
     if path_prefix is not None:
-        traj_ref = str(traj_path.relative_to(path_prefix))
+        traj_refs = [str(p.relative_to(path_prefix)) for p in traj_paths]
         log_ref = str(log_path.relative_to(path_prefix))
     else:
-        traj_ref = str(traj_path)
+        traj_refs = [str(p) for p in traj_paths]
         log_ref = str(log_path)
 
     out = {
-        "traj": traj_ref,
+        "traj": traj_refs[0] if traj_refs else "",
+        "traj_parts": traj_refs,
+        "traj_part_count": len(traj_refs),
         "log": log_ref,
         "mode": mode,
-        "frames_traj": 1 + nsteps // traj_every,
+        "frames_traj": int(total_frames_written),
         "log_samples": len(rows),
         "etot_start_eV": float(et[0]),
         "etot_end_eV": float(et[-1]),
@@ -509,6 +536,12 @@ def main() -> int:
     parser.add_argument("--dt-fs", type=float, default=0.25)
     parser.add_argument("--log-every", type=int, default=50)
     parser.add_argument("--traj-every", type=int, default=1)
+    parser.add_argument(
+        "--traj-chunk-frames",
+        type=int,
+        default=0,
+        help="Split trajectory into multiple files with at most this many frames each (0 = single file).",
+    )
     parser.add_argument("--ml-cutoff", type=float, default=0.1)
     parser.add_argument("--mm-switch-on", type=float, default=5.5)
     parser.add_argument("--mm-cutoff", type=float, default=2.0)
@@ -818,6 +851,7 @@ def main() -> int:
             nsteps=nsteps,
             log_every=args.log_every,
             traj_every=args.traj_every,
+            traj_chunk_frames=args.traj_chunk_frames,
             out_dir=out_dir,
             nvt_temp_K=args.nvt_temp_K,
             nve_temp_K=args.nve_temp_K,

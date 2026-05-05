@@ -37,6 +37,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--ps", type=float, default=1.0, help="Simulation length in ps.")
     parser.add_argument("--dt-fs", type=float, default=0.25, help="Timestep in fs.")
     parser.add_argument(
+        "--traj-chunk-frames",
+        type=int,
+        default=0,
+        help="Split trajectory output into multi-file chunks with at most this many frames (0 = single file).",
+    )
+    parser.add_argument(
         "--temperature",
         type=float,
         default=300.0,
@@ -88,6 +94,8 @@ def build_command(args: argparse.Namespace) -> list[str]:
             str(args.temperature),
             "--pressure",
             str(args.pressure),
+            "--traj-chunk-frames",
+            str(args.traj_chunk_frames),
         ]
     else:
         cmd = [
@@ -99,6 +107,8 @@ def build_command(args: argparse.Namespace) -> list[str]:
             str(args.ps),
             "--dt-fs",
             str(args.dt_fs),
+            "--traj-chunk-frames",
+            str(args.traj_chunk_frames),
         ]
         if args.setup == "all":
             cmd.append("--all")
