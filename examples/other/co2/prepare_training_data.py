@@ -1,5 +1,5 @@
 """
-Prepare and validate CO2 training data with strict unit checking.
+Prepare and validate training data with strict unit checking.
 
 This script:
 1. Validates all units match expected standards for DCMnet/PhysnetJax
@@ -30,7 +30,7 @@ class UnitValidator:
     """Validate physical units in molecular datasets."""
     
     # Physical constants and expected ranges
-    CO_BOND_LENGTH_ANGSTROM = 1.16  # ± 0.05 typical for CO2
+    CO_BOND_LENGTH_ANGSTROM = 1.16  # ± 0.05 typical
     CO_BOND_LENGTH_BOHR = 2.19      # ± 0.10
     
     # Element data
@@ -153,7 +153,6 @@ class UnitValidator:
         
         results = {'valid': False, 'units': 'unknown'}
         
-        # For CO2, MP2/aug-cc-pVTZ energies should be around -187 to -188 Hartree
         if -200 < E.mean() < -150:
             self.log("Energies in expected range for CO2 ✓", 'OK')
             results['units'] = 'hartree'
@@ -215,7 +214,6 @@ class UnitValidator:
         
         results = {'valid': True, 'units': 'debye'}
         
-        # CO2 dipole should be ~0 (linear symmetric molecule)
         # But vibrational modes can break symmetry
         if dipole_norms.mean() < 2.0:
             self.log("Dipole magnitudes reasonable for CO2 ✓", 'OK')
@@ -368,7 +366,7 @@ def split_dataset(data: Dict[str, np.ndarray], indices: np.ndarray) -> Dict[str,
 def main():
     """Main validation and splitting workflow."""
     print("\n" + "="*70)
-    print("CO2 Data Validation and Splitting for DCMnet/PhysnetJax Training")
+    print("Validation and Splitting for DCMnet/PhysnetJax Training")
     print("="*70)
     
     # Setup paths
@@ -509,7 +507,7 @@ def main():
     print(f"{'#'*70}")
     
     report_lines = [
-        "CO2 Dataset Validation Report",
+        "Dataset Validation Report",
         "=" * 70,
         "",
         "## Data Sources",

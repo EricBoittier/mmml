@@ -3464,7 +3464,7 @@ def train_model(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Joint PhysNet-DCMNet training for CO2 data",
+        description="Joint PhysNet-DCMNet training",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
     

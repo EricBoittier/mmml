@@ -205,13 +205,7 @@ def validate_fixed_data(R_ang, E_ev, F_ev_ang, vdw_grid_ang, Z, N):
     print(f"  Value: {E_ev[0]:.6f} eV")
     print(f"  Dataset mean: {E_ev.mean():.6f} eV")
     
-    # For CO2, expect energies around -5100 to -5000 eV (from -187.5 Ha)
-    if -5200 < E_ev.mean() < -4900:
-        print(f"  ✓ Energies in expected range for CO2 in eV")
-        energy_ok = True
-    else:
-        print(f"  ⚠️  Energy range unexpected for CO2")
-        energy_ok = False
+
     
     # Check forces
     f_sample = F_ev_ang[0, :3, :]  # First sample, first 3 atoms
@@ -321,7 +315,7 @@ def validate_fixed_data(R_ang, E_ev, F_ev_ang, vdw_grid_ang, Z, N):
 def main():
     """Main workflow to fix units and create splits."""
     print("\n" + "="*70)
-    print("CO2 Data Unit Conversion and Splitting")
+    print("Unit Conversion and Splitting")
     print("="*70)
     
     # Paths
@@ -543,10 +537,7 @@ def main():
     print("# Step 8: Creating Documentation")
     print(f"{'#'*70}")
     
-    readme_content = f"""# CO2 Training Data (Unit-Corrected)
-
-This directory contains CO2 molecular data with **corrected units** ready for DCMnet/PhysnetJax training.
-
+    readme_content = f"""# 
 ## Data Corrections Applied
 
 ### 1. Atomic Coordinates (R)
@@ -664,7 +655,7 @@ Generated: {Path(__file__).name}
     # Create quick reference
     units_ref = output_dir / "UNITS_REFERENCE.txt"
     with open(units_ref, 'w') as f:
-        f.write("""CO2 Training Data - Units Quick Reference
+        f.write("""Units Quick Reference
 ================================================================================
 
 COORDINATES (R)
