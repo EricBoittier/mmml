@@ -460,7 +460,7 @@ def main() -> int:
     parser.add_argument("--dt-fs", type=float, default=1.0)
     parser.add_argument("--log-every", type=int, default=50)
     parser.add_argument("--traj-every", type=int, default=5000)
-    parser.add_argument("--ml-cutoff", type=float, default=1.0)
+    parser.add_argument("--ml-cutoff", type=float, default=0.1)
     parser.add_argument("--mm-switch-on", type=float, default=5.5)
     parser.add_argument("--mm-cutoff", type=float, default=2.0)
     parser.add_argument("--pre-min-fmax", type=float, default=0.1)
