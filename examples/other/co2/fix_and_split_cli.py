@@ -301,7 +301,7 @@ def fix_and_split_data(
     """
     if verbose:
         print("\n" + "="*70)
-        print("CO2 Data Unit Conversion and Splitting")
+        print("Unit Conversion and Splitting")
         print("="*70)
         print(f"\nInput files:")
         print(f"  EFD:  {efd_file}")
