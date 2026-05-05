@@ -183,6 +183,13 @@ def main() -> int:
         Si_mass=np.asarray(atoms.get_masses(), dtype=np.float32),
         atoms_template=atoms.copy(),
     )
+    # For NPT path in jaxmd_runner, neighbor list is refreshed once per recording block.
+    if args.ensemble == "npt":
+        print(
+            f"[jaxmd_nbr] update cadence: every {max(1, args.steps_per_recording)} MD steps "
+            f"(records={int(round(args.ps * 1000.0 / args.dt_fs)) // max(1, args.steps_per_recording)})"
+        )
+    update_fn_live = get_update_fn(np.asarray(atoms.get_positions(), dtype=np.float64), cutoff) if get_update_fn else None
     key = random.PRNGKey(args.seed)
     steps_completed, frames, boxes = run_sim(key, total_steps=nsteps)
 
@@ -209,7 +216,14 @@ def main() -> int:
         "box_A": float(L),
         "pressure_atm": float(args.pressure),
         "temperature_K": float(args.temperature),
+        "neighbor_update_interval_steps": int(max(1, args.steps_per_recording)) if args.ensemble == "npt" else None,
+        "neighbor_expected_updates": int(nsteps // max(1, args.steps_per_recording)) if args.ensemble == "npt" else None,
     }
+    if update_fn_live is not None and hasattr(update_fn_live, "get_stats"):
+        try:
+            summary["mm_pair_update_stats"] = dict(update_fn_live.get_stats())
+        except Exception:
+            pass
     (out_dir / "suite_summary_jaxmd.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     print(json.dumps(summary, indent=2))
     print(f"Wrote {traj_path}")
