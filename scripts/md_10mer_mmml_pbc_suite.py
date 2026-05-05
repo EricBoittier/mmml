@@ -570,6 +570,18 @@ def main() -> int:
     parser.add_argument("--pre-min-fmax", type=float, default=0.1)
     parser.add_argument("--pre-min-steps", type=int, default=50)
     parser.add_argument(
+        "--zero-force-threshold",
+        type=float,
+        default=1e-8,
+        help="Treat max|F| below this as near-zero in force sanity checks.",
+    )
+    parser.add_argument(
+        "--high-energy-threshold",
+        type=float,
+        default=1e3,
+        help="Treat |E| above this as suspicious when forces are near-zero.",
+    )
+    parser.add_argument(
         "--max-fmax-after-min",
         type=float,
         default=2.0,
@@ -811,6 +823,20 @@ def main() -> int:
             )
         else:
             run_timings["jit_warmup_first_potential_s"] = 0.0
+
+        # Sanity check: large energy with near-zero forces indicates a broken force path.
+        e0 = float(atoms.get_potential_energy())
+        f0 = np.asarray(atoms.get_forces())
+        f0_max = float(np.abs(f0).max())
+        run_timings["pre_bfgs_energy_eV"] = e0
+        run_timings["pre_bfgs_fmax_eVA"] = f0_max
+        if abs(e0) > float(args.high_energy_threshold) and f0_max <= float(args.zero_force_threshold):
+            raise RuntimeError(
+                f"{key}: force sanity check failed before BFGS: "
+                f"E={e0:.6f} eV, max|F|={f0_max:.3e} eV/A. "
+                "This usually means forces are not being propagated for this setup "
+                "(e.g., mixed composition path issue)."
+            )
 
         t_b = _tmark()
         _tlog(
