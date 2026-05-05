@@ -176,6 +176,13 @@ def _build_cluster_from_composition(
     read.prm(pyci.CGENFF_PRM)
     settings.set_bomb_level(bl)
     settings.set_warn_level(wl)
+    # First determine per-residue atom counts.
+    atoms_per_residue: dict[str, int] = {}
+    for residue, _count in composition:
+        if residue not in atoms_per_residue:
+            atoms_per_residue[residue] = _count_atoms_for_residue(residue)
+
+    # Rebuild the requested mixed system in one segment.
     sequence_items: list[str] = []
     for residue, count in composition:
         sequence_items.extend([residue] * int(count))
@@ -188,10 +195,11 @@ def _build_cluster_from_composition(
     ic.build()
 
     positions = coor.get_positions().to_numpy(dtype=float)
+    z = np.asarray(get_Z_from_psf(), dtype=int)
     atoms_per_list: list[int] = []
     ordered_residue_names: list[str] = []
     for residue, count in composition:
-        n_atoms_res = _count_atoms_for_residue(residue)
+        n_atoms_res = int(atoms_per_residue[residue])
         for _ in range(int(count)):
             atoms_per_list.append(int(n_atoms_res))
             ordered_residue_names.append(residue)
@@ -214,7 +222,6 @@ def _build_cluster_from_composition(
         shift = np.array([(i % n_side) * spacing, (i // n_side) * spacing, 0.0], dtype=float)
         shifted[s:e] = shifted[s:e] - com + shift
     coor.set_positions(pd.DataFrame(shifted, columns=["x", "y", "z"]))
-    z = np.asarray(get_Z_from_psf(), dtype=int)
     return z, shifted, atoms_per_list, ordered_residue_names
 
 
