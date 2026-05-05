@@ -47,6 +47,7 @@ from ase.md.verlet import VelocityVerlet
 from ase.md.velocitydistribution import MaxwellBoltzmannDistribution, Stationary, ZeroRotation
 from ase.optimize import BFGS
 from ase.optimize.fire import FIRE
+from ase.calculators.calculator import PropertyNotImplementedError
 
 import mmml.interfaces.pycharmmInterface.import_pycharmm as pyci
 from mmml.cli.base import resolve_checkpoint_paths
@@ -434,7 +435,13 @@ def run_md(
             "Fmax_eVA": fmax,
         }
         if mode == "nvt_nhc" and hasattr(dyn, "get_conserved_energy"):
-            row["H_eV"] = float(dyn.get_conserved_energy())
+            try:
+                row["H_eV"] = float(dyn.get_conserved_energy())
+            except (PropertyNotImplementedError, NotImplementedError):
+                # Some ASE calculators (including this hybrid MMML calculator) do not
+                # expose free_energy, which NoseHooverChainNVT may request internally.
+                # Keep logging robust by skipping H in that case.
+                pass
         rows.append(row)
 
     def _open_chunk() -> None:
