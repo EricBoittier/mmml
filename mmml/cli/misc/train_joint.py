@@ -182,6 +182,16 @@ EPS = 1e-8
 RADII_TABLE = jnp.array(ase.data.covalent_radii)
 
 
+def _count_tree_parameters(tree: Any) -> int:
+    """Count array/scalar leaves in a parameter PyTree for logging."""
+    total = 0
+    for leaf in jax.tree_util.tree_leaves(tree):
+        if leaf is None:
+            continue
+        total += int(np.asarray(leaf).size)
+    return total
+
+
 # ============================================================================
 # Optimizer Configuration and Recommendations
 # ============================================================================
@@ -3268,9 +3278,9 @@ def train_model(
                     params["params"]["coulomb_lambda"] = recovered_lambda
                     print("  ✅ Recovered coulomb_lambda from restart checkpoint tree")
 
-        print(f"✅ Merged checkpoint with {sum(x.size for x in jax.tree_util.tree_leaves(params)):,} parameters")
+        print(f"✅ Merged checkpoint with {_count_tree_parameters(params):,} parameters")
     else:
-        print(f"✅ Model initialized with {sum(x.size for x in jax.tree_util.tree_leaves(params)):,} parameters")
+        print(f"✅ Model initialized with {_count_tree_parameters(params):,} parameters")
     
     # Setup optimizer
     if optimizer_kwargs is None:
@@ -4158,7 +4168,7 @@ def main():
         # Flax joint model: {'params': {'physnet': ..., 'dcmnet': ..., ...}}
         restart_params = {"params": {"physnet": physnet_params}}
         print("\n🔄 Merging PhysNet params into joint model...")
-        print(f"✅ Loaded PhysNet params ({sum(x.size for x in jax.tree_util.tree_leaves(physnet_params)):,} parameters)")
+        print(f"✅ Loaded PhysNet params ({_count_tree_parameters(physnet_params):,} parameters)")
     
     if args.restart:
         # Determine restart path
@@ -4174,7 +4184,7 @@ def main():
         print(f"\n🔄 Restart checkpoint: {restart_path}")
         with open(restart_path, 'rb') as f:
             restart_params = pickle.load(f)
-        print(f"✅ Loaded checkpoint with {sum(x.size for x in jax.tree_util.tree_leaves(restart_params)):,} parameters")
+        print(f"✅ Loaded checkpoint with {_count_tree_parameters(restart_params):,} parameters")
         
         # Try to determine start epoch from checkpoint directory name or metadata
         # For now, user should manually adjust --epochs if needed
