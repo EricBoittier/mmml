@@ -60,6 +60,11 @@ def main() -> int:
     p.add_argument("--jax-md-max-overflow-retries", type=int, default=4)
     p.add_argument("--jax-md-update-interval", type=int, default=10)
     p.add_argument("--jax-md-skin-distance", type=float, default=0.2)
+    p.add_argument(
+        "--npt-allow-stale-neighbors",
+        action="store_true",
+        help="Allow NPT to use configured neighbor update interval/skin (faster, potentially less stable).",
+    )
     p.add_argument("--jax-md-disable-fallback", action="store_true")
     p.add_argument("--charmm-pre-minimize", action="store_true")
     p.add_argument("--charmm-sd-steps", type=int, default=50)
@@ -118,8 +123,16 @@ def main() -> int:
         jax_md_capacity_growth_factor=args.jax_md_capacity_growth_factor,
         jax_md_max_overflow_retries=args.jax_md_max_overflow_retries,
         jax_md_overflow_fallback_to_cell_list=not args.jax_md_disable_fallback,
-        jax_md_update_interval=args.jax_md_update_interval,
-        jax_md_skin_distance=args.jax_md_skin_distance,
+        jax_md_update_interval=(
+            args.jax_md_update_interval
+            if (args.ensemble != "npt" or args.npt_allow_stale_neighbors)
+            else 1
+        ),
+        jax_md_skin_distance=(
+            args.jax_md_skin_distance
+            if (args.ensemble != "npt" or args.npt_allow_stale_neighbors)
+            else 0.0
+        ),
     )
     cutoff = CutoffParameters(ml_cutoff=args.ml_cutoff, mm_switch_on=args.mm_switch_on, mm_cutoff=args.mm_cutoff)
     calc_result = factory(
@@ -185,10 +198,24 @@ def main() -> int:
     )
     # For NPT path in jaxmd_runner, neighbor list is refreshed once per recording block.
     if args.ensemble == "npt":
+        if args.npt_allow_stale_neighbors:
+            effective_update_interval = int(max(1, args.jax_md_update_interval))
+            effective_skin = float(max(0.0, args.jax_md_skin_distance))
+        else:
+            effective_update_interval = 1
+            effective_skin = 0.0
         print(
             f"[jaxmd_nbr] update cadence: every {max(1, args.steps_per_recording)} MD steps "
             f"(records={int(round(args.ps * 1000.0 / args.dt_fs)) // max(1, args.steps_per_recording)})"
         )
+        mode = "benchmark/unsafe override" if args.npt_allow_stale_neighbors else "safe default"
+        print(
+            f"[jaxmd_nbr] internal updater settings ({mode}): "
+            f"update_interval_calls={effective_update_interval}, skin_distance={effective_skin:.3f} A"
+        )
+    else:
+        effective_update_interval = int(max(1, args.jax_md_update_interval))
+        effective_skin = float(max(0.0, args.jax_md_skin_distance))
     update_fn_live = get_update_fn(np.asarray(atoms.get_positions(), dtype=np.float64), cutoff) if get_update_fn else None
     key = random.PRNGKey(args.seed)
     steps_completed, frames, boxes = run_sim(key, total_steps=nsteps)
@@ -218,6 +245,8 @@ def main() -> int:
         "temperature_K": float(args.temperature),
         "neighbor_update_interval_steps": int(max(1, args.steps_per_recording)) if args.ensemble == "npt" else None,
         "neighbor_expected_updates": int(nsteps // max(1, args.steps_per_recording)) if args.ensemble == "npt" else None,
+        "neighbor_internal_update_interval_calls": effective_update_interval,
+        "neighbor_internal_skin_distance_A": effective_skin,
     }
     if update_fn_live is not None and hasattr(update_fn_live, "get_stats"):
         try:
