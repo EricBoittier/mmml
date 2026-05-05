@@ -44,7 +44,9 @@ def _parse_cell(text: str | None) -> np.ndarray | None:
     raise ValueError("--cell must contain 3 lengths or 9 cell-matrix values")
 
 
-def _is_valid_cell(cell: np.ndarray) -> bool:
+def _is_valid_cell(cell: np.ndarray | None) -> bool:
+    if cell is None:
+        return False
     try:
         return cell.shape == (3, 3) and abs(float(np.linalg.det(cell))) > 1e-12
     except np.linalg.LinAlgError:
@@ -57,10 +59,71 @@ def _minimum_image_delta(delta: np.ndarray, cell: np.ndarray) -> np.ndarray:
     return frac @ cell
 
 
+def _contiguous_groups(n_atoms: int, group_size: int | None = None, n_groups: int | None = None) -> list[slice]:
+    if group_size is not None and n_groups is not None:
+        raise ValueError("use only one of --group-size or --n-groups")
+    if group_size is None and n_groups is None:
+        group_size = 1
+    if n_groups is not None:
+        if n_groups < 1:
+            raise ValueError("--n-groups must be >= 1")
+        if n_atoms % n_groups != 0:
+            raise ValueError(f"{n_atoms} atoms cannot be split into {n_groups} equal contiguous groups")
+        group_size = n_atoms // n_groups
+    if group_size is None or group_size < 1:
+        raise ValueError("--group-size must be >= 1")
+    if n_atoms % group_size != 0:
+        raise ValueError(f"{n_atoms} atoms is not divisible by group size {group_size}")
+    return [slice(start, start + group_size) for start in range(0, n_atoms, group_size)]
+
+
+def _make_groups_whole(frame: np.ndarray, cell: np.ndarray, groups: list[slice]) -> np.ndarray:
+    whole = np.asarray(frame, dtype=float).copy()
+    for group in groups:
+        anchor = frame[group.start]
+        whole[group] = anchor + _minimum_image_delta(frame[group] - anchor, cell)
+    return whole
+
+
+def _group_centers(frame: np.ndarray, groups: list[slice]) -> np.ndarray:
+    return np.asarray([frame[group].mean(axis=0) for group in groups], dtype=float)
+
+
+class _ContiguousGroupUnwrapper:
+    def __init__(self, n_atoms: int, group_size: int | None = None, n_groups: int | None = None) -> None:
+        self.groups = _contiguous_groups(n_atoms, group_size=group_size, n_groups=n_groups)
+        self.prev_wrapped_centers: np.ndarray | None = None
+        self.prev_unwrapped_centers: np.ndarray | None = None
+
+    def unwrap(self, wrapped: np.ndarray, cell: np.ndarray) -> np.ndarray:
+        if not _is_valid_cell(cell):
+            raise ValueError("a non-singular periodic cell is required for unwrapping")
+
+        whole = _make_groups_whole(np.asarray(wrapped, dtype=float), cell, self.groups)
+        wrapped_centers = _group_centers(whole, self.groups)
+        if self.prev_wrapped_centers is None or self.prev_unwrapped_centers is None:
+            self.prev_wrapped_centers = wrapped_centers
+            self.prev_unwrapped_centers = wrapped_centers
+            return whole
+
+        center_delta = _minimum_image_delta(wrapped_centers - self.prev_wrapped_centers, cell)
+        unwrapped_centers = self.prev_unwrapped_centers + center_delta
+
+        out = whole.copy()
+        for group, wrapped_center, unwrapped_center in zip(self.groups, wrapped_centers, unwrapped_centers):
+            out[group] += unwrapped_center - wrapped_center
+
+        self.prev_wrapped_centers = wrapped_centers
+        self.prev_unwrapped_centers = unwrapped_centers
+        return out
+
+
 def unwrap_positions(
     positions: np.ndarray,
     cells: np.ndarray | None = None,
     cell: np.ndarray | None = None,
+    group_size: int | None = None,
+    n_groups: int | None = None,
 ) -> np.ndarray:
     """Return unwrapped positions for an array shaped (n_frames, n_atoms, 3)."""
     coords = np.asarray(positions, dtype=float)
@@ -70,16 +133,11 @@ def unwrap_positions(
         return coords.copy()
 
     out = np.empty_like(coords, dtype=float)
-    out[0] = coords[0]
-    prev_wrapped = coords[0]
+    unwrapper = _ContiguousGroupUnwrapper(coords.shape[1], group_size=group_size, n_groups=n_groups)
 
-    for i in range(1, coords.shape[0]):
+    for i in range(coords.shape[0]):
         frame_cell = _frame_cell(i, cells, cell)
-        if not _is_valid_cell(frame_cell):
-            raise ValueError("a non-singular periodic cell is required for unwrapping")
-        delta = _minimum_image_delta(coords[i] - prev_wrapped, frame_cell)
-        out[i] = out[i - 1] + delta
-        prev_wrapped = coords[i]
+        out[i] = unwrapper.unwrap(coords[i], frame_cell)
     return out
 
 
@@ -164,35 +222,33 @@ def _iter_ase_frames(path: Path, index: str) -> Iterator[Any]:
     yield from iread(str(path), index=index)
 
 
-def _iter_unwrapped_ase_frames(path: Path, index: str, override_cell: np.ndarray | None) -> Iterator[Any]:
+def _iter_unwrapped_ase_frames(
+    path: Path,
+    index: str,
+    override_cell: np.ndarray | None,
+    group_size: int | None,
+    n_groups: int | None,
+) -> Iterator[Any]:
     frames = _iter_ase_frames(path, index)
     try:
         first = next(frames)
     except StopIteration:
         return
 
-    prev_wrapped = np.asarray(first.get_positions(), dtype=float)
     first_cell = override_cell if override_cell is not None else np.asarray(first.cell.array, dtype=float)
-    if not _is_valid_cell(first_cell):
-        raise ValueError("input has no usable cell; pass --cell a,b,c or a 3x3 cell")
-    first.set_positions(prev_wrapped)
+    unwrapper = _ContiguousGroupUnwrapper(len(first), group_size=group_size, n_groups=n_groups)
+    first.set_positions(unwrapper.unwrap(first.get_positions(), first_cell))
     if override_cell is not None:
         first.set_cell(override_cell)
         first.pbc = True
     yield first
 
-    prev_unwrapped = prev_wrapped
     for atoms in frames:
-        wrapped = np.asarray(atoms.get_positions(), dtype=float)
         frame_cell = override_cell if override_cell is not None else np.asarray(atoms.cell.array, dtype=float)
-        if not _is_valid_cell(frame_cell):
-            raise ValueError("input has no usable cell; pass --cell a,b,c or a 3x3 cell")
-        atoms.set_positions(prev_unwrapped + _minimum_image_delta(wrapped - prev_wrapped, frame_cell))
+        atoms.set_positions(unwrapper.unwrap(atoms.get_positions(), frame_cell))
         if override_cell is not None:
             atoms.set_cell(override_cell)
             atoms.pbc = True
-        prev_wrapped = wrapped
-        prev_unwrapped = np.asarray(atoms.get_positions(), dtype=float)
         yield atoms
 
 
@@ -261,7 +317,13 @@ def _h5_atoms_iter(path: Path, args: argparse.Namespace, override_cell: np.ndarr
             cells = None
     if cell is None and cells is None:
         cell = ref_cell
-    unwrapped = unwrap_positions(coords, cells=cells, cell=cell)
+    unwrapped = unwrap_positions(
+        coords,
+        cells=cells,
+        cell=cell,
+        group_size=args.group_size,
+        n_groups=args.n_groups,
+    )
 
     for i, positions in enumerate(unwrapped):
         frame_numbers = numbers[i] if numbers.ndim == 2 else numbers
@@ -323,6 +385,8 @@ def main() -> int:
     parser.add_argument("--fast", action="store_true", help="Use direct streaming writer for xyz/extxyz outputs")
     parser.add_argument("--index", default=":", help="ASE input frame index/slice for non-HDF5 inputs (default: :)")
     parser.add_argument("--cell", help="Override cell as 'a,b,c' or 9 matrix values")
+    parser.add_argument("--group-size", type=int, help="Atoms per contiguous molecule/group for molecule-wise unwrapping")
+    parser.add_argument("--n-groups", type=int, help="Number of equal contiguous molecule/groups for molecule-wise unwrapping")
     parser.add_argument("--reference", type=Path, help="ASE-readable file supplying atomic numbers and fallback cell for HDF5 inputs")
     parser.add_argument("--coord-key", help="HDF5 coordinate dataset key (default: R/positions/coordinates/coords/xyz)")
     parser.add_argument("--numbers-key", help="HDF5 atomic-number dataset key (default: Z/atomic_numbers/numbers)")
@@ -346,7 +410,13 @@ def main() -> int:
         if is_h5:
             frames = _h5_atoms_iter(args.input, args, override_cell)
         else:
-            frames = _iter_unwrapped_ase_frames(args.input, args.index, override_cell)
+            frames = _iter_unwrapped_ase_frames(
+                args.input,
+                args.index,
+                override_cell,
+                group_size=args.group_size,
+                n_groups=args.n_groups,
+            )
         n_frames = _write_frames(args.output, frames, fmt, fast=args.fast)
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)

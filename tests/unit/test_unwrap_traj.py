@@ -30,6 +30,23 @@ def test_unwrap_positions_crossing_boundary() -> None:
     assert np.allclose(out[:, 0, 0], [9.5, 10.2, 10.9])
 
 
+def test_unwrap_positions_keeps_contiguous_molecule_whole() -> None:
+    positions = np.array(
+        [
+            [[9.8, 0.0, 0.0], [0.2, 0.0, 0.0]],
+            [[0.1, 0.0, 0.0], [0.5, 0.0, 0.0]],
+        ]
+    )
+
+    out = unwrap_traj.unwrap_positions(
+        positions,
+        cell=np.diag([10.0, 10.0, 10.0]),
+        group_size=2,
+    )
+
+    assert np.allclose(out[:, :, 0], [[9.8, 10.2], [10.1, 10.5]])
+
+
 def test_cli_unwraps_ase_traj_to_fast_extxyz(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     wrapped = tmp_path / "wrapped.traj"
     with Trajectory(str(wrapped), "w") as traj:
