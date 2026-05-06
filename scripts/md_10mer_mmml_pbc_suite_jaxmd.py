@@ -170,7 +170,7 @@ def main() -> int:
     p.add_argument(
         "--npt-allow-stale-neighbors",
         action="store_true",
-        help="Allow NPT to use configured neighbor update interval/skin (faster, potentially less stable).",
+        help="Deprecated no-op: NPT pre-minimization uses configured neighbor update interval/skin by default.",
     )
     p.add_argument("--jax-md-disable-fallback", action="store_true")
     p.add_argument(
@@ -266,12 +266,8 @@ def main() -> int:
         )
 
     if args.ensemble == "npt":
-        if args.npt_allow_stale_neighbors:
-            effective_update_interval = int(max(1, args.jax_md_update_interval))
-            effective_skin = float(max(0.0, args.jax_md_skin_distance))
-        else:
-            effective_update_interval = 1
-            effective_skin = 0.0
+        effective_update_interval = int(max(1, args.jax_md_update_interval))
+        effective_skin = float(max(0.0, args.jax_md_skin_distance))
     elif args.ensemble == "nvt":
         effective_update_interval = int(max(1, args.jax_md_update_interval))
         effective_skin = float(max(0.0, args.jax_md_skin_distance))
@@ -431,9 +427,8 @@ def main() -> int:
             f"[jaxmd_nbr] update cadence: every {max(1, args.steps_per_recording)} MD steps "
             f"(records={int(round(args.ps * 1000.0 / args.dt_fs)) // max(1, args.steps_per_recording)})"
         )
-        mode = "benchmark/unsafe override" if args.npt_allow_stale_neighbors else "safe default"
         print(
-            f"[jaxmd_nbr] internal updater settings ({mode}): "
+            "[jaxmd_nbr] internal updater settings (configured pre-min reuse): "
             f"update_interval_calls={effective_update_interval}, skin_distance={effective_skin:.3f} A"
         )
     elif args.ensemble == "nvt":
