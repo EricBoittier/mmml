@@ -67,7 +67,7 @@ def main() -> int:
     p.add_argument("--jax-md-capacity-growth-factor", type=float, default=1.5)
     p.add_argument("--jax-md-max-overflow-retries", type=int, default=4)
     p.add_argument("--jax-md-disable-fallback", action="store_true")
-    p.add_argument("--jax-md-update-interval", type=int, default=10)
+    p.add_argument("--jax-md-update-interval", type=int, default=5)
     p.add_argument("--jax-md-skin-distance", type=float, default=0.2)
     p.add_argument("--charmm-pre-minimize", action="store_true")
     p.add_argument("--charmm-sd-steps", type=int, default=25)
