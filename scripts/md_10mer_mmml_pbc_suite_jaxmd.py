@@ -165,7 +165,7 @@ def main() -> int:
     p.add_argument(
         "--nvt-allow-stale-neighbors",
         action="store_true",
-        help="Allow NVT to use configured neighbor update interval/skin (faster, potentially less stable).",
+        help="Deprecated no-op: NVT uses configured neighbor update interval/skin by default.",
     )
     p.add_argument(
         "--npt-allow-stale-neighbors",
@@ -273,12 +273,8 @@ def main() -> int:
             effective_update_interval = 1
             effective_skin = 0.0
     elif args.ensemble == "nvt":
-        if args.nvt_allow_stale_neighbors:
-            effective_update_interval = int(max(1, args.jax_md_update_interval))
-            effective_skin = float(max(0.0, args.jax_md_skin_distance))
-        else:
-            effective_update_interval = 1
-            effective_skin = 0.0
+        effective_update_interval = int(max(1, args.jax_md_update_interval))
+        effective_skin = float(max(0.0, args.jax_md_skin_distance))
     else:
         effective_update_interval = int(max(1, args.jax_md_update_interval))
         effective_skin = float(max(0.0, args.jax_md_skin_distance))
@@ -441,9 +437,8 @@ def main() -> int:
             f"update_interval_calls={effective_update_interval}, skin_distance={effective_skin:.3f} A"
         )
     elif args.ensemble == "nvt":
-        mode = "benchmark/unsafe override" if args.nvt_allow_stale_neighbors else "safe default"
         print(
-            f"[jaxmd_nbr] internal updater settings ({mode}): "
+            "[jaxmd_nbr] internal updater settings (NVT fixed-box reuse): "
             f"update_interval_calls={effective_update_interval}, skin_distance={effective_skin:.3f} A"
         )
     update_fn_live = get_update_fn(np.asarray(atoms.get_positions(), dtype=np.float64), cutoff) if get_update_fn else None

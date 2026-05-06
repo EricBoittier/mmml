@@ -66,7 +66,7 @@ from mmml.cli.run.summaries import (
     print_positions_summary,
     print_system_summary,
 )
-from mmml.cli.run.pycharmm_runner import add_two_residue_sampling_args
+from mmml.cli.run.pycharmm_sampling_args import add_two_residue_sampling_args
 from mmml.cli.run.utils import get_steps_per_frame, normalize_n_atoms_monomer
 
 
