@@ -561,6 +561,11 @@ def main() -> int:
         "temperature_K": float(args.temperature),
         "composition": {res: int(cnt) for res, cnt in composition},
         "psf_charges": psf_charge_summary,
+        "charmm_minimization": {
+            "nbxmod": int(args.charmm_nbxmod),
+            "sd_steps": int(args.charmm_sd_steps),
+            "abnr_steps": int(args.charmm_abnr_steps),
+        },
         "placement": "random_3d",
         "placement_seed": int(args.seed),
         "neighbor_update_interval_steps": int(max(1, args.steps_per_recording)) if args.ensemble == "npt" else None,
