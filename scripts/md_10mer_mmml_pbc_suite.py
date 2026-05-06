@@ -666,8 +666,6 @@ def run_md(
         frames_in_chunk += 1
         total_frames_written += 1
 
-    _write_frame()  # initial frame
-    snapshot(0)
     _check_or_charmm_overlap_rescue(
         atoms,
         monomer_offsets,
@@ -679,6 +677,8 @@ def run_md(
         tolgrd=charmm_tolgrd,
         timings=timings,
     )
+    _write_frame()  # initial frame
+    snapshot(0)
     t_after_first_snapshot = _tmark()
     _tlog(
         f"{name}: initial MD snapshot {t_after_first_snapshot - t_before_first_snapshot:.3f} s; "
@@ -686,7 +686,6 @@ def run_md(
         log_lines,
     )
     dyn.attach(lambda: snapshot(dyn.get_number_of_steps()), interval=log_every)
-    dyn.attach(_write_frame, interval=max(1, traj_every))
     dyn.attach(
         lambda: _check_or_charmm_overlap_rescue(
             atoms,
@@ -701,6 +700,7 @@ def run_md(
         ),
         interval=max(1, traj_every),
     )
+    dyn.attach(_write_frame, interval=max(1, traj_every))
     t_run0 = _tmark()
     dyn.run(nsteps)
     t_run1 = _tmark()
