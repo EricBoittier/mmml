@@ -26,6 +26,7 @@ Available commands:
   train       Train DCMNet or PhysNetJAX models (coming soon)
   evaluate    Evaluate trained models (coming soon)
   validate    Validate NPZ files against schema
+  train-joint Joint PhysNet+DCMNet training with PhysNet transfer initialization
   fix-and-split  Fix units and create train/valid/test splits from NPZ data
   pyscf-dft   GPU-accelerated DFT calculations (energy, gradient, hessian, etc.)
   pyscf-mp2   GPU-accelerated MP2 (post-HF) calculations
@@ -77,7 +78,7 @@ For help on a specific command:
     
     parser.add_argument(
         'command',
-        choices=['make-res', 'make-box', 'run', 'md-system', 'run-pycharmm', 'xml2npz', 'validate', 'train', 'evaluate', 'downstream', 'fix-and-split', 'pyscf-dft', 'pyscf-mp2', 'pyscf-evaluate', 'verify-esp-alignment', 'normal-mode-sample', 'physnet-md', 'physnet-evaluate', 'ef-train', 'ef-evaluate', 'ef-md', 'active-learning', 'kernel-fit', 'interpolate-xyz', 'unwrap-traj', 'sample-diverse-xyz', 'gui', 'extract-checkpoint-metrics'],
+        choices=['make-res', 'make-box', 'run', 'md-system', 'run-pycharmm', 'xml2npz', 'validate', 'train', 'train-joint', 'evaluate', 'downstream', 'fix-and-split', 'pyscf-dft', 'pyscf-mp2', 'pyscf-evaluate', 'verify-esp-alignment', 'normal-mode-sample', 'physnet-md', 'physnet-evaluate', 'ef-train', 'ef-evaluate', 'ef-md', 'active-learning', 'kernel-fit', 'interpolate-xyz', 'unwrap-traj', 'sample-diverse-xyz', 'gui', 'extract-checkpoint-metrics'],
         help='Command to run'
     )
     parser.add_argument(
@@ -142,6 +143,11 @@ For help on a specific command:
         from . import train
         sys.argv = ['mmml train'] + args.args
         return train.main()
+
+    elif args.command == 'train-joint':
+        from .misc import train_joint
+        sys.argv = ['mmml train-joint'] + args.args
+        return train_joint.main()
     
     elif args.command == 'evaluate':
         from . import evaluate

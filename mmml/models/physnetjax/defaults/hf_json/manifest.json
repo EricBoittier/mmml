@@ -2,8 +2,49 @@
   "source_repo": "EricBoi/MMML_CKPTS",
   "selection": "latest epoch from each top-level run in the dataset at conversion time",
   "format": "portable JSON with params/config/metadata, compatible with resolve_checkpoint_paths direct .json loading",
+  "default_joint_training_model": "charged_electrostatic_best_forces",
+  "categories": {
+    "joint-training-defaults": {
+      "description": "Charge-predicting PhysNet checkpoints suitable for initializing joint PhysNet+DCMNet training.",
+      "default": "charged_electrostatic_best_forces",
+      "models": [
+        "charged_light_degree1",
+        "charged_electrostatic_best_forces",
+        "charged_degree0_high_features",
+        "charged_electrostatic_basis64"
+      ]
+    },
+    "charge-predicting": {
+      "description": "PhysNet checkpoints trained with charges=True.",
+      "models": [
+        "charged_light_degree1",
+        "charged_electrostatic_best_forces",
+        "charged_degree0_high_features",
+        "charged_electrostatic_basis64"
+      ]
+    },
+    "energy-force-dipole": {
+      "description": "PhysNet checkpoints trained without explicit atomic charge prediction.",
+      "models": [
+        "neutral_large_degree2",
+        "neutral_best_forces"
+      ]
+    },
+    "point-charge-electrostatics": {
+      "description": "Charge-predicting checkpoints with include_electrostatics=True in the saved config.",
+      "models": [
+        "charged_electrostatic_best_forces",
+        "charged_electrostatic_basis64"
+      ]
+    }
+  },
   "checkpoints": [
     {
+      "id": "neutral_large_degree2",
+      "label": "Neutral large degree-2 model",
+      "categories": [
+        "energy-force-dipole"
+      ],
       "file": "test-37a54bdd-2ba0-42c0-b31e-4d7cd96ada6d_epoch-11_portable.json",
       "source_run": "test-37a54bdd-2ba0-42c0-b31e-4d7cd96ada6d",
       "source_epoch": "epoch-11",
@@ -51,6 +92,12 @@
       }
     },
     {
+      "id": "charged_light_degree1",
+      "label": "Charged light degree-1 model",
+      "categories": [
+        "joint-training-defaults",
+        "charge-predicting"
+      ],
       "file": "test-765cb5d4-4629-49ab-83dd-792305760441_epoch-16_portable.json",
       "source_run": "test-765cb5d4-4629-49ab-83dd-792305760441",
       "source_epoch": "epoch-16",
@@ -98,6 +145,13 @@
       }
     },
     {
+      "id": "charged_electrostatic_best_forces",
+      "label": "Charged electrostatic best-force model",
+      "categories": [
+        "joint-training-defaults",
+        "charge-predicting",
+        "point-charge-electrostatics"
+      ],
       "file": "test-b4064dca-8cbd-471c-9871-08887107a1d8_epoch-550_portable.json",
       "source_run": "test-b4064dca-8cbd-471c-9871-08887107a1d8",
       "source_epoch": "epoch-550",
@@ -146,6 +200,12 @@
       }
     },
     {
+      "id": "charged_degree0_high_features",
+      "label": "Charged degree-0 high-feature model",
+      "categories": [
+        "joint-training-defaults",
+        "charge-predicting"
+      ],
       "file": "test-bb2d8bab-51ef-43a6-ba86-2728db2bbba3_epoch-18_portable.json",
       "source_run": "test-bb2d8bab-51ef-43a6-ba86-2728db2bbba3",
       "source_epoch": "epoch-18",
@@ -193,6 +253,11 @@
       }
     },
     {
+      "id": "neutral_best_forces",
+      "label": "Neutral best-force model",
+      "categories": [
+        "energy-force-dipole"
+      ],
       "file": "test-f41c04c0-62e3-4785-9018-351ffdc161c4_epoch-251_portable.json",
       "source_run": "test-f41c04c0-62e3-4785-9018-351ffdc161c4",
       "source_epoch": "epoch-251",
@@ -240,6 +305,13 @@
       }
     },
     {
+      "id": "charged_electrostatic_basis64",
+      "label": "Charged electrostatic basis-64 model",
+      "categories": [
+        "joint-training-defaults",
+        "charge-predicting",
+        "point-charge-electrostatics"
+      ],
       "file": "test-f461d24a-8e98-4e24-bdf6-563a0aaa1a65_epoch-113_portable.json",
       "source_run": "test-f461d24a-8e98-4e24-bdf6-563a0aaa1a65",
       "source_epoch": "epoch-113",

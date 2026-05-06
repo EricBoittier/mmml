@@ -121,6 +121,11 @@ except ImportError:
 from mmml.physnetjax.physnetjax.models.model import EF
 from mmml.physnetjax.physnetjax.directories import BASE_CKPT_DIR
 from mmml.cli.base import BUNDLED_PORTABLE_MEOH_PATH
+from mmml.models.physnetjax.defaults import (
+    JOINT_TRAINING_CATEGORY,
+    list_hf_physnet_models,
+    resolve_hf_physnet_model,
+)
 
 # Import DCMNet components
 from mmml.dcmnet.dcmnet.modules import MessagePassingModel
@@ -176,6 +181,30 @@ def _load_physnet_checkpoint(path: Path) -> Tuple[Dict[str, Any], Optional[Dict[
         return params, config
     except Exception as e:
         raise RuntimeError(f"Failed to load PhysNet checkpoint from {path}: {e}") from e
+
+
+def _print_bundled_physnet_models(category: Optional[str] = None) -> None:
+    """Print bundled PhysNet transfer-learning choices."""
+    models = list_hf_physnet_models(category)
+    title = f"Bundled PhysNet transfer models"
+    if category:
+        title += f" ({category})"
+    print(f"\n{title}:")
+    for entry in models:
+        config = entry.get("config", {})
+        objectives = entry.get("metadata", {}).get("objectives", {})
+        categories = ", ".join(entry.get("categories", []))
+        print(
+            f"  {entry['id']}: {entry.get('label', entry['file'])}\n"
+            f"    file={entry['file']}\n"
+            f"    categories={categories}\n"
+            f"    charges={config.get('charges')}, electrostatics={config.get('include_electrostatics', False)}, "
+            f"features={config.get('features')}, basis={config.get('num_basis_functions')}, "
+            f"iterations={config.get('num_iterations')}, max_degree={config.get('max_degree')}\n"
+            f"    valid_forces_mae={objectives.get('valid_forces_mae')}, "
+            f"valid_energy_mae={objectives.get('valid_energy_mae')}, "
+            f"valid_dipole_mae={objectives.get('valid_dipole_mae')}"
+        )
 
 
 EPS = 1e-8
@@ -3818,6 +3847,14 @@ def main():
     parser.add_argument('--physnet-checkpoint', type=Path, default=None,
                        help='Load PhysNet params from a pre-trained checkpoint (e.g. from step 09). '
                             'Path to orbax experiment dir (e.g. <name>-<uuid>) or epoch dir, or JSON.')
+    parser.add_argument('--physnet-transfer-model', type=str, default=None,
+                       help='Bundled PhysNet transfer model ID, file stem, or category. '
+                            f'Defaults to the {JOINT_TRAINING_CATEGORY!r} charged model for fresh joint training. '
+                            'Use --list-physnet-transfer-models to inspect choices.')
+    parser.add_argument('--list-physnet-transfer-models', action='store_true', default=False,
+                       help='List bundled PhysNet transfer-learning models and exit.')
+    parser.add_argument('--physnet-transfer-category', type=str, default=None,
+                       help='Filter --list-physnet-transfer-models by manifest category.')
     parser.add_argument('--use-repo-physnet-params', action='store_true', default=False,
                        help='Initialize the PhysNet part of joint DCMNet training from the bundled '
                             f'repo PhysNet parameters ({BUNDLED_PORTABLE_MEOH_PATH}).')
@@ -3835,12 +3872,32 @@ def main():
                        help='Verbose output')
     
     args = parser.parse_args()
+    if args.list_physnet_transfer_models:
+        _print_bundled_physnet_models(args.physnet_transfer_category)
+        return 0
+
     if args.use_repo_physnet_params:
         if args.restart:
             parser.error("--use-repo-physnet-params cannot be combined with --restart")
         if args.physnet_checkpoint is not None:
             parser.error("--use-repo-physnet-params cannot be combined with --physnet-checkpoint")
+        if args.physnet_transfer_model is not None:
+            parser.error("--use-repo-physnet-params cannot be combined with --physnet-transfer-model")
         args.physnet_checkpoint = BUNDLED_PORTABLE_MEOH_PATH
+    elif args.physnet_transfer_model is not None:
+        if args.restart:
+            parser.error("--physnet-transfer-model cannot be combined with --restart")
+        if args.physnet_checkpoint is not None:
+            parser.error("--physnet-transfer-model cannot be combined with --physnet-checkpoint")
+        try:
+            selected_transfer_model = resolve_hf_physnet_model(args.physnet_transfer_model)
+            args.physnet_checkpoint = Path(selected_transfer_model["path"])
+        except KeyError as e:
+            parser.error(str(e))
+    elif args.physnet_checkpoint is None and args.restart is None:
+        selected_transfer_model = resolve_hf_physnet_model(JOINT_TRAINING_CATEGORY)
+        args.physnet_checkpoint = Path(selected_transfer_model["path"])
+        args.physnet_transfer_model = selected_transfer_model["id"]
 
     # Configure loss terms
     dipole_w = args.dipole_weight
@@ -4002,6 +4059,9 @@ def main():
     physnet_ckpt_params = None
     if args.physnet_checkpoint and not args.restart:
         physnet_ckpt_path = Path(args.physnet_checkpoint).resolve()
+        if args.physnet_transfer_model:
+            print(f"\n📦 PhysNet transfer model: {args.physnet_transfer_model}")
+            print(f"   Checkpoint: {physnet_ckpt_path}")
         if not physnet_ckpt_path.exists():
             print(f"\n❌ Error: PhysNet checkpoint not found: {physnet_ckpt_path}")
             sys.exit(1)
