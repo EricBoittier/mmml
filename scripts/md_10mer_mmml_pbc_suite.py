@@ -665,6 +665,12 @@ def main() -> int:
         default=6.0,
         help="Minimum initial COM-COM distance (A) enforced before minimization.",
     )
+    parser.add_argument(
+        "--box-size",
+        type=float,
+        default=None,
+        help="Override periodic cubic box side length in Angstrom (default: auto from initial geometry).",
+    )
     parser.add_argument("--ps", type=float, default=1.0, help="Simulation length (ps)")
     parser.add_argument("--dt-fs", type=float, default=0.25)
     parser.add_argument("--log-every", type=int, default=50)
@@ -794,6 +800,8 @@ def main() -> int:
         help="Hide ASE BFGS per-step output (default: print steps to stdout; large 10-mers can spend hours here before MD).",
     )
     args = parser.parse_args()
+    if args.box_size is not None and args.box_size <= 0:
+        raise ValueError("--box-size must be positive")
 
     t_suite0 = _tmark()
     out_dir = (Path.cwd() / args.output_dir.expanduser()).absolute()
@@ -839,7 +847,7 @@ def main() -> int:
         min_com_distance=args.min_com_start_distance,
     )
 
-    L = _cubic_box_length(r0, args.ml_cutoff)
+    L = float(args.box_size) if args.box_size is not None else _cubic_box_length(r0, args.ml_cutoff)
     r_pbc = r0 - r0.mean(axis=0) + 0.5 * L
 
     nsteps = int(round(args.ps * 1000.0 / args.dt_fs))

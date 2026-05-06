@@ -40,6 +40,12 @@ def parse_args() -> argparse.Namespace:
         help="Residue composition string, e.g. MEOH:5,TIP3:5 (overrides --n-molecules).",
     )
     parser.add_argument("--spacing", type=float, default=5.0, help="Initial spacing in Angstrom.")
+    parser.add_argument(
+        "--box-size",
+        type=float,
+        default=None,
+        help="Override periodic cubic box side length in Angstrom (default: auto from initial geometry).",
+    )
     parser.add_argument("--ps", type=float, default=1.0, help="Simulation length in ps.")
     parser.add_argument("--dt-fs", type=float, default=0.25, help="Timestep in fs.")
     parser.add_argument(
@@ -159,6 +165,7 @@ def build_command(args: argparse.Namespace) -> list[str]:
         cmd.extend(["--composition", str(args.composition)])
     else:
         cmd.extend(["--n-molecules", str(args.n_molecules)])
+    _append_optional(cmd, "--box-size", args.box_size)
     _append_optional(cmd, "--checkpoint", args.checkpoint)
     _append_optional(cmd, "--output-dir", args.output_dir)
     _append_optional(cmd, "--template-pdb", args.template_pdb)
