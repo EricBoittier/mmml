@@ -310,6 +310,19 @@ def _symbols(numbers: np.ndarray) -> list[str]:
     return [chemical_symbols[int(z)] for z in numbers]
 
 
+def _xyz_comment(atoms: Any, frame_index: int, extended: bool) -> str:
+    cell = np.asarray(atoms.cell.array, dtype=float)
+    if not _is_valid_cell(cell):
+        return f"frame={frame_index}"
+
+    lattice = " ".join(f"{x:.16g}" for x in cell.reshape(-1))
+    pbc = " ".join("T" if flag else "F" for flag in atoms.pbc)
+    fields = [f'Lattice="{lattice}"', f'pbc="{pbc}"', f"frame={frame_index}"]
+    if extended:
+        fields.insert(1, "Properties=species:S:1:pos:R:3")
+    return " ".join(fields)
+
+
 def _write_fast_xyz(path: Path, frames: Iterator[Any], extended: bool) -> int:
     n_frames = 0
     with path.open("w", encoding="utf-8") as handle:
@@ -318,15 +331,7 @@ def _write_fast_xyz(path: Path, frames: Iterator[Any], extended: bool) -> int:
             positions = np.asarray(atoms.get_positions(), dtype=float)
             symbols = _symbols(numbers)
             handle.write(f"{len(symbols)}\n")
-            if extended:
-                cell = np.asarray(atoms.cell.array, dtype=float).reshape(-1)
-                lattice = " ".join(f"{x:.16g}" for x in cell)
-                pbc = " ".join("T" if flag else "F" for flag in atoms.pbc)
-                handle.write(
-                    f'Lattice="{lattice}" Properties=species:S:1:pos:R:3 pbc="{pbc}" frame={n_frames - 1}\n'
-                )
-            else:
-                handle.write(f"frame={n_frames - 1}\n")
+            handle.write(f"{_xyz_comment(atoms, n_frames - 1, extended=extended)}\n")
             for sym, xyz in zip(symbols, positions):
                 handle.write(f"{sym} {xyz[0]:.16g} {xyz[1]:.16g} {xyz[2]:.16g}\n")
     return n_frames
@@ -409,7 +414,7 @@ def _infer_format(output: Path, fmt: str | None) -> str:
 
 def _write_frames(output: Path, frames: Iterator[Any], fmt: str, fast: bool) -> int:
     output.parent.mkdir(parents=True, exist_ok=True)
-    if fast and fmt in {"xyz", "extxyz"}:
+    if fmt == "xyz" or (fast and fmt == "extxyz"):
         return _write_fast_xyz(output, frames, extended=fmt == "extxyz")
 
     from ase.io import write
