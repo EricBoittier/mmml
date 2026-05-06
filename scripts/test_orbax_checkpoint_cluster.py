@@ -386,7 +386,8 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help=(
             "Orbax root, epoch-* dir, or portable .json. "
-            "Default: bundled MEOH portable weights in the mmml package (or $MMML_CKPT)."
+            "Default: bundled general uncharged small-molecule weights in the mmml package "
+            "(or $MMML_CKPT)."
         ),
     )
     parser.add_argument("--output-dir", type=Path, default=Path("artifacts/checkpoint_smoke"), help="Output directory")

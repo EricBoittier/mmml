@@ -15,11 +15,14 @@ from typing import Any, Dict, Tuple
 
 import numpy as np
 
-# Portable PhysNetJax weights + config (MEOH / dimer-style quickstart, no Orbax).
+# Portable PhysNetJax weights + config for general uncharged small molecules.
 _PKG_ROOT = Path(__file__).resolve().parent.parent
-BUNDLED_PORTABLE_MEOH_PATH = (
+BUNDLED_PORTABLE_SMALL_MOLECULE_PATH = (
     _PKG_ROOT / "models" / "physnetjax" / "defaults" / "meoh_dimer_portable.json"
 )
+# Backward-compatible alias; the file name is historical and does not mean the
+# checkpoint is methanol-specific.
+BUNDLED_PORTABLE_MEOH_PATH = BUNDLED_PORTABLE_SMALL_MOLECULE_PATH
 
 
 def parse_base_args() -> argparse.Namespace:
@@ -136,8 +139,8 @@ def resolve_checkpoint_paths(arg: Path | str | None) -> Tuple[Path, Path]:
         ckpt_env = os.environ.get("MMML_CKPT")
         if ckpt_env:
             candidate = Path(ckpt_env)
-        elif BUNDLED_PORTABLE_MEOH_PATH.is_file():
-            candidate = BUNDLED_PORTABLE_MEOH_PATH
+        elif BUNDLED_PORTABLE_SMALL_MOLECULE_PATH.is_file():
+            candidate = BUNDLED_PORTABLE_SMALL_MOLECULE_PATH
         else:
             candidate = Path("mmml/models/physnetjax/ckpts")
     elif isinstance(arg, str):

@@ -311,7 +311,10 @@ def parse_args() -> argparse.Namespace:
         "--checkpoint",
         type=Path,
         default=None,
-        help="Orbax root, epoch-* dir, or portable .json (default: bundled MEOH portable or $MMML_CKPT).",
+        help=(
+            "Orbax root, epoch-* dir, or portable .json "
+            "(default: bundled general uncharged small-molecule model or $MMML_CKPT)."
+        ),
     )
     parser.add_argument("--output-dir", type=Path, default=Path("artifacts/dimer_scan_meoh"))
     parser.add_argument("--template-pdb", type=Path, default=Path("mmml/generate/sample/pdb/meoh.pdb"))
