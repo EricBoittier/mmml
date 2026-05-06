@@ -1117,6 +1117,11 @@ def main() -> int:
             "mm_switch_on": args.mm_switch_on,
             "mm_cutoff": args.mm_cutoff,
         },
+        "charmm_minimization": {
+            "nbxmod": int(args.charmm_nbxmod),
+            "sd_steps": int(args.charmm_sd_steps),
+            "abnr_steps": int(args.charmm_abnr_steps),
+        },
         "runs": {},
         "timing": {
             "cluster_build_s": cluster_build_s,
