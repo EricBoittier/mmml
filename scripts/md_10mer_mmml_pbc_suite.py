@@ -398,6 +398,18 @@ def _run_charmm_minimize(
         return
     t0 = _tmark()
     coor.set_positions(pd.DataFrame(atoms.get_positions(), columns=["x", "y", "z"]))
+    pyci.pycharmm.NonBondedScript(
+        cutnb=18.0,
+        ctonnb=13.0,
+        ctofnb=17.0,
+        eps=1.0,
+        cdie=True,
+        atom=True,
+        vatom=True,
+        fswitch=True,
+        vfswitch=True,
+        nbxmod=5,
+    ).run()
     if nstep_sd > 0:
         charmm_minimize.run_sd(nstep=nstep_sd, tolenr=tolenr, tolgrd=tolgrd)
     if nstep_abnr > 0:
@@ -673,7 +685,12 @@ def main() -> int:
         help="Abort before MD if post-minimization Fmax exceeds this threshold (eV/A).",
     )
     parser.add_argument("--bfgs-maxstep", type=float, default=0.05, help="ASE BFGS maxstep (A)")
-    parser.add_argument("--charmm-pre-minimize", action="store_true", help="Run CHARMM SD/ABNR before ASE BFGS.")
+    parser.add_argument(
+        "--charmm-pre-minimize",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Run CHARMM SD/ABNR before ASE BFGS (default: enabled; use --no-charmm-pre-minimize to skip).",
+    )
     parser.add_argument("--charmm-sd-steps", type=int, default=25, help="CHARMM SD steps before ABNR.")
     parser.add_argument("--charmm-abnr-steps", type=int, default=100, help="CHARMM ABNR steps before ASE BFGS.")
     parser.add_argument("--charmm-tolenr", type=float, default=1e-3, help="CHARMM minimization energy tolerance.")
@@ -844,21 +861,13 @@ def main() -> int:
             "runs": {},
         },
     }
-    non_meoh_residues = sorted({r for r in residue_labels if r != "MEOH"})
     use_ml_terms = True
     use_ml_dimer_terms = True
-    if args.composition and non_meoh_residues and args.mm_only_on_mixed:
+    if args.composition and args.mm_only_on_mixed:
         use_ml_terms = False
         use_ml_dimer_terms = False
         _tlog(
-            "mixed composition includes non-MEOH residues "
-            f"({non_meoh_residues}); using explicit MM-only fallback.",
-            timing_log,
-        )
-    elif args.composition and non_meoh_residues:
-        _tlog(
-            "mixed composition includes non-MEOH residues "
-            f"({non_meoh_residues}); keeping ML terms enabled by default.",
+            "mixed composition requested; using explicit MM-only fallback.",
             timing_log,
         )
 
