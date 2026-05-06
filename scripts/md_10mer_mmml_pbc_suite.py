@@ -1039,6 +1039,12 @@ def main() -> int:
     n_atoms = len(z)
     monomer_offsets = np.zeros(n_molecules + 1, dtype=int)
     monomer_offsets[1:] = np.cumsum(np.asarray(atoms_per_list, dtype=int))
+    psf_charge_summary = _validate_psf_charges(
+        monomer_offsets=monomer_offsets,
+        residue_labels=residue_labels,
+        total_atoms=n_atoms,
+        log_lines=timing_log,
+    )
     r0 = _randomize_monomer_com_positions(
         r0,
         monomer_offsets,
@@ -1076,6 +1082,7 @@ def main() -> int:
             "residue": "mixed" if args.composition else "MEOH",
             "composition": composition_summary,
             "residue_labels": residue_labels,
+            "psf_charges": psf_charge_summary,
             "n_molecules": n_molecules,
             "n_atoms": n_atoms,
             "spacing_A": args.spacing,
