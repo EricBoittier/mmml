@@ -37,6 +37,12 @@ def run_pycharmm_nbonds_minimize(args: Any) -> None:
     reset_block()
     pycharmm_soft()
     pycharmm.lingo.charmm_script(NBONDS_SCRIPT)
+    pycharmm.lingo.charmm_script("""define R1 sele resid 1 end
+    define R2 sele resid 2 end
+    cons harm clear
+    cons harm force 1.0 r0 2.5 -
+    sele R1 end sele R2 end""")
+
     safe_energy_show()
     Console().print(Panel(
         f"ABNR minimization ({getattr(args, 'pycharmm_minimize_steps', 1000)} steps)",
