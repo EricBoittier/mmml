@@ -46,6 +46,12 @@ def main() -> int:
     )
     p.add_argument("--spacing", type=float, default=5.0)
     p.add_argument("--min-com-start-distance", type=float, default=6.0)
+    p.add_argument(
+        "--box-size",
+        type=float,
+        default=None,
+        help="Override periodic cubic box side length in Angstrom (default: auto from initial geometry).",
+    )
     p.add_argument("--ps", type=float, default=1.0)
     p.add_argument("--dt-fs", type=float, default=0.25)
     p.add_argument("--traj-every", type=int, default=1)
@@ -125,6 +131,8 @@ def main() -> int:
     p.add_argument("--charmm-tolenr", type=float, default=1e-3)
     p.add_argument("--charmm-tolgrd", type=float, default=1e-3)
     args = p.parse_args()
+    if args.box_size is not None and args.box_size <= 0:
+        raise ValueError("--box-size must be positive")
 
     out_dir = (Path.cwd() / args.output_dir.expanduser()).absolute()
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -166,7 +174,7 @@ def main() -> int:
     monomer_offsets = np.zeros(n_molecules + 1, dtype=int)
     monomer_offsets[1:] = np.cumsum(np.asarray(atoms_per_list, dtype=int))
     r0 = _enforce_min_com_separation(r0, monomer_offsets, args.min_com_start_distance)
-    L = _cubic_box_length(r0, args.ml_cutoff)
+    L = float(args.box_size) if args.box_size is not None else _cubic_box_length(r0, args.ml_cutoff)
     r = r0 - r0.mean(axis=0) + 0.5 * L
     atoms = Atoms(numbers=z, positions=r)
     atoms.set_cell([L, L, L])
