@@ -165,31 +165,28 @@ def _setup_charmm_box(
     pdb_path: str,
     side_length: float,
     tag: str,
+    skip_energy_show: bool = False,
 ) -> None:
     """Read the mixed PDB into PyCHARMM, set up PSF / PBC, and minimise."""
     from mmml.interfaces.pycharmmInterface import setupBox
     from mmml.interfaces.pycharmmInterface.import_pycharmm import (
-        pycharmm,
         reset_block,
         reset_block_no_internal,
-        safe_energy_show,
     )
     from mmml.interfaces.pycharmmInterface.pycharmmCommands import CLEAR_CHARMM
 
     CLEAR_CHARMM()
-    setupBox.setup_box_generic(pdb_path, side_length=side_length, tag=tag)
+    setupBox.setup_box_generic(
+        pdb_path,
+        side_length=side_length,
+        tag=tag,
+        skip_energy_show=skip_energy_show,
+    )
 
     reset_block()
     reset_block_no_internal()
     reset_block()
-    nbonds_script = """
-nbonds atom cutnb 14.0 ctofnb 12.0 ctonnb 10.0 -
-fswitch vswitch NBXMOD 3 -
-inbfrq -1 imgfrq -1
-"""
-    pycharmm.lingo.charmm_script(nbonds_script)
-    safe_energy_show()
-    setupBox.minimize_box()
+    setupBox.minimize_box(skip_energy_show=skip_energy_show)
     print("[make_mixed_box] Box setup & minimisation done.")
 
 
@@ -238,7 +235,12 @@ def main_loop(args: argparse.Namespace) -> Dict[str, Any]:
 
     # 3. Setup PyCHARMM box
     tag = "_".join(r.lower() for r in residues)
-    _setup_charmm_box(output_pdb, side_length=side_length, tag=tag)
+    _setup_charmm_box(
+        output_pdb,
+        side_length=side_length,
+        tag=tag,
+        skip_energy_show=skip_energy_show,
+    )
 
     # 4. Build the atoms_per_monomer list (packmol places types in order)
     atoms_per_monomer: List[int] = []

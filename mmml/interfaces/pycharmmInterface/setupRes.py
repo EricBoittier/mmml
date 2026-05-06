@@ -13,6 +13,8 @@ from ase import Atoms
 from ase.io import read
 
 from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_loud
+from mmml.interfaces.pycharmmInterface.import_pycharmm import reset_block
+from mmml.interfaces.pycharmmInterface.import_pycharmm import safe_energy_show
 from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_RTF, CGENFF_PRM, CHARMM_HOME, CHARMM_LIB_DIR
 from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf, set_up_directories
 
@@ -32,7 +34,6 @@ import pycharmm
 import pycharmm.generate as gen
 import pycharmm.ic as ic
 import pycharmm.coor as coor
-import pycharmm.energy as energy
 import pycharmm.minimize as minimize
 import pycharmm.read as read
 import pycharmm.write as write
@@ -100,12 +101,29 @@ def generate_residue(resid) -> None:
     read.sequence_string(resid)
     gen.new_segment(seg_name=resid, setup_ic=True)
     ic.prm_fill(replace_all=True)
+    reset_block()
 
 
 
 
 
-def generate_coordinates() -> Atoms:
+def _show_energy(skip_energy_show: bool) -> None:
+    if skip_energy_show:
+        print("Skipping energy.show() (--skip-energy-show).")
+        return
+    safe_energy_show()
+
+
+def _has_resolved_geometry(atoms: Atoms) -> bool:
+    positions = np.asarray(atoms.get_positions(), dtype=float)
+    if positions.size == 0 or not np.all(np.isfinite(positions)):
+        return False
+    if len(positions) <= 1:
+        return True
+    return float(np.max(np.ptp(positions, axis=0))) > 1e-3
+
+
+def generate_coordinates(skip_energy_show: bool = False, validate: bool = True) -> Atoms:
     print("*" * 5, "Generating coordinates", "*" * 5)
 
     set_up_directories()
@@ -126,12 +144,12 @@ def generate_coordinates() -> Atoms:
     # from mmml.interfaces.pycharmmInterface.pycharmmCommands import nbonds_script
     # pycharmm.lingo.charmm_script(nbonds_script)
     # start_energy = pycharmm.lingo.get_energy_value("ENER")
-    mini(nbxmod=1)
+    mini(nbxmod=1, skip_energy_show=skip_energy_show)
     xyz = coor.get_positions()
     xyz *= 1 * np.random.random(xyz.to_numpy().shape)
     coor.set_positions(xyz)
     coor.show()
-    mini(nbxmod=5)
+    mini(nbxmod=5, skip_energy_show=skip_energy_show)
 
     xyz = coor.get_positions()
     coor.show()
@@ -154,12 +172,17 @@ def generate_coordinates() -> Atoms:
         cell=mol.get_cell(),
         pbc=mol.get_pbc(),
     )
+    if validate and not _has_resolved_geometry(atoms):
+        raise RuntimeError(
+            "PyCHARMM residue coordinate generation produced unresolved geometry. "
+            "Ensure generate_residue() has loaded topology/parameters before minimization."
+        )
     return atoms
 
 
 
 
-def mini(nbxmod=5):
+def mini(nbxmod=5, skip_energy_show: bool = False):
     print("*" * 5, "Minimizing", "*" * 5)
     # Specify nonbonded python object called my_nbonds - this just sets it up
     # equivalant CHARMM scripting command: nbonds cutnb 18 ctonnb 13 ctofnb 17 cdie eps 1 atom vatom fswitch vfswitch
@@ -182,7 +205,7 @@ def mini(nbxmod=5):
     # equivalent CHARMM scripting command: minimize abnr nstep 1000 tole 1e-3 tolgr 1e-3
     minimize.run_abnr(nstep=1000, tolenr=1e-3, tolgrd=1e-3)
     # equivalent CHARMM scripting command: energy
-    energy.show()
+    _show_energy(skip_energy_show)
 
 
 def write_psf(resid: str) -> None:
@@ -192,12 +215,26 @@ def write_psf(resid: str) -> None:
     write.psf_card(f"psf/{resid.lower()}-1.psf")
 
 
-def main(resid: str) -> None:
+def main(resid: str, skip_energy_show: bool = False, max_attempts: int = 2) -> Atoms:
     """Main function"""
     resid = resid.upper()
     print("*" * 5, f"Generating residue from residue name ({resid})", "*" * 5)
-    generate_residue(resid)
-    atoms = generate_coordinates()
+    last_error = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            generate_residue(resid)
+            atoms = generate_coordinates(skip_energy_show=skip_energy_show)
+            break
+        except RuntimeError as exc:
+            last_error = exc
+            if attempt == max_attempts:
+                raise
+            print(
+                f"Residue coordinate generation failed on attempt {attempt}/{max_attempts}: {exc}. "
+                "Retrying from a fresh PyCHARMM residue setup."
+            )
+    else:
+        raise RuntimeError(f"Failed to generate residue {resid}") from last_error
     write_psf(resid)
 
     # copy pdb/initial.pdb to pdb/resid.pdb

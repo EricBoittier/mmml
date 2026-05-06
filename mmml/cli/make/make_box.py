@@ -65,23 +65,10 @@ def main_loop(args):
     from mmml.interfaces.pycharmmInterface.import_pycharmm import (
         reset_block,
         reset_block_no_internal,
-        pycharmm,
-        safe_energy_show,
     )
     reset_block()
     reset_block_no_internal()
     reset_block()
-    nbonds = """!#########################################
-! Bonded/Non-bonded Options & Constraints
-!#########################################
-
-! Non-bonding parameters
-nbonds atom cutnb 14.0  ctofnb 12.0 ctonnb 10.0 -
-fswitch vswitch NBXMOD 3 -
-inbfrq -1 imgfrq -1
-"""
-    pycharmm.lingo.charmm_script(nbonds)
-    safe_energy_show()
     setupBox.minimize_box()
     
 
