@@ -429,6 +429,75 @@ def _factory_mmml(
     return mmml_calc
 
 
+def _validate_psf_charges(
+    *,
+    monomer_offsets: np.ndarray,
+    residue_labels: list[str],
+    total_atoms: int,
+    log_lines: list[str] | None = None,
+) -> dict:
+    charges = np.asarray(psf.get_charges(), dtype=float)[:total_atoms]
+    atom_types = np.asarray(psf.get_atype(), dtype=str)[:total_atoms]
+    if charges.shape[0] != total_atoms:
+        raise RuntimeError(
+            f"PSF charge count mismatch: expected {total_atoms}, got {charges.shape[0]}"
+        )
+    if atom_types.shape[0] != total_atoms:
+        raise RuntimeError(
+            f"PSF atom-type count mismatch: expected {total_atoms}, got {atom_types.shape[0]}"
+        )
+    if not np.all(np.isfinite(charges)):
+        bad = np.where(~np.isfinite(charges))[0][:10].tolist()
+        raise RuntimeError(f"PSF charges contain non-finite values at atom indices {bad}")
+
+    residue_reference: dict[str, tuple[np.ndarray, np.ndarray]] = {}
+    residue_summaries: dict[str, dict] = {}
+    for i, residue in enumerate(residue_labels):
+        s = int(monomer_offsets[i])
+        e = int(monomer_offsets[i + 1])
+        local_types = atom_types[s:e]
+        local_charges = charges[s:e]
+        if residue in residue_reference:
+            ref_types, ref_charges = residue_reference[residue]
+            if list(local_types) != list(ref_types):
+                raise RuntimeError(
+                    f"PSF atom-type order differs between {residue} copies: "
+                    f"{list(local_types)} != {list(ref_types)}"
+                )
+            if not np.allclose(local_charges, ref_charges, atol=1e-8, rtol=0.0):
+                raise RuntimeError(
+                    f"PSF charges differ between {residue} copies: "
+                    f"{local_charges.tolist()} != {ref_charges.tolist()}"
+                )
+        else:
+            residue_reference[residue] = (local_types.copy(), local_charges.copy())
+            residue_summaries[residue] = {
+                "n_atoms": int(e - s),
+                "charge_sum_e": float(np.sum(local_charges)),
+                "atom_types": [str(x) for x in local_types],
+                "charges_e": [float(x) for x in local_charges],
+            }
+
+    total_charge = float(np.sum(charges))
+    summary = {
+        "total_charge_e": total_charge,
+        "n_charged_atoms": int(np.count_nonzero(np.abs(charges) > 1e-12)),
+        "min_charge_e": float(np.min(charges)) if charges.size else 0.0,
+        "max_charge_e": float(np.max(charges)) if charges.size else 0.0,
+        "residues": residue_summaries,
+    }
+    _tlog(
+        "PSF charge validation: "
+        f"total={total_charge:.6f} e, charged_atoms={summary['n_charged_atoms']}, "
+        + ", ".join(
+            f"{res}:{data['charge_sum_e']:.6f} e"
+            for res, data in residue_summaries.items()
+        ),
+        log_lines,
+    )
+    return summary
+
+
 def _run_charmm_minimize(
     atoms: Atoms,
     *,
@@ -461,16 +530,17 @@ def _run_charmm_minimize(
         pyci.pycharmm_loud()
         pyci.pycharmm.lingo.charmm_script("ENER")
         pyci.safe_energy_show()
-        pyci.get_forces_pycharmm()
         pyci.pycharmm_quiet()
         if nstep_sd > 0:
             charmm_minimize.run_sd(nstep=nstep_sd, tolenr=tolenr, tolgrd=tolgrd)
         if nstep_abnr > 0:
             charmm_minimize.run_abnr(nstep=nstep_abnr, tolenr=tolenr, tolgrd=tolgrd)
+        minimized_positions = coor.get_positions().to_numpy(dtype=float)
         print("CHARMM energy after minimization:")
         pyci.pycharmm_loud()
         pyci.pycharmm.lingo.charmm_script("ENER")
         pyci.safe_energy_show()
+        coor.set_positions(pd.DataFrame(minimized_positions, columns=["x", "y", "z"]))
     finally:
         pyci.pycharmm_quiet()
     atoms.set_positions(coor.get_positions().to_numpy(dtype=float))
