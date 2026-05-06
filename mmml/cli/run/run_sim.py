@@ -66,6 +66,7 @@ from mmml.cli.run.summaries import (
     print_positions_summary,
     print_system_summary,
 )
+from mmml.cli.run.pycharmm_runner import add_two_residue_sampling_args
 from mmml.cli.run.utils import get_steps_per_frame, normalize_n_atoms_monomer
 
 
@@ -347,6 +348,7 @@ def parse_args() -> argparse.Namespace:
         help="Number of ABNR minimization steps when PyCHARMM minimize is enabled (default: 1000). "
         "Use fewer (e.g. 100) for faster startup when structure is already reasonable.",
     )
+    add_two_residue_sampling_args(parser)
     parser.add_argument(
         "--skip-setup-energy-show",
         action="store_true",

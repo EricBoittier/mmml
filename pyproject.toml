@@ -227,6 +227,7 @@ explicit = true
 
 [project.scripts]
 mmml = "mmml.cli.__main__:main"
+mmml-pycharmm-two-residue-sample = "mmml.cli.run.pycharmm_two_residue_sample:main"
 
 [tool.setuptools]
 zip-safe = false

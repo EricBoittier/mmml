@@ -22,6 +22,7 @@ Available commands:
   run         MM/ML simulation (ASE + JAX-MD with hybrid calculator)
   md-system   Run mixed-composition MD setups (free/pbc NVE/NVT + pbc NPT)
   run-pycharmm  Pure CHARMM heating and equilibration (no ML)
+  pycharmm-two-residue-sample  Restrained sampling for a two-residue CHARMM system
   xml2npz     Convert Molpro XML files to NPZ format
   train       Train DCMNet or PhysNetJAX models (coming soon)
   evaluate    Evaluate trained models (coming soon)
@@ -78,7 +79,7 @@ For help on a specific command:
     
     parser.add_argument(
         'command',
-        choices=['make-res', 'make-box', 'run', 'md-system', 'run-pycharmm', 'xml2npz', 'validate', 'train', 'train-joint', 'evaluate', 'downstream', 'fix-and-split', 'pyscf-dft', 'pyscf-mp2', 'pyscf-evaluate', 'verify-esp-alignment', 'normal-mode-sample', 'physnet-md', 'physnet-evaluate', 'ef-train', 'ef-evaluate', 'ef-md', 'active-learning', 'kernel-fit', 'interpolate-xyz', 'unwrap-traj', 'sample-diverse-xyz', 'gui', 'extract-checkpoint-metrics'],
+        choices=['make-res', 'make-box', 'run', 'md-system', 'run-pycharmm', 'pycharmm-two-residue-sample', 'xml2npz', 'validate', 'train', 'train-joint', 'evaluate', 'downstream', 'fix-and-split', 'pyscf-dft', 'pyscf-mp2', 'pyscf-evaluate', 'verify-esp-alignment', 'normal-mode-sample', 'physnet-md', 'physnet-evaluate', 'ef-train', 'ef-evaluate', 'ef-md', 'active-learning', 'kernel-fit', 'interpolate-xyz', 'unwrap-traj', 'sample-diverse-xyz', 'gui', 'extract-checkpoint-metrics'],
         help='Command to run'
     )
     parser.add_argument(
@@ -113,6 +114,11 @@ For help on a specific command:
     elif args.command == 'run-pycharmm':
         from .run.run_pycharmm import main
         sys.argv = ['mmml run-pycharmm'] + args.args
+        return main()
+
+    elif args.command == 'pycharmm-two-residue-sample':
+        from .run.pycharmm_two_residue_sample import main
+        sys.argv = ['mmml pycharmm-two-residue-sample'] + args.args
         return main()
 
     elif args.command == 'xml2npz':

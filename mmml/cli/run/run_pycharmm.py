@@ -21,6 +21,7 @@ from pathlib import Path
 from mmml.interfaces.pycharmmInterface.import_pycharmm import coor
 from mmml.interfaces.pycharmmInterface.setupBox import setup_box_generic
 from mmml.cli.run.pycharmm_runner import (
+    add_two_residue_sampling_args,
     run_equilibration,
     run_heat,
     run_dyna,
@@ -66,6 +67,7 @@ def parse_args() -> argparse.Namespace:
         metavar="N",
         help="ABNR minimization steps (default: 1000).",
     )
+    add_two_residue_sampling_args(parser)
     parser.add_argument(
         "--view-braille",
         action="store_true",

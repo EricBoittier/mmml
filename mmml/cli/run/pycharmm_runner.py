@@ -5,6 +5,7 @@ Extracted from run_sim.py to separate PyCHARMM-specific code paths.
 """
 from __future__ import annotations
 
+import argparse
 from typing import Any, Callable, Optional
 
 import pycharmm
@@ -30,6 +31,141 @@ shake bonh para sele all end
 """
 
 
+def two_residue_harmonic_constraint_script(
+    *,
+    force: float,
+    r0: float,
+    resid1: int | str = 1,
+    resid2: int | str = 2,
+) -> str:
+    """Return CHARMM commands for a harmonic restraint between two residues."""
+    return f"""define R1 sele resid {resid1} end
+define R2 sele resid {resid2} end
+cons harm clear
+cons harm force {float(force):.12g} r0 {float(r0):.12g} -
+sele R1 end sele R2 end"""
+
+
+def clear_harmonic_constraints() -> None:
+    """Remove active CHARMM harmonic constraints."""
+    pycharmm.lingo.charmm_script("cons harm clear")
+
+
+def apply_two_residue_harmonic_constraint(
+    *,
+    force: float,
+    r0: float,
+    resid1: int | str = 1,
+    resid2: int | str = 2,
+) -> None:
+    """Apply a CHARMM harmonic restraint between two residues."""
+    pycharmm.lingo.charmm_script(
+        two_residue_harmonic_constraint_script(
+            force=force,
+            r0=r0,
+            resid1=resid1,
+            resid2=resid2,
+        )
+    )
+
+
+def run_two_residue_harmonic_sampling(
+    args: Any,
+    *,
+    atoms: Any | None = None,
+    show_frame: Optional[Callable[[Any, int, str], None]] = None,
+) -> Any | None:
+    """Minimize/sample a two-residue system under a CHARMM harmonic restraint."""
+    force = float(getattr(args, "two_residue_restraint_force", 1.0))
+    r0 = float(getattr(args, "two_residue_restraint_r0", 2.5))
+    resid1 = getattr(args, "two_residue_restraint_resid1", 1)
+    resid2 = getattr(args, "two_residue_restraint_resid2", 2)
+    nsteps = getattr(args, "two_residue_sampling_steps", None)
+    if nsteps is None:
+        nsteps = getattr(args, "pycharmm_minimize_steps", 1000)
+    nsteps = int(nsteps)
+
+    Console().print(Panel(
+        (
+            f"Two-residue harmonic sampling ({nsteps} ABNR steps)\n"
+            f"resid {resid1} <-> resid {resid2}, force={force:g}, r0={r0:g} Angstrom"
+        ),
+        title="[bold cyan]PyCHARMM[/bold cyan]",
+        border_style="cyan",
+    ))
+
+    apply_two_residue_harmonic_constraint(
+        force=force,
+        r0=r0,
+        resid1=resid1,
+        resid2=resid2,
+    )
+    try:
+        safe_energy_show()
+        pycharmm.minimize.run_abnr(
+            nstep=nsteps,
+            tolenr=1e-2,
+            tolgrd=1e-2,
+        )
+        pycharmm.lingo.charmm_script("ENER")
+        safe_energy_show()
+        if atoms is not None:
+            atoms.set_positions(coor.get_positions())
+            if show_frame is not None:
+                show_frame(atoms, 0, "pycharmm_two_residue")
+    finally:
+        clear_harmonic_constraints()
+
+    return atoms
+
+
+def add_two_residue_sampling_args(
+    parser: argparse.ArgumentParser,
+    *,
+    include_toggle: bool = True,
+) -> None:
+    """Add CLI options for restrained two-residue PyCHARMM sampling."""
+    if include_toggle:
+        parser.add_argument(
+            "--two-residue-sampling",
+            dest="two_residue_sampling",
+            default=True,
+            action=argparse.BooleanOptionalAction,
+            help="Run restrained two-residue PyCHARMM sampling after nbonds/block setup (default: True).",
+        )
+    parser.add_argument(
+        "--two-residue-restraint-force",
+        type=float,
+        default=1.0,
+        metavar="K",
+        help="CHARMM harmonic restraint force constant for two-residue sampling (default: 1.0).",
+    )
+    parser.add_argument(
+        "--two-residue-restraint-r0",
+        type=float,
+        default=2.5,
+        metavar="ANGSTROM",
+        help="CHARMM harmonic restraint target distance r0 for two-residue sampling (default: 2.5 Angstrom).",
+    )
+    parser.add_argument(
+        "--two-residue-sampling-steps",
+        type=int,
+        default=None,
+        metavar="N",
+        help="ABNR steps for restrained two-residue sampling (default: --pycharmm-minimize-steps).",
+    )
+    parser.add_argument(
+        "--two-residue-restraint-resid1",
+        default=1,
+        help="First CHARMM residue id for two-residue sampling (default: 1).",
+    )
+    parser.add_argument(
+        "--two-residue-restraint-resid2",
+        default=2,
+        help="Second CHARMM residue id for two-residue sampling (default: 2).",
+    )
+
+
 def run_pycharmm_nbonds_minimize(args: Any) -> None:
     """Run PyCHARMM nbonds setup and ABNR minimization."""
     from mmml.interfaces.pycharmmInterface.import_pycharmm import reset_block
@@ -37,27 +173,24 @@ def run_pycharmm_nbonds_minimize(args: Any) -> None:
     reset_block()
     pycharmm_soft()
     pycharmm.lingo.charmm_script(NBONDS_SCRIPT)
-    pycharmm.lingo.charmm_script("""define R1 sele resid 1 end
-    define R2 sele resid 2 end
-    cons harm clear
-    cons harm force 1.0 r0 2.5 -
-    sele R1 end sele R2 end""")
+    if getattr(args, "two_residue_sampling", True):
+        run_two_residue_harmonic_sampling(args)
+    else:
+        safe_energy_show()
+        Console().print(Panel(
+            f"ABNR minimization ({getattr(args, 'pycharmm_minimize_steps', 1000)} steps)",
+            title="[bold cyan]PyCHARMM[/bold cyan]",
+            border_style="cyan",
+        ))
 
-    safe_energy_show()
-    Console().print(Panel(
-        f"ABNR minimization ({getattr(args, 'pycharmm_minimize_steps', 1000)} steps)",
-        title="[bold cyan]PyCHARMM[/bold cyan]",
-        border_style="cyan",
-    ))
+        pycharmm.minimize.run_abnr(
+            nstep=getattr(args, "pycharmm_minimize_steps", 1000),
+            tolenr=1e-2,
+            tolgrd=1e-2,
+        )
 
-    pycharmm.minimize.run_abnr(
-        nstep=getattr(args, "pycharmm_minimize_steps", 1000),
-        tolenr=1e-2,
-        tolgrd=1e-2,
-    )
-    
-    pycharmm.lingo.charmm_script("ENER")
-    safe_energy_show()
+        pycharmm.lingo.charmm_script("ENER")
+        safe_energy_show()
     pycharmm_quiet()
 
 
