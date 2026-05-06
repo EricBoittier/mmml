@@ -67,6 +67,24 @@ def test_cli_unwraps_ase_traj_to_fast_extxyz(tmp_path: Path, monkeypatch: pytest
     assert np.allclose([frame.positions[0, 0] for frame in frames], [9.5, 10.2])
 
 
+def test_cli_writes_cell_metadata_to_xyz_comment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    wrapped = tmp_path / "wrapped.traj"
+    with Trajectory(str(wrapped), "w") as traj:
+        traj.write(Atoms("H", positions=[[9.5, 0.0, 0.0]], cell=[10.0, 11.0, 12.0], pbc=True))
+
+    output = tmp_path / "unwrapped.xyz"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["mmml unwrap-traj", str(wrapped), "-o", str(output), "--format", "xyz", "--quiet"],
+    )
+
+    assert unwrap_traj.main() == 0
+    comment = output.read_text(encoding="utf-8").splitlines()[1]
+    assert 'Lattice="10 0 0 0 11 0 0 0 12"' in comment
+    assert 'pbc="T T T"' in comment
+
+
 def test_cli_infers_variable_size_molecules_for_ase_traj(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     wrapped = tmp_path / "mixed.traj"
     with Trajectory(str(wrapped), "w") as traj:
