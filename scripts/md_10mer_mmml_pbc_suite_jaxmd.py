@@ -133,6 +133,7 @@ def main() -> int:
         base_ckpt_dir, _ = resolve_checkpoint_paths(None)
     else:
         base_ckpt_dir, _ = resolve_checkpoint_paths(args.checkpoint.expanduser().resolve())
+    print(f"Using MMML checkpoint: {base_ckpt_dir}")
 
     if args.composition:
         composition = _parse_composition(args.composition)
