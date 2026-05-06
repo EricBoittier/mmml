@@ -23,6 +23,12 @@ def parse_args() -> argparse.Namespace:
         default="pbc_nve",
         help="Simulation setup preset.",
     )
+    parser.add_argument(
+        "--backend",
+        choices=["auto", "ase", "jaxmd"],
+        default="auto",
+        help="MD backend. auto keeps legacy routing: ASE except pbc_npt, which uses JAX-MD.",
+    )
     parser.add_argument("--checkpoint", type=Path, default=None, help="Model checkpoint path.")
     parser.add_argument("--output-dir", type=Path, default=None, help="Output directory for artifacts.")
     parser.add_argument("--template-pdb", type=Path, default=None, help="Monomer template PDB path.")
@@ -83,13 +89,21 @@ def build_command(args: argparse.Namespace) -> list[str]:
     root = _repo_root()
     ase_script = root / "scripts" / "md_10mer_mmml_pbc_suite.py"
     jaxmd_script = root / "scripts" / "md_10mer_mmml_pbc_suite_jaxmd.py"
+    backend = args.backend
+    if backend == "auto":
+        backend = "jaxmd" if args.setup == "pbc_npt" else "ase"
 
-    if args.setup == "pbc_npt":
+    if backend == "jaxmd":
+        if args.setup not in {"pbc_nve", "pbc_nvt", "pbc_npt"}:
+            raise ValueError("--backend jaxmd only supports periodic setups: pbc_nve, pbc_nvt, pbc_npt")
+        if args.setup == "pbc_nvt" and args.nvt_integrator == "langevin":
+            raise ValueError("--backend jaxmd uses NHC for pbc_nvt; use --backend ase for Langevin NVT")
+        ensemble = args.setup[len("pbc_") :]
         cmd = [
             sys.executable,
             str(jaxmd_script),
             "--ensemble",
-            "npt",
+            ensemble,
             "--spacing",
             str(args.spacing),
             "--ps",
@@ -104,6 +118,8 @@ def build_command(args: argparse.Namespace) -> list[str]:
             str(args.traj_chunk_frames),
         ]
     else:
+        if args.setup == "pbc_npt":
+            raise ValueError("pbc_npt requires --backend jaxmd or --backend auto")
         cmd = [
             sys.executable,
             str(ase_script),
@@ -153,7 +169,11 @@ def build_command(args: argparse.Namespace) -> list[str]:
 
 def main() -> int:
     args = parse_args()
-    cmd = build_command(args)
+    try:
+        cmd = build_command(args)
+    except ValueError as exc:
+        print(f"mmml md-system: error: {exc}", file=sys.stderr)
+        return 2
     print("Running:", " ".join(cmd))
     completed = subprocess.run(cmd, cwd=str(_repo_root()))
     return int(completed.returncode)
