@@ -22,6 +22,7 @@ import numpy as np
 _COORD_KEYS = ("R", "positions", "coordinates", "coords", "xyz")
 _NUMBER_KEYS = ("Z", "atomic_numbers", "numbers")
 _CELL_KEYS = ("cell", "cells", "lattice", "lattices", "box", "boxes")
+_AtomGroups = list[np.ndarray]
 
 
 def _cell_from_array(value: np.ndarray) -> np.ndarray:
@@ -59,7 +60,7 @@ def _minimum_image_delta(delta: np.ndarray, cell: np.ndarray) -> np.ndarray:
     return frac @ cell
 
 
-def _contiguous_groups(n_atoms: int, group_size: int | None = None, n_groups: int | None = None) -> list[slice]:
+def _contiguous_groups(n_atoms: int, group_size: int | None = None, n_groups: int | None = None) -> _AtomGroups:
     if group_size is not None and n_groups is not None:
         raise ValueError("use only one of --group-size or --n-groups")
     if group_size is None and n_groups is None:
@@ -74,24 +75,70 @@ def _contiguous_groups(n_atoms: int, group_size: int | None = None, n_groups: in
         raise ValueError("--group-size must be >= 1")
     if n_atoms % group_size != 0:
         raise ValueError(f"{n_atoms} atoms is not divisible by group size {group_size}")
-    return [slice(start, start + group_size) for start in range(0, n_atoms, group_size)]
+    return [np.arange(start, start + group_size, dtype=int) for start in range(0, n_atoms, group_size)]
 
 
-def _make_groups_whole(frame: np.ndarray, cell: np.ndarray, groups: list[slice]) -> np.ndarray:
+def _infer_molecule_groups(numbers: np.ndarray, positions: np.ndarray, cell: np.ndarray | None) -> _AtomGroups:
+    from ase import Atoms
+    from ase.neighborlist import NeighborList, natural_cutoffs
+
+    frame_numbers = np.asarray(numbers, dtype=int)
+    if frame_numbers.ndim != 1:
+        raise ValueError(f"atomic numbers must have shape (n_atoms,), got {frame_numbers.shape}")
+
+    atoms = Atoms(numbers=frame_numbers, positions=np.asarray(positions, dtype=float))
+    if _is_valid_cell(cell):
+        atoms.set_cell(cell)
+        atoms.pbc = True
+
+    cutoffs = natural_cutoffs(atoms, mult=1.2)
+    neighbor_list = NeighborList(cutoffs, self_interaction=False, bothways=True, skin=0.0)
+    neighbor_list.update(atoms)
+
+    groups: _AtomGroups = []
+    seen = np.zeros(len(atoms), dtype=bool)
+    for start in range(len(atoms)):
+        if seen[start]:
+            continue
+        stack = [start]
+        component: list[int] = []
+        seen[start] = True
+        while stack:
+            atom_index = stack.pop()
+            component.append(atom_index)
+            neighbors, _offsets = neighbor_list.get_neighbors(atom_index)
+            for neighbor in neighbors:
+                neighbor_index = int(neighbor)
+                if not seen[neighbor_index]:
+                    seen[neighbor_index] = True
+                    stack.append(neighbor_index)
+        groups.append(np.array(sorted(component), dtype=int))
+    return groups
+
+
+def _make_groups_whole(frame: np.ndarray, cell: np.ndarray, groups: _AtomGroups) -> np.ndarray:
     whole = np.asarray(frame, dtype=float).copy()
     for group in groups:
-        anchor = frame[group.start]
+        anchor = frame[group[0]]
         whole[group] = anchor + _minimum_image_delta(frame[group] - anchor, cell)
     return whole
 
 
-def _group_centers(frame: np.ndarray, groups: list[slice]) -> np.ndarray:
+def _group_centers(frame: np.ndarray, groups: _AtomGroups) -> np.ndarray:
     return np.asarray([frame[group].mean(axis=0) for group in groups], dtype=float)
 
 
 class _ContiguousGroupUnwrapper:
-    def __init__(self, n_atoms: int, group_size: int | None = None, n_groups: int | None = None) -> None:
-        self.groups = _contiguous_groups(n_atoms, group_size=group_size, n_groups=n_groups)
+    def __init__(
+        self,
+        n_atoms: int,
+        group_size: int | None = None,
+        n_groups: int | None = None,
+        groups: _AtomGroups | None = None,
+    ) -> None:
+        self.groups = groups if groups is not None else _contiguous_groups(n_atoms, group_size=group_size, n_groups=n_groups)
+        if sum(len(group) for group in self.groups) != n_atoms:
+            raise ValueError("atom groups must cover every atom exactly once")
         self.prev_wrapped_centers: np.ndarray | None = None
         self.prev_unwrapped_centers: np.ndarray | None = None
 
@@ -124,6 +171,7 @@ def unwrap_positions(
     cell: np.ndarray | None = None,
     group_size: int | None = None,
     n_groups: int | None = None,
+    groups: _AtomGroups | None = None,
 ) -> np.ndarray:
     """Return unwrapped positions for an array shaped (n_frames, n_atoms, 3)."""
     coords = np.asarray(positions, dtype=float)
@@ -133,7 +181,7 @@ def unwrap_positions(
         return coords.copy()
 
     out = np.empty_like(coords, dtype=float)
-    unwrapper = _ContiguousGroupUnwrapper(coords.shape[1], group_size=group_size, n_groups=n_groups)
+    unwrapper = _ContiguousGroupUnwrapper(coords.shape[1], group_size=group_size, n_groups=n_groups, groups=groups)
 
     for i in range(coords.shape[0]):
         frame_cell = _frame_cell(i, cells, cell)
@@ -228,6 +276,7 @@ def _iter_unwrapped_ase_frames(
     override_cell: np.ndarray | None,
     group_size: int | None,
     n_groups: int | None,
+    infer_molecules: bool,
 ) -> Iterator[Any]:
     frames = _iter_ase_frames(path, index)
     try:
@@ -236,7 +285,10 @@ def _iter_unwrapped_ase_frames(
         return
 
     first_cell = override_cell if override_cell is not None else np.asarray(first.cell.array, dtype=float)
-    unwrapper = _ContiguousGroupUnwrapper(len(first), group_size=group_size, n_groups=n_groups)
+    groups = None
+    if infer_molecules and group_size is None and n_groups is None:
+        groups = _infer_molecule_groups(first.get_atomic_numbers(), first.get_positions(), first_cell)
+    unwrapper = _ContiguousGroupUnwrapper(len(first), group_size=group_size, n_groups=n_groups, groups=groups)
     first.set_positions(unwrapper.unwrap(first.get_positions(), first_cell))
     if override_cell is not None:
         first.set_cell(override_cell)
@@ -317,12 +369,18 @@ def _h5_atoms_iter(path: Path, args: argparse.Namespace, override_cell: np.ndarr
             cells = None
     if cell is None and cells is None:
         cell = ref_cell
+    groups = None
+    if not args.no_molecules and args.group_size is None and args.n_groups is None:
+        first_numbers = numbers[0] if numbers.ndim == 2 else numbers
+        first_cell = _frame_cell(0, cells, cell)
+        groups = _infer_molecule_groups(first_numbers, coords[0], first_cell)
     unwrapped = unwrap_positions(
         coords,
         cells=cells,
         cell=cell,
         group_size=args.group_size,
         n_groups=args.n_groups,
+        groups=groups,
     )
 
     for i, positions in enumerate(unwrapped):
@@ -387,6 +445,7 @@ def main() -> int:
     parser.add_argument("--cell", help="Override cell as 'a,b,c' or 9 matrix values")
     parser.add_argument("--group-size", type=int, help="Atoms per contiguous molecule/group for molecule-wise unwrapping")
     parser.add_argument("--n-groups", type=int, help="Number of equal contiguous molecule/groups for molecule-wise unwrapping")
+    parser.add_argument("--no-molecules", action="store_true", help="Disable automatic bonded-fragment grouping; unwrap atoms independently")
     parser.add_argument("--reference", type=Path, help="ASE-readable file supplying atomic numbers and fallback cell for HDF5 inputs")
     parser.add_argument("--coord-key", help="HDF5 coordinate dataset key (default: R/positions/coordinates/coords/xyz)")
     parser.add_argument("--numbers-key", help="HDF5 atomic-number dataset key (default: Z/atomic_numbers/numbers)")
@@ -416,6 +475,7 @@ def main() -> int:
                 override_cell,
                 group_size=args.group_size,
                 n_groups=args.n_groups,
+                infer_molecules=not args.no_molecules,
             )
         n_frames = _write_frames(args.output, frames, fmt, fast=args.fast)
     except Exception as exc:
