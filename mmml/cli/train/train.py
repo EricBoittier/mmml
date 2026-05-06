@@ -22,6 +22,11 @@ from mmml.data import (
     load_npz,
     train_valid_split
 )
+from mmml.models.physnetjax.defaults import (
+    JOINT_TRAINING_CATEGORY,
+    list_hf_physnet_models,
+    resolve_hf_physnet_model,
+)
 
 
 @dataclass
@@ -59,6 +64,8 @@ class TrainConfig:
     
     # Model-specific (will be passed to model constructor)
     model_params: Dict[str, Any] = None
+    physnet_checkpoint: Optional[str] = None
+    physnet_transfer_model: Optional[str] = None
     
     def __post_init__(self):
         if self.targets is None:
@@ -85,6 +92,29 @@ def save_config(config: TrainConfig, output_file: str):
     
     with open(output_path, 'w') as f:
         yaml.dump(asdict(config), f, default_flow_style=False)
+
+
+def print_bundled_physnet_models(category: Optional[str] = None):
+    """Print bundled PhysNet transfer-learning choices."""
+    models = list_hf_physnet_models(category)
+    title = "Bundled PhysNet transfer models"
+    if category:
+        title += f" ({category})"
+    print(f"\n{title}:")
+    for entry in models:
+        config = entry.get("config", {})
+        objectives = entry.get("metadata", {}).get("objectives", {})
+        print(
+            f"  {entry['id']}: {entry.get('label', entry['file'])}\n"
+            f"    file={entry['file']}\n"
+            f"    categories={', '.join(entry.get('categories', []))}\n"
+            f"    charges={config.get('charges')}, electrostatics={config.get('include_electrostatics', False)}, "
+            f"features={config.get('features')}, basis={config.get('num_basis_functions')}, "
+            f"iterations={config.get('num_iterations')}, max_degree={config.get('max_degree')}\n"
+            f"    valid_forces_mae={objectives.get('valid_forces_mae')}, "
+            f"valid_energy_mae={objectives.get('valid_energy_mae')}, "
+            f"valid_dipole_mae={objectives.get('valid_dipole_mae')}"
+        )
 
 
 def train_dcmnet(
@@ -200,6 +230,10 @@ def train_physnetjax(
         if verbose:
             print(f"   Train batches: {len(train_batches)}")
             print(f"   Valid batches: {len(valid_batches)}")
+            if config.physnet_checkpoint:
+                print(f"   PhysNet checkpoint: {config.physnet_checkpoint}")
+            if config.physnet_transfer_model:
+                print(f"   PhysNet transfer model: {config.physnet_transfer_model}")
         
         # TODO: Load actual PhysNetJAX model and train
         # For now, this is a placeholder showing the structure
@@ -267,6 +301,33 @@ Examples:
         choices=['dcmnet', 'physnetjax'],
         default='dcmnet',
         help='Model to train (default: dcmnet)'
+    )
+    parser.add_argument(
+        '--physnet-checkpoint',
+        type=str,
+        default=None,
+        help='PhysNet checkpoint path for transfer learning'
+    )
+    parser.add_argument(
+        '--physnet-transfer-model',
+        type=str,
+        default=None,
+        help=(
+            'Bundled PhysNet transfer model ID, file stem, or category. '
+            f'Defaults to the {JOINT_TRAINING_CATEGORY!r} charged model for physnetjax training.'
+        )
+    )
+    parser.add_argument(
+        '--list-physnet-transfer-models',
+        action='store_true',
+        default=False,
+        help='List bundled PhysNet transfer-learning models and exit'
+    )
+    parser.add_argument(
+        '--physnet-transfer-category',
+        type=str,
+        default=None,
+        help='Filter --list-physnet-transfer-models by manifest category'
     )
     
     # Data
@@ -378,6 +439,10 @@ Examples:
     )
     
     args = parser.parse_args()
+    if args.list_physnet_transfer_models:
+        print_bundled_physnet_models(args.physnet_transfer_category)
+        return 0
+
     verbose = args.verbose and not args.quiet
     
     # Load or create configuration
@@ -390,6 +455,27 @@ Examples:
         if not args.train:
             print("❌ Error: --train required (or use --config)", file=sys.stderr)
             return 1
+
+        physnet_checkpoint = args.physnet_checkpoint
+        physnet_transfer_model = args.physnet_transfer_model
+        if args.model == 'physnetjax' and physnet_checkpoint is None:
+            try:
+                selected_model = resolve_hf_physnet_model(
+                    physnet_transfer_model or JOINT_TRAINING_CATEGORY
+                )
+            except KeyError as e:
+                print(f"❌ Error: {e}", file=sys.stderr)
+                return 1
+            physnet_transfer_model = selected_model["id"]
+            physnet_checkpoint = str(selected_model["path"])
+        elif args.model != 'physnetjax' and physnet_transfer_model:
+            try:
+                selected_model = resolve_hf_physnet_model(physnet_transfer_model)
+            except KeyError as e:
+                print(f"❌ Error: {e}", file=sys.stderr)
+                return 1
+            physnet_transfer_model = selected_model["id"]
+            physnet_checkpoint = str(selected_model["path"])
         
         config = TrainConfig(
             model=args.model,
@@ -407,7 +493,20 @@ Examples:
             normalize_energy=args.normalize_energy,
             rot_augment=args.rot_augment,
             rot_perturbation=args.rot_perturbation,
+            physnet_checkpoint=physnet_checkpoint,
+            physnet_transfer_model=physnet_transfer_model,
         )
+
+    if config.model == 'physnetjax' and config.physnet_checkpoint is None:
+        try:
+            selected_model = resolve_hf_physnet_model(
+                config.physnet_transfer_model or JOINT_TRAINING_CATEGORY
+            )
+        except KeyError as e:
+            print(f"❌ Error: {e}", file=sys.stderr)
+            return 1
+        config.physnet_transfer_model = selected_model["id"]
+        config.physnet_checkpoint = str(selected_model["path"])
     
     # Save config if requested
     if args.save_config:
