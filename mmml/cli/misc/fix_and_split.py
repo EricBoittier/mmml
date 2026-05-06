@@ -23,7 +23,8 @@ This script:
 4. Optional extra multipliers (--energy-scale, --force-scale, --dipole-scale, --efield-scale, --esp-scale, --charge-scale) after the standard conversions (and on matching auxiliary NPZ keys)
 5. Converts ESP grid coordinates from index space to physical Angstroms (if grid data provided)
 6. Creates train/valid/test splits
-7. Saves data in ASE-compatible format
+7. Optionally Z-scales energies using the training-set mean/std
+8. Saves data in ASE-compatible format
 
 ASE Standard Units:
 - Coordinates (R): Angstrom
@@ -738,6 +739,7 @@ def fix_and_split_data(
     efield_scale: float = 1.0,
     esp_scale: float = 1.0,
     charge_scale: float = 1.0,
+    zscale_energies: bool = False,
     verbose: bool = True,
 ) -> bool:
     """
@@ -795,6 +797,10 @@ def fix_and_split_data(
         Multiply NPZ key ``Q`` if present. Intended for **total molecular charge** when your files
         use ``Q`` for that. Note: PySCF ``dens_esp`` export may store **quadrupole** under ``Q``;
         only use this scale when ``Q`` matches your intended quantity. Default 1.0.
+    zscale_energies : bool
+        If True, replace ``E`` with ``(E - mean_train) / std_train`` after unit conversion,
+        optional scaling, validation, and split creation. Mean/std are computed from the
+        training split only and saved to ``energy_zscale_stats.json``. Default False.
     verbose : bool
         Print detailed progress (default True)
         
@@ -1265,6 +1271,32 @@ def fix_and_split_data(
         print(f"  Train: {len(splits['train'])} ({len(splits['train'])/n_samples*100:.1f}%)")
         print(f"  Valid: {len(splits['valid'])} ({len(splits['valid'])/n_samples*100:.1f}%)")
         print(f"  Test:  {len(splits['test'])} ({len(splits['test'])/n_samples*100:.1f}%)")
+
+    energy_zscale_stats: Optional[Dict[str, Any]] = None
+    if zscale_energies:
+        train_E = np.asarray(E_ev[splits['train']], dtype=np.float64)
+        if train_E.size == 0:
+            raise ValueError("Cannot Z-scale energies: training split is empty.")
+        energy_mean = float(np.mean(train_E))
+        energy_std = float(np.std(train_E))
+        if not np.isfinite(energy_std) or energy_std == 0.0:
+            raise ValueError(
+                f"Cannot Z-scale energies: training energy std must be finite and non-zero, got {energy_std}."
+            )
+        E_ev = (np.asarray(E_ev, dtype=np.float64) - energy_mean) / energy_std
+        energy_zscale_stats = {
+            "enabled": True,
+            "property": "E",
+            "mean": energy_mean,
+            "std": energy_std,
+            "units_before_zscale": "eV",
+            "train_samples": int(train_E.size),
+            "std_ddof": 0,
+        }
+        if verbose:
+            print("\nEnergy Z-scaling enabled:")
+            print(f"  mean_train = {energy_mean:.12g} eV")
+            print(f"  std_train  = {energy_std:.12g} eV")
     
     # =========================================================================
     # Prepare datasets with fixed units
@@ -1375,6 +1407,14 @@ def fix_and_split_data(
     np.savez(indices_out, **splits)
     if verbose:
         print(f"\n✓ Split indices saved to {indices_out.name}")
+
+    if energy_zscale_stats is not None:
+        stats_out = output_dir / "energy_zscale_stats.json"
+        with open(stats_out, 'w') as f:
+            json.dump(energy_zscale_stats, f, indent=2)
+            f.write("\n")
+        if verbose:
+            print(f"✓ Energy Z-scale stats saved to {stats_out.name}")
     
     # =========================================================================
     # Create documentation
@@ -1427,6 +1467,24 @@ def fix_and_split_data(
     if _scale_lines:
         extra_scales_readme = "\n### 3b. Extra property scales\n" + "\n".join(_scale_lines) + "\n"
 
+    energy_zscale_readme = ""
+    energy_unit_label = "eV"
+    energy_file_note = "Energies [eV] ← CONVERTED from Hartree"
+    energy_usage_comment = "eV"
+    energy_usage_intro = "All units are ASE-standard - ready to use!"
+    if energy_zscale_stats is not None:
+        energy_unit_label = "dimensionless"
+        energy_file_note = "Energies [Z-scaled] ← (E_eV - train_mean) / train_std"
+        energy_usage_comment = "Z-scaled, dimensionless"
+        energy_usage_intro = "E is Z-scaled; other arrays use ASE-standard units."
+        energy_zscale_readme = (
+            "\n### 3c. Energy Z-scaling\n"
+            "- **Applied**: `E = (E_eV - mean_train) / std_train`\n"
+            f"- **Training mean**: {energy_zscale_stats['mean']:.12g} eV\n"
+            f"- **Training std**: {energy_zscale_stats['std']:.12g} eV\n"
+            "- **Stats file**: `energy_zscale_stats.json`\n"
+        )
+
     readme_content = f"""# Training Data (Unit-Corrected)
 
 This directory contains molecular data with **corrected units** ready for DCMnet/PhysnetJax training.
@@ -1447,7 +1505,7 @@ This directory contains molecular data with **corrected units** ready for DCMnet
 - **Original**: Hartree/Bohr
 - **Converted**: eV/Angstrom (ASE standard)
 - **Factor**: ×51.42208
-{forces_sign_readme}{extra_scales_readme}{grid_section}
+{forces_sign_readme}{extra_scales_readme}{energy_zscale_readme}{grid_section}
 ## Data Splits
 
 - **Train**: {len(splits['train'])} samples ({train_frac*100:.0f}%)
@@ -1466,7 +1524,7 @@ Each contains:
 - `R`: Atomic coordinates [Angstrom]
 - `Z`: Atomic numbers [int]
 - `N`: Number of atoms [int]
-- `E`: Energies [eV] ← CONVERTED from Hartree
+- `E`: {energy_file_note}
 - `F`: Forces [eV/Angstrom] ← CONVERTED from Hartree/Bohr
 - `Dxyz`: Dipole moments [e·Å] ← CONVERTED from Debye
 """
@@ -1491,13 +1549,13 @@ Each contains:
 - `Dxyz`: Dipole moments [e·Å] ← CONVERTED from Debye
 """
     
-    readme_content += """
+    readme_content += f"""
 ## Units Summary (ASE Standard)
 
 | Property | Unit | Status |
 |----------|------|--------|
 | R (coordinates) | Angstrom | ✓ Correct |
-| E (energy) | eV | ✓ Converted |
+| E (energy) | {energy_unit_label} | ✓ Converted{' and Z-scaled' if energy_zscale_stats is not None else ''} |
 | F (forces) | eV/Angstrom | ✓ Converted |
 | Dxyz (dipoles) | e·Å | ✓ Converted from Debye |
 """
@@ -1507,7 +1565,7 @@ Each contains:
 | vdw_surface | Angstrom | ✓ Fixed |
 """
     
-    readme_content += """
+    readme_content += f"""
 ## Usage
 
 ```python
@@ -1516,9 +1574,9 @@ import numpy as np
 # Load training data
 train_props = np.load('energies_forces_dipoles_train.npz')
 
-# All units are ASE-standard - ready to use!
+# {energy_usage_intro}
 R = train_props['R']  # Angstroms
-E = train_props['E']  # eV
+E = train_props['E']  # {energy_usage_comment}
 F = train_props['F']  # eV/Angstrom
 Dxyz = train_props['Dxyz']  # e·Å (converted from Debye)
 """
@@ -1555,9 +1613,15 @@ Generated by: mmml.cli.fix_and_split
         if has_grid:
             print("  - grids_esp_{train,valid,test}.npz")
         print("  - split_indices.npz")
+        if energy_zscale_stats is not None:
+            print("  - energy_zscale_stats.json")
         print("  - README.md")
-        print("\n✅ IMPORTANT: All units are now ASE-standard compliant!")
-        print("   - Energies: eV (converted from Hartree)")
+        if energy_zscale_stats is not None:
+            print("\n✅ IMPORTANT: Outputs are ready for training with Z-scaled energies!")
+            print("   - Energies: Z-scaled from eV using training-set mean/std")
+        else:
+            print("\n✅ IMPORTANT: All units are now ASE-standard compliant!")
+            print("   - Energies: eV (converted from Hartree)")
         print("   - Forces: eV/Angstrom (converted from Hartree/Bohr)")
         print("   - Coordinates: Angstrom")
         if has_grid:
@@ -1615,6 +1679,9 @@ Examples:
 
   # Correct a systematic factor after normal conversion (e.g. duplicate unit fix upstream)
   %(prog)s --efd data.npz --output-dir ./out --energy-scale 0.5 --force-scale 1.0
+
+  # Z-scale energies with training-set statistics and save the mean/std
+  %(prog)s --efd data.npz --output-dir ./out --zscale-energies
 """
     )
     
@@ -1749,6 +1816,14 @@ Examples:
         help='Multiply E by X after Hartree→eV. Also efield_energy, efield_scf_energy if present (default 1.0).',
     )
     parser.add_argument(
+        '--zscale-energies', '--z-scale-energies',
+        action='store_true',
+        help=(
+            'Z-scale E after creating splits using training-set mean/std: '
+            'E = (E_eV - mean_train) / std_train. Saves energy_zscale_stats.json.'
+        ),
+    )
+    parser.add_argument(
         '--force-scale',
         type=float,
         default=1.0,
@@ -1844,6 +1919,7 @@ Examples:
         efield_scale=getattr(args, 'efield_scale', 1.0),
         esp_scale=getattr(args, 'esp_scale', 1.0),
         charge_scale=getattr(args, 'charge_scale', 1.0),
+        zscale_energies=getattr(args, 'zscale_energies', False),
         verbose=not args.quiet,
     )
     
