@@ -811,7 +811,7 @@ def main() -> int:
     parser.add_argument(
         "--jax-md-update-interval",
         type=int,
-        default=10,
+        default=5,
         help="Update MM neighbor pairs every N calculator calls (reuse cached pairs in between).",
     )
     parser.add_argument(

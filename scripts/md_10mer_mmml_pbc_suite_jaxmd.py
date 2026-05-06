@@ -129,7 +129,7 @@ def main() -> int:
     p.add_argument("--nhc-sy-steps", type=int, default=3)
     p.add_argument("--nhc-tau", type=float, default=100.0)
     p.add_argument("--nhc-barostat-tau", type=float, default=10000.0)
-    p.add_argument("--steps-per-recording", type=int, default=25)
+    p.add_argument("--steps-per-recording", type=int, default=100)
     p.add_argument("--jaxmd-minimize-steps", type=int, default=200)
     p.add_argument("--jaxmd-pbc-minimize-steps", type=int, default=200)
     p.add_argument("--seed", type=int, default=123)
@@ -160,7 +160,7 @@ def main() -> int:
     p.add_argument("--jax-md-capacity-multiplier", type=float, default=1.25)
     p.add_argument("--jax-md-capacity-growth-factor", type=float, default=1.5)
     p.add_argument("--jax-md-max-overflow-retries", type=int, default=4)
-    p.add_argument("--jax-md-update-interval", type=int, default=10)
+    p.add_argument("--jax-md-update-interval", type=int, default=5)
     p.add_argument("--jax-md-skin-distance", type=float, default=0.2)
     p.add_argument(
         "--nvt-allow-stale-neighbors",
