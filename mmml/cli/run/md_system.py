@@ -39,7 +39,7 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Residue composition string, e.g. MEOH:5,TIP3:5 (overrides --n-molecules).",
     )
-    parser.add_argument("--spacing", type=float, default=5.0, help="Initial spacing in Angstrom.")
+    parser.add_argument("--spacing", type=float, default=5.0, help="Target minimum random COM spacing in Angstrom.")
     parser.add_argument(
         "--box-size",
         type=float,
@@ -72,6 +72,7 @@ def parse_args() -> argparse.Namespace:
         default=1.0,
         help="Target pressure in atm (NPT).",
     )
+    parser.add_argument("--seed", type=int, default=123, help="Random seed for initial placement and velocities.")
     parser.add_argument(
         "--extra-args",
         nargs=argparse.REMAINDER,
@@ -169,6 +170,7 @@ def build_command(args: argparse.Namespace) -> list[str]:
     _append_optional(cmd, "--checkpoint", args.checkpoint)
     _append_optional(cmd, "--output-dir", args.output_dir)
     _append_optional(cmd, "--template-pdb", args.template_pdb)
+    cmd.extend(["--seed", str(args.seed)])
     if args.extra_args:
         cmd.extend(args.extra_args)
     return cmd
