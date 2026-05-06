@@ -36,16 +36,9 @@ def main_loop(args):
         reset_block,
         reset_block_no_internal,
     )
-    atoms = setupRes.main(args.res)
-    atoms = setupRes.generate_coordinates()
-    _ = setupRes.coor.get_positions()
-    atoms.set_positions(_)
-    reset_block()
-    reset_block_no_internal()
-    reset_block()
-    atoms = setupRes.generate_coordinates()
-    _ = setupRes.coor.get_positions()
-    atoms.set_positions(_)
+
+    skip_energy_show = getattr(args, "skip_energy_show", False)
+    atoms = setupRes.main(args.res, skip_energy_show=skip_energy_show, max_attempts=2)
     reset_block()
     reset_block_no_internal()
     reset_block()

@@ -28,7 +28,6 @@ sys.path.append(str(Path(CHARMM_HOME) / "tool" / "pycharmm"))
 
 # CHARMM imports
 import pycharmm
-import pycharmm.energy as energy
 import pycharmm.minimize as minimize
 import pycharmm.read as read
 import pycharmm.write as write
@@ -474,11 +473,26 @@ def initialize_psf(resid: str, n_molecules: int, side_length: float, solvent: st
     print("wrote pdb/init.box.pdb")
 
 
-def minimize_box():
+def minimize_box(skip_energy_show: bool = False, nbxmod: int = 3):
+    nbonds = f"""!#########################################
+! Bonded/Non-bonded Options & Constraints
+!#########################################
+
+! Non-bonding parameters
+nbonds atom cutnb 14.0  ctofnb 12.0 ctonnb 10.0 -
+fswitch vswitch NBXMOD {nbxmod} -
+inbfrq -1 imgfrq -1
+"""
+    pycharmm.lingo.charmm_script(nbonds)
     # equivalent CHARMM scripting command: minimize abnr nstep 1000 tole 1e-3 tolgr 1e-3
     minimize.run_abnr(nstep=1000, tolenr=1e-3, tolgrd=1e-3)
     # equivalent CHARMM scripting command: energy
-    energy.show()
+    if skip_energy_show:
+        print("Skipping energy.show() (--skip-energy-show).")
+    else:
+        from mmml.interfaces.pycharmmInterface.import_pycharmm import safe_energy_show
+
+        safe_energy_show()
 
 
 def main(density: float, side_length: float, residue: str, solvent: str):
