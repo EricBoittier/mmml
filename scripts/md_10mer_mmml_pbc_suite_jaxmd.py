@@ -198,6 +198,12 @@ def main() -> int:
         default=0.1,
         help="Abort if atoms from different monomers get closer than this distance in Angstrom (<=0 disables).",
     )
+    p.add_argument(
+        "--dynamics-overlap-action",
+        choices=["warn", "error", "off"],
+        default="warn",
+        help="How to handle inter-monomer distance violations during production dynamics.",
+    )
     args = p.parse_args()
     if args.box_size is not None and args.box_size <= 0:
         raise ValueError("--box-size must be positive")
@@ -469,6 +475,7 @@ def main() -> int:
         jaxmd_minimize_steps=args.jaxmd_minimize_steps,
         jaxmd_pbc_minimize_steps=args.jaxmd_pbc_minimize_steps,
         min_intermonomer_atom_distance=args.min_intermonomer_atom_distance,
+        dynamics_overlap_action=args.dynamics_overlap_action,
     )
     run_sim = set_up_nhc_sim_routine(
         atoms=atoms,
@@ -551,6 +558,13 @@ def main() -> int:
         "neighbor_internal_update_interval_calls": effective_update_interval,
         "neighbor_internal_skin_distance_A": effective_skin,
         "pre_md_minimization": minimization_summary,
+        "dynamics_overlap_action": args.dynamics_overlap_action,
+        "dynamics_overlap_warning_count": int(getattr(run_sim, "last_overlap_warning_count", 0)),
+        "dynamics_min_intermonomer_distance_A": (
+            None
+            if not np.isfinite(float(getattr(run_sim, "last_overlap_min_distance", float("inf"))))
+            else float(getattr(run_sim, "last_overlap_min_distance"))
+        ),
     }
     if update_fn_live is not None and hasattr(update_fn_live, "get_stats"):
         try:

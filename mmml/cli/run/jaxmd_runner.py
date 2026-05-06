@@ -583,15 +583,39 @@ def set_up_nhc_sim_routine(
             for m in range(n_monomers)
         ]
         overlap_min_distance = float(getattr(args, "min_intermonomer_atom_distance", 0.1))
+        overlap_action = str(getattr(args, "dynamics_overlap_action", "warn")).lower()
+        overlap_warning_count = 0
+        overlap_min_seen = float("inf")
 
         def _check_overlap(positions, cell, context: str) -> None:
-            assert_no_intermonomer_atom_overlap(
-                np.asarray(jax.device_get(positions), dtype=float),
-                monomer_offsets,
-                min_distance=overlap_min_distance,
-                cell=None if cell is None else np.asarray(jax.device_get(cell), dtype=float),
-                context=context,
-            )
+            nonlocal overlap_warning_count, overlap_min_seen
+            if overlap_action == "off":
+                return
+            try:
+                min_dist = assert_no_intermonomer_atom_overlap(
+                    np.asarray(jax.device_get(positions), dtype=float),
+                    monomer_offsets,
+                    min_distance=overlap_min_distance,
+                    cell=None if cell is None else np.asarray(jax.device_get(cell), dtype=float),
+                    context=context,
+                )
+                overlap_min_seen = min(overlap_min_seen, min_dist)
+            except RuntimeError as exc:
+                overlap_warning_count += 1
+                message = str(exc)
+                try:
+                    min_dist = float(message.split("distance=")[1].split(" A")[0])
+                    overlap_min_seen = min(overlap_min_seen, min_dist)
+                except (IndexError, ValueError):
+                    pass
+                if overlap_action == "error":
+                    raise
+                if overlap_warning_count <= 5 or overlap_warning_count % 50 == 0:
+                    c.print(Panel(
+                        f"{message}\nContinuing because dynamics_overlap_action={overlap_action!r}.",
+                        title="[bold yellow]JAX-MD overlap warning[/bold yellow]",
+                        border_style="yellow",
+                    ))
 
         # When ASE already ran (nsteps_ase > 0), R is ASE-minimized; skip JAX-MD minimization
         fire_positions = []
@@ -1125,6 +1149,8 @@ def set_up_nhc_sim_routine(
         steps_completed = len(nhc_positions) * steps_per_recording
         run_sim.last_status = run_status
         run_sim.last_error = run_error
+        run_sim.last_overlap_warning_count = overlap_warning_count
+        run_sim.last_overlap_min_distance = overlap_min_seen
         completion_title = "Simulation complete" if run_status == "complete" else "Partial simulation saved"
         c.print(Panel(f"{steps_completed} steps ({steps_completed * dt:.2f} ps)", title=f"[bold]{completion_title}[/bold]", border_style="green"))
 
