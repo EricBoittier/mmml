@@ -386,7 +386,7 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help=(
             "Orbax root, epoch-* dir, or portable .json. "
-            "Default: bundled general uncharged small-molecule weights in the mmml package "
+            "Default: bundled manifest model with lowest validation force MAE "
             "(or $MMML_CKPT)."
         ),
     )
