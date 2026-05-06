@@ -256,9 +256,28 @@ def cell_list_pairs(
     if n_valid > max_pairs:
         # Truncate (shouldn't happen in practice if max_pairs is set correctly)
         import warnings
-        warnings.warn(
+        message = (
             f"cell_list_pairs: found {n_valid} pairs but max_pairs={max_pairs}. "
-            f"Truncating. Increase max_pairs for correctness.",
+            "Truncating. Increase max_pairs for correctness."
+        )
+        try:
+            from rich.console import Console
+            from rich.panel import Panel
+
+            Console(stderr=True).print(
+                Panel(
+                    (
+                        f"[bold red]{message}[/bold red]\n\n"
+                        f"Suggested value: [bold]--max-pairs {int(np.ceil(n_valid * 1.25))}[/bold]"
+                    ),
+                    title="[bold red]MM Pair List Truncated[/bold red]",
+                    border_style="red",
+                )
+            )
+        except Exception:
+            pass
+        warnings.warn(
+            message,
             RuntimeWarning,
             stacklevel=2,
         )

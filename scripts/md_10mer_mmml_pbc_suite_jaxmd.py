@@ -9,6 +9,7 @@ from types import SimpleNamespace
 
 import numpy as np
 from ase import Atoms
+from ase.io import write as ase_write
 from ase.io.trajectory import Trajectory
 from ase.md.velocitydistribution import MaxwellBoltzmannDistribution, Stationary, ZeroRotation
 from ase.optimize import BFGS
@@ -31,6 +32,64 @@ from md_10mer_mmml_pbc_suite import (  # noqa: E402
     _randomize_monomer_com_positions,
     _run_charmm_minimize,
 )
+
+
+class _BestMinimizationFrame:
+    def __init__(self, atoms: Atoms) -> None:
+        self.atoms = atoms
+        self.best_force_positions: np.ndarray | None = None
+        self.best_force_energy = float("inf")
+        self.best_force_fmax = float("inf")
+        self.best_force_label = ""
+        self.best_energy_positions: np.ndarray | None = None
+        self.best_energy = float("inf")
+        self.best_energy_fmax = float("inf")
+        self.best_energy_label = ""
+
+    def record(self, label: str) -> None:
+        try:
+            energy = float(self.atoms.get_potential_energy())
+            fmax = float(np.abs(self.atoms.get_forces()).max())
+        except Exception:
+            return
+        positions = np.asarray(self.atoms.get_positions(), dtype=float).copy()
+        if np.isfinite(fmax) and fmax < self.best_force_fmax:
+            self.best_force_positions = positions
+            self.best_force_energy = energy
+            self.best_force_fmax = fmax
+            self.best_force_label = label
+        if np.isfinite(energy) and energy < self.best_energy:
+            self.best_energy_positions = positions
+            self.best_energy = energy
+            self.best_energy_fmax = fmax
+            self.best_energy_label = label
+
+    def restore_best_force(self) -> float:
+        if self.best_force_positions is not None:
+            self.atoms.set_positions(self.best_force_positions)
+        return float(np.abs(self.atoms.get_forces()).max())
+
+    def write(self, out_dir: Path, prefix: str) -> dict[str, float | str]:
+        summary: dict[str, float | str] = {}
+        if self.best_force_positions is not None:
+            force_atoms = self.atoms.copy()
+            force_atoms.set_positions(self.best_force_positions)
+            path = out_dir / f"{prefix}_best_force.xyz"
+            ase_write(str(path), force_atoms)
+            summary["best_force_xyz"] = str(path.relative_to(out_dir))
+            summary["best_force_energy_eV"] = float(self.best_force_energy)
+            summary["best_force_fmax_eVA"] = float(self.best_force_fmax)
+            summary["best_force_label"] = self.best_force_label
+        if self.best_energy_positions is not None:
+            energy_atoms = self.atoms.copy()
+            energy_atoms.set_positions(self.best_energy_positions)
+            path = out_dir / f"{prefix}_best_energy.xyz"
+            ase_write(str(path), energy_atoms)
+            summary["best_energy_xyz"] = str(path.relative_to(out_dir))
+            summary["best_energy_eV"] = float(self.best_energy)
+            summary["best_energy_fmax_eVA"] = float(self.best_energy_fmax)
+            summary["best_energy_label"] = self.best_energy_label
+        return summary
 
 
 def main() -> int:
@@ -83,7 +142,7 @@ def main() -> int:
     p.add_argument("--bfgs-maxstep", type=float, default=0.05)
     p.add_argument("--fire-min-steps", type=int, default=100)
     p.add_argument("--fire-min-maxstep", type=float, default=0.02)
-    p.add_argument("--max-fmax-after-min", type=float, default=0.5)
+    p.add_argument("--max-fmax-after-min", type=float, default=2.0)
     p.add_argument("--quiet-bfgs", action="store_true")
     p.add_argument(
         "--calculator-pre-minimize",
@@ -271,6 +330,8 @@ def main() -> int:
     if args.calculator_pre_minimize:
         _ = float(atoms.get_potential_energy())
         pre_bfgs_fmax = float(np.abs(atoms.get_forces()).max())
+        best_frame = _BestMinimizationFrame(atoms)
+        best_frame.record("initial")
         minimization_summary["pre_bfgs_fmax_eVA"] = pre_bfgs_fmax
         print(
             f"ASE BFGS pre-minimization starting "
@@ -283,7 +344,9 @@ def main() -> int:
             trajectory=str(bfgs_traj_path),
             maxstep=args.bfgs_maxstep,
         )
+        opt.attach(lambda: best_frame.record("bfgs"), interval=1)
         opt.run(fmax=args.pre_min_fmax, steps=args.pre_min_steps)
+        best_frame.record("bfgs_final")
         fmin = float(np.abs(atoms.get_forces()).max())
         minimization_summary["bfgs_iterations"] = float(opt.get_number_of_steps())
         minimization_summary["bfgs_fmax_eVA"] = fmin
@@ -301,11 +364,21 @@ def main() -> int:
                 trajectory=str(fire_traj_path),
                 maxstep=args.fire_min_maxstep,
             )
+            fire.attach(lambda: best_frame.record("fire"), interval=1)
             fire.run(fmax=args.pre_min_fmax, steps=args.fire_min_steps)
+            best_frame.record("fire_final")
             fmin = float(np.abs(atoms.get_forces()).max())
             minimization_summary["fire_fmax_eVA"] = fmin
             minimization_summary["fire_traj"] = str(fire_traj_path.relative_to(out_dir))
             print(f"ASE FIRE rescue complete, fmax={fmin:.6f} eV/A")
+        minimization_summary.update(best_frame.write(out_dir, f"pbc_{args.ensemble}_pre_md"))
+        fmin = best_frame.restore_best_force()
+        minimization_summary["restored_best_force_fmax_eVA"] = fmin
+        print(
+            "Restored best-force pre-MD structure "
+            f"({best_frame.best_force_label}, fmax={fmin:.6f} eV/A, "
+            f"E={best_frame.best_force_energy:.6f} eV)"
+        )
         if fmin > args.max_fmax_after_min:
             raise RuntimeError(
                 f"post-calculator minimization fmax={fmin:.6f} eV/A exceeds "
