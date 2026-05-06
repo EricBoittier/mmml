@@ -397,6 +397,7 @@ def _run_charmm_minimize(
     if nstep_sd <= 0 and nstep_abnr <= 0:
         return
     t0 = _tmark()
+    reset_block()
     coor.set_positions(pd.DataFrame(atoms.get_positions(), columns=["x", "y", "z"]))
     pyci.pycharmm.NonBondedScript(
         cutnb=18.0,
@@ -410,6 +411,8 @@ def _run_charmm_minimize(
         vfswitch=True,
         nbxmod=5,
     ).run()
+    pyci.safe_energy_show()
+    pyci.get_forces_pycharmm()
     if nstep_sd > 0:
         charmm_minimize.run_sd(nstep=nstep_sd, tolenr=tolenr, tolgrd=tolgrd)
     if nstep_abnr > 0:
