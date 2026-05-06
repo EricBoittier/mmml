@@ -18,6 +18,7 @@ import jax.numpy as jnp
 
 from mmml.cli.run.summaries import print_forces_summary
 from mmml.interfaces.pycharmmInterface.pbc_utils_jax import wrap_groups
+from mmml.utils.geometry_checks import assert_no_intermonomer_atom_overlap
 from mmml.utils.hdf5_reporter import make_jaxmd_reporter
 
 import ase.io as ase_io

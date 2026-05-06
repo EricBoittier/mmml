@@ -19,6 +19,7 @@ from jax import random
 from mmml.cli.base import resolve_checkpoint_paths
 from mmml.cli.run.jaxmd_runner import set_up_nhc_sim_routine
 from mmml.interfaces.pycharmmInterface.mmml_calculator import CutoffParameters, setup_calculator
+from mmml.utils.geometry_checks import assert_no_intermonomer_atom_overlap
 
 _scripts_dir = Path(__file__).resolve().parent
 if str(_scripts_dir) not in sys.path:
@@ -190,6 +191,12 @@ def main() -> int:
     p.add_argument("--charmm-abnr-steps", type=int, default=1000)
     p.add_argument("--charmm-tolenr", type=float, default=1e-3)
     p.add_argument("--charmm-tolgrd", type=float, default=1e-3)
+    p.add_argument(
+        "--min-intermonomer-atom-distance",
+        type=float,
+        default=0.5,
+        help="Abort if atoms from different monomers get closer than this distance in Angstrom (<=0 disables).",
+    )
     args = p.parse_args()
     if args.box_size is not None and args.box_size <= 0:
         raise ValueError("--box-size must be positive")
@@ -246,6 +253,13 @@ def main() -> int:
     atoms = Atoms(numbers=z, positions=r)
     atoms.set_cell([L, L, L])
     atoms.set_pbc(True)
+    assert_no_intermonomer_atom_overlap(
+        atoms.get_positions(),
+        monomer_offsets,
+        min_distance=args.min_intermonomer_atom_distance,
+        cell=atoms.cell.array,
+        context="initial placement",
+    )
     minimization_summary: dict[str, float | str] = {}
     if args.charmm_pre_minimize:
         print(
@@ -259,6 +273,13 @@ def main() -> int:
             tolenr=args.charmm_tolenr,
             tolgrd=args.charmm_tolgrd,
             timings=minimization_summary,
+        )
+        assert_no_intermonomer_atom_overlap(
+            atoms.get_positions(),
+            monomer_offsets,
+            min_distance=args.min_intermonomer_atom_distance,
+            cell=atoms.cell.array,
+            context="after CHARMM pre-minimization",
         )
         print(
             "CHARMM pre-minimization complete "
@@ -329,6 +350,16 @@ def main() -> int:
             f"ASE BFGS pre-minimization starting "
             f"(max {args.pre_min_steps} steps, fmax={args.pre_min_fmax})"
         )
+
+        def _check_pre_min_overlap(label: str) -> None:
+            assert_no_intermonomer_atom_overlap(
+                atoms.get_positions(),
+                monomer_offsets,
+                min_distance=args.min_intermonomer_atom_distance,
+                cell=atoms.cell.array,
+                context=label,
+            )
+
         bfgs_traj_path = out_dir / f"pbc_{args.ensemble}_bfgs_min.traj"
         opt = BFGS(
             atoms,
@@ -337,8 +368,10 @@ def main() -> int:
             maxstep=args.bfgs_maxstep,
         )
         opt.attach(lambda: best_frame.record("bfgs"), interval=1)
+        opt.attach(lambda: _check_pre_min_overlap("ASE BFGS pre-minimization"), interval=1)
         opt.run(fmax=args.pre_min_fmax, steps=args.pre_min_steps)
         best_frame.record("bfgs_final")
+        _check_pre_min_overlap("after ASE BFGS pre-minimization")
         fmin = float(np.abs(atoms.get_forces()).max())
         minimization_summary["bfgs_iterations"] = float(opt.get_number_of_steps())
         minimization_summary["bfgs_fmax_eVA"] = fmin
@@ -360,14 +393,17 @@ def main() -> int:
                 maxstep=args.fire_min_maxstep,
             )
             fire.attach(lambda: best_frame.record("fire"), interval=1)
+            fire.attach(lambda: _check_pre_min_overlap("ASE FIRE rescue"), interval=1)
             fire.run(fmax=args.pre_min_fmax, steps=args.fire_min_steps)
             best_frame.record("fire_final")
+            _check_pre_min_overlap("after ASE FIRE rescue")
             fmin = float(np.abs(atoms.get_forces()).max())
             minimization_summary["fire_fmax_eVA"] = fmin
             minimization_summary["fire_traj"] = str(fire_traj_path.relative_to(out_dir))
             print(f"ASE FIRE rescue complete, fmax={fmin:.6f} eV/A")
         minimization_summary.update(best_frame.write(out_dir, f"pbc_{args.ensemble}_pre_md"))
         fmin = best_frame.restore_best_force()
+        _check_pre_min_overlap("restored best-force pre-MD structure")
         minimization_summary["restored_best_force_fmax_eVA"] = fmin
         print(
             "Restored best-force pre-MD structure "
@@ -409,6 +445,7 @@ def main() -> int:
         nsteps_jaxmd=nsteps,
         jaxmd_minimize_steps=args.jaxmd_minimize_steps,
         jaxmd_pbc_minimize_steps=args.jaxmd_pbc_minimize_steps,
+        min_intermonomer_atom_distance=args.min_intermonomer_atom_distance,
     )
     run_sim = set_up_nhc_sim_routine(
         atoms=atoms,
