@@ -70,7 +70,7 @@ def parse_args() -> argparse.Namespace:
         "--extra-args",
         nargs=argparse.REMAINDER,
         default=[],
-        help="Additional raw args forwarded to the underlying script (use after '--').",
+        help="Additional raw args forwarded to the underlying script; put this option last.",
     )
     return parser.parse_args()
 

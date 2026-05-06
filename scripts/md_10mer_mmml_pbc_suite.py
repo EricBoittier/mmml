@@ -707,7 +707,7 @@ def main() -> int:
     parser.add_argument("--rescue-charmm-sd-steps", type=int, default=100, help="Rescue CHARMM SD steps.")
     parser.add_argument("--rescue-charmm-abnr-steps", type=int, default=300, help="Rescue CHARMM ABNR steps.")
     parser.add_argument("--rescue-fire-steps", type=int, default=300, help="Rescue ASE FIRE steps.")
-    parser.add_argument("--rescue-fire-fmax", type=float, default=0.5, help="Rescue ASE FIRE fmax target (eV/A).")
+    parser.add_argument("--rescue-fire-fmax", type=float, default=0.1, help="Rescue ASE FIRE fmax target (eV/A).")
     parser.add_argument("--rescue-fire-maxstep", type=float, default=0.02, help="Rescue ASE FIRE maxstep (A).")
     parser.add_argument("--nvt-temp-K", type=float, default=300.0)
     parser.add_argument("--nve-temp-K", type=float, default=10.0)
@@ -983,10 +983,10 @@ def main() -> int:
             f"{key}: BFGS {run_timings['bfgs_wall_s']:.3f} s ({n_bfgs} iters)",
             timing_log,
         )
-        if fmin > args.max_fmax_after_min:
+        if fmin > args.pre_min_fmax:
             if args.rescue_minimize:
                 _tlog(
-                    f"{key}: rescue minimization triggered (fmax={fmin:.6f} > {args.max_fmax_after_min:.6f})",
+                    f"{key}: rescue minimization triggered (fmax={fmin:.6f} > {args.pre_min_fmax:.6f})",
                     timing_log,
                 )
                 _run_charmm_minimize(
