@@ -67,6 +67,52 @@ def test_cli_unwraps_ase_traj_to_fast_extxyz(tmp_path: Path, monkeypatch: pytest
     assert np.allclose([frame.positions[0, 0] for frame in frames], [9.5, 10.2])
 
 
+def test_cli_infers_variable_size_molecules_for_ase_traj(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    wrapped = tmp_path / "mixed.traj"
+    with Trajectory(str(wrapped), "w") as traj:
+        traj.write(
+            Atoms(
+                numbers=[8, 1, 1, 1, 1],
+                positions=[
+                    [9.8, 0.0, 0.0],
+                    [0.2, 0.0, 0.0],
+                    [9.8, 0.7, 0.0],
+                    [4.0, 0.0, 0.0],
+                    [4.7, 0.0, 0.0],
+                ],
+                cell=[10.0, 10.0, 10.0],
+                pbc=True,
+            )
+        )
+        traj.write(
+            Atoms(
+                numbers=[8, 1, 1, 1, 1],
+                positions=[
+                    [0.1, 0.0, 0.0],
+                    [0.5, 0.0, 0.0],
+                    [0.1, 0.7, 0.0],
+                    [4.2, 0.0, 0.0],
+                    [4.9, 0.0, 0.0],
+                ],
+                cell=[10.0, 10.0, 10.0],
+                pbc=True,
+            )
+        )
+
+    output = tmp_path / "unwrapped.xyz"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["mmml unwrap-traj", str(wrapped), "-o", str(output), "--format", "xyz", "--fast", "--quiet"],
+    )
+
+    assert unwrap_traj.main() == 0
+    frames = read(str(output), index=":")
+    assert len(frames) == 2
+    assert np.allclose(frames[0].positions[:3, 0], [9.8, 10.2, 9.8])
+    assert np.allclose(frames[1].positions[:3, 0], [10.1, 10.5, 10.1])
+
+
 def test_cli_unwraps_h5_coordinates_to_fast_xyz(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     h5_path = tmp_path / "coords.h5"
     with h5py.File(h5_path, "w") as handle:
