@@ -11,6 +11,8 @@ import numpy as np
 from ase import Atoms
 from ase.io.trajectory import Trajectory
 from ase.md.velocitydistribution import MaxwellBoltzmannDistribution, Stationary, ZeroRotation
+from ase.optimize import BFGS
+from ase.optimize.fire import FIRE
 from jax import random
 
 from mmml.cli.base import resolve_checkpoint_paths
@@ -69,6 +71,26 @@ def main() -> int:
     p.add_argument("--mm-switch-on", type=float, default=5.5)
     p.add_argument("--mm-cutoff", type=float, default=2.0)
     p.add_argument("--max-pairs", type=int, default=20_000)
+    p.add_argument("--pre-min-fmax", type=float, default=0.1)
+    p.add_argument("--pre-min-steps", type=int, default=50)
+    p.add_argument("--bfgs-maxstep", type=float, default=0.05)
+    p.add_argument("--fire-min-steps", type=int, default=300)
+    p.add_argument("--fire-min-maxstep", type=float, default=0.02)
+    p.add_argument("--max-fmax-after-min", type=float, default=0.1)
+    p.add_argument("--quiet-bfgs", action="store_true")
+    p.add_argument(
+        "--calculator-pre-minimize",
+        dest="calculator_pre_minimize",
+        action="store_true",
+        default=True,
+        help="Run ASE BFGS with the MMML calculator before JAX-MD minimization (default).",
+    )
+    p.add_argument(
+        "--no-calculator-pre-minimize",
+        dest="calculator_pre_minimize",
+        action="store_false",
+        help="Skip ASE BFGS/FIRE pre-minimization before the JAX-MD runner.",
+    )
     p.add_argument("--jax-md-capacity-multiplier", type=float, default=1.25)
     p.add_argument("--jax-md-capacity-growth-factor", type=float, default=1.5)
     p.add_argument("--jax-md-max-overflow-retries", type=int, default=4)
@@ -85,7 +107,19 @@ def main() -> int:
         help="Allow NPT to use configured neighbor update interval/skin (faster, potentially less stable).",
     )
     p.add_argument("--jax-md-disable-fallback", action="store_true")
-    p.add_argument("--charmm-pre-minimize", action="store_true")
+    p.add_argument(
+        "--charmm-pre-minimize",
+        dest="charmm_pre_minimize",
+        action="store_true",
+        default=True,
+        help="Run CHARMM SD/ABNR before calculator minimization (default).",
+    )
+    p.add_argument(
+        "--no-charmm-pre-minimize",
+        dest="charmm_pre_minimize",
+        action="store_false",
+        help="Skip CHARMM SD/ABNR before calculator minimization.",
+    )
     p.add_argument("--charmm-sd-steps", type=int, default=50)
     p.add_argument("--charmm-abnr-steps", type=int, default=200)
     p.add_argument("--charmm-tolenr", type=float, default=1e-3)
@@ -136,14 +170,23 @@ def main() -> int:
     atoms = Atoms(numbers=z, positions=r)
     atoms.set_cell([L, L, L])
     atoms.set_pbc(True)
+    minimization_summary: dict[str, float | str] = {}
     if args.charmm_pre_minimize:
+        print(
+            f"CHARMM pre-minimization starting "
+            f"(SD={args.charmm_sd_steps}, ABNR={args.charmm_abnr_steps})"
+        )
         _run_charmm_minimize(
             atoms,
             nstep_sd=args.charmm_sd_steps,
             nstep_abnr=args.charmm_abnr_steps,
             tolenr=args.charmm_tolenr,
             tolgrd=args.charmm_tolgrd,
-            timings={},
+            timings=minimization_summary,
+        )
+        print(
+            "CHARMM pre-minimization complete "
+            f"({minimization_summary.get('charmm_min_wall_s', 0.0):.3f} s)"
         )
 
     if args.ensemble == "npt":
@@ -207,6 +250,51 @@ def main() -> int:
         calc, spherical_cutoff_calculator = calc_result
         get_update_fn = None
     atoms.calc = calc
+
+    if args.calculator_pre_minimize:
+        _ = float(atoms.get_potential_energy())
+        pre_bfgs_fmax = float(np.abs(atoms.get_forces()).max())
+        minimization_summary["pre_bfgs_fmax_eVA"] = pre_bfgs_fmax
+        print(
+            f"ASE BFGS pre-minimization starting "
+            f"(max {args.pre_min_steps} steps, fmax={args.pre_min_fmax})"
+        )
+        bfgs_traj_path = out_dir / f"pbc_{args.ensemble}_bfgs_min.traj"
+        opt = BFGS(
+            atoms,
+            logfile=None if args.quiet_bfgs else "-",
+            trajectory=str(bfgs_traj_path),
+            maxstep=args.bfgs_maxstep,
+        )
+        opt.run(fmax=args.pre_min_fmax, steps=args.pre_min_steps)
+        fmin = float(np.abs(atoms.get_forces()).max())
+        minimization_summary["bfgs_iterations"] = float(opt.get_number_of_steps())
+        minimization_summary["bfgs_fmax_eVA"] = fmin
+        minimization_summary["bfgs_traj"] = str(bfgs_traj_path.relative_to(out_dir))
+        print(f"ASE BFGS pre-minimization complete, fmax={fmin:.6f} eV/A")
+        if fmin > args.pre_min_fmax:
+            print(
+                f"ASE FIRE rescue starting "
+                f"(BFGS fmax={fmin:.6f} > {args.pre_min_fmax:.6f})"
+            )
+            fire_traj_path = out_dir / f"pbc_{args.ensemble}_fire_min.traj"
+            fire = FIRE(
+                atoms,
+                logfile=None if args.quiet_bfgs else "-",
+                trajectory=str(fire_traj_path),
+                maxstep=args.fire_min_maxstep,
+            )
+            fire.run(fmax=args.pre_min_fmax, steps=args.fire_min_steps)
+            fmin = float(np.abs(atoms.get_forces()).max())
+            minimization_summary["fire_fmax_eVA"] = fmin
+            minimization_summary["fire_traj"] = str(fire_traj_path.relative_to(out_dir))
+            print(f"ASE FIRE rescue complete, fmax={fmin:.6f} eV/A")
+        if fmin > args.max_fmax_after_min:
+            raise RuntimeError(
+                f"post-calculator minimization fmax={fmin:.6f} eV/A exceeds "
+                f"--max-fmax-after-min={args.max_fmax_after_min:.6f}. "
+                "Increase minimization steps or inspect the generated residue geometry."
+            )
 
     rng = np.random.default_rng(args.seed)
     MaxwellBoltzmannDistribution(atoms, temperature_K=args.temperature, rng=rng)
@@ -316,6 +404,7 @@ def main() -> int:
         "neighbor_expected_updates": int(nsteps // max(1, args.steps_per_recording)) if args.ensemble == "npt" else None,
         "neighbor_internal_update_interval_calls": effective_update_interval,
         "neighbor_internal_skin_distance_A": effective_skin,
+        "pre_md_minimization": minimization_summary,
     }
     if update_fn_live is not None and hasattr(update_fn_live, "get_stats"):
         try:
