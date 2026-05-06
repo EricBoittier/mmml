@@ -293,6 +293,15 @@ def load_model_checkpoint(
 
     result = {}
 
+    json_payload = None
+    if json_params_path is not None and json_params_path.exists() and (load_config or load_metadata) and not load_params:
+        with open(json_params_path, "r", encoding="utf-8") as f:
+            json_payload = json.load(f)
+        if load_config and "config" in json_payload:
+            result["config"] = json_payload["config"]
+        if load_metadata and "metadata" in json_payload:
+            result["metadata"] = json_payload["metadata"]
+
     # Load parameters
     if load_params:
         if use_orbax:
@@ -356,7 +365,7 @@ def load_model_checkpoint(
                     result['params'] = checkpoint_data
     
     # Load config
-    if load_config:
+    if load_config and "config" not in result:
         config_path = checkpoint_dir / "model_config.json"
         if not config_path.exists():
             # Try pickle version
@@ -371,7 +380,7 @@ def load_model_checkpoint(
                 result['config'] = json.load(f)
     
     # Load metadata
-    if load_metadata:
+    if load_metadata and "metadata" not in result:
         metadata_path = checkpoint_dir / "metadata.json"
         if metadata_path.exists():
             with open(metadata_path, 'r') as f:
