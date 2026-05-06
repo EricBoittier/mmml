@@ -505,6 +505,7 @@ def _run_charmm_minimize(
     nstep_abnr: int,
     tolenr: float,
     tolgrd: float,
+    nbxmod: int = 5,
     timings: dict[str, float] | None = None,
 ) -> None:
     """Run optional CHARMM minimization and write updated coords back to ASE atoms."""
@@ -524,7 +525,7 @@ def _run_charmm_minimize(
             vatom=True,
             fswitch=True,
             vfswitch=True,
-            nbxmod=5,
+            nbxmod=nbxmod,
         ).run()
         print("CHARMM energy before minimization:")
         pyci.pycharmm_loud()
@@ -560,6 +561,7 @@ def _check_or_charmm_overlap_rescue(
     nstep_abnr: int,
     tolenr: float,
     tolgrd: float,
+    nbxmod: int = 5,
     timings: dict[str, float] | None = None,
 ) -> float:
     """Check for inter-monomer overlaps, using CHARMM minimization as first rescue."""
@@ -582,6 +584,7 @@ def _check_or_charmm_overlap_rescue(
             nstep_abnr=nstep_abnr,
             tolenr=tolenr,
             tolgrd=tolgrd,
+            nbxmod=nbxmod,
             timings=timings,
         )
         try:
@@ -640,6 +643,7 @@ def run_md(
     overlap_rescue_charmm_abnr_steps: int,
     charmm_tolenr: float,
     charmm_tolgrd: float,
+    charmm_nbxmod: int,
     path_prefix: Path | None = None,
     timings: dict[str, float] | None = None,
     log_lines: list[str] | None = None,
@@ -747,6 +751,7 @@ def run_md(
         nstep_abnr=overlap_rescue_charmm_abnr_steps,
         tolenr=charmm_tolenr,
         tolgrd=charmm_tolgrd,
+        nbxmod=charmm_nbxmod,
         timings=timings,
     )
     _write_frame()  # initial frame
@@ -768,6 +773,7 @@ def run_md(
             nstep_abnr=overlap_rescue_charmm_abnr_steps,
             tolenr=charmm_tolenr,
             tolgrd=charmm_tolgrd,
+            nbxmod=charmm_nbxmod,
             timings=timings,
         ),
         interval=max(1, traj_every),
@@ -909,6 +915,12 @@ def main() -> int:
     parser.add_argument("--charmm-abnr-steps", type=int, default=100, help="CHARMM ABNR steps before ASE BFGS.")
     parser.add_argument("--charmm-tolenr", type=float, default=1e-3, help="CHARMM minimization energy tolerance.")
     parser.add_argument("--charmm-tolgrd", type=float, default=1e-3, help="CHARMM minimization gradient tolerance.")
+    parser.add_argument(
+        "--charmm-nbxmod",
+        type=int,
+        default=5,
+        help="CHARMM NBXMOD for SD/ABNR minimization (default 5, matching CGenFF).",
+    )
     parser.add_argument(
         "--min-intermonomer-atom-distance",
         type=float,
@@ -1069,6 +1081,7 @@ def main() -> int:
         nstep_abnr=args.charmm_abnr_steps,
         tolenr=args.charmm_tolenr,
         tolgrd=args.charmm_tolgrd,
+        nbxmod=args.charmm_nbxmod,
     )
     r0 = initial_atoms.get_positions()
 
@@ -1141,6 +1154,7 @@ def main() -> int:
             nstep_abnr=args.charmm_abnr_steps,
             tolenr=args.charmm_tolenr,
             tolgrd=args.charmm_tolgrd,
+            nbxmod=args.charmm_nbxmod,
             timings=run_timings,
         )
         if args.charmm_pre_minimize:
@@ -1155,6 +1169,7 @@ def main() -> int:
                 nstep_abnr=args.charmm_abnr_steps,
                 tolenr=args.charmm_tolenr,
                 tolgrd=args.charmm_tolgrd,
+                nbxmod=args.charmm_nbxmod,
                 timings=run_timings,
             )
             _check_or_charmm_overlap_rescue(
@@ -1166,6 +1181,7 @@ def main() -> int:
                 nstep_abnr=args.charmm_abnr_steps,
                 tolenr=args.charmm_tolenr,
                 tolgrd=args.charmm_tolgrd,
+                nbxmod=args.charmm_nbxmod,
                 timings=run_timings,
             )
             _tlog(
@@ -1252,6 +1268,7 @@ def main() -> int:
                 nstep_abnr=args.charmm_abnr_steps,
                 tolenr=args.charmm_tolenr,
                 tolgrd=args.charmm_tolgrd,
+                nbxmod=args.charmm_nbxmod,
                 timings=run_timings,
             ),
             interval=1,
@@ -1275,6 +1292,7 @@ def main() -> int:
             nstep_abnr=args.charmm_abnr_steps,
             tolenr=args.charmm_tolenr,
             tolgrd=args.charmm_tolgrd,
+            nbxmod=args.charmm_nbxmod,
             timings=run_timings,
         )
         if fmin > args.pre_min_fmax:
@@ -1289,6 +1307,7 @@ def main() -> int:
                     nstep_abnr=args.rescue_charmm_abnr_steps,
                     tolenr=args.charmm_tolenr,
                     tolgrd=args.charmm_tolgrd,
+                    nbxmod=args.charmm_nbxmod,
                     timings=run_timings,
                 )
                 rescue_traj_path = out_dir / f"{key}_rescue_fire.traj"
@@ -1309,6 +1328,7 @@ def main() -> int:
                         nstep_abnr=args.rescue_charmm_abnr_steps,
                         tolenr=args.charmm_tolenr,
                         tolgrd=args.charmm_tolgrd,
+                        nbxmod=args.charmm_nbxmod,
                         timings=run_timings,
                     ),
                     interval=1,
@@ -1327,6 +1347,7 @@ def main() -> int:
                     nstep_abnr=args.rescue_charmm_abnr_steps,
                     tolenr=args.charmm_tolenr,
                     tolgrd=args.charmm_tolgrd,
+                    nbxmod=args.charmm_nbxmod,
                     timings=run_timings,
                 )
             if fmin > args.max_fmax_after_min:
@@ -1356,6 +1377,7 @@ def main() -> int:
             overlap_rescue_charmm_abnr_steps=args.rescue_charmm_abnr_steps,
             charmm_tolenr=args.charmm_tolenr,
             charmm_tolgrd=args.charmm_tolgrd,
+            charmm_nbxmod=args.charmm_nbxmod,
             path_prefix=out_dir,
             timings=run_timings,
             log_lines=timing_log,
