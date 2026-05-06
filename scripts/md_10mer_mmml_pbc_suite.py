@@ -78,31 +78,81 @@ import test_orbax_checkpoint_cluster as _toc  # noqa: E402
 _build_psf_ordered_cluster = _toc._build_psf_ordered_cluster
 
 
-def _load_pdb_coords_by_atom_name(pdb_path: Path) -> dict[str, np.ndarray]:
-    """Load coordinates keyed by atom name from a single-residue PDB template."""
-    coords: dict[str, np.ndarray] = {}
-    for line in pdb_path.read_text(encoding="utf-8").splitlines():
-        if not (line.startswith("ATOM") or line.startswith("HETATM")):
-            continue
-        atom_name = line[12:16].strip()
-        coords[atom_name] = np.array(
-            [
-                float(line[30:38]),
-                float(line[38:46]),
-                float(line[46:54]),
-            ],
-            dtype=float,
-        )
-    if not coords:
-        raise ValueError(f"No ATOM/HETATM coordinates found in template PDB: {pdb_path}")
-    return coords
-
-
 def _has_resolved_geometry(coords: np.ndarray, min_span: float = 1.0e-4) -> bool:
     """Return True if a residue has more than origin/identical coordinates."""
     if coords.size == 0 or not np.all(np.isfinite(coords)):
         return False
     return bool(np.max(np.ptp(coords, axis=0)) > min_span)
+
+
+def _read_cgenff_toppar() -> None:
+    read.rtf(pyci.CGENFF_RTF)
+    bl = settings.set_bomb_level(-2)
+    wl = settings.set_warn_level(-2)
+    read.prm(pyci.CGENFF_PRM)
+    settings.set_bomb_level(bl)
+    settings.set_warn_level(wl)
+    pyci.pycharmm.lingo.charmm_script("bomlev 0")
+
+
+def _reset_pycharmm_system() -> None:
+    pyci.pycharmm.lingo.charmm_script("DELETE ATOM SELE ALL END")
+    reset_block()
+    reset_block_no_internal()
+    reset_block()
+
+
+def _make_res_minimize(nbxmod: int, nstep: int = 1000) -> None:
+    """Run the same nonbonded/minimization recipe used by make-res."""
+    pyci.pycharmm.NonBondedScript(
+        cutnb=18.0,
+        ctonnb=13.0,
+        ctofnb=17.0,
+        eps=1.0,
+        cdie=True,
+        atom=True,
+        vatom=True,
+        fswitch=True,
+        vfswitch=True,
+        nbxmod=nbxmod,
+    ).run()
+    charmm_minimize.run_abnr(nstep=nstep, tolenr=1e-3, tolgrd=1e-3)
+
+
+def _generate_residue_with_make_res_recipe(residue: str) -> tuple[np.ndarray, list[str]]:
+    """Generate one residue in PyCHARMM using make-res style coordinate relaxation."""
+    _reset_pycharmm_system()
+    _read_cgenff_toppar()
+    read.sequence_string(residue)
+    gen.new_segment(seg_name="TMP", setup_ic=True)
+    ic.prm_fill(replace_all=True)
+    ic.build()
+
+    initial = coor.get_positions().to_numpy(dtype=float)
+    atom_names = [str(x) for x in np.asarray(psf.get_atype(), dtype=str)]
+    if initial.shape[0] != len(atom_names):
+        raise RuntimeError(
+            f"PSF atom-name count mismatch while generating {residue}: "
+            f"{len(atom_names)} vs positions {initial.shape[0]}"
+        )
+
+    # make-res deliberately escapes incomplete IC tables by randomizing coordinates
+    # before two CHARMM minimization passes.
+    seed = sum((i + 1) * ord(ch) for i, ch in enumerate(residue.upper())) + 1729
+    rng = np.random.default_rng(seed)
+    xyz = pd.DataFrame(2.0 * rng.random(initial.shape), columns=["x", "y", "z"])
+    coor.set_positions(xyz)
+    _make_res_minimize(nbxmod=1)
+
+    xyz = coor.get_positions().to_numpy(dtype=float)
+    xyz *= rng.random(xyz.shape)
+    coor.set_positions(pd.DataFrame(xyz, columns=["x", "y", "z"]))
+    _make_res_minimize(nbxmod=5)
+
+    coords = coor.get_positions().to_numpy(dtype=float)
+    if not _has_resolved_geometry(coords):
+        raise RuntimeError(f"PyCHARMM make-res coordinate generation failed for residue {residue!r}")
+    return coords, atom_names
 
 
 def _tmark() -> float:
@@ -188,36 +238,21 @@ def _build_cluster_from_composition(
     *,
     composition: list[tuple[str, int]],
     spacing: float,
-    template_pdb: Path | None = None,
 ) -> tuple[np.ndarray, np.ndarray, list[int], list[str]]:
-    def _count_atoms_for_residue(residue: str) -> int:
-        pyci.pycharmm.lingo.charmm_script("DELETE ATOM SELE ALL END")
-        reset_block()
-        read.sequence_string(residue)
-        gen.new_segment(seg_name="TMP", setup_ic=True)
-        ic.prm_fill(replace_all=True)
-        ic.build()
-        return int(coor.get_positions().shape[0])
-
-    read.rtf(pyci.CGENFF_RTF)
-    bl = settings.set_bomb_level(-2)
-    wl = settings.set_warn_level(-2)
-    read.prm(pyci.CGENFF_PRM)
-    settings.set_bomb_level(bl)
-    settings.set_warn_level(wl)
-    # First determine per-residue atom counts.
-    atoms_per_residue: dict[str, int] = {}
+    # First generate each unique residue exactly as make-res does, in isolation.
+    residue_geometries: dict[str, tuple[np.ndarray, list[str]]] = {}
     for residue, _count in composition:
-        if residue not in atoms_per_residue:
-            atoms_per_residue[residue] = _count_atoms_for_residue(residue)
+        if residue not in residue_geometries:
+            residue_geometries[residue] = _generate_residue_with_make_res_recipe(residue)
 
-    # Rebuild the requested mixed system in one segment.
+    # Rebuild the requested mixed system in one segment, then overwrite CHARMM's
+    # placeholder IC coordinates with the PyCHARMM-relaxed residue geometries.
     sequence_items: list[str] = []
     for residue, count in composition:
         sequence_items.extend([residue] * int(count))
     sequence = " ".join(sequence_items)
-    pyci.pycharmm.lingo.charmm_script("DELETE ATOM SELE ALL END")
-    reset_block()
+    _reset_pycharmm_system()
+    _read_cgenff_toppar()
     read.sequence_string(sequence)
     gen.new_segment(seg_name="CLST", setup_ic=True)
     ic.prm_fill(replace_all=True)
@@ -231,7 +266,7 @@ def _build_cluster_from_composition(
     atoms_per_list: list[int] = []
     ordered_residue_names: list[str] = []
     for residue, count in composition:
-        n_atoms_res = int(atoms_per_residue[residue])
+        n_atoms_res = int(residue_geometries[residue][0].shape[0])
         for _ in range(int(count)):
             atoms_per_list.append(int(n_atoms_res))
             ordered_residue_names.append(residue)
@@ -242,15 +277,6 @@ def _build_cluster_from_composition(
             f"({positions.shape[0]}). Composition={composition}"
         )
 
-    known_templates: dict[str, Path] = {
-        "TIP3": _scripts_dir.parent / "mmml" / "data" / "charmm" / "tip3.pdb",
-    }
-    if template_pdb is not None:
-        known_templates["MEOH"] = template_pdb
-    else:
-        known_templates["MEOH"] = _scripts_dir.parent / "mmml" / "generate" / "sample" / "pdb" / "meoh.pdb"
-    template_coords: dict[str, dict[str, np.ndarray]] = {}
-
     n_molecules = len(atoms_per_list)
     n_side = int(np.ceil(np.sqrt(n_molecules)))
     shifted = positions.copy()
@@ -260,24 +286,14 @@ def _build_cluster_from_composition(
         s = int(offsets[i])
         e = int(offsets[i + 1])
         residue = ordered_residue_names[i]
-        if not _has_resolved_geometry(shifted[s:e]):
-            tmpl_path = known_templates.get(residue)
-            if tmpl_path is None or not tmpl_path.is_file():
-                raise RuntimeError(
-                    f"CHARMM built degenerate coordinates for residue {residue!r}, and no coordinate "
-                    "template is available. Provide a template or add one to the mixed-composition builder."
-                )
-            if residue not in template_coords:
-                template_coords[residue] = _load_pdb_coords_by_atom_name(tmpl_path)
-            local_coords = []
-            for atom_name in atom_names[s:e]:
-                if atom_name not in template_coords[residue]:
-                    raise KeyError(
-                        f"Template PDB {tmpl_path} missing atom name '{atom_name}' required by "
-                        f"{residue} in PSF order. Available: {sorted(template_coords[residue])}"
-                    )
-                local_coords.append(template_coords[residue][atom_name])
-            shifted[s:e] = np.asarray(local_coords, dtype=float)
+        residue_coords, residue_atom_names = residue_geometries[residue]
+        local_atom_names = [str(x) for x in atom_names[s:e]]
+        if local_atom_names != residue_atom_names:
+            raise RuntimeError(
+                f"Atom order mismatch for {residue}: final PSF has {local_atom_names}, "
+                f"make-res generation produced {residue_atom_names}"
+            )
+        shifted[s:e] = residue_coords
         com = shifted[s:e].mean(axis=0)
         shift = np.array([(i % n_side) * spacing, (i // n_side) * spacing, 0.0], dtype=float)
         shifted[s:e] = shifted[s:e] - com + shift
@@ -752,7 +768,6 @@ def main() -> int:
         z, r0, atoms_per_list, residue_labels = _build_cluster_from_composition(
             composition=composition,
             spacing=args.spacing,
-            template_pdb=args.template_pdb.expanduser().resolve() if args.template_pdb is not None else None,
         )
         n_molecules = len(atoms_per_list)
         composition_summary = {res: int(cnt) for res, cnt in composition}
