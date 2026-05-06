@@ -582,7 +582,7 @@ def set_up_nhc_sim_routine(
             jnp.arange(int(monomer_offsets[m]), int(monomer_offsets[m + 1]))
             for m in range(n_monomers)
         ]
-        overlap_min_distance = float(getattr(args, "min_intermonomer_atom_distance", 0.5))
+        overlap_min_distance = float(getattr(args, "min_intermonomer_atom_distance", 0.1))
 
         def _check_overlap(positions, cell, context: str) -> None:
             assert_no_intermonomer_atom_overlap(
