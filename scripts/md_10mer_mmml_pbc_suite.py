@@ -53,6 +53,7 @@ import mmml.interfaces.pycharmmInterface.import_pycharmm as pyci
 from mmml.cli.base import resolve_checkpoint_paths
 from mmml.interfaces.pycharmmInterface.import_pycharmm import reset_block, reset_block_no_internal
 from mmml.interfaces.pycharmmInterface.mmml_calculator import CutoffParameters, setup_calculator
+from mmml.utils.geometry_checks import assert_no_intermonomer_atom_overlap
 import pycharmm.param as param
 import pycharmm.psf as psf
 import pycharmm.read as read
@@ -515,6 +516,8 @@ def run_md(
     nve_temp_K: float,
     langevin_friction: float,
     seed: int,
+    monomer_offsets: np.ndarray,
+    min_intermonomer_atom_distance: float,
     path_prefix: Path | None = None,
     timings: dict[str, float] | None = None,
     log_lines: list[str] | None = None,
@@ -615,6 +618,14 @@ def run_md(
 
     _write_frame()  # initial frame
     snapshot(0)
+    overlap_cell = atoms.cell.array if atoms.pbc.any() else None
+    assert_no_intermonomer_atom_overlap(
+        atoms.get_positions(),
+        monomer_offsets,
+        min_distance=min_intermonomer_atom_distance,
+        cell=overlap_cell,
+        context=f"{name}: initial MD frame",
+    )
     t_after_first_snapshot = _tmark()
     _tlog(
         f"{name}: initial MD snapshot {t_after_first_snapshot - t_before_first_snapshot:.3f} s; "
@@ -623,6 +634,16 @@ def run_md(
     )
     dyn.attach(lambda: snapshot(dyn.get_number_of_steps()), interval=log_every)
     dyn.attach(_write_frame, interval=max(1, traj_every))
+    dyn.attach(
+        lambda: assert_no_intermonomer_atom_overlap(
+            atoms.get_positions(),
+            monomer_offsets,
+            min_distance=min_intermonomer_atom_distance,
+            cell=overlap_cell,
+            context=f"{name}: MD step {dyn.get_number_of_steps()}",
+        ),
+        interval=max(1, traj_every),
+    )
     t_run0 = _tmark()
     dyn.run(nsteps)
     t_run1 = _tmark()
@@ -759,6 +780,12 @@ def main() -> int:
     parser.add_argument("--charmm-abnr-steps", type=int, default=100, help="CHARMM ABNR steps before ASE BFGS.")
     parser.add_argument("--charmm-tolenr", type=float, default=1e-3, help="CHARMM minimization energy tolerance.")
     parser.add_argument("--charmm-tolgrd", type=float, default=1e-3, help="CHARMM minimization gradient tolerance.")
+    parser.add_argument(
+        "--min-intermonomer-atom-distance",
+        type=float,
+        default=0.5,
+        help="Abort if atoms from different monomers get closer than this distance in Angstrom (<=0 disables).",
+    )
     parser.add_argument(
         "--rescue-minimize",
         action=argparse.BooleanOptionalAction,
@@ -897,6 +924,12 @@ def main() -> int:
         monomer_offsets=monomer_offsets,
         min_com_distance=args.min_com_start_distance,
     )
+    assert_no_intermonomer_atom_overlap(
+        r0,
+        monomer_offsets,
+        min_distance=args.min_intermonomer_atom_distance,
+        context="initial placement",
+    )
 
     L = float(args.box_size) if args.box_size is not None else _cubic_box_length(r0, args.ml_cutoff)
     r_pbc = r0 - r0.mean(axis=0) + 0.5 * L
@@ -957,6 +990,14 @@ def main() -> int:
             atoms.set_pbc(False)
 
         run_timings: dict[str, float] = {}
+        overlap_cell = atoms.cell.array if use_pbc else None
+        assert_no_intermonomer_atom_overlap(
+            atoms.get_positions(),
+            monomer_offsets,
+            min_distance=args.min_intermonomer_atom_distance,
+            cell=overlap_cell,
+            context=f"{key}: before minimization",
+        )
         if args.charmm_pre_minimize:
             _tlog(
                 f"{key}: CHARMM minimization starting (SD={args.charmm_sd_steps}, "
@@ -970,6 +1011,13 @@ def main() -> int:
                 tolenr=args.charmm_tolenr,
                 tolgrd=args.charmm_tolgrd,
                 timings=run_timings,
+            )
+            assert_no_intermonomer_atom_overlap(
+                atoms.get_positions(),
+                monomer_offsets,
+                min_distance=args.min_intermonomer_atom_distance,
+                cell=overlap_cell,
+                context=f"{key}: after CHARMM minimization",
             )
             _tlog(
                 f"{key}: CHARMM minimization {run_timings.get('charmm_min_wall_s', 0.0):.3f} s",
@@ -1045,6 +1093,16 @@ def main() -> int:
         min_traj_path = out_dir / f"{key}_min.traj"
         bfgs_log = None if args.quiet_bfgs else "-"
         opt = BFGS(atoms, logfile=bfgs_log, trajectory=str(min_traj_path), maxstep=args.bfgs_maxstep)
+        opt.attach(
+            lambda: assert_no_intermonomer_atom_overlap(
+                atoms.get_positions(),
+                monomer_offsets,
+                min_distance=args.min_intermonomer_atom_distance,
+                cell=overlap_cell,
+                context=f"{key}: ASE BFGS",
+            ),
+            interval=1,
+        )
         opt.run(fmax=args.pre_min_fmax, steps=args.pre_min_steps)
         run_timings["bfgs_wall_s"] = _tmark() - t_b
         run_timings["bfgs_traj"] = str(min_traj_path.relative_to(out_dir))
@@ -1054,6 +1112,13 @@ def main() -> int:
         _tlog(
             f"{key}: BFGS {run_timings['bfgs_wall_s']:.3f} s ({n_bfgs} iters)",
             timing_log,
+        )
+        assert_no_intermonomer_atom_overlap(
+            atoms.get_positions(),
+            monomer_offsets,
+            min_distance=args.min_intermonomer_atom_distance,
+            cell=overlap_cell,
+            context=f"{key}: after ASE BFGS",
         )
         if fmin > args.pre_min_fmax:
             if args.rescue_minimize:
@@ -1077,11 +1142,28 @@ def main() -> int:
                     trajectory=str(rescue_traj_path),
                     maxstep=args.rescue_fire_maxstep,
                 )
+                fire.attach(
+                    lambda: assert_no_intermonomer_atom_overlap(
+                        atoms.get_positions(),
+                        monomer_offsets,
+                        min_distance=args.min_intermonomer_atom_distance,
+                        cell=overlap_cell,
+                        context=f"{key}: ASE FIRE rescue",
+                    ),
+                    interval=1,
+                )
                 fire.run(fmax=args.rescue_fire_fmax, steps=args.rescue_fire_steps)
                 run_timings["rescue_fire_wall_s"] = _tmark() - t_fire0
                 run_timings["rescue_fire_traj"] = str(rescue_traj_path.relative_to(out_dir))
                 fmin = float(np.abs(atoms.get_forces()).max())
                 _tlog(f"{key}: rescue minimization done, fmax={fmin:.6f} eV/A", timing_log)
+                assert_no_intermonomer_atom_overlap(
+                    atoms.get_positions(),
+                    monomer_offsets,
+                    min_distance=args.min_intermonomer_atom_distance,
+                    cell=overlap_cell,
+                    context=f"{key}: after ASE FIRE rescue",
+                )
             if fmin > args.max_fmax_after_min:
                 raise RuntimeError(
                     f"{key}: post-minimization fmax={fmin:.6f} eV/A exceeds "
@@ -1103,6 +1185,8 @@ def main() -> int:
             nve_temp_K=args.nve_temp_K,
             langevin_friction=args.langevin_friction,
             seed=args.seed,
+            monomer_offsets=monomer_offsets,
+            min_intermonomer_atom_distance=args.min_intermonomer_atom_distance,
             path_prefix=out_dir,
             timings=run_timings,
             log_lines=timing_log,

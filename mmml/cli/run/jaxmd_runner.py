@@ -582,6 +582,16 @@ def set_up_nhc_sim_routine(
             jnp.arange(int(monomer_offsets[m]), int(monomer_offsets[m + 1]))
             for m in range(n_monomers)
         ]
+        overlap_min_distance = float(getattr(args, "min_intermonomer_atom_distance", 0.5))
+
+        def _check_overlap(positions, cell, context: str) -> None:
+            assert_no_intermonomer_atom_overlap(
+                np.asarray(jax.device_get(positions), dtype=float),
+                monomer_offsets,
+                min_distance=overlap_min_distance,
+                cell=None if cell is None else np.asarray(jax.device_get(cell), dtype=float),
+                context=context,
+            )
 
         # When ASE already ran (nsteps_ase > 0), R is ASE-minimized; skip JAX-MD minimization
         fire_positions = []
@@ -632,6 +642,11 @@ def set_up_nhc_sim_routine(
             if jnp.any(~jnp.isfinite(minimized_pos)) and fire_positions:
                 minimized_pos = fire_positions[-1]
                 c.print(Panel("Using last valid position from first minimization", title="[bold yellow]Warning[/bold yellow]", border_style="yellow"))
+        _check_overlap(
+            minimized_pos,
+            atoms.get_cell()[:] if use_pbc else None,
+            "after JAX-MD first minimization",
+        )
         # save pdb (wrap by monomer when PBC so molecules stay intact)
         min_pdb_path = Path(f"{args.output_prefix}_minimized.pdb")
         min_pdb_path.parent.mkdir(parents=True, exist_ok=True)
@@ -711,6 +726,11 @@ def set_up_nhc_sim_routine(
                     if not (np.isfinite(energy) and np.isfinite(max_force)):
                         print("PBC minimization hit NaN energy/forces; using first-min result")
                         break
+                    _check_overlap(
+                        new_pbc_state.position,
+                        atoms.get_cell()[:],
+                        "during JAX-MD PBC minimization",
+                    )
                     pbc_fire_state = new_pbc_state
                     if max_force < best_pbc_max_f:
                         best_pbc_max_f = max_force
@@ -734,6 +754,7 @@ def set_up_nhc_sim_routine(
 
             # Save PBC minimized structure (md_pos already wrapped by monomer)
             atoms.set_positions(np.asarray(md_pos))
+            _check_overlap(md_pos, atoms.get_cell()[:], "after JAX-MD PBC minimization")
             pbc_pdb_path = Path(f"{args.output_prefix}_pbc_minimized.pdb")
             pbc_pdb_path.parent.mkdir(parents=True, exist_ok=True)
             ase_io.write(str(pbc_pdb_path), atoms)
@@ -751,6 +772,7 @@ def set_up_nhc_sim_routine(
             run_sim.last_status = "error"
             run_sim.last_error = "No valid positions for JAX-MD"
             return 0, jnp.array([]).reshape(0, len(md_pos), 3), None
+        _check_overlap(md_pos, atoms.get_cell()[:] if use_pbc else None, "before JAX-MD dynamics")
 
         if args.ensemble == "npt" and use_pbc:
             # NPT: positions in fractional coords; wrap md_pos into cell first, then convert to fractional
@@ -943,11 +965,17 @@ def set_up_nhc_sim_routine(
                         frac_pos = state.position
                         wrapped_frac = frac_pos - jnp.floor(frac_pos)
                         state = state.set(position=wrapped_frac)
+                        pos_for_overlap = space.transform(box_curr, state.position)
+                        pos_for_overlap = wrap_groups(pos_for_overlap, _monomer_groups, box_curr, mass=Si_mass)
+                        _check_overlap(pos_for_overlap, box_curr, f"JAX-MD dynamics record {i + 1}")
                     else:
                         wrapped_pos = wrap_groups(
                             state.position, _monomer_groups, _cell_jax, mass=Si_mass
                         )
                         state = state.set(position=wrapped_pos)
+                        _check_overlap(state.position, _cell_jax, f"JAX-MD dynamics record {i + 1}")
+                else:
+                    _check_overlap(state.position, None, f"JAX-MD dynamics record {i + 1}")
 
                 # Store current position (NPT: fractional + box for correct real coords at save)
                 if is_npt:
