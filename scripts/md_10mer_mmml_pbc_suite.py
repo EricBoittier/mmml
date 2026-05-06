@@ -78,6 +78,33 @@ import test_orbax_checkpoint_cluster as _toc  # noqa: E402
 _build_psf_ordered_cluster = _toc._build_psf_ordered_cluster
 
 
+def _load_pdb_coords_by_atom_name(pdb_path: Path) -> dict[str, np.ndarray]:
+    """Load coordinates keyed by atom name from a single-residue PDB template."""
+    coords: dict[str, np.ndarray] = {}
+    for line in pdb_path.read_text(encoding="utf-8").splitlines():
+        if not (line.startswith("ATOM") or line.startswith("HETATM")):
+            continue
+        atom_name = line[12:16].strip()
+        coords[atom_name] = np.array(
+            [
+                float(line[30:38]),
+                float(line[38:46]),
+                float(line[46:54]),
+            ],
+            dtype=float,
+        )
+    if not coords:
+        raise ValueError(f"No ATOM/HETATM coordinates found in template PDB: {pdb_path}")
+    return coords
+
+
+def _has_resolved_geometry(coords: np.ndarray, min_span: float = 1.0e-4) -> bool:
+    """Return True if a residue has more than origin/identical coordinates."""
+    if coords.size == 0 or not np.all(np.isfinite(coords)):
+        return False
+    return bool(np.max(np.ptp(coords, axis=0)) > min_span)
+
+
 def _tmark() -> float:
     return time.perf_counter()
 
@@ -161,6 +188,7 @@ def _build_cluster_from_composition(
     *,
     composition: list[tuple[str, int]],
     spacing: float,
+    template_pdb: Path | None = None,
 ) -> tuple[np.ndarray, np.ndarray, list[int], list[str]]:
     def _count_atoms_for_residue(residue: str) -> int:
         pyci.pycharmm.lingo.charmm_script("DELETE ATOM SELE ALL END")
@@ -197,6 +225,9 @@ def _build_cluster_from_composition(
 
     positions = coor.get_positions().to_numpy(dtype=float)
     z = np.asarray(get_Z_from_psf(), dtype=int)
+    atom_names = np.asarray(psf.get_atype(), dtype=str)
+    if len(atom_names) != int(positions.shape[0]):
+        raise RuntimeError(f"PSF atom-name count mismatch: {len(atom_names)} vs positions {positions.shape[0]}")
     atoms_per_list: list[int] = []
     ordered_residue_names: list[str] = []
     for residue, count in composition:
@@ -211,6 +242,15 @@ def _build_cluster_from_composition(
             f"({positions.shape[0]}). Composition={composition}"
         )
 
+    known_templates: dict[str, Path] = {
+        "TIP3": _scripts_dir.parent / "mmml" / "data" / "charmm" / "tip3.pdb",
+    }
+    if template_pdb is not None:
+        known_templates["MEOH"] = template_pdb
+    else:
+        known_templates["MEOH"] = _scripts_dir.parent / "mmml" / "generate" / "sample" / "pdb" / "meoh.pdb"
+    template_coords: dict[str, dict[str, np.ndarray]] = {}
+
     n_molecules = len(atoms_per_list)
     n_side = int(np.ceil(np.sqrt(n_molecules)))
     shifted = positions.copy()
@@ -219,6 +259,25 @@ def _build_cluster_from_composition(
     for i in range(n_molecules):
         s = int(offsets[i])
         e = int(offsets[i + 1])
+        residue = ordered_residue_names[i]
+        if not _has_resolved_geometry(shifted[s:e]):
+            tmpl_path = known_templates.get(residue)
+            if tmpl_path is None or not tmpl_path.is_file():
+                raise RuntimeError(
+                    f"CHARMM built degenerate coordinates for residue {residue!r}, and no coordinate "
+                    "template is available. Provide a template or add one to the mixed-composition builder."
+                )
+            if residue not in template_coords:
+                template_coords[residue] = _load_pdb_coords_by_atom_name(tmpl_path)
+            local_coords = []
+            for atom_name in atom_names[s:e]:
+                if atom_name not in template_coords[residue]:
+                    raise KeyError(
+                        f"Template PDB {tmpl_path} missing atom name '{atom_name}' required by "
+                        f"{residue} in PSF order. Available: {sorted(template_coords[residue])}"
+                    )
+                local_coords.append(template_coords[residue][atom_name])
+            shifted[s:e] = np.asarray(local_coords, dtype=float)
         com = shifted[s:e].mean(axis=0)
         shift = np.array([(i % n_side) * spacing, (i // n_side) * spacing, 0.0], dtype=float)
         shifted[s:e] = shifted[s:e] - com + shift
@@ -693,6 +752,7 @@ def main() -> int:
         z, r0, atoms_per_list, residue_labels = _build_cluster_from_composition(
             composition=composition,
             spacing=args.spacing,
+            template_pdb=args.template_pdb.expanduser().resolve() if args.template_pdb is not None else None,
         )
         n_molecules = len(atoms_per_list)
         composition_summary = {res: int(cnt) for res, cnt in composition}
