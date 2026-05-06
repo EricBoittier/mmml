@@ -15,14 +15,21 @@ from typing import Any, Dict, Tuple
 
 import numpy as np
 
-# Portable PhysNetJax weights + config for general uncharged small molecules.
 _PKG_ROOT = Path(__file__).resolve().parent.parent
-BUNDLED_PORTABLE_SMALL_MOLECULE_PATH = (
+_BUNDLED_LEGACY_MEOH_PATH = (
     _PKG_ROOT / "models" / "physnetjax" / "defaults" / "meoh_dimer_portable.json"
 )
-# Backward-compatible alias; the file name is historical and does not mean the
-# checkpoint is methanol-specific.
-BUNDLED_PORTABLE_MEOH_PATH = BUNDLED_PORTABLE_SMALL_MOLECULE_PATH
+try:
+    from mmml.models.physnetjax.defaults import resolve_hf_physnet_checkpoint
+
+    # General MM/ML default: manifest checkpoint with the lowest validation force MAE.
+    BUNDLED_PORTABLE_SMALL_MOLECULE_PATH = resolve_hf_physnet_checkpoint("mmml-default")
+except Exception:
+    BUNDLED_PORTABLE_SMALL_MOLECULE_PATH = _BUNDLED_LEGACY_MEOH_PATH
+
+# Backward-compatible alias for joint-training transfer initialization. This
+# legacy file predicts charges, so keep it separate from the neutral MM/ML default.
+BUNDLED_PORTABLE_MEOH_PATH = _BUNDLED_LEGACY_MEOH_PATH
 
 
 def parse_base_args() -> argparse.Namespace:

@@ -10,6 +10,8 @@ DEFAULTS_DIR = Path(__file__).resolve().parent
 HF_JSON_DIR = DEFAULTS_DIR / "hf_json"
 HF_JSON_MANIFEST_PATH = HF_JSON_DIR / "manifest.json"
 JOINT_TRAINING_CATEGORY = "joint-training-defaults"
+MMML_DEFAULT_ALIAS = "mmml-default"
+BEST_FORCE_ALIAS = "best-forces"
 
 
 def load_hf_physnet_manifest() -> dict[str, Any]:
@@ -53,6 +55,23 @@ def default_hf_physnet_model_id(category: str = JOINT_TRAINING_CATEGORY) -> str:
     raise KeyError(f"No default PhysNet model configured for category: {category}")
 
 
+def best_force_hf_physnet_model_id() -> str:
+    """Return the bundled model ID with the lowest validation force MAE."""
+    checkpoints = load_hf_physnet_manifest().get("checkpoints", [])
+    candidates = [
+        entry
+        for entry in checkpoints
+        if entry.get("metadata", {}).get("objectives", {}).get("valid_forces_mae") is not None
+    ]
+    if not candidates:
+        raise KeyError("No bundled PhysNet model has metadata.objectives.valid_forces_mae")
+    best = min(
+        candidates,
+        key=lambda entry: float(entry["metadata"]["objectives"]["valid_forces_mae"]),
+    )
+    return str(best["id"])
+
+
 def resolve_hf_physnet_model(selection: str | None = None) -> dict[str, Any]:
     """Resolve a bundled PhysNet model by ID, file name, category, or default alias."""
     manifest = load_hf_physnet_manifest()
@@ -62,6 +81,8 @@ def resolve_hf_physnet_model(selection: str | None = None) -> dict[str, Any]:
 
     if selected in {"default", "joint-default", "joint-training-default"}:
         selected = default_hf_physnet_model_id()
+    elif selected in {MMML_DEFAULT_ALIAS, BEST_FORCE_ALIAS, "lowest-force-mae"}:
+        selected = best_force_hf_physnet_model_id()
     elif selected in categories:
         selected = default_hf_physnet_model_id(selected)
 

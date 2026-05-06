@@ -51,7 +51,15 @@ def force_fd_check(atoms: Atoms, natoms_check: int, dx: float) -> dict[str, floa
 
 def main() -> int:
     p = argparse.ArgumentParser()
-    p.add_argument("--checkpoint", type=Path, default=None)
+    p.add_argument(
+        "--checkpoint",
+        type=Path,
+        default=None,
+        help=(
+            "Portable .json or Orbax path (default: bundled manifest model with "
+            "lowest validation force MAE, or $MMML_CKPT)."
+        ),
+    )
     p.add_argument("--template-pdb", type=Path, default=Path("mmml/generate/sample/pdb/meoh.pdb"))
     p.add_argument("--output", type=Path, default=Path("artifacts/md_10mer_mmml_pbc_suite/fd_force_check.json"))
     p.add_argument("--n-molecules", type=int, default=10)

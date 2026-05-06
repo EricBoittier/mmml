@@ -313,7 +313,7 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help=(
             "Orbax root, epoch-* dir, or portable .json "
-            "(default: bundled general uncharged small-molecule model or $MMML_CKPT)."
+            "(default: bundled manifest model with lowest validation force MAE, or $MMML_CKPT)."
         ),
     )
     parser.add_argument("--output-dir", type=Path, default=Path("artifacts/dimer_scan_meoh"))
