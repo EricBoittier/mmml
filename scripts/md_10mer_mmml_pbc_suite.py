@@ -447,6 +447,7 @@ def run_md(
     seed: int,
     path_prefix: Path | None = None,
     timings: dict[str, float] | None = None,
+    log_lines: list[str] | None = None,
 ) -> dict:
     dt = dt_fs * units.fs
     traj_chunk_frames = int(max(0, traj_chunk_frames))
@@ -495,6 +496,7 @@ def run_md(
         raise ValueError(mode)
 
     t_before_first_snapshot = _tmark()
+    _tlog(f"{name}: MD initialization complete; writing initial frame and observables", log_lines)
 
     def snapshot(step: int) -> None:
         ep = float(atoms.get_potential_energy())
@@ -544,11 +546,17 @@ def run_md(
     _write_frame()  # initial frame
     snapshot(0)
     t_after_first_snapshot = _tmark()
+    _tlog(
+        f"{name}: initial MD snapshot {t_after_first_snapshot - t_before_first_snapshot:.3f} s; "
+        f"running {nsteps} steps",
+        log_lines,
+    )
     dyn.attach(lambda: snapshot(dyn.get_number_of_steps()), interval=log_every)
     dyn.attach(_write_frame, interval=max(1, traj_every))
     t_run0 = _tmark()
     dyn.run(nsteps)
     t_run1 = _tmark()
+    _tlog(f"{name}: MD integrator loop {t_run1 - t_run0:.3f} s", log_lines)
     if traj is not None:
         traj.close()
     if timings is not None:
@@ -689,7 +697,12 @@ def main() -> int:
     parser.add_argument(
         "--allow-ml-on-mixed",
         action="store_true",
-        help="Allow ML terms for mixed compositions. Default behavior disables ML for non-MEOH mixed systems.",
+        help="Deprecated no-op: ML terms are enabled for mixed compositions by default.",
+    )
+    parser.add_argument(
+        "--mm-only-on-mixed",
+        action="store_true",
+        help="Disable ML terms for mixed compositions and use the MM-only fallback.",
     )
     parser.add_argument(
         "--jax-md-capacity-multiplier",
@@ -834,13 +847,18 @@ def main() -> int:
     non_meoh_residues = sorted({r for r in residue_labels if r != "MEOH"})
     use_ml_terms = True
     use_ml_dimer_terms = True
-    if args.composition and non_meoh_residues and not args.allow_ml_on_mixed:
+    if args.composition and non_meoh_residues and args.mm_only_on_mixed:
         use_ml_terms = False
         use_ml_dimer_terms = False
         _tlog(
             "mixed composition includes non-MEOH residues "
-            f"({non_meoh_residues}); using MM-only fallback. "
-            "Pass --allow-ml-on-mixed to force ML terms.",
+            f"({non_meoh_residues}); using explicit MM-only fallback.",
+            timing_log,
+        )
+    elif args.composition and non_meoh_residues:
+        _tlog(
+            "mixed composition includes non-MEOH residues "
+            f"({non_meoh_residues}); keeping ML terms enabled by default.",
             timing_log,
         )
 
@@ -1003,6 +1021,7 @@ def main() -> int:
             seed=args.seed,
             path_prefix=out_dir,
             timings=run_timings,
+            log_lines=timing_log,
         )
         res["pbc"] = use_pbc
         res["box_A"] = L if use_pbc else None
