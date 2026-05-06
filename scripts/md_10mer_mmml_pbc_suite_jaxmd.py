@@ -19,7 +19,6 @@ from jax import random
 from mmml.cli.base import resolve_checkpoint_paths
 from mmml.cli.run.jaxmd_runner import set_up_nhc_sim_routine
 from mmml.interfaces.pycharmmInterface.mmml_calculator import CutoffParameters, setup_calculator
-from mmml.utils.geometry_checks import assert_no_intermonomer_atom_overlap
 
 _scripts_dir = Path(__file__).resolve().parent
 if str(_scripts_dir) not in sys.path:
@@ -30,6 +29,7 @@ from md_10mer_mmml_pbc_suite import (  # noqa: E402
     _parse_composition,
     _cubic_box_length,
     _enforce_min_com_separation,
+    _check_or_charmm_overlap_rescue,
     _randomize_monomer_com_positions,
     _run_charmm_minimize,
 )
@@ -194,7 +194,7 @@ def main() -> int:
     p.add_argument(
         "--min-intermonomer-atom-distance",
         type=float,
-        default=0.5,
+        default=0.1,
         help="Abort if atoms from different monomers get closer than this distance in Angstrom (<=0 disables).",
     )
     args = p.parse_args()
@@ -253,14 +253,18 @@ def main() -> int:
     atoms = Atoms(numbers=z, positions=r)
     atoms.set_cell([L, L, L])
     atoms.set_pbc(True)
-    assert_no_intermonomer_atom_overlap(
-        atoms.get_positions(),
+    minimization_summary: dict[str, float | str] = {}
+    _check_or_charmm_overlap_rescue(
+        atoms,
         monomer_offsets,
         min_distance=args.min_intermonomer_atom_distance,
-        cell=atoms.cell.array,
         context="initial placement",
+        nstep_sd=args.charmm_sd_steps,
+        nstep_abnr=args.charmm_abnr_steps,
+        tolenr=args.charmm_tolenr,
+        tolgrd=args.charmm_tolgrd,
+        timings=minimization_summary,
     )
-    minimization_summary: dict[str, float | str] = {}
     if args.charmm_pre_minimize:
         print(
             f"CHARMM pre-minimization starting "
@@ -274,12 +278,16 @@ def main() -> int:
             tolgrd=args.charmm_tolgrd,
             timings=minimization_summary,
         )
-        assert_no_intermonomer_atom_overlap(
-            atoms.get_positions(),
+        _check_or_charmm_overlap_rescue(
+            atoms,
             monomer_offsets,
             min_distance=args.min_intermonomer_atom_distance,
-            cell=atoms.cell.array,
             context="after CHARMM pre-minimization",
+            nstep_sd=args.charmm_sd_steps,
+            nstep_abnr=args.charmm_abnr_steps,
+            tolenr=args.charmm_tolenr,
+            tolgrd=args.charmm_tolgrd,
+            timings=minimization_summary,
         )
         print(
             "CHARMM pre-minimization complete "
