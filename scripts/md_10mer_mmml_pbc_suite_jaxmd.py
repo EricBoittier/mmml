@@ -186,8 +186,8 @@ def main() -> int:
         action="store_false",
         help="Skip CHARMM SD/ABNR before calculator minimization.",
     )
-    p.add_argument("--charmm-sd-steps", type=int, default=50)
-    p.add_argument("--charmm-abnr-steps", type=int, default=200)
+    p.add_argument("--charmm-sd-steps", type=int, default=200)
+    p.add_argument("--charmm-abnr-steps", type=int, default=1000)
     p.add_argument("--charmm-tolenr", type=float, default=1e-3)
     p.add_argument("--charmm-tolgrd", type=float, default=1e-3)
     args = p.parse_args()

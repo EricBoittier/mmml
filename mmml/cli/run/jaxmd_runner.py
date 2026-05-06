@@ -865,7 +865,7 @@ def set_up_nhc_sim_routine(
             c.print(Panel(f"{n_monomers} monomer groups, wrapping every {steps_per_recording} steps", title="[bold]PBC Wrapping[/bold]", border_style="blue"))
         c.print(Panel(f"Starting {args.ensemble.upper()} simulation", title="[bold cyan]JAX-MD[/bold cyan]", border_style="cyan"))
         if is_npt:
-            hdr = "\t\tTime (ps)\tSteps\tE_pot (eV)\tE_tot (eV)\tT (K)\tL (Å)\tV (Å³)\tP_tgt (atm)\tP_meas (atm)\tavg(ns/day)"
+            hdr = "\t\tTime (ps)\tSteps\tE_pot (eV)\tE_tot (eV)\tT (K)\tL (Å)\tV (Å³)\trho (g/cm³)\tP_tgt (atm)\tP_meas (atm)\tavg(ns/day)"
             if nbr_monitor:
                 hdr += "\tn_valid\tcapacity\tfill%"
             c.print(f"[dim]{hdr}[/dim]")
@@ -879,6 +879,8 @@ def set_up_nhc_sim_routine(
         run_sim.last_hdf5_path = str(hdf5_path)
         hdf5_path.parent.mkdir(parents=True, exist_ok=True)
         scalar_quantities = ["total_energy", "time_ps"]
+        if is_npt:
+            scalar_quantities.append("density_g_cm3")
         if nbr_monitor and is_npt:
             scalar_quantities.extend(["nbr_n_valid", "nbr_capacity", "nbr_fill_ratio"])
         hdf5_reporter = make_jaxmd_reporter(
@@ -998,6 +1000,7 @@ def set_up_nhc_sim_routine(
                         vol = float(quantity.volume(3, box_curr))
                         box_diag = np.diagonal(np.asarray(box_curr)[:3, :3])
                         L = float(box_diag[0]) if box_diag.size > 0 else float("nan")
+                        density_g_cm3 = float(np.sum(Si_mass) * 1.66053906660 / vol) if vol > 0 else float("nan")
                         BAR_PER_ATM = 1.01325
                         unit_p = float(unit["pressure"])
                         p_tgt_atm = float(npt_pressure / (unit_p * BAR_PER_ATM))
@@ -1012,7 +1015,7 @@ def set_up_nhc_sim_routine(
                             p_meas_atm = float("nan")
                         line = (
                             f"{time_ps:10.4f}\t{steps:6d}\t{e_pot:10.4f}\t{e_tot:10.4f}\t{temp:10.2f}\t"
-                            f"{L:8.2f}\t{vol:10.1f}\t{p_tgt_atm:8.2f}\t{p_meas_atm:8.2f}\t"
+                            f"{L:8.2f}\t{vol:10.1f}\t{density_g_cm3:8.3f}\t{p_tgt_atm:8.2f}\t{p_meas_atm:8.2f}\t"
                             f"{avg_speed_ns_per_day:10.4f}"
                         )
                         if nbr_monitor:
@@ -1043,6 +1046,14 @@ def set_up_nhc_sim_routine(
                         positions=pos_for_h5,
                         velocities=state.momentum / state.mass,
                     )
+                    if is_npt:
+                        box_for_density = simulate.npt_box(state)
+                        vol_for_density = float(quantity.volume(3, box_for_density))
+                        report_kw["density_g_cm3"] = (
+                            float(np.sum(Si_mass) * 1.66053906660 / vol_for_density)
+                            if vol_for_density > 0
+                            else float("nan")
+                        )
                     if nbr_monitor and is_npt and npt_pair_idx is not None and nbr_n_valid is not None:
                         report_kw["nbr_n_valid"] = nbr_n_valid
                         report_kw["nbr_capacity"] = nbr_capacity
