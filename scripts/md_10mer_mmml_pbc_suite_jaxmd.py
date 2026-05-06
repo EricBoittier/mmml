@@ -162,7 +162,7 @@ def main() -> int:
     p.add_argument("--jax-md-capacity-multiplier", type=float, default=1.25)
     p.add_argument("--jax-md-capacity-growth-factor", type=float, default=1.5)
     p.add_argument("--jax-md-max-overflow-retries", type=int, default=4)
-    p.add_argument("--jax-md-update-interval", type=int, default=1)
+    p.add_argument("--jax-md-update-interval", type=int, default=10)
     p.add_argument("--jax-md-skin-distance", type=float, default=0.2)
     p.add_argument(
         "--nvt-allow-stale-neighbors",
