@@ -193,6 +193,12 @@ def main() -> int:
     p.add_argument("--charmm-tolenr", type=float, default=1e-3)
     p.add_argument("--charmm-tolgrd", type=float, default=1e-3)
     p.add_argument(
+        "--charmm-nbxmod",
+        type=int,
+        default=5,
+        help="CHARMM NBXMOD for SD/ABNR minimization (default 5, matching CGenFF).",
+    )
+    p.add_argument(
         "--min-intermonomer-atom-distance",
         type=float,
         default=0.1,
@@ -280,6 +286,7 @@ def main() -> int:
         nstep_abnr=args.charmm_abnr_steps,
         tolenr=args.charmm_tolenr,
         tolgrd=args.charmm_tolgrd,
+        nbxmod=args.charmm_nbxmod,
         timings=minimization_summary,
     )
     if args.charmm_pre_minimize:
@@ -293,6 +300,7 @@ def main() -> int:
             nstep_abnr=args.charmm_abnr_steps,
             tolenr=args.charmm_tolenr,
             tolgrd=args.charmm_tolgrd,
+            nbxmod=args.charmm_nbxmod,
             timings=minimization_summary,
         )
         _check_or_charmm_overlap_rescue(
@@ -304,6 +312,7 @@ def main() -> int:
             nstep_abnr=args.charmm_abnr_steps,
             tolenr=args.charmm_tolenr,
             tolgrd=args.charmm_tolgrd,
+            nbxmod=args.charmm_nbxmod,
             timings=minimization_summary,
         )
         print(
@@ -386,6 +395,7 @@ def main() -> int:
                 nstep_abnr=args.charmm_abnr_steps,
                 tolenr=args.charmm_tolenr,
                 tolgrd=args.charmm_tolgrd,
+                nbxmod=args.charmm_nbxmod,
                 timings=minimization_summary,
             )
 
