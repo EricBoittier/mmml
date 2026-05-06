@@ -647,7 +647,7 @@ def main() -> int:
         "--checkpoint",
         type=Path,
         default=None,
-        help="Portable .json or Orbax path (default: bundled MEOH or $MMML_CKPT).",
+        help="Portable .json or Orbax path (default: bundled general uncharged small-molecule model or $MMML_CKPT).",
     )
     parser.add_argument("--output-dir", type=Path, default=Path("artifacts/md_10mer_mmml_pbc_suite"))
     parser.add_argument("--template-pdb", type=Path, default=Path("mmml/generate/sample/pdb/meoh.pdb"))
