@@ -74,6 +74,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--seed", type=int, default=123, help="Random seed for initial placement and velocities.")
     parser.add_argument(
+        "--min-intermonomer-atom-distance",
+        type=float,
+        default=0.5,
+        help="Abort if atoms from different monomers get closer than this distance in Angstrom (<=0 disables).",
+    )
+    parser.add_argument(
         "--extra-args",
         nargs=argparse.REMAINDER,
         default=[],
@@ -171,6 +177,7 @@ def build_command(args: argparse.Namespace) -> list[str]:
     _append_optional(cmd, "--output-dir", args.output_dir)
     _append_optional(cmd, "--template-pdb", args.template_pdb)
     cmd.extend(["--seed", str(args.seed)])
+    cmd.extend(["--min-intermonomer-atom-distance", str(args.min_intermonomer_atom_distance)])
     if args.extra_args:
         cmd.extend(args.extra_args)
     return cmd
