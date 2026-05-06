@@ -214,6 +214,50 @@ def _enforce_min_com_separation(
     return pos
 
 
+def _randomize_monomer_com_positions(
+    positions: np.ndarray,
+    monomer_offsets: np.ndarray,
+    *,
+    spacing: float,
+    min_com_distance: float,
+    seed: int,
+) -> np.ndarray:
+    """Place molecule centers at reproducible random 3D positions."""
+    n_molecules = int(len(monomer_offsets) - 1)
+    if n_molecules <= 1:
+        return positions
+
+    rng = np.random.default_rng(int(seed))
+    min_dist = float(max(0.0, min_com_distance))
+    side = max(float(spacing), min_dist, 1.0) * max(1.0, n_molecules ** (1.0 / 3.0))
+    targets: list[np.ndarray] = []
+    max_attempts = 5000
+
+    while True:
+        targets.clear()
+        for _i in range(n_molecules):
+            for _attempt in range(max_attempts):
+                candidate = rng.uniform(0.0, side, size=3)
+                if all(float(np.linalg.norm(candidate - prev)) >= min_dist for prev in targets):
+                    targets.append(candidate)
+                    break
+            else:
+                break
+        if len(targets) == n_molecules:
+            break
+        side *= 1.25
+
+    target_arr = np.asarray(targets, dtype=float)
+    target_arr -= target_arr.mean(axis=0)
+    randomized = np.asarray(positions, dtype=float).copy()
+    for i, target in enumerate(target_arr):
+        s = int(monomer_offsets[i])
+        e = int(monomer_offsets[i + 1])
+        com = randomized[s:e].mean(axis=0)
+        randomized[s:e] += target - com
+    return randomized
+
+
 def _parse_composition(spec: str) -> list[tuple[str, int]]:
     out: list[tuple[str, int]] = []
     for tok in spec.split(","):
@@ -658,7 +702,7 @@ def main() -> int:
         default=None,
         help="Residue composition as RES:count comma list (e.g. MEOH:5,TIP3:5). Overrides --n-molecules.",
     )
-    parser.add_argument("--spacing", type=float, default=5.0)
+    parser.add_argument("--spacing", type=float, default=5.0, help="Target minimum random COM spacing in Angstrom.")
     parser.add_argument(
         "--min-com-start-distance",
         type=float,
@@ -841,6 +885,13 @@ def main() -> int:
     n_atoms = len(z)
     monomer_offsets = np.zeros(n_molecules + 1, dtype=int)
     monomer_offsets[1:] = np.cumsum(np.asarray(atoms_per_list, dtype=int))
+    r0 = _randomize_monomer_com_positions(
+        r0,
+        monomer_offsets,
+        spacing=args.spacing,
+        min_com_distance=max(float(args.spacing), float(args.min_com_start_distance)),
+        seed=args.seed,
+    )
     r0 = _enforce_min_com_separation(
         r0,
         monomer_offsets=monomer_offsets,
@@ -862,6 +913,8 @@ def main() -> int:
             "n_molecules": n_molecules,
             "n_atoms": n_atoms,
             "spacing_A": args.spacing,
+            "placement": "random_3d",
+            "placement_seed": int(args.seed),
         },
         "box_A": L,
         "md": {

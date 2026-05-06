@@ -28,6 +28,7 @@ from md_10mer_mmml_pbc_suite import (  # noqa: E402
     _parse_composition,
     _cubic_box_length,
     _enforce_min_com_separation,
+    _randomize_monomer_com_positions,
     _run_charmm_minimize,
 )
 
@@ -44,7 +45,7 @@ def main() -> int:
         default=None,
         help="Residue composition as RES:count comma list (e.g. MEOH:5,TIP3:5). Overrides --n-molecules.",
     )
-    p.add_argument("--spacing", type=float, default=5.0)
+    p.add_argument("--spacing", type=float, default=5.0, help="Target minimum random COM spacing in Angstrom.")
     p.add_argument("--min-com-start-distance", type=float, default=6.0)
     p.add_argument(
         "--box-size",
@@ -173,6 +174,13 @@ def main() -> int:
         composition = [("MEOH", n_molecules)]
     monomer_offsets = np.zeros(n_molecules + 1, dtype=int)
     monomer_offsets[1:] = np.cumsum(np.asarray(atoms_per_list, dtype=int))
+    r0 = _randomize_monomer_com_positions(
+        r0,
+        monomer_offsets,
+        spacing=args.spacing,
+        min_com_distance=max(float(args.spacing), float(args.min_com_start_distance)),
+        seed=args.seed,
+    )
     r0 = _enforce_min_com_separation(r0, monomer_offsets, args.min_com_start_distance)
     L = float(args.box_size) if args.box_size is not None else _cubic_box_length(r0, args.ml_cutoff)
     r = r0 - r0.mean(axis=0) + 0.5 * L
@@ -409,6 +417,8 @@ def main() -> int:
         "pressure_atm": float(args.pressure),
         "temperature_K": float(args.temperature),
         "composition": {res: int(cnt) for res, cnt in composition},
+        "placement": "random_3d",
+        "placement_seed": int(args.seed),
         "neighbor_update_interval_steps": int(max(1, args.steps_per_recording)) if args.ensemble == "npt" else None,
         "neighbor_expected_updates": int(nsteps // max(1, args.steps_per_recording)) if args.ensemble == "npt" else None,
         "neighbor_internal_update_interval_calls": effective_update_interval,
