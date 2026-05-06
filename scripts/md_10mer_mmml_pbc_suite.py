@@ -128,7 +128,7 @@ def _generate_residue_with_make_res_recipe(residue: str) -> tuple[np.ndarray, li
     ic.prm_fill(replace_all=True)
     ic.build()
 
-    initial = coor.get_positions().to_numpy(dtype=float)
+    initial = np.array(coor.get_positions().to_numpy(dtype=float), dtype=float, copy=True)
     atom_names = [str(x) for x in np.asarray(psf.get_atype(), dtype=str)]
     if initial.shape[0] != len(atom_names):
         raise RuntimeError(
@@ -144,12 +144,12 @@ def _generate_residue_with_make_res_recipe(residue: str) -> tuple[np.ndarray, li
     coor.set_positions(xyz)
     _make_res_minimize(nbxmod=1)
 
-    xyz = coor.get_positions().to_numpy(dtype=float)
+    xyz = np.array(coor.get_positions().to_numpy(dtype=float), dtype=float, copy=True)
     xyz *= rng.random(xyz.shape)
     coor.set_positions(pd.DataFrame(xyz, columns=["x", "y", "z"]))
     _make_res_minimize(nbxmod=5)
 
-    coords = coor.get_positions().to_numpy(dtype=float)
+    coords = np.array(coor.get_positions().to_numpy(dtype=float), dtype=float, copy=True)
     if not _has_resolved_geometry(coords):
         raise RuntimeError(f"PyCHARMM make-res coordinate generation failed for residue {residue!r}")
     return coords, atom_names
