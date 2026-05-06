@@ -353,9 +353,12 @@ def main() -> int:
         minimization_summary["bfgs_traj"] = str(bfgs_traj_path.relative_to(out_dir))
         print(f"ASE BFGS pre-minimization complete, fmax={fmin:.6f} eV/A")
         if fmin > args.pre_min_fmax:
+            bfgs_best_fmax = best_frame.restore_best_force()
+            minimization_summary["bfgs_best_force_fmax_eVA"] = bfgs_best_fmax
             print(
                 f"ASE FIRE rescue starting "
-                f"(BFGS fmax={fmin:.6f} > {args.pre_min_fmax:.6f})"
+                f"from best BFGS frame "
+                f"({best_frame.best_force_label}, fmax={bfgs_best_fmax:.6f} > {args.pre_min_fmax:.6f})"
             )
             fire_traj_path = out_dir / f"pbc_{args.ensemble}_fire_min.traj"
             fire = FIRE(
