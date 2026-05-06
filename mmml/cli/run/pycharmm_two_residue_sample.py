@@ -7,21 +7,7 @@ import argparse
 import sys
 from pathlib import Path
 
-import pycharmm
-import pycharmm.write as write
-
-from mmml.cli.run.pycharmm_runner import (
-    NBONDS_SCRIPT,
-    add_two_residue_sampling_args,
-    run_two_residue_harmonic_sampling,
-)
-from mmml.interfaces.pycharmmInterface.import_pycharmm import (
-    coor,
-    pycharmm_quiet,
-    pycharmm_soft,
-    reset_block,
-)
-from mmml.interfaces.pycharmmInterface.setupBox import setup_box_generic
+from mmml.cli.run.pycharmm_sampling_args import add_two_residue_sampling_args
 
 
 def parse_args() -> argparse.Namespace:
@@ -66,6 +52,21 @@ def parse_args() -> argparse.Namespace:
 
 def run(args: argparse.Namespace):
     """Set up nbonds/block state, run restrained sampling, and write coordinates."""
+    import pycharmm
+    import pycharmm.write as write
+
+    from mmml.cli.run.pycharmm_runner import (
+        NBONDS_SCRIPT,
+        run_two_residue_harmonic_sampling,
+    )
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+        coor,
+        pycharmm_quiet,
+        pycharmm_soft,
+        reset_block,
+    )
+    from mmml.interfaces.pycharmmInterface.setupBox import setup_box_generic
+
     atoms = setup_box_generic(
         str(args.pdbfile),
         side_length=args.cell,
