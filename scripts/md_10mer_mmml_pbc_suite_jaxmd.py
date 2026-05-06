@@ -74,7 +74,7 @@ def main() -> int:
     p.add_argument("--pre-min-fmax", type=float, default=0.1)
     p.add_argument("--pre-min-steps", type=int, default=50)
     p.add_argument("--bfgs-maxstep", type=float, default=0.05)
-    p.add_argument("--fire-min-steps", type=int, default=300)
+    p.add_argument("--fire-min-steps", type=int, default=100)
     p.add_argument("--fire-min-maxstep", type=float, default=0.02)
     p.add_argument("--max-fmax-after-min", type=float, default=0.1)
     p.add_argument("--quiet-bfgs", action="store_true")
