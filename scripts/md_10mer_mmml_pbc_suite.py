@@ -536,11 +536,13 @@ def _run_charmm_minimize(
         if nstep_abnr > 0:
             charmm_minimize.run_abnr(nstep=nstep_abnr, tolenr=tolenr, tolgrd=tolgrd)
         minimized_positions = coor.get_positions().to_numpy(dtype=float)
-        print("CHARMM energy after minimization:")
-        pyci.pycharmm_loud()
-        pyci.pycharmm.lingo.charmm_script("ENER")
-        pyci.safe_energy_show()
-        coor.set_positions(pd.DataFrame(minimized_positions, columns=["x", "y", "z"]))
+        try:
+            print("CHARMM energy after minimization:")
+            pyci.pycharmm_loud()
+            pyci.pycharmm.lingo.charmm_script("ENER")
+            pyci.safe_energy_show()
+        finally:
+            coor.set_positions(pd.DataFrame(minimized_positions, columns=["x", "y", "z"]))
     finally:
         pyci.pycharmm_quiet()
     atoms.set_positions(coor.get_positions().to_numpy(dtype=float))

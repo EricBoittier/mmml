@@ -32,6 +32,7 @@ from md_10mer_mmml_pbc_suite import (  # noqa: E402
     _check_or_charmm_overlap_rescue,
     _randomize_monomer_com_positions,
     _run_charmm_minimize,
+    _validate_psf_charges,
 )
 
 
@@ -240,6 +241,16 @@ def main() -> int:
         composition = [("MEOH", n_molecules)]
     monomer_offsets = np.zeros(n_molecules + 1, dtype=int)
     monomer_offsets[1:] = np.cumsum(np.asarray(atoms_per_list, dtype=int))
+    residue_labels = [
+        residue
+        for residue, count in composition
+        for _ in range(int(count))
+    ]
+    psf_charge_summary = _validate_psf_charges(
+        monomer_offsets=monomer_offsets,
+        residue_labels=residue_labels,
+        total_atoms=len(z),
+    )
     r0 = _randomize_monomer_com_positions(
         r0,
         monomer_offsets,
@@ -532,6 +543,7 @@ def main() -> int:
         "pressure_atm": float(args.pressure),
         "temperature_K": float(args.temperature),
         "composition": {res: int(cnt) for res, cnt in composition},
+        "psf_charges": psf_charge_summary,
         "placement": "random_3d",
         "placement_seed": int(args.seed),
         "neighbor_update_interval_steps": int(max(1, args.steps_per_recording)) if args.ensemble == "npt" else None,
