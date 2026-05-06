@@ -360,12 +360,16 @@ def main() -> int:
         )
 
         def _check_pre_min_overlap(label: str) -> None:
-            assert_no_intermonomer_atom_overlap(
-                atoms.get_positions(),
+            _check_or_charmm_overlap_rescue(
+                atoms,
                 monomer_offsets,
                 min_distance=args.min_intermonomer_atom_distance,
-                cell=atoms.cell.array,
                 context=label,
+                nstep_sd=args.charmm_sd_steps,
+                nstep_abnr=args.charmm_abnr_steps,
+                tolenr=args.charmm_tolenr,
+                tolgrd=args.charmm_tolgrd,
+                timings=minimization_summary,
             )
 
         bfgs_traj_path = out_dir / f"pbc_{args.ensemble}_bfgs_min.traj"

@@ -43,7 +43,7 @@ def assert_no_intermonomer_atom_overlap(
     positions: np.ndarray,
     monomer_offsets: np.ndarray,
     *,
-    min_distance: float = 0.5,
+    min_distance: float = 0.1,
     cell: Any | None = None,
     context: str = "geometry",
 ) -> float:

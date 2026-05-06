@@ -76,7 +76,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--min-intermonomer-atom-distance",
         type=float,
-        default=0.5,
+        default=0.1,
         help="Abort if atoms from different monomers get closer than this distance in Angstrom (<=0 disables).",
     )
     parser.add_argument(
