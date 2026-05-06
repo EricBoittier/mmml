@@ -399,24 +399,35 @@ def _run_charmm_minimize(
     t0 = _tmark()
     reset_block()
     coor.set_positions(pd.DataFrame(atoms.get_positions(), columns=["x", "y", "z"]))
-    pyci.pycharmm.NonBondedScript(
-        cutnb=18.0,
-        ctonnb=13.0,
-        ctofnb=17.0,
-        eps=1.0,
-        cdie=True,
-        atom=True,
-        vatom=True,
-        fswitch=True,
-        vfswitch=True,
-        nbxmod=5,
-    ).run()
-    pyci.safe_energy_show()
-    pyci.get_forces_pycharmm()
-    if nstep_sd > 0:
-        charmm_minimize.run_sd(nstep=nstep_sd, tolenr=tolenr, tolgrd=tolgrd)
-    if nstep_abnr > 0:
-        charmm_minimize.run_abnr(nstep=nstep_abnr, tolenr=tolenr, tolgrd=tolgrd)
+    try:
+        pyci.pycharmm.NonBondedScript(
+            cutnb=18.0,
+            ctonnb=13.0,
+            ctofnb=17.0,
+            eps=1.0,
+            cdie=True,
+            atom=True,
+            vatom=True,
+            fswitch=True,
+            vfswitch=True,
+            nbxmod=5,
+        ).run()
+        print("CHARMM energy before minimization:")
+        pyci.pycharmm_loud()
+        pyci.pycharmm.lingo.charmm_script("ENER")
+        pyci.safe_energy_show()
+        pyci.get_forces_pycharmm()
+        pyci.pycharmm_quiet()
+        if nstep_sd > 0:
+            charmm_minimize.run_sd(nstep=nstep_sd, tolenr=tolenr, tolgrd=tolgrd)
+        if nstep_abnr > 0:
+            charmm_minimize.run_abnr(nstep=nstep_abnr, tolenr=tolenr, tolgrd=tolgrd)
+        print("CHARMM energy after minimization:")
+        pyci.pycharmm_loud()
+        pyci.pycharmm.lingo.charmm_script("ENER")
+        pyci.safe_energy_show()
+    finally:
+        pyci.pycharmm_quiet()
     atoms.set_positions(coor.get_positions().to_numpy(dtype=float))
     if timings is not None:
         timings["charmm_min_wall_s"] = _tmark() - t0
