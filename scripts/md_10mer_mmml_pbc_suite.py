@@ -478,6 +478,52 @@ def _run_charmm_minimize(
         timings["charmm_min_wall_s"] = _tmark() - t0
 
 
+def _check_or_charmm_overlap_rescue(
+    atoms: Atoms,
+    monomer_offsets: np.ndarray,
+    *,
+    min_distance: float,
+    context: str,
+    nstep_sd: int,
+    nstep_abnr: int,
+    tolenr: float,
+    tolgrd: float,
+    timings: dict[str, float] | None = None,
+) -> float:
+    """Check for inter-monomer overlaps, using CHARMM minimization as first rescue."""
+    cell = atoms.cell.array if atoms.pbc.any() else None
+    try:
+        return assert_no_intermonomer_atom_overlap(
+            atoms.get_positions(),
+            monomer_offsets,
+            min_distance=min_distance,
+            cell=cell,
+            context=context,
+        )
+    except RuntimeError as exc:
+        print(f"{context}: overlap detected; attempting CHARMM SD/ABNR rescue before aborting.")
+        if timings is not None:
+            timings["overlap_rescue_attempted"] = float(timings.get("overlap_rescue_attempted", 0.0) + 1.0)
+        _run_charmm_minimize(
+            atoms,
+            nstep_sd=nstep_sd,
+            nstep_abnr=nstep_abnr,
+            tolenr=tolenr,
+            tolgrd=tolgrd,
+            timings=timings,
+        )
+        try:
+            return assert_no_intermonomer_atom_overlap(
+                atoms.get_positions(),
+                monomer_offsets,
+                min_distance=min_distance,
+                cell=cell,
+                context=f"{context} after CHARMM overlap rescue",
+            )
+        except RuntimeError as rescue_exc:
+            raise RuntimeError(f"{exc}; CHARMM overlap rescue failed: {rescue_exc}") from rescue_exc
+
+
 def _save_cutoff_plot(
     *,
     out_dir: Path,
@@ -518,6 +564,10 @@ def run_md(
     seed: int,
     monomer_offsets: np.ndarray,
     min_intermonomer_atom_distance: float,
+    overlap_rescue_charmm_sd_steps: int,
+    overlap_rescue_charmm_abnr_steps: int,
+    charmm_tolenr: float,
+    charmm_tolgrd: float,
     path_prefix: Path | None = None,
     timings: dict[str, float] | None = None,
     log_lines: list[str] | None = None,
@@ -618,13 +668,16 @@ def run_md(
 
     _write_frame()  # initial frame
     snapshot(0)
-    overlap_cell = atoms.cell.array if atoms.pbc.any() else None
-    assert_no_intermonomer_atom_overlap(
-        atoms.get_positions(),
+    _check_or_charmm_overlap_rescue(
+        atoms,
         monomer_offsets,
         min_distance=min_intermonomer_atom_distance,
-        cell=overlap_cell,
         context=f"{name}: initial MD frame",
+        nstep_sd=overlap_rescue_charmm_sd_steps,
+        nstep_abnr=overlap_rescue_charmm_abnr_steps,
+        tolenr=charmm_tolenr,
+        tolgrd=charmm_tolgrd,
+        timings=timings,
     )
     t_after_first_snapshot = _tmark()
     _tlog(
@@ -635,12 +688,16 @@ def run_md(
     dyn.attach(lambda: snapshot(dyn.get_number_of_steps()), interval=log_every)
     dyn.attach(_write_frame, interval=max(1, traj_every))
     dyn.attach(
-        lambda: assert_no_intermonomer_atom_overlap(
-            atoms.get_positions(),
+        lambda: _check_or_charmm_overlap_rescue(
+            atoms,
             monomer_offsets,
             min_distance=min_intermonomer_atom_distance,
-            cell=overlap_cell,
             context=f"{name}: MD step {dyn.get_number_of_steps()}",
+            nstep_sd=overlap_rescue_charmm_sd_steps,
+            nstep_abnr=overlap_rescue_charmm_abnr_steps,
+            tolenr=charmm_tolenr,
+            tolgrd=charmm_tolgrd,
+            timings=timings,
         ),
         interval=max(1, traj_every),
     )
@@ -783,7 +840,7 @@ def main() -> int:
     parser.add_argument(
         "--min-intermonomer-atom-distance",
         type=float,
-        default=0.5,
+        default=0.1,
         help="Abort if atoms from different monomers get closer than this distance in Angstrom (<=0 disables).",
     )
     parser.add_argument(
@@ -924,12 +981,18 @@ def main() -> int:
         monomer_offsets=monomer_offsets,
         min_com_distance=args.min_com_start_distance,
     )
-    assert_no_intermonomer_atom_overlap(
-        r0,
+    initial_atoms = Atoms(numbers=z, positions=r0)
+    _check_or_charmm_overlap_rescue(
+        initial_atoms,
         monomer_offsets,
         min_distance=args.min_intermonomer_atom_distance,
         context="initial placement",
+        nstep_sd=args.charmm_sd_steps,
+        nstep_abnr=args.charmm_abnr_steps,
+        tolenr=args.charmm_tolenr,
+        tolgrd=args.charmm_tolgrd,
     )
+    r0 = initial_atoms.get_positions()
 
     L = float(args.box_size) if args.box_size is not None else _cubic_box_length(r0, args.ml_cutoff)
     r_pbc = r0 - r0.mean(axis=0) + 0.5 * L
@@ -990,13 +1053,16 @@ def main() -> int:
             atoms.set_pbc(False)
 
         run_timings: dict[str, float] = {}
-        overlap_cell = atoms.cell.array if use_pbc else None
-        assert_no_intermonomer_atom_overlap(
-            atoms.get_positions(),
+        _check_or_charmm_overlap_rescue(
+            atoms,
             monomer_offsets,
             min_distance=args.min_intermonomer_atom_distance,
-            cell=overlap_cell,
             context=f"{key}: before minimization",
+            nstep_sd=args.charmm_sd_steps,
+            nstep_abnr=args.charmm_abnr_steps,
+            tolenr=args.charmm_tolenr,
+            tolgrd=args.charmm_tolgrd,
+            timings=run_timings,
         )
         if args.charmm_pre_minimize:
             _tlog(
@@ -1012,12 +1078,16 @@ def main() -> int:
                 tolgrd=args.charmm_tolgrd,
                 timings=run_timings,
             )
-            assert_no_intermonomer_atom_overlap(
-                atoms.get_positions(),
+            _check_or_charmm_overlap_rescue(
+                atoms,
                 monomer_offsets,
                 min_distance=args.min_intermonomer_atom_distance,
-                cell=overlap_cell,
                 context=f"{key}: after CHARMM minimization",
+                nstep_sd=args.charmm_sd_steps,
+                nstep_abnr=args.charmm_abnr_steps,
+                tolenr=args.charmm_tolenr,
+                tolgrd=args.charmm_tolgrd,
+                timings=run_timings,
             )
             _tlog(
                 f"{key}: CHARMM minimization {run_timings.get('charmm_min_wall_s', 0.0):.3f} s",
@@ -1094,12 +1164,16 @@ def main() -> int:
         bfgs_log = None if args.quiet_bfgs else "-"
         opt = BFGS(atoms, logfile=bfgs_log, trajectory=str(min_traj_path), maxstep=args.bfgs_maxstep)
         opt.attach(
-            lambda: assert_no_intermonomer_atom_overlap(
-                atoms.get_positions(),
+            lambda: _check_or_charmm_overlap_rescue(
+                atoms,
                 monomer_offsets,
                 min_distance=args.min_intermonomer_atom_distance,
-                cell=overlap_cell,
                 context=f"{key}: ASE BFGS",
+                nstep_sd=args.charmm_sd_steps,
+                nstep_abnr=args.charmm_abnr_steps,
+                tolenr=args.charmm_tolenr,
+                tolgrd=args.charmm_tolgrd,
+                timings=run_timings,
             ),
             interval=1,
         )
@@ -1113,12 +1187,16 @@ def main() -> int:
             f"{key}: BFGS {run_timings['bfgs_wall_s']:.3f} s ({n_bfgs} iters)",
             timing_log,
         )
-        assert_no_intermonomer_atom_overlap(
-            atoms.get_positions(),
+        _check_or_charmm_overlap_rescue(
+            atoms,
             monomer_offsets,
             min_distance=args.min_intermonomer_atom_distance,
-            cell=overlap_cell,
             context=f"{key}: after ASE BFGS",
+            nstep_sd=args.charmm_sd_steps,
+            nstep_abnr=args.charmm_abnr_steps,
+            tolenr=args.charmm_tolenr,
+            tolgrd=args.charmm_tolgrd,
+            timings=run_timings,
         )
         if fmin > args.pre_min_fmax:
             if args.rescue_minimize:
@@ -1143,12 +1221,16 @@ def main() -> int:
                     maxstep=args.rescue_fire_maxstep,
                 )
                 fire.attach(
-                    lambda: assert_no_intermonomer_atom_overlap(
-                        atoms.get_positions(),
+                    lambda: _check_or_charmm_overlap_rescue(
+                        atoms,
                         monomer_offsets,
                         min_distance=args.min_intermonomer_atom_distance,
-                        cell=overlap_cell,
                         context=f"{key}: ASE FIRE rescue",
+                        nstep_sd=args.rescue_charmm_sd_steps,
+                        nstep_abnr=args.rescue_charmm_abnr_steps,
+                        tolenr=args.charmm_tolenr,
+                        tolgrd=args.charmm_tolgrd,
+                        timings=run_timings,
                     ),
                     interval=1,
                 )
@@ -1157,12 +1239,16 @@ def main() -> int:
                 run_timings["rescue_fire_traj"] = str(rescue_traj_path.relative_to(out_dir))
                 fmin = float(np.abs(atoms.get_forces()).max())
                 _tlog(f"{key}: rescue minimization done, fmax={fmin:.6f} eV/A", timing_log)
-                assert_no_intermonomer_atom_overlap(
-                    atoms.get_positions(),
+                _check_or_charmm_overlap_rescue(
+                    atoms,
                     monomer_offsets,
                     min_distance=args.min_intermonomer_atom_distance,
-                    cell=overlap_cell,
                     context=f"{key}: after ASE FIRE rescue",
+                    nstep_sd=args.rescue_charmm_sd_steps,
+                    nstep_abnr=args.rescue_charmm_abnr_steps,
+                    tolenr=args.charmm_tolenr,
+                    tolgrd=args.charmm_tolgrd,
+                    timings=run_timings,
                 )
             if fmin > args.max_fmax_after_min:
                 raise RuntimeError(
@@ -1187,6 +1273,10 @@ def main() -> int:
             seed=args.seed,
             monomer_offsets=monomer_offsets,
             min_intermonomer_atom_distance=args.min_intermonomer_atom_distance,
+            overlap_rescue_charmm_sd_steps=args.rescue_charmm_sd_steps,
+            overlap_rescue_charmm_abnr_steps=args.rescue_charmm_abnr_steps,
+            charmm_tolenr=args.charmm_tolenr,
+            charmm_tolgrd=args.charmm_tolgrd,
             path_prefix=out_dir,
             timings=run_timings,
             log_lines=timing_log,
