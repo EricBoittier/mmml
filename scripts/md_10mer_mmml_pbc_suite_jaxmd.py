@@ -132,7 +132,20 @@ def main() -> int:
     p.add_argument("--nhc-sy-steps", type=int, default=3)
     p.add_argument("--nhc-tau", type=float, default=100.0)
     p.add_argument("--nhc-barostat-tau", type=float, default=10000.0)
-    p.add_argument("--steps-per-recording", type=int, default=100)
+    p.add_argument(
+        "--steps-per-recording",
+        type=int,
+        default=100,
+        help="MD steps between trajectory/HDF5 records (smaller → more frames, heavier I/O).",
+    )
+    p.add_argument(
+        "--traj-export-molecular-wrap",
+        action="store_true",
+        help=(
+            "Apply molecular COM wrap when writing HDF5 and final ASE .traj (slower JAX work per frame; "
+            "helps visualization). Default off: coordinates match what was accumulated during dynamics."
+        ),
+    )
     p.add_argument("--jaxmd-minimize-steps", type=int, default=200)
     p.add_argument("--jaxmd-pbc-minimize-steps", type=int, default=200)
     p.add_argument("--seed", type=int, default=123)
@@ -543,6 +556,7 @@ def main() -> int:
         jaxmd_pbc_minimize_steps=args.jaxmd_pbc_minimize_steps,
         min_intermonomer_atom_distance=args.min_intermonomer_atom_distance,
         dynamics_overlap_action=args.dynamics_overlap_action,
+        traj_export_molecular_wrap=bool(args.traj_export_molecular_wrap),
     )
     run_sim = set_up_nhc_sim_routine(
         atoms=atoms,
@@ -638,6 +652,7 @@ def main() -> int:
         "dynamics_overlap_charmm_rescue_count": int(
             getattr(run_sim, "last_charmm_overlap_rescue_count", 0)
         ),
+        "traj_export_molecular_wrap": bool(args.traj_export_molecular_wrap),
         "dynamics_overlap_warning_count": int(getattr(run_sim, "last_overlap_warning_count", 0)),
         "dynamics_min_intermonomer_distance_A": (
             None
