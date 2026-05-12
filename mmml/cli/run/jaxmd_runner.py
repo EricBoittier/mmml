@@ -597,6 +597,8 @@ def set_up_nhc_sim_routine(
         ]
         overlap_min_distance = float(getattr(args, "min_intermonomer_atom_distance", 0.1))
         overlap_action = str(getattr(args, "dynamics_overlap_action", "warn")).lower()
+        # Optional slow path: JAX wrap_groups every frame at HDF5/export time (better viz).
+        traj_export_molecular_wrap = bool(getattr(args, "traj_export_molecular_wrap", False))
         overlap_warning_count = 0
         overlap_min_seen = float("inf")
         charmm_overlap_rescue_count = 0
@@ -1165,12 +1167,15 @@ def set_up_nhc_sim_routine(
                             f"{avg_speed_ns_per_day:10.4f}"
                         )
 
-                    # Record to HDF5 (NPT: save real positions via transform, wrap by monomer)
+                    # Record to HDF5 (NPT: real-space via transform; optional monomer wrap for viewers)
                     pos_for_h5 = state.position
                     if is_npt:
                         box_curr = simulate.npt_box(state)
                         pos_for_h5 = space.transform(box_curr, state.position)
-                        pos_for_h5 = wrap_groups(pos_for_h5, _monomer_groups, box_curr, mass=Si_mass)
+                        if traj_export_molecular_wrap:
+                            pos_for_h5 = wrap_groups(
+                                pos_for_h5, _monomer_groups, box_curr, mass=Si_mass
+                            )
                     report_kw = dict(
                         potential_energy=e_pot,
                         kinetic_energy=e_kin,
@@ -1244,15 +1249,16 @@ def set_up_nhc_sim_routine(
                 # NPT: convert fractional to real using box at this step
                 box_i = nhc_boxes[idx]
                 R = space.transform(box_i, R)
-                # Wrap by monomer so molecules stay intact (frac wrap was per-atom)
-                R = wrap_groups(R, _monomer_groups, box_i, mass=Si_mass)
+                if traj_export_molecular_wrap:
+                    R = wrap_groups(R, _monomer_groups, box_i, mass=Si_mass)
                 nhc_boxes_out.append(np.asarray(jax.device_get(box_i)))
             elif use_pbc:
-                # Match HDF5 export: optional pbc_map (MIC bookkeeping) then molecular COM wrap
-                # into the primary cell so .traj/.npz viewers do not see drifted or split images.
                 if pbc_map_fn is not None:
                     R = pbc_map_fn(R)
-                R = wrap_groups(jnp.asarray(R), _monomer_groups, _cell_jax, mass=Si_mass)
+                if traj_export_molecular_wrap:
+                    R = wrap_groups(
+                        jnp.asarray(R), _monomer_groups, _cell_jax, mass=Si_mass
+                    )
             nhc_positions_out.append(np.asarray(jax.device_get(R)))
         if nhc_positions_out:
             positions_out = np.stack(nhc_positions_out)

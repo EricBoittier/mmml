@@ -59,6 +59,11 @@ def parse_args() -> argparse.Namespace:
         help="Split trajectory output into multi-file chunks with at most this many frames (0 = single file).",
     )
     parser.add_argument(
+        "--traj-export-molecular-wrap",
+        action="store_true",
+        help="JAX-MD only: molecular COM wrap when writing HDF5/.traj (slower).",
+    )
+    parser.add_argument(
         "--temperature",
         type=float,
         default=300.0,
@@ -134,6 +139,8 @@ def build_command(args: argparse.Namespace) -> list[str]:
             "--traj-chunk-frames",
             str(args.traj_chunk_frames),
         ]
+        if args.traj_export_molecular_wrap:
+            cmd.append("--traj-export-molecular-wrap")
     else:
         if args.setup == "pbc_npt":
             raise ValueError("pbc_npt requires --backend jaxmd or --backend auto")
