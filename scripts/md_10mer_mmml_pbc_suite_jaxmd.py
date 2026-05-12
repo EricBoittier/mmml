@@ -210,6 +210,26 @@ def main() -> int:
         default="warn",
         help="How to handle inter-monomer distance violations during production dynamics.",
     )
+    p.add_argument(
+        "--no-dynamics-overlap-charmm-rescue",
+        action="store_true",
+        help=(
+            "Disable CHARMM SD/ABNR rescue when an overlap is detected during dynamics "
+            "(default: run CHARMM minimization with the same periodic box as the MD step)."
+        ),
+    )
+    p.add_argument(
+        "--dynamics-overlap-charmm-sd-steps",
+        type=int,
+        default=200,
+        help="CHARMM SD steps for dynamics overlap rescue (default 200).",
+    )
+    p.add_argument(
+        "--dynamics-overlap-charmm-abnr-steps",
+        type=int,
+        default=400,
+        help="CHARMM ABNR steps for dynamics overlap rescue (default 400).",
+    )
     args = p.parse_args()
     if args.box_size is not None and args.box_size <= 0:
         raise ValueError("--box-size must be positive")
@@ -461,6 +481,37 @@ def main() -> int:
     Stationary(atoms)
     ZeroRotation(atoms)
 
+    def _dynamics_overlap_charmm_rescue(pos_np: np.ndarray, cell_np: np.ndarray | None) -> np.ndarray:
+        """CHARMM MM minimization using PyCHARMM / CGenFF; box matches passed MD cell."""
+        atoms.set_positions(np.asarray(pos_np, dtype=float))
+        cubic_L: float | None = None
+        if cell_np is not None:
+            c = np.asarray(cell_np, dtype=float)
+            if c.shape == (3, 3):
+                atoms.set_cell(c)
+                cubic_L = float(np.mean(np.abs(np.diagonal(c)[:3])))
+            elif c.size >= 3:
+                ll = np.reshape(c, (-1,))[:3]
+                cubic_L = float(np.mean(np.abs(ll)))
+                atoms.set_cell(np.diag(ll))
+            else:
+                cubic_L = float(c.reshape(-1)[0])
+                atoms.set_cell([cubic_L, cubic_L, cubic_L])
+        _run_charmm_minimize(
+            atoms,
+            nstep_sd=args.dynamics_overlap_charmm_sd_steps,
+            nstep_abnr=args.dynamics_overlap_charmm_abnr_steps,
+            tolenr=args.charmm_tolenr,
+            tolgrd=args.charmm_tolgrd,
+            nbxmod=args.charmm_nbxmod,
+            cubic_box_side_A=cubic_L,
+        )
+        return np.asarray(atoms.get_positions(), dtype=float)
+
+    overlap_charmm_rescue_fn = None
+    if not args.no_dynamics_overlap_charmm_rescue:
+        overlap_charmm_rescue_fn = _dynamics_overlap_charmm_rescue
+
     nsteps = int(round(args.ps * 1000.0 / args.dt_fs))
     output_prefix = out_dir / f"pbc_{args.ensemble}_jaxmd"
     jargs = SimpleNamespace(
@@ -497,6 +548,7 @@ def main() -> int:
         monomer_offsets=monomer_offsets,
         Si_mass=np.asarray(atoms.get_masses(), dtype=np.float32),
         atoms_template=atoms.copy(),
+        overlap_charmm_rescue_fn=overlap_charmm_rescue_fn,
     )
     # For NPT path in jaxmd_runner, neighbor list is refreshed once per recording block.
     if args.ensemble == "npt":
@@ -574,6 +626,12 @@ def main() -> int:
         "neighbor_internal_skin_distance_A": effective_skin,
         "pre_md_minimization": minimization_summary,
         "dynamics_overlap_action": args.dynamics_overlap_action,
+        "dynamics_overlap_charmm_rescue_enabled": (not args.no_dynamics_overlap_charmm_rescue),
+        "dynamics_overlap_charmm_sd_steps": int(args.dynamics_overlap_charmm_sd_steps),
+        "dynamics_overlap_charmm_abnr_steps": int(args.dynamics_overlap_charmm_abnr_steps),
+        "dynamics_overlap_charmm_rescue_count": int(
+            getattr(run_sim, "last_charmm_overlap_rescue_count", 0)
+        ),
         "dynamics_overlap_warning_count": int(getattr(run_sim, "last_overlap_warning_count", 0)),
         "dynamics_min_intermonomer_distance_A": (
             None
