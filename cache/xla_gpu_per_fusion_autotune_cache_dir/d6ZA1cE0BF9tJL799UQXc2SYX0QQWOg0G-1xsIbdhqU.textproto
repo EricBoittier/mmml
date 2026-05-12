@@ -1,0 +1,6 @@
+other {
+  name: "NATIVE_EMITTER"
+  config {
+    type_url: "type.googleapis.com/xla.gpu.NativeEmitterBackendConfig"
+  }
+}
