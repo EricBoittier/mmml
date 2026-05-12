@@ -31,6 +31,7 @@ from md_10mer_mmml_pbc_suite import (  # noqa: E402
     _enforce_min_com_separation,
     _check_or_charmm_overlap_rescue,
     _randomize_monomer_com_positions,
+    _numpy_wrap_monomers_primary_cell,
     _run_charmm_minimize,
     _validate_psf_charges,
 )
@@ -497,6 +498,11 @@ def main() -> int:
             else:
                 cubic_L = float(c.reshape(-1)[0])
                 atoms.set_cell([cubic_L, cubic_L, cubic_L])
+            # Keeps molecules in one image so CHARMM BYGROUP image lists stay valid.
+            w = _numpy_wrap_monomers_primary_cell(
+                atoms.get_positions(), monomer_offsets, atoms.cell.array
+            )
+            atoms.set_positions(w)
         _run_charmm_minimize(
             atoms,
             nstep_sd=args.dynamics_overlap_charmm_sd_steps,

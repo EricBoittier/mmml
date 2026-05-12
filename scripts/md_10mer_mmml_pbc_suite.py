@@ -498,6 +498,31 @@ def _validate_psf_charges(
     return summary
 
 
+def _numpy_wrap_monomers_primary_cell(
+    positions: np.ndarray,
+    monomer_offsets: np.ndarray,
+    cell_matrix: np.ndarray,
+) -> np.ndarray:
+    """Rigid integer-lattice shifts per monomer so each COM sits in the primary orthorhombic cell."""
+    pos = np.asarray(positions, dtype=float).copy()
+    c = np.asarray(cell_matrix, dtype=float).reshape(3, 3)
+    Lx, Ly, Lz = float(c[0, 0]), float(c[1, 1]), float(c[2, 2])
+    n_mol = int(len(monomer_offsets) - 1)
+    for mi in range(n_mol):
+        s, e = int(monomer_offsets[mi]), int(monomer_offsets[mi + 1])
+        com = pos[s:e].mean(axis=0)
+        shift = np.array(
+            [
+                -np.floor(com[0] / Lx) * Lx if Lx > 0 else 0.0,
+                -np.floor(com[1] / Ly) * Ly if Ly > 0 else 0.0,
+                -np.floor(com[2] / Lz) * Lz if Lz > 0 else 0.0,
+            ],
+            dtype=float,
+        )
+        pos[s:e] += shift
+    return pos
+
+
 def _run_charmm_minimize(
     atoms: Atoms,
     *,
@@ -521,6 +546,8 @@ def _run_charmm_minimize(
     coor.set_positions(pd.DataFrame(atoms.get_positions(), columns=["x", "y", "z"]))
     try:
         use_pbc_charmm = cubic_box_side_A is not None and float(cubic_box_side_A) > 0.0
+        cutnb_mm = 18.0
+        cutim_mm = cutnb_mm + 4.0 if use_pbc_charmm else None
         if use_pbc_charmm:
             from mmml.interfaces.pycharmmInterface.pycharmmCommands import pbcset
             from mmml.interfaces.pycharmmInterface.setupBox import _ensure_crystal_image_str
@@ -528,8 +555,16 @@ def _run_charmm_minimize(
             _ensure_crystal_image_str()
             L = float(cubic_box_side_A)
             pyci.pycharmm.lingo.charmm_script(pbcset.format(SIDELENGTH=L))
-        pyci.pycharmm.NonBondedScript(
-            cutnb=18.0,
+            # IMAGE before NBONDS; CUTIM >= CUTNB or CHARMM errors (CUTNB larger than CUTIM).
+            pyci.pycharmm.lingo.charmm_script(
+                "open read unit 10 card name crystal_image.str\n"
+                f"crystal defi cubic {L} {L} {L} 90. 90. 90.\n"
+                "CRYSTAL READ UNIT 10 CARD\n"
+                "image byres xcen 0.0 ycen 0.0 zcen 0.0 sele all end\n"
+            )
+
+        nbond_kw = dict(
+            cutnb=cutnb_mm,
             ctonnb=13.0,
             ctofnb=17.0,
             eps=1.0,
@@ -539,15 +574,10 @@ def _run_charmm_minimize(
             fswitch=True,
             vfswitch=True,
             nbxmod=nbxmod,
-        ).run()
-        if use_pbc_charmm:
-            L = float(cubic_box_side_A)
-            pyci.pycharmm.lingo.charmm_script(
-                "open read unit 10 card name crystal_image.str\n"
-                f"crystal defi cubic {L} {L} {L} 90. 90. 90.\n"
-                "CRYSTAL READ UNIT 10 CARD\n"
-                "image byres xcen 0.0 ycen 0.0 zcen 0.0 sele all end\n"
-            )
+        )
+        if cutim_mm is not None:
+            nbond_kw["cutim"] = float(cutim_mm)
+        pyci.pycharmm.NonBondedScript(**nbond_kw).run()
         print("CHARMM energy before minimization:")
         pyci.pycharmm_loud()
         pyci.pycharmm.lingo.charmm_script("ENER")
