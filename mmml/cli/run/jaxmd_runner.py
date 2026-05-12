@@ -1164,8 +1164,12 @@ def set_up_nhc_sim_routine(
                 # Wrap by monomer so molecules stay intact (frac wrap was per-atom)
                 R = wrap_groups(R, _monomer_groups, box_i, mass=Si_mass)
                 nhc_boxes_out.append(np.asarray(jax.device_get(box_i)))
-            elif use_pbc and pbc_map_fn is not None:
-                R = pbc_map_fn(R)
+            elif use_pbc:
+                # Match HDF5 export: optional pbc_map (MIC bookkeeping) then molecular COM wrap
+                # into the primary cell so .traj/.npz viewers do not see drifted or split images.
+                if pbc_map_fn is not None:
+                    R = pbc_map_fn(R)
+                R = wrap_groups(jnp.asarray(R), _monomer_groups, _cell_jax, mass=Si_mass)
             nhc_positions_out.append(np.asarray(jax.device_get(R)))
         if nhc_positions_out:
             positions_out = np.stack(nhc_positions_out)
