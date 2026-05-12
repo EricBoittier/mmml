@@ -22,7 +22,17 @@ from mmml.utils.geometry_checks import assert_no_intermonomer_atom_overlap
 from mmml.utils.hdf5_reporter import make_jaxmd_reporter
 
 import ase.io as ase_io
+from typing import Callable, Optional
+
 WORSE_COUNT_THRESHOLD = 100
+
+
+def _real_cartesian_to_fractional(pos_real: np.ndarray, box_3x3: np.ndarray) -> np.ndarray:
+    """Map real-space Cartesian rows (n, 3) to fractional coords for jax_md NPT state."""
+    B = np.asarray(box_3x3, dtype=np.float64)[:3, :3]
+    R = np.asarray(pos_real, dtype=np.float64)
+    invB = np.linalg.inv(B)
+    return (invB @ R.T).T
 
 def default_nhc_kwargs(tau, overrides=None):
     """Build Nose-Hoover chain kwargs dict with sensible defaults.
@@ -215,6 +225,9 @@ def set_up_nhc_sim_routine(
     Si_mass,
     show_frame=None,
     atoms_template=None,
+    overlap_charmm_rescue_fn: Optional[
+        Callable[[np.ndarray, Optional[np.ndarray]], np.ndarray]
+    ] = None,
 ):
     """Set up the Nose-Hoover chain simulation routine.
 
@@ -586,11 +599,15 @@ def set_up_nhc_sim_routine(
         overlap_action = str(getattr(args, "dynamics_overlap_action", "warn")).lower()
         overlap_warning_count = 0
         overlap_min_seen = float("inf")
+        charmm_overlap_rescue_count = 0
 
-        def _check_overlap(positions, cell, context: str) -> None:
-            nonlocal overlap_warning_count, overlap_min_seen
+        def _check_overlap(
+            positions, cell, context: str
+        ) -> Optional[np.ndarray]:
+            """Return new real-space Cartesian positions if CHARMM rescue was applied."""
+            nonlocal overlap_warning_count, overlap_min_seen, charmm_overlap_rescue_count
             if overlap_action == "off":
-                return
+                return None
             try:
                 min_dist = assert_no_intermonomer_atom_overlap(
                     np.asarray(jax.device_get(positions), dtype=float),
@@ -600,6 +617,7 @@ def set_up_nhc_sim_routine(
                     context=context,
                 )
                 overlap_min_seen = min(overlap_min_seen, min_dist)
+                return None
             except RuntimeError as exc:
                 overlap_warning_count += 1
                 message = str(exc)
@@ -610,14 +628,38 @@ def set_up_nhc_sim_routine(
                     pass
                 if overlap_action == "error":
                     raise
+                if (
+                    overlap_action == "warn"
+                    and overlap_charmm_rescue_fn is not None
+                ):
+                    pos_np = np.asarray(jax.device_get(positions), dtype=float)
+                    cell_np = (
+                        None
+                        if cell is None
+                        else np.asarray(jax.device_get(cell), dtype=float)
+                    )
+                    try:
+                        new_pos = overlap_charmm_rescue_fn(pos_np, cell_np)
+                        charmm_overlap_rescue_count += 1
+                        c.print(Panel(
+                            f"{message}\nApplied CHARMM SD/ABNR overlap rescue (box synced to MD cell).",
+                            title="[bold green]JAX-MD overlap → CHARMM rescue[/bold green]",
+                            border_style="green",
+                        ))
+                        return np.asarray(new_pos, dtype=float)
+                    except Exception as rescue_exc:
+                        c.print(Panel(
+                            f"{message}\nCHARMM rescue failed ({type(rescue_exc).__name__}: {rescue_exc}).",
+                            title="[bold red]JAX-MD overlap rescue failed[/bold red]",
+                            border_style="red",
+                        ))
                 if overlap_warning_count <= 5 or overlap_warning_count % 50 == 0:
                     c.print(Panel(
                         f"{message}\nContinuing because dynamics_overlap_action={overlap_action!r}.",
                         title="[bold yellow]JAX-MD overlap warning[/bold yellow]",
                         border_style="yellow",
                     ))
-
-        # When ASE already ran (nsteps_ase > 0), R is ASE-minimized; skip JAX-MD minimization
+                return None
         fire_positions = []
         if skip_minimization:
             minimized_pos = jnp.asarray(R, dtype=jnp.float32)
@@ -666,11 +708,13 @@ def set_up_nhc_sim_routine(
             if jnp.any(~jnp.isfinite(minimized_pos)) and fire_positions:
                 minimized_pos = fire_positions[-1]
                 c.print(Panel("Using last valid position from first minimization", title="[bold yellow]Warning[/bold yellow]", border_style="yellow"))
-        _check_overlap(
+        res_overlap = _check_overlap(
             minimized_pos,
             atoms.get_cell()[:] if use_pbc else None,
             "after JAX-MD first minimization",
         )
+        if res_overlap is not None:
+            minimized_pos = jnp.asarray(res_overlap, dtype=jnp.float32)
         # save pdb (wrap by monomer when PBC so molecules stay intact)
         min_pdb_path = Path(f"{args.output_prefix}_minimized.pdb")
         min_pdb_path.parent.mkdir(parents=True, exist_ok=True)
@@ -750,11 +794,15 @@ def set_up_nhc_sim_routine(
                     if not (np.isfinite(energy) and np.isfinite(max_force)):
                         print("PBC minimization hit NaN energy/forces; using first-min result")
                         break
-                    _check_overlap(
+                    res_pb = _check_overlap(
                         new_pbc_state.position,
                         atoms.get_cell()[:],
                         "during JAX-MD PBC minimization",
                     )
+                    if res_pb is not None:
+                        pbc_fire_state = pbc_fire_state.set(
+                            position=jnp.asarray(res_pb, dtype=jnp.float32)
+                        )
                     pbc_fire_state = new_pbc_state
                     if max_force < best_pbc_max_f:
                         best_pbc_max_f = max_force
@@ -778,7 +826,10 @@ def set_up_nhc_sim_routine(
 
             # Save PBC minimized structure (md_pos already wrapped by monomer)
             atoms.set_positions(np.asarray(md_pos))
-            _check_overlap(md_pos, atoms.get_cell()[:], "after JAX-MD PBC minimization")
+            res_after_pbc = _check_overlap(md_pos, atoms.get_cell()[:], "after JAX-MD PBC minimization")
+            if res_after_pbc is not None:
+                md_pos = jnp.asarray(res_after_pbc, dtype=jnp.float32)
+                atoms.set_positions(np.asarray(res_after_pbc, dtype=float))
             pbc_pdb_path = Path(f"{args.output_prefix}_pbc_minimized.pdb")
             pbc_pdb_path.parent.mkdir(parents=True, exist_ok=True)
             ase_io.write(str(pbc_pdb_path), atoms)
@@ -796,7 +847,10 @@ def set_up_nhc_sim_routine(
             run_sim.last_status = "error"
             run_sim.last_error = "No valid positions for JAX-MD"
             return 0, jnp.array([]).reshape(0, len(md_pos), 3), None
-        _check_overlap(md_pos, atoms.get_cell()[:] if use_pbc else None, "before JAX-MD dynamics")
+        res_pre = _check_overlap(md_pos, atoms.get_cell()[:] if use_pbc else None, "before JAX-MD dynamics")
+        if res_pre is not None:
+            md_pos = jnp.asarray(res_pre, dtype=jnp.float32)
+            atoms.set_positions(np.asarray(res_pre, dtype=float))
 
         if args.ensemble == "npt" and use_pbc:
             # NPT: positions in fractional coords; wrap md_pos into cell first, then convert to fractional
@@ -991,15 +1045,43 @@ def set_up_nhc_sim_routine(
                         state = state.set(position=wrapped_frac)
                         pos_for_overlap = space.transform(box_curr, state.position)
                         pos_for_overlap = wrap_groups(pos_for_overlap, _monomer_groups, box_curr, mass=Si_mass)
-                        _check_overlap(pos_for_overlap, box_curr, f"JAX-MD dynamics record {i + 1}")
+                        rescued = _check_overlap(pos_for_overlap, box_curr, f"JAX-MD dynamics record {i + 1}")
+                        if rescued is not None:
+                            b_np = np.asarray(jax.device_get(box_curr), dtype=float)
+                            new_frac = jnp.asarray(
+                                _real_cartesian_to_fractional(rescued, b_np),
+                                dtype=jnp.float32,
+                            )
+                            new_frac = new_frac - jnp.floor(new_frac)
+                            state = state.set(position=new_frac)
+                            if update_fn is not None:
+                                box_nl = np.asarray(jax.device_get(box_curr))
+                                if box_nl.shape == (3, 3):
+                                    Ln = float(np.diagonal(box_nl)[:3].mean())
+                                    box_nl = np.array([Ln, Ln, Ln], dtype=np.float64)
+                                elif box_nl.size >= 3:
+                                    box_nl = np.asarray(box_nl, dtype=np.float64).reshape(-1)[:3]
+                                npt_pair_idx, npt_pair_mask = update_fn(
+                                    np.asarray(new_frac), box=box_nl
+                                )
                     else:
                         wrapped_pos = wrap_groups(
                             state.position, _monomer_groups, _cell_jax, mass=Si_mass
                         )
                         state = state.set(position=wrapped_pos)
-                        _check_overlap(state.position, _cell_jax, f"JAX-MD dynamics record {i + 1}")
+                        rescued = _check_overlap(state.position, _cell_jax, f"JAX-MD dynamics record {i + 1}")
+                        if rescued is not None:
+                            state = state.set(position=jnp.asarray(rescued, dtype=jnp.float32))
+                            if update_fn is not None:
+                                pp_i, pp_m = update_fn(
+                                    np.asarray(state.position), box=pbc_box_nl
+                                )
+                                _pbc_state["pair_idx"] = pp_i
+                                _pbc_state["pair_mask"] = pp_m
                 else:
-                    _check_overlap(state.position, None, f"JAX-MD dynamics record {i + 1}")
+                    rescued = _check_overlap(state.position, None, f"JAX-MD dynamics record {i + 1}")
+                    if rescued is not None:
+                        state = state.set(position=jnp.asarray(rescued, dtype=jnp.float32))
 
                 # Store current position (NPT: fractional + box for correct real coords at save)
                 if is_npt:
@@ -1151,6 +1233,7 @@ def set_up_nhc_sim_routine(
         run_sim.last_error = run_error
         run_sim.last_overlap_warning_count = overlap_warning_count
         run_sim.last_overlap_min_distance = overlap_min_seen
+        run_sim.last_charmm_overlap_rescue_count = charmm_overlap_rescue_count
         completion_title = "Simulation complete" if run_status == "complete" else "Partial simulation saved"
         c.print(Panel(f"{steps_completed} steps ({steps_completed * dt:.2f} ps)", title=f"[bold]{completion_title}[/bold]", border_style="green"))
 

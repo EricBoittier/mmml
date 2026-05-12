@@ -507,14 +507,27 @@ def _run_charmm_minimize(
     tolgrd: float,
     nbxmod: int = 5,
     timings: dict[str, float] | None = None,
+    cubic_box_side_A: float | None = None,
 ) -> None:
-    """Run optional CHARMM minimization and write updated coords back to ASE atoms."""
+    """Run optional CHARMM minimization and write updated coords back to ASE atoms.
+
+    When ``cubic_box_side_A`` is set, CHARMM crystal / IMAGE PBC is rebuilt for a
+    cubic cell of that edge length (matches the MD periodic box for JAX-MD / ASE).
+    """
     if nstep_sd <= 0 and nstep_abnr <= 0:
         return
     t0 = _tmark()
     reset_block()
     coor.set_positions(pd.DataFrame(atoms.get_positions(), columns=["x", "y", "z"]))
     try:
+        use_pbc_charmm = cubic_box_side_A is not None and float(cubic_box_side_A) > 0.0
+        if use_pbc_charmm:
+            from mmml.interfaces.pycharmmInterface.pycharmmCommands import pbcset
+            from mmml.interfaces.pycharmmInterface.setupBox import _ensure_crystal_image_str
+
+            _ensure_crystal_image_str()
+            L = float(cubic_box_side_A)
+            pyci.pycharmm.lingo.charmm_script(pbcset.format(SIDELENGTH=L))
         pyci.pycharmm.NonBondedScript(
             cutnb=18.0,
             ctonnb=13.0,
@@ -527,6 +540,14 @@ def _run_charmm_minimize(
             vfswitch=True,
             nbxmod=nbxmod,
         ).run()
+        if use_pbc_charmm:
+            L = float(cubic_box_side_A)
+            pyci.pycharmm.lingo.charmm_script(
+                "open read unit 10 card name crystal_image.str\n"
+                f"crystal defi cubic {L} {L} {L} 90. 90. 90.\n"
+                "CRYSTAL READ UNIT 10 CARD\n"
+                "image byres xcen 0.0 ycen 0.0 zcen 0.0 sele all end\n"
+            )
         print("CHARMM energy before minimization:")
         pyci.pycharmm_loud()
         pyci.pycharmm.lingo.charmm_script("ENER")
