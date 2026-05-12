@@ -1,0 +1,56 @@
+npm notice
+(base) boittier@pc-studix:~/mmml/mmml/gui/viewer$ npm run build
+
+> mmml-viewer@1.0.0 build
+> vite build
+
+node:internal/modules/package_json_reader:301
+  throw new ERR_MODULE_NOT_FOUND(packageName, fileURLToPath(base), null);
+        ^
+
+Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'rolldown' imported from /mmhome/boittier/home/mmml/mmml/gui/viewer/node_modules/vite/dist/node/chunks/node.js
+    at Object.getPackageJSONURL (node:internal/modules/package_json_reader:301:9)
+    at packageResolve (node:internal/modules/esm/resolve:764:81)
+    at moduleResolve (node:internal/modules/esm/resolve:855:18)
+    at defaultResolve (node:internal/modules/esm/resolve:988:11)
+    at #cachedDefaultResolve (node:internal/modules/esm/loader:697:20)
+    at #resolveAndMaybeBlockOnLoaderThread (node:internal/modules/esm/loader:714:38)
+    at ModuleLoader.resolveSync (node:internal/modules/esm/loader:746:52)
+    at #resolve (node:internal/modules/esm/loader:679:17)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:599:35)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:160:33) {
+  code: 'ERR_MODULE_NOT_FOUND'
+}
+
+Node.js v25.8.2
+npm notice
+npm notice New minor version of npm available! 11.11.1 -> 11.14.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.14.0
+npm notice To update run: npm install -g npm@11.14.0
+npm notice
+(base) boittier@pc-studix:~/mmml/mmml/gui/viewer$ npm run build > build.log
+node:internal/modules/package_json_reader:301
+  throw new ERR_MODULE_NOT_FOUND(packageName, fileURLToPath(base), null);
+        ^
+
+Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'rolldown' imported from /mmhome/boittier/home/mmml/mmml/gui/viewer/node_modules/vite/dist/node/chunks/node.js
+    at Object.getPackageJSONURL (node:internal/modules/package_json_reader:301:9)
+    at packageResolve (node:internal/modules/esm/resolve:764:81)
+    at moduleResolve (node:internal/modules/esm/resolve:855:18)
+    at defaultResolve (node:internal/modules/esm/resolve:988:11)
+    at #cachedDefaultResolve (node:internal/modules/esm/loader:697:20)
+    at #resolveAndMaybeBlockOnLoaderThread (node:internal/modules/esm/loader:714:38)
+    at ModuleLoader.resolveSync (node:internal/modules/esm/loader:746:52)
+    at #resolve (node:internal/modules/esm/loader:679:17)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:599:35)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:160:33) {
+  code: 'ERR_MODULE_NOT_FOUND'
+}
+
+Node.js v25.8.2
+npm notice
+npm notice New minor version of npm available! 11.11.1 -> 11.14.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.14.0
+npm notice To update run: npm install -g npm@11.14.0
+npm notice
+(base) boittie
