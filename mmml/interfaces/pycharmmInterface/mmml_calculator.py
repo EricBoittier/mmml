@@ -1262,7 +1262,9 @@ def setup_calculator(
             monomer_atom_mask_flat=monomer_atom_mask_flat,
         )
         
-        if not doML_dimer:
+        # No dimer pairs exist for a single monomer (n_monomers < 2); skip ML 2-body
+        # path to avoid empty np.concatenate in segment bookkeeping.
+        if not doML_dimer or n_dimers == 0:
             return {
                 **monomer_contribs,
                 "ml_2b_E": 0,

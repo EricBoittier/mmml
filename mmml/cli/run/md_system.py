@@ -37,7 +37,11 @@ def parse_args() -> argparse.Namespace:
         "--composition",
         type=str,
         default=None,
-        help="Residue composition string, e.g. MEOH:5,TIP3:5 (overrides --n-molecules).",
+        help=(
+            "Residue composition: comma-separated RES:N entries, e.g. MEOH:5,TIP3:5. "
+            "A bare RES (no ':N') implies a single copy (N=1); when this option is set, "
+            "--n-molecules is not passed to the backend (use DCM:10 for ten DCM)."
+        ),
     )
     parser.add_argument("--spacing", type=float, default=5.0, help="Target minimum random COM spacing in Angstrom.")
     parser.add_argument(
