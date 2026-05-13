@@ -524,6 +524,7 @@ def main() -> int:
             tolgrd=args.charmm_tolgrd,
             nbxmod=args.charmm_nbxmod,
             cubic_box_side_A=cubic_L,
+            quiet=True,
         )
         return np.asarray(atoms.get_positions(), dtype=float)
 

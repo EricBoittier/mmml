@@ -533,11 +533,15 @@ def _run_charmm_minimize(
     nbxmod: int = 5,
     timings: dict[str, float] | None = None,
     cubic_box_side_A: float | None = None,
+    quiet: bool = False,
 ) -> None:
     """Run optional CHARMM minimization and write updated coords back to ASE atoms.
 
     When ``cubic_box_side_A`` is set, CHARMM crystal / IMAGE PBC is rebuilt for a
     cubic cell of that edge length (matches the MD periodic box for JAX-MD / ASE).
+
+    When ``quiet`` is True, CHARMM print levels stay low for the whole routine (no
+    pre/post ``ENER`` banners); use for overlap rescue during long JAX-MD runs.
     """
     if nstep_sd <= 0 and nstep_abnr <= 0:
         return
@@ -545,6 +549,8 @@ def _run_charmm_minimize(
     reset_block()
     coor.set_positions(pd.DataFrame(atoms.get_positions(), columns=["x", "y", "z"]))
     try:
+        if quiet:
+            pyci.pycharmm_quiet()
         use_pbc_charmm = cubic_box_side_A is not None and float(cubic_box_side_A) > 0.0
         cutnb_mm = 18.0
         cutim_mm = cutnb_mm + 4.0 if use_pbc_charmm else None
@@ -578,22 +584,26 @@ def _run_charmm_minimize(
         if cutim_mm is not None:
             nbond_kw["cutim"] = float(cutim_mm)
         pyci.pycharmm.NonBondedScript(**nbond_kw).run()
-        print("CHARMM energy before minimization:")
-        pyci.pycharmm_loud()
-        pyci.pycharmm.lingo.charmm_script("ENER")
-        pyci.safe_energy_show()
-        pyci.pycharmm_quiet()
+        if not quiet:
+            print("CHARMM energy before minimization:")
+            pyci.pycharmm_loud()
+            pyci.pycharmm.lingo.charmm_script("ENER")
+            pyci.safe_energy_show()
+            pyci.pycharmm_quiet()
         if nstep_sd > 0:
             charmm_minimize.run_sd(nstep=nstep_sd, tolenr=tolenr, tolgrd=tolgrd)
         if nstep_abnr > 0:
             charmm_minimize.run_abnr(nstep=nstep_abnr, tolenr=tolenr, tolgrd=tolgrd)
         minimized_positions = coor.get_positions().to_numpy(dtype=float)
-        try:
-            print("CHARMM energy after minimization:")
-            pyci.pycharmm_loud()
-            pyci.pycharmm.lingo.charmm_script("ENER")
-            pyci.safe_energy_show()
-        finally:
+        if not quiet:
+            try:
+                print("CHARMM energy after minimization:")
+                pyci.pycharmm_loud()
+                pyci.pycharmm.lingo.charmm_script("ENER")
+                pyci.safe_energy_show()
+            finally:
+                coor.set_positions(pd.DataFrame(minimized_positions, columns=["x", "y", "z"]))
+        else:
             coor.set_positions(pd.DataFrame(minimized_positions, columns=["x", "y", "z"]))
     finally:
         pyci.pycharmm_quiet()
