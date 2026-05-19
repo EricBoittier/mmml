@@ -37,6 +37,7 @@ import seaborn as sns
 import functools
 
 from mmml.utils.cli_args import exit_if_unknown_long_options
+from mmml.models.EF.eval_paths import resolve_evaluation_output_dir
 from mmml.models.EF.training import (
     MessagePassingModel,
     mean_absolute_error_forces,
@@ -1059,8 +1060,12 @@ def main(args=None):
     if args is None:
         args = get_args()
     
-    # Create output directory
-    output_dir = Path(args.output_dir)
+    # Create output directory (separate subdir per rot-perturbation when augmenting)
+    output_dir = resolve_evaluation_output_dir(
+        args.output_dir,
+        rot_augment=args.rot_augment,
+        rot_perturbation=args.rot_perturbation,
+    )
     output_dir.mkdir(parents=True, exist_ok=True)
     
     print("="*60)
@@ -1069,6 +1074,8 @@ def main(args=None):
     print(f"Parameters: {args.params}")
     print(f"Data: {args.data}")
     print(f"Output directory: {output_dir}")
+    if Path(args.output_dir).resolve() != output_dir.resolve():
+        print(f"  (base --output-dir: {args.output_dir})")
     print(f"Batch size: {args.batch_size}")
     print(f"rot_augment: {args.rot_augment}")
     print(f"rot_perturbation: {args.rot_perturbation}")
