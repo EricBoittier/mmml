@@ -9,14 +9,20 @@
 #
 # Usage (from repo root or any cwd):
 #   ./scripts/ef_evaluate_dipeptide_checkpoints.sh
-#   TEST_NPZ=/path/to/test.npz OUT_BASE=./ef_eval ./scripts/ef_evaluate_dipeptide_checkpoints.sh
-#   ./scripts/ef_evaluate_dipeptide_checkpoints.sh --rot-augment --rot-perturbation 1.0
+#   ROT_PERTURBATIONS="0.0 0.5 1.0" ./scripts/ef_evaluate_dipeptide_checkpoints.sh
+#   ROT_AUGMENT=0 ./scripts/ef_evaluate_dipeptide_checkpoints.sh   # no augmentation (canonical frame)
+#
+# With --rot-augment, each perturbation writes to a separate subdir (no NPZ overwrite):
+#   ${OUT_BASE}/${run_name}/rotaug_pert{p}/evaluation_output.npz
+#   ${OUT_BASE}/${run_name}/rotaug_pert{p}/metrics.json
 #
 # Environment:
-#   TEST_NPZ     Test split NPZ (default: out/splits01/energies_forces_dipoles_test.npz)
-#   OUT_BASE     Output root (default: ef_eval)
-#   BATCH_SIZE   Evaluation batch size (default: 64)
-#   CKPT_ROOT    Override checkpoint base (default: /mmhome/boittier/home/ckpts)
+#   TEST_NPZ          Test split NPZ (default: out/splits01/energies_forces_dipoles_test.npz)
+#   OUT_BASE          Output root (default: ef_eval)
+#   BATCH_SIZE        Evaluation batch size (default: 64)
+#   CKPT_ROOT         Checkpoint base (default: /mmhome/boittier/home/ckpts)
+#   ROT_AUGMENT       1 = sweep ROT_PERTURBATIONS with --rot-augment (default: 1)
+#   ROT_PERTURBATIONS Space-separated perturbation values (default: 0.0 0.5 1.0)
 
 set -euo pipefail
 
@@ -27,6 +33,8 @@ TEST_NPZ="${TEST_NPZ:-${REPO_ROOT}/out/splits01/energies_forces_dipoles_test.npz
 OUT_BASE="${OUT_BASE:-${REPO_ROOT}/ef_eval}"
 BATCH_SIZE="${BATCH_SIZE:-64}"
 CKPT_ROOT="${CKPT_ROOT:-/mmhome/boittier/home/ckpts}"
+ROT_AUGMENT="${ROT_AUGMENT:-1}"
+ROT_PERTURBATIONS="${ROT_PERTURBATIONS:-0.0 0.5 1.0}"
 
 if [[ ! -f "${TEST_NPZ}" ]]; then
   echo "Error: test NPZ not found: ${TEST_NPZ}" >&2
@@ -44,28 +52,26 @@ RUNS=(
   "1ptTbothPert|${CKPT_ROOT}/dipetidePert_ef2_ptT_run1|config-bd8b7a90-13fa-4943-9453-6b3ef7bf4433.json|params-bd8b7a90-13fa-4943-9453-6b3ef7bf4433.json"
 )
 
+# Extra mmml ef-evaluate flags (not rot-*); rot sweep is controlled by env vars above.
 EXTRA_ARGS=("$@")
 
-echo "Test NPZ:  ${TEST_NPZ}"
-echo "Out base:  ${OUT_BASE}"
-echo "Batch:     ${BATCH_SIZE}"
-echo "Extra args:${EXTRA_ARGS[*]:-<none>}"
+echo "Test NPZ:          ${TEST_NPZ}"
+echo "Out base:          ${OUT_BASE}"
+echo "Batch:             ${BATCH_SIZE}"
+echo "ROT_AUGMENT:       ${ROT_AUGMENT}"
+if [[ "${ROT_AUGMENT}" == "1" ]]; then
+  echo "ROT_PERTURBATIONS: ${ROT_PERTURBATIONS}"
+fi
+echo "Extra args:        ${EXTRA_ARGS[*]:-<none>}"
 echo
 
-for entry in "${RUNS[@]}"; do
-  IFS='|' read -r run_name ckpt_dir config_file params_file <<< "${entry}"
-  config_path="${ckpt_dir}/${config_file}"
-  params_path="${ckpt_dir}/${params_file}"
-  out_dir="${OUT_BASE}/${run_name}"
-
-  if [[ ! -f "${params_path}" ]]; then
-    echo "Error: params not found: ${params_path}" >&2
-    exit 1
-  fi
-  if [[ ! -f "${config_path}" ]]; then
-    echo "Error: config not found: ${config_path}" >&2
-    exit 1
-  fi
+run_eval() {
+  local run_name="$1"
+  local config_path="$2"
+  local params_path="$3"
+  local out_dir="$4"
+  shift 4
+  local -a eval_extra=("$@")
 
   echo "============================================================"
   echo "Run:    ${run_name}"
@@ -81,10 +87,42 @@ for entry in "${RUNS[@]}"; do
     --output-dir "${out_dir}" \
     --batch-size "${BATCH_SIZE}" \
     --save-output-npz \
-    "${EXTRA_ARGS[@]}"
+    "${eval_extra[@]}"
 
   echo
+}
+
+for entry in "${RUNS[@]}"; do
+  IFS='|' read -r run_name ckpt_dir config_file params_file <<< "${entry}"
+  config_path="${ckpt_dir}/${config_file}"
+  params_path="${ckpt_dir}/${params_file}"
+  base_out="${OUT_BASE}/${run_name}"
+
+  if [[ ! -f "${params_path}" ]]; then
+    echo "Error: params not found: ${params_path}" >&2
+    exit 1
+  fi
+  if [[ ! -f "${config_path}" ]]; then
+    echo "Error: config not found: ${config_path}" >&2
+    exit 1
+  fi
+
+  if [[ "${ROT_AUGMENT}" == "1" ]]; then
+    for pert in ${ROT_PERTURBATIONS}; do
+      echo "--- rot-perturbation: ${pert} ---"
+      run_eval "${run_name}" "${config_path}" "${params_path}" "${base_out}" \
+        --rot-augment --rot-perturbation "${pert}" \
+        "${EXTRA_ARGS[@]}"
+    done
+  else
+    run_eval "${run_name}" "${config_path}" "${params_path}" "${base_out}" \
+      "${EXTRA_ARGS[@]}"
+  fi
 done
 
 echo "All evaluations written under: ${OUT_BASE}"
-echo "  metrics.json + plots + evaluation_output.npz per run subdirectory"
+if [[ "${ROT_AUGMENT}" == "1" ]]; then
+  echo "  Per checkpoint: rotaug_pert*/{evaluation_output.npz, metrics.json, plots}"
+else
+  echo "  Per checkpoint: evaluation_output.npz, metrics.json, plots"
+fi
