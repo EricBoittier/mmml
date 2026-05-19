@@ -64,7 +64,8 @@ Examples:
   mmml physnet-md --checkpoint out/ckpts/cybz_physnet --data out/splits/energies_forces_dipoles_train.npz -o out/
   mmml physnet-evaluate --checkpoint out/ckpts/cybz_physnet --data out/splits/test.npz -o out/physnet_eval
   mmml ef-train --train-npz splits/train.npz --valid-npz splits/valid.npz --output-dir ./ef_run
-  mmml ef-evaluate --params ./ef_run/params.json --data splits/test.npz --output-dir ./ef_eval --output-h5 ./ef_eval/eval_gui.h5
+  mmml ef-evaluate --params ./ef_run/params.json --test-npz splits/test.npz --output-dir ./ef_eval --save-output-npz
+  mmml ef-evaluate --params ./ef_run/params.json --data splits/test.npz --output-dir ./ef_eval --output-h5 ./ef_eval/eval_gui.h5 --rot-augment
   mmml ef-md --params ./ef_run/params.json --data splits/train.npz --steps 5000 --output md.traj
   mmml ef-md -b jax --params ./ef_run/params.json --xyz mol.xyz --thermostat langevin --steps 10000
   mmml active-learning -i out/physnet_md/physnet_ase.traj -o md_sampled.npz --max-temp 300

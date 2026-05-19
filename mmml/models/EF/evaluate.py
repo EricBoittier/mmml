@@ -8,6 +8,7 @@ Note: Expects input data in eV/angstrom units. All errors are reported in kcal/m
 
 Usage:
     mmml ef-evaluate --params params.json --data test.npz --output-dir results/ --output-h5 eval_gui.h5
+    mmml ef-evaluate --params params.json --test-npz splits/test.npz --save-output-npz --rot-augment --rot-perturbation 1.0
     python -m mmml.models.EF.evaluate --params params.json --data test.npz --output-dir results/
 """
 
@@ -79,6 +80,9 @@ def get_args(**kwargs):
         "max_atomic_number": None,
         "save_output_npz": False,
         "output_h5": None,
+        "test_npz": None,
+        "rot_augment": False,
+        "rot_perturbation": 1.0,
     }
     
     # Check if we're in a notebook/IPython environment
@@ -105,6 +109,12 @@ def get_args(**kwargs):
                            help="Path to config JSON file (will be auto-detected from params UUID if not provided)")
         parser.add_argument("--data", type=str, default=defaults["data"],
                            help="Path to dataset NPZ file")
+        parser.add_argument(
+            "--test-npz",
+            type=str,
+            default=defaults["test_npz"],
+            help="Test split NPZ (alias for --data; same as ef-train --test-npz)",
+        )
         parser.add_argument("--output-dir", type=str, default=defaults["output_dir"],
                            help="Output directory for plots and metrics")
         parser.add_argument("--batch-size", type=int, default=defaults["batch_size"],
@@ -134,13 +144,25 @@ def get_args(**kwargs):
             metavar="PATH",
             help="Write HDF5 trajectory for mmml gui (R,Z,N,E,E_pred,F,F_pred,Dxyz,Dxyz_pred,Ef). Requires h5py.",
         )
+        parser.add_argument(
+            "--rot-augment",
+            action="store_true",
+            help="Apply random SO(3) rotation augmentation when building batches (via prepare_batches)",
+        )
+        parser.add_argument(
+            "--rot-perturbation",
+            type=float,
+            default=defaults["rot_perturbation"],
+            help="Rotation perturbation strength in [0, 1] (used with --rot-augment)",
+        )
 
         args, unknown = parser.parse_known_args()
         exit_if_unknown_long_options(unknown, prog="mmml ef-evaluate")
+        data_path = args.test_npz if args.test_npz else args.data
         return SimpleNamespace(
             params=args.params,
             config=args.config,
-            data=args.data,
+            data=data_path,
             output_dir=args.output_dir,
             batch_size=args.batch_size,
             num_test=args.num_test,
@@ -153,6 +175,9 @@ def get_args(**kwargs):
             max_atomic_number=args.max_atomic_number,
             save_output_npz=args.save_output_npz,
             output_h5=args.output_h5,
+            test_npz=args.test_npz,
+            rot_augment=args.rot_augment,
+            rot_perturbation=args.rot_perturbation,
         )
     
     # Otherwise, use notebook mode (defaults only)
@@ -415,7 +440,16 @@ def compute_force_metrics(predictions, targets):
     }
 
 
-def evaluate_dataset(model, params, data, batch_size=64, dataset_name="test"):
+def evaluate_dataset(
+    model,
+    params,
+    data,
+    batch_size=64,
+    dataset_name="test",
+    *,
+    rot_augment: bool = False,
+    rot_perturbation: float = 1.0,
+):
     """Evaluate model on a dataset."""
     print(f"\n{'='*60}")
     print(f"Evaluating on {dataset_name} dataset")
@@ -428,7 +462,13 @@ def evaluate_dataset(model, params, data, batch_size=64, dataset_name="test"):
     key = jax.random.PRNGKey(42)
     # Sequential batches, include final partial batch so len(pred)==n_frames; aligns with R for H5.
     batches = prepare_batches(
-        key, data, batch_size, shuffle=False, drop_last=False
+        key,
+        data,
+        batch_size,
+        shuffle=False,
+        drop_last=False,
+        rot_augment=rot_augment,
+        rot_perturbation=rot_perturbation,
     )
     
     # Collect predictions and targets
@@ -1030,6 +1070,8 @@ def main(args=None):
     print(f"Data: {args.data}")
     print(f"Output directory: {output_dir}")
     print(f"Batch size: {args.batch_size}")
+    print(f"rot_augment: {args.rot_augment}")
+    print(f"rot_perturbation: {args.rot_perturbation}")
     
     # Load dataset
     print(f"\nLoading dataset from {args.data}...")
@@ -1290,13 +1332,25 @@ def main(args=None):
     # Evaluate
     if test_data['forces'] is not None:
         energy_pred, energy_targets, force_pred, force_targets, dipole_pred, dipole_targets, metrics = evaluate_dataset(
-            model, params, test_data, batch_size=args.batch_size, dataset_name="test"
+            model,
+            params,
+            test_data,
+            batch_size=args.batch_size,
+            dataset_name="test",
+            rot_augment=args.rot_augment,
+            rot_perturbation=args.rot_perturbation,
         )
     else:
         # Fallback if no forces
         print("Warning: Evaluating without forces (forces not available in dataset)")
         energy_pred, energy_targets, _, _, dipole_pred, dipole_targets, metrics = evaluate_dataset(
-            model, params, test_data, batch_size=args.batch_size, dataset_name="test"
+            model,
+            params,
+            test_data,
+            batch_size=args.batch_size,
+            dataset_name="test",
+            rot_augment=args.rot_augment,
+            rot_perturbation=args.rot_perturbation,
         )
         force_pred = None
         force_targets = None
