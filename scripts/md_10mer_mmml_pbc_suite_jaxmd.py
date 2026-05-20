@@ -115,6 +115,14 @@ def main() -> int:
         default=None,
         help="Override periodic cubic box side length in Angstrom (default: auto from initial geometry).",
     )
+    p.add_argument(
+        "--free-space",
+        action="store_true",
+        help=(
+            "Open boundary cluster: no ASE unit cell / PBC, hybrid calculator with cell=False, "
+            "JAX-MD NVE/NVT in free space. Incompatible with --ensemble npt."
+        ),
+    )
     p.add_argument("--ps", type=float, default=1.0)
     p.add_argument("--dt-fs", type=float, default=0.25)
     p.add_argument("--traj-every", type=int, default=1)
@@ -264,6 +272,8 @@ def main() -> int:
         help="CHARMM ABNR steps for dynamics overlap rescue (default 400).",
     )
     args = p.parse_args()
+    if args.free_space and args.ensemble == "npt":
+        raise ValueError("--free-space cannot be combined with NPT (--ensemble npt)")
     if args.box_size is not None and args.box_size <= 0:
         raise ValueError("--box-size must be positive")
 
@@ -324,11 +334,26 @@ def main() -> int:
         seed=args.seed,
     )
     r0 = _enforce_min_com_separation(r0, monomer_offsets, args.min_com_start_distance)
-    L = float(args.box_size) if args.box_size is not None else _cubic_box_length(r0, args.ml_cutoff)
-    r = r0 - r0.mean(axis=0) + 0.5 * L
+    free_space = bool(args.free_space)
+    if free_space:
+        if args.box_size is not None:
+            print(
+                "md_10mer_mmml_pbc_suite_jaxmd: note: ignoring --box-size with --free-space "
+                f"({float(args.box_size):g} Å)."
+            )
+        L: float | None = None
+        r = r0 - r0.mean(axis=0)
+    else:
+        L = float(args.box_size) if args.box_size is not None else float(_cubic_box_length(r0, args.ml_cutoff))
+        r = r0 - r0.mean(axis=0) + 0.5 * L
+    geom_tag = "vac" if free_space else "pbc"
     atoms = Atoms(numbers=z, positions=r)
-    atoms.set_cell([L, L, L])
-    atoms.set_pbc(True)
+    if free_space:
+        atoms.set_pbc(False)
+    else:
+        assert L is not None
+        atoms.set_cell([L, L, L])
+        atoms.set_pbc(True)
     minimization_summary: dict[str, float | str] = {}
     _check_or_charmm_overlap_rescue(
         atoms,
@@ -355,6 +380,7 @@ def main() -> int:
             tolgrd=args.charmm_tolgrd,
             nbxmod=args.charmm_nbxmod,
             timings=minimization_summary,
+            cubic_box_side_A=float(L) if not free_space else None,
         )
         _check_or_charmm_overlap_rescue(
             atoms,
@@ -395,7 +421,7 @@ def main() -> int:
         debug=False,
         model_restart_path=base_ckpt_dir,
         MAX_ATOMS_PER_SYSTEM=max(atoms_per_list) * 2,
-        cell=float(L),
+        cell=False if free_space else float(L),
         verbose=False,
         max_pairs=args.max_pairs,
         jax_md_capacity_multiplier=args.jax_md_capacity_multiplier,
@@ -454,7 +480,7 @@ def main() -> int:
                 timings=minimization_summary,
             )
 
-        bfgs_traj_path = out_dir / f"pbc_{args.ensemble}_bfgs_min.traj"
+        bfgs_traj_path = out_dir / f"{geom_tag}_{args.ensemble}_bfgs_min.traj"
         opt = BFGS(
             atoms,
             logfile=None if args.quiet_bfgs else "-",
@@ -479,7 +505,7 @@ def main() -> int:
                 f"from best BFGS frame "
                 f"({best_frame.best_force_label}, fmax={bfgs_best_fmax:.6f} > {args.pre_min_fmax:.6f})"
             )
-            fire_traj_path = out_dir / f"pbc_{args.ensemble}_fire_min.traj"
+            fire_traj_path = out_dir / f"{geom_tag}_{args.ensemble}_fire_min.traj"
             fire = FIRE(
                 atoms,
                 logfile=None if args.quiet_bfgs else "-",
@@ -495,7 +521,7 @@ def main() -> int:
             minimization_summary["fire_fmax_eVA"] = fmin
             minimization_summary["fire_traj"] = str(fire_traj_path.relative_to(out_dir))
             print(f"ASE FIRE rescue complete, fmax={fmin:.6f} eV/A")
-        minimization_summary.update(best_frame.write(out_dir, f"pbc_{args.ensemble}_pre_md"))
+        minimization_summary.update(best_frame.write(out_dir, f"{geom_tag}_{args.ensemble}_pre_md"))
         fmin = best_frame.restore_best_force()
         _check_pre_min_overlap("restored best-force pre-MD structure")
         minimization_summary["restored_best_force_fmax_eVA"] = fmin
@@ -554,12 +580,12 @@ def main() -> int:
         overlap_charmm_rescue_fn = _dynamics_overlap_charmm_rescue
 
     nsteps = int(round(args.ps * 1000.0 / args.dt_fs))
-    output_prefix = out_dir / f"pbc_{args.ensemble}_jaxmd"
+    output_prefix = out_dir / f"{geom_tag}_{args.ensemble}_jaxmd"
     jargs = SimpleNamespace(
         temperature=args.temperature,
         timestep=args.dt_fs,
         ensemble=args.ensemble,
-        cell=float(L),
+        cell=None if free_space else float(L),
         include_mm=True,
         skip_ml_dimers=False,
         debug=False,
@@ -617,10 +643,10 @@ def main() -> int:
     traj_chunk_frames = int(max(0, args.traj_chunk_frames))
     traj_paths: list[Path] = []
     if traj_chunk_frames <= 0:
-        traj_paths = [out_dir / f"pbc_{args.ensemble}.traj"]
+        traj_paths = [out_dir / f"{geom_tag}_{args.ensemble}.traj"]
     else:
         n_parts = max(1, int(np.ceil(len(frames) / traj_chunk_frames)))
-        traj_paths = [out_dir / f"pbc_{args.ensemble}.part{i:04d}.traj" for i in range(n_parts)]
+        traj_paths = [out_dir / f"{geom_tag}_{args.ensemble}.part{i:04d}.traj" for i in range(n_parts)]
 
     for part_idx, traj_path in enumerate(traj_paths):
         start = part_idx * traj_chunk_frames if traj_chunk_frames > 0 else 0
@@ -629,11 +655,14 @@ def main() -> int:
         for i in range(start, stop):
             xyz = frames[i]
             f = Atoms(numbers=z, positions=np.asarray(xyz))
-            if boxes is not None and i < len(boxes):
+            if free_space:
+                f.set_pbc(False)
+            elif boxes is not None and i < len(boxes):
                 b = np.asarray(boxes[i], dtype=float)
                 f.set_cell(b)
                 f.set_pbc(True)
             else:
+                assert L is not None
                 f.set_cell([L, L, L])
                 f.set_pbc(True)
             traj.write(f)
@@ -650,7 +679,8 @@ def main() -> int:
         "traj": str(traj_paths[0].relative_to(out_dir)),
         "traj_parts": [str(p.relative_to(out_dir)) for p in traj_paths],
         "traj_part_count": len(traj_paths),
-        "box_A": float(L),
+        "box_A": (float(L) if L is not None else None),
+        "free_space": bool(free_space),
         "pressure_atm": float(args.pressure),
         "temperature_K": float(args.temperature),
         "composition": {res: int(cnt) for res, cnt in composition},
