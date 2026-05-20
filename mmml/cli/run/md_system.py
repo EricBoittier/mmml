@@ -14,7 +14,7 @@ def parse_args() -> argparse.Namespace:
         description=(
             "Run predefined MD setups (free-space NVE/NVT, periodic NVE/NVT, periodic NPT) "
             "for arbitrary residue compositions. Wraps scripts/md_10mer_mmml_pbc_suite.py "
-            "and scripts/md_10mer_mmml_pbc_suite_jaxmd.py."
+            "(ASE) and scripts/md_10mer_mmml_pbc_suite_jaxmd.py (JAX-MD; periodic or --free-space)."
         )
     )
     parser.add_argument(
@@ -27,7 +27,11 @@ def parse_args() -> argparse.Namespace:
         "--backend",
         choices=["auto", "ase", "jaxmd"],
         default="auto",
-        help="MD backend. auto keeps legacy routing: ASE except pbc_npt, which uses JAX-MD.",
+        help=(
+            "MD engine: ase runs scripts/md_10mer_mmml_pbc_suite.py; jaxmd runs ..._jaxmd.py. "
+            "auto uses ASE for vacuum (free_*) and fixed-volume PBC, JAX-MD for NPT. "
+            "Use jaxmd with --setup free_nve or free_nvt for open-boundary JAX-MD."
+        ),
     )
     parser.add_argument("--checkpoint", type=Path, default=None, help="Model checkpoint path.")
     parser.add_argument("--output-dir", type=Path, default=None, help="Output directory for artifacts.")
@@ -132,12 +136,23 @@ def build_command(args: argparse.Namespace) -> list[str]:
     if backend == "auto":
         backend = "jaxmd" if args.setup == "pbc_npt" else "ase"
 
+    skip_box_size_for_cmd = False
     if backend == "jaxmd":
-        if args.setup not in {"pbc_nve", "pbc_nvt", "pbc_npt"}:
-            raise ValueError("--backend jaxmd only supports periodic setups: pbc_nve, pbc_nvt, pbc_npt")
-        if args.setup == "pbc_nvt" and args.nvt_integrator == "langevin":
-            raise ValueError("--backend jaxmd uses NHC for pbc_nvt; use --backend ase for Langevin NVT")
-        ensemble = args.setup[len("pbc_") :]
+        jaxmd_setups = {"pbc_nve", "pbc_nvt", "pbc_npt", "free_nve", "free_nvt"}
+        if args.setup not in jaxmd_setups:
+            raise ValueError(
+                f"--backend jaxmd supports pbc_nve, pbc_nvt, pbc_npt, free_nve, free_nvt; got {args.setup!r}"
+            )
+        if args.setup.endswith("_nvt") and args.nvt_integrator == "langevin":
+            raise ValueError(
+                "--backend jaxmd uses Nose-Hoover chain NVT; use --backend ase for Langevin NVT"
+            )
+        if args.setup.startswith("free_"):
+            ensemble = args.setup[len("free_") :]
+            jaxmd_free = True
+        else:
+            ensemble = args.setup[len("pbc_") :]
+            jaxmd_free = False
         cmd = [
             sys.executable,
             str(jaxmd_script),
@@ -156,6 +171,9 @@ def build_command(args: argparse.Namespace) -> list[str]:
             "--traj-chunk-frames",
             str(args.traj_chunk_frames),
         ]
+        if jaxmd_free:
+            cmd.append("--free-space")
+            skip_box_size_for_cmd = True
         if args.traj_export_molecular_wrap:
             cmd.append("--traj-export-molecular-wrap")
     else:
@@ -200,7 +218,8 @@ def build_command(args: argparse.Namespace) -> list[str]:
         cmd.extend(["--composition", str(args.composition)])
     else:
         cmd.extend(["--n-molecules", str(args.n_molecules)])
-    _append_optional(cmd, "--box-size", args.box_size)
+    if not skip_box_size_for_cmd:
+        _append_optional(cmd, "--box-size", args.box_size)
     _append_optional(cmd, "--checkpoint", args.checkpoint)
     _append_optional(cmd, "--output-dir", args.output_dir)
     _append_optional(cmd, "--template-pdb", args.template_pdb)
