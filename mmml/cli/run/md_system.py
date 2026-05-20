@@ -89,6 +89,23 @@ def parse_args() -> argparse.Namespace:
         help="Abort if atoms from different monomers get closer than this distance in Angstrom (<=0 disables).",
     )
     parser.add_argument(
+        "--flat-bottom-radius",
+        type=float,
+        default=None,
+        metavar="Å",
+        help=(
+            "Optional harmonic flat-bottom restraining system COM: V=0 inside radius R, "
+            "V=k(|d|-R)^2 outside. With PBC, d is MIC displacement to box center; in vacuum, center is origin."
+        ),
+    )
+    parser.add_argument(
+        "--flat-bottom-k",
+        type=float,
+        default=1.0,
+        metavar="eV/Å²",
+        help="Flat-bottom force constant when COM is outside --flat-bottom-radius (default: 1.0).",
+    )
+    parser.add_argument(
         "--extra-args",
         nargs=argparse.REMAINDER,
         default=[],
@@ -189,6 +206,9 @@ def build_command(args: argparse.Namespace) -> list[str]:
     _append_optional(cmd, "--template-pdb", args.template_pdb)
     cmd.extend(["--seed", str(args.seed)])
     cmd.extend(["--min-intermonomer-atom-distance", str(args.min_intermonomer_atom_distance)])
+    _append_optional(cmd, "--flat-bottom-radius", args.flat_bottom_radius)
+    if args.flat_bottom_radius is not None:
+        cmd.extend(["--flat-bottom-k", str(args.flat_bottom_k)])
     if args.extra_args:
         cmd.extend(args.extra_args)
     return cmd

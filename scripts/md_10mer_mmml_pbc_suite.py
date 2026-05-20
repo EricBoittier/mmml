@@ -368,6 +368,8 @@ def _factory_mmml(
     do_ml: bool = True,
     do_ml_dimer: bool = True,
     timings: dict[str, float] | None = None,
+    flat_bottom_radius: float | None = None,
+    flat_bottom_force_const: float = 1.0,
 ):
     at_codes = np.asarray(psf.get_iac(), dtype=int) - 1
     n_types = len(param.get_atc())
@@ -401,6 +403,8 @@ def _factory_mmml(
         jax_md_overflow_fallback_to_cell_list=jax_md_overflow_fallback_to_cell_list,
         jax_md_update_interval=jax_md_update_interval,
         jax_md_skin_distance=jax_md_skin_distance,
+        flat_bottom_radius=flat_bottom_radius,
+        flat_bottom_force_const=flat_bottom_force_const,
     )
     t1 = _tmark()
     cutoff = CutoffParameters(ml_cutoff=ml_cut, mm_switch_on=mm_sw, mm_cutoff=mm_cut)
@@ -1006,6 +1010,26 @@ def main() -> int:
     parser.add_argument("--nve-temp-K", type=float, default=10.0)
     parser.add_argument("--langevin-friction", type=float, default=0.02)
     parser.add_argument("--seed", type=int, default=123)
+    parser.add_argument(
+        "--flat-bottom-radius",
+        type=float,
+        default=None,
+        metavar="Å",
+        dest="flat_bottom_radius",
+        help=(
+            "Optional flat-bottom restraint on the system COM: V=0 for |d|<=R, "
+            "else V=k*(|d|-R)^2. With periodic box, d uses MIC to the box center; "
+            "in vacuum, center is the origin. Omit or set <=0 to disable (via calculator logic)."
+        ),
+    )
+    parser.add_argument(
+        "--flat-bottom-k",
+        type=float,
+        default=1.0,
+        metavar="eV/Å²",
+        dest="flat_bottom_k",
+        help="Force constant k when COM is outside --flat-bottom-radius (default: 1.0).",
+    )
     parser.add_argument("--verbose-calc", action="store_true")
     parser.add_argument(
         "--allow-ml-on-mixed",
@@ -1278,6 +1302,8 @@ def main() -> int:
             do_ml=use_ml_terms,
             do_ml_dimer=use_ml_dimer_terms,
             timings=run_timings,
+            flat_bottom_radius=args.flat_bottom_radius,
+            flat_bottom_force_const=args.flat_bottom_k,
         )
         atoms.calc = calc
         _save_cutoff_plot(

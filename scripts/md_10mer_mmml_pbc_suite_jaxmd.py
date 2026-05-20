@@ -149,6 +149,25 @@ def main() -> int:
     p.add_argument("--jaxmd-minimize-steps", type=int, default=200)
     p.add_argument("--jaxmd-pbc-minimize-steps", type=int, default=200)
     p.add_argument("--seed", type=int, default=123)
+    p.add_argument(
+        "--flat-bottom-radius",
+        type=float,
+        default=None,
+        metavar="Å",
+        dest="flat_bottom_radius",
+        help=(
+            "Optional flat-bottom on system COM (same as mmml run / md_10mer suite ASE path): "
+            "PBC uses MIC to box center; vacuum uses origin."
+        ),
+    )
+    p.add_argument(
+        "--flat-bottom-k",
+        type=float,
+        default=1.0,
+        metavar="eV/Å²",
+        dest="flat_bottom_k",
+        help="Flat-bottom k when |COM offset| exceeds radius (default: 1.0).",
+    )
     p.add_argument("--ml-cutoff", type=float, default=0.1)
     p.add_argument("--mm-switch-on", type=float, default=5.5)
     p.add_argument("--mm-cutoff", type=float, default=2.0)
@@ -385,6 +404,8 @@ def main() -> int:
         jax_md_overflow_fallback_to_cell_list=not args.jax_md_disable_fallback,
         jax_md_update_interval=effective_update_interval,
         jax_md_skin_distance=effective_skin,
+        flat_bottom_radius=args.flat_bottom_radius,
+        flat_bottom_force_const=args.flat_bottom_k,
     )
     cutoff = CutoffParameters(ml_cutoff=args.ml_cutoff, mm_switch_on=args.mm_switch_on, mm_cutoff=args.mm_cutoff)
     calc_result = factory(
