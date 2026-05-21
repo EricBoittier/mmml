@@ -83,6 +83,7 @@ class LambdaDynamicsConfig:
     mm_switch_on: float = 5.0
     mm_cutoff: float = 5.0
     no_fix_com: bool = False
+    no_stationary: bool = False
     md_mode: str = "free_nve"
     backend: str = "ase"
     box_size: float | None = None
@@ -304,13 +305,15 @@ def make_md_integrator(
     seed: int,
     langevin_friction: float,
     initialize_velocities: bool = True,
+    remove_net_drift: bool = True,
 ):
     dt = dt_fs * units.fs
     rng = np.random.default_rng(int(seed))
     if initialize_velocities:
         MaxwellBoltzmannDistribution(atoms, temperature_K=temperature_K, rng=rng)
-        Stationary(atoms)
-        ZeroRotation(atoms)
+        if remove_net_drift:
+            Stationary(atoms)
+            ZeroRotation(atoms)
     if integrator == "nve":
         return VelocityVerlet(atoms, timestep=dt)
     if integrator == "nvt_nhc":
@@ -836,6 +839,11 @@ def run_lambda_dynamics(cfg: LambdaDynamicsConfig) -> dict[str, Any]:
     cell_scalar = float(md_settings.box_L) if md_settings.use_pbc and md_settings.box_L else None
 
     use_fix_com = not cfg.no_fix_com
+    remove_net_drift = not cfg.no_stationary
+    print(
+        f"COM handling: FixCom={'on' if use_fix_com else 'off'}, "
+        f"Stationary/ZeroRotation on velocity init={'on' if remove_net_drift else 'off'}"
+    )
     lambda_windows = sorted(float(x) for x in cfg.lambda_windows)
     snap_meta = snapshot_metadata_from_cluster(cluster, cfg, couple_residue_numbers_1b)
 
@@ -868,9 +876,9 @@ def run_lambda_dynamics(cfg: LambdaDynamicsConfig) -> dict[str, Any]:
         for rep in range(cfg.repeats_per_window):
             r_init = base_seed_positions.copy()
             atoms = ase.Atoms(numbers=z, positions=r_init)
+            prepare_atoms_geometry(atoms, r_init, md_settings)
             if use_fix_com:
                 atoms.set_constraint(FixCom())
-            prepare_atoms_geometry(atoms, r_init, md_settings)
 
             label = f"win_{wi:02d}_rep{rep:02d}_lam{lam:.2f}"
             min_traj_path = traj_root / f"{label}_min.traj"
@@ -901,6 +909,7 @@ def run_lambda_dynamics(cfg: LambdaDynamicsConfig) -> dict[str, Any]:
                 temperature_K=cfg.temperature_K,
                 seed=cfg.seed + wi * 1000 + rep,
                 langevin_friction=cfg.langevin_friction,
+                remove_net_drift=remove_net_drift,
             )
             if traj_eq is not None:
                 dyn_eq.attach(traj_eq.write, interval=eq_interval)
@@ -955,6 +964,7 @@ def run_lambda_dynamics(cfg: LambdaDynamicsConfig) -> dict[str, Any]:
                 seed=cfg.seed + wi * 1000 + rep + 1,
                 langevin_friction=cfg.langevin_friction,
                 initialize_velocities=False,
+                remove_net_drift=False,
             )
             dyn_prod.attach(traj_prod.write, interval=max(1, cfg.interval))
             dyn_prod.attach(_on_step)
@@ -1024,6 +1034,9 @@ def run_lambda_dynamics(cfg: LambdaDynamicsConfig) -> dict[str, Any]:
             "box_A": md_settings.box_L,
             "charmm_pre_minimize": cfg.charmm_pre_minimize,
             "calculator_pre_minimize": cfg.calculator_pre_minimize,
+            "fix_com": use_fix_com,
+            "no_fix_com": cfg.no_fix_com,
+            "no_stationary": cfg.no_stationary,
         },
         "description": {
             "delta_F_couple_eV": "TI integral ∫ ⟨∂U/∂λ⟩ dλ (turn on intermolecular coupling of selected residues)",
@@ -1353,7 +1366,16 @@ def add_lambda_dynamics_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--ml-cutoff", type=float, default=1.0)
     parser.add_argument("--mm-switch-on", type=float, default=5.0)
     parser.add_argument("--mm-cutoff", type=float, default=5.0)
-    parser.add_argument("--no-fix-com", action="store_true")
+    parser.add_argument(
+        "--no-fix-com",
+        action="store_true",
+        help="Do not use ASE FixCom (allows system COM translation in vacuum NVE).",
+    )
+    parser.add_argument(
+        "--no-stationary",
+        action="store_true",
+        help="Skip Stationary/ZeroRotation after velocity initialization (net COM drift possible).",
+    )
 
 
 def config_from_namespace(args: argparse.Namespace, repo_root: Path | None = None) -> LambdaDynamicsConfig:
@@ -1404,6 +1426,7 @@ def config_from_namespace(args: argparse.Namespace, repo_root: Path | None = Non
         mm_switch_on=args.mm_switch_on,
         mm_cutoff=args.mm_cutoff,
         no_fix_com=args.no_fix_com,
+        no_stationary=bool(getattr(args, "no_stationary", False)),
         md_mode=str(getattr(args, "lambda_md_mode", "free_nve")),
         backend=backend,
         box_size=getattr(args, "box_size", None),
