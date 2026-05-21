@@ -830,10 +830,9 @@ def run_lambda_dynamics(cfg: LambdaDynamicsConfig) -> dict[str, Any]:
     if backend == "auto":
         backend = "ase"
     if backend == "jaxmd":
-        raise NotImplementedError(
-            "lambda_ti with --backend jaxmd is not implemented yet. "
-            "Use --backend ase with --lambda-md-mode free_nve|pbc_nve|free_nvt|pbc_nvt."
-        )
+        from mmml.cli.run.lambda_jaxmd import run_lambda_dynamics_jaxmd
+
+        return run_lambda_dynamics_jaxmd(cfg)
     if backend != "ase":
         raise ValueError(f"Unsupported backend for lambda_ti: {cfg.backend!r}")
 
@@ -1320,7 +1319,7 @@ def add_lambda_dynamics_args(parser: argparse.ArgumentParser) -> None:
         "--backend",
         choices=["ase", "jaxmd", "auto"],
         default="ase",
-        help="lambda TI MD engine (only ase is implemented; jaxmd raises).",
+        help="lambda TI MD engine: ase (default) or jaxmd (NVE/NHC-NVT; no Langevin).",
     )
     parser.add_argument("--box-size", type=float, default=None, help="PBC cubic box side (Å); auto if omitted.")
     parser.add_argument(

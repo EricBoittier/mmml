@@ -26,7 +26,7 @@ def parse_args() -> argparse.Namespace:
         default="pbc_nve",
         help=(
             "Simulation setup preset. lambda_ti: alchemical TI with CHARMM+MMML minimization "
-            "per λ window (--lambda-md-mode, --backend ase); mmml lambda-mbar afterward."
+            "per λ window (--lambda-md-mode, --backend ase|jaxmd); mmml lambda-mbar afterward."
         ),
     )
     parser.add_argument(
@@ -127,7 +127,7 @@ def parse_args() -> argparse.Namespace:
         "--lambda-md-mode",
         choices=["free_nve", "free_nvt", "pbc_nve", "pbc_nvt"],
         default="free_nve",
-        help="lambda_ti: ASE MD after minimization (vacuum/PBC × NVE/NVT).",
+        help="lambda_ti: MD ensemble (vacuum/PBC × NVE/NVT); use --backend ase or jaxmd.",
     )
     parser.add_argument(
         "--couple-residues",
