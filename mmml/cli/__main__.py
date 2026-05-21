@@ -20,7 +20,8 @@ Available commands:
   make-res    Generate residue (PDB, PSF, topology) via PyCHARMM/CGENFF
   make-box    Pack molecules into periodic box (vacuum or solvated)
   run         MM/ML simulation (ASE + JAX-MD with hybrid calculator)
-  md-system   Run mixed-composition MD setups (free/pbc NVE/NVT + pbc NPT)
+  md-system   Run mixed-composition MD setups (free/pbc NVE/NVT + pbc NPT + lambda TI)
+  lambda-mbar MBAR post-processing for lambda-dynamics runs
   run-pycharmm  Pure CHARMM heating and equilibration (no ML)
   pycharmm-two-residue-sample  Restrained sampling for a two-residue CHARMM system
   xml2npz     Convert Molpro XML files to NPZ format
@@ -49,6 +50,8 @@ Examples:
   mmml make-res --res CYBZ
   mmml make-box --res CYBZ --n 50 --side_length 25.0
   mmml md-system --setup pbc_npt --composition MEOH:5,TIP3:5 --temperature 300 --pressure 1.0
+  mmml md-system --setup lambda_ti --composition MEOH:2 --couple-residues 1 --n-prod 500
+  mmml lambda-mbar --run-dir artifacts/meoh_dimer_lambda_ti
   mmml xml2npz input.xml -o output.npz
   mmml xml2npz inputs/*.xml -o dataset.npz --validate
   mmml validate dataset.npz
@@ -80,7 +83,7 @@ For help on a specific command:
     
     parser.add_argument(
         'command',
-        choices=['make-res', 'make-box', 'run', 'md-system', 'run-pycharmm', 'pycharmm-two-residue-sample', 'xml2npz', 'validate', 'train', 'train-joint', 'evaluate', 'downstream', 'fix-and-split', 'pyscf-dft', 'pyscf-mp2', 'pyscf-evaluate', 'verify-esp-alignment', 'normal-mode-sample', 'physnet-md', 'physnet-evaluate', 'ef-train', 'ef-evaluate', 'ef-md', 'active-learning', 'kernel-fit', 'interpolate-xyz', 'unwrap-traj', 'sample-diverse-xyz', 'gui', 'extract-checkpoint-metrics'],
+        choices=['make-res', 'make-box', 'run', 'md-system', 'lambda-mbar', 'run-pycharmm', 'pycharmm-two-residue-sample', 'xml2npz', 'validate', 'train', 'train-joint', 'evaluate', 'downstream', 'fix-and-split', 'pyscf-dft', 'pyscf-mp2', 'pyscf-evaluate', 'verify-esp-alignment', 'normal-mode-sample', 'physnet-md', 'physnet-evaluate', 'ef-train', 'ef-evaluate', 'ef-md', 'active-learning', 'kernel-fit', 'interpolate-xyz', 'unwrap-traj', 'sample-diverse-xyz', 'gui', 'extract-checkpoint-metrics'],
         help='Command to run'
     )
     parser.add_argument(
@@ -111,6 +114,11 @@ For help on a specific command:
         from .run import md_system
         sys.argv = ['mmml md-system'] + args.args
         return md_system.main()
+
+    elif args.command == 'lambda-mbar':
+        from .run import lambda_mbar
+        sys.argv = ['mmml lambda-mbar'] + args.args
+        return lambda_mbar.main()
 
     elif args.command == 'run-pycharmm':
         from .run.run_pycharmm import main

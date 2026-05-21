@@ -53,7 +53,7 @@ dependencies = [
     "fastapi",
     "uvicorn",
     "pytest>=9.0.2",
-    # Alchemical / multistate free energy (e.g. scripts/meoh_dimer_lambda_ti.py)
+    # Alchemical / multistate free energy (mmml lambda-mbar, scripts/meoh_dimer_lambda_mbar.py)
     "pymbar>=4.0",
 ]
 
