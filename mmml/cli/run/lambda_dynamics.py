@@ -801,6 +801,29 @@ def resolve_model_restart_path(checkpoint: Path | None) -> Path:
     return epoch
 
 
+def _print_run_banner(cfg: LambdaDynamicsConfig, *, backend: str) -> None:
+    """Log key run options before CHARMM/cluster setup (stdout may be noisy afterward)."""
+    use_fix_com = not cfg.no_fix_com
+    remove_net_drift = not cfg.no_stationary
+    comp = cfg.composition or f"{cfg.residue}:{cfg.n_molecules}"
+    lines = [
+        "=== lambda_ti run ===",
+        f"  output_dir: {cfg.output_dir}",
+        f"  composition: {comp}",
+        f"  couple_residues (1-based): {cfg.couple_residue_numbers}",
+        f"  backend: {backend}",
+        f"  lambda_md_mode: {cfg.md_mode}",
+        f"  COM handling: FixCom={'on' if use_fix_com else 'off'}, "
+        f"Stationary/ZeroRotation on velocity init={'on' if remove_net_drift else 'off'}",
+        f"  lambda_windows: {len(cfg.lambda_windows)} values, "
+        f"repeats_per_window={cfg.repeats_per_window}",
+        f"  n_equil={cfg.n_equil}, n_prod={cfg.n_prod}, interval={cfg.interval}",
+        f"  cutoffs (Å): ml={cfg.ml_cutoff}, mm_switch_on={cfg.mm_switch_on}, mm_cutoff={cfg.mm_cutoff}",
+    ]
+    for line in lines:
+        print(line, flush=True)
+
+
 def run_lambda_dynamics(cfg: LambdaDynamicsConfig) -> dict[str, Any]:
     """Run λ-window MD/TI sampling; write summary JSON and snapshot NPZ (no MBAR)."""
     backend = str(cfg.backend).lower()
@@ -817,6 +840,8 @@ def run_lambda_dynamics(cfg: LambdaDynamicsConfig) -> dict[str, Any]:
     repo_root = cfg.repo_root or repo_root_from_here()
     out_dir = cfg.output_dir.expanduser().resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    _print_run_banner(cfg, backend=backend)
 
     cluster = build_cluster_system(cfg)
     z = cluster.z
@@ -840,10 +865,6 @@ def run_lambda_dynamics(cfg: LambdaDynamicsConfig) -> dict[str, Any]:
 
     use_fix_com = not cfg.no_fix_com
     remove_net_drift = not cfg.no_stationary
-    print(
-        f"COM handling: FixCom={'on' if use_fix_com else 'off'}, "
-        f"Stationary/ZeroRotation on velocity init={'on' if remove_net_drift else 'off'}"
-    )
     lambda_windows = sorted(float(x) for x in cfg.lambda_windows)
     snap_meta = snapshot_metadata_from_cluster(cluster, cfg, couple_residue_numbers_1b)
 

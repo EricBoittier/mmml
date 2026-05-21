@@ -257,6 +257,7 @@ def _run_lambda_ti_inline(args: argparse.Namespace) -> int:
     args.langevin_friction = getattr(args, "langevin_friction", 0.02)
 
     cfg = config_from_namespace(args, repo_root=_repo_root())
+    print("mmml md-system: starting lambda_ti (in-process)", flush=True)
     summary = run_lambda_dynamics(cfg)
     print_lambda_summary(summary)
     print(f"Wrote {summary['_summary_path']}")
