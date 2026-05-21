@@ -12,16 +12,22 @@ from pathlib import Path
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Run predefined MD setups (free-space NVE/NVT, periodic NVE/NVT, periodic NPT) "
-            "for arbitrary residue compositions. Wraps scripts/md_10mer_mmml_pbc_suite.py "
-            "(ASE) and scripts/md_10mer_mmml_pbc_suite_jaxmd.py (JAX-MD; periodic or --free-space)."
+            "Run predefined MD setups (free-space NVE/NVT, periodic NVE/NVT, periodic NPT, "
+            "lambda TI for arbitrary compositions) for arbitrary residue compositions. "
+            "Wraps scripts/md_10mer_mmml_pbc_suite.py (ASE), "
+            "scripts/md_10mer_mmml_pbc_suite_jaxmd.py (JAX-MD), and "
+            "mmml.cli.run.lambda_dynamics (lambda_ti). "
+            "MBAR: mmml lambda-mbar --run-dir <output-dir>."
         )
     )
     parser.add_argument(
         "--setup",
-        choices=["free_nve", "free_nvt", "pbc_nve", "pbc_nvt", "pbc_npt", "all"],
+        choices=["free_nve", "free_nvt", "pbc_nve", "pbc_nvt", "pbc_npt", "lambda_ti", "all"],
         default="pbc_nve",
-        help="Simulation setup preset.",
+        help=(
+            "Simulation setup preset. lambda_ti runs gas-phase alchemical sampling "
+            "(NVE + TI) for --composition with --couple-residues; use mmml lambda-mbar afterward."
+        ),
     )
     parser.add_argument(
         "--backend",
@@ -115,6 +121,58 @@ def parse_args() -> argparse.Namespace:
         default=[],
         help="Additional raw args forwarded to the underlying script; put this option last.",
     )
+
+    # --- lambda_ti (--setup lambda_ti) ----------------------------------------
+    parser.add_argument(
+        "--couple-residues",
+        type=str,
+        default="1",
+        help="lambda_ti: 1-based residue numbers sharing λ (comma-separated, cluster order).",
+    )
+    parser.add_argument(
+        "--lambda-windows",
+        type=float,
+        nargs="+",
+        default=[0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+        help="lambda_ti: shared λ values for coupled residues.",
+    )
+    parser.add_argument("--min-steps", type=int, default=10, help="lambda_ti: BFGS steps per window.")
+    parser.add_argument("--min-fmax", type=float, default=0.03, help="lambda_ti: BFGS fmax (eV/Å).")
+    parser.add_argument("--n-equil", type=int, default=500, help="lambda_ti: NVE equilibration steps per window.")
+    parser.add_argument("--n-prod", type=int, default=2000, help="lambda_ti: NVE production steps per window.")
+    parser.add_argument(
+        "--repeats-per-window",
+        type=int,
+        default=1,
+        help="lambda_ti: independent repeats per λ window.",
+    )
+    parser.add_argument(
+        "--interval",
+        type=int,
+        default=20,
+        help="lambda_ti: sample dU/dλ every N production steps.",
+    )
+    parser.add_argument(
+        "--min-com-start-distance",
+        type=float,
+        default=2.0,
+        help="lambda_ti: minimum inter-monomer COM distance after placement (Å).",
+    )
+    parser.add_argument(
+        "--no-fix-com",
+        action="store_true",
+        help="lambda_ti: do not constrain the system center of mass.",
+    )
+    parser.add_argument("--ml-cutoff", type=float, default=1.0, help="lambda_ti: ML cutoff (Å).")
+    parser.add_argument("--mm-switch-on", type=float, default=5.0, help="lambda_ti: MM switch-on (Å).")
+    parser.add_argument("--mm-cutoff", type=float, default=5.0, help="lambda_ti: MM cutoff (Å).")
+    parser.add_argument(
+        "--residue",
+        type=str,
+        default="MEOH",
+        help="lambda_ti: residue name when --composition is not set.",
+    )
+
     return parser.parse_args()
 
 
@@ -128,7 +186,37 @@ def _append_optional(cmd: list[str], flag: str, value) -> None:
     cmd.extend([flag, str(value)])
 
 
+def _run_lambda_ti_inline(args: argparse.Namespace) -> int:
+    from mmml.cli.run.lambda_dynamics import (
+        config_from_namespace,
+        print_lambda_summary,
+        run_lambda_dynamics,
+    )
+
+    if args.interval < 1:
+        raise ValueError("--interval must be >= 1")
+    if args.repeats_per_window < 1:
+        raise ValueError("--repeats-per-window must be >= 1")
+
+    if args.output_dir is None:
+        args.output_dir = Path("artifacts/lambda_ti")
+    args.timestep_fs = args.dt_fs
+    args.temperature_K = args.temperature
+    if not hasattr(args, "min_com_start_distance"):
+        args.min_com_start_distance = 2.0
+
+    cfg = config_from_namespace(args, repo_root=_repo_root())
+    summary = run_lambda_dynamics(cfg)
+    print_lambda_summary(summary)
+    print(f"Wrote {summary['_summary_path']}")
+    print(f"Snapshots: {summary['snapshots_npz']}")
+    print(f"MBAR: mmml lambda-mbar --run-dir {cfg.output_dir}")
+    return 0
+
+
 def build_command(args: argparse.Namespace) -> list[str]:
+    if args.setup == "lambda_ti":
+        raise ValueError("lambda_ti runs in-process; use main() dispatch")
     root = _repo_root()
     ase_script = root / "scripts" / "md_10mer_mmml_pbc_suite.py"
     jaxmd_script = root / "scripts" / "md_10mer_mmml_pbc_suite_jaxmd.py"
@@ -235,6 +323,12 @@ def build_command(args: argparse.Namespace) -> list[str]:
 
 def main() -> int:
     args = parse_args()
+    if args.setup == "lambda_ti":
+        try:
+            return _run_lambda_ti_inline(args)
+        except ValueError as exc:
+            print(f"mmml md-system: error: {exc}", file=sys.stderr)
+            return 2
     try:
         cmd = build_command(args)
     except ValueError as exc:
