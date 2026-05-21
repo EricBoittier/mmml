@@ -468,6 +468,7 @@ def setup_calculator(
     N_MONOMERS + len(dimer_perms)  # Number of systems per batch
     # print(BATCH_SIZE)
     restart_path = Path(model_restart_path) if type(model_restart_path) == str else model_restart_path
+    print(f"[setup_calculator] model_restart_path={restart_path.resolve()}")
 
     # Check if this is a JSON checkpoint (params.json in dir, or path to .json file)
     is_json_checkpoint = (
@@ -588,6 +589,11 @@ def setup_calculator(
         params, MODEL = get_params_model(restart, natoms=max_atoms)
     MODEL.natoms = max_atoms
     print(f"[setup_calculator] Model loaded: {MODEL}")
+    if is_json_checkpoint:
+        print(
+            f"[setup_calculator] Runtime natoms={max_atoms} (largest monomer/dimer in this system). "
+            "n_res is an EF architecture parameter, not the number of CHARMM residues."
+        )
     is_spooky_model = "spooky_model" in type(MODEL).__module__
 
     # Precompute batch structure for full batch (used when not sparse)

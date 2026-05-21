@@ -386,7 +386,12 @@ def load_model_checkpoint(
             with open(metadata_path, 'r') as f:
                 result['metadata'] = json.load(f)
     
-    print(f"✓ Loaded checkpoint from {checkpoint_dir}")
+    load_source = (
+        json_params_path
+        if json_params_path is not None and json_params_path.is_file()
+        else checkpoint_dir
+    )
+    print(f"✓ Loaded checkpoint from {load_source}")
     return result
 
 
