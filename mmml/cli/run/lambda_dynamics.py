@@ -72,6 +72,8 @@ class LambdaDynamicsConfig:
     min_steps: int = 10
     min_fmax: float = 0.03
     n_equil: int = 500
+    save_equil_traj: bool = False
+    equil_traj_interval: int | None = None
     n_prod: int = 2000
     repeats_per_window: int = 1
     interval: int = 20
@@ -884,8 +886,13 @@ def run_lambda_dynamics(cfg: LambdaDynamicsConfig) -> dict[str, Any]:
                 min_traj_path=min_traj_path,
             )
 
-            prod_path = traj_root / f"{label}_prod.traj"
-            traj_prod = Trajectory(str(prod_path), "w", atoms)
+            equil_path: str | None = None
+            traj_eq = None
+            if cfg.save_equil_traj and cfg.n_equil > 0:
+                equil_path = str(traj_root / f"{label}_eq.traj")
+                traj_eq = Trajectory(equil_path, "w", atoms)
+                eq_interval = cfg.equil_traj_interval or cfg.interval
+                eq_interval = max(1, int(eq_interval))
 
             dyn_eq = make_md_integrator(
                 atoms,
@@ -895,7 +902,14 @@ def run_lambda_dynamics(cfg: LambdaDynamicsConfig) -> dict[str, Any]:
                 seed=cfg.seed + wi * 1000 + rep,
                 langevin_friction=cfg.langevin_friction,
             )
+            if traj_eq is not None:
+                dyn_eq.attach(traj_eq.write, interval=eq_interval)
             dyn_eq.run(cfg.n_equil)
+            if traj_eq is not None:
+                traj_eq.close()
+
+            prod_path = traj_root / f"{label}_prod.traj"
+            traj_prod = Trajectory(str(prod_path), "w", atoms)
 
             samples_rep: list[float] = []
             step_count = [0]
@@ -954,6 +968,7 @@ def run_lambda_dynamics(cfg: LambdaDynamicsConfig) -> dict[str, Any]:
                     "mean_dUdlambda_eV": float(np.mean(samples_rep)) if samples_rep else float("nan"),
                     "std_dUdlambda_eV": float(np.std(samples_rep)) if len(samples_rep) > 1 else 0.0,
                     "traj": str(prod_path),
+                    "equil_traj": equil_path,
                     "minimization": min_summary,
                 }
             )
@@ -1319,6 +1334,17 @@ def add_lambda_dynamics_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--rescue-fire-maxstep", type=float, default=0.02)
     parser.add_argument("--skip-jit-warmup", action="store_true")
     parser.add_argument("--n-equil", type=int, default=500)
+    parser.add_argument(
+        "--save-equil-traj",
+        action="store_true",
+        help="Write ASE trajectories during equilibration (…_eq.traj under trajectories/).",
+    )
+    parser.add_argument(
+        "--equil-traj-interval",
+        type=int,
+        default=None,
+        help="Frame interval for equil trajectories (default: same as --interval).",
+    )
     parser.add_argument("--n-prod", type=int, default=2000)
     parser.add_argument("--repeats-per-window", type=int, default=1)
     parser.add_argument("--interval", type=int, default=20)
@@ -1367,6 +1393,8 @@ def config_from_namespace(args: argparse.Namespace, repo_root: Path | None = Non
         pre_min_steps=pre_min_steps,
         pre_min_fmax=pre_min_fmax,
         n_equil=args.n_equil,
+        save_equil_traj=bool(getattr(args, "save_equil_traj", False)),
+        equil_traj_interval=getattr(args, "equil_traj_interval", None),
         n_prod=args.n_prod,
         repeats_per_window=args.repeats_per_window,
         interval=args.interval,

@@ -172,6 +172,17 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--max-fmax-after-min", type=float, default=2.0)
     parser.add_argument("--n-equil", type=int, default=500, help="lambda_ti: equilibration steps per window.")
+    parser.add_argument(
+        "--save-equil-traj",
+        action="store_true",
+        help="lambda_ti: write …_eq.traj under trajectories/ during equilibration (debug).",
+    )
+    parser.add_argument(
+        "--equil-traj-interval",
+        type=int,
+        default=None,
+        help="lambda_ti: equil trajectory frame interval (default: --interval).",
+    )
     parser.add_argument("--n-prod", type=int, default=2000, help="lambda_ti: production steps per window.")
     parser.add_argument(
         "--repeats-per-window",
