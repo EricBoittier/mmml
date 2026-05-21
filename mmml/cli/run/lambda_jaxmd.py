@@ -48,6 +48,20 @@ class LambdaJaxMdBundle:
     pbc_state: dict[str, Any]
 
 
+def _warm_mmml_spherical_cache(
+    *,
+    get_update_fn: Callable | None,
+    positions: np.ndarray,
+    cutoff: CutoffParameters,
+) -> None:
+    """Build MM energy/force caches outside JIT (mirrors ASE ``calculate`` / jaxmd_runner)."""
+    if get_update_fn is None:
+        raise RuntimeError(
+            "MMML calculator returned no get_update_fn; cannot warm MM cache for JAX-MD."
+        )
+    get_update_fn(np.asarray(positions, dtype=float), cutoff)
+
+
 def _ensemble_from_md_settings(md_settings: LambdaMdSettings) -> str:
     if md_settings.integrator == "nve":
         return "nve"
@@ -131,8 +145,12 @@ def build_lambda_jaxmd_bundle(
         )
 
     _, spherical_prod, get_update_fn = _factory(lam_coupled)
-    _, spherical_on, _ = _factory(1.0)
-    _, spherical_off, _ = _factory(0.0)
+    _, spherical_on, get_update_on = _factory(1.0)
+    _, spherical_off, get_update_off = _factory(0.0)
+
+    pos_np = np.asarray(positions, dtype=float)
+    for upd in (get_update_fn, get_update_on, get_update_off):
+        _warm_mmml_spherical_cache(get_update_fn=upd, positions=pos_np, cutoff=cutoff)
 
     z_jnp = jnp.asarray(atomic_numbers, dtype=jnp.int32)
     use_pbc = md_settings.use_pbc
@@ -141,6 +159,10 @@ def build_lambda_jaxmd_bundle(
         jnp.array([box_L, box_L, box_L], dtype=jnp.float32) if use_pbc and box_L else None
     )
     pbc_state: dict[str, Any] = {"box": box_init, "pair_idx": None, "pair_mask": None}
+    if use_pbc and get_update_fn is not None:
+        pair_idx, pair_mask = get_update_fn(pos_np, cutoff)
+        pbc_state["pair_idx"] = pair_idx
+        pbc_state["pair_mask"] = pair_mask
 
     if use_pbc and box_L is not None:
         displacement, shift = space.periodic(box_L)
@@ -465,9 +487,12 @@ def run_lambda_dynamics_jaxmd(cfg: LambdaDynamicsConfig) -> dict[str, Any]:
                 md_settings=md_settings,
                 **calc_kw,
             )
+            # JIT-compile production forces (MM cache already warmed in build_lambda_jaxmd_bundle).
             _ = float(
-                jax.device_get(
-                    bundle.wrapped_force_fn(jnp.asarray(r_min, dtype=jnp.float32))
+                np.abs(
+                    jax.device_get(
+                        bundle.wrapped_force_fn(jnp.asarray(r_min, dtype=jnp.float32))
+                    )
                 ).max()
             )
 
