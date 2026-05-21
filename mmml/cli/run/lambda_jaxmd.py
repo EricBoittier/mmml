@@ -35,8 +35,9 @@ class LambdaJaxMdBundle:
     """JIT MMML spherical calculators for production (λ) and TI probes (λ=1, λ=0)."""
 
     wrapped_force_fn: Callable
-    interaction_on: Callable
-    interaction_off: Callable
+    spherical_prod: Callable
+    spherical_on: Callable
+    spherical_off: Callable
     shift: Callable
     masses: jnp.ndarray
     atomic_numbers: jnp.ndarray
@@ -169,30 +170,6 @@ def build_lambda_jaxmd_bundle(
     else:
         displacement, shift = space.free()
 
-    def _make_interaction_jit(spherical_fn):
-        """One JIT fn per λ probe; spherical_fn must be closed over, not passed as an arg."""
-
-        @jit
-        def interaction_energy(position, mm_pair_idx=None, mm_pair_mask=None, box=None):
-            pos = jnp.asarray(position, dtype=jnp.float32)
-            out = spherical_fn(
-                pos,
-                z_jnp,
-                n_monomers,
-                cutoff,
-                mm_pair_idx=mm_pair_idx,
-                mm_pair_mask=mm_pair_mask,
-                box=box,
-            )
-            ml = jnp.sum(jnp.asarray(out.ml_2b_E))
-            mm = jnp.sum(jnp.asarray(out.mm_E))
-            return ml + mm
-
-        return interaction_energy
-
-    interaction_on = _make_interaction_jit(spherical_on)
-    interaction_off = _make_interaction_jit(spherical_off)
-
     @jit
     def jax_md_force_fn(position, mm_pair_idx=None, mm_pair_mask=None, box=None):
         pos = jnp.asarray(position, dtype=jnp.float32)
@@ -220,8 +197,9 @@ def build_lambda_jaxmd_bundle(
 
     return LambdaJaxMdBundle(
         wrapped_force_fn=wrapped_force_fn,
-        interaction_on=interaction_on,
-        interaction_off=interaction_off,
+        spherical_prod=spherical_prod,
+        spherical_on=spherical_on,
+        spherical_off=spherical_off,
         shift=shift,
         masses=masses,
         atomic_numbers=z_jnp,
@@ -246,19 +224,34 @@ def _refresh_pbc_neighbors(bundle: LambdaJaxMdBundle, position: np.ndarray) -> N
     bundle.pbc_state["box"] = bundle.pbc_state["box"]
 
 
-def _dudl_at_position(bundle: LambdaJaxMdBundle, position: np.ndarray) -> float:
-    pos = jnp.asarray(position, dtype=jnp.float32)
+def _interaction_energy_eV(
+    bundle: LambdaJaxMdBundle,
+    spherical_fn: Callable,
+    position: np.ndarray,
+) -> float:
+    """Evaluate inter-monomer ML+MM energy (eV) via the pre-JIT spherical calculator."""
     if bundle.use_pbc:
         _refresh_pbc_neighbors(bundle, np.asarray(position, dtype=float))
+    pos = jnp.asarray(position, dtype=jnp.float32)
     box = bundle.pbc_state["box"]
     pair_idx = bundle.pbc_state["pair_idx"]
     pair_mask = bundle.pbc_state["pair_mask"]
-    e_on = float(
-        bundle.interaction_on(pos, mm_pair_idx=pair_idx, mm_pair_mask=pair_mask, box=box)
+    out = spherical_fn(
+        pos,
+        bundle.atomic_numbers,
+        bundle.n_monomers,
+        bundle.cutoff,
+        mm_pair_idx=pair_idx,
+        mm_pair_mask=pair_mask,
+        box=box,
     )
-    e_off = float(
-        bundle.interaction_off(pos, mm_pair_idx=pair_idx, mm_pair_mask=pair_mask, box=box)
-    )
+    e = jnp.sum(jnp.asarray(out.ml_2b_E)) + jnp.sum(jnp.asarray(out.mm_E))
+    return float(jax.device_get(e))
+
+
+def _dudl_at_position(bundle: LambdaJaxMdBundle, position: np.ndarray) -> float:
+    e_on = _interaction_energy_eV(bundle, bundle.spherical_on, position)
+    e_off = _interaction_energy_eV(bundle, bundle.spherical_off, position)
     return e_on - e_off
 
 
