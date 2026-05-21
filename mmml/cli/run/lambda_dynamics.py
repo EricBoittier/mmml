@@ -21,10 +21,9 @@ from ase.md.verlet import VelocityVerlet
 from ase.optimize import BFGS
 
 import mmml.interfaces.pycharmmInterface.import_pycharmm as pyci
-from mmml.cli.base import load_physnet_params_and_ef_model, resolve_checkpoint_paths
+from mmml.cli.base import resolve_checkpoint_paths
 from mmml.interfaces.pycharmmInterface.import_pycharmm import coor
 from mmml.interfaces.pycharmmInterface.mmml_calculator import CutoffParameters, setup_calculator
-from mmml.models.physnetjax.physnetjax.restart.restart import get_params_model
 
 import pycharmm.param as param
 import pycharmm.psf as psf
@@ -514,22 +513,16 @@ def plot_window_components(
     return written
 
 
-def _resolve_checkpoint(base: Path | None, repo_root: Path) -> Path:
-    if base is None:
-        ckpt_root, _ = resolve_checkpoint_paths(None)
-    else:
-        ckpt_root = base.expanduser().resolve()
-    base_ckpt_dir, _ = resolve_checkpoint_paths(ckpt_root)
-    return base_ckpt_dir
-
-
-def _latest_epoch_dir(ckpt_root: Path) -> Path:
-    if (ckpt_root / "manifest.ocdbt").exists():
-        return ckpt_root
-    epochs = [p for p in ckpt_root.iterdir() if p.is_dir() and p.name.startswith("epoch-")]
-    if not epochs:
-        raise FileNotFoundError(f"No epoch-* directories in {ckpt_root}")
-    return max(epochs, key=lambda p: int(p.name.split("epoch-")[-1]))
+def resolve_model_restart_path(checkpoint: Path | None) -> Path:
+    """Return a path ``setup_calculator`` accepts (portable .json, params.json dir, or Orbax epoch)."""
+    base, epoch = resolve_checkpoint_paths(checkpoint)
+    base = Path(base).resolve()
+    epoch = Path(epoch).resolve()
+    if base.is_file() and base.suffix.lower() == ".json":
+        return base
+    if base.is_dir() and (base / "params.json").exists():
+        return base
+    return epoch
 
 
 def run_lambda_dynamics(cfg: LambdaDynamicsConfig) -> dict[str, Any]:
@@ -544,13 +537,7 @@ def run_lambda_dynamics(cfg: LambdaDynamicsConfig) -> dict[str, Any]:
     couple_indices = parse_couple_residue_list(cfg.couple_residue_numbers, cluster.n_monomers)
     couple_residue_numbers_1b = [i + 1 for i in couple_indices]
 
-    base_ckpt_dir = _resolve_checkpoint(cfg.checkpoint, repo_root)
-    if cfg.checkpoint is not None and cfg.checkpoint.expanduser().resolve().is_file() and cfg.checkpoint.suffix == ".json":
-        load_physnet_params_and_ef_model(cfg.checkpoint.expanduser().resolve(), natoms=len(z))
-    else:
-        epoch_dir = _latest_epoch_dir(base_ckpt_dir)
-        phys_params, phys_model = get_params_model(str(epoch_dir), natoms=len(z))
-        phys_model.natoms = len(z)
+    model_restart_path = resolve_model_restart_path(cfg.checkpoint)
 
     at_codes = np.asarray(psf.get_iac(), dtype=int) - 1
     n_types = len(param.get_atc())
@@ -568,7 +555,7 @@ def run_lambda_dynamics(cfg: LambdaDynamicsConfig) -> dict[str, Any]:
 
     calc_common = dict(
         atomic_numbers=z,
-        base_ckpt_dir=base_ckpt_dir,
+        base_ckpt_dir=model_restart_path,
         atoms_per_monomer=cluster.atoms_per_monomer,
         n_monomers=cluster.n_monomers,
         couple_indices=couple_indices,
@@ -768,7 +755,7 @@ def run_mbar_analysis(cfg: MbarConfig) -> dict[str, Any]:
         repo_root,
     )
 
-    base_ckpt_dir = _resolve_checkpoint(cfg.checkpoint, repo_root)
+    model_restart_path = resolve_model_restart_path(cfg.checkpoint)
     at_codes = np.asarray(psf.get_iac(), dtype=int) - 1
     n_types = len(param.get_atc())
     ep_scale = np.ones(n_types, dtype=float)
@@ -780,7 +767,7 @@ def run_mbar_analysis(cfg: MbarConfig) -> dict[str, Any]:
     )
     calc_common = dict(
         atomic_numbers=z,
-        base_ckpt_dir=base_ckpt_dir,
+        base_ckpt_dir=model_restart_path,
         atoms_per_monomer=snap["atoms_per_monomer"],
         n_monomers=snap["n_monomers"],
         couple_indices=couple_indices,
