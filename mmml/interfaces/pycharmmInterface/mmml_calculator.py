@@ -498,6 +498,7 @@ def setup_calculator(
                     "cutoff": 6.0,
                     "max_atomic_number": 118,
                     "charges": False,
+                    "include_electrostatics": False,
                     "natoms": max_atoms,
                     "total_charge": 0,
                     "n_res": 3,
@@ -527,6 +528,9 @@ def setup_calculator(
             model_config['natoms'] = max_atoms
             if cell:
                 model_config['use_pbc'] = True
+            # ML Coulomb only runs when charges=True; keep repr/config consistent for neutral models.
+            if not model_config.get("charges", False):
+                model_config["include_electrostatics"] = False
             is_spooky_model = (
                 str(config.get("model_type", "")).lower() == "spooky"
                 or "spooky" in str(restart_path).lower()
