@@ -205,7 +205,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--no-fix-com",
         action="store_true",
-        help="lambda_ti: do not constrain the system center of mass.",
+        help="lambda_ti: disable ASE FixCom (COM position can drift during MD).",
+    )
+    parser.add_argument(
+        "--no-stationary",
+        action="store_true",
+        help="lambda_ti: skip Stationary/ZeroRotation on velocity init (with --no-fix-com, COM can translate).",
     )
     parser.add_argument("--ml-cutoff", type=float, default=1.0, help="lambda_ti: ML cutoff (Å).")
     parser.add_argument("--mm-switch-on", type=float, default=5.0, help="lambda_ti: MM switch-on (Å).")
