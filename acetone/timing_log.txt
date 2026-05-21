@@ -1,0 +1,13 @@
+[11:59:30] cluster_build: 0.343 s
+[11:59:30] PSF charge validation: total=-0.000000 e, charged_atoms=200, ACO:-0.000000 e
+[11:59:30] vac_nvt_langevin: CHARMM minimization starting (SD=25, ABNR=100, tolenr=0.001, tolgrd=0.001)
+[11:59:30] vac_nvt_langevin: CHARMM minimization 0.019 s
+[11:59:31] cutoff plot: /mmhome/boittier/home/mmml/acetone/cutoffs_schematic_0.10_5.50_2.00_complementary.png
+[11:59:31] vac_nvt_langevin: mmml setup_calculator 0.619 s, factory_call 0.000 s
+[11:59:41] vac_nvt_langevin: JIT warmup (first potential energy) 9.432 s
+[11:59:41] vac_nvt_langevin: BFGS starting (max 50 steps, fmax=0.1; this is pre-MD minimization, not dynamics yet)
+[11:59:42] vac_nvt_langevin: BFGS 0.893 s (49 iters)
+[11:59:42] vac_nvt_langevin: MD initialization complete; writing initial frame and observables
+[11:59:42] vac_nvt_langevin: initial MD snapshot 0.005 s; running 4000 steps
+[11:59:57] vac_nvt_langevin: MD integrator loop 15.942 s
+[11:59:57] vac_nvt_langevin: MD integrator 15.942 s (3.9855 ms/step mean)

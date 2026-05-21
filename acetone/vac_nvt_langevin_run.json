@@ -1,0 +1,34 @@
+{
+  "traj": "vac_nvt_langevin.traj",
+  "traj_parts": [
+    "vac_nvt_langevin.traj"
+  ],
+  "traj_part_count": 1,
+  "log": "vac_nvt_langevin.log",
+  "mode": "nvt_langevin",
+  "frames_traj": 4002,
+  "log_samples": 82,
+  "etot_start_eV": -954.6240570471585,
+  "etot_end_eV": -950.0345832788661,
+  "etot_drift_eV": 4.589473768292464,
+  "etot_span_eV": 5.4098041760157685,
+  "temp_start_K": 303.3849901635806,
+  "temp_end_K": 319.9492418410249,
+  "temp_mean_K": 279.348071930585,
+  "timings_s": {
+    "charmm_min_wall_s": 0.019429045962169766,
+    "mmml_setup_calculator_s": 0.6192152850562707,
+    "mmml_factory_call_s": 4.456599708646536e-05,
+    "jit_warmup_first_potential_s": 9.43217330891639,
+    "pre_bfgs_energy_eV": -959.5145263671875,
+    "pre_bfgs_fmax_eVA": 2.357344627380371,
+    "bfgs_wall_s": 0.8929960540262982,
+    "bfgs_traj": "vac_nvt_langevin_min.traj",
+    "bfgs_iterations": 49.0,
+    "md_entry_to_integrator_ready_s": 0.0006894610123708844,
+    "md_first_observable_snapshot_s": 0.004938593017868698,
+    "md_attach_overhead_s": 3.862695302814245e-05,
+    "md_integrator_loop_s": 15.942023403011262,
+    "md_per_step_mean_ms": 3.9855058507528156
+  }
+}
