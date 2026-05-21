@@ -169,32 +169,29 @@ def build_lambda_jaxmd_bundle(
     else:
         displacement, shift = space.free()
 
-    @jit
-    def _interaction(spherical_fn, position, mm_pair_idx=None, mm_pair_mask=None, box=None):
-        pos = jnp.asarray(position, dtype=jnp.float32)
-        out = spherical_fn(
-            pos,
-            z_jnp,
-            n_monomers,
-            cutoff,
-            mm_pair_idx=mm_pair_idx,
-            mm_pair_mask=mm_pair_mask,
-            box=box,
-        )
-        ml = jnp.sum(jnp.asarray(out.ml_2b_E))
-        mm = jnp.sum(jnp.asarray(out.mm_E))
-        return ml + mm
+    def _make_interaction_jit(spherical_fn):
+        """One JIT fn per λ probe; spherical_fn must be closed over, not passed as an arg."""
 
-    interaction_on = jit(
-        lambda position, mm_pair_idx=None, mm_pair_mask=None, box=None: _interaction(
-            spherical_on, position, mm_pair_idx, mm_pair_mask, box
-        )
-    )
-    interaction_off = jit(
-        lambda position, mm_pair_idx=None, mm_pair_mask=None, box=None: _interaction(
-            spherical_off, position, mm_pair_idx, mm_pair_mask, box
-        )
-    )
+        @jit
+        def interaction_energy(position, mm_pair_idx=None, mm_pair_mask=None, box=None):
+            pos = jnp.asarray(position, dtype=jnp.float32)
+            out = spherical_fn(
+                pos,
+                z_jnp,
+                n_monomers,
+                cutoff,
+                mm_pair_idx=mm_pair_idx,
+                mm_pair_mask=mm_pair_mask,
+                box=box,
+            )
+            ml = jnp.sum(jnp.asarray(out.ml_2b_E))
+            mm = jnp.sum(jnp.asarray(out.mm_E))
+            return ml + mm
+
+        return interaction_energy
+
+    interaction_on = _make_interaction_jit(spherical_on)
+    interaction_off = _make_interaction_jit(spherical_off)
 
     @jit
     def jax_md_force_fn(position, mm_pair_idx=None, mm_pair_mask=None, box=None):
