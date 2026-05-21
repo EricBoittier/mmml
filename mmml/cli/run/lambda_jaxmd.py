@@ -22,6 +22,7 @@ from mmml.cli.run.lambda_dynamics import (
     lambda_array,
     minimize_lambda_structure,
     prepare_atoms_geometry,
+    resolve_model_restart_path,
 )
 from mmml.interfaces.pycharmmInterface.mmml_calculator import CutoffParameters, setup_calculator
 
@@ -368,6 +369,7 @@ def run_lambda_dynamics_jaxmd(cfg: LambdaDynamicsConfig) -> dict[str, Any]:
         parse_couple_residue_list,
         plot_window_components,
         repo_root_from_here,
+        resolve_lambda_md_settings,
         save_snapshots_npz,
         snapshot_metadata_from_cluster,
     )
