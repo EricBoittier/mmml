@@ -6,15 +6,15 @@ Build any composition (as ``mmml md-system``), select coupled residues by
 1-based index in cluster order, and sample λ windows. MBAR is separate:
 ``mmml lambda-mbar`` or ``scripts/meoh_dimer_lambda_mbar.py``.
 
-Example (methanol dimer, couple residue 1):
+Example (methanol dimer, CHARMM + MMML min, vacuum NVE):
 
   mmml md-system --setup lambda_ti --composition MEOH:2 --couple-residues 1 \\
-    --output-dir artifacts/meoh_dimer_lambda_ti --checkpoint PATH
+    --lambda-md-mode free_nve --pre-min-steps 50 --output-dir artifacts/lambda_ti
 
-Example (mixed cluster, couple residues 1 and 3):
+Example (PBC NVE, residues 1 and 3 coupled):
 
-  mmml md-system --setup lambda_ti --composition MEOH:2,TIP3:1 --couple-residues 1,3 \\
-    --spacing 6 --n-prod 2000
+  mmml md-system --setup lambda_ti --composition MEOH:2,TIP3:1 \\
+    --couple-residues 1,3 --lambda-md-mode pbc_nve --box-size 40 --spacing 6
 """
 
 <<<<<<< HEAD

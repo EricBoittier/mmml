@@ -16,9 +16,12 @@ import pandas as pd
 from ase import units
 from ase.constraints import FixCom
 from ase.io.trajectory import Trajectory
-from ase.md.velocitydistribution import MaxwellBoltzmannDistribution, Stationary
+from ase.md.langevin import Langevin
+from ase.md.nose_hoover_chain import NoseHooverChainNVT
+from ase.md.velocitydistribution import MaxwellBoltzmannDistribution, Stationary, ZeroRotation
 from ase.md.verlet import VelocityVerlet
 from ase.optimize import BFGS
+from ase.optimize.fire import FIRE
 
 import mmml.interfaces.pycharmmInterface.import_pycharmm as pyci
 from mmml.cli.base import resolve_checkpoint_paths
@@ -78,6 +81,30 @@ class LambdaDynamicsConfig:
     mm_switch_on: float = 5.0
     mm_cutoff: float = 5.0
     no_fix_com: bool = False
+    md_mode: str = "free_nve"
+    backend: str = "ase"
+    box_size: float | None = None
+    nvt_integrator: str = "auto"
+    langevin_friction: float = 0.02
+    charmm_pre_minimize: bool = True
+    calculator_pre_minimize: bool = True
+    pre_min_steps: int = 50
+    pre_min_fmax: float = 0.1
+    bfgs_maxstep: float = 0.05
+    charmm_sd_steps: int = 25
+    charmm_abnr_steps: int = 100
+    charmm_tolenr: float = 1e-3
+    charmm_tolgrd: float = 1e-3
+    charmm_nbxmod: int = 5
+    min_intermonomer_atom_distance: float = 0.1
+    rescue_minimize: bool = True
+    rescue_fire_steps: int = 300
+    rescue_fire_fmax: float = 0.1
+    rescue_fire_maxstep: float = 0.02
+    max_fmax_after_min: float = 2.0
+    flat_bottom_radius: float | None = None
+    flat_bottom_k: float = 1.0
+    skip_jit_warmup: bool = False
     repo_root: Path | None = None
 
 
@@ -203,9 +230,10 @@ def build_cluster_system(cfg: LambdaDynamicsConfig) -> ClusterContext:
         min_com_distance=float(cfg.min_com_start_distance),
     )
 
+    base_positions = np.asarray(r0, dtype=float).copy()
     return ClusterContext(
         z=z,
-        base_seed_positions=np.asarray(r0, dtype=float).copy(),
+        base_seed_positions=base_positions,
         atoms_per_monomer=[int(x) for x in atoms_per_list],
         residue_labels=list(residue_labels),
         monomer_offsets=monomer_offsets,
@@ -213,6 +241,243 @@ def build_cluster_system(cfg: LambdaDynamicsConfig) -> ClusterContext:
         composition_summary=composition_summary,
         composition_str=composition_str,
     )
+
+
+@dataclass
+class LambdaMdSettings:
+    use_pbc: bool
+    integrator: str
+    box_L: float | None
+
+
+def resolve_lambda_md_settings(cfg: LambdaDynamicsConfig, positions: np.ndarray) -> LambdaMdSettings:
+    mode = str(cfg.md_mode).lower()
+    if mode not in {"free_nve", "free_nvt", "pbc_nve", "pbc_nvt"}:
+        raise ValueError(
+            f"md_mode must be free_nve, free_nvt, pbc_nve, or pbc_nvt; got {cfg.md_mode!r}"
+        )
+    use_pbc = mode.startswith("pbc_")
+    if mode.endswith("_nve"):
+        integrator = "nve"
+    elif cfg.nvt_integrator == "langevin" or (
+        cfg.nvt_integrator == "auto" and bool(cfg.composition)
+    ):
+        integrator = "nvt_langevin"
+    else:
+        integrator = "nvt_nhc"
+
+    box_L: float | None = None
+    if use_pbc:
+        box_L = float(cfg.box_size) if cfg.box_size is not None else None
+        if box_L is None:
+            md = _load_md_suite_module(cfg.repo_root or repo_root_from_here())
+            box_L = float(md._cubic_box_length(positions, cfg.ml_cutoff))
+    return LambdaMdSettings(use_pbc=use_pbc, integrator=integrator, box_L=box_L)
+
+
+def prepare_atoms_geometry(
+    atoms: ase.Atoms,
+    positions: np.ndarray,
+    md_settings: LambdaMdSettings,
+) -> None:
+    atoms.set_positions(positions)
+    if md_settings.use_pbc:
+        assert md_settings.box_L is not None
+        L = float(md_settings.box_L)
+        centered = positions - positions.mean(axis=0) + 0.5 * L
+        atoms.set_positions(centered)
+        atoms.set_cell([L, L, L])
+        atoms.set_pbc(True)
+    else:
+        atoms.set_cell(None)
+        atoms.set_pbc(False)
+
+
+def make_md_integrator(
+    atoms: ase.Atoms,
+    *,
+    integrator: str,
+    dt_fs: float,
+    temperature_K: float,
+    seed: int,
+    langevin_friction: float,
+    initialize_velocities: bool = True,
+):
+    dt = dt_fs * units.fs
+    rng = np.random.default_rng(int(seed))
+    if initialize_velocities:
+        MaxwellBoltzmannDistribution(atoms, temperature_K=temperature_K, rng=rng)
+        Stationary(atoms)
+        ZeroRotation(atoms)
+    if integrator == "nve":
+        return VelocityVerlet(atoms, timestep=dt)
+    if integrator == "nvt_nhc":
+        tdamp = 100.0 * dt
+        return NoseHooverChainNVT(
+            atoms,
+            timestep=dt,
+            temperature_K=temperature_K,
+            tdamp=tdamp,
+            tchain=3,
+            tloop=1,
+        )
+    if integrator == "nvt_langevin":
+        return Langevin(
+            atoms,
+            timestep=dt,
+            temperature_K=temperature_K,
+            friction=langevin_friction,
+            fixcm=False,
+            rng=rng,
+        )
+    raise ValueError(f"Unknown integrator: {integrator!r}")
+
+
+def minimize_lambda_structure(
+    atoms: ase.Atoms,
+    *,
+    cfg: LambdaDynamicsConfig,
+    cluster: ClusterContext,
+    model_restart_path: Path,
+    couple_indices: list[int],
+    lam_coupled: float,
+    md_settings: LambdaMdSettings,
+    label: str,
+    min_traj_path: Path | None,
+) -> dict[str, float | int | str]:
+    """CHARMM (MM) then MMML-calculator BFGS, matching ``md_10mer_mmml_pbc_suite``."""
+    repo_root = cfg.repo_root or repo_root_from_here()
+    md = _load_md_suite_module(repo_root)
+    timings: dict[str, float | int | str] = {}
+    overlap_kw = dict(
+        nstep_sd=cfg.charmm_sd_steps,
+        nstep_abnr=cfg.charmm_abnr_steps,
+        tolenr=cfg.charmm_tolenr,
+        tolgrd=cfg.charmm_tolgrd,
+        nbxmod=cfg.charmm_nbxmod,
+        timings=timings,
+    )
+
+    md._check_or_charmm_overlap_rescue(
+        atoms,
+        cluster.monomer_offsets,
+        min_distance=cfg.min_intermonomer_atom_distance,
+        context=f"{label}: before minimization",
+        **overlap_kw,
+    )
+
+    if cfg.charmm_pre_minimize:
+        print(
+            f"{label}: CHARMM minimization (SD={cfg.charmm_sd_steps}, "
+            f"ABNR={cfg.charmm_abnr_steps})"
+        )
+        md._run_charmm_minimize(
+            atoms,
+            nstep_sd=cfg.charmm_sd_steps,
+            nstep_abnr=cfg.charmm_abnr_steps,
+            tolenr=cfg.charmm_tolenr,
+            tolgrd=cfg.charmm_tolgrd,
+            nbxmod=cfg.charmm_nbxmod,
+            timings=timings,
+            cubic_box_side_A=md_settings.box_L if md_settings.use_pbc else None,
+        )
+        md._check_or_charmm_overlap_rescue(
+            atoms,
+            cluster.monomer_offsets,
+            min_distance=cfg.min_intermonomer_atom_distance,
+            context=f"{label}: after CHARMM minimization",
+            **overlap_kw,
+        )
+
+    at_codes = np.asarray(psf.get_iac(), dtype=int) - 1
+    n_types = len(param.get_atc())
+    ep_scale = np.ones(n_types, dtype=float)
+    sig_scale = np.ones(n_types, dtype=float)
+    cutoff = CutoffParameters(
+        ml_cutoff=cfg.ml_cutoff,
+        mm_switch_on=cfg.mm_switch_on,
+        mm_cutoff=cfg.mm_cutoff,
+    )
+    cell_scalar = float(md_settings.box_L) if md_settings.use_pbc and md_settings.box_L else None
+    calc = build_fixed_lambda_calculator(
+        atomic_numbers=cluster.z,
+        atomic_positions=atoms.get_positions(),
+        base_ckpt_dir=model_restart_path,
+        atoms_per_monomer=cluster.atoms_per_monomer,
+        n_monomers=cluster.n_monomers,
+        couple_indices=couple_indices,
+        lam_coupled=lam_coupled,
+        cutoff=cutoff,
+        ml_cutoff=cfg.ml_cutoff,
+        mm_switch_on=cfg.mm_switch_on,
+        mm_cutoff=cfg.mm_cutoff,
+        at_codes=at_codes,
+        ep_scale=ep_scale,
+        sig_scale=sig_scale,
+        cell_scalar=cell_scalar,
+        flat_bottom_radius=cfg.flat_bottom_radius,
+        flat_bottom_k=cfg.flat_bottom_k,
+    )
+    atoms.calc = calc
+
+    if not cfg.skip_jit_warmup:
+        _ = float(atoms.get_potential_energy())
+
+    if not cfg.calculator_pre_minimize:
+        coor.set_positions(pd.DataFrame(atoms.get_positions(), columns=["x", "y", "z"]))
+        return timings
+
+    print(f"{label}: MMML BFGS (max {cfg.pre_min_steps} steps, fmax={cfg.pre_min_fmax})")
+    bfgs_log = None
+    opt = BFGS(
+        atoms,
+        logfile=bfgs_log,
+        trajectory=str(min_traj_path) if min_traj_path else None,
+        maxstep=cfg.bfgs_maxstep,
+    )
+    opt.attach(
+        lambda: md._check_or_charmm_overlap_rescue(
+            atoms,
+            cluster.monomer_offsets,
+            min_distance=cfg.min_intermonomer_atom_distance,
+            context=f"{label}: ASE BFGS",
+            **overlap_kw,
+        ),
+        interval=1,
+    )
+    opt.run(fmax=cfg.pre_min_fmax, steps=cfg.pre_min_steps)
+    timings["bfgs_iterations"] = int(opt.get_number_of_steps())
+    fmin = float(np.abs(atoms.get_forces()).max())
+    timings["bfgs_fmax_eVA"] = fmin
+    if min_traj_path is not None:
+        timings["min_traj"] = str(min_traj_path)
+
+    if fmin > cfg.pre_min_fmax and cfg.rescue_minimize:
+        print(f"{label}: ASE FIRE rescue (fmax={fmin:.4f} > {cfg.pre_min_fmax})")
+        fire = FIRE(atoms, logfile=bfgs_log, maxstep=cfg.rescue_fire_maxstep)
+        fire.attach(
+            lambda: md._check_or_charmm_overlap_rescue(
+                atoms,
+                cluster.monomer_offsets,
+                min_distance=cfg.min_intermonomer_atom_distance,
+                context=f"{label}: ASE FIRE",
+                **overlap_kw,
+            ),
+            interval=1,
+        )
+        fire.run(fmax=cfg.rescue_fire_fmax, steps=cfg.rescue_fire_steps)
+        fmin = float(np.abs(atoms.get_forces()).max())
+        timings["fire_fmax_eVA"] = fmin
+
+    if fmin > cfg.max_fmax_after_min:
+        raise RuntimeError(
+            f"{label}: post-minimization fmax={fmin:.4f} eV/Å exceeds "
+            f"--max-fmax-after-min={cfg.max_fmax_after_min}"
+        )
+
+    coor.set_positions(pd.DataFrame(atoms.get_positions(), columns=["x", "y", "z"]))
+    timings["final_fmax_eVA"] = fmin
+    return timings
 
 
 def ensure_psf_for_snapshots(meta: dict[str, Any], repo_root: Path) -> None:
@@ -303,9 +568,13 @@ def build_fixed_lambda_calculator(
     at_codes: np.ndarray,
     ep_scale: np.ndarray,
     sig_scale: np.ndarray,
+    cell_scalar: float | None = None,
+    flat_bottom_radius: float | None = None,
+    flat_bottom_k: float = 1.0,
 ) -> object:
     lam_arr = lambda_array(n_monomers, couple_indices, lam_coupled)
     max_atoms_per = int(max(atoms_per_monomer))
+    cell_arg = float(cell_scalar) if cell_scalar is not None else None
     factory = setup_calculator(
         ATOMS_PER_MONOMER=atoms_per_monomer,
         N_MONOMERS=n_monomers,
@@ -318,11 +587,13 @@ def build_fixed_lambda_calculator(
         debug=False,
         model_restart_path=base_ckpt_dir,
         MAX_ATOMS_PER_SYSTEM=max_atoms_per * 2,
-        cell=None,
+        cell=cell_arg,
         ep_scale=ep_scale,
         sig_scale=sig_scale,
         at_codes_override=at_codes,
         lambda_monomer=lam_arr,
+        flat_bottom_radius=flat_bottom_radius,
+        flat_bottom_force_const=flat_bottom_k,
     )
     calc, _, _ = factory(
         atomic_numbers=atomic_numbers,
@@ -527,6 +798,17 @@ def resolve_model_restart_path(checkpoint: Path | None) -> Path:
 
 def run_lambda_dynamics(cfg: LambdaDynamicsConfig) -> dict[str, Any]:
     """Run λ-window MD/TI sampling; write summary JSON and snapshot NPZ (no MBAR)."""
+    backend = str(cfg.backend).lower()
+    if backend == "auto":
+        backend = "ase"
+    if backend == "jaxmd":
+        raise NotImplementedError(
+            "lambda_ti with --backend jaxmd is not implemented yet. "
+            "Use --backend ase with --lambda-md-mode free_nve|pbc_nve|free_nvt|pbc_nvt."
+        )
+    if backend != "ase":
+        raise ValueError(f"Unsupported backend for lambda_ti: {cfg.backend!r}")
+
     repo_root = cfg.repo_root or repo_root_from_here()
     out_dir = cfg.output_dir.expanduser().resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -538,6 +820,7 @@ def run_lambda_dynamics(cfg: LambdaDynamicsConfig) -> dict[str, Any]:
     couple_residue_numbers_1b = [i + 1 for i in couple_indices]
 
     model_restart_path = resolve_model_restart_path(cfg.checkpoint)
+    md_settings = resolve_lambda_md_settings(cfg, base_seed_positions)
 
     at_codes = np.asarray(psf.get_iac(), dtype=int) - 1
     n_types = len(param.get_atc())
@@ -548,6 +831,7 @@ def run_lambda_dynamics(cfg: LambdaDynamicsConfig) -> dict[str, Any]:
         mm_switch_on=cfg.mm_switch_on,
         mm_cutoff=cfg.mm_cutoff,
     )
+    cell_scalar = float(md_settings.box_L) if md_settings.use_pbc and md_settings.box_L else None
 
     use_fix_com = not cfg.no_fix_com
     lambda_windows = sorted(float(x) for x in cfg.lambda_windows)
@@ -566,6 +850,9 @@ def run_lambda_dynamics(cfg: LambdaDynamicsConfig) -> dict[str, Any]:
         at_codes=at_codes,
         ep_scale=ep_scale,
         sig_scale=sig_scale,
+        cell_scalar=cell_scalar,
+        flat_bottom_radius=cfg.flat_bottom_radius,
+        flat_bottom_k=cfg.flat_bottom_k,
     )
 
     rows: list[dict] = []
@@ -573,7 +860,6 @@ def run_lambda_dynamics(cfg: LambdaDynamicsConfig) -> dict[str, Any]:
     traj_root = out_dir / "trajectories"
     traj_root.mkdir(exist_ok=True)
 
-    dt = cfg.timestep_fs * units.fs
     for wi, lam in enumerate(lambda_windows):
         samples: list[float] = []
         repeat_stats: list[dict[str, float | int | str]] = []
@@ -582,25 +868,33 @@ def run_lambda_dynamics(cfg: LambdaDynamicsConfig) -> dict[str, Any]:
             atoms = ase.Atoms(numbers=z, positions=r_init)
             if use_fix_com:
                 atoms.set_constraint(FixCom())
-            calc_dyn = build_fixed_lambda_calculator(
-                atomic_positions=atoms.get_positions(),
+            prepare_atoms_geometry(atoms, r_init, md_settings)
+
+            label = f"win_{wi:02d}_rep{rep:02d}_lam{lam:.2f}"
+            min_traj_path = traj_root / f"{label}_min.traj"
+            min_summary = minimize_lambda_structure(
+                atoms,
+                cfg=cfg,
+                cluster=cluster,
+                model_restart_path=model_restart_path,
+                couple_indices=couple_indices,
                 lam_coupled=lam,
-                **calc_common,
+                md_settings=md_settings,
+                label=label,
+                min_traj_path=min_traj_path,
             )
-            atoms.calc = calc_dyn
-            MaxwellBoltzmannDistribution(atoms, temperature_K=cfg.temperature_K)
-            Stationary(atoms)
-            coor.set_positions(pd.DataFrame(atoms.get_positions(), columns=["x", "y", "z"]))
 
-            min_traj_path = traj_root / f"win_{wi:02d}_rep{rep:02d}_lam{lam:.2f}_min.traj"
-            minimizer = BFGS(atoms, trajectory=str(min_traj_path), logfile=None)
-            minimizer.run(fmax=cfg.min_fmax, steps=cfg.min_steps)
-            coor.set_positions(pd.DataFrame(atoms.get_positions(), columns=["x", "y", "z"]))
-
-            prod_path = traj_root / f"win_{wi:02d}_rep{rep:02d}_lam{lam:.2f}_prod.traj"
+            prod_path = traj_root / f"{label}_prod.traj"
             traj_prod = Trajectory(str(prod_path), "w", atoms)
 
-            dyn_eq = VelocityVerlet(atoms, timestep=dt)
+            dyn_eq = make_md_integrator(
+                atoms,
+                integrator=md_settings.integrator,
+                dt_fs=cfg.timestep_fs,
+                temperature_K=cfg.temperature_K,
+                seed=cfg.seed + wi * 1000 + rep,
+                langevin_friction=cfg.langevin_friction,
+            )
             dyn_eq.run(cfg.n_equil)
 
             samples_rep: list[float] = []
@@ -619,6 +913,11 @@ def run_lambda_dynamics(cfg: LambdaDynamicsConfig) -> dict[str, Any]:
             )
             atoms_probe_on.calc = calc_probe_on
             atoms_probe_off.calc = calc_probe_off
+            atoms.calc = build_fixed_lambda_calculator(
+                atomic_positions=atoms.get_positions(),
+                lam_coupled=lam,
+                **calc_common,
+            )
 
             def _on_step(_atoms=atoms):
                 step_count[0] += 1
@@ -634,7 +933,15 @@ def run_lambda_dynamics(cfg: LambdaDynamicsConfig) -> dict[str, Any]:
                     samples.append(d)
                     snapshots_per_window[wi].append(_atoms.get_positions().copy())
 
-            dyn_prod = VelocityVerlet(atoms, timestep=dt)
+            dyn_prod = make_md_integrator(
+                atoms,
+                integrator=md_settings.integrator,
+                dt_fs=cfg.timestep_fs,
+                temperature_K=cfg.temperature_K,
+                seed=cfg.seed + wi * 1000 + rep + 1,
+                langevin_friction=cfg.langevin_friction,
+                initialize_velocities=False,
+            )
             dyn_prod.attach(traj_prod.write, interval=max(1, cfg.interval))
             dyn_prod.attach(_on_step)
             dyn_prod.run(cfg.n_prod)
@@ -647,6 +954,7 @@ def run_lambda_dynamics(cfg: LambdaDynamicsConfig) -> dict[str, Any]:
                     "mean_dUdlambda_eV": float(np.mean(samples_rep)) if samples_rep else float("nan"),
                     "std_dUdlambda_eV": float(np.std(samples_rep)) if len(samples_rep) > 1 else 0.0,
                     "traj": str(prod_path),
+                    "minimization": min_summary,
                 }
             )
 
@@ -694,6 +1002,13 @@ def run_lambda_dynamics(cfg: LambdaDynamicsConfig) -> dict[str, Any]:
             "placement_seed": int(cfg.seed),
             "couple_residue_numbers": couple_residue_numbers_1b,
             "couple_residue_labels": coupled_labels,
+            "backend": backend,
+            "md_mode": cfg.md_mode,
+            "integrator": md_settings.integrator,
+            "use_pbc": md_settings.use_pbc,
+            "box_A": md_settings.box_L,
+            "charmm_pre_minimize": cfg.charmm_pre_minimize,
+            "calculator_pre_minimize": cfg.calculator_pre_minimize,
         },
         "description": {
             "delta_F_couple_eV": "TI integral ∫ ⟨∂U/∂λ⟩ dλ (turn on intermolecular coupling of selected residues)",
@@ -946,8 +1261,63 @@ def add_lambda_dynamics_args(parser: argparse.ArgumentParser) -> None:
         nargs="+",
         default=[0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
     )
-    parser.add_argument("--min-steps", type=int, default=10)
-    parser.add_argument("--min-fmax", type=float, default=0.03)
+    parser.add_argument(
+        "--lambda-md-mode",
+        choices=["free_nve", "free_nvt", "pbc_nve", "pbc_nvt"],
+        default="free_nve",
+        help="MD ensemble for equilibration/production (ASE): vacuum vs PBC, NVE vs NVT.",
+    )
+    parser.add_argument(
+        "--backend",
+        choices=["ase", "jaxmd", "auto"],
+        default="ase",
+        help="lambda TI MD engine (only ase is implemented; jaxmd raises).",
+    )
+    parser.add_argument("--box-size", type=float, default=None, help="PBC cubic box side (Å); auto if omitted.")
+    parser.add_argument(
+        "--nvt-integrator",
+        choices=["auto", "nhc", "langevin"],
+        default="auto",
+        help="NVT thermostat when lambda-md-mode ends with _nvt.",
+    )
+    parser.add_argument("--pre-min-steps", type=int, default=50, help="MMML BFGS steps per λ window.")
+    parser.add_argument("--pre-min-fmax", type=float, default=0.1, help="MMML BFGS fmax (eV/Å) per λ window.")
+    parser.add_argument("--min-steps", type=int, default=None, help="Alias for --pre-min-steps.")
+    parser.add_argument("--min-fmax", type=float, default=None, help="Alias for --pre-min-fmax.")
+    parser.add_argument("--bfgs-maxstep", type=float, default=0.05)
+    parser.add_argument(
+        "--charmm-pre-minimize",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="CHARMM SD/ABNR before MMML BFGS each λ window.",
+    )
+    parser.add_argument(
+        "--calculator-pre-minimize",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="ASE BFGS on the MMML calculator after CHARMM.",
+    )
+    parser.add_argument("--charmm-sd-steps", type=int, default=25)
+    parser.add_argument("--charmm-abnr-steps", type=int, default=100)
+    parser.add_argument("--charmm-tolenr", type=float, default=1e-3)
+    parser.add_argument("--charmm-tolgrd", type=float, default=1e-3)
+    parser.add_argument("--charmm-nbxmod", type=int, default=5)
+    parser.add_argument(
+        "--max-fmax-after-min",
+        type=float,
+        default=2.0,
+        help="Abort if post-minimization fmax exceeds this (eV/Å).",
+    )
+    parser.add_argument(
+        "--rescue-minimize",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="ASE FIRE rescue if BFGS fmax remains above target.",
+    )
+    parser.add_argument("--rescue-fire-steps", type=int, default=300)
+    parser.add_argument("--rescue-fire-fmax", type=float, default=0.1)
+    parser.add_argument("--rescue-fire-maxstep", type=float, default=0.02)
+    parser.add_argument("--skip-jit-warmup", action="store_true")
     parser.add_argument("--n-equil", type=int, default=500)
     parser.add_argument("--n-prod", type=int, default=2000)
     parser.add_argument("--repeats-per-window", type=int, default=1)
@@ -969,6 +1339,17 @@ def config_from_namespace(args: argparse.Namespace, repo_root: Path | None = Non
         n_mol = sum(c for _, c in parsed)
     couple_1b = [i + 1 for i in parse_couple_residue_numbers(str(args.couple_residues), n_mol)]
 
+    pre_min_steps = int(args.pre_min_steps)
+    pre_min_fmax = float(args.pre_min_fmax)
+    if getattr(args, "min_steps", None) is not None:
+        pre_min_steps = int(args.min_steps)
+    if getattr(args, "min_fmax", None) is not None:
+        pre_min_fmax = float(args.min_fmax)
+
+    backend = str(getattr(args, "backend", "ase")).lower()
+    if backend == "auto":
+        backend = "ase"
+
     return LambdaDynamicsConfig(
         checkpoint=args.checkpoint,
         output_dir=args.output_dir,
@@ -981,18 +1362,44 @@ def config_from_namespace(args: argparse.Namespace, repo_root: Path | None = Non
         min_com_start_distance=float(getattr(args, "min_com_start_distance", 2.0)),
         couple_residue_numbers=couple_1b,
         lambda_windows=list(args.lambda_windows),
-        min_steps=args.min_steps,
-        min_fmax=args.min_fmax,
+        min_steps=pre_min_steps,
+        min_fmax=pre_min_fmax,
+        pre_min_steps=pre_min_steps,
+        pre_min_fmax=pre_min_fmax,
         n_equil=args.n_equil,
         n_prod=args.n_prod,
         repeats_per_window=args.repeats_per_window,
         interval=args.interval,
-        timestep_fs=args.timestep_fs,
-        temperature_K=args.temperature_K,
+        timestep_fs=float(getattr(args, "timestep_fs", getattr(args, "dt_fs", 0.5))),
+        temperature_K=float(getattr(args, "temperature_K", getattr(args, "temperature", 100.0))),
         ml_cutoff=args.ml_cutoff,
         mm_switch_on=args.mm_switch_on,
         mm_cutoff=args.mm_cutoff,
         no_fix_com=args.no_fix_com,
+        md_mode=str(getattr(args, "lambda_md_mode", "free_nve")),
+        backend=backend,
+        box_size=getattr(args, "box_size", None),
+        nvt_integrator=str(getattr(args, "nvt_integrator", "auto")),
+        langevin_friction=float(getattr(args, "langevin_friction", 0.02)),
+        charmm_pre_minimize=bool(getattr(args, "charmm_pre_minimize", True)),
+        calculator_pre_minimize=bool(getattr(args, "calculator_pre_minimize", True)),
+        bfgs_maxstep=float(getattr(args, "bfgs_maxstep", 0.05)),
+        charmm_sd_steps=int(getattr(args, "charmm_sd_steps", 25)),
+        charmm_abnr_steps=int(getattr(args, "charmm_abnr_steps", 100)),
+        charmm_tolenr=float(getattr(args, "charmm_tolenr", 1e-3)),
+        charmm_tolgrd=float(getattr(args, "charmm_tolgrd", 1e-3)),
+        charmm_nbxmod=int(getattr(args, "charmm_nbxmod", 5)),
+        min_intermonomer_atom_distance=float(
+            getattr(args, "min_intermonomer_atom_distance", 0.1)
+        ),
+        rescue_minimize=bool(getattr(args, "rescue_minimize", True)),
+        rescue_fire_steps=int(getattr(args, "rescue_fire_steps", 300)),
+        rescue_fire_fmax=float(getattr(args, "rescue_fire_fmax", 0.1)),
+        rescue_fire_maxstep=float(getattr(args, "rescue_fire_maxstep", 0.02)),
+        max_fmax_after_min=float(getattr(args, "max_fmax_after_min", 2.0)),
+        flat_bottom_radius=getattr(args, "flat_bottom_radius", None),
+        flat_bottom_k=float(getattr(args, "flat_bottom_k", 1.0)),
+        skip_jit_warmup=bool(getattr(args, "skip_jit_warmup", False)),
         repo_root=repo_root,
     )
 

@@ -25,8 +25,8 @@ def parse_args() -> argparse.Namespace:
         choices=["free_nve", "free_nvt", "pbc_nve", "pbc_nvt", "pbc_npt", "lambda_ti", "all"],
         default="pbc_nve",
         help=(
-            "Simulation setup preset. lambda_ti runs gas-phase alchemical sampling "
-            "(NVE + TI) for --composition with --couple-residues; use mmml lambda-mbar afterward."
+            "Simulation setup preset. lambda_ti: alchemical TI with CHARMM+MMML minimization "
+            "per λ window (--lambda-md-mode, --backend ase); mmml lambda-mbar afterward."
         ),
     )
     parser.add_argument(
@@ -124,6 +124,12 @@ def parse_args() -> argparse.Namespace:
 
     # --- lambda_ti (--setup lambda_ti) ----------------------------------------
     parser.add_argument(
+        "--lambda-md-mode",
+        choices=["free_nve", "free_nvt", "pbc_nve", "pbc_nvt"],
+        default="free_nve",
+        help="lambda_ti: ASE MD after minimization (vacuum/PBC × NVE/NVT).",
+    )
+    parser.add_argument(
         "--couple-residues",
         type=str,
         default="1",
@@ -136,10 +142,37 @@ def parse_args() -> argparse.Namespace:
         default=[0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
         help="lambda_ti: shared λ values for coupled residues.",
     )
-    parser.add_argument("--min-steps", type=int, default=10, help="lambda_ti: BFGS steps per window.")
-    parser.add_argument("--min-fmax", type=float, default=0.03, help="lambda_ti: BFGS fmax (eV/Å).")
-    parser.add_argument("--n-equil", type=int, default=500, help="lambda_ti: NVE equilibration steps per window.")
-    parser.add_argument("--n-prod", type=int, default=2000, help="lambda_ti: NVE production steps per window.")
+    parser.add_argument("--pre-min-steps", type=int, default=50, help="lambda_ti: MMML BFGS steps per window.")
+    parser.add_argument("--pre-min-fmax", type=float, default=0.1, help="lambda_ti: MMML BFGS fmax (eV/Å).")
+    parser.add_argument("--min-steps", type=int, default=None, help="lambda_ti: alias for --pre-min-steps.")
+    parser.add_argument("--min-fmax", type=float, default=None, help="lambda_ti: alias for --pre-min-fmax.")
+    parser.add_argument("--bfgs-maxstep", type=float, default=0.05)
+    parser.add_argument(
+        "--charmm-pre-minimize",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="lambda_ti: CHARMM SD/ABNR before MMML BFGS (default on).",
+    )
+    parser.add_argument(
+        "--calculator-pre-minimize",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="lambda_ti: MMML-calculator BFGS after CHARMM (default on).",
+    )
+    parser.add_argument("--charmm-sd-steps", type=int, default=25)
+    parser.add_argument("--charmm-abnr-steps", type=int, default=100)
+    parser.add_argument("--charmm-tolenr", type=float, default=1e-3)
+    parser.add_argument("--charmm-tolgrd", type=float, default=1e-3)
+    parser.add_argument("--charmm-nbxmod", type=int, default=5)
+    parser.add_argument(
+        "--rescue-minimize",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="lambda_ti: ASE FIRE if BFGS fmax stays high.",
+    )
+    parser.add_argument("--max-fmax-after-min", type=float, default=2.0)
+    parser.add_argument("--n-equil", type=int, default=500, help="lambda_ti: equilibration steps per window.")
+    parser.add_argument("--n-prod", type=int, default=2000, help="lambda_ti: production steps per window.")
     parser.add_argument(
         "--repeats-per-window",
         type=int,
@@ -172,6 +205,7 @@ def parse_args() -> argparse.Namespace:
         default="MEOH",
         help="lambda_ti: residue name when --composition is not set.",
     )
+    parser.add_argument("--skip-jit-warmup", action="store_true", help="lambda_ti: skip first MMML energy eval per window.")
 
     return parser.parse_args()
 
@@ -200,10 +234,11 @@ def _run_lambda_ti_inline(args: argparse.Namespace) -> int:
 
     if args.output_dir is None:
         args.output_dir = Path("artifacts/lambda_ti")
+    if args.backend == "auto":
+        args.backend = "ase"
     args.timestep_fs = args.dt_fs
     args.temperature_K = args.temperature
-    if not hasattr(args, "min_com_start_distance"):
-        args.min_com_start_distance = 2.0
+    args.langevin_friction = getattr(args, "langevin_friction", 0.02)
 
     cfg = config_from_namespace(args, repo_root=_repo_root())
     summary = run_lambda_dynamics(cfg)
@@ -215,8 +250,6 @@ def _run_lambda_ti_inline(args: argparse.Namespace) -> int:
 
 
 def build_command(args: argparse.Namespace) -> list[str]:
-    if args.setup == "lambda_ti":
-        raise ValueError("lambda_ti runs in-process; use main() dispatch")
     root = _repo_root()
     ase_script = root / "scripts" / "md_10mer_mmml_pbc_suite.py"
     jaxmd_script = root / "scripts" / "md_10mer_mmml_pbc_suite_jaxmd.py"
