@@ -390,6 +390,7 @@ def run_lambda_dynamics_jaxmd(cfg: LambdaDynamicsConfig) -> dict[str, Any]:
         build_cluster_system,
         parse_couple_residue_list,
         plot_window_components,
+        print_cluster_psf_monomer_diagnostics,
         repo_root_from_here,
         resolve_lambda_md_settings,
         save_snapshots_npz,
@@ -410,6 +411,7 @@ def run_lambda_dynamics_jaxmd(cfg: LambdaDynamicsConfig) -> dict[str, Any]:
     base_seed_positions = cluster.base_seed_positions
     couple_indices = parse_couple_residue_list(cfg.couple_residue_numbers, cluster.n_monomers)
     couple_residue_numbers_1b = [i + 1 for i in couple_indices]
+    print_cluster_psf_monomer_diagnostics(cluster, monomer_index=couple_indices[0])
 
     model_restart_path = resolve_model_restart_path(cfg.checkpoint)
     md_settings = resolve_lambda_md_settings(cfg, base_seed_positions)

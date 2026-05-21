@@ -801,6 +801,118 @@ def resolve_model_restart_path(checkpoint: Path | None) -> Path:
     return epoch
 
 
+def print_cluster_psf_monomer_diagnostics(
+    cluster: ClusterContext,
+    *,
+    monomer_index: int = 0,
+) -> dict[str, Any]:
+    """Print CHARMM PSF atom types and MM charges for one monomer (post cluster build)."""
+    mi = int(monomer_index)
+    if mi < 0 or mi >= cluster.n_monomers:
+        raise ValueError(
+            f"monomer_index {mi} out of range 0..{cluster.n_monomers - 1}"
+        )
+    s = int(cluster.monomer_offsets[mi])
+    e = int(cluster.monomer_offsets[mi + 1])
+    n_atoms = e - s
+    residue = cluster.residue_labels[mi]
+
+    charges_all = np.asarray(psf.get_charges(), dtype=float)
+    atypes_all = np.asarray(psf.get_atype(), dtype=str)
+    iac_all = np.asarray(psf.get_iac(), dtype=int)
+    masses_all = np.asarray(psf.get_amass(), dtype=float)
+    z_all = np.asarray(cluster.z, dtype=int)
+
+    charges = charges_all[s:e]
+    atypes = atypes_all[s:e]
+    iac = iac_all[s:e]
+    masses = masses_all[s:e]
+    z_loc = z_all[s:e]
+
+    segid = resid = resname = None
+    try:
+        segid = np.asarray(psf.get_segid(), dtype=str)[s:e]
+    except Exception:
+        pass
+    try:
+        resid = np.asarray(psf.get_resid(), dtype=int)[s:e]
+    except Exception:
+        pass
+    try:
+        resname = np.asarray(psf.get_res(), dtype=str)[s:e]
+    except Exception:
+        pass
+
+    atc_labels: list[str] = []
+    try:
+        atc = [str(x).strip() for x in param.get_atc()]
+        atc_labels = [atc[int(c) - 1] if 0 < int(c) <= len(atc) else "?" for c in iac]
+    except Exception:
+        atc_labels = ["?"] * n_atoms
+
+    lines = [
+        "=== PSF / MM monomer diagnostic (CHARMM after cluster build) ===",
+        f"  monomer {mi + 1} / {cluster.n_monomers}  residue_label={residue!r}  "
+        f"atoms [{s}:{e})  n_atoms={n_atoms}",
+        f"  composition: {cluster.composition_summary}",
+        f"  charge_sum (e): {float(np.sum(charges)):.6f}",
+        f"  total cluster charge (e): {float(np.sum(charges_all[: len(z_all)])):.6f}",
+        "  index  Z   atype      iac  param_type     charge(e)    mass(amu)"
+        + ("  segid  resid  resname" if segid is not None else ""),
+    ]
+    for j in range(n_atoms):
+        extra = ""
+        if segid is not None:
+            rn = str(resname[j]) if resname is not None else "?"
+            extra = f"  {segid[j]!s:4s}  {int(resid[j]) if resid is not None else -1:5d}  {rn!s}"
+        lines.append(
+            f"  {s + j:4d}  {int(z_loc[j]):2d}  {atypes[j]!s:10s}  {int(iac[j]):3d}  "
+            f"{atc_labels[j]!s:14s}  {float(charges[j]):+10.5f}  {float(masses[j]):8.4f}"
+            + extra
+        )
+
+    same_type = [i for i, lab in enumerate(cluster.residue_labels) if lab == residue]
+    if len(same_type) > 1:
+        ref_charges = charges.copy()
+        ref_atypes = list(atypes)
+        mismatch: list[str] = []
+        for other in same_type:
+            if other == mi:
+                continue
+            os_ = int(cluster.monomer_offsets[other])
+            oe = int(cluster.monomer_offsets[other + 1])
+            oc = charges_all[os_:oe]
+            oa = atypes_all[os_:oe]
+            if list(oa) != ref_atypes:
+                mismatch.append(f"monomer {other + 1}: atom types differ")
+            elif not np.allclose(oc, ref_charges, atol=1e-8, rtol=0.0):
+                mismatch.append(
+                    f"monomer {other + 1}: charges differ "
+                    f"(sum={float(np.sum(oc)):.6f} vs {float(np.sum(ref_charges)):.6f})"
+                )
+        if mismatch:
+            lines.append("  WARNING: PSF differs across copies of same residue:")
+            lines.extend(f"    - {m}" for m in mismatch)
+        else:
+            lines.append(
+                f"  OK: all {len(same_type)} {residue!r} copies share identical atypes/charges."
+            )
+
+    for line in lines:
+        print(line, flush=True)
+
+    return {
+        "monomer_index": mi,
+        "residue_label": residue,
+        "atom_slice": [s, e],
+        "charge_sum_e": float(np.sum(charges)),
+        "atom_types": [str(x) for x in atypes],
+        "charges_e": [float(x) for x in charges],
+        "iac": [int(x) for x in iac],
+        "atomic_numbers": [int(x) for x in z_loc],
+    }
+
+
 def _print_run_banner(cfg: LambdaDynamicsConfig, *, backend: str) -> None:
     """Log key run options before CHARMM/cluster setup (stdout may be noisy afterward)."""
     use_fix_com = not cfg.no_fix_com
@@ -847,6 +959,7 @@ def run_lambda_dynamics(cfg: LambdaDynamicsConfig) -> dict[str, Any]:
     base_seed_positions = cluster.base_seed_positions
     couple_indices = parse_couple_residue_list(cfg.couple_residue_numbers, cluster.n_monomers)
     couple_residue_numbers_1b = [i + 1 for i in couple_indices]
+    print_cluster_psf_monomer_diagnostics(cluster, monomer_index=couple_indices[0])
 
     model_restart_path = resolve_model_restart_path(cfg.checkpoint)
     md_settings = resolve_lambda_md_settings(cfg, base_seed_positions)
