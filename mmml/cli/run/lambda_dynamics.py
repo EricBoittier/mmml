@@ -829,19 +829,20 @@ def print_cluster_psf_monomer_diagnostics(
     masses = masses_all[s:e]
     z_loc = z_all[s:e]
 
-    segid = resid = resname = None
-    try:
-        segid = np.asarray(psf.get_segid(), dtype=str)[s:e]
-    except Exception:
-        pass
-    try:
-        resid = np.asarray(psf.get_resid(), dtype=int)[s:e]
-    except Exception:
-        pass
-    try:
-        resname = np.asarray(psf.get_res(), dtype=str)[s:e]
-    except Exception:
-        pass
+    def _psf_slice(getter, dtype):
+        try:
+            arr = np.asarray(getter(), dtype=dtype)
+        except Exception:
+            return None
+        if arr.size < e:
+            return None
+        sl = arr[s:e]
+        return sl if sl.shape[0] == n_atoms else None
+
+    segid = _psf_slice(psf.get_segid, str)
+    resid = _psf_slice(psf.get_resid, int)
+    resname = _psf_slice(psf.get_res, str)
+    show_residue_cols = segid is not None and resid is not None and resname is not None
 
     atc_labels: list[str] = []
     try:
@@ -858,13 +859,18 @@ def print_cluster_psf_monomer_diagnostics(
         f"  charge_sum (e): {float(np.sum(charges)):.6f}",
         f"  total cluster charge (e): {float(np.sum(charges_all[: len(z_all)])):.6f}",
         "  index  Z   atype      iac  param_type     charge(e)    mass(amu)"
-        + ("  segid  resid  resname" if segid is not None else ""),
+        + ("  segid  resid  resname" if show_residue_cols else ""),
     ]
+    if not show_residue_cols:
+        lines.append(
+            "  (PSF segid/resid/resname not per-atom in this build; using residue_label above)"
+        )
     for j in range(n_atoms):
         extra = ""
-        if segid is not None:
-            rn = str(resname[j]) if resname is not None else "?"
-            extra = f"  {segid[j]!s:4s}  {int(resid[j]) if resid is not None else -1:5d}  {rn!s}"
+        if show_residue_cols:
+            extra = (
+                f"  {segid[j]!s:4s}  {int(resid[j]):5d}  {str(resname[j])!s}"
+            )
         lines.append(
             f"  {s + j:4d}  {int(z_loc[j]):2d}  {atypes[j]!s:10s}  {int(iac[j]):3d}  "
             f"{atc_labels[j]!s:14s}  {float(charges[j]):+10.5f}  {float(masses[j]):8.4f}"
