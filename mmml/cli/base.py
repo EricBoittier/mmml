@@ -135,11 +135,22 @@ def resolve_dataset_path(arg: Path | None) -> Path:
     return candidate
 
 
+def _try_resolve_bundled_hf_checkpoint(arg: Path | str) -> Path | None:
+    """Map manifest aliases (e.g. best-forces, neutral_best_forces) to a portable .json path."""
+    try:
+        from mmml.models.physnetjax.defaults import resolve_hf_physnet_checkpoint
+
+        return resolve_hf_physnet_checkpoint(str(arg))
+    except (ImportError, KeyError, OSError):
+        return None
+
+
 def resolve_checkpoint_paths(arg: Path | str | None) -> Tuple[Path, Path]:
     """Return (factory_base_dir, epoch_dir) for the supplied checkpoint.
 
-    Supports both orbax checkpoints (manifest.ocdbt) and JSON checkpoints
-    (params.json or a .json file from orbax_to_json).
+    Supports orbax checkpoints (manifest.ocdbt), JSON checkpoints (params.json
+    or a portable .json file), and bundled HF aliases (best-forces, mmml-default,
+    neutral_best_forces, etc. — see mmml.models.physnetjax.defaults).
     """
     # Convert string to Path if needed
     if arg is None:
@@ -156,7 +167,17 @@ def resolve_checkpoint_paths(arg: Path | str | None) -> Tuple[Path, Path]:
         candidate = arg
 
     if not candidate.exists():
-        sys.exit(f"Checkpoint directory not found: {candidate}")
+        if arg is not None:
+            hf_ckpt = _try_resolve_bundled_hf_checkpoint(arg)
+            if hf_ckpt is not None and hf_ckpt.is_file():
+                candidate = hf_ckpt
+        if not candidate.exists():
+            sys.exit(
+                f"Checkpoint not found: {candidate}. "
+                "For bundled HF portable weights use an alias such as "
+                "best-forces, mmml-default, or neutral_best_forces, "
+                "or pass a path to a .json / Orbax directory."
+            )
 
     candidate = candidate.resolve()
 
