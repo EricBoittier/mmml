@@ -23,13 +23,24 @@ This document summarizes the units used across MMML components (train_joint, fix
 - **esp**: Hartree/e (atomic units)
 - **esp_grid**: Bohr (PySCF uses atomic units for grids)
 
-### fix_and_split output (after conversion)
+### fix_and_split output
+Default: convert PySCF/atomic input → ASE-style training units. **Always read `units_manifest.json`** in the output directory.
+
+CLI flags (`mmml fix-and-split --help`, group “Unit conversion”):
+- `--coords-in` / `--coords-out` (`auto`, `bohr`, `angstrom`, `same`)
+- `--energy-in` / `--energy-out` (`hartree`, `ev`, `same`)
+- `--force-in` / `--force-out` (`hartree-bohr`, `ev-angstrom`, `same`)
+- `--dipole-in` / `--dipole-out` (`debye`, `e-angstrom`, `same`)
+- `--grid-coords-in` / `--grid-coords-out` (`auto`, `bohr`, `angstrom`, `index`, `same`)
+- `--preserve-units`: no conversion on R, E, F, Dxyz, or grid coordinates
+
+Typical defaults (when not using `--preserve-units`):
 - **R**: Angstrom
 - **E**: eV
 - **F**: eV/Å
-- **Dxyz**: e·Å (converted from Debye)
+- **Dxyz**: e·Å (from Debye if input is PySCF)
 - **esp**: Hartree/e (unchanged)
-- **vdw_surface**: Angstrom (converted from Bohr if from PySCF)
+- **vdw_surface**: Angstrom (from Bohr/index if from PySCF)
 
 ### train_joint (model I/O)
 - **R**: Angstrom
