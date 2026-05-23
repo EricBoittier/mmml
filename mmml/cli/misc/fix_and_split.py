@@ -5,34 +5,35 @@ CLI tool to fix units and create train/valid/test splits from molecular NPZ data
 Supports NPZ files with or without ESP grid data.
 
 Usage:
-    # With grid data
+    # PySCF / atomic-units NPZ → ASE-style training splits (default)
     mmml fix-and-split \\
         --efd energies_forces_dipoles.npz \\
         --grid grids_esp.npz \\
         --output-dir ./training_data_fixed
-    
-    # Without grid data (only EFD)
+
+    # NPZ already in training units (eV, eV/Å, e·Å, Å): split only, no conversion
     mmml fix-and-split \\
-        --efd energies_forces_dipoles.npz \\
-        --output-dir ./training_data_fixed
+        --efd data_ev.npz \\
+        --output-dir ./splits \\
+        --coords-in angstrom --coords-out same \\
+        --energy-in ev --energy-out same \\
+        --force-in ev-angstrom --force-out same \\
+        --dipole-in e-angstrom --dipole-out same \\
+        --grid-coords-in angstrom --grid-coords-out same
 
-This script:
-1. Validates atomic coordinates are in Angstroms
-2. Converts energies from Hartree to eV (ASE standard)
-3. Converts forces from Hartree/Bohr to eV/Angstrom (ASE standard); optional --flip-forces if F stores ∂E/∂R (gradient) instead of −∇E
-4. Optional extra multipliers (--energy-scale, --force-scale, --dipole-scale, --efield-scale, --esp-scale, --charge-scale) after the standard conversions (and on matching auxiliary NPZ keys)
-5. Converts ESP grid coordinates from index space to physical Angstroms (if grid data provided)
-6. Creates train/valid/test splits
-7. Optionally Z-scales energies using the training-set mean/std
-8. Saves data in ASE-compatible format
+    # Explicit per-field control (see --help for all *-in / *-out flags)
+    mmml fix-and-split --efd data.npz -o out \\
+        --energy-in hartree --energy-out ev \\
+        --force-in hartree-bohr --force-out ev-angstrom
 
-ASE Standard Units:
-- Coordinates (R): Angstrom
-- Energies (E): eV
-- Forces (F): eV/Angstrom
-- Dipoles (Dxyz): Debye
-- ESP values: Hartree/e (no ASE standard for ESP)
-- ESP grid (vdw_surface): Angstrom
+Default conversions (when *-out is not ``same``):
+- R: auto-detect Bohr vs Å → Å (use ``--coords-in`` to override auto)
+- E: Hartree → eV
+- F: Hartree/Bohr → eV/Å (optional ``--flip-forces`` for ∂E/∂R gradients)
+- Dxyz: Debye → e·Å
+- ESP grid: Bohr or cube indices → Å (``--grid-coords-in auto``)
+
+Writes ``units_manifest.json`` documenting input/output units for each array.
 """
 
 import json
@@ -41,7 +42,8 @@ import argparse
 from pathlib import Path
 import numpy as np
 from scipy.spatial.distance import cdist
-from typing import Any, Dict, List, Optional, Tuple, Union
+from dataclasses import asdict, dataclass
+from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
 # Add parent directory to path
 repo_root = Path(__file__).parent.parent.parent
@@ -69,21 +71,333 @@ def create_splits(n_samples: int, train_frac=0.8, valid_frac=0.1, test_frac=0.1,
 
 
 def convert_energy_hartree_to_ev(E_hartree: np.ndarray) -> np.ndarray:
-    """Convert energies from Hartree to eV (ASE standard)."""
-    HARTREE_TO_EV = 27.211386
+    """Convert energies from Hartree to eV."""
+    from mmml.data.units import HARTREE_TO_EV
     return E_hartree * HARTREE_TO_EV
 
 
+def convert_energy_ev_to_hartree(E_ev: np.ndarray) -> np.ndarray:
+    """Convert energies from eV to Hartree."""
+    from mmml.data.units import EV_TO_HARTREE
+    return E_ev * EV_TO_HARTREE
+
+
 def convert_forces_hartree_bohr_to_ev_angstrom(F_hartree_bohr: np.ndarray) -> np.ndarray:
-    """Convert forces from Hartree/Bohr to eV/Angstrom (ASE standard)."""
-    HARTREE_BOHR_TO_EV_ANGSTROM = 51.42208
+    """Convert forces from Hartree/Bohr to eV/Angstrom."""
+    from mmml.data.units import HARTREE_BOHR_TO_EV_ANGSTROM
     return F_hartree_bohr * HARTREE_BOHR_TO_EV_ANGSTROM
 
 
+def convert_forces_ev_angstrom_to_hartree_bohr(F_ev_ang: np.ndarray) -> np.ndarray:
+    """Convert forces from eV/Angstrom to Hartree/Bohr."""
+    from mmml.data.units import HARTREE_BOHR_TO_EV_ANGSTROM
+    return F_ev_ang / HARTREE_BOHR_TO_EV_ANGSTROM
+
+
 def convert_dipole_debye_to_eA(D_debye: np.ndarray) -> np.ndarray:
-    """Convert dipole moments from Debye to e·Å (PhysNet/DCMNet standard)."""
+    """Convert dipole moments from Debye to e·Å."""
     from mmml.data.units import DEBYE_TO_EANGSTROM
     return D_debye * DEBYE_TO_EANGSTROM
+
+
+def convert_dipole_eA_to_debye(D_eA: np.ndarray) -> np.ndarray:
+    """Convert dipole moments from e·Å to Debye."""
+    from mmml.data.units import EANGSTROM_TO_DEBYE
+    return D_eA * EANGSTROM_TO_DEBYE
+
+
+CoordsIn = Literal["auto", "bohr", "angstrom"]
+CoordsOut = Literal["angstrom", "bohr", "same"]
+EnergyIn = Literal["hartree", "ev"]
+EnergyOut = Literal["ev", "hartree", "same"]
+ForceIn = Literal["hartree_bohr", "ev_angstrom"]
+ForceOut = Literal["ev_angstrom", "hartree_bohr", "same"]
+DipoleIn = Literal["debye", "e_angstrom"]
+DipoleOut = Literal["e_angstrom", "debye", "same"]
+GridCoordsIn = Literal["auto", "bohr", "angstrom", "index"]
+GridCoordsOut = Literal["angstrom", "bohr", "same"]
+
+
+@dataclass
+class UnitsManifest:
+    """Recorded in units_manifest.json for downstream loaders."""
+
+    coords_in: str
+    coords_out: str
+    coords_detected: Optional[str]
+    energy_in: str
+    energy_out: str
+    force_in: str
+    force_out: str
+    dipole_in: Optional[str]
+    dipole_out: Optional[str]
+    grid_coords_in: Optional[str]
+    grid_coords_out: Optional[str]
+    esp_values: str
+    flip_forces: bool
+    preserve_units: bool
+    notes: List[str]
+
+
+def _mean_shortest_interatomic_distance(R: np.ndarray, max_samples: int = 100) -> Optional[float]:
+    """Mean shortest interatomic distance over up to max_samples structures."""
+    min_dists: List[float] = []
+    for i in range(min(max_samples, len(R))):
+        r = R[i]
+        valid = np.any(r != 0, axis=1)
+        vpos = r[valid]
+        if len(vpos) < 2:
+            continue
+        d = vpos[:, np.newaxis, :] - vpos[np.newaxis, :, :]
+        norms = np.linalg.norm(d, axis=2)
+        norms[np.triu_indices_from(norms, k=0)] = np.inf
+        min_dists.append(float(norms.min()))
+    if not min_dists:
+        return None
+    return float(np.mean(min_dists))
+
+
+def detect_coords_unit(R: np.ndarray) -> str:
+    """
+    Infer whether coordinates are in Angstrom or Bohr from bond lengths.
+
+    Returns ``angstrom`` or ``bohr``.
+    """
+    d_mean = _mean_shortest_interatomic_distance(R)
+    if d_mean is None:
+        return "angstrom"
+    if 0.8 < d_mean < 2.5:
+        return "angstrom"
+    if 1.8 < d_mean < 2.9:
+        return "bohr"
+    return "angstrom"
+
+
+def convert_coords_array(
+    R: np.ndarray,
+    coords_in: CoordsIn,
+    coords_out: CoordsOut,
+    *,
+    verbose: bool = False,
+) -> Tuple[np.ndarray, str, Optional[str]]:
+    """
+    Convert atomic coordinates between unit conventions.
+
+    Returns (R_out, effective_input_unit, detected_unit_if_auto).
+    """
+    from mmml.data.units import ANGSTROM_TO_BOHR, BOHR_TO_ANGSTROM
+
+    detected: Optional[str] = None
+    if coords_in == "auto":
+        detected = detect_coords_unit(R)
+        effective_in = detected
+        if verbose:
+            print(f"  Auto-detected coordinates: {effective_in}")
+    else:
+        effective_in = coords_in
+
+    if coords_out == "same":
+        return np.asarray(R, dtype=np.float64).copy(), effective_in, detected
+
+    if effective_in == coords_out:
+        return np.asarray(R, dtype=np.float64).copy(), effective_in, detected
+
+    R_out = np.asarray(R, dtype=np.float64).copy()
+    if effective_in == "bohr" and coords_out == "angstrom":
+        R_out *= BOHR_TO_ANGSTROM
+    elif effective_in == "angstrom" and coords_out == "bohr":
+        R_out *= ANGSTROM_TO_BOHR
+    else:
+        raise ValueError(
+            f"Cannot convert coordinates from {effective_in!r} to {coords_out!r}. "
+            "Use --coords-in / --coords-out or --preserve-units."
+        )
+    return R_out, effective_in, detected
+
+
+def convert_energy_array(
+    E: np.ndarray,
+    energy_in: EnergyIn,
+    energy_out: EnergyOut,
+) -> np.ndarray:
+    """Convert total energies between supported unit conventions."""
+    E_work = np.asarray(E, dtype=np.float64).copy()
+    if energy_out == "same":
+        return E_work
+    if energy_in == energy_out:
+        return E_work
+    if energy_in == "hartree" and energy_out == "ev":
+        return convert_energy_hartree_to_ev(E_work)
+    if energy_in == "ev" and energy_out == "hartree":
+        return convert_energy_ev_to_hartree(E_work)
+    raise ValueError(
+        f"Cannot convert energy from {energy_in!r} to {energy_out!r}. "
+        "Supported: hartree↔ev, or use --energy-out same."
+    )
+
+
+def convert_force_array(
+    F: np.ndarray,
+    force_in: ForceIn,
+    force_out: ForceOut,
+) -> np.ndarray:
+    """Convert forces between supported unit conventions."""
+    F_work = np.asarray(F, dtype=np.float64).copy()
+    if force_out == "same":
+        return F_work
+    if force_in == force_out:
+        return F_work
+    if force_in == "hartree_bohr" and force_out == "ev_angstrom":
+        return convert_forces_hartree_bohr_to_ev_angstrom(F_work)
+    if force_in == "ev_angstrom" and force_out == "hartree_bohr":
+        return convert_forces_ev_angstrom_to_hartree_bohr(F_work)
+    raise ValueError(
+        f"Cannot convert forces from {force_in!r} to {force_out!r}. "
+        "Supported: hartree_bohr↔ev_angstrom, or use --force-out same."
+    )
+
+
+def convert_dipole_array(
+    D: np.ndarray,
+    dipole_in: DipoleIn,
+    dipole_out: DipoleOut,
+) -> np.ndarray:
+    """Convert dipole vectors between Debye and e·Å."""
+    D_work = np.asarray(D, dtype=np.float64).copy()
+    if dipole_out == "same":
+        return D_work
+    if dipole_in == dipole_out:
+        return D_work
+    if dipole_in == "debye" and dipole_out == "e_angstrom":
+        return convert_dipole_debye_to_eA(D_work)
+    if dipole_in == "e_angstrom" and dipole_out == "debye":
+        return convert_dipole_eA_to_debye(D_work)
+    raise ValueError(
+        f"Cannot convert dipole from {dipole_in!r} to {dipole_out!r}. "
+        "Supported: debye↔e_angstrom, or use --dipole-out same."
+    )
+
+
+def _grid_key_candidates(grid_data: Dict[str, Any]) -> List[str]:
+    for key in ("vdw_surface", "vdw_grid", "esp_grid"):
+        if key in grid_data:
+            return [key]
+    return []
+
+
+def convert_grid_surface_array(
+    grid_data: Dict[str, Any],
+    grid_coords_in: GridCoordsIn,
+    grid_coords_out: GridCoordsOut,
+    *,
+    cube_spacing_bohr: float = 0.25,
+    verbose: bool = False,
+) -> Tuple[Optional[np.ndarray], str, List[str]]:
+    """
+    Convert ESP grid point coordinates to the requested output units.
+
+    Returns (grid_coords_or_none, effective_input_unit, log_notes).
+    """
+    from mmml.data.units import BOHR_TO_ANGSTROM
+
+    notes: List[str] = []
+    keys = _grid_key_candidates(grid_data)
+    if not keys:
+        return None, "none", notes
+
+    key = keys[0]
+    vdw_raw = np.asarray(grid_data[key], dtype=np.float64)
+
+    if grid_coords_out == "same":
+        effective_in = grid_coords_in
+        if grid_coords_in == "auto":
+            required = ["vdw_grid", "grid_origin", "grid_axes", "grid_dims"]
+            missing = [k for k in required if k not in grid_data]
+            grid_from_pyscf = "esp" in grid_data and bool(keys)
+            if not missing:
+                effective_in = "index"
+            elif grid_from_pyscf:
+                effective_in = "bohr"
+            else:
+                effective_in = "angstrom"
+            notes.append(f"auto (preserve): grid input assumed {effective_in}")
+        if verbose:
+            print(
+                f"  Grid ({key}): preserving coordinates "
+                f"(--grid-coords-out same, input={effective_in})"
+            )
+        return vdw_raw.copy(), effective_in, notes
+
+    effective_in = grid_coords_in
+    if grid_coords_in == "auto":
+        required = ["vdw_grid", "grid_origin", "grid_axes", "grid_dims"]
+        missing = [k for k in required if k not in grid_data]
+        grid_from_pyscf = "esp" in grid_data and bool(keys)
+        if not missing:
+            effective_in = "index"
+        elif grid_from_pyscf:
+            effective_in = "bohr"
+            notes.append("auto: pyscf-style esp+grid → input assumed Bohr")
+        else:
+            effective_in = "angstrom"
+            notes.append("auto: no cube metadata → input assumed Angstrom")
+        if verbose:
+            print(f"  Auto-detected grid coordinates: {effective_in}")
+
+    if effective_in == grid_coords_out:
+        return vdw_raw.copy(), effective_in, notes
+
+    if effective_in == "index" and grid_coords_out == "angstrom":
+        required = ["grid_origin", "grid_axes", "grid_dims"]
+        missing = [k for k in required if k not in grid_data]
+        if missing:
+            raise ValueError(
+                f"Grid coords are index space but missing keys {missing} for conversion to Angstrom. "
+                "Provide cube metadata or set --grid-coords-in angstrom/bohr."
+            )
+        vdw_ang = convert_grid_indices_to_angstrom(
+            grid_data.get("vdw_grid", vdw_raw),
+            grid_data["grid_origin"],
+            grid_data["grid_axes"],
+            grid_data["grid_dims"],
+            cube_spacing_bohr=cube_spacing_bohr,
+        )
+        notes.append(f"index→angstrom via cube spacing {cube_spacing_bohr} Bohr")
+        return vdw_ang, "index", notes
+
+    if effective_in == "bohr" and grid_coords_out == "angstrom":
+        return vdw_raw * BOHR_TO_ANGSTROM, "bohr", notes
+    if effective_in == "angstrom" and grid_coords_out == "bohr":
+        from mmml.data.units import ANGSTROM_TO_BOHR
+        return vdw_raw * ANGSTROM_TO_BOHR, "angstrom", notes
+    if effective_in == "angstrom" and grid_coords_out == "angstrom":
+        return vdw_raw.copy(), "angstrom", notes
+    if effective_in == "bohr" and grid_coords_out == "bohr":
+        return vdw_raw.copy(), "bohr", notes
+
+    raise ValueError(
+        f"Cannot convert grid coordinates from {effective_in!r} to {grid_coords_out!r}."
+    )
+
+
+def _unit_label_energy(u: str) -> str:
+    return {"hartree": "Hartree", "ev": "eV", "same": "(unchanged)"}.get(u, u)
+
+
+def _unit_label_force(u: str) -> str:
+    return {
+        "hartree_bohr": "Hartree/Bohr",
+        "ev_angstrom": "eV/Å",
+        "same": "(unchanged)",
+    }.get(u, u)
+
+
+def _unit_label_dipole(u: str) -> str:
+    return {"debye": "Debye", "e_angstrom": "e·Å", "same": "(unchanged)"}.get(u, u)
+
+
+def _unit_label_coords(u: str) -> str:
+    return {"bohr": "Bohr", "angstrom": "Å", "same": "(unchanged)", "auto": "auto"}.get(u, u)
 
 
 def _scale_ndarrays_in_dict(
@@ -407,11 +721,20 @@ def check_esp_grid_alignment(
 
 
 def validate_fixed_data(
-    R_ang, E_ev, F_ev_ang, vdw_grid_ang, Z, N, 
+    R_ang,
+    E_ev,
+    F_ev_ang,
+    vdw_grid_ang,
+    Z,
+    N,
     has_grid: bool = True,
-    verbose: bool = True
+    verbose: bool = True,
+    *,
+    coords_unit: str = "angstrom",
+    energy_unit: str = "ev",
+    force_unit: str = "ev_angstrom",
 ):
-    """Validate that fixes worked correctly."""
+    """Validate converted data; checks adapt to declared output units."""
     if verbose:
         print(f"\n{'='*70}")
         print("POST-FIX VALIDATION")
@@ -442,7 +765,10 @@ def validate_fixed_data(
             print("\nAtomic Coordinates (up to 100 samples):")
             print(f"  Shortest distance: mean={min_dists.mean():.4f} Å, "
                   f"range=[{min_dists.min():.4f}, {min_dists.max():.4f}]")
-        coords_ok = 0.5 <= min_dists.mean() <= 3.0
+        if coords_unit == "bohr":
+            coords_ok = 0.9 <= min_dists.mean() <= 5.5
+        else:
+            coords_ok = 0.5 <= min_dists.mean() <= 3.0
         if verbose and coords_ok:
             print("  ✓ Coordinates in reasonable range")
         elif verbose:
@@ -453,18 +779,21 @@ def validate_fixed_data(
     # Check energies
     if verbose:
         print("\nEnergies (sample 0):")
-        print(f"  Value: {E_ev[0]:.6f} eV")
-        print(f"  Dataset mean: {E_ev.mean():.6f} eV")
-    
-    # Check that energies are in reasonable range for molecular systems (eV)
-    if -10000 < E_ev.mean() < 1000:
-        if verbose:
-            print("  ✓ Energies in reasonable range for molecular energies in eV")
-        energy_ok = True
+        e_label = _unit_label_energy(energy_unit)
+        print(f"  Value: {E_ev[0]:.6f} {e_label}")
+        print(f"  Dataset mean: {E_ev.mean():.6f} {e_label}")
+
+    if energy_unit == "hartree":
+        energy_ok = -500 < E_ev.mean() < 50
+        ok_msg = "reasonable range for Hartree"
     else:
+        energy_ok = -10000 < E_ev.mean() < 1000
+        ok_msg = "reasonable range for eV"
+    if energy_ok:
         if verbose:
-            print("  ⚠️  Energy range unexpected")
-        energy_ok = False
+            print(f"  ✓ Energies in {ok_msg}")
+    elif verbose:
+        print("  ⚠️  Energy range unexpected (may be fine for your chemistry/units)")
     
     # Check forces
     f_sample = F_ev_ang[0, :min(3, F_ev_ang.shape[1]), :]  # First sample, first atoms
@@ -472,10 +801,10 @@ def validate_fixed_data(
     
     if verbose:
         print("\nForces (sample 0):")
-        print(f"  Mean norm: {f_norm:.6e} eV/Angstrom")
-    
-    # For geometry scans, forces can be large (up to 50-100 eV/Å far from equilibrium)
-    if 1e-6 < f_norm < 1000:
+        print(f"  Mean norm: {f_norm:.6e} {_unit_label_force(force_unit)}")
+
+    f_max = 5000.0 if force_unit == "hartree_bohr" else 1000.0
+    if 1e-6 < f_norm < f_max:
         if verbose:
             print("  ✓ Force magnitudes in reasonable range")
         force_ok = True
@@ -740,6 +1069,17 @@ def fix_and_split_data(
     esp_scale: float = 1.0,
     charge_scale: float = 1.0,
     zscale_energies: bool = False,
+    coords_in: CoordsIn = "auto",
+    coords_out: CoordsOut = "angstrom",
+    energy_in: EnergyIn = "hartree",
+    energy_out: EnergyOut = "ev",
+    force_in: ForceIn = "hartree_bohr",
+    force_out: ForceOut = "ev_angstrom",
+    dipole_in: DipoleIn = "debye",
+    dipole_out: DipoleOut = "e_angstrom",
+    grid_coords_in: GridCoordsIn = "auto",
+    grid_coords_out: GridCoordsOut = "angstrom",
+    preserve_units: bool = False,
     verbose: bool = True,
 ) -> bool:
     """
@@ -801,6 +1141,19 @@ def fix_and_split_data(
         If True, replace ``E`` with ``(E - mean_train) / std_train`` after unit conversion,
         optional scaling, validation, and split creation. Mean/std are computed from the
         training split only and saved to ``energy_zscale_stats.json``. Default False.
+    coords_in, coords_out : str
+        Input/output units for ``R``. ``coords_in=auto`` infers Bohr vs Å from bond lengths.
+        ``coords_out=same`` leaves coordinates unchanged (after resolving ``auto``).
+    energy_in, energy_out : str
+        Input/output units for ``E`` (``hartree``, ``ev``, or ``same`` for output).
+    force_in, force_out : str
+        Input/output units for ``F`` (``hartree_bohr``, ``ev_angstrom``, or ``same``).
+    dipole_in, dipole_out : str
+        Input/output units for ``Dxyz`` (``debye``, ``e_angstrom``, or ``same``).
+    grid_coords_in, grid_coords_out : str
+        Input/output units for ESP grid positions (``auto``, ``bohr``, ``angstrom``, ``index``).
+    preserve_units : bool
+        If True, equivalent to ``*-out same`` for R, E, F, Dxyz, and grid coordinates.
     verbose : bool
         Print detailed progress (default True)
         
@@ -809,10 +1162,32 @@ def fix_and_split_data(
     bool
         True if successful, False otherwise
     """
+    manifest_notes: List[str] = []
+    if preserve_units:
+        coords_out = "same"
+        energy_out = "same"
+        force_out = "same"
+        dipole_out = "same"
+        grid_coords_out = "same"
+        manifest_notes.append("--preserve-units: no unit conversions on R, E, F, Dxyz, or grid")
+
+    effective_energy_out = energy_out if energy_out != "same" else energy_in
+    effective_force_out = force_out if force_out != "same" else force_in
+    effective_dipole_out = dipole_out if dipole_out != "same" else dipole_in
+    effective_grid_coords_out = (
+        grid_coords_out if grid_coords_out != "same" else grid_coords_in
+    )
+
     if verbose:
         print("\n" + "="*70)
         print("Molecular Data Unit Conversion and Splitting")
         print("="*70)
+        print("\nUnit policy:")
+        print(f"  R:     {_unit_label_coords(coords_in)} → {_unit_label_coords(coords_out)}")
+        print(f"  E:     {_unit_label_energy(energy_in)} → {_unit_label_energy(energy_out)}")
+        print(f"  F:     {_unit_label_force(force_in)} → {_unit_label_force(force_out)}")
+        print(f"  Dxyz:  {_unit_label_dipole(dipole_in)} → {_unit_label_dipole(dipole_out)}")
+        print(f"  Grid:  {grid_coords_in} → {grid_coords_out}")
         print("\nInput files:")
         if isinstance(efd_file, (list, tuple)):
             print(f"  EFD:  {[str(p) for p in efd_file]}")
@@ -895,7 +1270,10 @@ def fix_and_split_data(
         print(f"  F:  mean_norm={f_norms.mean():.6e}, max_norm={f_norms.max():.6e}")
         if 'Dxyz' in efd_data:
             d_norms = np.linalg.norm(efd_data['Dxyz'].reshape(-1, 3), axis=1)
-            print(f"  Dxyz: mean_norm={d_norms.mean():.4f}, max_norm={d_norms.max():.4f} Debye")
+            print(
+                f"  Dxyz: mean_norm={d_norms.mean():.4f}, max_norm={d_norms.max():.4f} "
+                f"({_unit_label_dipole(dipole_in)} per --dipole-in)"
+            )
         if has_grid and 'esp' in (grid_data or {}):
             esp_flat = grid_data['esp'].flatten()
             valid_esp = esp_flat[np.abs(esp_flat) < 1e5]  # exclude padding
@@ -903,121 +1281,100 @@ def fix_and_split_data(
                 print(f"  esp: mean={valid_esp.mean():.6e}, range=[{valid_esp.min():.6e}, {valid_esp.max():.6e}]")
 
     # =========================================================================
-    # Check atomic coordinates (Bohr vs Angstrom)
+    # Atomic coordinates
     # =========================================================================
     if verbose:
         print(f"\n{'#'*70}")
-        print("# Step 2: Checking Atomic Coordinates")
+        print("# Step 2: Atomic Coordinates (R)")
         print(f"{'#'*70}")
-    
-    # Use shortest interatomic distance to infer units (generic, not molecule-specific)
-    min_dists = []
-    for i in range(min(100, len(efd_data['R']))):
-        r = efd_data['R'][i]
-        valid = np.any(r != 0, axis=1)
-        vpos = r[valid]
-        if len(vpos) < 2:
-            continue
-        # Pairwise distances (upper triangle)
-        d = vpos[:, np.newaxis, :] - vpos[np.newaxis, :, :]
-        norms = np.linalg.norm(d, axis=2)
-        norms[np.triu_indices_from(norms, k=0)] = np.inf
-        min_dists.append(norms.min())
-    min_dists = np.array(min_dists) if min_dists else np.array([])
 
-    if len(min_dists) > 0:
-        d_mean = min_dists.mean()
-        if verbose:
-            print(f"\nShortest interatomic distance: mean={d_mean:.4f}, range=[{min_dists.min():.4f}, {min_dists.max():.4f}]")
-        if 0.8 < d_mean < 2.5:
-            if verbose:
-                print("✓ Coordinates in Angstroms")
-            R_angstrom = efd_data['R']
-        elif 1.8 < d_mean < 2.9:
-            if verbose:
-                print("→ Converting from Bohr to Angstroms...")
-            R_angstrom = efd_data['R'] * 0.529177
-        else:
-            if verbose:
-                print(f"⚠️  Ambiguous units (d={d_mean:.4f}), assuming Angstroms")
-            R_angstrom = efd_data['R']
-    else:
-        if verbose:
-            print("\n⚠️  Could not compute distances, assuming coordinates in Angstroms")
-        R_angstrom = efd_data['R']
-    
+    d_mean = _mean_shortest_interatomic_distance(efd_data["R"])
+    if verbose and d_mean is not None:
+        print(f"\nShortest interatomic distance (mean over samples): {d_mean:.4f} Å-equivalent scale")
+
+    R_out, coords_effective_in, coords_detected = convert_coords_array(
+        efd_data["R"], coords_in, coords_out, verbose=verbose
+    )
+    effective_coords_out = coords_effective_in if coords_out == "same" else coords_out
+    if verbose:
+        print(f"✓ R output units: {_unit_label_coords(effective_coords_out)}")
+
     # =========================================================================
-    # Convert energies: Hartree → eV (optionally subtract atomic references)
+    # Energies (optional atomic references, then unit conversion)
     # =========================================================================
     if verbose:
         print(f"\n{'#'*70}")
-        print("# Step 3: Converting Energies from Hartree to eV")
+        print(f"# Step 3: Energies (E): {_unit_label_energy(energy_in)} → {_unit_label_energy(energy_out)}")
         print(f"{'#'*70}")
-    
-    E_hartree = np.asarray(efd_data['E']).copy()
+
+    E_work = np.asarray(efd_data["E"], dtype=np.float64).copy()
     if atomic_ref:
         if verbose:
-            print(f"\nSubtracting atomic reference energies (scheme: {atomic_ref}, units: {atomic_ref_units})")
-        E_hartree = subtract_atomic_references(E_hartree, Z_expanded, atomic_ref, ref_units=atomic_ref_units)
+            print(f"\nSubtracting atomic reference energies (scheme: {atomic_ref}, ref units: {atomic_ref_units})")
+        if energy_in == "ev":
+            E_ha = convert_energy_ev_to_hartree(E_work)
+            E_ha = subtract_atomic_references(E_ha, Z_expanded, atomic_ref, ref_units=atomic_ref_units)
+            E_work = convert_energy_hartree_to_ev(E_ha)
+        else:
+            E_work = subtract_atomic_references(E_work, Z_expanded, atomic_ref, ref_units=atomic_ref_units)
         if verbose:
-            print(f"  E (after ref subtraction): mean={E_hartree.mean():.6f} Ha, "
-                  f"range=[{E_hartree.min():.6f}, {E_hartree.max():.6f}]")
-    E_ev = convert_energy_hartree_to_ev(E_hartree)
-    
+            print(f"  E after ref subtraction: mean={E_work.mean():.6f}, range=[{E_work.min():.6f}, {E_work.max():.6f}]")
+
+    E_out = convert_energy_array(E_work, energy_in, energy_out)
     if verbose:
-        HARTREE_TO_EV = 27.211386
-        print(f"\nConversion factor: {HARTREE_TO_EV}")
-        print(f"Original (Hartree): mean={efd_data['E'].mean():.6f}, "
-              f"range=[{efd_data['E'].min():.6f}, {efd_data['E'].max():.6f}]")
-        if atomic_ref:
-            print(f"After atomic ref subtraction: mean={E_hartree.mean():.6f} Ha")
-        print(f"Converted (eV):     mean={E_ev.mean():.6f}, "
-              f"range=[{E_ev.min():.6f}, {E_ev.max():.6f}]")
-        print("✓ Energies converted to eV")
-    
+        print(f"  Input ({_unit_label_energy(energy_in)}): mean={efd_data['E'].mean():.6f}")
+        print(f"  Output ({_unit_label_energy(effective_energy_out)}): mean={E_out.mean():.6f}")
+        if energy_out != "same" and energy_in != energy_out:
+            print("✓ Energies converted")
+        else:
+            print("✓ Energies unchanged (per unit flags)")
+
     # =========================================================================
-    # Convert forces: Hartree/Bohr → eV/Angstrom
+    # Forces
     # =========================================================================
     if verbose:
         print(f"\n{'#'*70}")
-        print("# Step 4: Converting Forces from Hartree/Bohr to eV/Angstrom")
+        print(f"# Step 4: Forces (F): {_unit_label_force(force_in)} → {_unit_label_force(force_out)}")
         print(f"{'#'*70}")
-    
-    F_hartree_bohr = np.asarray(efd_data["F"], dtype=np.float64).copy()
+
+    F_work = np.asarray(efd_data["F"], dtype=np.float64).copy()
     if flip_forces:
-        F_hartree_bohr = -F_hartree_bohr
+        F_work = -F_work
         if verbose:
-            print("  --flip-forces: negating F before conversion (gradient ∂E/∂R → force −∇E)")
+            print("  --flip-forces: negating F before unit conversion (gradient ∂E/∂R → force −∇E)")
 
-    F_ev_ang = convert_forces_hartree_bohr_to_ev_angstrom(F_hartree_bohr)
-
+    F_out = convert_force_array(F_work, force_in, force_out)
     if verbose:
-        HARTREE_BOHR_TO_EV_ANG = 51.42208
-        f_orig_norms = np.linalg.norm(F_hartree_bohr[:10, :3, :].reshape(-1, 3), axis=1)
-        f_conv_norms = np.linalg.norm(F_ev_ang[:10, :3, :].reshape(-1, 3), axis=1)
+        f_in_norms = np.linalg.norm(F_work.reshape(-1, 3), axis=1)[:10]
+        f_out_norms = np.linalg.norm(F_out.reshape(-1, 3), axis=1)[:10]
+        print(f"  Input mean |F| (sample): {f_in_norms.mean():.6e}")
+        print(f"  Output mean |F| (sample): {f_out_norms.mean():.6e}")
+        if force_out != "same" and force_in != force_out:
+            print("✓ Forces converted")
+        else:
+            print("✓ Forces unchanged (per unit flags)")
 
-        print(f"\nConversion factor: {HARTREE_BOHR_TO_EV_ANG}")
-        print(f"Input to convert (Ha/Bohr): mean norm={f_orig_norms.mean():.6e}")
-        print(f"Converted (eV/Å):           mean norm={f_conv_norms.mean():.6e}")
-        print("✓ Forces converted to eV/Angstrom")
-    
     # =========================================================================
-    # Convert dipoles: Debye → e·Å (PhysNet/DCMNet standard)
+    # Dipoles
     # =========================================================================
-    if 'Dxyz' in efd_data:
-        D_eA = convert_dipole_debye_to_eA(efd_data['Dxyz'])
+    D_out: Optional[np.ndarray] = None
+    if "Dxyz" in efd_data:
+        D_out = convert_dipole_array(efd_data["Dxyz"], dipole_in, dipole_out)
         if verbose:
-            d_norms_before = np.linalg.norm(efd_data['Dxyz'].reshape(-1, 3), axis=1)
-            d_norms_after = np.linalg.norm(D_eA.reshape(-1, 3), axis=1)
+            d_norms_before = np.linalg.norm(efd_data["Dxyz"].reshape(-1, 3), axis=1)
+            d_norms_after = np.linalg.norm(D_out.reshape(-1, 3), axis=1)
             print(f"\n{'#'*70}")
-            print("# Step 4b: Converting Dipoles from Debye to e·Å")
+            print(
+                f"# Step 4b: Dipoles (Dxyz): {_unit_label_dipole(dipole_in)} → "
+                f"{_unit_label_dipole(dipole_out)}"
+            )
             print(f"{'#'*70}")
-            print("  Conversion: 1 D = 0.208194 e·Å")
-            print(f"  Original (Debye): mean |D|={d_norms_before.mean():.4f}, max={d_norms_before.max():.4f}")
-            print(f"  Converted (e·Å):  mean |D|={d_norms_after.mean():.4f}, max={d_norms_after.max():.4f}")
-            print("✓ Dipoles converted to e·Å")
-    else:
-        D_eA = None
+            print(f"  Input:  mean |D|={d_norms_before.mean():.4f}, max={d_norms_before.max():.4f}")
+            print(f"  Output: mean |D|={d_norms_after.mean():.4f}, max={d_norms_after.max():.4f}")
+            if dipole_out != "same" and dipole_in != dipole_out:
+                print("✓ Dipoles converted")
+            else:
+                print("✓ Dipoles unchanged (per unit flags)")
 
     # =========================================================================
     # Optional extra scales (after standard conversions; before validation / ESP)
@@ -1026,11 +1383,11 @@ def fix_and_split_data(
     fs = float(force_scale)
     ds = float(dipole_scale)
     if es != 1.0:
-        E_ev = E_ev * es
+        E_out = E_out * es
     if fs != 1.0:
-        F_ev_ang = F_ev_ang * fs
-    if D_eA is not None and ds != 1.0:
-        D_eA = D_eA * ds
+        F_out = F_out * fs
+    if D_out is not None and ds != 1.0:
+        D_out = D_out * ds
     ef_s = float(efield_scale)
     esp_s = float(esp_scale)
     q_s = float(charge_scale)
@@ -1039,11 +1396,11 @@ def fix_and_split_data(
         print("# Extra property scales (applied after standard unit conversion)")
         print(f"{'#'*70}")
         if es != 1.0:
-            print(f"  E:     × {es}  (eV); also efield_energy, efield_scf_energy when present")
+            print(f"  E:     × {es}  ({_unit_label_energy(effective_energy_out)}); also efield_energy, efield_scf_energy when present")
         if fs != 1.0:
-            print(f"  F:     × {fs}  (eV/Å); also efield_scf_F when present")
-        if D_eA is not None and ds != 1.0:
-            print(f"  Dxyz:  × {ds}  (after Debye→e·Å); also D, efield_scf_D, efield_D when present")
+            print(f"  F:     × {fs}  ({_unit_label_force(effective_force_out)}); also efield_scf_F when present")
+        if D_out is not None and ds != 1.0:
+            print(f"  Dxyz:  × {ds}  ({_unit_label_dipole(effective_dipole_out)}); also D, efield_scf_D, efield_D when present")
         elif ds != 1.0:
             print(f"  D/efield dipoles: × {ds}  (Debye vectors, if present)")
         if ef_s != 1.0:
@@ -1054,130 +1411,75 @@ def fix_and_split_data(
             print(f"  Q:     × {q_s}  (NPZ key Q; use for total charge—PySCF may use Q for quadrupole)")
 
     # =========================================================================
-    # Fix ESP grid: index space → physical Angstroms (if grid data exists)
+    # ESP grid coordinates (if grid data exists)
     # =========================================================================
-    vdw_surface_angstrom = None
-    
-    if has_grid:
+    vdw_surface_out: Optional[np.ndarray] = None
+    grid_coords_effective_in: Optional[str] = None
+    grid_conversion_notes: List[str] = []
+
+    if has_grid and grid_data is not None:
         if verbose:
             print(f"\n{'#'*70}")
-            print("# Step 5: Converting ESP Grid to Physical Angstroms")
-            print(f"{'#'*70}")
-        
-        BOHR_TO_ANGSTROM = 0.529177
-        
-        # Check if required grid keys exist
-        required_grid_keys = ['vdw_grid', 'grid_origin', 'grid_axes', 'grid_dims']
-        missing_keys = [k for k in required_grid_keys if k not in grid_data]
-        
-        if missing_keys:
-            if verbose:
-                print(f"\n⚠️  Missing grid keys: {missing_keys}")
-                print(f"  Available keys: {list(grid_data.keys())}")
-            # Grid from pyscf-evaluate (esp/esp_grid) is in Bohr; convert to Angstrom
-            # Grid from other sources: assume Angstrom if no metadata
-            # pyscf-evaluate saves esp_grid; also accept vdw_surface or vdw_grid
-            grid_from_pyscf = 'esp' in grid_data and (
-                'vdw_surface' in grid_data or 'vdw_grid' in grid_data or 'esp_grid' in grid_data
+            print(
+                f"# Step 5: ESP grid coordinates: {grid_coords_in} → {grid_coords_out}"
             )
-            if 'vdw_surface' in grid_data:
-                vdw_raw = grid_data['vdw_surface']
-                if grid_from_pyscf:
-                    vdw_surface_angstrom = vdw_raw * BOHR_TO_ANGSTROM
-                    if verbose:
-                        valid = np.all(np.abs(vdw_raw) < 1e5, axis=-1)
-                        if valid.any():
-                            ext_bohr = np.abs(vdw_raw[valid]).max()
-                            ext_ang = np.abs(vdw_surface_angstrom[valid]).max()
-                            print("  Converting vdw_surface from Bohr to Angstrom (pyscf-evaluate format)")
-                            print(f"  Grid extent: ~{ext_bohr:.2f} Bohr → ~{ext_ang:.2f} Angstrom")
-                        else:
-                            print("  Converting vdw_surface from Bohr to Angstrom (pyscf-evaluate format)")
-                else:
-                    vdw_surface_angstrom = vdw_raw
-                    if verbose:
-                        print("  Using existing vdw_surface (assuming Angstroms)")
-            elif 'vdw_grid' in grid_data:
-                vdw_raw = grid_data['vdw_grid']
-                if grid_from_pyscf:
-                    vdw_surface_angstrom = vdw_raw * BOHR_TO_ANGSTROM
-                    if verbose:
-                        print("  Converting vdw_grid from Bohr to Angstrom (pyscf-evaluate format)")
-                else:
-                    vdw_surface_angstrom = vdw_raw
-                    if verbose:
-                        print("  Using vdw_grid directly (assuming Angstroms)")
-            elif 'esp_grid' in grid_data:
-                vdw_raw = grid_data['esp_grid']
-                if grid_from_pyscf:
-                    vdw_surface_angstrom = vdw_raw * BOHR_TO_ANGSTROM
-                    if verbose:
-                        print("  Using esp_grid as grid; converting from Bohr to Angstrom (pyscf format)")
-                else:
-                    vdw_surface_angstrom = vdw_raw
-                    if verbose:
-                        print("  Using esp_grid as grid (assuming Angstroms)")
-        else:
-            if verbose:
-                print("\nCube file parameters:")
-                print(f"  Spacing: {cube_spacing_bohr} Bohr = {cube_spacing_bohr * BOHR_TO_ANGSTROM:.6f} Angstrom")
-                print(f"  Dimensions: {grid_data['grid_dims'][0]}")
-                print(f"  Original origin (Bohr): {grid_data['grid_origin'][0]}")
-            
-            try:
-                vdw_surface_angstrom = convert_grid_indices_to_angstrom(
-                    grid_data['vdw_grid'],
-                    grid_data['grid_origin'],
-                    grid_data['grid_axes'],
-                    grid_data['grid_dims'],
-                    cube_spacing_bohr=cube_spacing_bohr
-                )
-                
-                if verbose:
-                    grid0_original = grid_data['vdw_grid'][0]
-                    grid0_fixed = vdw_surface_angstrom[0]
-                    
-                    print(f"\nOriginal grid extent: {(grid0_original.max(axis=0) - grid0_original.min(axis=0)).mean():.4f}")
-                    print(f"Fixed grid extent: {(grid0_fixed.max(axis=0) - grid0_fixed.min(axis=0)).mean():.4f} Angstrom")
-                    print("✓ ESP grid converted to physical Angstroms")
-            except Exception as e:
-                if verbose:
-                    print(f"\n⚠️  Error converting grid: {e}")
-                    print("  Falling back to using grid data as-is")
-                # Fallback: use grid data as-is
-                grid_from_pyscf_fb = 'esp' in grid_data and ('vdw_surface' in grid_data or 'vdw_grid' in grid_data)
-                if 'vdw_surface' in grid_data:
-                    vdw_raw = grid_data['vdw_surface']
-                    vdw_surface_angstrom = vdw_raw * BOHR_TO_ANGSTROM if grid_from_pyscf_fb else vdw_raw
-                elif 'vdw_grid' in grid_data:
-                    vdw_raw = grid_data['vdw_grid']
-                    vdw_surface_angstrom = vdw_raw * BOHR_TO_ANGSTROM if grid_from_pyscf_fb else vdw_raw
-    else:
-        if verbose:
-            print(f"\n{'#'*70}")
-            print("# Step 5: ESP Grid (skipped - no grid data provided)")
             print(f"{'#'*70}")
+        try:
+            vdw_surface_out, grid_coords_effective_in, grid_conversion_notes = convert_grid_surface_array(
+                grid_data,
+                grid_coords_in,
+                grid_coords_out,
+                cube_spacing_bohr=cube_spacing_bohr,
+                verbose=verbose,
+            )
+            manifest_notes.extend(grid_conversion_notes)
+            if grid_coords_out != "same" and grid_coords_effective_in != effective_grid_coords_out:
+                if verbose:
+                    print(f"✓ Grid output units: {_unit_label_coords(effective_grid_coords_out)}")
+            elif verbose:
+                print(f"✓ Grid coordinates unchanged ({grid_coords_effective_in})")
+        except Exception as e:
+            print(f"\n❌ Grid unit conversion failed: {e}")
+            return False
+    elif verbose:
+        print(f"\n{'#'*70}")
+        print("# Step 5: ESP Grid (skipped - no grid data provided)")
+        print(f"{'#'*70}")
+
+    if grid_coords_out == "same" and grid_coords_effective_in is not None:
+        effective_grid_coords_out = grid_coords_effective_in
     
     # =========================================================================
     # Reduce ESP grid to fixed number of points (if grid exists)
     # =========================================================================
-    if has_grid and vdw_surface_angstrom is not None:
+    if has_grid and effective_coords_out != "angstrom" and not skip_validation:
+        manifest_notes.append(
+            "ESP grid filtering (--min-dist-to-atoms, etc.) assumes R in Å; "
+            f"output R is in {effective_coords_out}"
+        )
+        if verbose:
+            print(
+                "\n⚠️  R is not in Angstrom: ESP distance filters use Å by default; "
+                "adjust --min-dist-to-atoms or convert coordinates."
+            )
+
+    if has_grid and vdw_surface_out is not None:
         esp_raw = grid_data['esp']
         # Sanity check: esp and grid must have matching shapes (esp[i,j] pairs with grid[i,j])
-        if esp_raw.shape[0] != vdw_surface_angstrom.shape[0]:
+        if esp_raw.shape[0] != vdw_surface_out.shape[0]:
             raise ValueError(
-                f"ESP/grid sample count mismatch: esp {esp_raw.shape[0]} vs grid {vdw_surface_angstrom.shape[0]}. "
+                f"ESP/grid sample count mismatch: esp {esp_raw.shape[0]} vs grid {vdw_surface_out.shape[0]}. "
                 "Check that EFD and grid files have the same samples in the same order."
             )
-        if esp_raw.shape[1] != vdw_surface_angstrom.shape[1]:
+        if esp_raw.shape[1] != vdw_surface_out.shape[1]:
             raise ValueError(
-                f"ESP/grid point count mismatch: esp {esp_raw.shape[1]} vs grid {vdw_surface_angstrom.shape[1]}. "
+                f"ESP/grid point count mismatch: esp {esp_raw.shape[1]} vs grid {vdw_surface_out.shape[1]}. "
                 "esp[i,j] must correspond to grid[i,j] for correct pairing."
             )
         # Check index alignment only for separate grid files (combined EFD format is trusted)
         if not grid_from_efd:
             align_ok_raw, align_corr_raw = check_esp_grid_alignment(
-                esp_raw, vdw_surface_angstrom, R_angstrom, n_check=min(5, esp_raw.shape[0])
+                esp_raw, vdw_surface_out, R_out, n_check=min(5, esp_raw.shape[0])
             )
             if verbose:
                 print(f"  ESP-grid alignment (raw): correlation={align_corr_raw:.3f} {'✓' if align_ok_raw else '⚠️'}")
@@ -1194,8 +1496,8 @@ def fix_and_split_data(
             print(f"  Exclude points < {min_dist_to_atoms} Å from atoms")
         esp_reduced, grid_reduced = reduce_esp_grid(
             esp_raw,
-            vdw_surface_angstrom,
-            R_angstrom,
+            vdw_surface_out,
+            R_out,
             n_grid_points=n_grid_points,
             esp_sd_sigma=esp_sd_sigma,
             esp_max_abs_kcal_mol=esp_max_abs_kcal_mol,
@@ -1204,7 +1506,7 @@ def fix_and_split_data(
         )
         # Verify reduction preserved esp-grid alignment (same indices used for both)
         reduction_ok = verify_reduction_preserves_alignment(
-            esp_raw, vdw_surface_angstrom, esp_reduced, grid_reduced, R_angstrom,
+            esp_raw, vdw_surface_out, esp_reduced, grid_reduced, R_out,
             n_grid_points=n_grid_points, esp_sd_sigma=esp_sd_sigma,
             esp_max_abs_kcal_mol=esp_max_abs_kcal_mol, min_dist_to_atoms=min_dist_to_atoms,
             seed=seed, n_spot_check=3,
@@ -1216,14 +1518,14 @@ def fix_and_split_data(
             )
         if verbose:
             print("  ✓ Reduction preserves esp-grid alignment (verified)")
-        vdw_surface_angstrom = grid_reduced
+        vdw_surface_out = grid_reduced
         if verbose:
             n_valid_per_sample = np.sum(np.all(np.abs(grid_reduced) < 1e5, axis=2), axis=1)
             print(f"  Reduced to shape: esp {esp_reduced.shape}, grid {grid_reduced.shape}")
             print(f"  Valid points per sample: min={n_valid_per_sample.min()}, max={n_valid_per_sample.max()}, mean={n_valid_per_sample.mean():.0f}")
         # Verify esp-grid alignment only for separate grid files
         if not grid_from_efd:
-            align_ok, align_corr = check_esp_grid_alignment(esp_reduced, grid_reduced, R_angstrom, n_check=5)
+            align_ok, align_corr = check_esp_grid_alignment(esp_reduced, grid_reduced, R_out, n_check=5)
             if verbose:
                 print(f"  ESP-grid alignment check: correlation={align_corr:.3f} {'✓' if align_ok else '⚠️'}")
             if not align_ok and verbose:
@@ -1245,10 +1547,17 @@ def fix_and_split_data(
             print(f"{'#'*70}")
         
         is_valid = validate_fixed_data(
-            R_angstrom, E_ev, F_ev_ang, vdw_surface_angstrom,
-            Z_expanded, efd_data['N'], 
+            R_out,
+            E_out,
+            F_out,
+            vdw_surface_out,
+            Z_expanded,
+            efd_data['N'],
             has_grid=has_grid,
-            verbose=verbose
+            verbose=verbose,
+            coords_unit=effective_coords_out,
+            energy_unit=effective_energy_out,
+            force_unit=effective_force_out,
         )
         
         if not is_valid:
@@ -1274,7 +1583,7 @@ def fix_and_split_data(
 
     energy_zscale_stats: Optional[Dict[str, Any]] = None
     if zscale_energies:
-        train_E = np.asarray(E_ev[splits['train']], dtype=np.float64)
+        train_E = np.asarray(E_out[splits['train']], dtype=np.float64)
         if train_E.size == 0:
             raise ValueError("Cannot Z-scale energies: training split is empty.")
         energy_mean = float(np.mean(train_E))
@@ -1283,20 +1592,20 @@ def fix_and_split_data(
             raise ValueError(
                 f"Cannot Z-scale energies: training energy std must be finite and non-zero, got {energy_std}."
             )
-        E_ev = (np.asarray(E_ev, dtype=np.float64) - energy_mean) / energy_std
+        E_out = (np.asarray(E_out, dtype=np.float64) - energy_mean) / energy_std
         energy_zscale_stats = {
             "enabled": True,
             "property": "E",
             "mean": energy_mean,
             "std": energy_std,
-            "units_before_zscale": "eV",
+            "units_before_zscale": effective_energy_out,
             "train_samples": int(train_E.size),
             "std_ddof": 0,
         }
         if verbose:
             print("\nEnergy Z-scaling enabled:")
-            print(f"  mean_train = {energy_mean:.12g} eV")
-            print(f"  std_train  = {energy_std:.12g} eV")
+            print(f"  mean_train = {energy_mean:.12g} {_unit_label_energy(effective_energy_out)}")
+            print(f"  std_train  = {energy_std:.12g} {_unit_label_energy(effective_energy_out)}")
     
     # =========================================================================
     # Prepare datasets with fixed units
@@ -1308,11 +1617,11 @@ def fix_and_split_data(
     
     # Update EFD data with fixed/converted values
     efd_fixed = efd_data.copy()
-    efd_fixed['R'] = R_angstrom
-    efd_fixed['E'] = E_ev
-    efd_fixed['F'] = F_ev_ang
-    if D_eA is not None:
-        efd_fixed['Dxyz'] = D_eA
+    efd_fixed['R'] = R_out
+    efd_fixed['E'] = E_out
+    efd_fixed['F'] = F_out
+    if D_out is not None:
+        efd_fixed['Dxyz'] = D_out
     # PhysNet expects N (n_samples,) and Z (n_samples, n_atoms); pyscf-evaluate outputs scalar N and 1D Z
     N_raw = efd_data['N']
     if (np.isscalar(N_raw) or (isinstance(N_raw, np.ndarray) and N_raw.size == 1) or
@@ -1328,19 +1637,19 @@ def fix_and_split_data(
     grid_fixed = None
     if has_grid and grid_data is not None:
         grid_fixed = grid_data.copy()
-        grid_fixed['R'] = R_angstrom
-        if vdw_surface_angstrom is not None:
-            grid_fixed['vdw_surface'] = vdw_surface_angstrom
-            grid_fixed['vdw_grid'] = vdw_surface_angstrom  # Backward compatibility
-        if D_eA is not None and 'Dxyz' in grid_fixed:
-            grid_fixed['Dxyz'] = D_eA
+        grid_fixed['R'] = R_out
+        if vdw_surface_out is not None:
+            grid_fixed['vdw_surface'] = vdw_surface_out
+            grid_fixed['vdw_grid'] = vdw_surface_out  # Backward compatibility
+        if D_out is not None and 'Dxyz' in grid_fixed:
+            grid_fixed['Dxyz'] = D_out
         # Align Z and N with EFD (per-sample shapes for PhysNet)
         if 'N' in grid_fixed:
             N_g = grid_fixed['N']
             if (np.isscalar(N_g) or (isinstance(N_g, np.ndarray) and N_g.size == 1) or
                     (isinstance(N_g, np.ndarray) and N_g.ndim == 0) or
                     (isinstance(N_g, np.ndarray) and N_g.shape[0] != n_samples)):
-                n_a = int(np.asarray(N_g).flat[0]) if np.asarray(N_g).size else R_angstrom.shape[1]
+                n_a = int(np.asarray(N_g).flat[0]) if np.asarray(N_g).size else R_out.shape[1]
                 grid_fixed['N'] = np.full(n_samples, n_a, dtype=np.int32)
         if 'Z' in grid_fixed:
             Z_g = grid_fixed['Z']
@@ -1415,7 +1724,31 @@ def fix_and_split_data(
             f.write("\n")
         if verbose:
             print(f"✓ Energy Z-scale stats saved to {stats_out.name}")
-    
+
+    units_manifest = UnitsManifest(
+        coords_in=coords_in,
+        coords_out=effective_coords_out,
+        coords_detected=coords_detected,
+        energy_in=energy_in,
+        energy_out=effective_energy_out,
+        force_in=force_in,
+        force_out=effective_force_out,
+        dipole_in=dipole_in if "Dxyz" in efd_data else None,
+        dipole_out=effective_dipole_out if "Dxyz" in efd_data else None,
+        grid_coords_in=grid_coords_in if has_grid else None,
+        grid_coords_out=effective_grid_coords_out if has_grid else None,
+        esp_values="hartree/e",
+        flip_forces=flip_forces,
+        preserve_units=preserve_units,
+        notes=manifest_notes,
+    )
+    manifest_out = output_dir / "units_manifest.json"
+    with open(manifest_out, "w") as f:
+        json.dump(asdict(units_manifest), f, indent=2)
+        f.write("\n")
+    if verbose:
+        print(f"✓ Units manifest saved to {manifest_out.name}")
+
     # =========================================================================
     # Create documentation
     # =========================================================================
@@ -1424,13 +1757,27 @@ def fix_and_split_data(
         print("# Step 10: Creating Documentation")
         print(f"{'#'*70}")
     
+    def _label_for(prop: str, unit: str) -> str:
+        if prop == "R":
+            return _unit_label_coords(unit)
+        if prop == "E":
+            return _unit_label_energy(unit)
+        if prop == "F":
+            return _unit_label_force(unit)
+        return _unit_label_dipole(unit)
+
+    def _conv_line(name: str, u_in: str, u_out: str) -> str:
+        if u_in == u_out:
+            return f"- **{name}**: {_label_for(name, u_in)} (unchanged)"
+        return f"- **{name}**: {_label_for(name, u_in)} → {_label_for(name, u_out)}"
+
     grid_section = ""
     if has_grid:
         grid_section = f"""
-### 4. ESP Grid Coordinates (vdw_surface)
-- **Original**: Grid index space
-- **Fixed**: Physical Angstroms
-- **Conversion**: Applied proper grid spacing ({cube_spacing_bohr} Bohr = {cube_spacing_bohr * 0.529177:.6f} Å)
+### 4. ESP Grid Coordinates (vdw_surface / vdw_grid)
+- **Input policy**: `{grid_coords_in}` (effective: `{grid_coords_effective_in or 'n/a'}`)
+- **Output units**: {_unit_label_coords(effective_grid_coords_out)}
+- See `units_manifest.json` for full conversion log
 """
 
     forces_sign_readme = ""
@@ -1468,43 +1815,51 @@ def fix_and_split_data(
         extra_scales_readme = "\n### 3b. Extra property scales\n" + "\n".join(_scale_lines) + "\n"
 
     energy_zscale_readme = ""
-    energy_unit_label = "eV"
-    energy_file_note = "Energies [eV] ← CONVERTED from Hartree"
-    energy_usage_comment = "eV"
-    energy_usage_intro = "All units are ASE-standard - ready to use!"
+    energy_unit_label = effective_energy_out
+    energy_file_note = f"Energies [{_unit_label_energy(effective_energy_out)}]"
+    if energy_in != effective_energy_out:
+        energy_file_note += f" ← converted from {_unit_label_energy(energy_in)}"
+    energy_usage_comment = _unit_label_energy(effective_energy_out)
+    energy_usage_intro = (
+        "Units match `units_manifest.json` (default pipeline targets ASE-style training units)."
+        if not preserve_units
+        else "Units preserved from input (`--preserve-units`); see `units_manifest.json`."
+    )
     if energy_zscale_stats is not None:
         energy_unit_label = "dimensionless"
-        energy_file_note = "Energies [Z-scaled] ← (E_eV - train_mean) / train_std"
+        energy_file_note = (
+            f"Energies [Z-scaled] ← (E in {_unit_label_energy(effective_energy_out)} - train_mean) / train_std"
+        )
         energy_usage_comment = "Z-scaled, dimensionless"
-        energy_usage_intro = "E is Z-scaled; other arrays use ASE-standard units."
+        energy_usage_intro = "E is Z-scaled; see `units_manifest.json` for other properties."
         energy_zscale_readme = (
             "\n### 3c. Energy Z-scaling\n"
-            "- **Applied**: `E = (E_eV - mean_train) / std_train`\n"
-            f"- **Training mean**: {energy_zscale_stats['mean']:.12g} eV\n"
-            f"- **Training std**: {energy_zscale_stats['std']:.12g} eV\n"
+            "- **Applied**: `E = (E - mean_train) / std_train`\n"
+            f"- **Training mean**: {energy_zscale_stats['mean']:.12g} {_unit_label_energy(effective_energy_out)}\n"
+            f"- **Training std**: {energy_zscale_stats['std']:.12g} {_unit_label_energy(effective_energy_out)}\n"
             "- **Stats file**: `energy_zscale_stats.json`\n"
         )
 
+    dipole_file_line = ""
+    if "Dxyz" in efd_data:
+        dipole_file_line = (
+            f"- `Dxyz`: Dipole moments [{_unit_label_dipole(effective_dipole_out)}]"
+        )
+        if dipole_in != effective_dipole_out:
+            dipole_file_line += f" ← converted from {_unit_label_dipole(dipole_in)}"
+        dipole_file_line += "\n"
+
     readme_content = f"""# Training Data (Unit-Corrected)
 
-This directory contains molecular data with **corrected units** ready for DCMnet/PhysnetJax training.
+This directory contains molecular data prepared for DCMnet/PhysnetJax training.
+**Always read `units_manifest.json`** before training or evaluation.
 
-## Data Corrections Applied
+## Unit conversions applied
 
-### 1. Atomic Coordinates (R)
-- **Original**: Angstroms (verified)
-- **Status**: ✓ Correct
-- **Units**: Angstrom (ASE standard)
-
-### 2. Energies (E)
-- **Original**: Hartree
-- **Converted**: eV (ASE standard)
-- **Factor**: ×27.211386
-
-### 3. Forces (F)
-- **Original**: Hartree/Bohr
-- **Converted**: eV/Angstrom (ASE standard)
-- **Factor**: ×51.42208
+{_conv_line('R', coords_effective_in if coords_in == 'auto' else coords_in, effective_coords_out)}
+{_conv_line('E', energy_in, effective_energy_out)}
+{_conv_line('F', force_in, effective_force_out)}
+{f"{_conv_line('Dxyz', dipole_in, effective_dipole_out)}" if "Dxyz" in efd_data else ""}
 {forces_sign_readme}{extra_scales_readme}{energy_zscale_readme}{grid_section}
 ## Data Splits
 
@@ -1521,13 +1876,12 @@ This directory contains molecular data with **corrected units** ready for DCMnet
 - `energies_forces_dipoles_test.npz`
 
 Each contains:
-- `R`: Atomic coordinates [Angstrom]
+- `R`: Atomic coordinates [{_unit_label_coords(effective_coords_out)}]
 - `Z`: Atomic numbers [int]
 - `N`: Number of atoms [int]
 - `E`: {energy_file_note}
-- `F`: Forces [eV/Angstrom] ← CONVERTED from Hartree/Bohr
-- `Dxyz`: Dipole moments [e·Å] ← CONVERTED from Debye
-"""
+- `F`: Forces [{_unit_label_force(effective_force_out)}]
+{dipole_file_line}"""
     
     if has_grid:
         readme_content += """
@@ -1537,32 +1891,33 @@ Each contains:
 - `grids_esp_test.npz`
 
 Each contains:
-- `R`: Atomic coordinates [Angstrom]
+- `R`: Atomic coordinates [{_unit_label_coords(effective_coords_out)}]
 - `Z`: Atomic numbers [int]
 - `N`: Number of atoms [int]
 - `esp`: ESP values [Hartree/e]
-- `vdw_surface`: Grid coordinates [Angstrom] ← FIXED
+- `vdw_surface`: Grid coordinates [{_unit_label_coords(effective_grid_coords_out)}]
 - `vdw_grid`: Same as vdw_surface (backward compatibility)
 - `grid_dims`: Original cube dimensions (if available)
 - `grid_origin`: Original cube origins [Bohr] (if available)
 - `grid_axes`: Original cube axes (if available)
-- `Dxyz`: Dipole moments [e·Å] ← CONVERTED from Debye
-"""
+{dipole_file_line if "Dxyz" in efd_data else ""}"""
     
     readme_content += f"""
-## Units Summary (ASE Standard)
+## Units Summary
 
-| Property | Unit | Status |
-|----------|------|--------|
-| R (coordinates) | Angstrom | ✓ Correct |
-| E (energy) | {energy_unit_label} | ✓ Converted{' and Z-scaled' if energy_zscale_stats is not None else ''} |
-| F (forces) | eV/Angstrom | ✓ Converted |
-| Dxyz (dipoles) | e·Å | ✓ Converted from Debye |
+| Property | Unit | Notes |
+|----------|------|-------|
+| R (coordinates) | {_unit_label_coords(effective_coords_out)} | see manifest |
+| E (energy) | {energy_unit_label} | {'Z-scaled' if energy_zscale_stats is not None else 'see manifest'} |
+| F (forces) | {_unit_label_force(effective_force_out)} | see manifest |
 """
     
+    if "Dxyz" in efd_data:
+        readme_content += f"| Dxyz (dipoles) | {_unit_label_dipole(effective_dipole_out)} | see manifest |\n"
+
     if has_grid:
-        readme_content += """| esp (values) | Hartree/e | ✓ Correct |
-| vdw_surface | Angstrom | ✓ Fixed |
+        readme_content += f"""| esp (values) | Hartree/e | unchanged |
+| vdw_surface | {_unit_label_coords(effective_grid_coords_out)} | see manifest |
 """
     
     readme_content += f"""
@@ -1575,10 +1930,10 @@ import numpy as np
 train_props = np.load('energies_forces_dipoles_train.npz')
 
 # {energy_usage_intro}
-R = train_props['R']  # Angstroms
+R = train_props['R']  # {_unit_label_coords(effective_coords_out)}
 E = train_props['E']  # {energy_usage_comment}
-F = train_props['F']  # eV/Angstrom
-Dxyz = train_props['Dxyz']  # e·Å (converted from Debye)
+F = train_props['F']  # {_unit_label_force(effective_force_out)}
+# Dxyz: see units_manifest.json
 """
     
     if has_grid:
@@ -1682,7 +2037,92 @@ Examples:
 
   # Z-scale energies with training-set statistics and save the mean/std
   %(prog)s --efd data.npz --output-dir ./out --zscale-energies
+
+  # Already in training units (eV, eV/Å, e·Å, Å): split only
+  %(prog)s --efd data.npz -o ./splits --preserve-units
+
+  # Explicit: PySCF Hartree/Bohr in, ASE units out (same as default)
+  %(prog)s --efd pyscf.npz -o ./out \\
+    --energy-in hartree --energy-out ev \\
+    --force-in hartree-bohr --force-out ev-angstrom \\
+    --dipole-in debye --dipole-out e-angstrom
 """
+    )
+
+    units_group = parser.add_argument_group(
+        "Unit conversion",
+        "Declare units in the NPZ files. Defaults assume PySCF/atomic units on input "
+        "and ASE-style training units on output. Use --preserve-units or *-out same "
+        "to avoid converting fields that are already correct.",
+    )
+    units_group.add_argument(
+        "--coords-in",
+        choices=["auto", "bohr", "angstrom"],
+        default="auto",
+        help="Units of R in the input NPZ (default: auto = infer from bond lengths)",
+    )
+    units_group.add_argument(
+        "--coords-out",
+        choices=["angstrom", "bohr", "same"],
+        default="angstrom",
+        help="Units of R in output NPZ (default: angstrom; same = no conversion)",
+    )
+    units_group.add_argument(
+        "--energy-in",
+        choices=["hartree", "ev"],
+        default="hartree",
+        help="Units of E in the input NPZ (default: hartree)",
+    )
+    units_group.add_argument(
+        "--energy-out",
+        choices=["ev", "hartree", "same"],
+        default="ev",
+        help="Units of E in output NPZ (default: ev; same = no conversion)",
+    )
+    units_group.add_argument(
+        "--force-in",
+        choices=["hartree-bohr", "ev-angstrom"],
+        default="hartree-bohr",
+        dest="force_in",
+        help="Units of F in the input NPZ (default: hartree-bohr)",
+    )
+    units_group.add_argument(
+        "--force-out",
+        choices=["ev-angstrom", "hartree-bohr", "same"],
+        default="ev-angstrom",
+        dest="force_out",
+        help="Units of F in output NPZ (default: ev-angstrom; same = no conversion)",
+    )
+    units_group.add_argument(
+        "--dipole-in",
+        choices=["debye", "e-angstrom"],
+        default="debye",
+        dest="dipole_in",
+        help="Units of Dxyz in the input NPZ (default: debye)",
+    )
+    units_group.add_argument(
+        "--dipole-out",
+        choices=["e-angstrom", "debye", "same"],
+        default="e-angstrom",
+        dest="dipole_out",
+        help="Units of Dxyz in output NPZ (default: e-angstrom; same = no conversion)",
+    )
+    units_group.add_argument(
+        "--grid-coords-in",
+        choices=["auto", "bohr", "angstrom", "index"],
+        default="auto",
+        help="Units of vdw_surface/vdw_grid/esp_grid (default: auto)",
+    )
+    units_group.add_argument(
+        "--grid-coords-out",
+        choices=["angstrom", "bohr", "same"],
+        default="angstrom",
+        help="Grid coordinate units in output NPZ (default: angstrom; same = no conversion)",
+    )
+    units_group.add_argument(
+        "--preserve-units",
+        action="store_true",
+        help="Do not convert R, E, F, Dxyz, or grid coordinates (sets all *-out to same)",
     )
     
     parser.add_argument(
@@ -1895,6 +2335,12 @@ Examples:
               f"{args.train_frac + args.valid_frac + args.test_frac}")
         sys.exit(1)
     
+    def _norm_force_unit(s: str) -> ForceIn:
+        return s.replace("-", "_")  # type: ignore[return-value]
+
+    def _norm_dipole_unit(s: str) -> DipoleIn:
+        return s.replace("-", "_")  # type: ignore[return-value]
+
     # Run the conversion
     success = fix_and_split_data(
         efd_file=efd_files if len(efd_files) > 1 else efd_files[0],
@@ -1920,6 +2366,17 @@ Examples:
         esp_scale=getattr(args, 'esp_scale', 1.0),
         charge_scale=getattr(args, 'charge_scale', 1.0),
         zscale_energies=getattr(args, 'zscale_energies', False),
+        coords_in=args.coords_in,
+        coords_out=args.coords_out,
+        energy_in=args.energy_in,
+        energy_out=args.energy_out,
+        force_in=_norm_force_unit(args.force_in),
+        force_out=_norm_force_unit(args.force_out),
+        dipole_in=_norm_dipole_unit(args.dipole_in),
+        dipole_out=_norm_dipole_unit(args.dipole_out),
+        grid_coords_in=args.grid_coords_in,
+        grid_coords_out=args.grid_coords_out,
+        preserve_units=args.preserve_units,
         verbose=not args.quiet,
     )
     
