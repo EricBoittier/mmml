@@ -24,16 +24,16 @@ _scripts_dir = Path(__file__).resolve().parent
 if str(_scripts_dir) not in sys.path:
     sys.path.insert(0, str(_scripts_dir))
 from md_10mer_mmml_pbc_suite import (  # noqa: E402
-    _build_psf_ordered_cluster,
-    _build_cluster_from_composition,
-    _parse_composition,
     _cubic_box_length,
-    _enforce_min_com_separation,
     _check_or_charmm_overlap_rescue,
-    _randomize_monomer_com_positions,
+    _enforce_min_com_separation,
     _numpy_wrap_monomers_primary_cell,
+    _parse_composition,
+    _randomize_monomer_com_positions,
     _run_charmm_minimize,
     _validate_psf_charges,
+    build_initial_cluster_from_args,
+    resolve_cluster_packmol_sphere,
 )
 
 
@@ -158,14 +158,38 @@ def main() -> int:
     p.add_argument("--jaxmd-pbc-minimize-steps", type=int, default=200)
     p.add_argument("--seed", type=int, default=123)
     p.add_argument(
+        "--packmol-sphere",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        dest="packmol_sphere",
+        help=(
+            "Pack --composition with Packmol inside a sphere (radius = --flat-bottom-radius). "
+            "Default: on when both --composition and --flat-bottom-radius are set."
+        ),
+    )
+    p.add_argument(
+        "--packmol-center",
+        type=float,
+        nargs=3,
+        metavar=("CX", "CY", "CZ"),
+        default=None,
+        help="Packmol sphere center in Angstrom (default: 0 0 0).",
+    )
+    p.add_argument(
+        "--packmol-tolerance",
+        type=float,
+        default=2.0,
+        help="Packmol tolerance (Å) for --packmol-sphere (default: 2.0).",
+    )
+    p.add_argument(
         "--flat-bottom-radius",
         type=float,
         default=None,
         metavar="Å",
         dest="flat_bottom_radius",
         help=(
-            "Optional flat-bottom on system COM (same as mmml run / md_10mer suite ASE path): "
-            "PBC uses MIC to box center; vacuum uses origin."
+            "Flat-bottom COM restraint radius (Å). With --composition, also Packmol sphere radius "
+            "unless --no-packmol-sphere."
         ),
     )
     p.add_argument(
@@ -286,54 +310,30 @@ def main() -> int:
         base_ckpt_dir, _ = resolve_checkpoint_paths(args.checkpoint.expanduser().resolve())
     print(f"Using MMML checkpoint: {base_ckpt_dir}")
 
+    z, r0, atoms_per_list, residue_labels, _composition_summary = build_initial_cluster_from_args(
+        args
+    )
+    n_molecules = len(atoms_per_list)
     if args.composition:
         composition = _parse_composition(args.composition)
-        z, r0, atoms_per_list, _ = _build_cluster_from_composition(
-            composition=composition,
-            spacing=args.spacing,
-        )
-        n_molecules = len(atoms_per_list)
     else:
-        # Preserve legacy behavior for homogeneous MEOH systems: use template-seeded
-        # PSF-ordered builder for stable monomer geometry.
-        composition = [("MEOH", int(args.n_molecules))]
-        z, r0 = _build_psf_ordered_cluster(
-            "MEOH",
-            args.n_molecules,
-            args.spacing,
-            template_pdb=args.template_pdb.expanduser().resolve(),
-        )
-        n_atoms_tmp = len(z)
-        atoms_per_uniform = n_atoms_tmp // args.n_molecules
-        atoms_per_list = [int(atoms_per_uniform)] * int(args.n_molecules)
-        if n_atoms_tmp != int(np.sum(np.asarray(atoms_per_list, dtype=int))):
-            raise RuntimeError(
-                f"Homogeneous atom partition mismatch: total_atoms={n_atoms_tmp}, "
-                f"n_molecules={args.n_molecules}, atoms_per={atoms_per_uniform}"
-            )
-        n_molecules = int(args.n_molecules)
-        # Keep composition summary consistent with the actual count.
         composition = [("MEOH", n_molecules)]
     monomer_offsets = np.zeros(n_molecules + 1, dtype=int)
     monomer_offsets[1:] = np.cumsum(np.asarray(atoms_per_list, dtype=int))
-    residue_labels = [
-        residue
-        for residue, count in composition
-        for _ in range(int(count))
-    ]
     psf_charge_summary = _validate_psf_charges(
         monomer_offsets=monomer_offsets,
         residue_labels=residue_labels,
         total_atoms=len(z),
     )
-    r0 = _randomize_monomer_com_positions(
-        r0,
-        monomer_offsets,
-        spacing=args.spacing,
-        min_com_distance=max(float(args.spacing), float(args.min_com_start_distance)),
-        seed=args.seed,
-    )
-    r0 = _enforce_min_com_separation(r0, monomer_offsets, args.min_com_start_distance)
+    if not resolve_cluster_packmol_sphere(args):
+        r0 = _randomize_monomer_com_positions(
+            r0,
+            monomer_offsets,
+            spacing=args.spacing,
+            min_com_distance=max(float(args.spacing), float(args.min_com_start_distance)),
+            seed=args.seed,
+        )
+        r0 = _enforce_min_com_separation(r0, monomer_offsets, args.min_com_start_distance)
     free_space = bool(args.free_space)
     if free_space:
         if args.box_size is not None:
