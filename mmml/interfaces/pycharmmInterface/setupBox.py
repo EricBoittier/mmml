@@ -38,6 +38,7 @@ import pycharmm.lingo
 from mmml.interfaces.pycharmmInterface.pycharmmCommands import CLEAR_CHARMM
 from mmml.interfaces.pycharmmInterface.packmol_placement import (
     require_packmol_sphere_radius,
+    resolve_packmol_sphere_radius,
     resolve_packmol_sphere_use,
     run_packmol_sphere,
     run_packmol_sphere_mixed,
