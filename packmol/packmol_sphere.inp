@@ -1,4 +1,4 @@
-seed 1
+seed 2
 output pdb/init-packmol-sphere.pdb
 filetype pdb
 tolerance 2.0
