@@ -21,6 +21,7 @@ from mmml.cli.run.lambda_dynamics import (
     LambdaMdSettings,
     ensure_jax_cuda_toolchain,
     is_lambda_prod_complete,
+    lambda_array,
     lambda_min_traj_path,
     lambda_prod_traj_path,
     lambda_repeat_label,
