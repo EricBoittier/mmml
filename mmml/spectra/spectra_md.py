@@ -75,14 +75,92 @@ FS_INV_TO_CM_INV = 1e15 / 2.99792458e10  # 1/fs  →  cm⁻¹  (≈ 33 356.4)
 # =====================================================================
 # Property extraction from trajectory frames
 # =====================================================================
+def _resolve_ef_model(calc, model=None, params=None):
+    """Return (model, params) from explicit args or an AseCalculatorEF."""
+    if model is not None and params is not None:
+        return model, params
+    if calc is not None and hasattr(calc, "model") and hasattr(calc, "params"):
+        return calc.model, calc.params
+    return None, None
+
+
+def _resolve_ef(traj_frames, calc, Ef=None):
+    if Ef is not None:
+        return np.asarray(Ef, dtype=np.float32).reshape(3)
+    if calc is not None and getattr(calc, "electric_field", None) is not None:
+        return np.asarray(calc.electric_field, dtype=np.float32).reshape(3)
+    if traj_frames and "electric_field" in traj_frames[0].info:
+        return np.asarray(traj_frames[0].info["electric_field"],
+                         dtype=np.float32).reshape(3)
+    return np.zeros(3, dtype=np.float32)
+
+
+def _collect_geometry_from_frames(traj_frames):
+    """Fast pass: positions and velocities only (no ML)."""
+    T = len(traj_frames)
+    N = len(traj_frames[0])
+    Z = traj_frames[0].get_atomic_numbers()
+
+    positions = np.zeros((T, N, 3), dtype=np.float32)
+    velocities = np.zeros((T, N, 3), dtype=np.float32)
+    has_vel = True
+
+    for i, atoms in enumerate(traj_frames):
+        positions[i] = atoms.get_positions()
+        try:
+            v = atoms.get_velocities()
+            if v is not None and np.any(v != 0):
+                velocities[i] = v
+            else:
+                has_vel = False
+        except Exception:
+            has_vel = False
+
+    return positions, velocities, has_vel, Z
+
+
+def _extract_properties_sequential(traj_frames, calc, dipoles, charges,
+                                   recompute_dipole, recompute_charges,
+                                   need_mu, need_q):
+    """Per-frame ASE calculator fallback."""
+    T = len(traj_frames)
+    for i, atoms in enumerate(traj_frames):
+        if need_mu and (recompute_dipole or "ml_dipole" not in atoms.info):
+            atoms.calc = calc
+            atoms.get_potential_energy()
+            dipoles[i] = calc.results.get("dipole", np.zeros(3))
+        if need_q and recompute_charges:
+            q, _ = calc.get_atomic_charges(atoms)
+            charges[i] = q
+        if (i + 1) % 200 == 0 or i == 0:
+            print(f"      frame {i+1}/{T}")
+
+
 def extract_properties(traj_frames, calc=None,
                        recompute_dipole=False,
-                       recompute_charges=False):
+                       recompute_charges=False,
+                       batch_size=32,
+                       use_batched=True,
+                       model=None, params=None, Ef=None):
     """Read / recompute  μ(t), q_s(t), r(t), v(t)  from trajectory.
 
     Dipoles are read from  atoms.info['ml_dipole']  if available;
     charges from  atoms.arrays['ml_charges'].
-    If not present (or recompute=True), the calculator is used.
+    Missing values (or ``recompute_*`` flags) are filled via GPU-batched
+    JAX inference when ``calc`` is an ``AseCalculatorEF`` (or ``model`` /
+    ``params`` are passed explicitly).  Falls back to per-frame ASE calls
+    only when batched inference is unavailable.
+
+    Parameters
+    ----------
+    batch_size : int
+        Frames per GPU batch for JAX inference (default 32).
+    use_batched : bool
+        Use GPU-batched model inference when possible (default True).
+    model, params : optional
+        Override model/params instead of reading from ``calc``.
+    Ef : array-like (3,), optional
+        Electric field in model input units.
 
     Returns
     -------
@@ -94,46 +172,53 @@ def extract_properties(traj_frames, calc=None,
     T = len(traj_frames)
     N = len(traj_frames[0])
 
-    positions  = np.zeros((T, N, 3))
-    velocities = np.zeros((T, N, 3))
-    dipoles    = np.zeros((T, 3))
-    charges    = np.zeros((T, N))
-    has_vel = True
+    positions, velocities, has_vel, Z = _collect_geometry_from_frames(traj_frames)
+
+    dipoles = np.zeros((T, 3), dtype=np.float32)
+    charges = np.zeros((T, N), dtype=np.float32)
+
+    need_mu = recompute_dipole
+    need_q = recompute_charges
 
     for i, atoms in enumerate(traj_frames):
-        positions[i] = atoms.get_positions()
-
-        # Velocities
-        try:
-            v = atoms.get_velocities()
-            if v is not None and np.any(v != 0):
-                velocities[i] = v
-            else:
-                has_vel = False
-        except Exception:
-            has_vel = False
-
-        # Dipole
-        if not recompute_dipole and 'ml_dipole' in atoms.info:
-            dipoles[i] = np.asarray(atoms.info['ml_dipole'])
-        elif calc is not None:
-            atoms.calc = calc
-            atoms.get_potential_energy()          # triggers calculate()
-            dipoles[i] = calc.results.get('dipole', np.zeros(3))
-        # else: stays zero
-
-        # Charges
-        if not recompute_charges and 'ml_charges' in getattr(atoms, 'arrays', {}):
-            charges[i] = atoms.arrays['ml_charges']
-        elif calc is not None and recompute_charges:
-            q, _ = calc.get_atomic_charges(atoms)
-            charges[i] = q
+        if not recompute_dipole and "ml_dipole" in atoms.info:
+            dipoles[i] = np.asarray(atoms.info["ml_dipole"], dtype=np.float32)
         else:
-            # fall back to nuclear charges (crude)
-            charges[i] = atoms.get_atomic_numbers().astype(float)
+            need_mu = True
 
-        if (i + 1) % 200 == 0 or i == 0:
-            print(f"      frame {i+1}/{T}")
+        if not recompute_charges and "ml_charges" in getattr(atoms, "arrays", {}):
+            charges[i] = np.asarray(atoms.arrays["ml_charges"], dtype=np.float32)
+        elif not recompute_charges:
+            charges[i] = atoms.get_atomic_numbers().astype(np.float32)
+        else:
+            need_q = True
+
+    model, params = _resolve_ef_model(calc, model=model, params=params)
+    can_batch = use_batched and calc is not None and model is not None
+
+    if (need_mu or need_q) and can_batch:
+        Ef_np = _resolve_ef(traj_frames, calc, Ef=Ef)
+        print(f"    GPU-batched property extraction "
+              f"(batch_size={batch_size}, T={T}) ...")
+        mu_b, q_b, _ = extract_dipoles_batched(
+            positions, Z, Ef_np, model, params, chunk_size=batch_size)
+        if need_mu:
+            if recompute_dipole:
+                dipoles = mu_b
+            else:
+                for i, atoms in enumerate(traj_frames):
+                    if "ml_dipole" not in atoms.info:
+                        dipoles[i] = mu_b[i]
+        if need_q:
+            charges = q_b
+    elif (need_mu or need_q) and calc is not None:
+        print(f"    Sequential ASE extraction ({T} frames) ...")
+        _extract_properties_sequential(
+            traj_frames, calc, dipoles, charges,
+            recompute_dipole, recompute_charges, need_mu, need_q)
+    elif need_mu or need_q:
+        print("    WARNING: ML properties missing and no calculator — "
+              "dipoles/charges may be zero or nuclear Z only.")
 
     if not has_vel:
         print("    WARNING: trajectory has no velocities — "
@@ -148,11 +233,8 @@ def compute_magnetic_dipoles(positions, velocities, charges):
     Result in internally consistent (not SI) units —
     relative spectra are correct.
     """
-    T = positions.shape[0]
-    m = np.zeros((T, 3))
-    for t in range(T):
-        cross = np.cross(positions[t], velocities[t])   # (N, 3)
-        m[t] = np.sum(charges[t, :, None] * cross, axis=0) / (2.0 * C_AU)
+    cross = np.cross(positions, velocities)  # (T, N, 3)
+    m = np.einsum("tn,tnj->tj", charges, cross) / (2.0 * C_AU)
     return m
 
 
@@ -202,48 +284,67 @@ def load_hdf5_trajectory(path):
 
 
 def extract_properties_hdf5(positions, velocities, calc, atomic_numbers,
-                            recompute_dipole=False):
+                            recompute_dipole=False,
+                            recompute_charges=True,
+                            batch_size=32,
+                            use_batched=True,
+                            model=None, params=None, Ef=None):
     """Compute dipoles and charges from HDF5-loaded positions/velocities.
 
-    Parameters
-    ----------
-    positions      : (T, N, 3)
-    velocities     : (T, N, 3) or None
-    calc           : ASE calculator with dipole/charge support
-    atomic_numbers : (N,) int array
-    recompute_dipole : bool
+    Uses the same GPU-batched path as :func:`extract_properties` when possible.
 
     Returns
     -------
     positions, velocities, dipoles, charges  (same convention as extract_properties)
     """
     T, N, _ = positions.shape
+    Z = np.asarray(atomic_numbers, dtype=int)
+    positions = np.asarray(positions, dtype=np.float32)
 
     if velocities is None:
         velocities = np.zeros_like(positions)
         print("    WARNING: HDF5 has no velocities — "
               "VCD from correlation functions will be zero.")
+    else:
+        velocities = np.asarray(velocities, dtype=np.float32)
 
-    dipoles = np.zeros((T, 3))
-    charges = np.zeros((T, N))
+    dipoles = np.zeros((T, 3), dtype=np.float32)
+    charges = np.zeros((T, N), dtype=np.float32)
 
-    dummy = ase.Atoms(numbers=atomic_numbers,
-                      positions=positions[0])
-    dummy.calc = calc
+    need_mu = recompute_dipole
+    need_q = recompute_charges
 
-    for i in range(T):
-        dummy.set_positions(positions[i])
-        dummy.get_potential_energy()
-        dipoles[i] = calc.results.get("dipole", np.zeros(3))
+    model, params = _resolve_ef_model(calc, model=model, params=params)
+    can_batch = use_batched and calc is not None and model is not None
 
-        if hasattr(calc, "get_atomic_charges"):
-            q, _ = calc.get_atomic_charges(dummy)
-            charges[i] = q
+    if (need_mu or need_q) and can_batch:
+        if Ef is None and getattr(calc, "electric_field", None) is not None:
+            Ef_np = np.asarray(calc.electric_field, dtype=np.float32).reshape(3)
+        elif Ef is not None:
+            Ef_np = np.asarray(Ef, dtype=np.float32).reshape(3)
         else:
-            charges[i] = atomic_numbers.astype(float)
-
-        if (i + 1) % 200 == 0 or i == 0:
-            print(f"      frame {i+1}/{T}")
+            Ef_np = np.zeros(3, dtype=np.float32)
+        print(f"    GPU-batched property extraction "
+              f"(batch_size={batch_size}, T={T}) ...")
+        dipoles, charges, _ = extract_dipoles_batched(
+            positions, Z, Ef_np, model, params, chunk_size=batch_size)
+    elif calc is not None:
+        print(f"    Sequential ASE extraction ({T} frames) ...")
+        dummy = ase.Atoms(numbers=Z, positions=positions[0])
+        dummy.calc = calc
+        for i in range(T):
+            dummy.set_positions(positions[i])
+            dummy.get_potential_energy()
+            dipoles[i] = calc.results.get("dipole", np.zeros(3))
+            if hasattr(calc, "get_atomic_charges"):
+                q, _ = calc.get_atomic_charges(dummy)
+                charges[i] = q
+            else:
+                charges[i] = Z.astype(np.float32)
+            if (i + 1) % 200 == 0 or i == 0:
+                print(f"      frame {i+1}/{T}")
+    else:
+        charges[:] = Z.astype(np.float32)
 
     return positions, velocities, dipoles, charges
 
@@ -352,9 +453,12 @@ def extract_dipoles_batched(positions, atomic_numbers, Ef,
     charges        : (T, N)
     atomic_dipoles : (T, N, 3)
     """
+    import functools
+    import time
+
+    import jax
     import jax.numpy as jnp
     import e3x
-    import time
 
     T, N, _ = positions.shape
     Z = jnp.asarray(atomic_numbers, dtype=jnp.int32)
@@ -365,6 +469,22 @@ def extract_dipoles_batched(positions, atomic_numbers, Ef,
     src_idx = jnp.asarray(src_idx, dtype=jnp.int32)
 
     B = chunk_size
+    batch_segments = jnp.repeat(jnp.arange(B, dtype=jnp.int32), N)
+    offsets = jnp.arange(B, dtype=jnp.int32) * N
+    dst_flat = (dst_idx[None, :] + offsets[:, None]).reshape(-1)
+    src_flat = (src_idx[None, :] + offsets[:, None]).reshape(-1)
+    Z_batch = jnp.tile(Z[None, :], (B, 1))
+
+    @functools.partial(jax.jit, static_argnames=("batch_size",))
+    def _forward(params, positions, Ef, batch_size):
+        return model.apply(
+            params,
+            Z_batch, positions, Ef,
+            dst_idx_flat=dst_flat, src_idx_flat=src_flat,
+            batch_segments=batch_segments, batch_size=batch_size,
+            dst_idx=dst_idx, src_idx=src_idx,
+            mutable=["intermediates"],
+        )
 
     dipoles = np.zeros((T, 3), dtype=np.float32)
     charges = np.zeros((T, N), dtype=np.float32)
@@ -380,25 +500,14 @@ def extract_dipoles_batched(positions, atomic_numbers, Ef,
 
         pos_pad = np.zeros((B, N, 3), dtype=np.float32)
         pos_pad[:actual] = positions[start:end]
-
-        batch_segments = jnp.repeat(jnp.arange(B, dtype=jnp.int32), N)
-        offsets = jnp.arange(B, dtype=jnp.int32) * N
-        dst_flat = (dst_idx[None, :] + offsets[:, None]).reshape(-1)
-        src_flat = (src_idx[None, :] + offsets[:, None]).reshape(-1)
-        Z_batch = jnp.tile(Z[None, :], (B, 1))
         Ef_batch = jnp.tile(Ef_jax[None, :], (B, 1))
 
-        (energy, dipole), state = model.apply(
-            params,
-            Z_batch, jnp.asarray(pos_pad), Ef_batch,
-            dst_idx_flat=dst_flat, src_idx_flat=src_flat,
-            batch_segments=batch_segments, batch_size=B,
-            dst_idx=dst_idx, src_idx=src_idx,
-            mutable=['intermediates'])
+        (energy, dipole), state = _forward(
+            params, jnp.asarray(pos_pad), Ef_batch, B)
 
-        intermediates = state.get('intermediates', {})
-        q = intermediates.get('atomic_charges', (None,))[-1]
-        mu_at = intermediates.get('atomic_dipoles', (None,))[-1]
+        intermediates = state.get("intermediates", {})
+        q = intermediates.get("atomic_charges", (None,))[-1]
+        mu_at = intermediates.get("atomic_dipoles", (None,))[-1]
 
         dipoles[start:end] = np.asarray(dipole)[:actual]
         if q is not None:
@@ -1215,12 +1324,15 @@ def main(args=None):
                 hdf5_pos, hdf5_vel, calc,
                 atomic_numbers=np.asarray(atomic_numbers, dtype=int),
                 recompute_dipole=args.recompute_dipole,
+                recompute_charges=args.recompute_charges,
+                batch_size=args.batch_size,
             )
         else:
             positions, velocities, dipoles, charges = extract_properties(
                 traj_frames_i, calc=calc,
                 recompute_dipole=args.recompute_dipole,
                 recompute_charges=args.recompute_charges,
+                batch_size=args.batch_size,
             )
 
         # ---- magnetic dipoles -------------------------------------------
