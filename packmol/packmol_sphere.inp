@@ -1,9 +1,9 @@
-seed 2
+seed 1
 output pdb/init-packmol-sphere.pdb
 filetype pdb
 tolerance 2.0
 
-structure pdb/packmol_sphere/aco.pdb
+structure pdb/packmol_sphere/dcm.pdb
   chain A
   resnumbers 2
   number 30
