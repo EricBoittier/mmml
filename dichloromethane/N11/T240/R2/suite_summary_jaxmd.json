@@ -16,11 +16,11 @@
   "pressure_atm": 1.0,
   "temperature_K": 240.0,
   "composition": {
-    "DCM": 22
+    "DCM": 11
   },
   "psf_charges": {
-    "total_charge_e": -3.0531133177191805e-16,
-    "n_charged_atoms": 110,
+    "total_charge_e": -1.3877787807814457e-16,
+    "n_charged_atoms": 55,
     "min_charge_e": -0.081,
     "max_charge_e": 0.09,
     "residues": {
@@ -50,26 +50,26 @@
     "abnr_steps": 1000
   },
   "placement": "random_3d",
-  "placement_seed": 1,
+  "placement_seed": 411240,
   "neighbor_update_interval_steps": null,
   "neighbor_expected_updates": null,
   "neighbor_internal_update_interval_calls": 10,
   "neighbor_internal_skin_distance_A": 0.2,
   "pre_md_minimization": {
-    "charmm_min_wall_s": 0.012949469033628702,
-    "pre_bfgs_fmax_eVA": 1.5272269248962402,
-    "bfgs_iterations": 15.0,
-    "bfgs_fmax_eVA": 0.05458943918347359,
+    "charmm_min_wall_s": 0.016340640024282038,
+    "pre_bfgs_fmax_eVA": 2.4864659309387207,
+    "bfgs_iterations": 14.0,
+    "bfgs_fmax_eVA": 0.07968597859144211,
     "bfgs_traj": "vac_nvt_bfgs_min.traj",
     "best_force_xyz": "vac_nvt_pre_md_best_force.xyz",
-    "best_force_energy_eV": -481.9853820800781,
-    "best_force_fmax_eVA": 0.05458943918347359,
+    "best_force_energy_eV": -240.94944763183594,
+    "best_force_fmax_eVA": 0.07968597859144211,
     "best_force_label": "bfgs",
     "best_energy_xyz": "vac_nvt_pre_md_best_energy.xyz",
-    "best_energy_eV": -481.9853820800781,
-    "best_energy_fmax_eVA": 0.05458943918347359,
+    "best_energy_eV": -240.9498291015625,
+    "best_energy_fmax_eVA": 0.25499266386032104,
     "best_energy_label": "bfgs",
-    "restored_best_force_fmax_eVA": 0.05458943918347359
+    "restored_best_force_fmax_eVA": 0.07968597859144211
   },
   "dynamics_overlap_action": "warn",
   "dynamics_overlap_charmm_rescue_enabled": true,
@@ -78,5 +78,5 @@
   "dynamics_overlap_charmm_rescue_count": 0,
   "traj_export_molecular_wrap": false,
   "dynamics_overlap_warning_count": 0,
-  "dynamics_min_intermonomer_distance_A": 2.878291996086751
+  "dynamics_min_intermonomer_distance_A": 2.5730317770840165
 }
