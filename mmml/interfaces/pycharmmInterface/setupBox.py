@@ -36,6 +36,12 @@ import pycharmm.lingo
 
 # import simple scripts
 from mmml.interfaces.pycharmmInterface.pycharmmCommands import CLEAR_CHARMM
+from mmml.interfaces.pycharmmInterface.packmol_placement import (
+    require_packmol_sphere_radius,
+    resolve_packmol_sphere_use,
+    run_packmol_sphere,
+    run_packmol_sphere_mixed,
+)
 
 
 # unit registry
@@ -326,7 +332,6 @@ def run_packmol(n_molecules: int, side_length: float) -> None:
     inside box 0.0 0.0 0.0 {side_length} {side_length} {side_length}
     end structure
     """
-    import os
     os.makedirs("packmol", exist_ok=True)
     randint = np.random.randint(1000000)
     packmol_script = packmol_input.split("\n")
@@ -334,8 +339,6 @@ def run_packmol(n_molecules: int, side_length: float) -> None:
     packmol_script = "\n".join(packmol_script)
     with open("packmol/packmol.inp", "w") as f:
         f.writelines(packmol_script)
-
-    import os
 
     print(f"{PACKMOL_PATH} < packmol/packmol.inp")
     output = os.system(

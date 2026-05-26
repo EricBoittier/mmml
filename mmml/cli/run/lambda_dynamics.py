@@ -214,6 +214,9 @@ class LambdaDynamicsConfig:
     max_fmax_after_min: float = 2.0
     flat_bottom_radius: float | None = None
     flat_bottom_k: float = 1.0
+    packmol_sphere: bool | None = None
+    packmol_center: tuple[float, float, float] | None = None
+    packmol_tolerance: float = 2.0
     skip_jit_warmup: bool = False
     resume: bool = False
     repo_root: Path | None = None
@@ -299,11 +302,31 @@ def build_cluster_system(cfg: LambdaDynamicsConfig) -> ClusterContext:
     toc = _load_toc_module(repo_root)
 
     if cfg.composition:
+        from mmml.interfaces.pycharmmInterface.packmol_placement import resolve_packmol_sphere_use
+
         composition = md._parse_composition(cfg.composition)
-        z, r0, atoms_per_list, residue_labels = md._build_cluster_from_composition(
-            composition=composition,
-            spacing=cfg.spacing,
+        use_packmol = resolve_packmol_sphere_use(
+            composition=cfg.composition,
+            flat_bottom_radius=cfg.flat_bottom_radius,
+            packmol_sphere=cfg.packmol_sphere,
         )
+        if use_packmol:
+            from mmml.interfaces.pycharmmInterface.packmol_placement import require_packmol_sphere_radius
+
+            radius = require_packmol_sphere_radius(cfg.flat_bottom_radius)
+            center = cfg.packmol_center if cfg.packmol_center is not None else (0.0, 0.0, 0.0)
+            z, r0, atoms_per_list, residue_labels = md._build_cluster_from_composition_packmol(
+                composition=composition,
+                center=center,
+                radius=radius,
+                tolerance=float(cfg.packmol_tolerance),
+                seed=int(cfg.seed),
+            )
+        else:
+            z, r0, atoms_per_list, residue_labels = md._build_cluster_from_composition(
+                composition=composition,
+                spacing=cfg.spacing,
+            )
         composition_summary = {res: int(cnt) for res, cnt in composition}
         composition_str = cfg.composition.strip()
     else:
@@ -328,18 +351,25 @@ def build_cluster_system(cfg: LambdaDynamicsConfig) -> ClusterContext:
     monomer_offsets = np.zeros(n_monomers + 1, dtype=int)
     monomer_offsets[1:] = np.cumsum(np.asarray(atoms_per_list, dtype=int))
 
-    r0 = md._randomize_monomer_com_positions(
-        r0,
-        monomer_offsets,
-        spacing=float(cfg.spacing),
-        min_com_distance=max(float(cfg.spacing), float(cfg.min_com_start_distance)),
-        seed=int(cfg.seed),
-    )
-    r0 = md._enforce_min_com_separation(
-        r0,
-        monomer_offsets=monomer_offsets,
-        min_com_distance=float(cfg.min_com_start_distance),
-    )
+    from mmml.interfaces.pycharmmInterface.packmol_placement import resolve_packmol_sphere_use
+
+    if not resolve_packmol_sphere_use(
+        composition=cfg.composition,
+        flat_bottom_radius=cfg.flat_bottom_radius,
+        packmol_sphere=cfg.packmol_sphere,
+    ):
+        r0 = md._randomize_monomer_com_positions(
+            r0,
+            monomer_offsets,
+            spacing=float(cfg.spacing),
+            min_com_distance=max(float(cfg.spacing), float(cfg.min_com_start_distance)),
+            seed=int(cfg.seed),
+        )
+        r0 = md._enforce_min_com_separation(
+            r0,
+            monomer_offsets=monomer_offsets,
+            min_com_distance=float(cfg.min_com_start_distance),
+        )
 
     base_positions = np.asarray(r0, dtype=float).copy()
     return ClusterContext(
@@ -1768,6 +1798,13 @@ def config_from_namespace(args: argparse.Namespace, repo_root: Path | None = Non
         max_fmax_after_min=float(getattr(args, "max_fmax_after_min", 2.0)),
         flat_bottom_radius=getattr(args, "flat_bottom_radius", None),
         flat_bottom_k=float(getattr(args, "flat_bottom_k", 1.0)),
+        packmol_sphere=getattr(args, "packmol_sphere", None),
+        packmol_center=(
+            tuple(args.packmol_center)
+            if getattr(args, "packmol_center", None) is not None
+            else None
+        ),
+        packmol_tolerance=float(getattr(args, "packmol_tolerance", 2.0)),
         skip_jit_warmup=bool(getattr(args, "skip_jit_warmup", False)),
         resume=bool(getattr(args, "resume", False)),
         repo_root=repo_root,

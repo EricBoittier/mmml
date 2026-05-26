@@ -279,19 +279,58 @@ def _parse_composition(spec: str) -> list[tuple[str, int]]:
     return out
 
 
-def _build_cluster_from_composition(
-    *,
+def _charmm_atom_names_to_symbols(atom_names: list[str]) -> list[str]:
+    symbols: list[str] = []
+    for name in atom_names:
+        token = str(name).strip()
+        if not token:
+            raise ValueError("empty CHARMM atom name")
+        sym = token[0].upper()
+        if sym == "C" and len(token) > 1 and token[1].upper() == "L":
+            sym = "CL"
+        symbols.append(sym)
+    return symbols
+
+
+def _write_monomer_pdb_for_packmol(
+    pdb_path: Path,
+    coords: np.ndarray,
+    atom_names: list[str],
+) -> None:
+    from ase.io import write
+
+    symbols = _charmm_atom_names_to_symbols(atom_names)
+    mol = Atoms(symbols=symbols, positions=np.asarray(coords, dtype=float))
+    mol.positions -= mol.get_center_of_mass()
+    pdb_path.parent.mkdir(parents=True, exist_ok=True)
+    write(pdb_path, mol)
+
+
+def _load_packmol_sphere_positions(
+    pdb_path: str | Path,
+    atoms_per_list: list[int],
+) -> np.ndarray:
+    from ase.io import read as ase_read
+
+    packed = ase_read(str(pdb_path))
+    positions = np.asarray(packed.get_positions(), dtype=float)
+    expected = int(np.sum(np.asarray(atoms_per_list, dtype=int)))
+    if int(positions.shape[0]) != expected:
+        raise RuntimeError(
+            f"Packmol PDB atom count ({positions.shape[0]}) != composition ({expected})"
+        )
+    return positions
+
+
+def _build_cluster_psf_from_composition(
     composition: list[tuple[str, int]],
-    spacing: float,
-) -> tuple[np.ndarray, np.ndarray, list[int], list[str]]:
-    # First generate each unique residue exactly as make-res does, in isolation.
+) -> tuple[np.ndarray, list[str], list[int], list[str]]:
+    """Build CHARMM PSF for a mixed cluster; return Z, PSF atom names, atoms/monomer, residue order."""
     residue_geometries: dict[str, tuple[np.ndarray, list[str]]] = {}
     for residue, _count in composition:
         if residue not in residue_geometries:
             residue_geometries[residue] = _generate_residue_with_make_res_recipe(residue)
 
-    # Rebuild the requested mixed system in one segment, then overwrite CHARMM's
-    # placeholder IC coordinates with the PyCHARMM-relaxed residue geometries.
     sequence_items: list[str] = []
     for residue, count in composition:
         sequence_items.extend([residue] * int(count))
@@ -303,11 +342,8 @@ def _build_cluster_from_composition(
     ic.prm_fill(replace_all=True)
     ic.build()
 
-    positions = coor.get_positions().to_numpy(dtype=float)
     z = np.asarray(get_Z_from_psf(), dtype=int)
-    atom_names = np.asarray(psf.get_atype(), dtype=str)
-    if len(atom_names) != int(positions.shape[0]):
-        raise RuntimeError(f"PSF atom-name count mismatch: {len(atom_names)} vs positions {positions.shape[0]}")
+    atom_names = [str(x) for x in np.asarray(psf.get_atype(), dtype=str)]
     atoms_per_list: list[int] = []
     ordered_residue_names: list[str] = []
     for residue, count in composition:
@@ -316,28 +352,164 @@ def _build_cluster_from_composition(
             atoms_per_list.append(int(n_atoms_res))
             ordered_residue_names.append(residue)
     expected_atoms = int(np.sum(np.asarray(atoms_per_list, dtype=int)))
-    if expected_atoms != int(positions.shape[0]):
+    if expected_atoms != int(len(atom_names)):
         raise RuntimeError(
-            f"Composition-derived atom count ({expected_atoms}) does not match built coordinates "
-            f"({positions.shape[0]}). Composition={composition}"
+            f"Composition-derived atom count ({expected_atoms}) does not match PSF "
+            f"({len(atom_names)}). Composition={composition}"
         )
+
+    offsets = np.zeros(len(atoms_per_list) + 1, dtype=int)
+    offsets[1:] = np.cumsum(np.asarray(atoms_per_list, dtype=int))
+    for i, residue in enumerate(ordered_residue_names):
+        s = int(offsets[i])
+        e = int(offsets[i + 1])
+        residue_coords, residue_atom_names = residue_geometries[residue]
+        local_atom_names = atom_names[s:e]
+        if local_atom_names != residue_atom_names:
+            raise RuntimeError(
+                f"Atom order mismatch for {residue}: PSF has {local_atom_names}, "
+                f"make-res produced {residue_atom_names}"
+            )
+        if int(residue_coords.shape[0]) != e - s:
+            raise RuntimeError(f"Atom count mismatch for {residue} at monomer {i}")
+    return z, atom_names, atoms_per_list, ordered_residue_names
+
+
+def _build_cluster_from_composition_packmol(
+    *,
+    composition: list[tuple[str, int]],
+    center: tuple[float, float, float],
+    radius: float,
+    tolerance: float = 2.0,
+    seed: int | None = None,
+) -> tuple[np.ndarray, np.ndarray, list[int], list[str]]:
+    from mmml.interfaces.pycharmmInterface import packmol_placement
+
+    residue_geometries: dict[str, tuple[np.ndarray, list[str]]] = {}
+    for residue, _count in composition:
+        if residue not in residue_geometries:
+            residue_geometries[residue] = _generate_residue_with_make_res_recipe(residue)
+
+    packmol_dir = Path("pdb/packmol_sphere")
+    packmol_blocks: list[tuple[Path, int]] = []
+    for residue, count in composition:
+        coords, atom_names = residue_geometries[residue]
+        pdb_path = packmol_dir / f"{residue.lower()}.pdb"
+        _write_monomer_pdb_for_packmol(pdb_path, coords, atom_names)
+        packmol_blocks.append((pdb_path, int(count)))
+
+    output_pdb = Path("pdb/init-packmol-sphere.pdb")
+    packmol_placement.run_packmol_sphere_mixed(
+        packmol_blocks,
+        center=center,
+        radius=float(radius),
+        output_pdb=output_pdb,
+        tolerance=float(tolerance),
+        seed=seed,
+    )
+
+    z, _atom_names, atoms_per_list, ordered_residue_names = _build_cluster_psf_from_composition(
+        composition
+    )
+    shifted = _load_packmol_sphere_positions(output_pdb, atoms_per_list)
+    coor.set_positions(pd.DataFrame(shifted, columns=["x", "y", "z"]))
+    return z, shifted, atoms_per_list, ordered_residue_names
+
+
+def resolve_cluster_packmol_sphere(args: argparse.Namespace) -> bool:
+    from mmml.interfaces.pycharmmInterface.packmol_placement import resolve_packmol_sphere_use
+
+    return resolve_packmol_sphere_use(
+        composition=getattr(args, "composition", None),
+        flat_bottom_radius=getattr(args, "flat_bottom_radius", None),
+        packmol_sphere=getattr(args, "packmol_sphere", None),
+    )
+
+
+def packmol_sphere_center_from_args(args: argparse.Namespace) -> tuple[float, float, float]:
+    center = getattr(args, "packmol_center", None)
+    if center is not None:
+        if len(center) != 3:
+            raise ValueError("--packmol-center requires three floats: CX CY CZ")
+        return (float(center[0]), float(center[1]), float(center[2]))
+    return (0.0, 0.0, 0.0)
+
+
+def build_initial_cluster_from_args(
+    args: argparse.Namespace,
+) -> tuple[np.ndarray, np.ndarray, list[int], list[str], dict[str, int] | None]:
+    """Build cluster geometry; returns z, r0, atoms_per_list, residue_labels, composition_summary."""
+    use_packmol = resolve_cluster_packmol_sphere(args)
+    if use_packmol and not args.composition:
+        raise ValueError(
+            "Spherical Packmol placement requires --composition (e.g. MEOH:30). "
+            "Set --flat-bottom-radius to the sphere radius in Angstrom."
+        )
+
+    if args.composition:
+        composition = _parse_composition(args.composition)
+        composition_summary = {res: int(cnt) for res, cnt in composition}
+        if use_packmol:
+            from mmml.interfaces.pycharmmInterface.packmol_placement import require_packmol_sphere_radius
+
+            radius = require_packmol_sphere_radius(getattr(args, "flat_bottom_radius", None))
+            center = packmol_sphere_center_from_args(args)
+            tolerance = float(getattr(args, "packmol_tolerance", 2.0))
+            z, r0, atoms_per_list, residue_labels = _build_cluster_from_composition_packmol(
+                composition=composition,
+                center=center,
+                radius=radius,
+                tolerance=tolerance,
+                seed=int(getattr(args, "seed", 0)),
+            )
+            print(
+                f"Cluster built with Packmol sphere: center={center}, radius={radius:.3f} Å "
+                f"(flat-bottom radius)"
+            )
+        else:
+            z, r0, atoms_per_list, residue_labels = _build_cluster_from_composition(
+                composition=composition,
+                spacing=args.spacing,
+            )
+        return z, r0, atoms_per_list, residue_labels, composition_summary
+
+    z, r0 = _build_psf_ordered_cluster(
+        "MEOH",
+        args.n_molecules,
+        args.spacing,
+        template_pdb=args.template_pdb.expanduser().resolve(),
+    )
+    n_atoms_tmp = len(z)
+    atoms_per_uniform = n_atoms_tmp // args.n_molecules
+    atoms_per_list = [int(atoms_per_uniform)] * int(args.n_molecules)
+    residue_labels = ["MEOH"] * int(args.n_molecules)
+    composition_summary = {"MEOH": int(args.n_molecules)}
+    return z, r0, atoms_per_list, residue_labels, composition_summary
+
+
+def _build_cluster_from_composition(
+    *,
+    composition: list[tuple[str, int]],
+    spacing: float,
+) -> tuple[np.ndarray, np.ndarray, list[int], list[str]]:
+    z, atom_names, atoms_per_list, ordered_residue_names = _build_cluster_psf_from_composition(
+        composition
+    )
+    residue_geometries: dict[str, tuple[np.ndarray, list[str]]] = {}
+    for residue, _count in composition:
+        if residue not in residue_geometries:
+            residue_geometries[residue] = _generate_residue_with_make_res_recipe(residue)
 
     n_molecules = len(atoms_per_list)
     n_side = int(np.ceil(np.sqrt(n_molecules)))
-    shifted = positions.copy()
+    shifted = coor.get_positions().to_numpy(dtype=float).copy()
     offsets = np.zeros(n_molecules + 1, dtype=int)
     offsets[1:] = np.cumsum(np.asarray(atoms_per_list, dtype=int))
     for i in range(n_molecules):
         s = int(offsets[i])
         e = int(offsets[i + 1])
         residue = ordered_residue_names[i]
-        residue_coords, residue_atom_names = residue_geometries[residue]
-        local_atom_names = [str(x) for x in atom_names[s:e]]
-        if local_atom_names != residue_atom_names:
-            raise RuntimeError(
-                f"Atom order mismatch for {residue}: final PSF has {local_atom_names}, "
-                f"make-res generation produced {residue_atom_names}"
-            )
+        residue_coords, _residue_atom_names = residue_geometries[residue]
         shifted[s:e] = residue_coords
         com = shifted[s:e].mean(axis=0)
         shift = np.array([(i % n_side) * spacing, (i // n_side) * spacing, 0.0], dtype=float)
@@ -1011,6 +1183,30 @@ def main() -> int:
     parser.add_argument("--langevin-friction", type=float, default=0.02)
     parser.add_argument("--seed", type=int, default=123)
     parser.add_argument(
+        "--packmol-sphere",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        dest="packmol_sphere",
+        help=(
+            "Pack --composition inside a sphere with Packmol (radius = --flat-bottom-radius). "
+            "Default: on when both --composition and --flat-bottom-radius are set."
+        ),
+    )
+    parser.add_argument(
+        "--packmol-center",
+        type=float,
+        nargs=3,
+        metavar=("CX", "CY", "CZ"),
+        default=None,
+        help="Packmol sphere center in Angstrom (default: 0 0 0; vacuum COM is re-centered later).",
+    )
+    parser.add_argument(
+        "--packmol-tolerance",
+        type=float,
+        default=2.0,
+        help="Packmol distance tolerance in Angstrom when using --packmol-sphere (default: 2.0).",
+    )
+    parser.add_argument(
         "--flat-bottom-radius",
         type=float,
         default=None,
@@ -1018,8 +1214,8 @@ def main() -> int:
         dest="flat_bottom_radius",
         help=(
             "Optional flat-bottom restraint on the system COM: V=0 for |d|<=R, "
-            "else V=k*(|d|-R)^2. With periodic box, d uses MIC to the box center; "
-            "in vacuum, center is the origin. Omit or set <=0 to disable (via calculator logic)."
+            "else V=k*(|d|-R)^2. With --composition, also sets Packmol sphere radius unless "
+            "--no-packmol-sphere. In vacuum, center is the origin."
         ),
     )
     parser.add_argument(
@@ -1115,27 +1311,10 @@ def main() -> int:
 
     timing_log: list[str] = []
     t_c0 = _tmark()
-    if args.composition:
-        composition = _parse_composition(args.composition)
-        z, r0, atoms_per_list, residue_labels = _build_cluster_from_composition(
-            composition=composition,
-            spacing=args.spacing,
-        )
-        n_molecules = len(atoms_per_list)
-        composition_summary = {res: int(cnt) for res, cnt in composition}
-    else:
-        z, r0 = _build_psf_ordered_cluster(
-            "MEOH",
-            args.n_molecules,
-            args.spacing,
-            template_pdb=args.template_pdb.expanduser().resolve(),
-        )
-        n_atoms_tmp = len(z)
-        atoms_per_uniform = n_atoms_tmp // args.n_molecules
-        atoms_per_list = [int(atoms_per_uniform)] * int(args.n_molecules)
-        residue_labels = ["MEOH"] * int(args.n_molecules)
-        n_molecules = int(args.n_molecules)
-        composition_summary = {"MEOH": n_molecules}
+    z, r0, atoms_per_list, residue_labels, composition_summary = build_initial_cluster_from_args(
+        args
+    )
+    n_molecules = len(atoms_per_list)
     cluster_build_s = _tmark() - t_c0
     _tlog(f"cluster_build: {cluster_build_s:.3f} s", timing_log)
     n_atoms = len(z)
@@ -1147,18 +1326,19 @@ def main() -> int:
         total_atoms=n_atoms,
         log_lines=timing_log,
     )
-    r0 = _randomize_monomer_com_positions(
-        r0,
-        monomer_offsets,
-        spacing=args.spacing,
-        min_com_distance=max(float(args.spacing), float(args.min_com_start_distance)),
-        seed=args.seed,
-    )
-    r0 = _enforce_min_com_separation(
-        r0,
-        monomer_offsets=monomer_offsets,
-        min_com_distance=args.min_com_start_distance,
-    )
+    if not resolve_cluster_packmol_sphere(args):
+        r0 = _randomize_monomer_com_positions(
+            r0,
+            monomer_offsets,
+            spacing=args.spacing,
+            min_com_distance=max(float(args.spacing), float(args.min_com_start_distance)),
+            seed=args.seed,
+        )
+        r0 = _enforce_min_com_separation(
+            r0,
+            monomer_offsets=monomer_offsets,
+            min_com_distance=args.min_com_start_distance,
+        )
     initial_atoms = Atoms(numbers=z, positions=r0)
     _check_or_charmm_overlap_rescue(
         initial_atoms,
