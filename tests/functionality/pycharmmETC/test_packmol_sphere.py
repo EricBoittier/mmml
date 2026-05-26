@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 
@@ -36,6 +37,25 @@ def test_require_packmol_sphere_radius():
     assert require_packmol_sphere_radius(15.5) == 15.5
     with pytest.raises(ValueError, match="flat-bottom-radius"):
         require_packmol_sphere_radius(None)
+
+
+def test_write_monomer_pdb_uses_psf_atomic_numbers(tmp_path):
+    """Chlorinated residues (Z=17) must become ASE symbol Cl, not CL."""
+    from ase.io import read as ase_read
+
+    scripts_dir = Path(__file__).resolve().parents[3] / "scripts"
+    import sys
+
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
+    from md_10mer_mmml_pbc_suite import _write_monomer_pdb_for_packmol
+
+    coords = np.array([[0.0, 0.0, 0.0], [1.5, 0.0, 0.0]], dtype=float)
+    z = np.array([17, 6], dtype=int)
+    pdb_path = tmp_path / "dcm.pdb"
+    _write_monomer_pdb_for_packmol(pdb_path, coords, z)
+    symbols = ase_read(pdb_path).get_chemical_symbols()
+    assert symbols == ["Cl", "C"]
 
 
 def test_run_packmol_sphere_mixed_writes_inp(tmp_path, monkeypatch):

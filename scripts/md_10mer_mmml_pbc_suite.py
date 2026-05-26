@@ -120,7 +120,9 @@ def _make_res_minimize(nbxmod: int, nstep: int = 1000) -> None:
     charmm_minimize.run_abnr(nstep=nstep, tolenr=1e-3, tolgrd=1e-3)
 
 
-def _generate_residue_with_make_res_recipe(residue: str) -> tuple[np.ndarray, list[str]]:
+def _generate_residue_with_make_res_recipe(
+    residue: str,
+) -> tuple[np.ndarray, list[str], np.ndarray]:
     """Generate one residue in PyCHARMM using make-res style coordinate relaxation."""
     _reset_pycharmm_system()
     _read_cgenff_toppar()
@@ -153,7 +155,12 @@ def _generate_residue_with_make_res_recipe(residue: str) -> tuple[np.ndarray, li
     coords = np.array(coor.get_positions().to_numpy(dtype=float), dtype=float, copy=True)
     if not _has_resolved_geometry(coords):
         raise RuntimeError(f"PyCHARMM make-res coordinate generation failed for residue {residue!r}")
-    return coords, atom_names
+    z = np.asarray(get_Z_from_psf(), dtype=int)
+    if int(z.shape[0]) != len(atom_names):
+        raise RuntimeError(
+            f"PSF Z count mismatch for {residue}: {z.shape[0]} vs {len(atom_names)} atom names"
+        )
+    return coords, atom_names, z
 
 
 def _tmark() -> float:
@@ -279,27 +286,20 @@ def _parse_composition(spec: str) -> list[tuple[str, int]]:
     return out
 
 
-def _charmm_atom_names_to_symbols(atom_names: list[str]) -> list[str]:
-    symbols: list[str] = []
-    for name in atom_names:
-        token = str(name).strip()
-        if not token:
-            raise ValueError("empty CHARMM atom name")
-        sym = token[0].upper()
-        if sym == "C" and len(token) > 1 and token[1].upper() == "L":
-            sym = "CL"
-        symbols.append(sym)
-    return symbols
-
-
 def _write_monomer_pdb_for_packmol(
     pdb_path: Path,
     coords: np.ndarray,
-    atom_names: list[str],
+    atomic_numbers: np.ndarray,
 ) -> None:
+    from ase.data import chemical_symbols
     from ase.io import write
 
-    symbols = _charmm_atom_names_to_symbols(atom_names)
+    z = np.asarray(atomic_numbers, dtype=int).reshape(-1)
+    if int(z.shape[0]) != int(np.asarray(coords).shape[0]):
+        raise ValueError(
+            f"atomic_numbers length ({z.shape[0]}) != coords rows ({coords.shape[0]})"
+        )
+    symbols = [chemical_symbols[int(zi)] for zi in z]
     mol = Atoms(symbols=symbols, positions=np.asarray(coords, dtype=float))
     mol.positions -= mol.get_center_of_mass()
     pdb_path.parent.mkdir(parents=True, exist_ok=True)
@@ -324,9 +324,9 @@ def _load_packmol_sphere_positions(
 
 def _residue_geometries_for_composition(
     composition: list[tuple[str, int]],
-) -> dict[str, tuple[np.ndarray, list[str]]]:
-    """Relaxed monomer coords/atom names per residue type (make-res recipe)."""
-    residue_geometries: dict[str, tuple[np.ndarray, list[str]]] = {}
+) -> dict[str, tuple[np.ndarray, list[str], np.ndarray]]:
+    """Relaxed monomer coords, atom names, and Z per residue type (make-res recipe)."""
+    residue_geometries: dict[str, tuple[np.ndarray, list[str], np.ndarray]] = {}
     for residue, _count in composition:
         if residue not in residue_geometries:
             residue_geometries[residue] = _generate_residue_with_make_res_recipe(residue)
@@ -336,7 +336,7 @@ def _residue_geometries_for_composition(
 def _build_cluster_psf_from_composition(
     composition: list[tuple[str, int]],
     *,
-    residue_geometries: dict[str, tuple[np.ndarray, list[str]]] | None = None,
+    residue_geometries: dict[str, tuple[np.ndarray, list[str], np.ndarray]] | None = None,
 ) -> tuple[np.ndarray, list[str], list[int], list[str]]:
     """Build CHARMM PSF for a mixed cluster; return Z, PSF atom names, atoms/monomer, residue order."""
     if residue_geometries is None:
@@ -378,7 +378,7 @@ def _build_cluster_psf_from_composition(
     for i, residue in enumerate(ordered_residue_names):
         s = int(offsets[i])
         e = int(offsets[i + 1])
-        residue_coords, residue_atom_names = residue_geometries[residue]
+        residue_coords, residue_atom_names, _residue_z = residue_geometries[residue]
         local_atom_names = atom_names[s:e]
         if local_atom_names != residue_atom_names:
             raise RuntimeError(
@@ -405,9 +405,9 @@ def _build_cluster_from_composition_packmol(
     packmol_dir = Path("pdb/packmol_sphere")
     packmol_blocks: list[tuple[Path, int]] = []
     for residue, count in composition:
-        coords, atom_names = residue_geometries[residue]
+        coords, _atom_names, monomer_z = residue_geometries[residue]
         pdb_path = packmol_dir / f"{residue.lower()}.pdb"
-        _write_monomer_pdb_for_packmol(pdb_path, coords, atom_names)
+        _write_monomer_pdb_for_packmol(pdb_path, coords, monomer_z)
         packmol_blocks.append((pdb_path, int(count)))
 
     output_pdb = Path("pdb/init-packmol-sphere.pdb")
@@ -528,7 +528,7 @@ def _build_cluster_from_composition(
         s = int(offsets[i])
         e = int(offsets[i + 1])
         residue = ordered_residue_names[i]
-        residue_coords, _residue_atom_names = residue_geometries[residue]
+        residue_coords, _residue_atom_names, _residue_z = residue_geometries[residue]
         shifted[s:e] = residue_coords
         com = shifted[s:e].mean(axis=0)
         shift = np.array([(i % n_side) * spacing, (i // n_side) * spacing, 0.0], dtype=float)
