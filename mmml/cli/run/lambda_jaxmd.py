@@ -160,10 +160,13 @@ def build_lambda_jaxmd_bundle(
         jnp.array([box_L, box_L, box_L], dtype=jnp.float32) if use_pbc and box_L else None
     )
     pbc_state: dict[str, Any] = {"box": box_init, "pair_idx": None, "pair_mask": None}
-    if use_pbc and get_update_fn is not None:
-        pair_idx, pair_mask = get_update_fn(pos_np, cutoff)
-        pbc_state["pair_idx"] = pair_idx
-        pbc_state["pair_mask"] = pair_mask
+    if use_pbc and get_update_fn is not None and box_L is not None:
+        update_fn = get_update_fn(pos_np, cutoff)
+        if update_fn is not None:
+            box_nl = np.array([box_L, box_L, box_L], dtype=np.float64)
+            pair_idx, pair_mask = update_fn(pos_np, box=box_nl)
+            pbc_state["pair_idx"] = pair_idx
+            pbc_state["pair_mask"] = pair_mask
 
     if use_pbc and box_L is not None:
         displacement, shift = space.periodic(box_L)
@@ -215,10 +218,12 @@ def build_lambda_jaxmd_bundle(
 def _refresh_pbc_neighbors(bundle: LambdaJaxMdBundle, position: np.ndarray) -> None:
     if not bundle.use_pbc or bundle.get_update_fn is None or bundle.box_L is None:
         return
-    box_nl = np.array([bundle.box_L] * 3, dtype=np.float64)
-    pair_idx, pair_mask = bundle.get_update_fn(
-        np.asarray(position, dtype=float), bundle.cutoff
-    )
+    pos = np.asarray(position, dtype=float)
+    update_fn = bundle.get_update_fn(pos, bundle.cutoff)
+    if update_fn is None:
+        return
+    box_nl = np.array([bundle.box_L, bundle.box_L, bundle.box_L], dtype=np.float64)
+    pair_idx, pair_mask = update_fn(pos, box=box_nl)
     bundle.pbc_state["pair_idx"] = pair_idx
     bundle.pbc_state["pair_mask"] = pair_mask
     bundle.pbc_state["box"] = bundle.pbc_state["box"]
