@@ -103,9 +103,16 @@ def parse_args() -> argparse.Namespace:
         action=argparse.BooleanOptionalAction,
         default=None,
         help=(
-            "Pack --composition inside a sphere with Packmol. Radius equals --flat-bottom-radius. "
-            "Default: enabled when both --composition and --flat-bottom-radius are set."
+            "Pack --composition inside a sphere with Packmol (--packmol-radius). "
+            "Default: on when --composition and --packmol-radius (or legacy: --flat-bottom-radius) are set."
         ),
+    )
+    parser.add_argument(
+        "--packmol-radius",
+        type=float,
+        default=None,
+        metavar="Å",
+        help="Packmol sphere radius in Angstrom (independent of --flat-bottom-radius).",
     )
     parser.add_argument(
         "--packmol-center",
@@ -128,8 +135,7 @@ def parse_args() -> argparse.Namespace:
         metavar="Å",
         help=(
             "Harmonic flat-bottom on system COM: V=0 inside radius R, V=k(|d|-R)^2 outside. "
-            "With --composition, also sets Packmol sphere radius (linked placement) unless "
-            "--no-packmol-sphere. Vacuum: center at origin; PBC: MIC to box center."
+            "Independent of --packmol-radius. Vacuum: center at origin; PBC: MIC to box center."
         ),
     )
     parser.add_argument(
@@ -267,22 +273,26 @@ def _append_optional(cmd: list[str], flag: str, value) -> None:
 
 def _validate_packmol_sphere_args(args: argparse.Namespace) -> None:
     from mmml.interfaces.pycharmmInterface.packmol_placement import (
-        require_packmol_sphere_radius,
+        resolve_packmol_sphere_radius,
         resolve_packmol_sphere_use,
     )
 
     if not resolve_packmol_sphere_use(
         composition=args.composition,
+        packmol_radius=getattr(args, "packmol_radius", None),
         flat_bottom_radius=args.flat_bottom_radius,
         packmol_sphere=getattr(args, "packmol_sphere", None),
     ):
         return
     if not args.composition:
         raise ValueError(
-            "Spherical Packmol placement requires --composition (e.g. ACO:30). "
-            "Use --flat-bottom-radius for the sphere radius (Å)."
+            "Spherical Packmol placement requires --composition (e.g. ACO:30) "
+            "and --packmol-radius (Å)."
         )
-    require_packmol_sphere_radius(args.flat_bottom_radius)
+    resolve_packmol_sphere_radius(
+        getattr(args, "packmol_radius", None),
+        args.flat_bottom_radius,
+    )
 
 
 def _append_packmol_sphere_args(cmd: list[str], args: argparse.Namespace) -> None:
@@ -290,11 +300,13 @@ def _append_packmol_sphere_args(cmd: list[str], args: argparse.Namespace) -> Non
 
     if not resolve_packmol_sphere_use(
         composition=args.composition,
+        packmol_radius=getattr(args, "packmol_radius", None),
         flat_bottom_radius=args.flat_bottom_radius,
         packmol_sphere=getattr(args, "packmol_sphere", None),
     ):
         return
     cmd.append("--packmol-sphere")
+    _append_optional(cmd, "--packmol-radius", getattr(args, "packmol_radius", None))
     if args.packmol_center is not None:
         cmd.extend(["--packmol-center", *[str(x) for x in args.packmol_center]])
     cmd.extend(["--packmol-tolerance", str(args.packmol_tolerance)])

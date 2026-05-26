@@ -35,29 +35,46 @@ def execute_packmol_script(packmol_input: str, inp_path: Path) -> None:
 def resolve_packmol_sphere_use(
     *,
     composition: str | None,
-    flat_bottom_radius: float | None,
+    packmol_radius: float | None = None,
+    flat_bottom_radius: float | None = None,
     packmol_sphere: bool | None = None,
 ) -> bool:
-    """Use spherical Packmol placement when explicitly requested or composition + flat-bottom R."""
+    """Use spherical Packmol placement when explicitly requested or composition + a radius."""
     if packmol_sphere is True:
         return True
     if packmol_sphere is False:
         return False
-    return (
-        composition is not None
-        and flat_bottom_radius is not None
-        and float(flat_bottom_radius) > 0.0
+    if composition is None:
+        return False
+    if packmol_radius is not None and float(packmol_radius) > 0.0:
+        return True
+    # Legacy: auto-enable when only --flat-bottom-radius was set (uses it as packmol R too).
+    if flat_bottom_radius is not None and float(flat_bottom_radius) > 0.0:
+        return True
+    return False
+
+
+def resolve_packmol_sphere_radius(
+    packmol_radius: float | None,
+    flat_bottom_radius: float | None = None,
+) -> float:
+    """Return Packmol sphere radius; --packmol-radius overrides --flat-bottom-radius."""
+    if packmol_radius is not None and float(packmol_radius) > 0.0:
+        return float(packmol_radius)
+    if flat_bottom_radius is not None and float(flat_bottom_radius) > 0.0:
+        return float(flat_bottom_radius)
+    raise ValueError(
+        "Spherical Packmol placement requires --packmol-radius > 0 "
+        "(or --flat-bottom-radius > 0 for legacy combined mode)."
     )
 
 
-def require_packmol_sphere_radius(flat_bottom_radius: float | None) -> float:
-    """Packmol sphere radius equals the flat-bottom COM restraint radius."""
-    if flat_bottom_radius is None or float(flat_bottom_radius) <= 0.0:
-        raise ValueError(
-            "Spherical Packmol placement requires --flat-bottom-radius > 0. "
-            "The same radius packs the cluster and restrains the system COM during MD."
-        )
-    return float(flat_bottom_radius)
+def require_packmol_sphere_radius(
+    flat_bottom_radius: float | None,
+    packmol_radius: float | None = None,
+) -> float:
+    """Backward-compatible alias for resolve_packmol_sphere_radius."""
+    return resolve_packmol_sphere_radius(packmol_radius, flat_bottom_radius)
 
 
 def run_packmol_sphere(

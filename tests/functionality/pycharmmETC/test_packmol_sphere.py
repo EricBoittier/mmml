@@ -11,12 +11,13 @@ import pytest
 def test_resolve_packmol_sphere_use_defaults():
     from mmml.interfaces.pycharmmInterface.packmol_placement import resolve_packmol_sphere_use
 
+    assert resolve_packmol_sphere_use(composition="MEOH:5", packmol_radius=12.0) is True
     assert resolve_packmol_sphere_use(composition="MEOH:5", flat_bottom_radius=12.0) is True
-    assert resolve_packmol_sphere_use(composition="MEOH:5", flat_bottom_radius=None) is False
+    assert resolve_packmol_sphere_use(composition="MEOH:5") is False
     assert (
         resolve_packmol_sphere_use(
             composition="MEOH:5",
-            flat_bottom_radius=12.0,
+            packmol_radius=12.0,
             packmol_sphere=False,
         )
         is False
@@ -24,19 +25,20 @@ def test_resolve_packmol_sphere_use_defaults():
     assert (
         resolve_packmol_sphere_use(
             composition=None,
-            flat_bottom_radius=12.0,
+            packmol_radius=12.0,
             packmol_sphere=True,
         )
         is True
     )
 
 
-def test_require_packmol_sphere_radius():
-    from mmml.interfaces.pycharmmInterface.packmol_placement import require_packmol_sphere_radius
+def test_resolve_packmol_sphere_radius_separate():
+    from mmml.interfaces.pycharmmInterface.packmol_placement import resolve_packmol_sphere_radius
 
-    assert require_packmol_sphere_radius(15.5) == 15.5
-    with pytest.raises(ValueError, match="flat-bottom-radius"):
-        require_packmol_sphere_radius(None)
+    assert resolve_packmol_sphere_radius(25.0, 20.0) == 25.0
+    assert resolve_packmol_sphere_radius(None, 20.0) == 20.0
+    with pytest.raises(ValueError, match="packmol-radius"):
+        resolve_packmol_sphere_radius(None, None)
 
 
 def test_write_monomer_pdb_uses_psf_atomic_numbers(tmp_path):

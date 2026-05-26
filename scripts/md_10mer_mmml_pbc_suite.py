@@ -434,6 +434,7 @@ def resolve_cluster_packmol_sphere(args: argparse.Namespace) -> bool:
 
     return resolve_packmol_sphere_use(
         composition=getattr(args, "composition", None),
+        packmol_radius=getattr(args, "packmol_radius", None),
         flat_bottom_radius=getattr(args, "flat_bottom_radius", None),
         packmol_sphere=getattr(args, "packmol_sphere", None),
     )
@@ -455,17 +456,20 @@ def build_initial_cluster_from_args(
     use_packmol = resolve_cluster_packmol_sphere(args)
     if use_packmol and not args.composition:
         raise ValueError(
-            "Spherical Packmol placement requires --composition (e.g. MEOH:30). "
-            "Set --flat-bottom-radius to the sphere radius in Angstrom."
+            "Spherical Packmol placement requires --composition (e.g. MEOH:30) "
+            "and --packmol-radius (Å)."
         )
 
     if args.composition:
         composition = _parse_composition(args.composition)
         composition_summary = {res: int(cnt) for res, cnt in composition}
         if use_packmol:
-            from mmml.interfaces.pycharmmInterface.packmol_placement import require_packmol_sphere_radius
+            from mmml.interfaces.pycharmmInterface.packmol_placement import resolve_packmol_sphere_radius
 
-            radius = require_packmol_sphere_radius(getattr(args, "flat_bottom_radius", None))
+            radius = resolve_packmol_sphere_radius(
+                getattr(args, "packmol_radius", None),
+                getattr(args, "flat_bottom_radius", None),
+            )
             center = packmol_sphere_center_from_args(args)
             tolerance = float(getattr(args, "packmol_tolerance", 2.0))
             z, r0, atoms_per_list, residue_labels = _build_cluster_from_composition_packmol(
@@ -475,9 +479,14 @@ def build_initial_cluster_from_args(
                 tolerance=tolerance,
                 seed=int(getattr(args, "seed", 0)),
             )
+            fb_r = getattr(args, "flat_bottom_radius", None)
             print(
-                f"Cluster built with Packmol sphere: center={center}, radius={radius:.3f} Å "
-                f"(flat-bottom radius)"
+                f"Cluster built with Packmol sphere: center={center}, packmol_radius={radius:.3f} Å"
+                + (
+                    f", flat_bottom_radius={float(fb_r):.3f} Å"
+                    if fb_r is not None and float(fb_r) > 0
+                    else ""
+                )
             )
         else:
             z, r0, atoms_per_list, residue_labels = _build_cluster_from_composition(
@@ -1207,9 +1216,17 @@ def main() -> int:
         default=None,
         dest="packmol_sphere",
         help=(
-            "Pack --composition inside a sphere with Packmol (radius = --flat-bottom-radius). "
-            "Default: on when both --composition and --flat-bottom-radius are set."
+            "Pack --composition inside a sphere with Packmol (--packmol-radius). "
+            "Default: on when --composition and --packmol-radius (or legacy: --flat-bottom-radius) are set."
         ),
+    )
+    parser.add_argument(
+        "--packmol-radius",
+        type=float,
+        default=None,
+        metavar="Å",
+        dest="packmol_radius",
+        help="Packmol inside-sphere radius in Angstrom (independent of --flat-bottom-radius).",
     )
     parser.add_argument(
         "--packmol-center",
@@ -1232,9 +1249,9 @@ def main() -> int:
         metavar="Å",
         dest="flat_bottom_radius",
         help=(
-            "Optional flat-bottom restraint on the system COM: V=0 for |d|<=R, "
-            "else V=k*(|d|-R)^2. With --composition, also sets Packmol sphere radius unless "
-            "--no-packmol-sphere. In vacuum, center is the origin."
+            "Flat-bottom restraint on system COM: V=0 for |d|<=R, else V=k*(|d|-R)^2. "
+            "Independent of --packmol-radius. If only this is set with --composition, Packmol "
+            "still uses it as sphere radius (legacy); prefer --packmol-radius for packing."
         ),
     )
     parser.add_argument(

@@ -163,9 +163,17 @@ def main() -> int:
         default=None,
         dest="packmol_sphere",
         help=(
-            "Pack --composition with Packmol inside a sphere (radius = --flat-bottom-radius). "
-            "Default: on when both --composition and --flat-bottom-radius are set."
+            "Pack --composition with Packmol inside a sphere (--packmol-radius). "
+            "Default: on when --composition and --packmol-radius (or legacy: --flat-bottom-radius) are set."
         ),
+    )
+    p.add_argument(
+        "--packmol-radius",
+        type=float,
+        default=None,
+        metavar="Å",
+        dest="packmol_radius",
+        help="Packmol inside-sphere radius in Angstrom (independent of --flat-bottom-radius).",
     )
     p.add_argument(
         "--packmol-center",
@@ -188,8 +196,8 @@ def main() -> int:
         metavar="Å",
         dest="flat_bottom_radius",
         help=(
-            "Flat-bottom COM restraint radius (Å). With --composition, also Packmol sphere radius "
-            "unless --no-packmol-sphere."
+            "Flat-bottom COM restraint radius (Å), independent of --packmol-radius. "
+            "Legacy: if only this is set with --composition, Packmol uses it as sphere radius."
         ),
     )
     p.add_argument(

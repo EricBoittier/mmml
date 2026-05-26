@@ -214,6 +214,7 @@ class LambdaDynamicsConfig:
     max_fmax_after_min: float = 2.0
     flat_bottom_radius: float | None = None
     flat_bottom_k: float = 1.0
+    packmol_radius: float | None = None
     packmol_sphere: bool | None = None
     packmol_center: tuple[float, float, float] | None = None
     packmol_tolerance: float = 2.0
@@ -307,13 +308,14 @@ def build_cluster_system(cfg: LambdaDynamicsConfig) -> ClusterContext:
         composition = md._parse_composition(cfg.composition)
         use_packmol = resolve_packmol_sphere_use(
             composition=cfg.composition,
+            packmol_radius=cfg.packmol_radius,
             flat_bottom_radius=cfg.flat_bottom_radius,
             packmol_sphere=cfg.packmol_sphere,
         )
         if use_packmol:
-            from mmml.interfaces.pycharmmInterface.packmol_placement import require_packmol_sphere_radius
+            from mmml.interfaces.pycharmmInterface.packmol_placement import resolve_packmol_sphere_radius
 
-            radius = require_packmol_sphere_radius(cfg.flat_bottom_radius)
+            radius = resolve_packmol_sphere_radius(cfg.packmol_radius, cfg.flat_bottom_radius)
             center = cfg.packmol_center if cfg.packmol_center is not None else (0.0, 0.0, 0.0)
             z, r0, atoms_per_list, residue_labels = md._build_cluster_from_composition_packmol(
                 composition=composition,
@@ -355,6 +357,7 @@ def build_cluster_system(cfg: LambdaDynamicsConfig) -> ClusterContext:
 
     if not resolve_packmol_sphere_use(
         composition=cfg.composition,
+        packmol_radius=cfg.packmol_radius,
         flat_bottom_radius=cfg.flat_bottom_radius,
         packmol_sphere=cfg.packmol_sphere,
     ):
@@ -1798,6 +1801,7 @@ def config_from_namespace(args: argparse.Namespace, repo_root: Path | None = Non
         max_fmax_after_min=float(getattr(args, "max_fmax_after_min", 2.0)),
         flat_bottom_radius=getattr(args, "flat_bottom_radius", None),
         flat_bottom_k=float(getattr(args, "flat_bottom_k", 1.0)),
+        packmol_radius=getattr(args, "packmol_radius", None),
         packmol_sphere=getattr(args, "packmol_sphere", None),
         packmol_center=(
             tuple(args.packmol_center)
