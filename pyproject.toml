@@ -83,8 +83,8 @@ mbar = [
 gpu = [
     "jax[cuda13]",
     "jaxlib",
-    "jax-cuda13-plugin>=0.9.0",
-    "jax-cuda13-pjrt>=0.9.0",
+    "jax-cuda13-plugin>=0.9.2",
+    "jax-cuda13-pjrt>=0.9.2",
     "cupy-cuda13x>=13.0.0",
     "cutensor-cu13>=2.0.0",
 #    "cuequivariance-ops-jax-cu13",
@@ -95,8 +95,8 @@ gpu = [
 gpu-cuda12 = [
     "jax[cuda12]>=0.9.0",
     "jaxlib",
-    "jax-cuda12-plugin>=0.9.0",
-    "jax-cuda12-pjrt>=0.9.0",
+    "jax-cuda12-plugin>=0.9.2",
+    "jax-cuda12-pjrt>=0.9.2",
     "cupy-cuda12x>=13.0.0",
     "cutensor-cu12>=2.0.0",
 #    "cuequivariance-ops-jax-cu12",

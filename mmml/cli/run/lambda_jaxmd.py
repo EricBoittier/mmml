@@ -19,9 +19,17 @@ from jax_md import simulate, space, units as jax_md_units
 from mmml.cli.run.lambda_dynamics import (
     LambdaDynamicsConfig,
     LambdaMdSettings,
-    lambda_array,
+    ensure_jax_cuda_toolchain,
+    is_lambda_prod_complete,
+    lambda_min_traj_path,
+    lambda_prod_traj_path,
+    lambda_repeat_label,
+    lambda_traj_frame_count,
+    load_lambda_start_positions,
+    load_lambda_traj_positions,
     minimize_lambda_structure,
     prepare_atoms_geometry,
+    print_lambda_resume_plan,
     resolve_model_restart_path,
 )
 from mmml.interfaces.pycharmmInterface.mmml_calculator import CutoffParameters, setup_calculator
@@ -392,6 +400,8 @@ def run_lambda_dynamics_jaxmd(cfg: LambdaDynamicsConfig) -> dict[str, Any]:
         snapshot_metadata_from_cluster,
     )
 
+    ensure_jax_cuda_toolchain()
+
     if cfg.interval < 1:
         raise ValueError("--interval must be >= 1")
 
@@ -451,47 +461,95 @@ def run_lambda_dynamics_jaxmd(cfg: LambdaDynamicsConfig) -> dict[str, Any]:
     traj_root = out_dir / "trajectories"
     traj_root.mkdir(exist_ok=True)
 
+    if cfg.resume:
+        print("=== lambda_ti resume ===", flush=True)
+        print_lambda_resume_plan(
+            traj_root,
+            lambda_windows,
+            repeats_per_window=cfg.repeats_per_window,
+            n_prod=cfg.n_prod,
+            interval=cfg.interval,
+        )
+
     neighbor_update_interval = 10
+
+    def _build_bundle(r_min: np.ndarray) -> LambdaJaxMdBundle:
+        calc_kw = dict(calc_common)
+        calc_kw["model_restart_path"] = calc_kw.pop("base_ckpt_dir")
+        bundle = build_lambda_jaxmd_bundle(
+            positions=r_min,
+            lam_coupled=lam,
+            md_settings=md_settings,
+            **calc_kw,
+        )
+        _ = float(
+            np.abs(
+                jax.device_get(
+                    bundle.wrapped_force_fn(jnp.asarray(r_min, dtype=jnp.float32))
+                )
+            ).max()
+        )
+        return bundle
 
     for wi, lam in enumerate(lambda_windows):
         samples: list[float] = []
         repeat_stats: list[dict[str, float | int | str]] = []
         for rep in range(cfg.repeats_per_window):
+            label = lambda_repeat_label(wi, rep, lam)
+            prod_path = lambda_prod_traj_path(traj_root, label)
+            min_traj_path = lambda_min_traj_path(traj_root, label)
+
+            if cfg.resume and is_lambda_prod_complete(prod_path, cfg.n_prod, cfg.interval):
+                positions = load_lambda_traj_positions(prod_path)
+                r_min = load_lambda_start_positions(traj_root, label, n_equil=cfg.n_equil)
+                if r_min is None:
+                    r_min = positions[0]
+                bundle = _build_bundle(r_min)
+                samples_rep = [_dudl_at_position(bundle, p) for p in positions]
+                samples.extend(samples_rep)
+                snapshots_per_window[wi].extend([p.copy() for p in positions])
+                repeat_stats.append(
+                    {
+                        "repeat": rep,
+                        "n_samples": len(samples_rep),
+                        "mean_dUdlambda_eV": float(np.mean(samples_rep)) if samples_rep else float("nan"),
+                        "std_dUdlambda_eV": float(np.std(samples_rep)) if len(samples_rep) > 1 else 0.0,
+                        "traj": str(prod_path),
+                        "equil_traj": None,
+                        "minimization": {"resumed": True, "skipped": "complete_prod_traj"},
+                    }
+                )
+                continue
+
+            if cfg.resume and prod_path.is_file():
+                prod_path.unlink()
+
             r_init = base_seed_positions.copy()
             atoms = ase.Atoms(numbers=z, positions=r_init)
             prepare_atoms_geometry(atoms, r_init, md_settings)
 
-            label = f"win_{wi:02d}_rep{rep:02d}_lam{lam:.2f}"
-            min_traj_path = traj_root / f"{label}_min.traj"
-            min_summary = minimize_lambda_structure(
-                atoms,
-                cfg=cfg,
-                cluster=cluster,
-                model_restart_path=model_restart_path,
-                couple_indices=couple_indices,
-                lam_coupled=lam,
-                md_settings=md_settings,
-                label=label,
-                min_traj_path=min_traj_path,
-            )
+            skip_min = cfg.resume and lambda_traj_frame_count(min_traj_path) > 0
+            if skip_min:
+                r_min = load_lambda_start_positions(traj_root, label, n_equil=0)
+                if r_min is None:
+                    raise RuntimeError(f"resume: missing minimized structure for {label}")
+                atoms.set_positions(r_min)
+                min_summary = {"resumed": True, "from": str(min_traj_path)}
+            else:
+                min_summary = minimize_lambda_structure(
+                    atoms,
+                    cfg=cfg,
+                    cluster=cluster,
+                    model_restart_path=model_restart_path,
+                    couple_indices=couple_indices,
+                    lam_coupled=lam,
+                    md_settings=md_settings,
+                    label=label,
+                    min_traj_path=min_traj_path,
+                )
+                r_min = np.asarray(atoms.get_positions(), dtype=float)
 
-            r_min = np.asarray(atoms.get_positions(), dtype=float)
-            calc_kw = dict(calc_common)
-            calc_kw["model_restart_path"] = calc_kw.pop("base_ckpt_dir")
-            bundle = build_lambda_jaxmd_bundle(
-                positions=r_min,
-                lam_coupled=lam,
-                md_settings=md_settings,
-                **calc_kw,
-            )
-            # JIT-compile production forces (MM cache already warmed in build_lambda_jaxmd_bundle).
-            _ = float(
-                np.abs(
-                    jax.device_get(
-                        bundle.wrapped_force_fn(jnp.asarray(r_min, dtype=jnp.float32))
-                    )
-                ).max()
-            )
+            bundle = _build_bundle(r_min)
 
             r_md = r_min
             equil_path: str | None = None
@@ -516,7 +574,6 @@ def run_lambda_dynamics_jaxmd(cfg: LambdaDynamicsConfig) -> dict[str, Any]:
                 )
                 atoms.set_positions(r_md)
 
-            prod_path = traj_root / f"{label}_prod.traj"
             samples_rep, snap_rep, _, _ = run_jaxmd_segment(
                 bundle,
                 r_md,
