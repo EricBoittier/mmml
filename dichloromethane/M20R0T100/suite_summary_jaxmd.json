@@ -1,35 +1,26 @@
 {
   "ensemble": "nvt",
-  "nsteps_requested": 1000000,
-  "nsteps_completed": 1000000,
-  "frames": 10000,
+  "nsteps_requested": 100000,
+  "nsteps_completed": 100000,
+  "frames": 1000,
   "status": "complete",
   "error": null,
   "h5": "vac_nvt_jaxmd_nvt.h5",
   "traj": "vac_nvt.part0000.traj",
   "traj_parts": [
-    "vac_nvt.part0000.traj",
-    "vac_nvt.part0001.traj",
-    "vac_nvt.part0002.traj",
-    "vac_nvt.part0003.traj",
-    "vac_nvt.part0004.traj",
-    "vac_nvt.part0005.traj",
-    "vac_nvt.part0006.traj",
-    "vac_nvt.part0007.traj",
-    "vac_nvt.part0008.traj",
-    "vac_nvt.part0009.traj"
+    "vac_nvt.part0000.traj"
   ],
-  "traj_part_count": 10,
+  "traj_part_count": 1,
   "box_A": null,
   "free_space": true,
   "pressure_atm": 1.0,
-  "temperature_K": 100.0,
+  "temperature_K": 240.0,
   "composition": {
-    "DCM": 20
+    "DCM": 22
   },
   "psf_charges": {
-    "total_charge_e": -2.7755575615628914e-16,
-    "n_charged_atoms": 100,
+    "total_charge_e": -3.0531133177191805e-16,
+    "n_charged_atoms": 110,
     "min_charge_e": -0.081,
     "max_charge_e": 0.09,
     "residues": {
@@ -65,20 +56,20 @@
   "neighbor_internal_update_interval_calls": 10,
   "neighbor_internal_skin_distance_A": 0.2,
   "pre_md_minimization": {
-    "charmm_min_wall_s": 0.012369693024083972,
-    "pre_bfgs_fmax_eVA": 1.838606595993042,
+    "charmm_min_wall_s": 0.012949469033628702,
+    "pre_bfgs_fmax_eVA": 1.5272269248962402,
     "bfgs_iterations": 15.0,
-    "bfgs_fmax_eVA": 0.046464961022138596,
+    "bfgs_fmax_eVA": 0.05458943918347359,
     "bfgs_traj": "vac_nvt_bfgs_min.traj",
     "best_force_xyz": "vac_nvt_pre_md_best_force.xyz",
-    "best_force_energy_eV": -398.0478820800781,
-    "best_force_fmax_eVA": 0.046464961022138596,
+    "best_force_energy_eV": -481.9853820800781,
+    "best_force_fmax_eVA": 0.05458943918347359,
     "best_force_label": "bfgs",
     "best_energy_xyz": "vac_nvt_pre_md_best_energy.xyz",
-    "best_energy_eV": -398.06494140625,
-    "best_energy_fmax_eVA": 0.2824491262435913,
+    "best_energy_eV": -481.9853820800781,
+    "best_energy_fmax_eVA": 0.05458943918347359,
     "best_energy_label": "bfgs",
-    "restored_best_force_fmax_eVA": 0.046464961022138596
+    "restored_best_force_fmax_eVA": 0.05458943918347359
   },
   "dynamics_overlap_action": "warn",
   "dynamics_overlap_charmm_rescue_enabled": true,
@@ -87,5 +78,5 @@
   "dynamics_overlap_charmm_rescue_count": 0,
   "traj_export_molecular_wrap": false,
   "dynamics_overlap_warning_count": 0,
-  "dynamics_min_intermonomer_distance_A": 1.3500874341535547
+  "dynamics_min_intermonomer_distance_A": 2.878291996086751
 }
