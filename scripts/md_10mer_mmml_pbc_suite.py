@@ -322,14 +322,29 @@ def _load_packmol_sphere_positions(
     return positions
 
 
-def _build_cluster_psf_from_composition(
+def _residue_geometries_for_composition(
     composition: list[tuple[str, int]],
-) -> tuple[np.ndarray, list[str], list[int], list[str]]:
-    """Build CHARMM PSF for a mixed cluster; return Z, PSF atom names, atoms/monomer, residue order."""
+) -> dict[str, tuple[np.ndarray, list[str]]]:
+    """Relaxed monomer coords/atom names per residue type (make-res recipe)."""
     residue_geometries: dict[str, tuple[np.ndarray, list[str]]] = {}
     for residue, _count in composition:
         if residue not in residue_geometries:
             residue_geometries[residue] = _generate_residue_with_make_res_recipe(residue)
+    return residue_geometries
+
+
+def _build_cluster_psf_from_composition(
+    composition: list[tuple[str, int]],
+    *,
+    residue_geometries: dict[str, tuple[np.ndarray, list[str]]] | None = None,
+) -> tuple[np.ndarray, list[str], list[int], list[str]]:
+    """Build CHARMM PSF for a mixed cluster; return Z, PSF atom names, atoms/monomer, residue order."""
+    if residue_geometries is None:
+        residue_geometries = _residue_geometries_for_composition(composition)
+    else:
+        for residue, _count in composition:
+            if residue not in residue_geometries:
+                residue_geometries[residue] = _generate_residue_with_make_res_recipe(residue)
 
     sequence_items: list[str] = []
     for residue, count in composition:
@@ -385,10 +400,7 @@ def _build_cluster_from_composition_packmol(
 ) -> tuple[np.ndarray, np.ndarray, list[int], list[str]]:
     from mmml.interfaces.pycharmmInterface import packmol_placement
 
-    residue_geometries: dict[str, tuple[np.ndarray, list[str]]] = {}
-    for residue, _count in composition:
-        if residue not in residue_geometries:
-            residue_geometries[residue] = _generate_residue_with_make_res_recipe(residue)
+    residue_geometries = _residue_geometries_for_composition(composition)
 
     packmol_dir = Path("pdb/packmol_sphere")
     packmol_blocks: list[tuple[Path, int]] = []
@@ -409,7 +421,8 @@ def _build_cluster_from_composition_packmol(
     )
 
     z, _atom_names, atoms_per_list, ordered_residue_names = _build_cluster_psf_from_composition(
-        composition
+        composition,
+        residue_geometries=residue_geometries,
     )
     shifted = _load_packmol_sphere_positions(output_pdb, atoms_per_list)
     coor.set_positions(pd.DataFrame(shifted, columns=["x", "y", "z"]))
@@ -492,19 +505,25 @@ def _build_cluster_from_composition(
     composition: list[tuple[str, int]],
     spacing: float,
 ) -> tuple[np.ndarray, np.ndarray, list[int], list[str]]:
+    # Build monomer templates once; do not call make-res again after the cluster PSF
+    # (_generate_residue_with_make_res_recipe resets CHARMM and deletes the cluster).
+    residue_geometries = _residue_geometries_for_composition(composition)
     z, atom_names, atoms_per_list, ordered_residue_names = _build_cluster_psf_from_composition(
-        composition
+        composition,
+        residue_geometries=residue_geometries,
     )
-    residue_geometries: dict[str, tuple[np.ndarray, list[str]]] = {}
-    for residue, _count in composition:
-        if residue not in residue_geometries:
-            residue_geometries[residue] = _generate_residue_with_make_res_recipe(residue)
 
     n_molecules = len(atoms_per_list)
     n_side = int(np.ceil(np.sqrt(n_molecules)))
-    shifted = coor.get_positions().to_numpy(dtype=float).copy()
     offsets = np.zeros(n_molecules + 1, dtype=int)
     offsets[1:] = np.cumsum(np.asarray(atoms_per_list, dtype=int))
+    expected_atoms = int(offsets[-1])
+    shifted = coor.get_positions().to_numpy(dtype=float).copy()
+    if int(shifted.shape[0]) != expected_atoms:
+        raise RuntimeError(
+            f"CHARMM coordinate count ({shifted.shape[0]}) != cluster PSF atom count "
+            f"({expected_atoms}). The cluster PSF may have been cleared after build."
+        )
     for i in range(n_molecules):
         s = int(offsets[i])
         e = int(offsets[i + 1])
