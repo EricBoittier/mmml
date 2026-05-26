@@ -6,6 +6,8 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import os
+import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -40,6 +42,111 @@ pyci.psf = psf
 _EV_TO_KCAL = 23.0609
 SNAPSHOTS_NPZ = "lambda_ti_snapshots.npz"
 SUMMARY_JSON = "lambda_ti_summary.json"
+
+
+def ensure_jax_cuda_toolchain() -> None:
+    """Put bundled ``ptxas`` (JAX CUDA 13 wheels) on PATH for XLA GPU compilation."""
+    ver = f"{sys.version_info.major}.{sys.version_info.minor}"
+    ptxas_dir = (
+        Path(sys.prefix)
+        / f"lib/python{ver}/site-packages/nvidia/cu13/bin"
+    )
+    if not (ptxas_dir / "ptxas").is_file():
+        return
+    path = str(ptxas_dir.resolve())
+    cur = os.environ.get("PATH", "")
+    if path not in cur.split(os.pathsep):
+        os.environ["PATH"] = f"{path}{os.pathsep}{cur}"
+
+
+def lambda_repeat_label(wi: int, rep: int, lam: float) -> str:
+    return f"win_{wi:02d}_rep{rep:02d}_lam{lam:.2f}"
+
+
+def lambda_expected_prod_frames(n_prod: int, interval: int) -> int:
+    return int(n_prod) // max(1, int(interval))
+
+
+def lambda_prod_traj_path(traj_root: Path, label: str) -> Path:
+    return traj_root / f"{label}_prod.traj"
+
+
+def lambda_min_traj_path(traj_root: Path, label: str) -> Path:
+    return traj_root / f"{label}_min.traj"
+
+
+def lambda_traj_frame_count(path: Path) -> int:
+    if not path.is_file():
+        return 0
+    try:
+        with Trajectory(str(path), "r") as tr:
+            return len(tr)
+    except Exception:
+        return 0
+
+
+def is_lambda_prod_complete(path: Path, n_prod: int, interval: int) -> bool:
+    expected = lambda_expected_prod_frames(n_prod, interval)
+    if expected < 1:
+        return path.is_file()
+    return lambda_traj_frame_count(path) >= expected
+
+
+def load_lambda_traj_positions(path: Path) -> list[np.ndarray]:
+    with Trajectory(str(path), "r") as tr:
+        return [np.asarray(at.get_positions(), dtype=float) for at in tr]
+
+
+def load_lambda_start_positions(
+    traj_root: Path,
+    label: str,
+    *,
+    n_equil: int,
+) -> np.ndarray | None:
+    """Last frame after minimization (and equilibration, if any)."""
+    if n_equil > 0:
+        eq_path = traj_root / f"{label}_eq.traj"
+        if lambda_traj_frame_count(eq_path) > 0:
+            return load_lambda_traj_positions(eq_path)[-1]
+    min_path = lambda_min_traj_path(traj_root, label)
+    if lambda_traj_frame_count(min_path) > 0:
+        return load_lambda_traj_positions(min_path)[-1]
+    return None
+
+
+def print_lambda_resume_plan(
+    traj_root: Path,
+    lambda_windows: list[float],
+    *,
+    repeats_per_window: int,
+    n_prod: int,
+    interval: int,
+) -> None:
+    expected = lambda_expected_prod_frames(n_prod, interval)
+    n_skip = 0
+    n_redo = 0
+    n_run = 0
+    for wi, lam in enumerate(lambda_windows):
+        for rep in range(repeats_per_window):
+            label = lambda_repeat_label(wi, rep, lam)
+            prod_path = lambda_prod_traj_path(traj_root, label)
+            if is_lambda_prod_complete(prod_path, n_prod, interval):
+                n_skip += 1
+                print(f"  resume: skip complete {label} ({lambda_traj_frame_count(prod_path)} frames)", flush=True)
+            elif prod_path.is_file():
+                n_redo += 1
+                print(
+                    f"  resume: redo incomplete {label} "
+                    f"({lambda_traj_frame_count(prod_path)}/{expected} frames)",
+                    flush=True,
+                )
+            else:
+                n_run += 1
+    print(
+        f"  resume plan: skip={n_skip}, redo_incomplete={n_redo}, run_new={n_run} "
+        f"(expected {expected} prod frames per repeat)",
+        flush=True,
+    )
 
 
 @dataclass
@@ -108,6 +215,7 @@ class LambdaDynamicsConfig:
     flat_bottom_radius: float | None = None
     flat_bottom_k: float = 1.0
     skip_jit_warmup: bool = False
+    resume: bool = False
     repo_root: Path | None = None
 
 
@@ -936,6 +1044,7 @@ def _print_run_banner(cfg: LambdaDynamicsConfig, *, backend: str) -> None:
         f"  lambda_windows: {len(cfg.lambda_windows)} values, "
         f"repeats_per_window={cfg.repeats_per_window}",
         f"  n_equil={cfg.n_equil}, n_prod={cfg.n_prod}, interval={cfg.interval}",
+        f"  resume: {'on' if cfg.resume else 'off'}",
         f"  cutoffs (Å): ml={cfg.ml_cutoff}, mm_switch_on={cfg.mm_switch_on}, mm_cutoff={cfg.mm_cutoff}",
     ]
     for line in lines:
@@ -1009,29 +1118,95 @@ def run_lambda_dynamics(cfg: LambdaDynamicsConfig) -> dict[str, Any]:
     traj_root = out_dir / "trajectories"
     traj_root.mkdir(exist_ok=True)
 
+    if cfg.resume:
+        print("=== lambda_ti resume ===", flush=True)
+        print_lambda_resume_plan(
+            traj_root,
+            lambda_windows,
+            repeats_per_window=cfg.repeats_per_window,
+            n_prod=cfg.n_prod,
+            interval=cfg.interval,
+        )
+
     for wi, lam in enumerate(lambda_windows):
         samples: list[float] = []
         repeat_stats: list[dict[str, float | int | str]] = []
         for rep in range(cfg.repeats_per_window):
+            label = lambda_repeat_label(wi, rep, lam)
+            prod_path = lambda_prod_traj_path(traj_root, label)
+            if cfg.resume and is_lambda_prod_complete(prod_path, cfg.n_prod, cfg.interval):
+                positions = load_lambda_traj_positions(prod_path)
+                atoms_probe_on = ase.Atoms(numbers=z, positions=positions[0].copy())
+                atoms_probe_off = ase.Atoms(numbers=z, positions=positions[0].copy())
+                calc_probe_on = build_fixed_lambda_calculator(
+                    atomic_positions=atoms_probe_on.get_positions(),
+                    lam_coupled=1.0,
+                    **calc_common,
+                )
+                calc_probe_off = build_fixed_lambda_calculator(
+                    atomic_positions=atoms_probe_off.get_positions(),
+                    lam_coupled=0.0,
+                    **calc_common,
+                )
+                atoms_probe_on.calc = calc_probe_on
+                atoms_probe_off.calc = calc_probe_off
+                samples_rep = [
+                    dUdlambda_at_R(
+                        calc_probe_on,
+                        atoms_probe_on,
+                        calc_probe_off,
+                        atoms_probe_off,
+                        p,
+                    )
+                    for p in positions
+                ]
+                samples.extend(samples_rep)
+                snapshots_per_window[wi].extend([p.copy() for p in positions])
+                repeat_stats.append(
+                    {
+                        "repeat": rep,
+                        "n_samples": len(samples_rep),
+                        "mean_dUdlambda_eV": float(np.mean(samples_rep)) if samples_rep else float("nan"),
+                        "std_dUdlambda_eV": float(np.std(samples_rep)) if len(samples_rep) > 1 else 0.0,
+                        "traj": str(prod_path),
+                        "equil_traj": None,
+                        "minimization": {"resumed": True, "skipped": "complete_prod_traj"},
+                    }
+                )
+                continue
+
+            if cfg.resume and prod_path.is_file():
+                prod_path.unlink()
+
             r_init = base_seed_positions.copy()
             atoms = ase.Atoms(numbers=z, positions=r_init)
             prepare_atoms_geometry(atoms, r_init, md_settings)
             if use_fix_com:
                 atoms.set_constraint(FixCom())
 
-            label = f"win_{wi:02d}_rep{rep:02d}_lam{lam:.2f}"
-            min_traj_path = traj_root / f"{label}_min.traj"
-            min_summary = minimize_lambda_structure(
-                atoms,
-                cfg=cfg,
-                cluster=cluster,
-                model_restart_path=model_restart_path,
-                couple_indices=couple_indices,
-                lam_coupled=lam,
-                md_settings=md_settings,
-                label=label,
-                min_traj_path=min_traj_path,
+            min_traj_path = lambda_min_traj_path(traj_root, label)
+            skip_min = (
+                cfg.resume
+                and lambda_traj_frame_count(min_traj_path) > 0
             )
+            if skip_min:
+                r_min = load_lambda_start_positions(traj_root, label, n_equil=0)
+                if r_min is None:
+                    raise RuntimeError(f"resume: missing minimized structure for {label}")
+                atoms.set_positions(r_min)
+                min_summary = {"resumed": True, "from": str(min_traj_path)}
+            else:
+                min_summary = minimize_lambda_structure(
+                    atoms,
+                    cfg=cfg,
+                    cluster=cluster,
+                    model_restart_path=model_restart_path,
+                    couple_indices=couple_indices,
+                    lam_coupled=lam,
+                    md_settings=md_settings,
+                    label=label,
+                    min_traj_path=min_traj_path,
+                )
 
             equil_path: str | None = None
             traj_eq = None
@@ -1056,7 +1231,6 @@ def run_lambda_dynamics(cfg: LambdaDynamicsConfig) -> dict[str, Any]:
             if traj_eq is not None:
                 traj_eq.close()
 
-            prod_path = traj_root / f"{label}_prod.traj"
             traj_prod = Trajectory(str(prod_path), "w", atoms)
 
             samples_rep: list[float] = []
@@ -1485,6 +1659,11 @@ def add_lambda_dynamics_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--rescue-fire-fmax", type=float, default=0.1)
     parser.add_argument("--rescue-fire-maxstep", type=float, default=0.02)
     parser.add_argument("--skip-jit-warmup", action="store_true")
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Skip λ repeats whose production trajectory is complete; redo partial prod.traj files.",
+    )
     parser.add_argument("--n-equil", type=int, default=500)
     parser.add_argument(
         "--save-equil-traj",
@@ -1590,6 +1769,7 @@ def config_from_namespace(args: argparse.Namespace, repo_root: Path | None = Non
         flat_bottom_radius=getattr(args, "flat_bottom_radius", None),
         flat_bottom_k=float(getattr(args, "flat_bottom_k", 1.0)),
         skip_jit_warmup=bool(getattr(args, "skip_jit_warmup", False)),
+        resume=bool(getattr(args, "resume", False)),
         repo_root=repo_root,
     )
 

@@ -222,6 +222,11 @@ def parse_args() -> argparse.Namespace:
         help="lambda_ti: residue name when --composition is not set.",
     )
     parser.add_argument("--skip-jit-warmup", action="store_true", help="lambda_ti: skip first MMML energy eval per window.")
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="lambda_ti: skip completed production trajectories; redo partial prod.traj files.",
+    )
 
     return parser.parse_args()
 
