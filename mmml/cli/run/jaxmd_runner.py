@@ -331,6 +331,9 @@ def set_up_nhc_sim_routine(
     init_forces = np.asarray(result.forces).reshape(-1, 3)
     flat_bottom_radius = getattr(args, "flat_bottom_radius", None)
     flat_bottom_k = float(getattr(args, "flat_bottom_k", 1.0))
+    use_flat_bottom = (
+        flat_bottom_radius is not None and float(flat_bottom_radius) > 0.0
+    )
     c.print(Panel(f"Compilation done in {elapsed:.2f} s", title="[bold green]JAX[/bold green]", border_style="green"))
     print_forces_summary(init_forces, energy_eV=float(init_energy), console=c)
     print_flat_bottom_summary(
@@ -348,6 +351,14 @@ def set_up_nhc_sim_routine(
 
     # Mutable container for box/pairs so PBC minimization can update pairs for pbc_start_pos
     _pbc_state = {"box": box_init, "pair_idx": pair_idx, "pair_mask": pair_mask}
+
+    def _eval_at_position(position, *, box=None, pair_idx=None, pair_mask=None):
+        return jax_md_eval_fn(
+            position,
+            mm_pair_idx=pair_idx if pair_idx is not None else _pbc_state["pair_idx"],
+            mm_pair_mask=pair_mask if pair_mask is not None else _pbc_state["pair_mask"],
+            box=box if box is not None else _pbc_state["box"],
+        )
 
     # Energy and force: use calculator's explicit forces (jax.grad through calculator gives NaN).
     # MIC-only PBC: no coordinate transform; calculator uses MIC internally.
@@ -1032,24 +1043,51 @@ def set_up_nhc_sim_routine(
             run_sim.last_status = "error"
             run_sim.last_error = "First step produced NaN positions"
             return 0, np.stack([np.asarray(jax.device_get(pos_out))]), box_out
-        if is_npt and npt_pair_idx is not None:
+        if use_flat_bottom:
+            if is_npt and npt_pair_idx is not None:
+                box_one = simulate.npt_box(state_one)
+                out1 = _eval_at_position(
+                    state_one.position,
+                    box=box_one,
+                    pair_idx=npt_pair_idx,
+                    pair_mask=npt_pair_mask,
+                )
+            else:
+                out1 = _eval_at_position(state_one.position)
+            e1 = float(out1.energy)
+            c.print(
+                Panel(
+                    f"First step OK: E_pot={e1:.6f} eV, |COM|={float(out1.com_dist):.4f} Å, "
+                    f"V_fb={float(out1.flat_bottom_E):.6f} eV",
+                    title="[bold green]JAX-MD[/bold green]",
+                    border_style="green",
+                )
+            )
+        elif is_npt and npt_pair_idx is not None:
             box_one = simulate.npt_box(state_one)
             e1 = float(npt_energy_fn(state_one.position, box=box_one, neighbor=(npt_pair_idx, npt_pair_mask)))
+            c.print(Panel(f"First step OK: E_pot={e1:.6f} eV", title="[bold green]JAX-MD[/bold green]", border_style="green"))
         else:
             e1 = float(wrapped_energy_fn(state_one.position))
-        c.print(Panel(f"First step OK: E_pot={e1:.6f} eV", title="[bold green]JAX-MD[/bold green]", border_style="green"))
+            c.print(Panel(f"First step OK: E_pot={e1:.6f} eV", title="[bold green]JAX-MD[/bold green]", border_style="green"))
 
         nbr_monitor = getattr(args, "nbr_monitor", False)
         if use_pbc:
             c.print(Panel(f"{n_monomers} monomer groups, wrapping every {steps_per_recording} steps", title="[bold]PBC Wrapping[/bold]", border_style="blue"))
         c.print(Panel(f"Starting {args.ensemble.upper()} simulation", title="[bold cyan]JAX-MD[/bold cyan]", border_style="cyan"))
+        _fb_hdr = "\t|COM| (Å)\tV_fb (eV)" if use_flat_bottom else ""
         if is_npt:
-            hdr = "\t\tTime (ps)\tSteps\tE_pot (eV)\tE_tot (eV)\tT (K)\tL (Å)\tV (Å³)\trho (g/cm³)\tP_tgt (atm)\tP_meas (atm)\tavg(ns/day)"
+            hdr = (
+                "\t\tTime (ps)\tSteps\tE_pot (eV)\tE_tot (eV)\tT (K)\tL (Å)\tV (Å³)\trho (g/cm³)"
+                f"\tP_tgt (atm)\tP_meas (atm){_fb_hdr}\tavg(ns/day)"
+            )
             if nbr_monitor:
                 hdr += "\tn_valid\tcapacity\tfill%"
             c.print(f"[dim]{hdr}[/dim]")
         else:
-            c.print("[dim]\t\tTime (ps)\tSteps\tE_pot (eV)\tE_tot (eV)\tT (K)\tavg(ns/day)[/dim]")
+            c.print(
+                f"[dim]\t\tTime (ps)\tSteps\tE_pot (eV)\tE_tot (eV)\tT (K){_fb_hdr}\tavg(ns/day)[/dim]"
+            )
 
         # ========================================================================
         # HDF5 REPORTER SETUP
@@ -1062,6 +1100,8 @@ def set_up_nhc_sim_routine(
             scalar_quantities.append("density_g_cm3")
         if nbr_monitor and is_npt:
             scalar_quantities.extend(["nbr_n_valid", "nbr_capacity", "nbr_fill_ratio"])
+        if use_flat_bottom:
+            scalar_quantities.extend(["com_dist_A", "flat_bottom_E_eV"])
         hdf5_reporter = make_jaxmd_reporter(
             str(hdf5_path),
             n_atoms=len(atoms),
@@ -1076,6 +1116,10 @@ def set_up_nhc_sim_routine(
                 "steps_per_recording": steps_per_recording,
                 "n_atoms": len(atoms),
                 "atomic_numbers": atoms.get_atomic_numbers(),
+                "flat_bottom_radius_A": float(flat_bottom_radius)
+                if use_flat_bottom
+                else None,
+                "flat_bottom_k_eV_A2": float(flat_bottom_k) if use_flat_bottom else None,
             },
         )
 
@@ -1193,7 +1237,23 @@ def set_up_nhc_sim_routine(
                         mass=state.mass
                     ) / unit['temperature']
                     temp = float(T_curr)
-                    if is_npt and npt_pair_idx is not None:
+                    com_dist_report = float("nan")
+                    e_fb_report = float("nan")
+                    if use_flat_bottom:
+                        if is_npt and npt_pair_idx is not None:
+                            box_curr = simulate.npt_box(state)
+                            out_dyn = _eval_at_position(
+                                state.position,
+                                box=box_curr,
+                                pair_idx=npt_pair_idx,
+                                pair_mask=npt_pair_mask,
+                            )
+                        else:
+                            out_dyn = _eval_at_position(state.position)
+                        e_pot = float(out_dyn.energy)
+                        com_dist_report = float(out_dyn.com_dist)
+                        e_fb_report = float(out_dyn.flat_bottom_E)
+                    elif is_npt and npt_pair_idx is not None:
                         box_curr = simulate.npt_box(state)
                         e_pot = float(npt_energy_fn(state.position, box=box_curr, neighbor=(npt_pair_idx, npt_pair_mask)))
                     else:
@@ -1226,10 +1286,15 @@ def set_up_nhc_sim_routine(
                             p_meas_atm = float(p_meas / (unit_p * BAR_PER_ATM))
                         except Exception:
                             p_meas_atm = float("nan")
+                        _fb_cols = (
+                            f"\t{com_dist_report:8.4f}\t{e_fb_report:10.4f}"
+                            if use_flat_bottom
+                            else ""
+                        )
                         line = (
                             f"{time_ps:10.4f}\t{steps:6d}\t{e_pot:10.4f}\t{e_tot:10.4f}\t{temp:10.2f}\t"
-                            f"{L:8.2f}\t{vol:10.1f}\t{density_g_cm3:8.3f}\t{p_tgt_atm:8.2f}\t{p_meas_atm:8.2f}\t"
-                            f"{avg_speed_ns_per_day:10.4f}"
+                            f"{L:8.2f}\t{vol:10.1f}\t{density_g_cm3:8.3f}\t{p_tgt_atm:8.2f}\t{p_meas_atm:8.2f}"
+                            f"{_fb_cols}\t{avg_speed_ns_per_day:10.4f}"
                         )
                         if nbr_monitor:
                             nbr_n_valid = int(np.sum(np.asarray(jax.device_get(npt_pair_mask))))
@@ -1238,9 +1303,14 @@ def set_up_nhc_sim_routine(
                             line += f"\t{nbr_n_valid}\t{nbr_capacity}\t{100.0 * nbr_fill_ratio:.1f}%"
                         print(line)
                     else:
+                        _fb_cols = (
+                            f"\t{com_dist_report:8.4f}\t{e_fb_report:10.4f}"
+                            if use_flat_bottom
+                            else ""
+                        )
                         print(
-                            f"{time_ps:10.4f}\t{steps:6d}\t{e_pot:10.4f}\t{e_tot:10.4f}\t{temp:10.2f}\t"
-                            f"{avg_speed_ns_per_day:10.4f}"
+                            f"{time_ps:10.4f}\t{steps:6d}\t{e_pot:10.4f}\t{e_tot:10.4f}\t{temp:10.2f}"
+                            f"{_fb_cols}\t{avg_speed_ns_per_day:10.4f}"
                         )
 
                     # Record to HDF5 (NPT: real-space via transform; optional monomer wrap for viewers)
@@ -1274,6 +1344,9 @@ def set_up_nhc_sim_routine(
                         report_kw["nbr_n_valid"] = nbr_n_valid
                         report_kw["nbr_capacity"] = nbr_capacity
                         report_kw["nbr_fill_ratio"] = nbr_fill_ratio
+                    if use_flat_bottom:
+                        report_kw["com_dist_A"] = com_dist_report
+                        report_kw["flat_bottom_E_eV"] = e_fb_report
                     hdf5_reporter.report(**report_kw)
 
                     # Stop on numerical instability (NaN, Inf, or energy blow-up to 0)
