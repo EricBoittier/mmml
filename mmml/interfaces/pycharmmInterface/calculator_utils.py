@@ -210,13 +210,18 @@ def apply_flat_bottom(
     if mode != "monomer":
         raise ValueError(f"flat_bottom mode must be one of {FLAT_BOTTOM_MODES}, got {mode!r}")
 
-    from jax import lax
+    # Static slice bounds: monomer_offsets and n_monomers are fixed at JIT compile time
+    # (n_monomers is a static arg on spherical_cutoff_calculator). lax.fori_loop cannot
+    # be used because dynamic slice endpoints are not allowed inside traced loops.
+    mo_np = np.asarray(monomer_offsets, dtype=np.int32)
+    n_mon = int(n_monomers)
 
-    mo = jnp.asarray(monomer_offsets, dtype=jnp.int32)
-
-    def step(m: int, carry: Tuple[Array, Array, Array]) -> Tuple[Array, Array, Array]:
-        flat_E, flat_F, max_dist = carry
-        s, e = mo[m], mo[m + 1]
+    flat_E = jnp.array(0.0, dtype=positions.dtype)
+    flat_F = jnp.zeros_like(base_forces)
+    max_dist = jnp.array(0.0, dtype=positions.dtype)
+    for m in range(n_mon):
+        s = int(mo_np[m])
+        e = int(mo_np[m + 1])
         pos_m = positions[s:e]
         mass_m = masses[s:e]
         M_m = jnp.sum(mass_m)
@@ -232,18 +237,9 @@ def apply_flat_bottom(
         F_com = -k * 2.0 * excess * unit_d
         F_m = (mass_m[:, None] / M_m) * F_com[None, :]
         flat_F = flat_F.at[s:e].add(F_m)
-        return flat_E + E_m, flat_F, jnp.maximum(max_dist, dist)
+        flat_E = flat_E + E_m
+        max_dist = jnp.maximum(max_dist, dist)
 
-    flat_E, flat_F, max_dist = lax.fori_loop(
-        0,
-        n_monomers,
-        step,
-        (
-            jnp.array(0.0, dtype=positions.dtype),
-            jnp.zeros_like(base_forces),
-            jnp.array(0.0, dtype=positions.dtype),
-        ),
-    )
     com = jnp.zeros(3, dtype=positions.dtype)
     return flat_E, flat_F, com, max_dist
 
