@@ -113,6 +113,7 @@ def build_lambda_jaxmd_bundle(
     cell_scalar: float | None,
     flat_bottom_radius: float | None,
     flat_bottom_k: float,
+    flat_bottom_mode: str = "system",
     md_settings: LambdaMdSettings,
 ) -> LambdaJaxMdBundle:
     """Build production + probe spherical calculators and a JAX-MD force function."""
@@ -140,6 +141,7 @@ def build_lambda_jaxmd_bundle(
             lambda_monomer=lam_arr,
             flat_bottom_radius=flat_bottom_radius,
             flat_bottom_force_const=flat_bottom_k,
+            flat_bottom_mode=flat_bottom_mode,
         )
         return factory(
             atomic_numbers=atomic_numbers,
@@ -455,6 +457,7 @@ def run_lambda_dynamics_jaxmd(cfg: LambdaDynamicsConfig) -> dict[str, Any]:
         cell_scalar=cell_scalar,
         flat_bottom_radius=cfg.flat_bottom_radius,
         flat_bottom_k=cfg.flat_bottom_k,
+        flat_bottom_mode=cfg.flat_bottom_mode,
     )
 
     rows: list[dict] = []

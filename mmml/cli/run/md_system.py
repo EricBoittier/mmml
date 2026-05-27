@@ -146,6 +146,15 @@ def parse_args() -> argparse.Namespace:
         help="Flat-bottom force constant when COM is outside --flat-bottom-radius (default: 1.0).",
     )
     parser.add_argument(
+        "--flat-bottom-mode",
+        choices=["system", "monomer"],
+        default="system",
+        help=(
+            "Flat-bottom anchor: system = one restraint on mass-weighted cluster COM; "
+            "monomer = sum of harmonic restraints on each monomer COM (same R and k)."
+        ),
+    )
+    parser.add_argument(
         "--extra-args",
         nargs=argparse.REMAINDER,
         default=[],
@@ -443,6 +452,7 @@ def build_command(args: argparse.Namespace) -> list[str]:
     _append_optional(cmd, "--flat-bottom-radius", args.flat_bottom_radius)
     if args.flat_bottom_radius is not None:
         cmd.extend(["--flat-bottom-k", str(args.flat_bottom_k)])
+        cmd.extend(["--flat-bottom-mode", str(args.flat_bottom_mode)])
     if args.extra_args:
         cmd.extend(args.extra_args)
     return cmd

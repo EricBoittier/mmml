@@ -331,8 +331,12 @@ def set_up_nhc_sim_routine(
     init_forces = np.asarray(result.forces).reshape(-1, 3)
     flat_bottom_radius = getattr(args, "flat_bottom_radius", None)
     flat_bottom_k = float(getattr(args, "flat_bottom_k", 1.0))
+    flat_bottom_mode = str(getattr(args, "flat_bottom_mode", "system")).lower().strip()
     use_flat_bottom = (
         flat_bottom_radius is not None and float(flat_bottom_radius) > 0.0
+    )
+    _fb_dist_hdr = (
+        "max|COM_m| (Å)" if flat_bottom_mode == "monomer" else "|COM| (Å)"
     )
     c.print(Panel(f"Compilation done in {elapsed:.2f} s", title="[bold green]JAX[/bold green]", border_style="green"))
     print_forces_summary(init_forces, energy_eV=float(init_energy), console=c)
@@ -340,6 +344,7 @@ def set_up_nhc_sim_routine(
         result,
         flat_bottom_radius=flat_bottom_radius,
         flat_bottom_k=flat_bottom_k,
+        flat_bottom_mode=flat_bottom_mode,
         label="post-compile (ASE-minimized R)",
         console=c,
     )
@@ -717,6 +722,7 @@ def set_up_nhc_sim_routine(
                         _out0,
                         flat_bottom_radius=flat_bottom_radius,
                         flat_bottom_k=flat_bottom_k,
+                        flat_bottom_mode=flat_bottom_mode,
                         label="FIRE start (COM-centered)",
                         console=c,
                     )
@@ -730,6 +736,7 @@ def set_up_nhc_sim_routine(
                     _out_r,
                     flat_bottom_radius=flat_bottom_radius,
                     flat_bottom_k=flat_bottom_k,
+                    flat_bottom_mode=flat_bottom_mode,
                     label="FIRE reference (raw R, no COM shift)",
                     console=c,
                 )
@@ -770,12 +777,13 @@ def set_up_nhc_sim_routine(
                         f"  [dim]{i}/{NMIN}[/dim]: E_total={energy:.6f} eV, "
                         f"E_hybrid={float(out_step.hybrid_energy):.6f} eV, "
                         f"E_fb={float(out_step.flat_bottom_E):.6f} eV, "
-                        f"|COM|={float(out_step.com_dist):.4f} Å, max|F|={max_force:.6f}"
+                        f"{_fb_dist_hdr}={float(out_step.com_dist):.4f}, max|F|={max_force:.6f}"
                     )
                     print_flat_bottom_summary(
                         out_step,
                         flat_bottom_radius=flat_bottom_radius,
                         flat_bottom_k=flat_bottom_k,
+                        flat_bottom_mode=flat_bottom_mode,
                         label=f"FIRE step {i}/{NMIN}",
                         console=c,
                     )
@@ -977,6 +985,7 @@ def set_up_nhc_sim_routine(
                 out_init,
                 flat_bottom_radius=flat_bottom_radius,
                 flat_bottom_k=flat_bottom_k,
+                flat_bottom_mode=flat_bottom_mode,
                 label="MD start (post-FIRE)",
                 console=c,
             )
@@ -1057,7 +1066,7 @@ def set_up_nhc_sim_routine(
             e1 = float(out1.energy)
             c.print(
                 Panel(
-                    f"First step OK: E_pot={e1:.6f} eV, |COM|={float(out1.com_dist):.4f} Å, "
+                    f"First step OK: E_pot={e1:.6f} eV, {_fb_dist_hdr}={float(out1.com_dist):.4f}, "
                     f"V_fb={float(out1.flat_bottom_E):.6f} eV",
                     title="[bold green]JAX-MD[/bold green]",
                     border_style="green",
@@ -1075,7 +1084,7 @@ def set_up_nhc_sim_routine(
         if use_pbc:
             c.print(Panel(f"{n_monomers} monomer groups, wrapping every {steps_per_recording} steps", title="[bold]PBC Wrapping[/bold]", border_style="blue"))
         c.print(Panel(f"Starting {args.ensemble.upper()} simulation", title="[bold cyan]JAX-MD[/bold cyan]", border_style="cyan"))
-        _fb_hdr = "\t|COM| (Å)\tV_fb (eV)" if use_flat_bottom else ""
+        _fb_hdr = f"\t{_fb_dist_hdr}\tV_fb (eV)" if use_flat_bottom else ""
         if is_npt:
             hdr = (
                 "\t\tTime (ps)\tSteps\tE_pot (eV)\tE_tot (eV)\tT (K)\tL (Å)\tV (Å³)\trho (g/cm³)"
@@ -1120,6 +1129,7 @@ def set_up_nhc_sim_routine(
                 if use_flat_bottom
                 else None,
                 "flat_bottom_k_eV_A2": float(flat_bottom_k) if use_flat_bottom else None,
+                "flat_bottom_mode": flat_bottom_mode if use_flat_bottom else None,
             },
         )
 

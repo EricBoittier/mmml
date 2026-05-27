@@ -214,6 +214,7 @@ class LambdaDynamicsConfig:
     max_fmax_after_min: float = 2.0
     flat_bottom_radius: float | None = None
     flat_bottom_k: float = 1.0
+    flat_bottom_mode: str = "system"
     packmol_radius: float | None = None
     packmol_sphere: bool | None = None
     packmol_center: tuple[float, float, float] | None = None
@@ -563,6 +564,7 @@ def minimize_lambda_structure(
         cell_scalar=cell_scalar,
         flat_bottom_radius=cfg.flat_bottom_radius,
         flat_bottom_k=cfg.flat_bottom_k,
+        flat_bottom_mode=cfg.flat_bottom_mode,
     )
     atoms.calc = calc
 
@@ -717,6 +719,7 @@ def build_fixed_lambda_calculator(
     cell_scalar: float | None = None,
     flat_bottom_radius: float | None = None,
     flat_bottom_k: float = 1.0,
+    flat_bottom_mode: str = "system",
 ) -> object:
     lam_arr = lambda_array(n_monomers, couple_indices, lam_coupled)
     max_atoms_per = int(max(atoms_per_monomer))
@@ -740,6 +743,7 @@ def build_fixed_lambda_calculator(
         lambda_monomer=lam_arr,
         flat_bottom_radius=flat_bottom_radius,
         flat_bottom_force_const=flat_bottom_k,
+        flat_bottom_mode=flat_bottom_mode,
     )
     calc, _, _ = factory(
         atomic_numbers=atomic_numbers,
@@ -1144,6 +1148,7 @@ def run_lambda_dynamics(cfg: LambdaDynamicsConfig) -> dict[str, Any]:
         cell_scalar=cell_scalar,
         flat_bottom_radius=cfg.flat_bottom_radius,
         flat_bottom_k=cfg.flat_bottom_k,
+        flat_bottom_mode=cfg.flat_bottom_mode,
     )
 
     rows: list[dict] = []
@@ -1801,6 +1806,7 @@ def config_from_namespace(args: argparse.Namespace, repo_root: Path | None = Non
         max_fmax_after_min=float(getattr(args, "max_fmax_after_min", 2.0)),
         flat_bottom_radius=getattr(args, "flat_bottom_radius", None),
         flat_bottom_k=float(getattr(args, "flat_bottom_k", 1.0)),
+        flat_bottom_mode=str(getattr(args, "flat_bottom_mode", "system")),
         packmol_radius=getattr(args, "packmol_radius", None),
         packmol_sphere=getattr(args, "packmol_sphere", None),
         packmol_center=(

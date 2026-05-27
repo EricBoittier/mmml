@@ -104,11 +104,13 @@ def print_flat_bottom_summary(
     *,
     flat_bottom_radius: float | None,
     flat_bottom_k: float = 1.0,
+    flat_bottom_mode: str = "system",
     label: str = "",
     console: Optional[Console] = None,
 ) -> None:
-    """Print hybrid energy, flat-bottom term, and mass-weighted COM diagnostics."""
+    """Print hybrid energy, flat-bottom term, and COM diagnostics."""
     c = console or Console()
+    mode = str(flat_bottom_mode).lower().strip()
     hybrid = float(np.asarray(result.hybrid_energy).reshape(()))
     flat_e = float(np.asarray(result.flat_bottom_E).reshape(()))
     total = float(np.asarray(result.energy).reshape(()))
@@ -117,20 +119,24 @@ def print_flat_bottom_summary(
     r_fb = float(flat_bottom_radius) if flat_bottom_radius is not None else 0.0
     excess = max(0.0, com_dist - r_fb) if r_fb > 0 else 0.0
     active = r_fb > 0 and excess > 1e-8
+    dist_label = "max |COM_m| (Å)" if mode == "monomer" else "|COM| (Å)"
 
     table = Table(title="[bold magenta]Flat-bottom / COM[/bold magenta]", show_header=True)
     table.add_column("Quantity", style="bright_magenta", no_wrap=True)
     table.add_column("Value", style="white")
     if label:
         table.add_row("Stage", label)
+    table.add_row("flat_bottom_mode", mode)
     table.add_row("E_hybrid (ML+MM)", f"{hybrid:.6f} eV")
     table.add_row("E_flat_bottom", f"{flat_e:.6f} eV")
     table.add_row("E_total", f"{total:.6f} eV")
-    table.add_row("COM (Å)", f"({com[0]:.4f}, {com[1]:.4f}, {com[2]:.4f})")
-    table.add_row("|COM| (Å)", f"{com_dist:.4f}")
+    if mode == "system":
+        table.add_row("COM (Å)", f"({com[0]:.4f}, {com[1]:.4f}, {com[2]:.4f})")
+    table.add_row(dist_label, f"{com_dist:.4f}")
     table.add_row("R_flat_bottom (Å)", f"{r_fb:.4f}" if r_fb > 0 else "off")
     table.add_row("k_flat_bottom (eV/Å²)", f"{float(flat_bottom_k):.4f}" if r_fb > 0 else "—")
-    table.add_row("|COM| - R excess (Å)", f"{excess:.4f}" if r_fb > 0 else "—")
+    excess_label = "max |COM_m| - R" if mode == "monomer" else "|COM| - R"
+    table.add_row(f"{excess_label} excess (Å)", f"{excess:.4f}" if r_fb > 0 else "—")
     table.add_row("Restraint active", "yes" if active else "no")
     c.print(Panel(table, title="[bold]Flat-bottom[/bold]", border_style="magenta"))
 

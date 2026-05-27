@@ -208,6 +208,13 @@ def main() -> int:
         dest="flat_bottom_k",
         help="Flat-bottom k when |COM offset| exceeds radius (default: 1.0).",
     )
+    p.add_argument(
+        "--flat-bottom-mode",
+        choices=["system", "monomer"],
+        default="system",
+        dest="flat_bottom_mode",
+        help="system: cluster COM; monomer: sum over monomer COM restraints (same R, k).",
+    )
     p.add_argument("--ml-cutoff", type=float, default=0.1)
     p.add_argument("--mm-switch-on", type=float, default=5.5)
     p.add_argument("--mm-cutoff", type=float, default=2.0)
@@ -440,6 +447,7 @@ def main() -> int:
         jax_md_skin_distance=effective_skin,
         flat_bottom_radius=args.flat_bottom_radius,
         flat_bottom_force_const=args.flat_bottom_k,
+        flat_bottom_mode=args.flat_bottom_mode,
     )
     cutoff = CutoffParameters(ml_cutoff=args.ml_cutoff, mm_switch_on=args.mm_switch_on, mm_cutoff=args.mm_cutoff)
     calc_result = factory(
@@ -615,6 +623,7 @@ def main() -> int:
         traj_export_molecular_wrap=bool(args.traj_export_molecular_wrap),
         flat_bottom_radius=args.flat_bottom_radius,
         flat_bottom_k=args.flat_bottom_k,
+        flat_bottom_mode=args.flat_bottom_mode,
     )
     run_sim = set_up_nhc_sim_routine(
         atoms=atoms,
