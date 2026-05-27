@@ -9,13 +9,78 @@ units are kcal/mol and kcal/mol/Å).
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, Optional, Union
+from typing import Dict, Optional, Tuple, Union
 
 import numpy as np
 
 from .preprocessing import convert_energy_units
 
 KCAL_TO_EV = 0.043364106370
+
+
+def resolve_rmd17_splits_dir(
+    data_path: Union[str, Path],
+    splits_dir: Optional[Union[str, Path]] = None,
+) -> Path:
+    """
+    Locate the rMD17 ``splits/`` directory with official index CSV files.
+
+    If ``splits_dir`` is given, it is returned as-is. Otherwise, looks for
+    ``<rmd17_root>/splits`` when ``data_path`` lives under ``.../npz_data/``.
+    """
+    if splits_dir is not None:
+        return Path(splits_dir)
+
+    data_path = Path(data_path)
+    if data_path.parent.name == "npz_data":
+        candidate = data_path.parent.parent / "splits"
+        if candidate.is_dir():
+            return candidate
+
+    raise FileNotFoundError(
+        "Could not find rMD17 splits directory. Set RMD17_SPLITS_DIR to the "
+        "folder containing index_train_01.csv and index_test_01.csv "
+        "(typically <rmd17>/splits next to npz_data/)."
+    )
+
+
+def load_rmd17_official_splits(
+    splits_dir: Union[str, Path],
+    split_id: int = 1,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Load official rMD17 train-pool and test indices from Materials Cloud CSVs.
+
+    Files: ``index_train_{split_id:02d}.csv``, ``index_test_{split_id:02d}.csv``
+    for ``split_id`` in 1..5 (five predefined folds).
+
+    Returns
+    -------
+    train_pool_idx, test_idx
+        Integer row indices into the NPZ arrays. Hold out ``test_idx`` first;
+        draw train/validation only from ``train_pool_idx``.
+    """
+    if not 1 <= split_id <= 5:
+        raise ValueError("split_id must be between 1 and 5 (official rMD17 folds)")
+
+    splits_dir = Path(splits_dir)
+    train_path = splits_dir / f"index_train_{split_id:02d}.csv"
+    test_path = splits_dir / f"index_test_{split_id:02d}.csv"
+
+    for path in (train_path, test_path):
+        if not path.is_file():
+            raise FileNotFoundError(f"Missing official split file: {path}")
+
+    train_pool_idx = np.loadtxt(train_path, dtype=np.int64).reshape(-1)
+    test_idx = np.loadtxt(test_path, dtype=np.int64).reshape(-1)
+
+    overlap = np.intersect1d(train_pool_idx, test_idx)
+    if overlap.size:
+        raise ValueError(
+            f"Official train and test indices overlap ({overlap.size} entries)"
+        )
+
+    return train_pool_idx, test_idx
 
 
 def load_rmd17_npz(
