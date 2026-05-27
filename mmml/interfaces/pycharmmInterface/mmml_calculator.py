@@ -393,7 +393,6 @@ def setup_calculator(
     for i, n in enumerate(atoms_per_monomer_list):
         monomer_offsets[i + 1] = monomer_offsets[i] + n
     total_atoms = int(monomer_offsets[-1])
-    monomer_offsets_jax = jnp.asarray(monomer_offsets, dtype=jnp.int32)
 
     # Convenience: keep a uniform value when all monomers are the same size.
     _all_same_size = len(set(atoms_per_monomer_list)) == 1
@@ -1022,7 +1021,7 @@ def setup_calculator(
                 radius=float(flat_bottom_radius),
                 k=float(flat_bottom_force_const),
                 mode=_fb_mode,
-                monomer_offsets=monomer_offsets_jax,
+                monomer_offsets=monomer_offsets,
                 n_monomers=n_monomers,
                 pbc_cell=pbc_cell,
                 mic_fn=mic_fn,
