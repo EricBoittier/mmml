@@ -1,11 +1,11 @@
-seed 392250
+seed 0
 output pdb/init-packmol-sphere.pdb
 filetype pdb
 tolerance 2.0
 
-structure pdb/packmol_sphere/aco.pdb
+structure pdb/packmol_sphere/tip3.pdb
   chain A
   resnumbers 2
-  number 92
-  inside sphere 0.0 0.0 0.0 15.0
+  number 16
+  inside sphere 0.0 0.0 0.0 3.0
 end structure
