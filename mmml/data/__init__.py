@@ -32,6 +32,7 @@ from .preprocessing import (
     denormalize_energies,
     create_esp_mask
 )
+from .rmd17 import load_rmd17_npz
 
 __version__ = "0.1.0"
 
@@ -57,5 +58,7 @@ __all__ = [
     "normalize_energies",
     "denormalize_energies",
     "create_esp_mask",
+    # MD17 / rMD17
+    "load_rmd17_npz",
 ]
 
