@@ -18,9 +18,11 @@ from mmml.interfaces.pycharmmInterface.cutoffs import GAMMA_OFF, GAMMA_ON
 
 # Re-export for convenience
 __all__ = [
+    "FLAT_BOTTOM_MODES",
     "GAMMA_OFF",
     "GAMMA_ON",
     "ModelOutput",
+    "apply_flat_bottom",
     "debug_print",
     "dimer_permutations",
     "epsilon",
@@ -159,8 +161,91 @@ class ModelOutput(NamedTuple):
     ml_2b_F: Array
     hybrid_energy: Array  # ML+MM before flat-bottom (eV)
     flat_bottom_E: Array  # flat-bottom contribution (eV)
-    com: Array  # mass-weighted COM (3,)
-    com_dist: Array  # |COM - center| (Å)
+    com: Array  # mass-weighted system COM (3,); zeros in monomer mode
+    com_dist: Array  # |COM - center| (Å), or max_m |COM_m - center| in monomer mode
+
+
+FLAT_BOTTOM_MODES = ("system", "monomer")
+
+
+def apply_flat_bottom(
+    positions: Array,
+    atomic_numbers: Array,
+    base_forces: Array,
+    *,
+    radius: float,
+    k: float,
+    mode: str,
+    monomer_offsets: Array,
+    n_monomers: int,
+    pbc_cell: Array | None,
+    mic_fn,
+) -> Tuple[Array, Array, Array, Array]:
+    """Harmonic flat-bottom on COM(s). Returns (flat_E, flat_F, com, com_dist)."""
+    if jnp is None:
+        raise RuntimeError("apply_flat_bottom requires JAX")
+    from ase.data import atomic_masses as ase_atomic_masses
+
+    masses = jnp.take(jnp.array(ase_atomic_masses, dtype=positions.dtype), atomic_numbers)
+    if pbc_cell is not None:
+        center = (pbc_cell[0] + pbc_cell[1] + pbc_cell[2]) / 2.0
+    else:
+        center = jnp.zeros(3, dtype=positions.dtype)
+
+    if mode == "system":
+        M = jnp.sum(masses)
+        com = jnp.sum(positions * masses[:, None], axis=0) / M
+        if pbc_cell is not None:
+            d = mic_fn(center, com, pbc_cell)
+        else:
+            d = com - center
+        com_dist = jnp.linalg.norm(d)
+        excess = jnp.maximum(0.0, com_dist - radius)
+        flat_E = k * excess ** 2
+        unit_d = d / (com_dist + 1e-12)
+        F_com = -k * 2.0 * excess * unit_d
+        flat_F = (masses[:, None] / M) * F_com[None, :]
+        return flat_E, flat_F, com, com_dist
+
+    if mode != "monomer":
+        raise ValueError(f"flat_bottom mode must be one of {FLAT_BOTTOM_MODES}, got {mode!r}")
+
+    from jax import lax
+
+    mo = jnp.asarray(monomer_offsets, dtype=jnp.int32)
+
+    def step(m: int, carry: Tuple[Array, Array, Array]) -> Tuple[Array, Array, Array]:
+        flat_E, flat_F, max_dist = carry
+        s, e = mo[m], mo[m + 1]
+        pos_m = positions[s:e]
+        mass_m = masses[s:e]
+        M_m = jnp.sum(mass_m)
+        com_m = jnp.sum(pos_m * mass_m[:, None], axis=0) / M_m
+        if pbc_cell is not None:
+            d = mic_fn(center, com_m, pbc_cell)
+        else:
+            d = com_m - center
+        dist = jnp.linalg.norm(d)
+        excess = jnp.maximum(0.0, dist - radius)
+        E_m = k * excess ** 2
+        unit_d = d / (dist + 1e-12)
+        F_com = -k * 2.0 * excess * unit_d
+        F_m = (mass_m[:, None] / M_m) * F_com[None, :]
+        flat_F = flat_F.at[s:e].add(F_m)
+        return flat_E + E_m, flat_F, jnp.maximum(max_dist, dist)
+
+    flat_E, flat_F, max_dist = lax.fori_loop(
+        0,
+        n_monomers,
+        step,
+        (
+            jnp.array(0.0, dtype=positions.dtype),
+            jnp.zeros_like(base_forces),
+            jnp.array(0.0, dtype=positions.dtype),
+        ),
+    )
+    com = jnp.zeros(3, dtype=positions.dtype)
+    return flat_E, flat_F, com, max_dist
 
 
 def debug_print(debug: bool, msg: str, *args: Any, **kwargs: Any) -> None:

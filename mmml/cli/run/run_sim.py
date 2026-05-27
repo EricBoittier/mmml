@@ -124,6 +124,12 @@ def parse_args() -> argparse.Namespace:
         metavar="eV/Å²",
         help="Force constant for flat bottom potential when outside radius (default: 1.0).",
     )
+    parser.add_argument(
+        "--flat-bottom-mode",
+        choices=["system", "monomer"],
+        default="system",
+        help="system: cluster COM; monomer: sum over per-monomer COM restraints (same R, k).",
+    )
 
     parser.add_argument(
         "--n-monomers",
@@ -513,6 +519,7 @@ def run(args: argparse.Namespace) -> int:
         cell=args.cell,
         flat_bottom_radius=getattr(args, "flat_bottom_radius", None),
         flat_bottom_force_const=getattr(args, "flat_bottom_k", 1.0),
+        flat_bottom_mode=getattr(args, "flat_bottom_mode", "system"),
         ensemble=getattr(args, "ensemble", "nve"),
         ml_batch_size=getattr(args, "ml_batch_size", None),
         mm_r_min=getattr(args, "mm_r_min", None),

@@ -570,6 +570,7 @@ def _factory_mmml(
     timings: dict[str, float] | None = None,
     flat_bottom_radius: float | None = None,
     flat_bottom_force_const: float = 1.0,
+    flat_bottom_mode: str = "system",
 ):
     at_codes = np.asarray(psf.get_iac(), dtype=int) - 1
     n_types = len(param.get_atc())
@@ -605,6 +606,7 @@ def _factory_mmml(
         jax_md_skin_distance=jax_md_skin_distance,
         flat_bottom_radius=flat_bottom_radius,
         flat_bottom_force_const=flat_bottom_force_const,
+        flat_bottom_mode=flat_bottom_mode,
     )
     t1 = _tmark()
     cutoff = CutoffParameters(ml_cutoff=ml_cut, mm_switch_on=mm_sw, mm_cutoff=mm_cut)
@@ -1262,6 +1264,16 @@ def main() -> int:
         dest="flat_bottom_k",
         help="Force constant k when COM is outside --flat-bottom-radius (default: 1.0).",
     )
+    parser.add_argument(
+        "--flat-bottom-mode",
+        choices=["system", "monomer"],
+        default="system",
+        dest="flat_bottom_mode",
+        help=(
+            "system: harmonic on cluster COM; monomer: sum over monomer COMs (same R, k). "
+            "Vacuum: anchor at origin; PBC: MIC to box center."
+        ),
+    )
     parser.add_argument("--verbose-calc", action="store_true")
     parser.add_argument(
         "--allow-ml-on-mixed",
@@ -1520,6 +1532,7 @@ def main() -> int:
             timings=run_timings,
             flat_bottom_radius=args.flat_bottom_radius,
             flat_bottom_force_const=args.flat_bottom_k,
+            flat_bottom_mode=args.flat_bottom_mode,
         )
         atoms.calc = calc
         _save_cutoff_plot(

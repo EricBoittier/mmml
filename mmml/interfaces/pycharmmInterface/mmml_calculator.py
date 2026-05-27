@@ -29,7 +29,9 @@ from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
     mic_displacement_smooth,
 )
 from mmml.interfaces.pycharmmInterface.calculator_utils import (
+    FLAT_BOTTOM_MODES,
     ModelOutput,
+    apply_flat_bottom,
     debug_print,
     dimer_permutations,
     indices_of_monomer,
@@ -308,6 +310,7 @@ def setup_calculator(
     max_pairs: Optional[int] = None,
     flat_bottom_radius: float | None = None,
     flat_bottom_force_const: float = 1.0,
+    flat_bottom_mode: str = "system",
     use_smooth_mic: Optional[bool] = None,
     ensemble: str = "nve",
     ml_sparse_dimers: bool = True,
@@ -373,12 +376,24 @@ def setup_calculator(
 
     n_monomers = N_MONOMERS
 
+    _fb_mode = str(flat_bottom_mode).lower().strip()
+    if _fb_mode not in FLAT_BOTTOM_MODES:
+        raise ValueError(
+            f"flat_bottom_mode must be one of {FLAT_BOTTOM_MODES}, got {flat_bottom_mode!r}"
+        )
+    if flat_bottom_radius is not None and float(flat_bottom_radius) > 0:
+        print(
+            "[setup_calculator] flat_bottom mode=%s R=%.4f Å k=%.4f eV/Å²"
+            % (_fb_mode, float(flat_bottom_radius), float(flat_bottom_force_const))
+        )
+
     # Cumulative atom offsets: monomer_offsets[i] is the global index of the
     # first atom of monomer i.  E.g. [0, 3, 6, 12] for [3, 3, 6, ...].
     monomer_offsets = np.zeros(n_monomers + 1, dtype=int)
     for i, n in enumerate(atoms_per_monomer_list):
         monomer_offsets[i + 1] = monomer_offsets[i] + n
     total_atoms = int(monomer_offsets[-1])
+    monomer_offsets_jax = jnp.asarray(monomer_offsets, dtype=jnp.int32)
 
     # Convenience: keep a uniform value when all monomers are the same size.
     _all_same_size = len(set(atoms_per_monomer_list)) == 1
@@ -993,31 +1008,25 @@ def setup_calculator(
             final_energy = jnp.array(final_energy)
         final_energy = jnp.where(jnp.isfinite(final_energy), final_energy, 0.0)
 
-        # Flat bottom potential: constrain COM to center (e.g. box center for PBC)
-        # V = 0 when |d| <= R, else V = k * (|d| - R)^2
+        # Flat bottom: system COM or sum over per-monomer COMs (same R, k).
         hybrid_energy = final_energy
         flat_E = jnp.array(0.0, dtype=jnp.float32)
         com = jnp.zeros(3, dtype=jnp.float32)
         com_dist = jnp.array(0.0, dtype=jnp.float32)
-        _pbc_cell = pbc_cell
         if flat_bottom_radius is not None and flat_bottom_radius > 0:
-            from ase.data import atomic_masses as ase_atomic_masses
-            masses = jnp.take(jnp.array(ase_atomic_masses), atomic_numbers)
-            M = jnp.sum(masses)
-            com = jnp.sum(positions * masses[:, None], axis=0) / M
-            if _pbc_cell is not None:
-                center = (_pbc_cell[0] + _pbc_cell[1] + _pbc_cell[2]) / 2.0
-                mic_fn = mic_displacement_smooth if use_smooth_mic else mic_displacement
-                d = mic_fn(center, com, _pbc_cell)
-            else:
-                center = jnp.zeros(3)
-                d = com - center
-            com_dist = jnp.linalg.norm(d)
-            excess = jnp.maximum(0.0, com_dist - flat_bottom_radius)
-            flat_E = flat_bottom_force_const * excess ** 2
-            unit_d = d / (com_dist + 1e-12)
-            F_com = -flat_bottom_force_const * 2.0 * excess * unit_d
-            flat_F = (masses[:, None] / M) * F_com[None, :]
+            mic_fn = mic_displacement_smooth if use_smooth_mic else mic_displacement
+            flat_E, flat_F, com, com_dist = apply_flat_bottom(
+                positions,
+                atomic_numbers,
+                final_forces,
+                radius=float(flat_bottom_radius),
+                k=float(flat_bottom_force_const),
+                mode=_fb_mode,
+                monomer_offsets=monomer_offsets_jax,
+                n_monomers=n_monomers,
+                pbc_cell=pbc_cell,
+                mic_fn=mic_fn,
+            )
             final_energy = final_energy + flat_E
             final_forces = final_forces + flat_F
         
