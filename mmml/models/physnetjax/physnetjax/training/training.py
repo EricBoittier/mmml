@@ -129,6 +129,7 @@ def train_model(
     init_params=None,
     rot_augment: bool = False,
     rot_perturbation: float = 1.0,
+    save_every_epoch: bool = False,
 ):
     """
     Train a PhysNetJax model with comprehensive logging and checkpointing.
@@ -173,7 +174,10 @@ def train_model(
     name : str, optional
         Experiment name for checkpointing, by default "test"
     best : bool, optional
-        Whether to save best model, by default False
+        Whether to save checkpoints when the objective improves, by default False
+    save_every_epoch : bool, optional
+        If True, write an orbax checkpoint at the end of every epoch (in addition
+        to any best-epoch saves when ``best=True``), by default False
     optimizer : optax.GradientTransformation | str | None, optional
         Optimizer or string identifier, by default None
     transform : optax.GradientTransformation | str | None, optional
@@ -216,7 +220,7 @@ def train_model(
     - Model initialization or checkpoint restoration
     - Training loop with gradient updates
     - Validation after each epoch
-    - Checkpointing of best models
+    - Checkpointing of best models and/or every epoch (``save_every_epoch``)
     - Progress monitoring with rich console output
     """
     _ = log_tb  # Deprecated argument retained for backward compatibility.
@@ -273,7 +277,7 @@ def train_model(
             "Start Time: ", time.strftime("%H:%M:%S", time.gmtime(start_time))
         )
 
-    best_loss = float('inf') if best else None
+    best_loss = float("inf") if (best or save_every_epoch) else None
     do_charges = model.charges
     # Initialize model parameters and optimizer state.
     key, init_key = jax.random.split(key)
@@ -300,6 +304,7 @@ def train_model(
     training_style_dict = {
         "restart": restart,
         "best": best,
+        "save_every_epoch": save_every_epoch,
         "data_keys": data_keys,
         "objective": objective,
     }
@@ -538,18 +543,21 @@ def train_model(
                 "forces_w": forces_weight,
             }
 
-            best_ = False
+            ckp = CKPT_DIR / f"epoch-{epoch}"
+            save_time = time.strftime("%H:%M:%S", time.gmtime(time.time()))
 
-            if obj_res[objective] < best_loss:
-                save_time = time.time()
-                save_time = time.strftime("%H:%M:%S", time.gmtime(save_time))
-                # print("Saving checkpoint at", save_time)
-                ckp = CKPT_DIR / f"epoch-{epoch}"
-                # update best loss
+            improved = obj_res[objective] < best_loss
+            if improved:
                 best_loss = obj_res[objective]
                 epochs_without_improvement = 0
-                model_attributes = model.return_attributes()
+            else:
+                epochs_without_improvement += 1
 
+            should_save = save_every_epoch or (best and improved)
+            best_ = improved and best
+
+            if should_save:
+                model_attributes = model.return_attributes()
                 ckpt = {
                     "model": state,
                     "model_attributes": model_attributes,
@@ -563,16 +571,9 @@ def train_model(
                     "objectives": obj_res,
                 }
                 save_args = orbax_utils.save_args_from_target(ckpt)
-                # Save checkpoint - suppress asyncio warnings during save
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore", RuntimeWarning)
-                    orbax_checkpointer.save(
-                        CKPT_DIR / f"epoch-{epoch}", ckpt, save_args=save_args
-                    )
-
-                best_ = True
-            else:
-                epochs_without_improvement += 1
+                    orbax_checkpointer.save(ckp, ckpt, save_args=save_args)
 
             if best_ or (epoch % print_freq == 0) and console is not None:
                 combined = epoch_printer.update(
