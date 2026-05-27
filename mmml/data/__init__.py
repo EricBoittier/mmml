@@ -32,7 +32,11 @@ from .preprocessing import (
     denormalize_energies,
     create_esp_mask
 )
-from .rmd17 import load_rmd17_npz
+from .rmd17 import (
+    load_rmd17_npz,
+    load_rmd17_official_splits,
+    resolve_rmd17_splits_dir,
+)
 
 __version__ = "0.1.0"
 
@@ -60,5 +64,7 @@ __all__ = [
     "create_esp_mask",
     # MD17 / rMD17
     "load_rmd17_npz",
+    "load_rmd17_official_splits",
+    "resolve_rmd17_splits_dir",
 ]
 
