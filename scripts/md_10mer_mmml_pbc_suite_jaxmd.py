@@ -613,6 +613,8 @@ def main() -> int:
         min_intermonomer_atom_distance=args.min_intermonomer_atom_distance,
         dynamics_overlap_action=args.dynamics_overlap_action,
         traj_export_molecular_wrap=bool(args.traj_export_molecular_wrap),
+        flat_bottom_radius=args.flat_bottom_radius,
+        flat_bottom_k=args.flat_bottom_k,
     )
     run_sim = set_up_nhc_sim_routine(
         atoms=atoms,

@@ -148,7 +148,7 @@ def indices_of_monomer(
 
 
 class ModelOutput(NamedTuple):
-    energy: Array  # Shape: (,), total energy in eV
+    energy: Array  # Shape: (,), total energy in eV (hybrid + flat-bottom)
     forces: Array  # Shape: (n_atoms, 3), forces in eV/Å
     dH: Array  # Shape: (,), total interaction energy in eV
     internal_E: Array  # Shape: (,) total internal energy in eV
@@ -157,6 +157,10 @@ class ModelOutput(NamedTuple):
     mm_F: Array
     ml_2b_E: Array
     ml_2b_F: Array
+    hybrid_energy: Array  # ML+MM before flat-bottom (eV)
+    flat_bottom_E: Array  # flat-bottom contribution (eV)
+    com: Array  # mass-weighted COM (3,)
+    com_dist: Array  # |COM - center| (Å)
 
 
 def debug_print(debug: bool, msg: str, *args: Any, **kwargs: Any) -> None:

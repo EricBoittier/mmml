@@ -995,6 +995,10 @@ def setup_calculator(
 
         # Flat bottom potential: constrain COM to center (e.g. box center for PBC)
         # V = 0 when |d| <= R, else V = k * (|d| - R)^2
+        hybrid_energy = final_energy
+        flat_E = jnp.array(0.0, dtype=jnp.float32)
+        com = jnp.zeros(3, dtype=jnp.float32)
+        com_dist = jnp.array(0.0, dtype=jnp.float32)
         _pbc_cell = pbc_cell
         if flat_bottom_radius is not None and flat_bottom_radius > 0:
             from ase.data import atomic_masses as ase_atomic_masses
@@ -1008,10 +1012,10 @@ def setup_calculator(
             else:
                 center = jnp.zeros(3)
                 d = com - center
-            dist = jnp.linalg.norm(d) + 1e-12
-            excess = jnp.maximum(0.0, dist - flat_bottom_radius)
+            com_dist = jnp.linalg.norm(d)
+            excess = jnp.maximum(0.0, com_dist - flat_bottom_radius)
             flat_E = flat_bottom_force_const * excess ** 2
-            unit_d = d / dist
+            unit_d = d / (com_dist + 1e-12)
             F_com = -flat_bottom_force_const * 2.0 * excess * unit_d
             flat_F = (masses[:, None] / M) * F_com[None, :]
             final_energy = final_energy + flat_E
@@ -1020,8 +1024,10 @@ def setup_calculator(
         # Compute energy sum safely
         if hasattr(final_energy, 'sum'):
             energy_sum = final_energy.sum()
+            hybrid_sum = hybrid_energy.sum() if hasattr(hybrid_energy, 'sum') else hybrid_energy
         else:
             energy_sum = final_energy
+            hybrid_sum = hybrid_energy
         
         return ModelOutput(
             energy=energy_sum,
@@ -1032,7 +1038,11 @@ def setup_calculator(
             internal_E=outputs["internal_E"],
             internal_F=outputs["internal_F"],
             mm_E=outputs.get("mm_E", 0),
-            mm_F=outputs.get("mm_F", 0)
+            mm_F=outputs.get("mm_F", 0),
+            hybrid_energy=hybrid_sum,
+            flat_bottom_E=flat_E,
+            com=com,
+            com_dist=com_dist,
         )
 
     def get_ML_energy_fn(

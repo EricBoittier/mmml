@@ -16,7 +16,7 @@ from rich.table import Table
 
 import jax.numpy as jnp
 
-from mmml.cli.run.summaries import print_forces_summary
+from mmml.cli.run.summaries import print_flat_bottom_summary, print_forces_summary
 from mmml.interfaces.pycharmmInterface.pbc_utils_jax import wrap_groups
 from mmml.utils.geometry_checks import assert_no_intermonomer_atom_overlap
 from mmml.utils.hdf5_reporter import make_jaxmd_reporter
@@ -263,16 +263,25 @@ def set_up_nhc_sim_routine(
     R = jnp.asarray(atoms.get_positions(), dtype=jnp.float32)
 
     @jit
-    def jax_md_energy_fn(position, mm_pair_idx=None, mm_pair_mask=None, box=None, **kwargs):
+    def jax_md_eval_fn(position, mm_pair_idx=None, mm_pair_mask=None, box=None, **kwargs):
         position = jnp.asarray(position, dtype=jnp.float32)
-        result = evaluate_energies_and_forces(
+        return evaluate_energies_and_forces(
             atomic_numbers=atomic_numbers,
             positions=position,
             mm_pair_idx=mm_pair_idx,
             mm_pair_mask=mm_pair_mask,
             box=box,
         )
-        return result.energy.reshape(-1)[0]
+
+    @jit
+    def jax_md_energy_fn(position, mm_pair_idx=None, mm_pair_mask=None, box=None, **kwargs):
+        return jax_md_eval_fn(
+            position,
+            mm_pair_idx=mm_pair_idx,
+            mm_pair_mask=mm_pair_mask,
+            box=box,
+            **kwargs,
+        ).energy.reshape(-1)[0]
 
     @jit
     def jax_md_force_fn(position, mm_pair_idx=None, mm_pair_mask=None, box=None, **kwargs):
@@ -320,8 +329,17 @@ def set_up_nhc_sim_routine(
     elapsed = time.perf_counter() - t0
     init_energy = result.energy.reshape(-1)[0]
     init_forces = np.asarray(result.forces).reshape(-1, 3)
+    flat_bottom_radius = getattr(args, "flat_bottom_radius", None)
+    flat_bottom_k = float(getattr(args, "flat_bottom_k", 1.0))
     c.print(Panel(f"Compilation done in {elapsed:.2f} s", title="[bold green]JAX[/bold green]", border_style="green"))
     print_forces_summary(init_forces, energy_eV=float(init_energy), console=c)
+    print_flat_bottom_summary(
+        result,
+        flat_bottom_radius=flat_bottom_radius,
+        flat_bottom_k=flat_bottom_k,
+        label="post-compile (ASE-minimized R)",
+        console=c,
+    )
 
     # MIC-only PBC: calculator uses minimum-image convention, no coordinate transform.
     pbc_map_fn = getattr(atoms.calc, "pbc_map", None) if atoms.calc else None
@@ -672,11 +690,38 @@ def set_up_nhc_sim_routine(
             initial_pos = jnp.asarray(R - com, dtype=jnp.float32)
             # Sanity check: ensure energy/gradient are finite at start; else use R directly
             try:
-                _e0 = float(wrapped_energy_fn(initial_pos))
-                _f0 = wrapped_force_fn(initial_pos)
+                _out0 = jax_md_eval_fn(
+                    initial_pos,
+                    mm_pair_idx=_pbc_state["pair_idx"],
+                    mm_pair_mask=_pbc_state["pair_mask"],
+                    box=_pbc_state["box"],
+                )
+                _e0 = float(_out0.energy)
+                _f0 = _out0.forces
                 if not (np.isfinite(_e0) and np.all(np.isfinite(np.asarray(_f0)))):
                     initial_pos = jnp.asarray(R, dtype=jnp.float32)
                     c.print(Panel("Non-finite energy/forces at COM-centered pos; using R directly", title="[bold yellow]Warning[/bold yellow]", border_style="yellow"))
+                else:
+                    print_flat_bottom_summary(
+                        _out0,
+                        flat_bottom_radius=flat_bottom_radius,
+                        flat_bottom_k=flat_bottom_k,
+                        label="FIRE start (COM-centered)",
+                        console=c,
+                    )
+                _out_r = jax_md_eval_fn(
+                    R,
+                    mm_pair_idx=_pbc_state["pair_idx"],
+                    mm_pair_mask=_pbc_state["pair_mask"],
+                    box=_pbc_state["box"],
+                )
+                print_flat_bottom_summary(
+                    _out_r,
+                    flat_bottom_radius=flat_bottom_radius,
+                    flat_bottom_k=flat_bottom_k,
+                    label="FIRE reference (raw R, no COM shift)",
+                    console=c,
+                )
             except Exception:
                 initial_pos = jnp.asarray(R, dtype=jnp.float32)
                 print("Fallback: using R directly for minimization")
@@ -696,15 +741,33 @@ def set_up_nhc_sim_routine(
                     c.print(Panel("FIRE step produced NaN/Inf positions; rejecting and stopping", title="[bold red]Error[/bold red]", border_style="red"))
                     break
                 # Check energy/forces at new position before accepting
-                energy = float(wrapped_energy_fn(new_state.position))
-                max_force = float(jnp.abs(wrapped_force_fn(new_state.position)).max())
+                out_step = jax_md_eval_fn(
+                    new_state.position,
+                    mm_pair_idx=_pbc_state["pair_idx"],
+                    mm_pair_mask=_pbc_state["pair_mask"],
+                    box=_pbc_state["box"],
+                )
+                energy = float(out_step.energy)
+                max_force = float(jnp.abs(out_step.forces).max())
                 if not (np.isfinite(energy) and np.isfinite(max_force)):
                     print("FIRE step led to NaN/Inf energy or forces; rejecting and stopping")
                     break
                 fire_state = new_state
 
                 if i % max(1, NMIN // 10) == 0:
-                    c.print(f"  [dim]{i}/{NMIN}[/dim]: E={energy:.6f} eV, max|F|={max_force:.6f}")
+                    c.print(
+                        f"  [dim]{i}/{NMIN}[/dim]: E_total={energy:.6f} eV, "
+                        f"E_hybrid={float(out_step.hybrid_energy):.6f} eV, "
+                        f"E_fb={float(out_step.flat_bottom_E):.6f} eV, "
+                        f"|COM|={float(out_step.com_dist):.4f} Å, max|F|={max_force:.6f}"
+                    )
+                    print_flat_bottom_summary(
+                        out_step,
+                        flat_bottom_radius=flat_bottom_radius,
+                        flat_bottom_k=flat_bottom_k,
+                        label=f"FIRE step {i}/{NMIN}",
+                        console=c,
+                    )
             # fire_state always holds last valid position (we reject bad steps)
             minimized_pos = fire_state.position
             if jnp.any(~jnp.isfinite(minimized_pos)) and fire_positions:
@@ -892,7 +955,20 @@ def set_up_nhc_sim_routine(
             box_curr = simulate.npt_box(state)
             energy_initial = float(npt_energy_fn(state.position, box=box_curr, neighbor=(npt_pair_idx, npt_pair_mask)))
         else:
-            energy_initial = float(wrapped_energy_fn(state.position))
+            out_init = jax_md_eval_fn(
+                state.position,
+                mm_pair_idx=_pbc_state["pair_idx"],
+                mm_pair_mask=_pbc_state["pair_mask"],
+                box=_pbc_state["box"],
+            )
+            energy_initial = float(out_init.energy)
+            print_flat_bottom_summary(
+                out_init,
+                flat_bottom_radius=flat_bottom_radius,
+                flat_bottom_k=flat_bottom_k,
+                label="MD start (post-FIRE)",
+                console=c,
+            )
         # Debug: forces from calculator (used by NVE; jax.grad gives NaN)
         if is_npt and npt_pair_idx is not None:
             box_curr = simulate.npt_box(state)
