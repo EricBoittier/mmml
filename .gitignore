@@ -11,6 +11,8 @@ core.*
 CHARMMSETUP
 
 # Generated outputs and checkpoints (do not version large artifacts)
+*.h5
+*.hdf5
 outputs/
 out/
 mmml/models/physnetjax/ckpts/*
@@ -205,7 +207,6 @@ tests/psf/initial.psf
 tests/psf/system-tip3.psf
 tests/psf/tip3-1.psf
 examples/general/abdimers/AB_ACO_DCM_minimized_16:15:58.pdb
-examples/general/abdimers/AB_ACO_DCM_nvt_trajectory.h5
 examples/general/abdimers/AB_ACO_DCM_pbc_minimized_16:17:48.pdb
 .cursor/plans/jax_md_nl_and_npt_combined.plan.md
 mmml/generate/packmol/packmol
