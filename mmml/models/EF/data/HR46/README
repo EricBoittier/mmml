@@ -1,0 +1,4 @@
+python mmml/models/EF/data/HR46/extract_hr46_to_npz.py \
+  --input-root /home/boittier/Downloads/HR46 \
+  --output-dir /home/boittier/Downloads/HR46_npz_by_theory \
+  --combine-by-theory
