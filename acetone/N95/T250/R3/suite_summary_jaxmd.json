@@ -1,8 +1,8 @@
 {
   "ensemble": "nvt",
   "nsteps_requested": 500000,
-  "nsteps_completed": 334000,
-  "frames": 3340,
+  "nsteps_completed": 500000,
+  "frames": 5000,
   "status": "complete",
   "error": null,
   "h5": "vac_nvt_jaxmd_nvt.h5",
@@ -11,19 +11,20 @@
     "vac_nvt.part0000.traj",
     "vac_nvt.part0001.traj",
     "vac_nvt.part0002.traj",
-    "vac_nvt.part0003.traj"
+    "vac_nvt.part0003.traj",
+    "vac_nvt.part0004.traj"
   ],
-  "traj_part_count": 4,
+  "traj_part_count": 5,
   "box_A": null,
   "free_space": true,
   "pressure_atm": 1.0,
   "temperature_K": 250.0,
   "composition": {
-    "ACO": 92
+    "ACO": 95
   },
   "psf_charges": {
-    "total_charge_e": 6.439293542825908e-15,
-    "n_charged_atoms": 920,
+    "total_charge_e": 5.218048215738236e-15,
+    "n_charged_atoms": 950,
     "min_charge_e": -0.48,
     "max_charge_e": 0.4,
     "residues": {
@@ -63,36 +64,36 @@
     "abnr_steps": 1000
   },
   "placement": "random_3d",
-  "placement_seed": 292250,
+  "placement_seed": 395250,
   "neighbor_update_interval_steps": null,
   "neighbor_expected_updates": null,
   "neighbor_internal_update_interval_calls": 10,
   "neighbor_internal_skin_distance_A": 0.2,
   "pre_md_minimization": {
-    "charmm_min_wall_s": 3.286598133156076,
-    "pre_bfgs_fmax_eVA": 855.2315063476562,
+    "charmm_min_wall_s": 2.7649848328437656,
+    "pre_bfgs_fmax_eVA": 2.428173780441284,
     "bfgs_iterations": 50.0,
-    "bfgs_fmax_eVA": 1.005401372909546,
+    "bfgs_fmax_eVA": 0.2532796561717987,
     "bfgs_traj": "vac_nvt_bfgs_min.traj",
-    "bfgs_best_force_fmax_eVA": 0.5615212321281433,
-    "fire_fmax_eVA": 0.06551225483417511,
+    "bfgs_best_force_fmax_eVA": 0.18819878995418549,
+    "fire_fmax_eVA": 0.06927546858787537,
     "fire_traj": "vac_nvt_fire_min.traj",
     "best_force_xyz": "vac_nvt_pre_md_best_force.xyz",
-    "best_force_energy_eV": -3817.047119140625,
-    "best_force_fmax_eVA": 0.06551225483417511,
+    "best_force_energy_eV": -3940.914306640625,
+    "best_force_fmax_eVA": 0.06927546858787537,
     "best_force_label": "fire",
     "best_energy_xyz": "vac_nvt_pre_md_best_energy.xyz",
-    "best_energy_eV": -3817.85498046875,
-    "best_energy_fmax_eVA": 2.7067716121673584,
-    "best_energy_label": "bfgs",
-    "restored_best_force_fmax_eVA": 0.06551225483417511
+    "best_energy_eV": -3940.941650390625,
+    "best_energy_fmax_eVA": 0.11744304746389389,
+    "best_energy_label": "fire",
+    "restored_best_force_fmax_eVA": 0.06927546858787537
   },
   "dynamics_overlap_action": "warn",
   "dynamics_overlap_charmm_rescue_enabled": true,
   "dynamics_overlap_charmm_sd_steps": 200,
   "dynamics_overlap_charmm_abnr_steps": 400,
-  "dynamics_overlap_charmm_rescue_count": 1,
+  "dynamics_overlap_charmm_rescue_count": 0,
   "traj_export_molecular_wrap": false,
-  "dynamics_overlap_warning_count": 1,
-  "dynamics_min_intermonomer_distance_A": 0.0976
+  "dynamics_overlap_warning_count": 0,
+  "dynamics_min_intermonomer_distance_A": 0.24800211242060247
 }
