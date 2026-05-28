@@ -1,8 +1,8 @@
 {
   "ensemble": "nvt",
   "nsteps_requested": 500000,
-  "nsteps_completed": 244000,
-  "frames": 2440,
+  "nsteps_completed": 334000,
+  "frames": 3340,
   "status": "complete",
   "error": null,
   "h5": "vac_nvt_jaxmd_nvt.h5",
@@ -10,9 +10,10 @@
   "traj_parts": [
     "vac_nvt.part0000.traj",
     "vac_nvt.part0001.traj",
-    "vac_nvt.part0002.traj"
+    "vac_nvt.part0002.traj",
+    "vac_nvt.part0003.traj"
   ],
-  "traj_part_count": 3,
+  "traj_part_count": 4,
   "box_A": null,
   "free_space": true,
   "pressure_atm": 1.0,
@@ -68,30 +69,30 @@
   "neighbor_internal_update_interval_calls": 10,
   "neighbor_internal_skin_distance_A": 0.2,
   "pre_md_minimization": {
-    "charmm_min_wall_s": 3.2926747610326856,
-    "pre_bfgs_fmax_eVA": 855.3017578125,
+    "charmm_min_wall_s": 3.286598133156076,
+    "pre_bfgs_fmax_eVA": 855.2315063476562,
     "bfgs_iterations": 50.0,
-    "bfgs_fmax_eVA": 0.8099584579467773,
+    "bfgs_fmax_eVA": 1.005401372909546,
     "bfgs_traj": "vac_nvt_bfgs_min.traj",
-    "bfgs_best_force_fmax_eVA": 0.4224258065223694,
-    "fire_fmax_eVA": 0.06694342941045761,
+    "bfgs_best_force_fmax_eVA": 0.5615212321281433,
+    "fire_fmax_eVA": 0.06551225483417511,
     "fire_traj": "vac_nvt_fire_min.traj",
     "best_force_xyz": "vac_nvt_pre_md_best_force.xyz",
-    "best_force_energy_eV": -3817.069580078125,
-    "best_force_fmax_eVA": 0.06694342941045761,
+    "best_force_energy_eV": -3817.047119140625,
+    "best_force_fmax_eVA": 0.06551225483417511,
     "best_force_label": "fire",
     "best_energy_xyz": "vac_nvt_pre_md_best_energy.xyz",
-    "best_energy_eV": -3822.0517578125,
-    "best_energy_fmax_eVA": 855.3017578125,
-    "best_energy_label": "initial",
-    "restored_best_force_fmax_eVA": 0.06694342941045761
+    "best_energy_eV": -3817.85498046875,
+    "best_energy_fmax_eVA": 2.7067716121673584,
+    "best_energy_label": "bfgs",
+    "restored_best_force_fmax_eVA": 0.06551225483417511
   },
   "dynamics_overlap_action": "warn",
   "dynamics_overlap_charmm_rescue_enabled": true,
   "dynamics_overlap_charmm_sd_steps": 200,
   "dynamics_overlap_charmm_abnr_steps": 400,
-  "dynamics_overlap_charmm_rescue_count": 0,
+  "dynamics_overlap_charmm_rescue_count": 1,
   "traj_export_molecular_wrap": false,
-  "dynamics_overlap_warning_count": 0,
-  "dynamics_min_intermonomer_distance_A": 0.9778118380500082
+  "dynamics_overlap_warning_count": 1,
+  "dynamics_min_intermonomer_distance_A": 0.0976
 }

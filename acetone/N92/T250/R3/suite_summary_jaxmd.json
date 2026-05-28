@@ -1,8 +1,8 @@
 {
   "ensemble": "nvt",
   "nsteps_requested": 500000,
-  "nsteps_completed": 100,
-  "frames": 1,
+  "nsteps_completed": 5000,
+  "frames": 50,
   "status": "complete",
   "error": null,
   "h5": "vac_nvt_jaxmd_nvt.h5",
@@ -66,23 +66,23 @@
   "neighbor_internal_update_interval_calls": 10,
   "neighbor_internal_skin_distance_A": 0.2,
   "pre_md_minimization": {
-    "charmm_min_wall_s": 3.255386850098148,
-    "pre_bfgs_fmax_eVA": 213.215576171875,
+    "charmm_min_wall_s": 3.2506385180167854,
+    "pre_bfgs_fmax_eVA": 213.24436950683594,
     "bfgs_iterations": 50.0,
-    "bfgs_fmax_eVA": 11561.396484375,
+    "bfgs_fmax_eVA": 1611.9722900390625,
     "bfgs_traj": "vac_nvt_bfgs_min.traj",
-    "bfgs_best_force_fmax_eVA": 3.6026813983917236,
-    "fire_fmax_eVA": 0.8904528617858887,
+    "bfgs_best_force_fmax_eVA": 3.231886386871338,
+    "fire_fmax_eVA": 1.7006219625473022,
     "fire_traj": "vac_nvt_fire_min.traj",
     "best_force_xyz": "vac_nvt_pre_md_best_force.xyz",
-    "best_force_energy_eV": -3811.030517578125,
-    "best_force_fmax_eVA": 0.6699411273002625,
+    "best_force_energy_eV": -3794.078125,
+    "best_force_fmax_eVA": 0.679234504699707,
     "best_force_label": "fire",
     "best_energy_xyz": "vac_nvt_pre_md_best_energy.xyz",
-    "best_energy_eV": -5093.4208984375,
-    "best_energy_fmax_eVA": 22840.51171875,
+    "best_energy_eV": -3816.101318359375,
+    "best_energy_fmax_eVA": 619.8031616210938,
     "best_energy_label": "bfgs",
-    "restored_best_force_fmax_eVA": 0.660865843296051
+    "restored_best_force_fmax_eVA": 0.6800913214683533
   },
   "dynamics_overlap_action": "warn",
   "dynamics_overlap_charmm_rescue_enabled": true,
@@ -91,5 +91,5 @@
   "dynamics_overlap_charmm_rescue_count": 0,
   "traj_export_molecular_wrap": false,
   "dynamics_overlap_warning_count": 0,
-  "dynamics_min_intermonomer_distance_A": 2.2093243743390074
+  "dynamics_min_intermonomer_distance_A": 2.150450481446381
 }
