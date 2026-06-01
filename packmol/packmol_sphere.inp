@@ -3,9 +3,9 @@ output pdb/init-packmol-sphere.pdb
 filetype pdb
 tolerance 2.0
 
-structure pdb/packmol_sphere/aco.pdb
+structure pdb/packmol_sphere/dcm.pdb
   chain A
   resnumbers 2
-  number 30
-  inside sphere 0.0 0.0 0.0 22.0
+  number 90
+  inside sphere 0.0 0.0 0.0 20.0
 end structure
