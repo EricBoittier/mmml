@@ -55,6 +55,44 @@ def add_charmm_output_args(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def add_dcd_save_args(parser: argparse.ArgumentParser) -> None:
+    """CLI flags for DCD trajectory frame spacing (scripts 04–05)."""
+    group = parser.add_argument_group("DCD trajectory output")
+    group.add_argument(
+        "--dcd-nsavc",
+        type=int,
+        default=1,
+        help="Write a DCD frame every N integration/SD steps (CHARMM nsavc; default: 1)",
+    )
+    group.add_argument(
+        "--dcd-interval-ps",
+        type=float,
+        default=None,
+        metavar="PS",
+        help="Alternative to --dcd-nsavc: save interval in ps (dynamics only; uses timestep)",
+    )
+
+
+def resolve_dcd_nsavc(
+    *,
+    dcd_nsavc: int,
+    dcd_interval_ps: float | None = None,
+    timestep_ps: float | None = None,
+    nstep: int | None = None,
+) -> int:
+    """Resolve CHARMM ``nsavc`` from step count or a target time interval."""
+    if dcd_interval_ps is not None:
+        if timestep_ps is None or timestep_ps <= 0:
+            raise ValueError("timestep_ps required when using --dcd-interval-ps")
+        nsavc = int(round(float(dcd_interval_ps) / float(timestep_ps)))
+    else:
+        nsavc = int(dcd_nsavc)
+    nsavc = max(1, nsavc)
+    if nstep is not None:
+        nsavc = min(nsavc, max(1, int(nstep)))
+    return nsavc
+
+
 def apply_charmm_output_from_args(args: argparse.Namespace) -> int:
     """Apply PRNLev/WRNLev from argparse; return effective ``nprint``."""
     # Import setup submodule directly (avoid pulling full mlpot via package __init__).
