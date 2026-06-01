@@ -51,7 +51,7 @@ python tests/functionality/mlpot/03_energy_compare.py --residue ACO --n-molecule
 
 - `get_pycharmm_calculator()` in `helper_mlp.py` ignores arguments from `MLpot` and returns a pre-built calculator (OK only when all atoms are ML and in order).
 - `PyCharmm_Calculator` does not yet use ML–MM pair lists (`idxu`/`idxv`) for embedding electrostatics.
-- Unit conventions differ: ASE scripts often use `ev2kcalmol`; `get_pyc` applies `pycharmm_conversion` inside the JAX wrapper.
+- `get_pyc` uses `pycharmm_conversion` to convert model output from eV → kcal/mol (same factor as `ev2kcalmol` in ASE calculators).
 
 ## Pytest (optional later)
 
