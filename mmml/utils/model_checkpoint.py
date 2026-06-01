@@ -620,6 +620,59 @@ def json_to_params(
     return result
 
 
+def normalize_flax_params_for_apply(
+    params: Any,
+    *,
+    backend: str = "jax",
+) -> Any:
+    """Convert loaded checkpoint params to the tree expected by ``model.apply``.
+
+    Flax modules expect ``variables`` with a top-level ``'params'`` key. JSON
+    checkpoints may store either a bare variable tree or ``{'params': tree}``;
+    some exports double-wrap as ``{'params': {'params': tree}}``.
+
+    Parameters
+    ----------
+    params
+        Parameters from :func:`load_model_checkpoint`, :func:`json_to_params`, or Orbax.
+    backend
+        ``'jax'`` (default) or ``'numpy'`` for array conversion from JSON lists.
+
+    Returns
+    -------
+    Any
+        Parameter PyTree suitable for ``model.apply(params, ...)``.
+    """
+    def _recurse(obj: Any) -> Any:
+        if isinstance(obj, dict):
+            return {k: _recurse(v) for k, v in obj.items()}
+        if isinstance(obj, list):
+            if len(obj) > 0 and isinstance(obj[0], (list, int, float)):
+                arr = np.array(obj)
+                if backend == "jax":
+                    return jax.numpy.asarray(arr)
+                return arr
+            return [_recurse(x) for x in obj]
+        return obj
+
+    params = _recurse(params)
+    if not isinstance(params, dict):
+        return {"params": params}
+
+    # Collapse double wrap from JSON export: {'params': {'params': tree}}
+    inner = params.get("params")
+    if (
+        isinstance(inner, dict)
+        and set(inner.keys()) == {"params"}
+        and isinstance(inner.get("params"), dict)
+    ):
+        params = inner
+
+    if "params" not in params:
+        return {"params": params}
+    return params
+
+
 # Convenience function for quick load
 def quick_load(
     checkpoint_path: Union[str, Path],

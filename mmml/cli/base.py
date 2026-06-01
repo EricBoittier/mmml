@@ -263,12 +263,13 @@ def load_physnet_params_and_ef_model(
         from mmml.models.physnetjax.physnetjax.models.model import EF
         from mmml.utils.model_checkpoint import load_model_checkpoint
 
+        from mmml.utils.model_checkpoint import normalize_flax_params_for_apply
+
         ck = load_model_checkpoint(p, use_orbax=False)
         cfg = dict(ck.get("config") or {})
         cfg["natoms"] = natoms
         model = EF(**cfg)
-        raw = ck["params"]
-        params = raw["params"] if isinstance(raw, dict) and "params" in raw else raw
+        params = normalize_flax_params_for_apply(ck["params"])
         return params, model
 
     if orbax_epoch_dir is None:
