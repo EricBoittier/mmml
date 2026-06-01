@@ -5,9 +5,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Sequence
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 
+from mmml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
 from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
 from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol, setup_calculator
 
@@ -53,16 +55,16 @@ class DecomposedMlpotCalculator:
         n = int(Natom)
         pos = np.array([x[:n], y[:n], z[:n]], dtype=np.float64).T
         out = self.spherical_fn(
-            jnp.asarray(pos),
-            jnp.asarray(self.atomic_numbers[:n]),
-            self.n_monomers,
-            self.cutoff_params,
+            positions=jnp.asarray(pos),
+            atomic_numbers=jnp.asarray(self.atomic_numbers[:n]),
+            n_monomers=self.n_monomers,
+            cutoff_params=self.cutoff_params,
             doML=True,
             doMM=False,
             doML_dimer=True,
         )
-        e_kcal = float(out.energy) * self.ev2kcal
-        forces = np.asarray(out.forces, dtype=np.float64) * self.ev2kcal
+        e_kcal = float(jax.device_get(out.energy)) * self.ev2kcal
+        forces = np.asarray(jax.device_get(out.forces), dtype=np.float64) * self.ev2kcal
         for i in range(n):
             dx[i] -= forces[i, 0]
             dy[i] -= forces[i, 1]
@@ -106,14 +108,32 @@ def build_decomposed_mlpot_model(
 ) -> DecomposedMlpotModel:
     ckpt = Path(checkpoint).expanduser().resolve()
     cutoff_params = CutoffParameters()
-    spherical_fn = setup_calculator(
-        ATOMS_PER_MONOMER=list(atoms_per_monomer),
+    z = np.asarray(atomic_numbers, dtype=int)
+    per = [int(x) for x in atoms_per_monomer]
+    max_atoms = max(per) * 2
+    factory = setup_calculator(
+        ATOMS_PER_MONOMER=per,
         N_MONOMERS=int(n_monomers),
         model_restart_path=str(ckpt),
         doMM=False,
         doML=True,
         doML_dimer=True,
         verbose=verbose,
+        MAX_ATOMS_PER_SYSTEM=max_atoms,
+    )
+    r0 = np.zeros((len(z), 3), dtype=np.float64)
+    _, spherical_fn, _ = unpack_factory_result(
+        factory(
+            atomic_numbers=jnp.asarray(z),
+            atomic_positions=jnp.asarray(r0),
+            n_monomers=int(n_monomers),
+            cutoff_params=cutoff_params,
+            doML=True,
+            doMM=False,
+            doML_dimer=True,
+            backprop=False,
+            create_ase_calculator=False,
+        )
     )
     return DecomposedMlpotModel(
         spherical_fn,

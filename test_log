@@ -1,0 +1,401 @@
+mmml md-system: running pycharmm in-process: --phase full --ensemble nve --spacing 5.0 --ps 25.0 --dt-fs 0.25 --temperature 300.0 --mini-nstep 1500 --residue MEOH --fix-resids 1 --constrain-resids  --dyn-nprint 100 --dyn-iprfrq 500 --dcd-nsavc 1 --echeck 500.0 --composition DCM:30 --output-dir artifacts/pycharmm_mlpot/dcm30_nve --no-fix --charmm-sd-steps 25 --charmm-abnr-steps 100 --charmm-tolenr 0.001 --charmm-tolgrd 0.001 --max-grms-before-dyn 50.0 --fb-rad 20.0 --fb-forc 1.0 --seed 123 --packmol-sphere --packmol-radius 10.0 --packmol-tolerance 2.0 --flat-bottom-radius 20.0
+
+################################################################################
+
+ PACKMOL - Packing optimization for the automated generation of
+ starting configurations for molecular dynamics simulations.
+ 
+                                                             Version 21.1.0 
+
+################################################################################
+
+  Packmol must be run with: packmol < inputfile.inp 
+
+  Userguide at: http://m3g.iqm.unicamp.br/packmol 
+
+  Reading input file... (Control-C aborts)
+  Types of coordinate files specified: pdb
+  Seed for random number generator:          123
+  Output file: pdb/init-packmol-sphere.pdb
+  Reading coordinate file: pdb/packmol_sphere/dcm.pdb
+  Number of independent structures:            1
+  The structures are: 
+  Structure            1 :pdb/packmol_sphere/dcm.pdb(           5  atoms)
+  Maximum number of GENCAN loops for all molecule packing:          200
+  Distance tolerance:    2.0000000000000000     
+  Residue numbering set for structure            1 :           2
+  Swap chains of molecules of structure            1 : F
+  Specific chain identifier set for structure            1 :A
+  Number of molecules of type            1 :           30
+  Total number of restrictions:            1
+  Total number of atoms:          150
+  Total number of molecules:           30
+  Number of fixed molecules:            0
+  Number of free molecules:           30
+  Number of variables:          180
+  Total number of fixed atoms:            0
+  Maximum internal distance of type            1 :    1.6396060502449972     
+  All atoms must be within these coordinates: 
+   x: [   -1000.0000000000000      ,    1000.0000000000000       ] 
+   y: [   -1000.0000000000000      ,    1000.0000000000000       ] 
+   z: [   -1000.0000000000000      ,    1000.0000000000000       ] 
+  If the system is larger than this, increase the sidemax parameter. 
+
+################################################################################
+
+  Building initial approximation ... 
+
+################################################################################
+
+  Adjusting initial point to fit the constraints 
+
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+
+  Molecules of type:            1
+
+  Packing:|0                                                        100%|
+          |*********************************************************
+
+  Restraint-only function value:    1.0771180376061790E-005
+  Maximum violation of the restraints:    5.0726664374171212E-006
+
+--------------------------------------------------------------------------------
+
+  Rescaling maximum and minimum coordinates... 
+  Mininum and maximum coordinates after constraint fitting: 
+   x: [   -9.5327258670248955      ,    8.7826129520616139       ] 
+   y: [   -9.5569844141318008      ,    8.6284771468739674       ] 
+   z: [   -9.3302027923745250      ,    7.8635113066430868       ] 
+  Computing size of patches... 
+  Number of cells in each direction and cell sides: 
+   x:           10  cells of size    2.2715338819086512     
+   y:           10  cells of size    2.2585461561005769     
+   z:            9  cells of size    2.3993015665575124     
+  Cell-system length:   22.71534  22.58546  21.59371
+  Reseting center of mass... 
+
+--------------------------------------------------------------------------------
+
+  Setting initial trial coordinates ... 
+
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+
+  Molecules of type:            1
+  Adjusting random positions to fit the constraints. 
+  Restraint-only function value:    0.0000000000000000     
+  Maximum violation of the restraints:    0.0000000000000000     
+
+################################################################################
+
+  Objective function at initial point:    403.75585586790322     
+
+################################################################################
+
+  Packing molecules of type:            1
+
+################################################################################
+
+
+--------------------------------------------------------------------------------
+
+  Starting GENCAN loop:            0
+  Scaling radii by:    1.1000000000000001     
+
+  Packing:|0                                                        100%|
+          |******
+
+  Function value from last GENCAN loop: f = .77433E-04
+  Best function value before: f = .40376E+03
+  Improvement from best function value:    99.99 %
+  Improvement from last loop:    99.99 %
+  Maximum violation of target distance:     0.008800
+  Maximum violation of the constraints: .00000E+00
+  Current structure written to file: pdb/init-packmol-sphere.pdb
+--------------------------------------------------------------------------------
+  Packing solved for molecules of type           1
+  Objective function value:    7.7433217148635243E-005
+  Maximum violation of target distance:    8.7996146022786270E-003
+  Max. constraint violation:    0.0000000000000000     
+--------------------------------------------------------------------------------
+
+################################################################################
+
+  Packing all molecules together 
+
+################################################################################
+
+
+  Initial approximation is a solution. Nothing to do. 
+
+  Solution written to file: pdb/init-packmol-sphere.pdb
+
+################################################################################
+
+                                 Success! 
+              Final objective function value: .72046E+00
+              Maximum violation of target distance:   0.008800
+              Maximum violation of the constraints: .00000E+00
+
+--------------------------------------------------------------------------------
+
+              Please cite this work if Packmol was useful: 
+
+           L. Martinez, R. Andrade, E. G. Birgin, J. M. Martinez, 
+         PACKMOL: A package for building initial configurations for
+                   molecular dynamics simulations. 
+        Journal of Computational Chemistry, 30(13) pp. 2157-2164, 2009.
+                  https://doi.org/10.1002/jcc.21224
+
+################################################################################
+
+   Running time:    3.33700026E-03  seconds. 
+
+--------------------------------------------------------------------------------
+
+
+  
+ CHARMM>     BLOCK
+ WARNING from DECODI -- Zero length string being converted to 0
+ Block structure initialized with   3 blocks.
+ All atoms have been assigned to block 1.
+ All interaction coefficients have been set to unity.
+  Setting number of block exclusions nblock_excldPairs=0
+  
+  BLOCK>            CALL 1 SELE ALL END
+ SELRPN>      0 atoms have been selected out of      0
+ The selected atoms have been reassigned to block   1
+  
+  BLOCK>              COEFF 1 1 1.0
+  
+  BLOCK>            END
+ Matrix of Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of BOND Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of ANGLE Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of DIHE Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of CROSS Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of ELEC Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of VDW Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+  
+ CHARMM>     
+  
+  
+ CHARMM>     domdec off
+  
+  
+ CHARMM>     crystal free
+  
+  
+ CHARMM>     bomlev 0
+  
+  
+ CHARMM>     crystal free
+  
+  
+ CHARMM>     nbonds cutnb 18.0 -
+ CHARMM>     ctonnb 13.0 -
+ CHARMM>     ctofnb 17.0 -
+ CHARMM>     eps 1.0 -
+ CHARMM>     cdie -
+ CHARMM>     atom -
+ CHARMM>     vatom -
+ CHARMM>     fswitch -
+ CHARMM>     vfswitch -
+ CHARMM>     nbxmod 5
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are    10867 atom  pairs and      300 atom  exclusions.
+ There are        0 group pairs and        0 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR    11101 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+    10867 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        5 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+  
+ CHARMM>     
+  
+  
+ CHARMM>     write name /mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm30_nve/cluster_for_vmd_dcm_30.psf -
+ CHARMM>     psf card
+ VOPEN> Attempting to open::/mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm30_nve/cluster_for_vmd_dcm_30.psf::
+ RDTITL>  
+ RDTITL> No title read.
+ VCLOSE: Closing unit   91 with status "KEEP"
+ VCLOSE: Closing unit   91 with status "KEEP"
+  
+ CHARMM>     
+  
+  
+ CHARMM>     write name /mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm30_nve/cluster_for_vmd_dcm_30.pdb -
+ CHARMM>     coor pdb
+ VOPEN> Attempting to open::/mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm30_nve/cluster_for_vmd_dcm_30.pdb::
+ RDTITL> * PRE-MLPOT CLUSTER
+ RDTITL> *
+  Write CHARMM-pdb format
+ VCLOSE: Closing unit   91 with status "KEEP"
+  
+ CHARMM>     
+  
+  
+ CHARMM>     crystal free
+  
+  
+ CHARMM>     nbonds cutnb 18.0 -
+ CHARMM>     ctonnb 13.0 -
+ CHARMM>     ctofnb 17.0 -
+ CHARMM>     eps 1.0 -
+ CHARMM>     cdie -
+ CHARMM>     atom -
+ CHARMM>     vatom -
+ CHARMM>     fswitch -
+ CHARMM>     vfswitch -
+ CHARMM>     nbxmod 5
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are    10867 atom  pairs and      300 atom  exclusions.
+ There are        0 group pairs and        0 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR    11101 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+    10867 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        5 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+  
+ CHARMM>     
+  
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are    10867 atom  pairs and      300 atom  exclusions.
+ There are        0 group pairs and        0 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR    11101 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+    10867 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        5 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ PRNHBD: CUToff Hydrogen Bond  distance =    0.5000   Angle =   90.0000
+         CuT switching ON HB dist. =     3.5000  OFf HB dist. =    4.0000
+         CuT switching ON Hb Angle =    50.0000  OFf Hb Angle =   70.0000
+         ACCEptor antecedents included
+         All hydrogen bonds for each hydrogen will be found
+         Hydrogen bonds between excluded atoms will be kept
+
+
+
+ STEEPD> An energy minimization has been requested.
+
+ NSTEP  =           25   NPRINT =            1
+ STEP   =    0.0200000   TOLFUN =    0.0010000
+ TOLGRD =    0.0010000   TOLSTP =    0.0000000
+
+MINI MIN: Cycle      ENERgy      Delta-E         GRMS    Step-size
+ ----------       ---------    ---------    ---------    ---------    ---------
+MINI>        0      0.00000      0.00000      0.00000      0.02000
+ ----------       ---------    ---------    ---------    ---------    ---------
+MINI>        1      0.00000      0.00000      0.00000      0.01000
+ ----------       ---------    ---------    ---------    ---------    ---------
+
+ STEEPD> Minimization exiting with function tolerance ( 0.0010000) satisfied.
+
+STPD MIN: Cycle      ENERgy      Delta-E         GRMS    Step-size
+ ----------       ---------    ---------    ---------    ---------    ---------
+STPD>        1      0.00000      0.00000      0.00000      0.00500
+ ----------       ---------    ---------    ---------    ---------    ---------
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are    10867 atom  pairs and      300 atom  exclusions.
+ There are        0 group pairs and        0 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR    11101 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+    10867 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        5 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ PRNHBD: CUToff Hydrogen Bond  distance =    0.5000   Angle =   90.0000
+         CuT switching ON HB dist. =     3.5000  OFf HB dist. =    4.0000
+         CuT switching ON Hb Angle =    50.0000  OFf Hb Angle =   70.0000
+         ACCEptor antecedents included
+         All hydrogen bonds for each hydrogen will be found
+         Hydrogen bonds between excluded atoms will be kept
+
+
+
+ ABNER> An energy minimization has been requested.
+
+ EIGRNG =    0.0005000   MINDIM =            5
+ NPRINT =           10   NSTEP  =          100
+ PSTRCT =    0.0000000   SDSTP  =    0.0200000
+ STPLIM =    1.0000000   STRICT =    0.1000000
+ TOLFUN =    0.0010000   TOLGRD =    0.0010000
+ TOLITR =          100   TOLSTP =    0.0000000
+ FMEM   =    0.0000000
+MINI MIN: Cycle      ENERgy      Delta-E         GRMS    Step-size
+ ----------       ---------    ---------    ---------    ---------    ---------
+MINI>        0      0.00000      0.00000      0.00000      0.00000
+ ----------       ---------    ---------    ---------    ---------    ---------
+
+ ABNER> Minimization exiting with step-size underflow. Last step was   0.2000E-01
+
+ABNR MIN: Cycle      ENERgy      Delta-E         GRMS    Step-size
+ ----------       ---------    ---------    ---------    ---------    ---------
+ABNR>        0      0.00000      0.00000      0.00000      0.02000
