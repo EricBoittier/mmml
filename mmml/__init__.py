@@ -9,10 +9,10 @@ if "mmml.pycharmmInterface" not in sys.modules:
     from mmml.interfaces import pycharmmInterface
     sys.modules["mmml.pycharmmInterface"] = pycharmmInterface
 
-# Compatibility: mmml.physnetjax -> mmml.models.physnetjax
-if "mmml.physnetjax" not in sys.modules:
+# Compatibility: mmml.models.physnetjax -> mmml.models.physnetjax
+if "mmml.models.physnetjax" not in sys.modules:
     from mmml.models import physnetjax
-    sys.modules["mmml.physnetjax"] = physnetjax
+    sys.modules["mmml.models.physnetjax"] = physnetjax
 
 # Compatibility: mmml.dcmnet -> mmml.models.dcmnet
 if "mmml.dcmnet" not in sys.modules:
