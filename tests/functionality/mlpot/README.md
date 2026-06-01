@@ -29,7 +29,9 @@ pip install -e .
 | `01_callback_vs_ase_no_charmm.py` | no | Compare `PyCharmm_Calculator.calculate_charmm` vs `get_ase_calc` on same geometry |
 | `02_mlpot_register_smoke.py` | yes | Build PSF cluster, register `MLpot`, run `energy.show()` |
 | `03_energy_compare.py` | yes | Tabulate ASE vs direct callback vs CHARMM energy after `MLpot` |
-| `run_all.sh` | — | Run 00→03; stops on first failure |
+| `04_mlpot_minimize_stub.py` | yes | SD minimization + optional `--save` outputs |
+| `05_mlpot_dynamics_stub.py` | yes | Short NVE with DCD/restart (`--run`) |
+| `run_all.sh` | — | Run 00→03; `RUN_EXTENDED=1` adds 04–05 |
 
 ```bash
 cd /path/to/mmml
@@ -55,16 +57,23 @@ python tests/functionality/mlpot/03_energy_compare.py --residue ACO --n-molecule
 - `PyCharmm_Calculator` does not yet use ML–MM pair lists (`idxu`/`idxv`) for embedding electrostatics.
 - `get_pyc` uses `pycharmm_conversion` to convert model output from eV → kcal/mol (same factor as `ev2kcalmol` in ASE calculators).
 
-## Steps 4–5 and pytest (stubs)
-
-| Script / test | Purpose |
-|---------------|---------|
-| `04_mlpot_minimize_stub.py` | Full-system MLpot + `cons_fix` on `--fix-resid 1`; `--run --save` writes outputs |
-| `05_mlpot_dynamics_stub.py` | Short NVE with MLpot (`--run`) |
-| `test_mlpot_energy_matches_ase.py` | Pytest equivalent of script 03 |
+## Steps 4–5 and pytest
 
 ```bash
+# Minimization (you already validated 3D XYZ export)
+# Default: PRNLev=5, nprint=1 (verbose CHARMM console). Use --quiet to reduce output.
+python tests/functionality/mlpot/04_mlpot_minimize_stub.py --run --save --nstep 10
+python tests/functionality/mlpot/04_mlpot_minimize_stub.py --run --prnlev 5 --nprint 1
+
+# Short NVE (~5 fs at 0.25 fs timestep)
+python tests/functionality/mlpot/05_mlpot_dynamics_stub.py --run --nstep 20
+
+# Core + extended in one shot
+RUN_EXTENDED=1 ./tests/functionality/mlpot/run_all.sh
+
+# Pytest (script 03 logic; needs CHARMM + checkpoint)
 pytest tests/functionality/mlpot/test_mlpot_energy_matches_ase.py -q
+pytest tests/functionality/mlpot/test_pycharmm_conversion.py -q
 ```
 
 ## Library module

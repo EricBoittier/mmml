@@ -122,6 +122,29 @@ def select_by_resid(resid: int | str):
     return _import_pycharmm().SelectAtoms(res_id=str(resid))
 
 
+def apply_charmm_verbosity(
+    *,
+    prnlev: int = 5,
+    warnlev: int = 5,
+    bomlev: int = 0,
+) -> dict[str, int]:
+    """Raise CHARMM console output (``PRNLev``, ``WRNLev``, ``BOMBlev``).
+
+    Returns the previous levels as ``{"prnlev", "warnlev", "bomlev"}``.
+    Higher ``prnlev`` / ``warnlev`` (up to ~5) print more from the Fortran core.
+    """
+    import pycharmm.settings as settings
+
+    pycharmm = _import_pycharmm()
+    old = {
+        "prnlev": int(settings.set_verbosity(int(prnlev))),
+        "warnlev": int(settings.set_warn_level(int(warnlev))),
+        "bomlev": int(settings.set_bomb_level(int(bomlev))),
+    }
+    pycharmm.lingo.charmm_script(f"bomlev {int(bomlev)}")
+    return old
+
+
 def setup_default_nbonds(
     *,
     cutnb: float = 14.0,
