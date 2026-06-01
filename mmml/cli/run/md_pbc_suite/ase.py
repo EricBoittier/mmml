@@ -1085,6 +1085,9 @@ def run_md(
 
 
 def main(argv: list[str] | None = None) -> int:
+    from mmml.utils.jax_gpu_warmup import apply_xla_cuda_timer_log_filter
+
+    apply_xla_cuda_timer_log_filter()
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--checkpoint",
