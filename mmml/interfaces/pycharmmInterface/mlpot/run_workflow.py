@@ -68,10 +68,8 @@ def _charmm_pre_minimize_before_mlpot(
     n_abnr = int(getattr(args, "charmm_abnr_steps", 100))
     tolenr = float(getattr(args, "charmm_tolenr", 1e-3))
     tolgrd = float(getattr(args, "charmm_tolgrd", 1e-3))
-    print(
-        f"\nCHARMM MM minimization (pre-MLpot, no PhysNet): "
-        f"SD={n_sd} steps, ABNR={n_abnr} steps"
-    )
+    if not args.quiet:
+        print(f"\nCHARMM MM pre-minimize: SD={n_sd} ABNR={n_abnr}")
     minimize_charmm_mm_only(
         CharmmMmMinimizeConfig(
             nstep_sd=n_sd,
@@ -85,7 +83,8 @@ def _charmm_pre_minimize_before_mlpot(
     )
     r_mm = get_charmm_positions_array()
     grms = charmm_grms()
-    print(f"Post MM pre-minimization GRMS: {grms:.4f} kcal/mol/Å")
+    if not args.quiet:
+        print(f"Post MM pre-min GRMS: {grms:.4f} kcal/mol/Å")
     return r_mm
 
 
@@ -98,7 +97,7 @@ def _register_mlpot_context(z: np.ndarray, r: np.ndarray, ckpt: Path, n_atoms: i
     sync_charmm_positions(r)
     pos_chk = get_charmm_positions_array()
     if np.allclose(pos_chk, 0.0):
-        print("WARN: CHARMM coordinates are zero after MLpot; re-syncing from cluster build")
+        print("WARN: zero coordinates after MLpot register; re-syncing")
         sync_charmm_positions(r)
     return ctx, pyCModel
 
@@ -237,10 +236,8 @@ def run_dynamics_workflow(
     try:
         if pre_minimize:
             fix_sel = select_by_resids(fix_resids) if fix_resids else None
-            print(
-                f"\nPre-dynamics minimization ({mini_nstep} SD steps per pass) | "
-                f"MLpot on all {n_atoms} atoms"
-            )
+            if not args.quiet:
+                print(f"\nMLpot SD minimize: {mini_nstep} steps/pass, {n_atoms} atoms")
             minimize_with_mlpot(
                 MinimizeWithMlpotConfig(
                     fixed_ml_selection=fix_sel,
@@ -256,7 +253,8 @@ def run_dynamics_workflow(
             )
             sync_charmm_positions(get_charmm_positions_array())
             grms = charmm_grms()
-            print(f"Post-minimization GRMS: {grms:.4f} kcal/mol/Å")
+            if not args.quiet:
+                print(f"Post MLpot mini GRMS: {grms:.4f} kcal/mol/Å")
 
         # MMFP flat-bottom for dynamics only (avoid fighting SD on the initial Packmol cloud).
         apply_flat_bottom_from_args(args)

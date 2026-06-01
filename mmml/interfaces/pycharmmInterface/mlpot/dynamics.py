@@ -91,29 +91,21 @@ def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> None:
         "tolgrd": float(config.tolgrd),
     }
     if config.verbose and config.show_energy:
-        print("CHARMM MM energy before pre-MLpot minimization:")
         energy.show()
     if config.nstep_sd > 0:
         if config.verbose:
-            print(
-                f"CHARMM MM SD (pre-MLpot, all atoms free): "
-                f"nstep={config.nstep_sd} nprint={config.nprint}"
-            )
+            print(f"CHARMM MM SD: nstep={config.nstep_sd}")
         minimize.run_sd(**sd_kw)
-        if config.verbose and config.show_energy:
-            print("CHARMM MM energy after SD (pre-MLpot):")
-            energy.show()
     if config.nstep_abnr > 0:
         if config.verbose:
-            print(f"CHARMM MM ABNR (pre-MLpot): nstep={config.nstep_abnr}")
+            print(f"CHARMM MM ABNR: nstep={config.nstep_abnr}")
         minimize.run_abnr(
             nstep=int(config.nstep_abnr),
             tolenr=float(config.tolenr),
             tolgrd=float(config.tolgrd),
         )
-        if config.verbose and config.show_energy:
-            print("CHARMM MM energy after ABNR (pre-MLpot):")
-            energy.show()
+    if config.verbose and config.show_energy:
+        energy.show()
     cons_fix.turn_off()
 
 

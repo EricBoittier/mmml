@@ -194,17 +194,13 @@ def assign_packmol_pdb_to_psf_order(
     if missing:
         sample = missing[:5]
         raise RuntimeError(
-            "Could not map Packmol PDB atoms to PSF order by (residue, atom_name). "
-            f"First failures (pdb_index, key): {sample}. "
-            "Ensure monomer PDBs use CHARMM atype names (write_monomer_pdb_for_packmol "
-            "with atom_names=...)."
+            f"Packmol PDB does not match PSF atom order (first failures: {sample})"
         )
 
-    span = out.max(axis=0) - out.min(axis=0)
+    span = np.ptp(out, axis=0)
     if float(span[1]) < 0.3 or float(span[2]) < 0.3:
         raise RuntimeError(
-            f"Packmol→PSF positions look collapsed (spans Å: x={span[0]:.2f} "
-            f"y={span[1]:.2f} z={span[2]:.2f}). Check Packmol input templates."
+            f"Packmol cluster not 3D (spans Å x={span[0]:.2f} y={span[1]:.2f} z={span[2]:.2f})"
         )
     return out
 

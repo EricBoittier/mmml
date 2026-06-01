@@ -455,13 +455,9 @@ def build_cluster_from_args_with_tag(
                 verbose=not getattr(args, "quiet", False),
             )
             fb_r = getattr(args, "flat_bottom_radius", None)
-            msg = (
-                f"Cluster built with Packmol sphere: center={center}, "
-                f"packmol_radius={radius:.3f} Å, tolerance={tolerance:.2f} Å"
+            print(
+                f"Packmol sphere: center={center} R={radius:.1f} Å tol={tolerance:.1f} Å"
             )
-            if fb_r is not None and float(fb_r) > 0:
-                msg += f", flat_bottom_radius={float(fb_r):.3f} Å"
-            print(msg)
         else:
             z, r, _atoms_per, _names = _build_cluster_from_composition(
                 composition=composition,
@@ -741,8 +737,7 @@ def assert_dynamics_ready(
         return grms
     msg = (
         f"Pre-dynamics GRMS {grms:.2f} kcal/mol/Å exceeds {max_grms} — "
-        "increase --mini-nstep, run --setup pycharmm_minimize first, or check Packmol overlap. "
-        "Dynamics will likely hit ECHECK immediately."
+        "Increase --mini-nstep or run minimization first."
     )
     if abort and not os.environ.get("MMML_MLPOT_ALLOW_HIGH_GRMS"):
         raise RuntimeError(msg)
