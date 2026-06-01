@@ -197,21 +197,38 @@ def capture_neighbour_list():
 
 reset_block()
 
-def force_charmm_vacuum_mode() -> None:
-    """Re-apply vacuum settings (safe after MLpot / JAX on DOMDEC builds)."""
+_domdec_vacuum_disabled = False
+
+
+def disable_charmm_domdec() -> None:
+    """Turn off domdec once per process (repeat ``domdec off`` segfaults on DOMDEC builds)."""
+    global _domdec_vacuum_disabled
+    if _domdec_vacuum_disabled:
+        return
     try:
-        pycharmm.lingo.charmm_script("domdec off\ncrystal free")
+        pycharmm.lingo.charmm_script("domdec off")
+    except Exception:
+        pass
+    _domdec_vacuum_disabled = True
+
+
+def crystal_free_charmm() -> None:
+    """Clear periodic image state (safe to repeat)."""
+    try:
+        pycharmm.lingo.charmm_script("crystal free")
     except Exception:
         pass
 
 
-def disable_charmm_domdec() -> None:
-    """Legacy alias for :func:`force_charmm_vacuum_mode`."""
-    force_charmm_vacuum_mode()
+def force_charmm_vacuum_mode() -> None:
+    """Vacuum helpers: domdec off is once-only; crystal free may repeat."""
+    disable_charmm_domdec()
+    crystal_free_charmm()
 
 
 def _init_vacuum_charmm_state() -> None:
-    force_charmm_vacuum_mode()
+    disable_charmm_domdec()
+    crystal_free_charmm()
 
 
 _init_vacuum_charmm_state()
