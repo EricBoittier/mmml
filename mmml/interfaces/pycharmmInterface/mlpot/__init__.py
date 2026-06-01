@@ -38,6 +38,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.setup import (
     sync_charmm_positions,
     write_charmm_psf,
     select_by_resid,
+    select_by_resids,
     select_by_seg_id,
     setup_default_nbonds,
 )
@@ -72,6 +73,7 @@ __all__ = [
     "save_minimization_results",
     "select_all_atoms",
     "select_by_resid",
+    "select_by_resids",
     "select_by_seg_id",
     "setup_default_nbonds",
     "write_minimized_coordinates",

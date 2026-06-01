@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """
-Step 5: short CHARMM dynamics with MLpot (acetone dimer, 20 atoms).
+Step 5: short CHARMM dynamics with MLpot.
 
-Default: dry-run only. ``--run`` executes a minimal NVE segment (few steps).
-Full heat / equil / production chains use ``mlpot.dynamics`` builders.
+Supports multiple monomers (``--n-molecules``) and optional frozen monomers
+(``--constrain-resids``) during the run.
+
+Default: dry-run only. ``--run`` executes a minimal NVE segment.
 """
 
 from __future__ import annotations
@@ -16,13 +18,18 @@ from _common import (
     add_charmm_output_args,
     add_cluster_args,
     add_dcd_save_args,
+    add_monomer_constraint_args,
     apply_charmm_output_from_args,
-    build_acetone_dimer_cluster,
-    build_ase_cluster,
+    build_cluster_from_args,
+    format_resid_constraint_message,
     print_cluster_geometry_summary,
     print_header,
     resolve_checkpoint,
+    resolve_constrain_resids,
     resolve_dcd_nsavc,
+    setup_cons_fix_for_resids,
+    turn_off_cons_fix,
+    validate_resids_for_cluster,
 )
 
 NVE_TIMESTEP_PS = 0.00025
@@ -33,11 +40,7 @@ def main() -> int:
     add_cluster_args(parser)
     add_charmm_output_args(parser)
     add_dcd_save_args(parser)
-    parser.add_argument(
-        "--no-save-vmd-topology",
-        action="store_true",
-        help="Do not write cluster_for_vmd.psf/pdb before MLpot strips PSF bonds",
-    )
+    add_monomer_constraint_args(parser, for_dynamics=True)
     parser.add_argument("--run", action="store_true", help="Run a short NVE segment")
     parser.add_argument("--nstep", type=int, default=20, help="Dynamics steps when --run")
     parser.add_argument(
@@ -51,31 +54,35 @@ def main() -> int:
         type=Path,
         default=Path("tests/functionality/mlpot/output/dynamics"),
     )
+    parser.add_argument(
+        "--no-save-vmd-topology",
+        action="store_true",
+        help="Do not write cluster_for_vmd.psf/pdb before MLpot strips PSF bonds",
+    )
     args = parser.parse_args()
+
+    constrain_resids = resolve_constrain_resids(args)
 
     print_header("MLpot dynamics (step 5)")
     out_dir = args.out_dir.resolve()
-    res_path = out_dir / "nve_stub.res"
-    dcd_path = out_dir / "nve_stub.dcd"
+    tag = f"{args.residue.lower()}_{args.n_molecules}mer"
+    res_path = out_dir / f"nve_{tag}.res"
+    dcd_path = out_dir / f"nve_{tag}.dcd"
 
-    print("Stages in mmml/interfaces/pycharmmInterface/mlpot/dynamics.py:")
-    print("  build_heat_dynamics              -> NVT heating")
-    print("  build_nve_dynamics               -> NVE")
-    print("  build_cpt_equilibration_dynamics -> NPT equil")
-    print("  build_cpt_production_dynamics    -> NPT production")
-    print("  production_restart_chain         -> chained dyna.{i}.res/dcd")
+    print(f"Cluster: {args.residue} × {args.n_molecules} monomers (spacing {args.spacing} Å)")
+    print(format_resid_constraint_message(constrain_resids, context="Dynamics"))
 
     if not args.run:
+        print("\nExamples:")
+        print("  --n-molecules 4 --run --nstep 50")
+        print("  --n-molecules 3 --constrain-resids 1,2 --run  # freeze monomers 1–2")
         print("\nDry-run only. Example:")
         print("  python tests/functionality/mlpot/05_mlpot_dynamics_stub.py --run --nstep 20")
         return 0
 
     ckpt = resolve_checkpoint(args.checkpoint)
-    if args.residue.upper() == "ACO" and args.n_molecules == 2:
-        z, r = build_acetone_dimer_cluster(spacing=args.spacing)
-    else:
-        z, r = build_ase_cluster(args.residue, args.n_molecules, args.spacing)
-    n_atoms = len(z)
+    z, r, n_atoms = build_cluster_from_args(args)
+    validate_resids_for_cluster(constrain_resids, args.n_molecules)
     print_cluster_geometry_summary(r, args.n_molecules)
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -108,19 +115,25 @@ def main() -> int:
     sync_charmm_positions(r)
     if not args.no_save_vmd_topology:
         vmd_files = save_cluster_topology_for_vmd(
-            out_dir, r, stem="cluster_for_vmd", title="pre-MLpot cluster"
+            out_dir, r, stem=f"cluster_for_vmd_{tag}", title="pre-MLpot cluster"
         )
         print(
             "VMD topology (full PSF bonds, before MLpot): "
             f"{vmd_files['psf'].name} + {vmd_files['pdb'].name}"
         )
         print(f"  vmd {vmd_files['psf']} {vmd_files['pdb']}")
+
     atoms = ase.Atoms(numbers=z, positions=r)
     _, _, pyCModel = load_physnet_mlpot_bundle(ckpt, n_atoms, atoms)
 
-    print(f"MLpot: all {n_atoms} atoms | NVE {args.nstep} steps @ 0.25 fs")
+    print(
+        f"MLpot: all {n_atoms} atoms | NVE {args.nstep} steps @ {NVE_TIMESTEP_PS} ps | "
+        f"{format_resid_constraint_message(constrain_resids, context='cons_fix')}"
+    )
     ctx = register_mlpot(pyCModel, z, select_all_atoms())
     try:
+        if constrain_resids:
+            setup_cons_fix_for_resids(constrain_resids)
         if not args.quiet:
             print("CHARMM energy before dynamics:")
             energy.show()
@@ -146,6 +159,8 @@ def main() -> int:
         print("CHARMM energy after dynamics:")
         energy.show()
     finally:
+        if constrain_resids:
+            turn_off_cons_fix()
         ctx.unset()
 
     missing = [p for p in (res_path, dcd_path) if not p.is_file()]
