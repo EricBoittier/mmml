@@ -142,3 +142,8 @@ def warmup_ase_mmml_energy_forces(atoms: Any, *, include_forces: bool = True) ->
     if include_forces:
         forces = atoms.get_forces()
         block_jax_values(forces)
+
+
+# Apply log filter on import so CLI entry points that import this module early
+# can suppress cuda_timer noise even if JAX was not imported yet.
+apply_xla_cuda_timer_log_filter()

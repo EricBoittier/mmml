@@ -43,7 +43,6 @@ from mmml.interfaces.pycharmmInterface.ml_batching import prepare_batches_md, pr
 from mmml.interfaces.pycharmmInterface.mm_energy_forces import build_mm_energy_forces_fn
 from mmml.utils.jax_gpu_warmup import (
     apply_xla_cuda_timer_log_filter,
-    block_jax_values,
     ensure_xla_gpu_warmed,
     warmup_hybrid_spherical_cutoff,
 )
@@ -869,9 +868,6 @@ def setup_calculator(
             _cached_mm_fn[0] = mm_result
             _cached_update_mm_pairs[0] = update_fn
             _cached_mm_cutoff_key[0] = key
-            # PyCHARMM parameter load (drudes, etc.) can run between setup_calculator's
-            # early XLA warmup and the first large hybrid JIT; recalibrate delay kernel.
-            ensure_xla_gpu_warmed(force=True)
 
     @partial(jax.jit, static_argnames=['n_monomers', 'cutoff_params', 'doML', 'doMM', 'doML_dimer', 'debug',])
     def spherical_cutoff_calculator(
@@ -1665,6 +1661,15 @@ def setup_calculator(
                         if callable(get_stats):
                             self.results["mm_pair_update_stats"] = dict(get_stats())
 
+                _maybe_warmup_hybrid_jit(
+                    R,
+                    self.cutoff_params,
+                    Z,
+                    mm_pair_idx=mm_pair_idx,
+                    mm_pair_mask=mm_pair_mask,
+                    box=box_jax,
+                )
+
                 def _spherical_eval(positions_jax):
                     kwargs = dict(
                         positions=positions_jax,
@@ -2016,9 +2021,17 @@ def setup_calculator(
                 debug=debug,
             )
 
-            def get_update_fn(positions, cutoff_params_arg):
+            def get_update_fn(positions, cutoff_params_arg, box=None):
                 """Ensure MM fn is built and return update_mm_pairs, or None for cell-list path."""
-                _ensure_mm_fn(np.asarray(positions), cutoff_params_arg)
+                pos_np = np.asarray(positions)
+                _ensure_mm_fn(pos_np, cutoff_params_arg)
+                box_jax = jnp.asarray(box, dtype=jnp.float32) if box is not None else None
+                _maybe_warmup_hybrid_jit(
+                    pos_np,
+                    cutoff_params_arg,
+                    atomic_numbers,
+                    box=box_jax,
+                )
                 return _cached_update_mm_pairs[0]
 
             return calculator, configured_spherical_cutoff, get_update_fn
