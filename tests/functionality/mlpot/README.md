@@ -63,10 +63,18 @@ python tests/functionality/mlpot/03_energy_compare.py --residue ACO --n-molecule
 # Minimization (you already validated 3D XYZ export)
 # Default: PRNLev=5, nprint=1 (verbose CHARMM console). Use --quiet to reduce output.
 python tests/functionality/mlpot/04_mlpot_minimize_stub.py --run --save --nstep 10
-python tests/functionality/mlpot/04_mlpot_minimize_stub.py --run --prnlev 5 --nprint 1
+# VMD: use cluster_for_vmd.psf (bonds intact) + trajectory or mini_full_mlpot.xyz
+# vmd tests/functionality/mlpot/output/minimize/cluster_for_vmd.psf mini_full_mlpot.dcd
+# Denser minimization DCD: every step (default) or every 5 SD steps:
+python tests/functionality/mlpot/04_mlpot_minimize_stub.py --run --save --dcd-nsavc 1
+python tests/functionality/mlpot/04_mlpot_minimize_stub.py --run --save --dcd-nsavc 5
 
 # Short NVE (~5 fs at 0.25 fs timestep)
 python tests/functionality/mlpot/05_mlpot_dynamics_stub.py --run --nstep 20
+# DCD every step (default): --dcd-nsavc 1
+# DCD every 0.001 ps (4 steps at 0.25 fs): --dcd-interval-ps 0.001
+python tests/functionality/mlpot/05_mlpot_dynamics_stub.py --run --nstep 100 --dcd-nsavc 1
+python tests/functionality/mlpot/05_mlpot_dynamics_stub.py --run --nstep 100 --dcd-interval-ps 0.00025
 
 # Core + extended in one shot
 RUN_EXTENDED=1 ./tests/functionality/mlpot/run_all.sh

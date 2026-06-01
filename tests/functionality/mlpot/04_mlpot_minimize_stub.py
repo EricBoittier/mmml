@@ -19,12 +19,14 @@ import numpy as np
 from _common import (
     add_charmm_output_args,
     add_cluster_args,
+    add_dcd_save_args,
     apply_charmm_output_from_args,
     build_acetone_dimer_cluster,
     build_ase_cluster,
     print_cluster_geometry_summary,
     print_header,
     resolve_checkpoint,
+    resolve_dcd_nsavc,
 )
 
 
@@ -32,6 +34,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     add_cluster_args(parser)
     add_charmm_output_args(parser)
+    add_dcd_save_args(parser)
     parser.add_argument(
         "--run",
         action="store_true",
@@ -55,10 +58,9 @@ def main() -> int:
         help="After minimization, write PDB/CRD/PSF, energy JSON, XYZ, and minimization DCD",
     )
     parser.add_argument(
-        "--dcd-nsavc",
-        type=int,
-        default=1,
-        help="Write a DCD frame every N SD steps when --save (CHARMM nsavc)",
+        "--no-save-vmd-topology",
+        action="store_true",
+        help="Do not write cluster_for_vmd.psf/pdb before MLpot strips PSF bonds",
     )
     args = parser.parse_args()
 
@@ -70,7 +72,6 @@ def main() -> int:
     energy_json_path = out_dir / "mini_full_mlpot_energy.json"
     xyz_path = out_dir / "mini_full_mlpot.xyz"
     dcd_path = out_dir / "mini_full_mlpot.dcd"
-
     print("Workflow:")
     print("  1. register_mlpot on ALL atoms")
     print(f"  2. cons_fix.setup(resid {args.fix_resid})  # constraint test only")
@@ -100,6 +101,7 @@ def main() -> int:
         load_physnet_mlpot_bundle,
         minimize_with_mlpot,
         register_mlpot,
+        save_cluster_topology_for_vmd,
         select_all_atoms,
         select_by_resid,
         setup_default_nbonds,
@@ -107,12 +109,25 @@ def main() -> int:
     )
 
     nprint = apply_charmm_output_from_args(args)
+    dcd_nsavc = resolve_dcd_nsavc(
+        dcd_nsavc=args.dcd_nsavc,
+        nstep=args.nstep,
+    )
     print(
         f"CHARMM output: PRNLev={0 if args.quiet else args.prnlev} "
         f"WRNLev={0 if args.quiet else args.warnlev} nprint={nprint}"
     )
     setup_default_nbonds()
     sync_charmm_positions(r)
+    if not args.no_save_vmd_topology:
+        vmd_files = save_cluster_topology_for_vmd(
+            out_dir, r, stem="cluster_for_vmd", title="pre-MLpot cluster"
+        )
+        print(
+            "VMD topology (full PSF bonds, before MLpot): "
+            f"{vmd_files['psf'].name} + {vmd_files['pdb'].name}"
+        )
+        print(f"  vmd {vmd_files['psf']} {vmd_files['pdb']}")
     atoms = ase.Atoms(numbers=z, positions=r)
     _, _, pyCModel = load_physnet_mlpot_bundle(ckpt, n_atoms, atoms)
 
@@ -121,6 +136,8 @@ def main() -> int:
         print(f"FAIL: no atoms in fix-resid {args.fix_resid}")
         return 1
 
+    if args.save:
+        print(f"Minimization DCD nsavc={dcd_nsavc} (frame every {dcd_nsavc} SD steps)")
     print(f"MLpot: all {n_atoms} atoms | cons_fix: resid {args.fix_resid}")
     ctx = register_mlpot(pyCModel, z, select_all_atoms())
     sync_charmm_positions(r)
@@ -144,7 +161,7 @@ def main() -> int:
                 energy_json_path=energy_json_path if args.save else None,
                 xyz_path=xyz_path if args.save else None,
                 dcd_path=dcd_path if args.save else None,
-                dcd_nsavc=args.dcd_nsavc if args.save else 0,
+                dcd_nsavc=dcd_nsavc if args.save else 0,
                 skip_if_crd_exists=False,
             )
         )

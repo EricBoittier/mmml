@@ -145,6 +145,38 @@ def apply_charmm_verbosity(
     return old
 
 
+def write_charmm_psf(path: PathLike) -> Path:
+    """Write the current in-memory PSF (connectivity as in CHARMM)."""
+    import pycharmm.write as write
+
+    p = Path(path).expanduser().resolve()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    write.psf_card(str(p))
+    return p
+
+
+def save_cluster_topology_for_vmd(
+    out_dir: PathLike,
+    positions: np.ndarray,
+    *,
+    stem: str = "cluster_for_vmd",
+    title: str = "cluster",
+) -> dict[str, Path]:
+    """Save PSF + PDB **before** ``MLpot`` removes internal ML bonds from the PSF.
+
+    Load in VMD with: ``vmd cluster_for_vmd.psf cluster_for_vmd.pdb`` (or a trajectory).
+    """
+    import pycharmm.write as write
+
+    sync_charmm_positions(positions)
+    out = Path(out_dir).expanduser().resolve()
+    out.mkdir(parents=True, exist_ok=True)
+    psf_path = write_charmm_psf(out / f"{stem}.psf")
+    pdb_path = out / f"{stem}.pdb"
+    write.coor_pdb(str(pdb_path), title=title)
+    return {"psf": psf_path, "pdb": pdb_path.resolve()}
+
+
 def setup_default_nbonds(
     *,
     cutnb: float = 14.0,
