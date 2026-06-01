@@ -210,44 +210,20 @@ def prepare_charmm_vacuum() -> None:
 
 
 def setup_default_nbonds(*, nbxmod: int = 5) -> None:
-    """Apply make-res style switched nonbonds (matches ``md_pbc_suite/ase.py``)."""
-    prepare_charmm_vacuum()
-    pycharmm = _import_pycharmm()
-    pycharmm.NonBondedScript(
-        cutnb=18.0,
-        ctonnb=13.0,
-        ctofnb=17.0,
-        eps=1.0,
-        cdie=True,
-        atom=True,
-        vatom=True,
-        fswitch=True,
-        vfswitch=True,
-        nbxmod=int(nbxmod),
-        inbfrq=1,
-        imgfrq=-1,
-    ).run()
+    """Vacuum nonbonds (same kwargs as ``md_pbc_suite/ase._run_charmm_minimize``)."""
+    from mmml.interfaces.pycharmmInterface.nbonds_config import apply_vacuum_nbonds
+
+    apply_vacuum_nbonds(nbxmod=nbxmod)
 
 
 def refresh_nbonds_after_mlpot(*, nbxmod: int = 5) -> None:
     """Rebuild nonbond lists after :class:`pycharmm.MLpot` changes exclusions."""
+    from mmml.interfaces.pycharmmInterface.nbonds_config import vacuum_nbond_kwargs
+
     prepare_charmm_vacuum()
     pycharmm = _import_pycharmm()
     pycharmm.nbonds.update_bnbnd()
-    pycharmm.UpdateNonBondedScript(
-        atom=True,
-        cdie=True,
-        eps=1.0,
-        vatom=True,
-        vfswitch=True,
-        cutnb=18.0,
-        ctonnb=13.0,
-        ctofnb=17.0,
-        fswitch=True,
-        nbxmod=int(nbxmod),
-        inbfrq=1,
-        imgfrq=-1,
-    ).run()
+    pycharmm.UpdateNonBondedScript(**vacuum_nbond_kwargs(nbxmod=nbxmod)).run()
 
 
 def load_physnet_mlpot_bundle(

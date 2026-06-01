@@ -84,14 +84,10 @@ def _has_resolved_geometry(coords: np.ndarray, min_span: float = 1.0e-4) -> bool
     return bool(np.max(np.ptp(coords, axis=0)) > min_span)
 
 
-def _read_cgenff_toppar() -> None:
-    read.rtf(pyci.CGENFF_RTF)
-    bl = settings.set_bomb_level(-2)
-    wl = settings.set_warn_level(-2)
-    read.prm(pyci.CGENFF_PRM)
-    settings.set_bomb_level(bl)
-    settings.set_warn_level(wl)
-    pyci.pycharmm.lingo.charmm_script("bomlev 0")
+def _read_cgenff_toppar(*, enable_drude: bool = False) -> None:
+    from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
+
+    read_cgenff_toppar(enable_drude=enable_drude)
 
 
 def _reset_pycharmm_system() -> None:
@@ -103,22 +99,10 @@ def _reset_pycharmm_system() -> None:
 
 def _make_res_minimize(nbxmod: int, nstep: int = 1000) -> None:
     """Run the same nonbonded/minimization recipe used by make-res."""
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import prepare_charmm_vacuum
+    from mmml.interfaces.pycharmmInterface.nbonds_config import apply_vacuum_nbonds
 
-    prepare_charmm_vacuum()
     pyci.pycharmm_quiet()
-    pyci.pycharmm.NonBondedScript(
-        cutnb=18.0,
-        ctonnb=13.0,
-        ctofnb=17.0,
-        eps=1.0,
-        cdie=True,
-        atom=True,
-        vatom=True,
-        fswitch=True,
-        vfswitch=True,
-        nbxmod=nbxmod,
-    ).run()
+    apply_vacuum_nbonds(nbxmod=nbxmod)
     charmm_minimize.run_abnr(nstep=nstep, tolenr=1e-3, tolgrd=1e-3)
 
 
@@ -787,6 +771,8 @@ def _run_charmm_minimize(
     try:
         if quiet:
             pyci.pycharmm_quiet()
+        from mmml.interfaces.pycharmmInterface.nbonds_config import pbc_nbond_kwargs
+
         use_pbc_charmm = cubic_box_side_A is not None and float(cubic_box_side_A) > 0.0
         cutnb_mm = 18.0
         cutim_mm = cutnb_mm + 4.0 if use_pbc_charmm else None
@@ -805,20 +791,18 @@ def _run_charmm_minimize(
                 "image byres xcen 0.0 ycen 0.0 zcen 0.0 sele all end\n"
             )
 
-        nbond_kw = dict(
-            cutnb=cutnb_mm,
-            ctonnb=13.0,
-            ctofnb=17.0,
-            eps=1.0,
-            cdie=True,
-            atom=True,
-            vatom=True,
-            fswitch=True,
-            vfswitch=True,
-            nbxmod=nbxmod,
-        )
-        if cutim_mm is not None:
-            nbond_kw["cutim"] = float(cutim_mm)
+        if use_pbc_charmm:
+            nbond_kw = pbc_nbond_kwargs(
+                nbxmod=nbxmod,
+                cutnb=cutnb_mm,
+                cutim=cutim_mm,
+            )
+        else:
+            from mmml.interfaces.pycharmmInterface.nbonds_config import (
+                vacuum_nbond_kwargs,
+            )
+
+            nbond_kw = vacuum_nbond_kwargs(nbxmod=nbxmod)
         pyci.pycharmm.NonBondedScript(**nbond_kw).run()
         if show_energy:
             print("CHARMM energy before minimization:")
