@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional, Union
@@ -63,7 +62,7 @@ class CharmmTrajectoryFiles:
 class MinimizeWithMlpotConfig:
     """SD minimization while MLpot supplies the ML region energy."""
 
-    fixed_ml_selection: Any
+    fixed_ml_selection: Optional[Any] = None
     nstep: int = 500
     nprint: int = 10
     tolenr: float = 1e-5
@@ -136,7 +135,6 @@ def build_heat_dynamics(
     duration_ps: float = 10.0,
     save_interval_ps: float = 0.1,
     temp: float = 300.0,
-    io: Optional[CharmmTrajectoryFiles] = None,
 ) -> dict[str, Any]:
     """NVT heating dict for ``DynamicsScript`` (CHARMM + MLpot)."""
     nstep = ps_to_nsteps(timestep_ps, duration_ps)
@@ -164,7 +162,6 @@ def build_nve_dynamics(
     duration_ps: float = 50.0,
     save_interval_ps: float = 0.01,
     restart: bool = True,
-    io: Optional[CharmmTrajectoryFiles] = None,
 ) -> dict[str, Any]:
     """NVE production-style dict (restart from heat)."""
     nstep = ps_to_nsteps(timestep_ps, duration_ps)
@@ -212,7 +209,6 @@ def build_cpt_equilibration_dynamics(
     save_interval_ps: float = 0.01,
     temp: float = 300.0,
     restart: bool = True,
-    io: Optional[CharmmTrajectoryFiles] = None,
 ) -> dict[str, Any]:
     """NPT equilibration (CPT + Hoover); matches example mini-MD scripts."""
     nstep = ps_to_nsteps(timestep_ps, duration_ps)
@@ -236,7 +232,6 @@ def build_cpt_production_dynamics(
     save_interval_ps: float = 0.01,
     temp: float = 300.0,
     restart: bool = True,
-    io: Optional[CharmmTrajectoryFiles] = None,
 ) -> dict[str, Any]:
     """NPT production segment (same integrator as equilibration)."""
     return build_cpt_equilibration_dynamics(
@@ -245,7 +240,6 @@ def build_cpt_production_dynamics(
         save_interval_ps=save_interval_ps,
         temp=temp,
         restart=restart,
-        io=io,
     )
 
 
@@ -256,6 +250,23 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     dyn = pycharmm.DynamicsScript(**dynamics_kwargs)
     dyn.run()
     return dyn
+
+
+def run_dynamics_with_io(
+    dynamics_kwargs: dict[str, Any],
+    io: Optional[CharmmTrajectoryFiles] = None,
+) -> Any:
+    """Run dynamics and open/close CharmmFile units from ``io``."""
+    open_files: list[Any] = []
+    kw = dict(dynamics_kwargs)
+    if io is not None:
+        open_files, iokw = io.open_for_run()
+        kw.update(iokw)
+    try:
+        return run_dynamics(kw)
+    finally:
+        for f in open_files:
+            f.close()
 
 
 def minimize_with_mlpot(
@@ -274,14 +285,15 @@ def minimize_with_mlpot(
             energy.show()
         return False
 
-    cons_fix.setup(config.fixed_ml_selection)
-    minimize.run_sd(
-        nstep=config.nstep,
-        nprint=config.nprint,
-        tolenr=config.tolenr,
-        tolgrd=config.tolgrd,
-    )
-    cons_fix.turn_off()
+    if config.fixed_ml_selection is not None:
+        cons_fix.setup(config.fixed_ml_selection)
+        minimize.run_sd(
+            nstep=config.nstep,
+            nprint=config.nprint,
+            tolenr=config.tolenr,
+            tolgrd=config.tolgrd,
+        )
+        cons_fix.turn_off()
     minimize.run_sd(
         nstep=config.nstep,
         nprint=config.nprint,

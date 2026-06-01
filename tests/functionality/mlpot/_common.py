@@ -107,20 +107,15 @@ def build_ase_cluster(
 
 def all_atom_selection():
     """PyCHARMM selection for all atoms (for MLpot on full cluster)."""
-    import pycharmm
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import select_all_atoms
 
-    return pycharmm.SelectAtoms().all_atoms()
+    return select_all_atoms()
 
 
 def setup_charmm_nbonds() -> None:
-    import pycharmm
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import setup_default_nbonds
 
-    nbonds = """
-    nbonds atom cutnb 14.0 ctofnb 12.0 ctonnb 10.0 -
-    vswitch -
-    inbfrq -1 imgfrq -1
-    """
-    pycharmm.lingo.charmm_script(nbonds)
+    setup_default_nbonds()
 
 
 def check_mlpot_symbols() -> list[str]:
