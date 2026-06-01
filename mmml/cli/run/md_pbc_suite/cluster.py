@@ -9,8 +9,6 @@ import pandas as pd
 
 import mmml.interfaces.pycharmmInterface.import_pycharmm as pyci
 from mmml.interfaces.pycharmmInterface.import_pycharmm import (
-    CGENFF_PRM,
-    CGENFF_RTF,
     coor,
     pycharmm,
     reset_block,
@@ -54,15 +52,11 @@ def _build_psf_ordered_cluster(
     residue = residue.upper()
     sequence = " ".join([residue] * n_molecules)
 
+    from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
+
     pycharmm.lingo.charmm_script("DELETE ATOM SELE ALL END")
     reset_block()
-    read.rtf(CGENFF_RTF)
-    bl = settings.set_bomb_level(-2)
-    wl = settings.set_warn_level(-2)
-    read.prm(CGENFF_PRM)
-    settings.set_bomb_level(bl)
-    settings.set_warn_level(wl)
-    pycharmm.lingo.charmm_script("bomlev 0")
+    read_cgenff_toppar(enable_drude=False)
 
     read.sequence_string(sequence)
     gen.new_segment(seg_name="CLST", setup_ic=True)
@@ -175,15 +169,11 @@ def build_minimized_monomer_for_packmol(
     residue = residue.upper()
     coords, atom_names, z = _generate_residue_with_make_res_recipe(residue)
 
+    from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
+
     pycharmm.lingo.charmm_script("DELETE ATOM SELE ALL END")
     reset_block()
-    read.rtf(CGENFF_RTF)
-    bl = settings.set_bomb_level(-2)
-    wl = settings.set_warn_level(-2)
-    read.prm(CGENFF_PRM)
-    settings.set_bomb_level(bl)
-    settings.set_warn_level(wl)
-    pycharmm.lingo.charmm_script("bomlev 0")
+    read_cgenff_toppar(enable_drude=False)
     read.sequence_string(residue)
     gen.new_segment(seg_name="CLST", setup_ic=True)
     ic.prm_fill(replace_all=True)
