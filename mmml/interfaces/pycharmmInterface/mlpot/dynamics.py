@@ -5,7 +5,10 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
+
+if TYPE_CHECKING:
+    from mmml.interfaces.pycharmmInterface.mlpot.derivative_test import TestFirstConfig
 
 import numpy as np
 
@@ -175,6 +178,7 @@ class MinimizeWithMlpotConfig:
     skip_if_crd_exists: bool = True
     show_energy: bool = False
     verbose: bool = False
+    test_first: Optional["TestFirstConfig"] = None
 
 
 def _import_pycharmm_modules():
@@ -536,6 +540,25 @@ def minimize_with_mlpot(
             )
         elif config.show_energy:
             _maybe_show_energy(True)
+
+        if config.test_first is not None:
+            from mmml.interfaces.pycharmmInterface.mlpot.derivative_test import (
+                run_post_minimize_derivative_tests,
+            )
+
+            from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+                resolve_export_positions,
+            )
+
+            export_pos = resolve_export_positions(
+                pyCModel=config.pyCModel,
+                reference_positions=config.reference_positions,
+            )
+            run_post_minimize_derivative_tests(
+                config.test_first,
+                pyCModel=config.pyCModel,
+                positions=export_pos,
+            )
     finally:
         if dcd_file is not None:
             dcd_file.close()

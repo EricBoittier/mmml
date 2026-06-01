@@ -26,6 +26,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     resolve_mini_nstep,
     resolve_fix_resids,
     resolve_show_energy,
+    resolve_test_first_config,
     setup_cons_fix_for_resids,
     timestep_ps_from_dt_fs,
     turn_off_cons_fix,
@@ -197,6 +198,7 @@ def run_minimize_workflow(args: argparse.Namespace) -> int:
                 dcd_path=dcd_path if save else None,
                 dcd_nsavc=dcd_nsavc if save else 0,
                 skip_if_crd_exists=False,
+                test_first=resolve_test_first_config(args),
             )
         )
     finally:
@@ -294,6 +296,7 @@ def run_dynamics_workflow(
                     save=False,
                     show_energy=show_energy,
                     skip_if_crd_exists=False,
+                    test_first=resolve_test_first_config(args),
                 )
             )
             sync_charmm_positions(get_charmm_positions_array())
