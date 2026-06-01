@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional, Sequence, Union
+from typing import Any, Iterable, Optional, Sequence, Union
 
 import numpy as np
 import pandas as pd
@@ -120,6 +120,17 @@ def select_by_seg_id(seg_id: str):
 def select_by_resid(resid: int | str):
     """CHARMM selection by residue ID (e.g. ``1`` for the first residue)."""
     return _import_pycharmm().SelectAtoms(res_id=str(resid))
+
+
+def select_by_resids(resids: Sequence[int | str]) -> Any:
+    """Union selection over multiple residue IDs (one CGenFF residue = one monomer)."""
+    ids = [str(r).strip() for r in resids if str(r).strip()]
+    if not ids:
+        raise ValueError("select_by_resids: empty resid list")
+    sel = select_by_resid(ids[0])
+    for rid in ids[1:]:
+        sel = sel | select_by_resid(rid)
+    return sel
 
 
 def apply_charmm_verbosity(

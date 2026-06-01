@@ -2,7 +2,7 @@
 
 Runnable scripts to bring up `pycharmm.MLpot` alongside the existing ASE PhysNet path (`get_ase_calc` / `get_pyc`). Run them **in order** from the repository root.
 
-**Default cluster:** acetone dimer **ACO × 2 → 20 atoms**. `ic.build()` alone is nearly 1D (y≈z≈0); builders use bundled `mmml/generate/sample/pdb/aco_monomer.pdb` for 3D monomer geometry, then place monomers on a grid with `--spacing` (default 4 Å COM separation).
+**Default cluster:** acetone **ACO × N** (10 atoms per monomer). `ic.build()` alone is nearly 1D; builders use bundled `mmml/generate/sample/pdb/aco_monomer.pdb` and place monomers on a grid with `--spacing` (default 4 Å). Each CGenFF **resid** = one monomer for constraints.
 
 ## Prerequisites
 
@@ -63,6 +63,10 @@ python tests/functionality/mlpot/03_energy_compare.py --residue ACO --n-molecule
 # Minimization (you already validated 3D XYZ export)
 # Default: PRNLev=5, nprint=1 (verbose CHARMM console). Use --quiet to reduce output.
 python tests/functionality/mlpot/04_mlpot_minimize_stub.py --run --save --nstep 10
+# Tetramer, fix monomers 1 and 3 during first SD pass only:
+python tests/functionality/mlpot/04_mlpot_minimize_stub.py --run --save --n-molecules 4 --fix-resids 1,3 --nstep 20
+# Trimer, no constraints:
+python tests/functionality/mlpot/04_mlpot_minimize_stub.py --run --n-molecules 3 --no-fix
 # VMD: use cluster_for_vmd.psf (bonds intact) + trajectory or mini_full_mlpot.xyz
 # vmd tests/functionality/mlpot/output/minimize/cluster_for_vmd.psf mini_full_mlpot.dcd
 # Denser minimization DCD: every step (default) or every 5 SD steps:
@@ -71,6 +75,8 @@ python tests/functionality/mlpot/04_mlpot_minimize_stub.py --run --save --dcd-ns
 
 # Short NVE (~5 fs at 0.25 fs timestep)
 python tests/functionality/mlpot/05_mlpot_dynamics_stub.py --run --nstep 20
+# 4-molecule cluster; freeze monomers 1–2 for whole NVE:
+python tests/functionality/mlpot/05_mlpot_dynamics_stub.py --run --n-molecules 4 --constrain-resids 1,2 --nstep 50
 # DCD every step (default): --dcd-nsavc 1
 # DCD every 0.001 ps (4 steps at 0.25 fs): --dcd-interval-ps 0.001
 python tests/functionality/mlpot/05_mlpot_dynamics_stub.py --run --nstep 100 --dcd-nsavc 1

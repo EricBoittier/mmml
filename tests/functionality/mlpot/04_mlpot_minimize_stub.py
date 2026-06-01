@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Step 4 (stub): SD minimization with MLpot on the full system.
+Step 4: SD minimization with MLpot on the full cluster.
 
-- MLpot: all atoms (full PhysNet cluster).
-- cons_fix: only ``resid`` 1 (default) to test fixed-atom constraints.
+- MLpot: all atoms (PhysNet on the full system).
+- Optional ``cons_fix`` on selected monomers (``--fix-resids``) during SD pass 1.
 
-Pass ``--run`` to execute a short SD test.
+Pass ``--run`` to execute. Use ``--n-molecules`` for larger acetone clusters (ACO × N).
 """
 
 from __future__ import annotations
@@ -20,13 +20,16 @@ from _common import (
     add_charmm_output_args,
     add_cluster_args,
     add_dcd_save_args,
+    add_monomer_constraint_args,
     apply_charmm_output_from_args,
-    build_acetone_dimer_cluster,
-    build_ase_cluster,
+    build_cluster_from_args,
+    format_resid_constraint_message,
     print_cluster_geometry_summary,
     print_header,
     resolve_checkpoint,
     resolve_dcd_nsavc,
+    resolve_fix_resids,
+    validate_resids_for_cluster,
 )
 
 
@@ -35,18 +38,13 @@ def main() -> int:
     add_cluster_args(parser)
     add_charmm_output_args(parser)
     add_dcd_save_args(parser)
+    add_monomer_constraint_args(parser, for_dynamics=False)
     parser.add_argument(
         "--run",
         action="store_true",
         help="Execute minimization (default: dry-run stub message only)",
     )
     parser.add_argument("--nstep", type=int, default=10, help="SD steps per SD pass")
-    parser.add_argument(
-        "--fix-resid",
-        type=int,
-        default=1,
-        help="Residue ID held fixed with cons_fix during the first SD pass",
-    )
     parser.add_argument(
         "--out-dir",
         type=Path,
@@ -64,33 +62,36 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    print_header("MLpot minimization stub (step 4)")
+    fix_resids = resolve_fix_resids(args)
+
+    print_header("MLpot minimization (step 4)")
     out_dir = args.out_dir.resolve()
-    pdb_path = out_dir / "mini_full_mlpot.pdb"
-    crd_path = out_dir / "mini_full_mlpot.crd"
-    psf_path = out_dir / "mini_full_mlpot.psf"
-    energy_json_path = out_dir / "mini_full_mlpot_energy.json"
-    xyz_path = out_dir / "mini_full_mlpot.xyz"
-    dcd_path = out_dir / "mini_full_mlpot.dcd"
+    tag = f"{args.residue.lower()}_{args.n_molecules}mer"
+    pdb_path = out_dir / f"mini_full_mlpot_{tag}.pdb"
+    crd_path = out_dir / f"mini_full_mlpot_{tag}.crd"
+    psf_path = out_dir / f"mini_full_mlpot_{tag}.psf"
+    energy_json_path = out_dir / f"mini_full_mlpot_{tag}_energy.json"
+    xyz_path = out_dir / f"mini_full_mlpot_{tag}.xyz"
+    dcd_path = out_dir / f"mini_full_mlpot_{tag}.dcd"
+
     print("Workflow:")
+    print(f"  Cluster: {args.residue} × {args.n_molecules} monomers (spacing {args.spacing} Å)")
     print("  1. register_mlpot on ALL atoms")
-    print(f"  2. cons_fix.setup(resid {args.fix_resid})  # constraint test only")
-    print("  3. minimize.run_sd; cons_fix.turn_off(); minimize.run_sd")
+    print(f"  2. {format_resid_constraint_message(fix_resids, context='SD pass 1')}")
+    print("  3. minimize.run_sd; cons_fix.turn_off(); minimize.run_sd (free)")
     if args.save:
-        print(f"  4. --save -> {out_dir}/mini_full_mlpot.*")
-    else:
-        print("  4. (optional) pass --save to write minimized structures and energy JSON")
+        print(f"  4. --save -> {out_dir}/mini_full_mlpot_{tag}.*")
 
     if not args.run:
+        print("\nExamples:")
+        print("  --n-molecules 4 --fix-resids 1,3   # tetramer; fix monomers 1 and 3 in pass 1")
+        print("  --n-molecules 3 --no-fix           # trimer; single free minimization pass")
         print("\nSTUB: pass --run to execute.")
         return 0
 
     ckpt = resolve_checkpoint(args.checkpoint)
-    if args.residue.upper() == "ACO" and args.n_molecules == 2:
-        z, r = build_acetone_dimer_cluster(spacing=args.spacing)
-    else:
-        z, r = build_ase_cluster(args.residue, args.n_molecules, args.spacing)
-    n_atoms = len(z)
+    z, r, n_atoms = build_cluster_from_args(args)
+    validate_resids_for_cluster(fix_resids, args.n_molecules)
     print_cluster_geometry_summary(r, args.n_molecules)
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -103,16 +104,13 @@ def main() -> int:
         register_mlpot,
         save_cluster_topology_for_vmd,
         select_all_atoms,
-        select_by_resid,
+        select_by_resids,
         setup_default_nbonds,
         sync_charmm_positions,
     )
 
     nprint = apply_charmm_output_from_args(args)
-    dcd_nsavc = resolve_dcd_nsavc(
-        dcd_nsavc=args.dcd_nsavc,
-        nstep=args.nstep,
-    )
+    dcd_nsavc = resolve_dcd_nsavc(dcd_nsavc=args.dcd_nsavc, nstep=args.nstep)
     print(
         f"CHARMM output: PRNLev={0 if args.quiet else args.prnlev} "
         f"WRNLev={0 if args.quiet else args.warnlev} nprint={nprint}"
@@ -121,24 +119,28 @@ def main() -> int:
     sync_charmm_positions(r)
     if not args.no_save_vmd_topology:
         vmd_files = save_cluster_topology_for_vmd(
-            out_dir, r, stem="cluster_for_vmd", title="pre-MLpot cluster"
+            out_dir, r, stem=f"cluster_for_vmd_{tag}", title="pre-MLpot cluster"
         )
         print(
             "VMD topology (full PSF bonds, before MLpot): "
             f"{vmd_files['psf'].name} + {vmd_files['pdb'].name}"
         )
         print(f"  vmd {vmd_files['psf']} {vmd_files['pdb']}")
+
     atoms = ase.Atoms(numbers=z, positions=r)
     _, _, pyCModel = load_physnet_mlpot_bundle(ckpt, n_atoms, atoms)
 
-    fix_sel = select_by_resid(args.fix_resid)
-    if len(fix_sel.get_atom_indexes()) == 0:
-        print(f"FAIL: no atoms in fix-resid {args.fix_resid}")
+    fix_sel = select_by_resids(fix_resids) if fix_resids else None
+    if fix_sel is not None and len(fix_sel.get_atom_indexes()) == 0:
+        print(f"FAIL: no atoms for --fix-resids {fix_resids}")
         return 1
 
     if args.save:
         print(f"Minimization DCD nsavc={dcd_nsavc} (frame every {dcd_nsavc} SD steps)")
-    print(f"MLpot: all {n_atoms} atoms | cons_fix: resid {args.fix_resid}")
+    print(
+        f"MLpot: all {n_atoms} atoms | "
+        f"{format_resid_constraint_message(fix_resids, context='cons_fix')}"
+    )
     ctx = register_mlpot(pyCModel, z, select_all_atoms())
     sync_charmm_positions(r)
     pos_chk = get_charmm_positions_array()

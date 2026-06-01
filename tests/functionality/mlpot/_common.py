@@ -19,6 +19,7 @@ if str(PROJECT_ROOT) not in sys.path:
 DEFAULT_RESIDUE = "ACO"
 DEFAULT_N_MOLECULES = 2
 DEFAULT_SPACING = 4.0
+ACO_ATOMS_PER_MONOMER = 10
 
 
 def add_charmm_output_args(parser: argparse.ArgumentParser) -> None:
@@ -120,7 +121,7 @@ def add_cluster_args(parser: argparse.ArgumentParser) -> None:
         "--n-molecules",
         type=int,
         default=DEFAULT_N_MOLECULES,
-        help="Number of identical residues in the cluster",
+        help="Number of identical monomers (CGenFF residues) in the cluster (default: 2)",
     )
     parser.add_argument(
         "--spacing",
@@ -134,6 +135,87 @@ def add_cluster_args(parser: argparse.ArgumentParser) -> None:
         default=None,
         help="Checkpoint (.json or Orbax root). Default: MMML_CKPT or repo ckpts.",
     )
+
+
+def add_monomer_constraint_args(
+    parser: argparse.ArgumentParser,
+    *,
+    for_dynamics: bool = False,
+) -> None:
+    """CLI flags to fix/constrain specific monomers (CHARMM ``resid`` = monomer index)."""
+    group = parser.add_argument_group("Monomer constraints (cons_fix)")
+    if for_dynamics:
+        group.add_argument(
+            "--constrain-resids",
+            type=str,
+            default="",
+            metavar="IDS",
+            help="Comma-separated residue IDs frozen for the whole dynamics run (e.g. 1,2)",
+        )
+    else:
+        group.add_argument(
+            "--fix-resids",
+            type=str,
+            default="1",
+            metavar="IDS",
+            help="Monomers fixed during SD pass 1 only (comma-separated resids; default: 1)",
+        )
+        group.add_argument(
+            "--fix-resid",
+            type=int,
+            default=None,
+            help="Deprecated: single resid; use --fix-resids",
+        )
+        group.add_argument(
+            "--no-fix",
+            action="store_true",
+            help="Skip the constrained SD pass (only run free minimization)",
+        )
+
+
+def parse_resid_list(text: str) -> list[int]:
+    """Parse ``1,2,3`` or ``1 2 3`` into unique positive residue IDs."""
+    if not text or not str(text).strip():
+        return []
+    parts = str(text).replace(",", " ").split()
+    resids: list[int] = []
+    for p in parts:
+        rid = int(p.strip())
+        if rid < 1:
+            raise ValueError(f"residue IDs must be >= 1, got {rid}")
+        if rid not in resids:
+            resids.append(rid)
+    return resids
+
+
+def resolve_fix_resids(args: argparse.Namespace) -> list[int]:
+    """Resids to hold fixed in minimization pass 1 (empty if --no-fix)."""
+    if getattr(args, "no_fix", False):
+        return []
+    if getattr(args, "fix_resid", None) is not None:
+        return [int(args.fix_resid)]
+    return parse_resid_list(getattr(args, "fix_resids", "") or "")
+
+
+def resolve_constrain_resids(args: argparse.Namespace) -> list[int]:
+    """Resids frozen for an entire dynamics run."""
+    return parse_resid_list(getattr(args, "constrain_resids", "") or "")
+
+
+def build_acetone_cluster(
+    n_molecules: int,
+    spacing: float = DEFAULT_SPACING,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Acetone cluster (ACO × n) with bundled 3D monomer template; 10 atoms per monomer."""
+    if n_molecules < 1:
+        raise ValueError(f"n_molecules must be >= 1, got {n_molecules}")
+    z, r = build_ase_cluster(DEFAULT_RESIDUE, n_molecules, spacing)
+    expected = ACO_ATOMS_PER_MONOMER * n_molecules
+    if len(z) != expected:
+        raise RuntimeError(
+            f"Expected {expected} atoms for ACO×{n_molecules}, got {len(z)}"
+        )
+    return z, r
 
 
 def resolve_checkpoint(explicit: Path | None = None) -> Path:
@@ -208,17 +290,25 @@ def validate_cluster_geometry(
                     f"Monomer {i + 1} extent {extent:.3f} Å < {min_monomer_extent} Å (likely bad template/ic.build)"
                 )
             coms.append(chunk.mean(axis=0))
+        com_dists: list[float] = []
         if len(coms) > 1:
-            com_sep = float(np.linalg.norm(coms[1] - coms[0]))
+            for i in range(len(coms)):
+                for j in range(i + 1, len(coms)):
+                    com_dists.append(float(np.linalg.norm(coms[j] - coms[i])))
+            com_sep = com_dists[0]
         else:
             com_sep = 0.0
     else:
         com_sep = float("nan")
+        com_dists = []
     return {
         "span_x": float(span[0]),
         "span_y": float(span[1]),
         "span_z": float(span[2]),
         "com_sep_01": com_sep,
+        "com_dist_min": min(com_dists) if com_dists else float("nan"),
+        "com_dist_max": max(com_dists) if com_dists else float("nan"),
+        "n_molecules": float(n_molecules or 0),
     }
 
 
@@ -240,20 +330,73 @@ def build_ase_cluster(
 
 
 def build_acetone_dimer_cluster(spacing: float = DEFAULT_SPACING) -> Tuple[np.ndarray, np.ndarray]:
-    """20-atom acetone dimer (ACO × 2) with bundled 3D monomer template."""
-    z, r = build_ase_cluster(DEFAULT_RESIDUE, DEFAULT_N_MOLECULES, spacing)
-    if len(z) != 20:
-        raise RuntimeError(f"Expected 20 atoms for ACO dimer, got {len(z)}")
-    return z, r
+    """ACO × 2 acetone dimer (20 atoms); alias for :func:`build_acetone_cluster`."""
+    return build_acetone_cluster(2, spacing)
+
+
+def build_cluster_from_args(args: argparse.Namespace) -> Tuple[np.ndarray, np.ndarray, int]:
+    """Build cluster from CLI args; returns ``(Z, positions, n_atoms)``."""
+    residue = args.residue.upper()
+    n_mol = int(args.n_molecules)
+    spacing = float(args.spacing)
+    if residue == "ACO":
+        z, r = build_acetone_cluster(n_mol, spacing)
+    else:
+        z, r = build_ase_cluster(residue, n_mol, spacing)
+    return z, r, len(z)
 
 
 def print_cluster_geometry_summary(positions: np.ndarray, n_molecules: int) -> None:
     stats = validate_cluster_geometry(positions, n_molecules=n_molecules)
-    print(
-        "Cluster geometry OK:"
+    n_atoms = len(positions)
+    msg = (
+        f"Cluster geometry OK: {n_molecules} monomer(s), {n_atoms} atoms |"
         f" spans (Å) x={stats['span_x']:.2f} y={stats['span_y']:.2f} z={stats['span_z']:.2f}"
-        f" | COM separation (1→2) = {stats['com_sep_01']:.2f} Å"
     )
+    if n_molecules > 1 and not np.isnan(stats["com_dist_min"]):
+        msg += (
+            f" | COM distances (Å) min={stats['com_dist_min']:.2f}"
+            f" max={stats['com_dist_max']:.2f}"
+        )
+    print(msg)
+
+
+def validate_resids_for_cluster(resids: list[int], n_molecules: int) -> None:
+    """Ensure each resid maps to a built monomer (1 … n_molecules)."""
+    bad = [r for r in resids if r < 1 or r > n_molecules]
+    if bad:
+        raise ValueError(
+            f"residue ID(s) {bad} out of range for {n_molecules} monomer(s) "
+            "(resids are 1-based monomer indices from the PSF)"
+        )
+
+
+def setup_cons_fix_for_resids(resids: list[int]) -> Any:
+    """Apply ``cons_fix`` to all atoms in the given residue IDs."""
+    if not resids:
+        return None
+    import pycharmm.cons_fix as cons_fix
+
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import select_by_resids
+
+    sel = select_by_resids(resids)
+    if len(sel.get_atom_indexes()) == 0:
+        raise RuntimeError(f"cons_fix: no atoms for resid(s) {resids}")
+    cons_fix.setup(sel)
+    return sel
+
+
+def turn_off_cons_fix() -> None:
+    import pycharmm.cons_fix as cons_fix
+
+    cons_fix.turn_off()
+
+
+def format_resid_constraint_message(resids: list[int], *, context: str) -> str:
+    if not resids:
+        return f"{context}: no monomers constrained"
+    ids = ", ".join(str(r) for r in resids)
+    return f"{context}: cons_fix on resid(s) [{ids}] ({len(resids)} monomer(s))"
 
 
 def all_atom_selection():

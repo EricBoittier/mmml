@@ -370,10 +370,12 @@ def minimize_with_mlpot(
             print("CHARMM energy before minimization:")
             energy.show()
         if config.fixed_ml_selection is not None:
+            n_fix = len(config.fixed_ml_selection.get_atom_indexes())
             cons_fix.setup(config.fixed_ml_selection)
             if config.verbose:
                 print(
-                    f"SD pass 1 (cons_fix): nstep={config.nstep} nprint={config.nprint}"
+                    f"SD pass 1 (cons_fix, {n_fix} atoms): "
+                    f"nstep={config.nstep} nprint={config.nprint}"
                 )
             minimize.run_sd(**sd_kw)
             if config.verbose and config.show_energy:
