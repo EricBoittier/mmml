@@ -6,6 +6,8 @@ Prefer ``from mmml.interfaces.pycharmmInterface import ...`` in new code.
 from __future__ import annotations
 
 import importlib
+import importlib.abc
+import importlib.util
 import sys
 from types import ModuleType
 
@@ -31,33 +33,54 @@ _SUBMODULES = (
 )
 
 
-class _SubmoduleRedirect(ModuleType):
-    """Lazy proxy so legacy ``mmml.pycharmmInterface.<name>`` imports work without eager loads."""
+class _CompatAliasLoader(importlib.abc.Loader):
+    """Load a legacy ``mmml.pycharmmInterface.<sub>`` name as the canonical interface module."""
 
     def __init__(self, alias_name: str, target_name: str) -> None:
-        super().__init__(alias_name)
+        self._alias_name = alias_name
         self._target_name = target_name
 
-    def _load_target(self) -> ModuleType:
+    def create_module(self, spec: importlib.machinery.ModuleSpec) -> ModuleType | None:
+        return sys.modules.get(self._target_name)
+
+    def exec_module(self, module: ModuleType) -> None:
         target = importlib.import_module(self._target_name)
-        sys.modules[self.__name__] = target
-        return target
-
-    def __getattr__(self, name: str):
-        return getattr(self._load_target(), name)
-
-    def __dir__(self) -> list[str]:
-        return dir(self._load_target())
+        sys.modules[self._alias_name] = target
+        sys.modules[self._target_name] = target
 
 
-def _register_submodule_aliases() -> None:
-    for name in _SUBMODULES:
-        full = f"{__name__}.{name}"
-        if full not in sys.modules:
-            sys.modules[full] = _SubmoduleRedirect(full, f"{_REAL_PREFIX}.{name}")
+class _CompatAliasFinder(importlib.abc.MetaPathFinder):
+    def find_spec(
+        self,
+        fullname: str,
+        path: object | None,
+        target: ModuleType | None = None,
+    ) -> importlib.machinery.ModuleSpec | None:
+        prefix = f"{__name__}."
+        if not fullname.startswith(prefix):
+            return None
+        sub = fullname[len(prefix) :]
+        if sub not in _SUBMODULES:
+            return None
+        return importlib.util.spec_from_loader(
+            fullname,
+            _CompatAliasLoader(fullname, f"{_REAL_PREFIX}.{sub}"),
+        )
 
 
-_register_submodule_aliases()
+def _install_compat_finder() -> None:
+    if any(isinstance(finder, _CompatAliasFinder) for finder in sys.meta_path):
+        return
+    sys.meta_path.insert(0, _CompatAliasFinder())
+
+
+def __getattr__(name: str):
+    if name in _SUBMODULES:
+        return importlib.import_module(f"{__name__}.{name}")
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+_install_compat_finder()
 
 from mmml.interfaces import pycharmmInterface as _pkg
 

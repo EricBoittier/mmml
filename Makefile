@@ -145,7 +145,7 @@ test:
 	cd tests && uv run pytest .
 
 test-quick:
-	uv run pytest -q tests/functionality/mmml/test_mmml_calc.py::test_ev2kcalmol_constant
+	uv run pytest -q tests/functionality/mmml_tests/test_mmml_calc.py::test_ev2kcalmol_constant
 
 test-coverage:
 	uv run pytest --cov=mmml --cov-report=html --cov-report=term tests/
@@ -155,7 +155,7 @@ test-data:
 		echo "Error: MMML_DATA and MMML_CKPT must be set"; \
 		exit 1; \
 	fi
-	uv run pytest tests/functionality/mmml/test_mmml_calc.py::test_ml_energy_matches_reference_when_data_available
+	uv run pytest tests/functionality/mmml_tests/test_mmml_calc.py::test_ml_energy_matches_reference_when_data_available
 
 # ==============================================================================
 # Code quality
