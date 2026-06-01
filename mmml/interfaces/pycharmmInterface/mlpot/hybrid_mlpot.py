@@ -12,6 +12,7 @@ import numpy as np
 from mmml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
 from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
 from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol, setup_calculator
+from mmml.interfaces.pycharmmInterface.mlpot.setup import physnet_ml_atomic_numbers
 
 
 class DecomposedMlpotCalculator:
@@ -27,7 +28,9 @@ class DecomposedMlpotCalculator:
         self.spherical_fn = spherical_fn
         self.cutoff_params = cutoff_params
         self.n_monomers = int(n_monomers)
-        self.atomic_numbers = np.asarray(atomic_numbers, dtype=np.int32)
+        self.atomic_numbers = np.asarray(
+            physnet_ml_atomic_numbers(atomic_numbers), dtype=np.int32
+        )
         self.ev2kcal = float(ev2kcalmol)
 
     def calculate_charmm(
@@ -108,7 +111,7 @@ def build_decomposed_mlpot_model(
 ) -> DecomposedMlpotModel:
     ckpt = Path(checkpoint).expanduser().resolve()
     cutoff_params = CutoffParameters()
-    z = np.asarray(atomic_numbers, dtype=int)
+    z = np.asarray(physnet_ml_atomic_numbers(atomic_numbers), dtype=int)
     per = [int(x) for x in atoms_per_monomer]
     max_atoms = max(per) * 2
     factory = setup_calculator(
