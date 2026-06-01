@@ -7,26 +7,42 @@ from pathlib import Path
 
 import pytest
 
+_IMPORT_PYCHARMM = "mmml.interfaces.pycharmmInterface.import_pycharmm"
+_SETUP_RES = "mmml.interfaces.pycharmmInterface.setupRes"
+_PYCHARMM_INTERFACE = "mmml.interfaces.pycharmmInterface"
+
 
 class _FakeAtoms:
     pass
 
 
+def _make_fake_import_pycharmm(calls: list[str]) -> types.ModuleType:
+    """Stub import_pycharmm with every symbol setupRes / make_res import at load time."""
+    fake = types.ModuleType(_IMPORT_PYCHARMM)
+    fake.CGENFF_RTF = "fake.rtf"
+    fake.CGENFF_PRM = "fake.prm"
+    fake.CHARMM_HOME = "/tmp/charmm"
+    fake.CHARMM_LIB_DIR = "/tmp/charmm/lib"
+    fake.pycharmm_quiet = lambda: calls.append("quiet")
+    fake.pycharmm_loud = lambda: calls.append("loud")
+    fake.reset_block = lambda: calls.append("reset_block")
+    fake.reset_block_no_internal = lambda: calls.append("reset_block_no_internal")
+    fake.safe_energy_show = lambda: calls.append("safe_energy_show")
+    return fake
+
+
+def _clear_pycharmm_interface_import_cache(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in (_SETUP_RES, _IMPORT_PYCHARMM):
+        monkeypatch.delitem(sys.modules, name, raising=False)
+    parent = sys.modules.get(_PYCHARMM_INTERFACE)
+    if parent is not None:
+        parent.__dict__.pop("setupRes", None)
+        parent.__dict__.pop("import_pycharmm", None)
+
+
 def _install_fake_setupres_dependencies(monkeypatch: pytest.MonkeyPatch, calls: list[str]) -> None:
-    fake_import_pycharmm = types.ModuleType("mmml.interfaces.pycharmmInterface.import_pycharmm")
-    fake_import_pycharmm.CGENFF_RTF = "fake.rtf"
-    fake_import_pycharmm.CGENFF_PRM = "fake.prm"
-    fake_import_pycharmm.CHARMM_HOME = "/tmp/charmm"
-    fake_import_pycharmm.CHARMM_LIB_DIR = "/tmp/charmm/lib"
-    fake_import_pycharmm.pycharmm_quiet = lambda: calls.append("quiet")
-    fake_import_pycharmm.pycharmm_loud = lambda: calls.append("loud")
-    fake_import_pycharmm.reset_block = lambda: calls.append("reset_block")
-    fake_import_pycharmm.safe_energy_show = lambda: calls.append("safe_energy_show")
-    monkeypatch.setitem(
-        sys.modules,
-        "mmml.interfaces.pycharmmInterface.import_pycharmm",
-        fake_import_pycharmm,
-    )
+    fake_import_pycharmm = _make_fake_import_pycharmm(calls)
+    monkeypatch.setitem(sys.modules, _IMPORT_PYCHARMM, fake_import_pycharmm)
 
     fake_utils = types.ModuleType("mmml.interfaces.pycharmmInterface.utils")
     fake_utils.get_Z_from_psf = lambda: [1]
@@ -84,9 +100,9 @@ def _install_fake_setupres_dependencies(monkeypatch: pytest.MonkeyPatch, calls: 
 
 def _import_setupres_with_fakes(monkeypatch: pytest.MonkeyPatch, calls: list[str]):
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2]))
-    monkeypatch.delitem(sys.modules, "mmml.interfaces.pycharmmInterface.setupRes", raising=False)
+    _clear_pycharmm_interface_import_cache(monkeypatch)
     _install_fake_setupres_dependencies(monkeypatch, calls)
-    return importlib.import_module("mmml.interfaces.pycharmmInterface.setupRes")
+    return importlib.import_module(_SETUP_RES)
 
 
 def test_mini_sets_nbonds_before_abnr_and_uses_safe_energy(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -162,14 +178,8 @@ def test_make_res_main_loop_uses_single_checked_setup_path(monkeypatch: pytest.M
     fake_utils.set_up_directories = lambda: calls.append("set_up_directories")
     monkeypatch.setitem(sys.modules, "mmml.interfaces.pycharmmInterface.utils", fake_utils)
 
-    fake_import_pycharmm = types.ModuleType("mmml.interfaces.pycharmmInterface.import_pycharmm")
-    fake_import_pycharmm.reset_block = lambda: calls.append("reset_block")
-    fake_import_pycharmm.reset_block_no_internal = lambda: calls.append("reset_block_no_internal")
-    monkeypatch.setitem(
-        sys.modules,
-        "mmml.interfaces.pycharmmInterface.import_pycharmm",
-        fake_import_pycharmm,
-    )
+    _clear_pycharmm_interface_import_cache(monkeypatch)
+    monkeypatch.setitem(sys.modules, _IMPORT_PYCHARMM, _make_fake_import_pycharmm(calls))
 
     import ase.io
 
