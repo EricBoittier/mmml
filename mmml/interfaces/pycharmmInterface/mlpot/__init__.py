@@ -4,8 +4,10 @@ Validated against the scripts in ``tests/functionality/mlpot/`` (ASE / callback 
 """
 
 from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    CharmmMmMinimizeConfig,
     CharmmTrajectoryFiles,
     MinimizeWithMlpotConfig,
+    minimize_charmm_mm_only,
     assign_boltzmann_velocities,
     boltzmann_velocity_kwargs,
     build_cpt_production_dynamics,
@@ -51,6 +53,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.setup import (
 )
 
 __all__ = [
+    "CharmmMmMinimizeConfig",
     "CharmmTrajectoryFiles",
     "FlatBottomSphereConfig",
     "MinimizeWithMlpotConfig",
@@ -71,6 +74,7 @@ __all__ = [
     "get_charmm_positions_array",
     "resolve_export_positions",
     "load_physnet_mlpot_bundle",
+    "minimize_charmm_mm_only",
     "minimize_with_mlpot",
     "sync_charmm_positions",
     "open_minimize_dcd",

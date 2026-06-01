@@ -353,8 +353,7 @@ def validate_cluster_geometry(
     span = r.max(axis=0) - r.min(axis=0)
     if float(span[1]) < min_axis_span or float(span[2]) < min_axis_span:
         raise ValueError(
-            f"Cluster is nearly planar/collinear (spans Å x={span[0]:.3f} "
-            f"y={span[1]:.3f} z={span[2]:.3f})"
+            f"Cluster not 3D (spans Å x={span[0]:.3f} y={span[1]:.3f} z={span[2]:.3f})"
         )
     if n_molecules is not None and n_molecules > 0 and r.shape[0] % n_molecules == 0:
         n_per = r.shape[0] // n_molecules
@@ -449,6 +448,11 @@ def build_cluster_from_args_with_tag(
                 radius=radius,
                 tolerance=tolerance,
                 seed=int(getattr(args, "seed", 123)),
+                charmm_sd_steps=int(getattr(args, "charmm_sd_steps", 50)),
+                charmm_abnr_steps=int(getattr(args, "charmm_abnr_steps", 100)),
+                charmm_tolenr=float(getattr(args, "charmm_tolenr", 1e-3)),
+                charmm_tolgrd=float(getattr(args, "charmm_tolgrd", 1e-3)),
+                verbose=not getattr(args, "quiet", False),
             )
             fb_r = getattr(args, "flat_bottom_radius", None)
             msg = (
@@ -681,6 +685,69 @@ def charmm_energy_row() -> dict[str, float]:
         if isinstance(value, (int, float, np.floating)):
             out[str(key)] = float(value)
     return out
+
+
+def charmm_grms() -> float:
+    """Current CHARMM gradient RMS (kcal/mol/Å) from the active energy/force state."""
+    import pycharmm.energy as energy
+
+    return float(energy.get_grms())
+
+
+def resolve_mini_nstep(args: argparse.Namespace, n_monomers: int) -> int:
+    """SD steps per pass; scale up for large Packmol clusters unless disabled."""
+    base = int(getattr(args, "mini_nstep", 20))
+    if getattr(args, "no_scale_mini_nstep", False):
+        return max(1, base)
+    # Heuristic: large clusters need more than 20 SD steps per pass.
+    scaled = max(base, min(300, 8 * max(1, n_monomers)))
+    if scaled != base:
+        print(f"mini-nstep scaled {base} -> {scaled} for {n_monomers} monomer(s)")
+    return scaled
+
+
+def resolve_echeck_for_cluster(
+    args: argparse.Namespace,
+    *,
+    n_atoms: int,
+    n_monomers: int,
+) -> float:
+    """ECHECK tolerance; large ML clusters use a looser default (see production dyna.inp CPT)."""
+    if getattr(args, "no_echeck", False):
+        return -1.0
+    if getattr(args, "no_scale_echeck", False):
+        return float(getattr(args, "echeck", 100.0))
+    base = float(getattr(args, "echeck", 100.0))
+    if n_monomers >= 10 or n_atoms >= 100:
+        loose = max(500.0, base)
+        if loose != base:
+            print(
+                f"echeck loosened {base} -> {loose} kcal/mol for "
+                f"{n_monomers} monomer(s) / {n_atoms} atoms (override with explicit --echeck)"
+            )
+        return loose
+    return base
+
+
+def assert_dynamics_ready(
+    *,
+    max_grms: float = 50.0,
+    abort: bool = True,
+) -> float:
+    """Warn or abort if gradients are still huge before starting dynamics."""
+    grms = charmm_grms()
+    if grms <= max_grms:
+        print(f"Pre-dynamics GRMS OK: {grms:.4f} kcal/mol/Å (limit {max_grms})")
+        return grms
+    msg = (
+        f"Pre-dynamics GRMS {grms:.2f} kcal/mol/Å exceeds {max_grms} — "
+        "increase --mini-nstep, run --setup pycharmm_minimize first, or check Packmol overlap. "
+        "Dynamics will likely hit ECHECK immediately."
+    )
+    if abort and not os.environ.get("MMML_MLPOT_ALLOW_HIGH_GRMS"):
+        raise RuntimeError(msg)
+    print(f"WARN: {msg} (set MMML_MLPOT_ALLOW_HIGH_GRMS=1 to force dynamics)")
+    return grms
 
 
 def print_header(title: str) -> None:

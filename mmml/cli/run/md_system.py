@@ -234,6 +234,27 @@ def parse_args() -> argparse.Namespace:
         default=1,
         help="pycharmm: DCD frame every N integration/SD steps",
     )
+    parser.add_argument(
+        "--no-scale-mini-nstep",
+        action="store_true",
+        help="pycharmm: do not auto-increase --mini-nstep for large clusters",
+    )
+    parser.add_argument(
+        "--no-scale-echeck",
+        action="store_true",
+        help="pycharmm: do not auto-loosen --echeck for large clusters",
+    )
+    parser.add_argument(
+        "--allow-high-grms",
+        action="store_true",
+        help="pycharmm: start dynamics even if post-min GRMS is high",
+    )
+    parser.add_argument(
+        "--max-grms-before-dyn",
+        type=float,
+        default=50.0,
+        help="pycharmm: abort if post-min GRMS exceeds this (kcal/mol/Å)",
+    )
 
     # --- lambda_ti (--setup lambda_ti) ----------------------------------------
     parser.add_argument(
@@ -432,6 +453,38 @@ def _pycharmm_setups() -> set[str]:
     return {"free_nve", "free_nvt", "pycharmm_minimize"}
 
 
+def _apply_backend_setup_defaults(args: argparse.Namespace) -> None:
+    """Align ``--setup`` with ``--backend`` when the CLI default setup is wrong for pycharmm."""
+    if args.setup == "lambda_ti":
+        return
+
+    pycharmm_setups = _pycharmm_setups()
+    if args.backend == "auto":
+        if args.setup in pycharmm_setups:
+            args.backend = "pycharmm"
+        return
+
+    if args.backend != "pycharmm":
+        return
+
+    if args.setup in pycharmm_setups:
+        return
+
+    if args.setup in ("all",):
+        raise ValueError(
+            f"--backend pycharmm does not support --setup {args.setup!r}. "
+            f"Use one of: {', '.join(sorted(pycharmm_setups))}."
+        )
+
+    # Default md-system setup is pbc_nve; pycharmm is vacuum-only.
+    print(
+        f"mmml md-system: --backend pycharmm uses vacuum (free_nve); "
+        f"replacing --setup {args.setup!r}",
+        flush=True,
+    )
+    args.setup = "free_nve"
+
+
 def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     if args.setup == "pycharmm_minimize":
         phase = "minimize"
@@ -486,10 +539,23 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         cmd.append("--no-fix")
     if args.no_pre_minimize:
         cmd.append("--no-pre-minimize")
+    if args.charmm_pre_minimize is False:
+        cmd.append("--no-charmm-pre-minimize")
+    cmd.extend(["--charmm-sd-steps", str(args.charmm_sd_steps)])
+    cmd.extend(["--charmm-abnr-steps", str(args.charmm_abnr_steps)])
+    cmd.extend(["--charmm-tolenr", str(args.charmm_tolenr)])
+    cmd.extend(["--charmm-tolgrd", str(args.charmm_tolgrd)])
     if args.no_echeck:
         cmd.append("--no-echeck")
     if args.quiet:
         cmd.append("--quiet")
+    if getattr(args, "no_scale_mini_nstep", False):
+        cmd.append("--no-scale-mini-nstep")
+    if getattr(args, "no_scale_echeck", False):
+        cmd.append("--no-scale-echeck")
+    if getattr(args, "allow_high_grms", False):
+        cmd.append("--allow-high-grms")
+    cmd.extend(["--max-grms-before-dyn", str(args.max_grms_before_dyn)])
     if args.flat_bottom_radius is not None:
         cmd.extend(["--fb-rad", str(args.flat_bottom_radius)])
         cmd.extend(["--fb-forc", str(args.flat_bottom_k)])
@@ -622,8 +688,11 @@ def main() -> int:
         except ValueError as exc:
             print(f"mmml md-system: error: {exc}", file=sys.stderr)
             return 2
-    if args.setup in _pycharmm_setups() and args.backend == "auto":
-        args.backend = "pycharmm"
+    try:
+        _apply_backend_setup_defaults(args)
+    except ValueError as exc:
+        print(f"mmml md-system: error: {exc}", file=sys.stderr)
+        return 2
     try:
         backend, argv = build_command(args)
     except ValueError as exc:

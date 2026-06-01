@@ -81,23 +81,132 @@ def write_monomer_pdb_for_packmol(
     pdb_path: Path,
     coords: np.ndarray,
     atomic_numbers: np.ndarray,
+    *,
+    atom_names: list[str] | None = None,
 ) -> None:
-    """Write a centered monomer PDB for Packmol using true atomic numbers (e.g. Cl=17)."""
-    from ase import Atoms
-    from ase.data import chemical_symbols
-    from ase.io import write
+    """Write a centered monomer PDB for Packmol.
 
+    When ``atom_names`` are supplied (CHARMM PSF ``atype`` labels), they are written to
+    the PDB name column so Packmol output can be mapped back to PSF order.
+    """
     z = np.asarray(atomic_numbers, dtype=int).reshape(-1)
     coords_arr = np.asarray(coords, dtype=float)
     if int(z.shape[0]) != int(coords_arr.shape[0]):
         raise ValueError(
             f"atomic_numbers length ({z.shape[0]}) != coords rows ({coords_arr.shape[0]})"
         )
+    coords_arr = coords_arr - coords_arr.mean(axis=0)
+    pdb_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if atom_names is not None:
+        names = [str(n) for n in atom_names]
+        if len(names) != int(coords_arr.shape[0]):
+            raise ValueError(
+                f"atom_names length ({len(names)}) != coords rows ({coords_arr.shape[0]})"
+            )
+        from ase.data import chemical_symbols
+
+        lines = [
+            "REMARK   mmml packmol monomer (CHARMM atom names for PSF reordering)",
+            "CRYST1   200.000   200.000   200.000  90.00  90.00  90.00 P 1           1",
+        ]
+        for i, (name, (x, y, z)) in enumerate(zip(names, coords_arr), start=1):
+            elem = name[0] if name else "C"
+            if elem.isdigit():
+                elem = "C"
+            try:
+                sym = chemical_symbols[int(z[i - 1])]
+                elem = sym if len(sym) <= 2 else elem
+            except (IndexError, ValueError):
+                pass
+            lines.append(
+                f"ATOM  {i:5d} {name[:4]:>4s} UNK A   1    "
+                f"{float(x):8.3f}{float(y):8.3f}{float(z):8.3f}  1.00  0.00          "
+                f"{elem:>2s}"
+            )
+        lines.append("END")
+        pdb_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return
+
+    from ase import Atoms
+    from ase.data import chemical_symbols
+    from ase.io import write
+
     symbols = [chemical_symbols[int(zi)] for zi in z]
     mol = Atoms(symbols=symbols, positions=coords_arr)
-    mol.positions -= mol.get_center_of_mass()
-    pdb_path.parent.mkdir(parents=True, exist_ok=True)
     write(pdb_path, mol)
+
+
+def assign_packmol_pdb_to_psf_order(
+    pdb_path: Path | str,
+    psf_atom_names: list[str],
+    atoms_per_list: list[int],
+) -> np.ndarray:
+    """Map Packmol-packed PDB coordinates onto CHARMM PSF atom order.
+
+    Packmol output atom order does not generally match PSF ``atype`` order.  Match by
+    ``(residue_index, atom_name)`` using the same recipe as ``mmml_ase.load_pdb_data``.
+    """
+    import MDAnalysis as mda
+
+    atypes = [str(x) for x in psf_atom_names]
+    n_atoms = len(atypes)
+    if n_atoms != int(np.sum(atoms_per_list)):
+        raise ValueError(
+            f"PSF atom count ({n_atoms}) != sum(atoms_per_list) ({sum(atoms_per_list)})"
+        )
+
+    charmm_resids: list[int] = []
+    for i, n_per in enumerate(atoms_per_list):
+        charmm_resids.extend([int(i)] * int(n_per))
+
+    u = mda.Universe(str(pdb_path))
+    pdb_positions = np.asarray(u.atoms.positions, dtype=float)
+    if int(pdb_positions.shape[0]) != n_atoms:
+        raise RuntimeError(
+            f"Packmol PDB atom count ({pdb_positions.shape[0]}) != PSF ({n_atoms})"
+        )
+
+    mda_names = [str(s) for s in u.atoms.names]
+    mda_resids = [int(s) for s in u.atoms.resids]
+
+    mda_res_at_dict = {
+        (int(a) - 1, b): i for i, (a, b) in enumerate(zip(mda_resids, mda_names))
+    }
+    charmm_res_at_dict = {
+        (int(a), b): i for i, (a, b) in enumerate(zip(charmm_resids, atypes))
+    }
+    an_mda_res_at_dict = {v: k for k, v in mda_res_at_dict.items()}
+
+    out = np.zeros((n_atoms, 3), dtype=float)
+    missing: list[tuple[int, tuple[int, str] | None]] = []
+    for pdb_i in range(n_atoms):
+        key = an_mda_res_at_dict.get(pdb_i)
+        if key is None:
+            missing.append((pdb_i, None))
+            continue
+        psf_i = charmm_res_at_dict.get(key)
+        if psf_i is None:
+            missing.append((pdb_i, key))
+            continue
+        out[psf_i] = pdb_positions[pdb_i]
+
+    if missing:
+        sample = missing[:5]
+        raise RuntimeError(
+            "Could not map Packmol PDB atoms to PSF order by (residue, atom_name). "
+            f"First failures (pdb_index, key): {sample}. "
+            "Ensure monomer PDBs use CHARMM atype names (write_monomer_pdb_for_packmol "
+            "with atom_names=...)."
+        )
+
+    span = out.max(axis=0) - out.min(axis=0)
+    if float(span[1]) < 0.3 or float(span[2]) < 0.3:
+        raise RuntimeError(
+            f"Packmol→PSF positions look collapsed (spans Å: x={span[0]:.2f} "
+            f"y={span[1]:.2f} z={span[2]:.2f}). Check Packmol input templates."
+        )
+    return out
 
 
 def run_packmol_sphere(

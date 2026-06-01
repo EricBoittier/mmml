@@ -69,13 +69,8 @@ def _build_psf_ordered_cluster(
     ic.prm_fill(replace_all=True)
     ic.build()
 
-    try:
-        from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
-
-        positions = get_charmm_positions_array()
-    except Exception:
-        pos_df = coor.get_positions()
-        positions = pos_df[["x", "y", "z"]].to_numpy(dtype=float)
+    pos_df = coor.get_positions()
+    positions = pos_df[["x", "y", "z"]].to_numpy(dtype=float)
     n_atoms = positions.shape[0]
     if n_atoms % n_molecules != 0:
         raise RuntimeError(
@@ -107,8 +102,8 @@ def _build_psf_ordered_cluster(
             for nm in local_names:
                 if nm not in tmpl:
                     raise KeyError(
-                        f"Template PDB {template_pdb} missing atom name '{nm}' required by PSF order. "
-                        f"Available: {sorted(tmpl.keys())}"
+                        f"Template {template_pdb} missing atom '{nm}' (PSF order). "
+                        f"Have: {sorted(tmpl.keys())}"
                     )
                 local_coords.append(tmpl[nm])
             shifted[start:end] = np.asarray(local_coords, dtype=float)
@@ -128,12 +123,106 @@ def _build_psf_ordered_cluster(
     except Exception:
         pass
 
-    span = shifted.max(axis=0) - shifted.min(axis=0)
-    if span[1] < 0.3 or span[2] < 0.3:
+    span = np.ptp(shifted, axis=0)
+    if float(span[1]) < 0.3 or float(span[2]) < 0.3:
         raise RuntimeError(
-            f"Cluster geometry is nearly 1D (axis spans Å: x={span[0]:.3f} y={span[1]:.3f} z={span[2]:.3f}). "
-            "Pass template_pdb with 3D monomer coordinates (e.g. default_aco_template_pdb() for ACO)."
+            f"Cluster geometry not 3D (spans Å x={span[0]:.3f} y={span[1]:.3f} z={span[2]:.3f})"
         )
 
     z = np.asarray(get_Z_from_psf(), dtype=int)
     return z, shifted
+
+
+def _default_template_pdb_for_residue(residue: str) -> Path | None:
+    """Bundled 3D monomer templates keyed by CGenFF residue name."""
+    residue = residue.upper()
+    from mmml.paths import default_aco_template_pdb, default_meoh_template_pdb
+
+    if residue == "ACO":
+        path = default_aco_template_pdb()
+        return path if path.is_file() else None
+    if residue == "MEOH":
+        path = default_meoh_template_pdb()
+        return path if path.is_file() else None
+    return None
+
+
+def _monomer_geometry_is_3d(coords: np.ndarray, *, min_axis_span: float = 0.3) -> bool:
+    span = np.max(coords, axis=0) - np.min(coords, axis=0)
+    return float(span[1]) >= min_axis_span and float(span[2]) >= min_axis_span
+
+
+def build_minimized_monomer_for_packmol(
+    residue: str,
+    *,
+    nstep_sd: int = 50,
+    nstep_abnr: int = 100,
+    tolenr: float = 1e-3,
+    tolgrd: float = 1e-3,
+    verbose: bool = True,
+) -> tuple[np.ndarray, list[str], np.ndarray]:
+    """Build and CHARMM-minimize an isolated monomer before Packmol (MM only, no MLpot)."""
+    from mmml.cli.run.md_pbc_suite.ase import _generate_residue_with_make_res_recipe
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        CharmmMmMinimizeConfig,
+        minimize_charmm_mm_only,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        get_charmm_positions_array,
+        sync_charmm_positions,
+    )
+
+    residue = residue.upper()
+    coords, atom_names, z = _generate_residue_with_make_res_recipe(residue)
+
+    pycharmm.lingo.charmm_script("DELETE ATOM SELE ALL END")
+    reset_block()
+    read.rtf(CGENFF_RTF)
+    bl = settings.set_bomb_level(-2)
+    wl = settings.set_warn_level(-2)
+    read.prm(CGENFF_PRM)
+    settings.set_bomb_level(bl)
+    settings.set_warn_level(wl)
+    pycharmm.lingo.charmm_script("bomlev 0")
+    read.sequence_string(residue)
+    gen.new_segment(seg_name="CLST", setup_ic=True)
+    ic.prm_fill(replace_all=True)
+    ic.build()
+
+    psf_names = [str(x) for x in np.asarray(psf.get_atype(), dtype=str)]
+    if psf_names != atom_names:
+        raise RuntimeError(
+            f"Atom order mismatch for {residue}: PSF {psf_names} vs relaxed {atom_names}"
+        )
+    sync_charmm_positions(coords)
+
+    if verbose and (nstep_sd > 0 or nstep_abnr > 0):
+        print(
+            f"Packmol monomer {residue}: CHARMM MM minimize (SD={nstep_sd}, ABNR={nstep_abnr})"
+        )
+    if nstep_sd > 0 or nstep_abnr > 0:
+        minimize_charmm_mm_only(
+            CharmmMmMinimizeConfig(
+                nstep_sd=int(nstep_sd),
+                nstep_abnr=int(nstep_abnr),
+                nprint=10,
+                tolenr=float(tolenr),
+                tolgrd=float(tolgrd),
+                verbose=verbose,
+                show_energy=verbose,
+            )
+        )
+        coords = get_charmm_positions_array()
+
+    if not _monomer_geometry_is_3d(coords):
+        span = np.ptp(coords, axis=0)
+        raise RuntimeError(
+            f"Monomer {residue} not 3D after minimization "
+            f"(spans Å x={span[0]:.2f} y={span[1]:.2f} z={span[2]:.2f})"
+        )
+    z = np.asarray(get_Z_from_psf(), dtype=int)
+    if int(z.shape[0]) != len(atom_names):
+        raise RuntimeError(
+            f"Atom count mismatch for {residue}: PSF {z.shape[0]} vs {len(atom_names)} names"
+        )
+    return coords, atom_names, z

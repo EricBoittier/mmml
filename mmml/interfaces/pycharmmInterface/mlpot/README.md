@@ -26,6 +26,15 @@ finally:
     ctx.unset()
 ```
 
+## Workflow order (CLI / ``run_workflow``)
+
+1. Build cluster: each monomer **CHARMM-minimized** (template + SD/ABNR) → written to Packmol → sphere pack → PSF reorder  
+2. **Cluster CHARMM MM SD/ABNR** (CGENFF only, no MLpot) — ``--charmm-pre-minimize`` (default on)  
+3. **Register MLpot** + PhysNet  
+4. **MLpot SD** (optional second pass with ``cons_fix``) then dynamics  
+
+Skip step 2 with ``--no-charmm-pre-minimize``. Tune with ``--charmm-sd-steps`` / ``--charmm-abnr-steps``.
+
 ## Minimization (example pattern)
 
 MLpot on the **whole** system; two SD passes — free, then `cons_fix` on selected monomers:
