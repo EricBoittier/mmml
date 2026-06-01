@@ -19,7 +19,3 @@ for name in [
     setattr(stub_models, name, {})
 sys.modules["mmml.dcmnet.dcmnet.models"] = stub_models
 
-# Stub e3x if imported indirectly
-sys.modules.setdefault("e3x", types.ModuleType("e3x"))
-
-

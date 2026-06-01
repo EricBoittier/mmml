@@ -7,7 +7,11 @@ import jax
 import jax.numpy as jnp
 from typing import Callable, Iterable, List, Optional, Sequence
 
-from mmml.pycharmmInterface.pbc_utils_jax import coregister_groups, unwrap_groups, wrap_groups
+from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
+    coregister_groups,
+    unwrap_groups,
+    wrap_groups,
+)
 
 Array = jnp.ndarray
 
