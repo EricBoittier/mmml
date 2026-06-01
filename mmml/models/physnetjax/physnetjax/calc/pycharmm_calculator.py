@@ -67,7 +67,6 @@ class PyCharmm_Calculator:
         mlmm_lambda: Optional[float] = 1.0,
         **kwargs,
     ):
-        print("PyCharmm_Calculator")
         self.dtype = np.float64
         self.ml_num_atoms = len(ml_atom_indices) if ml_atom_indices is not None else 0
         self.ml_atom_indices = ml_atom_indices
@@ -178,6 +177,9 @@ class PyCharmm_Calculator:
             mlmm_R = np.array([x[:Natom], y[:Natom], z[:Natom]]).T
             idxp[:Natom]
 
+        ml_idx = np.asarray(self.ml_atom_indices, dtype=int)
+        ml_R = mlmm_R[ml_idx]
+
         # Assign indices
         # ML-ML pair indices
         # ML-ML pair indices
@@ -196,7 +198,7 @@ class PyCharmm_Calculator:
         atoms_batch = {}
         atoms_batch["N"] = self.ml_num_atoms
         atoms_batch["atomic_numbers"] = self.ml_atomic_numbers
-        atoms_batch["positions"] = mlmm_R
+        atoms_batch["positions"] = ml_R
         atoms_batch["charge"] = self.ml_charge
         atoms_batch["dst_idx"] = ml_idxi
         atoms_batch["src_idx"] = ml_idxj
@@ -219,14 +221,13 @@ class PyCharmm_Calculator:
             return 0
         for prop in self.implemented_properties:
             self.results[prop] = results[prop]
-        # Apply dtype conversion
-        ml_F = np.array(self.results["forces"])
-
-        # Add forces to CHARMM derivative arrays
-        for ai in self.ml_atom_indices:
-            for ai, force in zip(self.ml_atom_indices, ml_F):
-                dx[ai] -= force[0]
-                dy[ai] -= force[1]
-                dz[ai] -= force[2]
+        # Add forces to CHARMM derivative arrays (one accumulation per ML atom).
+        ml_F = np.asarray(self.results["forces"], dtype=self.dtype).reshape(
+            self.ml_num_atoms, 3
+        )
+        for ai, force in zip(self.ml_atom_indices, ml_F):
+            dx[ai] -= force[0]
+            dy[ai] -= force[1]
+            dz[ai] -= force[2]
 
         return self.results["energy"]
