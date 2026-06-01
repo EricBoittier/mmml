@@ -1,0 +1,1 @@
+"""ASE calculator integration."""

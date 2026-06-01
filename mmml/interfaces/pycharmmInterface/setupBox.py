@@ -348,7 +348,9 @@ def _ensure_crystal_image_str() -> None:
     dst = Path("crystal_image.str")
     if dst.exists():
         return
-    src = Path(__file__).resolve().parents[2] / "data" / "charmm" / "crystal_image.str"
+    from mmml.paths import crystal_image_str_source
+
+    src = crystal_image_str_source()
     if src.exists():
         shutil.copy2(src, dst)
     else:

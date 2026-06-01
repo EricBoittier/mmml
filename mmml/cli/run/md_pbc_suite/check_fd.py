@@ -18,6 +18,7 @@ from mmml.cli.run.md_pbc_suite.ase import (
     _run_charmm_minimize,
 )
 from mmml.cli.run.md_pbc_suite.cluster import _build_psf_ordered_cluster
+from mmml.paths import default_meoh_template_pdb
 
 
 def force_fd_check(atoms: Atoms, natoms_check: int, dx: float) -> dict[str, float]:
@@ -58,7 +59,7 @@ def main(argv: list[str] | None = None) -> int:
             "lowest validation force MAE, or $MMML_CKPT)."
         ),
     )
-    p.add_argument("--template-pdb", type=Path, default=Path("mmml/generate/sample/pdb/meoh.pdb"))
+    p.add_argument("--template-pdb", type=Path, default=default_meoh_template_pdb())
     p.add_argument("--output", type=Path, default=Path("artifacts/md_10mer_mmml_pbc_suite/fd_force_check.json"))
     p.add_argument("--n-molecules", type=int, default=10)
     p.add_argument("--spacing", type=float, default=5.0)
