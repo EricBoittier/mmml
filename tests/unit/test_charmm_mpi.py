@@ -73,6 +73,32 @@ def test_revalidate_mpi_after_cuda_trusts_mpirun_without_mpi4py(monkeypatch):
         assert charmm_mpi.revalidate_mpi_after_cuda(phase="test") is True
 
 
+def test_charmm_mpirun_path_from_ldd(monkeypatch, tmp_path):
+    lib = tmp_path / "libcharmm.so"
+    lib.write_bytes(b"stub")
+    bindir = tmp_path / "openmpi" / "bin"
+    bindir.mkdir(parents=True)
+    mpirun = bindir / "mpirun"
+    mpirun.write_text("#!/bin/sh\n")
+    mpirun.chmod(0o755)
+    libdir = tmp_path / "openmpi" / "lib"
+    libdir.mkdir(parents=True)
+    (libdir / "libmpi.so.40").symlink_to("/dev/null")
+
+    monkeypatch.setenv("CHARMM_LIB_DIR", str(tmp_path))
+    charmm_mpi.charmm_lib_links_mpi.cache_clear()
+    charmm_mpi.charmm_mpirun_path.cache_clear()
+    ldd_out = f"libmpi.so.40 => {libdir / 'libmpi.so.40'}"
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.subprocess.run",
+        return_value=mock.Mock(returncode=0, stdout=ldd_out),
+    ):
+        found = charmm_mpi.charmm_mpirun_path()
+    assert found == mpirun.resolve()
+    charmm_mpi.charmm_mpirun_path.cache_clear()
+    charmm_mpi.charmm_lib_links_mpi.cache_clear()
+
+
 def test_recover_mpi_never_finalizes(monkeypatch):
     monkeypatch.delenv("MMML_NO_MPI_INIT", raising=False)
     with mock.patch(

@@ -180,6 +180,66 @@ def mpi_library_path_export() -> str:
     return f"export LD_LIBRARY_PATH={prefix}${{LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}}"
 
 
+@lru_cache(maxsize=1)
+def charmm_mpirun_path() -> Path | None:
+    """``mpirun`` from the same OpenMPI install as ``libcharmm.so`` (not system OpenMPI 3)."""
+    override = (os.environ.get("MMML_MPIRUN") or "").strip()
+    if override:
+        candidate = Path(override).expanduser()
+        if candidate.is_file():
+            return candidate.resolve()
+
+    lib = _charmm_lib_path()
+    if lib is None:
+        return None
+
+    for line in _run_ldd(lib).splitlines():
+        low = line.lower()
+        if "libmpi.so" not in low or "=>" not in line:
+            continue
+        try:
+            _, _, rest = line.partition("=>")
+            libpath = rest.split("(", 1)[0].strip()
+        except IndexError:
+            continue
+        if not libpath.startswith("/"):
+            continue
+        lib_dir = Path(libpath).parent.resolve()
+        for candidate in (
+            lib_dir.parent / "bin" / "mpirun",
+            lib_dir / "mpirun",
+        ):
+            if candidate.is_file():
+                return candidate.resolve()
+    return None
+
+
+def mpi_path_export() -> str:
+    mpirun = charmm_mpirun_path()
+    if mpirun is None:
+        return ""
+    bindir = str(mpirun.parent)
+    return f"export PATH={bindir}${{PATH:+:$PATH}}"
+
+
+def mpi_shell_setup_lines() -> list[str]:
+    """Shell ``export`` lines for LD_LIBRARY_PATH, PATH, and OpenMPI MCA vars."""
+    lines = [
+        "export OMPI_MCA_mpi_cuda_support=0",
+        "export OMPI_MCA_opal_cuda_support=0",
+    ]
+    ld = mpi_library_path_export()
+    if ld:
+        lines.append(ld)
+    path_line = mpi_path_export()
+    if path_line:
+        lines.append(path_line)
+    mpirun = charmm_mpirun_path()
+    if mpirun is not None:
+        lines.append(f"export MMML_MPIRUN={mpirun}")
+    return lines
+
+
 def ensure_charmm_mpi_library_path() -> list[str]:
     if _truthy("MMML_NO_MPI_LD_PATH"):
         return []
@@ -363,11 +423,11 @@ def revalidate_mpi_after_cuda(*, phase: str = "after JAX GPU warmup") -> bool:
 
 
 def mpirun_launch_hint(argv0: str = "mmml md-system") -> str:
-    export_line = mpi_library_path_export()
-    lines = ["export OMPI_MCA_mpi_cuda_support=0", "export OMPI_MCA_opal_cuda_support=0"]
-    if export_line:
-        lines.append(export_line)
-    lines.append(f"mpirun -np 1 {argv0} ...")
+    lines = mpi_shell_setup_lines()
+    mpirun = charmm_mpirun_path()
+    runner = str(mpirun) if mpirun is not None else "mpirun"
+    lines.append(f"{runner} -np 1 {argv0} ...")
+    lines.append("# or: ./scripts/mmml-charmm-mpirun.sh md-system ...")
     return "\n".join(lines)
 
 
