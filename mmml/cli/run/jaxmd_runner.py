@@ -20,6 +20,7 @@ from mmml.cli.run.summaries import print_flat_bottom_summary, print_forces_summa
 from mmml.interfaces.pycharmmInterface.pbc_utils_jax import wrap_groups
 from mmml.utils.geometry_checks import assert_no_intermonomer_atom_overlap
 from mmml.utils.hdf5_reporter import make_jaxmd_reporter
+from mmml.utils.jax_gpu_warmup import block_jax_values, ensure_xla_gpu_warmed
 
 import ase.io as ase_io
 from typing import Callable, Optional
@@ -317,6 +318,16 @@ def set_up_nhc_sim_routine(
             # NVT/NVE: fixed box, pass box for neighbor list consistency
             pair_idx, pair_mask = update_fn(np.asarray(R), box=box_nl)
     c = Console()
+    # Silent compile + GPU sync before timed run (avoids XLA cuda_timer delay-kernel warnings).
+    ensure_xla_gpu_warmed(force=True)
+    _warm = evaluate_energies_and_forces(
+        atomic_numbers=atomic_numbers,
+        positions=R,
+        mm_pair_idx=pair_idx,
+        mm_pair_mask=pair_mask,
+        box=box_init,
+    )
+    block_jax_values(_warm.energy, _warm.forces)
     c.print(Panel("Compiling JAX energy/force (first run may take minutes)...", title="[bold cyan]JAX-MD[/bold cyan]", border_style="cyan"))
     t0 = time.perf_counter()
     result = evaluate_energies_and_forces(
@@ -1034,6 +1045,15 @@ def set_up_nhc_sim_routine(
                 kT=kT,
                 grad=grad,
             )
+
+        # Warm up jitted integrator before timed/diagnostic first step.
+        if is_npt and npt_pair_idx is not None:
+            _warm_state = apply_fn(
+                state, neighbor=(npt_pair_idx, npt_pair_mask), pressure=npt_pressure
+            )
+        else:
+            _warm_state = apply_fn(state)
+        block_jax_values(_warm_state.position, _warm_state.momentum)
 
         # Single-step diagnostic: catch NaN on first step (common with wrong mass/units)
         if is_npt and npt_pair_idx is not None:

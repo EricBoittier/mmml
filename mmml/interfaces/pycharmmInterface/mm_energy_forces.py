@@ -190,6 +190,10 @@ def build_mm_energy_forces_fn(
     settings.set_warn_level(wl)
     import pycharmm
     pycharmm.lingo.charmm_script('bomlev 0')
+    # Drude/Thole setup prints here; recalibrate XLA delay kernel before hybrid JIT.
+    from mmml.utils.jax_gpu_warmup import ensure_xla_gpu_warmed
+
+    ensure_xla_gpu_warmed(force=True)
 
     cgenff_rtf = open(CGENFF_RTF).readlines()
     atc = param.get_atc()

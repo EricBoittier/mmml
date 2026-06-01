@@ -41,7 +41,12 @@ from mmml.interfaces.pycharmmInterface.calculator_utils import (
 )
 from mmml.interfaces.pycharmmInterface.ml_batching import prepare_batches_md, prepare_batch_structure
 from mmml.interfaces.pycharmmInterface.mm_energy_forces import build_mm_energy_forces_fn
-from mmml.utils.jax_gpu_warmup import ensure_xla_gpu_warmed
+from mmml.utils.jax_gpu_warmup import (
+    apply_xla_cuda_timer_log_filter,
+    block_jax_values,
+    ensure_xla_gpu_warmed,
+    warmup_hybrid_spherical_cutoff,
+)
 
 
 # CHARMM force-field definitions are optional.  During documentation builds we
@@ -625,8 +630,11 @@ def setup_calculator(
             f"[setup_calculator] Runtime natoms={max_atoms} (largest monomer/dimer in this system). "
             "n_res is an EF architecture parameter, not the number of CHARMM residues."
         )
+    apply_xla_cuda_timer_log_filter()
     if ensure_xla_gpu_warmed():
-        print("[setup_calculator] XLA GPU warmup complete (delay-kernel calibration)")
+        print(
+            "[setup_calculator] Generic XLA GPU warmup (full hybrid warmup runs after PyCHARMM/CGENFF init)"
+        )
     is_spooky_model = "spooky_model" in type(MODEL).__module__
 
     # Precompute batch structure for full batch (used when not sparse)
@@ -808,6 +816,36 @@ def setup_calculator(
     _cached_mm_fn = [None]          # [0] = calculate_mm_energy_and_forces | None
     _cached_update_mm_pairs = [None]  # [0] = update_mm_pairs | None (jax_md path)
     _cached_mm_cutoff_key = [None]  # hashable key to detect cutoff-param changes
+    _hybrid_jit_warmed = [False]
+
+    def _maybe_warmup_hybrid_jit(
+        positions_concrete,
+        cutoff_params,
+        atomic_numbers_concrete,
+        *,
+        mm_pair_idx=None,
+        mm_pair_mask=None,
+        box=None,
+    ) -> None:
+        """Run two hybrid evals once MM/CGENFF is ready (post-drude XLA calibration)."""
+        if _hybrid_jit_warmed[0]:
+            return
+        warmup_hybrid_spherical_cutoff(
+            spherical_cutoff_calculator,
+            atomic_numbers=jnp.asarray(atomic_numbers_concrete, dtype=jnp.int32),
+            positions=jnp.asarray(positions_concrete, dtype=jnp.float32),
+            n_monomers=n_monomers,
+            cutoff_params=cutoff_params,
+            doML=doML,
+            doMM=doMM,
+            doML_dimer=doML_dimer,
+            debug=debug,
+            mm_pair_idx=mm_pair_idx,
+            mm_pair_mask=mm_pair_mask,
+            box=box,
+        )
+        _hybrid_jit_warmed[0] = True
+        print("[mmml] hybrid JIT warmup complete (post-PyCHARMM delay-kernel calibration)")
 
     def _ensure_mm_fn(positions_concrete, cutoff_params):
         """Build the MM energy/force function if not yet cached (or if cutoffs changed)."""
@@ -831,6 +869,9 @@ def setup_calculator(
             _cached_mm_fn[0] = mm_result
             _cached_update_mm_pairs[0] = update_fn
             _cached_mm_cutoff_key[0] = key
+            # PyCHARMM parameter load (drudes, etc.) can run between setup_calculator's
+            # early XLA warmup and the first large hybrid JIT; recalibrate delay kernel.
+            ensure_xla_gpu_warmed(force=True)
 
     @partial(jax.jit, static_argnames=['n_monomers', 'cutoff_params', 'doML', 'doMM', 'doML_dimer', 'debug',])
     def spherical_cutoff_calculator(
@@ -1573,8 +1614,8 @@ def setup_calculator(
                 """Calculate energy and forces for given atomic configuration"""
 
                 ase_calc.Calculator.calculate(self, atoms, properties, system_changes)
-                if not getattr(self, "_xla_gpu_warmed", True):
-                    ensure_xla_gpu_warmed()
+                if not getattr(self, "_xla_gpu_warmed", False):
+                    ensure_xla_gpu_warmed(force=True)
                     self._xla_gpu_warmed = True
                 R = np.asarray(atoms.get_positions(), dtype=np.float64)
 
