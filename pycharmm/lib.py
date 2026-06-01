@@ -59,6 +59,8 @@ class CharmmLib:
         self.lib.init_charmm()
 
     def del_charmm(self):
+        if self.lib is None:
+            return
         self.lib.del_charmm()  # initiates 'normal stop'
         # does not work
         # self.lib.dlclose(self.lib)
