@@ -18,7 +18,7 @@ from mmml.utils.model_checkpoint import (
 # Example 1: Save a model checkpoint
 def example_save():
     """Example of saving a model checkpoint."""
-    from mmml.physnetjax.physnetjax.models.model import EF
+    from mmml.models.physnetjax.physnetjax.models.model import EF
     
     # Create a model
     model = EF(
@@ -74,7 +74,7 @@ def example_load(checkpoint_dir: Path):
 # Example 3: Create model from checkpoint
 def example_create_model(checkpoint_dir: Path):
     """Example of creating a model instance from checkpoint."""
-    from mmml.physnetjax.physnetjax.models.model import EF
+    from mmml.models.physnetjax.physnetjax.models.model import EF
     
     model, params, config = create_model_from_checkpoint(
         checkpoint_dir=checkpoint_dir,
@@ -91,7 +91,7 @@ def example_create_model(checkpoint_dir: Path):
 # Example 4: Quick save/load
 def example_quick_save_load():
     """Example using quick save/load functions."""
-    from mmml.physnetjax.physnetjax.models.model import EF
+    from mmml.models.physnetjax.physnetjax.models.model import EF
     
     model = EF(features=32, cutoff=6.0)
     key = jax.random.PRNGKey(0)

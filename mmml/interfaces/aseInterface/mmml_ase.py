@@ -35,16 +35,16 @@ import pandas as pd
 
 # sys.path.append("/pchem-data/meuwly/boittier/home/dcm-lj-data")
 # from pycharmm_lingo_scripts import script1, script2, script3, load_dcm
-from mmml.physnetjax.physnetjax.restart.restart import get_last, get_params_model
+from mmml.models.physnetjax.physnetjax.restart.restart import get_last, get_params_model
 
-from mmml.physnetjax.physnetjax.models.model import EF
+from mmml.models.physnetjax.physnetjax.models.model import EF
 
 orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
 
 data_key, train_key = jax.random.split(jax.random.PRNGKey(42), 2)
 
 
-from mmml.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
+from mmml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
 
 
 def parse_non_int(s):

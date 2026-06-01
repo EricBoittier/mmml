@@ -61,8 +61,8 @@ def _run_ase_replica(args: Dict[str, Any]) -> tuple[int, Path]:
     from ase.md.langevin import Langevin
     from ase.md.velocitydistribution import MaxwellBoltzmannDistribution, Stationary, ZeroRotation
 
-    from mmml.physnetjax.physnetjax.restart.restart import get_last, get_params_model
-    from mmml.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
+    from mmml.models.physnetjax.physnetjax.restart.restart import get_last, get_params_model
+    from mmml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
 
     replica_id = args["replica_id"]
     R = np.array(args["R"])
@@ -222,8 +222,8 @@ def main() -> int:
     n_atoms = len(Z)
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
-    from mmml.physnetjax.physnetjax.restart.restart import get_last, get_params_model
-    from mmml.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
+    from mmml.models.physnetjax.physnetjax.restart.restart import get_last, get_params_model
+    from mmml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
     import e3x
     import jax
     import jax.numpy as jnp

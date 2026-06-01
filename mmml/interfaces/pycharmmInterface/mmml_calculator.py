@@ -63,7 +63,7 @@ try:
     from mmml.models.physnetjax.physnetjax.models.model import EF
     from mmml.models.physnetjax.physnetjax.restart.restart import get_files, get_last, get_params_model
     # Skip training import that requires lovely_jax
-    # from mmml.physnetjax.physnetjax.training.training import train_model
+    # from mmml.models.physnetjax.physnetjax.training.training import train_model
     def train_model(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[override]
         raise ModuleNotFoundError("lovely_jax is required for train_model")
 except ModuleNotFoundError:  # pragma: no cover - ML stack optional for docs
@@ -524,8 +524,8 @@ def setup_calculator(
                 }
 
             # Reconstruct model from config
-            from mmml.physnetjax.physnetjax.models.model import EF as StandardEF
-            from mmml.physnetjax.physnetjax.models.spooky_model import EF as SpookyEF
+            from mmml.models.physnetjax.physnetjax.models.model import EF as StandardEF
+            from mmml.models.physnetjax.physnetjax.models.spooky_model import EF as SpookyEF
 
             # Convert JSON arrays back to JAX arrays for model config
             def json_to_jax_config(obj):

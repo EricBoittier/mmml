@@ -14,9 +14,9 @@ import sys
 repo_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(repo_root))
 
-from mmml.physnetjax.physnetjax.models.model import EF
-from mmml.physnetjax.physnetjax.training.trainstep import train_step
-from mmml.physnetjax.physnetjax.training.optimizer import get_optimizer
+from mmml.models.physnetjax.physnetjax.models.model import EF
+from mmml.models.physnetjax.physnetjax.training.trainstep import train_step
+from mmml.models.physnetjax.physnetjax.training.optimizer import get_optimizer
 
 
 def main():

@@ -193,13 +193,13 @@ def main() -> int:
             print("Error: no samples to evaluate.", file=sys.stderr)
             return 1
 
-        from mmml.physnetjax.physnetjax.restart.restart import (
+        from mmml.models.physnetjax.physnetjax.restart.restart import (
             get_last,
             get_params_model,
         )
-        from mmml.physnetjax.physnetjax.data.data import prepare_datasets
-        from mmml.physnetjax.physnetjax.data.batches import prepare_batches_jit
-        from mmml.physnetjax.physnetjax.analysis.analysis import plot_stats
+        from mmml.models.physnetjax.physnetjax.data.data import prepare_datasets
+        from mmml.models.physnetjax.physnetjax.data.batches import prepare_batches_jit
+        from mmml.models.physnetjax.physnetjax.analysis.analysis import plot_stats
 
         restart_path = get_last(str(args.checkpoint))
         params, model = get_params_model(str(restart_path), natoms=natoms)

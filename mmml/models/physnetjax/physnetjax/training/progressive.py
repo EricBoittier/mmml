@@ -8,7 +8,7 @@ then max_degree.  Convergence at each stage is detected via plateau
 
 Usage
 -----
->>> from mmml.physnetjax.physnetjax.training.progressive import train_model_progressive
+>>> from mmml.models.physnetjax.physnetjax.training.progressive import train_model_progressive
 >>> growth_stages = [
 ...     {"features": 16, "max_degree": 0},
 ...     {"features": 32, "max_degree": 0},
@@ -34,8 +34,8 @@ import e3x
 import jax
 import numpy as np
 
-from mmml.physnetjax.physnetjax.models.model import EF
-from mmml.physnetjax.physnetjax.training.training import train_model
+from mmml.models.physnetjax.physnetjax.models.model import EF
+from mmml.models.physnetjax.physnetjax.training.training import train_model
 
 
 # ---------------------------------------------------------------------------
@@ -206,7 +206,7 @@ def train_model_progressive(
     # Resume: load params from a completed stage's checkpoint
     # ------------------------------------------------------------------
     if resume_stage > 0 and resume_checkpoint is not None:
-        from mmml.physnetjax.physnetjax.restart.restart import (
+        from mmml.models.physnetjax.physnetjax.restart.restart import (
             get_last,
             get_params_model,
         )

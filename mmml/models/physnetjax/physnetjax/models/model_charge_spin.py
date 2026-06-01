@@ -15,8 +15,8 @@ import jax
 import jax.numpy as jnp
 from jax import Array
 
-from mmml.physnetjax.physnetjax.models.euclidean_fast_attention import fast_attention as efa
-from mmml.physnetjax.physnetjax.models.zbl import ZBLRepulsion
+from mmml.models.physnetjax.physnetjax.models.euclidean_fast_attention import fast_attention as efa
+from mmml.models.physnetjax.physnetjax.models.zbl import ZBLRepulsion
 
 EFA = efa.EuclideanFastAttention
 

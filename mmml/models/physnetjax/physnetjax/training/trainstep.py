@@ -16,7 +16,7 @@ except ModuleNotFoundError:  # pragma: no cover
     optax = None  # type: ignore[assignment]
     otu = None  # type: ignore[assignment]
 
-from mmml.physnetjax.physnetjax.training.loss import (
+from mmml.models.physnetjax.physnetjax.training.loss import (
     mean_absolute_error,
     mean_squared_loss,
     mean_squared_loss_QD,

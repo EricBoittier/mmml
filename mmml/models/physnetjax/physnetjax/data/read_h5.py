@@ -22,7 +22,7 @@ import jax
 import numpy as np
 import orbax.checkpoint
 
-from mmml.physnetjax.physnetjax.data.data import get_choices, make_dicts
+from mmml.models.physnetjax.physnetjax.data.data import get_choices, make_dicts
 
 # Orbax checkpointer for dataset caching
 _dataset_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
@@ -812,8 +812,8 @@ def prepare_h5_datasets(
     Examples
     --------
     >>> import jax
-    >>> from mmml.physnetjax.physnetjax.models.model import EF
-    >>> from mmml.physnetjax.physnetjax.training.training import train_model
+    >>> from mmml.models.physnetjax.physnetjax.models.model import EF
+    >>> from mmml.models.physnetjax.physnetjax.training.training import train_model
     >>> key = jax.random.PRNGKey(42)
     >>> train_data, valid_data, natoms = prepare_h5_datasets(
     ...     key,
@@ -1024,7 +1024,7 @@ if __name__ == "__main__":
     Verification script: load an HDF5 file and print shapes/statistics.
 
     Usage:
-        python -m mmml.physnetjax.physnetjax.data.read_h5 /path/to/qcell_dimers.h5 [natoms]
+        python -m mmml.models.physnetjax.physnetjax.data.read_h5 /path/to/qcell_dimers.h5 [natoms]
 
     If natoms is omitted it is auto-detected from the file.
     """

@@ -28,11 +28,11 @@ from datetime import datetime
 import jax
 
 
-# from mmml.physnetjax.physnetjax.models import model as model
-from mmml.physnetjax.physnetjax.models.model import EF
-from mmml.physnetjax.physnetjax.training.training import train_model
-from mmml.physnetjax.physnetjax.data.data import prepare_datasets
-# from mmml.physnetjax.physnetjax.data.batches import prepare_batches_jit
+# from mmml.models.physnetjax.physnetjax.models import model as model
+from mmml.models.physnetjax.physnetjax.models.model import EF
+from mmml.models.physnetjax.physnetjax.training.training import train_model
+from mmml.models.physnetjax.physnetjax.data.data import prepare_datasets
+# from mmml.models.physnetjax.physnetjax.data.batches import prepare_batches_jit
 
 import numpy as np
 

@@ -9,10 +9,10 @@ with PhysNet training.
 import jax
 import jax.numpy as jnp
 from mmml.data.packed_memmap_loader import PackedMemmapLoader, split_loader
-from mmml.physnetjax.physnetjax.models.model import EF
-from mmml.physnetjax.physnetjax.training.trainstep import train_step
-from mmml.physnetjax.physnetjax.training.evalstep import eval_step
-from mmml.physnetjax.physnetjax.training.optimizer import get_optimizer
+from mmml.models.physnetjax.physnetjax.models.model import EF
+from mmml.models.physnetjax.physnetjax.training.trainstep import train_step
+from mmml.models.physnetjax.physnetjax.training.evalstep import eval_step
+from mmml.models.physnetjax.physnetjax.training.optimizer import get_optimizer
 import e3x
 
 

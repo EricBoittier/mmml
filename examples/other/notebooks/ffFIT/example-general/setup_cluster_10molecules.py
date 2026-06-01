@@ -107,7 +107,7 @@ print("=" * 70)
 
 # Load model using the same approach as p3_sim_FIXED.py
 from mmml.cli.base import resolve_checkpoint_paths
-from mmml.physnetjax.physnetjax.restart.restart import get_params_model
+from mmml.models.physnetjax.physnetjax.restart.restart import get_params_model
 
 base_ckpt_dir, epoch_dir = resolve_checkpoint_paths(checkpoint_path)
 print(f"  Base checkpoint dir: {base_ckpt_dir}")

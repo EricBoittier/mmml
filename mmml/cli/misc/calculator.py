@@ -269,7 +269,7 @@ class MMMLCalculator(Calculator):
         # Import and create model
         if model_type == 'dcmnet':
             try:
-                from mmml.physnetjax.physnetjax.models.joint_physnet_dcmnet import JointPhysNetDCMNet
+                from mmml.models.physnetjax.physnetjax.models.joint_physnet_dcmnet import JointPhysNetDCMNet
                 model = JointPhysNetDCMNet(
                     physnet_config=config['physnet_config'],
                     dcmnet_config=config['dcmnet_config'],
@@ -280,7 +280,7 @@ class MMMLCalculator(Calculator):
                 raise
         elif model_type == 'noneq':
             try:
-                from mmml.physnetjax.physnetjax.models.joint_physnet_noneq import JointPhysNetNonEquivariant
+                from mmml.models.physnetjax.physnetjax.models.joint_physnet_noneq import JointPhysNetNonEquivariant
                 model = JointPhysNetNonEquivariant(
                     physnet_config=config['physnet_config'],
                     noneq_config=config['noneq_config'],
@@ -291,7 +291,7 @@ class MMMLCalculator(Calculator):
                 raise
         else:
             try:
-                from mmml.physnetjax.physnetjax.models.model import EF
+                from mmml.models.physnetjax.physnetjax.models.model import EF
                 model = EF(**config.get('physnet_config', config))
             except ImportError:
                 print("⚠️  Could not import PhysNet models")

@@ -17,10 +17,10 @@ import sys
 repo_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(repo_root))
 
-from mmml.physnetjax.physnetjax.models.model import EF
-from mmml.physnetjax.physnetjax.training.trainstep import train_step
-from mmml.physnetjax.physnetjax.training.evalstep import eval_step
-from mmml.physnetjax.physnetjax.training.optimizer import get_optimizer
+from mmml.models.physnetjax.physnetjax.models.model import EF
+from mmml.models.physnetjax.physnetjax.training.trainstep import train_step
+from mmml.models.physnetjax.physnetjax.training.evalstep import eval_step
+from mmml.models.physnetjax.physnetjax.training.optimizer import get_optimizer
 
 
 def load_glycol_data(data_path, train_size=0.8, valid_size=0.1):

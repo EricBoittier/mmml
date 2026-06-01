@@ -30,11 +30,11 @@ except ModuleNotFoundError as exc:  # pragma: no cover - script requires ASE
 
 try:
     from mmml.cli.base import load_model_parameters, resolve_checkpoint_paths
-    from mmml.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
+    from mmml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
 except ModuleNotFoundError:  # pragma: no cover - fallback for script execution
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
     from mmml.cli.base import load_model_parameters, resolve_checkpoint_paths
-    from mmml.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
+    from mmml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
 
 np.set_printoptions(threshold=sys.maxsize)
 

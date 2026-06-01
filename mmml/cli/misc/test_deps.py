@@ -19,7 +19,7 @@ def test_core_imports():
     
     # Test model creation
     try:
-        from mmml.physnetjax.physnetjax.models.model import EF
+        from mmml.models.physnetjax.physnetjax.models.model import EF
         EF(features=64, natoms=3)
         tests.append(("Model creation", True, None))
         print("✅ Model creation works")
@@ -47,7 +47,7 @@ def test_core_imports():
     
     # Test training utilities
     try:
-        from mmml.physnetjax.physnetjax.utils.pretty_printer import init_table
+        from mmml.models.physnetjax.physnetjax.utils.pretty_printer import init_table
         init_table(doCharges=False)
         tests.append(("Training utilities", True, None))
         print("✅ Training utilities work")
@@ -68,7 +68,7 @@ def check_optional_dependencies():
     
     # Check plotting dependencies
     try:
-        from mmml.physnetjax.physnetjax.utils.pretty_printer import HAS_ASCIICHARTPY, HAS_POLARS
+        from mmml.models.physnetjax.physnetjax.utils.pretty_printer import HAS_ASCIICHARTPY, HAS_POLARS
         available['asciichartpy'] = HAS_ASCIICHARTPY
         available['polars'] = HAS_POLARS
         print(f"{'✅' if HAS_ASCIICHARTPY else '❌'} asciichartpy: {HAS_ASCIICHARTPY}")
