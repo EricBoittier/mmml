@@ -47,12 +47,24 @@ def add_charmm_output_args(parser: argparse.ArgumentParser) -> None:
         "--nprint",
         type=int,
         default=1,
-        help="Print energy/status every N minimization or dynamics steps (default: 1)",
+        help="SD minimization: print energy every N steps (default: 1)",
+    )
+    group.add_argument(
+        "--dyn-nprint",
+        type=int,
+        default=100,
+        help="Dynamics: print energy every N steps (default: 100, like dyna.inp production)",
+    )
+    group.add_argument(
+        "--dyn-iprfrq",
+        type=int,
+        default=500,
+        help="Dynamics: detailed status every N steps (default: 500)",
     )
     group.add_argument(
         "--quiet",
         action="store_true",
-        help="Shortcut for --prnlev 0 --warnlev 0 and coarse nprint",
+        help="Shortcut for --prnlev 0 --warnlev 0; coarse mini/dynamics print",
     )
 
 
@@ -128,20 +140,45 @@ def resolve_dcd_nsavc(
 
 
 def apply_charmm_output_from_args(args: argparse.Namespace) -> int:
-    """Apply PRNLev/WRNLev from argparse; return effective ``nprint``."""
+    """Apply PRNLev/WRNLev from argparse; return effective SD ``nprint``."""
     # Import setup submodule directly (avoid pulling full mlpot via package __init__).
     from mmml.interfaces.pycharmmInterface.mlpot.setup import apply_charmm_verbosity
 
     if getattr(args, "quiet", False):
         apply_charmm_verbosity(prnlev=0, warnlev=0, bomlev=args.bomlev)
-        nstep = getattr(args, "nstep", 100)
-        return max(1, nstep)
-    apply_charmm_verbosity(
-        prnlev=args.prnlev,
-        warnlev=args.warnlev,
-        bomlev=args.bomlev,
-    )
+    else:
+        apply_charmm_verbosity(
+            prnlev=args.prnlev,
+            warnlev=args.warnlev,
+            bomlev=args.bomlev,
+        )
+    if getattr(args, "quiet", False):
+        mini_nstep = getattr(args, "mini_nstep", getattr(args, "nstep", 100))
+        return max(1, int(mini_nstep))
     return max(1, int(args.nprint))
+
+
+def resolve_dynamics_print_kwargs(
+    args: argparse.Namespace,
+    *,
+    nstep: int,
+) -> dict[str, int]:
+    """CHARMM ``dyna`` print frequencies (less verbose than SD defaults)."""
+    nstep = max(1, int(nstep))
+    if getattr(args, "quiet", False):
+        return {
+            "nprint": nstep,
+            "iprfrq": nstep,
+            "isvfrq": nstep,
+        }
+    nprint = max(1, int(getattr(args, "dyn_nprint", 100)))
+    iprfrq = max(nprint, int(getattr(args, "dyn_iprfrq", 500)))
+    isvfrq = max(iprfrq, int(getattr(args, "dyn_iprfrq", 500)))
+    # Do not print more often than the run length
+    nprint = min(nprint, nstep)
+    iprfrq = min(iprfrq, nstep)
+    isvfrq = min(isvfrq, nstep)
+    return {"nprint": nprint, "iprfrq": iprfrq, "isvfrq": isvfrq}
 
 
 def add_cluster_args(parser: argparse.ArgumentParser) -> None:

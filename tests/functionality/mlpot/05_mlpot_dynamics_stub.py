@@ -32,6 +32,7 @@ from _common import (
     resolve_checkpoint,
     resolve_constrain_resids,
     resolve_dcd_nsavc,
+    resolve_dynamics_print_kwargs,
     resolve_fix_resids,
     setup_cons_fix_for_resids,
     turn_off_cons_fix,
@@ -122,7 +123,8 @@ def main() -> int:
         sync_charmm_positions,
     )
 
-    nprint = apply_charmm_output_from_args(args)
+    mini_nprint = apply_charmm_output_from_args(args)
+    dyn_print = resolve_dynamics_print_kwargs(args, nstep=args.nstep)
     dcd_nsavc = resolve_dcd_nsavc(
         dcd_nsavc=args.dcd_nsavc,
         dcd_interval_ps=args.dcd_interval_ps,
@@ -131,7 +133,9 @@ def main() -> int:
     )
     print(
         f"CHARMM output: PRNLev={0 if args.quiet else args.prnlev} "
-        f"WRNLev={0 if args.quiet else args.warnlev} nprint={nprint}"
+        f"WRNLev={0 if args.quiet else args.warnlev} | "
+        f"SD nprint={mini_nprint} | "
+        f"dyn nprint={dyn_print['nprint']} iprfrq={dyn_print['iprfrq']}"
     )
     setup_default_nbonds()
     sync_charmm_positions(r)
@@ -162,7 +166,7 @@ def main() -> int:
                 MinimizeWithMlpotConfig(
                     fixed_ml_selection=fix_sel,
                     nstep=args.mini_nstep,
-                    nprint=nprint,
+                    nprint=mini_nprint,
                     verbose=not args.quiet,
                     reference_positions=r,
                     pyCModel=pyCModel,
@@ -194,14 +198,18 @@ def main() -> int:
             save_interval_ps=NVE_TIMESTEP_PS * dcd_nsavc,
             restart=False,
             temp=args.temp,
+            nprint=dyn_print["nprint"],
+            iprfrq=dyn_print["iprfrq"],
+            isvfrq=dyn_print["isvfrq"],
         )
         kw["new"] = True
         kw["start"] = True
         kw["nstep"] = args.nstep
-        kw["nprint"] = nprint
-        kw["iprfrq"] = nprint
         kw["nsavc"] = dcd_nsavc
-        print(f"DCD nsavc={dcd_nsavc} (frame every {dcd_nsavc * NVE_TIMESTEP_PS:.6f} ps)")
+        print(
+            f"DCD nsavc={dcd_nsavc} ({dcd_nsavc * NVE_TIMESTEP_PS:.6f} ps/frame) | "
+            f"dyn print every {dyn_print['nprint']} steps"
+        )
         run_dynamics_with_io(kw, io)
         print("CHARMM energy after dynamics:")
         energy.show()
