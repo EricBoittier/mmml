@@ -62,7 +62,9 @@ def _callback_energy_forces(pyc, positions: np.ndarray) -> tuple[float, np.ndarr
         idxup=[],
         idxvp=[],
     )
-    return float(e_kcal), -np.stack([dx, dy, dz], axis=-1)
+    f_kcal = np.asarray(pyc.results["forces"], dtype=float)
+    f_dx = -np.stack([dx, dy, dz], axis=-1)
+    return float(e_kcal), f_kcal, f_dx
 
 
 def main() -> int:
@@ -103,12 +105,13 @@ def main() -> int:
         conversion={"energy": ev2kcalmol, "forces": ev2kcalmol},
     )
     atoms.calc = ase_calc
-    e_ase_kcal = float(atoms.get_potential_energy()) * ev2kcalmol
-    f_ase_kcal = atoms.get_forces() * ev2kcalmol
+    _ = atoms.get_potential_energy()  # trigger calculate(); results already in kcal/mol
+    e_ase_kcal = float(ase_calc.results["energy"])
+    f_ase_kcal = np.asarray(ase_calc.results["forces"], dtype=float)
 
     pyCModel = get_pyc(params, model, atoms)
     pyc = pyCModel.get_pycharmm_calculator()
-    e_cb_kcal, f_cb_kcal = _callback_energy_forces(pyc, r)
+    e_cb_kcal, f_cb_kcal, _f_dx = _callback_energy_forces(pyc, r)
 
     ml_sel = all_atom_selection()
     mlpot = pycharmm.MLpot(
@@ -134,30 +137,29 @@ def main() -> int:
     print(f"  sum bonded MM terms:     {bonded:.8f}")
     print(f"  max |F_ASE - F_cb|:      {np.abs(f_ase_kcal - f_cb_kcal).max():.8f}")
 
-    ref = max(abs(e_ase_kcal), 1e-6)
+    ref = max(abs(e_ase_kcal), abs(e_cb_kcal), 1e-6)
     ok_ase_cb = abs(e_ase_kcal - e_cb_kcal) <= args.rtol * ref
     ok_cb_user = (
         np.isfinite(e_user)
         and abs(e_cb_kcal - e_user) <= args.rtol * max(abs(e_cb_kcal), 1e-6)
     )
-    ok_total = (
+    ok_ase_charmm = (
         np.isfinite(e_charmm_total)
         and abs(e_ase_kcal - e_charmm_total) <= args.rtol * ref
     )
+    force_ok = np.abs(f_ase_kcal - f_cb_kcal).max() <= args.force_atol
 
     print("\nChecks:")
-    print(f"  ASE vs callback:     {'PASS' if ok_ase_cb else 'FAIL'}")
-    print(f"  callback vs USER:  {'PASS' if ok_cb_user else 'FAIL/SKIP (no USER column)'}")
-    print(f"  ASE vs CHARMM ENER: {'PASS' if ok_total else 'FAIL'}")
+    print(f"  ASE vs callback:      {'PASS' if ok_ase_cb else 'FAIL'}")
+    print(f"  callback vs USER:     {'PASS' if ok_cb_user else 'FAIL'}")
+    print(f"  ASE vs CHARMM ENER:   {'PASS' if ok_ase_charmm else 'FAIL'}")
+    print(f"  ASE vs callback |F|:  {'PASS' if force_ok else 'FAIL'}")
 
-    if ok_ase_cb and (ok_cb_user or ok_total):
-        print("\nPASS: MLpot path is in the right ballpark.")
+    if ok_ase_cb and ok_cb_user and ok_ase_charmm and force_ok:
+        print("\nPASS: ASE, callback, and CHARMM+MLpot agree.")
         return 0
 
-    print(
-        "\nFAIL or partial — capture output and we can narrow "
-        "(units, pair list from CHARMM vs e3x, USER term name)."
-    )
+    print("\nFAIL: see mismatched checks above.")
     return 1
 
 
