@@ -92,6 +92,9 @@ def should_skip_charmm_energy_show() -> bool:
         return True
     if sys.platform == "darwin":
         return True
+    # CHARMM energy.show() can segfault under pytest on some Linux builds.
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return True
     return False
 
 
