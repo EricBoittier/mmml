@@ -99,7 +99,6 @@ def _register_mlpot_context(z: np.ndarray, r: np.ndarray, ckpt: Path, n_atoms: i
     sync_charmm_positions(r)
     pos_chk = get_charmm_positions_array()
     if np.allclose(pos_chk, 0.0):
-        print("WARN: zero coordinates after MLpot register; re-syncing")
         sync_charmm_positions(r)
     return ctx, pyCModel
 

@@ -349,6 +349,12 @@ def resolve_checkpoint(explicit: Path | None = None) -> Path:
     candidates: list[Path] = []
     if ckpt_env:
         candidates.append(Path(ckpt_env))
+    try:
+        from mmml.cli.base import BUNDLED_PORTABLE_SMALL_MOLECULE_PATH
+
+        candidates.append(BUNDLED_PORTABLE_SMALL_MOLECULE_PATH)
+    except Exception:
+        pass
     candidates.extend(
         [
             REPO_ROOT / "examples/ckpts_json/DESdimers_params.json",
@@ -761,13 +767,10 @@ def assert_dynamics_ready(
     if grms <= max_grms:
         print(f"Pre-dynamics GRMS OK: {grms:.4f} kcal/mol/Å (limit {max_grms})")
         return grms
-    msg = (
-        f"Pre-dynamics GRMS {grms:.2f} kcal/mol/Å exceeds {max_grms} — "
-        "Increase --mini-nstep or run minimization first."
-    )
+    msg = f"Pre-dynamics GRMS {grms:.2f} kcal/mol/Å > {max_grms}"
     if abort and not os.environ.get("MMML_MLPOT_ALLOW_HIGH_GRMS"):
         raise RuntimeError(msg)
-    print(f"WARN: {msg} (set MMML_MLPOT_ALLOW_HIGH_GRMS=1 to force dynamics)")
+    print(f"WARN: {msg}")
     return grms
 
 

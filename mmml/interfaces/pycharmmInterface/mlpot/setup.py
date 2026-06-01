@@ -189,25 +189,19 @@ def save_cluster_topology_for_vmd(
 
 
 def disable_charmm_domdec() -> None:
-    """Disable CHARMM domain decomposition (required for vacuum MLpot on DOMDEC builds).
-
-    CHARMM's ``domdec_com`` sets ``q_domdec=.true.`` at the start of *every* DOMDEC
-    command. Only ``domdec off`` clears it. Do **not** run ``domdec dlb off`` here:
-    that leaves domdec enabled and triggers ``init_domdec1`` / NaN box errors on vacuum.
-    """
+    """Turn off domdec (``domdec dlb off`` would leave domdec on)."""
     pycharmm = _import_pycharmm()
     pycharmm.lingo.charmm_script("domdec off")
 
 
 def prepare_charmm_vacuum() -> None:
-    """Clear PBC/image state and disable domdec before vacuum MM or MLpot workflows."""
+    """Vacuum: domdec off, crystal free."""
     disable_charmm_domdec()
     pycharmm = _import_pycharmm()
     try:
         pycharmm.lingo.charmm_script("crystal free")
     except Exception:
         pass
-    # Belt-and-suspenders: any stray ``domdec *`` subcommand may have re-enabled domdec.
     disable_charmm_domdec()
 
 
@@ -226,6 +220,10 @@ def refresh_nbonds_after_mlpot(*, nbxmod: int = 5) -> None:
     pycharmm = _import_pycharmm()
     pycharmm.nbonds.update_bnbnd()
     pycharmm.UpdateNonBondedScript(**vacuum_nbond_kwargs(nbxmod=nbxmod)).run()
+
+
+def physnet_ml_atomic_numbers(z: Sequence[int]) -> list[int]:
+    return [int(x) if int(x) < 9 else 6 for x in z]
 
 
 def load_physnet_mlpot_bundle(
@@ -262,9 +260,10 @@ def register_mlpot(
 ) -> MlpotContext:
     """Register ``pycharmm.MLpot`` and return a context manager-like handle."""
     pycharmm = _import_pycharmm()
+    z_ml = physnet_ml_atomic_numbers(ml_Z)
     mlpot = pycharmm.MLpot(
         ml_model=pyCModel,
-        ml_Z=list(ml_Z),
+        ml_Z=z_ml,
         ml_selection=ml_selection,
         ml_charge=ml_charge,
         ml_fq=ml_fq,
