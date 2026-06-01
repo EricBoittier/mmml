@@ -43,11 +43,17 @@ minimize_with_mlpot(
     MinimizeWithMlpotConfig(
         fixed_ml_selection=select_by_resid(1),
         nstep=500,
+        save=True,
         pdb_path=Path("charmm_data/mini.pdb"),
         crd_path=Path("charmm_data/mini.crd"),
+        psf_path=Path("charmm_data/mini.psf"),
+        energy_json_path=Path("charmm_data/mini_energy.json"),
+        xyz_path=Path("charmm_data/mini.xyz"),
     )
 )
 ```
+
+Set ``save=True`` (or use ``save_minimization_results`` directly) to write coordinates, PSF, CHARMM energy terms as JSON, and an ASE XYZ file.
 
 Prefer **CRD** over PDB when reloading minimized structures (avoids ML nonbond exclusion issues with PDB).
 

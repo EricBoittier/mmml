@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional, Union
@@ -67,8 +68,12 @@ class MinimizeWithMlpotConfig:
     nprint: int = 10
     tolenr: float = 1e-5
     tolgrd: float = 1e-5
+    save: bool = False
     pdb_path: Optional[PathLike] = None
     crd_path: Optional[PathLike] = None
+    psf_path: Optional[PathLike] = None
+    energy_json_path: Optional[PathLike] = None
+    xyz_path: Optional[PathLike] = None
     title: str = "Mini SD"
     skip_if_crd_exists: bool = True
     show_energy: bool = True
@@ -301,14 +306,97 @@ def minimize_with_mlpot(
         tolgrd=config.tolgrd,
     )
 
-    write_minimized_coordinates(
-        pdb_path=config.pdb_path,
-        crd_path=config.crd_path,
-        title=config.title,
-    )
-    if config.show_energy:
+    if config.save:
+        save_minimization_results(
+            pdb_path=config.pdb_path,
+            crd_path=config.crd_path,
+            psf_path=config.psf_path,
+            energy_json_path=config.energy_json_path,
+            xyz_path=config.xyz_path,
+            title=config.title,
+            show_energy=config.show_energy,
+        )
+    elif config.show_energy:
         energy.show()
     return True
+
+
+def charmm_energy_terms() -> dict[str, float]:
+    """Current CHARMM energy row as ``{term: value}`` (kcal/mol)."""
+    _, _, energy, *_ = _import_pycharmm_modules()
+    df = energy.get_energy()
+    row = df.iloc[0].to_dict()
+    terms: dict[str, float] = {}
+    for key, value in row.items():
+        if isinstance(value, (int, float, np.floating)):
+            terms[str(key)] = float(value)
+    return terms
+
+
+def save_minimization_results(
+    *,
+    pdb_path: Optional[PathLike] = None,
+    crd_path: Optional[PathLike] = None,
+    psf_path: Optional[PathLike] = None,
+    energy_json_path: Optional[PathLike] = None,
+    xyz_path: Optional[PathLike] = None,
+    title: str = "Mini SD",
+    show_energy: bool = True,
+) -> dict[str, Path]:
+    """Write minimized coordinates and optional PSF / energy summary.
+
+    Returns dict of output kind -> path for files that were written.
+    """
+    _, _, energy, _, _, write = _import_pycharmm_modules()
+    written: dict[str, Path] = {}
+
+    if pdb_path is not None:
+        p = Path(pdb_path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        write.coor_pdb(str(p), title=title)
+        written["pdb"] = p.resolve()
+
+    if crd_path is not None:
+        p = Path(crd_path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        write.coor_card(str(p), title=title)
+        written["crd"] = p.resolve()
+
+    if psf_path is not None:
+        import pycharmm.write as pywrite
+
+        p = Path(psf_path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        pywrite.psf_card(str(p))
+        written["psf"] = p.resolve()
+
+    if energy_json_path is not None:
+        p = Path(energy_json_path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        payload = {"title": title, "energy_kcal_mol": charmm_energy_terms()}
+        p.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        written["energy_json"] = p.resolve()
+
+    if xyz_path is not None:
+        import pycharmm.coor as coor
+
+        try:
+            import ase
+            import ase.io
+            from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+
+            pos = coor.get_positions().to_numpy(dtype=float)
+            numbers = np.asarray(get_Z_from_psf(), dtype=int)
+            p = Path(xyz_path)
+            p.parent.mkdir(parents=True, exist_ok=True)
+            ase.io.write(str(p), ase.Atoms(numbers=numbers, positions=pos))
+            written["xyz"] = p.resolve()
+        except Exception as exc:
+            raise RuntimeError(f"Failed to write XYZ to {xyz_path}: {exc}") from exc
+
+    if show_energy:
+        energy.show()
+    return written
 
 
 def write_minimized_coordinates(
