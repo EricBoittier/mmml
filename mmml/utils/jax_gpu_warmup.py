@@ -13,11 +13,28 @@ Call :func:`ensure_xla_gpu_warmed` once per process before the first large
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
 _xla_gpu_warmed = False
+
+
+def apply_xla_cuda_timer_log_filter() -> None:
+    """Suppress XLA ``cuda_timer.cc`` delay-kernel timeout noise (harmless autotuner warnings).
+
+  Set env ``MMML_SUPPRESS_XLA_CUDA_TIMER=1`` (default) to raise ``TF_CPP_MIN_LOG_LEVEL``
+  to 3 when it is unset. Set ``MMML_SUPPRESS_XLA_CUDA_TIMER=0`` to leave logging unchanged.
+    """
+    if os.environ.get("MMML_SUPPRESS_XLA_CUDA_TIMER", "1").strip().lower() in (
+        "0",
+        "false",
+        "no",
+        "off",
+    ):
+        return
+    os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
 
 
 def ensure_xla_gpu_warmed(*, force: bool = False) -> bool:
@@ -64,23 +81,64 @@ def ensure_xla_gpu_warmed(*, force: bool = False) -> bool:
     return True
 
 
-def warmup_ase_mmml_energy_forces(atoms: Any, *, include_forces: bool = True) -> None:
-    """JIT-warm an ASE calculator attached to ``atoms`` (energy, optionally forces)."""
-    ensure_xla_gpu_warmed()
-    energy = atoms.get_potential_energy()
+def block_jax_values(*values: Any) -> None:
+    """Block until JAX array leaves are ready (no-op if JAX is unavailable)."""
     try:
         import jax
         import jax.numpy as jnp
-
-        jax.block_until_ready(jnp.asarray(energy))
-    except Exception:
-        pass
-    if include_forces:
-        forces = atoms.get_forces()
+    except ImportError:
+        return
+    for value in values:
         try:
-            import jax
-            import jax.numpy as jnp
-
-            jax.block_until_ready(jnp.asarray(forces))
+            jax.block_until_ready(jnp.asarray(value))
         except Exception:
             pass
+
+
+def warmup_hybrid_spherical_cutoff(
+    spherical_cutoff_calculator: Any,
+    *,
+    atomic_numbers: Any,
+    positions: Any,
+    n_monomers: int,
+    cutoff_params: Any,
+    doML: bool = True,
+    doMM: bool = True,
+    doML_dimer: bool = True,
+    debug: bool = False,
+    mm_pair_idx: Any = None,
+    mm_pair_mask: Any = None,
+    box: Any = None,
+) -> None:
+    """Compile and run one hybrid MMML eval; block until GPU work completes.
+
+    Call after PyCHARMM/MM setup (e.g. CGENFF drudes) and before timed JAX-MD compiles.
+    """
+    ensure_xla_gpu_warmed(force=True)
+    kwargs = dict(
+        positions=positions,
+        atomic_numbers=atomic_numbers,
+        n_monomers=n_monomers,
+        cutoff_params=cutoff_params,
+        doML=doML,
+        doMM=doMM,
+        doML_dimer=doML_dimer,
+        debug=debug,
+        mm_pair_idx=mm_pair_idx,
+        mm_pair_mask=mm_pair_mask,
+        box=box,
+    )
+    # Two untimed runs: first compiles/autotunes; second calibrates XLA's delay kernel.
+    for _ in range(2):
+        result = spherical_cutoff_calculator(**kwargs)
+        block_jax_values(getattr(result, "energy", None), getattr(result, "forces", None))
+
+
+def warmup_ase_mmml_energy_forces(atoms: Any, *, include_forces: bool = True) -> None:
+    """JIT-warm an ASE calculator attached to ``atoms`` (energy, optionally forces)."""
+    ensure_xla_gpu_warmed(force=True)
+    energy = atoms.get_potential_energy()
+    block_jax_values(energy)
+    if include_forces:
+        forces = atoms.get_forces()
+        block_jax_values(forces)
