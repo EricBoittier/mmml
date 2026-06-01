@@ -105,6 +105,13 @@ def build_ase_cluster(
     return z, r
 
 
+def all_atom_selection():
+    """PyCHARMM selection for all atoms (for MLpot on full cluster)."""
+    import pycharmm
+
+    return pycharmm.SelectAtoms().all_atoms()
+
+
 def setup_charmm_nbonds() -> None:
     import pycharmm
 

@@ -17,6 +17,7 @@ import numpy as np
 
 from _common import (
     add_cluster_args,
+    all_atom_selection,
     build_ase_cluster,
     charmm_energy_row,
     check_mlpot_symbols,
@@ -88,7 +89,6 @@ def main() -> int:
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm
     import pycharmm.energy as energy
-    import pycharmm.select as chm_select
 
     setup_charmm_nbonds()
 
@@ -110,7 +110,7 @@ def main() -> int:
     pyc = pyCModel.get_pycharmm_calculator()
     e_cb_kcal, f_cb_kcal = _callback_energy_forces(pyc, r)
 
-    ml_sel = chm_select.SelectAtoms().all_atoms()
+    ml_sel = all_atom_selection()
     mlpot = pycharmm.MLpot(
         ml_model=pyCModel,
         ml_Z=list(z),
