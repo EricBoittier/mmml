@@ -326,7 +326,7 @@ def create_hybrid_fitting_factory(
                 "ml_switch_width",
                 params_dict.get(
                     "ml_cutoff",
-                    cutoff_params.ml_switch_width if cutoff_params else 2.0,
+                    cutoff_params.ml_switch_width if cutoff_params else 0.1,
                 ),
             )
             mm_switch_on_val = params_dict.get(
@@ -341,7 +341,7 @@ def create_hybrid_fitting_factory(
             )
         else:
             # Use fixed switch widths
-            ml_cutoff_val = cutoff_params.ml_switch_width if cutoff_params else 2.0
+            ml_cutoff_val = cutoff_params.ml_switch_width if cutoff_params else 0.1
             mm_switch_on_val = cutoff_params.mm_switch_on if cutoff_params else 5.0
             mm_cutoff_val = cutoff_params.mm_switch_width if cutoff_params else 1.0
         
@@ -703,7 +703,7 @@ def create_hybrid_fitting_factory(
             mm_cutoff_val = jnp.maximum(mm_cutoff_val, 0.1)  # Minimum 0.1 Å
             
             # Ensure all are finite
-            ml_cutoff_val = jnp.where(jnp.isfinite(ml_cutoff_val), ml_cutoff_val, 2.0)
+            ml_cutoff_val = jnp.where(jnp.isfinite(ml_cutoff_val), ml_cutoff_val, 0.1)
             mm_switch_on_val = jnp.where(jnp.isfinite(mm_switch_on_val), mm_switch_on_val, 5.0)
             mm_cutoff_val = jnp.where(jnp.isfinite(mm_cutoff_val), mm_cutoff_val, 1.0)
             
@@ -1402,7 +1402,7 @@ def fit_hybrid_potential_to_training_data_jax(
     
     if optimize_mode == "cutoff_only":
         if initial_ml_cutoff is None:
-            initial_ml_cutoff = cutoff_params.ml_switch_width if cutoff_params else 2.0
+            initial_ml_cutoff = cutoff_params.ml_switch_width if cutoff_params else 0.1
         if initial_mm_switch_on is None:
             initial_mm_switch_on = cutoff_params.mm_switch_on if cutoff_params else 5.0
         if initial_mm_cutoff is None:
@@ -1911,7 +1911,7 @@ def fit_hybrid_potential_to_training_data_jax(
             """Loss function for cutoff-only optimization."""
             # Validate and clip parameters before computing loss
             ml_cutoff = jnp.clip(
-                jnp.where(jnp.isfinite(p["ml_cutoff"]), p["ml_cutoff"], 2.0),
+                jnp.where(jnp.isfinite(p["ml_cutoff"]), p["ml_cutoff"], 0.1),
                 0.00001, 100.0
             )
             mm_switch_on = jnp.clip(
@@ -2080,7 +2080,7 @@ def fit_hybrid_potential_to_training_data_jax(
             # Clip cutoffs to reasonable bounds (positive, with ordering constraints)
             # Also ensure they're finite
             params["ml_cutoff"] = jnp.clip(
-                jnp.where(jnp.isfinite(params["ml_cutoff"]), params["ml_cutoff"], 2.0),
+                jnp.where(jnp.isfinite(params["ml_cutoff"]), params["ml_cutoff"], 0.1),
                 0.0001, 10.0
             )
             params["mm_switch_on"] = jnp.clip(
@@ -2353,7 +2353,7 @@ def fit_hybrid_parameters_iteratively(
     
     if current_cutoff_params is None:
         current_cutoff_params = CutoffParameters(
-            ml_cutoff=initial_ml_cutoff if initial_ml_cutoff is not None else 2.0,
+            ml_cutoff=initial_ml_cutoff if initial_ml_cutoff is not None else 0.1,
             mm_switch_on=initial_mm_switch_on if initial_mm_switch_on is not None else 5.0,
             mm_cutoff=initial_mm_cutoff if initial_mm_cutoff is not None else 1.0,
         )

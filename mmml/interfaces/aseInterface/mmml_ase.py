@@ -959,7 +959,7 @@ def get_MM_energy_forces_fns(R):
     def apply_switching_function(
         positions: Array,  # Shape: (n_atoms, 3)
         pair_energies: Array,  # Shape: (n_pairs,)
-        ml_cutoff_distance: float = 2.0,
+        ml_cutoff_distance: float = 0.1,
         mm_switch_on: float = 5.0,
         mm_cutoff: float = 1.0,
     ) -> Array:
