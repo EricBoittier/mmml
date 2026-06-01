@@ -288,17 +288,17 @@ def _parse_composition(spec: str) -> list[tuple[str, int]]:
 def _load_packmol_sphere_positions(
     pdb_path: str | Path,
     atoms_per_list: list[int],
+    psf_atom_names: list[str],
 ) -> np.ndarray:
-    from ase.io import read as ase_read
+    from mmml.interfaces.pycharmmInterface.packmol_placement import (
+        assign_packmol_pdb_to_psf_order,
+    )
 
-    packed = ase_read(str(pdb_path))
-    positions = np.asarray(packed.get_positions(), dtype=float)
-    expected = int(np.sum(np.asarray(atoms_per_list, dtype=int)))
-    if int(positions.shape[0]) != expected:
-        raise RuntimeError(
-            f"Packmol PDB atom count ({positions.shape[0]}) != composition ({expected})"
-        )
-    return positions
+    return assign_packmol_pdb_to_psf_order(
+        pdb_path,
+        psf_atom_names,
+        atoms_per_list,
+    )
 
 
 def _residue_geometries_for_composition(
@@ -309,6 +309,32 @@ def _residue_geometries_for_composition(
     for residue, _count in composition:
         if residue not in residue_geometries:
             residue_geometries[residue] = _generate_residue_with_make_res_recipe(residue)
+    return residue_geometries
+
+
+def _residue_geometries_for_packmol(
+    composition: list[tuple[str, int]],
+    *,
+    charmm_sd_steps: int = 50,
+    charmm_abnr_steps: int = 100,
+    charmm_tolenr: float = 1e-3,
+    charmm_tolgrd: float = 1e-3,
+    verbose: bool = True,
+) -> dict[str, tuple[np.ndarray, list[str], np.ndarray]]:
+    """Minimized monomer geometries (PSF order) for Packmol input PDBs."""
+    from mmml.cli.run.md_pbc_suite.cluster import build_minimized_monomer_for_packmol
+
+    residue_geometries: dict[str, tuple[np.ndarray, list[str], np.ndarray]] = {}
+    for residue, _count in composition:
+        if residue not in residue_geometries:
+            residue_geometries[residue] = build_minimized_monomer_for_packmol(
+                residue,
+                nstep_sd=charmm_sd_steps,
+                nstep_abnr=charmm_abnr_steps,
+                tolenr=charmm_tolenr,
+                tolgrd=charmm_tolgrd,
+                verbose=verbose,
+            )
     return residue_geometries
 
 
@@ -376,17 +402,31 @@ def _build_cluster_from_composition_packmol(
     radius: float,
     tolerance: float = 2.0,
     seed: int | None = None,
+    charmm_sd_steps: int = 50,
+    charmm_abnr_steps: int = 100,
+    charmm_tolenr: float = 1e-3,
+    charmm_tolgrd: float = 1e-3,
+    verbose: bool = True,
 ) -> tuple[np.ndarray, np.ndarray, list[int], list[str]]:
     from mmml.interfaces.pycharmmInterface import packmol_placement
 
-    residue_geometries = _residue_geometries_for_composition(composition)
+    residue_geometries = _residue_geometries_for_packmol(
+        composition,
+        charmm_sd_steps=charmm_sd_steps,
+        charmm_abnr_steps=charmm_abnr_steps,
+        charmm_tolenr=charmm_tolenr,
+        charmm_tolgrd=charmm_tolgrd,
+        verbose=verbose,
+    )
 
     packmol_dir = Path("pdb/packmol_sphere")
     packmol_blocks: list[tuple[Path, int]] = []
     for residue, count in composition:
-        coords, _atom_names, monomer_z = residue_geometries[residue]
+        coords, atom_names, monomer_z = residue_geometries[residue]
         pdb_path = packmol_dir / f"{residue.lower()}.pdb"
-        _write_monomer_pdb_for_packmol(pdb_path, coords, monomer_z)
+        _write_monomer_pdb_for_packmol(
+            pdb_path, coords, monomer_z, atom_names=atom_names
+        )
         packmol_blocks.append((pdb_path, int(count)))
 
     output_pdb = Path("pdb/init-packmol-sphere.pdb")
@@ -399,12 +439,19 @@ def _build_cluster_from_composition_packmol(
         seed=seed,
     )
 
-    z, _atom_names, atoms_per_list, ordered_residue_names = _build_cluster_psf_from_composition(
+    z, atom_names, atoms_per_list, ordered_residue_names = _build_cluster_psf_from_composition(
         composition,
         residue_geometries=residue_geometries,
     )
-    shifted = _load_packmol_sphere_positions(output_pdb, atoms_per_list)
+    shifted = _load_packmol_sphere_positions(
+        output_pdb, atoms_per_list, psf_atom_names=atom_names
+    )
     coor.set_positions(pd.DataFrame(shifted, columns=["x", "y", "z"]))
+    span = np.ptp(shifted, axis=0)
+    print(
+        f"Packmol→PSF reorder OK: {len(atom_names)} atoms, "
+        f"spans (Å) x={span[0]:.2f} y={span[1]:.2f} z={span[2]:.2f}"
+    )
     return z, shifted, atoms_per_list, ordered_residue_names
 
 

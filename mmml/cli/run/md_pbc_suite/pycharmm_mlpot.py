@@ -109,6 +109,47 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Packmol distance tolerance in Å (default: 2.0)",
     )
     parser.add_argument("--seed", type=int, default=123, help="Random seed for Packmol placement")
+    parser.add_argument(
+        "--no-scale-mini-nstep",
+        action="store_true",
+        help="Do not auto-increase --mini-nstep for large clusters",
+    )
+    parser.add_argument(
+        "--no-scale-echeck",
+        action="store_true",
+        help="Keep --echeck exactly as given for large clusters",
+    )
+    parser.add_argument(
+        "--allow-high-grms",
+        action="store_true",
+        help="Run dynamics even if post-min GRMS is high (not recommended)",
+    )
+    parser.add_argument(
+        "--max-grms-before-dyn",
+        type=float,
+        default=50.0,
+        help="Abort dynamics if post-min GRMS exceeds this (kcal/mol/Å)",
+    )
+    parser.add_argument(
+        "--charmm-pre-minimize",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="CGENFF SD/ABNR before registering MLpot (default: on; use --no-charmm-pre-minimize to skip)",
+    )
+    parser.add_argument(
+        "--charmm-sd-steps",
+        type=int,
+        default=50,
+        help="CHARMM SD steps before MLpot (default: 50)",
+    )
+    parser.add_argument(
+        "--charmm-abnr-steps",
+        type=int,
+        default=100,
+        help="CHARMM ABNR steps before MLpot (default: 100; 0 to skip)",
+    )
+    parser.add_argument("--charmm-tolenr", type=float, default=1e-3)
+    parser.add_argument("--charmm-tolgrd", type=float, default=1e-3)
     return parser.parse_args(argv)
 
 

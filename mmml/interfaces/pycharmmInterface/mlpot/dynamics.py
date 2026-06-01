@@ -60,6 +60,64 @@ class CharmmTrajectoryFiles:
 
 
 @dataclass
+class CharmmMmMinimizeConfig:
+    """CGENFF-only minimization (no MLpot) to relax Packmol / IC clashes before ML registration."""
+
+    nstep_sd: int = 50
+    nstep_abnr: int = 0
+    nprint: int = 10
+    tolenr: float = 1e-3
+    tolgrd: float = 1e-3
+    verbose: bool = True
+    show_energy: bool = True
+
+
+def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> None:
+    """Run CHARMM SD (and optional ABNR) on the current PSF using MM terms only.
+
+    Call **before** :func:`register_mlpot` so the PSF still has bonds and no ML model is loaded.
+    """
+    _, cons_fix, energy, minimize, *_ = _import_pycharmm_modules()
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import setup_default_nbonds
+
+    setup_default_nbonds()
+    if config.nstep_sd <= 0 and config.nstep_abnr <= 0:
+        return
+
+    sd_kw = {
+        "nstep": max(1, int(config.nstep_sd)),
+        "nprint": max(1, int(config.nprint)),
+        "tolenr": float(config.tolenr),
+        "tolgrd": float(config.tolgrd),
+    }
+    if config.verbose and config.show_energy:
+        print("CHARMM MM energy before pre-MLpot minimization:")
+        energy.show()
+    if config.nstep_sd > 0:
+        if config.verbose:
+            print(
+                f"CHARMM MM SD (pre-MLpot, all atoms free): "
+                f"nstep={config.nstep_sd} nprint={config.nprint}"
+            )
+        minimize.run_sd(**sd_kw)
+        if config.verbose and config.show_energy:
+            print("CHARMM MM energy after SD (pre-MLpot):")
+            energy.show()
+    if config.nstep_abnr > 0:
+        if config.verbose:
+            print(f"CHARMM MM ABNR (pre-MLpot): nstep={config.nstep_abnr}")
+        minimize.run_abnr(
+            nstep=int(config.nstep_abnr),
+            tolenr=float(config.tolenr),
+            tolgrd=float(config.tolgrd),
+        )
+        if config.verbose and config.show_energy:
+            print("CHARMM MM energy after ABNR (pre-MLpot):")
+            energy.show()
+    cons_fix.turn_off()
+
+
+@dataclass
 class MinimizeWithMlpotConfig:
     """SD minimization while MLpot supplies the ML region energy."""
 

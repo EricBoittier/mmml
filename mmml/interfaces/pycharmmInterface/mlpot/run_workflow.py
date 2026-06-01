@@ -10,7 +10,6 @@ import numpy as np
 
 from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     apply_charmm_output_from_args,
-    apply_flat_bottom_from_args,
     build_cluster_from_args_with_tag,
     dynamics_nstep_from_ps,
     format_resid_constraint_message,
@@ -20,7 +19,11 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     resolve_constrain_resids,
     resolve_dcd_nsavc,
     resolve_dynamics_print_kwargs,
-    resolve_echeck_from_args,
+    apply_flat_bottom_from_args,
+    assert_dynamics_ready,
+    charmm_grms,
+    resolve_echeck_for_cluster,
+    resolve_mini_nstep,
     resolve_fix_resids,
     setup_cons_fix_for_resids,
     timestep_ps_from_dt_fs,
@@ -28,10 +31,12 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     validate_resids_for_cluster,
 )
 from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    CharmmMmMinimizeConfig,
     CharmmTrajectoryFiles,
     MinimizeWithMlpotConfig,
     build_heat_dynamics,
     build_nve_dynamics,
+    minimize_charmm_mm_only,
     minimize_with_mlpot,
     run_dynamics_with_io,
 )
@@ -48,6 +53,40 @@ from mmml.interfaces.pycharmmInterface.mlpot.setup import (
 
 Phase = Literal["minimize", "dynamics", "full"]
 Ensemble = Literal["nve", "nvt"]
+
+
+def _charmm_pre_minimize_before_mlpot(
+    args: argparse.Namespace,
+    *,
+    nprint: int,
+) -> np.ndarray:
+    """CGENFF SD/ABNR on the built cluster before :func:`register_mlpot`."""
+    if not getattr(args, "charmm_pre_minimize", True):
+        return get_charmm_positions_array()
+
+    n_sd = int(getattr(args, "charmm_sd_steps", 50))
+    n_abnr = int(getattr(args, "charmm_abnr_steps", 100))
+    tolenr = float(getattr(args, "charmm_tolenr", 1e-3))
+    tolgrd = float(getattr(args, "charmm_tolgrd", 1e-3))
+    print(
+        f"\nCHARMM MM minimization (pre-MLpot, no PhysNet): "
+        f"SD={n_sd} steps, ABNR={n_abnr} steps"
+    )
+    minimize_charmm_mm_only(
+        CharmmMmMinimizeConfig(
+            nstep_sd=n_sd,
+            nstep_abnr=n_abnr,
+            nprint=nprint,
+            tolenr=tolenr,
+            tolgrd=tolgrd,
+            verbose=not args.quiet,
+            show_energy=not args.quiet,
+        )
+    )
+    r_mm = get_charmm_positions_array()
+    grms = charmm_grms()
+    print(f"Post MM pre-minimization GRMS: {grms:.4f} kcal/mol/Å")
+    return r_mm
 
 
 def _register_mlpot_context(z: np.ndarray, r: np.ndarray, ckpt: Path, n_atoms: int):
@@ -88,13 +127,15 @@ def run_minimize_workflow(args: argparse.Namespace) -> int:
 
     setup_default_nbonds()
     sync_charmm_positions(r)
-    apply_flat_bottom_from_args(args)
     vmd_topo_psf = out_dir / f"cluster_for_vmd_{tag}.psf"
     if not getattr(args, "no_save_vmd_topology", False):
         vmd_files = save_cluster_topology_for_vmd(
             out_dir, r, stem=f"cluster_for_vmd_{tag}", title="pre-MLpot cluster"
         )
         vmd_topo_psf = vmd_files["psf"]
+
+    r = _charmm_pre_minimize_before_mlpot(args, nprint=nprint)
+    sync_charmm_positions(r)
 
     ctx, pyCModel = _register_mlpot_context(z, r, ckpt, n_atoms)
     fix_sel = select_by_resids(fix_resids) if fix_resids else None
@@ -162,7 +203,7 @@ def run_dynamics_workflow(
 
     mini_nprint = apply_charmm_output_from_args(args)
     dyn_print = resolve_dynamics_print_kwargs(args, nstep=nstep)
-    echeck = resolve_echeck_from_args(args)
+    echeck = resolve_echeck_for_cluster(args, n_atoms=n_atoms, n_monomers=n_mol)
     dcd_nsavc = resolve_dcd_nsavc(
         dcd_nsavc=args.dcd_nsavc,
         dcd_interval_ps=args.dcd_interval_ps,
@@ -176,17 +217,19 @@ def run_dynamics_workflow(
 
     if pre_minimize is None:
         pre_minimize = not getattr(args, "no_pre_minimize", False)
-    mini_nstep = int(getattr(args, "mini_nstep", 20))
+    mini_nstep = resolve_mini_nstep(args, n_mol)
 
     setup_default_nbonds()
     sync_charmm_positions(r)
-    apply_flat_bottom_from_args(args)
     vmd_topo_psf = out_dir / f"cluster_for_vmd_{tag}.psf"
     if not getattr(args, "no_save_vmd_topology", False):
         vmd_files = save_cluster_topology_for_vmd(
             out_dir, r, stem=f"cluster_for_vmd_{tag}", title="pre-MLpot cluster"
         )
         vmd_topo_psf = vmd_files["psf"]
+
+    r = _charmm_pre_minimize_before_mlpot(args, nprint=mini_nprint)
+    sync_charmm_positions(r)
 
     ctx, pyCModel = _register_mlpot_context(z, r, ckpt, n_atoms)
     import pycharmm.energy as energy
@@ -212,6 +255,17 @@ def run_dynamics_workflow(
                 )
             )
             sync_charmm_positions(get_charmm_positions_array())
+            grms = charmm_grms()
+            print(f"Post-minimization GRMS: {grms:.4f} kcal/mol/Å")
+
+        # MMFP flat-bottom for dynamics only (avoid fighting SD on the initial Packmol cloud).
+        apply_flat_bottom_from_args(args)
+
+        max_grms = float(getattr(args, "max_grms_before_dyn", 50.0))
+        assert_dynamics_ready(
+            max_grms=max_grms,
+            abort=not getattr(args, "allow_high_grms", False),
+        )
 
         if dynamics_constrain:
             setup_cons_fix_for_resids(dynamics_constrain)
