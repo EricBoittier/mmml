@@ -124,6 +124,21 @@ Script 05: ``--echeck 100`` (default), ``--echeck 500`` for looser NPT-style run
 
 See `partial_mm.py` — segment registration works; **ML–MM pair electrostatics** (`idxu`/`idxv`) raise `NotImplementedError` until implemented in `PyCharmm_Calculator`.
 
+## CLI (`mmml md-system --backend pycharmm`)
+
+Vacuum MLpot workflows are wired into the main MD CLI (same logic as scripts 04–05):
+
+```bash
+mmml md-system --setup free_nve --backend pycharmm --residue ACO --n-molecules 4 \
+  --flat-bottom-radius 20 --ps 0.5 --fix-resids 1,3
+
+mmml md-system --setup pycharmm_minimize --composition ACO:2 --mini-nstep 30
+
+python -m mmml.cli.run.md_pbc_suite.pycharmm_mlpot --phase dynamics --ensemble nve --help
+```
+
+Implementation: `mmml/cli/run/md_pbc_suite/pycharmm_mlpot.py`, `mlpot/run_workflow.py`, shared flags in `mlpot/cli_common.py`.
+
 ## Tests
 
 ```bash
