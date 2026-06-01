@@ -28,3 +28,24 @@ def test_mlpot_cpu_override(monkeypatch):
         from mmml.interfaces.pycharmmInterface import jax_device_policy
 
         assert jax_device_policy.mlpot_jax_device_name() == "cpu"
+
+
+def test_mlpot_jax_compilation_cache_default(monkeypatch, tmp_path):
+    monkeypatch.delenv("JAX_COMPILATION_CACHE_DIR", raising=False)
+    monkeypatch.delenv("MMML_NO_JAX_COMPILATION_CACHE", raising=False)
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+    from mmml.interfaces.pycharmmInterface import jax_device_policy
+
+    cache = jax_device_policy.apply_mlpot_jax_compilation_cache_env(quiet=True)
+    assert cache == tmp_path / "mmml" / "jax-compilation-cache"
+    assert cache.is_dir()
+    assert __import__("os").environ["JAX_COMPILATION_CACHE_DIR"] == str(cache)
+
+
+def test_mlpot_jax_compilation_cache_respects_override(monkeypatch, tmp_path):
+    override = tmp_path / "custom-jax-cache"
+    monkeypatch.setenv("JAX_COMPILATION_CACHE_DIR", str(override))
+    from mmml.interfaces.pycharmmInterface import jax_device_policy
+
+    cache = jax_device_policy.apply_mlpot_jax_compilation_cache_env(quiet=True)
+    assert cache == override

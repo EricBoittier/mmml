@@ -1,9 +1,10 @@
-"""JAX device selection for MLpot with OpenMPI-linked DOMDEC CHARMM."""
+"""JAX device and compilation-cache setup for MLpot with OpenMPI-linked CHARMM."""
 
 from __future__ import annotations
 
 import os
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Any, Iterator
 
 
@@ -21,10 +22,43 @@ def mlpot_jax_device_name() -> str:
     return "gpu"
 
 
+def mlpot_jax_compilation_cache_dir() -> Path | None:
+    """Persistent JIT cache directory (``None`` when disabled)."""
+    if _truthy("MMML_NO_JAX_COMPILATION_CACHE"):
+        return None
+    override = (os.environ.get("JAX_COMPILATION_CACHE_DIR") or "").strip()
+    if override:
+        return Path(override).expanduser()
+    cache_home = (os.environ.get("XDG_CACHE_HOME") or "").strip()
+    if cache_home:
+        base = Path(cache_home).expanduser()
+    else:
+        base = Path.home() / ".cache"
+    return base / "mmml" / "jax-compilation-cache"
+
+
+def apply_mlpot_jax_compilation_cache_env(*, quiet: bool = False) -> Path | None:
+    """Enable JAX persistent compilation cache before the first ``import jax``."""
+    cache_dir = mlpot_jax_compilation_cache_dir()
+    if cache_dir is None:
+        return None
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    os.environ.setdefault("JAX_COMPILATION_CACHE_DIR", str(cache_dir))
+    # Reuse GPU autotuning across runs (safe default for MLpot PhysNet JIT).
+    os.environ.setdefault(
+        "JAX_PERSISTENT_CACHE_ENABLE_XLA_CACHES",
+        "xla_gpu_per_fusion_autotune_cache_dir",
+    )
+    if not quiet and not _truthy("MMML_QUIET"):
+        print(f"mmml: JAX compilation cache -> {cache_dir}", flush=True)
+    return cache_dir
+
+
 def apply_mlpot_jax_platform_env(*, quiet: bool = False) -> str:
-    """Set ``JAX_PLATFORMS`` before the first ``import jax`` for MLpot."""
+    """Set ``JAX_PLATFORMS`` and compilation cache before the first ``import jax``."""
     device = mlpot_jax_device_name()
     os.environ.setdefault("JAX_PLATFORMS", device)
+    apply_mlpot_jax_compilation_cache_env(quiet=quiet)
     if not quiet and not _truthy("MMML_QUIET") and device == "cpu":
         print(
             "mmml: MLpot JAX runs on CPU (MMML_MLPOT_DEVICE=cpu). "
