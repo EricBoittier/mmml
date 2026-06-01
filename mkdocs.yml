@@ -34,6 +34,7 @@ plugins:
 nav:
   - Home: index.md
   - Getting Started: getting-started.md
+  - Package Architecture: README.md
   - Development: development.md
   - Units Summary: UNITS_SUMMARY.md
   - API Reference: api.md
