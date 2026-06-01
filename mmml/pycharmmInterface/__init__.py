@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import importlib
 import sys
+from types import ModuleType
 
 _REAL_PREFIX = "mmml.interfaces.pycharmmInterface"
 
@@ -30,14 +31,33 @@ _SUBMODULES = (
 )
 
 
-def _alias_submodules() -> None:
+class _SubmoduleRedirect(ModuleType):
+    """Lazy proxy so legacy ``mmml.pycharmmInterface.<name>`` imports work without eager loads."""
+
+    def __init__(self, alias_name: str, target_name: str) -> None:
+        super().__init__(alias_name)
+        self._target_name = target_name
+
+    def _load_target(self) -> ModuleType:
+        target = importlib.import_module(self._target_name)
+        sys.modules[self.__name__] = target
+        return target
+
+    def __getattr__(self, name: str):
+        return getattr(self._load_target(), name)
+
+    def __dir__(self) -> list[str]:
+        return dir(self._load_target())
+
+
+def _register_submodule_aliases() -> None:
     for name in _SUBMODULES:
         full = f"{__name__}.{name}"
         if full not in sys.modules:
-            sys.modules[full] = importlib.import_module(f"{_REAL_PREFIX}.{name}")
+            sys.modules[full] = _SubmoduleRedirect(full, f"{_REAL_PREFIX}.{name}")
 
 
-_alias_submodules()
+_register_submodule_aliases()
 
 from mmml.interfaces import pycharmmInterface as _pkg
 

@@ -41,6 +41,7 @@ from mmml.interfaces.pycharmmInterface.calculator_utils import (
 )
 from mmml.interfaces.pycharmmInterface.ml_batching import prepare_batches_md, prepare_batch_structure
 from mmml.interfaces.pycharmmInterface.mm_energy_forces import build_mm_energy_forces_fn
+from mmml.utils.jax_gpu_warmup import ensure_xla_gpu_warmed
 
 
 # CHARMM force-field definitions are optional.  During documentation builds we
@@ -624,6 +625,8 @@ def setup_calculator(
             f"[setup_calculator] Runtime natoms={max_atoms} (largest monomer/dimer in this system). "
             "n_res is an EF architecture parameter, not the number of CHARMM residues."
         )
+    if ensure_xla_gpu_warmed():
+        print("[setup_calculator] XLA GPU warmup complete (delay-kernel calibration)")
     is_spooky_model = "spooky_model" in type(MODEL).__module__
 
     # Precompute batch structure for full batch (used when not sparse)
@@ -1523,6 +1526,7 @@ def setup_calculator(
                 self.total_atoms = total_atoms
                 if self.do_pbc_map and self.pbc_map is None:
                     self.do_pbc_map = False
+                self._xla_gpu_warmed = False
 
             # --- Lambda property for runtime adjustment (FEP / TI) ---
             @property
@@ -1569,6 +1573,9 @@ def setup_calculator(
                 """Calculate energy and forces for given atomic configuration"""
 
                 ase_calc.Calculator.calculate(self, atoms, properties, system_changes)
+                if not getattr(self, "_xla_gpu_warmed", True):
+                    ensure_xla_gpu_warmed()
+                    self._xla_gpu_warmed = True
                 R = np.asarray(atoms.get_positions(), dtype=np.float64)
 
                 # Do NOT wrap positions during energy/force evaluation. MIC handles unwrapped
@@ -2302,6 +2309,7 @@ def setup_calculator(
     # Expose pbc_map and do_pbc_map so callers (e.g. run_sim) can pass them to the calculator
     get_spherical_cutoff_calculator.pbc_map = pbc_map if do_pbc_map else None
     get_spherical_cutoff_calculator.do_pbc_map = do_pbc_map
+    ensure_xla_gpu_warmed()
     return get_spherical_cutoff_calculator
 
 ######################################################
