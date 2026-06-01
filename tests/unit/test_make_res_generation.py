@@ -16,6 +16,13 @@ class _FakeAtoms:
     pass
 
 
+def _make_fake_utils(calls: list[str]) -> types.ModuleType:
+    fake = types.ModuleType("mmml.interfaces.pycharmmInterface.utils")
+    fake.get_Z_from_psf = lambda: [1]
+    fake.set_up_directories = lambda: calls.append("set_up_directories")
+    return fake
+
+
 def _make_fake_import_pycharmm(calls: list[str]) -> types.ModuleType:
     """Stub import_pycharmm with every symbol setupRes / make_res import at load time."""
     fake = types.ModuleType(_IMPORT_PYCHARMM)
@@ -44,10 +51,11 @@ def _install_fake_setupres_dependencies(monkeypatch: pytest.MonkeyPatch, calls: 
     fake_import_pycharmm = _make_fake_import_pycharmm(calls)
     monkeypatch.setitem(sys.modules, _IMPORT_PYCHARMM, fake_import_pycharmm)
 
-    fake_utils = types.ModuleType("mmml.interfaces.pycharmmInterface.utils")
-    fake_utils.get_Z_from_psf = lambda: [1]
-    fake_utils.set_up_directories = lambda: calls.append("set_up_directories")
-    monkeypatch.setitem(sys.modules, "mmml.interfaces.pycharmmInterface.utils", fake_utils)
+    monkeypatch.setitem(
+        sys.modules,
+        "mmml.interfaces.pycharmmInterface.utils",
+        _make_fake_utils(calls),
+    )
 
     fake_lingo = types.ModuleType("pycharmm.lingo")
     fake_lingo.charmm_script = lambda script: calls.append(f"script:{script.strip().splitlines()[0]}")
@@ -162,24 +170,26 @@ def test_make_res_main_loop_uses_single_checked_setup_path(monkeypatch: pytest.M
     calls: list[str] = []
     atoms = _FakeAtoms()
 
-    fake_setup_res = types.ModuleType("mmml.interfaces.pycharmmInterface.setupRes")
+    _clear_pycharmm_interface_import_cache(monkeypatch)
+
+    fake_setup_res = types.ModuleType(_SETUP_RES)
 
     def fake_main(resid: str, *, skip_energy_show: bool, max_attempts: int) -> _FakeAtoms:
         calls.append(f"setupRes.main:{resid}:{skip_energy_show}:{max_attempts}")
         return atoms
 
     fake_setup_res.main = fake_main
+    monkeypatch.setitem(sys.modules, _SETUP_RES, fake_setup_res)
+    monkeypatch.setitem(sys.modules, _IMPORT_PYCHARMM, _make_fake_import_pycharmm(calls))
+    monkeypatch.setitem(
+        sys.modules,
+        "mmml.interfaces.pycharmmInterface.utils",
+        _make_fake_utils(calls),
+    )
+
     import mmml.interfaces.pycharmmInterface as pycharmm_interface
 
     monkeypatch.setattr(pycharmm_interface, "setupRes", fake_setup_res, raising=False)
-    monkeypatch.setitem(sys.modules, "mmml.interfaces.pycharmmInterface.setupRes", fake_setup_res)
-
-    fake_utils = types.ModuleType("mmml.interfaces.pycharmmInterface.utils")
-    fake_utils.set_up_directories = lambda: calls.append("set_up_directories")
-    monkeypatch.setitem(sys.modules, "mmml.interfaces.pycharmmInterface.utils", fake_utils)
-
-    _clear_pycharmm_interface_import_cache(monkeypatch)
-    monkeypatch.setitem(sys.modules, _IMPORT_PYCHARMM, _make_fake_import_pycharmm(calls))
 
     import ase.io
 
