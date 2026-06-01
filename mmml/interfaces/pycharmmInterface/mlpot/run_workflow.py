@@ -11,7 +11,6 @@ import numpy as np
 from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     apply_charmm_output_from_args,
     build_cluster_from_args_with_tag,
-    cluster_mm_relaxed_in_packmol_build,
     dynamics_nstep_from_ps,
     format_resid_constraint_message,
     print_cluster_geometry_summary,
@@ -62,16 +61,10 @@ def _charmm_pre_minimize_before_mlpot(
     args: argparse.Namespace,
     *,
     nprint: int,
+    reference_positions: np.ndarray | None = None,
 ) -> np.ndarray:
     """CGENFF SD/ABNR on the built cluster before :func:`register_mlpot`."""
     if not getattr(args, "charmm_pre_minimize", True):
-        return get_charmm_positions_array()
-    if cluster_mm_relaxed_in_packmol_build(args):
-        if not args.quiet:
-            print(
-                "Skipping CHARMM MM pre-minimize (cluster MM already ran after Packmol)",
-                flush=True,
-            )
         return get_charmm_positions_array()
 
     n_sd = int(getattr(args, "charmm_sd_steps", 50))
@@ -89,12 +82,13 @@ def _charmm_pre_minimize_before_mlpot(
             tolgrd=tolgrd,
             verbose=not args.quiet,
             show_energy=resolve_show_energy(args),
+            reference_positions=reference_positions,
         )
     )
     r_mm = get_charmm_positions_array()
     grms = charmm_grms()
     if not args.quiet:
-        print(f"Post MM pre-min GRMS: {grms:.4f} kcal/mol/Å")
+        print(f"Post MM pre-min GRMS: {grms:.4f} kcal/mol/Å", flush=True)
     return r_mm
 
 
@@ -167,7 +161,9 @@ def run_minimize_workflow(args: argparse.Namespace) -> int:
         )
         vmd_topo_psf = vmd_files["psf"]
 
-    r = _charmm_pre_minimize_before_mlpot(args, nprint=nprint)
+    r = _charmm_pre_minimize_before_mlpot(
+        args, nprint=nprint, reference_positions=r
+    )
     sync_charmm_positions(r)
 
     ctx, pyCModel = _register_mlpot_context(
@@ -263,7 +259,9 @@ def run_dynamics_workflow(
         )
         vmd_topo_psf = vmd_files["psf"]
 
-    r = _charmm_pre_minimize_before_mlpot(args, nprint=mini_nprint)
+    r = _charmm_pre_minimize_before_mlpot(
+        args, nprint=mini_nprint, reference_positions=r
+    )
     sync_charmm_positions(r)
 
     ctx, pyCModel = _register_mlpot_context(
