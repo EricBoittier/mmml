@@ -492,10 +492,18 @@ def minimize_with_mlpot(
         dcd_file = open_minimize_dcd(config.dcd_path, unit=config.dcd_unit)
 
     sd_kw = _sd_kwargs_from_config(config)
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import revalidate_mpi_after_cuda
+
     try:
         if config.verbose and config.show_energy:
             print("CHARMM energy before minimization:")
             _maybe_show_energy(True)
+        if not revalidate_mpi_after_cuda(phase="before MLpot SD minimize"):
+            raise RuntimeError(
+                "MPI communicator is invalid before MLpot SD minimize. "
+                "OpenMPI-linked CHARMM requires either mpi4py (pip install mpi4py) "
+                "or launching with: mpirun -np 1 ..."
+            )
         if config.verbose:
             print(
                 f"SD pass 1 (free, all atoms): nstep={config.nstep} nprint={config.nprint}"

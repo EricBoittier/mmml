@@ -156,6 +156,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> int:
+    from mmml.utils.jax_gpu_warmup import ensure_jax_cuda_toolchain
+
+    ensure_jax_cuda_toolchain()
     args = parse_args(argv)
     # Alias for run_workflow helpers that read ``temp``.
     args.temp = args.temperature

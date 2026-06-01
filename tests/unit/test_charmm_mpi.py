@@ -1,0 +1,68 @@
+"""Tests for OpenMPI / DOMDEC CHARMM MPI bootstrap."""
+
+from __future__ import annotations
+
+import os
+from unittest import mock
+
+import pytest
+
+from mmml.interfaces.pycharmmInterface import charmm_mpi
+
+
+def test_charmm_lib_links_mpi_detects_ldd(monkeypatch, tmp_path):
+    lib = tmp_path / "libcharmm.so"
+    lib.write_bytes(b"stub")
+    monkeypatch.setenv("CHARMM_LIB_DIR", str(tmp_path))
+    charmm_mpi.charmm_lib_links_mpi.cache_clear()
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.subprocess.run",
+        return_value=mock.Mock(returncode=0, stdout="libmpi.so.40 => /lib/libmpi.so.40"),
+    ):
+        assert charmm_mpi.charmm_lib_links_mpi() is True
+    charmm_mpi.charmm_lib_links_mpi.cache_clear()
+
+
+def test_scrub_stale_openmpi_env_when_charmm_mpi_linked(monkeypatch):
+    monkeypatch.setenv("OMPI_COMM_WORLD_SIZE", "1")
+    monkeypatch.delenv("OMPI_COMM_WORLD_RANK", raising=False)
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
+        return_value=True,
+    ):
+        removed = charmm_mpi.scrub_stale_openmpi_env()
+    assert removed >= 1
+    assert "OMPI_COMM_WORLD_SIZE" not in os.environ
+
+
+def test_ensure_mpi_skips_when_disabled(monkeypatch):
+    monkeypatch.setenv("MMML_NO_MPI_INIT", "1")
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._needs_mpi_setup",
+        return_value=True,
+    ) as needs:
+        assert charmm_mpi.ensure_mpi_for_charmm_domdec() is False
+        needs.assert_not_called()
+
+
+def test_revalidate_mpi_after_cuda_ok_when_not_needed(monkeypatch):
+    monkeypatch.setenv("MMML_NO_MPI_INIT", "1")
+    assert charmm_mpi.revalidate_mpi_after_cuda() is True
+
+
+def test_revalidate_mpi_after_cuda_warns_when_comm_invalid(monkeypatch, capsys):
+    monkeypatch.delenv("MMML_NO_MPI_INIT", raising=False)
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._needs_mpi_setup",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._mpi_comm_valid",
+        return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
+        return_value=True,
+    ):
+        assert charmm_mpi.revalidate_mpi_after_cuda(phase="test") is False
+    err = capsys.readouterr().err
+    assert "MPI communicator invalid" in err
+    assert "mpirun -np 1" in err
