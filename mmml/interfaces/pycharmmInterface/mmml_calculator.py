@@ -32,6 +32,7 @@ from mmml.interfaces.pycharmmInterface.calculator_utils import (
     FLAT_BOTTOM_MODES,
     ModelOutput,
     apply_flat_bottom,
+    box_vectors_from_atoms_or_cell,
     debug_print,
     dimer_permutations,
     indices_of_monomer,
@@ -1583,17 +1584,23 @@ def setup_calculator(
 
                 # Pre-build MM function: cell list uses wrap-by-molecule for binning (monomer_offsets).
                 mm_pair_idx, mm_pair_mask = None, None
+                box_vec = box_vectors_from_atoms_or_cell(atoms, self.pbc_cell)
+                box_jax = jnp.asarray(box_vec) if box_vec is not None else None
+
                 if self.doMM:
                     _ensure_mm_fn(np.asarray(R), self.cutoff_params)
                     update_fn = _cached_update_mm_pairs[0]
                     if update_fn is not None:
-                        mm_pair_idx, mm_pair_mask = update_fn(R)
+                        if box_vec is not None:
+                            mm_pair_idx, mm_pair_mask = update_fn(R, box=box_vec)
+                        else:
+                            mm_pair_idx, mm_pair_mask = update_fn(R)
                         get_stats = getattr(update_fn, "get_stats", None)
                         if callable(get_stats):
                             self.results["mm_pair_update_stats"] = dict(get_stats())
 
                 def _spherical_eval(positions_jax):
-                    return spherical_cutoff_calculator(
+                    kwargs = dict(
                         positions=positions_jax,
                         atomic_numbers=jnp.asarray(Z),
                         n_monomers=self.n_monomers,
@@ -1605,6 +1612,9 @@ def setup_calculator(
                         mm_pair_idx=mm_pair_idx,
                         mm_pair_mask=mm_pair_mask,
                     )
+                    if box_jax is not None:
+                        kwargs["box"] = box_jax
+                    return spherical_cutoff_calculator(**kwargs)
 
                 if self.backprop:
                     R_jax = jnp.asarray(R)

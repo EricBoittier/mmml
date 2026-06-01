@@ -53,6 +53,7 @@ __all__ = [
     "_sharpstep",
     "_smoothstep01",
     "unpack_factory_result",
+    "box_vectors_from_atoms_or_cell",
 ]
 
 epsilon = 10 ** (-6)
@@ -271,6 +272,27 @@ def debug_print(debug: bool, msg: str, *args: Any, **kwargs: Any) -> None:
                 print(f"{name}: {value.shape}")
         except Exception:
             pass
+
+
+def box_vectors_from_atoms_or_cell(
+    atoms: Any,
+    setup_cell: Any = None,
+) -> np.ndarray | None:
+    """Return orthorhombic box lengths ``(Lx, Ly, Lz)`` from ASE atoms or setup cell."""
+    cell = _ase_cell_to_3x3(atoms)
+    if cell is not None:
+        return np.diagonal(cell).astype(np.float64)
+    if setup_cell is None:
+        return None
+    sc = np.asarray(setup_cell, dtype=np.float64)
+    if sc.ndim == 0:
+        length = float(sc)
+        return np.array([length, length, length], dtype=np.float64)
+    if sc.shape == (3,):
+        return sc.copy()
+    if sc.shape == (3, 3):
+        return np.diagonal(sc).astype(np.float64)
+    return None
 
 
 def _ase_cell_to_3x3(atoms: Any) -> np.ndarray | None:

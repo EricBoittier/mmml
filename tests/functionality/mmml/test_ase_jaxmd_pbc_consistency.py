@@ -504,13 +504,14 @@ def test_ase_jaxmd_pbc_ml_mm_box_and_jaxmd_pairs():
     if update_fn is None:
         pytest.skip("jax-md neighbor update_fn not available (jax_md path not built)")
 
-    cell_matrix = np.diag([cell_length, cell_length, cell_length])
-    atoms = ase.Atoms(z, r, cell=cell_matrix, pbc=True)
+    atoms = ase.Atoms(z, r, cell=_cell_matrix(cell_length), pbc=True)
     atoms.calc = calc
 
+    box_nl = np.array([cell_length, cell_length, cell_length], dtype=np.float64)
+    box_jax = jnp.array(box_nl, dtype=jnp.float32)
+
     try:
-        # Match AseDimerCalculator.calculate(), which calls update_fn(R) without box.
-        pair_idx, pair_mask = update_fn(r)
+        pair_idx, pair_mask = update_fn(r, box=box_nl)
         E_ase = atoms.get_potential_energy()
         F_ase = atoms.get_forces()
     except (IndexError, RuntimeError, ValueError) as exc:
@@ -527,10 +528,548 @@ def test_ase_jaxmd_pbc_ml_mm_box_and_jaxmd_pairs():
         debug=False,
         mm_pair_idx=pair_idx,
         mm_pair_mask=pair_mask,
+        box=box_jax,
     )
     E_jax = float(result.energy.reshape(-1)[0])
     F_jax = np.asarray(result.forces)
 
     _assert_ase_jax_energy_forces_match(
         E_ase, F_ase, E_jax, F_jax, context="ML+MM jax-md pairs"
+    )
+
+
+def _cell_matrix(cell_length: float) -> np.ndarray:
+    return np.diag([cell_length, cell_length, cell_length]).astype(float)
+
+
+def _build_aco_mm_calculator(
+    ckpt: Path,
+    z: np.ndarray,
+    r: np.ndarray,
+    cell_length: float,
+    *,
+    backprop: bool = False,
+):
+    """Factory + calculator for 2xACO with ML+MM and PBC."""
+    import pycharmm.param as param
+    from mmml.pycharmmInterface.mmml_calculator import setup_calculator
+    from mmml.pycharmmInterface.cutoffs import CutoffParameters
+    from mmml.pycharmmInterface.calculator_utils import unpack_factory_result
+
+    at_codes = _psf_at_codes_override()
+    n_types = len(param.get_atc())
+    cutoff_params = CutoffParameters()
+    factory = setup_calculator(
+        ATOMS_PER_MONOMER=ACO_ATOMS_PER_MONOMER,
+        N_MONOMERS=ACO_N_MONOMERS,
+        doML=True,
+        doMM=True,
+        model_restart_path=ckpt,
+        MAX_ATOMS_PER_SYSTEM=ACO_N_ATOMS,
+        cell=cell_length,
+        at_codes_override=at_codes,
+        ep_scale=np.ones(n_types, dtype=float),
+        sig_scale=np.ones(n_types, dtype=float),
+    )
+    calc, spherical_fn, get_update_fn = unpack_factory_result(
+        factory(
+            atomic_numbers=z,
+            atomic_positions=r,
+            n_monomers=ACO_N_MONOMERS,
+            cutoff_params=cutoff_params,
+            backprop=backprop,
+        )
+    )
+    return calc, spherical_fn, get_update_fn, cutoff_params, z, r
+
+
+def _assert_lattice_translation_invariance(
+    *,
+    cell_length: float,
+    R: np.ndarray,
+    monomer_slice: slice,
+    E0_ase: float,
+    E1_ase: float,
+    F0_ase: np.ndarray,
+    F1_ase: np.ndarray,
+    E0_jax: float,
+    E1_jax: float,
+    energy_tol: float = 1e-3,
+    force_tol: float = 1e-3,
+    context: str = "",
+) -> None:
+    prefix = f"{context}: " if context else ""
+    delta_e_ase = abs(float(E1_ase - E0_ase))
+    delta_e_jax = abs(float(E1_jax - E0_jax))
+    assert delta_e_ase < energy_tol, (
+        f"{prefix}ASE lattice energy drift {delta_e_ase:.6e} (tol {energy_tol})"
+    )
+    assert delta_e_jax < energy_tol, (
+        f"{prefix}JAX lattice energy drift {delta_e_jax:.6e} (tol {energy_tol})"
+    )
+    f0 = F0_ase[monomer_slice]
+    f1 = F1_ase[monomer_slice]
+    assert np.allclose(f0, f1, atol=force_tol, rtol=1e-3), (
+        f"{prefix}ASE force invariance on translated monomer: "
+        f"max |ΔF| = {np.max(np.abs(f0 - f1)):.6e}"
+    )
+
+
+@pytest.mark.skipif(not _can_import("pycharmm"), reason="pycharmm not available")
+@pytest.mark.skipif(not _can_import("jax_md"), reason="jax_md not available")
+def test_ml_only_jax_autograd_matches_model_forces():
+    """ML-only: -jax.grad(energy) matches ModelOutput.forces (valid autodiff path)."""
+    if not _can_import("jax") or not _can_import_e3x_nn() or not _can_import("ase"):
+        pytest.skip("jax/e3x/ase not available")
+
+    import jax
+    import jax.numpy as jnp
+    from jax import jit
+    import ase
+
+    from mmml.pycharmmInterface.mmml_calculator import setup_calculator
+    from mmml.pycharmmInterface.cutoffs import CutoffParameters
+    from mmml.pycharmmInterface.calculator_utils import unpack_factory_result
+
+    ckpt = _get_ckpt()
+    if ckpt is None:
+        pytest.skip("No checkpoint")
+
+    cell_length = 40.0
+    factory = setup_calculator(
+        ATOMS_PER_MONOMER=10,
+        N_MONOMERS=2,
+        doML=True,
+        doMM=False,
+        model_restart_path=ckpt,
+        MAX_ATOMS_PER_SYSTEM=20,
+        cell=cell_length,
+    )
+    key = jax.random.PRNGKey(7)
+    R = np.asarray(
+        jax.random.uniform(key, (20, 3), minval=2.0, maxval=cell_length - 2.0),
+        dtype=np.float32,
+    )
+    Z = np.array([6] * 20)
+    cutoff_params = CutoffParameters()
+    calc, spherical_fn, _ = unpack_factory_result(
+        factory(
+            atomic_numbers=Z,
+            atomic_positions=R,
+            n_monomers=2,
+            cutoff_params=cutoff_params,
+            backprop=False,
+        )
+    )
+
+    result = spherical_fn(
+        atomic_numbers=jnp.array(Z),
+        positions=jnp.array(R),
+        n_monomers=2,
+        cutoff_params=cutoff_params,
+        doML=True,
+        doMM=False,
+        doML_dimer=True,
+    )
+    F_model = np.asarray(result.forces)
+
+    @jit
+    def energy_fn(pos):
+        out = spherical_fn(
+            atomic_numbers=jnp.array(Z),
+            positions=jnp.array(pos),
+            n_monomers=2,
+            cutoff_params=cutoff_params,
+            doML=True,
+            doMM=False,
+            doML_dimer=True,
+        )
+        return out.energy.reshape(-1)[0]
+
+    F_grad = np.asarray(-jax.grad(energy_fn)(jnp.array(R)))
+    _require_nontrivial_forces(F_model, label="F_model")
+    _require_nontrivial_forces(F_grad, label="F_grad")
+    assert np.allclose(F_model, F_grad, rtol=0.02, atol=0.05), (
+        f"ML autograd vs model forces: max |ΔF| = {np.max(np.abs(F_model - F_grad)):.6e}"
+    )
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not _can_import("pycharmm"), reason="pycharmm not available")
+@pytest.mark.skipif(not _can_import("jax_md"), reason="jax_md not available")
+def test_ml_mm_frozen_pair_autograd_differs_from_analytical():
+    """
+    ML+MM with a frozen jax-md pair list: autograd must not match analytical forces.
+
+    Documents that ``jax.grad`` through MM while holding neighbor pairs fixed is not
+    a supported force model; production uses ``ModelOutput.forces``.
+    """
+    if not _can_import("jax") or not _can_import_e3x_nn() or not _can_import("ase"):
+        pytest.skip("jax/e3x/ase not available")
+
+    import jax
+    import jax.numpy as jnp
+    from jax import jit
+
+    ckpt = _get_ckpt()
+    if ckpt is None:
+        pytest.skip("No checkpoint")
+
+    cell_length = 40.0
+    try:
+        z, r = _setup_charmm_aco_dimer_pbc(cell_length=cell_length, com_separation=4.5)
+        calc, spherical_fn, get_update_fn, cutoff_params, z, r = _build_aco_mm_calculator(
+            ckpt, z, r, cell_length, backprop=False
+        )
+        update_fn = get_update_fn(r, cutoff_params)
+        if update_fn is None:
+            pytest.skip("jax-md neighbor list unavailable")
+    except (RuntimeError, ValueError, IndexError) as exc:
+        _skip_if_runtime_incompatible(exc)
+
+    box = np.array([cell_length, cell_length, cell_length], dtype=np.float64)
+    box_jax = jnp.array(box, dtype=jnp.float32)
+    pair_idx, pair_mask = update_fn(r, box=box)
+
+    result = spherical_fn(
+        atomic_numbers=jnp.array(z),
+        positions=jnp.array(r),
+        n_monomers=ACO_N_MONOMERS,
+        cutoff_params=cutoff_params,
+        doML=True,
+        doMM=True,
+        doML_dimer=True,
+        mm_pair_idx=pair_idx,
+        mm_pair_mask=pair_mask,
+        box=box_jax,
+    )
+    F_model = np.asarray(result.forces)
+    _require_nontrivial_forces(F_model, label="F_model")
+
+    @jit
+    def energy_frozen_pairs(pos):
+        out = spherical_fn(
+            atomic_numbers=jnp.array(z),
+            positions=jnp.array(pos),
+            n_monomers=ACO_N_MONOMERS,
+            cutoff_params=cutoff_params,
+            doML=True,
+            doMM=True,
+            doML_dimer=True,
+            mm_pair_idx=pair_idx,
+            mm_pair_mask=pair_mask,
+            box=box_jax,
+        )
+        return out.energy.reshape(-1)[0]
+
+    F_grad = np.asarray(-jax.grad(energy_frozen_pairs)(jnp.array(r)))
+    if not np.all(np.isfinite(F_grad)):
+        return  # autograd undefined: expected for this path
+    if np.max(np.linalg.norm(F_grad, axis=1)) < 1e-10:
+        pytest.fail("Frozen-pair autograd returned zero forces; expected mismatch, not trivial zeros")
+    max_rel = np.max(
+        np.abs(F_model - F_grad)
+        / (np.linalg.norm(F_model, axis=1) + 1e-10)
+    )
+    assert max_rel > 0.05 or not np.allclose(F_model, F_grad, rtol=0.05, atol=0.1), (
+        "Frozen MM pair autograd should not match analytical hybrid forces"
+    )
+
+
+@pytest.mark.skipif(not _can_import("pycharmm"), reason="pycharmm not available")
+def test_box_vectors_from_ase_atoms():
+    """Orthorhombic ASE cell is forwarded as (Lx, Ly, Lz) box vectors."""
+    import ase
+    from mmml.pycharmmInterface.calculator_utils import box_vectors_from_atoms_or_cell
+
+    cell_length = 40.0
+    atoms = ase.Atoms("H2O", positions=[[0, 0, 0], [1, 0, 0], [0, 1, 0]], cell=_cell_matrix(cell_length), pbc=True)
+    bv = box_vectors_from_atoms_or_cell(atoms, setup_cell=None)
+    np.testing.assert_allclose(bv, [cell_length, cell_length, cell_length], rtol=0, atol=1e-6)
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not _can_import("pycharmm"), reason="pycharmm not available")
+@pytest.mark.skipif(not _can_import("jax_md"), reason="jax_md not available")
+def test_ase_calculator_passes_cell_box_to_mm_path():
+    """ASE calculate() with pbc=True matches spherical eval using the same box and pairs."""
+    if not _can_import("jax") or not _can_import_e3x_nn() or not _can_import("ase"):
+        pytest.skip("jax/e3x/ase not available")
+
+    import jax.numpy as jnp
+    import ase
+
+    ckpt = _get_ckpt()
+    if ckpt is None:
+        pytest.skip("No checkpoint")
+
+    cell_length = 40.0
+    try:
+        z, r = _setup_charmm_aco_dimer_pbc(cell_length=cell_length, com_separation=4.5)
+        calc, spherical_fn, get_update_fn, cutoff_params, z, r = _build_aco_mm_calculator(
+            ckpt, z, r, cell_length, backprop=False
+        )
+        if get_update_fn is None:
+            pytest.skip("jax-md neighbor list unavailable")
+    except (RuntimeError, ValueError, IndexError) as exc:
+        _skip_if_runtime_incompatible(exc)
+
+    box = np.array([cell_length, cell_length, cell_length], dtype=np.float64)
+    box_jax = jnp.array(box, dtype=jnp.float32)
+    update_fn = get_update_fn(r, cutoff_params)
+    pair_idx, pair_mask = update_fn(r, box=box)
+
+    atoms = ase.Atoms(z, r, cell=_cell_matrix(cell_length), pbc=True)
+    atoms.calc = calc
+    E_ase = atoms.get_potential_energy()
+    F_ase = atoms.get_forces()
+
+    result = spherical_fn(
+        atomic_numbers=jnp.array(z),
+        positions=jnp.array(r),
+        n_monomers=ACO_N_MONOMERS,
+        cutoff_params=cutoff_params,
+        doML=True,
+        doMM=True,
+        doML_dimer=True,
+        mm_pair_idx=pair_idx,
+        mm_pair_mask=pair_mask,
+        box=box_jax,
+    )
+    _assert_ase_jax_energy_forces_match(
+        float(E_ase),
+        F_ase,
+        float(result.energy.reshape(-1)[0]),
+        np.asarray(result.forces),
+        context="ASE with atoms.cell box",
+    )
+
+
+@pytest.mark.skipif(not _can_import("pycharmm"), reason="pycharmm not available")
+@pytest.mark.skipif(not _can_import("jax_md"), reason="jax_md not available")
+def test_pbc_lattice_invariance_ml_ase_and_jax():
+    """Translating monomer 0 by a lattice vector leaves ML energy/forces unchanged (ASE + JAX)."""
+    if not _can_import("jax") or not _can_import_e3x_nn() or not _can_import("ase"):
+        pytest.skip("jax/e3x/ase not available")
+
+    import jax
+    import jax.numpy as jnp
+    from jax import jit
+    import ase
+
+    from mmml.pycharmmInterface.mmml_calculator import setup_calculator
+    from mmml.pycharmmInterface.cutoffs import CutoffParameters
+    from mmml.pycharmmInterface.calculator_utils import unpack_factory_result
+
+    ckpt = _get_ckpt()
+    if ckpt is None:
+        pytest.skip("No checkpoint")
+
+    cell_length = 40.0
+    factory = setup_calculator(
+        ATOMS_PER_MONOMER=10,
+        N_MONOMERS=2,
+        doML=True,
+        doMM=False,
+        model_restart_path=ckpt,
+        MAX_ATOMS_PER_SYSTEM=20,
+        cell=cell_length,
+    )
+    key = jax.random.PRNGKey(99)
+    R = np.asarray(
+        jax.random.uniform(key, (20, 3), minval=2.0, maxval=cell_length - 2.0),
+        dtype=np.float32,
+    )
+    Z = np.array([6] * 20)
+    cutoff_params = CutoffParameters()
+    calc, spherical_fn, _ = unpack_factory_result(
+        factory(
+            atomic_numbers=Z,
+            atomic_positions=R,
+            n_monomers=2,
+            cutoff_params=cutoff_params,
+        )
+    )
+    atoms = ase.Atoms(Z, R, cell=_cell_matrix(cell_length), pbc=True)
+    atoms.calc = calc
+    monomer_slice = slice(0, 10)
+
+    E0_ase = float(atoms.get_potential_energy())
+    F0_ase = atoms.get_forces()
+    a = np.array([cell_length, 0.0, 0.0])
+    R_shift = R.copy()
+    R_shift[monomer_slice] += a
+    atoms.set_positions(R_shift)
+    E1_ase = float(atoms.get_potential_energy())
+    F1_ase = atoms.get_forces()
+
+    @jit
+    def energy_fn(pos):
+        out = spherical_fn(
+            atomic_numbers=jnp.array(Z),
+            positions=jnp.array(pos),
+            n_monomers=2,
+            cutoff_params=cutoff_params,
+            doML=True,
+            doMM=False,
+            doML_dimer=True,
+        )
+        return out.energy.reshape(-1)[0]
+
+    E0_jax = float(energy_fn(jnp.array(R)))
+    E1_jax = float(energy_fn(jnp.array(R_shift)))
+
+    _assert_lattice_translation_invariance(
+        cell_length=cell_length,
+        R=R,
+        monomer_slice=monomer_slice,
+        E0_ase=E0_ase,
+        E1_ase=E1_ase,
+        F0_ase=F0_ase,
+        F1_ase=F1_ase,
+        E0_jax=E0_jax,
+        E1_jax=E1_jax,
+        context="ML-only",
+    )
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not _can_import("pycharmm"), reason="pycharmm not available")
+@pytest.mark.skipif(not _can_import("jax_md"), reason="jax_md not available")
+@pytest.mark.parametrize("com_separation", [3.5, 4.5, 5.5])
+def test_aco_hybrid_nontrivial_at_com_separation(com_separation: float):
+    """ML+MM ACO dimer at several COM separations: non-zero forces and ASE/JAX agreement."""
+    if not _can_import("jax") or not _can_import_e3x_nn() or not _can_import("ase"):
+        pytest.skip("jax/e3x/ase not available")
+
+    import jax.numpy as jnp
+    import ase
+
+    ckpt = _get_ckpt()
+    if ckpt is None:
+        pytest.skip("No checkpoint")
+
+    cell_length = 40.0
+    try:
+        z, r = _setup_charmm_aco_dimer_pbc(
+            cell_length=cell_length,
+            com_separation=com_separation,
+        )
+        calc, spherical_fn, get_update_fn, cutoff_params, z, r = _build_aco_mm_calculator(
+            ckpt, z, r, cell_length, backprop=False
+        )
+        update_fn = get_update_fn(r, cutoff_params)
+        if update_fn is None:
+            pytest.skip("jax-md neighbor list unavailable")
+    except (RuntimeError, ValueError, IndexError) as exc:
+        _skip_if_runtime_incompatible(exc)
+
+    box = np.array([cell_length, cell_length, cell_length], dtype=np.float64)
+    box_jax = jnp.array(box, dtype=jnp.float32)
+    pair_idx, pair_mask = update_fn(r, box=box)
+
+    atoms = ase.Atoms(z, r, cell=_cell_matrix(cell_length), pbc=True)
+    atoms.calc = calc
+    E_ase = atoms.get_potential_energy()
+    F_ase = atoms.get_forces()
+
+    result = spherical_fn(
+        atomic_numbers=jnp.array(z),
+        positions=jnp.array(r),
+        n_monomers=ACO_N_MONOMERS,
+        cutoff_params=cutoff_params,
+        doML=True,
+        doMM=True,
+        doML_dimer=True,
+        mm_pair_idx=pair_idx,
+        mm_pair_mask=pair_mask,
+        box=box_jax,
+    )
+    _assert_ase_jax_energy_forces_match(
+        float(E_ase),
+        F_ase,
+        float(result.energy.reshape(-1)[0]),
+        np.asarray(result.forces),
+        context=f"ACO COM={com_separation:.1f} Å",
+    )
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not _can_import("pycharmm"), reason="pycharmm not available")
+@pytest.mark.skipif(not _can_import("jax_md"), reason="jax_md not available")
+def test_pbc_lattice_invariance_ml_mm_aco_ase_and_spherical():
+    """ACO ML+MM: lattice translation invariance for ASE and spherical (jax-md pairs + box)."""
+    if not _can_import("jax") or not _can_import_e3x_nn() or not _can_import("ase"):
+        pytest.skip("jax/e3x/ase not available")
+
+    import jax.numpy as jnp
+    import ase
+
+    ckpt = _get_ckpt()
+    if ckpt is None:
+        pytest.skip("No checkpoint")
+
+    cell_length = 40.0
+    try:
+        z, r = _setup_charmm_aco_dimer_pbc(cell_length=cell_length, com_separation=4.5)
+        calc, spherical_fn, get_update_fn, cutoff_params, z, r = _build_aco_mm_calculator(
+            ckpt, z, r, cell_length, backprop=False
+        )
+        update_fn = get_update_fn(r, cutoff_params)
+        if update_fn is None:
+            pytest.skip("jax-md neighbor list unavailable")
+    except (RuntimeError, ValueError, IndexError) as exc:
+        _skip_if_runtime_incompatible(exc)
+
+    box = np.array([cell_length, cell_length, cell_length], dtype=np.float64)
+    box_jax = jnp.array(box, dtype=jnp.float32)
+    monomer_slice = slice(0, ACO_ATOMS_PER_MONOMER)
+
+    atoms = ase.Atoms(z, r, cell=_cell_matrix(cell_length), pbc=True)
+    atoms.calc = calc
+
+    E0_ase = float(atoms.get_potential_energy())
+    F0_ase = atoms.get_forces()
+    a = np.array([cell_length, 0.0, 0.0])
+    R_shift = r.copy()
+    R_shift[monomer_slice] += a
+    atoms.set_positions(R_shift)
+    E1_ase = float(atoms.get_potential_energy())
+    F1_ase = atoms.get_forces()
+
+    pair0 = update_fn(r, box=box)
+    pair1 = update_fn(R_shift, box=box)
+
+    def eval_spherical(pos, pair_data):
+        pi, pm = pair_data
+        out = spherical_fn(
+            atomic_numbers=jnp.array(z),
+            positions=jnp.array(pos),
+            n_monomers=ACO_N_MONOMERS,
+            cutoff_params=cutoff_params,
+            doML=True,
+            doMM=True,
+            doML_dimer=True,
+            mm_pair_idx=pi,
+            mm_pair_mask=pm,
+            box=box_jax,
+        )
+        return float(out.energy.reshape(-1)[0])
+
+    E0_jax = eval_spherical(r, pair0)
+    E1_jax = eval_spherical(R_shift, pair1)
+
+    _assert_lattice_translation_invariance(
+        cell_length=cell_length,
+        R=r,
+        monomer_slice=monomer_slice,
+        E0_ase=E0_ase,
+        E1_ase=E1_ase,
+        F0_ase=F0_ase,
+        F1_ase=F1_ase,
+        E0_jax=E0_jax,
+        E1_jax=E1_jax,
+        energy_tol=5e-3,
+        force_tol=0.05,
+        context="ML+MM ACO",
     )
