@@ -444,7 +444,8 @@ def setup_calculator(
     if mm_r_min is not None:
         print(f"[setup_calculator] mm_r_min={mm_r_min} (exclude pairs with dimer COM < this)")
     print(f"[setup_calculator] atoms_per_monomer={atoms_per_monomer_list}, total_atoms={total_atoms}")
-    print(f"[setup_calculator] lambda_monomer={lambda_monomer}")
+    if debug:
+        print(f"[setup_calculator] lambda_monomer={lambda_monomer}")
 
     # --- Build monomer / dimer index arrays ---------------------------------
     all_dimer_idxs = []
@@ -465,7 +466,8 @@ def setup_calculator(
 
     dimer_perms = dimer_permutations(n_monomers)
 
-    print("len(dimer_perms)", len(dimer_perms))
+    if debug:
+        print("len(dimer_perms)", len(dimer_perms))
 
     # max_atoms: largest single system (monomer or dimer) the ML model processes.
     # Used for model natoms and batching; NOT the total system size.

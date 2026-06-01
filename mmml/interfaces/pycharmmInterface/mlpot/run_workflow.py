@@ -90,11 +90,36 @@ def _charmm_pre_minimize_before_mlpot(
     return r_mm
 
 
-def _register_mlpot_context(z: np.ndarray, r: np.ndarray, ckpt: Path, n_atoms: int):
+def _atoms_per_monomer_list(z: np.ndarray, n_monomers: int) -> list[int]:
+    n_atoms = int(len(z))
+    if n_atoms % int(n_monomers) != 0:
+        raise ValueError(
+            f"atom count {n_atoms} not divisible by n_monomers={n_monomers}"
+        )
+    per = n_atoms // int(n_monomers)
+    return [per] * int(n_monomers)
+
+
+def _register_mlpot_context(
+    z: np.ndarray,
+    r: np.ndarray,
+    ckpt: Path,
+    n_atoms: int,
+    n_monomers: int,
+    *,
+    verbose: bool = False,
+):
     import ase
 
     atoms = ase.Atoms(numbers=z, positions=r)
-    _, _, pyCModel = load_physnet_mlpot_bundle(ckpt, n_atoms, atoms)
+    _, _, pyCModel = load_physnet_mlpot_bundle(
+        ckpt,
+        n_atoms,
+        atoms,
+        n_monomers=n_monomers,
+        atoms_per_monomer=_atoms_per_monomer_list(z, n_monomers),
+        verbose=verbose,
+    )
     ctx = register_mlpot(pyCModel, z, select_all_atoms())
     sync_charmm_positions(r)
     pos_chk = get_charmm_positions_array()
@@ -137,7 +162,9 @@ def run_minimize_workflow(args: argparse.Namespace) -> int:
     r = _charmm_pre_minimize_before_mlpot(args, nprint=nprint)
     sync_charmm_positions(r)
 
-    ctx, pyCModel = _register_mlpot_context(z, r, ckpt, n_atoms)
+    ctx, pyCModel = _register_mlpot_context(
+        z, r, ckpt, n_atoms, n_mol, verbose=not args.quiet
+    )
     fix_sel = select_by_resids(fix_resids) if fix_resids else None
     try:
         ran = minimize_with_mlpot(
@@ -231,7 +258,9 @@ def run_dynamics_workflow(
     r = _charmm_pre_minimize_before_mlpot(args, nprint=mini_nprint)
     sync_charmm_positions(r)
 
-    ctx, pyCModel = _register_mlpot_context(z, r, ckpt, n_atoms)
+    ctx, pyCModel = _register_mlpot_context(
+        z, r, ckpt, n_atoms, n_mol, verbose=not args.quiet
+    )
     show_energy = resolve_show_energy(args)
 
     try:

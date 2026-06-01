@@ -194,13 +194,24 @@ def capture_neighbour_list():
 
 reset_block()
 
+_domdec_vacuum_disabled = False
 
-def _init_vacuum_charmm_state() -> None:
-    """Vacuum defaults at import: domdec off (see ``mlpot.setup.disable_charmm_domdec``)."""
+
+def disable_charmm_domdec() -> None:
+    """Turn off domdec once per process (repeat ``domdec off`` can segfault on DOMDEC builds)."""
+    global _domdec_vacuum_disabled
+    if _domdec_vacuum_disabled:
+        return
     try:
         pycharmm.lingo.charmm_script("domdec off")
     except Exception:
         pass
+    _domdec_vacuum_disabled = True
+
+
+def _init_vacuum_charmm_state() -> None:
+    """Vacuum defaults at import: domdec off, crystal free."""
+    disable_charmm_domdec()
     try:
         pycharmm.lingo.charmm_script("crystal free")
     except Exception:

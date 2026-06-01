@@ -189,9 +189,10 @@ def save_cluster_topology_for_vmd(
 
 
 def disable_charmm_domdec() -> None:
-    """Turn off domdec (``domdec dlb off`` would leave domdec on)."""
-    pycharmm = _import_pycharmm()
-    pycharmm.lingo.charmm_script("domdec off")
+    """Turn off domdec once (``domdec dlb off`` would leave domdec on)."""
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import disable_charmm_domdec as _disable
+
+    _disable()
 
 
 def prepare_charmm_vacuum() -> None:
@@ -202,7 +203,6 @@ def prepare_charmm_vacuum() -> None:
         pycharmm.lingo.charmm_script("crystal free")
     except Exception:
         pass
-    disable_charmm_domdec()
 
 
 def setup_default_nbonds(*, nbxmod: int = 5) -> None:
@@ -230,19 +230,41 @@ def load_physnet_mlpot_bundle(
     checkpoint: PathLike,
     n_atoms: int,
     ase_atoms: Any,
+    *,
+    n_monomers: int = 1,
+    atoms_per_monomer: Sequence[int] | None = None,
+    verbose: bool = False,
 ) -> tuple[Any, Any, Any]:
-    """Load checkpoint and build the ``get_pyc`` model wrapper for MLpot.
-
-    Returns ``(params, model, pyCModel)``.
-    """
-    from mmml.cli.base import load_physnet_params_and_ef_model
-
+    """Load PhysNet for MLpot. Multi-monomer clusters use monomer/dimer batches."""
     ckpt = Path(checkpoint).expanduser().resolve()
-    params, model = load_physnet_params_and_ef_model(ckpt, natoms=n_atoms)
-    model.natoms = n_atoms
+    z = np.asarray(ase_atoms.get_atomic_numbers(), dtype=int)
 
+    if int(n_monomers) > 1:
+        from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+            build_decomposed_mlpot_model,
+        )
+
+        if atoms_per_monomer is None:
+            if int(n_atoms) % int(n_monomers) != 0:
+                raise ValueError(
+                    f"atom count {n_atoms} not divisible by n_monomers={n_monomers}"
+                )
+            per = int(n_atoms) // int(n_monomers)
+            atoms_per_monomer = [per] * int(n_monomers)
+        pyCModel = build_decomposed_mlpot_model(
+            ckpt,
+            z,
+            atoms_per_monomer,
+            int(n_monomers),
+            verbose=verbose,
+        )
+        return None, None, pyCModel
+
+    from mmml.cli.base import load_physnet_params_and_ef_model
     from mmml.models.physnetjax.physnetjax.calc.helper_mlp import get_pyc
 
+    params, model = load_physnet_params_and_ef_model(ckpt, natoms=n_atoms)
+    model.natoms = n_atoms
     pyCModel = get_pyc(params, model, ase_atoms)
     return params, model, pyCModel
 

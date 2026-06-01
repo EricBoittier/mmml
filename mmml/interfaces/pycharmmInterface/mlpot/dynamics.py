@@ -453,9 +453,6 @@ def minimize_with_mlpot(
     if config.save and config.dcd_path is not None and config.dcd_nsavc > 0:
         dcd_file = open_minimize_dcd(config.dcd_path, unit=config.dcd_unit)
 
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import disable_charmm_domdec
-
-    disable_charmm_domdec()
     sd_kw = _sd_kwargs_from_config(config)
     try:
         if config.verbose and config.show_energy:
