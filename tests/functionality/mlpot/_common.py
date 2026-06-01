@@ -57,6 +57,7 @@ def add_charmm_output_args(parser: argparse.ArgumentParser) -> None:
 
 def apply_charmm_output_from_args(args: argparse.Namespace) -> int:
     """Apply PRNLev/WRNLev from argparse; return effective ``nprint``."""
+    # Import setup submodule directly (avoid pulling full mlpot via package __init__).
     from mmml.interfaces.pycharmmInterface.mlpot.setup import apply_charmm_verbosity
 
     if getattr(args, "quiet", False):
