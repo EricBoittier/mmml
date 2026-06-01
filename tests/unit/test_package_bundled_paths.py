@@ -10,6 +10,7 @@ from mmml.paths import (
     _package_dir,
     bundled_file,
     crystal_image_str_source,
+    default_aco_template_pdb,
     default_meoh_template_pdb,
 )
 
@@ -27,6 +28,13 @@ def test_atomic_reference_json_is_bundled() -> None:
 def test_default_meoh_template_pdb_is_bundled() -> None:
     path = default_meoh_template_pdb()
     assert path.is_file(), f"missing bundled template PDB: {path}"
+
+
+def test_default_aco_template_pdb_is_bundled() -> None:
+    path = default_aco_template_pdb()
+    assert path.is_file(), f"missing bundled acetone template PDB: {path}"
+    text = path.read_text(encoding="utf-8")
+    assert "O1" in text and "ACO" in text
 
 
 def test_crystal_image_str_is_bundled() -> None:

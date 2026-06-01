@@ -2,6 +2,8 @@
 
 Runnable scripts to bring up `pycharmm.MLpot` alongside the existing ASE PhysNet path (`get_ase_calc` / `get_pyc`). Run them **in order** from the repository root.
 
+**Default cluster:** acetone dimer **ACO × 2 → 20 atoms**. `ic.build()` alone is nearly 1D (y≈z≈0); builders use bundled `mmml/generate/sample/pdb/aco_monomer.pdb` for 3D monomer geometry, then place monomers on a grid with `--spacing` (default 4 Å COM separation).
+
 ## Prerequisites
 
 - `CHARMM_HOME` and `CHARMM_LIB_DIR` (via `mmml/CHARMMSETUP` or environment)

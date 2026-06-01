@@ -49,7 +49,12 @@ def test_mlpot_energy_matches_ase():
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm.energy as energy
 
-    from mmml.cli.run.md_pbc_suite.cluster import _build_psf_ordered_cluster
+    import sys
+
+    mlpot_dir = Path(__file__).resolve().parent
+    if str(mlpot_dir) not in sys.path:
+        sys.path.insert(0, str(mlpot_dir))
+    from _common import build_acetone_dimer_cluster
     from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol
     from mmml.interfaces.pycharmmInterface.mlpot import (
         load_physnet_mlpot_bundle,
@@ -59,7 +64,7 @@ def test_mlpot_energy_matches_ase():
     )
     from mmml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
 
-    z, r = _build_psf_ordered_cluster("ACO", 2, 4.0)
+    z, r = build_acetone_dimer_cluster(4.0)
     n_atoms = len(z)
     setup_default_nbonds()
 
