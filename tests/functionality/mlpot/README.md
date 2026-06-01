@@ -87,6 +87,10 @@ python tests/functionality/mlpot/05_mlpot_dynamics_stub.py --run --no-fix --cons
 python tests/functionality/mlpot/05_mlpot_dynamics_stub.py --run --nstep 100 --dcd-nsavc 1
 python tests/functionality/mlpot/05_mlpot_dynamics_stub.py --run --nstep 100 --dcd-interval-ps 0.00025
 
+# Non-PBC MMFP flat-bottom sphere (production dyna.inp style):
+python tests/functionality/mlpot/05_mlpot_dynamics_stub.py --run --n-molecules 4 \
+  --fb-rad 20 --fb-forc 1 --fix-resids 1 --mini-nstep 30 --nstep 100
+
 # Core + extended in one shot
 RUN_EXTENDED=1 ./tests/functionality/mlpot/run_all.sh
 
