@@ -21,4 +21,5 @@ run "$DIR/02_mlpot_register_smoke.py" "$@"
 run "$DIR/03_energy_compare.py" "$@"
 
 echo ""
-echo "All MLpot scripts finished OK."
+echo "Core MLpot scripts (00-03) finished OK."
+echo "Optional: 04_mlpot_minimize_stub.py --run | 05_mlpot_dynamics_stub.py --run"

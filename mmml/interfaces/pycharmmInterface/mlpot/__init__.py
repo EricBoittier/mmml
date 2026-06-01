@@ -12,7 +12,9 @@ from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
     build_nve_dynamics,
     load_minimized_coordinates,
     minimize_with_mlpot,
+    production_restart_chain,
     run_dynamics,
+    run_dynamics_with_io,
     write_minimized_coordinates,
 )
 from mmml.interfaces.pycharmmInterface.mlpot.partial_mm import (
@@ -42,7 +44,9 @@ __all__ = [
     "minimize_with_mlpot",
     "register_mlpot",
     "register_mlpot_partial_mm",
+    "production_restart_chain",
     "run_dynamics",
+    "run_dynamics_with_io",
     "select_all_atoms",
     "select_by_seg_id",
     "setup_default_nbonds",

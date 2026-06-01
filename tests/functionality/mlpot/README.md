@@ -53,6 +53,18 @@ python tests/functionality/mlpot/03_energy_compare.py --residue ACO --n-molecule
 - `PyCharmm_Calculator` does not yet use ML–MM pair lists (`idxu`/`idxv`) for embedding electrostatics.
 - `get_pyc` uses `pycharmm_conversion` to convert model output from eV → kcal/mol (same factor as `ev2kcalmol` in ASE calculators).
 
-## Pytest (optional later)
+## Steps 4–5 and pytest (stubs)
 
-These are **scripts**, not pytest tests yet. After the smoke path works, we can wrap `03` as `test_mlpot_energy_matches_ase` with `@pytest.mark.skipif`.
+| Script / test | Purpose |
+|---------------|---------|
+| `04_mlpot_minimize_stub.py` | SD minimization via `mlpot.dynamics` (`--run` for short test) |
+| `05_mlpot_dynamics_stub.py` | Short NVE with MLpot (`--run`) |
+| `test_mlpot_energy_matches_ase.py` | Pytest equivalent of script 03 |
+
+```bash
+pytest tests/functionality/mlpot/test_mlpot_energy_matches_ase.py -q
+```
+
+## Library module
+
+Reusable API: `mmml/interfaces/pycharmmInterface/mlpot/` — see `mlpot/README.md`.

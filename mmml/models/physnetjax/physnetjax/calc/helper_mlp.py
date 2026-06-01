@@ -181,46 +181,13 @@ def get_pyc(params, model, ase_mol, conversion=pycharmm_conversion):
         output["forces"] *= conversion["forces"]
         return output
 
-    pyc = PyCharmm_Calculator(
-        model_calc,
-        ml_atom_indices=np.arange(model.natoms),
-        ml_atomic_numbers=Z,
-        ml_charge=None,
-        # ml_fluctuating_charges = model.charges
-    )
-
-    if __name__ == "__main__":
-        blah = np.array(list(range(NATOMS)))
-        blah1 = np.array(list(range(10000)))
-        blah2 = np.arange(NATOMS) * 1.0
-        print("...", dir(pyc)), pyc, "pyc?"
-        _ = pyc.calculate_charmm(
-            Natom=NATOMS,
-            Ntrans=0,
-            Natim=0,
-            idxp=blah,
-            x=blah2,
-            y=blah2,
-            z=blah2,
-            dx=blah2,
-            dy=blah2,
-            dz=blah2,
-            Nmlp=NATOMS,
-            Nmlmmp=NATOMS,
-            idxi=blah1,
-            idxj=blah1,
-            idxjp=blah,
-            idxu=blah,
-            idxv=blah,
-            idxup=blah,
-            idxvp=blah,
-        )
+    default_indices = list(np.arange(NATOMS, dtype=int))
 
     class pyCModel:
-        def __init__():
-            pass
+        """Wrapper required by ``pycharmm.MLpot`` (``get_pycharmm_calculator``)."""
 
         def get_pycharmm_calculator(
+            self,
             ml_atom_indices=None,
             ml_atomic_numbers=None,
             ml_charge=None,
@@ -230,7 +197,25 @@ def get_pyc(params, model, ase_mol, conversion=pycharmm_conversion):
             mlmm_cuton=None,
             **kwargs,
         ):
-            """Dummy function to return the PyCharmm_Calculator object"""
-            return pyc
+            indices = (
+                list(ml_atom_indices)
+                if ml_atom_indices is not None
+                else default_indices
+            )
+            if ml_atomic_numbers is not None:
+                z_ml = np.asarray(ml_atomic_numbers, dtype=int).tolist()
+            else:
+                z_ml = [int(Z[i]) for i in indices]
+            return PyCharmm_Calculator(
+                model_calc,
+                ml_atom_indices=indices,
+                ml_atomic_numbers=z_ml,
+                ml_charge=ml_charge,
+                ml_fluctuating_charges=ml_fluctuating_charges,
+                mlmm_atomic_charges=mlmm_atomic_charges,
+                mlmm_cutoff=mlmm_cutoff if mlmm_cutoff is not None else 12.0,
+                mlmm_cuton=mlmm_cuton if mlmm_cuton is not None else 10.0,
+                **kwargs,
+            )
 
-    return pyCModel
+    return pyCModel()
