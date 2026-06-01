@@ -159,6 +159,11 @@ def main(argv: list[str] | None = None) -> int:
     from mmml.utils.jax_gpu_warmup import ensure_jax_cuda_toolchain
 
     ensure_jax_cuda_toolchain()
+    # CHARMM_LIB_DIR is set when import_pycharmm loads; ensure MPI before workflow.
+    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import ensure_mpi_for_charmm_domdec
+
+    ensure_mpi_for_charmm_domdec(phase="before MLpot workflow")
     args = parse_args(argv)
     # Alias for run_workflow helpers that read ``temp``.
     args.temp = args.temperature

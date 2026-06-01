@@ -500,9 +500,10 @@ def minimize_with_mlpot(
             _maybe_show_energy(True)
         if not revalidate_mpi_after_cuda(phase="before MLpot SD minimize"):
             raise RuntimeError(
-                "MPI communicator is invalid before MLpot SD minimize. "
-                "OpenMPI-linked CHARMM requires either mpi4py (pip install mpi4py) "
-                "or launching with: mpirun -np 1 ..."
+                "MPI is not initialized for OpenMPI-linked CHARMM in this serial Python "
+                "process. Install mpi4py into the active environment "
+                "(`uv sync --extra gpu` or `pip install mpi4py`), or launch with:\n"
+                "  mpirun -np 1 mmml md-system ..."
             )
         if config.verbose:
             print(
