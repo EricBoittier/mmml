@@ -110,7 +110,10 @@ def _generate_residue_with_make_res_recipe(
     residue: str,
 ) -> tuple[np.ndarray, list[str], np.ndarray]:
     """Generate one residue in PyCHARMM using make-res style coordinate relaxation."""
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import prepare_charmm_vacuum
+
     _reset_pycharmm_system()
+    prepare_charmm_vacuum()
     _read_cgenff_toppar()
     read.sequence_string(residue)
     gen.new_segment(seg_name="TMP", setup_ic=True)
@@ -342,7 +345,10 @@ def _build_cluster_psf_from_composition(
     for residue, count in composition:
         sequence_items.extend([residue] * int(count))
     sequence = " ".join(sequence_items)
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import prepare_charmm_vacuum
+
     _reset_pycharmm_system()
+    prepare_charmm_vacuum()
     _read_cgenff_toppar()
     read.sequence_string(sequence)
     gen.new_segment(seg_name="CLST", setup_ic=True)

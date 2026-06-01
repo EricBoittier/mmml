@@ -189,24 +189,26 @@ def save_cluster_topology_for_vmd(
 
 
 def disable_charmm_domdec() -> None:
-    """Disable CHARMM domain decomposition (required for MLpot on DOMDEC/MPI builds)."""
+    """Disable CHARMM domain decomposition (required for vacuum MLpot on DOMDEC builds).
+
+    CHARMM's ``domdec_com`` sets ``q_domdec=.true.`` at the start of *every* DOMDEC
+    command. Only ``domdec off`` clears it. Do **not** run ``domdec dlb off`` here:
+    that leaves domdec enabled and triggers ``init_domdec1`` / NaN box errors on vacuum.
+    """
     pycharmm = _import_pycharmm()
-    for line in ("domdec off", "domdec dlb off"):
-        try:
-            pycharmm.lingo.charmm_script(line)
-        except Exception:
-            pass
+    pycharmm.lingo.charmm_script("domdec off")
 
 
 def prepare_charmm_vacuum() -> None:
     """Clear PBC/image state and disable domdec before vacuum MM or MLpot workflows."""
     disable_charmm_domdec()
     pycharmm = _import_pycharmm()
-    for line in ("crystal free",):
-        try:
-            pycharmm.lingo.charmm_script(line)
-        except Exception:
-            pass
+    try:
+        pycharmm.lingo.charmm_script("crystal free")
+    except Exception:
+        pass
+    # Belt-and-suspenders: any stray ``domdec *`` subcommand may have re-enabled domdec.
+    disable_charmm_domdec()
 
 
 def setup_default_nbonds(*, nbxmod: int = 5) -> None:

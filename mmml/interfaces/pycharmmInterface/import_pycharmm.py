@@ -193,6 +193,22 @@ def capture_neighbour_list():
 
 
 reset_block()
+
+
+def _init_vacuum_charmm_state() -> None:
+    """Vacuum defaults at import: domdec off (see ``mlpot.setup.disable_charmm_domdec``)."""
+    try:
+        pycharmm.lingo.charmm_script("domdec off")
+    except Exception:
+        pass
+    try:
+        pycharmm.lingo.charmm_script("crystal free")
+    except Exception:
+        pass
+
+
+_init_vacuum_charmm_state()
+
 from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf 
 
 def ase_from_pycharmm_state():
