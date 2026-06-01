@@ -95,9 +95,19 @@ class MlpotContext:
     pyCModel: Any
     params: Any
     model: Any
+    ml_selection: Any = None
+    block_tag: str = "all"
 
     def unset(self) -> None:
         self.mlpot.unset_mlpot()
+        from mmml.interfaces.pycharmmInterface.mlpot.block_terms import (
+            apply_charmm_mm_block,
+            clear_mlpot_energy_block,
+        )
+
+        if self.ml_selection is not None:
+            clear_mlpot_energy_block(self.ml_selection, block_tag=self.block_tag)
+        apply_charmm_mm_block()
 
 
 def _import_pycharmm():
@@ -173,7 +183,7 @@ def save_cluster_topology_for_vmd(
     stem: str = "cluster_for_vmd",
     title: str = "cluster",
 ) -> dict[str, Path]:
-    """Save PSF + PDB **before** ``MLpot`` removes internal ML bonds from the PSF.
+    """Save PSF + PDB for VMD (connectivity preserved; MLpot uses BLOCK, not PSF deletes).
 
     Load in VMD with: ``vmd cluster_for_vmd.psf cluster_for_vmd.pdb`` (or a trajectory).
     """
@@ -279,11 +289,15 @@ def register_mlpot(
     ml_fq: bool = True,
     mlmm_ctonnb: Optional[float] = None,
     mlmm_ctofnb: Optional[float] = None,
+    preserve_psf_internals: bool = True,
     **kwargs: Any,
 ) -> MlpotContext:
     """Register ``pycharmm.MLpot`` and return a context manager-like handle."""
+    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import apply_mlpot_energy_block
+
     pycharmm = _import_pycharmm()
     z_ml = physnet_ml_atomic_numbers(ml_Z)
+    block_tag = apply_mlpot_energy_block(ml_selection)
     mlpot = pycharmm.MLpot(
         ml_model=pyCModel,
         ml_Z=z_ml,
@@ -292,7 +306,15 @@ def register_mlpot(
         ml_fq=ml_fq,
         mlmm_ctonnb=mlmm_ctonnb,
         mlmm_ctofnb=mlmm_ctofnb,
+        preserve_psf_internals=preserve_psf_internals,
         **kwargs,
     )
     refresh_nbonds_after_mlpot()
-    return MlpotContext(mlpot=mlpot, pyCModel=pyCModel, params=None, model=None)
+    return MlpotContext(
+        mlpot=mlpot,
+        pyCModel=pyCModel,
+        params=None,
+        model=None,
+        ml_selection=ml_selection,
+        block_tag=block_tag,
+    )

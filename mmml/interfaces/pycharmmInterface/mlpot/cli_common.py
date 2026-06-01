@@ -602,7 +602,7 @@ def write_vmd_load_script(
     out_dir = out_dir.resolve()
     topology_psf = topology_psf.resolve()
     lines = [
-        "# VMD: topology written BEFORE MLpot (bonds intact).",
+        "# VMD: topology with full PSF connectivity (MLpot uses BLOCK, not bond deletion).",
         f"# Atoms: {n_atoms} — must match trajectory frame count.",
         f"mol new {{{topology_psf}}}",
     ]
@@ -645,8 +645,8 @@ def print_vmd_load_help(
         print(f"\n  vmd {topo}")
     if bondless_psf is not None:
         print(
-            f"\n  Do NOT use {bondless_psf.name} in VMD — written after MLpot "
-            "(no bonds; for CHARMM restart only)."
+            f"\n  Prefer {topology_psf.name} in VMD (full connectivity). "
+            f"{bondless_psf.name} is the in-memory PSF after MLpot registration."
         )
 
 

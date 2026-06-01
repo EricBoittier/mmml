@@ -31,6 +31,10 @@ from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
     clear_mmfp_restraints,
     setup_flat_bottom_sphere_mmfp,
 )
+from mmml.interfaces.pycharmmInterface.mlpot.block_terms import (
+    apply_charmm_mm_block,
+    apply_mlpot_energy_block,
+)
 from mmml.interfaces.pycharmmInterface.mlpot.partial_mm import (
     PartialMlMmConfig,
     register_mlpot_partial_mm,
@@ -67,7 +71,9 @@ __all__ = [
     "clear_mmfp_restraints",
     "MlpotContext",
     "PartialMlMmConfig",
+    "apply_charmm_mm_block",
     "apply_charmm_verbosity",
+    "apply_mlpot_energy_block",
     "build_cpt_equilibration_dynamics",
     "build_cpt_production_dynamics",
     "build_heat_dynamics",
