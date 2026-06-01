@@ -51,6 +51,8 @@ Examples:
   mmml make-box --res CYBZ --n 50 --side_length 25.0
   mmml md-system --setup pbc_npt --composition MEOH:5,TIP3:5 --temperature 300 --pressure 1.0
   mmml md-system --setup free_nvt --backend jaxmd --composition ACO:30 --packmol-radius 22 --flat-bottom-radius 20 --temperature 250
+  mmml md-system --setup free_nve --backend pycharmm --residue ACO --n-molecules 4 --flat-bottom-radius 20 --ps 0.5
+  mmml md-system --setup pycharmm_minimize --composition ACO:2 --mini-nstep 30
   mmml md-system --setup lambda_ti --composition MEOH:2 --couple-residues 1 --lambda-md-mode free_nve --pre-min-steps 50
   mmml lambda-mbar --run-dir artifacts/meoh_dimer_lambda_ti
   mmml xml2npz input.xml -o output.npz

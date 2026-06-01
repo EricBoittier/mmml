@@ -1,0 +1,96 @@
+#!/usr/bin/env python3
+"""CHARMM MLpot backend for ``mmml md-system --backend pycharmm`` (vacuum, non-PBC)."""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    add_charmm_output_args,
+    add_cluster_args,
+    add_dcd_save_args,
+    add_dynamics_stability_args,
+    add_flat_bottom_args,
+    add_monomer_constraint_args,
+)
+from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import run_workflow
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description=(
+            "CHARMM MLpot workflows: two-pass SD minimization and vacuum NVE/NVT dynamics. "
+            "Invoked via ``mmml md-system --backend pycharmm``."
+        )
+    )
+    parser.add_argument(
+        "--phase",
+        choices=["full", "minimize", "dynamics"],
+        default="full",
+        help="full = pre-minimize + MD; minimize = SD only; dynamics = MD only",
+    )
+    parser.add_argument(
+        "--ensemble",
+        choices=["nve", "nvt"],
+        default="nve",
+        help="MD ensemble after minimization (nvt = CHARMM heating/Hoover-style)",
+    )
+    add_cluster_args(parser)
+    add_charmm_output_args(parser)
+    add_dcd_save_args(parser)
+    add_dynamics_stability_args(parser)
+    add_flat_bottom_args(parser)
+    add_monomer_constraint_args(parser, for_dynamics=True)
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("artifacts/pycharmm_mlpot"),
+        help="Directory for PSF/DCD/restart outputs",
+    )
+    parser.add_argument(
+        "--nstep",
+        type=int,
+        default=0,
+        help="Dynamics integration steps (0 = derive from --ps and --dt-fs)",
+    )
+    parser.add_argument("--ps", type=float, default=1.0, help="Dynamics length in ps")
+    parser.add_argument("--dt-fs", type=float, default=0.25, help="Timestep in fs")
+    parser.add_argument(
+        "--temperature",
+        type=float,
+        default=300.0,
+        help="Target / initial temperature in K",
+    )
+    parser.add_argument(
+        "--save",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Write minimization artifacts when --phase minimize",
+    )
+    parser.add_argument(
+        "--no-save-vmd-topology",
+        action="store_true",
+        help="Skip cluster_for_vmd PSF/PDB before MLpot strips bonds",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
+    # Alias for run_workflow helpers that read ``temp``.
+    args.temp = args.temperature
+    try:
+        return run_workflow(
+            args,
+            phase=args.phase,
+            ensemble=args.ensemble,
+        )
+    except (ValueError, FileNotFoundError, RuntimeError) as exc:
+        print(f"pycharmm_mlpot: error: {exc}", file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

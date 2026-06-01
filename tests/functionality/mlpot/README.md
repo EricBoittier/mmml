@@ -57,6 +57,24 @@ python tests/functionality/mlpot/03_energy_compare.py --residue ACO --n-molecule
 - `PyCharmm_Calculator` does not yet use ML–MM pair lists (`idxu`/`idxv`) for embedding electrostatics.
 - `get_pyc` uses `pycharmm_conversion` to convert model output from eV → kcal/mol (same factor as `ev2kcalmol` in ASE calculators).
 
+## `mmml md-system` (PyCHARMM backend)
+
+The same minimize / NVE workflows are available via the main CLI (no `--run` stub):
+
+```bash
+# Two-pass SD + short NVE (acetone tetramer, MMFP sphere R=20 Å)
+mmml md-system --setup free_nve --backend pycharmm --residue ACO --n-molecules 4 \
+  --flat-bottom-radius 20 --ps 0.5 --mini-nstep 20 --fix-resids 1,3
+
+# SD minimization only
+mmml md-system --setup pycharmm_minimize --composition ACO:2 --mini-nstep 30
+
+# Direct module entry (same as backend dispatch)
+python -m mmml.cli.run.md_pbc_suite.pycharmm_mlpot --phase full --residue ACO --n-molecules 2 --ps 0.1
+```
+
+Outputs default to `artifacts/pycharmm_mlpot/` (`cluster_for_vmd_*.psf`, `nve_*.dcd`). Use `--flat-bottom-radius` (maps to CHARMM MMFP `--fb-rad`) for vacuum droplet restraints.
+
 ## Steps 4–5 and pytest
 
 ```bash

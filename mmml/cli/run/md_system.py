@@ -13,26 +13,38 @@ def parse_args() -> argparse.Namespace:
         description=(
             "Run predefined MD setups (free-space NVE/NVT, periodic NVE/NVT, periodic NPT, "
             "lambda TI for arbitrary compositions) for arbitrary residue compositions. "
-            "Runs mmml.cli.run.md_pbc_suite (ASE or JAX-MD) and "
+            "Runs mmml.cli.run.md_pbc_suite (ASE, JAX-MD, or CHARMM MLpot) and "
             "mmml.cli.run.lambda_dynamics (lambda_ti). "
             "MBAR: mmml lambda-mbar --run-dir <output-dir>."
         )
     )
     parser.add_argument(
         "--setup",
-        choices=["free_nve", "free_nvt", "pbc_nve", "pbc_nvt", "pbc_npt", "lambda_ti", "all"],
+        choices=[
+            "free_nve",
+            "free_nvt",
+            "pbc_nve",
+            "pbc_nvt",
+            "pbc_npt",
+            "lambda_ti",
+            "pycharmm_minimize",
+            "all",
+        ],
         default="pbc_nve",
         help=(
             "Simulation setup preset. lambda_ti: alchemical TI with CHARMM+MMML minimization "
-            "per λ window (--lambda-md-mode, --backend ase|jaxmd); mmml lambda-mbar afterward."
+            "per λ window (--lambda-md-mode, --backend ase|jaxmd); mmml lambda-mbar afterward. "
+            "pycharmm_minimize: CHARMM MLpot SD only (--backend pycharmm). "
+            "free_nve/free_nvt with --backend pycharmm: MLpot minimize + vacuum MD."
         ),
     )
     parser.add_argument(
         "--backend",
-        choices=["auto", "ase", "jaxmd"],
+        choices=["auto", "ase", "jaxmd", "pycharmm"],
         default="auto",
         help=(
-            "MD engine: ase runs md_pbc_suite.ase; jaxmd runs md_pbc_suite.jaxmd. "
+            "MD engine: ase runs md_pbc_suite.ase; jaxmd runs md_pbc_suite.jaxmd; "
+            "pycharmm runs CHARMM MLpot (vacuum, non-PBC: SD + NVE/NVT). "
             "auto uses ASE for vacuum (free_*) and fixed-volume PBC, JAX-MD for NPT. "
             "Use jaxmd with --setup free_nve or free_nvt for open-boundary JAX-MD."
         ),
@@ -159,6 +171,70 @@ def parse_args() -> argparse.Namespace:
         help="Additional raw args forwarded to the underlying script; put this option last.",
     )
 
+    # --- pycharmm / MLpot (--backend pycharmm) --------------------------------
+    parser.add_argument(
+        "--fix-resids",
+        type=str,
+        default="1",
+        help="pycharmm: monomers held in SD pass 2 (comma-separated 1-based resids)",
+    )
+    parser.add_argument(
+        "--constrain-resids",
+        type=str,
+        default="",
+        help="pycharmm: freeze these resids during MD (comma-separated)",
+    )
+    parser.add_argument(
+        "--no-fix",
+        action="store_true",
+        help="pycharmm: skip constrained SD pass 2",
+    )
+    parser.add_argument(
+        "--mini-nstep",
+        type=int,
+        default=20,
+        help="pycharmm: SD steps per minimization pass before dynamics",
+    )
+    parser.add_argument(
+        "--no-pre-minimize",
+        action="store_true",
+        help="pycharmm: skip SD minimization before dynamics",
+    )
+    parser.add_argument(
+        "--echeck",
+        type=float,
+        default=100.0,
+        help="pycharmm: CHARMM ECHECK tolerance (kcal/mol); use --no-echeck to disable",
+    )
+    parser.add_argument(
+        "--no-echeck",
+        action="store_true",
+        help="pycharmm: disable CHARMM ECHECK early stop",
+    )
+    parser.add_argument(
+        "--dyn-nprint",
+        type=int,
+        default=100,
+        help="pycharmm: print dynamics energy every N steps",
+    )
+    parser.add_argument(
+        "--dyn-iprfrq",
+        type=int,
+        default=500,
+        help="pycharmm: detailed dynamics status every N steps",
+    )
+    parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="pycharmm: reduce CHARMM console output",
+    )
+    parser.add_argument(
+        "--dcd-nsavc",
+        type=int,
+        default=1,
+        help="pycharmm: DCD frame every N integration/SD steps",
+    )
+
     # --- lambda_ti (--setup lambda_ti) ----------------------------------------
     parser.add_argument(
         "--lambda-md-mode",
@@ -256,7 +332,10 @@ def parse_args() -> argparse.Namespace:
         "--residue",
         type=str,
         default="MEOH",
-        help="lambda_ti: residue name when --composition is not set.",
+        help=(
+            "Residue name when --composition is not set "
+            "(lambda_ti default MEOH; use ACO for acetone with --backend pycharmm)."
+        ),
     )
     parser.add_argument("--skip-jit-warmup", action="store_true", help="lambda_ti: skip first MMML energy eval per window.")
     parser.add_argument(
@@ -349,10 +428,87 @@ def _run_lambda_ti_inline(args: argparse.Namespace) -> int:
     return 0
 
 
+def _pycharmm_setups() -> set[str]:
+    return {"free_nve", "free_nvt", "pycharmm_minimize"}
+
+
+def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
+    if args.setup == "pycharmm_minimize":
+        phase = "minimize"
+        ensemble = "nve"
+    elif args.setup == "free_nvt":
+        phase = "full"
+        ensemble = "nvt"
+    else:
+        phase = "full"
+        ensemble = "nve"
+
+    if args.output_dir is None:
+        args.output_dir = Path("artifacts/pycharmm_mlpot")
+
+    cmd = [
+        "--phase",
+        phase,
+        "--ensemble",
+        ensemble,
+        "--spacing",
+        str(args.spacing),
+        "--ps",
+        str(args.ps),
+        "--dt-fs",
+        str(args.dt_fs),
+        "--temperature",
+        str(args.temperature),
+        "--mini-nstep",
+        str(args.mini_nstep),
+        "--residue",
+        str(args.residue),
+        "--fix-resids",
+        str(args.fix_resids),
+        "--constrain-resids",
+        str(args.constrain_resids),
+        "--dyn-nprint",
+        str(args.dyn_nprint),
+        "--dyn-iprfrq",
+        str(args.dyn_iprfrq),
+        "--dcd-nsavc",
+        str(args.dcd_nsavc),
+        "--echeck",
+        str(args.echeck),
+    ]
+    if args.composition:
+        cmd.extend(["--composition", str(args.composition)])
+    else:
+        cmd.extend(["--n-molecules", str(args.n_molecules)])
+    _append_optional(cmd, "--checkpoint", args.checkpoint)
+    _append_optional(cmd, "--output-dir", args.output_dir)
+    if args.no_fix:
+        cmd.append("--no-fix")
+    if args.no_pre_minimize:
+        cmd.append("--no-pre-minimize")
+    if args.no_echeck:
+        cmd.append("--no-echeck")
+    if args.quiet:
+        cmd.append("--quiet")
+    if args.flat_bottom_radius is not None:
+        cmd.extend(["--fb-rad", str(args.flat_bottom_radius)])
+        cmd.extend(["--fb-forc", str(args.flat_bottom_k)])
+    if args.extra_args:
+        cmd.extend(args.extra_args)
+    return cmd
+
+
 def build_command(args: argparse.Namespace) -> tuple[str, list[str]]:
     backend = args.backend
     if backend == "auto":
         backend = "jaxmd" if args.setup == "pbc_npt" else "ase"
+
+    if backend == "pycharmm":
+        if args.setup not in _pycharmm_setups():
+            raise ValueError(
+                f"--backend pycharmm supports {_pycharmm_setups()}; got {args.setup!r}"
+            )
+        return "pycharmm", build_pycharmm_command(args)
 
     skip_box_size_for_cmd = False
     if backend == "jaxmd":
@@ -462,6 +618,8 @@ def main() -> int:
         except ValueError as exc:
             print(f"mmml md-system: error: {exc}", file=sys.stderr)
             return 2
+    if args.setup in _pycharmm_setups() and args.backend == "auto":
+        args.backend = "pycharmm"
     try:
         backend, argv = build_command(args)
     except ValueError as exc:
@@ -470,6 +628,8 @@ def main() -> int:
     print(f"mmml md-system: running {backend} in-process:", " ".join(argv), flush=True)
     if backend == "ase":
         from mmml.cli.run.md_pbc_suite import ase as backend_mod
+    elif backend == "pycharmm":
+        from mmml.cli.run.md_pbc_suite import pycharmm_mlpot as backend_mod
     else:
         from mmml.cli.run.md_pbc_suite import jaxmd as backend_mod
     return int(backend_mod.main(argv))
