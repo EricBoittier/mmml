@@ -5,7 +5,10 @@ from __future__ import annotations
 from typing import Any
 
 _ML_BLOCK_NAME = "mmml_ml"
-_NO_INTERNAL = "BOND 0.0 ANGL 0.0 DIHEdral 0.0 IMPr 0.0"
+
+# CHARMM COEFF keywords: BOND ANGL DIHEdral ELEC VDW (no IMPR on this line).
+# Global coefficient 0.0 also zeros improper dihedrals and any other unnamed terms.
+_ML_SELF_ZERO = "0.0 BOND 0.0 ANGL 0.0 DIHEdral 0.0 ELEC 0.0 VDW 0.0"
 
 
 def _import_pycharmm():
@@ -23,7 +26,7 @@ def apply_charmm_mm_block() -> None:
 
 
 def apply_mlpot_energy_block(ml_selection: Any) -> str:
-    """Zero CHARMM internal terms on ML atoms; MM environment keeps bonded terms.
+    """Zero CHARMM bonded and nonbonded terms on ML atoms; MLpot supplies the energy.
 
     Uses stored CHARMM selections so the PSF is not modified (no ``delete_bonds``).
     """
@@ -35,7 +38,7 @@ def apply_mlpot_energy_block(ml_selection: Any) -> str:
     if n_ml >= n_total:
         block = f"""BLOCK
 CALL 1 SELE ALL END
-COEFF 1 1 1.0 {_NO_INTERNAL}
+COEFF 1 1 {_ML_SELF_ZERO}
 END
 """
         pycharmm.lingo.charmm_script(block)
@@ -46,7 +49,7 @@ END
 CALL 1 SELE .NOT. @{name} END
 CALL 2 SELE @{name} END
 COEFF 1 1 1.0
-COEFF 2 2 1.0 {_NO_INTERNAL}
+COEFF 2 2 {_ML_SELF_ZERO}
 COEFF 1 2 0.0
 END
 """
