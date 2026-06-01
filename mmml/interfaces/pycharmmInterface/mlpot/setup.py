@@ -41,6 +41,11 @@ def select_by_seg_id(seg_id: str):
     return _import_pycharmm().SelectAtoms(seg_id=seg_id)
 
 
+def select_by_resid(resid: int | str):
+    """CHARMM selection by residue ID (e.g. ``1`` for the first residue)."""
+    return _import_pycharmm().SelectAtoms(res_id=str(resid))
+
+
 def setup_default_nbonds(
     *,
     cutnb: float = 14.0,

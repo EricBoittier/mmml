@@ -17,7 +17,8 @@ from mmml.interfaces.pycharmmInterface.mlpot.setup import (
 class PartialMlMmConfig:
     """Configuration for a mixed ML region + MM environment."""
 
-    ml_seg_id: str
+    ml_seg_id: str = ""
+    ml_resid: Optional[int] = None
     ml_charge: float = 0.0
     ml_fq: bool = True
     mlmm_ctonnb: Optional[float] = None
@@ -52,9 +53,17 @@ def register_mlpot_partial_mm(
             "registration (ML region + MM nonbonds)."
         )
 
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import select_by_seg_id
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        select_by_resid,
+        select_by_seg_id,
+    )
 
-    ml_sel = select_by_seg_id(config.ml_seg_id)
+    if config.ml_resid is not None:
+        ml_sel = select_by_resid(config.ml_resid)
+    elif config.ml_seg_id:
+        ml_sel = select_by_seg_id(config.ml_seg_id)
+    else:
+        raise ValueError("PartialMlMmConfig requires ml_resid or ml_seg_id")
     return register_mlpot(
         pyCModel,
         ml_Z,

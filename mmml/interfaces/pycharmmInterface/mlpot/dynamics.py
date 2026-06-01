@@ -317,7 +317,7 @@ def write_minimized_coordinates(
     crd_path: Optional[PathLike] = None,
     title: str = "Mini SD",
 ) -> None:
-    _, _, _, _, write = _import_pycharmm_modules()
+    *_, write = _import_pycharmm_modules()
     if pdb_path is not None:
         write.coor_pdb(str(pdb_path), title=title)
     if crd_path is not None:
@@ -326,7 +326,7 @@ def write_minimized_coordinates(
 
 def load_minimized_coordinates(crd_path: PathLike) -> None:
     """Load optimized coords from a CRD card (preferred over PDB for ML exclusions)."""
-    _, _, _, _, read = _import_pycharmm_modules()
+    *_, read, _write = _import_pycharmm_modules()
     path = Path(crd_path)
     if not path.exists():
         raise FileNotFoundError(f"CRD not found: {path}")

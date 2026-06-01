@@ -26,6 +26,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.setup import (
     load_physnet_mlpot_bundle,
     register_mlpot,
     select_all_atoms,
+    select_by_resid,
     select_by_seg_id,
     setup_default_nbonds,
 )
@@ -48,6 +49,7 @@ __all__ = [
     "run_dynamics",
     "run_dynamics_with_io",
     "select_all_atoms",
+    "select_by_resid",
     "select_by_seg_id",
     "setup_default_nbonds",
     "write_minimized_coordinates",
