@@ -122,6 +122,15 @@ def _register_mlpot_context(
         atoms_per_monomer=_atoms_per_monomer_list(z, n_monomers),
         verbose=verbose,
     )
+    if int(n_monomers) > 1:
+        from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+            DecomposedMlpotModel,
+            warmup_decomposed_mlpot,
+        )
+
+        if isinstance(pyCModel, DecomposedMlpotModel):
+            warmup_decomposed_mlpot(pyCModel, r, verbose=verbose)
+
     ctx = register_mlpot(pyCModel, z, select_all_atoms())
     sync_charmm_positions(r)
     pos_chk = get_charmm_positions_array()

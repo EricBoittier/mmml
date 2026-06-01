@@ -463,7 +463,10 @@ def minimize_with_mlpot(
 
     Returns True if minimization ran, False if skipped because CRD exists.
     """
-    _, cons_fix, energy, minimize, *_ = _import_pycharmm_modules()
+    pycharmm, cons_fix, energy, minimize, *_ = _import_pycharmm_modules()
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import disable_charmm_domdec
+
+    disable_charmm_domdec()
 
     crd_path = Path(config.crd_path) if config.crd_path else None
     if config.skip_if_crd_exists and crd_path is not None and crd_path.exists():

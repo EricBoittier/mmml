@@ -138,9 +138,40 @@ def build_decomposed_mlpot_model(
             create_ase_calculator=False,
         )
     )
-    return DecomposedMlpotModel(
+    model = DecomposedMlpotModel(
         spherical_fn,
         cutoff_params,
         int(n_monomers),
         np.asarray(atomic_numbers, dtype=int),
     )
+    return model
+
+
+def warmup_decomposed_mlpot(
+    model: DecomposedMlpotModel,
+    positions: np.ndarray,
+    *,
+    verbose: bool = False,
+) -> None:
+    """JIT-compile hybrid ML outside the CHARMM callback (before MLpot SD)."""
+    from mmml.utils.jax_gpu_warmup import warmup_hybrid_spherical_cutoff
+
+    z = np.asarray(physnet_ml_atomic_numbers(model._atomic_numbers), dtype=int)
+    r = np.asarray(positions, dtype=np.float64)
+    if verbose:
+        print(
+            f"Decomposed MLpot JAX warmup: {len(z)} atoms, {model._n_monomers} monomers",
+            flush=True,
+        )
+    warmup_hybrid_spherical_cutoff(
+        model._spherical_fn,
+        atomic_numbers=jnp.asarray(z),
+        positions=jnp.asarray(r),
+        n_monomers=model._n_monomers,
+        cutoff_params=model._cutoff_params,
+        doML=True,
+        doMM=False,
+        doML_dimer=True,
+    )
+    if verbose:
+        print("Decomposed MLpot JAX warmup complete", flush=True)
