@@ -401,72 +401,20 @@ def _build_cluster_from_composition_packmol(
     charmm_tolgrd: float = 1e-3,
     verbose: bool = True,
 ) -> tuple[np.ndarray, np.ndarray, list[int], list[str]]:
-    from mmml.interfaces.pycharmmInterface import packmol_placement
+    from mmml.cli.run.md_pbc_suite.cluster import build_packmol_composition_cluster
 
-    residue_geometries = _residue_geometries_for_packmol(
-        composition,
+    return build_packmol_composition_cluster(
+        composition=composition,
+        center=center,
+        radius=radius,
+        tolerance=tolerance,
+        seed=seed,
         charmm_sd_steps=charmm_sd_steps,
         charmm_abnr_steps=charmm_abnr_steps,
         charmm_tolenr=charmm_tolenr,
         charmm_tolgrd=charmm_tolgrd,
         verbose=verbose,
     )
-
-    packmol_dir = Path("pdb/packmol_sphere")
-    packmol_blocks: list[tuple[Path, int]] = []
-    for residue, count in composition:
-        coords, atom_names, monomer_z = residue_geometries[residue]
-        pdb_path = packmol_dir / f"{residue.lower()}.pdb"
-        _write_monomer_pdb_for_packmol(
-            pdb_path, coords, monomer_z, atom_names=atom_names
-        )
-        packmol_blocks.append((pdb_path, int(count)))
-
-    output_pdb = Path("pdb/init-packmol-sphere.pdb")
-    packmol_placement.run_packmol_sphere_mixed(
-        packmol_blocks,
-        center=center,
-        radius=float(radius),
-        output_pdb=output_pdb,
-        tolerance=float(tolerance),
-        seed=seed,
-    )
-
-    z, atom_names, atoms_per_list, ordered_residue_names = _build_cluster_psf_from_composition(
-        composition,
-        residue_geometries=residue_geometries,
-    )
-    shifted = _load_packmol_sphere_positions(
-        output_pdb, atoms_per_list, psf_atom_names=atom_names
-    )
-    coor.set_positions(pd.DataFrame(shifted, columns=["x", "y", "z"]))
-    if int(charmm_sd_steps) > 0 or int(charmm_abnr_steps) > 0:
-        from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
-            CharmmMmMinimizeConfig,
-            minimize_charmm_mm_only,
-        )
-
-        if verbose:
-            print(
-                f"Packmol cluster: CHARMM MM minimize "
-                f"SD={charmm_sd_steps} ABNR={charmm_abnr_steps}"
-            )
-        minimize_charmm_mm_only(
-            CharmmMmMinimizeConfig(
-                nstep_sd=int(charmm_sd_steps),
-                nstep_abnr=int(charmm_abnr_steps),
-                tolenr=float(charmm_tolenr),
-                tolgrd=float(charmm_tolgrd),
-                verbose=verbose,
-            )
-        )
-        shifted = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
-    span = np.ptp(shifted, axis=0)
-    print(
-        f"Packmol cluster: {len(atom_names)} atoms, "
-        f"span Å x={span[0]:.1f} y={span[1]:.1f} z={span[2]:.1f}"
-    )
-    return z, shifted, atoms_per_list, ordered_residue_names
 
 
 def resolve_cluster_packmol_sphere(args: argparse.Namespace) -> bool:
@@ -518,6 +466,11 @@ def build_initial_cluster_from_args(
                 radius=radius,
                 tolerance=tolerance,
                 seed=int(getattr(args, "seed", 0)),
+                charmm_sd_steps=int(getattr(args, "charmm_sd_steps", 50)),
+                charmm_abnr_steps=int(getattr(args, "charmm_abnr_steps", 100)),
+                charmm_tolenr=float(getattr(args, "charmm_tolenr", 1e-3)),
+                charmm_tolgrd=float(getattr(args, "charmm_tolgrd", 1e-3)),
+                verbose=not getattr(args, "quiet", False),
             )
             fb_r = getattr(args, "flat_bottom_radius", None)
             print(

@@ -71,7 +71,7 @@ def _charmm_pre_minimize_before_mlpot(
     tolenr = float(getattr(args, "charmm_tolenr", 1e-3))
     tolgrd = float(getattr(args, "charmm_tolgrd", 1e-3))
     if not args.quiet:
-        print(f"\nCHARMM MM pre-minimize: SD={n_sd} ABNR={n_abnr}")
+        print(f"\nCHARMM MM pre-minimize: SD={n_sd} ABNR={n_abnr}", flush=True)
     minimize_charmm_mm_only(
         CharmmMmMinimizeConfig(
             nstep_sd=n_sd,
