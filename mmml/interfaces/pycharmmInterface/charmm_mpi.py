@@ -222,10 +222,15 @@ def mpi_path_export() -> str:
     return f"export PATH={bindir}${{PATH:+:$PATH}}"
 
 
+def _scrub_deprecated_openmpi_mca_env() -> None:
+    """OpenMPI 5+: ``mpi_cuda_support`` is deprecated in favor of ``opal_cuda_support``."""
+    os.environ.pop("OMPI_MCA_mpi_cuda_support", None)
+
+
 def mpi_shell_setup_lines() -> list[str]:
     """Shell ``export`` lines for LD_LIBRARY_PATH, PATH, and OpenMPI MCA vars."""
     lines = [
-        "export OMPI_MCA_mpi_cuda_support=0",
+        "unset OMPI_MCA_mpi_cuda_support",
         "export OMPI_MCA_opal_cuda_support=0",
     ]
     ld = mpi_library_path_export()
@@ -278,6 +283,7 @@ def _preload_pmix_global() -> None:
 def prepare_charmm_mpi_runtime() -> None:
     """Apply MPI/PMIx library path and preload before ``import pycharmm``."""
     _apply_cuda_mpi_env_defaults()
+    _scrub_deprecated_openmpi_mca_env()
     if not charmm_lib_links_mpi():
         return
     ensure_charmm_mpi_library_path()
@@ -307,8 +313,8 @@ def scrub_stale_openmpi_env(*, force: bool = False) -> int:
 
 def _apply_cuda_mpi_env_defaults() -> None:
     os.environ.setdefault("OMPI_MCA_btl_vader_single_copy_mechanism", "none")
-    os.environ.setdefault("OMPI_MCA_mpi_cuda_support", "0")
     os.environ.setdefault("OMPI_MCA_opal_cuda_support", "0")
+    _scrub_deprecated_openmpi_mca_env()
 
 
 def _mpi_comm_valid(*, barrier: bool = False) -> bool:
@@ -363,7 +369,7 @@ def _warn_invalid_comm(*, phase: str) -> None:
     print(
         f"mmml: MPI communicator check failed {phase}. Launch with:\n  "
         + mpi_library_path_export()
-        + "\n  export OMPI_MCA_mpi_cuda_support=0\n  "
+        + "\n  export OMPI_MCA_opal_cuda_support=0\n  "
         + mpirun_launch_hint(),
         file=sys.stderr,
         flush=True,
