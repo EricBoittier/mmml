@@ -206,6 +206,7 @@ def get_pyc(params, model, ase_mol, conversion=pycharmm_conversion):
                 z_ml = np.asarray(ml_atomic_numbers, dtype=int).tolist()
             else:
                 z_ml = [int(Z[i]) for i in indices]
+            graph_cutoff = float(getattr(model, "cutoff", 6.0))
             return PyCharmm_Calculator(
                 model_calc,
                 ml_atom_indices=indices,
@@ -215,6 +216,8 @@ def get_pyc(params, model, ase_mol, conversion=pycharmm_conversion):
                 mlmm_atomic_charges=mlmm_atomic_charges,
                 mlmm_cutoff=mlmm_cutoff if mlmm_cutoff is not None else 12.0,
                 mlmm_cuton=mlmm_cuton if mlmm_cuton is not None else 10.0,
+                ml_graph_cutoff=graph_cutoff,
+                use_e3x_pair_list=True,
                 **kwargs,
             )
 

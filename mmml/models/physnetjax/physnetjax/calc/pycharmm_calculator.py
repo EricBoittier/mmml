@@ -1,5 +1,6 @@
 from typing import List, Optional
 
+import e3x
 import numpy as np
 
 __all__ = ["PyCharmm_Calculator"]
@@ -65,9 +66,13 @@ class PyCharmm_Calculator:
         mlmm_cutoff: Optional[float] = 12.0,
         mlmm_cuton: Optional[float] = 10.0,
         mlmm_lambda: Optional[float] = 1.0,
+        ml_graph_cutoff: Optional[float] = 6.0,
+        use_e3x_pair_list: bool = True,
         **kwargs,
     ):
         self.dtype = np.float64
+        self.ml_graph_cutoff = ml_graph_cutoff
+        self.use_e3x_pair_list = bool(use_e3x_pair_list)
         self.ml_num_atoms = len(ml_atom_indices) if ml_atom_indices is not None else 0
         self.ml_atom_indices = ml_atom_indices
         self.ml_atomic_numbers = ml_atomic_numbers
@@ -96,6 +101,12 @@ class PyCharmm_Calculator:
         self.ml_idxp = None
         self.ml_idxjp = None
         self.last_full_positions: Optional[np.ndarray] = None
+
+    def _e3x_ml_pairs(self, ml_R: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """Same pair list as ``get_ase_calc`` (PhysNet applies cutoff in the model)."""
+        n = int(self.ml_num_atoms)
+        dst, src = e3x.ops.sparse_pairwise_indices(n)
+        return np.asarray(dst, dtype=np.int32), np.asarray(src, dtype=np.int32)
 
     def calculate_charmm(
         self,
@@ -183,12 +194,13 @@ class PyCharmm_Calculator:
         ml_idx = np.asarray(self.ml_atom_indices, dtype=int)
         ml_R = mlmm_R[ml_idx]
 
-        # Assign indices
-        # ML-ML pair indices
-        # ML-ML pair indices
-        ml_idxi = np.array(idxi[:Nmlp], dtype=np.int32)
-        ml_idxj = np.array(idxj[:Nmlp], dtype=np.int32)
-        ml_idxjp = np.array(idxjp[:Nmlp], dtype=np.int32)
+        if self.use_e3x_pair_list or int(Nmlp) <= 0:
+            ml_idxi, ml_idxj = self._e3x_ml_pairs(ml_R)
+            ml_idxjp = np.arange(ml_idxi.shape[0], dtype=np.int32)
+        else:
+            ml_idxi = np.array(idxi[:Nmlp], dtype=np.int32)
+            ml_idxj = np.array(idxj[:Nmlp], dtype=np.int32)
+            ml_idxjp = np.array(idxjp[:Nmlp], dtype=np.int32)
         ml_sysi = np.zeros(self.ml_num_atoms, dtype=np.int32)
         # ML-MM pair indices and pointer
         np.array(idxu[:Nmlmmp], dtype=np.int32)
