@@ -18,6 +18,7 @@ def _install_fake_setupres_dependencies(monkeypatch: pytest.MonkeyPatch, calls: 
     fake_import_pycharmm.CGENFF_PRM = "fake.prm"
     fake_import_pycharmm.CHARMM_HOME = "/tmp/charmm"
     fake_import_pycharmm.CHARMM_LIB_DIR = "/tmp/charmm/lib"
+    fake_import_pycharmm.pycharmm_quiet = lambda: calls.append("quiet")
     fake_import_pycharmm.pycharmm_loud = lambda: calls.append("loud")
     fake_import_pycharmm.reset_block = lambda: calls.append("reset_block")
     fake_import_pycharmm.safe_energy_show = lambda: calls.append("safe_energy_show")
