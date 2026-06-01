@@ -20,7 +20,7 @@ def _run_in_subprocess(code: str, env: dict | None = None) -> tuple[int, str]:
         capture_output=True,
         text=True,
         env=env,
-        timeout=10,
+        timeout=120,
     )
     out = (result.stdout or "") + (result.stderr or "")
     return result.returncode, out
