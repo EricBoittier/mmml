@@ -148,6 +148,28 @@ def _psf_at_codes_override() -> np.ndarray:
     return np.asarray(psf.get_iac(), dtype=int) - 1
 
 
+def _require_nontrivial_forces(forces: np.ndarray, *, label: str = "forces") -> None:
+    """Fail fast when forces are missing, non-finite, or all ~zero (invalid for consistency tests)."""
+    f = np.asarray(forces, dtype=float)
+    if f.size == 0:
+        raise AssertionError(f"{label}: empty force array")
+    if f.ndim != 2 or f.shape[1] != 3:
+        raise AssertionError(f"{label}: expected shape (n_atoms, 3), got {f.shape}")
+    per_atom = np.linalg.norm(f, axis=1)
+    if not np.all(np.isfinite(per_atom)):
+        bad = np.where(~np.isfinite(per_atom))[0]
+        raise AssertionError(
+            f"{label}: non-finite force magnitudes at atom indices {bad.tolist()}"
+        )
+    max_mag = float(np.max(per_atom))
+    if max_mag < 1e-10:
+        raise AssertionError(
+            f"{label}: all forces are near zero (max |F| = {max_mag:.3e}). "
+            "This usually indicates broken autodiff, a missing CHARMM PSF, NaNs zeroed "
+            "in the calculator, or geometry outside the ML/MM switching region."
+        )
+
+
 def _assert_ase_jax_energy_forces_match(
     E_ase: float,
     F_ase: np.ndarray,
@@ -157,6 +179,8 @@ def _assert_ase_jax_energy_forces_match(
     context: str = "",
 ) -> None:
     prefix = f"{context}: " if context else ""
+    _require_nontrivial_forces(F_ase, label=f"{prefix}F_ase")
+    _require_nontrivial_forces(F_jax, label=f"{prefix}F_jax")
     rtol, atol = 1e-4, 1e-3
     force_atol = 0.05
     assert np.isclose(E_ase, E_jax, rtol=rtol, atol=atol), (
@@ -506,11 +530,6 @@ def test_ase_jaxmd_pbc_ml_mm_box_and_jaxmd_pairs():
     )
     E_jax = float(result.energy.reshape(-1)[0])
     F_jax = np.asarray(result.forces)
-
-    if not np.all(np.isfinite(F_ase)) or not np.all(np.isfinite(F_jax)):
-        pytest.skip("Non-finite forces from ML+MM hybrid evaluation")
-    if np.max(np.abs(F_ase)) < 1e-10 and np.max(np.abs(F_jax)) < 1e-10:
-        pytest.skip("Zero hybrid forces; check ACO dimer geometry or MM switching")
 
     _assert_ase_jax_energy_forces_match(
         E_ase, F_ase, E_jax, F_jax, context="ML+MM jax-md pairs"

@@ -1830,6 +1830,18 @@ def setup_calculator(
                 
                 # Final NaN check (should be redundant but ensures safety)
                 forces_final = np.where(np.isfinite(forces_final), forces_final, 0.0)
+
+                _force_mags = np.linalg.norm(forces_final, axis=1)
+                _max_force = float(_force_mags.max()) if _force_mags.size else 0.0
+                if _max_force < 1e-12:
+                    _zero_force_msg = (
+                        "All atomic forces are near zero after calculator evaluation. "
+                        "Check ML/MM switching, PSF/CHARMM setup, backprop vs analytical "
+                        "forces, and whether the geometry lies in the active switching region."
+                    )
+                    if self.debug:
+                        raise ValueError(_zero_force_msg)
+                    warnings.warn(_zero_force_msg, UserWarning, stacklevel=2)
                 
                 # Debug: Check which atoms have zero forces before storing
                 if self.debug:
