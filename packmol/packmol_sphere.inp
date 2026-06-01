@@ -7,5 +7,5 @@ structure pdb/packmol_sphere/aco.pdb
   chain A
   resnumbers 2
   number 30
-  inside sphere 0.0 0.0 0.0 22.0
+  inside sphere 0.0 0.0 0.0 20.0
 end structure
