@@ -167,12 +167,38 @@ def build_heat_dynamics(
     return kw
 
 
+def boltzmann_velocity_kwargs(temp: float = 300.0) -> dict[str, Any]:
+    """Dynamics kwargs for Maxwell-Boltzmann velocity assignment (``iasvel`` / ``firstt``).
+
+    CHARMM c47 does not accept a standalone ``velocity`` script command (it is parsed as
+    ``VELO`` and fails). Velocities are assigned when ``dyna`` runs with ``iasvel`` 1.
+    """
+    t = float(temp)
+    return {
+        "iasors": 1,
+        "iasvel": 1,
+        "iscale": 0,
+        "iscvel": 0,
+        "ichecw": 0,
+        "firstt": t,
+        "finalt": t,
+        "tbath": t,
+        "tstruct": t,
+    }
+
+
+def assign_boltzmann_velocities(temp: float = 300.0) -> dict[str, Any]:
+    """Return ``dyna`` kwargs for velocity init (alias of :func:`boltzmann_velocity_kwargs`)."""
+    return boltzmann_velocity_kwargs(temp)
+
+
 def build_nve_dynamics(
     *,
     timestep_ps: float = 0.00025,
     duration_ps: float = 50.0,
     save_interval_ps: float = 0.01,
     restart: bool = True,
+    temp: float = 300.0,
 ) -> dict[str, Any]:
     """NVE production-style dict (restart from heat)."""
     nstep = ps_to_nsteps(timestep_ps, duration_ps)
@@ -186,6 +212,7 @@ def build_nve_dynamics(
     )
     kw.update(
         {
+            "leap": True,
             "verlet": True,
             "new": False,
             "start": False,
@@ -194,6 +221,8 @@ def build_nve_dynamics(
             "ieqfrq": 0,
         }
     )
+    if not restart:
+        kw.update(boltzmann_velocity_kwargs(temp))
     return kw
 
 
@@ -261,14 +290,6 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     dyn = pycharmm.DynamicsScript(**dynamics_kwargs)
     dyn.run()
     return dyn
-
-
-def assign_boltzmann_velocities(temp: float = 300.0) -> None:
-    """Assign Maxwell-Boltzmann velocities (required before ``new`` dynamics)."""
-    pycharmm, *_ = _import_pycharmm_modules()
-    pycharmm.lingo.charmm_script(
-        f"velocity select all set temp {float(temp):.4f} dist u"
-    )
 
 
 def run_dynamics_with_io(

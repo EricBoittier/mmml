@@ -73,7 +73,6 @@ def main() -> int:
     import pycharmm.energy as energy
     from mmml.interfaces.pycharmmInterface.mlpot import (
         CharmmTrajectoryFiles,
-        assign_boltzmann_velocities,
         build_nve_dynamics,
         load_physnet_mlpot_bundle,
         register_mlpot,
@@ -99,7 +98,6 @@ def main() -> int:
         if not args.quiet:
             print("CHARMM energy before dynamics:")
             energy.show()
-        assign_boltzmann_velocities(args.temp)
         io = CharmmTrajectoryFiles(
             restart_write=res_path,
             trajectory=dcd_path,
@@ -109,6 +107,7 @@ def main() -> int:
             duration_ps=args.nstep * 0.00025,
             save_interval_ps=0.00025,
             restart=False,
+            temp=args.temp,
         )
         kw["new"] = True
         kw["start"] = True
