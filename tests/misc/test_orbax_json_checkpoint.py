@@ -19,6 +19,7 @@ import pytest
 from mmml.utils.model_checkpoint import (
     json_to_params,
     load_model_checkpoint,
+    normalize_flax_params_for_apply,
     orbax_to_json,
     to_jsonable,
 )
@@ -127,6 +128,18 @@ def test_load_model_checkpoint_from_json_file_path(temp_dir):
     assert "params" in ckpt
     assert "config" in ckpt
     assert ckpt["config"]["features"] == 64
+
+
+def test_normalize_flax_params_double_wrap_and_bare_tree():
+    """JSON-style double wrap and bare trees both become {'params': tree}."""
+    bare = _create_synthetic_params()
+    double = {"params": {"params": bare}}
+    out_bare = normalize_flax_params_for_apply(bare, backend="numpy")
+    out_double = normalize_flax_params_for_apply(double, backend="numpy")
+    assert set(out_bare.keys()) == {"params"}
+    assert set(out_double.keys()) == {"params"}
+    assert "embedding" in out_bare["params"]
+    assert "embedding" in out_double["params"]
 
 
 def test_orbax_to_json_with_config_and_metadata(temp_dir):
