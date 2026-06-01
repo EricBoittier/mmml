@@ -1,7 +1,6 @@
 import numpy as np
 
 
-import numpy as np
 from scipy.spatial import distance_matrix
 
 from pyscf.data import radii

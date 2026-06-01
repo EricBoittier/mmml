@@ -1,11 +1,10 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from sklearn.model_selection import KFold
 import statsmodels.api as sm
 
 def evaluate_models(soaps, dfs, model_list, *,
-                    i=1, N_fit=100, n_splits=5,
+                    i=1, N_fit=100, _n_splits=5,
                     axes=None,
                     kcal_mol=True, plot=True, energy_key="E"):
     """
@@ -103,20 +102,15 @@ def evaluate_models(soaps, dfs, model_list, *,
 # In[462]:
 
 
-import molzip
-from molzip.regressor import ZipRegressor, regress
+from molzip.regressor import regress
 
 
 # In[463]:
 
 
-import gzip
 import multiprocessing
-from typing import Any, Iterable
+from typing import Iterable
 from functools import partial
-import numpy as np
-from sklearn.metrics import mean_squared_error
-from sklearn.model_selection import KFold
 
 def fig2img(fig,dpi=9):
     """Convert a Matplotlib figure to a PIL Image and return it"""
@@ -173,7 +167,6 @@ class _ZipRegressor(object):
         X_train: Iterable[str],
         y_train: Iterable,
     ) -> np.ndarray:
-        preds = []
         self.X_train = [str(_) for _ in X_train]
         self.y_train = np.array(y_train, dtype=float)
         return self.fit_predict(self.X_train, self.y_train, self.X_train, k=self.k).flatten()
@@ -204,9 +197,7 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
 
-from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import StandardScaler
-from sklearn.linear_model import LinearRegression, Ridge, Lasso, ElasticNet, SGDRegressor
+from sklearn.linear_model import LinearRegression, Lasso, ElasticNet
 from sklearn.svm import SVR
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor, AdaBoostRegressor
 from sklearn.neural_network import MLPRegressor
@@ -254,7 +245,6 @@ model_list = [
 # In[488]:
 
 
-import matplotlib.pyplot as plt
 
 def create_model_mosaic(model_names, layout=None, figsize=(14, 8)):
     """

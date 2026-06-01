@@ -10,7 +10,6 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
-from pathlib import Path
 
 
 def _run_in_subprocess(code: str, env: dict | None = None) -> tuple[int, str]:

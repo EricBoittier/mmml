@@ -3,12 +3,7 @@ import pyscf
 from pyscf.hessian import thermo
 from gpu4pyscf.dft import rks
  
-import pyscf
 
-import numpy as np
-import pyscf
-from pyscf.hessian import thermo
-from gpu4pyscf.dft import rks
 
 from .enums import *
 from .helperfunctions import *

@@ -28,7 +28,6 @@ import ase
 from ase.data import atomic_masses as ASE_ATOMIC_MASSES
 from ase.optimize import BFGS
 
-import sys
 sys.path.insert(0, str(Path(__file__).parent))
 
 from ase_calc_EF import AseCalculatorEF

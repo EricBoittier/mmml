@@ -1,7 +1,0 @@
-other {
-  name: "BLOCK_LEVEL_EMITTER"
-  config {
-    type_url: "type.googleapis.com/xla.gpu.BlockLevelFusionConfig"
-    value: "\020\010\032\000\032\004\n\002\330\030 \001(\001"
-  }
-}

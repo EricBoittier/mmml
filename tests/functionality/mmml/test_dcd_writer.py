@@ -59,7 +59,7 @@ def _read_dcd_header(path):
         rec2 = struct.unpack("<i", f.read(4))[0]
         # Title block
         block_size = struct.unpack("<i", f.read(4))[0]
-        n_titles = struct.unpack("<i", f.read(4))[0]
+        _n_titles = struct.unpack("<i", f.read(4))[0]
         f.read(block_size - 4)
         f.read(4)
         # Natoms block: 4 (size) + 4 (n_atoms) + 4 (size)
@@ -86,9 +86,9 @@ def _read_dcd_frame_coords(f, n_atoms, has_unitcell):
     if has_unitcell:
         rec = struct.unpack("<i", f.read(4))[0]
         assert rec == 48
-        uc = np.fromfile(f, dtype=np.float64, count=6)
+        _uc = np.fromfile(f, dtype=np.float64, count=6)
         struct.unpack("<i", f.read(4))[0]
-    block_size = n_atoms * 4
+    _block_size = n_atoms * 4
     struct.unpack("<i", f.read(4))[0]  # block start
     x = np.fromfile(f, dtype=np.float32, count=n_atoms)
     struct.unpack("<i", f.read(4))[0]  # block end

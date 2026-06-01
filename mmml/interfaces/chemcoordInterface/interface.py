@@ -278,7 +278,6 @@ def interpolate_xyzs_to_npz(xyz1: str, xyz2: str, steps: int = 1000, out_fn="int
 
 import ase
 from io import StringIO
-import pandas as pd
 
 
 def sym_to_ase(eq):

@@ -26,7 +26,6 @@ from jax_md import space, minimize, quantity, simulate, partition
 
 # Local imports
 import e3x
-import jax
 from physnetjax.restart.restart import get_last, get_params_model
 
 

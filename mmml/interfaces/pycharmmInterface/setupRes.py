@@ -12,22 +12,18 @@ import numpy as np
 # ASE imports
 import ase
 from ase import Atoms
-from ase.io import read
-
 from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_loud
 from mmml.interfaces.pycharmmInterface.import_pycharmm import reset_block
 from mmml.interfaces.pycharmmInterface.import_pycharmm import safe_energy_show
 from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_RTF, CGENFF_PRM, CHARMM_HOME, CHARMM_LIB_DIR
 from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf, set_up_directories
 
-import os
 os.environ["CHARMM_HOME"] = CHARMM_HOME
 os.environ["CHARMM_LIB_DIR"] = CHARMM_LIB_DIR
 
 print("CHARMM_HOME: ", CHARMM_HOME)
 print("CHARMM_LIB_DIR: ", CHARMM_LIB_DIR)
 
-import sys
 sys.path.append(str(Path(CHARMM_HOME) / "tool" / "pycharmm"))
 
 

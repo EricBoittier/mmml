@@ -1100,7 +1100,6 @@ def run_lambda_dynamics(cfg: LambdaDynamicsConfig) -> dict[str, Any]:
     if backend != "ase":
         raise ValueError(f"Unsupported backend for lambda_ti: {cfg.backend!r}")
 
-    repo_root = cfg.repo_root or repo_root_from_here()
     out_dir = cfg.output_dir.expanduser().resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
 

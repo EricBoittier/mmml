@@ -11,9 +11,7 @@ os.environ["CHARMM_LIB_DIR"] = "/pchem-data/meuwly/boittier/home/charmm/build/cm
 os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".99"
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
-import jax
 from jax import jit
-import jax.numpy as jnp
 import ase.calculators.calculator as ase_calc
 
 # from jax import config
@@ -45,7 +43,6 @@ orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
 
 data_key, train_key = jax.random.split(jax.random.PRNGKey(42), 2)
 
-from pathlib import Path
 
 from mmml.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
 
@@ -88,10 +85,8 @@ model = EF(
 
 import pycharmm
 
-import pycharmm
 import pycharmm.coor as coor
 import pycharmm.energy as energy
-import pycharmm.minimize as minimize
 import pycharmm.psf as psf
 
 
@@ -100,7 +95,7 @@ import ase
 from ase.visualize import view
 
 
-from scipy.optimize import minimize
+from scipy.optimize import minimize as scipy_minimize
 
 ev2kcalmol = 1 / (ase.units.kcal / ase.units.mol)
 
@@ -178,7 +173,6 @@ def view_atoms(atoms):
     return view(atoms, viewer="x3d")
 
 
-from itertools import combinations
 
 
 def dimer_permutations(n_mol):
@@ -733,16 +727,16 @@ def optimize_params_simplex(
     x0, bounds, loss, method="Nelder-Mead", maxiter=100, xatol=0.0001, fatol=0.0001
 ):
     initial_simplex = create_initial_simplex(x0)
-    res = minimize(
+    res = scipy_minimize(
         loss,
         x0=x0,
         method="Nelder-Mead",
         bounds=bounds,
         options={
-            "xatol": 0.0001,  # Absolute tolerance on x
-            "fatol": 0.0001,  # Absolute tolerance on function value
+            "xatol": xatol,
+            "fatol": fatol,
             "initial_simplex": initial_simplex,
-            "maxiter": 100,
+            "maxiter": maxiter,
         },
     )  # Initial simplex with steps of 0.0001
 
@@ -968,7 +962,6 @@ def get_MM_energy_forces_fns(R):
         ml_cutoff_distance: float = 2.0,
         mm_switch_on: float = 5.0,
         mm_cutoff: float = 1.0,
-        buffer_distance: float = 0.001,
     ) -> Array:
         """Applies smooth switching function to MM energies based on distances.
 
@@ -978,7 +971,6 @@ def get_MM_energy_forces_fns(R):
             ml_cutoff_distance: Distance where ML potential is cut off
             mm_switch_on: Distance where MM potential starts switching on
             mm_cutoff: Final cutoff for MM potential
-            buffer_distance: Small buffer to avoid discontinuities
 
         Returns:
             Array: Scaled MM energies after applying switching function

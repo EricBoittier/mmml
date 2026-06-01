@@ -314,8 +314,6 @@ def prepare_batches_jit(
     return output
 
 
-import jax
-import numpy as np
 
 
 def compute_dst_src_lookup(data):

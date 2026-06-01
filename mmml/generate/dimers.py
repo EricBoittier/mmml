@@ -125,8 +125,6 @@ def make_rigid_angle_scan(A, B, n_points=20, distance=3.0, axis='z'):
     return structures
 
 
-import numpy as np
-from ase import Atoms
 from scipy.spatial.distance import pdist, squareform
 from scipy.sparse.csgraph import connected_components
 from scipy.sparse import csr_matrix
@@ -161,7 +159,6 @@ def separate_monomers_by_distance(system: Atoms, threshold: float = 1.8):
     
     return monomers
 
-import numpy as np
 from ase import Atoms
 
 def get_mean_plane(atoms: Atoms):
@@ -188,7 +185,6 @@ def get_mean_plane(atoms: Atoms):
     return centroid, normal
 
 
-import numpy as np
 
 def angle_between_planes(normal1: np.ndarray, normal2: np.ndarray, degrees=True):
     """

@@ -312,29 +312,6 @@ def evaluate_dc(
         return esp_errors, mono_pred, mono_errors, None
 
 
-def plot_3d_combined(combined, batch, batch_size=1):
-    # Infer number of atoms from batch
-    num_atoms = infer_num_atoms(batch, batch_size)
-    
-    xyz2 = combined[:, :3]
-    q2 = combined[:, 3]
-    i = 0
-    nonzero = np.nonzero(batch["Z"].reshape(batch_size, num_atoms)[i])
-    xyz = batch["R"].reshape(batch_size, num_atoms, 3)[i][nonzero]
-    elem = batch["Z"].reshape(batch_size, num_atoms)[i][nonzero]
-
-    from ase import Atoms
-    from ase.visualize import view
-
-    mol = Atoms(elem, xyz)
-    V1 = view(mol, viewer="x3d")
-    dcmol = Atoms(["X" if _ > 0 else "He" for _ in q2], xyz2)
-    V2 = view(dcmol, viewer="x3d")
-    combined = dcmol + mol
-    V3 = view(combined, viewer="x3d")
-    return V1, V2, V3
-
-
 def plot_model(DCM2, params, batch, batch_size, nDCM, plot=True):
     mono_dc2, dipo_dc2 = apply_model(DCM2, params, batch, batch_size)
 

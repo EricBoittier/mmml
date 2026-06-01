@@ -57,7 +57,6 @@ def load_pdb_data(pdb_file):
     # loaded_pdb = mda.topology.PDBParser.PDBParser(pdb_file)
     
     atypes = psf.get_atype()
-    atc = pycharmm.param.get_atc()
     residues = psf.get_res()
     psf.get_natom()
     # nl_info = capture_neighbour_list()
@@ -272,14 +271,12 @@ def calc_energies_forces(
     ase_atom_full_system = ase.Atoms(atomic_numbers, atom_positions)
     
     result = None
-    summed_2body = None
     mmml_energy = None
     charmm = None
 
     if DO_MM:
         # Calculate CHARMM energies and forces first
         result = calc_pycharmm_dimers(forces=True)
-        summed_2body = result["mm_forces"].sum(axis=0)
         mm_forces = result["mm_forces"]
 
     all_coordinates = ase_atom_full_system.get_positions()

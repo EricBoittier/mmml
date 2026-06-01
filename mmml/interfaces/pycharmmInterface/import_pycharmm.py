@@ -46,7 +46,6 @@ print("CHARMM_LIB_DIR", CHARMM_LIB_DIR)
 
 import pycharmm
 
-import pycharmm
 import pycharmm.coor as coor
 import pycharmm.energy as energy
 

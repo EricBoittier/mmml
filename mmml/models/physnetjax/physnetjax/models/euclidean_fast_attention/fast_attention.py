@@ -23,7 +23,7 @@ PrecisionLike = jax.lax.PrecisionLike
 
 
 def frequency_init_fn(
-    rng, num_frequencies, num_features, max_frequency, max_length, dtype
+    rng, _num_frequencies, num_features, max_frequency, max_length, dtype
 ):
     """Init function for Euclidean Rope frequencies.
 

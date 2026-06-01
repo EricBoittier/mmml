@@ -1,7 +1,0 @@
-[19:31:38] cluster_build: 0.240 s
-[19:31:39] cutoff plot: /home/ericb/mmml/out/mdsys/pbc_nvt/cutoffs_schematic_0.10_5.50_2.00_complementary.png
-[19:31:39] pbc_nvt_nhc: mmml setup_calculator 0.744 s, factory_call 0.000 s
-[19:31:49] pbc_nvt_nhc: JIT warmup (first potential energy) 9.778 s
-[19:31:49] pbc_nvt_nhc: BFGS starting (max 50 steps, fmax=0.1; this is pre-MD minimization, not dynamics yet)
-[19:31:50] pbc_nvt_nhc: BFGS 0.963 s (12 iters)
-[19:35:31] pbc_nvt_nhc: MD integrator 221.617 s (55.4043 ms/step mean)

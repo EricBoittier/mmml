@@ -31,24 +31,6 @@ def read_dyna_line(line: str) -> dict:
         return None
 
 
-def read_press_line(line: str) -> dict:
-    # Early return if not a PRESS line
-    if not line.startswith("DYNA PRESS"):
-        return None
-    try:
-        return {
-            "vire": float(line[11:28].strip()),
-            "viri": float(line[28:40].strip()),
-            "press_e": float(line[40:52].strip()),
-            "press_i": float(line[53:65].strip()),
-            "volume": float(line[67:].strip()),
-        }
-    except (ValueError, IndexError) as e:
-        print(f"Error parsing PRESS line: {line.strip()}")
-        print(f"Error: {e}")
-        return None
-
-
 # For processing the whole file, use Polars' streaming capabilities
 def read_dyna_file(filename: str) -> pl.DataFrame:
     dyna_data = []
@@ -83,7 +65,6 @@ def process_file(filename: str) -> pl.DataFrame:
         raise ValueError(f"Unknown file type: {filename}")
 
 
-import matplotlib.pyplot as plt
 
 
 def plot_simulation_overview(dyna_df, press_df, subfig=None):

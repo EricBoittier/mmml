@@ -1,6 +1,5 @@
 from ase.io import read
 import numpy as np
-from ase.io import read
 
 
 def save_traj_to_npz(traj_file, output_file, FORCES=True, ENERGY=True):
