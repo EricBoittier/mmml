@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any, Callable
 
 import ase
@@ -397,7 +396,6 @@ def run_lambda_dynamics_jaxmd(cfg: LambdaDynamicsConfig) -> dict[str, Any]:
         parse_couple_residue_list,
         plot_window_components,
         print_cluster_psf_monomer_diagnostics,
-        repo_root_from_here,
         resolve_lambda_md_settings,
         save_snapshots_npz,
         snapshot_metadata_from_cluster,
@@ -408,7 +406,6 @@ def run_lambda_dynamics_jaxmd(cfg: LambdaDynamicsConfig) -> dict[str, Any]:
     if cfg.interval < 1:
         raise ValueError("--interval must be >= 1")
 
-    repo_root = cfg.repo_root or repo_root_from_here()
     out_dir = cfg.output_dir.expanduser().resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
 

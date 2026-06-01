@@ -11,7 +11,6 @@ import pycharmm
 from rich.console import Console
 from rich.panel import Panel
 
-from mmml.cli.run.pycharmm_sampling_args import add_two_residue_sampling_args
 from mmml.interfaces.pycharmmInterface.import_pycharmm import (
     coor,
     pycharmm_quiet,

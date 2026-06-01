@@ -12,7 +12,6 @@ import random
 from tqdm import tqdm
 import os
 
-from dscribe.descriptors import MBTR
 
 from select_points import select_most_unique_samples
 

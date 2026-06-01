@@ -4,7 +4,6 @@ Test that ASE calculator and JAX-MD produce consistent energies and forces for P
 Verifies that the ASE AseDimerCalculator and JAX-MD energy_fn yield the same energy
 and forces for the same configuration. Uses MIC-only PBC (no coordinate transform).
 """
-import importlib.util
 from pathlib import Path
 import os
 import pytest
@@ -182,7 +181,6 @@ def test_ase_jaxmd_pbc_with_box_and_pairs():
 
     import jax
     import jax.numpy as jnp
-    from jax import jit
     import ase
     import e3x
 

@@ -148,7 +148,7 @@ def test_orbax_to_json_with_config_and_metadata(temp_dir):
         metadata={"epoch": 100},
     )
 
-    loaded = json_to_params(json_path)
+    json_to_params(json_path)
     # orbax_to_json with config/metadata adds them to the payload
     with open(json_path) as f:
         data = json.load(f)

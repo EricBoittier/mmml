@@ -195,6 +195,8 @@ dev = [
     "mkdocs>=1.6,<2.0",
     "mkdocs-material>=9.7",
     "mkdocstrings[python]>=0.30",
+    "ruff>=0.15",
+    "vulture>=2.16",
 ]
 
 # Full installation with all optional dependencies (CUDA 13 default)
@@ -262,3 +264,53 @@ default-tag = "1.0.0"
 
 [tool.versioningit.write]
 file = "mmml/_version.py"
+
+[tool.ruff]
+target-version = "py313"
+line-length = 119
+src = ["mmml", "tests", "scripts", "pycharmm"]
+extend-exclude = ["*.ipynb"]
+
+[tool.ruff.lint]
+select = [
+    "F401",   # unused imports
+    "F841",   # unused variables
+    "F811",   # redefined while unused
+    "ARG",    # unused function/method/lambda arguments
+]
+ignore = [
+    "ARG001",  # many callback/API stubs keep unused args intentionally
+    "ARG002",
+    "ARG005",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"pycharmm/__init__.py" = ["F401"]
+"tests/**/*.py" = ["ARG"]
+
+[tool.vulture]
+paths = ["mmml", "tests", "scripts", "pycharmm"]
+min_confidence = 80
+ignore_names = [
+    "ngrid",
+    "signum",
+    "frame",
+    "exc_type",
+    "exc_value",
+    "exc_tb",
+    "cls",
+    "request",
+    "app",
+    "router",
+]
+ignore_decorators = [
+    "@app.get",
+    "@app.post",
+    "@app.put",
+    "@app.delete",
+    "@app.patch",
+    "@app.head",
+    "@app.options",
+    "@router.get",
+    "@router.post",
+]

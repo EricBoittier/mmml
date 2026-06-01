@@ -680,7 +680,7 @@ def train_step(params: FrozenDict, opt_state, model: TTTNet,
 # Simple training loop
 # ============================
 def train_loop(num_iters=50, games_per_iter=16, batch_size=64, train_steps=100,
-               sims_per_move=200, lr=1e-3, wd=1e-4, seed=0):
+               _sims_per_move=200, lr=1e-3, wd=1e-4, seed=0):
     """
     Complete AlphaZero-style training loop for Tic-Tac-Toe.
     

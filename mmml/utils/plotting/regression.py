@@ -8,9 +8,6 @@ from statsmodels.graphics.gofplots import ProbPlot
 from statsmodels.stats.outliers_influence import variance_inflation_factor
 import matplotlib.pyplot as plt
 from typing import Type
-import statsmodels
-import statsmodels.formula.api as smf
-import pandas as pd
 
 style_talk = "seaborn-talk"  # refer to plt.style.available
 

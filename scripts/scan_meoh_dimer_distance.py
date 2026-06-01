@@ -36,7 +36,6 @@ import pycharmm.param as param
 import pycharmm.psf as psf
 import pycharmm.read as read
 import pycharmm.settings as settings
-import pycharmm.write as pywrite
 
 # Compatibility shims used by MMML internals.
 pyci.read = read

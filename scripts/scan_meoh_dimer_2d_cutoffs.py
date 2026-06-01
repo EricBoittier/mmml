@@ -230,7 +230,6 @@ def main() -> int:
     f_ml2b = -np.gradient(e_ml2b, distances, axis=1)
     f_mm = -np.gradient(e_mm, distances, axis=1)
     dlam_total = e_total[-1] - e_total[0]
-    dlam_internal = e_internal[-1] - e_internal[0]
     dlam_ml2b = e_ml2b[-1] - e_ml2b[0]
     dlam_mm = e_mm[-1] - e_mm[0]
     dlam_force_total = f_total[-1] - f_total[0]

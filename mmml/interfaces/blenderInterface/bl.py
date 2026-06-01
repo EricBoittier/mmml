@@ -1,6 +1,5 @@
 import bpy
 import sys
-import sys
 
 # subprocess.run([sys.executable, '-m', 'pip', 'install', 'ase', '-t',
 #    'C:\\Users\\Eric\\AppData\\Roaming\\Blender Foundation\\Blender\\4.4\\scripts\\modules'])
@@ -9,12 +8,8 @@ sys.path.append(r"c:\users\eric\appdata\roaming\python\python311\site-packages")
 import ase.io
 import numpy as np
 
-import bpy
-import numpy as np
 
 
-import bpy
-import numpy as np
 from mathutils import Vector
 
 
@@ -54,7 +49,6 @@ def create_arrow(start, end, name="ForceArrow"):
     return obj
 
 
-import bpy
 
 
 def delete_all_objects():
@@ -101,7 +95,6 @@ def best_fit_rotation_matrix(P, Q):
     return R
 
 
-import bpy
 
 
 def create_3d_text(text, location=(0, 0, 0), size=1):

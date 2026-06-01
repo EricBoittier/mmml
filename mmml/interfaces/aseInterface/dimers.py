@@ -39,7 +39,6 @@ orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
 
 data_key, train_key = jax.random.split(jax.random.PRNGKey(42), 2)
 
-from pathlib import Path
 
 from physnetjax.calc.helper_mlp import get_ase_calc
 
@@ -81,10 +80,8 @@ model = EF(
 
 import pycharmm
 
-import pycharmm
 import pycharmm.coor as coor
 import pycharmm.energy as energy
-import pycharmm.minimize as minimize
 import pycharmm.psf as psf
 
 
@@ -93,7 +90,7 @@ import ase
 from ase.visualize import view
 
 
-from scipy.optimize import minimize
+from scipy.optimize import minimize as scipy_minimize
 
 ev2kcalmol = 1 / (ase.units.kcal / ase.units.mol)
 
@@ -712,16 +709,16 @@ def optimize_params_simplex(
     x0, bounds, loss, method="Nelder-Mead", maxiter=100, xatol=0.0001, fatol=0.0001
 ):
     initial_simplex = create_initial_simplex(x0)
-    res = minimize(
+    res = scipy_minimize(
         loss,
         x0=x0,
         method="Nelder-Mead",
         bounds=bounds,
         options={
-            "xatol": 0.0001,  # Absolute tolerance on x
-            "fatol": 0.0001,  # Absolute tolerance on function value
+            "xatol": xatol,
+            "fatol": fatol,
             "initial_simplex": initial_simplex,
-            "maxiter": 100,
+            "maxiter": maxiter,
         },
     )  # Initial simplex with steps of 0.0001
 

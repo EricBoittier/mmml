@@ -206,7 +206,6 @@ def test_charmm_dcm_xyz_vs_python(tmp_path):
     frame_idx = 0
     mdcm_path = tmp_path / "meoh.mdcm"
     py_xyz = tmp_path / "dcm_python.xyz"
-    charmm_xyz = tmp_path / "dcm_charmm.xyz"
 
     frames, charges_per_frame = build_mdcm_from_dcmnet(
         h5_path, frame_idx, mdcm_path, "MEOH"

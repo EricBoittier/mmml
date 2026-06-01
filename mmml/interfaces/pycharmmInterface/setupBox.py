@@ -10,7 +10,6 @@ import numpy as np
 # ASE imports
 import ase
 from ase import Atoms
-from ase.io import read
 
 from mmml.interfaces.pycharmmInterface.import_pycharmm import (
     CGENFF_RTF, CGENFF_PRM, CHARMM_HOME, CHARMM_LIB_DIR
@@ -23,7 +22,6 @@ os.environ["CHARMM_LIB_DIR"] = CHARMM_LIB_DIR
 
 print(CHARMM_HOME)
 print(CHARMM_LIB_DIR)
-import sys
 sys.path.append(str(Path(CHARMM_HOME) / "tool" / "pycharmm"))
 
 # CHARMM imports
@@ -36,13 +34,6 @@ import pycharmm.lingo
 
 # import simple scripts
 from mmml.interfaces.pycharmmInterface.pycharmmCommands import CLEAR_CHARMM
-from mmml.interfaces.pycharmmInterface.packmol_placement import (
-    require_packmol_sphere_radius,
-    resolve_packmol_sphere_radius,
-    resolve_packmol_sphere_use,
-    run_packmol_sphere,
-    run_packmol_sphere_mixed,
-)
 
 
 # unit registry

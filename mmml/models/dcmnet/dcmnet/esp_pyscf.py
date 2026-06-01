@@ -12,8 +12,6 @@ from pyscf.data import radii
 from gpu4pyscf.df import int3c2e
 from gpu4pyscf.lib.cupy_helper import dist_matrix
 import pyscf
-import numpy as np
-from pyscf import gto
 from gpu4pyscf.dft import rks
 
 from gpu4pyscf.properties import polarizability
@@ -28,7 +26,6 @@ sys.path.append("/pchem-data/meuwly/boittier/jaxeq/dcmnet")
 print(sys.path)
 # from dcmnet.models import DCM1, DCM2, DCM3, DCM4, dcm1_params, dcm2_params, dcm3_params, dcm4_params
 
-import numpy as np
 
 
 def atom_centered_dipole(dcm, com, q):
@@ -54,13 +51,6 @@ references:
 https://onlinelibrary.wiley.com/doi/abs/10.1002/qua.26035
 '''
 
-import numpy as np
-from scipy.spatial import distance_matrix
-import cupy
-from pyscf import gto
-from pyscf.data import radii
-from gpu4pyscf.df import int3c2e
-from gpu4pyscf.lib.cupy_helper import dist_matrix
 
 from ase.data import chemical_symbols
 

@@ -15,7 +15,7 @@ cons_command = "cons dihe {} force {} min {:4.2f}'".format(
 # pycharmm.lingo.charmm_script(cons_command)
 
 
-def add_waters(n_waters: int = 4):
+def add_waters(_n_waters: int = 4):
     add_water_script = """! Generate a water segment
 read sequence tip3 1
 generate WAT setup angle 109.47

@@ -178,7 +178,6 @@ def get_MM_energy_forces_fns(R, ATOMS_PER_MONOMER=5, N_MONOMERS=2):
         ml_cutoff_distance: float = 2.0,
         mm_switch_on: float = 5.0,
         mm_cutoff: float = 1.0,
-        buffer_distance: float = 0.001,
     ) -> Array:
         """Applies smooth switching function to MM energies based on distances.
         
@@ -188,7 +187,6 @@ def get_MM_energy_forces_fns(R, ATOMS_PER_MONOMER=5, N_MONOMERS=2):
             ml_cutoff_distance: Distance where ML potential is cut off
             mm_switch_on: Distance where MM potential starts switching on
             mm_cutoff: Final cutoff for MM potential
-            buffer_distance: Small buffer to avoid discontinuities
             
         Returns:
             Array: Scaled MM energies after applying switching function
