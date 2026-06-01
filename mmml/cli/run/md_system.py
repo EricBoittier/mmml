@@ -493,6 +493,10 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     if args.flat_bottom_radius is not None:
         cmd.extend(["--fb-rad", str(args.flat_bottom_radius)])
         cmd.extend(["--fb-forc", str(args.flat_bottom_k)])
+    cmd.extend(["--seed", str(args.seed)])
+    _append_packmol_sphere_args(cmd, args)
+    if getattr(args, "flat_bottom_radius", None) is not None:
+        cmd.extend(["--flat-bottom-radius", str(args.flat_bottom_radius)])
     if args.extra_args:
         cmd.extend(args.extra_args)
     return cmd

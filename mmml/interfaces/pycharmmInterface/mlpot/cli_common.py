@@ -409,23 +409,60 @@ def composition_tag(composition: list[tuple[str, int]] | None, residue: str, n_m
     return f"{residue.lower()}_{n_molecules}mer"
 
 
+def use_packmol_sphere_placement(args: argparse.Namespace) -> bool:
+    from mmml.interfaces.pycharmmInterface.packmol_placement import resolve_packmol_sphere_use
+
+    return resolve_packmol_sphere_use(
+        composition=getattr(args, "composition", None),
+        packmol_radius=getattr(args, "packmol_radius", None),
+        flat_bottom_radius=getattr(args, "flat_bottom_radius", None),
+        packmol_sphere=getattr(args, "packmol_sphere", None),
+    )
+
+
 def build_cluster_from_args_with_tag(
     args: argparse.Namespace,
 ) -> Tuple[np.ndarray, np.ndarray, int, str]:
     """Build cluster; returns ``(Z, positions, n_monomers, tag)``."""
     from mmml.cli.run.md_pbc_suite.ase import (
         _build_cluster_from_composition,
+        _build_cluster_from_composition_packmol,
         _parse_composition,
+        packmol_sphere_center_from_args,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+    from mmml.interfaces.pycharmmInterface.packmol_placement import resolve_packmol_sphere_radius
 
     spacing = float(args.spacing)
     if getattr(args, "composition", None):
         composition = _parse_composition(args.composition)
-        z, r, _atoms_per, _names = _build_cluster_from_composition(
-            composition=composition,
-            spacing=spacing,
-        )
+        if use_packmol_sphere_placement(args):
+            radius = resolve_packmol_sphere_radius(
+                getattr(args, "packmol_radius", None),
+                getattr(args, "flat_bottom_radius", None),
+            )
+            center = packmol_sphere_center_from_args(args)
+            tolerance = float(getattr(args, "packmol_tolerance", 2.0))
+            z, r, _atoms_per, _names = _build_cluster_from_composition_packmol(
+                composition=composition,
+                center=center,
+                radius=radius,
+                tolerance=tolerance,
+                seed=int(getattr(args, "seed", 123)),
+            )
+            fb_r = getattr(args, "flat_bottom_radius", None)
+            msg = (
+                f"Cluster built with Packmol sphere: center={center}, "
+                f"packmol_radius={radius:.3f} Å, tolerance={tolerance:.2f} Å"
+            )
+            if fb_r is not None and float(fb_r) > 0:
+                msg += f", flat_bottom_radius={float(fb_r):.3f} Å"
+            print(msg)
+        else:
+            z, r, _atoms_per, _names = _build_cluster_from_composition(
+                composition=composition,
+                spacing=spacing,
+            )
         n_mol = sum(count for _, count in composition)
         tag = composition_tag(composition, args.residue.upper(), n_mol)
     else:

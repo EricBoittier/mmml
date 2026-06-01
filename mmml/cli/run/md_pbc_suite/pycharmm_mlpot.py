@@ -74,6 +74,41 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Skip cluster_for_vmd PSF/PDB before MLpot strips bonds",
     )
+    parser.add_argument(
+        "--flat-bottom-radius",
+        type=float,
+        default=None,
+        metavar="ANG",
+        help="MMFP droff (Å); also enables Packmol when --composition is set (legacy)",
+    )
+    parser.add_argument(
+        "--packmol-sphere",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Pack --composition inside a sphere with Packmol",
+    )
+    parser.add_argument(
+        "--packmol-radius",
+        type=float,
+        default=None,
+        metavar="ANG",
+        help="Packmol sphere radius (overrides --flat-bottom-radius for packing only)",
+    )
+    parser.add_argument(
+        "--packmol-center",
+        type=float,
+        nargs=3,
+        metavar=("CX", "CY", "CZ"),
+        default=None,
+        help="Packmol sphere center in Å (default: 0 0 0)",
+    )
+    parser.add_argument(
+        "--packmol-tolerance",
+        type=float,
+        default=2.0,
+        help="Packmol distance tolerance in Å (default: 2.0)",
+    )
+    parser.add_argument("--seed", type=int, default=123, help="Random seed for Packmol placement")
     return parser.parse_args(argv)
 
 
