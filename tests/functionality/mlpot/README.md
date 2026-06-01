@@ -57,7 +57,7 @@ python tests/functionality/mlpot/03_energy_compare.py --residue ACO --n-molecule
 
 | Script / test | Purpose |
 |---------------|---------|
-| `04_mlpot_minimize_stub.py` | Full-system MLpot + `cons_fix` on `--fix-resid 1` (`--run`) |
+| `04_mlpot_minimize_stub.py` | Full-system MLpot + `cons_fix` on `--fix-resid 1`; `--run --save` writes outputs |
 | `05_mlpot_dynamics_stub.py` | Short NVE with MLpot (`--run`) |
 | `test_mlpot_energy_matches_ase.py` | Pytest equivalent of script 03 |
 

@@ -42,18 +42,29 @@ def main() -> int:
         type=Path,
         default=Path("tests/functionality/mlpot/output/minimize"),
     )
+    parser.add_argument(
+        "--save",
+        action="store_true",
+        help="After minimization, write PDB/CRD/PSF, energy JSON, and XYZ",
+    )
     args = parser.parse_args()
 
     print_header("MLpot minimization stub (step 4)")
     out_dir = args.out_dir.resolve()
     pdb_path = out_dir / "mini_full_mlpot.pdb"
     crd_path = out_dir / "mini_full_mlpot.crd"
+    psf_path = out_dir / "mini_full_mlpot.psf"
+    energy_json_path = out_dir / "mini_full_mlpot_energy.json"
+    xyz_path = out_dir / "mini_full_mlpot.xyz"
 
     print("Workflow:")
     print("  1. register_mlpot on ALL atoms")
     print(f"  2. cons_fix.setup(resid {args.fix_resid})  # constraint test only")
     print("  3. minimize.run_sd; cons_fix.turn_off(); minimize.run_sd")
-    print(f"  4. write CRD/PDB -> {crd_path}")
+    if args.save:
+        print(f"  4. --save -> {out_dir}/mini_full_mlpot.*")
+    else:
+        print("  4. (optional) pass --save to write minimized structures and energy JSON")
 
     if not args.run:
         print("\nSTUB: pass --run to execute.")
@@ -92,15 +103,22 @@ def main() -> int:
                 fixed_ml_selection=fix_sel,
                 nstep=args.nstep,
                 nprint=max(1, args.nstep // 2),
-                pdb_path=pdb_path,
-                crd_path=crd_path,
+                save=args.save,
+                pdb_path=pdb_path if args.save else None,
+                crd_path=crd_path if args.save else None,
+                psf_path=psf_path if args.save else None,
+                energy_json_path=energy_json_path if args.save else None,
+                xyz_path=xyz_path if args.save else None,
                 skip_if_crd_exists=False,
             )
         )
     finally:
         ctx.unset()
 
-    print(f"\nMinimization ran={ran}; files under {out_dir}")
+    if args.save:
+        print(f"\nMinimization ran={ran}; saved under {out_dir}")
+    else:
+        print(f"\nMinimization ran={ran} (no files written; use --save)")
     return 0
 
 
