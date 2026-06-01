@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """
-Step 5: short CHARMM dynamics with MLpot.
+Step 5: CHARMM dynamics with MLpot after two-stage minimization.
 
-Supports multiple monomers (``--n-molecules``) and optional frozen monomers
-(``--constrain-resids``) during the run.
+Workflow with MLpot registered:
+  1. SD pass 1 — free minimization (all atoms)
+  2. SD pass 2 — constrained minimization (``--fix-resids``)
+  3. NVE dynamics (optional ``--constrain-resids`` during MD)
 
-Default: dry-run only. ``--run`` executes a minimal NVE segment.
+Use ``--no-pre-minimize`` to skip steps 1–2.
 """
 
 from __future__ import annotations
@@ -28,6 +30,7 @@ from _common import (
     resolve_checkpoint,
     resolve_constrain_resids,
     resolve_dcd_nsavc,
+    resolve_fix_resids,
     setup_cons_fix_for_resids,
     turn_off_cons_fix,
     validate_resids_for_cluster,
@@ -42,8 +45,8 @@ def main() -> int:
     add_charmm_output_args(parser)
     add_dcd_save_args(parser)
     add_monomer_constraint_args(parser, for_dynamics=True)
-    parser.add_argument("--run", action="store_true", help="Run a short NVE segment")
-    parser.add_argument("--nstep", type=int, default=20, help="Dynamics steps when --run")
+    parser.add_argument("--run", action="store_true", help="Run minimization + NVE")
+    parser.add_argument("--nstep", type=int, default=20, help="NVE dynamics steps when --run")
     parser.add_argument(
         "--temp",
         type=float,
@@ -62,7 +65,8 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    constrain_resids = resolve_constrain_resids(args)
+    fix_resids = resolve_fix_resids(args)
+    dynamics_constrain = resolve_constrain_resids(args)
 
     print_header("MLpot dynamics (step 5)")
     out_dir = args.out_dir.resolve()
@@ -71,19 +75,29 @@ def main() -> int:
     dcd_path = out_dir / f"nve_{tag}.dcd"
 
     print(f"Cluster: {args.residue} × {args.n_molecules} monomers (spacing {args.spacing} Å)")
-    print(format_resid_constraint_message(constrain_resids, context="Dynamics"))
+    if not args.no_pre_minimize:
+        print("  1. SD pass 1: free minimization")
+        print(f"  2. SD pass 2: {format_resid_constraint_message(fix_resids, context='cons_fix')}")
+        print(
+            f"  3. NVE: {format_resid_constraint_message(dynamics_constrain, context='cons_fix during MD')}"
+        )
+    else:
+        print("  (pre-minimize skipped)")
+        print(
+            f"  NVE: {format_resid_constraint_message(dynamics_constrain, context='cons_fix during MD')}"
+        )
 
     if not args.run:
         print("\nExamples:")
-        print("  --n-molecules 4 --run --nstep 50")
-        print("  --n-molecules 3 --constrain-resids 1,2 --run  # freeze monomers 1–2")
-        print("\nDry-run only. Example:")
-        print("  python tests/functionality/mlpot/05_mlpot_dynamics_stub.py --run --nstep 20")
+        print("  --run --n-molecules 4 --fix-resids 1,3 --mini-nstep 30 --nstep 50")
+        print("  --run --fix-resids 1 --constrain-resids 1  # same monomer fixed in mini + MD")
+        print("  --run --no-pre-minimize --nstep 20")
         return 0
 
     ckpt = resolve_checkpoint(args.checkpoint)
     z, r, n_atoms = build_cluster_from_args(args)
-    validate_resids_for_cluster(constrain_resids, args.n_molecules)
+    validate_resids_for_cluster(fix_resids, args.n_molecules)
+    validate_resids_for_cluster(dynamics_constrain, args.n_molecules)
     print_cluster_geometry_summary(r, args.n_molecules)
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -91,12 +105,16 @@ def main() -> int:
     import pycharmm.energy as energy
     from mmml.interfaces.pycharmmInterface.mlpot import (
         CharmmTrajectoryFiles,
+        MinimizeWithMlpotConfig,
         build_nve_dynamics,
+        get_charmm_positions_array,
         load_physnet_mlpot_bundle,
+        minimize_with_mlpot,
         register_mlpot,
         run_dynamics_with_io,
         save_cluster_topology_for_vmd,
         select_all_atoms,
+        select_by_resids,
         setup_default_nbonds,
         sync_charmm_positions,
     )
@@ -128,17 +146,40 @@ def main() -> int:
     atoms = ase.Atoms(numbers=z, positions=r)
     _, _, pyCModel = load_physnet_mlpot_bundle(ckpt, n_atoms, atoms)
 
-    print(
-        f"MLpot: all {n_atoms} atoms | NVE {args.nstep} steps @ {NVE_TIMESTEP_PS} ps | "
-        f"{format_resid_constraint_message(constrain_resids, context='cons_fix')}"
-    )
     ctx = register_mlpot(pyCModel, z, select_all_atoms())
     try:
-        if constrain_resids:
-            setup_cons_fix_for_resids(constrain_resids)
+        if not args.no_pre_minimize:
+            fix_sel = select_by_resids(fix_resids) if fix_resids else None
+            print(
+                f"\nPre-dynamics minimization ({args.mini_nstep} SD steps per pass) | "
+                f"MLpot on all {n_atoms} atoms"
+            )
+            minimize_with_mlpot(
+                MinimizeWithMlpotConfig(
+                    fixed_ml_selection=fix_sel,
+                    nstep=args.mini_nstep,
+                    nprint=nprint,
+                    verbose=not args.quiet,
+                    reference_positions=r,
+                    pyCModel=pyCModel,
+                    save=False,
+                    show_energy=True,
+                    skip_if_crd_exists=False,
+                )
+            )
+            sync_charmm_positions(get_charmm_positions_array())
+
+        if dynamics_constrain:
+            setup_cons_fix_for_resids(dynamics_constrain)
+
+        print(
+            f"\nNVE: {args.nstep} steps @ {NVE_TIMESTEP_PS} ps | "
+            f"{format_resid_constraint_message(dynamics_constrain, context='cons_fix')}"
+        )
         if not args.quiet:
             print("CHARMM energy before dynamics:")
             energy.show()
+
         io = CharmmTrajectoryFiles(
             restart_write=res_path,
             trajectory=dcd_path,
@@ -161,7 +202,7 @@ def main() -> int:
         print("CHARMM energy after dynamics:")
         energy.show()
     finally:
-        if constrain_resids:
+        if dynamics_constrain:
             turn_off_cons_fix()
         ctx.unset()
 

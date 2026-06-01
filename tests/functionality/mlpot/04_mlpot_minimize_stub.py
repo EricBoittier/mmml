@@ -3,7 +3,7 @@
 Step 4: SD minimization with MLpot on the full cluster.
 
 - MLpot: all atoms (PhysNet on the full system).
-- Optional ``cons_fix`` on selected monomers (``--fix-resids``) during SD pass 1.
+- SD pass 1: free minimization (all atoms); pass 2: ``cons_fix`` on ``--fix-resids`` monomers.
 
 Pass ``--run`` to execute. Use ``--n-molecules`` for larger acetone clusters (ACO × N).
 """
@@ -78,15 +78,15 @@ def main() -> int:
     print("Workflow:")
     print(f"  Cluster: {args.residue} × {args.n_molecules} monomers (spacing {args.spacing} Å)")
     print("  1. register_mlpot on ALL atoms")
-    print(f"  2. {format_resid_constraint_message(fix_resids, context='SD pass 1')}")
-    print("  3. minimize.run_sd; cons_fix.turn_off(); minimize.run_sd (free)")
+    print("  2. SD pass 1: free minimization (all atoms)")
+    print(f"  3. SD pass 2: {format_resid_constraint_message(fix_resids, context='cons_fix')}")
     if args.save:
         print(f"  4. --save -> {out_dir}/mini_full_mlpot_{tag}.*")
 
     if not args.run:
         print("\nExamples:")
-        print("  --n-molecules 4 --fix-resids 1,3   # tetramer; fix monomers 1 and 3 in pass 1")
-        print("  --n-molecules 3 --no-fix           # trimer; single free minimization pass")
+        print("  --n-molecules 4 --fix-resids 1,3   # tetramer; free mini then fix 1,3")
+        print("  --n-molecules 3 --no-fix           # trimer; free minimization only")
         print("\nSTUB: pass --run to execute.")
         return 0
 
