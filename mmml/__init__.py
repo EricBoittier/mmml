@@ -3,13 +3,13 @@
 # Add imports here
 from .mmml import *
 
-# Compatibility: mmml.pycharmmInterface -> mmml.interfaces.pycharmmInterface
-import sys
-if "mmml.pycharmmInterface" not in sys.modules:
-    from mmml.interfaces import pycharmmInterface
-    sys.modules["mmml.pycharmmInterface"] = pycharmmInterface
+# Legacy ``mmml.pycharmmInterface`` imports are handled by ``mmml/pycharmmInterface/``
+# (lazy redirects to ``mmml.interfaces.pycharmmInterface``). Do not register the
+# interfaces package as ``mmml.pycharmmInterface`` in ``sys.modules`` here: that
+# breaks ``alias_mod is canonical_mod`` for submodules loaded via the legacy path.
 
-# Compatibility: mmml.models.physnetjax -> mmml.models.physnetjax
+import sys
+
 if "mmml.models.physnetjax" not in sys.modules:
     from mmml.models import physnetjax
     sys.modules["mmml.models.physnetjax"] = physnetjax

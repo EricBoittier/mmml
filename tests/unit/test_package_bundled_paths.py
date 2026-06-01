@@ -6,8 +6,12 @@ from pathlib import Path
 
 import importlib.util
 
-import mmml
-from mmml.paths import bundled_file, crystal_image_str_source, default_meoh_template_pdb
+from mmml.paths import (
+    _package_dir,
+    bundled_file,
+    crystal_image_str_source,
+    default_meoh_template_pdb,
+)
 
 
 def test_atomic_reference_json_is_bundled() -> None:
@@ -46,5 +50,6 @@ def test_generate_sample_module_is_packaged() -> None:
 
 
 def test_mmml_package_root_is_directory() -> None:
-    root = Path(mmml.__file__).resolve().parent
+    root = _package_dir()
     assert root.is_dir()
+    assert (root / "__init__.py").is_file()

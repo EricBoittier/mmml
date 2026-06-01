@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from importlib.resources import files
+def _package_dir() -> Path:
+    """Directory containing ``paths.py`` (the installed ``mmml`` package root)."""
+    return Path(__file__).resolve().parent
 
 
 def bundled_file(*parts: str) -> Path:
     """Return an on-disk path to a file declared in setuptools package-data."""
-    return Path(files("mmml").joinpath(*parts))
+    return _package_dir().joinpath(*parts)
 
 
 def default_meoh_template_pdb() -> Path:
