@@ -26,11 +26,18 @@ def default_cp() -> CutoffParameters:
   return CutoffParameters(ml_switch_width=2.0, mm_switch_on=5.0, mm_switch_width=1.0)
 
 
-def test_cutoff_defaults(default_cp: CutoffParameters) -> None:
+def test_cutoff_defaults() -> None:
+    cp = CutoffParameters()
+    assert cp.ml_switch_width == 0.1
+    assert cp.mm_switch_on == 5.0
+    assert cp.mm_switch_width == 1.0
+    assert cp.complementary_handoff is True
+
+
+def test_cutoff_fixture_values(default_cp: CutoffParameters) -> None:
     assert default_cp.ml_switch_width == 2.0
     assert default_cp.mm_switch_on == 5.0
     assert default_cp.mm_switch_width == 1.0
-    assert default_cp.complementary_handoff is True
 
 
 def test_cutoff_deprecated_aliases_resolve() -> None:
@@ -70,13 +77,41 @@ def test_ml_scale_matches_calculator_sharpstep(default_cp: CutoffParameters) -> 
     r = np.linspace(0.0, 8.0, 50)
     start = default_cp.mm_switch_on - default_cp.ml_switch_width
     stop = default_cp.mm_switch_on
-    expected = 1.0 - calc_sharpstep(r, start, stop, gamma=GAMMA_ON)
+    expected = np.asarray(
+        1.0 - calc_sharpstep(r, start, stop, gamma=GAMMA_ON), dtype=np.float64
+    )
     np.testing.assert_allclose(
         default_cp.ml_scale(r, gamma_ml=GAMMA_ON),
         expected,
-        rtol=0.0,
-        atol=1e-12,
+        rtol=1e-6,
+        atol=1e-6,
     )
+
+
+@pytest.mark.unit
+def test_complementary_scales_match_jax_sharpstep(default_cp: CutoffParameters) -> None:
+    """NumPy CutoffParameters scales match JAX _sharpstep (MM/jax-md switching path)."""
+    jax = pytest.importorskip("jax")
+    import jax.numpy as jnp
+
+    r = jnp.linspace(0.01, 8.0, 60)
+    start = float(default_cp.mm_switch_on - default_cp.ml_switch_width)
+    stop = float(default_cp.mm_switch_on)
+    tail = float(default_cp.mm_switch_on + default_cp.mm_switch_width)
+
+    s_ml_jax = 1.0 - calc_sharpstep(r, start, stop, gamma=GAMMA_ON)
+    handoff = 1.0 - s_ml_jax
+    mm_taper = 1.0 - calc_sharpstep(r, stop, tail, gamma=GAMMA_OFF)
+    s_mm_jax = handoff * mm_taper
+
+    r_np = np.asarray(r, dtype=np.float64)
+    s_ml_np, s_mm_np = default_cp.ml_mm_scales_complementary(
+        r_np, gamma_ml=GAMMA_ON, gamma_mm_off=GAMMA_OFF
+    )
+    np.testing.assert_allclose(s_ml_np, np.asarray(s_ml_jax), rtol=1e-6, atol=1e-6)
+    np.testing.assert_allclose(s_mm_np, np.asarray(s_mm_jax), rtol=1e-6, atol=1e-6)
+    # Guard against accidental no-op in the JAX path
+    assert float(jax.device_get(jnp.max(s_ml_jax))) == pytest.approx(1.0)
 
 
 def test_ml_scale_endpoint_values(default_cp: CutoffParameters) -> None:

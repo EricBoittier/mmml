@@ -151,8 +151,8 @@ def parse_args() -> argparse.Namespace:
         "--ml-cutoff",
         dest="ml_switch_width",
         type=float,
-        default=2.0,
-        help="ML taper width in Å over [mm_switch_on - width, mm_switch_on] (default: 2.0).",
+        default=0.1,
+        help="ML taper width in Å over [mm_switch_on - width, mm_switch_on] (default: 0.1).",
     )
     parser.add_argument(
         "--mm-switch-on",

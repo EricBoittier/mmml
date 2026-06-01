@@ -287,7 +287,7 @@ Eref[17] = -459.549260062932
 def setup_calculator(
     ATOMS_PER_MONOMER: Union[int, List[int], Sequence[int]],
     N_MONOMERS: int = 2,
-    ml_switch_width: float = 2.0,
+    ml_switch_width: float = 0.1,
     mm_switch_on: float = 5.0,
     mm_switch_width: float = 1.0,
     ml_cutoff_distance: float | None = None,

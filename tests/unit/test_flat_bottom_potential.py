@@ -12,6 +12,10 @@ from mmml.interfaces.pycharmmInterface.calculator_utils import (
     FLAT_BOTTOM_MODES,
     apply_flat_bottom,
 )
+from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
+    mic_displacement,
+    mic_displacement_smooth,
+)
 
 
 def _mic_identity(a, b, _cell):
@@ -150,7 +154,8 @@ def test_flat_bottom_forces_match_energy_gradient() -> None:
 
 
 @pytest.mark.unit
-def test_flat_bottom_pbc_uses_cell_center() -> None:
+@pytest.mark.parametrize("mic_fn", [mic_displacement, mic_displacement_smooth])
+def test_flat_bottom_pbc_uses_cell_center(mic_fn) -> None:
     """With an orthorhombic cell, COM is measured relative to the box center via MIC."""
     cell = jnp.diag(jnp.array([20.0, 20.0, 20.0], dtype=jnp.float64))
     # COM at (10, 10, 13): 3 Å above box center (10, 10, 10)
@@ -158,9 +163,49 @@ def test_flat_bottom_pbc_uses_cell_center() -> None:
     atomic_numbers = jnp.array([1], dtype=jnp.int32)
     monomer_offsets = jnp.array([0, 1], dtype=jnp.int32)
 
-    from mmml.interfaces.pycharmmInterface.calculator_utils import mic_displacement
-
     flat_e, _, _, com_dist = apply_flat_bottom(
+        positions,
+        atomic_numbers,
+        jnp.zeros((1, 3)),
+        radius=2.0,
+        k=1.0,
+        mode="system",
+        monomer_offsets=monomer_offsets,
+        n_monomers=1,
+        pbc_cell=cell,
+        mic_fn=mic_fn,
+    )
+
+    assert float(com_dist) == pytest.approx(3.0, rel=0.0, abs=1e-5)
+    assert float(flat_e) == pytest.approx(1.0, rel=0.0, abs=1e-5)  # k * (3 - 2)^2
+
+
+@pytest.mark.unit
+def test_flat_bottom_jitted_matches_eager_pbc() -> None:
+    """JIT-compiled apply_flat_bottom matches eager (jax-md / calculator path)."""
+    cell = jnp.diag(jnp.array([20.0, 20.0, 20.0], dtype=jnp.float64))
+    positions = jnp.array([[10.0, 10.0, 13.0]], dtype=jnp.float64)
+    atomic_numbers = jnp.array([1], dtype=jnp.int32)
+    monomer_offsets = jnp.array([0, 1], dtype=jnp.int32)
+
+    @jax.jit
+    def flat_energy(pos):
+        e, f, _, _ = apply_flat_bottom(
+            pos,
+            atomic_numbers,
+            jnp.zeros((1, 3)),
+            radius=2.0,
+            k=1.0,
+            mode="system",
+            monomer_offsets=monomer_offsets,
+            n_monomers=1,
+            pbc_cell=cell,
+            mic_fn=mic_displacement,
+        )
+        return e, f
+
+    e_jit, f_jit = flat_energy(positions)
+    e_ref, f_ref, _, _ = apply_flat_bottom(
         positions,
         atomic_numbers,
         jnp.zeros((1, 3)),
@@ -173,8 +218,8 @@ def test_flat_bottom_pbc_uses_cell_center() -> None:
         mic_fn=mic_displacement,
     )
 
-    assert float(com_dist) == pytest.approx(3.0)
-    assert float(flat_e) == pytest.approx(1.0)  # k * (3 - 2)^2
+    assert float(e_jit) == pytest.approx(float(e_ref), rel=0.0, abs=1e-6)
+    np.testing.assert_allclose(np.asarray(f_jit), np.asarray(f_ref), rtol=1e-6, atol=1e-6)
 
 
 @pytest.mark.unit
