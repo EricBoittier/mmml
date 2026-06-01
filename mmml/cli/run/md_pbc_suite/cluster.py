@@ -192,7 +192,8 @@ def build_minimized_monomer_for_packmol(
 
     if verbose and (nstep_sd > 0 or nstep_abnr > 0):
         print(
-            f"Packmol monomer {residue}: CHARMM MM minimize (SD={nstep_sd}, ABNR={nstep_abnr})"
+            f"Packmol monomer {residue}: CHARMM MM minimize (SD={nstep_sd}, ABNR={nstep_abnr})",
+            flush=True,
         )
     if nstep_sd > 0 or nstep_abnr > 0:
         minimize_charmm_mm_only(
