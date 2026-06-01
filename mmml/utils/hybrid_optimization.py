@@ -322,14 +322,28 @@ def create_hybrid_fitting_factory(
         
         # Extract cutoff parameters
         if optimize_mode == "cutoff_only":
-            ml_cutoff_val = params_dict.get("ml_cutoff", cutoff_params.ml_cutoff if cutoff_params else 2.0)
-            mm_switch_on_val = params_dict.get("mm_switch_on", cutoff_params.mm_switch_on if cutoff_params else 5.0)
-            mm_cutoff_val = params_dict.get("mm_cutoff", cutoff_params.mm_cutoff if cutoff_params else 1.0)
+            ml_cutoff_val = params_dict.get(
+                "ml_switch_width",
+                params_dict.get(
+                    "ml_cutoff",
+                    cutoff_params.ml_switch_width if cutoff_params else 2.0,
+                ),
+            )
+            mm_switch_on_val = params_dict.get(
+                "mm_switch_on", cutoff_params.mm_switch_on if cutoff_params else 5.0
+            )
+            mm_cutoff_val = params_dict.get(
+                "mm_switch_width",
+                params_dict.get(
+                    "mm_cutoff",
+                    cutoff_params.mm_switch_width if cutoff_params else 1.0,
+                ),
+            )
         else:
-            # Use fixed cutoff values
-            ml_cutoff_val = cutoff_params.ml_cutoff if cutoff_params else 2.0
+            # Use fixed switch widths
+            ml_cutoff_val = cutoff_params.ml_switch_width if cutoff_params else 2.0
             mm_switch_on_val = cutoff_params.mm_switch_on if cutoff_params else 5.0
-            mm_cutoff_val = cutoff_params.mm_cutoff if cutoff_params else 1.0
+            mm_cutoff_val = cutoff_params.mm_switch_width if cutoff_params else 1.0
         
         # Skip MM computation if optimize_mode is "ml_only" (MM will be precomputed and added separately)
         if optimize_mode == "ml_only":
@@ -1388,15 +1402,17 @@ def fit_hybrid_potential_to_training_data_jax(
     
     if optimize_mode == "cutoff_only":
         if initial_ml_cutoff is None:
-            initial_ml_cutoff = cutoff_params.ml_cutoff if cutoff_params else 2.0
+            initial_ml_cutoff = cutoff_params.ml_switch_width if cutoff_params else 2.0
         if initial_mm_switch_on is None:
             initial_mm_switch_on = cutoff_params.mm_switch_on if cutoff_params else 5.0
         if initial_mm_cutoff is None:
-            initial_mm_cutoff = cutoff_params.mm_cutoff if cutoff_params else 1.0
-        
-        params["ml_cutoff"] = jnp.array(initial_ml_cutoff)
+            initial_mm_cutoff = cutoff_params.mm_switch_width if cutoff_params else 1.0
+
+        params["ml_switch_width"] = jnp.array(initial_ml_cutoff)
         params["mm_switch_on"] = jnp.array(initial_mm_switch_on)
-        params["mm_cutoff"] = jnp.array(initial_mm_cutoff)
+        params["mm_switch_width"] = jnp.array(initial_mm_cutoff)
+        params["ml_cutoff"] = params["ml_switch_width"]
+        params["mm_cutoff"] = params["mm_switch_width"]
         
         # Store optimized LJ parameters if provided (from previous optimization)
         # These will be used in the loss function to get better starting loss

@@ -58,9 +58,15 @@ def print_system_summary(
         table.add_row("PBC", "False")
 
     if cutoff_params is not None:
-        table.add_row("ML cutoff (Å)", str(getattr(cutoff_params, "ml_cutoff", "N/A")))
+        table.add_row(
+            "ML switch width (Å)",
+            str(getattr(cutoff_params, "ml_switch_width", getattr(cutoff_params, "ml_cutoff", "N/A"))),
+        )
         table.add_row("MM switch-on (Å)", str(getattr(cutoff_params, "mm_switch_on", "N/A")))
-        table.add_row("MM cutoff (Å)", str(getattr(cutoff_params, "mm_cutoff", "N/A")))
+        table.add_row(
+            "MM switch width (Å)",
+            str(getattr(cutoff_params, "mm_switch_width", getattr(cutoff_params, "mm_cutoff", "N/A"))),
+        )
 
     if calculator_info:
         table.add_row("Calculator", calculator_info)

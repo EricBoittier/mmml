@@ -287,9 +287,11 @@ Eref[17] = -459.549260062932
 def setup_calculator(
     ATOMS_PER_MONOMER: Union[int, List[int], Sequence[int]],
     N_MONOMERS: int = 2,
-    ml_cutoff_distance: float = 2.0,
+    ml_switch_width: float = 2.0,
     mm_switch_on: float = 5.0,
-    mm_cutoff: float = 1.0,
+    mm_switch_width: float = 1.0,
+    ml_cutoff_distance: float | None = None,
+    mm_cutoff: float | None = None,
     complementary_handoff: bool = True,
     doML: bool = True,
     doMM: bool = True,
@@ -352,7 +354,7 @@ def setup_calculator(
             monomers+dimers in one batch. Set to reduce memory for large systems.
         mm_r_min: Optional inner cutoff (Å) for MM neighbor list. Pairs with dimer
             COM distance < mm_r_min are excluded. Defaults: complementary_handoff=False
-            -> mm_switch_on * 0.9; complementary_handoff=True -> (mm_switch_on - ml_cutoff) * 0.9
+            -> mm_switch_on * 0.9; complementary_handoff=True -> (mm_switch_on - ml_switch_width) * 0.9
             (exclude pure ML region; handoff preserved). Pass explicit value to override.
         jax_md_capacity_multiplier: Initial jax-md neighbor-list capacity multiplier.
             Increase for dense systems to reduce overflow risk.
@@ -367,6 +369,11 @@ def setup_calculator(
     """
     if model_restart_path is None:
         raise ValueError("model_restart_path must be provided")
+
+    if ml_switch_width is not None:
+        ml_switch_width = ml_switch_width
+    if mm_cutoff is not None:
+        mm_switch_width = mm_cutoff
 
     # --- Normalise ATOMS_PER_MONOMER into a per-monomer list ----------------
     if isinstance(ATOMS_PER_MONOMER, (list, tuple, np.ndarray)):
@@ -411,19 +418,23 @@ def setup_calculator(
             )
 
     CutoffParameters(
-        ml_cutoff_distance, mm_switch_on, mm_cutoff, complementary_handoff=complementary_handoff
+        ml_switch_width,
+        mm_switch_on,
+        mm_switch_width,
+        complementary_handoff=complementary_handoff,
     )
     # Default mm_r_min: exclude pairs in pure ML region (MM contributes 0 there)
     if mm_r_min is None and not complementary_handoff:
         mm_r_min = mm_switch_on * 0.9  # 10% buffer below mm_switch_on for numerical safety
     elif mm_r_min is None and complementary_handoff:
-        # Exclude r < handoff_start (pure ML); keep handoff [mm_switch_on - ml_cutoff, mm_switch_on]
-        handoff_start = mm_switch_on - ml_cutoff_distance
+        # Exclude r < handoff_start (pure ML); keep handoff [mm_switch_on - ml_switch_width, mm_switch_on]
+        handoff_start = mm_switch_on - ml_switch_width
         mm_r_min = handoff_start * 0.9 if handoff_start > 0 else None
 
     print(
-        "[setup_calculator] Cutoff inputs -> ml_cutoff=%.4f, mm_switch_on=%.4f, mm_cutoff=%.4f, complementary_handoff=%s"
-        % (ml_cutoff_distance, mm_switch_on, mm_cutoff, complementary_handoff)
+        "[setup_calculator] Handoff parameters -> ml_switch_width=%.4f Å, mm_switch_on=%.4f Å, "
+        "mm_switch_width=%.4f Å, complementary_handoff=%s"
+        % (ml_switch_width, mm_switch_on, mm_switch_width, complementary_handoff)
     )
     if mm_r_min is not None:
         print(f"[setup_calculator] mm_r_min={mm_r_min} (exclude pairs with dimer COM < this)")
@@ -661,7 +672,7 @@ def setup_calculator(
 
     def switch_ML(X,
         ml_energy,
-        ml_cutoff=ml_cutoff_distance,
+        ml_switch_width=ml_switch_width,
         mm_switch_on=mm_switch_on,
         n_atoms_a: int = atoms_per_monomer_list[0],
         n_atoms_b: int = atoms_per_monomer_list[-1],
@@ -691,8 +702,10 @@ def setup_calculator(
         else:
             r = jnp.linalg.norm(com2 - com1)
     
-        # ML: 1 -> 0 over [mm_switch_on - ml_cutoff, mm_switch_on]
-        ml_scale = 1.0 - _sharpstep(r, mm_switch_on - ml_cutoff, mm_switch_on, gamma=GAMMA_ON)
+        # ML: 1 -> 0 over [mm_switch_on - ml_switch_width, mm_switch_on]
+        ml_scale = 1.0 - _sharpstep(
+            r, mm_switch_on - ml_switch_width, mm_switch_on, gamma=GAMMA_ON
+        )
       
         return ml_scale * ml_energy
 
@@ -705,9 +718,9 @@ def setup_calculator(
         R,
         ATOMS_PER_MONOMER_ARG=None,
         N_MONOMERS=N_MONOMERS,
-        ml_cutoff_distance=ml_cutoff_distance,
+        ml_switch_width=ml_switch_width,
         mm_switch_on=mm_switch_on,
-        mm_cutoff=mm_cutoff,
+        mm_switch_width=mm_switch_width,
         complementary_handoff=True,
         sig_scale=sig_scale,
         ep_scale=ep_scale,
@@ -729,9 +742,9 @@ def setup_calculator(
             monomer_offsets=monomer_offsets,
             atoms_per_monomer_list=atoms_per_monomer_list,
             lambda_monomer=lambda_monomer,
-            ml_cutoff_distance=ml_cutoff_distance,
+            ml_switch_width=ml_switch_width,
             mm_switch_on=mm_switch_on,
-            mm_cutoff=mm_cutoff,
+            mm_switch_width=mm_switch_width,
             complementary_handoff=complementary_handoff,
             ep_scale=ep_scale,
             sig_scale=sig_scale,
@@ -761,9 +774,9 @@ def setup_calculator(
                 monomer_offsets=monomer_offsets,
                 atoms_per_monomer_list=atoms_per_monomer_list,
                 lambda_monomer=lambda_monomer,
-                ml_cutoff_distance=ml_cutoff_distance,
+                ml_switch_width=ml_switch_width,
                 mm_switch_on=mm_switch_on,
-                mm_cutoff=mm_cutoff,
+                mm_switch_width=mm_switch_width,
                 complementary_handoff=complementary_handoff,
                 ep_scale=ep_scale,
                 sig_scale=sig_scale,
@@ -795,15 +808,20 @@ def setup_calculator(
 
     def _ensure_mm_fn(positions_concrete, cutoff_params):
         """Build the MM energy/force function if not yet cached (or if cutoffs changed)."""
-        key = (cutoff_params.ml_cutoff, cutoff_params.mm_switch_on, cutoff_params.mm_cutoff,
-               getattr(cutoff_params, "complementary_handoff", True), mm_r_min)
+        key = (
+            cutoff_params.ml_switch_width,
+            cutoff_params.mm_switch_on,
+            cutoff_params.mm_switch_width,
+            getattr(cutoff_params, "complementary_handoff", True),
+            mm_r_min,
+        )
         if _cached_mm_fn[0] is None or _cached_mm_cutoff_key[0] != key:
             mm_result, update_fn = get_MM_energy_forces_fns(
                 positions_concrete,
                 N_MONOMERS=n_monomers,
-                ml_cutoff_distance=cutoff_params.ml_cutoff,
+                ml_switch_width=cutoff_params.ml_switch_width,
                 mm_switch_on=cutoff_params.mm_switch_on,
-                mm_cutoff=cutoff_params.mm_cutoff,
+                mm_switch_width=cutoff_params.mm_switch_width,
                 complementary_handoff=getattr(cutoff_params, "complementary_handoff", True),
                 mm_r_min=mm_r_min,
             )
@@ -1721,7 +1739,10 @@ def setup_calculator(
                     print(f"DEBUG doML_dimer: {self.doML_dimer}")
                     if getattr(self, "cutoff_params", None) is not None:
                         cp = self.cutoff_params
-                        print(f"DEBUG cutoffs: ml_cutoff={getattr(cp,'ml_cutoff',None)}, mm_switch_on={getattr(cp,'mm_switch_on',None)}")
+                        print(
+                            f"DEBUG cutoffs: ml_switch_width={getattr(cp, 'ml_switch_width', None)}, "
+                            f"mm_switch_on={getattr(cp, 'mm_switch_on', None)}"
+                        )
                     # Dimer COM distance for first pair (atoms 0:n_per and n_per:2*n_per)
                     try:
                         R_np = np.asarray(jax.device_get(R) if hasattr(R, "shape") and hasattr(jax, "device_get") else R)
@@ -2192,21 +2213,39 @@ def setup_calculator(
         nb_arr = jnp.array(dimer_n_atoms_b)
 
         def _switch_ml_vmapped(x, e, na, nb):
-            return switch_ML(x, e, ml_cutoff=cutoff_params.ml_cutoff,
-                            mm_switch_on=cutoff_params.mm_switch_on,
-                            n_atoms_a=na, n_atoms_b=nb, pbc_cell=pbc_cell)
+            return switch_ML(
+                x,
+                e,
+                ml_switch_width=cutoff_params.ml_switch_width,
+                mm_switch_on=cutoff_params.mm_switch_on,
+                n_atoms_a=na,
+                n_atoms_b=nb,
+                pbc_cell=pbc_cell,
+            )
 
         def _switch_ml_grad_vmapped(x, e, na, nb):
-            return switch_ML_grad(x, e, ml_cutoff=cutoff_params.ml_cutoff,
-                                 mm_switch_on=cutoff_params.mm_switch_on,
-                                 n_atoms_a=na, n_atoms_b=nb, pbc_cell=pbc_cell)
+            return switch_ML_grad(
+                x,
+                e,
+                ml_switch_width=cutoff_params.ml_switch_width,
+                mm_switch_on=cutoff_params.mm_switch_on,
+                n_atoms_a=na,
+                n_atoms_b=nb,
+                pbc_cell=pbc_cell,
+            )
 
         switched_energy = jax.vmap(_switch_ml_vmapped, in_axes=(0, 0, 0, 0))(
             dimer_pos_padded, dimer_energies, na_arr, nb_arr)
         switching_scales = jax.vmap(
-            lambda x, na, nb: switch_ML(x, 1.0, ml_cutoff=cutoff_params.ml_cutoff,
-                                        mm_switch_on=cutoff_params.mm_switch_on,
-                                        n_atoms_a=na, n_atoms_b=nb, pbc_cell=pbc_cell),
+            lambda x, na, nb: switch_ML(
+                x,
+                1.0,
+                ml_switch_width=cutoff_params.ml_switch_width,
+                mm_switch_on=cutoff_params.mm_switch_on,
+                n_atoms_a=na,
+                n_atoms_b=nb,
+                pbc_cell=pbc_cell,
+            ),
             in_axes=(0, 0, 0))(dimer_pos_padded, na_arr, nb_arr)
         switched_grad = jax.vmap(_switch_ml_grad_vmapped, in_axes=(0, 0, 0, 0))(
             dimer_pos_padded, dimer_energies, na_arr, nb_arr)  # (n_dimers, max_atoms, 3)

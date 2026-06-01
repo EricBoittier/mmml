@@ -147,27 +147,31 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--ml-switch-width",
         "--ml-cutoff",
+        dest="ml_switch_width",
         type=float,
         default=2.0,
-        help="ML cutoff distance passed to the calculator factory (default: 2.0 Å).",
+        help="ML taper width in Å over [mm_switch_on - width, mm_switch_on] (default: 2.0).",
     )
     parser.add_argument(
         "--mm-switch-on",
         type=float,
         default=5.0,
-        help="MM switch-on distance for the hybrid calculator (default: 5.0 Å).",
+        help="Distance (Å) where ML→0 and MM→1 in complementary handoff (default: 5.0).",
     )
     parser.add_argument(
+        "--mm-switch-width",
         "--mm-cutoff",
+        dest="mm_switch_width",
         type=float,
         default=1.0,
-        help="MM cutoff width for the hybrid calculator (default: 1.0 Å).",
+        help="MM outer taper width in Å past mm_switch_on (default: 1.0).",
     )
     parser.add_argument(
         "--no-complementary-handoff",
         action="store_true",
-        help="Use legacy MM switching (MM only in [mm_switch_on, mm_switch_on+mm_cutoff]). "
+        help="Use legacy MM switching (MM only in [mm_switch_on, mm_switch_on+mm_switch_width]). "
         "When set, mm_r_min defaults to mm_switch_on to exclude close monomers.",
     )
     parser.add_argument(
@@ -186,7 +190,7 @@ def parse_args() -> argparse.Namespace:
         default=None,
         metavar="Å",
         help="MM inner cutoff: exclude pairs with dimer COM < this. Defaults: legacy mode "
-        "-> mm_switch_on*0.9; complementary -> (mm_switch_on-ml_cutoff)*0.9.",
+        "-> mm_switch_on*0.9; complementary -> (mm_switch_on-ml_switch_width)*0.9.",
     )
     parser.add_argument(
         "--ml-batch-size",
@@ -504,9 +508,9 @@ def run(args: argparse.Namespace) -> int:
     calculator_factory = setup_calculator(
         ATOMS_PER_MONOMER=atoms_per_monomer_list,
         N_MONOMERS=n_monomers,
-        ml_cutoff_distance=args.ml_cutoff,
+        ml_switch_width=args.ml_switch_width,
         mm_switch_on=args.mm_switch_on,
-        mm_cutoff=args.mm_cutoff,
+        mm_switch_width=args.mm_switch_width,
         complementary_handoff=not getattr(args, "no_complementary_handoff", False),
         doML=True,
         doMM=args.include_mm,
@@ -527,9 +531,9 @@ def run(args: argparse.Namespace) -> int:
     
 
     CUTOFF_PARAMS = CutoffParameters(
-            ml_cutoff=args.ml_cutoff,
+            ml_switch_width=args.ml_switch_width,
             mm_switch_on=args.mm_switch_on,
-            mm_cutoff=args.mm_cutoff,
+            mm_switch_width=args.mm_switch_width,
             complementary_handoff=not getattr(args, "no_complementary_handoff", False),
         )
 

@@ -85,18 +85,18 @@ def jax_smooth_cutoff_cosine(r: Array, cutoff: float) -> Array:
     return jnp.where(r < cutoff, val, 0.0)
 
 
-def ml_switch_simple(r: Array, ml_cutoff: float, mm_switch_on: float) -> Array:
-    """ML active at short range, tapers 1→0 over [mm_switch_on - ml_cutoff, mm_switch_on]."""
-    taper_start = mm_switch_on - ml_cutoff
-    t = (r - taper_start) / _safe_den(ml_cutoff)
+def ml_switch_simple(r: Array, ml_switch_width: float, mm_switch_on: float) -> Array:
+    """ML active at short range, tapers 1→0 over [mm_switch_on - ml_switch_width, mm_switch_on]."""
+    taper_start = mm_switch_on - ml_switch_width
+    t = (r - taper_start) / _safe_den(ml_switch_width)
     cosine_taper = 0.5 * (1.0 + jnp.cos(jnp.pi * jnp.clip(t, 0.0, 1.0)))
     return jnp.where(r < taper_start, 1.0, jnp.where(r < mm_switch_on, cosine_taper, 0.0))
 
 
-def mm_switch_simple(r: Array, mm_switch_on: float, mm_cutoff: float) -> Array:
-    """MM off at short range, ramps 0→1 over [mm_switch_on, mm_switch_on + mm_cutoff]."""
-    ramp_end = mm_switch_on + mm_cutoff
-    t = (r - mm_switch_on) / _safe_den(mm_cutoff)
+def mm_switch_simple(r: Array, mm_switch_on: float, mm_switch_width: float) -> Array:
+    """MM off at short range, ramps 0→1 over [mm_switch_on, mm_switch_on + mm_switch_width]."""
+    ramp_end = mm_switch_on + mm_switch_width
+    t = (r - mm_switch_on) / _safe_den(mm_switch_width)
     cosine_ramp = 0.5 * (1.0 - jnp.cos(jnp.pi * jnp.clip(t, 0.0, 1.0)))
     return jnp.where(r < mm_switch_on, 0.0, jnp.where(r < ramp_end, cosine_ramp, 1.0))
 

@@ -127,9 +127,11 @@ def build_mm_energy_forces_fn(
     monomer_offsets: np.ndarray,
     atoms_per_monomer_list: Sequence[int],
     lambda_monomer: np.ndarray,
-    ml_cutoff_distance: float,
+    ml_switch_width: float,
     mm_switch_on: float,
-    mm_cutoff: float,
+    mm_switch_width: float,
+    ml_cutoff_distance: float | None = None,
+    mm_cutoff: float | None = None,
     complementary_handoff: bool = True,
     ep_scale: Optional[np.ndarray] = None,
     sig_scale: Optional[np.ndarray] = None,
@@ -159,7 +161,7 @@ def build_mm_energy_forces_fn(
         mm_r_min: Optional inner cutoff (Å). Pairs with dimer COM distance < mm_r_min
             are excluded from the MM neighbor list. Use mm_switch_on to exclude close
             monomers (MM only in switching region). Note: with complementary_handoff,
-            mm_scale is nonzero for r in [mm_switch_on - ml_cutoff, mm_switch_on];
+            mm_scale is nonzero for r in [mm_switch_on - ml_switch_width, mm_switch_on];
             mm_r_min >= mm_switch_on will break the handoff.
 
     Returns:
@@ -168,6 +170,11 @@ def build_mm_energy_forces_fn(
         update_fn(positions, box=None) -> (pair_idx, pair_mask).
         Otherwise: mm_fn(positions) -> (energy, forces) (single callable).
     """
+    if ml_cutoff_distance is not None:
+        ml_switch_width = ml_cutoff_distance
+    if mm_cutoff is not None:
+        mm_switch_width = mm_cutoff
+
     if CGENFF_PRM is None or CGENFF_RTF is None:
         raise RuntimeError("CGENFF parameters not available; PyCHARMM may not be initialized")
 
@@ -233,7 +240,7 @@ def build_mm_energy_forces_fn(
     def _create_jax_md_bundle(capacity_multiplier: float):
         return create_jax_md_neighbor_list(
             np.asarray(pbc_cell),
-            r_cutoff=mm_switch_on + mm_cutoff,
+            r_cutoff=mm_switch_on + mm_switch_width,
             monomer_offsets=np.asarray(monomer_offsets),
             dr_threshold=0.5,
             capacity_multiplier=capacity_multiplier,
@@ -256,13 +263,13 @@ def build_mm_energy_forces_fn(
             _use_cell_list = pbc_cell is not None and _cell_list_pairs is not None
 
     if _use_cell_list:
-        _mm_cutoff_dist = mm_switch_on + mm_cutoff
+        _mm_switch_width_dist = mm_switch_on + mm_switch_width
         if max_pairs is not None:
             _max_pairs = int(max_pairs)
         else:
             _max_pairs = _estimate_max_pairs(
                 total_atoms,
-                cutoff=_mm_cutoff_dist,
+                cutoff=_mm_switch_width_dist,
                 safety_factor=cell_list_safety_factor,
                 density_estimate=cell_list_density_estimate,
             )
@@ -270,7 +277,7 @@ def build_mm_energy_forces_fn(
         _cl_i, _cl_j, _cl_mask, _n_valid = _cell_list_pairs(
             np.asarray(R),
             np.asarray(pbc_cell),
-            cutoff=_mm_cutoff_dist,
+            cutoff=_mm_switch_width_dist,
             max_pairs=_max_pairs,
             monomer_offsets=_offsets_np,
             atoms_per_monomer_list=atoms_per_monomer_list,
@@ -320,7 +327,7 @@ def build_mm_energy_forces_fn(
         n_pairs_per_dimer_arr = _n_pairs_per_dimer_count
         pair_dimer_idx = jnp.array(_pair_dimer_idx)
     elif _use_jax_md_nbrs:
-        _mm_cutoff_dist = mm_switch_on + mm_cutoff
+        _mm_switch_width_dist = mm_switch_on + mm_switch_width
         _offsets_np = np.array([int(monomer_offsets[k]) for k in range(len(monomer_offsets))])
         nbrs_init = _neighbor_fn_cell[0].allocate(np.asarray(R))
         _nbrs[0] = nbrs_init
@@ -330,7 +337,7 @@ def build_mm_energy_forces_fn(
         if debug:
             n_valid_init = int(np.sum(np.asarray(jax.device_get(mask))))
             print(f"[nbr] allocate: capacity={_max_pairs}, n_valid={n_valid_init}, "
-                  f"frac_coords={fractional_coordinates}, r_cutoff={mm_switch_on + mm_cutoff:.2f}")
+                  f"frac_coords={fractional_coordinates}, r_cutoff={mm_switch_on + mm_switch_width:.2f}")
         pair_idx_atom_atom = jnp.stack([pair_i, pair_j], axis=1)
         _cl_mask_jnp = jnp.asarray(mask, dtype=jnp.float32)
         _pair_idx_cell[0] = pair_idx_atom_atom
@@ -450,9 +457,9 @@ def build_mm_energy_forces_fn(
     _mm_r_min = mm_r_min  # capture for closure
 
     def get_switching_function(
-        ml_cutoff_distance: float = ml_cutoff_distance,
+        ml_switch_width: float = ml_switch_width,
         mm_switch_on: float = mm_switch_on,
-        mm_cutoff: float = mm_cutoff,
+        mm_switch_width: float = mm_switch_width,
         complementary_handoff: bool = complementary_handoff,
     ) -> Callable[..., Array]:
         def apply_switching_function(
@@ -479,12 +486,12 @@ def build_mm_energy_forces_fn(
             else:
                 r_min_mask = None
             if complementary_handoff:
-                handoff = _sharpstep(r, mm_switch_on - ml_cutoff_distance, mm_switch_on, gamma=GAMMA_ON)
-                mm_taper = 1.0 - _sharpstep(r, mm_switch_on, mm_switch_on + mm_cutoff, gamma=GAMMA_OFF)
+                handoff = _sharpstep(r, mm_switch_on - ml_switch_width, mm_switch_on, gamma=GAMMA_ON)
+                mm_taper = 1.0 - _sharpstep(r, mm_switch_on, mm_switch_on + mm_switch_width, gamma=GAMMA_OFF)
                 mm_scale = handoff * mm_taper
             else:
-                mm_on = _sharpstep(r, mm_switch_on, mm_switch_on + mm_cutoff, gamma=GAMMA_ON)
-                mm_off = _sharpstep(r, mm_switch_on + mm_cutoff, mm_switch_on + 2.0 * mm_cutoff, gamma=GAMMA_OFF)
+                mm_on = _sharpstep(r, mm_switch_on, mm_switch_on + mm_switch_width, gamma=GAMMA_ON)
+                mm_off = _sharpstep(r, mm_switch_on + mm_switch_width, mm_switch_on + 2.0 * mm_switch_width, gamma=GAMMA_OFF)
                 mm_scale = mm_on * (1.0 - mm_off)
             if r_min_mask is not None:
                 mm_scale = mm_scale * r_min_mask.astype(mm_scale.dtype)
@@ -627,7 +634,7 @@ def build_mm_energy_forces_fn(
                 or _estimate_max_pairs is None
             ):
                 raise RuntimeError("Neighbor list failed and cell-list fallback is unavailable")
-            cutoff = mm_switch_on + mm_cutoff
+            cutoff = mm_switch_on + mm_switch_width
             fallback_max_pairs = int(max_pairs) if max_pairs is not None else int(
                 _estimate_max_pairs(
                     total_atoms,

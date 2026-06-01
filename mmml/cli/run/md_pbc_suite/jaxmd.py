@@ -17,6 +17,7 @@ from jax import random
 
 from mmml.cli.base import resolve_checkpoint_paths
 from mmml.cli.run.jaxmd_runner import set_up_nhc_sim_routine
+from mmml.interfaces.pycharmmInterface.cutoffs import handoff_widths_from_args
 from mmml.interfaces.pycharmmInterface.mmml_calculator import CutoffParameters, setup_calculator
 
 from .ase import (
@@ -211,9 +212,9 @@ def main(argv: list[str] | None = None) -> int:
         dest="flat_bottom_mode",
         help="system: cluster COM; monomer: sum over monomer COM restraints (same R, k).",
     )
-    p.add_argument("--ml-cutoff", type=float, default=0.1)
+    p.add_argument("--ml-switch-width", "--ml-cutoff", dest="ml_switch_width", type=float, default=0.1)
     p.add_argument("--mm-switch-on", type=float, default=5.5)
-    p.add_argument("--mm-cutoff", type=float, default=2.0)
+    p.add_argument("--mm-switch-width", "--mm-cutoff", dest="mm_switch_width", type=float, default=2.0)
     p.add_argument("--max-pairs", type=int, default=20_000)
     p.add_argument("--pre-min-fmax", type=float, default=0.1)
     p.add_argument("--pre-min-steps", type=int, default=50)
@@ -345,6 +346,7 @@ def main(argv: list[str] | None = None) -> int:
             seed=args.seed,
         )
         r0 = _enforce_min_com_separation(r0, monomer_offsets, args.min_com_start_distance)
+    ml_w, mm_on, mm_w = handoff_widths_from_args(args)
     free_space = bool(args.free_space)
     if free_space:
         if args.box_size is not None:
@@ -355,7 +357,7 @@ def main(argv: list[str] | None = None) -> int:
         L: float | None = None
         r = r0 - r0.mean(axis=0)
     else:
-        L = float(args.box_size) if args.box_size is not None else float(_cubic_box_length(r0, args.ml_cutoff))
+        L = float(args.box_size) if args.box_size is not None else float(_cubic_box_length(r0, ml_w))
         r = r0 - r0.mean(axis=0) + 0.5 * L
     geom_tag = "vac" if free_space else "pbc"
     atoms = Atoms(numbers=z, positions=r)
@@ -423,9 +425,9 @@ def main(argv: list[str] | None = None) -> int:
     factory = setup_calculator(
         ATOMS_PER_MONOMER=atoms_per_list,
         N_MONOMERS=n_molecules,
-        ml_cutoff_distance=args.ml_cutoff,
-        mm_switch_on=args.mm_switch_on,
-        mm_cutoff=args.mm_cutoff,
+        ml_switch_width=ml_w,
+        mm_switch_on=mm_on,
+        mm_switch_width=mm_w,
         doML=True,
         doMM=True,
         doML_dimer=True,
@@ -445,7 +447,7 @@ def main(argv: list[str] | None = None) -> int:
         flat_bottom_force_const=args.flat_bottom_k,
         flat_bottom_mode=args.flat_bottom_mode,
     )
-    cutoff = CutoffParameters(ml_cutoff=args.ml_cutoff, mm_switch_on=args.mm_switch_on, mm_cutoff=args.mm_cutoff)
+    cutoff = CutoffParameters(ml_switch_width=ml_w, mm_switch_on=mm_on, mm_switch_width=mm_w)
     calc_result = factory(
         atomic_numbers=z,
         atomic_positions=atoms.get_positions(),
