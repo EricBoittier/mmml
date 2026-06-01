@@ -762,9 +762,22 @@ def main() -> int:
     if backend == "ase":
         from mmml.cli.run.md_pbc_suite import ase as backend_mod
     elif backend == "pycharmm":
-        from mmml.interfaces.pycharmmInterface.charmm_mpi import prepare_charmm_mpi_runtime
+        from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+            charmm_lib_links_mpi,
+            prepare_serial_charmm_mpi_env,
+            _under_mpirun,
+            mpirun_launch_hint,
+        )
 
-        prepare_charmm_mpi_runtime()
+        prepare_serial_charmm_mpi_env()
+        if charmm_lib_links_mpi() and not _under_mpirun():
+            print(
+                "mmml: OpenMPI-linked CHARMM — for large MLpot clusters prefer:\n  "
+                f"  {_repo_root() / 'scripts/mmml-charmm-mpirun.sh'} md-system ...\n"
+                "  (or see mpirun hint below if SD hits domdec/MPI errors)\n  "
+                + mpirun_launch_hint("mmml md-system"),
+                flush=True,
+            )
         from mmml.cli.run.md_pbc_suite import pycharmm_mlpot as backend_mod
     else:
         from mmml.cli.run.md_pbc_suite import jaxmd as backend_mod

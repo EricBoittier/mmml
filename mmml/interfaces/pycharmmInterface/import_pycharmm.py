@@ -44,13 +44,9 @@ CGENFF_PRM = str(CGENFF_PRM)
 print("CHARMM_HOME", CHARMM_HOME)
 print("CHARMM_LIB_DIR", CHARMM_LIB_DIR)
 
-from mmml.interfaces.pycharmmInterface.charmm_mpi import (
-    ensure_mpi_for_charmm_domdec,
-    prepare_charmm_mpi_runtime,
-)
+from mmml.interfaces.pycharmmInterface.charmm_mpi import prepare_serial_charmm_mpi_env
 
-prepare_charmm_mpi_runtime()
-ensure_mpi_for_charmm_domdec()
+prepare_serial_charmm_mpi_env()
 
 import pycharmm
 

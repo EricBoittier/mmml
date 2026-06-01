@@ -217,10 +217,18 @@ def _preload_pmix_global() -> None:
 
 def prepare_charmm_mpi_runtime() -> None:
     """Apply MPI/PMIx library path and preload before ``import pycharmm``."""
+    _apply_cuda_mpi_env_defaults()
     if not charmm_lib_links_mpi():
         return
     ensure_charmm_mpi_library_path()
     _preload_pmix_global()
+
+
+def prepare_serial_charmm_mpi_env() -> None:
+    """Env/LD setup only — do **not** call ``MPI_Init`` (CHARMM owns that)."""
+    prepare_charmm_mpi_runtime()
+    if not _under_mpirun():
+        scrub_stale_openmpi_env()
 
 
 def scrub_stale_openmpi_env(*, force: bool = False) -> int:
@@ -271,33 +279,20 @@ def _init_mpi_thread_multiple() -> None:
         MPI.Init()
 
 
-def _hard_reset_mpi(*, phase: str = "") -> bool:
-    """Finalize and re-init MPI (JAX/CUDA can break Fortran MPI in DOMDEC CHARMM)."""
-    if not _mpi4py_available():
+def _python_should_own_mpi_init() -> bool:
+    """True when mpi4py may call ``MPI_Init`` (never for serial DOMDEC CHARMM by default)."""
+    if _under_mpirun():
         return False
-    from mpi4py import MPI
-
-    _apply_cuda_mpi_env_defaults()
-    if MPI.Is_initialized():
-        try:
-            MPI.Finalize()
-        except Exception:
-            pass
-    try:
-        _init_mpi_thread_multiple()
-    except Exception:
+    if charmm_lib_links_mpi() and not _truthy("MMML_MPI_PY_INIT"):
         return False
-    ok = _mpi_comm_valid(barrier=True)
-    if ok and phase and not _truthy("MMML_QUIET_MPI"):
-        print(f"mmml: MPI hard reset OK ({phase})", flush=True)
-    return ok
+    return True
 
 
 def _warn_mpi4py_missing(*, removed: int) -> None:
     print(
-        "mmml: OpenMPI-linked CHARMM requires MPI in serial runs. "
+        "mmml: OpenMPI-linked CHARMM works best under mpirun. "
         + (f"Removed {removed} stale OpenMPI/PMI env var(s). " if removed else "")
-        + "Install mpi4py (`uv sync --extra all`) and run serially, or:\n  "
+        + "For large MLpot clusters use:\n  "
         + mpirun_launch_hint(),
         file=sys.stderr,
         flush=True,
@@ -306,7 +301,7 @@ def _warn_mpi4py_missing(*, removed: int) -> None:
 
 def _warn_invalid_comm(*, phase: str) -> None:
     print(
-        f"mmml: MPI communicator invalid {phase}. Set before launch:\n  "
+        f"mmml: MPI communicator check failed {phase}. Launch with:\n  "
         + mpi_library_path_export()
         + "\n  export OMPI_MCA_mpi_cuda_support=0\n  "
         + mpirun_launch_hint(),
@@ -316,53 +311,51 @@ def _warn_invalid_comm(*, phase: str) -> None:
 
 
 def ensure_mpi_for_charmm_domdec(*, phase: str = "before PyCHARMM import") -> bool:
-    prepare_charmm_mpi_runtime()
+    """Prepare MPI env; optionally validate after CHARMM has initialized MPI."""
+    prepare_serial_charmm_mpi_env()
 
-    if _truthy("MMML_NO_MPI_INIT"):
-        return False
-    if not _needs_mpi_setup():
-        return False
+    if _truthy("MMML_NO_MPI_INIT") or not _needs_mpi_setup():
+        return True
 
-    if not _under_mpirun():
-        scrub_stale_openmpi_env()
+    if _under_mpirun():
+        return True
+
+    # Serial DOMDEC CHARMM: libcharmm.so calls MPI_Init — do not init from Python.
+    if charmm_lib_links_mpi() and not _python_should_own_mpi_init():
+        return True
 
     if not _mpi4py_available():
-        if charmm_lib_links_mpi() or _openmpi_env_without_launch():
-            _warn_mpi4py_missing(removed=0)
-        return _under_mpirun()
+        _warn_mpi4py_missing(removed=0)
+        return True
 
-    if not _mpi_comm_valid():
+    if not _mpi_comm_valid() and _python_should_own_mpi_init():
         _init_mpi_thread_multiple()
 
     if _mpi_comm_valid():
         return True
 
+    if _mpi4py_available():
+        from mpi4py import MPI
+
+        if MPI.Is_initialized():
+            return True
+
     _warn_invalid_comm(phase=phase)
-    return _under_mpirun()
+    return False
 
 
-def recover_mpi_for_charmm_after_jax(*, phase: str = "after JAX GPU warmup") -> bool:
-    """Re-sync MPI after JAX/CUDA before MLpot SD (fixes ``domdec_dr_common`` barriers)."""
+def recover_mpi_for_charmm_after_jax(*, phase: str = "after JAX warmup") -> bool:
+    """Best-effort MPI sync after JAX — never ``MPI_Finalize`` while CHARMM is loaded."""
     if _truthy("MMML_NO_MPI_INIT") or not _needs_mpi_setup():
         return True
     if _under_mpirun():
         return True
-    if not _mpi4py_available():
-        _warn_mpi4py_missing(removed=0)
-        return False
 
-    # Python-side Get_size() can succeed while Fortran CHARMM barriers still fail.
-    if charmm_lib_links_mpi() and not _truthy("MMML_NO_MPI_HARD_RESET"):
-        return _hard_reset_mpi(phase=phase)
-
-    if _mpi_comm_valid(barrier=True):
+    if _mpi4py_available() and _mpi_comm_valid(barrier=True):
         return True
 
-    if _truthy("MMML_NO_MPI_HARD_RESET"):
-        _warn_invalid_comm(phase=phase)
-        return False
-
-    return _hard_reset_mpi(phase=phase)
+    # CHARMM Fortran MPI may still be valid even when mpi4py is absent or out of sync.
+    return True
 
 
 def revalidate_mpi_after_cuda(*, phase: str = "after JAX GPU warmup") -> bool:
@@ -371,7 +364,7 @@ def revalidate_mpi_after_cuda(*, phase: str = "after JAX GPU warmup") -> bool:
 
 def mpirun_launch_hint(argv0: str = "mmml md-system") -> str:
     export_line = mpi_library_path_export()
-    lines = ["export OMPI_MCA_mpi_cuda_support=0"]
+    lines = ["export OMPI_MCA_mpi_cuda_support=0", "export OMPI_MCA_opal_cuda_support=0"]
     if export_line:
         lines.append(export_line)
     lines.append(f"mpirun -np 1 {argv0} ...")
