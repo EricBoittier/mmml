@@ -21,8 +21,17 @@ def _under_mpirun() -> bool:
             "PMI_RANK",
             "PMIX_RANK",
             "MPI_LOCALRANKID",
+            "OMPI_MCA_orte_precondition_transports",
         )
     )
+
+
+def _mpi4py_available() -> bool:
+    try:
+        import mpi4py  # noqa: F401
+    except ImportError:
+        return False
+    return True
 
 
 def _openmpi_env_without_launch() -> bool:
@@ -91,10 +100,10 @@ def _apply_cuda_mpi_env_defaults() -> None:
 
 
 def _mpi_comm_valid() -> bool:
-    try:
-        from mpi4py import MPI
-    except ImportError:
+    if not _mpi4py_available():
         return False
+    from mpi4py import MPI
+
     if not MPI.Is_initialized():
         return False
     try:
@@ -179,20 +188,30 @@ def ensure_mpi_for_charmm_domdec(*, phase: str = "before PyCHARMM import") -> bo
 
 
 def revalidate_mpi_after_cuda(*, phase: str = "after JAX GPU warmup") -> bool:
-    """Re-check MPI after CUDA/JAX init; large MLpot clusters hit ``MPI_Barrier`` here."""
+    """Re-check MPI after CUDA/JAX init; large MLpot clusters hit ``MPI_Barrier`` here.
+
+    When launched under ``mpirun``, Fortran CHARMM owns ``MPI_COMM_WORLD`` even if
+    ``mpi4py`` is not installed — do not block those runs based on Python-side checks.
+    """
     if _truthy("MMML_NO_MPI_INIT") or not _needs_mpi_setup():
         return True
+
+    # mpirun provides a valid communicator to libcharmm.so; mpi4py is optional.
+    if _under_mpirun():
+        if not _mpi_comm_valid() and _mpi4py_available():
+            _warn_invalid_comm(phase=f"{phase} (under mpirun; proceeding anyway)")
+        return True
+
     if _mpi_comm_valid():
         return True
-    if _under_mpirun():
-        _warn_invalid_comm(phase=phase)
-        return False
+
     scrub_stale_openmpi_env(force=True)
-    try:
-        from mpi4py import MPI
-    except ImportError:
+    if not _mpi4py_available():
         _warn_mpi4py_missing(removed=0)
         return False
+
+    from mpi4py import MPI
+
     if not MPI.Is_initialized():
         _init_mpi_thread_multiple()
     if _mpi_comm_valid():

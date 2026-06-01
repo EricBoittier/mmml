@@ -50,7 +50,7 @@ def test_revalidate_mpi_after_cuda_ok_when_not_needed(monkeypatch):
     assert charmm_mpi.revalidate_mpi_after_cuda() is True
 
 
-def test_revalidate_mpi_after_cuda_warns_when_comm_invalid(monkeypatch, capsys):
+def test_revalidate_mpi_after_cuda_trusts_mpirun_without_mpi4py(monkeypatch):
     monkeypatch.delenv("MMML_NO_MPI_INIT", raising=False)
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi._needs_mpi_setup",
@@ -61,8 +61,26 @@ def test_revalidate_mpi_after_cuda_warns_when_comm_invalid(monkeypatch, capsys):
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
         return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._mpi4py_available",
+        return_value=False,
+    ):
+        assert charmm_mpi.revalidate_mpi_after_cuda(phase="test") is True
+
+
+def test_revalidate_mpi_after_cuda_serial_requires_mpi4py(monkeypatch):
+    monkeypatch.delenv("MMML_NO_MPI_INIT", raising=False)
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._needs_mpi_setup",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._mpi_comm_valid",
+        return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
+        return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._mpi4py_available",
+        return_value=False,
     ):
         assert charmm_mpi.revalidate_mpi_after_cuda(phase="test") is False
-    err = capsys.readouterr().err
-    assert "MPI communicator invalid" in err
-    assert "mpirun -np 1" in err
