@@ -936,9 +936,18 @@ def test_pbc_lattice_invariance_ml_ase_and_jax():
 @pytest.mark.integration
 @pytest.mark.skipif(not _can_import("pycharmm"), reason="pycharmm not available")
 @pytest.mark.skipif(not _can_import("jax_md"), reason="jax_md not available")
-@pytest.mark.parametrize("com_separation", [3.5, 4.5, 5.5])
+@pytest.mark.parametrize(
+    "com_separation",
+    [3.5, 4.5, 4.9],
+    ids=["com3p5", "com4p5", "com4p9"],
+)
 def test_aco_hybrid_nontrivial_at_com_separation(com_separation: float):
-    """ML+MM ACO dimer at several COM separations: non-zero forces and ASE/JAX agreement."""
+    """
+    ML+MM ACO dimer at COM separations inside the hybrid window (mm_switch_on=5.0 Å).
+
+    Separations must stay below ``mm_switch_on`` so sparse dimers and switching still
+    produce non-zero hybrid forces; larger COM (e.g. 5.5 Å) is tested separately.
+    """
     if not _can_import("jax") or not _can_import_e3x_nn() or not _can_import("ase"):
         pytest.skip("jax/e3x/ase not available")
 
@@ -991,6 +1000,52 @@ def test_aco_hybrid_nontrivial_at_com_separation(com_separation: float):
         float(result.energy.reshape(-1)[0]),
         np.asarray(result.forces),
         context=f"ACO COM={com_separation:.1f} Å",
+    )
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not _can_import("pycharmm"), reason="pycharmm not available")
+@pytest.mark.skipif(not _can_import("jax_md"), reason="jax_md not available")
+def test_aco_beyond_mm_switch_monomer_forces_remain():
+    """
+    COM separation past mm_switch_on: dimer ML tapers off, but monomer forces stay non-zero.
+
+    Default cutoffs use mm_switch_on=5.0 Å; at 6.0 Å the inter-monomer ML path is inactive,
+    yet each monomer's internal ML contribution should still yield forces on its atoms.
+    """
+    if not _can_import("jax") or not _can_import_e3x_nn() or not _can_import("ase"):
+        pytest.skip("jax/e3x/ase not available")
+
+    import ase
+
+    ckpt = _get_ckpt()
+    if ckpt is None:
+        pytest.skip("No checkpoint")
+
+    cell_length = 40.0
+    try:
+        z, r = _setup_charmm_aco_dimer_pbc(
+            cell_length=cell_length,
+            com_separation=6.0,
+        )
+        calc, _, get_update_fn, cutoff_params, z, r = _build_aco_mm_calculator(
+            ckpt, z, r, cell_length, backprop=False
+        )
+        if get_update_fn is None:
+            pytest.skip("jax-md neighbor list unavailable")
+    except (RuntimeError, ValueError, IndexError) as exc:
+        _skip_if_runtime_incompatible(exc)
+
+    atoms = ase.Atoms(z, r, cell=_cell_matrix(cell_length), pbc=True)
+    atoms.calc = calc
+    F_ase = atoms.get_forces()
+    _require_nontrivial_forces(
+        F_ase[:ACO_ATOMS_PER_MONOMER],
+        label="monomer-0 forces at COM=6.0 Å (beyond mm_switch_on)",
+    )
+    _require_nontrivial_forces(
+        F_ase[ACO_ATOMS_PER_MONOMER:],
+        label="monomer-1 forces at COM=6.0 Å (beyond mm_switch_on)",
     )
 
 
