@@ -59,9 +59,9 @@ def _run_calculate_charmm(pyc, positions: np.ndarray, z: np.ndarray) -> tuple[fl
         idxup=np.zeros(0, dtype=int),
         idxvp=np.zeros(0, dtype=int),
     )
-    forces_kcal = np.stack([dx, dy, dz], axis=-1)
-    # calculate_charmm subtracts ML forces from dx/dy/dz
-    return float(energy_kcal), -forces_kcal
+    forces_results = np.asarray(pyc.results["forces"], dtype=float)
+    forces_dx = -np.stack([dx, dy, dz], axis=-1)
+    return float(energy_kcal), forces_results, forces_dx
 
 
 def main() -> int:
@@ -107,29 +107,38 @@ def main() -> int:
 
     pyCModel = get_pyc(params, model, atoms)
     pyc = pyCModel.get_pycharmm_calculator()
-    e_cb_kcal, f_cb_kcal = _run_calculate_charmm(pyc, r, z)
+    e_cb_kcal, f_cb_kcal, f_dx_kcal = _run_calculate_charmm(pyc, r, z)
 
     e_scale = max(abs(e_ase_kcal), abs(e_cb_kcal), 1e-6)
     f_diff = np.abs(f_ase_kcal - f_cb_kcal).max()
+    f_dx_diff = np.abs(f_ase_kcal - f_dx_kcal).max()
 
     print(f"\n  model energy (eV, ref):    {e_model_ev:.8f}")
     print(f"  ASE energy (kcal/mol):     {e_ase_kcal:.8f}")
     print(f"  callback energy (kcal/mol): {e_cb_kcal:.8f}")
     print(f"  |dE| (kcal/mol):           {abs(e_ase_kcal - e_cb_kcal):.8f}")
-    print(f"  max |dF| (kcal/mol/Å):     {f_diff:.8f}")
+    print(f"  max |dF| results vs ASE:   {f_diff:.8f}")
+    print(f"  max |dF| dx-array vs ASE:   {f_dx_diff:.8f}")
 
     energy_ok = abs(e_ase_kcal - e_cb_kcal) <= args.rtol * e_scale
     force_ok = f_diff <= args.force_atol
+    force_dx_ok = f_dx_diff <= args.force_atol
 
     if energy_ok and force_ok:
-        print("\nPASS: callback matches ASE within tolerance.")
+        print("\nPASS: energy and forces match ASE.")
         return 0
 
-    print("\nFAIL: mismatch — check units in helper_mlp.get_pyc / pycharmm_calculator.")
-    if not energy_ok:
-        print(f"  energy rtol={args.rtol} on scale {e_scale:.4f}")
-    if not force_ok:
-        print(f"  force atol={args.force_atol} kcal/mol/Å")
+    print("\nFAIL:")
+    if energy_ok:
+        print("  energy: PASS")
+    else:
+        print(f"  energy: FAIL (rtol={args.rtol}, scale={e_scale:.4f})")
+    if force_ok:
+        print("  forces (model results): PASS")
+    else:
+        print(f"  forces (model results): FAIL (atol={args.force_atol} kcal/mol/Å)")
+    if not force_dx_ok:
+        print(f"  forces (CHARMM dx scatter): FAIL (atol={args.force_atol})")
     return 1
 
 
