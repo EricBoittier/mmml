@@ -449,8 +449,8 @@ def _build_cluster_from_composition_packmol(
     coor.set_positions(pd.DataFrame(shifted, columns=["x", "y", "z"]))
     span = np.ptp(shifted, axis=0)
     print(
-        f"Packmol→PSF reorder OK: {len(atom_names)} atoms, "
-        f"spans (Å) x={span[0]:.2f} y={span[1]:.2f} z={span[2]:.2f}"
+        f"Packmol cluster: {len(atom_names)} atoms, "
+        f"span Å x={span[0]:.1f} y={span[1]:.1f} z={span[2]:.1f}"
     )
     return z, shifted, atoms_per_list, ordered_residue_names
 
