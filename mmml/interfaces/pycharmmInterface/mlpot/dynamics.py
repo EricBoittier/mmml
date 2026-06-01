@@ -78,6 +78,7 @@ class CharmmMmMinimizeConfig:
     tolgrd: float = 1e-3
     verbose: bool = True
     show_energy: bool = False
+    reference_positions: Optional[np.ndarray] = None
 
 
 def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> None:
@@ -85,12 +86,32 @@ def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> None:
 
     Call **before** :func:`register_mlpot` so the PSF still has bonds and no ML model is loaded.
     """
-    _, cons_fix, energy, minimize, *_ = _import_pycharmm_modules()
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import setup_default_nbonds
+    pycharmm, cons_fix, energy, minimize, *_ = _import_pycharmm_modules()
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        get_charmm_positions_array,
+        setup_default_nbonds,
+        sync_charmm_positions,
+    )
+
+    if config.reference_positions is not None:
+        sync_charmm_positions(config.reference_positions)
 
     setup_default_nbonds()
     if config.nstep_sd <= 0 and config.nstep_abnr <= 0:
         return
+
+    n_atoms = int(get_charmm_positions_array().shape[0])
+    if n_atoms == 0:
+        raise RuntimeError("CHARMM MM minimize: no atoms in PSF (coordinates not loaded?)")
+
+    pycharmm.lingo.charmm_script("ENER")
+    if config.verbose:
+        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
+
+        print(
+            f"CHARMM MM minimize start: {n_atoms} atoms, GRMS={charmm_grms():.4f} kcal/mol/Å",
+            flush=True,
+        )
 
     sd_kw = {
         "nstep": max(1, int(config.nstep_sd)),
@@ -114,7 +135,14 @@ def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> None:
             tolenr=float(config.tolenr),
             tolgrd=float(config.tolgrd),
         )
-    _import_pycharmm_modules()[0].lingo.charmm_script("ENER")
+    pycharmm.lingo.charmm_script("ENER")
+    if config.verbose:
+        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
+
+        print(
+            f"CHARMM MM minimize end: GRMS={charmm_grms():.4f} kcal/mol/Å",
+            flush=True,
+        )
     if config.verbose and config.show_energy:
         _maybe_show_energy(True)
     cons_fix.turn_off()
