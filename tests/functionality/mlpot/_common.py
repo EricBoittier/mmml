@@ -399,6 +399,71 @@ def format_resid_constraint_message(resids: list[int], *, context: str) -> str:
     return f"{context}: cons_fix on resid(s) [{ids}] ({len(resids)} monomer(s))"
 
 
+def write_vmd_load_script(
+    *,
+    out_dir: Path,
+    tag: str,
+    topology_psf: Path,
+    trajectory: Path | None = None,
+    n_atoms: int,
+) -> Path:
+    """Write a small Tcl script that loads topology (with bonds) + optional trajectory."""
+    out_dir = out_dir.resolve()
+    topology_psf = topology_psf.resolve()
+    lines = [
+        "# VMD: topology written BEFORE MLpot (bonds intact).",
+        f"# Atoms: {n_atoms} — must match trajectory frame count.",
+        f"mol new {{{topology_psf}}}",
+    ]
+    if trajectory is not None:
+        traj = trajectory.resolve()
+        lines.append(f"mol addfile {{{traj}}} waitfor all")
+        lines.append("animate goto 0")
+    lines.append("display update")
+    tcl_path = out_dir / f"load_{tag}_in_vmd.tcl"
+    tcl_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return tcl_path
+
+
+def print_vmd_load_help(
+    *,
+    out_dir: Path,
+    tag: str,
+    topology_psf: Path,
+    trajectory: Path | None,
+    n_atoms: int,
+    bondless_psf: Path | None = None,
+) -> None:
+    """Print how to load the system in VMD (avoid bondless / wrong-atom-count PSF)."""
+    topo = topology_psf.resolve()
+    print("\n=== VMD ===")
+    print(f"  Atoms in this run: {n_atoms}")
+    print(f"  Topology (bonds):  {topo}")
+    if trajectory is not None:
+        traj = trajectory.resolve()
+        print(f"  Trajectory:        {traj}")
+        print(f"\n  vmd {topo} {traj}")
+        tcl = write_vmd_load_script(
+            out_dir=out_dir,
+            tag=tag,
+            topology_psf=topo,
+            trajectory=traj,
+            n_atoms=n_atoms,
+        )
+        print(f"  # or: vmd -e {tcl}")
+    else:
+        print(f"\n  vmd {topo}")
+    if bondless_psf is not None:
+        print(
+            f"\n  Do NOT use {bondless_psf.name} in VMD — written after MLpot "
+            "(no bonds; for CHARMM restart only)."
+        )
+    print(
+        "  Do not mix PSF/DCD from different --n-molecules runs "
+        "(atom counts must match)."
+    )
+
+
 def all_atom_selection():
     """PyCHARMM selection for all atoms (for MLpot on full cluster)."""
     from mmml.interfaces.pycharmmInterface.mlpot.setup import select_all_atoms

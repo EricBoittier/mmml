@@ -26,6 +26,7 @@ from _common import (
     format_resid_constraint_message,
     print_cluster_geometry_summary,
     print_header,
+    print_vmd_load_help,
     resolve_checkpoint,
     resolve_dcd_nsavc,
     resolve_fix_resids,
@@ -117,15 +118,16 @@ def main() -> int:
     )
     setup_default_nbonds()
     sync_charmm_positions(r)
+    vmd_topo_psf = out_dir / f"cluster_for_vmd_{tag}.psf"
     if not args.no_save_vmd_topology:
         vmd_files = save_cluster_topology_for_vmd(
             out_dir, r, stem=f"cluster_for_vmd_{tag}", title="pre-MLpot cluster"
         )
+        vmd_topo_psf = vmd_files["psf"]
         print(
             "VMD topology (full PSF bonds, before MLpot): "
             f"{vmd_files['psf'].name} + {vmd_files['pdb'].name}"
         )
-        print(f"  vmd {vmd_files['psf']} {vmd_files['pdb']}")
 
     atoms = ase.Atoms(numbers=z, positions=r)
     _, _, pyCModel = load_physnet_mlpot_bundle(ckpt, n_atoms, atoms)
@@ -172,8 +174,24 @@ def main() -> int:
 
     if args.save:
         print(f"\nMinimization ran={ran}; saved under {out_dir} (incl. {dcd_path.name})")
+        print_vmd_load_help(
+            out_dir=out_dir,
+            tag=tag,
+            topology_psf=vmd_topo_psf,
+            trajectory=dcd_path,
+            n_atoms=n_atoms,
+            bondless_psf=psf_path,
+        )
     else:
         print(f"\nMinimization ran={ran} (no files written; use --save)")
+        if vmd_topo_psf.is_file():
+            print_vmd_load_help(
+                out_dir=out_dir,
+                tag=tag,
+                topology_psf=vmd_topo_psf,
+                trajectory=None,
+                n_atoms=n_atoms,
+            )
     return 0
 
 

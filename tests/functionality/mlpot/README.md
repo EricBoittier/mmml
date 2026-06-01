@@ -67,8 +67,11 @@ python tests/functionality/mlpot/04_mlpot_minimize_stub.py --run --save --nstep 
 python tests/functionality/mlpot/04_mlpot_minimize_stub.py --run --save --n-molecules 4 --fix-resids 1,3 --nstep 20
 # Trimer, no constraints:
 python tests/functionality/mlpot/04_mlpot_minimize_stub.py --run --n-molecules 3 --no-fix
-# VMD: use cluster_for_vmd.psf (bonds intact) + trajectory or mini_full_mlpot.xyz
-# vmd tests/functionality/mlpot/output/minimize/cluster_for_vmd.psf mini_full_mlpot.dcd
+# VMD: topology MUST be cluster_for_vmd_<tag>.psf (bonds intact, same atom count as DCD).
+# Do NOT use mini_full_mlpot_*.psf in VMD (MLpot strips bonds; CHARMM-only).
+# 4-mer example:
+# vmd tests/functionality/mlpot/output/minimize/cluster_for_vmd_aco_4mer.psf \
+#     tests/functionality/mlpot/output/minimize/mini_full_mlpot_aco_4mer.dcd
 # Denser minimization DCD: every step (default) or every 5 SD steps:
 python tests/functionality/mlpot/04_mlpot_minimize_stub.py --run --save --dcd-nsavc 1
 python tests/functionality/mlpot/04_mlpot_minimize_stub.py --run --save --dcd-nsavc 5
