@@ -199,6 +199,9 @@ def build_nve_dynamics(
     save_interval_ps: float = 0.01,
     restart: bool = True,
     temp: float = 300.0,
+    nprint: int = 100,
+    iprfrq: int = 500,
+    isvfrq: int = 500,
 ) -> dict[str, Any]:
     """NVE production-style dict (restart from heat)."""
     nstep = ps_to_nsteps(timestep_ps, duration_ps)
@@ -207,7 +210,9 @@ def build_nve_dynamics(
         timestep=timestep_ps,
         nstep=nstep,
         nsavc=nsavc,
-        nprint=10,
+        nprint=max(1, nprint),
+        iprfrq=max(1, iprfrq),
+        isvfrq=max(1, isvfrq),
         ntrfrq=0,
     )
     kw.update(
