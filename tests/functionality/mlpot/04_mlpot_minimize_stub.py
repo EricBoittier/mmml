@@ -2,8 +2,8 @@
 """
 Step 4 (stub): SD minimization with MLpot active.
 
-Default: print planned workflow only. Pass ``--run`` to execute a few SD steps
-on the ACO dimer cluster (all atoms ML, no fixed segment).
+Default: print planned workflow only. Pass ``--run`` to execute a few SD steps.
+ML region and fixed atoms use CHARMM ``resid`` (default: residue 1).
 """
 
 from __future__ import annotations
@@ -12,10 +12,11 @@ import argparse
 import sys
 from pathlib import Path
 
+import numpy as np
+
 from _common import (
     add_cluster_args,
     build_ase_cluster,
-    load_physnet_for_cluster,
     print_header,
     resolve_checkpoint,
 )
@@ -31,6 +32,12 @@ def main() -> int:
     )
     parser.add_argument("--nstep", type=int, default=10, help="SD steps when --run")
     parser.add_argument(
+        "--ml-resid",
+        type=int,
+        default=1,
+        help="Residue ID for MLpot region and cons_fix (CHARMM resid)",
+    )
+    parser.add_argument(
         "--out-dir",
         type=Path,
         default=Path("tests/functionality/mlpot/output/minimize"),
@@ -39,16 +46,14 @@ def main() -> int:
 
     print_header("MLpot minimization stub (step 4)")
     out_dir = args.out_dir.resolve()
-    pdb_path = out_dir / "mini_aco.pdb"
-    crd_path = out_dir / "mini_aco.crd"
+    pdb_path = out_dir / f"mini_resid{args.ml_resid}.pdb"
+    crd_path = out_dir / f"mini_resid{args.ml_resid}.crd"
 
     print("Workflow (see mmml/interfaces/pycharmmInterface/mlpot/dynamics.py):")
-    print("  1. register_mlpot(...)")
-    print("  2. optional cons_fix.setup(selection)  # e.g. seg_id='AMM1'")
-    print("  3. minimize.run_sd(...)")
-    print("  4. cons_fix.turn_off(); minimize.run_sd(...)  # second pass in examples")
-    print(f"  5. write CRD/PDB -> {crd_path}")
-    print("  Prefer reloading CRD (not PDB) to preserve ML nb exclusions.")
+    print(f"  1. register_mlpot on resid {args.ml_resid}")
+    print(f"  2. cons_fix.setup(resid {args.ml_resid})")
+    print("  3. minimize.run_sd(...); cons_fix.turn_off(); minimize.run_sd(...)")
+    print(f"  4. write CRD/PDB -> {crd_path}")
 
     if not args.run:
         print("\nSTUB: pass --run to execute a short SD test.")
@@ -56,7 +61,6 @@ def main() -> int:
 
     ckpt = resolve_checkpoint(args.checkpoint)
     z, r = build_ase_cluster(args.residue, args.n_molecules, args.spacing)
-    n_atoms = len(z)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     import ase
@@ -65,18 +69,29 @@ def main() -> int:
         load_physnet_mlpot_bundle,
         minimize_with_mlpot,
         register_mlpot,
-        select_all_atoms,
+        select_by_resid,
         setup_default_nbonds,
     )
 
     setup_default_nbonds()
-    atoms = ase.Atoms(numbers=z, positions=r)
-    _, _, pyCModel = load_physnet_mlpot_bundle(ckpt, n_atoms, atoms)
-    ctx = register_mlpot(pyCModel, z, select_all_atoms())
+    ml_sel = select_by_resid(args.ml_resid)
+    ml_idx = np.array(ml_sel.get_atom_indexes(), dtype=int)
+    if ml_idx.size == 0:
+        print(f"FAIL: no atoms in resid {args.ml_resid}")
+        return 1
+
+    ml_z = z[ml_idx]
+    ml_r = r[ml_idx]
+    n_ml = len(ml_idx)
+    print(f"MLpot on resid {args.ml_resid}: {n_ml} atoms (indices {ml_idx.min()}..{ml_idx.max()})")
+
+    atoms_ml = ase.Atoms(numbers=ml_z, positions=ml_r)
+    _, _, pyCModel = load_physnet_mlpot_bundle(ckpt, n_ml, atoms_ml)
+    ctx = register_mlpot(pyCModel, ml_z, ml_sel)
     try:
         ran = minimize_with_mlpot(
             MinimizeWithMlpotConfig(
-                fixed_ml_selection=None,
+                fixed_ml_selection=select_by_resid(args.ml_resid),
                 nstep=args.nstep,
                 nprint=max(1, args.nstep // 2),
                 pdb_path=pdb_path,
