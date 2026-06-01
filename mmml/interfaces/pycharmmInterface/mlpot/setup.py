@@ -188,8 +188,19 @@ def save_cluster_topology_for_vmd(
     return {"psf": psf_path, "pdb": pdb_path.resolve()}
 
 
+def disable_charmm_domdec() -> None:
+    """Disable CHARMM domain decomposition (required for MLpot on DOMDEC/MPI builds)."""
+    pycharmm = _import_pycharmm()
+    for line in ("domdec off", "domdec dlb off", "energy domdec off"):
+        try:
+            pycharmm.lingo.charmm_script(line)
+        except Exception:
+            pass
+
+
 def setup_default_nbonds(*, nbxmod: int = 5) -> None:
     """Apply make-res style switched nonbonds (matches ``md_pbc_suite/ase.py``)."""
+    disable_charmm_domdec()
     pycharmm = _import_pycharmm()
     pycharmm.NonBondedScript(
         cutnb=18.0,
@@ -202,6 +213,29 @@ def setup_default_nbonds(*, nbxmod: int = 5) -> None:
         fswitch=True,
         vfswitch=True,
         nbxmod=int(nbxmod),
+        inbfrq=1,
+        imgfrq=-1,
+    ).run()
+
+
+def refresh_nbonds_after_mlpot(*, nbxmod: int = 5) -> None:
+    """Rebuild nonbond lists after :class:`pycharmm.MLpot` changes exclusions."""
+    disable_charmm_domdec()
+    pycharmm = _import_pycharmm()
+    pycharmm.nbonds.update_bnbnd()
+    pycharmm.UpdateNonBondedScript(
+        atom=True,
+        cdie=True,
+        eps=1.0,
+        vatom=True,
+        vfswitch=True,
+        cutnb=18.0,
+        ctonnb=13.0,
+        ctofnb=17.0,
+        fswitch=True,
+        nbxmod=int(nbxmod),
+        inbfrq=1,
+        imgfrq=-1,
     ).run()
 
 
@@ -249,4 +283,5 @@ def register_mlpot(
         mlmm_ctofnb=mlmm_ctofnb,
         **kwargs,
     )
+    refresh_nbonds_after_mlpot()
     return MlpotContext(mlpot=mlpot, pyCModel=pyCModel, params=None, model=None)

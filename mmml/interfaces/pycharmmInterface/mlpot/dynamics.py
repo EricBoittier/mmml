@@ -97,6 +97,8 @@ def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> None:
         "nprint": max(1, int(config.nprint)),
         "tolenr": float(config.tolenr),
         "tolgrd": float(config.tolgrd),
+        "inbfrq": 1,
+        "ihbfrq": -1,
     }
     if config.verbose and config.show_energy:
         _maybe_show_energy(True)
@@ -364,8 +366,11 @@ def build_cpt_production_dynamics(
 
 def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     """Instantiate and run ``pycharmm.DynamicsScript``."""
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import disable_charmm_domdec
+
     import pycharmm
 
+    disable_charmm_domdec()
     dyn = pycharmm.DynamicsScript(**dynamics_kwargs)
     dyn.run()
     return dyn
@@ -408,6 +413,9 @@ def _sd_kwargs_from_config(config: MinimizeWithMlpotConfig) -> dict[str, Any]:
         "nprint": config.nprint,
         "tolenr": config.tolenr,
         "tolgrd": config.tolgrd,
+        # Fixed inbfrq avoids domdec heuristic load-balance on MPI CHARMM builds.
+        "inbfrq": 1,
+        "ihbfrq": -1,
     }
     if config.save and config.dcd_path is not None and config.dcd_nsavc > 0:
         kw["iuncrd"] = config.dcd_unit
@@ -443,6 +451,9 @@ def minimize_with_mlpot(
     if config.save and config.dcd_path is not None and config.dcd_nsavc > 0:
         dcd_file = open_minimize_dcd(config.dcd_path, unit=config.dcd_unit)
 
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import disable_charmm_domdec
+
+    disable_charmm_domdec()
     sd_kw = _sd_kwargs_from_config(config)
     try:
         if config.verbose and config.show_energy:
