@@ -27,6 +27,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.partial_mm import (
 from mmml.interfaces.pycharmmInterface.mlpot.setup import (
     MlpotContext,
     get_charmm_positions_array,
+    resolve_export_positions,
     load_physnet_mlpot_bundle,
     register_mlpot,
     select_all_atoms,
@@ -48,6 +49,7 @@ __all__ = [
     "charmm_energy_terms",
     "load_minimized_coordinates",
     "get_charmm_positions_array",
+    "resolve_export_positions",
     "load_physnet_mlpot_bundle",
     "minimize_with_mlpot",
     "sync_charmm_positions",

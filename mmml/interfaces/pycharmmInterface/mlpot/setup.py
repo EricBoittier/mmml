@@ -12,8 +12,21 @@ import pandas as pd
 PathLike = Union[str, Path]
 
 
+def _positions_xyzw_dataframe(arr: np.ndarray) -> pd.DataFrame:
+    """Build a CHARMM coor dataframe with ``x,y,z,w`` (``w`` = 1)."""
+    n = arr.shape[0]
+    return pd.DataFrame(
+        {
+            "x": arr[:, 0],
+            "y": arr[:, 1],
+            "z": arr[:, 2],
+            "w": np.ones(n, dtype=float),
+        }
+    )
+
+
 def sync_charmm_positions(positions: np.ndarray) -> None:
-    """Push ``(N, 3)`` positions into the CHARMM coordinate array."""
+    """Push ``(N, 3)`` into CHARMM main and auxiliary coordinate sets."""
     import pycharmm.coor as coor
 
     arr = np.asarray(positions, dtype=float)
@@ -22,15 +35,56 @@ def sync_charmm_positions(positions: np.ndarray) -> None:
     n = coor.get_natom()
     if arr.shape[0] != n:
         raise ValueError(f"positions rows {arr.shape[0]} != CHARMM natom {n}")
-    coor.set_positions(pd.DataFrame(arr, columns=["x", "y", "z"]))
+
+    xyz = pd.DataFrame(arr, columns=["x", "y", "z"])
+    xyzw = _positions_xyzw_dataframe(arr)
+    coor.set_positions(xyz)
+    coor.set_main(xyzw)
+    coor.set_comparison(xyzw)
+
+    check = get_charmm_positions_array()
+    if np.allclose(check, 0.0) and not np.allclose(arr, 0.0):
+        raise RuntimeError(
+            "sync_charmm_positions: CHARMM coordinates still zero after set_main/set_positions"
+        )
 
 
 def get_charmm_positions_array() -> np.ndarray:
-    """Read CHARMM coordinates as ``(N, 3)``."""
+    """Read CHARMM coordinates as ``(N, 3)`` (main set, then positions, then comparison)."""
     import pycharmm.coor as coor
 
-    df = coor.get_positions()
-    return df[["x", "y", "z"]].to_numpy(dtype=float)
+    for getter in (coor.get_main, coor.get_positions, coor.get_comparison):
+        df = getter()
+        pos = df[["x", "y", "z"]].to_numpy(dtype=float)
+        if pos.shape[0] and not np.allclose(pos, 0.0):
+            return pos
+    n = coor.get_natom()
+    return np.zeros((n, 3), dtype=float)
+
+
+def resolve_export_positions(
+    *,
+    pyCModel: Any = None,
+    reference_positions: Optional[np.ndarray] = None,
+) -> Optional[np.ndarray]:
+    """Best-effort positions for file export after minimization."""
+    if pyCModel is not None:
+        calc = pyCModel.get_pycharmm_calculator()
+        cached = getattr(calc, "last_full_positions", None)
+        if cached is not None:
+            cached = np.asarray(cached, dtype=float)
+            if cached.size and not np.allclose(cached, 0.0):
+                return cached
+
+    charmm = get_charmm_positions_array()
+    if charmm.size and not np.allclose(charmm, 0.0):
+        return charmm
+
+    if reference_positions is not None:
+        ref = np.asarray(reference_positions, dtype=float)
+        if ref.size and not np.allclose(ref, 0.0):
+            return ref
+    return None
 
 
 @dataclass

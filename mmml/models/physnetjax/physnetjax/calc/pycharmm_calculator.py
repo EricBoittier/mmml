@@ -95,6 +95,7 @@ class PyCharmm_Calculator:
 
         self.ml_idxp = None
         self.ml_idxjp = None
+        self.last_full_positions: Optional[np.ndarray] = None
 
     def calculate_charmm(
         self,
@@ -176,6 +177,8 @@ class PyCharmm_Calculator:
         else:
             mlmm_R = np.array([x[:Natom], y[:Natom], z[:Natom]]).T
             idxp[:Natom]
+
+        self.last_full_positions = np.asarray(mlmm_R, dtype=self.dtype, copy=True)
 
         ml_idx = np.asarray(self.ml_atom_indices, dtype=int)
         ml_R = mlmm_R[ml_idx]

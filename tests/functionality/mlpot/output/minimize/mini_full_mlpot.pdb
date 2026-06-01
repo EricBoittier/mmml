@@ -1,0 +1,24 @@
+REMARK  MINI SD                                                                       
+REMARK   DATE:     6/ 1/26     17:44: 0      CREATED BY USER: boittier                
+ATOM      1  O1  ACO     1       0.000   0.000   0.000  1.00  1.00      CLST
+ATOM      2  C1  ACO     1       0.000   0.000   0.000  1.00  1.00      CLST
+ATOM      3  C2  ACO     1       0.000   0.000   0.000  1.00  1.00      CLST
+ATOM      4  C3  ACO     1       0.000   0.000   0.000  1.00  1.00      CLST
+ATOM      5  H21 ACO     1       0.000   0.000   0.000  1.00  1.00      CLST
+ATOM      6  H22 ACO     1       0.000   0.000   0.000  1.00  1.00      CLST
+ATOM      7  H23 ACO     1       0.000   0.000   0.000  1.00  1.00      CLST
+ATOM      8  H31 ACO     1       0.000   0.000   0.000  1.00  1.00      CLST
+ATOM      9  H32 ACO     1       0.000   0.000   0.000  1.00  1.00      CLST
+ATOM     10  H33 ACO     1       0.000   0.000   0.000  1.00  1.00      CLST
+ATOM     11  O1  ACO     2       3.982   0.000   0.000  1.00  1.00      CLST
+ATOM     12  C1  ACO     2       3.947   0.000   0.000  1.00  1.00      CLST
+ATOM     13  C2  ACO     2       3.947   0.000   0.000  1.00  1.00      CLST
+ATOM     14  C3  ACO     2       3.947   0.000   0.000  1.00  1.00      CLST
+ATOM     15  H21 ACO     2       4.056   0.000   0.000  1.00  1.00      CLST
+ATOM     16  H22 ACO     2       4.056   0.000   0.000  1.00  1.00      CLST
+ATOM     17  H23 ACO     2       4.056   0.000   0.000  1.00  1.00      CLST
+ATOM     18  H31 ACO     2       4.056   0.000   0.000  1.00  1.00      CLST
+ATOM     19  H32 ACO     2       4.056   0.000   0.000  1.00  1.00      CLST
+ATOM     20  H33 ACO     2       4.056   0.000   0.000  1.00  1.00      CLST
+TER      21      ACO      2
+END
