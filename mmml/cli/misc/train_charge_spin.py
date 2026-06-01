@@ -23,10 +23,10 @@ import jax
 import jax.numpy as jnp
 from flax.training import orbax_utils, train_state
 
-from mmml.physnetjax.physnetjax.models.model_charge_spin import EF_ChargeSpinConditioned
-from mmml.physnetjax.physnetjax.training.optimizer import get_optimizer
-from mmml.physnetjax.physnetjax.restart.restart import orbax_checkpointer
-from mmml.physnetjax.physnetjax.directories import BASE_CKPT_DIR
+from mmml.models.physnetjax.physnetjax.models.model_charge_spin import EF_ChargeSpinConditioned
+from mmml.models.physnetjax.physnetjax.training.optimizer import get_optimizer
+from mmml.models.physnetjax.physnetjax.restart.restart import orbax_checkpointer
+from mmml.models.physnetjax.physnetjax.directories import BASE_CKPT_DIR
 from mmml.data.packed_memmap_loader import PackedMemmapLoader, split_loader
 
 

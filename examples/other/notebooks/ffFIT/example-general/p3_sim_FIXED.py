@@ -64,8 +64,8 @@ import pycharmm.ic as ic
 import pycharmm.psf as psf
 import pycharmm.energy as energy
 from mmml.pycharmmInterface.mmml_calculator import setup_calculator, CutoffParameters
-from mmml.physnetjax.physnetjax.data.data import prepare_datasets
-from mmml.physnetjax.physnetjax.data.batches import prepare_batches_jit
+from mmml.models.physnetjax.physnetjax.data.data import prepare_datasets
+from mmml.models.physnetjax.physnetjax.data.batches import prepare_batches_jit
 from mmml.pycharmmInterface.setupBox import setup_box_generic
 from mmml.pycharmmInterface import setupRes, setupBox
 from mmml.pycharmmInterface.import_pycharmm import (
@@ -257,7 +257,7 @@ def load_model_parameters_json(epoch_dir, natoms, use_orbax=False):
         epoch_dir = Path(epoch_dir)
     elif not isinstance(epoch_dir, Path):
         epoch_dir = Path(epoch_dir)
-    from mmml.physnetjax.physnetjax.models.model import EF
+    from mmml.models.physnetjax.physnetjax.models.model import EF
     import json
     import pickle
 
@@ -266,7 +266,7 @@ def load_model_parameters_json(epoch_dir, natoms, use_orbax=False):
     # Try orbax first if requested
     if use_orbax:
         try:
-            from mmml.physnetjax.physnetjax.restart.restart import get_params_model
+            from mmml.models.physnetjax.physnetjax.restart.restart import get_params_model
             params, model = get_params_model(str(epoch_dir), natoms=natoms)
             if model is not None:
                 print("✓ Loaded checkpoint using orbax")

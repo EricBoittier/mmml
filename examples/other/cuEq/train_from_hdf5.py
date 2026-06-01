@@ -6,7 +6,7 @@ Supports two workflows:
 
 1. PhysNetJAX-style (prepare_h5_datasets + train_model_cueq):
 
-    from mmml.physnetjax.physnetjax.data.read_h5 import prepare_h5_datasets
+    from mmml.models.physnetjax.physnetjax.data.read_h5 import prepare_h5_datasets
     from tests.cuEq.train_from_hdf5 import train_model_cueq
 
     train_data, valid_data, natoms = prepare_h5_datasets(

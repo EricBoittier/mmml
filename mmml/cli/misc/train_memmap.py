@@ -25,12 +25,12 @@ import jax.numpy as jnp
 import numpy as np
 from flax.training import orbax_utils, train_state
 
-from mmml.physnetjax.physnetjax.models.model import EF
-from mmml.physnetjax.physnetjax.training.trainstep import train_step
-from mmml.physnetjax.physnetjax.training.evalstep import eval_step
-from mmml.physnetjax.physnetjax.training.optimizer import get_optimizer
-from mmml.physnetjax.physnetjax.restart.restart import orbax_checkpointer
-from mmml.physnetjax.physnetjax.directories import BASE_CKPT_DIR
+from mmml.models.physnetjax.physnetjax.models.model import EF
+from mmml.models.physnetjax.physnetjax.training.trainstep import train_step
+from mmml.models.physnetjax.physnetjax.training.evalstep import eval_step
+from mmml.models.physnetjax.physnetjax.training.optimizer import get_optimizer
+from mmml.models.physnetjax.physnetjax.restart.restart import orbax_checkpointer
+from mmml.models.physnetjax.physnetjax.directories import BASE_CKPT_DIR
 
 
 class PackedMemmapLoader:

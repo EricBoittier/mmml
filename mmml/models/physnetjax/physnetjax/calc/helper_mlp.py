@@ -7,7 +7,7 @@ import jax
 import numpy as np
 
 # import numpy as np
-from  mmml.physnetjax.physnetjax.calc.pycharmm_calculator import PyCharmm_Calculator
+from  mmml.models.physnetjax.physnetjax.calc.pycharmm_calculator import PyCharmm_Calculator
 
 conversion = {
     "energy": 1,

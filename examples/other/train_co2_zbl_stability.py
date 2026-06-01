@@ -18,8 +18,8 @@ import jax.numpy as jnp
 import numpy as np
 from pathlib import Path
 
-from mmml.physnetjax.physnetjax.models.model_charge_spin import EF_ChargeSpinConditioned
-from mmml.physnetjax.physnetjax.training.optimizer import get_optimizer
+from mmml.models.physnetjax.physnetjax.models.model_charge_spin import EF_ChargeSpinConditioned
+from mmml.models.physnetjax.physnetjax.training.optimizer import get_optimizer
 
 
 def generate_co2_training_data(n_samples=100, seed=42):

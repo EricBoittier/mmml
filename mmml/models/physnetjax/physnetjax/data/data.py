@@ -12,7 +12,7 @@ from mmml.data.atomic_references import (
 from rich.console import Console
 from rich.table import Table
 
-from mmml.physnetjax.physnetjax.utils.pretty_printer import print_dict_as_table
+from mmml.models.physnetjax.physnetjax.utils.pretty_printer import print_dict_as_table
 
 # Atomic energies in Hartree sourced from reference table
 ATOM_ENERGIES_HARTREE = get_atomic_reference_array(

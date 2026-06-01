@@ -15,9 +15,9 @@ import jax.numpy as jnp
 import orbax
 import orbax.checkpoint
 
-from mmml.physnetjax.physnetjax.models.model import EF
-from mmml.physnetjax.physnetjax.utils.pretty_printer import print_dict_as_table
-from mmml.physnetjax.physnetjax.utils.utils import get_files
+from mmml.models.physnetjax.physnetjax.models.model import EF
+from mmml.models.physnetjax.physnetjax.utils.pretty_printer import print_dict_as_table
+from mmml.models.physnetjax.physnetjax.utils.utils import get_files
 
 orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
 

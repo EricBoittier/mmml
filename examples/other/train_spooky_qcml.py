@@ -34,8 +34,8 @@ from flax.training import train_state
 from flax.training import orbax_utils
 import orbax.checkpoint as ocp
 
-from mmml.physnetjax.physnetjax.models.spooky_model import EF as SpookyEF
-from mmml.physnetjax.physnetjax.training.spooky_training import (
+from mmml.models.physnetjax.physnetjax.models.spooky_model import EF as SpookyEF
+from mmml.models.physnetjax.physnetjax.training.spooky_training import (
     build_spooky_batch_from_padded_arrays,
     make_spooky_train_step,
     restart_params_only,

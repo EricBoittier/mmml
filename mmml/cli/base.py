@@ -357,8 +357,8 @@ def load_model_parameters(epoch_dir: Path, natoms: int):
             from mmml.models.physnetjax.physnetjax.models.model import EF as StandardEF
             from mmml.models.physnetjax.physnetjax.models.spooky_model import EF as SpookyEF
         except ModuleNotFoundError:
-            from mmml.physnetjax.physnetjax.models.model import EF as StandardEF
-            from mmml.physnetjax.physnetjax.models.spooky_model import EF as SpookyEF
+            from mmml.models.physnetjax.physnetjax.models.model import EF as StandardEF
+            from mmml.models.physnetjax.physnetjax.models.spooky_model import EF as SpookyEF
         from mmml.utils.model_checkpoint import load_model_checkpoint
 
         checkpoint = load_model_checkpoint(
@@ -410,7 +410,7 @@ def load_model_parameters(epoch_dir: Path, natoms: int):
     try:
         from mmml.models.physnetjax.physnetjax.restart.restart import get_params_model
     except ModuleNotFoundError:
-        from mmml.physnetjax.physnetjax.restart.restart import get_params_model
+        from mmml.models.physnetjax.physnetjax.restart.restart import get_params_model
 
     params, model = get_params_model(str(epoch_dir), natoms=natoms)
     if model is None:
@@ -454,7 +454,7 @@ def setup_mmml_imports():
         try:
             from mmml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
         except ModuleNotFoundError:
-            from mmml.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
+            from mmml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
         return CutoffParameters, ev2kcalmol, setup_calculator, get_ase_calc
     except ModuleNotFoundError as exc:
         sys.exit(f"Required MMML modules not available: {exc}")

@@ -13,7 +13,7 @@ sys.path.insert(0, str(repo_root.resolve()))
 
 import jax
 import jax.numpy as jnp
-from mmml.physnetjax.physnetjax.models.model import EF
+from mmml.models.physnetjax.physnetjax.models.model import EF
 from ase.io import read
 
 

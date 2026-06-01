@@ -28,13 +28,7 @@ import e3x
 from mmml.utils.rotations import rotate_batched_vectors, sample_random_rotations
 
 # ZBL repulsion (optional short-range nuclear repulsion)
-try:
-    from mmml.physnetjax.physnetjax.models.zbl import ZBLRepulsion
-except ImportError:
-    _root = Path(__file__).resolve().parents[2]
-    if str(_root) not in sys.path:
-        sys.path.insert(0, str(_root))
-    from mmml.physnetjax.physnetjax.models.zbl import ZBLRepulsion
+from mmml.models.physnetjax.physnetjax.models.zbl import ZBLRepulsion
 
 from ase.visualize import view as view  # optional; kept because you had it
 
@@ -1318,7 +1312,7 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
         rot_perturbation=rot_perturbation,
     )
 
-    from mmml.physnetjax.physnetjax.data.data import print_shapes
+    from mmml.models.physnetjax.physnetjax.data.data import print_shapes
 
     print_shapes(valid_batches[0], name="Validation Batch[0]")
     # print(

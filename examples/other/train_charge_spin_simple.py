@@ -11,8 +11,8 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from mmml.physnetjax.physnetjax.models.model_charge_spin import EF_ChargeSpinConditioned
-from mmml.physnetjax.physnetjax.training.optimizer import get_optimizer
+from mmml.models.physnetjax.physnetjax.models.model_charge_spin import EF_ChargeSpinConditioned
+from mmml.models.physnetjax.physnetjax.training.optimizer import get_optimizer
 
 
 def create_dummy_batch(batch_size=4, num_atoms=10):

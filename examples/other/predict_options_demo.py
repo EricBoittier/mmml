@@ -12,7 +12,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from mmml.physnetjax.physnetjax.models.model_charge_spin import EF_ChargeSpinConditioned
+from mmml.models.physnetjax.physnetjax.models.model_charge_spin import EF_ChargeSpinConditioned
 
 
 def create_test_molecule(num_atoms=10):

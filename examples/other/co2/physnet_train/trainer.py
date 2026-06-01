@@ -36,9 +36,9 @@ sys.path.insert(0, str(repo_root.resolve()))
 import jax
 import jax.numpy as jnp
 from mmml.data import load_npz, load_multiple_npz, DataConfig
-from mmml.physnetjax.physnetjax.models.model import EF
-from mmml.physnetjax.physnetjax.training.training import train_model
-from mmml.physnetjax.physnetjax.directories import BASE_CKPT_DIR
+from mmml.models.physnetjax.physnetjax.models.model import EF
+from mmml.models.physnetjax.physnetjax.training.training import train_model
+from mmml.models.physnetjax.physnetjax.directories import BASE_CKPT_DIR
 
 
 def ensure_standard_keys(data: Dict, verbose: bool = False) -> Dict:
@@ -642,7 +642,7 @@ def main():
         print(f"{'='*70}")
         print(f"\nFinal parameters saved to: {ckpt_dir / args.name}")
         print(f"\nTo use the trained model:")
-        print(f"  from mmml.physnetjax.physnetjax.models.model import EF")
+        print(f"  from mmml.models.physnetjax.physnetjax.models.model import EF")
         print(f"  import pickle")
         print(f"  ")
         print(f"  # Load parameters")

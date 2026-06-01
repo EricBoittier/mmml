@@ -7,7 +7,7 @@ as JSON files, enabling easy model persistence and reloading.
 Example Usage:
     ```python
     from mmml.utils.model_checkpoint import save_model_checkpoint, load_model_checkpoint
-    from mmml.physnetjax.physnetjax.models.model import EF
+    from mmml.models.physnetjax.physnetjax.models.model import EF
     
     # Save a model checkpoint
     model = EF(features=64, cutoff=8.0)

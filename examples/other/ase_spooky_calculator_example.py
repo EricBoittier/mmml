@@ -39,7 +39,7 @@ from ase.md.velocitydistribution import (
     ZeroRotation,
 )
 
-from mmml.physnetjax.physnetjax.models.spooky_model import EF as SpookyEF
+from mmml.models.physnetjax.physnetjax.models.spooky_model import EF as SpookyEF
 from mmml.utils.model_checkpoint import load_model_checkpoint
 
 

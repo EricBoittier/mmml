@@ -17,7 +17,7 @@ import sys
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
-from mmml.physnetjax.physnetjax.models.model import EF
+from mmml.models.physnetjax.physnetjax.models.model import EF
 from mmml.dcmnet.dcmnet.modules import MessagePassingModel
 
 

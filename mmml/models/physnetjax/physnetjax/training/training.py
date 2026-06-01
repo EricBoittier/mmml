@@ -26,20 +26,20 @@ logging.getLogger("asyncio").setLevel(logging.ERROR)
 warnings.filterwarnings("ignore", category=RuntimeWarning, message=".*coroutine.*was never awaited")
 warnings.filterwarnings("ignore", category=RuntimeWarning, message=".*Task was destroyed.*")
 
-from mmml.physnetjax.physnetjax.data.data import print_shapes
-from mmml.physnetjax.physnetjax.directories import BASE_CKPT_DIR, print_paths
-from mmml.physnetjax.physnetjax.restart.restart import orbax_checkpointer, restart_training
-from mmml.physnetjax.physnetjax.training.evalstep import eval_step
-from mmml.physnetjax.physnetjax.training.optimizer import (
+from mmml.models.physnetjax.physnetjax.data.data import print_shapes
+from mmml.models.physnetjax.physnetjax.directories import BASE_CKPT_DIR, print_paths
+from mmml.models.physnetjax.physnetjax.restart.restart import orbax_checkpointer, restart_training
+from mmml.models.physnetjax.physnetjax.training.evalstep import eval_step
+from mmml.models.physnetjax.physnetjax.training.optimizer import (
     base_optimizer,
     base_schedule_fn,
     base_transform,
     get_optimizer,
 )
-from mmml.physnetjax.physnetjax.training.trainstep import train_step
-from mmml.physnetjax.physnetjax.training.validation import validate_atomic_numbers
-from mmml.physnetjax.physnetjax.utils.ascii import computer 
-from mmml.physnetjax.physnetjax.utils.pretty_printer import (
+from mmml.models.physnetjax.physnetjax.training.trainstep import train_step
+from mmml.models.physnetjax.physnetjax.training.validation import validate_atomic_numbers
+from mmml.models.physnetjax.physnetjax.utils.ascii import computer 
+from mmml.models.physnetjax.physnetjax.utils.pretty_printer import (
     Printer,
     print_dict_as_table,
 )
@@ -255,7 +255,7 @@ def train_model(
         print("Using default (fat) batching method")
         import sys
         sys.stdout.flush()  # Flush for SLURM logging
-        from mmml.physnetjax.physnetjax.data.batches import _prepare_batches
+        from mmml.models.physnetjax.physnetjax.data.batches import _prepare_batches
 
     # Force terminal output for SLURM environments
     import sys
