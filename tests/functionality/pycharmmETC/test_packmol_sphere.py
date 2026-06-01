@@ -45,12 +45,14 @@ def test_write_monomer_pdb_uses_psf_atomic_numbers(tmp_path):
     """Chlorinated residues (Z=17) must become ASE symbol Cl, not CL."""
     from ase.io import read as ase_read
 
-    from mmml.cli.run.md_pbc_suite.ase import _write_monomer_pdb_for_packmol
+    from mmml.interfaces.pycharmmInterface.packmol_placement import (
+        write_monomer_pdb_for_packmol,
+    )
 
     coords = np.array([[0.0, 0.0, 0.0], [1.5, 0.0, 0.0]], dtype=float)
     z = np.array([17, 6], dtype=int)
     pdb_path = tmp_path / "dcm.pdb"
-    _write_monomer_pdb_for_packmol(pdb_path, coords, z)
+    write_monomer_pdb_for_packmol(pdb_path, coords, z)
     symbols = ase_read(pdb_path).get_chemical_symbols()
     assert symbols == ["Cl", "C"]
 

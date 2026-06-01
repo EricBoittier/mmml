@@ -61,6 +61,9 @@ import pycharmm.coor as coor
 import pycharmm.generate as gen
 import pycharmm.ic as ic
 import pycharmm.minimize as charmm_minimize
+from mmml.interfaces.pycharmmInterface.packmol_placement import (
+    write_monomer_pdb_for_packmol as _write_monomer_pdb_for_packmol,
+)
 from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 from mmml.cli.run.md_pbc_suite.cluster import _build_psf_ordered_cluster
 
@@ -277,26 +280,6 @@ def _parse_composition(spec: str) -> list[tuple[str, int]]:
     if not out:
         raise ValueError("Empty composition")
     return out
-
-
-def _write_monomer_pdb_for_packmol(
-    pdb_path: Path,
-    coords: np.ndarray,
-    atomic_numbers: np.ndarray,
-) -> None:
-    from ase.data import chemical_symbols
-    from ase.io import write
-
-    z = np.asarray(atomic_numbers, dtype=int).reshape(-1)
-    if int(z.shape[0]) != int(np.asarray(coords).shape[0]):
-        raise ValueError(
-            f"atomic_numbers length ({z.shape[0]}) != coords rows ({coords.shape[0]})"
-        )
-    symbols = [chemical_symbols[int(zi)] for zi in z]
-    mol = Atoms(symbols=symbols, positions=np.asarray(coords, dtype=float))
-    mol.positions -= mol.get_center_of_mass()
-    pdb_path.parent.mkdir(parents=True, exist_ok=True)
-    write(pdb_path, mol)
 
 
 def _load_packmol_sphere_positions(

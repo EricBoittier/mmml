@@ -77,6 +77,29 @@ def require_packmol_sphere_radius(
     return resolve_packmol_sphere_radius(packmol_radius, flat_bottom_radius)
 
 
+def write_monomer_pdb_for_packmol(
+    pdb_path: Path,
+    coords: np.ndarray,
+    atomic_numbers: np.ndarray,
+) -> None:
+    """Write a centered monomer PDB for Packmol using true atomic numbers (e.g. Cl=17)."""
+    from ase import Atoms
+    from ase.data import chemical_symbols
+    from ase.io import write
+
+    z = np.asarray(atomic_numbers, dtype=int).reshape(-1)
+    coords_arr = np.asarray(coords, dtype=float)
+    if int(z.shape[0]) != int(coords_arr.shape[0]):
+        raise ValueError(
+            f"atomic_numbers length ({z.shape[0]}) != coords rows ({coords_arr.shape[0]})"
+        )
+    symbols = [chemical_symbols[int(zi)] for zi in z]
+    mol = Atoms(symbols=symbols, positions=coords_arr)
+    mol.positions -= mol.get_center_of_mass()
+    pdb_path.parent.mkdir(parents=True, exist_ok=True)
+    write(pdb_path, mol)
+
+
 def run_packmol_sphere(
     n_molecules: int,
     center: tuple[float, float, float],
