@@ -111,7 +111,7 @@ def _base_dyn_kwargs(
     iprfrq: int = 500,
     isvfrq: int = 1000,
     ntrfrq: int = 1000,
-    echeck: int = -1,
+    echeck: float = 100.0,
 ) -> dict[str, Any]:
     return {
         "timestep": timestep,
@@ -146,11 +146,18 @@ def build_heat_dynamics(
     duration_ps: float = 10.0,
     save_interval_ps: float = 0.1,
     temp: float = 300.0,
+    echeck: float = 100.0,
 ) -> dict[str, Any]:
     """NVT heating dict for ``DynamicsScript`` (CHARMM + MLpot)."""
     nstep = ps_to_nsteps(timestep_ps, duration_ps)
     nsavc = nsavc_for_interval(timestep_ps, save_interval_ps)
-    kw = _base_dyn_kwargs(timestep=timestep_ps, nstep=nstep, nsavc=nsavc, nprint=100)
+    kw = _base_dyn_kwargs(
+        timestep=timestep_ps,
+        nstep=nstep,
+        nsavc=nsavc,
+        nprint=100,
+        echeck=echeck,
+    )
     kw.update(
         {
             "verlet": True,
@@ -202,6 +209,7 @@ def build_nve_dynamics(
     nprint: int = 100,
     iprfrq: int = 500,
     isvfrq: int = 500,
+    echeck: float = 100.0,
 ) -> dict[str, Any]:
     """NVE production-style dict (restart from heat)."""
     nstep = ps_to_nsteps(timestep_ps, duration_ps)
@@ -214,6 +222,7 @@ def build_nve_dynamics(
         iprfrq=max(1, iprfrq),
         isvfrq=max(1, isvfrq),
         ntrfrq=0,
+        echeck=echeck,
     )
     kw.update(
         {
@@ -254,11 +263,18 @@ def build_cpt_equilibration_dynamics(
     save_interval_ps: float = 0.01,
     temp: float = 300.0,
     restart: bool = True,
+    echeck: float = 500.0,
 ) -> dict[str, Any]:
     """NPT equilibration (CPT + Hoover); matches example mini-MD scripts."""
     nstep = ps_to_nsteps(timestep_ps, duration_ps)
     nsavc = nsavc_for_interval(timestep_ps, save_interval_ps)
-    kw = _base_dyn_kwargs(timestep=timestep_ps, nstep=nstep, nsavc=nsavc, nprint=100)
+    kw = _base_dyn_kwargs(
+        timestep=timestep_ps,
+        nstep=nstep,
+        nsavc=nsavc,
+        nprint=100,
+        echeck=echeck,
+    )
     kw.update(
         {
             "new": False,

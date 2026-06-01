@@ -1,0 +1,6 @@
+# VMD: topology written BEFORE MLpot (bonds intact).
+# Atoms: 100 — must match trajectory frame count.
+mol new {/mmhome/boittier/home/mmml/tests/functionality/mlpot/output/dynamics/cluster_for_vmd_aco_10mer.psf}
+mol addfile {/mmhome/boittier/home/mmml/tests/functionality/mlpot/output/dynamics/nve_aco_10mer.dcd} waitfor all
+animate goto 0
+display update

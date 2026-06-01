@@ -86,6 +86,10 @@ python tests/functionality/mlpot/05_mlpot_dynamics_stub.py --run --no-fix --cons
 # DCD every 0.001 ps (4 steps at 0.25 fs): --dcd-interval-ps 0.001
 python tests/functionality/mlpot/05_mlpot_dynamics_stub.py --run --nstep 100 --dcd-nsavc 1
 python tests/functionality/mlpot/05_mlpot_dynamics_stub.py --run --nstep 100 --dcd-interval-ps 0.00025
+# Tighter energy kill (stop before MMFP/PRESS RMS runaway):
+python tests/functionality/mlpot/05_mlpot_dynamics_stub.py --run --nstep 200000 --echeck 50
+# Looser (NPT-style):
+python tests/functionality/mlpot/05_mlpot_dynamics_stub.py --run --echeck 500
 
 # Non-PBC MMFP flat-bottom sphere (production dyna.inp style):
 python tests/functionality/mlpot/05_mlpot_dynamics_stub.py --run --n-molecules 4 \

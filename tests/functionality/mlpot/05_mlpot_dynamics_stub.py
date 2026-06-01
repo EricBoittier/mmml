@@ -20,6 +20,7 @@ from _common import (
     add_charmm_output_args,
     add_cluster_args,
     add_dcd_save_args,
+    add_dynamics_stability_args,
     add_flat_bottom_args,
     add_monomer_constraint_args,
     apply_flat_bottom_from_args,
@@ -33,6 +34,7 @@ from _common import (
     resolve_constrain_resids,
     resolve_dcd_nsavc,
     resolve_dynamics_print_kwargs,
+    resolve_echeck_from_args,
     resolve_fix_resids,
     setup_cons_fix_for_resids,
     turn_off_cons_fix,
@@ -47,6 +49,7 @@ def main() -> int:
     add_cluster_args(parser)
     add_charmm_output_args(parser)
     add_dcd_save_args(parser)
+    add_dynamics_stability_args(parser)
     add_flat_bottom_args(parser)
     add_monomer_constraint_args(parser, for_dynamics=True)
     parser.add_argument("--run", action="store_true", help="Run minimization + NVE")
@@ -125,6 +128,7 @@ def main() -> int:
 
     mini_nprint = apply_charmm_output_from_args(args)
     dyn_print = resolve_dynamics_print_kwargs(args, nstep=args.nstep)
+    echeck = resolve_echeck_from_args(args)
     dcd_nsavc = resolve_dcd_nsavc(
         dcd_nsavc=args.dcd_nsavc,
         dcd_interval_ps=args.dcd_interval_ps,
@@ -135,7 +139,8 @@ def main() -> int:
         f"CHARMM output: PRNLev={0 if args.quiet else args.prnlev} "
         f"WRNLev={0 if args.quiet else args.warnlev} | "
         f"SD nprint={mini_nprint} | "
-        f"dyn nprint={dyn_print['nprint']} iprfrq={dyn_print['iprfrq']}"
+        f"dyn nprint={dyn_print['nprint']} iprfrq={dyn_print['iprfrq']} | "
+        f"echeck={echeck}"
     )
     setup_default_nbonds()
     sync_charmm_positions(r)
@@ -201,6 +206,7 @@ def main() -> int:
             nprint=dyn_print["nprint"],
             iprfrq=dyn_print["iprfrq"],
             isvfrq=dyn_print["isvfrq"],
+            echeck=echeck,
         )
         kw["new"] = True
         kw["start"] = True
@@ -208,7 +214,8 @@ def main() -> int:
         kw["nsavc"] = dcd_nsavc
         print(
             f"DCD nsavc={dcd_nsavc} ({dcd_nsavc * NVE_TIMESTEP_PS:.6f} ps/frame) | "
-            f"dyn print every {dyn_print['nprint']} steps"
+            f"dyn print every {dyn_print['nprint']} steps | "
+            f"echeck={echeck} kcal/mol (stop if |dE| exceeded)"
         )
         run_dynamics_with_io(kw, io)
         print("CHARMM energy after dynamics:")
