@@ -45,7 +45,13 @@ def main() -> int:
     parser.add_argument(
         "--save",
         action="store_true",
-        help="After minimization, write PDB/CRD/PSF, energy JSON, and XYZ",
+        help="After minimization, write PDB/CRD/PSF, energy JSON, XYZ, and minimization DCD",
+    )
+    parser.add_argument(
+        "--dcd-nsavc",
+        type=int,
+        default=1,
+        help="Write a DCD frame every N SD steps when --save (CHARMM nsavc)",
     )
     args = parser.parse_args()
 
@@ -56,6 +62,7 @@ def main() -> int:
     psf_path = out_dir / "mini_full_mlpot.psf"
     energy_json_path = out_dir / "mini_full_mlpot_energy.json"
     xyz_path = out_dir / "mini_full_mlpot.xyz"
+    dcd_path = out_dir / "mini_full_mlpot.dcd"
 
     print("Workflow:")
     print("  1. register_mlpot on ALL atoms")
@@ -109,6 +116,8 @@ def main() -> int:
                 psf_path=psf_path if args.save else None,
                 energy_json_path=energy_json_path if args.save else None,
                 xyz_path=xyz_path if args.save else None,
+                dcd_path=dcd_path if args.save else None,
+                dcd_nsavc=args.dcd_nsavc if args.save else 0,
                 skip_if_crd_exists=False,
             )
         )
@@ -116,7 +125,7 @@ def main() -> int:
         ctx.unset()
 
     if args.save:
-        print(f"\nMinimization ran={ran}; saved under {out_dir}")
+        print(f"\nMinimization ran={ran}; saved under {out_dir} (incl. {dcd_path.name})")
     else:
         print(f"\nMinimization ran={ran} (no files written; use --save)")
     return 0

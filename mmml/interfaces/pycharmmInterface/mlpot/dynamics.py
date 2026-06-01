@@ -74,6 +74,9 @@ class MinimizeWithMlpotConfig:
     psf_path: Optional[PathLike] = None
     energy_json_path: Optional[PathLike] = None
     xyz_path: Optional[PathLike] = None
+    dcd_path: Optional[PathLike] = None
+    dcd_nsavc: int = 1
+    dcd_unit: int = 51
     title: str = "Mini SD"
     skip_if_crd_exists: bool = True
     show_energy: bool = True
@@ -274,14 +277,44 @@ def run_dynamics_with_io(
             f.close()
 
 
+def open_minimize_dcd(path: PathLike, *, unit: int = 51) -> Any:
+    """Open a DCD file for minimization trajectory output (``iuncrd``)."""
+    pycharmm, *_ = _import_pycharmm_modules()
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    return pycharmm.CharmmFile(
+        file_name=str(p),
+        file_unit=unit,
+        formatted=False,
+        read_only=False,
+    )
+
+
+def _sd_kwargs_from_config(config: MinimizeWithMlpotConfig) -> dict[str, Any]:
+    """Common ``minimize.run_sd`` settings including optional DCD trajectory."""
+    kw: dict[str, Any] = {
+        "nstep": config.nstep,
+        "nprint": config.nprint,
+        "tolenr": config.tolenr,
+        "tolgrd": config.tolgrd,
+    }
+    if config.save and config.dcd_path is not None and config.dcd_nsavc > 0:
+        kw["iuncrd"] = config.dcd_unit
+        kw["nsavc"] = config.dcd_nsavc
+    return kw
+
+
 def minimize_with_mlpot(
     config: MinimizeWithMlpotConfig,
 ) -> bool:
-    """Run SD minimization with optional fixed ML atoms; write PDB/CRD.
+    """Run SD minimization with optional fixed ML atoms; optional trajectory/output.
+
+    When ``dcd_path`` is set and ``save=True``, frames are written during SD via
+    CHARMM ``iuncrd`` / ``nsavc`` (see ``pycharmm.minimize.MinOpts``).
 
     Returns True if minimization ran, False if skipped because CRD exists.
     """
-    pycharmm, cons_fix, energy, minimize, read, write = _import_pycharmm_modules()
+    _, cons_fix, energy, minimize, *_ = _import_pycharmm_modules()
 
     crd_path = Path(config.crd_path) if config.crd_path else None
     if config.skip_if_crd_exists and crd_path is not None and crd_path.exists():
@@ -290,34 +323,33 @@ def minimize_with_mlpot(
             energy.show()
         return False
 
-    if config.fixed_ml_selection is not None:
-        cons_fix.setup(config.fixed_ml_selection)
-        minimize.run_sd(
-            nstep=config.nstep,
-            nprint=config.nprint,
-            tolenr=config.tolenr,
-            tolgrd=config.tolgrd,
-        )
-        cons_fix.turn_off()
-    minimize.run_sd(
-        nstep=config.nstep,
-        nprint=config.nprint,
-        tolenr=config.tolenr,
-        tolgrd=config.tolgrd,
-    )
+    dcd_file = None
+    if config.save and config.dcd_path is not None and config.dcd_nsavc > 0:
+        dcd_file = open_minimize_dcd(config.dcd_path, unit=config.dcd_unit)
 
-    if config.save:
-        save_minimization_results(
-            pdb_path=config.pdb_path,
-            crd_path=config.crd_path,
-            psf_path=config.psf_path,
-            energy_json_path=config.energy_json_path,
-            xyz_path=config.xyz_path,
-            title=config.title,
-            show_energy=config.show_energy,
-        )
-    elif config.show_energy:
-        energy.show()
+    sd_kw = _sd_kwargs_from_config(config)
+    try:
+        if config.fixed_ml_selection is not None:
+            cons_fix.setup(config.fixed_ml_selection)
+            minimize.run_sd(**sd_kw)
+            cons_fix.turn_off()
+        minimize.run_sd(**sd_kw)
+
+        if config.save:
+            save_minimization_results(
+                pdb_path=config.pdb_path,
+                crd_path=config.crd_path,
+                psf_path=config.psf_path,
+                energy_json_path=config.energy_json_path,
+                xyz_path=config.xyz_path,
+                title=config.title,
+                show_energy=config.show_energy,
+            )
+        elif config.show_energy:
+            energy.show()
+    finally:
+        if dcd_file is not None:
+            dcd_file.close()
     return True
 
 
