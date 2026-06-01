@@ -66,6 +66,7 @@ from mmml.interfaces.pycharmmInterface.packmol_placement import (
 )
 from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 from mmml.cli.run.md_pbc_suite.cluster import _build_psf_ordered_cluster
+from mmml.paths import default_meoh_template_pdb
 
 pyci.read = read
 pyci.settings = settings
@@ -1094,7 +1095,7 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument("--output-dir", type=Path, default=Path("artifacts/md_10mer_mmml_pbc_suite"))
-    parser.add_argument("--template-pdb", type=Path, default=Path("mmml/generate/sample/pdb/meoh.pdb"))
+    parser.add_argument("--template-pdb", type=Path, default=default_meoh_template_pdb())
     parser.add_argument("--n-molecules", type=int, default=10)
     parser.add_argument(
         "--composition",

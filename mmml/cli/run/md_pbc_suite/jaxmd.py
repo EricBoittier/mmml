@@ -19,6 +19,7 @@ from mmml.cli.base import resolve_checkpoint_paths
 from mmml.cli.run.jaxmd_runner import set_up_nhc_sim_routine
 from mmml.interfaces.pycharmmInterface.cutoffs import handoff_widths_from_args
 from mmml.interfaces.pycharmmInterface.mmml_calculator import CutoffParameters, setup_calculator
+from mmml.paths import default_meoh_template_pdb
 
 from .ase import (
     _cubic_box_length,
@@ -96,7 +97,7 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--checkpoint", type=Path, default=None)
     p.add_argument("--output-dir", type=Path, default=Path("artifacts/md_10mer_mmml_pbc_suite_jaxmd"))
-    p.add_argument("--template-pdb", type=Path, default=Path("mmml/generate/sample/pdb/meoh.pdb"))
+    p.add_argument("--template-pdb", type=Path, default=default_meoh_template_pdb())
     p.add_argument("--n-molecules", type=int, default=10)
     p.add_argument(
         "--composition",
