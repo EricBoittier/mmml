@@ -9,6 +9,7 @@ import numpy as np
 
 # ASE imports
 import ase
+import ase.io
 from ase import Atoms
 
 from mmml.interfaces.pycharmmInterface.import_pycharmm import (
@@ -60,8 +61,8 @@ cwd = Path(__file__).parent
 PACKMOL_PATH = Path("~/mmml/mmml/generate/packmol/packmol").expanduser()
 water_pdb_path = cwd / ".." / ".." / "data" / "charmm" / "tip3.pdb"
 octanol_pdb_path = cwd / ".." / ".." / "data" / "charmm" / "ocoh.pdb"
-ase_water = ase.io.read(water_pdb_path)
-ase_octanol = ase.io.read(octanol_pdb_path)
+ase_water = ase.io.read(str(water_pdb_path))
+ase_octanol = ase.io.read(str(octanol_pdb_path))
 
 def correct_names(atoms: Atoms) -> Atoms:
     """

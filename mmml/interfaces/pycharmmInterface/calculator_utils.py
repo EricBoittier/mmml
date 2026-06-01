@@ -16,6 +16,21 @@ except ModuleNotFoundError:
 
 from mmml.interfaces.pycharmmInterface.cutoffs import GAMMA_OFF, GAMMA_ON
 
+
+def unpack_factory_result(result: tuple) -> tuple:
+    """Unpack the return value of a ``setup_calculator()`` factory call.
+
+    Returns ``(calculator, spherical_cutoff_calculator, get_update_fn)`` where
+    ``get_update_fn`` is ``None`` when the factory returns only two values.
+    """
+    n = len(result)
+    if n == 3:
+        return result[0], result[1], result[2]
+    if n == 2:
+        return result[0], result[1], None
+    raise ValueError(f"setup_calculator factory returned {n} values, expected 2 or 3")
+
+
 # Re-export for convenience
 __all__ = [
     "FLAT_BOTTOM_MODES",
@@ -37,6 +52,7 @@ __all__ = [
     "_safe_den",
     "_sharpstep",
     "_smoothstep01",
+    "unpack_factory_result",
 ]
 
 epsilon = 10 ** (-6)
