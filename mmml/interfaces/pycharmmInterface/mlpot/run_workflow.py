@@ -48,6 +48,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.setup import (
     save_cluster_topology_for_vmd,
     select_all_atoms,
     select_by_resids,
+    disable_charmm_domdec,
     setup_default_nbonds,
     sync_charmm_positions,
 )
@@ -318,6 +319,7 @@ def run_dynamics_workflow(
             f"DCD nsavc={dcd_nsavc} ({dcd_nsavc * timestep_ps:.6f} ps/frame) | "
             f"dyn print every {dyn_print['nprint']} steps | echeck={echeck} kcal/mol"
         )
+        disable_charmm_domdec()
         run_dynamics_with_io(kw, io)
         if show_energy:
             from mmml.interfaces.pycharmmInterface.import_pycharmm import (
