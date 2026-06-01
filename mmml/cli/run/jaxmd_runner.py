@@ -1120,16 +1120,20 @@ def set_up_nhc_sim_routine(
             scalar_quantities=scalar_quantities,
             attrs={
                 "ensemble": args.ensemble,
-                "temperature_target": T,
-                "dt_ps": dt,
-                "steps_per_recording": steps_per_recording,
+                "temperature_target": float(T),
+                "dt_ps": float(dt),
+                "steps_per_recording": int(steps_per_recording),
                 "n_atoms": len(atoms),
-                "atomic_numbers": atoms.get_atomic_numbers(),
-                "flat_bottom_radius_A": float(flat_bottom_radius)
-                if use_flat_bottom
-                else None,
-                "flat_bottom_k_eV_A2": float(flat_bottom_k) if use_flat_bottom else None,
-                "flat_bottom_mode": flat_bottom_mode if use_flat_bottom else None,
+                "atomic_numbers": np.asarray(atoms.get_atomic_numbers(), dtype=np.int32),
+                **(
+                    {
+                        "flat_bottom_radius_A": float(flat_bottom_radius),
+                        "flat_bottom_k_eV_A2": float(flat_bottom_k),
+                        "flat_bottom_mode": flat_bottom_mode,
+                    }
+                    if use_flat_bottom
+                    else {}
+                ),
             },
         )
 
