@@ -13,32 +13,24 @@ def _truthy(name: str) -> bool:
 
 def mlpot_jax_device_name() -> str:
     """``cpu`` or ``gpu`` for MLpot energy/force evaluation."""
-    mode = (os.environ.get("MMML_MLPOT_DEVICE") or "auto").strip().lower()
+    mode = (os.environ.get("MMML_MLPOT_DEVICE") or "gpu").strip().lower()
     if mode in ("cpu", "gpu"):
         return mode
     if mode == "auto":
-        try:
-            from mmml.interfaces.pycharmmInterface.charmm_mpi import charmm_lib_links_mpi
-
-            if charmm_lib_links_mpi():
-                return "cpu"
-        except Exception:
-            pass
+        return "gpu"
     return "gpu"
 
 
 def apply_mlpot_jax_platform_env(*, quiet: bool = False) -> str:
-    """Set ``JAX_PLATFORMS`` before the first ``import jax`` when MLpot must avoid CUDA+MPI."""
+    """Set ``JAX_PLATFORMS`` before the first ``import jax`` for MLpot."""
     device = mlpot_jax_device_name()
-    if device == "cpu":
-        os.environ.setdefault("JAX_PLATFORMS", "cpu")
-        if not quiet and not _truthy("MMML_QUIET"):
-            print(
-                "mmml: OpenMPI-linked CHARMM — MLpot JAX runs on CPU "
-                "(CUDA after MPI breaks SD barriers). "
-                "Set MMML_MLPOT_DEVICE=gpu to override (experimental).",
-                flush=True,
-            )
+    os.environ.setdefault("JAX_PLATFORMS", device)
+    if not quiet and not _truthy("MMML_QUIET") and device == "cpu":
+        print(
+            "mmml: MLpot JAX runs on CPU (MMML_MLPOT_DEVICE=cpu). "
+            "Unset or set MMML_MLPOT_DEVICE=gpu for GPU.",
+            flush=True,
+        )
     return device
 
 
