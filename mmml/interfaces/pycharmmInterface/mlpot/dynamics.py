@@ -78,6 +78,7 @@ class MinimizeWithMlpotConfig:
     dcd_nsavc: int = 1
     dcd_unit: int = 51
     reference_positions: Optional[np.ndarray] = None
+    pyCModel: Optional[Any] = None
     title: str = "Mini SD"
     skip_if_crd_exists: bool = True
     show_energy: bool = True
@@ -342,12 +343,21 @@ def minimize_with_mlpot(
         minimize.run_sd(**sd_kw)
 
         if config.save:
+            from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+                resolve_export_positions,
+            )
+
+            export_pos = resolve_export_positions(
+                pyCModel=config.pyCModel,
+                reference_positions=config.reference_positions,
+            )
             save_minimization_results(
                 pdb_path=config.pdb_path,
                 crd_path=config.crd_path,
                 psf_path=config.psf_path,
                 energy_json_path=config.energy_json_path,
                 xyz_path=config.xyz_path,
+                positions=export_pos,
                 title=config.title,
                 show_energy=config.show_energy,
             )
@@ -378,15 +388,24 @@ def save_minimization_results(
     psf_path: Optional[PathLike] = None,
     energy_json_path: Optional[PathLike] = None,
     xyz_path: Optional[PathLike] = None,
+    positions: Optional[np.ndarray] = None,
     title: str = "Mini SD",
     show_energy: bool = True,
 ) -> dict[str, Path]:
     """Write minimized coordinates and optional PSF / energy summary.
 
+    If ``positions`` is given, sync to CHARMM before native PDB/CRD writes and use
+    for XYZ. This avoids empty exports when only the main coordinate set is populated.
+
     Returns dict of output kind -> path for files that were written.
     """
     _, _, energy, _, _, write = _import_pycharmm_modules()
     written: dict[str, Path] = {}
+
+    if positions is not None:
+        from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+
+        sync_charmm_positions(positions)
 
     if pdb_path is not None:
         p = Path(pdb_path)
@@ -424,7 +443,11 @@ def save_minimization_results(
             )
             from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 
-            pos = get_charmm_positions_array()
+            pos = (
+                np.asarray(positions, dtype=float)
+                if positions is not None
+                else get_charmm_positions_array()
+            )
             numbers = np.asarray(get_Z_from_psf(), dtype=int)
             p = Path(xyz_path)
             p.parent.mkdir(parents=True, exist_ok=True)

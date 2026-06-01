@@ -121,6 +121,7 @@ def main() -> int:
                 nstep=args.nstep,
                 nprint=max(1, args.nstep // 2),
                 reference_positions=r,
+                pyCModel=pyCModel,
                 save=args.save,
                 pdb_path=pdb_path if args.save else None,
                 crd_path=crd_path if args.save else None,
