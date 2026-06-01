@@ -497,13 +497,7 @@ def minimize_with_mlpot(
             print("CHARMM energy before minimization:")
             _maybe_show_energy(True)
         force_charmm_vacuum_mode()
-        if not recover_mpi_for_charmm_after_jax(phase="before MLpot SD minimize"):
-            raise RuntimeError(
-                "MPI is not initialized for OpenMPI-linked CHARMM in this serial Python "
-                "process. Install mpi4py into the active environment "
-                "(`uv sync --extra gpu` or `pip install mpi4py`), or launch with:\n"
-                "  mpirun -np 1 mmml md-system ..."
-            )
+        recover_mpi_for_charmm_after_jax(phase="before MLpot SD minimize")
         if config.verbose:
             print(
                 f"SD pass 1 (free, all atoms): nstep={config.nstep} nprint={config.nprint}"

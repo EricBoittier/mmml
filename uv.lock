@@ -1931,6 +1931,7 @@ all = [
     { name = "mdanalysis" },
     { name = "mmtf-python" },
     { name = "molzip" },
+    { name = "mpi4py" },
     { name = "mrcfile" },
     { name = "nbformat" },
     { name = "omegaconf" },
@@ -2019,6 +2020,7 @@ all-cuda12 = [
     { name = "mdanalysis" },
     { name = "mmtf-python" },
     { name = "molzip" },
+    { name = "mpi4py" },
     { name = "mrcfile" },
     { name = "nbformat" },
     { name = "omegaconf" },
@@ -2067,6 +2069,7 @@ all-cuda13 = [
     { name = "mdanalysis" },
     { name = "mmtf-python" },
     { name = "molzip" },
+    { name = "mpi4py" },
     { name = "mrcfile" },
     { name = "nbformat" },
     { name = "omegaconf" },
@@ -2122,6 +2125,7 @@ gpu = [
     { name = "jax-cuda13-pjrt" },
     { name = "jax-cuda13-plugin" },
     { name = "jaxlib" },
+    { name = "mpi4py" },
 ]
 gpu-cuda12 = [
     { name = "cupy-cuda12x" },
@@ -2130,6 +2134,7 @@ gpu-cuda12 = [
     { name = "jax-cuda12-pjrt" },
     { name = "jax-cuda12-plugin" },
     { name = "jaxlib" },
+    { name = "mpi4py" },
 ]
 mbar = [
     { name = "pymbar" },
@@ -2246,7 +2251,7 @@ requires-dist = [
     { name = "mkdocs-material", marker = "extra == 'dev'", specifier = ">=9.7" },
     { name = "mkdocstrings", extras = ["python"], marker = "extra == 'dev'", specifier = ">=0.30" },
     { name = "ml-dtypes" },
-    { name = "mmml", extras = ["chem", "data", "experiments", "gpu", "md", "ml", "notebooks", "plotting", "quantum", "quantum-gpu", "viz"], marker = "extra == 'all'" },
+    { name = "mmml", extras = ["charmm-interface", "chem", "data", "experiments", "gpu", "md", "ml", "notebooks", "plotting", "quantum", "quantum-gpu", "viz"], marker = "extra == 'all'" },
     { name = "mmml", extras = ["chem", "data", "experiments", "gpu", "md", "ml", "notebooks", "plotting", "quantum", "quantum-gpu", "viz"], marker = "extra == 'all-cuda13'" },
     { name = "mmml", extras = ["chem", "data", "experiments", "gpu-cuda12", "md", "ml", "notebooks", "plotting", "quantum", "quantum-gpu-cuda12", "viz"], marker = "extra == 'all-cuda12'" },
     { name = "mmml", extras = ["chem", "data", "experiments", "md", "ml", "notebooks", "plotting", "quantum", "viz"], marker = "extra == 'all-cpu'" },
@@ -2255,6 +2260,8 @@ requires-dist = [
     { name = "mmtf-python", marker = "extra == 'md'" },
     { name = "molzip", marker = "extra == 'chem'" },
     { name = "mpi4py", marker = "extra == 'charmm-interface'" },
+    { name = "mpi4py", marker = "extra == 'gpu'" },
+    { name = "mpi4py", marker = "extra == 'gpu-cuda12'" },
     { name = "mrcfile", marker = "extra == 'md'" },
     { name = "nbformat", marker = "extra == 'notebooks'" },
     { name = "numpy" },
