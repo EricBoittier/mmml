@@ -223,7 +223,8 @@ def refresh_nbonds_after_mlpot(*, nbxmod: int = 5) -> None:
 
 
 def physnet_ml_atomic_numbers(z: Sequence[int]) -> list[int]:
-    return [int(x) if int(x) < 9 else 6 for x in z]
+    """PSF/ASE atomic numbers for MLpot (must match ``setup_calculator`` inputs)."""
+    return [int(x) for x in z]
 
 
 def load_physnet_mlpot_bundle(

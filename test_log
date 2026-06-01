@@ -1,4 +1,14 @@
-mmml md-system: running pycharmm in-process: --phase full --ensemble nve --spacing 5.0 --ps 25.0 --dt-fs 0.25 --temperature 300.0 --mini-nstep 1500 --residue MEOH --fix-resids 1 --constrain-resids  --dyn-nprint 100 --dyn-iprfrq 500 --dcd-nsavc 1 --echeck 500.0 --composition DCM:30 --output-dir artifacts/pycharmm_mlpot/dcm30_nve --no-fix --charmm-sd-steps 25 --charmm-abnr-steps 100 --charmm-tolenr 0.001 --charmm-tolgrd 0.001 --max-grms-before-dyn 50.0 --fb-rad 20.0 --fb-forc 1.0 --seed 123 --packmol-sphere --packmol-radius 10.0 --packmol-tolerance 2.0 --flat-bottom-radius 20.0
+mmml md-system: running pycharmm in-process: --phase full --ensemble nve --spacing 5.0 --ps 25.0 --dt-fs 0.25 --temperature 300.0 --mini-nstep 1500 --residue MEOH --fix-resids 1 --constrain-resids  --dyn-nprint 100 --dyn-iprfrq 500 --dcd-nsavc 100 --echeck 500.0 --composition DCM:10 --output-dir artifacts/pycharmm_mlpot/dcm30_nve --no-fix --charmm-sd-steps 25 --charmm-abnr-steps 100 --charmm-tolenr 0.001 --charmm-tolgrd 0.001 --max-grms-before-dyn 50.0 --fb-rad 20.0 --fb-forc 1.0 --seed 123 --packmol-sphere --packmol-radius 10.0 --packmol-tolerance 2.0 --flat-bottom-radius 20.0
+/mmhome/boittier/home/mmml/mmml/data/charmm/top_all36_cgenff.rtf
+/mmhome/boittier/home/mmml/mmml/data/charmm/par_all36_cgenff.prm
+CHARMM_HOME /mmhome/boittier/home/mmml/setup/charmm
+CHARMM_LIB_DIR /mmhome/boittier/home/mmml/setup/charmm
+[cluster] 1/4 CHARMM MM minimize isolated monomer(s) (before Packmol)
+Packmol monomer DCM: CHARMM MM minimize (SD=25, ABNR=100)
+CHARMM MM SD: nstep=25
+CHARMM MM ABNR: nstep=100
+[cluster] 2/4 Write monomer PDBs for Packmol
+[cluster] 3/4 Packmol sphere placement
 
 ################################################################################
 
@@ -26,13 +36,13 @@ mmml md-system: running pycharmm in-process: --phase full --ensemble nve --spaci
   Residue numbering set for structure            1 :           2
   Swap chains of molecules of structure            1 : F
   Specific chain identifier set for structure            1 :A
-  Number of molecules of type            1 :           30
+  Number of molecules of type            1 :           10
   Total number of restrictions:            1
-  Total number of atoms:          150
-  Total number of molecules:           30
+  Total number of atoms:           50
+  Total number of molecules:           10
   Number of fixed molecules:            0
-  Number of free molecules:           30
-  Number of variables:          180
+  Number of free molecules:           10
+  Number of variables:           60
   Total number of fixed atoms:            0
   Maximum internal distance of type            1 :    1.6396060502449972     
   All atoms must be within these coordinates: 
@@ -56,24 +66,24 @@ mmml md-system: running pycharmm in-process: --phase full --ensemble nve --spaci
   Molecules of type:            1
 
   Packing:|0                                                        100%|
-          |*********************************************************
+          |************************************************
 
-  Restraint-only function value:    1.0771180376061790E-005
-  Maximum violation of the restraints:    5.0726664374171212E-006
+  Restraint-only function value:    3.4724692908323510E-003
+  Maximum violation of the restraints:    1.0028343241654956E-003
 
 --------------------------------------------------------------------------------
 
   Rescaling maximum and minimum coordinates... 
   Mininum and maximum coordinates after constraint fitting: 
-   x: [   -9.5327258670248955      ,    8.7826129520616139       ] 
-   y: [   -9.5569844141318008      ,    8.6284771468739674       ] 
-   z: [   -9.3302027923745250      ,    7.8635113066430868       ] 
+   x: [   -9.0070079089711292      ,    6.2494309274534983       ] 
+   y: [   -7.5106481047053544      ,    7.4112375865716160       ] 
+   z: [   -9.2546085944511081      ,    4.3704248107862513       ] 
   Computing size of patches... 
   Number of cells in each direction and cell sides: 
-   x:           10  cells of size    2.2715338819086512     
-   y:           10  cells of size    2.2585461561005769     
-   z:            9  cells of size    2.3993015665575124     
-  Cell-system length:   22.71534  22.58546  21.59371
+   x:            8  cells of size    2.4570548545530784     
+   y:            8  cells of size    2.4152357114096210     
+   z:            8  cells of size    2.2531291756546699     
+  Cell-system length:   19.65644  19.32189  18.02503
   Reseting center of mass... 
 
 --------------------------------------------------------------------------------
@@ -91,7 +101,7 @@ mmml md-system: running pycharmm in-process: --phase full --ensemble nve --spaci
 
 ################################################################################
 
-  Objective function at initial point:    403.75585586790322     
+  Objective function at initial point:    55.080680564614326     
 
 ################################################################################
 
@@ -106,19 +116,19 @@ mmml md-system: running pycharmm in-process: --phase full --ensemble nve --spaci
   Scaling radii by:    1.1000000000000001     
 
   Packing:|0                                                        100%|
-          |******
+          |***
 
-  Function value from last GENCAN loop: f = .77433E-04
-  Best function value before: f = .40376E+03
+  Function value from last GENCAN loop: f = .00000E+00
+  Best function value before: f = .55081E+02
   Improvement from best function value:    99.99 %
   Improvement from last loop:    99.99 %
-  Maximum violation of target distance:     0.008800
+  Maximum violation of target distance:     0.000000
   Maximum violation of the constraints: .00000E+00
   Current structure written to file: pdb/init-packmol-sphere.pdb
 --------------------------------------------------------------------------------
   Packing solved for molecules of type           1
-  Objective function value:    7.7433217148635243E-005
-  Maximum violation of target distance:    8.7996146022786270E-003
+  Objective function value:    0.0000000000000000     
+  Maximum violation of target distance:    0.0000000000000000     
   Max. constraint violation:    0.0000000000000000     
 --------------------------------------------------------------------------------
 
@@ -136,8 +146,8 @@ mmml md-system: running pycharmm in-process: --phase full --ensemble nve --spaci
 ################################################################################
 
                                  Success! 
-              Final objective function value: .72046E+00
-              Maximum violation of target distance:   0.008800
+              Final objective function value: .00000E+00
+              Maximum violation of target distance:   0.000000
               Maximum violation of the constraints: .00000E+00
 
 --------------------------------------------------------------------------------
@@ -152,11 +162,22 @@ mmml md-system: running pycharmm in-process: --phase full --ensemble nve --spaci
 
 ################################################################################
 
-   Running time:    3.33700026E-03  seconds. 
+   Running time:    1.55399996E-03  seconds. 
 
 --------------------------------------------------------------------------------
 
 
+Running: /mmhome/boittier/home/mmml/mmml/generate/packmol/packmol < packmol/packmol_sphere.inp
+Generated pdb/init-packmol-sphere.pdb
+[cluster] 4/4 Build cluster PSF and CHARMM MM relax
+Packmol cluster: CHARMM MM minimize SD=25 ABNR=100
+CHARMM MM SD: nstep=25
+CHARMM MM ABNR: nstep=100
+Packmol cluster: 50 atoms, span Å x=14.3 y=11.6 z=12.9
+Packmol sphere: center=(0.0, 0.0, 0.0) R=10.0 Å tol=2.0 Å
+Cluster geometry OK: 10 monomer(s), 50 atoms | spans (Å) x=14.28 y=11.62 z=12.87 | COM distances (Å) min=3.28 max=14.63
+
+CHARMM MM pre-minimize: SD=25 ABNR=100
   
  CHARMM>     BLOCK
  WARNING from DECODI -- Zero length string being converted to 0
@@ -241,22 +262,22 @@ mmml md-system: running pycharmm in-process: --phase full --ensemble nve --spaci
  CGONNB =  0.000 CGOFNB = 10.000
  WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
  NBXMOD =      5
- There are    10867 atom  pairs and      300 atom  exclusions.
+ There are     1125 atom  pairs and      100 atom  exclusions.
  There are        0 group pairs and        0 group exclusions.
  Generating nonbond list with Exclusion mode = 5
- == PRIMARY == SPACE FOR    11101 ATOM PAIRS AND        0 GROUP PAIRS
+ == PRIMARY == SPACE FOR     1201 ATOM PAIRS AND        0 GROUP PAIRS
 
  General atom nonbond list generation found:
-    10867 ATOM PAIRS WERE FOUND FOR ATOM LIST
-        5 GROUP PAIRS REQUIRED ATOM SEARCHES
+     1125 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
 
   
  CHARMM>     
   
   
- CHARMM>     write name /mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm30_nve/cluster_for_vmd_dcm_30.psf -
+ CHARMM>     write name /mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm30_nve/cluster_for_vmd_dcm_10.psf -
  CHARMM>     psf card
- VOPEN> Attempting to open::/mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm30_nve/cluster_for_vmd_dcm_30.psf::
+ VOPEN> Attempting to open::/mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm30_nve/cluster_for_vmd_dcm_10.psf::
  RDTITL>  
  RDTITL> No title read.
  VCLOSE: Closing unit   91 with status "KEEP"
@@ -265,9 +286,9 @@ mmml md-system: running pycharmm in-process: --phase full --ensemble nve --spaci
  CHARMM>     
   
   
- CHARMM>     write name /mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm30_nve/cluster_for_vmd_dcm_30.pdb -
+ CHARMM>     write name /mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm30_nve/cluster_for_vmd_dcm_10.pdb -
  CHARMM>     coor pdb
- VOPEN> Attempting to open::/mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm30_nve/cluster_for_vmd_dcm_30.pdb::
+ VOPEN> Attempting to open::/mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm30_nve/cluster_for_vmd_dcm_10.pdb::
  RDTITL> * PRE-MLPOT CLUSTER
  RDTITL> *
   Write CHARMM-pdb format
@@ -297,14 +318,16 @@ mmml md-system: running pycharmm in-process: --phase full --ensemble nve --spaci
  CGONNB =  0.000 CGOFNB = 10.000
  WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
  NBXMOD =      5
- There are    10867 atom  pairs and      300 atom  exclusions.
+ There are     1125 atom  pairs and      100 atom  exclusions.
  There are        0 group pairs and        0 group exclusions.
  Generating nonbond list with Exclusion mode = 5
- == PRIMARY == SPACE FOR    11101 ATOM PAIRS AND        0 GROUP PAIRS
+ == PRIMARY == SPACE FOR     1201 ATOM PAIRS AND        0 GROUP PAIRS
 
  General atom nonbond list generation found:
-    10867 ATOM PAIRS WERE FOUND FOR ATOM LIST
-        5 GROUP PAIRS REQUIRED ATOM SEARCHES
+     1125 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+CHARMM MM SD: nstep=25
+CHARMM MM ABNR: nstep=100
 
   
  CHARMM>     
@@ -317,14 +340,14 @@ mmml md-system: running pycharmm in-process: --phase full --ensemble nve --spaci
  CGONNB =  0.000 CGOFNB = 10.000
  WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
  NBXMOD =      5
- There are    10867 atom  pairs and      300 atom  exclusions.
+ There are     1125 atom  pairs and      100 atom  exclusions.
  There are        0 group pairs and        0 group exclusions.
  Generating nonbond list with Exclusion mode = 5
- == PRIMARY == SPACE FOR    11101 ATOM PAIRS AND        0 GROUP PAIRS
+ == PRIMARY == SPACE FOR     1201 ATOM PAIRS AND        0 GROUP PAIRS
 
  General atom nonbond list generation found:
-    10867 ATOM PAIRS WERE FOUND FOR ATOM LIST
-        5 GROUP PAIRS REQUIRED ATOM SEARCHES
+     1125 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
 
  PRNHBD: CUToff Hydrogen Bond  distance =    0.5000   Angle =   90.0000
          CuT switching ON HB dist. =     3.5000  OFf HB dist. =    4.0000
@@ -362,14 +385,14 @@ STPD>        1      0.00000      0.00000      0.00000      0.00500
  CGONNB =  0.000 CGOFNB = 10.000
  WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
  NBXMOD =      5
- There are    10867 atom  pairs and      300 atom  exclusions.
+ There are     1125 atom  pairs and      100 atom  exclusions.
  There are        0 group pairs and        0 group exclusions.
  Generating nonbond list with Exclusion mode = 5
- == PRIMARY == SPACE FOR    11101 ATOM PAIRS AND        0 GROUP PAIRS
+ == PRIMARY == SPACE FOR     1201 ATOM PAIRS AND        0 GROUP PAIRS
 
  General atom nonbond list generation found:
-    10867 ATOM PAIRS WERE FOUND FOR ATOM LIST
-        5 GROUP PAIRS REQUIRED ATOM SEARCHES
+     1125 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
 
  PRNHBD: CUToff Hydrogen Bond  distance =    0.5000   Angle =   90.0000
          CuT switching ON HB dist. =     3.5000  OFf HB dist. =    4.0000
@@ -410,14 +433,14 @@ ABNR>        0      0.00000      0.00000      0.00000      0.02000
  CGONNB =  0.000 CGOFNB = 10.000
  WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
  NBXMOD =      5
- There are    10867 atom  pairs and      300 atom  exclusions.
+ There are     1125 atom  pairs and      100 atom  exclusions.
  There are        0 group pairs and        0 group exclusions.
  Generating nonbond list with Exclusion mode = 5
- == PRIMARY == SPACE FOR    11101 ATOM PAIRS AND        0 GROUP PAIRS
+ == PRIMARY == SPACE FOR     1201 ATOM PAIRS AND        0 GROUP PAIRS
 
  General atom nonbond list generation found:
-    10867 ATOM PAIRS WERE FOUND FOR ATOM LIST
-        5 GROUP PAIRS REQUIRED ATOM SEARCHES
+     1125 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
 
  PRNHBD: CUToff Hydrogen Bond  distance =    0.5000   Angle =   90.0000
          CuT switching ON HB dist. =     3.5000  OFf HB dist. =    4.0000
@@ -431,17 +454,17 @@ ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
 ENER>        0      0.00000      0.00000      0.00000
  ----------       ---------    ---------    ---------    ---------    ---------
   
- DELTIC:       120 bonds deleted
- DELTIC:       180 angles deleted
- <MAKINB> with mode   5 found  11175 exclusions and      0 interactions(1-4)
- <MAKGRP> found    435 group exclusions.
- <MAKINB> with mode   5 found  11175 exclusions and      0 interactions(1-4)
- <MAKGRP> found    435 group exclusions.
+ DELTIC:        40 bonds deleted
+ DELTIC:        60 angles deleted
+ <MAKINB> with mode   5 found   1225 exclusions and      0 interactions(1-4)
+ <MAKGRP> found     45 group exclusions.
+ <MAKINB> with mode   5 found   1225 exclusions and      0 interactions(1-4)
+ <MAKGRP> found     45 group exclusions.
   
  CHARMM>     crystal free
   
- <MAKINB> with mode   5 found  11175 exclusions and      0 interactions(1-4)
- <MAKGRP> found    435 group exclusions.
+ <MAKINB> with mode   5 found   1225 exclusions and      0 interactions(1-4)
+ <MAKGRP> found     45 group exclusions.
   
  CHARMM>     update cutnb 18.0 -
  CHARMM>     ctonnb 13.0 -
@@ -461,14 +484,14 @@ ENER>        0      0.00000      0.00000      0.00000
  CGONNB =  0.000 CGOFNB = 10.000
  WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
  NBXMOD =      5
- There are        0 atom  pairs and    11175 atom  exclusions.
- There are        0 group pairs and      435 group exclusions.
+ There are        0 atom  pairs and     1225 atom  exclusions.
+ There are        0 group pairs and       45 group exclusions.
  Generating nonbond list with Exclusion mode = 5
- == PRIMARY == SPACE FOR    11101 ATOM PAIRS AND        0 GROUP PAIRS
+ == PRIMARY == SPACE FOR     1201 ATOM PAIRS AND        0 GROUP PAIRS
 
  General atom nonbond list generation found:
         0 ATOM PAIRS WERE FOUND FOR ATOM LIST
-        5 GROUP PAIRS REQUIRED ATOM SEARCHES
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
 
  PRNHBD: CUToff Hydrogen Bond  distance =    0.5000   Angle =   90.0000
          CuT switching ON HB dist. =     3.5000  OFf HB dist. =    4.0000
@@ -491,1630 +514,413 @@ ENER>        0      0.00000      0.00000      0.00000
 MINI MIN: Cycle      ENERgy      Delta-E         GRMS    Step-size
 MINI EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>        0  46500.82375 -46500.82375  13398.63846      0.02000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  46500.82375
+MINI>        0   8246.23043  -8246.23043   6918.04207      0.02000
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000   8246.23043
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>        1  24746.25662  21754.56714  18754.18661      0.01000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  24746.25662
+MINI>        1   1654.62616   6591.60426  10180.74151      0.01000
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000   1654.62616
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>        2  -8218.20702  32964.46364   8712.73653      0.01200
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -8218.20702
+MINI>        2  -4256.80418   5911.43035   3459.77566      0.01200
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -4256.80418
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>        3 -18110.35873   9892.15171   1554.02175      0.01440
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -18110.35873
+MINI>        3  -5922.38337   1665.57919    455.57193      0.01440
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -5922.38337
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>        4 -16453.30268  -1657.05604   4752.60212      0.01728
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -16453.30268
+MINI>        4  -6011.04768     88.66432    219.76908      0.01728
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -6011.04768
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>        5 -18505.95607   2052.65338    552.34537      0.00864
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -18505.95607
+MINI>        5  -6236.10197    225.05428    227.07391      0.02074
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -6236.10197
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>        6 -18653.01773    147.06166    404.73120      0.01037
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -18653.01773
+MINI>        6  -6318.97863     82.87666    294.42325      0.02488
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -6318.97863
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>        7 -18787.59765    134.57992    340.94636      0.01244
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -18787.59765
+MINI>        7  -5739.92860   -579.05002   4479.57087      0.02986
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -5739.92860
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>        8 -19043.87319    256.27554    451.53331      0.01493
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19043.87319
+MINI>        8  -6404.95180    665.02319    437.36029      0.01493
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -6404.95180
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>        9 -19277.73845    233.86526   3268.08432      0.01792
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19277.73845
+MINI>        9  -6509.94738    104.99559    382.28910      0.01792
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -6509.94738
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       10 -19116.52855   -161.20990    682.67324      0.02150
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19116.52855
+MINI>       10  -6469.29725    -40.65013   2061.08214      0.02150
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -6469.29725
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       11 -19171.61967     55.09112    489.31297      0.01075
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19171.61967
+MINI>       11  -6603.41973    134.12248    361.41053      0.01075
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -6603.41973
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       12 -18296.07749   -875.54218   3861.19033      0.01290
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -18296.07749
+MINI>       12  -6736.20367    132.78394    488.95539      0.01290
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -6736.20367
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       13 -19469.46585   1173.38836    931.68536      0.00645
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19469.46585
+MINI>       13  -6712.35211    -23.85157    411.03092      0.01548
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -6712.35211
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       14 -18859.39162   -610.07423   3681.69396      0.00774
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -18859.39162
+MINI>       14  -6753.19929     40.84718    289.16671      0.00774
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -6753.19929
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       15 -19562.53706    703.14544   1278.99306      0.00387
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19562.53706
+MINI>       15  -6773.22385     20.02456    430.67677      0.00929
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -6773.22385
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       16 -19321.51464   -241.02242    778.87606      0.00464
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19321.51464
+MINI>       16  -6800.90101     27.67716    231.93942      0.01115
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -6800.90101
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       17 -19289.85565    -31.65899   1067.46817      0.00232
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19289.85565
+MINI>       17  -6353.25909   -447.64192   2438.80157      0.01337
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -6353.25909
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       18 -19384.50045     94.64480    602.92718      0.00116
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19384.50045
+MINI>       18  -6715.11082    361.85172   2859.41659      0.00669
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -6715.11082
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       19 -19406.23091     21.73046    702.63211      0.00139
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19406.23091
+MINI>       19  -6446.16211   -268.94871   1943.06813      0.00802
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -6446.16211
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       20 -19471.79386     65.56295    992.63992      0.00167
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19471.79386
+MINI>       20  -6851.06868    404.90657    494.95924      0.00401
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -6851.06868
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       21 -19470.38354     -1.41032   1235.89364      0.00201
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19470.38354
+MINI>       21  -6411.97946   -439.08922   2433.20297      0.00481
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -6411.97946
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       22 -19578.65861    108.27507    475.88142      0.00100
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19578.65861
+MINI>       22  -6914.28251    502.30304    277.74689      0.00241
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -6914.28251
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       23 -19623.03300     44.37438    530.21876      0.00120
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19623.03300
+MINI>       23  -6806.37128   -107.91123   1012.92620      0.00289
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -6806.37128
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       24 -19622.54318     -0.48981   1154.40495      0.00144
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19622.54318
+MINI>       24  -6937.74208    131.37081    386.21505      0.00144
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -6937.74208
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       25 -19664.37139     41.82821    541.33877      0.00072
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19664.37139
+MINI>       25  -6900.03645    -37.70563    938.57366      0.00173
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -6900.03645
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       26 -19651.44206    -12.92933   1242.28316      0.00087
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19651.44206
+MINI>       26  -6958.33950     58.30304    234.40670      0.00087
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -6958.33950
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       27 -19680.66607     29.22401    407.97838      0.00043
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19680.66607
+MINI>       27  -6938.48173    -19.85777   1105.16205      0.00104
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -6938.48173
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       28 -19707.50717     26.84110    497.70139      0.00052
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19707.50717
+MINI>       28  -6962.39593     23.91420    149.17399      0.00052
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -6962.39593
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       29 -19707.10463     -0.40255    819.16951      0.00062
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19707.10463
+MINI>       29  -6983.31988     20.92396    257.51808      0.00062
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -6983.31988
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       30 -19737.49968     30.39505    383.30896      0.00031
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19737.49968
+MINI>       30  -6955.80106    -27.51882    455.39855      0.00075
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -6955.80106
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       31 -19736.41168     -1.08800    564.73176      0.00037
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19736.41168
+MINI>       31  -6973.01554     17.21448    200.84053      0.00037
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -6973.01554
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       32 -19753.34677     16.93509    357.91461      0.00019
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19753.34677
+MINI>       32  -6988.63391     15.61837    340.21936      0.00045
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -6988.63391
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       33 -19753.81265      0.46588    451.84272      0.00022
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19753.81265
+MINI>       33  -6967.84156    -20.79236    406.94142      0.00054
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -6967.84156
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       34 -19784.94805     31.13540    495.67365      0.00027
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19784.94805
+MINI>       34  -6982.66328     14.82172    152.75925      0.00027
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -6982.66328
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       35 -19768.00029    -16.94776    522.29761      0.00032
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19768.00029
+MINI>       35  -6990.36655      7.70327    161.68866      0.00032
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -6990.36655
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       36 -19787.38022     19.37992    347.36244      0.00016
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19787.38022
+MINI>       36  -6986.81049     -3.55606    247.69433      0.00039
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -6986.81049
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       37 -19791.41272      4.03250    456.43809      0.00019
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19791.41272
+MINI>       37  -6992.77690      5.96641    162.68543      0.00019
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -6992.77690
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       38 -19818.85342     27.44070    502.78951      0.00023
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19818.85342
+MINI>       38  -6995.50887      2.73197    159.38048      0.00023
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -6995.50887
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       39 -19803.29065    -15.56277    486.10197      0.00028
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19803.29065
+MINI>       39  -6996.78055      1.27168    182.87225      0.00028
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -6996.78055
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       40 -19813.13895      9.84831    336.99735      0.00014
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19813.13895
+MINI>       40  -7004.54012      7.75957    266.75861      0.00034
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7004.54012
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       41 -19817.57822      4.43927    389.29652      0.00017
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19817.57822
+MINI>       41  -6990.91900    -13.62112    319.87843      0.00040
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -6990.91900
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       42 -19838.55848     20.98026    473.06820      0.00020
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19838.55848
+MINI>       42  -7000.62163      9.70263    235.02772      0.00020
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7000.62163
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       43 -19823.45173    -15.10674    476.71107      0.00024
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19823.45173
+MINI>       43  -7010.22081      9.59918    338.62668      0.00024
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7010.22081
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       44 -19834.48657     11.03483    336.96958      0.00012
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19834.48657
+MINI>       44  -7001.95453     -8.26627    371.67130      0.00029
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7001.95453
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       45 -19836.67946      2.19289    362.13238      0.00014
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19836.67946
+MINI>       45  -7007.31924      5.36470    282.17521      0.00014
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7007.31924
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       46 -19841.52831      4.84885    458.34265      0.00017
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19841.52831
+MINI>       46  -7013.16953      5.85029    304.02098      0.00017
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7013.16953
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       47 -19864.01178     22.48347    497.45650      0.00021
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19864.01178
+MINI>       47  -7012.98022     -0.18931    278.94935      0.00021
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7012.98022
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       48 -19842.87107    -21.14071    480.81400      0.00025
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19842.87107
+MINI>       48  -7017.31603      4.33582    242.52996      0.00010
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7017.31603
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       49 -19852.86716      9.99609    345.95573      0.00013
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19852.86716
+MINI>       49  -7019.22250      1.90646    165.04501      0.00013
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7019.22250
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       50 -19861.22352      8.35635    369.17191      0.00015
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19861.22352
+MINI>       50  -7023.44008      4.21759    161.24246      0.00015
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7023.44008
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       51 -19856.97848     -4.24503    455.80810      0.00018
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19856.97848
+MINI>       51  -7022.24934     -1.19075    171.37054      0.00018
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7022.24934
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       52 -19863.38263      6.40414    353.34336      0.00009
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19863.38263
+MINI>       52  -7025.26280      3.01347    158.00696      0.00009
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7025.26280
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       53 -19862.44523     -0.93740    363.18184      0.00011
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19862.44523
+MINI>       53  -7024.47319     -0.78961    206.00385      0.00011
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7024.47319
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       54 -19867.29549      4.85026    357.70208      0.00005
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19867.29549
+MINI>       54  -7026.40921      1.93602    145.18026      0.00005
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7026.40921
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       55 -19864.82813     -2.46735    356.55273      0.00006
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19864.82813
+MINI>       55  -7025.65620     -0.75301    140.18047      0.00006
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7025.65620
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       56 -19868.45809      3.62995    357.80563      0.00003
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19868.45809
+MINI>       56  -7026.66045      1.00425    133.71555      0.00003
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7026.66045
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       57 -19866.12163     -2.33646    359.56823      0.00004
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19866.12163
+MINI>       57  -7027.25442      0.59397    132.57142      0.00004
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7027.25442
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       58 -19868.99998      2.87835    363.22125      0.00002
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19868.99998
+MINI>       58  -7027.66049      0.40606    133.49829      0.00005
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7027.66049
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       59 -19864.07371     -4.92626    361.53798      0.00002
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19864.07371
+MINI>       59  -7029.00676      1.34628    138.67977      0.00006
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7029.00676
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       60 -19866.39328      2.31957    361.67737      0.00001
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19866.39328
+MINI>       60  -7028.62533     -0.38143    143.57210      0.00007
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7028.62533
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       61 -19868.56084      2.16756    362.94995      0.00001
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19868.56084
+MINI>       61  -7029.70137      1.07604    129.10932      0.00003
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7029.70137
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       62 -19867.65722     -0.90362    363.03008      0.00002
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19867.65722
+MINI>       62  -7030.29604      0.59467    151.46564      0.00004
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7030.29604
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       63 -19872.82980      5.17258    363.51211      0.00001
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19872.82980
+MINI>       63  -7031.47201      1.17597    148.36218      0.00005
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7031.47201
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       64 -19869.62632     -3.20348    364.18088      0.00001
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.62632
+MINI>       64  -7031.84288      0.37088    131.87725      0.00006
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7031.84288
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       65 -19870.82692      1.20060    364.37563      0.00001
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.82692
+MINI>       65  -7032.16379      0.32091    156.66038      0.00007
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7032.16379
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       66 -19865.70360     -5.12332    364.45705      0.00001
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19865.70360
+MINI>       66  -7033.31724      1.15345    145.37359      0.00008
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7033.31724
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       67 -19868.83389      3.13029    364.56905      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19868.83389
+MINI>       67  -7033.37073      0.05349    165.53911      0.00010
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7033.37073
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       68 -19867.67974     -1.15415    365.31520      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19867.67974
+MINI>       68  -7037.87474      4.50401    213.00755      0.00012
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7037.87474
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       69 -19867.52773     -0.15201    366.25989      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19867.52773
+MINI>       69  -7032.72820     -5.14654    285.07349      0.00014
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7032.72820
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       70 -19869.95004      2.42231    365.06997      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.95004
+MINI>       70  -7035.95068      3.22248    140.47821      0.00007
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7035.95068
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       71 -19866.05689     -3.89316    365.24622      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19866.05689
+MINI>       71  -7037.34200      1.39132    178.13009      0.00009
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7037.34200
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       72 -19868.48483      2.42794    365.07559      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19868.48483
+MINI>       72  -7035.81205     -1.52996    228.05946      0.00010
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7035.81205
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       73 -19870.33007      1.84524    365.28031      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.33007
+MINI>       73  -7037.02883      1.21679    137.14107      0.00005
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7037.02883
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       74 -19868.84656     -1.48351    365.98395      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19868.84656
+MINI>       74  -7037.68543      0.65660    167.72760      0.00006
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7037.68543
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       75 -19867.28986     -1.55670    364.99240      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19867.28986
+MINI>       75  -7039.96278      2.27734    214.65536      0.00007
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7039.96278
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       76 -19868.02598      0.73612    365.05974      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19868.02598
+MINI>       76  -7037.74666     -2.21612    184.12156      0.00009
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7037.74666
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       77 -19867.16037     -0.86562    366.64602      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19867.16037
+MINI>       77  -7039.46030      1.71364    149.42672      0.00004
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7039.46030
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       78 -19870.09642      2.93605    366.54701      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.09642
+MINI>       78  -7039.96700      0.50670    141.41437      0.00005
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7039.96700
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       79 -19870.38778      0.29135    365.32063      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.38778
+MINI>       79  -7041.34424      1.37724    150.65103      0.00006
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7041.34424
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       80 -19869.01968     -1.36809    365.62359      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.01968
+MINI>       80  -7040.97759     -0.36665    162.80912      0.00008
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7040.97759
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       81 -19867.61218     -1.40750    365.80503      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19867.61218
+MINI>       81  -7042.05996      1.08237    151.60775      0.00004
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7042.05996
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       82 -19868.31734      0.70516    365.96140      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19868.31734
+MINI>       82  -7041.94524     -0.11471    157.73018      0.00005
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7041.94524
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       83 -19866.96613     -1.35120    366.21222      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19866.96613
+MINI>       83  -7041.63700     -0.30824    159.52919      0.00002
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7041.63700
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       84 -19866.97739      0.01126    365.78934      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19866.97739
+MINI>       84  -7042.45828      0.82128    153.63722      0.00001
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7042.45828
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       85 -19867.16881      0.19142    365.93440      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19867.16881
+MINI>       85  -7042.99032      0.53204    151.40401      0.00001
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7042.99032
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       86 -19868.50594      1.33713    365.20825      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19868.50594
+MINI>       86  -7042.47517     -0.51515    166.59599      0.00002
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7042.47517
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       87 -19868.26807     -0.23787    366.42850      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19868.26807
+MINI>       87  -7042.90376      0.42859    152.57639      0.00001
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7042.90376
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       88 -19868.61151      0.34343    364.81147      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19868.61151
+MINI>       88  -7043.11136      0.20761    157.67795      0.00001
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7043.11136
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       89 -19870.31318      1.70167    364.95529      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.31318
+MINI>       89  -7042.76019     -0.35117    152.99992      0.00001
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7042.76019
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       90 -19869.96975     -0.34343    364.85043      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.96975
+MINI>       90  -7042.35131     -0.40888    150.85946      0.00001
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7042.35131
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       91 -19870.61016      0.64041    364.86001      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.61016
+MINI>       91  -7042.83549      0.48418    149.07766      0.00000
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7042.83549
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       92 -19869.80507     -0.80509    364.87125      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.80507
+MINI>       92  -7043.56176      0.72627    149.36014      0.00000
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7043.56176
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       93 -19870.70869      0.90362    364.87862      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.70869
+MINI>       93  -7043.12614     -0.43562    155.96286      0.00000
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7043.12614
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       94 -19871.08449      0.37580    364.86422      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19871.08449
+MINI>       94  -7042.99032     -0.13582    155.64677      0.00000
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7042.99032
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       95 -19870.59046     -0.49403    364.88641      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.59046
+MINI>       95  -7042.76793     -0.22239    159.71583      0.00000
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7042.76793
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       96 -19871.07323      0.48277    364.86015      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19871.07323
+MINI>       96  -7043.21059      0.44266    153.30968      0.00000
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7043.21059
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       97 -19871.27591      0.20268    364.83767      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19871.27591
+MINI>       97  -7043.31756      0.10697    154.44019      0.00000
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7043.31756
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       98 -19870.96908     -0.30684    364.90274      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.96908
+MINI>       98  -7043.46113      0.14357    154.63477      0.00000
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7043.46113
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>       99 -19870.96345     -0.00563    364.91427      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.96345
+MINI>       99  -7043.74896      0.28783    156.72427      0.00000
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7043.74896
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      100 -19870.12035     -0.84309    364.92126      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.12035
+MINI>      100  -7043.32741     -0.42155    161.16227      0.00000
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7043.32741
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      101 -19870.07390     -0.04645    364.92300      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.07390
+MINI>      101  -7043.56176      0.23435    148.52856      0.00000
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7043.56176
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      102 -19870.83114      0.75724    364.92854      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.83114
+MINI>      102  -7043.19511     -0.36665    148.50640      0.00000
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7043.19511
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      103 -19870.31177     -0.51937    364.89990      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.31177
+MINI>      103  -7043.80385      0.60875    163.24085      0.00000
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7043.80385
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      104 -19869.87263     -0.43914    364.90073      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.87263
+MINI>      104  -7043.74755     -0.05630    163.00364      0.00000
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7043.74755
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      105 -19871.12672      1.25409    364.91166      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19871.12672
+MINI>      105  -7044.20710      0.45955    164.65160      0.00000
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7044.20710
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      106 -19870.35400     -0.77272    364.90925      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.35400
+MINI>      106  -7043.33304     -0.87406    149.73505      0.00000
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7043.33304
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      107 -19871.21398      0.85999    364.89654      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19871.21398
+MINI>      107  -7043.56880      0.23576    150.04455      0.00000
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7043.56880
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      108 -19869.94723     -1.26675    364.90690      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.94723
+MINI>      108  -7043.99809      0.42929    149.17560      0.00000
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7043.99809
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      109 -19870.16680      0.21957    364.89839      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.16680
+MINI>      109  -7043.30138     -0.69671    149.93335      0.00000
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7043.30138
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      110 -19870.58342      0.41662    364.90294      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.58342
+MINI>      110  -7043.21692     -0.08445    149.41468      0.00000
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7043.21692
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      111 -19870.51164     -0.07178    364.90205      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.51164
+MINI>      111  -7043.65255      0.43562    149.66712      0.00000
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7043.65255
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      112 -19870.34133     -0.17031    364.91053      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.34133
+MINI>      112  -7043.36049     -0.29206    149.84649      0.00000
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7043.36049
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      113 -19871.15205      0.81072    364.90356      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19871.15205
+MINI>      113  -7043.50406      0.14357    149.87348      0.00000
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7043.50406
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      114 -19869.97256     -1.17949    364.90024      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.97256
+MINI>      114  -7043.80948      0.30543    149.24584      0.00000
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7043.80948
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      115 -19869.72906     -0.24350    364.90467      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.72906
+MINI>      115  -7043.83904      0.02956    149.74533      0.00000
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7043.83904
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      116 -19870.47082      0.74175    364.90484      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.47082
+MINI>      116  -7043.59695     -0.24209    148.80928      0.00000
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7043.59695
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      117 -19870.71995      0.24913    364.91130      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.71995
+MINI>      117  -7043.56880     -0.02815    148.86537      0.00000
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7043.56880
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      118 -19870.72558      0.00563    364.90124      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.72558
+MINI>      118  -7043.60399      0.03519    148.86739      0.00000
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7043.60399
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      119 -19870.15413     -0.57145    364.91261      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.15413
+MINI>      119  -7044.03328      0.42929    148.64139      0.00000
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7044.03328
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      120 -19870.44689      0.29276    364.91555      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.44689
+MINI>      120  -7043.88830     -0.14497    148.64409      0.00000
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7043.88830
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      121 -19869.82618     -0.62071    364.91312      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.82618
+MINI>      121  -7043.93757      0.04926    148.61527      0.00000
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7043.93757
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      122 -19869.59113     -0.23505    364.90531      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.59113
+MINI>      122  -7043.22255     -0.71501    148.67514      0.00000
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7043.22255
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      123 -19870.42578      0.83465    364.90511      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.42578
+MINI>      123  -7043.28308      0.06052    148.67508      0.00000
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7043.28308
  ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      124 -19870.63409      0.20831    364.90596      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.63409
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      125 -19870.48349     -0.15060    364.89607      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.48349
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      126 -19870.82269      0.33921    364.90320      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.82269
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      127 -19869.77833     -1.04437    364.90426      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.77833
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      128 -19870.58483      0.80650    364.90331      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.58483
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      129 -19870.86492      0.28009    364.91124      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.86492
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      130 -19869.93315     -0.93177    364.91339      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.93315
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      131 -19870.59468      0.66153    364.90780      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.59468
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      132 -19869.73329     -0.86139    364.90394      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.73329
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      133 -19870.31177      0.57848    364.91017      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.31177
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      134 -19870.57216      0.26039    364.90311      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.57216
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      135 -19870.08235     -0.48981    364.90845      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.08235
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      136 -19869.31385     -0.76850    364.90757      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.31385
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      137 -19870.51023      1.19638    364.90299      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.51023
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      138 -19870.13020     -0.38003    364.89831      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.13020
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      139 -19869.35748     -0.77272    364.90885      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.35748
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      140 -19870.21465      0.85717    364.90937      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.21465
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      141 -19870.20902     -0.00563    364.90342      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.20902
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      142 -19870.38215      0.17312    364.90462      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.38215
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      143 -19870.22873     -0.15342    364.90996      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.22873
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      144 -19870.30755      0.07882    364.90328      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.30755
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      145 -19870.65942      0.35188    364.91189      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.65942
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      146 -19870.54119     -0.11823    364.90799      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.54119
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      147 -19870.98034      0.43914    364.90409      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.98034
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      148 -19871.10842      0.12808    364.90900      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19871.10842
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      149 -19870.53556     -0.57285    364.90772      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.53556
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      150 -19870.62142      0.08586    364.89569      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.62142
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      151 -19869.63476     -0.98666    364.90772      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.63476
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      152 -19869.68684      0.05208    364.90813      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.68684
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      153 -19870.78469      1.09785    364.90662      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.78469
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      154 -19870.44267     -0.34202    364.90801      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.44267
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      155 -19869.44897     -0.99370    364.89625      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.44897
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      156 -19869.39126     -0.05771    364.90474      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.39126
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      157 -19870.14569      0.75442    364.91132      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.14569
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      158 -19870.52430      0.37862    364.90367      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.52430
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      159 -19870.14709     -0.37721    364.90769      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.14709
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      160 -19870.30473      0.15764    364.90247      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.30473
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      161 -19870.12176     -0.18298    364.90477      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.12176
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      162 -19870.27658      0.15483    364.90775      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.27658
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      163 -19869.68543     -0.59115    364.89543      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.68543
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      164 -19870.57497      0.88954    364.90679      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.57497
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      165 -19869.68121     -0.89377    364.90384      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.68121
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      166 -19869.89233      0.21113    364.90351      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.89233
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      167 -19870.28503      0.39269    364.90036      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.28503
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      168 -19870.15413     -0.13090    364.90621      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.15413
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      169 -19870.00634     -0.14779    364.90709      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.00634
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      170 -19870.88322      0.87688    364.90444      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.88322
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      171 -19869.97678     -0.90643    364.90182      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.97678
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      172 -19870.06264      0.08586    364.91151      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.06264
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      173 -19871.10279      1.04015    364.90428      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19871.10279
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      174 -19870.95782     -0.14497    364.92493      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.95782
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      175 -19870.12457     -0.83324    364.90031      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.12457
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      176 -19870.12598      0.00141    364.89785      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.12598
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      177 -19870.28784      0.16186    364.89692      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.28784
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      178 -19870.45956      0.17172    364.90114      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.45956
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      179 -19869.85715     -0.60241    364.90689      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.85715
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      180 -19870.38215      0.52500    364.91920      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.38215
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      181 -19871.23791      0.85576    364.89811      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19871.23791
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      182 -19869.76284     -1.47506    364.90446      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.76284
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      183 -19869.95708      0.19424    364.90801      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.95708
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      184 -19870.41874      0.46166    364.89631      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.41874
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      185 -19870.65942      0.24068    364.90622      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.65942
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      186 -19870.18650     -0.47292    364.90440      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.18650
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      187 -19870.62564      0.43914    364.89954      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.62564
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      188 -19870.34274     -0.28291    364.90190      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.34274
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      189 -19870.55527      0.21253    364.89503      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.55527
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      190 -19871.05775      0.50248    364.90226      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19871.05775
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      191 -19870.15695     -0.90080    364.91048      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.15695
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      192 -19870.54682      0.38988    364.90066      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.54682
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      193 -19871.28013      0.73331    364.90490      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19871.28013
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      194 -19870.20339     -1.07674    364.89827      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.20339
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      195 -19870.31177      0.10838    364.89912      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.31177
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      196 -19870.49052      0.17875    364.90451      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.49052
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      197 -19870.92966      0.43914    364.90538      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.92966
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      198 -19870.27518     -0.65449    364.90863      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.27518
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      199 -19871.15627      0.88110    364.91662      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19871.15627
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      200 -19870.23436     -0.92192    364.89695      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.23436
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      201 -19870.18932     -0.04504    364.90815      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.18932
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      202 -19870.51023      0.32091    364.90238      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.51023
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      203 -19870.24421     -0.26602    364.90510      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.24421
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      204 -19870.68757      0.44336    364.90529      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.68757
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      205 -19870.85225      0.16468    364.91638      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.85225
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      206 -19870.32444     -0.52781    364.90327      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.32444
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      207 -19870.29347     -0.03097    364.90608      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.29347
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      208 -19870.36526      0.07178    364.89613      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.36526
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      209 -19870.64816      0.28291    364.89865      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.64816
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      210 -19870.51727     -0.13090    364.90041      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.51727
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      211 -19869.85011     -0.66716    364.89493      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.85011
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      212 -19870.07109      0.22098    364.90246      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.07109
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      213 -19869.94723     -0.12386    364.89890      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.94723
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      214 -19870.23436      0.28713    364.90738      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.23436
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      215 -19869.93174     -0.30261    364.89767      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.93174
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      216 -19869.65587     -0.27587    364.89915      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.65587
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      217 -19870.43422      0.77835    364.89785      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.43422
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      218 -19870.51445      0.08023    364.90521      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.51445
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      219 -19870.15132     -0.36314    364.89627      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.15132
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      220 -19870.16398      0.01267    364.89955      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.16398
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      221 -19870.02042     -0.14357    364.90045      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.02042
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      222 -19870.01197     -0.00845    364.90354      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.01197
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      223 -19870.63268      0.62071    364.92011      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.63268
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      224 -19870.28362     -0.34906    364.89861      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.28362
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      225 -19870.73543      0.45181    364.90614      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.73543
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      226 -19870.29629     -0.43914    364.90652      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.29629
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      227 -19869.95849     -0.33780    364.90321      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.95849
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      228 -19869.78396     -0.17453    364.91169      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.78396
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      229 -19869.70654     -0.07741    364.90108      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.70654
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      230 -19871.16894      1.46240    364.89684      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19871.16894
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      231 -19870.22310     -0.94584    364.90271      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.22310
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      232 -19870.40326      0.18016    364.92015      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.40326
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      233 -19870.37652     -0.02674    364.91124      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.37652
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      234 -19870.07390     -0.30261    364.90188      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.07390
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      235 -19870.71995      0.64604    364.92106      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.71995
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      236 -19870.41030     -0.30965    364.90666      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.41030
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      237 -19870.65661      0.24631    364.90923      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.65661
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      238 -19870.93670      0.28009    364.90941      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.93670
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      239 -19869.24348     -1.69323    364.90210      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.24348
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      240 -19870.33148      1.08800    364.90543      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.33148
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      241 -19870.56794      0.23646    364.90504      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.56794
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      242 -19869.52498     -1.04296    364.90588      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.52498
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      243 -19870.44971      0.92473    364.90330      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.44971
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      244 -19870.49615      0.04645    364.93081      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.49615
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      245 -19870.99441      0.49826    364.90100      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.99441
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      246 -19869.78959     -1.20482    364.89657      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.78959
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      247 -19870.93670      1.14712    364.90666      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.93670
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      248 -19870.59046     -0.34625    364.90922      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.59046
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      249 -19870.35259     -0.23787    364.90223      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.35259
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      250 -19869.54046     -0.81213    364.90328      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.54046
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      251 -19869.95004      0.40958    364.90099      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.95004
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      252 -19870.34555      0.39551    364.90200      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.34555
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      253 -19870.68898      0.34343    364.91405      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.68898
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      254 -19870.45111     -0.23787    364.90142      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.45111
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      255 -19869.64602     -0.80509    364.90509      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.64602
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      256 -19870.58905      0.94303    364.91743      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.58905
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      257 -19870.13724     -0.45181    364.89933      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.13724
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      258 -19869.76707     -0.37017    364.91115      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.76707
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      259 -19870.37229      0.60523    364.90419      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.37229
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      260 -19869.94300     -0.42929    364.90978      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.94300
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      261 -19870.73684      0.79383    364.90370      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.73684
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      262 -19870.24280     -0.49403    364.90754      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.24280
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      263 -19870.43282      0.19001    364.90262      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.43282
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      264 -19871.22383      0.79102    364.90469      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19871.22383
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      265 -19870.61579     -0.60804    364.90804      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.61579
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      266 -19870.49897     -0.11682    364.90548      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.49897
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      267 -19869.78536     -0.71360    364.90720      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.78536
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      268 -19870.38215      0.59678    364.90397      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.38215
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      269 -19869.87826     -0.50389    364.90580      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.87826
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      270 -19871.05634      1.17808    364.89895      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19871.05634
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      271 -19870.50319     -0.55315    364.91639      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.50319
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      272 -19870.18228     -0.32091    364.91749      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.18228
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      273 -19870.33711      0.15483    364.90799      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.33711
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      274 -19871.11827      0.78116    364.91718      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19871.11827
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      275 -19869.81633     -1.30194    364.89700      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.81633
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      276 -19869.43630     -0.38003    364.90545      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.43630
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      277 -19870.68194      1.24564    364.90794      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.68194
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      278 -19869.18999     -1.49195    364.91092      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.18999
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      279 -19870.69039      1.50040    364.91726      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.69039
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      280 -19869.70091     -0.98948    364.90206      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.70091
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      281 -19869.75721      0.05630    364.92893      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.75721
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      282 -19870.40607      0.64886    364.90649      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.40607
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      283 -19870.24421     -0.16186    364.89872      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.24421
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      284 -19869.99367     -0.25054    364.90268      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.99367
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      285 -19870.07390      0.08023    364.90162      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.07390
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      286 -19870.42719      0.35328    364.89760      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.42719
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      287 -19869.95145     -0.47574    364.90414      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.95145
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      288 -19870.02042      0.06897    364.90887      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.02042
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      289 -19871.04367      1.02326    364.90342      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19871.04367
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      290 -19870.37511     -0.66856    364.90353      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.37511
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      291 -19870.36666     -0.00845    364.91452      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.36666
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      292 -19870.27377     -0.09290    364.90504      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.27377
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      293 -19870.17665     -0.09712    364.90829      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.17665
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      294 -19870.29910      0.12245    364.91426      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.29910
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      295 -19870.70728      0.40818    364.91058      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.70728
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      296 -19869.98664     -0.72064    364.89451      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.98664
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      297 -19870.67209      0.68545    364.92041      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.67209
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      298 -19870.53697     -0.13512    364.90194      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.53697
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      299 -19870.15976     -0.37721    364.90445      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.15976
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      300 -19870.49193      0.33217    364.89555      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.49193
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      301 -19870.74247      0.25054    364.91398      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.74247
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      302 -19870.13724     -0.60523    364.90277      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.13724
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      303 -19869.91345     -0.22379    364.89942      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.91345
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      304 -19869.56579     -0.34765    364.90346      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.56579
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      305 -19870.01197      0.44618    364.90365      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.01197
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      306 -19870.82551      0.81354    364.89956      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.82551
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      307 -19870.60875     -0.21676    364.91898      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.60875
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      308 -19870.94515      0.33639    364.90616      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.94515
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      309 -19870.16398     -0.78116    364.90962      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.16398
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      310 -19870.42719      0.26320    364.90171      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.42719
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      311 -19870.74528      0.31810    364.90408      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.74528
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      312 -19870.18369     -0.56159    364.90238      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.18369
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      313 -19869.73610     -0.44759    364.90888      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.73610
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      314 -19870.91840      1.18230    364.90342      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.91840
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      315 -19870.10346     -0.81494    364.90160      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.10346
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      316 -19870.46097      0.35751    364.90770      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.46097
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      317 -19870.25969     -0.20127    364.90356      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.25969
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      318 -19870.72980      0.47011    364.91036      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.72980
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      319 -19870.85366      0.12386    364.90342      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.85366
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      320 -19870.64113     -0.21253    364.92078      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.64113
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      321 -19870.18650     -0.45462    364.89991      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.18650
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      322 -19870.01197     -0.17453    364.90285      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.01197
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      323 -19870.17384      0.16186    364.90300      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.17384
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      324 -19870.29066      0.11682    364.89897      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.29066
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      325 -19869.57565     -0.71501    364.89923      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.57565
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      326 -19870.55386      0.97822    364.89558      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.55386
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      327 -19870.09642     -0.45744    364.91015      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.09642
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      328 -19870.19776      0.10134    364.89685      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.19776
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      329 -19871.02256      0.82480    364.92166      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19871.02256
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      330 -19870.37792     -0.64464    364.89944      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.37792
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      331 -19870.49756      0.11964    364.89941      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.49756
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      332 -19869.84870     -0.64886    364.90240      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.84870
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      333 -19869.64884     -0.19987    364.90343      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.64884
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      334 -19870.81284      1.16401    364.91648      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.81284
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      335 -19869.87122     -0.94162    364.90220      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.87122
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      336 -19871.12390      1.25268    364.90150      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19871.12390
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      337 -19870.17947     -0.94444    364.90683      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.17947
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      338 -19870.15554     -0.02393    364.90261      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.15554
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      339 -19870.70024      0.54470    364.90383      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.70024
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      340 -19869.85433     -0.84591    364.90807      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.85433
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      341 -19870.29347      0.43914    364.90050      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.29347
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      342 -19869.82900     -0.46448    364.89983      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.82900
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      343 -19870.52290      0.69390    364.89805      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.52290
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      344 -19869.72766     -0.79524    364.90819      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.72766
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      345 -19870.56371      0.83606    364.90892      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.56371
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      346 -19870.74528      0.18157    364.92128      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.74528
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      347 -19870.43141     -0.31387    364.89744      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.43141
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      348 -19870.36385     -0.06756    364.90555      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.36385
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      349 -19870.23154     -0.13231    364.90213      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.23154
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      350 -19870.50319      0.27165    364.90757      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.50319
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      351 -19870.65239      0.14920    364.90911      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.65239
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      352 -19871.24072      0.58834    364.90820      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19871.24072
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      353 -19869.60098     -1.63974    364.90812      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.60098
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      354 -19870.44830      0.84732    364.90404      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.44830
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      355 -19870.18228     -0.26602    364.90507      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.18228
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      356 -19870.33007      0.14779    364.89951      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.33007
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      357 -19870.77202      0.44196    364.89870      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.77202
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      358 -19870.08235     -0.68968    364.90348      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.08235
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      359 -19869.53483     -0.54752    364.90613      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.53483
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      360 -19871.25198      1.71716    364.89483      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19871.25198
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      361 -19870.12880     -1.12319    364.91278      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.12880
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      362 -19870.04716     -0.08164    364.90401      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.04716
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      363 -19870.55105      0.50389    364.90113      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.55105
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      364 -19871.05634      0.50529    364.90359      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19871.05634
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      365 -19869.72766     -1.32868    364.91151      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.72766
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      366 -19869.73469      0.00704    364.89988      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.73469
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      367 -19870.39200      0.65730    364.90948      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.39200
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      368 -19871.68549      1.29350    364.91024      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19871.68549
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      369 -19869.87404     -1.81146    364.90697      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.87404
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      370 -19870.18369      0.30965    364.89877      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.18369
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      371 -19869.82618     -0.35751    364.90008      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.82618
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      372 -19870.13865      0.31247    364.89856      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.13865
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      373 -19869.29133     -0.84732    364.90973      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.29133
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      374 -19870.17243      0.88110    364.90423      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.17243
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      375 -19869.97819     -0.19424    364.90325      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.97819
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      376 -19870.86914      0.89095    364.90314      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.86914
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      377 -19869.74877     -1.12037    364.91862      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.74877
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      378 -19870.61579      0.86702    364.91435      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.61579
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      379 -19870.39763     -0.21816    364.90086      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.39763
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      380 -19871.05775      0.66012    364.90409      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19871.05775
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      381 -19869.55313     -1.50462    364.90145      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.55313
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      382 -19870.45111      0.89799    364.90649      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.45111
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      383 -19870.14850     -0.30261    364.89777      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.14850
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      384 -19870.36103      0.21253    364.90354      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.36103
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      385 -19870.60453      0.24350    364.90228      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.60453
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      386 -19870.93389      0.32936    364.90532      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.93389
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      387 -19870.56794     -0.36595    364.90453      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.56794
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      388 -19870.92263      0.35469    364.90353      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.92263
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      389 -19869.91063     -1.01200    364.90566      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.91063
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      390 -19869.53061     -0.38003    364.90095      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.53061
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      391 -19870.78469      1.25409    364.89806      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.78469
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      392 -19869.91204     -0.87265    364.90616      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.91204
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      393 -19870.65379      0.74175    364.90450      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.65379
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      394 -19870.42578     -0.22802    364.90180      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.42578
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      395 -19870.00071     -0.42507    364.90518      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.00071
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      396 -19870.44408      0.44336    364.89669      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.44408
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      397 -19870.65239      0.20831    364.90511      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.65239
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      398 -19870.52008     -0.13231    364.89961      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.52008
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      399 -19870.10909     -0.41099    364.90342      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.10909
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      400 -19870.42719      0.31810    364.91794      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.42719
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      401 -19870.12880     -0.29839    364.90801      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.12880
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      402 -19870.21325      0.08445    364.89936      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.21325
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      403 -19869.63335     -0.57989    364.89667      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.63335
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      404 -19871.25480      1.62144    364.90321      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19871.25480
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      405 -19871.01130     -0.24350    364.92421      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19871.01130
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      406 -19870.40889     -0.60241    364.92037      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.40889
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      407 -19870.54682      0.13794    364.90775      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.54682
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      408 -19870.77202      0.22520    364.90883      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.77202
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      409 -19869.91908     -0.85295    364.91045      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.91908
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      410 -19870.37370      0.45462    364.90469      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.37370
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      411 -19869.80648     -0.56722    364.89699      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.80648
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      412 -19869.49401     -0.31247    364.90226      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.49401
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      413 -19870.31881      0.82480    364.90516      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.31881
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      414 -19869.48838     -0.83043    364.90553      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.48838
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      415 -19870.57638      1.08800    364.90722      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.57638
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      416 -19870.35400     -0.22239    364.90222      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.35400
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      417 -19870.50038      0.14638    364.90192      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.50038
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      418 -19870.81284      0.31247    364.90335      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.81284
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      419 -19870.49334     -0.31950    364.90397      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.49334
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      420 -19870.99723      0.50389    364.90486      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.99723
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      421 -19870.56653     -0.43070    364.90165      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.56653
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      422 -19871.26465      0.69812    364.90166      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19871.26465
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      423 -19870.48771     -0.77694    364.90439      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.48771
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      424 -19871.09294      0.60523    364.91433      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19871.09294
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      425 -19870.95641     -0.13653    364.90887      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.95641
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      426 -19870.17243     -0.78398    364.90626      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.17243
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      427 -19870.62564      0.45322    364.90404      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.62564
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      428 -19870.58342     -0.04223    364.90493      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.58342
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      429 -19871.18161      0.59819    364.90083      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19871.18161
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      430 -19870.88885     -0.29276    364.90428      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.88885
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      431 -19870.09079     -0.79805    364.90536      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.09079
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      432 -19870.83677      0.74598    364.91386      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.83677
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      433 -19870.08657     -0.75020    364.91147      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.08657
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      434 -19870.63972      0.55315    364.90398      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.63972
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      435 -19869.98382     -0.65590    364.90354      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.98382
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      436 -19870.52712      0.54330    364.90327      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.52712
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      437 -19869.76003     -0.76709    364.89970      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.76003
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      438 -19870.17947      0.41944    364.90509      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.17947
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      439 -19870.58623      0.40677    364.91046      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.58623
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      440 -19869.66713     -0.91910    364.89949      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.66713
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      441 -19871.25480      1.58766    364.90304      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19871.25480
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      442 -19870.07531     -1.17949    364.89771      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.07531
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      443 -19870.07812      0.00282    364.89777      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.07812
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      444 -19869.55031     -0.52781    364.90540      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.55031
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      445 -19870.33007      0.77976    364.90362      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.33007
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      446 -19870.52853      0.19846    364.90086      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.52853
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      447 -19870.74950      0.22098    364.90344      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.74950
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      448 -19869.64461     -1.10489    364.90386      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.64461
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      449 -19869.94441      0.29980    364.89605      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.94441
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      450 -19870.54119      0.59678    364.90303      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.54119
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      451 -19870.25829     -0.28291    364.91706      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.25829
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      452 -19870.48067      0.22239    364.91091      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.48067
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      453 -19869.65728     -0.82339    364.90111      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.65728
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      454 -19869.51090     -0.14638    364.90340      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.51090
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      455 -19870.51586      1.00496    364.90861      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.51586
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      456 -19870.46519     -0.05067    364.90774      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.46519
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      457 -19870.06968     -0.39551    364.92027      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.06968
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      458 -19870.39341      0.32373    364.90113      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.39341
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      459 -19870.32303     -0.07038    364.90775      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.32303
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      460 -19870.51727      0.19424    364.90948      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.51727
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      461 -19870.88040      0.36314    364.90735      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.88040
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      462 -19870.39200     -0.48840    364.91500      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.39200
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      463 -19870.41733      0.02534    364.91519      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.41733
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      464 -19869.41801     -0.99933    364.90477      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.41801
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      465 -19870.56512      1.14712    364.90400      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.56512
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      466 -19870.06686     -0.49826    364.89903      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.06686
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      467 -19870.52430      0.45744    364.91935      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.52430
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      468 -19870.09924     -0.42507    364.91595      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.09924
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      469 -19871.04930      0.95007    364.90693      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19871.04930
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      470 -19870.40467     -0.64464    364.90607      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.40467
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      471 -19870.18932     -0.21535    364.90584      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.18932
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      472 -19870.00493     -0.18438    364.90734      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.00493
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      473 -19870.71009      0.70516    364.92298      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.71009
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      474 -19870.67491     -0.03519    364.90464      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.67491
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      475 -19869.83603     -0.83887    364.90349      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.83603
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      476 -19870.63409      0.79805    364.90912      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.63409
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      477 -19870.50460     -0.12949    364.92842      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.50460
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      478 -19870.45956     -0.04504    364.90629      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.45956
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      479 -19870.03308     -0.42647    364.90546      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.03308
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      480 -19870.10205      0.06897    364.90667      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.10205
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      481 -19870.46519      0.36314    364.90335      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.46519
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      482 -19870.26532     -0.19987    364.90632      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.26532
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      483 -19869.92471     -0.34062    364.90495      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.92471
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      484 -19871.23228      1.30757    364.90430      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19871.23228
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      485 -19870.63268     -0.59960    364.90004      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.63268
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      486 -19871.07323      0.44055    364.91868      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19871.07323
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      487 -19870.14146     -0.93177    364.90327      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.14146
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      488 -19870.74810      0.60663    364.90593      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.74810
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      489 -19870.06546     -0.68264    364.90127      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.06546
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      490 -19869.80085     -0.26461    364.89936      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.80085
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      491 -19870.37089      0.57004    364.90145      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.37089
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      492 -19869.94441     -0.42647    364.90005      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.94441
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      493 -19870.23154      0.28713    364.91390      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.23154
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      494 -19870.31318      0.08164    364.91578      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.31318
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      495 -19870.41030      0.09712    364.91247      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.41030
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      496 -19870.61438      0.20409    364.90349      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.61438
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      497 -19869.50668     -1.10771    364.89789      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.50668
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      498 -19870.12035      0.61367    364.90966      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.12035
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      499 -19869.65869     -0.46166    364.90176      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.65869
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      500 -19870.79314      1.13445    364.92226      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.79314
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      501 -19869.93034     -0.86280    364.90196      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.93034
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      502 -19869.91485     -0.01548    364.90421      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.91485
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      503 -19870.40748      0.49263    364.90384      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.40748
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      504 -19870.71432      0.30684    364.91075      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.71432
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      505 -19870.12176     -0.59256    364.90091      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.12176
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      506 -19871.05916      0.93740    364.89609      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19871.05916
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      507 -19870.10205     -0.95710    364.90193      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.10205
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      508 -19870.33148      0.22942    364.90460      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.33148
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      509 -19871.09575      0.76427    364.89745      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19871.09575
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      510 -19869.99086     -1.10489    364.90769      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.99086
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      511 -19869.99790      0.00704    364.90281      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.99790
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      512 -19869.72766     -0.27024    364.89727      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.72766
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      513 -19870.94796      1.22031    364.89689      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.94796
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      514 -19870.32022     -0.62775    364.90426      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.32022
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      515 -19870.00775     -0.31247    364.92572      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.00775
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      516 -19869.93174     -0.07601    364.91095      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.93174
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      517 -19869.75721     -0.17453    364.90517      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.75721
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      518 -19870.62283      0.86562    364.90536      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.62283
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      519 -19870.60031     -0.02252    364.90001      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.60031
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      520 -19869.77833     -0.82198    364.90540      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.77833
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      521 -19871.12109      1.34276    364.90954      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19871.12109
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      522 -19870.19354     -0.92755    364.90248      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.19354
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      523 -19871.27028      1.07674    364.90256      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19871.27028
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      524 -19870.13583     -1.13445    364.91497      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.13583
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      525 -19870.70587      0.57004    364.89883      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.70587
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      526 -19870.74387      0.03800    364.90729      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.74387
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      527 -19870.50601     -0.23787    364.90498      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.50601
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      528 -19870.63831      0.13231    364.90333      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.63831
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      529 -19871.22524      0.58693    364.90524      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19871.22524
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      530 -19869.78677     -1.43847    364.90201      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19869.78677
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      531 -19870.75654      0.96977    364.90007      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.75654
- ----------       ---------    ---------    ---------    ---------    ---------
-MINI>      532 -19870.75654      0.96977    364.90801      0.00000
-MINI EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.75654
+MINI>      124  -7043.28308      0.06052    148.67525      0.00000
+MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -7043.28308
  ----------       ---------    ---------    ---------    ---------    ---------
 
  STEEPD> Minimization exiting with function tolerance ( 0.0000100) satisfied.
-/mmhome/boittier/home/mmml/mmml/data/charmm/top_all36_cgenff.rtf
-/mmhome/boittier/home/mmml/mmml/data/charmm/par_all36_cgenff.prm
-CHARMM_HOME /mmhome/boittier/home/mmml/setup/charmm
-CHARMM_LIB_DIR /mmhome/boittier/home/mmml/setup/charmm
-Packmol monomer DCM: CHARMM MM minimize (SD=25, ABNR=100)
-CHARMM MM SD: nstep=25
-CHARMM MM ABNR: nstep=100
-Running: /mmhome/boittier/home/mmml/mmml/generate/packmol/packmol < packmol/packmol_sphere.inp
-Generated pdb/init-packmol-sphere.pdb
-Packmol cluster: CHARMM MM minimize SD=25 ABNR=100
-CHARMM MM SD: nstep=25
-CHARMM MM ABNR: nstep=100
-Packmol cluster: 150 atoms, span Å x=17.3 y=14.8 z=15.2
-Packmol sphere: center=(0.0, 0.0, 0.0) R=10.0 Å tol=2.0 Å
-Cluster geometry OK: 30 monomer(s), 150 atoms | spans (Å) x=17.28 y=14.84 z=15.19 | COM distances (Å) min=2.86 max=17.41
 
-CHARMM MM pre-minimize: SD=25 ABNR=100
-CHARMM MM SD: nstep=25
-CHARMM MM ABNR: nstep=100
+STPD MIN: Cycle      ENERgy      Delta-E         GRMS    Step-size
+STPD EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
+ ----------       ---------    ---------    ---------    ---------    ---------
+STPD>      124  -7043.28308      0.06052    148.67525      0.00000
+STPD EXTERN>        0.00000      0.00000      0.00000      0.00000  -7043.28308
+ ----------       ---------    ---------    ---------    ---------    ---------
+  
+ CHARMM>     coor orient sele all end
+ SELRPN>     50 atoms have been selected out of     50
+
+ ORIENT THE COORDINATES TO ALIGN WITH AXIS
+
+ MOMENTS
+    651.16685702    314.75071950    -16.87541138
+                    681.05127625   -258.38000954
+                                    861.66335110
+
+ Transpose of the rotation matrix
+     0.623688   -0.648074   -0.437051
+     0.717637    0.253092    0.648800
+    -0.309857   -0.718293    0.622932
+ CENTER OF ATOMS BEFORE TRANSLATION    -0.37405     0.70513    -1.41810
+ AXIS OF ROTATION IS  0.705937  0.065680 -0.705223  ANGLE IS   75.53
+
+ ALL COORDINATES ORIENTED IN THE MAIN SET BASED ON SELECTED ATOMS.
 Post MM pre-min GRMS: 0.0000 kcal/mol/Å
 [setup_calculator] Handoff parameters -> ml_switch_width=0.1000 Å, mm_switch_on=5.0000 Å, mm_switch_width=1.0000 Å, complementary_handoff=True
 [setup_calculator] mm_r_min=4.41 (exclude pairs with dimer COM < this)
-[setup_calculator] atoms_per_monomer=[5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5], total_atoms=150
+[setup_calculator] atoms_per_monomer=[5, 5, 5, 5, 5, 5, 5, 5, 5, 5], total_atoms=50
 [setup_calculator] max_atoms (model natoms)=10 (max monomer/dimer size)
 [setup_calculator] model_restart_path=/mmhome/boittier/home/mmml/mmml/models/physnetjax/defaults/hf_json/test-f41c04c0-62e3-4785-9018-351ffdc161c4_epoch-251_portable.json
 ✓ Loaded checkpoint from /mmhome/boittier/home/mmml/mmml/models/physnetjax/defaults/hf_json/test-f41c04c0-62e3-4785-9018-351ffdc161c4_epoch-251_portable.json
@@ -2140,55 +946,29 @@ Post MM pre-min GRMS: 0.0000 kcal/mol/Å
 [setup_calculator] Runtime natoms=10 (largest monomer/dimer in this system). n_res is an EF architecture parameter, not the number of CHARMM residues.
 [setup_calculator] Generic XLA GPU warmup (full hybrid warmup runs after PyCHARMM/CGENFF init)
 
-MLpot SD minimize: 1500 steps/pass, 150 atoms
+MLpot SD minimize: 1500 steps/pass, 50 atoms
 SD pass 1 (free, all atoms): nstep=1500 nprint=1
-Post MLpot mini GRMS: 364.9080 kcal/mol/Å
+Post MLpot mini GRMS: 148.6753 kcal/mol/Å
 MMFP flat-bottom sphere: droff=20.00 Å force=1.00 center=(0.00, 0.00, 0.00)
-
-STPD MIN: Cycle      ENERgy      Delta-E         GRMS    Step-size
-STPD EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
- ----------       ---------    ---------    ---------    ---------    ---------
-STPD>      532 -19870.75654      0.96977    364.90801      0.00000
-STPD EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.75654
- ----------       ---------    ---------    ---------    ---------    ---------
-  
- CHARMM>     coor orient sele all end
- SELRPN>    150 atoms have been selected out of    150
-
- ORIENT THE COORDINATES TO ALIGN WITH AXIS
-
- MOMENTS
-   1963.40487713    274.18175464   -807.67803116
-                   2548.89136744   -377.03943478
-                                   2553.96772926
-
- Transpose of the rotation matrix
-     0.713595   -0.489147   -0.501515
-     0.405760    0.872160   -0.273304
-     0.571087   -0.008466    0.820846
- CENTER OF ATOMS BEFORE TRANSLATION    -0.70941    -1.08281    -1.00069
- AXIS OF ROTATION IS -0.186271  0.754405 -0.629425  ANGLE IS   45.31
-
- ALL COORDINATES ORIENTED IN THE MAIN SET BASED ON SELECTED ATOMS.
 
   
   
  CHARMM>     
   
  CHARMM>    coor stat sele all end
- SELRPN>    150 atoms have been selected out of    150
- STATISTICS FOR       150 SELECTED ATOMS:
-    XMIN =   -8.775068 XMAX =    8.627319 XAVE =   -0.000000
-    YMIN =   -8.019761 YMAX =    7.274544 YAVE =    0.000000
-    ZMIN =   -6.211282 ZMAX =    4.800276 ZAVE =    0.000000
+ SELRPN>     50 atoms have been selected out of     50
+ STATISTICS FOR        50 SELECTED ATOMS:
+    XMIN =   -6.022123 XMAX =    7.319214 XAVE =    0.000000
+    YMIN =   -5.912763 YMAX =    7.136739 YAVE =    0.000000
+    ZMIN =   -5.566652 ZMAX =    3.841463 ZAVE =   -0.000000
     WMIN =    1.000000 WMAX =    1.000000 WAVE =    1.000000
   
  CHARMM>    coor translate xdir -?xave ydir -?yave zdir -?zave sele all end
- RDCMND substituted energy or value "?XAVE" to "-4.144832625E-17"
- RDCMND substituted energy or value "?YAVE" to "2.013204418E-16"
- RDCMND substituted energy or value "?ZAVE" to "4.263256415E-16"
- SELRPN>    150 atoms have been selected out of    150
- TRANSLATION VECTOR     0.000000   -0.000000   -0.000000
+ RDCMND substituted energy or value "?XAVE" to "6.661338148E-17"
+ RDCMND substituted energy or value "?YAVE" to "8.881784197E-17"
+ RDCMND substituted energy or value "?ZAVE" to "-3.197442311E-16"
+ SELRPN>     50 atoms have been selected out of     50
+ TRANSLATION VECTOR    -0.000000   -0.000000    0.000000
  SELECTED COORDINATES TRANSLATED IN THE MAIN SET.
 
   
@@ -2205,13 +985,13 @@ STPD EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.75654
    MMFP>        xref 0.000000 yref 0.000000 zref 0.000000 -
    MMFP>        droff 20.000000 force 1.000000 -
    MMFP>        sele all end
- GEO INITIALIZED, MAXGEO=  152
+ GEO INITIALIZED, MAXGEO=   52
  Sphere constraint
  Quartic constraint
- SELRPN>    150 atoms have been selected out of    150
- new constraints applied on        150 atoms
- the total number of constraints is        150
- the total number of atoms affected is        150
+ SELRPN>     50 atoms have been selected out of     50
+ new constraints applied on         50 atoms
+ the total number of constraints is         50
+ the total number of atoms affected is         50
   
    MMFP>    END
   
@@ -2225,11 +1005,11 @@ STPD EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.75654
          Angle energy                    0.00 Other:            0.00
          Dihedral energy                 0.00 Other:            0.00
          Restraints energy               0.00 Other:            0.00
-      INTRNL energy                   6.43 Other:            6.42
+      INTRNL energy                   2.42 Other:            2.42
       Comm energy                     0.00 Other:            0.00
       Comm force                      0.00 Other:            0.00
-   Energy time                     6.44 Other:            0.01
- Total time                     25.98 Other:           19.54
+   Energy time                     2.42 Other:            0.00
+ Total time                     18.13 Other:           15.71
          $$$$$$  Average   profile $$$$$
       Heuristic check                 0.00 Other:            0.00
    List time                       0.00 Other:            0.00
@@ -2238,15 +1018,15 @@ STPD EXTERN>        0.00000      0.00000      0.00000      0.00000 -19870.75654
          Angle energy                    0.00 Other:            0.00
          Dihedral energy                 0.00 Other:            0.00
          Restraints energy               0.00 Other:            0.00
-      INTRNL energy                   6.43 Other:            6.42
+      INTRNL energy                   2.42 Other:            2.42
       Comm energy                     0.00 Other:            0.00
       Comm force                      0.00 Other:            0.00
-   Energy time                     6.44 Other:            0.01
- Total time                     25.98 Other:           19.54
+   Energy time                     2.42 Other:            0.00
+ Total time                     18.13 Other:           15.71
 
                     NORMAL TERMINATION BY NORMAL STOP
                     MOST SEVERE WARNING WAS AT LEVEL  0
 
                     $$$$$ JOB ACCOUNTING INFORMATION $$$$$
-                     ELAPSED TIME:    25.98  SECONDS 
-                         CPU TIME:    22.83  SECONDS 
+                     ELAPSED TIME:    18.14  SECONDS 
+                         CPU TIME:     8.10  SECONDS 

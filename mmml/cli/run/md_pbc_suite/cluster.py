@@ -325,6 +325,14 @@ def build_packmol_composition_cluster(
             )
         )
         shifted = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
+        if verbose:
+            from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
+
+            pycharmm.lingo.charmm_script("ENER")
+            print(
+                f"Packmol cluster post-MM GRMS: {charmm_grms():.4f} kcal/mol/Å",
+                flush=True,
+            )
 
     span = np.ptp(shifted, axis=0)
     print(

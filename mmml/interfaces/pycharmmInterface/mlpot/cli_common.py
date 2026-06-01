@@ -440,6 +440,17 @@ def composition_tag(composition: list[tuple[str, int]] | None, residue: str, n_m
     return f"{residue.lower()}_{n_molecules}mer"
 
 
+def cluster_mm_relaxed_in_packmol_build(args: argparse.Namespace) -> bool:
+    """True when ``build_packmol_composition_cluster`` already ran cluster SD/ABNR."""
+    if not getattr(args, "composition", None):
+        return False
+    if not use_packmol_sphere_placement(args):
+        return False
+    n_sd = int(getattr(args, "charmm_sd_steps", 50))
+    n_abnr = int(getattr(args, "charmm_abnr_steps", 100))
+    return n_sd > 0 or n_abnr > 0
+
+
 def use_packmol_sphere_placement(args: argparse.Namespace) -> bool:
     from mmml.interfaces.pycharmmInterface.packmol_placement import resolve_packmol_sphere_use
 
@@ -766,12 +777,20 @@ def assert_dynamics_ready(
     """Warn or abort if gradients are still huge before starting dynamics."""
     grms = charmm_grms()
     if grms <= max_grms:
-        print(f"Pre-dynamics GRMS OK: {grms:.4f} kcal/mol/Å (limit {max_grms})")
+        print(
+            f"Pre-dynamics GRMS OK: {grms:.4f} kcal/mol/Å (limit {max_grms})",
+            flush=True,
+        )
         return grms
-    msg = f"Pre-dynamics GRMS {grms:.2f} kcal/mol/Å > {max_grms}"
+    msg = (
+        f"Pre-dynamics GRMS {grms:.2f} kcal/mol/Å > {max_grms} — "
+        "MLpot minimization did not converge; dynamics skipped. "
+        "Try more --mini-nstep, a composition-specific checkpoint, or "
+        "--allow-high-grms (not recommended)."
+    )
     if abort and not os.environ.get("MMML_MLPOT_ALLOW_HIGH_GRMS"):
         raise RuntimeError(msg)
-    print(f"WARN: {msg}")
+    print(f"WARN: {msg}", flush=True)
     return grms
 
 
