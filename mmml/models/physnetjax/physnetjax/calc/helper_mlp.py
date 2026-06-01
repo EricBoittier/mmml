@@ -112,13 +112,14 @@ def get_ase_calc(
 
 
 try:
-    _kcal_to_ev = 1 / (ase.units.kcal / ase.units.mol)
+    _ev_to_kcalmol = 1 / (ase.units.kcal / ase.units.mol)
 except Exception:  # pragma: no cover - triggered when ASE units mocked
-    _kcal_to_ev = 1.0
+    _ev_to_kcalmol = 23.060548867
 
+# PhysNet EF outputs eV and eV/Å; CHARMM MLpot expects kcal/mol and kcal/mol/Å.
 pycharmm_conversion = {
-    "energy": _kcal_to_ev,
-    "forces": _kcal_to_ev,
+    "energy": _ev_to_kcalmol,
+    "forces": _ev_to_kcalmol,
     "charge": 1,
 }
 

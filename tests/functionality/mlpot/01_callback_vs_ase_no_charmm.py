@@ -99,10 +99,11 @@ def main() -> int:
         conversion={"energy": ev2kcalmol, "forces": ev2kcalmol},
     )
     atoms.calc = ase_calc
-    e_ase_ev = float(atoms.get_potential_energy())
-    f_ase_ev = atoms.get_forces()
-    e_ase_kcal = e_ase_ev * ev2kcalmol
-    f_ase_kcal = f_ase_ev * ev2kcalmol
+    _ = atoms.get_potential_energy()  # trigger calculate()
+    # Read stored properties (kcal/mol) — same convention as get_pyc / CHARMM.
+    e_ase_kcal = float(ase_calc.results["energy"])
+    f_ase_kcal = np.asarray(ase_calc.results["forces"], dtype=float)
+    e_model_ev = e_ase_kcal / ev2kcalmol
 
     pyCModel = get_pyc(params, model, atoms)
     pyc = pyCModel.get_pycharmm_calculator()
@@ -111,7 +112,7 @@ def main() -> int:
     e_scale = max(abs(e_ase_kcal), abs(e_cb_kcal), 1e-6)
     f_diff = np.abs(f_ase_kcal - f_cb_kcal).max()
 
-    print(f"\n  ASE energy (eV):           {e_ase_ev:.8f}")
+    print(f"\n  model energy (eV, ref):    {e_model_ev:.8f}")
     print(f"  ASE energy (kcal/mol):     {e_ase_kcal:.8f}")
     print(f"  callback energy (kcal/mol): {e_cb_kcal:.8f}")
     print(f"  |dE| (kcal/mol):           {abs(e_ase_kcal - e_cb_kcal):.8f}")
