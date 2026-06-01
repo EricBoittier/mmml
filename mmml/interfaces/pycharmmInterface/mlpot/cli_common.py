@@ -468,6 +468,7 @@ def build_cluster_from_args_with_tag(
     if getattr(args, "composition", None):
         composition = _parse_composition(args.composition)
         if use_packmol_sphere_placement(args):
+            import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
             radius = resolve_packmol_sphere_radius(
                 getattr(args, "packmol_radius", None),
                 getattr(args, "flat_bottom_radius", None),

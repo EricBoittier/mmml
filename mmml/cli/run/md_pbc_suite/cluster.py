@@ -221,3 +221,115 @@ def build_minimized_monomer_for_packmol(
             f"Atom count mismatch for {residue}: PSF {z.shape[0]} vs {len(atom_names)} names"
         )
     return coords, atom_names, z
+
+
+def build_packmol_composition_cluster(
+    *,
+    composition: list[tuple[str, int]],
+    center: tuple[float, float, float],
+    radius: float,
+    tolerance: float = 2.0,
+    seed: int | None = None,
+    charmm_sd_steps: int = 50,
+    charmm_abnr_steps: int = 100,
+    charmm_tolenr: float = 1e-3,
+    charmm_tolgrd: float = 1e-3,
+    verbose: bool = True,
+) -> tuple[np.ndarray, np.ndarray, list[int], list[str]]:
+    """CHARMM-minimize monomers, Packmol sphere pack, cluster PSF, then cluster MM relax."""
+    from mmml.cli.run.md_pbc_suite.ase import (
+        _build_cluster_psf_from_composition,
+        _load_packmol_sphere_positions,
+    )
+    from mmml.interfaces.pycharmmInterface import packmol_placement
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        CharmmMmMinimizeConfig,
+        minimize_charmm_mm_only,
+    )
+
+    if verbose:
+        print(
+            "[cluster] 1/4 CHARMM MM minimize isolated monomer(s) (before Packmol)",
+            flush=True,
+        )
+
+    residue_geometries: dict[str, tuple[np.ndarray, list[str], np.ndarray]] = {}
+    for residue, _count in composition:
+        key = residue.upper()
+        if key not in residue_geometries:
+            residue_geometries[key] = build_minimized_monomer_for_packmol(
+                key,
+                nstep_sd=int(charmm_sd_steps),
+                nstep_abnr=int(charmm_abnr_steps),
+                tolenr=float(charmm_tolenr),
+                tolgrd=float(charmm_tolgrd),
+                verbose=verbose,
+            )
+
+    if verbose:
+        print("[cluster] 2/4 Write monomer PDBs for Packmol", flush=True)
+
+    packmol_dir = Path("pdb/packmol_sphere")
+    packmol_blocks: list[tuple[Path, int]] = []
+    for residue, count in composition:
+        key = residue.upper()
+        coords, atom_names, monomer_z = residue_geometries[key]
+        pdb_path = packmol_dir / f"{key.lower()}.pdb"
+        packmol_placement.write_monomer_pdb_for_packmol(
+            pdb_path, coords, monomer_z, atom_names=atom_names
+        )
+        packmol_blocks.append((pdb_path, int(count)))
+
+    output_pdb = Path("pdb/init-packmol-sphere.pdb")
+    if output_pdb.exists():
+        output_pdb.unlink()
+
+    if verbose:
+        print("[cluster] 3/4 Packmol sphere placement", flush=True)
+
+    packmol_placement.run_packmol_sphere_mixed(
+        packmol_blocks,
+        center=center,
+        radius=float(radius),
+        output_pdb=output_pdb,
+        tolerance=float(tolerance),
+        seed=seed,
+    )
+
+    if verbose:
+        print("[cluster] 4/4 Build cluster PSF and CHARMM MM relax", flush=True)
+
+    z, atom_names, atoms_per_list, ordered_residue_names = _build_cluster_psf_from_composition(
+        composition,
+        residue_geometries=residue_geometries,
+    )
+    shifted = _load_packmol_sphere_positions(
+        output_pdb, atoms_per_list, psf_atom_names=atom_names
+    )
+    coor.set_positions(pd.DataFrame(shifted, columns=["x", "y", "z"]))
+
+    if int(charmm_sd_steps) > 0 or int(charmm_abnr_steps) > 0:
+        if verbose:
+            print(
+                f"Packmol cluster: CHARMM MM minimize "
+                f"SD={charmm_sd_steps} ABNR={charmm_abnr_steps}",
+                flush=True,
+            )
+        minimize_charmm_mm_only(
+            CharmmMmMinimizeConfig(
+                nstep_sd=int(charmm_sd_steps),
+                nstep_abnr=int(charmm_abnr_steps),
+                tolenr=float(charmm_tolenr),
+                tolgrd=float(charmm_tolgrd),
+                verbose=verbose,
+            )
+        )
+        shifted = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
+
+    span = np.ptp(shifted, axis=0)
+    print(
+        f"Packmol cluster: {len(atom_names)} atoms, "
+        f"span Å x={span[0]:.1f} y={span[1]:.1f} z={span[2]:.1f}",
+        flush=True,
+    )
+    return z, shifted, atoms_per_list, ordered_residue_names

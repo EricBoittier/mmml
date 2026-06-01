@@ -104,11 +104,11 @@ def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> None:
         _maybe_show_energy(True)
     if config.nstep_sd > 0:
         if config.verbose:
-            print(f"CHARMM MM SD: nstep={config.nstep_sd}")
+            print(f"CHARMM MM SD: nstep={config.nstep_sd}", flush=True)
         minimize.run_sd(**sd_kw)
     if config.nstep_abnr > 0:
         if config.verbose:
-            print(f"CHARMM MM ABNR: nstep={config.nstep_abnr}")
+            print(f"CHARMM MM ABNR: nstep={config.nstep_abnr}", flush=True)
         minimize.run_abnr(
             nstep=int(config.nstep_abnr),
             tolenr=float(config.tolenr),

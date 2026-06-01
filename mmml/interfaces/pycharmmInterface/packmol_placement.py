@@ -272,5 +272,5 @@ def run_packmol_sphere_mixed(
     )
     inp_path = Path("packmol") / "packmol_sphere.inp"
     execute_packmol_script(packmol_input, inp_path)
-    print(f"Generated {out}")
+    print(f"Generated {out}", flush=True)
     return str(out)
