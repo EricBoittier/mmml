@@ -13,7 +13,7 @@ import numpy as np
 import ase
 import ase.io
 from ase import Atoms
-from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_loud
+from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet
 from mmml.interfaces.pycharmmInterface.import_pycharmm import reset_block
 from mmml.interfaces.pycharmmInterface.import_pycharmm import safe_energy_show
 from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_RTF, CGENFF_PRM, CHARMM_HOME, CHARMM_LIB_DIR
@@ -138,7 +138,7 @@ def generate_coordinates(skip_energy_show: bool = False, validate: bool = True) 
     coor.set_positions(xyz)
     _ = coor.get_positions()
     coor.show()
-    pycharmm_loud()
+    pycharmm_quiet()
 
     # from mmml.interfaces.pycharmmInterface.pycharmmCommands import nbonds_script
     # pycharmm.lingo.charmm_script(nbonds_script)
@@ -183,6 +183,7 @@ def generate_coordinates(skip_energy_show: bool = False, validate: bool = True) 
 
 def mini(nbxmod=5, skip_energy_show: bool = False):
     print("*" * 5, "Minimizing", "*" * 5)
+    pycharmm_quiet()
     # Specify nonbonded python object called my_nbonds - this just sets it up
     # equivalant CHARMM scripting command: nbonds cutnb 18 ctonnb 13 ctofnb 17 cdie eps 1 atom vatom fswitch vfswitch
     my_nbonds = pycharmm.NonBondedScript(

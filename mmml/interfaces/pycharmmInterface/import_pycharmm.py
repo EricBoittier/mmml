@@ -1,6 +1,7 @@
 import os
-from pathlib import Path
 import sys
+from contextlib import contextmanager
+from pathlib import Path
 
 # current directory of current file
 cwd = Path(__file__).parent
@@ -200,22 +201,42 @@ def view_pycharmm_state():
     return view_atoms(ase_from_pycharmm_state())
 
 
-def pycharmm_quiet():
-    cmd = "PRNLev 0\nWRNLev 0"
-    pycharmm.lingo.charmm_script(cmd)
+def _apply_print_levels(prnlev: int, wrnlev: int) -> None:
+    """Set CHARMM PRNLev/WRNLev via stream API and scripting (keeps both in sync)."""
+    settings.set_verbosity(int(prnlev))
+    settings.set_warn_level(int(wrnlev))
+    pycharmm.lingo.charmm_script(f"PRNLev {int(prnlev)}\nWRNLev {int(wrnlev)}")
 
 
-def pycharmm_soft():
-    cmd = "PRNLev 1\nWRNLev 1"
-    pycharmm.lingo.charmm_script(cmd)
+def pycharmm_quiet() -> None:
+    _apply_print_levels(0, 0)
 
 
-def pycharmm_verbose():
-    cmd = "PRNLev 5\nWRNLev 5"
-    pycharmm.lingo.charmm_script(cmd)
+def pycharmm_soft() -> None:
+    _apply_print_levels(1, 1)
 
-def pycharmm_loud():
-    cmd = "PRNLev 9\nWRNLev 9"
-    pycharmm.lingo.charmm_script(cmd)
+
+def pycharmm_verbose() -> None:
+    _apply_print_levels(5, 5)
+
+
+def pycharmm_loud() -> None:
+    _apply_print_levels(9, 9)
+
+
+@contextmanager
+def charmm_print_level(prnlev: int = 0, wrnlev: int | None = None):
+    """Temporarily set CHARMM print/warning levels; restore on exit."""
+    if wrnlev is None:
+        wrnlev = prnlev
+    old_prn = settings.set_verbosity(int(prnlev))
+    old_wrn = settings.set_warn_level(int(wrnlev))
+    pycharmm.lingo.charmm_script(f"PRNLev {int(prnlev)}\nWRNLev {int(wrnlev)}")
+    try:
+        yield
+    finally:
+        settings.set_verbosity(old_prn)
+        settings.set_warn_level(old_wrn)
+        pycharmm.lingo.charmm_script(f"PRNLev {int(old_prn)}\nWRNLev {int(old_wrn)}")
 
 pycharmm_quiet()

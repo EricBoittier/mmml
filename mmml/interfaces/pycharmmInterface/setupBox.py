@@ -378,8 +378,8 @@ def setup_box_generic(pdb_path, rtf=CGENFF_RTF, prm=CGENFF_PRM, side_length: flo
     settings.set_warn_level(wl)
     pycharmm.lingo.charmm_script("bomlev 0")
     header = f"""bomlev -2
-    prnlev 4
-    wrnlev 4
+    prnlev 0
+    wrnlev 0
     OPEN UNIT 1 READ FORM NAME {pdb_path}
     READ SEQU PDB UNIT 1
     CLOSE UNIT 1
@@ -441,8 +441,8 @@ def initialize_psf(resid: str, n_molecules: int, side_length: float, solvent: st
         pdb_path = pdbfilename
 
     header = f"""bomlev -2
-    prnlev 4
-    wrnlev 4
+    prnlev 0
+    wrnlev 0
     OPEN UNIT 1 READ FORM NAME {pdb_path}
     READ SEQU PDB UNIT 1
     CLOSE UNIT 1

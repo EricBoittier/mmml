@@ -101,6 +101,7 @@ def _reset_pycharmm_system() -> None:
 
 def _make_res_minimize(nbxmod: int, nstep: int = 1000) -> None:
     """Run the same nonbonded/minimization recipe used by make-res."""
+    pyci.pycharmm_quiet()
     pyci.pycharmm.NonBondedScript(
         cutnb=18.0,
         ctonnb=13.0,
@@ -715,15 +716,16 @@ def _run_charmm_minimize(
     nbxmod: int = 5,
     timings: dict[str, float] | None = None,
     cubic_box_side_A: float | None = None,
-    quiet: bool = False,
+    quiet: bool = True,
+    show_energy: bool = False,
 ) -> None:
     """Run optional CHARMM minimization and write updated coords back to ASE atoms.
 
     When ``cubic_box_side_A`` is set, CHARMM crystal / IMAGE PBC is rebuilt for a
     cubic cell of that edge length (matches the MD periodic box for JAX-MD / ASE).
 
-    When ``quiet`` is True, CHARMM print levels stay low for the whole routine (no
-    pre/post ``ENER`` banners); use for overlap rescue during long JAX-MD runs.
+    By default CHARMM runs at PRNLev 0 (no per-step ENERGY / nonbond banners). Set
+    ``show_energy=True`` for a compact energy table before and after minimization.
     """
     if nstep_sd <= 0 and nstep_abnr <= 0:
         return
@@ -766,27 +768,22 @@ def _run_charmm_minimize(
         if cutim_mm is not None:
             nbond_kw["cutim"] = float(cutim_mm)
         pyci.pycharmm.NonBondedScript(**nbond_kw).run()
-        if not quiet:
+        if show_energy:
             print("CHARMM energy before minimization:")
-            pyci.pycharmm_loud()
-            pyci.pycharmm.lingo.charmm_script("ENER")
-            pyci.safe_energy_show()
             pyci.pycharmm_quiet()
+            pyci.safe_energy_show()
         if nstep_sd > 0:
+            pyci.pycharmm_quiet()
             charmm_minimize.run_sd(nstep=nstep_sd, tolenr=tolenr, tolgrd=tolgrd)
         if nstep_abnr > 0:
+            pyci.pycharmm_quiet()
             charmm_minimize.run_abnr(nstep=nstep_abnr, tolenr=tolenr, tolgrd=tolgrd)
         minimized_positions = coor.get_positions().to_numpy(dtype=float)
-        if not quiet:
-            try:
-                print("CHARMM energy after minimization:")
-                pyci.pycharmm_loud()
-                pyci.pycharmm.lingo.charmm_script("ENER")
-                pyci.safe_energy_show()
-            finally:
-                coor.set_positions(pd.DataFrame(minimized_positions, columns=["x", "y", "z"]))
-        else:
-            coor.set_positions(pd.DataFrame(minimized_positions, columns=["x", "y", "z"]))
+        coor.set_positions(pd.DataFrame(minimized_positions, columns=["x", "y", "z"]))
+        if show_energy:
+            print("CHARMM energy after minimization:")
+            pyci.pycharmm_quiet()
+            pyci.safe_energy_show()
     finally:
         pyci.pycharmm_quiet()
     atoms.set_positions(coor.get_positions().to_numpy(dtype=float))
@@ -829,6 +826,7 @@ def _check_or_charmm_overlap_rescue(
             tolgrd=tolgrd,
             nbxmod=nbxmod,
             timings=timings,
+            quiet=True,
         )
         try:
             return assert_no_intermonomer_atom_overlap(
