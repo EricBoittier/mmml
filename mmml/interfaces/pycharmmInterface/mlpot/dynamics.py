@@ -97,8 +97,8 @@ def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> None:
         "nprint": max(1, int(config.nprint)),
         "tolenr": float(config.tolenr),
         "tolgrd": float(config.tolgrd),
-        "inbfrq": 1,
-        "ihbfrq": -1,
+        "inbfrq": 50,
+        "ihbfrq": 50,
     }
     if config.verbose and config.show_energy:
         _maybe_show_energy(True)
@@ -413,9 +413,10 @@ def _sd_kwargs_from_config(config: MinimizeWithMlpotConfig) -> dict[str, Any]:
         "nprint": config.nprint,
         "tolenr": config.tolenr,
         "tolgrd": config.tolgrd,
-        # Fixed inbfrq avoids domdec heuristic load-balance on MPI CHARMM builds.
-        "inbfrq": 1,
-        "ihbfrq": -1,
+        # Do not rebuild nonbond/MLpot pair lists each SD step (mlpot_update can
+        # segfault when all atoms are ML and the atom-pair list is empty).
+        "inbfrq": 0,
+        "ihbfrq": 0,
     }
     if config.save and config.dcd_path is not None and config.dcd_nsavc > 0:
         kw["iuncrd"] = config.dcd_unit
