@@ -101,6 +101,43 @@ class DatasetSpec:
     chunk_frames: Optional[int] = None
 
 
+_SKIP_H5_ATTR = object()
+
+
+def _coerce_h5_attr(value: Any) -> Any:
+    """Convert *value* to an HDF5-storable attribute, or skip sentinel."""
+    if value is None:
+        return _SKIP_H5_ATTR
+
+    if _HAS_JAX and isinstance(value, jax.Array):
+        value = np.asarray(jax.device_get(value))
+
+    if isinstance(value, np.generic):
+        return value.item()
+
+    if isinstance(value, np.ndarray):
+        if value.dtype == object:
+            raise TypeError(
+                f"HDF5 attributes cannot use object dtype (got shape {value.shape})"
+            )
+        if value.ndim == 0:
+            return value.item()
+        return np.ascontiguousarray(value)
+
+    if isinstance(value, (bool, int, float, str, bytes)):
+        return value
+
+    if isinstance(value, (list, tuple)):
+        arr = np.asarray(value)
+        if arr.dtype == object:
+            return _SKIP_H5_ATTR
+        if arr.ndim == 0:
+            return arr.item()
+        return np.ascontiguousarray(arr)
+
+    return str(value)
+
+
 # ---------------------------------------------------------------------------
 # Reporter
 # ---------------------------------------------------------------------------
@@ -149,7 +186,9 @@ class HDF5Reporter:
 
         if attrs is not None:
             for k, v in attrs.items():
-                self._h5.attrs[k] = v
+                h5_v = _coerce_h5_attr(v)
+                if h5_v is not _SKIP_H5_ATTR:
+                    self._h5.attrs[k] = h5_v
 
         # Per-dataset in-memory buffers (plain numpy).
         self._buffers: Dict[str, np.ndarray] = {}
