@@ -62,6 +62,22 @@ python tests/functionality/mlpot/03_energy_compare.py --residue ACO --n-molecule
 The same minimize / NVE workflows are available via the main CLI (no `--run` stub):
 
 ```bash
+# Packmol sphere + MMFP (30 monomers in R=22 Å, flat-bottom R=20 Å)
+mmml md-system --setup free_nve --backend pycharmm \
+  --composition ACO:30 \
+  --packmol-radius 22 \
+  --flat-bottom-radius 20 \
+  --packmol-tolerance 2.0 \
+  --seed 42 \
+  --ps 0.5 --mini-nstep 20
+
+# Mixed composition in a Packmol sphere (explicit --packmol-sphere)
+mmml md-system --setup free_nve --backend pycharmm \
+  --composition ACO:15,MEOH:15 \
+  --packmol-sphere --packmol-radius 25 \
+  --flat-bottom-radius 22 \
+  --output-dir artifacts/pycharmm_mlpot/aco15_meoh15
+
 # Two-pass SD + short NVE (acetone tetramer, MMFP sphere R=20 Å)
 mmml md-system --setup free_nve --backend pycharmm --residue ACO --n-molecules 4 \
   --flat-bottom-radius 20 --ps 0.5 --mini-nstep 20 --fix-resids 1,3
