@@ -7,8 +7,30 @@ from pathlib import Path
 from typing import Any, Optional, Sequence, Union
 
 import numpy as np
+import pandas as pd
 
 PathLike = Union[str, Path]
+
+
+def sync_charmm_positions(positions: np.ndarray) -> None:
+    """Push ``(N, 3)`` positions into the CHARMM coordinate array."""
+    import pycharmm.coor as coor
+
+    arr = np.asarray(positions, dtype=float)
+    if arr.ndim != 2 or arr.shape[1] != 3:
+        raise ValueError(f"positions must be (N, 3), got {arr.shape}")
+    n = coor.get_natom()
+    if arr.shape[0] != n:
+        raise ValueError(f"positions rows {arr.shape[0]} != CHARMM natom {n}")
+    coor.set_positions(pd.DataFrame(arr, columns=["x", "y", "z"]))
+
+
+def get_charmm_positions_array() -> np.ndarray:
+    """Read CHARMM coordinates as ``(N, 3)``."""
+    import pycharmm.coor as coor
+
+    df = coor.get_positions()
+    return df[["x", "y", "z"]].to_numpy(dtype=float)
 
 
 @dataclass

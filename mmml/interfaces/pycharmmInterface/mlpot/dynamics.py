@@ -77,6 +77,7 @@ class MinimizeWithMlpotConfig:
     dcd_path: Optional[PathLike] = None
     dcd_nsavc: int = 1
     dcd_unit: int = 51
+    reference_positions: Optional[np.ndarray] = None
     title: str = "Mini SD"
     skip_if_crd_exists: bool = True
     show_energy: bool = True
@@ -323,6 +324,11 @@ def minimize_with_mlpot(
             energy.show()
         return False
 
+    if config.reference_positions is not None:
+        from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+
+        sync_charmm_positions(config.reference_positions)
+
     dcd_file = None
     if config.save and config.dcd_path is not None and config.dcd_nsavc > 0:
         dcd_file = open_minimize_dcd(config.dcd_path, unit=config.dcd_unit)
@@ -410,14 +416,15 @@ def save_minimization_results(
         written["energy_json"] = p.resolve()
 
     if xyz_path is not None:
-        import pycharmm.coor as coor
-
         try:
             import ase
             import ase.io
+            from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+                get_charmm_positions_array,
+            )
             from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 
-            pos = coor.get_positions().to_numpy(dtype=float)
+            pos = get_charmm_positions_array()
             numbers = np.asarray(get_Z_from_psf(), dtype=int)
             p = Path(xyz_path)
             p.parent.mkdir(parents=True, exist_ok=True)

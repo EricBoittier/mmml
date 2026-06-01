@@ -14,6 +14,8 @@ import argparse
 import sys
 from pathlib import Path
 
+import numpy as np
+
 from _common import (
     add_cluster_args,
     build_ase_cluster,
@@ -85,15 +87,18 @@ def main() -> int:
     import ase
     from mmml.interfaces.pycharmmInterface.mlpot import (
         MinimizeWithMlpotConfig,
+        get_charmm_positions_array,
         load_physnet_mlpot_bundle,
         minimize_with_mlpot,
         register_mlpot,
         select_all_atoms,
         select_by_resid,
         setup_default_nbonds,
+        sync_charmm_positions,
     )
 
     setup_default_nbonds()
+    sync_charmm_positions(r)
     atoms = ase.Atoms(numbers=z, positions=r)
     _, _, pyCModel = load_physnet_mlpot_bundle(ckpt, n_atoms, atoms)
 
@@ -104,12 +109,18 @@ def main() -> int:
 
     print(f"MLpot: all {n_atoms} atoms | cons_fix: resid {args.fix_resid}")
     ctx = register_mlpot(pyCModel, z, select_all_atoms())
+    sync_charmm_positions(r)
+    pos_chk = get_charmm_positions_array()
+    if np.allclose(pos_chk, 0.0):
+        print("WARN: CHARMM coordinates are zero after MLpot; re-syncing from cluster build")
+        sync_charmm_positions(r)
     try:
         ran = minimize_with_mlpot(
             MinimizeWithMlpotConfig(
                 fixed_ml_selection=fix_sel,
                 nstep=args.nstep,
                 nprint=max(1, args.nstep // 2),
+                reference_positions=r,
                 save=args.save,
                 pdb_path=pdb_path if args.save else None,
                 crd_path=crd_path if args.save else None,

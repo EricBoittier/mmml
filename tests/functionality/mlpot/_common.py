@@ -101,7 +101,10 @@ def build_ase_cluster(
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401 — sets CHARMM env
     from mmml.cli.run.md_pbc_suite.cluster import _build_psf_ordered_cluster
 
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+
     z, r = _build_psf_ordered_cluster(residue.upper(), n_molecules, spacing)
+    sync_charmm_positions(r)
     return z, r
 
 
