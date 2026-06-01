@@ -53,6 +53,7 @@ from mmml.cli.base import resolve_checkpoint_paths
 from mmml.interfaces.pycharmmInterface.import_pycharmm import reset_block, reset_block_no_internal
 from mmml.interfaces.pycharmmInterface.mmml_calculator import CutoffParameters, setup_calculator
 from mmml.utils.geometry_checks import assert_no_intermonomer_atom_overlap
+from mmml.utils.jax_gpu_warmup import warmup_ase_mmml_energy_forces
 import pycharmm.param as param
 import pycharmm.psf as psf
 import pycharmm.read as read
@@ -1525,7 +1526,7 @@ def main(argv: list[str] | None = None) -> int:
 
         if not args.skip_jit_warmup:
             t_w = _tmark()
-            _ = float(atoms.get_potential_energy())
+            warmup_ase_mmml_energy_forces(atoms, include_forces=True)
             run_timings["jit_warmup_first_potential_s"] = _tmark() - t_w
             _tlog(
                 f"{key}: JIT warmup (first potential energy) {run_timings['jit_warmup_first_potential_s']:.3f} s",

@@ -550,7 +550,9 @@ def minimize_lambda_structure(
     atoms.calc = calc
 
     if not cfg.skip_jit_warmup:
-        _ = float(atoms.get_potential_energy())
+        from mmml.utils.jax_gpu_warmup import warmup_ase_mmml_energy_forces
+
+        warmup_ase_mmml_energy_forces(atoms, include_forces=True)
 
     if not cfg.calculator_pre_minimize:
         coor.set_positions(pd.DataFrame(atoms.get_positions(), columns=["x", "y", "z"]))

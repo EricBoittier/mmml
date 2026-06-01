@@ -222,6 +222,17 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--bfgs-maxstep", type=float, default=0.05)
     p.add_argument("--fire-min-steps", type=int, default=100)
     p.add_argument("--fire-min-maxstep", type=float, default=0.02)
+    p.add_argument(
+        "--rescue-minimize",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "If post-BFGS fmax stays above --pre-min-fmax, run CHARMM SD/ABNR rescue "
+            "(before ASE FIRE, and again after FIRE if fmax is still high)."
+        ),
+    )
+    p.add_argument("--rescue-charmm-sd-steps", type=int, default=100, help="Rescue CHARMM SD steps.")
+    p.add_argument("--rescue-charmm-abnr-steps", type=int, default=300, help="Rescue CHARMM ABNR steps.")
     p.add_argument("--max-fmax-after-min", type=float, default=2.0)
     p.add_argument("--quiet-bfgs", action="store_true")
     p.add_argument(
@@ -512,13 +523,32 @@ def main(argv: list[str] | None = None) -> int:
         minimization_summary["bfgs_fmax_eVA"] = fmin
         minimization_summary["bfgs_traj"] = str(bfgs_traj_path.relative_to(out_dir))
         print(f"ASE BFGS pre-minimization complete, fmax={fmin:.6f} eV/A")
-        if fmin > args.pre_min_fmax:
+        if fmin > args.pre_min_fmax and args.rescue_minimize:
             bfgs_best_fmax = best_frame.restore_best_force()
             minimization_summary["bfgs_best_force_fmax_eVA"] = bfgs_best_fmax
             print(
+                f"CHARMM rescue minimization starting "
+                f"(SD={args.rescue_charmm_sd_steps}, ABNR={args.rescue_charmm_abnr_steps}; "
+                f"best BFGS frame {best_frame.best_force_label}, fmax={bfgs_best_fmax:.6f})"
+            )
+            _run_charmm_minimize(
+                atoms,
+                nstep_sd=args.rescue_charmm_sd_steps,
+                nstep_abnr=args.rescue_charmm_abnr_steps,
+                tolenr=args.charmm_tolenr,
+                tolgrd=args.charmm_tolgrd,
+                nbxmod=args.charmm_nbxmod,
+                timings=minimization_summary,
+                cubic_box_side_A=float(L) if not free_space else None,
+            )
+            best_frame.record("charmm_rescue_pre_fire")
+            _check_pre_min_overlap("after CHARMM rescue (pre-FIRE)")
+            fmin = float(np.abs(atoms.get_forces()).max())
+            minimization_summary["charmm_rescue_pre_fire_fmax_eVA"] = fmin
+            print(f"CHARMM rescue (pre-FIRE) complete, fmax={fmin:.6f} eV/A")
+            print(
                 f"ASE FIRE rescue starting "
-                f"from best BFGS frame "
-                f"({best_frame.best_force_label}, fmax={bfgs_best_fmax:.6f} > {args.pre_min_fmax:.6f})"
+                f"(fmax={fmin:.6f} > {args.pre_min_fmax:.6f})"
             )
             fire_traj_path = out_dir / f"{geom_tag}_{args.ensemble}_fire_min.traj"
             fire = FIRE(
@@ -536,6 +566,32 @@ def main(argv: list[str] | None = None) -> int:
             minimization_summary["fire_fmax_eVA"] = fmin
             minimization_summary["fire_traj"] = str(fire_traj_path.relative_to(out_dir))
             print(f"ASE FIRE rescue complete, fmax={fmin:.6f} eV/A")
+            if fmin > args.pre_min_fmax:
+                print(
+                    f"CHARMM post-FIRE rescue starting "
+                    f"(SD={args.rescue_charmm_sd_steps}, ABNR={args.rescue_charmm_abnr_steps}; "
+                    f"fmax={fmin:.6f} > {args.pre_min_fmax:.6f})"
+                )
+                _run_charmm_minimize(
+                    atoms,
+                    nstep_sd=args.rescue_charmm_sd_steps,
+                    nstep_abnr=args.rescue_charmm_abnr_steps,
+                    tolenr=args.charmm_tolenr,
+                    tolgrd=args.charmm_tolgrd,
+                    nbxmod=args.charmm_nbxmod,
+                    timings=minimization_summary,
+                    cubic_box_side_A=float(L) if not free_space else None,
+                )
+                best_frame.record("charmm_rescue_post_fire")
+                _check_pre_min_overlap("after CHARMM rescue (post-FIRE)")
+                fmin = float(np.abs(atoms.get_forces()).max())
+                minimization_summary["charmm_rescue_post_fire_fmax_eVA"] = fmin
+                print(f"CHARMM post-FIRE rescue complete, fmax={fmin:.6f} eV/A")
+        elif fmin > args.pre_min_fmax:
+            print(
+                f"Skipping CHARMM/FIRE rescue (--no-rescue-minimize); "
+                f"BFGS fmax={fmin:.6f} eV/A"
+            )
         minimization_summary.update(best_frame.write(out_dir, f"{geom_tag}_{args.ensemble}_pre_md"))
         fmin = best_frame.restore_best_force()
         _check_pre_min_overlap("restored best-force pre-MD structure")
@@ -707,6 +763,9 @@ def main(argv: list[str] | None = None) -> int:
             "nbxmod": int(args.charmm_nbxmod),
             "sd_steps": int(args.charmm_sd_steps),
             "abnr_steps": int(args.charmm_abnr_steps),
+            "rescue_minimize": bool(args.rescue_minimize),
+            "rescue_sd_steps": int(args.rescue_charmm_sd_steps),
+            "rescue_abnr_steps": int(args.rescue_charmm_abnr_steps),
         },
         "placement": "random_3d",
         "placement_seed": int(args.seed),
