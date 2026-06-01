@@ -49,11 +49,14 @@ minimize_with_mlpot(
         psf_path=Path("charmm_data/mini.psf"),
         energy_json_path=Path("charmm_data/mini_energy.json"),
         xyz_path=Path("charmm_data/mini.xyz"),
+        dcd_path=Path("charmm_data/mini.dcd"),
+        dcd_nsavc=1,
     )
 )
 ```
 
-Set ``save=True`` (or use ``save_minimization_results`` directly) to write coordinates, PSF, CHARMM energy terms as JSON, and an ASE XYZ file.
+Set ``save=True`` to write coordinates, PSF, energy JSON, XYZ, and a **DCD** of the SD trajectory
+(``iuncrd`` / ``nsavc`` on ``minimize.run_sd``). Both SD passes (fixed then free) append to the same DCD.
 
 Prefer **CRD** over PDB when reloading minimized structures (avoids ML nonbond exclusion issues with PDB).
 
