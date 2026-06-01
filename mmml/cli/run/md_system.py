@@ -224,6 +224,17 @@ def parse_args() -> argparse.Namespace:
         help="pycharmm: detailed dynamics status every N steps",
     )
     parser.add_argument(
+        "--skip-energy-show",
+        action="store_true",
+        help="pycharmm: skip CHARMM energy.show() (MPI/cluster segfault guard)",
+    )
+    parser.add_argument(
+        "--show-energy",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="pycharmm: print CHARMM energy tables (off by default)",
+    )
+    parser.add_argument(
         "--quiet",
         action="store_true",
         help="pycharmm: reduce CHARMM console output",
@@ -547,6 +558,12 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     cmd.extend(["--charmm-tolgrd", str(args.charmm_tolgrd)])
     if args.no_echeck:
         cmd.append("--no-echeck")
+    if getattr(args, "skip_energy_show", False):
+        cmd.append("--skip-energy-show")
+    if getattr(args, "show_energy", None) is True:
+        cmd.append("--show-energy")
+    elif getattr(args, "show_energy", None) is False:
+        cmd.append("--no-show-energy")
     if args.quiet:
         cmd.append("--quiet")
     if getattr(args, "no_scale_mini_nstep", False):

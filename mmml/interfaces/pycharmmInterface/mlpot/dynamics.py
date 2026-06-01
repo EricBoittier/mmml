@@ -12,6 +12,14 @@ import numpy as np
 PathLike = Union[str, Path]
 
 
+def _maybe_show_energy(show: bool) -> None:
+    if not show:
+        return
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import safe_energy_show
+
+    safe_energy_show()
+
+
 @dataclass
 class CharmmTrajectoryFiles:
     """Unit numbers and paths for CHARMM restart / trajectory I/O."""
@@ -69,7 +77,7 @@ class CharmmMmMinimizeConfig:
     tolenr: float = 1e-3
     tolgrd: float = 1e-3
     verbose: bool = True
-    show_energy: bool = True
+    show_energy: bool = False
 
 
 def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> None:
@@ -91,7 +99,7 @@ def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> None:
         "tolgrd": float(config.tolgrd),
     }
     if config.verbose and config.show_energy:
-        energy.show()
+        _maybe_show_energy(True)
     if config.nstep_sd > 0:
         if config.verbose:
             print(f"CHARMM MM SD: nstep={config.nstep_sd}")
@@ -105,7 +113,7 @@ def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> None:
             tolgrd=float(config.tolgrd),
         )
     if config.verbose and config.show_energy:
-        energy.show()
+        _maybe_show_energy(True)
     cons_fix.turn_off()
 
 
@@ -131,7 +139,7 @@ class MinimizeWithMlpotConfig:
     pyCModel: Optional[Any] = None
     title: str = "Mini SD"
     skip_if_crd_exists: bool = True
-    show_energy: bool = True
+    show_energy: bool = False
     verbose: bool = False
 
 
@@ -423,7 +431,7 @@ def minimize_with_mlpot(
     if config.skip_if_crd_exists and crd_path is not None and crd_path.exists():
         load_minimized_coordinates(crd_path)
         if config.show_energy:
-            energy.show()
+            _maybe_show_energy(True)
         return False
 
     if config.reference_positions is not None:
@@ -439,7 +447,7 @@ def minimize_with_mlpot(
     try:
         if config.verbose and config.show_energy:
             print("CHARMM energy before minimization:")
-            energy.show()
+            _maybe_show_energy(True)
         if config.verbose:
             print(
                 f"SD pass 1 (free, all atoms): nstep={config.nstep} nprint={config.nprint}"
@@ -447,7 +455,7 @@ def minimize_with_mlpot(
         minimize.run_sd(**sd_kw)
         if config.verbose and config.show_energy:
             print("CHARMM energy after SD pass 1 (free):")
-            energy.show()
+            _maybe_show_energy(True)
 
         if config.fixed_ml_selection is not None:
             n_fix = len(config.fixed_ml_selection.get_atom_indexes())
@@ -460,7 +468,7 @@ def minimize_with_mlpot(
             minimize.run_sd(**sd_kw)
             if config.verbose and config.show_energy:
                 print("CHARMM energy after SD pass 2 (constrained):")
-                energy.show()
+                _maybe_show_energy(True)
             cons_fix.turn_off()
 
         if config.save:
@@ -483,7 +491,7 @@ def minimize_with_mlpot(
                 show_energy=config.show_energy,
             )
         elif config.show_energy:
-            energy.show()
+            _maybe_show_energy(True)
     finally:
         if dcd_file is not None:
             dcd_file.close()
@@ -492,6 +500,12 @@ def minimize_with_mlpot(
 
 def charmm_energy_terms() -> dict[str, float]:
     """Current CHARMM energy row as ``{term: value}`` (kcal/mol)."""
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+        should_skip_charmm_energy_show,
+    )
+
+    if should_skip_charmm_energy_show():
+        return {}
     _, _, energy, *_ = _import_pycharmm_modules()
     df = energy.get_energy()
     row = df.iloc[0].to_dict()
@@ -511,7 +525,7 @@ def save_minimization_results(
     xyz_path: Optional[PathLike] = None,
     positions: Optional[np.ndarray] = None,
     title: str = "Mini SD",
-    show_energy: bool = True,
+    show_energy: bool = False,
 ) -> dict[str, Path]:
     """Write minimized coordinates and optional PSF / energy summary.
 
@@ -578,7 +592,7 @@ def save_minimization_results(
             raise RuntimeError(f"Failed to write XYZ to {xyz_path}: {exc}") from exc
 
     if show_energy:
-        energy.show()
+        _maybe_show_energy(True)
     return written
 
 

@@ -188,20 +188,21 @@ def save_cluster_topology_for_vmd(
     return {"psf": psf_path, "pdb": pdb_path.resolve()}
 
 
-def setup_default_nbonds(
-    *,
-    cutnb: float = 14.0,
-    ctofnb: float = 12.0,
-    ctonnb: float = 10.0,
-) -> None:
-    """Apply a standard atom-based nonbond setup (matches mlpot test scripts)."""
+def setup_default_nbonds(*, nbxmod: int = 5) -> None:
+    """Apply make-res style switched nonbonds (matches ``md_pbc_suite/ase.py``)."""
     pycharmm = _import_pycharmm()
-    script = f"""
-    nbonds atom cutnb {cutnb} ctofnb {ctofnb} ctonnb {ctonnb} -
-    vswitch -
-    inbfrq -1 imgfrq -1
-    """
-    pycharmm.lingo.charmm_script(script)
+    pycharmm.NonBondedScript(
+        cutnb=18.0,
+        ctonnb=13.0,
+        ctofnb=17.0,
+        eps=1.0,
+        cdie=True,
+        atom=True,
+        vatom=True,
+        fswitch=True,
+        vfswitch=True,
+        nbxmod=int(nbxmod),
+    ).run()
 
 
 def load_physnet_mlpot_bundle(

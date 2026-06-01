@@ -25,6 +25,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     resolve_echeck_for_cluster,
     resolve_mini_nstep,
     resolve_fix_resids,
+    resolve_show_energy,
     setup_cons_fix_for_resids,
     timestep_ps_from_dt_fs,
     turn_off_cons_fix,
@@ -78,7 +79,7 @@ def _charmm_pre_minimize_before_mlpot(
             tolenr=tolenr,
             tolgrd=tolgrd,
             verbose=not args.quiet,
-            show_energy=not args.quiet,
+            show_energy=resolve_show_energy(args),
         )
     )
     r_mm = get_charmm_positions_array()
@@ -231,7 +232,7 @@ def run_dynamics_workflow(
     sync_charmm_positions(r)
 
     ctx, pyCModel = _register_mlpot_context(z, r, ckpt, n_atoms)
-    import pycharmm.energy as energy
+    show_energy = resolve_show_energy(args)
 
     try:
         if pre_minimize:
@@ -247,7 +248,7 @@ def run_dynamics_workflow(
                     reference_positions=r,
                     pyCModel=pyCModel,
                     save=False,
-                    show_energy=True,
+                    show_energy=show_energy,
                     skip_if_crd_exists=False,
                 )
             )
@@ -273,9 +274,13 @@ def run_dynamics_workflow(
             f"\n{label}: {nstep} steps @ {timestep_ps} ps | "
             f"{format_resid_constraint_message(dynamics_constrain, context='cons_fix')}"
         )
-        if not args.quiet:
+        if show_energy:
+            from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+                safe_energy_show,
+            )
+
             print("CHARMM energy before dynamics:")
-            energy.show()
+            safe_energy_show()
 
         io = CharmmTrajectoryFiles(
             restart_write=res_path,
@@ -314,8 +319,13 @@ def run_dynamics_workflow(
             f"dyn print every {dyn_print['nprint']} steps | echeck={echeck} kcal/mol"
         )
         run_dynamics_with_io(kw, io)
-        print("CHARMM energy after dynamics:")
-        energy.show()
+        if show_energy:
+            from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+                safe_energy_show,
+            )
+
+            print("CHARMM energy after dynamics:")
+            safe_energy_show()
     finally:
         if dynamics_constrain:
             turn_off_cons_fix()
