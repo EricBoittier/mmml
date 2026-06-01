@@ -114,6 +114,7 @@ def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> None:
             tolenr=float(config.tolenr),
             tolgrd=float(config.tolgrd),
         )
+    _import_pycharmm_modules()[0].lingo.charmm_script("ENER")
     if config.verbose and config.show_energy:
         _maybe_show_energy(True)
     cons_fix.turn_off()

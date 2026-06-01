@@ -440,6 +440,27 @@ def _build_cluster_from_composition_packmol(
         output_pdb, atoms_per_list, psf_atom_names=atom_names
     )
     coor.set_positions(pd.DataFrame(shifted, columns=["x", "y", "z"]))
+    if int(charmm_sd_steps) > 0 or int(charmm_abnr_steps) > 0:
+        from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+            CharmmMmMinimizeConfig,
+            minimize_charmm_mm_only,
+        )
+
+        if verbose:
+            print(
+                f"Packmol cluster: CHARMM MM minimize "
+                f"SD={charmm_sd_steps} ABNR={charmm_abnr_steps}"
+            )
+        minimize_charmm_mm_only(
+            CharmmMmMinimizeConfig(
+                nstep_sd=int(charmm_sd_steps),
+                nstep_abnr=int(charmm_abnr_steps),
+                tolenr=float(charmm_tolenr),
+                tolgrd=float(charmm_tolgrd),
+                verbose=verbose,
+            )
+        )
+        shifted = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
     span = np.ptp(shifted, axis=0)
     print(
         f"Packmol cluster: {len(atom_names)} atoms, "
