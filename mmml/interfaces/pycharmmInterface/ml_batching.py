@@ -105,11 +105,15 @@ def prepare_batches_md(
         batch_segments = jnp.repeat(jnp.arange(batch_size), num_atoms)
         if dst_idx is None or src_idx is None:
             dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(num_atoms)
-        if dst_idx.ndim == 2:
-            dst_idx = dst_idx + offsets[:, None]
-            src_idx = src_idx + offsets[:, None]
-            dst_idx = dst_idx.flatten()
-            src_idx = src_idx.flatten()
+        # e3x may return (n_pairs,) or (n_pairs, k); tile per batch element.
+        if dst_idx.ndim == 1:
+            dst_idx = (dst_idx[None, :] + offsets[:, None]).reshape(-1)
+            src_idx = (src_idx[None, :] + offsets[:, None]).reshape(-1)
+        elif dst_idx.ndim == 2:
+            dst_idx = (dst_idx + offsets[:, None]).reshape(-1)
+            src_idx = (src_idx + offsets[:, None]).reshape(-1)
+        else:
+            raise ValueError(f"unexpected dst_idx.ndim={dst_idx.ndim}")
 
     reshape_rules = {
         "R": (batch_size * num_atoms, 3),
