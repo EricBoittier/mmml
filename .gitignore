@@ -15,6 +15,7 @@ CHARMMSETUP
 *.hdf5
 outputs/
 out/
+artifacts/
 mmml/models/physnetjax/ckpts/*
 !mmml/models/physnetjax/ckpts/DESdimers/
 
