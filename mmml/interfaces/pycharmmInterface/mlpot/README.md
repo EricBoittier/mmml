@@ -28,24 +28,23 @@ finally:
 
 ## Minimization (example pattern)
 
-Matches ammonia / segment-fixed ML minimization scripts:
+MLpot on the **whole** system; `cons_fix` on a subset (e.g. one residue) to test constraints:
 
 ```python
 from pathlib import Path
 from mmml.interfaces.pycharmmInterface.mlpot import (
     MinimizeWithMlpotConfig,
     minimize_with_mlpot,
-    select_by_seg_id,
+    select_by_resid,
 )
 
-data = Path("charmm_data")
+# Call after register_mlpot(..., select_all_atoms(), ...)
 minimize_with_mlpot(
     MinimizeWithMlpotConfig(
-        fixed_ml_selection=select_by_seg_id("AMM1"),
+        fixed_ml_selection=select_by_resid(1),
         nstep=500,
-        pdb_path=data / "mini_ammonia.pdb",
-        crd_path=data / "mini_ammonia.crd",
-        skip_if_crd_exists=True,
+        pdb_path=Path("charmm_data/mini.pdb"),
+        crd_path=Path("charmm_data/mini.crd"),
     )
 )
 ```
