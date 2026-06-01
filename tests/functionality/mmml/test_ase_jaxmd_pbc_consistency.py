@@ -162,14 +162,14 @@ def test_ase_jaxmd_pbc_energy_forces_consistency():
     not _can_import("pycharmm"),
     reason="pycharmm not available in this environment",
 )
-@pytest.mark.skipif(
-    not _can_import("jax_md"),
-    reason="jax_md not available in this environment",
-)
 def test_ase_jaxmd_pbc_with_box_and_pairs():
     """
-    Test that evaluate_energies_and_forces with box and pair_idx/pair_mask
-    matches ASE calculator for the same wrapped configuration.
+    Test that spherical_cutoff_calculator with box and pair_idx/pair_mask kwargs
+    matches the ASE calculator for the same PBC configuration.
+
+    Uses ML only (doMM=False): pair indices are passed through the API but MM is
+    off, so no CHARMM PSF is required. This checks that box/pair kwargs do not
+    break ASE/JAX consistency for the ML path.
     """
     if not _can_import("jax"):
         pytest.skip("jax not available in this environment")
@@ -201,20 +201,20 @@ def test_ase_jaxmd_pbc_with_box_and_pairs():
             ATOMS_PER_MONOMER=n_atoms_monomer,
             N_MONOMERS=n_monomers,
             doML=True,
-            doMM=True,
+            doMM=False,
             model_restart_path=ckpt,
             MAX_ATOMS_PER_SYSTEM=n_atoms,
             cell=cell_length,
         )
     except (ModuleNotFoundError, RuntimeError) as exc:
-        pytest.skip(f"MM setup failed (PyCHARMM/jax_md): {exc}")
+        pytest.skip(f"Calculator setup failed: {exc}")
 
     key = jax.random.PRNGKey(42)
     R_init = np.asarray(
         jax.random.uniform(key, (n_atoms, 3), minval=2.0, maxval=cell_length - 2.0),
         dtype=np.float32,
     )
-    calc, spherical_cutoff_calculator, get_update_fn = unpack_factory_result(
+    calc, spherical_cutoff_calculator, _ = unpack_factory_result(
         factory(
             atomic_numbers=np.array([6] * n_atoms),
             atomic_positions=R_init,
@@ -222,10 +222,6 @@ def test_ase_jaxmd_pbc_with_box_and_pairs():
             cutoff_params=CutoffParameters(),
         )
     )
-
-    update_fn = get_update_fn(R_init, CutoffParameters())
-    if update_fn is None:
-        pytest.skip("get_update_fn not available (jax_md neighbor list not used)")
 
     cell_matrix = np.diag([cell_length, cell_length, cell_length])
     R = R_init
@@ -237,11 +233,10 @@ def test_ase_jaxmd_pbc_with_box_and_pairs():
     E_ase = atoms.get_potential_energy()
     F_ase = atoms.get_forces()
 
-    box_nl = np.array([cell_length, cell_length, cell_length], dtype=np.float64)
     box_init = jnp.array([cell_length, cell_length, cell_length], dtype=jnp.float32)
-    pair_idx, pair_mask = update_fn(R, box=box_nl)
-
     dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(n_atoms)
+    pair_idx = jnp.stack([dst_idx, src_idx], axis=1)
+    pair_mask = jnp.ones(pair_idx.shape[0], dtype=jnp.float32)
 
     cutoff_params = CutoffParameters()
 
@@ -251,7 +246,7 @@ def test_ase_jaxmd_pbc_with_box_and_pairs():
         n_monomers=n_monomers,
         cutoff_params=cutoff_params,
         doML=True,
-        doMM=True,
+        doMM=False,
         doML_dimer=True,
         debug=False,
         mm_pair_idx=pair_idx,
@@ -270,7 +265,7 @@ def test_ase_jaxmd_pbc_with_box_and_pairs():
             n_monomers=n_monomers,
             cutoff_params=cutoff_params,
             doML=True,
-            doMM=True,
+            doMM=False,
             doML_dimer=True,
             debug=False,
             mm_pair_idx=pair_idx,

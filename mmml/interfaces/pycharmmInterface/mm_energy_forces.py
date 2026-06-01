@@ -370,8 +370,20 @@ def build_mm_energy_forces_fn(
         pair_dimer_idx = None
 
     import pycharmm.psf as psf
-    charges = np.array(psf.get_charges())[:total_atoms]
-    at_codes = np.array(psf.get_iac())[:total_atoms]
+    charges_full = np.array(psf.get_charges(), dtype=np.float64)
+    at_codes_full = np.array(psf.get_iac(), dtype=np.int32)
+    if charges_full.size == 0:
+        raise RuntimeError(
+            "PyCHARMM PSF has no atoms. Read or generate a PSF for this system before "
+            "building MM energy/forces (e.g. setupRes/setupBox or read.psf)."
+        )
+    if charges_full.size < total_atoms:
+        raise RuntimeError(
+            f"PyCHARMM PSF has {charges_full.size} atoms but the calculator expects "
+            f"{total_atoms}. Regenerate the PSF for the current system."
+        )
+    charges = charges_full[:total_atoms]
+    at_codes = at_codes_full[:total_atoms]
     if at_codes_override is not None:
         at_codes_override_arr = np.array(at_codes_override)
         if at_codes_override_arr.shape[0] != at_codes.shape[0]:
@@ -396,6 +408,17 @@ def build_mm_energy_forces_fn(
     rmins_per_system = jnp.take(at_flat_rm, at_codes)
     epsilons_per_system = jnp.take(at_flat_ep, at_codes)
     q_per_system = jnp.array(charges)
+
+    _n_static_pairs = int(pair_idx_atom_atom.shape[0])
+    if not _use_jax_md_nbrs and (_n_static_pairs == 0 or int(q_per_system.shape[0]) == 0):
+
+        @jax.jit
+        def calculate_mm_energy_and_forces(positions: Array) -> Tuple[Array, Array]:
+            return jnp.array(0.0, dtype=jnp.float32), jnp.zeros(
+                (total_atoms, 3), dtype=jnp.float32
+            )
+
+        return calculate_mm_energy_and_forces
 
     if not _use_jax_md_nbrs:
         q_a = jnp.take(q_per_system, pair_idx_atom_atom[:, 0])
