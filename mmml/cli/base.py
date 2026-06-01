@@ -77,22 +77,26 @@ def parse_base_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--ml-switch-width",
         "--ml-cutoff",
+        dest="ml_switch_width",
         type=float,
         default=2.0,
-        help="ML cutoff distance passed to the calculator factory (default: 2.0 Å).",
+        help="ML taper width in Å over [mm_switch_on - width, mm_switch_on] (default: 2.0).",
     )
     parser.add_argument(
         "--mm-switch-on",
         type=float,
         default=5.0,
-        help="MM switch-on distance for the hybrid calculator (default: 5.0 Å).",
+        help="Distance (Å) where ML→0 and MM→1 in complementary handoff (default: 5.0).",
     )
     parser.add_argument(
+        "--mm-switch-width",
         "--mm-cutoff",
+        dest="mm_switch_width",
         type=float,
         default=1.0,
-        help="MM cutoff width for the hybrid calculator (default: 1.0 Å).",
+        help="MM outer taper width in Å past mm_switch_on (default: 1.0).",
     )
     parser.add_argument(
         "--include-mm",

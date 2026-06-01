@@ -1006,16 +1006,19 @@ def test_aco_hybrid_nontrivial_at_com_separation(com_separation: float):
 @pytest.mark.integration
 @pytest.mark.skipif(not _can_import("pycharmm"), reason="pycharmm not available")
 @pytest.mark.skipif(not _can_import("jax_md"), reason="jax_md not available")
-def test_aco_beyond_mm_switch_monomer_forces_remain():
+def test_aco_beyond_mm_switch_inter_monomer_terms_taper():
     """
-    COM separation past mm_switch_on: dimer ML tapers off, but monomer forces stay non-zero.
+    Past mm_switch_on (5 Å), inter-monomer ML 2-body and MM terms taper off.
 
-    Default cutoffs use mm_switch_on=5.0 Å; at 6.0 Å the inter-monomer ML path is inactive,
-    yet each monomer's internal ML contribution should still yield forces on its atoms.
+    ACO monomers from CHARMM ``ic.build`` are near equilibrium, so internal monomer
+    ML forces can be ~zero even inside the handoff window; hybrid forces at 4.5 Å
+    mainly come from ``ml_2b_F`` and ``mm_F``. At 6.0 Å those inter-monomer terms
+    should be negligible relative to the in-handoff reference.
     """
     if not _can_import("jax") or not _can_import_e3x_nn() or not _can_import("ase"):
         pytest.skip("jax/e3x/ase not available")
 
+    import jax.numpy as jnp
     import ase
 
     ckpt = _get_ckpt()
@@ -1023,29 +1026,69 @@ def test_aco_beyond_mm_switch_monomer_forces_remain():
         pytest.skip("No checkpoint")
 
     cell_length = 40.0
-    try:
+
+    def _hybrid_at_com(com_separation: float):
         z, r = _setup_charmm_aco_dimer_pbc(
             cell_length=cell_length,
-            com_separation=6.0,
+            com_separation=com_separation,
         )
-        calc, _, get_update_fn, cutoff_params, z, r = _build_aco_mm_calculator(
+        calc, spherical_fn, get_update_fn, cutoff_params, z, r = _build_aco_mm_calculator(
             ckpt, z, r, cell_length, backprop=False
         )
-        if get_update_fn is None:
+        update_fn = get_update_fn(r, cutoff_params)
+        if update_fn is None:
             pytest.skip("jax-md neighbor list unavailable")
+        box = np.array([cell_length, cell_length, cell_length], dtype=np.float64)
+        box_jax = jnp.array(box, dtype=jnp.float32)
+        pair_idx, pair_mask = update_fn(r, box=box)
+        atoms = ase.Atoms(z, r, cell=_cell_matrix(cell_length), pbc=True)
+        atoms.calc = calc
+        F_ase = atoms.get_forces()
+        result = spherical_fn(
+            atomic_numbers=jnp.array(z),
+            positions=jnp.array(r),
+            n_monomers=ACO_N_MONOMERS,
+            cutoff_params=cutoff_params,
+            doML=True,
+            doMM=True,
+            doML_dimer=True,
+            mm_pair_idx=pair_idx,
+            mm_pair_mask=pair_mask,
+            box=box_jax,
+        )
+        return F_ase, result
+
+    try:
+        F_near, out_near = _hybrid_at_com(4.5)
+        F_far, out_far = _hybrid_at_com(6.0)
     except (RuntimeError, ValueError, IndexError) as exc:
         _skip_if_runtime_incompatible(exc)
 
-    atoms = ase.Atoms(z, r, cell=_cell_matrix(cell_length), pbc=True)
-    atoms.calc = calc
-    F_ase = atoms.get_forces()
-    _require_nontrivial_forces(
-        F_ase[:ACO_ATOMS_PER_MONOMER],
-        label="monomer-0 forces at COM=6.0 Å (beyond mm_switch_on)",
+    _require_nontrivial_forces(F_near, label="total forces at COM=4.5 Å (handoff region)")
+
+    def _max_mag(arr) -> float:
+        a = np.asarray(arr, dtype=float)
+        if a.size == 0:
+            return 0.0
+        return float(np.max(np.linalg.norm(a.reshape(-1, 3), axis=1)))
+
+    ml2b_near = _max_mag(out_near.ml_2b_F)
+    ml2b_far = _max_mag(out_far.ml_2b_F)
+    mm_near = _max_mag(out_near.mm_F)
+    mm_far = _max_mag(out_far.mm_F)
+    f_near = _max_mag(F_near)
+    f_far = _max_mag(F_far)
+
+    assert np.isfinite(float(out_near.energy)) and np.isfinite(float(out_far.energy))
+    assert ml2b_far < max(0.05 * ml2b_near, 1e-8), (
+        f"ml_2b_F should taper beyond switch: near max={ml2b_near:.3e}, far max={ml2b_far:.3e}"
     )
-    _require_nontrivial_forces(
-        F_ase[ACO_ATOMS_PER_MONOMER:],
-        label="monomer-1 forces at COM=6.0 Å (beyond mm_switch_on)",
+    assert mm_far < max(0.05 * mm_near, 1e-8), (
+        f"mm_F should taper beyond switch: near max={mm_near:.3e}, far max={mm_far:.3e}"
+    )
+    assert f_far < max(0.2 * f_near, 1e-8), (
+        f"total |F| should drop when inter-monomer terms are off: "
+        f"near max={f_near:.3e}, far max={f_far:.3e}"
     )
 
 
