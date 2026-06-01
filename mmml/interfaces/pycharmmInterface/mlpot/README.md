@@ -113,6 +113,13 @@ apply_flat_bottom_workflow(radius=20.0, force=1.0, center_at_origin=True)
 
 Test scripts: ``--fb-rad 20 --fb-forc 1`` (optional ``--no-fb-center`` if the sphere center is not at the origin).
 
+## Energy drift guard (ECHECK)
+
+``build_nve_dynamics`` defaults to ``echeck=100`` kcal/mol (``dyna.inp`` heating/production).
+Dynamics stops early if the total energy jump exceeds the tolerance — use before MMFP/PRESS RMS blows up.
+
+Script 05: ``--echeck 100`` (default), ``--echeck 500`` for looser NPT-style runs, ``--no-echeck`` to disable.
+
 ## Partial ML / MM
 
 See `partial_mm.py` — segment registration works; **ML–MM pair electrostatics** (`idxu`/`idxv`) raise `NotImplementedError` until implemented in `PyCharmm_Calculator`.

@@ -101,6 +101,31 @@ def add_flat_bottom_args(parser: argparse.ArgumentParser) -> None:
     group.add_argument("--fb-zref", type=float, default=0.0, help="Sphere center z (Å)")
 
 
+def add_dynamics_stability_args(parser: argparse.ArgumentParser) -> None:
+    """CHARMM dynamics energy-drift kill switch (``ECHECK``)."""
+    group = parser.add_argument_group("Dynamics stability (ECHECK)")
+    group.add_argument(
+        "--echeck",
+        type=float,
+        default=100.0,
+        metavar="KCAL",
+        help="Stop dynamics if total energy change exceeds this (kcal/mol); "
+        "default 100 (dyna.inp). Use --no-echeck to disable.",
+    )
+    group.add_argument(
+        "--no-echeck",
+        action="store_true",
+        help="Disable ECHECK (CHARMM default -1 = no early stop)",
+    )
+
+
+def resolve_echeck_from_args(args: argparse.Namespace) -> float:
+    """Return CHARMM ``echeck`` tolerance (kcal/mol), or -1 if disabled."""
+    if getattr(args, "no_echeck", False):
+        return -1.0
+    return float(getattr(args, "echeck", 100.0))
+
+
 def add_dcd_save_args(parser: argparse.ArgumentParser) -> None:
     """CLI flags for DCD trajectory frame spacing (scripts 04–05)."""
     group = parser.add_argument_group("DCD trajectory output")
