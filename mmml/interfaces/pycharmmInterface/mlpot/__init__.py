@@ -50,6 +50,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.setup import (
     select_by_resids,
     select_by_seg_id,
     disable_charmm_domdec,
+    prepare_charmm_vacuum,
     refresh_nbonds_after_mlpot,
     setup_default_nbonds,
 )
@@ -93,6 +94,7 @@ __all__ = [
     "select_by_resids",
     "select_by_seg_id",
     "disable_charmm_domdec",
+    "prepare_charmm_vacuum",
     "refresh_nbonds_after_mlpot",
     "setup_default_nbonds",
     "setup_flat_bottom_sphere_mmfp",

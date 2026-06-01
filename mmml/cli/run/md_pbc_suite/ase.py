@@ -103,6 +103,9 @@ def _reset_pycharmm_system() -> None:
 
 def _make_res_minimize(nbxmod: int, nstep: int = 1000) -> None:
     """Run the same nonbonded/minimization recipe used by make-res."""
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import prepare_charmm_vacuum
+
+    prepare_charmm_vacuum()
     pyci.pycharmm_quiet()
     pyci.pycharmm.NonBondedScript(
         cutnb=18.0,
