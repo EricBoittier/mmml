@@ -14,11 +14,94 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
+import sys
+from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
 _xla_gpu_warmed = False
+_ptxas_path_configured = False
+
+
+def _site_package_roots() -> list[Path]:
+    ver = f"{sys.version_info.major}.{sys.version_info.minor}"
+    roots: list[Path] = [Path(sys.prefix) / f"lib/python{ver}/site-packages"]
+    try:
+        import site
+
+        roots.extend(Path(p) for p in site.getsitepackages())
+    except Exception:
+        pass
+    seen: set[Path] = set()
+    unique: list[Path] = []
+    for root in roots:
+        resolved = root.resolve()
+        if resolved not in seen and resolved.is_dir():
+            seen.add(resolved)
+            unique.append(resolved)
+    return unique
+
+
+@lru_cache(maxsize=1)
+def find_bundled_ptxas_dir() -> Path | None:
+    """Return the directory containing wheel-shipped ``ptxas``, if any."""
+    rel_bins = (
+        "nvidia/cu13/bin",
+        "nvidia/cu12/bin",
+        "nvidia/cuda_nvcc/bin",
+    )
+    for root in _site_package_roots():
+        for rel in rel_bins:
+            candidate = (root / rel).resolve()
+            if (candidate / "ptxas").is_file():
+                return candidate
+    for env_name in ("CUDA_HOME", "CUDA_PATH"):
+        cuda_home = (os.environ.get(env_name) or "").strip()
+        if not cuda_home:
+            continue
+        candidate = (Path(cuda_home) / "bin").resolve()
+        if (candidate / "ptxas").is_file():
+            return candidate
+    return None
+
+
+def ensure_jax_cuda_toolchain(*, required: bool = False) -> bool:
+    """Put bundled ``ptxas`` on ``PATH`` for XLA GPU compilation.
+
+    JAX CUDA wheels ship ``ptxas`` under ``site-packages/nvidia/cu13/bin`` (or
+    ``cu12``). XLA fails with ``INTERNAL: Failed to launch ptxas`` when that
+    directory is not on ``PATH`` — common after ``uv sync --extra gpu-cuda13``.
+
+    Returns True when ``ptxas`` is available on ``PATH`` after this call.
+    """
+    global _ptxas_path_configured
+    if shutil.which("ptxas"):
+        _ptxas_path_configured = True
+        return True
+
+    ptxas_dir = find_bundled_ptxas_dir()
+    if ptxas_dir is None:
+        if required:
+            raise RuntimeError(
+                "ptxas not found for JAX GPU compilation. Install CUDA extras, e.g. "
+                "`uv sync --extra gpu-cuda13` or `pip install nvidia-cuda-nvcc`, "
+                "or put a CUDA toolkit bin directory containing ptxas on PATH."
+            )
+        return False
+
+    path = str(ptxas_dir)
+    cur = os.environ.get("PATH", "")
+    if path not in cur.split(os.pathsep):
+        os.environ["PATH"] = f"{path}{os.pathsep}{cur}"
+        logger.debug("Prepended JAX CUDA toolchain to PATH: %s", path)
+
+    _ptxas_path_configured = True
+    if not shutil.which("ptxas") and required:
+        raise RuntimeError(f"ptxas exists at {ptxas_dir / 'ptxas'} but is not executable")
+    return shutil.which("ptxas") is not None
 
 
 def apply_xla_cuda_timer_log_filter() -> None:
@@ -62,6 +145,8 @@ def ensure_xla_gpu_warmed(*, force: bool = False) -> bool:
     if not gpu_devices:
         _xla_gpu_warmed = True
         return False
+
+    ensure_jax_cuda_toolchain(required=True)
 
     @jax.jit
     def _warmup_kernel(x: jnp.ndarray) -> jnp.ndarray:
@@ -114,6 +199,7 @@ def warmup_hybrid_spherical_cutoff(
 
     Call after PyCHARMM/MM setup (e.g. CGENFF drudes) and before timed JAX-MD compiles.
     """
+    ensure_jax_cuda_toolchain(required=True)
     ensure_xla_gpu_warmed(force=True)
     kwargs = dict(
         positions=positions,
@@ -147,3 +233,4 @@ def warmup_ase_mmml_energy_forces(atoms: Any, *, include_forces: bool = True) ->
 # Apply log filter on import so CLI entry points that import this module early
 # can suppress cuda_timer noise even if JAX was not imported yet.
 apply_xla_cuda_timer_log_filter()
+ensure_jax_cuda_toolchain()

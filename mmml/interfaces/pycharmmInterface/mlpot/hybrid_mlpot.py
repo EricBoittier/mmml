@@ -173,5 +173,8 @@ def warmup_decomposed_mlpot(
         doMM=False,
         doML_dimer=True,
     )
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import revalidate_mpi_after_cuda
+
+    revalidate_mpi_after_cuda(phase="after decomposed MLpot JAX warmup")
     if verbose:
         print("Decomposed MLpot JAX warmup complete", flush=True)

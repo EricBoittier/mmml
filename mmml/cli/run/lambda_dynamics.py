@@ -45,19 +45,7 @@ SNAPSHOTS_NPZ = "lambda_ti_snapshots.npz"
 SUMMARY_JSON = "lambda_ti_summary.json"
 
 
-def ensure_jax_cuda_toolchain() -> None:
-    """Put bundled ``ptxas`` (JAX CUDA 13 wheels) on PATH for XLA GPU compilation."""
-    ver = f"{sys.version_info.major}.{sys.version_info.minor}"
-    ptxas_dir = (
-        Path(sys.prefix)
-        / f"lib/python{ver}/site-packages/nvidia/cu13/bin"
-    )
-    if not (ptxas_dir / "ptxas").is_file():
-        return
-    path = str(ptxas_dir.resolve())
-    cur = os.environ.get("PATH", "")
-    if path not in cur.split(os.pathsep):
-        os.environ["PATH"] = f"{path}{os.pathsep}{cur}"
+from mmml.utils.jax_gpu_warmup import ensure_jax_cuda_toolchain
 
 
 def lambda_repeat_label(wi: int, rep: int, lam: float) -> str:

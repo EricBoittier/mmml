@@ -59,7 +59,9 @@ dependencies = [
 
 [project.optional-dependencies]
 # Interfaces and optional integrations
-charmm-interface = []
+charmm-interface = [
+    "mpi4py",
+]
 
 # OpenFE (Open Free Energy) - conda-only; see mmml/interfaces/openfeInterface/README.md
 # Install with: micromamba create -c conda-forge -n openfe openfe
