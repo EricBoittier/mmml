@@ -778,6 +778,9 @@ def main() -> int:
                 + mpirun_launch_hint("mmml md-system"),
                 flush=True,
             )
+        from mmml.interfaces.pycharmmInterface.jax_device_policy import apply_mlpot_jax_platform_env
+
+        apply_mlpot_jax_platform_env(quiet=True)
         from mmml.cli.run.md_pbc_suite import pycharmm_mlpot as backend_mod
     else:
         from mmml.cli.run.md_pbc_suite import jaxmd as backend_mod

@@ -122,19 +122,10 @@ def apply_xla_cuda_timer_log_filter() -> None:
 
 
 def _jax_warmup_backend() -> str:
-    """``cpu`` or ``gpu`` for JAX compile warmup (CPU avoids CUDA/MPI clashes)."""
-    mode = (os.environ.get("MMML_JAX_WARMUP_DEVICE") or "auto").strip().lower()
-    if mode in ("cpu", "gpu"):
-        return mode
-    if mode == "auto":
-        try:
-            from mmml.interfaces.pycharmmInterface.charmm_mpi import charmm_lib_links_mpi
+    """``cpu`` or ``gpu`` for JAX compile warmup."""
+    from mmml.interfaces.pycharmmInterface.jax_device_policy import jax_warmup_device_name
 
-            if charmm_lib_links_mpi():
-                return "cpu"
-        except Exception:
-            pass
-    return "gpu"
+    return jax_warmup_device_name()
 
 
 def ensure_xla_gpu_warmed(*, force: bool = False) -> bool:

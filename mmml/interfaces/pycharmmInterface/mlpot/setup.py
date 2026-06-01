@@ -295,9 +295,12 @@ def register_mlpot(
 ) -> MlpotContext:
     """Register ``pycharmm.MLpot`` and return a context manager-like handle."""
     from mmml.interfaces.pycharmmInterface.mlpot.block_terms import apply_mlpot_energy_block
+    from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import validate_mlpot_system_size
 
     pycharmm = _import_pycharmm()
     z_ml = physnet_ml_atomic_numbers(ml_Z)
+    n_ml = len(ml_selection.get_atom_indexes())
+    validate_mlpot_system_size(n_ml)
     block_tag = apply_mlpot_energy_block(ml_selection)
     mlpot = pycharmm.MLpot(
         ml_model=pyCModel,
