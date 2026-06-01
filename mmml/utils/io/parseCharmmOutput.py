@@ -164,7 +164,7 @@ def plot_distribution(data, column, ax, color, shift=0.0):
     ax.text(
         0.01,
         0.95 + shift,
-        f"$\mu = {mu:.0f}$\n $\sigma = {std:.0f}$",
+        f"$\\mu = {mu:.0f}$\n $\\sigma = {std:.0f}$",
         transform=ax.transAxes,
         ha="left",
         va="top",

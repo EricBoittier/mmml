@@ -134,8 +134,8 @@ def evaluate_dc(
             ax_scatter.set_xlim(-1, 1)
             ax_scatter.set_ylim(-1, 1)
             ax_scatter.set_aspect("equal")
-            ax_scatter.set_xlabel("$q_\mathrm{mono.}$ [$e$]")
-            ax_scatter.set_ylabel("$q_\mathrm{dcmnet}$ [$e$]")
+            ax_scatter.set_xlabel(r"$q_\mathrm{mono.}$ [$e$]")
+            ax_scatter.set_ylabel(r"$q_\mathrm{dcmnet}$ [$e$]")
 
             ax_scatter2.scatter(
                 batch["esp"][mbID][idx_cut],
@@ -152,13 +152,13 @@ def evaluate_dc(
                 color="k",
             )
             for ax in [ax_scatter2, ax_scatter3]:
-                ax.set_xlabel("ESP$_\mathrm{DFT}$ [(kcal/mol)/$e$]")
+                ax.set_xlabel(r"ESP$_\mathrm{DFT}$ [(kcal/mol)/$e$]")
                 ax.set_xlim(-0.1, 0.1)
                 ax.set_ylim(-0.1, 0.1)
                 ax.plot([-1, 1], [-1, 1], c="k", alpha=0.5)
                 ax.set_aspect("equal")
-            ax_scatter2.set_ylabel("ESP$_\mathrm{dcmnet}$ [(kcal/mol)/$e$]")
-            ax_scatter3.set_ylabel("ESP$_\mathrm{mono.}$ [(kcal/mol)/$e$]")
+            ax_scatter2.set_ylabel(r"ESP$_\mathrm{dcmnet}$ [(kcal/mol)/$e$]")
+            ax_scatter3.set_ylabel(r"ESP$_\mathrm{mono.}$ [(kcal/mol)/$e$]")
 
             if id:
                 ax_rdkit.imshow(images[mbID])
@@ -287,11 +287,11 @@ def evaluate_dc(
             for _ in [ax1, ax2, ax3, ax4, ax5]:
                 # _.set_proj_type('ortho')
                 _.set_xlim(-10, 10)
-                _.set_xlabel("$x~[\mathrm{\AA}]$")
+                _.set_xlabel(r"$x~[\mathrm{\AA}]$")
                 _.set_ylim(-10, 10)
-                _.set_ylabel("$y~[\mathrm{\AA}]$")
+                _.set_ylabel(r"$y~[\mathrm{\AA}]$")
                 _.set_zlim(-10, 10)
-                _.set_zlabel("$z~[\mathrm{\AA}]$")
+                _.set_zlabel(r"$z~[\mathrm{\AA}]$")
 
             # adjust white space
             plt.subplots_adjust(wspace=0.5, hspace=0.75)

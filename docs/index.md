@@ -8,7 +8,7 @@ Use this site for installation, usage patterns, and project development notes.
 
 - Quick installation and environment setup
 - A small runnable usage example
-- [Package architecture](README.md) — module layout, import graph, CLI and MD paths
+- [Package architecture](package-architecture.md) — module layout, import graph, CLI and MD paths
 - Development workflows for contributors
 
 ## External resources
