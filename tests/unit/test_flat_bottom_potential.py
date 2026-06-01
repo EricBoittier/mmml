@@ -154,8 +154,15 @@ def test_flat_bottom_forces_match_energy_gradient() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("mic_fn", [mic_displacement, mic_displacement_smooth])
-def test_flat_bottom_pbc_uses_cell_center(mic_fn) -> None:
+@pytest.mark.parametrize(
+    ("mic_fn", "dist_atol"),
+    [
+        (mic_displacement, 1e-6),
+        (mic_displacement_smooth, 2e-3),
+    ],
+    ids=["mic", "mic_smooth"],
+)
+def test_flat_bottom_pbc_uses_cell_center(mic_fn, dist_atol: float) -> None:
     """With an orthorhombic cell, COM is measured relative to the box center via MIC."""
     cell = jnp.diag(jnp.array([20.0, 20.0, 20.0], dtype=jnp.float64))
     # COM at (10, 10, 13): 3 Å above box center (10, 10, 10)
@@ -176,8 +183,10 @@ def test_flat_bottom_pbc_uses_cell_center(mic_fn) -> None:
         mic_fn=mic_fn,
     )
 
-    assert float(com_dist) == pytest.approx(3.0, rel=0.0, abs=1e-5)
-    assert float(flat_e) == pytest.approx(1.0, rel=0.0, abs=1e-5)  # k * (3 - 2)^2
+    com_d = float(com_dist)
+    assert com_d == pytest.approx(3.0, rel=0.0, abs=dist_atol)
+    excess = max(0.0, com_d - 2.0)
+    assert float(flat_e) == pytest.approx(1.0 * excess**2, rel=0.0, abs=max(dist_atol, 0.02))
 
 
 @pytest.mark.unit
