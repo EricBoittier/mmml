@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Optional, Sequence
 
 import jax
 import jax.numpy as jnp
@@ -13,6 +14,30 @@ from mmml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_re
 from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
 from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol, setup_calculator
 from mmml.interfaces.pycharmmInterface.mlpot.setup import physnet_ml_atomic_numbers
+
+
+def resolve_ml_batch_size(
+    n_monomers: int,
+    explicit: Optional[int] = None,
+) -> Optional[int]:
+    """Chunk size for PhysNet forward passes (limits XLA LLVM compile RAM).
+
+    DCM:90 sparse path evaluates ~590 systems (90 monomers + 500 dimers) per step.
+    Without chunking, CPU JAX JIT can exhaust memory during LLVM compilation.
+    """
+    if explicit is not None:
+        return int(explicit)
+    env = (os.environ.get("MMML_MLPOT_ML_BATCH_SIZE") or "").strip()
+    if env:
+        return int(env)
+    n = int(n_monomers)
+    if n <= 10:
+        return None
+    if n >= 40:
+        return 64
+    if n >= 20:
+        return 128
+    return 256
 
 
 class DecomposedMlpotCalculator:
@@ -110,6 +135,7 @@ def build_decomposed_mlpot_model(
     atoms_per_monomer: Sequence[int],
     n_monomers: int,
     *,
+    ml_batch_size: Optional[int] = None,
     verbose: bool = False,
 ) -> DecomposedMlpotModel:
     ckpt = Path(checkpoint).expanduser().resolve()
@@ -117,6 +143,13 @@ def build_decomposed_mlpot_model(
     z = np.asarray(physnet_ml_atomic_numbers(atomic_numbers), dtype=int)
     per = [int(x) for x in atoms_per_monomer]
     max_atoms = max(per) * 2
+    batch_size = resolve_ml_batch_size(int(n_monomers), ml_batch_size)
+    if verbose and batch_size is not None:
+        print(
+            f"Decomposed MLpot: ml_batch_size={batch_size} "
+            f"({int(n_monomers)} monomers; reduces JAX compile memory)",
+            flush=True,
+        )
     factory = setup_calculator(
         ATOMS_PER_MONOMER=per,
         N_MONOMERS=int(n_monomers),
@@ -126,6 +159,7 @@ def build_decomposed_mlpot_model(
         doML_dimer=True,
         verbose=verbose,
         MAX_ATOMS_PER_SYSTEM=max_atoms,
+        ml_batch_size=batch_size,
     )
     r0 = np.zeros((len(z), 3), dtype=np.float64)
     from mmml.interfaces.pycharmmInterface.jax_device_policy import mlpot_jax_device_context
