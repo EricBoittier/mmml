@@ -65,6 +65,32 @@ def add_charmm_output_args(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="Shortcut for --prnlev 0 --warnlev 0; coarse mini/dynamics print",
     )
+    group.add_argument(
+        "--skip-energy-show",
+        action="store_true",
+        help="Skip CHARMM energy.show() (avoids segfault on MPI/cluster builds).",
+    )
+    group.add_argument(
+        "--show-energy",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "Print CHARMM energy tables (off by default; use for debugging). "
+            "Honors SKIP_CHARMM_ENERGY_SHOW and SLURM/macOS/pytest/OpenMPI guards."
+        ),
+    )
+
+
+def resolve_show_energy(args: argparse.Namespace) -> bool:
+    """Whether MLpot workflows should call CHARMM energy.show()."""
+    if getattr(args, "skip_energy_show", False):
+        return False
+    if getattr(args, "quiet", False):
+        return False
+    show = getattr(args, "show_energy", None)
+    if show is not None:
+        return bool(show)
+    return False
 
 
 def add_flat_bottom_args(parser: argparse.ArgumentParser) -> None:

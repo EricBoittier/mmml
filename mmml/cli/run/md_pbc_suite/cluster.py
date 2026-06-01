@@ -209,7 +209,7 @@ def build_minimized_monomer_for_packmol(
                 tolenr=float(tolenr),
                 tolgrd=float(tolgrd),
                 verbose=verbose,
-                show_energy=verbose,
+                show_energy=False,
             )
         )
         coords = get_charmm_positions_array()

@@ -100,6 +100,9 @@ def should_skip_charmm_energy_show() -> bool:
     # CHARMM energy.show() can segfault under pytest on some Linux builds.
     if os.environ.get("PYTEST_CURRENT_TEST"):
         return True
+    # OpenMPI-linked CHARMM builds can segfault in domdec during print_energy.
+    if os.environ.get("OMPI_COMM_WORLD_SIZE") or os.environ.get("PMI_SIZE"):
+        return True
     return False
 
 
