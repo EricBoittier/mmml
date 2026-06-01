@@ -31,5 +31,7 @@ def test_setup_box_generic_smoke():
             pytest.skip(f"Missing CHARMM crystal script: {source_script}")
         shutil.copy2(source_script, crystal_script)
 
-    atoms = setupBox.setup_box_generic(str(pdb_path), side_length=10.0, tag="tip3")
+    atoms = setupBox.setup_box_generic(
+        str(pdb_path), side_length=10.0, tag="tip3", skip_energy_show=True
+    )
     assert atoms is not None

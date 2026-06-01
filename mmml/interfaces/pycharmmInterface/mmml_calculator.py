@@ -1592,39 +1592,47 @@ def setup_calculator(
                         if callable(get_stats):
                             self.results["mm_pair_update_stats"] = dict(get_stats())
 
-                # Compute ModelOutput to get forces directly (more stable)
-                out = spherical_cutoff_calculator(
-                    positions=R,
-                    atomic_numbers=Z,
-                    n_monomers=self.n_monomers,
-                    cutoff_params=self.cutoff_params,
-                    doML=self.doML,
-                    doMM=self.doMM,
-                    doML_dimer=self.doML_dimer,
-                    debug=self.debug,
-                    mm_pair_idx=mm_pair_idx,
-                    mm_pair_mask=mm_pair_mask,
-                )
-                
-                # Use forces directly from ModelOutput (MIC-only: no force transform needed)
-                F = out.forces
+                def _spherical_eval(positions_jax):
+                    return spherical_cutoff_calculator(
+                        positions=positions_jax,
+                        atomic_numbers=jnp.asarray(Z),
+                        n_monomers=self.n_monomers,
+                        cutoff_params=self.cutoff_params,
+                        doML=self.doML,
+                        doMM=self.doMM,
+                        doML_dimer=self.doML_dimer,
+                        debug=self.debug,
+                        mm_pair_idx=mm_pair_idx,
+                        mm_pair_mask=mm_pair_mask,
+                    )
 
-                # For energy, we can still use autodiff if needed, but for now use directly
-                # The energy from ModelOutput is already correct
-                E = out.energy
+                if self.backprop:
+                    R_jax = jnp.asarray(R)
+
+                    def _energy_scalar(positions_jax):
+                        return jnp.reshape(_spherical_eval(positions_jax).energy, (-1,))[0]
+
+                    E, grad_R = jax.value_and_grad(_energy_scalar)(R_jax)
+                    F = -grad_R
+                    out = _spherical_eval(R_jax) if self.verbose else None
+                else:
+                    out = _spherical_eval(jnp.asarray(R))
+                    E = out.energy
+                    F = out.forces
 
                 # Ensure forces are finite
                 E = jnp.where(jnp.isfinite(E), E, 0.0)
                 F = jnp.where(jnp.isfinite(F), F, 0.0)
 
-                if self.verbose:
-                    # Store full ModelOutput with ML/MM breakdown for analysis
-                    self.results["model_output"] = out
-                    if hasattr(out, "_asdict"):
-                        for k, v in out._asdict().items():
-                            self.results[f"model_{k}"] = v
-                else:
-                    self.results["out"] = out
+                if out is not None:
+                    if self.verbose:
+                        # Store full ModelOutput with ML/MM breakdown for analysis
+                        self.results["model_output"] = out
+                        if hasattr(out, "_asdict"):
+                            for k, v in out._asdict().items():
+                                self.results[f"model_{k}"] = v
+                    else:
+                        self.results["out"] = out
 
 
 

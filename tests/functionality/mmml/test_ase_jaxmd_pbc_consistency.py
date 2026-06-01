@@ -242,13 +242,15 @@ def test_ase_jaxmd_pbc_with_box_and_pairs():
 
     dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(n_atoms)
 
+    cutoff_params = CutoffParameters()
+
     result = spherical_cutoff_calculator(
         atomic_numbers=jnp.array(Z),
         positions=jnp.array(R),
         n_monomers=n_monomers,
-        cutoff_params=CutoffParameters(),
+        cutoff_params=cutoff_params,
         doML=True,
-        doMM=False,
+        doMM=True,
         doML_dimer=True,
         debug=False,
         mm_pair_idx=pair_idx,
@@ -256,7 +258,27 @@ def test_ase_jaxmd_pbc_with_box_and_pairs():
         box=box_init,
     )
     E_jax = float(result.energy.reshape(-1)[0])
-    F_jax = np.asarray(result.forces)
+
+    from jax import jit
+
+    @jit
+    def jax_md_energy_with_pairs(position, **kwargs):
+        out = spherical_cutoff_calculator(
+            atomic_numbers=jnp.array(Z),
+            positions=jnp.array(position),
+            n_monomers=n_monomers,
+            cutoff_params=cutoff_params,
+            doML=True,
+            doMM=True,
+            doML_dimer=True,
+            debug=False,
+            mm_pair_idx=pair_idx,
+            mm_pair_mask=pair_mask,
+            box=box_init,
+        )
+        return out.energy.reshape(-1)[0]
+
+    F_jax = np.array(-jax.grad(jax_md_energy_with_pairs)(jnp.array(R)))
 
     rtol, atol = 1e-4, 1e-3
     assert np.isclose(E_ase, E_jax, rtol=rtol, atol=atol), (
