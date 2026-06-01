@@ -14,6 +14,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     add_dynamics_stability_args,
     add_flat_bottom_args,
     add_monomer_constraint_args,
+    add_test_first_args,
 )
 from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import run_workflow
 
@@ -43,6 +44,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     add_dynamics_stability_args(parser)
     add_flat_bottom_args(parser)
     add_monomer_constraint_args(parser, for_dynamics=True)
+    add_test_first_args(parser)
     parser.add_argument(
         "--output-dir",
         type=Path,

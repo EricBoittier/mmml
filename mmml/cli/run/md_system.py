@@ -266,6 +266,39 @@ def parse_args() -> argparse.Namespace:
         default=50.0,
         help="pycharmm: abort if post-min GRMS exceeds this (kcal/mol/Å)",
     )
+    parser.add_argument(
+        "--test-first",
+        action="store_true",
+        help="pycharmm: CHARMM TEST FIRSt after MLpot SD minimization",
+    )
+    parser.add_argument(
+        "--test-first-tol",
+        type=float,
+        default=0.005,
+        help="pycharmm: TEST FIRSt tolerance (default: 0.005)",
+    )
+    parser.add_argument(
+        "--test-first-step",
+        type=float,
+        default=1.0e-4,
+        help="pycharmm: TEST FIRSt finite-difference step in Å (default: 1e-4)",
+    )
+    parser.add_argument(
+        "--test-first-resids",
+        type=str,
+        default="",
+        help="pycharmm: limit derivative tests to these resids (default: all atoms)",
+    )
+    parser.add_argument(
+        "--test-first-charmm",
+        action="store_true",
+        help="pycharmm: also run CHARMM TEST FIRSt (ANALYTIC omits MLpot USER energy)",
+    )
+    parser.add_argument(
+        "--test-first-update-nbonds",
+        action="store_true",
+        help="pycharmm: UPDATE nonbond lists before CHARMM TEST FIRSt",
+    )
 
     # --- lambda_ti (--setup lambda_ti) ----------------------------------------
     parser.add_argument(
@@ -573,6 +606,16 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     if getattr(args, "allow_high_grms", False):
         cmd.append("--allow-high-grms")
     cmd.extend(["--max-grms-before-dyn", str(args.max_grms_before_dyn)])
+    if getattr(args, "test_first", False):
+        cmd.append("--test-first")
+        cmd.extend(["--test-first-tol", str(args.test_first_tol)])
+        cmd.extend(["--test-first-step", str(args.test_first_step)])
+        if getattr(args, "test_first_resids", ""):
+            cmd.extend(["--test-first-resids", str(args.test_first_resids)])
+        if getattr(args, "test_first_charmm", False):
+            cmd.append("--test-first-charmm")
+        if getattr(args, "test_first_update_nbonds", False):
+            cmd.append("--test-first-update-nbonds")
     if args.flat_bottom_radius is not None:
         cmd.extend(["--fb-rad", str(args.flat_bottom_radius)])
         cmd.extend(["--fb-forc", str(args.flat_bottom_k)])

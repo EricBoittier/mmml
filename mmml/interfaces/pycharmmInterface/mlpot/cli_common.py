@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import os
 from pathlib import Path
-from typing import Any, Tuple
+from typing import Any, Optional, Tuple
 
 import numpy as np
 
@@ -295,6 +295,70 @@ def add_monomer_constraint_args(
             action="store_true",
             help="Skip pre-dynamics SD minimization",
         )
+
+
+def add_test_first_args(parser: argparse.ArgumentParser) -> None:
+    """Optional derivative tests after MLpot SD minimization."""
+    group = parser.add_argument_group("Post-minimize force tests")
+    group.add_argument(
+        "--test-first",
+        action="store_true",
+        help="After MLpot SD: Python ML energy vs finite-difference force check",
+    )
+    group.add_argument(
+        "--test-first-charmm",
+        action="store_true",
+        help="Also run CHARMM TEST FIRSt (ANALYTIC omits USER/MLpot; usually misleading)",
+    )
+    group.add_argument(
+        "--test-first-no-charmm",
+        action="store_true",
+        help=argparse.SUPPRESS,
+    )
+    group.add_argument(
+        "--test-first-update-nbonds",
+        action="store_true",
+        help="With --test-first: run UPDATE before CHARMM TEST (SD uses inbfrq=0 by default)",
+    )
+    group.add_argument(
+        "--test-first-tol",
+        type=float,
+        default=0.005,
+        help="TEST FIRSt TOL: report terms differing by more than this (default: 0.005)",
+    )
+    group.add_argument(
+        "--test-first-step",
+        type=float,
+        default=1.0e-4,
+        help="TEST FIRSt finite-difference step in Å (default: 1e-4)",
+    )
+    group.add_argument(
+        "--test-first-resids",
+        type=str,
+        default="",
+        metavar="IDS",
+        help="Limit TEST FIRSt to these resids (default: all atoms; use for large clusters)",
+    )
+
+
+def resolve_test_first_config(
+    args: argparse.Namespace,
+) -> Optional["TestFirstConfig"]:
+    if not getattr(args, "test_first", False):
+        return None
+    from mmml.interfaces.pycharmmInterface.mlpot.derivative_test import TestFirstConfig
+
+    resids = tuple(parse_resid_list(getattr(args, "test_first_resids", "") or ""))
+    return TestFirstConfig(
+        tol=float(getattr(args, "test_first_tol", 0.005)),
+        step=float(getattr(args, "test_first_step", 1.0e-4)),
+        resids=resids,
+        verbose=not getattr(args, "quiet", False),
+        mlpot_python=True,
+        charmm_lingo=bool(getattr(args, "test_first_charmm", False))
+        and not getattr(args, "test_first_no_charmm", False),
+        update_nonbonds=bool(getattr(args, "test_first_update_nbonds", False)),
+    )
 
 
 def parse_resid_list(text: str) -> list[int]:
