@@ -44,8 +44,12 @@ CGENFF_PRM = str(CGENFF_PRM)
 print("CHARMM_HOME", CHARMM_HOME)
 print("CHARMM_LIB_DIR", CHARMM_LIB_DIR)
 
-from mmml.interfaces.pycharmmInterface.charmm_mpi import ensure_mpi_for_charmm_domdec
+from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+    ensure_mpi_for_charmm_domdec,
+    prepare_charmm_mpi_runtime,
+)
 
+prepare_charmm_mpi_runtime()
 ensure_mpi_for_charmm_domdec()
 
 import pycharmm
@@ -197,28 +201,21 @@ def capture_neighbour_list():
 
 reset_block()
 
-_domdec_vacuum_disabled = False
+def force_charmm_vacuum_mode() -> None:
+    """Re-apply vacuum settings (safe after MLpot / JAX on DOMDEC builds)."""
+    try:
+        pycharmm.lingo.charmm_script("domdec off\ncrystal free")
+    except Exception:
+        pass
 
 
 def disable_charmm_domdec() -> None:
-    """Turn off domdec once per process (repeat ``domdec off`` can segfault on DOMDEC builds)."""
-    global _domdec_vacuum_disabled
-    if _domdec_vacuum_disabled:
-        return
-    try:
-        pycharmm.lingo.charmm_script("domdec off")
-    except Exception:
-        pass
-    _domdec_vacuum_disabled = True
+    """Legacy alias for :func:`force_charmm_vacuum_mode`."""
+    force_charmm_vacuum_mode()
 
 
 def _init_vacuum_charmm_state() -> None:
-    """Vacuum defaults at import: domdec off, crystal free."""
-    disable_charmm_domdec()
-    try:
-        pycharmm.lingo.charmm_script("crystal free")
-    except Exception:
-        pass
+    force_charmm_vacuum_mode()
 
 
 _init_vacuum_charmm_state()

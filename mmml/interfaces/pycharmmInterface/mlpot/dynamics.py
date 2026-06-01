@@ -471,9 +471,8 @@ def minimize_with_mlpot(
     Returns True if minimization ran, False if skipped because CRD exists.
     """
     pycharmm, cons_fix, energy, minimize, *_ = _import_pycharmm_modules()
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import disable_charmm_domdec
-
-    disable_charmm_domdec()
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import recover_mpi_for_charmm_after_jax
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import force_charmm_vacuum_mode
 
     crd_path = Path(config.crd_path) if config.crd_path else None
     if config.skip_if_crd_exists and crd_path is not None and crd_path.exists():
@@ -492,13 +491,13 @@ def minimize_with_mlpot(
         dcd_file = open_minimize_dcd(config.dcd_path, unit=config.dcd_unit)
 
     sd_kw = _sd_kwargs_from_config(config)
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import revalidate_mpi_after_cuda
 
     try:
         if config.verbose and config.show_energy:
             print("CHARMM energy before minimization:")
             _maybe_show_energy(True)
-        if not revalidate_mpi_after_cuda(phase="before MLpot SD minimize"):
+        force_charmm_vacuum_mode()
+        if not recover_mpi_for_charmm_after_jax(phase="before MLpot SD minimize"):
             raise RuntimeError(
                 "MPI is not initialized for OpenMPI-linked CHARMM in this serial Python "
                 "process. Install mpi4py into the active environment "

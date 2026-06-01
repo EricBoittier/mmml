@@ -762,6 +762,9 @@ def main() -> int:
     if backend == "ase":
         from mmml.cli.run.md_pbc_suite import ase as backend_mod
     elif backend == "pycharmm":
+        from mmml.interfaces.pycharmmInterface.charmm_mpi import prepare_charmm_mpi_runtime
+
+        prepare_charmm_mpi_runtime()
         from mmml.cli.run.md_pbc_suite import pycharmm_mlpot as backend_mod
     else:
         from mmml.cli.run.md_pbc_suite import jaxmd as backend_mod

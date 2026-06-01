@@ -68,11 +68,37 @@ def test_revalidate_mpi_after_cuda_trusts_mpirun_without_mpi4py(monkeypatch):
         assert charmm_mpi.revalidate_mpi_after_cuda(phase="test") is True
 
 
+def test_recover_mpi_hard_resets_after_jax_for_domdec_charmm(monkeypatch):
+    monkeypatch.delenv("MMML_NO_MPI_INIT", raising=False)
+    monkeypatch.delenv("MMML_NO_MPI_HARD_RESET", raising=False)
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._needs_mpi_setup",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
+        return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._mpi4py_available",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._hard_reset_mpi",
+        return_value=True,
+    ) as hard_reset:
+        assert charmm_mpi.recover_mpi_for_charmm_after_jax(phase="test") is True
+        hard_reset.assert_called_once()
+
+
 def test_revalidate_mpi_after_cuda_serial_requires_mpi4py(monkeypatch):
     monkeypatch.delenv("MMML_NO_MPI_INIT", raising=False)
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi._needs_mpi_setup",
         return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
+        return_value=False,
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi._mpi_comm_valid",
         return_value=False,
