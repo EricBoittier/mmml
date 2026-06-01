@@ -144,32 +144,42 @@ def add_monomer_constraint_args(
 ) -> None:
     """CLI flags to fix/constrain specific monomers (CHARMM ``resid`` = monomer index)."""
     group = parser.add_argument_group("Monomer constraints (cons_fix)")
+    group.add_argument(
+        "--fix-resids",
+        type=str,
+        default="1" if not for_dynamics else "",
+        metavar="IDS",
+        help="Monomers fixed in SD pass 2 (after free pass 1); comma-separated resids",
+    )
+    group.add_argument(
+        "--fix-resid",
+        type=int,
+        default=None,
+        help="Deprecated: single resid; use --fix-resids",
+    )
+    group.add_argument(
+        "--no-fix",
+        action="store_true",
+        help="Skip constrained SD pass 2 (only free minimization)",
+    )
     if for_dynamics:
         group.add_argument(
             "--constrain-resids",
             type=str,
             default="",
             metavar="IDS",
-            help="Comma-separated residue IDs frozen for the whole dynamics run (e.g. 1,2)",
-        )
-    else:
-        group.add_argument(
-            "--fix-resids",
-            type=str,
-            default="1",
-            metavar="IDS",
-            help="Monomers fixed during SD pass 1 only (comma-separated resids; default: 1)",
+            help="If set, freeze these resids during NVE (default: none; mini uses --fix-resids)",
         )
         group.add_argument(
-            "--fix-resid",
+            "--mini-nstep",
             type=int,
-            default=None,
-            help="Deprecated: single resid; use --fix-resids",
+            default=20,
+            help="SD steps per minimization pass before dynamics (default: 20)",
         )
         group.add_argument(
-            "--no-fix",
+            "--no-pre-minimize",
             action="store_true",
-            help="Skip the constrained SD pass (only run free minimization)",
+            help="Skip pre-dynamics SD minimization (free + optional constrained)",
         )
 
 

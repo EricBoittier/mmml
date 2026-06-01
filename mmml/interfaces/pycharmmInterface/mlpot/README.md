@@ -28,7 +28,7 @@ finally:
 
 ## Minimization (example pattern)
 
-MLpot on the **whole** system; `cons_fix` on a subset (e.g. one residue) to test constraints:
+MLpot on the **whole** system; two SD passes — free, then `cons_fix` on selected monomers:
 
 ```python
 from pathlib import Path
@@ -56,7 +56,8 @@ minimize_with_mlpot(
 ```
 
 Set ``save=True`` to write coordinates, PSF, energy JSON, XYZ, and a **DCD** of the SD trajectory
-(``iuncrd`` / ``nsavc`` on ``minimize.run_sd``). Both SD passes (fixed then free) append to the same DCD.
+(``iuncrd`` / ``nsavc`` on ``minimize.run_sd``). Pass 1 is free; pass 2 uses ``cons_fix`` when
+``fixed_ml_selection`` is set. Both passes append to the same DCD.
 
 Prefer **CRD** over PDB when reloading minimized structures (avoids ML nonbond exclusion issues with PDB).
 

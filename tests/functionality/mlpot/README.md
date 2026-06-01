@@ -63,7 +63,7 @@ python tests/functionality/mlpot/03_energy_compare.py --residue ACO --n-molecule
 # Minimization (you already validated 3D XYZ export)
 # Default: PRNLev=5, nprint=1 (verbose CHARMM console). Use --quiet to reduce output.
 python tests/functionality/mlpot/04_mlpot_minimize_stub.py --run --save --nstep 10
-# Tetramer, fix monomers 1 and 3 during first SD pass only:
+# Tetramer: free SD then constrained SD on monomers 1 and 3:
 python tests/functionality/mlpot/04_mlpot_minimize_stub.py --run --save --n-molecules 4 --fix-resids 1,3 --nstep 20
 # Trimer, no constraints:
 python tests/functionality/mlpot/04_mlpot_minimize_stub.py --run --n-molecules 3 --no-fix
@@ -78,8 +78,10 @@ python tests/functionality/mlpot/04_mlpot_minimize_stub.py --run --save --dcd-ns
 
 # Short NVE (~5 fs at 0.25 fs timestep)
 python tests/functionality/mlpot/05_mlpot_dynamics_stub.py --run --nstep 20
-# 4-molecule cluster; freeze monomers 1–2 for whole NVE:
-python tests/functionality/mlpot/05_mlpot_dynamics_stub.py --run --n-molecules 4 --constrain-resids 1,2 --nstep 50
+# 4-mer: free mini, constrained mini on 1,3, then NVE:
+python tests/functionality/mlpot/05_mlpot_dynamics_stub.py --run --n-molecules 4 --fix-resids 1,3 --mini-nstep 30 --nstep 50
+# Freeze monomers 1–2 during NVE only (after default pre-minimize):
+python tests/functionality/mlpot/05_mlpot_dynamics_stub.py --run --no-fix --constrain-resids 1,2 --nstep 50
 # DCD every step (default): --dcd-nsavc 1
 # DCD every 0.001 ps (4 steps at 0.25 fs): --dcd-interval-ps 0.001
 python tests/functionality/mlpot/05_mlpot_dynamics_stub.py --run --nstep 100 --dcd-nsavc 1
