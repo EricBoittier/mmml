@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import json
 import os
 import sys
@@ -27,6 +26,8 @@ from ase.optimize.fire import FIRE
 
 import mmml.interfaces.pycharmmInterface.import_pycharmm as pyci
 from mmml.cli.base import resolve_checkpoint_paths
+from mmml.cli.run.md_pbc_suite import ase as md_suite
+from mmml.cli.run.md_pbc_suite.cluster import _build_psf_ordered_cluster
 from mmml.interfaces.pycharmmInterface.import_pycharmm import coor
 from mmml.interfaces.pycharmmInterface.mmml_calculator import CutoffParameters, setup_calculator
 
@@ -242,24 +243,6 @@ def repo_root_from_here() -> Path:
     return Path(__file__).resolve().parents[3]
 
 
-def _load_md_suite_module(repo_root: Path):
-    path = repo_root / "scripts" / "md_10mer_mmml_pbc_suite.py"
-    spec = importlib.util.spec_from_file_location("md_10mer_mmml_pbc_suite", path)
-    mod = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    spec.loader.exec_module(mod)
-    return mod
-
-
-def _load_toc_module(repo_root: Path):
-    path = repo_root / "scripts" / "test_orbax_checkpoint_cluster.py"
-    spec = importlib.util.spec_from_file_location("test_orbax_checkpoint_cluster", path)
-    mod = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    spec.loader.exec_module(mod)
-    return mod
-
-
 def parse_couple_residue_numbers(spec: str, n_monomers: int) -> list[int]:
     """Parse 1-based residue numbers (cluster order); return sorted unique 0-based indices."""
     spec = str(spec).strip()
@@ -300,8 +283,7 @@ def lambda_array(
 def build_cluster_system(cfg: LambdaDynamicsConfig) -> ClusterContext:
     """Build CHARMM PSF and initial cluster geometry (same recipes as md-system)."""
     repo_root = cfg.repo_root or repo_root_from_here()
-    md = _load_md_suite_module(repo_root)
-    toc = _load_toc_module(repo_root)
+    md = md_suite
 
     if cfg.composition:
         from mmml.interfaces.pycharmmInterface.packmol_placement import resolve_packmol_sphere_use
@@ -337,7 +319,7 @@ def build_cluster_system(cfg: LambdaDynamicsConfig) -> ClusterContext:
         tmpl = cfg.template_pdb.expanduser().resolve() if cfg.template_pdb else None
         if tmpl is not None and not tmpl.is_file():
             tmpl = repo_root / tmpl
-        z, r0 = toc._build_psf_ordered_cluster(
+        z, r0 = _build_psf_ordered_cluster(
             residue,
             int(cfg.n_molecules),
             float(cfg.spacing),
@@ -415,8 +397,7 @@ def resolve_lambda_md_settings(cfg: LambdaDynamicsConfig, positions: np.ndarray)
     if use_pbc:
         box_L = float(cfg.box_size) if cfg.box_size is not None else None
         if box_L is None:
-            md = _load_md_suite_module(cfg.repo_root or repo_root_from_here())
-            box_L = float(md._cubic_box_length(positions, cfg.ml_cutoff))
+            box_L = float(md_suite._cubic_box_length(positions, cfg.ml_cutoff))
     return LambdaMdSettings(use_pbc=use_pbc, integrator=integrator, box_L=box_L)
 
 
@@ -494,7 +475,7 @@ def minimize_lambda_structure(
 ) -> dict[str, float | int | str]:
     """CHARMM (MM) then MMML-calculator BFGS, matching ``md_10mer_mmml_pbc_suite``."""
     repo_root = cfg.repo_root or repo_root_from_here()
-    md = _load_md_suite_module(repo_root)
+    md = md_suite
     timings: dict[str, float | int | str] = {}
     overlap_kw = dict(
         nstep_sd=cfg.charmm_sd_steps,
@@ -630,8 +611,7 @@ def minimize_lambda_structure(
 
 def ensure_psf_for_snapshots(meta: dict[str, Any], repo_root: Path) -> None:
     """Rebuild CHARMM PSF/topology so ``psf.get_iac()`` matches the sampled cluster."""
-    md = _load_md_suite_module(repo_root)
-    toc = _load_toc_module(repo_root)
+    md = md_suite
     spacing = float(meta.get("spacing", 5.0))
     composition_str = meta.get("composition_str")
     if composition_str:
@@ -644,7 +624,7 @@ def ensure_psf_for_snapshots(meta: dict[str, Any], repo_root: Path) -> None:
     template_pdb = Path(tmpl) if tmpl else None
     if template_pdb is not None and not template_pdb.is_file():
         template_pdb = repo_root / template_pdb
-    toc._build_psf_ordered_cluster(residue, n_mol, spacing, template_pdb=template_pdb)
+    _build_psf_ordered_cluster(residue, n_mol, spacing, template_pdb=template_pdb)
 
 
 def energy_at_positions(calc, atoms: ase.Atoms, r: np.ndarray) -> float:
@@ -1737,8 +1717,7 @@ def config_from_namespace(args: argparse.Namespace, repo_root: Path | None = Non
     comp = getattr(args, "composition", None)
     n_mol = int(args.n_molecules)
     if comp:
-        md = _load_md_suite_module(repo_root or repo_root_from_here())
-        parsed = md._parse_composition(comp)
+        parsed = md_suite._parse_composition(comp)
         n_mol = sum(c for _, c in parsed)
     couple_1b = [i + 1 for i in parse_couple_residue_numbers(str(args.couple_residues), n_mol)]
 
