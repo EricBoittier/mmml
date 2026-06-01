@@ -110,6 +110,7 @@ def _register_mlpot_context(
     n_atoms: int,
     n_monomers: int,
     *,
+    ml_batch_size: int | None = None,
     verbose: bool = False,
 ):
     import ase
@@ -121,6 +122,7 @@ def _register_mlpot_context(
         atoms,
         n_monomers=n_monomers,
         atoms_per_monomer=_atoms_per_monomer_list(z, n_monomers),
+        ml_batch_size=ml_batch_size,
         verbose=verbose,
     )
     if int(n_monomers) > 1:
@@ -177,7 +179,13 @@ def run_minimize_workflow(args: argparse.Namespace) -> int:
     sync_charmm_positions(r)
 
     ctx, pyCModel = _register_mlpot_context(
-        z, r, ckpt, n_atoms, n_mol, verbose=not args.quiet
+        z,
+        r,
+        ckpt,
+        n_atoms,
+        n_mol,
+        ml_batch_size=getattr(args, "ml_batch_size", None),
+        verbose=not args.quiet,
     )
     fix_sel = select_by_resids(fix_resids) if fix_resids else None
     try:
@@ -276,7 +284,13 @@ def run_dynamics_workflow(
     sync_charmm_positions(r)
 
     ctx, pyCModel = _register_mlpot_context(
-        z, r, ckpt, n_atoms, n_mol, verbose=not args.quiet
+        z,
+        r,
+        ckpt,
+        n_atoms,
+        n_mol,
+        ml_batch_size=getattr(args, "ml_batch_size", None),
+        verbose=not args.quiet,
     )
     show_energy = resolve_show_energy(args)
 

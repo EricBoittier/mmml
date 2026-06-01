@@ -152,6 +152,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--charmm-tolenr", type=float, default=1e-3)
     parser.add_argument("--charmm-tolgrd", type=float, default=1e-3)
+    parser.add_argument(
+        "--ml-batch-size",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "Chunk PhysNet monomer/dimer batches (default: auto for large clusters; "
+            "or MMML_MLPOT_ML_BATCH_SIZE). Lowers JAX compile memory on CPU."
+        ),
+    )
     return parser.parse_args(argv)
 
 

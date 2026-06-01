@@ -299,6 +299,16 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="pycharmm: UPDATE nonbond lists before CHARMM TEST FIRSt",
     )
+    parser.add_argument(
+        "--ml-batch-size",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "pycharmm: chunk PhysNet batches (auto for DCM:50+; "
+            "or MMML_MLPOT_ML_BATCH_SIZE). Lowers JAX compile RAM on CPU."
+        ),
+    )
 
     # --- lambda_ti (--setup lambda_ti) ----------------------------------------
     parser.add_argument(
@@ -589,6 +599,8 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     cmd.extend(["--charmm-abnr-steps", str(args.charmm_abnr_steps)])
     cmd.extend(["--charmm-tolenr", str(args.charmm_tolenr)])
     cmd.extend(["--charmm-tolgrd", str(args.charmm_tolgrd)])
+    if getattr(args, "ml_batch_size", None) is not None:
+        cmd.extend(["--ml-batch-size", str(args.ml_batch_size)])
     if args.no_echeck:
         cmd.append("--no-echeck")
     if getattr(args, "skip_energy_show", False):
