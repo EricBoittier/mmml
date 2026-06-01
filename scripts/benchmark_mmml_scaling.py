@@ -39,7 +39,8 @@ def _run_case(
     if backend == "ase":
         cmd = [
             python_exe,
-            str(script_path / "md_10mer_mmml_pbc_suite.py"),
+            "-m",
+            "mmml.cli.run.md_pbc_suite.ase",
             "--only",
             "pbc_nve",
             "--n-molecules",
@@ -57,7 +58,8 @@ def _run_case(
     elif backend == "jaxmd":
         cmd = [
             python_exe,
-            str(script_path / "md_10mer_mmml_pbc_suite_jaxmd.py"),
+            "-m",
+            "mmml.cli.run.md_pbc_suite.jaxmd",
             "--ensemble",
             ensemble,
             "--n-molecules",

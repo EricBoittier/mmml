@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import subprocess
 import sys
 from pathlib import Path
 
@@ -14,8 +13,7 @@ def parse_args() -> argparse.Namespace:
         description=(
             "Run predefined MD setups (free-space NVE/NVT, periodic NVE/NVT, periodic NPT, "
             "lambda TI for arbitrary compositions) for arbitrary residue compositions. "
-            "Wraps scripts/md_10mer_mmml_pbc_suite.py (ASE), "
-            "scripts/md_10mer_mmml_pbc_suite_jaxmd.py (JAX-MD), and "
+            "Runs mmml.cli.run.md_pbc_suite (ASE or JAX-MD) and "
             "mmml.cli.run.lambda_dynamics (lambda_ti). "
             "MBAR: mmml lambda-mbar --run-dir <output-dir>."
         )
@@ -34,7 +32,7 @@ def parse_args() -> argparse.Namespace:
         choices=["auto", "ase", "jaxmd"],
         default="auto",
         help=(
-            "MD engine: ase runs scripts/md_10mer_mmml_pbc_suite.py; jaxmd runs ..._jaxmd.py. "
+            "MD engine: ase runs md_pbc_suite.ase; jaxmd runs md_pbc_suite.jaxmd. "
             "auto uses ASE for vacuum (free_*) and fixed-volume PBC, JAX-MD for NPT. "
             "Use jaxmd with --setup free_nve or free_nvt for open-boundary JAX-MD."
         ),
@@ -351,10 +349,7 @@ def _run_lambda_ti_inline(args: argparse.Namespace) -> int:
     return 0
 
 
-def build_command(args: argparse.Namespace) -> list[str]:
-    root = _repo_root()
-    ase_script = root / "scripts" / "md_10mer_mmml_pbc_suite.py"
-    jaxmd_script = root / "scripts" / "md_10mer_mmml_pbc_suite_jaxmd.py"
+def build_command(args: argparse.Namespace) -> tuple[str, list[str]]:
     backend = args.backend
     if backend == "auto":
         backend = "jaxmd" if args.setup == "pbc_npt" else "ase"
@@ -377,8 +372,6 @@ def build_command(args: argparse.Namespace) -> list[str]:
             ensemble = args.setup[len("pbc_") :]
             jaxmd_free = False
         cmd = [
-            sys.executable,
-            str(jaxmd_script),
             "--ensemble",
             ensemble,
             "--spacing",
@@ -403,8 +396,6 @@ def build_command(args: argparse.Namespace) -> list[str]:
         if args.setup == "pbc_npt":
             raise ValueError("pbc_npt requires --backend jaxmd or --backend auto")
         cmd = [
-            sys.executable,
-            str(ase_script),
             "--spacing",
             str(args.spacing),
             "--ps",
@@ -455,7 +446,7 @@ def build_command(args: argparse.Namespace) -> list[str]:
         cmd.extend(["--flat-bottom-mode", str(args.flat_bottom_mode)])
     if args.extra_args:
         cmd.extend(args.extra_args)
-    return cmd
+    return backend, cmd
 
 
 def main() -> int:
@@ -472,13 +463,16 @@ def main() -> int:
             print(f"mmml md-system: error: {exc}", file=sys.stderr)
             return 2
     try:
-        cmd = build_command(args)
+        backend, argv = build_command(args)
     except ValueError as exc:
         print(f"mmml md-system: error: {exc}", file=sys.stderr)
         return 2
-    print("Running:", " ".join(cmd))
-    completed = subprocess.run(cmd, cwd=str(_repo_root()))
-    return int(completed.returncode)
+    print(f"mmml md-system: running {backend} in-process:", " ".join(argv), flush=True)
+    if backend == "ase":
+        from mmml.cli.run.md_pbc_suite import ase as backend_mod
+    else:
+        from mmml.cli.run.md_pbc_suite import jaxmd as backend_mod
+    return int(backend_mod.main(argv))
 
 
 if __name__ == "__main__":
