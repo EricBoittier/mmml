@@ -310,6 +310,9 @@ def register_mlpot(
         **kwargs,
     )
     refresh_nbonds_after_mlpot()
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import force_charmm_vacuum_mode
+
+    force_charmm_vacuum_mode()
     return MlpotContext(
         mlpot=mlpot,
         pyCModel=pyCModel,

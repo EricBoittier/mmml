@@ -16,6 +16,7 @@ import logging
 import os
 import shutil
 import sys
+from contextlib import nullcontext
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -120,6 +121,22 @@ def apply_xla_cuda_timer_log_filter() -> None:
     os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
 
 
+def _jax_warmup_backend() -> str:
+    """``cpu`` or ``gpu`` for JAX compile warmup (CPU avoids CUDA/MPI clashes)."""
+    mode = (os.environ.get("MMML_JAX_WARMUP_DEVICE") or "auto").strip().lower()
+    if mode in ("cpu", "gpu"):
+        return mode
+    if mode == "auto":
+        try:
+            from mmml.interfaces.pycharmmInterface.charmm_mpi import charmm_lib_links_mpi
+
+            if charmm_lib_links_mpi():
+                return "cpu"
+        except Exception:
+            pass
+    return "gpu"
+
+
 def ensure_xla_gpu_warmed(*, force: bool = False) -> bool:
     """Run a tiny JITted reduction on GPU and block until complete.
 
@@ -128,6 +145,10 @@ def ensure_xla_gpu_warmed(*, force: bool = False) -> bool:
     """
     global _xla_gpu_warmed
     if _xla_gpu_warmed and not force:
+        return False
+
+    if _jax_warmup_backend() == "cpu":
+        _xla_gpu_warmed = True
         return False
 
     try:
@@ -199,8 +220,10 @@ def warmup_hybrid_spherical_cutoff(
 
     Call after PyCHARMM/MM setup (e.g. CGENFF drudes) and before timed JAX-MD compiles.
     """
-    ensure_jax_cuda_toolchain(required=True)
-    ensure_xla_gpu_warmed(force=True)
+    backend = _jax_warmup_backend()
+    if backend == "gpu":
+        ensure_jax_cuda_toolchain(required=True)
+        ensure_xla_gpu_warmed(force=True)
     kwargs = dict(
         positions=positions,
         atomic_numbers=atomic_numbers,
@@ -214,10 +237,22 @@ def warmup_hybrid_spherical_cutoff(
         mm_pair_mask=mm_pair_mask,
         box=box,
     )
+    try:
+        import jax
+    except ImportError:
+        return
+
+    device_ctx = (
+        jax.default_device(jax.devices("cpu")[0])
+        if backend == "cpu"
+        else nullcontext()
+    )
+
     # Two untimed runs: first compiles/autotunes; second calibrates XLA's delay kernel.
-    for _ in range(2):
-        result = spherical_cutoff_calculator(**kwargs)
-        block_jax_values(getattr(result, "energy", None), getattr(result, "forces", None))
+    with device_ctx:
+        for _ in range(2):
+            result = spherical_cutoff_calculator(**kwargs)
+            block_jax_values(getattr(result, "energy", None), getattr(result, "forces", None))
 
 
 def warmup_ase_mmml_energy_forces(atoms: Any, *, include_forces: bool = True) -> None:
