@@ -174,9 +174,7 @@ def warmup_decomposed_mlpot(
         doML_dimer=True,
     )
     from mmml.interfaces.pycharmmInterface.charmm_mpi import recover_mpi_for_charmm_after_jax
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import force_charmm_vacuum_mode
 
     recover_mpi_for_charmm_after_jax(phase="after decomposed MLpot JAX warmup")
-    force_charmm_vacuum_mode()
     if verbose:
         print("Decomposed MLpot JAX warmup complete", flush=True)

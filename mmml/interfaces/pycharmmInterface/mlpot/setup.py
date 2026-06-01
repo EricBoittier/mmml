@@ -206,13 +206,14 @@ def disable_charmm_domdec() -> None:
 
 
 def prepare_charmm_vacuum() -> None:
-    """Vacuum: domdec off, crystal free."""
+    """Vacuum: domdec off (once), crystal free."""
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+        crystal_free_charmm,
+        disable_charmm_domdec,
+    )
+
     disable_charmm_domdec()
-    pycharmm = _import_pycharmm()
-    try:
-        pycharmm.lingo.charmm_script("crystal free")
-    except Exception:
-        pass
+    crystal_free_charmm()
 
 
 def setup_default_nbonds(*, nbxmod: int = 5) -> None:
@@ -310,9 +311,6 @@ def register_mlpot(
         **kwargs,
     )
     refresh_nbonds_after_mlpot()
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import force_charmm_vacuum_mode
-
-    force_charmm_vacuum_mode()
     return MlpotContext(
         mlpot=mlpot,
         pyCModel=pyCModel,
