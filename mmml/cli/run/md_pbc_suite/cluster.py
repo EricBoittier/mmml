@@ -69,8 +69,13 @@ def _build_psf_ordered_cluster(
     ic.prm_fill(replace_all=True)
     ic.build()
 
-    pos_df = coor.get_positions()
-    positions = pos_df.to_numpy(dtype=float)
+    try:
+        from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+
+        positions = get_charmm_positions_array()
+    except Exception:
+        pos_df = coor.get_positions()
+        positions = pos_df[["x", "y", "z"]].to_numpy(dtype=float)
     n_atoms = positions.shape[0]
     if n_atoms % n_molecules != 0:
         raise RuntimeError(
@@ -84,6 +89,13 @@ def _build_psf_ordered_cluster(
     atom_names = np.asarray(psf.get_atype())
     if len(atom_names) != n_atoms:
         raise RuntimeError(f"PSF atom-name count mismatch: {len(atom_names)} vs positions {n_atoms}")
+
+    if template_pdb is None and residue == "ACO":
+        from mmml.paths import default_aco_template_pdb
+
+        aco_tmpl = default_aco_template_pdb()
+        if aco_tmpl.is_file():
+            template_pdb = aco_tmpl
 
     if template_pdb is not None:
         tmpl = _load_template_pdb_coords(template_pdb)
@@ -109,5 +121,19 @@ def _build_psf_ordered_cluster(
         shifted[start:end] = shifted[start:end] - com + shift
 
     coor.set_positions(pd.DataFrame(shifted, columns=["x", "y", "z"]))
+    try:
+        from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+
+        sync_charmm_positions(shifted)
+    except Exception:
+        pass
+
+    span = shifted.max(axis=0) - shifted.min(axis=0)
+    if span[1] < 0.3 or span[2] < 0.3:
+        raise RuntimeError(
+            f"Cluster geometry is nearly 1D (axis spans Å: x={span[0]:.3f} y={span[1]:.3f} z={span[2]:.3f}). "
+            "Pass template_pdb with 3D monomer coordinates (e.g. default_aco_template_pdb() for ACO)."
+        )
+
     z = np.asarray(get_Z_from_psf(), dtype=int)
     return z, shifted

@@ -19,6 +19,11 @@ def default_meoh_template_pdb() -> Path:
     return bundled_file("generate", "sample", "pdb", "meoh.pdb")
 
 
+def default_aco_template_pdb() -> Path:
+    """Default acetone (CGenFF ``ACO``) monomer geometry for cluster builders."""
+    return bundled_file("generate", "sample", "pdb", "aco_monomer.pdb")
+
+
 def crystal_image_str_source() -> Path:
     """CHARMM periodic-image helper copied into the working directory when needed."""
     return bundled_file("data", "charmm", "crystal_image.str")

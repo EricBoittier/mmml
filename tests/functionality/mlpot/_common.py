@@ -92,6 +92,47 @@ def load_physnet_for_cluster(
     return params, model
 
 
+def validate_cluster_geometry(
+    positions: np.ndarray,
+    *,
+    min_axis_span: float = 0.3,
+    min_monomer_extent: float = 1.5,
+    n_molecules: int | None = None,
+) -> dict[str, float]:
+    """Raise if coordinates look collapsed or non-physical; else return summary stats."""
+    r = np.asarray(positions, dtype=float)
+    if r.ndim != 2 or r.shape[1] != 3:
+        raise ValueError(f"positions must be (N, 3), got {r.shape}")
+    span = r.max(axis=0) - r.min(axis=0)
+    if float(span[1]) < min_axis_span or float(span[2]) < min_axis_span:
+        raise ValueError(
+            f"Cluster is nearly planar/collinear (spans Å x={span[0]:.3f} y={span[1]:.3f} z={span[2]:.3f})"
+        )
+    if n_molecules is not None and n_molecules > 0 and r.shape[0] % n_molecules == 0:
+        n_per = r.shape[0] // n_molecules
+        coms = []
+        for i in range(n_molecules):
+            chunk = r[i * n_per : (i + 1) * n_per]
+            extent = float(np.linalg.norm(chunk.max(axis=0) - chunk.min(axis=0)))
+            if extent < min_monomer_extent:
+                raise ValueError(
+                    f"Monomer {i + 1} extent {extent:.3f} Å < {min_monomer_extent} Å (likely bad template/ic.build)"
+                )
+            coms.append(chunk.mean(axis=0))
+        if len(coms) > 1:
+            com_sep = float(np.linalg.norm(coms[1] - coms[0]))
+        else:
+            com_sep = 0.0
+    else:
+        com_sep = float("nan")
+    return {
+        "span_x": float(span[0]),
+        "span_y": float(span[1]),
+        "span_z": float(span[2]),
+        "com_sep_01": com_sep,
+    }
+
+
 def build_ase_cluster(
     residue: str,
     n_molecules: int,
@@ -105,7 +146,25 @@ def build_ase_cluster(
 
     z, r = _build_psf_ordered_cluster(residue.upper(), n_molecules, spacing)
     sync_charmm_positions(r)
+    validate_cluster_geometry(r, n_molecules=n_molecules)
     return z, r
+
+
+def build_acetone_dimer_cluster(spacing: float = DEFAULT_SPACING) -> Tuple[np.ndarray, np.ndarray]:
+    """20-atom acetone dimer (ACO × 2) with bundled 3D monomer template."""
+    z, r = build_ase_cluster(DEFAULT_RESIDUE, DEFAULT_N_MOLECULES, spacing)
+    if len(z) != 20:
+        raise RuntimeError(f"Expected 20 atoms for ACO dimer, got {len(z)}")
+    return z, r
+
+
+def print_cluster_geometry_summary(positions: np.ndarray, n_molecules: int) -> None:
+    stats = validate_cluster_geometry(positions, n_molecules=n_molecules)
+    print(
+        "Cluster geometry OK:"
+        f" spans (Å) x={stats['span_x']:.2f} y={stats['span_y']:.2f} z={stats['span_z']:.2f}"
+        f" | COM separation (1→2) = {stats['com_sep_01']:.2f} Å"
+    )
 
 
 def all_atom_selection():

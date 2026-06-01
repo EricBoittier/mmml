@@ -18,7 +18,9 @@ import numpy as np
 
 from _common import (
     add_cluster_args,
+    build_acetone_dimer_cluster,
     build_ase_cluster,
+    print_cluster_geometry_summary,
     print_header,
     resolve_checkpoint,
 )
@@ -80,8 +82,12 @@ def main() -> int:
         return 0
 
     ckpt = resolve_checkpoint(args.checkpoint)
-    z, r = build_ase_cluster(args.residue, args.n_molecules, args.spacing)
+    if args.residue.upper() == "ACO" and args.n_molecules == 2:
+        z, r = build_acetone_dimer_cluster(spacing=args.spacing)
+    else:
+        z, r = build_ase_cluster(args.residue, args.n_molecules, args.spacing)
     n_atoms = len(z)
+    print_cluster_geometry_summary(r, args.n_molecules)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     import ase
