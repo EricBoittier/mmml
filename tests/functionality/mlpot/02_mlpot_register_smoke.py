@@ -15,6 +15,7 @@ import numpy as np
 
 from _common import (
     add_cluster_args,
+    all_atom_selection,
     build_ase_cluster,
     charmm_energy_row,
     check_mlpot_symbols,
@@ -45,7 +46,6 @@ def main() -> int:
     import pycharmm
     import pycharmm.coor as coor
     import pycharmm.energy as energy
-    import pycharmm.select as chm_select
 
     setup_charmm_nbonds()
 
@@ -56,7 +56,7 @@ def main() -> int:
     from mmml.models.physnetjax.physnetjax.calc.helper_mlp import get_pyc
 
     pyCModel = get_pyc(params, model, atoms)
-    ml_sel = chm_select.SelectAtoms().all_atoms()
+    ml_sel = all_atom_selection()
 
     print("Registering MLpot (all atoms ML)...")
     mlpot = pycharmm.MLpot(
