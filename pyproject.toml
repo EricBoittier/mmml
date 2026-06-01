@@ -244,6 +244,7 @@ include = ["mmml*", "pycharmm*"]
 [tool.setuptools.package-data]
 mmml = [
     "py.typed",
+    "data/qcml/atomic_reference_energies.json",
     "models/physnetjax/defaults/*.json",
     "models/physnetjax/defaults/hf_json/*.json",
 ]
