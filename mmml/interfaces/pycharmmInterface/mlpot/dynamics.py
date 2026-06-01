@@ -96,6 +96,9 @@ def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> None:
     if config.reference_positions is not None:
         sync_charmm_positions(config.reference_positions)
 
+    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_block
+
+    apply_charmm_mm_block()
     setup_default_nbonds()
     if config.nstep_sd <= 0 and config.nstep_abnr <= 0:
         return

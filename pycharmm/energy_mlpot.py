@@ -44,6 +44,8 @@ class MLpot():
         # ML-MM cutoff radii ctonnb and ctofnb. If None, CHARMM parameter taken
         mlmm_ctonnb=None,
         mlmm_ctofnb=None,
+        # Keep PSF bonds/angles; use CHARMM BLOCK to disable internal MM on ML atoms.
+        preserve_psf_internals=True,
         # Additional model keyword arguments
         **kwargs
     ):
@@ -59,12 +61,14 @@ class MLpot():
         # ML atoms - atom number
         self.ml_Natoms = len(ml_indices)
 
-        # ML - Delete bonds, angles, dihedrals, improper - if active
-        pycharmm.psf.delete_bonds(ml_selection, ml_selection, psort=True)
-        pycharmm.psf.delete_angles(ml_selection, ml_selection, psort=True)
-        pycharmm.psf.delete_dihedrals(ml_selection, ml_selection, psort=True)
-        pycharmm.psf.delete_impropers(ml_selection, ml_selection, psort=True)
-        pycharmm.psf.delete_cmaps(ml_selection, ml_selection, psort=True)
+        # Legacy path: strip ML-region connectivity from the PSF. Prefer BLOCK +
+        # preserve_psf_internals=True (mmml default) so VMD/topology stay intact.
+        if not preserve_psf_internals:
+            pycharmm.psf.delete_bonds(ml_selection, ml_selection, psort=True)
+            pycharmm.psf.delete_angles(ml_selection, ml_selection, psort=True)
+            pycharmm.psf.delete_dihedrals(ml_selection, ml_selection, psort=True)
+            pycharmm.psf.delete_impropers(ml_selection, ml_selection, psort=True)
+            pycharmm.psf.delete_cmaps(ml_selection, ml_selection, psort=True)
 
         # ML&MM - psf charges - set ML charges zero when charges and ML-MM
         # interaction are handled by the ML potential
