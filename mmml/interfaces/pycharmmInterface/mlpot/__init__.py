@@ -22,6 +22,13 @@ from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
     save_minimization_results,
     write_minimized_coordinates,
 )
+from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+    FlatBottomSphereConfig,
+    apply_flat_bottom_workflow,
+    center_cluster_at_origin,
+    clear_mmfp_restraints,
+    setup_flat_bottom_sphere_mmfp,
+)
 from mmml.interfaces.pycharmmInterface.mlpot.partial_mm import (
     PartialMlMmConfig,
     register_mlpot_partial_mm,
@@ -45,9 +52,13 @@ from mmml.interfaces.pycharmmInterface.mlpot.setup import (
 
 __all__ = [
     "CharmmTrajectoryFiles",
+    "FlatBottomSphereConfig",
     "MinimizeWithMlpotConfig",
+    "apply_flat_bottom_workflow",
     "assign_boltzmann_velocities",
     "boltzmann_velocity_kwargs",
+    "center_cluster_at_origin",
+    "clear_mmfp_restraints",
     "MlpotContext",
     "PartialMlMmConfig",
     "apply_charmm_verbosity",
@@ -76,5 +87,6 @@ __all__ = [
     "select_by_resids",
     "select_by_seg_id",
     "setup_default_nbonds",
+    "setup_flat_bottom_sphere_mmfp",
     "write_minimized_coordinates",
 ]

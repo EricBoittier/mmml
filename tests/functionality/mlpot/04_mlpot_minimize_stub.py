@@ -20,6 +20,8 @@ from _common import (
     add_charmm_output_args,
     add_cluster_args,
     add_dcd_save_args,
+    add_flat_bottom_args,
+    apply_flat_bottom_from_args,
     add_monomer_constraint_args,
     apply_charmm_output_from_args,
     build_cluster_from_args,
@@ -39,6 +41,7 @@ def main() -> int:
     add_cluster_args(parser)
     add_charmm_output_args(parser)
     add_dcd_save_args(parser)
+    add_flat_bottom_args(parser)
     add_monomer_constraint_args(parser, for_dynamics=False)
     parser.add_argument(
         "--run",
@@ -118,6 +121,7 @@ def main() -> int:
     )
     setup_default_nbonds()
     sync_charmm_positions(r)
+    apply_flat_bottom_from_args(args)
     vmd_topo_psf = out_dir / f"cluster_for_vmd_{tag}.psf"
     if not args.no_save_vmd_topology:
         vmd_files = save_cluster_topology_for_vmd(

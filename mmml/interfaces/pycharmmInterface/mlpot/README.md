@@ -101,6 +101,18 @@ run_dynamics_with_io(build_cpt_equilibration_dynamics(duration_ps=50.0), equi_io
 
 Chained production restarts: `production_restart_chain(data_dir, n_segments=10)`.
 
+## Non-PBC flat-bottom sphere (MMFP)
+
+Same as production `dyna.inp` — quartic wall outside ``droff``:
+
+```python
+from mmml.interfaces.pycharmmInterface.mlpot import apply_flat_bottom_workflow
+
+apply_flat_bottom_workflow(radius=20.0, force=1.0, center_at_origin=True)
+```
+
+Test scripts: ``--fb-rad 20 --fb-forc 1`` (optional ``--no-fb-center`` if the sphere center is not at the origin).
+
 ## Partial ML / MM
 
 See `partial_mm.py` — segment registration works; **ML–MM pair electrostatics** (`idxu`/`idxv`) raise `NotImplementedError` until implemented in `PyCharmm_Calculator`.

@@ -56,6 +56,39 @@ def add_charmm_output_args(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def add_flat_bottom_args(parser: argparse.ArgumentParser) -> None:
+    """CHARMM MMFP flat-bottom spherical potential (non-PBC production-style)."""
+    group = parser.add_argument_group("Flat-bottom sphere (CHARMM MMFP)")
+    group.add_argument(
+        "--fb-rad",
+        type=float,
+        default=None,
+        metavar="ANG",
+        help="MMFP droff radius (Å); inside = no restraint. Omit to disable.",
+    )
+    group.add_argument(
+        "--fb-forc",
+        type=float,
+        default=1.0,
+        help="MMFP wall force constant (default: 1.0; increase if monomers escape)",
+    )
+    group.add_argument(
+        "--fb-center",
+        action="store_true",
+        default=True,
+        help="Center cluster at origin before MMFP (coor orient + translate; default: on)",
+    )
+    group.add_argument(
+        "--no-fb-center",
+        action="store_false",
+        dest="fb_center",
+        help="Skip COM translation; use with --fb-xref/--fb-yref/--fb-zref",
+    )
+    group.add_argument("--fb-xref", type=float, default=0.0, help="Sphere center x (Å)")
+    group.add_argument("--fb-yref", type=float, default=0.0, help="Sphere center y (Å)")
+    group.add_argument("--fb-zref", type=float, default=0.0, help="Sphere center z (Å)")
+
+
 def add_dcd_save_args(parser: argparse.ArgumentParser) -> None:
     """CLI flags for DCD trajectory frame spacing (scripts 04–05)."""
     group = parser.add_argument_group("DCD trajectory output")
@@ -400,6 +433,29 @@ def turn_off_cons_fix() -> None:
     import pycharmm.cons_fix as cons_fix
 
     cons_fix.turn_off()
+
+
+def apply_flat_bottom_from_args(args: argparse.Namespace) -> None:
+    """Apply MMFP flat-bottom sphere when ``--fb-rad`` is set."""
+    fb_rad = getattr(args, "fb_rad", None)
+    if fb_rad is None or float(fb_rad) <= 0:
+        return
+    from mmml.interfaces.pycharmmInterface.mlpot.restraints import apply_flat_bottom_workflow
+
+    cfg = apply_flat_bottom_workflow(
+        radius=float(fb_rad),
+        force=float(getattr(args, "fb_forc", 1.0)),
+        center_at_origin=bool(getattr(args, "fb_center", True)),
+        xref=float(getattr(args, "fb_xref", 0.0)),
+        yref=float(getattr(args, "fb_yref", 0.0)),
+        zref=float(getattr(args, "fb_zref", 0.0)),
+    )
+    if cfg is not None:
+        print(
+            "MMFP flat-bottom sphere: "
+            f"droff={cfg.radius:.2f} Å force={cfg.force:.2f} "
+            f"center=({cfg.xref:.2f}, {cfg.yref:.2f}, {cfg.zref:.2f})"
+        )
 
 
 def format_resid_constraint_message(resids: list[int], *, context: str) -> str:
