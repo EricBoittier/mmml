@@ -21,6 +21,56 @@ DEFAULT_N_MOLECULES = 2
 DEFAULT_SPACING = 4.0
 
 
+def add_charmm_output_args(parser: argparse.ArgumentParser) -> None:
+    """CLI flags for CHARMM console verbosity (scripts 04–05)."""
+    group = parser.add_argument_group("CHARMM console output")
+    group.add_argument(
+        "--prnlev",
+        type=int,
+        default=5,
+        help="CHARMM PRNLev (0=quiet, 5=verbose; default: 5)",
+    )
+    group.add_argument(
+        "--warnlev",
+        type=int,
+        default=5,
+        help="CHARMM WRNLev (default: 5)",
+    )
+    group.add_argument(
+        "--bomlev",
+        type=int,
+        default=0,
+        help="CHARMM BOMBlev (default: 0 = stop on errors)",
+    )
+    group.add_argument(
+        "--nprint",
+        type=int,
+        default=1,
+        help="Print energy/status every N minimization or dynamics steps (default: 1)",
+    )
+    group.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Shortcut for --prnlev 0 --warnlev 0 and coarse nprint",
+    )
+
+
+def apply_charmm_output_from_args(args: argparse.Namespace) -> int:
+    """Apply PRNLev/WRNLev from argparse; return effective ``nprint``."""
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import apply_charmm_verbosity
+
+    if getattr(args, "quiet", False):
+        apply_charmm_verbosity(prnlev=0, warnlev=0, bomlev=args.bomlev)
+        nstep = getattr(args, "nstep", 100)
+        return max(1, nstep)
+    apply_charmm_verbosity(
+        prnlev=args.prnlev,
+        warnlev=args.warnlev,
+        bomlev=args.bomlev,
+    )
+    return max(1, int(args.nprint))
+
+
 def add_cluster_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--residue",

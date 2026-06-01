@@ -6,6 +6,7 @@ Validated against the scripts in ``tests/functionality/mlpot/`` (ASE / callback 
 from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
     CharmmTrajectoryFiles,
     MinimizeWithMlpotConfig,
+    assign_boltzmann_velocities,
     build_cpt_production_dynamics,
     build_cpt_equilibration_dynamics,
     build_heat_dynamics,
@@ -26,6 +27,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.partial_mm import (
 )
 from mmml.interfaces.pycharmmInterface.mlpot.setup import (
     MlpotContext,
+    apply_charmm_verbosity,
     get_charmm_positions_array,
     resolve_export_positions,
     load_physnet_mlpot_bundle,
@@ -40,8 +42,10 @@ from mmml.interfaces.pycharmmInterface.mlpot.setup import (
 __all__ = [
     "CharmmTrajectoryFiles",
     "MinimizeWithMlpotConfig",
+    "assign_boltzmann_velocities",
     "MlpotContext",
     "PartialMlMmConfig",
+    "apply_charmm_verbosity",
     "build_cpt_equilibration_dynamics",
     "build_cpt_production_dynamics",
     "build_heat_dynamics",

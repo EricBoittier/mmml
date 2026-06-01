@@ -17,7 +17,9 @@ from pathlib import Path
 import numpy as np
 
 from _common import (
+    add_charmm_output_args,
     add_cluster_args,
+    apply_charmm_output_from_args,
     build_acetone_dimer_cluster,
     build_ase_cluster,
     print_cluster_geometry_summary,
@@ -29,6 +31,7 @@ from _common import (
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     add_cluster_args(parser)
+    add_charmm_output_args(parser)
     parser.add_argument(
         "--run",
         action="store_true",
@@ -103,6 +106,11 @@ def main() -> int:
         sync_charmm_positions,
     )
 
+    nprint = apply_charmm_output_from_args(args)
+    print(
+        f"CHARMM output: PRNLev={0 if args.quiet else args.prnlev} "
+        f"WRNLev={0 if args.quiet else args.warnlev} nprint={nprint}"
+    )
     setup_default_nbonds()
     sync_charmm_positions(r)
     atoms = ase.Atoms(numbers=z, positions=r)
@@ -125,7 +133,8 @@ def main() -> int:
             MinimizeWithMlpotConfig(
                 fixed_ml_selection=fix_sel,
                 nstep=args.nstep,
-                nprint=max(1, args.nstep // 2),
+                nprint=nprint,
+                verbose=not args.quiet,
                 reference_positions=r,
                 pyCModel=pyCModel,
                 save=args.save,

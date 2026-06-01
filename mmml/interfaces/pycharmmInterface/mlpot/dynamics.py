@@ -82,6 +82,7 @@ class MinimizeWithMlpotConfig:
     title: str = "Mini SD"
     skip_if_crd_exists: bool = True
     show_energy: bool = True
+    verbose: bool = False
 
 
 def _import_pycharmm_modules():
@@ -262,6 +263,14 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     return dyn
 
 
+def assign_boltzmann_velocities(temp: float = 300.0) -> None:
+    """Assign Maxwell-Boltzmann velocities (required before ``new`` dynamics)."""
+    pycharmm, *_ = _import_pycharmm_modules()
+    pycharmm.lingo.charmm_script(
+        f"velocity select all set temp {float(temp):.4f} dist u"
+    )
+
+
 def run_dynamics_with_io(
     dynamics_kwargs: dict[str, Any],
     io: Optional[CharmmTrajectoryFiles] = None,
@@ -336,11 +345,26 @@ def minimize_with_mlpot(
 
     sd_kw = _sd_kwargs_from_config(config)
     try:
+        if config.verbose and config.show_energy:
+            print("CHARMM energy before minimization:")
+            energy.show()
         if config.fixed_ml_selection is not None:
             cons_fix.setup(config.fixed_ml_selection)
+            if config.verbose:
+                print(
+                    f"SD pass 1 (cons_fix): nstep={config.nstep} nprint={config.nprint}"
+                )
             minimize.run_sd(**sd_kw)
+            if config.verbose and config.show_energy:
+                print("CHARMM energy after SD pass 1 (fixed):")
+                energy.show()
             cons_fix.turn_off()
+        if config.verbose:
+            print(f"SD pass 2 (free): nstep={config.nstep} nprint={config.nprint}")
         minimize.run_sd(**sd_kw)
+        if config.verbose and config.show_energy:
+            print("CHARMM energy after SD pass 2 (free):")
+            energy.show()
 
         if config.save:
             from mmml.interfaces.pycharmmInterface.mlpot.setup import (
