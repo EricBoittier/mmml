@@ -48,6 +48,10 @@ import pycharmm
 
 import pycharmm.coor as coor
 import pycharmm.energy as energy
+import pycharmm.read as read
+import pycharmm.settings as settings
+import pycharmm.psf as psf
+import pycharmm.minimize as minimize
 
 import ase
 from ase.visualize import view

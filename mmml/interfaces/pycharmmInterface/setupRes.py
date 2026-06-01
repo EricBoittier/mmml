@@ -11,6 +11,7 @@ import numpy as np
 
 # ASE imports
 import ase
+import ase.io
 from ase import Atoms
 from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_loud
 from mmml.interfaces.pycharmmInterface.import_pycharmm import reset_block

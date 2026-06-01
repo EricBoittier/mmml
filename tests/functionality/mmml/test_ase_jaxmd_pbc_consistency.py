@@ -84,6 +84,7 @@ def test_ase_jaxmd_pbc_energy_forces_consistency():
 
     from mmml.pycharmmInterface.mmml_calculator import setup_calculator
     from mmml.pycharmmInterface.cutoffs import CutoffParameters
+    from mmml.pycharmmInterface.calculator_utils import unpack_factory_result
 
     n_monomers = 2
     n_atoms_monomer = 10
@@ -114,11 +115,13 @@ def test_ase_jaxmd_pbc_energy_forces_consistency():
     )
     Z = jnp.array([6] * n_atoms)
 
-    calc, spherical_cutoff_calculator = factory(
-        atomic_numbers=np.array(Z),
-        atomic_positions=np.array(R),
-        n_monomers=n_monomers,
-        cutoff_params=cutoff_params,
+    calc, spherical_cutoff_calculator, _ = unpack_factory_result(
+        factory(
+            atomic_numbers=np.array(Z),
+            atomic_positions=np.array(R),
+            n_monomers=n_monomers,
+            cutoff_params=cutoff_params,
+        )
     )
 
     atoms = ase.Atoms(np.array(Z), np.array(R), cell=np.array(cell_matrix), pbc=True)
@@ -186,6 +189,7 @@ def test_ase_jaxmd_pbc_with_box_and_pairs():
 
     from mmml.pycharmmInterface.mmml_calculator import setup_calculator
     from mmml.pycharmmInterface.cutoffs import CutoffParameters
+    from mmml.pycharmmInterface.calculator_utils import unpack_factory_result
 
     n_monomers = 2
     n_atoms_monomer = 10
@@ -210,17 +214,14 @@ def test_ase_jaxmd_pbc_with_box_and_pairs():
         jax.random.uniform(key, (n_atoms, 3), minval=2.0, maxval=cell_length - 2.0),
         dtype=np.float32,
     )
-    calc_result = factory(
-        atomic_numbers=np.array([6] * n_atoms),
-        atomic_positions=R_init,
-        n_monomers=n_monomers,
-        cutoff_params=CutoffParameters(),
+    calc, spherical_cutoff_calculator, get_update_fn = unpack_factory_result(
+        factory(
+            atomic_numbers=np.array([6] * n_atoms),
+            atomic_positions=R_init,
+            n_monomers=n_monomers,
+            cutoff_params=CutoffParameters(),
+        )
     )
-    if len(calc_result) == 3:
-        calc, spherical_cutoff_calculator, get_update_fn = calc_result
-    else:
-        calc, spherical_cutoff_calculator = calc_result
-        get_update_fn = None
 
     update_fn = get_update_fn(R_init, CutoffParameters())
     if update_fn is None:

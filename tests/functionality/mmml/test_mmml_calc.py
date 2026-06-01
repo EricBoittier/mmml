@@ -107,6 +107,7 @@ def test_setup_calculator_factory_smoke():
 		pytest.skip("No checkpoints present for ML model")
 
 	from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+	from mmml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
 
 	# Create factory without touching MM (avoids CHARMM setup during smoke test)
 	try:
@@ -203,10 +204,12 @@ def test_ml_energy_matches_reference_when_data_available():
 		pytest.skip("ase not available in this environment")
 	ase = _il.import_module("ase")
 	atoms = ase.Atoms(np.array(Z), np.array(R))
-	calc, _ = factory(
-		atomic_numbers=np.array(Z),
-		atomic_positions=np.array(R),
-		n_monomers=2,
+	calc, _, _ = unpack_factory_result(
+		factory(
+			atomic_numbers=np.array(Z),
+			atomic_positions=np.array(R),
+			n_monomers=2,
+		)
 	)
 	atoms.calc = calc
 	ml_only_energy_kcal = atoms.get_potential_energy()
@@ -268,11 +271,13 @@ def test_check_lattice_invariance():
 	Z = jnp.array([6] * 20)  # carbon
 	cutoff_params = CutoffParameters()
 
-	calc, spherical_cutoff_calculator = factory(
-		atomic_numbers=np.array(Z),
-		atomic_positions=np.array(R),
-		n_monomers=2,
-		cutoff_params=cutoff_params,
+	calc, spherical_cutoff_calculator, _ = unpack_factory_result(
+		factory(
+			atomic_numbers=np.array(Z),
+			atomic_positions=np.array(R),
+			n_monomers=2,
+			cutoff_params=cutoff_params,
+		)
 	)
 
 	def sc_fn(R_in, Z_in, n_monomers, cutoff_params_in):
@@ -322,6 +327,7 @@ def test_pbc_energy_invariance_via_ase():
 	import jax.numpy as jnp
 	import ase
 	from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+	from mmml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
 	from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
 	cell_length = 40.0
 	factory = setup_calculator(
@@ -343,11 +349,13 @@ def test_pbc_energy_invariance_via_ase():
 	Z = np.array([6] * 20)
 	cutoff_params = CutoffParameters()
 
-	calc, _ = factory(
-		atomic_numbers=Z,
-		atomic_positions=R,
-		n_monomers=2,
-		cutoff_params=cutoff_params,
+	calc, _, _ = unpack_factory_result(
+		factory(
+			atomic_numbers=Z,
+			atomic_positions=R,
+			n_monomers=2,
+			cutoff_params=cutoff_params,
+		)
 	)
 
 	atoms = ase.Atoms(Z, R, cell=cell_matrix, pbc=True)
@@ -401,6 +409,7 @@ def test_pbc_force_invariance():
 	import jax.numpy as jnp
 	import ase
 	from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+	from mmml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
 	from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
 	cell_length = 40.0
 	factory = setup_calculator(
@@ -422,11 +431,13 @@ def test_pbc_force_invariance():
 	Z = np.array([6] * 20)
 	cutoff_params = CutoffParameters()
 
-	calc, _ = factory(
-		atomic_numbers=Z,
-		atomic_positions=R,
-		n_monomers=2,
-		cutoff_params=cutoff_params,
+	calc, _, _ = unpack_factory_result(
+		factory(
+			atomic_numbers=Z,
+			atomic_positions=R,
+			n_monomers=2,
+			cutoff_params=cutoff_params,
+		)
 	)
 
 	atoms = ase.Atoms(Z, R, cell=cell_matrix, pbc=True)
@@ -482,6 +493,7 @@ def test_pbc_force_gradient_numerical():
 	import jax.numpy as jnp
 	import ase
 	from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+	from mmml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
 	from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
 	cell_length = 40.0
 	factory = setup_calculator(
@@ -503,11 +515,13 @@ def test_pbc_force_gradient_numerical():
 	Z = np.array([6] * 20)
 	cutoff_params = CutoffParameters()
 
-	calc, _ = factory(
-		atomic_numbers=Z,
-		atomic_positions=R,
-		n_monomers=2,
-		cutoff_params=cutoff_params,
+	calc, _, _ = unpack_factory_result(
+		factory(
+			atomic_numbers=Z,
+			atomic_positions=R,
+			n_monomers=2,
+			cutoff_params=cutoff_params,
+		)
 	)
 
 	atoms = ase.Atoms(Z, R, cell=cell_matrix, pbc=True)
@@ -678,11 +692,13 @@ def test_pbc_energy_invariance_orthorhombic_cell():
 	Z = jnp.array([6] * 20)
 	cutoff_params = CutoffParameters()
 
-	calc, spherical_cutoff_calculator = factory(
-		atomic_numbers=np.array(Z),
-		atomic_positions=np.array(R),
-		n_monomers=2,
-		cutoff_params=cutoff_params,
+	calc, spherical_cutoff_calculator, _ = unpack_factory_result(
+		factory(
+			atomic_numbers=np.array(Z),
+			atomic_positions=np.array(R),
+			n_monomers=2,
+			cutoff_params=cutoff_params,
+		)
 	)
 
 	def sc_fn(R_in, Z_in, n_monomers, cutoff_params_in):
