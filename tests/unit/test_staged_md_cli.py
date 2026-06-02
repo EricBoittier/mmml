@@ -6,6 +6,8 @@ import argparse
 from pathlib import Path
 
 from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    recommend_echeck_kcal,
+    resolve_echeck_for_cluster,
     resolve_md_stages,
     resolve_use_pbc,
 )
@@ -79,6 +81,33 @@ def test_prior_restart_for_equi_prefers_nve_when_present(tmp_path: Path):
 
     got = _prior_restart_for_stage("equi", paths, restart_from=None)
     assert got == paths["nve_res"]
+
+
+def test_recommend_echeck_kcal_small_cluster():
+    assert recommend_echeck_kcal(4, 20) == 100.0
+
+
+def test_recommend_echeck_kcal_medium_cluster():
+    assert recommend_echeck_kcal(20, 100) == 1000.0
+
+
+def test_recommend_echeck_kcal_dcm90():
+    assert recommend_echeck_kcal(90, 450) == 4500.0
+
+
+def test_resolve_echeck_for_cluster_scales_dcm90():
+    args = argparse.Namespace(echeck=500.0, no_echeck=False, no_scale_echeck=False)
+    assert resolve_echeck_for_cluster(args, n_atoms=450, n_monomers=90) == 4500.0
+
+
+def test_resolve_echeck_for_cluster_respects_no_scale():
+    args = argparse.Namespace(echeck=500.0, no_echeck=False, no_scale_echeck=True)
+    assert resolve_echeck_for_cluster(args, n_atoms=450, n_monomers=90) == 500.0
+
+
+def test_resolve_echeck_for_cluster_user_floor_above_recommended():
+    args = argparse.Namespace(echeck=8000.0, no_echeck=False, no_scale_echeck=False)
+    assert resolve_echeck_for_cluster(args, n_atoms=450, n_monomers=90) == 8000.0
 
 
 def test_build_stage_dynamics_kw_restart_omits_invalid_res_flag():

@@ -127,7 +127,8 @@ Test scripts: ``--fb-rad 20 --fb-forc 1`` (optional ``--no-fb-center`` if the sp
 ``build_nve_dynamics`` defaults to ``echeck=100`` kcal/mol (``dyna.inp`` heating/production).
 Dynamics stops early if the total energy jump exceeds the tolerance — use before MMFP/PRESS RMS blows up.
 
-Script 05: ``--echeck 100`` (default), ``--echeck 500`` for looser NPT-style runs, ``--no-echeck`` to disable.
+Script 05: ``--echeck 100`` (default; auto-loosened for large clusters — DCM:90 → 4500 kcal/mol),
+``--no-scale-echeck`` to keep the explicit value, ``--no-echeck`` to disable.
 
 ## Partial ML / MM
 

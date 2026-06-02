@@ -135,7 +135,8 @@ def add_dynamics_stability_args(parser: argparse.ArgumentParser) -> None:
         default=100.0,
         metavar="KCAL",
         help="Stop dynamics if total energy change exceeds this (kcal/mol); "
-        "default 100. Use --no-echeck to disable.",
+        "default 100. Auto-loosened for large clusters (see --no-scale-echeck). "
+        "Use --no-echeck to disable.",
     )
     group.add_argument(
         "--no-echeck",
@@ -803,6 +804,22 @@ def resolve_mini_nstep(args: argparse.Namespace, n_monomers: int) -> int:
     return scaled
 
 
+def recommend_echeck_kcal(n_monomers: int, n_atoms: int) -> float:
+    """Size-aware ECHECK floor for MLpot clusters (kcal/mol).
+
+    Small clusters keep the CLI default (100). Medium/large systems scale with
+    monomer count and atom count so heat/nonbond-list updates on DCM:90-sized
+    droplets do not trip ECHECK on ~O(N) energy steps.
+    """
+    n_mol = max(1, int(n_monomers))
+    n_at = max(1, int(n_atoms))
+    if n_mol < 10 and n_at < 100:
+        return 100.0
+    from_mol = float(n_mol) * 50.0
+    from_atoms = float(n_at) * 10.0
+    return max(500.0, from_mol, from_atoms)
+
+
 def resolve_echeck_for_cluster(
     args: argparse.Namespace,
     *,
@@ -815,15 +832,16 @@ def resolve_echeck_for_cluster(
     if getattr(args, "no_scale_echeck", False):
         return float(getattr(args, "echeck", 100.0))
     base = float(getattr(args, "echeck", 100.0))
-    if n_monomers >= 10 or n_atoms >= 100:
-        loose = max(500.0, base)
-        if loose != base:
-            print(
-                f"echeck loosened {base} -> {loose} kcal/mol for "
-                f"{n_monomers} monomer(s) / {n_atoms} atoms (override with explicit --echeck)"
-            )
-        return loose
-    return base
+    recommended = recommend_echeck_kcal(n_monomers, n_atoms)
+    scaled = max(base, recommended)
+    if scaled != base:
+        print(
+            f"echeck loosened {base} -> {scaled:.0f} kcal/mol for "
+            f"{n_monomers} monomer(s) / {n_atoms} atoms "
+            f"(recommended floor {recommended:.0f}; --no-scale-echeck to keep {base})",
+            flush=True,
+        )
+    return scaled
 
 
 def assert_dynamics_ready(
