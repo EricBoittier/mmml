@@ -78,8 +78,17 @@ class CharmmTrajectoryFiles:
             kw["iuncrd"] = self.trajectory_unit
         return open_files, kw
 
-    def open_trajectory_for_run(self) -> tuple[list[Any], dict[str, int]]:
-        """Open the DCD once (for multi-chunk overlap runs; append across ``dyna`` calls)."""
+    def open_trajectory_for_run(
+        self,
+        *,
+        append: bool = False,
+    ) -> tuple[list[Any], dict[str, int]]:
+        """Open the DCD once (for multi-chunk overlap runs; append across ``dyna`` calls).
+
+        Pass ``append=True`` only when resuming an existing trajectory on disk.
+        Overlap chunking passes ``iuncrd`` on the first ``dyna`` call only so
+        PyCHARMM does not reopen/truncate the file on every restart chunk.
+        """
         import pycharmm
 
         if self.trajectory is None:
@@ -91,6 +100,7 @@ class CharmmTrajectoryFiles:
             file_unit=self.trajectory_unit,
             formatted=False,
             read_only=False,
+            append=append,
         )
         return [f], {"iuncrd": self.trajectory_unit}
 
@@ -919,15 +929,25 @@ def _overlap_chunk_io(
     )
 
 
-def effective_overlap_check_interval(total_nstep: int, requested_interval: int) -> int:
+def effective_overlap_check_interval(
+    total_nstep: int,
+    requested_interval: int,
+    *,
+    nsavc: int | None = None,
+) -> int:
     """Largest chunk size ≤ ``requested_interval`` that divides ``total_nstep`` evenly.
 
     Avoids a short final overlap chunk (e.g. 40 steps when 1640 total and
     requested 50), which triggers CHARMM FINCYC frequency retuning and PBC
     instability after scratch restart reads.
+
+    When ``nsavc`` is set, the effective interval is at least ``nsavc + 1`` so
+    trajectory save frequency is not re-clamped inside each chunk.
     """
     n = max(1, int(total_nstep))
     req = max(1, int(requested_interval))
+    if nsavc is not None and int(nsavc) > 0:
+        req = max(req, int(nsavc) + 1)
     if n % req == 0:
         return req
     for d in range(min(req, n), 0, -1):
@@ -991,7 +1011,6 @@ _OVERLAP_CHUNK_FREQ_KEYS = (
     "iprfrq",
     "nprint",
     "isvfrq",
-    "nsavc",
 )
 
 
@@ -1004,10 +1023,7 @@ def _harmonize_overlap_chunk_frequencies(
     for key in _OVERLAP_CHUNK_FREQ_KEYS:
         if key not in chunk_kw:
             continue
-        if key == "nsavc":
-            chunk_kw[key] = _harmonize_nsavc_frequency(int(chunk_kw[key]), n)
-        else:
-            chunk_kw[key] = _harmonize_dynamics_frequency(int(chunk_kw[key]), n)
+        chunk_kw[key] = _harmonize_dynamics_frequency(int(chunk_kw[key]), n)
 
 
 def _prepare_overlap_chunk_after_restart(
@@ -1176,13 +1192,27 @@ def run_dynamics_with_io(
         )
 
     requested_interval = max(1, int(overlap.check_interval))
-    interval = effective_overlap_check_interval(total_nstep, requested_interval)
+    traj_nsavc = int(kw["nsavc"]) if "nsavc" in kw else None
+    interval = effective_overlap_check_interval(
+        total_nstep,
+        requested_interval,
+        nsavc=traj_nsavc,
+    )
+    min_for_nsavc = (traj_nsavc + 1) if traj_nsavc is not None and traj_nsavc > 0 else None
     if interval != requested_interval:
+        reason = f"so {total_nstep} steps divide evenly ({total_nstep // interval} chunks)"
+        if (
+            min_for_nsavc is not None
+            and requested_interval < min_for_nsavc
+            and interval >= min_for_nsavc
+        ):
+            reason = (
+                f"nsavc={traj_nsavc} requires chunk nstep >= {min_for_nsavc}; "
+                + reason
+            )
         print(
             f"overlap ({overlap_context}): check interval "
-            f"{requested_interval} -> {interval} steps "
-            f"so {total_nstep} steps divide evenly "
-            f"({total_nstep // interval} chunks)",
+            f"{requested_interval} -> {interval} steps {reason}",
             flush=True,
         )
     _cleanup_overlap_restart_slots(io)
@@ -1234,10 +1264,11 @@ def run_dynamics_with_io(
             if has_restart_read:
                 _prepare_overlap_chunk_after_restart(mlpot_ctx)
 
+            chunk_dcd_iokw = dcd_iokw if chunk_index == 0 else None
             last_dyn = _run_dynamics_chunk(
                 chunk_kw,
                 chunk_io,
-                extra_iokw=dcd_iokw or None,
+                extra_iokw=chunk_dcd_iokw,
                 rng_base=rng_base,
                 rng_salt=_rng_salt_for_dynamics(
                     overlap_context=overlap_context,

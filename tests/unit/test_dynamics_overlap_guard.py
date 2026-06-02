@@ -29,7 +29,7 @@ def test_resolve_defaults_to_rescue_and_1p5A():
     cfg = resolve_dynamics_overlap_config(args, n_monomers=4, use_pbc=True)
     assert cfg.action == "rescue"
     assert cfg.min_distance_A == 1.5
-    assert cfg.check_interval == 50
+    assert cfg.check_interval == 500
     assert cfg.enabled is True
     assert cfg.rescue.nstep_sd == 200
     assert cfg.rescue.nstep_abnr == 400
@@ -411,7 +411,7 @@ def test_overlap_multi_chunk_keeps_dcd_open_across_chunks(tmp_path):
         )
 
     open_dcd.assert_called_once()
-    assert dcd_calls == [1, 1, 1]
+    assert dcd_calls == [1, None]
 
 
 def test_effective_overlap_check_interval_divides_nstep():
@@ -424,6 +424,16 @@ def test_effective_overlap_check_interval_divides_nstep():
     assert effective_overlap_check_interval(1650, 50) == 50
     assert effective_overlap_check_interval(100, 50) == 50
     assert effective_overlap_check_interval(7, 50) == 7
+
+
+def test_effective_overlap_check_interval_respects_nsavc():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        effective_overlap_check_interval,
+    )
+
+    assert effective_overlap_check_interval(8000, 50, nsavc=100) == 100
+    assert effective_overlap_check_interval(8000, 500, nsavc=100) == 500
+    assert effective_overlap_check_interval(8000, 200, nsavc=100) == 200
 
 
 def test_run_dynamics_with_io_uses_even_overlap_chunks(tmp_path):
@@ -498,11 +508,11 @@ def test_harmonize_dynamics_frequency_for_remainder_chunk():
 
     kw2 = {"nsavc": 10}
     _harmonize_overlap_chunk_frequencies(kw2, 41)
-    assert kw2["nsavc"] == 1
+    assert kw2["nsavc"] == 10
 
     kw3 = {"nsavc": 40}
     _harmonize_overlap_chunk_frequencies(kw3, 40)
-    assert kw3["nsavc"] == 20
+    assert kw3["nsavc"] == 40
 
 
 def test_sync_dynamics_io_units_keeps_explicit_iunrea_minus_one():

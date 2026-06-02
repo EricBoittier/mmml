@@ -260,6 +260,12 @@ def _build_stage_dynamics_kw(
     return kw
 
 
+def _reset_stage_trajectory(path: Path | None) -> None:
+    """Remove a prior partial DCD so a new stage run starts a fresh trajectory file."""
+    if path is not None:
+        Path(path).unlink(missing_ok=True)
+
+
 def _seed_restart_for_memory_handoff(
     io: CharmmTrajectoryFiles,
     kw: dict[str, Any],
@@ -509,6 +515,9 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         restart_path=restart_path,
                     )
                     disable_charmm_domdec()
+                    _reset_stage_trajectory(
+                        Path(seg_io.trajectory) if seg_io.trajectory else None
+                    )
                     run_dynamics_with_io(
                         kw,
                         seg_io,
@@ -585,6 +594,9 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         restart_path=restart_path,
                     )
                     disable_charmm_domdec()
+                    _reset_stage_trajectory(
+                        Path(seg_io.trajectory) if seg_io.trajectory else None
+                    )
                     run_dynamics_with_io(
                         kw,
                         seg_io,
@@ -659,6 +671,9 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 restart_path=restart_path,
             )
             disable_charmm_domdec()
+            _reset_stage_trajectory(
+                Path(io.trajectory) if io.trajectory else None
+            )
             run_dynamics_with_io(
                 kw,
                 io,
