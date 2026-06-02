@@ -475,6 +475,7 @@ def test_run_dynamics_with_io_uses_even_overlap_chunks(tmp_path):
 def test_harmonize_dynamics_frequency_for_remainder_chunk():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _harmonize_dynamics_frequency,
+        _harmonize_nsavc_frequency,
         _harmonize_overlap_chunk_frequencies,
     )
 
@@ -482,6 +483,10 @@ def test_harmonize_dynamics_frequency_for_remainder_chunk():
     assert _harmonize_dynamics_frequency(500, 40) == 40
     assert _harmonize_dynamics_frequency(50, 50) == 50
     assert _harmonize_dynamics_frequency(25, 50) == 25
+
+    assert _harmonize_nsavc_frequency(100, 41) == 1
+    assert _harmonize_nsavc_frequency(40, 40) == 20
+    assert _harmonize_nsavc_frequency(10, 40) == 10
 
     kw = {"nstep": 40, "ihbfrq": 50, "imgfrq": 50, "isvfrq": 500, "nsavc": 10, "inbfrq": -1}
     _harmonize_overlap_chunk_frequencies(kw, 40)
@@ -494,6 +499,26 @@ def test_harmonize_dynamics_frequency_for_remainder_chunk():
     kw2 = {"nsavc": 10}
     _harmonize_overlap_chunk_frequencies(kw2, 41)
     assert kw2["nsavc"] == 1
+
+    kw3 = {"nsavc": 40}
+    _harmonize_overlap_chunk_frequencies(kw3, 40)
+    assert kw3["nsavc"] == 20
+
+
+def test_ensure_nsavc_below_nstep_clamps_full_run():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _ensure_nsavc_below_nstep
+
+    kw = {"nstep": 50, "nsavc": 50}
+    _ensure_nsavc_below_nstep(kw)
+    assert kw["nsavc"] == 25
+
+
+def test_resolve_dcd_nsavc_strictly_below_nstep():
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_dcd_nsavc
+
+    assert resolve_dcd_nsavc(dcd_nsavc=100, nstep=50) == 49
+    assert resolve_dcd_nsavc(dcd_nsavc=10, nstep=50) == 10
+    assert resolve_dcd_nsavc(dcd_nsavc=5, nstep=2) == 1
 
 
 def test_overlap_reseeds_rng_before_each_chunk():
