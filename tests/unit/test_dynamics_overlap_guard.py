@@ -327,7 +327,41 @@ def test_overlap_chunk_io_external_read_last_write_only(tmp_path):
     c1 = _overlap_chunk_io(io, chunk_index=1, n_chunks=3)
     assert c1.restart_read is None
     assert c1.restart_write is None
+    assert c1.trajectory == io.trajectory
 
     c2 = _overlap_chunk_io(io, chunk_index=2, n_chunks=3)
     assert c2.restart_read is None
     assert c2.restart_write == equi
+    assert c2.trajectory == io.trajectory
+
+
+def test_run_dynamics_chunk_strips_stale_iunwri(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        CharmmTrajectoryFiles,
+        _run_dynamics_chunk,
+    )
+
+    io = CharmmTrajectoryFiles(
+        restart_write=tmp_path / "out.res",
+        trajectory=tmp_path / "out.dcd",
+    )
+    captured: list[dict] = []
+
+    def fake_run(kw):
+        captured.append(dict(kw))
+        return mock.Mock()
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.run_dynamics",
+        side_effect=fake_run,
+    ), mock.patch.object(
+        CharmmTrajectoryFiles,
+        "open_for_run",
+        return_value=([], {}),
+    ):
+        _run_dynamics_chunk(
+            {"nstep": 10, "restart": True, "iunwri": 2, "iunrea": 3},
+            io,
+        )
+    assert "iunwri" not in captured[0]
+    assert "iunrea" not in captured[0]
