@@ -178,8 +178,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--fix-resids",
         type=str,
-        default="1",
-        help="pycharmm: monomers held in SD pass 2 (comma-separated 1-based resids)",
+        default="",
+        help=(
+            "pycharmm: monomers held in SD pass 2 (comma-separated 1-based resids; "
+            "default: none — use e.g. 1 or 1,3 to anchor monomers during minimize)"
+        ),
     )
     parser.add_argument(
         "--constrain-resids",
@@ -488,8 +491,8 @@ def parse_args() -> argparse.Namespace:
         type=str,
         default="MEOH",
         help=(
-            "Residue name when --composition is not set "
-            "(lambda_ti default MEOH; use ACO for acetone with --backend pycharmm)."
+            "Single-residue name when --composition is not set "
+            "(ignored when --composition is set; lambda_ti default MEOH)."
         ),
     )
     parser.add_argument("--skip-jit-warmup", action="store_true", help="lambda_ti: skip first MMML energy eval per window.")
@@ -510,6 +513,35 @@ def _append_optional(cmd: list[str], flag: str, value) -> None:
     if value is None:
         return
     cmd.extend([flag, str(value)])
+
+
+def _append_if_nonempty(cmd: list[str], flag: str, value: str | None) -> None:
+    if value is None:
+        return
+    text = str(value).strip()
+    if text:
+        cmd.extend([flag, text])
+
+
+def _pycharmm_run_summary(args: argparse.Namespace) -> str:
+    """One-line summary of the active pycharmm run (for logs)."""
+    parts = [f"setup={args.setup}"]
+    if args.composition:
+        parts.append(f"composition={args.composition}")
+    else:
+        parts.append(f"residue={args.residue}")
+        parts.append(f"n={args.n_molecules}")
+    if getattr(args, "box_size", None):
+        parts.append(f"box={args.box_size}Å")
+    if args.md_stage:
+        parts.append(f"stage={args.md_stage}")
+    elif args.md_stages:
+        parts.append(f"stages={args.md_stages}")
+    if not args.no_fix and str(args.fix_resids).strip():
+        parts.append(f"fix-resids={args.fix_resids}")
+    if str(args.constrain_resids).strip():
+        parts.append(f"constrain-resids={args.constrain_resids}")
+    return " | ".join(parts)
 
 
 def _validate_packmol_sphere_args(args: argparse.Namespace) -> None:
@@ -666,12 +698,6 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         str(args.temperature),
         "--mini-nstep",
         str(args.mini_nstep),
-        "--residue",
-        str(args.residue),
-        "--fix-resids",
-        str(args.fix_resids),
-        "--constrain-resids",
-        str(args.constrain_resids),
         "--dyn-nprint",
         str(args.dyn_nprint),
         "--dyn-iprfrq",
@@ -690,7 +716,11 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     if args.composition:
         cmd.extend(["--composition", str(args.composition)])
     else:
+        cmd.extend(["--residue", str(args.residue)])
         cmd.extend(["--n-molecules", str(args.n_molecules)])
+    if not args.no_fix:
+        _append_if_nonempty(cmd, "--fix-resids", args.fix_resids)
+    _append_if_nonempty(cmd, "--constrain-resids", args.constrain_resids)
     if args.md_stage:
         cmd.extend(["--md-stage", str(args.md_stage)])
     elif args.md_stages:
@@ -891,7 +921,14 @@ def main() -> int:
     except ValueError as exc:
         print(f"mmml md-system: error: {exc}", file=sys.stderr)
         return 2
-    print(f"mmml md-system: running {backend} in-process:", " ".join(argv), flush=True)
+    if backend == "pycharmm":
+        print(
+            f"mmml md-system: running pycharmm ({_pycharmm_run_summary(args)})",
+            flush=True,
+        )
+        print(f"  {' '.join(argv)}", flush=True)
+    else:
+        print(f"mmml md-system: running {backend} in-process:", " ".join(argv), flush=True)
     if backend == "ase":
         from mmml.cli.run.md_pbc_suite import ase as backend_mod
     elif backend == "pycharmm":
