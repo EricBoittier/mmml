@@ -265,17 +265,35 @@ def _bonded_recovery_sd_kwargs(ctx: "MlpotContext", config: BondedMmMiniConfig) 
     return kw
 
 
+def _with_recovery_nbonds(ctx: "MlpotContext", fn):
+    """Run ``fn`` with ``NBXMOD=2`` exclusion list, then restore workflow ``NBXMOD=5``."""
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        MlpotContext,
+        apply_recovery_nbonds,
+        restore_workflow_nbonds,
+    )
+
+    if not isinstance(ctx, MlpotContext):
+        raise TypeError("ctx must be MlpotContext")
+    apply_recovery_nbonds(ctx)
+    try:
+        return fn()
+    finally:
+        restore_workflow_nbonds(ctx)
+
+
 def minimize_bonded_mm_recovery(
     ctx: "MlpotContext",
     config: BondedMmMiniConfig,
 ) -> float | None:
-    """Bonded-only MM SD via BLOCK; MLpot stays registered (no unset/reregister)."""
+    """Bonded MM + VDW rescue SD (``NBXMOD 2``); MLpot stays registered."""
     from mmml.interfaces.pycharmmInterface.mlpot.block_terms import (
-        apply_bonded_mm_only_block,
+        apply_bonded_vdw_recovery_block,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
         MlpotContext,
+        RECOVERY_NBXMOD,
         get_charmm_positions_array,
     )
 
@@ -283,7 +301,7 @@ def minimize_bonded_mm_recovery(
         raise TypeError("ctx must be MlpotContext")
 
     def _run_sd() -> float | None:
-        apply_bonded_mm_only_block()
+        apply_bonded_vdw_recovery_block()
         pycharmm, cons_fix, *_ = _import_pycharmm_modules()
         minimize = _import_pycharmm_modules()[3]
         if config.nstep_sd <= 0:
@@ -292,7 +310,8 @@ def minimize_bonded_mm_recovery(
         pycharmm.lingo.charmm_script("ENER")
         if config.verbose:
             print(
-                f"Bonded-MM mini start: GRMS={charmm_grms():.4f} kcal/mol/Å",
+                f"Bonded-MM mini start: GRMS={charmm_grms():.4f} kcal/mol/Å "
+                f"(VDW on, NBXMOD {RECOVERY_NBXMOD})",
                 flush=True,
             )
         sd_kw = _bonded_recovery_sd_kwargs(ctx, config)
@@ -311,7 +330,10 @@ def minimize_bonded_mm_recovery(
         _ = get_charmm_positions_array()
         return grms
 
-    return _with_mlpot_block_restored(ctx, _run_sd)
+    return _with_recovery_nbonds(
+        ctx,
+        lambda: _with_mlpot_block_restored(ctx, _run_sd),
+    )
 
 
 @dataclass

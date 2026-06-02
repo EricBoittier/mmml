@@ -36,6 +36,21 @@ END
     pycharmm.lingo.charmm_script(block)
 
 
+def apply_bonded_vdw_recovery_block() -> None:
+    """Bonded MM + VDW for rescue SD; ELEC off (MLpot handles electrostatics).
+
+    Pair with ``NBXMOD 2`` (only 1-2 exclusions) during rescue SD; restore ``NBXMOD 5``
+    afterward via :func:`restore_workflow_nbonds`.
+    """
+    pycharmm = _import_pycharmm()
+    block = """BLOCK
+CALL 1 SELE ALL END
+COEFF 1 1 1.0 BOND 1.0 ANGL 1.0 DIHEdral 1.0 ELEC 0.0 VDW 1.0
+END
+"""
+    pycharmm.lingo.charmm_script(block)
+
+
 def apply_mlpot_energy_block(ml_selection: Any) -> str:
     """Zero CHARMM bonded and nonbonded terms on ML atoms; MLpot supplies the energy.
 
