@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 import pytest
 
@@ -122,9 +122,9 @@ def test_minimize_bonded_recovery_uses_bonded_only_block():
     ctx = MagicMock(spec=MlpotContext)
     ctx.use_pbc = False
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._with_mlpot_block_restored",
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._with_mlpot_detached",
         side_effect=lambda _ctx, fn: fn(),
-    ), patch(
+    ) as detached, patch(
         "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_bonded_mm_only_block",
     ) as bonded_block, patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
@@ -134,6 +134,7 @@ def test_minimize_bonded_recovery_uses_bonded_only_block():
     ):
         imp.return_value = (MagicMock(), MagicMock(), MagicMock(), MagicMock())
         minimize_bonded_mm_recovery(ctx, BondedMmMiniConfig(nstep_sd=0))
+    detached.assert_called_once()
     bonded_block.assert_called_once()
 
 
@@ -156,9 +157,9 @@ def test_minimize_bonded_recovery_runs_sd_and_reports_angl():
         return None
 
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._with_mlpot_block_restored",
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._with_mlpot_detached",
         side_effect=lambda _ctx, fn: fn(),
-    ), patch(
+    ) as detached, patch(
         "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_bonded_mm_only_block",
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
@@ -177,9 +178,64 @@ def test_minimize_bonded_recovery_runs_sd_and_reports_angl():
     ):
         imp.return_value = (MagicMock(), MagicMock(), MagicMock(), minimize)
         grms = minimize_bonded_mm_recovery(ctx, BondedMmMiniConfig(nstep_sd=30))
+    detached.assert_called_once_with(ctx, ANY)
     minimize.run_sd.assert_called_once()
     assert minimize.run_sd.call_args.kwargs["nstep"] == 30
     assert grms == pytest.approx(1.0)
+
+
+def test_minimize_bonded_recovery_unset_and_reregister():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        BondedMmMiniConfig,
+        minimize_bonded_mm_recovery,
+    )
+
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+
+    ctx = MagicMock(spec=MlpotContext)
+    ctx.use_pbc = False
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_bonded_mm_only_block",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
+    ) as imp, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms",
+        return_value=1.0,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        return_value=MagicMock(),
+    ):
+        imp.return_value = (MagicMock(), MagicMock(), MagicMock(), MagicMock())
+        minimize_bonded_mm_recovery(ctx, BondedMmMiniConfig(nstep_sd=0))
+    ctx.unset.assert_called_once()
+    ctx.reregister_mlpot.assert_called_once()
+
+
+def test_measure_mm_bonded_strain_unset_and_reregister():
+    import sys
+
+    from mmml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+
+    ctx = MagicMock(spec=MlpotContext)
+    mock_py = MagicMock()
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_charmm_mm_block",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms",
+        return_value=0.5,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.charmm_internal_energy_kcalmol",
+        return_value=24.0,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.charmm_bonded_term_kcalmol",
+        return_value=24.0,
+    ), patch.dict(sys.modules, {"pycharmm": mock_py}):
+        out = bonded_mm_recovery.measure_mm_bonded_strain_with_full_block(ctx)
+    ctx.unset.assert_called_once()
+    ctx.reregister_mlpot.assert_called_once()
+    assert out.grms_kcalmol_A == pytest.approx(0.5)
+    assert out.angl_kcalmol == pytest.approx(24.0)
 
 
 def test_maybe_run_bonded_mm_mini_skips_when_grms_ok():

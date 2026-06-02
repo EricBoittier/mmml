@@ -215,9 +215,49 @@ def charmm_internal_energy_kcalmol(*, require: bool = False) -> float | None:
     return None
 
 
+def _log_bonded_term_diagnostics(*, verbose: bool) -> None:
+    """Verbose warning when CHARMM bonded terms read zero after MLpot detach."""
+    if not verbose:
+        return
+    angl = charmm_bonded_term_kcalmol("ANGL")
+    bond = charmm_bonded_term_kcalmol("BOND")
+    if angl is not None and abs(angl) < 1e-8:
+        terms = charmm_energy_terms()
+        if terms:
+            keys = ", ".join(sorted(terms.keys()))
+            print(
+                f"WARN: ANGL=0 after ENER (MM-only); energy terms: {keys}",
+                flush=True,
+            )
+        user = _charmm_eterm_value("USER")
+        if user is not None and abs(user) > 1e-8:
+            print(
+                f"WARN: USER={float(user):.4f} kcal/mol still active during MM-only work",
+                flush=True,
+            )
+    if bond is not None and abs(bond) < 1e-8 and angl is not None and abs(angl) < 1e-8:
+        print(
+            "WARN: BOND and ANGL both zero — check PSF connectivity / BLOCK state",
+            flush=True,
+        )
+
+
+def _with_mlpot_detached(ctx: "MlpotContext", fn):
+    """Unset MLpot USER, run MM work, then reregister MLpot + hybrid BLOCK."""
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+
+    if not isinstance(ctx, MlpotContext):
+        raise TypeError("ctx must be MlpotContext")
+    ctx.unset()
+    try:
+        return fn()
+    finally:
+        ctx.reregister_mlpot()
+
+
 @dataclass
 class BondedMmMiniConfig:
-    """Short bonded-only SD with MLpot left registered (BLOCK toggles only)."""
+    """Short bonded-only SD with MLpot temporarily detached (pure CHARMM bonded)."""
 
     nstep_sd: int = 50
     nprint: int = 10
@@ -278,7 +318,7 @@ def minimize_bonded_mm_recovery(
     ctx: "MlpotContext",
     config: BondedMmMiniConfig,
 ) -> float | None:
-    """Bonded-only rescue SD (BOND/ANGL/DIHE); no VDW/NBXMOD changes; MLpot stays registered."""
+    """Bonded-only rescue SD (BOND/ANGL/DIHE); MLpot detached for pure CHARMM minimization."""
     from mmml.interfaces.pycharmmInterface.mlpot.block_terms import apply_bonded_mm_only_block
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
@@ -294,15 +334,23 @@ def minimize_bonded_mm_recovery(
         pycharmm, cons_fix, *_ = _import_pycharmm_modules()
         minimize = _import_pycharmm_modules()[3]
         if config.nstep_sd <= 0:
+            pycharmm.lingo.charmm_script("ENER")
             return float(charmm_grms())
 
         pycharmm.lingo.charmm_script("ENER")
         angl_before = charmm_bonded_term_kcalmol("ANGL")
+        bond_before = charmm_bonded_term_kcalmol("BOND")
         grms_before = float(charmm_grms())
+        _log_bonded_term_diagnostics(verbose=config.verbose)
         if config.verbose:
-            msg = f"Bonded-MM mini start: GRMS={grms_before:.4f} kcal/mol/Å (bonded terms only)"
+            msg = (
+                f"Bonded-MM mini start: GRMS={grms_before:.4f} kcal/mol/Å "
+                "(bonded terms only, MLpot detached)"
+            )
             if angl_before is not None:
                 msg += f", ANGL={angl_before:.4f} kcal/mol"
+            if bond_before is not None:
+                msg += f", BOND={bond_before:.4f} kcal/mol"
             print(msg, flush=True)
         sd_kw = _bonded_recovery_sd_kwargs(ctx, config)
         if config.verbose and config.show_energy:
@@ -325,14 +373,14 @@ def minimize_bonded_mm_recovery(
         _ = get_charmm_positions_array()
         return grms
 
-    return _with_mlpot_block_restored(ctx, _run_sd)
+    return _with_mlpot_detached(ctx, _run_sd)
 
 
 def minimize_overlap_rescue(
     ctx: "MlpotContext",
     config: "OverlapRescueConfig",
 ) -> float | None:
-    """Bonded+VDW rescue SD/ABNR (NBXMOD 2) with MLpot registered; separates clashes."""
+    """Bonded+VDW rescue SD/ABNR (NBXMOD 2); MLpot detached so CHARMM VDW/BOND apply."""
     from mmml.interfaces.pycharmmInterface.mlpot.block_terms import (
         apply_bonded_vdw_recovery_block,
     )
@@ -397,7 +445,7 @@ def minimize_overlap_rescue(
             cons_fix.turn_off()
             _ = get_charmm_positions_array()
 
-    return _with_mlpot_block_restored(ctx, _run_rescue)
+    return _with_mlpot_detached(ctx, _run_rescue)
 
 
 @dataclass
@@ -788,45 +836,29 @@ def _overlap_restart_slot_paths(final_restart: Path) -> tuple[Path, Path]:
     )
 
 
-def _overlap_chunk_restart_paths(
+def _overlap_chunk_io(
     io: CharmmTrajectoryFiles,
     *,
     chunk_index: int,
     n_chunks: int,
-) -> tuple[Path | None, Path | None]:
-    """``(restart_read, restart_write)`` for overlap chunk ``chunk_index``."""
-    if io.restart_write is None:
-        return _valid_restart_file(io.restart_read), None
-    final = Path(io.restart_write)
+) -> CharmmTrajectoryFiles:
+    """Restart I/O for overlap chunking (in-process continuation between chunks).
+
+    Chunk 0 may read an external restart once; intermediate chunks use in-memory
+    coords only; the last chunk writes the final restart path.
+    """
+    restart_read = _valid_restart_file(io.restart_read) if chunk_index == 0 else None
     if n_chunks <= 1:
-        return _valid_restart_file(io.restart_read), final
-    slot_a, slot_b = _overlap_restart_slot_paths(final)
-    if chunk_index == 0:
-        return _valid_restart_file(io.restart_read), slot_a
-    if chunk_index == n_chunks - 1:
-        prev = slot_a if (chunk_index % 2) == 1 else slot_b
-        return prev, final
-    if chunk_index % 2 == 1:
-        return slot_a, slot_b
-    return slot_b, slot_a
-
-
-def _io_for_overlap_chunk(
-    io: Optional[CharmmTrajectoryFiles],
-    *,
-    chunk_index: int,
-    n_chunks: int,
-) -> Optional[CharmmTrajectoryFiles]:
-    """Restart I/O for overlap chunk ``chunk_index`` (separate read/write paths)."""
-    if io is None:
-        return None
-    rread, rwri = _overlap_chunk_restart_paths(
-        io, chunk_index=chunk_index, n_chunks=n_chunks
-    )
+        restart_write = io.restart_write
+    elif chunk_index == n_chunks - 1:
+        restart_write = io.restart_write
+    else:
+        restart_write = None
+    trajectory = io.trajectory if chunk_index == 0 else None
     return CharmmTrajectoryFiles(
-        restart_read=rread,
-        restart_write=rwri,
-        trajectory=io.trajectory,
+        restart_read=restart_read,
+        restart_write=restart_write,
+        trajectory=trajectory,
         restart_read_unit=io.restart_read_unit,
         restart_write_unit=io.restart_write_unit,
         trajectory_unit=io.trajectory_unit,
@@ -872,9 +904,8 @@ def run_dynamics_with_io(
 
     When ``overlap`` is enabled, integration runs in chunks of
     ``overlap.check_interval`` steps with inter-monomer distance checks
-    between chunks.  Multi-chunk runs alternate scratch ``.overlap_a/.b.res``
-    files so CHARMM never reads and writes the same restart path in one step
-    (that pattern triggers ``READYN`` EOF).
+    between chunks.  Multi-chunk runs continue in-process (coords stay in
+    memory); only the last chunk writes the final restart file.
     """
     from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         DynamicsOverlapConfig,
@@ -892,6 +923,7 @@ def run_dynamics_with_io(
         return _run_dynamics_chunk(kw, io)
 
     interval = max(1, int(overlap.check_interval))
+    _cleanup_overlap_restart_slots(io)
     check_dynamics_overlap(
         overlap,
         context=f"before {overlap_context}",
@@ -907,13 +939,14 @@ def run_dynamics_with_io(
             chunk_nstep = min(interval, total_nstep - steps_done)
             chunk_kw = dict(kw)
             chunk_kw["nstep"] = chunk_nstep
-            chunk_io = (
-                io
-                if chunk_index == 0 and n_chunks == 1
-                else _io_for_overlap_chunk(
+            if io is None:
+                chunk_io = None
+            elif n_chunks == 1:
+                chunk_io = io
+            else:
+                chunk_io = _overlap_chunk_io(
                     io, chunk_index=chunk_index, n_chunks=n_chunks
                 )
-            )
             has_restart_read = (
                 chunk_io is not None
                 and getattr(chunk_io, "restart_read", None) is not None
@@ -922,15 +955,15 @@ def run_dynamics_with_io(
                 chunk_kw["new"] = False
                 chunk_kw["start"] = False
                 chunk_kw.pop("firstt", None)
-                if has_restart_read:
-                    chunk_kw["restart"] = True
-                else:
-                    chunk_kw["restart"] = False
-                    chunk_kw["iunrea"] = -1
+                chunk_kw["restart"] = False
+                chunk_kw["iunrea"] = -1
             elif has_restart_read:
                 chunk_kw["new"] = False
                 chunk_kw["start"] = False
                 chunk_kw["restart"] = True
+            else:
+                chunk_kw["restart"] = False
+                chunk_kw["iunrea"] = -1
 
             last_dyn = _run_dynamics_chunk(chunk_kw, chunk_io)
             steps_done += chunk_nstep
