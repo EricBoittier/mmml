@@ -249,6 +249,23 @@ def measure_mm_grms_with_full_block(ctx: "MlpotContext") -> float:
     return _with_mlpot_block_restored(ctx, _measure)
 
 
+def _bonded_recovery_sd_kwargs(ctx: "MlpotContext", config: BondedMmMiniConfig) -> dict[str, Any]:
+    """SD frequencies compatible with vacuum vs PBC (CHARMM rejects inbfrq=0 + imgfrq≠0)."""
+    kw: dict[str, Any] = {
+        "nstep": max(1, int(config.nstep_sd)),
+        "nprint": max(1, int(config.nprint)),
+        "tolenr": float(config.tolenr),
+        "tolgrd": float(config.tolgrd),
+    }
+    if ctx.use_pbc:
+        # PBC: heuristic NB/image updates (same recipe as pbc_nbond_kwargs / dynamics).
+        kw.update({"inbfrq": -1, "ihbfrq": 50, "imgfrq": -1})
+    else:
+        # Vacuum: skip per-step list rebuild (MLpot SD recipe).
+        kw.update({"inbfrq": 0, "ihbfrq": 0, "imgfrq": 0})
+    return kw
+
+
 def minimize_bonded_mm_recovery(
     ctx: "MlpotContext",
     config: BondedMmMiniConfig,
@@ -279,15 +296,7 @@ def minimize_bonded_mm_recovery(
                 f"Bonded-MM mini start: GRMS={charmm_grms():.4f} kcal/mol/Å",
                 flush=True,
             )
-        sd_kw = {
-            "nstep": max(1, int(config.nstep_sd)),
-            "nprint": max(1, int(config.nprint)),
-            "tolenr": float(config.tolenr),
-            "tolgrd": float(config.tolgrd),
-            # Avoid MLpot/nbond list rebuilds each SD step (same as MLpot minimize).
-            "inbfrq": 0,
-            "ihbfrq": 0,
-        }
+        sd_kw = _bonded_recovery_sd_kwargs(ctx, config)
         if config.verbose and config.show_energy:
             _maybe_show_energy(True)
         minimize.run_sd(**sd_kw)
