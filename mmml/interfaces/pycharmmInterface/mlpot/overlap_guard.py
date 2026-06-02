@@ -246,10 +246,21 @@ def check_dynamics_overlap(
                 raise RuntimeError(
                     f"{exc}; MLpot overlap rescue failed: {rescue_exc}"
                 ) from rescue_exc
-            return _overlap_check(
-                config,
-                context=f"{label} after overlap rescue",
-            )
+            try:
+                return _overlap_check(
+                    config,
+                    context=f"{label} after overlap rescue",
+                )
+            except RuntimeError as still_bad:
+                raise RuntimeError(
+                    f"{still_bad}; overlap rescue "
+                    f"(SD={config.rescue.nstep_sd}, ABNR={config.rescue.nstep_abnr}) "
+                    f"did not separate monomers — try larger "
+                    f"--dynamics-overlap-charmm-sd-steps / "
+                    f"--dynamics-overlap-charmm-abnr-steps, "
+                    f"increase Packmol spacing, or relax "
+                    f"--dynamics-overlap-min-distance"
+                ) from still_bad
         if config.action == "warn":
             print(f"WARNING: {exc}", flush=True)
             return float("nan")
