@@ -30,24 +30,11 @@ def rewrite_dynamics_restart_from_current_state(
     *,
     write_unit: int = 92,
 ) -> None:
-    """Overwrite a dynamics restart so flags/coords match the current BLOCK setup."""
-    if restart_path is None:
-        return
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-    import pycharmm
+    """No-op: dynamics restart files are only written by ``WRIDYN`` during ``dyna``.
 
-    path = Path(restart_path).expanduser().resolve()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    restart_file = pycharmm.CharmmFile(
-        file_name=str(path),
-        file_unit=write_unit,
-        formatted=True,
-        read_only=False,
-    )
-    try:
-        pycharmm.lingo.charmm_script(f"write restart unit {write_unit}\n")
-    finally:
-        restart_file.close()
+    Same-process stage handoffs use in-memory coordinates (see ``memory_handoff``).
+    """
+    _ = (restart_path, write_unit)
 
 
 def record_mm_baseline_strain(*, verbose: bool = False) -> MmStrainBaseline | None:
@@ -88,21 +75,24 @@ def maybe_run_bonded_mm_mini_after_stage(
     stage: str,
     baseline: MmStrainBaseline | None,
     restart_path: PathLike | None = None,
-) -> None:
-    """If MM bonded GRMS rose above baseline, run bonded-only SD (BLOCK toggle only)."""
+) -> bool:
+    """If MM bonded GRMS rose above baseline, run bonded-only SD (BLOCK toggle only).
+
+    Returns True when recovery SD ran (caller should hand off next stage from memory).
+    """
     if not getattr(args, "bonded_mm_mini", False):
-        return
+        return False
     raw = str(getattr(args, "bonded_mm_mini_after", "heat") or "heat")
     watch = {s.strip().lower() for s in raw.split(",") if s.strip()}
     if stage.lower() not in watch:
-        return
+        return False
     if baseline is None:
         if not args.quiet:
             print(
                 "bonded-MM-mini: no baseline strain recorded; skipping check",
                 flush=True,
             )
-        return
+        return False
 
     grms_margin = getattr(args, "bonded_mm_grms_margin", None)
     margin = float(grms_margin if grms_margin is not None else getattr(args, "bonded_mm_internal_margin", 0.0))
@@ -117,28 +107,28 @@ def maybe_run_bonded_mm_mini_after_stage(
             if baseline.internal_kcalmol is not None:
                 msg += f"; baseline internal {baseline.internal_kcalmol:.4f} kcal/mol"
             print(msg, flush=True)
-    else:
-        if not args.quiet:
-            print(
-                f"bonded-MM-mini: GRMS {current_grms:.4f} > {threshold:.4f} after {stage}; "
-                f"running bonded SD (MLpot stays registered)",
-                flush=True,
-            )
-        nstep = int(getattr(args, "bonded_mm_mini_steps", 50))
-        minimize_bonded_mm_recovery(
-            ctx,
-            BondedMmMiniConfig(
-                nstep_sd=nstep,
-                nprint=max(1, int(getattr(args, "dyn_nprint", 100))),
-                verbose=not args.quiet,
-                show_energy=bool(getattr(args, "show_energy", False)),
-            ),
-        )
+        return False
 
-    rewrite_dynamics_restart_from_current_state(restart_path)
-    if restart_path is not None and not args.quiet:
+    if not args.quiet:
         print(
-            f"bonded-MM-mini: resynced restart {Path(restart_path).name} "
-            f"with current MLpot BLOCK",
+            f"bonded-MM-mini: GRMS {current_grms:.4f} > {threshold:.4f} after {stage}; "
+            f"running bonded SD (MLpot stays registered)",
             flush=True,
         )
+    nstep = int(getattr(args, "bonded_mm_mini_steps", 50))
+    minimize_bonded_mm_recovery(
+        ctx,
+        BondedMmMiniConfig(
+            nstep_sd=nstep,
+            nprint=max(1, int(getattr(args, "dyn_nprint", 100))),
+            verbose=not args.quiet,
+            show_energy=bool(getattr(args, "show_energy", False)),
+        ),
+    )
+    if not args.quiet:
+        print(
+            f"bonded-MM-mini: next stage will continue from in-memory coordinates "
+            f"(restart file unchanged)",
+            flush=True,
+        )
+    return True
