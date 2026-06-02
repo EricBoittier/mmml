@@ -84,6 +84,16 @@ class DecomposedMlpotCalculator:
     ) -> float:
         n = int(Natom)
         pos = np.array([x[:n], y[:n], z[:n]], dtype=np.float64).T
+        box = None
+        if self._cell:
+            from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+                cubic_box_matrix_from_side,
+                get_charmm_cubic_box_side_A,
+            )
+
+            side = get_charmm_cubic_box_side_A()
+            self._cell = side
+            box = jnp.asarray(cubic_box_matrix_from_side(side))
         from mmml.interfaces.pycharmmInterface.jax_device_policy import mlpot_jax_device_context
 
         with mlpot_jax_device_context():
@@ -95,6 +105,7 @@ class DecomposedMlpotCalculator:
                 doML=True,
                 doMM=False,
                 doML_dimer=True,
+                box=box,
             )
             e_kcal = float(jax.device_get(out.energy)) * self.ev2kcal
             forces = np.asarray(jax.device_get(out.forces), dtype=np.float64) * self.ev2kcal

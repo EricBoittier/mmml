@@ -138,3 +138,62 @@ def test_warmup_decomposed_mlpot_passes_box_when_cell_set():
     box = mock_warmup.call_args.kwargs["box"]
     assert box is not None
     assert float(box[0, 0]) == pytest.approx(20.0)
+
+
+def test_cubic_box_matrix_from_side():
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import cubic_box_matrix_from_side
+
+    m = cubic_box_matrix_from_side(40.0)
+    assert m.shape == (3, 3)
+    assert float(m[0, 0]) == pytest.approx(40.0)
+    assert float(m[1, 1]) == pytest.approx(40.0)
+
+
+def test_sync_mlpot_pbc_cell_from_charmm_updates_model():
+    from mmml.interfaces.pycharmmInterface.mlpot import run_workflow
+
+    z = np.zeros(8, dtype=int)
+    model = DecomposedMlpotModel(MagicMock(), CutoffParameters(), 2, z, cell=40.0)
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.get_charmm_cubic_box_side_A",
+        return_value=39.25,
+    ):
+        side = run_workflow.sync_mlpot_pbc_cell_from_charmm(model, verbose=False)
+    assert side == pytest.approx(39.25)
+    assert model._cell == pytest.approx(39.25)
+
+
+def test_decomposed_calculator_passes_charmm_box_to_spherical_fn():
+    z = np.zeros(8, dtype=int)
+    calc = DecomposedMlpotCalculator(
+        MagicMock(),
+        CutoffParameters(),
+        2,
+        z,
+        cell=40.0,
+    )
+    mock_out = MagicMock(energy=0.0, forces=np.zeros((8, 3)))
+    calc.spherical_fn = MagicMock(return_value=mock_out)
+    n = 8
+    x = np.zeros(n, dtype=np.float64)
+    y = np.zeros(n, dtype=np.float64)
+    zc = np.zeros(n, dtype=np.float64)
+    dx = np.zeros(n, dtype=np.float64)
+    dy = np.zeros(n, dtype=np.float64)
+    dz = np.zeros(n, dtype=np.float64)
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.get_charmm_cubic_box_side_A",
+        return_value=39.0,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
+        return_value=MagicMock(__enter__=MagicMock(), __exit__=MagicMock()),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+    ):
+        calc.calculate_charmm(
+            n, 0, 0, None, x, y, zc, dx, dy, dz, 0, 0, None, None, None, None, None, None
+        )
+    assert calc._cell == pytest.approx(39.0)
+    box = calc.spherical_fn.call_args.kwargs["box"]
+    assert box is not None
+    assert float(box[0, 0]) == pytest.approx(39.0)

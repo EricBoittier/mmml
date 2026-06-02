@@ -177,6 +177,31 @@ def _register_mlpot_context(
     return ctx, pyCModel
 
 
+def sync_mlpot_pbc_cell_from_charmm(
+    pyCModel: Any,
+    *,
+    verbose: bool = False,
+) -> float:
+    """Set ML MIC cell side to the current CHARMM cubic box (NpT / CPT stages)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotModel
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import get_charmm_cubic_box_side_A
+
+    side = float(get_charmm_cubic_box_side_A())
+    old = getattr(pyCModel, "_cell", False)
+    if isinstance(pyCModel, DecomposedMlpotModel):
+        pyCModel._cell = side
+    if verbose:
+        if old and abs(float(old) - side) > 1e-4:
+            print(
+                f"MLpot MIC PBC synced to CHARMM L={side:.3f} Å "
+                f"(was {float(old):.3f} Å)",
+                flush=True,
+            )
+        elif not old:
+            print(f"MLpot MIC PBC synced to CHARMM L={side:.3f} Å", flush=True)
+    return side
+
+
 def run_minimize_workflow(args: argparse.Namespace) -> int:
     fix_resids = resolve_fix_resids(args)
     ckpt = resolve_checkpoint(args.checkpoint)

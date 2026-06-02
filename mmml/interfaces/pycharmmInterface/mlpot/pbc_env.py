@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ctypes
 from typing import Any
 
 import numpy as np
@@ -17,6 +18,36 @@ def cubic_box_length_from_geometry(
     r = np.asarray(positions, dtype=float)
     span = float(np.max(r.max(axis=0) - r.min(axis=0)))
     return max(span + 2.0 * float(pad), 2.0 * float(ml_cutoff) + float(pad))
+
+
+def get_charmm_cubic_box_side_A() -> float:
+    """Read the current cubic CHARMM cell side length (Å) from ``pbound_get_size``."""
+    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401 — CHARMM env
+    import pycharmm.lib as lib
+
+    is_cubic = lib.charmm.pbound_is_cubic_box()
+    if is_cubic.value != 1:
+        raise RuntimeError("CHARMM box is not cubic; MLpot MIC sync expects a cubic cell")
+    size_x = ctypes.c_double(0.0)
+    size_y = ctypes.c_double(0.0)
+    size_z = ctypes.c_double(0.0)
+    lib.charmm.pbound_get_size(
+        ctypes.byref(size_x),
+        ctypes.byref(size_y),
+        ctypes.byref(size_z),
+    )
+    lx, ly, lz = float(size_x.value), float(size_y.value), float(size_z.value)
+    if min(lx, ly, lz) <= 0.0:
+        raise RuntimeError(
+            f"CHARMM cubic box side must be > 0, got ({lx}, {ly}, {lz})"
+        )
+    return lx
+
+
+def cubic_box_matrix_from_side(side_A: float) -> np.ndarray:
+    """Return orthorhombic 3×3 cell matrix for a cubic box side (Å)."""
+    L = float(side_A)
+    return np.array([[L, 0.0, 0.0], [0.0, L, 0.0], [0.0, 0.0, L]], dtype=np.float64)
 
 
 def prepare_charmm_pbc(cubic_box_side_A: float) -> None:
