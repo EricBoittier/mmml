@@ -48,6 +48,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
     run_dynamics_with_io,
 )
 from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    assert_pre_min_bonded_geometry,
     maybe_run_bonded_mm_mini_after_stage,
     record_mm_baseline_strain,
 )
@@ -317,6 +318,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
     baseline = None
     if getattr(args, "bonded_mm_mini", False) and getattr(args, "charmm_pre_minimize", True):
         baseline = record_mm_baseline_strain(verbose=not args.quiet)
+        assert_pre_min_bonded_geometry(args, baseline=baseline)
 
     ctx, pyCModel = _register_mlpot_context(
         z,
