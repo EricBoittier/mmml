@@ -6,8 +6,8 @@ import os
 
 import pytest
 
-from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import resolve_ml_batch_size
-from mmml.interfaces.pycharmmInterface.mlpot_gpu import (
+from mmml.interfaces.pycharmmInterface.mlpot.mlpot_batch_policy import resolve_ml_batch_size
+from mmml.interfaces.pycharmmInterface.mlpot.mlpot_gpu_policy import (
     effective_ml_gpu_count,
     resolve_ml_gpu_count,
 )
@@ -25,7 +25,7 @@ def test_resolve_ml_gpu_count_env(monkeypatch):
 
 def test_effective_ml_gpu_count_clamps(monkeypatch):
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_local_gpu_count",
+        "mmml.interfaces.pycharmmInterface.mlpot.mlpot_gpu_policy.mlpot_local_gpu_count",
         lambda: 4,
     )
     assert effective_ml_gpu_count(8, n_chunks=2) == 2

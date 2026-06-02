@@ -16,7 +16,7 @@ from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
 from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol, setup_calculator
 from mmml.interfaces.pycharmmInterface.mlpot.mlpot_batch_policy import resolve_ml_batch_size
 from mmml.interfaces.pycharmmInterface.mlpot.setup import physnet_ml_atomic_numbers
-from mmml.interfaces.pycharmmInterface.mlpot_gpu import resolve_ml_gpu_count
+from mmml.interfaces.pycharmmInterface.mlpot.mlpot_gpu_policy import resolve_ml_gpu_count
 
 __all__ = ["resolve_ml_batch_size", "DecomposedMlpotCalculator", "DecomposedMlpotModel", "build_decomposed_mlpot_model", "warmup_decomposed_mlpot"]
 

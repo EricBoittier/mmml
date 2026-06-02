@@ -50,7 +50,7 @@ from mmml.cli.base import (
     setup_ase_imports,
     setup_mmml_imports,
 )
-from mmml.interfaces.pycharmmInterface.mlpot_gpu import (
+from mmml.interfaces.pycharmmInterface.mlpot.mlpot_gpu_policy import (
     resolve_ml_gpu_count as _resolve_ml_gpu_count,
 )
 
