@@ -695,31 +695,79 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     return dyn
 
 
-def _io_for_overlap_chunk_continuation(
-    io: Optional[CharmmTrajectoryFiles],
-) -> Optional[CharmmTrajectoryFiles]:
-    """I/O for a later overlap-guard dynamics chunk.
+def _valid_restart_file(path: PathLike | None) -> Path | None:
+    if path is None:
+        return None
+    p = Path(path)
+    if p.is_file() and p.stat().st_size > 0:
+        return p
+    return None
 
-    CHARMM cannot safely continue a separate ``dynamics`` invocation from
-    in-memory coords alone (``READYN`` may still run and segfault when
-    ``iunrea=-1``).  Read the restart written at the end of the prior chunk
-    instead (same path as ``restart_write``).
-    """
+
+def _overlap_restart_slot_paths(final_restart: Path) -> tuple[Path, Path]:
+    """Alternating scratch restarts so read and write are never the same file."""
+    parent = final_restart.parent
+    stem = final_restart.stem
+    return (
+        parent / f"{stem}.overlap_a.res",
+        parent / f"{stem}.overlap_b.res",
+    )
+
+
+def _overlap_chunk_restart_paths(
+    io: CharmmTrajectoryFiles,
+    *,
+    chunk_index: int,
+    n_chunks: int,
+) -> tuple[Path | None, Path | None]:
+    """``(restart_read, restart_write)`` for overlap chunk ``chunk_index``."""
+    if io.restart_write is None:
+        return _valid_restart_file(io.restart_read), None
+    final = Path(io.restart_write)
+    if n_chunks <= 1:
+        return _valid_restart_file(io.restart_read), final
+    slot_a, slot_b = _overlap_restart_slot_paths(final)
+    if chunk_index == 0:
+        return _valid_restart_file(io.restart_read), slot_a
+    if chunk_index == n_chunks - 1:
+        prev = slot_a if (chunk_index % 2) == 1 else slot_b
+        return prev, final
+    if chunk_index % 2 == 1:
+        return slot_a, slot_b
+    return slot_b, slot_a
+
+
+def _io_for_overlap_chunk(
+    io: Optional[CharmmTrajectoryFiles],
+    *,
+    chunk_index: int,
+    n_chunks: int,
+) -> Optional[CharmmTrajectoryFiles]:
+    """Restart I/O for overlap chunk ``chunk_index`` (separate read/write paths)."""
     if io is None:
         return None
-    rread = None
-    if io.restart_write is not None:
-        wpath = Path(io.restart_write)
-        if wpath.is_file() and wpath.stat().st_size > 0:
-            rread = wpath
+    rread, rwri = _overlap_chunk_restart_paths(
+        io, chunk_index=chunk_index, n_chunks=n_chunks
+    )
     return CharmmTrajectoryFiles(
         restart_read=rread,
-        restart_write=io.restart_write,
+        restart_write=rwri,
         trajectory=io.trajectory,
         restart_read_unit=io.restart_read_unit,
         restart_write_unit=io.restart_write_unit,
         trajectory_unit=io.trajectory_unit,
     )
+
+
+def _cleanup_overlap_restart_slots(io: Optional[CharmmTrajectoryFiles]) -> None:
+    if io is None or io.restart_write is None:
+        return
+    slot_a, slot_b = _overlap_restart_slot_paths(Path(io.restart_write))
+    for path in (slot_a, slot_b):
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 def _run_dynamics_chunk(
@@ -749,9 +797,9 @@ def run_dynamics_with_io(
 
     When ``overlap`` is enabled, integration runs in chunks of
     ``overlap.check_interval`` steps with inter-monomer distance checks
-    between chunks.  Later chunks restart from the ``.res`` file written at
-    the end of the previous chunk (CHARMM-safe; in-memory-only continuation
-    is not reliable across separate ``dynamics`` calls).
+    between chunks.  Multi-chunk runs alternate scratch ``.overlap_a/.b.res``
+    files so CHARMM never reads and writes the same restart path in one step
+    (that pattern triggers ``READYN`` EOF).
     """
     from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         DynamicsOverlapConfig,
@@ -771,35 +819,48 @@ def run_dynamics_with_io(
     interval = max(1, int(overlap.check_interval))
     check_dynamics_overlap(overlap, context=f"before {overlap_context}", step=0)
 
+    n_chunks = (total_nstep + interval - 1) // interval
     last_dyn: Any = None
     steps_done = 0
-    first_chunk = True
-    while steps_done < total_nstep:
-        chunk_nstep = min(interval, total_nstep - steps_done)
-        chunk_kw = dict(kw)
-        chunk_kw["nstep"] = chunk_nstep
-        chunk_io = io if first_chunk else _io_for_overlap_chunk_continuation(io)
-        if not first_chunk:
-            chunk_kw["new"] = False
-            chunk_kw["start"] = False
-            chunk_kw.pop("firstt", None)
-            if (
+    try:
+        for chunk_index in range(n_chunks):
+            chunk_nstep = min(interval, total_nstep - steps_done)
+            chunk_kw = dict(kw)
+            chunk_kw["nstep"] = chunk_nstep
+            chunk_io = (
+                io
+                if chunk_index == 0 and n_chunks == 1
+                else _io_for_overlap_chunk(
+                    io, chunk_index=chunk_index, n_chunks=n_chunks
+                )
+            )
+            has_restart_read = (
                 chunk_io is not None
                 and getattr(chunk_io, "restart_read", None) is not None
-            ):
+            )
+            if chunk_index > 0:
+                chunk_kw["new"] = False
+                chunk_kw["start"] = False
+                chunk_kw.pop("firstt", None)
+                if has_restart_read:
+                    chunk_kw["restart"] = True
+                else:
+                    chunk_kw["restart"] = False
+                    chunk_kw["iunrea"] = -1
+            elif has_restart_read:
+                chunk_kw["new"] = False
+                chunk_kw["start"] = False
                 chunk_kw["restart"] = True
-            else:
-                chunk_kw["restart"] = False
-                chunk_kw["iunrea"] = -1
 
-        last_dyn = _run_dynamics_chunk(chunk_kw, chunk_io)
-        steps_done += chunk_nstep
-        check_dynamics_overlap(
-            overlap,
-            context=overlap_context,
-            step=steps_done,
-        )
-        first_chunk = False
+            last_dyn = _run_dynamics_chunk(chunk_kw, chunk_io)
+            steps_done += chunk_nstep
+            check_dynamics_overlap(
+                overlap,
+                context=overlap_context,
+                step=steps_done,
+            )
+    finally:
+        _cleanup_overlap_restart_slots(io)
     return last_dyn
 
 
