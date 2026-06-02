@@ -181,6 +181,8 @@ devtools/.DS_Store
 .vscode/settings.json
 mmml/packmol/packmol
 fort.1
+fort.51
+crystal_image.str
 pdb/init-packmol.pdb
 packmol/packmol.inp
 pdb/init-packmol-sphere.pdb
@@ -217,3 +219,4 @@ examples/general/abdimers/AB_ACO_DCM_pbc_minimized_16:17:48.pdb
 mmml/generate/packmol/packmol
 mmml/generate/packmol/packmol
 uv.lock
+pdb/init-packmol-sphere.pdb_FORCED

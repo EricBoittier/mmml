@@ -272,14 +272,9 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         n_atoms,
         n_mol,
         ml_batch_size=getattr(args, "ml_batch_size", None),
+        cubic_box_side_A=box_side if use_pbc else None,
         verbose=not args.quiet,
     )
-    if use_pbc and box_side is not None:
-        from mmml.interfaces.pycharmmInterface.mlpot.setup import (
-            refresh_nbonds_after_mlpot_pbc,
-        )
-
-        refresh_nbonds_after_mlpot_pbc(cubic_box_side_A=float(box_side))
 
     restart_from = (
         Path(args.restart_from).expanduser().resolve()

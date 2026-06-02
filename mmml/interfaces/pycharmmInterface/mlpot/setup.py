@@ -331,6 +331,7 @@ def load_physnet_mlpot_bundle(
     n_monomers: int = 1,
     atoms_per_monomer: Sequence[int] | None = None,
     ml_batch_size: Optional[int] = None,
+    cell: float | None = None,
     verbose: bool = False,
 ) -> tuple[Any, Any, Any]:
     """Load PhysNet for MLpot. Multi-monomer clusters use monomer/dimer batches."""
@@ -355,6 +356,7 @@ def load_physnet_mlpot_bundle(
             atoms_per_monomer,
             int(n_monomers),
             ml_batch_size=ml_batch_size,
+            cell=float(cell) if cell is not None else False,
             verbose=verbose,
         )
         return None, None, pyCModel

@@ -148,6 +148,30 @@ python -m mmml.cli.run.md_pbc_suite.pycharmm_mlpot --phase dynamics --ensemble n
 
 Implementation: `mmml/cli/run/md_pbc_suite/pycharmm_mlpot.py`, `mlpot/run_workflow.py`, shared flags in `mlpot/cli_common.py`.
 
+## Periodic boundaries (PBC) with MIC
+
+For ``--setup pbc_*`` or explicit ``--box-size``, the PyCHARMM backend:
+
+1. Installs CHARMM crystal + IMAGE (``pbc_env.py``) for the cubic box.
+2. Passes the same box side into ``setup_calculator(cell=L)`` for the decomposed monomer/dimer MLpot path (**MIC-only**, matching the ASE/JAX-MD hybrid calculator — no coordinate wrapping during energy evaluation).
+
+Log lines to expect when PBC ML is active:
+
+```text
+PBC cubic box: 20.000 Å
+MLpot MIC PBC: cubic L=20.000 Å
+```
+
+**Restart / staged continuation:** pass the same ``--box-size`` as the original run when using ``--skip-cluster-build`` or loading mini artifacts. Auto box from geometry can differ from an earlier explicit box.
+
+Single-monomer ``PyCharmm_Calculator`` (``n_monomers=1``) does not yet use MIC; multi-monomer Packmol clusters use the decomposed path above.
+
+```bash
+mmml md-system --setup pbc_nvt --backend pycharmm \
+  --composition DCM:20 --box-size 20 --packmol-radius 5 \
+  --mini-nstep 100 --output-dir artifacts/pycharmm_mlpot/dcm20_pbc
+```
+
 ## Tests
 
 ```bash
@@ -155,4 +179,5 @@ Implementation: `mmml/cli/run/md_pbc_suite/pycharmm_mlpot.py`, `mlpot/run_workfl
 python tests/functionality/mlpot/04_mlpot_minimize_stub.py --run
 python tests/functionality/mlpot/05_mlpot_dynamics_stub.py --run
 pytest tests/functionality/mlpot/test_mlpot_energy_matches_ase.py -q
+pytest tests/unit/test_mlpot_pbc_cell.py -q
 ```
