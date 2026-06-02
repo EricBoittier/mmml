@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CHARMM MLpot backend for ``mmml md-system --backend pycharmm`` (vacuum, non-PBC)."""
+"""CHARMM MLpot backend for ``mmml md-system --backend pycharmm`` (vacuum and PBC)."""
 
 from __future__ import annotations
 
@@ -23,7 +23,8 @@ from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import run_workflow
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "CHARMM MLpot workflows: two-pass SD minimization and vacuum NVE/NVT dynamics. "
+            "CHARMM MLpot workflows: staged mini → heat → NVE → equi → prod "
+            "(vacuum or PBC via --setup pbc_* / --box-size). "
             "Invoked via ``mmml md-system --backend pycharmm``."
         )
     )
