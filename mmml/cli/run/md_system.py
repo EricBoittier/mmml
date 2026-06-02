@@ -464,6 +464,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="pycharmm: continue when max-angl/max-internal pre-min limits exceeded",
     )
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+        add_dynamics_overlap_args,
+    )
+
+    add_dynamics_overlap_args(parser)
     parser.add_argument(
         "--restart-from",
         type=Path,
@@ -991,8 +996,18 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
                     str(args.bonded_mm_max_internal_kcal),
                 ]
             )
-        if getattr(args, "allow_high_bonded_strain", False):
-            cmd.append("--allow-high-bonded-strain")
+    if getattr(args, "allow_high_bonded_strain", False):
+        cmd.append("--allow-high-bonded-strain")
+    cmd.extend(["--dynamics-overlap-action", str(args.dynamics_overlap_action)])
+    cmd.extend(
+        ["--dynamics-overlap-min-distance", str(args.dynamics_overlap_min_distance)]
+    )
+    cmd.extend(
+        [
+            "--dynamics-overlap-check-interval",
+            str(args.dynamics_overlap_check_interval),
+        ]
+    )
     if args.charmm_pre_minimize is False:
         cmd.append("--no-charmm-pre-minimize")
     cmd.extend(["--charmm-sd-steps", str(args.charmm_sd_steps)])

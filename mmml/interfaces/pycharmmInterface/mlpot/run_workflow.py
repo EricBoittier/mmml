@@ -44,7 +44,9 @@ from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
     minimize_with_mlpot,
     run_dynamics_with_io,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    resolve_dynamics_overlap_config,
+)
     get_charmm_positions_array,
     load_physnet_mlpot_bundle,
     refresh_nbonds_after_mlpot_pbc,
@@ -382,6 +384,10 @@ def run_dynamics_workflow(
     if pre_minimize is None:
         pre_minimize = not getattr(args, "no_pre_minimize", False)
     mini_nstep = resolve_mini_nstep(args, n_mol)
+    use_pbc = resolve_use_pbc(args)
+    overlap_cfg = resolve_dynamics_overlap_config(
+        args, n_monomers=n_mol, use_pbc=use_pbc
+    )
 
     box_side = _setup_charmm_nbonds_for_args(args, r)
     sync_charmm_positions(r)
@@ -497,7 +503,12 @@ def run_dynamics_workflow(
             f"dyn print every {dyn_print['nprint']} steps | echeck={echeck} kcal/mol"
         )
         disable_charmm_domdec()
-        run_dynamics_with_io(kw, io)
+        run_dynamics_with_io(
+            kw,
+            io,
+            overlap=overlap_cfg,
+            overlap_context=label,
+        )
         if show_energy:
             from mmml.interfaces.pycharmmInterface.import_pycharmm import (
                 safe_energy_show,
