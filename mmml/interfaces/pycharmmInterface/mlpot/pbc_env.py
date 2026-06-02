@@ -8,6 +8,13 @@ from typing import Any
 import numpy as np
 
 
+def _charmm_ctypes_scalar(value: Any) -> float:
+    """Normalize CHARMM ctypes outputs (may be bare int/float or ctypes wrappers)."""
+    if hasattr(value, "value"):
+        return float(value.value)
+    return float(value)
+
+
 def cubic_box_length_from_geometry(
     positions: np.ndarray,
     *,
@@ -26,7 +33,7 @@ def get_charmm_cubic_box_side_A() -> float:
     import pycharmm.lib as lib
 
     is_cubic = lib.charmm.pbound_is_cubic_box()
-    if is_cubic.value != 1:
+    if _charmm_ctypes_scalar(is_cubic) != 1:
         raise RuntimeError("CHARMM box is not cubic; MLpot MIC sync expects a cubic cell")
     size_x = ctypes.c_double(0.0)
     size_y = ctypes.c_double(0.0)
@@ -36,7 +43,9 @@ def get_charmm_cubic_box_side_A() -> float:
         ctypes.byref(size_y),
         ctypes.byref(size_z),
     )
-    lx, ly, lz = float(size_x.value), float(size_y.value), float(size_z.value)
+    lx = _charmm_ctypes_scalar(size_x)
+    ly = _charmm_ctypes_scalar(size_y)
+    lz = _charmm_ctypes_scalar(size_z)
     if min(lx, ly, lz) <= 0.0:
         raise RuntimeError(
             f"CHARMM cubic box side must be > 0, got ({lx}, {ly}, {lz})"
