@@ -324,6 +324,7 @@ def setup_calculator(
     ml_sparse_dimers: bool = True,
     ml_batch_size: Optional[int] = None,
     ml_gpu_count: int = 1,
+    ml_max_active_dimers: Optional[int] = None,
     mm_r_min: Optional[float] = None,
     jax_md_capacity_multiplier: float = 1.25,
     jax_md_capacity_growth_factor: float = 1.5,
@@ -360,6 +361,8 @@ def setup_calculator(
             monomers+dimers in one batch. Set to reduce memory for large systems.
         ml_gpu_count: Parallel PhysNet chunks across this many local JAX GPUs
             (default 1). Use with ``CUDA_VISIBLE_DEVICES`` and ``MMML_MLPOT_N_GPUS``.
+        ml_max_active_dimers: Cap on sparse ML dimer slots per step (default
+            ``max(1000, 6*n_monomers)``; env ``MMML_MLPOT_MAX_ACTIVE_DIMERS``).
         mm_r_min: Optional inner cutoff (Å) for MM neighbor list. Pairs with dimer
             COM distance < mm_r_min are excluded. Defaults: complementary_handoff=False
             -> mm_switch_on * 0.9; complementary_handoff=True -> (mm_switch_on - ml_switch_width) * 0.9
@@ -650,8 +653,16 @@ def setup_calculator(
     except Exception:
         pass
 
+    from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
+        resolve_max_active_dimers,
+    )
+
     # Sparse dimers: max active for JIT (cap for memory)
-    _max_active_dimers = min(n_dimers_total, max(500, 3 * n_monomers)) if ml_sparse_dimers else n_dimers_total
+    _max_active_dimers = (
+        resolve_max_active_dimers(n_monomers, n_dimers_total, ml_max_active_dimers)
+        if ml_sparse_dimers
+        else n_dimers_total
+    )
     _cached_sparse_batch_structure = None
     if ml_sparse_dimers and _max_active_dimers < n_dimers_total:
         try:

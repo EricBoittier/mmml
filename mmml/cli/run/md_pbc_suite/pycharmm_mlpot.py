@@ -187,6 +187,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "Use with CUDA_VISIBLE_DEVICES."
         ),
     )
+    parser.add_argument(
+        "--ml-max-active-dimers",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "Sparse ML dimer slot cap (default max(1000, 6*n_monomers); "
+            "or MMML_MLPOT_MAX_ACTIVE_DIMERS)."
+        ),
+    )
     return parser.parse_args(argv)
 
 

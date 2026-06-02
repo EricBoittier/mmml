@@ -151,6 +151,7 @@ def build_decomposed_mlpot_model(
     *,
     ml_batch_size: Optional[int] = None,
     ml_gpu_count: Optional[int] = None,
+    ml_max_active_dimers: Optional[int] = None,
     cell: Union[float, bool] = False,
     verbose: bool = False,
 ) -> DecomposedMlpotModel:
@@ -161,6 +162,14 @@ def build_decomposed_mlpot_model(
     max_atoms = max(per) * 2
     batch_size = resolve_ml_batch_size(int(n_monomers), ml_batch_size)
     gpu_count = resolve_ml_gpu_count(ml_gpu_count)
+    from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
+        resolve_max_active_dimers,
+    )
+
+    n_dimers_total = int(n_monomers) * (int(n_monomers) - 1) // 2
+    dimer_cap = resolve_max_active_dimers(
+        int(n_monomers), n_dimers_total, ml_max_active_dimers
+    )
     from mmml.interfaces.pycharmmInterface.jax_device_policy import mlpot_local_gpu_count
 
     local_gpus = mlpot_local_gpu_count()
@@ -182,6 +191,12 @@ def build_decomposed_mlpot_model(
             f"Decomposed MLpot: ml_gpu_count={gpu_count} (parallel PhysNet chunks)",
             flush=True,
         )
+    if verbose:
+        print(
+            f"Decomposed MLpot: max_active_dimers={dimer_cap} "
+            f"(PhysNet batch ≤ {int(n_monomers) + dimer_cap} systems/step)",
+            flush=True,
+        )
     if verbose and cell:
         print(
             f"Decomposed MLpot: MIC PBC cubic cell={float(cell):.3f} Å",
@@ -198,6 +213,7 @@ def build_decomposed_mlpot_model(
         MAX_ATOMS_PER_SYSTEM=max_atoms,
         ml_batch_size=batch_size,
         ml_gpu_count=gpu_count,
+        ml_max_active_dimers=ml_max_active_dimers,
         cell=cell,
     )
     r0 = np.zeros((len(z), 3), dtype=np.float64)

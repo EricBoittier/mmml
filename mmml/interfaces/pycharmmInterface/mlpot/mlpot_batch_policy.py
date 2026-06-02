@@ -14,7 +14,7 @@ def resolve_ml_batch_size(
 ) -> Optional[int]:
     """Chunk size for PhysNet forward passes (limits XLA LLVM compile RAM).
 
-    DCM:90 sparse path evaluates ~590 systems (90 monomers + 500 dimers) per step.
+    DCM:90 sparse path evaluates up to ~1090 systems (90 monomers + 1000 dimer slots) per step.
     GPU defaults use larger chunks (256) for throughput; CPU keeps smaller chunks (64)
     to limit JAX LLVM compile memory.
     """

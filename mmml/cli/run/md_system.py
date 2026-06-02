@@ -326,6 +326,16 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--ml-max-active-dimers",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "pycharmm: sparse ML dimer slot cap per step (default max(1000, 6*n_monomers); "
+            "or MMML_MLPOT_MAX_ACTIVE_DIMERS). Run scripts/validate_mlpot_sparse_dimers.py to check."
+        ),
+    )
+    parser.add_argument(
         "--md-stages",
         type=str,
         default=None,
@@ -804,6 +814,8 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         cmd.extend(["--ml-batch-size", str(args.ml_batch_size)])
     if getattr(args, "ml_gpu_count", None) is not None:
         cmd.extend(["--ml-gpu-count", str(args.ml_gpu_count)])
+    if getattr(args, "ml_max_active_dimers", None) is not None:
+        cmd.extend(["--ml-max-active-dimers", str(args.ml_max_active_dimers)])
     if args.no_echeck:
         cmd.append("--no-echeck")
     if getattr(args, "skip_energy_show", False):
