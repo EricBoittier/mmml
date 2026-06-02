@@ -905,6 +905,30 @@ def add_staged_md_args(parser: argparse.ArgumentParser) -> None:
         ),
     )
     group.add_argument(
+        "--npt-pressure",
+        type=float,
+        default=1.0,
+        help="NPT reference pressure in atm for equi/prod (default: 1.0)",
+    )
+    group.add_argument(
+        "--npt-pgamma",
+        type=float,
+        default=5.0,
+        help=(
+            "CPT barostat Langevin collision frequency in 1/ps (default: 5). "
+            "Set to 0 to disable barostat coupling."
+        ),
+    )
+    group.add_argument(
+        "--n-equi-segments",
+        type=int,
+        default=1,
+        help=(
+            "Split NPT equilibration into chained restart segments (default: 1). "
+            "Use multiple segments to equilibrate pressure before production."
+        ),
+    )
+    group.add_argument(
         "--n-prod-segments",
         type=int,
         default=1,

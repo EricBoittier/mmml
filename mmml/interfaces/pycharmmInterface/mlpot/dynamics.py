@@ -354,6 +354,7 @@ def _apply_npt_cpt_kwargs(
     *,
     temp: float,
     thermostat: NptThermostat = "hoover",
+    pref: float = 1.0,
     pmass: int | None = None,
     tmass: int | None = None,
     pgamma: float = 5,
@@ -367,7 +368,7 @@ def _apply_npt_cpt_kwargs(
         {
             "leap": True,
             "cpt": True,
-            "pint pconst pref": 1,
+            "pint pconst pref": pref,
             "pgamma": pgamma,
             "pmass": pmass,
             "ihtfrq": 0,
@@ -396,9 +397,11 @@ def build_cpt_equilibration_dynamics(
     restart: bool = True,
     echeck: float = 500.0,
     thermostat: NptThermostat = "hoover",
+    pref: float = 1.0,
     pmass: int | None = None,
     tmass: int | None = None,
     pgamma: float = 5,
+    include_firstt: bool = True,
 ) -> dict[str, Any]:
     """NPT equilibration (CPT + Hoover by default); matches example mini-MD scripts."""
     nstep = ps_to_nsteps(timestep_ps, duration_ps)
@@ -421,10 +424,11 @@ def build_cpt_equilibration_dynamics(
         kw,
         temp=temp,
         thermostat=thermostat,
+        pref=pref,
         pmass=pmass,
         tmass=tmass,
         pgamma=pgamma,
-        firstt=temp,
+        firstt=temp if include_firstt else None,
     )
     return kw
 
@@ -438,11 +442,12 @@ def build_cpt_production_dynamics(
     restart: bool = True,
     echeck: float = 500.0,
     thermostat: NptThermostat = "hoover",
+    pref: float = 1.0,
     pmass: int | None = None,
     tmass: int | None = None,
-    pgamma: float = 0,
+    pgamma: float = 5,
 ) -> dict[str, Any]:
-    """NPT production (CPT + Hoover by default; ``pgamma=0`` per reference dyna scripts)."""
+    """NPT production (CPT + Hoover by default; same barostat recipe as equilibration)."""
     nstep = ps_to_nsteps(timestep_ps, duration_ps)
     nsavc = nsavc_for_interval(timestep_ps, save_interval_ps)
     kw = _base_dyn_kwargs(
@@ -463,11 +468,49 @@ def build_cpt_production_dynamics(
         kw,
         temp=temp,
         thermostat=thermostat,
+        pref=pref,
         pmass=pmass,
         tmass=tmass,
         pgamma=pgamma,
     )
     return kw
+
+
+def npt_restart_chain(
+    data_dir: PathLike,
+    *,
+    n_segments: int,
+    prefix: str,
+    initial_restart: PathLike | None = None,
+) -> list[CharmmTrajectoryFiles]:
+    """Build chained restart/trajectory I/O for repeated NPT segments.
+
+    Segment 0 reads ``initial_restart`` (if given). Segment ``i>0`` reads
+    ``{prefix}.{i-1}.res`` and writes ``{prefix}.{i}.res`` / ``.dcd``.
+    """
+    data_dir = Path(data_dir)
+    chain: list[CharmmTrajectoryFiles] = []
+    for ii in range(n_segments):
+        if ii == 0:
+            rread = Path(initial_restart) if initial_restart is not None else None
+        else:
+            rread = data_dir / f"{prefix}.{ii - 1}.res"
+        chain.append(
+            CharmmTrajectoryFiles(
+                restart_read=rread,
+                restart_write=data_dir / f"{prefix}.{ii}.res",
+                trajectory=data_dir / f"{prefix}.{ii}.dcd",
+            )
+        )
+    return chain
+
+
+def final_npt_segment_restart(data_dir: PathLike, prefix: str, n_segments: int) -> Path:
+    """Path to the last restart in a multi-segment NPT chain."""
+    data_dir = Path(data_dir)
+    if n_segments > 1:
+        return data_dir / f"{prefix}.{n_segments - 1}.res"
+    return data_dir / f"{prefix}.res"
 
 
 def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
@@ -762,22 +805,13 @@ def production_restart_chain(
     prefix: str = "dyna",
     equi_restart: str = "equi.res",
 ) -> list[CharmmTrajectoryFiles]:
-    """Build restart/trajectory file triples for chained production (stub planner).
+    """Build restart/trajectory file triples for chained production.
 
-    Segment 0 reads ``equi.res``; segment ``i>0`` reads ``dyna.{i-1}.res``.
+    Segment 0 reads ``equi_restart``; segment ``i>0`` reads ``{prefix}.{i-1}.res``.
     """
-    data_dir = Path(data_dir)
-    chain: list[CharmmTrajectoryFiles] = []
-    for ii in range(n_segments):
-        if ii == 0:
-            rread = data_dir / equi_restart
-        else:
-            rread = data_dir / f"{prefix}.{ii - 1}.res"
-        chain.append(
-            CharmmTrajectoryFiles(
-                restart_read=rread,
-                restart_write=data_dir / f"{prefix}.{ii}.res",
-                trajectory=data_dir / f"{prefix}.{ii}.dcd",
-            )
-        )
-    return chain
+    return npt_restart_chain(
+        data_dir,
+        n_segments=n_segments,
+        prefix=prefix,
+        initial_restart=Path(data_dir) / equi_restart,
+    )
