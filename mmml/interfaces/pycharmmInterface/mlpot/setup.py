@@ -238,15 +238,38 @@ def refresh_nbonds_after_mlpot_pbc(
     cubic_box_side_A: float,
     nbxmod: int = 5,
     cutnb: float = 18.0,
+    force: bool = False,
 ) -> None:
-    """Rebuild PBC nonbond lists after MLpot registration."""
+    """Rebuild PBC nonbond lists after MLpot registration.
+
+    With ``force=False`` (default), skip when the live CHARMM box already matches
+    ``cubic_box_side_A``, or when box lengths are unavailable — rebuilding
+    crystal/nbonds with MLpot active mid-workflow can segfault in ``upinb``.
+    Pass ``force=True`` once immediately after initial MLpot registration.
+    """
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        _is_cubic_box_sides,
+        _read_charmm_box_sides_A,
         apply_pbc_nbonds,
         prepare_charmm_pbc,
     )
 
+    side = float(cubic_box_side_A)
+    if not force:
+        try:
+            lx, ly, lz = _read_charmm_box_sides_A()
+            if _is_cubic_box_sides(lx, ly, lz):
+                mean = (lx + ly + lz) / 3.0
+                tol = max(1e-3, 1e-4 * side)
+                if abs(mean - side) <= tol:
+                    return
+            if min(lx, ly, lz) <= 0.0:
+                return
+        except Exception:
+            return
+
     pycharmm = _import_pycharmm()
-    prepare_charmm_pbc(float(cubic_box_side_A))
+    prepare_charmm_pbc(side)
     pycharmm.nbonds.update_bnbnd()
     apply_pbc_nbonds(nbxmod=nbxmod, cutnb=cutnb)
 
@@ -380,6 +403,7 @@ def register_mlpot(
     mlmm_ctonnb: Optional[float] = None,
     mlmm_ctofnb: Optional[float] = None,
     preserve_psf_internals: bool = True,
+    use_pbc: bool = False,
     **kwargs: Any,
 ) -> MlpotContext:
     """Register ``pycharmm.MLpot`` and return a context manager-like handle."""
@@ -402,7 +426,8 @@ def register_mlpot(
         preserve_psf_internals=preserve_psf_internals,
         **kwargs,
     )
-    refresh_nbonds_after_mlpot()
+    if not use_pbc:
+        refresh_nbonds_after_mlpot()
     return MlpotContext(
         mlpot=mlpot,
         pyCModel=pyCModel,
