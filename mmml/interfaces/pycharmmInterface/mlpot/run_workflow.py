@@ -183,10 +183,14 @@ def sync_mlpot_pbc_cell_from_charmm(
     fallback_side_A: float | None = None,
     verbose: bool = False,
 ) -> float:
-    """Set ML MIC cell side to the current CHARMM cubic box (NpT / CPT stages)."""
+    """Set ML MIC cell side to the current CHARMM cubic box (NpT / CPT stages).
+
+    Updates the JAX MIC cell only. Does **not** re-run ``prepare_charmm_pbc`` or
+    ``update_bnbnd`` here — rebuilding crystal/nbonds with MLpot registered can
+    segfault in CHARMM (``upinb``). CPT stage restarts restore CHARMM PBC state.
+    """
     from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotModel
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import resolve_charmm_cubic_box_side_A
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import refresh_nbonds_after_mlpot_pbc
 
     if fallback_side_A is None:
         old_cell = getattr(pyCModel, "_cell", False)
@@ -199,13 +203,11 @@ def sync_mlpot_pbc_cell_from_charmm(
     old = getattr(pyCModel, "_cell", False)
     if isinstance(pyCModel, DecomposedMlpotModel):
         pyCModel._cell = side
-    if used_fallback:
-        refresh_nbonds_after_mlpot_pbc(cubic_box_side_A=side)
     if verbose:
         if used_fallback:
             print(
-                f"MLpot MIC PBC: restored crystal L={side:.3f} Å "
-                f"(CHARMM box query unavailable)",
+                f"MLpot MIC PBC: using L={side:.3f} Å from last known cell "
+                f"(CHARMM box query unavailable; CPT restart restores PBC)",
                 flush=True,
             )
         elif old and abs(float(old) - side) > 1e-4:
