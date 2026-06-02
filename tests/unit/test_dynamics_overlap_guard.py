@@ -174,7 +174,7 @@ def test_run_dynamics_with_io_chunks_and_checks(tmp_path):
     (tmp_path / "heat.res").write_text("REST    48     1  CUBI\n", encoding="utf-8")
     calls: list[dict] = []
 
-    def fake_chunk(kw, _io):
+    def fake_chunk(kw, _io, *, extra_iokw=None):
         calls.append(dict(kw))
         return mock.Mock()
 
@@ -236,7 +236,7 @@ def test_overlap_memory_handoff_chunks_scratch_restart_handoff(tmp_path):
     io = CharmmTrajectoryFiles(restart_write=res_path)
     calls: list[dict] = []
 
-    def fake_chunk(kw, _io):
+    def fake_chunk(kw, _io, *, extra_iokw=None):
         calls.append(dict(kw))
         if _io is not None and _io.restart_write is not None:
             Path(_io.restart_write).write_text("REST\n", encoding="utf-8")
@@ -356,7 +356,62 @@ def test_overlap_chunk_io_alternate_scratch_and_final_write(tmp_path):
     c2 = _overlap_chunk_io(io, chunk_index=2, n_chunks=3)
     assert c2.restart_read == slot_b
     assert c2.restart_write == equi
-    assert c2.trajectory == io.trajectory
+    assert c2.trajectory is None
+
+
+def test_overlap_multi_chunk_keeps_dcd_open_across_chunks(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+
+    cfg = DynamicsOverlapConfig(
+        action="error",
+        min_distance_A=0.5,
+        check_interval=2,
+        n_monomers=2,
+        use_pbc=False,
+    )
+    pos_ok = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [5.0, 0.0, 0.0],
+            [6.0, 0.0, 0.0],
+        ],
+        dtype=float,
+    )
+    dcd = tmp_path / "heat.dcd"
+    io = CharmmTrajectoryFiles(restart_write=tmp_path / "heat.res", trajectory=dcd)
+    dcd_calls: list[int | None] = []
+
+    def fake_chunk(kw, _io, *, extra_iokw=None):
+        merged = dict(kw)
+        if extra_iokw:
+            merged.update(extra_iokw)
+        dcd_calls.append(merged.get("iuncrd"))
+        if _io is not None and _io.restart_write is not None:
+            Path(_io.restart_write).write_text("REST\n", encoding="utf-8")
+        return mock.Mock()
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        side_effect=fake_chunk,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+    ), mock.patch.object(
+        CharmmTrajectoryFiles,
+        "open_trajectory_for_run",
+        return_value=([mock.Mock()], {"iuncrd": 1}),
+    ) as open_dcd, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        return_value=pos_ok,
+    ):
+        run_dynamics_with_io(
+            {"nstep": 6, "nsavc": 2},
+            io,
+            overlap=cfg,
+        )
+
+    open_dcd.assert_called_once()
+    assert dcd_calls == [1, 1, 1]
 
 
 def test_effective_overlap_check_interval_divides_nstep():
@@ -392,7 +447,7 @@ def test_run_dynamics_with_io_uses_even_overlap_chunks(tmp_path):
     )
     calls: list[int] = []
 
-    def fake_chunk(kw, _io):
+    def fake_chunk(kw, _io, *, extra_iokw=None):
         calls.append(int(kw["nstep"]))
         return mock.Mock()
 
@@ -428,12 +483,17 @@ def test_harmonize_dynamics_frequency_for_remainder_chunk():
     assert _harmonize_dynamics_frequency(50, 50) == 50
     assert _harmonize_dynamics_frequency(25, 50) == 25
 
-    kw = {"nstep": 40, "ihbfrq": 50, "imgfrq": 50, "isvfrq": 500, "inbfrq": -1}
+    kw = {"nstep": 40, "ihbfrq": 50, "imgfrq": 50, "isvfrq": 500, "nsavc": 10, "inbfrq": -1}
     _harmonize_overlap_chunk_frequencies(kw, 40)
     assert kw["ihbfrq"] == 40
     assert kw["imgfrq"] == 40
     assert kw["isvfrq"] == 40
+    assert kw["nsavc"] == 10
     assert kw["inbfrq"] == -1
+
+    kw2 = {"nsavc": 10}
+    _harmonize_overlap_chunk_frequencies(kw2, 41)
+    assert kw2["nsavc"] == 1
 
 
 def test_run_dynamics_chunk_strips_stale_iunwri(tmp_path):

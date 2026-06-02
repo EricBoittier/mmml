@@ -66,8 +66,10 @@ class CharmmTrajectoryFiles:
             open_files.append(f)
             kw["iunwri"] = self.restart_write_unit
         if self.trajectory is not None:
+            p = Path(self.trajectory)
+            p.parent.mkdir(parents=True, exist_ok=True)
             f = pycharmm.CharmmFile(
-                file_name=str(self.trajectory),
+                file_name=str(p),
                 file_unit=self.trajectory_unit,
                 formatted=False,
                 read_only=False,
@@ -75,6 +77,22 @@ class CharmmTrajectoryFiles:
             open_files.append(f)
             kw["iuncrd"] = self.trajectory_unit
         return open_files, kw
+
+    def open_trajectory_for_run(self) -> tuple[list[Any], dict[str, int]]:
+        """Open the DCD once (for multi-chunk overlap runs; append across ``dyna`` calls)."""
+        import pycharmm
+
+        if self.trajectory is None:
+            return [], {}
+        p = Path(self.trajectory)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        f = pycharmm.CharmmFile(
+            file_name=str(p),
+            file_unit=self.trajectory_unit,
+            formatted=False,
+            read_only=False,
+        )
+        return [f], {"iuncrd": self.trajectory_unit}
 
 
 @dataclass
@@ -877,7 +895,7 @@ def _overlap_chunk_io(
     return CharmmTrajectoryFiles(
         restart_read=rread,
         restart_write=rwri,
-        trajectory=io.trajectory,
+        trajectory=None,
         restart_read_unit=io.restart_read_unit,
         restart_write_unit=io.restart_write_unit,
         trajectory_unit=io.trajectory_unit,
@@ -924,6 +942,7 @@ _OVERLAP_CHUNK_FREQ_KEYS = (
     "iprfrq",
     "nprint",
     "isvfrq",
+    "nsavc",
 )
 
 
@@ -1017,6 +1036,8 @@ def _sync_dynamics_io_units(
 def _run_dynamics_chunk(
     dynamics_kwargs: dict[str, Any],
     io: Optional[CharmmTrajectoryFiles],
+    *,
+    extra_iokw: dict[str, int] | None = None,
 ) -> Any:
     open_files: list[Any] = []
     kw = dict(dynamics_kwargs)
@@ -1024,6 +1045,9 @@ def _run_dynamics_chunk(
     if io is not None:
         open_files, iokw = io.open_for_run()
         kw.update(iokw)
+    if extra_iokw:
+        kw.update(extra_iokw)
+        iokw = {**iokw, **extra_iokw}
     _sync_dynamics_io_units(kw, iokw)
     try:
         return run_dynamics(kw)
@@ -1084,6 +1108,10 @@ def run_dynamics_with_io(
     n_chunks = total_nstep // interval
     last_dyn: Any = None
     steps_done = 0
+    dcd_open: list[Any] = []
+    dcd_iokw: dict[str, int] = {}
+    if io is not None and io.trajectory is not None and n_chunks > 1:
+        dcd_open, dcd_iokw = io.open_trajectory_for_run()
     try:
         for chunk_index in range(n_chunks):
             chunk_nstep = interval
@@ -1118,7 +1146,11 @@ def run_dynamics_with_io(
             if has_restart_read:
                 _prepare_overlap_chunk_after_restart(mlpot_ctx)
 
-            last_dyn = _run_dynamics_chunk(chunk_kw, chunk_io)
+            last_dyn = _run_dynamics_chunk(
+                chunk_kw,
+                chunk_io,
+                extra_iokw=dcd_iokw or None,
+            )
             steps_done += chunk_nstep
             check_dynamics_overlap(
                 overlap,
@@ -1127,6 +1159,8 @@ def run_dynamics_with_io(
                 mlpot_ctx=mlpot_ctx,
             )
     finally:
+        for f in dcd_open:
+            f.close()
         _cleanup_overlap_restart_slots(io)
     return last_dyn
 
