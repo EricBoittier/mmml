@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 from mmml.cli.run.md_system import (
     _pycharmm_run_summary,
     build_pycharmm_command,
+    build_run_manifest,
+    resolve_job_name,
+    save_job_run_manifest,
 )
 
 
@@ -37,6 +41,8 @@ def _pycharmm_args(**overrides) -> argparse.Namespace:
         tag=None,
         checkpoint=None,
         output_dir=Path("artifacts/pycharmm_mlpot/dcm20_pbc"),
+        job_name=None,
+        jobs_dir=Path("artifacts/md_system/jobs"),
         box_size=40.0,
         ps_nve=None,
         ps_prod=20.0,
@@ -130,3 +136,49 @@ def test_pycharmm_run_summary_composition():
 def test_pycharmm_run_summary_shows_fix_when_explicit():
     summary = _pycharmm_run_summary(_pycharmm_args(fix_resids="1"))
     assert "fix-resids=1" in summary
+
+
+def test_resolve_job_name_from_output_dir():
+    assert resolve_job_name(_pycharmm_args()) == "dcm20_pbc"
+
+
+def test_resolve_job_name_explicit_overrides_output_dir():
+    assert resolve_job_name(_pycharmm_args(job_name="dcm90_nvt")) == "dcm90_nvt"
+
+
+def test_resolve_job_name_skips_generic_default_output_dir():
+    assert (
+        resolve_job_name(
+            _pycharmm_args(output_dir=Path("artifacts/pycharmm_mlpot"), job_name=None)
+        )
+        is None
+    )
+
+
+def test_save_job_run_manifest_writes_registry_and_output_copy(tmp_path):
+    args = _pycharmm_args(
+        output_dir=tmp_path / "dcm20_pbc",
+        job_name="dcm20_pbc",
+        jobs_dir=tmp_path / "jobs",
+    )
+    manifest = build_run_manifest(
+        args,
+        backend="pycharmm",
+        argv=["--phase", "staged"],
+        started_at="2026-06-02T00:00:00+00:00",
+        finished_at="2026-06-02T00:01:00+00:00",
+        exit_code=0,
+    )
+    registry_path = save_job_run_manifest(
+        args.jobs_dir,
+        "dcm20_pbc",
+        manifest,
+        output_dir=args.output_dir,
+    )
+    assert registry_path == tmp_path / "jobs" / "dcm20_pbc.json"
+    assert (tmp_path / "dcm20_pbc" / "run_manifest.json").is_file()
+    payload = json.loads(registry_path.read_text(encoding="utf-8"))
+    assert payload["job_name"] == "dcm20_pbc"
+    assert payload["backend"] == "pycharmm"
+    assert payload["setup"] == "pbc_nvt"
+    assert payload["args"]["composition"] == "DCM:20"

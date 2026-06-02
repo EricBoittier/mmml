@@ -4,8 +4,15 @@
 from __future__ import annotations
 
 import argparse
+import json
+import re
+import shlex
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
+
+_DEFAULT_OUTPUT_DIR_STEMS = frozenset({"pycharmm_mlpot", "lambda_ti"})
 
 
 def parse_args() -> argparse.Namespace:
@@ -54,6 +61,21 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--checkpoint", type=Path, default=None, help="Model checkpoint path.")
     parser.add_argument("--output-dir", type=Path, default=None, help="Output directory for artifacts.")
+    parser.add_argument(
+        "--job-name",
+        type=str,
+        default=None,
+        help=(
+            "Logical job id for this run. Writes artifacts/md_system/jobs/<job-name>.json "
+            "with the last command and options (default: basename of --output-dir when set)."
+        ),
+    )
+    parser.add_argument(
+        "--jobs-dir",
+        type=Path,
+        default=Path("artifacts/md_system/jobs"),
+        help="Directory for per-job last-run manifest JSON files (default: artifacts/md_system/jobs).",
+    )
     parser.add_argument("--template-pdb", type=Path, default=None, help="Monomer template PDB path.")
     parser.add_argument("--n-molecules", type=int, default=10, help="Number of molecules for single-residue runs.")
     parser.add_argument(
@@ -587,6 +609,120 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parents[3]
 
 
+def _safe_job_filename(job_name: str) -> str:
+    safe = re.sub(r"[^\w.-]+", "_", job_name.strip())
+    if not safe:
+        raise ValueError("job name must contain at least one alphanumeric character")
+    return safe
+
+
+def resolve_job_name(args: argparse.Namespace) -> str | None:
+    """Return the job id used for last-run manifest lookup."""
+    explicit = getattr(args, "job_name", None)
+    if explicit is not None and str(explicit).strip():
+        return str(explicit).strip()
+    output_dir = getattr(args, "output_dir", None)
+    if output_dir is None:
+        return None
+    stem = Path(output_dir).name
+    if not stem or stem in _DEFAULT_OUTPUT_DIR_STEMS:
+        return None
+    return stem
+
+
+def _args_for_manifest(args: argparse.Namespace) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    for key, value in vars(args).items():
+        if key in {"extra_args", "jobs_dir"}:
+            continue
+        if isinstance(value, Path):
+            out[key] = str(value)
+        elif value is None or isinstance(value, (str, int, float, bool, list)):
+            out[key] = value
+        else:
+            out[key] = str(value)
+    return out
+
+
+def build_run_manifest(
+    args: argparse.Namespace,
+    *,
+    backend: str | None,
+    argv: list[str] | None,
+    started_at: str,
+    finished_at: str,
+    exit_code: int,
+) -> dict[str, Any]:
+    job_name = resolve_job_name(args)
+    if job_name is None:
+        raise ValueError("resolve_job_name returned None")
+    command_parts = list(sys.argv)
+    if command_parts and command_parts[0] == "mmml md-system":
+        command_parts = ["mmml", "md-system", *command_parts[1:]]
+    manifest: dict[str, Any] = {
+        "job_name": job_name,
+        "started_at": started_at,
+        "finished_at": finished_at,
+        "exit_code": int(exit_code),
+        "command": " ".join(shlex.quote(part) for part in command_parts),
+        "setup": args.setup,
+        "backend": backend,
+        "output_dir": str(args.output_dir) if args.output_dir is not None else None,
+        "args": _args_for_manifest(args),
+    }
+    if argv is not None:
+        manifest["backend_argv"] = list(argv)
+    return manifest
+
+
+def save_job_run_manifest(
+    jobs_dir: Path,
+    job_name: str,
+    manifest: dict[str, Any],
+    *,
+    output_dir: Path | None = None,
+) -> Path:
+    jobs_dir = Path(jobs_dir)
+    jobs_dir.mkdir(parents=True, exist_ok=True)
+    path = jobs_dir / f"{_safe_job_filename(job_name)}.json"
+    path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    if output_dir is not None:
+        out_copy = Path(output_dir) / "run_manifest.json"
+        out_copy.parent.mkdir(parents=True, exist_ok=True)
+        out_copy.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    return path
+
+
+def _maybe_save_job_run_manifest(
+    args: argparse.Namespace,
+    *,
+    backend: str | None,
+    argv: list[str] | None,
+    started_at: str,
+    finished_at: str,
+    exit_code: int,
+) -> Path | None:
+    job_name = resolve_job_name(args)
+    if job_name is None:
+        return None
+    manifest = build_run_manifest(
+        args,
+        backend=backend,
+        argv=argv,
+        started_at=started_at,
+        finished_at=finished_at,
+        exit_code=exit_code,
+    )
+    path = save_job_run_manifest(
+        args.jobs_dir,
+        job_name,
+        manifest,
+        output_dir=args.output_dir,
+    )
+    print(f"mmml md-system: wrote job manifest {path}", flush=True)
+    return path
+
+
 def _append_optional(cmd: list[str], flag: str, value) -> None:
     if value is None:
         return
@@ -1017,61 +1153,84 @@ def build_command(args: argparse.Namespace) -> tuple[str, list[str]]:
 
 def main() -> int:
     args = parse_args()
+    started_at = datetime.now(timezone.utc).isoformat()
+    backend: str | None = None
+    argv: list[str] | None = None
+    exit_code = 2
     try:
-        _validate_packmol_sphere_args(args)
-    except ValueError as exc:
-        print(f"mmml md-system: error: {exc}", file=sys.stderr)
-        return 2
-    if args.setup == "lambda_ti":
         try:
-            return _run_lambda_ti_inline(args)
+            _validate_packmol_sphere_args(args)
         except ValueError as exc:
             print(f"mmml md-system: error: {exc}", file=sys.stderr)
             return 2
-    try:
-        _apply_backend_setup_defaults(args)
-    except ValueError as exc:
-        print(f"mmml md-system: error: {exc}", file=sys.stderr)
-        return 2
-    try:
-        backend, argv = build_command(args)
-    except ValueError as exc:
-        print(f"mmml md-system: error: {exc}", file=sys.stderr)
-        return 2
-    if backend == "pycharmm":
-        print(
-            f"mmml md-system: running pycharmm ({_pycharmm_run_summary(args)})",
-            flush=True,
-        )
-        print(f"  {' '.join(argv)}", flush=True)
-    else:
-        print(f"mmml md-system: running {backend} in-process:", " ".join(argv), flush=True)
-    if backend == "ase":
-        from mmml.cli.run.md_pbc_suite import ase as backend_mod
-    elif backend == "pycharmm":
-        from mmml.interfaces.pycharmmInterface.charmm_mpi import (
-            charmm_lib_links_mpi,
-            prepare_serial_charmm_mpi_env,
-            _under_mpirun,
-            mpirun_launch_hint,
-        )
-
-        prepare_serial_charmm_mpi_env()
-        if charmm_lib_links_mpi() and not _under_mpirun():
+        if args.setup == "lambda_ti":
+            backend = str(args.backend)
+            try:
+                exit_code = _run_lambda_ti_inline(args)
+            except ValueError as exc:
+                print(f"mmml md-system: error: {exc}", file=sys.stderr)
+                exit_code = 2
+            return exit_code
+        try:
+            _apply_backend_setup_defaults(args)
+        except ValueError as exc:
+            print(f"mmml md-system: error: {exc}", file=sys.stderr)
+            return 2
+        try:
+            backend, argv = build_command(args)
+        except ValueError as exc:
+            print(f"mmml md-system: error: {exc}", file=sys.stderr)
+            return 2
+        if backend == "pycharmm":
             print(
-                "mmml: OpenMPI-linked CHARMM — for large MLpot clusters prefer:\n  "
-                f"  {_repo_root() / 'scripts/mmml-charmm-mpirun.sh'} md-system ...\n"
-                "  (or see mpirun hint below if SD hits domdec/MPI errors)\n  "
-                + mpirun_launch_hint("mmml md-system"),
+                f"mmml md-system: running pycharmm ({_pycharmm_run_summary(args)})",
                 flush=True,
             )
-        from mmml.interfaces.pycharmmInterface.jax_device_policy import apply_mlpot_jax_platform_env
+            print(f"  {' '.join(argv)}", flush=True)
+        else:
+            print(
+                f"mmml md-system: running {backend} in-process:",
+                " ".join(argv),
+                flush=True,
+            )
+        if backend == "ase":
+            from mmml.cli.run.md_pbc_suite import ase as backend_mod
+        elif backend == "pycharmm":
+            from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+                charmm_lib_links_mpi,
+                prepare_serial_charmm_mpi_env,
+                _under_mpirun,
+                mpirun_launch_hint,
+            )
 
-        apply_mlpot_jax_platform_env(quiet=True)
-        from mmml.cli.run.md_pbc_suite import pycharmm_mlpot as backend_mod
-    else:
-        from mmml.cli.run.md_pbc_suite import jaxmd as backend_mod
-    return int(backend_mod.main(argv))
+            prepare_serial_charmm_mpi_env()
+            if charmm_lib_links_mpi() and not _under_mpirun():
+                print(
+                    "mmml: OpenMPI-linked CHARMM — for large MLpot clusters prefer:\n  "
+                    f"  {_repo_root() / 'scripts/mmml-charmm-mpirun.sh'} md-system ...\n"
+                    "  (or see mpirun hint below if SD hits domdec/MPI errors)\n  "
+                    + mpirun_launch_hint("mmml md-system"),
+                    flush=True,
+                )
+            from mmml.interfaces.pycharmmInterface.jax_device_policy import (
+                apply_mlpot_jax_platform_env,
+            )
+
+            apply_mlpot_jax_platform_env(quiet=True)
+            from mmml.cli.run.md_pbc_suite import pycharmm_mlpot as backend_mod
+        else:
+            from mmml.cli.run.md_pbc_suite import jaxmd as backend_mod
+        exit_code = int(backend_mod.main(argv))
+        return exit_code
+    finally:
+        _maybe_save_job_run_manifest(
+            args,
+            backend=backend,
+            argv=argv,
+            started_at=started_at,
+            finished_at=datetime.now(timezone.utc).isoformat(),
+            exit_code=exit_code,
+        )
 
 
 if __name__ == "__main__":
