@@ -854,7 +854,8 @@ def _overlap_chunk_io(
         restart_write = io.restart_write
     else:
         restart_write = None
-    trajectory = io.trajectory if chunk_index == 0 else None
+    # Keep DCD open on every chunk (same path); CHARMM continues in-process coords.
+    trajectory = io.trajectory
     return CharmmTrajectoryFiles(
         restart_read=restart_read,
         restart_write=restart_write,
@@ -876,15 +877,27 @@ def _cleanup_overlap_restart_slots(io: Optional[CharmmTrajectoryFiles]) -> None:
             pass
 
 
+def _sync_dynamics_io_units(
+    kw: dict[str, Any],
+    iokw: dict[str, int],
+) -> None:
+    """Drop restart/trajectory unit numbers not backed by opened CharmmFile handles."""
+    for key in ("iunrea", "iunwri", "iuncrd", "iunvel"):
+        if key not in iokw:
+            kw.pop(key, None)
+
+
 def _run_dynamics_chunk(
     dynamics_kwargs: dict[str, Any],
     io: Optional[CharmmTrajectoryFiles],
 ) -> Any:
     open_files: list[Any] = []
     kw = dict(dynamics_kwargs)
+    iokw: dict[str, int] = {}
     if io is not None:
         open_files, iokw = io.open_for_run()
         kw.update(iokw)
+    _sync_dynamics_io_units(kw, iokw)
     try:
         return run_dynamics(kw)
     finally:
@@ -963,6 +976,11 @@ def run_dynamics_with_io(
                 chunk_kw["restart"] = True
             else:
                 chunk_kw["restart"] = False
+                chunk_kw["iunrea"] = -1
+            if chunk_io is None or chunk_io.restart_write is None:
+                chunk_kw.pop("iunwri", None)
+            if not has_restart_read:
+                chunk_kw.pop("iunrea", None)
                 chunk_kw["iunrea"] = -1
 
             last_dyn = _run_dynamics_chunk(chunk_kw, chunk_io)
