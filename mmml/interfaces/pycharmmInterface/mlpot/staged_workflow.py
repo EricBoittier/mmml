@@ -51,6 +51,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
     assert_pre_min_bonded_geometry,
     maybe_run_bonded_mm_mini_after_stage,
     record_mm_baseline_strain,
+    rewrite_dynamics_restart_from_current_state,
 )
 from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
     resolve_dynamics_overlap_config,
@@ -259,6 +260,28 @@ def _build_stage_dynamics_kw(
     return kw
 
 
+def _seed_restart_for_memory_handoff(
+    io: CharmmTrajectoryFiles,
+    kw: dict[str, Any],
+    *,
+    stage: MdStage,
+) -> Path:
+    """Write in-memory state to ``restart_write`` and switch ``kw`` to ``restart -``."""
+    if io.restart_write is None:
+        raise RuntimeError(
+            f"memory handoff for stage {stage!r} requires restart_write on I/O"
+        )
+    rewrite_dynamics_restart_from_current_state(io.restart_write)
+    seed = Path(io.restart_write)
+    io.restart_read = seed
+    kw["new"] = False
+    kw["start"] = False
+    kw["restart"] = True
+    if stage in ("equi", "prod"):
+        kw.pop("firstt", None)
+    return seed
+
+
 def _load_or_build_cluster(
     args: argparse.Namespace,
 ) -> tuple[np.ndarray, np.ndarray, int, str]:
@@ -461,13 +484,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                             + (" | memory handoff" if use_memory else ""),
                             flush=True,
                         )
-                    _sync_mlpot_cell_before_npt(
-                        "equi",
-                        use_pbc=use_pbc,
-                        pyCModel=pyCModel,
-                        quiet=bool(args.quiet),
-                        restart_path=Path(rread) if restart and rread else None,
-                    )
+                    restart_path = Path(rread) if restart and rread else None
                     kw = _build_stage_dynamics_kw(
                         "equi",
                         args=args,
@@ -482,6 +499,15 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         memory_handoff=use_memory,
                     )
                     kw["nsavc"] = dcd_nsavc
+                    if use_memory:
+                        restart_path = _seed_restart_for_memory_handoff(seg_io, kw, stage="equi")
+                    _sync_mlpot_cell_before_npt(
+                        "equi",
+                        use_pbc=use_pbc,
+                        pyCModel=pyCModel,
+                        quiet=bool(args.quiet),
+                        restart_path=restart_path,
+                    )
                     disable_charmm_domdec()
                     run_dynamics_with_io(
                         kw,
@@ -547,12 +573,16 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                             + (" | memory handoff" if use_memory else ""),
                             flush=True,
                         )
+                    restart_path = Path(rread) if restart and rread else None
+                    if use_memory:
+                        seed = _seed_restart_for_memory_handoff(seg_io, kw, stage="prod")
+                        restart_path = seed
                     _sync_mlpot_cell_before_npt(
                         "prod",
                         use_pbc=use_pbc,
                         pyCModel=pyCModel,
                         quiet=bool(args.quiet),
-                        restart_path=Path(rread) if restart and rread else None,
+                        restart_path=restart_path,
                     )
                     disable_charmm_domdec()
                     run_dynamics_with_io(
@@ -604,13 +634,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     flush=True,
                 )
 
-            _sync_mlpot_cell_before_npt(
-                stage,
-                use_pbc=use_pbc,
-                pyCModel=pyCModel,
-                quiet=bool(args.quiet),
-                restart_path=Path(rread) if restart and rread else None,
-            )
+            restart_path = Path(rread) if restart and rread else None
 
             kw = _build_stage_dynamics_kw(
                 stage,
@@ -625,6 +649,15 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 memory_handoff=use_memory,
             )
             kw["nsavc"] = dcd_nsavc
+            if use_memory:
+                restart_path = _seed_restart_for_memory_handoff(io, kw, stage=stage)
+            _sync_mlpot_cell_before_npt(
+                stage,
+                use_pbc=use_pbc,
+                pyCModel=pyCModel,
+                quiet=bool(args.quiet),
+                restart_path=restart_path,
+            )
             disable_charmm_domdec()
             run_dynamics_with_io(
                 kw,

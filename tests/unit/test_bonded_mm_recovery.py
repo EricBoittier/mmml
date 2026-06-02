@@ -387,6 +387,30 @@ def test_assert_pre_min_bonded_geometry_exits_on_high_angl():
         bonded_mm_recovery.assert_pre_min_bonded_geometry(args)
 
 
+def test_rewrite_dynamics_restart_writes_current_state(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        rewrite_dynamics_restart_from_current_state,
+    )
+
+    res = tmp_path / "equi.res"
+    mock_py = MagicMock()
+    with patch.dict(
+        "sys.modules",
+        {
+            "pycharmm": mock_py,
+            "mmml.interfaces.pycharmmInterface.import_pycharmm": MagicMock(),
+        },
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
+        return_value=__import__("contextlib").nullcontext(),
+    ):
+        rewrite_dynamics_restart_from_current_state(res, write_unit=92)
+
+    script = mock_py.lingo.charmm_script.call_args[0][0]
+    assert str(res) in script
+    assert "write restart unit 92" in script
+
+
 def argparse_namespace(**kwargs):
     import argparse
 
