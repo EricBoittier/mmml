@@ -35,7 +35,7 @@ class DynamicsOverlapConfig:
 
     action: DynamicsOverlapAction = "rescue"
     min_distance_A: float = 1.5
-    check_interval: int = 50
+    check_interval: int = 500
     n_monomers: int = 1
     use_pbc: bool = False
     fallback_box_side_A: float | None = None
@@ -86,11 +86,11 @@ def add_dynamics_overlap_args(parser: argparse.ArgumentParser) -> None:
     group.add_argument(
         "--dynamics-overlap-check-interval",
         type=int,
-        default=50,
+        default=500,
         help=(
-            "Integration steps between overlap checks (default: 50, matches imgfrq). "
+            "Integration steps between overlap checks (default: 500). "
             "Per stage, the effective interval is the largest divisor of the stage "
-            "step count not exceeding this value (avoids a short final chunk)."
+            "step count not exceeding this value (and at least dcd-nsavc + 1 when set)."
         ),
     )
 
@@ -112,7 +112,7 @@ def resolve_dynamics_overlap_config(
     if min_dist is None:
         min_dist = getattr(args, "min_intermonomer_atom_distance", 1.5)
 
-    interval = int(getattr(args, "dynamics_overlap_check_interval", 50))
+    interval = int(getattr(args, "dynamics_overlap_check_interval", 500))
     if use_pbc and fallback_box_side_A is None:
         box_size = getattr(args, "box_size", None)
         if box_size is not None:

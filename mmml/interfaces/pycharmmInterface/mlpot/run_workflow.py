@@ -512,6 +512,8 @@ def run_dynamics_workflow(
             f"dyn print every {dyn_print['nprint']} steps | echeck={echeck} kcal/mol"
         )
         disable_charmm_domdec()
+        if io.trajectory is not None:
+            Path(io.trajectory).unlink(missing_ok=True)
         run_dynamics_with_io(
             kw,
             io,
