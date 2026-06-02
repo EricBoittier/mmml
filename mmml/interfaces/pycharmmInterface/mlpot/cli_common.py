@@ -39,8 +39,8 @@ def add_charmm_output_args(parser: argparse.ArgumentParser) -> None:
     group.add_argument(
         "--bomlev",
         type=int,
-        default=0,
-        help="CHARMM BOMBlev (default: 0 = stop on errors)",
+        default=-2,
+        help="CHARMM BOMBlev (default: -2; use 0 to stop on any warning)",
     )
     group.add_argument(
         "--nprint",

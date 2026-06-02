@@ -357,4 +357,8 @@ def warmup_decomposed_mlpot(
 
     recover_mpi_for_charmm_after_jax(phase="after decomposed MLpot JAX warmup")
     if verbose:
+        # MM warmup may have silenced CHARMM; restore visibility before MLpot registration.
+        from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_verbose
+
+        pycharmm_verbose()
         print("Decomposed MLpot JAX warmup complete", flush=True)
