@@ -5,7 +5,10 @@
 #   doML=True   — PhysNet monomer/dimer ML (USER term via MLpot)
 #   doMM=True   — CHARMM MM inter-monomer handoff (complementary taper)
 #
-# Uses mini PSF/CRD under OUT_DIR; does not rebuild Packmol cluster.
+# Topology: cluster_for_vmd_*.psf (pre-MLpot CGENFF connectivity).
+# Coordinates: mini_full_mlpot_*.crd (optimized geometry).
+# Do NOT use mini_full_mlpot_*.psf for reload — it embeds ML exclusions and
+# CHARMM aborts with "Maximum number of nonbond exclusions exceeded".
 #
 # Example (on gpu08):
 #   ./scripts/run_dcm90_heat_from_mini.sh
@@ -23,11 +26,13 @@ FB_RAD="${FB_RAD:-32.0}"
 PS_HEAT="${PS_HEAT:-20}"
 MPIRUN="${MMML_MPIRUN_WRAPPER:-$REPO_ROOT/scripts/mmml-charmm-mpirun.sh}"
 
-MINI_PSF="$OUT_DIR/mini_full_mlpot_${TAG}.psf"
+TOPO_PSF="$OUT_DIR/cluster_for_vmd_${TAG}.psf"
 MINI_CRD="$OUT_DIR/mini_full_mlpot_${TAG}.crd"
-if [[ ! -f "$MINI_PSF" || ! -f "$MINI_CRD" ]]; then
-  echo "Missing mini artifacts: $MINI_PSF and/or $MINI_CRD" >&2
-  echo "Run ./scripts/run_dcm90_free_nvt.sh --md-stages mini first." >&2
+if [[ ! -f "$TOPO_PSF" || ! -f "$MINI_CRD" ]]; then
+  echo "Missing reload artifacts:" >&2
+  echo "  topology PSF: $TOPO_PSF" >&2
+  echo "  mini CRD:     $MINI_CRD" >&2
+  echo "Run ./scripts/run_dcm90_free_nvt.sh --md-stages mini first (needs cluster_for_vmd PSF)." >&2
   exit 1
 fi
 
@@ -39,10 +44,9 @@ exec "$MPIRUN" md-system \
   --job-name dcm90_heat \
   --md-stage heat \
   --skip-cluster-build \
-  --from-psf "$MINI_PSF" \
+  --from-psf "$TOPO_PSF" \
   --from-crd "$MINI_CRD" \
   --no-save-vmd-topology \
-  --free-space \
   --flat-bottom-radius "$FB_RAD" \
   --flat-bottom-k 1.0 \
   --temperature 300 \

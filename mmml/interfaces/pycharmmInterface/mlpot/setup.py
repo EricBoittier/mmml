@@ -194,6 +194,42 @@ def write_charmm_psf(path: PathLike) -> Path:
     return p
 
 
+def resolve_topology_psf_for_mlpot_reload(
+    psf_path: PathLike,
+    *,
+    tag: str | None = None,
+) -> Path:
+    """Return a PSF safe for ``read.psf_card`` before MLpot re-registration.
+
+    ``mini_full_mlpot_*.psf`` is written after MLpot and embeds large ML–ML
+    exclusion lists; CHARMM then aborts with "Maximum number of nonbond
+    exclusions exceeded". Prefer ``cluster_for_vmd_<tag>.psf`` (saved pre-MLpot).
+    """
+    psf = Path(psf_path).expanduser().resolve()
+    if "mini_full_mlpot_" not in psf.name:
+        return psf
+
+    tags: list[str] = []
+    if tag:
+        tags.append(str(tag))
+    derived = psf.name.replace("mini_full_mlpot_", "").replace(".psf", "")
+    if derived and derived not in tags:
+        tags.append(derived)
+
+    for t in tags:
+        vmd = psf.parent / f"cluster_for_vmd_{t}.psf"
+        if vmd.is_file():
+            return vmd.resolve()
+
+    raise FileNotFoundError(
+        f"Cannot reload topology from {psf.name}: it contains MLpot nonbond "
+        f"exclusions that exceed CHARMM PSF read limits. Provide "
+        f"{psf.parent / f'cluster_for_vmd_{derived or tag or '<tag>'}.psf'} "
+        f"(from the initial build, pre-MLpot) via --from-psf and keep using the "
+        f"mini CRD for coordinates."
+    )
+
+
 def save_cluster_topology_for_vmd(
     out_dir: PathLike,
     positions: np.ndarray,
@@ -401,9 +437,18 @@ def load_cluster_from_artifacts(
 
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
 
+    tag_guess = str(getattr(args, "tag", None) or psf_path.stem.replace("mini_full_mlpot_", ""))
+    topology_psf = resolve_topology_psf_for_mlpot_reload(psf_path, tag=tag_guess)
+    if topology_psf != psf_path and not getattr(args, "quiet", False):
+        print(
+            f"Reload topology from {topology_psf.name} "
+            f"(not {psf_path.name}; mini PSF embeds ML exclusions)",
+            flush=True,
+        )
+
     read_cgenff_toppar()
     with charmm_relaxed_bomlev():
-        read.psf_card(str(psf_path))
+        read.psf_card(str(topology_psf))
         load_minimized_coordinates(crd_path)
     z = np.asarray(get_Z_from_psf(), dtype=int)
     r = get_charmm_positions_array()
@@ -418,7 +463,10 @@ def load_cluster_from_artifacts(
 
     tag = str(getattr(args, "tag", None) or psf_path.stem.replace("mini_full_mlpot_", ""))
     if not getattr(args, "quiet", False):
-        print(f"Loaded cluster from {psf_path.name} + {crd_path.name}", flush=True)
+        print(
+            f"Loaded cluster from {topology_psf.name} + {crd_path.name}",
+            flush=True,
+        )
     return z, r, n_mol, tag
 
 
