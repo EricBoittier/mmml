@@ -78,6 +78,55 @@ def test_apply_bonded_mm_only_block_script():
     assert "ELEC 0.0 VDW 0.0" in script
 
 
+def test_apply_bonded_vdw_recovery_block_script():
+    import importlib.util
+    from pathlib import Path
+
+    path = (
+        Path(__file__).resolve().parents[2]
+        / "mmml/interfaces/pycharmmInterface/mlpot/block_terms.py"
+    )
+    spec = importlib.util.spec_from_file_location("block_terms", path)
+    block_terms = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(block_terms)
+
+    with patch.object(block_terms, "_import_pycharmm") as imp:
+        imp.return_value.lingo.charmm_script = MagicMock()
+        block_terms.apply_bonded_vdw_recovery_block()
+    script = imp.return_value.lingo.charmm_script.call_args[0][0]
+    assert "BOND 1.0 ANGL 1.0 DIHEdral 1.0" in script
+    assert "ELEC 0.0 VDW 1.0" in script
+
+
+def test_minimize_bonded_recovery_uses_vdw_block_and_nbonds():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        BondedMmMiniConfig,
+        minimize_bonded_mm_recovery,
+    )
+
+    ctx = MagicMock()
+    ctx.use_pbc = False
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._with_recovery_nbonds",
+        side_effect=lambda _ctx, fn: fn(),
+    ) as nbonds_wrap, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._with_mlpot_block_restored",
+        side_effect=lambda _ctx, fn: fn(),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_bonded_vdw_recovery_block",
+    ) as vdw_block, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
+    ) as imp, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.charmm_grms",
+        return_value=1.0,
+    ):
+        imp.return_value = (MagicMock(), MagicMock(), MagicMock(), MagicMock())
+        minimize_bonded_mm_recovery(ctx, BondedMmMiniConfig(nstep_sd=0))
+    nbonds_wrap.assert_called_once()
+    vdw_block.assert_called_once()
+
+
 def test_maybe_run_bonded_mm_mini_skips_when_grms_ok():
     from mmml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
 

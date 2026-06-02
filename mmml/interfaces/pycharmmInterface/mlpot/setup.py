@@ -264,6 +264,48 @@ def refresh_nbonds_after_mlpot(*, nbxmod: int = 5) -> None:
     pycharmm.UpdateNonBondedScript(**vacuum_nbond_kwargs(nbxmod=nbxmod)).run()
 
 
+DEFAULT_WORKFLOW_NBXMOD = 5
+RECOVERY_NBXMOD = 2
+# NBXMod controls VDW/ELEC exclusion lists (CHARMM nbonds):
+#   2 = exclude only 1-2 (bonded) pairs — milder exclusions during rescue SD
+#   5 = exclude 1-2, 1-3, and special 1-4 (normal production MD)
+
+
+def apply_recovery_nbonds(ctx: MlpotContext, *, nbxmod: int = RECOVERY_NBXMOD) -> None:
+    """Temporary nonbond settings for bonded rescue SD (``NBXMOD 2``, VDW on in BLOCK)."""
+    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+        pbc_nbond_kwargs,
+        vacuum_nbond_kwargs,
+    )
+
+    pycharmm = _import_pycharmm()
+    pycharmm.nbonds.update_bnbnd()
+    if ctx.use_pbc and ctx.cubic_box_side_A is not None:
+        cutnb = 18.0
+        cutim = cutnb + 4.0
+        pycharmm.UpdateNonBondedScript(
+            **pbc_nbond_kwargs(nbxmod=nbxmod, cutnb=cutnb, cutim=cutim)
+        ).run()
+    else:
+        pycharmm.UpdateNonBondedScript(**vacuum_nbond_kwargs(nbxmod=nbxmod)).run()
+
+
+def restore_workflow_nbonds(
+    ctx: MlpotContext,
+    *,
+    nbxmod: int = DEFAULT_WORKFLOW_NBXMOD,
+) -> None:
+    """Restore workflow nonbond settings after bonded rescue SD."""
+    if ctx.use_pbc and ctx.cubic_box_side_A is not None:
+        refresh_nbonds_after_mlpot_pbc(
+            cubic_box_side_A=float(ctx.cubic_box_side_A),
+            nbxmod=nbxmod,
+            force=True,
+        )
+    else:
+        refresh_nbonds_after_mlpot(nbxmod=nbxmod)
+
+
 def refresh_nbonds_after_mlpot_pbc(
     *,
     cubic_box_side_A: float,
