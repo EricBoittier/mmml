@@ -44,7 +44,6 @@ exec "$MPIRUN" md-system \
   --ps-equi 50 \
   --dcd-nsavc 400 \
   --dyn-nprint 500 \
-  --echeck 500 \
   --ml-batch-size 256 \
   --skip-energy-show \
   --seed 123 \

@@ -281,7 +281,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--no-scale-echeck",
         action="store_true",
-        help="pycharmm: do not auto-loosen --echeck for large clusters",
+        help="pycharmm: do not auto-loosen --echeck for large clusters (default scales with N monomers/atoms)",
     )
     parser.add_argument(
         "--allow-high-grms",
