@@ -388,11 +388,13 @@ def run_dynamics_workflow(
         pre_minimize = not getattr(args, "no_pre_minimize", False)
     mini_nstep = resolve_mini_nstep(args, n_mol)
     use_pbc = resolve_use_pbc(args)
-    overlap_cfg = resolve_dynamics_overlap_config(
-        args, n_monomers=n_mol, use_pbc=use_pbc
-    )
-
     box_side = _setup_charmm_nbonds_for_args(args, r)
+    overlap_cfg = resolve_dynamics_overlap_config(
+        args,
+        n_monomers=n_mol,
+        use_pbc=use_pbc,
+        fallback_box_side_A=box_side if use_pbc else None,
+    )
     sync_charmm_positions(r)
     vmd_topo_psf = out_dir / f"cluster_for_vmd_{tag}.psf"
     if not getattr(args, "no_save_vmd_topology", False):

@@ -37,6 +37,41 @@ def test_resolve_off_disables():
     assert cfg.enabled is False
 
 
+def test_resolve_pbc_stores_box_size_fallback():
+    args = argparse.Namespace(box_size=30.0)
+    cfg = resolve_dynamics_overlap_config(args, n_monomers=4, use_pbc=True)
+    assert cfg.fallback_box_side_A == pytest.approx(30.0)
+
+
+def test_overlap_cell_uses_fallback_when_pbound_zero():
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_box_sides_A",
+        return_value=(0.0, 0.0, 0.0),
+    ):
+        cfg = DynamicsOverlapConfig(
+            action="error",
+            min_distance_A=1.5,
+            n_monomers=2,
+            use_pbc=True,
+            fallback_box_side_A=30.0,
+        )
+        pos = np.array(
+            [
+                [0.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0],
+                [15.0, 0.0, 0.0],
+                [16.0, 0.0, 0.0],
+            ],
+            dtype=float,
+        )
+        with mock.patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+            return_value=pos,
+        ):
+            dmin = check_dynamics_overlap(cfg, context="test", step=0)
+    assert dmin > 1.5
+
+
 def test_check_overlap_raises_on_close_contact():
     cfg = DynamicsOverlapConfig(
         action="error",
