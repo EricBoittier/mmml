@@ -49,7 +49,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
 )
 from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
     maybe_run_bonded_mm_mini_after_stage,
-    record_mm_baseline_internal_energy,
+    record_mm_baseline_strain,
 )
 from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import setup_charmm_environment
 from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import (
@@ -308,9 +308,9 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         )
         sync_charmm_positions(r)
 
-    baseline_internal: float | None = None
+    baseline = None
     if getattr(args, "bonded_mm_mini", False) and getattr(args, "charmm_pre_minimize", True):
-        baseline_internal = record_mm_baseline_internal_energy(verbose=not args.quiet)
+        baseline = record_mm_baseline_strain(verbose=not args.quiet)
 
     ctx, pyCModel = _register_mlpot_context(
         z,
@@ -451,7 +451,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         ctx,
                         args,
                         stage="equi",
-                        baseline_internal=baseline_internal,
+                        baseline=baseline,
                         restart_path=seg_io.restart_write,
                     )
                     prev_restart = seg_io.restart_write
@@ -509,7 +509,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         ctx,
                         args,
                         stage="prod",
-                        baseline_internal=baseline_internal,
+                        baseline=baseline,
                         restart_path=seg_io.restart_write,
                     )
                     last_traj = seg_io.trajectory
@@ -566,7 +566,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 ctx,
                 args,
                 stage=stage,
-                baseline_internal=baseline_internal,
+                baseline=baseline,
                 restart_path=io.restart_write,
             )
             prev_restart = io.restart_write

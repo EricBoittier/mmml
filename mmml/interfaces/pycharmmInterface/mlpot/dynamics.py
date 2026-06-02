@@ -208,7 +208,7 @@ def charmm_internal_energy_kcalmol(*, require: bool = False) -> float | None:
 
 @dataclass
 class BondedMmMiniConfig:
-    """Short bonded-only SD while MLpot is temporarily detached."""
+    """Short bonded-only SD with MLpot left registered (BLOCK toggles only)."""
 
     nstep_sd: int = 50
     nprint: int = 10
@@ -218,76 +218,9 @@ class BondedMmMiniConfig:
     show_energy: bool = False
 
 
-def minimize_bonded_mm_recovery(
-    ctx: "MlpotContext",
-    config: BondedMmMiniConfig,
-) -> float | None:
-    """Bonded-only MM SD: unset MLpot, relax geometry, restore MLpot BLOCK."""
+def _with_mlpot_block_restored(ctx: "MlpotContext", fn):
+    """Run ``fn`` with full/bonded MM BLOCK, then restore hybrid MLpot BLOCK."""
     from mmml.interfaces.pycharmmInterface.mlpot.block_terms import (
-        apply_bonded_mm_only_block,
-    )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
-        MlpotContext,
-        get_charmm_positions_array,
-        setup_default_nbonds,
-    )
-
-    if not isinstance(ctx, MlpotContext):
-        raise TypeError("ctx must be MlpotContext")
-
-    ctx.unset()
-    apply_bonded_mm_only_block()
-    if ctx.use_pbc and ctx.cubic_box_side_A is not None:
-        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import apply_pbc_nbonds
-
-        apply_pbc_nbonds()
-    else:
-        setup_default_nbonds()
-
-    pycharmm, cons_fix, *_ = _import_pycharmm_modules()
-    minimize = _import_pycharmm_modules()[3]
-    if config.nstep_sd <= 0:
-        ctx.reregister_mlpot()
-        return charmm_internal_energy_kcalmol()
-
-    pycharmm.lingo.charmm_script("ENER")
-    if config.verbose:
-        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
-
-        print(
-            f"Bonded-MM mini start: GRMS={charmm_grms():.4f} kcal/mol/Å",
-            flush=True,
-        )
-    sd_kw = {
-        "nstep": max(1, int(config.nstep_sd)),
-        "nprint": max(1, int(config.nprint)),
-        "tolenr": float(config.tolenr),
-        "tolgrd": float(config.tolgrd),
-        "inbfrq": 50,
-        "ihbfrq": 50,
-    }
-    if config.verbose and config.show_energy:
-        _maybe_show_energy(True)
-    minimize.run_sd(**sd_kw)
-    pycharmm.lingo.charmm_script("ENER")
-    internal_after = charmm_internal_energy_kcalmol()
-    if config.verbose:
-        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
-
-        msg = f"Bonded-MM mini end: GRMS={charmm_grms():.4f} kcal/mol/Å"
-        if internal_after is not None:
-            msg += f", internal={internal_after:.4f} kcal/mol"
-        print(msg, flush=True)
-    cons_fix.turn_off()
-    ctx.reregister_mlpot()
-    _ = get_charmm_positions_array()
-    return internal_after
-
-
-def measure_mm_internal_with_full_block(ctx: "MlpotContext") -> float:
-    """Evaluate MM internal energy with full MM BLOCK; MLpot stays registered."""
-    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import (
-        apply_charmm_mm_block,
         apply_mlpot_energy_block,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
@@ -295,17 +228,82 @@ def measure_mm_internal_with_full_block(ctx: "MlpotContext") -> float:
     if not isinstance(ctx, MlpotContext):
         raise TypeError("ctx must be MlpotContext")
     if ctx.ml_selection is None:
-        raise RuntimeError("MlpotContext missing ml_selection for internal-energy check")
-
-    apply_charmm_mm_block()
+        raise RuntimeError("MlpotContext missing ml_selection for BLOCK restore")
     try:
-        pycharmm, *_ = _import_pycharmm_modules()
-        pycharmm.lingo.charmm_script("ENER")
-        val = charmm_internal_energy_kcalmol(require=True)
-        assert val is not None
-        return val
+        return fn()
     finally:
         ctx.block_tag = apply_mlpot_energy_block(ctx.ml_selection)
+
+
+def measure_mm_grms_with_full_block(ctx: "MlpotContext") -> float:
+    """MM bonded strain proxy: GRMS (kcal/mol/Å) with full MM BLOCK, MLpot stays on."""
+    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_block
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
+
+    def _measure() -> float:
+        apply_charmm_mm_block()
+        pycharmm, *_ = _import_pycharmm_modules()
+        pycharmm.lingo.charmm_script("ENER")
+        return float(charmm_grms())
+
+    return _with_mlpot_block_restored(ctx, _measure)
+
+
+def minimize_bonded_mm_recovery(
+    ctx: "MlpotContext",
+    config: BondedMmMiniConfig,
+) -> float | None:
+    """Bonded-only MM SD via BLOCK; MLpot stays registered (no unset/reregister)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import (
+        apply_bonded_mm_only_block,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        MlpotContext,
+        get_charmm_positions_array,
+    )
+
+    if not isinstance(ctx, MlpotContext):
+        raise TypeError("ctx must be MlpotContext")
+
+    def _run_sd() -> float | None:
+        apply_bonded_mm_only_block()
+        pycharmm, cons_fix, *_ = _import_pycharmm_modules()
+        minimize = _import_pycharmm_modules()[3]
+        if config.nstep_sd <= 0:
+            return float(charmm_grms())
+
+        pycharmm.lingo.charmm_script("ENER")
+        if config.verbose:
+            print(
+                f"Bonded-MM mini start: GRMS={charmm_grms():.4f} kcal/mol/Å",
+                flush=True,
+            )
+        sd_kw = {
+            "nstep": max(1, int(config.nstep_sd)),
+            "nprint": max(1, int(config.nprint)),
+            "tolenr": float(config.tolenr),
+            "tolgrd": float(config.tolgrd),
+            # Avoid MLpot/nbond list rebuilds each SD step (same as MLpot minimize).
+            "inbfrq": 0,
+            "ihbfrq": 0,
+        }
+        if config.verbose and config.show_energy:
+            _maybe_show_energy(True)
+        minimize.run_sd(**sd_kw)
+        pycharmm.lingo.charmm_script("ENER")
+        grms = float(charmm_grms())
+        if config.verbose:
+            internal_after = charmm_internal_energy_kcalmol()
+            msg = f"Bonded-MM mini end: GRMS={grms:.4f} kcal/mol/Å"
+            if internal_after is not None:
+                msg += f", internal={internal_after:.4f} kcal/mol"
+            print(msg, flush=True)
+        cons_fix.turn_off()
+        _ = get_charmm_positions_array()
+        return grms
+
+    return _with_mlpot_block_restored(ctx, _run_sd)
 
 
 @dataclass

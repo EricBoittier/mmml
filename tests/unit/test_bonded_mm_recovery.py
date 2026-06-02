@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import MmStrainBaseline
 from mmml.interfaces.pycharmmInterface.mlpot.dynamics import charmm_internal_energy_kcalmol
 
 
@@ -60,18 +61,20 @@ def test_apply_bonded_mm_only_block_script():
     assert "ELEC 0.0 VDW 0.0" in script
 
 
-def test_maybe_run_bonded_mm_mini_skips_when_internal_ok():
+def test_maybe_run_bonded_mm_mini_skips_when_grms_ok():
     from mmml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
 
     ctx = MagicMock()
     args = argparse_namespace(
         bonded_mm_mini=True,
         bonded_mm_mini_after="heat",
+        bonded_mm_grms_margin=0.0,
         quiet=True,
     )
+    baseline = MmStrainBaseline(grms_kcalmol_A=12.0, internal_kcalmol=24.0)
     with patch.object(
         bonded_mm_recovery,
-        "measure_mm_internal_with_full_block",
+        "measure_mm_grms_with_full_block",
         return_value=10.0,
     ) as measure, patch.object(
         bonded_mm_recovery,
@@ -84,7 +87,7 @@ def test_maybe_run_bonded_mm_mini_skips_when_internal_ok():
             ctx,
             args,
             stage="heat",
-            baseline_internal=12.0,
+            baseline=baseline,
             restart_path="/tmp/heat.res",
         )
     measure.assert_called_once()
@@ -92,7 +95,7 @@ def test_maybe_run_bonded_mm_mini_skips_when_internal_ok():
     resync.assert_called_once_with("/tmp/heat.res")
 
 
-def test_maybe_run_bonded_mm_mini_runs_when_internal_high():
+def test_maybe_run_bonded_mm_mini_runs_when_grms_high():
     from mmml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
 
     ctx = MagicMock()
@@ -100,13 +103,15 @@ def test_maybe_run_bonded_mm_mini_runs_when_internal_high():
         bonded_mm_mini=True,
         bonded_mm_mini_after="heat",
         bonded_mm_mini_steps=25,
+        bonded_mm_grms_margin=0.0,
         dyn_nprint=100,
         quiet=True,
         show_energy=False,
     )
+    baseline = MmStrainBaseline(grms_kcalmol_A=5.0)
     with patch.object(
         bonded_mm_recovery,
-        "measure_mm_internal_with_full_block",
+        "measure_mm_grms_with_full_block",
         return_value=20.0,
     ), patch.object(
         bonded_mm_recovery,
@@ -119,7 +124,7 @@ def test_maybe_run_bonded_mm_mini_runs_when_internal_high():
             ctx,
             args,
             stage="heat",
-            baseline_internal=10.0,
+            baseline=baseline,
             restart_path="/tmp/heat.res",
         )
     mini.assert_called_once()
