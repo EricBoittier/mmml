@@ -99,7 +99,7 @@ def build_high_force_selection(
         sel.set_selection(select.none_selection(n_atoms))
 
     stored = sel.store(name=store_name)
-    return stored, sel.get_n_selected()
+    return stored, len(indices)
 
 
 def unstore_selection(store_name: str) -> None:
