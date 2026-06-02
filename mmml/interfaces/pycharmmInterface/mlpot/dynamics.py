@@ -935,6 +935,38 @@ def _harmonize_dynamics_frequency(value: int, chunk_nstep: int) -> int:
     return n
 
 
+def _harmonize_nsavc_frequency(value: int, chunk_nstep: int) -> int:
+    """Trajectory save interval: strictly less than ``nstep`` and (when possible) divides it."""
+    n = max(1, int(chunk_nstep))
+    if n <= 1:
+        return max(1, int(value))
+    cap = n - 1
+    val = max(1, min(int(value), cap))
+    if n % val == 0:
+        return val
+    for d in range(val, 0, -1):
+        if n % d == 0:
+            return d
+    return 1
+
+
+def _ensure_nsavc_below_nstep(kw: dict[str, Any]) -> None:
+    """Clamp ``nsavc`` so CHARMM dynamics has ``nsavc < nstep``."""
+    if "nsavc" not in kw or "nstep" not in kw:
+        return
+    nstep = int(kw["nstep"])
+    if nstep <= 1:
+        return
+    old = int(kw["nsavc"])
+    new = _harmonize_nsavc_frequency(old, nstep)
+    if new != old:
+        print(
+            f"DCD nsavc {old} -> {new} (must be < nstep={nstep})",
+            flush=True,
+        )
+    kw["nsavc"] = new
+
+
 _OVERLAP_CHUNK_FREQ_KEYS = (
     "ihbfrq",
     "ilbfrq",
@@ -955,7 +987,10 @@ def _harmonize_overlap_chunk_frequencies(
     for key in _OVERLAP_CHUNK_FREQ_KEYS:
         if key not in chunk_kw:
             continue
-        chunk_kw[key] = _harmonize_dynamics_frequency(int(chunk_kw[key]), n)
+        if key == "nsavc":
+            chunk_kw[key] = _harmonize_nsavc_frequency(int(chunk_kw[key]), n)
+        else:
+            chunk_kw[key] = _harmonize_dynamics_frequency(int(chunk_kw[key]), n)
 
 
 def _prepare_overlap_chunk_after_restart(
@@ -1100,6 +1135,7 @@ def run_dynamics_with_io(
     )
 
     kw = dict(dynamics_kwargs)
+    _ensure_nsavc_below_nstep(kw)
     total_nstep = int(kw.get("nstep", 0))
     if (
         overlap is None

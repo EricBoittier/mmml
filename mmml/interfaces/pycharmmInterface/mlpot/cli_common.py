@@ -182,7 +182,11 @@ def resolve_dcd_nsavc(
         nsavc = int(dcd_nsavc)
     nsavc = max(1, nsavc)
     if nstep is not None:
-        nsavc = min(nsavc, max(1, int(nstep)))
+        n = int(nstep)
+        if n > 1:
+            nsavc = min(nsavc, n - 1)
+        else:
+            nsavc = min(nsavc, n)
     return nsavc
 
 
