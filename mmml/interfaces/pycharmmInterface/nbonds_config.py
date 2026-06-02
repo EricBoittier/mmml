@@ -65,11 +65,8 @@ def read_cgenff_toppar(*, enable_drude: bool = False) -> None:
     """Load CGENFF RTF/PRM under relaxed BOMBlev; restore the prior level on exit."""
     import pycharmm.read as read
 
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import (
-        CGENFF_PRM,
-        CGENFF_RTF,
-        charmm_relaxed_bomlev,
-    )
+    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM, CGENFF_RTF
 
     with charmm_relaxed_bomlev():
         if enable_drude:

@@ -372,7 +372,7 @@ def setup_box_generic(pdb_path, rtf=CGENFF_RTF, prm=CGENFF_PRM, side_length: flo
 
     _ensure_crystal_image_str()
     CLEAR_CHARMM()
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import charmm_relaxed_bomlev
+    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
 
     with charmm_relaxed_bomlev():
         read.rtf(rtf)

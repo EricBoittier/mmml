@@ -394,7 +394,7 @@ def load_cluster_from_artifacts(
     pycharmm = _import_pycharmm()
     import pycharmm.read as read
 
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import charmm_relaxed_bomlev
+    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
 
     read_cgenff_toppar()
     with charmm_relaxed_bomlev():
