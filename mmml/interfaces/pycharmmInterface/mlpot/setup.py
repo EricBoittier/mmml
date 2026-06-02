@@ -261,12 +261,28 @@ def load_cluster_from_artifacts(
 
     psf = getattr(args, "from_psf", None)
     crd = getattr(args, "from_crd", None)
-    if psf is None and crd is None and getattr(args, "output_dir", None):
+    if (psf is None or crd is None) and getattr(args, "output_dir", None):
         out = Path(args.output_dir).expanduser().resolve()
         tag_guess = getattr(args, "tag", None)
+        if not tag_guess and getattr(args, "composition", None):
+            from mmml.cli.run.md_pbc_suite.ase import _parse_composition
+            from mmml.interfaces.pycharmmInterface.mlpot.cli_common import composition_tag
+
+            comp = _parse_composition(args.composition)
+            n_from_comp = sum(c for _, c in comp)
+            tag_guess = composition_tag(
+                comp,
+                str(getattr(args, "residue", "ACO")).upper(),
+                n_from_comp,
+            )
         if tag_guess:
             psf = psf or out / f"mini_full_mlpot_{tag_guess}.psf"
             crd = crd or out / f"mini_full_mlpot_{tag_guess}.crd"
+        elif psf is None and crd is None:
+            psf_candidates = sorted(out.glob("mini_full_mlpot_*.psf"))
+            if len(psf_candidates) == 1:
+                psf = psf_candidates[0]
+                crd = out / psf.name.replace(".psf", ".crd")
     if psf is None or crd is None:
         raise ValueError(
             "skip-cluster-build requires --from-psf and --from-crd "
