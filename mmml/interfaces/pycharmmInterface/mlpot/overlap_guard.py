@@ -119,7 +119,21 @@ def check_dynamics_overlap(
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
     )
-    from mmml.utils.geometry_checks import assert_no_intermonomer_atom_overlap
+def _assert_no_intermonomer_atom_overlap(*args, **kwargs) -> float:
+    """Load geometry_checks without importing ``mmml.utils`` (pulls JAX)."""
+    import importlib.util
+    from pathlib import Path
+
+    path = (
+        Path(__file__).resolve().parents[3] / "utils" / "geometry_checks.py"
+    )
+    spec = importlib.util.spec_from_file_location("_mmml_geometry_checks", path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot load geometry checks from {path}")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    fn = getattr(mod, "assert_no_intermonomer_atom_overlap")
+    return fn(*args, **kwargs)
 
     if not config.enabled:
         return float("inf")
@@ -128,6 +142,8 @@ def check_dynamics_overlap(
     pos = get_charmm_positions_array()
     offsets = monomer_offsets(int(pos.shape[0]), config.n_monomers)
     cell = _overlap_cell(use_pbc=config.use_pbc)
+
+    assert_no_intermonomer_atom_overlap = _assert_no_intermonomer_atom_overlap
 
     if config.action == "error":
         return assert_no_intermonomer_atom_overlap(
