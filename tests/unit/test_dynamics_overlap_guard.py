@@ -14,10 +14,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
     monomer_offsets,
     resolve_dynamics_overlap_config,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
-    CharmmTrajectoryFiles,
-    run_dynamics_with_io,
-)
+from mmml.interfaces.pycharmmInterface.mlpot.dynamics import run_dynamics_with_io
 
 
 def test_monomer_offsets_uniform():
