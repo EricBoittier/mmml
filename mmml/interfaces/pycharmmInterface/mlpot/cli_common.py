@@ -999,8 +999,8 @@ def add_bonded_mm_mini_args(parser: argparse.ArgumentParser) -> None:
         "--bonded-mm-mini",
         action="store_true",
         help=(
-            "Compare CHARMM internal energy to post-MM-pre-min baseline after selected "
-            "stages; run bonded-only SD and restore MLpot BLOCK if higher"
+            "Compare MM bonded GRMS to post-MM-pre-min baseline after selected stages; "
+            "run bonded-only SD (BLOCK toggle, MLpot stays on) if higher"
         ),
     )
     group.add_argument(
@@ -1019,7 +1019,13 @@ def add_bonded_mm_mini_args(parser: argparse.ArgumentParser) -> None:
         "--bonded-mm-internal-margin",
         type=float,
         default=0.0,
-        help="kcal/mol above baseline before triggering recovery (default: 0)",
+        help="Deprecated alias for --bonded-mm-grms-margin (default: 0)",
+    )
+    group.add_argument(
+        "--bonded-mm-grms-margin",
+        type=float,
+        default=None,
+        help="kcal/mol/Å above baseline GRMS before recovery (default: bonded-mm-internal-margin)",
     )
 
 

@@ -385,7 +385,13 @@ def parse_args() -> argparse.Namespace:
         "--bonded-mm-internal-margin",
         type=float,
         default=0.0,
-        help="pycharmm: kcal/mol above baseline before recovery (default: 0)",
+        help="pycharmm: deprecated alias for --bonded-mm-grms-margin (default: 0)",
+    )
+    parser.add_argument(
+        "--bonded-mm-grms-margin",
+        type=float,
+        default=None,
+        help="pycharmm: kcal/mol/Å above baseline GRMS before recovery",
     )
     parser.add_argument(
         "--restart-from",
@@ -774,6 +780,10 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         cmd.extend(
             ["--bonded-mm-internal-margin", str(args.bonded_mm_internal_margin)]
         )
+        if getattr(args, "bonded_mm_grms_margin", None) is not None:
+            cmd.extend(
+                ["--bonded-mm-grms-margin", str(args.bonded_mm_grms_margin)]
+            )
     if args.charmm_pre_minimize is False:
         cmd.append("--no-charmm-pre-minimize")
     cmd.extend(["--charmm-sd-steps", str(args.charmm_sd_steps)])
