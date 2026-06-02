@@ -180,18 +180,35 @@ def _register_mlpot_context(
 def sync_mlpot_pbc_cell_from_charmm(
     pyCModel: Any,
     *,
+    fallback_side_A: float | None = None,
     verbose: bool = False,
 ) -> float:
     """Set ML MIC cell side to the current CHARMM cubic box (NpT / CPT stages)."""
     from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotModel
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import get_charmm_cubic_box_side_A
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import resolve_charmm_cubic_box_side_A
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import refresh_nbonds_after_mlpot_pbc
 
-    side = float(get_charmm_cubic_box_side_A())
+    if fallback_side_A is None:
+        old_cell = getattr(pyCModel, "_cell", False)
+        if old_cell:
+            fallback_side_A = float(old_cell)
+
+    side, used_fallback = resolve_charmm_cubic_box_side_A(
+        fallback_side_A=fallback_side_A,
+    )
     old = getattr(pyCModel, "_cell", False)
     if isinstance(pyCModel, DecomposedMlpotModel):
         pyCModel._cell = side
+    if used_fallback:
+        refresh_nbonds_after_mlpot_pbc(cubic_box_side_A=side)
     if verbose:
-        if old and abs(float(old) - side) > 1e-4:
+        if used_fallback:
+            print(
+                f"MLpot MIC PBC: restored crystal L={side:.3f} Å "
+                f"(CHARMM box query unavailable)",
+                flush=True,
+            )
+        elif old and abs(float(old) - side) > 1e-4:
             print(
                 f"MLpot MIC PBC synced to CHARMM L={side:.3f} Å "
                 f"(was {float(old):.3f} Å)",

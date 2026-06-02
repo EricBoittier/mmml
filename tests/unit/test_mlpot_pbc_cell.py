@@ -157,14 +157,34 @@ def test_cubic_box_matrix_from_side():
     assert float(m[1, 1]) == pytest.approx(40.0)
 
 
+def test_is_cubic_box_sides():
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import _is_cubic_box_sides
+
+    assert _is_cubic_box_sides(40.0, 40.0, 40.0)
+    assert not _is_cubic_box_sides(40.0, 41.0, 40.0)
+    assert not _is_cubic_box_sides(0.0, 40.0, 40.0)
+
+
+def test_resolve_charmm_cubic_box_side_A_uses_fallback():
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import resolve_charmm_cubic_box_side_A
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_box_sides_A",
+        return_value=(0.0, 0.0, 0.0),
+    ):
+        side, used_fallback = resolve_charmm_cubic_box_side_A(fallback_side_A=40.0)
+    assert side == pytest.approx(40.0)
+    assert used_fallback is True
+
+
 def test_sync_mlpot_pbc_cell_from_charmm_updates_model():
     from mmml.interfaces.pycharmmInterface.mlpot import run_workflow
 
     z = np.zeros(8, dtype=int)
     model = DecomposedMlpotModel(MagicMock(), CutoffParameters(), 2, z, cell=40.0)
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.get_charmm_cubic_box_side_A",
-        return_value=39.25,
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
+        return_value=(39.25, False),
     ):
         side = run_workflow.sync_mlpot_pbc_cell_from_charmm(model, verbose=False)
     assert side == pytest.approx(39.25)
@@ -190,8 +210,8 @@ def test_decomposed_calculator_passes_charmm_box_to_spherical_fn():
     dy = np.zeros(n, dtype=np.float64)
     dz = np.zeros(n, dtype=np.float64)
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.get_charmm_cubic_box_side_A",
-        return_value=39.0,
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
+        return_value=(39.0, False),
     ), patch(
         "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
         return_value=MagicMock(__enter__=MagicMock(), __exit__=MagicMock()),
