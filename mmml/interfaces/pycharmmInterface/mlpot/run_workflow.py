@@ -167,9 +167,17 @@ def _register_mlpot_context(
                 verbose=verbose,
             )
 
-    ctx = register_mlpot(pyCModel, z, select_all_atoms())
+    ctx = register_mlpot(
+        pyCModel,
+        z,
+        select_all_atoms(),
+        use_pbc=cubic_box_side_A is not None,
+    )
     if cubic_box_side_A is not None:
-        refresh_nbonds_after_mlpot_pbc(cubic_box_side_A=float(cubic_box_side_A))
+        refresh_nbonds_after_mlpot_pbc(
+            cubic_box_side_A=float(cubic_box_side_A),
+            force=True,
+        )
     sync_charmm_positions(r)
     pos_chk = get_charmm_positions_array()
     if np.allclose(pos_chk, 0.0):
