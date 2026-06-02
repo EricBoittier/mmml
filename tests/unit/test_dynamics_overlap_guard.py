@@ -113,10 +113,10 @@ def test_run_dynamics_with_io_chunks_and_checks():
         ],
         dtype=float,
     )
-    calls: list[int] = []
+    calls: list[dict] = []
 
     def fake_run(kw):
-        calls.append(int(kw["nstep"]))
+        calls.append(dict(kw))
         return mock.Mock()
 
     with mock.patch(
@@ -127,9 +127,15 @@ def test_run_dynamics_with_io_chunks_and_checks():
         return_value=pos_ok,
     ):
         run_dynamics_with_io(
-            {"nstep": 5, "new": True, "start": True},
+            {"nstep": 5, "new": True, "start": True, "restart": True, "iunrea": 3},
             overlap=cfg,
             overlap_context="NVE",
         )
 
-    assert calls == [2, 2, 1]
+    assert [c["nstep"] for c in calls] == [2, 2, 1]
+    assert calls[0]["restart"] is True
+    assert calls[0]["iunrea"] == 3
+    assert calls[1]["restart"] is False
+    assert calls[1]["iunrea"] == -1
+    assert calls[2]["restart"] is False
+    assert calls[2]["iunrea"] == -1
