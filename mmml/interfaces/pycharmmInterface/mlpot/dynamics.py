@@ -1113,11 +1113,14 @@ def write_minimized_coordinates(
 
 def load_minimized_coordinates(crd_path: PathLike) -> None:
     """Load optimized coords from a CRD card (preferred over PDB for ML exclusions)."""
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import charmm_relaxed_bomlev
+
     *_, read, _write = _import_pycharmm_modules()
     path = Path(crd_path)
     if not path.exists():
         raise FileNotFoundError(f"CRD not found: {path}")
-    read.coor_card(str(path))
+    with charmm_relaxed_bomlev():
+        read.coor_card(str(path))
 
 
 def production_restart_chain(

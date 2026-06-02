@@ -90,13 +90,11 @@ def generate_residue(resid) -> None:
     print("*" * 5, "Generating residue", "*" * 5)
     s = """DELETE ATOM SELE ALL END"""
     pycharmm.lingo.charmm_script(s)
-    read.rtf(CGENFF_RTF)
-    bl = settings.set_bomb_level(-2)
-    wl = settings.set_warn_level(-2)
-    read.prm(CGENFF_PRM)
-    settings.set_bomb_level(bl)
-    settings.set_warn_level(wl)
-    pycharmm.lingo.charmm_script("bomlev 0")
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import charmm_relaxed_bomlev
+
+    with charmm_relaxed_bomlev():
+        read.rtf(CGENFF_RTF)
+        read.prm(CGENFF_PRM)
     read.sequence_string(resid)
     gen.new_segment(seg_name=resid, setup_ic=True)
     ic.prm_fill(replace_all=True)
