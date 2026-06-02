@@ -51,44 +51,22 @@ def test_bonded_recovery_sd_kwargs_pbc_vs_vacuum():
     vac_ctx = MagicMock(use_pbc=False)
     pbc_kw = _bonded_recovery_sd_kwargs(pbc_ctx, cfg)
     vac_kw = _bonded_recovery_sd_kwargs(vac_ctx, cfg)
-    assert "nstep" not in pbc_kw
+    assert pbc_kw["nstep"] == 10
     assert pbc_kw["inbfrq"] == -1
     assert "imgfrq" not in pbc_kw
     assert vac_kw["inbfrq"] == 0
     assert "imgfrq" not in vac_kw
 
 
-def test_split_sd_steps_three_ways():
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import split_sd_steps_three_ways
+def test_charmm_bonded_term_reads_angl():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import charmm_bonded_term_kcalmol
 
-    assert split_sd_steps_three_ways(0) == (0, 0, 0)
-    assert split_sd_steps_three_ways(1) == (0, 1, 0)
-    assert split_sd_steps_three_ways(2) == (0, 2, 0)
-    assert split_sd_steps_three_ways(50) == (17, 17, 16)
-    assert sum(split_sd_steps_three_ways(50)) == 50
-
-
-def test_run_nbxmod_staged_sd_three_phases():
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import run_nbxmod_staged_sd
-
-    minimize = MagicMock()
-    ctx = MagicMock()
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.apply_recovery_nbonds",
-    ) as apply_nb, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.restore_workflow_nbonds",
-    ) as restore_nb:
-        run_nbxmod_staged_sd(
-            minimize,
-            {"nprint": 10, "tolenr": 1e-3, "tolgrd": 1e-3},
-            9,
-            ctx=ctx,
-            verbose=False,
-        )
-    assert apply_nb.call_count == 3
-    assert [c.kwargs["nbxmod"] for c in apply_nb.call_args_list] == [5, 2, 5]
-    assert [c.kwargs["nstep"] for c in minimize.run_sd.call_args_list] == [3, 3, 3]
-    restore_nb.assert_called_once_with(ctx)
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._charmm_eterm_value",
+        return_value=42.0,
+    ) as eterm:
+        assert charmm_bonded_term_kcalmol("ANGL") == pytest.approx(42.0)
+    eterm.assert_called_once_with("ANGL")
 
 
 def test_apply_bonded_mm_only_block_script():
@@ -133,7 +111,7 @@ def test_apply_bonded_vdw_recovery_block_script():
     assert "ELEC 0.0 VDW 1.0" in script
 
 
-def test_minimize_bonded_recovery_uses_vdw_block_and_nbonds():
+def test_minimize_bonded_recovery_uses_bonded_only_block():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         BondedMmMiniConfig,
         minimize_bonded_mm_recovery,
@@ -144,13 +122,11 @@ def test_minimize_bonded_recovery_uses_vdw_block_and_nbonds():
     ctx = MagicMock(spec=MlpotContext)
     ctx.use_pbc = False
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.run_nbxmod_staged_sd",
-    ) as staged_sd, patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._with_mlpot_block_restored",
         side_effect=lambda _ctx, fn: fn(),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_bonded_vdw_recovery_block",
-    ) as vdw_block, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_bonded_mm_only_block",
+    ) as bonded_block, patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
     ) as imp, patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms",
@@ -158,11 +134,10 @@ def test_minimize_bonded_recovery_uses_vdw_block_and_nbonds():
     ):
         imp.return_value = (MagicMock(), MagicMock(), MagicMock(), MagicMock())
         minimize_bonded_mm_recovery(ctx, BondedMmMiniConfig(nstep_sd=0))
-    staged_sd.assert_not_called()
-    vdw_block.assert_called_once()
+    bonded_block.assert_called_once()
 
 
-def test_minimize_bonded_recovery_runs_staged_sd():
+def test_minimize_bonded_recovery_runs_sd_and_reports_angl():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         BondedMmMiniConfig,
         minimize_bonded_mm_recovery,
@@ -173,13 +148,18 @@ def test_minimize_bonded_recovery_runs_staged_sd():
     ctx = MagicMock(spec=MlpotContext)
     ctx.use_pbc = False
     minimize = MagicMock()
+    angl_values = iter([500.0, 50.0])
+
+    def fake_eterm(name: str):
+        if name.upper() == "ANGL":
+            return next(angl_values)
+        return None
+
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.run_nbxmod_staged_sd",
-    ) as staged_sd, patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._with_mlpot_block_restored",
         side_effect=lambda _ctx, fn: fn(),
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_bonded_vdw_recovery_block",
+        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_bonded_mm_only_block",
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
     ) as imp, patch(
@@ -187,16 +167,19 @@ def test_minimize_bonded_recovery_runs_staged_sd():
         return_value=1.0,
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics.charmm_internal_energy_kcalmol",
-        return_value=0.0,
+        return_value=550.0,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._charmm_eterm_value",
+        side_effect=fake_eterm,
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=MagicMock(),
     ):
         imp.return_value = (MagicMock(), MagicMock(), MagicMock(), minimize)
-        minimize_bonded_mm_recovery(ctx, BondedMmMiniConfig(nstep_sd=30))
-    staged_sd.assert_called_once()
-    assert staged_sd.call_args.args[2] == 30
-    assert staged_sd.call_args.kwargs["ctx"] is ctx
+        grms = minimize_bonded_mm_recovery(ctx, BondedMmMiniConfig(nstep_sd=30))
+    minimize.run_sd.assert_called_once()
+    assert minimize.run_sd.call_args.kwargs["nstep"] == 30
+    assert grms == pytest.approx(1.0)
 
 
 def test_maybe_run_bonded_mm_mini_skips_when_grms_ok():
