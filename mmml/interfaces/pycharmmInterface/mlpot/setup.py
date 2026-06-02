@@ -119,26 +119,36 @@ class MlpotContext:
         from mmml.interfaces.pycharmmInterface.mlpot.block_terms import (
             apply_mlpot_energy_block,
         )
+        from mmml.interfaces.pycharmmInterface.nbonds_config import (
+            pbc_nbond_kwargs,
+            vacuum_nbond_kwargs,
+        )
 
         if self.ml_selection is None or self.ml_Z is None:
             raise RuntimeError("MlpotContext missing ml_selection or ml_Z for reregister")
-        self.block_tag = apply_mlpot_energy_block(self.ml_selection)
         pycharmm = _import_pycharmm()
         z_ml = physnet_ml_atomic_numbers(self.ml_Z)
-        self.mlpot = pycharmm.MLpot(
-            ml_model=self.pyCModel,
-            ml_Z=z_ml,
-            ml_selection=self.ml_selection,
-            ml_charge=float(self.ml_charge),
-            ml_fq=bool(self.ml_fq),
-        )
-        if self.use_pbc and self.cubic_box_side_A is not None:
-            refresh_nbonds_after_mlpot_pbc(
-                cubic_box_side_A=float(self.cubic_box_side_A),
-                force=False,
+        from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+
+        with charmm_relaxed_bomlev():
+            self.block_tag = apply_mlpot_energy_block(self.ml_selection)
+            self.mlpot = pycharmm.MLpot(
+                ml_model=self.pyCModel,
+                ml_Z=z_ml,
+                ml_selection=self.ml_selection,
+                ml_charge=float(self.ml_charge),
+                ml_fq=bool(self.ml_fq),
             )
-        else:
-            refresh_nbonds_after_mlpot()
+            # MLpot.__init__ already set iblo/inb and ran update_bnbnd (upinb).
+            # Re-running prepare_charmm_* / update_bnbnd here segfaults in upinb
+            # after long MD (same as register_mlpot).
+            if self.use_pbc and self.cubic_box_side_A is not None:
+                cutnb = 18.0
+                pycharmm.UpdateNonBondedScript(
+                    **pbc_nbond_kwargs(nbxmod=5, cutnb=cutnb, cutim=cutnb + 4.0)
+                ).run()
+            else:
+                pycharmm.UpdateNonBondedScript(**vacuum_nbond_kwargs(nbxmod=5)).run()
 
 
 def _import_pycharmm():
@@ -297,15 +307,28 @@ def restore_workflow_nbonds(
     *,
     nbxmod: int = DEFAULT_WORKFLOW_NBXMOD,
 ) -> None:
-    """Restore workflow nonbond settings after bonded rescue SD."""
+    """Restore workflow nonbond settings after bonded rescue SD.
+
+    Re-applies NBXMOD and nonbond flags only. Does not rebuild crystal/vacuum
+    (``prepare_charmm_pbc`` / ``prepare_charmm_vacuum`` + ``update_bnbnd`` can
+    segfault in ``upinb`` after dynamics).
+    """
+    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+        pbc_nbond_kwargs,
+        vacuum_nbond_kwargs,
+    )
+
+    pycharmm = _import_pycharmm()
+    pycharmm.nbonds.update_bnbnd()
     if ctx.use_pbc and ctx.cubic_box_side_A is not None:
-        refresh_nbonds_after_mlpot_pbc(
-            cubic_box_side_A=float(ctx.cubic_box_side_A),
-            nbxmod=nbxmod,
-            force=True,
-        )
+        cutnb = 18.0
+        cutim = cutnb + 4.0
+        pycharmm.UpdateNonBondedScript(
+            **pbc_nbond_kwargs(nbxmod=nbxmod, cutnb=cutnb, cutim=cutim)
+        ).run()
     else:
-        refresh_nbonds_after_mlpot(nbxmod=nbxmod)
+        pycharmm.nbonds.set_imgfrq(-1)
+        pycharmm.UpdateNonBondedScript(**vacuum_nbond_kwargs(nbxmod=nbxmod)).run()
 
 
 def refresh_nbonds_after_mlpot_pbc(
