@@ -437,6 +437,7 @@ def load_physnet_mlpot_bundle(
     ml_max_active_dimers: Optional[int] = None,
     cell: float | None = None,
     verbose: bool = False,
+    args: Any | None = None,
 ) -> tuple[Any, Any, Any]:
     """Load PhysNet for MLpot. Multi-monomer clusters use monomer/dimer batches."""
     ckpt = Path(checkpoint).expanduser().resolve()
@@ -464,6 +465,7 @@ def load_physnet_mlpot_bundle(
             ml_max_active_dimers=ml_max_active_dimers,
             cell=float(cell) if cell is not None else False,
             verbose=verbose,
+            args=args,
         )
         return None, None, pyCModel
 

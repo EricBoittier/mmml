@@ -26,6 +26,7 @@ energy is conserved only if forces are F = -dE_hybrid/dR.
    complementary handoff, use the same r-interval and s_MM = 1 - s_ML so
    E_hybrid = s_ML*E_ML + (1-s_ML)*E_MM has no overlap/gap.
 """
+import argparse
 import warnings
 from pathlib import Path
 
@@ -42,11 +43,54 @@ def handoff_widths_from_args(args) -> tuple[float, float, float]:
     ml_w = getattr(args, "ml_switch_width", None)
     if ml_w is None:
         ml_w = getattr(args, "ml_cutoff", 0.1)
-    mm_on = float(getattr(args, "mm_switch_on", 5.0))
+    mm_on = float(getattr(args, "mm_switch_on", 7.0))
     mm_w = getattr(args, "mm_switch_width", None)
     if mm_w is None:
-        mm_w = getattr(args, "mm_cutoff", 1.0)
+        mm_w = getattr(args, "mm_cutoff", 5.0)
     return float(ml_w), mm_on, float(mm_w)
+
+
+def cutoff_parameters_from_args(args) -> "CutoffParameters":
+    """Build :class:`CutoffParameters` from an argparse / md-system namespace."""
+    ml_w, mm_on, mm_w = handoff_widths_from_args(args)
+    complementary = not bool(getattr(args, "no_complementary_handoff", False))
+    return CutoffParameters(
+        ml_switch_width=ml_w,
+        mm_switch_on=mm_on,
+        mm_switch_width=mm_w,
+        complementary_handoff=complementary,
+    )
+
+
+def add_handoff_cutoff_args(parser: argparse.ArgumentParser) -> None:
+    """ML/MM handoff widths (shared by md-system and PyCHARMM MLpot CLIs)."""
+    parser.add_argument(
+        "--ml-switch-width",
+        "--ml-cutoff",
+        dest="ml_switch_width",
+        type=float,
+        default=0.1,
+        help="ML taper width in Å over [mm_switch_on - width, mm_switch_on] (default: 0.1).",
+    )
+    parser.add_argument(
+        "--mm-switch-on",
+        type=float,
+        default=7.0,
+        help="Distance (Å) where ML→0 and MM→1 in complementary handoff (default: 7.0).",
+    )
+    parser.add_argument(
+        "--mm-switch-width",
+        "--mm-cutoff",
+        dest="mm_switch_width",
+        type=float,
+        default=5.0,
+        help="MM outer taper width in Å past mm_switch_on (default: 5.0).",
+    )
+    parser.add_argument(
+        "--no-complementary-handoff",
+        action="store_true",
+        help="Legacy MM window (not complementary with ML taper).",
+    )
 
 
 def _resolve_ml_switch_width(
@@ -78,8 +122,8 @@ class CutoffParameters:
     def __init__(
         self,
         ml_switch_width: float = 0.1,
-        mm_switch_on: float = 5.0,
-        mm_switch_width: float = 1.0,
+        mm_switch_on: float = 7.0,
+        mm_switch_width: float = 5.0,
         *,
         complementary_handoff: bool = True,
         # Deprecated aliases (same semantics as the canonical names above).
@@ -255,7 +299,7 @@ class CutoffParameters:
                 "ml_switch_width", d.get("ml_cutoff", d.get("ml_cutoff_distance", 0.1))
             ),
             mm_switch_on=d["mm_switch_on"],
-            mm_switch_width=d.get("mm_switch_width", d.get("mm_cutoff", 1.0)),
+            mm_switch_width=d.get("mm_switch_width", d.get("mm_cutoff", 5.0)),
             complementary_handoff=d.get("complementary_handoff", True),
         )
 

@@ -29,8 +29,8 @@ def default_cp() -> CutoffParameters:
 def test_cutoff_defaults() -> None:
     cp = CutoffParameters()
     assert cp.ml_switch_width == 0.1
-    assert cp.mm_switch_on == 5.0
-    assert cp.mm_switch_width == 1.0
+    assert cp.mm_switch_on == 7.0
+    assert cp.mm_switch_width == 5.0
     assert cp.complementary_handoff is True
 
 
@@ -158,12 +158,12 @@ def test_legacy_mm_scale_differs_from_complementary(default_cp: CutoffParameters
 
 
 def test_simple_cosine_switches_match_endpoints() -> None:
-    ml_w, mm_on, mm_w = 2.0, 5.0, 1.0
+    ml_w, mm_on, mm_w = 2.0, 7.0, 5.0
     assert ml_switch_simple(2.0, ml_w, mm_on) == pytest.approx(1.0)
-    assert ml_switch_simple(6.0, ml_w, mm_on) == pytest.approx(0.0)
-    assert mm_switch_simple(4.0, mm_on, mm_w) == pytest.approx(0.0)
-    assert mm_switch_simple(5.5, mm_on, mm_w) == pytest.approx(0.5, abs=0.01)
-    assert mm_switch_simple(7.0, mm_on, mm_w) == pytest.approx(1.0)
+    assert ml_switch_simple(8.0, ml_w, mm_on) == pytest.approx(0.0)
+    assert mm_switch_simple(6.0, mm_on, mm_w) == pytest.approx(0.0)
+    assert mm_switch_simple(9.5, mm_on, mm_w) == pytest.approx(0.5, abs=0.01)
+    assert mm_switch_simple(12.0, mm_on, mm_w) == pytest.approx(1.0)
 
 
 def test_gamma_constants_match_calculator_module() -> None:

@@ -112,7 +112,7 @@ def count_near_dimer_pairs(
     n_monomers: int,
     atoms_per_monomer: int | Sequence[int],
     *,
-    mm_switch_on: float = 5.0,
+    mm_switch_on: float = 7.0,
     box_side_A: Optional[float] = None,
     cell: Optional[np.ndarray] = None,
 ) -> dict[str, float | int | bool]:
@@ -154,7 +154,7 @@ def validate_sparse_dimer_cap(
     n_monomers: int,
     atoms_per_monomer: int | Sequence[int],
     *,
-    mm_switch_on: float = 5.0,
+    mm_switch_on: float = 7.0,
     box_side_A: Optional[float] = None,
     max_active_dimers: Optional[int] = None,
 ) -> dict[str, float | int | bool | str]:

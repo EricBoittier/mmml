@@ -140,6 +140,7 @@ def _register_mlpot_context(
     ml_max_active_dimers: int | None = None,
     cubic_box_side_A: float | None = None,
     verbose: bool = False,
+    args: Any | None = None,
 ):
     import ase
 
@@ -161,6 +162,7 @@ def _register_mlpot_context(
         ml_max_active_dimers=ml_max_active_dimers,
         cell=float(cubic_box_side_A) if cubic_box_side_A is not None else None,
         verbose=verbose,
+        args=args,
     )
     if int(n_monomers) > 1:
         from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
@@ -305,6 +307,7 @@ def run_minimize_workflow(args: argparse.Namespace) -> int:
         ml_max_active_dimers=getattr(args, "ml_max_active_dimers", None),
         cubic_box_side_A=box_side,
         verbose=not args.quiet,
+        args=args,
     )
     fix_sel = select_by_resids(fix_resids) if fix_resids else None
     try:
@@ -419,6 +422,7 @@ def run_dynamics_workflow(
         ml_max_active_dimers=getattr(args, "ml_max_active_dimers", None),
         cubic_box_side_A=box_side,
         verbose=not args.quiet,
+        args=args,
     )
     show_energy = resolve_show_energy(args)
 
