@@ -38,6 +38,7 @@ def _mock_pycharmm_module(n_atoms: int = 4):
         }
     )
     mod.select.find.return_value = 0
+    mod.select.none_selection.return_value = (False,) * n_atoms
     sel = MagicMock()
     sel.get_n_selected.return_value = 2
     sel.store.return_value = "highf"

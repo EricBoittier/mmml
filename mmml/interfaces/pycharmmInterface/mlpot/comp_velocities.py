@@ -84,7 +84,7 @@ def build_high_force_selection(
 ) -> tuple[str, int]:
     """Store atoms with ``|F| >= min_force``; return ``(store_name, n_selected)``."""
     pycharmm = _import_pycharmm()
-    import pycharmm.select as select
+    select = pycharmm.select
 
     if select.find(store_name) > 0:
         select.delete_stored_selection(store_name.upper())
@@ -104,7 +104,7 @@ def build_high_force_selection(
 
 def unstore_selection(store_name: str) -> None:
     pycharmm = _import_pycharmm()
-    import pycharmm.select as select
+    select = pycharmm.select
 
     if select.find(store_name) > 0:
         select.delete_stored_selection(store_name.upper())
