@@ -320,28 +320,16 @@ def restore_workflow_nbonds(
     *,
     nbxmod: int = DEFAULT_WORKFLOW_NBXMOD,
 ) -> None:
-    """Restore workflow nonbond settings after bonded rescue SD.
+    """No-op after overlap rescue when MLpot is (re-)registered.
 
-    Re-applies NBXMOD and nonbond flags only. Does not rebuild crystal/vacuum
-    (``prepare_charmm_pbc`` / ``prepare_charmm_vacuum`` + ``update_bnbnd`` can
-    segfault in ``upinb`` after dynamics).
+    Rescue minimization temporarily uses ``NBXMOD 2`` via
+    :func:`apply_recovery_nbonds`. Switching back to production ``NBXMOD`` rebuilds
+    exclusion lists through ``update_bnbnd`` / ``UpdateNonBondedScript`` → ``upinb``,
+    which segfaults once MLpot has established ML exclusions (even after
+    ``unset_mlpot``). Hybrid MLpot MD keeps CHARMM VDW/ELEC off on ML atoms via
+    BLOCK, so staying on ``NBXMOD 2`` after rescue is safe.
     """
-    from mmml.interfaces.pycharmmInterface.nbonds_config import (
-        pbc_nbond_kwargs,
-        vacuum_nbond_kwargs,
-    )
-
-    pycharmm = _import_pycharmm()
-    pycharmm.nbonds.update_bnbnd()
-    if ctx.use_pbc and ctx.cubic_box_side_A is not None:
-        cutnb = 18.0
-        cutim = cutnb + 4.0
-        pycharmm.UpdateNonBondedScript(
-            **pbc_nbond_kwargs(nbxmod=nbxmod, cutnb=cutnb, cutim=cutim)
-        ).run()
-    else:
-        pycharmm.nbonds.set_imgfrq(-1)
-        pycharmm.UpdateNonBondedScript(**vacuum_nbond_kwargs(nbxmod=nbxmod)).run()
+    del ctx, nbxmod  # API kept for callers; intentionally no CHARMM nbond rebuild.
 
 
 def refresh_nbonds_after_mlpot_pbc(

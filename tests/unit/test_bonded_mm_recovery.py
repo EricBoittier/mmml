@@ -308,7 +308,7 @@ def test_reregister_mlpot_reattaches_without_new_mlpot_or_nbond_rebuild():
     mlpot.reattach_mlpot.assert_called_once_with()
 
 
-def test_restore_workflow_nbonds_uses_script_only():
+def test_restore_workflow_nbonds_skips_nbond_rebuild():
     from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext, restore_workflow_nbonds
 
     ctx = MlpotContext(
@@ -322,18 +322,12 @@ def test_restore_workflow_nbonds_uses_script_only():
     with patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup._import_pycharmm",
         return_value=mock_py,
-    ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.refresh_nbonds_after_mlpot_pbc",
-    ) as refresh_pbc, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.refresh_nbonds_after_mlpot",
-    ) as refresh_vac:
+    ):
         restore_workflow_nbonds(ctx)
 
-    refresh_pbc.assert_not_called()
-    refresh_vac.assert_not_called()
-    mock_py.nbonds.update_bnbnd.assert_called_once()
-    mock_py.nbonds.set_imgfrq.assert_called_once_with(-1)
-    mock_py.UpdateNonBondedScript.assert_called_once()
+    mock_py.nbonds.update_bnbnd.assert_not_called()
+    mock_py.nbonds.set_imgfrq.assert_not_called()
+    mock_py.UpdateNonBondedScript.assert_not_called()
 
 
 def test_maybe_run_bonded_mm_mini_skips_when_grms_ok():

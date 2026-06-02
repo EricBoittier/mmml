@@ -39,8 +39,9 @@ END
 def apply_bonded_vdw_recovery_block() -> None:
     """Bonded MM + VDW for rescue SD; ELEC off (MLpot handles electrostatics).
 
-    Pair with ``NBXMOD 2`` (only 1-2 exclusions) during rescue SD; restore ``NBXMOD 5``
-    afterward via :func:`restore_workflow_nbonds`.
+    Pair with ``NBXMOD 2`` (only 1-2 exclusions) during rescue SD. Production
+    ``NBXMOD 5`` is not restored afterward — :func:`restore_workflow_nbonds` is a
+    no-op so CHARMM does not rebuild ML exclusion lists (``upinb`` segfault).
     """
     pycharmm = _import_pycharmm()
     block = """BLOCK

@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 _xla_gpu_warmed = False
 _ptxas_path_configured = False
+_jax_cuda_runtime_libs_configured = False
 
 
 def _site_package_roots() -> list[Path]:
@@ -44,6 +45,28 @@ def _site_package_roots() -> list[Path]:
             seen.add(resolved)
             unique.append(resolved)
     return unique
+
+
+@lru_cache(maxsize=1)
+def find_bundled_nvidia_lib_dirs() -> list[Path]:
+    """Wheel-shipped NVIDIA runtime libs (cuDNN, cuBLAS, …) for JAX CUDA plugins."""
+    rel_libs = (
+        "nvidia/cudnn/lib",
+        "nvidia/cu13/lib",
+        "nvidia/cublas/lib",
+        "nvidia/cuda_nvrtc/lib",
+        "nvidia/cuda_cupti/lib",
+        "nvidia/nccl/lib",
+    )
+    dirs: list[Path] = []
+    seen: set[Path] = set()
+    for root in _site_package_roots():
+        for rel in rel_libs:
+            candidate = (root / rel).resolve()
+            if candidate.is_dir() and candidate not in seen:
+                seen.add(candidate)
+                dirs.append(candidate)
+    return dirs
 
 
 @lru_cache(maxsize=1)
@@ -69,8 +92,38 @@ def find_bundled_ptxas_dir() -> Path | None:
     return None
 
 
+def ensure_jax_cuda_runtime_libs(*, quiet: bool = False) -> list[str]:
+    """Prefer pip-shipped cuDNN/cuBLAS over older system modules on ``LD_LIBRARY_PATH``.
+
+    JAX CUDA 13 rejects cuDNN < 9.10.1 on multi-GPU nodes when cuBLAS >= 12.9 is
+    visible. ``uv sync --extra gpu-cuda13`` installs ``nvidia-cudnn-cu13`` under
+    ``site-packages``, but cluster ``module load cudnn/9.4`` often wins unless these
+    directories are prepended *after* MPI/CHARMM library setup as well.
+    """
+    global _jax_cuda_runtime_libs_configured
+    bundled = [str(path) for path in find_bundled_nvidia_lib_dirs()]
+    if not bundled:
+        return []
+
+    bundled_set = set(bundled)
+    cur_parts = [
+        part
+        for part in os.environ.get("LD_LIBRARY_PATH", "").split(os.pathsep)
+        if part and part not in bundled_set
+    ]
+    os.environ["LD_LIBRARY_PATH"] = os.pathsep.join(bundled + cur_parts)
+    _jax_cuda_runtime_libs_configured = True
+    if not quiet and not os.environ.get("MMML_QUIET", "").strip().lower() in (
+        "1",
+        "yes",
+        "true",
+    ):
+        logger.debug("Prepended JAX CUDA runtime libs to LD_LIBRARY_PATH: %s", bundled)
+    return bundled
+
+
 def ensure_jax_cuda_toolchain(*, required: bool = False) -> bool:
-    """Put bundled ``ptxas`` on ``PATH`` for XLA GPU compilation.
+    """Put bundled CUDA runtime libs and ``ptxas`` on ``PATH`` for XLA GPU use.
 
     JAX CUDA wheels ship ``ptxas`` under ``site-packages/nvidia/cu13/bin`` (or
     ``cu12``). XLA fails with ``INTERNAL: Failed to launch ptxas`` when that
@@ -79,6 +132,7 @@ def ensure_jax_cuda_toolchain(*, required: bool = False) -> bool:
     Returns True when ``ptxas`` is available on ``PATH`` after this call.
     """
     global _ptxas_path_configured
+    ensure_jax_cuda_runtime_libs(quiet=True)
     if shutil.which("ptxas"):
         _ptxas_path_configured = True
         return True
