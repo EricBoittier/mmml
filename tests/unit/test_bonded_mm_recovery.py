@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import ANY, MagicMock, patch
 
 import pytest
+import numpy as np
 
 from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import MmStrainBaseline
 from mmml.interfaces.pycharmmInterface.mlpot.dynamics import charmm_internal_energy_kcalmol
@@ -281,6 +282,75 @@ def test_with_mlpot_detached_unset_and_reregister():
     ctx.unset.assert_called_once()
     ctx.reregister_mlpot.assert_called_once()
     assert result == 42
+
+
+def test_reregister_mlpot_does_not_rebuild_crystal_or_vacuum_nbonds():
+    from contextlib import nullcontext
+
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+
+    ctx = MlpotContext(
+        mlpot=MagicMock(),
+        pyCModel=MagicMock(),
+        params=None,
+        model=None,
+        ml_selection=MagicMock(),
+        ml_Z=np.array([6, 1, 1, 1], dtype=int),
+        use_pbc=True,
+        cubic_box_side_A=31.0,
+    )
+    mock_py = MagicMock()
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup._import_pycharmm",
+        return_value=mock_py,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_mlpot_energy_block",
+        return_value="all",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.refresh_nbonds_after_mlpot_pbc",
+    ) as refresh_pbc, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.refresh_nbonds_after_mlpot",
+    ) as refresh_vac, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.physnet_ml_atomic_numbers",
+        return_value=[6, 1, 1, 1],
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
+        return_value=nullcontext(),
+    ):
+        ctx.reregister_mlpot()
+
+    refresh_pbc.assert_not_called()
+    refresh_vac.assert_not_called()
+    mock_py.MLpot.assert_called_once()
+    mock_py.UpdateNonBondedScript.assert_called_once()
+
+
+def test_restore_workflow_nbonds_uses_script_only():
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext, restore_workflow_nbonds
+
+    ctx = MlpotContext(
+        mlpot=MagicMock(),
+        pyCModel=MagicMock(),
+        params=None,
+        model=None,
+        use_pbc=False,
+    )
+    mock_py = MagicMock()
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup._import_pycharmm",
+        return_value=mock_py,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.refresh_nbonds_after_mlpot_pbc",
+    ) as refresh_pbc, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.refresh_nbonds_after_mlpot",
+    ) as refresh_vac:
+        restore_workflow_nbonds(ctx)
+
+    refresh_pbc.assert_not_called()
+    refresh_vac.assert_not_called()
+    mock_py.nbonds.update_bnbnd.assert_called_once()
+    mock_py.nbonds.set_imgfrq.assert_called_once_with(-1)
+    mock_py.UpdateNonBondedScript.assert_called_once()
 
 
 def test_maybe_run_bonded_mm_mini_skips_when_grms_ok():
