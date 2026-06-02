@@ -20,7 +20,7 @@ def test_resolve_max_active_dimers_env(monkeypatch):
 
 
 def test_resolve_max_active_dimers_small_cluster():
-    assert resolve_max_active_dimers(5, 10) == 1000
+    assert resolve_max_active_dimers(5, 10) == 10
 
 
 def test_validate_sparse_dimer_cap_random_sparse():

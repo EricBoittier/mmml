@@ -27,6 +27,10 @@ import re
 import sys
 from pathlib import Path
 
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
 
 def _parse_composition(s: str) -> tuple[int, int]:
     m = re.match(r"^([A-Za-z0-9]+):(\d+)$", s.strip())
