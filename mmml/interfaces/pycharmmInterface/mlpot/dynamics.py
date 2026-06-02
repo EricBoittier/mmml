@@ -770,6 +770,9 @@ def run_dynamics_with_io(
             chunk_kw["new"] = False
             chunk_kw["start"] = False
             chunk_kw["restart"] = False
+            # CHARMM keeps iunrea from the prior chunk; disable restart read
+            # so in-memory continuation does not hit READYN on a closed unit.
+            chunk_kw["iunrea"] = -1
 
         last_dyn = _run_dynamics_chunk(chunk_kw, chunk_io)
         steps_done += chunk_nstep
