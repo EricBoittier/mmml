@@ -125,7 +125,9 @@ def test_register_mlpot_context_forwards_cell():
 
 def test_warmup_decomposed_mlpot_passes_box_when_cell_set():
     z = np.zeros(8, dtype=int)
-    model = DecomposedMlpotModel(MagicMock(), CutoffParameters(), 2, z, cell=20.0)
+    model = DecomposedMlpotModel(
+        MagicMock(), CutoffParameters(), 2, z, cell=20.0, do_mm=False
+    )
     r = np.zeros((8, 3), dtype=float)
 
     with patch(
@@ -139,6 +141,31 @@ def test_warmup_decomposed_mlpot_passes_box_when_cell_set():
     box = mock_warmup.call_args.kwargs["box"]
     assert box is not None
     assert float(box[0, 0]) == pytest.approx(20.0)
+
+
+def test_warmup_decomposed_mlpot_do_mm_uses_get_update_fn():
+    z = np.zeros(8, dtype=int)
+    get_update_fn = MagicMock()
+    model = DecomposedMlpotModel(
+        MagicMock(),
+        CutoffParameters(),
+        2,
+        z,
+        cell=20.0,
+        do_mm=True,
+        get_update_fn=get_update_fn,
+    )
+    r = np.zeros((8, 3), dtype=float)
+
+    with patch(
+        "mmml.utils.jax_gpu_warmup.warmup_hybrid_spherical_cutoff",
+    ) as mock_warmup, patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+    ):
+        warmup_decomposed_mlpot(model, r, verbose=False)
+
+    get_update_fn.assert_called_once()
+    mock_warmup.assert_not_called()
 
 
 def test_charmm_ctypes_scalar_accepts_int_and_ctypes_wrapper():
