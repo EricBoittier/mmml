@@ -721,3 +721,17 @@ def test_run_dynamics_chunk_strips_stale_iunwri(tmp_path):
         )
     assert "iunwri" not in captured[0]
     assert "iunrea" not in captured[0]
+
+
+def test_prepare_overlap_chunk_skips_upinb_when_mlpot_active():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _prepare_overlap_chunk_after_restart,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+
+    ctx = mock.Mock(spec=MlpotContext)
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
+    ) as imp:
+        _prepare_overlap_chunk_after_restart(ctx)
+    imp.assert_not_called()
