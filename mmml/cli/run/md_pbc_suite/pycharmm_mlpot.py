@@ -173,8 +173,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=None,
         metavar="N",
         help=(
-            "Chunk PhysNet monomer/dimer batches (default: auto for large clusters; "
-            "or MMML_MLPOT_ML_BATCH_SIZE). Lowers JAX compile memory on CPU."
+            "Chunk PhysNet monomer/dimer batches (auto: 256 on GPU / 64 on CPU for n>=40; "
+            "or MMML_MLPOT_ML_BATCH_SIZE)."
+        ),
+    )
+    parser.add_argument(
+        "--ml-gpu-count",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "Parallel PhysNet chunks on N local GPUs (default 1; or MMML_MLPOT_N_GPUS). "
+            "Use with CUDA_VISIBLE_DEVICES."
         ),
     )
     return parser.parse_args(argv)

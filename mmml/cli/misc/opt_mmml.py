@@ -50,6 +50,9 @@ from mmml.cli.base import (
     setup_ase_imports,
     setup_mmml_imports,
 )
+from mmml.interfaces.pycharmmInterface.mlpot_gpu import (
+    resolve_ml_gpu_count as _resolve_ml_gpu_count,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -208,6 +211,13 @@ def parse_args() -> argparse.Namespace:
         default=None,
         metavar="N",
         help="Max systems per ML forward pass. When set, chunk large batches to reduce memory.",
+    )
+    parser.add_argument(
+        "--ml-gpu-count",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Parallel PhysNet chunks on N local GPUs (default 1; or MMML_MLPOT_N_GPUS).",
     )
     parser.add_argument(
         "--debug",
@@ -397,6 +407,7 @@ def build_calculator_factory(
         ml_force_conversion_factor=1,
         cell=args.cell,
         ml_batch_size=getattr(args, "ml_batch_size", None),
+        ml_gpu_count=_resolve_ml_gpu_count(getattr(args, "ml_gpu_count", None)),
         mm_r_min=getattr(args, "mm_r_min", None),
     )
 

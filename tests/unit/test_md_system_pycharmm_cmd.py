@@ -52,6 +52,7 @@ def _pycharmm_args(**overrides) -> argparse.Namespace:
         charmm_tolenr=0.001,
         charmm_tolgrd=0.001,
         ml_batch_size=None,
+        ml_gpu_count=None,
         no_echeck=False,
         skip_energy_show=False,
         show_energy=None,
@@ -95,6 +96,13 @@ def test_build_pycharmm_command_includes_residue_without_composition():
     assert cmd[idx + 1] == "ACO"
     assert "--composition" not in cmd
     assert "--n-molecules" in cmd
+
+
+def test_build_pycharmm_command_includes_ml_gpu_count_when_set():
+    cmd = build_pycharmm_command(_pycharmm_args(ml_gpu_count=2))
+    assert "--ml-gpu-count" in cmd
+    idx = cmd.index("--ml-gpu-count")
+    assert cmd[idx + 1] == "2"
 
 
 def test_build_pycharmm_command_includes_fix_resids_when_set():
