@@ -300,7 +300,10 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
     echeck = resolve_echeck_for_cluster(args, n_atoms=n_atoms, n_monomers=n_mol)
     mini_nstep = resolve_mini_nstep(args, n_mol)
     overlap_cfg = resolve_dynamics_overlap_config(
-        args, n_monomers=n_mol, use_pbc=use_pbc
+        args,
+        n_monomers=n_mol,
+        use_pbc=use_pbc,
+        fallback_box_side_A=box_side if use_pbc else None,
     )
     if overlap_cfg.enabled and not args.quiet:
         print(

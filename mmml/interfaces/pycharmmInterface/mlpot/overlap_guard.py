@@ -23,6 +23,7 @@ class DynamicsOverlapConfig:
     check_interval: int = 50
     n_monomers: int = 1
     use_pbc: bool = False
+    fallback_box_side_A: float | None = None
 
     @property
     def enabled(self) -> bool:
@@ -67,6 +68,7 @@ def resolve_dynamics_overlap_config(
     *,
     n_monomers: int,
     use_pbc: bool,
+    fallback_box_side_A: float | None = None,
 ) -> DynamicsOverlapConfig:
     action = str(
         getattr(args, "dynamics_overlap_action", "error")
@@ -79,12 +81,21 @@ def resolve_dynamics_overlap_config(
         min_dist = getattr(args, "min_intermonomer_atom_distance", 1.5)
 
     interval = int(getattr(args, "dynamics_overlap_check_interval", 50))
+    if use_pbc and fallback_box_side_A is None:
+        box_size = getattr(args, "box_size", None)
+        if box_size is not None:
+            fallback_box_side_A = float(box_size)
     return DynamicsOverlapConfig(
         action=action,  # type: ignore[arg-type]
         min_distance_A=float(min_dist),
         check_interval=max(1, interval),
         n_monomers=int(n_monomers),
         use_pbc=bool(use_pbc),
+        fallback_box_side_A=(
+            float(fallback_box_side_A)
+            if use_pbc and fallback_box_side_A is not None and float(fallback_box_side_A) > 0.0
+            else None
+        ),
     )
 
 
@@ -114,14 +125,21 @@ def _assert_no_intermonomer_atom_overlap_fn():
     return mod.assert_no_intermonomer_atom_overlap
 
 
-def _overlap_cell(*, use_pbc: bool) -> float | np.ndarray | None:
+def _overlap_cell(
+    *,
+    use_pbc: bool,
+    fallback_box_side_A: float | None = None,
+) -> float | np.ndarray | None:
     if not use_pbc:
         return None
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
-        get_charmm_cubic_box_side_A,
+        resolve_charmm_cubic_box_side_A,
     )
 
-    return float(get_charmm_cubic_box_side_A())
+    side, _ = resolve_charmm_cubic_box_side_A(
+        fallback_side_A=fallback_box_side_A,
+    )
+    return float(side)
 
 
 def check_dynamics_overlap(
@@ -141,7 +159,10 @@ def check_dynamics_overlap(
     label = context if step is None else f"{context} at step {step}"
     pos = get_charmm_positions_array()
     offsets = monomer_offsets(int(pos.shape[0]), config.n_monomers)
-    cell = _overlap_cell(use_pbc=config.use_pbc)
+    cell = _overlap_cell(
+        use_pbc=config.use_pbc,
+        fallback_box_side_A=config.fallback_box_side_A,
+    )
     assert_no_intermonomer_atom_overlap = _assert_no_intermonomer_atom_overlap_fn()
 
     if config.action == "error":
