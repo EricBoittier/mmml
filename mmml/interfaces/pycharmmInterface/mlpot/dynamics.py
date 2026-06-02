@@ -1029,31 +1029,25 @@ def _harmonize_overlap_chunk_frequencies(
 def _prepare_overlap_chunk_after_restart(
     mlpot_ctx: Optional["MlpotContext"],
 ) -> None:
-    """Rebuild pair/image lists after ``READYN`` before the next overlap ``dyna`` chunk."""
+    """Stabilize CHARMM before the next overlap ``dyna`` chunk that will ``READYN``.
+
+    With MLpot registered, do **not** call ``update_bnbnd`` (``upinb``) — ML exclusion
+    lists are already established and rebuilding them mid-workflow segfaults after
+    long MD (same as ``reregister_mlpot`` / ``refresh_nbonds_after_mlpot*``).
+    ``READYN`` on the scratch restart restores coordinates, velocities, and lists.
+    """
+    if mlpot_ctx is not None:
+        return
+
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
 
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import apply_pbc_nbonds
-    from mmml.interfaces.pycharmmInterface.nbonds_config import (
-        pbc_nbond_kwargs,
-        vacuum_nbond_kwargs,
-    )
+    from mmml.interfaces.pycharmmInterface.nbonds_config import vacuum_nbond_kwargs
 
     pycharmm = _import_pycharmm_modules()[0]
     with charmm_relaxed_bomlev():
         pycharmm.nbonds.update_bnbnd()
-        if (
-            mlpot_ctx is not None
-            and mlpot_ctx.use_pbc
-            and mlpot_ctx.cubic_box_side_A is not None
-        ):
-            cutnb = 18.0
-            pycharmm.UpdateNonBondedScript(
-                **pbc_nbond_kwargs(nbxmod=5, cutnb=cutnb, cutim=cutnb + 4.0)
-            ).run()
-            apply_pbc_nbonds(nbxmod=5, cutnb=cutnb)
-        else:
-            pycharmm.UpdateNonBondedScript(**vacuum_nbond_kwargs(nbxmod=5)).run()
+        pycharmm.UpdateNonBondedScript(**vacuum_nbond_kwargs(nbxmod=5)).run()
         pycharmm.lingo.charmm_script("ENER")
         pycharmm.lingo.charmm_script("UPDATE")
 
