@@ -32,11 +32,26 @@ def rewrite_dynamics_restart_from_current_state(
     *,
     write_unit: int = 92,
 ) -> None:
-    """No-op: dynamics restart files are only written by ``WRIDYN`` during ``dyna``.
+    """Write a ``WRITe restart`` snapshot from the current in-memory CHARMM state.
 
-    Same-process stage handoffs use in-memory coordinates (see ``memory_handoff``).
+    Used before NPT stages after ``memory_handoff`` (e.g. post-heat bonded-MM mini)
+    so overlap-chunk ``READYN`` has a valid restart (coords, velocities, crystal).
     """
-    _ = (restart_path, write_unit)
+    if restart_path is None:
+        return
+    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import pycharmm
+
+    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+
+    path = Path(restart_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with charmm_relaxed_bomlev():
+        pycharmm.lingo.charmm_script(
+            f"open write form unit {int(write_unit)} name {path}\n"
+            f"write restart unit {int(write_unit)}\n"
+            f"close unit {int(write_unit)}\n"
+        )
 
 
 def record_mm_baseline_strain(*, verbose: bool = False) -> MmStrainBaseline | None:

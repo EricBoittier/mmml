@@ -1081,8 +1081,12 @@ def _sync_dynamics_io_units(
 ) -> None:
     """Drop restart/trajectory unit numbers not backed by opened CharmmFile handles."""
     for key in ("iunrea", "iunwri", "iuncrd", "iunvel"):
-        if key not in iokw:
-            kw.pop(key, None)
+        if key in iokw:
+            continue
+        if key == "iunrea" and int(kw.get("iunrea", 0)) == -1:
+            # Explicit no-read: keep in ``dyna`` so CHARMM does not reuse a stale unit.
+            continue
+        kw.pop(key, None)
 
 
 def _refresh_charmm_dynamics_rng(*, base: int | None, salt: int) -> None:

@@ -505,6 +505,46 @@ def test_harmonize_dynamics_frequency_for_remainder_chunk():
     assert kw3["nsavc"] == 20
 
 
+def test_sync_dynamics_io_units_keeps_explicit_iunrea_minus_one():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _sync_dynamics_io_units
+
+    kw = {"iunrea": -1, "nstep": 50, "restart": False}
+    _sync_dynamics_io_units(kw, {"iunwri": 2, "iuncrd": 1})
+    assert kw["iunrea"] == -1
+    assert "iunwri" not in kw
+
+
+def test_run_dynamics_chunk_keeps_iunrea_minus_one_for_dynamics():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        CharmmTrajectoryFiles,
+        _run_dynamics_chunk,
+    )
+
+    captured: list[dict] = []
+
+    def fake_run(kw):
+        captured.append(dict(kw))
+        return None
+
+    io = CharmmTrajectoryFiles(restart_write=__import__("pathlib").Path("/tmp/out.res"))
+    with mock.patch.object(
+        io,
+        "open_for_run",
+        return_value=([], {"iunwri": 2}),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.run_dynamics",
+        side_effect=fake_run,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_charmm_dynamics_rng",
+    ):
+        _run_dynamics_chunk(
+            {"nstep": 50, "restart": False, "iunrea": -1},
+            io,
+        )
+
+    assert captured[0]["iunrea"] == -1
+
+
 def test_ensure_nsavc_below_nstep_clamps_full_run():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _ensure_nsavc_below_nstep
 
