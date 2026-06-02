@@ -27,14 +27,11 @@ def cubic_box_length_from_geometry(
     return max(span + 2.0 * float(pad), 2.0 * float(ml_cutoff) + float(pad))
 
 
-def get_charmm_cubic_box_side_A() -> float:
-    """Read the current cubic CHARMM cell side length (Å) from ``pbound_get_size``."""
+def _read_charmm_box_sides_A() -> tuple[float, float, float]:
+    """Read CHARMM periodic box lengths (Å) via ``pbound_get_size``."""
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401 — CHARMM env
     import pycharmm.lib as lib
 
-    is_cubic = lib.charmm.pbound_is_cubic_box()
-    if _charmm_ctypes_scalar(is_cubic) != 1:
-        raise RuntimeError("CHARMM box is not cubic; MLpot MIC sync expects a cubic cell")
     size_x = ctypes.c_double(0.0)
     size_y = ctypes.c_double(0.0)
     size_z = ctypes.c_double(0.0)
@@ -43,14 +40,55 @@ def get_charmm_cubic_box_side_A() -> float:
         ctypes.byref(size_y),
         ctypes.byref(size_z),
     )
-    lx = _charmm_ctypes_scalar(size_x)
-    ly = _charmm_ctypes_scalar(size_y)
-    lz = _charmm_ctypes_scalar(size_z)
+    return (
+        _charmm_ctypes_scalar(size_x),
+        _charmm_ctypes_scalar(size_y),
+        _charmm_ctypes_scalar(size_z),
+    )
+
+
+def _is_cubic_box_sides(
+    lx: float,
+    ly: float,
+    lz: float,
+    *,
+    rel_tol: float = 1e-3,
+) -> bool:
     if min(lx, ly, lz) <= 0.0:
+        return False
+    mean = (lx + ly + lz) / 3.0
+    return max(abs(lx - mean), abs(ly - mean), abs(lz - mean)) <= rel_tol * mean
+
+
+def resolve_charmm_cubic_box_side_A(
+    *,
+    fallback_side_A: float | None = None,
+    rel_tol: float = 1e-3,
+) -> tuple[float, bool]:
+    """Return ``(side, used_fallback)`` for the current CHARMM cubic cell.
+
+    Uses box side lengths rather than ``pbound_is_cubic_box()`` (that flag can be
+    unset between dynamics stages even for a cubic cell).
+    """
+    lx, ly, lz = _read_charmm_box_sides_A()
+    if _is_cubic_box_sides(lx, ly, lz, rel_tol=rel_tol):
+        return (lx + ly + lz) / 3.0, False
+    if fallback_side_A is not None and float(fallback_side_A) > 0.0:
+        return float(fallback_side_A), True
+    if min(lx, ly, lz) > 0.0:
         raise RuntimeError(
-            f"CHARMM cubic box side must be > 0, got ({lx}, {ly}, {lz})"
+            "CHARMM box is not cubic; MLpot MIC sync expects a cubic cell "
+            f"(got {lx:.4f}, {ly:.4f}, {lz:.4f} Å)"
         )
-    return lx
+    raise RuntimeError(
+        "CHARMM cubic box side unavailable (pbound_get_size returned non-positive lengths)"
+    )
+
+
+def get_charmm_cubic_box_side_A() -> float:
+    """Read the current cubic CHARMM cell side length (Å) from ``pbound_get_size``."""
+    side, _ = resolve_charmm_cubic_box_side_A()
+    return side
 
 
 def cubic_box_matrix_from_side(side_A: float) -> np.ndarray:

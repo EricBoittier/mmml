@@ -88,11 +88,13 @@ class DecomposedMlpotCalculator:
         if self._cell:
             from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
                 cubic_box_matrix_from_side,
-                get_charmm_cubic_box_side_A,
+                resolve_charmm_cubic_box_side_A,
             )
 
             try:
-                side = get_charmm_cubic_box_side_A()
+                side, _ = resolve_charmm_cubic_box_side_A(
+                    fallback_side_A=float(self._cell) if self._cell else None,
+                )
                 self._cell = side
             except (KeyboardInterrupt, SystemExit):
                 raise
