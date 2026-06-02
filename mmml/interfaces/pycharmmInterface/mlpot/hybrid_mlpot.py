@@ -161,6 +161,16 @@ def build_decomposed_mlpot_model(
     max_atoms = max(per) * 2
     batch_size = resolve_ml_batch_size(int(n_monomers), ml_batch_size)
     gpu_count = resolve_ml_gpu_count(ml_gpu_count)
+    from mmml.interfaces.pycharmmInterface.jax_device_policy import mlpot_local_gpu_count
+
+    local_gpus = mlpot_local_gpu_count()
+    if local_gpus > 1 and gpu_count <= 1 and verbose:
+        print(
+            f"Decomposed MLpot: {local_gpus} JAX GPUs visible but ml_gpu_count=1 "
+            f"(only GPU:0 runs PhysNet). Use --ml-gpu-count {local_gpus} "
+            f"and enough chunks (--ml-batch-size 128-256 for DCM:90).",
+            flush=True,
+        )
     if verbose and batch_size is not None:
         print(
             f"Decomposed MLpot: ml_batch_size={batch_size} "
