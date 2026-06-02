@@ -91,8 +91,13 @@ class DecomposedMlpotCalculator:
                 get_charmm_cubic_box_side_A,
             )
 
-            side = get_charmm_cubic_box_side_A()
-            self._cell = side
+            try:
+                side = get_charmm_cubic_box_side_A()
+                self._cell = side
+            except (KeyboardInterrupt, SystemExit):
+                raise
+            except Exception:
+                side = float(self._cell)
             box = jnp.asarray(cubic_box_matrix_from_side(side))
         from mmml.interfaces.pycharmmInterface.jax_device_policy import mlpot_jax_device_context
 

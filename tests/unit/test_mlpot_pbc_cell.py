@@ -140,6 +140,14 @@ def test_warmup_decomposed_mlpot_passes_box_when_cell_set():
     assert float(box[0, 0]) == pytest.approx(20.0)
 
 
+def test_charmm_ctypes_scalar_accepts_int_and_ctypes_wrapper():
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import _charmm_ctypes_scalar
+
+    assert _charmm_ctypes_scalar(1) == pytest.approx(1.0)
+    wrapper = MagicMock(value=39.5)
+    assert _charmm_ctypes_scalar(wrapper) == pytest.approx(39.5)
+
+
 def test_cubic_box_matrix_from_side():
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import cubic_box_matrix_from_side
 
