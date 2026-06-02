@@ -182,6 +182,8 @@ def test_run_dynamics_with_io_chunks_and_checks(tmp_path):
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
     ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=pos_ok,
     ):
@@ -193,6 +195,8 @@ def test_run_dynamics_with_io_chunks_and_checks(tmp_path):
                 "restart": True,
                 "iunrea": 3,
                 "firstt": 240.0,
+                "ihbfrq": 50,
+                "imgfrq": 50,
             },
             io,
             overlap=cfg,
@@ -241,6 +245,8 @@ def test_overlap_memory_handoff_chunks_scratch_restart_handoff(tmp_path):
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=pos_ok,
@@ -297,6 +303,8 @@ def test_overlap_cleans_stale_slots_at_start(tmp_path):
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         return_value=mock.Mock(),
     ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=pos_ok,
     ):
@@ -349,6 +357,25 @@ def test_overlap_chunk_io_alternate_scratch_and_final_write(tmp_path):
     assert c2.restart_read == slot_b
     assert c2.restart_write == equi
     assert c2.trajectory == io.trajectory
+
+
+def test_harmonize_dynamics_frequency_for_remainder_chunk():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _harmonize_dynamics_frequency,
+        _harmonize_overlap_chunk_frequencies,
+    )
+
+    assert _harmonize_dynamics_frequency(50, 40) == 40
+    assert _harmonize_dynamics_frequency(500, 40) == 40
+    assert _harmonize_dynamics_frequency(50, 50) == 50
+    assert _harmonize_dynamics_frequency(25, 50) == 25
+
+    kw = {"nstep": 40, "ihbfrq": 50, "imgfrq": 50, "isvfrq": 500, "inbfrq": -1}
+    _harmonize_overlap_chunk_frequencies(kw, 40)
+    assert kw["ihbfrq"] == 40
+    assert kw["imgfrq"] == 40
+    assert kw["isvfrq"] == 40
+    assert kw["inbfrq"] == -1
 
 
 def test_run_dynamics_chunk_strips_stale_iunwri(tmp_path):
