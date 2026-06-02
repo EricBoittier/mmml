@@ -323,6 +323,7 @@ def setup_calculator(
     ensemble: str = "nve",
     ml_sparse_dimers: bool = True,
     ml_batch_size: Optional[int] = None,
+    ml_gpu_count: int = 1,
     mm_r_min: Optional[float] = None,
     jax_md_capacity_multiplier: float = 1.25,
     jax_md_capacity_growth_factor: float = 1.5,
@@ -357,6 +358,8 @@ def setup_calculator(
             mm_switch_on COM-COM distance. Saves compute in dilute systems.
         ml_batch_size: Max systems per ML forward pass. When None, process all
             monomers+dimers in one batch. Set to reduce memory for large systems.
+        ml_gpu_count: Parallel PhysNet chunks across this many local JAX GPUs
+            (default 1). Use with ``CUDA_VISIBLE_DEVICES`` and ``MMML_MLPOT_N_GPUS``.
         mm_r_min: Optional inner cutoff (Å) for MM neighbor list. Pairs with dimer
             COM distance < mm_r_min are excluded. Defaults: complementary_handoff=False
             -> mm_switch_on * 0.9; complementary_handoff=True -> (mm_switch_on - ml_switch_width) * 0.9
@@ -1207,6 +1210,12 @@ def setup_calculator(
         _chunk_size = ml_batch_size
         _do_chunked = _chunk_size is not None and _effective_batch_size > _chunk_size
         _n_chunks = int(np.ceil(_effective_batch_size / _chunk_size)) if (_chunk_size and _do_chunked) else 1
+        from mmml.interfaces.pycharmmInterface.mlpot_gpu import (
+            effective_ml_gpu_count,
+            run_chunked_model_apply,
+        )
+
+        _ml_n_gpus = effective_ml_gpu_count(ml_gpu_count, n_chunks=_n_chunks)
 
         def apply_model(
             atomic_numbers: Array,  # Shape: (batch_size * num_atoms,)
@@ -1225,32 +1234,53 @@ def setup_calculator(
                 Z_chunks = Z_pad.reshape(_n_chunks, _chunk_size, max_atoms)
                 N_chunks = N_pad.reshape(_n_chunks, _chunk_size)
 
-                def process_chunk(i):
-                    chunk_data = {"R": R_chunks[i], "Z": Z_chunks[i], "N": N_chunks[i]}
-                    chunk_batches = prepare_batches_md(chunk_data, batch_size=_chunk_size, num_atoms=max_atoms)[0]
+                def apply_one_chunk(R_c, Z_c, N_c):
+                    chunk_data = {"R": R_c, "Z": Z_c, "N": N_c}
+                    chunk_batches = prepare_batches_md(
+                        chunk_data, batch_size=_chunk_size, num_atoms=max_atoms
+                    )[0]
                     if is_spooky_model:
                         am = chunk_batches["atom_mask"].astype(jnp.float32)
                         out = MODEL.apply(
-                            params, atomic_numbers=chunk_batches["Z"], positions=chunk_batches["R"],
+                            params,
+                            atomic_numbers=chunk_batches["Z"],
+                            positions=chunk_batches["R"],
                             charges=jnp.zeros((am.shape[0], 1), dtype=jnp.float32),
                             spins=am.reshape(-1, 1),
-                            dst_idx=chunk_batches["dst_idx"], src_idx=chunk_batches["src_idx"],
-                            batch_segments=chunk_batches["batch_segments"], batch_size=_chunk_size,
-                            batch_mask=chunk_batches["batch_mask"], atom_mask=am, cell=pbc_cell,
+                            dst_idx=chunk_batches["dst_idx"],
+                            src_idx=chunk_batches["src_idx"],
+                            batch_segments=chunk_batches["batch_segments"],
+                            batch_size=_chunk_size,
+                            batch_mask=chunk_batches["batch_mask"],
+                            atom_mask=am,
+                            cell=pbc_cell,
                         )
                     else:
                         out = MODEL.apply(
-                            params, atomic_numbers=chunk_batches["Z"], positions=chunk_batches["R"],
-                            dst_idx=chunk_batches["dst_idx"], src_idx=chunk_batches["src_idx"],
-                            batch_segments=chunk_batches["batch_segments"], batch_size=_chunk_size,
-                            batch_mask=chunk_batches["batch_mask"], atom_mask=chunk_batches["atom_mask"],
+                            params,
+                            atomic_numbers=chunk_batches["Z"],
+                            positions=chunk_batches["R"],
+                            dst_idx=chunk_batches["dst_idx"],
+                            src_idx=chunk_batches["src_idx"],
+                            batch_segments=chunk_batches["batch_segments"],
+                            batch_size=_chunk_size,
+                            batch_mask=chunk_batches["batch_mask"],
+                            atom_mask=chunk_batches["atom_mask"],
                             cell=pbc_cell,
                         )
                     return out["energy"], out["forces"]
 
-                e_list, f_list = jax.lax.map(process_chunk, jnp.arange(_n_chunks))
-                e_out = jnp.reshape(e_list, -1)[:_effective_batch_size]
-                f_out = jnp.reshape(f_list, (-1, 3))[:_effective_batch_size * max_atoms]
+                e_out, f_out = run_chunked_model_apply(
+                    R_chunks=R_chunks,
+                    Z_chunks=Z_chunks,
+                    N_chunks=N_chunks,
+                    n_chunks=_n_chunks,
+                    effective_batch_size=_effective_batch_size,
+                    chunk_size=_chunk_size,
+                    max_atoms=max_atoms,
+                    n_gpus=_ml_n_gpus,
+                    apply_one_chunk=apply_one_chunk,
+                )
                 return {"energy": e_out, "forces": f_out}
 
             if is_spooky_model:

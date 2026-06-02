@@ -311,8 +311,18 @@ def parse_args() -> argparse.Namespace:
         default=None,
         metavar="N",
         help=(
-            "pycharmm: chunk PhysNet batches (auto for DCM:50+; "
-            "or MMML_MLPOT_ML_BATCH_SIZE). Lowers JAX compile RAM on CPU."
+            "pycharmm: chunk PhysNet batches (auto: 256 on GPU / 64 on CPU for n>=40; "
+            "or MMML_MLPOT_ML_BATCH_SIZE). DCM:90 try 256-512 on one GPU."
+        ),
+    )
+    parser.add_argument(
+        "--ml-gpu-count",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "pycharmm: parallel PhysNet chunks on N local GPUs (default 1; "
+            "or MMML_MLPOT_N_GPUS). Set CUDA_VISIBLE_DEVICES to the GPU ids to use."
         ),
     )
     parser.add_argument(
@@ -792,6 +802,8 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     cmd.extend(["--charmm-tolgrd", str(args.charmm_tolgrd)])
     if getattr(args, "ml_batch_size", None) is not None:
         cmd.extend(["--ml-batch-size", str(args.ml_batch_size)])
+    if getattr(args, "ml_gpu_count", None) is not None:
+        cmd.extend(["--ml-gpu-count", str(args.ml_gpu_count)])
     if args.no_echeck:
         cmd.append("--no-echeck")
     if getattr(args, "skip_energy_show", False):

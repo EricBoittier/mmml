@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import time
 from pathlib import Path
 from typing import Any, Optional, Sequence, Union
 
@@ -13,31 +14,11 @@ import numpy as np
 from mmml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
 from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
 from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol, setup_calculator
+from mmml.interfaces.pycharmmInterface.mlpot.mlpot_batch_policy import resolve_ml_batch_size
 from mmml.interfaces.pycharmmInterface.mlpot.setup import physnet_ml_atomic_numbers
+from mmml.interfaces.pycharmmInterface.mlpot_gpu import resolve_ml_gpu_count
 
-
-def resolve_ml_batch_size(
-    n_monomers: int,
-    explicit: Optional[int] = None,
-) -> Optional[int]:
-    """Chunk size for PhysNet forward passes (limits XLA LLVM compile RAM).
-
-    DCM:90 sparse path evaluates ~590 systems (90 monomers + 500 dimers) per step.
-    Without chunking, CPU JAX JIT can exhaust memory during LLVM compilation.
-    """
-    if explicit is not None:
-        return int(explicit)
-    env = (os.environ.get("MMML_MLPOT_ML_BATCH_SIZE") or "").strip()
-    if env:
-        return int(env)
-    n = int(n_monomers)
-    if n <= 10:
-        return None
-    if n >= 40:
-        return 64
-    if n >= 20:
-        return 128
-    return 256
+__all__ = ["resolve_ml_batch_size", "DecomposedMlpotCalculator", "DecomposedMlpotModel", "build_decomposed_mlpot_model", "warmup_decomposed_mlpot"]
 
 
 class DecomposedMlpotCalculator:
@@ -103,7 +84,14 @@ class DecomposedMlpotCalculator:
                 side = float(self._cell)
             box = jnp.asarray(cubic_box_matrix_from_side(side))
         from mmml.interfaces.pycharmmInterface.jax_device_policy import mlpot_jax_device_context
+        from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
+            get_mlpot_profile_stats,
+            mlpot_profiling_enabled,
+        )
 
+        if mlpot_profiling_enabled():
+            get_mlpot_profile_stats().record_charmm_gap()
+        t0 = time.perf_counter()
         with mlpot_jax_device_context():
             out = self.spherical_fn(
                 positions=jnp.asarray(pos),
@@ -117,6 +105,8 @@ class DecomposedMlpotCalculator:
             )
             e_kcal = float(jax.device_get(out.energy)) * self.ev2kcal
             forces = np.asarray(jax.device_get(out.forces), dtype=np.float64) * self.ev2kcal
+        if mlpot_profiling_enabled():
+            get_mlpot_profile_stats().record_ml(time.perf_counter() - t0)
         for i in range(n):
             dx[i] -= forces[i, 0]
             dy[i] -= forces[i, 1]
@@ -160,6 +150,7 @@ def build_decomposed_mlpot_model(
     n_monomers: int,
     *,
     ml_batch_size: Optional[int] = None,
+    ml_gpu_count: Optional[int] = None,
     cell: Union[float, bool] = False,
     verbose: bool = False,
 ) -> DecomposedMlpotModel:
@@ -169,10 +160,16 @@ def build_decomposed_mlpot_model(
     per = [int(x) for x in atoms_per_monomer]
     max_atoms = max(per) * 2
     batch_size = resolve_ml_batch_size(int(n_monomers), ml_batch_size)
+    gpu_count = resolve_ml_gpu_count(ml_gpu_count)
     if verbose and batch_size is not None:
         print(
             f"Decomposed MLpot: ml_batch_size={batch_size} "
             f"({int(n_monomers)} monomers; reduces JAX compile memory)",
+            flush=True,
+        )
+    if verbose and gpu_count > 1:
+        print(
+            f"Decomposed MLpot: ml_gpu_count={gpu_count} (parallel PhysNet chunks)",
             flush=True,
         )
     if verbose and cell:
@@ -190,6 +187,7 @@ def build_decomposed_mlpot_model(
         verbose=verbose,
         MAX_ATOMS_PER_SYSTEM=max_atoms,
         ml_batch_size=batch_size,
+        ml_gpu_count=gpu_count,
         cell=cell,
     )
     r0 = np.zeros((len(z), 3), dtype=np.float64)

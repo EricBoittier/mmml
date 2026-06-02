@@ -1,4 +1,12 @@
-"""JAX device and compilation-cache setup for MLpot with OpenMPI-linked CHARMM."""
+"""JAX device and compilation-cache setup for MLpot with OpenMPI-linked CHARMM.
+
+GPU selection
+-------------
+- ``MMML_MLPOT_DEVICE``: ``gpu`` (default) or ``cpu``.
+- ``CUDA_VISIBLE_DEVICES``: restrict which physical GPUs JAX sees (e.g. ``0`` or ``0,1``).
+- ``MMML_MLPOT_N_GPUS`` / ``--ml-gpu-count``: parallel PhysNet *chunks* across local GPUs
+  (default 1). Does not split CHARMM integration across devices.
+"""
 
 from __future__ import annotations
 
@@ -10,6 +18,16 @@ from typing import Any, Iterator
 
 def _truthy(name: str) -> bool:
     return (os.environ.get(name) or "").strip().lower() in ("1", "yes", "true")
+
+
+def mlpot_local_gpu_count() -> int:
+    """Number of visible JAX GPU devices (0 when running on CPU only)."""
+    try:
+        import jax
+
+        return len(jax.devices("gpu"))
+    except Exception:
+        return 0
 
 
 def mlpot_jax_device_name() -> str:

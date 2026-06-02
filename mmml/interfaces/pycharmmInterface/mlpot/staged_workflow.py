@@ -325,6 +325,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         n_atoms,
         n_mol,
         ml_batch_size=getattr(args, "ml_batch_size", None),
+        ml_gpu_count=getattr(args, "ml_gpu_count", None),
         cubic_box_side_A=box_side if use_pbc else None,
         verbose=not args.quiet,
     )
@@ -605,6 +606,9 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             turn_off_cons_fix()
         ctx.unset()
 
+    from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import maybe_log_mlpot_profile
+
+    maybe_log_mlpot_profile(quiet=bool(args.quiet))
     print(f"\nStaged workflow OK ({','.join(stages)}) -> {out_dir}")
     if last_traj is not None and last_traj.is_file():
         print_vmd_load_help(

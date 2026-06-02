@@ -67,6 +67,9 @@ from mmml.cli.run.summaries import (
     print_system_summary,
 )
 from mmml.cli.run.pycharmm_sampling_args import add_two_residue_sampling_args
+from mmml.interfaces.pycharmmInterface.mlpot_gpu import (
+    resolve_ml_gpu_count as _resolve_ml_gpu_count,
+)
 from mmml.cli.run.utils import get_steps_per_frame, normalize_n_atoms_monomer
 
 
@@ -199,6 +202,13 @@ def parse_args() -> argparse.Namespace:
         metavar="N",
         help="Max systems per ML forward pass. When set, chunk large batches to reduce memory. "
         "Default: None (no chunking). Suggested: 256–512 for 8–16 GB GPU, 512–1024 for 24 GB+.",
+    )
+    parser.add_argument(
+        "--ml-gpu-count",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Parallel PhysNet chunks on N local GPUs (default 1; or MMML_MLPOT_N_GPUS).",
     )
     parser.add_argument(
         "--debug",
@@ -526,6 +536,7 @@ def run(args: argparse.Namespace) -> int:
         flat_bottom_mode=getattr(args, "flat_bottom_mode", "system"),
         ensemble=getattr(args, "ensemble", "nve"),
         ml_batch_size=getattr(args, "ml_batch_size", None),
+        ml_gpu_count=_resolve_ml_gpu_count(getattr(args, "ml_gpu_count", None)),
         mm_r_min=getattr(args, "mm_r_min", None),
     )
     
