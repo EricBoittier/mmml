@@ -156,31 +156,55 @@ def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> None:
     cons_fix.turn_off()
 
 
-_BONDED_INTERNAL_TERM_KEYS = ("BOND", "ANGL", "ANGLE", "UREY", "DIHE", "IMPR", "CMAP")
+_BONDED_INTERNAL_TERM_KEYS = ("BOND", "ANGL", "ANGLE", "UREY", "UB", "DIHE", "IMPR", "CMAP")
+_BONDED_ETERM_NAMES = frozenset(_BONDED_INTERNAL_TERM_KEYS)
+
+
+def _charmm_active_eterms() -> dict[str, float]:
+    """Active CHARMM energy terms from the eterm array (no ``energy.show()``)."""
+    import pycharmm.energy as energy
+
+    names = energy.get_term_names()
+    statuses = energy.get_term_statuses()
+    values = energy.get_terms()
+    out: dict[str, float] = {}
+    for active, name, val in zip(statuses, names, values):
+        if not active:
+            continue
+        key = str(name).strip().upper()
+        if key:
+            out[key] = float(val)
+    return out
 
 
 def charmm_internal_energy_kcalmol(*, require: bool = False) -> float | None:
     """CHARMM internal energy (kcal/mol): ``INTE`` if present, else sum of bonded terms."""
-    terms = charmm_energy_terms()
-    if not terms:
-        if require:
-            raise RuntimeError(
-                "CHARMM energy unavailable (set RUN_CHARMM_ENERGY_SHOW=1 or unset "
-                "SKIP_CHARMM_ENERGY_SHOW to use bonded-MM-mini internal checks)"
-            )
-        return None
-    bonded = sum(float(terms.get(k, 0.0)) for k in _BONDED_INTERNAL_TERM_KEYS)
-    if "INTE" in terms:
-        inte = float(terms["INTE"])
-        # Hybrid MLpot runs can leave INTE=0 in the energy row while bonded terms are populated.
-        if abs(inte) > 1e-8 or abs(bonded) <= 1e-8:
-            return inte
+    eterm = _charmm_active_eterms()
+    if not eterm:
+        terms = charmm_energy_terms()
+        if not terms:
+            if require:
+                raise RuntimeError(
+                    "CHARMM energy unavailable (set RUN_CHARMM_ENERGY_SHOW=1 or unset "
+                    "SKIP_CHARMM_ENERGY_SHOW to use bonded-MM-mini internal checks)"
+                )
+            return None
+        eterm = {str(k).strip().upper(): float(v) for k, v in terms.items()}
+
+    bonded = sum(float(eterm.get(k, 0.0)) for k in _BONDED_ETERM_NAMES)
+    inte = eterm.get("INTE")
+
+    if inte is not None and abs(inte) > 1e-8:
+        return float(inte)
     if abs(bonded) > 1e-8:
         return bonded
-    if "INTE" in terms:
-        return float(terms["INTE"])
+    if inte is not None:
+        return float(inte)
     if require:
-        raise RuntimeError("CHARMM internal energy terms are all zero")
+        raise RuntimeError(
+            "CHARMM internal energy terms are all zero after ENER "
+            f"(active eterm keys: {sorted(eterm.keys())})"
+        )
     return None
 
 
@@ -264,14 +288,12 @@ def minimize_bonded_mm_recovery(
 
 def measure_mm_internal_with_full_block(ctx: "MlpotContext") -> float:
     """Evaluate MM internal energy with MLpot detached and full MM BLOCK."""
-    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_block
     from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
     if not isinstance(ctx, MlpotContext):
         raise TypeError("ctx must be MlpotContext")
     ctx.unset()
     try:
-        apply_charmm_mm_block()
         pycharmm, *_ = _import_pycharmm_modules()
         pycharmm.lingo.charmm_script("ENER")
         val = charmm_internal_energy_kcalmol(require=True)

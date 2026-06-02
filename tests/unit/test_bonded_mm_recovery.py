@@ -11,7 +11,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.dynamics import charmm_internal_ene
 
 def test_charmm_internal_energy_prefers_inte():
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.charmm_energy_terms",
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._charmm_active_eterms",
         return_value={"INTE": 12.5, "BOND": 1.0},
     ):
         assert charmm_internal_energy_kcalmol() == pytest.approx(12.5)
@@ -19,7 +19,7 @@ def test_charmm_internal_energy_prefers_inte():
 
 def test_charmm_internal_energy_sums_bonded_terms():
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.charmm_energy_terms",
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._charmm_active_eterms",
         return_value={"BOND": 1.0, "ANGL": 2.0, "DIHE": 0.5},
     ):
         assert charmm_internal_energy_kcalmol() == pytest.approx(3.5)
@@ -27,7 +27,7 @@ def test_charmm_internal_energy_sums_bonded_terms():
 
 def test_charmm_internal_energy_prefers_bonded_when_inte_zero():
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.charmm_energy_terms",
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._charmm_active_eterms",
         return_value={"INTE": 0.0, "BOND": 10.0, "ANGL": 2.0},
     ):
         assert charmm_internal_energy_kcalmol() == pytest.approx(12.0)
