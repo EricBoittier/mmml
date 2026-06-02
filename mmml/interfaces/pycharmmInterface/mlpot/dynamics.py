@@ -725,6 +725,106 @@ def _apply_npt_cpt_kwargs(
         raise ValueError(f"unknown NPT thermostat: {thermostat!r}")
 
 
+def _apply_hoover_nvt_kwargs(
+    kw: dict[str, Any],
+    *,
+    temp: float,
+    tmass: int | None = None,
+    firstt: float | None = None,
+) -> None:
+    """Hoover NVT for vacuum/free-space (no ``cpt`` / crystal required)."""
+    if tmass is None:
+        _, tmass = compute_cpt_piston_masses()
+    kw.update(
+        {
+            "leap": True,
+            "ihtfrq": 0,
+            "ieqfrq": 0,
+            "hoover reft": temp,
+            "tmass": tmass,
+            "imgfrq": 0,
+            "ihbfrq": 0,
+            "ilbfrq": 0,
+        }
+    )
+    if firstt is not None:
+        kw["firstt"] = firstt
+
+
+def build_nvt_equilibration_dynamics(
+    *,
+    timestep_ps: float = 0.00025,
+    duration_ps: float = 50.0,
+    save_interval_ps: float = 0.01,
+    temp: float = 300.0,
+    restart: bool = True,
+    echeck: float = 500.0,
+    tmass: int | None = None,
+    include_firstt: bool = True,
+) -> dict[str, Any]:
+    """NVT equilibration (Hoover) for vacuum/free-space clusters."""
+    nstep = ps_to_nsteps(timestep_ps, duration_ps)
+    nsavc = nsavc_for_interval(timestep_ps, save_interval_ps)
+    kw = _base_dyn_kwargs(
+        timestep=timestep_ps,
+        nstep=nstep,
+        nsavc=nsavc,
+        nprint=100,
+        echeck=echeck,
+        imgfrq=0,
+        ihbfrq=0,
+        ilbfrq=0,
+    )
+    kw.update(
+        {
+            "new": False,
+            "start": False,
+            "restart": restart,
+        }
+    )
+    _apply_hoover_nvt_kwargs(
+        kw,
+        temp=temp,
+        tmass=tmass,
+        firstt=temp if include_firstt else None,
+    )
+    return kw
+
+
+def build_nvt_production_dynamics(
+    *,
+    timestep_ps: float = 0.00025,
+    duration_ps: float = 100.0,
+    save_interval_ps: float = 0.01,
+    temp: float = 300.0,
+    restart: bool = True,
+    echeck: float = 500.0,
+    tmass: int | None = None,
+) -> dict[str, Any]:
+    """NVT production (Hoover) for vacuum/free-space clusters."""
+    nstep = ps_to_nsteps(timestep_ps, duration_ps)
+    nsavc = nsavc_for_interval(timestep_ps, save_interval_ps)
+    kw = _base_dyn_kwargs(
+        timestep=timestep_ps,
+        nstep=nstep,
+        nsavc=nsavc,
+        nprint=100,
+        echeck=echeck,
+        imgfrq=0,
+        ihbfrq=0,
+        ilbfrq=0,
+    )
+    kw.update(
+        {
+            "new": False,
+            "start": False,
+            "restart": restart,
+        }
+    )
+    _apply_hoover_nvt_kwargs(kw, temp=temp, tmass=tmass, firstt=None)
+    return kw
+
+
 def build_cpt_equilibration_dynamics(
     *,
     timestep_ps: float = 0.00025,
