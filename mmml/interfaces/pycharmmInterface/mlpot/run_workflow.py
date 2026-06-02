@@ -132,6 +132,7 @@ def _register_mlpot_context(
     *,
     ml_batch_size: int | None = None,
     ml_gpu_count: int | None = None,
+    ml_max_active_dimers: int | None = None,
     cubic_box_side_A: float | None = None,
     verbose: bool = False,
 ):
@@ -152,6 +153,7 @@ def _register_mlpot_context(
         atoms_per_monomer=_atoms_per_monomer_list(z, n_monomers),
         ml_batch_size=ml_batch_size,
         ml_gpu_count=ml_gpu_count,
+        ml_max_active_dimers=ml_max_active_dimers,
         cell=float(cubic_box_side_A) if cubic_box_side_A is not None else None,
         verbose=verbose,
     )
@@ -295,6 +297,7 @@ def run_minimize_workflow(args: argparse.Namespace) -> int:
         n_mol,
         ml_batch_size=getattr(args, "ml_batch_size", None),
         ml_gpu_count=getattr(args, "ml_gpu_count", None),
+        ml_max_active_dimers=getattr(args, "ml_max_active_dimers", None),
         cubic_box_side_A=box_side,
         verbose=not args.quiet,
     )
@@ -402,6 +405,7 @@ def run_dynamics_workflow(
         n_mol,
         ml_batch_size=getattr(args, "ml_batch_size", None),
         ml_gpu_count=getattr(args, "ml_gpu_count", None),
+        ml_max_active_dimers=getattr(args, "ml_max_active_dimers", None),
         cubic_box_side_A=box_side,
         verbose=not args.quiet,
     )

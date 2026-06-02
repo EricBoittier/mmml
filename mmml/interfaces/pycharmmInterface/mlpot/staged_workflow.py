@@ -326,6 +326,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         n_mol,
         ml_batch_size=getattr(args, "ml_batch_size", None),
         ml_gpu_count=getattr(args, "ml_gpu_count", None),
+        ml_max_active_dimers=getattr(args, "ml_max_active_dimers", None),
         cubic_box_side_A=box_side if use_pbc else None,
         verbose=not args.quiet,
     )

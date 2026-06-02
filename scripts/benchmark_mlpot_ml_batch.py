@@ -15,9 +15,13 @@ from pathlib import Path
 
 
 def sparse_effective_batch(n_monomers: int) -> int:
+    from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
+        resolve_max_active_dimers,
+    )
+
     n_dimers = n_monomers * (n_monomers - 1) // 2
-    cap = max(500, 3 * n_monomers)
-    return n_monomers + min(n_dimers, cap)
+    cap = resolve_max_active_dimers(n_monomers, n_dimers)
+    return n_monomers + cap
 
 
 def print_tuning_table(n_monomers: int) -> None:

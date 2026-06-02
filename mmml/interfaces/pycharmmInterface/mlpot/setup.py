@@ -428,6 +428,7 @@ def load_physnet_mlpot_bundle(
     atoms_per_monomer: Sequence[int] | None = None,
     ml_batch_size: Optional[int] = None,
     ml_gpu_count: Optional[int] = None,
+    ml_max_active_dimers: Optional[int] = None,
     cell: float | None = None,
     verbose: bool = False,
 ) -> tuple[Any, Any, Any]:
@@ -454,6 +455,7 @@ def load_physnet_mlpot_bundle(
             int(n_monomers),
             ml_batch_size=ml_batch_size,
             ml_gpu_count=ml_gpu_count,
+            ml_max_active_dimers=ml_max_active_dimers,
             cell=float(cell) if cell is not None else False,
             verbose=verbose,
         )

@@ -53,6 +53,7 @@ def _pycharmm_args(**overrides) -> argparse.Namespace:
         charmm_tolgrd=0.001,
         ml_batch_size=None,
         ml_gpu_count=None,
+        ml_max_active_dimers=None,
         no_echeck=False,
         skip_energy_show=False,
         show_energy=None,
@@ -96,6 +97,13 @@ def test_build_pycharmm_command_includes_residue_without_composition():
     assert cmd[idx + 1] == "ACO"
     assert "--composition" not in cmd
     assert "--n-molecules" in cmd
+
+
+def test_build_pycharmm_command_includes_ml_max_active_dimers_when_set():
+    cmd = build_pycharmm_command(_pycharmm_args(ml_max_active_dimers=1200))
+    assert "--ml-max-active-dimers" in cmd
+    idx = cmd.index("--ml-max-active-dimers")
+    assert cmd[idx + 1] == "1200"
 
 
 def test_build_pycharmm_command_includes_ml_gpu_count_when_set():
