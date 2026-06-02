@@ -365,6 +365,29 @@ def parse_args() -> argparse.Namespace:
         help="pycharmm: split production into chained restart segments",
     )
     parser.add_argument(
+        "--bonded-mm-mini",
+        action="store_true",
+        help="pycharmm: bonded-only SD if internal energy exceeds post-MM-pre-min baseline",
+    )
+    parser.add_argument(
+        "--bonded-mm-mini-after",
+        type=str,
+        default="heat",
+        help="pycharmm: comma-separated stages to check (default: heat)",
+    )
+    parser.add_argument(
+        "--bonded-mm-mini-steps",
+        type=int,
+        default=50,
+        help="pycharmm: bonded recovery SD steps (default: 50)",
+    )
+    parser.add_argument(
+        "--bonded-mm-internal-margin",
+        type=float,
+        default=0.0,
+        help="pycharmm: kcal/mol above baseline before recovery (default: 0)",
+    )
+    parser.add_argument(
         "--restart-from",
         type=Path,
         default=None,
@@ -744,6 +767,13 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         cmd.append("--skip-cluster-build")
     if getattr(args, "skip_if_crd_exists", False):
         cmd.append("--skip-if-crd-exists")
+    if getattr(args, "bonded_mm_mini", False):
+        cmd.append("--bonded-mm-mini")
+        cmd.extend(["--bonded-mm-mini-after", str(args.bonded_mm_mini_after)])
+        cmd.extend(["--bonded-mm-mini-steps", str(args.bonded_mm_mini_steps)])
+        cmd.extend(
+            ["--bonded-mm-internal-margin", str(args.bonded_mm_internal_margin)]
+        )
     if args.charmm_pre_minimize is False:
         cmd.append("--no-charmm-pre-minimize")
     cmd.extend(["--charmm-sd-steps", str(args.charmm_sd_steps)])
