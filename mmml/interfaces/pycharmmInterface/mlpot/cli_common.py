@@ -261,9 +261,9 @@ def add_monomer_constraint_args(
     group.add_argument(
         "--fix-resids",
         type=str,
-        default="1" if not for_dynamics else "",
+        default="",
         metavar="IDS",
-        help="Monomers fixed in SD pass 2; comma-separated resids",
+        help="Monomers fixed in SD pass 2; comma-separated resids (default: none)",
     )
     group.add_argument(
         "--fix-resid",
