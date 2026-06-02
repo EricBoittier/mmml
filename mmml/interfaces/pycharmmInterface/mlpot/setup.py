@@ -233,6 +233,75 @@ def refresh_nbonds_after_mlpot(*, nbxmod: int = 5) -> None:
     pycharmm.UpdateNonBondedScript(**vacuum_nbond_kwargs(nbxmod=nbxmod)).run()
 
 
+def refresh_nbonds_after_mlpot_pbc(
+    *,
+    cubic_box_side_A: float,
+    nbxmod: int = 5,
+    cutnb: float = 18.0,
+) -> None:
+    """Rebuild PBC nonbond lists after MLpot registration."""
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        apply_pbc_nbonds,
+        prepare_charmm_pbc,
+    )
+
+    pycharmm = _import_pycharmm()
+    prepare_charmm_pbc(float(cubic_box_side_A))
+    pycharmm.nbonds.update_bnbnd()
+    apply_pbc_nbonds(nbxmod=nbxmod, cutnb=cutnb)
+
+
+def load_cluster_from_artifacts(
+    args: Any,
+) -> tuple[np.ndarray, np.ndarray, int, str]:
+    """Load PSF + CRD (and optional coordinates from ``--restart-from``)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import load_minimized_coordinates
+    from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
+    from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+
+    psf = getattr(args, "from_psf", None)
+    crd = getattr(args, "from_crd", None)
+    if psf is None and crd is None and getattr(args, "output_dir", None):
+        out = Path(args.output_dir).expanduser().resolve()
+        tag_guess = getattr(args, "tag", None)
+        if tag_guess:
+            psf = psf or out / f"mini_full_mlpot_{tag_guess}.psf"
+            crd = crd or out / f"mini_full_mlpot_{tag_guess}.crd"
+    if psf is None or crd is None:
+        raise ValueError(
+            "skip-cluster-build requires --from-psf and --from-crd "
+            "(or mini artifacts under --output-dir with --tag)"
+        )
+    psf_path = Path(psf).expanduser().resolve()
+    crd_path = Path(crd).expanduser().resolve()
+    if not psf_path.is_file():
+        raise FileNotFoundError(f"PSF not found: {psf_path}")
+    if not crd_path.is_file():
+        raise FileNotFoundError(f"CRD not found: {crd_path}")
+
+    pycharmm = _import_pycharmm()
+    import pycharmm.read as read
+
+    read_cgenff_toppar()
+    read.psf_card(str(psf_path))
+    load_minimized_coordinates(crd_path)
+    z = np.asarray(get_Z_from_psf(), dtype=int)
+    r = get_charmm_positions_array()
+
+    n_mol = int(getattr(args, "n_molecules", 0) or 0)
+    if getattr(args, "composition", None):
+        from mmml.cli.run.md_pbc_suite.ase import _parse_composition
+
+        n_mol = sum(c for _, c in _parse_composition(args.composition))
+    if n_mol <= 0:
+        n_mol = max(1, int(getattr(args, "n_molecules", 1) or 1))
+
+    tag = str(getattr(args, "tag", None) or psf_path.stem.replace("mini_full_mlpot_", ""))
+    if not getattr(args, "quiet", False):
+        print(f"Loaded cluster from {psf_path.name} + {crd_path.name}", flush=True)
+    return z, r, n_mol, tag
+
+
 def physnet_ml_atomic_numbers(z: Sequence[int]) -> list[int]:
     """PSF/ASE atomic numbers for MLpot (must match ``setup_calculator`` inputs)."""
     return [int(x) for x in z]

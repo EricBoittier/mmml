@@ -850,3 +850,150 @@ def assert_dynamics_ready(
 def print_header(title: str) -> None:
     bar = "=" * len(title)
     print(f"\n{bar}\n{title}\n{bar}")
+
+
+def add_staged_md_args(parser: argparse.ArgumentParser) -> None:
+    group = parser.add_argument_group("Staged MLpot MD (mini / heat / NVE / equi / prod)")
+    group.add_argument(
+        "--md-stages",
+        type=str,
+        default=None,
+        help=(
+            "Comma-separated stages: mini,heat,nve,equi,prod. "
+            "Default depends on --setup / --phase (pycharmm_full runs all)."
+        ),
+    )
+    group.add_argument(
+        "--md-stage",
+        type=str,
+        default=None,
+        choices=["mini", "heat", "nve", "equi", "prod"],
+        help="Run a single dynamics stage (implies --skip-cluster-build when artifacts exist).",
+    )
+    group.add_argument(
+        "--ps-heat",
+        type=float,
+        default=10.0,
+        help="Heating segment length in ps (default: 10)",
+    )
+    group.add_argument(
+        "--ps-nve",
+        type=float,
+        default=None,
+        help="NVE segment length in ps (default: --ps or 50)",
+    )
+    group.add_argument(
+        "--ps-equi",
+        type=float,
+        default=50.0,
+        help="NPT equilibration length in ps (default: 50)",
+    )
+    group.add_argument(
+        "--ps-prod",
+        type=float,
+        default=None,
+        help="Production length in ps (default: --ps or 100)",
+    )
+    group.add_argument(
+        "--n-prod-segments",
+        type=int,
+        default=1,
+        help="Split production into chained restart segments (default: 1)",
+    )
+    group.add_argument(
+        "--restart-from",
+        type=Path,
+        default=None,
+        help="CHARMM restart (.res) for the first dynamics stage",
+    )
+    group.add_argument(
+        "--from-psf",
+        type=Path,
+        default=None,
+        help="Load topology from PSF instead of rebuilding the cluster",
+    )
+    group.add_argument(
+        "--from-crd",
+        type=Path,
+        default=None,
+        help="Load coordinates from CRD (with --from-psf)",
+    )
+    group.add_argument(
+        "--skip-cluster-build",
+        action="store_true",
+        help="Do not run Packmol/IC build; requires --from-psf/--from-crd or prior mini artifacts",
+    )
+    group.add_argument(
+        "--skip-if-crd-exists",
+        action="store_true",
+        help="Skip MLpot SD when mini CRD already exists in --output-dir",
+    )
+    group.add_argument(
+        "--tag",
+        type=str,
+        default=None,
+        help="Artifact tag for staged outputs (default: from composition/residue)",
+    )
+    group.add_argument(
+        "--free-space",
+        action="store_true",
+        help="Vacuum cluster (no CHARMM crystal); default unless --setup pbc_* or --box-size",
+    )
+
+
+def _default_stages_for_setup(setup: str | None) -> list[str]:
+    s = (setup or "").strip().lower()
+    if s == "pycharmm_minimize":
+        return ["mini"]
+    if s == "free_nvt":
+        return ["mini", "heat"]
+    if s == "free_nve":
+        return ["mini", "nve"]
+    if s in ("pycharmm_full", "pbc_nve", "pbc_npt"):
+        return ["mini", "heat", "nve", "equi", "prod"]
+    if s == "pbc_nvt":
+        return ["mini", "heat", "equi"]
+    return ["mini", "heat", "nve", "equi", "prod"]
+
+
+def resolve_md_stages(args: argparse.Namespace) -> list[str]:
+    if getattr(args, "md_stage", None):
+        return [str(args.md_stage)]
+    raw = getattr(args, "md_stages", None)
+    if raw:
+        stages = [p.strip().lower() for p in str(raw).split(",") if p.strip()]
+    else:
+        setup = getattr(args, "setup", None)
+        phase = getattr(args, "phase", None)
+        if phase == "minimize":
+            return ["mini"]
+        if phase == "dynamics" and setup in (None, ""):
+            return ["nve"]
+        stages = _default_stages_for_setup(setup)
+    valid = {"mini", "heat", "nve", "equi", "prod"}
+    bad = [s for s in stages if s not in valid]
+    if bad:
+        raise ValueError(f"unknown md stage(s): {bad}; allowed: {sorted(valid)}")
+    return stages
+
+
+def resolve_use_pbc(args: argparse.Namespace) -> bool:
+    if getattr(args, "free_space", False):
+        return False
+    setup = (getattr(args, "setup", None) or "").strip().lower()
+    if setup.startswith("pbc_"):
+        return True
+    if getattr(args, "box_size", None) is not None:
+        return True
+    return False
+
+
+def resolve_pbc_box_side(args: argparse.Namespace, positions: np.ndarray) -> float:
+    if getattr(args, "box_size", None) is not None:
+        return float(args.box_size)
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        cubic_box_length_from_geometry,
+    )
+
+    ml_cutoff = float(getattr(args, "ml_cutoff", 12.0))
+    return cubic_box_length_from_geometry(positions, ml_cutoff=ml_cutoff)

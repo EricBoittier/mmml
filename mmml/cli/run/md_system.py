@@ -28,6 +28,7 @@ def parse_args() -> argparse.Namespace:
             "pbc_npt",
             "lambda_ti",
             "pycharmm_minimize",
+            "pycharmm_full",
             "all",
         ],
         default="pbc_nve",
@@ -35,7 +36,9 @@ def parse_args() -> argparse.Namespace:
             "Simulation setup preset. lambda_ti: alchemical TI with CHARMM+MMML minimization "
             "per λ window (--lambda-md-mode, --backend ase|jaxmd); mmml lambda-mbar afterward. "
             "pycharmm_minimize: CHARMM MLpot SD only (--backend pycharmm). "
-            "free_nve/free_nvt with --backend pycharmm: MLpot minimize + vacuum MD."
+            "pycharmm_full: mini → heat → NVE → equi → prod (--backend pycharmm). "
+            "pbc_* with --backend pycharmm: same staged pipeline with CHARMM crystal/IMAGE. "
+            "free_nve/free_nvt with --backend pycharmm: mini + NVE or mini + heat."
         ),
     )
     parser.add_argument(
@@ -309,6 +312,65 @@ def parse_args() -> argparse.Namespace:
             "or MMML_MLPOT_ML_BATCH_SIZE). Lowers JAX compile RAM on CPU."
         ),
     )
+    parser.add_argument(
+        "--md-stages",
+        type=str,
+        default=None,
+        help="pycharmm: comma-separated mini,heat,nve,equi,prod (default from --setup)",
+    )
+    parser.add_argument(
+        "--ps-heat",
+        type=float,
+        default=10.0,
+        help="pycharmm: heating length in ps (default: 10)",
+    )
+    parser.add_argument(
+        "--ps-nve",
+        type=float,
+        default=None,
+        help="pycharmm: NVE length in ps (default: --ps)",
+    )
+    parser.add_argument(
+        "--ps-equi",
+        type=float,
+        default=50.0,
+        help="pycharmm: NPT equilibration length in ps (default: 50)",
+    )
+    parser.add_argument(
+        "--ps-prod",
+        type=float,
+        default=None,
+        help="pycharmm: production length in ps (default: --ps)",
+    )
+    parser.add_argument(
+        "--n-prod-segments",
+        type=int,
+        default=1,
+        help="pycharmm: split production into chained restart segments",
+    )
+    parser.add_argument(
+        "--restart-from",
+        type=Path,
+        default=None,
+        help="pycharmm: CHARMM .res restart for first dynamics stage",
+    )
+    parser.add_argument(
+        "--from-psf",
+        type=Path,
+        default=None,
+        help="pycharmm: load PSF instead of rebuilding cluster",
+    )
+    parser.add_argument(
+        "--from-crd",
+        type=Path,
+        default=None,
+        help="pycharmm: load CRD with --from-psf",
+    )
+    parser.add_argument(
+        "--skip-cluster-build",
+        action="store_true",
+        help="pycharmm: skip Packmol/IC; use --from-psf/--from-crd or prior mini artifacts",
+    )
 
     # --- lambda_ti (--setup lambda_ti) ----------------------------------------
     parser.add_argument(
@@ -504,7 +566,15 @@ def _run_lambda_ti_inline(args: argparse.Namespace) -> int:
 
 
 def _pycharmm_setups() -> set[str]:
-    return {"free_nve", "free_nvt", "pycharmm_minimize"}
+    return {
+        "free_nve",
+        "free_nvt",
+        "pycharmm_minimize",
+        "pycharmm_full",
+        "pbc_nve",
+        "pbc_nvt",
+        "pbc_npt",
+    }
 
 
 def _apply_backend_setup_defaults(args: argparse.Namespace) -> None:
@@ -530,25 +600,33 @@ def _apply_backend_setup_defaults(args: argparse.Namespace) -> None:
             f"Use one of: {', '.join(sorted(pycharmm_setups))}."
         )
 
-    # Default md-system setup is pbc_nve; pycharmm is vacuum-only.
-    print(
-        f"mmml md-system: --backend pycharmm uses vacuum (free_nve); "
-        f"replacing --setup {args.setup!r}",
-        flush=True,
+    raise ValueError(
+        f"--backend pycharmm does not support --setup {args.setup!r}. "
+        f"Use one of: {', '.join(sorted(pycharmm_setups))}."
     )
-    args.setup = "free_nve"
 
 
 def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
-    if args.setup == "pycharmm_minimize":
-        phase = "minimize"
-        ensemble = "nve"
-    elif args.setup == "free_nvt":
-        phase = "full"
-        ensemble = "nvt"
-    else:
-        phase = "full"
-        ensemble = "nve"
+    _phase_for_setup = {
+        "pycharmm_minimize": "minimize",
+        "free_nve": "staged",
+        "free_nvt": "staged",
+        "pycharmm_full": "staged",
+        "pbc_nve": "staged",
+        "pbc_nvt": "staged",
+        "pbc_npt": "staged",
+    }
+    _default_stages = {
+        "pycharmm_minimize": "mini",
+        "free_nve": "mini,nve",
+        "free_nvt": "mini,heat",
+        "pycharmm_full": "mini,heat,nve,equi,prod",
+        "pbc_nve": "mini,heat,nve,equi,prod",
+        "pbc_nvt": "mini,heat,equi",
+        "pbc_npt": "mini,heat,nve,equi,prod",
+    }
+    phase = _phase_for_setup.get(args.setup, "staged")
+    ensemble = "nvt" if args.setup == "free_nvt" else "nve"
 
     if args.output_dir is None:
         args.output_dir = Path("artifacts/pycharmm_mlpot")
@@ -558,6 +636,8 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         phase,
         "--ensemble",
         ensemble,
+        "--setup",
+        str(args.setup),
         "--spacing",
         str(args.spacing),
         "--ps",
@@ -582,17 +662,35 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         str(args.dcd_nsavc),
         "--echeck",
         str(args.echeck),
+        "--ps-heat",
+        str(args.ps_heat),
+        "--ps-equi",
+        str(args.ps_equi),
+        "--n-prod-segments",
+        str(args.n_prod_segments),
     ]
     if args.composition:
         cmd.extend(["--composition", str(args.composition)])
     else:
         cmd.extend(["--n-molecules", str(args.n_molecules)])
+    if args.md_stages:
+        cmd.extend(["--md-stages", str(args.md_stages)])
+    elif args.setup in _default_stages:
+        cmd.extend(["--md-stages", _default_stages[args.setup]])
     _append_optional(cmd, "--checkpoint", args.checkpoint)
     _append_optional(cmd, "--output-dir", args.output_dir)
+    _append_optional(cmd, "--box-size", args.box_size)
+    _append_optional(cmd, "--ps-nve", getattr(args, "ps_nve", None))
+    _append_optional(cmd, "--ps-prod", getattr(args, "ps_prod", None))
+    _append_optional(cmd, "--restart-from", getattr(args, "restart_from", None))
+    _append_optional(cmd, "--from-psf", getattr(args, "from_psf", None))
+    _append_optional(cmd, "--from-crd", getattr(args, "from_crd", None))
     if args.no_fix:
         cmd.append("--no-fix")
     if args.no_pre_minimize:
         cmd.append("--no-pre-minimize")
+    if getattr(args, "skip_cluster_build", False):
+        cmd.append("--skip-cluster-build")
     if args.charmm_pre_minimize is False:
         cmd.append("--no-charmm-pre-minimize")
     cmd.extend(["--charmm-sd-steps", str(args.charmm_sd_steps)])

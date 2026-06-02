@@ -1,0 +1,454 @@
+"""Multi-stage MLpot MD: mini → heat → NVE → equi → production (+ PBC)."""
+
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+from typing import Any, Literal
+
+import numpy as np
+
+from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    apply_charmm_output_from_args,
+    apply_flat_bottom_from_args,
+    assert_dynamics_ready,
+    build_cluster_from_args_with_tag,
+    charmm_grms,
+    dynamics_nstep_from_ps,
+    format_resid_constraint_message,
+    print_cluster_geometry_summary,
+    print_vmd_load_help,
+    resolve_checkpoint,
+    resolve_constrain_resids,
+    resolve_dcd_nsavc,
+    resolve_dynamics_print_kwargs,
+    resolve_echeck_for_cluster,
+    resolve_fix_resids,
+    resolve_mini_nstep,
+    resolve_md_stages,
+    resolve_pbc_box_side,
+    resolve_show_energy,
+    resolve_test_first_config,
+    resolve_use_pbc,
+    setup_cons_fix_for_resids,
+    timestep_ps_from_dt_fs,
+    turn_off_cons_fix,
+    validate_resids_for_cluster,
+)
+from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    CharmmTrajectoryFiles,
+    MinimizeWithMlpotConfig,
+    build_cpt_equilibration_dynamics,
+    build_cpt_production_dynamics,
+    build_heat_dynamics,
+    build_nve_dynamics,
+    minimize_with_mlpot,
+    production_restart_chain,
+    run_dynamics_with_io,
+)
+from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import setup_charmm_environment
+from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import (
+    _charmm_pre_minimize_before_mlpot,
+    _register_mlpot_context,
+)
+from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    disable_charmm_domdec,
+    get_charmm_positions_array,
+    load_cluster_from_artifacts,
+    save_cluster_topology_for_vmd,
+    select_by_resids,
+    sync_charmm_positions,
+)
+
+MdStage = Literal["mini", "heat", "nve", "equi", "prod"]
+
+_STAGE_ORDER: tuple[MdStage, ...] = ("mini", "heat", "nve", "equi", "prod")
+
+
+def _stage_ps(args: argparse.Namespace, stage: MdStage) -> float:
+    dt_fs = float(getattr(args, "dt_fs", 0.25))
+    if stage == "heat":
+        return float(getattr(args, "ps_heat", 10.0))
+    if stage == "equi":
+        return float(getattr(args, "ps_equi", 50.0))
+    if stage == "prod":
+        return float(getattr(args, "ps_prod", None) or getattr(args, "ps", 100.0))
+    if stage == "nve":
+        return float(getattr(args, "ps_nve", None) or getattr(args, "ps", 50.0))
+    return float(getattr(args, "ps", 1.0))
+
+
+def _artifact_paths(out_dir: Path, tag: str) -> dict[str, Path]:
+    return {
+        "mini_crd": out_dir / f"mini_full_mlpot_{tag}.crd",
+        "mini_psf": out_dir / f"mini_full_mlpot_{tag}.psf",
+        "mini_dcd": out_dir / f"mini_full_mlpot_{tag}.dcd",
+        "heat_res": out_dir / f"heat_{tag}.res",
+        "heat_dcd": out_dir / f"heat_{tag}.dcd",
+        "nve_res": out_dir / f"nve_{tag}.res",
+        "nve_dcd": out_dir / f"nve_{tag}.dcd",
+        "equi_res": out_dir / f"equi_{tag}.res",
+        "equi_dcd": out_dir / f"equi_{tag}.dcd",
+        "prod_res": out_dir / f"prod_{tag}.res",
+        "prod_dcd": out_dir / f"prod_{tag}.dcd",
+        "vmd_psf": out_dir / f"cluster_for_vmd_{tag}.psf",
+    }
+
+
+def _prior_restart_for_stage(
+    stage: MdStage,
+    paths: dict[str, Path],
+    *,
+    restart_from: Path | None,
+) -> Path | None:
+    if restart_from is not None:
+        return restart_from
+    if stage == "heat":
+        return None
+    if stage == "nve":
+        return paths["heat_res"] if paths["heat_res"].is_file() else None
+    if stage == "equi":
+        return paths["nve_res"] if paths["nve_res"].is_file() else None
+    if stage == "prod":
+        return paths["equi_res"] if paths["equi_res"].is_file() else None
+    return None
+
+
+def _io_for_stage(stage: MdStage, paths: dict[str, Path]) -> CharmmTrajectoryFiles:
+    if stage == "heat":
+        return CharmmTrajectoryFiles(
+            restart_write=paths["heat_res"],
+            trajectory=paths["heat_dcd"],
+        )
+    if stage == "nve":
+        return CharmmTrajectoryFiles(
+            restart_write=paths["nve_res"],
+            trajectory=paths["nve_dcd"],
+        )
+    if stage == "equi":
+        return CharmmTrajectoryFiles(
+            restart_write=paths["equi_res"],
+            trajectory=paths["equi_dcd"],
+        )
+    if stage == "prod":
+        return CharmmTrajectoryFiles(
+            restart_write=paths["prod_res"],
+            trajectory=paths["prod_dcd"],
+        )
+    raise ValueError(f"no dynamics I/O for stage {stage!r}")
+
+
+def _build_stage_dynamics_kw(
+    stage: MdStage,
+    *,
+    args: argparse.Namespace,
+    timestep_ps: float,
+    nstep: int,
+    save_interval_ps: float,
+    temp: float,
+    echeck: float,
+    dyn_print: dict[str, int],
+    restart: bool,
+) -> dict[str, Any]:
+    duration_ps = nstep * timestep_ps
+    if stage == "heat":
+        kw = build_heat_dynamics(
+            timestep_ps=timestep_ps,
+            duration_ps=duration_ps,
+            save_interval_ps=save_interval_ps,
+            temp=temp,
+            echeck=echeck,
+        )
+    elif stage == "nve":
+        kw = build_nve_dynamics(
+            timestep_ps=timestep_ps,
+            duration_ps=duration_ps,
+            save_interval_ps=save_interval_ps,
+            restart=restart,
+            temp=temp,
+            nprint=dyn_print["nprint"],
+            iprfrq=dyn_print["iprfrq"],
+            isvfrq=dyn_print["isvfrq"],
+            echeck=echeck,
+        )
+    elif stage == "equi":
+        kw = build_cpt_equilibration_dynamics(
+            timestep_ps=timestep_ps,
+            duration_ps=duration_ps,
+            save_interval_ps=save_interval_ps,
+            temp=temp,
+            restart=restart,
+            echeck=max(echeck, 500.0) if echeck > 0 else echeck,
+        )
+    elif stage == "prod":
+        kw = build_cpt_production_dynamics(
+            timestep_ps=timestep_ps,
+            duration_ps=duration_ps,
+            save_interval_ps=save_interval_ps,
+            temp=temp,
+            restart=restart,
+        )
+    else:
+        raise ValueError(stage)
+    kw["nprint"] = dyn_print["nprint"]
+    kw["iprfrq"] = dyn_print["iprfrq"]
+    kw["isvfrq"] = dyn_print["isvfrq"]
+    kw["nstep"] = nstep
+    if restart:
+        kw["new"] = False
+        kw["start"] = False
+        kw["restart"] = True
+    else:
+        kw["new"] = True
+        kw["start"] = True
+    return kw
+
+
+def _load_or_build_cluster(
+    args: argparse.Namespace,
+) -> tuple[np.ndarray, np.ndarray, int, str]:
+    if getattr(args, "skip_cluster_build", False) or getattr(args, "from_psf", None):
+        return load_cluster_from_artifacts(args)
+    return build_cluster_from_args_with_tag(args)
+
+
+def run_staged_workflow(args: argparse.Namespace) -> int:
+    stages = resolve_md_stages(args)
+    if getattr(args, "no_pre_minimize", False):
+        stages = [s for s in stages if s != "mini"]
+    if not stages:
+        raise ValueError("no MD stages selected")
+
+    fix_resids = resolve_fix_resids(args)
+    dynamics_constrain = resolve_constrain_resids(args)
+    ckpt = resolve_checkpoint(args.checkpoint)
+    z, r, n_mol, tag = _load_or_build_cluster(args)
+    validate_resids_for_cluster(fix_resids, n_mol)
+    validate_resids_for_cluster(dynamics_constrain, n_mol)
+    print_cluster_geometry_summary(r, n_mol)
+
+    out_dir = Path(args.output_dir).resolve()
+    out_dir.mkdir(parents=True, exist_ok=True)
+    n_atoms = len(z)
+    paths = _artifact_paths(out_dir, tag)
+
+    use_pbc = resolve_use_pbc(args)
+    box_side = resolve_pbc_box_side(args, r) if use_pbc else None
+    if use_pbc and not args.quiet:
+        print(f"PBC cubic box: {box_side:.3f} Å", flush=True)
+
+    dt_fs = float(getattr(args, "dt_fs", 0.25))
+    timestep_ps = timestep_ps_from_dt_fs(dt_fs)
+    if getattr(args, "timestep_ps", None) is not None:
+        timestep_ps = float(args.timestep_ps)
+    temp = float(getattr(args, "temperature", getattr(args, "temp", 300.0)))
+    mini_nprint = apply_charmm_output_from_args(args)
+    show_energy = resolve_show_energy(args)
+    echeck = resolve_echeck_for_cluster(args, n_atoms=n_atoms, n_monomers=n_mol)
+    mini_nstep = resolve_mini_nstep(args, n_mol)
+
+    setup_charmm_environment(use_pbc=use_pbc, cubic_box_side_A=box_side)
+    sync_charmm_positions(r)
+
+    vmd_topo_psf = paths["vmd_psf"]
+    if not getattr(args, "no_save_vmd_topology", False) and not getattr(
+        args, "skip_cluster_build", False
+    ):
+        vmd_files = save_cluster_topology_for_vmd(
+            out_dir, r, stem=f"cluster_for_vmd_{tag}", title="pre-MLpot cluster"
+        )
+        vmd_topo_psf = vmd_files["psf"]
+
+    if "mini" in stages and not getattr(args, "skip_cluster_build", False):
+        r = _charmm_pre_minimize_before_mlpot(
+            args, nprint=mini_nprint, reference_positions=r
+        )
+        sync_charmm_positions(r)
+
+    ctx, pyCModel = _register_mlpot_context(
+        z,
+        r,
+        ckpt,
+        n_atoms,
+        n_mol,
+        ml_batch_size=getattr(args, "ml_batch_size", None),
+        verbose=not args.quiet,
+    )
+    if use_pbc and box_side is not None:
+        from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+            refresh_nbonds_after_mlpot_pbc,
+        )
+
+        refresh_nbonds_after_mlpot_pbc(cubic_box_side_A=float(box_side))
+
+    restart_from = (
+        Path(args.restart_from).expanduser().resolve()
+        if getattr(args, "restart_from", None)
+        else None
+    )
+    last_traj: Path | None = None
+    try:
+        if "mini" in stages:
+            fix_sel = select_by_resids(fix_resids) if fix_resids else None
+            save_mini = bool(getattr(args, "save", True))
+            dcd_nsavc = resolve_dcd_nsavc(
+                dcd_nsavc=args.dcd_nsavc, nstep=mini_nstep
+            )
+            if not args.quiet:
+                print(
+                    f"\nMLpot SD minimize: {mini_nstep} steps/pass, {n_atoms} atoms",
+                    flush=True,
+                )
+            minimize_with_mlpot(
+                MinimizeWithMlpotConfig(
+                    fixed_ml_selection=fix_sel,
+                    nstep=mini_nstep,
+                    nprint=mini_nprint,
+                    verbose=not args.quiet,
+                    reference_positions=r,
+                    pyCModel=pyCModel,
+                    save=save_mini,
+                    pdb_path=out_dir / f"mini_full_mlpot_{tag}.pdb" if save_mini else None,
+                    crd_path=paths["mini_crd"] if save_mini else None,
+                    psf_path=paths["mini_psf"] if save_mini else None,
+                    energy_json_path=out_dir / f"mini_full_mlpot_{tag}_energy.json"
+                    if save_mini
+                    else None,
+                    xyz_path=out_dir / f"mini_full_mlpot_{tag}.xyz" if save_mini else None,
+                    dcd_path=paths["mini_dcd"] if save_mini else None,
+                    dcd_nsavc=dcd_nsavc if save_mini else 0,
+                    skip_if_crd_exists=bool(getattr(args, "skip_if_crd_exists", False)),
+                    test_first=resolve_test_first_config(args),
+                    show_energy=show_energy,
+                )
+            )
+            sync_charmm_positions(get_charmm_positions_array())
+            if not args.quiet:
+                print(f"Post MLpot mini GRMS: {charmm_grms():.4f} kcal/mol/Å", flush=True)
+            last_traj = paths["mini_dcd"] if paths["mini_dcd"].is_file() else None
+
+        dyn_stages = [s for s in _STAGE_ORDER if s in stages and s != "mini"]
+        if not dyn_stages:
+            return 0
+
+        if not use_pbc:
+            apply_flat_bottom_from_args(args)
+
+        assert_dynamics_ready(
+            max_grms=float(getattr(args, "max_grms_before_dyn", 50.0)),
+            abort=not getattr(args, "allow_high_grms", False),
+        )
+
+        if dynamics_constrain:
+            setup_cons_fix_for_resids(dynamics_constrain)
+
+        n_prod_segments = max(1, int(getattr(args, "n_prod_segments", 1)))
+        if "prod" in dyn_stages and n_prod_segments > 1:
+            prod_idx = dyn_stages.index("prod")
+            dyn_stages = dyn_stages[:prod_idx] + ["prod"] * n_prod_segments
+
+        prev_restart: Path | None = restart_from
+        for stage in dyn_stages:
+            if stage == "prod" and n_prod_segments > 1:
+                seg_chain = production_restart_chain(
+                    out_dir,
+                    n_segments=n_prod_segments,
+                    prefix=f"prod_{tag}",
+                    equi_restart=paths["equi_res"].name
+                    if paths["equi_res"].is_file()
+                    else "equi.res",
+                )
+                for seg_i, seg_io in enumerate(seg_chain):
+                    seg_ps = _stage_ps(args, "prod") / n_prod_segments
+                    nstep = dynamics_nstep_from_ps(seg_ps, dt_fs)
+                    dcd_nsavc = resolve_dcd_nsavc(
+                        dcd_nsavc=args.dcd_nsavc,
+                        dcd_interval_ps=getattr(args, "dcd_interval_ps", None),
+                        timestep_ps=timestep_ps,
+                        nstep=nstep,
+                    )
+                    dyn_print = resolve_dynamics_print_kwargs(args, nstep=nstep)
+                    save_interval_ps = timestep_ps * dcd_nsavc
+                    rread = seg_io.restart_read
+                    restart = rread is not None and Path(rread).is_file()
+                    kw = _build_stage_dynamics_kw(
+                        "prod",
+                        args=args,
+                        timestep_ps=timestep_ps,
+                        nstep=nstep,
+                        save_interval_ps=save_interval_ps,
+                        temp=temp,
+                        echeck=echeck,
+                        dyn_print=dyn_print,
+                        restart=restart,
+                    )
+                    kw["nsavc"] = dcd_nsavc
+                    if not args.quiet:
+                        print(
+                            f"\nPROD segment {seg_i + 1}/{n_prod_segments}: "
+                            f"{nstep} steps @ {timestep_ps} ps",
+                            flush=True,
+                        )
+                    disable_charmm_domdec()
+                    run_dynamics_with_io(kw, seg_io)
+                    last_traj = seg_io.trajectory
+                continue
+
+            stage_ps = _stage_ps(args, stage)
+            nstep = dynamics_nstep_from_ps(stage_ps, dt_fs)
+            dcd_nsavc = resolve_dcd_nsavc(
+                dcd_nsavc=args.dcd_nsavc,
+                dcd_interval_ps=getattr(args, "dcd_interval_ps", None),
+                timestep_ps=timestep_ps,
+                nstep=nstep,
+            )
+            dyn_print = resolve_dynamics_print_kwargs(args, nstep=nstep)
+            save_interval_ps = timestep_ps * dcd_nsavc
+
+            rread = prev_restart or _prior_restart_for_stage(stage, paths, restart_from=None)
+            restart = rread is not None and Path(rread).is_file()
+            io = _io_for_stage(stage, paths)
+            if restart:
+                io.restart_read = Path(rread)
+
+            if not args.quiet:
+                print(
+                    f"\n{stage.upper()}: {nstep} steps @ {timestep_ps} ps | "
+                    f"restart={restart} | "
+                    f"{format_resid_constraint_message(dynamics_constrain, context='cons_fix')}",
+                    flush=True,
+                )
+
+            kw = _build_stage_dynamics_kw(
+                stage,
+                args=args,
+                timestep_ps=timestep_ps,
+                nstep=nstep,
+                save_interval_ps=save_interval_ps,
+                temp=temp,
+                echeck=echeck,
+                dyn_print=dyn_print,
+                restart=restart,
+            )
+            kw["nsavc"] = dcd_nsavc
+            disable_charmm_domdec()
+            run_dynamics_with_io(kw, io)
+            prev_restart = io.restart_write
+            last_traj = io.trajectory
+
+    finally:
+        if dynamics_constrain:
+            turn_off_cons_fix()
+        ctx.unset()
+
+    print(f"\nStaged workflow OK ({','.join(stages)}) -> {out_dir}")
+    if last_traj is not None and last_traj.is_file():
+        print_vmd_load_help(
+            out_dir=out_dir,
+            tag=tag,
+            topology_psf=vmd_topo_psf,
+            trajectory=last_traj,
+            n_atoms=n_atoms,
+            bondless_psf=paths["mini_psf"] if paths["mini_psf"].is_file() else None,
+        )
+    return 0

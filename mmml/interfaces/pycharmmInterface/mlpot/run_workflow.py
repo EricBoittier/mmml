@@ -54,7 +54,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.setup import (
     sync_charmm_positions,
 )
 
-Phase = Literal["minimize", "dynamics", "full"]
+Phase = Literal["minimize", "dynamics", "full", "staged"]
 Ensemble = Literal["nve", "nvt"]
 
 
@@ -415,10 +415,25 @@ def run_workflow(
     phase: Phase,
     ensemble: Ensemble = "nve",
 ) -> int:
+    setattr(args, "ensemble", ensemble)
     if phase == "minimize":
-        return run_minimize_workflow(args)
-    if phase == "dynamics":
-        return run_dynamics_workflow(args, ensemble=ensemble)
-    if phase == "full":
-        return run_dynamics_workflow(args, ensemble=ensemble, pre_minimize=True)
+        setattr(args, "setup", getattr(args, "setup", None) or "pycharmm_minimize")
+        from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
+            run_staged_workflow,
+        )
+
+        return run_staged_workflow(args)
+    if phase in ("dynamics", "full", "staged"):
+        if phase == "full" and not getattr(args, "no_pre_minimize", False):
+            if not getattr(args, "md_stages", None) and not getattr(args, "md_stage", None):
+                setup = getattr(args, "setup", "") or ""
+                if setup == "free_nvt":
+                    setattr(args, "md_stages", "mini,heat")
+                elif setup == "free_nve":
+                    setattr(args, "md_stages", "mini,nve")
+        from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
+            run_staged_workflow,
+        )
+
+        return run_staged_workflow(args)
     raise ValueError(f"Unknown phase: {phase}")

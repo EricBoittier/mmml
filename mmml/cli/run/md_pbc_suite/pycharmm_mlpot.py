@@ -14,6 +14,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     add_dynamics_stability_args,
     add_flat_bottom_args,
     add_monomer_constraint_args,
+    add_staged_md_args,
     add_test_first_args,
 )
 from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import run_workflow
@@ -28,9 +29,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--phase",
-        choices=["full", "minimize", "dynamics"],
-        default="full",
-        help="full = pre-minimize + MD; minimize = SD only; dynamics = MD only",
+        choices=["full", "minimize", "dynamics", "staged"],
+        default="staged",
+        help="staged = multi-stage MD (default); minimize = SD only",
+    )
+    parser.add_argument(
+        "--setup",
+        type=str,
+        default="pycharmm_full",
+        help="Preset from mmml md-system (controls default --md-stages and PBC)",
     )
     parser.add_argument(
         "--ensemble",
@@ -45,6 +52,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     add_flat_bottom_args(parser)
     add_monomer_constraint_args(parser, for_dynamics=True)
     add_test_first_args(parser)
+    add_staged_md_args(parser)
+    parser.add_argument(
+        "--box-size",
+        type=float,
+        default=None,
+        help="Cubic PBC box side in Å (with --setup pbc_* or explicit PBC)",
+    )
     parser.add_argument(
         "--output-dir",
         type=Path,
