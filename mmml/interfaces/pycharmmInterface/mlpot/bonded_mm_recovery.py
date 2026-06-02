@@ -65,13 +65,13 @@ def record_mm_baseline_strain(*, verbose: bool = False) -> MmStrainBaseline | No
 
 
 def measure_mm_bonded_strain_with_full_block(ctx: MlpotContext) -> MmStrainBaseline:
-    """GRMS + bonded internal + ANGL after ``ENER`` with full MM block (MLpot on)."""
+    """GRMS + bonded internal + ANGL after ``ENER`` with full MM block (MLpot detached)."""
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm
 
     from mmml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_block
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _with_mlpot_block_restored
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _with_mlpot_detached
 
     def _measure() -> MmStrainBaseline:
         apply_charmm_mm_block()
@@ -82,7 +82,7 @@ def measure_mm_bonded_strain_with_full_block(ctx: MlpotContext) -> MmStrainBasel
             angl_kcalmol=charmm_bonded_term_kcalmol("ANGL"),
         )
 
-    return _with_mlpot_block_restored(ctx, _measure)
+    return _with_mlpot_detached(ctx, _measure)
 
 
 def _bonded_strain_margins(args: argparse.Namespace) -> tuple[float, float, float]:
@@ -256,7 +256,7 @@ def maybe_run_bonded_mm_mini_after_stage(
     if not args.quiet:
         print(
             f"bonded-MM-mini: after {stage}: {'; '.join(reasons)}; "
-            f"running bonded SD (MLpot stays registered)",
+            f"running bonded SD (MLpot detached)",
             flush=True,
         )
     nstep = int(getattr(args, "bonded_mm_mini_steps", 50))

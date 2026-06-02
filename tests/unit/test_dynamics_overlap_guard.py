@@ -202,35 +202,132 @@ def test_run_dynamics_with_io_chunks_and_checks(tmp_path):
     assert calls[0]["restart"] is True
     assert calls[0]["iunrea"] == 3
     assert "firstt" in calls[0]
-    assert calls[1]["restart"] is True
+    assert calls[1]["restart"] is False
+    assert calls[1]["iunrea"] == -1
     assert "firstt" not in calls[1]
-    assert calls[2]["restart"] is True
+    assert calls[2]["restart"] is False
+    assert calls[2]["iunrea"] == -1
     assert "firstt" not in calls[2]
 
 
-def test_overlap_chunk_restart_paths_alternate_read_write(tmp_path):
+def test_overlap_memory_handoff_chunks_no_restart_read(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+
+    cfg = DynamicsOverlapConfig(
+        action="error",
+        min_distance_A=0.5,
+        check_interval=2,
+        n_monomers=2,
+        use_pbc=False,
+    )
+    pos_ok = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [5.0, 0.0, 0.0],
+            [6.0, 0.0, 0.0],
+        ],
+        dtype=float,
+    )
+    res_path = tmp_path / "equi.res"
+    io = CharmmTrajectoryFiles(restart_write=res_path)
+    calls: list[dict] = []
+
+    def fake_chunk(kw, _io):
+        calls.append(dict(kw))
+        return mock.Mock()
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        side_effect=fake_chunk,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        return_value=pos_ok,
+    ):
+        run_dynamics_with_io(
+            {
+                "nstep": 5,
+                "new": False,
+                "start": False,
+                "restart": False,
+            },
+            io,
+            overlap=cfg,
+            overlap_context="NVE",
+        )
+
+    assert [c["nstep"] for c in calls] == [2, 2, 1]
+    for c in calls:
+        assert c["restart"] is False
+        assert c.get("iunrea") == -1
+        assert "firstt" not in c
+
+
+def test_overlap_cleans_stale_slots_at_start(tmp_path):
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmTrajectoryFiles,
-        _overlap_chunk_restart_paths,
         _overlap_restart_slot_paths,
+        _cleanup_overlap_restart_slots,
+    )
+
+    cfg = DynamicsOverlapConfig(
+        action="error",
+        min_distance_A=0.5,
+        check_interval=2,
+        n_monomers=2,
+        use_pbc=False,
+    )
+    pos_ok = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [5.0, 0.0, 0.0],
+            [6.0, 0.0, 0.0],
+        ],
+        dtype=float,
+    )
+    equi = tmp_path / "equi.res"
+    io = CharmmTrajectoryFiles(restart_write=equi)
+    slot_a, slot_b = _overlap_restart_slot_paths(equi)
+    slot_a.write_text("", encoding="utf-8")
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        return_value=mock.Mock(),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        return_value=pos_ok,
+    ):
+        run_dynamics_with_io(
+            {"nstep": 4, "restart": False},
+            io,
+            overlap=cfg,
+        )
+
+    assert not slot_a.exists()
+    _cleanup_overlap_restart_slots(io)
+    assert not slot_b.exists()
+
+
+def test_overlap_chunk_io_external_read_last_write_only(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        CharmmTrajectoryFiles,
+        _overlap_chunk_io,
     )
 
     heat = tmp_path / "heat.res"
     equi = tmp_path / "equi_dcm_60.res"
     heat.write_text("REST\n", encoding="utf-8")
     io = CharmmTrajectoryFiles(restart_read=heat, restart_write=equi)
-    slot_a, slot_b = _overlap_restart_slot_paths(equi)
 
-    r0, w0 = _overlap_chunk_restart_paths(io, chunk_index=0, n_chunks=3)
-    assert r0 == heat
-    assert w0 == slot_a
+    c0 = _overlap_chunk_io(io, chunk_index=0, n_chunks=3)
+    assert c0.restart_read == heat
+    assert c0.restart_write is None
 
-    r1, w1 = _overlap_chunk_restart_paths(io, chunk_index=1, n_chunks=3)
-    assert r1 == slot_a
-    assert w1 == slot_b
+    c1 = _overlap_chunk_io(io, chunk_index=1, n_chunks=3)
+    assert c1.restart_read is None
+    assert c1.restart_write is None
 
-    r2, w2 = _overlap_chunk_restart_paths(io, chunk_index=2, n_chunks=3)
-    assert r2 == slot_b
-    assert w2 == equi
-    assert r1 != w1
-    assert r2 != w2
+    c2 = _overlap_chunk_io(io, chunk_index=2, n_chunks=3)
+    assert c2.restart_read is None
+    assert c2.restart_write == equi
