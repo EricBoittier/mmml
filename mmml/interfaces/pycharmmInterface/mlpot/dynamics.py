@@ -271,7 +271,7 @@ def _log_bonded_term_diagnostics(*, verbose: bool) -> None:
 
 
 def _with_mlpot_detached(ctx: "MlpotContext", fn):
-    """Unset MLpot USER, run MM work, then reregister MLpot + hybrid BLOCK."""
+    """Unset MLpot USER, run MM work, then reattach MLpot + hybrid BLOCK."""
     from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
     if not isinstance(ctx, MlpotContext):

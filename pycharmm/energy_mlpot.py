@@ -204,3 +204,18 @@ class MLpot():
         """
         pycharmm.lib.charmm.mlpot_unset()
         self.is_set = False
+
+    def reattach_mlpot(self):
+        """Re-enable MLpot after :meth:`unset_mlpot` without rebuilding exclusion lists.
+
+        Re-running :func:`pycharmm.psf.set_iblo_inb` / :func:`pycharmm.nbonds.update_bnbnd`
+        after long MD can segfault in CHARMM ``upinb``; reuse the existing lists instead.
+        """
+        if self.is_set:
+            return
+        pycharmm.lib.charmm.mlpot_set_func(self.energy_func)
+        mlidx = (ctypes.c_int * self.ml_Natoms)(*(self.ml_indices + 1))
+        mlidz = (ctypes.c_int * self.ml_Natoms)(*self.ml_Z)
+        nml = (ctypes.c_int * 1)(self.ml_Natoms)
+        pycharmm.lib.charmm.mlpot_set_properties(nml, mlidx, mlidz)
+        self.is_set = True
