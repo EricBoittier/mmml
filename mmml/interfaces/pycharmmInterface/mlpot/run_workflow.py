@@ -25,8 +25,10 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     resolve_echeck_for_cluster,
     resolve_mini_nstep,
     resolve_fix_resids,
+    resolve_pbc_box_side,
     resolve_show_energy,
     resolve_test_first_config,
+    resolve_use_pbc,
     setup_cons_fix_for_resids,
     timestep_ps_from_dt_fs,
     turn_off_cons_fix,
@@ -45,6 +47,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
 from mmml.interfaces.pycharmmInterface.mlpot.setup import (
     get_charmm_positions_array,
     load_physnet_mlpot_bundle,
+    refresh_nbonds_after_mlpot_pbc,
     register_mlpot,
     save_cluster_topology_for_vmd,
     select_all_atoms,
@@ -53,6 +56,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.setup import (
     setup_default_nbonds,
     sync_charmm_positions,
 )
+from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import setup_charmm_environment
 
 Phase = Literal["minimize", "dynamics", "full", "staged"]
 Ensemble = Literal["nve", "nvt"]
@@ -103,6 +107,22 @@ def _atoms_per_monomer_list(z: np.ndarray, n_monomers: int) -> list[int]:
     return [per] * int(n_monomers)
 
 
+def _setup_charmm_nbonds_for_args(
+    args: argparse.Namespace,
+    r: np.ndarray,
+) -> float | None:
+    """Vacuum or PBC CHARMM environment; return cubic box side when PBC is active."""
+    use_pbc = resolve_use_pbc(args)
+    if not use_pbc:
+        setup_default_nbonds()
+        return None
+    box_side = resolve_pbc_box_side(args, r)
+    if not args.quiet:
+        print(f"PBC cubic box: {box_side:.3f} Å", flush=True)
+    setup_charmm_environment(use_pbc=True, cubic_box_side_A=box_side)
+    return float(box_side)
+
+
 def _register_mlpot_context(
     z: np.ndarray,
     r: np.ndarray,
@@ -111,9 +131,16 @@ def _register_mlpot_context(
     n_monomers: int,
     *,
     ml_batch_size: int | None = None,
+    cubic_box_side_A: float | None = None,
     verbose: bool = False,
 ):
     import ase
+
+    if cubic_box_side_A is not None and verbose:
+        print(
+            f"MLpot MIC PBC: cubic L={float(cubic_box_side_A):.3f} Å",
+            flush=True,
+        )
 
     atoms = ase.Atoms(numbers=z, positions=r)
     _, _, pyCModel = load_physnet_mlpot_bundle(
@@ -123,6 +150,7 @@ def _register_mlpot_context(
         n_monomers=n_monomers,
         atoms_per_monomer=_atoms_per_monomer_list(z, n_monomers),
         ml_batch_size=ml_batch_size,
+        cell=float(cubic_box_side_A) if cubic_box_side_A is not None else None,
         verbose=verbose,
     )
     if int(n_monomers) > 1:
@@ -132,9 +160,16 @@ def _register_mlpot_context(
         )
 
         if isinstance(pyCModel, DecomposedMlpotModel):
-            warmup_decomposed_mlpot(pyCModel, r, verbose=verbose)
+            warmup_decomposed_mlpot(
+                pyCModel,
+                r,
+                cell=float(cubic_box_side_A) if cubic_box_side_A is not None else None,
+                verbose=verbose,
+            )
 
     ctx = register_mlpot(pyCModel, z, select_all_atoms())
+    if cubic_box_side_A is not None:
+        refresh_nbonds_after_mlpot_pbc(cubic_box_side_A=float(cubic_box_side_A))
     sync_charmm_positions(r)
     pos_chk = get_charmm_positions_array()
     if np.allclose(pos_chk, 0.0):
@@ -164,7 +199,7 @@ def run_minimize_workflow(args: argparse.Namespace) -> int:
     dcd_path = out_dir / f"mini_full_mlpot_{tag}.dcd"
     save = bool(getattr(args, "save", True))
 
-    setup_default_nbonds()
+    box_side = _setup_charmm_nbonds_for_args(args, r)
     sync_charmm_positions(r)
     vmd_topo_psf = out_dir / f"cluster_for_vmd_{tag}.psf"
     if not getattr(args, "no_save_vmd_topology", False):
@@ -185,6 +220,7 @@ def run_minimize_workflow(args: argparse.Namespace) -> int:
         n_atoms,
         n_mol,
         ml_batch_size=getattr(args, "ml_batch_size", None),
+        cubic_box_side_A=box_side,
         verbose=not args.quiet,
     )
     fix_sel = select_by_resids(fix_resids) if fix_resids else None
@@ -269,7 +305,7 @@ def run_dynamics_workflow(
         pre_minimize = not getattr(args, "no_pre_minimize", False)
     mini_nstep = resolve_mini_nstep(args, n_mol)
 
-    setup_default_nbonds()
+    box_side = _setup_charmm_nbonds_for_args(args, r)
     sync_charmm_positions(r)
     vmd_topo_psf = out_dir / f"cluster_for_vmd_{tag}.psf"
     if not getattr(args, "no_save_vmd_topology", False):
@@ -290,6 +326,7 @@ def run_dynamics_workflow(
         n_atoms,
         n_mol,
         ml_batch_size=getattr(args, "ml_batch_size", None),
+        cubic_box_side_A=box_side,
         verbose=not args.quiet,
     )
     show_energy = resolve_show_energy(args)

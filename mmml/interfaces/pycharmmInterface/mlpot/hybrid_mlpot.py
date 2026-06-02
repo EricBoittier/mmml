@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any, Optional, Sequence
+from typing import Any, Optional, Sequence, Union
 
 import jax
 import jax.numpy as jnp
@@ -49,6 +49,7 @@ class DecomposedMlpotCalculator:
         cutoff_params: CutoffParameters,
         n_monomers: int,
         atomic_numbers: np.ndarray,
+        cell: Union[float, bool] = False,
     ) -> None:
         self.spherical_fn = spherical_fn
         self.cutoff_params = cutoff_params
@@ -57,6 +58,7 @@ class DecomposedMlpotCalculator:
             physnet_ml_atomic_numbers(atomic_numbers), dtype=np.int32
         )
         self.ev2kcal = float(ev2kcalmol)
+        self._cell = float(cell) if cell else False
 
     def calculate_charmm(
         self,
@@ -110,11 +112,13 @@ class DecomposedMlpotModel:
         cutoff_params: CutoffParameters,
         n_monomers: int,
         atomic_numbers: np.ndarray,
+        cell: Union[float, bool] = False,
     ) -> None:
         self._spherical_fn = spherical_fn
         self._cutoff_params = cutoff_params
         self._n_monomers = int(n_monomers)
         self._atomic_numbers = np.asarray(atomic_numbers, dtype=int)
+        self._cell = float(cell) if cell else False
 
     def get_pycharmm_calculator(self, ml_atom_indices=None, ml_atomic_numbers=None, **kwargs):
         if ml_atomic_numbers is not None:
@@ -126,6 +130,7 @@ class DecomposedMlpotModel:
             self._cutoff_params,
             self._n_monomers,
             z,
+            cell=self._cell,
         )
 
 
@@ -136,6 +141,7 @@ def build_decomposed_mlpot_model(
     n_monomers: int,
     *,
     ml_batch_size: Optional[int] = None,
+    cell: Union[float, bool] = False,
     verbose: bool = False,
 ) -> DecomposedMlpotModel:
     ckpt = Path(checkpoint).expanduser().resolve()
@@ -150,6 +156,11 @@ def build_decomposed_mlpot_model(
             f"({int(n_monomers)} monomers; reduces JAX compile memory)",
             flush=True,
         )
+    if verbose and cell:
+        print(
+            f"Decomposed MLpot: MIC PBC cubic cell={float(cell):.3f} Å",
+            flush=True,
+        )
     factory = setup_calculator(
         ATOMS_PER_MONOMER=per,
         N_MONOMERS=int(n_monomers),
@@ -160,6 +171,7 @@ def build_decomposed_mlpot_model(
         verbose=verbose,
         MAX_ATOMS_PER_SYSTEM=max_atoms,
         ml_batch_size=batch_size,
+        cell=cell,
     )
     r0 = np.zeros((len(z), 3), dtype=np.float64)
     from mmml.interfaces.pycharmmInterface.jax_device_policy import mlpot_jax_device_context
@@ -183,6 +195,7 @@ def build_decomposed_mlpot_model(
         cutoff_params,
         int(n_monomers),
         np.asarray(atomic_numbers, dtype=int),
+        cell=cell,
     )
     return model
 
@@ -191,6 +204,7 @@ def warmup_decomposed_mlpot(
     model: DecomposedMlpotModel,
     positions: np.ndarray,
     *,
+    cell: Union[float, bool] | None = None,
     verbose: bool = False,
 ) -> None:
     """JIT-compile hybrid ML outside the CHARMM callback (before MLpot SD)."""
@@ -198,11 +212,16 @@ def warmup_decomposed_mlpot(
 
     z = np.asarray(physnet_ml_atomic_numbers(model._atomic_numbers), dtype=int)
     r = np.asarray(positions, dtype=np.float64)
+    pbc_cell = cell if cell is not None else model._cell
+    box = None
+    if pbc_cell:
+        side = float(pbc_cell)
+        box = jnp.asarray([[side, 0.0, 0.0], [0.0, side, 0.0], [0.0, 0.0, side]])
     if verbose:
-        print(
-            f"Decomposed MLpot JAX warmup: {len(z)} atoms, {model._n_monomers} monomers",
-            flush=True,
-        )
+        msg = f"Decomposed MLpot JAX warmup: {len(z)} atoms, {model._n_monomers} monomers"
+        if pbc_cell:
+            msg += f", MIC PBC L={float(pbc_cell):.3f} Å"
+        print(msg, flush=True)
     warmup_hybrid_spherical_cutoff(
         model._spherical_fn,
         atomic_numbers=jnp.asarray(z),
@@ -212,6 +231,7 @@ def warmup_decomposed_mlpot(
         doML=True,
         doMM=False,
         doML_dimer=True,
+        box=box,
     )
     from mmml.interfaces.pycharmmInterface.charmm_mpi import recover_mpi_for_charmm_after_jax
 
