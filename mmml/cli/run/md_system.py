@@ -497,6 +497,19 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="pycharmm: skip MLpot SD when mini CRD already exists in --output-dir",
     )
+    parser.add_argument(
+        "--no-save-vmd-topology",
+        action="store_true",
+        help="pycharmm: skip cluster_for_vmd PSF/PDB before MLpot registration",
+    )
+    parser.add_argument(
+        "--free-space",
+        action="store_true",
+        help=(
+            "pycharmm: force vacuum (no PBC). free_nve/free_nvt setups are vacuum "
+            "by default; use to override when --box-size is also set."
+        ),
+    )
 
     # --- lambda_ti (--setup lambda_ti) ----------------------------------------
     parser.add_argument(
@@ -986,6 +999,10 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         cmd.append("--skip-cluster-build")
     if getattr(args, "skip_if_crd_exists", False):
         cmd.append("--skip-if-crd-exists")
+    if getattr(args, "no_save_vmd_topology", False):
+        cmd.append("--no-save-vmd-topology")
+    if getattr(args, "free_space", False):
+        cmd.append("--free-space")
     if getattr(args, "bonded_mm_mini", False):
         cmd.append("--bonded-mm-mini")
         cmd.extend(["--bonded-mm-mini-after", str(args.bonded_mm_mini_after)])
