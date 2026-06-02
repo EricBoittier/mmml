@@ -884,6 +884,76 @@ def _overlap_chunk_io(
     )
 
 
+def _harmonize_dynamics_frequency(value: int, chunk_nstep: int) -> int:
+    """Pick a CHARMM update frequency that divides ``chunk_nstep`` (FINCYC compatibility)."""
+    n = max(1, int(chunk_nstep))
+    val = int(value)
+    if val <= 0:
+        return val
+    if val > n:
+        return n
+    if n % val == 0:
+        return val
+    for d in range(min(val, n), 0, -1):
+        if n % d == 0:
+            return d
+    return n
+
+
+_OVERLAP_CHUNK_FREQ_KEYS = (
+    "ihbfrq",
+    "ilbfrq",
+    "imgfrq",
+    "iprfrq",
+    "nprint",
+    "isvfrq",
+)
+
+
+def _harmonize_overlap_chunk_frequencies(
+    chunk_kw: dict[str, Any],
+    chunk_nstep: int,
+) -> None:
+    """Align list/image/HB update freqs with this chunk's ``nstep`` (avoids FINCYC retune)."""
+    n = max(1, int(chunk_nstep))
+    for key in _OVERLAP_CHUNK_FREQ_KEYS:
+        if key not in chunk_kw:
+            continue
+        chunk_kw[key] = _harmonize_dynamics_frequency(int(chunk_kw[key]), n)
+
+
+def _prepare_overlap_chunk_after_restart(
+    mlpot_ctx: Optional["MlpotContext"],
+) -> None:
+    """Rebuild pair/image lists after ``READYN`` before the next overlap ``dyna`` chunk."""
+    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+
+    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+        apply_pbc_nbonds,
+        pbc_nbond_kwargs,
+        vacuum_nbond_kwargs,
+    )
+
+    pycharmm = _import_pycharmm_modules()[0]
+    with charmm_relaxed_bomlev():
+        pycharmm.nbonds.update_bnbnd()
+        if (
+            mlpot_ctx is not None
+            and mlpot_ctx.use_pbc
+            and mlpot_ctx.cubic_box_side_A is not None
+        ):
+            cutnb = 18.0
+            pycharmm.UpdateNonBondedScript(
+                **pbc_nbond_kwargs(nbxmod=5, cutnb=cutnb, cutim=cutnb + 4.0)
+            ).run()
+            apply_pbc_nbonds(nbxmod=5, cutnb=cutnb)
+        else:
+            pycharmm.UpdateNonBondedScript(**vacuum_nbond_kwargs(nbxmod=5)).run()
+        pycharmm.lingo.charmm_script("ENER")
+        pycharmm.lingo.charmm_script("UPDATE")
+
+
 def _apply_overlap_chunk_dynamics_kw(
     chunk_kw: dict[str, Any],
     *,
@@ -1017,6 +1087,10 @@ def run_dynamics_with_io(
                 )
             if chunk_io is None or chunk_io.restart_write is None:
                 chunk_kw.pop("iunwri", None)
+
+            _harmonize_overlap_chunk_frequencies(chunk_kw, chunk_nstep)
+            if has_restart_read:
+                _prepare_overlap_chunk_after_restart(mlpot_ctx)
 
             last_dyn = _run_dynamics_chunk(chunk_kw, chunk_io)
             steps_done += chunk_nstep
