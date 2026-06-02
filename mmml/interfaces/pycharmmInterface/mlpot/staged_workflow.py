@@ -132,7 +132,11 @@ def _prior_restart_for_stage(
     if stage == "nve":
         return paths["heat_res"] if paths["heat_res"].is_file() else None
     if stage == "equi":
-        return paths["nve_res"] if paths["nve_res"].is_file() else None
+        if paths["nve_res"].is_file():
+            return paths["nve_res"]
+        if paths["heat_res"].is_file():
+            return paths["heat_res"]
+        return None
     if stage == "prod":
         return paths["equi_res"] if paths["equi_res"].is_file() else None
     return None
@@ -249,8 +253,6 @@ def _build_stage_dynamics_kw(
         kw["new"] = False
         kw["start"] = False
         kw["restart"] = True
-        # Coords/box from restart; skip READYN flag check after BLOCK/MLpot toggles.
-        kw["res"] = True
     else:
         kw["new"] = True
         kw["start"] = True
