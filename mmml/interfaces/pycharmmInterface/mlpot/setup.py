@@ -178,7 +178,7 @@ def apply_charmm_verbosity(
     *,
     prnlev: int = 5,
     warnlev: int = 5,
-    bomlev: int = 0,
+    bomlev: int = -2,
 ) -> dict[str, int]:
     """Raise CHARMM console output (``PRNLev``, ``WRNLev``, ``BOMBlev``).
 
@@ -342,9 +342,12 @@ def refresh_nbonds_after_mlpot_pbc(
             return
 
     pycharmm = _import_pycharmm()
-    prepare_charmm_pbc(side)
-    pycharmm.nbonds.update_bnbnd()
-    apply_pbc_nbonds(nbxmod=nbxmod, cutnb=cutnb)
+    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+
+    with charmm_relaxed_bomlev():
+        prepare_charmm_pbc(side)
+        pycharmm.nbonds.update_bnbnd()
+        apply_pbc_nbonds(nbxmod=nbxmod, cutnb=cutnb)
 
 
 def load_cluster_from_artifacts(
@@ -494,20 +497,23 @@ def register_mlpot(
     z_ml = physnet_ml_atomic_numbers(ml_Z)
     n_ml = len(ml_selection.get_atom_indexes())
     validate_mlpot_system_size(n_ml)
-    block_tag = apply_mlpot_energy_block(ml_selection)
-    mlpot = pycharmm.MLpot(
-        ml_model=pyCModel,
-        ml_Z=z_ml,
-        ml_selection=ml_selection,
-        ml_charge=ml_charge,
-        ml_fq=ml_fq,
-        mlmm_ctonnb=mlmm_ctonnb,
-        mlmm_ctofnb=mlmm_ctofnb,
-        preserve_psf_internals=preserve_psf_internals,
-        **kwargs,
-    )
-    if not use_pbc:
-        refresh_nbonds_after_mlpot()
+    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+
+    with charmm_relaxed_bomlev():
+        block_tag = apply_mlpot_energy_block(ml_selection)
+        mlpot = pycharmm.MLpot(
+            ml_model=pyCModel,
+            ml_Z=z_ml,
+            ml_selection=ml_selection,
+            ml_charge=ml_charge,
+            ml_fq=ml_fq,
+            mlmm_ctonnb=mlmm_ctonnb,
+            mlmm_ctofnb=mlmm_ctofnb,
+            preserve_psf_internals=preserve_psf_internals,
+            **kwargs,
+        )
+        if not use_pbc:
+            refresh_nbonds_after_mlpot()
     ml_z = np.asarray(ml_Z, dtype=int)
     return MlpotContext(
         mlpot=mlpot,
