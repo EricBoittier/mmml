@@ -11,24 +11,30 @@ from mmml.interfaces.pycharmmInterface.mlpot.dynamics import charmm_internal_ene
 
 def test_charmm_internal_energy_prefers_inte():
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._charmm_active_eterms",
-        return_value={"INTE": 12.5, "BOND": 1.0},
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._charmm_eterm_value",
+        side_effect=lambda name: {"INTE": 12.5, "BOND": 1.0}.get(name.upper()),
     ):
         assert charmm_internal_energy_kcalmol() == pytest.approx(12.5)
 
 
 def test_charmm_internal_energy_sums_bonded_terms():
+    def fake_eterm(name: str):
+        return {"BOND": 1.0, "ANGL": 2.0, "DIHE": 0.5}.get(name.upper())
+
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._charmm_active_eterms",
-        return_value={"BOND": 1.0, "ANGL": 2.0, "DIHE": 0.5},
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._charmm_eterm_value",
+        side_effect=fake_eterm,
     ):
         assert charmm_internal_energy_kcalmol() == pytest.approx(3.5)
 
 
 def test_charmm_internal_energy_prefers_bonded_when_inte_zero():
+    def fake_eterm(name: str):
+        return {"INTE": 0.0, "BOND": 10.0, "ANGL": 2.0}.get(name.upper())
+
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._charmm_active_eterms",
-        return_value={"INTE": 0.0, "BOND": 10.0, "ANGL": 2.0},
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._charmm_eterm_value",
+        side_effect=fake_eterm,
     ):
         assert charmm_internal_energy_kcalmol() == pytest.approx(12.0)
 
