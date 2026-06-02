@@ -162,6 +162,7 @@ class DecomposedMlpotModel:
         atomic_numbers: np.ndarray,
         cell: Union[float, bool] = False,
         do_mm: bool = True,
+        get_update_fn: Any | None = None,
     ) -> None:
         self._spherical_fn = spherical_fn
         self._cutoff_params = cutoff_params
@@ -169,6 +170,7 @@ class DecomposedMlpotModel:
         self._atomic_numbers = np.asarray(atomic_numbers, dtype=int)
         self._cell = float(cell) if cell else False
         self._do_mm = bool(do_mm)
+        self._get_update_fn = get_update_fn
 
     def get_pycharmm_calculator(self, ml_atom_indices=None, ml_atomic_numbers=None, **kwargs):
         if ml_atomic_numbers is not None:
@@ -281,7 +283,7 @@ def build_decomposed_mlpot_model(
     from mmml.interfaces.pycharmmInterface.jax_device_policy import mlpot_jax_device_context
 
     with mlpot_jax_device_context():
-        _, spherical_fn, _ = unpack_factory_result(
+        _, spherical_fn, get_update_fn = unpack_factory_result(
             factory(
                 atomic_numbers=jnp.asarray(z),
                 atomic_positions=jnp.asarray(r0),
@@ -307,6 +309,7 @@ def build_decomposed_mlpot_model(
         np.asarray(atomic_numbers, dtype=int),
         cell=cell,
         do_mm=do_mm,
+        get_update_fn=get_update_fn if do_mm else None,
     )
     return model
 
@@ -318,7 +321,7 @@ def warmup_decomposed_mlpot(
     cell: Union[float, bool] | None = None,
     verbose: bool = False,
 ) -> None:
-    """JIT-compile hybrid ML outside the CHARMM callback (before MLpot SD)."""
+    """JIT-compile hybrid ML/MM outside the CHARMM callback (before MLpot SD)."""
     from mmml.utils.jax_gpu_warmup import warmup_hybrid_spherical_cutoff
 
     z = np.asarray(physnet_ml_atomic_numbers(model._atomic_numbers), dtype=int)
@@ -330,20 +333,26 @@ def warmup_decomposed_mlpot(
         box = jnp.asarray([[side, 0.0, 0.0], [0.0, side, 0.0], [0.0, 0.0, side]])
     if verbose:
         msg = f"Decomposed MLpot JAX warmup: {len(z)} atoms, {model._n_monomers} monomers"
+        if model._do_mm:
+            msg += " (ML+MM)"
         if pbc_cell:
             msg += f", MIC PBC L={float(pbc_cell):.3f} Å"
         print(msg, flush=True)
-    warmup_hybrid_spherical_cutoff(
-        model._spherical_fn,
-        atomic_numbers=jnp.asarray(z),
-        positions=jnp.asarray(r),
-        n_monomers=model._n_monomers,
-        cutoff_params=model._cutoff_params,
-        doML=True,
-        doMM=model._do_mm,
-        doML_dimer=True,
-        box=box,
-    )
+    if model._do_mm and model._get_update_fn is not None:
+        # Build CGENFF MM pair fn on concrete coords, then run hybrid JIT warmup.
+        model._get_update_fn(r, model._cutoff_params, box=box)
+    else:
+        warmup_hybrid_spherical_cutoff(
+            model._spherical_fn,
+            atomic_numbers=jnp.asarray(z),
+            positions=jnp.asarray(r),
+            n_monomers=model._n_monomers,
+            cutoff_params=model._cutoff_params,
+            doML=True,
+            doMM=False,
+            doML_dimer=True,
+            box=box,
+        )
     from mmml.interfaces.pycharmmInterface.charmm_mpi import recover_mpi_for_charmm_after_jax
 
     recover_mpi_for_charmm_after_jax(phase="after decomposed MLpot JAX warmup")
