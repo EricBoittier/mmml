@@ -146,6 +146,59 @@ def test_check_overlap_rescue_runs_minimize_and_rechecks():
     assert dmin > 1.5
 
 
+def test_check_overlap_rescue_applies_separation_last_resort():
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        min_distance_A=1.5,
+        n_monomers=2,
+        use_pbc=False,
+        rescue=OverlapRescueConfig(nstep_sd=10, nstep_abnr=0, verbose=False),
+        separate_on_rescue_fail=True,
+        separate_margin_A=0.0,
+    )
+    pos_bad = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.5, 0.0, 0.0],
+            [2.0, 0.0, 0.0],
+        ],
+        dtype=float,
+    )
+    pos_ok = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [5.0, 0.0, 0.0],
+            [6.0, 0.0, 0.0],
+        ],
+        dtype=float,
+    )
+    ctx = mock.Mock()
+    call_n = [0]
+
+    def get_pos():
+        call_n[0] += 1
+        if call_n[0] <= 2:
+            return pos_bad.copy()
+        return pos_ok.copy()
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        side_effect=get_pos,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+    ) as sync_pos, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.minimize_overlap_rescue",
+    ) as rescue:
+        dmin = check_dynamics_overlap(
+            cfg, context="test", step=50, mlpot_ctx=ctx
+        )
+        rescue.assert_called_once_with(ctx, cfg.rescue)
+        sync_pos.assert_called_once()
+    assert dmin > 1.5
+
+
 def test_run_dynamics_with_io_chunks_and_checks(tmp_path):
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
 

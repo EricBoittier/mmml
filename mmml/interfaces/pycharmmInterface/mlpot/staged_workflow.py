@@ -340,7 +340,12 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         print(
             f"Dynamics overlap guard: action={overlap_cfg.action}, "
             f"min_distance={overlap_cfg.min_distance_A:.2f} Å, "
-            f"check every {overlap_cfg.check_interval} steps",
+            f"check every {overlap_cfg.check_interval} steps"
+            + (
+                ", last-resort monomer separation on"
+                if overlap_cfg.separate_on_rescue_fail
+                else ""
+            ),
             flush=True,
         )
 

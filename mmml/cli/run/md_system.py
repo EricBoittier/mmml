@@ -1043,6 +1043,14 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
             str(getattr(args, "dynamics_overlap_charmm_abnr_steps", 400)),
         ]
     )
+    if getattr(args, "no_dynamics_overlap_separate", False):
+        cmd.append("--no-dynamics-overlap-separate")
+    cmd.extend(
+        [
+            "--dynamics-overlap-separate-margin",
+            str(getattr(args, "dynamics_overlap_separate_margin", 0.2)),
+        ]
+    )
     cmd.extend(["--mm-switch-on", str(getattr(args, "mm_switch_on", 7.0))])
     cmd.extend(
         [
