@@ -590,6 +590,17 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--ml-cutoff", type=float, default=1.0, help="lambda_ti: ML cutoff (Å).")
     parser.add_argument(
+        "--ml-switch-width",
+        "--ml-cutoff-distance",
+        dest="ml_switch_width",
+        type=float,
+        default=0.1,
+        help=(
+            "ML taper width (Å) over [mm_switch_on - width, mm_switch_on] for pycharmm/MMML handoff "
+            "(default: 0.1). Does not affect lambda_ti (see --ml-cutoff)."
+        ),
+    )
+    parser.add_argument(
         "--mm-switch-on",
         type=float,
         default=7.0,
@@ -1039,10 +1050,9 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
             str(getattr(args, "mm_switch_width", getattr(args, "mm_cutoff", 5.0))),
         ]
     )
-    if getattr(args, "ml_switch_width", None) is not None:
-        cmd.extend(["--ml-switch-width", str(args.ml_switch_width)])
-    elif getattr(args, "ml_cutoff", None) is not None:
-        cmd.extend(["--ml-switch-width", str(args.ml_cutoff)])
+    cmd.extend(
+        ["--ml-switch-width", str(getattr(args, "ml_switch_width", 0.1))]
+    )
     if args.charmm_pre_minimize is False:
         cmd.append("--no-charmm-pre-minimize")
     cmd.extend(["--charmm-sd-steps", str(args.charmm_sd_steps)])
