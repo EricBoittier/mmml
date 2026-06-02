@@ -92,8 +92,10 @@ def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> None:
     Call **before** :func:`register_mlpot` so the PSF still has bonds and no ML model is loaded.
     """
     pycharmm, cons_fix, energy, minimize, *_ = _import_pycharmm_modules()
+    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_block
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
+        run_nbxmod_staged_sd,
         setup_default_nbonds,
         sync_charmm_positions,
     )
@@ -101,12 +103,11 @@ def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> None:
     if config.reference_positions is not None:
         sync_charmm_positions(config.reference_positions)
 
-    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_block
-
     apply_charmm_mm_block()
-    setup_default_nbonds()
     if config.nstep_sd <= 0 and config.nstep_abnr <= 0:
         return
+    if config.nstep_sd <= 0:
+        setup_default_nbonds()
 
     n_atoms = int(get_charmm_positions_array().shape[0])
     if n_atoms == 0:
@@ -122,7 +123,6 @@ def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> None:
         )
 
     sd_kw = {
-        "nstep": max(1, int(config.nstep_sd)),
         "nprint": max(1, int(config.nprint)),
         "tolenr": float(config.tolenr),
         "tolgrd": float(config.tolgrd),
@@ -133,8 +133,17 @@ def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> None:
         _maybe_show_energy(True)
     if config.nstep_sd > 0:
         if config.verbose:
-            print(f"CHARMM MM SD: nstep={config.nstep_sd}", flush=True)
-        minimize.run_sd(**sd_kw)
+            print(
+                f"CHARMM MM SD: nstep={config.nstep_sd} (NBXMOD 5→2→5)",
+                flush=True,
+            )
+        run_nbxmod_staged_sd(
+            minimize,
+            sd_kw,
+            int(config.nstep_sd),
+            ctx=None,
+            verbose=config.verbose,
+        )
     if config.nstep_abnr > 0:
         if config.verbose:
             print(f"CHARMM MM ABNR: nstep={config.nstep_abnr}", flush=True)
@@ -252,7 +261,6 @@ def measure_mm_grms_with_full_block(ctx: "MlpotContext") -> float:
 def _bonded_recovery_sd_kwargs(ctx: "MlpotContext", config: BondedMmMiniConfig) -> dict[str, Any]:
     """SD frequencies compatible with vacuum vs PBC (CHARMM rejects inbfrq=0 + imgfrq≠0)."""
     kw: dict[str, Any] = {
-        "nstep": max(1, int(config.nstep_sd)),
         "nprint": max(1, int(config.nprint)),
         "tolenr": float(config.tolenr),
         "tolgrd": float(config.tolgrd),
@@ -265,36 +273,19 @@ def _bonded_recovery_sd_kwargs(ctx: "MlpotContext", config: BondedMmMiniConfig) 
     return kw
 
 
-def _with_recovery_nbonds(ctx: "MlpotContext", fn):
-    """Run ``fn`` with ``NBXMOD=2`` exclusion list, then restore workflow ``NBXMOD=5``."""
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
-        MlpotContext,
-        apply_recovery_nbonds,
-        restore_workflow_nbonds,
-    )
-
-    if not isinstance(ctx, MlpotContext):
-        raise TypeError("ctx must be MlpotContext")
-    apply_recovery_nbonds(ctx)
-    try:
-        return fn()
-    finally:
-        restore_workflow_nbonds(ctx)
-
-
 def minimize_bonded_mm_recovery(
     ctx: "MlpotContext",
     config: BondedMmMiniConfig,
 ) -> float | None:
-    """Bonded MM + VDW rescue SD (``NBXMOD 2``); MLpot stays registered."""
+    """Bonded MM + VDW rescue SD (NBXMOD 5→2→5); MLpot stays registered."""
     from mmml.interfaces.pycharmmInterface.mlpot.block_terms import (
         apply_bonded_vdw_recovery_block,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
         MlpotContext,
-        RECOVERY_NBXMOD,
         get_charmm_positions_array,
+        run_nbxmod_staged_sd,
     )
 
     if not isinstance(ctx, MlpotContext):
@@ -311,13 +302,19 @@ def minimize_bonded_mm_recovery(
         if config.verbose:
             print(
                 f"Bonded-MM mini start: GRMS={charmm_grms():.4f} kcal/mol/Å "
-                f"(VDW on, NBXMOD {RECOVERY_NBXMOD})",
+                f"(VDW on, NBXMOD 5→2→5)",
                 flush=True,
             )
         sd_kw = _bonded_recovery_sd_kwargs(ctx, config)
         if config.verbose and config.show_energy:
             _maybe_show_energy(True)
-        minimize.run_sd(**sd_kw)
+        run_nbxmod_staged_sd(
+            minimize,
+            sd_kw,
+            int(config.nstep_sd),
+            ctx=ctx,
+            verbose=config.verbose,
+        )
         pycharmm.lingo.charmm_script("ENER")
         grms = float(charmm_grms())
         if config.verbose:
@@ -330,10 +327,7 @@ def minimize_bonded_mm_recovery(
         _ = get_charmm_positions_array()
         return grms
 
-    return _with_recovery_nbonds(
-        ctx,
-        lambda: _with_mlpot_block_restored(ctx, _run_sd),
-    )
+    return _with_mlpot_block_restored(ctx, _run_sd)
 
 
 @dataclass

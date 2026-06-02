@@ -269,6 +269,64 @@ RECOVERY_NBXMOD = 2
 # NBXMod controls VDW/ELEC exclusion lists (CHARMM nbonds):
 #   2 = exclude only 1-2 (bonded) pairs — milder exclusions during rescue SD
 #   5 = exclude 1-2, 1-3, and special 1-4 (normal production MD)
+NBXMOD_STAGED_PHASES = (
+    DEFAULT_WORKFLOW_NBXMOD,
+    RECOVERY_NBXMOD,
+    DEFAULT_WORKFLOW_NBXMOD,
+)
+NBXMOD_STAGED_LABELS = (
+    "standard exclusions",
+    "1-2 exclusions only (H-spread VDW)",
+    "restore standard exclusions",
+)
+
+
+def split_sd_steps_three_ways(nstep_total: int) -> tuple[int, int, int]:
+    """Split SD steps across NBXMOD 5→2→5 phases."""
+    n = max(0, int(nstep_total))
+    if n == 0:
+        return (0, 0, 0)
+    if n < 3:
+        return (0, n, 0)
+    base, rem = divmod(n, 3)
+    steps = [base, base, base]
+    for i in range(rem):
+        steps[i] += 1
+    return tuple(steps)
+
+
+def run_nbxmod_staged_sd(
+    minimize: Any,
+    sd_kw: dict[str, Any],
+    nstep_total: int,
+    *,
+    ctx: MlpotContext | None = None,
+    verbose: bool = True,
+) -> None:
+    """Three-phase SD: NBXMOD 5 → 2 → 5 to spread close H via 1-3 VDW."""
+    steps = split_sd_steps_three_ways(nstep_total)
+    base_kw = {k: v for k, v in sd_kw.items() if k != "nstep"}
+    ran_any = False
+    for nbxmod, nstep, label in zip(NBXMOD_STAGED_PHASES, steps, NBXMOD_STAGED_LABELS):
+        if nstep <= 0:
+            continue
+        ran_any = True
+        if ctx is not None:
+            apply_recovery_nbonds(ctx, nbxmod=nbxmod)
+        else:
+            refresh_nbonds_after_mlpot(nbxmod=nbxmod)
+        if verbose:
+            print(
+                f"  NBXMOD {nbxmod} ({label}): {nstep} SD steps",
+                flush=True,
+            )
+        minimize.run_sd(**{**base_kw, "nstep": nstep})
+    if not ran_any:
+        return
+    if ctx is not None:
+        restore_workflow_nbonds(ctx)
+    else:
+        refresh_nbonds_after_mlpot(nbxmod=DEFAULT_WORKFLOW_NBXMOD)
 
 
 def apply_recovery_nbonds(ctx: MlpotContext, *, nbxmod: int = RECOVERY_NBXMOD) -> None:
