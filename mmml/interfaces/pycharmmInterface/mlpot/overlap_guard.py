@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 from dataclasses import dataclass
+from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 import numpy as np
@@ -99,6 +102,18 @@ def monomer_offsets(n_atoms: int, n_monomers: int) -> np.ndarray:
     return np.arange(0, n_atoms + 1, per, dtype=int)
 
 
+@lru_cache(maxsize=1)
+def _assert_no_intermonomer_atom_overlap_fn():
+    """Load geometry_checks without importing ``mmml.utils`` (pulls JAX)."""
+    path = Path(__file__).resolve().parents[3] / "utils" / "geometry_checks.py"
+    spec = importlib.util.spec_from_file_location("_mmml_geometry_checks", path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot load geometry checks from {path}")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.assert_no_intermonomer_atom_overlap
+
+
 def _overlap_cell(*, use_pbc: bool) -> float | np.ndarray | None:
     if not use_pbc:
         return None
@@ -119,21 +134,6 @@ def check_dynamics_overlap(
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
     )
-def _assert_no_intermonomer_atom_overlap(*args, **kwargs) -> float:
-    """Load geometry_checks without importing ``mmml.utils`` (pulls JAX)."""
-    import importlib.util
-    from pathlib import Path
-
-    path = (
-        Path(__file__).resolve().parents[3] / "utils" / "geometry_checks.py"
-    )
-    spec = importlib.util.spec_from_file_location("_mmml_geometry_checks", path)
-    if spec is None or spec.loader is None:
-        raise ImportError(f"cannot load geometry checks from {path}")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    fn = getattr(mod, "assert_no_intermonomer_atom_overlap")
-    return fn(*args, **kwargs)
 
     if not config.enabled:
         return float("inf")
@@ -142,8 +142,7 @@ def _assert_no_intermonomer_atom_overlap(*args, **kwargs) -> float:
     pos = get_charmm_positions_array()
     offsets = monomer_offsets(int(pos.shape[0]), config.n_monomers)
     cell = _overlap_cell(use_pbc=config.use_pbc)
-
-    assert_no_intermonomer_atom_overlap = _assert_no_intermonomer_atom_overlap
+    assert_no_intermonomer_atom_overlap = _assert_no_intermonomer_atom_overlap_fn()
 
     if config.action == "error":
         return assert_no_intermonomer_atom_overlap(
