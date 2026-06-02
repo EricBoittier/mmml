@@ -965,8 +965,8 @@ def _prepare_overlap_chunk_after_restart(
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
 
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import apply_pbc_nbonds
     from mmml.interfaces.pycharmmInterface.nbonds_config import (
-        apply_pbc_nbonds,
         pbc_nbond_kwargs,
         vacuum_nbond_kwargs,
     )
