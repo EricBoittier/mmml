@@ -43,6 +43,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
     build_heat_dynamics,
     build_nve_dynamics,
     minimize_with_mlpot,
+    npt_restart_chain,
     production_restart_chain,
     run_dynamics_with_io,
 )
@@ -94,6 +95,20 @@ def _artifact_paths(out_dir: Path, tag: str) -> dict[str, Path]:
         "prod_dcd": out_dir / f"prod_{tag}.dcd",
         "vmd_psf": out_dir / f"cluster_for_vmd_{tag}.psf",
     }
+
+
+def _npt_cpt_options(args: argparse.Namespace) -> dict[str, Any]:
+    return {
+        "thermostat": getattr(args, "npt_thermostat", "hoover"),
+        "pref": float(getattr(args, "npt_pressure", 1.0)),
+        "pgamma": float(getattr(args, "npt_pgamma", 5.0)),
+    }
+
+
+def _equi_restart_name(tag: str, n_equi_segments: int) -> str:
+    if n_equi_segments > 1:
+        return f"equi_{tag}.{n_equi_segments - 1}.res"
+    return f"equi_{tag}.res"
 
 
 def _prior_restart_for_stage(
@@ -161,6 +176,7 @@ def _build_stage_dynamics_kw(
     echeck: float,
     dyn_print: dict[str, int],
     restart: bool,
+    npt_include_firstt: bool = True,
 ) -> dict[str, Any]:
     duration_ps = nstep * timestep_ps
     if stage == "heat":
@@ -191,7 +207,8 @@ def _build_stage_dynamics_kw(
             temp=temp,
             restart=restart,
             echeck=max(echeck, 500.0) if echeck > 0 else echeck,
-            thermostat=getattr(args, "npt_thermostat", "hoover"),
+            include_firstt=npt_include_firstt,
+            **_npt_cpt_options(args),
         )
     elif stage == "prod":
         kw = build_cpt_production_dynamics(
@@ -201,7 +218,7 @@ def _build_stage_dynamics_kw(
             temp=temp,
             restart=restart,
             echeck=max(echeck, 500.0) if echeck > 0 else echeck,
-            thermostat=getattr(args, "npt_thermostat", "hoover"),
+            **_npt_cpt_options(args),
         )
     else:
         raise ValueError(stage)
@@ -352,21 +369,78 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         if dynamics_constrain:
             setup_cons_fix_for_resids(dynamics_constrain)
 
+        n_equi_segments = max(1, int(getattr(args, "n_equi_segments", 1)))
         n_prod_segments = max(1, int(getattr(args, "n_prod_segments", 1)))
+        if "equi" in dyn_stages and n_equi_segments > 1:
+            equi_idx = dyn_stages.index("equi")
+            dyn_stages = dyn_stages[:equi_idx] + ["equi"] * n_equi_segments
         if "prod" in dyn_stages and n_prod_segments > 1:
             prod_idx = dyn_stages.index("prod")
             dyn_stages = dyn_stages[:prod_idx] + ["prod"] * n_prod_segments
 
+        equi_restart_for_prod = _equi_restart_name(tag, n_equi_segments)
         prev_restart: Path | None = restart_from
         for stage in dyn_stages:
+            if stage == "equi" and n_equi_segments > 1:
+                initial = prev_restart or _prior_restart_for_stage(
+                    "equi", paths, restart_from=None
+                )
+                seg_chain = npt_restart_chain(
+                    out_dir,
+                    n_segments=n_equi_segments,
+                    prefix=f"equi_{tag}",
+                    initial_restart=initial,
+                )
+                for seg_i, seg_io in enumerate(seg_chain):
+                    seg_ps = _stage_ps(args, "equi") / n_equi_segments
+                    nstep = dynamics_nstep_from_ps(seg_ps, dt_fs)
+                    dcd_nsavc = resolve_dcd_nsavc(
+                        dcd_nsavc=args.dcd_nsavc,
+                        dcd_interval_ps=getattr(args, "dcd_interval_ps", None),
+                        timestep_ps=timestep_ps,
+                        nstep=nstep,
+                    )
+                    dyn_print = resolve_dynamics_print_kwargs(args, nstep=nstep)
+                    save_interval_ps = timestep_ps * dcd_nsavc
+                    rread = seg_io.restart_read
+                    restart = rread is not None and Path(rread).is_file()
+                    if not args.quiet:
+                        print(
+                            f"\nEQUI segment {seg_i + 1}/{n_equi_segments}: "
+                            f"{nstep} steps @ {timestep_ps} ps",
+                            flush=True,
+                        )
+                    _sync_mlpot_cell_before_npt(
+                        "equi",
+                        use_pbc=use_pbc,
+                        pyCModel=pyCModel,
+                        quiet=bool(args.quiet),
+                    )
+                    kw = _build_stage_dynamics_kw(
+                        "equi",
+                        args=args,
+                        timestep_ps=timestep_ps,
+                        nstep=nstep,
+                        save_interval_ps=save_interval_ps,
+                        temp=temp,
+                        echeck=echeck,
+                        dyn_print=dyn_print,
+                        restart=restart,
+                        npt_include_firstt=(seg_i == 0),
+                    )
+                    kw["nsavc"] = dcd_nsavc
+                    disable_charmm_domdec()
+                    run_dynamics_with_io(kw, seg_io)
+                    prev_restart = seg_io.restart_write
+                    last_traj = seg_io.trajectory
+                continue
+
             if stage == "prod" and n_prod_segments > 1:
                 seg_chain = production_restart_chain(
                     out_dir,
                     n_segments=n_prod_segments,
                     prefix=f"prod_{tag}",
-                    equi_restart=paths["equi_res"].name
-                    if paths["equi_res"].is_file()
-                    else "equi.res",
+                    equi_restart=equi_restart_for_prod,
                 )
                 for seg_i, seg_io in enumerate(seg_chain):
                     seg_ps = _stage_ps(args, "prod") / n_prod_segments
