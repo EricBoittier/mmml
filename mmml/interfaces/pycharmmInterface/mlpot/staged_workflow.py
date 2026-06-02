@@ -489,6 +489,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         overlap=overlap_cfg,
                         overlap_context=f"equi segment {seg_i + 1}/{n_equi_segments}",
                         mlpot_ctx=ctx,
+                        rng_base=getattr(args, "seed", None),
                     )
                     memory_handoff_next = maybe_run_bonded_mm_mini_after_stage(
                         ctx,
@@ -560,6 +561,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         overlap=overlap_cfg,
                         overlap_context=f"prod segment {seg_i + 1}/{n_prod_segments}",
                         mlpot_ctx=ctx,
+                        rng_base=getattr(args, "seed", None),
                     )
                     memory_handoff_next = maybe_run_bonded_mm_mini_after_stage(
                         ctx,
@@ -630,6 +632,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 overlap=overlap_cfg,
                 overlap_context=stage.upper(),
                 mlpot_ctx=ctx,
+                rng_base=getattr(args, "seed", None),
             )
             memory_handoff_next = maybe_run_bonded_mm_mini_after_stage(
                 ctx,
