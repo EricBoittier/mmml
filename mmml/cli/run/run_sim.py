@@ -67,7 +67,7 @@ from mmml.cli.run.summaries import (
     print_system_summary,
 )
 from mmml.cli.run.pycharmm_sampling_args import add_two_residue_sampling_args
-from mmml.interfaces.pycharmmInterface.mlpot_gpu import (
+from mmml.interfaces.pycharmmInterface.mlpot.mlpot_gpu_policy import (
     resolve_ml_gpu_count as _resolve_ml_gpu_count,
 )
 from mmml.cli.run.utils import get_steps_per_frame, normalize_n_atoms_monomer
