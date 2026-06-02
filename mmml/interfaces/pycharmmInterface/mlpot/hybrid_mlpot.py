@@ -21,6 +21,43 @@ from mmml.interfaces.pycharmmInterface.mlpot.mlpot_gpu_policy import resolve_ml_
 __all__ = ["resolve_ml_batch_size", "DecomposedMlpotCalculator", "DecomposedMlpotModel", "build_decomposed_mlpot_model", "warmup_decomposed_mlpot"]
 
 
+def _print_setup_calculator_factory_summary(
+    factory: Any,
+    *,
+    checkpoint: Path,
+    n_monomers: int,
+    atoms_per_monomer: Sequence[int],
+    do_ml: bool,
+    do_mm: bool,
+    do_ml_dimer: bool,
+    cutoff_params: CutoffParameters,
+    max_atoms_per_system: int,
+    ml_batch_size: Optional[int],
+    ml_gpu_count: int,
+    ml_max_active_dimers: Optional[int],
+    cell: Union[float, bool],
+) -> None:
+    """Log hybrid factory defaults after ``setup_calculator`` returns."""
+    cp = cutoff_params
+    comp = getattr(cp, "complementary_handoff", True)
+    print(
+        "Decomposed MLpot factory (setup_calculator return):\n"
+        f"  factory={factory!r}\n"
+        f"  module={getattr(factory, '__module__', '?')}\n"
+        f"  name={getattr(factory, '__name__', type(factory).__name__)}\n"
+        f"  model_restart_path={checkpoint}\n"
+        f"  n_monomers={n_monomers} atoms_per_monomer={list(atoms_per_monomer)}\n"
+        f"  MAX_ATOMS_PER_SYSTEM={max_atoms_per_system}\n"
+        f"  doML={do_ml} doMM={do_mm} doML_dimer={do_ml_dimer}\n"
+        f"  ml_switch_width={cp.ml_switch_width} mm_switch_on={cp.mm_switch_on} "
+        f"mm_switch_width={cp.mm_switch_width} complementary_handoff={comp}\n"
+        f"  ml_batch_size={ml_batch_size} ml_gpu_count={ml_gpu_count} "
+        f"ml_max_active_dimers={ml_max_active_dimers}\n"
+        f"  cell={cell!r}",
+        flush=True,
+    )
+
+
 class DecomposedMlpotCalculator:
     """CHARMM MLpot callback using padded monomer/dimer PhysNet evaluations."""
 
@@ -31,10 +68,12 @@ class DecomposedMlpotCalculator:
         n_monomers: int,
         atomic_numbers: np.ndarray,
         cell: Union[float, bool] = False,
+        do_mm: bool = True,
     ) -> None:
         self.spherical_fn = spherical_fn
         self.cutoff_params = cutoff_params
         self.n_monomers = int(n_monomers)
+        self.do_mm = bool(do_mm)
         self.atomic_numbers = np.asarray(
             physnet_ml_atomic_numbers(atomic_numbers), dtype=np.int32
         )
@@ -99,7 +138,7 @@ class DecomposedMlpotCalculator:
                 n_monomers=self.n_monomers,
                 cutoff_params=self.cutoff_params,
                 doML=True,
-                doMM=False,
+                doMM=self.do_mm,
                 doML_dimer=True,
                 box=box,
             )
@@ -122,12 +161,14 @@ class DecomposedMlpotModel:
         n_monomers: int,
         atomic_numbers: np.ndarray,
         cell: Union[float, bool] = False,
+        do_mm: bool = True,
     ) -> None:
         self._spherical_fn = spherical_fn
         self._cutoff_params = cutoff_params
         self._n_monomers = int(n_monomers)
         self._atomic_numbers = np.asarray(atomic_numbers, dtype=int)
         self._cell = float(cell) if cell else False
+        self._do_mm = bool(do_mm)
 
     def get_pycharmm_calculator(self, ml_atom_indices=None, ml_atomic_numbers=None, **kwargs):
         if ml_atomic_numbers is not None:
@@ -140,6 +181,7 @@ class DecomposedMlpotModel:
             self._n_monomers,
             z,
             cell=self._cell,
+            do_mm=self._do_mm,
         )
 
 
@@ -202,13 +244,16 @@ def build_decomposed_mlpot_model(
             f"Decomposed MLpot: MIC PBC cubic cell={float(cell):.3f} Å",
             flush=True,
         )
+    do_ml = True
+    do_mm = True
+    do_ml_dimer = True
     factory = setup_calculator(
         ATOMS_PER_MONOMER=per,
         N_MONOMERS=int(n_monomers),
         model_restart_path=str(ckpt),
-        doMM=True,
-        doML=True,
-        doML_dimer=True,
+        doMM=do_mm,
+        doML=do_ml,
+        doML_dimer=do_ml_dimer,
         verbose=verbose,
         MAX_ATOMS_PER_SYSTEM=max_atoms,
         ml_batch_size=batch_size,
@@ -216,6 +261,22 @@ def build_decomposed_mlpot_model(
         ml_max_active_dimers=ml_max_active_dimers,
         cell=cell,
     )
+    if verbose:
+        _print_setup_calculator_factory_summary(
+            factory,
+            checkpoint=ckpt,
+            n_monomers=int(n_monomers),
+            atoms_per_monomer=per,
+            do_ml=do_ml,
+            do_mm=do_mm,
+            do_ml_dimer=do_ml_dimer,
+            cutoff_params=cutoff_params,
+            max_atoms_per_system=max_atoms,
+            ml_batch_size=batch_size,
+            ml_gpu_count=gpu_count,
+            ml_max_active_dimers=ml_max_active_dimers,
+            cell=cell,
+        )
     r0 = np.zeros((len(z), 3), dtype=np.float64)
     from mmml.interfaces.pycharmmInterface.jax_device_policy import mlpot_jax_device_context
 
@@ -226,12 +287,18 @@ def build_decomposed_mlpot_model(
                 atomic_positions=jnp.asarray(r0),
                 n_monomers=int(n_monomers),
                 cutoff_params=cutoff_params,
-                doML=True,
-                doMM=False,
-                doML_dimer=True,
+                doML=do_ml,
+                doMM=do_mm,
+                doML_dimer=do_ml_dimer,
                 backprop=False,
                 create_ase_calculator=False,
             )
+        )
+    if verbose:
+        print(
+            f"Decomposed MLpot spherical_fn={spherical_fn!r} "
+            f"(JIT bind doML={do_ml} doMM={do_mm} doML_dimer={do_ml_dimer})",
+            flush=True,
         )
     model = DecomposedMlpotModel(
         spherical_fn,
@@ -239,6 +306,7 @@ def build_decomposed_mlpot_model(
         int(n_monomers),
         np.asarray(atomic_numbers, dtype=int),
         cell=cell,
+        do_mm=do_mm,
     )
     return model
 
@@ -272,7 +340,7 @@ def warmup_decomposed_mlpot(
         n_monomers=model._n_monomers,
         cutoff_params=model._cutoff_params,
         doML=True,
-        doMM=False,
+        doMM=model._do_mm,
         doML_dimer=True,
         box=box,
     )
