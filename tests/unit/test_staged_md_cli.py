@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+from unittest.mock import patch
 
 from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     recommend_echeck_kcal,
@@ -41,6 +42,11 @@ def test_resolve_md_stages_override():
 def test_resolve_use_pbc_from_setup():
     args = argparse.Namespace(setup="pbc_nve", free_space=False, box_size=None)
     assert resolve_use_pbc(args) is True
+
+
+def test_resolve_use_pbc_free_nvt_setup():
+    args = argparse.Namespace(setup="free_nvt", free_space=False, box_size=None)
+    assert resolve_use_pbc(args) is False
 
 
 def test_resolve_use_pbc_free_space():
@@ -126,3 +132,30 @@ def test_build_stage_dynamics_kw_restart_omits_invalid_res_flag():
     )
     assert kw["restart"] is True
     assert "res" not in kw
+
+
+def test_build_stage_dynamics_kw_free_space_equi_uses_hoover_nvt():
+    args = argparse.Namespace()
+    dyn_print = {"nprint": 100, "iprfrq": 500, "isvfrq": 500}
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.compute_cpt_piston_masses",
+        return_value=(152, 1520),
+    ):
+        kw = _build_stage_dynamics_kw(
+            "equi",
+            args=args,
+            timestep_ps=0.0001,
+            nstep=500,
+            save_interval_ps=0.04,
+            temp=300.0,
+            echeck=50000.0,
+            dyn_print=dyn_print,
+            restart=True,
+            use_pbc=False,
+        )
+    assert kw["restart"] is True
+    assert kw["hoover reft"] == 300.0
+    assert kw["tmass"] == 1520
+    assert "cpt" not in kw
+    assert "pint pconst pref" not in kw
+    assert kw["imgfrq"] == 0

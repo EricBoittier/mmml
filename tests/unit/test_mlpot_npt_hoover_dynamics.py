@@ -9,6 +9,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
     _apply_npt_cpt_kwargs,
     build_cpt_equilibration_dynamics,
     build_cpt_production_dynamics,
+    build_nvt_equilibration_dynamics,
     final_npt_segment_restart,
     npt_restart_chain,
 )
@@ -70,6 +71,19 @@ def test_equi_later_segment_omits_firstt():
         temp=300.0, pmass=10, tmass=100, include_firstt=False
     )
     assert "firstt" not in kw
+
+
+def test_nvt_equilibration_omits_cpt_and_crystal_keywords():
+    kw = build_nvt_equilibration_dynamics(temp=300.0, tmass=160)
+    script = _script_string(**kw)
+
+    assert kw["hoover reft"] == 300.0
+    assert kw["tmass"] == 160
+    assert kw["imgfrq"] == 0
+    assert "cpt" not in kw
+    assert "pint pconst pref" not in kw
+    assert "cpt" not in script
+    assert "hoover reft" in script
 
 
 def test_berendsen_thermostat_option():

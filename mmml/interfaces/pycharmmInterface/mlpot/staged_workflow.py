@@ -41,6 +41,8 @@ from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
     build_cpt_equilibration_dynamics,
     build_cpt_production_dynamics,
     build_heat_dynamics,
+    build_nvt_equilibration_dynamics,
+    build_nvt_production_dynamics,
     build_nve_dynamics,
     minimize_with_mlpot,
     npt_restart_chain,
@@ -194,6 +196,7 @@ def _build_stage_dynamics_kw(
     echeck: float,
     dyn_print: dict[str, int],
     restart: bool,
+    use_pbc: bool = True,
     npt_include_firstt: bool = True,
     memory_handoff: bool = False,
 ) -> dict[str, Any]:
@@ -220,26 +223,47 @@ def _build_stage_dynamics_kw(
             echeck=echeck,
         )
     elif stage == "equi":
-        kw = build_cpt_equilibration_dynamics(
-            timestep_ps=timestep_ps,
-            duration_ps=duration_ps,
-            save_interval_ps=save_interval_ps,
-            temp=temp,
-            restart=effective_restart,
-            echeck=max(echeck, 500.0) if echeck > 0 else echeck,
-            include_firstt=npt_include_firstt,
-            **_npt_cpt_options(args),
-        )
+        if use_pbc:
+            kw = build_cpt_equilibration_dynamics(
+                timestep_ps=timestep_ps,
+                duration_ps=duration_ps,
+                save_interval_ps=save_interval_ps,
+                temp=temp,
+                restart=effective_restart,
+                echeck=max(echeck, 500.0) if echeck > 0 else echeck,
+                include_firstt=npt_include_firstt,
+                **_npt_cpt_options(args),
+            )
+        else:
+            kw = build_nvt_equilibration_dynamics(
+                timestep_ps=timestep_ps,
+                duration_ps=duration_ps,
+                save_interval_ps=save_interval_ps,
+                temp=temp,
+                restart=effective_restart,
+                echeck=max(echeck, 500.0) if echeck > 0 else echeck,
+                include_firstt=npt_include_firstt,
+            )
     elif stage == "prod":
-        kw = build_cpt_production_dynamics(
-            timestep_ps=timestep_ps,
-            duration_ps=duration_ps,
-            save_interval_ps=save_interval_ps,
-            temp=temp,
-            restart=effective_restart,
-            echeck=max(echeck, 500.0) if echeck > 0 else echeck,
-            **_npt_cpt_options(args),
-        )
+        if use_pbc:
+            kw = build_cpt_production_dynamics(
+                timestep_ps=timestep_ps,
+                duration_ps=duration_ps,
+                save_interval_ps=save_interval_ps,
+                temp=temp,
+                restart=effective_restart,
+                echeck=max(echeck, 500.0) if echeck > 0 else echeck,
+                **_npt_cpt_options(args),
+            )
+        else:
+            kw = build_nvt_production_dynamics(
+                timestep_ps=timestep_ps,
+                duration_ps=duration_ps,
+                save_interval_ps=save_interval_ps,
+                temp=temp,
+                restart=effective_restart,
+                echeck=max(echeck, 500.0) if echeck > 0 else echeck,
+            )
     else:
         raise ValueError(stage)
     kw["nprint"] = dyn_print["nprint"]
@@ -506,6 +530,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         echeck=echeck,
                         dyn_print=dyn_print,
                         restart=restart,
+                        use_pbc=use_pbc,
                         npt_include_firstt=(seg_i == 0),
                         memory_handoff=use_memory,
                     )
@@ -577,6 +602,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         echeck=echeck,
                         dyn_print=dyn_print,
                         restart=restart,
+                        use_pbc=use_pbc,
                         memory_handoff=use_memory,
                     )
                     kw["nsavc"] = dcd_nsavc
@@ -663,6 +689,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 echeck=echeck,
                 dyn_print=dyn_print,
                 restart=restart,
+                use_pbc=use_pbc,
                 memory_handoff=use_memory,
             )
             kw["nsavc"] = dcd_nsavc
