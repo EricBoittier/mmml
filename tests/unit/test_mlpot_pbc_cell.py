@@ -12,6 +12,7 @@ pytest.importorskip("jax")
 
 from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
 from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+    DecomposedMlpotCalculator,
     DecomposedMlpotModel,
     build_decomposed_mlpot_model,
     warmup_decomposed_mlpot,
@@ -115,7 +116,7 @@ def test_register_mlpot_context_forwards_cell():
 
     mock_load.assert_called_once()
     assert mock_load.call_args.kwargs["cell"] == 20.0
-    mock_register.assert_called_once_with(fake_model, z, fake_sel)
+    mock_register.assert_called_once_with(fake_model, z, fake_sel, use_pbc=True)
     mock_warmup.assert_called_once()
     assert mock_warmup.call_args.kwargs["cell"] == 20.0
     assert ctx is fake_ctx
