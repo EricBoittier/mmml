@@ -82,14 +82,10 @@ def test_prior_restart_for_equi_prefers_nve_when_present(tmp_path: Path):
 
 
 def test_build_stage_dynamics_kw_restart_omits_invalid_res_flag():
-    args = argparse.Namespace(
-        npt_thermostat="hoover",
-        npt_pressure=1.0,
-        npt_pgamma=5.0,
-    )
+    args = argparse.Namespace()
     dyn_print = {"nprint": 100, "iprfrq": 500, "isvfrq": 500}
     kw = _build_stage_dynamics_kw(
-        "equi",
+        "nve",
         args=args,
         timestep_ps=0.0005,
         nstep=2000,
