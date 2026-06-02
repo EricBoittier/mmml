@@ -191,6 +191,7 @@ def _build_stage_dynamics_kw(
             temp=temp,
             restart=restart,
             echeck=max(echeck, 500.0) if echeck > 0 else echeck,
+            thermostat=getattr(args, "npt_thermostat", "hoover"),
         )
     elif stage == "prod":
         kw = build_cpt_production_dynamics(
@@ -199,6 +200,8 @@ def _build_stage_dynamics_kw(
             save_interval_ps=save_interval_ps,
             temp=temp,
             restart=restart,
+            echeck=max(echeck, 500.0) if echeck > 0 else echeck,
+            thermostat=getattr(args, "npt_thermostat", "hoover"),
         )
     else:
         raise ValueError(stage)
