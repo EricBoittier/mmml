@@ -333,12 +333,12 @@ def _bonded_recovery_sd_kwargs(ctx: "MlpotContext", config: BondedMmMiniConfig) 
         "nprint": max(1, int(config.nprint)),
         "tolenr": float(config.tolenr),
         "tolgrd": float(config.tolgrd),
+        # Always use heuristic NB updates during rescue SD. Heat/production dyna sets
+        # imgfrq=50 via _base_dyn_kwargs even for vacuum clusters; inbfrq=0 then
+        # triggers FINCYC "INBFRQ is zero when IMGFRQ is not" at BOMLev -2.
+        "inbfrq": -1,
+        "ihbfrq": 50 if ctx.use_pbc else 0,
     }
-    if ctx.use_pbc:
-        # PBC image list is active (imgfrq set by nbonds); inbfrq=0 is invalid — use heuristic.
-        kw.update({"inbfrq": -1, "ihbfrq": 50})
-    else:
-        kw.update({"inbfrq": 0, "ihbfrq": 0})
     return kw
 
 

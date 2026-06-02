@@ -287,6 +287,8 @@ def apply_recovery_nbonds(ctx: MlpotContext, *, nbxmod: int = RECOVERY_NBXMOD) -
             **pbc_nbond_kwargs(nbxmod=nbxmod, cutnb=cutnb, cutim=cutim)
         ).run()
     else:
+        # Dynamics may leave imgfrq>0; clear before rescue SD (inbfrq=0 is invalid then).
+        pycharmm.nbonds.set_imgfrq(-1)
         pycharmm.UpdateNonBondedScript(**vacuum_nbond_kwargs(nbxmod=nbxmod)).run()
 
 
