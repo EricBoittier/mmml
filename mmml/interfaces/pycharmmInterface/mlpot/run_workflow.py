@@ -47,6 +47,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
 from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
     resolve_dynamics_overlap_config,
 )
+from mmml.interfaces.pycharmmInterface.mlpot.setup import (
     get_charmm_positions_array,
     load_physnet_mlpot_bundle,
     refresh_nbonds_after_mlpot_pbc,
