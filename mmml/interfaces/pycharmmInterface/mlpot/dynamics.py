@@ -884,6 +884,23 @@ def _overlap_chunk_io(
     )
 
 
+def effective_overlap_check_interval(total_nstep: int, requested_interval: int) -> int:
+    """Largest chunk size ≤ ``requested_interval`` that divides ``total_nstep`` evenly.
+
+    Avoids a short final overlap chunk (e.g. 40 steps when 1640 total and
+    requested 50), which triggers CHARMM FINCYC frequency retuning and PBC
+    instability after scratch restart reads.
+    """
+    n = max(1, int(total_nstep))
+    req = max(1, int(requested_interval))
+    if n % req == 0:
+        return req
+    for d in range(min(req, n), 0, -1):
+        if n % d == 0:
+            return d
+    return 1
+
+
 def _harmonize_dynamics_frequency(value: int, chunk_nstep: int) -> int:
     """Pick a CHARMM update frequency that divides ``chunk_nstep`` (FINCYC compatibility)."""
     n = max(1, int(chunk_nstep))
@@ -1046,7 +1063,16 @@ def run_dynamics_with_io(
     ):
         return _run_dynamics_chunk(kw, io)
 
-    interval = max(1, int(overlap.check_interval))
+    requested_interval = max(1, int(overlap.check_interval))
+    interval = effective_overlap_check_interval(total_nstep, requested_interval)
+    if interval != requested_interval:
+        print(
+            f"overlap ({overlap_context}): check interval "
+            f"{requested_interval} -> {interval} steps "
+            f"so {total_nstep} steps divide evenly "
+            f"({total_nstep // interval} chunks)",
+            flush=True,
+        )
     _cleanup_overlap_restart_slots(io)
     check_dynamics_overlap(
         overlap,
@@ -1055,12 +1081,12 @@ def run_dynamics_with_io(
         mlpot_ctx=mlpot_ctx,
     )
 
-    n_chunks = (total_nstep + interval - 1) // interval
+    n_chunks = total_nstep // interval
     last_dyn: Any = None
     steps_done = 0
     try:
         for chunk_index in range(n_chunks):
-            chunk_nstep = min(interval, total_nstep - steps_done)
+            chunk_nstep = interval
             chunk_kw = dict(kw)
             chunk_kw["nstep"] = chunk_nstep
             if io is None:
