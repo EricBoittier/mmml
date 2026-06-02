@@ -319,6 +319,19 @@ def parse_args() -> argparse.Namespace:
         help="pycharmm: comma-separated mini,heat,nve,equi,prod (default from --setup)",
     )
     parser.add_argument(
+        "--md-stage",
+        type=str,
+        default=None,
+        choices=["mini", "heat", "nve", "equi", "prod"],
+        help="pycharmm: run one stage only (implies prior artifacts under --output-dir)",
+    )
+    parser.add_argument(
+        "--tag",
+        type=str,
+        default=None,
+        help="pycharmm: artifact tag for staged outputs (default: from composition)",
+    )
+    parser.add_argument(
         "--ps-heat",
         type=float,
         default=10.0,
@@ -370,6 +383,11 @@ def parse_args() -> argparse.Namespace:
         "--skip-cluster-build",
         action="store_true",
         help="pycharmm: skip Packmol/IC; use --from-psf/--from-crd or prior mini artifacts",
+    )
+    parser.add_argument(
+        "--skip-if-crd-exists",
+        action="store_true",
+        help="pycharmm: skip MLpot SD when mini CRD already exists in --output-dir",
     )
 
     # --- lambda_ti (--setup lambda_ti) ----------------------------------------
@@ -673,10 +691,13 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         cmd.extend(["--composition", str(args.composition)])
     else:
         cmd.extend(["--n-molecules", str(args.n_molecules)])
-    if args.md_stages:
+    if args.md_stage:
+        cmd.extend(["--md-stage", str(args.md_stage)])
+    elif args.md_stages:
         cmd.extend(["--md-stages", str(args.md_stages)])
     elif args.setup in _default_stages:
         cmd.extend(["--md-stages", _default_stages[args.setup]])
+    _append_optional(cmd, "--tag", getattr(args, "tag", None))
     _append_optional(cmd, "--checkpoint", args.checkpoint)
     _append_optional(cmd, "--output-dir", args.output_dir)
     _append_optional(cmd, "--box-size", args.box_size)
@@ -691,6 +712,8 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         cmd.append("--no-pre-minimize")
     if getattr(args, "skip_cluster_build", False):
         cmd.append("--skip-cluster-build")
+    if getattr(args, "skip_if_crd_exists", False):
+        cmd.append("--skip-if-crd-exists")
     if args.charmm_pre_minimize is False:
         cmd.append("--no-charmm-pre-minimize")
     cmd.extend(["--charmm-sd-steps", str(args.charmm_sd_steps)])
