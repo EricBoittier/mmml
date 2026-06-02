@@ -164,6 +164,12 @@ MLpot MIC PBC: cubic L=20.000 Å
 
 **Restart / staged continuation:** pass the same ``--box-size`` as the original run when using ``--skip-cluster-build`` or loading mini artifacts. Auto box from geometry can differ from an earlier explicit box.
 
+**NpT (CPT ``equi`` / ``prod``):** before each CPT stage and on every MLpot callback, the decomposed calculator reads the current CHARMM cubic box (``pbound_get_size``) and passes it into the JAX MIC path so ML dimer switching tracks box resizing during CPT dynamics. Expect a log line when the box changed since registration:
+
+```text
+MLpot MIC PBC synced to CHARMM L=39.821 Å (was 40.000 Å)
+```
+
 Single-monomer ``PyCharmm_Calculator`` (``n_monomers=1``) does not yet use MIC; multi-monomer Packmol clusters use the decomposed path above.
 
 ```bash

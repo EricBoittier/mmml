@@ -50,6 +50,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import setup_charmm_environ
 from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import (
     _charmm_pre_minimize_before_mlpot,
     _register_mlpot_context,
+    sync_mlpot_pbc_cell_from_charmm,
 )
 from mmml.interfaces.pycharmmInterface.mlpot.setup import (
     disable_charmm_domdec,
@@ -136,6 +137,17 @@ def _io_for_stage(stage: MdStage, paths: dict[str, Path]) -> CharmmTrajectoryFil
             trajectory=paths["prod_dcd"],
         )
     raise ValueError(f"no dynamics I/O for stage {stage!r}")
+
+
+def _sync_mlpot_cell_before_npt(
+    stage: MdStage,
+    *,
+    use_pbc: bool,
+    pyCModel: Any,
+    quiet: bool,
+) -> None:
+    if use_pbc and stage in ("equi", "prod"):
+        sync_mlpot_pbc_cell_from_charmm(pyCModel, verbose=not quiet)
 
 
 def _build_stage_dynamics_kw(
@@ -384,6 +396,12 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                             f"{nstep} steps @ {timestep_ps} ps",
                             flush=True,
                         )
+                    _sync_mlpot_cell_before_npt(
+                        "prod",
+                        use_pbc=use_pbc,
+                        pyCModel=pyCModel,
+                        quiet=bool(args.quiet),
+                    )
                     disable_charmm_domdec()
                     run_dynamics_with_io(kw, seg_io)
                     last_traj = seg_io.trajectory
@@ -413,6 +431,13 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     f"{format_resid_constraint_message(dynamics_constrain, context='cons_fix')}",
                     flush=True,
                 )
+
+            _sync_mlpot_cell_before_npt(
+                stage,
+                use_pbc=use_pbc,
+                pyCModel=pyCModel,
+                quiet=bool(args.quiet),
+            )
 
             kw = _build_stage_dynamics_kw(
                 stage,

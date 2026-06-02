@@ -902,6 +902,7 @@ def setup_calculator(
         """
         n_dimers = len(dimer_permutations(n_monomers))
         n_atoms = positions.shape[0]
+        mic_pbc_cell = box if box is not None else pbc_cell
         
         # Optional: reorder to model order for ML, then remap back
         ml_perm = None
@@ -941,7 +942,8 @@ def setup_calculator(
                 doML_dimer=doML_dimer,
                 debug=debug,
                 ml_energy_conversion_factor=ml_energy_conversion_factor,
-                ml_force_conversion_factor=ml_force_conversion_factor
+                ml_force_conversion_factor=ml_force_conversion_factor,
+                mic_pbc_cell=mic_pbc_cell,
             )
             # Get ML forces from calculate_ml_contributions
             # CRITICAL: These forces are ALREADY correctly mapped to atoms 0 to (total_atoms - 1)
@@ -1084,7 +1086,7 @@ def setup_calculator(
                 mode=_fb_mode,
                 monomer_offsets=monomer_offsets,
                 n_monomers=n_monomers,
-                pbc_cell=pbc_cell,
+                pbc_cell=mic_pbc_cell,
                 mic_fn=mic_fn,
             )
             final_energy = final_energy + flat_E
@@ -1119,6 +1121,7 @@ def setup_calculator(
         positions: Array,  # Shape: (n_atoms, 3)
         BATCH_SIZE,
         cutoff_params: Optional[Any] = None,
+        mic_pbc_cell: Optional[Array] = None,
     ) -> Tuple[Any, Dict[str, Array]]:
         """Prepares the ML model and batching for energy calculations.
 
@@ -1157,6 +1160,7 @@ def setup_calculator(
 
         # Sparse: only include dimers within mm_switch_on
         use_sparse = ml_sparse_dimers and _max_active_dimers < n_dimers and cutoff_params is not None
+        cell_for_mic = mic_pbc_cell if mic_pbc_cell is not None else pbc_cell
         if use_sparse:
             mm_switch_on = cutoff_params.mm_switch_on
             mic_fn = mic_displacement_smooth if use_smooth_mic else mic_displacement
@@ -1171,7 +1175,7 @@ def setup_calculator(
                 n_b = jnp.maximum(jnp.sum(mask_b), 1e-10)
                 com_a = jnp.sum(pos_di * mask_a[:, None], axis=0) / n_a
                 com_b = jnp.sum(pos_di * mask_b[:, None], axis=0) / n_b
-                d = mic_fn(com_a, com_b, pbc_cell) if pbc_cell is not None else com_b - com_a
+                d = mic_fn(com_a, com_b, cell_for_mic) if cell_for_mic is not None else com_b - com_a
                 return jnp.linalg.norm(d)
 
             com_dists = jax.vmap(_dimer_com_dist, in_axes=(0, 0, 0))(
@@ -1291,7 +1295,8 @@ def setup_calculator(
         doML_dimer: bool = True,
         debug: bool = False,
         ml_energy_conversion_factor: float = 1.0,
-        ml_force_conversion_factor: float = 1.0
+        ml_force_conversion_factor: float = 1.0,
+        mic_pbc_cell: Optional[Array] = None,
     ) -> Dict[str, Array]:
         """Calculate ML energy and force contributions (heterogeneous-safe)."""
         # Calculate max atoms for consistent array shapes (heterogeneous)
@@ -1304,7 +1309,13 @@ def setup_calculator(
         max_atoms = max(max_monomer_atoms, max_dimer_atoms)
 
         # Get model predictions
-        apply_model, batches = get_ML_energy_fn(atomic_numbers, positions, n_dimers + n_monomers, cutoff_params)
+        apply_model, batches = get_ML_energy_fn(
+            atomic_numbers,
+            positions,
+            n_dimers + n_monomers,
+            cutoff_params,
+            mic_pbc_cell=mic_pbc_cell,
+        )
         output = apply_model(batches["Z"], batches["R"])
 
         f = output["forces"] * ml_force_conversion_factor
@@ -1365,7 +1376,8 @@ def setup_calculator(
             positions, e, f, n_dimers, 
             monomer_contribs["monomer_energy"],
             cutoff_params,
-            debug
+            debug,
+            mic_pbc_cell=mic_pbc_cell,
         )
 
         debug_print(debug, f"DEBUG dimer_contribs: {dimer_contribs}")
@@ -2125,7 +2137,8 @@ def setup_calculator(
         n_dimers: int,
         monomer_energies: Array,
         cutoff_params: CutoffParameters,
-        debug: bool = False
+        debug: bool = False,
+        mic_pbc_cell: Optional[Array] = None,
     ) -> Dict[str, Array]:
         """Calculate energy and force contributions from dimers (heterogeneous-safe)."""
         # Compute max_atoms (padded batch dimension) -- heterogeneous
@@ -2170,7 +2183,13 @@ def setup_calculator(
 
         # Apply switching functions
         switched_results = apply_dimer_switching(
-            positions, dimer_int_energies, dimer_forces, cutoff_params, max_atoms, debug
+            positions,
+            dimer_int_energies,
+            dimer_forces,
+            cutoff_params,
+            max_atoms,
+            debug,
+            mic_pbc_cell=mic_pbc_cell,
         )
 
         debug_print(debug, "Dimer Contributions:",
@@ -2254,13 +2273,15 @@ def setup_calculator(
         dimer_forces: Array,
         cutoff_params: CutoffParameters,
         max_atoms: int,
-        debug: bool
+        debug: bool,
+        mic_pbc_cell: Optional[Array] = None,
     ) -> Dict[str, Array]:
         """Apply switching functions to dimer energies and forces (heterogeneous-safe).
 
         Forces are computed using the product rule:
         ``F = -d/dR [E * s(R)] = -[dE/dR * s(R) + E * ds/dR]``
         """
+        cell_for_mic = mic_pbc_cell if mic_pbc_cell is not None else pbc_cell
         n_dimers = len(all_dimer_idxs)
         force_segments = calculate_dimer_force_segments(n_dimers)
 
@@ -2283,7 +2304,7 @@ def setup_calculator(
                 mm_switch_on=cutoff_params.mm_switch_on,
                 n_atoms_a=na,
                 n_atoms_b=nb,
-                pbc_cell=pbc_cell,
+                pbc_cell=cell_for_mic,
             )
 
         def _switch_ml_grad_vmapped(x, e, na, nb):
@@ -2294,7 +2315,7 @@ def setup_calculator(
                 mm_switch_on=cutoff_params.mm_switch_on,
                 n_atoms_a=na,
                 n_atoms_b=nb,
-                pbc_cell=pbc_cell,
+                pbc_cell=cell_for_mic,
             )
 
         switched_energy = jax.vmap(_switch_ml_vmapped, in_axes=(0, 0, 0, 0))(
@@ -2307,7 +2328,7 @@ def setup_calculator(
                 mm_switch_on=cutoff_params.mm_switch_on,
                 n_atoms_a=na,
                 n_atoms_b=nb,
-                pbc_cell=pbc_cell,
+                pbc_cell=cell_for_mic,
             ),
             in_axes=(0, 0, 0))(dimer_pos_padded, na_arr, nb_arr)
         switched_grad = jax.vmap(_switch_ml_grad_vmapped, in_axes=(0, 0, 0, 0))(
