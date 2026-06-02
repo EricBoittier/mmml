@@ -96,7 +96,9 @@ def test_check_overlap_raises_on_close_contact():
             check_dynamics_overlap(cfg, context="test", step=50)
 
 
-def test_run_dynamics_with_io_chunks_and_checks():
+def test_run_dynamics_with_io_chunks_and_checks(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+
     cfg = DynamicsOverlapConfig(
         action="error",
         min_distance_A=0.5,
@@ -113,21 +115,36 @@ def test_run_dynamics_with_io_chunks_and_checks():
         ],
         dtype=float,
     )
+    res_path = tmp_path / "equi.res"
+    res_path.write_text("REST    48     1  CUBI\n", encoding="utf-8")
+    io = CharmmTrajectoryFiles(
+        restart_read=tmp_path / "heat.res",
+        restart_write=res_path,
+    )
+    (tmp_path / "heat.res").write_text("REST    48     1  CUBI\n", encoding="utf-8")
     calls: list[dict] = []
 
-    def fake_run(kw):
+    def fake_chunk(kw, _io):
         calls.append(dict(kw))
         return mock.Mock()
 
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.run_dynamics",
-        side_effect=fake_run,
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        side_effect=fake_chunk,
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=pos_ok,
     ):
         run_dynamics_with_io(
-            {"nstep": 5, "new": True, "start": True, "restart": True, "iunrea": 3},
+            {
+                "nstep": 5,
+                "new": True,
+                "start": True,
+                "restart": True,
+                "iunrea": 3,
+                "firstt": 240.0,
+            },
+            io,
             overlap=cfg,
             overlap_context="NVE",
         )
@@ -135,7 +152,29 @@ def test_run_dynamics_with_io_chunks_and_checks():
     assert [c["nstep"] for c in calls] == [2, 2, 1]
     assert calls[0]["restart"] is True
     assert calls[0]["iunrea"] == 3
-    assert calls[1]["restart"] is False
-    assert calls[1]["iunrea"] == -1
-    assert calls[2]["restart"] is False
-    assert calls[2]["iunrea"] == -1
+    assert "firstt" in calls[0]
+    assert calls[1]["restart"] is True
+    assert "firstt" not in calls[1]
+    assert calls[2]["restart"] is True
+    assert "firstt" not in calls[2]
+
+
+def test_io_for_overlap_chunk_continuation_reads_written_restart(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        CharmmTrajectoryFiles,
+        _io_for_overlap_chunk_continuation,
+    )
+
+    res_path = tmp_path / "equi.res"
+    res_path.write_text("REST\n", encoding="utf-8")
+    io = CharmmTrajectoryFiles(restart_write=res_path)
+    cont = _io_for_overlap_chunk_continuation(io)
+    assert cont is not None
+    assert cont.restart_read == res_path
+
+    empty = tmp_path / "empty.res"
+    empty.write_text("", encoding="utf-8")
+    io2 = CharmmTrajectoryFiles(restart_write=empty)
+    cont2 = _io_for_overlap_chunk_continuation(io2)
+    assert cont2 is not None
+    assert cont2.restart_read is None

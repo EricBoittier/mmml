@@ -695,14 +695,25 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     return dyn
 
 
-def _io_for_in_memory_continuation(
+def _io_for_overlap_chunk_continuation(
     io: Optional[CharmmTrajectoryFiles],
 ) -> Optional[CharmmTrajectoryFiles]:
-    """I/O for a dynamics chunk that continues from in-memory coords (no restart read)."""
+    """I/O for a later overlap-guard dynamics chunk.
+
+    CHARMM cannot safely continue a separate ``dynamics`` invocation from
+    in-memory coords alone (``READYN`` may still run and segfault when
+    ``iunrea=-1``).  Read the restart written at the end of the prior chunk
+    instead (same path as ``restart_write``).
+    """
     if io is None:
         return None
+    rread = None
+    if io.restart_write is not None:
+        wpath = Path(io.restart_write)
+        if wpath.is_file() and wpath.stat().st_size > 0:
+            rread = wpath
     return CharmmTrajectoryFiles(
-        restart_read=None,
+        restart_read=rread,
         restart_write=io.restart_write,
         trajectory=io.trajectory,
         restart_read_unit=io.restart_read_unit,
@@ -738,7 +749,9 @@ def run_dynamics_with_io(
 
     When ``overlap`` is enabled, integration runs in chunks of
     ``overlap.check_interval`` steps with inter-monomer distance checks
-    between chunks (in-memory continuation, no restart read).
+    between chunks.  Later chunks restart from the ``.res`` file written at
+    the end of the previous chunk (CHARMM-safe; in-memory-only continuation
+    is not reliable across separate ``dynamics`` calls).
     """
     from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         DynamicsOverlapConfig,
@@ -765,14 +778,19 @@ def run_dynamics_with_io(
         chunk_nstep = min(interval, total_nstep - steps_done)
         chunk_kw = dict(kw)
         chunk_kw["nstep"] = chunk_nstep
-        chunk_io = io if first_chunk else _io_for_in_memory_continuation(io)
+        chunk_io = io if first_chunk else _io_for_overlap_chunk_continuation(io)
         if not first_chunk:
             chunk_kw["new"] = False
             chunk_kw["start"] = False
-            chunk_kw["restart"] = False
-            # CHARMM keeps iunrea from the prior chunk; disable restart read
-            # so in-memory continuation does not hit READYN on a closed unit.
-            chunk_kw["iunrea"] = -1
+            chunk_kw.pop("firstt", None)
+            if (
+                chunk_io is not None
+                and getattr(chunk_io, "restart_read", None) is not None
+            ):
+                chunk_kw["restart"] = True
+            else:
+                chunk_kw["restart"] = False
+                chunk_kw["iunrea"] = -1
 
         last_dyn = _run_dynamics_chunk(chunk_kw, chunk_io)
         steps_done += chunk_nstep
