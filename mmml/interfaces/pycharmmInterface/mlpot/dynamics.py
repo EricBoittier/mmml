@@ -1033,12 +1033,33 @@ def _sync_dynamics_io_units(
             kw.pop(key, None)
 
 
+def _refresh_charmm_dynamics_rng(*, base: int | None, salt: int) -> None:
+    """Reseed CHARMM dynamics RNG (thermostat / velocity assignment noise)."""
+    import pycharmm.dynamics as dyn
+
+    nrand = max(1, int(dyn.get_nrand()))
+    if base is None:
+        rng = np.random.default_rng()
+    else:
+        rng = np.random.default_rng(int(base) + int(salt) * 1_000_003)
+    seeds = [int(x) for x in rng.integers(1, 2**31, size=nrand)]
+    dyn.set_rngseeds(seeds)
+
+
+def _rng_salt_for_dynamics(*, overlap_context: str, chunk_index: int, steps_done: int) -> int:
+    ctx_hash = abs(hash(str(overlap_context))) & 0x7FFF_FFFF
+    return int(ctx_hash + chunk_index * 1_000_003 + steps_done * 10_007)
+
+
 def _run_dynamics_chunk(
     dynamics_kwargs: dict[str, Any],
     io: Optional[CharmmTrajectoryFiles],
     *,
     extra_iokw: dict[str, int] | None = None,
+    rng_base: int | None = None,
+    rng_salt: int = 0,
 ) -> Any:
+    _refresh_charmm_dynamics_rng(base=rng_base, salt=rng_salt)
     open_files: list[Any] = []
     kw = dict(dynamics_kwargs)
     iokw: dict[str, int] = {}
@@ -1063,6 +1084,7 @@ def run_dynamics_with_io(
     overlap: Optional["DynamicsOverlapConfig"] = None,
     overlap_context: str = "dynamics",
     mlpot_ctx: Optional["MlpotContext"] = None,
+    rng_base: int | None = None,
 ) -> Any:
     """Run dynamics and open/close CharmmFile units from ``io``.
 
@@ -1085,7 +1107,16 @@ def run_dynamics_with_io(
         or not overlap.enabled
         or total_nstep <= 0
     ):
-        return _run_dynamics_chunk(kw, io)
+        return _run_dynamics_chunk(
+            kw,
+            io,
+            rng_base=rng_base,
+            rng_salt=_rng_salt_for_dynamics(
+                overlap_context=overlap_context,
+                chunk_index=0,
+                steps_done=0,
+            ),
+        )
 
     requested_interval = max(1, int(overlap.check_interval))
     interval = effective_overlap_check_interval(total_nstep, requested_interval)
@@ -1150,6 +1181,12 @@ def run_dynamics_with_io(
                 chunk_kw,
                 chunk_io,
                 extra_iokw=dcd_iokw or None,
+                rng_base=rng_base,
+                rng_salt=_rng_salt_for_dynamics(
+                    overlap_context=overlap_context,
+                    chunk_index=chunk_index,
+                    steps_done=steps_done,
+                ),
             )
             steps_done += chunk_nstep
             check_dynamics_overlap(

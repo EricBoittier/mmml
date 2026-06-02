@@ -174,7 +174,7 @@ def test_run_dynamics_with_io_chunks_and_checks(tmp_path):
     (tmp_path / "heat.res").write_text("REST    48     1  CUBI\n", encoding="utf-8")
     calls: list[dict] = []
 
-    def fake_chunk(kw, _io, *, extra_iokw=None):
+    def fake_chunk(kw, _io, *, extra_iokw=None, **kwargs):
         calls.append(dict(kw))
         return mock.Mock()
 
@@ -236,7 +236,7 @@ def test_overlap_memory_handoff_chunks_scratch_restart_handoff(tmp_path):
     io = CharmmTrajectoryFiles(restart_write=res_path)
     calls: list[dict] = []
 
-    def fake_chunk(kw, _io, *, extra_iokw=None):
+    def fake_chunk(kw, _io, *, extra_iokw=None, **kwargs):
         calls.append(dict(kw))
         if _io is not None and _io.restart_write is not None:
             Path(_io.restart_write).write_text("REST\n", encoding="utf-8")
@@ -382,7 +382,7 @@ def test_overlap_multi_chunk_keeps_dcd_open_across_chunks(tmp_path):
     io = CharmmTrajectoryFiles(restart_write=tmp_path / "heat.res", trajectory=dcd)
     dcd_calls: list[int | None] = []
 
-    def fake_chunk(kw, _io, *, extra_iokw=None):
+    def fake_chunk(kw, _io, *, extra_iokw=None, **kwargs):
         merged = dict(kw)
         if extra_iokw:
             merged.update(extra_iokw)
@@ -447,7 +447,7 @@ def test_run_dynamics_with_io_uses_even_overlap_chunks(tmp_path):
     )
     calls: list[int] = []
 
-    def fake_chunk(kw, _io, *, extra_iokw=None):
+    def fake_chunk(kw, _io, *, extra_iokw=None, **kwargs):
         calls.append(int(kw["nstep"]))
         return mock.Mock()
 
@@ -496,6 +496,71 @@ def test_harmonize_dynamics_frequency_for_remainder_chunk():
     assert kw2["nsavc"] == 1
 
 
+def test_overlap_reseeds_rng_before_each_chunk():
+    cfg = DynamicsOverlapConfig(
+        action="error",
+        min_distance_A=0.5,
+        check_interval=2,
+        n_monomers=2,
+        use_pbc=False,
+    )
+    pos_ok = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [5.0, 0.0, 0.0],
+            [6.0, 0.0, 0.0],
+        ],
+        dtype=float,
+    )
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_charmm_dynamics_rng",
+    ) as refresh, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.run_dynamics",
+        return_value=mock.Mock(),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        return_value=pos_ok,
+    ):
+        run_dynamics_with_io(
+            {"nstep": 6},
+            None,
+            overlap=cfg,
+            overlap_context="HEAT",
+            rng_base=123,
+        )
+
+    assert refresh.call_count == 3
+    salts = [int(c.kwargs["salt"]) for c in refresh.call_args_list]
+    assert len(set(salts)) == 3
+    assert all(c.kwargs["base"] == 123 for c in refresh.call_args_list)
+
+
+def test_refresh_charmm_dynamics_rng_uses_salt_with_base():
+    import sys
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _refresh_charmm_dynamics_rng,
+    )
+
+    fake_dyn = mock.Mock()
+    fake_dyn.get_nrand.return_value = 2
+    fake_pycharmm = mock.Mock()
+    fake_pycharmm.dynamics = fake_dyn
+    with mock.patch.dict(
+        sys.modules,
+        {"pycharmm": fake_pycharmm, "pycharmm.dynamics": fake_dyn},
+    ):
+        _refresh_charmm_dynamics_rng(base=123, salt=0)
+        _refresh_charmm_dynamics_rng(base=123, salt=1)
+    assert fake_dyn.set_rngseeds.call_count == 2
+    first = list(fake_dyn.set_rngseeds.call_args_list[0][0][0])
+    second = list(fake_dyn.set_rngseeds.call_args_list[1][0][0])
+    assert first != second
+
+
 def test_run_dynamics_chunk_strips_stale_iunwri(tmp_path):
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmTrajectoryFiles,
@@ -513,6 +578,8 @@ def test_run_dynamics_chunk_strips_stale_iunwri(tmp_path):
         return mock.Mock()
 
     with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_charmm_dynamics_rng",
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics.run_dynamics",
         side_effect=fake_run,
     ), mock.patch.object(
