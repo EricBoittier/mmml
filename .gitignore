@@ -183,6 +183,8 @@ mmml/packmol/packmol
 fort.1
 pdb/init-packmol.pdb
 packmol/packmol.inp
+pdb/init-packmol-sphere.pdb
+packmol/packmol_sphere.inp
 packmol/packmol.inp
 pdb/init-packmol.pdb
 pdb/initial.pdb
@@ -199,6 +201,8 @@ pdb/tip3.pdb
 pdb/initial.pdb
 pdb/init-packmol.pdb
 packmol/packmol.inp
+pdb/init-packmol-sphere.pdb
+packmol/packmol_sphere.inp
 tests/packmol/packmol.inp
 tests/pdb/init-packmol.pdb
 tests/pdb/init-tip3.pdb
