@@ -206,7 +206,7 @@ def build_decomposed_mlpot_model(
         ATOMS_PER_MONOMER=per,
         N_MONOMERS=int(n_monomers),
         model_restart_path=str(ckpt),
-        doMM=False,
+        doMM=True,
         doML=True,
         doML_dimer=True,
         verbose=verbose,
