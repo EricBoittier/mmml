@@ -87,7 +87,11 @@ def add_dynamics_overlap_args(parser: argparse.ArgumentParser) -> None:
         "--dynamics-overlap-check-interval",
         type=int,
         default=50,
-        help="Integration steps between overlap checks (default: 50, matches imgfrq).",
+        help=(
+            "Integration steps between overlap checks (default: 50, matches imgfrq). "
+            "Per stage, the effective interval is the largest divisor of the stage "
+            "step count not exceeding this value (avoids a short final chunk)."
+        ),
     )
 
 

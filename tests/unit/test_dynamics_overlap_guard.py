@@ -189,7 +189,7 @@ def test_run_dynamics_with_io_chunks_and_checks(tmp_path):
     ):
         run_dynamics_with_io(
             {
-                "nstep": 5,
+                "nstep": 6,
                 "new": True,
                 "start": True,
                 "restart": True,
@@ -203,7 +203,7 @@ def test_run_dynamics_with_io_chunks_and_checks(tmp_path):
             overlap_context="NVE",
         )
 
-    assert [c["nstep"] for c in calls] == [2, 2, 1]
+    assert [c["nstep"] for c in calls] == [2, 2, 2]
     assert calls[0]["restart"] is True
     assert calls[0]["iunrea"] == 3
     assert "firstt" in calls[0]
@@ -253,7 +253,7 @@ def test_overlap_memory_handoff_chunks_scratch_restart_handoff(tmp_path):
     ):
         run_dynamics_with_io(
             {
-                "nstep": 5,
+                "nstep": 6,
                 "new": False,
                 "start": False,
                 "restart": False,
@@ -263,7 +263,7 @@ def test_overlap_memory_handoff_chunks_scratch_restart_handoff(tmp_path):
             overlap_context="NVE",
         )
 
-    assert [c["nstep"] for c in calls] == [2, 2, 1]
+    assert [c["nstep"] for c in calls] == [2, 2, 2]
     assert calls[0]["restart"] is False
     assert calls[0].get("iunrea") == -1
     assert calls[1]["restart"] is True
@@ -357,6 +357,64 @@ def test_overlap_chunk_io_alternate_scratch_and_final_write(tmp_path):
     assert c2.restart_read == slot_b
     assert c2.restart_write == equi
     assert c2.trajectory == io.trajectory
+
+
+def test_effective_overlap_check_interval_divides_nstep():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        effective_overlap_check_interval,
+    )
+
+    assert effective_overlap_check_interval(2000, 50) == 50
+    assert effective_overlap_check_interval(1640, 50) == 41
+    assert effective_overlap_check_interval(1650, 50) == 50
+    assert effective_overlap_check_interval(100, 50) == 50
+    assert effective_overlap_check_interval(7, 50) == 7
+
+
+def test_run_dynamics_with_io_uses_even_overlap_chunks(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+
+    cfg = DynamicsOverlapConfig(
+        action="error",
+        min_distance_A=0.5,
+        check_interval=50,
+        n_monomers=2,
+        use_pbc=False,
+    )
+    pos_ok = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [5.0, 0.0, 0.0],
+            [6.0, 0.0, 0.0],
+        ],
+        dtype=float,
+    )
+    calls: list[int] = []
+
+    def fake_chunk(kw, _io):
+        calls.append(int(kw["nstep"]))
+        return mock.Mock()
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        side_effect=fake_chunk,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        return_value=pos_ok,
+    ):
+        run_dynamics_with_io(
+            {"nstep": 1640},
+            None,
+            overlap=cfg,
+            overlap_context="HEAT",
+        )
+
+    assert all(n == 41 for n in calls)
+    assert sum(calls) == 1640
+    assert len(calls) == 40
 
 
 def test_harmonize_dynamics_frequency_for_remainder_chunk():
