@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import sys
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
@@ -40,6 +41,8 @@ class DynamicsOverlapConfig:
     use_pbc: bool = False
     fallback_box_side_A: float | None = None
     rescue: OverlapRescueConfig = field(default_factory=OverlapRescueConfig)
+    separate_on_rescue_fail: bool = True
+    separate_margin_A: float = 0.2
 
     @property
     def enabled(self) -> bool:
@@ -57,8 +60,9 @@ def add_dynamics_overlap_args(parser: argparse.ArgumentParser) -> None:
         choices=("error", "warn", "rescue", "off"),
         default="rescue",
         help=(
-            "On inter-monomer overlap during MD: rescue=CHARMM bonded+VDW mini "
-            "(default), error=abort, warn=log only, off=disable."
+            "On inter-monomer overlap during MD: rescue=CHARMM bonded+VDW mini, then "
+            "rigid monomer push if still overlapped (default); error=abort, "
+            "warn=log only, off=disable."
         ),
     )
     group.add_argument(
@@ -91,6 +95,24 @@ def add_dynamics_overlap_args(parser: argparse.ArgumentParser) -> None:
             "Integration steps between overlap checks (default: 500). "
             "Per stage, the effective interval is the largest divisor of the stage "
             "step count not exceeding this value (and at least dcd-nsavc + 1 when set)."
+        ),
+    )
+    group.add_argument(
+        "--no-dynamics-overlap-separate",
+        action="store_true",
+        help=(
+            "Do not rigidly push overlapped monomers apart when bonded+VDW rescue "
+            "minimization fails to restore min inter-monomer distance."
+        ),
+    )
+    group.add_argument(
+        "--dynamics-overlap-separate-margin",
+        type=float,
+        default=0.2,
+        metavar="ANG",
+        help=(
+            "Extra Å added beyond --dynamics-overlap-min-distance when last-resort "
+            "monomer separation is applied (default: 0.2)."
         ),
     )
 
@@ -137,6 +159,10 @@ def resolve_dynamics_overlap_config(
             else None
         ),
         rescue=rescue,
+        separate_on_rescue_fail=not bool(
+            getattr(args, "no_dynamics_overlap_separate", False)
+        ),
+        separate_margin_A=float(getattr(args, "dynamics_overlap_separate_margin", 0.2)),
     )
 
 
@@ -155,15 +181,34 @@ def monomer_offsets(n_atoms: int, n_monomers: int) -> np.ndarray:
 
 
 @lru_cache(maxsize=1)
-def _assert_no_intermonomer_atom_overlap_fn():
+def _geometry_checks_mod():
     """Load geometry_checks without importing ``mmml.utils`` (pulls JAX)."""
     path = Path(__file__).resolve().parents[3] / "utils" / "geometry_checks.py"
-    spec = importlib.util.spec_from_file_location("_mmml_geometry_checks", path)
+    name = "_mmml_geometry_checks"
+    if name in sys.modules:
+        return sys.modules[name]
+    spec = importlib.util.spec_from_file_location(name, path)
     if spec is None or spec.loader is None:
         raise ImportError(f"cannot load geometry checks from {path}")
     mod = importlib.util.module_from_spec(spec)
+    sys.modules[name] = mod
     spec.loader.exec_module(mod)
-    return mod.assert_no_intermonomer_atom_overlap
+    return mod
+
+
+@lru_cache(maxsize=1)
+def _assert_no_intermonomer_atom_overlap_fn():
+    return _geometry_checks_mod().assert_no_intermonomer_atom_overlap
+
+
+@lru_cache(maxsize=1)
+def _find_worst_intermonomer_overlap_fn():
+    return _geometry_checks_mod().find_worst_intermonomer_overlap
+
+
+@lru_cache(maxsize=1)
+def _separate_intermonomer_overlaps_fn():
+    return _geometry_checks_mod().separate_intermonomer_overlaps
 
 
 def _overlap_cell(
@@ -204,6 +249,31 @@ def _overlap_check(
         cell=cell,
         context=context,
     )
+
+
+def apply_overlap_separation_last_resort(config: DynamicsOverlapConfig) -> float:
+    """Rigidly push overlapped monomer pairs apart (symmetric COM translation)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        get_charmm_positions_array,
+        sync_charmm_positions,
+    )
+
+    pos = get_charmm_positions_array()
+    offsets = monomer_offsets(int(pos.shape[0]), config.n_monomers)
+    cell = _overlap_cell(
+        use_pbc=config.use_pbc,
+        fallback_box_side_A=config.fallback_box_side_A,
+    )
+    new_pos = _separate_intermonomer_overlaps_fn()(
+        pos,
+        offsets,
+        min_distance=config.min_distance_A,
+        margin=config.separate_margin_A,
+        cell=cell,
+    )
+    sync_charmm_positions(new_pos)
+    best_dist, _ = _find_worst_intermonomer_overlap_fn()(new_pos, offsets, cell=cell)
+    return float(best_dist)
 
 
 def check_dynamics_overlap(
@@ -252,6 +322,33 @@ def check_dynamics_overlap(
                     context=f"{label} after overlap rescue",
                 )
             except RuntimeError as still_bad:
+                if config.separate_on_rescue_fail:
+                    print(
+                        f"{still_bad}\nApplying last-resort monomer separation "
+                        f"(target {config.min_distance_A + config.separate_margin_A:.2f} Å)...",
+                        flush=True,
+                    )
+                    try:
+                        d_sep = apply_overlap_separation_last_resort(config)
+                        print(
+                            f"Overlap separation: min inter-monomer distance now {d_sep:.4f} Å",
+                            flush=True,
+                        )
+                        return _overlap_check(
+                            config,
+                            context=f"{label} after overlap separation",
+                        )
+                    except RuntimeError as sep_still_bad:
+                        raise RuntimeError(
+                            f"{sep_still_bad}; overlap rescue "
+                            f"(SD={config.rescue.nstep_sd}, ABNR={config.rescue.nstep_abnr}) "
+                            f"and rigid monomer separation did not restore "
+                            f"{config.min_distance_A:.2f} Å — try larger "
+                            f"--dynamics-overlap-charmm-sd-steps / "
+                            f"--dynamics-overlap-charmm-abnr-steps, "
+                            f"increase Packmol spacing, or relax "
+                            f"--dynamics-overlap-min-distance"
+                        ) from sep_still_bad
                 raise RuntimeError(
                     f"{still_bad}; overlap rescue "
                     f"(SD={config.rescue.nstep_sd}, ABNR={config.rescue.nstep_abnr}) "
