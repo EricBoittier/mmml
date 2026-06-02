@@ -28,7 +28,7 @@ def test_validate_sparse_dimer_cap_random_sparse():
     n = 20
     apm = 10
     pos = rng.standard_normal((n * apm, 3)) * 5.0
-    stats = validate_sparse_dimer_cap(pos, n, apm, mm_switch_on=5.0, box_side_A=None)
+    stats = validate_sparse_dimer_cap(pos, n, apm, mm_switch_on=7.0, box_side_A=None)
     assert stats["n_dimers_total"] == n * (n - 1) // 2
     assert "verdict" in stats
     assert isinstance(stats["ok"], bool)

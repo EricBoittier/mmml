@@ -85,6 +85,9 @@ def _pycharmm_args(**overrides) -> argparse.Namespace:
         dynamics_overlap_action="rescue",
         dynamics_overlap_min_distance=1.5,
         dynamics_overlap_check_interval=50,
+        mm_switch_on=7.0,
+        mm_switch_width=5.0,
+        ml_switch_width=0.1,
     )
     base.update(overrides)
     return argparse.Namespace(**base)

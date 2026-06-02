@@ -589,8 +589,20 @@ def parse_args() -> argparse.Namespace:
         help="lambda_ti: skip Stationary/ZeroRotation on velocity init (with --no-fix-com, COM can translate).",
     )
     parser.add_argument("--ml-cutoff", type=float, default=1.0, help="lambda_ti: ML cutoff (Å).")
-    parser.add_argument("--mm-switch-on", type=float, default=5.0, help="lambda_ti: MM switch-on (Å).")
-    parser.add_argument("--mm-cutoff", type=float, default=5.0, help="lambda_ti: MM cutoff (Å).")
+    parser.add_argument(
+        "--mm-switch-on",
+        type=float,
+        default=7.0,
+        help="MM handoff distance (Å); ML→0 / MM→1 at this COM separation (default: 7.0).",
+    )
+    parser.add_argument(
+        "--mm-cutoff",
+        "--mm-switch-width",
+        dest="mm_switch_width",
+        type=float,
+        default=5.0,
+        help="MM outer taper width (Å) past mm_switch_on (default: 5.0).",
+    )
     parser.add_argument(
         "--residue",
         type=str,
@@ -1020,6 +1032,17 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
             str(getattr(args, "dynamics_overlap_charmm_abnr_steps", 400)),
         ]
     )
+    cmd.extend(["--mm-switch-on", str(getattr(args, "mm_switch_on", 7.0))])
+    cmd.extend(
+        [
+            "--mm-switch-width",
+            str(getattr(args, "mm_switch_width", getattr(args, "mm_cutoff", 5.0))),
+        ]
+    )
+    if getattr(args, "ml_switch_width", None) is not None:
+        cmd.extend(["--ml-switch-width", str(args.ml_switch_width)])
+    elif getattr(args, "ml_cutoff", None) is not None:
+        cmd.extend(["--ml-switch-width", str(args.ml_cutoff)])
     if args.charmm_pre_minimize is False:
         cmd.append("--no-charmm-pre-minimize")
     cmd.extend(["--charmm-sd-steps", str(args.charmm_sd_steps)])

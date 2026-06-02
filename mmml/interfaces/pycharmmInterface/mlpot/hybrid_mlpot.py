@@ -12,7 +12,10 @@ import jax.numpy as jnp
 import numpy as np
 
 from mmml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
-from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+from mmml.interfaces.pycharmmInterface.cutoffs import (
+    CutoffParameters,
+    cutoff_parameters_from_args,
+)
 from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol, setup_calculator
 from mmml.interfaces.pycharmmInterface.mlpot.mlpot_batch_policy import resolve_ml_batch_size
 from mmml.interfaces.pycharmmInterface.mlpot.setup import physnet_ml_atomic_numbers
@@ -198,9 +201,12 @@ def build_decomposed_mlpot_model(
     ml_max_active_dimers: Optional[int] = None,
     cell: Union[float, bool] = False,
     verbose: bool = False,
+    args: Any | None = None,
 ) -> DecomposedMlpotModel:
     ckpt = Path(checkpoint).expanduser().resolve()
-    cutoff_params = CutoffParameters()
+    cutoff_params = (
+        cutoff_parameters_from_args(args) if args is not None else CutoffParameters()
+    )
     z = np.asarray(physnet_ml_atomic_numbers(atomic_numbers), dtype=int)
     per = [int(x) for x in atoms_per_monomer]
     max_atoms = max(per) * 2
