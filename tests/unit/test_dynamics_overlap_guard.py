@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 from unittest import mock
 
 import numpy as np
@@ -202,15 +203,13 @@ def test_run_dynamics_with_io_chunks_and_checks(tmp_path):
     assert calls[0]["restart"] is True
     assert calls[0]["iunrea"] == 3
     assert "firstt" in calls[0]
-    assert calls[1]["restart"] is False
-    assert calls[1]["iunrea"] == -1
+    assert calls[1]["restart"] is True
     assert "firstt" not in calls[1]
-    assert calls[2]["restart"] is False
-    assert calls[2]["iunrea"] == -1
+    assert calls[2]["restart"] is True
     assert "firstt" not in calls[2]
 
 
-def test_overlap_memory_handoff_chunks_no_restart_read(tmp_path):
+def test_overlap_memory_handoff_chunks_scratch_restart_handoff(tmp_path):
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
 
     cfg = DynamicsOverlapConfig(
@@ -235,6 +234,8 @@ def test_overlap_memory_handoff_chunks_no_restart_read(tmp_path):
 
     def fake_chunk(kw, _io):
         calls.append(dict(kw))
+        if _io is not None and _io.restart_write is not None:
+            Path(_io.restart_write).write_text("REST\n", encoding="utf-8")
         return mock.Mock()
 
     with mock.patch(
@@ -257,10 +258,11 @@ def test_overlap_memory_handoff_chunks_no_restart_read(tmp_path):
         )
 
     assert [c["nstep"] for c in calls] == [2, 2, 1]
-    for c in calls:
-        assert c["restart"] is False
-        assert c.get("iunrea") == -1
-        assert "firstt" not in c
+    assert calls[0]["restart"] is False
+    assert calls[0].get("iunrea") == -1
+    assert calls[1]["restart"] is True
+    assert calls[2]["restart"] is True
+    assert "firstt" not in calls[1]
 
 
 def test_overlap_cleans_stale_slots_at_start(tmp_path):
@@ -309,28 +311,42 @@ def test_overlap_cleans_stale_slots_at_start(tmp_path):
     assert not slot_b.exists()
 
 
-def test_overlap_chunk_io_external_read_last_write_only(tmp_path):
+def test_overlap_chunk_io_alternate_scratch_and_final_write(tmp_path):
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmTrajectoryFiles,
         _overlap_chunk_io,
+        _overlap_chunk_restart_paths,
+        _overlap_restart_slot_paths,
     )
 
     heat = tmp_path / "heat.res"
     equi = tmp_path / "equi_dcm_60.res"
     heat.write_text("REST\n", encoding="utf-8")
     io = CharmmTrajectoryFiles(restart_read=heat, restart_write=equi)
+    slot_a, slot_b = _overlap_restart_slot_paths(equi)
+
+    r0, w0 = _overlap_chunk_restart_paths(io, chunk_index=0, n_chunks=3)
+    assert r0 == heat
+    assert w0 == slot_a
+
+    r1, w1 = _overlap_chunk_restart_paths(io, chunk_index=1, n_chunks=3)
+    assert r1 == slot_a
+    assert w1 == slot_b
+
+    r2, w2 = _overlap_chunk_restart_paths(io, chunk_index=2, n_chunks=3)
+    assert r2 == slot_b
+    assert w2 == equi
 
     c0 = _overlap_chunk_io(io, chunk_index=0, n_chunks=3)
     assert c0.restart_read == heat
-    assert c0.restart_write is None
+    assert c0.restart_write == slot_a
 
     c1 = _overlap_chunk_io(io, chunk_index=1, n_chunks=3)
-    assert c1.restart_read is None
-    assert c1.restart_write is None
-    assert c1.trajectory == io.trajectory
+    assert c1.restart_read == slot_a
+    assert c1.restart_write == slot_b
 
     c2 = _overlap_chunk_io(io, chunk_index=2, n_chunks=3)
-    assert c2.restart_read is None
+    assert c2.restart_read == slot_b
     assert c2.restart_write == equi
     assert c2.trajectory == io.trajectory
 
