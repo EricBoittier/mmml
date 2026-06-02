@@ -284,13 +284,12 @@ def test_with_mlpot_detached_unset_and_reregister():
     assert result == 42
 
 
-def test_reregister_mlpot_does_not_rebuild_crystal_or_vacuum_nbonds():
-    from contextlib import nullcontext
-
+def test_reregister_mlpot_reattaches_without_new_mlpot_or_nbond_rebuild():
     from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
+    mlpot = MagicMock()
     ctx = MlpotContext(
-        mlpot=MagicMock(),
+        mlpot=mlpot,
         pyCModel=MagicMock(),
         params=None,
         model=None,
@@ -299,30 +298,14 @@ def test_reregister_mlpot_does_not_rebuild_crystal_or_vacuum_nbonds():
         use_pbc=True,
         cubic_box_side_A=31.0,
     )
-    mock_py = MagicMock()
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup._import_pycharmm",
-        return_value=mock_py,
-    ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_mlpot_energy_block",
         return_value="all",
-    ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.refresh_nbonds_after_mlpot_pbc",
-    ) as refresh_pbc, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.refresh_nbonds_after_mlpot",
-    ) as refresh_vac, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.physnet_ml_atomic_numbers",
-        return_value=[6, 1, 1, 1],
-    ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
-        return_value=nullcontext(),
-    ):
+    ) as apply_block:
         ctx.reregister_mlpot()
 
-    refresh_pbc.assert_not_called()
-    refresh_vac.assert_not_called()
-    mock_py.MLpot.assert_called_once()
-    mock_py.UpdateNonBondedScript.assert_called_once()
+    apply_block.assert_called_once_with(ctx.ml_selection)
+    mlpot.reattach_mlpot.assert_called_once_with()
 
 
 def test_restore_workflow_nbonds_uses_script_only():

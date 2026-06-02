@@ -119,36 +119,13 @@ class MlpotContext:
         from mmml.interfaces.pycharmmInterface.mlpot.block_terms import (
             apply_mlpot_energy_block,
         )
-        from mmml.interfaces.pycharmmInterface.nbonds_config import (
-            pbc_nbond_kwargs,
-            vacuum_nbond_kwargs,
-        )
 
         if self.ml_selection is None or self.ml_Z is None:
             raise RuntimeError("MlpotContext missing ml_selection or ml_Z for reregister")
-        pycharmm = _import_pycharmm()
-        z_ml = physnet_ml_atomic_numbers(self.ml_Z)
-        from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
-
-        with charmm_relaxed_bomlev():
-            self.block_tag = apply_mlpot_energy_block(self.ml_selection)
-            self.mlpot = pycharmm.MLpot(
-                ml_model=self.pyCModel,
-                ml_Z=z_ml,
-                ml_selection=self.ml_selection,
-                ml_charge=float(self.ml_charge),
-                ml_fq=bool(self.ml_fq),
-            )
-            # MLpot.__init__ already set iblo/inb and ran update_bnbnd (upinb).
-            # Re-running prepare_charmm_* / update_bnbnd here segfaults in upinb
-            # after long MD (same as register_mlpot).
-            if self.use_pbc and self.cubic_box_side_A is not None:
-                cutnb = 18.0
-                pycharmm.UpdateNonBondedScript(
-                    **pbc_nbond_kwargs(nbxmod=5, cutnb=cutnb, cutim=cutnb + 4.0)
-                ).run()
-            else:
-                pycharmm.UpdateNonBondedScript(**vacuum_nbond_kwargs(nbxmod=5)).run()
+        self.block_tag = apply_mlpot_energy_block(self.ml_selection)
+        # Do not construct a new MLpot(): __init__ rebuilds iblo/inb via update_bnbnd
+        # (upinb), which segfaults after long MD. Re-enable the existing callback.
+        self.mlpot.reattach_mlpot()
 
 
 def _import_pycharmm():
