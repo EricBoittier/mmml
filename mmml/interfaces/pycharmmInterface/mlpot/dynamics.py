@@ -184,29 +184,6 @@ def charmm_internal_energy_kcalmol(*, require: bool = False) -> float | None:
     return None
 
 
-def rewrite_dynamics_restart_from_current_state(
-    restart_path: PathLike | None,
-    *,
-    write_unit: int = 92,
-) -> None:
-    """Overwrite a dynamics restart so flags/coords match the current BLOCK setup."""
-    if restart_path is None:
-        return
-    path = Path(restart_path).expanduser().resolve()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    pycharmm, *_ = _import_pycharmm_modules()
-    restart_file = pycharmm.CharmmFile(
-        file_name=str(path),
-        file_unit=write_unit,
-        formatted=True,
-        read_only=False,
-    )
-    try:
-        pycharmm.lingo.charmm_script(f"write restart unit {write_unit}\n")
-    finally:
-        restart_file.close()
-
-
 @dataclass
 class BondedMmMiniConfig:
     """Short bonded-only SD while MLpot is temporarily detached."""

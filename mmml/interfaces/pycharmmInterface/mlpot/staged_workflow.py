@@ -35,10 +35,6 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     turn_off_cons_fix,
     validate_resids_for_cluster,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
-    maybe_run_bonded_mm_mini_after_stage,
-    record_mm_baseline_internal_energy,
-)
 from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
     CharmmTrajectoryFiles,
     MinimizeWithMlpotConfig,
@@ -50,6 +46,10 @@ from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
     npt_restart_chain,
     production_restart_chain,
     run_dynamics_with_io,
+)
+from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    maybe_run_bonded_mm_mini_after_stage,
+    record_mm_baseline_internal_energy,
 )
 from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import setup_charmm_environment
 from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import (
