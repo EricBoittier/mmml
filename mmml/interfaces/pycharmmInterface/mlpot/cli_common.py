@@ -895,6 +895,16 @@ def add_staged_md_args(parser: argparse.ArgumentParser) -> None:
         help="Production length in ps (default: --ps or 100)",
     )
     group.add_argument(
+        "--npt-thermostat",
+        type=str,
+        choices=["hoover", "berendsen"],
+        default="hoover",
+        help=(
+            "NPT temperature control for equi/prod stages (default: hoover). "
+            "Hoover uses CPT extended-system thermostat with pmass/tmass from PSF mass."
+        ),
+    )
+    group.add_argument(
         "--n-prod-segments",
         type=int,
         default=1,

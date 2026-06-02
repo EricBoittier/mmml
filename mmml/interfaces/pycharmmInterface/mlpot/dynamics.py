@@ -5,7 +5,9 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Literal, Optional, Union
+
+NptThermostat = Literal["hoover", "berendsen"]
 
 if TYPE_CHECKING:
     from mmml.interfaces.pycharmmInterface.mlpot.derivative_test import TestFirstConfig
@@ -336,20 +338,53 @@ def build_nve_dynamics(
     return kw
 
 
-def _cpt_mass_kwargs(temp: float = 300.0) -> dict[str, Any]:
+def compute_cpt_piston_masses() -> tuple[int, int]:
+    """Return ``(pmass, tmass)`` from total PSF mass (CHARMM CPT recipe).
+
+    ``pmass = int(sum(mass) / 50)``, ``tmass = pmass * 10``.
+    """
     import pycharmm.select as select
 
     pmass = int(np.sum(select.get_property("mass")) / 50.0)
-    tmass = int(pmass * 10)
-    return {
-        "leap": True,
-        "cpt": True,
-        "pint pconst pref": 1,
-        "pgamma": 5,
-        "pmass": pmass,
-        "hoover reft": temp,
-        "tmass": tmass,
-    }
+    return pmass, int(pmass * 10)
+
+
+def _apply_npt_cpt_kwargs(
+    kw: dict[str, Any],
+    *,
+    temp: float,
+    thermostat: NptThermostat = "hoover",
+    pmass: int | None = None,
+    tmass: int | None = None,
+    pgamma: float = 5,
+    firstt: float | None = None,
+    tcoupling: float = 5.0,
+) -> None:
+    """Attach CPT barostat + temperature control keywords to a dynamics dict."""
+    if pmass is None or tmass is None:
+        pmass, tmass = compute_cpt_piston_masses()
+    kw.update(
+        {
+            "leap": True,
+            "cpt": True,
+            "pint pconst pref": 1,
+            "pgamma": pgamma,
+            "pmass": pmass,
+            "ihtfrq": 0,
+            "ieqfrq": 0,
+        }
+    )
+    if thermostat == "hoover":
+        kw["hoover reft"] = temp
+        kw["tmass"] = tmass
+        if firstt is not None:
+            kw["firstt"] = firstt
+    elif thermostat == "berendsen":
+        kw["tcons"] = True
+        kw["tcoupling"] = tcoupling
+        kw["treference"] = temp
+    else:
+        raise ValueError(f"unknown NPT thermostat: {thermostat!r}")
 
 
 def build_cpt_equilibration_dynamics(
@@ -360,8 +395,12 @@ def build_cpt_equilibration_dynamics(
     temp: float = 300.0,
     restart: bool = True,
     echeck: float = 500.0,
+    thermostat: NptThermostat = "hoover",
+    pmass: int | None = None,
+    tmass: int | None = None,
+    pgamma: float = 5,
 ) -> dict[str, Any]:
-    """NPT equilibration (CPT + Hoover); matches example mini-MD scripts."""
+    """NPT equilibration (CPT + Hoover by default); matches example mini-MD scripts."""
     nstep = ps_to_nsteps(timestep_ps, duration_ps)
     nsavc = nsavc_for_interval(timestep_ps, save_interval_ps)
     kw = _base_dyn_kwargs(
@@ -378,7 +417,15 @@ def build_cpt_equilibration_dynamics(
             "restart": restart,
         }
     )
-    kw.update(_cpt_mass_kwargs(temp))
+    _apply_npt_cpt_kwargs(
+        kw,
+        temp=temp,
+        thermostat=thermostat,
+        pmass=pmass,
+        tmass=tmass,
+        pgamma=pgamma,
+        firstt=temp,
+    )
     return kw
 
 
@@ -389,15 +436,38 @@ def build_cpt_production_dynamics(
     save_interval_ps: float = 0.01,
     temp: float = 300.0,
     restart: bool = True,
+    echeck: float = 500.0,
+    thermostat: NptThermostat = "hoover",
+    pmass: int | None = None,
+    tmass: int | None = None,
+    pgamma: float = 0,
 ) -> dict[str, Any]:
-    """NPT production segment (same integrator as equilibration)."""
-    return build_cpt_equilibration_dynamics(
-        timestep_ps=timestep_ps,
-        duration_ps=duration_ps,
-        save_interval_ps=save_interval_ps,
-        temp=temp,
-        restart=restart,
+    """NPT production (CPT + Hoover by default; ``pgamma=0`` per reference dyna scripts)."""
+    nstep = ps_to_nsteps(timestep_ps, duration_ps)
+    nsavc = nsavc_for_interval(timestep_ps, save_interval_ps)
+    kw = _base_dyn_kwargs(
+        timestep=timestep_ps,
+        nstep=nstep,
+        nsavc=nsavc,
+        nprint=100,
+        echeck=echeck,
     )
+    kw.update(
+        {
+            "new": False,
+            "start": False,
+            "restart": restart,
+        }
+    )
+    _apply_npt_cpt_kwargs(
+        kw,
+        temp=temp,
+        thermostat=thermostat,
+        pmass=pmass,
+        tmass=tmass,
+        pgamma=pgamma,
+    )
+    return kw
 
 
 def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
