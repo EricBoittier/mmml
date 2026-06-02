@@ -11,12 +11,14 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     add_charmm_output_args,
     add_cluster_args,
     add_dcd_save_args,
-    add_dynamics_overlap_args,
     add_dynamics_stability_args,
     add_flat_bottom_args,
     add_monomer_constraint_args,
     add_staged_md_args,
     add_test_first_args,
+)
+from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    add_dynamics_overlap_args,
 )
 from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import run_workflow
 
