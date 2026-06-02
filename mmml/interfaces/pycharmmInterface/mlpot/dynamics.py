@@ -13,7 +13,9 @@ if TYPE_CHECKING:
     from mmml.interfaces.pycharmmInterface.mlpot.derivative_test import TestFirstConfig
     from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         DynamicsOverlapConfig,
+        OverlapRescueConfig,
     )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
 import numpy as np
 
@@ -324,6 +326,78 @@ def minimize_bonded_mm_recovery(
         return grms
 
     return _with_mlpot_block_restored(ctx, _run_sd)
+
+
+def minimize_overlap_rescue(
+    ctx: "MlpotContext",
+    config: "OverlapRescueConfig",
+) -> float | None:
+    """Bonded+VDW rescue SD/ABNR (NBXMOD 2) with MLpot registered; separates clashes."""
+    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import (
+        apply_bonded_vdw_recovery_block,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+        OverlapRescueConfig,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        MlpotContext,
+        apply_recovery_nbonds,
+        get_charmm_positions_array,
+        restore_workflow_nbonds,
+    )
+
+    if not isinstance(config, OverlapRescueConfig):
+        raise TypeError("config must be OverlapRescueConfig")
+    if not isinstance(ctx, MlpotContext):
+        raise TypeError("ctx must be MlpotContext")
+
+    def _run_rescue() -> float | None:
+        apply_bonded_vdw_recovery_block()
+        apply_recovery_nbonds(ctx)
+        pycharmm, cons_fix, *_ = _import_pycharmm_modules()
+        minimize = _import_pycharmm_modules()[3]
+        grms_before = float(charmm_grms())
+        if config.verbose:
+            print(
+                f"Overlap rescue start: GRMS={grms_before:.4f} kcal/mol/Å",
+                flush=True,
+            )
+        try:
+            sd_kw = _bonded_recovery_sd_kwargs(
+                ctx,
+                BondedMmMiniConfig(
+                    nstep_sd=config.nstep_sd,
+                    nprint=config.nprint,
+                    tolenr=config.tolenr,
+                    tolgrd=config.tolgrd,
+                    verbose=config.verbose,
+                    show_energy=False,
+                ),
+            )
+            if config.nstep_sd > 0:
+                pycharmm.lingo.charmm_script("ENER")
+                minimize.run_sd(**sd_kw)
+            if config.nstep_abnr > 0:
+                minimize.run_abnr(
+                    nstep=int(config.nstep_abnr),
+                    tolenr=float(config.tolenr),
+                    tolgrd=float(config.tolgrd),
+                )
+            pycharmm.lingo.charmm_script("ENER")
+            grms = float(charmm_grms())
+            if config.verbose:
+                print(
+                    f"Overlap rescue end: GRMS={grms:.4f} kcal/mol/Å",
+                    flush=True,
+                )
+            return grms
+        finally:
+            restore_workflow_nbonds(ctx)
+            cons_fix.turn_off()
+            _ = get_charmm_positions_array()
+
+    return _with_mlpot_block_restored(ctx, _run_rescue)
 
 
 @dataclass
@@ -792,6 +866,7 @@ def run_dynamics_with_io(
     *,
     overlap: Optional["DynamicsOverlapConfig"] = None,
     overlap_context: str = "dynamics",
+    mlpot_ctx: Optional["MlpotContext"] = None,
 ) -> Any:
     """Run dynamics and open/close CharmmFile units from ``io``.
 
@@ -817,7 +892,12 @@ def run_dynamics_with_io(
         return _run_dynamics_chunk(kw, io)
 
     interval = max(1, int(overlap.check_interval))
-    check_dynamics_overlap(overlap, context=f"before {overlap_context}", step=0)
+    check_dynamics_overlap(
+        overlap,
+        context=f"before {overlap_context}",
+        step=0,
+        mlpot_ctx=mlpot_ctx,
+    )
 
     n_chunks = (total_nstep + interval - 1) // interval
     last_dyn: Any = None
@@ -858,6 +938,7 @@ def run_dynamics_with_io(
                 overlap,
                 context=overlap_context,
                 step=steps_done,
+                mlpot_ctx=mlpot_ctx,
             )
     finally:
         _cleanup_overlap_restart_slots(io)

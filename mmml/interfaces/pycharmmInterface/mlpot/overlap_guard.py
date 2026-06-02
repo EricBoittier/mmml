@@ -4,26 +4,42 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 
-DynamicsOverlapAction = Literal["error", "warn", "off"]
+if TYPE_CHECKING:
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+
+DynamicsOverlapAction = Literal["error", "warn", "rescue", "off"]
+
+
+@dataclass(frozen=True)
+class OverlapRescueConfig:
+    """CHARMM bonded+VDW SD/ABNR while MLpot stays registered."""
+
+    nstep_sd: int = 200
+    nstep_abnr: int = 400
+    nprint: int = 50
+    tolenr: float = 1e-3
+    tolgrd: float = 1e-3
+    verbose: bool = False
 
 
 @dataclass(frozen=True)
 class DynamicsOverlapConfig:
     """Chunked dynamics overlap guard (see :func:`run_dynamics_with_io`)."""
 
-    action: DynamicsOverlapAction = "error"
+    action: DynamicsOverlapAction = "rescue"
     min_distance_A: float = 1.5
     check_interval: int = 50
     n_monomers: int = 1
     use_pbc: bool = False
     fallback_box_side_A: float | None = None
+    rescue: OverlapRescueConfig = field(default_factory=OverlapRescueConfig)
 
     @property
     def enabled(self) -> bool:
@@ -38,12 +54,24 @@ def add_dynamics_overlap_args(parser: argparse.ArgumentParser) -> None:
     group = parser.add_argument_group("Dynamics overlap guard (PyCHARMM MLpot)")
     group.add_argument(
         "--dynamics-overlap-action",
-        choices=("error", "warn", "off"),
-        default="error",
+        choices=("error", "warn", "rescue", "off"),
+        default="rescue",
         help=(
-            "Abort or warn when inter-monomer atoms are closer than the overlap "
-            "threshold during MD (default: error)."
+            "On inter-monomer overlap during MD: rescue=CHARMM bonded+VDW mini "
+            "(default), error=abort, warn=log only, off=disable."
         ),
+    )
+    group.add_argument(
+        "--dynamics-overlap-charmm-sd-steps",
+        type=int,
+        default=200,
+        help="CHARMM SD steps for overlap rescue (default: 200).",
+    )
+    group.add_argument(
+        "--dynamics-overlap-charmm-abnr-steps",
+        type=int,
+        default=400,
+        help="CHARMM ABNR steps for overlap rescue (default: 400).",
     )
     group.add_argument(
         "--dynamics-overlap-min-distance",
@@ -71,9 +99,9 @@ def resolve_dynamics_overlap_config(
     fallback_box_side_A: float | None = None,
 ) -> DynamicsOverlapConfig:
     action = str(
-        getattr(args, "dynamics_overlap_action", "error")
+        getattr(args, "dynamics_overlap_action", "rescue")
     ).lower()
-    if action not in ("error", "warn", "off"):
+    if action not in ("error", "warn", "rescue", "off"):
         raise ValueError(f"unknown dynamics_overlap_action: {action!r}")
 
     min_dist = getattr(args, "dynamics_overlap_min_distance", None)
@@ -85,6 +113,14 @@ def resolve_dynamics_overlap_config(
         box_size = getattr(args, "box_size", None)
         if box_size is not None:
             fallback_box_side_A = float(box_size)
+    rescue = OverlapRescueConfig(
+        nstep_sd=int(getattr(args, "dynamics_overlap_charmm_sd_steps", 200)),
+        nstep_abnr=int(getattr(args, "dynamics_overlap_charmm_abnr_steps", 400)),
+        nprint=max(1, int(getattr(args, "dyn_nprint", 50))),
+        tolenr=float(getattr(args, "charmm_tolenr", 1e-3)),
+        tolgrd=float(getattr(args, "charmm_tolgrd", 1e-3)),
+        verbose=not bool(getattr(args, "quiet", False)),
+    )
     return DynamicsOverlapConfig(
         action=action,  # type: ignore[arg-type]
         min_distance_A=float(min_dist),
@@ -96,6 +132,7 @@ def resolve_dynamics_overlap_config(
             if use_pbc and fallback_box_side_A is not None and float(fallback_box_side_A) > 0.0
             else None
         ),
+        rescue=rescue,
     )
 
 
@@ -142,21 +179,13 @@ def _overlap_cell(
     return float(side)
 
 
-def check_dynamics_overlap(
+def _overlap_check(
     config: DynamicsOverlapConfig,
     *,
     context: str,
-    step: int | None = None,
 ) -> float:
-    """Check current CHARMM coordinates; raise or warn per ``config.action``."""
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
-        get_charmm_positions_array,
-    )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
 
-    if not config.enabled:
-        return float("inf")
-
-    label = context if step is None else f"{context} at step {step}"
     pos = get_charmm_positions_array()
     offsets = monomer_offsets(int(pos.shape[0]), config.n_monomers)
     cell = _overlap_cell(
@@ -164,24 +193,60 @@ def check_dynamics_overlap(
         fallback_box_side_A=config.fallback_box_side_A,
     )
     assert_no_intermonomer_atom_overlap = _assert_no_intermonomer_atom_overlap_fn()
+    return assert_no_intermonomer_atom_overlap(
+        pos,
+        offsets,
+        min_distance=config.min_distance_A,
+        cell=cell,
+        context=context,
+    )
+
+
+def check_dynamics_overlap(
+    config: DynamicsOverlapConfig,
+    *,
+    context: str,
+    step: int | None = None,
+    mlpot_ctx: "MlpotContext | None" = None,
+) -> float:
+    """Check current CHARMM coordinates; raise, warn, or rescue per ``config.action``."""
+    if not config.enabled:
+        return float("inf")
+
+    label = context if step is None else f"{context} at step {step}"
 
     if config.action == "error":
-        return assert_no_intermonomer_atom_overlap(
-            pos,
-            offsets,
-            min_distance=config.min_distance_A,
-            cell=cell,
-            context=label,
-        )
+        return _overlap_check(config, context=label)
 
     try:
-        return assert_no_intermonomer_atom_overlap(
-            pos,
-            offsets,
-            min_distance=config.min_distance_A,
-            cell=cell,
-            context=label,
-        )
+        return _overlap_check(config, context=label)
     except RuntimeError as exc:
-        print(f"WARNING: {exc}", flush=True)
-        return float("nan")
+        if config.action == "rescue":
+            if mlpot_ctx is None:
+                raise RuntimeError(
+                    f"{exc}; overlap rescue requires MlpotContext"
+                ) from exc
+            print(
+                f"{exc}\nAttempting MLpot overlap rescue "
+                f"(bonded+VDW SD={config.rescue.nstep_sd}, "
+                f"ABNR={config.rescue.nstep_abnr})...",
+                flush=True,
+            )
+            from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+                minimize_overlap_rescue,
+            )
+
+            try:
+                minimize_overlap_rescue(mlpot_ctx, config.rescue)
+            except Exception as rescue_exc:
+                raise RuntimeError(
+                    f"{exc}; MLpot overlap rescue failed: {rescue_exc}"
+                ) from rescue_exc
+            return _overlap_check(
+                config,
+                context=f"{label} after overlap rescue",
+            )
+        if config.action == "warn":
+            print(f"WARNING: {exc}", flush=True)
+            return float("nan")
+        raise

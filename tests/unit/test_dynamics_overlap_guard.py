@@ -10,6 +10,7 @@ import pytest
 
 from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
     DynamicsOverlapConfig,
+    OverlapRescueConfig,
     check_dynamics_overlap,
     monomer_offsets,
     resolve_dynamics_overlap_config,
@@ -22,13 +23,15 @@ def test_monomer_offsets_uniform():
     np.testing.assert_array_equal(off, [0, 5, 10])
 
 
-def test_resolve_defaults_to_error_and_1p5A():
+def test_resolve_defaults_to_rescue_and_1p5A():
     args = argparse.Namespace()
     cfg = resolve_dynamics_overlap_config(args, n_monomers=4, use_pbc=True)
-    assert cfg.action == "error"
+    assert cfg.action == "rescue"
     assert cfg.min_distance_A == 1.5
     assert cfg.check_interval == 50
     assert cfg.enabled is True
+    assert cfg.rescue.nstep_sd == 200
+    assert cfg.rescue.nstep_abnr == 400
 
 
 def test_resolve_off_disables():
@@ -94,6 +97,52 @@ def test_check_overlap_raises_on_close_contact():
     ):
         with pytest.raises(RuntimeError, match="inter-monomer atom overlap"):
             check_dynamics_overlap(cfg, context="test", step=50)
+
+
+def test_check_overlap_rescue_runs_minimize_and_rechecks():
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        min_distance_A=1.5,
+        n_monomers=2,
+        use_pbc=False,
+        rescue=OverlapRescueConfig(nstep_sd=10, nstep_abnr=0, verbose=False),
+    )
+    pos_bad = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.5, 0.0, 0.0],
+            [2.0, 0.0, 0.0],
+        ],
+        dtype=float,
+    )
+    pos_ok = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [5.0, 0.0, 0.0],
+            [6.0, 0.0, 0.0],
+        ],
+        dtype=float,
+    )
+    ctx = mock.Mock()
+    call_n = [0]
+
+    def get_pos():
+        call_n[0] += 1
+        return pos_bad if call_n[0] == 1 else pos_ok
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        side_effect=get_pos,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.minimize_overlap_rescue",
+    ) as rescue:
+        dmin = check_dynamics_overlap(
+            cfg, context="test", step=50, mlpot_ctx=ctx
+        )
+        rescue.assert_called_once_with(ctx, cfg.rescue)
+    assert dmin > 1.5
 
 
 def test_run_dynamics_with_io_chunks_and_checks(tmp_path):
