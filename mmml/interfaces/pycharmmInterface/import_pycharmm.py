@@ -283,22 +283,6 @@ def charmm_print_level(prnlev: int = 0, wrnlev: int | None = None):
         pycharmm.lingo.charmm_script(f"PRNLev {int(old_prn)}\nWRNLev {int(old_wrn)}")
 
 
-@contextmanager
-def charmm_relaxed_bomlev(level: int = -2):
-    """Relax BOMBlev/WRNLev for RTF/PRM/PSF/CARD reads; restore on exit.
-
-    Do not leave ``bomlev 0`` after parameter loads — benign read warnings would
-    abort the job on the next CHARMM command (e.g. MLpot registration).
-    """
-    old_bl = settings.set_bomb_level(int(level))
-    old_wl = settings.set_warn_level(int(level))
-    pycharmm.lingo.charmm_script(f"bomlev {int(level)}\nwrnlev {int(level)}")
-    try:
-        yield
-    finally:
-        settings.set_bomb_level(old_bl)
-        settings.set_warn_level(old_wl)
-        pycharmm.lingo.charmm_script(f"bomlev {int(old_bl)}\nwrnlev {int(old_wl)}")
-
+from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev  # noqa: E402
 
 pycharmm_quiet()
