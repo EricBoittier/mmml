@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import numpy as np
+
+PathLike = str | Path
 
 from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     apply_charmm_output_from_args,
