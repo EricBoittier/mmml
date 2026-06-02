@@ -40,6 +40,23 @@ def test_charmm_internal_energy_prefers_bonded_when_inte_zero():
         assert charmm_internal_energy_kcalmol() == pytest.approx(12.0)
 
 
+def test_bonded_recovery_sd_kwargs_pbc_vs_vacuum():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        BondedMmMiniConfig,
+        _bonded_recovery_sd_kwargs,
+    )
+
+    cfg = BondedMmMiniConfig(nstep_sd=10)
+    pbc_ctx = MagicMock(use_pbc=True)
+    vac_ctx = MagicMock(use_pbc=False)
+    pbc_kw = _bonded_recovery_sd_kwargs(pbc_ctx, cfg)
+    vac_kw = _bonded_recovery_sd_kwargs(vac_ctx, cfg)
+    assert pbc_kw["inbfrq"] == -1
+    assert pbc_kw["imgfrq"] == -1
+    assert vac_kw["inbfrq"] == 0
+    assert vac_kw["imgfrq"] == 0
+
+
 def test_apply_bonded_mm_only_block_script():
     import importlib.util
     from pathlib import Path
