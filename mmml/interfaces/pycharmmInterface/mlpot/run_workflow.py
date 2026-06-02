@@ -513,6 +513,7 @@ def run_dynamics_workflow(
             io,
             overlap=overlap_cfg,
             overlap_context=label,
+            mlpot_ctx=ctx,
         )
         if show_energy:
             from mmml.interfaces.pycharmmInterface.import_pycharmm import (

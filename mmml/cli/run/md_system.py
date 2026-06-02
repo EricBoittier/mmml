@@ -1008,6 +1008,18 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
             str(args.dynamics_overlap_check_interval),
         ]
     )
+    cmd.extend(
+        [
+            "--dynamics-overlap-charmm-sd-steps",
+            str(getattr(args, "dynamics_overlap_charmm_sd_steps", 200)),
+        ]
+    )
+    cmd.extend(
+        [
+            "--dynamics-overlap-charmm-abnr-steps",
+            str(getattr(args, "dynamics_overlap_charmm_abnr_steps", 400)),
+        ]
+    )
     if args.charmm_pre_minimize is False:
         cmd.append("--no-charmm-pre-minimize")
     cmd.extend(["--charmm-sd-steps", str(args.charmm_sd_steps)])
