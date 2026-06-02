@@ -770,7 +770,6 @@ def run_dynamics_with_io(
             chunk_kw["new"] = False
             chunk_kw["start"] = False
             chunk_kw["restart"] = False
-            chunk_kw.pop("res", None)
 
         last_dyn = _run_dynamics_chunk(chunk_kw, chunk_io)
         steps_done += chunk_nstep
