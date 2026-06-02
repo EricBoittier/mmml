@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
 from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
     BondedMmMiniConfig,
     charmm_internal_energy_kcalmol,
-    minimize_bonded_mm_recovery,
     measure_mm_internal_with_full_block,
+    minimize_bonded_mm_recovery,
+    rewrite_dynamics_restart_from_current_state,
 )
 from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+
+PathLike = str | Path
 
 
 def record_mm_baseline_internal_energy(
@@ -40,6 +44,7 @@ def maybe_run_bonded_mm_mini_after_stage(
     *,
     stage: str,
     baseline_internal: float | None,
+    restart_path: PathLike | None = None,
 ) -> None:
     """If internal energy rose above baseline, run bonded-only MM SD and restore BLOCK."""
     if not getattr(args, "bonded_mm_mini", False):
@@ -66,21 +71,29 @@ def maybe_run_bonded_mm_mini_after_stage(
                 f"(baseline {baseline_internal:.4f} + margin {margin:.4f})",
                 flush=True,
             )
-        return
+    else:
+        if not args.quiet:
+            print(
+                f"bonded-MM-mini: internal {current:.4f} > {threshold:.4f} after {stage}; "
+                f"running bonded SD",
+                flush=True,
+            )
+        nstep = int(getattr(args, "bonded_mm_mini_steps", 50))
+        minimize_bonded_mm_recovery(
+            ctx,
+            BondedMmMiniConfig(
+                nstep_sd=nstep,
+                nprint=max(1, int(getattr(args, "dyn_nprint", 100))),
+                verbose=not args.quiet,
+                show_energy=bool(getattr(args, "show_energy", False)),
+            ),
+        )
 
-    if not args.quiet:
+    # Internal check temporarily detaches MLpot / toggles BLOCK; refresh restart flags.
+    rewrite_dynamics_restart_from_current_state(restart_path)
+    if restart_path is not None and not args.quiet:
         print(
-            f"bonded-MM-mini: internal {current:.4f} > {threshold:.4f} after {stage}; "
-            f"running bonded SD",
+            f"bonded-MM-mini: resynced restart {Path(restart_path).name} "
+            f"with current MLpot BLOCK",
             flush=True,
         )
-    nstep = int(getattr(args, "bonded_mm_mini_steps", 50))
-    minimize_bonded_mm_recovery(
-        ctx,
-        BondedMmMiniConfig(
-            nstep_sd=nstep,
-            nprint=max(1, int(getattr(args, "dyn_nprint", 100))),
-            verbose=not args.quiet,
-            show_energy=bool(getattr(args, "show_energy", False)),
-        ),
-    )

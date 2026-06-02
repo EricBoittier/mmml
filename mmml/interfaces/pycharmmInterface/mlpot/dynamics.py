@@ -169,10 +169,42 @@ def charmm_internal_energy_kcalmol(*, require: bool = False) -> float | None:
                 "SKIP_CHARMM_ENERGY_SHOW to use bonded-MM-mini internal checks)"
             )
         return None
+    bonded = sum(float(terms.get(k, 0.0)) for k in _BONDED_INTERNAL_TERM_KEYS)
+    if "INTE" in terms:
+        inte = float(terms["INTE"])
+        # Hybrid MLpot runs can leave INTE=0 in the energy row while bonded terms are populated.
+        if abs(inte) > 1e-8 or abs(bonded) <= 1e-8:
+            return inte
+    if abs(bonded) > 1e-8:
+        return bonded
     if "INTE" in terms:
         return float(terms["INTE"])
-    bonded = sum(float(terms.get(k, 0.0)) for k in _BONDED_INTERNAL_TERM_KEYS)
-    return bonded
+    if require:
+        raise RuntimeError("CHARMM internal energy terms are all zero")
+    return None
+
+
+def rewrite_dynamics_restart_from_current_state(
+    restart_path: PathLike | None,
+    *,
+    write_unit: int = 92,
+) -> None:
+    """Overwrite a dynamics restart so flags/coords match the current BLOCK setup."""
+    if restart_path is None:
+        return
+    path = Path(restart_path).expanduser().resolve()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    pycharmm, *_ = _import_pycharmm_modules()
+    restart_file = pycharmm.CharmmFile(
+        file_name=str(path),
+        file_unit=write_unit,
+        formatted=True,
+        read_only=False,
+    )
+    try:
+        pycharmm.lingo.charmm_script(f"write restart unit {write_unit}\n")
+    finally:
+        restart_file.close()
 
 
 @dataclass
