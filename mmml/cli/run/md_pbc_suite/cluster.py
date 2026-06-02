@@ -276,7 +276,11 @@ def build_packmol_composition_cluster(
         coords, atom_names, monomer_z = residue_geometries[key]
         pdb_path = packmol_dir / f"{key.lower()}.pdb"
         packmol_placement.write_monomer_pdb_for_packmol(
-            pdb_path, coords, monomer_z, atom_names=atom_names
+            pdb_path,
+            coords,
+            monomer_z,
+            atom_names=atom_names,
+            resname=key,
         )
         packmol_blocks.append((pdb_path, int(count)))
 

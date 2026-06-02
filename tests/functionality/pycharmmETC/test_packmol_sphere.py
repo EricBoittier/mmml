@@ -57,6 +57,28 @@ def test_write_monomer_pdb_uses_psf_atomic_numbers(tmp_path):
     assert symbols == ["Cl", "C"]
 
 
+def test_write_monomer_pdb_charmm_names_not_carbon_for_cl(tmp_path):
+    """Regression: coord loop variable must not shadow atomic_numbers (CL1 -> Cl)."""
+    from mmml.interfaces.pycharmmInterface.packmol_placement import (
+        write_monomer_pdb_for_packmol,
+    )
+
+    coords = np.zeros((5, 3), dtype=float)
+    Z = np.array([6, 1, 1, 17, 17], dtype=int)
+    names = ["C", "H1", "H2", "CL1", "CL2"]
+    pdb_path = tmp_path / "dcm.pdb"
+    write_monomer_pdb_for_packmol(
+        pdb_path, coords, Z, atom_names=names, resname="DCM"
+    )
+    text = pdb_path.read_text()
+    assert " DCM " in text or "DCM A" in text
+    assert "UNK" not in text
+    assert "CL1 DCM" in text or "CL1 DCM" in text.replace("  ", " ")
+    for line in text.splitlines():
+        if "CL1" in line or "CL2" in line:
+            assert line.rstrip().endswith("Cl")
+
+
 def test_run_packmol_sphere_mixed_writes_inp(tmp_path, monkeypatch):
     from mmml.interfaces.pycharmmInterface import packmol_placement
 

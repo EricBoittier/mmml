@@ -77,26 +77,53 @@ def require_packmol_sphere_radius(
     return resolve_packmol_sphere_radius(packmol_radius, flat_bottom_radius)
 
 
+def _element_symbol(atomic_number: int) -> str:
+    """Map atomic number to PDB element column (prefer ASE table when installed)."""
+    zi = int(atomic_number)
+    try:
+        from ase.data import chemical_symbols
+
+        if 1 <= zi < len(chemical_symbols) and chemical_symbols[zi]:
+            return str(chemical_symbols[zi])
+    except ImportError:
+        pass
+    fallback = {
+        1: "H",
+        6: "C",
+        7: "N",
+        8: "O",
+        9: "F",
+        15: "P",
+        16: "S",
+        17: "Cl",
+        35: "Br",
+        53: "I",
+    }
+    return fallback.get(zi, "X")
+
+
 def write_monomer_pdb_for_packmol(
     pdb_path: Path,
     coords: np.ndarray,
     atomic_numbers: np.ndarray,
     *,
     atom_names: list[str] | None = None,
+    resname: str = "UNK",
 ) -> None:
     """Write a centered monomer PDB for Packmol.
 
     When ``atom_names`` are supplied (CHARMM PSF ``atype`` labels), they are written to
     the PDB name column so Packmol output can be mapped back to PSF order.
     """
-    z = np.asarray(atomic_numbers, dtype=int).reshape(-1)
+    Z = np.asarray(atomic_numbers, dtype=int).reshape(-1)
     coords_arr = np.asarray(coords, dtype=float)
-    if int(z.shape[0]) != int(coords_arr.shape[0]):
+    if int(Z.shape[0]) != int(coords_arr.shape[0]):
         raise ValueError(
-            f"atomic_numbers length ({z.shape[0]}) != coords rows ({coords_arr.shape[0]})"
+            f"atomic_numbers length ({Z.shape[0]}) != coords rows ({coords_arr.shape[0]})"
         )
     coords_arr = coords_arr - coords_arr.mean(axis=0)
     pdb_path.parent.mkdir(parents=True, exist_ok=True)
+    resn = str(resname).upper()[:3] or "UNK"
 
     if atom_names is not None:
         names = [str(n) for n in atom_names]
@@ -104,24 +131,15 @@ def write_monomer_pdb_for_packmol(
             raise ValueError(
                 f"atom_names length ({len(names)}) != coords rows ({coords_arr.shape[0]})"
             )
-        from ase.data import chemical_symbols
-
         lines = [
             "REMARK   mmml packmol monomer (CHARMM atom names for PSF reordering)",
             "CRYST1   200.000   200.000   200.000  90.00  90.00  90.00 P 1           1",
         ]
-        for i, (name, (x, y, z)) in enumerate(zip(names, coords_arr), start=1):
-            elem = name[0] if name else "C"
-            if elem.isdigit():
-                elem = "C"
-            try:
-                sym = chemical_symbols[int(z[i - 1])]
-                elem = sym if len(sym) <= 2 else elem
-            except (IndexError, ValueError):
-                pass
+        for i, (name, (x, y, z_coord)) in enumerate(zip(names, coords_arr), start=1):
+            elem = _element_symbol(Z[i - 1])
             lines.append(
-                f"ATOM  {i:5d} {name[:4]:>4s} UNK A   1    "
-                f"{float(x):8.3f}{float(y):8.3f}{float(z):8.3f}  1.00  0.00          "
+                f"ATOM  {i:5d} {name[:4]:>4s} {resn:<3s} A   1    "
+                f"{float(x):8.3f}{float(y):8.3f}{float(z_coord):8.3f}  1.00  0.00          "
                 f"{elem:>2s}"
             )
         lines.append("END")
@@ -129,10 +147,9 @@ def write_monomer_pdb_for_packmol(
         return
 
     from ase import Atoms
-    from ase.data import chemical_symbols
     from ase.io import write
 
-    symbols = [chemical_symbols[int(zi)] for zi in z]
+    symbols = [_element_symbol(zi) for zi in Z]
     mol = Atoms(symbols=symbols, positions=coords_arr)
     write(pdb_path, mol)
 
