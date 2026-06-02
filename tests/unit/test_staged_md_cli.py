@@ -38,3 +38,21 @@ def test_resolve_use_pbc_from_setup():
 def test_resolve_use_pbc_free_space():
     args = argparse.Namespace(setup="pbc_nve", free_space=True, box_size=None)
     assert resolve_use_pbc(args) is False
+
+
+def test_resolve_use_pbc_box_size():
+    args = argparse.Namespace(setup="free_nve", free_space=False, box_size=40.0)
+    assert resolve_use_pbc(args) is True
+
+
+def test_cubic_box_length_from_geometry():
+    import numpy as np
+
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        cubic_box_length_from_geometry,
+    )
+
+    pos = np.array([[0.0, 0.0, 0.0], [10.0, 0.0, 0.0], [0.0, 10.0, 0.0]])
+    side = cubic_box_length_from_geometry(pos, ml_cutoff=12.0, pad=10.0)
+    assert side >= 2.0 * 12.0 + 10.0
+    assert side >= 10.0 + 20.0
