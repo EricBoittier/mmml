@@ -94,6 +94,7 @@ class DecomposedMlpotCalculator:
             try:
                 side, _ = resolve_charmm_cubic_box_side_A(
                     fallback_side_A=float(self._cell) if self._cell else None,
+                    restart_path=getattr(self, "_npt_restart_read", None),
                 )
                 self._cell = side
             except (KeyboardInterrupt, SystemExit):

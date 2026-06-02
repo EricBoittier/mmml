@@ -3,9 +3,79 @@
 from __future__ import annotations
 
 import ctypes
-from typing import Any
+from pathlib import Path
+from typing import Any, Literal
 
 import numpy as np
+
+PathLike = str | Path
+BoxSideSource = Literal["pbound", "restart", "fallback"]
+
+
+def _parse_fortran_float(token: str) -> float:
+    """Parse CHARMM restart floats such as ``0.310000000000000D+02``."""
+    return float(token.strip().upper().replace("D", "E"))
+
+
+def parse_cubic_box_side_from_charmm_restart(path: PathLike) -> float | None:
+    """Read cubic box side (Å) from a CHARMM dynamics restart (``.res``).
+
+    CPT/NPT restarts store ``!CRYSTAL PARAMETERS`` after the title block.
+    Returns ``None`` when the file has no crystal section (e.g. vacuum NVE).
+    """
+    p = Path(path)
+    if not p.is_file():
+        return None
+    lines = p.read_text(encoding="ascii", errors="ignore").splitlines()
+    if not lines:
+        return None
+
+    header = lines[0].upper()
+    has_cubi = "CUBI" in header
+    crystal_idx = next(
+        (i for i, ln in enumerate(lines[:40]) if "CRYSTAL PARAMETERS" in ln.upper()),
+        None,
+    )
+    if crystal_idx is None and not has_cubi:
+        return None
+
+    if crystal_idx is None:
+        return None
+
+    values: list[float] = []
+    for j in range(crystal_idx + 1, min(crystal_idx + 4, len(lines))):
+        for token in lines[j].split():
+            try:
+                values.append(_parse_fortran_float(token))
+            except ValueError:
+                continue
+
+    positives = [v for v in values if v > 1.0]
+    if not positives:
+        return None
+
+    if has_cubi:
+        return float(positives[0])
+
+    if len(values) >= 9:
+        mat = np.array(values[:9], dtype=float).reshape(3, 3)
+        lengths = [
+            float(np.linalg.norm(mat[k]))
+            for k in range(3)
+            if float(np.linalg.norm(mat[k])) > 1.0
+        ]
+        if lengths:
+            if _is_cubic_box_sides(
+                lengths[0],
+                lengths[1] if len(lengths) > 1 else lengths[0],
+                lengths[2] if len(lengths) > 2 else lengths[0],
+            ):
+                return sum(lengths) / len(lengths)
+
+    rounded = {round(v, 4) for v in positives}
+    if len(rounded) == 1:
+        return float(next(iter(rounded)))
+    return float(positives[0])
 
 
 def _charmm_ctypes_scalar(value: Any) -> float:
@@ -63,31 +133,50 @@ def _is_cubic_box_sides(
 def resolve_charmm_cubic_box_side_A(
     *,
     fallback_side_A: float | None = None,
+    restart_path: PathLike | None = None,
     rel_tol: float = 1e-3,
-) -> tuple[float, bool]:
-    """Return ``(side, used_fallback)`` for the current CHARMM cubic cell.
+) -> tuple[float, BoxSideSource]:
+    """Return ``(side, source)`` for the current CHARMM cubic cell.
 
-    Uses box side lengths rather than ``pbound_is_cubic_box()`` (that flag can be
-    unset between dynamics stages even for a cubic cell).
+    Resolution order:
+
+    1. Live ``pbound_get_size`` (during/after CPT when crystal is active)
+    2. ``!CRYSTAL PARAMETERS`` in a CHARMM restart file (before CPT read restores PBC)
+    3. ``fallback_side_A`` (last known ML MIC cell or CLI ``--box-size``)
     """
     lx, ly, lz = _read_charmm_box_sides_A()
     if _is_cubic_box_sides(lx, ly, lz, rel_tol=rel_tol):
-        return (lx + ly + lz) / 3.0, False
+        return (lx + ly + lz) / 3.0, "pbound"
+
+    if restart_path is not None:
+        from_restart = parse_cubic_box_side_from_charmm_restart(restart_path)
+        if from_restart is not None and from_restart > 0.0:
+            return float(from_restart), "restart"
+
     if fallback_side_A is not None and float(fallback_side_A) > 0.0:
-        return float(fallback_side_A), True
+        return float(fallback_side_A), "fallback"
+
     if min(lx, ly, lz) > 0.0:
         raise RuntimeError(
             "CHARMM box is not cubic; MLpot MIC sync expects a cubic cell "
             f"(got {lx:.4f}, {ly:.4f}, {lz:.4f} Å)"
         )
     raise RuntimeError(
-        "CHARMM cubic box side unavailable (pbound_get_size returned non-positive lengths)"
+        "CHARMM cubic box side unavailable (pbound_get_size returned non-positive "
+        "lengths and no restart/fallback box side was provided)"
     )
 
 
-def get_charmm_cubic_box_side_A() -> float:
-    """Read the current cubic CHARMM cell side length (Å) from ``pbound_get_size``."""
-    side, _ = resolve_charmm_cubic_box_side_A()
+def get_charmm_cubic_box_side_A(
+    *,
+    restart_path: PathLike | None = None,
+    fallback_side_A: float | None = None,
+) -> float:
+    """Read the current cubic CHARMM cell side length (Å)."""
+    side, _ = resolve_charmm_cubic_box_side_A(
+        fallback_side_A=fallback_side_A,
+        restart_path=restart_path,
+    )
     return side
 
 

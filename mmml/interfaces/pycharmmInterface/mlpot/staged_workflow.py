@@ -160,9 +160,14 @@ def _sync_mlpot_cell_before_npt(
     use_pbc: bool,
     pyCModel: Any,
     quiet: bool,
+    restart_path: Path | None = None,
 ) -> None:
     if use_pbc and stage in ("equi", "prod"):
-        sync_mlpot_pbc_cell_from_charmm(pyCModel, verbose=not quiet)
+        sync_mlpot_pbc_cell_from_charmm(
+            pyCModel,
+            verbose=not quiet,
+            restart_path=restart_path,
+        )
 
 
 def _build_stage_dynamics_kw(
@@ -415,6 +420,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         use_pbc=use_pbc,
                         pyCModel=pyCModel,
                         quiet=bool(args.quiet),
+                        restart_path=Path(rread) if restart and rread else None,
                     )
                     kw = _build_stage_dynamics_kw(
                         "equi",
@@ -478,6 +484,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         use_pbc=use_pbc,
                         pyCModel=pyCModel,
                         quiet=bool(args.quiet),
+                        restart_path=Path(rread) if restart and rread else None,
                     )
                     disable_charmm_domdec()
                     run_dynamics_with_io(kw, seg_io)
@@ -514,6 +521,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 use_pbc=use_pbc,
                 pyCModel=pyCModel,
                 quiet=bool(args.quiet),
+                restart_path=Path(rread) if restart and rread else None,
             )
 
             kw = _build_stage_dynamics_kw(
