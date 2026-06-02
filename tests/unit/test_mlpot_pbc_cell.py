@@ -172,9 +172,39 @@ def test_resolve_charmm_cubic_box_side_A_uses_fallback():
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_box_sides_A",
         return_value=(0.0, 0.0, 0.0),
     ):
-        side, used_fallback = resolve_charmm_cubic_box_side_A(fallback_side_A=40.0)
+        side, source = resolve_charmm_cubic_box_side_A(fallback_side_A=40.0)
     assert side == pytest.approx(40.0)
-    assert used_fallback is True
+    assert source == "fallback"
+
+
+def test_resolve_charmm_cubic_box_side_A_uses_restart_file():
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import resolve_charmm_cubic_box_side_A
+
+    heat_res = Path(
+        "examples/other/notebooks/ffFIT/example-general/heat.res"
+    ).resolve()
+    if not heat_res.is_file():
+        pytest.skip("example heat.res not available")
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env._read_charmm_box_sides_A",
+        return_value=(0.0, 0.0, 0.0),
+    ):
+        side, source = resolve_charmm_cubic_box_side_A(restart_path=heat_res)
+    assert side == pytest.approx(31.0)
+    assert source == "restart"
+
+
+def test_parse_cubic_box_side_from_charmm_restart_vacuum_returns_none():
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        parse_cubic_box_side_from_charmm_restart,
+    )
+
+    nve_res = Path(
+        "tests/functionality/mlpot/output/dynamics/nve_aco_4mer.res"
+    ).resolve()
+    if not nve_res.is_file():
+        pytest.skip("nve restart fixture not available")
+    assert parse_cubic_box_side_from_charmm_restart(nve_res) is None
 
 
 def test_sync_mlpot_pbc_cell_from_charmm_updates_model():
@@ -184,7 +214,7 @@ def test_sync_mlpot_pbc_cell_from_charmm_updates_model():
     model = DecomposedMlpotModel(MagicMock(), CutoffParameters(), 2, z, cell=40.0)
     with patch(
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
-        return_value=(39.25, False),
+        return_value=(39.25, "pbound"),
     ):
         side = run_workflow.sync_mlpot_pbc_cell_from_charmm(model, verbose=False)
     assert side == pytest.approx(39.25)
@@ -211,7 +241,7 @@ def test_decomposed_calculator_passes_charmm_box_to_spherical_fn():
     dz = np.zeros(n, dtype=np.float64)
     with patch(
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
-        return_value=(39.0, False),
+        return_value=(39.0, "pbound"),
     ), patch(
         "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
         return_value=MagicMock(__enter__=MagicMock(), __exit__=MagicMock()),

@@ -27,6 +27,9 @@ from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
     save_minimization_results,
     write_minimized_coordinates,
 )
+from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    parse_cubic_box_side_from_charmm_restart,
+)
 from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
     FlatBottomSphereConfig,
     apply_flat_bottom_workflow,
@@ -83,6 +86,7 @@ __all__ = [
     "build_nve_dynamics",
     "charmm_energy_terms",
     "compute_cpt_piston_masses",
+    "parse_cubic_box_side_from_charmm_restart",
     "final_npt_segment_restart",
     "npt_restart_chain",
     "load_minimized_coordinates",

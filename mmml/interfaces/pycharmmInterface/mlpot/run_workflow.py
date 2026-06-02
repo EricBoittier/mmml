@@ -189,6 +189,7 @@ def sync_mlpot_pbc_cell_from_charmm(
     pyCModel: Any,
     *,
     fallback_side_A: float | None = None,
+    restart_path: PathLike | None = None,
     verbose: bool = False,
 ) -> float:
     """Set ML MIC cell side to the current CHARMM cubic box (NpT / CPT stages).
@@ -196,23 +197,39 @@ def sync_mlpot_pbc_cell_from_charmm(
     Updates the JAX MIC cell only. Does **not** re-run ``prepare_charmm_pbc`` or
     ``update_bnbnd`` here — rebuilding crystal/nbonds with MLpot registered can
     segfault in CHARMM (``upinb``). CPT stage restarts restore CHARMM PBC state.
+
+    When ``pbound_get_size`` is zero (common before a CPT restart is read), pass
+    ``restart_path`` to the upcoming/previous ``.res`` file — CHARMM stores the
+    box under ``!CRYSTAL PARAMETERS``.
     """
     from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotModel
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import resolve_charmm_cubic_box_side_A
+
+    if restart_path is not None:
+        rpath = Path(restart_path)
+        if isinstance(pyCModel, DecomposedMlpotModel):
+            pyCModel._npt_restart_read = rpath if rpath.is_file() else None
 
     if fallback_side_A is None:
         old_cell = getattr(pyCModel, "_cell", False)
         if old_cell:
             fallback_side_A = float(old_cell)
 
-    side, used_fallback = resolve_charmm_cubic_box_side_A(
+    side, source = resolve_charmm_cubic_box_side_A(
         fallback_side_A=fallback_side_A,
+        restart_path=restart_path,
     )
     old = getattr(pyCModel, "_cell", False)
     if isinstance(pyCModel, DecomposedMlpotModel):
         pyCModel._cell = side
     if verbose:
-        if used_fallback:
+        if source == "restart":
+            print(
+                f"MLpot MIC PBC: L={side:.3f} Å from restart "
+                f"{Path(restart_path).name if restart_path else ''}",
+                flush=True,
+            )
+        elif source == "fallback":
             print(
                 f"MLpot MIC PBC: using L={side:.3f} Å from last known cell "
                 f"(CHARMM box query unavailable; CPT restart restores PBC)",
