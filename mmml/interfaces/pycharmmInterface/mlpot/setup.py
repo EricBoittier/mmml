@@ -97,6 +97,11 @@ class MlpotContext:
     model: Any
     ml_selection: Any = None
     block_tag: str = "all"
+    ml_Z: np.ndarray | None = None
+    use_pbc: bool = False
+    cubic_box_side_A: float | None = None
+    ml_charge: float = 0.0
+    ml_fq: bool = True
 
     def unset(self) -> None:
         self.mlpot.unset_mlpot()
@@ -108,6 +113,32 @@ class MlpotContext:
         if self.ml_selection is not None:
             clear_mlpot_energy_block(self.ml_selection, block_tag=self.block_tag)
         apply_charmm_mm_block()
+
+    def reregister_mlpot(self) -> None:
+        """Re-attach MLpot + ML BLOCK after temporary MM-only work."""
+        from mmml.interfaces.pycharmmInterface.mlpot.block_terms import (
+            apply_mlpot_energy_block,
+        )
+
+        if self.ml_selection is None or self.ml_Z is None:
+            raise RuntimeError("MlpotContext missing ml_selection or ml_Z for reregister")
+        self.block_tag = apply_mlpot_energy_block(self.ml_selection)
+        pycharmm = _import_pycharmm()
+        z_ml = physnet_ml_atomic_numbers(self.ml_Z)
+        self.mlpot = pycharmm.MLpot(
+            ml_model=self.pyCModel,
+            ml_Z=z_ml,
+            ml_selection=self.ml_selection,
+            ml_charge=float(self.ml_charge),
+            ml_fq=bool(self.ml_fq),
+        )
+        if self.use_pbc and self.cubic_box_side_A is not None:
+            refresh_nbonds_after_mlpot_pbc(
+                cubic_box_side_A=float(self.cubic_box_side_A),
+                force=False,
+            )
+        else:
+            refresh_nbonds_after_mlpot()
 
 
 def _import_pycharmm():
@@ -428,6 +459,7 @@ def register_mlpot(
     )
     if not use_pbc:
         refresh_nbonds_after_mlpot()
+    ml_z = np.asarray(ml_Z, dtype=int)
     return MlpotContext(
         mlpot=mlpot,
         pyCModel=pyCModel,
@@ -435,4 +467,9 @@ def register_mlpot(
         model=None,
         ml_selection=ml_selection,
         block_tag=block_tag,
+        ml_Z=ml_z,
+        use_pbc=bool(use_pbc),
+        cubic_box_side_A=None,
+        ml_charge=float(ml_charge),
+        ml_fq=bool(ml_fq),
     )

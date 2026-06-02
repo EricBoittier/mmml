@@ -173,6 +173,9 @@ def _register_mlpot_context(
         select_all_atoms(),
         use_pbc=cubic_box_side_A is not None,
     )
+    ctx.ml_Z = np.asarray(z, dtype=int)
+    ctx.use_pbc = cubic_box_side_A is not None
+    ctx.cubic_box_side_A = float(cubic_box_side_A) if cubic_box_side_A is not None else None
     if cubic_box_side_A is not None:
         refresh_nbonds_after_mlpot_pbc(
             cubic_box_side_A=float(cubic_box_side_A),

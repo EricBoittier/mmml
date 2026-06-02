@@ -35,6 +35,10 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     turn_off_cons_fix,
     validate_resids_for_cluster,
 )
+from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+    maybe_run_bonded_mm_mini_after_stage,
+    record_mm_baseline_internal_energy,
+)
 from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
     CharmmTrajectoryFiles,
     MinimizeWithMlpotConfig,
@@ -302,6 +306,10 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         )
         sync_charmm_positions(r)
 
+    baseline_internal: float | None = None
+    if getattr(args, "bonded_mm_mini", False) and getattr(args, "charmm_pre_minimize", True):
+        baseline_internal = record_mm_baseline_internal_energy(verbose=not args.quiet)
+
     ctx, pyCModel = _register_mlpot_context(
         z,
         r,
@@ -437,6 +445,12 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     kw["nsavc"] = dcd_nsavc
                     disable_charmm_domdec()
                     run_dynamics_with_io(kw, seg_io)
+                    maybe_run_bonded_mm_mini_after_stage(
+                        ctx,
+                        args,
+                        stage="equi",
+                        baseline_internal=baseline_internal,
+                    )
                     prev_restart = seg_io.restart_write
                     last_traj = seg_io.trajectory
                 continue
@@ -488,6 +502,12 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     )
                     disable_charmm_domdec()
                     run_dynamics_with_io(kw, seg_io)
+                    maybe_run_bonded_mm_mini_after_stage(
+                        ctx,
+                        args,
+                        stage="prod",
+                        baseline_internal=baseline_internal,
+                    )
                     last_traj = seg_io.trajectory
                 continue
 
@@ -538,6 +558,12 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             kw["nsavc"] = dcd_nsavc
             disable_charmm_domdec()
             run_dynamics_with_io(kw, io)
+            maybe_run_bonded_mm_mini_after_stage(
+                ctx,
+                args,
+                stage=stage,
+                baseline_internal=baseline_internal,
+            )
             prev_restart = io.restart_write
             last_traj = io.trajectory
 

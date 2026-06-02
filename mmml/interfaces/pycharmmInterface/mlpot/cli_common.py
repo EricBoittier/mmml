@@ -934,6 +934,7 @@ def add_staged_md_args(parser: argparse.ArgumentParser) -> None:
         default=1,
         help="Split production into chained restart segments (default: 1)",
     )
+    add_bonded_mm_mini_args(parser)
     group.add_argument(
         "--restart-from",
         type=Path,
@@ -988,6 +989,38 @@ def _default_stages_for_setup(setup: str | None) -> list[str]:
     if s == "pbc_nvt":
         return ["mini", "heat", "equi"]
     return ["mini", "heat", "nve", "equi", "prod"]
+
+
+def add_bonded_mm_mini_args(parser: argparse.ArgumentParser) -> None:
+    group = parser.add_argument_group(
+        "Bonded MM recovery (fix bad conformations after heat)"
+    )
+    group.add_argument(
+        "--bonded-mm-mini",
+        action="store_true",
+        help=(
+            "Compare CHARMM internal energy to post-MM-pre-min baseline after selected "
+            "stages; run bonded-only SD and restore MLpot BLOCK if higher"
+        ),
+    )
+    group.add_argument(
+        "--bonded-mm-mini-after",
+        type=str,
+        default="heat",
+        help="Comma-separated dynamics stages to check (default: heat)",
+    )
+    group.add_argument(
+        "--bonded-mm-mini-steps",
+        type=int,
+        default=50,
+        help="SD steps for bonded-only recovery mini (default: 50)",
+    )
+    group.add_argument(
+        "--bonded-mm-internal-margin",
+        type=float,
+        default=0.0,
+        help="kcal/mol above baseline before triggering recovery (default: 0)",
+    )
 
 
 def resolve_md_stages(args: argparse.Namespace) -> list[str]:

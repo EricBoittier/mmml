@@ -25,6 +25,17 @@ def apply_charmm_mm_block() -> None:
     reset_block()
 
 
+def apply_bonded_mm_only_block() -> None:
+    """Bonded MM terms only (BOND/ANGL/DIHE); zero VDW/ELEC for geometry recovery."""
+    pycharmm = _import_pycharmm()
+    block = """BLOCK
+CALL 1 SELE ALL END
+COEFF 1 1 1.0 BOND 1.0 ANGL 1.0 DIHEdral 1.0 ELEC 0.0 VDW 0.0
+END
+"""
+    pycharmm.lingo.charmm_script(block)
+
+
 def apply_mlpot_energy_block(ml_selection: Any) -> str:
     """Zero CHARMM bonded and nonbonded terms on ML atoms; MLpot supplies the energy.
 

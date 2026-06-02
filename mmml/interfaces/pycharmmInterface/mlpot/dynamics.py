@@ -156,6 +156,122 @@ def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> None:
     cons_fix.turn_off()
 
 
+_BONDED_INTERNAL_TERM_KEYS = ("BOND", "ANGL", "ANGLE", "UREY", "DIHE", "IMPR", "CMAP")
+
+
+def charmm_internal_energy_kcalmol(*, require: bool = False) -> float | None:
+    """CHARMM internal energy (kcal/mol): ``INTE`` if present, else sum of bonded terms."""
+    terms = charmm_energy_terms()
+    if not terms:
+        if require:
+            raise RuntimeError(
+                "CHARMM energy unavailable (set RUN_CHARMM_ENERGY_SHOW=1 or unset "
+                "SKIP_CHARMM_ENERGY_SHOW to use bonded-MM-mini internal checks)"
+            )
+        return None
+    if "INTE" in terms:
+        return float(terms["INTE"])
+    bonded = sum(float(terms.get(k, 0.0)) for k in _BONDED_INTERNAL_TERM_KEYS)
+    return bonded
+
+
+@dataclass
+class BondedMmMiniConfig:
+    """Short bonded-only SD while MLpot is temporarily detached."""
+
+    nstep_sd: int = 50
+    nprint: int = 10
+    tolenr: float = 1e-3
+    tolgrd: float = 1e-3
+    verbose: bool = True
+    show_energy: bool = False
+
+
+def minimize_bonded_mm_recovery(
+    ctx: "MlpotContext",
+    config: BondedMmMiniConfig,
+) -> float | None:
+    """Bonded-only MM SD: unset MLpot, relax geometry, restore MLpot BLOCK."""
+    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import (
+        apply_bonded_mm_only_block,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        MlpotContext,
+        get_charmm_positions_array,
+        setup_default_nbonds,
+    )
+
+    if not isinstance(ctx, MlpotContext):
+        raise TypeError("ctx must be MlpotContext")
+
+    ctx.unset()
+    apply_bonded_mm_only_block()
+    if ctx.use_pbc and ctx.cubic_box_side_A is not None:
+        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import apply_pbc_nbonds
+
+        apply_pbc_nbonds()
+    else:
+        setup_default_nbonds()
+
+    pycharmm, cons_fix, *_ = _import_pycharmm_modules()
+    minimize = _import_pycharmm_modules()[3]
+    if config.nstep_sd <= 0:
+        ctx.reregister_mlpot()
+        return charmm_internal_energy_kcalmol()
+
+    pycharmm.lingo.charmm_script("ENER")
+    if config.verbose:
+        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
+
+        print(
+            f"Bonded-MM mini start: GRMS={charmm_grms():.4f} kcal/mol/Å",
+            flush=True,
+        )
+    sd_kw = {
+        "nstep": max(1, int(config.nstep_sd)),
+        "nprint": max(1, int(config.nprint)),
+        "tolenr": float(config.tolenr),
+        "tolgrd": float(config.tolgrd),
+        "inbfrq": 50,
+        "ihbfrq": 50,
+    }
+    if config.verbose and config.show_energy:
+        _maybe_show_energy(True)
+    minimize.run_sd(**sd_kw)
+    pycharmm.lingo.charmm_script("ENER")
+    internal_after = charmm_internal_energy_kcalmol()
+    if config.verbose:
+        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
+
+        msg = f"Bonded-MM mini end: GRMS={charmm_grms():.4f} kcal/mol/Å"
+        if internal_after is not None:
+            msg += f", internal={internal_after:.4f} kcal/mol"
+        print(msg, flush=True)
+    cons_fix.turn_off()
+    ctx.reregister_mlpot()
+    _ = get_charmm_positions_array()
+    return internal_after
+
+
+def measure_mm_internal_with_full_block(ctx: "MlpotContext") -> float:
+    """Evaluate MM internal energy with MLpot detached and full MM BLOCK."""
+    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_block
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+
+    if not isinstance(ctx, MlpotContext):
+        raise TypeError("ctx must be MlpotContext")
+    ctx.unset()
+    try:
+        apply_charmm_mm_block()
+        pycharmm, *_ = _import_pycharmm_modules()
+        pycharmm.lingo.charmm_script("ENER")
+        val = charmm_internal_energy_kcalmol(require=True)
+        assert val is not None
+        return val
+    finally:
+        ctx.reregister_mlpot()
+
+
 @dataclass
 class MinimizeWithMlpotConfig:
     """SD minimization while MLpot supplies the ML region energy."""
