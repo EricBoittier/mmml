@@ -105,7 +105,9 @@ def test_minimize_bonded_recovery_uses_vdw_block_and_nbonds():
         minimize_bonded_mm_recovery,
     )
 
-    ctx = MagicMock()
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+
+    ctx = MagicMock(spec=MlpotContext)
     ctx.use_pbc = False
     with patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._with_recovery_nbonds",
@@ -118,7 +120,7 @@ def test_minimize_bonded_recovery_uses_vdw_block_and_nbonds():
     ) as vdw_block, patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
     ) as imp, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.charmm_grms",
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms",
         return_value=1.0,
     ):
         imp.return_value = (MagicMock(), MagicMock(), MagicMock(), MagicMock())
