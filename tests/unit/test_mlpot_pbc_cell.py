@@ -82,6 +82,7 @@ def test_register_mlpot_context_forwards_cell():
     ckpt = Path("/tmp/fake_ckpt.json")
     fake_model = DecomposedMlpotModel(MagicMock(), CutoffParameters(), 2, z, cell=20.0)
     fake_ctx = MagicMock()
+    fake_sel = MagicMock()
 
     with patch(
         "mmml.interfaces.pycharmmInterface.mlpot.run_workflow.load_physnet_mlpot_bundle",
@@ -89,6 +90,9 @@ def test_register_mlpot_context_forwards_cell():
     ) as mock_load, patch(
         "mmml.interfaces.pycharmmInterface.mlpot.run_workflow.register_mlpot",
         return_value=fake_ctx,
+    ) as mock_register, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.run_workflow.select_all_atoms",
+        return_value=fake_sel,
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.warmup_decomposed_mlpot",
     ) as mock_warmup, patch(
@@ -111,6 +115,7 @@ def test_register_mlpot_context_forwards_cell():
 
     mock_load.assert_called_once()
     assert mock_load.call_args.kwargs["cell"] == 20.0
+    mock_register.assert_called_once_with(fake_model, z, fake_sel)
     mock_warmup.assert_called_once()
     assert mock_warmup.call_args.kwargs["cell"] == 20.0
     assert ctx is fake_ctx
