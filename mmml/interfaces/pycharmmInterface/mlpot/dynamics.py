@@ -258,11 +258,10 @@ def _bonded_recovery_sd_kwargs(ctx: "MlpotContext", config: BondedMmMiniConfig) 
         "tolgrd": float(config.tolgrd),
     }
     if ctx.use_pbc:
-        # PBC: heuristic NB/image updates (same recipe as pbc_nbond_kwargs / dynamics).
-        kw.update({"inbfrq": -1, "ihbfrq": 50, "imgfrq": -1})
+        # PBC image list is active (imgfrq set by nbonds); inbfrq=0 is invalid — use heuristic.
+        kw.update({"inbfrq": -1, "ihbfrq": 50})
     else:
-        # Vacuum: skip per-step list rebuild (MLpot SD recipe).
-        kw.update({"inbfrq": 0, "ihbfrq": 0, "imgfrq": 0})
+        kw.update({"inbfrq": 0, "ihbfrq": 0})
     return kw
 
 

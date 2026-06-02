@@ -52,9 +52,9 @@ def test_bonded_recovery_sd_kwargs_pbc_vs_vacuum():
     pbc_kw = _bonded_recovery_sd_kwargs(pbc_ctx, cfg)
     vac_kw = _bonded_recovery_sd_kwargs(vac_ctx, cfg)
     assert pbc_kw["inbfrq"] == -1
-    assert pbc_kw["imgfrq"] == -1
+    assert "imgfrq" not in pbc_kw
     assert vac_kw["inbfrq"] == 0
-    assert vac_kw["imgfrq"] == 0
+    assert "imgfrq" not in vac_kw
 
 
 def test_apply_bonded_mm_only_block_script():
