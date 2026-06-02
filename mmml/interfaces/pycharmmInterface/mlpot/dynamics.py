@@ -394,6 +394,23 @@ def minimize_bonded_mm_recovery(
     return _with_mlpot_detached(ctx, _run_sd)
 
 
+def _prepare_overlap_rescue_lists(ctx: "MlpotContext") -> None:
+    """Rebuild bonded/image lists for rescue minimization (NBXMOD 2, no image centering)."""
+    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        MlpotContext,
+        RECOVERY_NBXMOD,
+        apply_recovery_nbonds,
+    )
+
+    if not isinstance(ctx, MlpotContext):
+        raise TypeError("ctx must be MlpotContext")
+    pycharmm = _import_pycharmm_modules()[0]
+    with charmm_relaxed_bomlev():
+        apply_recovery_nbonds(ctx, nbxmod=RECOVERY_NBXMOD)
+        pycharmm.lingo.charmm_script("UPDATE")
+
+
 def minimize_overlap_rescue(
     ctx: "MlpotContext",
     config: "OverlapRescueConfig",
@@ -408,7 +425,6 @@ def minimize_overlap_rescue(
     )
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
         MlpotContext,
-        apply_recovery_nbonds,
         get_charmm_positions_array,
         restore_workflow_nbonds,
     )
@@ -420,9 +436,10 @@ def minimize_overlap_rescue(
 
     def _run_rescue() -> float | None:
         apply_bonded_vdw_recovery_block()
-        apply_recovery_nbonds(ctx)
+        _prepare_overlap_rescue_lists(ctx)
         pycharmm, cons_fix, *_ = _import_pycharmm_modules()
         minimize = _import_pycharmm_modules()[3]
+        pycharmm.lingo.charmm_script("ENER")
         grms_before = float(charmm_grms())
         if config.verbose:
             print(
@@ -442,7 +459,6 @@ def minimize_overlap_rescue(
                 ),
             )
             if config.nstep_sd > 0:
-                pycharmm.lingo.charmm_script("ENER")
                 minimize.run_sd(**sd_kw)
             if config.nstep_abnr > 0:
                 minimize.run_abnr(
@@ -450,7 +466,8 @@ def minimize_overlap_rescue(
                     tolenr=float(config.tolenr),
                     tolgrd=float(config.tolgrd),
                 )
-            pycharmm.lingo.charmm_script("ENER")
+            # Do not call ENER here: on overlapped PBC clusters it recenters images
+            # and can stack atoms (GRMS/energy blow up) while leaving bad coordinates.
             grms = float(charmm_grms())
             if config.verbose:
                 print(
