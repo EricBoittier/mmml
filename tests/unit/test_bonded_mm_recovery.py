@@ -160,6 +160,8 @@ def test_minimize_bonded_recovery_runs_sd_and_reports_angl():
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._with_mlpot_detached",
         side_effect=lambda _ctx, fn: fn(),
     ) as detached, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._log_bonded_term_diagnostics",
+    ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_bonded_mm_only_block",
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
@@ -211,7 +213,7 @@ def test_minimize_bonded_recovery_unset_and_reregister():
     ctx.reregister_mlpot.assert_called_once()
 
 
-def test_measure_mm_bonded_strain_unset_and_reregister():
+def test_measure_mm_bonded_strain_uses_mlpot_detached():
     import sys
 
     from mmml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
@@ -219,23 +221,64 @@ def test_measure_mm_bonded_strain_unset_and_reregister():
 
     ctx = MagicMock(spec=MlpotContext)
     mock_py = MagicMock()
-    with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_charmm_mm_block",
-    ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms",
-        return_value=0.5,
-    ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.charmm_internal_energy_kcalmol",
-        return_value=24.0,
-    ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.charmm_bonded_term_kcalmol",
-        return_value=24.0,
-    ), patch.dict(sys.modules, {"pycharmm": mock_py}):
-        out = bonded_mm_recovery.measure_mm_bonded_strain_with_full_block(ctx)
+    saved_modules = {
+        key: sys.modules.get(key)
+        for key in (
+            "pycharmm",
+            "mmml.interfaces.pycharmmInterface.import_pycharmm",
+        )
+    }
+    sys.modules["pycharmm"] = mock_py
+    sys.modules["mmml.interfaces.pycharmmInterface.import_pycharmm"] = MagicMock()
+
+    def fake_detached(detach_ctx, fn):
+        detach_ctx.unset()
+        try:
+            return fn()
+        finally:
+            detach_ctx.reregister_mlpot()
+
+    try:
+        with patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._with_mlpot_detached",
+            side_effect=fake_detached,
+        ) as detached, patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_charmm_mm_block",
+        ), patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms",
+            return_value=0.5,
+        ), patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.charmm_internal_energy_kcalmol",
+            return_value=24.0,
+        ), patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.charmm_bonded_term_kcalmol",
+            return_value=24.0,
+        ):
+            out = bonded_mm_recovery.measure_mm_bonded_strain_with_full_block(ctx)
+    finally:
+        for key, mod in saved_modules.items():
+            if mod is None:
+                sys.modules.pop(key, None)
+            else:
+                sys.modules[key] = mod
+
+    detached.assert_called_once()
+    assert detached.call_args[0][0] is ctx
     ctx.unset.assert_called_once()
     ctx.reregister_mlpot.assert_called_once()
     assert out.grms_kcalmol_A == pytest.approx(0.5)
     assert out.angl_kcalmol == pytest.approx(24.0)
+
+
+def test_with_mlpot_detached_unset_and_reregister():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _with_mlpot_detached
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+
+    ctx = MagicMock(spec=MlpotContext)
+    result = _with_mlpot_detached(ctx, lambda: 42)
+    ctx.unset.assert_called_once()
+    ctx.reregister_mlpot.assert_called_once()
+    assert result == 42
 
 
 def test_maybe_run_bonded_mm_mini_skips_when_grms_ok():

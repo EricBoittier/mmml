@@ -118,6 +118,12 @@ def test_build_pycharmm_command_includes_ml_max_active_dimers_when_set():
     assert cmd[idx + 1] == "1200"
 
 
+def test_build_pycharmm_command_includes_ml_switch_width_default():
+    cmd = build_pycharmm_command(_pycharmm_args())
+    idx = cmd.index("--ml-switch-width")
+    assert cmd[idx + 1] == "0.1"
+
+
 def test_build_pycharmm_command_includes_ml_gpu_count_when_set():
     cmd = build_pycharmm_command(_pycharmm_args(ml_gpu_count=2))
     assert "--ml-gpu-count" in cmd
