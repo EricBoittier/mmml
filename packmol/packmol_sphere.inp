@@ -7,5 +7,5 @@ structure pdb/packmol_sphere/dcm.pdb
   chain A
   resnumbers 2
   number 90
-  inside sphere 0.0 0.0 0.0 18.0
+  inside sphere 0.0 0.0 0.0 8.0
 end structure
