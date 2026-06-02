@@ -10,11 +10,35 @@ from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
     charmm_internal_energy_kcalmol,
     measure_mm_internal_with_full_block,
     minimize_bonded_mm_recovery,
-    rewrite_dynamics_restart_from_current_state,
 )
 from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
 PathLike = str | Path
+
+
+def rewrite_dynamics_restart_from_current_state(
+    restart_path: PathLike | None,
+    *,
+    write_unit: int = 92,
+) -> None:
+    """Overwrite a dynamics restart so flags/coords match the current BLOCK setup."""
+    if restart_path is None:
+        return
+    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import pycharmm
+
+    path = Path(restart_path).expanduser().resolve()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    restart_file = pycharmm.CharmmFile(
+        file_name=str(path),
+        file_unit=write_unit,
+        formatted=True,
+        read_only=False,
+    )
+    try:
+        pycharmm.lingo.charmm_script(f"write restart unit {write_unit}\n")
+    finally:
+        restart_file.close()
 
 
 def record_mm_baseline_internal_energy(
