@@ -25,6 +25,14 @@ def test_charmm_internal_energy_sums_bonded_terms():
         assert charmm_internal_energy_kcalmol() == pytest.approx(3.5)
 
 
+def test_charmm_internal_energy_prefers_bonded_when_inte_zero():
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.charmm_energy_terms",
+        return_value={"INTE": 0.0, "BOND": 10.0, "ANGL": 2.0},
+    ):
+        assert charmm_internal_energy_kcalmol() == pytest.approx(12.0)
+
+
 def test_apply_bonded_mm_only_block_script():
     import importlib.util
     from pathlib import Path
@@ -62,15 +70,20 @@ def test_maybe_run_bonded_mm_mini_skips_when_internal_ok():
     ) as measure, patch.object(
         bonded_mm_recovery,
         "minimize_bonded_mm_recovery",
-    ) as mini:
+    ) as mini, patch.object(
+        bonded_mm_recovery,
+        "rewrite_dynamics_restart_from_current_state",
+    ) as resync:
         bonded_mm_recovery.maybe_run_bonded_mm_mini_after_stage(
             ctx,
             args,
             stage="heat",
             baseline_internal=12.0,
+            restart_path="/tmp/heat.res",
         )
     measure.assert_called_once()
     mini.assert_not_called()
+    resync.assert_called_once_with("/tmp/heat.res")
 
 
 def test_maybe_run_bonded_mm_mini_runs_when_internal_high():
@@ -92,14 +105,19 @@ def test_maybe_run_bonded_mm_mini_runs_when_internal_high():
     ), patch.object(
         bonded_mm_recovery,
         "minimize_bonded_mm_recovery",
-    ) as mini:
+    ) as mini, patch.object(
+        bonded_mm_recovery,
+        "rewrite_dynamics_restart_from_current_state",
+    ) as resync:
         bonded_mm_recovery.maybe_run_bonded_mm_mini_after_stage(
             ctx,
             args,
             stage="heat",
             baseline_internal=10.0,
+            restart_path="/tmp/heat.res",
         )
     mini.assert_called_once()
+    resync.assert_called_once_with("/tmp/heat.res")
 
 
 def argparse_namespace(**kwargs):

@@ -239,6 +239,8 @@ def _build_stage_dynamics_kw(
         kw["new"] = False
         kw["start"] = False
         kw["restart"] = True
+        # Coords/box from restart; skip READYN flag check after BLOCK/MLpot toggles.
+        kw["res"] = True
     else:
         kw["new"] = True
         kw["start"] = True
@@ -450,6 +452,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         args,
                         stage="equi",
                         baseline_internal=baseline_internal,
+                        restart_path=seg_io.restart_write,
                     )
                     prev_restart = seg_io.restart_write
                     last_traj = seg_io.trajectory
@@ -507,6 +510,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         args,
                         stage="prod",
                         baseline_internal=baseline_internal,
+                        restart_path=seg_io.restart_write,
                     )
                     last_traj = seg_io.trajectory
                 continue
@@ -563,6 +567,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 args,
                 stage=stage,
                 baseline_internal=baseline_internal,
+                restart_path=io.restart_write,
             )
             prev_restart = io.restart_write
             last_traj = io.trajectory
