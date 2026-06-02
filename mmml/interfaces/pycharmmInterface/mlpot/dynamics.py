@@ -157,42 +157,26 @@ def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> None:
 
 
 _BONDED_INTERNAL_TERM_KEYS = ("BOND", "ANGL", "ANGLE", "UREY", "UB", "DIHE", "IMPR", "CMAP")
-_BONDED_ETERM_NAMES = frozenset(_BONDED_INTERNAL_TERM_KEYS)
 
 
-def _charmm_active_eterms() -> dict[str, float]:
-    """Active CHARMM energy terms from the eterm array (no ``energy.show()``)."""
+def _charmm_eterm_value(name: str) -> float | None:
+    """Read one CHARMM energy term by name (after ``ENER``)."""
     import pycharmm.energy as energy
 
-    names = energy.get_term_names()
-    statuses = energy.get_term_statuses()
-    values = energy.get_terms()
-    out: dict[str, float] = {}
-    for active, name, val in zip(statuses, names, values):
-        if not active:
-            continue
-        key = str(name).strip().upper()
-        if key:
-            out[key] = float(val)
-    return out
+    try:
+        return float(energy.get_term_by_name(name.upper()))
+    except ValueError:
+        return None
 
 
 def charmm_internal_energy_kcalmol(*, require: bool = False) -> float | None:
     """CHARMM internal energy (kcal/mol): ``INTE`` if present, else sum of bonded terms."""
-    eterm = _charmm_active_eterms()
-    if not eterm:
-        terms = charmm_energy_terms()
-        if not terms:
-            if require:
-                raise RuntimeError(
-                    "CHARMM energy unavailable (set RUN_CHARMM_ENERGY_SHOW=1 or unset "
-                    "SKIP_CHARMM_ENERGY_SHOW to use bonded-MM-mini internal checks)"
-                )
-            return None
-        eterm = {str(k).strip().upper(): float(v) for k, v in terms.items()}
-
-    bonded = sum(float(eterm.get(k, 0.0)) for k in _BONDED_ETERM_NAMES)
-    inte = eterm.get("INTE")
+    bonded = 0.0
+    for name in _BONDED_INTERNAL_TERM_KEYS:
+        val = _charmm_eterm_value(name)
+        if val is not None:
+            bonded += val
+    inte = _charmm_eterm_value("INTE")
 
     if inte is not None and abs(inte) > 1e-8:
         return float(inte)
@@ -200,10 +184,24 @@ def charmm_internal_energy_kcalmol(*, require: bool = False) -> float | None:
         return bonded
     if inte is not None:
         return float(inte)
+
+    # Fallback when eterm lookup is empty (e.g. some MPI builds).
+    terms = charmm_energy_terms()
+    if terms:
+        eterm = {str(k).strip().upper(): float(v) for k, v in terms.items()}
+        bonded = sum(float(eterm.get(k, 0.0)) for k in _BONDED_INTERNAL_TERM_KEYS)
+        inte = eterm.get("INTE")
+        if inte is not None and abs(inte) > 1e-8:
+            return float(inte)
+        if abs(bonded) > 1e-8:
+            return bonded
+        if inte is not None:
+            return float(inte)
+
     if require:
         raise RuntimeError(
             "CHARMM internal energy terms are all zero after ENER "
-            f"(active eterm keys: {sorted(eterm.keys())})"
+            "(bonded MM terms could not be read from CHARMM)"
         )
     return None
 
@@ -287,12 +285,19 @@ def minimize_bonded_mm_recovery(
 
 
 def measure_mm_internal_with_full_block(ctx: "MlpotContext") -> float:
-    """Evaluate MM internal energy with MLpot detached and full MM BLOCK."""
+    """Evaluate MM internal energy with full MM BLOCK; MLpot stays registered."""
+    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import (
+        apply_charmm_mm_block,
+        apply_mlpot_energy_block,
+    )
     from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
     if not isinstance(ctx, MlpotContext):
         raise TypeError("ctx must be MlpotContext")
-    ctx.unset()
+    if ctx.ml_selection is None:
+        raise RuntimeError("MlpotContext missing ml_selection for internal-energy check")
+
+    apply_charmm_mm_block()
     try:
         pycharmm, *_ = _import_pycharmm_modules()
         pycharmm.lingo.charmm_script("ENER")
@@ -300,7 +305,7 @@ def measure_mm_internal_with_full_block(ctx: "MlpotContext") -> float:
         assert val is not None
         return val
     finally:
-        ctx.reregister_mlpot()
+        ctx.block_tag = apply_mlpot_energy_block(ctx.ml_selection)
 
 
 @dataclass
