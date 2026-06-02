@@ -1019,13 +1019,42 @@ def add_bonded_mm_mini_args(parser: argparse.ArgumentParser) -> None:
         "--bonded-mm-internal-margin",
         type=float,
         default=0.0,
-        help="Deprecated alias for --bonded-mm-grms-margin (default: 0)",
+        help="Legacy alias for --bonded-mm-grms-margin when grms-margin unset (default: 0)",
     )
     group.add_argument(
         "--bonded-mm-grms-margin",
         type=float,
         default=None,
-        help="kcal/mol/Å above baseline GRMS before recovery (default: bonded-mm-internal-margin)",
+        help="kcal/mol/Å above baseline GRMS before recovery SD (default: bonded-mm-internal-margin)",
+    )
+    group.add_argument(
+        "--bonded-mm-internal-energy-margin",
+        type=float,
+        default=0.0,
+        help="kcal/mol above baseline bonded internal energy before recovery (0=off)",
+    )
+    group.add_argument(
+        "--bonded-mm-angl-margin",
+        type=float,
+        default=0.0,
+        help="kcal/mol above baseline ANGL term before recovery (0=off)",
+    )
+    group.add_argument(
+        "--bonded-mm-max-angl-kcal",
+        type=float,
+        default=None,
+        help="Abort after MM pre-min if ANGL exceeds this (e.g. 15 for tight clusters)",
+    )
+    group.add_argument(
+        "--bonded-mm-max-internal-kcal",
+        type=float,
+        default=None,
+        help="Abort after MM pre-min if bonded internal energy exceeds this",
+    )
+    group.add_argument(
+        "--allow-high-bonded-strain",
+        action="store_true",
+        help="Continue when --bonded-mm-max-angl-kcal / max-internal limits are exceeded",
     )
 
 

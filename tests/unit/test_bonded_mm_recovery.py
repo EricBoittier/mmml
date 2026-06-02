@@ -192,11 +192,12 @@ def test_maybe_run_bonded_mm_mini_skips_when_grms_ok():
         bonded_mm_grms_margin=0.0,
         quiet=True,
     )
-    baseline = MmStrainBaseline(grms_kcalmol_A=12.0, internal_kcalmol=24.0)
+    baseline = MmStrainBaseline(grms_kcalmol_A=12.0, internal_kcalmol=24.0, angl_kcalmol=24.0)
+    current = MmStrainBaseline(grms_kcalmol_A=10.0, internal_kcalmol=24.0, angl_kcalmol=24.0)
     with patch.object(
         bonded_mm_recovery,
-        "measure_mm_grms_with_full_block",
-        return_value=10.0,
+        "measure_mm_bonded_strain_with_full_block",
+        return_value=current,
     ) as measure, patch.object(
         bonded_mm_recovery,
         "minimize_bonded_mm_recovery",
@@ -213,6 +214,21 @@ def test_maybe_run_bonded_mm_mini_skips_when_grms_ok():
     assert ran is False
 
 
+def test_recovery_reasons_angl_margin():
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        MmStrainBaseline,
+        _recovery_reasons,
+    )
+
+    base = MmStrainBaseline(grms_kcalmol_A=0.5, internal_kcalmol=24.0, angl_kcalmol=24.0)
+    cur = MmStrainBaseline(grms_kcalmol_A=0.4, internal_kcalmol=25.0, angl_kcalmol=30.0)
+    reasons = _recovery_reasons(
+        cur, base, grms_margin=0.0, internal_margin=0.0, angl_margin=5.0
+    )
+    assert len(reasons) == 1
+    assert "ANGL" in reasons[0]
+
+
 def test_maybe_run_bonded_mm_mini_runs_when_grms_high():
     from mmml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
 
@@ -227,10 +243,11 @@ def test_maybe_run_bonded_mm_mini_runs_when_grms_high():
         show_energy=False,
     )
     baseline = MmStrainBaseline(grms_kcalmol_A=5.0)
+    current = MmStrainBaseline(grms_kcalmol_A=20.0)
     with patch.object(
         bonded_mm_recovery,
-        "measure_mm_grms_with_full_block",
-        return_value=20.0,
+        "measure_mm_bonded_strain_with_full_block",
+        return_value=current,
     ), patch.object(
         bonded_mm_recovery,
         "minimize_bonded_mm_recovery",
@@ -244,6 +261,31 @@ def test_maybe_run_bonded_mm_mini_runs_when_grms_high():
         )
     mini.assert_called_once()
     assert ran is True
+
+
+def test_assert_pre_min_bonded_geometry_exits_on_high_angl():
+    import sys
+
+    from mmml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
+
+    args = argparse_namespace(
+        bonded_mm_mini=True,
+        bonded_mm_max_angl_kcal=15.0,
+        quiet=True,
+    )
+    mock_py = MagicMock()
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_charmm_mm_block",
+    ), patch.object(
+        bonded_mm_recovery,
+        "charmm_bonded_term_kcalmol",
+        return_value=24.0,
+    ), patch.object(
+        bonded_mm_recovery,
+        "charmm_internal_energy_kcalmol",
+        return_value=24.0,
+    ), patch.dict(sys.modules, {"pycharmm": mock_py}), pytest.raises(SystemExit):
+        bonded_mm_recovery.assert_pre_min_bonded_geometry(args)
 
 
 def argparse_namespace(**kwargs):

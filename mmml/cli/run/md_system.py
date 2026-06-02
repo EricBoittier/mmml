@@ -414,6 +414,35 @@ def parse_args() -> argparse.Namespace:
         help="pycharmm: kcal/mol/Å above baseline GRMS before recovery",
     )
     parser.add_argument(
+        "--bonded-mm-internal-energy-margin",
+        type=float,
+        default=0.0,
+        help="pycharmm: kcal/mol above baseline bonded internal before recovery (0=off)",
+    )
+    parser.add_argument(
+        "--bonded-mm-angl-margin",
+        type=float,
+        default=0.0,
+        help="pycharmm: kcal/mol above baseline ANGL before recovery (0=off)",
+    )
+    parser.add_argument(
+        "--bonded-mm-max-angl-kcal",
+        type=float,
+        default=None,
+        help="pycharmm: abort after MM pre-min if ANGL exceeds this (e.g. 15)",
+    )
+    parser.add_argument(
+        "--bonded-mm-max-internal-kcal",
+        type=float,
+        default=None,
+        help="pycharmm: abort after MM pre-min if bonded internal exceeds this",
+    )
+    parser.add_argument(
+        "--allow-high-bonded-strain",
+        action="store_true",
+        help="pycharmm: continue when max-angl/max-internal pre-min limits exceeded",
+    )
+    parser.add_argument(
         "--restart-from",
         type=Path,
         default=None,
@@ -804,6 +833,30 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
             cmd.extend(
                 ["--bonded-mm-grms-margin", str(args.bonded_mm_grms_margin)]
             )
+        if getattr(args, "bonded_mm_internal_energy_margin", 0.0):
+            cmd.extend(
+                [
+                    "--bonded-mm-internal-energy-margin",
+                    str(args.bonded_mm_internal_energy_margin),
+                ]
+            )
+        if getattr(args, "bonded_mm_angl_margin", 0.0):
+            cmd.extend(
+                ["--bonded-mm-angl-margin", str(args.bonded_mm_angl_margin)]
+            )
+        if getattr(args, "bonded_mm_max_angl_kcal", None) is not None:
+            cmd.extend(
+                ["--bonded-mm-max-angl-kcal", str(args.bonded_mm_max_angl_kcal)]
+            )
+        if getattr(args, "bonded_mm_max_internal_kcal", None) is not None:
+            cmd.extend(
+                [
+                    "--bonded-mm-max-internal-kcal",
+                    str(args.bonded_mm_max_internal_kcal),
+                ]
+            )
+        if getattr(args, "allow_high_bonded_strain", False):
+            cmd.append("--allow-high-bonded-strain")
     if args.charmm_pre_minimize is False:
         cmd.append("--no-charmm-pre-minimize")
     cmd.extend(["--charmm-sd-steps", str(args.charmm_sd_steps)])
