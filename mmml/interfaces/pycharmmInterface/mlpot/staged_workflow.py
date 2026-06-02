@@ -52,6 +52,9 @@ from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
     maybe_run_bonded_mm_mini_after_stage,
     record_mm_baseline_strain,
 )
+from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    resolve_dynamics_overlap_config,
+)
 from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import setup_charmm_environment
 from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import (
     _charmm_pre_minimize_before_mlpot,
@@ -296,6 +299,16 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
     show_energy = resolve_show_energy(args)
     echeck = resolve_echeck_for_cluster(args, n_atoms=n_atoms, n_monomers=n_mol)
     mini_nstep = resolve_mini_nstep(args, n_mol)
+    overlap_cfg = resolve_dynamics_overlap_config(
+        args, n_monomers=n_mol, use_pbc=use_pbc
+    )
+    if overlap_cfg.enabled and not args.quiet:
+        print(
+            f"Dynamics overlap guard: action={overlap_cfg.action}, "
+            f"min_distance={overlap_cfg.min_distance_A:.2f} Å, "
+            f"check every {overlap_cfg.check_interval} steps",
+            flush=True,
+        )
 
     setup_charmm_environment(use_pbc=use_pbc, cubic_box_side_A=box_side)
     sync_charmm_positions(r)
@@ -464,7 +477,12 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     )
                     kw["nsavc"] = dcd_nsavc
                     disable_charmm_domdec()
-                    run_dynamics_with_io(kw, seg_io)
+                    run_dynamics_with_io(
+                        kw,
+                        seg_io,
+                        overlap=overlap_cfg,
+                        overlap_context=f"equi segment {seg_i + 1}/{n_equi_segments}",
+                    )
                     memory_handoff_next = maybe_run_bonded_mm_mini_after_stage(
                         ctx,
                         args,
@@ -529,7 +547,12 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         restart_path=Path(rread) if restart and rread else None,
                     )
                     disable_charmm_domdec()
-                    run_dynamics_with_io(kw, seg_io)
+                    run_dynamics_with_io(
+                        kw,
+                        seg_io,
+                        overlap=overlap_cfg,
+                        overlap_context=f"prod segment {seg_i + 1}/{n_prod_segments}",
+                    )
                     memory_handoff_next = maybe_run_bonded_mm_mini_after_stage(
                         ctx,
                         args,
@@ -593,7 +616,12 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             )
             kw["nsavc"] = dcd_nsavc
             disable_charmm_domdec()
-            run_dynamics_with_io(kw, io)
+            run_dynamics_with_io(
+                kw,
+                io,
+                overlap=overlap_cfg,
+                overlap_context=stage.upper(),
+            )
             memory_handoff_next = maybe_run_bonded_mm_mini_after_stage(
                 ctx,
                 args,

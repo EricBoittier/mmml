@@ -11,6 +11,9 @@ NptThermostat = Literal["hoover", "berendsen"]
 
 if TYPE_CHECKING:
     from mmml.interfaces.pycharmmInterface.mlpot.derivative_test import TestFirstConfig
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+        DynamicsOverlapConfig,
+    )
 
 import numpy as np
 
@@ -692,11 +695,26 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     return dyn
 
 
-def run_dynamics_with_io(
+def _io_for_in_memory_continuation(
+    io: Optional[CharmmTrajectoryFiles],
+) -> Optional[CharmmTrajectoryFiles]:
+    """I/O for a dynamics chunk that continues from in-memory coords (no restart read)."""
+    if io is None:
+        return None
+    return CharmmTrajectoryFiles(
+        restart_read=None,
+        restart_write=io.restart_write,
+        trajectory=io.trajectory,
+        restart_read_unit=io.restart_read_unit,
+        restart_write_unit=io.restart_write_unit,
+        trajectory_unit=io.trajectory_unit,
+    )
+
+
+def _run_dynamics_chunk(
     dynamics_kwargs: dict[str, Any],
-    io: Optional[CharmmTrajectoryFiles] = None,
+    io: Optional[CharmmTrajectoryFiles],
 ) -> Any:
-    """Run dynamics and open/close CharmmFile units from ``io``."""
     open_files: list[Any] = []
     kw = dict(dynamics_kwargs)
     if io is not None:
@@ -707,6 +725,62 @@ def run_dynamics_with_io(
     finally:
         for f in open_files:
             f.close()
+
+
+def run_dynamics_with_io(
+    dynamics_kwargs: dict[str, Any],
+    io: Optional[CharmmTrajectoryFiles] = None,
+    *,
+    overlap: Optional["DynamicsOverlapConfig"] = None,
+    overlap_context: str = "dynamics",
+) -> Any:
+    """Run dynamics and open/close CharmmFile units from ``io``.
+
+    When ``overlap`` is enabled, integration runs in chunks of
+    ``overlap.check_interval`` steps with inter-monomer distance checks
+    between chunks (in-memory continuation, no restart read).
+    """
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+        DynamicsOverlapConfig,
+        check_dynamics_overlap,
+    )
+
+    kw = dict(dynamics_kwargs)
+    total_nstep = int(kw.get("nstep", 0))
+    if (
+        overlap is None
+        or not isinstance(overlap, DynamicsOverlapConfig)
+        or not overlap.enabled
+        or total_nstep <= 0
+    ):
+        return _run_dynamics_chunk(kw, io)
+
+    interval = max(1, int(overlap.check_interval))
+    check_dynamics_overlap(overlap, context=f"before {overlap_context}", step=0)
+
+    last_dyn: Any = None
+    steps_done = 0
+    first_chunk = True
+    while steps_done < total_nstep:
+        chunk_nstep = min(interval, total_nstep - steps_done)
+        chunk_kw = dict(kw)
+        chunk_kw["nstep"] = chunk_nstep
+        chunk_io = io if first_chunk else _io_for_in_memory_continuation(io)
+        if not first_chunk:
+            chunk_kw["new"] = False
+            chunk_kw["start"] = False
+            chunk_kw["restart"] = False
+            chunk_kw.pop("res", None)
+
+        last_dyn = _run_dynamics_chunk(chunk_kw, chunk_io)
+        steps_done += chunk_nstep
+        check_dynamics_overlap(
+            overlap,
+            context=overlap_context,
+            step=steps_done,
+        )
+        first_chunk = False
+    return last_dyn
 
 
 def open_minimize_dcd(path: PathLike, *, unit: int = 51) -> Any:
