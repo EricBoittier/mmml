@@ -186,8 +186,10 @@ def _build_stage_dynamics_kw(
     dyn_print: dict[str, int],
     restart: bool,
     npt_include_firstt: bool = True,
+    memory_handoff: bool = False,
 ) -> dict[str, Any]:
     duration_ps = nstep * timestep_ps
+    effective_restart = restart and not memory_handoff
     if stage == "heat":
         kw = build_heat_dynamics(
             timestep_ps=timestep_ps,
@@ -201,7 +203,7 @@ def _build_stage_dynamics_kw(
             timestep_ps=timestep_ps,
             duration_ps=duration_ps,
             save_interval_ps=save_interval_ps,
-            restart=restart,
+            restart=effective_restart,
             temp=temp,
             nprint=dyn_print["nprint"],
             iprfrq=dyn_print["iprfrq"],
@@ -214,7 +216,7 @@ def _build_stage_dynamics_kw(
             duration_ps=duration_ps,
             save_interval_ps=save_interval_ps,
             temp=temp,
-            restart=restart,
+            restart=effective_restart,
             echeck=max(echeck, 500.0) if echeck > 0 else echeck,
             include_firstt=npt_include_firstt,
             **_npt_cpt_options(args),
@@ -225,7 +227,7 @@ def _build_stage_dynamics_kw(
             duration_ps=duration_ps,
             save_interval_ps=save_interval_ps,
             temp=temp,
-            restart=restart,
+            restart=effective_restart,
             echeck=max(echeck, 500.0) if echeck > 0 else echeck,
             **_npt_cpt_options(args),
         )
@@ -235,7 +237,11 @@ def _build_stage_dynamics_kw(
     kw["iprfrq"] = dyn_print["iprfrq"]
     kw["isvfrq"] = dyn_print["isvfrq"]
     kw["nstep"] = nstep
-    if restart:
+    if memory_handoff:
+        kw["new"] = False
+        kw["start"] = False
+        kw["restart"] = False
+    elif restart:
         kw["new"] = False
         kw["start"] = False
         kw["restart"] = True
@@ -395,6 +401,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
 
         equi_restart_for_prod = _equi_restart_name(tag, n_equi_segments)
         prev_restart: Path | None = restart_from
+        memory_handoff_next = False
         for stage in dyn_stages:
             if stage == "equi" and n_equi_segments > 1:
                 initial = prev_restart or _prior_restart_for_stage(
@@ -417,12 +424,18 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     )
                     dyn_print = resolve_dynamics_print_kwargs(args, nstep=nstep)
                     save_interval_ps = timestep_ps * dcd_nsavc
-                    rread = seg_io.restart_read
-                    restart = rread is not None and Path(rread).is_file()
+                    use_memory = memory_handoff_next
+                    if use_memory:
+                        restart = False
+                        rread = None
+                    else:
+                        rread = seg_io.restart_read
+                        restart = rread is not None and Path(rread).is_file()
                     if not args.quiet:
                         print(
                             f"\nEQUI segment {seg_i + 1}/{n_equi_segments}: "
-                            f"{nstep} steps @ {timestep_ps} ps",
+                            f"{nstep} steps @ {timestep_ps} ps"
+                            + (" | memory handoff" if use_memory else ""),
                             flush=True,
                         )
                     _sync_mlpot_cell_before_npt(
@@ -443,11 +456,12 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         dyn_print=dyn_print,
                         restart=restart,
                         npt_include_firstt=(seg_i == 0),
+                        memory_handoff=use_memory,
                     )
                     kw["nsavc"] = dcd_nsavc
                     disable_charmm_domdec()
                     run_dynamics_with_io(kw, seg_io)
-                    maybe_run_bonded_mm_mini_after_stage(
+                    memory_handoff_next = maybe_run_bonded_mm_mini_after_stage(
                         ctx,
                         args,
                         stage="equi",
@@ -476,8 +490,13 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     )
                     dyn_print = resolve_dynamics_print_kwargs(args, nstep=nstep)
                     save_interval_ps = timestep_ps * dcd_nsavc
-                    rread = seg_io.restart_read
-                    restart = rread is not None and Path(rread).is_file()
+                    use_memory = memory_handoff_next
+                    if use_memory:
+                        restart = False
+                        rread = None
+                    else:
+                        rread = seg_io.restart_read
+                        restart = rread is not None and Path(rread).is_file()
                     kw = _build_stage_dynamics_kw(
                         "prod",
                         args=args,
@@ -488,12 +507,14 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         echeck=echeck,
                         dyn_print=dyn_print,
                         restart=restart,
+                        memory_handoff=use_memory,
                     )
                     kw["nsavc"] = dcd_nsavc
                     if not args.quiet:
                         print(
                             f"\nPROD segment {seg_i + 1}/{n_prod_segments}: "
-                            f"{nstep} steps @ {timestep_ps} ps",
+                            f"{nstep} steps @ {timestep_ps} ps"
+                            + (" | memory handoff" if use_memory else ""),
                             flush=True,
                         )
                     _sync_mlpot_cell_before_npt(
@@ -505,7 +526,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     )
                     disable_charmm_domdec()
                     run_dynamics_with_io(kw, seg_io)
-                    maybe_run_bonded_mm_mini_after_stage(
+                    memory_handoff_next = maybe_run_bonded_mm_mini_after_stage(
                         ctx,
                         args,
                         stage="prod",
@@ -526,17 +547,23 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             dyn_print = resolve_dynamics_print_kwargs(args, nstep=nstep)
             save_interval_ps = timestep_ps * dcd_nsavc
 
-            rread = prev_restart or _prior_restart_for_stage(stage, paths, restart_from=None)
-            restart = rread is not None and Path(rread).is_file()
+            use_memory = memory_handoff_next
+            if use_memory:
+                restart = False
+                rread = None
+            else:
+                rread = prev_restart or _prior_restart_for_stage(stage, paths, restart_from=None)
+                restart = rread is not None and Path(rread).is_file()
             io = _io_for_stage(stage, paths)
-            if restart:
+            if restart and rread is not None:
                 io.restart_read = Path(rread)
 
             if not args.quiet:
                 print(
                     f"\n{stage.upper()}: {nstep} steps @ {timestep_ps} ps | "
-                    f"restart={restart} | "
-                    f"{format_resid_constraint_message(dynamics_constrain, context='cons_fix')}",
+                    f"restart={restart}"
+                    + (" | memory handoff" if use_memory else "")
+                    + f" | {format_resid_constraint_message(dynamics_constrain, context='cons_fix')}",
                     flush=True,
                 )
 
@@ -558,11 +585,12 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 echeck=echeck,
                 dyn_print=dyn_print,
                 restart=restart,
+                memory_handoff=use_memory,
             )
             kw["nsavc"] = dcd_nsavc
             disable_charmm_domdec()
             run_dynamics_with_io(kw, io)
-            maybe_run_bonded_mm_mini_after_stage(
+            memory_handoff_next = maybe_run_bonded_mm_mini_after_stage(
                 ctx,
                 args,
                 stage=stage,
