@@ -250,7 +250,7 @@ def test_decomposed_calculator_passes_charmm_box_to_spherical_fn():
         "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ):
         calc.calculate_charmm(
-            n, 0, 0, None, x, y, zc, dx, dy, dz, 0, 0, None, None, None, None, None, None
+            n, 0, 0, None, x, y, zc, dx, dy, dz, 0, 0, None, None, None, None, None, None, None
         )
     assert calc._cell == pytest.approx(39.0)
     box = calc.spherical_fn.call_args.kwargs["box"]
