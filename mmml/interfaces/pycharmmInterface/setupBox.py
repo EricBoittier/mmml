@@ -372,13 +372,11 @@ def setup_box_generic(pdb_path, rtf=CGENFF_RTF, prm=CGENFF_PRM, side_length: flo
 
     _ensure_crystal_image_str()
     CLEAR_CHARMM()
-    read.rtf(rtf)
-    bl = settings.set_bomb_level(-2)
-    wl = settings.set_warn_level(-2)
-    read.prm(prm)
-    settings.set_bomb_level(bl)
-    settings.set_warn_level(wl)
-    pycharmm.lingo.charmm_script("bomlev 0")
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import charmm_relaxed_bomlev
+
+    with charmm_relaxed_bomlev():
+        read.rtf(rtf)
+        read.prm(prm)
     header = f"""bomlev -2
     prnlev 0
     wrnlev 0
@@ -425,13 +423,9 @@ def initialize_psf(resid: str, n_molecules: int, side_length: float, solvent: st
     else:
         pdbfilename = pdb_path
 
-    read.rtf(CGENFF_RTF)
-    bl = settings.set_bomb_level(-2)
-    wl = settings.set_warn_level(-2)
-    read.prm(CGENFF_PRM)
-    settings.set_bomb_level(bl)
-    settings.set_warn_level(wl)
-    pycharmm.lingo.charmm_script("bomlev 0")
+    from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
+
+    read_cgenff_toppar()
 
     pycharmm_quiet()
     if solvent is not None:

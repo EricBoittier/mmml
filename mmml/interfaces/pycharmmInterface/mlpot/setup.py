@@ -394,9 +394,12 @@ def load_cluster_from_artifacts(
     pycharmm = _import_pycharmm()
     import pycharmm.read as read
 
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import charmm_relaxed_bomlev
+
     read_cgenff_toppar()
-    read.psf_card(str(psf_path))
-    load_minimized_coordinates(crd_path)
+    with charmm_relaxed_bomlev():
+        read.psf_card(str(psf_path))
+        load_minimized_coordinates(crd_path)
     z = np.asarray(get_Z_from_psf(), dtype=int)
     r = get_charmm_positions_array()
 

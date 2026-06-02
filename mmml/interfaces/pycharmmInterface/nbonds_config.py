@@ -62,25 +62,21 @@ def pbc_nbond_kwargs(
 
 
 def read_cgenff_toppar(*, enable_drude: bool = False) -> None:
-    """Load CGENFF RTF/PRM with the same bomb/warn levels as ``ase._read_cgenff_toppar``."""
+    """Load CGENFF RTF/PRM under relaxed BOMBlev; restore the prior level on exit."""
     import pycharmm.read as read
-    import pycharmm.settings as settings
 
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM, CGENFF_RTF
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+        CGENFF_PRM,
+        CGENFF_RTF,
+        charmm_relaxed_bomlev,
+    )
 
-    if enable_drude:
-        read.rtf(CGENFF_RTF)
-    else:
-        read.rtf(_rtf_path_without_drude_autogen(CGENFF_RTF))
-    bl = settings.set_bomb_level(-2)
-    wl = settings.set_warn_level(-2)
-    read.prm(CGENFF_PRM)
-    settings.set_bomb_level(bl)
-    settings.set_warn_level(wl)
-
-    import pycharmm
-
-    pycharmm.lingo.charmm_script("bomlev 0")
+    with charmm_relaxed_bomlev():
+        if enable_drude:
+            read.rtf(CGENFF_RTF)
+        else:
+            read.rtf(_rtf_path_without_drude_autogen(CGENFF_RTF))
+        read.prm(CGENFF_PRM)
 
 
 def _rtf_path_without_drude_autogen(rtf_path: str | Path) -> str:

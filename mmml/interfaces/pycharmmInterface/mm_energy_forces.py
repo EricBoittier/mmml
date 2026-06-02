@@ -179,18 +179,14 @@ def build_mm_energy_forces_fn(
         raise RuntimeError("CGENFF parameters not available; PyCHARMM may not be initialized")
 
     import pycharmm.param as param
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import read, reset_block, settings
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import reset_block
+    from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_toppar
+
     pycharmm_quiet()
     reset_block()
-    read.rtf(CGENFF_RTF)
-    bl = settings.set_bomb_level(-2)
-    wl = settings.set_warn_level(-2)
-    read.prm(CGENFF_PRM)
-    settings.set_bomb_level(bl)
-    settings.set_warn_level(wl)
-    import pycharmm
-    pycharmm.lingo.charmm_script('bomlev 0')
-    # Drude/Thole setup prints here; recalibrate XLA delay kernel before hybrid JIT.
+    # Same RTF/PRM path as workflow (no Drude autogen); restore workflow bomlev after load.
+    read_cgenff_toppar()
+    # Recalibrate XLA delay kernel before hybrid JIT (post-PyCHARMM CGENFF param read).
     from mmml.utils.jax_gpu_warmup import ensure_xla_gpu_warmed
 
     ensure_xla_gpu_warmed(force=True)
