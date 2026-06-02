@@ -515,7 +515,14 @@ def register_mlpot(
             **kwargs,
         )
         if not use_pbc:
-            refresh_nbonds_after_mlpot()
+            # MLpot.__init__ already set iblo/inb and ran update_bnbnd (upinb).
+            # Re-running prepare_charmm_vacuum + update_bnbnd here segfaults in upinb
+            # for large clusters (e.g. DCM:90) after JAX GPU warmup.
+            from mmml.interfaces.pycharmmInterface.nbonds_config import (
+                vacuum_nbond_kwargs,
+            )
+
+            pycharmm.UpdateNonBondedScript(**vacuum_nbond_kwargs(nbxmod=5)).run()
     ml_z = np.asarray(ml_Z, dtype=int)
     return MlpotContext(
         mlpot=mlpot,

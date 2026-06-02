@@ -8,8 +8,11 @@
 #   Recompute from mini CRD (see estimate_droff_from_crd.py below) and rerun with --fb-rad.
 #
 # Prerequisites:
-#   - CHARMM + PyCHARMM with MLpot limits for 450 atoms (DCM:90):
-#       ./scripts/rebuild_charmm_mlpot.sh   # max_Nml>=512, max_Npr>=300000
+#   - Rebuilt libcharmm.so (source has max_Nml=50000; stale lib segfaults on DCM:90):
+#       ./scripts/rebuild_charmm_mlpot.sh
+#   - Launch under OpenMPI mpirun (libcharmm.so is MPI-linked; plain python segfaults
+#     after JAX GPU warmup on gpu nodes):
+#       ./scripts/mmml-charmm-mpirun.sh md-system ...
 #   - MMML_CKPT or examples/ckpts_json/DESdimers_params.json
 #   - packmol on PATH (mmml/generate/packmol or module)
 
@@ -21,7 +24,8 @@ cd "$REPO_ROOT"
 PACKMOL_R="${PACKMOL_R:-21.0}"
 FB_RAD="${FB_RAD:-32.0}"
 
-exec python -m mmml.cli.run.md_system \
+MPIRUN="${MMML_MPIRUN_WRAPPER:-$REPO_ROOT/scripts/mmml-charmm-mpirun.sh}"
+exec "$MPIRUN" md-system \
   --setup free_nvt \
   --backend pycharmm \
   --composition DCM:90 \
