@@ -669,8 +669,11 @@ def test_overlap_aborts_before_charmm_when_scratch_restart_is_invalid(tmp_path):
     assert len(calls) == 1
 
 
-def test_overlap_multi_chunk_keeps_single_dcd_open(tmp_path):
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+def test_overlap_multi_chunk_splits_dcd_per_chunk(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        CharmmTrajectoryFiles,
+        _overlap_chunk_trajectory_path,
+    )
 
     cfg = DynamicsOverlapConfig(
         action="error",
@@ -691,12 +694,10 @@ def test_overlap_multi_chunk_keeps_single_dcd_open(tmp_path):
     dcd = tmp_path / "heat.dcd"
     io = CharmmTrajectoryFiles(restart_write=tmp_path / "heat.res", trajectory=dcd)
     chunk_paths: list[Path | None] = []
-    extra_units: list[dict | None] = []
-    handle = mock.Mock()
+    expected_chunks = [_overlap_chunk_trajectory_path(dcd, i) for i in range(3)]
 
     def fake_chunk(kw, _io, *, extra_iokw=None, **kwargs):
         chunk_paths.append(_io.trajectory if _io is not None else None)
-        extra_units.append(extra_iokw)
         if _io is not None and _io.restart_write is not None:
             Path(_io.restart_write).write_text("REST\n", encoding="utf-8")
         return mock.Mock()
@@ -709,21 +710,19 @@ def test_overlap_multi_chunk_keeps_single_dcd_open(tmp_path):
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=pos_ok,
-    ), mock.patch.object(
-        CharmmTrajectoryFiles,
-        "open_trajectory_for_run",
-        return_value=([handle], {"iuncrd": 1}),
-    ) as open_traj:
+    ), mock.patch(
+        "mmml.utils.dcd_writer.concat_dcd_files",
+        return_value=3,
+    ) as merge:
         run_dynamics_with_io(
             {"nstep": 6, "nsavc": 1},
             io,
             overlap=cfg,
+            overlap_context="heat",
         )
 
-    open_traj.assert_called_once_with()
-    assert chunk_paths == [None, None, None]
-    assert extra_units == [{"iuncrd": 1}, {"iuncrd": 1}, {"iuncrd": 1}]
-    handle.close.assert_called_once_with()
+    assert chunk_paths == expected_chunks
+    merge.assert_called_once_with(expected_chunks, dcd)
 
 
 def test_overlap_single_chunk_uses_stage_dcd_directly(tmp_path):

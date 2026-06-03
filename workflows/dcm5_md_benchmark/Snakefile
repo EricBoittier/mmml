@@ -44,5 +44,10 @@ rule collect:
     output:
         csv="results/benchmark_summary.csv",
         md="results/benchmark_report.md",
-    script:
-        "scripts/collect_benchmark.py"
+    params:
+        workflow_dir=workflow.basedir,
+    shell:
+        """
+        bash {params.workflow_dir}/scripts/collect_shell.sh \
+            {params.workflow_dir} {output.csv} {output.md}
+        """

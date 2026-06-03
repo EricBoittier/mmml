@@ -433,14 +433,12 @@ def _overlap_for_stage(
     stage: MdStage,
     overlap_cfg: DynamicsOverlapConfig,
 ) -> DynamicsOverlapConfig | None:
-    """Disable restart-chunked overlap checks during CHARMM heating.
+    """Return overlap guard config for dynamics stages (including heat).
 
-    CHARMM's heating/velocity-scaling state does not survive overlap restart
-    chunks reliably; failed heat chunks can write coordinate-history files that
-    cannot be used for restart. Later stages can keep the overlap guard.
+    Heat uses the same chunked overlap checks and per-chunk DCD writes as equi/prod.
+    Prefer ``--heat-thermostat hoover`` (default in ``run_dcm9_stability.sh``):
+    velocity-scaling ramps (``ihtfrq``) do not survive overlap restart chunks.
     """
-    if stage == "heat":
-        return None
     return overlap_cfg
 
 
@@ -474,6 +472,28 @@ def _reset_stage_trajectory(
 
     dcd_path.unlink(missing_ok=True)
     print(f"Removed prior DCD: {dcd_path}", flush=True)
+
+
+def _reset_stage_restart(
+    restart_path: Path | None,
+    *,
+    trajectory_path: Path | None = None,
+) -> None:
+    """Remove prior stage restart/scratch files before a fresh dynamics run."""
+    if restart_path is None:
+        return
+    path = Path(restart_path)
+    if path.is_file():
+        path.unlink(missing_ok=True)
+        print(f"Removed prior restart: {path}", flush=True)
+    parent = path.parent
+    stem = path.stem
+    for slot in (f"{stem}.overlap_a.res", f"{stem}.overlap_b.res"):
+        Path(parent / slot).unlink(missing_ok=True)
+    if trajectory_path is not None:
+        traj_stem = Path(trajectory_path).stem
+        for chunk_dcd in parent.glob(f"{traj_stem}.chunk.*.dcd"):
+            chunk_dcd.unlink(missing_ok=True)
 
 
 def _validate_dyn_stage_completion(
@@ -1056,6 +1076,10 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 restart_path=restart_path,
             )
             disable_charmm_domdec()
+            _reset_stage_restart(
+                Path(io.restart_write) if io.restart_write else None,
+                trajectory_path=Path(io.trajectory) if io.trajectory else None,
+            )
             _reset_stage_trajectory(
                 Path(io.trajectory) if io.trajectory else None,
                 rescue_old=bool(getattr(args, "rescue_old_dcd", False)),
@@ -1068,6 +1092,18 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             apply_comp_velocity_policy(stage, kw, args)
             if stage == "heat":
                 heat_thermostat = resolve_heat_thermostat(args)
+                overlap_for_stage = _overlap_for_stage(stage, overlap_cfg)
+                if (
+                    overlap_for_stage is not None
+                    and overlap_for_stage.enabled
+                    and heat_thermostat == "scale"
+                    and not args.quiet
+                ):
+                    print(
+                        "HEAT overlap guard: chunked restarts may disrupt ihtfrq "
+                        "ramps; prefer --heat-thermostat hoover (default).",
+                        flush=True,
+                    )
                 _configure_heat_dynamics_start(
                     kw,
                     io,

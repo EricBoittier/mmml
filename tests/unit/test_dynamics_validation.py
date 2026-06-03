@@ -13,7 +13,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
     expected_dcd_frame_count,
     read_restart_last_step,
 )
-from mmml.utils.dcd_writer import save_trajectory_dcd
+from mmml.utils.dcd_writer import concat_dcd_files, save_trajectory_dcd
 
 
 def test_expected_dcd_frame_count():
@@ -36,6 +36,34 @@ def test_count_dcd_frames(tmp_path):
         steps_per_frame=10,
     )
     assert count_dcd_frames(path) == 3
+
+
+def test_concat_dcd_files_merges_chunks(tmp_path):
+    import numpy as np
+
+    class _Atoms:
+        def __len__(self):
+            return 2
+
+    atoms = _Atoms()
+    c1 = tmp_path / "heat.chunk.0000.dcd"
+    c2 = tmp_path / "heat.chunk.0001.dcd"
+    out = tmp_path / "heat.dcd"
+    save_trajectory_dcd(
+        c1,
+        np.zeros((2, 2, 3), dtype=np.float32),
+        atoms,
+        steps_per_frame=1,
+    )
+    save_trajectory_dcd(
+        c2,
+        np.ones((3, 2, 3), dtype=np.float32),
+        atoms,
+        steps_per_frame=1,
+    )
+    n = concat_dcd_files([c1, c2], out)
+    assert n == 5
+    assert count_dcd_frames(out) == 5
 
 
 def test_read_restart_last_step(tmp_path):
