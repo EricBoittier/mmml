@@ -360,6 +360,16 @@ def _force_fd_check(
     finite_diff_arr = diff_arr[np.isfinite(diff_arr)]
     n_fail = int(np.count_nonzero(diff_arr > float(tol)))
     n_nonfinite = int(diff_arr.size - finite_diff_arr.size)
+    nonfinite_components = [
+        {
+            "atom": int(row["atom"]),
+            "axis": str(row["axis"]),
+            "analytic_force_kcalmol_A": float(row["analytic_force_kcalmol_A"]),
+            "fd_force_kcalmol_A": float(row["fd_force_kcalmol_A"]),
+        }
+        for row in rows
+        if not np.isfinite(float(row["abs_diff_kcalmol_A"]))
+    ]
     max_abs_diff = float(finite_diff_arr.max()) if finite_diff_arr.size else float("nan")
     rms_abs_diff = (
         float(np.sqrt(np.mean(finite_diff_arr**2)))
@@ -377,6 +387,7 @@ def _force_fd_check(
         "n_components_checked": int(len(components)),
         "n_fail": n_fail,
         "n_nonfinite": n_nonfinite,
+        "nonfinite_components": nonfinite_components,
         "max_abs_diff_kcalmol_A": max_abs_diff,
         "rms_abs_diff_kcalmol_A": rms_abs_diff,
         "worst": worst,
