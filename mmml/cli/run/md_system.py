@@ -304,6 +304,34 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--heat-comp-damp",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="pycharmm: experimental COMP force copy before heat (default: off).",
+    )
+    parser.add_argument(
+        "--heat-comp-hydrogen-only",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "pycharmm: with --heat-comp-damp, select high-|F| hydrogens only "
+            "(default). --no-heat-comp-hydrogen-only = all atom types."
+        ),
+    )
+    parser.add_argument(
+        "--heat-comp-force-min",
+        type=float,
+        default=None,
+        metavar="KCAL",
+        help="pycharmm: |F| threshold for heat COMP selection (kcal/mol/Å).",
+    )
+    parser.add_argument(
+        "--heat-comp-force-scale",
+        type=float,
+        default=None,
+        help="pycharmm: scale for forces copied into COMP during heat.",
+    )
+    parser.add_argument(
         "--skip-energy-show",
         action="store_true",
         help="pycharmm: skip CHARMM energy.show() (MPI/cluster segfault guard)",
@@ -822,6 +850,14 @@ def _append_optional(cmd: list[str], flag: str, value) -> None:
     cmd.extend([flag, str(value)])
 
 
+def _append_boolean_optional_flag(cmd: list[str], flag: str, value: bool) -> None:
+    """Forward ``BooleanOptionalAction`` flags (--flag / --no-flag)."""
+    if value:
+        cmd.append(flag)
+    else:
+        cmd.append(f"--no-{flag.removeprefix('--')}")
+
+
 def _append_if_nonempty(cmd: list[str], flag: str, value: str | None) -> None:
     if value is None:
         return
@@ -1035,6 +1071,18 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     ]
     _append_optional(cmd, "--heat-firstt", getattr(args, "heat_firstt", None))
     _append_optional(cmd, "--heat-finalt", getattr(args, "heat_finalt", None))
+    _append_boolean_optional_flag(
+        cmd, "--heat-comp-damp", bool(getattr(args, "heat_comp_damp", False))
+    )
+    _append_boolean_optional_flag(
+        cmd,
+        "--heat-comp-hydrogen-only",
+        bool(getattr(args, "heat_comp_hydrogen_only", True)),
+    )
+    _append_optional(cmd, "--heat-comp-force-min", getattr(args, "heat_comp_force_min", None))
+    _append_optional(
+        cmd, "--heat-comp-force-scale", getattr(args, "heat_comp_force_scale", None)
+    )
     cmd.extend(
         [
         "--dcd-nsavc",
