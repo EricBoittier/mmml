@@ -306,18 +306,13 @@ def _reset_stage_trajectory(path: Path | None) -> None:
 
 
 def _trajectory_outputs(path: Path | None) -> list[Path]:
-    """Existing non-empty DCD outputs for a stage, including overlap chunks."""
+    """Existing non-empty DCD output for a stage."""
     if path is None:
         return []
     stage_path = Path(path)
-    outputs: list[Path] = []
     if stage_path.is_file() and stage_path.stat().st_size > 0:
-        outputs.append(stage_path)
-    outputs.extend(
-        p for p in sorted(stage_path.parent.glob(f"{stage_path.stem}.overlap_*.dcd"))
-        if p.is_file() and p.stat().st_size > 0
-    )
-    return outputs
+        return [stage_path]
+    return []
 
 
 def _seed_restart_for_memory_handoff(
