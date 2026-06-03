@@ -203,6 +203,154 @@ def assert_mlpot_user_active(
     return float(user)
 
 
+def _masses_consistent_with_z(
+    masses: np.ndarray,
+    z: np.ndarray,
+    *,
+    tol_amu: float = 0.2,
+) -> list[str]:
+    """Return human-readable issues when CHARMM PSF masses disagree with atomic numbers."""
+    import ase.data
+
+    ase_m = ase.data.atomic_masses_common
+    issues: list[str] = []
+    for i, (mass, zi) in enumerate(zip(masses, z, strict=True)):
+        zi = int(zi)
+        if zi < 0 or zi >= len(ase_m):
+            issues.append(f"atom {i}: invalid Z={zi}")
+            continue
+        delta = abs(float(mass) - float(ase_m[zi]))
+        if delta > tol_amu:
+            issues.append(
+                f"atom {i}: Z={zi} PSF mass={float(mass):.4f} amu vs "
+                f"ASE={float(ase_m[zi]):.4f} amu (Δ={delta:.4f} amu)"
+            )
+    return issues
+
+
+def _calculator_atomic_numbers(ctx: MlpotContext) -> np.ndarray | None:
+    """Best-effort Z array stored on the MLpot-linked PyCHARMM calculator."""
+    calc = getattr(ctx.mlpot, "calculator", None)
+    if calc is None:
+        return None
+    for attr in ("ml_atomic_numbers", "atomic_numbers"):
+        raw = getattr(calc, attr, None)
+        if raw is not None:
+            return np.asarray(raw, dtype=int)
+    return None
+
+
+def _model_atomic_numbers(pyCModel: Any) -> np.ndarray | None:
+    raw = getattr(pyCModel, "_atomic_numbers", None)
+    if raw is None:
+        return None
+    return np.asarray(raw, dtype=int)
+
+
+def verify_mlpot_charmm_atom_consistency(
+    ctx: MlpotContext,
+    *,
+    expected_z: Sequence[int] | np.ndarray | None = None,
+    mass_tol_amu: float = 0.2,
+    context: str = "dynamics",
+    quiet: bool = False,
+) -> None:
+    """Verify PSF masses/Z, MLpot registration, and calculator agree before MD.
+
+    Raises ``RuntimeError`` on mismatch (wrong atom order or element mapping breaks
+    PhysNet and CHARMM integration).
+    """
+    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import pycharmm.coor as coor
+    import pycharmm.psf as psf
+
+    from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+
+    if ctx.ml_Z is None:
+        raise RuntimeError(
+            f"Atom consistency check before {context}: MlpotContext.ml_Z is missing"
+        )
+
+    n_psf = int(coor.get_natom())
+    masses = np.asarray(psf.get_amass(), dtype=float)
+    atypes = [str(x) for x in np.asarray(psf.get_atype(), dtype=str)]
+    z_psf = np.asarray(get_Z_from_psf(), dtype=int)
+    z_ctx = np.asarray(ctx.ml_Z, dtype=int)
+    z_mlpot = np.asarray(ctx.mlpot.ml_Z, dtype=int)
+    ml_idx = np.asarray(ctx.mlpot.ml_indices, dtype=int)
+    n_ml = int(ctx.mlpot.ml_Natoms)
+
+    issues: list[str] = []
+    if masses.shape[0] != n_psf:
+        issues.append(f"PSF mass count {masses.shape[0]} != natom {n_psf}")
+    if z_psf.shape[0] != n_psf:
+        issues.append(f"PSF-derived Z length {z_psf.shape[0]} != natom {n_psf}")
+    if z_ctx.shape[0] != n_ml:
+        issues.append(f"context ml_Z length {z_ctx.shape[0]} != ml_Natoms {n_ml}")
+    if z_mlpot.shape[0] != n_ml:
+        issues.append(f"mlpot.ml_Z length {z_mlpot.shape[0]} != ml_Natoms {n_ml}")
+    if n_ml != n_psf:
+        issues.append(f"ml_Natoms {n_ml} != CHARMM natom {n_psf}")
+
+    if expected_z is not None:
+        z_exp = np.asarray(expected_z, dtype=int)
+        if z_exp.shape != z_ctx.shape or not np.array_equal(z_exp, z_ctx):
+            issues.append(
+                "cluster build Z != MlpotContext.ml_Z "
+                f"(build {z_exp.tolist()[:8]}... vs ctx {z_ctx.tolist()[:8]}...)"
+            )
+
+    if not np.array_equal(z_psf, z_ctx):
+        mismatch = np.where(z_psf != z_ctx)[0]
+        issues.append(
+            "PSF mass-derived Z != MlpotContext.ml_Z at indices "
+            + ", ".join(str(int(i)) for i in mismatch[:12])
+            + ("..." if mismatch.size > 12 else "")
+        )
+    if not np.array_equal(z_ctx, z_mlpot):
+        issues.append("MlpotContext.ml_Z != mlpot.ml_Z (registration vs MLpot object)")
+
+    expected_idx = np.arange(n_ml, dtype=int)
+    if ml_idx.shape != expected_idx.shape or not np.array_equal(ml_idx, expected_idx):
+        issues.append(
+            f"mlpot.ml_indices not 0..{n_ml - 1} (got {ml_idx.tolist()[:16]}...)"
+        )
+
+    z_calc = _calculator_atomic_numbers(ctx)
+    if z_calc is None:
+        issues.append("MLpot calculator has no ml_atomic_numbers / atomic_numbers")
+    elif z_calc.shape != z_mlpot.shape or not np.array_equal(z_calc, z_mlpot):
+        issues.append("calculator atomic numbers != mlpot.ml_Z")
+
+    z_model = _model_atomic_numbers(ctx.pyCModel)
+    if z_model is not None:
+        if z_model.shape != z_ctx.shape or not np.array_equal(z_model, z_ctx):
+            issues.append("pyCModel._atomic_numbers != MlpotContext.ml_Z")
+
+    issues.extend(
+        _masses_consistent_with_z(masses, z_psf, tol_amu=mass_tol_amu)
+    )
+
+    if issues:
+        raise RuntimeError(
+            f"CHARMM/MLpot atom identity mismatch before {context}:\n  - "
+            + "\n  - ".join(issues)
+        )
+
+    if not quiet:
+        sample = min(3, n_psf)
+        lines = [
+            f"Atom consistency OK before {context}: N={n_psf} "
+            f"(PSF ↔ MLpot ↔ calculator Z and masses)"
+        ]
+        for i in range(sample):
+            lines.append(
+                f"  atom {i}: type={atypes[i]} Z={int(z_psf[i])} "
+                f"mass={float(masses[i]):.4f} amu"
+            )
+        print("\n".join(lines), flush=True)
+
+
 def _import_pycharmm():
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401 — CHARMM env
     import pycharmm
