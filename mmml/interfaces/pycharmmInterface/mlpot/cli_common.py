@@ -110,6 +110,16 @@ def add_flat_bottom_args(parser: argparse.ArgumentParser) -> None:
         help="MMFP wall force constant (default: 1.0)",
     )
     group.add_argument(
+        "--fb-selection",
+        type=str,
+        default="all",
+        help=(
+            "CHARMM atom selection for MMFP wall (default: all). "
+            "Use e.g. 'TYPE C*' for one representative atom per DCM molecule "
+            "to avoid MAXGEO overflow on large clusters."
+        ),
+    )
+    group.add_argument(
         "--fb-center",
         action="store_true",
         default=True,
@@ -649,12 +659,14 @@ def apply_flat_bottom_from_args(args: argparse.Namespace) -> None:
         xref=float(getattr(args, "fb_xref", 0.0)),
         yref=float(getattr(args, "fb_yref", 0.0)),
         zref=float(getattr(args, "fb_zref", 0.0)),
+        selection=str(getattr(args, "fb_selection", "all") or "all"),
     )
     if cfg is not None:
         print(
             "MMFP flat-bottom sphere: "
             f"droff={cfg.radius:.2f} Å force={cfg.force:.2f} "
-            f"center=({cfg.xref:.2f}, {cfg.yref:.2f}, {cfg.zref:.2f})"
+            f"center=({cfg.xref:.2f}, {cfg.yref:.2f}, {cfg.zref:.2f}) "
+            f"selection='{cfg.selection}'"
         )
 
 

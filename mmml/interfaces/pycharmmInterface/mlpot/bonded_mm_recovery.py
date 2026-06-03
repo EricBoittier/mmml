@@ -368,6 +368,7 @@ def _restore_flat_bottom_after_heavy_recovery(args: argparse.Namespace) -> None:
             xref=float(getattr(args, "fb_xref", 0.0)),
             yref=float(getattr(args, "fb_yref", 0.0)),
             zref=float(getattr(args, "fb_zref", 0.0)),
+            selection=str(getattr(args, "fb_selection", "all") or "all"),
         )
     )
 
