@@ -203,27 +203,53 @@ def assert_mlpot_user_active(
     return float(user)
 
 
+def _z_from_psf_masses(masses: np.ndarray) -> np.ndarray:
+    """Element Z from PSF masses (same recipe as ``get_Z_from_psf``)."""
+    import ase.data
+
+    ase_m = ase.data.atomic_masses_common
+    return np.asarray(
+        [int(np.argmin((ase_m - float(m)) ** 2)) for m in masses],
+        dtype=int,
+    )
+
+
 def _masses_consistent_with_z(
     masses: np.ndarray,
     z: np.ndarray,
     *,
     tol_amu: float = 0.2,
 ) -> list[str]:
-    """Return human-readable issues when CHARMM PSF masses disagree with atomic numbers."""
+    """Return issues when assigned Z is not the best match for each PSF mass.
+
+    CGenFF/CHARMM masses (e.g. Cl at 35.453 amu) often differ from ASE tabulated
+    values (34.969 amu) while still mapping to the same element. We therefore
+    require self-consistent nearest-mass Z, not exact ASE mass equality.
+    """
     import ase.data
 
     ase_m = ase.data.atomic_masses_common
+    z_from_mass = _z_from_psf_masses(masses)
     issues: list[str] = []
-    for i, (mass, zi) in enumerate(zip(masses, z, strict=True)):
+    for i, (mass, zi, z_best) in enumerate(zip(masses, z, z_from_mass, strict=True)):
         zi = int(zi)
+        z_best = int(z_best)
         if zi < 0 or zi >= len(ase_m):
             issues.append(f"atom {i}: invalid Z={zi}")
             continue
-        delta = abs(float(mass) - float(ase_m[zi]))
-        if delta > tol_amu:
+        if z_best != zi:
             issues.append(
-                f"atom {i}: Z={zi} PSF mass={float(mass):.4f} amu vs "
-                f"ASE={float(ase_m[zi]):.4f} amu (Δ={delta:.4f} amu)"
+                f"atom {i}: assigned Z={zi} but PSF mass={float(mass):.4f} amu "
+                f"best matches Z={z_best} (ASE={float(ase_m[z_best]):.4f} amu)"
+            )
+            continue
+        # Secondary guard: mass far from all elements (ambiguous assignment).
+        deltas = (ase_m - float(mass)) ** 2
+        order = np.argsort(deltas)
+        if len(order) > 1 and (deltas[order[1]] - deltas[order[0]]) < tol_amu**2:
+            issues.append(
+                f"atom {i}: PSF mass={float(mass):.4f} amu is ambiguous between "
+                f"Z={int(order[0])} and Z={int(order[1])}"
             )
     return issues
 
