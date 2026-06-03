@@ -148,6 +148,7 @@ def _copy_mlpot_context_state(dst: MlpotContext, src: MlpotContext) -> None:
         "cubic_box_side_A",
         "ml_charge",
         "ml_fq",
+        "mm_internal_scale",
     ):
         setattr(dst, name, getattr(src, name))
 
@@ -220,6 +221,7 @@ def _reregister_mlpot_after_topology_reload(ctx: MlpotContext) -> None:
         ml_charge=ctx.ml_charge,
         ml_fq=ctx.ml_fq,
         use_pbc=ctx.use_pbc,
+        mm_internal_scale=float(getattr(ctx, "mm_internal_scale", 0.0)),
     )
     new_ctx.ml_Z = ml_z
     new_ctx.use_pbc = bool(ctx.use_pbc)

@@ -344,11 +344,23 @@ def _register_mlpot_context(
                 verbose=verbose,
             )
 
+    mm_internal_scale = (
+        float(getattr(args, "mlpot_mm_internal_scale", 0.0) or 0.0)
+        if args is not None
+        else 0.0
+    )
+    if mm_internal_scale > 0.0 and verbose:
+        print(
+            f"MLpot BLOCK: CGENFF BOND/ANGL/DIHE scale={mm_internal_scale:g} on ML atoms "
+            "(ELEC/VDW off; USER=PhysNet)",
+            flush=True,
+        )
     ctx = register_mlpot(
         pyCModel,
         z,
         select_all_atoms(),
         use_pbc=cubic_box_side_A is not None,
+        mm_internal_scale=mm_internal_scale,
     )
     ctx.ml_Z = np.asarray(z, dtype=int)
     ctx.use_pbc = cubic_box_side_A is not None

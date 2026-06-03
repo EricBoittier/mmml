@@ -324,7 +324,10 @@ def _with_mlpot_block_restored(ctx: "MlpotContext", fn):
     try:
         return fn()
     finally:
-        ctx.block_tag = apply_mlpot_energy_block(ctx.ml_selection)
+        ctx.block_tag = apply_mlpot_energy_block(
+            ctx.ml_selection,
+            mm_internal_scale=float(getattr(ctx, "mm_internal_scale", 0.0)),
+        )
 
 
 def measure_mm_grms_with_full_block(ctx: "MlpotContext") -> float:

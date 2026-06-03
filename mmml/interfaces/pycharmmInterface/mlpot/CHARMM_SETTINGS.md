@@ -108,6 +108,7 @@ Use `--allow-incomplete-dynamics` only for debugging. For heat tests on small cl
 
 | Flag | Purpose |
 |------|---------|
+| `--mlpot-mm-internal-scale` | CGENFF BOND/ANGL/DIHE weight on ML atoms during MLpot (0=off, 0.1=soft MM internal; ELEC/VDW off) |
 | `--bonded-mm-mini` | CHARMM bonded-only recovery SD after selected stages |
 | `--fix-resids` / `--constrain-resids` | `cons_fix` in mini pass 2 / MD |
 | `--quiet` | Low `PRNLev` + coarse print |

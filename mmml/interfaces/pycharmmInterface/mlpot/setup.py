@@ -103,6 +103,7 @@ class MlpotContext:
     cubic_box_side_A: float | None = None
     ml_charge: float = 0.0
     ml_fq: bool = True
+    mm_internal_scale: float = 0.0
 
     def unset(self) -> None:
         self.mlpot.unset_mlpot()
@@ -123,7 +124,10 @@ class MlpotContext:
 
         if self.ml_selection is None or self.ml_Z is None:
             raise RuntimeError("MlpotContext missing ml_selection or ml_Z for reregister")
-        self.block_tag = apply_mlpot_energy_block(self.ml_selection)
+        self.block_tag = apply_mlpot_energy_block(
+            self.ml_selection,
+            mm_internal_scale=float(self.mm_internal_scale),
+        )
         reattach = getattr(self.mlpot, "reattach_mlpot", None)
         if callable(reattach):
             # Do not construct a new MLpot(): __init__ rebuilds iblo/inb via update_bnbnd
@@ -762,6 +766,7 @@ def register_mlpot(
     mlmm_ctofnb: Optional[float] = None,
     preserve_psf_internals: bool = True,
     use_pbc: bool = False,
+    mm_internal_scale: float = 0.0,
     **kwargs: Any,
 ) -> MlpotContext:
     """Register ``pycharmm.MLpot`` and return a context manager-like handle."""
@@ -775,7 +780,10 @@ def register_mlpot(
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
 
     with charmm_relaxed_bomlev():
-        block_tag = apply_mlpot_energy_block(ml_selection)
+        block_tag = apply_mlpot_energy_block(
+            ml_selection,
+            mm_internal_scale=float(mm_internal_scale),
+        )
         mlpot = pycharmm.MLpot(
             ml_model=pyCModel,
             ml_Z=z_ml,
@@ -809,4 +817,5 @@ def register_mlpot(
         cubic_box_side_A=None,
         ml_charge=float(ml_charge),
         ml_fq=bool(ml_fq),
+        mm_internal_scale=float(mm_internal_scale),
     )
