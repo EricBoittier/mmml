@@ -538,22 +538,27 @@ def test_reregister_mlpot_reattaches_without_new_mlpot_or_nbond_rebuild():
 
 def test_assert_mlpot_user_active_reattaches_when_user_missing():
     import sys
+    import types
 
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
         MlpotContext,
         assert_mlpot_user_active,
     )
 
+    mlpot = MagicMock()
+    mlpot.is_set = False
     ctx = MlpotContext(
-        mlpot=MagicMock(is_set=False),
+        mlpot=mlpot,
         pyCModel=MagicMock(),
         params=None,
         model=None,
         ml_selection=MagicMock(),
         ml_Z=np.array([6, 1], dtype=int),
     )
-    mock_py = MagicMock()
-    mock_energy = MagicMock()
+    mock_py = types.ModuleType("pycharmm")
+    mock_py.lingo = MagicMock()
+    mock_energy = types.ModuleType("pycharmm.energy")
+    mock_energy.get_term_by_name = MagicMock()
     mock_energy.get_term_by_name.side_effect = [0.0, -123.4]
     with patch.dict(
         sys.modules,
