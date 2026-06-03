@@ -77,12 +77,13 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--ml-max-active-dimers", type=int, default=None)
     parser.add_argument(
         "--mode",
-        choices=["ml-only", "callback"],
+        choices=["ml-only", "monomer-only", "callback"],
         default="ml-only",
         help=(
             "What to finite-difference: 'ml-only' checks the decomposed MLpot "
-            "JAX energy/forces with MM disabled; 'callback' checks the full "
-            "PyCHARMM callback including stateful MM pair updates."
+            "JAX energy/forces with MM disabled; 'monomer-only' disables dimer "
+            "terms; 'callback' checks the full PyCHARMM callback including "
+            "stateful MM pair updates."
         ),
     )
     parser.add_argument(
@@ -90,6 +91,15 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=float,
         default=1.0e-4,
         help="Central-difference displacement in Å.",
+    )
+    parser.add_argument(
+        "--fd-steps",
+        type=str,
+        default="",
+        help=(
+            "Comma/space-separated FD displacements in Å. If set, run a step "
+            "sweep and ignore --fd-step."
+        ),
     )
     parser.add_argument(
         "--tol",
@@ -209,7 +219,12 @@ def _callback_energy_and_force(calc: Any, positions: np.ndarray) -> tuple[float,
     return float(energy), -gradient
 
 
-def _ml_only_energy_and_force(calc: Any, positions: np.ndarray) -> tuple[float, np.ndarray]:
+def _ml_energy_and_force(
+    calc: Any,
+    positions: np.ndarray,
+    *,
+    do_ml_dimer: bool,
+) -> tuple[float, np.ndarray]:
     """Return ML-only decomposed energy/forces from the scalar energy gradient."""
     import jax
     import jax.numpy as jnp
@@ -234,7 +249,7 @@ def _ml_only_energy_and_force(calc: Any, positions: np.ndarray) -> tuple[float, 
                 cutoff_params=calc.cutoff_params,
                 doML=True,
                 doMM=False,
-                doML_dimer=True,
+                doML_dimer=do_ml_dimer,
                 box=box,
             )
             return jnp.reshape(out.energy, (-1,))[0]
@@ -243,6 +258,14 @@ def _ml_only_energy_and_force(calc: Any, positions: np.ndarray) -> tuple[float, 
         energy = float(jax.device_get(energy_raw)) * float(calc.ev2kcal)
         forces = -np.asarray(jax.device_get(grad), dtype=np.float64) * float(calc.ev2kcal)
     return energy, forces
+
+
+def _ml_only_energy_and_force(calc: Any, positions: np.ndarray) -> tuple[float, np.ndarray]:
+    return _ml_energy_and_force(calc, positions, do_ml_dimer=True)
+
+
+def _monomer_only_energy_and_force(calc: Any, positions: np.ndarray) -> tuple[float, np.ndarray]:
+    return _ml_energy_and_force(calc, positions, do_ml_dimer=False)
 
 
 def _selected_atom_indices(args: argparse.Namespace, n_atoms: int) -> np.ndarray:
@@ -278,6 +301,8 @@ def _force_fd_check(
         evaluate = _callback_energy_and_force
     elif mode == "ml-only":
         evaluate = _ml_only_energy_and_force
+    elif mode == "monomer-only":
+        evaluate = _monomer_only_energy_and_force
     else:
         raise ValueError(f"unknown force-check mode: {mode!r}")
     e0, f_analytic = evaluate(calc, pos0)
@@ -315,11 +340,21 @@ def _force_fd_check(
         }
         rows.append(row)
         diffs.append(abs_diff)
-        if worst is None or abs_diff > float(worst["abs_diff_kcalmol_A"]):
+        if np.isfinite(abs_diff) and (
+            worst is None or abs_diff > float(worst["abs_diff_kcalmol_A"])
+        ):
             worst = row
 
     diff_arr = np.asarray(diffs, dtype=float)
+    finite_diff_arr = diff_arr[np.isfinite(diff_arr)]
     n_fail = int(np.count_nonzero(diff_arr > float(tol)))
+    n_nonfinite = int(diff_arr.size - finite_diff_arr.size)
+    max_abs_diff = float(finite_diff_arr.max()) if finite_diff_arr.size else float("nan")
+    rms_abs_diff = (
+        float(np.sqrt(np.mean(finite_diff_arr**2)))
+        if finite_diff_arr.size
+        else float("nan")
+    )
     return {
         "mode": mode,
         "energy_kcalmol": e0,
@@ -329,11 +364,22 @@ def _force_fd_check(
         "n_atoms_selected": int(len(atom_indices)),
         "n_components_checked": int(len(components)),
         "n_fail": n_fail,
-        "max_abs_diff_kcalmol_A": float(diff_arr.max()),
-        "rms_abs_diff_kcalmol_A": float(np.sqrt(np.mean(diff_arr**2))),
+        "n_nonfinite": n_nonfinite,
+        "max_abs_diff_kcalmol_A": max_abs_diff,
+        "rms_abs_diff_kcalmol_A": rms_abs_diff,
         "worst": worst,
         "components": rows,
     }
+
+
+def _parse_float_list(text: str) -> list[float]:
+    values: list[float] = []
+    for part in str(text).replace(",", " ").split():
+        value = float(part)
+        if value <= 0:
+            raise ValueError(f"FD steps must be > 0, got {value}")
+        values.append(value)
+    return values
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -353,27 +399,42 @@ def main(argv: list[str] | None = None) -> int:
     try:
         calc = pyc_model.get_pycharmm_calculator()
         atom_indices = _selected_atom_indices(args, len(z))
-        report = _force_fd_check(
-            calc,
-            positions,
-            atom_indices,
-            mode=args.mode,
-            step=float(args.fd_step),
-            tol=float(args.tol),
-            max_components=args.max_components,
-        )
+        steps = _parse_float_list(args.fd_steps) if args.fd_steps else [float(args.fd_step)]
+        reports = [
+            _force_fd_check(
+                calc,
+                positions,
+                atom_indices,
+                mode=args.mode,
+                step=step,
+                tol=float(args.tol),
+                max_components=args.max_components,
+            )
+            for step in steps
+        ]
+        report = reports[0] if len(reports) == 1 else {"sweep": reports}
         report["tag"] = tag
         report["composition"] = args.composition
         report["box_side_A"] = box_side
-        report["passed"] = int(report["n_fail"]) == 0
+        if len(reports) == 1:
+            report["passed"] = int(report["n_fail"]) == 0 and int(report["n_nonfinite"]) == 0
+        else:
+            report["passed"] = all(
+                int(r["n_fail"]) == 0 and int(r["n_nonfinite"]) == 0 for r in reports
+            )
     finally:
         ctx.unset()
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2), encoding="utf-8")
 
-    worst = report["worst"]
-    print(json.dumps({k: v for k, v in report.items() if k != "components"}, indent=2))
+    display_report = {k: v for k, v in report.items() if k != "components"}
+    if "sweep" in display_report:
+        display_report["sweep"] = [
+            {k: v for k, v in r.items() if k != "components"} for r in report["sweep"]
+        ]
+    worst = report["worst"] if "worst" in report else None
+    print(json.dumps(display_report, indent=2))
     if worst is not None:
         print(
             "Worst component: atom {atom} {axis}, analytic={analytic_force_kcalmol_A:.6f}, "

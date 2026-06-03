@@ -156,6 +156,8 @@ class DecomposedMlpotCalculator:
                 return jnp.reshape(out.energy, (-1,))[0]
 
             e_raw, grad = jax.value_and_grad(energy_scalar)(positions_jax)
+            e_raw = jnp.where(jnp.isfinite(e_raw), e_raw, 0.0)
+            grad = jnp.where(jnp.isfinite(grad), grad, 0.0)
             e_kcal = float(jax.device_get(e_raw)) * self.ev2kcal
             forces = -np.asarray(jax.device_get(grad), dtype=np.float64) * self.ev2kcal
         if mlpot_profiling_enabled():
