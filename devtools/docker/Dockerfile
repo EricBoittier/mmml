@@ -55,11 +55,11 @@ WORKDIR /workspace/mmml
 FROM base AS dependencies
 
 # Copy only dependency files first for better caching
-COPY pyproject.toml uv.lock ./
+COPY pyproject.toml ./
 COPY setup ./setup
 
-# Install dependencies without the project itself
-RUN uv sync --frozen --no-install-project
+# Install dependencies without the project itself (lock generated in-image; not in git)
+RUN uv lock && uv sync --no-install-project
 
 # ============================================================================
 # Stage 3: Final runtime image (CPU)
@@ -70,7 +70,7 @@ FROM dependencies AS runtime-cpu
 COPY . .
 
 # Install the project itself
-RUN uv sync --frozen
+RUN uv sync
 
 # Set up environment variables
 ENV VIRTUAL_ENV=/workspace/mmml/.venv \
@@ -134,17 +134,17 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
 WORKDIR /workspace/mmml
 
 # Copy dependency files
-COPY pyproject.toml uv.lock ./
+COPY pyproject.toml ./
 COPY setup ./setup
 
 # Install dependencies with GPU extras
-RUN uv sync --frozen --no-install-project --extra gpu
+RUN uv lock && uv sync --no-install-project --extra gpu
 
 # Copy the entire project
 COPY . .
 
 # Install the project with GPU extras
-RUN uv sync --frozen --extra gpu
+RUN uv sync --extra gpu
 
 # Set up environment variables
 ENV VIRTUAL_ENV=/workspace/mmml/.venv \
@@ -213,17 +213,17 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
 WORKDIR /workspace/mmml
 
 # Copy dependency files
-COPY pyproject.toml uv.lock ./
+COPY pyproject.toml ./
 COPY setup ./setup
 
 # Install dependencies with CUDA 13 GPU extras
-RUN uv sync --frozen --no-install-project --extra gpu-cuda13
+RUN uv lock && uv sync --no-install-project --extra gpu
 
 # Copy the entire project
 COPY . .
 
 # Install the project with CUDA 13 GPU extras
-RUN uv sync --frozen --extra gpu-cuda13
+RUN uv sync --extra gpu
 
 # Set up environment variables
 ENV VIRTUAL_ENV=/workspace/mmml/.venv \

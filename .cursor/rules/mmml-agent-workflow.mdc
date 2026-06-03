@@ -8,7 +8,8 @@ alwaysApply: true
 ## Do not run simulations or full MD in the agent
 
 - Do **not** run `mmml md-system`, PyCHARMM dynamics, Packmol box builds, or other long / env-heavy jobs in the sandbox or on the user's machine unless they explicitly ask for a one-off command.
-- CHARMM, MPI-linked libs, checkpoints, and GPU JAX are not available in agent sessions; attempts waste time and fail on `uv.lock` / missing env.
+- CHARMM, MPI-linked libs, checkpoints, and GPU JAX are not available in agent sessions; attempts waste time and fail on missing env.
+- `uv.lock` is gitignored (not committed). After `uv sync`, ignore local lock churn; on older clones still tracking it, run `scripts/git-skip-uv-lock.sh`.
 - Prefer **unit tests** (`pytest tests/unit/...`) and **documented workflows** the user runs locally.
 
 ## Test-driven development

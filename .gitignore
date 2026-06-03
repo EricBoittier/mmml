@@ -218,5 +218,6 @@ examples/general/abdimers/AB_ACO_DCM_pbc_minimized_16:17:48.pdb
 .cursor/plans/jax_md_nl_and_npt_combined.plan.md
 mmml/generate/packmol/packmol
 mmml/generate/packmol/packmol
+# Local lock from `uv sync`; do not commit (regenerate per machine / CI).
 uv.lock
 pdb/init-packmol-sphere.pdb_FORCED
