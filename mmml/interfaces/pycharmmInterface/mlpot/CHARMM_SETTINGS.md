@@ -91,6 +91,17 @@ Neighbor lists for large PBC systems use an outer cutoff **`mm_switch_on + mm_sw
 
 Before each dynamics stage, an existing stage DCD (e.g. `heat_dcm_2.dcd`) is **removed** by default so the new run does not append to old frames. Use `--rescue-old-dcd` to archive to `*.rescued.N.dcd` instead.
 
+## Post-dynamics validation (staged workflow)
+
+After each dynamics stage, the workflow checks the stage restart step and DCD frame count. If CHARMM stops early (common: **`echeck`** exceeded when an H stretches off or energy spikes during heating), the run **fails** instead of printing `Staged workflow OK`.
+
+| Symptom | Likely cause |
+|---------|----------------|
+| 1 DCD frame, restart step ~700, asked for 40k steps | `echeck` abort (~0.18 ps of 10 ps heat) |
+| H “falls off” in VMD | No SHAKE; ML USER-only dynamics; bad heat / echeck stop |
+
+Use `--allow-incomplete-dynamics` only for debugging. For heat tests on small clusters, consider `--no-echeck` or a larger `--echeck` after confirming minimization is sound.
+
 ## Related flags (not print, but often paired)
 
 | Flag | Purpose |

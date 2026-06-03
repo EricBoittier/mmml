@@ -346,6 +346,30 @@ def _reset_stage_trajectory(
     print(f"Removed prior DCD: {dcd_path}", flush=True)
 
 
+def _validate_dyn_stage_completion(
+    args: argparse.Namespace,
+    *,
+    stage: str,
+    nstep: int,
+    nsavc: int,
+    io: CharmmTrajectoryFiles,
+) -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        assert_stage_dynamics_completed,
+    )
+
+    restart_path = Path(io.restart_write) if io.restart_write else None
+    dcd_path = Path(io.trajectory) if io.trajectory else None
+    assert_stage_dynamics_completed(
+        stage=stage,
+        expected_nstep=nstep,
+        nsavc=nsavc,
+        dcd_path=dcd_path,
+        restart_path=restart_path,
+        allow_incomplete=bool(getattr(args, "allow_incomplete_dynamics", False)),
+    )
+
+
 def _trajectory_outputs(path: Path | None) -> list[Path]:
     """Existing non-empty DCD output for a stage."""
     if path is None:
@@ -682,6 +706,13 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         mlpot_ctx=ctx,
                         rng_base=getattr(args, "seed", None),
                     )
+                    _validate_dyn_stage_completion(
+                        args,
+                        stage="equi",
+                        nstep=nstep,
+                        nsavc=dcd_nsavc,
+                        io=seg_io,
+                    )
                     memory_handoff_next = maybe_run_bonded_mm_mini_after_stage(
                         ctx,
                         args,
@@ -778,6 +809,13 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         mlpot_ctx=ctx,
                         rng_base=getattr(args, "seed", None),
                     )
+                    _validate_dyn_stage_completion(
+                        args,
+                        stage="prod",
+                        nstep=nstep,
+                        nsavc=dcd_nsavc,
+                        io=seg_io,
+                    )
                     memory_handoff_next = maybe_run_bonded_mm_mini_after_stage(
                         ctx,
                         args,
@@ -872,6 +910,13 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 overlap_context=stage.upper(),
                 mlpot_ctx=ctx,
                 rng_base=getattr(args, "seed", None),
+            )
+            _validate_dyn_stage_completion(
+                args,
+                stage=stage,
+                nstep=nstep,
+                nsavc=dcd_nsavc,
+                io=io,
             )
             memory_handoff_next = maybe_run_bonded_mm_mini_after_stage(
                 ctx,
