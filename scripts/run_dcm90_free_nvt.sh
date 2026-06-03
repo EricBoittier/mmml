@@ -44,7 +44,7 @@ uv run mmml md-system \
   --composition "$COMPOSITION" \
   --output-dir "artifacts/pycharmm_mlpot/$RUN_NAME" \
   --job-name "$RUN_NAME" \
-  --md-stages mini,heat,equi \
+  --md-stages mini,heat \
   --free-space \
   --packmol-sphere \
   --packmol-radius "$PACKMOL_R" \
@@ -54,10 +54,10 @@ uv run mmml md-system \
   --temperature 10 \
   --dt-fs 0.25 \
   --echeck 10000000 \
-  --ps-heat 1 \
+  --ps-heat 10 \
   --ps-equi 50 \
   --dcd-nsavc 40 \
-  --dyn-nprint 40 \
+  --dyn-nprint 40 --mm-switch-width 3.0 \
   --ml-batch-size 2256 \
   --skip-energy-show \
   --seed 123 \

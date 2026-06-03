@@ -54,13 +54,14 @@ def test_build_decomposed_mlpot_passes_cell_to_setup_calculator():
 def test_build_decomposed_mlpot_vacuum_cell_false():
     z = np.array([6, 1, 1, 1, 6, 1, 1, 1], dtype=int)
     per = [4, 4]
+    get_update_fn = MagicMock()
     factory = MagicMock(return_value=(None, MagicMock(), None))
     with patch(
         "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.setup_calculator",
         return_value=factory,
     ) as mock_setup, patch(
         "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.unpack_factory_result",
-        return_value=(None, MagicMock(), None),
+        return_value=(None, MagicMock(), get_update_fn),
     ), patch(
         "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
         return_value=MagicMock(__enter__=MagicMock(), __exit__=MagicMock()),
@@ -73,6 +74,7 @@ def test_build_decomposed_mlpot_vacuum_cell_false():
         )
     assert mock_setup.call_args.kwargs["cell"] is False
     assert model._cell is False
+    assert model._get_update_fn is get_update_fn
 
 
 def test_register_mlpot_context_forwards_cell():
@@ -166,6 +168,39 @@ def test_warmup_decomposed_mlpot_do_mm_uses_get_update_fn():
 
     get_update_fn.assert_called_once()
     mock_warmup.assert_not_called()
+
+
+def test_decomposed_calculator_initializes_mm_before_spherical_fn():
+    z = np.zeros(8, dtype=int)
+    get_update_fn = MagicMock()
+    calc = DecomposedMlpotCalculator(
+        MagicMock(),
+        CutoffParameters(),
+        2,
+        z,
+        do_mm=True,
+        get_update_fn=get_update_fn,
+    )
+    mock_out = MagicMock(energy=0.0, forces=np.zeros((8, 3)))
+    calc.spherical_fn = MagicMock(return_value=mock_out)
+    n = 8
+    x = np.zeros(n, dtype=np.float64)
+    y = np.zeros(n, dtype=np.float64)
+    zc = np.zeros(n, dtype=np.float64)
+    dx = np.zeros(n, dtype=np.float64)
+    dy = np.zeros(n, dtype=np.float64)
+    dz = np.zeros(n, dtype=np.float64)
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
+        return_value=MagicMock(__enter__=MagicMock(), __exit__=MagicMock()),
+    ):
+        calc.calculate_charmm(
+            n, 0, 0, None, x, y, zc, dx, dy, dz, 0, 0, None, None, None, None, None, None, None
+        )
+
+    get_update_fn.assert_called_once()
+    assert calc.spherical_fn.call_count == 1
 
 
 def test_charmm_ctypes_scalar_accepts_int_and_ctypes_wrapper():
