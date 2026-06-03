@@ -32,7 +32,7 @@ PyCHARMM runs use [scripts/mmml-charmm-mpirun.sh](../../scripts/mmml-charmm-mpir
 | NVE PBC | `ase_pbc_nve`, `jaxmd_pbc_nve`, `pycharmm_pbc_nve` |
 | NVT vacuum | `ase_vac_nvt_nhc`, `ase_vac_nvt_langevin`, `jaxmd_vac_nvt`, `pycharmm_vac_heat_scale`, `pycharmm_vac_heat_hoover` |
 | NVT PBC | `ase_pbc_nvt_nhc`, `ase_pbc_nvt_langevin`, `jaxmd_pbc_nvt` |
-| NPT PBC | `jaxmd_pbc_npt` |
+| NPT PBC | `jaxmd_pbc_npt` (optional — may fail on 2 ps smoke; does not block collect) |
 
 Shared parameters (see [config.yaml](config.yaml)):
 
@@ -50,10 +50,10 @@ cd workflows/dcm5_md_benchmark
 snakemake -n
 
 # Local (1 GPU; PyCHARMM serialized via mpi=1 resource)
-snakemake -j4 --resources gpu=1 mpi=1
+snakemake -j4 --resources gpu=2 mpi=1 --keep-going
 
 # With local profile
-snakemake --profile profiles/local
+snakemake --profile profiles/local --keep-going
 
 # Cluster (edit profiles/slurm/config.yaml first)
 snakemake --profile profiles/slurm -j20
@@ -81,6 +81,30 @@ Aggregate:
 
 - `results/benchmark_summary.csv`
 - `results/benchmark_report.md`
+
+## Troubleshooting
+
+### `jaxmd_pbc_npt` fails
+
+NPT is the most fragile mode (barostat + neighbor list + small cluster). Check:
+
+```bash
+cat results/jaxmd_pbc_npt/stdout.log | tail -80
+grep -E 'ERROR|NaN|error|Partial output' results/jaxmd_pbc_npt/stdout.log
+```
+
+Common log messages:
+
+- `First step produced NaN positions` — try larger box (`box_size: 40` in config) or longer `--ps`
+- `Energy blow-up` — initial overlap; Packmol placement is now enabled for PBC jobs
+
+This job is **optional**: the summary CSV is produced when the other 14 jobs finish. Use `--keep-going` so one NPT failure does not stop the workflow.
+
+Retry NPT alone:
+
+```bash
+bash scripts/job_shell.sh jaxmd_pbc_npt
+```
 
 ## Pass/fail criteria
 

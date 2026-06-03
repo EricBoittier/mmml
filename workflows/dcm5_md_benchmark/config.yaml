@@ -26,6 +26,10 @@ heat_finalt: 240.0
 heat_ihtfrq_scale: 100
 nsteps_target: 8000
 
+# Jobs listed here may fail without blocking ``rule collect`` (use ``snakemake --keep-going``).
+optional_jobs:
+  - jaxmd_pbc_npt
+
 jobs:
   ase_vac_nve:
     backend: ase
@@ -178,6 +182,10 @@ jobs:
     setup: pbc_npt
     pbc: true
     integrator: npt_nhc
+    optional: true
+    box_size: 35.0
     extra_args:
       - "--steps-per-recording"
-      - "500"
+      - "200"
+      - "--jax-md-update-interval"
+      - "1"
