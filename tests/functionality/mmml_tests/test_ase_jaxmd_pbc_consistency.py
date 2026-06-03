@@ -817,6 +817,8 @@ def test_ase_calculator_passes_cell_box_to_mm_path():
     box = np.array([cell_length, cell_length, cell_length], dtype=np.float64)
     box_jax = jnp.array(box, dtype=jnp.float32)
     update_fn = get_update_fn(r, cutoff_params)
+    if update_fn is None:
+        pytest.skip("jax-md neighbor update_fn not available (jax_md path not built)")
     pair_idx, pair_mask = update_fn(r, box=box)
 
     atoms = ase.Atoms(z, r, cell=_cell_matrix(cell_length), pbc=True)

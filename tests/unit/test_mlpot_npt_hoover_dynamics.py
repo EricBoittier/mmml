@@ -7,6 +7,7 @@ from pathlib import Path
 
 from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
     _apply_npt_cpt_kwargs,
+    build_heat_dynamics,
     build_cpt_equilibration_dynamics,
     build_cpt_production_dynamics,
     build_nvt_equilibration_dynamics,
@@ -25,6 +26,21 @@ def _script_string(**kwargs) -> str:
             opts.append(f"{k} {v} -")
     script = "dynamics " + " ".join(opts)
     return script.strip(" -").lower()
+
+
+def test_heat_uses_reference_ramp_without_equilibration_rescale():
+    kw = build_heat_dynamics(temp=300.0)
+
+    assert kw["ihtfrq"] == 10
+    assert kw["TEMINC"] == 5
+    assert kw["ieqfrq"] == 0
+    assert kw["iasors"] == 1
+    assert kw["iasvel"] == 1
+    assert kw["iscvel"] == 0
+    assert kw["ichecw"] == 0
+    assert kw["firstt"] == 60.0
+    assert kw["finalt"] == 300.0
+    assert kw["tbath"] == 300.0
 
 
 def test_equi_hoover_default_uses_mass_formula_and_disables_rescaling():
