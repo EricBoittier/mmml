@@ -17,6 +17,16 @@ class IntermonomerOverlap:
     distance_A: float
 
 
+@dataclass(frozen=True)
+class IntramonomerCloseContact:
+    """Closest nonbonded atom-atom contact within one monomer."""
+
+    monomer: int
+    atom_i: int
+    atom_j: int
+    distance_A: float
+
+
 def _cell_matrix(cell: Any | None) -> np.ndarray | None:
     if cell is None:
         return None
@@ -189,6 +199,117 @@ def assert_no_intermonomer_atom_overlap(
             f"{context}: inter-monomer atom overlap detected: "
             f"monomers {violation.monomer_i}/{violation.monomer_j}, "
             f"atoms {violation.atom_i}/{violation.atom_j}, distance={best_dist:.4f} A "
-            f"< min_distance={threshold:.4f} A"
+        )
+    return best_dist
+
+
+def normalize_atom_pair(i: int, j: int) -> tuple[int, int]:
+    """Return ``(min, max)`` for an unordered atom pair."""
+    a, b = int(i), int(j)
+    return (a, b) if a < b else (b, a)
+
+
+def build_bond_exclusion_pairs(
+    ib: Any,
+    jb: Any,
+    *,
+    exclude_1_3: bool = True,
+) -> frozenset[tuple[int, int]]:
+    """Return 1–2 (and optionally 1–3) atom pairs to skip in close-contact scans.
+
+    ``ib`` / ``jb`` follow CHARMM PSF convention (1-based atom indices).
+    """
+    bonds: set[tuple[int, int]] = set()
+    neighbors: dict[int, set[int]] = {}
+    for i_raw, j_raw in zip(ib, jb):
+        a, b = int(i_raw) - 1, int(j_raw) - 1
+        if a < 0 or b < 0:
+            continue
+        pair = normalize_atom_pair(a, b)
+        bonds.add(pair)
+        neighbors.setdefault(pair[0], set()).add(pair[1])
+        neighbors.setdefault(pair[1], set()).add(pair[0])
+
+    excluded = set(bonds)
+    if exclude_1_3:
+        for a, b in bonds:
+            for c in neighbors.get(a, ()):
+                if c != b:
+                    excluded.add(normalize_atom_pair(b, c))
+            for c in neighbors.get(b, ()):
+                if c != a:
+                    excluded.add(normalize_atom_pair(a, c))
+    return frozenset(excluded)
+
+
+def find_worst_intramonomer_close_contact(
+    positions: np.ndarray,
+    monomer_offsets: np.ndarray,
+    excluded_pairs: frozenset[tuple[int, int]] | set[tuple[int, int]],
+    *,
+    cell: Any | None = None,
+) -> tuple[float, IntramonomerCloseContact | None]:
+    """Return the minimum non-excluded atom distance inside any monomer."""
+    pos = np.asarray(positions, dtype=float)
+    offsets = np.asarray(monomer_offsets, dtype=int)
+    n_monomers = int(len(offsets) - 1)
+    if n_monomers <= 0:
+        return float("inf"), None
+
+    cell_mat = _cell_matrix(cell)
+    excluded = frozenset(excluded_pairs)
+    best_dist = float("inf")
+    best: IntramonomerCloseContact | None = None
+
+    for mi in range(n_monomers):
+        si, ei = int(offsets[mi]), int(offsets[mi + 1])
+        n_local = ei - si
+        if n_local < 2:
+            continue
+        block = pos[si:ei]
+        for local_i in range(n_local):
+            for local_j in range(local_i + 1, n_local):
+                gi = si + local_i
+                gj = si + local_j
+                if normalize_atom_pair(gi, gj) in excluded:
+                    continue
+                disp = _mic_displacement(block[local_i], block[local_j], cell_mat)
+                dist = float(np.linalg.norm(disp))
+                if dist < best_dist:
+                    best_dist = dist
+                    best = IntramonomerCloseContact(
+                        monomer=mi,
+                        atom_i=gi,
+                        atom_j=gj,
+                        distance_A=dist,
+                    )
+    return best_dist, best
+
+
+def assert_no_intramonomer_close_contact(
+    positions: np.ndarray,
+    monomer_offsets: np.ndarray,
+    excluded_pairs: frozenset[tuple[int, int]] | set[tuple[int, int]],
+    *,
+    min_distance: float = 1.0,
+    cell: Any | None = None,
+    context: str = "geometry",
+) -> float:
+    """Raise if any monomer has a non-excluded atom pair closer than ``min_distance``."""
+    threshold = float(min_distance)
+    if threshold <= 0.0:
+        return float("inf")
+
+    best_dist, violation = find_worst_intramonomer_close_contact(
+        positions,
+        monomer_offsets,
+        excluded_pairs,
+        cell=cell,
+    )
+    if violation is not None and best_dist < threshold:
+        raise RuntimeError(
+            f"{context}: intra-monomer close contact: "
+            f"monomer {violation.monomer}, atoms {violation.atom_i}/{violation.atom_j}, "
+            f"distance={best_dist:.4f} A < min_distance={threshold:.4f} A"
         )
     return best_dist
