@@ -65,6 +65,7 @@ def test_spookynetjax_calculator_smoke(tmp_path: Path):
     from ase.io import read
     from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
     from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+    from mmml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
 
     atoms_in = read(str(pdb_path))
     R = np.asarray(atoms_in.get_positions()[:20])
@@ -93,11 +94,13 @@ def test_spookynetjax_calculator_smoke(tmp_path: Path):
         model_restart_path=ckpt_for_test,
         MAX_ATOMS_PER_SYSTEM=20,
     )
-    calc, _ = factory(
-        atomic_numbers=Z,
-        atomic_positions=R,
-        n_monomers=2,
-        cutoff_params=CutoffParameters(),
+    calc, _, _ = unpack_factory_result(
+        factory(
+            atomic_numbers=Z,
+            atomic_positions=R,
+            n_monomers=2,
+            cutoff_params=CutoffParameters(),
+        )
     )
     atoms = ase.Atoms(Z, R)
     atoms.calc = calc

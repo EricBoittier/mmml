@@ -217,8 +217,12 @@ def build_decomposed_mlpot_model(
     )
 
     n_dimers_total = int(n_monomers) * (int(n_monomers) - 1) // 2
+    free_space = cell is False or cell is None
     dimer_cap = resolve_max_active_dimers(
-        int(n_monomers), n_dimers_total, ml_max_active_dimers
+        int(n_monomers),
+        n_dimers_total,
+        ml_max_active_dimers,
+        free_space=free_space,
     )
     from mmml.interfaces.pycharmmInterface.jax_device_policy import mlpot_local_gpu_count
 
@@ -242,9 +246,10 @@ def build_decomposed_mlpot_model(
             flush=True,
         )
     if verbose:
+        cap_note = "free-space all-pairs safe; " if free_space else ""
         print(
             f"Decomposed MLpot: max_active_dimers={dimer_cap} "
-            f"(PhysNet batch ≤ {int(n_monomers) + dimer_cap} systems/step)",
+            f"({cap_note}PhysNet batch ≤ {int(n_monomers) + dimer_cap} systems/step)",
             flush=True,
         )
     if verbose and cell:
