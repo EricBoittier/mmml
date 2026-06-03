@@ -111,6 +111,19 @@ def _bonded_strain_margins(args: argparse.Namespace) -> tuple[float, float, floa
     return grms_margin, internal_margin, angl_margin
 
 
+def _mlpot_covers_all_atoms(ctx: MlpotContext) -> bool:
+    """True when CHARMM MM terms cannot be used as a recovery potential."""
+    try:
+        import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+        import pycharmm
+
+        n_atoms = int(pycharmm.coor.get_natom())
+        n_ml = len(ctx.ml_selection.get_atom_indexes()) if ctx.ml_selection is not None else 0
+        return n_atoms > 0 and n_ml >= n_atoms
+    except Exception:
+        return False
+
+
 def _recovery_reasons(
     current: MmStrainBaseline,
     baseline: MmStrainBaseline,
@@ -244,6 +257,15 @@ def maybe_run_bonded_mm_mini_after_stage(
         if not args.quiet:
             print(
                 "bonded-MM-mini: no baseline strain recorded; skipping check",
+                flush=True,
+            )
+        return False
+
+    if _mlpot_covers_all_atoms(ctx):
+        if not args.quiet:
+            print(
+                f"bonded-MM-mini: skipping after {stage} for all-ML system; "
+                "CHARMM bonded terms are unavailable after MLpot registration",
                 flush=True,
             )
         return False
