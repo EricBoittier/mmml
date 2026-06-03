@@ -1218,6 +1218,38 @@ def add_staged_md_args(parser: argparse.ArgumentParser) -> None:
         default=1,
         help="Split production into chained restart segments (default: 1)",
     )
+    pretreat = parser.add_argument_group(
+        "CHARMM MM pretreat (CGENFF before MLpot registration)"
+    )
+    pretreat.add_argument(
+        "--charmm-mm-pretreat",
+        action="store_true",
+        help=(
+            "Before MLpot: CGENFF SD/ABNR minimize + CHARMM heating (no USER/ML). "
+            "Coordinates feed MLpot mini/heat/NVE."
+        ),
+    )
+    pretreat.add_argument(
+        "--charmm-mm-pretreat-heat-nstep",
+        type=int,
+        default=2000,
+        metavar="N",
+        help="Integration steps for pretreat CHARMM heat (default: 2000)",
+    )
+    pretreat.add_argument(
+        "--charmm-mm-pretreat-mini-sd",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Pretreat CHARMM SD steps (default: --charmm-sd-steps)",
+    )
+    pretreat.add_argument(
+        "--charmm-mm-pretreat-mini-abnr",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Pretreat CHARMM ABNR steps (default: --charmm-abnr-steps)",
+    )
     add_bonded_mm_mini_args(parser)
     group.add_argument(
         "--restart-from",

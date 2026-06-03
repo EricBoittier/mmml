@@ -69,6 +69,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import setup_charmm_environ
 from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import (
     _charmm_pre_minimize_before_mlpot,
     _register_mlpot_context,
+    run_charmm_mm_pretreat_before_mlpot,
     sync_mlpot_pbc_cell_from_charmm,
 )
 from mmml.interfaces.pycharmmInterface.mlpot.setup import (
@@ -106,6 +107,8 @@ def _artifact_paths(out_dir: Path, tag: str) -> dict[str, Path]:
         "mini_psf": out_dir / f"mini_full_mlpot_{tag}.psf",
         "mini_charmm_dcd": out_dir / f"mini_charmm_mm_{tag}.dcd",
         "mini_dcd": out_dir / f"mini_full_mlpot_{tag}.dcd",
+        "charmm_mm_heat_res": out_dir / f"charmm_mm_heat_{tag}.res",
+        "charmm_mm_heat_dcd": out_dir / f"charmm_mm_heat_{tag}.dcd",
         "heat_res": out_dir / f"heat_{tag}.res",
         "heat_dcd": out_dir / f"heat_{tag}.dcd",
         "nve_res": out_dir / f"nve_{tag}.res",
@@ -581,7 +584,23 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         vmd_topo_psf = vmd_files["psf"]
     recovery_topology_psf = vmd_topo_psf if Path(vmd_topo_psf).is_file() else None
 
-    if "mini" in stages and not getattr(args, "skip_cluster_build", False):
+    pretreat_mm = bool(getattr(args, "charmm_mm_pretreat", False))
+    if pretreat_mm and not getattr(args, "skip_cluster_build", False):
+        r = run_charmm_mm_pretreat_before_mlpot(
+            args,
+            paths=paths,
+            timestep_ps=timestep_ps,
+            use_pbc=use_pbc,
+            temp=temp,
+            echeck=echeck,
+            mini_nprint=mini_nprint,
+            reference_positions=r,
+        )
+        sync_charmm_positions(r)
+        if not use_pbc:
+            apply_flat_bottom_from_args(args)
+            r = get_charmm_positions_array()
+    elif "mini" in stages and not getattr(args, "skip_cluster_build", False):
         save_mini = bool(getattr(args, "save", True))
         mini_dcd_nsavc = resolve_dcd_nsavc(
             dcd_nsavc=args.dcd_nsavc, nstep=mini_nstep
@@ -601,7 +620,11 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             r = get_charmm_positions_array()
 
     baseline = None
-    if getattr(args, "bonded_mm_mini", False) and getattr(args, "charmm_pre_minimize", True):
+    if (
+        getattr(args, "bonded_mm_mini", False)
+        and getattr(args, "charmm_pre_minimize", True)
+        and not pretreat_mm
+    ):
         baseline = record_mm_baseline_strain(verbose=not args.quiet)
         assert_pre_min_bonded_geometry(args, baseline=baseline)
 

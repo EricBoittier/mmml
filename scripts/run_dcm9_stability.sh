@@ -25,6 +25,8 @@
 # Examples:
 #   MMML_CKPT=$HOME/mmml_tutorial/acodcm/ckpts/dcm1-... ./scripts/run_dcm9_stability.sh
 #   PS_HEAT=20 MD_STAGES=mini,heat,equi ./scripts/run_dcm9_stability.sh
+#   CHARMM_MM_PRETREAT=1 MD_STAGES=mini,heat ./scripts/run_dcm9_stability.sh
+#     # CGENFF min + 2000-step CHARMM heat before MLpot (outputs charmm_mm_heat_dcm_9.*)
 #   ENABLE_FB=1 FB_RAD=14 ./scripts/run_dcm9_stability.sh
 #   ./scripts/run_dcm9_stability.sh --ps-heat 30 --heat-ihtfrq 100
 #   # softer ramp (defaults): 0 K -> 240 K over 20 ps, scale at ihtfrq
@@ -75,6 +77,14 @@ MINI_NSTEP="${MINI_NSTEP:-150}"
 DYN_NPRINT="${DYN_NPRINT:-500}"
 DCD_NSAVC="${DCD_NSAVC:-500}"
 
+PRETREAT_ARGS=()
+if [[ "${CHARMM_MM_PRETREAT:-0}" == "1" ]]; then
+  PRETREAT_ARGS=(
+    --charmm-mm-pretreat
+    --charmm-mm-pretreat-heat-nstep "${CHARMM_MM_PRETREAT_HEAT_NSTEP:-2000}"
+  )
+fi
+
 MPIRUN="${MMML_MPIRUN_WRAPPER:-$REPO_ROOT/scripts/mmml-charmm-mpirun.sh}"
 
 FB_ARGS=()
@@ -118,5 +128,6 @@ exec "$MPIRUN" md-system \
   --ml-gpu-count 1 \
   --skip-energy-show \
   --seed 123 \
+  "${PRETREAT_ARGS[@]}" \
   "${FB_ARGS[@]}" \
   "$@"

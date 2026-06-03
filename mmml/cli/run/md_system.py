@@ -494,6 +494,35 @@ def parse_args() -> argparse.Namespace:
         help="pycharmm: heating length in ps (default: 10)",
     )
     parser.add_argument(
+        "--charmm-mm-pretreat",
+        action="store_true",
+        help=(
+            "pycharmm: CGENFF minimize + CHARMM heat before MLpot (no PhysNet); "
+            "see --charmm-mm-pretreat-heat-nstep"
+        ),
+    )
+    parser.add_argument(
+        "--charmm-mm-pretreat-heat-nstep",
+        type=int,
+        default=2000,
+        metavar="N",
+        help="pycharmm: integration steps for pretreat CHARMM heat (default: 2000)",
+    )
+    parser.add_argument(
+        "--charmm-mm-pretreat-mini-sd",
+        type=int,
+        default=None,
+        metavar="N",
+        help="pycharmm: pretreat CHARMM SD steps (default: --charmm-sd-steps)",
+    )
+    parser.add_argument(
+        "--charmm-mm-pretreat-mini-abnr",
+        type=int,
+        default=None,
+        metavar="N",
+        help="pycharmm: pretreat CHARMM ABNR steps (default: --charmm-abnr-steps)",
+    )
+    parser.add_argument(
         "--ps-nve",
         type=float,
         default=None,
@@ -1247,6 +1276,23 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     cmd.extend(["--charmm-abnr-steps", str(args.charmm_abnr_steps)])
     cmd.extend(["--charmm-tolenr", str(args.charmm_tolenr)])
     cmd.extend(["--charmm-tolgrd", str(args.charmm_tolgrd)])
+    if getattr(args, "charmm_mm_pretreat", False):
+        cmd.append("--charmm-mm-pretreat")
+    _append_optional(
+        cmd,
+        "--charmm-mm-pretreat-heat-nstep",
+        getattr(args, "charmm_mm_pretreat_heat_nstep", None),
+    )
+    _append_optional(
+        cmd,
+        "--charmm-mm-pretreat-mini-sd",
+        getattr(args, "charmm_mm_pretreat_mini_sd", None),
+    )
+    _append_optional(
+        cmd,
+        "--charmm-mm-pretreat-mini-abnr",
+        getattr(args, "charmm_mm_pretreat_mini_abnr", None),
+    )
     if getattr(args, "ml_batch_size", None) is not None:
         cmd.extend(["--ml-batch-size", str(args.ml_batch_size)])
     if getattr(args, "ml_gpu_count", None) is not None:
