@@ -1,0 +1,119 @@
+# DCM:5 cross-backend MD benchmark
+
+Reproducible **2 ps** smoke benchmark on **DCM:5** comparing ASE, JAX-MD, and PyCHARMM
+(`mmml md-system`) across vacuum and PBC integrator modes.
+
+## Prerequisites
+
+- MMML env with GPU JAX (`uv sync --extra gpu` on cluster nodes)
+- DCM PhysNet checkpoint:
+
+```bash
+export MMML_CKPT=/path/to/dcm1-.../ckpts/dcm1-...
+```
+
+- **PyCHARMM jobs**: OpenMPI-linked libcharmm (use bundled wrapper)
+- **Snakemake** (`pip install snakemake` or cluster module)
+- `packmol` on PATH (first vacuum cluster build)
+
+PyCHARMM runs use [scripts/mmml-charmm-mpirun.sh](../../scripts/mmml-charmm-mpirun.sh) (1 MPI rank).
+
+## Job matrix (15 jobs)
+
+| Category | Jobs |
+|----------|------|
+| NVE vacuum | `ase_vac_nve`, `jaxmd_vac_nve`, `pycharmm_vac_nve` |
+| NVE PBC | `ase_pbc_nve`, `jaxmd_pbc_nve`, `pycharmm_pbc_nve` |
+| NVT vacuum | `ase_vac_nvt_nhc`, `ase_vac_nvt_langevin`, `jaxmd_vac_nvt`, `pycharmm_vac_heat_scale`, `pycharmm_vac_heat_hoover` |
+| NVT PBC | `ase_pbc_nvt_nhc`, `ase_pbc_nvt_langevin`, `jaxmd_pbc_nvt` |
+| NPT PBC | `jaxmd_pbc_npt` |
+
+Shared parameters (see [config.yaml](config.yaml)):
+
+- `DCM:5`, `--seed 123`, `--dt-fs 0.25`, **2.0 ps** (8000 steps)
+- Vacuum Packmol sphere `R = 6.9 Å`; PBC `--box-size 25`
+- PyCHARMM heat: 0 → 240 K (`scale` vs `hoover`)
+
+## Run
+
+```bash
+export MMML_CKPT=/path/to/dcm1-ckpt
+cd workflows/dcm5_md_benchmark
+
+# Dry-run
+snakemake -n
+
+# Local (1 GPU; PyCHARMM serialized via mpi=1 resource)
+snakemake -j4 --resources gpu=1 mpi=1
+
+# With local profile
+snakemake --profile profiles/local
+
+# Cluster (edit profiles/slurm/config.yaml first)
+snakemake --profile profiles/slurm -j20
+```
+
+Run a single job:
+
+```bash
+bash scripts/job_shell.sh pycharmm_vac_heat_hoover
+# or
+python3 scripts/run_job.py ase_vac_nve
+```
+
+Collect only (after jobs finished):
+
+```bash
+python3 scripts/collect_benchmark.py
+```
+
+## Outputs
+
+Per job: `results/<job_id>/stdout.log` plus backend artifacts under the same directory.
+
+Aggregate:
+
+- `results/benchmark_summary.csv`
+- `results/benchmark_report.md`
+
+## Pass/fail criteria
+
+| Backend | Pass |
+|---------|------|
+| ASE | `suite_summary.json` run entry with `log_samples > 0` |
+| JAX-MD | `suite_summary_jaxmd.json` → `status == complete`, `nsteps_completed ≥ 7600` |
+| PyCHARMM | Log contains `HEAT complete` / `NVE complete`; `restart_step ≥ 7600`; no early echeck abort |
+
+NVT: report `temp_mean_K` within ±15% of 300 K (ASE collector warns otherwise).
+
+NVE: report `etot_drift_eV` (ASE) in CSV notes.
+
+## Log checks (PyCHARMM heat)
+
+```bash
+grep -E 'HEAT Hoover|HEAT complete|IHTFRQ|VELOCITIES HAVE BEEN SCALED' results/pycharmm_vac_heat_hoover/stdout.log
+```
+
+- **Hoover**: `IHTFRQ = 0`, no repeated velocity scaling
+- **Scale**: `VELOCITIES HAVE BEEN SCALED` every 100 steps
+
+## Unit tests (no CHARMM)
+
+```bash
+pytest tests/unit/test_dcm5_benchmark_config.py \
+       tests/unit/test_collect_benchmark.py -v
+```
+
+## Optional longer tier
+
+Edit [config.yaml](config.yaml):
+
+- `--ps-heat 10–20`, `--ps-nve 5`
+- `--mini-nstep 150`
+- `--dcd-nsavc 250` for denser trajectories
+
+## Notes
+
+- ASE/JAX-MD use BFGS pre-MD minimization; PyCHARMM uses MLpot SD — pretreat paths differ by design.
+- Trajectory RMSD cross-backend comparison is out of scope for this smoke suite.
+- NPT is JAX-MD only (`pbc_npt`); ASE has no NPT integrator in `md_pbc_suite`.

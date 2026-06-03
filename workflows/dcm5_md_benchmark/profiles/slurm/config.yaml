@@ -1,0 +1,16 @@
+# Slurm profile template for DCM:5 benchmark (fill cluster-specific fields).
+executor: slurm
+jobs: 20
+default-resources:
+  - gpu=1
+  - mpi=1
+  - runtime=30
+  - mem_mb=16000
+  - slurm_partition=gpu
+  - slurm_gres=gpu:1
+  - slurm_time=00:45:00
+
+set-resources:
+  run_benchmark:
+    slurm_extra: >-
+      --cpus-per-task=4
