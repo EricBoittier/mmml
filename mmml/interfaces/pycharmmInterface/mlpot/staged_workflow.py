@@ -302,6 +302,78 @@ def _build_stage_dynamics_kw(
     return kw
 
 
+def _configure_heat_dynamics_start(
+    kw: dict[str, Any],
+    io: CharmmTrajectoryFiles,
+    *,
+    coords_in_memory: bool,
+    restart_from_file: bool,
+    timestep_ps: float,
+    use_pbc: bool,
+    quiet: bool,
+) -> None:
+    """Ensure heat has Boltzmann velocities at ``FIRSTT`` (DCM2-style ``start``).
+
+    ``RESTART`` without ``START`` skips the initial assignment; mini restart files
+    often carry ~zero kinetic energy, so ``ihtfrq`` with ``iasvel=0`` leaves T≈0.
+    """
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        assign_velocities_at_temperature,
+    )
+
+    firstt = float(kw.get("firstt", kw.get("finalt", 300.0)))
+    kw["iasvel"] = 1
+    kw["iasors"] = 1
+
+    if coords_in_memory:
+        io.restart_read = None
+        kw["restart"] = False
+        kw["new"] = False
+        assign_velocities_at_temperature(
+            firstt,
+            timestep_ps=timestep_ps,
+            restart_path=None,
+            use_pbc=use_pbc,
+        )
+        kw["start"] = False
+        if not quiet:
+            print(
+                f"HEAT: Boltzmann velocities at FIRSTT={firstt:.1f} K "
+                "(in-memory coords after mini)",
+                flush=True,
+            )
+        return
+
+    if restart_from_file and io.restart_read is not None:
+        restart_path = io.restart_read
+        assign_velocities_at_temperature(
+            firstt,
+            timestep_ps=timestep_ps,
+            restart_path=restart_path,
+            use_pbc=use_pbc,
+        )
+        io.restart_read = None
+        kw["restart"] = False
+        kw["new"] = False
+        kw["start"] = False
+        if not quiet:
+            print(
+                f"HEAT: Boltzmann velocities at FIRSTT={firstt:.1f} K "
+                f"(coords from {restart_path})",
+                flush=True,
+            )
+        return
+
+    kw["restart"] = False
+    kw["new"] = False
+    kw["start"] = True
+    if not quiet:
+        print(
+            f"HEAT: dyna start with FIRSTT={firstt:.1f} K (cold start, no READYN)",
+            flush=True,
+        )
+
+
 def _overlap_for_stage(
     stage: MdStage,
     overlap_cfg: DynamicsOverlapConfig,
@@ -907,6 +979,16 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 quiet=bool(args.quiet),
             )
             apply_comp_velocity_policy(stage, kw, args)
+            if stage == "heat":
+                _configure_heat_dynamics_start(
+                    kw,
+                    io,
+                    coords_in_memory=use_memory or prev_restart_is_current_state,
+                    restart_from_file=restart and io.restart_read is not None,
+                    timestep_ps=timestep_ps,
+                    use_pbc=use_pbc,
+                    quiet=bool(args.quiet),
+                )
             run_dynamics_with_io(
                 kw,
                 io,
