@@ -52,7 +52,7 @@ uv run mmml md-system \
   --flat-bottom-radius "$FB_RAD" --dynamics-overlap-min-distance 0.4 \
   --flat-bottom-selection "TYPE C" \
   --flat-bottom-k 0.00001 \
-  --temperature 200.0 --bonded-mm-mini --bonded-mm-mini-after mini,heat --bonded-mm-mini-steps 500 \
+  --temperature 240.0 --bonded-mm-mini --bonded-mm-mini-after mini,heat --bonded-mm-mini-steps 500 \
   --dt-fs 0.25 \
   --ps-heat 100 \
   --dcd-nsavc 1000 \
