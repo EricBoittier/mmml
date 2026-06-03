@@ -1022,11 +1022,23 @@ def _overlap_chunk_io(
     return CharmmTrajectoryFiles(
         restart_read=rread,
         restart_write=rwri,
-        trajectory=None,
+        trajectory=_overlap_chunk_trajectory_path(io, chunk_index=chunk_index),
         restart_read_unit=io.restart_read_unit,
         restart_write_unit=io.restart_write_unit,
         trajectory_unit=io.trajectory_unit,
     )
+
+
+def _overlap_chunk_trajectory_path(
+    io: CharmmTrajectoryFiles,
+    *,
+    chunk_index: int,
+) -> Path | None:
+    """Indexed DCD path for one overlap chunk, preserving partial trajectories."""
+    if io.trajectory is None:
+        return None
+    trajectory = Path(io.trajectory)
+    return trajectory.with_name(f"{trajectory.stem}.overlap_{chunk_index:04d}{trajectory.suffix}")
 
 
 def effective_overlap_check_interval(
@@ -1323,10 +1335,7 @@ def run_dynamics_with_io(
     n_chunks = total_nstep // interval
     last_dyn: Any = None
     steps_done = 0
-    dcd_open: list[Any] = []
-    dcd_iokw: dict[str, int] = {}
-    if io is not None and io.trajectory is not None and n_chunks > 1:
-        dcd_open, dcd_iokw = io.open_trajectory_for_run()
+    completed = False
     try:
         for chunk_index in range(n_chunks):
             chunk_nstep = interval
@@ -1361,11 +1370,9 @@ def run_dynamics_with_io(
             if has_restart_read:
                 _prepare_overlap_chunk_after_restart(mlpot_ctx)
 
-            chunk_dcd_iokw = dcd_iokw if chunk_index == 0 else None
             last_dyn = _run_dynamics_chunk(
                 chunk_kw,
                 chunk_io,
-                extra_iokw=chunk_dcd_iokw,
                 rng_base=rng_base,
                 rng_salt=_rng_salt_for_dynamics(
                     overlap_context=overlap_context,
@@ -1380,10 +1387,16 @@ def run_dynamics_with_io(
                 step=steps_done,
                 mlpot_ctx=mlpot_ctx,
             )
+        completed = True
     finally:
-        for f in dcd_open:
-            f.close()
-        _cleanup_overlap_restart_slots(io)
+        if completed:
+            _cleanup_overlap_restart_slots(io)
+        elif io is not None and io.restart_write is not None:
+            print(
+                "overlap: preserving scratch restart files after failed overlap handling "
+                f"for {io.restart_write}",
+                flush=True,
+            )
     return last_dyn
 
 
