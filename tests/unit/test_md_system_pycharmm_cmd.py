@@ -102,6 +102,14 @@ def test_build_pycharmm_command_omits_residue_when_composition_set():
     assert "--constrain-resids" not in cmd
 
 
+def test_build_pycharmm_command_derives_n_molecules_from_composition():
+    cmd = build_pycharmm_command(
+        _pycharmm_args(composition="DCM:90", n_molecules=10)
+    )
+    idx = cmd.index("--n-molecules")
+    assert cmd[idx + 1] == "90"
+
+
 def test_build_pycharmm_command_includes_residue_without_composition():
     cmd = build_pycharmm_command(_pycharmm_args(composition=None, residue="ACO"))
     assert "--residue" in cmd
