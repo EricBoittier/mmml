@@ -399,6 +399,7 @@ def _build_cluster_from_composition_packmol(
     charmm_abnr_steps: int = 100,
     charmm_tolenr: float = 1e-3,
     charmm_tolgrd: float = 1e-3,
+    scratch_dir: str | Path | None = None,
     verbose: bool = True,
 ) -> tuple[np.ndarray, np.ndarray, list[int], list[str]]:
     from mmml.cli.run.md_pbc_suite.cluster import build_packmol_composition_cluster
@@ -413,6 +414,7 @@ def _build_cluster_from_composition_packmol(
         charmm_abnr_steps=charmm_abnr_steps,
         charmm_tolenr=charmm_tolenr,
         charmm_tolgrd=charmm_tolgrd,
+        scratch_dir=scratch_dir,
         verbose=verbose,
     )
 
@@ -470,6 +472,11 @@ def build_initial_cluster_from_args(
                 charmm_abnr_steps=int(getattr(args, "charmm_abnr_steps", 100)),
                 charmm_tolenr=float(getattr(args, "charmm_tolenr", 1e-3)),
                 charmm_tolgrd=float(getattr(args, "charmm_tolgrd", 1e-3)),
+                scratch_dir=(
+                    Path(args.output_dir) / "packmol_sphere"
+                    if getattr(args, "output_dir", None) is not None
+                    else None
+                ),
                 verbose=not getattr(args, "quiet", False),
             )
             fb_r = getattr(args, "flat_bottom_radius", None)

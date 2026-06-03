@@ -234,6 +234,7 @@ def build_packmol_composition_cluster(
     charmm_abnr_steps: int = 100,
     charmm_tolenr: float = 1e-3,
     charmm_tolgrd: float = 1e-3,
+    scratch_dir: str | Path | None = None,
     verbose: bool = True,
 ) -> tuple[np.ndarray, np.ndarray, list[int], list[str]]:
     """CHARMM-minimize monomers, Packmol sphere pack, cluster PSF, then cluster MM relax."""
@@ -269,7 +270,8 @@ def build_packmol_composition_cluster(
     if verbose:
         print("[cluster] 2/4 Write monomer PDBs for Packmol", flush=True)
 
-    packmol_dir = Path("pdb/packmol_sphere")
+    scratch_root = Path(scratch_dir) if scratch_dir is not None else Path("pdb/packmol_sphere")
+    packmol_dir = scratch_root / "monomers"
     packmol_blocks: list[tuple[Path, int]] = []
     for residue, count in composition:
         key = residue.upper()
@@ -284,7 +286,7 @@ def build_packmol_composition_cluster(
         )
         packmol_blocks.append((pdb_path, int(count)))
 
-    output_pdb = Path("pdb/init-packmol-sphere.pdb")
+    output_pdb = scratch_root / "init-packmol-sphere.pdb"
     if output_pdb.exists():
         output_pdb.unlink()
 
@@ -299,6 +301,7 @@ def build_packmol_composition_cluster(
         center=center,
         radius=float(radius),
         output_pdb=output_pdb,
+        input_path=scratch_root / "packmol_sphere.inp",
         tolerance=float(tolerance),
         seed=seed,
     )
