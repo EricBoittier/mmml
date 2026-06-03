@@ -8,6 +8,7 @@ from pathlib import Path
 from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     recommend_echeck_kcal,
     resolve_echeck_for_cluster,
+    resolve_flat_bottom_selection,
     resolve_md_stages,
     resolve_use_pbc,
 )
@@ -58,6 +59,20 @@ def test_resolve_use_pbc_free_space():
 def test_resolve_use_pbc_box_size():
     args = argparse.Namespace(setup="free_nve", free_space=False, box_size=40.0)
     assert resolve_use_pbc(args) is True
+
+
+def test_resolve_flat_bottom_selection_dcm_uses_one_carbon_type():
+    args = argparse.Namespace(composition="DCM:90", residue="ACO", fb_selection="all")
+    assert resolve_flat_bottom_selection(args) == "TYPE CG321"
+
+
+def test_resolve_flat_bottom_selection_respects_explicit_value():
+    args = argparse.Namespace(
+        composition="DCM:90",
+        residue="ACO",
+        fb_selection="TYPE CLGA1",
+    )
+    assert resolve_flat_bottom_selection(args) == "TYPE CLGA1"
 
 
 def test_cubic_box_length_from_geometry():

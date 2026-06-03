@@ -123,15 +123,34 @@ def test_flat_bottom_mmfp_uses_outside_harmonic_wall():
             restraints.FlatBottomSphereConfig(
                 radius=10.0,
                 force=0.01,
-                selection="TYPE C*",
+                selection="TYPE CG321",
             )
         )
 
     script = pycharmm.lingo.charmm_script.call_args[0][0]
     assert "GEO sphere harm" in script
     assert "droff 10.000000 force 0.010000 outside" in script
-    assert "sele TYPE C* end" in script
+    assert "sele TYPE CG321 end" in script
     assert "quartic" not in script.lower()
+
+
+def test_apply_flat_bottom_workflow_accepts_selection():
+    from mmml.interfaces.pycharmmInterface.mlpot import restraints
+
+    with patch.object(restraints, "center_cluster_at_origin") as center, patch.object(
+        restraints,
+        "setup_flat_bottom_sphere_mmfp",
+    ) as setup:
+        cfg = restraints.apply_flat_bottom_workflow(
+            radius=10.0,
+            force=0.01,
+            selection="TYPE CG321",
+        )
+
+    center.assert_called_once()
+    setup.assert_called_once()
+    assert cfg is not None
+    assert cfg.selection == "TYPE CG321"
 
 
 def test_clear_mmfp_uses_block_command():

@@ -659,7 +659,7 @@ def apply_flat_bottom_from_args(args: argparse.Namespace) -> None:
         xref=float(getattr(args, "fb_xref", 0.0)),
         yref=float(getattr(args, "fb_yref", 0.0)),
         zref=float(getattr(args, "fb_zref", 0.0)),
-        selection=str(getattr(args, "fb_selection", "all") or "all"),
+        selection=resolve_flat_bottom_selection(args),
     )
     if cfg is not None:
         print(
@@ -668,6 +668,20 @@ def apply_flat_bottom_from_args(args: argparse.Namespace) -> None:
             f"center=({cfg.xref:.2f}, {cfg.yref:.2f}, {cfg.zref:.2f}) "
             f"selection='{cfg.selection}'"
         )
+
+
+def resolve_flat_bottom_selection(args: argparse.Namespace) -> str:
+    """Resolve the CHARMM selection used for MMFP wall constraints."""
+    raw = str(getattr(args, "fb_selection", "all") or "all").strip()
+    if raw.lower() != "all":
+        return raw
+    composition = str(getattr(args, "composition", "") or "").upper()
+    residue = str(getattr(args, "residue", "") or "").upper()
+    if "DCM" in composition or residue == "DCM":
+        # One carbon per dichloromethane molecule. Avoid TYPE C*, which also
+        # matches chlorine atom types such as CLGA1 and can overflow MAXGEO.
+        return "TYPE CG321"
+    return raw
 
 
 def format_resid_constraint_message(resids: list[int], *, context: str) -> str:
