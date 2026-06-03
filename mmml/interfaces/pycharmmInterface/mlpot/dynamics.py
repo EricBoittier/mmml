@@ -1015,30 +1015,23 @@ def _overlap_chunk_io(
     chunk_index: int,
     n_chunks: int,
 ) -> CharmmTrajectoryFiles:
-    """Restart I/O for overlap chunking via alternating scratch restarts."""
+    """Restart I/O for overlap chunking via alternating scratch restarts.
+
+    Trajectory output is kept on the parent ``io`` object and opened once for
+    the full multi-chunk run; reopening a DCD per restart chunk can leave empty
+    placeholder files for CHARMM restart dynamics.
+    """
     rread, rwri = _overlap_chunk_restart_paths(
         io, chunk_index=chunk_index, n_chunks=n_chunks
     )
     return CharmmTrajectoryFiles(
         restart_read=rread,
         restart_write=rwri,
-        trajectory=_overlap_chunk_trajectory_path(io, chunk_index=chunk_index),
+        trajectory=None,
         restart_read_unit=io.restart_read_unit,
         restart_write_unit=io.restart_write_unit,
         trajectory_unit=io.trajectory_unit,
     )
-
-
-def _overlap_chunk_trajectory_path(
-    io: CharmmTrajectoryFiles,
-    *,
-    chunk_index: int,
-) -> Path | None:
-    """Indexed DCD path for one overlap chunk, preserving partial trajectories."""
-    if io.trajectory is None:
-        return None
-    trajectory = Path(io.trajectory)
-    return trajectory.with_name(f"{trajectory.stem}.overlap_{chunk_index:04d}{trajectory.suffix}")
 
 
 def effective_overlap_check_interval(
@@ -1336,7 +1329,11 @@ def run_dynamics_with_io(
     last_dyn: Any = None
     steps_done = 0
     completed = False
+    trajectory_files: list[Any] = []
+    trajectory_iokw: dict[str, int] = {}
     try:
+        if io is not None and n_chunks > 1 and io.trajectory is not None:
+            trajectory_files, trajectory_iokw = io.open_trajectory_for_run()
         for chunk_index in range(n_chunks):
             chunk_nstep = interval
             chunk_kw = dict(kw)
@@ -1373,6 +1370,7 @@ def run_dynamics_with_io(
             last_dyn = _run_dynamics_chunk(
                 chunk_kw,
                 chunk_io,
+                extra_iokw=trajectory_iokw,
                 rng_base=rng_base,
                 rng_salt=_rng_salt_for_dynamics(
                     overlap_context=overlap_context,
@@ -1397,6 +1395,8 @@ def run_dynamics_with_io(
                 f"for {io.restart_write}",
                 flush=True,
             )
+        for f in trajectory_files:
+            f.close()
     return last_dyn
 
 
