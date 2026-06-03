@@ -215,10 +215,7 @@ def parse_args() -> argparse.Namespace:
         "--flat-bottom-selection",
         type=str,
         default="all",
-        help=(
-            "pycharmm: CHARMM atom selection for MMFP wall (default: all). "
-            "For large DCM clusters use 'TYPE C' to avoid MMFP MAXGEO overflow."
-        ),
+        help="pycharmm: CHARMM atom selection for MMFP wall (default: all).",
     )
     parser.add_argument(
         "--flat-bottom-mode",

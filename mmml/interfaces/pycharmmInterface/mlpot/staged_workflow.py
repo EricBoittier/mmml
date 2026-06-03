@@ -568,9 +568,6 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
 
     setup_charmm_environment(use_pbc=use_pbc, cubic_box_side_A=box_side)
     sync_charmm_positions(r)
-    if not use_pbc:
-        apply_flat_bottom_from_args(args)
-        r = get_charmm_positions_array()
 
     vmd_topo_psf = paths["vmd_psf"]
     if getattr(args, "skip_cluster_build", False) and getattr(args, "from_psf", None):
@@ -597,9 +594,6 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             reference_positions=r,
         )
         sync_charmm_positions(r)
-        if not use_pbc:
-            apply_flat_bottom_from_args(args)
-            r = get_charmm_positions_array()
     elif "mini" in stages and not getattr(args, "skip_cluster_build", False):
         save_mini = bool(getattr(args, "save", True))
         mini_dcd_nsavc = resolve_dcd_nsavc(
@@ -613,11 +607,12 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             dcd_nsavc=mini_dcd_nsavc if save_mini else 0,
         )
         sync_charmm_positions(r)
-        if not use_pbc:
-            # Re-tune after CGENFF relaxation: Packmol/MM pre-min can change the
-            # selected radius before MLpot is registered.
-            apply_flat_bottom_from_args(args)
-            r = get_charmm_positions_array()
+
+    if not use_pbc:
+        # Install MMFP once after Packmol / CHARMM pretreat / pre-MLpot mini so
+        # droff tuning and coor orient are not repeated (stacked walls / COM shifts).
+        apply_flat_bottom_from_args(args)
+        r = get_charmm_positions_array()
 
     baseline = None
     if (
