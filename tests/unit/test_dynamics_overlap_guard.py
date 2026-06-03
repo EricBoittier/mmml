@@ -460,6 +460,59 @@ def test_overlap_chunk_io_skips_negative_restart_header(tmp_path):
     assert c1.restart_write == equi.with_name("equi_dcm_10.overlap_b.res")
 
 
+def test_overlap_aborts_before_charmm_when_scratch_restart_is_invalid(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        CharmmTrajectoryFiles,
+        _overlap_restart_slot_paths,
+    )
+
+    cfg = DynamicsOverlapConfig(
+        action="error",
+        min_distance_A=0.5,
+        check_interval=2,
+        n_monomers=2,
+        use_pbc=False,
+    )
+    pos_ok = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [5.0, 0.0, 0.0],
+            [6.0, 0.0, 0.0],
+        ],
+        dtype=float,
+    )
+    res_path = tmp_path / "heat.res"
+    io = CharmmTrajectoryFiles(restart_write=res_path)
+    slot_a, _ = _overlap_restart_slot_paths(res_path)
+    calls: list[dict] = []
+
+    def fake_chunk(kw, _io, *, extra_iokw=None, **kwargs):
+        calls.append(dict(kw))
+        slot_a.write_text(
+            "NOTE!! THIS FILE  C A N N O T  BE USED TO RESTART A RUN!!!\n",
+            encoding="utf-8",
+        )
+        return mock.Mock()
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        side_effect=fake_chunk,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        return_value=pos_ok,
+    ):
+        with pytest.raises(RuntimeError, match="overlap restart handoff failed"):
+            run_dynamics_with_io(
+                {"nstep": 6, "nsavc": 1},
+                io,
+                overlap=cfg,
+                overlap_context="heat",
+            )
+
+    assert len(calls) == 1
+
+
 def test_overlap_multi_chunk_keeps_single_dcd_open(tmp_path):
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
 
