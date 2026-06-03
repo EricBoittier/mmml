@@ -44,17 +44,16 @@ uv run mmml md-system \
   --composition "$COMPOSITION" \
   --output-dir "artifacts/pycharmm_mlpot/$RUN_NAME" \
   --job-name "$RUN_NAME" \
-  --md-stages mini,heat,equi \
+  --md-stages mini,heat \
   --free-space \
   --packmol-sphere \
   --packmol-radius "$PACKMOL_R" \
   --packmol-tolerance 1.0 \
   --flat-bottom-radius "$FB_RAD" --dynamics-overlap-min-distance 0.4 \
   --flat-bottom-k 0.01 \
-  --temperature 50.0 --bonded-mm-mini --bonded-mm-mini-after mini,heat,equi --bonded-mm-mini-steps 500 \
+  --temperature 50.0 --bonded-mm-mini --bonded-mm-mini-after mini,heat --bonded-mm-mini-steps 500 \
   --dt-fs 0.5 \
-  --ps-heat 1 \
-  --ps-equi 1 \
+  --ps-heat 100 \
   --dcd-nsavc 40 \
   --dyn-nprint 40 --ml-switch-width 0.1 --mm-switch-width 3.0 --charmm-sd-steps 2000 --charmm-abnr-steps 200  \
   --ml-batch-size 2256 \
