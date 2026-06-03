@@ -43,6 +43,14 @@ def test_heat_uses_reference_ramp_without_equilibration_rescale():
     assert kw["tbath"] == 300.0
 
 
+def test_heat_free_space_disables_image_update_frequencies():
+    kw = build_heat_dynamics(temp=300.0, use_pbc=False)
+
+    assert kw["imgfrq"] == 0
+    assert kw["ihbfrq"] == 0
+    assert kw["ilbfrq"] == 0
+
+
 def test_equi_hoover_default_uses_mass_formula_and_disables_rescaling():
     kw = build_cpt_equilibration_dynamics(
         temp=300.0, pmass=16, tmass=160, pref=1.0

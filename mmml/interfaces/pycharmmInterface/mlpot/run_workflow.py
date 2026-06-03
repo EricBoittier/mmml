@@ -499,6 +499,7 @@ def run_dynamics_workflow(
                 save_interval_ps=save_interval_ps,
                 temp=temp,
                 echeck=echeck,
+                use_pbc=use_pbc,
             )
             kw["nprint"] = dyn_print["nprint"]
             kw["iprfrq"] = dyn_print["iprfrq"]
