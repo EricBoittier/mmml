@@ -874,6 +874,9 @@ def assert_dynamics_ready(
     abort: bool = True,
 ) -> float:
     """Warn or abort if gradients are still huge before starting dynamics."""
+    import pycharmm
+
+    pycharmm.lingo.charmm_script("ENER")
     grms = charmm_grms()
     if grms <= max_grms:
         print(
