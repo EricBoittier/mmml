@@ -411,6 +411,56 @@ def test_maybe_run_bonded_mm_mini_runs_when_grms_high():
     assert ran is True
 
 
+def test_maybe_run_bonded_mm_mini_all_ml_uses_heavy_reload(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
+
+    ctx = MagicMock()
+    args = argparse_namespace(
+        bonded_mm_mini=True,
+        bonded_mm_mini_after="heat",
+        quiet=True,
+    )
+    topology_psf = tmp_path / "cluster_for_vmd_dcm_10.psf"
+    topology_psf.write_text("* psf\n", encoding="utf-8")
+    baseline = MmStrainBaseline(grms_kcalmol_A=5.0)
+    result = bonded_mm_recovery.BondedMmRecoveryResult(
+        ran_recovery=True,
+        current=MmStrainBaseline(grms_kcalmol_A=20.0),
+        reasons=("GRMS high",),
+        heavy_reload=True,
+    )
+    with patch.object(
+        bonded_mm_recovery,
+        "_mlpot_covers_all_atoms",
+        return_value=True,
+    ), patch.object(
+        bonded_mm_recovery,
+        "_run_heavy_bonded_recovery_check",
+        return_value=result,
+    ) as heavy, patch.object(
+        bonded_mm_recovery,
+        "measure_mm_bonded_strain_with_full_block",
+    ) as measure:
+        ran = bonded_mm_recovery.maybe_run_bonded_mm_mini_after_stage(
+            ctx,
+            args,
+            stage="heat",
+            baseline=baseline,
+            restart_path="/tmp/heat.res",
+            topology_psf=topology_psf,
+        )
+
+    heavy.assert_called_once_with(
+        ctx,
+        args,
+        stage="heat",
+        baseline=baseline,
+        topology_psf=topology_psf,
+    )
+    measure.assert_not_called()
+    assert ran is True
+
+
 def test_assert_pre_min_bonded_geometry_exits_on_high_angl():
     import sys
 

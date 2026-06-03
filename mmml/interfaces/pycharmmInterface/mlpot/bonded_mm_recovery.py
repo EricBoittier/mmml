@@ -27,6 +27,16 @@ class MmStrainBaseline:
     angl_kcalmol: float | None = None
 
 
+@dataclass(frozen=True)
+class BondedMmRecoveryResult:
+    """Outcome of a bonded-MM recovery check."""
+
+    ran_recovery: bool
+    current: MmStrainBaseline | None = None
+    reasons: tuple[str, ...] = ()
+    heavy_reload: bool = False
+
+
 def rewrite_dynamics_restart_from_current_state(
     restart_path: PathLike | None,
     *,
@@ -122,6 +132,218 @@ def _mlpot_covers_all_atoms(ctx: MlpotContext) -> bool:
         return n_atoms > 0 and n_ml >= n_atoms
     except Exception:
         return False
+
+
+def _copy_mlpot_context_state(dst: MlpotContext, src: MlpotContext) -> None:
+    """Keep the caller's context object valid after rebuilding CHARMM topology."""
+    for name in (
+        "mlpot",
+        "pyCModel",
+        "params",
+        "model",
+        "ml_selection",
+        "block_tag",
+        "ml_Z",
+        "use_pbc",
+        "cubic_box_side_A",
+        "ml_charge",
+        "ml_fq",
+    ):
+        setattr(dst, name, getattr(src, name))
+
+
+def _measure_current_mm_strain() -> MmStrainBaseline:
+    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import pycharmm
+
+    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_block
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
+
+    apply_charmm_mm_block()
+    pycharmm.lingo.charmm_script("ENER")
+    return MmStrainBaseline(
+        grms_kcalmol_A=float(charmm_grms()),
+        internal_kcalmol=charmm_internal_energy_kcalmol(),
+        angl_kcalmol=charmm_bonded_term_kcalmol("ANGL"),
+    )
+
+
+def _reload_pre_mlpot_topology(
+    ctx: MlpotContext,
+    *,
+    topology_psf: PathLike,
+) -> None:
+    """Replace MLpot-mutated PSF with the saved pre-MLpot topology."""
+    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import pycharmm
+    import pycharmm.read as read
+
+    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import setup_charmm_environment
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        get_charmm_positions_array,
+        setup_default_nbonds,
+        sync_charmm_positions,
+    )
+
+    current_positions = get_charmm_positions_array()
+    ctx.unset()
+    with charmm_relaxed_bomlev():
+        pycharmm.lingo.charmm_script(
+            "DELETE ATOM SELE ALL END\nDELETE PSF SELE ALL END"
+        )
+        read.psf_card(str(Path(topology_psf).expanduser().resolve()))
+    sync_charmm_positions(current_positions)
+    if ctx.use_pbc and ctx.cubic_box_side_A is not None:
+        setup_charmm_environment(use_pbc=True, cubic_box_side_A=float(ctx.cubic_box_side_A))
+    else:
+        setup_default_nbonds()
+
+
+def _reregister_mlpot_after_topology_reload(ctx: MlpotContext) -> None:
+    import numpy as np
+
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        get_charmm_positions_array,
+        refresh_nbonds_after_mlpot_pbc,
+        register_mlpot,
+        select_all_atoms,
+        sync_charmm_positions,
+    )
+
+    positions = get_charmm_positions_array()
+    ml_z = np.asarray(ctx.ml_Z, dtype=int)
+    new_ctx = register_mlpot(
+        ctx.pyCModel,
+        ml_z,
+        select_all_atoms(),
+        ml_charge=ctx.ml_charge,
+        ml_fq=ctx.ml_fq,
+        use_pbc=ctx.use_pbc,
+    )
+    new_ctx.ml_Z = ml_z
+    new_ctx.use_pbc = bool(ctx.use_pbc)
+    new_ctx.cubic_box_side_A = ctx.cubic_box_side_A
+    if new_ctx.use_pbc and new_ctx.cubic_box_side_A is not None:
+        refresh_nbonds_after_mlpot_pbc(
+            cubic_box_side_A=float(new_ctx.cubic_box_side_A),
+            force=True,
+        )
+    sync_charmm_positions(positions)
+    _copy_mlpot_context_state(ctx, new_ctx)
+
+
+def _run_bonded_sd_without_mlpot(
+    ctx: MlpotContext,
+    config: BondedMmMiniConfig,
+) -> float | None:
+    """Run bonded-only SD after the pre-MLpot PSF has already been reloaded."""
+    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import (
+        apply_bonded_mm_only_block,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _bonded_recovery_sd_kwargs,
+        _import_pycharmm_modules,
+    )
+
+    apply_bonded_mm_only_block()
+    pycharmm, cons_fix, *_ = _import_pycharmm_modules()
+    minimize = _import_pycharmm_modules()[3]
+    pycharmm.lingo.charmm_script("ENER")
+    grms_before = float(charmm_grms())
+    angl_before = charmm_bonded_term_kcalmol("ANGL")
+    if config.verbose:
+        msg = (
+            f"Bonded-MM heavy mini start: GRMS={grms_before:.4f} kcal/mol/Å "
+            "(pre-MLpot topology, MLpot detached)"
+        )
+        if angl_before is not None:
+            msg += f", ANGL={angl_before:.4f} kcal/mol"
+        print(msg, flush=True)
+    if config.nstep_sd > 0:
+        minimize.run_sd(**_bonded_recovery_sd_kwargs(ctx, config))
+    pycharmm.lingo.charmm_script("ENER")
+    grms_after = float(charmm_grms())
+    if config.verbose:
+        msg = f"Bonded-MM heavy mini end: GRMS={grms_after:.4f} kcal/mol/Å"
+        angl_after = charmm_bonded_term_kcalmol("ANGL")
+        if angl_after is not None:
+            msg += f", ANGL={angl_after:.4f} kcal/mol"
+        print(msg, flush=True)
+    cons_fix.turn_off()
+    return grms_after
+
+
+def _run_heavy_bonded_recovery_check(
+    ctx: MlpotContext,
+    args: argparse.Namespace,
+    *,
+    stage: str,
+    baseline: MmStrainBaseline,
+    topology_psf: PathLike,
+) -> BondedMmRecoveryResult:
+    """Reload the clean topology, check real MM strain, optionally recover, and reattach MLpot."""
+    path = Path(topology_psf).expanduser().resolve()
+    if not path.is_file():
+        raise FileNotFoundError(f"pre-MLpot topology PSF not found: {path}")
+
+    if not args.quiet:
+        print(
+            f"bonded-MM-mini: reloading pre-MLpot topology for all-ML recovery: {path.name}",
+            flush=True,
+        )
+    _reload_pre_mlpot_topology(ctx, topology_psf=path)
+    try:
+        current = _measure_current_mm_strain()
+        grms_margin, internal_margin, angl_margin = _bonded_strain_margins(args)
+        reasons = tuple(
+            _recovery_reasons(
+                current,
+                baseline,
+                grms_margin=grms_margin,
+                internal_margin=internal_margin,
+                angl_margin=angl_margin,
+            )
+        )
+        if not reasons:
+            if not args.quiet:
+                print(
+                    f"bonded-MM-mini: strain OK after {stage} with reloaded topology "
+                    f"(GRMS {current.grms_kcalmol_A:.4f} kcal/mol/Å)",
+                    flush=True,
+                )
+            return BondedMmRecoveryResult(
+                ran_recovery=False,
+                current=current,
+                reasons=reasons,
+                heavy_reload=True,
+            )
+
+        if not args.quiet:
+            print(
+                f"bonded-MM-mini: after {stage}: {'; '.join(reasons)}; "
+                "running heavy bonded SD (pre-MLpot topology)",
+                flush=True,
+            )
+        nstep = int(getattr(args, "bonded_mm_mini_steps", 50))
+        _run_bonded_sd_without_mlpot(
+            ctx,
+            BondedMmMiniConfig(
+                nstep_sd=nstep,
+                nprint=max(1, int(getattr(args, "dyn_nprint", 100))),
+                verbose=not args.quiet,
+                show_energy=bool(getattr(args, "show_energy", False)),
+            ),
+        )
+        return BondedMmRecoveryResult(
+            ran_recovery=True,
+            current=current,
+            reasons=reasons,
+            heavy_reload=True,
+        )
+    finally:
+        _reregister_mlpot_after_topology_reload(ctx)
 
 
 def _recovery_reasons(
@@ -239,6 +461,7 @@ def maybe_run_bonded_mm_mini_after_stage(
     stage: str,
     baseline: MmStrainBaseline | None,
     restart_path: PathLike | None = None,
+    topology_psf: PathLike | None = None,
 ) -> bool:
     """If MM bonded strain rose above baseline, run bonded-only SD (BLOCK toggle only).
 
@@ -262,10 +485,20 @@ def maybe_run_bonded_mm_mini_after_stage(
         return False
 
     if _mlpot_covers_all_atoms(ctx):
+        if topology_psf is not None:
+            result = _run_heavy_bonded_recovery_check(
+                ctx,
+                args,
+                stage=stage,
+                baseline=baseline,
+                topology_psf=topology_psf,
+            )
+            return result.ran_recovery
         if not args.quiet:
             print(
                 f"bonded-MM-mini: skipping after {stage} for all-ML system; "
-                "CHARMM bonded terms are unavailable after MLpot registration",
+                "CHARMM bonded terms are unavailable after MLpot registration "
+                "and no pre-MLpot topology PSF was provided",
                 flush=True,
             )
         return False
