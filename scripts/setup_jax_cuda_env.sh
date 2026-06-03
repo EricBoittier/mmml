@@ -24,7 +24,7 @@ _setup_jax_cuda_env() {
     return 1
   fi
 
-  eval "$("$py" - <<'PY')"
+  eval "$("$py" - <<'PY'
 import os
 import shlex
 from mmml.utils.jax_gpu_warmup import ensure_jax_cuda_runtime_libs
@@ -40,6 +40,7 @@ if not bundled:
         file=__import__('sys').stderr,
     )
 PY
+)"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
