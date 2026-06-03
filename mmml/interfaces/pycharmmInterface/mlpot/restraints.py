@@ -9,6 +9,7 @@ import numpy as np
 
 _MMFP_GEO_ACTIVE = False
 _DROFF_MARGIN_A = 1.0e-3
+_ENERGY_VERIFY_TOL_KCAL = 1.0e-4
 
 
 @dataclass
@@ -113,6 +114,45 @@ def _selected_max_radius(selection: str, *, xref: float, yref: float, zref: floa
     return float(np.max(distances))
 
 
+def _current_charmm_energy_kcalmol() -> float | None:
+    try:
+        import pycharmm
+        import pycharmm.energy as energy
+
+        pycharmm.lingo.charmm_script("ENER")
+        row = energy.get_energy().iloc[0].to_dict()
+        for key in ("ENER", "ENERgy", "ENERGY"):
+            if key in row:
+                return float(row[key])
+    except Exception as exc:
+        print(
+            f"WARN: could not verify MMFP zero-energy install: {exc}",
+            flush=True,
+        )
+    return None
+
+
+def _verify_zero_energy_install(before: float | None, *, tol: float = _ENERGY_VERIFY_TOL_KCAL) -> None:
+    if before is None:
+        return
+    after = _current_charmm_energy_kcalmol()
+    if after is None:
+        return
+    delta = after - before
+    if abs(delta) > tol:
+        print(
+            "WARN: MMFP flat-bottom changed energy at install "
+            f"by {delta:+.6f} kcal/mol after droff tuning "
+            f"(before={before:.6f}, after={after:.6f})",
+            flush=True,
+        )
+    else:
+        print(
+            f"MMFP flat-bottom zero-energy check OK: ΔE={delta:+.6f} kcal/mol",
+            flush=True,
+        )
+
+
 def clear_mmfp_restraints() -> None:
     """Remove MMFP terms (safe to call if none were defined)."""
     global _MMFP_GEO_ACTIVE
@@ -144,6 +184,7 @@ def apply_flat_bottom_workflow(
         return None
     if center_at_origin:
         center_cluster_at_origin()
+    energy_before = _current_charmm_energy_kcalmol()
     requested_radius = float(radius)
     current_radius = _selected_max_radius(selection, xref=xref, yref=yref, zref=zref)
     effective_radius = requested_radius
@@ -165,4 +206,5 @@ def apply_flat_bottom_workflow(
         selection=selection,
     )
     setup_flat_bottom_sphere_mmfp(cfg)
+    _verify_zero_energy_install(energy_before)
     return cfg

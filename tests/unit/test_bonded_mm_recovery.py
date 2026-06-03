@@ -144,6 +144,10 @@ def test_apply_flat_bottom_workflow_accepts_selection():
         restraints,
         "_selected_max_radius",
         return_value=4.0,
+    ), patch.object(
+        restraints,
+        "_current_charmm_energy_kcalmol",
+        return_value=None,
     ):
         cfg = restraints.apply_flat_bottom_workflow(
             radius=10.0,
@@ -167,6 +171,10 @@ def test_apply_flat_bottom_workflow_inflates_droff_to_current_extent():
         restraints,
         "_selected_max_radius",
         return_value=12.5,
+    ), patch.object(
+        restraints,
+        "_current_charmm_energy_kcalmol",
+        return_value=None,
     ):
         cfg = restraints.apply_flat_bottom_workflow(
             radius=10.0,
@@ -179,6 +187,57 @@ def test_apply_flat_bottom_workflow_inflates_droff_to_current_extent():
     assert cfg.radius == pytest.approx(12.501)
     setup.assert_called_once()
     assert setup.call_args.args[0].radius == pytest.approx(12.501)
+
+
+def test_apply_flat_bottom_workflow_verifies_energy_unchanged():
+    from mmml.interfaces.pycharmmInterface.mlpot import restraints
+
+    with patch.object(restraints, "center_cluster_at_origin"), patch.object(
+        restraints,
+        "setup_flat_bottom_sphere_mmfp",
+    ), patch.object(
+        restraints,
+        "_selected_max_radius",
+        return_value=8.0,
+    ), patch.object(
+        restraints,
+        "_current_charmm_energy_kcalmol",
+        side_effect=[100.0, 100.0],
+    ) as energy, patch(
+        "builtins.print",
+    ) as mock_print:
+        restraints.apply_flat_bottom_workflow(radius=10.0, force=0.01, selection="TYPE C")
+
+    assert energy.call_count == 2
+    assert any(
+        "zero-energy check OK" in str(call.args[0])
+        for call in mock_print.call_args_list
+    )
+
+
+def test_apply_flat_bottom_workflow_warns_when_energy_changes():
+    from mmml.interfaces.pycharmmInterface.mlpot import restraints
+
+    with patch.object(restraints, "center_cluster_at_origin"), patch.object(
+        restraints,
+        "setup_flat_bottom_sphere_mmfp",
+    ), patch.object(
+        restraints,
+        "_selected_max_radius",
+        return_value=8.0,
+    ), patch.object(
+        restraints,
+        "_current_charmm_energy_kcalmol",
+        side_effect=[100.0, 100.01],
+    ), patch(
+        "builtins.print",
+    ) as mock_print:
+        restraints.apply_flat_bottom_workflow(radius=10.0, force=0.01, selection="TYPE C")
+
+    assert any(
+        "WARN: MMFP flat-bottom changed energy" in str(call.args[0])
+        for call in mock_print.call_args_list
+    )
 
 
 def test_clear_mmfp_uses_block_command():
