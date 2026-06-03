@@ -44,7 +44,7 @@ mmml md-system ... --heat-ihtfrq 40
 |-------|-------------------|---------------|------------------------|----------------------|
 | **mini** (MLpot) | SD ×2 optional `cons_fix` | same | — | `nprint` from `--nprint` |
 | **MM pre-min** | CHARMM SD/ABNR, MM only | same | — | same `nprint` |
-| **heat** | Verlet + velocity scaling | Verlet + IMAGE lists | `firstt=0.2×T`, `finalt=T`, `TEMINC` | **`--heat-ihtfrq`**; after mini: Boltzmann at `FIRSTT` then `iasvel=1`/`iasors=1` ramp (not `RESTART`+`start=false`). Optional **`--heat-comp-damp`** (experimental) |
+| **heat** | Verlet + velocity scaling | Verlet + IMAGE lists | **`--heat-firstt`**, **`--heat-finalt`**, `TEMINC` | DCM:9 default **0→240 K** over **20 ps**, **`--heat-ihtfrq` 100**, `iasors=0` scale after cold start. **`--temperature`** is for later stages only unless `--heat-finalt` omitted |
 | **nve** | Leap, microcanonical | Leap + IMAGE | none (`ihtfrq=0`) | print from `--dyn-nprint` |
 | **equi** | Velocity scaling (restart: off) | CPT + Hoover NPT | vacuum: like heat; PBC: `hoover reft`, `cpt` | vacuum restart: **0**; vacuum cold start: ramp |
 | **prod** | Hoover NVT | CPT Hoover NPT | `hoover reft`, `tmass` | 0 |

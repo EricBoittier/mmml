@@ -72,6 +72,26 @@ def add_charmm_output_args(parser: argparse.ArgumentParser) -> None:
         ),
     )
     group.add_argument(
+        "--heat-firstt",
+        type=float,
+        default=None,
+        metavar="K",
+        help=(
+            "Heat start temperature (CHARMM FIRSTT). Default: 0.2×--temperature. "
+            "Use 0 for a cold start (zero initial velocities, then IHTFRQ scaling)."
+        ),
+    )
+    group.add_argument(
+        "--heat-finalt",
+        type=float,
+        default=None,
+        metavar="K",
+        help=(
+            "Heat end temperature (CHARMM FINALT / TBATH). "
+            "Default: --temperature (e.g. 300). DCM:9 stability often uses 240."
+        ),
+    )
+    group.add_argument(
         "--heat-comp-damp",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -277,6 +297,19 @@ def apply_charmm_output_from_args(args: argparse.Namespace) -> int:
         mini_nstep = getattr(args, "mini_nstep", getattr(args, "nstep", 100))
         return max(1, int(mini_nstep))
     return max(1, int(args.nprint))
+
+
+def resolve_heat_firstt_finalt(
+    args: argparse.Namespace,
+    *,
+    default_temp: float,
+) -> tuple[float, float]:
+    """Return ``(firstt, finalt)`` for the heat stage (Kelvin)."""
+    finalt = getattr(args, "heat_finalt", None)
+    firstt = getattr(args, "heat_firstt", None)
+    t_end = float(finalt if finalt is not None else default_temp)
+    t_start = float(firstt if firstt is not None else t_end * 0.2)
+    return t_start, t_end
 
 
 def resolve_heat_comp_damp(args: argparse.Namespace) -> bool:

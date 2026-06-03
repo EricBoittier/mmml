@@ -24,7 +24,8 @@
 #   MMML_CKPT=$HOME/mmml_tutorial/acodcm/ckpts/dcm1-... ./scripts/run_dcm9_stability.sh
 #   PS_HEAT=20 MD_STAGES=mini,heat,equi ./scripts/run_dcm9_stability.sh
 #   ENABLE_FB=1 FB_RAD=14 ./scripts/run_dcm9_stability.sh
-#   ./scripts/run_dcm9_stability.sh --ps-heat 5 --heat-ihtfrq 100
+#   ./scripts/run_dcm9_stability.sh --ps-heat 30 --heat-ihtfrq 100
+#   # softer ramp (defaults): 0 K -> 240 K over 20 ps, scale at ihtfrq
 #
 # After run, confirm in the log (non-quiet):
 #   HEAT complete: restart_step=~40000, dcd_frames=~81  (new validation)
@@ -33,7 +34,7 @@
 #   Removed prior DCD          (or pull latest repo; old builds say Rescued)
 # If heat stops early (~1–3k steps): grep 'TOLERANCE\\|echeck' in the log.
 #   DCM:9 auto-loosens echeck (9 monomers); override with --no-echeck if needed.
-#   Heat uses iasors=0 (scale at ihtfrq) after Boltzmann at 60 K — not Gaussian redraw.
+#   Heat: 0 K -> 240 K (see HEAT_FIRSTT/FINALT), iasors=0 scaling every HEAT_IHTFRQ steps.
 #
 # VMD:
 #   vmd artifacts/pycharmm_mlpot/dcm9_stability/cluster_for_vmd_dcm_9.psf
@@ -62,7 +63,9 @@ PACKMOL_R="${PACKMOL_R:-$(
 )}"
 OUT_DIR="${OUT_DIR:-artifacts/pycharmm_mlpot/dcm9_stability}"
 MD_STAGES="${MD_STAGES:-mini,heat}"
-PS_HEAT="${PS_HEAT:-10.0}"
+PS_HEAT="${PS_HEAT:-20.0}"
+HEAT_FIRSTT="${HEAT_FIRSTT:-0}"
+HEAT_FINALT="${HEAT_FINALT:-240}"
 HEAT_IHTFRQ="${HEAT_IHTFRQ:-100}"
 MINI_NSTEP="${MINI_NSTEP:-150}"
 DYN_NPRINT="${DYN_NPRINT:-500}"
@@ -94,6 +97,8 @@ exec "$MPIRUN" md-system \
   --packmol-tolerance 1.0 \
   --mini-nstep "$MINI_NSTEP" \
   --ps-heat "$PS_HEAT" \
+  --heat-firstt "$HEAT_FIRSTT" \
+  --heat-finalt "$HEAT_FINALT" \
   --heat-ihtfrq "$HEAT_IHTFRQ" \
   --dyn-nprint "$DYN_NPRINT" \
   --dyn-iprfrq 2000 \
