@@ -1,21 +1,12 @@
 configfile: "config.yaml"
 
-import os
-import sys
-
-workflow_dir = workflow.basedir
-scripts_dir = os.path.join(workflow_dir, "scripts")
-if scripts_dir not in sys.path:
-    sys.path.insert(0, scripts_dir)
-
-from benchmark_lib import load_config  # noqa: E402
-
-_cfg = load_config()
-_JOB_IDS = list(_cfg["jobs"].keys())
+# Use Snakemake's loaded config only — do not import mmml/benchmark_lib here
+# (Snakemake may run with a Python that lacks the repo on sys.path).
+_JOB_IDS = list(config["jobs"].keys())
 
 
 def _needs_mpi(wildcards) -> int:
-    return 1 if _cfg["jobs"][wildcards.job]["backend"] == "pycharmm" else 0
+    return 1 if config["jobs"][wildcards.job]["backend"] == "pycharmm" else 0
 
 
 rule all:

@@ -9,11 +9,19 @@ from typing import Any
 
 import yaml
 
-from mmml.cli.run import md_system
-
 
 def workflow_root() -> Path:
     return Path(__file__).resolve().parents[1]
+
+
+def repo_root() -> Path:
+    return workflow_root().parents[1]
+
+
+def _ensure_repo_on_path() -> None:
+    root = str(repo_root())
+    if root not in sys.path:
+        sys.path.insert(0, root)
 
 
 def load_config(config_path: Path | None = None) -> dict[str, Any]:
@@ -147,6 +155,9 @@ def namespace_for_job(
     output_dir: Path | None = None,
 ) -> tuple[str, list[str], Any]:
     """Return (backend, backend_argv, argparse.Namespace) for a benchmark job."""
+    _ensure_repo_on_path()
+    from mmml.cli.run import md_system
+
     argv = build_md_system_argv(cfg, job_id, output_dir=output_dir)
     old_argv = sys.argv[:]
     sys.argv = ["md-system", *argv]
