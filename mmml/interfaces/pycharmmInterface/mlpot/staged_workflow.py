@@ -466,6 +466,11 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             dcd_nsavc=mini_dcd_nsavc if save_mini else 0,
         )
         sync_charmm_positions(r)
+        if not use_pbc:
+            # Re-tune after CGENFF relaxation: Packmol/MM pre-min can change the
+            # selected radius before MLpot is registered.
+            apply_flat_bottom_from_args(args)
+            r = get_charmm_positions_array()
 
     baseline = None
     if getattr(args, "bonded_mm_mini", False) and getattr(args, "charmm_pre_minimize", True):
