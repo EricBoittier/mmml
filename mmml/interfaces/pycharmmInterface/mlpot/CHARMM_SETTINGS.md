@@ -1,0 +1,92 @@
+# CHARMM / PyCHARMM settings by workflow mode
+
+Reference for `mmml md-system --backend pycharmm` and `tests/functionality/mlpot/*`.
+CLI flags live in `cli_common.add_charmm_output_args()`; stage builders in `dynamics.py`; orchestration in `staged_workflow.py`.
+
+## Console verbosity (global)
+
+| Mode | CLI | `PRNLev` | `WRNLev` | `BOMBlev` | Notes |
+|------|-----|----------|----------|-----------|--------|
+| Default | *(none)* | 5 | 5 | -2 | Verbose Fortran core |
+| Quiet | `--quiet` | 0 | 0 | -2 | Also sets mini/dyn print to once per pass/stage |
+| Custom | `--prnlev N` `--warnlev N` `--bomlev N` | N | N | N | Applied at workflow start via `apply_charmm_verbosity()` |
+
+`--show-energy` / `--skip-energy-show` control Python `energy.show()` only, not `DYNA>` lines.
+
+## Print cadence (what you see during runs)
+
+| Output type | CHARMM keyword | CLI flag | Default | When it fires |
+|-------------|----------------|----------|---------|----------------|
+| SD / mini energy line | `nprint` | `--nprint` | **50** | Every N SD steps (MLpot mini + CHARMM MM pre-min) |
+| Dynamics energy summary | `nprint` | `--dyn-nprint` | **500** | `DYNA>` block every N integration steps |
+| Detailed dynamics props | `iprfrq` | `--dyn-iprfrq` | **2000** | Extra `DYNA PROP>` / extended rows |
+| Restart / velocity save | `isvfrq` | *(same as iprfrq)* | **2000** | Restart file timing |
+| **Heating velocity rescale** | **`ihtfrq`** | **`--heat-ihtfrq`** | **0 → use `--dyn-nprint`** | **COM + “VELOCITIES ASSIGNED” banners** (often mistaken for `nprint`) |
+| Quiet dynamics | — | `--quiet` | `nprint = iprfrq = isvfrq = nstep` | One summary per stage |
+
+**Heating spam:** If you still see output every ~10 steps during `heat`, check `ihtfrq` (not only `dyn-nprint`). Legacy code used `ihtfrq=10` hardcoded. Current staged workflow sets `ihtfrq = resolve_heat_ihtfrq()` (default: match `--dyn-nprint`, e.g. 500).
+
+Example for rare heating banners:
+
+```bash
+mmml md-system ... --dyn-nprint 2000 --dyn-iprfrq 5000 --heat-ihtfrq 2000
+```
+
+Finer temperature ramp (more rescales, more console):
+
+```bash
+mmml md-system ... --heat-ihtfrq 40
+```
+
+## Stage → integrator & thermostat
+
+| Stage | Vacuum (`free_*`) | PBC (`pbc_*`) | Thermostat / T control | `ihtfrq` (after CLI) |
+|-------|-------------------|---------------|------------------------|----------------------|
+| **mini** (MLpot) | SD ×2 optional `cons_fix` | same | — | `nprint` from `--nprint` |
+| **MM pre-min** | CHARMM SD/ABNR, MM only | same | — | same `nprint` |
+| **heat** | Verlet + velocity scaling | Verlet + IMAGE lists | `firstt=0.2×T`, `finalt=T`, `TEMINC` | **`--heat-ihtfrq` or `--dyn-nprint`** |
+| **nve** | Leap, microcanonical | Leap + IMAGE | none (`ihtfrq=0`) | print from `--dyn-nprint` |
+| **equi** | Velocity scaling (restart: off) | CPT + Hoover NPT | vacuum: like heat; PBC: `hoover reft`, `cpt` | vacuum restart: **0**; vacuum cold start: ramp |
+| **prod** | Hoover NVT | CPT Hoover NPT | `hoover reft`, `tmass` | 0 |
+
+Staged workflow **always overwrites** `nprint`, `iprfrq`, `isvfrq` from `resolve_dynamics_print_kwargs()` after each builder runs.
+
+## Stage → lists, trajectory, stability
+
+| Setting | CLI | Default (typical) | heat | nve | equi/prod PBC |
+|---------|-----|-------------------|------|-----|----------------|
+| Timestep | `--dt-fs` | 0.25 fs → 0.00025 ps | all | all | all |
+| Length | `--ps`, `--ps-heat`, … | setup-dependent | | | |
+| DCD frames | `--dcd-nsavc` | 1 | all | all | all |
+| Energy drift stop | `--echeck` / `--no-echeck` | 100 kcal/mol (scaled for large clusters) | all | all | equi/prod ≥500 if user value low |
+| Nonbond rebuild | `inbfrq` | -1 (heat/PBC builders) | periodic lists | | |
+| MLpot SD lists | `inbfrq=0` | mini only | avoids mlpot_update segfault | | |
+
+## `md-system` setup presets
+
+| `--setup` | Default `--md-stages` | Ensemble | PBC |
+|-----------|----------------------|----------|-----|
+| `free_nvt` | `mini,heat` | nvt (heat only; no Hoover prod in preset) | no |
+| `free_nve` | `mini,nve` | nve | no |
+| `pycharmm_minimize` | `mini` | — | no |
+| `pycharmm_full` | `mini,heat,nve,equi,prod` | mixed | no |
+| `pbc_nvt` | `mini,heat,equi` | nvt | yes |
+| `pbc_nve` | `mini,heat,nve,equi,prod` | nve | yes |
+| `pbc_npt` | `mini,heat,nve,equi,prod` | npt | yes |
+
+## Related flags (not print, but often paired)
+
+| Flag | Purpose |
+|------|---------|
+| `--bonded-mm-mini` | CHARMM bonded-only recovery SD after selected stages |
+| `--fix-resids` / `--constrain-resids` | `cons_fix` in mini pass 2 / MD |
+| `--quiet` | Low `PRNLev` + coarse print |
+| `--charmm-sd-steps` / `--charmm-abnr-steps` | MM pre-min before MLpot |
+
+## Tests (no CHARMM)
+
+```bash
+pytest tests/unit/test_charmm_output_settings.py tests/unit/test_staged_md_cli.py -q
+```
+
+See also `THERMOSTAT_INVESTIGATION.md` for Hoover vs velocity-scaling design notes.

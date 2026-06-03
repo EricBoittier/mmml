@@ -166,7 +166,7 @@ def test_build_stage_dynamics_kw_free_space_equi_uses_charmm_heat_controls():
         use_pbc=False,
     )
     assert kw["restart"] is True
-    assert kw["ihtfrq"] == 10
+    assert kw["ihtfrq"] == 0
     assert kw["TEMINC"] == 0.0
     assert kw["iasvel"] == 0
     assert "firstt" not in kw

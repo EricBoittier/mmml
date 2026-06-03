@@ -590,6 +590,21 @@ def nsavc_for_interval(timestep_ps: float, interval_ps: float) -> int:
     return max(1, int(round(interval_ps / timestep_ps)))
 
 
+def apply_heat_ramp_frequencies(
+    kw: dict[str, Any],
+    *,
+    nstep: int,
+    ihtfrq: int,
+) -> None:
+    """Update ``ihtfrq`` / ``TEMINC`` after the stage length or CLI cadence is known."""
+    iht = max(1, min(int(ihtfrq), max(1, int(nstep))))
+    firstt = float(kw.get("firstt", kw.get("finalt", 300.0)))
+    finalt = float(kw.get("finalt", 300.0))
+    heat_updates = max(1, int(nstep) // iht)
+    kw["ihtfrq"] = iht
+    kw["TEMINC"] = max(0.0, (finalt - firstt) / heat_updates)
+
+
 def build_heat_dynamics(
     *,
     timestep_ps: float = 0.00025,
@@ -598,14 +613,12 @@ def build_heat_dynamics(
     temp: float = 300.0,
     echeck: float = 100.0,
     use_pbc: bool = True,
+    ihtfrq: int = 50,
 ) -> dict[str, Any]:
     """NVT heating dict for ``DynamicsScript`` (CHARMM + MLpot)."""
     nstep = ps_to_nsteps(timestep_ps, duration_ps)
     nsavc = nsavc_for_interval(timestep_ps, save_interval_ps)
-    ihtfrq = 10
     firstt = temp * 0.2
-    heat_updates = max(1, nstep // ihtfrq)
-    teminc = max(0.0, (temp - firstt) / heat_updates)
     image_kwargs = {} if use_pbc else {"imgfrq": 0, "ihbfrq": 0, "ilbfrq": 0}
     kw = _base_dyn_kwargs(
         timestep=timestep_ps,
@@ -620,8 +633,6 @@ def build_heat_dynamics(
             "verlet": True,
             "new": True,
             "start": True,
-            "ihtfrq": ihtfrq,
-            "TEMINC": teminc,
             "ieqfrq": 0,
             "iasors": 1,
             "iasvel": 1,
@@ -632,6 +643,7 @@ def build_heat_dynamics(
             "tbath": temp,
         }
     )
+    apply_heat_ramp_frequencies(kw, nstep=nstep, ihtfrq=ihtfrq)
     return kw
 
 
@@ -796,10 +808,7 @@ def build_nvt_equilibration_dynamics(
     """
     nstep = ps_to_nsteps(timestep_ps, duration_ps)
     nsavc = nsavc_for_interval(timestep_ps, save_interval_ps)
-    ihtfrq = 10
     firstt = temp if restart else temp * 0.2
-    heat_updates = max(1, nstep // ihtfrq)
-    teminc = max(0.0, (temp - firstt) / heat_updates)
     kw = _base_dyn_kwargs(
         timestep=timestep_ps,
         nstep=nstep,
@@ -817,8 +826,6 @@ def build_nvt_equilibration_dynamics(
             "new": False,
             "start": False,
             "restart": restart,
-            "ihtfrq": ihtfrq,
-            "TEMINC": teminc,
             "ieqfrq": 0,
             "iasors": 1,
             "iasvel": 0 if restart else 1,
@@ -830,6 +837,10 @@ def build_nvt_equilibration_dynamics(
     )
     if include_firstt and not restart:
         kw["firstt"] = firstt
+        apply_heat_ramp_frequencies(kw, nstep=nstep, ihtfrq=50)
+    else:
+        kw["ihtfrq"] = 0
+        kw["TEMINC"] = 0.0
     return kw
 
 

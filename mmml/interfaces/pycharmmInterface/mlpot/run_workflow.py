@@ -21,6 +21,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     resolve_constrain_resids,
     resolve_dcd_nsavc,
     resolve_dynamics_print_kwargs,
+    resolve_heat_ihtfrq,
     apply_flat_bottom_from_args,
     assert_dynamics_ready,
     charmm_grms,
@@ -40,6 +41,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
     CharmmMmMinimizeConfig,
     CharmmTrajectoryFiles,
     MinimizeWithMlpotConfig,
+    apply_heat_ramp_frequencies,
     build_heat_dynamics,
     build_nve_dynamics,
     minimize_charmm_mm_only,
@@ -523,6 +525,11 @@ def run_dynamics_workflow(
             kw["nprint"] = dyn_print["nprint"]
             kw["iprfrq"] = dyn_print["iprfrq"]
             kw["isvfrq"] = dyn_print["isvfrq"]
+            apply_heat_ramp_frequencies(
+                kw,
+                nstep=nstep,
+                ihtfrq=resolve_heat_ihtfrq(args, nstep=nstep),
+            )
         kw["new"] = True
         kw["start"] = True
         kw["nstep"] = nstep

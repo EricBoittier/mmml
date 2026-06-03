@@ -22,6 +22,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     resolve_constrain_resids,
     resolve_dcd_nsavc,
     resolve_dynamics_print_kwargs,
+    resolve_heat_ihtfrq,
     resolve_echeck_for_cluster,
     resolve_fix_resids,
     resolve_mini_nstep,
@@ -276,6 +277,14 @@ def _build_stage_dynamics_kw(
     kw["iprfrq"] = dyn_print["iprfrq"]
     kw["isvfrq"] = dyn_print["isvfrq"]
     kw["nstep"] = nstep
+    if stage == "heat" or (stage == "equi" and not use_pbc and int(kw.get("ihtfrq", 0)) > 0):
+        from mmml.interfaces.pycharmmInterface.mlpot.dynamics import apply_heat_ramp_frequencies
+
+        apply_heat_ramp_frequencies(
+            kw,
+            nstep=nstep,
+            ihtfrq=resolve_heat_ihtfrq(args, nstep=nstep),
+        )
     if memory_handoff:
         kw["new"] = False
         kw["start"] = False

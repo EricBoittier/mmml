@@ -61,6 +61,17 @@ def add_charmm_output_args(parser: argparse.ArgumentParser) -> None:
         help="Dynamics: detailed status every N steps (default: 2000)",
     )
     group.add_argument(
+        "--heat-ihtfrq",
+        type=int,
+        default=0,
+        metavar="N",
+        help=(
+            "Heating / free-space equi: CHARMM ihtfrq (velocity rescaling every N steps). "
+            "0 = use --dyn-nprint (or full stage length when --quiet). "
+            "Lower values ramp temperature faster but print COM/velocity banners more often."
+        ),
+    )
+    group.add_argument(
         "--quiet",
         action="store_true",
         help="Shortcut for --prnlev 0 --warnlev 0; coarse mini/dynamics print",
@@ -216,6 +227,21 @@ def apply_charmm_output_from_args(args: argparse.Namespace) -> int:
         mini_nstep = getattr(args, "mini_nstep", getattr(args, "nstep", 100))
         return max(1, int(mini_nstep))
     return max(1, int(args.nprint))
+
+
+def resolve_heat_ihtfrq(args: argparse.Namespace, *, nstep: int) -> int:
+    """Heating velocity-rescale cadence (CHARMM ``ihtfrq``).
+
+    CHARMM prints GAUSSIAN / COM / velocity-assignment blocks on each rescale,
+    which dominates console output when ``ihtfrq`` is small (legacy default 10).
+    """
+    nstep = max(1, int(nstep))
+    explicit = int(getattr(args, "heat_ihtfrq", 0) or 0)
+    if explicit > 0:
+        return min(explicit, nstep)
+    if getattr(args, "quiet", False):
+        return nstep
+    return min(max(1, int(getattr(args, "dyn_nprint", 500))), nstep)
 
 
 def resolve_dynamics_print_kwargs(
