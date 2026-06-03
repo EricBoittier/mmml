@@ -531,7 +531,9 @@ def test_pbc_force_gradient_numerical():
 		F_analytical = atoms.get_forces()
 	except Exception as exc:
 		_skip_if_runtime_incompatible(exc)
-	h = 1e-5
+	# Energies are evaluated through the default float32 JAX path; too small a
+	# displacement is dominated by rounding noise in central differences.
+	h = 1e-3
 	F_numerical = np.zeros_like(R)
 	for i in range(len(R)):
 		for j in range(3):
