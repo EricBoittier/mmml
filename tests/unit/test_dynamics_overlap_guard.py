@@ -440,6 +440,26 @@ def test_overlap_chunk_io_skips_nonrestartable_scratch_restart(tmp_path):
     assert c1.restart_write == equi.with_name("equi_dcm_90.overlap_b.res")
 
 
+def test_overlap_chunk_io_skips_negative_restart_header(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        CharmmTrajectoryFiles,
+        _overlap_chunk_io,
+        _overlap_restart_slot_paths,
+    )
+
+    heat = tmp_path / "heat.res"
+    equi = tmp_path / "equi_dcm_10.res"
+    heat.write_text("REST\n", encoding="utf-8")
+    io = CharmmTrajectoryFiles(restart_read=heat, restart_write=equi)
+    slot_a, _ = _overlap_restart_slot_paths(equi)
+    slot_a.write_text("REST    48    -1                \n", encoding="utf-8")
+
+    c1 = _overlap_chunk_io(io, chunk_index=1, n_chunks=3)
+
+    assert c1.restart_read is None
+    assert c1.restart_write == equi.with_name("equi_dcm_10.overlap_b.res")
+
+
 def test_overlap_multi_chunk_keeps_single_dcd_open(tmp_path):
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
 
