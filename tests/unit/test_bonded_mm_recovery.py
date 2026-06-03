@@ -120,12 +120,17 @@ def test_flat_bottom_mmfp_uses_outside_harmonic_wall():
     pycharmm = MagicMock()
     with patch.object(restraints, "_import_pycharmm", return_value=pycharmm):
         restraints.setup_flat_bottom_sphere_mmfp(
-            restraints.FlatBottomSphereConfig(radius=10.0, force=0.01)
+            restraints.FlatBottomSphereConfig(
+                radius=10.0,
+                force=0.01,
+                selection="TYPE C*",
+            )
         )
 
     script = pycharmm.lingo.charmm_script.call_args[0][0]
     assert "GEO sphere harm" in script
     assert "droff 10.000000 force 0.010000 outside" in script
+    assert "sele TYPE C* end" in script
     assert "quartic" not in script.lower()
 
 

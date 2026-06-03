@@ -105,6 +105,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="MMFP droff (Å); also enables Packmol when --composition is set (legacy)",
     )
     parser.add_argument(
+        "--flat-bottom-selection",
+        dest="fb_selection",
+        type=str,
+        default=None,
+        help="CHARMM selection for MMFP wall (default: all; DCM: use 'TYPE C*').",
+    )
+    parser.add_argument(
         "--packmol-sphere",
         action=argparse.BooleanOptionalAction,
         default=None,

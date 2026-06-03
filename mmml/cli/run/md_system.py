@@ -181,6 +181,15 @@ def parse_args() -> argparse.Namespace:
         help="Flat-bottom force constant when COM is outside --flat-bottom-radius (default: 1.0).",
     )
     parser.add_argument(
+        "--flat-bottom-selection",
+        type=str,
+        default="all",
+        help=(
+            "pycharmm: CHARMM atom selection for MMFP wall (default: all). "
+            "For large DCM clusters use 'TYPE C*' to avoid MMFP MAXGEO overflow."
+        ),
+    )
+    parser.add_argument(
         "--flat-bottom-mode",
         choices=["system", "monomer"],
         default="system",
@@ -1140,6 +1149,7 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     if args.flat_bottom_radius is not None:
         cmd.extend(["--fb-rad", str(args.flat_bottom_radius)])
         cmd.extend(["--fb-forc", str(args.flat_bottom_k)])
+        cmd.extend(["--fb-selection", str(args.flat_bottom_selection)])
     cmd.extend(["--seed", str(args.seed)])
     _append_packmol_sphere_args(cmd, args)
     if getattr(args, "flat_bottom_radius", None) is not None:

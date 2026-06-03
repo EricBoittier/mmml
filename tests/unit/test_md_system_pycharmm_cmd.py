@@ -80,6 +80,7 @@ def _pycharmm_args(**overrides) -> argparse.Namespace:
         packmol_center=None,
         flat_bottom_radius=None,
         flat_bottom_k=1.0,
+        flat_bottom_selection="all",
         extra_args=[],
         seed=123,
         dynamics_overlap_action="rescue",
@@ -137,6 +138,15 @@ def test_build_pycharmm_command_includes_ml_gpu_count_when_set():
     assert "--ml-gpu-count" in cmd
     idx = cmd.index("--ml-gpu-count")
     assert cmd[idx + 1] == "2"
+
+
+def test_build_pycharmm_command_forwards_flat_bottom_selection():
+    cmd = build_pycharmm_command(
+        _pycharmm_args(flat_bottom_radius=15.0, flat_bottom_selection="TYPE C*")
+    )
+    assert "--fb-selection" in cmd
+    idx = cmd.index("--fb-selection")
+    assert cmd[idx + 1] == "TYPE C*"
 
 
 def test_build_pycharmm_command_includes_fix_resids_when_set():
