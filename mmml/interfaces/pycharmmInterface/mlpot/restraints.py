@@ -52,7 +52,7 @@ def setup_flat_bottom_sphere_mmfp(config: FlatBottomSphereConfig) -> None:
         MMFP
         GEO sphere harm -
             xref … yref … zref … -
-            droff <radius> force <force> outside -
+            droff <radius> force <force> -
             sele all end
         END
     """
@@ -68,7 +68,7 @@ def setup_flat_bottom_sphere_mmfp(config: FlatBottomSphereConfig) -> None:
 MMFP
 GEO sphere harm -
     xref {float(config.xref):.6f} yref {float(config.yref):.6f} zref {float(config.zref):.6f} -
-    droff {float(config.radius):.6f} force {float(config.force):.6f} outside -
+    droff {float(config.radius):.6f} force {float(config.force):.6f} -
     sele {sel} end
 END
 """

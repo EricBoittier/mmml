@@ -129,7 +129,9 @@ def test_flat_bottom_mmfp_uses_outside_harmonic_wall():
 
     script = pycharmm.lingo.charmm_script.call_args[0][0]
     assert "GEO sphere harm" in script
-    assert "droff 10.000000 force 0.010000 outside" in script
+    assert "droff 10.000000 force 0.010000" in script
+    assert " outside " not in script
+    assert " inside " not in script
     assert "sele TYPE C end" in script
     assert "quartic" not in script.lower()
 
