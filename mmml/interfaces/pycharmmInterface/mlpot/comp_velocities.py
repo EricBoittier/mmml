@@ -1,4 +1,4 @@
-"""Prepare CHARMM COMP (comparison set) for ``IASVEL=0`` velocity assignment."""
+"""Prepare CHARMM COMP (comparison set) for selective force-damp / velocity workflows."""
 
 from __future__ import annotations
 
@@ -214,7 +214,7 @@ def apply_comp_velocity_policy(
     kw: dict[str, Any],
     args: argparse.Namespace,
 ) -> None:
-    """Heat: selective COMP damp on high-|F| H; later stages: clear COMP."""
+    """Heat: optional COMP prep + gentler ``iasors=0`` scaling; later stages: clear COMP."""
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
         resolve_heat_comp_damp,
         resolve_heat_comp_damp_kwargs,
@@ -223,13 +223,14 @@ def apply_comp_velocity_policy(
     if stage == "heat" and resolve_heat_comp_damp(args):
         damp_kw = resolve_heat_comp_damp_kwargs(args)
         n = prepare_comp_for_heat(**damp_kw)
-        kw["iasvel"] = 0
+        # Experimental: do not override iasvel/iasors (heating needs iasvel=1,
+        # iasors=1 per reference heat). COMP force metadata only.
         if not getattr(args, "quiet", False):
             target = "H" if damp_kw.get("hydrogen_only", True) else "all"
             print(
-                f"HEAT COMP: selective force-damp on {n} {target} atoms "
+                f"HEAT COMP: force-damp metadata on {n} {target} atoms "
                 f"(|F|>={damp_kw['min_force_kcalmol_A']} kcal/mol/Å, "
-                f"scale={damp_kw['force_scale']}); iasvel=0",
+                f"scale={damp_kw['force_scale']})",
                 flush=True,
             )
     elif stage in _COMP_CLEARED_STAGES:

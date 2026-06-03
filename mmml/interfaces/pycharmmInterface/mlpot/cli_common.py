@@ -74,10 +74,10 @@ def add_charmm_output_args(parser: argparse.ArgumentParser) -> None:
     group.add_argument(
         "--heat-comp-damp",
         action=argparse.BooleanOptionalAction,
-        default=True,
+        default=False,
         help=(
-            "Before heat: selective COMP force-damp on high-|F| hydrogens (X–H spikes) "
-            "with dyna iasvel=0. Cleared automatically before equi/NVE/prod."
+            "Experimental: COMP prep on high-|F| hydrogens before heat (does not change "
+            "iasvel/iasors). Cleared before equi/NVE/prod. Default off — use reference heat."
         ),
     )
     group.add_argument(
@@ -280,8 +280,8 @@ def apply_charmm_output_from_args(args: argparse.Namespace) -> int:
 
 
 def resolve_heat_comp_damp(args: argparse.Namespace) -> bool:
-    """Whether heat uses selective COMP force-damp (non-H only) with ``iasvel=0``."""
-    return bool(getattr(args, "heat_comp_damp", True))
+    """Whether heat runs experimental COMP force-damp prep (default off)."""
+    return bool(getattr(args, "heat_comp_damp", False))
 
 
 def resolve_heat_comp_damp_kwargs(args: argparse.Namespace) -> dict[str, float | bool]:

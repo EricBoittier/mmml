@@ -672,6 +672,67 @@ def assign_boltzmann_velocities(temp: float = 300.0) -> dict[str, Any]:
     return boltzmann_velocity_kwargs(temp)
 
 
+def assign_velocities_at_temperature(
+    firstt: float,
+    *,
+    timestep_ps: float = 0.00025,
+    restart_path: PathLike | None = None,
+    use_pbc: bool = True,
+    read_unit: int = 90,
+) -> None:
+    """Boltzmann-assign velocities at ``firstt`` (one ``dyna`` step, ``ihtfrq=0``).
+
+    Uses current coordinates when ``restart_path`` is None. Otherwise loads coords
+    from the restart file first (velocities are replaced at ``firstt``).
+    """
+    image_kwargs = {} if use_pbc else {"imgfrq": 0, "ihbfrq": 0, "ilbfrq": 0}
+    kw = _base_dyn_kwargs(
+        timestep=timestep_ps,
+        nstep=1,
+        nsavc=1,
+        nprint=1,
+        iprfrq=1,
+        isvfrq=1,
+        ntrfrq=0,
+        echeck=-1,
+        **image_kwargs,
+    )
+    t = float(firstt)
+    kw.update(boltzmann_velocity_kwargs(t))
+    kw.update(
+        {
+            "verlet": True,
+            "new": False,
+            "start": True,
+            "restart": restart_path is not None,
+            "ihtfrq": 0,
+            "ieqfrq": 0,
+            "TEMINC": 0.0,
+            "iunrea": -1,
+            "iunwri": -1,
+            "iuncrd": -1,
+        }
+    )
+    _ensure_nsavc_below_nstep(kw)
+    if restart_path is None:
+        run_dynamics(kw)
+        return
+
+    import pycharmm
+
+    restart_file = pycharmm.CharmmFile(
+        file_name=str(restart_path),
+        file_unit=read_unit,
+        formatted=True,
+        read_only=True,
+    )
+    try:
+        kw["iunrea"] = read_unit
+        run_dynamics(kw)
+    finally:
+        restart_file.close()
+
+
 def build_nve_dynamics(
     *,
     timestep_ps: float = 0.00025,
