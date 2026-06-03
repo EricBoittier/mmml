@@ -56,6 +56,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
     rewrite_dynamics_restart_from_current_state,
 )
 from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+    DynamicsOverlapConfig,
     resolve_dynamics_overlap_config,
 )
 from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import setup_charmm_environment
@@ -282,6 +283,21 @@ def _build_stage_dynamics_kw(
         kw["new"] = True
         kw["start"] = True
     return kw
+
+
+def _overlap_for_stage(
+    stage: MdStage,
+    overlap_cfg: DynamicsOverlapConfig,
+) -> DynamicsOverlapConfig | None:
+    """Disable restart-chunked overlap checks during CHARMM heating.
+
+    CHARMM's heating/velocity-scaling state does not survive overlap restart
+    chunks reliably; failed heat chunks can write coordinate-history files that
+    cannot be used for restart. Later stages can keep the overlap guard.
+    """
+    if stage == "heat":
+        return None
+    return overlap_cfg
 
 
 def _reset_stage_trajectory(path: Path | None) -> None:
@@ -576,7 +592,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     run_dynamics_with_io(
                         kw,
                         seg_io,
-                        overlap=overlap_cfg,
+                        overlap=_overlap_for_stage("equi", overlap_cfg),
                         overlap_context=f"equi segment {seg_i + 1}/{n_equi_segments}",
                         mlpot_ctx=ctx,
                         rng_base=getattr(args, "seed", None),
@@ -656,7 +672,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     run_dynamics_with_io(
                         kw,
                         seg_io,
-                        overlap=overlap_cfg,
+                        overlap=_overlap_for_stage("prod", overlap_cfg),
                         overlap_context=f"prod segment {seg_i + 1}/{n_prod_segments}",
                         mlpot_ctx=ctx,
                         rng_base=getattr(args, "seed", None),
@@ -734,7 +750,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             run_dynamics_with_io(
                 kw,
                 io,
-                overlap=overlap_cfg,
+                overlap=_overlap_for_stage(stage, overlap_cfg),
                 overlap_context=stage.upper(),
                 mlpot_ctx=ctx,
                 rng_base=getattr(args, "seed", None),

@@ -15,8 +15,10 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
 from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
     _artifact_paths,
     _build_stage_dynamics_kw,
+    _overlap_for_stage,
     _prior_restart_for_stage,
 )
+from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import DynamicsOverlapConfig
 
 
 def test_resolve_md_stages_pycharmm_full():
@@ -159,3 +161,17 @@ def test_build_stage_dynamics_kw_free_space_equi_uses_hoover_nvt():
     assert "cpt" not in kw
     assert "pint pconst pref" not in kw
     assert kw["imgfrq"] == 0
+
+
+def test_overlap_for_stage_disables_heat_chunking_only():
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        min_distance_A=0.4,
+        check_interval=100,
+        n_monomers=10,
+        use_pbc=False,
+    )
+
+    assert _overlap_for_stage("heat", cfg) is None
+    assert _overlap_for_stage("equi", cfg) is cfg
+    assert _overlap_for_stage("prod", cfg) is cfg
