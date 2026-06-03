@@ -91,6 +91,8 @@ python -m mmml.cli.run.md_pbc_suite.pycharmm_mlpot --phase full --residue ACO --
 
 Outputs default to `artifacts/pycharmm_mlpot/` (`cluster_for_vmd_*.psf`, `nve_*.dcd`). Use `--flat-bottom-radius` (maps to CHARMM MMFP `--fb-rad`) for vacuum droplet restraints.
 
+CHARMM print / heating cadence (`nprint`, `dyn-nprint`, `ihtfrq`): see [`CHARMM_SETTINGS.md`](../../mmml/interfaces/pycharmmInterface/mlpot/CHARMM_SETTINGS.md).
+
 ## Steps 4–5 and pytest
 
 ```bash

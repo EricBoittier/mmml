@@ -267,6 +267,16 @@ def parse_args() -> argparse.Namespace:
         help="pycharmm: detailed dynamics status every N steps (default: 2000)",
     )
     parser.add_argument(
+        "--heat-ihtfrq",
+        type=int,
+        default=0,
+        metavar="N",
+        help=(
+            "pycharmm: heating velocity rescale every N steps (0 = match --dyn-nprint). "
+            "Controls COM/velocity banner frequency during heat."
+        ),
+    )
+    parser.add_argument(
         "--skip-energy-show",
         action="store_true",
         help="pycharmm: skip CHARMM energy.show() (MPI/cluster segfault guard)",
@@ -993,6 +1003,8 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         str(args.dyn_nprint),
         "--dyn-iprfrq",
         str(args.dyn_iprfrq),
+        "--heat-ihtfrq",
+        str(args.heat_ihtfrq),
         "--dcd-nsavc",
         str(args.dcd_nsavc),
         "--echeck",
