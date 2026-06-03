@@ -16,6 +16,12 @@ export MMML_CKPT=/path/to/dcm1-.../ckpts/dcm1-...
 - **Snakemake** (`pip install snakemake` or cluster module)
 - `packmol` on PATH (first vacuum cluster build)
 
+If Snakemake uses a Python without `mmml` installed, set:
+
+```bash
+export MMML_PYTHON="$PWD/../../.venv/bin/python"   # from workflow dir
+```
+
 PyCHARMM runs use [scripts/mmml-charmm-mpirun.sh](../../scripts/mmml-charmm-mpirun.sh) (1 MPI rank).
 
 ## Job matrix (15 jobs)

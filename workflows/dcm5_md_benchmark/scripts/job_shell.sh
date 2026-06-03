@@ -7,4 +7,13 @@ REPO_ROOT="$(cd "$WORKFLOW_ROOT/../.." && pwd)"
 JOB_ID="${1:?usage: job_shell.sh JOB_ID}"
 
 cd "$REPO_ROOT"
-exec python3 "$WORKFLOW_ROOT/scripts/run_job.py" "$JOB_ID" --config "$WORKFLOW_ROOT/config.yaml"
+
+PY="${MMML_PYTHON:-}"
+if [[ -z "$PY" && -x "$REPO_ROOT/.venv/bin/python" ]]; then
+  PY="$REPO_ROOT/.venv/bin/python"
+fi
+if [[ -z "$PY" ]]; then
+  PY="$(command -v python3)"
+fi
+
+exec "$PY" "$WORKFLOW_ROOT/scripts/run_job.py" "$JOB_ID" --config "$WORKFLOW_ROOT/config.yaml"
