@@ -72,6 +72,40 @@ def add_charmm_output_args(parser: argparse.ArgumentParser) -> None:
         ),
     )
     group.add_argument(
+        "--heat-comp-damp",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Before heat: selective COMP force-damp on high-|F| hydrogens (X–H spikes) "
+            "with dyna iasvel=0. Cleared automatically before equi/NVE/prod."
+        ),
+    )
+    group.add_argument(
+        "--heat-comp-hydrogen-only",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "With --heat-comp-damp, damp only hydrogens above --heat-comp-force-min "
+            "(default). Use --no-heat-comp-hydrogen-only to damp all atom types."
+        ),
+    )
+    group.add_argument(
+        "--heat-comp-force-min",
+        type=float,
+        default=None,
+        metavar="KCAL",
+        help=(
+            "Min |F| (kcal/mol/Å) for heat COMP damp selection (default: 1.0). "
+            "Only used with --heat-comp-damp."
+        ),
+    )
+    group.add_argument(
+        "--heat-comp-force-scale",
+        type=float,
+        default=None,
+        help="Scale copied forces into COMP during heat (default: 0.01).",
+    )
+    group.add_argument(
         "--quiet",
         action="store_true",
         help="Shortcut for --prnlev 0 --warnlev 0; coarse mini/dynamics print",
@@ -243,6 +277,33 @@ def apply_charmm_output_from_args(args: argparse.Namespace) -> int:
         mini_nstep = getattr(args, "mini_nstep", getattr(args, "nstep", 100))
         return max(1, int(mini_nstep))
     return max(1, int(args.nprint))
+
+
+def resolve_heat_comp_damp(args: argparse.Namespace) -> bool:
+    """Whether heat uses selective COMP force-damp (non-H only) with ``iasvel=0``."""
+    return bool(getattr(args, "heat_comp_damp", True))
+
+
+def resolve_heat_comp_damp_kwargs(args: argparse.Namespace) -> dict[str, float | bool]:
+    from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+        DEFAULT_COMP_FORCE_MIN_KCALMOL_A,
+        DEFAULT_COMP_FORCE_SCALE,
+    )
+
+    min_f = getattr(args, "heat_comp_force_min", None)
+    scale = getattr(args, "heat_comp_force_scale", None)
+    kw: dict[str, float | bool] = {
+        "hydrogen_only": bool(getattr(args, "heat_comp_hydrogen_only", True)),
+    }
+    if min_f is not None:
+        kw["min_force_kcalmol_A"] = float(min_f)
+    else:
+        kw["min_force_kcalmol_A"] = DEFAULT_COMP_FORCE_MIN_KCALMOL_A
+    if scale is not None:
+        kw["force_scale"] = float(scale)
+    else:
+        kw["force_scale"] = DEFAULT_COMP_FORCE_SCALE
+    return kw
 
 
 def resolve_heat_ihtfrq(args: argparse.Namespace, *, nstep: int) -> int:

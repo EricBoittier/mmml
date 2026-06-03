@@ -22,6 +22,8 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     resolve_constrain_resids,
     resolve_dcd_nsavc,
     resolve_dynamics_print_kwargs,
+    resolve_heat_comp_damp,
+    resolve_heat_comp_damp_kwargs,
     resolve_heat_ihtfrq,
     resolve_echeck_for_cluster,
     resolve_fix_resids,
@@ -312,6 +314,38 @@ def _overlap_for_stage(
     if stage == "heat":
         return None
     return overlap_cfg
+
+
+_COMP_CLEARED_STAGES: frozenset[MdStage] = frozenset({"nve", "equi", "prod"})
+
+
+def _apply_comp_velocity_policy(
+    stage: MdStage,
+    kw: dict[str, Any],
+    args: argparse.Namespace,
+) -> None:
+    """Heat: selective COMP damp on non-H; later stages: clear COMP."""
+    from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+        clear_comp_for_production,
+        prepare_comp_for_heat,
+    )
+
+    if stage == "heat" and resolve_heat_comp_damp(args):
+        damp_kw = resolve_heat_comp_damp_kwargs(args)
+        n = prepare_comp_for_heat(**damp_kw)
+        kw["iasvel"] = 0
+        if not args.quiet:
+            target = "H" if damp_kw.get("hydrogen_only", True) else "all"
+            print(
+                f"HEAT COMP: selective force-damp on {n} {target} atoms "
+                f"(|F|>={damp_kw['min_force_kcalmol_A']} kcal/mol/Å, "
+                f"scale={damp_kw['force_scale']}); iasvel=0",
+                flush=True,
+            )
+    elif stage in _COMP_CLEARED_STAGES:
+        clear_comp_for_production()
+        if not args.quiet:
+            print(f"{stage.upper()}: COMP cleared (no force-damp)", flush=True)
 
 
 def _reset_stage_trajectory(
@@ -903,6 +937,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 context=stage.upper(),
                 quiet=bool(args.quiet),
             )
+            _apply_comp_velocity_policy(stage, kw, args)
             run_dynamics_with_io(
                 kw,
                 io,
