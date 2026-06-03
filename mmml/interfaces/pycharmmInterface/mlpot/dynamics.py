@@ -1194,6 +1194,7 @@ def _apply_overlap_chunk_dynamics_kw(
 ) -> None:
     """Set ``restart`` / ``new`` / ``start`` for one overlap chunk (in-place)."""
     if chunk_index == 0 and not has_restart_read:
+        chunk_kw["restart"] = False
         chunk_kw.pop("iunrea", None)
         chunk_kw["iunrea"] = -1
         return
