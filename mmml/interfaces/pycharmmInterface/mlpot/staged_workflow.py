@@ -439,6 +439,8 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
     sync_charmm_positions(r)
 
     vmd_topo_psf = paths["vmd_psf"]
+    if getattr(args, "skip_cluster_build", False) and getattr(args, "from_psf", None):
+        vmd_topo_psf = Path(args.from_psf).expanduser().resolve()
     if not getattr(args, "no_save_vmd_topology", False) and not getattr(
         args, "skip_cluster_build", False
     ):
@@ -446,6 +448,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             out_dir, r, stem=f"cluster_for_vmd_{tag}", title="pre-MLpot cluster"
         )
         vmd_topo_psf = vmd_files["psf"]
+    recovery_topology_psf = vmd_topo_psf if Path(vmd_topo_psf).is_file() else None
 
     if "mini" in stages and not getattr(args, "skip_cluster_build", False):
         save_mini = bool(getattr(args, "save", True))
@@ -643,6 +646,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         stage="equi",
                         baseline=baseline,
                         restart_path=seg_io.restart_write,
+                        topology_psf=recovery_topology_psf,
                     )
                     prev_restart = seg_io.restart_write
                     prev_restart_is_current_state = True
@@ -732,6 +736,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         stage="prod",
                         baseline=baseline,
                         restart_path=seg_io.restart_write,
+                        topology_psf=recovery_topology_psf,
                     )
                     prev_restart = seg_io.restart_write
                     prev_restart_is_current_state = True
@@ -820,6 +825,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 stage=stage,
                 baseline=baseline,
                 restart_path=io.restart_write,
+                topology_psf=recovery_topology_psf,
             )
             prev_restart = io.restart_write
             prev_restart_is_current_state = True
