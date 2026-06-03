@@ -284,6 +284,26 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--heat-firstt",
+        type=float,
+        default=None,
+        metavar="K",
+        help=(
+            "pycharmm: heat start temperature (FIRSTT). Default 0.2×--temperature; "
+            "use 0 for cold start + IHTFRQ scaling."
+        ),
+    )
+    parser.add_argument(
+        "--heat-finalt",
+        type=float,
+        default=None,
+        metavar="K",
+        help=(
+            "pycharmm: heat end temperature (FINALT). Default --temperature; "
+            "DCM:9 stability often uses 240."
+        ),
+    )
+    parser.add_argument(
         "--skip-energy-show",
         action="store_true",
         help="pycharmm: skip CHARMM energy.show() (MPI/cluster segfault guard)",
@@ -1012,6 +1032,11 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         str(args.dyn_iprfrq),
         "--heat-ihtfrq",
         str(args.heat_ihtfrq),
+    ]
+    _append_optional(cmd, "--heat-firstt", getattr(args, "heat_firstt", None))
+    _append_optional(cmd, "--heat-finalt", getattr(args, "heat_finalt", None))
+    cmd.extend(
+        [
         "--dcd-nsavc",
         str(args.dcd_nsavc),
         "--echeck",
@@ -1022,7 +1047,8 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         str(args.ps_equi),
         "--n-prod-segments",
         str(args.n_prod_segments),
-    ]
+        ]
+    )
     if args.composition:
         cmd.extend(["--composition", str(args.composition)])
         cmd.extend(["--n-molecules", str(_composition_molecule_count(args.composition))])
