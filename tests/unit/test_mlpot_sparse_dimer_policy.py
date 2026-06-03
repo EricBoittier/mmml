@@ -5,6 +5,7 @@ from __future__ import annotations
 import numpy as np
 
 from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
+    max_dimer_pairs,
     resolve_max_active_dimers,
     validate_sparse_dimer_cap,
 )
@@ -14,9 +15,23 @@ def test_resolve_max_active_dimers_default_90():
     assert resolve_max_active_dimers(90, 4005) == 1000
 
 
+def test_resolve_max_active_dimers_free_space_uses_all_pairs():
+    assert max_dimer_pairs(90) == 4005
+    assert resolve_max_active_dimers(90, 4005, free_space=True) == 4005
+
+
+def test_resolve_max_active_dimers_free_space_promotes_lower_explicit():
+    assert resolve_max_active_dimers(90, 4005, explicit=1000, free_space=True) == 4005
+
+
 def test_resolve_max_active_dimers_env(monkeypatch):
     monkeypatch.setenv("MMML_MLPOT_MAX_ACTIVE_DIMERS", "1500")
     assert resolve_max_active_dimers(90, 4005) == 1500
+
+
+def test_resolve_max_active_dimers_free_space_promotes_lower_env(monkeypatch):
+    monkeypatch.setenv("MMML_MLPOT_MAX_ACTIVE_DIMERS", "1500")
+    assert resolve_max_active_dimers(90, 4005, free_space=True) == 4005
 
 
 def test_resolve_max_active_dimers_small_cluster():
