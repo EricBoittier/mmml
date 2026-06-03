@@ -58,12 +58,13 @@ def setup_flat_bottom_sphere_mmfp(config: FlatBottomSphereConfig) -> None:
     sel = config.selection.strip() or "all"
     script = f"""
 MMFP
-GEO sphere quartic -
+GEO sphere harm -
     xref {float(config.xref):.6f} yref {float(config.yref):.6f} zref {float(config.zref):.6f} -
-    droff {float(config.radius):.6f} force {float(config.force):.6f} p1 2.5 -
+     force {float(config.force):.6f}  -
     sele {sel} end
 END
 """
+    # droff {float(config.radius):.6f}
     pycharmm.lingo.charmm_script(script)
 
 
