@@ -300,11 +300,22 @@ def _force_fd_check(
     if mode == "callback":
         evaluate = _callback_energy_and_force
     elif mode == "ml-only":
-        evaluate = _ml_only_energy_and_force
+        evaluate = (
+            _ml_only_energy_and_force
+            if hasattr(calc, "spherical_fn")
+            else _callback_energy_and_force
+        )
     elif mode == "monomer-only":
-        evaluate = _monomer_only_energy_and_force
+        evaluate = (
+            _monomer_only_energy_and_force
+            if hasattr(calc, "spherical_fn")
+            else _callback_energy_and_force
+        )
     else:
         raise ValueError(f"unknown force-check mode: {mode!r}")
+    effective_mode = mode
+    if evaluate is _callback_energy_and_force and mode != "callback":
+        effective_mode = f"{mode}-via-callback"
     e0, f_analytic = evaluate(calc, pos0)
 
     components = [(int(i), axis) for i in atom_indices for axis in range(3)]
@@ -357,6 +368,7 @@ def _force_fd_check(
     )
     return {
         "mode": mode,
+        "effective_mode": effective_mode,
         "energy_kcalmol": e0,
         "fd_step_A": float(step),
         "tol_kcalmol_A": float(tol),
