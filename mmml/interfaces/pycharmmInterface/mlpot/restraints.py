@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from fnmatch import fnmatchcase
 
 import numpy as np
 
 _MMFP_GEO_ACTIVE = False
 _DROFF_MARGIN_A = 1.0e-3
 _ENERGY_VERIFY_TOL_KCAL = 1.0e-4
+_DROFF_TUNE_MAX_ATTEMPTS = 8
 
 
 @dataclass
@@ -77,41 +77,29 @@ END
     _MMFP_GEO_ACTIVE = True
 
 
-def _selected_atom_indices(selection: str, n_atoms: int) -> np.ndarray:
-    """Best-effort Python mirror for common CHARMM selections used by MMFP."""
-    sel = (selection or "all").strip()
-    if not sel or sel.lower() == "all":
-        return np.arange(n_atoms, dtype=int)
-
-    parts = sel.split()
-    if len(parts) == 2 and parts[0].upper() == "TYPE":
-        import pycharmm.psf as psf
-
-        pattern = parts[1].upper()
-        names = [str(name).strip().upper() for name in psf.get_atype()]
-        if pattern.endswith("*"):
-            idx = [i for i, name in enumerate(names) if fnmatchcase(name, pattern)]
-        else:
-            idx = [i for i, name in enumerate(names) if name == pattern]
-        return np.asarray(idx, dtype=int)
-
-    # Unknown selection syntax: let CHARMM handle selection, but do not try to
-    # auto-inflate droff from an incorrect Python-side subset.
-    return np.arange(n_atoms, dtype=int)
-
-
 def _selected_max_radius(selection: str, *, xref: float, yref: float, zref: float) -> float | None:
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+    """Conservative max selected distance using CHARMM's own selection parser."""
+    pycharmm = _import_pycharmm()
+    sel = (selection or "all").strip() or "all"
+    try:
+        pycharmm.lingo.charmm_script(f"coor stat sele {sel} end")
+        xmin = float(pycharmm.lingo.get_energy_value("XMIN"))
+        xmax = float(pycharmm.lingo.get_energy_value("XMAX"))
+        ymin = float(pycharmm.lingo.get_energy_value("YMIN"))
+        ymax = float(pycharmm.lingo.get_energy_value("YMAX"))
+        zmin = float(pycharmm.lingo.get_energy_value("ZMIN"))
+        zmax = float(pycharmm.lingo.get_energy_value("ZMAX"))
+    except Exception as exc:
+        print(
+            f"WARN: could not estimate MMFP droff from selection {sel!r}: {exc}",
+            flush=True,
+        )
+        return None
 
-    positions = np.asarray(get_charmm_positions_array(), dtype=float)
-    if positions.ndim != 2 or positions.shape[0] == 0:
-        return None
-    idx = _selected_atom_indices(selection, int(positions.shape[0]))
-    if idx.size == 0:
-        return None
-    center = np.asarray([xref, yref, zref], dtype=float)
-    distances = np.linalg.norm(positions[idx] - center[None, :], axis=1)
-    return float(np.max(distances))
+    dx = max(abs(xmin - float(xref)), abs(xmax - float(xref)))
+    dy = max(abs(ymin - float(yref)), abs(ymax - float(yref)))
+    dz = max(abs(zmin - float(zref)), abs(zmax - float(zref)))
+    return float(np.sqrt(dx * dx + dy * dy + dz * dz))
 
 
 def _current_charmm_energy_kcalmol() -> float | None:
@@ -132,25 +120,18 @@ def _current_charmm_energy_kcalmol() -> float | None:
     return None
 
 
-def _verify_zero_energy_install(before: float | None, *, tol: float = _ENERGY_VERIFY_TOL_KCAL) -> None:
+def _energy_delta_after_install(before: float | None) -> float | None:
     if before is None:
-        return
+        return None
     after = _current_charmm_energy_kcalmol()
     if after is None:
-        return
-    delta = after - before
-    if abs(delta) > tol:
-        print(
-            "WARN: MMFP flat-bottom changed energy at install "
-            f"by {delta:+.6f} kcal/mol after droff tuning "
-            f"(before={before:.6f}, after={after:.6f})",
-            flush=True,
-        )
-    else:
-        print(
-            f"MMFP flat-bottom zero-energy check OK: ΔE={delta:+.6f} kcal/mol",
-            flush=True,
-        )
+        return None
+    return after - before
+
+
+def _next_droff_increment(radius: float, attempt: int) -> float:
+    base = max(0.05, 0.01 * float(radius))
+    return base * (2 ** max(0, attempt - 1))
 
 
 def clear_mmfp_restraints() -> None:
@@ -205,6 +186,31 @@ def apply_flat_bottom_workflow(
         zref=zref,
         selection=selection,
     )
-    setup_flat_bottom_sphere_mmfp(cfg)
-    _verify_zero_energy_install(energy_before)
+    for attempt in range(1, _DROFF_TUNE_MAX_ATTEMPTS + 1):
+        setup_flat_bottom_sphere_mmfp(cfg)
+        delta = _energy_delta_after_install(energy_before)
+        if delta is None:
+            return cfg
+        if abs(delta) <= _ENERGY_VERIFY_TOL_KCAL:
+            print(
+                f"MMFP flat-bottom zero-energy check OK: ΔE={delta:+.6f} kcal/mol",
+                flush=True,
+            )
+            return cfg
+        if attempt == _DROFF_TUNE_MAX_ATTEMPTS:
+            print(
+                "WARN: MMFP flat-bottom changed energy at install "
+                f"by {delta:+.6f} kcal/mol after {attempt} droff tuning attempt(s) "
+                f"(droff={cfg.radius:.6f} Å)",
+                flush=True,
+            )
+            return cfg
+        old_radius = cfg.radius
+        cfg.radius = old_radius + _next_droff_increment(old_radius, attempt)
+        print(
+            "MMFP flat-bottom ΔE not zero "
+            f"({delta:+.6f} kcal/mol); increasing droff "
+            f"{old_radius:.3f} -> {cfg.radius:.3f} Å and retrying",
+            flush=True,
+        )
     return cfg
