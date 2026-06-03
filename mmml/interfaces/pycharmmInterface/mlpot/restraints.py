@@ -74,7 +74,7 @@ def clear_mmfp_restraints() -> None:
     pycharmm.lingo.charmm_script(
         """
 MMFP
-CLEAR
+GEO RESET
 END
 """
     )

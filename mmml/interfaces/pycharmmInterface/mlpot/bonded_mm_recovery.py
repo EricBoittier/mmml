@@ -347,8 +347,7 @@ def _run_heavy_bonded_recovery_check(
         )
     finally:
         _reregister_mlpot_after_topology_reload(ctx)
-        if stage.lower() != "mini":
-            _restore_flat_bottom_after_heavy_recovery(args)
+        _restore_flat_bottom_after_heavy_recovery(args)
 
 
 def _restore_flat_bottom_after_heavy_recovery(args: argparse.Namespace) -> None:

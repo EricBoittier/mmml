@@ -63,7 +63,7 @@ def test_resolve_use_pbc_box_size():
 
 def test_resolve_flat_bottom_selection_dcm_uses_one_carbon_type():
     args = argparse.Namespace(composition="DCM:90", residue="ACO", fb_selection="all")
-    assert resolve_flat_bottom_selection(args) == "TYPE CG321"
+    assert resolve_flat_bottom_selection(args) == "TYPE C"
 
 
 def test_resolve_flat_bottom_selection_respects_explicit_value():

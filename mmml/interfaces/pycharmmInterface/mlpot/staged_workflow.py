@@ -437,6 +437,9 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
 
     setup_charmm_environment(use_pbc=use_pbc, cubic_box_side_A=box_side)
     sync_charmm_positions(r)
+    if not use_pbc:
+        apply_flat_bottom_from_args(args)
+        r = get_charmm_positions_array()
 
     vmd_topo_psf = paths["vmd_psf"]
     if getattr(args, "skip_cluster_build", False) and getattr(args, "from_psf", None):
@@ -542,9 +545,6 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         dyn_stages = [s for s in _STAGE_ORDER if s in stages and s != "mini"]
         if not dyn_stages:
             return 0
-
-        if not use_pbc:
-            apply_flat_bottom_from_args(args)
 
         assert_dynamics_ready(
             max_grms=float(getattr(args, "max_grms_before_dyn", 50.0)),
