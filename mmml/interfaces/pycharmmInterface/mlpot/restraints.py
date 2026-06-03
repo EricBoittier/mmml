@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from fnmatch import fnmatchcase
+
+import numpy as np
 
 _MMFP_GEO_ACTIVE = False
+_DROFF_MARGIN_A = 1.0e-3
 
 
 @dataclass
@@ -72,6 +76,43 @@ END
     _MMFP_GEO_ACTIVE = True
 
 
+def _selected_atom_indices(selection: str, n_atoms: int) -> np.ndarray:
+    """Best-effort Python mirror for common CHARMM selections used by MMFP."""
+    sel = (selection or "all").strip()
+    if not sel or sel.lower() == "all":
+        return np.arange(n_atoms, dtype=int)
+
+    parts = sel.split()
+    if len(parts) == 2 and parts[0].upper() == "TYPE":
+        import pycharmm.psf as psf
+
+        pattern = parts[1].upper()
+        names = [str(name).strip().upper() for name in psf.get_atype()]
+        if pattern.endswith("*"):
+            idx = [i for i, name in enumerate(names) if fnmatchcase(name, pattern)]
+        else:
+            idx = [i for i, name in enumerate(names) if name == pattern]
+        return np.asarray(idx, dtype=int)
+
+    # Unknown selection syntax: let CHARMM handle selection, but do not try to
+    # auto-inflate droff from an incorrect Python-side subset.
+    return np.arange(n_atoms, dtype=int)
+
+
+def _selected_max_radius(selection: str, *, xref: float, yref: float, zref: float) -> float | None:
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+
+    positions = np.asarray(get_charmm_positions_array(), dtype=float)
+    if positions.ndim != 2 or positions.shape[0] == 0:
+        return None
+    idx = _selected_atom_indices(selection, int(positions.shape[0]))
+    if idx.size == 0:
+        return None
+    center = np.asarray([xref, yref, zref], dtype=float)
+    distances = np.linalg.norm(positions[idx] - center[None, :], axis=1)
+    return float(np.max(distances))
+
+
 def clear_mmfp_restraints() -> None:
     """Remove MMFP terms (safe to call if none were defined)."""
     global _MMFP_GEO_ACTIVE
@@ -103,8 +144,20 @@ def apply_flat_bottom_workflow(
         return None
     if center_at_origin:
         center_cluster_at_origin()
+    requested_radius = float(radius)
+    current_radius = _selected_max_radius(selection, xref=xref, yref=yref, zref=zref)
+    effective_radius = requested_radius
+    if current_radius is not None:
+        effective_radius = max(requested_radius, current_radius + _DROFF_MARGIN_A)
+        if effective_radius > requested_radius:
+            print(
+                "MMFP flat-bottom droff adjusted "
+                f"{requested_radius:.3f} -> {effective_radius:.3f} Å "
+                f"so initial {selection!r} wall energy is zero",
+                flush=True,
+            )
     cfg = FlatBottomSphereConfig(
-        radius=float(radius),
+        radius=effective_radius,
         force=float(force),
         xref=xref,
         yref=yref,

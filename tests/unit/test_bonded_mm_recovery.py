@@ -140,7 +140,11 @@ def test_apply_flat_bottom_workflow_accepts_selection():
     with patch.object(restraints, "center_cluster_at_origin") as center, patch.object(
         restraints,
         "setup_flat_bottom_sphere_mmfp",
-    ) as setup:
+    ) as setup, patch.object(
+        restraints,
+        "_selected_max_radius",
+        return_value=4.0,
+    ):
         cfg = restraints.apply_flat_bottom_workflow(
             radius=10.0,
             force=0.01,
@@ -151,6 +155,30 @@ def test_apply_flat_bottom_workflow_accepts_selection():
     setup.assert_called_once()
     assert cfg is not None
     assert cfg.selection == "TYPE CG321"
+
+
+def test_apply_flat_bottom_workflow_inflates_droff_to_current_extent():
+    from mmml.interfaces.pycharmmInterface.mlpot import restraints
+
+    with patch.object(restraints, "center_cluster_at_origin"), patch.object(
+        restraints,
+        "setup_flat_bottom_sphere_mmfp",
+    ) as setup, patch.object(
+        restraints,
+        "_selected_max_radius",
+        return_value=12.5,
+    ):
+        cfg = restraints.apply_flat_bottom_workflow(
+            radius=10.0,
+            force=0.01,
+            selection="TYPE C",
+        )
+
+    assert cfg is not None
+    assert cfg.radius > 12.5
+    assert cfg.radius == pytest.approx(12.501)
+    setup.assert_called_once()
+    assert setup.call_args.args[0].radius == pytest.approx(12.501)
 
 
 def test_clear_mmfp_uses_block_command():
