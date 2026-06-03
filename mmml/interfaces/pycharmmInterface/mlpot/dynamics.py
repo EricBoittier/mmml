@@ -587,6 +587,10 @@ def build_heat_dynamics(
     """NVT heating dict for ``DynamicsScript`` (CHARMM + MLpot)."""
     nstep = ps_to_nsteps(timestep_ps, duration_ps)
     nsavc = nsavc_for_interval(timestep_ps, save_interval_ps)
+    ihtfrq = 10
+    firstt = temp * 0.2
+    heat_updates = max(1, nstep // ihtfrq)
+    teminc = max(0.0, (temp - firstt) / heat_updates)
     image_kwargs = {} if use_pbc else {"imgfrq": 0, "ihbfrq": 0, "ilbfrq": 0}
     kw = _base_dyn_kwargs(
         timestep=timestep_ps,
@@ -601,14 +605,14 @@ def build_heat_dynamics(
             "verlet": True,
             "new": True,
             "start": True,
-            "ihtfrq": 10,
-            "TEMINC": 5,
+            "ihtfrq": ihtfrq,
+            "TEMINC": teminc,
             "ieqfrq": 0,
             "iasors": 1,
             "iasvel": 1,
             "iscvel": 0,
             "ichecw": 0,
-            "firstt": temp * 0.2,
+            "firstt": firstt,
             "finalt": temp,
             "tbath": temp,
         }

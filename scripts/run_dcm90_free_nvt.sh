@@ -50,7 +50,7 @@ uv run mmml md-system \
   --packmol-radius "$PACKMOL_R" \
   --packmol-tolerance 2.0 \
   --flat-bottom-radius "$FB_RAD" --dynamics-overlap-min-distance 0.4 \
-  --flat-bottom-k 1.0 \
+  --flat-bottom-k 0.01 \
   --temperature 100.0 \
   --dt-fs 0.1 \
   --ps-heat 10 \

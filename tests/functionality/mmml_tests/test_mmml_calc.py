@@ -240,6 +240,7 @@ def test_check_lattice_invariance():
 		if ckpt is None:
 			pytest.skip("Strict lattice/force checks require full checkpoint directory, not JSON params")
 
+	import jax
 	import jax.numpy as jnp
 	from mmml.interfaces.pycharmmInterface.mmml_calculator import (
 		setup_calculator,
@@ -323,7 +324,6 @@ def test_pbc_energy_invariance_via_ase():
 		if ckpt is None:
 			pytest.skip("Strict lattice/force checks require full checkpoint directory, not JSON params")
 
-	import jax
 	import jax.numpy as jnp
 	import ase
 	from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
@@ -405,7 +405,6 @@ def test_pbc_force_invariance():
 		if ckpt is None:
 			pytest.skip("Strict lattice/force checks require full checkpoint directory, not JSON params")
 
-	import jax
 	import jax.numpy as jnp
 	import ase
 	from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
@@ -426,8 +425,27 @@ def test_pbc_force_invariance():
 		[0, cell_length, 0],
 		[0, 0, cell_length],
 	])
-	key = jax.random.PRNGKey(42)
-	R = np.asarray(jax.random.uniform(key, (20, 3), minval=2.0, maxval=cell_length - 2.0))
+	monomer_template = np.array(
+		[
+			[0.0, 0.0, 0.0],
+			[1.4, 0.0, 0.0],
+			[0.0, 1.4, 0.0],
+			[0.0, 0.0, 1.4],
+			[1.4, 1.4, 0.0],
+			[1.4, 0.0, 1.4],
+			[0.0, 1.4, 1.4],
+			[1.4, 1.4, 1.4],
+			[2.8, 0.7, 0.7],
+			[0.7, 2.8, 0.7],
+		],
+		dtype=float,
+	)
+	# Keep monomers compact and away from cell faces so finite differences do not
+	# probe MIC/image discontinuities unrelated to the force convention.
+	R = np.vstack([
+		monomer_template + np.array([8.0, 8.0, 8.0]),
+		monomer_template + np.array([12.5, 8.0, 8.0]),
+	])
 	Z = np.array([6] * 20)
 	cutoff_params = CutoffParameters()
 
@@ -540,6 +558,7 @@ def test_pbc_force_gradient_numerical():
 			Rp = R.copy()
 			Rp[i, j] += h
 			atoms.set_positions(Rp)
+			atoms.calc.results.clear()
 			try:
 				Ep = atoms.get_potential_energy()
 			except Exception as exc:
@@ -547,6 +566,7 @@ def test_pbc_force_gradient_numerical():
 			Rm = R.copy()
 			Rm[i, j] -= h
 			atoms.set_positions(Rm)
+			atoms.calc.results.clear()
 			try:
 				Em = atoms.get_potential_energy()
 			except Exception as exc:

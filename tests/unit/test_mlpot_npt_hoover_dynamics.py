@@ -32,7 +32,7 @@ def test_heat_uses_reference_ramp_without_equilibration_rescale():
     kw = build_heat_dynamics(temp=300.0)
 
     assert kw["ihtfrq"] == 10
-    assert kw["TEMINC"] == 5
+    assert kw["TEMINC"] == 0.06
     assert kw["ieqfrq"] == 0
     assert kw["iasors"] == 1
     assert kw["iasvel"] == 1
@@ -41,6 +41,20 @@ def test_heat_uses_reference_ramp_without_equilibration_rescale():
     assert kw["firstt"] == 60.0
     assert kw["finalt"] == 300.0
     assert kw["tbath"] == 300.0
+
+
+def test_heat_low_temperature_ramp_spans_requested_duration():
+    kw = build_heat_dynamics(
+        timestep_ps=0.00005,
+        duration_ps=1.0,
+        temp=1.0,
+    )
+
+    assert kw["nstep"] == 20000
+    assert kw["ihtfrq"] == 10
+    assert kw["firstt"] == 0.2
+    assert kw["finalt"] == 1.0
+    assert kw["TEMINC"] == 0.0004
 
 
 def test_heat_free_space_disables_image_update_frequencies():
