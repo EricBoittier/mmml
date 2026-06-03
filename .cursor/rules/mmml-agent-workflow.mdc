@@ -1,0 +1,31 @@
+---
+description: MMML agent workflow — no live MD runs; tests and runnable workflows first
+alwaysApply: true
+---
+
+# MMML agent workflow
+
+## Do not run simulations or full MD in the agent
+
+- Do **not** run `mmml md-system`, PyCHARMM dynamics, Packmol box builds, or other long / env-heavy jobs in the sandbox or on the user's machine unless they explicitly ask for a one-off command.
+- CHARMM, MPI-linked libs, checkpoints, and GPU JAX are not available in agent sessions; attempts waste time and fail on `uv.lock` / missing env.
+- Prefer **unit tests** (`pytest tests/unit/...`) and **documented workflows** the user runs locally.
+
+## Test-driven development
+
+- Add or extend **fast unit tests** (mocked PyCHARMM) before asking the user to run CHARMM.
+- Use **functionality scripts** under `tests/functionality/` for staged manual verification (see READMEs there).
+- Build features in layers: **CHARMM FF only** → **MMML / MLpot** → full `md-system` presets.
+- When changing CLI defaults or argv forwarding, update `tests/unit/test_md_system_pycharmm_cmd.py` (or related) in the same change.
+
+## Constraint / MD work ordering
+
+1. **CLI + parsing** — `resolve_fix_resids`, `resolve_constrain_resids`, argv forwarding (`tests/unit/test_monomer_constraints.py`).
+2. **CHARMM FF only** — `cons_fix` + SD without MLpot (`tests/functionality/constraints/README.md`).
+3. **MMML** — `minimize_with_mlpot` pass 2 + dynamics `cons_fix` (`tests/functionality/mlpot/04_*.py`, `05_*.py`).
+
+## What to deliver instead of running MD
+
+- `pytest` commands for the user.
+- Copy-paste workflow blocks (shell / Slurm) with minimal smoke parameters.
+- Clear pass/fail criteria (e.g. fixed monomer RMSD ≈ 0 after SD pass 2).
