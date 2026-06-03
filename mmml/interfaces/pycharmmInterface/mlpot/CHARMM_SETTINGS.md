@@ -93,7 +93,7 @@ Before each dynamics stage, an existing stage DCD (e.g. `heat_dcm_2.dcd`) is **r
 
 ## Post-dynamics validation (staged workflow)
 
-Before the first dynamics stage, the workflow runs **`verify_mlpot_charmm_atom_consistency`**: PSF masses and mass-derived ``Z``, ``MlpotContext.ml_Z``, ``mlpot.ml_Z``, calculator atomic numbers, and (for decomposed PhysNet) ``pyCModel._atomic_numbers`` must agree. Mismatches abort with an index-level error (wrong element mapping breaks MD).
+Before the first dynamics stage, the workflow runs **`verify_mlpot_charmm_atom_consistency`**: mass-derived ``Z`` (nearest ASE element to each PSF mass), ``MlpotContext.ml_Z``, ``mlpot.ml_Z``, calculator atomic numbers, and (for decomposed PhysNet) ``pyCModel._atomic_numbers`` must agree. CGenFF masses may differ from ASE tabulated weights (e.g. Cl 35.453 vs 34.969 amu) without failing, as long as the element assignment is self-consistent.
 
 After each dynamics stage, the workflow checks the stage restart step and DCD frame count. If CHARMM stops early (common: **`echeck`** exceeded when an H stretches off or energy spikes during heating), the run **fails** instead of printing `Staged workflow OK`.
 

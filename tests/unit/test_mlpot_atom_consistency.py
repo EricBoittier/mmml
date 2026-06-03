@@ -15,9 +15,17 @@ def test_masses_consistent_with_z_accepts_matching_masses():
     assert _masses_consistent_with_z(masses, z) == []
 
 
-def test_masses_consistent_with_z_flags_large_delta():
+def test_masses_consistent_with_z_accepts_cgenff_chlorine_mass():
+    """CGenFF Cl mass (35.453) differs from ASE (34.969) but still maps to Z=17."""
+    z = np.array([6, 1, 17, 17], dtype=int)
+    masses = np.array([12.011, 1.008, 35.453, 35.453], dtype=float)
+    assert _masses_consistent_with_z(masses, z) == []
+
+
+def test_masses_consistent_with_z_flags_wrong_z_assignment():
     z = np.array([6, 1], dtype=int)
     masses = np.array([12.0, 5.0], dtype=float)
     issues = _masses_consistent_with_z(masses, z, tol_amu=0.2)
     assert len(issues) == 1
     assert "atom 1" in issues[0]
+    assert "best matches" in issues[0]
