@@ -294,10 +294,15 @@ def build_packmol_composition_cluster(
                             tolgrd=float(charmm_tolgrd),
                             verbose=False,
                         )
-            atom_names, _, _ = _build_cluster_psf_from_composition(
+            _psf_z, atom_names, _, _ = _build_cluster_psf_from_composition(
                 composition,
                 residue_geometries=residue_geometries,
             )
+            if len(_psf_z) != len(z) or not np.all(_psf_z == z):
+                raise RuntimeError(
+                    "Packmol cache Z does not match rebuilt PSF; "
+                    "use --rebuild-packmol or delete the cache entry"
+                )
             coor.set_positions(
                 pd.DataFrame(shifted, columns=["x", "y", "z"])
             )
