@@ -178,11 +178,7 @@ def add_flat_bottom_args(parser: argparse.ArgumentParser) -> None:
         "--fb-selection",
         type=str,
         default="all",
-        help=(
-            "CHARMM atom selection for MMFP wall (default: all). "
-            "Use e.g. 'TYPE C' for one representative atom per DCM molecule "
-            "to avoid MAXGEO overflow on large clusters."
-        ),
+        help="CHARMM atom selection for MMFP wall (default: all).",
     )
     group.add_argument(
         "--fb-center",
@@ -856,15 +852,7 @@ def apply_flat_bottom_from_args(args: argparse.Namespace) -> None:
 def resolve_flat_bottom_selection(args: argparse.Namespace) -> str:
     """Resolve the CHARMM selection used for MMFP wall constraints."""
     raw = str(getattr(args, "fb_selection", "all") or "all").strip()
-    if raw.lower() != "all":
-        return raw
-    composition = str(getattr(args, "composition", "") or "").upper()
-    residue = str(getattr(args, "residue", "") or "").upper()
-    if "DCM" in composition or residue == "DCM":
-        # One carbon atom name per dichloromethane molecule. Avoid TYPE C*,
-        # which also matches chlorine atom names like CL1/CL2.
-        return "TYPE C"
-    return raw
+    return raw or "all"
 
 
 def format_resid_constraint_message(resids: list[int], *, context: str) -> str:

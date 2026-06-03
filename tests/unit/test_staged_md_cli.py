@@ -61,9 +61,9 @@ def test_resolve_use_pbc_box_size():
     assert resolve_use_pbc(args) is True
 
 
-def test_resolve_flat_bottom_selection_dcm_uses_one_carbon_type():
+def test_resolve_flat_bottom_selection_dcm_keeps_all_default():
     args = argparse.Namespace(composition="DCM:90", residue="ACO", fb_selection="all")
-    assert resolve_flat_bottom_selection(args) == "TYPE C"
+    assert resolve_flat_bottom_selection(args) == "all"
 
 
 def test_resolve_flat_bottom_selection_respects_explicit_value():

@@ -92,7 +92,6 @@ if [[ "${ENABLE_FB:-0}" == "1" ]]; then
   FB_RAD="${FB_RAD:-14.0}"
   FB_ARGS=(
     --flat-bottom-radius "$FB_RAD"
-    --flat-bottom-selection "TYPE C"
     --flat-bottom-k 0.00001
   )
 fi
