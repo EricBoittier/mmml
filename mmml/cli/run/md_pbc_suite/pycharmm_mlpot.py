@@ -14,6 +14,8 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     add_dynamics_stability_args,
     add_flat_bottom_args,
     add_monomer_constraint_args,
+    add_packmol_cache_args,
+    add_run_state_checkpoint_args,
     add_staged_md_args,
     add_test_first_args,
 )
@@ -51,6 +53,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="MD ensemble after minimization (nvt = CHARMM heating/Hoover-style)",
     )
     add_cluster_args(parser)
+    add_packmol_cache_args(parser)
+    add_run_state_checkpoint_args(parser)
     add_handoff_cutoff_args(parser)
     add_charmm_output_args(parser)
     add_dcd_save_args(parser)

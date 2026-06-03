@@ -403,6 +403,48 @@ def add_cluster_args(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def add_packmol_cache_args(parser: argparse.ArgumentParser) -> None:
+    group = parser.add_argument_group("Packmol cluster cache")
+    group.add_argument(
+        "--reuse-packmol-cache",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Reuse disk cache for Packmol sphere builds (default: on)",
+    )
+    group.add_argument(
+        "--rebuild-packmol",
+        action="store_true",
+        help="Ignore Packmol cache and rebuild monomer/Packmol/MM placement",
+    )
+    group.add_argument(
+        "--packmol-cache-dir",
+        type=Path,
+        default=None,
+        help=(
+            "Packmol cache root (default: <output-dir>/.packmol_cache, "
+            "or MMML_PACKMOL_CACHE)"
+        ),
+    )
+
+
+def add_run_state_checkpoint_args(parser: argparse.ArgumentParser) -> None:
+    group = parser.add_argument_group("Run state checkpoint (Orbax or NPZ)")
+    group.add_argument(
+        "--save-run-state",
+        action="store_true",
+        help=(
+            "After staged workflow, save positions/velocities and metadata "
+            "(PhysNet weights remain in --checkpoint)"
+        ),
+    )
+    group.add_argument(
+        "--run-state-dir",
+        type=Path,
+        default=None,
+        help="Run-state output directory (default: <output-dir>/run_state)",
+    )
+
+
 def add_monomer_constraint_args(
     parser: argparse.ArgumentParser,
     *,
@@ -706,6 +748,11 @@ def build_cluster_from_args_with_tag(
                     else None
                 ),
                 verbose=not getattr(args, "quiet", False),
+                reuse_packmol_cache=bool(getattr(args, "reuse_packmol_cache", True)),
+                packmol_cache_dir=getattr(args, "packmol_cache_dir", None),
+                force_rebuild_packmol_cache=bool(
+                    getattr(args, "rebuild_packmol", False)
+                ),
             )
             fb_r = getattr(args, "flat_bottom_radius", None)
             print(
