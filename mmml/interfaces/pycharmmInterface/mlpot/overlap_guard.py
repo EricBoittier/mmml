@@ -276,6 +276,51 @@ def apply_overlap_separation_last_resort(config: DynamicsOverlapConfig) -> float
     return float(best_dist)
 
 
+def _mlpot_covers_all_atoms(mlpot_ctx: "MlpotContext | None") -> bool:
+    if mlpot_ctx is None or getattr(mlpot_ctx, "ml_selection", None) is None:
+        return False
+    try:
+        from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+
+        n_atoms = int(get_charmm_positions_array().shape[0])
+        n_ml = len(mlpot_ctx.ml_selection.get_atom_indexes())
+        return n_atoms > 0 and n_ml >= n_atoms
+    except Exception:
+        return False
+
+
+def _apply_separation_or_raise(
+    config: DynamicsOverlapConfig,
+    *,
+    label: str,
+    cause: RuntimeError,
+) -> float:
+    if not config.separate_on_rescue_fail:
+        raise cause
+    print(
+        f"{cause}\nApplying last-resort monomer separation "
+        f"(target {config.min_distance_A + config.separate_margin_A:.2f} Å)...",
+        flush=True,
+    )
+    try:
+        d_sep = apply_overlap_separation_last_resort(config)
+        print(
+            f"Overlap separation: min inter-monomer distance now {d_sep:.4f} Å",
+            flush=True,
+        )
+        return _overlap_check(
+            config,
+            context=f"{label} after overlap separation",
+        )
+    except RuntimeError as sep_still_bad:
+        raise RuntimeError(
+            f"{sep_still_bad}; rigid monomer separation did not restore "
+            f"{config.min_distance_A:.2f} Å — increase Packmol spacing, "
+            f"relax --dynamics-overlap-min-distance, or increase "
+            f"--dynamics-overlap-separate-margin"
+        ) from sep_still_bad
+
+
 def check_dynamics_overlap(
     config: DynamicsOverlapConfig,
     *,
@@ -306,6 +351,14 @@ def check_dynamics_overlap(
                 f"ABNR={config.rescue.nstep_abnr})...",
                 flush=True,
             )
+            if _mlpot_covers_all_atoms(mlpot_ctx):
+                print(
+                    "Skipping CHARMM bonded+VDW overlap rescue for all-ML system; "
+                    "ML-ML pairs are excluded from CHARMM nonbond lists.",
+                    flush=True,
+                )
+                return _apply_separation_or_raise(config, label=label, cause=exc)
+
             from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
                 minimize_overlap_rescue,
             )
@@ -313,6 +366,12 @@ def check_dynamics_overlap(
             try:
                 minimize_overlap_rescue(mlpot_ctx, config.rescue)
             except Exception as rescue_exc:
+                if config.separate_on_rescue_fail:
+                    print(
+                        f"MLpot overlap rescue failed: {rescue_exc}",
+                        flush=True,
+                    )
+                    return _apply_separation_or_raise(config, label=label, cause=exc)
                 raise RuntimeError(
                     f"{exc}; MLpot overlap rescue failed: {rescue_exc}"
                 ) from rescue_exc
@@ -323,32 +382,11 @@ def check_dynamics_overlap(
                 )
             except RuntimeError as still_bad:
                 if config.separate_on_rescue_fail:
-                    print(
-                        f"{still_bad}\nApplying last-resort monomer separation "
-                        f"(target {config.min_distance_A + config.separate_margin_A:.2f} Å)...",
-                        flush=True,
+                    return _apply_separation_or_raise(
+                        config,
+                        label=label,
+                        cause=still_bad,
                     )
-                    try:
-                        d_sep = apply_overlap_separation_last_resort(config)
-                        print(
-                            f"Overlap separation: min inter-monomer distance now {d_sep:.4f} Å",
-                            flush=True,
-                        )
-                        return _overlap_check(
-                            config,
-                            context=f"{label} after overlap separation",
-                        )
-                    except RuntimeError as sep_still_bad:
-                        raise RuntimeError(
-                            f"{sep_still_bad}; overlap rescue "
-                            f"(SD={config.rescue.nstep_sd}, ABNR={config.rescue.nstep_abnr}) "
-                            f"and rigid monomer separation did not restore "
-                            f"{config.min_distance_A:.2f} Å — try larger "
-                            f"--dynamics-overlap-charmm-sd-steps / "
-                            f"--dynamics-overlap-charmm-abnr-steps, "
-                            f"increase Packmol spacing, or relax "
-                            f"--dynamics-overlap-min-distance"
-                        ) from sep_still_bad
                 raise RuntimeError(
                     f"{still_bad}; overlap rescue "
                     f"(SD={config.rescue.nstep_sd}, ABNR={config.rescue.nstep_abnr}) "
