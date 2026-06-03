@@ -41,6 +41,18 @@ def test_resolve_mmml_cmd_uses_md_system_subcommand() -> None:
     assert cmd[idx + 2] == "free_nve"
 
 
+def test_validate_checkpoint_rejects_placeholder(tmp_path: Path) -> None:
+    from benchmark_lib import validate_checkpoint  # noqa: E402
+
+    bad = tmp_path / "path" / "to" / "dcm1-ckpt"
+    bad.mkdir(parents=True)
+    try:
+        validate_checkpoint(bad)
+        assert False, "expected RuntimeError"
+    except RuntimeError as exc:
+        assert "placeholder" in str(exc).lower()
+
+
 def test_config_has_fifteen_jobs(cfg: dict) -> None:
     assert len(cfg["jobs"]) == EXPECTED_JOB_COUNT
 

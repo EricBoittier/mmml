@@ -35,10 +35,31 @@ def resolve_checkpoint(raw: str) -> Path:
         env = os.environ.get("MMML_CKPT", "").strip()
         if not env:
             raise RuntimeError(
-                "MMML_CKPT is not set (config checkpoint: ${MMML_CKPT})"
+                "MMML_CKPT is not set (config checkpoint: ${MMML_CKPT}). "
+                "Export your DCM PhysNet checkpoint directory before running Snakemake."
             )
-        return Path(env).expanduser().resolve()
-    return Path(os.path.expandvars(raw)).expanduser().resolve()
+        path = Path(env).expanduser().resolve()
+    else:
+        path = Path(os.path.expandvars(raw)).expanduser().resolve()
+    validate_checkpoint(path)
+    return path
+
+
+def validate_checkpoint(path: Path) -> None:
+    """Fail fast when MMML_CKPT is missing or still a README placeholder."""
+    text = str(path)
+    placeholders = ("/path/to", "/path/to/dcm", "your/checkpoint", "REPLACE_ME")
+    if any(p in text for p in placeholders):
+        raise RuntimeError(
+            f"Checkpoint path looks like a placeholder: {path}\n"
+            "Set a real directory, e.g.\n"
+            "  export MMML_CKPT=$HOME/mmml_tutorial/acodcm/ckpts/dcm1-..."
+        )
+    if not path.exists():
+        raise RuntimeError(
+            f"Checkpoint not found: {path}\n"
+            "Verify MMML_CKPT points at your DCM PhysNet ckpt directory."
+        )
 
 
 def job_output_dir(cfg: dict[str, Any], job_id: str) -> Path:

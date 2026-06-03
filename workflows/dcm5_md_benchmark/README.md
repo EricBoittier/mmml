@@ -43,7 +43,8 @@ Shared parameters (see [config.yaml](config.yaml)):
 ## Run
 
 ```bash
-export MMML_CKPT=/path/to/dcm1-ckpt
+export MMML_CKPT=/path/to/your/dcm1-ckpt-directory   # real path, not this placeholder
+bash scripts/preflight.sh                             # fail fast if unset/invalid
 cd workflows/dcm5_md_benchmark
 
 # Dry-run
