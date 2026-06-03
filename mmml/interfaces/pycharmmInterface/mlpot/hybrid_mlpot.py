@@ -139,18 +139,25 @@ class DecomposedMlpotCalculator:
         with mlpot_jax_device_context():
             if self.do_mm and self._get_update_fn is not None:
                 self._get_update_fn(pos, self.cutoff_params, box=box)
-            out = self.spherical_fn(
-                positions=jnp.asarray(pos),
-                atomic_numbers=jnp.asarray(self.atomic_numbers[:n]),
-                n_monomers=self.n_monomers,
-                cutoff_params=self.cutoff_params,
-                doML=True,
-                doMM=self.do_mm,
-                doML_dimer=True,
-                box=box,
-            )
-            e_kcal = float(jax.device_get(out.energy)) * self.ev2kcal
-            forces = np.asarray(jax.device_get(out.forces), dtype=np.float64) * self.ev2kcal
+            positions_jax = jnp.asarray(pos)
+            atomic_numbers_jax = jnp.asarray(self.atomic_numbers[:n])
+
+            def energy_scalar(p):
+                out = self.spherical_fn(
+                    positions=p,
+                    atomic_numbers=atomic_numbers_jax,
+                    n_monomers=self.n_monomers,
+                    cutoff_params=self.cutoff_params,
+                    doML=True,
+                    doMM=self.do_mm,
+                    doML_dimer=True,
+                    box=box,
+                )
+                return jnp.reshape(out.energy, (-1,))[0]
+
+            e_raw, grad = jax.value_and_grad(energy_scalar)(positions_jax)
+            e_kcal = float(jax.device_get(e_raw)) * self.ev2kcal
+            forces = -np.asarray(jax.device_get(grad), dtype=np.float64) * self.ev2kcal
         if mlpot_profiling_enabled():
             get_mlpot_profile_stats().record_ml(time.perf_counter() - t0)
         for i in range(n):
