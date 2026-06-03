@@ -38,6 +38,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
 from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
     CharmmTrajectoryFiles,
     MinimizeWithMlpotConfig,
+    _valid_restart_file,
     build_cpt_equilibration_dynamics,
     build_cpt_production_dynamics,
     build_heat_dynamics,
@@ -353,6 +354,23 @@ def _seed_restart_for_memory_handoff(
     return seed
 
 
+def _can_seed_stage_from_memory(
+    rread: Path | None,
+    *,
+    prev_restart: Path | None,
+    prev_restart_is_current_state: bool,
+) -> bool:
+    """True when an invalid prior-stage restart can be replaced from live CHARMM state."""
+    return (
+        rread is not None
+        and prev_restart is not None
+        and prev_restart_is_current_state
+        and Path(rread) == Path(prev_restart)
+        and Path(rread).is_file()
+        and _valid_restart_file(rread) is None
+    )
+
+
 def _load_or_build_cluster(
     args: argparse.Namespace,
 ) -> tuple[np.ndarray, np.ndarray, int, str]:
@@ -523,6 +541,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
 
         equi_restart_for_prod = _equi_restart_name(tag, n_equi_segments)
         prev_restart: Path | None = restart_from
+        prev_restart_is_current_state = False
         memory_handoff_next = False
         for stage in dyn_stages:
             if stage == "equi" and n_equi_segments > 1:
@@ -553,6 +572,14 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     else:
                         rread = seg_io.restart_read
                         restart = rread is not None and Path(rread).is_file()
+                        if _can_seed_stage_from_memory(
+                            Path(rread) if rread is not None else None,
+                            prev_restart=prev_restart,
+                            prev_restart_is_current_state=prev_restart_is_current_state,
+                        ):
+                            use_memory = True
+                            restart = False
+                            rread = None
                     if not args.quiet:
                         print(
                             f"\nEQUI segment {seg_i + 1}/{n_equi_segments}: "
@@ -605,6 +632,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         restart_path=seg_io.restart_write,
                     )
                     prev_restart = seg_io.restart_write
+                    prev_restart_is_current_state = True
                     last_traj = seg_io.trajectory
                 continue
 
@@ -633,6 +661,14 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     else:
                         rread = seg_io.restart_read
                         restart = rread is not None and Path(rread).is_file()
+                        if _can_seed_stage_from_memory(
+                            Path(rread) if rread is not None else None,
+                            prev_restart=prev_restart,
+                            prev_restart_is_current_state=prev_restart_is_current_state,
+                        ):
+                            use_memory = True
+                            restart = False
+                            rread = None
                     kw = _build_stage_dynamics_kw(
                         "prod",
                         args=args,
@@ -684,6 +720,8 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         baseline=baseline,
                         restart_path=seg_io.restart_write,
                     )
+                    prev_restart = seg_io.restart_write
+                    prev_restart_is_current_state = True
                     last_traj = seg_io.trajectory
                 continue
 
@@ -705,6 +743,14 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             else:
                 rread = prev_restart or _prior_restart_for_stage(stage, paths, restart_from=None)
                 restart = rread is not None and Path(rread).is_file()
+                if _can_seed_stage_from_memory(
+                    Path(rread) if rread is not None else None,
+                    prev_restart=prev_restart,
+                    prev_restart_is_current_state=prev_restart_is_current_state,
+                ):
+                    use_memory = True
+                    restart = False
+                    rread = None
             io = _io_for_stage(stage, paths)
             if restart and rread is not None:
                 io.restart_read = Path(rread)
@@ -763,6 +809,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 restart_path=io.restart_write,
             )
             prev_restart = io.restart_write
+            prev_restart_is_current_state = True
             last_traj = io.trajectory
 
     finally:

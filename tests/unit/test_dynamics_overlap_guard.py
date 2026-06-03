@@ -327,6 +327,69 @@ def test_overlap_memory_handoff_chunks_scratch_restart_handoff(tmp_path):
     assert "firstt" not in calls[1]
 
 
+def test_overlap_first_chunk_drops_restart_when_restart_read_is_invalid(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+
+    cfg = DynamicsOverlapConfig(
+        action="error",
+        min_distance_A=0.5,
+        check_interval=2,
+        n_monomers=2,
+        use_pbc=False,
+    )
+    pos_ok = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [5.0, 0.0, 0.0],
+            [6.0, 0.0, 0.0],
+        ],
+        dtype=float,
+    )
+    heat = tmp_path / "heat.res"
+    heat.write_text(
+        "NOTE!! THIS FILE  C A N N O T  BE USED TO RESTART A RUN!!!\n",
+        encoding="utf-8",
+    )
+    io = CharmmTrajectoryFiles(
+        restart_read=heat,
+        restart_write=tmp_path / "equi.res",
+    )
+    calls: list[dict] = []
+
+    def fake_chunk(kw, _io, *, extra_iokw=None, **kwargs):
+        calls.append(dict(kw))
+        if _io is not None and _io.restart_write is not None:
+            Path(_io.restart_write).write_text("REST\n", encoding="utf-8")
+        return mock.Mock()
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        side_effect=fake_chunk,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        return_value=pos_ok,
+    ):
+        run_dynamics_with_io(
+            {
+                "nstep": 4,
+                "new": False,
+                "start": False,
+                "restart": True,
+                "iunrea": 3,
+            },
+            io,
+            overlap=cfg,
+            overlap_context="equi",
+        )
+
+    assert calls[0]["restart"] is False
+    assert calls[0]["iunrea"] == -1
+    assert calls[1]["restart"] is True
+
+
 def test_overlap_cleans_stale_slots_at_start(tmp_path):
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmTrajectoryFiles,

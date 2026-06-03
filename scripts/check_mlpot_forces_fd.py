@@ -10,10 +10,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
 import numpy as np
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -71,6 +76,16 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--ml-gpu-count", type=int, default=None)
     parser.add_argument("--ml-max-active-dimers", type=int, default=None)
     parser.add_argument(
+        "--mode",
+        choices=["ml-only", "callback"],
+        default="ml-only",
+        help=(
+            "What to finite-difference: 'ml-only' checks the decomposed MLpot "
+            "JAX energy/forces with MM disabled; 'callback' checks the full "
+            "PyCHARMM callback including stateful MM pair updates."
+        ),
+    )
+    parser.add_argument(
         "--fd-step",
         type=float,
         default=1.0e-4,
@@ -105,7 +120,6 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Always exit 0 after writing the report.",
     )
-    parser.add_argument("--quiet", action="store_true", help="Reduce CHARMM/setup output.")
     args = parser.parse_args(argv)
 
     if args.composition_arg:
@@ -195,6 +209,35 @@ def _callback_energy_and_force(calc: Any, positions: np.ndarray) -> tuple[float,
     return float(energy), -gradient
 
 
+def _ml_only_energy_and_force(calc: Any, positions: np.ndarray) -> tuple[float, np.ndarray]:
+    """Return ML-only decomposed energy/forces, avoiding stateful MM pair updates."""
+    import jax
+    import jax.numpy as jnp
+
+    from mmml.interfaces.pycharmmInterface.jax_device_policy import mlpot_jax_device_context
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import cubic_box_matrix_from_side
+
+    pos = np.asarray(positions, dtype=np.float64)
+    n = int(len(pos))
+    box = None
+    if getattr(calc, "_cell", False):
+        box = jnp.asarray(cubic_box_matrix_from_side(float(calc._cell)))
+    with mlpot_jax_device_context():
+        out = calc.spherical_fn(
+            positions=jnp.asarray(pos),
+            atomic_numbers=jnp.asarray(calc.atomic_numbers[:n]),
+            n_monomers=calc.n_monomers,
+            cutoff_params=calc.cutoff_params,
+            doML=True,
+            doMM=False,
+            doML_dimer=True,
+            box=box,
+        )
+        energy = float(jax.device_get(out.energy)) * float(calc.ev2kcal)
+        forces = np.asarray(jax.device_get(out.forces), dtype=np.float64) * float(calc.ev2kcal)
+    return energy, forces
+
+
 def _selected_atom_indices(args: argparse.Namespace, n_atoms: int) -> np.ndarray:
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import parse_resid_list
     from mmml.interfaces.pycharmmInterface.mlpot.setup import select_by_resids
@@ -218,12 +261,19 @@ def _force_fd_check(
     positions: np.ndarray,
     atom_indices: np.ndarray,
     *,
+    mode: str,
     step: float,
     tol: float,
     max_components: int | None,
 ) -> dict[str, Any]:
     pos0 = np.asarray(positions, dtype=np.float64)
-    e0, f_analytic = _callback_energy_and_force(calc, pos0)
+    if mode == "callback":
+        evaluate = _callback_energy_and_force
+    elif mode == "ml-only":
+        evaluate = _ml_only_energy_and_force
+    else:
+        raise ValueError(f"unknown force-check mode: {mode!r}")
+    e0, f_analytic = evaluate(calc, pos0)
 
     components = [(int(i), axis) for i in atom_indices for axis in range(3)]
     if max_components is not None:
@@ -239,8 +289,8 @@ def _force_fd_check(
         minus = pos0.copy()
         plus[atom, axis] += step
         minus[atom, axis] -= step
-        ep, _ = _callback_energy_and_force(calc, plus)
-        em, _ = _callback_energy_and_force(calc, minus)
+        ep, _ = evaluate(calc, plus)
+        em, _ = evaluate(calc, minus)
         f_fd = -(ep - em) / (2.0 * step)
         f_an = float(f_analytic[atom, axis])
         diff = float(f_fd - f_an)
@@ -250,6 +300,9 @@ def _force_fd_check(
             "axis": "xyz"[axis],
             "analytic_force_kcalmol_A": f_an,
             "fd_force_kcalmol_A": float(f_fd),
+            "energy_plus_kcalmol": float(ep),
+            "energy_minus_kcalmol": float(em),
+            "energy_delta_kcalmol": float(ep - em),
             "diff_kcalmol_A": diff,
             "abs_diff_kcalmol_A": abs_diff,
         }
@@ -261,6 +314,7 @@ def _force_fd_check(
     diff_arr = np.asarray(diffs, dtype=float)
     n_fail = int(np.count_nonzero(diff_arr > float(tol)))
     return {
+        "mode": mode,
         "energy_kcalmol": e0,
         "fd_step_A": float(step),
         "tol_kcalmol_A": float(tol),
@@ -296,6 +350,7 @@ def main(argv: list[str] | None = None) -> int:
             calc,
             positions,
             atom_indices,
+            mode=args.mode,
             step=float(args.fd_step),
             tol=float(args.tol),
             max_components=args.max_components,
