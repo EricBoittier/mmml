@@ -4,12 +4,31 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+PY="${MMML_PYTHON:-python}"
 while IFS= read -r line; do
   [[ -n "$line" ]] && eval "$line"
-done < <(python - <<'PY'
+done < <("$PY" - <<'PY'
+import os
+import shlex
+
 from mmml.interfaces.pycharmmInterface.charmm_mpi import charmm_mpirun_path, mpi_shell_setup_lines
+from mmml.utils.jax_gpu_warmup import ensure_jax_cuda_runtime_libs
+
 for line in mpi_shell_setup_lines():
     print(line)
+
+# After MPI/CHARMM prepends LD_LIBRARY_PATH, prefer pip cuDNN >= 9.10.1 over module stacks.
+bundled = ensure_jax_cuda_runtime_libs(quiet=True)
+ld = os.environ.get("LD_LIBRARY_PATH", "")
+if ld:
+    print(f"export LD_LIBRARY_PATH={shlex.quote(ld)}")
+if not bundled:
+    print(
+        "echo mmml-charmm-mpirun: warning: no pip nvidia/cudnn libs; "
+        "JAX CUDA may fail if module cuDNN is < 9.10.1. "
+        "Run: uv sync --extra gpu >&2",
+    )
+
 mpirun = charmm_mpirun_path()
 if mpirun is None:
     raise SystemExit(

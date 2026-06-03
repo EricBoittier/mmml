@@ -94,10 +94,17 @@ Interpret as **DCM:9** (or similar 9-molecule cluster) — confirm stable heatin
 ### Run script (user runs on cluster)
 
 ```bash
+cd /mmhome/boittier/home/mmml
+git pull   # mpirun + run_dcm9_stability prepend pip cuDNN
+uv sync --extra gpu
+module unload cudnn   # if cluster loads cudnn/9.4 (< 9.10.1 breaks JAX CUDA 13)
+
 export MMML_CKPT=/path/to/dcm1-.../ckpts/dcm1-...
 ./scripts/run_dcm9_stability.sh
 # optional: PS_HEAT=20 ENABLE_FB=1 FB_RAD=14 ./scripts/run_dcm9_stability.sh
 ```
+
+**JAX CUDA / cuDNN error** (`cuDNN 90400 found` → no `cuda` backend): cluster `module load cudnn/9.4` wins over JAX unless pip `nvidia-cudnn-cu13>=9.10.1` is installed and prepended (`scripts/setup_jax_cuda_env.sh`, `mmml-charmm-mpirun.sh`). Smoke test: `python -c "import jax; print(jax.devices())"` should list `cuda:0`.
 
 `scripts/run_dcm9_stability.sh` wraps `mmml-charmm-mpirun.sh`, sets Packmol `R ≈ 9.6 Å` from the DCM:90 scaling formula, and matches the good DCM:2 smoke flags (no `cons_fix`, no `--bonded-mm-mini`, no flat-bottom unless `ENABLE_FB=1`). Extra CLI args are passed through (`"$@"`).
 
