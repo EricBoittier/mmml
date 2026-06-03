@@ -10,9 +10,15 @@
 # Prerequisites:
 #   - Launch under OpenMPI (libcharmm is MPI-linked on GPU nodes):
 #       ./scripts/run_dcm9_stability.sh
+#   - JAX CUDA 13 needs cuDNN >= 9.10.1 (cluster module cudnn/9.4 breaks GPU init):
+#       uv sync --extra gpu
+#       module unload cudnn    # if a old cuDNN module is loaded
 #   - Checkpoint for DCM PhysNet:
 #       export MMML_CKPT=/path/to/dcm1-.../ckpts/dcm1-...
 #   - packmol on PATH; rebuild libcharmm if you scale cluster size up
+#
+# Defaults: one GPU (CUDA_VISIBLE_DEVICES=0, --ml-gpu-count 1) to avoid multi-GPU
+# cuDNN/cuBLASLt issues on shared nodes.
 #
 # Examples:
 #   MMML_CKPT=$HOME/mmml_tutorial/acodcm/ckpts/dcm1-... ./scripts/run_dcm9_stability.sh
@@ -33,6 +39,12 @@
 set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
+
+# Prefer pip cuDNN before mpirun (mmml-charmm-mpirun.sh also does this after MPI setup).
+# shellcheck source=scripts/setup_jax_cuda_env.sh
+source "$REPO_ROOT/scripts/setup_jax_cuda_env.sh"
+
+export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 
 if [[ -z "${MMML_CKPT:-}" ]]; then
   echo "Set MMML_CKPT to your DCM PhysNet checkpoint directory." >&2
@@ -90,6 +102,7 @@ exec "$MPIRUN" md-system \
   --ml-switch-width 0.1 \
   --charmm-sd-steps 25 \
   --charmm-abnr-steps 100 \
+  --ml-gpu-count 1 \
   --skip-energy-show \
   --seed 123 \
   "${FB_ARGS[@]}" \
