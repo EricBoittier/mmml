@@ -611,6 +611,8 @@ def build_heat_dynamics(
     duration_ps: float = 10.0,
     save_interval_ps: float = 0.1,
     temp: float = 300.0,
+    firstt: float | None = None,
+    finalt: float | None = None,
     echeck: float = 100.0,
     use_pbc: bool = True,
     ihtfrq: int = 50,
@@ -618,7 +620,8 @@ def build_heat_dynamics(
     """NVT heating dict for ``DynamicsScript`` (CHARMM + MLpot)."""
     nstep = ps_to_nsteps(timestep_ps, duration_ps)
     nsavc = nsavc_for_interval(timestep_ps, save_interval_ps)
-    firstt = temp * 0.2
+    heat_finalt = float(finalt if finalt is not None else temp)
+    heat_firstt = float(firstt if firstt is not None else heat_finalt * 0.2)
     image_kwargs = {} if use_pbc else {"imgfrq": 0, "ihbfrq": 0, "ilbfrq": 0}
     kw = _base_dyn_kwargs(
         timestep=timestep_ps,
@@ -638,9 +641,9 @@ def build_heat_dynamics(
             "iasvel": 1,
             "iscvel": 0,
             "ichecw": 0,
-            "firstt": firstt,
-            "finalt": temp,
-            "tbath": temp,
+            "firstt": heat_firstt,
+            "finalt": heat_finalt,
+            "tbath": heat_finalt,
         }
     )
     apply_heat_ramp_frequencies(kw, nstep=nstep, ihtfrq=ihtfrq)

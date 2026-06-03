@@ -113,6 +113,24 @@ def test_recommend_echeck_kcal_dcm9():
     assert recommend_echeck_kcal(9, 45) == 500.0
 
 
+def test_resolve_heat_firstt_finalt_defaults():
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        resolve_heat_firstt_finalt,
+    )
+
+    args = argparse.Namespace(heat_firstt=None, heat_finalt=None)
+    assert resolve_heat_firstt_finalt(args, default_temp=300.0) == (60.0, 300.0)
+
+
+def test_resolve_heat_firstt_finalt_dcm9_soft():
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        resolve_heat_firstt_finalt,
+    )
+
+    args = argparse.Namespace(heat_firstt=0.0, heat_finalt=240.0)
+    assert resolve_heat_firstt_finalt(args, default_temp=300.0) == (0.0, 240.0)
+
+
 def test_recommend_echeck_kcal_medium_cluster():
     assert recommend_echeck_kcal(20, 100) == 1000.0
 

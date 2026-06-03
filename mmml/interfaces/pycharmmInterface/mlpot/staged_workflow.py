@@ -22,6 +22,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     resolve_constrain_resids,
     resolve_dcd_nsavc,
     resolve_dynamics_print_kwargs,
+    resolve_heat_firstt_finalt,
     resolve_heat_ihtfrq,
     resolve_echeck_for_cluster,
     resolve_fix_resids,
@@ -211,11 +212,14 @@ def _build_stage_dynamics_kw(
     duration_ps = nstep * timestep_ps
     effective_restart = restart and not memory_handoff
     if stage == "heat":
+        heat_firstt, heat_finalt = resolve_heat_firstt_finalt(args, default_temp=temp)
         kw = build_heat_dynamics(
             timestep_ps=timestep_ps,
             duration_ps=duration_ps,
             save_interval_ps=save_interval_ps,
             temp=temp,
+            firstt=heat_firstt,
+            finalt=heat_finalt,
             echeck=echeck,
             use_pbc=use_pbc,
         )
@@ -992,6 +996,14 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     use_pbc=use_pbc,
                     quiet=bool(args.quiet),
                 )
+                if not args.quiet:
+                    print(
+                        f"HEAT ramp: {kw.get('firstt')} -> {kw.get('finalt')} K "
+                        f"over {stage_ps} ps | ihtfrq={kw.get('ihtfrq')} "
+                        f"TEMINC={float(kw.get('TEMINC', 0)):.4g} K | "
+                        "iasors=0 (scale)",
+                        flush=True,
+                    )
             run_dynamics_with_io(
                 kw,
                 io,
