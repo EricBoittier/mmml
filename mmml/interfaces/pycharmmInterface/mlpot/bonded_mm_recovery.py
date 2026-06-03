@@ -356,6 +356,9 @@ def _restore_flat_bottom_after_heavy_recovery(args: argparse.Namespace) -> None:
     fb_rad = getattr(args, "fb_rad", None)
     if fb_rad is None or float(fb_rad) <= 0:
         return
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        resolve_flat_bottom_selection,
+    )
     from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
         FlatBottomSphereConfig,
         setup_flat_bottom_sphere_mmfp,
@@ -368,7 +371,7 @@ def _restore_flat_bottom_after_heavy_recovery(args: argparse.Namespace) -> None:
             xref=float(getattr(args, "fb_xref", 0.0)),
             yref=float(getattr(args, "fb_yref", 0.0)),
             zref=float(getattr(args, "fb_zref", 0.0)),
-            selection=str(getattr(args, "fb_selection", "all") or "all"),
+            selection=resolve_flat_bottom_selection(args),
         )
     )
 

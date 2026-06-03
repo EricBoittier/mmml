@@ -55,6 +55,7 @@ def setup_flat_bottom_sphere_mmfp(config: FlatBottomSphereConfig) -> None:
         raise ValueError(f"flat-bottom force must be > 0, got {config.force}")
 
     pycharmm = _import_pycharmm()
+    clear_mmfp_restraints()
     sel = config.selection.strip() or "all"
     script = f"""
 MMFP
@@ -87,6 +88,7 @@ def apply_flat_bottom_workflow(
     xref: float = 0.0,
     yref: float = 0.0,
     zref: float = 0.0,
+    selection: str = "all",
 ) -> FlatBottomSphereConfig | None:
     """Optionally center the cluster and set up MMFP flat-bottom sphere."""
     if radius is None or radius <= 0:
@@ -99,6 +101,7 @@ def apply_flat_bottom_workflow(
         xref=xref,
         yref=yref,
         zref=zref,
+        selection=selection,
     )
     setup_flat_bottom_sphere_mmfp(cfg)
     return cfg
