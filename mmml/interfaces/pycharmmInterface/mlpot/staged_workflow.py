@@ -285,9 +285,24 @@ def _build_stage_dynamics_kw(
 
 
 def _reset_stage_trajectory(path: Path | None) -> None:
-    """Remove a prior partial DCD so a new stage run starts a fresh trajectory file."""
-    if path is not None:
-        Path(path).unlink(missing_ok=True)
+    """Archive a prior partial DCD so a new stage run starts a fresh trajectory file."""
+    if path is None:
+        return
+
+    dcd_path = Path(path)
+    if not dcd_path.exists():
+        return
+
+    for rescue_index in range(1, 10_000):
+        rescue_path = dcd_path.with_name(
+            f"{dcd_path.stem}.rescued.{rescue_index}{dcd_path.suffix}"
+        )
+        if not rescue_path.exists():
+            dcd_path.replace(rescue_path)
+            print(f"Rescued existing DCD: {dcd_path} -> {rescue_path}", flush=True)
+            return
+
+    raise RuntimeError(f"could not find an available rescue name for {dcd_path}")
 
 
 def _seed_restart_for_memory_handoff(
