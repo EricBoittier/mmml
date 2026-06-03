@@ -230,6 +230,8 @@ def test_run_dynamics_with_io_chunks_and_checks(tmp_path):
 
     def fake_chunk(kw, _io, *, extra_iokw=None, **kwargs):
         calls.append(dict(kw))
+        if _io is not None and _io.restart_write is not None:
+            Path(_io.restart_write).write_text("REST\n", encoding="utf-8")
         return mock.Mock()
 
     with mock.patch(
@@ -386,6 +388,8 @@ def test_overlap_chunk_io_alternate_scratch_and_final_write(tmp_path):
     heat.write_text("REST\n", encoding="utf-8")
     io = CharmmTrajectoryFiles(restart_read=heat, restart_write=equi)
     slot_a, slot_b = _overlap_restart_slot_paths(equi)
+    slot_a.write_text("REST\n", encoding="utf-8")
+    slot_b.write_text("REST\n", encoding="utf-8")
 
     r0, w0 = _overlap_chunk_restart_paths(io, chunk_index=0, n_chunks=3)
     assert r0 == heat
@@ -411,6 +415,29 @@ def test_overlap_chunk_io_alternate_scratch_and_final_write(tmp_path):
     assert c2.restart_read == slot_b
     assert c2.restart_write == equi
     assert c2.trajectory is None
+
+
+def test_overlap_chunk_io_skips_nonrestartable_scratch_restart(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        CharmmTrajectoryFiles,
+        _overlap_chunk_io,
+        _overlap_restart_slot_paths,
+    )
+
+    heat = tmp_path / "heat.res"
+    equi = tmp_path / "equi_dcm_90.res"
+    heat.write_text("REST\n", encoding="utf-8")
+    io = CharmmTrajectoryFiles(restart_read=heat, restart_write=equi)
+    slot_a, _ = _overlap_restart_slot_paths(equi)
+    slot_a.write_text(
+        "NOTE!! THIS FILE  C A N N O T  BE USED TO RESTART A RUN!!!\n",
+        encoding="utf-8",
+    )
+
+    c1 = _overlap_chunk_io(io, chunk_index=1, n_chunks=3)
+
+    assert c1.restart_read is None
+    assert c1.restart_write == equi.with_name("equi_dcm_90.overlap_b.res")
 
 
 def test_overlap_multi_chunk_keeps_single_dcd_open(tmp_path):
