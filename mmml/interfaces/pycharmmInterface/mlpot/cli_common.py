@@ -115,7 +115,7 @@ def add_flat_bottom_args(parser: argparse.ArgumentParser) -> None:
         default="all",
         help=(
             "CHARMM atom selection for MMFP wall (default: all). "
-            "Use e.g. 'TYPE C*' for one representative atom per DCM molecule "
+            "Use e.g. 'TYPE C' for one representative atom per DCM molecule "
             "to avoid MAXGEO overflow on large clusters."
         ),
     )
@@ -678,9 +678,9 @@ def resolve_flat_bottom_selection(args: argparse.Namespace) -> str:
     composition = str(getattr(args, "composition", "") or "").upper()
     residue = str(getattr(args, "residue", "") or "").upper()
     if "DCM" in composition or residue == "DCM":
-        # One carbon per dichloromethane molecule. Avoid TYPE C*, which also
-        # matches chlorine atom types such as CLGA1 and can overflow MAXGEO.
-        return "TYPE CG321"
+        # One carbon atom name per dichloromethane molecule. Avoid TYPE C*,
+        # which also matches chlorine atom names like CL1/CL2.
+        return "TYPE C"
     return raw
 
 

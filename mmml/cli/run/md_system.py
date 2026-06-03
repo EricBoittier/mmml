@@ -186,7 +186,7 @@ def parse_args() -> argparse.Namespace:
         default="all",
         help=(
             "pycharmm: CHARMM atom selection for MMFP wall (default: all). "
-            "For large DCM clusters use 'TYPE C*' to avoid MMFP MAXGEO overflow."
+            "For large DCM clusters use 'TYPE C' to avoid MMFP MAXGEO overflow."
         ),
     )
     parser.add_argument(

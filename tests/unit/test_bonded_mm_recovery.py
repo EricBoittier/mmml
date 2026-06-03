@@ -123,14 +123,14 @@ def test_flat_bottom_mmfp_uses_outside_harmonic_wall():
             restraints.FlatBottomSphereConfig(
                 radius=10.0,
                 force=0.01,
-                selection="TYPE CG321",
+                selection="TYPE C",
             )
         )
 
     script = pycharmm.lingo.charmm_script.call_args[0][0]
     assert "GEO sphere harm" in script
     assert "droff 10.000000 force 0.010000 outside" in script
-    assert "sele TYPE CG321 end" in script
+    assert "sele TYPE C end" in script
     assert "quartic" not in script.lower()
 
 
@@ -161,9 +161,10 @@ def test_clear_mmfp_uses_block_command():
         restraints.clear_mmfp_restraints()
 
     script = pycharmm.lingo.charmm_script.call_args[0][0]
-    assert "MMFP\nCLEAR\nEND" in "\n".join(
+    assert "MMFP\nGEO RESET\nEND" in "\n".join(
         line.strip() for line in script.splitlines() if line.strip()
     )
+    assert "CLEAR" not in script
     assert "MMFP CLEAR" not in script
 
 

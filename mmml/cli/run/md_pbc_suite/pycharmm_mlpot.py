@@ -109,7 +109,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         dest="fb_selection",
         type=str,
         default=None,
-        help="CHARMM selection for MMFP wall (default: all; DCM: use 'TYPE C*').",
+        help="CHARMM selection for MMFP wall (default: all; DCM: use 'TYPE C').",
     )
     parser.add_argument(
         "--packmol-sphere",
