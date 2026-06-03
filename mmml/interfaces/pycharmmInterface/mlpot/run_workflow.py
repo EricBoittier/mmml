@@ -56,6 +56,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
 )
 from mmml.interfaces.pycharmmInterface.mlpot.setup import (
     assert_mlpot_user_active,
+    verify_mlpot_charmm_atom_consistency,
     get_charmm_positions_array,
     load_physnet_mlpot_bundle,
     refresh_nbonds_after_mlpot_pbc,
@@ -484,6 +485,12 @@ def run_dynamics_workflow(
             max_grms=max_grms,
             abort=not getattr(args, "allow_high_grms", False),
             require_mlpot_user=True,
+        )
+        verify_mlpot_charmm_atom_consistency(
+            ctx,
+            expected_z=z,
+            context="dynamics",
+            quiet=bool(args.quiet),
         )
 
         if dynamics_constrain:

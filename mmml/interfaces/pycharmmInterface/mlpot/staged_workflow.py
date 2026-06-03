@@ -73,6 +73,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import (
 )
 from mmml.interfaces.pycharmmInterface.mlpot.setup import (
     assert_mlpot_user_active,
+    verify_mlpot_charmm_atom_consistency,
     disable_charmm_domdec,
     get_charmm_positions_array,
     load_cluster_from_artifacts,
@@ -684,6 +685,12 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             max_grms=float(getattr(args, "max_grms_before_dyn", 50.0)),
             abort=not getattr(args, "allow_high_grms", False),
             require_mlpot_user=True,
+        )
+        verify_mlpot_charmm_atom_consistency(
+            ctx,
+            expected_z=z,
+            context="staged dynamics",
+            quiet=bool(args.quiet),
         )
 
         if dynamics_constrain:
