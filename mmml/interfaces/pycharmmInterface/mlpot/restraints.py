@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 @dataclass
 class FlatBottomSphereConfig:
-    """Flat-bottom spherical MMFP (``GEO sphere quartic``), as in production ``dyna.inp``."""
+    """Flat-bottom spherical MMFP wall; inside ``radius`` has no restraint."""
 
     radius: float = 20.0
     force: float = 1.0
@@ -43,9 +43,9 @@ def setup_flat_bottom_sphere_mmfp(config: FlatBottomSphereConfig) -> None:
     Matches::
 
         MMFP
-        GEO sphere quartic -
+        GEO sphere harm -
             xref … yref … zref … -
-            droff <radius> force <force> -
+            droff <radius> force <force> outside -
             sele all end
         END
     """
@@ -58,9 +58,9 @@ def setup_flat_bottom_sphere_mmfp(config: FlatBottomSphereConfig) -> None:
     sel = config.selection.strip() or "all"
     script = f"""
 MMFP
-GEO sphere quartic -
+GEO sphere harm -
     xref {float(config.xref):.6f} yref {float(config.yref):.6f} zref {float(config.zref):.6f} -
-    droff {float(config.radius):.6f} force {float(config.force):.6f} p1 {float(0.8*config.radius):.6f} -
+    droff {float(config.radius):.6f} force {float(config.force):.6f} outside -
     sele {sel} end
 END
 """

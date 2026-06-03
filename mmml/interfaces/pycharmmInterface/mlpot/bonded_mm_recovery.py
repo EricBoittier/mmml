@@ -295,6 +295,9 @@ def _run_heavy_bonded_recovery_check(
         )
     _reload_pre_mlpot_topology(ctx, topology_psf=path)
     try:
+        from mmml.interfaces.pycharmmInterface.mlpot.restraints import clear_mmfp_restraints
+
+        clear_mmfp_restraints()
         current = _measure_current_mm_strain()
         grms_margin, internal_margin, angl_margin = _bonded_strain_margins(args)
         reasons = tuple(
@@ -344,6 +347,29 @@ def _run_heavy_bonded_recovery_check(
         )
     finally:
         _reregister_mlpot_after_topology_reload(ctx)
+        if stage.lower() != "mini":
+            _restore_flat_bottom_after_heavy_recovery(args)
+
+
+def _restore_flat_bottom_after_heavy_recovery(args: argparse.Namespace) -> None:
+    """Reinstall the workflow MMFP wall after temporarily clearing it for MM recovery."""
+    fb_rad = getattr(args, "fb_rad", None)
+    if fb_rad is None or float(fb_rad) <= 0:
+        return
+    from mmml.interfaces.pycharmmInterface.mlpot.restraints import (
+        FlatBottomSphereConfig,
+        setup_flat_bottom_sphere_mmfp,
+    )
+
+    setup_flat_bottom_sphere_mmfp(
+        FlatBottomSphereConfig(
+            radius=float(fb_rad),
+            force=float(getattr(args, "fb_forc", 1.0)),
+            xref=float(getattr(args, "fb_xref", 0.0)),
+            yref=float(getattr(args, "fb_yref", 0.0)),
+            zref=float(getattr(args, "fb_zref", 0.0)),
+        )
+    )
 
 
 def _recovery_reasons(

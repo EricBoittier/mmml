@@ -114,6 +114,21 @@ def test_apply_bonded_vdw_recovery_block_script():
     assert "ELEC 0.0 VDW 1.0" in script
 
 
+def test_flat_bottom_mmfp_uses_outside_harmonic_wall():
+    from mmml.interfaces.pycharmmInterface.mlpot import restraints
+
+    pycharmm = MagicMock()
+    with patch.object(restraints, "_import_pycharmm", return_value=pycharmm):
+        restraints.setup_flat_bottom_sphere_mmfp(
+            restraints.FlatBottomSphereConfig(radius=10.0, force=0.01)
+        )
+
+    script = pycharmm.lingo.charmm_script.call_args[0][0]
+    assert "GEO sphere harm" in script
+    assert "droff 10.000000 force 0.010000 outside" in script
+    assert "quartic" not in script.lower()
+
+
 def test_minimize_bonded_recovery_uses_bonded_only_block():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         BondedMmMiniConfig,
