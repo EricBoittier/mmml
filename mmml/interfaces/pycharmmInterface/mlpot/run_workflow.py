@@ -51,8 +51,8 @@ from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
 from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
     resolve_dynamics_overlap_config,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
-    _apply_comp_velocity_policy,
+from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+    apply_comp_velocity_policy,
 )
 from mmml.interfaces.pycharmmInterface.mlpot.setup import (
     assert_mlpot_user_active,
@@ -547,7 +547,7 @@ def run_dynamics_workflow(
         disable_charmm_domdec()
         if io.trajectory is not None:
             Path(io.trajectory).unlink(missing_ok=True)
-        _apply_comp_velocity_policy(
+        apply_comp_velocity_policy(
             "nve" if ensemble == "nve" else "heat",
             kw,
             args,
