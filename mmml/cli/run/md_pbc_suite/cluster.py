@@ -236,17 +236,82 @@ def build_packmol_composition_cluster(
     charmm_tolgrd: float = 1e-3,
     scratch_dir: str | Path | None = None,
     verbose: bool = True,
+    reuse_packmol_cache: bool = True,
+    packmol_cache_dir: str | Path | None = None,
+    force_rebuild_packmol_cache: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, list[int], list[str]]:
     """CHARMM-minimize monomers, Packmol sphere pack, cluster PSF, then cluster MM relax."""
     from mmml.cli.run.md_pbc_suite.ase import (
         _build_cluster_psf_from_composition,
         _load_packmol_sphere_positions,
     )
-    from mmml.interfaces.pycharmmInterface import packmol_placement
+    from mmml.interfaces.pycharmmInterface import packmol_cache, packmol_placement
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmMmMinimizeConfig,
         minimize_charmm_mm_only,
     )
+
+    scratch_root = Path(scratch_dir) if scratch_dir is not None else Path("pdb/packmol_sphere")
+    cache_root = packmol_cache.packmol_cache_root(
+        output_dir=scratch_root.parent if scratch_dir is not None else None,
+        override=packmol_cache_dir,
+    )
+    if reuse_packmol_cache and not force_rebuild_packmol_cache:
+        cached = packmol_cache.try_load_packmol_cluster_cache(
+            composition=composition,
+            center=center,
+            radius=float(radius),
+            tolerance=float(tolerance),
+            seed=seed,
+            charmm_sd_steps=int(charmm_sd_steps),
+            charmm_abnr_steps=int(charmm_abnr_steps),
+            charmm_tolenr=float(charmm_tolenr),
+            charmm_tolgrd=float(charmm_tolgrd),
+            cache_root=cache_root,
+        )
+        if cached is not None:
+            if verbose:
+                key = cached["manifest"].get("cache_key", "?")
+                print(
+                    f"[cluster] Packmol cache hit ({key}): skip monomer/Packmol/MM build",
+                    flush=True,
+                )
+            import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+            import pandas as pd
+            import pycharmm.coor as coor
+
+            z = cached["z"]
+            shifted = cached["positions"]
+            atoms_per_list = cached["atoms_per_list"]
+            ordered_residue_names = cached["residue_names"]
+            residue_geometries = cached.get("residue_geometries")
+            if residue_geometries is None:
+                residue_geometries = {}
+                for residue, _count in composition:
+                    key = residue.upper()
+                    if key not in residue_geometries:
+                        residue_geometries[key] = build_minimized_monomer_for_packmol(
+                            key,
+                            nstep_sd=int(charmm_sd_steps),
+                            nstep_abnr=int(charmm_abnr_steps),
+                            tolenr=float(charmm_tolenr),
+                            tolgrd=float(charmm_tolgrd),
+                            verbose=False,
+                        )
+            atom_names, _, _ = _build_cluster_psf_from_composition(
+                composition,
+                residue_geometries=residue_geometries,
+            )
+            coor.set_positions(
+                pd.DataFrame(shifted, columns=["x", "y", "z"])
+            )
+            span = np.ptp(shifted, axis=0)
+            print(
+                f"Packmol cluster (cached): {len(atom_names)} atoms, "
+                f"span Å x={span[0]:.1f} y={span[1]:.1f} z={span[2]:.1f}",
+                flush=True,
+            )
+            return z, shifted, atoms_per_list, ordered_residue_names
 
     if verbose:
         print(
@@ -270,7 +335,6 @@ def build_packmol_composition_cluster(
     if verbose:
         print("[cluster] 2/4 Write monomer PDBs for Packmol", flush=True)
 
-    scratch_root = Path(scratch_dir) if scratch_dir is not None else Path("pdb/packmol_sphere")
     packmol_dir = scratch_root / "monomers"
     packmol_blocks: list[tuple[Path, int]] = []
     for residue, count in composition:
@@ -350,4 +414,37 @@ def build_packmol_composition_cluster(
         f"span Å x={span[0]:.1f} y={span[1]:.1f} z={span[2]:.1f}",
         flush=True,
     )
+    if reuse_packmol_cache:
+        cache_key = packmol_cache.packmol_cache_key(
+            composition=composition,
+            center=center,
+            radius=float(radius),
+            tolerance=float(tolerance),
+            seed=seed,
+            charmm_sd_steps=int(charmm_sd_steps),
+            charmm_abnr_steps=int(charmm_abnr_steps),
+            charmm_tolenr=float(charmm_tolenr),
+            charmm_tolgrd=float(charmm_tolgrd),
+        )
+        entry = cache_root / cache_key
+        packmol_cache.save_packmol_cluster_cache(
+            entry,
+            manifest={
+                "version": packmol_cache.CACHE_VERSION,
+                "cache_key": cache_key,
+                "composition": [[r, n] for r, n in composition],
+                "center": list(center),
+                "radius": float(radius),
+                "tolerance": float(tolerance),
+                "seed": seed,
+            },
+            z=z,
+            positions=shifted,
+            atoms_per_list=atoms_per_list,
+            residue_names=ordered_residue_names,
+            packmol_pdb=output_pdb,
+            residue_geometries=residue_geometries,
+        )
+        if verbose:
+            print(f"[cluster] Packmol cache saved: {entry}", flush=True)
     return z, shifted, atoms_per_list, ordered_residue_names

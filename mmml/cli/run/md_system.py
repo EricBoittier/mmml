@@ -164,6 +164,37 @@ def parse_args() -> argparse.Namespace:
         help="Packmol distance tolerance (Å) when using spherical packing (default: 2.0).",
     )
     parser.add_argument(
+        "--reuse-packmol-cache",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="pycharmm: reuse disk cache for Packmol sphere cluster builds (default: on).",
+    )
+    parser.add_argument(
+        "--rebuild-packmol",
+        action="store_true",
+        help="pycharmm: ignore Packmol cache and rebuild placement.",
+    )
+    parser.add_argument(
+        "--packmol-cache-dir",
+        type=Path,
+        default=None,
+        help="pycharmm: Packmol cache root (default: output-dir/.packmol_cache or MMML_PACKMOL_CACHE).",
+    )
+    parser.add_argument(
+        "--save-run-state",
+        action="store_true",
+        help=(
+            "pycharmm: after staged MD, save positions/velocities + metadata "
+            "(Orbax if installed, else NPZ; PhysNet stays in --checkpoint)."
+        ),
+    )
+    parser.add_argument(
+        "--run-state-dir",
+        type=Path,
+        default=None,
+        help="pycharmm: run-state output directory (default: output-dir/run_state).",
+    )
+    parser.add_argument(
         "--flat-bottom-radius",
         type=float,
         default=None,
@@ -1257,6 +1288,15 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         cmd.extend(["--fb-selection", str(args.flat_bottom_selection)])
     cmd.extend(["--seed", str(args.seed)])
     _append_packmol_sphere_args(cmd, args)
+    _append_boolean_optional_flag(
+        cmd, "--reuse-packmol-cache", bool(getattr(args, "reuse_packmol_cache", True))
+    )
+    if getattr(args, "rebuild_packmol", False):
+        cmd.append("--rebuild-packmol")
+    _append_optional(cmd, "--packmol-cache-dir", getattr(args, "packmol_cache_dir", None))
+    if getattr(args, "save_run_state", False):
+        cmd.append("--save-run-state")
+    _append_optional(cmd, "--run-state-dir", getattr(args, "run_state_dir", None))
     if getattr(args, "flat_bottom_radius", None) is not None:
         cmd.extend(["--flat-bottom-radius", str(args.flat_bottom_radius)])
     if args.extra_args:

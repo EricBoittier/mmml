@@ -624,6 +624,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         else None
     )
     last_traj: Path | None = None
+    last_restart_path: Path | None = None
     try:
         if "mini" in stages:
             fix_sel = select_by_resids(fix_resids) if fix_resids else None
@@ -805,6 +806,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     )
                     prev_restart = seg_io.restart_write
                     prev_restart_is_current_state = True
+                    last_restart_path = prev_restart
                     last_traj = seg_io.trajectory
                 continue
 
@@ -908,6 +910,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     )
                     prev_restart = seg_io.restart_write
                     prev_restart_is_current_state = True
+                    last_restart_path = prev_restart
                     last_traj = seg_io.trajectory
                 continue
 
@@ -1029,6 +1032,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             )
             prev_restart = io.restart_write
             prev_restart_is_current_state = True
+            last_restart_path = prev_restart
             last_traj = io.trajectory
 
     finally:
@@ -1039,6 +1043,20 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
     from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import maybe_log_mlpot_profile
 
     maybe_log_mlpot_profile(quiet=bool(args.quiet))
+    from mmml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint import (
+        maybe_save_run_state_from_workflow,
+    )
+
+    maybe_save_run_state_from_workflow(
+        args,
+        positions=get_charmm_positions_array(),
+        atomic_numbers=z,
+        out_dir=out_dir,
+        tag=tag,
+        stages_completed=list(stages),
+        last_restart=last_restart_path,
+        last_trajectory=last_traj,
+    )
     print(f"\nStaged workflow OK ({','.join(stages)}) -> {out_dir}")
     trajectory_outputs = _trajectory_outputs(paths["mini_charmm_dcd"])
     trajectory_outputs.extend(_trajectory_outputs(paths["mini_dcd"]))

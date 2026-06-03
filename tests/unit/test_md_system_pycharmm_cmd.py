@@ -91,6 +91,11 @@ def _pycharmm_args(**overrides) -> argparse.Namespace:
         mm_switch_on=7.0,
         mm_switch_width=5.0,
         ml_switch_width=0.1,
+        reuse_packmol_cache=True,
+        rebuild_packmol=False,
+        packmol_cache_dir=None,
+        save_run_state=False,
+        run_state_dir=None,
     )
     base.update(overrides)
     return argparse.Namespace(**base)
@@ -140,6 +145,25 @@ def test_build_pycharmm_command_includes_ml_gpu_count_when_set():
     assert "--ml-gpu-count" in cmd
     idx = cmd.index("--ml-gpu-count")
     assert cmd[idx + 1] == "2"
+
+
+def test_build_pycharmm_command_forwards_packmol_cache_and_run_state_flags():
+    cmd = build_pycharmm_command(
+        _pycharmm_args(
+            rebuild_packmol=True,
+            save_run_state=True,
+            packmol_cache_dir=Path("/tmp/mmml_packmol"),
+            run_state_dir=Path("/tmp/run_state"),
+            reuse_packmol_cache=False,
+        )
+    )
+    assert "--no-reuse-packmol-cache" in cmd
+    assert "--rebuild-packmol" in cmd
+    assert "--save-run-state" in cmd
+    idx = cmd.index("--packmol-cache-dir")
+    assert cmd[idx + 1] == "/tmp/mmml_packmol"
+    idx = cmd.index("--run-state-dir")
+    assert cmd[idx + 1] == "/tmp/run_state"
 
 
 def test_build_pycharmm_command_forwards_flat_bottom_selection():

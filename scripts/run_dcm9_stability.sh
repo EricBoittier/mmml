@@ -15,7 +15,9 @@
 #       module unload cudnn    # if a old cuDNN module is loaded
 #   - Checkpoint for DCM PhysNet:
 #       export MMML_CKPT=/path/to/dcm1-.../ckpts/dcm1-...
-#   - packmol on PATH; rebuild libcharmm if you scale cluster size up
+#   - packmol on PATH (first run only if cache miss); rebuild libcharmm if you scale cluster size up
+#   - Packmol placement cached under <output-dir>/.packmol_cache (or MMML_PACKMOL_CACHE).
+#     Use --rebuild-packmol to force repack; --save-run-state for Orbax/NPZ geometry + metadata.
 #
 # Defaults: one GPU (CUDA_VISIBLE_DEVICES=0, --ml-gpu-count 1) to avoid multi-GPU
 # cuDNN/cuBLASLt issues on shared nodes.

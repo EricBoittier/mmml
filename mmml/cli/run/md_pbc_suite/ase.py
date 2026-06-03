@@ -401,6 +401,9 @@ def _build_cluster_from_composition_packmol(
     charmm_tolgrd: float = 1e-3,
     scratch_dir: str | Path | None = None,
     verbose: bool = True,
+    reuse_packmol_cache: bool = True,
+    packmol_cache_dir: str | Path | None = None,
+    force_rebuild_packmol_cache: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, list[int], list[str]]:
     from mmml.cli.run.md_pbc_suite.cluster import build_packmol_composition_cluster
 
@@ -416,6 +419,9 @@ def _build_cluster_from_composition_packmol(
         charmm_tolgrd=charmm_tolgrd,
         scratch_dir=scratch_dir,
         verbose=verbose,
+        reuse_packmol_cache=reuse_packmol_cache,
+        packmol_cache_dir=packmol_cache_dir,
+        force_rebuild_packmol_cache=force_rebuild_packmol_cache,
     )
 
 
