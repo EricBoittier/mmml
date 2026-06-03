@@ -72,6 +72,8 @@ def _charmm_pre_minimize_before_mlpot(
     *,
     nprint: int,
     reference_positions: np.ndarray | None = None,
+    dcd_path: Path | None = None,
+    dcd_nsavc: int = 1,
 ) -> np.ndarray:
     """CGENFF SD/ABNR on the built cluster before :func:`register_mlpot`."""
     if not getattr(args, "charmm_pre_minimize", True):
@@ -93,6 +95,8 @@ def _charmm_pre_minimize_before_mlpot(
             verbose=not args.quiet,
             show_energy=resolve_show_energy(args),
             reference_positions=reference_positions,
+            dcd_path=dcd_path,
+            dcd_nsavc=dcd_nsavc,
         )
     )
     r_mm = get_charmm_positions_array()
@@ -280,6 +284,7 @@ def run_minimize_workflow(args: argparse.Namespace) -> int:
     energy_json_path = out_dir / f"mini_full_mlpot_{tag}_energy.json"
     xyz_path = out_dir / f"mini_full_mlpot_{tag}.xyz"
     dcd_path = out_dir / f"mini_full_mlpot_{tag}.dcd"
+    charmm_dcd_path = out_dir / f"mini_charmm_mm_{tag}.dcd"
     save = bool(getattr(args, "save", True))
 
     box_side = _setup_charmm_nbonds_for_args(args, r)
@@ -292,7 +297,11 @@ def run_minimize_workflow(args: argparse.Namespace) -> int:
         vmd_topo_psf = vmd_files["psf"]
 
     r = _charmm_pre_minimize_before_mlpot(
-        args, nprint=nprint, reference_positions=r
+        args,
+        nprint=nprint,
+        reference_positions=r,
+        dcd_path=charmm_dcd_path if save else None,
+        dcd_nsavc=dcd_nsavc if save else 0,
     )
     sync_charmm_positions(r)
 
@@ -340,7 +349,7 @@ def run_minimize_workflow(args: argparse.Namespace) -> int:
             out_dir=out_dir,
             tag=tag,
             topology_psf=vmd_topo_psf,
-            trajectory=dcd_path if dcd_path.is_file() else None,
+            trajectory=[charmm_dcd_path, dcd_path],
             n_atoms=n_atoms,
             bondless_psf=psf_path,
         )
@@ -386,10 +395,14 @@ def run_dynamics_workflow(
     stem = "nve" if ensemble == "nve" else "nvt"
     res_path = out_dir / f"{stem}_{tag}.res"
     dcd_path = out_dir / f"{stem}_{tag}.dcd"
+    save = bool(getattr(args, "save", True))
+    charmm_mini_dcd_path = out_dir / f"mini_charmm_mm_{tag}.dcd"
+    mlpot_mini_dcd_path = out_dir / f"mini_full_mlpot_{tag}.dcd"
 
     if pre_minimize is None:
         pre_minimize = not getattr(args, "no_pre_minimize", False)
     mini_nstep = resolve_mini_nstep(args, n_mol)
+    mini_dcd_nsavc = resolve_dcd_nsavc(dcd_nsavc=args.dcd_nsavc, nstep=mini_nstep)
     use_pbc = resolve_use_pbc(args)
     box_side = _setup_charmm_nbonds_for_args(args, r)
     overlap_cfg = resolve_dynamics_overlap_config(
@@ -407,7 +420,11 @@ def run_dynamics_workflow(
         vmd_topo_psf = vmd_files["psf"]
 
     r = _charmm_pre_minimize_before_mlpot(
-        args, nprint=mini_nprint, reference_positions=r
+        args,
+        nprint=mini_nprint,
+        reference_positions=r,
+        dcd_path=charmm_mini_dcd_path if save else None,
+        dcd_nsavc=mini_dcd_nsavc if save else 0,
     )
     sync_charmm_positions(r)
 
@@ -439,7 +456,9 @@ def run_dynamics_workflow(
                     verbose=not args.quiet,
                     reference_positions=r,
                     pyCModel=pyCModel,
-                    save=False,
+                    save=save,
+                    dcd_path=mlpot_mini_dcd_path if save else None,
+                    dcd_nsavc=mini_dcd_nsavc if save else 0,
                     show_energy=show_energy,
                     skip_if_crd_exists=False,
                     test_first=resolve_test_first_config(args),
@@ -545,7 +564,7 @@ def run_dynamics_workflow(
         out_dir=out_dir,
         tag=tag,
         topology_psf=vmd_topo_psf,
-        trajectory=dcd_path,
+        trajectory=[charmm_mini_dcd_path, mlpot_mini_dcd_path, dcd_path],
         n_atoms=n_atoms,
     )
     return 0
