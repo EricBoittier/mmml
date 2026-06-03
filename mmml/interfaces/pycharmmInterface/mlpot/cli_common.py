@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import os
 from pathlib import Path
-from typing import Any, Optional, Tuple
+from typing import Any, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -670,7 +670,7 @@ def write_vmd_load_script(
     out_dir: Path,
     tag: str,
     topology_psf: Path,
-    trajectory: Path | None = None,
+    trajectory: Path | Sequence[Path] | None = None,
     n_atoms: int,
 ) -> Path:
     out_dir = out_dir.resolve()
@@ -680,9 +680,10 @@ def write_vmd_load_script(
         f"# Atoms: {n_atoms} — must match trajectory frame count.",
         f"mol new {{{topology_psf}}}",
     ]
-    if trajectory is not None:
-        traj = trajectory.resolve()
+    trajectories = _normalize_trajectory_paths(trajectory)
+    for traj in trajectories:
         lines.append(f"mol addfile {{{traj}}} waitfor all")
+    if trajectories:
         lines.append("animate goto 0")
     lines.append("display update")
     tcl_path = out_dir / f"load_{tag}_in_vmd.tcl"
@@ -695,7 +696,7 @@ def print_vmd_load_help(
     out_dir: Path,
     tag: str,
     topology_psf: Path,
-    trajectory: Path | None,
+    trajectory: Path | Sequence[Path] | None,
     n_atoms: int,
     bondless_psf: Path | None = None,
 ) -> None:
@@ -703,15 +704,21 @@ def print_vmd_load_help(
     print("\n=== VMD ===")
     print(f"  Atoms in this run: {n_atoms}")
     print(f"  Topology (bonds):  {topo}")
-    if trajectory is not None:
-        traj = trajectory.resolve()
-        print(f"  Trajectory:        {traj}")
-        print(f"\n  vmd {topo} {traj}")
+    trajectories = _normalize_trajectory_paths(trajectory)
+    if trajectories:
+        if len(trajectories) == 1:
+            print(f"  Trajectory:        {trajectories[0]}")
+            print(f"\n  vmd {topo} {trajectories[0]}")
+        else:
+            print("  Trajectories:")
+            for traj in trajectories:
+                print(f"    {traj}")
+            print(f"\n  vmd {topo}")
         tcl = write_vmd_load_script(
             out_dir=out_dir,
             tag=tag,
             topology_psf=topo,
-            trajectory=traj,
+            trajectory=trajectories,
             n_atoms=n_atoms,
         )
         print(f"  # or: vmd -e {tcl}")
@@ -722,6 +729,18 @@ def print_vmd_load_help(
             f"\n  Prefer {topology_psf.name} in VMD (full connectivity). "
             f"{bondless_psf.name} is the in-memory PSF after MLpot registration."
         )
+
+
+def _normalize_trajectory_paths(
+    trajectory: Path | Sequence[Path] | None,
+) -> list[Path]:
+    if trajectory is None:
+        return []
+    if isinstance(trajectory, Path):
+        paths = [trajectory]
+    else:
+        paths = [Path(p) for p in trajectory]
+    return [path.resolve() for path in paths if path.is_file() and path.stat().st_size > 0]
 
 
 def timestep_ps_from_dt_fs(dt_fs: float) -> float:

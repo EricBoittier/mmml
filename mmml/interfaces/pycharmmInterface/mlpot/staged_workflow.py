@@ -305,6 +305,21 @@ def _reset_stage_trajectory(path: Path | None) -> None:
     raise RuntimeError(f"could not find an available rescue name for {dcd_path}")
 
 
+def _trajectory_outputs(path: Path | None) -> list[Path]:
+    """Existing non-empty DCD outputs for a stage, including overlap chunks."""
+    if path is None:
+        return []
+    stage_path = Path(path)
+    outputs: list[Path] = []
+    if stage_path.is_file() and stage_path.stat().st_size > 0:
+        outputs.append(stage_path)
+    outputs.extend(
+        p for p in sorted(stage_path.parent.glob(f"{stage_path.stem}.overlap_*.dcd"))
+        if p.is_file() and p.stat().st_size > 0
+    )
+    return outputs
+
+
 def _seed_restart_for_memory_handoff(
     io: CharmmTrajectoryFiles,
     kw: dict[str, Any],
@@ -748,12 +763,13 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
 
     maybe_log_mlpot_profile(quiet=bool(args.quiet))
     print(f"\nStaged workflow OK ({','.join(stages)}) -> {out_dir}")
-    if last_traj is not None and last_traj.is_file():
+    trajectory_outputs = _trajectory_outputs(last_traj)
+    if trajectory_outputs:
         print_vmd_load_help(
             out_dir=out_dir,
             tag=tag,
             topology_psf=vmd_topo_psf,
-            trajectory=last_traj,
+            trajectory=trajectory_outputs,
             n_atoms=n_atoms,
             bondless_psf=paths["mini_psf"] if paths["mini_psf"].is_file() else None,
         )
