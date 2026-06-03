@@ -924,15 +924,42 @@ def assert_dynamics_ready(
     *,
     max_grms: float = 50.0,
     abort: bool = True,
+    require_mlpot_user: bool = False,
+    user_zero_tol_kcalmol: float = 1.0e-6,
 ) -> float:
     """Warn or abort if gradients are still huge before starting dynamics."""
+    import math
+
     import pycharmm
+    import pycharmm.energy as energy
 
     pycharmm.lingo.charmm_script("ENER")
     grms = charmm_grms()
+    user_kcal: float | None = None
+    if require_mlpot_user:
+        try:
+            user_kcal = float(energy.get_term_by_name("USER"))
+        except Exception:
+            user_kcal = None
+        user_missing = (
+            user_kcal is None
+            or not math.isfinite(user_kcal)
+            or abs(user_kcal) <= user_zero_tol_kcalmol
+        )
+        if user_missing or grms < 1.0e-4:
+            msg = (
+                "Pre-dynamics check failed: MLpot USER energy inactive or GRMS≈0 "
+                f"(USER={user_kcal}, GRMS={grms:.4f}). "
+                "Dynamics would integrate a free gas / zeroed BLOCK state."
+            )
+            if abort:
+                raise RuntimeError(msg)
+            print(f"WARN: {msg}", flush=True)
+            return grms
     if grms <= max_grms:
+        extra = f", USER={user_kcal:.2f} kcal/mol" if user_kcal is not None else ""
         print(
-            f"Pre-dynamics GRMS OK: {grms:.4f} kcal/mol/Å (limit {max_grms})",
+            f"Pre-dynamics GRMS OK: {grms:.4f} kcal/mol/Å (limit {max_grms}){extra}",
             flush=True,
         )
         return grms

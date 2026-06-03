@@ -561,11 +561,12 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         if not dyn_stages:
             return 0
 
+        assert_mlpot_user_active(ctx, context="staged dynamics", quiet=bool(args.quiet))
         assert_dynamics_ready(
             max_grms=float(getattr(args, "max_grms_before_dyn", 50.0)),
             abort=not getattr(args, "allow_high_grms", False),
+            require_mlpot_user=True,
         )
-        assert_mlpot_user_active(ctx, context="staged dynamics", quiet=bool(args.quiet))
 
         if dynamics_constrain:
             setup_cons_fix_for_resids(dynamics_constrain)
