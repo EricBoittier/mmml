@@ -23,6 +23,8 @@ def _pycharmm_args(**overrides) -> argparse.Namespace:
         dt_fs=0.5,
         temperature=50.0,
         mini_nstep=20,
+        nprint=50,
+        heat_ihtfrq=0,
         residue="MEOH",
         fix_resids="",
         constrain_resids="",
