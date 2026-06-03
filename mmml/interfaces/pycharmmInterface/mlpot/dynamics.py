@@ -975,6 +975,18 @@ def _valid_restart_file(path: PathLike | None) -> Path | None:
         head = p.read_bytes()[:8192]
     except OSError:
         return None
+    first_line = head.splitlines()[0].decode("ascii", errors="ignore").split()
+    if (
+        len(first_line) >= 3
+        and first_line[0].upper() == "REST"
+        and first_line[2].lstrip("+-").isdigit()
+        and int(first_line[2]) < 0
+    ):
+        print(
+            f"overlap: ignoring non-restartable CHARMM scratch restart {p}",
+            flush=True,
+        )
+        return None
     if b"C A N N O T" in head and b"RESTART A RUN" in head:
         print(
             f"overlap: ignoring non-restartable CHARMM scratch restart {p}",

@@ -52,8 +52,7 @@ uv run mmml md-system \
   --flat-bottom-radius "$FB_RAD" --allow-high-grms --dynamics-overlap-min-distance 0.4 \
   --flat-bottom-k 1.0 \
   --temperature 10 \
-  --dt-fs 0.25 \
-  --echeck 10000000 \
+  --dt-fs 0.1 \
   --ps-heat 10 \
   --ps-equi 50 \
   --dcd-nsavc 40 \
