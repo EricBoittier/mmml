@@ -289,7 +289,10 @@ def build_packmol_composition_cluster(
         output_pdb.unlink()
 
     if verbose:
-        print("[cluster] 3/4 Packmol sphere placement", flush=True)
+        packed_counts = ", ".join(
+            f"{path.stem.upper()}:{count}" for path, count in packmol_blocks
+        )
+        print(f"[cluster] 3/4 Packmol sphere placement ({packed_counts})", flush=True)
 
     packmol_placement.run_packmol_sphere_mixed(
         packmol_blocks,

@@ -280,9 +280,10 @@ def _mlpot_covers_all_atoms(mlpot_ctx: "MlpotContext | None") -> bool:
     if mlpot_ctx is None or getattr(mlpot_ctx, "ml_selection", None) is None:
         return False
     try:
-        from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+        import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+        import pycharmm
 
-        n_atoms = int(get_charmm_positions_array().shape[0])
+        n_atoms = int(pycharmm.coor.get_natom())
         n_ml = len(mlpot_ctx.ml_selection.get_atom_indexes())
         return n_atoms > 0 and n_ml >= n_atoms
     except Exception:

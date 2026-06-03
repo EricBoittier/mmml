@@ -778,6 +778,25 @@ def _append_if_nonempty(cmd: list[str], flag: str, value: str | None) -> None:
         cmd.extend([flag, text])
 
 
+def _composition_molecule_count(spec: str) -> int:
+    total = 0
+    for tok in str(spec).split(","):
+        tok = tok.strip()
+        if not tok:
+            continue
+        if ":" in tok:
+            _residue, count_str = tok.split(":", 1)
+            count = int(count_str)
+        else:
+            count = 1
+        if count <= 0:
+            raise ValueError(f"Invalid composition token: {tok!r}")
+        total += count
+    if total <= 0:
+        raise ValueError("Empty composition")
+    return total
+
+
 def _pycharmm_run_summary(args: argparse.Namespace) -> str:
     """One-line summary of the active pycharmm run (for logs)."""
     parts = [f"setup={args.setup}"]
@@ -970,6 +989,7 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     ]
     if args.composition:
         cmd.extend(["--composition", str(args.composition)])
+        cmd.extend(["--n-molecules", str(_composition_molecule_count(args.composition))])
     else:
         cmd.extend(["--residue", str(args.residue)])
         cmd.extend(["--n-molecules", str(args.n_molecules)])
