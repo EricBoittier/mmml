@@ -16,4 +16,10 @@ if [[ -z "$PY" ]]; then
   PY="$(command -v python3)"
 fi
 
+# Prefer mmml console script on PATH / venv (python -m mmml does not work).
+export MMML_BIN="${MMML_BIN:-}"
+if [[ -z "$MMML_BIN" && -x "$REPO_ROOT/.venv/bin/mmml" ]]; then
+  export MMML_BIN="$REPO_ROOT/.venv/bin/mmml"
+fi
+
 exec "$PY" "$WORKFLOW_ROOT/scripts/run_job.py" "$JOB_ID" --config "$WORKFLOW_ROOT/config.yaml"

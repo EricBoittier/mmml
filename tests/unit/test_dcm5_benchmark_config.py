@@ -30,6 +30,17 @@ def cfg() -> dict:
     return load_config(WORKFLOW_ROOT / "config.yaml")
 
 
+def test_resolve_mmml_cmd_uses_md_system_subcommand() -> None:
+    sys.path.insert(0, str(SCRIPTS))
+    from run_job import _resolve_mmml_cmd  # noqa: E402
+
+    cmd = _resolve_mmml_cmd(["--setup", "free_nve"])
+    assert "md-system" in cmd
+    idx = cmd.index("md-system")
+    assert cmd[idx + 1] == "--setup"
+    assert cmd[idx + 2] == "free_nve"
+
+
 def test_config_has_fifteen_jobs(cfg: dict) -> None:
     assert len(cfg["jobs"]) == EXPECTED_JOB_COUNT
 
