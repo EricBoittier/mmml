@@ -30,16 +30,27 @@ def test_resolve_defaults_to_rescue_and_1p5A():
     cfg = resolve_dynamics_overlap_config(args, n_monomers=4, use_pbc=True)
     assert cfg.action == "rescue"
     assert cfg.min_distance_A == 1.5
+    assert cfg.intra_min_distance_A == 1.0
+    assert cfg.intra_exclude_1_3 is True
     assert cfg.check_interval == 500
     assert cfg.enabled is True
+    assert cfg.intra_enabled is True
     assert cfg.rescue.nstep_sd == 200
     assert cfg.rescue.nstep_abnr == 400
 
 
-def test_resolve_off_disables():
+def test_resolve_off_disables_inter_and_intra():
     args = argparse.Namespace(dynamics_overlap_action="off")
     cfg = resolve_dynamics_overlap_config(args, n_monomers=4, use_pbc=False)
     assert cfg.enabled is False
+    assert cfg.intra_enabled is False
+
+
+def test_resolve_intra_min_distance_zero_disables_intra_only():
+    args = argparse.Namespace(dynamics_intra_min_distance=0.0)
+    cfg = resolve_dynamics_overlap_config(args, n_monomers=4, use_pbc=False)
+    assert cfg.enabled is True
+    assert cfg.intra_enabled is False
 
 
 def test_resolve_pbc_stores_box_size_fallback():
@@ -99,6 +110,83 @@ def test_check_overlap_raises_on_close_contact():
     ):
         with pytest.raises(RuntimeError, match="inter-monomer atom overlap"):
             check_dynamics_overlap(cfg, context="test", step=50)
+
+
+def test_check_intra_monomer_raises_on_close_contact():
+    cfg = DynamicsOverlapConfig(
+        action="error",
+        min_distance_A=1.5,
+        intra_min_distance_A=1.0,
+        n_monomers=2,
+        use_pbc=False,
+    )
+    pos = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.09, 0.0, 0.0],
+            [0.25, 0.0, 0.0],
+            [10.0, 0.0, 0.0],
+            [11.0, 0.0, 0.0],
+        ],
+        dtype=float,
+    )
+    excluded = frozenset({(0, 1), (1, 2), (0, 2)})
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        return_value=pos,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard._bond_exclusion_pairs",
+        return_value=excluded,
+    ):
+        with pytest.raises(RuntimeError, match="intra-monomer close contact"):
+            check_dynamics_overlap(cfg, context="test", step=100)
+
+
+def test_check_intra_monomer_rescue_runs_bonded_mini():
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        min_distance_A=0.0,
+        intra_min_distance_A=1.0,
+        n_monomers=1,
+        use_pbc=False,
+        rescue=OverlapRescueConfig(nstep_sd=25, nstep_abnr=0, verbose=False),
+    )
+    pos_bad = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.09, 0.0, 0.0],
+            [0.25, 0.0, 0.0],
+        ],
+        dtype=float,
+    )
+    pos_ok = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.09, 0.0, 0.0],
+            [0.36, 1.03, 0.0],
+        ],
+        dtype=float,
+    )
+    excluded = frozenset({(0, 1), (1, 2), (0, 2)})
+    ctx = object()
+    positions = {"current": pos_bad}
+
+    def _get_pos():
+        return positions["current"]
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        side_effect=_get_pos,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard._bond_exclusion_pairs",
+        return_value=excluded,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard._run_intramonomer_bonded_rescue",
+        side_effect=lambda _ctx, _cfg: positions.update(current=pos_ok),
+    ) as rescue:
+        dmin = check_dynamics_overlap(cfg, context="heat", step=500, mlpot_ctx=ctx)
+        rescue.assert_called_once()
+    assert dmin >= 1.0
 
 
 def test_check_overlap_rescue_runs_minimize_and_rechecks():

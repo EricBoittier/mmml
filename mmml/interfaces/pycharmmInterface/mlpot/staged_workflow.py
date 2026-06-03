@@ -565,6 +565,14 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             ),
             flush=True,
         )
+    if overlap_cfg.intra_enabled and not args.quiet:
+        print(
+            f"Dynamics intra-monomer guard: action={overlap_cfg.action}, "
+            f"min_distance={overlap_cfg.intra_min_distance_A:.2f} Å, "
+            f"exclude_1_3={overlap_cfg.intra_exclude_1_3}, "
+            f"check every {overlap_cfg.check_interval} steps",
+            flush=True,
+        )
 
     setup_charmm_environment(use_pbc=use_pbc, cubic_box_side_A=box_side)
     sync_charmm_positions(r)

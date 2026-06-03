@@ -442,6 +442,119 @@ def _apply_separation_or_raise(
         ) from sep_still_bad
 
 
+def _handle_inter_monomer_rescue(
+    config: DynamicsOverlapConfig,
+    *,
+    label: str,
+    exc: RuntimeError,
+    mlpot_ctx: "MlpotContext",
+) -> float:
+    print(
+        f"{exc}\nAttempting MLpot overlap rescue "
+        f"(bonded+VDW SD={config.rescue.nstep_sd}, "
+        f"ABNR={config.rescue.nstep_abnr})...",
+        flush=True,
+    )
+    if _mlpot_covers_all_atoms(mlpot_ctx):
+        print(
+            "Skipping CHARMM bonded+VDW overlap rescue for all-ML system; "
+            "ML-ML pairs are excluded from CHARMM nonbond lists.",
+            flush=True,
+        )
+        return _apply_separation_or_raise(config, label=label, cause=exc)
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import minimize_overlap_rescue
+
+    try:
+        minimize_overlap_rescue(mlpot_ctx, config.rescue)
+    except Exception as rescue_exc:
+        if config.separate_on_rescue_fail:
+            print(f"MLpot overlap rescue failed: {rescue_exc}", flush=True)
+            return _apply_separation_or_raise(config, label=label, cause=exc)
+        raise RuntimeError(
+            f"{exc}; MLpot overlap rescue failed: {rescue_exc}"
+        ) from rescue_exc
+    try:
+        return _overlap_check(config, context=f"{label} after overlap rescue")
+    except RuntimeError as still_bad:
+        if config.separate_on_rescue_fail:
+            return _apply_separation_or_raise(config, label=label, cause=still_bad)
+        raise RuntimeError(
+            f"{still_bad}; overlap rescue "
+            f"(SD={config.rescue.nstep_sd}, ABNR={config.rescue.nstep_abnr}) "
+            f"did not separate monomers — try larger "
+            f"--dynamics-overlap-charmm-sd-steps / "
+            f"--dynamics-overlap-charmm-abnr-steps, "
+            f"increase Packmol spacing, or relax "
+            f"--dynamics-overlap-min-distance"
+        ) from still_bad
+
+
+def _handle_intramonomer_rescue(
+    config: DynamicsOverlapConfig,
+    *,
+    label: str,
+    exc: RuntimeError,
+    mlpot_ctx: "MlpotContext",
+) -> float:
+    sd_steps = config.intra_rescue_sd_steps
+    if sd_steps is None:
+        sd_steps = config.rescue.nstep_sd
+    print(
+        f"{exc}\nAttempting intra-monomer bonded-MM rescue "
+        f"(SD={sd_steps})...",
+        flush=True,
+    )
+    try:
+        _run_intramonomer_bonded_rescue(mlpot_ctx, config)
+    except Exception as rescue_exc:
+        raise RuntimeError(
+            f"{exc}; intra-monomer bonded-MM rescue failed: {rescue_exc}"
+        ) from rescue_exc
+    try:
+        return _intramonomer_check(config, context=f"{label} after intra-monomer rescue")
+    except RuntimeError as still_bad:
+        raise RuntimeError(
+            f"{still_bad}; intra-monomer bonded rescue (SD={sd_steps}) "
+            f"did not restore {config.intra_min_distance_A:.2f} Å — "
+            f"try larger --dynamics-intra-rescue-sd-steps / "
+            f"--dynamics-overlap-charmm-sd-steps, longer minimization, "
+            f"or relax --dynamics-intra-min-distance"
+        ) from still_bad
+
+
+def _run_geometry_guard(
+    check_fn,
+    *,
+    config: DynamicsOverlapConfig,
+    label: str,
+    mlpot_ctx: "MlpotContext | None",
+    inter_monomer: bool,
+) -> float:
+    if config.action == "error":
+        return check_fn(label)
+
+    try:
+        return check_fn(label)
+    except RuntimeError as exc:
+        if config.action == "warn":
+            print(f"WARNING: {exc}", flush=True)
+            return float("nan")
+        if config.action != "rescue":
+            raise
+        if mlpot_ctx is None:
+            raise RuntimeError(
+                f"{exc}; geometry rescue requires MlpotContext"
+            ) from exc
+        if inter_monomer:
+            return _handle_inter_monomer_rescue(
+                config, label=label, exc=exc, mlpot_ctx=mlpot_ctx
+            )
+        return _handle_intramonomer_rescue(
+            config, label=label, exc=exc, mlpot_ctx=mlpot_ctx
+        )
+
+
 def check_dynamics_overlap(
     config: DynamicsOverlapConfig,
     *,
@@ -449,75 +562,33 @@ def check_dynamics_overlap(
     step: int | None = None,
     mlpot_ctx: "MlpotContext | None" = None,
 ) -> float:
-    """Check current CHARMM coordinates; raise, warn, or rescue per ``config.action``."""
-    if not config.enabled:
+    """Check inter- and intra-monomer geometry; raise, warn, or rescue per action."""
+    if not config.enabled and not config.intra_enabled:
         return float("inf")
 
     label = context if step is None else f"{context} at step {step}"
+    best = float("inf")
 
-    if config.action == "error":
-        return _overlap_check(config, context=label)
+    if config.enabled:
+        dist = _run_geometry_guard(
+            lambda ctx: _overlap_check(config, context=ctx),
+            config=config,
+            label=label,
+            mlpot_ctx=mlpot_ctx,
+            inter_monomer=True,
+        )
+        if np.isfinite(dist):
+            best = min(best, dist)
 
-    try:
-        return _overlap_check(config, context=label)
-    except RuntimeError as exc:
-        if config.action == "rescue":
-            if mlpot_ctx is None:
-                raise RuntimeError(
-                    f"{exc}; overlap rescue requires MlpotContext"
-                ) from exc
-            print(
-                f"{exc}\nAttempting MLpot overlap rescue "
-                f"(bonded+VDW SD={config.rescue.nstep_sd}, "
-                f"ABNR={config.rescue.nstep_abnr})...",
-                flush=True,
-            )
-            if _mlpot_covers_all_atoms(mlpot_ctx):
-                print(
-                    "Skipping CHARMM bonded+VDW overlap rescue for all-ML system; "
-                    "ML-ML pairs are excluded from CHARMM nonbond lists.",
-                    flush=True,
-                )
-                return _apply_separation_or_raise(config, label=label, cause=exc)
+    if config.intra_enabled:
+        dist = _run_geometry_guard(
+            lambda ctx: _intramonomer_check(config, context=ctx),
+            config=config,
+            label=label,
+            mlpot_ctx=mlpot_ctx,
+            inter_monomer=False,
+        )
+        if np.isfinite(dist):
+            best = min(best, dist)
 
-            from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
-                minimize_overlap_rescue,
-            )
-
-            try:
-                minimize_overlap_rescue(mlpot_ctx, config.rescue)
-            except Exception as rescue_exc:
-                if config.separate_on_rescue_fail:
-                    print(
-                        f"MLpot overlap rescue failed: {rescue_exc}",
-                        flush=True,
-                    )
-                    return _apply_separation_or_raise(config, label=label, cause=exc)
-                raise RuntimeError(
-                    f"{exc}; MLpot overlap rescue failed: {rescue_exc}"
-                ) from rescue_exc
-            try:
-                return _overlap_check(
-                    config,
-                    context=f"{label} after overlap rescue",
-                )
-            except RuntimeError as still_bad:
-                if config.separate_on_rescue_fail:
-                    return _apply_separation_or_raise(
-                        config,
-                        label=label,
-                        cause=still_bad,
-                    )
-                raise RuntimeError(
-                    f"{still_bad}; overlap rescue "
-                    f"(SD={config.rescue.nstep_sd}, ABNR={config.rescue.nstep_abnr}) "
-                    f"did not separate monomers — try larger "
-                    f"--dynamics-overlap-charmm-sd-steps / "
-                    f"--dynamics-overlap-charmm-abnr-steps, "
-                    f"increase Packmol spacing, or relax "
-                    f"--dynamics-overlap-min-distance"
-                ) from still_bad
-        if config.action == "warn":
-            print(f"WARNING: {exc}", flush=True)
-            return float("nan")
-        raise
+    return best
