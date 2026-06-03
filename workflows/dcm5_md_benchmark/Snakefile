@@ -1,0 +1,54 @@
+configfile: "config.yaml"
+
+import os
+import sys
+
+workflow_dir = workflow.basedir
+scripts_dir = os.path.join(workflow_dir, "scripts")
+if scripts_dir not in sys.path:
+    sys.path.insert(0, scripts_dir)
+
+from benchmark_lib import load_config  # noqa: E402
+
+_cfg = load_config()
+_JOB_IDS = list(_cfg["jobs"].keys())
+
+
+def _needs_mpi(wildcards) -> int:
+    return 1 if _cfg["jobs"][wildcards.job]["backend"] == "pycharmm" else 0
+
+
+rule all:
+    input:
+        "results/benchmark_summary.csv",
+        "results/benchmark_report.md",
+
+
+rule run_benchmark:
+    output:
+        touch("results/{job}/done.txt"),
+        log="results/{job}/stdout.log",
+    params:
+        job=lambda wildcards: wildcards.job,
+        workflow_dir=workflow.basedir,
+    resources:
+        gpu=1,
+        mpi=_needs_mpi,
+        runtime=30,
+    shell:
+        """
+        set -euo pipefail
+        mkdir -p results/{wildcards.job}
+        bash {params.workflow_dir}/scripts/job_shell.sh {params.job} > {output.log} 2>&1
+        touch {output[0]}
+        """
+
+
+rule collect:
+    input:
+        expand("results/{job}/done.txt", job=_JOB_IDS),
+    output:
+        csv="results/benchmark_summary.csv",
+        md="results/benchmark_report.md",
+    script:
+        "scripts/collect_benchmark.py"

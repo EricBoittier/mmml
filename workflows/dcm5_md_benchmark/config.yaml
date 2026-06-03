@@ -1,0 +1,183 @@
+# DCM:5 cross-backend MD benchmark — 2 ps smoke matrix.
+# Checkpoint path is resolved from MMML_CKPT at run time when checkpoint is "${MMML_CKPT}".
+
+composition: "DCM:5"
+ps: 2.0
+dt_fs: 0.25
+temperature: 300.0
+pressure: 1.0
+seed: 123
+spacing: 5.0
+packmol_radius: 6.9
+packmol_tolerance: 1.0
+box_size: 25.0
+checkpoint: "${MMML_CKPT}"
+output_root: "results"
+mpirun_wrapper: "../../scripts/mmml-charmm-mpirun.sh"
+
+mm_switch_on: 7.0
+mm_switch_width: 5.0
+ml_switch_width: 0.1
+mini_nstep: 100
+dyn_nprint: 500
+dcd_nsavc: 500
+heat_firstt: 0.0
+heat_finalt: 240.0
+heat_ihtfrq_scale: 100
+nsteps_target: 8000
+
+jobs:
+  ase_vac_nve:
+    backend: ase
+    setup: free_nve
+    pbc: false
+    integrator: nve
+    extra_args:
+      - "--nve-temp-K"
+      - "300"
+      - "--log-every"
+      - "500"
+      - "--traj-every"
+      - "500"
+
+  ase_pbc_nve:
+    backend: ase
+    setup: pbc_nve
+    pbc: true
+    integrator: nve
+    extra_args:
+      - "--nve-temp-K"
+      - "300"
+      - "--log-every"
+      - "500"
+      - "--traj-every"
+      - "500"
+
+  jaxmd_vac_nve:
+    backend: jaxmd
+    setup: free_nve
+    pbc: false
+    integrator: nve
+    extra_args:
+      - "--steps-per-recording"
+      - "500"
+
+  jaxmd_pbc_nve:
+    backend: jaxmd
+    setup: pbc_nve
+    pbc: true
+    integrator: nve
+    extra_args:
+      - "--steps-per-recording"
+      - "500"
+
+  pycharmm_vac_nve:
+    backend: pycharmm
+    setup: free_nve
+    pbc: false
+    integrator: nve
+    md_stages: "mini,nve"
+    ps_nve: 2.0
+
+  pycharmm_pbc_nve:
+    backend: pycharmm
+    setup: pbc_nve
+    pbc: true
+    integrator: nve
+    md_stages: "mini,nve"
+    ps_nve: 2.0
+
+  ase_vac_nvt_nhc:
+    backend: ase
+    setup: free_nvt
+    pbc: false
+    integrator: nvt_nhc
+    nvt_integrator: nhc
+    extra_args:
+      - "--log-every"
+      - "500"
+      - "--traj-every"
+      - "500"
+
+  ase_vac_nvt_langevin:
+    backend: ase
+    setup: free_nvt
+    pbc: false
+    integrator: nvt_langevin
+    nvt_integrator: langevin
+    extra_args:
+      - "--log-every"
+      - "500"
+      - "--traj-every"
+      - "500"
+
+  ase_pbc_nvt_nhc:
+    backend: ase
+    setup: pbc_nvt
+    pbc: true
+    integrator: nvt_nhc
+    nvt_integrator: nhc
+    extra_args:
+      - "--log-every"
+      - "500"
+      - "--traj-every"
+      - "500"
+
+  ase_pbc_nvt_langevin:
+    backend: ase
+    setup: pbc_nvt
+    pbc: true
+    integrator: nvt_langevin
+    nvt_integrator: langevin
+    extra_args:
+      - "--log-every"
+      - "500"
+      - "--traj-every"
+      - "500"
+
+  jaxmd_vac_nvt:
+    backend: jaxmd
+    setup: free_nvt
+    pbc: false
+    integrator: nvt_nhc
+    extra_args:
+      - "--steps-per-recording"
+      - "500"
+
+  jaxmd_pbc_nvt:
+    backend: jaxmd
+    setup: pbc_nvt
+    pbc: true
+    integrator: nvt_nhc
+    extra_args:
+      - "--steps-per-recording"
+      - "500"
+
+  pycharmm_vac_heat_scale:
+    backend: pycharmm
+    setup: free_nvt
+    pbc: false
+    integrator: heat_scale
+    md_stages: "mini,heat"
+    ps_heat: 2.0
+    heat_thermostat: scale
+    heat_ihtfrq: 100
+
+  pycharmm_vac_heat_hoover:
+    backend: pycharmm
+    setup: free_nvt
+    pbc: false
+    integrator: heat_hoover
+    md_stages: "mini,heat"
+    ps_heat: 2.0
+    heat_thermostat: hoover
+    heat_ihtfrq: 0
+
+  jaxmd_pbc_npt:
+    backend: jaxmd
+    setup: pbc_npt
+    pbc: true
+    integrator: npt_nhc
+    extra_args:
+      - "--steps-per-recording"
+      - "500"

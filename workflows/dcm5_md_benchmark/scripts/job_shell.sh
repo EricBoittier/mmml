@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Run one DCM:5 benchmark job (called from Snakemake).
+set -euo pipefail
+
+WORKFLOW_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "$WORKFLOW_ROOT/../.." && pwd)"
+JOB_ID="${1:?usage: job_shell.sh JOB_ID}"
+
+cd "$REPO_ROOT"
+exec python3 "$WORKFLOW_ROOT/scripts/run_job.py" "$JOB_ID" --config "$WORKFLOW_ROOT/config.yaml"
