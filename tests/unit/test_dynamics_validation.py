@@ -40,8 +40,22 @@ def test_count_dcd_frames(tmp_path):
 
 def test_read_restart_last_step(tmp_path):
     res = tmp_path / "heat.res"
-    res.write_text("REST     0    721\n")
+    res.write_text(
+        "REST    48     1\n"
+        "\n"
+        " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
+        "         100       10000         721         100          10         721\n"
+    )
     assert read_restart_last_step(res) == 721
+
+
+def test_read_restart_last_step_real_fixture():
+    stub = (
+        Path(__file__).resolve().parents[1]
+        / "functionality/mlpot/output/dynamics/nve_stub.res"
+    )
+    assert stub.is_file()
+    assert read_restart_last_step(stub) == 2000
 
 
 def test_assert_stage_dynamics_completed_fails_truncated(tmp_path):

@@ -28,20 +28,48 @@ def expected_dcd_frame_count(*, nstep: int, nsavc: int) -> int:
 
 
 def read_restart_last_step(path: Path) -> int | None:
-    """Parse CHARMM restart first line ``REST ... <step>`` when present."""
+    """Return the dynamics step counter from a CHARMM restart file.
+
+    CHARMM stores the step on the ``!NATOM,NPRIV,NSTEP,...`` record (third
+    integer), not on the ``REST`` header line (whose third field is typically
+    ``1``). Falls back to the legacy ``REST ... <step>`` header when no NATOM
+    block is present (minimal test fixtures).
+    """
     p = Path(path)
     if not p.is_file():
         return None
     try:
-        line = p.read_text(errors="ignore").splitlines()[0].split()
+        lines = p.read_text(errors="ignore").splitlines()
     except OSError:
         return None
-    if len(line) < 3 or line[0].upper() != "REST":
+    if not lines:
         return None
-    try:
-        return int(line[2])
-    except ValueError:
-        return None
+
+    for i, raw in enumerate(lines):
+        tag = raw.strip().split()[0] if raw.strip() else ""
+        if not (tag.startswith("!NATOM") or tag.startswith("NATOM")):
+            continue
+        if i + 1 >= len(lines):
+            break
+        fields = lines[i + 1].split()
+        if len(fields) >= 3:
+            try:
+                return int(fields[2])
+            except ValueError:
+                break
+        if len(fields) >= 6:
+            try:
+                return int(fields[5])
+            except ValueError:
+                break
+
+    header = lines[0].split()
+    if len(header) >= 3 and header[0].upper() == "REST":
+        try:
+            return int(header[2])
+        except ValueError:
+            return None
+    return None
 
 
 def assert_stage_dynamics_completed(
