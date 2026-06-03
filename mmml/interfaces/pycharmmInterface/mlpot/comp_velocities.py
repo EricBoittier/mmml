@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import argparse
+from typing import Any
+
 import numpy as np
 import pandas as pd
 
@@ -201,3 +204,35 @@ def clear_comp_for_production() -> None:
     """Zero COMP before equi / NVE / prod (no force-damp recipe)."""
     zero_comparison_scalars("all")
     run_charmm_script("scalar wcomp set 0 select all end")
+
+
+_COMP_CLEARED_STAGES = frozenset({"nve", "equi", "prod"})
+
+
+def apply_comp_velocity_policy(
+    stage: str,
+    kw: dict[str, Any],
+    args: argparse.Namespace,
+) -> None:
+    """Heat: selective COMP damp on high-|F| H; later stages: clear COMP."""
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        resolve_heat_comp_damp,
+        resolve_heat_comp_damp_kwargs,
+    )
+
+    if stage == "heat" and resolve_heat_comp_damp(args):
+        damp_kw = resolve_heat_comp_damp_kwargs(args)
+        n = prepare_comp_for_heat(**damp_kw)
+        kw["iasvel"] = 0
+        if not getattr(args, "quiet", False):
+            target = "H" if damp_kw.get("hydrogen_only", True) else "all"
+            print(
+                f"HEAT COMP: selective force-damp on {n} {target} atoms "
+                f"(|F|>={damp_kw['min_force_kcalmol_A']} kcal/mol/Å, "
+                f"scale={damp_kw['force_scale']}); iasvel=0",
+                flush=True,
+            )
+    elif stage in _COMP_CLEARED_STAGES:
+        clear_comp_for_production()
+        if not getattr(args, "quiet", False):
+            print(f"{stage.upper()}: COMP cleared (no force-damp)", flush=True)
