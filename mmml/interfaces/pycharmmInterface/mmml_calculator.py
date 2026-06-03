@@ -575,6 +575,9 @@ def setup_calculator(
                 or "spooky" in str(restart_path).lower()
             )
             model_cls = SpookyEF if is_spooky_model else StandardEF
+            model_fields = getattr(model_cls, "__dataclass_fields__", None)
+            if model_fields:
+                model_config = {k: v for k, v in model_config.items() if k in model_fields}
             MODEL = model_cls(**model_config)
             MODEL.natoms = max_atoms
             
@@ -1416,6 +1419,7 @@ def setup_calculator(
         dimer_contribs = calculate_dimer_contributions(
             positions, e, f, n_dimers, 
             monomer_contribs["monomer_energy"],
+            monomer_contribs["out_F"],
             cutoff_params,
             debug,
             mic_pbc_cell=mic_pbc_cell,
@@ -2177,6 +2181,7 @@ def setup_calculator(
         f: Array,
         n_dimers: int,
         monomer_energies: Array,
+        monomer_forces: Array,
         cutoff_params: CutoffParameters,
         debug: bool = False,
         mic_pbc_cell: Optional[Array] = None,
@@ -2217,16 +2222,29 @@ def setup_calculator(
             monomer_contrib=monomer_contrib,
         )
 
-        # Process dimer forces
-        dimer_forces = process_dimer_forces(
-            ml_dimer_forces, force_segments, n_dimers, max_atoms, debug
-        )
+        # Convert model dimer forces into interaction forces matching
+        # E_int = E_dimer - E_monomer_a - E_monomer_b before switching.
+        ml_dimer_forces_2d = ml_dimer_forces.reshape(n_dimers, max_atoms, 3)
+        interaction_force_parts = []
+        for di, (mi, mj) in enumerate(dimer_perms):
+            n_i = atoms_per_monomer_list[mi]
+            n_j = atoms_per_monomer_list[mj]
+            n_d = n_i + n_j
+            off_i = int(monomer_offsets[mi])
+            off_j = int(monomer_offsets[mj])
+            monomer_pair_forces = jnp.concatenate([
+                monomer_forces[off_i:off_i + n_i],
+                monomer_forces[off_j:off_j + n_j],
+            ], axis=0)
+            force_int = ml_dimer_forces_2d[di, :n_d, :] - monomer_pair_forces
+            interaction_force_parts.append(force_int * dimer_lambda[di])
+        dimer_interaction_forces_flat = jnp.concatenate(interaction_force_parts, axis=0)
 
         # Apply switching functions
         switched_results = apply_dimer_switching(
             positions,
             dimer_int_energies,
-            dimer_forces,
+            dimer_interaction_forces_flat,
             cutoff_params,
             max_atoms,
             debug,
@@ -2311,7 +2329,7 @@ def setup_calculator(
     def apply_dimer_switching(
         positions: Array,
         dimer_energies: Array,
-        dimer_forces: Array,
+        dimer_forces_flat: Array,
         cutoff_params: CutoffParameters,
         max_atoms: int,
         debug: bool,
@@ -2390,30 +2408,21 @@ def setup_calculator(
             num_segments=total_atoms
         )
 
-        # Per-atom switching scale: expand per-dimer scale to per-atom
+        # Per-dimer-entry switching scale: expand per-dimer scale to each
+        # valid atom entry before scattering forces back to global atoms.
         scale_parts = []
         for di, (mi, mj) in enumerate(dimer_perms):
             n_d = atoms_per_monomer_list[mi] + atoms_per_monomer_list[mj]
             scale_parts.append(jnp.full((n_d,), switching_scales[di]))
         switching_scales_per_atom = jnp.concatenate(scale_parts)
 
-        atom_switching_scales_sum = jax.ops.segment_sum(
-            switching_scales_per_atom, seg_ids, num_segments=total_atoms
+        dimer_forces_safe = jnp.where(jnp.isfinite(dimer_forces_flat), dimer_forces_flat, 0.0)
+        scaled_dimer_forces_flat = dimer_forces_safe * switching_scales_per_atom[:, None]
+        scaled_dimer_forces = jax.ops.segment_sum(
+            scaled_dimer_forces_flat,
+            seg_ids,
+            num_segments=total_atoms,
         )
-        atom_dimer_counts = jax.ops.segment_sum(
-            jnp.ones_like(switching_scales_per_atom), seg_ids, num_segments=total_atoms
-        )
-
-        safe_counts = jnp.maximum(atom_dimer_counts, 1.0)
-        safe_counts = jnp.where(jnp.isfinite(safe_counts), safe_counts, 1.0)
-        safe_scales_sum = jnp.where(jnp.isfinite(atom_switching_scales_sum), atom_switching_scales_sum, 0.0)
-        atom_switching_scales = jnp.where(
-            atom_dimer_counts > 0, safe_scales_sum / safe_counts, 1.0
-        )
-        atom_switching_scales = jnp.where(jnp.isfinite(atom_switching_scales), atom_switching_scales, 1.0)
-
-        dimer_forces_safe = jnp.where(jnp.isfinite(dimer_forces), dimer_forces, 0.0)
-        scaled_dimer_forces = dimer_forces_safe * atom_switching_scales[:, None]
 
         energy_weighted_grad_safe = jnp.where(jnp.isfinite(energy_weighted_grad), energy_weighted_grad, 0.0)
         switched_forces = scaled_dimer_forces - energy_weighted_grad_safe

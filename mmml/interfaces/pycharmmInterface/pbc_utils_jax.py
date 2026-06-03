@@ -12,6 +12,16 @@ Array = jnp.ndarray
 SMOOTH_MIC_K = 20.0
 
 
+def _cell_as_matrix(cell: Array) -> Array:
+    """Normalize scalar or box-length PBC cells to a 3x3 cell matrix."""
+    cell = jnp.asarray(cell)
+    if cell.ndim == 0:
+        return jnp.eye(3, dtype=cell.dtype) * cell
+    if cell.shape == (3,):
+        return jnp.diag(cell)
+    return cell
+
+
 def _smooth_round_frac(frac: Array, k: float = SMOOTH_MIC_K) -> Array:
     """Smooth approximation to round for fractional part in [0, 1).
 
@@ -32,12 +42,14 @@ def _smooth_frac_to_mic(frac: Array, k: float = SMOOTH_MIC_K) -> Array:
 
 def frac_coords(R: Array, cell: Array) -> Array:
     """Cartesian -> fractional (row-vectors) using a stable linear solve."""
+    cell = _cell_as_matrix(cell)
     S_T = jax.scipy.linalg.solve(cell.T, R.T, assume_a='gen')
     return S_T.T
 
 
 def cart_coords(S: Array, cell: Array) -> Array:
     """Fractional -> Cartesian (row-vectors)."""
+    cell = _cell_as_matrix(cell)
     return S @ cell
 
 
