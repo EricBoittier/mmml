@@ -768,6 +768,16 @@ def parse_args() -> argparse.Namespace:
         help="MM outer taper width (Å) past mm_switch_on (default: 5.0).",
     )
     parser.add_argument(
+        "--mlpot-mm-internal-scale",
+        type=float,
+        default=0.0,
+        metavar="W",
+        help=(
+            "pycharmm: scale CGENFF BOND/ANGL/DIHE on ML atoms during MLpot BLOCK "
+            "(0=off, 0.1=10%% internal). ELEC/VDW stay off."
+        ),
+    )
+    parser.add_argument(
         "--residue",
         type=str,
         default="MEOH",
@@ -1270,6 +1280,9 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     cmd.extend(
         ["--ml-switch-width", str(getattr(args, "ml_switch_width", 0.1))]
     )
+    scale = float(getattr(args, "mlpot_mm_internal_scale", 0.0) or 0.0)
+    if scale > 0.0:
+        cmd.extend(["--mlpot-mm-internal-scale", str(scale)])
     if args.charmm_pre_minimize is False:
         cmd.append("--no-charmm-pre-minimize")
     cmd.extend(["--charmm-sd-steps", str(args.charmm_sd_steps)])

@@ -1252,6 +1252,16 @@ def add_staged_md_args(parser: argparse.ArgumentParser) -> None:
     )
     add_bonded_mm_mini_args(parser)
     group.add_argument(
+        "--mlpot-mm-internal-scale",
+        type=float,
+        default=0.0,
+        metavar="W",
+        help=(
+            "During MLpot, scale CGENFF BOND/ANGL/DIHE on ML atoms via BLOCK "
+            "(0=full ML only, 0.1=10%% MM internal). ELEC/VDW remain off."
+        ),
+    )
+    group.add_argument(
         "--restart-from",
         type=Path,
         default=None,
