@@ -1375,6 +1375,15 @@ def run_dynamics_with_io(
                 chunk_io is not None
                 and getattr(chunk_io, "restart_read", None) is not None
             )
+            if chunk_index > 0 and n_chunks > 1 and not has_restart_read:
+                raise RuntimeError(
+                    "overlap restart handoff failed: previous CHARMM chunk did not "
+                    f"produce a restartable scratch file before {overlap_context} "
+                    f"chunk {chunk_index + 1}/{n_chunks}. The dynamics segment is "
+                    "unstable or CHARMM wrote a coordinate-history scratch file "
+                    "instead of a restart; reduce the timestep, minimize longer, "
+                    "or disable overlap chunking for this run."
+                )
             if chunk_index == 0 and has_restart_read:
                 chunk_kw["new"] = False
                 chunk_kw["start"] = False
