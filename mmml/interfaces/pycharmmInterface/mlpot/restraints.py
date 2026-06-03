@@ -70,7 +70,13 @@ END
 def clear_mmfp_restraints() -> None:
     """Remove MMFP terms (safe to call if none were defined)."""
     pycharmm = _import_pycharmm()
-    pycharmm.lingo.charmm_script("MMFP CLEAR")
+    pycharmm.lingo.charmm_script(
+        """
+MMFP
+CLEAR
+END
+"""
+    )
 
 
 def apply_flat_bottom_workflow(
