@@ -8,6 +8,7 @@ from pathlib import Path
 from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
     _apply_npt_cpt_kwargs,
     build_heat_dynamics,
+    build_hoover_heat_dynamics,
     build_cpt_equilibration_dynamics,
     build_cpt_production_dynamics,
     build_nvt_equilibration_dynamics,
@@ -63,6 +64,30 @@ def test_heat_free_space_disables_image_update_frequencies():
     assert kw["imgfrq"] == 0
     assert kw["ihbfrq"] == 0
     assert kw["ilbfrq"] == 0
+
+
+def test_hoover_heat_uses_hoover_nvt_without_velocity_scaling():
+    kw = build_hoover_heat_dynamics(
+        temp=240.0,
+        firstt=0.0,
+        finalt=240.0,
+        use_pbc=False,
+        tmass=160,
+    )
+    script = _script_string(**kw)
+
+    assert kw["ihtfrq"] == 0
+    assert kw["ieqfrq"] == 0
+    assert kw["hoover reft"] == 240.0
+    assert kw["tmass"] == 160
+    assert kw["firstt"] == 0.0
+    assert kw["finalt"] == 240.0
+    assert kw["tbath"] == 240.0
+    assert "TEMINC" not in kw
+    assert kw["imgfrq"] == 0
+    assert "hoover reft" in script
+    assert "cpt" not in script
+    assert "ihtfrq" not in script or "ihtfrq 0" in script
 
 
 def test_equi_hoover_default_uses_mass_formula_and_disables_rescaling():

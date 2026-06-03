@@ -66,9 +66,18 @@ def add_charmm_output_args(parser: argparse.ArgumentParser) -> None:
         default=0,
         metavar="N",
         help=(
-            "Heating / free-space equi: CHARMM ihtfrq (velocity rescaling every N steps). "
-            "0 = use --dyn-nprint (or full stage length when --quiet). "
-            "Lower values ramp temperature faster but print COM/velocity banners more often."
+            "Heating with --heat-thermostat scale: CHARMM ihtfrq (velocity rescaling "
+            "every N steps). 0 = use --dyn-nprint (or full stage length when --quiet). "
+            "Ignored for --heat-thermostat hoover."
+        ),
+    )
+    group.add_argument(
+        "--heat-thermostat",
+        choices=("scale", "hoover"),
+        default="scale",
+        help=(
+            "Heat-stage temperature control: scale=IHTFRQ velocity rescaling (default); "
+            "hoover=CHARMM Hoover NVT (no ihtfrq; vacuum uses hoover reft/tmass, no CPT)."
         ),
     )
     group.add_argument(
@@ -311,6 +320,14 @@ def resolve_heat_firstt_finalt(
 def resolve_heat_comp_damp(args: argparse.Namespace) -> bool:
     """Whether heat runs experimental COMP force-damp prep (default off)."""
     return bool(getattr(args, "heat_comp_damp", False))
+
+
+def resolve_heat_thermostat(args: argparse.Namespace) -> str:
+    """Heat-stage thermostat: ``scale`` (IHTFRQ) or ``hoover`` (CHARMM Hoover NVT)."""
+    raw = str(getattr(args, "heat_thermostat", "scale") or "scale").strip().lower()
+    if raw not in ("scale", "hoover"):
+        raise ValueError(f"unknown heat_thermostat: {raw!r}")
+    return raw
 
 
 def resolve_heat_comp_damp_kwargs(args: argparse.Namespace) -> dict[str, float | bool]:

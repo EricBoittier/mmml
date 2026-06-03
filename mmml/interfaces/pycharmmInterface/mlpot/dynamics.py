@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Optional, Union
 
 NptThermostat = Literal["hoover", "berendsen"]
+HeatThermostat = Literal["scale", "hoover"]
 
 if TYPE_CHECKING:
     from mmml.interfaces.pycharmmInterface.mlpot.derivative_test import TestFirstConfig
@@ -650,6 +651,55 @@ def build_heat_dynamics(
         }
     )
     apply_heat_ramp_frequencies(kw, nstep=nstep, ihtfrq=ihtfrq)
+    return kw
+
+
+def build_hoover_heat_dynamics(
+    *,
+    timestep_ps: float = 0.00025,
+    duration_ps: float = 10.0,
+    save_interval_ps: float = 0.1,
+    temp: float = 300.0,
+    firstt: float | None = None,
+    finalt: float | None = None,
+    echeck: float = 100.0,
+    use_pbc: bool = True,
+    tmass: int | None = None,
+) -> dict[str, Any]:
+    """NVT heating with CHARMM Hoover (no ``ihtfrq`` velocity scaling).
+
+    Vacuum/free-space clusters use standalone ``hoover reft`` / ``tmass`` (no CPT).
+    Boltzmann velocities at ``firstt`` should be assigned before ``dyna`` (see
+    :func:`staged_workflow._configure_heat_dynamics_start`).
+    """
+    nstep = ps_to_nsteps(timestep_ps, duration_ps)
+    nsavc = nsavc_for_interval(timestep_ps, save_interval_ps)
+    heat_finalt = float(finalt if finalt is not None else temp)
+    heat_firstt = float(firstt if firstt is not None else heat_finalt * 0.2)
+    image_kwargs = {} if use_pbc else {"imgfrq": 0, "ihbfrq": 0, "ilbfrq": 0}
+    kw = _base_dyn_kwargs(
+        timestep=timestep_ps,
+        nstep=nstep,
+        nsavc=nsavc,
+        nprint=100,
+        echeck=echeck,
+        **image_kwargs,
+    )
+    kw.update(
+        {
+            "new": True,
+            "start": True,
+            "firstt": heat_firstt,
+            "finalt": heat_finalt,
+            "tbath": heat_finalt,
+        }
+    )
+    _apply_hoover_nvt_kwargs(
+        kw,
+        temp=heat_finalt,
+        tmass=tmass,
+        firstt=heat_firstt,
+    )
     return kw
 
 

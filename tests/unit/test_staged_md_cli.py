@@ -172,6 +172,26 @@ def test_build_stage_dynamics_kw_restart_omits_invalid_res_flag():
     assert "res" not in kw
 
 
+def test_build_stage_dynamics_kw_heat_hoover_disables_ihtfrq_ramp():
+    args = argparse.Namespace(heat_thermostat="hoover", heat_firstt=0.0, heat_finalt=240.0)
+    dyn_print = {"nprint": 100, "iprfrq": 500, "isvfrq": 500}
+    kw = _build_stage_dynamics_kw(
+        "heat",
+        args=args,
+        timestep_ps=0.00025,
+        nstep=80000,
+        save_interval_ps=0.125,
+        temp=300.0,
+        echeck=100.0,
+        dyn_print=dyn_print,
+        restart=False,
+        use_pbc=False,
+    )
+    assert kw["hoover reft"] == 240.0
+    assert kw["ihtfrq"] == 0
+    assert "TEMINC" not in kw
+
+
 def test_build_stage_dynamics_kw_free_space_equi_uses_charmm_heat_controls():
     args = argparse.Namespace()
     dyn_print = {"nprint": 100, "iprfrq": 500, "isvfrq": 500}

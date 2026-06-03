@@ -85,6 +85,7 @@ def _pycharmm_args(**overrides) -> argparse.Namespace:
         flat_bottom_selection="all",
         extra_args=[],
         seed=123,
+        heat_thermostat="scale",
         dynamics_overlap_action="rescue",
         dynamics_overlap_min_distance=1.5,
         dynamics_overlap_check_interval=50,
@@ -138,6 +139,12 @@ def test_build_pycharmm_command_forwards_intra_monomer_guard():
     cmd = build_pycharmm_command(_pycharmm_args())
     idx = cmd.index("--dynamics-intra-min-distance")
     assert cmd[idx + 1] == "1.0"
+
+
+def test_build_pycharmm_command_forwards_heat_thermostat():
+    cmd = build_pycharmm_command(_pycharmm_args(heat_thermostat="hoover"))
+    idx = cmd.index("--heat-thermostat")
+    assert cmd[idx + 1] == "hoover"
 
 
 def test_build_pycharmm_command_includes_ml_switch_width_default():

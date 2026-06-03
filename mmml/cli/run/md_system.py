@@ -307,8 +307,17 @@ def parse_args() -> argparse.Namespace:
         default=0,
         metavar="N",
         help=(
-            "pycharmm: heating velocity rescale every N steps (0 = match --dyn-nprint). "
-            "Controls COM/velocity banner frequency during heat."
+            "pycharmm: heating velocity rescale every N steps when --heat-thermostat "
+            "scale (0 = match --dyn-nprint). Ignored for hoover."
+        ),
+    )
+    parser.add_argument(
+        "--heat-thermostat",
+        choices=("scale", "hoover"),
+        default="scale",
+        help=(
+            "pycharmm heat stage: scale=IHTFRQ velocity rescaling; hoover=CHARMM Hoover "
+            "NVT (vacuum hoover reft/tmass, no CPT / no ML PBC required)."
         ),
     )
     parser.add_argument(
@@ -1138,6 +1147,7 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     ]
     _append_optional(cmd, "--heat-firstt", getattr(args, "heat_firstt", None))
     _append_optional(cmd, "--heat-finalt", getattr(args, "heat_finalt", None))
+    cmd.extend(["--heat-thermostat", str(getattr(args, "heat_thermostat", "scale"))])
     _append_boolean_optional_flag(
         cmd, "--heat-comp-damp", bool(getattr(args, "heat_comp_damp", False))
     )

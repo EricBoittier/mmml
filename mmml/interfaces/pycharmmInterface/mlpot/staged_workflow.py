@@ -24,6 +24,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     resolve_dynamics_print_kwargs,
     resolve_heat_firstt_finalt,
     resolve_heat_ihtfrq,
+    resolve_heat_thermostat,
     resolve_echeck_for_cluster,
     resolve_fix_resids,
     resolve_mini_nstep,
@@ -217,16 +218,32 @@ def _build_stage_dynamics_kw(
     effective_restart = restart and not memory_handoff
     if stage == "heat":
         heat_firstt, heat_finalt = resolve_heat_firstt_finalt(args, default_temp=temp)
-        kw = build_heat_dynamics(
-            timestep_ps=timestep_ps,
-            duration_ps=duration_ps,
-            save_interval_ps=save_interval_ps,
-            temp=temp,
-            firstt=heat_firstt,
-            finalt=heat_finalt,
-            echeck=echeck,
-            use_pbc=use_pbc,
-        )
+        if resolve_heat_thermostat(args) == "hoover":
+            from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+                build_hoover_heat_dynamics,
+            )
+
+            kw = build_hoover_heat_dynamics(
+                timestep_ps=timestep_ps,
+                duration_ps=duration_ps,
+                save_interval_ps=save_interval_ps,
+                temp=temp,
+                firstt=heat_firstt,
+                finalt=heat_finalt,
+                echeck=echeck,
+                use_pbc=use_pbc,
+            )
+        else:
+            kw = build_heat_dynamics(
+                timestep_ps=timestep_ps,
+                duration_ps=duration_ps,
+                save_interval_ps=save_interval_ps,
+                temp=temp,
+                firstt=heat_firstt,
+                finalt=heat_finalt,
+                echeck=echeck,
+                use_pbc=use_pbc,
+            )
     elif stage == "nve":
         kw = build_nve_dynamics(
             timestep_ps=timestep_ps,
@@ -288,7 +305,12 @@ def _build_stage_dynamics_kw(
     kw["iprfrq"] = dyn_print["iprfrq"]
     kw["isvfrq"] = dyn_print["isvfrq"]
     kw["nstep"] = nstep
-    if stage == "heat" or (stage == "equi" and not use_pbc and int(kw.get("ihtfrq", 0)) > 0):
+    if stage == "heat" or (
+        stage == "equi"
+        and not use_pbc
+        and resolve_heat_thermostat(args) == "scale"
+        and int(kw.get("ihtfrq", 0)) > 0
+    ):
         from mmml.interfaces.pycharmmInterface.mlpot.dynamics import apply_heat_ramp_frequencies
 
         apply_heat_ramp_frequencies(
@@ -319,6 +341,7 @@ def _configure_heat_dynamics_start(
     timestep_ps: float,
     use_pbc: bool,
     quiet: bool,
+    heat_thermostat: str = "scale",
 ) -> None:
     """Ensure heat has Boltzmann velocities at ``FIRSTT`` (DCM2-style ``start``).
 
@@ -331,9 +354,11 @@ def _configure_heat_dynamics_start(
 
     firstt = float(kw.get("firstt", kw.get("finalt", 300.0)))
     kw["iasvel"] = 1
-    # Scale at IHTFRQ (CHARMM iasors=0); avoid Gaussian reassignment every ihtfrq
-    # which spikes T and trips echeck on all-ML clusters (no SHAKE).
-    kw["iasors"] = 0
+    hoover_heat = heat_thermostat == "hoover"
+    if not hoover_heat:
+        # Scale at IHTFRQ (CHARMM iasors=0); avoid Gaussian reassignment every ihtfrq
+        # which spikes T and trips echeck on all-ML clusters (no SHAKE).
+        kw["iasors"] = 0
 
     if coords_in_memory:
         io.restart_read = None
@@ -347,11 +372,18 @@ def _configure_heat_dynamics_start(
         )
         kw["start"] = False
         if not quiet:
-            print(
-                f"HEAT: Boltzmann velocities at FIRSTT={firstt:.1f} K "
-                "(in-memory coords after mini); ihtfrq scales (iasors=0)",
-                flush=True,
-            )
+            if hoover_heat:
+                print(
+                    f"HEAT: Boltzmann velocities at FIRSTT={firstt:.1f} K "
+                    "(in-memory coords after mini); Hoover NVT (no ihtfrq)",
+                    flush=True,
+                )
+            else:
+                print(
+                    f"HEAT: Boltzmann velocities at FIRSTT={firstt:.1f} K "
+                    "(in-memory coords after mini); ihtfrq scales (iasors=0)",
+                    flush=True,
+                )
         return
 
     if restart_from_file and io.restart_read is not None:
@@ -367,9 +399,17 @@ def _configure_heat_dynamics_start(
         kw["new"] = False
         kw["start"] = False
         if not quiet:
-            print(
+            msg = (
                 f"HEAT: Boltzmann velocities at FIRSTT={firstt:.1f} K "
-                f"(coords from {restart_path}); ihtfrq scales (iasors=0)",
+                f"(coords from {restart_path}); "
+            )
+            print(
+                msg
+                + (
+                    "Hoover NVT (no ihtfrq)"
+                    if hoover_heat
+                    else "ihtfrq scales (iasors=0)"
+                ),
                 flush=True,
             )
         return
@@ -380,7 +420,11 @@ def _configure_heat_dynamics_start(
     if not quiet:
         print(
             f"HEAT: dyna start FIRSTT={firstt:.1f} K (cold start); "
-            "ihtfrq scales (iasors=0)",
+            + (
+                "Hoover NVT (no ihtfrq)"
+                if hoover_heat
+                else "ihtfrq scales (iasors=0)"
+            ),
             flush=True,
         )
 
@@ -1023,6 +1067,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             )
             apply_comp_velocity_policy(stage, kw, args)
             if stage == "heat":
+                heat_thermostat = resolve_heat_thermostat(args)
                 _configure_heat_dynamics_start(
                     kw,
                     io,
@@ -1031,15 +1076,24 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     timestep_ps=timestep_ps,
                     use_pbc=use_pbc,
                     quiet=bool(args.quiet),
+                    heat_thermostat=heat_thermostat,
                 )
                 if not args.quiet:
-                    print(
-                        f"HEAT ramp: {kw.get('firstt')} -> {kw.get('finalt')} K "
-                        f"over {stage_ps} ps | ihtfrq={kw.get('ihtfrq')} "
-                        f"TEMINC={float(kw.get('TEMINC', 0)):.4g} K | "
-                        "iasors=0 (scale)",
-                        flush=True,
-                    )
+                    if heat_thermostat == "hoover":
+                        print(
+                            f"HEAT Hoover: {kw.get('firstt')} -> {kw.get('finalt')} K "
+                            f"over {stage_ps} ps | hoover reft={kw.get('hoover reft')} K "
+                            f"tmass={kw.get('tmass')} | ihtfrq=0",
+                            flush=True,
+                        )
+                    else:
+                        print(
+                            f"HEAT ramp: {kw.get('firstt')} -> {kw.get('finalt')} K "
+                            f"over {stage_ps} ps | ihtfrq={kw.get('ihtfrq')} "
+                            f"TEMINC={float(kw.get('TEMINC', 0)):.4g} K | "
+                            "iasors=0 (scale)",
+                            flush=True,
+                        )
             run_dynamics_with_io(
                 kw,
                 io,
