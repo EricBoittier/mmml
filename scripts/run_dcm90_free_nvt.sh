@@ -49,14 +49,14 @@ uv run mmml md-system \
   --packmol-sphere \
   --packmol-radius "$PACKMOL_R" \
   --packmol-tolerance 2.0 \
-  --flat-bottom-radius "$FB_RAD" --allow-high-grms --dynamics-overlap-min-distance 0.4 \
-  --flat-bottom-k 0.0001 \
-  --temperature 10 \
+  --flat-bottom-radius "$FB_RAD" --dynamics-overlap-min-distance 0.4 \
+  --flat-bottom-k 0.01 \
+  --temperature 10.0 \
   --dt-fs 0.1 \
   --ps-heat 10 \
   --ps-equi 50 \
   --dcd-nsavc 40 \
-  --dyn-nprint 40 --mm-switch-width 3.0 \
+  --dyn-nprint 40 --ml-switch-width 0.5 --mm-switch-width 3.0 --charmm-sd-steps 200 --charmm-abnr-steps 200  \
   --ml-batch-size 2256 \
   --skip-energy-show \
   --seed 123 \
