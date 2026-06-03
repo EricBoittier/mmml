@@ -187,6 +187,14 @@ def add_dcd_save_args(parser: argparse.ArgumentParser) -> None:
         metavar="PS",
         help="Alternative to --dcd-nsavc: save interval in ps (dynamics only)",
     )
+    group.add_argument(
+        "--rescue-old-dcd",
+        action="store_true",
+        help=(
+            "Before each dynamics stage, rename an existing stage DCD to "
+            "*.rescued.N.dcd instead of deleting it (default: remove prior DCD)."
+        ),
+    )
 
 
 def resolve_dcd_nsavc(

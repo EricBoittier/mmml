@@ -74,6 +74,23 @@ Staged workflow **always overwrites** `nprint`, `iprfrq`, `isvfrq` from `resolve
 | `pbc_nve` | `mini,heat,nve,equi,prod` | nve | yes |
 | `pbc_npt` | `mini,heat,nve,equi,prod` | npt | yes |
 
+## ML/MM pair list vs `mm_r_min` (not dropping atoms)
+
+| What | Dropped when “out of range”? |
+|------|------------------------------|
+| **Atoms** | Never — all PSF atoms stay in MLpot and CHARMM |
+| **Monomers** | Never — both DCM residues always evaluated |
+| **ML monomer / dimer terms** | ML dimer models use their own cutoff (`mm_switch_on`, PhysNet `cutoff`); dimers within range get ML |
+| **MM atom–atom pairs** (vacuum, small N) | **No spatial cull** — all cross-monomer pairs (e.g. 5×5) stay in the list |
+| **MM weight `s_MM(r)`** | Goes to **0** when dimer COM is in the pure-ML zone (complementary handoff) |
+| **`mm_r_min`** | Extra inner rule on **MM only**: scale MM to zero when dimer COM &lt; `mm_r_min` (~6.2 Å with default handoff). Does **not** remove atoms or monomers |
+
+Neighbor lists for large PBC systems use an outer cutoff **`mm_switch_on + mm_switch_width` (12 Å)** plus optional jax-md skin — pairs near that cutoff stay listed so they can enter range later. That is separate from `mm_r_min`.
+
+## Trajectory files
+
+Before each dynamics stage, an existing stage DCD (e.g. `heat_dcm_2.dcd`) is **removed** by default so the new run does not append to old frames. Use `--rescue-old-dcd` to archive to `*.rescued.N.dcd` instead.
+
 ## Related flags (not print, but often paired)
 
 | Flag | Purpose |

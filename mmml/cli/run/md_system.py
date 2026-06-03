@@ -1048,6 +1048,8 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         cmd.append("--skip-cluster-build")
     if getattr(args, "skip_if_crd_exists", False):
         cmd.append("--skip-if-crd-exists")
+    if getattr(args, "rescue_old_dcd", False):
+        cmd.append("--rescue-old-dcd")
     if getattr(args, "no_save_vmd_topology", False):
         cmd.append("--no-save-vmd-topology")
     if getattr(args, "free_space", False):

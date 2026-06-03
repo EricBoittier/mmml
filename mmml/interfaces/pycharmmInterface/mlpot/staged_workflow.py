@@ -314,8 +314,16 @@ def _overlap_for_stage(
     return overlap_cfg
 
 
-def _reset_stage_trajectory(path: Path | None) -> None:
-    """Archive a prior partial DCD so a new stage run starts a fresh trajectory file."""
+def _reset_stage_trajectory(
+    path: Path | None,
+    *,
+    rescue_old: bool = False,
+) -> None:
+    """Ensure a stage DCD write starts from an empty file.
+
+    Default: remove any prior ``path`` (fresh trajectory for this stage).
+    With ``rescue_old=True``, rename the old file to ``*.rescued.N.dcd`` instead.
+    """
     if path is None:
         return
 
@@ -323,16 +331,19 @@ def _reset_stage_trajectory(path: Path | None) -> None:
     if not dcd_path.exists():
         return
 
-    for rescue_index in range(1, 10_000):
-        rescue_path = dcd_path.with_name(
-            f"{dcd_path.stem}.rescued.{rescue_index}{dcd_path.suffix}"
-        )
-        if not rescue_path.exists():
-            dcd_path.replace(rescue_path)
-            print(f"Rescued existing DCD: {dcd_path} -> {rescue_path}", flush=True)
-            return
+    if rescue_old:
+        for rescue_index in range(1, 10_000):
+            rescue_path = dcd_path.with_name(
+                f"{dcd_path.stem}.rescued.{rescue_index}{dcd_path.suffix}"
+            )
+            if not rescue_path.exists():
+                dcd_path.replace(rescue_path)
+                print(f"Rescued existing DCD: {dcd_path} -> {rescue_path}", flush=True)
+                return
+        raise RuntimeError(f"could not find an available rescue name for {dcd_path}")
 
-    raise RuntimeError(f"could not find an available rescue name for {dcd_path}")
+    dcd_path.unlink(missing_ok=True)
+    print(f"Removed prior DCD: {dcd_path}", flush=True)
 
 
 def _trajectory_outputs(path: Path | None) -> list[Path]:
@@ -655,7 +666,8 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     )
                     disable_charmm_domdec()
                     _reset_stage_trajectory(
-                        Path(seg_io.trajectory) if seg_io.trajectory else None
+                        Path(seg_io.trajectory) if seg_io.trajectory else None,
+                        rescue_old=bool(getattr(args, "rescue_old_dcd", False)),
                     )
                     assert_mlpot_user_active(
                         ctx,
@@ -750,7 +762,8 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     )
                     disable_charmm_domdec()
                     _reset_stage_trajectory(
-                        Path(seg_io.trajectory) if seg_io.trajectory else None
+                        Path(seg_io.trajectory) if seg_io.trajectory else None,
+                        rescue_old=bool(getattr(args, "rescue_old_dcd", False)),
                     )
                     assert_mlpot_user_active(
                         ctx,
@@ -844,7 +857,8 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             )
             disable_charmm_domdec()
             _reset_stage_trajectory(
-                Path(io.trajectory) if io.trajectory else None
+                Path(io.trajectory) if io.trajectory else None,
+                rescue_old=bool(getattr(args, "rescue_old_dcd", False)),
             )
             assert_mlpot_user_active(
                 ctx,
