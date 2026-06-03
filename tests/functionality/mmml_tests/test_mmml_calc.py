@@ -87,6 +87,29 @@ def _skip_if_runtime_incompatible(exc: Exception) -> None:
 	raise exc
 
 
+def _stable_pbc_force_gradient_positions() -> np.ndarray:
+	"""Synthetic two-monomer geometry with no short C-C contacts."""
+	monomer_template = np.array(
+		[
+			[0.0, 0.0, 0.0],
+			[3.5, 0.0, 0.0],
+			[0.0, 3.5, 0.0],
+			[0.0, 0.0, 3.5],
+			[3.5, 3.5, 0.0],
+			[3.5, 0.0, 3.5],
+			[0.0, 3.5, 3.5],
+			[3.5, 3.5, 3.5],
+			[7.0, 0.0, 0.0],
+			[0.0, 7.0, 0.0],
+		],
+		dtype=float,
+	)
+	return np.vstack([
+		monomer_template + np.array([6.0, 6.0, 6.0]),
+		monomer_template + np.array([20.0, 6.0, 6.0]),
+	])
+
+
 def test_ev2kcalmol_constant():
 	# Ensure the EV->kcal/mol conversion used by calculators is reasonable
 	from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol
@@ -425,27 +448,7 @@ def test_pbc_force_invariance():
 		[0, cell_length, 0],
 		[0, 0, cell_length],
 	])
-	monomer_template = np.array(
-		[
-			[0.0, 0.0, 0.0],
-			[1.4, 0.0, 0.0],
-			[0.0, 1.4, 0.0],
-			[0.0, 0.0, 1.4],
-			[1.4, 1.4, 0.0],
-			[1.4, 0.0, 1.4],
-			[0.0, 1.4, 1.4],
-			[1.4, 1.4, 1.4],
-			[2.8, 0.7, 0.7],
-			[0.7, 2.8, 0.7],
-		],
-		dtype=float,
-	)
-	# Keep monomers compact and away from cell faces so finite differences do not
-	# probe MIC/image discontinuities unrelated to the force convention.
-	R = np.vstack([
-		monomer_template + np.array([8.0, 8.0, 8.0]),
-		monomer_template + np.array([12.5, 8.0, 8.0]),
-	])
+	R = _stable_pbc_force_gradient_positions()
 	Z = np.array([6] * 20)
 	cutoff_params = CutoffParameters()
 
@@ -527,27 +530,7 @@ def test_pbc_force_gradient_numerical():
 		[0, cell_length, 0],
 		[0, 0, cell_length],
 	])
-	monomer_template = np.array(
-		[
-			[0.0, 0.0, 0.0],
-			[1.4, 0.0, 0.0],
-			[0.0, 1.4, 0.0],
-			[0.0, 0.0, 1.4],
-			[1.4, 1.4, 0.0],
-			[1.4, 0.0, 1.4],
-			[0.0, 1.4, 1.4],
-			[1.4, 1.4, 1.4],
-			[2.8, 0.7, 0.7],
-			[0.7, 2.8, 0.7],
-		],
-		dtype=float,
-	)
-	# Keep monomers compact and away from cell faces so finite differences do not
-	# probe MIC/image discontinuities unrelated to the force convention.
-	R = np.vstack([
-		monomer_template + np.array([8.0, 8.0, 8.0]),
-		monomer_template + np.array([12.5, 8.0, 8.0]),
-	])
+	R = _stable_pbc_force_gradient_positions()
 	Z = np.array([6] * 20)
 	cutoff_params = CutoffParameters()
 
