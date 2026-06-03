@@ -72,11 +72,13 @@ class DecomposedMlpotCalculator:
         atomic_numbers: np.ndarray,
         cell: Union[float, bool] = False,
         do_mm: bool = True,
+        get_update_fn: Any | None = None,
     ) -> None:
         self.spherical_fn = spherical_fn
         self.cutoff_params = cutoff_params
         self.n_monomers = int(n_monomers)
         self.do_mm = bool(do_mm)
+        self._get_update_fn = get_update_fn
         self.atomic_numbers = np.asarray(
             physnet_ml_atomic_numbers(atomic_numbers), dtype=np.int32
         )
@@ -135,6 +137,8 @@ class DecomposedMlpotCalculator:
             get_mlpot_profile_stats().record_charmm_gap()
         t0 = time.perf_counter()
         with mlpot_jax_device_context():
+            if self.do_mm and self._get_update_fn is not None:
+                self._get_update_fn(pos, self.cutoff_params, box=box)
             out = self.spherical_fn(
                 positions=jnp.asarray(pos),
                 atomic_numbers=jnp.asarray(self.atomic_numbers[:n]),
@@ -187,6 +191,7 @@ class DecomposedMlpotModel:
             z,
             cell=self._cell,
             do_mm=self._do_mm,
+            get_update_fn=self._get_update_fn,
         )
 
 

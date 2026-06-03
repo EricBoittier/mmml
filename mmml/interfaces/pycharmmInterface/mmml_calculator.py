@@ -40,7 +40,7 @@ from mmml.interfaces.pycharmmInterface.calculator_utils import (
     _sharpstep,
 )
 from mmml.interfaces.pycharmmInterface.ml_batching import prepare_batches_md, prepare_batch_structure
-from mmml.interfaces.pycharmmInterface.mm_energy_forces import build_mm_energy_forces_fn, have_jax_md
+from mmml.interfaces.pycharmmInterface.mm_energy_forces import build_mm_energy_forces_fn
 from mmml.utils.jax_gpu_warmup import (
     apply_xla_cuda_timer_log_filter,
     ensure_xla_gpu_warmed,
@@ -2101,7 +2101,7 @@ def setup_calculator(
                 )
                 return _cached_update_mm_pairs[0]
 
-            update_fn_factory = get_update_fn if (doMM and pbc_cell is not None and have_jax_md()) else None
+            update_fn_factory = get_update_fn if doMM else None
             return calculator, configured_spherical_cutoff, update_fn_factory
 
     else:  # pragma: no cover - exercised when ASE not installed
