@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# DCM:90 vacuum (free-space) NVT: MLpot SD → heating → Hoover CPT equil + MMFP sphere.
+# Free-space NVT: MLpot SD → heating → Hoover CPT equil + MMFP sphere.
 #
 # Sphere radii (initial guess before minimization):
-#   packmol sphere R ≈ 18 * (90/60)^(1/3) ≈ 21 Å  (see packmol/packmol_sphere_dcm90.inp)
+#   packmol sphere R ≈ 18 * (90/60)^(1/3) ≈ 21 Å for DCM:90.
 #   MMFP droff (flat-bottom) after COM centering:
 #     R_fb = 1 + sqrt(x_max^2 + y_max^2 + z_max^2)
 #   Recompute from mini CRD (see estimate_droff_from_crd.py below) and rerun with --fb-rad.
@@ -23,6 +23,17 @@ cd "$REPO_ROOT"
 # Initial sphere guess; tighten droff after mini using the formula above (~30–33 Å).
 PACKMOL_R="${PACKMOL_R:-21.0}"
 FB_RAD="${FB_RAD:-32.0}"
+COMPOSITION="${1:-DCM:90}"
+if [[ $# -gt 0 ]]; then
+  shift
+fi
+
+COMPOSITION_TAG="$(
+  printf '%s' "$COMPOSITION" \
+    | tr '[:upper:]' '[:lower:]' \
+    | sed -E 's/[^a-z0-9]+//g'
+)"
+RUN_NAME="${COMPOSITION_TAG}_nvt"
 
 MPIRUN="${MMML_MPIRUN_WRAPPER:-$REPO_ROOT/scripts/mmml-charmm-mpirun.sh}"
 #exec "$MPIRUN" 
@@ -30,9 +41,9 @@ MPIRUN="${MMML_MPIRUN_WRAPPER:-$REPO_ROOT/scripts/mmml-charmm-mpirun.sh}"
 uv run mmml md-system \
   --setup free_nvt \
   --backend pycharmm \
-  --composition DCM:90 \
-  --output-dir artifacts/pycharmm_mlpot/dcm90_nvt \
-  --job-name dcm90_nvt \
+  --composition "$COMPOSITION" \
+  --output-dir "artifacts/pycharmm_mlpot/$RUN_NAME" \
+  --job-name "$RUN_NAME" \
   --md-stages mini,heat,equi \
   --free-space \
   --packmol-sphere \
