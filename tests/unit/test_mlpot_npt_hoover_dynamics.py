@@ -111,17 +111,38 @@ def test_equi_later_segment_omits_firstt():
     assert "firstt" not in kw
 
 
-def test_nvt_equilibration_omits_cpt_and_crystal_keywords():
+def test_nvt_equilibration_uses_charmm_heat_controls_on_restart():
     kw = build_nvt_equilibration_dynamics(temp=300.0, tmass=160)
     script = _script_string(**kw)
 
-    assert kw["hoover reft"] == 300.0
-    assert kw["tmass"] == 160
+    assert kw["restart"] is True
+    assert kw["ihtfrq"] == 10
+    assert kw["TEMINC"] == 0.0
+    assert kw["iasvel"] == 0
+    assert "firstt" not in kw
+    assert kw["finalt"] == 300.0
+    assert kw["tbath"] == 300.0
     assert kw["imgfrq"] == 0
+    assert "hoover reft" not in kw
+    assert "tmass" not in kw
     assert "cpt" not in kw
     assert "pint pconst pref" not in kw
     assert "cpt" not in script
-    assert "hoover reft" in script
+    assert "hoover reft" not in script
+
+
+def test_nvt_equilibration_fresh_start_assigns_heat_ramp_velocities():
+    kw = build_nvt_equilibration_dynamics(
+        temp=300.0,
+        duration_ps=10.0,
+        restart=False,
+    )
+
+    assert kw["restart"] is False
+    assert kw["iasvel"] == 1
+    assert kw["firstt"] == 60.0
+    assert kw["finalt"] == 300.0
+    assert kw["TEMINC"] == 0.06
 
 
 def test_berendsen_thermostat_option():
