@@ -97,6 +97,7 @@ def _artifact_paths(out_dir: Path, tag: str) -> dict[str, Path]:
     return {
         "mini_crd": out_dir / f"mini_full_mlpot_{tag}.crd",
         "mini_psf": out_dir / f"mini_full_mlpot_{tag}.psf",
+        "mini_charmm_dcd": out_dir / f"mini_charmm_mm_{tag}.dcd",
         "mini_dcd": out_dir / f"mini_full_mlpot_{tag}.dcd",
         "heat_res": out_dir / f"heat_{tag}.res",
         "heat_dcd": out_dir / f"heat_{tag}.dcd",
@@ -447,8 +448,16 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         vmd_topo_psf = vmd_files["psf"]
 
     if "mini" in stages and not getattr(args, "skip_cluster_build", False):
+        save_mini = bool(getattr(args, "save", True))
+        mini_dcd_nsavc = resolve_dcd_nsavc(
+            dcd_nsavc=args.dcd_nsavc, nstep=mini_nstep
+        )
         r = _charmm_pre_minimize_before_mlpot(
-            args, nprint=mini_nprint, reference_positions=r
+            args,
+            nprint=mini_nprint,
+            reference_positions=r,
+            dcd_path=paths["mini_charmm_dcd"] if save_mini else None,
+            dcd_nsavc=mini_dcd_nsavc if save_mini else 0,
         )
         sync_charmm_positions(r)
 
@@ -481,7 +490,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         if "mini" in stages:
             fix_sel = select_by_resids(fix_resids) if fix_resids else None
             save_mini = bool(getattr(args, "save", True))
-            dcd_nsavc = resolve_dcd_nsavc(
+            mini_dcd_nsavc = resolve_dcd_nsavc(
                 dcd_nsavc=args.dcd_nsavc, nstep=mini_nstep
             )
             if not args.quiet:
@@ -506,7 +515,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     else None,
                     xyz_path=out_dir / f"mini_full_mlpot_{tag}.xyz" if save_mini else None,
                     dcd_path=paths["mini_dcd"] if save_mini else None,
-                    dcd_nsavc=dcd_nsavc if save_mini else 0,
+                    dcd_nsavc=mini_dcd_nsavc if save_mini else 0,
                     skip_if_crd_exists=bool(getattr(args, "skip_if_crd_exists", False)),
                     test_first=resolve_test_first_config(args),
                     show_energy=show_energy,
@@ -515,7 +524,9 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             sync_charmm_positions(get_charmm_positions_array())
             if not args.quiet:
                 print(f"Post MLpot mini GRMS: {charmm_grms():.4f} kcal/mol/Å", flush=True)
-            last_traj = paths["mini_dcd"] if paths["mini_dcd"].is_file() else None
+            mini_trajectories = _trajectory_outputs(paths["mini_charmm_dcd"])
+            mini_trajectories.extend(_trajectory_outputs(paths["mini_dcd"]))
+            last_traj = mini_trajectories[-1] if mini_trajectories else None
 
         dyn_stages = [s for s in _STAGE_ORDER if s in stages and s != "mini"]
         if not dyn_stages:
@@ -823,7 +834,10 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
 
     maybe_log_mlpot_profile(quiet=bool(args.quiet))
     print(f"\nStaged workflow OK ({','.join(stages)}) -> {out_dir}")
-    trajectory_outputs = _trajectory_outputs(last_traj)
+    trajectory_outputs = _trajectory_outputs(paths["mini_charmm_dcd"])
+    trajectory_outputs.extend(_trajectory_outputs(paths["mini_dcd"]))
+    if last_traj is not None and last_traj not in trajectory_outputs:
+        trajectory_outputs.extend(_trajectory_outputs(last_traj))
     if trajectory_outputs:
         print_vmd_load_help(
             out_dir=out_dir,

@@ -51,12 +51,12 @@ uv run mmml md-system \
   --packmol-tolerance 2.0 \
   --flat-bottom-radius "$FB_RAD" --dynamics-overlap-min-distance 0.4 \
   --flat-bottom-k 0.01 \
-  --temperature 100.0 \
-  --dt-fs 0.1 \
+  --temperature 200.0 \
+  --dt-fs 0.5 \
   --ps-heat 10 \
   --ps-equi 50 \
   --dcd-nsavc 40 \
-  --dyn-nprint 40 --ml-switch-width 0.5 --mm-switch-width 3.0 --charmm-sd-steps 200 --charmm-abnr-steps 200  \
+  --dyn-nprint 40 --ml-switch-width 0.1 --mm-switch-width 3.0 --charmm-sd-steps 2000 --charmm-abnr-steps 200  \
   --ml-batch-size 2256 \
   --skip-energy-show \
   --seed 123 \

@@ -117,6 +117,9 @@ class CharmmMmMinimizeConfig:
     verbose: bool = True
     show_energy: bool = False
     reference_positions: Optional[np.ndarray] = None
+    dcd_path: Optional[PathLike] = None
+    dcd_nsavc: int = 1
+    dcd_unit: int = 51
 
 
 def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> None:
@@ -153,6 +156,12 @@ def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> None:
             flush=True,
         )
 
+    dcd_file = None
+    dcd_kw: dict[str, int] = {}
+    if config.dcd_path is not None and config.dcd_nsavc > 0:
+        dcd_file = open_minimize_dcd(config.dcd_path, unit=config.dcd_unit)
+        dcd_kw = {"iuncrd": config.dcd_unit, "nsavc": max(1, int(config.dcd_nsavc))}
+
     sd_kw = {
         "nstep": max(1, int(config.nstep_sd)),
         "nprint": max(1, int(config.nprint)),
@@ -160,32 +169,38 @@ def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> None:
         "tolgrd": float(config.tolgrd),
         "inbfrq": 50,
         "ihbfrq": 50,
+        **dcd_kw,
     }
-    if config.verbose and config.show_energy:
-        _maybe_show_energy(True)
-    if config.nstep_sd > 0:
+    try:
+        if config.verbose and config.show_energy:
+            _maybe_show_energy(True)
+        if config.nstep_sd > 0:
+            if config.verbose:
+                print(f"CHARMM MM SD: nstep={config.nstep_sd}", flush=True)
+            minimize.run_sd(**sd_kw)
+        if config.nstep_abnr > 0:
+            if config.verbose:
+                print(f"CHARMM MM ABNR: nstep={config.nstep_abnr}", flush=True)
+            minimize.run_abnr(
+                nstep=int(config.nstep_abnr),
+                tolenr=float(config.tolenr),
+                tolgrd=float(config.tolgrd),
+                **dcd_kw,
+            )
+        pycharmm.lingo.charmm_script("ENER")
         if config.verbose:
-            print(f"CHARMM MM SD: nstep={config.nstep_sd}", flush=True)
-        minimize.run_sd(**sd_kw)
-    if config.nstep_abnr > 0:
-        if config.verbose:
-            print(f"CHARMM MM ABNR: nstep={config.nstep_abnr}", flush=True)
-        minimize.run_abnr(
-            nstep=int(config.nstep_abnr),
-            tolenr=float(config.tolenr),
-            tolgrd=float(config.tolgrd),
-        )
-    pycharmm.lingo.charmm_script("ENER")
-    if config.verbose:
-        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
+            from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
 
-        print(
-            f"CHARMM MM minimize end: GRMS={charmm_grms():.4f} kcal/mol/Å",
-            flush=True,
-        )
-    if config.verbose and config.show_energy:
-        _maybe_show_energy(True)
-    cons_fix.turn_off()
+            print(
+                f"CHARMM MM minimize end: GRMS={charmm_grms():.4f} kcal/mol/Å",
+                flush=True,
+            )
+        if config.verbose and config.show_energy:
+            _maybe_show_energy(True)
+    finally:
+        if dcd_file is not None:
+            dcd_file.close()
+        cons_fix.turn_off()
 
 
 _BONDED_INTERNAL_TERM_KEYS = ("BOND", "ANGL", "ANGLE", "UREY", "UB", "DIHE", "IMPR", "CMAP")
