@@ -22,6 +22,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     resolve_dcd_nsavc,
     resolve_dynamics_print_kwargs,
     resolve_heat_ihtfrq,
+    resolve_heat_firstt_finalt,
     apply_flat_bottom_from_args,
     assert_dynamics_ready,
     charmm_grms,
@@ -42,6 +43,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
     CharmmTrajectoryFiles,
     MinimizeWithMlpotConfig,
     apply_heat_ramp_frequencies,
+    assign_velocities_at_temperature,
     build_heat_dynamics,
     build_nve_dynamics,
     minimize_charmm_mm_only,
@@ -111,6 +113,159 @@ def _charmm_pre_minimize_before_mlpot(
     if not args.quiet:
         print(f"Post MM pre-min GRMS: {grms:.4f} kcal/mol/Å", flush=True)
     return r_mm
+
+
+def run_charmm_mm_pretreat_before_mlpot(
+    args: argparse.Namespace,
+    *,
+    paths: dict[str, Path],
+    timestep_ps: float,
+    use_pbc: bool,
+    temp: float,
+    echeck: float,
+    mini_nprint: int,
+    reference_positions: np.ndarray | None = None,
+) -> np.ndarray:
+    """CGENFF minimize + CHARMM heat on the built cluster before :func:`register_mlpot`.
+
+    Uses full MM terms (``apply_charmm_mm_block``), not MLpot USER. Intended for
+    relaxing Packmol clashes and a short classical heat before ML dynamics.
+    """
+    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_block
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        assert_stage_dynamics_completed,
+    )
+
+    n_heat = max(1, int(getattr(args, "charmm_mm_pretreat_heat_nstep", 2000)))
+    n_sd = int(
+        getattr(args, "charmm_mm_pretreat_mini_sd", None)
+        if getattr(args, "charmm_mm_pretreat_mini_sd", None) is not None
+        else getattr(args, "charmm_sd_steps", 50)
+    )
+    n_abnr = int(
+        getattr(args, "charmm_mm_pretreat_mini_abnr", None)
+        if getattr(args, "charmm_mm_pretreat_mini_abnr", None) is not None
+        else getattr(args, "charmm_abnr_steps", 100)
+    )
+    if not args.quiet:
+        print(
+            f"\nCHARMM MM pretreat (no MLpot): SD={n_sd} ABNR={n_abnr}, "
+            f"heat nstep={n_heat}",
+            flush=True,
+        )
+
+    apply_charmm_mm_block()
+    if not use_pbc:
+        setup_default_nbonds()
+
+    save = bool(getattr(args, "save", True))
+    heat_dcd_nsavc = resolve_dcd_nsavc(dcd_nsavc=args.dcd_nsavc, nstep=n_heat)
+    minimize_charmm_mm_only(
+        CharmmMmMinimizeConfig(
+            nstep_sd=n_sd,
+            nstep_abnr=n_abnr,
+            nprint=mini_nprint,
+            tolenr=float(getattr(args, "charmm_tolenr", 1e-3)),
+            tolgrd=float(getattr(args, "charmm_tolgrd", 1e-3)),
+            verbose=not args.quiet,
+            show_energy=resolve_show_energy(args),
+            reference_positions=reference_positions,
+            dcd_path=paths.get("mini_charmm_dcd") if save else None,
+            dcd_nsavc=resolve_dcd_nsavc(dcd_nsavc=args.dcd_nsavc, nstep=max(n_sd, 1))
+            if save
+            else 0,
+        )
+    )
+    if not args.quiet:
+        print(
+            f"CHARMM MM pretreat post-min GRMS: {charmm_grms():.4f} kcal/mol/Å",
+            flush=True,
+        )
+
+    heat_firstt, heat_finalt = resolve_heat_firstt_finalt(args, default_temp=temp)
+    save_interval_ps = timestep_ps * max(
+        1,
+        resolve_dcd_nsavc(
+            dcd_nsavc=args.dcd_nsavc,
+            dcd_interval_ps=getattr(args, "dcd_interval_ps", None),
+            timestep_ps=timestep_ps,
+            nstep=n_heat,
+        ),
+    )
+    kw = build_heat_dynamics(
+        timestep_ps=timestep_ps,
+        duration_ps=n_heat * timestep_ps,
+        save_interval_ps=save_interval_ps,
+        temp=temp,
+        firstt=heat_firstt,
+        finalt=heat_finalt,
+        echeck=echeck,
+        use_pbc=use_pbc,
+        ihtfrq=resolve_heat_ihtfrq(args, nstep=n_heat),
+    )
+    dyn_print = resolve_dynamics_print_kwargs(args, nstep=n_heat)
+    kw["nstep"] = n_heat
+    kw["nprint"] = dyn_print["nprint"]
+    kw["iprfrq"] = dyn_print["iprfrq"]
+    kw["isvfrq"] = dyn_print["isvfrq"]
+    kw["iasors"] = 0
+    kw["iasvel"] = 1
+    apply_heat_ramp_frequencies(
+        kw, nstep=n_heat, ihtfrq=resolve_heat_ihtfrq(args, nstep=n_heat)
+    )
+    assign_velocities_at_temperature(
+        float(heat_firstt),
+        timestep_ps=timestep_ps,
+        restart_path=None,
+        use_pbc=use_pbc,
+    )
+    kw["restart"] = False
+    kw["new"] = False
+    kw["start"] = False
+
+    io = CharmmTrajectoryFiles(
+        restart_write=paths["charmm_mm_heat_res"],
+        trajectory=paths["charmm_mm_heat_dcd"] if save else None,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
+        _reset_stage_trajectory,
+    )
+
+    if save and io.trajectory is not None:
+        _reset_stage_trajectory(
+            Path(io.trajectory),
+            rescue_old=bool(getattr(args, "rescue_old_dcd", False)),
+        )
+    if not args.quiet:
+        print(
+            f"CHARMM MM pretreat heat: {heat_firstt:.1f} -> {heat_finalt:.1f} K, "
+            f"{n_heat} steps @ {timestep_ps} ps | ihtfrq={kw.get('ihtfrq')}",
+            flush=True,
+        )
+    run_dynamics_with_io(
+        kw,
+        io,
+        overlap=None,
+        overlap_context="CHARMM_MM_PRETREAT_HEAT",
+        mlpot_ctx=None,
+        rng_base=getattr(args, "seed", None),
+    )
+    if save:
+        assert_stage_dynamics_completed(
+            stage="charmm_mm_heat",
+            expected_nstep=n_heat,
+            nsavc=heat_dcd_nsavc,
+            dcd_path=paths.get("charmm_mm_heat_dcd"),
+            restart_path=paths.get("charmm_mm_heat_res"),
+            allow_incomplete=bool(getattr(args, "allow_incomplete_dynamics", False)),
+        )
+    sync_charmm_positions(get_charmm_positions_array())
+    if not args.quiet:
+        print(
+            f"CHARMM MM pretreat done -> {paths['charmm_mm_heat_res']}",
+            flush=True,
+        )
+    return get_charmm_positions_array()
 
 
 def _atoms_per_monomer_list(z: np.ndarray, n_monomers: int) -> list[int]:
