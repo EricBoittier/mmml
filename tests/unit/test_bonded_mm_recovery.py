@@ -189,6 +189,32 @@ def test_apply_flat_bottom_workflow_inflates_droff_to_current_extent():
     assert setup.call_args.args[0].radius == pytest.approx(12.501)
 
 
+def test_selected_max_radius_uses_charmm_selection_bounds():
+    from mmml.interfaces.pycharmmInterface.mlpot import restraints
+
+    pycharmm = MagicMock()
+    values = {
+        "XMIN": -3.0,
+        "XMAX": 4.0,
+        "YMIN": -5.0,
+        "YMAX": 2.0,
+        "ZMIN": -1.0,
+        "ZMAX": 6.0,
+    }
+    pycharmm.lingo.get_energy_value.side_effect = lambda key: values[key.upper()]
+
+    with patch.object(restraints, "_import_pycharmm", return_value=pycharmm):
+        radius = restraints._selected_max_radius(
+            "TYPE C",
+            xref=0.0,
+            yref=0.0,
+            zref=0.0,
+        )
+
+    pycharmm.lingo.charmm_script.assert_called_once_with("coor stat sele TYPE C end")
+    assert radius == pytest.approx((4.0**2 + 5.0**2 + 6.0**2) ** 0.5)
+
+
 def test_apply_flat_bottom_workflow_verifies_energy_unchanged():
     from mmml.interfaces.pycharmmInterface.mlpot import restraints
 
@@ -215,25 +241,66 @@ def test_apply_flat_bottom_workflow_verifies_energy_unchanged():
     )
 
 
-def test_apply_flat_bottom_workflow_warns_when_energy_changes():
+def test_apply_flat_bottom_workflow_retries_until_energy_unchanged():
     from mmml.interfaces.pycharmmInterface.mlpot import restraints
 
     with patch.object(restraints, "center_cluster_at_origin"), patch.object(
         restraints,
         "setup_flat_bottom_sphere_mmfp",
-    ), patch.object(
+    ) as setup, patch.object(
         restraints,
         "_selected_max_radius",
         return_value=8.0,
     ), patch.object(
         restraints,
         "_current_charmm_energy_kcalmol",
-        side_effect=[100.0, 100.01],
+        side_effect=[100.0, 100.01, 100.0],
+    ), patch(
+        "builtins.print",
+    ) as mock_print:
+        cfg = restraints.apply_flat_bottom_workflow(
+            radius=10.0,
+            force=0.01,
+            selection="TYPE C",
+        )
+
+    assert cfg is not None
+    assert cfg.radius > 10.0
+    assert setup.call_count == 2
+    assert any(
+        "increasing droff" in str(call.args[0])
+        for call in mock_print.call_args_list
+    )
+    assert any(
+        "zero-energy check OK" in str(call.args[0])
+        for call in mock_print.call_args_list
+    )
+
+
+def test_apply_flat_bottom_workflow_warns_when_energy_never_converges():
+    from mmml.interfaces.pycharmmInterface.mlpot import restraints
+
+    with patch.object(restraints, "center_cluster_at_origin"), patch.object(
+        restraints,
+        "setup_flat_bottom_sphere_mmfp",
+    ) as setup, patch.object(
+        restraints,
+        "_selected_max_radius",
+        return_value=8.0,
+    ), patch.object(
+        restraints,
+        "_current_charmm_energy_kcalmol",
+        side_effect=[100.0, 100.01, 100.02],
+    ), patch.object(
+        restraints,
+        "_DROFF_TUNE_MAX_ATTEMPTS",
+        2,
     ), patch(
         "builtins.print",
     ) as mock_print:
         restraints.apply_flat_bottom_workflow(radius=10.0, force=0.01, selection="TYPE C")
 
+    assert setup.call_count == 2
     assert any(
         "WARN: MMFP flat-bottom changed energy" in str(call.args[0])
         for call in mock_print.call_args_list
