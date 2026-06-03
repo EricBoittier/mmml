@@ -355,9 +355,14 @@ def test_overlap_cleans_stale_slots_at_start(tmp_path):
     slot_a, slot_b = _overlap_restart_slot_paths(equi)
     slot_a.write_text("", encoding="utf-8")
 
+    def fake_chunk(kw, _io, *, extra_iokw=None, **kwargs):
+        if _io is not None and _io.restart_write is not None:
+            Path(_io.restart_write).write_text("REST\n", encoding="utf-8")
+        return mock.Mock()
+
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
-        return_value=mock.Mock(),
+        side_effect=fake_chunk,
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
     ), mock.patch(
