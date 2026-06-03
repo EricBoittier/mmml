@@ -36,6 +36,9 @@ class DynamicsOverlapConfig:
 
     action: DynamicsOverlapAction = "rescue"
     min_distance_A: float = 1.5
+    intra_min_distance_A: float = 1.0
+    intra_exclude_1_3: bool = True
+    intra_rescue_sd_steps: int | None = None
     check_interval: int = 500
     n_monomers: int = 1
     use_pbc: bool = False
@@ -52,6 +55,10 @@ class DynamicsOverlapConfig:
             and int(self.n_monomers) > 1
         )
 
+    @property
+    def intra_enabled(self) -> bool:
+        return self.action != "off" and float(self.intra_min_distance_A) > 0.0
+
 
 def add_dynamics_overlap_args(parser: argparse.ArgumentParser) -> None:
     group = parser.add_argument_group("Dynamics overlap guard (PyCHARMM MLpot)")
@@ -62,7 +69,7 @@ def add_dynamics_overlap_args(parser: argparse.ArgumentParser) -> None:
         help=(
             "On inter-monomer overlap during MD: rescue=CHARMM bonded+VDW mini, then "
             "rigid monomer push if still overlapped (default); error=abort, "
-            "warn=log only, off=disable."
+            "warn=log only, off=disable. Also controls intra-monomer close-contact checks."
         ),
     )
     group.add_argument(
@@ -85,6 +92,30 @@ def add_dynamics_overlap_args(parser: argparse.ArgumentParser) -> None:
         help=(
             "Minimum allowed inter-monomer atom distance in Å during dynamics "
             "(default: 1.5; CHARMM close-contact warnings often appear near this)."
+        ),
+    )
+    group.add_argument(
+        "--dynamics-intra-min-distance",
+        type=float,
+        default=1.0,
+        metavar="ANG",
+        help=(
+            "Minimum allowed nonbonded atom distance within each monomer (1–2 and 1–3 "
+            "pairs excluded from PSF bonds). Set 0 to disable (default: 1.0 Å)."
+        ),
+    )
+    group.add_argument(
+        "--no-dynamics-intra-exclude-1-3",
+        action="store_true",
+        help="Intra-monomer checks: only exclude PSF 1–2 bonds, not 1–3 pairs.",
+    )
+    group.add_argument(
+        "--dynamics-intra-rescue-sd-steps",
+        type=int,
+        default=None,
+        help=(
+            "Bonded-only SD steps for intra-monomer close-contact rescue "
+            "(default: --dynamics-overlap-charmm-sd-steps)."
         ),
     )
     group.add_argument(
@@ -150,6 +181,13 @@ def resolve_dynamics_overlap_config(
     return DynamicsOverlapConfig(
         action=action,  # type: ignore[arg-type]
         min_distance_A=float(min_dist),
+        intra_min_distance_A=float(
+            getattr(args, "dynamics_intra_min_distance", 1.0) or 0.0
+        ),
+        intra_exclude_1_3=not bool(
+            getattr(args, "no_dynamics_intra_exclude_1_3", False)
+        ),
+        intra_rescue_sd_steps=getattr(args, "dynamics_intra_rescue_sd_steps", None),
         check_interval=max(1, interval),
         n_monomers=int(n_monomers),
         use_pbc=bool(use_pbc),
@@ -211,6 +249,39 @@ def _separate_intermonomer_overlaps_fn():
     return _geometry_checks_mod().separate_intermonomer_overlaps
 
 
+@lru_cache(maxsize=1)
+def _assert_no_intramonomer_close_contact_fn():
+    return _geometry_checks_mod().assert_no_intramonomer_close_contact
+
+
+@lru_cache(maxsize=1)
+def _build_bond_exclusion_pairs_fn():
+    return _geometry_checks_mod().build_bond_exclusion_pairs
+
+
+_bond_exclusion_cache: tuple[int, bool, frozenset[tuple[int, int]]] | None = None
+
+
+def _bond_exclusion_pairs(*, exclude_1_3: bool) -> frozenset[tuple[int, int]]:
+    """PSF 1–2 / 1–3 pairs to skip during intra-monomer scans."""
+    global _bond_exclusion_cache
+    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import pycharmm.psf as psf
+
+    nbond = int(psf.get_nbond())
+    if (
+        _bond_exclusion_cache is not None
+        and _bond_exclusion_cache[0] == nbond
+        and _bond_exclusion_cache[1] == exclude_1_3
+    ):
+        return _bond_exclusion_cache[2]
+
+    ib, jb = psf.get_ib_jb()
+    pairs = _build_bond_exclusion_pairs_fn()(ib, jb, exclude_1_3=exclude_1_3)
+    _bond_exclusion_cache = (nbond, exclude_1_3, pairs)
+    return pairs
+
+
 def _overlap_cell(
     *,
     use_pbc: bool,
@@ -248,6 +319,55 @@ def _overlap_check(
         min_distance=config.min_distance_A,
         cell=cell,
         context=context,
+    )
+
+
+def _intramonomer_check(
+    config: DynamicsOverlapConfig,
+    *,
+    context: str,
+) -> float:
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+
+    pos = get_charmm_positions_array()
+    offsets = monomer_offsets(int(pos.shape[0]), config.n_monomers)
+    cell = _overlap_cell(
+        use_pbc=config.use_pbc,
+        fallback_box_side_A=config.fallback_box_side_A,
+    )
+    excluded = _bond_exclusion_pairs(exclude_1_3=config.intra_exclude_1_3)
+    assert_no_intramonomer_close_contact = _assert_no_intramonomer_close_contact_fn()
+    return assert_no_intramonomer_close_contact(
+        pos,
+        offsets,
+        excluded,
+        min_distance=config.intra_min_distance_A,
+        cell=cell,
+        context=context,
+    )
+
+
+def _run_intramonomer_bonded_rescue(
+    mlpot_ctx: "MlpotContext",
+    config: DynamicsOverlapConfig,
+) -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        BondedMmMiniConfig,
+        minimize_bonded_mm_recovery,
+    )
+
+    sd_steps = config.intra_rescue_sd_steps
+    if sd_steps is None:
+        sd_steps = config.rescue.nstep_sd
+    minimize_bonded_mm_recovery(
+        mlpot_ctx,
+        BondedMmMiniConfig(
+            nstep_sd=int(sd_steps),
+            nprint=max(1, int(config.rescue.nprint)),
+            tolenr=float(config.rescue.tolenr),
+            tolgrd=float(config.rescue.tolgrd),
+            verbose=config.rescue.verbose,
+        ),
     )
 
 
