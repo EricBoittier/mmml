@@ -219,7 +219,7 @@ def test_build_stage_dynamics_kw_free_space_equi_uses_charmm_heat_controls():
     assert kw["imgfrq"] == 0
 
 
-def test_overlap_for_stage_disables_heat_chunking_only():
+def test_overlap_for_stage_enables_heat_chunking():
     cfg = DynamicsOverlapConfig(
         action="rescue",
         min_distance_A=0.4,
@@ -228,6 +228,6 @@ def test_overlap_for_stage_disables_heat_chunking_only():
         use_pbc=False,
     )
 
-    assert _overlap_for_stage("heat", cfg) is None
+    assert _overlap_for_stage("heat", cfg) is cfg
     assert _overlap_for_stage("equi", cfg) is cfg
     assert _overlap_for_stage("prod", cfg) is cfg

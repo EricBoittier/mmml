@@ -136,3 +136,92 @@ def save_trajectory_dcd(
                 f.write(struct.pack(_FMT_I, block_size_xyz))
                 xyz[:, j].astype(np.float32).tofile(f)
                 f.write(struct.pack(_FMT_I, block_size_xyz))
+
+
+def _dcd_header_byte_size(data: bytes) -> tuple[int, int, int, bool]:
+    """Parse a DCD header; return ``(header_bytes, n_frames, n_atoms, has_unitcell)``."""
+    offset = 0
+    n_frames = 0
+    has_unitcell = False
+    n_atoms = 0
+
+    def read_record() -> bytes:
+        nonlocal offset
+        if offset + 4 > len(data):
+            raise ValueError("truncated DCD record")
+        rec_size = struct.unpack(_FMT_I, data[offset : offset + 4])[0]
+        offset += 4
+        end = offset + rec_size
+        if end + 4 > len(data):
+            raise ValueError("truncated DCD record payload")
+        payload = data[offset:end]
+        offset = end + 4
+        return payload
+
+    cord_block = read_record()
+    if cord_block[:4] != b"CORD":
+        raise ValueError("invalid DCD header (missing CORD magic)")
+    n_frames = struct.unpack(_FMT_I, cord_block[4:8])[0]
+    if len(cord_block) >= 44:
+        has_unitcell = struct.unpack(_FMT_I, cord_block[40:44])[0] != 0
+    read_record()  # title
+    natoms_block = read_record()
+    if len(natoms_block) != 4:
+        raise ValueError(f"unexpected DCD natoms record size {len(natoms_block)}")
+    n_atoms = struct.unpack(_FMT_I, natoms_block)[0]
+    return offset, int(n_frames), int(n_atoms), has_unitcell
+
+
+def _dcd_frame_byte_size(n_atoms: int, *, has_unitcell: bool) -> int:
+    xyz = 3 * (4 + 4 * n_atoms + 4)
+    if has_unitcell:
+        return 4 + 48 + 4 + xyz
+    return xyz
+
+
+def concat_dcd_files(chunks: list[Union[str, Path]], out: Union[str, Path]) -> int:
+    """Concatenate same-system DCD chunks; return total frame count.
+
+    Chunk files must share atom count and unit-cell flag. The first chunk supplies
+    the header; frame blocks from every chunk are appended in order.
+    """
+    paths = [Path(p) for p in chunks if Path(p).is_file()]
+    out_path = Path(out)
+    if not paths:
+        out_path.unlink(missing_ok=True)
+        return 0
+    if len(paths) == 1:
+        out_path.write_bytes(paths[0].read_bytes())
+        with out_path.open("rb") as f:
+            _, n_frames, _, _ = _dcd_header_byte_size(f.read(4096))
+        return n_frames
+
+    first = paths[0].read_bytes()
+    header_end, _, n_atoms, has_unitcell = _dcd_header_byte_size(first)
+    frame_bytes = _dcd_frame_byte_size(n_atoms, has_unitcell=has_unitcell)
+    total_frames = 0
+    frame_blob = bytearray()
+    for path in paths:
+        data = path.read_bytes()
+        hdr_end, n_frames, natoms, uc = _dcd_header_byte_size(data)
+        if natoms != n_atoms or uc != has_unitcell:
+            raise ValueError(
+                f"DCD chunk {path.name} incompatible with {paths[0].name} "
+                f"(natoms {natoms} vs {n_atoms}, unitcell {uc} vs {has_unitcell})"
+            )
+        payload = data[hdr_end:]
+        expected = n_frames * frame_bytes
+        if len(payload) < expected:
+            raise ValueError(
+                f"DCD chunk {path.name} truncated: expected {expected} frame bytes, "
+                f"got {len(payload)}"
+            )
+        frame_blob.extend(payload[:expected])
+        total_frames += n_frames
+
+    out_bytes = bytearray(first[:header_end])
+    out_bytes[8:12] = struct.pack(_FMT_I, total_frames)
+    out_bytes.extend(frame_blob)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_bytes(out_bytes)
+    return total_frames

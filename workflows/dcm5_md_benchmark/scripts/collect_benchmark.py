@@ -10,12 +10,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-# Snakemake injects ``snakemake`` when run as a script rule.
-try:
-    snakemake  # type: ignore[name-defined]
-except NameError:
-    snakemake = None  # type: ignore[assignment,misc]
-
 _SCRIPTS = Path(__file__).resolve().parent
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
@@ -281,19 +275,6 @@ def collect(
 
 
 def main() -> None:
-    if snakemake is not None:
-        csv_path = Path(snakemake.output.csv)
-        md_path = Path(snakemake.output.md)
-        results_root = workflow_root() / "results"
-        rows = collect(
-            results_root=results_root,
-            csv_path=csv_path,
-            md_path=md_path,
-        )
-        print(f"Wrote {csv_path} ({len(rows)} jobs)")
-        print(f"Wrote {md_path}")
-        return
-
     import argparse
 
     parser = argparse.ArgumentParser(description=__doc__)
@@ -318,12 +299,14 @@ def main() -> None:
         default=workflow_root() / "config.yaml",
     )
     args = parser.parse_args()
-    collect(
+    rows = collect(
         results_root=args.results_root,
         csv_path=args.csv,
         md_path=args.md,
         config_path=args.config,
     )
+    print(f"Wrote {args.csv} ({len(rows)} jobs)")
+    print(f"Wrote {args.md}")
 
 
 if __name__ == "__main__":

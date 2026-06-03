@@ -1176,6 +1176,12 @@ def _overlap_restart_slot_paths(final_restart: Path) -> tuple[Path, Path]:
     )
 
 
+def _overlap_chunk_trajectory_path(trajectory: Path, chunk_index: int) -> Path:
+    """Per-chunk DCD path for overlap-segmented dynamics."""
+    p = Path(trajectory)
+    return p.with_name(f"{p.stem}.chunk.{chunk_index:04d}{p.suffix}")
+
+
 def _overlap_chunk_restart_paths(
     io: CharmmTrajectoryFiles,
     *,
@@ -1209,20 +1215,26 @@ def _overlap_chunk_io(
     *,
     chunk_index: int,
     n_chunks: int,
+    split_trajectory: bool = True,
 ) -> CharmmTrajectoryFiles:
     """Restart I/O for overlap chunking via alternating scratch restarts.
 
-    Trajectory output is kept on the parent ``io`` object and opened once for
-    the full multi-chunk run; reopening a DCD per restart chunk can leave empty
-    placeholder files for CHARMM restart dynamics.
+    When ``split_trajectory`` is true and ``n_chunks > 1``, each chunk writes its
+    own ``*.chunk.NNNN.dcd`` (merged into the stage DCD after the run).
     """
     rread, rwri = _overlap_chunk_restart_paths(
         io, chunk_index=chunk_index, n_chunks=n_chunks
     )
+    traj: Path | None = None
+    if io.trajectory is not None:
+        if n_chunks <= 1:
+            traj = io.trajectory
+        elif split_trajectory:
+            traj = _overlap_chunk_trajectory_path(Path(io.trajectory), chunk_index)
     return CharmmTrajectoryFiles(
         restart_read=rread,
         restart_write=rwri,
-        trajectory=None,
+        trajectory=traj,
         restart_read_unit=io.restart_read_unit,
         restart_write_unit=io.restart_write_unit,
         trajectory_unit=io.trajectory_unit,
@@ -1527,8 +1539,10 @@ def run_dynamics_with_io(
     completed = False
     trajectory_files: list[Any] = []
     trajectory_iokw: dict[str, int] = {}
+    chunk_dcd_paths: list[Path] = []
+    split_trajectory = io is not None and io.trajectory is not None and n_chunks > 1
     try:
-        if io is not None and n_chunks > 1 and io.trajectory is not None:
+        if io is not None and n_chunks > 1 and io.trajectory is not None and not split_trajectory:
             trajectory_files, trajectory_iokw = io.open_trajectory_for_run()
         for chunk_index in range(n_chunks):
             chunk_nstep = interval
@@ -1540,8 +1554,17 @@ def run_dynamics_with_io(
                 chunk_io = io
             else:
                 chunk_io = _overlap_chunk_io(
-                    io, chunk_index=chunk_index, n_chunks=n_chunks
+                    io,
+                    chunk_index=chunk_index,
+                    n_chunks=n_chunks,
+                    split_trajectory=split_trajectory,
                 )
+                if (
+                    split_trajectory
+                    and chunk_io is not None
+                    and chunk_io.trajectory is not None
+                ):
+                    chunk_dcd_paths.append(Path(chunk_io.trajectory))
             has_restart_read = (
                 chunk_io is not None
                 and getattr(chunk_io, "restart_read", None) is not None
@@ -1597,6 +1620,15 @@ def run_dynamics_with_io(
                 mlpot_ctx=mlpot_ctx,
             )
         completed = True
+        if split_trajectory and chunk_dcd_paths and io is not None:
+            from mmml.utils.dcd_writer import concat_dcd_files
+
+            merged = concat_dcd_files(chunk_dcd_paths, Path(io.trajectory))
+            print(
+                f"overlap ({overlap_context}): merged {len(chunk_dcd_paths)} chunk DCD(s) "
+                f"-> {io.trajectory} ({merged} frames)",
+                flush=True,
+            )
     finally:
         if completed:
             _cleanup_overlap_restart_slots(io)
