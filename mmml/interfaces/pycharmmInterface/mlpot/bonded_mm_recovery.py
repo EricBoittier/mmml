@@ -334,7 +334,7 @@ def _run_heavy_bonded_recovery_check(
             ctx,
             BondedMmMiniConfig(
                 nstep_sd=nstep,
-                nprint=max(1, int(getattr(args, "dyn_nprint", 100))),
+                nprint=max(1, int(getattr(args, "dyn_nprint", 500))),
                 verbose=not args.quiet,
                 show_energy=bool(getattr(args, "show_energy", False)),
             ),
@@ -563,7 +563,7 @@ def maybe_run_bonded_mm_mini_after_stage(
         ctx,
         BondedMmMiniConfig(
             nstep_sd=nstep,
-            nprint=max(1, int(getattr(args, "dyn_nprint", 100))),
+            nprint=max(1, int(getattr(args, "dyn_nprint", 500))),
             verbose=not args.quiet,
             show_energy=bool(getattr(args, "show_energy", False)),
         ),

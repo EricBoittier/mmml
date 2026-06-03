@@ -45,20 +45,20 @@ def add_charmm_output_args(parser: argparse.ArgumentParser) -> None:
     group.add_argument(
         "--nprint",
         type=int,
-        default=1,
-        help="SD minimization: print energy every N steps (default: 1)",
+        default=50,
+        help="SD minimization: print energy every N steps (default: 50)",
     )
     group.add_argument(
         "--dyn-nprint",
         type=int,
-        default=100,
-        help="Dynamics: print energy every N steps (default: 100)",
+        default=500,
+        help="Dynamics: print energy every N steps (default: 500)",
     )
     group.add_argument(
         "--dyn-iprfrq",
         type=int,
-        default=500,
-        help="Dynamics: detailed status every N steps (default: 500)",
+        default=2000,
+        help="Dynamics: detailed status every N steps (default: 2000)",
     )
     group.add_argument(
         "--quiet",
@@ -226,9 +226,9 @@ def resolve_dynamics_print_kwargs(
     nstep = max(1, int(nstep))
     if getattr(args, "quiet", False):
         return {"nprint": nstep, "iprfrq": nstep, "isvfrq": nstep}
-    nprint = max(1, int(getattr(args, "dyn_nprint", 100)))
-    iprfrq = max(nprint, int(getattr(args, "dyn_iprfrq", 500)))
-    isvfrq = max(iprfrq, int(getattr(args, "dyn_iprfrq", 500)))
+    nprint = max(1, int(getattr(args, "dyn_nprint", 500)))
+    iprfrq = max(nprint, int(getattr(args, "dyn_iprfrq", 2000)))
+    isvfrq = max(iprfrq, int(getattr(args, "dyn_iprfrq", 2000)))
     nprint = min(nprint, nstep)
     iprfrq = min(iprfrq, nstep)
     isvfrq = min(isvfrq, nstep)

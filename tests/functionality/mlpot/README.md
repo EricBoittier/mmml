@@ -95,7 +95,7 @@ Outputs default to `artifacts/pycharmm_mlpot/` (`cluster_for_vmd_*.psf`, `nve_*.
 
 ```bash
 # Minimization (you already validated 3D XYZ export)
-# Default: PRNLev=5, nprint=1 (verbose CHARMM console). Use --quiet to reduce output.
+# Default: PRNLev=5, nprint=50 (CHARMM console). Use --quiet to reduce output further.
 python tests/functionality/mlpot/04_mlpot_minimize_stub.py --run --save --nstep 10
 # Tetramer: free SD then constrained SD on monomers 1 and 3:
 python tests/functionality/mlpot/04_mlpot_minimize_stub.py --run --save --n-molecules 4 --fix-resids 1,3 --nstep 20
