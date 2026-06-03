@@ -249,6 +249,13 @@ def parse_args() -> argparse.Namespace:
         help="pycharmm: disable CHARMM ECHECK early stop",
     )
     parser.add_argument(
+        "--allow-incomplete-dynamics",
+        action="store_true",
+        help=(
+            "pycharmm: do not fail when dynamics stops early or the stage DCD is truncated"
+        ),
+    )
+    parser.add_argument(
         "--nprint",
         type=int,
         default=50,
@@ -1143,6 +1150,8 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         cmd.extend(["--ml-max-active-dimers", str(args.ml_max_active_dimers)])
     if args.no_echeck:
         cmd.append("--no-echeck")
+    if getattr(args, "allow_incomplete_dynamics", False):
+        cmd.append("--allow-incomplete-dynamics")
     if getattr(args, "skip_energy_show", False):
         cmd.append("--skip-energy-show")
     if getattr(args, "show_energy", None) is True:

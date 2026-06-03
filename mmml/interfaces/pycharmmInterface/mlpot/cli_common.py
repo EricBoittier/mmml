@@ -164,6 +164,14 @@ def add_dynamics_stability_args(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="Disable ECHECK (CHARMM -1 = no early stop)",
     )
+    group.add_argument(
+        "--allow-incomplete-dynamics",
+        action="store_true",
+        help=(
+            "Do not fail staged MD when CHARMM stops early (echeck) or the stage DCD "
+            "has too few frames. Default: abort with a clear error."
+        ),
+    )
 
 
 def resolve_echeck_from_args(args: argparse.Namespace) -> float:

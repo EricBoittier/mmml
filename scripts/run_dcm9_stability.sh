@@ -27,10 +27,12 @@
 #   ./scripts/run_dcm9_stability.sh --ps-heat 5 --heat-ihtfrq 100
 #
 # After run, confirm in the log (non-quiet):
+#   HEAT complete: restart_step=~40000, dcd_frames=~81  (new validation)
 #   cons_fix: no monomers constrained
 #   MLpot USER active before staged dynamics
 #   Removed prior DCD          (or pull latest repo; old builds say Rescued)
-#   AVER> ... TEMPerature      (heat block averages near ~300 K)
+# If heat stops at ~700 steps / 1 DCD frame: echeck abort (H stretch / energy spike).
+#   grep -i 'TOLERANCE\\|echeck' log   — try --no-echeck for diagnosis only
 #
 # VMD:
 #   vmd artifacts/pycharmm_mlpot/dcm9_stability/cluster_for_vmd_dcm_9.psf
