@@ -249,16 +249,22 @@ def parse_args() -> argparse.Namespace:
         help="pycharmm: disable CHARMM ECHECK early stop",
     )
     parser.add_argument(
+        "--nprint",
+        type=int,
+        default=50,
+        help="pycharmm: print SD minimization energy every N steps (default: 50)",
+    )
+    parser.add_argument(
         "--dyn-nprint",
         type=int,
-        default=100,
-        help="pycharmm: print dynamics energy every N steps",
+        default=500,
+        help="pycharmm: print dynamics energy every N steps (default: 500)",
     )
     parser.add_argument(
         "--dyn-iprfrq",
         type=int,
-        default=500,
-        help="pycharmm: detailed dynamics status every N steps",
+        default=2000,
+        help="pycharmm: detailed dynamics status every N steps (default: 2000)",
     )
     parser.add_argument(
         "--skip-energy-show",
@@ -981,6 +987,8 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         str(args.temperature),
         "--mini-nstep",
         str(args.mini_nstep),
+        "--nprint",
+        str(args.nprint),
         "--dyn-nprint",
         str(args.dyn_nprint),
         "--dyn-iprfrq",
