@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from unittest.mock import patch
 
 from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     recommend_echeck_kcal,
@@ -136,28 +135,28 @@ def test_build_stage_dynamics_kw_restart_omits_invalid_res_flag():
     assert "res" not in kw
 
 
-def test_build_stage_dynamics_kw_free_space_equi_uses_hoover_nvt():
+def test_build_stage_dynamics_kw_free_space_equi_uses_charmm_heat_controls():
     args = argparse.Namespace()
     dyn_print = {"nprint": 100, "iprfrq": 500, "isvfrq": 500}
-    with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.compute_cpt_piston_masses",
-        return_value=(152, 1520),
-    ):
-        kw = _build_stage_dynamics_kw(
-            "equi",
-            args=args,
-            timestep_ps=0.0001,
-            nstep=500,
-            save_interval_ps=0.04,
-            temp=300.0,
-            echeck=50000.0,
-            dyn_print=dyn_print,
-            restart=True,
-            use_pbc=False,
-        )
+    kw = _build_stage_dynamics_kw(
+        "equi",
+        args=args,
+        timestep_ps=0.0001,
+        nstep=500,
+        save_interval_ps=0.04,
+        temp=300.0,
+        echeck=50000.0,
+        dyn_print=dyn_print,
+        restart=True,
+        use_pbc=False,
+    )
     assert kw["restart"] is True
-    assert kw["hoover reft"] == 300.0
-    assert kw["tmass"] == 1520
+    assert kw["ihtfrq"] == 10
+    assert kw["TEMINC"] == 0.0
+    assert kw["iasvel"] == 0
+    assert "firstt" not in kw
+    assert "hoover reft" not in kw
+    assert "tmass" not in kw
     assert "cpt" not in kw
     assert "pint pconst pref" not in kw
     assert kw["imgfrq"] == 0

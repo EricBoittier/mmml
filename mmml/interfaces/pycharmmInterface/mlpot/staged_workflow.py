@@ -226,6 +226,7 @@ def _build_stage_dynamics_kw(
             echeck=echeck,
         )
     elif stage == "equi":
+        include_firstt = npt_include_firstt and not effective_restart
         if use_pbc:
             kw = build_cpt_equilibration_dynamics(
                 timestep_ps=timestep_ps,
@@ -234,7 +235,7 @@ def _build_stage_dynamics_kw(
                 temp=temp,
                 restart=effective_restart,
                 echeck=max(echeck, 500.0) if echeck > 0 else echeck,
-                include_firstt=npt_include_firstt,
+                include_firstt=include_firstt,
                 **_npt_cpt_options(args),
             )
         else:
@@ -245,7 +246,7 @@ def _build_stage_dynamics_kw(
                 temp=temp,
                 restart=effective_restart,
                 echeck=max(echeck, 500.0) if echeck > 0 else echeck,
-                include_firstt=npt_include_firstt,
+                include_firstt=include_firstt,
             )
     elif stage == "prod":
         if use_pbc:
