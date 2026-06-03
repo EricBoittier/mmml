@@ -210,7 +210,7 @@ def _callback_energy_and_force(calc: Any, positions: np.ndarray) -> tuple[float,
 
 
 def _ml_only_energy_and_force(calc: Any, positions: np.ndarray) -> tuple[float, np.ndarray]:
-    """Return ML-only decomposed energy/forces, avoiding stateful MM pair updates."""
+    """Return ML-only decomposed energy/forces from the scalar energy gradient."""
     import jax
     import jax.numpy as jnp
 
@@ -223,18 +223,25 @@ def _ml_only_energy_and_force(calc: Any, positions: np.ndarray) -> tuple[float, 
     if getattr(calc, "_cell", False):
         box = jnp.asarray(cubic_box_matrix_from_side(float(calc._cell)))
     with mlpot_jax_device_context():
-        out = calc.spherical_fn(
-            positions=jnp.asarray(pos),
-            atomic_numbers=jnp.asarray(calc.atomic_numbers[:n]),
-            n_monomers=calc.n_monomers,
-            cutoff_params=calc.cutoff_params,
-            doML=True,
-            doMM=False,
-            doML_dimer=True,
-            box=box,
-        )
-        energy = float(jax.device_get(out.energy)) * float(calc.ev2kcal)
-        forces = np.asarray(jax.device_get(out.forces), dtype=np.float64) * float(calc.ev2kcal)
+        positions_jax = jnp.asarray(pos)
+        atomic_numbers_jax = jnp.asarray(calc.atomic_numbers[:n])
+
+        def energy_scalar(p):
+            out = calc.spherical_fn(
+                positions=p,
+                atomic_numbers=atomic_numbers_jax,
+                n_monomers=calc.n_monomers,
+                cutoff_params=calc.cutoff_params,
+                doML=True,
+                doMM=False,
+                doML_dimer=True,
+                box=box,
+            )
+            return jnp.reshape(out.energy, (-1,))[0]
+
+        energy_raw, grad = jax.value_and_grad(energy_scalar)(positions_jax)
+        energy = float(jax.device_get(energy_raw)) * float(calc.ev2kcal)
+        forces = -np.asarray(jax.device_get(grad), dtype=np.float64) * float(calc.ev2kcal)
     return energy, forces
 
 
