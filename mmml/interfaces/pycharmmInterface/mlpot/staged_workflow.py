@@ -323,7 +323,9 @@ def _configure_heat_dynamics_start(
 
     firstt = float(kw.get("firstt", kw.get("finalt", 300.0)))
     kw["iasvel"] = 1
-    kw["iasors"] = 1
+    # Scale at IHTFRQ (CHARMM iasors=0); avoid Gaussian reassignment every ihtfrq
+    # which spikes T and trips echeck on all-ML clusters (no SHAKE).
+    kw["iasors"] = 0
 
     if coords_in_memory:
         io.restart_read = None
@@ -339,7 +341,7 @@ def _configure_heat_dynamics_start(
         if not quiet:
             print(
                 f"HEAT: Boltzmann velocities at FIRSTT={firstt:.1f} K "
-                "(in-memory coords after mini)",
+                "(in-memory coords after mini); ihtfrq scales (iasors=0)",
                 flush=True,
             )
         return
@@ -359,7 +361,7 @@ def _configure_heat_dynamics_start(
         if not quiet:
             print(
                 f"HEAT: Boltzmann velocities at FIRSTT={firstt:.1f} K "
-                f"(coords from {restart_path})",
+                f"(coords from {restart_path}); ihtfrq scales (iasors=0)",
                 flush=True,
             )
         return
@@ -369,7 +371,8 @@ def _configure_heat_dynamics_start(
     kw["start"] = True
     if not quiet:
         print(
-            f"HEAT: dyna start with FIRSTT={firstt:.1f} K (cold start, no READYN)",
+            f"HEAT: dyna start FIRSTT={firstt:.1f} K (cold start); "
+            "ihtfrq scales (iasors=0)",
             flush=True,
         )
 

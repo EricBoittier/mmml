@@ -31,8 +31,9 @@
 #   cons_fix: no monomers constrained
 #   MLpot USER active before staged dynamics
 #   Removed prior DCD          (or pull latest repo; old builds say Rescued)
-# If heat stops at ~700 steps / 1 DCD frame: echeck abort (H stretch / energy spike).
-#   grep -i 'TOLERANCE\\|echeck' log   — try --no-echeck for diagnosis only
+# If heat stops early (~1–3k steps): grep 'TOLERANCE\\|echeck' in the log.
+#   DCM:9 auto-loosens echeck (9 monomers); override with --no-echeck if needed.
+#   Heat uses iasors=0 (scale at ihtfrq) after Boltzmann at 60 K — not Gaussian redraw.
 #
 # VMD:
 #   vmd artifacts/pycharmm_mlpot/dcm9_stability/cluster_for_vmd_dcm_9.psf
@@ -97,6 +98,7 @@ exec "$MPIRUN" md-system \
   --dyn-nprint "$DYN_NPRINT" \
   --dyn-iprfrq 2000 \
   --dcd-nsavc "$DCD_NSAVC" \
+  --dynamics-overlap-action off \
   --dt-fs 0.25 \
   --temperature 300.0 \
   --mm-switch-on 7.0 \
