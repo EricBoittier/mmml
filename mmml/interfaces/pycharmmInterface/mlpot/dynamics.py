@@ -966,9 +966,22 @@ def _valid_restart_file(path: PathLike | None) -> Path | None:
     if path is None:
         return None
     p = Path(path)
-    if p.is_file() and p.stat().st_size > 0:
-        return p
-    return None
+    if not p.is_file() or p.stat().st_size <= 0:
+        return None
+
+    # CHARMM can write coordinate-history files during failed dynamics and label
+    # them as restart output, but those files explicitly cannot restart a run.
+    try:
+        head = p.read_bytes()[:8192]
+    except OSError:
+        return None
+    if b"C A N N O T" in head and b"RESTART A RUN" in head:
+        print(
+            f"overlap: ignoring non-restartable CHARMM scratch restart {p}",
+            flush=True,
+        )
+        return None
+    return p
 
 
 def _overlap_restart_slot_paths(final_restart: Path) -> tuple[Path, Path]:
@@ -1003,10 +1016,10 @@ def _overlap_chunk_restart_paths(
         return _valid_restart_file(io.restart_read), slot_a
     if chunk_index == n_chunks - 1:
         prev = slot_a if (chunk_index % 2) == 1 else slot_b
-        return prev, final
+        return _valid_restart_file(prev), final
     if chunk_index % 2 == 1:
-        return slot_a, slot_b
-    return slot_b, slot_a
+        return _valid_restart_file(slot_a), slot_b
+    return _valid_restart_file(slot_b), slot_a
 
 
 def _overlap_chunk_io(
