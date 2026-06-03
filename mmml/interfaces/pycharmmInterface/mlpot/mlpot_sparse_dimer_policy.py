@@ -10,17 +10,32 @@ import numpy as np
 from mmml.interfaces.pycharmmInterface.calculator_utils import dimer_permutations
 
 
+def max_dimer_pairs(n_monomers: int) -> int:
+    """Maximum number of unique monomer dimers for an ``n_monomers`` cluster."""
+    n = int(n_monomers)
+    return max(0, n * (n - 1) // 2)
+
+
 def resolve_max_active_dimers(
     n_monomers: int,
     n_dimers_total: Optional[int] = None,
     explicit: Optional[int] = None,
+    *,
+    free_space: bool = False,
 ) -> int:
     """Max PhysNet dimer slots per step when ``ml_sparse_dimers`` is enabled.
 
-    Default raised from ``max(500, 3n)`` to ``max(1000, 6n)`` (DCM:90 → 1000 slots).
-    Override with ``explicit``, ``MMML_MLPOT_MAX_ACTIVE_DIMERS``, or CLI
-    ``--ml-max-active-dimers``.
+    Periodic systems default to ``max(1000, 6n)`` because the active-pair
+    count is bounded by local density.  Free-space clusters have no comparable
+    geometric bound: the largest safe static allocation is every unique dimer,
+    ``n * (n - 1) // 2`` (DCM:90 -> 4005 slots).  Lower explicit/env caps are
+    promoted in free-space mode so sparse packing cannot silently drop pairs.
     """
+    if n_dimers_total is None:
+        n_dimers_total = max_dimer_pairs(n_monomers)
+    n_dimers_total = int(n_dimers_total)
+
+    all_pairs_cap = n_dimers_total
     if explicit is not None:
         cap = int(explicit)
     else:
@@ -28,9 +43,10 @@ def resolve_max_active_dimers(
         if env:
             cap = int(env)
         else:
-            cap = max(1000, 6 * int(n_monomers))
-    if n_dimers_total is not None:
-        cap = min(int(n_dimers_total), cap)
+            cap = all_pairs_cap if free_space else max(1000, 6 * int(n_monomers))
+    if free_space:
+        cap = max(cap, all_pairs_cap)
+    cap = min(all_pairs_cap, cap)
     return max(1, cap)
 
 

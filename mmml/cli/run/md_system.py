@@ -353,8 +353,8 @@ def parse_args() -> argparse.Namespace:
         default=None,
         metavar="N",
         help=(
-            "pycharmm: sparse ML dimer slot cap per step (default max(1000, 6*n_monomers); "
-            "or MMML_MLPOT_MAX_ACTIVE_DIMERS). Run scripts/validate_mlpot_sparse_dimers.py to check."
+            "pycharmm: sparse ML dimer slot cap per step (PBC default max(1000, 6*n_monomers); "
+            "free-space default all unique dimers). Run scripts/validate_mlpot_sparse_dimers.py to check."
         ),
     )
     parser.add_argument(

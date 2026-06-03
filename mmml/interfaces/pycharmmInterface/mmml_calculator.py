@@ -361,8 +361,10 @@ def setup_calculator(
             monomers+dimers in one batch. Set to reduce memory for large systems.
         ml_gpu_count: Parallel PhysNet chunks across this many local JAX GPUs
             (default 1). Use with ``CUDA_VISIBLE_DEVICES`` and ``MMML_MLPOT_N_GPUS``.
-        ml_max_active_dimers: Cap on sparse ML dimer slots per step (default
-            ``max(1000, 6*n_monomers)``; env ``MMML_MLPOT_MAX_ACTIVE_DIMERS``).
+        ml_max_active_dimers: Cap on sparse ML dimer slots per step. Periodic
+            default is ``max(1000, 6*n_monomers)``; free-space default is all
+            unique dimers, ``n_monomers*(n_monomers-1)//2``. Lower explicit/env
+            caps are promoted in free-space mode to avoid dropping pairs.
         mm_r_min: Optional inner cutoff (Å) for MM neighbor list. Pairs with dimer
             COM distance < mm_r_min are excluded. Defaults: complementary_handoff=False
             -> mm_switch_on * 0.9; complementary_handoff=True -> (mm_switch_on - ml_switch_width) * 0.9
@@ -661,8 +663,14 @@ def setup_calculator(
     )
 
     # Sparse dimers: max active for JIT (cap for memory)
+    _free_space_dimers = cell is False or cell is None
     _max_active_dimers = (
-        resolve_max_active_dimers(n_monomers, n_dimers_total, ml_max_active_dimers)
+        resolve_max_active_dimers(
+            n_monomers,
+            n_dimers_total,
+            ml_max_active_dimers,
+            free_space=_free_space_dimers,
+        )
         if ml_sparse_dimers
         else n_dimers_total
     )
