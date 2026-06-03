@@ -1,5 +1,9 @@
 mmml md-system: running pycharmm (setup=free_nvt | composition=DCM:2 | stages=mini,heat)
+<<<<<<< HEAD
   --phase staged --ensemble nvt --setup free_nvt --spacing 5.0 --ps 1.0 --dt-fs 0.25 --temperature 300.0 --mini-nstep 100 --nprint 50 --dyn-nprint 100 --dyn-iprfrq 2000 --heat-ihtfrq 100 --dcd-nsavc 1 --echeck 100.0 --ps-heat 2.0 --ps-equi 50.0 --n-prod-segments 1 --composition DCM:2 --n-molecules 2 --md-stages mini,heat --checkpoint /mmhome/boittier/home/mmml_tutorial/acodcm/ckpts/dcm1-c137fb42-1f65-4748-880b-8f8184a20f70 --output-dir artifacts/pycharmm_mlpot/dcm2_smoke_v2 --dynamics-overlap-action rescue --dynamics-overlap-min-distance 1.5 --dynamics-overlap-check-interval 500 --dynamics-overlap-charmm-sd-steps 200 --dynamics-overlap-charmm-abnr-steps 400 --dynamics-overlap-separate-margin 0.2 --mm-switch-on 7.0 --mm-switch-width 5.0 --ml-switch-width 0.1 --charmm-sd-steps 25 --charmm-abnr-steps 100 --charmm-tolenr 0.001 --charmm-tolgrd 0.001 --skip-energy-show --max-grms-before-dyn 50.0 --seed 123
+=======
+  --phase staged --ensemble nvt --setup free_nvt --spacing 5.0 --ps 1.0 --dt-fs 0.25 --temperature 300.0 --mini-nstep 100 --nprint 50 --dyn-nprint 500 --dyn-iprfrq 2000 --heat-ihtfrq 0 --dcd-nsavc 1 --echeck 100.0 --ps-heat 0.5 --ps-equi 50.0 --n-prod-segments 1 --composition DCM:2 --n-molecules 2 --md-stages mini,heat --checkpoint /mmhome/boittier/home/mmml_tutorial/acodcm/ckpts/dcm1-c137fb42-1f65-4748-880b-8f8184a20f70 --output-dir artifacts/pycharmm_mlpot/dcm2_nvt_bonded_test --bonded-mm-mini --bonded-mm-mini-after mini,heat --bonded-mm-mini-steps 50 --bonded-mm-internal-margin 0.0 --dynamics-overlap-action rescue --dynamics-overlap-min-distance 1.5 --dynamics-overlap-check-interval 500 --dynamics-overlap-charmm-sd-steps 200 --dynamics-overlap-charmm-abnr-steps 400 --dynamics-overlap-separate-margin 0.2 --mm-switch-on 7.0 --mm-switch-width 5.0 --ml-switch-width 0.1 --charmm-sd-steps 25 --charmm-abnr-steps 100 --charmm-tolenr 0.001 --charmm-tolgrd 0.001 --max-grms-before-dyn 50.0 --seed 123
+>>>>>>> e925ab14b (sadf)
 mmml: OpenMPI-linked CHARMM — for large MLpot clusters prefer:
     /mmhome/boittier/home/mmml/scripts/mmml-charmm-mpirun.sh md-system ...
   (or see mpirun hint below if SD hits domdec/MPI errors)
@@ -119,9 +123,15 @@ CHARMM MM pre-minimize: SD=25 ABNR=100
  CHARMM>     
   
   
+<<<<<<< HEAD
  CHARMM>     write name /mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm2_smoke_v2/cluster_for_vmd_dcm_2.psf -
  CHARMM>     psf card
  VOPEN> Attempting to open::/mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm2_smoke_v2/cluster_for_vmd_dcm_2.psf::
+=======
+ CHARMM>     write name /mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm2_nvt_bonded_test/cluster_for_vmd_dcm_2.psf -
+ CHARMM>     psf card
+ VOPEN> Attempting to open::/mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm2_nvt_bonded_test/cluster_for_vmd_dcm_2.psf::
+>>>>>>> e925ab14b (sadf)
  RDTITL>  
  RDTITL> No title read.
  VCLOSE: Closing unit   91 with status "KEEP"
@@ -130,9 +140,15 @@ CHARMM MM pre-minimize: SD=25 ABNR=100
  CHARMM>     
   
   
+<<<<<<< HEAD
  CHARMM>     write name /mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm2_smoke_v2/cluster_for_vmd_dcm_2.pdb -
  CHARMM>     coor pdb
  VOPEN> Attempting to open::/mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm2_smoke_v2/cluster_for_vmd_dcm_2.pdb::
+=======
+ CHARMM>     write name /mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm2_nvt_bonded_test/cluster_for_vmd_dcm_2.pdb -
+ CHARMM>     coor pdb
+ VOPEN> Attempting to open::/mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm2_nvt_bonded_test/cluster_for_vmd_dcm_2.pdb::
+>>>>>>> e925ab14b (sadf)
  RDTITL> * PRE-MLPOT CLUSTER
  RDTITL> *
   Write CHARMM-pdb format
@@ -269,7 +285,11 @@ ENER INTERN>     1195.36377    232.15251      6.89172      0.00000      0.00000
 ENER EXTERN>       -1.02549      0.02438      0.00000      0.00000      0.00000
  ----------       ---------    ---------    ---------    ---------    ---------
   
+<<<<<<< HEAD
  VOPEN> Attempting to open::/mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm2_smoke_v2/mini_charmm_mm_dcm_2.dcd::
+=======
+ VOPEN> Attempting to open::/mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm2_nvt_bonded_test/mini_charmm_mm_dcm_2.dcd::
+>>>>>>> e925ab14b (sadf)
 
  NONBOND OPTION FLAGS: 
      ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
@@ -434,6 +454,146 @@ ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
 ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
 CHARMM MM minimize end: GRMS=0.5808 kcal/mol/Å
 Post MM pre-min GRMS: 0.5808 kcal/mol/Å
+<<<<<<< HEAD
+=======
+MM baseline GRMS: 0.5808 kcal/mol/Å, ANGL: 0.5414 kcal/mol, internal: 0.5556 kcal/mol
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0     -0.34219      0.00090      0.58077
+ENER INTERN>        0.00374      0.54139      0.01043      0.00000      0.00000
+ENER EXTERN>       -0.95850      0.06074      0.00000      0.00000      0.00000
+ ----------       ---------    ---------    ---------    ---------    ---------
+  
+ VCLOSE: Closing unit   51 with status "KEEP"
+  
+ CHARMM>     BLOCK
+  
+  BLOCK>            CALL 1 SELE ALL END
+ SELRPN>     10 atoms have been selected out of     10
+ The selected atoms have been reassigned to block   1
+  
+  BLOCK>              COEFF 1 1 1.0
+  
+  BLOCK>            END
+ Matrix of Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of BOND Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of ANGLE Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of DIHE Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of CROSS Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of ELEC Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of VDW Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+  
+ CHARMM>     
+  
+  
+ CHARMM>     ENER
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are       25 atom  pairs and       20 atom  exclusions.
+ There are        0 group pairs and        0 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       41 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+       25 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ PRNHBD: CUToff Hydrogen Bond  distance =    0.5000   Angle =   90.0000
+         CuT switching ON HB dist. =     3.5000  OFf HB dist. =    4.0000
+         CuT switching ON Hb Angle =    50.0000  OFf Hb Angle =   70.0000
+         ACCEptor antecedents included
+         All hydrogen bonds for each hydrogen will be found
+         Hydrogen bonds between excluded atoms will be kept
+
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0     -0.34219      0.00090      0.58077
+ENER INTERN>        0.00374      0.54139      0.01043      0.00000      0.00000
+ENER EXTERN>       -0.95850      0.06074      0.00000      0.00000      0.00000
+ ----------       ---------    ---------    ---------    ---------    ---------
+  
+  
+ CHARMM>     BLOCK
+  
+  BLOCK>            CALL 1 SELE ALL END
+ SELRPN>     10 atoms have been selected out of     10
+ The selected atoms have been reassigned to block   1
+  
+  BLOCK>              COEFF 1 1 1.0
+  
+  BLOCK>            END
+ Matrix of Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of BOND Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of ANGLE Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of DIHE Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of CROSS Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of ELEC Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of VDW Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+Pre-min bonded geometry: ANGL=0.5414 kcal/mol, internal=0.5556 kcal/mol (baseline GRMS 0.5808 kcal/mol/Å)
+>>>>>>> e925ab14b (sadf)
 Decomposed MLpot: 2 JAX GPUs visible but ml_gpu_count=1 (only GPU:0 runs PhysNet). Use --ml-gpu-count 2 and enough chunks (--ml-batch-size 128-256 for DCM:90).
 Decomposed MLpot: max_active_dimers=1 (free-space all-pairs safe; PhysNet batch ≤ 3 systems/step)
 [setup_calculator] Handoff parameters -> ml_switch_width=0.1000 Å, mm_switch_on=7.0000 Å, mm_switch_width=5.0000 Å, complementary_handoff=True
@@ -475,7 +635,11 @@ dict_keys(['opt_state', 'params', 'step'])
 )
 [setup_calculator] Generic XLA GPU warmup (full hybrid warmup runs after PyCHARMM/CGENFF init)
 Decomposed MLpot factory (setup_calculator return):
+<<<<<<< HEAD
   factory=<function setup_calculator.<locals>.get_spherical_cutoff_calculator at 0x151f881aab60>
+=======
+  factory=<function setup_calculator.<locals>.get_spherical_cutoff_calculator at 0x147e9eae6b60>
+>>>>>>> e925ab14b (sadf)
   module=mmml.interfaces.pycharmmInterface.mmml_calculator
   name=get_spherical_cutoff_calculator
   model_restart_path=/mmhome/boittier/home/mmml_tutorial/acodcm/ckpts/dcm1-c137fb42-1f65-4748-880b-8f8184a20f70
@@ -485,19 +649,61 @@ Decomposed MLpot factory (setup_calculator return):
   ml_switch_width=0.1 mm_switch_on=7.0 mm_switch_width=5.0 complementary_handoff=True
   ml_batch_size=None ml_gpu_count=1 ml_max_active_dimers=None
   cell=False
+<<<<<<< HEAD
 Decomposed MLpot spherical_fn=functools.partial(<PjitFunction of <function setup_calculator.<locals>.spherical_cutoff_calculator at 0x151f881aa700>>, doML=True, doMM=True, doML_dimer=True, debug=False) (JIT bind doML=True doMM=True doML_dimer=True)
 Decomposed MLpot JAX warmup: 10 atoms, 2 monomers (ML+MM)
 [mmml] hybrid JIT warmup complete (post-PyCHARMM delay-kernel calibration)
 Decomposed MLpot JAX warmup complete
 
 MLpot SD minimize: 100 steps/pass, 10 atoms
+=======
+Decomposed MLpot spherical_fn=functools.partial(<PjitFunction of <function setup_calculator.<locals>.spherical_cutoff_calculator at 0x147e9eae6700>>, doML=True, doMM=True, doML_dimer=True, debug=False) (JIT bind doML=True doMM=True doML_dimer=True)
+Decomposed MLpot JAX warmup: 10 atoms, 2 monomers (ML+MM)
+[mmml] hybrid JIT warmup complete (post-PyCHARMM delay-kernel calibration)
+Decomposed MLpot JAX warmup complete
+  
+ CHARMM>     
+  
+  
+ CHARMM>     ENER
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are       25 atom  pairs and       20 atom  exclusions.
+ There are        0 group pairs and        0 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       41 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+       25 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ PRNHBD: CUToff Hydrogen Bond  distance =    0.5000   Angle =   90.0000
+         CuT switching ON HB dist. =     3.5000  OFf HB dist. =    4.0000
+         CuT switching ON Hb Angle =    50.0000  OFf Hb Angle =   70.0000
+         ACCEptor antecedents included
+         All hydrogen bonds for each hydrogen will be found
+         Hydrogen bonds between excluded atoms will be kept
+
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
+>>>>>>> e925ab14b (sadf)
  ----------       ---------    ---------    ---------    ---------    ---------
 ENER>        0     -0.34219      0.00090      0.58077
 ENER INTERN>        0.00374      0.54139      0.01043      0.00000      0.00000
 ENER EXTERN>       -0.95850      0.06074      0.00000      0.00000      0.00000
  ----------       ---------    ---------    ---------    ---------    ---------
   
+<<<<<<< HEAD
  VCLOSE: Closing unit   51 with status "KEEP"
+=======
+>>>>>>> e925ab14b (sadf)
   
  CHARMM>     PRNLev 5
   
@@ -591,6 +797,14 @@ ENER EXTERN>       -0.95850      0.06074      0.00000      0.00000      0.00000
         0 GROUP PAIRS REQUIRED ATOM SEARCHES
 
  PRNHBD: CUToff Hydrogen Bond  distance =    0.5000   Angle =   90.0000
+<<<<<<< HEAD
+=======
+
+MLpot SD minimize: 100 steps/pass, 10 atoms
+SD pass 1 (free, all atoms): nstep=100 nprint=50
+Post MLpot mini GRMS: 0.1260 kcal/mol/Å
+bonded-MM-mini: reloading pre-MLpot topology for all-ML recovery: cluster_for_vmd_dcm_2.psf
+>>>>>>> e925ab14b (sadf)
          CuT switching ON HB dist. =     3.5000  OFf HB dist. =    4.0000
          CuT switching ON Hb Angle =    50.0000  OFf Hb Angle =   70.0000
          ACCEptor antecedents included
@@ -605,7 +819,11 @@ ENER EXTERN>       -0.95850      0.06074      0.00000      0.00000      0.00000
   
  CHARMM>    wrnlev 5
   
+<<<<<<< HEAD
  VOPEN> Attempting to open::/mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm2_smoke_v2/mini_full_mlpot_dcm_2.dcd::
+=======
+ VOPEN> Attempting to open::/mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm2_nvt_bonded_test/mini_full_mlpot_dcm_2.dcd::
+>>>>>>> e925ab14b (sadf)
 
 
  STEEPD> An energy minimization has been requested.
@@ -622,6 +840,7 @@ MINI EXTERN>        0.00000      0.00000      0.00000      0.00000  -1007.14531
  ----------       ---------    ---------    ---------    ---------    ---------
 
  STEEPD> Minimization exiting with function tolerance ( 0.0000100) satisfied.
+<<<<<<< HEAD
 SD pass 1 (free, all atoms): nstep=100 nprint=50
 Post MLpot mini GRMS: 0.1291 kcal/mol/Å
 Pre-dynamics GRMS OK: 0.1291 kcal/mol/Å (limit 50.0)
@@ -630,10 +849,13 @@ MLpot USER active before staged dynamics: USER=-1009.244342 kcal/mol
 HEAT: 8000 steps @ 0.00025 ps | restart=False | cons_fix: no monomers constrained
 Rescued existing DCD: /mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm2_smoke_v2/heat_dcm_2.dcd -> /mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm2_smoke_v2/heat_dcm_2.rescued.2.dcd
 MLpot USER active before HEAT: USER=-1009.244342 kcal/mol
+=======
+>>>>>>> e925ab14b (sadf)
 
 STPD MIN: Cycle      ENERgy      Delta-E         GRMS    Step-size
 STPD EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
  ----------       ---------    ---------    ---------    ---------    ---------
+<<<<<<< HEAD
 STPD>       40  -1009.24003      2.09472      0.01228      0.00000
 STPD EXTERN>        0.00000      0.00000      0.00000      0.00000  -1009.24003
  ----------       ---------    ---------    ---------    ---------    ---------
@@ -641,6 +863,15 @@ STPD EXTERN>        0.00000      0.00000      0.00000      0.00000  -1009.24003
  CHARMM>     write name /mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm2_smoke_v2/mini_full_mlpot_dcm_2.pdb -
  CHARMM>     coor pdb
  VOPEN> Attempting to open::/mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm2_smoke_v2/mini_full_mlpot_dcm_2.pdb::
+=======
+STPD>       35  -1009.23977      2.09445      0.01293      0.00000
+STPD EXTERN>        0.00000      0.00000      0.00000      0.00000  -1009.23977
+ ----------       ---------    ---------    ---------    ---------    ---------
+  
+ CHARMM>     write name /mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm2_nvt_bonded_test/mini_full_mlpot_dcm_2.pdb -
+ CHARMM>     coor pdb
+ VOPEN> Attempting to open::/mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm2_nvt_bonded_test/mini_full_mlpot_dcm_2.pdb::
+>>>>>>> e925ab14b (sadf)
  RDTITL> * MINI SD
  RDTITL> *
   Write CHARMM-pdb format
@@ -649,9 +880,15 @@ STPD EXTERN>        0.00000      0.00000      0.00000      0.00000  -1009.24003
  CHARMM>     
   
   
+<<<<<<< HEAD
  CHARMM>     write name /mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm2_smoke_v2/mini_full_mlpot_dcm_2.crd -
  CHARMM>     coor card
  VOPEN> Attempting to open::/mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm2_smoke_v2/mini_full_mlpot_dcm_2.crd::
+=======
+ CHARMM>     write name /mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm2_nvt_bonded_test/mini_full_mlpot_dcm_2.crd -
+ CHARMM>     coor card
+ VOPEN> Attempting to open::/mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm2_nvt_bonded_test/mini_full_mlpot_dcm_2.crd::
+>>>>>>> e925ab14b (sadf)
  RDTITL> * MINI SD
  RDTITL> *
  VCLOSE: Closing unit   91 with status "KEEP"
@@ -660,9 +897,15 @@ STPD EXTERN>        0.00000      0.00000      0.00000      0.00000  -1009.24003
  CHARMM>     
   
   
+<<<<<<< HEAD
  CHARMM>     write name /mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm2_smoke_v2/mini_full_mlpot_dcm_2.psf -
  CHARMM>     psf card
  VOPEN> Attempting to open::/mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm2_smoke_v2/mini_full_mlpot_dcm_2.psf::
+=======
+ CHARMM>     write name /mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm2_nvt_bonded_test/mini_full_mlpot_dcm_2.psf -
+ CHARMM>     psf card
+ VOPEN> Attempting to open::/mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm2_nvt_bonded_test/mini_full_mlpot_dcm_2.psf::
+>>>>>>> e925ab14b (sadf)
  RDTITL>  
  RDTITL> No title read.
  VCLOSE: Closing unit   91 with status "KEEP"
@@ -673,6 +916,7 @@ STPD EXTERN>        0.00000      0.00000      0.00000      0.00000  -1009.24003
 ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
 ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
  ----------       ---------    ---------    ---------    ---------    ---------
+<<<<<<< HEAD
 ENER>        0  -1009.24434      0.00431      0.12906
 ENER EXTERN>        0.00000      0.00000      0.00000      0.00000  -1009.24434
  ----------       ---------    ---------    ---------    ---------    ---------
@@ -685,10 +929,203 @@ ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
 ENER>        0  -1009.24434      0.00431      0.12906
 ENER EXTERN>        0.00000      0.00000      0.00000      0.00000  -1009.24434
  ----------       ---------    ---------    ---------    ---------    ---------
+=======
+ENER>        0  -1009.24417      0.00440      0.12596
+ENER EXTERN>        0.00000      0.00000      0.00000      0.00000  -1009.24417
+ ----------       ---------    ---------    ---------    ---------    ---------
+ VCLOSE: Closing unit   51 with status "KEEP"
+  
+ CHARMM>     BLOCK
+  
+  BLOCK>            CALL 1 SELE ALL END
+ SELRPN>     10 atoms have been selected out of     10
+ The selected atoms have been reassigned to block   1
+  
+  BLOCK>              COEFF 1 1 1.0
+  
+  BLOCK>            END
+ Matrix of Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of BOND Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of ANGLE Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of DIHE Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of CROSS Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of ELEC Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of VDW Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+  
+ CHARMM>     
+  
+  
+ CHARMM>     bomlev -2
+  
+ CHARMM>    wrnlev -2
+  
+  
+ CHARMM>     DELETE ATOM SELE ALL END
+ SELRPN>     10 atoms have been selected out of     10
+
+ Message from MAPIC: Atom numbers are changed.
+
+ Message from MAPIC:          2 residues deleted.
+
+ Message from MAPIC:          1 segments deleted.
+ PSFSUM> PSF modified: NONBOND lists and IMAGE atoms cleared.
+ PSFSUM> Summary of the structure file counters :
+         Number of segments      =        0   Number of residues   =        0
+         Number of atoms         =        0   Number of groups     =        0
+         Number of bonds         =        0   Number of angles     =        0
+         Number of dihedrals     =        0   Number of impropers  =        0
+         Number of cross-terms   =        0   Number of autogens   =        0
+         Number of HB acceptors  =        0   Number of HB donors  =        0
+         Number of NB exclusions =        0   Total charge =    0.00000
+  
+ CHARMM>    DELETE PSF SELE ALL END
+  
+  
+ CHARMM>     read psf card -
+ CHARMM>     name /mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm2_nvt_bonded_test/cluster_for_vmd_dcm_2.psf
+ VOPEN> Attempting to open::/mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm2_nvt_bonded_test/cluster_for_vmd_dcm_2.psf::
+ MAINIO> Protein structure file being read from unit  91.
+ psf_read_formatted: Reading PSF in the expanded format.
+ TITLE>  * EXECUTING CHARMM SCRIPT FROM PYTHON
+ TITLE>  *  DATE:     6/ 3/26     20:34:26      CREATED BY USER: boittier
+ TITLE>  *
+ PSFSUM> PSF modified: NONBOND lists and IMAGE atoms cleared.
+ PSFSUM> Summary of the structure file counters :
+         Number of segments      =        1   Number of residues   =        2
+         Number of atoms         =       10   Number of groups     =        2
+         Number of bonds         =        8   Number of angles     =       12
+         Number of dihedrals     =        0   Number of impropers  =        0
+         Number of cross-terms   =        0   Number of autogens   =        0
+         Number of HB acceptors  =        0   Number of HB donors  =        0
+         Number of NB exclusions =        0   Total charge =   -0.00000
+ VCLOSE: Closing unit   91 with status "KEEP"
+  
+ CHARMM>     
+  
+  
+ CHARMM>     bomlev -2
+  
+ CHARMM>    wrnlev 5
+  
+  
+ CHARMM>     crystal free
+  
+  
+ CHARMM>     nbonds cutnb 18.0 -
+ CHARMM>     ctonnb 13.0 -
+ CHARMM>     ctofnb 17.0 -
+ CHARMM>     eps 1.0 -
+ CHARMM>     cdie -
+ CHARMM>     atom -
+ CHARMM>     vatom -
+ CHARMM>     fswitch -
+ CHARMM>     vfswitch -
+ CHARMM>     nbxmod 5
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are        0 atom  pairs and        0 atom  exclusions.
+ There are        0 group pairs and        0 group exclusions.
+ <MAKINB> with mode   5 found     20 exclusions and      0 interactions(1-4)
+ <MAKGRP> found      0 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       41 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+       25 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+  
+ CHARMM>     
+  
+  
+ CHARMM>     BLOCK
+  
+  BLOCK>            CALL 1 SELE ALL END
+ SELRPN>     10 atoms have been selected out of     10
+ The selected atoms have been reassigned to block   1
+  
+  BLOCK>              COEFF 1 1 1.0
+  
+  BLOCK>            END
+ Matrix of Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of BOND Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+bonded-MM-mini: after mini: GRMS 7.6253 > 0.5808 kcal/mol/Å; running heavy bonded SD (pre-MLpot topology)
+Bonded-MM heavy mini start: GRMS=7.6389 kcal/mol/Å (pre-MLpot topology, MLpot detached), ANGL=1.0077 kcal/mol
+    1.00000   1.00000   1.00000
+ Matrix of ANGLE Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of DIHE Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of CROSS Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of ELEC Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of VDW Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+  
+ CHARMM>     
+>>>>>>> e925ab14b (sadf)
   
   
  CHARMM>     ENER
 ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+<<<<<<< HEAD
 ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
  ----------       ---------    ---------    ---------    ---------    ---------
 ENER>        0  -1009.24434      0.00431      0.12906
@@ -706,6 +1143,375 @@ ENER EXTERN>        0.00000      0.00000      0.00000      0.00000  -1009.24434
   
  VOPEN> Attempting to open::/mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm2_smoke_v2/heat_dcm_2.res::
  VOPEN> Attempting to open::/mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm2_smoke_v2/heat_dcm_2.dcd::
+=======
+ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0      1.45470  -1010.69887      7.62526
+ENER INTERN>        1.36359      1.00769      0.00032      0.00000      0.00000
+ENER EXTERN>       -0.96594      0.04904      0.00000      0.00000      0.00000
+ ----------       ---------    ---------    ---------    ---------    ---------
+  
+  
+ CHARMM>     BLOCK
+  
+  BLOCK>    CALL 1 SELE ALL END
+ SELRPN>     10 atoms have been selected out of     10
+ The selected atoms have been reassigned to block   1
+  
+  BLOCK>    COEFF 1 1 1.0 BOND 1.0 ANGL 1.0 DIHEdral 1.0 ELEC 0.0 VDW 0.0
+  
+  BLOCK>    END
+ Matrix of Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of BOND Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of ANGLE Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of DIHE Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of CROSS Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of ELEC Interaction Coefficients
+ 
+    0.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of VDW Interaction Coefficients
+ 
+    0.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+  
+ CHARMM>     
+  
+  
+ CHARMM>     ENER
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0      2.37160     -0.91690      7.63890
+ENER INTERN>        1.36359      1.00769      0.00032      0.00000      0.00000
+ ----------       ---------    ---------    ---------    ---------    ---------
+  
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are       25 atom  pairs and       20 atom  exclusions.
+ There are        0 group pairs and        0 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       41 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+       25 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+STPD MIN: Cycle      ENERgy      Delta-E         GRMS    Step-size
+STPD INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ ----------       ---------    ---------    ---------    ---------    ---------
+STPD>       14      0.54472      1.82689      0.19967      0.00028
+STPD INTERN>        0.00024      0.53393      0.01054      0.00000      0.00000
+ ----------       ---------    ---------    ---------    ---------    ---------
+  
+ CHARMM>     ENER
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+Bonded-MM heavy mini end: GRMS=0.1536 kcal/mol/Å, ANGL=0.5340 kcal/mol
+ NBXMOD =      5
+ There are       25 atom  pairs and       20 atom  exclusions.
+ There are        0 group pairs and        0 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       41 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+       25 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0      0.54462      0.00010      0.15357
+ENER INTERN>        0.00141      0.53399      0.00921      0.00000      0.00000
+ ----------       ---------    ---------    ---------    ---------    ---------
+  
+  
+ CHARMM>     bomlev -2
+  
+ CHARMM>    wrnlev -2
+  
+  
+ CHARMM>     BLOCK
+  
+  BLOCK>    CALL 1 SELE ALL END
+ SELRPN>     10 atoms have been selected out of     10
+ The selected atoms have been reassigned to block   1
+  
+  BLOCK>    COEFF 1 1 0.0 BOND 0.0 ANGL 0.0 DIHEdral 0.0 ELEC 0.0 VDW 0.0
+  
+  BLOCK>    END
+ Matrix of Interaction Coefficients
+ 
+    0.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of BOND Interaction Coefficients
+ 
+    0.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of ANGLE Interaction Coefficients
+ 
+    0.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of DIHE Interaction Coefficients
+ 
+    0.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of CROSS Interaction Coefficients
+ 
+    0.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of ELEC Interaction Coefficients
+ 
+    0.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of VDW Interaction Coefficients
+ 
+    0.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+  
+ CHARMM>     
+  
+ DELTIC:         8 bonds deleted
+ DELTIC:        12 angles deleted
+ <MAKINB> with mode   5 found     45 exclusions and      0 interactions(1-4)
+ <MAKGRP> found      1 group exclusions.
+ <MAKINB> with mode   5 found     45 exclusions and      0 interactions(1-4)
+ <MAKGRP> found      1 group exclusions.
+  
+ CHARMM>     update cutnb 18.0 -
+ CHARMM>     ctonnb 13.0 -
+ CHARMM>     ctofnb 17.0 -
+ CHARMM>     eps 1.0 -
+ CHARMM>     cdie -
+ CHARMM>     atom -
+ CHARMM>     vatom -
+ CHARMM>     fswitch -
+ CHARMM>     vfswitch -
+ CHARMM>     nbxmod 5
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are        0 atom  pairs and       45 atom  exclusions.
+ There are        0 group pairs and        1 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       41 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+        0 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+  
+ CHARMM>     
+  
+  
+ CHARMM>     bomlev -2
+  
+ CHARMM>    wrnlev 5
+  
+  
+ CHARMM>     ENER
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are        0 atom  pairs and       45 atom  exclusions.
+ There are        0 group pairs and        1 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       41 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+        0 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0      0.00000      0.54462      0.00000
+Pre-dynamics GRMS OK: 0.0000 kcal/mol/Å (limit 50.0)
+WARN: MLpot USER term missing before staged dynamics; attempting reattach
+MLpot USER active before staged dynamics: USER=-1007.274188 kcal/mol
+
+HEAT: 2000 steps @ 0.00025 ps | restart=False | cons_fix: no monomers constrained
+Rescued existing DCD: /mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm2_nvt_bonded_test/heat_dcm_2.dcd -> /mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm2_nvt_bonded_test/heat_dcm_2.rescued.5.dcd
+ ----------       ---------    ---------    ---------    ---------    ---------
+  
+  
+ CHARMM>     ENER
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are        0 atom  pairs and       45 atom  exclusions.
+ There are        0 group pairs and        1 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       41 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+        0 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0      0.00000      0.00000      0.00000
+ ----------       ---------    ---------    ---------    ---------    ---------
+  
+  
+ CHARMM>     BLOCK
+  
+  BLOCK>    CALL 1 SELE ALL END
+ SELRPN>     10 atoms have been selected out of     10
+ The selected atoms have been reassigned to block   1
+  
+  BLOCK>    COEFF 1 1 0.0 BOND 0.0 ANGL 0.0 DIHEdral 0.0 ELEC 0.0 VDW 0.0
+  
+  BLOCK>    END
+ Matrix of Interaction Coefficients
+ 
+    0.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of BOND Interaction Coefficients
+ 
+    0.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of ANGLE Interaction Coefficients
+ 
+    0.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of DIHE Interaction Coefficients
+ 
+    0.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of CROSS Interaction Coefficients
+ 
+    0.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of ELEC Interaction Coefficients
+ 
+    0.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of VDW Interaction Coefficients
+ 
+    0.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+  
+ CHARMM>     
+  
+  
+ CHARMM>     ENER
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are        0 atom  pairs and       45 atom  exclusions.
+ There are        0 group pairs and        1 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       41 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+        0 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0  -1007.27419      0.00000      9.03158
+ENER EXTERN>        0.00000      0.00000      0.00000      0.00000  -1007.27419
+ ----------       ---------    ---------    ---------    ---------    ---------
+  
+  
+ CHARMM>     ENER
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are        0 atom  pairs and       45 atom  exclusions.
+ There are        0 group pairs and        1 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       41 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+        0 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
+ ----------       ---------    ---------    ---------    ---------    ---------
+MLpot USER active before HEAT: USER=-1007.274188 kcal/mol
+ENER>        0  -1007.27419      0.00000      9.03158
+ENER EXTERN>        0.00000      0.00000      0.00000      0.00000  -1007.27419
+ ----------       ---------    ---------    ---------    ---------    ---------
+  
+ VOPEN> Attempting to open::/mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm2_nvt_bonded_test/heat_dcm_2.res::
+ VOPEN> Attempting to open::/mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm2_nvt_bonded_test/heat_dcm_2.dcd::
+>>>>>>> e925ab14b (sadf)
   
  CHARMM>     bomlev -3
  MISCOM> Setting BOMLev < -2 is NOT a good idea.
@@ -714,14 +1520,22 @@ ENER EXTERN>        0.00000      0.00000      0.00000      0.00000  -1009.24434
   
   
  CHARMM>     dynamics timestep 0.00025 -
+<<<<<<< HEAD
  CHARMM>     nstep 8000 -
+=======
+ CHARMM>     nstep 2000 -
+>>>>>>> e925ab14b (sadf)
  CHARMM>     nsavc 1 -
  CHARMM>     inbfrq -1 -
  CHARMM>     ihbfrq 0 -
  CHARMM>     ilbfrq 0 -
  CHARMM>     imgfrq 0 -
  CHARMM>     ixtfrq 1000 -
+<<<<<<< HEAD
  CHARMM>     nprint 100 -
+=======
+ CHARMM>     nprint 500 -
+>>>>>>> e925ab14b (sadf)
  CHARMM>     iprfrq 2000 -
  CHARMM>     isvfrq 2000 -
  CHARMM>     ntrfrq 1000 -
@@ -737,8 +1551,13 @@ ENER EXTERN>        0.00000      0.00000      0.00000      0.00000  -1009.24434
  CHARMM>     firstt 60.0 -
  CHARMM>     finalt 300.0 -
  CHARMM>     tbath 300.0 -
+<<<<<<< HEAD
  CHARMM>     ihtfrq 100 -
  CHARMM>     TEMINC 3.0 -
+=======
+ CHARMM>     ihtfrq 500 -
+ CHARMM>     TEMINC 60.0 -
+>>>>>>> e925ab14b (sadf)
  CHARMM>     iunwri 2 -
  CHARMM>     iuncrd 1
   IUNREA = -1         IUNWRI =  2          IUNOS = -1
@@ -753,6 +1572,7 @@ ENER EXTERN>        0.00000      0.00000      0.00000      0.00000  -1009.24434
  NBXMOD =      5
  There are        0 atom  pairs and       45 atom  exclusions.
  There are        0 group pairs and        1 group exclusions.
+<<<<<<< HEAD
    NSTEP =     8000    NSAVC =        1    NSAVV =       10
   ISCALE =        0   ISCVEL =        0   IASORS =        1
   IASVEL =        1   ICHECW =        0   NTRFRQ =     1000
@@ -761,16 +1581,31 @@ ENER EXTERN>        0.00000      0.00000      0.00000      0.00000  -1009.24434
   ILBFRQ =        0   IMGFRQ =        0
   ISVFRQ =     2000   NCYCLE =      100    NSNOS =       10
   FIRSTT =    60.000  TEMINC =     3.000  TSTRUC =  -999.000
+=======
+   NSTEP =     2000    NSAVC =        1    NSAVV =       10
+  ISCALE =        0   ISCVEL =        0   IASORS =        1
+  IASVEL =        1   ICHECW =        0   NTRFRQ =     1000
+  IHTFRQ =      500   IEQFRQ =        0   NPRINT =      500
+  INBFRQ =       -1   IHBFRQ =        0   IPRFRQ =     2000
+  ILBFRQ =        0   IMGFRQ =        0
+  ISVFRQ =     2000   NCYCLE =      500    NSNOS =       10
+  FIRSTT =    60.000  TEMINC =    60.000  TSTRUC =  -999.000
+>>>>>>> e925ab14b (sadf)
   FINALT =   300.000  TWINDH =    10.000  TWINDL =   -10.000
 
   TIME STEP =  5.11371E-03 AKMA       2.50000E-04 PS
 
+<<<<<<< HEAD
   RANDOM NUM. GEN. SEED(S) = 1288698460 1747808863 1239710061 462639211 692584715 1733674298 409506832 37848416
+=======
+  RANDOM NUM. GEN. SEED(S) = 395354917 1154576719 667338871 854769362 2058616143 839777564 551540987 1001173633
+>>>>>>> e925ab14b (sadf)
  NUMBER OF DEGREES OF FREEDOM =     24
 
           GAUSSIAN OPTION                  IS            1
           VELOCITIES ASSIGNED AT TEMPERATURE =     75.0000
           SEED FOR RANDOM NUMBER GENERATOR IS:
+<<<<<<< HEAD
           SEEDS> 1288698460 1747808863 1239710061 462639211 692584715 1733674298 409506832 37848416
 
      DETAILS ABOUT CENTRE OF MASS
@@ -778,11 +1613,21 @@ ENER EXTERN>        0.00000      0.00000      0.00000      0.00000  -1009.24434
      VELOCITY          :  -2.39878830E-02   2.50173969E-02  -3.55192724E-03
      ANGULAR MOMENTUM  :   -1.4867325        9.9445899       -13.469357    
      KINETIC ENERGY    :   0.10310058    
+=======
+          SEEDS> 395354917 1154576719 667338871 854769362 2058616143 839777564 551540987 1001173633
+
+     DETAILS ABOUT CENTRE OF MASS
+     POSITION          :    2.6551414       5.05540898E-02  -0.63625251    
+     VELOCITY          :   4.42067903E-02  -9.69597680E-03   4.72008551E-02
+     ANGULAR MOMENTUM  :   0.21636903        11.777055       -12.047436    
+     KINETIC ENERGY    :   0.36318820    
+>>>>>>> e925ab14b (sadf)
 DYNA DYN: Step         Time      TOTEner        TOTKe       ENERgy  TEMPerature
 DYNA PROP:             GRMS      HFCTote        HFCKe       EHFCor        VIRKe
 DYNA EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
 DYNA PRESS:            VIRE         VIRI       PRESSE       PRESSI       VOLUme
  ----------       ---------    ---------    ---------    ---------    ---------
+<<<<<<< HEAD
 DYNA>        0      0.00000  -1007.65112      1.59322  -1009.24434     66.81206
 DYNA PROP>          0.14429  -1007.65112      1.59322      0.00000     -1.60771
 DYNA EXTERN>        0.00000      0.00000      0.00000      0.00000  -1009.24434
@@ -1356,11 +2201,49 @@ FLUC PRESS>         0.00000     48.10219      0.00000      0.00000      0.00000
      ANGULAR MOMENTUM  :    1.6788857       -20.495814        28.276483    
      KINETIC ENERGY    :   0.38616049    
  WRIDYN: RESTart file was written at step    2000
+=======
+DYNA>        0      0.00000  -1004.93884      2.33535  -1007.27419     97.93344
+DYNA PROP>         10.09761  -1004.93685      2.34130      0.00198     84.14234
+DYNA EXTERN>        0.00000      0.00000      0.00000      0.00000  -1007.27419
+DYNA PRESS>         0.00000    -56.09489      0.00000      0.00000      0.00000
+ ----------       ---------    ---------    ---------    ---------    ---------
+ UPDECI: Nonbond update at step       149
+ UPDECI: MLpot update at step       149
+ UPDECI: Nonbond update at step       219
+ UPDECI: MLpot update at step       219
+ UPDECI: Nonbond update at step       309
+ UPDECI: MLpot update at step       309
+ UPDECI: Nonbond update at step       369
+ UPDECI: MLpot update at step       369
+ UPDECI: Nonbond update at step       403
+ UPDECI: MLpot update at step       403
+ UPDECI: Nonbond update at step       437
+ UPDECI: MLpot update at step       437
+ UPDECI: Nonbond update at step       472
+ UPDECI: MLpot update at step       472
+DYNA>      500      0.12500   -965.35357      9.45794   -974.81151    396.62105
+DYNA PROP>         18.27791   -965.34307      9.47148      0.01050     81.96602
+DYNA EXTERN>        0.00000      0.00000      0.00000      0.00000   -974.81151
+DYNA PRESS>         0.00000    -54.64401      0.00000      0.00000      0.00000
+ ----------       ---------    ---------    ---------    ---------    ---------
+
+          GAUSSIAN OPTION                  IS            1
+          VELOCITIES ASSIGNED AT TEMPERATURE =    120.0000
+          SEED FOR RANDOM NUMBER GENERATOR IS:
+          SEEDS> 395354917 1154576719 667338871 854769362 2058616143 839777564 551540987 1001173633
+
+     DETAILS ABOUT CENTRE OF MASS
+     POSITION          :    2.4969742       4.50825214E-02  -0.71740912    
+     VELOCITY          :   1.64000118E-03   9.84670880E-03  -2.93470613E-03
+     ANGULAR MOMENTUM  :    2.9887908        17.113051       -15.897029    
+     KINETIC ENERGY    :   9.19482774E-03
+>>>>>>> e925ab14b (sadf)
 DYNA DYN: Step         Time      TOTEner        TOTKe       ENERgy  TEMPerature
 DYNA PROP:             GRMS      HFCTote        HFCKe       EHFCor        VIRKe
 DYNA EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
 DYNA PRESS:            VIRE         VIRI       PRESSE       PRESSI       VOLUme
  ----------       ---------    ---------    ---------    ---------    ---------
+<<<<<<< HEAD
 DYNA>     2000      0.50000   -984.03641      2.00083   -986.03724     83.90536
 DYNA PROP>         19.36613   -984.02836      2.02498      0.00805   -151.06077
 DYNA EXTERN>        0.00000      0.00000      0.00000      0.00000   -986.03724
@@ -1948,11 +2831,61 @@ FLUC PRESS>         0.00000     91.55793      0.00000      0.00000      0.00000
      ANGULAR MOMENTUM  :    1.1673701       -24.250186       -28.441809    
      KINETIC ENERGY    :   0.34286169    
  WRIDYN: RESTart file was written at step    4000
+=======
+DYNA>      500      0.12500   -972.91923      1.89229   -974.81151     79.35346
+DYNA PROP>         18.27794   -972.91471      1.90583      0.00451     81.96743
+DYNA EXTERN>        0.00000      0.00000      0.00000      0.00000   -974.81151
+DYNA PRESS>         0.00000    -54.64495      0.00000      0.00000      0.00000
+ ----------       ---------    ---------    ---------    ---------    ---------
+ UPDECI: Nonbond update at step       561
+ UPDECI: MLpot update at step       561
+ UPDECI: Nonbond update at step       600
+ UPDECI: MLpot update at step       600
+ UPDECI: Nonbond update at step       640
+ UPDECI: MLpot update at step       640
+ UPDECI: Nonbond update at step       674
+ UPDECI: MLpot update at step       674
+ UPDECI: Nonbond update at step       707
+ UPDECI: MLpot update at step       707
+ UPDECI: Nonbond update at step       740
+ UPDECI: MLpot update at step       740
+ UPDECI: Nonbond update at step       771
+ UPDECI: MLpot update at step       771
+ UPDECI: Nonbond update at step       813
+ UPDECI: MLpot update at step       813
+ UPDECI: Nonbond update at step       848
+ UPDECI: MLpot update at step       848
+ UPDECI: Nonbond update at step       877
+ UPDECI: MLpot update at step       877
+ UPDECI: Nonbond update at step       912
+ UPDECI: MLpot update at step       912
+ UPDECI: Nonbond update at step       943
+ UPDECI: MLpot update at step       943
+ UPDECI: Nonbond update at step       978
+ UPDECI: MLpot update at step       978
+DYNA>     1000      0.25000   -957.15064     14.34435   -971.49499    601.53391
+DYNA PROP>         12.73371   -957.19450     14.35018     -0.04386    -53.06321
+DYNA EXTERN>        0.00000      0.00000      0.00000      0.00000   -971.49499
+DYNA PRESS>         0.00000     35.37548      0.00000      0.00000      0.00000
+ ----------       ---------    ---------    ---------    ---------    ---------
+
+          GAUSSIAN OPTION                  IS            1
+          VELOCITIES ASSIGNED AT TEMPERATURE =    180.0000
+          SEED FOR RANDOM NUMBER GENERATOR IS:
+          SEEDS> 395354917 1154576719 667338871 854769362 2058616143 839777564 551540987 1001173633
+
+     DETAILS ABOUT CENTRE OF MASS
+     POSITION          :    2.4337782       1.33712670E-02  -0.83753149    
+     VELOCITY          :   4.76323624E-02  -7.70173183E-03   5.01673192E-02
+     ANGULAR MOMENTUM  :   -4.0836318       -32.102000       -29.028777    
+     KINETIC ENERGY    :   0.41149347    
+>>>>>>> e925ab14b (sadf)
 DYNA DYN: Step         Time      TOTEner        TOTKe       ENERgy  TEMPerature
 DYNA PROP:             GRMS      HFCTote        HFCKe       EHFCor        VIRKe
 DYNA EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
 DYNA PRESS:            VIRE         VIRI       PRESSE       PRESSI       VOLUme
  ----------       ---------    ---------    ---------    ---------    ---------
+<<<<<<< HEAD
 DYNA>     4000      1.00000   -962.20765      4.25534   -966.46299    178.44876
 DYNA PROP>         27.11669   -962.19730      4.28639      0.01035   -329.30386
 DYNA EXTERN>        0.00000      0.00000      0.00000      0.00000   -966.46299
@@ -2518,11 +3451,67 @@ FLUC PRESS>         0.00000     26.90337      0.00000      0.00000      0.00000
      ANGULAR MOMENTUM  :   -4.5392905        30.119623       -10.846145    
      KINETIC ENERGY    :   0.46490483    
  WRIDYN: RESTart file was written at step    6000
+=======
+DYNA>     1000      0.25000   -966.64701      4.84798   -971.49499    203.30114
+DYNA PROP>         12.73371   -966.64507      4.85380      0.00194    -53.06321
+DYNA EXTERN>        0.00000      0.00000      0.00000      0.00000   -971.49499
+DYNA PRESS>         0.00000     35.37548      0.00000      0.00000      0.00000
+ ----------       ---------    ---------    ---------    ---------    ---------
+ UPDECI: Nonbond update at step      1045
+ UPDECI: MLpot update at step      1045
+ UPDECI: Nonbond update at step      1092
+ UPDECI: MLpot update at step      1092
+ UPDECI: Nonbond update at step      1131
+ UPDECI: MLpot update at step      1131
+ UPDECI: Nonbond update at step      1168
+ UPDECI: MLpot update at step      1168
+ UPDECI: Nonbond update at step      1206
+ UPDECI: MLpot update at step      1206
+ UPDECI: Nonbond update at step      1238
+ UPDECI: MLpot update at step      1238
+ UPDECI: Nonbond update at step      1265
+ UPDECI: MLpot update at step      1265
+ UPDECI: Nonbond update at step      1295
+ UPDECI: MLpot update at step      1295
+ UPDECI: Nonbond update at step      1324
+ UPDECI: MLpot update at step      1324
+ UPDECI: Nonbond update at step      1346
+ UPDECI: MLpot update at step      1346
+ UPDECI: Nonbond update at step      1379
+ UPDECI: MLpot update at step      1379
+ UPDECI: Nonbond update at step      1404
+ UPDECI: MLpot update at step      1404
+ UPDECI: Nonbond update at step      1428
+ UPDECI: MLpot update at step      1428
+ UPDECI: Nonbond update at step      1453
+ UPDECI: MLpot update at step      1453
+ UPDECI: Nonbond update at step      1477
+ UPDECI: MLpot update at step      1477
+ UPDECI: Nonbond update at step      1499
+ UPDECI: MLpot update at step      1499
+DYNA>     1500      0.37500   -945.30366     23.70779   -969.01145    994.19200
+DYNA PROP>          8.84464   -945.28107     23.71004      0.02259      5.87692
+DYNA EXTERN>        0.00000      0.00000      0.00000      0.00000   -969.01145
+DYNA PRESS>         0.00000     -3.91795      0.00000      0.00000      0.00000
+ ----------       ---------    ---------    ---------    ---------    ---------
+
+          GAUSSIAN OPTION                  IS            1
+          VELOCITIES ASSIGNED AT TEMPERATURE =    240.0000
+          SEED FOR RANDOM NUMBER GENERATOR IS:
+          SEEDS> 395354917 1154576719 667338871 854769362 2058616143 839777564 551540987 1001173633
+
+     DETAILS ABOUT CENTRE OF MASS
+     POSITION          :    2.3476127      -1.67334008E-02  -0.83182234    
+     VELOCITY          :  -2.84083170E-02  -4.48751903E-02   0.11625298    
+     ANGULAR MOMENTUM  :   -2.3264300        21.413692       -10.212969    
+     KINETIC ENERGY    :    1.3874291    
+>>>>>>> e925ab14b (sadf)
 DYNA DYN: Step         Time      TOTEner        TOTKe       ENERgy  TEMPerature
 DYNA PROP:             GRMS      HFCTote        HFCKe       EHFCor        VIRKe
 DYNA EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
 DYNA PRESS:            VIRE         VIRI       PRESSE       PRESSI       VOLUme
  ----------       ---------    ---------    ---------    ---------    ---------
+<<<<<<< HEAD
 DYNA>     6000      1.50000   -973.57177      7.54835   -981.12012    316.54190
 DYNA PROP>         10.23921   -973.57082      7.55120      0.00095    -50.53722
 DYNA EXTERN>        0.00000      0.00000      0.00000      0.00000   -981.12012
@@ -3076,14 +4065,46 @@ DYNA PRESS>         0.00000    -21.19701      0.00000      0.00000      0.00000
  UPDECI: MLpot update at step      7922
 
    8000   COORDINATE SETS STARTING FROM
+=======
+DYNA>     1500      0.37500   -960.51209      8.49936   -969.01145    356.42257
+DYNA PROP>          8.84464   -960.51134      8.50161      0.00075      5.87693
+DYNA EXTERN>        0.00000      0.00000      0.00000      0.00000   -969.01145
+DYNA PRESS>         0.00000     -3.91795      0.00000      0.00000      0.00000
+ ----------       ---------    ---------    ---------    ---------    ---------
+ UPDECI: Nonbond update at step      1594
+ UPDECI: MLpot update at step      1594
+ UPDECI: Nonbond update at step      1663
+ UPDECI: MLpot update at step      1663
+ UPDECI: Nonbond update at step      1724
+ UPDECI: MLpot update at step      1724
+ UPDECI: Nonbond update at step      1781
+ UPDECI: MLpot update at step      1781
+ UPDECI: Nonbond update at step      1834
+ UPDECI: MLpot update at step      1834
+ UPDECI: Nonbond update at step      1888
+ UPDECI: MLpot update at step      1888
+ UPDECI: Nonbond update at step      1939
+ UPDECI: MLpot update at step      1939
+ UPDECI: Nonbond update at step      1987
+ UPDECI: MLpot update at step      1987
+
+   2000   COORDINATE SETS STARTING FROM
+>>>>>>> e925ab14b (sadf)
      STEP NO        1   FOR EVERY     1  STEPS
      WRITTEN ON UNIT    1
 
  VCLOSE: Closing unit    1 with status "KEEP"
+<<<<<<< HEAD
 DYNA>     8000      2.00000   -962.95074      8.11488   -971.06562    340.29945
 DYNA PROP>         14.24499   -962.98540      8.12501     -0.03466    -69.64119
 DYNA EXTERN>        0.00000      0.00000      0.00000      0.00000   -971.06562
 DYNA PRESS>         0.00000     46.42746      0.00000      0.00000      0.00000
+=======
+DYNA>     2000      0.50000   -960.08153     11.01408   -971.09561    461.87831
+DYNA PROP>         12.61776   -960.00943     11.02172      0.07210    -80.92217
+DYNA EXTERN>        0.00000      0.00000      0.00000      0.00000   -971.09561
+DYNA PRESS>         0.00000     53.94811      0.00000      0.00000      0.00000
+>>>>>>> e925ab14b (sadf)
  ----------       ---------    ---------    ---------    ---------    ---------
  DYNAMC> Averages for the last 2000 steps:
 AVER DYN: Step         Time      TOTEner        TOTKe       ENERgy  TEMPerature
@@ -3091,6 +4112,7 @@ AVER PROP:             GRMS      HFCTote        HFCKe       EHFCor        VIRKe
 AVER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
 AVER PRESS:            VIRE         VIRI       PRESSE       PRESSI       VOLUme
  ----------       ---------    ---------    ---------    ---------    ---------
+<<<<<<< HEAD
 AVER>     2000      2.00000   -963.04477      9.08042   -972.12518    380.78947
 AVER PROP>         15.67708   -963.05485      9.09197     -0.01008     11.36235
 AVER EXTERN>        0.00000      0.00000      0.00000      0.00000   -972.12518
@@ -3106,10 +4128,28 @@ FLUC PRESS>         0.00000     80.51278      0.00000      0.00000      0.00000
      DRIFT/STEP (LAST-TOTAL):    3.09710616E-03   3.09710616E-03
      E AT STEP 0            :    -966.15350       -966.15350    
      CORR. COEFFICIENT      :    0.26949100       0.26949100    
+=======
+AVER>     2000      0.50000   -966.19428     11.90993   -978.10421    499.44579
+AVER PROP>         12.25007   -966.20487     11.91683     -0.01059     10.72139
+AVER EXTERN>        0.00000      0.00000      0.00000      0.00000   -978.10421
+AVER PRESS>         0.00000     -7.14759      0.00000      0.00000      0.00000
+ ----------       ---------    ---------    ---------    ---------    ---------
+ DYNAMC> RMS fluctuations for the last 2000 steps:
+FLUC>     2000      0.50000     12.71587      6.11396      9.45415    256.39033
+FLUC PROP>          5.33660     12.72181      6.11412      0.08609     53.63920
+FLUC EXTERN>        0.00000      0.00000      0.00000      0.00000      9.45415
+FLUC PRESS>         0.00000     35.75946      0.00000      0.00000      0.00000
+ ----------       ---------    ---------    ---------    ---------    ---------
+
+     DRIFT/STEP (LAST-TOTAL):    1.70084285E-02   1.70084285E-02
+     E AT STEP 0            :    -983.22180       -983.22180    
+     CORR. COEFFICIENT      :    0.77188851       0.77188851    
+>>>>>>> e925ab14b (sadf)
 
           GAUSSIAN OPTION                  IS            1
           VELOCITIES ASSIGNED AT TEMPERATURE =    300.0000
           SEED FOR RANDOM NUMBER GENERATOR IS:
+<<<<<<< HEAD
           SEEDS> 1288698460 1747808863 1239710061 462639211 692584715 1733674298 409506832 37848416
 
      DETAILS ABOUT CENTRE OF MASS
@@ -3141,6 +4181,24 @@ Staged workflow OK (mini,heat) -> /mmhome/boittier/home/mmml/artifacts/pycharmm_
 
   Prefer cluster_for_vmd_dcm_2.psf in VMD (full connectivity). mini_full_mlpot_dcm_2.psf is the in-memory PSF after MLpot registration.
 mmml md-system: wrote job manifest artifacts/md_system/jobs/dcm2_smoke_v2.json
+=======
+          SEEDS> 395354917 1154576719 667338871 854769362 2058616143 839777564 551540987 1001173633
+
+     DETAILS ABOUT CENTRE OF MASS
+     POSITION          :    2.3910090       1.66556561E-02  -0.78792152    
+     VELOCITY          :  -9.40628278E-02  -4.02746202E-03  -2.13368009E-02
+     ANGULAR MOMENTUM  :   0.80785119        28.082352        59.918854    
+     KINETIC ENERGY    :   0.79151569    
+ WRIDYN: RESTart file was written at step    2000
+ VCLOSE: Closing unit    2 with status "KEEP"
+
+     DETAILS ABOUT CENTRE OF MASS
+     POSITION          :    2.3910090       1.66556561E-02  -0.78792152    
+     VELOCITY          :    0.0000000      -1.30717510E-18  -7.84305058E-18
+     ANGULAR MOMENTUM  :   6.41232724E-16  -3.18546388E-15   1.38535869E-14
+     KINETIC ENERGY    :   5.36964679E-33
+bonded-MM-mini: reloading pre-MLpot topology for all-ML recovery: cluster_for_vmd_dcm_2.psf
+>>>>>>> e925ab14b (sadf)
   
  CHARMM>     
   
@@ -3199,6 +4257,7 @@ mmml md-system: wrote job manifest artifacts/md_system/jobs/dcm2_smoke_v2.json
   
  CHARMM>     
   
+<<<<<<< HEAD
       $$$$$$  New timer profile Local node$$$$$
    First List                      0.01 Other:            0.00
       Comm coords                     0.01 Other:            0.00
@@ -3243,10 +4302,599 @@ mmml md-system: wrote job manifest artifacts/md_system/jobs/dcm2_smoke_v2.json
       Comm force                      0.01 Other:            0.00
    Energy time                    72.34 Other:            0.07
  Total time                    166.47 Other:           92.84
+=======
+  
+ CHARMM>     bomlev -2
+  
+ CHARMM>    wrnlev -2
+  
+  
+ CHARMM>     DELETE ATOM SELE ALL END
+ SELRPN>     10 atoms have been selected out of     10
+
+ Message from MAPIC: Atom numbers are changed.
+
+ Message from MAPIC:          2 residues deleted.
+
+ Message from MAPIC:          1 segments deleted.
+ PSFSUM> PSF modified: NONBOND lists and IMAGE atoms cleared.
+ PSFSUM> Summary of the structure file counters :
+         Number of segments      =        0   Number of residues   =        0
+         Number of atoms         =        0   Number of groups     =        0
+         Number of bonds         =        0   Number of angles     =        0
+         Number of dihedrals     =        0   Number of impropers  =        0
+         Number of cross-terms   =        0   Number of autogens   =        0
+         Number of HB acceptors  =        0   Number of HB donors  =        0
+         Number of NB exclusions =        0   Total charge =    0.00000
+  
+ CHARMM>    DELETE PSF SELE ALL END
+  
+  
+ CHARMM>     read psf card -
+ CHARMM>     name /mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm2_nvt_bonded_test/cluster_for_vmd_dcm_2.psf
+ VOPEN> Attempting to open::/mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm2_nvt_bonded_test/cluster_for_vmd_dcm_2.psf::
+ MAINIO> Protein structure file being read from unit  91.
+ psf_read_formatted: Reading PSF in the expanded format.
+ TITLE>  * EXECUTING CHARMM SCRIPT FROM PYTHON
+ TITLE>  *  DATE:     6/ 3/26     20:34:26      CREATED BY USER: boittier
+ TITLE>  *
+ PSFSUM> PSF modified: NONBOND lists and IMAGE atoms cleared.
+ PSFSUM> Summary of the structure file counters :
+         Number of segments      =        1   Number of residues   =        2
+         Number of atoms         =       10   Number of groups     =        2
+         Number of bonds         =        8   Number of angles     =       12
+         Number of dihedrals     =        0   Number of impropers  =        0
+         Number of cross-terms   =        0   Number of autogens   =        0
+         Number of HB acceptors  =        0   Number of HB donors  =        0
+         Number of NB exclusions =        0   Total charge =   -0.00000
+ VCLOSE: Closing unit   91 with status "KEEP"
+  
+ CHARMM>     
+  
+  
+ CHARMM>     bomlev -2
+  
+ CHARMM>    wrnlev 5
+  
+  
+ CHARMM>     crystal free
+  
+  
+ CHARMM>     nbonds cutnb 18.0 -
+ CHARMM>     ctonnb 13.0 -
+ CHARMM>     ctofnb 17.0 -
+ CHARMM>     eps 1.0 -
+ CHARMM>     cdie -
+ CHARMM>     atom -
+ CHARMM>     vatom -
+ CHARMM>     fswitch -
+ CHARMM>     vfswitch -
+ CHARMM>     nbxmod 5
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are        0 atom  pairs and        0 atom  exclusions.
+bonded-MM-mini: after heat: GRMS 1069.4922 > 0.5808 kcal/mol/Å; running heavy bonded SD (pre-MLpot topology)
+ There are        0 group pairs and        0 group exclusions.
+ <MAKINB> with mode   5 found     20 exclusions and      0 interactions(1-4)
+ <MAKGRP> found      0 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       41 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+       25 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+  
+ CHARMM>     
+  
+  
+ CHARMM>     BLOCK
+  
+  BLOCK>            CALL 1 SELE ALL END
+ SELRPN>     10 atoms have been selected out of     10
+ The selected atoms have been reassigned to block   1
+  
+  BLOCK>              COEFF 1 1 1.0
+  
+  BLOCK>            END
+ Matrix of Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of BOND Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of ANGLE Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of DIHE Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of CROSS Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of ELEC Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of VDW Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+  
+ CHARMM>     
+  
+  
+ CHARMM>     ENER
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are       25 atom  pairs and       20 atom  exclusions.
+ There are        0 group pairs and        0 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       41 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+       25 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0  13418.59368      0.00000   1069.49225
+ENER INTERN>    12572.63076    643.53158    202.83224      0.00000      0.00000
+ENER EXTERN>       -0.39045     -0.01046      0.00000      0.00000      0.00000
+ ----------       ---------    ---------    ---------    ---------    ---------
+  
+  
+ CHARMM>     BLOCK
+  
+  BLOCK>    CALL 1 SELE ALL END
+ SELRPN>     10 atoms have been selected out of     10
+ The selected atoms have been reassigned to block   1
+  
+  BLOCK>    COEFF 1 1 1.0 BOND 1.0 ANGL 1.0 DIHEdral 1.0 ELEC 0.0 VDW 0.0
+  
+  BLOCK>    END
+ Matrix of Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of BOND Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of ANGLE Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of DIHE Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of CROSS Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of ELEC Interaction Coefficients
+ 
+    0.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of VDW Interaction Coefficients
+ 
+    0.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+  
+ CHARMM>     
+  
+  
+ CHARMM>     ENER
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+Bonded-MM heavy mini start: GRMS=1069.4871 kcal/mol/Å (pre-MLpot topology, MLpot detached), ANGL=643.5316 kcal/mol
+ NBXMOD =      5
+ There are       25 atom  pairs and       20 atom  exclusions.
+ There are        0 group pairs and        0 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       41 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+       25 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0  13418.99458     -0.40091   1069.48713
+ENER INTERN>    12572.63076    643.53158    202.83224      0.00000      0.00000
+ ----------       ---------    ---------    ---------    ---------    ---------
+  
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are       25 atom  pairs and       20 atom  exclusions.
+ There are        0 group pairs and        0 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       41 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+       25 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ UPDECI: Nonbond update at step         8
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       41 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+       25 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ UPDECI: Nonbond update at step        11
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       41 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+       25 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ UPDECI: Nonbond update at step        13
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       41 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+       25 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ UPDECI: Nonbond update at step        15
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       41 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+       25 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ UPDECI: Nonbond update at step        16
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       41 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+       25 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ UPDECI: Nonbond update at step        17
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       41 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+       25 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ UPDECI: Nonbond update at step        18
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       41 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+       25 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ UPDECI: Nonbond update at step        19
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       41 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+       25 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ UPDECI: Nonbond update at step        20
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       41 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+Bonded-MM heavy mini end: GRMS=0.3707 kcal/mol/Å, ANGL=0.5359 kcal/mol
+       25 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ UPDECI: Nonbond update at step        21
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       41 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+       25 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ UPDECI: Nonbond update at step        32
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       41 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+       25 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+STPD MIN: Cycle      ENERgy      Delta-E         GRMS    Step-size
+STPD INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ ----------       ---------    ---------    ---------    ---------    ---------
+STPD>       50      0.54739  13418.44719      0.37072      0.00104
+STPD INTERN>        0.00165      0.53593      0.00981      0.00000      0.00000
+ ----------       ---------    ---------    ---------    ---------    ---------
+  
+ CHARMM>     ENER
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are       25 atom  pairs and       20 atom  exclusions.
+ There are        0 group pairs and        0 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       41 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+       25 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0      0.54739  13418.44719      0.37072
+ENER INTERN>        0.00165      0.53593      0.00981      0.00000      0.00000
+ ----------       ---------    ---------    ---------    ---------    ---------
+  
+  
+ CHARMM>     bomlev -2
+  
+ CHARMM>    wrnlev -2
+  
+  
+ CHARMM>     BLOCK
+  
+  BLOCK>    CALL 1 SELE ALL END
+ SELRPN>     10 atoms have been selected out of     10
+ The selected atoms have been reassigned to block   1
+  
+  BLOCK>    COEFF 1 1 0.0 BOND 0.0 ANGL 0.0 DIHEdral 0.0 ELEC 0.0 VDW 0.0
+  
+  BLOCK>    END
+ Matrix of Interaction Coefficients
+ 
+    0.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of BOND Interaction Coefficients
+ 
+    0.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of ANGLE Interaction Coefficients
+ 
+    0.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of DIHE Interaction Coefficients
+ 
+    0.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of CROSS Interaction Coefficients
+ 
+    0.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of ELEC Interaction Coefficients
+ 
+    0.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of VDW Interaction Coefficients
+ 
+    0.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+  
+ CHARMM>     
+  
+ DELTIC:         8 bonds deleted
+ DELTIC:        12 angles deleted
+ <MAKINB> with mode   5 found     45 exclusions and      0 interactions(1-4)
+ <MAKGRP> found      1 group exclusions.
+ <MAKINB> with mode   5 found     45 exclusions and      0 interactions(1-4)
+ <MAKGRP> found      1 group exclusions.
+  
+ CHARMM>     update cutnb 18.0 -
+ CHARMM>     ctonnb 13.0 -
+ CHARMM>     ctofnb 17.0 -
+ CHARMM>     eps 1.0 -
+ CHARMM>     cdie -
+ CHARMM>     atom -
+ CHARMM>     vatom -
+ CHARMM>     fswitch -
+ CHARMM>     vfswitch -
+ CHARMM>     nbxmod 5
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  FSWItch  VATOm    VFSWIt  
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 18.000 CTEXNB =999.000 CTONNB = 13.000 CTOFNB = 17.000
+
+Staged workflow OK (mini,heat) -> /mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm2_nvt_bonded_test
+
+=== VMD ===
+  Atoms in this run: 10
+  Topology (bonds):  /mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm2_nvt_bonded_test/cluster_for_vmd_dcm_2.psf
+  Trajectories:
+    /mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm2_nvt_bonded_test/mini_charmm_mm_dcm_2.dcd
+    /mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm2_nvt_bonded_test/mini_full_mlpot_dcm_2.dcd
+    /mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm2_nvt_bonded_test/heat_dcm_2.dcd
+
+  vmd /mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm2_nvt_bonded_test/cluster_for_vmd_dcm_2.psf
+  # or: vmd -e /mmhome/boittier/home/mmml/artifacts/pycharmm_mlpot/dcm2_nvt_bonded_test/load_dcm_2_in_vmd.tcl
+
+  Prefer cluster_for_vmd_dcm_2.psf in VMD (full connectivity). mini_full_mlpot_dcm_2.psf is the in-memory PSF after MLpot registration.
+mmml md-system: wrote job manifest artifacts/md_system/jobs/dcm2_nvt_bonded_test.json
+ CGONNB =  0.000 CGOFNB = 10.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are        0 atom  pairs and       45 atom  exclusions.
+ There are        0 group pairs and        1 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR       41 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+        0 ATOM PAIRS WERE FOUND FOR ATOM LIST
+        0 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+  
+ CHARMM>     
+  
+  
+ CHARMM>     bomlev -2
+  
+ CHARMM>    wrnlev 5
+  
+  
+ CHARMM>     BLOCK
+  
+  BLOCK>            CALL 1 SELE ALL END
+ SELRPN>     10 atoms have been selected out of     10
+ The selected atoms have been reassigned to block   1
+  
+  BLOCK>              COEFF 1 1 1.0
+  
+  BLOCK>            END
+ Matrix of Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of BOND Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of ANGLE Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of DIHE Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of CROSS Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of ELEC Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+ Matrix of VDW Interaction Coefficients
+ 
+    1.00000
+    1.00000   1.00000
+    1.00000   1.00000   1.00000
+  
+ CHARMM>     
+  
+      $$$$$$  New timer profile Local node$$$$$
+   First List                      0.01 Other:            0.00
+      Comm coords                     0.00 Other:            0.00
+         Comm variables                  0.00 Other:            0.00
+         Save shake coords               0.00 Other:            0.00
+         Heuristic check                 0.00 Other:            0.00
+         Temp and virial calc            0.00 Other:            0.00
+      dynamc                          0.10 Other:            0.09
+   Dynamics total                  0.12 Other:            0.01
+      Heuristic check                 0.00 Other:            0.00
+      NBONDS                          0.00 Other:            0.00
+   List time                       0.29 Other:            0.28
+      Nonbond force                   0.01 Other:            0.00
+         Bond energy                     0.01 Other:            0.00
+         Angle energy                    0.00 Other:            0.00
+         Dihedral energy                 0.00 Other:            0.00
+         Restraints energy               0.00 Other:            0.00
+      INTRNL energy                  20.08 Other:           20.05
+      Comm energy                     0.00 Other:            0.00
+      Comm force                      0.00 Other:            0.00
+   Energy time                    20.11 Other:            0.02
+ Total time                    112.05 Other:           91.53
+         $$$$$$  Average   profile $$$$$
+   First List                      0.01 Other:            0.00
+      Comm coords                     0.00 Other:            0.00
+         Comm variables                  0.00 Other:            0.00
+         Save shake coords               0.00 Other:            0.00
+         Heuristic check                 0.00 Other:            0.00
+         Temp and virial calc            0.00 Other:            0.00
+      dynamc                          0.10 Other:            0.09
+   Dynamics total                  0.12 Other:            0.01
+      Heuristic check                 0.00 Other:            0.00
+      NBONDS                          0.00 Other:            0.00
+   List time                       0.29 Other:            0.28
+      Nonbond force                   0.01 Other:            0.00
+         Bond energy                     0.01 Other:            0.00
+         Angle energy                    0.00 Other:            0.00
+         Dihedral energy                 0.00 Other:            0.00
+         Restraints energy               0.00 Other:            0.00
+      INTRNL energy                  20.08 Other:           20.05
+      Comm energy                     0.00 Other:            0.00
+      Comm force                      0.00 Other:            0.00
+   Energy time                    20.11 Other:            0.02
+ Total time                    112.05 Other:           91.53
+>>>>>>> e925ab14b (sadf)
 
                     NORMAL TERMINATION BY NORMAL STOP
                     MOST SEVERE WARNING WAS AT LEVEL  0
 
                     $$$$$ JOB ACCOUNTING INFORMATION $$$$$
+<<<<<<< HEAD
                      ELAPSED TIME:     2.78  MINUTES 
                          CPU TIME:     1.47  MINUTES 
+=======
+                     ELAPSED TIME:     1.87  MINUTES 
+                         CPU TIME:    33.13  SECONDS 
+>>>>>>> e925ab14b (sadf)
