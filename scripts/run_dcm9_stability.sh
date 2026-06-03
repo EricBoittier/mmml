@@ -38,7 +38,8 @@
 #   Removed prior DCD          (or pull latest repo; old builds say Rescued)
 # If heat stops early (~1–3k steps): grep 'TOLERANCE\\|echeck' in the log.
 #   DCM:9 auto-loosens echeck (9 monomers); override with --no-echeck if needed.
-#   Heat: 0 K -> 240 K; iasors=0 scaling (see mmml/.../mlpot/COMP_AND_HEATING.md).
+#   Heat: 0 K -> 240 K; default --heat-thermostat hoover (CHARMM NVT, no ihtfrq).
+#   Use --heat-thermostat scale for legacy IHTFRQ velocity rescaling.
 #   COMP is OFF by default — do not enable --heat-comp-damp unless testing COMP.
 #   H-on-C overlap in early DCD frames: X-H not constrained (no SHAKE); verify mini + frames 0-2.
 #   Overlap rescue (default): inter-monomer bonded+VDW SD/ABNR; intra-monomer bonded SD
@@ -74,6 +75,7 @@ MD_STAGES="${MD_STAGES:-mini,heat}"
 PS_HEAT="${PS_HEAT:-20.0}"
 HEAT_FIRSTT="${HEAT_FIRSTT:-0}"
 HEAT_FINALT="${HEAT_FINALT:-240}"
+HEAT_THERMOSTAT="${HEAT_THERMOSTAT:-hoover}"
 HEAT_IHTFRQ="${HEAT_IHTFRQ:-100}"
 MINI_NSTEP="${MINI_NSTEP:-150}"
 DYN_NPRINT="${DYN_NPRINT:-500}"
@@ -114,6 +116,7 @@ exec "$MPIRUN" md-system \
   --ps-heat "$PS_HEAT" \
   --heat-firstt "$HEAT_FIRSTT" \
   --heat-finalt "$HEAT_FINALT" \
+  --heat-thermostat "$HEAT_THERMOSTAT" \
   --heat-ihtfrq "$HEAT_IHTFRQ" \
   --dyn-nprint "$DYN_NPRINT" \
   --dyn-iprfrq 2000 \
