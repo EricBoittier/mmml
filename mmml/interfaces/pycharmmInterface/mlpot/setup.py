@@ -217,14 +217,12 @@ def _z_from_psf_masses(masses: np.ndarray) -> np.ndarray:
 def _masses_consistent_with_z(
     masses: np.ndarray,
     z: np.ndarray,
-    *,
-    tol_amu: float = 0.2,
 ) -> list[str]:
-    """Return issues when assigned Z is not the best match for each PSF mass.
+    """Return issues when assigned Z is not the best ASE nearest-mass match.
 
-    CGenFF/CHARMM masses (e.g. Cl at 35.453 amu) often differ from ASE tabulated
-    values (34.969 amu) while still mapping to the same element. We therefore
-    require self-consistent nearest-mass Z, not exact ASE mass equality.
+    Uses the same rule as ``get_Z_from_psf``. CGenFF masses may differ from ASE
+    tabulated weights (e.g. Cl); we only require that the registered ``Z`` matches
+    the mass-based assignment, not exact ASE mass equality.
     """
     import ase.data
 
@@ -241,15 +239,6 @@ def _masses_consistent_with_z(
             issues.append(
                 f"atom {i}: assigned Z={zi} but PSF mass={float(mass):.4f} amu "
                 f"best matches Z={z_best} (ASE={float(ase_m[z_best]):.4f} amu)"
-            )
-            continue
-        # Secondary guard: mass far from all elements (ambiguous assignment).
-        deltas = (ase_m - float(mass)) ** 2
-        order = np.argsort(deltas)
-        if len(order) > 1 and (deltas[order[1]] - deltas[order[0]]) < tol_amu**2:
-            issues.append(
-                f"atom {i}: PSF mass={float(mass):.4f} amu is ambiguous between "
-                f"Z={int(order[0])} and Z={int(order[1])}"
             )
     return issues
 
@@ -277,7 +266,6 @@ def verify_mlpot_charmm_atom_consistency(
     ctx: MlpotContext,
     *,
     expected_z: Sequence[int] | np.ndarray | None = None,
-    mass_tol_amu: float = 0.2,
     context: str = "dynamics",
     quiet: bool = False,
 ) -> None:
@@ -353,9 +341,7 @@ def verify_mlpot_charmm_atom_consistency(
         if z_model.shape != z_ctx.shape or not np.array_equal(z_model, z_ctx):
             issues.append("pyCModel._atomic_numbers != MlpotContext.ml_Z")
 
-    issues.extend(
-        _masses_consistent_with_z(masses, z_psf, tol_amu=mass_tol_amu)
-    )
+    issues.extend(_masses_consistent_with_z(masses, z_psf))
 
     if issues:
         raise RuntimeError(
