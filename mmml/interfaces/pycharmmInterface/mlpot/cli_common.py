@@ -554,6 +554,11 @@ def build_cluster_from_args_with_tag(
                 charmm_abnr_steps=int(getattr(args, "charmm_abnr_steps", 100)),
                 charmm_tolenr=float(getattr(args, "charmm_tolenr", 1e-3)),
                 charmm_tolgrd=float(getattr(args, "charmm_tolgrd", 1e-3)),
+                scratch_dir=(
+                    Path(args.output_dir) / "packmol_sphere"
+                    if getattr(args, "output_dir", None) is not None
+                    else None
+                ),
                 verbose=not getattr(args, "quiet", False),
             )
             fb_r = getattr(args, "flat_bottom_radius", None)

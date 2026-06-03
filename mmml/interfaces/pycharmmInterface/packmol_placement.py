@@ -249,6 +249,7 @@ def run_packmol_sphere_mixed(
     radius: float,
     *,
     output_pdb: str | Path = "pdb/init-packmol-sphere.pdb",
+    input_path: str | Path | None = None,
     tolerance: float = 2.0,
     seed: int | None = None,
 ) -> str:
@@ -287,7 +288,7 @@ def run_packmol_sphere_mixed(
         + "\n\n".join(structure_lines)
         + "\n"
     )
-    inp_path = Path("packmol") / "packmol_sphere.inp"
+    inp_path = Path(input_path) if input_path is not None else Path("packmol") / "packmol_sphere.inp"
     execute_packmol_script(packmol_input, inp_path)
     print(f"Generated {out}", flush=True)
     return str(out)
