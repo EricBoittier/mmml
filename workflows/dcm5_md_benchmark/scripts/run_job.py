@@ -26,6 +26,26 @@ def _repo_root() -> Path:
     return workflow_root().parents[1]
 
 
+def _resolve_mmml_cmd(md_argv: list[str]) -> list[str]:
+    """Return argv prefix to invoke ``mmml md-system``."""
+    mmml_bin = os.environ.get("MMML_BIN")
+    if mmml_bin:
+        return [mmml_bin, "md-system", *md_argv]
+
+    venv_mmml = _repo_root() / ".venv" / "bin" / "mmml"
+    if venv_mmml.is_file():
+        return [str(venv_mmml), "md-system", *md_argv]
+
+    from shutil import which
+
+    on_path = which("mmml")
+    if on_path:
+        return [on_path, "md-system", *md_argv]
+
+    # Fallback: module entry (mmml package has no __main__.py).
+    return [sys.executable, "-m", "mmml.cli.__main__", "md-system", *md_argv]
+
+
 def _resolve_mpirun_wrapper(cfg: dict) -> Path:
     raw = Path(str(cfg.get("mpirun_wrapper", "../../scripts/mmml-charmm-mpirun.sh")))
     if raw.is_absolute():
@@ -61,13 +81,8 @@ def main() -> int:
         cfg, args.job_id, output_dir=args.output_dir
     )
 
-    mmml_bin = os.environ.get("MMML_BIN")
-    if mmml_bin:
-        mmml_cmd = [mmml_bin, "md-system", *md_argv]
-    else:
-        mmml_cmd = [sys.executable, "-m", "mmml", "md-system", *md_argv]
-
     os.chdir(_repo_root())
+    mmml_cmd = _resolve_mmml_cmd(md_argv)
 
     if backend == "pycharmm":
         mpirun_wrapper = _resolve_mpirun_wrapper(cfg)
@@ -78,7 +93,10 @@ def main() -> int:
         cmd = mmml_cmd
 
     print(f"Running: {' '.join(cmd)}", flush=True)
-    return subprocess.call(cmd)
+    rc = subprocess.call(cmd)
+    if rc != 0:
+        print(f"Job {args.job_id!r} failed with exit code {rc}", file=sys.stderr)
+    return rc
 
 
 if __name__ == "__main__":

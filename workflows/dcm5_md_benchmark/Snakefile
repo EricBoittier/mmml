@@ -18,7 +18,8 @@ rule all:
 rule run_benchmark:
     output:
         touch("results/{job}/done.txt"),
-        log="results/{job}/stdout.log",
+    log:
+        stdout="results/{job}/stdout.log",
     params:
         job=lambda wildcards: wildcards.job,
         workflow_dir=workflow.basedir,
@@ -28,10 +29,9 @@ rule run_benchmark:
         runtime=30,
     shell:
         """
-        set -euo pipefail
         mkdir -p results/{wildcards.job}
-        bash {params.workflow_dir}/scripts/job_shell.sh {params.job} > {output.log} 2>&1
-        touch {output[0]}
+        bash {params.workflow_dir}/scripts/job_shell.sh {params.job} > {log.stdout} 2>&1
+        touch {output}
         """
 
 
