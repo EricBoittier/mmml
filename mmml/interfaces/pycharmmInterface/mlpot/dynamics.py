@@ -582,16 +582,19 @@ def build_heat_dynamics(
     save_interval_ps: float = 0.1,
     temp: float = 300.0,
     echeck: float = 100.0,
+    use_pbc: bool = True,
 ) -> dict[str, Any]:
     """NVT heating dict for ``DynamicsScript`` (CHARMM + MLpot)."""
     nstep = ps_to_nsteps(timestep_ps, duration_ps)
     nsavc = nsavc_for_interval(timestep_ps, save_interval_ps)
+    image_kwargs = {} if use_pbc else {"imgfrq": 0, "ihbfrq": 0, "ilbfrq": 0}
     kw = _base_dyn_kwargs(
         timestep=timestep_ps,
         nstep=nstep,
         nsavc=nsavc,
         nprint=100,
         echeck=echeck,
+        **image_kwargs,
     )
     kw.update(
         {

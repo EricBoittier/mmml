@@ -211,6 +211,7 @@ def _build_stage_dynamics_kw(
             save_interval_ps=save_interval_ps,
             temp=temp,
             echeck=echeck,
+            use_pbc=use_pbc,
         )
     elif stage == "nve":
         kw = build_nve_dynamics(
