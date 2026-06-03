@@ -53,8 +53,8 @@ uv run mmml md-system \
   --flat-bottom-k 1.0 \
   --temperature 200.0 --bonded-mm-mini-after heat,equi --bonded-mm-mini-steps 500 \
   --dt-fs 0.5 \
-  --ps-heat 10 \
-  --ps-equi 50 \
+  --ps-heat 1 \
+  --ps-equi 1 \
   --dcd-nsavc 40 \
   --dyn-nprint 40 --ml-switch-width 0.1 --mm-switch-width 3.0 --charmm-sd-steps 2000 --charmm-abnr-steps 200  \
   --ml-batch-size 2256 \
