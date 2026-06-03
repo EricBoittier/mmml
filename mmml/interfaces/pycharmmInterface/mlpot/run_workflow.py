@@ -52,6 +52,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
     resolve_dynamics_overlap_config,
 )
 from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    assert_mlpot_user_active,
     get_charmm_positions_array,
     load_physnet_mlpot_bundle,
     refresh_nbonds_after_mlpot_pbc,
@@ -474,10 +475,12 @@ def run_dynamics_workflow(
         # MMFP flat-bottom for dynamics only (avoid fighting SD on the initial Packmol cloud).
         apply_flat_bottom_from_args(args)
 
+        assert_mlpot_user_active(ctx, context="dynamics", quiet=bool(args.quiet))
         max_grms = float(getattr(args, "max_grms_before_dyn", 50.0))
         assert_dynamics_ready(
             max_grms=max_grms,
             abort=not getattr(args, "allow_high_grms", False),
+            require_mlpot_user=True,
         )
 
         if dynamics_constrain:
