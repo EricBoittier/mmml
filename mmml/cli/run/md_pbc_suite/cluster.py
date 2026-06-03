@@ -276,10 +276,6 @@ def build_packmol_composition_cluster(
                     f"[cluster] Packmol cache hit ({key}): skip monomer/Packmol/MM build",
                     flush=True,
                 )
-            import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-            import pandas as pd
-            import pycharmm.coor as coor
-
             z = cached["z"]
             shifted = cached["positions"]
             atoms_per_list = cached["atoms_per_list"]
