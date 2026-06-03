@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ctypes
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Optional, Sequence, Union
@@ -123,9 +124,36 @@ class MlpotContext:
         if self.ml_selection is None or self.ml_Z is None:
             raise RuntimeError("MlpotContext missing ml_selection or ml_Z for reregister")
         self.block_tag = apply_mlpot_energy_block(self.ml_selection)
-        # Do not construct a new MLpot(): __init__ rebuilds iblo/inb via update_bnbnd
-        # (upinb), which segfaults after long MD. Re-enable the existing callback.
-        self.mlpot.reattach_mlpot()
+        reattach = getattr(self.mlpot, "reattach_mlpot", None)
+        if callable(reattach):
+            # Do not construct a new MLpot(): __init__ rebuilds iblo/inb via update_bnbnd
+            # (upinb), which segfaults after long MD. Re-enable the existing callback.
+            reattach()
+            return
+
+        self._reattach_mlpot_compat()
+
+    def _reattach_mlpot_compat(self) -> None:
+        """Compatibility path for PyCHARMM MLpot builds without ``reattach_mlpot``."""
+        required = ("energy_func", "ml_indices", "ml_Z", "ml_Natoms")
+        missing = [name for name in required if not hasattr(self.mlpot, name)]
+        if missing:
+            raise RuntimeError(
+                "PyCHARMM MLpot cannot be reattached; missing attributes: "
+                + ", ".join(missing)
+            )
+
+        pycharmm = _import_pycharmm()
+        pycharmm.lib.charmm.mlpot_set_func(self.mlpot.energy_func)
+        ml_indices = np.asarray(self.mlpot.ml_indices, dtype=int)
+        ml_z = np.asarray(self.mlpot.ml_Z, dtype=int)
+        n_ml = int(self.mlpot.ml_Natoms)
+        mlidx = (ctypes.c_int * n_ml)(*(ml_indices + 1))
+        mlidz = (ctypes.c_int * n_ml)(*ml_z)
+        nml = (ctypes.c_int * 1)(n_ml)
+        pycharmm.lib.charmm.mlpot_set_properties(nml, mlidx, mlidz)
+        if hasattr(self.mlpot, "is_set"):
+            self.mlpot.is_set = True
 
 
 def _import_pycharmm():
