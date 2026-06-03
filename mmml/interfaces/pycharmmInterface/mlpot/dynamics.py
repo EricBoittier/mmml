@@ -1237,7 +1237,10 @@ def _run_dynamics_chunk(
         iokw = {**iokw, **extra_iokw}
     _sync_dynamics_io_units(kw, iokw)
     try:
-        return run_dynamics(kw)
+        from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+
+        with charmm_relaxed_bomlev(level=-3):
+            return run_dynamics(kw)
     finally:
         for f in open_files:
             f.close()

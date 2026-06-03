@@ -25,7 +25,9 @@ PACKMOL_R="${PACKMOL_R:-21.0}"
 FB_RAD="${FB_RAD:-32.0}"
 
 MPIRUN="${MMML_MPIRUN_WRAPPER:-$REPO_ROOT/scripts/mmml-charmm-mpirun.sh}"
-exec "$MPIRUN" md-system \
+#exec "$MPIRUN" 
+
+uv run mmml md-system \
   --setup free_nvt \
   --backend pycharmm \
   --composition DCM:90 \
@@ -38,8 +40,9 @@ exec "$MPIRUN" md-system \
   --packmol-tolerance 2.0 \
   --flat-bottom-radius "$FB_RAD" \
   --flat-bottom-k 1.0 \
-  --temperature 300 \
-  --dt-fs 0.25 \
+  --temperature 200 \
+  --dt-fs 0.5 \
+  --echeck 10000000 \
   --ps-heat 1 \
   --ps-equi 50 \
   --dcd-nsavc 40 \
