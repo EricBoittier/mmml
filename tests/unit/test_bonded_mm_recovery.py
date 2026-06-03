@@ -129,6 +129,20 @@ def test_flat_bottom_mmfp_uses_outside_harmonic_wall():
     assert "quartic" not in script.lower()
 
 
+def test_clear_mmfp_uses_block_command():
+    from mmml.interfaces.pycharmmInterface.mlpot import restraints
+
+    pycharmm = MagicMock()
+    with patch.object(restraints, "_import_pycharmm", return_value=pycharmm):
+        restraints.clear_mmfp_restraints()
+
+    script = pycharmm.lingo.charmm_script.call_args[0][0]
+    assert "MMFP\nCLEAR\nEND" in "\n".join(
+        line.strip() for line in script.splitlines() if line.strip()
+    )
+    assert "MMFP CLEAR" not in script
+
+
 def test_minimize_bonded_recovery_uses_bonded_only_block():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         BondedMmMiniConfig,
