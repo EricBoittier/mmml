@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+_MMFP_GEO_ACTIVE = False
+
 
 @dataclass
 class FlatBottomSphereConfig:
@@ -54,8 +56,8 @@ def setup_flat_bottom_sphere_mmfp(config: FlatBottomSphereConfig) -> None:
     if config.force <= 0:
         raise ValueError(f"flat-bottom force must be > 0, got {config.force}")
 
-    pycharmm = _import_pycharmm()
     clear_mmfp_restraints()
+    pycharmm = _import_pycharmm()
     sel = config.selection.strip() or "all"
     script = f"""
 MMFP
@@ -66,10 +68,15 @@ GEO sphere harm -
 END
 """
     pycharmm.lingo.charmm_script(script)
+    global _MMFP_GEO_ACTIVE
+    _MMFP_GEO_ACTIVE = True
 
 
 def clear_mmfp_restraints() -> None:
     """Remove MMFP terms (safe to call if none were defined)."""
+    global _MMFP_GEO_ACTIVE
+    if not _MMFP_GEO_ACTIVE:
+        return
     pycharmm = _import_pycharmm()
     pycharmm.lingo.charmm_script(
         """
@@ -78,6 +85,7 @@ GEO RESET
 END
 """
     )
+    _MMFP_GEO_ACTIVE = False
 
 
 def apply_flat_bottom_workflow(

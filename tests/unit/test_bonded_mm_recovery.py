@@ -157,7 +157,11 @@ def test_clear_mmfp_uses_block_command():
     from mmml.interfaces.pycharmmInterface.mlpot import restraints
 
     pycharmm = MagicMock()
-    with patch.object(restraints, "_import_pycharmm", return_value=pycharmm):
+    with patch.object(restraints, "_import_pycharmm", return_value=pycharmm), patch.object(
+        restraints,
+        "_MMFP_GEO_ACTIVE",
+        True,
+    ):
         restraints.clear_mmfp_restraints()
 
     script = pycharmm.lingo.charmm_script.call_args[0][0]
@@ -166,6 +170,20 @@ def test_clear_mmfp_uses_block_command():
     )
     assert "CLEAR" not in script
     assert "MMFP CLEAR" not in script
+
+
+def test_clear_mmfp_noops_before_setup():
+    from mmml.interfaces.pycharmmInterface.mlpot import restraints
+
+    pycharmm = MagicMock()
+    with patch.object(restraints, "_import_pycharmm", return_value=pycharmm), patch.object(
+        restraints,
+        "_MMFP_GEO_ACTIVE",
+        False,
+    ):
+        restraints.clear_mmfp_restraints()
+
+    pycharmm.lingo.charmm_script.assert_not_called()
 
 
 def test_minimize_bonded_recovery_uses_bonded_only_block():
