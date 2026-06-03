@@ -413,7 +413,7 @@ def test_overlap_chunk_io_alternate_scratch_and_final_write(tmp_path):
     assert c2.trajectory is None
 
 
-def test_overlap_multi_chunk_writes_indexed_dcd_chunks(tmp_path):
+def test_overlap_multi_chunk_keeps_single_dcd_open(tmp_path):
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
 
     cfg = DynamicsOverlapConfig(
@@ -434,12 +434,67 @@ def test_overlap_multi_chunk_writes_indexed_dcd_chunks(tmp_path):
     )
     dcd = tmp_path / "heat.dcd"
     io = CharmmTrajectoryFiles(restart_write=tmp_path / "heat.res", trajectory=dcd)
-    dcd_paths: list[Path | None] = []
+    chunk_paths: list[Path | None] = []
+    extra_units: list[dict | None] = []
+    handle = mock.Mock()
 
     def fake_chunk(kw, _io, *, extra_iokw=None, **kwargs):
-        dcd_paths.append(_io.trajectory if _io is not None else None)
+        chunk_paths.append(_io.trajectory if _io is not None else None)
+        extra_units.append(extra_iokw)
         if _io is not None and _io.restart_write is not None:
             Path(_io.restart_write).write_text("REST\n", encoding="utf-8")
+        return mock.Mock()
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        side_effect=fake_chunk,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        return_value=pos_ok,
+    ), mock.patch.object(
+        CharmmTrajectoryFiles,
+        "open_trajectory_for_run",
+        return_value=([handle], {"iuncrd": 1}),
+    ) as open_traj:
+        run_dynamics_with_io(
+            {"nstep": 6, "nsavc": 1},
+            io,
+            overlap=cfg,
+        )
+
+    open_traj.assert_called_once_with()
+    assert chunk_paths == [None, None, None]
+    assert extra_units == [{"iuncrd": 1}, {"iuncrd": 1}, {"iuncrd": 1}]
+    handle.close.assert_called_once_with()
+
+
+def test_overlap_single_chunk_uses_stage_dcd_directly(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+
+    cfg = DynamicsOverlapConfig(
+        action="error",
+        min_distance_A=0.5,
+        check_interval=10,
+        n_monomers=2,
+        use_pbc=False,
+    )
+    pos_ok = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [5.0, 0.0, 0.0],
+            [6.0, 0.0, 0.0],
+        ],
+        dtype=float,
+    )
+    dcd = tmp_path / "heat.dcd"
+    io = CharmmTrajectoryFiles(restart_write=tmp_path / "heat.res", trajectory=dcd)
+    chunk_paths: list[Path | None] = []
+
+    def fake_chunk(kw, _io, *, extra_iokw=None, **kwargs):
+        chunk_paths.append(_io.trajectory if _io is not None else None)
         return mock.Mock()
 
     with mock.patch(
@@ -457,10 +512,7 @@ def test_overlap_multi_chunk_writes_indexed_dcd_chunks(tmp_path):
             overlap=cfg,
         )
 
-    assert dcd_paths == [
-        tmp_path / "heat.overlap_0000.dcd",
-        tmp_path / "heat.overlap_0001.dcd",
-    ]
+    assert chunk_paths == [dcd]
 
 
 def test_effective_overlap_check_interval_divides_nstep():
