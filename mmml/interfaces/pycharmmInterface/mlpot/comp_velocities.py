@@ -1,4 +1,9 @@
-"""Prepare CHARMM COMP (comparison set) for selective force-damp / velocity workflows."""
+"""CHARMM comparison (COMP) scalars — force copy only; not used in default heat.
+
+See ``COMP_AND_HEATING.md`` for how COMP relates to ``IASVEL`` / ``IASORS`` and
+what to grep in logs. Default staged heat keeps ``--heat-comp-damp`` off, so
+these helpers do not affect ``dyna`` unless explicitly enabled.
+"""
 
 from __future__ import annotations
 
@@ -137,7 +142,13 @@ def apply_selective_force_damp_recipe(
     hydrogen_only: bool = False,
     exclude_hydrogen: bool = False,
 ) -> int:
-    """Zero all COMP, then COPY/MULT forces into COMP on high-|F| atoms only."""
+    """Zero all COMP, then COPY/MULT **forces** (dx,dy,dz) into xcomp/ycomp/zcomp.
+
+    This does **not** set velocities. CHARMM only uses COMP for dynamics when
+    ``iasvel=0`` and comparison values are actual velocity components (see
+    ``COMP_AND_HEATING.md``). Safe to call for inspection/tests only unless a
+    full COMP-velocity workflow is wired.
+    """
     zero_comparison_scalars("all")
     stored_name, n_selected = build_high_force_selection(
         min_force_kcalmol_A,
@@ -220,17 +231,22 @@ def apply_comp_velocity_policy(
         resolve_heat_comp_damp_kwargs,
     )
 
-    if stage == "heat" and resolve_heat_comp_damp(args):
-        damp_kw = resolve_heat_comp_damp_kwargs(args)
-        n = prepare_comp_for_heat(**damp_kw)
-        # Experimental: do not override iasvel/iasors (heating needs iasvel=1,
-        # iasors=1 per reference heat). COMP force metadata only.
-        if not getattr(args, "quiet", False):
-            target = "H" if damp_kw.get("hydrogen_only", True) else "all"
+    if stage == "heat":
+        if resolve_heat_comp_damp(args):
+            damp_kw = resolve_heat_comp_damp_kwargs(args)
+            n = prepare_comp_for_heat(**damp_kw)
+            if not getattr(args, "quiet", False):
+                target = "H" if damp_kw.get("hydrogen_only", True) else "all"
+                print(
+                    f"HEAT COMP (experimental): copied scaled forces into COMP "
+                    f"for {n} {target} atoms — does NOT change dyna iasvel/iasors; "
+                    "see COMP_AND_HEATING.md",
+                    flush=True,
+                )
+        elif not getattr(args, "quiet", False):
             print(
-                f"HEAT COMP: force-damp metadata on {n} {target} atoms "
-                f"(|F|>={damp_kw['min_force_kcalmol_A']} kcal/mol/Å, "
-                f"scale={damp_kw['force_scale']})",
+                "HEAT COMP: off (--heat-comp-damp not set); heat uses iasors=0 "
+                "scaling only",
                 flush=True,
             )
     elif stage in _COMP_CLEARED_STAGES:

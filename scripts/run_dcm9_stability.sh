@@ -34,7 +34,9 @@
 #   Removed prior DCD          (or pull latest repo; old builds say Rescued)
 # If heat stops early (~1–3k steps): grep 'TOLERANCE\\|echeck' in the log.
 #   DCM:9 auto-loosens echeck (9 monomers); override with --no-echeck if needed.
-#   Heat: 0 K -> 240 K (see HEAT_FIRSTT/FINALT), iasors=0 scaling every HEAT_IHTFRQ steps.
+#   Heat: 0 K -> 240 K; iasors=0 scaling (see mmml/.../mlpot/COMP_AND_HEATING.md).
+#   COMP is OFF by default — do not enable --heat-comp-damp unless testing COMP.
+#   H-on-C overlap in early DCD frames: X-H not constrained (no SHAKE); verify mini + frames 0-2.
 #
 # VMD:
 #   vmd artifacts/pycharmm_mlpot/dcm9_stability/cluster_for_vmd_dcm_9.psf
