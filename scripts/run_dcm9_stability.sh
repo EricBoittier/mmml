@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+# DCM:9 free-space stability: CHARMM MM pre-min → MLpot SD → heating.
+#
+# Based on the validated DCM:2 smoke (no cons_fix, no bonded-mm-mini). See
+# docs/agent-handoff-pycharmm-9mer.md for pass/fail checks and VMD notes.
+#
+# Packmol sphere radius (initial guess, same scaling as run_dcm90_free_nvt.sh):
+#   R ≈ 18 * (9/60)^(1/3) ≈ 9.6 Å  (override with PACKMOL_R=...)
+#
+# Prerequisites:
+#   - Launch under OpenMPI (libcharmm is MPI-linked on GPU nodes):
+#       ./scripts/run_dcm9_stability.sh
+#   - Checkpoint for DCM PhysNet:
+#       export MMML_CKPT=/path/to/dcm1-.../ckpts/dcm1-...
+#   - packmol on PATH; rebuild libcharmm if you scale cluster size up
+#
+# Examples:
+#   MMML_CKPT=$HOME/mmml_tutorial/acodcm/ckpts/dcm1-... ./scripts/run_dcm9_stability.sh
+#   PS_HEAT=20 MD_STAGES=mini,heat,equi ./scripts/run_dcm9_stability.sh
+#   ENABLE_FB=1 FB_RAD=14 ./scripts/run_dcm9_stability.sh
+#   ./scripts/run_dcm9_stability.sh --ps-heat 5 --heat-ihtfrq 100
+#
+# After run, confirm in the log (non-quiet):
+#   cons_fix: no monomers constrained
+#   MLpot USER active before staged dynamics
+#   Removed prior DCD          (or pull latest repo; old builds say Rescued)
+#   AVER> ... TEMPerature      (heat block averages near ~300 K)
+#
+# VMD:
+#   vmd artifacts/pycharmm_mlpot/dcm9_stability/cluster_for_vmd_dcm_9.psf
+#   # trajectory: heat_dcm_9.dcd
+
+set -euo pipefail
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$REPO_ROOT"
+
+if [[ -z "${MMML_CKPT:-}" ]]; then
+  echo "Set MMML_CKPT to your DCM PhysNet checkpoint directory." >&2
+  echo "  Example: export MMML_CKPT=\$HOME/mmml_tutorial/acodcm/ckpts/dcm1-..." >&2
+  exit 1
+fi
+
+N_MOLECULES=9
+# Same (N/60)^(1/3) scaling as DCM:90 → 21 Å at N=90.
+PACKMOL_R="${PACKMOL_R:-$(
+  python3 -c "print(round(18 * (${N_MOLECULES}/60) ** (1/3), 1))"
+)}"
+OUT_DIR="${OUT_DIR:-artifacts/pycharmm_mlpot/dcm9_stability}"
+MD_STAGES="${MD_STAGES:-mini,heat}"
+PS_HEAT="${PS_HEAT:-10.0}"
+HEAT_IHTFRQ="${HEAT_IHTFRQ:-200}"
+MINI_NSTEP="${MINI_NSTEP:-150}"
+DYN_NPRINT="${DYN_NPRINT:-500}"
+DCD_NSAVC="${DCD_NSAVC:-500}"
+
+MPIRUN="${MMML_MPIRUN_WRAPPER:-$REPO_ROOT/scripts/mmml-charmm-mpirun.sh}"
+
+FB_ARGS=()
+if [[ "${ENABLE_FB:-0}" == "1" ]]; then
+  FB_RAD="${FB_RAD:-14.0}"
+  FB_ARGS=(
+    --flat-bottom-radius "$FB_RAD"
+    --flat-bottom-selection "TYPE C"
+    --flat-bottom-k 0.00001
+  )
+fi
+
+exec "$MPIRUN" md-system \
+  --setup free_nvt \
+  --backend pycharmm \
+  --composition "DCM:${N_MOLECULES}" \
+  --output-dir "$OUT_DIR" \
+  --job-name dcm9_stability \
+  --checkpoint "$MMML_CKPT" \
+  --md-stages "$MD_STAGES" \
+  --spacing 5.0 \
+  --packmol-sphere \
+  --packmol-radius "$PACKMOL_R" \
+  --packmol-tolerance 1.0 \
+  --mini-nstep "$MINI_NSTEP" \
+  --ps-heat "$PS_HEAT" \
+  --heat-ihtfrq "$HEAT_IHTFRQ" \
+  --dyn-nprint "$DYN_NPRINT" \
+  --dyn-iprfrq 2000 \
+  --dcd-nsavc "$DCD_NSAVC" \
+  --dt-fs 0.25 \
+  --temperature 300.0 \
+  --mm-switch-on 7.0 \
+  --mm-switch-width 5.0 \
+  --ml-switch-width 0.1 \
+  --charmm-sd-steps 25 \
+  --charmm-abnr-steps 100 \
+  --skip-energy-show \
+  --seed 123 \
+  "${FB_ARGS[@]}" \
+  "$@"

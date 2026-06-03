@@ -91,31 +91,17 @@ Not `cons_fix` for DCM:2 smoke. Likely visible physics / artifacts:
 
 Interpret as **DCM:9** (or similar 9-molecule cluster) — confirm stable heating / geometry, not flying apart or absurd T.
 
-### Suggested command sketch (user runs)
+### Run script (user runs on cluster)
 
 ```bash
-# OpenMPI if needed on cluster:
-# ./scripts/mmml-charmm-mpirun.sh md-system ...
-
-mmml md-system \
-  --setup free_nvt \
-  --backend pycharmm \
-  --composition DCM:9 \
-  --output-dir artifacts/pycharmm_mlpot/dcm9_stability \
-  --md-stages mini,heat \
-  --checkpoint "$MMML_CKPT" \
-  --mini-nstep 150 \
-  --ps-heat 10.0 \
-  --heat-ihtfrq 200 \
-  --dyn-nprint 500 \
-  --dyn-iprfrq 2000 \
-  --spacing 5.0 \
-  --packmol-sphere \
-  --packmol-radius <R> \
-  --seed 123
+export MMML_CKPT=/path/to/dcm1-.../ckpts/dcm1-...
+./scripts/run_dcm9_stability.sh
+# optional: PS_HEAT=20 ENABLE_FB=1 FB_RAD=14 ./scripts/run_dcm9_stability.sh
 ```
 
-Tune `packmol-radius` from geometry (see `scripts/run_dcm90_free_nvt.sh` scaling). **Avoid** `--bonded-mm-mini` until CHARMM-only constraint tests pass on smaller systems.
+`scripts/run_dcm9_stability.sh` wraps `mmml-charmm-mpirun.sh`, sets Packmol `R ≈ 9.6 Å` from the DCM:90 scaling formula, and matches the good DCM:2 smoke flags (no `cons_fix`, no `--bonded-mm-mini`, no flat-bottom unless `ENABLE_FB=1`). Extra CLI args are passed through (`"$@"`).
+
+Tune `PACKMOL_R` / `FB_RAD` after mini using `scripts/estimate_droff_from_crd.py` if needed.
 
 Optional large-cluster aids (if COM drifts):
 
