@@ -156,6 +156,53 @@ class MlpotContext:
             self.mlpot.is_set = True
 
 
+def assert_mlpot_user_active(
+    ctx: MlpotContext,
+    *,
+    context: str = "dynamics",
+    zero_tol_kcalmol: float = 1.0e-12,
+    quiet: bool = False,
+) -> float:
+    """Ensure the CHARMM USER term is active before MLpot dynamics.
+
+    In all-ML workflows CHARMM bonded/nonbonded terms are intentionally zeroed by
+    BLOCK, so a missing USER term leaves dynamics integrating a free gas.
+    """
+    import math
+
+    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import pycharmm
+    import pycharmm.energy as energy
+
+    def _read_user() -> float | None:
+        pycharmm.lingo.charmm_script("ENER")
+        try:
+            return float(energy.get_term_by_name("USER"))
+        except Exception:
+            return None
+
+    user = _read_user()
+    missing = user is None or not math.isfinite(user) or abs(user) <= zero_tol_kcalmol
+    is_set = getattr(ctx.mlpot, "is_set", True)
+    if missing or is_set is False:
+        if not quiet:
+            print(
+                f"WARN: MLpot USER term missing before {context}; attempting reattach",
+                flush=True,
+            )
+        ctx.reregister_mlpot()
+        user = _read_user()
+        missing = user is None or not math.isfinite(user) or abs(user) <= zero_tol_kcalmol
+
+    if missing:
+        raise RuntimeError(
+            f"MLpot USER term is zero/missing before {context}; refusing to run dynamics"
+        )
+    if not quiet:
+        print(f"MLpot USER active before {context}: USER={user:.6f} kcal/mol", flush=True)
+    return float(user)
+
+
 def _import_pycharmm():
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401 — CHARMM env
     import pycharmm

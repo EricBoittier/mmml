@@ -67,6 +67,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import (
     sync_mlpot_pbc_cell_from_charmm,
 )
 from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+    assert_mlpot_user_active,
     disable_charmm_domdec,
     get_charmm_positions_array,
     load_cluster_from_artifacts,
@@ -555,6 +556,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             max_grms=float(getattr(args, "max_grms_before_dyn", 50.0)),
             abort=not getattr(args, "allow_high_grms", False),
         )
+        assert_mlpot_user_active(ctx, context="staged dynamics", quiet=bool(args.quiet))
 
         if dynamics_constrain:
             setup_cons_fix_for_resids(dynamics_constrain)
@@ -644,6 +646,11 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     disable_charmm_domdec()
                     _reset_stage_trajectory(
                         Path(seg_io.trajectory) if seg_io.trajectory else None
+                    )
+                    assert_mlpot_user_active(
+                        ctx,
+                        context=f"equi segment {seg_i + 1}/{n_equi_segments}",
+                        quiet=bool(args.quiet),
                     )
                     run_dynamics_with_io(
                         kw,
@@ -735,6 +742,11 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     _reset_stage_trajectory(
                         Path(seg_io.trajectory) if seg_io.trajectory else None
                     )
+                    assert_mlpot_user_active(
+                        ctx,
+                        context=f"prod segment {seg_i + 1}/{n_prod_segments}",
+                        quiet=bool(args.quiet),
+                    )
                     run_dynamics_with_io(
                         kw,
                         seg_io,
@@ -823,6 +835,11 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             disable_charmm_domdec()
             _reset_stage_trajectory(
                 Path(io.trajectory) if io.trajectory else None
+            )
+            assert_mlpot_user_active(
+                ctx,
+                context=stage.upper(),
+                quiet=bool(args.quiet),
             )
             run_dynamics_with_io(
                 kw,

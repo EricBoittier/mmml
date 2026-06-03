@@ -536,6 +536,42 @@ def test_reregister_mlpot_reattaches_without_new_mlpot_or_nbond_rebuild():
     mlpot.reattach_mlpot.assert_called_once_with()
 
 
+def test_assert_mlpot_user_active_reattaches_when_user_missing():
+    import sys
+
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        MlpotContext,
+        assert_mlpot_user_active,
+    )
+
+    ctx = MlpotContext(
+        mlpot=MagicMock(is_set=False),
+        pyCModel=MagicMock(),
+        params=None,
+        model=None,
+        ml_selection=MagicMock(),
+        ml_Z=np.array([6, 1], dtype=int),
+    )
+    mock_py = MagicMock()
+    mock_energy = MagicMock()
+    mock_energy.get_term_by_name.side_effect = [0.0, -123.4]
+    with patch.dict(
+        sys.modules,
+        {
+            "pycharmm": mock_py,
+            "pycharmm.energy": mock_energy,
+            "mmml.interfaces.pycharmmInterface.import_pycharmm": MagicMock(),
+        },
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_mlpot_energy_block",
+        return_value="all",
+    ):
+        user = assert_mlpot_user_active(ctx, context="test", quiet=True)
+
+    ctx.mlpot.reattach_mlpot.assert_called_once()
+    assert user == pytest.approx(-123.4)
+
+
 def test_restore_workflow_nbonds_skips_nbond_rebuild():
     from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext, restore_workflow_nbonds
 
