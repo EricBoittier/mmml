@@ -12,7 +12,9 @@ from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
     DEFAULT_COMP_FORCE_SCALE,
     apply_selective_force_damp_recipe,
     build_high_force_selection,
+    clear_comp_for_production,
     get_comparison_array,
+    prepare_comp_for_heat,
     prepare_comp_for_iasvel0,
     set_comparison_array,
     zero_comparison_scalars,
@@ -82,14 +84,53 @@ def test_zero_comparison_scalars(mock_script):
 def test_build_high_force_selection(mock_import, mock_script):
     pycharmm = _mock_pycharmm_module()
     mock_import.return_value = pycharmm
+    highf_sel = MagicMock()
+    highf_sel.get_selection.return_value = (False, True, False, True)
+    highf_sel.store.return_value = "highf"
+    pycharmm.SelectAtoms.return_value = highf_sel
     name, n_sel = build_high_force_selection(1.0, store_name="highf")
     assert name == "highf"
     assert n_sel == 2
     pycharmm.SelectAtoms.assert_called_once()
     _, kwargs = pycharmm.SelectAtoms.call_args
     assert kwargs["atom_nums"] == [1, 3]
-    pycharmm.SelectAtoms.return_value.store.assert_called_once_with(name="highf")
+    highf_sel.store.assert_called_once_with(name="highf")
     mock_script.assert_not_called()
+
+
+@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.run_charmm_script")
+@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities._import_pycharmm")
+def test_build_high_force_selection_excludes_hydrogen(mock_import, mock_script):
+    pycharmm = _mock_pycharmm_module()
+    mock_import.return_value = pycharmm
+    highf_sel = MagicMock()
+    heavy_only = MagicMock()
+    heavy_only.get_selection.return_value = (False, True, False, False)
+    heavy_only.store.return_value = "highf"
+    highf_sel.__and__ = MagicMock(return_value=heavy_only)
+    pycharmm.SelectAtoms.side_effect = [highf_sel, MagicMock()]
+    name, n_sel = build_high_force_selection(1.0, exclude_hydrogen=True)
+    assert name == "highf"
+    assert n_sel == 1
+    highf_sel.__and__.assert_called_once()
+    heavy_only.store.assert_called_once_with(name="highf")
+
+
+@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.run_charmm_script")
+@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities._import_pycharmm")
+def test_build_high_force_selection_hydrogen_only(mock_import, mock_script):
+    pycharmm = _mock_pycharmm_module()
+    mock_import.return_value = pycharmm
+    highf_sel = MagicMock()
+    h_only = MagicMock()
+    h_only.get_selection.return_value = (True, False, False, False)
+    h_only.store.return_value = "highf"
+    highf_sel.__and__ = MagicMock(return_value=h_only)
+    pycharmm.SelectAtoms.side_effect = [highf_sel, MagicMock()]
+    name, n_sel = build_high_force_selection(1.0, hydrogen_only=True)
+    assert name == "highf"
+    assert n_sel == 1
+    h_only.store.assert_called_once_with(name="highf")
 
 
 @patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.unstore_selection")
@@ -160,3 +201,24 @@ def test_prepare_comp_for_iasvel0_zero_only(mock_script, mock_zero, mock_recipe)
     )
     mock_zero.assert_called_once_with("all")
     mock_recipe.assert_not_called()
+
+
+@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.prepare_comp_for_iasvel0")
+def test_prepare_comp_for_heat_targets_hydrogen(mock_prepare):
+    mock_prepare.return_value = 4
+    n = prepare_comp_for_heat(min_force_kcalmol_A=2.0, force_scale=0.02)
+    assert n == 4
+    mock_prepare.assert_called_once_with(
+        min_force_kcalmol_A=2.0,
+        force_scale=0.02,
+        hydrogen_only=True,
+        exclude_hydrogen=False,
+    )
+
+
+@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.run_charmm_script")
+@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.zero_comparison_scalars")
+def test_clear_comp_for_production(mock_zero, mock_script):
+    clear_comp_for_production()
+    mock_zero.assert_called_once_with("all")
+    mock_script.assert_called_once_with("scalar wcomp set 0 select all end")

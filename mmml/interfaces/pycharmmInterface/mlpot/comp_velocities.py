@@ -77,12 +77,24 @@ def force_magnitudes_kcalmol_A() -> np.ndarray:
     return np.sqrt(dx * dx + dy * dy + dz * dz)
 
 
+def _selection_count(sel) -> int:
+    return int(sum(sel.get_selection()))
+
+
 def build_high_force_selection(
     min_force_kcalmol_A: float,
     *,
     store_name: str = DEFAULT_HIGHF_STORE_NAME,
+    hydrogen_only: bool = False,
+    exclude_hydrogen: bool = False,
 ) -> tuple[str, int]:
-    """Store atoms with ``|F| >= min_force``; return ``(store_name, n_selected)``."""
+    """Store atoms with ``|F| >= min_force``; return ``(store_name, n_selected)``.
+
+    ``hydrogen_only``: keep only hydrogens in the stored set (heat X–H stabilization).
+    ``exclude_hydrogen``: drop hydrogens (legacy; prefer ``hydrogen_only`` for heat).
+    """
+    if hydrogen_only and exclude_hydrogen:
+        raise ValueError("hydrogen_only and exclude_hydrogen are mutually exclusive")
     pycharmm = _import_pycharmm()
     select = pycharmm.select
 
@@ -94,12 +106,16 @@ def build_high_force_selection(
     n_atoms = pycharmm.psf.get_natom()
     if indices:
         sel = pycharmm.SelectAtoms(atom_nums=indices, update=False)
+        if hydrogen_only:
+            sel = sel & pycharmm.SelectAtoms(hydrogens=True, update=False)
+        elif exclude_hydrogen:
+            sel = sel & ~pycharmm.SelectAtoms(hydrogens=True, update=False)
     else:
         sel = pycharmm.SelectAtoms(update=False)
         sel.set_selection(select.none_selection(n_atoms))
 
     stored = sel.store(name=store_name)
-    return stored, len(indices)
+    return stored, _selection_count(sel)
 
 
 def unstore_selection(store_name: str) -> None:
@@ -115,12 +131,16 @@ def apply_selective_force_damp_recipe(
     min_force_kcalmol_A: float = DEFAULT_COMP_FORCE_MIN_KCALMOL_A,
     force_scale: float = DEFAULT_COMP_FORCE_SCALE,
     store_name: str = DEFAULT_HIGHF_STORE_NAME,
+    hydrogen_only: bool = False,
+    exclude_hydrogen: bool = False,
 ) -> int:
     """Zero all COMP, then COPY/MULT forces into COMP on high-|F| atoms only."""
     zero_comparison_scalars("all")
     stored_name, n_selected = build_high_force_selection(
         min_force_kcalmol_A,
         store_name=store_name,
+        hydrogen_only=hydrogen_only,
+        exclude_hydrogen=exclude_hydrogen,
     )
     try:
         if n_selected > 0:
@@ -144,6 +164,8 @@ def prepare_comp_for_iasvel0(
     force_scale: float = DEFAULT_COMP_FORCE_SCALE,
     zero_only: bool = False,
     store_name: str = DEFAULT_HIGHF_STORE_NAME,
+    hydrogen_only: bool = False,
+    exclude_hydrogen: bool = False,
 ) -> int:
     """``ENER`` then zero COMP; optionally selective force-damp into COMP."""
     run_charmm_script("ENER")
@@ -155,4 +177,27 @@ def prepare_comp_for_iasvel0(
         min_force_kcalmol_A=min_force_kcalmol_A,
         force_scale=force_scale,
         store_name=store_name,
+        hydrogen_only=hydrogen_only,
+        exclude_hydrogen=exclude_hydrogen,
     )
+
+
+def prepare_comp_for_heat(
+    *,
+    min_force_kcalmol_A: float = DEFAULT_COMP_FORCE_MIN_KCALMOL_A,
+    force_scale: float = DEFAULT_COMP_FORCE_SCALE,
+    hydrogen_only: bool = True,
+) -> int:
+    """Selective COMP force-damp for heating (default: high-|F| hydrogens only)."""
+    return prepare_comp_for_iasvel0(
+        min_force_kcalmol_A=min_force_kcalmol_A,
+        force_scale=force_scale,
+        hydrogen_only=hydrogen_only,
+        exclude_hydrogen=False,
+    )
+
+
+def clear_comp_for_production() -> None:
+    """Zero COMP before equi / NVE / prod (no force-damp recipe)."""
+    zero_comparison_scalars("all")
+    run_charmm_script("scalar wcomp set 0 select all end")
