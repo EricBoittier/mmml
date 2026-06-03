@@ -530,6 +530,14 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             mini_trajectories = _trajectory_outputs(paths["mini_charmm_dcd"])
             mini_trajectories.extend(_trajectory_outputs(paths["mini_dcd"]))
             last_traj = mini_trajectories[-1] if mini_trajectories else None
+            maybe_run_bonded_mm_mini_after_stage(
+                ctx,
+                args,
+                stage="mini",
+                baseline=baseline,
+                restart_path=paths["mini_crd"],
+                topology_psf=recovery_topology_psf,
+            )
 
         dyn_stages = [s for s in _STAGE_ORDER if s in stages and s != "mini"]
         if not dyn_stages:
