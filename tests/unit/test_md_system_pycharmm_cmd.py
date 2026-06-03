@@ -134,6 +134,12 @@ def test_build_pycharmm_command_includes_ml_max_active_dimers_when_set():
     assert cmd[idx + 1] == "1200"
 
 
+def test_build_pycharmm_command_forwards_intra_monomer_guard():
+    cmd = build_pycharmm_command(_pycharmm_args())
+    idx = cmd.index("--dynamics-intra-min-distance")
+    assert cmd[idx + 1] == "1.0"
+
+
 def test_build_pycharmm_command_includes_ml_switch_width_default():
     cmd = build_pycharmm_command(_pycharmm_args())
     idx = cmd.index("--ml-switch-width")

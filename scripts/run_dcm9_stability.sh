@@ -41,7 +41,8 @@
 #   Heat: 0 K -> 240 K; iasors=0 scaling (see mmml/.../mlpot/COMP_AND_HEATING.md).
 #   COMP is OFF by default — do not enable --heat-comp-damp unless testing COMP.
 #   H-on-C overlap in early DCD frames: X-H not constrained (no SHAKE); verify mini + frames 0-2.
-#   Overlap rescue (default): bonded+VDW SD/ABNR if monomers clash during ML dynamics.
+#   Overlap rescue (default): inter-monomer bonded+VDW SD/ABNR; intra-monomer bonded SD
+#   (1–2/1–3 pairs excluded; default min 1.0 Å within each monomer).
 #
 # VMD:
 #   vmd artifacts/pycharmm_mlpot/dcm9_stability/cluster_for_vmd_dcm_9.psf
