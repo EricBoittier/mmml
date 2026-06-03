@@ -40,11 +40,11 @@ exec "$MPIRUN" md-system \
   --flat-bottom-k 1.0 \
   --temperature 300 \
   --dt-fs 0.25 \
-  --ps-heat 20 \
+  --ps-heat 1 \
   --ps-equi 50 \
-  --dcd-nsavc 400 \
-  --dyn-nprint 500 \
-  --ml-batch-size 256 \
+  --dcd-nsavc 40 \
+  --dyn-nprint 40 \
+  --ml-batch-size 2256 \
   --skip-energy-show \
   --seed 123 \
   "$@"
