@@ -960,13 +960,12 @@ def resolve_mini_nstep(args: argparse.Namespace, n_monomers: int) -> int:
 def recommend_echeck_kcal(n_monomers: int, n_atoms: int) -> float:
     """Size-aware ECHECK floor for MLpot clusters (kcal/mol).
 
-    Small clusters keep the CLI default (100). Medium/large systems scale with
-    monomer count and atom count so heat/nonbond-list updates on DCM:90-sized
-    droplets do not trip ECHECK on ~O(N) energy steps.
+    Single-monomer smoke tests keep 100 kcal/mol. Multi-monomer clusters (e.g.
+    DCM:9) scale with size so ML heat/nonbond updates do not trip ECHECK.
     """
     n_mol = max(1, int(n_monomers))
     n_at = max(1, int(n_atoms))
-    if n_mol < 10 and n_at < 100:
+    if n_mol == 1 and n_at < 100:
         return 100.0
     from_mol = float(n_mol) * 50.0
     from_atoms = float(n_at) * 10.0

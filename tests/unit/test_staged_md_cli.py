@@ -105,8 +105,12 @@ def test_prior_restart_for_equi_prefers_nve_when_present(tmp_path: Path):
     assert got == paths["nve_res"]
 
 
-def test_recommend_echeck_kcal_small_cluster():
-    assert recommend_echeck_kcal(4, 20) == 100.0
+def test_recommend_echeck_kcal_single_monomer():
+    assert recommend_echeck_kcal(1, 20) == 100.0
+
+
+def test_recommend_echeck_kcal_dcm9():
+    assert recommend_echeck_kcal(9, 45) == 500.0
 
 
 def test_recommend_echeck_kcal_medium_cluster():
