@@ -131,7 +131,24 @@ def test_pbc_jobs_use_box_size(cfg: dict) -> None:
         argv = build_md_system_argv(cfg, job_id)
         assert "--box-size" in argv, job_id
         idx = argv.index("--box-size")
-        assert argv[idx + 1] == "25.0"
+        expected = str(job.get("box_size", cfg["box_size"]))
+        assert argv[idx + 1] == expected
+
+
+def test_pbc_jobs_use_packmol_sphere(cfg: dict) -> None:
+    os.environ.setdefault("MMML_CKPT", "/tmp/dcm5_test_ckpt")
+    for job_id, job in cfg["jobs"].items():
+        if not job.get("pbc"):
+            continue
+        argv = build_md_system_argv(cfg, job_id)
+        assert "--packmol-sphere" in argv, job_id
+
+
+def test_jaxmd_pbc_npt_uses_larger_box(cfg: dict) -> None:
+    os.environ.setdefault("MMML_CKPT", "/tmp/dcm5_test_ckpt")
+    argv = build_md_system_argv(cfg, "jaxmd_pbc_npt")
+    idx = argv.index("--box-size")
+    assert argv[idx + 1] == "35.0"
 
 
 @pytest.mark.parametrize("job_id", ["ase_vac_nve", "jaxmd_pbc_npt", "pycharmm_vac_nve"])

@@ -3,6 +3,9 @@ configfile: "config.yaml"
 # Use Snakemake's loaded config only — do not import mmml/benchmark_lib here
 # (Snakemake may run with a Python that lacks the repo on sys.path).
 _JOB_IDS = list(config["jobs"].keys())
+_REQUIRED_JOB_IDS = [
+    j for j in _JOB_IDS if j not in set(config.get("optional_jobs") or [])
+]
 
 
 def _needs_mpi(wildcards) -> int:
@@ -37,7 +40,7 @@ rule run_benchmark:
 
 rule collect:
     input:
-        expand("results/{job}/done.txt", job=_JOB_IDS),
+        expand("results/{job}/done.txt", job=_REQUIRED_JOB_IDS),
     output:
         csv="results/benchmark_summary.csv",
         md="results/benchmark_report.md",

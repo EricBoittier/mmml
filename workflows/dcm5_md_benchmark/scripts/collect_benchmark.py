@@ -197,6 +197,15 @@ def _parse_pycharmm(out_dir: Path, log_path: Path, meta: dict[str, Any]) -> dict
 def _parse_job(out_dir: Path, cfg: dict[str, Any], job_id: str) -> dict[str, Any]:
     job = cfg["jobs"][job_id]
     meta = job_metadata(cfg, job_id)
+    if not out_dir.is_dir() or not (out_dir / "stdout.log").is_file():
+        meta["status"] = "skipped" if meta.get("optional") else "missing"
+        meta["notes"] = "optional job not run" if meta.get("optional") else "no output dir"
+        meta["nsteps"] = ""
+        meta["temp_mean_K"] = ""
+        meta["temp_end_K"] = ""
+        meta["energy_drift"] = ""
+        meta["wall_s"] = ""
+        return meta
     backend = meta["backend"]
     log_path = out_dir / "stdout.log"
 

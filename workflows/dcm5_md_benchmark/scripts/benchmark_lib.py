@@ -46,6 +46,18 @@ def job_output_dir(cfg: dict[str, Any], job_id: str) -> Path:
     return (root / job_id).resolve()
 
 
+def _append_packmol_argv(argv: list[str], cfg: dict[str, Any]) -> None:
+    argv.extend(
+        [
+            "--packmol-sphere",
+            "--packmol-radius",
+            str(cfg["packmol_radius"]),
+            "--packmol-tolerance",
+            str(cfg["packmol_tolerance"]),
+        ]
+    )
+
+
 def build_md_system_argv(
     cfg: dict[str, Any],
     job_id: str,
@@ -74,7 +86,7 @@ def build_md_system_argv(
         "--dt-fs",
         str(cfg["dt_fs"]),
         "--ps",
-        str(cfg["ps"]),
+        str(job.get("ps", cfg["ps"])),
         "--temperature",
         str(cfg["temperature"]),
         "--spacing",
@@ -88,17 +100,11 @@ def build_md_system_argv(
     ]
 
     if job.get("pbc"):
-        argv.extend(["--box-size", str(cfg["box_size"])])
+        box_size = job.get("box_size", cfg["box_size"])
+        argv.extend(["--box-size", str(box_size)])
+        _append_packmol_argv(argv, cfg)
     else:
-        argv.extend(
-            [
-                "--packmol-sphere",
-                "--packmol-radius",
-                str(cfg["packmol_radius"]),
-                "--packmol-tolerance",
-                str(cfg["packmol_tolerance"]),
-            ]
-        )
+        _append_packmol_argv(argv, cfg)
 
     if job.get("nvt_integrator"):
         argv.extend(["--nvt-integrator", str(job["nvt_integrator"])])
@@ -138,7 +144,7 @@ def build_md_system_argv(
         argv.extend(["--heat-finalt", str(cfg["heat_finalt"])])
 
     if str(job["setup"]) == "pbc_npt":
-        argv.extend(["--pressure", str(cfg["pressure"])])
+        argv.extend(["--pressure", str(job.get("pressure", cfg["pressure"]))])
 
     extra = list(job.get("extra_args") or [])
     if extra:
@@ -172,12 +178,14 @@ def namespace_for_job(
 
 def job_metadata(cfg: dict[str, Any], job_id: str) -> dict[str, Any]:
     job = cfg["jobs"][job_id]
+    ps = float(job.get("ps", cfg["ps"]))
     return {
         "job_id": job_id,
         "backend": str(job["backend"]),
         "setup": str(job["setup"]),
         "pbc": bool(job.get("pbc")),
         "integrator": str(job.get("integrator", "")),
-        "ps": float(cfg["ps"]),
-        "nsteps_target": int(cfg.get("nsteps_target", 8000)),
+        "ps": ps,
+        "nsteps_target": int(round(ps * 1000.0 / float(cfg["dt_fs"]))),
+        "optional": bool(job.get("optional")),
     }
