@@ -1165,13 +1165,18 @@ def setup_calculator(
         max_monomer_atoms = max(atoms_per_monomer_list)
         max_dimer_atoms = max(_dimer_atom_counts) if _dimer_atom_counts else 2 * max_monomer_atoms
         max_atoms = max(max_monomer_atoms, max_dimer_atoms)
+        pad_axis = jnp.arange(max_atoms, dtype=positions.dtype)
+        pad_positions = jnp.stack(
+            [100.0 + pad_axis, 200.0 + pad_axis, 300.0 + pad_axis],
+            axis=-1,
+        )
 
         # --- Monomer data (vectorized gather via precomputed index arrays) ---
         monomer_positions = positions[monomer_idx_arr_jnp]  # (n_monomers, max_atoms, 3)
         monomer_atomic = atomic_numbers[monomer_idx_arr_jnp]  # (n_monomers, max_atoms)
         monomer_N_arr = jnp.array([atoms_per_monomer_list[i] for i in range(n_monomers)])
         monomer_mask = jnp.arange(max_atoms)[None, :] < monomer_N_arr[:, None]
-        monomer_positions = jnp.where(monomer_mask[:, :, None], monomer_positions, 0.0)
+        monomer_positions = jnp.where(monomer_mask[:, :, None], monomer_positions, pad_positions[None, :, :])
         monomer_atomic = jnp.where(monomer_mask, monomer_atomic, 0)
 
         # --- Dimer data (vectorized gather) ---
@@ -1180,7 +1185,7 @@ def setup_calculator(
         dimer_atomic = atomic_numbers[dimer_idx_arr_jnp]
         dimer_N_arr = jnp.array(_dimer_atom_counts)
         dimer_mask = jnp.arange(max_atoms)[None, :] < dimer_N_arr[:, None]
-        dimer_positions = jnp.where(dimer_mask[:, :, None], dimer_positions, 0.0)
+        dimer_positions = jnp.where(dimer_mask[:, :, None], dimer_positions, pad_positions[None, :, :])
         dimer_atomic = jnp.where(dimer_mask, dimer_atomic, 0)
 
         # Sparse: only include dimers within mm_switch_on
