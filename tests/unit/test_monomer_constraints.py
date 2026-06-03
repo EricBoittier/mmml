@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -62,6 +63,15 @@ def test_format_resid_constraint_message_none():
     )
 
 
+def _patch_pycharmm_cons_fix(cons_fix: MagicMock):
+    fake_pycharmm = MagicMock()
+    fake_pycharmm.cons_fix = cons_fix
+    return patch.dict(
+        sys.modules,
+        {"pycharmm": fake_pycharmm, "pycharmm.cons_fix": cons_fix},
+    )
+
+
 def test_setup_cons_fix_for_resids_calls_pycharmm():
     fake_sel = MagicMock()
     fake_sel.get_atom_indexes.return_value = [1, 2, 3]
@@ -69,11 +79,7 @@ def test_setup_cons_fix_for_resids_calls_pycharmm():
     with patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup.select_by_resids",
         return_value=fake_sel,
-    ), patch(
-        "pycharmm.cons_fix",
-        cons_fix,
-        create=True,
-    ):
+    ), _patch_pycharmm_cons_fix(cons_fix):
         sel = setup_cons_fix_for_resids([1])
     cons_fix.setup.assert_called_once_with(fake_sel)
     assert sel is fake_sel
@@ -85,14 +91,14 @@ def test_setup_cons_fix_raises_when_selection_empty():
     with patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup.select_by_resids",
         return_value=fake_sel,
-    ), patch("pycharmm.cons_fix", MagicMock(), create=True):
+    ), _patch_pycharmm_cons_fix(MagicMock()):
         with pytest.raises(RuntimeError, match="no atoms"):
             setup_cons_fix_for_resids([99])
 
 
 def test_turn_off_cons_fix():
     cons_fix = MagicMock()
-    with patch("pycharmm.cons_fix", cons_fix, create=True):
+    with _patch_pycharmm_cons_fix(cons_fix):
         turn_off_cons_fix()
     cons_fix.turn_off.assert_called_once()
 

@@ -31,8 +31,8 @@ def _script_string(**kwargs) -> str:
 def test_heat_uses_reference_ramp_without_equilibration_rescale():
     kw = build_heat_dynamics(temp=300.0)
 
-    assert kw["ihtfrq"] == 10
-    assert kw["TEMINC"] == 0.06
+    assert kw["ihtfrq"] == 50
+    assert kw["TEMINC"] == 0.3
     assert kw["ieqfrq"] == 0
     assert kw["iasors"] == 1
     assert kw["iasvel"] == 1
@@ -51,10 +51,10 @@ def test_heat_low_temperature_ramp_spans_requested_duration():
     )
 
     assert kw["nstep"] == 20000
-    assert kw["ihtfrq"] == 10
+    assert kw["ihtfrq"] == 50
     assert kw["firstt"] == 0.2
     assert kw["finalt"] == 1.0
-    assert kw["TEMINC"] == 0.0004
+    assert kw["TEMINC"] == 0.002
 
 
 def test_heat_free_space_disables_image_update_frequencies():
@@ -116,7 +116,7 @@ def test_nvt_equilibration_uses_charmm_heat_controls_on_restart():
     script = _script_string(**kw)
 
     assert kw["restart"] is True
-    assert kw["ihtfrq"] == 10
+    assert kw["ihtfrq"] == 0
     assert kw["TEMINC"] == 0.0
     assert kw["iasvel"] == 0
     assert "firstt" not in kw
@@ -142,7 +142,7 @@ def test_nvt_equilibration_fresh_start_assigns_heat_ramp_velocities():
     assert kw["iasvel"] == 1
     assert kw["firstt"] == 60.0
     assert kw["finalt"] == 300.0
-    assert kw["TEMINC"] == 0.06
+    assert kw["TEMINC"] == 0.3
 
 
 def test_berendsen_thermostat_option():
