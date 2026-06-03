@@ -25,7 +25,7 @@ def test_masses_consistent_with_z_accepts_cgenff_chlorine_mass():
 def test_masses_consistent_with_z_flags_wrong_z_assignment():
     z = np.array([6, 1], dtype=int)
     masses = np.array([12.0, 5.0], dtype=float)
-    issues = _masses_consistent_with_z(masses, z, tol_amu=0.2)
+    issues = _masses_consistent_with_z(masses, z)
     assert len(issues) == 1
     assert "atom 1" in issues[0]
     assert "best matches" in issues[0]
