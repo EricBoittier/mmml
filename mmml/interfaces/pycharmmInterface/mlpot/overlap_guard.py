@@ -276,8 +276,20 @@ def _bond_exclusion_pairs(*, exclude_1_3: bool) -> frozenset[tuple[int, int]]:
     ):
         return _bond_exclusion_cache[2]
 
-    ib, jb = psf.get_ib_jb()
-    pairs = _build_bond_exclusion_pairs_fn()(ib, jb, exclude_1_3=exclude_1_3)
+    raw_ib_jb = psf.get_ib_jb()
+    if isinstance(raw_ib_jb, tuple) and len(raw_ib_jb) == 2:
+        ib, jb = raw_ib_jb
+    elif isinstance(raw_ib_jb, (list, tuple)) and len(raw_ib_jb) == 0:
+        # PyCHARMM <= vendored bug: ``get_ib_jb()`` returned ``[]`` when ``nbond==0``.
+        ib, jb = [], []
+    else:
+        raise ValueError(f"unexpected psf.get_ib_jb() return: {raw_ib_jb!r}")
+    if nbond <= 0:
+        if ib or jb:
+            ib, jb = [], []
+        pairs = frozenset()
+    else:
+        pairs = _build_bond_exclusion_pairs_fn()(ib, jb, exclude_1_3=exclude_1_3)
     _bond_exclusion_cache = (nbond, exclude_1_3, pairs)
     return pairs
 

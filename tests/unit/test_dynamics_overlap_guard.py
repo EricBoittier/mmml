@@ -20,6 +20,18 @@ from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
 from mmml.interfaces.pycharmmInterface.mlpot.dynamics import run_dynamics_with_io
 
 
+def test_bond_exclusion_pairs_handles_empty_get_ib_jb():
+    """PyCHARMM can return ``[]`` (not ``([], [])``) when ``get_nbond()==0``."""
+    import mmml.interfaces.pycharmmInterface.mlpot.overlap_guard as overlap_guard
+
+    overlap_guard._bond_exclusion_cache = None
+    with mock.patch("pycharmm.psf.get_nbond", return_value=0), mock.patch(
+        "pycharmm.psf.get_ib_jb", return_value=[]
+    ):
+        pairs = overlap_guard._bond_exclusion_pairs(exclude_1_3=True)
+    assert pairs == frozenset()
+
+
 def test_monomer_offsets_uniform():
     off = monomer_offsets(10, 2)
     np.testing.assert_array_equal(off, [0, 5, 10])

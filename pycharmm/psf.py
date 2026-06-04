@@ -351,7 +351,7 @@ def get_ib_jb():
     """
     n = get_nbond()
     if n <= 0:
-        return list()
+        return [], []
 
     # print(f'psf.py, get_ib_jb, n = {n}')
     ib = (ctypes.c_int * n)(0)
