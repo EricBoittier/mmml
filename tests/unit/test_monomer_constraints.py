@@ -132,6 +132,36 @@ def test_minimize_with_mlpot_runs_two_sd_passes_when_fixed_selection_set():
     cons_fix.turn_off.assert_called_once()
 
 
+def test_minimize_with_mlpot_asserts_user_when_ctx_provided():
+    ctx = MagicMock()
+    minimize = MagicMock()
+    pycharmm = MagicMock()
+    cons_fix = MagicMock()
+
+    config = MinimizeWithMlpotConfig(
+        nstep=3,
+        nprint=10,
+        verbose=False,
+        mlpot_ctx=ctx,
+    )
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
+        return_value=(pycharmm, cons_fix, MagicMock(), minimize, MagicMock()),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.assert_mlpot_user_active",
+    ) as assert_user:
+        minimize_with_mlpot(config)
+
+    assert_user.assert_called_once_with(
+        ctx,
+        context="MLpot SD minimize",
+        quiet=True,
+    )
+
+
 def test_minimize_with_mlpot_single_pass_when_no_fix():
     minimize = MagicMock()
     pycharmm = MagicMock()

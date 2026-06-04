@@ -550,6 +550,7 @@ class MinimizeWithMlpotConfig:
     dcd_unit: int = 51
     reference_positions: Optional[np.ndarray] = None
     pyCModel: Optional[Any] = None
+    mlpot_ctx: Optional["MlpotContext"] = None
     title: str = "Mini SD"
     skip_if_crd_exists: bool = True
     show_energy: bool = False
@@ -1728,6 +1729,16 @@ def minimize_with_mlpot(
             print("CHARMM energy before minimization:")
             _maybe_show_energy(True)
         recover_mpi_for_charmm_after_jax(phase="before MLpot SD minimize")
+        if config.mlpot_ctx is not None:
+            from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+                assert_mlpot_user_active,
+            )
+
+            assert_mlpot_user_active(
+                config.mlpot_ctx,
+                context="MLpot SD minimize",
+                quiet=not config.verbose,
+            )
         if config.verbose:
             print(
                 f"SD pass 1 (free, all atoms): nstep={config.nstep} nprint={config.nprint}"
