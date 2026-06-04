@@ -24,6 +24,8 @@ From [config.yaml](config.yaml):
 - `dcd_nsavc: 1`, `dyn_nprint: 1`, `nprint: 1` (every integration step)
 - `nve_boltzmann_temp: 0.2` (very low initial KE before NVE; raise cautiously if clusters are too cold)
 - `ps_nve: 0.2` (800-step screening leg; increase once COM QC is stable)
+- `nve_inbfrq_values: [-1, 1, 10, 50]` — one run per value under `results/dcm_N_nve/inbfrq_<slug>/`
+- `pre_nve_charmm_update: true` — CHARMM `ENER`+`UPDATE` after mini (lists were frozen at `inbfrq=0`)
 - `mini_nstep: 2000`, `bonded_mm_mini: true` (bonded-only SD after mini if ANGL/GRMS spike)
 - `packmol_reference_r: 20`, `packmol_tolerance: 1.2` (looser initial cluster)
 - `forces_npz_interval: 500` (DCD still every step via `dcd_nsavc: 1`)
@@ -49,11 +51,13 @@ Single size:
 snakemake results/dcm_7_nve/done.txt --cores 1
 ```
 
-Outputs per size under `results/dcm_N_nve/`:
+Outputs per size and `inbfrq` under `results/dcm_N_nve/inbfrq_<slug>/`:
 
-- `nve_dcm_N.dcd`, `mini_full_mlpot_dcm_N.crd`
+- `nve_dcm_N.dcd`, `mini_full_mlpot_dcm_N.crd`, `stdout.log`
 - `audit.json`, `com_analysis.npz`, optional `forces.npz`
-- Aggregated `results/scaling_summary.csv`, `scaling_report.md`
+- Aggregated `results/scaling_summary.csv` (includes `inbfrq` column), `scaling_report.md`
+
+Pick the best `inbfrq` from the CSV (`status=pass`, low `outlier_ratio`), then optionally re-run production with that value only (set `nve_inbfrq_values: [-1]`).
 
 ## Analysis scripts (repo root)
 

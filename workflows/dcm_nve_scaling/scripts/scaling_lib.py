@@ -71,6 +71,25 @@ def composition_string(n_monomers: int, *, prefix: str = "DCM") -> str:
     return f"{prefix}:{int(n_monomers)}"
 
 
+def nve_inbfrq_values(cfg: dict[str, Any]) -> list[int]:
+    raw = cfg.get("nve_inbfrq_values")
+    if raw is None:
+        return [int(cfg.get("default_nve_inbfrq", -1))]
+    return [int(x) for x in raw]
+
+
+def inbfrq_slug(value: int) -> str:
+    v = int(value)
+    return f"neg{abs(v)}" if v < 0 else str(v)
+
+
+def inbfrq_from_slug(slug: str) -> int:
+    s = str(slug).strip()
+    if s.startswith("neg"):
+        return -int(s[3:])
+    return int(s)
+
+
 def job_output_dir(cfg: dict[str, Any], n_monomers: int) -> Path:
     tag = composition_tag(
         n_monomers,
@@ -78,6 +97,12 @@ def job_output_dir(cfg: dict[str, Any], n_monomers: int) -> Path:
     )
     root = workflow_root() / str(cfg.get("output_root", "results"))
     return (root / f"{tag}_nve").resolve()
+
+
+def run_variant_dir(cfg: dict[str, Any], n_monomers: int, inbfrq: int) -> Path:
+    """Per-``inbfrq`` output directory under ``{tag}_nve/inbfrq_<slug>/``."""
+    base = job_output_dir(cfg, n_monomers)
+    return (base / f"inbfrq_{inbfrq_slug(inbfrq)}").resolve()
 
 
 def _assert_per_step_output(cfg: dict[str, Any]) -> None:
@@ -96,14 +121,18 @@ def build_md_system_argv(
     n_monomers: int,
     *,
     output_dir: Path | None = None,
+    inbfrq: int | None = None,
 ) -> list[str]:
-    """Build ``mmml md-system`` argv for one cluster size."""
+    """Build ``mmml md-system`` argv for one cluster size and NVE ``inbfrq``."""
     _assert_per_step_output(cfg)
     n = int(n_monomers)
     prefix = str(cfg.get("composition_prefix", "DCM"))
     comp = composition_string(n, prefix=prefix)
-    job_name = f"{composition_tag(n, prefix=prefix)}_nve"
-    out = output_dir or job_output_dir(cfg, n)
+    tag = composition_tag(n, prefix=prefix)
+    if inbfrq is None:
+        inbfrq = int(nve_inbfrq_values(cfg)[0])
+    out = output_dir or run_variant_dir(cfg, n, int(inbfrq))
+    job_name = f"{tag}_nve_ib{inbfrq_slug(int(inbfrq))}"
     packmol_r = packmol_radius_A(
         n,
         reference_n=int(cfg.get("packmol_reference_n", 60)),
@@ -157,6 +186,8 @@ def build_md_system_argv(
         str(cfg["dyn_nprint"]),
         "--dcd-nsavc",
         str(cfg["dcd_nsavc"]),
+        "--dyn-inbfrq",
+        str(int(inbfrq)),
         "--dynamics-overlap-action",
         str(cfg.get("dynamics_overlap_action", "rescue")),
         "--dynamics-overlap-min-distance",
@@ -176,7 +207,6 @@ def build_md_system_argv(
         argv.extend(["--echeck", str(cfg["echeck"])])
     if bool(cfg.get("no_scale_echeck", False)):
         argv.append("--no-scale-echeck")
-    # When echeck is set without no_scale_echeck, md-system auto-loosens to recommend_echeck_kcal.
     if bool(cfg.get("no_echeck", False)):
         argv.append("--no-echeck")
 
@@ -201,15 +231,28 @@ def build_md_system_argv(
             ]
         )
 
+    if bool(cfg.get("pre_nve_charmm_update", True)):
+        argv.append("--pre-nve-charmm-update")
+    else:
+        argv.append("--no-pre-nve-charmm-update")
+
     return argv
 
 
-def paths_for_size(cfg: dict[str, Any], n_monomers: int) -> dict[str, Path]:
-    out = job_output_dir(cfg, n_monomers)
+def paths_for_size(
+    cfg: dict[str, Any],
+    n_monomers: int,
+    *,
+    inbfrq: int | None = None,
+) -> dict[str, Path]:
+    if inbfrq is None:
+        inbfrq = int(nve_inbfrq_values(cfg)[0])
+    out = run_variant_dir(cfg, n_monomers, int(inbfrq))
     tag = composition_tag(n_monomers, prefix=str(cfg.get("composition_prefix", "DCM")))
     return {
         "out_dir": out,
         "tag": tag,
+        "inbfrq": int(inbfrq),
         "mini_crd": out / f"mini_full_mlpot_{tag}.crd",
         "nve_dcd": out / f"nve_{tag}.dcd",
         "nve_res": out / f"nve_{tag}.res",

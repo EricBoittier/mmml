@@ -4,10 +4,25 @@ _CLUSTER_SIZES = [int(n) for n in config["cluster_sizes"]]
 _OUTPUT_ROOT = str(config.get("output_root", "results"))
 _PREFIX = str(config.get("composition_prefix", "DCM")).lower()
 _TAGS = [f"{_PREFIX}_{n}" for n in _CLUSTER_SIZES]
+_INBFRQ_VALUES = [int(x) for x in config.get("nve_inbfrq_values", [-1])]
+_INBFRQ_SLUGS = [
+    (f"neg{abs(int(v))}" if int(v) < 0 else str(int(v))) for v in _INBFRQ_VALUES
+]
 
 
 def _n_from_tag(tag: str) -> int:
     return int(tag.rsplit("_", 1)[-1])
+
+
+def _inbfrq_from_slug(slug: str) -> int:
+    s = str(slug)
+    if s.startswith("neg"):
+        return -int(s[3:])
+    return int(s)
+
+
+def _variant_relpath(tag: str, inbfrq_slug: str) -> str:
+    return f"{_OUTPUT_ROOT}/{tag}_nve/inbfrq_{inbfrq_slug}"
 
 
 rule all:
@@ -18,11 +33,12 @@ rule all:
 
 rule run_nve:
     output:
-        touch(f"{_OUTPUT_ROOT}/{{tag}}_nve/done.txt"),
+        touch(f"{_OUTPUT_ROOT}/{{tag}}_nve/inbfrq_{{inbfrq_slug}}/done.txt"),
     log:
-        stdout=f"{_OUTPUT_ROOT}/{{tag}}_nve/stdout.log",
+        stdout=f"{_OUTPUT_ROOT}/{{tag}}_nve/inbfrq_{{inbfrq_slug}}/stdout.log",
     params:
         n=lambda wildcards: _n_from_tag(wildcards.tag),
+        inbfrq=lambda wildcards: _inbfrq_from_slug(wildcards.inbfrq_slug),
         workflow_dir=workflow.basedir,
     resources:
         gpu=1,
@@ -30,25 +46,26 @@ rule run_nve:
         runtime=120,
     shell:
         """
-        mkdir -p {workflow.basedir}/{_OUTPUT_ROOT}/{wildcards.tag}_nve
-        bash {params.workflow_dir}/scripts/job_shell.sh {params.n} > {log.stdout} 2>&1
-        test -s {workflow.basedir}/{_OUTPUT_ROOT}/{wildcards.tag}_nve/nve_{wildcards.tag}.dcd
+        mkdir -p {params.workflow_dir}/{_OUTPUT_ROOT}/{wildcards.tag}_nve/inbfrq_{wildcards.inbfrq_slug}
+        bash {params.workflow_dir}/scripts/job_shell.sh {params.n} {params.inbfrq} \
+            > {log.stdout} 2>&1
+        test -s {params.workflow_dir}/{_OUTPUT_ROOT}/{wildcards.tag}_nve/inbfrq_{wildcards.inbfrq_slug}/nve_{wildcards.tag}.dcd
         touch {output}
         """
 
 
 rule audit_post_mini:
     input:
-        f"{_OUTPUT_ROOT}/{{tag}}_nve/done.txt",
+        f"{_OUTPUT_ROOT}/{{tag}}_nve/inbfrq_{{inbfrq_slug}}/done.txt",
     output:
-        f"{_OUTPUT_ROOT}/{{tag}}_nve/audit.json",
+        f"{_OUTPUT_ROOT}/{{tag}}_nve/inbfrq_{{inbfrq_slug}}/audit.json",
     params:
         n=lambda wildcards: _n_from_tag(wildcards.tag),
         repo=workflow.basedir + "/../..",
     shell:
         """
         python {params.repo}/scripts/audit_mlpot_cluster.py \
-            --output-dir {workflow.basedir}/{_OUTPUT_ROOT}/{wildcards.tag}_nve \
+            --output-dir {workflow.basedir}/{_OUTPUT_ROOT}/{wildcards.tag}_nve/inbfrq_{wildcards.inbfrq_slug} \
             --composition DCM:{params.n} \
             --atoms-per-monomer {config[atoms_per_monomer]} \
             --mm-switch-on {config[mm_switch_on]} \
@@ -77,9 +94,9 @@ def _com_analysis_args() -> str:
 
 rule com_analysis:
     input:
-        f"{_OUTPUT_ROOT}/{{tag}}_nve/done.txt",
+        f"{_OUTPUT_ROOT}/{{tag}}_nve/inbfrq_{{inbfrq_slug}}/done.txt",
     output:
-        f"{_OUTPUT_ROOT}/{{tag}}_nve/com_analysis.npz",
+        f"{_OUTPUT_ROOT}/{{tag}}_nve/inbfrq_{{inbfrq_slug}}/com_analysis.npz",
     params:
         n=lambda wildcards: _n_from_tag(wildcards.tag),
         repo=workflow.basedir + "/../..",
@@ -87,7 +104,7 @@ rule com_analysis:
     shell:
         """
         python {params.repo}/scripts/analyze_monomer_com_dcd.py \
-            --dcd {workflow.basedir}/{_OUTPUT_ROOT}/{wildcards.tag}_nve/nve_{wildcards.tag}.dcd \
+            --dcd {workflow.basedir}/{_OUTPUT_ROOT}/{wildcards.tag}_nve/inbfrq_{wildcards.inbfrq_slug}/nve_{wildcards.tag}.dcd \
             --n-monomers {params.n} \
             --atoms-per-monomer {config[atoms_per_monomer]} \
             {params.com_extra} \
@@ -97,8 +114,16 @@ rule com_analysis:
 
 rule collect:
     input:
-        expand(f"{_OUTPUT_ROOT}/{{tag}}_nve/com_analysis.npz", tag=_TAGS),
-        expand(f"{_OUTPUT_ROOT}/{{tag}}_nve/audit.json", tag=_TAGS),
+        expand(
+            f"{_OUTPUT_ROOT}/{{tag}}_nve/inbfrq_{{inbfrq_slug}}/com_analysis.npz",
+            tag=_TAGS,
+            inbfrq_slug=_INBFRQ_SLUGS,
+        ),
+        expand(
+            f"{_OUTPUT_ROOT}/{{tag}}_nve/inbfrq_{{inbfrq_slug}}/audit.json",
+            tag=_TAGS,
+            inbfrq_slug=_INBFRQ_SLUGS,
+        ),
     output:
         csv=f"{_OUTPUT_ROOT}/scaling_summary.csv",
         md=f"{_OUTPUT_ROOT}/scaling_report.md",

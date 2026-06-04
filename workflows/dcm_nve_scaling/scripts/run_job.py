@@ -60,6 +60,12 @@ def main() -> int:
         default=workflow_root() / "config.yaml",
         help="Workflow config YAML",
     )
+    parser.add_argument(
+        "--inbfrq",
+        type=int,
+        default=None,
+        help="CHARMM inbfrq for NVE (overrides config nve_inbfrq_values entry)",
+    )
     args = parser.parse_args()
 
     cfg = load_config(args.config)
@@ -67,7 +73,10 @@ def main() -> int:
     if int(args.n_monomers) not in sizes:
         raise SystemExit(f"n_monomers={args.n_monomers} not in cluster_sizes {sizes}")
 
-    md_argv = build_md_system_argv(cfg, int(args.n_monomers))
+    from scaling_lib import nve_inbfrq_values
+
+    inbfrq = int(args.inbfrq) if args.inbfrq is not None else int(nve_inbfrq_values(cfg)[0])
+    md_argv = build_md_system_argv(cfg, int(args.n_monomers), inbfrq=inbfrq)
     os.chdir(_repo_root())
 
     mpirun_wrapper = _resolve_mpirun_wrapper(cfg)
@@ -81,7 +90,7 @@ def main() -> int:
         print(f"DCM:{args.n_monomers} NVE failed with exit code {rc}", file=sys.stderr)
         return rc
 
-    paths = paths_for_size(cfg, int(args.n_monomers))
+    paths = paths_for_size(cfg, int(args.n_monomers), inbfrq=inbfrq)
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         assert_stage_dynamics_completed,
     )
