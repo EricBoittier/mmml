@@ -190,11 +190,6 @@ def concat_dcd_files(chunks: list[Union[str, Path]], out: Union[str, Path]) -> i
     if not paths:
         out_path.unlink(missing_ok=True)
         return 0
-    if len(paths) == 1:
-        out_path.write_bytes(paths[0].read_bytes())
-        with out_path.open("rb") as f:
-            _, n_frames, _, _ = _dcd_header_byte_size(f.read(4096))
-        return n_frames
 
     first = paths[0].read_bytes()
     header_end, _, n_atoms, has_unitcell = _dcd_header_byte_size(first)
@@ -204,19 +199,29 @@ def concat_dcd_files(chunks: list[Union[str, Path]], out: Union[str, Path]) -> i
     for path in paths:
         data = path.read_bytes()
         hdr_end, n_frames, natoms, uc = _dcd_header_byte_size(data)
-        if natoms != n_atoms or uc != has_unitcell:
+        if natoms != n_atoms:
             raise ValueError(
                 f"DCD chunk {path.name} incompatible with {paths[0].name} "
-                f"(natoms {natoms} vs {n_atoms}, unitcell {uc} vs {has_unitcell})"
+                f"(natoms {natoms} vs {n_atoms})"
             )
         payload = data[hdr_end:]
         expected = n_frames * frame_bytes
         if len(payload) < expected:
-            raise ValueError(
-                f"DCD chunk {path.name} truncated: expected {expected} frame bytes, "
-                f"got {len(payload)}"
-            )
-        frame_blob.extend(payload[:expected])
+            alt_frame_bytes = _dcd_frame_byte_size(n_atoms, has_unitcell=not has_unitcell)
+            alt_frames = len(payload) // alt_frame_bytes
+            if alt_frames > 0:
+                n_frames = min(n_frames, alt_frames)
+                frame_bytes = alt_frame_bytes
+                has_unitcell = not has_unitcell
+            else:
+                complete_frames = len(payload) // frame_bytes
+                if complete_frames <= 0:
+                    raise ValueError(
+                        f"DCD chunk {path.name} truncated: expected {expected} frame bytes, "
+                        f"got {len(payload)}"
+                    )
+                n_frames = complete_frames
+        frame_blob.extend(payload[: n_frames * frame_bytes])
         total_frames += n_frames
 
     out_bytes = bytearray(first[:header_end])
