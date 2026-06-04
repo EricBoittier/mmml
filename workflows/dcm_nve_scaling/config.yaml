@@ -27,7 +27,7 @@ packmol_reference_r: 20.0
 packmol_reference_n: 60
 temperature: 300.0
 # Gentle velocity draw before NVE (ML USER-only, no SHAKE).
-nve_boltzmann_temp: 30.0
+nve_boltzmann_temp: 1.0
 
 save_forces_npz: true
 forces_npz_interval: 500

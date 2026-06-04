@@ -24,6 +24,9 @@ _CSV_FIELDS = [
     "status",
     "n_frames",
     "max_com_disp_A",
+    "cluster_com_disp_A",
+    "cluster_msd_A2",
+    "max_internal_rmsd_A",
     "worst_monomer_1based",
     "outlier_ratio",
     "sparse_dimer_ok",
@@ -59,6 +62,9 @@ def _row_for_size(cfg: dict[str, Any], n: int) -> dict[str, Any]:
         "status": "missing",
         "n_frames": "",
         "max_com_disp_A": "",
+        "cluster_com_disp_A": "",
+        "cluster_msd_A2": "",
+        "max_internal_rmsd_A": "",
         "worst_monomer_1based": "",
         "outlier_ratio": "",
         "sparse_dimer_ok": "",
@@ -88,8 +94,14 @@ def _row_for_size(cfg: dict[str, Any], n: int) -> dict[str, Any]:
     row["status"] = "pass" if bool(com.get("ok", True)) else "fail"
     row["n_frames"] = int(com.get("n_frames", max_disp.shape[0] if max_disp.ndim == 2 else 0))
     row["max_com_disp_A"] = f"{float(np.max(max_disp)):.4f}"
+    row["cluster_com_disp_A"] = f"{float(com.get('max_cluster_com_disp_A', np.nan)):.4f}"
+    row["cluster_msd_A2"] = f"{float(com.get('mean_msd_cluster_A2', np.nan)):.4f}"
+    row["max_internal_rmsd_A"] = f"{float(com.get('max_internal_rmsd_A', np.nan)):.4f}"
     row["worst_monomer_1based"] = worst
     row["outlier_ratio"] = f"{outlier:.2f}"
+    fail_reasons = com.get("fail_reasons")
+    if fail_reasons is not None and len(fail_reasons) and row["status"] == "fail":
+        row["notes"] = ",".join(str(x) for x in np.atleast_1d(fail_reasons))[:120]
     if audit is not None:
         row["sparse_dimer_ok"] = audit.get("sparse_dimer", {}).get("ok", "")
         if audit.get("verdict"):
@@ -119,13 +131,13 @@ def main() -> int:
         "",
         f"Config: `{args.config}`",
         "",
-        "| N | status | max COM disp (Å) | worst monomer | outlier/median | forces.npz |",
-        "|---|--------|------------------|---------------|----------------|------------|",
+        "| N | status | cluster disp (Å) | cluster MSD (Å²) | max internal RMSD | forces.npz |",
+        "|---|--------|------------------|------------------|-------------------|------------|",
     ]
     for r in rows:
         lines.append(
-            f"| {r['n_monomers']} | {r['status']} | {r['max_com_disp_A']} | "
-            f"{r['worst_monomer_1based']} | {r['outlier_ratio']} | {r['forces_npz']} |"
+            f"| {r['n_monomers']} | {r['status']} | {r['cluster_com_disp_A']} | "
+            f"{r['cluster_msd_A2']} | {r['max_internal_rmsd_A']} | {r['forces_npz']} |"
         )
     lines.append("")
     args.md.write_text("\n".join(lines) + "\n", encoding="utf-8")
