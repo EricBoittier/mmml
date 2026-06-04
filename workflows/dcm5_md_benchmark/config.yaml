@@ -179,7 +179,8 @@ jobs:
     md_stages: "mini,heat"
     ps_heat: 2.0
     heat_thermostat: hoover
-    heat_ihtfrq: 0
+    # Vacuum Hoover uses ihtfrq scaling (CPT Hoover needs CRYSTal); 0 = dyn_nprint.
+    heat_ihtfrq: 100
 
   jaxmd_pbc_npt:
     backend: jaxmd

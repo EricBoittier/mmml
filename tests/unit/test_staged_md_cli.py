@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+from unittest.mock import patch
 
 from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     recommend_echeck_kcal,
@@ -174,7 +175,7 @@ def test_build_stage_dynamics_kw_restart_omits_invalid_res_flag():
     assert "res" not in kw
 
 
-def test_build_stage_dynamics_kw_heat_hoover_disables_ihtfrq_ramp():
+def test_build_stage_dynamics_kw_heat_hoover_vacuum_uses_ihtfrq_fallback():
     args = argparse.Namespace(heat_thermostat="hoover", heat_firstt=0.0, heat_finalt=240.0)
     dyn_print = {"nprint": 100, "iprfrq": 500, "isvfrq": 500}
     kw = _build_stage_dynamics_kw(
@@ -189,7 +190,34 @@ def test_build_stage_dynamics_kw_heat_hoover_disables_ihtfrq_ramp():
         restart=False,
         use_pbc=False,
     )
+    assert "cpt" not in kw
+    assert "hoover reft" not in kw
+    assert kw["iasors"] == 0
+    assert kw["ihtfrq"] > 0
+    assert kw["TEMINC"] > 0
+
+
+def test_build_stage_dynamics_kw_heat_hoover_pbc_disables_ihtfrq_ramp():
+    args = argparse.Namespace(heat_thermostat="hoover", heat_firstt=0.0, heat_finalt=240.0)
+    dyn_print = {"nprint": 100, "iprfrq": 500, "isvfrq": 500}
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.compute_cpt_piston_masses",
+        return_value=(80, 800),
+    ):
+        kw = _build_stage_dynamics_kw(
+            "heat",
+            args=args,
+            timestep_ps=0.00025,
+            nstep=80000,
+            save_interval_ps=0.125,
+            temp=300.0,
+            echeck=100.0,
+            dyn_print=dyn_print,
+            restart=False,
+            use_pbc=True,
+        )
     assert kw["hoover reft"] == 240.0
+    assert kw["cpt"] is True
     assert kw["ihtfrq"] == 0
     assert "TEMINC" not in kw
 

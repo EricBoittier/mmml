@@ -66,12 +66,26 @@ def test_heat_free_space_disables_image_update_frequencies():
     assert kw["ilbfrq"] == 0
 
 
-def test_hoover_heat_uses_cpt_hoover_nvt_at_constant_volume():
+def test_hoover_heat_vacuum_falls_back_to_ihtfrq_scaling():
     kw = build_hoover_heat_dynamics(
         temp=240.0,
         firstt=10.0,
         finalt=240.0,
         use_pbc=False,
+        ihtfrq=100,
+    )
+    assert kw["iasors"] == 0  # vacuum Hoover fallback uses scale path
+    assert kw["ihtfrq"] == 100
+    assert "cpt" not in kw
+    assert "hoover reft" not in kw
+
+
+def test_hoover_heat_pbc_uses_cpt_hoover_nvt_at_constant_volume():
+    kw = build_hoover_heat_dynamics(
+        temp=240.0,
+        firstt=10.0,
+        finalt=240.0,
+        use_pbc=True,
         tmass=160,
     )
     script = _script_string(**kw)
@@ -86,11 +100,9 @@ def test_hoover_heat_uses_cpt_hoover_nvt_at_constant_volume():
     assert kw["finalt"] == 240.0
     assert kw["tbath"] == 240.0
     assert "TEMINC" not in kw
-    assert kw["imgfrq"] == 0
     assert "hoover reft" in script
     assert "cpt" in script
     assert "pmass 0" in script
-    assert "ihtfrq" not in script or "ihtfrq 0" in script
 
 
 def test_equi_hoover_default_uses_mass_formula_and_disables_rescaling():

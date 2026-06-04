@@ -277,6 +277,7 @@ def _build_stage_dynamics_kw(
                 finalt=heat_finalt,
                 echeck=echeck,
                 use_pbc=use_pbc,
+                ihtfrq=resolve_heat_ihtfrq(args, nstep=nstep),
             )
         else:
             kw = build_heat_dynamics(
@@ -352,18 +353,16 @@ def _build_stage_dynamics_kw(
     kw["isvfrq"] = dyn_print["isvfrq"]
     kw["nstep"] = nstep
     if stage == "heat":
-        if resolve_heat_thermostat(args) == "scale":
-            from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
-                apply_heat_ramp_frequencies,
-            )
+        from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+            apply_heat_ramp_frequencies,
+        )
 
-            apply_heat_ramp_frequencies(
-                kw,
-                nstep=nstep,
-                ihtfrq=resolve_heat_ihtfrq(args, nstep=nstep),
-            )
+        ihtfrq = resolve_heat_ihtfrq(args, nstep=nstep)
+        if resolve_heat_thermostat(args) == "scale" or not kw.get("cpt"):
+            # Scale heat and vacuum Hoover fallback (no CPT): ihtfrq velocity ramp.
+            apply_heat_ramp_frequencies(kw, nstep=nstep, ihtfrq=ihtfrq)
         else:
-            # Hoover heat: keep ihtfrq=0 from build_hoover_heat_dynamics (no IHTFRQ ramp).
+            # PBC Hoover CPT: thermostat via hoover reft; disable IHTFRQ ramp.
             kw["ihtfrq"] = 0
             kw.pop("TEMINC", None)
     elif (
@@ -415,8 +414,8 @@ def _configure_heat_dynamics_start(
 
     firstt = float(kw.get("firstt", kw.get("finalt", 300.0)))
     kw["iasvel"] = 1
-    hoover_heat = heat_thermostat == "hoover"
-    if not hoover_heat:
+    hoover_cpt_heat = heat_thermostat == "hoover" and bool(kw.get("cpt"))
+    if not hoover_cpt_heat:
         # Scale at IHTFRQ (CHARMM iasors=0); avoid Gaussian reassignment every ihtfrq
         # which spikes T and trips echeck on all-ML clusters (no SHAKE).
         kw["iasors"] = 0
@@ -431,7 +430,7 @@ def _configure_heat_dynamics_start(
             restart_path=None,
             use_pbc=use_pbc,
         )
-        if hoover_heat:
+        if hoover_cpt_heat:
             # Keep firstt/finalt for overlap chunk 0 (see preserve_cold_start) and
             # use start so Hoover engages after the one-shot Boltzmann assign.
             kw["iasvel"] = 0
@@ -439,10 +438,10 @@ def _configure_heat_dynamics_start(
         else:
             kw["start"] = False
         if not quiet:
-            if hoover_heat:
+            if hoover_cpt_heat:
                 print(
                     f"HEAT: Boltzmann velocities at FIRSTT={firstt:.1f} K "
-                    "(in-memory coords after mini); Hoover NVT (no ihtfrq); "
+                    "(in-memory coords after mini); Hoover CPT NVT (no ihtfrq); "
                     "start=True for main heat dyna",
                     flush=True,
                 )
@@ -465,7 +464,7 @@ def _configure_heat_dynamics_start(
         io.restart_read = None
         kw["restart"] = False
         kw["new"] = False
-        if hoover_heat:
+        if hoover_cpt_heat:
             kw["iasvel"] = 0
             kw["start"] = True
         else:
@@ -478,8 +477,8 @@ def _configure_heat_dynamics_start(
             print(
                 msg
                 + (
-                    "Hoover NVT (no ihtfrq); start=True for main heat dyna"
-                    if hoover_heat
+                    "Hoover CPT NVT (no ihtfrq); start=True for main heat dyna"
+                    if hoover_cpt_heat
                     else "ihtfrq scales (iasors=0)"
                 ),
                 flush=True,
@@ -493,8 +492,8 @@ def _configure_heat_dynamics_start(
         print(
             f"HEAT: dyna start FIRSTT={firstt:.1f} K (cold start); "
             + (
-                "Hoover NVT (no ihtfrq)"
-                if hoover_heat
+                "Hoover CPT NVT (no ihtfrq)"
+                if hoover_cpt_heat
                 else "ihtfrq scales (iasors=0)"
             ),
             flush=True,
@@ -1362,12 +1361,13 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 if (
                     overlap_for_stage is not None
                     and overlap_for_stage.enabled
-                    and heat_thermostat == "scale"
+                    and int(kw.get("ihtfrq", 0) or 0) > 0
                     and not args.quiet
                 ):
                     print(
                         "HEAT overlap guard: chunked restarts may disrupt ihtfrq "
-                        "ramps; prefer --heat-thermostat hoover (default).",
+                        "ramps; use a single segment (--dynamics-overlap-check-interval "
+                        ">= heat nstep) or --heat-thermostat hoover with PBC.",
                         flush=True,
                     )
                 _configure_heat_dynamics_start(
@@ -1393,11 +1393,18 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     temp=nve_t,
                 )
             if stage == "heat" and not args.quiet:
-                if heat_thermostat == "hoover":
+                if heat_thermostat == "hoover" and kw.get("cpt"):
                     print(
-                        f"HEAT Hoover: {kw.get('firstt')} -> {kw.get('finalt')} K "
+                        f"HEAT Hoover (CPT): {kw.get('firstt')} -> {kw.get('finalt')} K "
                         f"over {stage_ps} ps | hoover reft={kw.get('hoover reft')} K "
-                        f"tmass={kw.get('tmass')} | ihtfrq=0",
+                        f"tmass={kw.get('tmass')} | pmass=0 | ihtfrq=0",
+                        flush=True,
+                    )
+                elif heat_thermostat == "hoover":
+                    print(
+                        f"HEAT Hoover (vacuum fallback): {kw.get('firstt')} -> "
+                        f"{kw.get('finalt')} K over {stage_ps} ps | CPT Hoover needs "
+                        f"CRYSTal — using ihtfrq={kw.get('ihtfrq')} scale (iasors=0)",
                         flush=True,
                     )
                 else:
