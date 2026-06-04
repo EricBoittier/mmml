@@ -166,8 +166,12 @@ def build_md_system_argv(
         heat_ihtfrq = job.get("heat_ihtfrq")
         if heat_ihtfrq is not None:
             argv.extend(["--heat-ihtfrq", str(heat_ihtfrq)])
-        argv.extend(["--heat-firstt", str(cfg["heat_firstt"])])
-        argv.extend(["--heat-finalt", str(cfg["heat_finalt"])])
+        argv.extend(
+            ["--heat-firstt", str(job.get("heat_firstt", cfg["heat_firstt"]))]
+        )
+        argv.extend(
+            ["--heat-finalt", str(job.get("heat_finalt", cfg["heat_finalt"]))]
+        )
         if cfg.get("bonded_mm_mini"):
             argv.append("--bonded-mm-mini")
             argv.extend(

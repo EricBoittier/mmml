@@ -182,7 +182,10 @@ jobs:
     box_size: 55.0
     integrator: heat_hoover
     md_stages: "mini,heat"
-    ps_heat: 5.0
+    # Gentle Hoover ramp: 10→120 K over 10 ps (~11 K/ps; was 10→240 K / 5 ps ≈ 46 K/ps).
+    ps_heat: 10.0
+    heat_firstt: 10.0
+    heat_finalt: 120.0
     heat_thermostat: hoover
     heat_ihtfrq: 0
 

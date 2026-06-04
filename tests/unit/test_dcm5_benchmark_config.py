@@ -121,7 +121,9 @@ def test_pycharmm_heat_hoover_argv(cfg: dict) -> None:
     assert argv[idx + 1] == "0"
     assert "--ps-heat" in argv
     idx = argv.index("--ps-heat")
-    assert float(argv[idx + 1]) == 5.0
+    assert float(argv[idx + 1]) == 10.0
+    idx = argv.index("--heat-finalt")
+    assert float(argv[idx + 1]) == 120.0
     assert "--bonded-mm-mini" in argv
     assert "--box-size" in argv
     idx = argv.index("--box-size")
