@@ -60,6 +60,39 @@ def _write_pycharmm_fixture(root: Path) -> None:
     (job_dir / "stdout.log").write_text(log, encoding="utf-8")
 
 
+def test_collect_pycharmm_ignores_segment_nstep_in_log(tmp_path: Path) -> None:
+    """Collector must not treat overlap chunk NSTEP=500 as total integrated steps."""
+    job_dir = tmp_path / "pycharmm_vac_nve"
+    job_dir.mkdir(parents=True)
+    res = job_dir / "nve_dcm_5.res"
+    res.write_text(
+        "REST    48     1\n"
+        "\n"
+        " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
+        "         100       10000         500         500          10        8000\n",
+        encoding="utf-8",
+    )
+    log = (
+        "overlap rescue SD=25\n"
+        "NSTEP = 25\n"
+        "NSTEP = 500\n"
+        "WRIDYN: RESTart file was written at step    8000\n"
+    )
+    (job_dir / "stdout.log").write_text(log, encoding="utf-8")
+
+    csv_path = tmp_path / "benchmark_summary.csv"
+    md_path = tmp_path / "benchmark_report.md"
+    rows = collect(
+        results_root=tmp_path,
+        csv_path=csv_path,
+        md_path=md_path,
+        config_path=WORKFLOW_ROOT / "config.yaml",
+    )
+    row = {r["job_id"]: r for r in rows}["pycharmm_vac_nve"]
+    assert int(row["nsteps"]) == 8000
+    assert row["status"] in {"pass", "warn"}
+
+
 def test_collect_parses_fixture_outputs(tmp_path: Path) -> None:
     _write_ase_fixture(tmp_path)
     _write_jaxmd_fixture(tmp_path)
