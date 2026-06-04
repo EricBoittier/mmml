@@ -101,7 +101,7 @@ def main() -> int:
         return rc
 
     if backend == "pycharmm":
-        from mmml.interfaces.pycharmmInterface.mlpot.dynamics import dynamics_nstep_from_ps
+        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import dynamics_nstep_from_ps
         from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
             assert_stage_dynamics_completed,
         )

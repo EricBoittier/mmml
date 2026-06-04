@@ -204,6 +204,6 @@ def paths_for_size(cfg: dict[str, Any], n_monomers: int) -> dict[str, Path]:
 
 
 def expected_nve_nstep(cfg: dict[str, Any]) -> int:
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import dynamics_nstep_from_ps
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import dynamics_nstep_from_ps
 
     return int(dynamics_nstep_from_ps(float(cfg["ps_nve"]), float(cfg["dt_fs"])))
