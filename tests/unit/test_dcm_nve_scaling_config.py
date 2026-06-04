@@ -18,6 +18,7 @@ if str(SCRIPTS) not in sys.path:
 from scaling_lib import (  # noqa: E402
     build_md_system_argv,
     composition_string,
+    expected_nve_nstep,
     load_config,
     packmol_radius_A,
     paths_for_size,
@@ -41,6 +42,11 @@ def test_per_step_output_required(cfg: dict) -> None:
 
 def test_nve_boltzmann_temp_below_full_temperature(cfg: dict) -> None:
     assert float(cfg["nve_boltzmann_temp"]) < float(cfg["temperature"])
+
+
+def test_expected_nve_nstep_matches_config(cfg: dict) -> None:
+    dt_ps = float(cfg["dt_fs"]) * 1e-3
+    assert expected_nve_nstep(cfg) == int(round(float(cfg["ps_nve"]) / dt_ps))
 
 
 def test_nve_overlap_single_chunk(cfg: dict) -> None:
