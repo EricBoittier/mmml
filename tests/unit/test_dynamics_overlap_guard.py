@@ -683,6 +683,23 @@ def test_overlap_aborts_before_charmm_when_scratch_restart_is_invalid(tmp_path):
     assert len(calls) == 1
 
 
+def test_assign_velocities_at_temperature_uses_nstep_zero():
+    from unittest.mock import patch
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        assign_velocities_at_temperature,
+    )
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.run_dynamics"
+    ) as run_dyn:
+        assign_velocities_at_temperature(48.0, use_pbc=False)
+    kw = run_dyn.call_args.args[0]
+    assert int(kw["nstep"]) == 0
+    assert int(kw["iasvel"]) == 1
+    assert float(kw["firstt"]) == 48.0
+
+
 def test_overlap_should_split_trajectory_limits_chunk_dcd_count():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _overlap_should_split_trajectory,
@@ -691,8 +708,9 @@ def test_overlap_should_split_trajectory_limits_chunk_dcd_count():
     assert not _overlap_should_split_trajectory(n_chunks=1, traj_nsavc=1)
     assert not _overlap_should_split_trajectory(n_chunks=7390, traj_nsavc=1)
     assert not _overlap_should_split_trajectory(n_chunks=100, traj_nsavc=1)
-    assert _overlap_should_split_trajectory(n_chunks=4, traj_nsavc=100)
-    assert _overlap_should_split_trajectory(n_chunks=8, traj_nsavc=1)
+    assert not _overlap_should_split_trajectory(n_chunks=4, traj_nsavc=100)
+    assert not _overlap_should_split_trajectory(n_chunks=8, traj_nsavc=1)
+    assert _overlap_should_split_trajectory(n_chunks=3, traj_nsavc=100)
 
 
 def test_apply_overlap_chunk_preserves_heat_cold_start_kw():

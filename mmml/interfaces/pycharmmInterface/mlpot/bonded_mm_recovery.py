@@ -622,6 +622,43 @@ def record_mm_baseline_internal_energy(
     return baseline.internal_kcalmol if baseline is not None else None
 
 
+def _bonded_mm_skip_reason_after_heat_overlap(
+    ctx: MlpotContext,
+    args: argparse.Namespace,
+    *,
+    stage: str,
+) -> str | None:
+    """Block heavy bonded-MM reload when heat left inter-monomer overlaps."""
+    if stage.lower() != "heat":
+        return None
+    action = str(getattr(args, "dynamics_overlap_action", "rescue") or "rescue").lower()
+    if action == "off":
+        return None
+    n_monomers = int(getattr(ctx, "n_monomers", 0) or 0)
+    if n_monomers < 2:
+        return None
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+        measure_worst_intermonomer_distance,
+        resolve_dynamics_overlap_config,
+    )
+
+    cfg = resolve_dynamics_overlap_config(
+        args,
+        n_monomers=n_monomers,
+        use_pbc=bool(getattr(ctx, "use_pbc", False)),
+    )
+    if not cfg.enabled:
+        return None
+    worst = measure_worst_intermonomer_distance(cfg)
+    if worst >= cfg.min_distance_A:
+        return None
+    return (
+        f"worst inter-monomer distance {worst:.3f} Å < "
+        f"--dynamics-overlap-min-distance {cfg.min_distance_A:.3f} Å "
+        "(fix heat/overlap before bonded-MM on pre-MLpot topology)"
+    )
+
+
 def maybe_run_bonded_mm_mini_after_stage(
     ctx: MlpotContext,
     args: argparse.Namespace,
@@ -643,7 +680,7 @@ def maybe_run_bonded_mm_mini_after_stage(
     """
     if not getattr(args, "bonded_mm_mini", False):
         return False
-    raw = str(getattr(args, "bonded_mm_mini_after", "heat") or "heat")
+    raw = str(getattr(args, "bonded_mm_mini_after", "mini") or "mini")
     watch = {s.strip().lower() for s in raw.split(",") if s.strip()}
     if stage.lower() not in watch:
         return False
@@ -679,6 +716,14 @@ def maybe_run_bonded_mm_mini_after_stage(
 
     if _mlpot_covers_all_atoms(ctx):
         if topology_psf is not None:
+            skip_reason = _bonded_mm_skip_reason_after_heat_overlap(ctx, args, stage=stage)
+            if skip_reason is not None:
+                if not args.quiet:
+                    print(
+                        f"bonded-MM-mini: skipping heavy recovery after {stage}: {skip_reason}",
+                        flush=True,
+                    )
+                return False
             result = _run_heavy_bonded_recovery_check(
                 ctx,
                 args,

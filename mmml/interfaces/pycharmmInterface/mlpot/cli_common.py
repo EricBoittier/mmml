@@ -1379,8 +1379,8 @@ def add_bonded_mm_mini_args(parser: argparse.ArgumentParser) -> None:
     group.add_argument(
         "--bonded-mm-mini-after",
         type=str,
-        default="heat",
-        help="Comma-separated dynamics stages to check (default: heat)",
+        default="mini",
+        help="Comma-separated dynamics stages to check (default: mini)",
     )
     group.add_argument(
         "--bonded-mm-mini-steps",

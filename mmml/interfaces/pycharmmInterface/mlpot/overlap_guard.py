@@ -344,6 +344,22 @@ def _overlap_cell(
     return float(side)
 
 
+def measure_worst_intermonomer_distance(
+    config: DynamicsOverlapConfig,
+) -> float:
+    """Return closest inter-monomer atom–atom distance (Å) without raising."""
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+
+    pos = get_charmm_positions_array()
+    offsets = monomer_offsets(int(pos.shape[0]), config.n_monomers)
+    cell = _overlap_cell(
+        use_pbc=config.use_pbc,
+        fallback_box_side_A=config.fallback_box_side_A,
+    )
+    best_dist, _ = _find_worst_intermonomer_overlap_fn()(pos, offsets, cell=cell)
+    return float(best_dist)
+
+
 def _overlap_check(
     config: DynamicsOverlapConfig,
     *,

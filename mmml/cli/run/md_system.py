@@ -581,8 +581,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--bonded-mm-mini-after",
         type=str,
-        default="heat",
-        help="pycharmm: comma-separated stages to check (default: heat)",
+        default="mini",
+        help="pycharmm: comma-separated stages to check (default: mini)",
     )
     parser.add_argument(
         "--bonded-mm-mini-steps",
