@@ -104,6 +104,7 @@ def main() -> int:
             str(args.atoms_per_monomer),
             "--mm-switch-on",
             str(args.mm_switch_on),
+            "--free-space",
         ],
         capture_output=True,
         text=True,

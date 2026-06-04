@@ -47,3 +47,12 @@ def test_validate_sparse_dimer_cap_random_sparse():
     assert stats["n_dimers_total"] == n * (n - 1) // 2
     assert "verdict" in stats
     assert isinstance(stats["ok"], bool)
+
+
+def test_count_near_dimer_pairs_free_space_cap_is_all_pairs():
+    n = 10
+    apm = 5
+    pos = np.zeros((n * apm, 3), dtype=np.float64)
+    stats = validate_sparse_dimer_cap(pos, n, apm, mm_switch_on=7.0, free_space=True)
+    assert stats["max_active_dimers_cap"] == n * (n - 1) // 2
+    assert stats["free_space"] is True

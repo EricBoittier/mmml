@@ -349,7 +349,22 @@ def _build_stage_dynamics_kw(
     kw["iprfrq"] = dyn_print["iprfrq"]
     kw["isvfrq"] = dyn_print["isvfrq"]
     kw["nstep"] = nstep
-    if stage == "heat" or (
+    if stage == "heat":
+        if resolve_heat_thermostat(args) == "scale":
+            from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+                apply_heat_ramp_frequencies,
+            )
+
+            apply_heat_ramp_frequencies(
+                kw,
+                nstep=nstep,
+                ihtfrq=resolve_heat_ihtfrq(args, nstep=nstep),
+            )
+        else:
+            # Hoover heat: keep ihtfrq=0 from build_hoover_heat_dynamics (no IHTFRQ ramp).
+            kw["ihtfrq"] = 0
+            kw.pop("TEMINC", None)
+    elif (
         stage == "equi"
         and not use_pbc
         and resolve_heat_thermostat(args) == "scale"

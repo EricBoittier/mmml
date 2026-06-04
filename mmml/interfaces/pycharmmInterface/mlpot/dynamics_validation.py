@@ -20,6 +20,20 @@ def count_dcd_frames(path: Path) -> int:
         return int(struct.unpack(_FMT_I, f.read(4))[0])
 
 
+def count_readable_dcd_frames(path: Path) -> int:
+    """Return frames actually readable from coordinate records (not header alone)."""
+    p = Path(path)
+    if not p.is_file():
+        return 0
+    try:
+        from mmml.utils.dcd_reader import read_dcd_trajectory
+
+        pos, _ = read_dcd_trajectory(p)
+        return int(pos.shape[0])
+    except (ValueError, struct.error, OSError):
+        return 0
+
+
 def expected_dcd_frame_count(*, nstep: int, nsavc: int) -> int:
     """Minimum frames CHARMM should write (step 0 plus every ``nsavc`` steps)."""
     n = max(1, int(nstep))
@@ -105,7 +119,11 @@ def assert_stage_dynamics_completed(
     if restart_path is not None:
         restart_step = read_restart_last_step(restart_path)
 
-    n_frames = count_dcd_frames(dcd_path) if dcd_path is not None else 0
+    header_frames = count_dcd_frames(dcd_path) if dcd_path is not None else 0
+    readable_frames = (
+        count_readable_dcd_frames(dcd_path) if dcd_path is not None else 0
+    )
+    n_frames = min(header_frames, readable_frames) if header_frames else readable_frames
 
     problems: list[str] = []
     if restart_step is not None and restart_step < min_steps:
@@ -113,9 +131,14 @@ def assert_stage_dynamics_completed(
             f"restart step {restart_step} < {min_steps} "
             f"(expected ~{expected_nstep}; likely echeck or CHARMM abort)"
         )
+    if dcd_path is not None and header_frames > 0 and readable_frames < header_frames:
+        problems.append(
+            f"DCD {dcd_path.name} header claims {header_frames} frame(s) but only "
+            f"{readable_frames} are readable (truncated or corrupt file)"
+        )
     if dcd_path is not None and n_frames < min_frames:
         problems.append(
-            f"DCD {dcd_path.name} has {n_frames} frame(s), "
+            f"DCD {dcd_path.name} has {n_frames} readable frame(s), "
             f"expected >= {min_frames} ({expected_frames} at nsavc={nsavc})"
         )
 
@@ -123,7 +146,13 @@ def assert_stage_dynamics_completed(
         print(
             f"{stage.upper()} complete: "
             f"restart_step={restart_step if restart_step is not None else '?'}, "
-            f"dcd_frames={n_frames} (expected ~{expected_frames})",
+            f"dcd_frames={n_frames} readable"
+            + (
+                f" (header {header_frames})"
+                if header_frames and header_frames != n_frames
+                else ""
+            )
+            + f" (expected ~{expected_frames})",
             flush=True,
         )
         return
