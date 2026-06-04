@@ -5,6 +5,9 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
+
+import numpy as np
 
 from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
     BondedMmMiniConfig,
@@ -336,10 +339,6 @@ def _reload_pre_mlpot_topology(
 
 
 def _reregister_mlpot_after_topology_reload(ctx: MlpotContext) -> None:
-    from typing import Any
-
-import numpy as np
-
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
         refresh_nbonds_after_mlpot_pbc,
