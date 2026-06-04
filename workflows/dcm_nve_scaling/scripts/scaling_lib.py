@@ -189,6 +189,18 @@ def build_md_system_argv(
             ]
         )
 
+    if bool(cfg.get("bonded_mm_mini", False)):
+        argv.append("--bonded-mm-mini")
+        argv.extend(
+            ["--bonded-mm-mini-after", str(cfg.get("bonded_mm_mini_after", "mini"))]
+        )
+        argv.extend(
+            [
+                "--bonded-mm-mini-steps",
+                str(int(cfg.get("bonded_mm_mini_steps", 50))),
+            ]
+        )
+
     return argv
 
 

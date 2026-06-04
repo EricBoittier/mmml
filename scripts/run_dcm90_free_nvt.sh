@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Free-space NVT: MLpot SD → heating → Hoover CPT equil + MMFP sphere.
+# Free-space NVT: MLpot SD → IHTFRQ velocity-scale heat → NVT equil + MMFP sphere.
+# Vacuum heat uses --heat-thermostat scale (Hoover CPT needs CRYSTal / PBC).
 #
 # Sphere radii (initial guess before minimization):
 #   packmol sphere R ≈ 18 * (90/60)^(1/3) ≈ 21 Å for DCM:90.
@@ -53,9 +54,11 @@ mmml md-system \
   --flat-bottom-selection "all" \
   --flat-bottom-k 0.01 \
   --temperature 240.0 --bonded-mm-mini --bonded-mm-mini-after mini --bonded-mm-mini-steps 500 \
-  --heat-thermostat hoover \
+  --heat-thermostat scale \
+  --heat-firstt 10.0 --heat-finalt 240.0 \
+  --heat-ihtfrq 100 \
   --dt-fs 0.25 \
-  --ps-heat 1 --ps-equi 3 \
+  --ps-heat 10 --ps-equi 3 \
   --dcd-nsavc 100 \
   --dynamics-overlap-check-interval 500 \
   --dyn-nprint 1000 --ml-switch-width 0.1 --charmm-sd-steps 2000 --charmm-abnr-steps 200  \

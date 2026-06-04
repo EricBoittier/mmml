@@ -115,6 +115,17 @@ snakemake results/pycharmm_vac_nve/done.txt -c1
 
 Sync repo + `pip install -e .` for NVE memory handoff and post-run DCD validation.
 
+### `pycharmm_vac_heat_hoover`: `CRYStal must be used for constant pressure simulations`
+
+Loose-PBC Hoover heat uses CHARMM **CPT** (`pmass=0`). The crystal must stay active after CGENFF pre-minimize. Older code called `crystal free` during MM pre-min; current `mmml` skips that when `--box-size` is set and re-installs the box before heat.
+
+```bash
+grep -E 'CHARMM loose PBC|CHARMM crystal ready|CRYStal must be used|HEAT Hoover' \
+  results/pycharmm_vac_heat_hoover/stdout.log | tail -15
+```
+
+After updating the package, rerun the job. You should see `CHARMM loose PBC` early and either no crystal warning or `CHARMM crystal ready for CPT` before `HEAT Hoover (CPT)`.
+
 ### `jaxmd_pbc_npt` fails
 
 NPT is the most fragile mode (barostat + neighbor list + small cluster). Check:

@@ -1643,20 +1643,10 @@ def _apply_overlap_chunk_dynamics_kw(
     if not preserve_cold_start:
         chunk_kw["iasvel"] = 0
     elif preserve_ihtfrq_heat_ramp:
-        # Boltzmann assign already ran (start=False); keep IHTFRQ ramp keywords.
+        # Boltzmann assign already ran (start=False); keep IHTFRQ / TEMINC / FIRSTT ramp.
         chunk_kw["iasvel"] = 0
-        for key in (
-            "iasors",
-            "iscale",
-            "iscvel",
-            "ichecw",
-            "firstt",
-            "finalt",
-            "tbath",
-            "tstruct",
-            "TEMINC",
-        ):
-            chunk_kw.pop(key, None)
+        chunk_kw["iasors"] = 0
+        chunk_kw["start"] = False
         # Hoover NVT: keep thermostat keywords; ensure scale-heat ramps stay off.
         if int(chunk_kw.get("ihtfrq", 0)) != 0 and "hoover reft" in chunk_kw:
             chunk_kw["ihtfrq"] = 0
