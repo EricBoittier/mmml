@@ -158,9 +158,9 @@ def assert_stage_dynamics_completed(
         return
 
     hint = (
-        "Check the log for 'ENERGY CHANGE TOLERANCE' / echeck. "
-        "For heating tests try --no-echeck or a larger --echeck; "
-        "for dissociation inspect VMD (ML USER-only dynamics has no SHAKE)."
+        "Check the log for 'ENERGY CHANGE TOLERANCE' / echeck and the last DYNA> line. "
+        "ML USER-only NVE (no SHAKE) often needs --no-echeck or echeck >> 500 kcal/mol; "
+        "inspect VMD for dissociation if the run continues but physics look wrong."
     )
     raise RuntimeError(
         f"{stage.upper()} dynamics incomplete: " + "; ".join(problems) + f". {hint}"

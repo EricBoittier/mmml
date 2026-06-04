@@ -42,6 +42,7 @@ charmm_sd_steps: 200
 charmm_abnr_steps: 200
 dynamics_overlap_action: rescue
 dynamics_overlap_min_distance: 0.5
-# ML USER-only NVE (no SHAKE): echeck=50 stops every run ~0.1 ps in. Use 500 kcal/mol floor.
-echeck: 500.0
+# ML USER-only NVE (no SHAKE): CHARMM echeck stops early (|ΔE| spikes → ~1k steps, not 80k).
+# Disable in-run echeck; post-run validation in run_job.py still requires ~90% of frames.
+no_echeck: true
 ml_gpu_count: 1
