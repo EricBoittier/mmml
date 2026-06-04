@@ -22,8 +22,9 @@ temperature: 300.0
 
 save_forces_npz: true
 forces_npz_interval: 1
-# Align overlap checks with force dump cadence (effective min 2 when dcd_nsavc=1)
-dynamics_overlap_check_interval: 1
+# Overlap chunk size (steps). With dcd_nsavc=1 the effective minimum is 2; use 500
+# so 20 ps NVE (~80k steps) yields ~160 chunks, not ~40k per-chunk *.chunk.*.dcd files.
+dynamics_overlap_check_interval: 500
 
 mm_switch_on: 7.0
 mm_switch_width: 5.0

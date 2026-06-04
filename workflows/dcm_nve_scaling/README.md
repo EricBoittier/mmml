@@ -22,6 +22,7 @@ Sibling to [dcm5_md_benchmark](../dcm5_md_benchmark/) (fixed DCM:5, multi-backen
 From [config.yaml](config.yaml):
 
 - `dcd_nsavc: 1`, `dyn_nprint: 1`, `nprint: 1` (every integration step)
+- `dynamics_overlap_check_interval: 500` (overlap guard every 500 steps; avoids thousands of `*.chunk.NNNN.dcd` when interval was 1→2)
 - `save_forces_npz: true`, `forces_npz_interval: 1`
 - Packmol sphere `R = 18 * (N/60)^(1/3)` Å
 
