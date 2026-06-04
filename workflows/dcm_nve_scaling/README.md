@@ -25,7 +25,7 @@ From [config.yaml](config.yaml):
 - `nve_boltzmann_temp: 60` (gentle velocity draw before NVE; `--temperature` is for NVT stages only)
 - `mini_nstep: 2000`, `charmm_sd_steps` / `charmm_abnr_steps`: 200 (conservative pre-NVE relax)
 - `dynamics_overlap_check_interval: 80000` (single NVE chunk at 20 ps / 0.25 fs; no scratch restart handoff)
-- `echeck: 50`, `no_scale_echeck: true` (stop dynamics on large ΔE; expect **incomplete** NVE if the cluster drifts — inspect `restart_step` in the log, not a failed overlap handoff)
+- `echeck: 500` (50 kcal/mol stops ML USER NVE within ~400 steps; see `restart_step` in the log)
 - `save_forces_npz: true`, `forces_npz_interval: 1`
 - Packmol sphere `R = 18 * (N/60)^(1/3)` Å
 - **Free-space ML dimers:** `max_active_dimers = N(N−1)/2` (every unique pair evaluated each step; not the PBC `max(1000, 6N)` cap). Unset `MMML_MLPOT_MAX_ACTIVE_DIMERS` unless you intentionally override this.

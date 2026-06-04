@@ -102,7 +102,7 @@ def main() -> int:
     parser.add_argument(
         "--mm-switch-on",
         type=float,
-        default=5.0,
+        default=5.5,
         help="COM distance cutoff (Å), must match CutoffParameters.mm_switch_on",
     )
     parser.add_argument("--box-size", type=float, default=None, help="Cubic PBC side (Å)")
@@ -120,10 +120,16 @@ def main() -> int:
     )
     parser.add_argument(
         "--free-space",
-        action="store_true",
-        help="Use free-space cap policy (all unique dimer pairs; matches --free-space md-system)",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Free-space all-pairs cap (default: on when --box-size is omitted)",
     )
     args = parser.parse_args()
+    free_space = (
+        bool(args.free_space)
+        if args.free_space is not None
+        else args.box_size is None
+    )
 
     if args.composition:
         n_mol, n_apm = _parse_composition(args.composition)
@@ -167,7 +173,7 @@ def main() -> int:
         mm_switch_on=args.mm_switch_on,
         box_side_A=args.box_size,
         max_active_dimers=args.ml_max_active_dimers,
-        free_space=bool(args.free_space),
+        free_space=free_space,
     )
 
     print("Sparse ML dimer validation")
@@ -182,10 +188,10 @@ def main() -> int:
     default_cap = resolve_max_active_dimers(
         n_monomers,
         int(stats["n_dimers_total"]),
-        free_space=bool(args.free_space),
+        free_space=free_space,
     )
     if args.ml_max_active_dimers is None:
-        policy = "free-space all-pairs" if args.free_space else "PBC max(1000, 6n)"
+        policy = "free-space all-pairs" if free_space else "PBC max(1000, 6n)"
         print(f"  default policy cap   = {default_cap} ({policy})")
 
     if args.proposed_cap is not None:
@@ -196,7 +202,7 @@ def main() -> int:
             mm_switch_on=args.mm_switch_on,
             box_side_A=args.box_size,
             max_active_dimers=args.proposed_cap,
-            free_space=bool(args.free_space),
+            free_space=free_space,
         )
         print(f"\nProposed cap {args.proposed_cap}: {alt['verdict']}")
 

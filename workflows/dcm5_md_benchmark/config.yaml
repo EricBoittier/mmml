@@ -15,8 +15,8 @@ checkpoint: "${MMML_CKPT}"
 output_root: "results"
 mpirun_wrapper: "../../scripts/mmml-charmm-mpirun.sh"
 
-mm_switch_on: 7.0
-mm_switch_width: 5.0
+mm_switch_on: 5.5
+mm_switch_width: 1.5
 ml_switch_width: 0.1
 mini_nstep: 100
 dyn_nprint: 500

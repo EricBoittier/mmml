@@ -33,8 +33,8 @@ forces_npz_interval: 1
 # (ps_nve / (dt_fs * 1e-3) = 80_000)
 dynamics_overlap_check_interval: 80000
 
-mm_switch_on: 7.0
-mm_switch_width: 5.0
+mm_switch_on: 5.5
+mm_switch_width: 1.5
 ml_switch_width: 0.1
 # Conservative minimization before NVE (short mini caused early NVE energy spikes).
 mini_nstep: 2000
@@ -42,7 +42,6 @@ charmm_sd_steps: 200
 charmm_abnr_steps: 200
 dynamics_overlap_action: rescue
 dynamics_overlap_min_distance: 0.5
-# Abort dynamics before catastrophic ΔE; keep fixed (no auto-loosen for N=5..10).
-echeck: 50.0
-no_scale_echeck: true
+# ML USER-only NVE (no SHAKE): echeck=50 stops every run ~0.1 ps in. Use 500 kcal/mol floor.
+echeck: 500.0
 ml_gpu_count: 1

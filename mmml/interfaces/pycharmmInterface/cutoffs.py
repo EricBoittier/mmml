@@ -43,10 +43,10 @@ def handoff_widths_from_args(args) -> tuple[float, float, float]:
     ml_w = getattr(args, "ml_switch_width", None)
     if ml_w is None:
         ml_w = getattr(args, "ml_cutoff", 0.1)
-    mm_on = float(getattr(args, "mm_switch_on", 7.0))
+    mm_on = float(getattr(args, "mm_switch_on", 5.5))
     mm_w = getattr(args, "mm_switch_width", None)
     if mm_w is None:
-        mm_w = getattr(args, "mm_cutoff", 5.0)
+        mm_w = getattr(args, "mm_cutoff", 1.5)
     return float(ml_w), mm_on, float(mm_w)
 
 
@@ -75,16 +75,16 @@ def add_handoff_cutoff_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--mm-switch-on",
         type=float,
-        default=7.0,
-        help="Distance (Å) where ML→0 and MM→1 in complementary handoff (default: 7.0).",
+        default=5.5,
+        help="Distance (Å) where ML→0 and MM→1 in complementary handoff (default: 5.5).",
     )
     parser.add_argument(
         "--mm-switch-width",
         "--mm-cutoff",
         dest="mm_switch_width",
         type=float,
-        default=5.0,
-        help="MM outer taper width in Å past mm_switch_on (default: 5.0).",
+        default=1.5,
+        help="MM outer taper width in Å past mm_switch_on (default: 1.5).",
     )
     parser.add_argument(
         "--no-complementary-handoff",
@@ -122,8 +122,8 @@ class CutoffParameters:
     def __init__(
         self,
         ml_switch_width: float = 0.1,
-        mm_switch_on: float = 7.0,
-        mm_switch_width: float = 5.0,
+        mm_switch_on: float = 5.5,
+        mm_switch_width: float = 1.5,
         *,
         complementary_handoff: bool = True,
         # Deprecated aliases (same semantics as the canonical names above).
@@ -298,8 +298,8 @@ class CutoffParameters:
             ml_switch_width=d.get(
                 "ml_switch_width", d.get("ml_cutoff", d.get("ml_cutoff_distance", 0.1))
             ),
-            mm_switch_on=d["mm_switch_on"],
-            mm_switch_width=d.get("mm_switch_width", d.get("mm_cutoff", 5.0)),
+            mm_switch_on=d.get("mm_switch_on", 5.5),
+            mm_switch_width=d.get("mm_switch_width", d.get("mm_cutoff", 1.5)),
             complementary_handoff=d.get("complementary_handoff", True),
         )
 

@@ -124,8 +124,6 @@ exec "$MPIRUN" md-system \
   --dynamics-overlap-action rescue \
   --dt-fs 0.25 \
   --temperature 300.0 \
-  --mm-switch-on 7.0 \
-  --mm-switch-width 5.0 \
   --ml-switch-width 0.1 \
   --charmm-sd-steps 25 \
   --charmm-abnr-steps 100 \
