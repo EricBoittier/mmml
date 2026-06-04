@@ -85,7 +85,7 @@ Staged workflow **always overwrites** `nprint`, `iprfrq`, `isvfrq` from `resolve
 | **MM weight `s_MM(r)`** | Goes to **0** when dimer COM is in the pure-ML zone (complementary handoff) |
 | **`mm_r_min`** | Extra inner rule on **MM only**: scale MM to zero when dimer COM &lt; `mm_r_min` (~6.2 Å with default handoff). Does **not** remove atoms or monomers |
 
-Neighbor lists for large PBC systems use an outer cutoff **`mm_switch_on + mm_switch_width` (12 Å)** plus optional jax-md skin — pairs near that cutoff stay listed so they can enter range later. That is separate from `mm_r_min`.
+Neighbor lists for large PBC systems use an outer cutoff **`mm_switch_on + mm_switch_width` (7 Å with defaults 5.5 + 1.5)** plus optional jax-md skin — pairs near that cutoff stay listed so they can enter range later. That is separate from `mm_r_min`.
 
 ## Trajectory files
 

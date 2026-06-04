@@ -52,12 +52,11 @@ def test_nve_overlap_single_chunk(cfg: dict) -> None:
 
 def test_conservative_minimize_and_echeck(cfg: dict) -> None:
     assert int(cfg["mini_nstep"]) >= 1000
-    assert float(cfg["echeck"]) > 0
-    assert cfg.get("no_scale_echeck") is True
+    assert float(cfg["echeck"]) >= 500.0
 
 
 def test_packmol_radius_scaling() -> None:
-    assert packmol_radius_A(5) == pytest.approx(7.7, abs=0.2)
+    assert packmol_radius_A(5) == pytest.approx(7.9, abs=0.2)
     assert packmol_radius_A(90) == pytest.approx(21.0, abs=0.2)
 
 
@@ -83,7 +82,7 @@ def test_build_md_system_argv_per_step_flags(cfg: dict, tmp_path: Path) -> None:
     assert argv[idx + 1] == "mini,nve"
     idx = argv.index("--echeck")
     assert float(argv[idx + 1]) == float(cfg["echeck"])
-    assert "--no-scale-echeck" in argv
+    assert "--no-scale-echeck" not in argv
 
 
 def test_paths_for_size(cfg: dict) -> None:

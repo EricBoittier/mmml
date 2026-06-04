@@ -29,8 +29,8 @@ def default_cp() -> CutoffParameters:
 def test_cutoff_defaults() -> None:
     cp = CutoffParameters()
     assert cp.ml_switch_width == 0.1
-    assert cp.mm_switch_on == 7.0
-    assert cp.mm_switch_width == 5.0
+    assert cp.mm_switch_on == 5.5
+    assert cp.mm_switch_width == 1.5
     assert cp.complementary_handoff is True
 
 

@@ -56,8 +56,6 @@ exec "$MPIRUN" md-system \
   --dyn-nprint 500 \
   --ml-batch-size 256 \
   --skip-energy-show \
-  --mm-switch-on 7.0 \
-  --mm-switch-width 5.0 \
   --ml-switch-width 0.1 \
   --seed 123 \
   "$@"

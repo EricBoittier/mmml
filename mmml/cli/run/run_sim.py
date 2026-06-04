@@ -160,16 +160,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--mm-switch-on",
         type=float,
-        default=7.0,
-        help="Distance (Å) where ML→0 and MM→1 in complementary handoff (default: 7.0).",
+        default=5.5,
+        help="Distance (Å) where ML→0 and MM→1 in complementary handoff (default: 5.5).",
     )
     parser.add_argument(
         "--mm-switch-width",
         "--mm-cutoff",
         dest="mm_switch_width",
         type=float,
-        default=5.0,
-        help="MM outer taper width in Å past mm_switch_on (default: 5.0).",
+        default=1.5,
+        help="MM outer taper width in Å past mm_switch_on (default: 1.5).",
     )
     parser.add_argument(
         "--no-complementary-handoff",

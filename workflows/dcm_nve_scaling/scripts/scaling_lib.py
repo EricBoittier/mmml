@@ -172,6 +172,7 @@ def build_md_system_argv(
         argv.extend(["--echeck", str(cfg["echeck"])])
     if bool(cfg.get("no_scale_echeck", False)):
         argv.append("--no-scale-echeck")
+    # When echeck is set without no_scale_echeck, md-system auto-loosens to recommend_echeck_kcal.
     if bool(cfg.get("no_echeck", False)):
         argv.append("--no-echeck")
 

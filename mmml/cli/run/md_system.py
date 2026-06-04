@@ -783,16 +783,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--mm-switch-on",
         type=float,
-        default=7.0,
-        help="MM handoff distance (Å); ML→0 / MM→1 at this COM separation (default: 7.0).",
+        default=5.5,
+        help="MM handoff distance (Å); ML→0 / MM→1 at this COM separation (default: 5.5).",
     )
     parser.add_argument(
         "--mm-cutoff",
         "--mm-switch-width",
         dest="mm_switch_width",
         type=float,
-        default=5.0,
-        help="MM outer taper width (Å) past mm_switch_on (default: 5.0).",
+        default=1.5,
+        help="MM outer taper width (Å) past mm_switch_on (default: 1.5).",
     )
     parser.add_argument(
         "--mlpot-mm-internal-scale",
@@ -1312,11 +1312,11 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
             str(getattr(args, "dynamics_overlap_separate_margin", 0.2)),
         ]
     )
-    cmd.extend(["--mm-switch-on", str(getattr(args, "mm_switch_on", 7.0))])
+    cmd.extend(["--mm-switch-on", str(getattr(args, "mm_switch_on", 5.5))])
     cmd.extend(
         [
             "--mm-switch-width",
-            str(getattr(args, "mm_switch_width", getattr(args, "mm_cutoff", 5.0))),
+            str(getattr(args, "mm_switch_width", getattr(args, "mm_cutoff", 1.5))),
         ]
     )
     cmd.extend(
