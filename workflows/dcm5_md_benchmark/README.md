@@ -63,7 +63,7 @@ export MMML_CKPT=/path/to/your/dcm1-ckpt-directory   # real path, not this place
 bash scripts/preflight.sh                             # fail fast if unset/invalid
 cd workflows/dcm5_md_benchmark
 
-# Dry-run
+# Dry-run (should list ``run_benchmark`` ×14 required jobs + ``collect``, not only ``collect``)
 snakemake -n
 
 # Local (1 GPU; PyCHARMM serialized via mpi=1 resource)
@@ -74,6 +74,14 @@ snakemake --profile profiles/local --keep-going
 
 # Cluster (edit profiles/slurm/config.yaml first)
 snakemake --profile profiles/slurm -j20
+```
+
+After `rm -rf results/`, a plain `snakemake` must **not** finish in seconds with only `collect` — that meant the DAG had no job dependencies (fixed: `collect` waits on `results/<job>/done.txt` for non-optional jobs).
+
+Re-aggregate without re-running MD (e.g. after `--keep-going` with some failures):
+
+```bash
+bash scripts/collect_shell.sh "$(pwd)" results/benchmark_summary.csv results/benchmark_report.md
 ```
 
 Run a single job:
@@ -119,7 +127,7 @@ Sync repo + `pip install -e .` for NVE memory handoff and post-run DCD validatio
 
 Typical log: `DYNA>` temperature hundreds of K at 0.125 ps, `restart step 689 < 7600`, one readable DCD frame. Causes: **short mini** + **stale NB lists** after `inbfrq=0` mini, then **Hoover `tmass` too small** for a 25-atom ML cluster (PSF formula ≈80).
 
-Current benchmark defaults: `mini_nstep: 2000`, `bonded_mm_mini`, `ps_heat: 5`, Hoover heat uses **`tmass ≥ 2000`**, heat-stage **`echeck ≥ 5000`**, and **`pgamma 0`** with **CHARMM UPDATE before heat**.
+Current benchmark defaults: `mini_nstep: 2000`, `bonded_mm_mini`, Hoover job **`ps_heat: 10`** with **`10 → 120 K`**, **`tmass ≥ 2000`**, heat-stage **`echeck ≥ 5000`**, and **`pgamma 0`** with **CHARMM UPDATE before heat**.
 
 ```bash
 grep -E 'CHARMM UPDATE after mini|tmass=|DYNA>|integrated |echeck' \
