@@ -319,6 +319,23 @@ def apply_charmm_output_from_args(args: argparse.Namespace) -> int:
     return max(1, int(args.nprint))
 
 
+def resolve_nve_boltzmann_temp(
+    args: argparse.Namespace,
+    *,
+    default_temp: float,
+) -> float:
+    """Kelvin for the one-shot velocity draw before NVE (``iasvel=0``).
+
+    Defaults to ``0.2 × --temperature`` (same as heat FIRSTT) when
+    ``--nve-boltzmann-temp`` is unset. Use a low value (e.g. 50 K) after mini
+    to avoid large initial forces on stiff ML clusters.
+    """
+    explicit = getattr(args, "nve_boltzmann_temp", None)
+    if explicit is not None:
+        return float(explicit)
+    return float(default_temp) * 0.2
+
+
 def resolve_heat_firstt_finalt(
     args: argparse.Namespace,
     *,
@@ -1185,6 +1202,16 @@ def add_staged_md_args(parser: argparse.ArgumentParser) -> None:
         type=float,
         default=None,
         help="NVE segment length in ps (default: --ps or 50)",
+    )
+    group.add_argument(
+        "--nve-boltzmann-temp",
+        type=float,
+        default=None,
+        metavar="K",
+        help=(
+            "pycharmm: Kelvin for Boltzmann velocities before NVE (memory handoff after mini). "
+            "Default 0.2×--temperature; use 50–100 K for gentler start than full --temperature."
+        ),
     )
     group.add_argument(
         "--ps-equi",

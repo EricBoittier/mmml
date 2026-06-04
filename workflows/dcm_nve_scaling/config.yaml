@@ -19,6 +19,8 @@ seed: 123
 spacing: 5.0
 packmol_tolerance: 1.0
 temperature: 300.0
+# Boltzmann draw before NVE (not NVT target); 300 K straight after mini is harsh on ML clusters
+nve_boltzmann_temp: 60.0
 
 save_forces_npz: true
 forces_npz_interval: 1

@@ -39,6 +39,10 @@ def test_per_step_output_required(cfg: dict) -> None:
     assert cfg["nprint"] == 1
 
 
+def test_nve_boltzmann_temp_below_full_temperature(cfg: dict) -> None:
+    assert float(cfg["nve_boltzmann_temp"]) < float(cfg["temperature"])
+
+
 def test_overlap_check_interval_not_per_step(cfg: dict) -> None:
     """Avoid O(nstep) overlap chunks when dcd_nsavc=1 (effective min interval is 2)."""
     assert int(cfg["dynamics_overlap_check_interval"]) >= 100
