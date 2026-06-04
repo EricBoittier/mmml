@@ -152,11 +152,12 @@ NVE: report `etot_drift_eV` (ASE) in CSV notes.
 ## Log checks (PyCHARMM heat)
 
 ```bash
-grep -E 'HEAT Hoover|HEAT complete|IHTFRQ|VELOCITIES HAVE BEEN SCALED' results/pycharmm_vac_heat_hoover/stdout.log
+grep -E 'HEAT Hoover|HEAT complete|IHTFRQ|VELOCITIES HAVE BEEN SCALED|integrated |cpt|pmass' \
+  results/pycharmm_vac_heat_hoover/stdout.log | tail -20
 ```
 
-- **Hoover**: `IHTFRQ = 0`, no repeated velocity scaling
-- **Scale**: `VELOCITIES HAVE BEEN SCALED` every 100 steps
+- **Hoover** (`pycharmm_vac_heat_hoover`): needs **CPT + Hoover** (`pmass 0` in the `dyna` banner), not standalone `hoover reft` alone. Expect `TEMPerature` rising toward `heat_finalt` (240 K), not ~0 K after 2 ps.
+- **Scale** (`pycharmm_vac_heat_scale`): `VELOCITIES HAVE BEEN SCALED` every `heat_ihtfrq` steps
 
 ## Unit tests (no CHARMM)
 

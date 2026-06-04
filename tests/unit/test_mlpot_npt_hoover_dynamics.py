@@ -66,10 +66,10 @@ def test_heat_free_space_disables_image_update_frequencies():
     assert kw["ilbfrq"] == 0
 
 
-def test_hoover_heat_uses_hoover_nvt_without_velocity_scaling():
+def test_hoover_heat_uses_cpt_hoover_nvt_at_constant_volume():
     kw = build_hoover_heat_dynamics(
         temp=240.0,
-        firstt=0.0,
+        firstt=10.0,
         finalt=240.0,
         use_pbc=False,
         tmass=160,
@@ -78,15 +78,18 @@ def test_hoover_heat_uses_hoover_nvt_without_velocity_scaling():
 
     assert kw["ihtfrq"] == 0
     assert kw["ieqfrq"] == 0
+    assert kw["cpt"] is True
+    assert kw["pmass"] == 0
     assert kw["hoover reft"] == 240.0
     assert kw["tmass"] == 160
-    assert kw["firstt"] == 0.0
+    assert kw["firstt"] == 10.0
     assert kw["finalt"] == 240.0
     assert kw["tbath"] == 240.0
     assert "TEMINC" not in kw
     assert kw["imgfrq"] == 0
     assert "hoover reft" in script
-    assert "cpt" not in script
+    assert "cpt" in script
+    assert "pmass 0" in script
     assert "ihtfrq" not in script or "ihtfrq 0" in script
 
 

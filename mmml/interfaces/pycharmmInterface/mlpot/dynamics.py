@@ -718,10 +718,14 @@ def build_hoover_heat_dynamics(
     echeck: float = 100.0,
     use_pbc: bool = True,
     tmass: int | None = None,
+    pgamma: float = 5.0,
 ) -> dict[str, Any]:
-    """NVT heating with CHARMM Hoover (no ``ihtfrq`` velocity scaling).
+    """NVT heating with CHARMM Hoover via CPT at constant volume (``pmass=0``).
 
-    Vacuum/free-space clusters use standalone ``hoover reft`` / ``tmass`` (no CPT).
+    CHARMM only couples Hoover constant-T with ``pint pconst`` (see
+    ``THERMOSTAT_INVESTIGATION.md``).  Standalone ``hoover reft`` without CPT
+    integrates but does not heat (T stays near the Boltzmann ``firstt`` draw).
+
     Boltzmann velocities at ``firstt`` should be assigned before ``dyna`` (see
     :func:`staged_workflow._configure_heat_dynamics_start`).
     """
@@ -747,12 +751,19 @@ def build_hoover_heat_dynamics(
             "firstt": heat_firstt,
             "finalt": heat_finalt,
             "tbath": heat_finalt,
+            "verlet": True,
         }
     )
-    _apply_hoover_nvt_kwargs(
+    if tmass is None:
+        _, tmass = compute_cpt_piston_masses()
+    _apply_npt_cpt_kwargs(
         kw,
         temp=heat_finalt,
+        thermostat="hoover",
+        pref=1.0,
+        pmass=0,
         tmass=tmass,
+        pgamma=pgamma,
         firstt=heat_firstt,
     )
     return kw
@@ -1596,6 +1607,7 @@ def _apply_overlap_chunk_dynamics_kw(
         and (
             bool(chunk_kw.get("start"))
             or "hoover reft" in chunk_kw
+            or bool(chunk_kw.get("cpt"))
         )
     )
     if not preserve_cold_start:
