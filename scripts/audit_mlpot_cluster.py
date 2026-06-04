@@ -4,7 +4,7 @@
 Checks:
   - Post-mini CRD exists
   - Uniform monomer atom layout
-  - Sparse dimer cap vs mm_switch_on (validate_mlpot_sparse_dimers)
+  - Sparse dimer cap vs mm_switch_on (validate_mlpot_sparse_dimers --free-space)
   - Optional stdout log grep for atom consistency / free-space dimer cap
 
 Example

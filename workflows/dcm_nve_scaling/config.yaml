@@ -1,5 +1,9 @@
 # DCM:N free-space PyCHARMM MLpot NVE scaling (N = 5..10).
 # Checkpoint: export MMML_CKPT before snakemake.
+#
+# ML dimer slots: --free-space uses all C(N,2) unique pairs (no sparse truncation).
+# Do not set MMML_MLPOT_MAX_ACTIVE_DIMERS below C(N,2) for these runs; the post-mini
+# audit validates with the same free-space all-pairs policy.
 
 cluster_sizes: [5, 6, 7, 8, 9, 10]
 composition_prefix: DCM
