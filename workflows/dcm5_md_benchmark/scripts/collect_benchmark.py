@@ -33,8 +33,13 @@ _CSV_FIELDS = [
     "notes",
 ]
 
-_RESTART_STEP_RE = re.compile(
-    r"(?:restart_step=|NSTEP\s*=?\s*)(\d+)", re.IGNORECASE
+_STAGE_COMPLETE_RE = re.compile(
+    r"(?:HEAT|NVE|EQUI|PROD)\s+complete:.*?restart_step=(\d+)",
+    re.IGNORECASE,
+)
+_WRIDYN_STEP_RE = re.compile(
+    r"WRIDYN:\s+RESTart file was written at step\s+(\d+)",
+    re.IGNORECASE,
 )
 _HEAT_COMPLETE_RE = re.compile(
     r"(?:HEAT|NVE|EQUI|PROD)\s+complete:", re.IGNORECASE
@@ -144,6 +149,46 @@ def _parse_jaxmd(out_dir: Path, meta: dict[str, Any]) -> dict[str, Any]:
     return row
 
 
+def _restart_step_from_res_files(out_dir: Path) -> int | None:
+    """Read global step from CHARMM ``.res`` (JHSTRT), not segment ``NSTEP``."""
+    try:
+        from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+            read_restart_last_step,
+        )
+    except ImportError:
+        return None
+    best: int | None = None
+    for path in sorted(out_dir.glob("*.res")):
+        step = read_restart_last_step(path)
+        if step is not None and (best is None or step > best):
+            best = step
+    return best
+
+
+def _parse_pycharmm_restart_step(text: str, out_dir: Path) -> int | None:
+    """Best-effort global dynamics step for PyCHARMM jobs.
+
+    Prefer staged-workflow ``HEAT complete: restart_step=…`` lines and on-disk
+    restart files (JHSTRT).  Bare ``NSTEP=`` in logs often reflects overlap
+    chunk size (500) or overlap-rescue SD (25), not total integrated steps.
+    """
+    complete_steps = [
+        int(m.group(1)) for m in _STAGE_COMPLETE_RE.finditer(text)
+    ]
+    if complete_steps:
+        return complete_steps[-1]
+
+    from_res = _restart_step_from_res_files(out_dir)
+    if from_res is not None:
+        return from_res
+
+    wridyn = [int(m.group(1)) for m in _WRIDYN_STEP_RE.finditer(text)]
+    if wridyn:
+        return wridyn[-1]
+
+    return None
+
+
 def _parse_pycharmm(out_dir: Path, log_path: Path, meta: dict[str, Any]) -> dict[str, Any]:
     row = dict(meta)
     row["status"] = "missing"
@@ -155,9 +200,7 @@ def _parse_pycharmm(out_dir: Path, log_path: Path, meta: dict[str, Any]) -> dict
         return row
 
     text = log_path.read_text(encoding="utf-8", errors="replace")
-    restart_step: int | None = None
-    for match in _RESTART_STEP_RE.finditer(text):
-        restart_step = int(match.group(1))
+    restart_step = _parse_pycharmm_restart_step(text, out_dir)
 
     if restart_step is not None:
         row["nsteps"] = restart_step
