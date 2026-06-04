@@ -48,29 +48,56 @@ def _load_positions_npy(path: Path) -> "np.ndarray":
     return np.asarray(arr, dtype=np.float64)
 
 
+def _parse_crd_xyz(parts: list[str]) -> tuple[float, float, float] | None:
+    """Parse x,y,z from a CHARMM EXT coordinate line (Å)."""
+    # PyCHARMM write.coor_card: ATOM RESNAME ATOMNAME X Y Z ...
+    if len(parts) >= 7:
+        try:
+            return float(parts[4]), float(parts[5]), float(parts[6])
+        except ValueError:
+            pass
+    # Minimal test / legacy cards: X Y Z immediately after three tokens
+    if len(parts) >= 5:
+        try:
+            return float(parts[2]), float(parts[3]), float(parts[4])
+        except ValueError:
+            pass
+    return None
+
+
 def _load_positions_crd(path: Path) -> "np.ndarray":
-    """Minimal CHARMM CRD reader (EXT format with coords in Å)."""
+    """Read CHARMM CRD cards written by PyCHARMM (EXT format, coords in Å)."""
     import numpy as np
 
     lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
     if len(lines) < 2:
         raise ValueError(f"CRD too short: {path}")
-    try:
-        n_atoms = int(lines[0].split()[0])
-    except (IndexError, ValueError) as e:
-        raise ValueError(f"Cannot parse atom count from CRD header: {path}") from e
+
+    n_atoms: int | None = None
+    header_idx: int | None = None
+    for idx, line in enumerate(lines):
+        parts = line.split()
+        if len(parts) >= 2 and parts[-1].upper() == "EXT":
+            try:
+                n_atoms = int(parts[0])
+                header_idx = idx
+                break
+            except ValueError:
+                continue
+    if n_atoms is None or header_idx is None:
+        raise ValueError(f"Cannot find 'N EXT' header in CRD: {path}")
+
     coords = []
-    for line in lines[2:]:
+    for line in lines[header_idx + 1 :]:
         if len(coords) >= n_atoms:
             break
         parts = line.split()
-        if len(parts) < 5:
+        if not parts or parts[0].startswith("*"):
             continue
-        try:
-            x, y, z = float(parts[2]), float(parts[3]), float(parts[4])
-        except ValueError:
+        xyz = _parse_crd_xyz(parts)
+        if xyz is None:
             continue
-        coords.append([x, y, z])
+        coords.append(xyz)
     if len(coords) != n_atoms:
         raise ValueError(f"Expected {n_atoms} coordinates in {path}, found {len(coords)}")
     return np.asarray(coords, dtype=np.float64)

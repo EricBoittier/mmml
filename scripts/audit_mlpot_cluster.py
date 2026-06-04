@@ -127,7 +127,14 @@ def main() -> int:
 
     if not report["sparse_dimer"]["ok"]:
         report["ok"] = False
-        report["verdict"] = "Sparse dimer cap check failed"
+        err = (report["sparse_dimer"].get("stderr") or "").strip()
+        if err and "FAIL:" in (report["sparse_dimer"].get("stdout") or ""):
+            report["verdict"] = "Sparse dimer cap check failed"
+        elif err:
+            last = err.splitlines()[-1]
+            report["verdict"] = f"Sparse dimer validation error: {last}"
+        else:
+            report["verdict"] = "Sparse dimer cap check failed"
     elif not report["monomer_offsets_ok"]:
         report["ok"] = False
         report["verdict"] = "Atom count not divisible by n_monomers"
