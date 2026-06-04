@@ -748,6 +748,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     verbose=not args.quiet,
                     reference_positions=r,
                     pyCModel=pyCModel,
+                    mlpot_ctx=ctx,
                     save=save_mini,
                     pdb_path=out_dir / f"mini_full_mlpot_{tag}.pdb" if save_mini else None,
                     crd_path=paths["mini_crd"] if save_mini else None,

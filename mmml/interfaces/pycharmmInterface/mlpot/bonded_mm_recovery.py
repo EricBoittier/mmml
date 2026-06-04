@@ -251,6 +251,7 @@ def _run_all_ml_intra_overlap_rescue(
                 nprint=bonded_cfg.nprint,
                 verbose=bonded_cfg.verbose,
                 pyCModel=pyCModel,
+                mlpot_ctx=ctx,
                 save=False,
                 skip_if_crd_exists=False,
             )
