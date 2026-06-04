@@ -8,9 +8,11 @@ from unittest.mock import patch
 
 from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     recommend_echeck_kcal,
+    resolve_charmm_use_pbc,
     resolve_echeck_for_cluster,
     resolve_flat_bottom_selection,
     resolve_md_stages,
+    resolve_mlpot_use_pbc,
     resolve_use_pbc,
 )
 from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
@@ -62,6 +64,34 @@ def test_resolve_use_pbc_free_space():
 def test_resolve_use_pbc_box_size():
     args = argparse.Namespace(setup="free_nve", free_space=False, box_size=40.0)
     assert resolve_use_pbc(args) is True
+
+
+def test_loose_pbc_charmm_on_mlpot_off_for_free_setup_with_box():
+    args = argparse.Namespace(
+        setup="free_nvt",
+        free_space=False,
+        box_size=55.0,
+        mlpot_pbc=False,
+    )
+    assert resolve_charmm_use_pbc(args) is True
+    assert resolve_mlpot_use_pbc(args) is False
+
+
+def test_mlpot_pbc_flag_enables_mic_on_free_setup_with_box():
+    args = argparse.Namespace(
+        setup="free_nvt",
+        free_space=False,
+        box_size=55.0,
+        mlpot_pbc=True,
+    )
+    assert resolve_charmm_use_pbc(args) is True
+    assert resolve_mlpot_use_pbc(args) is True
+
+
+def test_pbc_setup_enables_both():
+    args = argparse.Namespace(setup="pbc_nve", free_space=False, box_size=None)
+    assert resolve_charmm_use_pbc(args) is True
+    assert resolve_mlpot_use_pbc(args) is True
 
 
 def test_resolve_flat_bottom_selection_dcm_keeps_all_default():

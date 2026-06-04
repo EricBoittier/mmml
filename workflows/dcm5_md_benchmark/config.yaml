@@ -174,13 +174,14 @@ jobs:
   pycharmm_vac_heat_hoover:
     backend: pycharmm
     setup: free_nvt
-    pbc: false
+    # CHARMM loose PBC (crystal + CPT Hoover, pmass=0); ML stays open-boundary (no MIC).
+    pbc: true
+    box_size: 55.0
     integrator: heat_hoover
     md_stages: "mini,heat"
     ps_heat: 2.0
     heat_thermostat: hoover
-    # Vacuum Hoover uses ihtfrq scaling (CPT Hoover needs CRYSTal); 0 = dyn_nprint.
-    heat_ihtfrq: 100
+    heat_ihtfrq: 0
 
   jaxmd_pbc_npt:
     backend: jaxmd

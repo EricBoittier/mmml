@@ -677,6 +677,14 @@ def parse_args() -> argparse.Namespace:
             "by default; use to override when --box-size is also set."
         ),
     )
+    parser.add_argument(
+        "--mlpot-pbc",
+        action="store_true",
+        help=(
+            "pycharmm: enable ML MIC / periodic dimer lists (default for pbc_* setups). "
+            "With free_* + --box-size, CHARMM uses loose PBC unless this flag is set."
+        ),
+    )
 
     # --- lambda_ti (--setup lambda_ti) ----------------------------------------
     parser.add_argument(
@@ -1234,6 +1242,8 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         cmd.append("--no-save-vmd-topology")
     if getattr(args, "free_space", False):
         cmd.append("--free-space")
+    if getattr(args, "mlpot_pbc", False):
+        cmd.append("--mlpot-pbc")
     if getattr(args, "bonded_mm_mini", False):
         cmd.append("--bonded-mm-mini")
         cmd.extend(["--bonded-mm-mini-after", str(args.bonded_mm_mini_after)])

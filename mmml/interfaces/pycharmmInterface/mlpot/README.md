@@ -168,16 +168,23 @@ Implementation: `mmml/cli/run/md_pbc_suite/pycharmm_mlpot.py`, `mlpot/run_workfl
 
 ## Periodic boundaries (PBC) with MIC
 
-For ``--setup pbc_*`` or explicit ``--box-size``, the PyCHARMM backend:
+For ``--setup pbc_*``, the PyCHARMM backend:
 
 1. Installs CHARMM crystal + IMAGE (``pbc_env.py``) for the cubic box.
 2. Passes the same box side into ``setup_calculator(cell=L)`` for the decomposed monomer/dimer MLpot path (**MIC-only**, matching the ASE/JAX-MD hybrid calculator — no coordinate wrapping during energy evaluation).
 
-Log lines to expect when PBC ML is active:
+**Loose PBC (``--setup free_*`` + ``--box-size``):** CHARMM gets crystal + CPT (e.g. Hoover heat with ``pmass=0``), but ML stays **open-boundary** (no MIC, free-space dimer lists) unless ``--mlpot-pbc`` is set. Use a box large enough that the cluster does not interact with its periodic images.
+
+Log lines to expect:
 
 ```text
+# Full PBC (pbc_* setups)
 PBC cubic box: 20.000 Å
 MLpot MIC PBC: cubic L=20.000 Å
+
+# Loose PBC (free_* + --box-size)
+CHARMM loose PBC: cubic L=55.000 Å (ML open boundary; no MIC)
+MLpot: open boundary (CHARMM box L=55.000 Å; no MIC)
 ```
 
 **Restart / staged continuation:** pass the same ``--box-size`` as the original run when using ``--skip-cluster-build`` or loading mini artifacts. Auto box from geometry can differ from an earlier explicit box.

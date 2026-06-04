@@ -33,6 +33,8 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     resolve_pbc_box_side,
     resolve_show_energy,
     resolve_test_first_config,
+    resolve_charmm_use_pbc,
+    resolve_mlpot_use_pbc,
     resolve_use_pbc,
     setup_cons_fix_for_resids,
     timestep_ps_from_dt_fs,
@@ -231,12 +233,12 @@ def _io_for_stage(stage: MdStage, paths: dict[str, Path]) -> CharmmTrajectoryFil
 def _sync_mlpot_cell_before_npt(
     stage: MdStage,
     *,
-    use_pbc: bool,
+    mlpot_pbc: bool,
     pyCModel: Any,
     quiet: bool,
     restart_path: Path | None = None,
 ) -> None:
-    if use_pbc and stage in ("equi", "prod"):
+    if mlpot_pbc and stage in ("equi", "prod"):
         sync_mlpot_pbc_cell_from_charmm(
             pyCModel,
             verbose=not quiet,
@@ -763,10 +765,18 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
     )
     legacy_mlpot = legacy_mlpot_mini_paths(out_dir, tag) if save_artifacts else None
 
-    use_pbc = resolve_use_pbc(args)
-    box_side = resolve_pbc_box_side(args, r) if use_pbc else None
-    if use_pbc and not args.quiet:
-        print(f"PBC cubic box: {box_side:.3f} Å", flush=True)
+    charmm_pbc = resolve_charmm_use_pbc(args)
+    mlpot_pbc = resolve_mlpot_use_pbc(args)
+    box_side = resolve_pbc_box_side(args, r) if charmm_pbc else None
+    if charmm_pbc and not args.quiet:
+        if charmm_pbc and not mlpot_pbc:
+            print(
+                f"CHARMM loose PBC: cubic L={box_side:.3f} Å "
+                "(ML open boundary; no MIC)",
+                flush=True,
+            )
+        else:
+            print(f"PBC cubic box: {box_side:.3f} Å", flush=True)
 
     dt_fs = float(getattr(args, "dt_fs", 0.25))
     timestep_ps = timestep_ps_from_dt_fs(dt_fs)
@@ -780,8 +790,8 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
     overlap_cfg = resolve_dynamics_overlap_config(
         args,
         n_monomers=n_mol,
-        use_pbc=use_pbc,
-        fallback_box_side_A=box_side if use_pbc else None,
+        use_pbc=charmm_pbc,
+        fallback_box_side_A=box_side if charmm_pbc else None,
     )
     if bool(getattr(args, "save_forces_npz", False)):
         from mmml.interfaces.pycharmmInterface.mlpot.force_checkpoint import (
@@ -826,7 +836,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             flush=True,
         )
 
-    setup_charmm_environment(use_pbc=use_pbc, cubic_box_side_A=box_side)
+    setup_charmm_environment(use_pbc=charmm_pbc, cubic_box_side_A=box_side)
     sync_charmm_positions(r)
 
     vmd_topo_psf = paths["vmd_psf"]
@@ -852,7 +862,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             args,
             paths=paths,
             timestep_ps=timestep_ps,
-            use_pbc=use_pbc,
+            use_pbc=charmm_pbc,
             temp=temp,
             echeck=echeck,
             mini_nprint=mini_nprint,
@@ -889,7 +899,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 grms_kcalmol_A=charmm_grms(),
             )
 
-    if not use_pbc:
+    if not mlpot_pbc:
         # Install MMFP once after Packmol / CHARMM pretreat / pre-MLpot mini so
         # droff tuning and coor orient are not repeated (stacked walls / COM shifts).
         apply_flat_bottom_from_args(args)
@@ -913,7 +923,8 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         ml_batch_size=getattr(args, "ml_batch_size", None),
         ml_gpu_count=getattr(args, "ml_gpu_count", None),
         ml_max_active_dimers=getattr(args, "ml_max_active_dimers", None),
-        cubic_box_side_A=box_side if use_pbc else None,
+        cubic_box_side_A=box_side,
+        mlpot_use_pbc=mlpot_pbc,
         verbose=not args.quiet,
         args=args,
     )
@@ -1098,7 +1109,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         echeck=echeck,
                         dyn_print=dyn_print,
                         restart=restart,
-                        use_pbc=use_pbc,
+                        use_pbc=charmm_pbc,
                         npt_include_firstt=(seg_i == 0),
                         memory_handoff=use_memory,
                     )
@@ -1107,7 +1118,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         restart_path = _seed_restart_for_memory_handoff(seg_io, kw, stage="equi")
                     _sync_mlpot_cell_before_npt(
                         "equi",
-                        use_pbc=use_pbc,
+                        mlpot_pbc=mlpot_pbc,
                         pyCModel=pyCModel,
                         quiet=bool(args.quiet),
                         restart_path=restart_path,
@@ -1201,7 +1212,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         echeck=echeck,
                         dyn_print=dyn_print,
                         restart=restart,
-                        use_pbc=use_pbc,
+                        use_pbc=charmm_pbc,
                         memory_handoff=use_memory,
                     )
                     kw["nsavc"] = dcd_nsavc
@@ -1218,7 +1229,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         restart_path = seed
                     _sync_mlpot_cell_before_npt(
                         "prod",
-                        use_pbc=use_pbc,
+                        mlpot_pbc=mlpot_pbc,
                         pyCModel=pyCModel,
                         quiet=bool(args.quiet),
                         restart_path=restart_path,
@@ -1320,7 +1331,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 echeck=echeck,
                 dyn_print=dyn_print,
                 restart=restart,
-                use_pbc=use_pbc,
+                use_pbc=charmm_pbc,
                 memory_handoff=use_memory,
             )
             kw["nsavc"] = dcd_nsavc
@@ -1328,7 +1339,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 restart_path = _seed_restart_for_memory_handoff(io, kw, stage=stage)
             _sync_mlpot_cell_before_npt(
                 stage,
-                use_pbc=use_pbc,
+                mlpot_pbc=mlpot_pbc,
                 pyCModel=pyCModel,
                 quiet=bool(args.quiet),
                 restart_path=restart_path,
@@ -1376,7 +1387,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     coords_in_memory=use_memory or prev_restart_is_current_state,
                     restart_from_file=restart and io.restart_read is not None,
                     timestep_ps=timestep_ps,
-                    use_pbc=use_pbc,
+                    use_pbc=charmm_pbc,
                     quiet=bool(args.quiet),
                     heat_thermostat=heat_thermostat,
                 )
@@ -1388,7 +1399,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     coords_in_memory=use_memory or prev_restart_is_current_state,
                     restart_from_file=restart and io.restart_read is not None,
                     timestep_ps=timestep_ps,
-                    use_pbc=use_pbc,
+                    use_pbc=charmm_pbc,
                     quiet=bool(args.quiet),
                     temp=nve_t,
                 )

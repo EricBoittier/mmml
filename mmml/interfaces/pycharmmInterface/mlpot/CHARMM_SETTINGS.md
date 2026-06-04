@@ -66,8 +66,8 @@ Staged workflow **always overwrites** `nprint`, `iprfrq`, `isvfrq` from `resolve
 
 | `--setup` | Default `--md-stages` | Ensemble | PBC |
 |-----------|----------------------|----------|-----|
-| `free_nvt` | `mini,heat` | nvt (heat only; no Hoover prod in preset) | no |
-| `free_nve` | `mini,nve` | nve | no |
+| `free_nvt` | `mini,heat` | nvt (heat only; no Hoover prod in preset) | no (yes with `--box-size` CHARMM-only) |
+| `free_nve` | `mini,nve` | nve | no (yes with `--box-size` CHARMM-only) |
 | `pycharmm_minimize` | `mini` | — | no |
 | `pycharmm_full` | `mini,heat,nve,equi,prod` | mixed | no |
 | `pbc_nvt` | `mini,heat,equi` | nvt | yes |
