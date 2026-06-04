@@ -25,6 +25,9 @@ heat_firstt: 0.0
 heat_finalt: 240.0
 heat_ihtfrq_scale: 100
 nsteps_target: 8000
+# Single overlap chunk for 2 ps NVE (8000 steps); avoids 16× scratch restart handoffs.
+dynamics_overlap_check_interval: 8000
+echeck: 500.0
 
 # Jobs listed here may fail without blocking ``rule collect`` (use ``snakemake --keep-going``).
 optional_jobs:

@@ -16,8 +16,10 @@ if str(_SCRIPTS) not in sys.path:
 
 from benchmark_lib import (  # noqa: E402
     build_md_system_argv,
+    job_output_dir,
     load_config,
     namespace_for_job,
+    pycharmm_stage_paths,
     workflow_root,
 )
 
@@ -96,7 +98,44 @@ def main() -> int:
     rc = subprocess.call(cmd)
     if rc != 0:
         print(f"Job {args.job_id!r} failed with exit code {rc}", file=sys.stderr)
-    return rc
+        return rc
+
+    if backend == "pycharmm":
+        from mmml.interfaces.pycharmmInterface.mlpot.dynamics import dynamics_nstep_from_ps
+        from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+            assert_stage_dynamics_completed,
+        )
+
+        job = cfg["jobs"][args.job_id]
+        stages = str(job.get("md_stages", ""))
+        paths = pycharmm_stage_paths(
+            cfg, args.job_id, output_dir=args.output_dir or job_output_dir(cfg, args.job_id)
+        )
+        try:
+            if "nve" in stages:
+                ps = float(job.get("ps_nve", cfg["ps"]))
+                nstep = int(dynamics_nstep_from_ps(ps, float(cfg["dt_fs"])))
+                assert_stage_dynamics_completed(
+                    stage="nve",
+                    expected_nstep=nstep,
+                    nsavc=int(cfg["dcd_nsavc"]),
+                    dcd_path=paths.get("nve_dcd"),
+                    restart_path=paths.get("nve_res"),
+                )
+            if "heat" in stages:
+                ps = float(job.get("ps_heat", cfg["ps"]))
+                nstep = int(dynamics_nstep_from_ps(ps, float(cfg["dt_fs"])))
+                assert_stage_dynamics_completed(
+                    stage="heat",
+                    expected_nstep=nstep,
+                    nsavc=int(cfg["dcd_nsavc"]),
+                    dcd_path=paths.get("heat_dcd"),
+                    restart_path=paths.get("heat_res"),
+                )
+        except RuntimeError as exc:
+            print(f"Job {args.job_id!r} post-run validation failed: {exc}", file=sys.stderr)
+            return 1
+    return 0
 
 
 if __name__ == "__main__":

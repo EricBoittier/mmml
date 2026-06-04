@@ -126,6 +126,7 @@ def build_md_system_argv(
         _append_packmol_argv(argv, cfg)
     else:
         _append_packmol_argv(argv, cfg)
+        argv.append("--free-space")
 
     if job.get("nvt_integrator"):
         argv.extend(["--nvt-integrator", str(job["nvt_integrator"])])
@@ -141,6 +142,10 @@ def build_md_system_argv(
                 str(cfg["dcd_nsavc"]),
                 "--dynamics-overlap-action",
                 "rescue",
+                "--dynamics-overlap-check-interval",
+                str(cfg.get("dynamics_overlap_check_interval", 8000)),
+                "--echeck",
+                str(cfg.get("echeck", 500.0)),
                 "--charmm-sd-steps",
                 "25",
                 "--charmm-abnr-steps",
@@ -195,6 +200,33 @@ def namespace_for_job(
         return backend, backend_argv, args
     finally:
         sys.argv = old_argv
+
+
+def composition_tag(composition: str) -> str:
+    """``DCM:5`` -> ``dcm_5`` (matches PyCHARMM artifact names)."""
+    residue, count = composition.strip().split(":", 1)
+    return f"{residue.lower()}_{count}"
+
+
+def pycharmm_stage_paths(
+    cfg: dict[str, Any],
+    job_id: str,
+    *,
+    output_dir: Path | None = None,
+) -> dict[str, Path]:
+    """Restart/DCD paths for a PyCHARMM benchmark job."""
+    out = output_dir or job_output_dir(cfg, job_id)
+    tag = composition_tag(str(cfg["composition"]))
+    job = cfg["jobs"][job_id]
+    paths: dict[str, Path] = {"out_dir": out, "tag": tag}
+    stages = str(job.get("md_stages", ""))
+    if "nve" in stages:
+        paths["nve_dcd"] = out / f"nve_{tag}.dcd"
+        paths["nve_res"] = out / f"nve_{tag}.res"
+    if "heat" in stages:
+        paths["heat_dcd"] = out / f"heat_{tag}.dcd"
+        paths["heat_res"] = out / f"heat_{tag}.res"
+    return paths
 
 
 def job_metadata(cfg: dict[str, Any], job_id: str) -> dict[str, Any]:

@@ -94,6 +94,16 @@ def test_build_md_system_argv_includes_core_flags(cfg: dict, job_id: str) -> Non
     assert argv[idx + 1] == "2.0"
 
 
+def test_pycharmm_vac_nve_single_chunk_and_free_space(cfg: dict) -> None:
+    os.environ.setdefault("MMML_CKPT", "/tmp/dcm5_test_ckpt")
+    argv = build_md_system_argv(cfg, "pycharmm_vac_nve")
+    assert "--free-space" in argv
+    idx = argv.index("--dynamics-overlap-check-interval")
+    assert int(argv[idx + 1]) >= 8000
+    idx = argv.index("--echeck")
+    assert float(argv[idx + 1]) >= 500.0
+
+
 def test_pycharmm_heat_hoover_argv(cfg: dict) -> None:
     os.environ.setdefault("MMML_CKPT", "/tmp/dcm5_test_ckpt")
     argv = build_md_system_argv(cfg, "pycharmm_vac_heat_hoover")
