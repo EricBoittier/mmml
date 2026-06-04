@@ -104,7 +104,11 @@ def build_md_system_argv(
     comp = composition_string(n, prefix=prefix)
     job_name = f"{composition_tag(n, prefix=prefix)}_nve"
     out = output_dir or job_output_dir(cfg, n)
-    packmol_r = packmol_radius_A(n)
+    packmol_r = packmol_radius_A(
+        n,
+        reference_n=int(cfg.get("packmol_reference_n", 60)),
+        reference_r=float(cfg.get("packmol_reference_r", 18.0)),
+    )
 
     argv: list[str] = [
         "--setup",
