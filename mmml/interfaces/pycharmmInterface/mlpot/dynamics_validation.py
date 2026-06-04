@@ -28,12 +28,15 @@ def expected_dcd_frame_count(*, nstep: int, nsavc: int) -> int:
 
 
 def read_restart_last_step(path: Path) -> int | None:
-    """Return the dynamics step counter from a CHARMM restart file.
+    """Return the accumulated dynamics step from a CHARMM restart file.
 
-    CHARMM stores the step on the ``!NATOM,NPRIV,NSTEP,...`` record (third
-    integer), not on the ``REST`` header line (whose third field is typically
-    ``1``). Falls back to the legacy ``REST ... <step>`` header when no NATOM
-    block is present (minimal test fixtures).
+    On the ``!NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,...`` line, use **JHSTRT**
+    (6th integer, index 5) as the global step counter. ``NSTEP`` (index 2) is
+    often the last segment length (e.g. 500 when overlap chunks use
+    ``nstep=500``), not the total integrated steps — reading it caused false
+    "restart step 500 < 8000" failures when ``JHSTRT`` was already 8000.
+
+    Falls back to ``NSTEP`` when ``JHSTRT`` is absent, then legacy ``REST``.
     """
     p = Path(path)
     if not p.is_file():
@@ -52,14 +55,14 @@ def read_restart_last_step(path: Path) -> int | None:
         if i + 1 >= len(lines):
             break
         fields = lines[i + 1].split()
-        if len(fields) >= 3:
-            try:
-                return int(fields[2])
-            except ValueError:
-                break
         if len(fields) >= 6:
             try:
                 return int(fields[5])
+            except ValueError:
+                pass
+        if len(fields) >= 3:
+            try:
+                return int(fields[2])
             except ValueError:
                 break
 

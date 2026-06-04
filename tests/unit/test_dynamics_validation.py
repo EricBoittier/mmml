@@ -112,6 +112,18 @@ def test_read_restart_last_step(tmp_path):
     assert read_restart_last_step(res) == 721
 
 
+def test_read_restart_last_step_prefers_jhstrt_over_segment_nstep(tmp_path):
+    """Overlap chunks: NSTEP=500 (last segment) but JHSTRT=8000 (global step)."""
+    res = tmp_path / "nve.res"
+    res.write_text(
+        "REST    48     1\n"
+        "\n"
+        " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
+        "          25        8000         500         500          10        8000\n"
+    )
+    assert read_restart_last_step(res) == 8000
+
+
 def test_read_restart_last_step_real_fixture():
     stub = (
         Path(__file__).resolve().parents[1]
