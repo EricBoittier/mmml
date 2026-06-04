@@ -41,8 +41,7 @@ rule run_benchmark:
 rule collect:
     input:
         config="config.yaml",
-        # Run all non-optional jobs before aggregating (see README for partial re-collect).
-        expand("results/{job}/done.txt", job=_REQUIRED_JOB_IDS),
+        jobs=expand("results/{job}/done.txt", job=_REQUIRED_JOB_IDS),
     output:
         csv="results/benchmark_summary.csv",
         md="results/benchmark_report.md",
