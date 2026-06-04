@@ -1675,6 +1675,19 @@ def open_minimize_dcd(path: PathLike, *, unit: int = 51) -> Any:
     )
 
 
+def _prepare_mlpot_sd_list_frequencies(pycharmm: Any, *, sd_kw: dict[str, Any]) -> None:
+    """Align image/HB list freqs with MLpot SD ``inbfrq=0`` (CHARMM FINCYC constraint).
+
+    ``minimize.run_sd`` only sets ``inbfrq`` / ``ihbfrq`` via ``MinOpts``; a non-zero
+    ``imgfrq`` left from production ``dyna`` kwargs triggers BOMLev -2:
+    "INBFRQ is zero when IMGFRQ is not".
+    """
+    if int(sd_kw.get("inbfrq", -1)) != 0:
+        return
+    pycharmm.nbonds.set_imgfrq(0)
+    pycharmm.nbonds.set_inbfrq(0)
+
+
 def _sd_kwargs_from_config(config: MinimizeWithMlpotConfig) -> dict[str, Any]:
     """Common ``minimize.run_sd`` settings including optional DCD trajectory."""
     kw: dict[str, Any] = {
@@ -1743,6 +1756,7 @@ def minimize_with_mlpot(
             print(
                 f"SD pass 1 (free, all atoms): nstep={config.nstep} nprint={config.nprint}"
             )
+        _prepare_mlpot_sd_list_frequencies(pycharmm, sd_kw=sd_kw)
         minimize.run_sd(**sd_kw)
         if config.verbose and config.show_energy:
             print("CHARMM energy after SD pass 1 (free):")
@@ -1756,6 +1770,7 @@ def minimize_with_mlpot(
                     f"SD pass 2 (cons_fix, {n_fix} atoms): "
                     f"nstep={config.nstep} nprint={config.nprint}"
                 )
+            _prepare_mlpot_sd_list_frequencies(pycharmm, sd_kw=sd_kw)
             minimize.run_sd(**sd_kw)
             if config.verbose and config.show_energy:
                 print("CHARMM energy after SD pass 2 (constrained):")
