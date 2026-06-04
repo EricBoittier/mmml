@@ -3,6 +3,22 @@
 Reproducible **2 ps** smoke benchmark on **DCM:5** comparing ASE, JAX-MD, and PyCHARMM
 (`mmml md-system`) across vacuum and PBC integrator modes.
 
+## Do not commit run outputs
+
+Benchmark artifacts live under `results/` and `.snakemake/` — both are **gitignored**.
+Commit only workflow source (`Snakefile`, `config.yaml`, `scripts/`, `README.md`, tests).
+
+```bash
+git add workflows/dcm5_md_benchmark/Snakefile \
+        workflows/dcm5_md_benchmark/config.yaml \
+        workflows/dcm5_md_benchmark/scripts/ \
+        workflows/dcm5_md_benchmark/README.md \
+        workflows/dcm5_md_benchmark/profiles/ \
+        tests/unit/test_dcm5_benchmark_config.py \
+        tests/unit/test_collect_benchmark.py
+# NOT: git add -A inside the workflow directory
+```
+
 ## Prerequisites
 
 - MMML env with GPU JAX (`uv sync --extra gpu` on cluster nodes)
