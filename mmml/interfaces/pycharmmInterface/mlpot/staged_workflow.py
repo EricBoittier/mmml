@@ -300,6 +300,7 @@ def _build_stage_dynamics_kw(
             iprfrq=dyn_print["iprfrq"],
             isvfrq=dyn_print["isvfrq"],
             echeck=echeck,
+            use_pbc=use_pbc,
         )
     elif stage == "equi":
         include_firstt = npt_include_firstt and not effective_restart

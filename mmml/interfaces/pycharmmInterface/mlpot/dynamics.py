@@ -592,6 +592,16 @@ def _import_pycharmm_modules():
     return pycharmm, cons_fix, energy, minimize, read, write
 
 
+def _non_pbc_dyn_freq_kwargs() -> dict[str, int]:
+    """Image list freqs for vacuum / free-space (no crystal updates)."""
+    return {"imgfrq": 0, "ihbfrq": 0, "ilbfrq": 0}
+
+
+def _strip_crystal_dyn_keywords(kw: dict[str, Any]) -> None:
+    """Remove ``ixtfrq`` when no crystal is active (avoids DCNTRL extraneous-keyword warn)."""
+    kw.pop("ixtfrq", None)
+
+
 def _base_dyn_kwargs(
     *,
     timestep: float,
@@ -667,15 +677,17 @@ def build_heat_dynamics(
     nsavc = nsavc_for_interval(timestep_ps, save_interval_ps)
     heat_finalt = float(finalt if finalt is not None else temp)
     heat_firstt = float(firstt if firstt is not None else heat_finalt * 0.2)
-    image_kwargs = {} if use_pbc else {"imgfrq": 0, "ihbfrq": 0, "ilbfrq": 0}
+    freq_kwargs = {} if use_pbc else _non_pbc_dyn_freq_kwargs()
     kw = _base_dyn_kwargs(
         timestep=timestep_ps,
         nstep=nstep,
         nsavc=nsavc,
         nprint=100,
         echeck=echeck,
-        **image_kwargs,
+        **freq_kwargs,
     )
+    if not use_pbc:
+        _strip_crystal_dyn_keywords(kw)
     kw.update(
         {
             "verlet": True,
@@ -717,15 +729,17 @@ def build_hoover_heat_dynamics(
     nsavc = nsavc_for_interval(timestep_ps, save_interval_ps)
     heat_finalt = float(finalt if finalt is not None else temp)
     heat_firstt = float(firstt if firstt is not None else heat_finalt * 0.2)
-    image_kwargs = {} if use_pbc else {"imgfrq": 0, "ihbfrq": 0, "ilbfrq": 0}
+    freq_kwargs = {} if use_pbc else _non_pbc_dyn_freq_kwargs()
     kw = _base_dyn_kwargs(
         timestep=timestep_ps,
         nstep=nstep,
         nsavc=nsavc,
         nprint=100,
         echeck=echeck,
-        **image_kwargs,
+        **freq_kwargs,
     )
+    if not use_pbc:
+        _strip_crystal_dyn_keywords(kw)
     kw.update(
         {
             "new": True,
@@ -784,7 +798,7 @@ def assign_velocities_at_temperature(
     A one-step ``dyna`` integration was removed because it quenched COM kinetic energy
     before Hoover / NVE handoff while leaving misleading CHARMM temperature prints.
     """
-    image_kwargs = {} if use_pbc else {"imgfrq": 0, "ihbfrq": 0, "ilbfrq": 0}
+    freq_kwargs = {} if use_pbc else _non_pbc_dyn_freq_kwargs()
     kw = _base_dyn_kwargs(
         timestep=timestep_ps,
         nstep=0,
@@ -794,8 +808,10 @@ def assign_velocities_at_temperature(
         isvfrq=0,
         ntrfrq=0,
         echeck=-1,
-        **image_kwargs,
+        **freq_kwargs,
     )
+    if not use_pbc:
+        _strip_crystal_dyn_keywords(kw)
     t = float(firstt)
     kw.update(boltzmann_velocity_kwargs(t))
     kw.update(
@@ -842,10 +858,12 @@ def build_nve_dynamics(
     iprfrq: int = 500,
     isvfrq: int = 500,
     echeck: float = 100.0,
+    use_pbc: bool = True,
 ) -> dict[str, Any]:
     """NVE production-style dict (restart from heat)."""
     nstep = ps_to_nsteps(timestep_ps, duration_ps)
     nsavc = nsavc_for_interval(timestep_ps, save_interval_ps)
+    freq_kwargs = {} if use_pbc else _non_pbc_dyn_freq_kwargs()
     kw = _base_dyn_kwargs(
         timestep=timestep_ps,
         nstep=nstep,
@@ -855,7 +873,10 @@ def build_nve_dynamics(
         isvfrq=max(1, isvfrq),
         ntrfrq=0,
         echeck=echeck,
+        **freq_kwargs,
     )
+    if not use_pbc:
+        _strip_crystal_dyn_keywords(kw)
     kw.update(
         {
             "leap": True,
