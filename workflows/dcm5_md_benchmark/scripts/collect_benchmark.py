@@ -44,6 +44,10 @@ _WRIDYN_STEP_RE = re.compile(
 _HEAT_COMPLETE_RE = re.compile(
     r"(?:HEAT|NVE|EQUI|PROD)\s+complete:", re.IGNORECASE
 )
+_STAGED_OK_RE = re.compile(r"Staged workflow OK\b", re.IGNORECASE)
+_DYNAMICS_INCOMPLETE_RE = re.compile(
+    r"(?:HEAT|NVE|EQUI|PROD)\s+dynamics incomplete:", re.IGNORECASE
+)
 _AVER_TEMP_RE = re.compile(
     r"AVER(?:AGE)?\s+(?:TEMP|TEMPERATURE)\s*=?\s*([0-9.+-eE]+)", re.IGNORECASE
 )
@@ -207,23 +211,44 @@ def _parse_pycharmm(out_dir: Path, log_path: Path, meta: dict[str, Any]) -> dict
 
     min_ok = int(0.95 * meta["nsteps_target"])
     complete = bool(_HEAT_COMPLETE_RE.search(text))
+    staged_ok = bool(_STAGED_OK_RE.search(text))
+    dyn_incomplete = bool(_DYNAMICS_INCOMPLETE_RE.search(text))
     echeck = bool(_ECHECK_ABORT_RE.search(text)) and "complete" not in text.lower()
 
     aver = _AVER_TEMP_RE.search(text)
     if aver:
         row["temp_mean_K"] = float(aver.group(1))
 
-    if echeck:
+    steps_ok = restart_step is not None and restart_step >= min_ok
+
+    if dyn_incomplete or (restart_step is not None and restart_step < min_ok):
+        row["status"] = "fail"
+        if dyn_incomplete:
+            row["notes"] = "dynamics incomplete (see stdout.log)"
+        elif echeck:
+            row["notes"] = f"restart_step={restart_step}; possible echeck abort"
+        else:
+            row["notes"] = f"restart_step={restart_step}"
+    elif echeck and not steps_ok:
         row["status"] = "fail"
         row["notes"] = "possible echeck abort"
-    elif complete and restart_step is not None and restart_step >= min_ok:
+    elif steps_ok and (complete or staged_ok):
         row["status"] = "pass"
+        if complete:
+            row["notes"] = ""
+        elif not complete:
+            row["notes"] = "Staged workflow OK (no per-stage complete line in log)"
+    elif steps_ok and complete:
+        row["status"] = "pass"
+    elif steps_ok:
+        row["status"] = "warn"
+        row["notes"] = (
+            "restart ok; missing stage-complete line "
+            "(often DCD post-check failed after full dynamics)"
+        )
     elif complete:
         row["status"] = "warn"
         row["notes"] = f"restart_step={restart_step} < {min_ok}"
-    elif restart_step is not None and restart_step >= min_ok:
-        row["status"] = "warn"
-        row["notes"] = "restart ok but stage complete line not found"
     else:
         row["status"] = "fail"
         row["notes"] = f"restart_step={restart_step}"
