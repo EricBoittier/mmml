@@ -1347,6 +1347,15 @@ def add_staged_md_args(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="Vacuum cluster (no CHARMM crystal); default unless --setup pbc_* or --box-size",
     )
+    group.add_argument(
+        "--mlpot-pbc",
+        action="store_true",
+        help=(
+            "Enable ML MIC / periodic dimer lists (default for --setup pbc_* only). "
+            "With --setup free_* and --box-size, CHARMM uses a large crystal for CPT "
+            "but ML stays open-boundary unless this flag is set."
+        ),
+    )
 
 
 def _default_stages_for_setup(setup: str | None) -> list[str]:
@@ -1452,7 +1461,8 @@ def resolve_md_stages(args: argparse.Namespace) -> list[str]:
     return stages
 
 
-def resolve_use_pbc(args: argparse.Namespace) -> bool:
+def resolve_charmm_use_pbc(args: argparse.Namespace) -> bool:
+    """CHARMM crystal / IMAGE / CPT (independent of ML MIC)."""
     if getattr(args, "free_space", False):
         return False
     setup = (getattr(args, "setup", None) or "").strip().lower()
@@ -1461,6 +1471,21 @@ def resolve_use_pbc(args: argparse.Namespace) -> bool:
     if getattr(args, "box_size", None) is not None:
         return True
     return False
+
+
+def resolve_mlpot_use_pbc(args: argparse.Namespace) -> bool:
+    """ML decomposed PhysNet MIC and periodic dimer neighbor lists."""
+    if getattr(args, "free_space", False):
+        return False
+    if getattr(args, "mlpot_pbc", False):
+        return True
+    setup = (getattr(args, "setup", None) or "").strip().lower()
+    return setup.startswith("pbc_")
+
+
+def resolve_use_pbc(args: argparse.Namespace) -> bool:
+    """Backward-compatible alias for :func:`resolve_charmm_use_pbc`."""
+    return resolve_charmm_use_pbc(args)
 
 
 def resolve_pbc_box_side(args: argparse.Namespace, positions: np.ndarray) -> float:

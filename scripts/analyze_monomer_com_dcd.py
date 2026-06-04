@@ -86,7 +86,12 @@ def analyze_com(
     worst_idx = int(np.argmax(max_disp_per_monomer))
     median = float(np.median(max_disp_per_monomer))
     worst = float(max_disp_per_monomer[worst_idx])
-    ratio = worst / median if median > 1e-8 else float("inf")
+    if median > 1e-8:
+        ratio = worst / median
+    elif worst > 1e-8:
+        ratio = float("inf")
+    else:
+        ratio = 1.0
 
     checks: list[tuple[str, bool]] = [
         ("cluster_com_disp", max_cluster_com_disp_A <= max_cluster_disp_A),

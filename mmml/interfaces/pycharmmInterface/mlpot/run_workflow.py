@@ -32,6 +32,8 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     resolve_pbc_box_side,
     resolve_show_energy,
     resolve_test_first_config,
+    resolve_charmm_use_pbc,
+    resolve_mlpot_use_pbc,
     resolve_use_pbc,
     setup_cons_fix_for_resids,
     timestep_ps_from_dt_fs,
@@ -293,13 +295,21 @@ def _setup_charmm_nbonds_for_args(
     r: np.ndarray,
 ) -> float | None:
     """Vacuum or PBC CHARMM environment; return cubic box side when PBC is active."""
-    use_pbc = resolve_use_pbc(args)
-    if not use_pbc:
+    charmm_pbc = resolve_charmm_use_pbc(args)
+    mlpot_pbc = resolve_mlpot_use_pbc(args)
+    if not charmm_pbc:
         setup_default_nbonds()
         return None
     box_side = resolve_pbc_box_side(args, r)
     if not args.quiet:
-        print(f"PBC cubic box: {box_side:.3f} Å", flush=True)
+        if charmm_pbc and not mlpot_pbc:
+            print(
+                f"CHARMM loose PBC: cubic L={box_side:.3f} Å "
+                "(ML open boundary; no MIC)",
+                flush=True,
+            )
+        else:
+            print(f"PBC cubic box: {box_side:.3f} Å", flush=True)
     setup_charmm_environment(use_pbc=True, cubic_box_side_A=box_side)
     return float(box_side)
 
@@ -315,14 +325,21 @@ def _register_mlpot_context(
     ml_gpu_count: int | None = None,
     ml_max_active_dimers: int | None = None,
     cubic_box_side_A: float | None = None,
+    mlpot_use_pbc: bool = False,
     verbose: bool = False,
     args: Any | None = None,
 ):
     import ase
 
-    if cubic_box_side_A is not None and verbose:
+    ml_cell = float(cubic_box_side_A) if mlpot_use_pbc and cubic_box_side_A is not None else None
+    if ml_cell is not None and verbose:
         print(
-            f"MLpot MIC PBC: cubic L={float(cubic_box_side_A):.3f} Å",
+            f"MLpot MIC PBC: cubic L={ml_cell:.3f} Å",
+            flush=True,
+        )
+    elif cubic_box_side_A is not None and verbose and not mlpot_use_pbc:
+        print(
+            f"MLpot: open boundary (CHARMM box L={float(cubic_box_side_A):.3f} Å; no MIC)",
             flush=True,
         )
 
@@ -336,7 +353,7 @@ def _register_mlpot_context(
         ml_batch_size=ml_batch_size,
         ml_gpu_count=ml_gpu_count,
         ml_max_active_dimers=ml_max_active_dimers,
-        cell=float(cubic_box_side_A) if cubic_box_side_A is not None else None,
+        cell=ml_cell,
         verbose=verbose,
         args=args,
     )
@@ -350,7 +367,7 @@ def _register_mlpot_context(
             warmup_decomposed_mlpot(
                 pyCModel,
                 r,
-                cell=float(cubic_box_side_A) if cubic_box_side_A is not None else None,
+                cell=ml_cell,
                 verbose=verbose,
             )
 
@@ -369,13 +386,13 @@ def _register_mlpot_context(
         pyCModel,
         z,
         select_all_atoms(),
-        use_pbc=cubic_box_side_A is not None,
+        use_pbc=mlpot_use_pbc,
         mm_internal_scale=mm_internal_scale,
     )
     ctx.ml_Z = np.asarray(z, dtype=int)
-    ctx.use_pbc = cubic_box_side_A is not None
-    ctx.cubic_box_side_A = float(cubic_box_side_A) if cubic_box_side_A is not None else None
-    if cubic_box_side_A is not None:
+    ctx.use_pbc = bool(mlpot_use_pbc)
+    ctx.cubic_box_side_A = float(cubic_box_side_A) if mlpot_use_pbc and cubic_box_side_A else None
+    if mlpot_use_pbc and cubic_box_side_A is not None:
         refresh_nbonds_after_mlpot_pbc(
             cubic_box_side_A=float(cubic_box_side_A),
             force=True,
