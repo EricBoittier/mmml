@@ -92,7 +92,7 @@ sequenceDiagram
     participant Dyna as dyna heat segment
 
     Mini->>Assign: coords in memory
-    Assign->>Assign: nstep=1, iasvel=1, firstt=0, ihtfrq=0
+    Assign->>Assign: nstep=0, iasvel=1, firstt=0, ihtfrq=0
     Note over Assign: Boltzmann at 0 K (near-zero v)
     Assign->>Dyna: start=false, restart=false
     loop every ihtfrq=100

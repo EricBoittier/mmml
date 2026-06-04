@@ -49,10 +49,10 @@ mmml md-system \
   --packmol-sphere \
   --packmol-radius "$PACKMOL_R" \
   --packmol-tolerance 1.0 \
-  --flat-bottom-radius "$FB_RAD" --dynamics-overlap-min-distance 0.4 \
+  --flat-bottom-radius "$FB_RAD" --dynamics-overlap-min-distance 0.5 \
   --flat-bottom-selection "all" \
   --flat-bottom-k 0.01 \
-  --temperature 240.0 --bonded-mm-mini --bonded-mm-mini-after mini,heat --bonded-mm-mini-steps 500 \
+  --temperature 240.0 --bonded-mm-mini --bonded-mm-mini-after mini --bonded-mm-mini-steps 500 \
   --heat-thermostat hoover \
   --dt-fs 0.25 \
   --ps-heat 1 --ps-equi 3 \

@@ -41,7 +41,7 @@ mini_nstep: 2000
 charmm_sd_steps: 200
 charmm_abnr_steps: 200
 dynamics_overlap_action: rescue
-dynamics_overlap_min_distance: 0.4
+dynamics_overlap_min_distance: 0.5
 # Abort dynamics before catastrophic ΔE; keep fixed (no auto-loosen for N=5..10).
 echeck: 50.0
 no_scale_echeck: true

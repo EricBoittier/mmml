@@ -777,19 +777,21 @@ def assign_velocities_at_temperature(
     use_pbc: bool = True,
     read_unit: int = 90,
 ) -> None:
-    """Boltzmann-assign velocities at ``firstt`` (one ``dyna`` step, ``ihtfrq=0``).
+    """Boltzmann-assign velocities at ``firstt`` without integrating (``nstep=0``).
 
     Uses current coordinates when ``restart_path`` is None. Otherwise loads coords
     from the restart file first (velocities are replaced at ``firstt``).
+    A one-step ``dyna`` integration was removed because it quenched COM kinetic energy
+    before Hoover / NVE handoff while leaving misleading CHARMM temperature prints.
     """
     image_kwargs = {} if use_pbc else {"imgfrq": 0, "ihbfrq": 0, "ilbfrq": 0}
     kw = _base_dyn_kwargs(
         timestep=timestep_ps,
-        nstep=1,
+        nstep=0,
         nsavc=1,
-        nprint=1,
-        iprfrq=1,
-        isvfrq=1,
+        nprint=0,
+        iprfrq=0,
+        isvfrq=0,
         ntrfrq=0,
         echeck=-1,
         **image_kwargs,
@@ -810,7 +812,6 @@ def assign_velocities_at_temperature(
             "iuncrd": -1,
         }
     )
-    _ensure_nsavc_below_nstep(kw)
     if restart_path is None:
         run_dynamics(kw)
         return
@@ -1357,6 +1358,8 @@ def _overlap_chunk_io(
 
 # Per-chunk DCDs at nsavc=1 and overlap interval 2 create O(nstep) tiny files.
 _OVERLAP_MAX_CHUNK_DCD_FILES = 64
+# Heat/equi with overlap interval 500 → 8 chunks for 4000 steps; keep one DCD.
+_OVERLAP_UNIFIED_DCD_MIN_CHUNKS = 4
 
 
 def _overlap_should_split_trajectory(
@@ -1368,6 +1371,8 @@ def _overlap_should_split_trajectory(
     if n_chunks <= 1:
         return False
     if n_chunks > _OVERLAP_MAX_CHUNK_DCD_FILES:
+        return False
+    if n_chunks >= _OVERLAP_UNIFIED_DCD_MIN_CHUNKS:
         return False
     if traj_nsavc is not None and int(traj_nsavc) <= 1 and n_chunks > 8:
         return False
