@@ -21,7 +21,8 @@ ml_switch_width: 0.1
 mini_nstep: 100
 dyn_nprint: 500
 dcd_nsavc: 500
-heat_firstt: 0.0
+# 10 K initial draw avoids a literal 0 K Boltzmann assign; Hoover still ramps to finalt.
+heat_firstt: 10.0
 heat_finalt: 240.0
 heat_ihtfrq_scale: 100
 nsteps_target: 8000

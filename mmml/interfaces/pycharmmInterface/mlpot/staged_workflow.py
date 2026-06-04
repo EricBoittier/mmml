@@ -431,12 +431,19 @@ def _configure_heat_dynamics_start(
             restart_path=None,
             use_pbc=use_pbc,
         )
-        kw["start"] = False
+        if hoover_heat:
+            # Keep firstt/finalt for overlap chunk 0 (see preserve_cold_start) and
+            # use start so Hoover engages after the one-shot Boltzmann assign.
+            kw["iasvel"] = 0
+            kw["start"] = True
+        else:
+            kw["start"] = False
         if not quiet:
             if hoover_heat:
                 print(
                     f"HEAT: Boltzmann velocities at FIRSTT={firstt:.1f} K "
-                    "(in-memory coords after mini); Hoover NVT (no ihtfrq)",
+                    "(in-memory coords after mini); Hoover NVT (no ihtfrq); "
+                    "start=True for main heat dyna",
                     flush=True,
                 )
             else:
@@ -458,7 +465,11 @@ def _configure_heat_dynamics_start(
         io.restart_read = None
         kw["restart"] = False
         kw["new"] = False
-        kw["start"] = False
+        if hoover_heat:
+            kw["iasvel"] = 0
+            kw["start"] = True
+        else:
+            kw["start"] = False
         if not quiet:
             msg = (
                 f"HEAT: Boltzmann velocities at FIRSTT={firstt:.1f} K "
@@ -467,7 +478,7 @@ def _configure_heat_dynamics_start(
             print(
                 msg
                 + (
-                    "Hoover NVT (no ihtfrq)"
+                    "Hoover NVT (no ihtfrq); start=True for main heat dyna"
                     if hoover_heat
                     else "ihtfrq scales (iasors=0)"
                 ),
