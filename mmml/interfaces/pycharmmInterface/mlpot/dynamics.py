@@ -622,7 +622,7 @@ def sync_charmm_lists_after_mini(*, quiet: bool = False) -> None:
         pycharmm.lingo.charmm_script("UPDATE")
     if not quiet:
         print(
-            "NVE: CHARMM UPDATE after mini (sync NB/MLpot lists before dyna)",
+            "CHARMM UPDATE after mini (sync NB/MLpot lists before dyna)",
             flush=True,
         )
 
@@ -822,6 +822,9 @@ def build_hoover_heat_dynamics(
     )
     if tmass is None:
         _, tmass = compute_cpt_piston_masses()
+    # Small ML clusters (e.g. DCM:5) get tmass≈80 from PSF mass; Hoover then under-couples
+    # and T spikes during 10→240 K CPT heat (echeck abort ~step 500–700).
+    tmass = max(int(tmass), 500)
     _apply_npt_cpt_kwargs(
         kw,
         temp=heat_finalt,
@@ -829,7 +832,7 @@ def build_hoover_heat_dynamics(
         pref=1.0,
         pmass=0,
         tmass=tmass,
-        pgamma=pgamma,
+        pgamma=0.0,
         firstt=heat_firstt,
     )
     return kw

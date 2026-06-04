@@ -96,6 +96,7 @@ def test_hoover_heat_pbc_uses_cpt_hoover_nvt_at_constant_volume():
     assert kw["pmass"] == 0
     assert kw["hoover reft"] == 240.0
     assert kw["tmass"] == 160
+    assert kw["pgamma"] == 0.0
     assert kw["firstt"] == 10.0
     assert kw["finalt"] == 240.0
     assert kw["tbath"] == 240.0

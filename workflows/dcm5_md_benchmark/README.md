@@ -115,6 +115,21 @@ snakemake results/pycharmm_vac_nve/done.txt -c1
 
 Sync repo + `pip install -e .` for NVE memory handoff and post-run DCD validation.
 
+### `pycharmm_vac_heat_hoover`: heat stops ~step 500–700 (echeck, T≫240 K)
+
+Typical log: `DYNA>` temperature hundreds of K at 0.125 ps, `restart step 689 < 7600`, one readable DCD frame. Causes: **short mini** + **stale NB lists** after `inbfrq=0` mini, then **Hoover `tmass` too small** for a 25-atom ML cluster (PSF formula ≈80).
+
+Current benchmark defaults: `mini_nstep: 2000`, `bonded_mm_mini`, `ps_heat: 5`, Hoover heat uses **`tmass ≥ 500`** and **`pgamma 0`** with **CHARMM UPDATE before heat**.
+
+```bash
+grep -E 'CHARMM UPDATE after mini|tmass=|DYNA>|integrated |echeck' \
+  results/pycharmm_vac_heat_hoover/stdout.log | tail -25
+rm -f results/pycharmm_vac_heat_hoover/done.txt
+bash scripts/job_shell.sh pycharmm_vac_heat_hoover
+```
+
+If it still aborts: try `pycharmm_vac_heat_scale` (velocity scaling) or `--no-echeck` once to confirm echeck vs physics (see `mlpot/COMP_AND_HEATING.md`).
+
 ### `pycharmm_vac_heat_hoover`: `CRYStal must be used for constant pressure simulations`
 
 Loose-PBC Hoover heat uses CHARMM **CPT** (`pmass=0`). The crystal must stay active after CGENFF pre-minimize. Older code called `crystal free` during MM pre-min; current `mmml` skips that when `--box-size` is set and re-installs the box before heat.
