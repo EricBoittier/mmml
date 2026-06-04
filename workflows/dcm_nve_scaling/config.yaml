@@ -1,0 +1,36 @@
+# DCM:N free-space PyCHARMM MLpot NVE scaling (N = 5..10).
+# Checkpoint: export MMML_CKPT before snakemake.
+
+cluster_sizes: [5, 6, 7, 8, 9, 10]
+composition_prefix: DCM
+atoms_per_monomer: 5
+checkpoint: "${MMML_CKPT}"
+output_root: results
+mpirun_wrapper: ../../scripts/mmml-charmm-mpirun.sh
+
+# Dynamics (free_nve: mini + nve)
+ps_nve: 20.0
+dt_fs: 0.25
+# Once per integration step (print + DCD + forces)
+dcd_nsavc: 1
+dyn_nprint: 1
+nprint: 1
+seed: 123
+spacing: 5.0
+packmol_tolerance: 1.0
+temperature: 300.0
+
+save_forces_npz: true
+forces_npz_interval: 1
+# Align overlap checks with force dump cadence (effective min 2 when dcd_nsavc=1)
+dynamics_overlap_check_interval: 1
+
+mm_switch_on: 7.0
+mm_switch_width: 5.0
+ml_switch_width: 0.1
+mini_nstep: 150
+charmm_sd_steps: 25
+charmm_abnr_steps: 100
+dynamics_overlap_action: rescue
+dynamics_overlap_min_distance: 0.4
+ml_gpu_count: 1

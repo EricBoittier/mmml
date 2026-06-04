@@ -84,6 +84,7 @@ class DecomposedMlpotCalculator:
         )
         self.ev2kcal = float(ev2kcalmol)
         self._cell = float(cell) if cell else False
+        self.last_ml_forces: np.ndarray | None = None
 
     def calculate_charmm(
         self,
@@ -160,6 +161,10 @@ class DecomposedMlpotCalculator:
             grad = jnp.where(jnp.isfinite(grad), grad, 0.0)
             e_kcal = float(jax.device_get(e_raw)) * self.ev2kcal
             forces = -np.asarray(jax.device_get(grad), dtype=np.float64) * self.ev2kcal
+            self.last_ml_forces = np.asarray(forces, dtype=np.float64, copy=True)
+            parent = getattr(self, "_parent_model", None)
+            if parent is not None:
+                parent._last_ml_forces = self.last_ml_forces
         if mlpot_profiling_enabled():
             get_mlpot_profile_stats().record_ml(time.perf_counter() - t0)
         for i in range(n):
@@ -187,13 +192,14 @@ class DecomposedMlpotModel:
         self._cell = float(cell) if cell else False
         self._do_mm = bool(do_mm)
         self._get_update_fn = get_update_fn
+        self._last_ml_forces: np.ndarray | None = None
 
     def get_pycharmm_calculator(self, ml_atom_indices=None, ml_atomic_numbers=None, **kwargs):
         if ml_atomic_numbers is not None:
             z = np.asarray(ml_atomic_numbers, dtype=int)
         else:
             z = self._atomic_numbers
-        return DecomposedMlpotCalculator(
+        calc = DecomposedMlpotCalculator(
             self._spherical_fn,
             self._cutoff_params,
             self._n_monomers,
@@ -202,6 +208,8 @@ class DecomposedMlpotModel:
             do_mm=self._do_mm,
             get_update_fn=self._get_update_fn,
         )
+        calc._parent_model = self
+        return calc
 
 
 def build_decomposed_mlpot_model(

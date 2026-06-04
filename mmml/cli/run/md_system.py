@@ -391,6 +391,17 @@ def parse_args() -> argparse.Namespace:
         help="pycharmm: DCD frame every N integration/SD steps",
     )
     parser.add_argument(
+        "--save-forces-npz",
+        action="store_true",
+        help="pycharmm: write <output-dir>/forces.npz during dynamics",
+    )
+    parser.add_argument(
+        "--forces-npz-interval",
+        type=int,
+        default=1,
+        help="pycharmm: force NPZ save every N steps (default: 1)",
+    )
+    parser.add_argument(
         "--no-scale-mini-nstep",
         action="store_true",
         help="pycharmm: do not auto-increase --mini-nstep for large clusters",
@@ -1344,6 +1355,9 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         cmd.append("--no-show-energy")
     if args.quiet:
         cmd.append("--quiet")
+    if getattr(args, "save_forces_npz", False):
+        cmd.append("--save-forces-npz")
+        cmd.extend(["--forces-npz-interval", str(args.forces_npz_interval)])
     if getattr(args, "no_scale_mini_nstep", False):
         cmd.append("--no-scale-mini-nstep")
     if getattr(args, "no_scale_echeck", False):

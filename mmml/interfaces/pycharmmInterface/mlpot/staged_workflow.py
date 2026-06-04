@@ -711,6 +711,28 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         use_pbc=use_pbc,
         fallback_box_side_A=box_side if use_pbc else None,
     )
+    if bool(getattr(args, "save_forces_npz", False)):
+        from mmml.interfaces.pycharmmInterface.mlpot.force_checkpoint import (
+            ForceCheckpointConfig,
+            configure_force_checkpoint,
+        )
+
+        atoms_per = n_atoms // int(n_mol) if int(n_mol) > 0 else None
+        configure_force_checkpoint(
+            ForceCheckpointConfig(
+                enabled=True,
+                interval=int(getattr(args, "forces_npz_interval", 1) or 1),
+                output_path=out_dir / "forces.npz",
+                n_monomers=int(n_mol),
+                atoms_per_monomer=atoms_per,
+            )
+        )
+        if not args.quiet:
+            print(
+                f"Force checkpoint: {out_dir / 'forces.npz'} "
+                f"every {int(getattr(args, 'forces_npz_interval', 1))} step(s)",
+                flush=True,
+            )
     if overlap_cfg.enabled and not args.quiet:
         print(
             f"Dynamics overlap guard: action={overlap_cfg.action}, "
@@ -1310,6 +1332,13 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         last_restart=last_restart_path,
         last_trajectory=last_traj,
     )
+    from mmml.interfaces.pycharmmInterface.mlpot.force_checkpoint import (
+        flush_force_checkpoint,
+    )
+
+    forces_path = flush_force_checkpoint()
+    if forces_path is not None and not args.quiet:
+        print(f"Force checkpoint saved: {forces_path}", flush=True)
     print(f"\nStaged workflow OK ({','.join(stages)}) -> {out_dir}")
     trajectory_outputs = _trajectory_outputs(paths["mini_charmm_dcd"])
     trajectory_outputs.extend(_trajectory_outputs(paths["mini_dcd"]))

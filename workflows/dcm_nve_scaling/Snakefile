@@ -1,0 +1,89 @@
+configfile: "config.yaml"
+
+_CLUSTER_SIZES = [int(n) for n in config["cluster_sizes"]]
+_OUTPUT_ROOT = str(config.get("output_root", "results"))
+_PREFIX = str(config.get("composition_prefix", "DCM")).lower()
+_TAGS = [f"{_PREFIX}_{n}" for n in _CLUSTER_SIZES]
+
+
+def _n_from_tag(tag: str) -> int:
+    return int(tag.rsplit("_", 1)[-1])
+
+
+rule all:
+    input:
+        f"{_OUTPUT_ROOT}/scaling_summary.csv",
+        f"{_OUTPUT_ROOT}/scaling_report.md",
+
+
+rule run_nve:
+    output:
+        touch(f"{_OUTPUT_ROOT}/{{tag}}_nve/done.txt"),
+    log:
+        stdout=f"{_OUTPUT_ROOT}/{{tag}}_nve/stdout.log",
+    params:
+        n=lambda wildcards: _n_from_tag(wildcards.tag),
+        workflow_dir=workflow.basedir,
+    resources:
+        gpu=1,
+        mpi=1,
+        runtime=120,
+    shell:
+        """
+        mkdir -p {workflow.basedir}/{_OUTPUT_ROOT}/{wildcards.tag}_nve
+        bash {params.workflow_dir}/scripts/job_shell.sh {params.n} > {log.stdout} 2>&1
+        touch {output}
+        """
+
+
+rule audit_post_mini:
+    input:
+        f"{_OUTPUT_ROOT}/{{tag}}_nve/done.txt",
+    output:
+        f"{_OUTPUT_ROOT}/{{tag}}_nve/audit.json",
+    params:
+        n=lambda wildcards: _n_from_tag(wildcards.tag),
+        repo=workflow.basedir + "/../..",
+    shell:
+        """
+        python {params.repo}/scripts/audit_mlpot_cluster.py \
+            --output-dir {workflow.basedir}/{_OUTPUT_ROOT}/{wildcards.tag}_nve \
+            --composition DCM:{params.n} \
+            --atoms-per-monomer {config[atoms_per_monomer]} \
+            --mm-switch-on {config[mm_switch_on]} \
+            -o {output}
+        """
+
+
+rule com_analysis:
+    input:
+        f"{_OUTPUT_ROOT}/{{tag}}_nve/done.txt",
+    output:
+        f"{_OUTPUT_ROOT}/{{tag}}_nve/com_analysis.npz",
+    params:
+        n=lambda wildcards: _n_from_tag(wildcards.tag),
+        repo=workflow.basedir + "/../..",
+    shell:
+        """
+        python {params.repo}/scripts/analyze_monomer_com_dcd.py \
+            --dcd {workflow.basedir}/{_OUTPUT_ROOT}/{wildcards.tag}_nve/nve_{wildcards.tag}.dcd \
+            --n-monomers {params.n} \
+            --atoms-per-monomer {config[atoms_per_monomer]} \
+            -o {output}
+        """
+
+
+rule collect:
+    input:
+        expand(f"{_OUTPUT_ROOT}/{{tag}}_nve/com_analysis.npz", tag=_TAGS),
+        expand(f"{_OUTPUT_ROOT}/{{tag}}_nve/audit.json", tag=_TAGS),
+    output:
+        csv=f"{_OUTPUT_ROOT}/scaling_summary.csv",
+        md=f"{_OUTPUT_ROOT}/scaling_report.md",
+    params:
+        workflow_dir=workflow.basedir,
+    shell:
+        """
+        bash {params.workflow_dir}/scripts/collect_shell.sh \
+            {params.workflow_dir} {output.csv} {output.md}
+        """
