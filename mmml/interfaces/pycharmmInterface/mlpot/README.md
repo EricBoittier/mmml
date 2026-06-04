@@ -35,6 +35,23 @@ finally:
 
 Skip step 2 with ``--no-charmm-pre-minimize``. Tune with ``--charmm-sd-steps`` / ``--charmm-abnr-steps``.
 
+## Numbered minimize snapshots (staged workflow)
+
+When ``--save`` is on (default), each geometry checkpoint is written under
+``artifacts/pycharmm_mlpot/<run>/`` with a **sequence prefix** and a **kind** label.
+A manifest ``minimize_snapshots_<tag>.json`` lists every snapshot.
+
+| Seq | Filename stem | Kind | Potential |
+|-----|---------------|------|-----------|
+| 00 | ``00_packmol_cluster_<tag>`` | packmol | Packmol placement (PSF+PDB) |
+| 01 | ``01_charmm_mm_<tag>`` | MM | CGENFF SD/ABNR before MLpot |
+| 02 | ``02_mlpot_mmml_<tag>`` | MMML | MLpot PhysNet SD (USER term) |
+| 03 | ``03_bonded_mm_after_mini_<tag>`` | bonded_MM | Bonded-only recovery after mini (if run) |
+| 04 | ``04_bonded_mm_after_heat_<tag>`` | bonded_MM | Bonded-only recovery after heat (if run) |
+| 10+ | ``10_rescue_<context>_<tag>`` | intra_rescue | Overlap / intra close-contact rescue |
+
+Legacy names ``mini_full_mlpot_<tag>.*`` are still copied from snapshot **02** for older scripts.
+
 ## Minimization (example pattern)
 
 MLpot on the **whole** system; two SD passes — free, then `cons_fix` on selected monomers:
