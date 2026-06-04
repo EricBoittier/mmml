@@ -527,10 +527,9 @@ def _configure_nve_dynamics_start(
             use_pbc=use_pbc,
         )
         kw["start"] = False
-        if io.restart_write is not None:
-            rewrite_dynamics_restart_from_current_state(io.restart_write)
-            io.restart_read = Path(io.restart_write)
-            kw["restart"] = True
+        # Match HEAT: continue from in-memory state. Do not READYN the scratch
+        # restart written after the 1-step Boltzmann draw — CHARMM often leaves a
+        # coordinate-history REST (EOF on READYN) while coords/vel are valid in RAM.
         if not quiet:
             print(
                 f"NVE: Boltzmann velocities at {target_t:.1f} K "
@@ -551,10 +550,6 @@ def _configure_nve_dynamics_start(
         kw["restart"] = False
         kw["new"] = False
         kw["start"] = False
-        if io.restart_write is not None:
-            rewrite_dynamics_restart_from_current_state(io.restart_write)
-            io.restart_read = Path(io.restart_write)
-            kw["restart"] = True
         if not quiet:
             print(
                 f"NVE: Boltzmann velocities at {target_t:.1f} K "

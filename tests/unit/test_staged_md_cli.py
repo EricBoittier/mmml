@@ -12,9 +12,11 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     resolve_md_stages,
     resolve_use_pbc,
 )
+from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
 from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
     _artifact_paths,
     _build_stage_dynamics_kw,
+    _configure_nve_dynamics_start,
     _overlap_for_stage,
     _prior_restart_for_stage,
 )
@@ -231,3 +233,35 @@ def test_overlap_for_stage_enables_heat_chunking():
     assert _overlap_for_stage("heat", cfg) is cfg
     assert _overlap_for_stage("equi", cfg) is cfg
     assert _overlap_for_stage("prod", cfg) is cfg
+
+
+def test_configure_nve_dynamics_start_memory_handoff_no_readyn(tmp_path):
+    """After mini, NVE must not READYN a 1-step scratch restart (CHARMM EOF)."""
+    from unittest.mock import patch
+
+    res = tmp_path / "nve_dcm_5.res"
+    io = CharmmTrajectoryFiles(restart_write=res)
+    kw = {"restart": True, "start": True, "iasvel": 1, "firstt": 300.0}
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.assign_velocities_at_temperature"
+    ) as assign, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.rewrite_dynamics_restart_from_current_state"
+    ) as rewrite:
+        _configure_nve_dynamics_start(
+            kw,
+            io,
+            coords_in_memory=True,
+            restart_from_file=False,
+            timestep_ps=0.00025,
+            use_pbc=False,
+            quiet=True,
+            temp=60.0,
+        )
+
+    assign.assert_called_once()
+    rewrite.assert_not_called()
+    assert kw["restart"] is False
+    assert kw["start"] is False
+    assert kw["iasvel"] == 0
+    assert io.restart_read is None
