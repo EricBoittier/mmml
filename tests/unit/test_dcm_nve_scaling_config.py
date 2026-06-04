@@ -43,9 +43,17 @@ def test_nve_boltzmann_temp_below_full_temperature(cfg: dict) -> None:
     assert float(cfg["nve_boltzmann_temp"]) < float(cfg["temperature"])
 
 
-def test_overlap_check_interval_not_per_step(cfg: dict) -> None:
-    """Avoid O(nstep) overlap chunks when dcd_nsavc=1 (effective min interval is 2)."""
-    assert int(cfg["dynamics_overlap_check_interval"]) >= 100
+def test_nve_overlap_single_chunk(cfg: dict) -> None:
+    """One overlap chunk for the full NVE leg (no scratch restart between chunks)."""
+    dt_ps = float(cfg["dt_fs"]) * 1e-3
+    nstep = int(round(float(cfg["ps_nve"]) / dt_ps))
+    assert int(cfg["dynamics_overlap_check_interval"]) >= nstep
+
+
+def test_conservative_minimize_and_echeck(cfg: dict) -> None:
+    assert int(cfg["mini_nstep"]) >= 1000
+    assert float(cfg["echeck"]) > 0
+    assert cfg.get("no_scale_echeck") is True
 
 
 def test_packmol_radius_scaling() -> None:
@@ -73,6 +81,9 @@ def test_build_md_system_argv_per_step_flags(cfg: dict, tmp_path: Path) -> None:
     assert "--md-stages" in argv
     idx = argv.index("--md-stages")
     assert argv[idx + 1] == "mini,nve"
+    idx = argv.index("--echeck")
+    assert float(argv[idx + 1]) == float(cfg["echeck"])
+    assert "--no-scale-echeck" in argv
 
 
 def test_paths_for_size(cfg: dict) -> None:
