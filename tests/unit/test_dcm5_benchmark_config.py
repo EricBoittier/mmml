@@ -113,6 +113,10 @@ def test_pycharmm_heat_hoover_argv(cfg: dict) -> None:
     idx = argv.index("--heat-ihtfrq")
     assert argv[idx + 1] == "0"
     assert "--ps-heat" in argv
+    assert "--box-size" in argv
+    idx = argv.index("--box-size")
+    assert argv[idx + 1] == "55.0"
+    assert "--free-space" not in argv
 
 
 def test_pycharmm_heat_scale_argv(cfg: dict) -> None:

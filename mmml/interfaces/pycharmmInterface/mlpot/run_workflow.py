@@ -488,6 +488,7 @@ def run_minimize_workflow(args: argparse.Namespace) -> int:
     charmm_dcd_path = out_dir / f"mini_charmm_mm_{tag}.dcd"
     save = bool(getattr(args, "save", True))
 
+    mlpot_pbc = resolve_mlpot_use_pbc(args)
     box_side = _setup_charmm_nbonds_for_args(args, r)
     sync_charmm_positions(r)
     vmd_topo_psf = out_dir / f"cluster_for_vmd_{tag}.psf"
@@ -516,6 +517,7 @@ def run_minimize_workflow(args: argparse.Namespace) -> int:
         ml_gpu_count=getattr(args, "ml_gpu_count", None),
         ml_max_active_dimers=getattr(args, "ml_max_active_dimers", None),
         cubic_box_side_A=box_side,
+        mlpot_use_pbc=mlpot_pbc,
         verbose=not args.quiet,
         args=args,
     )
@@ -605,13 +607,14 @@ def run_dynamics_workflow(
         pre_minimize = not getattr(args, "no_pre_minimize", False)
     mini_nstep = resolve_mini_nstep(args, n_mol)
     mini_dcd_nsavc = resolve_dcd_nsavc(dcd_nsavc=args.dcd_nsavc, nstep=mini_nstep)
-    use_pbc = resolve_use_pbc(args)
+    charmm_pbc = resolve_charmm_use_pbc(args)
+    mlpot_pbc = resolve_mlpot_use_pbc(args)
     box_side = _setup_charmm_nbonds_for_args(args, r)
     overlap_cfg = resolve_dynamics_overlap_config(
         args,
         n_monomers=n_mol,
-        use_pbc=use_pbc,
-        fallback_box_side_A=box_side if use_pbc else None,
+        use_pbc=charmm_pbc,
+        fallback_box_side_A=box_side if charmm_pbc else None,
     )
     sync_charmm_positions(r)
     vmd_topo_psf = out_dir / f"cluster_for_vmd_{tag}.psf"
@@ -640,6 +643,7 @@ def run_dynamics_workflow(
         ml_gpu_count=getattr(args, "ml_gpu_count", None),
         ml_max_active_dimers=getattr(args, "ml_max_active_dimers", None),
         cubic_box_side_A=box_side,
+        mlpot_use_pbc=mlpot_pbc,
         verbose=not args.quiet,
         args=args,
     )
@@ -729,7 +733,7 @@ def run_dynamics_workflow(
                 save_interval_ps=save_interval_ps,
                 temp=temp,
                 echeck=echeck,
-                use_pbc=use_pbc,
+                use_pbc=charmm_pbc,
             )
             kw["nprint"] = dyn_print["nprint"]
             kw["iprfrq"] = dyn_print["iprfrq"]
