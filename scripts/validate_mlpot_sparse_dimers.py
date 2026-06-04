@@ -118,6 +118,11 @@ def main() -> int:
         default=None,
         help="Also report stats for a hypothetical cap (what-if)",
     )
+    parser.add_argument(
+        "--free-space",
+        action="store_true",
+        help="Use free-space cap policy (all unique dimer pairs; matches --free-space md-system)",
+    )
     args = parser.parse_args()
 
     if args.composition:
@@ -162,6 +167,7 @@ def main() -> int:
         mm_switch_on=args.mm_switch_on,
         box_side_A=args.box_size,
         max_active_dimers=args.ml_max_active_dimers,
+        free_space=bool(args.free_space),
     )
 
     print("Sparse ML dimer validation")
@@ -173,9 +179,14 @@ def main() -> int:
     print(f"  cap margin           = {stats['cap_margin']}")
     print(f"  PhysNet padded batch = {stats['physnet_systems_padded_batch']} systems/step")
     print(f"  PhysNet if no trunc  = {stats['physnet_systems_per_step']} systems/step")
-    default_cap = resolve_max_active_dimers(n_monomers, int(stats["n_dimers_total"]))
+    default_cap = resolve_max_active_dimers(
+        n_monomers,
+        int(stats["n_dimers_total"]),
+        free_space=bool(args.free_space),
+    )
     if args.ml_max_active_dimers is None:
-        print(f"  default policy cap   = {default_cap}")
+        policy = "free-space all-pairs" if args.free_space else "PBC max(1000, 6n)"
+        print(f"  default policy cap   = {default_cap} ({policy})")
 
     if args.proposed_cap is not None:
         alt = validate_sparse_dimer_cap(
@@ -185,6 +196,7 @@ def main() -> int:
             mm_switch_on=args.mm_switch_on,
             box_side_A=args.box_size,
             max_active_dimers=args.proposed_cap,
+            free_space=bool(args.free_space),
         )
         print(f"\nProposed cap {args.proposed_cap}: {alt['verdict']}")
 

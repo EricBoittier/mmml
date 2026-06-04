@@ -1520,8 +1520,12 @@ def _apply_overlap_chunk_dynamics_kw(
             "finalt",
             "tbath",
             "tstruct",
+            "TEMINC",
         ):
             chunk_kw.pop(key, None)
+        # Hoover NVT: keep thermostat keywords; ensure scale-heat ramps stay off.
+        if int(chunk_kw.get("ihtfrq", 0)) != 0 and "hoover reft" in chunk_kw:
+            chunk_kw["ihtfrq"] = 0
     if chunk_index == 0 and not has_restart_read:
         chunk_kw["restart"] = False
         chunk_kw.pop("iunrea", None)

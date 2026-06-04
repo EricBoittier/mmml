@@ -59,7 +59,13 @@ def read_dcd_trajectory(
                     break
                 f.read(rec)
                 struct.unpack("<i", f.read(4))[0]
-            struct.unpack("<i", f.read(4))[0]
+            rec = f.read(4)
+            if len(rec) < 4:
+                raise ValueError(
+                    f"Truncated DCD at frame {n_read + 1}/{n_frames}: {path} "
+                    f"(file size {path.stat().st_size} bytes; dynamics may have aborted mid-write)"
+                )
+            struct.unpack("<i", rec)[0]
             x = np.fromfile(f, dtype=np.float32, count=n_atoms)
             struct.unpack("<i", f.read(4))[0]
             struct.unpack("<i", f.read(4))[0]

@@ -131,6 +131,7 @@ def count_near_dimer_pairs(
     mm_switch_on: float = 7.0,
     box_side_A: Optional[float] = None,
     cell: Optional[np.ndarray] = None,
+    free_space: bool = False,
 ) -> dict[str, float | int | bool]:
     """Count dimer pairs with COM distance < ``mm_switch_on`` (same rule as ML sparse path)."""
     pos = np.asarray(positions, dtype=np.float64)
@@ -151,13 +152,18 @@ def count_near_dimer_pairs(
     )
     near = dists < float(mm_switch_on)
     n_near = int(np.sum(near))
-    cap = resolve_max_active_dimers(n_monomers, n_dimers_total=n_dimers)
+    cap = resolve_max_active_dimers(
+        n_monomers,
+        n_dimers_total=n_dimers,
+        free_space=free_space,
+    )
     return {
         "n_monomers": int(n_monomers),
         "n_dimers_total": n_dimers,
         "n_near_mm_switch_on": n_near,
         "mm_switch_on_A": float(mm_switch_on),
         "max_active_dimers_cap": cap,
+        "free_space": bool(free_space),
         "cap_saturated": n_near > cap,
         "cap_margin": cap - n_near,
         "min_near_dist_A": float(np.min(dists[near])) if n_near else float("nan"),
@@ -173,6 +179,7 @@ def validate_sparse_dimer_cap(
     mm_switch_on: float = 7.0,
     box_side_A: Optional[float] = None,
     max_active_dimers: Optional[int] = None,
+    free_space: bool = False,
 ) -> dict[str, float | int | bool | str]:
     """Return statistics and a short verdict for the sparse dimer slot cap."""
     stats = count_near_dimer_pairs(
@@ -181,9 +188,15 @@ def validate_sparse_dimer_cap(
         atoms_per_monomer,
         mm_switch_on=mm_switch_on,
         box_side_A=box_side_A,
+        free_space=free_space,
     )
     cap = (
-        resolve_max_active_dimers(n_monomers, n_dimers_total=int(stats["n_dimers_total"]), explicit=max_active_dimers)
+        resolve_max_active_dimers(
+            n_monomers,
+            n_dimers_total=int(stats["n_dimers_total"]),
+            explicit=max_active_dimers,
+            free_space=free_space,
+        )
         if max_active_dimers is not None
         else int(stats["max_active_dimers_cap"])
     )
