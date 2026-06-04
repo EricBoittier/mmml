@@ -239,6 +239,21 @@ def resolve_echeck_from_args(args: argparse.Namespace) -> float:
     return float(getattr(args, "echeck", 100.0))
 
 
+def add_force_checkpoint_args(parser: argparse.ArgumentParser) -> None:
+    group = parser.add_argument_group("Force checkpoint (NPZ)")
+    group.add_argument(
+        "--save-forces-npz",
+        action="store_true",
+        help="During dynamics, append CHARMM total forces to <output-dir>/forces.npz",
+    )
+    group.add_argument(
+        "--forces-npz-interval",
+        type=int,
+        default=1,
+        help="Save forces every N integration steps (default: 1; align with --dcd-nsavc)",
+    )
+
+
 def add_dcd_save_args(parser: argparse.ArgumentParser) -> None:
     group = parser.add_argument_group("DCD trajectory output")
     group.add_argument(

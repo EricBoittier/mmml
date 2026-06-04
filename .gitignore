@@ -16,6 +16,8 @@ DCM*LOG
 # DCM:5 benchmark workflow outputs (see workflows/dcm5_md_benchmark/.gitignore)
 workflows/dcm5_md_benchmark/results/
 workflows/dcm5_md_benchmark/.snakemake/
+workflows/dcm_nve_scaling/results/
+workflows/dcm_nve_scaling/.snakemake/
 
 # Generated outputs and checkpoints (do not version large artifacts)
 *.h5

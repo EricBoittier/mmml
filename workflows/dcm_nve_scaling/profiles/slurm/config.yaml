@@ -1,0 +1,9 @@
+executor: slurm
+jobs: 20
+default-resources:
+  - gpu=1
+  - mpi=1
+  - runtime=180
+cluster:
+  partition: gpu
+  time: "04:00:00"

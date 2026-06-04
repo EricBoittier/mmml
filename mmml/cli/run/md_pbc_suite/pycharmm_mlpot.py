@@ -11,6 +11,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     add_charmm_output_args,
     add_cluster_args,
     add_dcd_save_args,
+    add_force_checkpoint_args,
     add_dynamics_stability_args,
     add_flat_bottom_args,
     add_monomer_constraint_args,
@@ -58,6 +59,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     add_handoff_cutoff_args(parser)
     add_charmm_output_args(parser)
     add_dcd_save_args(parser)
+    add_force_checkpoint_args(parser)
     add_dynamics_overlap_args(parser)
     add_dynamics_stability_args(parser)
     add_flat_bottom_args(parser)

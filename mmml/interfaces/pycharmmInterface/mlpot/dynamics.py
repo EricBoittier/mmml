@@ -1544,7 +1544,7 @@ def run_dynamics_with_io(
         or not overlap.enabled
         or total_nstep <= 0
     ):
-        return _run_dynamics_chunk(
+        last_dyn = _run_dynamics_chunk(
             kw,
             io,
             rng_base=rng_base,
@@ -1554,6 +1554,12 @@ def run_dynamics_with_io(
                 steps_done=0,
             ),
         )
+        from mmml.interfaces.pycharmmInterface.mlpot.force_checkpoint import (
+            maybe_record_forces,
+        )
+
+        maybe_record_forces(int(kw.get("nstep", 0)), ml_forces=None)
+        return last_dyn
 
     requested_interval = max(1, int(overlap.check_interval))
     traj_nsavc = int(kw["nsavc"]) if "nsavc" in kw else None
@@ -1679,6 +1685,15 @@ def run_dynamics_with_io(
                 step=steps_done,
                 mlpot_ctx=mlpot_ctx,
             )
+            ml_f = None
+            if mlpot_ctx is not None:
+                py_model = getattr(mlpot_ctx, "pyCModel", None)
+                ml_f = getattr(py_model, "_last_ml_forces", None)
+            from mmml.interfaces.pycharmmInterface.mlpot.force_checkpoint import (
+                maybe_record_forces,
+            )
+
+            maybe_record_forces(steps_done, ml_forces=ml_f)
             if final_restart is not None and chunk_io is not None:
                 _refresh_overlap_scratch_restart(
                     chunk_io.restart_write,
