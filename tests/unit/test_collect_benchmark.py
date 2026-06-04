@@ -60,6 +60,35 @@ def _write_pycharmm_fixture(root: Path) -> None:
     (job_dir / "stdout.log").write_text(log, encoding="utf-8")
 
 
+def test_collect_pycharmm_passes_when_restart_full_but_no_complete_line(
+    tmp_path: Path,
+) -> None:
+    job_dir = tmp_path / "pycharmm_vac_nve"
+    job_dir.mkdir(parents=True)
+    (job_dir / "nve_dcm_5.res").write_text(
+        "REST    48     1\n"
+        "\n"
+        " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
+        "         100       10000         500         500          10        8000\n",
+        encoding="utf-8",
+    )
+    (job_dir / "stdout.log").write_text(
+        "pycharmm_mlpot: error: DCD chunk truncated\n"
+        "WRIDYN: RESTart file was written at step    8000\n",
+        encoding="utf-8",
+    )
+    rows = collect(
+        results_root=tmp_path,
+        csv_path=tmp_path / "benchmark_summary.csv",
+        md_path=tmp_path / "benchmark_report.md",
+        config_path=WORKFLOW_ROOT / "config.yaml",
+    )
+    row = {r["job_id"]: r for r in rows}["pycharmm_vac_nve"]
+    assert int(row["nsteps"]) == 8000
+    assert row["status"] == "warn"
+    assert "DCD" in row["notes"] or "complete" in row["notes"]
+
+
 def test_collect_pycharmm_ignores_segment_nstep_in_log(tmp_path: Path) -> None:
     """Collector must not treat overlap chunk NSTEP=500 as total integrated steps."""
     job_dir = tmp_path / "pycharmm_vac_nve"
