@@ -63,6 +63,12 @@ def main() -> int:
     parser.add_argument("--composition", type=str, required=True)
     parser.add_argument("--atoms-per-monomer", type=int, default=5)
     parser.add_argument("--mm-switch-on", type=float, default=7.0)
+    parser.add_argument(
+        "--free-space",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Use free-space all-pairs sparse dimer cap (default: on)",
+    )
     parser.add_argument("-o", "--output", type=Path, required=True)
     args = parser.parse_args()
 
@@ -92,20 +98,22 @@ def main() -> int:
     report["monomer_offsets_ok"] = n_atoms % n_mol == 0
 
     script = _REPO / "scripts" / "validate_mlpot_sparse_dimers.py"
+    validate_cmd = [
+        sys.executable,
+        str(script),
+        "--crd",
+        str(crd),
+        "--n-monomers",
+        str(n_mol),
+        "--atoms-per-monomer",
+        str(args.atoms_per_monomer),
+        "--mm-switch-on",
+        str(args.mm_switch_on),
+    ]
+    if args.free_space:
+        validate_cmd.append("--free-space")
     proc = subprocess.run(
-        [
-            sys.executable,
-            str(script),
-            "--crd",
-            str(crd),
-            "--n-monomers",
-            str(n_mol),
-            "--atoms-per-monomer",
-            str(args.atoms_per_monomer),
-            "--mm-switch-on",
-            str(args.mm_switch_on),
-            "--free-space",
-        ],
+        validate_cmd,
         capture_output=True,
         text=True,
     )

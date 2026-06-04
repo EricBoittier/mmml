@@ -21,6 +21,59 @@ def test_expected_dcd_frame_count():
     assert expected_dcd_frame_count(nstep=721, nsavc=500) == 2
 
 
+def test_scan_dcd_frame_count_truncated_header(tmp_path):
+    from mmml.utils.dcd_reader import scan_dcd_frame_count
+    from mmml.utils.dcd_writer import save_trajectory_dcd
+
+    import numpy as np
+
+    class _Atoms:
+        def __len__(self):
+            return 5
+
+    path = tmp_path / "nve.dcd"
+    save_trajectory_dcd(
+        path,
+        np.zeros((2, 5, 3), dtype=np.float32),
+        _Atoms(),
+        steps_per_frame=1,
+    )
+    data = bytearray(path.read_bytes())
+    data[8:12] = struct.pack("<i", 80000)
+    path.write_bytes(data)
+
+    readable, header, truncated = scan_dcd_frame_count(path)
+    assert header == 80000
+    assert readable == 2
+    assert truncated is True
+
+
+def test_count_readable_dcd_frames_truncated(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        count_readable_dcd_frames,
+    )
+    from mmml.utils.dcd_writer import save_trajectory_dcd
+
+    import numpy as np
+
+    class _Atoms:
+        def __len__(self):
+            return 5
+
+    path = tmp_path / "nve.dcd"
+    save_trajectory_dcd(
+        path,
+        np.zeros((3, 5, 3), dtype=np.float32),
+        _Atoms(),
+        steps_per_frame=1,
+    )
+    data = bytearray(path.read_bytes())
+    data[8:12] = struct.pack("<i", 1000)
+    path.write_bytes(data)
+
+    assert count_readable_dcd_frames(path) == 3
+
+
 def test_count_dcd_frames(tmp_path):
     path = tmp_path / "t.dcd"
     import numpy as np

@@ -15,7 +15,9 @@ if str(_SCRIPTS) not in sys.path:
 
 from scaling_lib import (  # noqa: E402
     build_md_system_argv,
+    expected_nve_nstep,
     load_config,
+    paths_for_size,
     workflow_root,
 )
 
@@ -77,7 +79,25 @@ def main() -> int:
     rc = subprocess.call(cmd)
     if rc != 0:
         print(f"DCM:{args.n_monomers} NVE failed with exit code {rc}", file=sys.stderr)
-    return rc
+        return rc
+
+    paths = paths_for_size(cfg, int(args.n_monomers))
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        assert_stage_dynamics_completed,
+    )
+
+    try:
+        assert_stage_dynamics_completed(
+            stage="nve",
+            expected_nstep=expected_nve_nstep(cfg),
+            nsavc=int(cfg["dcd_nsavc"]),
+            dcd_path=paths["nve_dcd"],
+            restart_path=paths["nve_res"],
+        )
+    except RuntimeError as exc:
+        print(f"DCM:{args.n_monomers} post-run validation failed: {exc}", file=sys.stderr)
+        return 1
+    return 0
 
 
 if __name__ == "__main__":

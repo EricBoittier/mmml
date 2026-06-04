@@ -26,10 +26,10 @@ def count_readable_dcd_frames(path: Path) -> int:
     if not p.is_file():
         return 0
     try:
-        from mmml.utils.dcd_reader import read_dcd_trajectory
+        from mmml.utils.dcd_reader import scan_dcd_frame_count
 
-        pos, _ = read_dcd_trajectory(p)
-        return int(pos.shape[0])
+        readable, _, _ = scan_dcd_frame_count(p)
+        return int(readable)
     except (ValueError, struct.error, OSError):
         return 0
 
