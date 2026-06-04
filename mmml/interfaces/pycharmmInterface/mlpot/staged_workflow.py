@@ -66,6 +66,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
 from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
     DynamicsOverlapConfig,
     augment_overlap_config_for_rescue,
+    overlap_config_for_stage,
     resolve_dynamics_overlap_config,
 )
 from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import setup_charmm_environment
@@ -1395,10 +1396,8 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         "iasors=0 (scale)",
                         flush=True,
                     )
-            run_dynamics_with_io(
-                kw,
-                io,
-                overlap=_overlap_for_stage(
+            stage_overlap = overlap_config_for_stage(
+                _overlap_for_stage(
                     stage,
                     overlap_cfg,
                     ctx=ctx,
@@ -1406,6 +1405,25 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     topology_psf=recovery_topology_psf,
                     mini_registry=mini_registry,
                 ),
+                stage=stage,
+                nstep=nstep,
+            )
+            if (
+                stage == "heat"
+                and stage_overlap is not None
+                and stage_overlap.enabled
+                and int(stage_overlap.check_interval) >= nstep
+                and not args.quiet
+            ):
+                print(
+                    f"overlap (HEAT): one integration segment ({nstep} steps); "
+                    "geometry check after heat completes",
+                    flush=True,
+                )
+            run_dynamics_with_io(
+                kw,
+                io,
+                overlap=stage_overlap,
                 overlap_context=stage.upper(),
                 mlpot_ctx=ctx,
                 rng_base=getattr(args, "seed", None),

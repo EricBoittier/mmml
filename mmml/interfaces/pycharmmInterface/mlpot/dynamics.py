@@ -1262,6 +1262,31 @@ def _restart_header_step_field(path: Path) -> str | None:
     return None
 
 
+def _overlap_refresh_or_validate_scratch_restart(
+    write_path: PathLike | None,
+    *,
+    final_restart: Path,
+    chunk_index: int,
+    n_chunks: int,
+    overlap_context: str,
+    mlpot_ctx: Optional["MlpotContext"],
+) -> None:
+    """Refresh scratch restart; validate only when the next chunk will ``READYN`` it."""
+    if (
+        mlpot_ctx is not None
+        and n_chunks > 1
+        and _is_overlap_scratch_restart(write_path, final_restart)
+    ):
+        return
+    _ensure_valid_overlap_scratch_restart(
+        write_path,
+        final_restart=final_restart,
+        chunk_index=chunk_index,
+        n_chunks=n_chunks,
+        overlap_context=overlap_context,
+    )
+
+
 def _ensure_valid_overlap_scratch_restart(
     write_path: PathLike | None,
     *,
@@ -1325,12 +1350,23 @@ def _overlap_chunk_restart_paths(
     return _valid_restart_file(slot_b), slot_a
 
 
+def _overlap_chunk_uses_memory_handoff(
+    mlpot_ctx: Optional["MlpotContext"],
+    *,
+    chunk_index: int,
+    n_chunks: int,
+) -> bool:
+    """Continue overlap segments in-process (no ``READYN`` on scratch between chunks)."""
+    return mlpot_ctx is not None and n_chunks > 1 and chunk_index > 0
+
+
 def _overlap_chunk_io(
     io: CharmmTrajectoryFiles,
     *,
     chunk_index: int,
     n_chunks: int,
     split_trajectory: bool = True,
+    mlpot_ctx: Optional["MlpotContext"] = None,
 ) -> CharmmTrajectoryFiles:
     """Restart I/O for overlap chunking via alternating scratch restarts.
 
@@ -1340,6 +1376,10 @@ def _overlap_chunk_io(
     rread, rwri = _overlap_chunk_restart_paths(
         io, chunk_index=chunk_index, n_chunks=n_chunks
     )
+    if _overlap_chunk_uses_memory_handoff(
+        mlpot_ctx, chunk_index=chunk_index, n_chunks=n_chunks
+    ):
+        rread = None
     traj: Path | None = None
     if io.trajectory is not None:
         if n_chunks <= 1:
@@ -1729,6 +1769,7 @@ def run_dynamics_with_io(
     trajectory_files: list[Any] = []
     trajectory_iokw: dict[str, int] = {}
     chunk_dcd_paths: list[Path] = []
+    logged_mem_handoff = False
     split_trajectory = (
         io is not None
         and io.trajectory is not None
@@ -1762,6 +1803,7 @@ def run_dynamics_with_io(
                     chunk_index=chunk_index,
                     n_chunks=n_chunks,
                     split_trajectory=split_trajectory,
+                    mlpot_ctx=mlpot_ctx,
                 )
                 if (
                     split_trajectory
@@ -1769,16 +1811,28 @@ def run_dynamics_with_io(
                     and chunk_io.trajectory is not None
                 ):
                     chunk_dcd_paths.append(Path(chunk_io.trajectory))
+            mem_handoff = _overlap_chunk_uses_memory_handoff(
+                mlpot_ctx, chunk_index=chunk_index, n_chunks=n_chunks
+            )
             has_restart_read = (
                 chunk_io is not None
                 and getattr(chunk_io, "restart_read", None) is not None
+                and not mem_handoff
             )
+            if mem_handoff and chunk_index == 1 and not logged_mem_handoff:
+                print(
+                    f"overlap ({overlap_context}): in-memory handoff between "
+                    f"{n_chunks} chunks (no READYN on scratch restarts)",
+                    flush=True,
+                )
+                logged_mem_handoff = True
             if (
                 chunk_index > 0
                 and n_chunks > 1
                 and chunk_io is not None
                 and getattr(chunk_io, "restart_write", None) is not None
                 and not has_restart_read
+                and not mem_handoff
             ):
                 raise RuntimeError(
                     "overlap restart handoff failed: previous CHARMM chunk did not "
@@ -1827,12 +1881,13 @@ def run_dynamics_with_io(
                 fallback_steps=steps_done + chunk_nstep,
             )
             if final_restart is not None and chunk_io is not None:
-                _ensure_valid_overlap_scratch_restart(
+                _overlap_refresh_or_validate_scratch_restart(
                     chunk_io.restart_write,
                     final_restart=final_restart,
                     chunk_index=chunk_index,
                     n_chunks=n_chunks,
                     overlap_context=overlap_context,
+                    mlpot_ctx=mlpot_ctx,
                 )
             min_overlap_step = max(1, int(total_nstep * 0.95))
             if steps_done < min_overlap_step:
@@ -1859,12 +1914,13 @@ def run_dynamics_with_io(
 
             maybe_record_forces(steps_done, ml_forces=ml_f)
             if final_restart is not None and chunk_io is not None:
-                _ensure_valid_overlap_scratch_restart(
+                _overlap_refresh_or_validate_scratch_restart(
                     chunk_io.restart_write,
                     final_restart=final_restart,
                     chunk_index=chunk_index,
                     n_chunks=n_chunks,
                     overlap_context=overlap_context,
+                    mlpot_ctx=mlpot_ctx,
                 )
         completed = True
         if split_trajectory and chunk_dcd_paths and io is not None:
