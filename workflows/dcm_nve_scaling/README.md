@@ -1,6 +1,6 @@
 # DCM NVE scaling (PyCHARMM MLpot)
 
-Free-space **NVE** runs for **DCM:5 … DCM:10** with per-step CHARMM print, DCD frames,
+Free-space **NVE** runs for **DCM:3** and **DCM:5 … DCM:10** with per-step CHARMM print, DCD frames,
 optional force NPZ dumps, post-mini audits, and per-monomer COM displacement analysis.
 
 Sibling to [dcm5_md_benchmark](../dcm5_md_benchmark/) (fixed DCM:5, multi-backend smoke).
