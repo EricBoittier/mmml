@@ -397,6 +397,8 @@ def test_minimize_bonded_recovery_runs_sd_and_reports_angl():
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_bonded_mm_only_block",
     ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_bonded_mm_rescue_environment",
+    ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
     ) as imp, patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms",
@@ -757,6 +759,75 @@ def test_assert_pre_min_bonded_geometry_exits_on_high_angl():
         return_value=24.0,
     ), patch.dict(sys.modules, {"pycharmm": mock_py}), pytest.raises(SystemExit):
         bonded_mm_recovery.assert_pre_min_bonded_geometry(args)
+
+
+def test_run_intra_overlap_rescue_all_ml_uses_heavy_path(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        run_intra_monomer_overlap_rescue,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+        DynamicsOverlapConfig,
+        OverlapRescueConfig,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+
+    topo = tmp_path / "cluster.psf"
+    topo.write_text("psf", encoding="utf-8")
+    ctx = MagicMock(spec=MlpotContext)
+    ctx.ml_selection = MagicMock()
+    ctx.ml_selection.get_atom_indexes.return_value = list(range(45))
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        min_distance_A=0.0,
+        intra_min_distance_A=1.0,
+        n_monomers=9,
+        use_pbc=False,
+        topology_psf=topo,
+        rescue=OverlapRescueConfig(nstep_sd=50, verbose=False),
+    )
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._mlpot_covers_all_atoms",
+        return_value=True,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_all_ml_intra_overlap_rescue",
+    ) as heavy, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.minimize_bonded_mm_recovery",
+    ) as light:
+        run_intra_monomer_overlap_rescue(ctx, cfg)
+    heavy.assert_called_once()
+    light.assert_not_called()
+
+
+def test_run_intra_overlap_rescue_partial_ml_uses_light_path():
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        run_intra_monomer_overlap_rescue,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+        DynamicsOverlapConfig,
+        OverlapRescueConfig,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+
+    ctx = MagicMock(spec=MlpotContext)
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        min_distance_A=0.0,
+        intra_min_distance_A=1.0,
+        n_monomers=2,
+        use_pbc=False,
+        rescue=OverlapRescueConfig(nstep_sd=50, verbose=False),
+    )
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._mlpot_covers_all_atoms",
+        return_value=False,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.minimize_bonded_mm_recovery",
+    ) as light, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_all_ml_intra_overlap_rescue",
+    ) as heavy:
+        run_intra_monomer_overlap_rescue(ctx, cfg)
+    light.assert_called_once()
+    heavy.assert_not_called()
 
 
 def test_rewrite_dynamics_restart_writes_current_state(tmp_path):
