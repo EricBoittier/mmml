@@ -844,7 +844,9 @@ def build_nve_dynamics(
             "ieqfrq": 0,
         }
     )
-    if not restart:
+    if restart:
+        kw["iasvel"] = 0
+    else:
         kw.update(boltzmann_velocity_kwargs(temp))
     return kw
 
@@ -1421,6 +1423,9 @@ def _apply_overlap_chunk_dynamics_kw(
     has_restart_read: bool,
 ) -> None:
     """Set ``restart`` / ``new`` / ``start`` for one overlap chunk (in-place)."""
+    chunk_kw["iasvel"] = 0
+    for key in ("iasors", "iscale", "iscvel", "ichecw", "firstt", "finalt", "tbath", "tstruct"):
+        chunk_kw.pop(key, None)
     if chunk_index == 0 and not has_restart_read:
         chunk_kw["restart"] = False
         chunk_kw.pop("iunrea", None)
@@ -1428,7 +1433,6 @@ def _apply_overlap_chunk_dynamics_kw(
         return
     chunk_kw["new"] = False
     chunk_kw["start"] = False
-    chunk_kw.pop("firstt", None)
     if has_restart_read:
         chunk_kw["restart"] = True
     else:

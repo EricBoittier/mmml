@@ -430,6 +430,88 @@ def _configure_heat_dynamics_start(
         )
 
 
+def _configure_nve_dynamics_start(
+    kw: dict[str, Any],
+    io: CharmmTrajectoryFiles,
+    *,
+    coords_in_memory: bool,
+    restart_from_file: bool,
+    timestep_ps: float,
+    use_pbc: bool,
+    quiet: bool,
+    temp: float,
+) -> None:
+    """One-shot Boltzmann draw at ``temp``, then microcanonical ``dyna`` (``iasvel=0``).
+
+    After MLpot mini, coordinates are in memory but the saved CRD is not a CHARMM
+    restart (memory handoff).  ``build_nve_dynamics`` may still carry ``iasvel=1``
+    from the cold-start path; overlap chunks must not reassign velocities each
+    restart.  Mirrors the heat-stage ``assign_velocities_at_temperature`` pattern.
+    """
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        assign_velocities_at_temperature,
+    )
+
+    target_t = float(temp)
+    for key in ("iasors", "iscale", "iscvel", "ichecw", "firstt", "finalt", "tbath", "tstruct"):
+        kw.pop(key, None)
+    kw["iasvel"] = 0
+    kw["ihtfrq"] = 0
+
+    if coords_in_memory:
+        io.restart_read = None
+        kw["restart"] = False
+        kw["new"] = False
+        assign_velocities_at_temperature(
+            target_t,
+            timestep_ps=timestep_ps,
+            restart_path=None,
+            use_pbc=use_pbc,
+        )
+        kw["start"] = False
+        if io.restart_write is not None:
+            rewrite_dynamics_restart_from_current_state(io.restart_write)
+            io.restart_read = Path(io.restart_write)
+            kw["restart"] = True
+        if not quiet:
+            print(
+                f"NVE: Boltzmann velocities at {target_t:.1f} K "
+                "(in-memory coords after mini); iasvel=0",
+                flush=True,
+            )
+        return
+
+    if restart_from_file and io.restart_read is not None:
+        restart_path = io.restart_read
+        assign_velocities_at_temperature(
+            target_t,
+            timestep_ps=timestep_ps,
+            restart_path=restart_path,
+            use_pbc=use_pbc,
+        )
+        io.restart_read = None
+        kw["restart"] = False
+        kw["new"] = False
+        kw["start"] = False
+        if io.restart_write is not None:
+            rewrite_dynamics_restart_from_current_state(io.restart_write)
+            io.restart_read = Path(io.restart_write)
+            kw["restart"] = True
+        if not quiet:
+            print(
+                f"NVE: Boltzmann velocities at {target_t:.1f} K "
+                f"(coords from {restart_path}); iasvel=0",
+                flush=True,
+            )
+        return
+
+    if not quiet:
+        print(
+            f"NVE: continuing velocities from restart (iasvel=0, T target {target_t:.1f} K)",
+            flush=True,
+        )
+
+
 def _overlap_for_stage(
     stage: MdStage,
     overlap_cfg: DynamicsOverlapConfig,
@@ -1145,22 +1227,33 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     quiet=bool(args.quiet),
                     heat_thermostat=heat_thermostat,
                 )
-                if not args.quiet:
-                    if heat_thermostat == "hoover":
-                        print(
-                            f"HEAT Hoover: {kw.get('firstt')} -> {kw.get('finalt')} K "
-                            f"over {stage_ps} ps | hoover reft={kw.get('hoover reft')} K "
-                            f"tmass={kw.get('tmass')} | ihtfrq=0",
-                            flush=True,
-                        )
-                    else:
-                        print(
-                            f"HEAT ramp: {kw.get('firstt')} -> {kw.get('finalt')} K "
-                            f"over {stage_ps} ps | ihtfrq={kw.get('ihtfrq')} "
-                            f"TEMINC={float(kw.get('TEMINC', 0)):.4g} K | "
-                            "iasors=0 (scale)",
-                            flush=True,
-                        )
+            elif stage == "nve":
+                _configure_nve_dynamics_start(
+                    kw,
+                    io,
+                    coords_in_memory=use_memory or prev_restart_is_current_state,
+                    restart_from_file=restart and io.restart_read is not None,
+                    timestep_ps=timestep_ps,
+                    use_pbc=use_pbc,
+                    quiet=bool(args.quiet),
+                    temp=temp,
+                )
+            if stage == "heat" and not args.quiet:
+                if heat_thermostat == "hoover":
+                    print(
+                        f"HEAT Hoover: {kw.get('firstt')} -> {kw.get('finalt')} K "
+                        f"over {stage_ps} ps | hoover reft={kw.get('hoover reft')} K "
+                        f"tmass={kw.get('tmass')} | ihtfrq=0",
+                        flush=True,
+                    )
+                else:
+                    print(
+                        f"HEAT ramp: {kw.get('firstt')} -> {kw.get('finalt')} K "
+                        f"over {stage_ps} ps | ihtfrq={kw.get('ihtfrq')} "
+                        f"TEMINC={float(kw.get('TEMINC', 0)):.4g} K | "
+                        "iasors=0 (scale)",
+                        flush=True,
+                    )
             run_dynamics_with_io(
                 kw,
                 io,

@@ -38,6 +38,17 @@ def test_count_dcd_frames(tmp_path):
     assert count_dcd_frames(path) == 3
 
 
+def test_build_nve_dynamics_restart_uses_iasvel_zero():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import build_nve_dynamics
+
+    kw = build_nve_dynamics(restart=True, temp=300.0)
+    assert kw["iasvel"] == 0
+    assert "firstt" not in kw
+    cold = build_nve_dynamics(restart=False, temp=300.0)
+    assert cold["iasvel"] == 1
+    assert cold["firstt"] == 300.0
+
+
 def test_concat_dcd_files_merges_chunks(tmp_path):
     import numpy as np
 
@@ -64,6 +75,30 @@ def test_concat_dcd_files_merges_chunks(tmp_path):
     n = concat_dcd_files([c1, c2], out)
     assert n == 5
     assert count_dcd_frames(out) == 5
+
+
+def test_concat_dcd_files_accepts_header_with_incomplete_last_frame(tmp_path):
+    import numpy as np
+
+    class _Atoms:
+        def __len__(self):
+            return 2
+
+    atoms = _Atoms()
+    chunk = tmp_path / "nve.chunk.0000.dcd"
+    out = tmp_path / "nve.dcd"
+    save_trajectory_dcd(
+        chunk,
+        np.zeros((1, 2, 3), dtype=np.float32),
+        atoms,
+        steps_per_frame=1,
+    )
+    data = bytearray(chunk.read_bytes())
+    data[8:12] = struct.pack("<i", 2)
+    chunk.write_bytes(data)
+    n = concat_dcd_files([chunk], out)
+    assert n == 1
+    assert count_dcd_frames(out) == 1
 
 
 def test_read_restart_last_step(tmp_path):
