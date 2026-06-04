@@ -84,9 +84,11 @@ bash scripts/job_shell.sh pycharmm_vac_heat_hoover
 python3 scripts/run_job.py ase_vac_nve
 ```
 
-Collect only (after jobs finished):
+Collect only (works even if some jobs failed — no longer requires every `done.txt`):
 
 ```bash
+snakemake results/benchmark_summary.csv -f
+# or
 python3 scripts/collect_benchmark.py
 ```
 
@@ -100,6 +102,18 @@ Aggregate:
 - `results/benchmark_report.md`
 
 ## Troubleshooting
+
+### `pycharmm_vac_nve` has trajectories but no `done.txt`
+
+Usually NVE stopped early (echeck) or overlap chunk restart handoff failed. The directory may contain many `nve_dcm_5.chunk.*.dcd` files from the default 500-step overlap interval — use `dynamics_overlap_check_interval: 8000` in `config.yaml` (single chunk).
+
+```bash
+grep -E 'incomplete|restart step|NVE complete|READYN|echeck' results/pycharmm_vac_nve/stdout.log | tail -20
+rm -f results/pycharmm_vac_nve/done.txt
+snakemake results/pycharmm_vac_nve/done.txt -c1
+```
+
+Sync repo + `pip install -e .` for NVE memory handoff and post-run DCD validation.
 
 ### `jaxmd_pbc_npt` fails
 
