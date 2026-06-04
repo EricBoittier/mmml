@@ -38,7 +38,7 @@ RUN_NAME="${COMPOSITION_TAG}_nvt"
 MPIRUN="${MMML_MPIRUN_WRAPPER:-$REPO_ROOT/scripts/mmml-charmm-mpirun.sh}"
 #exec "$MPIRUN" 
 
-uv run mmml md-system \
+mmml md-system \
   --setup free_nvt \
   --backend pycharmm \
   --composition "$COMPOSITION" \
