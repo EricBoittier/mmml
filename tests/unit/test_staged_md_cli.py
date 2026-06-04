@@ -15,7 +15,10 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     resolve_mlpot_use_pbc,
     resolve_use_pbc,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    CharmmTrajectoryFiles,
+    build_hoover_heat_dynamics,
+)
 from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
     _artifact_paths,
     _build_stage_dynamics_kw,
@@ -247,9 +250,25 @@ def test_build_stage_dynamics_kw_heat_hoover_pbc_disables_ihtfrq_ramp():
             use_pbc=True,
         )
     assert kw["hoover reft"] == 240.0
+    assert kw["tmass"] == 800
+    assert kw["pgamma"] == 0.0
     assert kw["cpt"] is True
     assert kw["ihtfrq"] == 0
     assert "TEMINC" not in kw
+
+
+def test_build_hoover_heat_tmass_floor_for_small_psf_mass():
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.compute_cpt_piston_masses",
+        return_value=(8, 80),
+    ):
+        kw = build_hoover_heat_dynamics(
+            firstt=10.0,
+            finalt=240.0,
+            use_pbc=True,
+        )
+    assert kw["tmass"] == 500
+    assert kw["pgamma"] == 0.0
 
 
 def test_build_stage_dynamics_kw_free_space_equi_uses_charmm_heat_controls():

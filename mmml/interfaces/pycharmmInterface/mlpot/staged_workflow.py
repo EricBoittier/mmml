@@ -1368,8 +1368,12 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             )
 
             apply_dyn_inbfrq_from_args(kw, args, charmm_pbc=charmm_pbc)
-            if stage == "nve" and not charmm_pbc and getattr(
-                args, "pre_nve_charmm_update", True
+            if stage in ("heat", "nve") and (
+                stage == "heat"
+                or (
+                    not charmm_pbc
+                    and getattr(args, "pre_nve_charmm_update", True)
+                )
             ):
                 from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
                     sync_charmm_lists_after_mini,

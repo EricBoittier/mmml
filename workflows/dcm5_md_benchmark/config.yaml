@@ -18,7 +18,10 @@ mpirun_wrapper: "../../scripts/mmml-charmm-mpirun.sh"
 mm_switch_on: 5.5
 mm_switch_width: 1.5
 ml_switch_width: 0.1
-mini_nstep: 100
+mini_nstep: 2000
+bonded_mm_mini: true
+bonded_mm_mini_after: mini
+bonded_mm_mini_steps: 100
 dyn_nprint: 500
 dcd_nsavc: 500
 # 10 K initial draw avoids a literal 0 K Boltzmann assign; Hoover still ramps to finalt.
@@ -179,7 +182,7 @@ jobs:
     box_size: 55.0
     integrator: heat_hoover
     md_stages: "mini,heat"
-    ps_heat: 2.0
+    ps_heat: 5.0
     heat_thermostat: hoover
     heat_ihtfrq: 0
 

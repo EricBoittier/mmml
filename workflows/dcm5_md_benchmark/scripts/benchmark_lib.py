@@ -168,6 +168,17 @@ def build_md_system_argv(
             argv.extend(["--heat-ihtfrq", str(heat_ihtfrq)])
         argv.extend(["--heat-firstt", str(cfg["heat_firstt"])])
         argv.extend(["--heat-finalt", str(cfg["heat_finalt"])])
+        if cfg.get("bonded_mm_mini"):
+            argv.append("--bonded-mm-mini")
+            argv.extend(
+                ["--bonded-mm-mini-after", str(cfg.get("bonded_mm_mini_after", "mini"))]
+            )
+            argv.extend(
+                [
+                    "--bonded-mm-mini-steps",
+                    str(int(cfg.get("bonded_mm_mini_steps", 50))),
+                ]
+            )
 
     if str(job["setup"]) == "pbc_npt":
         argv.extend(["--pressure", str(job.get("pressure", cfg["pressure"]))])

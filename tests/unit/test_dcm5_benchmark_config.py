@@ -104,6 +104,13 @@ def test_pycharmm_vac_nve_single_chunk_and_free_space(cfg: dict) -> None:
     assert float(argv[idx + 1]) >= 500.0
 
 
+def test_pycharmm_benchmark_passes_bonded_mm_mini(cfg: dict) -> None:
+    assert cfg.get("bonded_mm_mini") is True
+    os.environ.setdefault("MMML_CKPT", "/tmp/dcm5_test_ckpt")
+    argv = build_md_system_argv(cfg, "pycharmm_vac_nve")
+    assert "--bonded-mm-mini" in argv
+
+
 def test_pycharmm_heat_hoover_argv(cfg: dict) -> None:
     os.environ.setdefault("MMML_CKPT", "/tmp/dcm5_test_ckpt")
     argv = build_md_system_argv(cfg, "pycharmm_vac_heat_hoover")
@@ -113,6 +120,9 @@ def test_pycharmm_heat_hoover_argv(cfg: dict) -> None:
     idx = argv.index("--heat-ihtfrq")
     assert argv[idx + 1] == "0"
     assert "--ps-heat" in argv
+    idx = argv.index("--ps-heat")
+    assert float(argv[idx + 1]) == 5.0
+    assert "--bonded-mm-mini" in argv
     assert "--box-size" in argv
     idx = argv.index("--box-size")
     assert argv[idx + 1] == "55.0"
