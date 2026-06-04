@@ -16,10 +16,17 @@ _SCRIPTS = Path(__file__).resolve().parent
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
-from scaling_lib import composition_string, load_config, paths_for_size, workflow_root  # noqa: E402
+from scaling_lib import (  # noqa: E402
+    composition_string,
+    load_config,
+    nve_inbfrq_values,
+    paths_for_size,
+    workflow_root,
+)
 
 _CSV_FIELDS = [
     "n_monomers",
+    "inbfrq",
     "composition",
     "status",
     "n_frames",
@@ -54,10 +61,11 @@ def _load_audit(path: Path) -> dict[str, Any] | None:
         return None
 
 
-def _row_for_size(cfg: dict[str, Any], n: int) -> dict[str, Any]:
-    paths = paths_for_size(cfg, n)
+def _row_for_size(cfg: dict[str, Any], n: int, *, inbfrq: int) -> dict[str, Any]:
+    paths = paths_for_size(cfg, n, inbfrq=inbfrq)
     row: dict[str, Any] = {
         "n_monomers": n,
+        "inbfrq": inbfrq,
         "composition": composition_string(n, prefix=str(cfg.get("composition_prefix", "DCM"))),
         "status": "missing",
         "n_frames": "",
@@ -118,7 +126,12 @@ def main() -> int:
 
     cfg = load_config(args.config)
     sizes = [int(x) for x in cfg["cluster_sizes"]]
-    rows = [_row_for_size(cfg, n) for n in sizes]
+    inbfrqs = nve_inbfrq_values(cfg)
+    rows = [
+        _row_for_size(cfg, n, inbfrq=ib)
+        for n in sizes
+        for ib in inbfrqs
+    ]
 
     args.csv.parent.mkdir(parents=True, exist_ok=True)
     with args.csv.open("w", newline="", encoding="utf-8") as f:
@@ -131,13 +144,13 @@ def main() -> int:
         "",
         f"Config: `{args.config}`",
         "",
-        "| N | status | cluster disp (Å) | cluster MSD (Å²) | max internal RMSD | forces.npz |",
-        "|---|--------|------------------|------------------|-------------------|------------|",
+        "| N | inbfrq | status | cluster disp (Å) | outlier ratio | max internal RMSD |",
+        "|---|--------|--------|------------------|---------------|-------------------|",
     ]
     for r in rows:
         lines.append(
-            f"| {r['n_monomers']} | {r['status']} | {r['cluster_com_disp_A']} | "
-            f"{r['cluster_msd_A2']} | {r['max_internal_rmsd_A']} | {r['forces_npz']} |"
+            f"| {r['n_monomers']} | {r['inbfrq']} | {r['status']} | "
+            f"{r['cluster_com_disp_A']} | {r['outlier_ratio']} | {r['max_internal_rmsd_A']} |"
         )
     lines.append("")
     args.md.write_text("\n".join(lines) + "\n", encoding="utf-8")

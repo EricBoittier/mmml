@@ -1363,6 +1363,19 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 quiet=bool(args.quiet),
             )
             apply_comp_velocity_policy(stage, kw, args)
+            from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+                apply_dyn_inbfrq_from_args,
+            )
+
+            apply_dyn_inbfrq_from_args(kw, args, charmm_pbc=charmm_pbc)
+            if stage == "nve" and not charmm_pbc and getattr(
+                args, "pre_nve_charmm_update", True
+            ):
+                from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+                    sync_charmm_lists_after_mini,
+                )
+
+                sync_charmm_lists_after_mini(quiet=bool(args.quiet))
             if stage == "heat":
                 heat_thermostat = resolve_heat_thermostat(args)
                 overlap_for_stage = _overlap_for_stage(

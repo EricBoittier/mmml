@@ -685,6 +685,18 @@ def parse_args() -> argparse.Namespace:
             "With free_* + --box-size, CHARMM uses loose PBC unless this flag is set."
         ),
     )
+    parser.add_argument(
+        "--dyn-inbfrq",
+        type=int,
+        default=None,
+        help="pycharmm: CHARMM inbfrq for dynamics (-1=heuristic, 50=vacuum default)",
+    )
+    parser.add_argument(
+        "--pre-nve-charmm-update",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="pycharmm: ENER+UPDATE after mini before vacuum NVE (default: on)",
+    )
 
     # --- lambda_ti (--setup lambda_ti) ----------------------------------------
     parser.add_argument(
@@ -1244,6 +1256,11 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         cmd.append("--free-space")
     if getattr(args, "mlpot_pbc", False):
         cmd.append("--mlpot-pbc")
+    _append_optional(cmd, "--dyn-inbfrq", getattr(args, "dyn_inbfrq", None))
+    if getattr(args, "pre_nve_charmm_update", None) is False:
+        cmd.append("--no-pre-nve-charmm-update")
+    elif getattr(args, "pre_nve_charmm_update", None) is True:
+        cmd.append("--pre-nve-charmm-update")
     if getattr(args, "bonded_mm_mini", False):
         cmd.append("--bonded-mm-mini")
         cmd.extend(["--bonded-mm-mini-after", str(args.bonded_mm_mini_after)])

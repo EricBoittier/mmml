@@ -59,7 +59,8 @@ Staged workflow **always overwrites** `nprint`, `iprfrq`, `isvfrq` from `resolve
 | Length | `--ps`, `--ps-heat`, … | setup-dependent | | | |
 | DCD frames | `--dcd-nsavc` | 1 | all | all | all |
 | Energy drift stop | `--echeck` / `--no-echeck` | 100 kcal/mol (scaled for large clusters) | all | all | equi/prod ≥500 if user value low |
-| Nonbond rebuild | `inbfrq` | 50 (vacuum); -1 (PBC) | periodic lists | | |
+| Nonbond rebuild | `inbfrq` | 50 (vacuum default); -1 (heuristic, preferred for small clusters) | periodic lists | `--dyn-inbfrq` |
+| Pre-NVE list sync | `pre_nve_charmm_update` | on (vacuum NVE) | `ENER`+`UPDATE` after mini (`inbfrq=0`) | `--no-pre-nve-charmm-update` |
 | MLpot SD lists | `inbfrq=0` | mini only | avoids mlpot_update segfault | | |
 
 ## `md-system` setup presets

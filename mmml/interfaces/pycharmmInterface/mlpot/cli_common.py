@@ -1356,6 +1356,33 @@ def add_staged_md_args(parser: argparse.ArgumentParser) -> None:
             "but ML stays open-boundary unless this flag is set."
         ),
     )
+    group.add_argument(
+        "--dyn-inbfrq",
+        type=int,
+        default=None,
+        help=(
+            "CHARMM nonbond list rebuild cadence for dynamics (inbfrq). "
+            "Vacuum default in builders is 50; -1 rebuilds when the cluster moves. "
+            "MLpot mini uses inbfrq=0; use --pre-nve-charmm-update before NVE."
+        ),
+    )
+    group.add_argument(
+        "--pre-nve-charmm-update",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Before vacuum NVE: CHARMM ENER+UPDATE after mini to sync lists (default: on). "
+            "Does not call update_bnbnd/upinb."
+        ),
+    )
+
+
+def resolve_dyn_inbfrq(args: argparse.Namespace) -> int | None:
+    """Explicit ``--dyn-inbfrq`` for dynamics stages, if set."""
+    raw = getattr(args, "dyn_inbfrq", None)
+    if raw is None:
+        return None
+    return int(raw)
 
 
 def _default_stages_for_setup(setup: str | None) -> list[str]:

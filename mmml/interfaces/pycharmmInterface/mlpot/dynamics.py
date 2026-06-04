@@ -595,11 +595,55 @@ def _import_pycharmm_modules():
     return pycharmm, cons_fix, energy, minimize, read, write
 
 
-def _non_pbc_dyn_freq_kwargs() -> dict[str, int]:
+def _non_pbc_dyn_freq_kwargs(*, inbfrq: int = 50) -> dict[str, int]:
     """Image list freqs for vacuum / free-space (no crystal updates)."""
-    # Fixed NB rebuild cadence: inbfrq=-1 heuristic rebuilds every step once the
-    # cluster moves (slow for large ML clusters); vacuum has no image list updates.
-    return {"imgfrq": 0, "ihbfrq": 0, "ilbfrq": 0, "inbfrq": 50}
+    # inbfrq=-1: heuristic rebuild when the cluster moves (best list/force consistency).
+    # inbfrq>0: fixed cadence (can leave lists stale between updates; mini uses inbfrq=0).
+    return {
+        "imgfrq": 0,
+        "ihbfrq": 0,
+        "ilbfrq": 0,
+        "inbfrq": int(inbfrq),
+    }
+
+
+def sync_charmm_lists_after_mini(*, quiet: bool = False) -> None:
+    """Refresh NB/MLpot pair lists from current coordinates after mini (``inbfrq=0``).
+
+    MLpot SD keeps ``inbfrq=0`` to avoid ``mlpot_update`` issues; the first NVE
+    ``UPDECI`` otherwise jumps from stale lists.  Uses CHARMM ``UPDATE`` only (no
+    ``update_bnbnd`` / ``upinb`` — unsafe with MLpot registered).
+    """
+    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+
+    pycharmm = _import_pycharmm_modules()[0]
+    with charmm_relaxed_bomlev():
+        pycharmm.lingo.charmm_script("ENER")
+        pycharmm.lingo.charmm_script("UPDATE")
+    if not quiet:
+        print(
+            "NVE: CHARMM UPDATE after mini (sync NB/MLpot lists before dyna)",
+            flush=True,
+        )
+
+
+def apply_dyn_inbfrq_from_args(
+    kw: dict[str, Any],
+    args: Any,
+    *,
+    charmm_pbc: bool,
+) -> None:
+    """Override ``inbfrq`` (and vacuum image freqs) when ``--dyn-inbfrq`` is set."""
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_dyn_inbfrq
+
+    inb = resolve_dyn_inbfrq(args)
+    if inb is None:
+        return
+    kw["inbfrq"] = int(inb)
+    if not charmm_pbc:
+        kw["imgfrq"] = 0
+        kw["ihbfrq"] = 0
+        kw["ilbfrq"] = 0
 
 
 def _strip_crystal_dyn_keywords(kw: dict[str, Any]) -> None:
@@ -892,11 +936,17 @@ def build_nve_dynamics(
     isvfrq: int = 500,
     echeck: float = 100.0,
     use_pbc: bool = True,
+    dyn_inbfrq: int | None = None,
 ) -> dict[str, Any]:
     """NVE production-style dict (restart from heat)."""
     nstep = ps_to_nsteps(timestep_ps, duration_ps)
     nsavc = nsavc_for_interval(timestep_ps, save_interval_ps)
-    freq_kwargs = {} if use_pbc else _non_pbc_dyn_freq_kwargs()
+    if use_pbc:
+        freq_kwargs: dict[str, int] = {}
+    else:
+        freq_kwargs = _non_pbc_dyn_freq_kwargs(
+            inbfrq=50 if dyn_inbfrq is None else int(dyn_inbfrq)
+        )
     kw = _base_dyn_kwargs(
         timestep=timestep_ps,
         nstep=nstep,
