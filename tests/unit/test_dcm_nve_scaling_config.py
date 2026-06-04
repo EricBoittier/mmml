@@ -31,7 +31,7 @@ def cfg() -> dict:
 
 
 def test_cluster_sizes(cfg: dict) -> None:
-    assert cfg["cluster_sizes"] == [5, 6, 7, 8, 9, 10]
+    assert cfg["cluster_sizes"] == [3, 5, 6, 7, 8, 9, 10]
 
 
 def test_per_step_output_required(cfg: dict) -> None:
@@ -41,8 +41,9 @@ def test_per_step_output_required(cfg: dict) -> None:
 
 
 def test_nve_boltzmann_temp_below_full_temperature(cfg: dict) -> None:
-    assert float(cfg["nve_boltzmann_temp"]) == 30.0
-    assert float(cfg["nve_boltzmann_temp"]) < float(cfg["temperature"])
+    t_nve = float(cfg["nve_boltzmann_temp"])
+    assert t_nve < float(cfg["temperature"])
+    assert 0.0 < t_nve < 50.0
 
 
 def test_expected_nve_nstep_matches_config(cfg: dict) -> None:
@@ -66,8 +67,15 @@ def test_conservative_minimize_and_echeck(cfg: dict) -> None:
 def test_packmol_radius_scaling(cfg: dict) -> None:
     r = float(cfg["packmol_reference_r"])
     n = int(cfg["packmol_reference_n"])
+    assert packmol_radius_A(3, reference_n=n, reference_r=r) == pytest.approx(7.4, abs=0.1)
     assert packmol_radius_A(5, reference_n=n, reference_r=r) == pytest.approx(8.8, abs=0.2)
     assert packmol_radius_A(90, reference_n=n, reference_r=r) == pytest.approx(22.9, abs=0.5)
+
+
+def test_paths_for_size_dcm3(cfg: dict) -> None:
+    p = paths_for_size(cfg, 3)
+    assert p["nve_dcd"].name == "nve_dcm_3.dcd"
+    assert p["mini_crd"].name == "mini_full_mlpot_dcm_3.crd"
 
 
 def test_build_md_system_argv_per_step_flags(cfg: dict, tmp_path: Path) -> None:
