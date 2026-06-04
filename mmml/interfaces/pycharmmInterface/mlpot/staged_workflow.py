@@ -25,6 +25,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     resolve_heat_firstt_finalt,
     resolve_heat_ihtfrq,
     resolve_heat_thermostat,
+    resolve_nve_boltzmann_temp,
     resolve_echeck_for_cluster,
     resolve_fix_resids,
     resolve_mini_nstep,
@@ -1357,6 +1358,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     heat_thermostat=heat_thermostat,
                 )
             elif stage == "nve":
+                nve_t = resolve_nve_boltzmann_temp(args, default_temp=temp)
                 _configure_nve_dynamics_start(
                     kw,
                     io,
@@ -1365,7 +1367,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     timestep_ps=timestep_ps,
                     use_pbc=use_pbc,
                     quiet=bool(args.quiet),
-                    temp=temp,
+                    temp=nve_t,
                 )
             if stage == "heat" and not args.quiet:
                 if heat_thermostat == "hoover":

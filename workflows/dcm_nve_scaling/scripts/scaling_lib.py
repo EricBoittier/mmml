@@ -127,6 +127,8 @@ def build_md_system_argv(
         str(cfg["ps_nve"]),
         "--temperature",
         str(cfg["temperature"]),
+        "--nve-boltzmann-temp",
+        str(cfg.get("nve_boltzmann_temp", float(cfg["temperature"]) * 0.2)),
         "--spacing",
         str(cfg["spacing"]),
         "--mm-switch-on",

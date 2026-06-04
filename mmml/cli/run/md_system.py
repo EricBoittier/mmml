@@ -341,6 +341,16 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--nve-boltzmann-temp",
+        type=float,
+        default=None,
+        metavar="K",
+        help=(
+            "pycharmm: Boltzmann velocity temperature before NVE after mini. "
+            "Default 0.2×--temperature; use 50–100 K for a gentler start than 300 K."
+        ),
+    )
+    parser.add_argument(
         "--heat-comp-damp",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -1158,6 +1168,7 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     ]
     _append_optional(cmd, "--heat-firstt", getattr(args, "heat_firstt", None))
     _append_optional(cmd, "--heat-finalt", getattr(args, "heat_finalt", None))
+    _append_optional(cmd, "--nve-boltzmann-temp", getattr(args, "nve_boltzmann_temp", None))
     cmd.extend(["--heat-thermostat", str(getattr(args, "heat_thermostat", "scale"))])
     _append_boolean_optional_flag(
         cmd, "--heat-comp-damp", bool(getattr(args, "heat_comp_damp", False))
