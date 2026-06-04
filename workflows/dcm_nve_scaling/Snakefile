@@ -74,7 +74,7 @@ rule audit_post_mini:
         """
 
 
-def _com_analysis_args() -> str:
+def _com_analysis_args(_wildcards) -> str:
     ca = config.get("com_analysis") or {}
     parts = []
     if ca.get("no_fail"):
