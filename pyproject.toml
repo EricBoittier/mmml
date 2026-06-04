@@ -82,11 +82,10 @@ mbar = [
 # JAX CUDA 13 uses plugin/pjrt wheels (jax[cuda13]); there is no jaxlib[cuda13] extra.
 # GPU requirement: NVIDIA SM 7.5+ (Turing or newer). Pascal/Volta (e.g. CC 6.x) are not supported — use gpu-cuda12.
 # Runtime: cuDNN >= 9.10.1 (older versions are rejected by the JAX CUDA 13 plugin).
+# Do not pin jaxlib / jax-cuda13-plugin separately: loose >=0.9.2 allows stale plugins when
+# base deps upgrade jaxlib (plugin version must exactly match jaxlib).
 gpu = [
     "jax[cuda13]",
-    "jaxlib",
-    "jax-cuda13-plugin>=0.9.2",
-    "jax-cuda13-pjrt>=0.9.2",
     "nvidia-cudnn-cu13>=9.10.1",
     "cupy-cuda13x>=13.0.0",
     "cutensor-cu13>=2.0.0",
@@ -98,9 +97,6 @@ gpu = [
 # jaxlib has no [cuda12] extra in JAX 0.9+; jax[cuda12] pulls jax-cuda12-plugin[with-cuda] + jaxlib from PyPI.
 gpu-cuda12 = [
     "jax[cuda12]>=0.9.0",
-    "jaxlib",
-    "jax-cuda12-plugin>=0.9.2",
-    "jax-cuda12-pjrt>=0.9.2",
     "cupy-cuda12x>=13.0.0",
     "cutensor-cu12>=2.0.0",
     "mpi4py",
