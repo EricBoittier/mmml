@@ -8,7 +8,7 @@ import sys
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 
@@ -46,6 +46,11 @@ class DynamicsOverlapConfig:
     rescue: OverlapRescueConfig = field(default_factory=OverlapRescueConfig)
     separate_on_rescue_fail: bool = True
     separate_margin_A: float = 0.2
+    topology_psf: Path | None = None
+    recovery_seed: int | None = None
+    position_noise_A: float = 0.05
+    mlpot_rescue_mini_nstep: int = 25
+    pyCModel: Any = field(default=None, compare=False, hash=False)
 
     @property
     def enabled(self) -> bool:
@@ -201,6 +206,31 @@ def resolve_dynamics_overlap_config(
             getattr(args, "no_dynamics_overlap_separate", False)
         ),
         separate_margin_A=float(getattr(args, "dynamics_overlap_separate_margin", 0.2)),
+    )
+
+
+def augment_overlap_config_for_rescue(
+    config: DynamicsOverlapConfig,
+    *,
+    ctx: "MlpotContext",
+    args: argparse.Namespace,
+    topology_psf: Path | None,
+) -> DynamicsOverlapConfig:
+    """Attach topology / MLpot handles needed for all-ML intra overlap rescue."""
+    from dataclasses import replace
+
+    topo_path: Path | None = None
+    if topology_psf is not None:
+        candidate = Path(topology_psf).expanduser()
+        if candidate.is_file():
+            topo_path = candidate.resolve()
+    mini_nstep = int(getattr(args, "charmm_sd_steps", 25) or 25)
+    return replace(
+        config,
+        topology_psf=topo_path,
+        recovery_seed=getattr(args, "seed", None),
+        mlpot_rescue_mini_nstep=max(0, mini_nstep),
+        pyCModel=getattr(ctx, "pyCModel", None),
     )
 
 
@@ -363,24 +393,11 @@ def _run_intramonomer_bonded_rescue(
     mlpot_ctx: "MlpotContext",
     config: DynamicsOverlapConfig,
 ) -> None:
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
-        BondedMmMiniConfig,
-        minimize_bonded_mm_recovery,
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        run_intra_monomer_overlap_rescue,
     )
 
-    sd_steps = config.intra_rescue_sd_steps
-    if sd_steps is None:
-        sd_steps = config.rescue.nstep_sd
-    minimize_bonded_mm_recovery(
-        mlpot_ctx,
-        BondedMmMiniConfig(
-            nstep_sd=int(sd_steps),
-            nprint=max(1, int(config.rescue.nprint)),
-            tolenr=float(config.rescue.tolenr),
-            tolgrd=float(config.rescue.tolgrd),
-            verbose=config.rescue.verbose,
-        ),
-    )
+    run_intra_monomer_overlap_rescue(mlpot_ctx, config)
 
 
 def apply_overlap_separation_last_resort(config: DynamicsOverlapConfig) -> float:
