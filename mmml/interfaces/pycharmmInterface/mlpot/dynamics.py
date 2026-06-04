@@ -1228,6 +1228,46 @@ def _refresh_overlap_scratch_restart(write_path: PathLike | None, *, final_resta
     rewrite_dynamics_restart_from_current_state(write_path)
 
 
+def _restart_header_step_field(path: Path) -> str | None:
+    """Return the third token on the ``REST`` line (step / history marker), if present."""
+    try:
+        first_line = path.read_text(errors="ignore").splitlines()[0].split()
+    except (OSError, IndexError):
+        return None
+    if len(first_line) >= 3 and first_line[0].upper() == "REST":
+        return first_line[2]
+    return None
+
+
+def _ensure_valid_overlap_scratch_restart(
+    write_path: PathLike | None,
+    *,
+    final_restart: Path,
+    chunk_index: int,
+    n_chunks: int,
+    overlap_context: str,
+) -> None:
+    """Refresh scratch restart from memory and fail fast if still not ``READYN``-able."""
+    if not _is_overlap_scratch_restart(write_path, final_restart):
+        return
+    path = Path(write_path)
+    _refresh_overlap_scratch_restart(write_path, final_restart=final_restart)
+    if _valid_restart_file(path) is not None:
+        return
+    rest_field = _restart_header_step_field(path)
+    hint = (
+        "CHARMM wrote a coordinate-history restart (REST third field -1) or dynamics "
+        "was unstable. For HEAT after mini use in-memory Boltzmann assignment; avoid "
+        "dyna start without firstt on overlap chunk 0; try --heat-thermostat hoover "
+        "and a single heat segment (--dynamics-overlap-check-interval >= heat nstep)."
+    )
+    raise RuntimeError(
+        f"overlap ({overlap_context}): scratch restart {path.name} is not restartable "
+        f"after chunk {chunk_index + 1}/{n_chunks} "
+        f"(REST step field={rest_field!r}). {hint}"
+    )
+
+
 def _overlap_chunk_trajectory_path(trajectory: Path, chunk_index: int) -> Path:
     """Per-chunk DCD path for overlap-segmented dynamics."""
     p = Path(trajectory)
@@ -1423,9 +1463,24 @@ def _apply_overlap_chunk_dynamics_kw(
     has_restart_read: bool,
 ) -> None:
     """Set ``restart`` / ``new`` / ``start`` for one overlap chunk (in-place)."""
-    chunk_kw["iasvel"] = 0
-    for key in ("iasors", "iscale", "iscvel", "ichecw", "firstt", "finalt", "tbath", "tstruct"):
-        chunk_kw.pop(key, None)
+    preserve_cold_start = (
+        chunk_index == 0
+        and not has_restart_read
+        and bool(chunk_kw.get("start"))
+    )
+    if not preserve_cold_start:
+        chunk_kw["iasvel"] = 0
+        for key in (
+            "iasors",
+            "iscale",
+            "iscvel",
+            "ichecw",
+            "firstt",
+            "finalt",
+            "tbath",
+            "tstruct",
+        ):
+            chunk_kw.pop(key, None)
     if chunk_index == 0 and not has_restart_read:
         chunk_kw["restart"] = False
         chunk_kw.pop("iunrea", None)
@@ -1675,9 +1730,12 @@ def run_dynamics_with_io(
             )
             steps_done += chunk_nstep
             if final_restart is not None and chunk_io is not None:
-                _refresh_overlap_scratch_restart(
+                _ensure_valid_overlap_scratch_restart(
                     chunk_io.restart_write,
                     final_restart=final_restart,
+                    chunk_index=chunk_index,
+                    n_chunks=n_chunks,
+                    overlap_context=overlap_context,
                 )
             check_dynamics_overlap(
                 overlap,
@@ -1695,9 +1753,12 @@ def run_dynamics_with_io(
 
             maybe_record_forces(steps_done, ml_forces=ml_f)
             if final_restart is not None and chunk_io is not None:
-                _refresh_overlap_scratch_restart(
+                _ensure_valid_overlap_scratch_restart(
                     chunk_io.restart_write,
                     final_restart=final_restart,
+                    chunk_index=chunk_index,
+                    n_chunks=n_chunks,
+                    overlap_context=overlap_context,
                 )
         completed = True
         if split_trajectory and chunk_dcd_paths and io is not None:

@@ -914,7 +914,9 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
 
         equi_restart_for_prod = _equi_restart_name(tag, n_equi_segments)
         prev_restart: Path | None = restart_from
-        prev_restart_is_current_state = False
+        # After MLpot mini, coordinates live in CHARMM — heat should Boltzmann-assign
+        # from memory instead of dyna start with stripped firstt on overlap chunk 0.
+        prev_restart_is_current_state = "mini" in stages and restart_from is None
         memory_handoff_next = False
         for stage in dyn_stages:
             if stage == "equi" and n_equi_segments > 1:
