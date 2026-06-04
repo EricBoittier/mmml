@@ -672,7 +672,7 @@ def test_overlap_aborts_before_charmm_when_scratch_restart_is_invalid(tmp_path):
         "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=pos_ok,
     ):
-        with pytest.raises(RuntimeError, match="overlap restart handoff failed"):
+        with pytest.raises(RuntimeError, match="scratch restart.*is not restartable after chunk 1"):
             run_dynamics_with_io(
                 {"nstep": 6, "nsavc": 1},
                 io,
@@ -681,6 +681,55 @@ def test_overlap_aborts_before_charmm_when_scratch_restart_is_invalid(tmp_path):
             )
 
     assert len(calls) == 1
+
+
+def test_apply_overlap_chunk_preserves_heat_cold_start_kw():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _apply_overlap_chunk_dynamics_kw
+
+    kw = {
+        "start": True,
+        "firstt": 48.0,
+        "finalt": 240.0,
+        "iasors": 0,
+        "iasvel": 1,
+        "ihtfrq": 1000,
+        "TEMINC": 48.0,
+    }
+    _apply_overlap_chunk_dynamics_kw(kw, chunk_index=0, has_restart_read=False)
+    assert kw["start"] is True
+    assert kw["firstt"] == 48.0
+    assert kw["finalt"] == 240.0
+    assert kw["iasors"] == 0
+    assert kw["iasvel"] == 1
+    assert kw["iunrea"] == -1
+    assert kw["restart"] is False
+
+    kw2 = {"start": False, "firstt": 48.0, "iasvel": 1}
+    _apply_overlap_chunk_dynamics_kw(kw2, chunk_index=0, has_restart_read=False)
+    assert "firstt" not in kw2
+    assert kw2["iasvel"] == 0
+
+
+def test_ensure_valid_overlap_scratch_restart_raises_on_rest_minus_one(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _ensure_valid_overlap_scratch_restart,
+        _overlap_restart_slot_paths,
+    )
+
+    final = tmp_path / "heat.res"
+    slot_a, _ = _overlap_restart_slot_paths(final)
+    slot_a.write_text("REST    48    -1                \n", encoding="utf-8")
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_overlap_scratch_restart",
+    ):
+        with pytest.raises(RuntimeError, match="REST step field='-1'"):
+            _ensure_valid_overlap_scratch_restart(
+                slot_a,
+                final_restart=final,
+                chunk_index=0,
+                n_chunks=8,
+                overlap_context="HEAT",
+            )
 
 
 def test_overlap_refresh_scratch_restart_fixes_invalid_handoff(tmp_path):
