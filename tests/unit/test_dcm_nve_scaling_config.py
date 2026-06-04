@@ -41,6 +41,7 @@ def test_per_step_output_required(cfg: dict) -> None:
 
 
 def test_nve_boltzmann_temp_below_full_temperature(cfg: dict) -> None:
+    assert float(cfg["nve_boltzmann_temp"]) == 30.0
     assert float(cfg["nve_boltzmann_temp"]) < float(cfg["temperature"])
 
 
@@ -58,12 +59,15 @@ def test_nve_overlap_single_chunk(cfg: dict) -> None:
 
 def test_conservative_minimize_and_echeck(cfg: dict) -> None:
     assert int(cfg["mini_nstep"]) >= 1000
+    assert int(cfg["forces_npz_interval"]) == 500
     assert bool(cfg.get("no_echeck")) is True
 
 
-def test_packmol_radius_scaling() -> None:
-    assert packmol_radius_A(5) == pytest.approx(7.9, abs=0.2)
-    assert packmol_radius_A(90) == pytest.approx(20.6, abs=0.5)
+def test_packmol_radius_scaling(cfg: dict) -> None:
+    r = float(cfg["packmol_reference_r"])
+    n = int(cfg["packmol_reference_n"])
+    assert packmol_radius_A(5, reference_n=n, reference_r=r) == pytest.approx(8.8, abs=0.2)
+    assert packmol_radius_A(90, reference_n=n, reference_r=r) == pytest.approx(22.9, abs=0.5)
 
 
 def test_build_md_system_argv_per_step_flags(cfg: dict, tmp_path: Path) -> None:
@@ -81,7 +85,7 @@ def test_build_md_system_argv_per_step_flags(cfg: dict, tmp_path: Path) -> None:
     assert argv[idx + 1] == "1"
     assert "--save-forces-npz" in argv
     idx = argv.index("--forces-npz-interval")
-    assert argv[idx + 1] == "1"
+    assert argv[idx + 1] == "500"
     assert "--setup" in argv and "free_nve" in argv
     assert "--md-stages" in argv
     idx = argv.index("--md-stages")

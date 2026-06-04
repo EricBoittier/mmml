@@ -21,13 +21,16 @@ dyn_nprint: 1
 nprint: 1
 seed: 123
 spacing: 5.0
-packmol_tolerance: 1.0
+# Slightly looser initial sphere than default R=18*(N/60)^(1/3) (see packmol_reference_r).
+packmol_tolerance: 1.2
+packmol_reference_r: 20.0
+packmol_reference_n: 60
 temperature: 300.0
-# Boltzmann draw before NVE (not NVT target); 300 K straight after mini is harsh on ML clusters
-nve_boltzmann_temp: 60.0
+# Gentle velocity draw before NVE (ML USER-only, no SHAKE).
+nve_boltzmann_temp: 30.0
 
 save_forces_npz: true
-forces_npz_interval: 1
+forces_npz_interval: 500
 # Overlap guard: one chunk for the full NVE leg (20 ps @ 0.25 fs → 80_000 steps).
 # Avoids scratch .overlap_a/.b.res handoffs that fail when dynamics blows up mid-run.
 # (ps_nve / (dt_fs * 1e-3) = 80_000)
@@ -36,8 +39,8 @@ dynamics_overlap_check_interval: 80000
 mm_switch_on: 5.5
 mm_switch_width: 1.5
 ml_switch_width: 0.1
-# Conservative minimization before NVE (short mini caused early NVE energy spikes).
-mini_nstep: 2000
+# MLpot mini before NVE (increase if early NVE energy spikes persist).
+mini_nstep: 1000
 charmm_sd_steps: 200
 charmm_abnr_steps: 200
 dynamics_overlap_action: rescue

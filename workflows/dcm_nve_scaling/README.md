@@ -22,8 +22,9 @@ Sibling to [dcm5_md_benchmark](../dcm5_md_benchmark/) (fixed DCM:5, multi-backen
 From [config.yaml](config.yaml):
 
 - `dcd_nsavc: 1`, `dyn_nprint: 1`, `nprint: 1` (every integration step)
-- `nve_boltzmann_temp: 60` (gentle velocity draw before NVE; `--temperature` is for NVT stages only)
-- `mini_nstep: 2000`, `charmm_sd_steps` / `charmm_abnr_steps`: 200 (conservative pre-NVE relax)
+- `nve_boltzmann_temp: 30` (gentle velocity draw before NVE; `--temperature` is for NVT stages only)
+- `mini_nstep: 1000`, `packmol_reference_r: 20`, `packmol_tolerance: 1.2` (looser initial cluster)
+- `forces_npz_interval: 500` (DCD still every step via `dcd_nsavc: 1`)
 - `dynamics_overlap_check_interval: 80000` (single NVE chunk at 20 ps / 0.25 fs; no scratch restart handoff)
 - `no_echeck: true` for the 20 ps NVE leg (in-run echeck stops ML USER clusters within ~1k steps; `run_job.py` still validates DCD length)
 - `save_forces_npz: true`, `forces_npz_interval: 1`
