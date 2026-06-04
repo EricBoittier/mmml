@@ -13,7 +13,7 @@ output_root: results
 mpirun_wrapper: ../../scripts/mmml-charmm-mpirun.sh
 
 # Dynamics (free_nve: mini + nve)
-ps_nve: 2.0
+ps_nve: 0.5
 dt_fs: 0.25
 # Once per integration step (print + DCD + forces)
 dcd_nsavc: 1
@@ -31,10 +31,10 @@ nve_boltzmann_temp: 30.0
 
 save_forces_npz: true
 forces_npz_interval: 500
-# Overlap guard: one chunk for the full NVE leg (2 ps @ 0.25 fs → 8_000 steps).
+# Overlap guard: one chunk for the full NVE leg (0.5 ps @ 0.25 fs → 2_000 steps).
 # Avoids scratch .overlap_a/.b.res handoffs that fail when dynamics blows up mid-run.
-# (ps_nve / (dt_fs * 1e-3) = 8_000)
-dynamics_overlap_check_interval: 8000
+# (ps_nve / (dt_fs * 1e-3) = 2_000)
+dynamics_overlap_check_interval: 2000
 
 mm_switch_on: 5.5
 mm_switch_width: 1.5

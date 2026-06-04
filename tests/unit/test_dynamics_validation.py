@@ -172,7 +172,7 @@ def test_read_restart_last_step_uses_nstep_when_jhstrt_zero(tmp_path):
         "REST    48     0\n"
         "\n"
         " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
-        "          25        8000         500         500          10           0\n",
+        "         25       10000        8000         500          10           0\n",
         encoding="utf-8",
     )
     assert read_restart_last_step(res) == 8000

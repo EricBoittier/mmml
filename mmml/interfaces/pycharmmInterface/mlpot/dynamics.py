@@ -719,31 +719,48 @@ def build_hoover_heat_dynamics(
     use_pbc: bool = True,
     tmass: int | None = None,
     pgamma: float = 5.0,
+    ihtfrq: int = 100,
 ) -> dict[str, Any]:
-    """NVT heating with CHARMM Hoover via CPT at constant volume (``pmass=0``).
+    """NVT heating with CHARMM Hoover (PBC) or velocity-scaling ramp (vacuum).
 
-    CHARMM only couples Hoover constant-T with ``pint pconst`` (see
-    ``THERMOSTAT_INVESTIGATION.md``).  Standalone ``hoover reft`` without CPT
-    integrates but does not heat (T stays near the Boltzmann ``firstt`` draw).
+    With PBC + CRYSTal, Hoover constant-T uses CPT at constant volume
+    (``pmass=0``, ``pint pconst``, ``hoover reft``).
+
+    Vacuum/free-space runs cannot use CPT (CHARMM: "CRYStal must be used for
+    constant pressure simulations").  For ``use_pbc=False`` this falls back to
+    :func:`build_heat_dynamics` (``iasors=0`` ``ihtfrq`` scaling), which is the
+    supported all-ML heat path in ``COMP_AND_HEATING.md``.
 
     Boltzmann velocities at ``firstt`` should be assigned before ``dyna`` (see
     :func:`staged_workflow._configure_heat_dynamics_start`).
     """
-    nstep = ps_to_nsteps(timestep_ps, duration_ps)
-    nsavc = nsavc_for_interval(timestep_ps, save_interval_ps)
     heat_finalt = float(finalt if finalt is not None else temp)
     heat_firstt = float(firstt if firstt is not None else heat_finalt * 0.2)
-    freq_kwargs = {} if use_pbc else _non_pbc_dyn_freq_kwargs()
+    if not use_pbc:
+        nstep = ps_to_nsteps(timestep_ps, duration_ps)
+        kw = build_heat_dynamics(
+            timestep_ps=timestep_ps,
+            duration_ps=duration_ps,
+            save_interval_ps=save_interval_ps,
+            temp=temp,
+            firstt=heat_firstt,
+            finalt=heat_finalt,
+            echeck=echeck,
+            use_pbc=False,
+            ihtfrq=ihtfrq,
+        )
+        kw["iasors"] = 0
+        apply_heat_ramp_frequencies(kw, nstep=nstep, ihtfrq=ihtfrq)
+        return kw
+    nstep = ps_to_nsteps(timestep_ps, duration_ps)
+    nsavc = nsavc_for_interval(timestep_ps, save_interval_ps)
     kw = _base_dyn_kwargs(
         timestep=timestep_ps,
         nstep=nstep,
         nsavc=nsavc,
         nprint=100,
         echeck=echeck,
-        **freq_kwargs,
     )
-    if not use_pbc:
-        _strip_crystal_dyn_keywords(kw)
     kw.update(
         {
             "new": True,

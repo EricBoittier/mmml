@@ -156,8 +156,8 @@ grep -E 'HEAT Hoover|HEAT complete|IHTFRQ|VELOCITIES HAVE BEEN SCALED|integrated
   results/pycharmm_vac_heat_hoover/stdout.log | tail -20
 ```
 
-- **Hoover** (`pycharmm_vac_heat_hoover`): needs **CPT + Hoover** (`pmass 0` in the `dyna` banner), not standalone `hoover reft` alone. Expect `TEMPerature` rising toward `heat_finalt` (240 K), not ~0 K after 2 ps.
-- **Scale** (`pycharmm_vac_heat_scale`): `VELOCITIES HAVE BEEN SCALED` every `heat_ihtfrq` steps
+- **Hoover** (`pycharmm_vac_heat_hoover`): vacuum runs **cannot use CPT Hoover** (CHARMM requires CRYSTal). The workflow falls back to **`ihtfrq` velocity scaling** (`iasors=0`), same class as scale heat. Log should say `HEAT Hoover (vacuum fallback)` and show `ihtfrq=100` (not `cpt` / `pmass 0`).
+- **Scale** (`pycharmm_vac_heat_scale`): explicit `VELOCITIES HAVE BEEN SCALED` every `heat_ihtfrq` steps
 
 ## Unit tests (no CHARMM)
 
