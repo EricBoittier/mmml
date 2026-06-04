@@ -22,7 +22,7 @@ Sibling to [dcm5_md_benchmark](../dcm5_md_benchmark/) (fixed DCM:5, multi-backen
 From [config.yaml](config.yaml):
 
 - `dcd_nsavc: 1`, `dyn_nprint: 1`, `nprint: 1` (every integration step)
-- `nve_boltzmann_temp: 30` (gentle velocity draw before NVE; `--temperature` is for NVT stages only)
+- `nve_boltzmann_temp: 1` (gentle velocity draw before NVE; `--temperature` is for NVT stages only)
 - `mini_nstep: 1000`, `packmol_reference_r: 20`, `packmol_tolerance: 1.2` (looser initial cluster)
 - `forces_npz_interval: 500` (DCD still every step via `dcd_nsavc: 1`)
 - `dynamics_overlap_check_interval: 2000` (single NVE chunk at 0.5 ps / 0.25 fs; no scratch restart handoff)
@@ -56,4 +56,4 @@ Outputs per size under `results/dcm_N_nve/`:
 ## Analysis scripts (repo root)
 
 - `scripts/audit_mlpot_cluster.py`
-- `scripts/analyze_monomer_com_dcd.py`
+- `scripts/analyze_monomer_com_dcd.py` (cluster COM drift + MSD, internal RMSD, monomer outlier ratio)
