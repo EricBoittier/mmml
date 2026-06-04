@@ -121,6 +121,11 @@ class CharmmMmMinimizeConfig:
     dcd_path: Optional[PathLike] = None
     dcd_nsavc: int = 1
     dcd_unit: int = 51
+    save_crd_path: Optional[PathLike] = None
+    save_pdb_path: Optional[PathLike] = None
+    save_psf_path: Optional[PathLike] = None
+    save_energy_json_path: Optional[PathLike] = None
+    save_title: str = "CHARMM MM minimize"
 
 
 def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> None:
@@ -198,6 +203,23 @@ def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> None:
             )
         if config.verbose and config.show_energy:
             _maybe_show_energy(True)
+        if any(
+            p is not None
+            for p in (
+                config.save_crd_path,
+                config.save_pdb_path,
+                config.save_psf_path,
+                config.save_energy_json_path,
+            )
+        ):
+            save_minimization_results(
+                pdb_path=config.save_pdb_path,
+                crd_path=config.save_crd_path,
+                psf_path=config.save_psf_path,
+                energy_json_path=config.save_energy_json_path,
+                title=config.save_title,
+                show_energy=False,
+            )
     finally:
         if dcd_file is not None:
             dcd_file.close()
@@ -1333,6 +1355,25 @@ def _overlap_chunk_io(
     )
 
 
+# Per-chunk DCDs at nsavc=1 and overlap interval 2 create O(nstep) tiny files.
+_OVERLAP_MAX_CHUNK_DCD_FILES = 64
+
+
+def _overlap_should_split_trajectory(
+    *,
+    n_chunks: int,
+    traj_nsavc: int | None,
+) -> bool:
+    """Use one stage DCD (append across chunks) when chunk count would explode."""
+    if n_chunks <= 1:
+        return False
+    if n_chunks > _OVERLAP_MAX_CHUNK_DCD_FILES:
+        return False
+    if traj_nsavc is not None and int(traj_nsavc) <= 1 and n_chunks > 8:
+        return False
+    return True
+
+
 def effective_overlap_check_interval(
     total_nstep: int,
     requested_interval: int,
@@ -1656,7 +1697,22 @@ def run_dynamics_with_io(
     trajectory_files: list[Any] = []
     trajectory_iokw: dict[str, int] = {}
     chunk_dcd_paths: list[Path] = []
-    split_trajectory = io is not None and io.trajectory is not None and n_chunks > 1
+    split_trajectory = (
+        io is not None
+        and io.trajectory is not None
+        and _overlap_should_split_trajectory(n_chunks=n_chunks, traj_nsavc=traj_nsavc)
+    )
+    if (
+        io is not None
+        and io.trajectory is not None
+        and n_chunks > 1
+        and not split_trajectory
+    ):
+        print(
+            f"overlap ({overlap_context}): writing one DCD ({io.trajectory.name}) "
+            f"across {n_chunks} chunks (avoiding {n_chunks} per-chunk *.chunk.*.dcd files)",
+            flush=True,
+        )
     try:
         if io is not None and n_chunks > 1 and io.trajectory is not None and not split_trajectory:
             trajectory_files, trajectory_iokw = io.open_trajectory_for_run()
@@ -1717,10 +1773,15 @@ def run_dynamics_with_io(
             if has_restart_read:
                 _prepare_overlap_chunk_after_restart(mlpot_ctx)
 
+            chunk_traj_iokw = (
+                trajectory_iokw
+                if (not split_trajectory and chunk_index == 0) or split_trajectory
+                else {}
+            )
             last_dyn = _run_dynamics_chunk(
                 chunk_kw,
                 chunk_io,
-                extra_iokw=trajectory_iokw,
+                extra_iokw=chunk_traj_iokw,
                 rng_base=rng_base,
                 rng_salt=_rng_salt_for_dynamics(
                     overlap_context=overlap_context,
@@ -1770,6 +1831,17 @@ def run_dynamics_with_io(
                 f"-> {io.trajectory} ({merged} frames)",
                 flush=True,
             )
+            for chunk_path in chunk_dcd_paths:
+                try:
+                    chunk_path.unlink(missing_ok=True)
+                except OSError:
+                    pass
+            if chunk_dcd_paths:
+                print(
+                    f"overlap ({overlap_context}): removed {len(chunk_dcd_paths)} "
+                    "per-chunk DCD scratch file(s)",
+                    flush=True,
+                )
     finally:
         if completed:
             _cleanup_overlap_restart_slots(io)

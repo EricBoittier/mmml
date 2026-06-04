@@ -83,6 +83,11 @@ def _charmm_pre_minimize_before_mlpot(
     reference_positions: np.ndarray | None = None,
     dcd_path: Path | None = None,
     dcd_nsavc: int = 1,
+    save_crd_path: Path | None = None,
+    save_pdb_path: Path | None = None,
+    save_psf_path: Path | None = None,
+    save_energy_json_path: Path | None = None,
+    save_title: str = "CHARMM MM pre-minimize",
 ) -> np.ndarray:
     """CGENFF SD/ABNR on the built cluster before :func:`register_mlpot`."""
     if not getattr(args, "charmm_pre_minimize", True):
@@ -106,6 +111,11 @@ def _charmm_pre_minimize_before_mlpot(
             reference_positions=reference_positions,
             dcd_path=dcd_path,
             dcd_nsavc=dcd_nsavc,
+            save_crd_path=save_crd_path,
+            save_pdb_path=save_pdb_path,
+            save_psf_path=save_psf_path,
+            save_energy_json_path=save_energy_json_path,
+            save_title=save_title,
         )
     )
     r_mm = get_charmm_positions_array()

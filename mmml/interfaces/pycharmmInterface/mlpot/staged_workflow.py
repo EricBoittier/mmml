@@ -74,6 +74,17 @@ from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import (
     run_charmm_mm_pretreat_before_mlpot,
     sync_mlpot_pbc_cell_from_charmm,
 )
+from mmml.interfaces.pycharmmInterface.mlpot.minimize_artifacts import (
+    BONDED_MM_AFTER_HEAT,
+    BONDED_MM_AFTER_MINI,
+    CHARMM_MM_PRE,
+    MLPOT_MMML,
+    MinimizeArtifactRegistry,
+    PACKMOL_CLUSTER,
+    legacy_mlpot_mini_paths,
+    mirror_legacy_mlpot_files,
+    save_snapshot_from_charmm,
+)
 from mmml.interfaces.pycharmmInterface.mlpot.setup import (
     assert_mlpot_user_active,
     verify_mlpot_charmm_atom_consistency,
@@ -104,11 +115,42 @@ def _stage_ps(args: argparse.Namespace, stage: MdStage) -> float:
 
 
 def _artifact_paths(out_dir: Path, tag: str) -> dict[str, Path]:
+    from mmml.interfaces.pycharmmInterface.mlpot.minimize_artifacts import (
+        BONDED_MM_AFTER_HEAT,
+        BONDED_MM_AFTER_MINI,
+        CHARMM_MM_PRE,
+        MLPOT_MMML,
+        legacy_charmm_mm_dcd,
+        legacy_mlpot_mini_paths,
+        snapshot_file_paths,
+    )
+
+    legacy = legacy_mlpot_mini_paths(out_dir, tag)
+    mm = snapshot_file_paths(out_dir, CHARMM_MM_PRE, tag)
+    mmml = snapshot_file_paths(out_dir, MLPOT_MMML, tag)
+    bonded_mini = snapshot_file_paths(out_dir, BONDED_MM_AFTER_MINI, tag)
+    bonded_heat = snapshot_file_paths(out_dir, BONDED_MM_AFTER_HEAT, tag)
     return {
-        "mini_crd": out_dir / f"mini_full_mlpot_{tag}.crd",
-        "mini_psf": out_dir / f"mini_full_mlpot_{tag}.psf",
-        "mini_charmm_dcd": out_dir / f"mini_charmm_mm_{tag}.dcd",
-        "mini_dcd": out_dir / f"mini_full_mlpot_{tag}.dcd",
+        **legacy,
+        "mini_crd": legacy["mini_crd"],
+        "mini_psf": legacy["mini_psf"],
+        "mini_pdb": legacy["mini_pdb"],
+        "mini_charmm_dcd": legacy_charmm_mm_dcd(out_dir, tag),
+        "mini_dcd": legacy["mini_dcd"],
+        "charmm_mm_crd": mm["crd"],
+        "charmm_mm_pdb": mm["pdb"],
+        "charmm_mm_psf": mm["psf"],
+        "charmm_mm_energy_json": mm["energy_json"],
+        "mlpot_mmml_crd": mmml["crd"],
+        "mlpot_mmml_pdb": mmml["pdb"],
+        "mlpot_mmml_psf": mmml["psf"],
+        "mlpot_mmml_dcd": mmml["dcd"],
+        "mlpot_mmml_xyz": mmml["xyz"],
+        "mlpot_mmml_energy_json": mmml["energy_json"],
+        "bonded_mm_after_mini_crd": bonded_mini["crd"],
+        "bonded_mm_after_mini_pdb": bonded_mini["pdb"],
+        "bonded_mm_after_heat_crd": bonded_heat["crd"],
+        "bonded_mm_after_heat_pdb": bonded_heat["pdb"],
         "charmm_mm_heat_res": out_dir / f"charmm_mm_heat_{tag}.res",
         "charmm_mm_heat_dcd": out_dir / f"charmm_mm_heat_{tag}.dcd",
         "heat_res": out_dir / f"heat_{tag}.res",
@@ -519,6 +561,7 @@ def _overlap_for_stage(
     ctx: Any = None,
     args: argparse.Namespace | None = None,
     topology_psf: Path | None = None,
+    mini_registry: MinimizeArtifactRegistry | None = None,
 ) -> DynamicsOverlapConfig | None:
     """Return overlap guard config for dynamics stages (including heat).
 
@@ -532,6 +575,7 @@ def _overlap_for_stage(
             ctx=ctx,
             args=args,
             topology_psf=topology_psf,
+            artifact_registry=mini_registry,
         )
     return overlap_cfg
 
@@ -690,6 +734,11 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
     n_atoms = len(z)
     paths = _artifact_paths(out_dir, tag)
+    save_artifacts = bool(getattr(args, "save", True))
+    mini_registry: MinimizeArtifactRegistry | None = (
+        MinimizeArtifactRegistry(out_dir, tag) if save_artifacts else None
+    )
+    legacy_mlpot = legacy_mlpot_mini_paths(out_dir, tag) if save_artifacts else None
 
     use_pbc = resolve_use_pbc(args)
     box_side = resolve_pbc_box_side(args, r) if use_pbc else None
@@ -767,6 +816,11 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             out_dir, r, stem=f"cluster_for_vmd_{tag}", title="pre-MLpot cluster"
         )
         vmd_topo_psf = vmd_files["psf"]
+        if mini_registry is not None:
+            mini_registry.record(
+                PACKMOL_CLUSTER,
+                {"pdb": vmd_files["pdb"], "psf": vmd_files["psf"]},
+            )
     recovery_topology_psf = vmd_topo_psf if Path(vmd_topo_psf).is_file() else None
 
     pretreat_mm = bool(getattr(args, "charmm_mm_pretreat", False))
@@ -793,8 +847,24 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             reference_positions=r,
             dcd_path=paths["mini_charmm_dcd"] if save_mini else None,
             dcd_nsavc=mini_dcd_nsavc if save_mini else 0,
+            save_crd_path=paths["charmm_mm_crd"] if save_mini else None,
+            save_pdb_path=paths["charmm_mm_pdb"] if save_mini else None,
+            save_psf_path=paths["charmm_mm_psf"] if save_mini else None,
+            save_energy_json_path=paths["charmm_mm_energy_json"] if save_mini else None,
+            save_title=CHARMM_MM_PRE.label,
         )
         sync_charmm_positions(r)
+        if save_mini and mini_registry is not None:
+            mini_registry.record(
+                CHARMM_MM_PRE,
+                {
+                    "pdb": paths["charmm_mm_pdb"],
+                    "crd": paths["charmm_mm_crd"],
+                    "psf": paths["charmm_mm_psf"],
+                    "energy_json": paths["charmm_mm_energy_json"],
+                },
+                grms_kcalmol_A=charmm_grms(),
+            )
 
     if not use_pbc:
         # Install MMFP once after Packmol / CHARMM pretreat / pre-MLpot mini so
@@ -854,25 +924,47 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     pyCModel=pyCModel,
                     mlpot_ctx=ctx,
                     save=save_mini,
-                    pdb_path=out_dir / f"mini_full_mlpot_{tag}.pdb" if save_mini else None,
-                    crd_path=paths["mini_crd"] if save_mini else None,
-                    psf_path=paths["mini_psf"] if save_mini else None,
-                    energy_json_path=out_dir / f"mini_full_mlpot_{tag}_energy.json"
-                    if save_mini
-                    else None,
-                    xyz_path=out_dir / f"mini_full_mlpot_{tag}.xyz" if save_mini else None,
-                    dcd_path=paths["mini_dcd"] if save_mini else None,
+                    pdb_path=paths["mlpot_mmml_pdb"] if save_mini else None,
+                    crd_path=paths["mlpot_mmml_crd"] if save_mini else None,
+                    psf_path=paths["mlpot_mmml_psf"] if save_mini else None,
+                    energy_json_path=paths["mlpot_mmml_energy_json"] if save_mini else None,
+                    xyz_path=paths["mlpot_mmml_xyz"] if save_mini else None,
+                    dcd_path=paths["mlpot_mmml_dcd"] if save_mini else None,
                     dcd_nsavc=mini_dcd_nsavc if save_mini else 0,
+                    title=MLPOT_MMML.label,
                     skip_if_crd_exists=bool(getattr(args, "skip_if_crd_exists", False)),
                     test_first=resolve_test_first_config(args),
                     show_energy=show_energy,
                 )
             )
+            if save_mini and legacy_mlpot is not None:
+                mirror_legacy_mlpot_files(
+                    {
+                        "pdb": paths["mlpot_mmml_pdb"],
+                        "crd": paths["mlpot_mmml_crd"],
+                        "psf": paths["mlpot_mmml_psf"],
+                        "xyz": paths["mlpot_mmml_xyz"],
+                        "energy_json": paths["mlpot_mmml_energy_json"],
+                    },
+                    legacy_mlpot,
+                )
+            if save_mini and mini_registry is not None:
+                mini_registry.record(
+                    MLPOT_MMML,
+                    {
+                        "pdb": paths["mlpot_mmml_pdb"],
+                        "crd": paths["mlpot_mmml_crd"],
+                        "psf": paths["mlpot_mmml_psf"],
+                        "xyz": paths["mlpot_mmml_xyz"],
+                        "energy_json": paths["mlpot_mmml_energy_json"],
+                    },
+                    grms_kcalmol_A=charmm_grms(),
+                )
             sync_charmm_positions(get_charmm_positions_array())
             if not args.quiet:
                 print(f"Post MLpot mini GRMS: {charmm_grms():.4f} kcal/mol/Å", flush=True)
             mini_trajectories = _trajectory_outputs(paths["mini_charmm_dcd"])
-            mini_trajectories.extend(_trajectory_outputs(paths["mini_dcd"]))
+            mini_trajectories.extend(_trajectory_outputs(paths["mlpot_mmml_dcd"]))
             last_traj = mini_trajectories[-1] if mini_trajectories else None
             maybe_run_bonded_mm_mini_after_stage(
                 ctx,
@@ -881,6 +973,16 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 baseline=baseline,
                 restart_path=paths["mini_crd"],
                 topology_psf=recovery_topology_psf,
+                mini_registry=mini_registry,
+                snapshot_spec=BONDED_MM_AFTER_MINI,
+                snapshot_paths=(
+                    {
+                        "pdb": paths["bonded_mm_after_mini_pdb"],
+                        "crd": paths["bonded_mm_after_mini_crd"],
+                    }
+                    if save_mini
+                    else None
+                ),
             )
 
         dyn_stages = [s for s in _STAGE_ORDER if s in stages and s != "mini"]
@@ -1006,6 +1108,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                             ctx=ctx,
                             args=args,
                             topology_psf=recovery_topology_psf,
+                            mini_registry=mini_registry,
                         ),
                         overlap_context=f"equi segment {seg_i + 1}/{n_equi_segments}",
                         mlpot_ctx=ctx,
@@ -1116,6 +1219,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                             ctx=ctx,
                             args=args,
                             topology_psf=recovery_topology_psf,
+                            mini_registry=mini_registry,
                         ),
                         overlap_context=f"prod segment {seg_i + 1}/{n_prod_segments}",
                         mlpot_ctx=ctx,
@@ -1229,6 +1333,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     ctx=ctx,
                     args=args,
                     topology_psf=recovery_topology_psf,
+                    mini_registry=mini_registry,
                 )
                 if (
                     overlap_for_stage is not None
@@ -1287,6 +1392,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     ctx=ctx,
                     args=args,
                     topology_psf=recovery_topology_psf,
+                    mini_registry=mini_registry,
                 ),
                 overlap_context=stage.upper(),
                 mlpot_ctx=ctx,
@@ -1306,6 +1412,16 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 baseline=baseline,
                 restart_path=io.restart_write,
                 topology_psf=recovery_topology_psf,
+                mini_registry=mini_registry,
+                snapshot_spec=BONDED_MM_AFTER_HEAT if stage == "heat" else None,
+                snapshot_paths=(
+                    {
+                        "pdb": paths["bonded_mm_after_heat_pdb"],
+                        "crd": paths["bonded_mm_after_heat_crd"],
+                    }
+                    if save_artifacts and stage == "heat"
+                    else None
+                ),
             )
             prev_restart = io.restart_write
             prev_restart_is_current_state = True

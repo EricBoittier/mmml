@@ -630,6 +630,9 @@ def maybe_run_bonded_mm_mini_after_stage(
     baseline: MmStrainBaseline | None,
     restart_path: PathLike | None = None,
     topology_psf: PathLike | None = None,
+    mini_registry: Any = None,
+    snapshot_spec: Any = None,
+    snapshot_paths: dict[str, Path] | None = None,
 ) -> bool:
     """If MM bonded strain rose above baseline, run bonded-only SD (BLOCK toggle only).
 
@@ -652,6 +655,28 @@ def maybe_run_bonded_mm_mini_after_stage(
             )
         return False
 
+    def _record_bonded_snapshot() -> None:
+        if (
+            mini_registry is None
+            or snapshot_spec is None
+            or snapshot_paths is None
+            or not bool(getattr(args, "save", True))
+        ):
+            return
+        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
+        from mmml.interfaces.pycharmmInterface.mlpot.dynamics import save_minimization_results
+
+        written = save_minimization_results(
+            pdb_path=snapshot_paths.get("pdb"),
+            crd_path=snapshot_paths.get("crd"),
+            title=snapshot_spec.label,
+        )
+        mini_registry.record(
+            snapshot_spec,
+            written,
+            grms_kcalmol_A=float(charmm_grms()),
+        )
+
     if _mlpot_covers_all_atoms(ctx):
         if topology_psf is not None:
             result = _run_heavy_bonded_recovery_check(
@@ -661,6 +686,8 @@ def maybe_run_bonded_mm_mini_after_stage(
                 baseline=baseline,
                 topology_psf=topology_psf,
             )
+            if result.ran_recovery:
+                _record_bonded_snapshot()
             return result.ran_recovery
         if not args.quiet:
             print(
@@ -707,6 +734,7 @@ def maybe_run_bonded_mm_mini_after_stage(
             show_energy=bool(getattr(args, "show_energy", False)),
         ),
     )
+    _record_bonded_snapshot()
     if not args.quiet:
         print(
             f"bonded-MM-mini: next stage will continue from in-memory coordinates "

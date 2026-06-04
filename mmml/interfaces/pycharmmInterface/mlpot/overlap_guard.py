@@ -51,6 +51,7 @@ class DynamicsOverlapConfig:
     position_noise_A: float = 0.05
     mlpot_rescue_mini_nstep: int = 25
     pyCModel: Any = field(default=None, compare=False, hash=False)
+    artifact_registry: Any = field(default=None, compare=False, hash=False)
 
     @property
     def enabled(self) -> bool:
@@ -215,6 +216,7 @@ def augment_overlap_config_for_rescue(
     ctx: "MlpotContext",
     args: argparse.Namespace,
     topology_psf: Path | None,
+    artifact_registry: Any = None,
 ) -> DynamicsOverlapConfig:
     """Attach topology / MLpot handles needed for all-ML intra overlap rescue."""
     from dataclasses import replace
@@ -231,6 +233,7 @@ def augment_overlap_config_for_rescue(
         recovery_seed=getattr(args, "seed", None),
         mlpot_rescue_mini_nstep=max(0, mini_nstep),
         pyCModel=getattr(ctx, "pyCModel", None),
+        artifact_registry=artifact_registry,
     )
 
 
@@ -389,6 +392,33 @@ def _intramonomer_check(
     )
 
 
+def _maybe_save_rescue_snapshot(
+    mlpot_ctx: "MlpotContext",
+    config: DynamicsOverlapConfig,
+    *,
+    label: str,
+) -> None:
+    registry = getattr(config, "artifact_registry", None)
+    if registry is None:
+        return
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
+
+    from mmml.interfaces.pycharmmInterface.mlpot.minimize_artifacts import (
+        save_snapshot_from_charmm,
+    )
+
+    spec = registry.allocate_rescue_spec(label)
+    save_snapshot_from_charmm(
+        registry,
+        spec,
+        out_dir=registry.out_dir,
+        tag=registry.tag,
+        title=spec.label,
+        grms_kcalmol_A=float(charmm_grms()),
+        include_psf=False,
+    )
+
+
 def _run_intramonomer_bonded_rescue(
     mlpot_ctx: "MlpotContext",
     config: DynamicsOverlapConfig,
@@ -496,6 +526,7 @@ def _handle_inter_monomer_rescue(
 
     try:
         minimize_overlap_rescue(mlpot_ctx, config.rescue)
+        _maybe_save_rescue_snapshot(mlpot_ctx, config, label=label)
     except Exception as rescue_exc:
         if config.separate_on_rescue_fail:
             print(f"MLpot overlap rescue failed: {rescue_exc}", flush=True)
@@ -540,6 +571,7 @@ def _handle_intramonomer_rescue(
         raise RuntimeError(
             f"{exc}; intra-monomer bonded-MM rescue failed: {rescue_exc}"
         ) from rescue_exc
+    _maybe_save_rescue_snapshot(mlpot_ctx, config, label=label)
     try:
         return _intramonomer_check(config, context=f"{label} after intra-monomer rescue")
     except RuntimeError as still_bad:

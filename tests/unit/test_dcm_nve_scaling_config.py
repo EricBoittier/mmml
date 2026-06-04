@@ -39,6 +39,11 @@ def test_per_step_output_required(cfg: dict) -> None:
     assert cfg["nprint"] == 1
 
 
+def test_overlap_check_interval_not_per_step(cfg: dict) -> None:
+    """Avoid O(nstep) overlap chunks when dcd_nsavc=1 (effective min interval is 2)."""
+    assert int(cfg["dynamics_overlap_check_interval"]) >= 100
+
+
 def test_packmol_radius_scaling() -> None:
     assert packmol_radius_A(5) == pytest.approx(7.7, abs=0.2)
     assert packmol_radius_A(90) == pytest.approx(21.0, abs=0.2)
