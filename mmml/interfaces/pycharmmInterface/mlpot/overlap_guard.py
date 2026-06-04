@@ -154,6 +154,25 @@ def add_dynamics_overlap_args(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def overlap_config_for_stage(
+    overlap: DynamicsOverlapConfig | None,
+    *,
+    stage: str,
+    nstep: int,
+) -> DynamicsOverlapConfig | None:
+    """Per-stage overlap settings (heat: one segment to avoid scratch ``READYN``)."""
+    if overlap is None or not overlap.enabled:
+        return overlap
+    if stage.lower() != "heat":
+        return overlap
+    from dataclasses import replace
+
+    n = max(1, int(nstep))
+    if int(overlap.check_interval) >= n:
+        return overlap
+    return replace(overlap, check_interval=n)
+
+
 def resolve_dynamics_overlap_config(
     args: argparse.Namespace,
     *,
