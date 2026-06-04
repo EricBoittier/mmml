@@ -1255,7 +1255,31 @@ def _is_overlap_scratch_restart(
     return p in (slot_a, slot_b)
 
 
-def _refresh_overlap_scratch_restart(write_path: PathLike | None, *, final_restart: Path) -> None:
+def _refresh_restart_write_after_chunk(
+    write_path: PathLike | None,
+    *,
+    final_restart: Path | None,
+) -> None:
+    """Rewrite restart from in-memory CHARMM state after a dynamics chunk.
+
+    CHARMM ``dyna`` often leaves coordinate-history ``.res`` files whose ``JHSTRT``
+    field stays 0 even when the log shows ``WRIDYN: ... step 8000``.  Refreshing
+    from memory fixes overlap step accounting and post-run validation.
+    """
+    if write_path is None:
+        return
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        rewrite_dynamics_restart_from_current_state,
+    )
+
+    rewrite_dynamics_restart_from_current_state(write_path)
+
+
+def _refresh_overlap_scratch_restart(
+    write_path: PathLike | None,
+    *,
+    final_restart: Path,
+) -> None:
     """Rewrite overlap scratch restart from in-memory CHARMM state.
 
     CHARMM dynamics can leave coordinate-history ``.res`` files that fail
@@ -1265,11 +1289,7 @@ def _refresh_overlap_scratch_restart(write_path: PathLike | None, *, final_resta
     """
     if not _is_overlap_scratch_restart(write_path, final_restart):
         return
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
-        rewrite_dynamics_restart_from_current_state,
-    )
-
-    rewrite_dynamics_restart_from_current_state(write_path)
+    _refresh_restart_write_after_chunk(write_path, final_restart=final_restart)
 
 
 def _restart_header_step_field(path: Path) -> str | None:
@@ -1573,7 +1593,10 @@ def _apply_overlap_chunk_dynamics_kw(
     preserve_cold_start = (
         chunk_index == 0
         and not has_restart_read
-        and bool(chunk_kw.get("start"))
+        and (
+            bool(chunk_kw.get("start"))
+            or "hoover reft" in chunk_kw
+        )
     )
     if not preserve_cold_start:
         chunk_kw["iasvel"] = 0
@@ -1668,7 +1691,7 @@ def _integrated_step_from_restart(
         if candidate is None:
             continue
         step = read_restart_last_step(Path(candidate))
-        if step is not None:
+        if step is not None and int(step) > 0:
             return int(step)
     return int(fallback_steps)
 
@@ -1896,6 +1919,11 @@ def run_dynamics_with_io(
                     steps_done=steps_done,
                 ),
             )
+            if chunk_io is not None and getattr(chunk_io, "restart_write", None) is not None:
+                _refresh_restart_write_after_chunk(
+                    chunk_io.restart_write,
+                    final_restart=final_restart,
+                )
             steps_done = _integrated_step_from_restart(
                 chunk_io=chunk_io,
                 final_restart=final_restart,
