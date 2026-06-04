@@ -22,10 +22,12 @@ Sibling to [dcm5_md_benchmark](../dcm5_md_benchmark/) (fixed DCM:5, multi-backen
 From [config.yaml](config.yaml):
 
 - `dcd_nsavc: 1`, `dyn_nprint: 1`, `nprint: 1` (every integration step)
-- `nve_boltzmann_temp: 1` (gentle velocity draw before NVE; `--temperature` is for NVT stages only)
-- `mini_nstep: 1000`, `packmol_reference_r: 20`, `packmol_tolerance: 1.2` (looser initial cluster)
+- `nve_boltzmann_temp: 0.2` (very low initial KE before NVE; raise cautiously if clusters are too cold)
+- `ps_nve: 0.2` (800-step screening leg; increase once COM QC is stable)
+- `mini_nstep: 2000`, `bonded_mm_mini: true` (bonded-only SD after mini if ANGL/GRMS spike)
+- `packmol_reference_r: 20`, `packmol_tolerance: 1.2` (looser initial cluster)
 - `forces_npz_interval: 500` (DCD still every step via `dcd_nsavc: 1`)
-- `dynamics_overlap_check_interval: 2000` (single NVE chunk at 0.5 ps / 0.25 fs; no scratch restart handoff)
+- `dynamics_overlap_check_interval: 800` (single NVE chunk; matches `ps_nve` / `dt_fs`)
 - `no_echeck: true` for the 0.5 ps NVE leg (in-run echeck stops ML USER clusters within ~1k steps; `run_job.py` still validates DCD length)
 - `save_forces_npz: true`, `forces_npz_interval: 1`
 - Packmol sphere `R = 18 * (N/60)^(1/3)` Å

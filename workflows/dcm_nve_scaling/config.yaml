@@ -13,7 +13,8 @@ output_root: results
 mpirun_wrapper: ../../scripts/mmml-charmm-mpirun.sh
 
 # Dynamics (free_nve: mini + nve)
-ps_nve: 0.5
+# Short NVE leg for scaling throughput; raise ps_nve once COM QC is stable.
+ps_nve: 0.2
 dt_fs: 0.25
 # Once per integration step (print + DCD + forces)
 dcd_nsavc: 1
@@ -26,23 +27,24 @@ packmol_tolerance: 1.2
 packmol_reference_r: 20.0
 packmol_reference_n: 60
 temperature: 300.0
-# Gentle velocity draw before NVE (ML USER-only, no SHAKE).
-nve_boltzmann_temp: 1.0
+# Very low KE before NVE (ML USER-only, no SHAKE); 1 K still blew up DCM:5 in smoke tests.
+nve_boltzmann_temp: 0.2
 
 save_forces_npz: true
 forces_npz_interval: 500
-# Overlap guard: one chunk for the full NVE leg (0.5 ps @ 0.25 fs → 2_000 steps).
-# Avoids scratch .overlap_a/.b.res handoffs that fail when dynamics blows up mid-run.
-# (ps_nve / (dt_fs * 1e-3) = 2_000)
-dynamics_overlap_check_interval: 2000
+# Overlap guard: one chunk for the full NVE leg (0.2 ps @ 0.25 fs → 800 steps).
+dynamics_overlap_check_interval: 800
 
 mm_switch_on: 5.5
 mm_switch_width: 1.5
 ml_switch_width: 0.1
-# MLpot mini before NVE (increase if early NVE energy spikes persist).
-mini_nstep: 1000
-charmm_sd_steps: 200
-charmm_abnr_steps: 200
+# MLpot mini + bonded-MM recovery if ANGL/GRMS spike after mini.
+mini_nstep: 2000
+bonded_mm_mini: true
+bonded_mm_mini_after: mini
+bonded_mm_mini_steps: 100
+charmm_sd_steps: 300
+charmm_abnr_steps: 400
 dynamics_overlap_action: rescue
 dynamics_overlap_min_distance: 0.5
 # ML USER-only NVE (no SHAKE): CHARMM echeck stops early (|ΔE| spikes → ~1k steps, not 80k).
