@@ -103,6 +103,20 @@ def test_turn_off_cons_fix():
     cons_fix.turn_off.assert_called_once()
 
 
+def test_prepare_mlpot_sd_list_frequencies_clears_imgfrq_when_inbfrq_zero():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _prepare_mlpot_sd_list_frequencies,
+    )
+
+    pycharmm = MagicMock()
+    _prepare_mlpot_sd_list_frequencies(pycharmm, sd_kw={"inbfrq": 0, "ihbfrq": 0})
+    pycharmm.nbonds.set_imgfrq.assert_called_once_with(0)
+    pycharmm.nbonds.set_inbfrq.assert_called_once_with(0)
+    pycharmm.reset_mock()
+    _prepare_mlpot_sd_list_frequencies(pycharmm, sd_kw={"inbfrq": -1})
+    pycharmm.nbonds.set_imgfrq.assert_not_called()
+
+
 def test_minimize_with_mlpot_runs_two_sd_passes_when_fixed_selection_set():
     fixed_sel = MagicMock()
     fixed_sel.get_atom_indexes.return_value = list(range(10))
@@ -128,6 +142,7 @@ def test_minimize_with_mlpot_runs_two_sd_passes_when_fixed_selection_set():
         assert minimize_with_mlpot(config) is True
 
     assert minimize.run_sd.call_count == 2
+    assert pycharmm.nbonds.set_imgfrq.call_count == 2
     cons_fix.setup.assert_called_once_with(fixed_sel)
     cons_fix.turn_off.assert_called_once()
 
