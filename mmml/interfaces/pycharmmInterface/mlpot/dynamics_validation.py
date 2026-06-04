@@ -71,7 +71,14 @@ def read_restart_last_step(path: Path) -> int | None:
         fields = lines[i + 1].split()
         if len(fields) >= 6:
             try:
-                return int(fields[5])
+                jhstrt = int(fields[5])
+                if jhstrt > 0:
+                    return jhstrt
+                # Coordinate-history restarts often leave JHSTRT=0; for a single
+                # segment the NSTEP field still records the integrated length.
+                nstep_field = int(fields[2])
+                if nstep_field > 0:
+                    return nstep_field
             except ValueError:
                 pass
         if len(fields) >= 3:
