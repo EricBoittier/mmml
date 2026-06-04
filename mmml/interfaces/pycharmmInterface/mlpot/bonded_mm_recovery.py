@@ -134,6 +134,140 @@ def _mlpot_covers_all_atoms(ctx: MlpotContext) -> bool:
         return False
 
 
+def apply_charmm_position_noise(
+    *,
+    amplitude_A: float,
+    seed: int | None = None,
+) -> None:
+    """Perturb in-memory coordinates (Å) to escape bad local minima before MM rescue."""
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        get_charmm_positions_array,
+        sync_charmm_positions,
+    )
+
+    amp = float(amplitude_A)
+    if amp <= 0.0:
+        return
+    pos = get_charmm_positions_array()
+    rng = np.random.default_rng(None if seed is None else int(seed))
+    sync_charmm_positions(pos + rng.normal(0.0, amp, pos.shape))
+
+
+def assert_bonded_mm_energy_active(*, context: str = "bonded-MM rescue") -> None:
+    """Raise when CHARMM bonded internals read zero after MM BLOCK setup."""
+    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import pycharmm
+
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
+
+    pycharmm.lingo.charmm_script("ENER")
+    bond = charmm_bonded_term_kcalmol("BOND")
+    angl = charmm_bonded_term_kcalmol("ANGL")
+    grms = float(charmm_grms())
+    bonded_zero = (
+        (bond is None or abs(float(bond)) <= 1.0e-8)
+        and (angl is None or abs(float(angl)) <= 1.0e-8)
+        and grms <= 1.0e-8
+    )
+    if bonded_zero:
+        raise RuntimeError(
+            f"{context}: CHARMM bonded MM terms read zero after BLOCK setup "
+            "(BOND/ANGL/GRMS). All-ML workflows must reload the pre-MLpot topology "
+            "PSF before bonded rescue."
+        )
+
+
+def _bonded_cfg_from_overlap_config(config: Any) -> BondedMmMiniConfig:
+    sd_steps = getattr(config, "intra_rescue_sd_steps", None)
+    if sd_steps is None:
+        sd_steps = config.rescue.nstep_sd
+    return BondedMmMiniConfig(
+        nstep_sd=int(sd_steps),
+        nprint=max(1, int(config.rescue.nprint)),
+        tolenr=float(config.rescue.tolenr),
+        tolgrd=float(config.rescue.tolgrd),
+        verbose=config.rescue.verbose,
+    )
+
+
+def _run_all_ml_intra_overlap_rescue(
+    ctx: MlpotContext,
+    config: Any,
+    bonded_cfg: BondedMmMiniConfig,
+) -> None:
+    """Reload clean PSF, bonded SD, reattach MLpot, optional ML SD mini."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        MinimizeWithMlpotConfig,
+        minimize_with_mlpot,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.restraints import clear_mmfp_restraints
+
+    topo = getattr(config, "topology_psf", None)
+    if topo is None or not Path(topo).is_file():
+        raise RuntimeError(
+            "all-ML intra-monomer rescue requires pre-MLpot topology PSF "
+            "(cluster_for_vmd_*.psf); lightweight MLpot detach leaves CHARMM bonded "
+            "terms at zero"
+        )
+
+    noise = float(getattr(config, "position_noise_A", 0.05) or 0.0)
+    seed = getattr(config, "recovery_seed", None)
+    if noise > 0.0:
+        if bonded_cfg.verbose:
+            print(
+                f"Intra overlap rescue: applying {noise:.3f} Å coordinate noise "
+                f"(seed={seed})",
+                flush=True,
+            )
+        apply_charmm_position_noise(amplitude_A=noise, seed=seed)
+
+    if bonded_cfg.verbose:
+        print(
+            f"Intra overlap rescue: reloading pre-MLpot topology {Path(topo).name}",
+            flush=True,
+        )
+    _reload_pre_mlpot_topology(ctx, topology_psf=topo)
+    try:
+        clear_mmfp_restraints()
+        assert_bonded_mm_energy_active(context="Intra overlap rescue (reloaded PSF)")
+        _run_bonded_sd_without_mlpot(ctx, bonded_cfg)
+    finally:
+        _reregister_mlpot_after_topology_reload(ctx)
+
+    n_mlpot = int(getattr(config, "mlpot_rescue_mini_nstep", 0) or 0)
+    pyCModel = getattr(config, "pyCModel", None)
+    if n_mlpot > 0 and pyCModel is not None:
+        if bonded_cfg.verbose:
+            print(
+                f"Intra overlap rescue: MLpot SD mini ({n_mlpot} steps)",
+                flush=True,
+            )
+        minimize_with_mlpot(
+            MinimizeWithMlpotConfig(
+                nstep=n_mlpot,
+                nprint=bonded_cfg.nprint,
+                verbose=bonded_cfg.verbose,
+                pyCModel=pyCModel,
+                save=False,
+                skip_if_crd_exists=False,
+            )
+        )
+
+
+def run_intra_monomer_overlap_rescue(
+    ctx: MlpotContext,
+    config: Any,
+) -> None:
+    """Recover from intra-monomer close contacts during dynamics overlap checks."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import minimize_bonded_mm_recovery
+
+    bonded_cfg = _bonded_cfg_from_overlap_config(config)
+    if _mlpot_covers_all_atoms(ctx):
+        _run_all_ml_intra_overlap_rescue(ctx, config, bonded_cfg)
+        return
+    minimize_bonded_mm_recovery(ctx, bonded_cfg)
+
+
 def _copy_mlpot_context_state(dst: MlpotContext, src: MlpotContext) -> None:
     """Keep the caller's context object valid after rebuilding CHARMM topology."""
     for name in (
@@ -202,7 +336,9 @@ def _reload_pre_mlpot_topology(
 
 
 def _reregister_mlpot_after_topology_reload(ctx: MlpotContext) -> None:
-    import numpy as np
+    from typing import Any
+
+import numpy as np
 
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
@@ -253,6 +389,7 @@ def _run_bonded_sd_without_mlpot(
     pycharmm, cons_fix, *_ = _import_pycharmm_modules()
     minimize = _import_pycharmm_modules()[3]
     pycharmm.lingo.charmm_script("ENER")
+    assert_bonded_mm_energy_active(context="Bonded-MM heavy mini")
     grms_before = float(charmm_grms())
     angl_before = charmm_bonded_term_kcalmol("ANGL")
     if config.verbose:

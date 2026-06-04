@@ -64,6 +64,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
 )
 from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
     DynamicsOverlapConfig,
+    augment_overlap_config_for_rescue,
     resolve_dynamics_overlap_config,
 )
 from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import setup_charmm_environment
@@ -432,6 +433,10 @@ def _configure_heat_dynamics_start(
 def _overlap_for_stage(
     stage: MdStage,
     overlap_cfg: DynamicsOverlapConfig,
+    *,
+    ctx: Any = None,
+    args: argparse.Namespace | None = None,
+    topology_psf: Path | None = None,
 ) -> DynamicsOverlapConfig | None:
     """Return overlap guard config for dynamics stages (including heat).
 
@@ -439,6 +444,13 @@ def _overlap_for_stage(
     Prefer ``--heat-thermostat hoover`` (default in ``run_dcm9_stability.sh``):
     velocity-scaling ramps (``ihtfrq``) do not survive overlap restart chunks.
     """
+    if ctx is not None and args is not None:
+        return augment_overlap_config_for_rescue(
+            overlap_cfg,
+            ctx=ctx,
+            args=args,
+            topology_psf=topology_psf,
+        )
     return overlap_cfg
 
 
@@ -881,7 +893,13 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     run_dynamics_with_io(
                         kw,
                         seg_io,
-                        overlap=_overlap_for_stage("equi", overlap_cfg),
+                        overlap=_overlap_for_stage(
+                            "equi",
+                            overlap_cfg,
+                            ctx=ctx,
+                            args=args,
+                            topology_psf=recovery_topology_psf,
+                        ),
                         overlap_context=f"equi segment {seg_i + 1}/{n_equi_segments}",
                         mlpot_ctx=ctx,
                         rng_base=getattr(args, "seed", None),
@@ -985,7 +1003,13 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     run_dynamics_with_io(
                         kw,
                         seg_io,
-                        overlap=_overlap_for_stage("prod", overlap_cfg),
+                        overlap=_overlap_for_stage(
+                            "prod",
+                            overlap_cfg,
+                            ctx=ctx,
+                            args=args,
+                            topology_psf=recovery_topology_psf,
+                        ),
                         overlap_context=f"prod segment {seg_i + 1}/{n_prod_segments}",
                         mlpot_ctx=ctx,
                         rng_base=getattr(args, "seed", None),
@@ -1092,7 +1116,13 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             apply_comp_velocity_policy(stage, kw, args)
             if stage == "heat":
                 heat_thermostat = resolve_heat_thermostat(args)
-                overlap_for_stage = _overlap_for_stage(stage, overlap_cfg)
+                overlap_for_stage = _overlap_for_stage(
+                    stage,
+                    overlap_cfg,
+                    ctx=ctx,
+                    args=args,
+                    topology_psf=recovery_topology_psf,
+                )
                 if (
                     overlap_for_stage is not None
                     and overlap_for_stage.enabled
@@ -1133,7 +1163,13 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             run_dynamics_with_io(
                 kw,
                 io,
-                overlap=_overlap_for_stage(stage, overlap_cfg),
+                overlap=_overlap_for_stage(
+                    stage,
+                    overlap_cfg,
+                    ctx=ctx,
+                    args=args,
+                    topology_psf=recovery_topology_psf,
+                ),
                 overlap_context=stage.upper(),
                 mlpot_ctx=ctx,
                 rng_base=getattr(args, "seed", None),

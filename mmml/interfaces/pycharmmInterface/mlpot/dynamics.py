@@ -361,6 +361,25 @@ def _bonded_recovery_sd_kwargs(ctx: "MlpotContext", config: BondedMmMiniConfig) 
     return kw
 
 
+def _prepare_bonded_mm_rescue_environment(ctx: "MlpotContext") -> None:
+    """Rebuild lists and validate bonded CHARMM terms after MLpot detach."""
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        assert_bonded_mm_energy_active,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        MlpotContext,
+        apply_recovery_nbonds,
+        RECOVERY_NBXMOD,
+    )
+
+    if not isinstance(ctx, MlpotContext):
+        raise TypeError("ctx must be MlpotContext")
+    pycharmm = _import_pycharmm_modules()[0]
+    apply_recovery_nbonds(ctx, nbxmod=RECOVERY_NBXMOD)
+    pycharmm.lingo.charmm_script("UPDATE")
+    assert_bonded_mm_energy_active(context="Bonded-MM rescue")
+
+
 def minimize_bonded_mm_recovery(
     ctx: "MlpotContext",
     config: BondedMmMiniConfig,
@@ -378,13 +397,12 @@ def minimize_bonded_mm_recovery(
 
     def _run_sd() -> float | None:
         apply_bonded_mm_only_block()
+        _prepare_bonded_mm_rescue_environment(ctx)
         pycharmm, cons_fix, *_ = _import_pycharmm_modules()
         minimize = _import_pycharmm_modules()[3]
         if config.nstep_sd <= 0:
-            pycharmm.lingo.charmm_script("ENER")
             return float(charmm_grms())
 
-        pycharmm.lingo.charmm_script("ENER")
         angl_before = charmm_bonded_term_kcalmol("ANGL")
         bond_before = charmm_bonded_term_kcalmol("BOND")
         grms_before = float(charmm_grms())

@@ -358,6 +358,8 @@ def test_minimize_bonded_recovery_uses_bonded_only_block():
     ) as detached, patch(
         "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_bonded_mm_only_block",
     ) as bonded_block, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_bonded_mm_rescue_environment",
+    ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
     ) as imp, patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms",
@@ -429,6 +431,8 @@ def test_minimize_bonded_recovery_unset_and_reregister():
     ctx.use_pbc = False
     with patch(
         "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_bonded_mm_only_block",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_bonded_mm_rescue_environment",
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
     ) as imp, patch(
