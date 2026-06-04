@@ -57,6 +57,24 @@ rule audit_post_mini:
         """
 
 
+def _com_analysis_args() -> str:
+    ca = config.get("com_analysis") or {}
+    parts = []
+    if ca.get("no_fail"):
+        parts.append("--no-fail")
+    if ca.get("no_outlier_ratio"):
+        parts.append("--no-outlier-ratio")
+    for key, flag in (
+        ("outlier_factor", "--outlier-factor"),
+        ("max_cluster_disp_A", "--max-cluster-disp-A"),
+        ("max_mean_msd_cluster_A2", "--max-mean-msd-cluster-A2"),
+        ("max_internal_rmsd_A", "--max-internal-rmsd-A"),
+    ):
+        if key in ca and ca[key] is not None:
+            parts.extend([flag, str(ca[key])])
+    return " ".join(parts)
+
+
 rule com_analysis:
     input:
         f"{_OUTPUT_ROOT}/{{tag}}_nve/done.txt",
@@ -65,12 +83,14 @@ rule com_analysis:
     params:
         n=lambda wildcards: _n_from_tag(wildcards.tag),
         repo=workflow.basedir + "/../..",
+        com_extra=_com_analysis_args,
     shell:
         """
         python {params.repo}/scripts/analyze_monomer_com_dcd.py \
             --dcd {workflow.basedir}/{_OUTPUT_ROOT}/{wildcards.tag}_nve/nve_{wildcards.tag}.dcd \
             --n-monomers {params.n} \
             --atoms-per-monomer {config[atoms_per_monomer]} \
+            {params.com_extra} \
             -o {output}
         """
 

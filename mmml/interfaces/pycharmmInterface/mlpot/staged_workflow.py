@@ -71,7 +71,10 @@ from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
     overlap_config_for_stage,
     resolve_dynamics_overlap_config,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import setup_charmm_environment
+from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+    ensure_charmm_crystal_for_cpt,
+    setup_charmm_environment,
+)
 from mmml.interfaces.pycharmmInterface.mlpot.run_workflow import (
     _charmm_pre_minimize_before_mlpot,
     _register_mlpot_context,
@@ -885,6 +888,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             save_psf_path=paths["charmm_mm_psf"] if save_mini else None,
             save_energy_json_path=paths["charmm_mm_energy_json"] if save_mini else None,
             save_title=CHARMM_MM_PRE.label,
+            use_pbc=charmm_pbc,
         )
         sync_charmm_positions(r)
         if save_mini and mini_registry is not None:
@@ -1380,6 +1384,16 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         "ramps; use a single segment (--dynamics-overlap-check-interval "
                         ">= heat nstep) or --heat-thermostat hoover with PBC.",
                         flush=True,
+                    )
+                if (
+                    charmm_pbc
+                    and box_side is not None
+                    and heat_thermostat == "hoover"
+                    and kw.get("cpt")
+                ):
+                    ensure_charmm_crystal_for_cpt(
+                        float(box_side),
+                        quiet=bool(args.quiet),
                     )
                 _configure_heat_dynamics_start(
                     kw,

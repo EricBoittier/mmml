@@ -90,6 +90,7 @@ def _charmm_pre_minimize_before_mlpot(
     save_psf_path: Path | None = None,
     save_energy_json_path: Path | None = None,
     save_title: str = "CHARMM MM pre-minimize",
+    use_pbc: bool = False,
 ) -> np.ndarray:
     """CGENFF SD/ABNR on the built cluster before :func:`register_mlpot`."""
     if not getattr(args, "charmm_pre_minimize", True):
@@ -118,6 +119,7 @@ def _charmm_pre_minimize_before_mlpot(
             save_psf_path=save_psf_path,
             save_energy_json_path=save_energy_json_path,
             save_title=save_title,
+            use_pbc=use_pbc,
         )
     )
     r_mm = get_charmm_positions_array()
@@ -186,6 +188,7 @@ def run_charmm_mm_pretreat_before_mlpot(
             dcd_nsavc=resolve_dcd_nsavc(dcd_nsavc=args.dcd_nsavc, nstep=max(n_sd, 1))
             if save
             else 0,
+            use_pbc=use_pbc,
         )
     )
     if not args.quiet:
@@ -392,6 +395,9 @@ def _register_mlpot_context(
     ctx.ml_Z = np.asarray(z, dtype=int)
     ctx.use_pbc = bool(mlpot_use_pbc)
     ctx.cubic_box_side_A = float(cubic_box_side_A) if mlpot_use_pbc and cubic_box_side_A else None
+    ctx.charmm_cubic_box_side_A = (
+        float(cubic_box_side_A) if cubic_box_side_A is not None else None
+    )
     if mlpot_use_pbc and cubic_box_side_A is not None:
         refresh_nbonds_after_mlpot_pbc(
             cubic_box_side_A=float(cubic_box_side_A),
@@ -489,6 +495,7 @@ def run_minimize_workflow(args: argparse.Namespace) -> int:
     save = bool(getattr(args, "save", True))
 
     mlpot_pbc = resolve_mlpot_use_pbc(args)
+    charmm_pbc = resolve_charmm_use_pbc(args)
     box_side = _setup_charmm_nbonds_for_args(args, r)
     sync_charmm_positions(r)
     vmd_topo_psf = out_dir / f"cluster_for_vmd_{tag}.psf"
@@ -504,6 +511,7 @@ def run_minimize_workflow(args: argparse.Namespace) -> int:
         reference_positions=r,
         dcd_path=charmm_dcd_path if save else None,
         dcd_nsavc=dcd_nsavc if save else 0,
+        use_pbc=charmm_pbc,
     )
     sync_charmm_positions(r)
 
@@ -630,6 +638,7 @@ def run_dynamics_workflow(
         reference_positions=r,
         dcd_path=charmm_mini_dcd_path if save else None,
         dcd_nsavc=mini_dcd_nsavc if save else 0,
+        use_pbc=charmm_pbc,
     )
     sync_charmm_positions(r)
 

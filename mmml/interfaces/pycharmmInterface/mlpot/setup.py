@@ -101,6 +101,7 @@ class MlpotContext:
     ml_Z: np.ndarray | None = None
     use_pbc: bool = False
     cubic_box_side_A: float | None = None
+    charmm_cubic_box_side_A: float | None = None
     ml_charge: float = 0.0
     ml_fq: bool = True
     mm_internal_scale: float = 0.0
