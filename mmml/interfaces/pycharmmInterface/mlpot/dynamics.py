@@ -1195,6 +1195,37 @@ def _overlap_restart_slot_paths(final_restart: Path) -> tuple[Path, Path]:
     )
 
 
+def _is_overlap_scratch_restart(
+    write_path: PathLike | None,
+    final_restart: Path,
+) -> bool:
+    """True when ``write_path`` is an alternating overlap scratch, not the stage restart."""
+    if write_path is None:
+        return False
+    p = Path(write_path)
+    if p == final_restart:
+        return False
+    slot_a, slot_b = _overlap_restart_slot_paths(final_restart)
+    return p in (slot_a, slot_b)
+
+
+def _refresh_overlap_scratch_restart(write_path: PathLike | None, *, final_restart: Path) -> None:
+    """Rewrite overlap scratch restart from in-memory CHARMM state.
+
+    CHARMM dynamics can leave coordinate-history ``.res`` files that fail
+    ``_valid_restart_file``; intra overlap rescue also updates coordinates without
+    rewriting the previous chunk's scratch path.  Refresh after each chunk (and
+    after overlap checks) so the next ``READYN`` handoff is valid.
+    """
+    if not _is_overlap_scratch_restart(write_path, final_restart):
+        return
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        rewrite_dynamics_restart_from_current_state,
+    )
+
+    rewrite_dynamics_restart_from_current_state(write_path)
+
+
 def _overlap_chunk_trajectory_path(trajectory: Path, chunk_index: int) -> Path:
     """Per-chunk DCD path for overlap-segmented dynamics."""
     p = Path(trajectory)
@@ -1553,6 +1584,7 @@ def run_dynamics_with_io(
     )
 
     n_chunks = total_nstep // interval
+    final_restart = Path(io.restart_write) if io is not None and io.restart_write else None
     last_dyn: Any = None
     steps_done = 0
     completed = False
@@ -1632,12 +1664,22 @@ def run_dynamics_with_io(
                 ),
             )
             steps_done += chunk_nstep
+            if final_restart is not None and chunk_io is not None:
+                _refresh_overlap_scratch_restart(
+                    chunk_io.restart_write,
+                    final_restart=final_restart,
+                )
             check_dynamics_overlap(
                 overlap,
                 context=overlap_context,
                 step=steps_done,
                 mlpot_ctx=mlpot_ctx,
             )
+            if final_restart is not None and chunk_io is not None:
+                _refresh_overlap_scratch_restart(
+                    chunk_io.restart_write,
+                    final_restart=final_restart,
+                )
         completed = True
         if split_trajectory and chunk_dcd_paths and io is not None:
             from mmml.utils.dcd_writer import concat_dcd_files

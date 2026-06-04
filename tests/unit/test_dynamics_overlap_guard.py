@@ -667,6 +667,8 @@ def test_overlap_aborts_before_charmm_when_scratch_restart_is_invalid(tmp_path):
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
         side_effect=fake_chunk,
     ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_overlap_scratch_restart",
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=pos_ok,
     ):
@@ -679,6 +681,68 @@ def test_overlap_aborts_before_charmm_when_scratch_restart_is_invalid(tmp_path):
             )
 
     assert len(calls) == 1
+
+
+def test_overlap_refresh_scratch_restart_fixes_invalid_handoff(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        CharmmTrajectoryFiles,
+        _overlap_restart_slot_paths,
+    )
+
+    cfg = DynamicsOverlapConfig(
+        action="error",
+        min_distance_A=0.5,
+        check_interval=2,
+        n_monomers=2,
+        use_pbc=False,
+    )
+    pos_ok = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [5.0, 0.0, 0.0],
+            [6.0, 0.0, 0.0],
+        ],
+        dtype=float,
+    )
+    res_path = tmp_path / "heat.res"
+    io = CharmmTrajectoryFiles(restart_write=res_path)
+    slot_a, slot_b = _overlap_restart_slot_paths(res_path)
+    refreshed: list[Path] = []
+
+    def fake_chunk(kw, _io, *, extra_iokw=None, **kwargs):
+        if _io is not None and _io.restart_write is not None:
+            Path(_io.restart_write).write_text(
+                "NOTE!! THIS FILE  C A N N O T  BE USED TO RESTART A RUN!!!\n",
+                encoding="utf-8",
+            )
+        return mock.Mock()
+
+    def fake_refresh(write_path, *, final_restart):
+        if write_path is not None:
+            p = Path(write_path)
+            p.write_text("REST\n", encoding="utf-8")
+            refreshed.append(p)
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        side_effect=fake_chunk,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_overlap_scratch_restart",
+        side_effect=fake_refresh,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        return_value=pos_ok,
+    ):
+        run_dynamics_with_io(
+            {"nstep": 6, "nsavc": 1},
+            io,
+            overlap=cfg,
+            overlap_context="heat",
+        )
+
+    assert slot_a in refreshed
+    assert slot_b in refreshed
 
 
 def test_overlap_multi_chunk_splits_dcd_per_chunk(tmp_path):
