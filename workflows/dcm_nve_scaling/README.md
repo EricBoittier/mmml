@@ -28,6 +28,7 @@ From [config.yaml](config.yaml):
 - `echeck: 50`, `no_scale_echeck: true` (stop dynamics on large ΔE before CHARMM writes unusable restarts)
 - `save_forces_npz: true`, `forces_npz_interval: 1`
 - Packmol sphere `R = 18 * (N/60)^(1/3)` Å
+- **Free-space ML dimers:** `max_active_dimers = N(N−1)/2` (every unique pair evaluated each step; not the PBC `max(1000, 6N)` cap). Unset `MMML_MLPOT_MAX_ACTIVE_DIMERS` unless you intentionally override this.
 
 ## Run
 
