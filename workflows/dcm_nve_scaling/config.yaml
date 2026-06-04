@@ -24,16 +24,21 @@ nve_boltzmann_temp: 60.0
 
 save_forces_npz: true
 forces_npz_interval: 1
-# Overlap chunk size (steps). With dcd_nsavc=1 the effective minimum is 2; use 500
-# so 20 ps NVE (~80k steps) yields ~160 chunks, not ~40k per-chunk *.chunk.*.dcd files.
-dynamics_overlap_check_interval: 500
+# Overlap guard: one chunk for the full NVE leg (20 ps @ 0.25 fs → 80_000 steps).
+# Avoids scratch .overlap_a/.b.res handoffs that fail when dynamics blows up mid-run.
+# (ps_nve / (dt_fs * 1e-3) = 80_000)
+dynamics_overlap_check_interval: 80000
 
 mm_switch_on: 7.0
 mm_switch_width: 5.0
 ml_switch_width: 0.1
-mini_nstep: 150
-charmm_sd_steps: 25
-charmm_abnr_steps: 100
+# Conservative minimization before NVE (short mini caused early NVE energy spikes).
+mini_nstep: 2000
+charmm_sd_steps: 200
+charmm_abnr_steps: 200
 dynamics_overlap_action: rescue
 dynamics_overlap_min_distance: 0.4
+# Abort dynamics before catastrophic ΔE; keep fixed (no auto-loosen for N=5..10).
+echeck: 50.0
+no_scale_echeck: true
 ml_gpu_count: 1

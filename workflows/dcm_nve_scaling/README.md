@@ -23,7 +23,9 @@ From [config.yaml](config.yaml):
 
 - `dcd_nsavc: 1`, `dyn_nprint: 1`, `nprint: 1` (every integration step)
 - `nve_boltzmann_temp: 60` (gentle velocity draw before NVE; `--temperature` is for NVT stages only)
-- `dynamics_overlap_check_interval: 500` (overlap guard every 500 steps; avoids thousands of `*.chunk.NNNN.dcd` when interval was 1→2)
+- `mini_nstep: 2000`, `charmm_sd_steps` / `charmm_abnr_steps`: 200 (conservative pre-NVE relax)
+- `dynamics_overlap_check_interval: 80000` (single NVE chunk at 20 ps / 0.25 fs; no scratch restart handoff)
+- `echeck: 50`, `no_scale_echeck: true` (stop dynamics on large ΔE before CHARMM writes unusable restarts)
 - `save_forces_npz: true`, `forces_npz_interval: 1`
 - Packmol sphere `R = 18 * (N/60)^(1/3)` Å
 

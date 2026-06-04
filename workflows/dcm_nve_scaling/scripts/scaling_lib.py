@@ -168,6 +168,13 @@ def build_md_system_argv(
         str(cfg.get("ml_gpu_count", 1)),
     ]
 
+    if cfg.get("echeck") is not None:
+        argv.extend(["--echeck", str(cfg["echeck"])])
+    if bool(cfg.get("no_scale_echeck", False)):
+        argv.append("--no-scale-echeck")
+    if bool(cfg.get("no_echeck", False)):
+        argv.append("--no-echeck")
+
     if bool(cfg.get("save_forces_npz", False)):
         argv.append("--save-forces-npz")
         argv.extend(
