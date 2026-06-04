@@ -52,14 +52,14 @@ mmml md-system \
   --packmol-tolerance 1.0 \
   --flat-bottom-radius "$FB_RAD" --dynamics-overlap-min-distance 0.5 \
   --flat-bottom-selection "all" \
-  --flat-bottom-k 0.01 \
-  --temperature 240.0 --bonded-mm-mini --bonded-mm-mini-after mini --bonded-mm-mini-steps 500 \
+  --flat-bottom-k 1.0 \
+  --temperature 100.0 --bonded-mm-mini --bonded-mm-mini-after mini --bonded-mm-mini-steps 500 \
   --heat-thermostat scale \
-  --heat-firstt 10.0 --heat-finalt 240.0 \
-  --heat-ihtfrq 100 \
-  --dt-fs 0.25 \
-  --ps-heat 10 --ps-equi 3 \
-  --dcd-nsavc 100 \
+  --heat-firstt 1.0 --heat-finalt 100.0 \
+  --heat-ihtfrq 20 \
+  --dt-fs 0.1 \
+  --ps-heat 20 --ps-equi 3 \
+  --dcd-nsavc 50 \
   --dynamics-overlap-check-interval 500 \
   --dyn-nprint 1000 --ml-switch-width 0.1 --charmm-sd-steps 2000 --charmm-abnr-steps 200  \
   --ml-batch-size 2256 \
