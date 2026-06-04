@@ -250,7 +250,8 @@ def test_build_stage_dynamics_kw_heat_hoover_pbc_disables_ihtfrq_ramp():
             use_pbc=True,
         )
     assert kw["hoover reft"] == 240.0
-    assert kw["tmass"] == 800
+    assert kw["tmass"] == 2000
+    assert kw["echeck"] == 5000.0
     assert kw["pgamma"] == 0.0
     assert kw["cpt"] is True
     assert kw["ihtfrq"] == 0
@@ -267,7 +268,7 @@ def test_build_hoover_heat_tmass_floor_for_small_psf_mass():
             finalt=240.0,
             use_pbc=True,
         )
-    assert kw["tmass"] == 500
+    assert kw["tmass"] == 2000
     assert kw["pgamma"] == 0.0
 
 

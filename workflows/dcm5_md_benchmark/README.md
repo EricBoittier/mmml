@@ -119,7 +119,7 @@ Sync repo + `pip install -e .` for NVE memory handoff and post-run DCD validatio
 
 Typical log: `DYNA>` temperature hundreds of K at 0.125 ps, `restart step 689 < 7600`, one readable DCD frame. Causes: **short mini** + **stale NB lists** after `inbfrq=0` mini, then **Hoover `tmass` too small** for a 25-atom ML cluster (PSF formula ≈80).
 
-Current benchmark defaults: `mini_nstep: 2000`, `bonded_mm_mini`, `ps_heat: 5`, Hoover heat uses **`tmass ≥ 500`** and **`pgamma 0`** with **CHARMM UPDATE before heat**.
+Current benchmark defaults: `mini_nstep: 2000`, `bonded_mm_mini`, `ps_heat: 5`, Hoover heat uses **`tmass ≥ 2000`**, heat-stage **`echeck ≥ 5000`**, and **`pgamma 0`** with **CHARMM UPDATE before heat**.
 
 ```bash
 grep -E 'CHARMM UPDATE after mini|tmass=|DYNA>|integrated |echeck' \

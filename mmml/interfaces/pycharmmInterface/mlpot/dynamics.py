@@ -822,9 +822,10 @@ def build_hoover_heat_dynamics(
     )
     if tmass is None:
         _, tmass = compute_cpt_piston_masses()
-    # Small ML clusters (e.g. DCM:5) get tmass≈80 from PSF mass; Hoover then under-couples
-    # and T spikes during 10→240 K CPT heat (echeck abort ~step 500–700).
-    tmass = max(int(tmass), 500)
+    # Small ML clusters (e.g. DCM:5) get tmass≈80 from PSF mass; Hoover then under-damps
+    # 10→240 K CPT heat (T≫reft, echeck abort ~step 500–700). Use a large floor (CHARMM
+    # solvated-protein recipes often use tmass≈1000 kcal·mol⁻¹·ps²).
+    tmass = max(int(tmass), 2000)
     _apply_npt_cpt_kwargs(
         kw,
         temp=heat_finalt,
