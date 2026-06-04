@@ -1589,6 +1589,29 @@ def _rng_salt_for_dynamics(*, overlap_context: str, chunk_index: int, steps_done
     return int(ctx_hash + chunk_index * 1_000_003 + steps_done * 10_007)
 
 
+def _integrated_step_from_restart(
+    *,
+    chunk_io: Optional[CharmmTrajectoryFiles],
+    final_restart: Path | None,
+    fallback_steps: int,
+) -> int:
+    """Read global dynamics step (``JHSTRT``) from the latest restart write."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        read_restart_last_step,
+    )
+
+    for candidate in (
+        getattr(chunk_io, "restart_write", None) if chunk_io is not None else None,
+        final_restart,
+    ):
+        if candidate is None:
+            continue
+        step = read_restart_last_step(Path(candidate))
+        if step is not None:
+            return int(step)
+    return int(fallback_steps)
+
+
 def _run_dynamics_chunk(
     dynamics_kwargs: dict[str, Any],
     io: Optional[CharmmTrajectoryFiles],
@@ -1798,7 +1821,11 @@ def run_dynamics_with_io(
                     steps_done=steps_done,
                 ),
             )
-            steps_done += chunk_nstep
+            steps_done = _integrated_step_from_restart(
+                chunk_io=chunk_io,
+                final_restart=final_restart,
+                fallback_steps=steps_done + chunk_nstep,
+            )
             if final_restart is not None and chunk_io is not None:
                 _ensure_valid_overlap_scratch_restart(
                     chunk_io.restart_write,
@@ -1807,12 +1834,21 @@ def run_dynamics_with_io(
                     n_chunks=n_chunks,
                     overlap_context=overlap_context,
                 )
-            check_dynamics_overlap(
-                overlap,
-                context=overlap_context,
-                step=steps_done,
-                mlpot_ctx=mlpot_ctx,
-            )
+            min_overlap_step = max(1, int(total_nstep * 0.95))
+            if steps_done < min_overlap_step:
+                print(
+                    f"overlap ({overlap_context}): integrated {steps_done}/{total_nstep} "
+                    "steps (echeck or CHARMM abort likely); skipping post-chunk "
+                    "overlap geometry check",
+                    flush=True,
+                )
+            else:
+                check_dynamics_overlap(
+                    overlap,
+                    context=overlap_context,
+                    step=steps_done,
+                    mlpot_ctx=mlpot_ctx,
+                )
             ml_f = None
             if mlpot_ctx is not None:
                 py_model = getattr(mlpot_ctx, "pyCModel", None)

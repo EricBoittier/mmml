@@ -32,6 +32,7 @@ rule run_nve:
         """
         mkdir -p {workflow.basedir}/{_OUTPUT_ROOT}/{wildcards.tag}_nve
         bash {params.workflow_dir}/scripts/job_shell.sh {params.n} > {log.stdout} 2>&1
+        test -s {workflow.basedir}/{_OUTPUT_ROOT}/{wildcards.tag}_nve/nve_{wildcards.tag}.dcd
         touch {output}
         """
 
@@ -51,6 +52,7 @@ rule audit_post_mini:
             --composition DCM:{params.n} \
             --atoms-per-monomer {config[atoms_per_monomer]} \
             --mm-switch-on {config[mm_switch_on]} \
+            --free-space \
             -o {output}
         """
 
