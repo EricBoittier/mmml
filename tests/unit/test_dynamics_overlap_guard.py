@@ -816,6 +816,24 @@ def test_apply_overlap_chunk_preserves_heat_cold_start_kw():
     assert "firstt" not in kw2
     assert kw2["iasvel"] == 0
 
+    kw3 = {
+        "start": False,
+        "firstt": 48.0,
+        "finalt": 240.0,
+        "tbath": 240.0,
+        "iasors": 0,
+        "iasvel": 1,
+        "ihtfrq": 1000,
+        "TEMINC": 48.0,
+    }
+    _apply_overlap_chunk_dynamics_kw(kw3, chunk_index=0, has_restart_read=False)
+    assert kw3["firstt"] == 48.0
+    assert kw3["finalt"] == 240.0
+    assert kw3["iasors"] == 0
+    assert kw3["iasvel"] == 0
+    assert kw3["ihtfrq"] == 1000
+    assert kw3["TEMINC"] == 48.0
+
 
 def test_ensure_valid_overlap_scratch_restart_raises_on_rest_minus_one(tmp_path):
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (

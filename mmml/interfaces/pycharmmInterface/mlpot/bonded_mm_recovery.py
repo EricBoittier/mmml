@@ -284,6 +284,7 @@ def _copy_mlpot_context_state(dst: MlpotContext, src: MlpotContext) -> None:
         "ml_Z",
         "use_pbc",
         "cubic_box_side_A",
+        "charmm_cubic_box_side_A",
         "ml_charge",
         "ml_fq",
         "mm_internal_scale",
@@ -333,8 +334,11 @@ def _reload_pre_mlpot_topology(
         )
         read.psf_card(str(Path(topology_psf).expanduser().resolve()))
     sync_charmm_positions(current_positions)
-    if ctx.use_pbc and ctx.cubic_box_side_A is not None:
-        setup_charmm_environment(use_pbc=True, cubic_box_side_A=float(ctx.cubic_box_side_A))
+    charmm_side = getattr(ctx, "charmm_cubic_box_side_A", None) or (
+        ctx.cubic_box_side_A if ctx.use_pbc else None
+    )
+    if charmm_side is not None:
+        setup_charmm_environment(use_pbc=True, cubic_box_side_A=float(charmm_side))
     else:
         setup_default_nbonds()
 
@@ -362,6 +366,7 @@ def _reregister_mlpot_after_topology_reload(ctx: MlpotContext) -> None:
     new_ctx.ml_Z = ml_z
     new_ctx.use_pbc = bool(ctx.use_pbc)
     new_ctx.cubic_box_side_A = ctx.cubic_box_side_A
+    new_ctx.charmm_cubic_box_side_A = getattr(ctx, "charmm_cubic_box_side_A", None)
     if new_ctx.use_pbc and new_ctx.cubic_box_side_A is not None:
         refresh_nbonds_after_mlpot_pbc(
             cubic_box_side_A=float(new_ctx.cubic_box_side_A),

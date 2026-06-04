@@ -126,6 +126,7 @@ class CharmmMmMinimizeConfig:
     save_psf_path: Optional[PathLike] = None
     save_energy_json_path: Optional[PathLike] = None
     save_title: str = "CHARMM MM minimize"
+    use_pbc: bool = False
 
 
 def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> None:
@@ -145,7 +146,9 @@ def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> None:
         sync_charmm_positions(config.reference_positions)
 
     apply_charmm_mm_block()
-    setup_default_nbonds()
+    # Vacuum nbonds call crystal free; skip when loose/full PBC is already active.
+    if not bool(config.use_pbc):
+        setup_default_nbonds()
     if config.nstep_sd <= 0 and config.nstep_abnr <= 0:
         return
 
@@ -594,7 +597,9 @@ def _import_pycharmm_modules():
 
 def _non_pbc_dyn_freq_kwargs() -> dict[str, int]:
     """Image list freqs for vacuum / free-space (no crystal updates)."""
-    return {"imgfrq": 0, "ihbfrq": 0, "ilbfrq": 0}
+    # Fixed NB rebuild cadence: inbfrq=-1 heuristic rebuilds every step once the
+    # cluster moves (slow for large ML clusters); vacuum has no image list updates.
+    return {"imgfrq": 0, "ihbfrq": 0, "ilbfrq": 0, "inbfrq": 50}
 
 
 def _strip_crystal_dyn_keywords(kw: dict[str, Any]) -> None:
@@ -1618,6 +1623,13 @@ def _apply_overlap_chunk_dynamics_kw(
     has_restart_read: bool,
 ) -> None:
     """Set ``restart`` / ``new`` / ``start`` for one overlap chunk (in-place)."""
+    preserve_ihtfrq_heat_ramp = (
+        chunk_index == 0
+        and not has_restart_read
+        and int(chunk_kw.get("ihtfrq", 0) or 0) > 0
+        and "hoover reft" not in chunk_kw
+        and not bool(chunk_kw.get("cpt"))
+    )
     preserve_cold_start = (
         chunk_index == 0
         and not has_restart_read
@@ -1625,9 +1637,13 @@ def _apply_overlap_chunk_dynamics_kw(
             bool(chunk_kw.get("start"))
             or "hoover reft" in chunk_kw
             or bool(chunk_kw.get("cpt"))
+            or preserve_ihtfrq_heat_ramp
         )
     )
     if not preserve_cold_start:
+        chunk_kw["iasvel"] = 0
+    elif preserve_ihtfrq_heat_ramp:
+        # Boltzmann assign already ran (start=False); keep IHTFRQ ramp keywords.
         chunk_kw["iasvel"] = 0
         for key in (
             "iasors",

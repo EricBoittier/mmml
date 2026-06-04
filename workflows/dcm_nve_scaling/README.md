@@ -57,3 +57,13 @@ Outputs per size under `results/dcm_N_nve/`:
 
 - `scripts/audit_mlpot_cluster.py`
 - `scripts/analyze_monomer_com_dcd.py` (cluster COM drift + MSD, internal RMSD, monomer outlier ratio)
+
+`com_analysis` uses `com_analysis.no_fail: true` in config so unstable short NVE runs still write
+`com_analysis.npz` and Snakemake can finish `collect` (status `fail` in CSV when checks fail).
+Re-run analysis only:
+
+```bash
+python ../../scripts/analyze_monomer_com_dcd.py \
+  --dcd results/dcm_5_nve/nve_dcm_5.dcd --n-monomers 5 --atoms-per-monomer 5 \
+  --no-fail -o results/dcm_5_nve/com_analysis.npz
+```

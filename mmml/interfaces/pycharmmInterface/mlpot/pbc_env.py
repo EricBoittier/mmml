@@ -186,6 +186,47 @@ def cubic_box_matrix_from_side(side_A: float) -> np.ndarray:
     return np.array([[L, 0.0, 0.0], [0.0, L, 0.0], [0.0, 0.0, L]], dtype=np.float64)
 
 
+def charmm_crystal_is_active(*, rel_tol: float = 1e-3) -> bool:
+    """True when CHARMM reports a positive cubic periodic box (crystal + IMAGE)."""
+    try:
+        lx, ly, lz = _read_charmm_box_sides_A()
+    except Exception:
+        return False
+    return _is_cubic_box_sides(lx, ly, lz, rel_tol=rel_tol) and min(lx, ly, lz) > 1.0
+
+
+def ensure_charmm_crystal_for_cpt(
+    cubic_box_side_A: float,
+    *,
+    quiet: bool = False,
+) -> None:
+    """Install or refresh CHARMM crystal before CPT / Hoover dynamics.
+
+    CGENFF pre-minimize via :func:`minimize_charmm_mm_only` used to call vacuum
+    nbonds (``crystal free``). Loose-PBC Hoover heat needs the box restored.
+    """
+    side = float(cubic_box_side_A)
+    if side <= 0.0:
+        raise ValueError(f"cubic box side must be > 0, got {side}")
+    if charmm_crystal_is_active():
+        try:
+            live, _ = resolve_charmm_cubic_box_side_A(fallback_side_A=side)
+            if abs(live - side) <= max(1e-3, 1e-4 * side):
+                return
+        except Exception:
+            pass
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import disable_charmm_domdec
+
+    disable_charmm_domdec()
+    prepare_charmm_pbc(side)
+    apply_pbc_nbonds()
+    if not quiet:
+        print(
+            f"CHARMM crystal ready for CPT (cubic L={side:.3f} Å)",
+            flush=True,
+        )
+
+
 def prepare_charmm_pbc(cubic_box_side_A: float) -> None:
     """Install CHARMM crystal + IMAGE for a cubic cell."""
     import mmml.interfaces.pycharmmInterface.import_pycharmm as pyci

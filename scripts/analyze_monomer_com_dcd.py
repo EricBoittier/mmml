@@ -50,9 +50,9 @@ def analyze_com(
     offsets: np.ndarray,
     *,
     outlier_factor: float = 2.0,
-    max_cluster_disp_A: float = 50.0,
-    max_mean_msd_cluster_A2: float | None = None,
-    max_internal_rmsd_A: float = 15.0,
+    max_cluster_disp_limit_A: float = 50.0,
+    max_mean_msd_cluster_limit_A2: float | None = None,
+    max_internal_rmsd_limit_A: float = 15.0,
     check_outlier_ratio: bool = True,
 ) -> dict:
     """Compute COM trajectories and displacement / MSD metrics."""
@@ -72,8 +72,8 @@ def analyze_com(
     max_cluster_com_disp_A = float(cluster_disp.max())
     mean_msd_cluster_A2 = float(np.mean(np.sum((com_cluster - com_cluster[0:1]) ** 2, axis=1)))
 
-    if max_mean_msd_cluster_A2 is None:
-        max_mean_msd_cluster_A2 = float(max_cluster_disp_A) ** 2
+    if max_mean_msd_cluster_limit_A2 is None:
+        max_mean_msd_cluster_limit_A2 = float(max_cluster_disp_limit_A) ** 2
 
     com_rel = com - com_cluster[:, np.newaxis, :]
     internal_rmsd = np.sqrt(np.mean(np.sum(com_rel**2, axis=2), axis=1))
@@ -94,9 +94,12 @@ def analyze_com(
         ratio = 1.0
 
     checks: list[tuple[str, bool]] = [
-        ("cluster_com_disp", max_cluster_com_disp_A <= max_cluster_disp_A),
-        ("cluster_com_msd", mean_msd_cluster_A2 <= max_mean_msd_cluster_A2),
-        ("internal_rmsd", max_internal_rmsd_A <= max_internal_rmsd_A),
+        ("cluster_com_disp", max_cluster_com_disp_A <= max_cluster_disp_limit_A),
+        (
+            "cluster_com_msd",
+            mean_msd_cluster_A2 <= max_mean_msd_cluster_limit_A2,
+        ),
+        ("internal_rmsd", max_internal_rmsd_A <= max_internal_rmsd_limit_A),
     ]
     if check_outlier_ratio:
         checks.append(("outlier_ratio", ratio <= float(outlier_factor)))
@@ -119,9 +122,9 @@ def analyze_com(
         "mean_msd_cluster_A2": mean_msd_cluster_A2,
         "max_internal_rmsd_A": max_internal_rmsd_A,
         "internal_rmsd_growth": internal_rmsd_growth,
-        "max_cluster_disp_limit_A": float(max_cluster_disp_A),
-        "max_mean_msd_cluster_limit_A2": float(max_mean_msd_cluster_A2),
-        "max_internal_rmsd_limit_A": float(max_internal_rmsd_A),
+        "max_cluster_disp_limit_A": float(max_cluster_disp_limit_A),
+        "max_mean_msd_cluster_limit_A2": float(max_mean_msd_cluster_limit_A2),
+        "max_internal_rmsd_limit_A": float(max_internal_rmsd_limit_A),
         "fail_reasons": fail_reasons,
         "n_frames": n_frames,
         "n_monomers": n_mol,
@@ -164,6 +167,11 @@ def main() -> int:
         action="store_true",
         help="Skip worst-vs-median monomer outlier check",
     )
+    parser.add_argument(
+        "--no-fail",
+        action="store_true",
+        help="Always exit 0 after writing NPZ (record ok=false for downstream collect)",
+    )
     parser.add_argument("--max-frames", type=int, default=None)
     args = parser.parse_args()
 
@@ -179,9 +187,9 @@ def main() -> int:
         pos,
         offsets,
         outlier_factor=args.outlier_factor,
-        max_cluster_disp_A=args.max_cluster_disp_A,
-        max_mean_msd_cluster_A2=args.max_mean_msd_cluster_A2,
-        max_internal_rmsd_A=args.max_internal_rmsd_A,
+        max_cluster_disp_limit_A=args.max_cluster_disp_A,
+        max_mean_msd_cluster_limit_A2=args.max_mean_msd_cluster_A2,
+        max_internal_rmsd_limit_A=args.max_internal_rmsd_A,
         check_outlier_ratio=not args.no_outlier_ratio,
     )
     stats["dcd_header"] = np.array([hdr], dtype=object)
@@ -221,6 +229,8 @@ def main() -> int:
         f"[{reasons}]",
         flush=True,
     )
+    if args.no_fail:
+        return 0
     return 0 if stats["ok"] else 1
 
 

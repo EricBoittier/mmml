@@ -49,3 +49,10 @@ dynamics_overlap_min_distance: 0.5
 # Disable in-run echeck; post-run validation in run_job.py still requires ~90% of frames.
 no_echeck: true
 ml_gpu_count: 1
+
+# Post-run COM QC (analyze_monomer_com_dcd.py): records metrics even when unstable.
+com_analysis:
+  no_fail: true
+  outlier_factor: 2.0
+  max_cluster_disp_A: 50.0
+  max_internal_rmsd_A: 15.0
