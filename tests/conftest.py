@@ -13,6 +13,7 @@ _TESTS_ROOT = Path(__file__).resolve().parent
 _PYCHARMM_PATH_PREFIXES = (
     "functionality/pycharmmETC/",
     "functionality/mlpot/test_mlpot_energy_matches_ase.py",
+    "functionality/mlpot/test_mlpot_dynamics_smoke.py",
     "functionality/mlpot/test_comp_velocities_integration.py",
     "functionality/mmml_tests/test_mmml_calc.py",
     "functionality/mmml_tests/test_ase_jaxmd_pbc_consistency.py",
@@ -23,6 +24,7 @@ _PYCHARMM_PATH_PREFIXES = (
 # Subset that loads ML checkpoints / benefits from JAX on GPU.
 _GPU_PATH_PREFIXES = (
     "functionality/mlpot/test_mlpot_energy_matches_ase.py",
+    "functionality/mlpot/test_mlpot_dynamics_smoke.py",
     "functionality/mmml_tests/test_mmml_calc.py",
     "functionality/mmml_tests/test_ase_jaxmd_pbc_consistency.py",
     "functionality/pycharmmETC/test_physnetjax_calc.py",
@@ -32,6 +34,7 @@ _GPU_PATH_PREFIXES = (
 
 _MLPOT_PATH_PREFIXES = (
     "functionality/mlpot/test_mlpot_energy_matches_ase.py",
+    "functionality/mlpot/test_mlpot_dynamics_smoke.py",
     "functionality/mlpot/test_comp_velocities_integration.py",
 )
 
