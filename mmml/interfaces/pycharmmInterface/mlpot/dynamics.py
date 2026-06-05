@@ -2034,6 +2034,7 @@ def _integrated_step_from_restart(
         read_restart_last_step,
     )
 
+    fb = max(0, int(fallback_steps))
     for candidate in (
         getattr(chunk_io, "restart_write", None) if chunk_io is not None else None,
         final_restart,
@@ -2041,9 +2042,18 @@ def _integrated_step_from_restart(
         if candidate is None:
             continue
         step = read_restart_last_step(Path(candidate))
-        if step is not None and int(step) > 0:
-            return int(step)
-    return int(fallback_steps)
+        if step is None or int(step) <= 0:
+            continue
+        step = int(step)
+        if step >= fb - 1:
+            return step
+        # CHARMM coord-history / scratch restarts often leave NSTEP at the last
+        # overlap sub-chunk size (e.g. 500) while the integrated segment ran longer
+        # (e.g. 2500).  Trust ``fallback_steps`` when the header divides evenly.
+        if fb > step and fb % step == 0 and fb // step >= 2:
+            return fb
+        return step
+    return fb
 
 
 def _run_dynamics_chunk(
@@ -2353,17 +2363,30 @@ def run_dynamics_with_io(
                     chunk_io.restart_write,
                     final_restart=final_restart,
                 )
+            expected_after = steps_before_chunk + chunk_nstep
             reported_steps = _integrated_step_from_restart(
                 chunk_io=chunk_io,
                 final_restart=final_restart,
-                fallback_steps=steps_before_chunk + chunk_nstep,
+                fallback_steps=expected_after,
             )
-            if reported_steps > steps_before_chunk:
-                steps_done = reported_steps
+            if reported_steps >= expected_after - 1:
+                steps_done = max(reported_steps, expected_after)
             else:
-                # JHSTRT=0 coordinate-history restarts often leave NSTEP at the
-                # segment length (e.g. 500) without advancing the global counter.
-                steps_done = steps_before_chunk + chunk_nstep
+                steps_done = reported_steps
+            if (
+                chunk_io is not None
+                and getattr(chunk_io, "restart_write", None) is not None
+                and steps_done >= expected_after - 1
+            ):
+                from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+                    patch_restart_global_step,
+                    read_restart_last_step,
+                )
+
+                restart_path = Path(chunk_io.restart_write)
+                header_step = read_restart_last_step(restart_path)
+                if header_step is None or header_step < expected_after - 1:
+                    patch_restart_global_step(restart_path, steps_done)
             if final_restart is not None and chunk_io is not None:
                 _overlap_refresh_or_validate_scratch_restart(
                     chunk_io.restart_write,
