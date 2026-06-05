@@ -8,9 +8,11 @@ checkpoint: "${MMML_CKPT}"
 output_root: results
 mpirun_wrapper: ../../scripts/mmml-charmm-mpirun.sh
 
-# Short NVE leg for screening; increase once a preset looks stable.
-ps_nve: 1.0
+# Round-4 validation leg (5 ps @ 0.25 fs → 20000 steps).
+ps_nve: 5.0
 dt_fs: 0.25
+# Runs with smoothness_score above this are flagged fail_energy in reports.
+energy_catastrophe_score: 10000.0
 temperature: 300.0
 nve_boltzmann_temp: 0.2
 seed: 123
@@ -34,34 +36,38 @@ charmm_sd_steps: 50
 charmm_abnr_steps: 100
 dynamics_overlap_action: rescue
 dynamics_overlap_min_distance: 0.4
-# One overlap chunk for the full NVE leg (1 ps @ 0.25 fs → 4000 steps).
+# One overlap chunk for the full NVE leg (must equal ps_nve * 1000 / dt_fs).
 # interval=1 + dcd_nsavc=1 forces 2-step chunks and NVE stops after ~2 steps.
-dynamics_overlap_check_interval: 4000
+dynamics_overlap_check_interval: 20000
 no_echeck: true
 ml_gpu_count: 1
 
-# Round-3: ML taper width sensitivity at fixed dcm9 mm_on/mm_w (7 / 5 Å).
-# Round-2 extended_mm5 / handoff_7p5 paused until ML width is settled.
+# Round-4: 5 ps NVE validation of round-2 winners + close-geometry hybrids.
 cutoff_presets:
-  # Production baseline; ML taper [6.9, 7.0] Å.
+  # Round-2 winner; sane on all four COM geoms at 1 ps.
+  extended_mm5:
+    mm_switch_on: 8.0
+    mm_switch_width: 5.0
+    ml_switch_width: 1.5
+  # Conservative fallback (docs/mlpot-settings.md baseline).
   dcm9_stability:
     mm_switch_on: 7.0
     mm_switch_width: 5.0
     ml_switch_width: 0.1
-  # Sharper ML→MM handoff: [6.99, 7.0] Å.
-  dcm9_ml01:
-    mm_switch_on: 7.0
+  # Best close at 1 ps; far geom catastrophic — included as close baseline only.
+  handoff_7p5:
+    mm_switch_on: 7.5
     mm_switch_width: 5.0
-    ml_switch_width: 0.01
-  # Near-step handoff: [6.999, 7.0] Å.
-  dcm9_ml001:
-    mm_switch_on: 7.0
-    mm_switch_width: 5.0
-    ml_switch_width: 0.001
-  # Wide ML taper contrast (round-1 best close/mid, unstable far/asymmetric).
-  extended_handoff:
+    ml_switch_width: 0.1
+  # Hybrid: extended_mm5 MM width + narrower ML taper for close spacing.
+  extended_mm5_ml05:
     mm_switch_on: 8.0
-    mm_switch_width: 3.0
+    mm_switch_width: 5.0
+    ml_switch_width: 0.5
+  # Hybrid: handoff_7p5 distance + extended ML taper.
+  handoff_7p5_ml15:
+    mm_switch_on: 7.5
+    mm_switch_width: 5.0
     ml_switch_width: 1.5
 
 # Rigid trimer COM placement (monomer 0 fixed; 1 along +x; 2 at angle from +x)

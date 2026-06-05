@@ -12,6 +12,8 @@ from typing import Any
 
 import numpy as np
 
+DEFAULT_ENERGY_CATASTROPHE_SCORE = 10000.0
+
 _DYNA_LINE = re.compile(
     r"^DYNA>\s+(\d+)\s+([\d.]+)\s+"
     r"([\d.eE+-]+)\s+([\d.eE+-]+)\s+([\d.eE+-]+)\s+([\d.eE+-]+)"
@@ -37,7 +39,25 @@ def parse_dyna_lines(text: str) -> list[dict[str, float]]:
     return rows
 
 
-def summarize_nve_energy(rows: list[dict[str, float]]) -> dict[str, Any]:
+def classify_energy_status(
+    summary: dict[str, Any],
+    *,
+    catastrophe_score: float = DEFAULT_ENERGY_CATASTROPHE_SCORE,
+) -> str:
+    """Return pass, fail, or fail_energy from parsed DYNA metrics."""
+    if int(summary.get("n_frames", 0)) < 2:
+        return "fail"
+    score = float(summary.get("smoothness_score", float("inf")))
+    if score > float(catastrophe_score):
+        return "fail_energy"
+    return "pass"
+
+
+def summarize_nve_energy(
+    rows: list[dict[str, float]],
+    *,
+    catastrophe_score: float = DEFAULT_ENERGY_CATASTROPHE_SCORE,
+) -> dict[str, Any]:
     if len(rows) < 2:
         return {
             "n_frames": len(rows),
@@ -81,19 +101,26 @@ def summarize_nve_energy(rows: list[dict[str, float]]) -> dict[str, Any]:
         "smoothness_score": float(
             np.std(etot) + np.max(step_delta) + 0.1 * abs(etot_drift)
         ),
-        "status": "pass",
         "notes": "",
     }
+    out["status"] = classify_energy_status(out, catastrophe_score=catastrophe_score)
+    if out["status"] == "fail_energy":
+        out["notes"] = (
+            f"smoothness_score {out['smoothness_score']:.3g} "
+            f"> catastrophe threshold {catastrophe_score:g}"
+        )
     return out
 
 
-def analyze_log(log_path: Path) -> dict[str, Any]:
+def analyze_log(
+    log_path: Path,
+    *,
+    catastrophe_score: float = DEFAULT_ENERGY_CATASTROPHE_SCORE,
+) -> dict[str, Any]:
     text = log_path.read_text(encoding="utf-8", errors="replace")
     rows = parse_dyna_lines(text)
-    summary = summarize_nve_energy(rows)
+    summary = summarize_nve_energy(rows, catastrophe_score=catastrophe_score)
     summary["log_path"] = str(log_path)
-    if summary.get("n_frames", 0) >= 2:
-        summary["status"] = "pass"
     return summary
 
 
@@ -113,6 +140,12 @@ def main() -> int:
         default=None,
         help="Optional NPZ with time series arrays",
     )
+    parser.add_argument(
+        "--catastrophe-score",
+        type=float,
+        default=DEFAULT_ENERGY_CATASTROPHE_SCORE,
+        help="smoothness_score above this → status fail_energy",
+    )
     args = parser.parse_args()
 
     if not args.log.is_file():
@@ -120,7 +153,7 @@ def main() -> int:
 
     text = args.log.read_text(encoding="utf-8", errors="replace")
     rows = parse_dyna_lines(text)
-    summary = summarize_nve_energy(rows)
+    summary = summarize_nve_energy(rows, catastrophe_score=args.catastrophe_score)
     summary["log_path"] = str(args.log.resolve())
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
