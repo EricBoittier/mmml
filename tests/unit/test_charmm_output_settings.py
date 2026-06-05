@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 
+import pytest
+
 from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     resolve_dynamics_print_kwargs,
     resolve_heat_ihtfrq,
@@ -12,6 +14,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
     apply_heat_ramp_frequencies,
     apply_heat_ramp_overlap_chunk,
     apply_heat_segment_ramp_kwargs,
+    build_hoover_heat_dynamics,
     finalize_heat_dynamics_frequencies,
     heat_ramp_bath_target_K,
 )
@@ -89,6 +92,42 @@ def test_apply_heat_ramp_overlap_chunk_continues_ramp():
     assert chunk_kw["finalt"] == 240.0
     assert chunk_kw["TEMINC"] == 0.12
     assert chunk_kw["iasors"] == 0
+    assert chunk_kw["iasvel"] == 0
+
+
+def test_hoover_cpt_heat_ramp_target_and_overlap_chunk():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        apply_hoover_cpt_heat_ramp_overlap_chunk,
+        hoover_cpt_heat_ramp_spec_from_kw,
+        hoover_cpt_heat_ramp_target_K,
+    )
+
+    assert hoover_cpt_heat_ramp_target_K(
+        firstt=0.0,
+        finalt=30.0,
+        step=500,
+        total_nstep=25000,
+    ) == pytest.approx(0.6)
+    kw = build_hoover_heat_dynamics(
+        temp=30.0,
+        firstt=0.0,
+        finalt=30.0,
+        use_pbc=True,
+        tmass=2000,
+    )
+    spec = hoover_cpt_heat_ramp_spec_from_kw(kw)
+    assert spec == {"firstt": 0.0, "finalt": 30.0}
+    chunk_kw: dict = {}
+    apply_hoover_cpt_heat_ramp_overlap_chunk(
+        chunk_kw,
+        chunk_index=1,
+        steps_done=500,
+        ramp_spec=spec,
+        total_nstep=25000,
+    )
+    assert chunk_kw["firstt"] == pytest.approx(0.6)
+    assert chunk_kw["finalt"] == 30.0
+    assert chunk_kw["tbath"] == 30.0
     assert chunk_kw["iasvel"] == 0
 
 

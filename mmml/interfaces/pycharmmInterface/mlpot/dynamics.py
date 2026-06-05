@@ -728,6 +728,62 @@ def heat_ramp_bath_target_K(
     return min(target, float(finalt))
 
 
+def hoover_cpt_heat_ramp_target_K(
+    *,
+    firstt: float,
+    finalt: float,
+    step: int,
+    total_nstep: int,
+) -> float:
+    """Linear Hoover CPT bath target (K) after ``step`` of ``total_nstep`` segment steps."""
+    if total_nstep <= 0:
+        return float(finalt)
+    frac = min(1.0, max(0.0, int(step) / int(total_nstep)))
+    return float(firstt) + frac * (float(finalt) - float(firstt))
+
+
+def hoover_cpt_heat_ramp_spec_from_kw(
+    kw: dict[str, Any],
+) -> dict[str, float] | None:
+    """Return segment-level Hoover CPT ramp endpoints, or ``None`` if inactive."""
+    if not bool(kw.get("cpt")) or "hoover reft" not in kw:
+        return None
+    if int(kw.get("ihtfrq", 0) or 0) > 0:
+        return None
+    firstt = kw.get("firstt")
+    finalt = kw.get("finalt")
+    if firstt is None or finalt is None:
+        return None
+    t0 = float(firstt)
+    t1 = float(finalt)
+    if t1 <= t0:
+        return None
+    return {"firstt": t0, "finalt": t1}
+
+
+def apply_hoover_cpt_heat_ramp_overlap_chunk(
+    chunk_kw: dict[str, Any],
+    *,
+    chunk_index: int,
+    steps_done: int,
+    ramp_spec: dict[str, float],
+    total_nstep: int,
+) -> None:
+    """Continue a Hoover CPT heat ramp on overlap chunk ``chunk_index`` > 0."""
+    if chunk_index <= 0:
+        return
+    target = hoover_cpt_heat_ramp_target_K(
+        firstt=float(ramp_spec["firstt"]),
+        finalt=float(ramp_spec["finalt"]),
+        step=int(steps_done),
+        total_nstep=int(total_nstep),
+    )
+    chunk_kw["firstt"] = target
+    chunk_kw["finalt"] = float(ramp_spec["finalt"])
+    chunk_kw["tbath"] = float(ramp_spec["finalt"])
+    chunk_kw["iasvel"] = 0
+
+
 def heat_ramp_spec_from_kw(kw: dict[str, Any]) -> dict[str, float | int] | None:
     """Return stage-level velocity-scaling ramp parameters, or ``None`` if inactive."""
     ihtfrq = int(kw.get("ihtfrq", 0) or 0)
@@ -2015,7 +2071,20 @@ def run_dynamics_with_io(
     )
 
     n_chunks = total_nstep // interval
+    if (
+        n_chunks > 20
+        and "heat" in str(overlap_context).lower()
+        and hoover_cpt_heat_ramp_spec_from_kw(kw) is not None
+    ):
+        print(
+            f"overlap ({overlap_context}): warning: {n_chunks} Hoover CPT heat restart "
+            f"chunks (interval={interval}, total={total_nstep} steps). Prefer "
+            f"--dynamics-overlap-check-interval >= {total_nstep} or fewer "
+            f"--n-heat-segments to reduce scratch READYN handoffs.",
+            flush=True,
+        )
     heat_ramp_spec = heat_ramp_spec_from_kw(kw)
+    hoover_heat_ramp_spec = hoover_cpt_heat_ramp_spec_from_kw(kw)
     final_restart = Path(io.restart_write) if io is not None and io.restart_write else None
     last_dyn: Any = None
     steps_done = 0
@@ -2113,6 +2182,14 @@ def run_dynamics_with_io(
                     steps_done=steps_done,
                     ramp_spec=heat_ramp_spec,
                 )
+            elif hoover_heat_ramp_spec is not None:
+                apply_hoover_cpt_heat_ramp_overlap_chunk(
+                    chunk_kw,
+                    chunk_index=chunk_index,
+                    steps_done=steps_done,
+                    ramp_spec=hoover_heat_ramp_spec,
+                    total_nstep=total_nstep,
+                )
             if chunk_io is None or chunk_io.restart_write is None:
                 chunk_kw.pop("iunwri", None)
 
@@ -2157,12 +2234,15 @@ def run_dynamics_with_io(
                 )
             min_overlap_step = max(1, int(total_nstep * 0.95))
             if steps_done < min_overlap_step:
-                print(
+                expected_after_chunk = (chunk_index + 1) * chunk_nstep
+                msg = (
                     f"overlap ({overlap_context}): integrated {steps_done}/{total_nstep} "
-                    "steps (echeck or CHARMM abort likely); skipping post-chunk "
-                    "overlap geometry check",
-                    flush=True,
+                    "steps"
                 )
+                if steps_done < expected_after_chunk - 1:
+                    msg += " (echeck or CHARMM abort likely)"
+                msg += "; skipping mid-stage overlap geometry check"
+                print(msg, flush=True)
             else:
                 check_dynamics_overlap(
                     overlap,
