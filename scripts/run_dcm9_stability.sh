@@ -30,7 +30,7 @@
 #   ENABLE_FB=1 FB_RAD=14 ./scripts/run_dcm9_stability.sh
 #   ./scripts/run_dcm9_stability.sh --ps-heat 30 --heat-ihtfrq 100
 #   # softer ramp (defaults): 0 K -> 240 K over 20 ps, 4 heat segments (5 ps each)
-#   # ML/MM cutoffs: mm_switch_on=7, mm_switch_width=5 (see docs/mlpot-settings.md)
+#   # ML/MM cutoffs: extended_mm5 8 / 5 / 1.5 (see docs/mlpot-settings.md)
 #
 # After run, confirm in the log (non-quiet):
 #   HEAT complete: restart_step=~40000, dcd_frames=~81  (new validation)
@@ -79,8 +79,9 @@ HEAT_FINALT="${HEAT_FINALT:-240}"
 HEAT_THERMOSTAT="${HEAT_THERMOSTAT:-hoover}"
 HEAT_IHTFRQ="${HEAT_IHTFRQ:-100}"
 N_HEAT_SEGMENTS="${N_HEAT_SEGMENTS:-4}"
-MM_SWITCH_ON="${MM_SWITCH_ON:-7}"
+MM_SWITCH_ON="${MM_SWITCH_ON:-8}"
 MM_SWITCH_WIDTH="${MM_SWITCH_WIDTH:-5}"
+ML_SWITCH_WIDTH="${ML_SWITCH_WIDTH:-1.5}"
 MINI_NSTEP="${MINI_NSTEP:-150}"
 DYN_NPRINT="${DYN_NPRINT:-500}"
 DCD_NSAVC="${DCD_NSAVC:-500}"
@@ -125,6 +126,7 @@ exec "$MPIRUN" md-system \
   --n-heat-segments "$N_HEAT_SEGMENTS" \
   --mm-switch-on "$MM_SWITCH_ON" \
   --mm-switch-width "$MM_SWITCH_WIDTH" \
+  --ml-switch-width "$ML_SWITCH_WIDTH" \
   --dyn-nprint "$DYN_NPRINT" \
   --dyn-iprfrq 2000 \
   --dcd-nsavc "$DCD_NSAVC" \

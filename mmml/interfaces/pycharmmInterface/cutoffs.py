@@ -38,15 +38,17 @@ GAMMA_ON: float = 1.0
 GAMMA_OFF: float = 3.0
 
 # Default ML/MM handoff widths (Å); used by md-system, PyCHARMM MLpot, and calculators.
-DEFAULT_MM_SWITCH_ON: float = 7.0
+# extended_mm5 (8 / 5 / 1.5): DCM:3 NVE cutoff sweep @ 5 ps (workflows/dcm3_nve_cutoff_sweep).
+DEFAULT_MM_SWITCH_ON: float = 8.0
 DEFAULT_MM_SWITCH_WIDTH: float = 5.0
+DEFAULT_ML_SWITCH_WIDTH: float = 1.5
 
 
 def handoff_widths_from_args(args) -> tuple[float, float, float]:
     """Return (ml_switch_width, mm_switch_on, mm_switch_width) from CLI/config namespace."""
     ml_w = getattr(args, "ml_switch_width", None)
     if ml_w is None:
-        ml_w = getattr(args, "ml_cutoff", 0.1)
+        ml_w = getattr(args, "ml_cutoff", DEFAULT_ML_SWITCH_WIDTH)
     mm_on = float(getattr(args, "mm_switch_on", DEFAULT_MM_SWITCH_ON))
     mm_w = getattr(args, "mm_switch_width", None)
     if mm_w is None:
@@ -73,8 +75,11 @@ def add_handoff_cutoff_args(parser: argparse.ArgumentParser) -> None:
         "--ml-cutoff",
         dest="ml_switch_width",
         type=float,
-        default=0.1,
-        help="ML taper width in Å over [mm_switch_on - width, mm_switch_on] (default: 0.1).",
+        default=DEFAULT_ML_SWITCH_WIDTH,
+        help=(
+            "ML taper width in Å over [mm_switch_on - width, mm_switch_on] "
+            f"(default: {DEFAULT_ML_SWITCH_WIDTH:g})."
+        ),
     )
     parser.add_argument(
         "--mm-switch-on",
@@ -125,7 +130,7 @@ class CutoffParameters:
 
     def __init__(
         self,
-        ml_switch_width: float = 0.1,
+        ml_switch_width: float = DEFAULT_ML_SWITCH_WIDTH,
         mm_switch_on: float = DEFAULT_MM_SWITCH_ON,
         mm_switch_width: float = DEFAULT_MM_SWITCH_WIDTH,
         *,
