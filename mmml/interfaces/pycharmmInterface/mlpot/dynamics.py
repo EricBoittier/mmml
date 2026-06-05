@@ -1684,7 +1684,7 @@ def _overlap_chunk_io(
     """Restart I/O for overlap chunking via alternating scratch restarts.
 
     When ``split_trajectory`` is true and ``n_chunks > 1``, each chunk writes its
-    own ``*.chunk.NNNN.dcd`` (merged into the stage DCD after the run).
+    own ``*.chunk.NNNN.dcd`` (kept on disk; no stage-level merge).
     """
     rread, rwri = _overlap_chunk_restart_paths(
         io, chunk_index=chunk_index, n_chunks=n_chunks
@@ -1711,8 +1711,6 @@ def _overlap_chunk_io(
 
 # Per-chunk DCDs at nsavc=1 and overlap interval 2 create O(nstep) tiny files.
 _OVERLAP_MAX_CHUNK_DCD_FILES = 64
-# Heat/equi with overlap interval 500 → 8 chunks for 4000 steps; keep one DCD.
-_OVERLAP_UNIFIED_DCD_MIN_CHUNKS = 4
 
 
 def _overlap_should_split_trajectory(
@@ -1720,15 +1718,14 @@ def _overlap_should_split_trajectory(
     n_chunks: int,
     traj_nsavc: int | None,
 ) -> bool:
-    """Use one stage DCD (append across chunks) when chunk count would explode."""
+    """Write per-chunk ``*.chunk.NNNN.dcd`` files for multi-segment overlap runs."""
     if n_chunks <= 1:
         return False
-    if n_chunks > _OVERLAP_MAX_CHUNK_DCD_FILES:
-        return False
-    if n_chunks >= _OVERLAP_UNIFIED_DCD_MIN_CHUNKS:
-        return False
-    if traj_nsavc is not None and int(traj_nsavc) <= 1 and n_chunks > 8:
-        return False
+    if traj_nsavc is not None and int(traj_nsavc) <= 1:
+        if n_chunks > _OVERLAP_MAX_CHUNK_DCD_FILES:
+            return False
+        if n_chunks > 8:
+            return False
     return True
 
 
@@ -1827,6 +1824,57 @@ def _harmonize_overlap_chunk_frequencies(
         if key not in chunk_kw:
             continue
         chunk_kw[key] = _harmonize_dynamics_frequency(int(chunk_kw[key]), n)
+
+
+def _mlpot_ctx_cubic_box_side_A(mlpot_ctx: Optional["MlpotContext"]) -> float | None:
+    if mlpot_ctx is None:
+        return None
+    for attr in ("charmm_cubic_box_side_A", "cubic_box_side_A"):
+        side = getattr(mlpot_ctx, attr, None)
+        if side is not None and float(side) > 0.0:
+            return float(side)
+    return None
+
+
+def _prepare_post_rescue_overlap_handoff(
+    chunk_kw: dict[str, Any],
+    *,
+    mlpot_ctx: Optional["MlpotContext"],
+) -> None:
+    """Continue overlap dynamics in-process after PSF-reload geometry rescue.
+
+    A full ``READYN`` handoff restores pre-rescue velocities and CPT barostat
+    internals from the last dynamics checkpoint, which disagrees with minimized
+    coordinates (``PIXX`` overflow and ``upimag`` segfaults).  Boltzmann-assign
+    on the rescued in-memory coordinates and run the next chunk without restart
+    read, matching normal MLpot overlap memory handoff.
+    """
+    use_pbc = bool(chunk_kw.get("cpt")) or (
+        mlpot_ctx is not None and bool(getattr(mlpot_ctx, "use_pbc", False))
+    )
+    target_t = float(
+        chunk_kw.get("firstt", chunk_kw.get("tbath", chunk_kw.get("finalt", 300.0)))
+    )
+    assign_velocities_at_temperature(
+        target_t,
+        timestep_ps=float(chunk_kw.get("timestep", 0.00025)),
+        restart_path=None,
+        use_pbc=use_pbc,
+    )
+    if use_pbc and bool(chunk_kw.get("cpt")):
+        side = _mlpot_ctx_cubic_box_side_A(mlpot_ctx)
+        if side is not None:
+            from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+                ensure_charmm_crystal_for_cpt,
+            )
+
+            ensure_charmm_crystal_for_cpt(side, quiet=True)
+    chunk_kw["restart"] = False
+    chunk_kw["new"] = False
+    chunk_kw["start"] = False
+    chunk_kw["iasvel"] = 1
+    chunk_kw.pop("iunrea", None)
+    chunk_kw["iunrea"] = -1
 
 
 def _prepare_overlap_chunk_after_restart(
@@ -2091,7 +2139,7 @@ def run_dynamics_with_io(
     )
 
     n_chunks = total_nstep // interval
-    resume_from_restart_after_rescue = False
+    pending_post_rescue_handoff = False
     if (
         n_chunks > 20
         and "heat" in str(overlap_context).lower()
@@ -2123,11 +2171,22 @@ def run_dynamics_with_io(
         io is not None
         and io.trajectory is not None
         and n_chunks > 1
+        and split_trajectory
+    ):
+        print(
+            f"overlap ({overlap_context}): writing {n_chunks} per-chunk DCD(s) "
+            f"({Path(io.trajectory).stem}.chunk.*{Path(io.trajectory).suffix})",
+            flush=True,
+        )
+    elif (
+        io is not None
+        and io.trajectory is not None
+        and n_chunks > 1
         and not split_trajectory
     ):
         print(
             f"overlap ({overlap_context}): writing one DCD ({io.trajectory.name}) "
-            f"across {n_chunks} chunks (avoiding {n_chunks} per-chunk *.chunk.*.dcd files)",
+            f"across {n_chunks} chunks (nsavc=1 chunk explosion guard)",
             flush=True,
         )
     try:
@@ -2136,9 +2195,6 @@ def run_dynamics_with_io(
         for chunk_index in range(n_chunks):
             chunk_nstep = interval
             steps_before_chunk = steps_done
-            force_restart_read = resume_from_restart_after_rescue
-            if force_restart_read:
-                resume_from_restart_after_rescue = False
             chunk_kw = dict(kw)
             chunk_kw["nstep"] = chunk_nstep
             if io is None:
@@ -2152,7 +2208,14 @@ def run_dynamics_with_io(
                     n_chunks=n_chunks,
                     split_trajectory=split_trajectory,
                     mlpot_ctx=mlpot_ctx,
-                    use_memory_handoff=not force_restart_read,
+                    use_memory_handoff=(
+                        pending_post_rescue_handoff
+                        or _overlap_chunk_uses_memory_handoff(
+                            mlpot_ctx,
+                            chunk_index=chunk_index,
+                            n_chunks=n_chunks,
+                        )
+                    ),
                 )
                 if (
                     split_trajectory
@@ -2161,8 +2224,8 @@ def run_dynamics_with_io(
                 ):
                     chunk_dcd_paths.append(Path(chunk_io.trajectory))
             mem_handoff = (
-                not force_restart_read
-                and _overlap_chunk_uses_memory_handoff(
+                pending_post_rescue_handoff
+                or _overlap_chunk_uses_memory_handoff(
                     mlpot_ctx, chunk_index=chunk_index, n_chunks=n_chunks
                 )
             )
@@ -2219,6 +2282,12 @@ def run_dynamics_with_io(
                     ramp_spec=hoover_heat_ramp_spec,
                     total_nstep=total_nstep,
                 )
+            if pending_post_rescue_handoff:
+                _prepare_post_rescue_overlap_handoff(
+                    chunk_kw,
+                    mlpot_ctx=mlpot_ctx,
+                )
+                pending_post_rescue_handoff = False
             if chunk_io is None or chunk_io.restart_write is None:
                 chunk_kw.pop("iunwri", None)
 
@@ -2294,11 +2363,11 @@ def run_dynamics_with_io(
                         Path(chunk_io.restart_write),
                         steps_done,
                     )
-                    resume_from_restart_after_rescue = True
+                    pending_post_rescue_handoff = True
                     print(
-                        f"overlap ({overlap_context}): post-rescue READYN handoff "
-                        f"at global step {steps_done} (PSF reload cleared in-memory "
-                        f"dyna counters)",
+                        f"overlap ({overlap_context}): post-rescue in-memory handoff "
+                        f"at global step {steps_done} (fresh velocities; avoiding "
+                        f"stale CPT READYN after PSF reload)",
                         flush=True,
                     )
             ml_f = None
@@ -2320,26 +2389,12 @@ def run_dynamics_with_io(
                     mlpot_ctx=mlpot_ctx,
                 )
         completed = True
-        if split_trajectory and chunk_dcd_paths and io is not None:
-            from mmml.utils.dcd_writer import concat_dcd_files
-
-            merged = concat_dcd_files(chunk_dcd_paths, Path(io.trajectory))
+        if split_trajectory and chunk_dcd_paths:
             print(
-                f"overlap ({overlap_context}): merged {len(chunk_dcd_paths)} chunk DCD(s) "
-                f"-> {io.trajectory} ({merged} frames)",
+                f"overlap ({overlap_context}): kept {len(chunk_dcd_paths)} "
+                "per-chunk DCD file(s)",
                 flush=True,
             )
-            for chunk_path in chunk_dcd_paths:
-                try:
-                    chunk_path.unlink(missing_ok=True)
-                except OSError:
-                    pass
-            if chunk_dcd_paths:
-                print(
-                    f"overlap ({overlap_context}): removed {len(chunk_dcd_paths)} "
-                    "per-chunk DCD scratch file(s)",
-                    flush=True,
-                )
     finally:
         if completed:
             _cleanup_overlap_restart_slots(io)

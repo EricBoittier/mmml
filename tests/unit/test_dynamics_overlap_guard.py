@@ -539,8 +539,8 @@ def test_overlap_skips_check_when_chunk_aborts_early(tmp_path, capsys):
     assert "echeck or CHARMM abort likely" in capsys.readouterr().out
 
 
-def test_overlap_post_rescue_forces_readyn_next_chunk(tmp_path, capsys):
-    """PSF reload during rescue must not leave the next chunk at dyna step 0."""
+def test_overlap_post_rescue_handoff_continues_in_memory(tmp_path, capsys):
+    """PSF reload during rescue must not READYN stale CPT state on the next chunk."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
 
     cfg = DynamicsOverlapConfig(
@@ -574,6 +574,8 @@ def test_overlap_post_rescue_forces_readyn_next_chunk(tmp_path, capsys):
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.patch_restart_global_step",
         return_value=True,
     ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_post_rescue_overlap_handoff",
+    ) as post_rescue, mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
@@ -589,10 +591,11 @@ def test_overlap_post_rescue_forces_readyn_next_chunk(tmp_path, capsys):
 
     assert len(calls) == 3
     assert calls[0][0]["restart"] is False
-    assert calls[1][0]["restart"] is True
-    assert calls[1][1] is not None and calls[1][1].restart_read is not None
+    assert calls[1][0]["restart"] is False
+    assert calls[1][1] is not None and calls[1][1].restart_read is None
     assert calls[2][0]["restart"] is False
-    assert "post-rescue READYN handoff at global step 500" in capsys.readouterr().out
+    post_rescue.assert_called_once()
+    assert "post-rescue in-memory handoff at global step 500" in capsys.readouterr().out
 
 
 def test_mlpot_overlap_chunks_continue_in_memory_without_readyn(tmp_path):
@@ -1016,8 +1019,10 @@ def test_overlap_should_split_trajectory_limits_chunk_dcd_count():
     assert not _overlap_should_split_trajectory(n_chunks=1, traj_nsavc=1)
     assert not _overlap_should_split_trajectory(n_chunks=7390, traj_nsavc=1)
     assert not _overlap_should_split_trajectory(n_chunks=100, traj_nsavc=1)
-    assert not _overlap_should_split_trajectory(n_chunks=4, traj_nsavc=100)
-    assert not _overlap_should_split_trajectory(n_chunks=8, traj_nsavc=1)
+    assert not _overlap_should_split_trajectory(n_chunks=9, traj_nsavc=1)
+    assert _overlap_should_split_trajectory(n_chunks=50, traj_nsavc=100)
+    assert _overlap_should_split_trajectory(n_chunks=4, traj_nsavc=100)
+    assert _overlap_should_split_trajectory(n_chunks=8, traj_nsavc=1)
     assert _overlap_should_split_trajectory(n_chunks=3, traj_nsavc=100)
 
 
@@ -1276,7 +1281,6 @@ def test_overlap_multi_chunk_splits_dcd_per_chunk(tmp_path):
         return_value=pos_ok,
     ), mock.patch(
         "mmml.utils.dcd_writer.concat_dcd_files",
-        return_value=3,
     ) as merge:
         run_dynamics_with_io(
             {"nstep": 6, "nsavc": 1},
@@ -1286,7 +1290,7 @@ def test_overlap_multi_chunk_splits_dcd_per_chunk(tmp_path):
         )
 
     assert chunk_paths == expected_chunks
-    merge.assert_called_once_with(expected_chunks, dcd)
+    merge.assert_not_called()
 
 
 def test_overlap_single_chunk_uses_stage_dcd_directly(tmp_path):
@@ -1611,3 +1615,34 @@ def test_prepare_overlap_chunk_skips_upinb_when_mlpot_active():
     ) as imp:
         _prepare_overlap_chunk_after_restart(ctx)
     imp.assert_not_called()
+
+
+def test_prepare_post_rescue_overlap_handoff_assigns_velocities_in_memory():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _prepare_post_rescue_overlap_handoff,
+    )
+
+    chunk_kw = {
+        "firstt": 40.4,
+        "timestep": 0.0001,
+        "cpt": True,
+        "restart": True,
+        "iunrea": 3,
+    }
+    ctx = mock.Mock(use_pbc=True, charmm_cubic_box_side_A=180.0)
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.assign_velocities_at_temperature",
+    ) as assign_vel, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.ensure_charmm_crystal_for_cpt",
+    ) as ensure_crystal:
+        _prepare_post_rescue_overlap_handoff(chunk_kw, mlpot_ctx=ctx)
+
+    assign_vel.assert_called_once_with(
+        40.4,
+        timestep_ps=0.0001,
+        restart_path=None,
+        use_pbc=True,
+    )
+    ensure_crystal.assert_called_once_with(180.0, quiet=True)
+    assert chunk_kw["restart"] is False
+    assert chunk_kw["iunrea"] == -1

@@ -34,6 +34,24 @@ def count_readable_dcd_frames(path: Path) -> int:
         return 0
 
 
+def overlap_chunk_dcd_paths(dcd_path: Path) -> list[Path]:
+    """Sorted ``{stem}.chunk.*.dcd`` siblings for an overlap stage trajectory."""
+    p = Path(dcd_path)
+    return sorted(p.parent.glob(f"{p.stem}.chunk.*{p.suffix}"))
+
+
+def count_overlap_chunk_dcd_frames(dcd_path: Path) -> tuple[int, int]:
+    """Return ``(header_frames, readable_frames)`` summed over overlap chunk DCDs."""
+    total_header = 0
+    total_readable = 0
+    for chunk_path in overlap_chunk_dcd_paths(dcd_path):
+        header = count_dcd_frames(chunk_path)
+        readable = count_readable_dcd_frames(chunk_path)
+        total_header += header
+        total_readable += min(header, readable) if header else readable
+    return total_header, total_readable
+
+
 def expected_dcd_frame_count(*, nstep: int, nsavc: int) -> int:
     """Minimum frames CHARMM should write (step 0 plus every ``nsavc`` steps)."""
     n = max(1, int(nstep))
@@ -221,6 +239,11 @@ def assert_stage_dynamics_completed(
     readable_frames = (
         count_readable_dcd_frames(dcd_path) if dcd_path is not None else 0
     )
+    if dcd_path is not None and header_frames == 0 and readable_frames == 0:
+        chunk_header, chunk_readable = count_overlap_chunk_dcd_frames(dcd_path)
+        if chunk_header or chunk_readable:
+            header_frames = chunk_header
+            readable_frames = chunk_readable
     n_frames = min(header_frames, readable_frames) if header_frames else readable_frames
 
     problems: list[str] = []
@@ -235,8 +258,14 @@ def assert_stage_dynamics_completed(
             f"{readable_frames} are readable (truncated or corrupt file)"
         )
     if dcd_path is not None and n_frames < min_frames:
+        chunk_paths = overlap_chunk_dcd_paths(dcd_path)
+        label = (
+            f"{len(chunk_paths)} overlap chunk DCD(s) for {dcd_path.name}"
+            if chunk_paths
+            else f"DCD {dcd_path.name}"
+        )
         problems.append(
-            f"DCD {dcd_path.name} has {n_frames} readable frame(s), "
+            f"{label} has {n_frames} readable frame(s), "
             f"expected >= {min_frames} ({expected_frames} at nsavc={nsavc})"
         )
 
