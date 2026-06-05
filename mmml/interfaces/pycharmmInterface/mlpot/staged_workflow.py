@@ -704,13 +704,21 @@ def _validate_dyn_stage_completion(
 
 
 def _trajectory_outputs(path: Path | None) -> list[Path]:
-    """Existing non-empty DCD output for a stage."""
+    """Existing non-empty DCD output for a stage (including overlap chunk files)."""
     if path is None:
         return []
     stage_path = Path(path)
+    outputs: list[Path] = []
     if stage_path.is_file() and stage_path.stat().st_size > 0:
-        return [stage_path]
-    return []
+        outputs.append(stage_path)
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        overlap_chunk_dcd_paths,
+    )
+
+    for chunk_path in overlap_chunk_dcd_paths(stage_path):
+        if chunk_path.is_file() and chunk_path.stat().st_size > 0:
+            outputs.append(chunk_path)
+    return outputs
 
 
 def _seed_restart_for_memory_handoff(
