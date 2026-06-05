@@ -205,8 +205,11 @@ def disable_charmm_domdec() -> None:
     global _domdec_vacuum_disabled
     if _domdec_vacuum_disabled:
         return
+    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+
     try:
-        pycharmm.lingo.charmm_script("domdec off")
+        with charmm_relaxed_bomlev():
+            pycharmm.lingo.charmm_script("domdec off")
     except Exception:
         pass
     _domdec_vacuum_disabled = True
