@@ -21,6 +21,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     add_test_first_args,
 )
 from mmml.interfaces.pycharmmInterface.cutoffs import add_handoff_cutoff_args
+from mmml.interfaces.pycharmmInterface.ml_dtypes import add_ml_compute_dtype_args
 from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
     add_dynamics_overlap_args,
 )
@@ -206,6 +207,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "Use with CUDA_VISIBLE_DEVICES."
         ),
     )
+    add_ml_compute_dtype_args(parser)
     parser.add_argument(
         "--ml-max-active-dimers",
         type=int,

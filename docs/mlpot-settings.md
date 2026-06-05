@@ -74,3 +74,21 @@ mmml md-system ... --n-heat-segments 4 --ps-heat 20 \
   --heat-firstt 0 --heat-finalt 240
 # cutoffs default to --mm-switch-on 8 --mm-switch-width 5 --ml-switch-width 1.5
 ```
+
+## ML compute dtype (float32 vs float64)
+
+PhysNet checkpoints are stored in **float32**. The hybrid calculator evaluates ML/MM interior math in a single JAX dtype (default **float32**). CHARMM I/O and returned total energies/forces stay **float64**.
+
+Precedence: `--ml-compute-dtype` → `MMML_ML_DTYPE` → `JAX_ENABLE_X64=1` → float32.
+
+To run ML interior in float64 (experimental; model not re-validated in f64):
+
+```bash
+export JAX_ENABLE_X64=1
+mmml md-system ... --ml-compute-dtype float64
+# or: export MMML_ML_DTYPE=float64  (with JAX_ENABLE_X64=1)
+```
+
+`JAX_ENABLE_X64` must be set **before** Python starts (e.g. in the shell or `scripts/mmml-charmm-mpirun.sh`). f32 checkpoints are promoted to f64 on load when f64 is requested.
+
+If you saw smoother heating with “XLA” enabled, that was likely **`JAX_ENABLE_X64=1`**, not `XLA_FLAGS` compiler options alone — explicit `dtype=jnp.float32` in the ML path previously blocked x64 until this centralization.

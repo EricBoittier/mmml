@@ -176,6 +176,13 @@ def test_build_pycharmm_command_includes_ml_gpu_count_when_set():
     assert cmd[idx + 1] == "2"
 
 
+def test_build_pycharmm_command_forwards_ml_compute_dtype_when_set():
+    cmd = build_pycharmm_command(_pycharmm_args(ml_compute_dtype="float64"))
+    assert "--ml-compute-dtype" in cmd
+    idx = cmd.index("--ml-compute-dtype")
+    assert cmd[idx + 1] == "float64"
+
+
 def test_build_pycharmm_command_forwards_packmol_cache_and_run_state_flags():
     cmd = build_pycharmm_command(
         _pycharmm_args(

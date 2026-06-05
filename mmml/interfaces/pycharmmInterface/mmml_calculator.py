@@ -40,6 +40,14 @@ from mmml.interfaces.pycharmmInterface.calculator_utils import (
     _sharpstep,
 )
 from mmml.interfaces.pycharmmInterface.ml_batching import prepare_batches_md, prepare_batch_structure
+from mmml.interfaces.pycharmmInterface.ml_dtypes import (
+    cast_pytree_to_ml_dtype,
+    json_tree_to_jax_params,
+    ml_numpy_dtype,
+    ml_scalar,
+    ml_zeros,
+    resolve_ml_compute_dtype,
+)
 from mmml.interfaces.pycharmmInterface.mm_energy_forces import build_mm_energy_forces_fn
 from mmml.utils.jax_gpu_warmup import (
     apply_xla_cuda_timer_log_filter,
@@ -337,6 +345,7 @@ def setup_calculator(
     jax_md_overflow_fallback_to_cell_list: bool = True,
     jax_md_update_interval: int = 1,
     jax_md_skin_distance: float = 0.0,
+    ml_compute_dtype: str | None = None,
 ):
     """Create hybrid ML/MM calculator with outputs in eV/eV-A.
 
@@ -384,9 +393,15 @@ def setup_calculator(
             Intermediate calls reuse cached pairs.
         jax_md_skin_distance: Additional displacement threshold (Å). When >0, cached pairs are
             reused while max displacement since last update stays below this value.
+        ml_compute_dtype: ``float32`` (default) or ``float64`` for JAX ML/MM interior.
+            float64 also requires ``JAX_ENABLE_X64=1`` before Python starts. Overridden by
+            ``MMML_ML_DTYPE`` when unset.
     """
     if model_restart_path is None:
         raise ValueError("model_restart_path must be provided")
+
+    ml_jnp_dtype = resolve_ml_compute_dtype(ml_compute_dtype)
+    ml_np_dtype = ml_numpy_dtype(ml_jnp_dtype)
 
     if ml_switch_width is not None:
         ml_switch_width = ml_switch_width
@@ -428,7 +443,7 @@ def setup_calculator(
     if lambda_monomer is None:
         lambda_monomer = jnp.ones(n_monomers)
     else:
-        lambda_monomer = jnp.asarray(lambda_monomer, dtype=jnp.float32)
+        lambda_monomer = jnp.asarray(lambda_monomer, dtype=ml_jnp_dtype)
         if lambda_monomer.shape != (n_monomers,):
             raise ValueError(
                 f"lambda_monomer must have shape ({n_monomers},), "
@@ -449,6 +464,7 @@ def setup_calculator(
         handoff_start = mm_switch_on - ml_switch_width
         mm_r_min = handoff_start * 0.9 if handoff_start > 0 else None
 
+    print(f"[setup_calculator] ml_compute_dtype={ml_jnp_dtype} (CHARMM I/O remains float64)")
     print(
         "[setup_calculator] Handoff parameters -> ml_switch_width=%.4f Å, mm_switch_on=%.4f Å, "
         "mm_switch_width=%.4f Å, complementary_handoff=%s"
@@ -528,7 +544,13 @@ def setup_calculator(
         # Load using JSON loader
         try:
             from mmml.utils.model_checkpoint import load_model_checkpoint
-            checkpoint = load_model_checkpoint(restart, use_orbax=False, load_params=True, load_config=True)
+            checkpoint = load_model_checkpoint(
+                restart,
+                use_orbax=False,
+                load_params=True,
+                load_config=True,
+                dtype=ml_np_dtype if ml_jnp_dtype == jnp.float64 else None,
+            )
             params = checkpoint.get('params')
             config = checkpoint.get('config', {})
             
@@ -588,23 +610,7 @@ def setup_calculator(
             MODEL = model_cls(**model_config)
             MODEL.natoms = max_atoms
             
-            # Convert JSON params back to JAX arrays
-            def json_to_jax_params(obj):
-                """Recursively convert JSON lists to JAX arrays."""
-                if isinstance(obj, dict):
-                    return {k: json_to_jax_params(v) for k, v in obj.items()}
-                elif isinstance(obj, list):
-                    # Check if it's a nested list (array)
-                    if len(obj) > 0 and isinstance(obj[0], (list, int, float)):
-                        return jnp.array(obj)
-                    else:
-                        return [json_to_jax_params(item) for item in obj]
-                elif isinstance(obj, (int, float)):
-                    return obj
-                else:
-                    return obj
-            
-            params = json_to_jax_params(params)
+            params = json_tree_to_jax_params(params, dtype=ml_jnp_dtype)
             
             # Flax models expect params to be wrapped in {'params': {...}}
             # Check if params is already in the correct format
@@ -640,6 +646,7 @@ def setup_calculator(
             ) from e
         # Setup monomer model using orbax
         params, MODEL = get_params_model(restart, natoms=max_atoms)
+        params = cast_pytree_to_ml_dtype(params, dtype=ml_jnp_dtype)
     MODEL.natoms = max_atoms
     print(f"[setup_calculator] Model loaded: {MODEL}")
     if is_json_checkpoint:
@@ -806,6 +813,7 @@ def setup_calculator(
             jax_md_update_interval=jax_md_update_interval,
             jax_md_skin_distance=jax_md_skin_distance,
             debug=debug,
+            ml_compute_dtype=ml_compute_dtype,
         )
         if isinstance(result_jaxmd, tuple):
             mm_fn_jaxmd, update_fn = result_jaxmd
@@ -822,21 +830,22 @@ def setup_calculator(
                 complementary_handoff=complementary_handoff,
                 ep_scale=ep_scale,
                 sig_scale=sig_scale,
-            at_codes_override=at_codes_override,
-            pbc_cell=cell_for_build,
-            max_pairs=max_pairs,
-            cell_list_safety_factor=cell_list_safety_factor,
-            cell_list_density_estimate=cell_list_density_estimate,
-            use_smooth_mic=use_smooth_mic,
-            use_jax_md_neighbor_list=False,
-            mm_r_min=mm_r_min,
-            jax_md_capacity_multiplier=jax_md_capacity_multiplier,
-            jax_md_capacity_growth_factor=jax_md_capacity_growth_factor,
-            jax_md_max_overflow_retries=jax_md_max_overflow_retries,
-            jax_md_overflow_fallback_to_cell_list=jax_md_overflow_fallback_to_cell_list,
-            jax_md_update_interval=jax_md_update_interval,
-            jax_md_skin_distance=jax_md_skin_distance,
-            debug=debug,
+                at_codes_override=at_codes_override,
+                pbc_cell=cell_for_build,
+                max_pairs=max_pairs,
+                cell_list_safety_factor=cell_list_safety_factor,
+                cell_list_density_estimate=cell_list_density_estimate,
+                use_smooth_mic=use_smooth_mic,
+                use_jax_md_neighbor_list=False,
+                mm_r_min=mm_r_min,
+                jax_md_capacity_multiplier=jax_md_capacity_multiplier,
+                jax_md_capacity_growth_factor=jax_md_capacity_growth_factor,
+                jax_md_max_overflow_retries=jax_md_max_overflow_retries,
+                jax_md_overflow_fallback_to_cell_list=jax_md_overflow_fallback_to_cell_list,
+                jax_md_update_interval=jax_md_update_interval,
+                jax_md_skin_distance=jax_md_skin_distance,
+                debug=debug,
+                ml_compute_dtype=ml_compute_dtype,
             )
             return (mm_fn_jaxmd, mm_fn_cell), update_fn
         return result_jaxmd, None
@@ -864,7 +873,7 @@ def setup_calculator(
         warmup_hybrid_spherical_cutoff(
             spherical_cutoff_calculator,
             atomic_numbers=jnp.asarray(atomic_numbers_concrete, dtype=jnp.int32),
-            positions=jnp.asarray(positions_concrete, dtype=jnp.float32),
+            positions=jnp.asarray(positions_concrete, dtype=ml_jnp_dtype),
             n_monomers=n_monomers,
             cutoff_params=cutoff_params,
             doML=doML,
@@ -1102,9 +1111,9 @@ def setup_calculator(
 
         # Flat bottom: system COM or sum over per-monomer COMs (same R, k).
         hybrid_energy = final_energy
-        flat_E = jnp.array(0.0, dtype=jnp.float32)
-        com = jnp.zeros(3, dtype=jnp.float32)
-        com_dist = jnp.array(0.0, dtype=jnp.float32)
+        flat_E = jnp.array(0.0, dtype=ml_jnp_dtype)
+        com = jnp.zeros(3, dtype=ml_jnp_dtype)
+        com_dist = jnp.array(0.0, dtype=ml_jnp_dtype)
         if flat_bottom_radius is not None and flat_bottom_radius > 0:
             mic_fn = mic_displacement_smooth if use_smooth_mic else mic_displacement
             flat_E, flat_F, com, com_dist = apply_flat_bottom(
@@ -1259,7 +1268,12 @@ def setup_calculator(
                 Z_full = atomic_numbers.reshape(_effective_batch_size, max_atoms)
                 N_full = batches["N"]
                 pad_to = _n_chunks * _chunk_size
-                R_pad = jnp.concatenate([R_full, jnp.zeros((pad_to - _effective_batch_size, max_atoms, 3))])
+                R_pad = jnp.concatenate(
+                    [
+                        R_full,
+                        ml_zeros((pad_to - _effective_batch_size, max_atoms, 3), dtype=ml_jnp_dtype),
+                    ]
+                )
                 Z_pad = jnp.concatenate([Z_full, jnp.zeros((pad_to - _effective_batch_size, max_atoms), dtype=jnp.int32)])
                 N_pad = jnp.concatenate([N_full, jnp.ones(pad_to - _effective_batch_size, dtype=jnp.int32)])
                 R_chunks = R_pad.reshape(_n_chunks, _chunk_size, max_atoms, 3)
@@ -1272,12 +1286,12 @@ def setup_calculator(
                         chunk_data, batch_size=_chunk_size, num_atoms=max_atoms
                     )[0]
                     if is_spooky_model:
-                        am = chunk_batches["atom_mask"].astype(jnp.float32)
+                        am = chunk_batches["atom_mask"].astype(ml_jnp_dtype)
                         out = MODEL.apply(
                             params,
                             atomic_numbers=chunk_batches["Z"],
                             positions=chunk_batches["R"],
-                            charges=jnp.zeros((am.shape[0], 1), dtype=jnp.float32),
+                            charges=jnp.zeros((am.shape[0], 1), dtype=ml_jnp_dtype),
                             spins=am.reshape(-1, 1),
                             dst_idx=chunk_batches["dst_idx"],
                             src_idx=chunk_batches["src_idx"],
@@ -1316,8 +1330,8 @@ def setup_calculator(
                 return {"energy": e_out, "forces": f_out}
 
             if is_spooky_model:
-                atom_mask = batches["atom_mask"].astype(jnp.float32)
-                q_atoms = jnp.zeros((atom_mask.shape[0], 1), dtype=jnp.float32)
+                atom_mask = batches["atom_mask"].astype(ml_jnp_dtype)
+                q_atoms = jnp.zeros((atom_mask.shape[0], 1), dtype=ml_jnp_dtype)
                 s_atoms = atom_mask.reshape(-1, 1)  # neutral singlet: multiplicity 1 on real atoms
                 return MODEL.apply(
                     params,
@@ -1662,7 +1676,7 @@ def setup_calculator(
                 in production runs, prefer setting lambda once before the MD loop.
                 """
                 nonlocal lambda_monomer
-                new_arr = jnp.asarray(new_lambda, dtype=jnp.float32)
+                new_arr = jnp.asarray(new_lambda, dtype=ml_jnp_dtype)
                 if new_arr.shape != (n_monomers,):
                     raise ValueError(
                         f"lambda_monomer must have shape ({n_monomers},), got {new_arr.shape}"
@@ -2102,7 +2116,7 @@ def setup_calculator(
                 """Ensure MM fn is built and return update_mm_pairs, or None for cell-list path."""
                 pos_np = np.asarray(positions)
                 _ensure_mm_fn(pos_np, cutoff_params_arg)
-                box_jax = jnp.asarray(box, dtype=jnp.float32) if box is not None else None
+                box_jax = jnp.asarray(box, dtype=ml_jnp_dtype) if box is not None else None
                 _maybe_warmup_hybrid_jit(
                     pos_np,
                     cutoff_params_arg,
