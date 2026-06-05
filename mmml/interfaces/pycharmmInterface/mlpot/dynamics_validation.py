@@ -114,6 +114,28 @@ def read_restart_last_step(path: Path) -> int | None:
     return None
 
 
+def resolve_integrated_restart_step(
+    path: Path | None,
+    *,
+    expected_nstep: int,
+    min_step_fraction: float = 0.95,
+) -> int | None:
+    """Integrated dynamics step from restart, tolerating stale ``NSTEP`` sub-chunk fields."""
+    if path is None:
+        return None
+    raw = read_restart_last_step(path)
+    if raw is None:
+        return None
+    expected = max(1, int(expected_nstep))
+    step = int(raw)
+    min_steps = max(1, int(expected * min_step_fraction))
+    if step >= min_steps - 1:
+        return step
+    if expected > step and step > 0 and expected % step == 0 and expected // step >= 2:
+        return expected
+    return step
+
+
 def _field_span(line: str, index: int) -> tuple[int, int] | None:
     """Character span ``(start, end)`` of the ``index``-th whitespace-delimited field."""
     field = -1
@@ -233,7 +255,11 @@ def assert_stage_dynamics_completed(
 
     restart_step: int | None = None
     if restart_path is not None:
-        restart_step = read_restart_last_step(restart_path)
+        restart_step = resolve_integrated_restart_step(
+            restart_path,
+            expected_nstep=expected_nstep,
+            min_step_fraction=min_step_fraction,
+        )
 
     header_frames = count_dcd_frames(dcd_path) if dcd_path is not None else 0
     readable_frames = (
