@@ -448,6 +448,51 @@ def test_overlap_checks_run_after_each_successful_chunk(tmp_path):
     assert post_chunk_steps == [500, 1000, 1500, 2000]
 
 
+def test_overlap_checks_run_when_restart_reports_segment_nstep_only(tmp_path):
+    """JHSTRT=0 restarts report NSTEP=500 each chunk; checks must still run."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+
+    cfg = DynamicsOverlapConfig(
+        action="error",
+        min_distance_A=0.5,
+        check_interval=500,
+        n_monomers=2,
+        use_pbc=False,
+    )
+    overlap_calls: list[int] = []
+
+    def fake_chunk(kw, _io, *, extra_iokw=None, **kwargs):
+        if _io is not None and _io.restart_write is not None:
+            Path(_io.restart_write).write_text("REST 500 1\n", encoding="utf-8")
+        return mock.Mock()
+
+    def track_overlap(_cfg, *, context, step, mlpot_ctx=None):
+        overlap_calls.append(int(step))
+        return 5.0
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        side_effect=fake_chunk,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
+        side_effect=track_overlap,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
+        return_value=500,
+    ):
+        run_dynamics_with_io(
+            {"nstep": 2000},
+            CharmmTrajectoryFiles(restart_write=tmp_path / "heat.res"),
+            overlap=cfg,
+            overlap_context="heat segment 1/8",
+        )
+
+    post_chunk_steps = [s for s in overlap_calls if s > 0]
+    assert post_chunk_steps == [500, 1000, 1500, 2000]
+
+
 def test_overlap_skips_check_when_chunk_aborts_early(tmp_path, capsys):
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
 
