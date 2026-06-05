@@ -1,0 +1,77 @@
+# DCM:3 PyCHARMM MLpot NVE sweep: cutoff presets × initial COM geometries.
+# Goal: rank ML/MM switch widths by NVE energy smoothness (low drift / low step noise).
+#
+# Prerequisites: export MMML_CKPT before snakemake (see README).
+
+composition: DCM:3
+checkpoint: "${MMML_CKPT}"
+output_root: results
+mpirun_wrapper: ../../scripts/mmml-charmm-mpirun.sh
+
+# Short NVE leg for screening; increase once a preset looks stable.
+ps_nve: 1.0
+dt_fs: 0.25
+temperature: 300.0
+nve_boltzmann_temp: 0.2
+seed: 123
+spacing: 5.0
+packmol_reference_r: 18.0
+packmol_reference_n: 60
+packmol_tolerance: 1.2
+
+# DYNA> / DCD every integration step (required for energy-drift analysis)
+dcd_nsavc: 1
+dyn_nprint: 1
+nprint: 1
+dyn_inbfrq: -1
+pre_nve_charmm_update: true
+
+mini_nstep: 500
+bonded_mm_mini: true
+bonded_mm_mini_after: mini
+bonded_mm_mini_steps: 100
+charmm_sd_steps: 50
+charmm_abnr_steps: 100
+dynamics_overlap_action: rescue
+dynamics_overlap_min_distance: 0.4
+dynamics_overlap_check_interval: 1
+no_echeck: true
+ml_gpu_count: 1
+
+# Presets from docs/mlpot-settings.md
+cutoff_presets:
+  code_default:
+    mm_switch_on: 5.5
+    mm_switch_width: 1.5
+    ml_switch_width: 0.1
+  dcm9_stability:
+    mm_switch_on: 7.0
+    mm_switch_width: 5.0
+    ml_switch_width: 0.1
+  wide_ml_taper:
+    mm_switch_on: 7.0
+    mm_switch_width: 5.0
+    ml_switch_width: 1.0
+  extended_handoff:
+    mm_switch_on: 8.0
+    mm_switch_width: 3.0
+    ml_switch_width: 1.5
+
+# Rigid trimer COM placement (monomer 0 fixed; 1 along +x; 2 at angle from +x)
+geometry_variants:
+  close:
+    d01: 4.0
+    d02: 4.5
+    angle_02_deg: 60.0
+  mid:
+    d01: 6.0
+    d02: 7.0
+    angle_02_deg: 60.0
+  far:
+    d01: 8.0
+    d02: 9.0
+    angle_02_deg: 60.0
+  asymmetric:
+    d01: 5.0
+    d02: 9.0
+    angle_02_deg: 90.0
