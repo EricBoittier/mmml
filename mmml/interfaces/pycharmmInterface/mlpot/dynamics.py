@@ -674,6 +674,24 @@ def _strip_crystal_dyn_keywords(kw: dict[str, Any]) -> None:
     kw.pop("ixtfrq", None)
 
 
+# Image/HB/extended list freqs disabled for loose-PBC (cluster in large box, no MIC).
+_LOOSE_PBC_DISABLED_FREQ_KEYS = ("ixtfrq", "imgfrq", "ihbfrq", "ilbfrq")
+
+
+def apply_loose_pbc_dyn_freq_kwargs(kw: dict[str, Any], *, nstep: int) -> None:
+    """Set crystal/image list rebuild freqs above ``nstep`` so they never fire.
+
+    CHARMM skips updates when the frequency exceeds the integration length.
+    Used for loose PBC (``--box-size`` without ``--mlpot-pbc``): crystal stays
+    active for Hoover CPT, but periodic image lists are not needed physically.
+    """
+    n = max(1, int(nstep))
+    disabled = n + 1
+    for key in _LOOSE_PBC_DISABLED_FREQ_KEYS:
+        if key in kw:
+            kw[key] = disabled
+
+
 def _base_dyn_kwargs(
     *,
     timestep: float,
@@ -1853,6 +1871,8 @@ _OVERLAP_CHUNK_FREQ_KEYS = (
 def _harmonize_overlap_chunk_frequencies(
     chunk_kw: dict[str, Any],
     chunk_nstep: int,
+    *,
+    loose_pbc: bool = False,
 ) -> None:
     """Align list/image/HB update freqs with this chunk's ``nstep`` (avoids FINCYC retune)."""
     n = max(1, int(chunk_nstep))
@@ -1860,6 +1880,8 @@ def _harmonize_overlap_chunk_frequencies(
         if key not in chunk_kw:
             continue
         chunk_kw[key] = _harmonize_dynamics_frequency(int(chunk_kw[key]), n)
+    if loose_pbc:
+        apply_loose_pbc_dyn_freq_kwargs(chunk_kw, nstep=n)
 
 
 def _mlpot_ctx_cubic_box_side_A(mlpot_ctx: Optional["MlpotContext"]) -> float | None:
@@ -2148,6 +2170,7 @@ def run_dynamics_with_io(
     overlap_context: str = "dynamics",
     mlpot_ctx: Optional["MlpotContext"] = None,
     rng_base: int | None = None,
+    loose_pbc: bool = False,
 ) -> Any:
     """Run dynamics and open/close CharmmFile units from ``io``.
 
@@ -2165,6 +2188,8 @@ def run_dynamics_with_io(
     kw = dict(dynamics_kwargs)
     _ensure_nsavc_below_nstep(kw)
     total_nstep = int(kw.get("nstep", 0))
+    if loose_pbc and total_nstep > 0:
+        apply_loose_pbc_dyn_freq_kwargs(kw, nstep=total_nstep)
     if (
         overlap is None
         or not isinstance(overlap, DynamicsOverlapConfig)
@@ -2394,7 +2419,11 @@ def run_dynamics_with_io(
             if chunk_io is None or chunk_io.restart_write is None:
                 chunk_kw.pop("iunwri", None)
 
-            _harmonize_overlap_chunk_frequencies(chunk_kw, chunk_nstep)
+            _harmonize_overlap_chunk_frequencies(
+                chunk_kw,
+                chunk_nstep,
+                loose_pbc=loose_pbc,
+            )
             if has_restart_read:
                 _prepare_overlap_chunk_after_restart(mlpot_ctx)
 

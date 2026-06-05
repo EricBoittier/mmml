@@ -1574,6 +1574,51 @@ def test_harmonize_dynamics_frequency_for_remainder_chunk():
     assert kw3["nsavc"] == 40
 
 
+def test_apply_loose_pbc_dyn_freq_kwargs_above_nstep():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        apply_loose_pbc_dyn_freq_kwargs,
+    )
+
+    kw = {
+        "nstep": 1250,
+        "ixtfrq": 1000,
+        "imgfrq": 50,
+        "ihbfrq": 50,
+        "ilbfrq": 50,
+        "inbfrq": -1,
+    }
+    apply_loose_pbc_dyn_freq_kwargs(kw, nstep=1250)
+    assert kw["ixtfrq"] == 1251
+    assert kw["imgfrq"] == 1251
+    assert kw["ihbfrq"] == 1251
+    assert kw["ilbfrq"] == 1251
+    assert kw["inbfrq"] == -1
+
+
+def test_harmonize_overlap_chunk_loose_pbc_disables_image_freqs():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _harmonize_overlap_chunk_frequencies,
+    )
+
+    kw = {
+        "nstep": 40,
+        "ihbfrq": 50,
+        "imgfrq": 50,
+        "ixtfrq": 1000,
+        "ilbfrq": 50,
+        "isvfrq": 500,
+        "nsavc": 10,
+        "inbfrq": -1,
+    }
+    _harmonize_overlap_chunk_frequencies(kw, 40, loose_pbc=True)
+    assert kw["ihbfrq"] == 41
+    assert kw["imgfrq"] == 41
+    assert kw["ixtfrq"] == 41
+    assert kw["ilbfrq"] == 41
+    assert kw["isvfrq"] == 40
+    assert kw["inbfrq"] == -1
+
+
 def test_sync_dynamics_io_units_keeps_explicit_iunrea_minus_one():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _sync_dynamics_io_units
 

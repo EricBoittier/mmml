@@ -1552,6 +1552,15 @@ def resolve_mlpot_use_pbc(args: argparse.Namespace) -> bool:
     return setup.startswith("pbc_")
 
 
+def resolve_loose_pbc(charmm_pbc: bool, mlpot_pbc: bool) -> bool:
+    """CHARMM crystal on for CPT/Hoover, but ML uses open boundary (no MIC).
+
+    Typical: ``--box-size`` without ``--mlpot-pbc``. Image/extended list rebuilds
+    are unnecessary for a cluster restrained near the box center.
+    """
+    return bool(charmm_pbc and not mlpot_pbc)
+
+
 def resolve_use_pbc(args: argparse.Namespace) -> bool:
     """Backward-compatible alias for :func:`resolve_charmm_use_pbc`."""
     return resolve_charmm_use_pbc(args)

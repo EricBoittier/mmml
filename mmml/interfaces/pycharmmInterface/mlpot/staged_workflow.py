@@ -35,6 +35,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     resolve_show_energy,
     resolve_test_first_config,
     resolve_charmm_use_pbc,
+    resolve_loose_pbc,
     resolve_mlpot_use_pbc,
     resolve_use_pbc,
     setup_cons_fix_for_resids,
@@ -846,6 +847,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
 
     charmm_pbc = resolve_charmm_use_pbc(args)
     mlpot_pbc = resolve_mlpot_use_pbc(args)
+    loose_pbc = resolve_loose_pbc(charmm_pbc, mlpot_pbc)
     box_side = resolve_pbc_box_side(args, r) if charmm_pbc else None
     if charmm_pbc and not args.quiet:
         if charmm_pbc and not mlpot_pbc:
@@ -1349,6 +1351,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         ),
                         mlpot_ctx=ctx,
                         rng_base=getattr(args, "seed", None),
+                        loose_pbc=loose_pbc,
                     )
                     _validate_dyn_stage_completion(
                         args,
@@ -1475,6 +1478,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         overlap_context=f"equi segment {seg_i + 1}/{n_equi_segments}",
                         mlpot_ctx=ctx,
                         rng_base=getattr(args, "seed", None),
+                        loose_pbc=loose_pbc,
                     )
                     _validate_dyn_stage_completion(
                         args,
@@ -1586,6 +1590,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         overlap_context=f"prod segment {seg_i + 1}/{n_prod_segments}",
                         mlpot_ctx=ctx,
                         rng_base=getattr(args, "seed", None),
+                        loose_pbc=loose_pbc,
                     )
                     _validate_dyn_stage_completion(
                         args,
@@ -1817,6 +1822,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 overlap_context=stage.upper(),
                 mlpot_ctx=ctx,
                 rng_base=getattr(args, "seed", None),
+                loose_pbc=loose_pbc,
             )
             _validate_dyn_stage_completion(
                 args,
