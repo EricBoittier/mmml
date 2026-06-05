@@ -128,8 +128,10 @@ def main() -> int:
 
     if args.npz is not None:
         if rows:
-            arr = {k: np.array([r[k] for r in rows], dtype=np.float64) for k in rows[0]}
-            np.savez_compressed(args.npz, **arr, **{f"summary_{k}": np.array(v) for k, v in summary.items() if isinstance(v, (int, float))})
+            series = {
+                k: np.array([r[k] for r in rows], dtype=np.float64) for k in rows[0]
+            }
+            np.savez_compressed(args.npz, **series)
         else:
             np.savez_compressed(args.npz, n_frames=np.array(0))
 

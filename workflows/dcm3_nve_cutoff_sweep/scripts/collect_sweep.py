@@ -77,7 +77,7 @@ def _row_for_job(cfg: dict[str, Any], preset_id: str, geom_id: str) -> dict[str,
         "notes": metrics.get("notes", ""),
     }
     for key in _CSV_FIELDS:
-        if key in metrics and key not in row:
+        if key in metrics:
             row[key] = metrics[key]
         row.setdefault(key, "")
     return row
