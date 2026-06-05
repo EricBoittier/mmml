@@ -637,7 +637,9 @@ def test_overlap_post_rescue_single_chunk_patches_without_extra_dyna(tmp_path, c
         return_value=True,
     ) as patch_step, mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_post_rescue_overlap_handoff",
-    ) as post_rescue:
+    ) as post_rescue, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_segment_restart_after_overlap_rescue",
+    ) as refresh_segment:
         run_dynamics_with_io(
             {"nstep": 2500},
             CharmmTrajectoryFiles(restart_write=tmp_path / "heat.res"),
@@ -647,8 +649,10 @@ def test_overlap_post_rescue_single_chunk_patches_without_extra_dyna(tmp_path, c
 
     assert len(calls) == 1
     post_rescue.assert_not_called()
+    refresh_segment.assert_called_once()
     patch_step.assert_called()
     out = capsys.readouterr().out
+    assert "post-rescue restart refreshed" in out
     assert "segment complete; no extra dyna" in out
     assert "in-memory handoff" not in out
 
@@ -1755,6 +1759,7 @@ def test_prepare_post_rescue_overlap_handoff_assigns_velocities_in_memory():
 
     chunk_kw = {
         "firstt": 40.4,
+        "tbath": 63.0,
         "timestep": 0.0001,
         "cpt": True,
         "restart": True,
@@ -1769,7 +1774,7 @@ def test_prepare_post_rescue_overlap_handoff_assigns_velocities_in_memory():
         _prepare_post_rescue_overlap_handoff(chunk_kw, mlpot_ctx=ctx)
 
     assign_vel.assert_called_once_with(
-        40.4,
+        63.0,
         timestep_ps=0.0001,
         restart_path=None,
         use_pbc=True,

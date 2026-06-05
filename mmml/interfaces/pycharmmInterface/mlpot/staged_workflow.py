@@ -1179,6 +1179,11 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                             use_memory = True
                             restart = False
                             rread = None
+                        elif seg_i > 0 and prev_restart_is_current_state:
+                            # Continue in-process: avoid READYN stale CPT after overlap rescue.
+                            use_memory = True
+                            restart = False
+                            rread = None
                     if not args.quiet:
                         print(
                             f"\nHEAT segment {seg_i + 1}/{n_heat_segments}: "
@@ -1222,7 +1227,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         nstep=nstep,
                         ihtfrq=resolve_heat_ihtfrq(args, nstep=nstep),
                     )
-                    if use_memory:
+                    if use_memory and (seg_i == 0 or memory_handoff_next):
                         restart_path = _seed_restart_for_memory_handoff(
                             seg_io, kw, stage="heat"
                         )
@@ -1257,11 +1262,11 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     )
                     apply_comp_velocity_policy("heat", kw, args)
                     apply_dyn_inbfrq_from_args(kw, args, charmm_pbc=charmm_pbc)
-                    if seg_i == 0 and (
+                    if (seg_i == 0 or use_memory) and (
                         use_memory or prev_restart_is_current_state
                     ):
                         sync_charmm_lists_after_mini(quiet=bool(args.quiet))
-                    if seg_i == 0:
+                    if use_memory:
                         if (
                             charmm_pbc
                             and box_side is not None
@@ -1275,8 +1280,28 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         _configure_heat_dynamics_start(
                             kw,
                             seg_io,
-                            coords_in_memory=use_memory
-                            or prev_restart_is_current_state,
+                            coords_in_memory=True,
+                            restart_from_file=False,
+                            timestep_ps=timestep_ps,
+                            use_pbc=charmm_pbc,
+                            quiet=bool(args.quiet),
+                            heat_thermostat=heat_thermostat,
+                        )
+                    elif seg_i == 0:
+                        if (
+                            charmm_pbc
+                            and box_side is not None
+                            and heat_thermostat == "hoover"
+                            and kw.get("cpt")
+                        ):
+                            ensure_charmm_crystal_for_cpt(
+                                float(box_side),
+                                quiet=bool(args.quiet),
+                            )
+                        _configure_heat_dynamics_start(
+                            kw,
+                            seg_io,
+                            coords_in_memory=prev_restart_is_current_state,
                             restart_from_file=restart
                             and seg_io.restart_read is not None,
                             timestep_ps=timestep_ps,
