@@ -40,32 +40,29 @@ dynamics_overlap_check_interval: 4000
 no_echeck: true
 ml_gpu_count: 1
 
-# Round-2 presets (after 1 ps NVE sweep). Removed:
-#   code_default (5.5/1.5/0.1) — narrow MM taper; mid-geometry blow-up
-#   wide_ml_taper (7/5/1.0) — wide ML taper; close-geometry blow-up
+# Round-3: ML taper width sensitivity at fixed dcm9 mm_on/mm_w (7 / 5 Å).
+# Round-2 extended_mm5 / handoff_7p5 paused until ML width is settled.
 cutoff_presets:
-  # Production baseline; stable on all four COM geometries (docs/mlpot-settings.md).
+  # Production baseline; ML taper [6.9, 7.0] Å.
   dcm9_stability:
     mm_switch_on: 7.0
     mm_switch_width: 5.0
     ml_switch_width: 0.1
-  # Best close/mid in round 1; keep as reference for extended-handoff family.
+  # Sharper ML→MM handoff: [6.99, 7.0] Å.
+  dcm9_ml01:
+    mm_switch_on: 7.0
+    mm_switch_width: 5.0
+    ml_switch_width: 0.01
+  # Near-step handoff: [6.999, 7.0] Å.
+  dcm9_ml001:
+    mm_switch_on: 7.0
+    mm_switch_width: 5.0
+    ml_switch_width: 0.001
+  # Wide ML taper contrast (round-1 best close/mid, unstable far/asymmetric).
   extended_handoff:
     mm_switch_on: 8.0
     mm_switch_width: 3.0
     ml_switch_width: 1.5
-  # Hypothesis: same long ML taper as extended_handoff but dcm9-like MM outer width
-  # fixes far/asymmetric catastrophes from the narrow 3 Å MM taper.
-  extended_mm5:
-    mm_switch_on: 8.0
-    mm_switch_width: 5.0
-    ml_switch_width: 1.5
-  # Hypothesis: slightly later handoff than dcm9 without extended's wide ML taper;
-  # may improve close runs while staying robust on mid/far spacing.
-  handoff_7p5:
-    mm_switch_on: 7.5
-    mm_switch_width: 5.0
-    ml_switch_width: 0.1
 
 # Rigid trimer COM placement (monomer 0 fixed; 1 along +x; 2 at angle from +x)
 geometry_variants:
