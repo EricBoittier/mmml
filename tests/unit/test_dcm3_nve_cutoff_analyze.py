@@ -57,13 +57,21 @@ def test_summarize_nve_energy_smoothness() -> None:
 
 def test_cutoff_lib_preset_geometry_keys() -> None:
     sys.path.insert(0, str(_REPO / "workflows" / "dcm3_nve_cutoff_sweep" / "scripts"))
-    from cutoff_lib import geometry_ids, load_config, preset_ids, workflow_root
+    from cutoff_lib import (
+        expected_nve_nstep,
+        geometry_ids,
+        load_config,
+        preset_ids,
+        workflow_root,
+    )
 
     cfg = load_config(workflow_root() / "config.yaml")
     assert "code_default" in preset_ids(cfg)
     assert "mid" in geometry_ids(cfg)
     assert len(preset_ids(cfg)) == 4
     assert len(geometry_ids(cfg)) == 4
+    assert expected_nve_nstep(cfg) == 4000
+    assert int(cfg["dynamics_overlap_check_interval"]) >= expected_nve_nstep(cfg)
 
 
 def test_prepare_geometry_shell_uses_mpirun_wrapper_for_script() -> None:
