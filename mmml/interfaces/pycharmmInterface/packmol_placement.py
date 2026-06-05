@@ -164,6 +164,45 @@ def write_monomer_pdb_for_packmol(
     write(pdb_path, mol)
 
 
+def _parse_pdb_atom_records(
+    pdb_path: Path | str,
+) -> tuple[list[str], list[int], np.ndarray]:
+    """Read ATOM/HETATM records from a PDB file (no MDAnalysis)."""
+    names: list[str] = []
+    resids: list[int] = []
+    positions: list[list[float]] = []
+
+    with open(pdb_path, encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            if not line.startswith(("ATOM  ", "HETATM")):
+                continue
+            if len(line) < 54:
+                raise RuntimeError(f"Truncated PDB ATOM record in {pdb_path}")
+            name = line[12:16].strip()
+            try:
+                resid = int(line[22:26].strip())
+            except ValueError as exc:
+                raise RuntimeError(
+                    f"Invalid PDB residue number in {pdb_path}: {line[22:26]!r}"
+                ) from exc
+            try:
+                x = float(line[30:38])
+                y = float(line[38:46])
+                z = float(line[46:54])
+            except ValueError as exc:
+                raise RuntimeError(
+                    f"Invalid PDB coordinates in {pdb_path}: {line[30:54]!r}"
+                ) from exc
+            names.append(name)
+            resids.append(resid)
+            positions.append([x, y, z])
+
+    if not names:
+        raise RuntimeError(f"No ATOM/HETATM records found in {pdb_path}")
+
+    return names, resids, np.asarray(positions, dtype=float)
+
+
 def assign_packmol_pdb_to_psf_order(
     pdb_path: Path | str,
     psf_atom_names: list[str],
@@ -174,8 +213,6 @@ def assign_packmol_pdb_to_psf_order(
     Packmol output atom order does not generally match PSF ``atype`` order.  Match by
     ``(residue_index, atom_name)`` using the same recipe as ``mmml_ase.load_pdb_data``.
     """
-    import MDAnalysis as mda
-
     atypes = [str(x) for x in psf_atom_names]
     n_atoms = len(atypes)
     if n_atoms != int(np.sum(atoms_per_list)):
@@ -187,15 +224,14 @@ def assign_packmol_pdb_to_psf_order(
     for i, n_per in enumerate(atoms_per_list):
         charmm_resids.extend([int(i)] * int(n_per))
 
-    u = mda.Universe(str(pdb_path))
-    pdb_positions = np.asarray(u.atoms.positions, dtype=float)
+    pdb_names, pdb_resids, pdb_positions = _parse_pdb_atom_records(pdb_path)
     if int(pdb_positions.shape[0]) != n_atoms:
         raise RuntimeError(
             f"Packmol PDB atom count ({pdb_positions.shape[0]}) != PSF ({n_atoms})"
         )
 
-    mda_names = [str(s) for s in u.atoms.names]
-    mda_resids = [int(s) for s in u.atoms.resids]
+    mda_names = [str(s) for s in pdb_names]
+    mda_resids = [int(s) for s in pdb_resids]
 
     mda_res_at_dict = {
         (int(a) - 1, b): i for i, (a, b) in enumerate(zip(mda_resids, mda_names))
