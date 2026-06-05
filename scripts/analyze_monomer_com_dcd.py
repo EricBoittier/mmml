@@ -30,6 +30,19 @@ if str(_REPO) not in sys.path:
 import numpy as np
 
 
+def _read_dcd_trajectory(path: Path, *, max_frames: int | None = None):
+    """Load DCD coords without ``import mmml.utils`` (eager JAX in ``__init__``)."""
+    import importlib.util
+
+    mod_path = _REPO / "mmml" / "utils" / "dcd_reader.py"
+    spec = importlib.util.spec_from_file_location("_mmml_dcd_reader", mod_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot load DCD reader from {mod_path}")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.read_dcd_trajectory(path, max_frames=max_frames)
+
+
 def monomer_offsets(n_atoms: int, n_monomers: int, atoms_per_monomer: int) -> np.ndarray:
     expected = int(n_monomers) * int(atoms_per_monomer)
     if int(n_atoms) != expected:
@@ -175,9 +188,7 @@ def main() -> int:
     parser.add_argument("--max-frames", type=int, default=None)
     args = parser.parse_args()
 
-    from mmml.utils.dcd_reader import read_dcd_trajectory
-
-    pos, hdr = read_dcd_trajectory(args.dcd, max_frames=args.max_frames)
+    pos, hdr = _read_dcd_trajectory(args.dcd, max_frames=args.max_frames)
     offsets = monomer_offsets(
         pos.shape[1],
         args.n_monomers,
