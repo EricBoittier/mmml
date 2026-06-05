@@ -41,7 +41,17 @@ def sync_charmm_positions(positions: np.ndarray) -> None:
     xyzw = _positions_xyzw_dataframe(arr)
     coor.set_positions(xyz)
     coor.set_main(xyzw)
-    coor.set_comparison(xyzw)
+    # Never mirror main coords into COMP. Zero comparison coordinates so a lingering
+    # START + iasvel=0 cannot treat positions as velocities (COMP_AND_HEATING.md).
+    comp_zero = pd.DataFrame(
+        {
+            "x": np.zeros(n, dtype=float),
+            "y": np.zeros(n, dtype=float),
+            "z": np.zeros(n, dtype=float),
+            "w": np.zeros(n, dtype=float),
+        }
+    )
+    coor.set_comparison(comp_zero)
 
     check = get_charmm_positions_array()
     if np.allclose(check, 0.0) and not np.allclose(arr, 0.0):

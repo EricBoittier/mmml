@@ -451,10 +451,10 @@ def _configure_heat_dynamics_start(
             use_pbc=use_pbc,
         )
         if hoover_cpt_heat:
-            # Continue in-memory velocities from the Boltzmann draw. Do not use
-            # start=True with iasvel=0 — CHARMM treats COMP as velocities (AKMA),
-            # and sync_charmm_positions stores coordinates in COMP.
-            kw["iasvel"] = 0
+            # Continue in-memory velocities from the Boltzmann draw. Omit START
+            # (start=False) and keep iasvel=1 so a lingering START flag cannot
+            # fall back to COMP coordinates as velocities.
+            kw["iasvel"] = 1
             kw["start"] = False
         else:
             kw["start"] = False
@@ -486,7 +486,7 @@ def _configure_heat_dynamics_start(
         kw["restart"] = False
         kw["new"] = False
         if hoover_cpt_heat:
-            kw["iasvel"] = 0
+            kw["iasvel"] = 1
             kw["start"] = False
         else:
             kw["start"] = False
@@ -532,12 +532,12 @@ def _configure_nve_dynamics_start(
     quiet: bool,
     temp: float,
 ) -> None:
-    """One-shot Boltzmann draw at ``temp``, then microcanonical ``dyna`` (``iasvel=0``).
+    """One-shot Boltzmann draw at ``temp``, then microcanonical ``dyna`` (no START).
 
     After MLpot mini, coordinates are in memory but the saved CRD is not a CHARMM
-    restart (memory handoff).  ``build_nve_dynamics`` may still carry ``iasvel=1``
-    from the cold-start path; overlap chunks must not reassign velocities each
-    restart.  Mirrors the heat-stage ``assign_velocities_at_temperature`` pattern.
+    restart (memory handoff).  Omit START and keep ``iasvel=1`` so CHARMM cannot
+    reuse comparison coordinates as velocities if START lingers from the assign
+    call.  Mirrors the heat-stage ``assign_velocities_at_temperature`` pattern.
     """
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         assign_velocities_at_temperature,
@@ -546,7 +546,7 @@ def _configure_nve_dynamics_start(
     target_t = float(temp)
     for key in ("iasors", "iscale", "iscvel", "ichecw", "firstt", "finalt", "tbath", "tstruct"):
         kw.pop(key, None)
-    kw["iasvel"] = 0
+    kw["iasvel"] = 1
     kw["ihtfrq"] = 0
 
     if coords_in_memory:
@@ -566,7 +566,7 @@ def _configure_nve_dynamics_start(
         if not quiet:
             print(
                 f"NVE: Boltzmann velocities at {target_t:.1f} K "
-                "(in-memory coords after mini); iasvel=0",
+                "(in-memory coords after mini); start omitted, iasvel=1",
                 flush=True,
             )
         return
@@ -586,14 +586,15 @@ def _configure_nve_dynamics_start(
         if not quiet:
             print(
                 f"NVE: Boltzmann velocities at {target_t:.1f} K "
-                f"(coords from {restart_path}); iasvel=0",
+                f"(coords from {restart_path}); start omitted, iasvel=1",
                 flush=True,
             )
         return
 
     if not quiet:
         print(
-            f"NVE: continuing velocities from restart (iasvel=0, T target {target_t:.1f} K)",
+            f"NVE: continuing velocities from restart "
+            f"(start omitted, T target {target_t:.1f} K)",
             flush=True,
         )
 
@@ -1220,7 +1221,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                             heat_thermostat=heat_thermostat,
                         )
                     elif restart:
-                        kw["iasvel"] = 0
+                        kw["iasvel"] = 1
                         kw["iasors"] = 0
                         kw["start"] = False
                         kw["restart"] = True

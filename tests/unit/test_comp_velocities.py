@@ -13,6 +13,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
     apply_selective_force_damp_recipe,
     build_high_force_selection,
     clear_comp_for_production,
+    clear_comparison_coordinates,
     get_comparison_array,
     prepare_comp_for_heat,
     prepare_comp_for_iasvel0,
@@ -216,9 +217,24 @@ def test_prepare_comp_for_heat_targets_hydrogen(mock_prepare):
     )
 
 
+@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.set_comparison_array")
+@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities._import_pycharmm")
+def test_clear_comparison_coordinates(mock_import, mock_set_comp):
+    mod = MagicMock()
+    mod.psf.get_natom.return_value = 3
+    mock_import.return_value = mod
+    clear_comparison_coordinates()
+    mock_set_comp.assert_called_once()
+    out = mock_set_comp.call_args.args[0]
+    assert out.shape == (3, 4)
+    assert np.allclose(out, 0.0)
+
+
 @patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.run_charmm_script")
 @patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.zero_comparison_scalars")
-def test_clear_comp_for_production(mock_zero, mock_script):
+@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.clear_comparison_coordinates")
+def test_clear_comp_for_production(mock_clear_coords, mock_zero, mock_script):
     clear_comp_for_production()
+    mock_clear_coords.assert_called_once()
     mock_zero.assert_called_once_with("all")
     mock_script.assert_called_once_with("scalar wcomp set 0 select all end")

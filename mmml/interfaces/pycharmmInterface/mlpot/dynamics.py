@@ -781,7 +781,8 @@ def apply_hoover_cpt_heat_ramp_overlap_chunk(
     chunk_kw["firstt"] = target
     chunk_kw["finalt"] = float(ramp_spec["finalt"])
     chunk_kw["tbath"] = float(ramp_spec["finalt"])
-    chunk_kw["iasvel"] = 0
+    chunk_kw["iasvel"] = 1
+    chunk_kw["start"] = False
 
 
 def heat_ramp_spec_from_kw(kw: dict[str, Any]) -> dict[str, float | int] | None:
@@ -820,8 +821,9 @@ def apply_heat_ramp_overlap_chunk(
     chunk_kw["finalt"] = float(ramp_spec["finalt"])
     chunk_kw["TEMINC"] = float(ramp_spec["teminc"])
     chunk_kw["ihtfrq"] = int(ramp_spec["ihtfrq"])
-    chunk_kw["iasvel"] = 0
+    chunk_kw["iasvel"] = 1
     chunk_kw["iasors"] = 0
+    chunk_kw["start"] = False
 
 
 _HEAT_FIN_FREQ_KEYS = ("ihtfrq", "iprfrq", "nprint", "isvfrq", "ntrfrq")
@@ -1448,11 +1450,19 @@ def final_npt_segment_restart(data_dir: PathLike, prefix: str, n_segments: int) 
 
 def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     """Instantiate and run ``pycharmm.DynamicsScript``."""
+    from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+        clear_comparison_coordinates,
+    )
     from mmml.interfaces.pycharmmInterface.mlpot.setup import disable_charmm_domdec
 
     import pycharmm
 
     disable_charmm_domdec()
+    # PyCHARMM omits ``start`` from the script when start=False, so CHARMM may keep
+    # START active after a prior Boltzmann assign. With iasvel=0 that reads COMP
+    # coordinates as velocities — zero COMP defensively.
+    if not dynamics_kwargs.get("start") and int(dynamics_kwargs.get("iasvel", 1)) == 0:
+        clear_comparison_coordinates()
     dyn = pycharmm.DynamicsScript(**dynamics_kwargs)
     dyn.run()
     return dyn
@@ -1869,16 +1879,25 @@ def _apply_overlap_chunk_dynamics_kw(
         )
     )
     if not preserve_cold_start:
-        chunk_kw["iasvel"] = 0
+        chunk_kw["iasvel"] = 1
+        chunk_kw["start"] = False
         if chunk_index > 0:
             chunk_kw.pop("firstt", None)
     elif preserve_ihtfrq_heat_ramp:
         # Boltzmann assign already ran (start=False); keep IHTFRQ / TEMINC / FIRSTT ramp.
-        chunk_kw["iasvel"] = 0
+        chunk_kw["iasvel"] = 1
         chunk_kw["iasors"] = 0
         chunk_kw["start"] = False
         # Hoover NVT: keep thermostat keywords; ensure scale-heat ramps stay off.
         if int(chunk_kw.get("ihtfrq", 0)) != 0 and "hoover reft" in chunk_kw:
+            chunk_kw["ihtfrq"] = 0
+    elif preserve_cold_start and (
+        "hoover reft" in chunk_kw or bool(chunk_kw.get("cpt"))
+    ):
+        # Hoover CPT chunk 0 after in-memory Boltzmann assign (see staged_workflow).
+        chunk_kw["iasvel"] = 1
+        chunk_kw["start"] = False
+        if int(chunk_kw.get("ihtfrq", 0)) != 0:
             chunk_kw["ihtfrq"] = 0
     if chunk_index == 0 and not has_restart_read:
         chunk_kw["restart"] = False
@@ -2588,6 +2607,11 @@ def load_minimized_coordinates(crd_path: PathLike) -> None:
         raise FileNotFoundError(f"CRD not found: {path}")
     with charmm_relaxed_bomlev():
         read.coor_card(str(path))
+    from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+        clear_comparison_coordinates,
+    )
+
+    clear_comparison_coordinates()
 
 
 def production_restart_chain(

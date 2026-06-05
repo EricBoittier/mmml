@@ -75,6 +75,16 @@ def zero_comparison_scalars(sele: str = "all") -> None:
         run_charmm_script(f"scalar {comp} set 0 select {sele} end")
 
 
+def clear_comparison_coordinates() -> None:
+    """Zero the comparison **coordinate** set (``coor set comp``), not just scalars."""
+    pycharmm = _import_pycharmm()
+    n_atoms = int(pycharmm.psf.get_natom())
+    if n_atoms <= 0:
+        return
+    zeros = np.zeros((n_atoms, 4), dtype=float)
+    set_comparison_array(zeros)
+
+
 def force_magnitudes_kcalmol_A() -> np.ndarray:
     """Per-atom force magnitude from last ``ENER`` (kcal/mol/Å)."""
     pycharmm = _import_pycharmm()
@@ -212,7 +222,8 @@ def prepare_comp_for_heat(
 
 
 def clear_comp_for_production() -> None:
-    """Zero COMP before equi / NVE / prod (no force-damp recipe)."""
+    """Clear comparison coords + scalars before dynamics (no COMP-velocity path)."""
+    clear_comparison_coordinates()
     zero_comparison_scalars("all")
     run_charmm_script("scalar wcomp set 0 select all end")
 
