@@ -115,6 +115,41 @@ def _stable_pbc_force_gradient_positions() -> np.ndarray:
 	])
 
 
+def _pbc_ml_energy_forces(
+	spherical_fn,
+	Z: np.ndarray,
+	R: np.ndarray,
+	cutoff_params,
+	box,
+	*,
+	n_monomers: int = 2,
+) -> tuple[float, np.ndarray]:
+	"""Return ML monomer-only (energy, forces) via ``jax.value_and_grad``."""
+	import jax
+	import jax.numpy as jnp
+
+	pos = jnp.asarray(R, dtype=jnp.float32)
+	z_j = jnp.asarray(Z, dtype=jnp.int32)
+
+	def energy_scalar(p):
+		out = spherical_fn(
+			atomic_numbers=z_j,
+			positions=p,
+			n_monomers=n_monomers,
+			cutoff_params=cutoff_params,
+			doML=True,
+			doMM=False,
+			doML_dimer=False,
+			box=box,
+		)
+		return out.energy.reshape(-1)[0]
+
+	energy, grad = jax.value_and_grad(energy_scalar)(pos)
+	energy_f = float(jax.device_get(energy))
+	forces = -np.asarray(jax.device_get(grad), dtype=np.float64)
+	return energy_f, forces
+
+
 def test_ev2kcalmol_constant():
 	# Ensure the EV->kcal/mol conversion used by calculators is reasonable
 	from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol
@@ -501,12 +536,12 @@ def test_pbc_force_invariance():
 )
 def test_pbc_force_gradient_numerical():
 	"""
-	Numerical gradient of energy vs positions; compare against atoms.get_forces()
-	to ensure forces match -dE/dR (MIC-only, no coordinate transform).
+	Central-difference check that ML monomer forces match ``-dE/dR`` under PBC.
 
 	Monomer-only (``doML_dimer=False``): the stable 3.5 Å template cannot place
 	non-overlapping dimers inside the default ML taper (COM < mm_switch_on).
-	Uses ``backprop=False`` so ASE forces follow production ModelOutput.forces.
+	Uses the same ``jax.value_and_grad`` reference as ``check_mlpot_forces_fd.py``
+	instead of 60 ASE energy evaluations (slow and sensitive to float32 noise).
 	"""
 	if not _can_import("jax"):
 		pytest.skip("jax not available in this environment")
@@ -544,7 +579,7 @@ def test_pbc_force_gradient_numerical():
 	Z = np.array([6] * 20)
 	cutoff_params = CutoffParameters()
 
-	calc, _, _ = unpack_factory_result(
+	calc, spherical_fn, _ = unpack_factory_result(
 		factory(
 			atomic_numbers=Z,
 			atomic_positions=R,
@@ -553,48 +588,65 @@ def test_pbc_force_gradient_numerical():
 			backprop=False,
 		)
 	)
-
-	atoms = ase.Atoms(Z, R, cell=cell_matrix, pbc=True)
-	atoms.calc = calc
+	box = jnp.asarray(cell_matrix, dtype=jnp.float32)
 
 	try:
-		F_analytical = atoms.get_forces()
+		_, F_grad = _pbc_ml_energy_forces(
+			spherical_fn, Z, R, cutoff_params, box,
+		)
+		model_out = spherical_fn(
+			atomic_numbers=jnp.asarray(Z, dtype=jnp.int32),
+			positions=jnp.asarray(R, dtype=jnp.float32),
+			n_monomers=2,
+			cutoff_params=cutoff_params,
+			doML=True,
+			doMM=False,
+			doML_dimer=False,
+			box=box,
+		)
+		F_model = np.asarray(model_out.forces)
 	except Exception as exc:
 		_skip_if_runtime_incompatible(exc)
-	# Energies are evaluated through the default float32 JAX path; too small a
-	# displacement is dominated by rounding noise in central differences.
-	h = 1e-3
-	F_numerical = np.zeros_like(R)
-	for i in range(len(R)):
-		for j in range(3):
+
+	assert np.allclose(F_model, F_grad, rtol=0.02, atol=0.05), (
+		f"ModelOutput.forces vs jax.grad: max |ΔF| = {np.max(np.abs(F_model - F_grad)):.4e}"
+	)
+
+	# Spot-check central differences on representative atoms (both monomers).
+	fd_atoms = np.array([0, 4, 9, 10, 14, 19], dtype=int)
+	h = 1.0e-4
+	max_abs_err = 0.0
+	worst = None
+	for atom in fd_atoms:
+		for axis in range(3):
 			Rp = R.copy()
-			Rp[i, j] += h
-			atoms.set_positions(Rp)
-			atoms.calc.results.clear()
-			try:
-				Ep = atoms.get_potential_energy()
-			except Exception as exc:
-				_skip_if_runtime_incompatible(exc)
 			Rm = R.copy()
-			Rm[i, j] -= h
-			atoms.set_positions(Rm)
-			atoms.calc.results.clear()
+			Rp[atom, axis] += h
+			Rm[atom, axis] -= h
 			try:
-				Em = atoms.get_potential_energy()
+				Ep, _ = _pbc_ml_energy_forces(spherical_fn, Z, Rp, cutoff_params, box)
+				Em, _ = _pbc_ml_energy_forces(spherical_fn, Z, Rm, cutoff_params, box)
 			except Exception as exc:
 				_skip_if_runtime_incompatible(exc)
-			F_numerical[i, j] = -(Ep - Em) / (2 * h)
+			f_fd = -(Ep - Em) / (2.0 * h)
+			f_ref = float(F_grad[atom, axis])
+			abs_err = abs(f_fd - f_ref)
+			if abs_err > max_abs_err:
+				max_abs_err = abs_err
+				worst = (int(atom), axis, f_ref, f_fd)
+	assert max_abs_err < 0.05, (
+		f"FD vs jax.grad mismatch: max_abs_err={max_abs_err:.4e}, worst={worst}"
+	)
 
-	atoms.set_positions(R)
-
-	rel_err = np.abs(F_analytical - F_numerical)
-	denom = np.abs(F_numerical) + 1e-10
-	rel_err = np.where(denom > 1e-8, rel_err / denom, rel_err)
-	max_rel_err = np.max(rel_err)
-	max_abs_err = np.max(np.abs(F_analytical - F_numerical))
-	# Relaxed tolerance: numerical gradients can differ near switching regions
-	assert max_rel_err < 0.25 or max_abs_err < 0.1, (
-		f"Force gradient mismatch: max_rel_err={max_rel_err:.4e}, max_abs_err={max_abs_err:.4e}"
+	# ASE calculator should expose the same analytical forces (production path).
+	atoms = ase.Atoms(Z, R, cell=cell_matrix, pbc=True)
+	atoms.calc = calc
+	try:
+		F_ase = atoms.get_forces()
+	except Exception as exc:
+		_skip_if_runtime_incompatible(exc)
+	assert np.allclose(F_ase, F_model, rtol=1e-4, atol=1e-3), (
+		f"ASE forces vs ModelOutput: max |ΔF| = {np.max(np.abs(F_ase - F_model)):.4e}"
 	)
 
 
