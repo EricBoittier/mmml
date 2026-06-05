@@ -245,7 +245,7 @@ def augment_overlap_config_for_rescue(
     topology_psf: Path | None,
     artifact_registry: Any = None,
 ) -> DynamicsOverlapConfig:
-    """Attach topology / MLpot handles needed for all-ML intra overlap rescue."""
+    """Attach topology / MLpot handles needed for all-ML overlap rescue."""
     from dataclasses import replace
 
     topo_path: Path | None = None
@@ -498,20 +498,6 @@ def apply_overlap_separation_last_resort(config: DynamicsOverlapConfig) -> float
     return float(best_dist)
 
 
-def _mlpot_covers_all_atoms(mlpot_ctx: "MlpotContext | None") -> bool:
-    if mlpot_ctx is None or getattr(mlpot_ctx, "ml_selection", None) is None:
-        return False
-    try:
-        import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-        import pycharmm
-
-        n_atoms = int(pycharmm.coor.get_natom())
-        n_ml = len(mlpot_ctx.ml_selection.get_atom_indexes())
-        return n_atoms > 0 and n_ml >= n_atoms
-    except Exception:
-        return False
-
-
 def _apply_separation_or_raise(
     config: DynamicsOverlapConfig,
     *,
@@ -557,18 +543,12 @@ def _handle_inter_monomer_rescue(
         f"ABNR={config.rescue.nstep_abnr})...",
         flush=True,
     )
-    if _mlpot_covers_all_atoms(mlpot_ctx):
-        print(
-            "Skipping CHARMM bonded+VDW overlap rescue for all-ML system; "
-            "ML-ML pairs are excluded from CHARMM nonbond lists.",
-            flush=True,
-        )
-        return _apply_separation_or_raise(config, label=label, cause=exc)
-
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import minimize_overlap_rescue
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        run_inter_monomer_overlap_rescue,
+    )
 
     try:
-        minimize_overlap_rescue(mlpot_ctx, config.rescue)
+        run_inter_monomer_overlap_rescue(mlpot_ctx, config)
         _maybe_save_rescue_snapshot(mlpot_ctx, config, label=label)
     except Exception as rescue_exc:
         if config.separate_on_rescue_fail:

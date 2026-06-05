@@ -263,6 +263,141 @@ def _run_all_ml_intra_overlap_rescue(
         )
 
 
+def _run_bonded_vdw_sd_without_mlpot(
+    ctx: MlpotContext,
+    rescue: Any,
+) -> float | None:
+    """Bonded+VDW SD/ABNR on a reloaded pre-MLpot PSF (MLpot not registered)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import (
+        apply_bonded_vdw_recovery_block,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _bonded_recovery_sd_kwargs,
+        _import_pycharmm_modules,
+        _prepare_overlap_rescue_lists,
+    )
+
+    from mmml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet
+
+    bonded_cfg = BondedMmMiniConfig(
+        nstep_sd=int(rescue.nstep_sd),
+        nprint=max(1, int(rescue.nprint)),
+        tolenr=float(rescue.tolenr),
+        tolgrd=float(rescue.tolgrd),
+        verbose=bool(rescue.verbose),
+        show_energy=False,
+    )
+    apply_bonded_vdw_recovery_block()
+    _prepare_overlap_rescue_lists(ctx)
+    pycharmm, cons_fix, *_ = _import_pycharmm_modules()
+    minimize = _import_pycharmm_modules()[3]
+    run_charmm_script_quiet("ENER")
+    assert_bonded_mm_energy_active(context="Inter overlap rescue (reloaded PSF)")
+    grms_before = float(charmm_grms())
+    if rescue.verbose:
+        print(
+            f"Inter overlap rescue start: GRMS={grms_before:.4f} kcal/mol/Å "
+            "(pre-MLpot topology, bonded+VDW, MLpot detached)",
+            flush=True,
+        )
+    try:
+        if int(rescue.nstep_sd) > 0:
+            minimize.run_sd(**_bonded_recovery_sd_kwargs(ctx, bonded_cfg))
+        if int(rescue.nstep_abnr) > 0:
+            minimize.run_abnr(
+                nstep=int(rescue.nstep_abnr),
+                tolenr=float(rescue.tolenr),
+                tolgrd=float(rescue.tolgrd),
+            )
+        grms = float(charmm_grms())
+        if rescue.verbose:
+            print(
+                f"Inter overlap rescue end: GRMS={grms:.4f} kcal/mol/Å",
+                flush=True,
+            )
+        return grms
+    finally:
+        cons_fix.turn_off()
+
+
+def _run_all_ml_inter_overlap_rescue(
+    ctx: MlpotContext,
+    config: Any,
+) -> None:
+    """Reload clean PSF, bonded+VDW SD/ABNR, reattach MLpot, optional ML SD mini."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        MinimizeWithMlpotConfig,
+        minimize_with_mlpot,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.restraints import clear_mmfp_restraints
+
+    topo = getattr(config, "topology_psf", None)
+    rescue = config.rescue
+    if topo is None or not Path(topo).is_file():
+        raise RuntimeError(
+            "all-ML inter-monomer rescue requires pre-MLpot topology PSF "
+            "(cluster_for_vmd_*.psf); reload restores CHARMM VDW between monomers "
+            "while MLpot is detached"
+        )
+
+    noise = float(getattr(config, "position_noise_A", 0.05) or 0.0)
+    seed = getattr(config, "recovery_seed", None)
+    if noise > 0.0:
+        if rescue.verbose:
+            print(
+                f"Inter overlap rescue: applying {noise:.3f} Å coordinate noise "
+                f"(seed={seed})",
+                flush=True,
+            )
+        apply_charmm_position_noise(amplitude_A=noise, seed=seed)
+
+    if rescue.verbose:
+        print(
+            f"Inter overlap rescue: reloading pre-MLpot topology {Path(topo).name}",
+            flush=True,
+        )
+    _reload_pre_mlpot_topology(ctx, topology_psf=topo)
+    try:
+        clear_mmfp_restraints()
+        _run_bonded_vdw_sd_without_mlpot(ctx, rescue)
+    finally:
+        _reregister_mlpot_after_topology_reload(ctx)
+
+    n_mlpot = int(getattr(config, "mlpot_rescue_mini_nstep", 0) or 0)
+    pyCModel = getattr(config, "pyCModel", None)
+    if n_mlpot > 0 and pyCModel is not None:
+        if rescue.verbose:
+            print(
+                f"Inter overlap rescue: MLpot SD mini ({n_mlpot} steps)",
+                flush=True,
+            )
+        minimize_with_mlpot(
+            MinimizeWithMlpotConfig(
+                nstep=n_mlpot,
+                nprint=max(1, int(rescue.nprint)),
+                verbose=rescue.verbose,
+                pyCModel=pyCModel,
+                mlpot_ctx=ctx,
+                save=False,
+                skip_if_crd_exists=False,
+            )
+        )
+
+
+def run_inter_monomer_overlap_rescue(
+    ctx: MlpotContext,
+    config: Any,
+) -> None:
+    """Recover from inter-monomer close contacts during dynamics overlap checks."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import minimize_overlap_rescue
+
+    if _mlpot_covers_all_atoms(ctx):
+        _run_all_ml_inter_overlap_rescue(ctx, config)
+        return
+    minimize_overlap_rescue(ctx, config.rescue)
+
+
 def run_intra_monomer_overlap_rescue(
     ctx: MlpotContext,
     config: Any,

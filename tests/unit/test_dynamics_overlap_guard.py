@@ -265,12 +265,12 @@ def test_check_overlap_rescue_runs_minimize_and_rechecks():
         "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         side_effect=get_pos,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.minimize_overlap_rescue",
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.run_inter_monomer_overlap_rescue",
     ) as rescue:
         dmin = check_dynamics_overlap(
             cfg, context="test", step=50, mlpot_ctx=ctx
         )
-        rescue.assert_called_once_with(ctx, cfg.rescue)
+        rescue.assert_called_once_with(ctx, cfg)
     assert dmin > 1.5
 
 
