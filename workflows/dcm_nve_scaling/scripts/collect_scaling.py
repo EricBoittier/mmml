@@ -46,10 +46,11 @@ def _load_com_npz(path: Path) -> dict[str, Any] | None:
     if not path.is_file():
         return None
     try:
-        data = np.load(path, allow_pickle=False)
+        # analyze_monomer_com_dcd.py stores fail_reasons / dcd_header as object arrays.
+        data = np.load(path, allow_pickle=True)
         return {k: data[k] for k in data.files}
-    except Exception:
-        return None
+    except Exception as exc:
+        return {"_load_error": str(exc)}
 
 
 def _load_audit(path: Path) -> dict[str, Any] | None:
@@ -88,6 +89,9 @@ def _row_for_size(cfg: dict[str, Any], n: int, *, inbfrq: int) -> dict[str, Any]
     audit = _load_audit(paths["audit_json"])
     if com is None:
         row["notes"] = "com_analysis.npz missing"
+        return row
+    if "_load_error" in com:
+        row["notes"] = f"com_analysis.npz unreadable: {com['_load_error']}"[:120]
         return row
 
     max_disp = np.asarray(com.get("max_disp_per_monomer", []), dtype=float)
@@ -148,8 +152,13 @@ def main() -> int:
         "|---|--------|--------|------------------|---------------|-------------------|",
     ]
     for r in rows:
+        note = str(r.get("notes") or "").strip()
+        if r["status"] == "missing" and note:
+            note_cell = f" ({note})"
+        else:
+            note_cell = ""
         lines.append(
-            f"| {r['n_monomers']} | {r['inbfrq']} | {r['status']} | "
+            f"| {r['n_monomers']} | {r['inbfrq']} | {r['status']}{note_cell} | "
             f"{r['cluster_com_disp_A']} | {r['outlier_ratio']} | {r['max_internal_rmsd_A']} |"
         )
     lines.append("")
