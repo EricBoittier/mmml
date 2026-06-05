@@ -51,7 +51,6 @@ def main() -> int:
     )
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
         save_cluster_topology_for_vmd,
-        setup_default_nbonds,
         sync_charmm_positions,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
@@ -84,7 +83,7 @@ def main() -> int:
         quiet=args.quiet,
     )
 
-    setup_default_nbonds()
+    # NBONDS must be set after the PSF has atoms (build_cluster → minimize_charmm_mm_only).
     z, ref_pos, n_mol, built_tag = build_cluster_from_args_with_tag(ns)
     if n_mol != 3 or built_tag != tag:
         raise SystemExit(f"Expected DCM:3 tag={tag}, got n_mol={n_mol} tag={built_tag}")

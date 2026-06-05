@@ -78,3 +78,16 @@ def test_prepare_geometry_shell_uses_mpirun_wrapper_for_script() -> None:
     assert "mmml_resolve_env" in text
     assert 'exec "$MPIRUN" "$WORKFLOW_ROOT/scripts/prepare_geometry.py"' in text
     assert '"$MPIRUN" "$PY"' not in text
+
+
+def test_prepare_geometry_does_not_setup_nbonds_before_cluster_build() -> None:
+    py = (
+        _REPO
+        / "workflows"
+        / "dcm3_nve_cutoff_sweep"
+        / "scripts"
+        / "prepare_geometry.py"
+    )
+    text = py.read_text(encoding="utf-8")
+    build_idx = text.index("build_cluster_from_args_with_tag")
+    assert "setup_default_nbonds" not in text[:build_idx]
