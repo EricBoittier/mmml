@@ -226,7 +226,7 @@ def _write_report(
             ]
         )
         for pid in sorted(sane_means, key=lambda p: sane_means[p][0]):
-            mean, n = sane_means[p]
+            mean, n = sane_means[pid]
             lines.append(f"| {pid} | {mean:.6f} | {n} |")
         lines.extend(
             [

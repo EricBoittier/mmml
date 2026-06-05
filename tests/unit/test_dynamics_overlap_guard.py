@@ -1581,6 +1581,7 @@ def test_apply_loose_pbc_dyn_freq_kwargs_above_nstep():
 
     kw = {
         "nstep": 1250,
+        "ntrfrq": 1000,
         "ixtfrq": 1000,
         "imgfrq": 50,
         "ihbfrq": 50,
@@ -1588,11 +1589,44 @@ def test_apply_loose_pbc_dyn_freq_kwargs_above_nstep():
         "inbfrq": -1,
     }
     apply_loose_pbc_dyn_freq_kwargs(kw, nstep=1250)
+    assert kw["ntrfrq"] == 1251
     assert kw["ixtfrq"] == 1251
     assert kw["imgfrq"] == 1251
     assert kw["ihbfrq"] == 1251
     assert kw["ilbfrq"] == 1251
     assert kw["inbfrq"] == -1
+
+
+def test_ensure_ntrfrq_above_nstep_for_non_loose_pbc():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _ensure_ntrfrq_above_nstep,
+    )
+
+    kw = {"ntrfrq": 1000, "nstep": 1250}
+    _ensure_ntrfrq_above_nstep(kw, 1250)
+    assert kw["ntrfrq"] == 1251
+
+    kw2 = {"ntrfrq": 1000, "nstep": 40000}
+    _ensure_ntrfrq_above_nstep(kw2, 40000)
+    assert kw2["ntrfrq"] == 40001
+
+    kw3 = {"ntrfrq": 2000, "nstep": 1250}
+    _ensure_ntrfrq_above_nstep(kw3, 1250)
+    assert kw3["ntrfrq"] == 2000
+
+    kw4 = {"ntrfrq": 0, "nstep": 1250}
+    _ensure_ntrfrq_above_nstep(kw4, 1250)
+    assert kw4["ntrfrq"] == 0
+
+
+def test_harmonize_overlap_chunk_non_loose_pbc_lifts_ntrfrq():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _harmonize_overlap_chunk_frequencies,
+    )
+
+    kw = {"ntrfrq": 1000, "nstep": 1250, "iprfrq": 1250, "isvfrq": 1250}
+    _harmonize_overlap_chunk_frequencies(kw, 1250, loose_pbc=False)
+    assert kw["ntrfrq"] == 1251
 
 
 def test_harmonize_overlap_chunk_loose_pbc_disables_image_freqs():
@@ -1602,6 +1636,7 @@ def test_harmonize_overlap_chunk_loose_pbc_disables_image_freqs():
 
     kw = {
         "nstep": 40,
+        "ntrfrq": 1000,
         "ihbfrq": 50,
         "imgfrq": 50,
         "ixtfrq": 1000,
@@ -1611,6 +1646,7 @@ def test_harmonize_overlap_chunk_loose_pbc_disables_image_freqs():
         "inbfrq": -1,
     }
     _harmonize_overlap_chunk_frequencies(kw, 40, loose_pbc=True)
+    assert kw["ntrfrq"] == 41
     assert kw["ihbfrq"] == 41
     assert kw["imgfrq"] == 41
     assert kw["ixtfrq"] == 41

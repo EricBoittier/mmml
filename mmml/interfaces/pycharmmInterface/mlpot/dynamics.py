@@ -675,7 +675,19 @@ def _strip_crystal_dyn_keywords(kw: dict[str, Any]) -> None:
 
 
 # Image/HB/extended list freqs disabled for loose-PBC (cluster in large box, no MIC).
-_LOOSE_PBC_DISABLED_FREQ_KEYS = ("ixtfrq", "imgfrq", "ihbfrq", "ilbfrq")
+# ``ntrfrq`` (COM rotation/translation stop) must also stay above ``nstep`` on short
+# segments or it fires mid-run (FINCYC retune / spurious COM resets during heat).
+_LOOSE_PBC_DISABLED_FREQ_KEYS = ("ixtfrq", "imgfrq", "ihbfrq", "ilbfrq", "ntrfrq")
+
+
+def _ensure_ntrfrq_above_nstep(kw: dict[str, Any], nstep: int) -> None:
+    """Lift ``ntrfrq`` above ``nstep`` when it would fire during this integration."""
+    if "ntrfrq" not in kw:
+        return
+    n = max(1, int(nstep))
+    val = int(kw["ntrfrq"])
+    if val > 0 and val <= n:
+        kw["ntrfrq"] = n + 1
 
 
 def apply_loose_pbc_dyn_freq_kwargs(kw: dict[str, Any], *, nstep: int) -> None:
@@ -705,7 +717,7 @@ def _base_dyn_kwargs(
     nprint: int = 100,
     iprfrq: int = 500,
     isvfrq: int = 1000,
-    ntrfrq: int = 1000,
+    ntrfrq: int = 0,
     echeck: float = 100.0,
 ) -> dict[str, Any]:
     return {
@@ -879,7 +891,7 @@ def apply_heat_ramp_overlap_chunk(
     chunk_kw["start"] = False
 
 
-_HEAT_FIN_FREQ_KEYS = ("ihtfrq", "iprfrq", "nprint", "isvfrq", "ntrfrq")
+_HEAT_FIN_FREQ_KEYS = ("ihtfrq", "iprfrq", "nprint", "isvfrq")
 
 
 def apply_heat_segment_ramp_kwargs(
@@ -1882,6 +1894,8 @@ def _harmonize_overlap_chunk_frequencies(
         chunk_kw[key] = _harmonize_dynamics_frequency(int(chunk_kw[key]), n)
     if loose_pbc:
         apply_loose_pbc_dyn_freq_kwargs(chunk_kw, nstep=n)
+    else:
+        _ensure_ntrfrq_above_nstep(chunk_kw, n)
 
 
 def _mlpot_ctx_cubic_box_side_A(mlpot_ctx: Optional["MlpotContext"]) -> float | None:
@@ -2190,6 +2204,8 @@ def run_dynamics_with_io(
     total_nstep = int(kw.get("nstep", 0))
     if loose_pbc and total_nstep > 0:
         apply_loose_pbc_dyn_freq_kwargs(kw, nstep=total_nstep)
+    elif total_nstep > 0:
+        _ensure_ntrfrq_above_nstep(kw, total_nstep)
     if (
         overlap is None
         or not isinstance(overlap, DynamicsOverlapConfig)
