@@ -243,12 +243,14 @@ def apply_comp_velocity_policy(
                     "see COMP_AND_HEATING.md",
                     flush=True,
                 )
-        elif not getattr(args, "quiet", False):
-            print(
-                "HEAT COMP: off (--heat-comp-damp not set); heat uses iasors=0 "
-                "scaling only",
-                flush=True,
-            )
+        else:
+            clear_comp_for_production()
+            if not getattr(args, "quiet", False):
+                print(
+                    "HEAT COMP: cleared (default; no --heat-comp-damp); "
+                    "never use iasvel=0 + start for COMP velocities",
+                    flush=True,
+                )
     elif stage in _COMP_CLEARED_STAGES:
         clear_comp_for_production()
         if not getattr(args, "quiet", False):

@@ -59,8 +59,13 @@ GAUSSIAN OPTION ... VELOCITIES ASSIGNED AT TEMPERATURE
 ### CHARMM (documentation)
 
 - **Comparison coordinates** are a separate set (`coor set comp`, `coor show comp`).
-- **`IASVEL = 0`**: use comparison-coordinate values for velocity assignment (with `STRT` / start).
-- **`IASVEL = 1`**: Gaussian Maxwell–Boltzmann assignment (default).
+- **`IASVEL = 0` + `START`**: CHARMM assigns **initial velocities from COMP** (AKMA units).
+  Log banner: `The comparison coordinate values will be used for the initial velocities`.
+  **Do not use this path in mmml**: `sync_charmm_positions` writes **coordinates** into COMP,
+  so `iasvel=0` + `start=True` produces absurd kinetic energy (e.g. T≫target at step 0).
+- **`IASVEL = 1` + `START`**: Gaussian Maxwell–Boltzmann assignment (default cold start).
+- **`START` false**: continue velocities already in CHARMM memory or on the restart file;
+  `iasvel` is ignored for the initial assignment.
 - **`IASORS = 0`**: at each `ihtfrq` / `ieqfrq`, **scale** existing velocities toward the target temperature.
 - **`IASORS ≠ 0`**: **assign** new velocities at each `ihtfrq` (uses `IASVEL`).
 
@@ -128,7 +133,9 @@ Do **not** combine these in one run until each is understood.
 4. **Diagnostic** — `--no-echeck` once to see if run completes (does not fix physics).
 5. **COMP (experimental)** — `--heat-comp-damp` only after reading this doc; compare log for `HEAT COMP:` line; expect **no** improvement unless COMP-velocity is implemented properly.
 
-Avoid re-enabling **`iasvel=0` on the main heat `dyna`** without a true COMP-velocity load — that freezes the ramp (see prior “IASVEL is zero” logs).
+Avoid **`iasvel=0` + `start=True`** on any `dyna` unless COMP holds real velocity components.
+After a Boltzmann pre-step or restart handoff, use **`start=False`** (Hoover CPT heat,
+NVE, overlap chunk 0). COMP is **cleared before heat** by default.
 
 Avoid **`iasors=1`** with short `ihtfrq` on all-ML clusters unless you accept Gaussian spikes (219 K before rescale to 66 K in earlier logs).
 

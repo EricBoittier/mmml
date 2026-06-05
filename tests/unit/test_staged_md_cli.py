@@ -22,6 +22,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
 from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
     _artifact_paths,
     _build_stage_dynamics_kw,
+    _configure_heat_dynamics_start,
     _configure_nve_dynamics_start,
     _overlap_for_stage,
     _prior_restart_for_stage,
@@ -311,6 +312,39 @@ def test_overlap_for_stage_enables_heat_chunking():
     assert _overlap_for_stage("heat", cfg) is cfg
     assert _overlap_for_stage("equi", cfg) is cfg
     assert _overlap_for_stage("prod", cfg) is cfg
+
+
+def test_configure_heat_dynamics_start_hoover_memory_handoff_no_comp_velocities():
+    """Hoover CPT after mini must not use iasvel=0 + start (COMP holds coordinates)."""
+    io = CharmmTrajectoryFiles()
+    kw = {
+        "firstt": 0.0,
+        "finalt": 240.0,
+        "tbath": 240.0,
+        "cpt": True,
+        "hoover reft": 240.0,
+        "tmass": 2000,
+        "start": True,
+    }
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.assign_velocities_at_temperature"
+    ) as assign:
+        _configure_heat_dynamics_start(
+            kw,
+            io,
+            coords_in_memory=True,
+            restart_from_file=False,
+            timestep_ps=0.00025,
+            use_pbc=True,
+            quiet=True,
+            heat_thermostat="hoover",
+        )
+
+    assign.assert_called_once()
+    assert kw["restart"] is False
+    assert kw["start"] is False
+    assert kw["iasvel"] == 0
 
 
 def test_configure_nve_dynamics_start_memory_handoff_no_readyn(tmp_path):

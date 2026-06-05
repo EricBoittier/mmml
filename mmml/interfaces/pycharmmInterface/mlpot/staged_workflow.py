@@ -451,10 +451,11 @@ def _configure_heat_dynamics_start(
             use_pbc=use_pbc,
         )
         if hoover_cpt_heat:
-            # Keep firstt/finalt for overlap chunk 0 (see preserve_cold_start) and
-            # use start so Hoover engages after the one-shot Boltzmann assign.
+            # Continue in-memory velocities from the Boltzmann draw. Do not use
+            # start=True with iasvel=0 — CHARMM treats COMP as velocities (AKMA),
+            # and sync_charmm_positions stores coordinates in COMP.
             kw["iasvel"] = 0
-            kw["start"] = True
+            kw["start"] = False
         else:
             kw["start"] = False
         if not quiet:
@@ -462,7 +463,7 @@ def _configure_heat_dynamics_start(
                 print(
                     f"HEAT: Boltzmann velocities at FIRSTT={firstt:.1f} K "
                     "(in-memory coords after mini); Hoover CPT NVT (no ihtfrq); "
-                    "start=True for main heat dyna",
+                    "start=False (no COMP velocity assign)",
                     flush=True,
                 )
             else:
@@ -486,7 +487,7 @@ def _configure_heat_dynamics_start(
         kw["new"] = False
         if hoover_cpt_heat:
             kw["iasvel"] = 0
-            kw["start"] = True
+            kw["start"] = False
         else:
             kw["start"] = False
         if not quiet:
@@ -497,7 +498,7 @@ def _configure_heat_dynamics_start(
             print(
                 msg
                 + (
-                    "Hoover CPT NVT (no ihtfrq); start=True for main heat dyna"
+                    "Hoover CPT NVT (no ihtfrq); start=False (no COMP velocity assign)"
                     if hoover_cpt_heat
                     else "ihtfrq scales (iasors=0)"
                 ),
