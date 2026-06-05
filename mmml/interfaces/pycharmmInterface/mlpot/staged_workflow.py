@@ -1161,6 +1161,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     )
                     dyn_print = resolve_dynamics_print_kwargs(args, nstep=nstep)
                     save_interval_ps = timestep_ps * dcd_nsavc
+                    seg_prep_quiet = bool(args.quiet) or seg_i > 0
                     use_memory = memory_handoff_next and seg_i == 0
                     if use_memory:
                         restart = False
@@ -1184,7 +1185,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                             use_memory = True
                             restart = False
                             rread = None
-                    if not args.quiet:
+                    if not seg_prep_quiet:
                         print(
                             f"\nHEAT segment {seg_i + 1}/{n_heat_segments}: "
                             f"{nstep} steps @ {timestep_ps} ps "
@@ -1258,14 +1259,14 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     assert_mlpot_user_active(
                         ctx,
                         context=f"heat segment {seg_i + 1}/{n_heat_segments}",
-                        quiet=bool(args.quiet),
+                        quiet=seg_prep_quiet,
                     )
-                    apply_comp_velocity_policy("heat", kw, args)
+                    apply_comp_velocity_policy("heat", kw, args, quiet=seg_prep_quiet)
                     apply_dyn_inbfrq_from_args(kw, args, charmm_pbc=charmm_pbc)
                     if (seg_i == 0 or use_memory) and (
                         use_memory or prev_restart_is_current_state
                     ):
-                        sync_charmm_lists_after_mini(quiet=bool(args.quiet))
+                        sync_charmm_lists_after_mini(quiet=seg_prep_quiet)
                     if use_memory:
                         if (
                             charmm_pbc
@@ -1275,7 +1276,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         ):
                             ensure_charmm_crystal_for_cpt(
                                 float(box_side),
-                                quiet=bool(args.quiet),
+                                quiet=seg_prep_quiet,
                             )
                         _configure_heat_dynamics_start(
                             kw,
@@ -1284,7 +1285,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                             restart_from_file=False,
                             timestep_ps=timestep_ps,
                             use_pbc=charmm_pbc,
-                            quiet=bool(args.quiet),
+                            quiet=seg_prep_quiet,
                             heat_thermostat=heat_thermostat,
                         )
                     elif seg_i == 0:
@@ -1296,7 +1297,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         ):
                             ensure_charmm_crystal_for_cpt(
                                 float(box_side),
-                                quiet=bool(args.quiet),
+                                quiet=seg_prep_quiet,
                             )
                         _configure_heat_dynamics_start(
                             kw,
@@ -1306,7 +1307,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                             and seg_io.restart_read is not None,
                             timestep_ps=timestep_ps,
                             use_pbc=charmm_pbc,
-                            quiet=bool(args.quiet),
+                            quiet=seg_prep_quiet,
                             heat_thermostat=heat_thermostat,
                         )
                     elif restart:
@@ -1316,7 +1317,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         kw["restart"] = True
                     if int(kw.get("ihtfrq", 0) or 0) > 0:
                         freq_changes = finalize_heat_dynamics_frequencies(kw)
-                        if freq_changes and not args.quiet:
+                        if freq_changes and not seg_prep_quiet:
                             parts = ", ".join(
                                 f"{key} {old}->{new}"
                                 for key, (old, new) in sorted(freq_changes.items())

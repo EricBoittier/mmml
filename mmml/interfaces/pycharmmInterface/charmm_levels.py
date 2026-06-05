@@ -43,6 +43,27 @@ def charmm_quiet_output():
 
 
 @contextmanager
+def charmm_silent_command(*, bomlev: int = -2):
+    """Minimal console output with relaxed bomb level (ENER/UPDATE, USER checks)."""
+    import pycharmm
+    import pycharmm.settings as settings
+
+    old_prn = settings.set_verbosity(0)
+    old_wrn = settings.set_warn_level(0)
+    old_bl = settings.set_bomb_level(int(bomlev))
+    pycharmm.lingo.charmm_script(f"PRNLev 0\nWRNLev 0\nbomlev {int(bomlev)}")
+    try:
+        yield
+    finally:
+        settings.set_verbosity(old_prn)
+        settings.set_warn_level(old_wrn)
+        settings.set_bomb_level(old_bl)
+        pycharmm.lingo.charmm_script(
+            f"PRNLev {int(old_prn)}\nWRNLev {int(old_wrn)}\nbomlev {int(old_bl)}"
+        )
+
+
+@contextmanager
 def charmm_relaxed_bomlev(level: int = -2):
     """Relax BOMBlev/WRNLev for RTF/PRM/PSF/CARD reads; restore on exit.
 

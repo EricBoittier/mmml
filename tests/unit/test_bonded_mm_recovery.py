@@ -573,6 +573,11 @@ def test_assert_mlpot_user_active_reattaches_when_user_missing():
     )
     mock_py = types.ModuleType("pycharmm")
     mock_py.lingo = MagicMock()
+    mock_settings = MagicMock()
+    mock_settings.set_verbosity.return_value = 0
+    mock_settings.set_warn_level.return_value = 0
+    mock_settings.set_bomb_level.return_value = 0
+    mock_py.settings = mock_settings
     mock_energy = types.ModuleType("pycharmm.energy")
     mock_energy.get_term_by_name = MagicMock()
     mock_energy.get_term_by_name.side_effect = [0.0, -123.4]
@@ -581,6 +586,7 @@ def test_assert_mlpot_user_active_reattaches_when_user_missing():
         {
             "pycharmm": mock_py,
             "pycharmm.energy": mock_energy,
+            "pycharmm.settings": mock_settings,
             "mmml.interfaces.pycharmmInterface.import_pycharmm": MagicMock(),
         },
     ), patch(

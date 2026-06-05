@@ -64,15 +64,22 @@ def get_comparison_array() -> np.ndarray:
     return df[["x", "y", "z", "w"]].to_numpy(dtype=float)
 
 
-def run_charmm_script(script: str) -> None:
+def run_charmm_script(script: str, *, quiet: bool = False) -> None:
     """Run a single CHARMM script line."""
+    if quiet:
+        from mmml.interfaces.pycharmmInterface.charmm_levels import (
+            run_charmm_script_quiet,
+        )
+
+        run_charmm_script_quiet(script)
+        return
     _import_pycharmm().lingo.charmm_script(script)
 
 
-def zero_comparison_scalars(sele: str = "all") -> None:
+def zero_comparison_scalars(sele: str = "all", *, quiet: bool = False) -> None:
     """Zero COMP scalar components via ``scalar xcomp/ycomp/zcomp/wcomp set 0``."""
     for comp in _COMP_COMPONENTS:
-        run_charmm_script(f"scalar {comp} set 0 select {sele} end")
+        run_charmm_script(f"scalar {comp} set 0 select {sele} end", quiet=quiet)
 
 
 def clear_comparison_coordinates() -> None:
@@ -221,11 +228,11 @@ def prepare_comp_for_heat(
     )
 
 
-def clear_comp_for_production() -> None:
+def clear_comp_for_production(*, quiet: bool = False) -> None:
     """Clear comparison coords + scalars before dynamics (no COMP-velocity path)."""
     clear_comparison_coordinates()
-    zero_comparison_scalars("all")
-    run_charmm_script("scalar wcomp set 0 select all end")
+    zero_comparison_scalars("all", quiet=quiet)
+    run_charmm_script("scalar wcomp set 0 select all end", quiet=quiet)
 
 
 _COMP_CLEARED_STAGES = frozenset({"nve", "equi", "prod"})
@@ -235,6 +242,8 @@ def apply_comp_velocity_policy(
     stage: str,
     kw: dict[str, Any],
     args: argparse.Namespace,
+    *,
+    quiet: bool | None = None,
 ) -> None:
     """Heat: optional COMP prep + gentler ``iasors=0`` scaling; later stages: clear COMP."""
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
@@ -242,11 +251,13 @@ def apply_comp_velocity_policy(
         resolve_heat_comp_damp_kwargs,
     )
 
+    silent = bool(quiet if quiet is not None else getattr(args, "quiet", False))
+
     if stage == "heat":
         if resolve_heat_comp_damp(args):
             damp_kw = resolve_heat_comp_damp_kwargs(args)
             n = prepare_comp_for_heat(**damp_kw)
-            if not getattr(args, "quiet", False):
+            if not silent:
                 target = "H" if damp_kw.get("hydrogen_only", True) else "all"
                 print(
                     f"HEAT COMP (experimental): copied scaled forces into COMP "
@@ -255,14 +266,14 @@ def apply_comp_velocity_policy(
                     flush=True,
                 )
         else:
-            clear_comp_for_production()
-            if not getattr(args, "quiet", False):
+            clear_comp_for_production(quiet=silent)
+            if not silent:
                 print(
                     "HEAT COMP: cleared (default; no --heat-comp-damp); "
                     "never use iasvel=0 + start for COMP velocities",
                     flush=True,
                 )
     elif stage in _COMP_CLEARED_STAGES:
-        clear_comp_for_production()
-        if not getattr(args, "quiet", False):
+        clear_comp_for_production(quiet=silent)
+        if not silent:
             print(f"{stage.upper()}: COMP cleared (no force-damp)", flush=True)
