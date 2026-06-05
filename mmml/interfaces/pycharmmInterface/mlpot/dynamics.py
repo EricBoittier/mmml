@@ -1872,6 +1872,37 @@ def _mlpot_ctx_cubic_box_side_A(mlpot_ctx: Optional["MlpotContext"]) -> float | 
     return None
 
 
+def _post_rescue_bath_target_K(chunk_kw: dict[str, Any]) -> float:
+    return float(
+        chunk_kw.get("tbath", chunk_kw.get("finalt", chunk_kw.get("firstt", 300.0)))
+    )
+
+
+def _assign_post_rescue_velocities_and_crystal(
+    chunk_kw: dict[str, Any],
+    *,
+    mlpot_ctx: Optional["MlpotContext"],
+) -> None:
+    """Boltzmann-draw on rescued coordinates; reset CPT crystal when needed."""
+    use_pbc = bool(chunk_kw.get("cpt")) or (
+        mlpot_ctx is not None and bool(getattr(mlpot_ctx, "use_pbc", False))
+    )
+    assign_velocities_at_temperature(
+        _post_rescue_bath_target_K(chunk_kw),
+        timestep_ps=float(chunk_kw.get("timestep", 0.00025)),
+        restart_path=None,
+        use_pbc=use_pbc,
+    )
+    if use_pbc and bool(chunk_kw.get("cpt")):
+        side = _mlpot_ctx_cubic_box_side_A(mlpot_ctx)
+        if side is not None:
+            from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+                ensure_charmm_crystal_for_cpt,
+            )
+
+            ensure_charmm_crystal_for_cpt(side, quiet=True)
+
+
 def _prepare_post_rescue_overlap_handoff(
     chunk_kw: dict[str, Any],
     *,
@@ -1885,32 +1916,28 @@ def _prepare_post_rescue_overlap_handoff(
     on the rescued in-memory coordinates and run the next chunk without restart
     read, matching normal MLpot overlap memory handoff.
     """
-    use_pbc = bool(chunk_kw.get("cpt")) or (
-        mlpot_ctx is not None and bool(getattr(mlpot_ctx, "use_pbc", False))
-    )
-    target_t = float(
-        chunk_kw.get("firstt", chunk_kw.get("tbath", chunk_kw.get("finalt", 300.0)))
-    )
-    assign_velocities_at_temperature(
-        target_t,
-        timestep_ps=float(chunk_kw.get("timestep", 0.00025)),
-        restart_path=None,
-        use_pbc=use_pbc,
-    )
-    if use_pbc and bool(chunk_kw.get("cpt")):
-        side = _mlpot_ctx_cubic_box_side_A(mlpot_ctx)
-        if side is not None:
-            from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
-                ensure_charmm_crystal_for_cpt,
-            )
-
-            ensure_charmm_crystal_for_cpt(side, quiet=True)
+    _assign_post_rescue_velocities_and_crystal(chunk_kw, mlpot_ctx=mlpot_ctx)
     chunk_kw["restart"] = False
     chunk_kw["new"] = False
     chunk_kw["start"] = False
     chunk_kw["iasvel"] = 1
     chunk_kw.pop("iunrea", None)
     chunk_kw["iunrea"] = -1
+
+
+def _refresh_segment_restart_after_overlap_rescue(
+    restart_path: PathLike | None,
+    chunk_kw: dict[str, Any],
+    *,
+    mlpot_ctx: Optional["MlpotContext"],
+) -> None:
+    """Rewrite the segment restart after last-chunk rescue (valid READYN if needed)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        rewrite_dynamics_restart_from_current_state,
+    )
+
+    _assign_post_rescue_velocities_and_crystal(chunk_kw, mlpot_ctx=mlpot_ctx)
+    rewrite_dynamics_restart_from_current_state(restart_path)
 
 
 def _prepare_overlap_chunk_after_restart(
@@ -2462,9 +2489,15 @@ def run_dynamics_with_io(
                             flush=True,
                         )
                     else:
+                        _refresh_segment_restart_after_overlap_rescue(
+                            chunk_io.restart_write,
+                            chunk_kw,
+                            mlpot_ctx=mlpot_ctx,
+                        )
                         print(
-                            f"overlap ({overlap_context}): post-rescue restart patched "
-                            f"at global step {steps_done} (segment complete; no extra dyna)",
+                            f"overlap ({overlap_context}): post-rescue restart refreshed "
+                            f"at global step {steps_done} (fresh velocities; segment "
+                            f"complete; no extra dyna)",
                             flush=True,
                         )
             ml_f = None
