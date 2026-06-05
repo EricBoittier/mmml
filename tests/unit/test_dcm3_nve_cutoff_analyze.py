@@ -66,9 +66,15 @@ def test_cutoff_lib_preset_geometry_keys() -> None:
     )
 
     cfg = load_config(workflow_root() / "config.yaml")
-    assert "code_default" in preset_ids(cfg)
+    presets = preset_ids(cfg)
+    assert "dcm9_stability" in presets
+    assert "extended_handoff" in presets
+    assert "extended_mm5" in presets
+    assert "handoff_7p5" in presets
+    assert "code_default" not in presets
+    assert "wide_ml_taper" not in presets
     assert "mid" in geometry_ids(cfg)
-    assert len(preset_ids(cfg)) == 4
+    assert len(presets) == 4
     assert len(geometry_ids(cfg)) == 4
     assert expected_nve_nstep(cfg) == 4000
     assert int(cfg["dynamics_overlap_check_interval"]) >= expected_nve_nstep(cfg)
