@@ -1278,7 +1278,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                             heat_thermostat=heat_thermostat,
                         )
                     elif restart:
-                        kw["iasvel"] = 1
+                        kw["iasvel"] = 0
                         kw["iasors"] = 0
                         kw["start"] = False
                         kw["restart"] = True

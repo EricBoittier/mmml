@@ -175,9 +175,10 @@ def overlap_config_for_stage(
 ) -> DynamicsOverlapConfig | None:
     """Per-stage overlap settings.
 
-    Heat with ``n_segments <= 1``: one long ``dyna`` + overlap check after the stage.
-    Heat with ``n_segments > 1``: keep the normal overlap interval within each short
-    segment so geometry rescue can run between restarts.
+    Heat (single or staged): one integration chunk per segment so overlap rescue
+    runs at segment boundaries (``--n-heat-segments`` chain restarts), not every
+    ``--dynamics-overlap-check-interval`` steps inside each segment.  Equi/prod
+    keep the configured interval.
     """
     if overlap is None or not overlap.enabled:
         return overlap
@@ -186,8 +187,6 @@ def overlap_config_for_stage(
     from dataclasses import replace
 
     n = max(1, int(nstep))
-    if int(n_segments) > 1:
-        return overlap
     if int(overlap.check_interval) >= n:
         return overlap
     return replace(overlap, check_interval=n)
