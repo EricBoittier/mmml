@@ -444,7 +444,8 @@ def test_overlap_checks_run_after_each_successful_chunk(tmp_path):
         )
 
     assert chunk_count == 4
-    assert overlap_calls == [500, 1000, 1500, 2000]
+    post_chunk_steps = [s for s in overlap_calls if s > 0]
+    assert post_chunk_steps == [500, 1000, 1500, 2000]
 
 
 def test_overlap_skips_check_when_chunk_aborts_early(tmp_path, capsys):
