@@ -2114,6 +2114,7 @@ def run_dynamics_with_io(
             trajectory_files, trajectory_iokw = io.open_trajectory_for_run()
         for chunk_index in range(n_chunks):
             chunk_nstep = interval
+            steps_before_chunk = steps_done
             chunk_kw = dict(kw)
             chunk_kw["nstep"] = chunk_nstep
             if io is None:
@@ -2218,11 +2219,17 @@ def run_dynamics_with_io(
                     chunk_io.restart_write,
                     final_restart=final_restart,
                 )
-            steps_done = _integrated_step_from_restart(
+            reported_steps = _integrated_step_from_restart(
                 chunk_io=chunk_io,
                 final_restart=final_restart,
-                fallback_steps=steps_done + chunk_nstep,
+                fallback_steps=steps_before_chunk + chunk_nstep,
             )
+            if reported_steps > steps_before_chunk:
+                steps_done = reported_steps
+            else:
+                # JHSTRT=0 coordinate-history restarts often leave NSTEP at the
+                # segment length (e.g. 500) without advancing the global counter.
+                steps_done = steps_before_chunk + chunk_nstep
             if final_restart is not None and chunk_io is not None:
                 _overlap_refresh_or_validate_scratch_restart(
                     chunk_io.restart_write,
@@ -2232,8 +2239,7 @@ def run_dynamics_with_io(
                     overlap_context=overlap_context,
                     mlpot_ctx=mlpot_ctx,
                 )
-            expected_after_chunk = (chunk_index + 1) * chunk_nstep
-            if steps_done < expected_after_chunk - 1:
+            if steps_done < steps_before_chunk + chunk_nstep - 1:
                 print(
                     f"overlap ({overlap_context}): integrated {steps_done}/{total_nstep} "
                     "steps (echeck or CHARMM abort likely); skipping mid-stage "
