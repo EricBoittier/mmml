@@ -96,6 +96,52 @@ def read_restart_last_step(path: Path) -> int | None:
     return None
 
 
+def patch_restart_global_step(path: Path, global_step: int) -> bool:
+    """Set ``JHSTRT`` (and legacy ``REST`` header) to the integrated dynamics step.
+
+    Intra overlap rescue reloads the PSF and clears CHARMM's in-memory step
+    counter; ``WRITe restart`` then leaves ``JHSTRT=0``.  Patching restores
+    correct global step accounting on the next ``READYN`` handoff.
+    """
+    p = Path(path)
+    step = max(0, int(global_step))
+    if not p.is_file():
+        return False
+    try:
+        lines = p.read_text(errors="ignore").splitlines()
+    except OSError:
+        return False
+    if not lines:
+        return False
+
+    patched = False
+    if lines[0].strip().upper().startswith("REST"):
+        header = lines[0].split()
+        if len(header) >= 3:
+            header[2] = str(step)
+            lines[0] = " ".join(header)
+            patched = True
+
+    for i, raw in enumerate(lines):
+        tag = raw.strip().split()[0] if raw.strip() else ""
+        if not (tag.startswith("!NATOM") or tag.startswith("NATOM")):
+            continue
+        if i + 1 >= len(lines):
+            break
+        fields = lines[i + 1].split()
+        if len(fields) < 6:
+            break
+        fields[5] = str(step)
+        lines[i + 1] = " ".join(fields)
+        patched = True
+        break
+
+    if not patched:
+        return False
+    p.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return True
+
+
 def assert_stage_dynamics_completed(
     *,
     stage: str,

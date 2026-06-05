@@ -1679,6 +1679,7 @@ def _overlap_chunk_io(
     n_chunks: int,
     split_trajectory: bool = True,
     mlpot_ctx: Optional["MlpotContext"] = None,
+    use_memory_handoff: bool = True,
 ) -> CharmmTrajectoryFiles:
     """Restart I/O for overlap chunking via alternating scratch restarts.
 
@@ -1688,7 +1689,7 @@ def _overlap_chunk_io(
     rread, rwri = _overlap_chunk_restart_paths(
         io, chunk_index=chunk_index, n_chunks=n_chunks
     )
-    if _overlap_chunk_uses_memory_handoff(
+    if use_memory_handoff and _overlap_chunk_uses_memory_handoff(
         mlpot_ctx, chunk_index=chunk_index, n_chunks=n_chunks
     ):
         rread = None
@@ -2090,6 +2091,7 @@ def run_dynamics_with_io(
     )
 
     n_chunks = total_nstep // interval
+    resume_from_restart_after_rescue = False
     if (
         n_chunks > 20
         and "heat" in str(overlap_context).lower()
@@ -2134,6 +2136,9 @@ def run_dynamics_with_io(
         for chunk_index in range(n_chunks):
             chunk_nstep = interval
             steps_before_chunk = steps_done
+            force_restart_read = resume_from_restart_after_rescue
+            if force_restart_read:
+                resume_from_restart_after_rescue = False
             chunk_kw = dict(kw)
             chunk_kw["nstep"] = chunk_nstep
             if io is None:
@@ -2147,6 +2152,7 @@ def run_dynamics_with_io(
                     n_chunks=n_chunks,
                     split_trajectory=split_trajectory,
                     mlpot_ctx=mlpot_ctx,
+                    use_memory_handoff=not force_restart_read,
                 )
                 if (
                     split_trajectory
@@ -2154,8 +2160,11 @@ def run_dynamics_with_io(
                     and chunk_io.trajectory is not None
                 ):
                     chunk_dcd_paths.append(Path(chunk_io.trajectory))
-            mem_handoff = _overlap_chunk_uses_memory_handoff(
-                mlpot_ctx, chunk_index=chunk_index, n_chunks=n_chunks
+            mem_handoff = (
+                not force_restart_read
+                and _overlap_chunk_uses_memory_handoff(
+                    mlpot_ctx, chunk_index=chunk_index, n_chunks=n_chunks
+                )
             )
             has_restart_read = (
                 chunk_io is not None
@@ -2266,12 +2275,32 @@ def run_dynamics_with_io(
                     flush=True,
                 )
             else:
-                check_dynamics_overlap(
+                _, rescued = check_dynamics_overlap(
                     overlap,
                     context=overlap_context,
                     step=steps_done,
                     mlpot_ctx=mlpot_ctx,
                 )
+                if rescued and chunk_io is not None and chunk_io.restart_write is not None:
+                    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+                        patch_restart_global_step,
+                    )
+
+                    _refresh_restart_write_after_chunk(
+                        chunk_io.restart_write,
+                        final_restart=final_restart,
+                    )
+                    patch_restart_global_step(
+                        Path(chunk_io.restart_write),
+                        steps_done,
+                    )
+                    resume_from_restart_after_rescue = True
+                    print(
+                        f"overlap ({overlap_context}): post-rescue READYN handoff "
+                        f"at global step {steps_done} (PSF reload cleared in-memory "
+                        f"dyna counters)",
+                        flush=True,
+                    )
             ml_f = None
             if mlpot_ctx is not None:
                 py_model = getattr(mlpot_ctx, "pyCModel", None)
