@@ -17,6 +17,7 @@ from mmml.interfaces.pycharmmInterface.cutoffs import (
     DEFAULT_MM_SWITCH_ON,
     DEFAULT_MM_SWITCH_WIDTH,
 )
+from mmml.interfaces.pycharmmInterface.ml_dtypes import add_ml_compute_dtype_args
 
 _DEFAULT_OUTPUT_DIR_STEMS = frozenset({"pycharmm_mlpot", "lambda_ti"})
 
@@ -501,6 +502,7 @@ def parse_args() -> argparse.Namespace:
             "or MMML_MLPOT_N_GPUS). Set CUDA_VISIBLE_DEVICES to the GPU ids to use."
         ),
     )
+    add_ml_compute_dtype_args(parser)
     parser.add_argument(
         "--ml-max-active-dimers",
         type=int,
@@ -1456,6 +1458,8 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         cmd.extend(["--ml-batch-size", str(args.ml_batch_size)])
     if getattr(args, "ml_gpu_count", None) is not None:
         cmd.extend(["--ml-gpu-count", str(args.ml_gpu_count)])
+    if getattr(args, "ml_compute_dtype", None) is not None:
+        cmd.extend(["--ml-compute-dtype", str(args.ml_compute_dtype)])
     if getattr(args, "ml_max_active_dimers", None) is not None:
         cmd.extend(["--ml-max-active-dimers", str(args.ml_max_active_dimers)])
     if args.no_echeck:

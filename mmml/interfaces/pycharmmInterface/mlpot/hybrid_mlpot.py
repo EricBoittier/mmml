@@ -16,6 +16,7 @@ from mmml.interfaces.pycharmmInterface.cutoffs import (
     CutoffParameters,
     cutoff_parameters_from_args,
 )
+from mmml.interfaces.pycharmmInterface.ml_dtypes import as_ml_array, resolve_ml_compute_dtype
 from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol, setup_calculator
 from mmml.interfaces.pycharmmInterface.mlpot.mlpot_batch_policy import resolve_ml_batch_size
 from mmml.interfaces.pycharmmInterface.mlpot.setup import physnet_ml_atomic_numbers
@@ -73,12 +74,14 @@ class DecomposedMlpotCalculator:
         cell: Union[float, bool] = False,
         do_mm: bool = True,
         get_update_fn: Any | None = None,
+        ml_compute_dtype: str | None = None,
     ) -> None:
         self.spherical_fn = spherical_fn
         self.cutoff_params = cutoff_params
         self.n_monomers = int(n_monomers)
         self.do_mm = bool(do_mm)
         self._get_update_fn = get_update_fn
+        self._ml_compute_dtype = ml_compute_dtype
         self.atomic_numbers = np.asarray(
             physnet_ml_atomic_numbers(atomic_numbers), dtype=np.int32
         )
@@ -140,7 +143,10 @@ class DecomposedMlpotCalculator:
         with mlpot_jax_device_context():
             if self.do_mm and self._get_update_fn is not None:
                 self._get_update_fn(pos, self.cutoff_params, box=box)
-            positions_jax = jnp.asarray(pos)
+            positions_jax = as_ml_array(
+                pos,
+                dtype=resolve_ml_compute_dtype(getattr(self, "_ml_compute_dtype", None)),
+            )
             atomic_numbers_jax = jnp.asarray(self.atomic_numbers[:n])
 
             def energy_scalar(p):
@@ -184,6 +190,7 @@ class DecomposedMlpotModel:
         cell: Union[float, bool] = False,
         do_mm: bool = True,
         get_update_fn: Any | None = None,
+        ml_compute_dtype: str | None = None,
     ) -> None:
         self._spherical_fn = spherical_fn
         self._cutoff_params = cutoff_params
@@ -192,6 +199,7 @@ class DecomposedMlpotModel:
         self._cell = float(cell) if cell else False
         self._do_mm = bool(do_mm)
         self._get_update_fn = get_update_fn
+        self._ml_compute_dtype = ml_compute_dtype
         self._last_ml_forces: np.ndarray | None = None
 
     def get_pycharmm_calculator(self, ml_atom_indices=None, ml_atomic_numbers=None, **kwargs):
@@ -207,6 +215,7 @@ class DecomposedMlpotModel:
             cell=self._cell,
             do_mm=self._do_mm,
             get_update_fn=self._get_update_fn,
+            ml_compute_dtype=self._ml_compute_dtype,
         )
         calc._parent_model = self
         return calc
@@ -224,8 +233,11 @@ def build_decomposed_mlpot_model(
     cell: Union[float, bool] = False,
     verbose: bool = False,
     args: Any | None = None,
+    ml_compute_dtype: str | None = None,
 ) -> DecomposedMlpotModel:
     ckpt = Path(checkpoint).expanduser().resolve()
+    if args is not None and ml_compute_dtype is None:
+        ml_compute_dtype = getattr(args, "ml_compute_dtype", None)
     cutoff_params = (
         cutoff_parameters_from_args(args) if args is not None else CutoffParameters()
     )
@@ -295,6 +307,7 @@ def build_decomposed_mlpot_model(
         ml_gpu_count=gpu_count,
         ml_max_active_dimers=ml_max_active_dimers,
         cell=cell,
+        ml_compute_dtype=ml_compute_dtype,
     )
     if verbose:
         _print_setup_calculator_factory_summary(
@@ -343,6 +356,7 @@ def build_decomposed_mlpot_model(
         cell=cell,
         do_mm=do_mm,
         get_update_fn=get_update_fn if do_mm else None,
+        ml_compute_dtype=ml_compute_dtype,
     )
     return model
 

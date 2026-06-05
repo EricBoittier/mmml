@@ -12,6 +12,7 @@ from jax import Array
 
 from mmml.interfaces.pycharmmInterface.calculator_utils import _sharpstep
 from mmml.interfaces.pycharmmInterface.cutoffs import GAMMA_OFF, GAMMA_ON
+from mmml.interfaces.pycharmmInterface.ml_dtypes import resolve_ml_compute_dtype
 from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
     mic_displacement,
     mic_displacement_smooth,
@@ -151,6 +152,7 @@ def build_mm_energy_forces_fn(
     jax_md_update_interval: int = 1,
     jax_md_skin_distance: float = 0.0,
     debug: bool = False,
+    ml_compute_dtype: str | None = None,
 ) -> Any:
     """Build MM energy/forces function with switching.
 
@@ -170,6 +172,7 @@ def build_mm_energy_forces_fn(
         update_fn(positions, box=None) -> (pair_idx, pair_mask).
         Otherwise: mm_fn(positions) -> (energy, forces) (single callable).
     """
+    ml_jnp_dtype = resolve_ml_compute_dtype(ml_compute_dtype)
     if ml_cutoff_distance is not None:
         ml_switch_width = ml_cutoff_distance
     if mm_cutoff is not None:
@@ -305,7 +308,7 @@ def build_mm_energy_forces_fn(
                 pbc_cell=np.asarray(pbc_cell) if pbc_cell is not None else None,
             )
         pair_idx_atom_atom = jnp.stack([_cl_i, _cl_j], axis=1)
-        _cl_mask_jnp = jnp.asarray(_cl_mask, dtype=jnp.float32)
+        _cl_mask_jnp = jnp.asarray(_cl_mask, dtype=ml_jnp_dtype)
 
         if debug:
             print(f"[get_MM] Cell list: {_n_valid} valid pairs out of max_pairs={_max_pairs}")
@@ -346,7 +349,7 @@ def build_mm_energy_forces_fn(
             print(f"[nbr] allocate: capacity={_max_pairs}, n_valid={n_valid_init}, "
                   f"frac_coords={fractional_coordinates}, r_cutoff={mm_switch_on + mm_switch_width:.2f}")
         pair_idx_atom_atom = jnp.stack([pair_i, pair_j], axis=1)
-        _cl_mask_jnp = jnp.asarray(mask, dtype=jnp.float32)
+        _cl_mask_jnp = jnp.asarray(mask, dtype=ml_jnp_dtype)
         _pair_idx_cell[0] = pair_idx_atom_atom
         _pair_mask_cell[0] = _cl_mask_jnp
         _monomer_id_np = np.empty(total_atoms, dtype=np.int32)
@@ -428,8 +431,8 @@ def build_mm_energy_forces_fn(
 
         @jax.jit
         def calculate_mm_energy_and_forces(positions: Array) -> Tuple[Array, Array]:
-            return jnp.array(0.0, dtype=jnp.float32), jnp.zeros(
-                (total_atoms, 3), dtype=jnp.float32
+            return jnp.array(0.0, dtype=ml_jnp_dtype), jnp.zeros(
+                (total_atoms, 3), dtype=ml_jnp_dtype
             )
 
         return calculate_mm_energy_and_forces
@@ -675,7 +678,7 @@ def build_mm_energy_forces_fn(
             _pair_stats["fallbacks"] += 1
             return (
                 jnp.stack([jnp.asarray(cl_i), jnp.asarray(cl_j)], axis=1),
-                jnp.asarray(cl_mask, dtype=jnp.float32),
+                jnp.asarray(cl_mask, dtype=ml_jnp_dtype),
             )
 
         def update_mm_pairs(positions: np.ndarray, box: Optional[np.ndarray] = None) -> Tuple[Array, Array]:
@@ -791,7 +794,7 @@ def build_mm_energy_forces_fn(
                     pbc_cell=pbc_for_filter,
                 )
             pair_idx = jnp.stack([pair_i, pair_j], axis=1)
-            pair_mask = jnp.asarray(mask, dtype=jnp.float32)
+            pair_mask = jnp.asarray(mask, dtype=ml_jnp_dtype)
             _pair_idx_cell[0] = pair_idx
             _pair_mask_cell[0] = pair_mask
             _last_positions[0] = np.asarray(R, dtype=np.float64)
