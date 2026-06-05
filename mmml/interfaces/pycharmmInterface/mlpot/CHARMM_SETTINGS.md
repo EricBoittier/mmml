@@ -53,6 +53,8 @@ Staged workflow **always overwrites** `nprint`, `iprfrq`, `isvfrq` from `resolve
 
 ## Stage → lists, trajectory, stability
 
+Full technical reference for CHARMM vs Python neighbor lists and `inbfrq` behavior: [NONBOND_LISTS.md](NONBOND_LISTS.md).
+
 | Setting | CLI | Default (typical) | heat | nve | equi/prod PBC |
 |---------|-----|-------------------|------|-----|----------------|
 | Timestep | `--dt-fs` | 0.25 fs → 0.00025 ps | all | all | all |
