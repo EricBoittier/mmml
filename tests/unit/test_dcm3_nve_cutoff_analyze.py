@@ -95,12 +95,14 @@ def test_cutoff_lib_preset_geometry_keys() -> None:
     presets = preset_ids(cfg)
     assert "extended_mm5" in presets
     assert "dcm9_stability" in presets
+    assert "dcm9_ml01" in presets
+    assert "dcm9_ml001" in presets
     assert "handoff_7p5" in presets
     assert "extended_mm5_ml05" in presets
     assert "handoff_7p5_ml15" in presets
     assert "code_default" not in presets
     assert "mid" in geometry_ids(cfg)
-    assert len(presets) == 5
+    assert len(presets) == 7
     assert len(geometry_ids(cfg)) == 4
     assert expected_nve_nstep(cfg) == 20000
     assert int(cfg["dynamics_overlap_check_interval"]) >= expected_nve_nstep(cfg)

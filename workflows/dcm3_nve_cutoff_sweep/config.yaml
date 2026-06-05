@@ -42,29 +42,34 @@ dynamics_overlap_check_interval: 20000
 no_echeck: true
 ml_gpu_count: 1
 
-# Round-4: 5 ps NVE validation of round-2 winners + close-geometry hybrids.
+# Round-4: 5 ps validation + ML taper sweep at fixed 7 / 5 mm handoff.
 cutoff_presets:
-  # Round-2 winner; sane on all four COM geoms at 1 ps.
-  extended_mm5:
-    mm_switch_on: 8.0
-    mm_switch_width: 5.0
-    ml_switch_width: 1.5
-  # Conservative fallback (docs/mlpot-settings.md baseline).
+  # --- ML taper sensitivity (fixed mm_on/mm_w = 7 / 5) ---
   dcm9_stability:
     mm_switch_on: 7.0
     mm_switch_width: 5.0
     ml_switch_width: 0.1
-  # Best close at 1 ps; far geom catastrophic — included as close baseline only.
+  dcm9_ml01:
+    mm_switch_on: 7.0
+    mm_switch_width: 5.0
+    ml_switch_width: 0.01
+  dcm9_ml001:
+    mm_switch_on: 7.0
+    mm_switch_width: 5.0
+    ml_switch_width: 0.001
+  # --- Round-2 winners + hybrids (extended / handoff families) ---
+  extended_mm5:
+    mm_switch_on: 8.0
+    mm_switch_width: 5.0
+    ml_switch_width: 1.5
   handoff_7p5:
     mm_switch_on: 7.5
     mm_switch_width: 5.0
     ml_switch_width: 0.1
-  # Hybrid: extended_mm5 MM width + narrower ML taper for close spacing.
   extended_mm5_ml05:
     mm_switch_on: 8.0
     mm_switch_width: 5.0
     ml_switch_width: 0.5
-  # Hybrid: handoff_7p5 distance + extended ML taper.
   handoff_7p5_ml15:
     mm_switch_on: 7.5
     mm_switch_width: 5.0
