@@ -101,6 +101,17 @@ def add_charmm_output_args(parser: argparse.ArgumentParser) -> None:
         ),
     )
     group.add_argument(
+        "--heat-hoover-tmass",
+        type=int,
+        default=None,
+        metavar="M",
+        help=(
+            "Hoover CPT heat only: thermostat mass tmass in kcal·mol⁻¹·ps². "
+            "Default clamps PSF-derived tmass to 400–1200 (tighter than equi). "
+            "Lower = stronger T coupling; try 400–800 if heat overshoots."
+        ),
+    )
+    group.add_argument(
         "--heat-comp-damp",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -360,6 +371,28 @@ def resolve_heat_thermostat(args: argparse.Namespace) -> str:
     if raw not in ("scale", "hoover"):
         raise ValueError(f"unknown heat_thermostat: {raw!r}")
     return raw
+
+
+def resolve_heat_hoover_tmass(
+    args: argparse.Namespace,
+    *,
+    psf_tmass: int | None = None,
+) -> int:
+    """Hoover CPT ``tmass`` (kcal·mol⁻¹·ps²) for heat — tighter than equi/prod default.
+
+    The old 2000 floor damped too slowly on small ML clusters and allowed kinetic
+    T overshoot.  Default clamps PSF-derived ``tmass`` to [400, 1200].
+    """
+    explicit = getattr(args, "heat_hoover_tmass", None)
+    if explicit is not None:
+        return max(1, int(explicit))
+    if psf_tmass is None:
+        from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+            compute_cpt_piston_masses,
+        )
+
+        _, psf_tmass = compute_cpt_piston_masses()
+    return max(400, min(int(psf_tmass), 1200))
 
 
 def resolve_heat_comp_damp_kwargs(args: argparse.Namespace) -> dict[str, float | bool]:

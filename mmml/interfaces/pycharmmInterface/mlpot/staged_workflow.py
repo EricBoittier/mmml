@@ -23,6 +23,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     resolve_dcd_nsavc,
     resolve_dynamics_print_kwargs,
     resolve_heat_firstt_finalt,
+    resolve_heat_hoover_tmass,
     resolve_heat_ihtfrq,
     resolve_heat_thermostat,
     resolve_nve_boltzmann_temp,
@@ -286,8 +287,13 @@ def _build_stage_dynamics_kw(
         if resolve_heat_thermostat(args) == "hoover":
             from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
                 build_hoover_heat_dynamics,
+                compute_cpt_piston_masses,
             )
 
+            tmass = None
+            if use_pbc:
+                _, psf_tmass = compute_cpt_piston_masses()
+                tmass = resolve_heat_hoover_tmass(args, psf_tmass=psf_tmass)
             kw = build_hoover_heat_dynamics(
                 timestep_ps=timestep_ps,
                 duration_ps=duration_ps,
@@ -298,6 +304,7 @@ def _build_stage_dynamics_kw(
                 echeck=heat_echeck,
                 use_pbc=use_pbc,
                 ihtfrq=resolve_heat_ihtfrq(args, nstep=nstep),
+                tmass=tmass,
             )
         else:
             kw = build_heat_dynamics(

@@ -108,7 +108,15 @@ def test_hoover_cpt_heat_ramp_target_and_overlap_chunk():
         finalt=30.0,
         step=500,
         total_nstep=25000,
+        n_chunks=50,
     ) == pytest.approx(0.6)
+    assert hoover_cpt_heat_ramp_target_K(
+        firstt=0.0,
+        finalt=30.0,
+        step=0,
+        total_nstep=2500,
+        n_chunks=1,
+    ) == pytest.approx(15.0)
     kw = build_hoover_heat_dynamics(
         temp=30.0,
         firstt=0.0,
@@ -121,14 +129,26 @@ def test_hoover_cpt_heat_ramp_target_and_overlap_chunk():
     chunk_kw: dict = {}
     apply_hoover_cpt_heat_ramp_overlap_chunk(
         chunk_kw,
+        chunk_index=0,
+        steps_done=0,
+        ramp_spec=spec,
+        total_nstep=2500,
+        n_chunks=1,
+    )
+    assert chunk_kw["hoover reft"] == pytest.approx(15.0)
+    chunk_kw = {}
+    apply_hoover_cpt_heat_ramp_overlap_chunk(
+        chunk_kw,
         chunk_index=1,
         steps_done=500,
         ramp_spec=spec,
         total_nstep=25000,
+        n_chunks=50,
     )
     assert chunk_kw["firstt"] == pytest.approx(0.6)
     assert chunk_kw["finalt"] == 30.0
     assert chunk_kw["tbath"] == 30.0
+    assert chunk_kw["hoover reft"] == pytest.approx(0.6)
     assert chunk_kw["iasvel"] == 1
     assert chunk_kw["start"] is False
 
@@ -147,6 +167,31 @@ def test_apply_heat_segment_ramp_kwargs_splits_ramp():
     assert kw["firstt"] == 60.0
     assert kw["finalt"] == 120.0
     assert kw["TEMINC"] == 60.0 / (20000 // 100)
+
+
+def test_apply_heat_segment_ramp_hoover_reft_starts_at_segment_low():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import apply_heat_segment_ramp_kwargs
+
+    kw = {
+        "firstt": 0.0,
+        "finalt": 240.0,
+        "hoover reft": 240.0,
+        "ihtfrq": 0,
+        "cpt": True,
+        "tbath": 240.0,
+    }
+    apply_heat_segment_ramp_kwargs(
+        kw,
+        seg_index=1,
+        n_segments=8,
+        heat_firstt=0.0,
+        heat_finalt=240.0,
+        nstep=2500,
+        ihtfrq=0,
+    )
+    assert kw["firstt"] == pytest.approx(30.0)
+    assert kw["finalt"] == pytest.approx(60.0)
+    assert kw["hoover reft"] == pytest.approx(30.0)
 
 
 def test_finalize_heat_dynamics_frequencies_harmonizes_ihtfrq_and_teminc():

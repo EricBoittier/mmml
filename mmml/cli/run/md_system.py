@@ -346,6 +346,16 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--heat-hoover-tmass",
+        type=int,
+        default=None,
+        metavar="M",
+        help=(
+            "pycharmm Hoover heat only: thermostat mass tmass (kcal·mol⁻¹·ps²). "
+            "Default clamps PSF tmass to 400–1200. Lower = stronger T coupling."
+        ),
+    )
+    parser.add_argument(
         "--nve-boltzmann-temp",
         type=float,
         default=None,
@@ -1233,6 +1243,7 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     ]
     _append_optional(cmd, "--heat-firstt", getattr(args, "heat_firstt", None))
     _append_optional(cmd, "--heat-finalt", getattr(args, "heat_finalt", None))
+    _append_optional(cmd, "--heat-hoover-tmass", getattr(args, "heat_hoover_tmass", None))
     _append_optional(cmd, "--nve-boltzmann-temp", getattr(args, "nve_boltzmann_temp", None))
     cmd.extend(["--heat-thermostat", str(getattr(args, "heat_thermostat", "scale"))])
     _append_boolean_optional_flag(

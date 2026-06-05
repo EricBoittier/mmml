@@ -734,12 +734,20 @@ def hoover_cpt_heat_ramp_target_K(
     finalt: float,
     step: int,
     total_nstep: int,
+    n_chunks: int = 1,
 ) -> float:
     """Linear Hoover CPT bath target (K) after ``step`` of ``total_nstep`` segment steps."""
+    t0 = float(firstt)
+    t1 = float(finalt)
+    if t1 <= t0:
+        return t1
+    if int(n_chunks) <= 1:
+        # One dyna segment: avoid hoover reft=finalt for the whole leg (overshoot).
+        return 0.5 * (t0 + t1)
     if total_nstep <= 0:
-        return float(finalt)
+        return t1
     frac = min(1.0, max(0.0, int(step) / int(total_nstep)))
-    return float(firstt) + frac * (float(finalt) - float(firstt))
+    return t0 + frac * (t1 - t0)
 
 
 def hoover_cpt_heat_ramp_spec_from_kw(
@@ -768,21 +776,20 @@ def apply_hoover_cpt_heat_ramp_overlap_chunk(
     steps_done: int,
     ramp_spec: dict[str, float],
     total_nstep: int,
+    n_chunks: int = 1,
 ) -> None:
-    """Continue a Hoover CPT heat ramp on overlap chunk ``chunk_index`` > 0."""
-    if chunk_index <= 0:
-        return
+    """Set Hoover CPT bath target for overlap chunk ``chunk_index`` (including 0)."""
     target = hoover_cpt_heat_ramp_target_K(
         firstt=float(ramp_spec["firstt"]),
         finalt=float(ramp_spec["finalt"]),
         step=int(steps_done),
         total_nstep=int(total_nstep),
+        n_chunks=int(n_chunks),
     )
     chunk_kw["firstt"] = target
     chunk_kw["finalt"] = float(ramp_spec["finalt"])
     chunk_kw["tbath"] = float(ramp_spec["finalt"])
-    if "hoover reft" in chunk_kw:
-        chunk_kw["hoover reft"] = target
+    chunk_kw["hoover reft"] = target
     if bool(chunk_kw.get("restart")):
         chunk_kw["iasvel"] = 0
     else:
@@ -860,7 +867,7 @@ def apply_heat_segment_ramp_kwargs(
     kw["finalt"] = seg_finalt
     kw["tbath"] = seg_finalt
     if "hoover reft" in kw:
-        kw["hoover reft"] = seg_finalt
+        kw["hoover reft"] = seg_firstt
     iht = max(1, min(int(ihtfrq), max(1, int(nstep))))
     if int(kw.get("ihtfrq", 0) or 0) > 0:
         heat_updates = max(1, int(nstep) // iht)
@@ -1006,10 +1013,9 @@ def build_hoover_heat_dynamics(
     )
     if tmass is None:
         _, tmass = compute_cpt_piston_masses()
-    # Small ML clusters (e.g. DCM:5) get tmass≈80 from PSF mass; Hoover then under-damps
-    # 10→240 K CPT heat (T≫reft, echeck abort ~step 500–700). Use a large floor (CHARMM
-    # solvated-protein recipes often use tmass≈1000 kcal·mol⁻¹·ps²).
-    tmass = max(int(tmass), 2000)
+        tmass = max(400, min(int(tmass), 1200))
+    else:
+        tmass = max(1, int(tmass))
     _apply_npt_cpt_kwargs(
         kw,
         temp=heat_finalt,
@@ -1019,6 +1025,7 @@ def build_hoover_heat_dynamics(
         tmass=tmass,
         pgamma=0.0,
         firstt=heat_firstt,
+        hoover_reft=heat_firstt,
     )
     return kw
 
@@ -1187,6 +1194,7 @@ def _apply_npt_cpt_kwargs(
     tmass: int | None = None,
     pgamma: float = 5,
     firstt: float | None = None,
+    hoover_reft: float | None = None,
     tcoupling: float = 5.0,
 ) -> None:
     """Attach CPT barostat + temperature control keywords to a dynamics dict."""
@@ -1204,7 +1212,7 @@ def _apply_npt_cpt_kwargs(
         }
     )
     if thermostat == "hoover":
-        kw["hoover reft"] = temp
+        kw["hoover reft"] = float(hoover_reft if hoover_reft is not None else temp)
         kw["tmass"] = tmass
         if firstt is not None:
             kw["firstt"] = firstt
@@ -2328,6 +2336,7 @@ def run_dynamics_with_io(
                     steps_done=steps_done,
                     ramp_spec=hoover_heat_ramp_spec,
                     total_nstep=total_nstep,
+                    n_chunks=n_chunks,
                 )
             if pending_post_rescue_handoff:
                 _prepare_post_rescue_overlap_handoff(

@@ -250,8 +250,8 @@ def test_build_stage_dynamics_kw_heat_hoover_pbc_disables_ihtfrq_ramp():
             restart=False,
             use_pbc=True,
         )
-    assert kw["hoover reft"] == 240.0
-    assert kw["tmass"] == 2000
+    assert kw["hoover reft"] == 0.0
+    assert kw["tmass"] == 800
     assert kw["echeck"] == 5000.0
     assert kw["pgamma"] == 0.0
     assert kw["cpt"] is True
@@ -269,8 +269,19 @@ def test_build_hoover_heat_tmass_floor_for_small_psf_mass():
             finalt=240.0,
             use_pbc=True,
         )
-    assert kw["tmass"] == 2000
+    assert kw["tmass"] == 400
     assert kw["pgamma"] == 0.0
+    assert kw["hoover reft"] == 10.0
+
+
+def test_resolve_heat_hoover_tmass_explicit_and_clamped_default():
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import resolve_heat_hoover_tmass
+
+    args = argparse.Namespace(heat_hoover_tmass=600)
+    assert resolve_heat_hoover_tmass(args, psf_tmass=80) == 600
+    args = argparse.Namespace(heat_hoover_tmass=None)
+    assert resolve_heat_hoover_tmass(args, psf_tmass=80) == 400
+    assert resolve_heat_hoover_tmass(args, psf_tmass=5000) == 1200
 
 
 def test_build_stage_dynamics_kw_free_space_equi_uses_charmm_heat_controls():
