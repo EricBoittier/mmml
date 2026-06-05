@@ -89,12 +89,14 @@ rule analyze_nve:
     params:
         repo=workflow.basedir + "/../..",
         python=_REPO_PYTHON,
+        catastrophe=config.get("energy_catastrophe_score", 10000.0),
     shell:
         """
         {params.python} {params.repo}/workflows/dcm3_nve_cutoff_sweep/scripts/analyze_nve_energy.py \
             --log {_OUTPUT_ROOT}/runs/{wildcards.preset}/{wildcards.geom}/stdout.log \
             -o {output.metrics} \
-            --npz {output.npz} || true
+            --npz {output.npz} \
+            --catastrophe-score {params.catastrophe} || true
         test -s {output.metrics}
         """
 

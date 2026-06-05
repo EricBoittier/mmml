@@ -53,6 +53,32 @@ def test_summarize_nve_energy_smoothness() -> None:
     s_noisy = mod.summarize_nve_energy(noisy)
     assert s_smooth["smoothness_score"] < s_noisy["smoothness_score"]
     assert s_noisy["max_abs_etot_step_delta_kcal"] >= 4.9
+    assert s_smooth["status"] == "pass"
+
+
+def test_classify_energy_catastrophe() -> None:
+    mod = _load_analyze()
+    rows = [
+        {
+            "total_energy_kcal": -100.0,
+            "potential_energy_kcal": -110.0,
+            "kinetic_energy_kcal": 10.0,
+            "temperature_K": 300.0,
+            "time_ps": 0.0,
+            "step": 0.0,
+        },
+        {
+            "total_energy_kcal": 1.0e9,
+            "potential_energy_kcal": 1.0e9,
+            "kinetic_energy_kcal": 0.0,
+            "temperature_K": 300.0,
+            "time_ps": 0.001,
+            "step": 1.0,
+        },
+    ]
+    summary = mod.summarize_nve_energy(rows, catastrophe_score=10000.0)
+    assert summary["status"] == "fail_energy"
+    assert "catastrophe threshold" in summary["notes"]
 
 
 def test_cutoff_lib_preset_geometry_keys() -> None:
@@ -67,19 +93,37 @@ def test_cutoff_lib_preset_geometry_keys() -> None:
 
     cfg = load_config(workflow_root() / "config.yaml")
     presets = preset_ids(cfg)
+    assert "extended_mm5" in presets
     assert "dcm9_stability" in presets
-    assert "dcm9_ml01" in presets
-    assert "dcm9_ml001" in presets
-    assert "extended_handoff" in presets
+    assert "handoff_7p5" in presets
+    assert "extended_mm5_ml05" in presets
+    assert "handoff_7p5_ml15" in presets
     assert "code_default" not in presets
-    assert "wide_ml_taper" not in presets
-    assert "extended_mm5" not in presets
-    assert "handoff_7p5" not in presets
     assert "mid" in geometry_ids(cfg)
-    assert len(presets) == 4
+    assert len(presets) == 5
     assert len(geometry_ids(cfg)) == 4
-    assert expected_nve_nstep(cfg) == 4000
+    assert expected_nve_nstep(cfg) == 20000
     assert int(cfg["dynamics_overlap_check_interval"]) >= expected_nve_nstep(cfg)
+    assert float(cfg["energy_catastrophe_score"]) == 10000.0
+
+
+def test_collect_sweep_flags_fail_energy(tmp_path) -> None:
+    sys.path.insert(0, str(_REPO / "workflows" / "dcm3_nve_cutoff_sweep" / "scripts"))
+    from collect_sweep import _effective_status, _preset_mean_scores
+
+    row = {"status": "pass", "smoothness_score": 500.0, "preset_id": "good"}
+    assert _effective_status(row, 10000.0) == "pass"
+    bad = {"status": "pass", "smoothness_score": 1.0e9, "preset_id": "bad"}
+    assert _effective_status(bad, 10000.0) == "fail_energy"
+
+    rows = [
+        {"preset_id": "a", "status": "pass", "smoothness_score": 100.0},
+        {"preset_id": "a", "status": "fail_energy", "smoothness_score": 1.0e9},
+        {"preset_id": "b", "status": "pass", "smoothness_score": 200.0},
+    ]
+    sane = _preset_mean_scores(rows, exclude_statuses=frozenset({"fail_energy"}))
+    assert sane["a"][0] == 100.0
+    assert sane["b"][0] == 200.0
 
 
 def test_prepare_geometry_shell_uses_mpirun_wrapper_for_script() -> None:

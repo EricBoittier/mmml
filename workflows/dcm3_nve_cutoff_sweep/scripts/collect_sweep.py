@@ -15,6 +15,7 @@ if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
 from cutoff_lib import (  # noqa: E402
+    energy_catastrophe_score,
     geometry_config,
     geometry_ids,
     load_config,
@@ -58,7 +59,24 @@ def _read_json(path: Path) -> dict[str, Any] | None:
         return None
 
 
-def _row_for_job(cfg: dict[str, Any], preset_id: str, geom_id: str) -> dict[str, Any]:
+def _effective_status(row: dict[str, Any], catastrophe: float) -> str:
+    status = str(row.get("status", "missing"))
+    score_raw = str(row.get("smoothness_score", "")).strip()
+    if not score_raw:
+        return status
+    score = float(score_raw)
+    if score > catastrophe and status == "pass":
+        return "fail_energy"
+    return status
+
+
+def _row_for_job(
+    cfg: dict[str, Any],
+    preset_id: str,
+    geom_id: str,
+    *,
+    catastrophe: float,
+) -> dict[str, Any]:
     preset = preset_config(cfg, preset_id)
     geom = geometry_config(cfg, geom_id)
     metrics_path = run_dir(cfg, preset_id, geom_id) / "nve_metrics.json"
@@ -80,7 +98,33 @@ def _row_for_job(cfg: dict[str, Any], preset_id: str, geom_id: str) -> dict[str,
         if key in metrics:
             row[key] = metrics[key]
         row.setdefault(key, "")
+    row["status"] = _effective_status(row, catastrophe)
+    if row["status"] == "fail_energy" and not row["notes"]:
+        row["notes"] = (
+            f"smoothness_score {float(row['smoothness_score']):.3g} "
+            f"> catastrophe threshold {catastrophe:g}"
+        )
     return row
+
+
+def _preset_mean_scores(
+    rows: list[dict[str, Any]],
+    *,
+    exclude_statuses: frozenset[str],
+) -> dict[str, tuple[float, int]]:
+    by_preset: dict[str, list[float]] = {}
+    for row in rows:
+        if str(row.get("status", "")) in exclude_statuses:
+            continue
+        score_raw = str(row.get("smoothness_score", "")).strip()
+        if not score_raw:
+            continue
+        by_preset.setdefault(str(row["preset_id"]), []).append(float(score_raw))
+    return {
+        pid: (sum(vals) / len(vals), len(vals))
+        for pid, vals in by_preset.items()
+        if vals
+    }
 
 
 def collect(
@@ -90,10 +134,13 @@ def collect(
     config_path: Path | None = None,
 ) -> list[dict[str, Any]]:
     cfg = load_config(config_path)
+    catastrophe = energy_catastrophe_score(cfg)
     rows: list[dict[str, Any]] = []
     for preset_id in preset_ids(cfg):
         for geom_id in geometry_ids(cfg):
-            rows.append(_row_for_job(cfg, preset_id, geom_id))
+            rows.append(
+                _row_for_job(cfg, preset_id, geom_id, catastrophe=catastrophe)
+            )
 
     rows.sort(
         key=lambda r: (
@@ -110,14 +157,20 @@ def collect(
         for row in rows:
             writer.writerow(row)
 
-    _write_report(rows, md_path, cfg)
+    _write_report(rows, md_path, cfg, catastrophe=catastrophe)
     return rows
 
 
-def _write_report(rows: list[dict[str, Any]], path: Path, cfg: dict[str, Any]) -> None:
+def _write_report(
+    rows: list[dict[str, Any]],
+    path: Path,
+    cfg: dict[str, Any],
+    *,
+    catastrophe: float,
+) -> None:
     presets = preset_ids(cfg)
     geoms = geometry_ids(cfg)
-    passed = [r for r in rows if r.get("status") == "pass"]
+    n_catastrophe = sum(1 for r in rows if r.get("status") == "fail_energy")
 
     lines = [
         "# DCM:3 NVE cutoff sweep report",
@@ -125,13 +178,14 @@ def _write_report(rows: list[dict[str, Any]], path: Path, cfg: dict[str, Any]) -
         f"- Composition: `{cfg.get('composition', 'DCM:3')}`",
         f"- NVE length: **{cfg['ps_nve']} ps** @ {cfg['dt_fs']} fs",
         f"- Matrix: {len(presets)} cutoff presets × {len(geoms)} COM geometries = {len(rows)} jobs",
+        f"- Energy catastrophe threshold: **{catastrophe:g}** (`smoothness_score`; → `fail_energy`)",
         "",
         "Lower **smoothness_score** (= etot_std + max step Δ + 0.1×|drift|) indicates smoother NVE.",
         "",
         "## Ranked runs (smoothest first)",
         "",
         "| rank | preset | geom | mm_on | mm_w | ml_w | etot_std | max_ΔE/step | drift | score | status |",
-        "|------|--------|------|-------|------|------|----------|-------------|-------|-------|--------|",
+        "|------|--------|------|-------|------|------|----------|-------------|-------|-------|--------",
     ]
     for i, row in enumerate(rows, start=1):
         lines.append(
@@ -140,34 +194,51 @@ def _write_report(rows: list[dict[str, Any]], path: Path, cfg: dict[str, Any]) -
             "{etot_drift_kcal} | {smoothness_score} | {status} |".format(i=i, **row)
         )
 
-    if passed:
-        by_preset: dict[str, list[float]] = {}
-        for row in passed:
-            score = float(row["smoothness_score"])
-            by_preset.setdefault(str(row["preset_id"]), []).append(score)
-        mean_scores = {
-            pid: sum(vals) / len(vals) for pid, vals in by_preset.items()
-        }
-        best_preset = min(mean_scores, key=mean_scores.get)
+    all_means = _preset_mean_scores(rows, exclude_statuses=frozenset({"missing", "fail"}))
+    sane_means = _preset_mean_scores(
+        rows,
+        exclude_statuses=frozenset({"missing", "fail", "fail_energy"}),
+    )
+
+    if all_means:
         lines.extend(
             [
                 "",
-                "## Preset mean smoothness (passed runs only)",
+                "## Preset mean smoothness (all completed runs)",
                 "",
                 "| preset | mean smoothness_score | n |",
                 "|--------|----------------------|---|",
             ]
         )
-        for pid in sorted(mean_scores, key=mean_scores.get):
-            lines.append(
-                f"| {pid} | {mean_scores[pid]:.6f} | {len(by_preset[pid])} |"
-            )
+        for pid in sorted(all_means, key=lambda p: all_means[p][0]):
+            mean, n = all_means[pid]
+            lines.append(f"| {pid} | {mean:.6f} | {n} |")
+
+    if sane_means:
+        best_preset = min(sane_means, key=lambda p: sane_means[p][0])
         lines.extend(
             [
                 "",
-                f"**Suggested preset (lowest mean score):** `{best_preset}`",
+                "## Preset mean smoothness (excluding `fail_energy`)",
+                "",
+                "| preset | mean smoothness_score | n |",
+                "|--------|----------------------|---|",
             ]
         )
+        for pid in sorted(sane_means, key=lambda p: sane_means[p][0]):
+            mean, n = sane_means[p]
+            lines.append(f"| {pid} | {mean:.6f} | {n} |")
+        lines.extend(
+            [
+                "",
+                f"**Suggested preset (lowest sane mean):** `{best_preset}`",
+            ]
+        )
+        if n_catastrophe:
+            lines.append(
+                f"\n_{n_catastrophe} run(s) flagged `fail_energy` (score > {catastrophe:g}); "
+                "excluded from sane mean._"
+            )
 
     lines.append("")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")

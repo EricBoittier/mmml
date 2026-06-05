@@ -113,6 +113,10 @@ def expected_nve_nstep(cfg: dict[str, Any]) -> int:
     return int(dynamics_nstep_from_ps(float(cfg["ps_nve"]), float(cfg["dt_fs"])))
 
 
+def energy_catastrophe_score(cfg: dict[str, Any]) -> float:
+    return float(cfg.get("energy_catastrophe_score", 10000.0))
+
+
 def _assert_per_step_output(cfg: dict[str, Any]) -> None:
     dcd = int(cfg.get("dcd_nsavc", 0))
     dyn = int(cfg.get("dyn_nprint", 0))
