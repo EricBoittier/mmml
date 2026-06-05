@@ -220,11 +220,37 @@ def test_patch_restart_global_step_updates_jhstrt(tmp_path):
         "REST    48     0\n"
         "\n"
         " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
-        "          25        8000         500         500          10           0\n",
+        f"{'25':>10}{'8000':>10}{'500':>10}{'500':>10}{'10':>10}{'0':>10}\n",
         encoding="utf-8",
     )
     assert patch_restart_global_step(res, 1500)
     assert read_restart_last_step(res) == 1500
+
+
+def test_patch_restart_global_step_preserves_fortran_restart_format(tmp_path):
+    """Post-rescue READYN needs fixed-width I10 lines, not space-joined tokens."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        patch_restart_global_step,
+    )
+
+    stub = (
+        Path(__file__).resolve().parents[1]
+        / "functionality/mlpot/output/dynamics/nve_stub.res"
+    )
+    assert stub.is_file()
+    res = tmp_path / "overlap_a.res"
+    res.write_text(stub.read_text(encoding="utf-8"), encoding="utf-8")
+    natom_line_before = res.read_text(encoding="utf-8").splitlines()[7]
+    tail_before = natom_line_before[60:]
+
+    assert patch_restart_global_step(res, 500)
+
+    lines = res.read_text(encoding="utf-8").splitlines()
+    assert lines[0].startswith("REST")
+    assert lines[0][10:20] == "       500"
+    natom_line = lines[7]
+    assert natom_line[50:60] == "       500"
+    assert natom_line[60:] == tail_before
 
 
 def test_read_restart_last_step_real_fixture():
