@@ -29,7 +29,8 @@
 #     # CGENFF min + 2000-step CHARMM heat before MLpot (outputs charmm_mm_heat_dcm_9.*)
 #   ENABLE_FB=1 FB_RAD=14 ./scripts/run_dcm9_stability.sh
 #   ./scripts/run_dcm9_stability.sh --ps-heat 30 --heat-ihtfrq 100
-#   # softer ramp (defaults): 0 K -> 240 K over 20 ps, scale at ihtfrq
+#   # softer ramp (defaults): 0 K -> 240 K over 20 ps, 4 heat segments (5 ps each)
+#   # ML/MM cutoffs: mm_switch_on=7, mm_switch_width=5 (see docs/mlpot-settings.md)
 #
 # After run, confirm in the log (non-quiet):
 #   HEAT complete: restart_step=~40000, dcd_frames=~81  (new validation)
