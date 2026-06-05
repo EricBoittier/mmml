@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 # Launch mmml pycharmm / MLpot under the OpenMPI build linked to libcharmm.so.
+#
+# MPI ranks: default 1 (recommended). Override for experiments:
+#   MMML_MPI_NP=4 ./scripts/mmml-charmm-mpirun.sh md-system ...
+# MLpot disables CHARMM domdec and runs the Python callback on every rank — np>1
+# is unsupported and may hang, corrupt I/O, or fight over GPUs.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -42,14 +47,22 @@ PY
 )
 
 MPIRUN="${MMML_MPIRUN:-mpirun}"
+MPI_NP="${MMML_MPI_NP:-1}"
+if ! [[ "$MPI_NP" =~ ^[1-9][0-9]*$ ]]; then
+  echo "mmml-charmm-mpirun: MMML_MPI_NP must be a positive integer (got: ${MMML_MPI_NP:-<unset>})" >&2
+  exit 1
+fi
+if [[ "$MPI_NP" -gt 1 ]]; then
+  echo "mmml-charmm-mpirun: warning: MMML_MPI_NP=${MPI_NP} (experimental; domdec off, no rank-0 MLpot guard)" >&2
+fi
 if [[ "${1:-}" == *.py ]]; then
-  exec "$MPIRUN" -np 1 "$PY" "$@"
+  exec "$MPIRUN" -np "$MPI_NP" "$PY" "$@"
 fi
 if [[ "${1:-}" == python || "${1:-}" == python3 ]]; then
   shift
-  exec "$MPIRUN" -np 1 "$PY" "$@"
+  exec "$MPIRUN" -np "$MPI_NP" "$PY" "$@"
 fi
 if [[ -n "${MMML_BIN:-}" && -x "${MMML_BIN}" ]]; then
-  exec "$MPIRUN" -np 1 "$MMML_BIN" "$@"
+  exec "$MPIRUN" -np "$MPI_NP" "$MMML_BIN" "$@"
 fi
-exec "$MPIRUN" -np 1 "$PY" -m mmml.cli.__main__ "$@"
+exec "$MPIRUN" -np "$MPI_NP" "$PY" -m mmml.cli.__main__ "$@"
