@@ -75,8 +75,10 @@ def record_mm_baseline_strain(*, verbose: bool = False) -> MmStrainBaseline | No
     from mmml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_block
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
 
+    from mmml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet
+
     apply_charmm_mm_block()
-    pycharmm.lingo.charmm_script("ENER")
+    run_charmm_script_quiet("ENER")
     baseline = MmStrainBaseline(
         grms_kcalmol_A=float(charmm_grms()),
         internal_kcalmol=charmm_internal_energy_kcalmol(),
@@ -101,9 +103,11 @@ def measure_mm_bonded_strain_with_full_block(ctx: MlpotContext) -> MmStrainBasel
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _with_mlpot_detached
 
+    from mmml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet
+
     def _measure() -> MmStrainBaseline:
         apply_charmm_mm_block()
-        pycharmm.lingo.charmm_script("ENER")
+        run_charmm_script_quiet("ENER")
         return MmStrainBaseline(
             grms_kcalmol_A=float(charmm_grms()),
             internal_kcalmol=charmm_internal_energy_kcalmol(),
@@ -162,8 +166,9 @@ def assert_bonded_mm_energy_active(*, context: str = "bonded-MM rescue") -> None
     import pycharmm
 
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
+    from mmml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet
 
-    pycharmm.lingo.charmm_script("ENER")
+    run_charmm_script_quiet("ENER")
     bond = charmm_bonded_term_kcalmol("BOND")
     angl = charmm_bonded_term_kcalmol("ANGL")
     grms = float(charmm_grms())
@@ -298,9 +303,10 @@ def _measure_current_mm_strain() -> MmStrainBaseline:
 
     from mmml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_block
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
+    from mmml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet
 
     apply_charmm_mm_block()
-    pycharmm.lingo.charmm_script("ENER")
+    run_charmm_script_quiet("ENER")
     return MmStrainBaseline(
         grms_kcalmol_A=float(charmm_grms()),
         internal_kcalmol=charmm_internal_energy_kcalmol(),
@@ -390,10 +396,12 @@ def _run_bonded_sd_without_mlpot(
         _import_pycharmm_modules,
     )
 
+    from mmml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet
+
     apply_bonded_mm_only_block()
     pycharmm, cons_fix, *_ = _import_pycharmm_modules()
     minimize = _import_pycharmm_modules()[3]
-    pycharmm.lingo.charmm_script("ENER")
+    run_charmm_script_quiet("ENER")
     assert_bonded_mm_energy_active(context="Bonded-MM heavy mini")
     grms_before = float(charmm_grms())
     angl_before = charmm_bonded_term_kcalmol("ANGL")
@@ -407,7 +415,7 @@ def _run_bonded_sd_without_mlpot(
         print(msg, flush=True)
     if config.nstep_sd > 0:
         minimize.run_sd(**_bonded_recovery_sd_kwargs(ctx, config))
-    pycharmm.lingo.charmm_script("ENER")
+    run_charmm_script_quiet("ENER")
     grms_after = float(charmm_grms())
     if config.verbose:
         msg = f"Bonded-MM heavy mini end: GRMS={grms_after:.4f} kcal/mol/Å"
@@ -570,10 +578,10 @@ def assert_pre_min_bonded_geometry(
     if not getattr(args, "bonded_mm_mini", False):
         return
 
-    apply_charmm_mm_block()
-    import pycharmm
+    from mmml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet
 
-    pycharmm.lingo.charmm_script("ENER")
+    apply_charmm_mm_block()
+    run_charmm_script_quiet("ENER")
     angl = charmm_bonded_term_kcalmol("ANGL")
     internal = charmm_internal_energy_kcalmol()
     max_angl = getattr(args, "bonded_mm_max_angl_kcal", None)

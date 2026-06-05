@@ -28,6 +28,14 @@ def _import_pycharmm():
     return pycharmm
 
 
+def _run_block_script(summary: str, script: str) -> None:
+    """Apply a BLOCK script quietly and emit a one-line Python summary."""
+    from mmml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet
+
+    run_charmm_script_quiet(script)
+    print(summary, flush=True)
+
+
 def apply_charmm_mm_block() -> None:
     """Full CGENFF internal terms on all atoms (MM / pre-MLpot cluster minimize)."""
     from mmml.interfaces.pycharmmInterface.import_pycharmm import reset_block
@@ -37,13 +45,15 @@ def apply_charmm_mm_block() -> None:
 
 def apply_bonded_mm_only_block() -> None:
     """Bonded MM terms only (BOND/ANGL/DIHE); zero VDW/ELEC for geometry recovery."""
-    pycharmm = _import_pycharmm()
     block = """BLOCK
 CALL 1 SELE ALL END
 COEFF 1 1 1.0 BOND 1.0 ANGL 1.0 DIHEdral 1.0 ELEC 0.0 VDW 0.0
 END
 """
-    pycharmm.lingo.charmm_script(block)
+    _run_block_script(
+        "CHARMM BLOCK: bonded-only (BOND/ANGL/DIHE on, ELEC/VDW off)",
+        block,
+    )
 
 
 def apply_bonded_vdw_recovery_block() -> None:
@@ -53,13 +63,15 @@ def apply_bonded_vdw_recovery_block() -> None:
     ``NBXMOD 5`` is not restored afterward — :func:`restore_workflow_nbonds` is a
     no-op so CHARMM does not rebuild ML exclusion lists (``upinb`` segfault).
     """
-    pycharmm = _import_pycharmm()
     block = """BLOCK
 CALL 1 SELE ALL END
 COEFF 1 1 1.0 BOND 1.0 ANGL 1.0 DIHEdral 1.0 ELEC 0.0 VDW 1.0
 END
 """
-    pycharmm.lingo.charmm_script(block)
+    _run_block_script(
+        "CHARMM BLOCK: bonded+VDW recovery (ELEC off)",
+        block,
+    )
 
 
 def apply_mlpot_energy_block(
@@ -87,7 +99,16 @@ CALL 1 SELE ALL END
 COEFF 1 1 {coeff}
 END
 """
-        pycharmm.lingo.charmm_script(block)
+        if mm_internal_scale > 0.0:
+            summary = (
+                f"CHARMM BLOCK: MLpot all-ML ({n_total} atoms, "
+                f"bonded scale={mm_internal_scale:g}, ELEC/VDW off)"
+            )
+        else:
+            summary = (
+                f"CHARMM BLOCK: MLpot all-ML ({n_total} atoms, bonded/ELEC/VDW off)"
+            )
+        _run_block_script(summary, block)
         return "all"
 
     name = ml_selection.store(_ML_BLOCK_NAME)
@@ -99,7 +120,18 @@ COEFF 2 2 {coeff}
 COEFF 1 2 0.0
 END
 """
-    pycharmm.lingo.charmm_script(block)
+    n_mm = n_total - n_ml
+    if mm_internal_scale > 0.0:
+        summary = (
+            f"CHARMM BLOCK: MLpot hybrid ({n_ml} ML + {n_mm} MM atoms, "
+            f"bonded scale={mm_internal_scale:g} on ML, ELEC/VDW off on ML)"
+        )
+    else:
+        summary = (
+            f"CHARMM BLOCK: MLpot hybrid ({n_ml} ML + {n_mm} MM atoms, "
+            "ML bonded/ELEC/VDW off)"
+        )
+    _run_block_script(summary, block)
     return name
 
 

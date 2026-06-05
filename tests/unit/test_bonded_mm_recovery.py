@@ -85,10 +85,13 @@ def test_apply_bonded_mm_only_block_script():
     assert spec.loader is not None
     spec.loader.exec_module(block_terms)
 
-    with patch.object(block_terms, "_import_pycharmm") as imp:
-        imp.return_value.lingo.charmm_script = MagicMock()
+    scripts: list[str] = []
+    with patch(
+        "mmml.interfaces.pycharmmInterface.charmm_levels.run_charmm_script_quiet",
+        side_effect=scripts.append,
+    ):
         block_terms.apply_bonded_mm_only_block()
-    script = imp.return_value.lingo.charmm_script.call_args[0][0]
+    script = scripts[0]
     assert "BOND 1.0 ANGL 1.0 DIHEdral 1.0" in script
     assert "ELEC 0.0 VDW 0.0" in script
 
@@ -106,10 +109,13 @@ def test_apply_bonded_vdw_recovery_block_script():
     assert spec.loader is not None
     spec.loader.exec_module(block_terms)
 
-    with patch.object(block_terms, "_import_pycharmm") as imp:
-        imp.return_value.lingo.charmm_script = MagicMock()
+    scripts: list[str] = []
+    with patch(
+        "mmml.interfaces.pycharmmInterface.charmm_levels.run_charmm_script_quiet",
+        side_effect=scripts.append,
+    ):
         block_terms.apply_bonded_vdw_recovery_block()
-    script = imp.return_value.lingo.charmm_script.call_args[0][0]
+    script = scripts[0]
     assert "BOND 1.0 ANGL 1.0 DIHEdral 1.0" in script
     assert "ELEC 0.0 VDW 1.0" in script
 
@@ -412,6 +418,8 @@ def test_minimize_bonded_recovery_runs_sd_and_reports_angl():
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=MagicMock(),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_levels.run_charmm_script_quiet",
     ):
         imp.return_value = (MagicMock(), MagicMock(), MagicMock(), minimize)
         grms = minimize_bonded_mm_recovery(ctx, BondedMmMiniConfig(nstep_sd=30))
@@ -490,6 +498,8 @@ def test_measure_mm_bonded_strain_uses_mlpot_detached():
         ), patch(
             "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.charmm_bonded_term_kcalmol",
             return_value=24.0,
+        ), patch(
+            "mmml.interfaces.pycharmmInterface.charmm_levels.run_charmm_script_quiet",
         ):
             out = bonded_mm_recovery.measure_mm_bonded_strain_with_full_block(ctx)
     finally:
@@ -793,6 +803,8 @@ def test_assert_pre_min_bonded_geometry_exits_on_high_angl():
         bonded_mm_recovery,
         "charmm_internal_energy_kcalmol",
         return_value=24.0,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_levels.run_charmm_script_quiet",
     ), patch.dict(sys.modules, {"pycharmm": mock_py}), pytest.raises(SystemExit):
         bonded_mm_recovery.assert_pre_min_bonded_geometry(args)
 
