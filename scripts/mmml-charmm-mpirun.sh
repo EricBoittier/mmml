@@ -42,6 +42,13 @@ PY
 )
 
 MPIRUN="${MMML_MPIRUN:-mpirun}"
+if [[ "${1:-}" == *.py ]]; then
+  exec "$MPIRUN" -np 1 "$PY" "$@"
+fi
+if [[ "${1:-}" == python || "${1:-}" == python3 ]]; then
+  shift
+  exec "$MPIRUN" -np 1 "$PY" "$@"
+fi
 if [[ -n "${MMML_BIN:-}" && -x "${MMML_BIN}" ]]; then
   exec "$MPIRUN" -np 1 "$MMML_BIN" "$@"
 fi
