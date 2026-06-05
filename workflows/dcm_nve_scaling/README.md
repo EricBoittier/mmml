@@ -25,7 +25,7 @@ From [config.yaml](config.yaml):
 - `dcd_nsavc: 1`, `dyn_nprint: 1`, `nprint: 1` (every integration step)
 - `nve_boltzmann_temp: 0.2` (very low initial KE before NVE; raise cautiously if clusters are too cold)
 - `ps_nve: 0.2` (800-step screening leg; increase once COM QC is stable)
-- `nve_inbfrq_values: [-1, 1, 10, 50]` — one run per value under `results/dcm_N_nve/inbfrq_<slug>/`
+- `nve_inbfrq_values: [-1, 0, 1, 10, 50]` — one run per value under `results/dcm_N_nve/inbfrq_<slug>/` (`0` = no CHARMM list rebuilds during NVE after post-mini sync)
 - `pre_nve_charmm_update: true` — CHARMM `ENER`+`UPDATE` after mini (lists were frozen at `inbfrq=0`)
 - `mini_nstep: 2000`, `bonded_mm_mini: true` (bonded-only SD after mini if ANGL/GRMS spike)
 - `packmol_reference_r: 20`, `packmol_tolerance: 1.2` (looser initial cluster)

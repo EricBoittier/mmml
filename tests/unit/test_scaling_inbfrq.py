@@ -18,9 +18,15 @@ from scaling_lib import (  # noqa: E402
 
 
 def test_inbfrq_slug_roundtrip():
-    for v in (-1, 1, 10, 50):
+    for v in (-1, 0, 1, 10, 50):
         s = inbfrq_slug(v)
         assert inbfrq_from_slug(s) == v
+
+
+def test_run_variant_dir_inbfrq_zero():
+    cfg = {"composition_prefix": "DCM", "output_root": "results"}
+    p = run_variant_dir(cfg, 5, 0)
+    assert p.name == "inbfrq_0"
 
 
 def test_run_variant_dir_layout():
