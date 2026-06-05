@@ -2232,17 +2232,14 @@ def run_dynamics_with_io(
                     overlap_context=overlap_context,
                     mlpot_ctx=mlpot_ctx,
                 )
-            min_overlap_step = max(1, int(total_nstep * 0.95))
-            if steps_done < min_overlap_step:
-                expected_after_chunk = (chunk_index + 1) * chunk_nstep
-                msg = (
+            expected_after_chunk = (chunk_index + 1) * chunk_nstep
+            if steps_done < expected_after_chunk - 1:
+                print(
                     f"overlap ({overlap_context}): integrated {steps_done}/{total_nstep} "
-                    "steps"
+                    "steps (echeck or CHARMM abort likely); skipping mid-stage "
+                    "overlap geometry check",
+                    flush=True,
                 )
-                if steps_done < expected_after_chunk - 1:
-                    msg += " (echeck or CHARMM abort likely)"
-                msg += "; skipping mid-stage overlap geometry check"
-                print(msg, flush=True)
             else:
                 check_dynamics_overlap(
                     overlap,

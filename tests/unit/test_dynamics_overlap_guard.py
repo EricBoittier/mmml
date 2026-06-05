@@ -397,6 +397,99 @@ def test_run_dynamics_with_io_chunks_and_checks(tmp_path):
     assert "firstt" not in calls[2]
 
 
+def test_overlap_checks_run_after_each_successful_chunk(tmp_path):
+    """Mid-chunk overlap geometry checks must run at every chunk boundary."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+
+    cfg = DynamicsOverlapConfig(
+        action="error",
+        min_distance_A=0.5,
+        check_interval=500,
+        n_monomers=2,
+        use_pbc=False,
+    )
+    overlap_calls: list[int] = []
+    chunk_count = 0
+
+    def fake_chunk(kw, _io, *, extra_iokw=None, **kwargs):
+        nonlocal chunk_count
+        chunk_count += 1
+        if _io is not None and _io.restart_write is not None:
+            Path(_io.restart_write).write_text(
+                f"REST {500 * chunk_count} 1\n", encoding="utf-8"
+            )
+        return mock.Mock()
+
+    def track_overlap(_cfg, *, context, step, mlpot_ctx=None):
+        overlap_calls.append(int(step))
+        return 5.0
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        side_effect=fake_chunk,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
+        side_effect=track_overlap,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
+        side_effect=lambda path: int(Path(path).read_text().split()[1]),
+    ):
+        run_dynamics_with_io(
+            {"nstep": 2000},
+            CharmmTrajectoryFiles(restart_write=tmp_path / "heat.res"),
+            overlap=cfg,
+            overlap_context="heat segment 1/8",
+        )
+
+    assert chunk_count == 4
+    assert overlap_calls == [500, 1000, 1500, 2000]
+
+
+def test_overlap_skips_check_when_chunk_aborts_early(tmp_path, capsys):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+
+    cfg = DynamicsOverlapConfig(
+        action="error",
+        min_distance_A=0.5,
+        check_interval=500,
+        n_monomers=2,
+        use_pbc=False,
+    )
+
+    def fake_chunk(kw, _io, *, extra_iokw=None, **kwargs):
+        if _io is not None and _io.restart_write is not None:
+            Path(_io.restart_write).write_text("REST 300 1\n", encoding="utf-8")
+        return mock.Mock()
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        side_effect=fake_chunk,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
+    ) as check_overlap, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
+        return_value=300,
+    ):
+        run_dynamics_with_io(
+            {"nstep": 500},
+            CharmmTrajectoryFiles(restart_write=tmp_path / "heat.res"),
+            overlap=cfg,
+            overlap_context="heat segment 1/8",
+        )
+
+    post_chunk_steps = [
+        call.kwargs["step"]
+        for call in check_overlap.call_args_list
+        if int(call.kwargs.get("step", -1)) > 0
+    ]
+    assert post_chunk_steps == []
+    assert "echeck or CHARMM abort likely" in capsys.readouterr().out
+
+
 def test_mlpot_overlap_chunks_continue_in_memory_without_readyn(tmp_path):
     """MLpot runs must not READYN scratch restarts between overlap chunks."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
