@@ -6,9 +6,9 @@ Visual reference for ML/MM handoff cutoffs and staged heating. Figures are gener
 uv run python scripts/plot_mlpot_settings.py
 ```
 
-Output directory: [`docs/images/mlpot-settings/`](images/mlpot-settings/).
+Output directory: `docs/images/mlpot-settings/`.
 
-CLI flags: [`mmml/interfaces/pycharmmInterface/cutoffs.py`](../mmml/interfaces/pycharmmInterface/cutoffs.py) (`--mm-switch-on`, `--mm-switch-width`, `--ml-switch-width`). Dynamics: [`CHARMM_SETTINGS.md`](../mmml/interfaces/pycharmmInterface/mlpot/CHARMM_SETTINGS.md).
+CLI flags: [`mmml/interfaces/pycharmmInterface/cutoffs.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/pycharmmInterface/cutoffs.py) (`--mm-switch-on`, `--mm-switch-width`, `--ml-switch-width`). Dynamics: [`CHARMM_SETTINGS.md`](https://github.com/EricBoittier/mmml/blob/main/mmml/interfaces/pycharmmInterface/mlpot/CHARMM_SETTINGS.md).
 
 ## ML/MM cutoff presets
 
