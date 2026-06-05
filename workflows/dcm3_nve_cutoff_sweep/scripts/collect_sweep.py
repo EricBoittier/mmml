@@ -215,7 +215,10 @@ def _write_report(
             lines.append(f"| {pid} | {mean:.6f} | {n} |")
 
     if sane_means:
-        best_preset = min(sane_means, key=lambda p: sane_means[p][0])
+        n_geoms = len(geoms)
+        robust = {
+            pid: stats for pid, stats in sane_means.items() if stats[1] == n_geoms
+        }
         lines.extend(
             [
                 "",
@@ -228,12 +231,28 @@ def _write_report(
         for pid in sorted(sane_means, key=lambda p: sane_means[p][0]):
             mean, n = sane_means[pid]
             lines.append(f"| {pid} | {mean:.6f} | {n} |")
-        lines.extend(
-            [
-                "",
-                f"**Suggested preset (lowest sane mean):** `{best_preset}`",
-            ]
-        )
+        if robust:
+            best_preset = min(robust, key=lambda p: robust[p][0])
+            lines.extend(
+                [
+                    "",
+                    f"**Suggested preset (lowest sane mean, all {n_geoms} geoms):** `{best_preset}`",
+                ]
+            )
+        else:
+            lines.extend(
+                [
+                    "",
+                    f"**Suggested preset:** none (no preset passed all {n_geoms} geoms without `fail_energy`).",
+                ]
+            )
+        partial = {pid: stats for pid, stats in sane_means.items() if stats[1] < n_geoms}
+        if partial:
+            lines.append(
+                "\n_Presets with n < {n} may look good on a subset but failed at least one geometry._".format(
+                    n=n_geoms
+                )
+            )
         if n_catastrophe:
             lines.append(
                 f"\n_{n_catastrophe} run(s) flagged `fail_energy` (score > {catastrophe:g}); "

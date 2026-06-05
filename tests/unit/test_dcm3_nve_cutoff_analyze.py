@@ -158,12 +158,85 @@ def test_collect_sweep_write_report(tmp_path) -> None:
             "status": "fail_energy",
         },
     ]
-    cfg = {"composition": "DCM:3", "ps_nve": 5.0, "dt_fs": 0.25}
+    cfg = {
+        "composition": "DCM:3",
+        "ps_nve": 5.0,
+        "dt_fs": 0.25,
+        "geometry_variants": {"far": {}},
+    }
     md_path = tmp_path / "report.md"
     _write_report(rows, md_path, cfg, catastrophe=10000.0)
     text = md_path.read_text(encoding="utf-8")
     assert "excluding `fail_energy`" in text
-    assert "**Suggested preset (lowest sane mean):** `dcm9_stability`" in text
+    assert "**Suggested preset (lowest sane mean, all 1 geoms):** `dcm9_stability`" in text
+
+
+def test_collect_sweep_suggestion_requires_all_geoms(tmp_path) -> None:
+    sys.path.insert(0, str(_REPO / "workflows" / "dcm3_nve_cutoff_sweep" / "scripts"))
+    from collect_sweep import _write_report
+
+    rows = [
+        {
+            "preset_id": "partial",
+            "geom_id": "close",
+            "mm_switch_on": 8.0,
+            "mm_switch_width": 5.0,
+            "ml_switch_width": 0.5,
+            "etot_std_kcal": 10.0,
+            "max_abs_etot_step_delta_kcal": 1.0,
+            "etot_drift_kcal": 1.0,
+            "smoothness_score": 11.1,
+            "status": "pass",
+        },
+        {
+            "preset_id": "partial",
+            "geom_id": "mid",
+            "mm_switch_on": 8.0,
+            "mm_switch_width": 5.0,
+            "ml_switch_width": 0.5,
+            "etot_std_kcal": 1.0e9,
+            "max_abs_etot_step_delta_kcal": 1.0e9,
+            "etot_drift_kcal": 1.0e9,
+            "smoothness_score": 1.0e9,
+            "status": "fail_energy",
+        },
+        {
+            "preset_id": "robust",
+            "geom_id": "close",
+            "mm_switch_on": 8.0,
+            "mm_switch_width": 5.0,
+            "ml_switch_width": 1.5,
+            "etot_std_kcal": 100.0,
+            "max_abs_etot_step_delta_kcal": 20.0,
+            "etot_drift_kcal": 50.0,
+            "smoothness_score": 125.0,
+            "status": "pass",
+        },
+        {
+            "preset_id": "robust",
+            "geom_id": "mid",
+            "mm_switch_on": 8.0,
+            "mm_switch_width": 5.0,
+            "ml_switch_width": 1.5,
+            "etot_std_kcal": 100.0,
+            "max_abs_etot_step_delta_kcal": 20.0,
+            "etot_drift_kcal": 50.0,
+            "smoothness_score": 125.0,
+            "status": "pass",
+        },
+    ]
+    cfg = {
+        "composition": "DCM:3",
+        "ps_nve": 5.0,
+        "dt_fs": 0.25,
+        "geometry_variants": {"close": {}, "mid": {}},
+        "cutoff_presets": {"partial": {}, "robust": {}},
+    }
+    md_path = tmp_path / "report.md"
+    _write_report(rows, md_path, cfg, catastrophe=10000.0)
+    text = md_path.read_text(encoding="utf-8")
+    assert "**Suggested preset (lowest sane mean, all 2 geoms):** `robust`" in text
+    assert "failed at least one geometry" in text
 
 
 def test_prepare_geometry_shell_uses_mpirun_wrapper_for_script() -> None:
