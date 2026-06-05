@@ -15,6 +15,7 @@ if [[ -z "$PY" ]]; then
   PY="$(command -v python3)"
 fi
 
-MPIRUN="${MMML_MPIRUN_WRAPPER:-$REPO_ROOT/scripts/mmml-charmm-mpirun.sh}"
-exec "$MPIRUN" "$PY" "$WORKFLOW_ROOT/scripts/prepare_geometry.py" "$GEOM_ID" \
+# PyCHARMM cluster build only (no MLpot / md-system). import_pycharmm sets up MPI
+# library paths; mmml-charmm-mpirun.sh is for ``mmml md-system`` CLI only.
+exec "$PY" "$WORKFLOW_ROOT/scripts/prepare_geometry.py" "$GEOM_ID" \
   --config "$WORKFLOW_ROOT/config.yaml"
