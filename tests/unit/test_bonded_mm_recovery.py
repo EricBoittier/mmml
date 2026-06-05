@@ -538,7 +538,7 @@ def test_reregister_mlpot_reattaches_without_new_mlpot_or_nbond_rebuild():
     ) as apply_block:
         ctx.reregister_mlpot()
 
-    apply_block.assert_called_once_with(ctx.ml_selection)
+    apply_block.assert_called_once_with(ctx.ml_selection, mm_internal_scale=0.0)
     mlpot.reattach_mlpot.assert_called_once_with()
 
 

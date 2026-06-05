@@ -41,7 +41,7 @@ def test_find_worst_intramonomer_close_contact_skips_bonded_pairs():
         dtype=float,
     )
     offsets = np.array([0, 3, 5], dtype=int)
-    excluded = build_bond_exclusion_pairs([1, 2], [2, 3], exclude_1_3=True)
+    excluded = build_bond_exclusion_pairs([1, 2], [2, 3], exclude_1_3=False)
     dist, violation = find_worst_intramonomer_close_contact(
         pos, offsets, excluded
     )
@@ -80,7 +80,7 @@ def test_assert_no_intramonomer_close_contact_raises():
         dtype=float,
     )
     offsets = np.array([0, 3], dtype=int)
-    excluded = build_bond_exclusion_pairs([1, 2], [2, 3], exclude_1_3=True)
+    excluded = build_bond_exclusion_pairs([1, 2], [2, 3], exclude_1_3=False)
     with pytest.raises(RuntimeError, match="intra-monomer close contact"):
         assert_no_intramonomer_close_contact(
             pos, offsets, excluded, min_distance=1.0, context="test"

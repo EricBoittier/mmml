@@ -113,12 +113,15 @@ def test_register_mlpot_context_forwards_cell():
             len(z),
             2,
             cubic_box_side_A=20.0,
+            mlpot_use_pbc=True,
             verbose=True,
         )
 
     mock_load.assert_called_once()
     assert mock_load.call_args.kwargs["cell"] == 20.0
-    mock_register.assert_called_once_with(fake_model, z, fake_sel, use_pbc=True)
+    mock_register.assert_called_once_with(
+        fake_model, z, fake_sel, use_pbc=True, mm_internal_scale=0.0
+    )
     mock_warmup.assert_called_once()
     assert mock_warmup.call_args.kwargs["cell"] == 20.0
     assert ctx is fake_ctx

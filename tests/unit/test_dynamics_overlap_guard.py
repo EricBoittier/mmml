@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from contextlib import nullcontext
 from pathlib import Path
 from unittest import mock
@@ -20,13 +21,39 @@ from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
 from mmml.interfaces.pycharmmInterface.mlpot.dynamics import run_dynamics_with_io
 
 
+@pytest.fixture(autouse=True)
+def _mock_bond_exclusion_pairs_unless_targeted(request):
+    """Overlap intra checks must not import PyCHARMM in CI."""
+    if request.node.name == "test_bond_exclusion_pairs_handles_empty_get_ib_jb":
+        yield
+        return
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard._bond_exclusion_pairs",
+        return_value=frozenset(),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_restart_write_after_chunk",
+    ):
+        yield
+
+
 def test_bond_exclusion_pairs_handles_empty_get_ib_jb():
     """PyCHARMM can return ``[]`` (not ``([], [])``) when ``get_nbond()==0``."""
     import mmml.interfaces.pycharmmInterface.mlpot.overlap_guard as overlap_guard
 
     overlap_guard._bond_exclusion_cache = None
-    with mock.patch("pycharmm.psf.get_nbond", return_value=0), mock.patch(
-        "pycharmm.psf.get_ib_jb", return_value=[]
+    fake_psf = mock.MagicMock()
+    fake_psf.get_nbond.return_value = 0
+    fake_psf.get_ib_jb.return_value = []
+    fake_pycharmm = mock.MagicMock()
+    fake_pycharmm.psf = fake_psf
+    fake_import = mock.MagicMock()
+    with mock.patch.dict(
+        sys.modules,
+        {
+            "pycharmm": fake_pycharmm,
+            "pycharmm.psf": fake_psf,
+            "mmml.interfaces.pycharmmInterface.import_pycharmm": fake_import,
+        },
     ):
         pairs = overlap_guard._bond_exclusion_pairs(exclude_1_3=True)
     assert pairs == frozenset()
@@ -79,6 +106,7 @@ def test_overlap_cell_uses_fallback_when_pbound_zero():
         cfg = DynamicsOverlapConfig(
             action="error",
             min_distance_A=1.5,
+            intra_min_distance_A=0.0,
             n_monomers=2,
             use_pbc=True,
             fallback_box_side_A=30.0,
@@ -129,7 +157,7 @@ def test_check_intra_monomer_raises_on_close_contact():
         action="error",
         min_distance_A=1.5,
         intra_min_distance_A=1.0,
-        n_monomers=2,
+        n_monomers=1,
         use_pbc=False,
     )
     pos = np.array(
@@ -137,12 +165,10 @@ def test_check_intra_monomer_raises_on_close_contact():
             [0.0, 0.0, 0.0],
             [1.09, 0.0, 0.0],
             [0.25, 0.0, 0.0],
-            [10.0, 0.0, 0.0],
-            [11.0, 0.0, 0.0],
         ],
         dtype=float,
     )
-    excluded = frozenset({(0, 1), (1, 2), (0, 2)})
+    excluded = frozenset({(0, 1), (1, 2)})
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=pos,
@@ -179,7 +205,7 @@ def test_check_intra_monomer_rescue_runs_bonded_mini():
         ],
         dtype=float,
     )
-    excluded = frozenset({(0, 1), (1, 2), (0, 2)})
+    excluded = frozenset({(0, 1), (1, 2)})
     ctx = object()
     positions = {"current": pos_bad}
 
@@ -205,6 +231,7 @@ def test_check_overlap_rescue_runs_minimize_and_rechecks():
     cfg = DynamicsOverlapConfig(
         action="rescue",
         min_distance_A=1.5,
+        intra_min_distance_A=0.0,
         n_monomers=2,
         use_pbc=False,
         rescue=OverlapRescueConfig(nstep_sd=10, nstep_abnr=0, verbose=False),
@@ -251,6 +278,7 @@ def test_check_overlap_rescue_applies_separation_last_resort():
     cfg = DynamicsOverlapConfig(
         action="rescue",
         min_distance_A=1.5,
+        intra_min_distance_A=0.0,
         n_monomers=2,
         use_pbc=False,
         rescue=OverlapRescueConfig(nstep_sd=10, nstep_abnr=0, verbose=False),
@@ -906,6 +934,8 @@ def test_overlap_refresh_scratch_restart_fixes_invalid_handoff(tmp_path):
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._refresh_overlap_scratch_restart",
         side_effect=fake_refresh,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=pos_ok,

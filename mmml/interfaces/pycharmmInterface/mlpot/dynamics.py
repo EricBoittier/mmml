@@ -1696,6 +1696,8 @@ def _apply_overlap_chunk_dynamics_kw(
     )
     if not preserve_cold_start:
         chunk_kw["iasvel"] = 0
+        if chunk_index > 0:
+            chunk_kw.pop("firstt", None)
     elif preserve_ihtfrq_heat_ramp:
         # Boltzmann assign already ran (start=False); keep IHTFRQ / TEMINC / FIRSTT ramp.
         chunk_kw["iasvel"] = 0
