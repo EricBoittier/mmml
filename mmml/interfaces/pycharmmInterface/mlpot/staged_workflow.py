@@ -186,18 +186,31 @@ def _equi_restart_name(tag: str, n_equi_segments: int) -> str:
     return f"equi_{tag}.res"
 
 
+def _heat_restart_path(paths: dict[str, Path], tag: str, n_heat_segments: int) -> Path:
+    if n_heat_segments > 1:
+        return paths["heat_res"].parent / f"heat_{tag}.{n_heat_segments - 1}.res"
+    return paths["heat_res"]
+
+
 def _prior_restart_for_stage(
     stage: MdStage,
     paths: dict[str, Path],
     *,
     restart_from: Path | None,
+    tag: str | None = None,
+    n_heat_segments: int = 1,
 ) -> Path | None:
     if restart_from is not None:
         return restart_from
     if stage == "heat":
         return None
     if stage == "nve":
-        return paths["heat_res"] if paths["heat_res"].is_file() else None
+        heat_restart = _heat_restart_path(paths, tag or "", n_heat_segments)
+        if heat_restart.is_file():
+            return heat_restart
+        if paths["heat_res"].is_file():
+            return paths["heat_res"]
+        return None
     if stage == "equi":
         if paths["nve_res"].is_file():
             return paths["nve_res"]
@@ -1045,6 +1058,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         if dynamics_constrain:
             setup_cons_fix_for_resids(dynamics_constrain)
 
+        n_heat_segments = max(1, int(getattr(args, "n_heat_segments", 1)))
         n_equi_segments = max(1, int(getattr(args, "n_equi_segments", 1)))
         n_prod_segments = max(1, int(getattr(args, "n_prod_segments", 1)))
         if "equi" in dyn_stages and n_equi_segments > 1:
@@ -1061,6 +1075,222 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         prev_restart_is_current_state = "mini" in stages and restart_from is None
         memory_handoff_next = False
         for stage in dyn_stages:
+            if stage == "heat" and n_heat_segments > 1:
+                heat_firstt, heat_finalt = resolve_heat_firstt_finalt(
+                    args, default_temp=temp
+                )
+                heat_thermostat = resolve_heat_thermostat(args)
+                initial = prev_restart or _prior_restart_for_stage(
+                    "heat", paths, restart_from=None
+                )
+                seg_chain = npt_restart_chain(
+                    out_dir,
+                    n_segments=n_heat_segments,
+                    prefix=f"heat_{tag}",
+                    initial_restart=initial,
+                )
+                for seg_i, seg_io in enumerate(seg_chain):
+                    seg_ps = _stage_ps(args, "heat") / n_heat_segments
+                    nstep = dynamics_nstep_from_ps(seg_ps, dt_fs)
+                    dcd_nsavc = resolve_dcd_nsavc(
+                        dcd_nsavc=args.dcd_nsavc,
+                        dcd_interval_ps=getattr(args, "dcd_interval_ps", None),
+                        timestep_ps=timestep_ps,
+                        nstep=nstep,
+                    )
+                    dyn_print = resolve_dynamics_print_kwargs(args, nstep=nstep)
+                    save_interval_ps = timestep_ps * dcd_nsavc
+                    use_memory = memory_handoff_next and seg_i == 0
+                    if use_memory:
+                        restart = False
+                        rread = None
+                    else:
+                        rread = seg_io.restart_read
+                        restart = rread is not None and Path(rread).is_file()
+                        if (
+                            seg_i == 0
+                            and _can_seed_stage_from_memory(
+                                Path(rread) if rread is not None else None,
+                                prev_restart=prev_restart,
+                                prev_restart_is_current_state=prev_restart_is_current_state,
+                            )
+                        ):
+                            use_memory = True
+                            restart = False
+                            rread = None
+                    if not args.quiet:
+                        print(
+                            f"\nHEAT segment {seg_i + 1}/{n_heat_segments}: "
+                            f"{nstep} steps @ {timestep_ps} ps "
+                            f"({heat_firstt:.1f}→{heat_finalt:.1f} K ramp, "
+                            f"segment bath "
+                            f"{heat_firstt + (heat_finalt - heat_firstt) * (seg_i / n_heat_segments):.1f}"
+                            f"→"
+                            f"{heat_firstt + (heat_finalt - heat_firstt) * ((seg_i + 1) / n_heat_segments):.1f} K)"
+                            + (" | memory handoff" if use_memory else ""),
+                            flush=True,
+                        )
+                    restart_path = Path(rread) if restart and rread else None
+                    kw = _build_stage_dynamics_kw(
+                        "heat",
+                        args=args,
+                        timestep_ps=timestep_ps,
+                        nstep=nstep,
+                        save_interval_ps=save_interval_ps,
+                        temp=temp,
+                        echeck=echeck,
+                        dyn_print=dyn_print,
+                        restart=restart,
+                        use_pbc=charmm_pbc,
+                        memory_handoff=use_memory,
+                    )
+                    kw["nsavc"] = dcd_nsavc
+                    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+                        apply_dyn_inbfrq_from_args,
+                        apply_heat_segment_ramp_kwargs,
+                        finalize_heat_dynamics_frequencies,
+                        sync_charmm_lists_after_mini,
+                    )
+
+                    apply_heat_segment_ramp_kwargs(
+                        kw,
+                        seg_index=seg_i,
+                        n_segments=n_heat_segments,
+                        heat_firstt=heat_firstt,
+                        heat_finalt=heat_finalt,
+                        nstep=nstep,
+                        ihtfrq=resolve_heat_ihtfrq(args, nstep=nstep),
+                    )
+                    if use_memory:
+                        restart_path = _seed_restart_for_memory_handoff(
+                            seg_io, kw, stage="heat"
+                        )
+                    _sync_mlpot_cell_before_npt(
+                        "heat",
+                        mlpot_pbc=mlpot_pbc,
+                        pyCModel=pyCModel,
+                        quiet=bool(args.quiet),
+                        restart_path=restart_path,
+                    )
+                    disable_charmm_domdec()
+                    if seg_i == 0:
+                        _reset_stage_restart(
+                            Path(seg_io.restart_write) if seg_io.restart_write else None,
+                            trajectory_path=(
+                                Path(seg_io.trajectory) if seg_io.trajectory else None
+                            ),
+                        )
+                        _reset_stage_trajectory(
+                            Path(seg_io.trajectory) if seg_io.trajectory else None,
+                            rescue_old=bool(getattr(args, "rescue_old_dcd", False)),
+                        )
+                    assert_mlpot_user_active(
+                        ctx,
+                        context=f"heat segment {seg_i + 1}/{n_heat_segments}",
+                        quiet=bool(args.quiet),
+                    )
+                    apply_comp_velocity_policy("heat", kw, args)
+                    apply_dyn_inbfrq_from_args(kw, args, charmm_pbc=charmm_pbc)
+                    if seg_i == 0 and (
+                        use_memory or prev_restart_is_current_state
+                    ):
+                        sync_charmm_lists_after_mini(quiet=bool(args.quiet))
+                    if seg_i == 0:
+                        if (
+                            charmm_pbc
+                            and box_side is not None
+                            and heat_thermostat == "hoover"
+                            and kw.get("cpt")
+                        ):
+                            ensure_charmm_crystal_for_cpt(
+                                float(box_side),
+                                quiet=bool(args.quiet),
+                            )
+                        _configure_heat_dynamics_start(
+                            kw,
+                            seg_io,
+                            coords_in_memory=use_memory
+                            or prev_restart_is_current_state,
+                            restart_from_file=restart
+                            and seg_io.restart_read is not None,
+                            timestep_ps=timestep_ps,
+                            use_pbc=charmm_pbc,
+                            quiet=bool(args.quiet),
+                            heat_thermostat=heat_thermostat,
+                        )
+                    elif restart:
+                        kw["iasvel"] = 0
+                        kw["iasors"] = 0
+                        kw["start"] = False
+                        kw["restart"] = True
+                    if int(kw.get("ihtfrq", 0) or 0) > 0:
+                        freq_changes = finalize_heat_dynamics_frequencies(kw)
+                        if freq_changes and not args.quiet:
+                            parts = ", ".join(
+                                f"{key} {old}->{new}"
+                                for key, (old, new) in sorted(freq_changes.items())
+                            )
+                            print(
+                                f"HEAT segment {seg_i + 1}: harmonized frequencies "
+                                f"({parts}); TEMINC={float(kw.get('TEMINC', 0)):.6g} K",
+                                flush=True,
+                            )
+                    stage_overlap = overlap_config_for_stage(
+                        _overlap_for_stage(
+                            "heat",
+                            overlap_cfg,
+                            ctx=ctx,
+                            args=args,
+                            topology_psf=recovery_topology_psf,
+                            mini_registry=mini_registry,
+                        ),
+                        stage="heat",
+                        nstep=nstep,
+                        n_segments=n_heat_segments,
+                    )
+                    run_dynamics_with_io(
+                        kw,
+                        seg_io,
+                        overlap=stage_overlap,
+                        overlap_context=(
+                            f"heat segment {seg_i + 1}/{n_heat_segments}"
+                        ),
+                        mlpot_ctx=ctx,
+                        rng_base=getattr(args, "seed", None),
+                    )
+                    _validate_dyn_stage_completion(
+                        args,
+                        stage="heat",
+                        nstep=nstep,
+                        nsavc=dcd_nsavc,
+                        io=seg_io,
+                    )
+                    memory_handoff_next = maybe_run_bonded_mm_mini_after_stage(
+                        ctx,
+                        args,
+                        stage="heat",
+                        baseline=baseline,
+                        restart_path=seg_io.restart_write,
+                        topology_psf=recovery_topology_psf,
+                        mini_registry=mini_registry,
+                        snapshot_spec=(
+                            BONDED_MM_AFTER_HEAT if seg_i == n_heat_segments - 1 else None
+                        ),
+                        snapshot_paths=(
+                            {
+                                "pdb": paths["bonded_mm_after_heat_pdb"],
+                                "crd": paths["bonded_mm_after_heat_crd"],
+                            }
+                            if save_artifacts and seg_i == n_heat_segments - 1
+                            else None
+                        ),
+                    )
+                    prev_restart = seg_io.restart_write
+                    prev_restart_is_current_state = True
+                    last_restart_path = prev_restart
+                    last_traj = seg_io.trajectory
+                continue
+
             if stage == "equi" and n_equi_segments > 1:
                 initial = prev_restart or _prior_restart_for_stage(
                     "equi", paths, restart_from=None
@@ -1302,7 +1532,13 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 restart = False
                 rread = None
             else:
-                rread = prev_restart or _prior_restart_for_stage(stage, paths, restart_from=None)
+                rread = prev_restart or _prior_restart_for_stage(
+                    stage,
+                    paths,
+                    restart_from=None,
+                    tag=tag,
+                    n_heat_segments=n_heat_segments,
+                )
                 restart = rread is not None and Path(rread).is_file()
                 if _can_seed_stage_from_memory(
                     Path(rread) if rread is not None else None,
@@ -1384,26 +1620,6 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 sync_charmm_lists_after_mini(quiet=bool(args.quiet))
             if stage == "heat":
                 heat_thermostat = resolve_heat_thermostat(args)
-                overlap_for_stage = _overlap_for_stage(
-                    stage,
-                    overlap_cfg,
-                    ctx=ctx,
-                    args=args,
-                    topology_psf=recovery_topology_psf,
-                    mini_registry=mini_registry,
-                )
-                if (
-                    overlap_for_stage is not None
-                    and overlap_for_stage.enabled
-                    and int(kw.get("ihtfrq", 0) or 0) > 0
-                    and not args.quiet
-                ):
-                    print(
-                        "HEAT overlap guard: chunked restarts may disrupt ihtfrq "
-                        "ramps; use a single segment (--dynamics-overlap-check-interval "
-                        ">= heat nstep) or --heat-thermostat hoover with PBC.",
-                        flush=True,
-                    )
                 if (
                     charmm_pbc
                     and box_side is not None
@@ -1470,9 +1686,11 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 ),
                 stage=stage,
                 nstep=nstep,
+                n_segments=n_heat_segments if stage == "heat" else 1,
             )
             if (
                 stage == "heat"
+                and n_heat_segments <= 1
                 and stage_overlap is not None
                 and stage_overlap.enabled
                 and int(stage_overlap.check_interval) >= nstep

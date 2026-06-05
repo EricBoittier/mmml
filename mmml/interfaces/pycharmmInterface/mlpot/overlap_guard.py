@@ -159,8 +159,14 @@ def overlap_config_for_stage(
     *,
     stage: str,
     nstep: int,
+    n_segments: int = 1,
 ) -> DynamicsOverlapConfig | None:
-    """Per-stage overlap settings (heat: one segment to avoid scratch ``READYN``)."""
+    """Per-stage overlap settings.
+
+    Heat with ``n_segments <= 1``: one long ``dyna`` + overlap check after the stage.
+    Heat with ``n_segments > 1``: keep the normal overlap interval within each short
+    segment so geometry rescue can run between restarts.
+    """
     if overlap is None or not overlap.enabled:
         return overlap
     if stage.lower() != "heat":
@@ -168,6 +174,8 @@ def overlap_config_for_stage(
     from dataclasses import replace
 
     n = max(1, int(nstep))
+    if int(n_segments) > 1:
+        return overlap
     if int(overlap.check_interval) >= n:
         return overlap
     return replace(overlap, check_interval=n)

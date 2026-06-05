@@ -26,7 +26,9 @@ CLI flags live in `cli_common.add_charmm_output_args()`; stage builders in `dyna
 
 **Heating spam:** If you still see output every ~10 steps during `heat`, check `ihtfrq` (not only `dyn-nprint`). Legacy code used `ihtfrq=10` hardcoded. Current staged workflow sets `ihtfrq = resolve_heat_ihtfrq()` (default: match `--dyn-nprint`, e.g. 500).
 
-**Heat ramp integrity (staged `md-system`):** Heat is one overlap segment (`overlap_config_for_stage` sets `check_interval = nstep`). There are no later heat stages in the default `mini,heat` preset. Before `dyna`, `finalize_heat_dynamics_frequencies()` harmonizes `ihtfrq` / `iprfrq` with `nstep` and recomputes `TEMINC` so CHARMM FINCYC does not desync the bath target. If you still see `NEW TEMPERATURE` drop mid-ramp, grep the log for `HEAT: harmonized` and the `HEAT ramp:` line (`ihtfrq`, `TEMINC`).
+**Staged heating:** `--n-heat-segments N` splits `--ps-heat` into short chained restarts (`heat_{tag}.0.res`, …) with overlap rescue between segments. Default DCM:9 script uses `N_HEAT_SEGMENTS=4` (5 ps per segment for 20 ps total). Each segment gets a linear slice of `--heat-firstt`→`--heat-finalt`. With `n_heat_segments=1`, heat stays one overlap segment (`check_interval = nstep`). Before each heat `dyna`, `finalize_heat_dynamics_frequencies()` harmonizes `ihtfrq` / `iprfrq` with `nstep` and recomputes `TEMINC`.
+
+**ML/MM cutoffs (DCM:9 script defaults):** `--mm-switch-on 7` (ML handoff / sparse-dimer radius), `--mm-switch-width 5` (MM outer taper). Override with `MM_SWITCH_ON` / `MM_SWITCH_WIDTH` env vars.
 
 Example for rare heating banners:
 

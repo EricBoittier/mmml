@@ -771,6 +771,37 @@ def apply_heat_ramp_overlap_chunk(
 _HEAT_FIN_FREQ_KEYS = ("ihtfrq", "iprfrq", "nprint", "isvfrq", "ntrfrq")
 
 
+def apply_heat_segment_ramp_kwargs(
+    kw: dict[str, Any],
+    *,
+    seg_index: int,
+    n_segments: int,
+    heat_firstt: float,
+    heat_finalt: float,
+    nstep: int,
+    ihtfrq: int,
+) -> None:
+    """Set per-segment bath ramp for staged heating (``n_heat_segments`` > 1)."""
+    if n_segments <= 1:
+        return
+    n_seg = max(1, int(n_segments))
+    seg_i = max(0, min(int(seg_index), n_seg - 1))
+    t0 = float(heat_firstt)
+    t1 = float(heat_finalt)
+    seg_firstt = t0 + (t1 - t0) * (seg_i / n_seg)
+    seg_finalt = t0 + (t1 - t0) * ((seg_i + 1) / n_seg)
+    kw["firstt"] = seg_firstt
+    kw["finalt"] = seg_finalt
+    kw["tbath"] = seg_finalt
+    if "hoover reft" in kw:
+        kw["hoover reft"] = seg_finalt
+    iht = max(1, min(int(ihtfrq), max(1, int(nstep))))
+    if int(kw.get("ihtfrq", 0) or 0) > 0:
+        heat_updates = max(1, int(nstep) // iht)
+        kw["ihtfrq"] = iht
+        kw["TEMINC"] = max(0.0, (seg_finalt - seg_firstt) / heat_updates)
+
+
 def finalize_heat_dynamics_frequencies(kw: dict[str, Any]) -> dict[str, tuple[int, int]]:
     """Harmonize heat thermostat/print freqs with ``nstep`` and refresh ``TEMINC``.
 
