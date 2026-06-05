@@ -209,6 +209,31 @@ def test_read_restart_last_step_prefers_jhstrt_over_segment_nstep(tmp_path):
     assert read_restart_last_step(res) == 8000
 
 
+def test_integrated_step_from_restart_stale_nstep_field(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        CharmmTrajectoryFiles,
+        _integrated_step_from_restart,
+    )
+
+    res = tmp_path / "heat.res"
+    res.write_text(
+        "REST    48     0\n"
+        "\n"
+        " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
+        "          25         500         500         500          10           0\n",
+        encoding="utf-8",
+    )
+    io = CharmmTrajectoryFiles(restart_write=res)
+    assert (
+        _integrated_step_from_restart(
+            chunk_io=io,
+            final_restart=res,
+            fallback_steps=2500,
+        )
+        == 2500
+    )
+
+
 def test_patch_restart_global_step_updates_jhstrt(tmp_path):
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         patch_restart_global_step,
