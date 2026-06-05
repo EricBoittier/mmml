@@ -427,9 +427,16 @@ def _configure_heat_dynamics_start(
 
     ``RESTART`` without ``START`` skips the initial assignment; mini restart files
     often carry ~zero kinetic energy, so ``ihtfrq`` with ``iasvel=0`` leaves T≈0.
+
+    In-place resume (``restart_read == restart_write``) uses ``dyna restart`` so
+    the step counter and thermostat state continue from the checkpoint.
     """
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _valid_restart_file,
         assign_velocities_at_temperature,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        read_restart_last_step,
     )
 
     firstt = float(kw.get("firstt", kw.get("finalt", 300.0)))
@@ -473,6 +480,28 @@ def _configure_heat_dynamics_start(
                     flush=True,
                 )
         return
+
+    if (
+        restart_from_file
+        and not coords_in_memory
+        and _heat_in_place_restart(io)
+        and _valid_restart_file(io.restart_read) is not None
+    ):
+        last_step = read_restart_last_step(Path(io.restart_read))
+        if last_step is not None and last_step > 0:
+            kw["restart"] = True
+            kw["new"] = False
+            kw["start"] = False
+            kw["iasvel"] = 1
+            if not hoover_cpt_heat:
+                kw["iasors"] = 0
+            if not quiet:
+                print(
+                    f"HEAT: dyna restart from {io.restart_read} "
+                    f"(step {last_step}; in-place resume)",
+                    flush=True,
+                )
+            return
 
     if restart_from_file and io.restart_read is not None:
         restart_path = io.restart_read
@@ -657,18 +686,33 @@ def _reset_stage_trajectory(
     print(f"Removed prior DCD: {dcd_path}", flush=True)
 
 
+def _heat_in_place_restart(io: CharmmTrajectoryFiles) -> bool:
+    """True when heat reads and writes the same ``.res`` (resume interrupted heat)."""
+    if io.restart_read is None or io.restart_write is None:
+        return False
+    return Path(io.restart_read).resolve() == Path(io.restart_write).resolve()
+
+
 def _reset_stage_restart(
     restart_path: Path | None,
     *,
     trajectory_path: Path | None = None,
+    restart_read: Path | None = None,
 ) -> None:
     """Remove prior stage restart/scratch files before a fresh dynamics run."""
     if restart_path is None:
         return
     path = Path(restart_path)
-    if path.is_file():
+    preserve_main = (
+        restart_read is not None
+        and path.is_file()
+        and path.resolve() == Path(restart_read).resolve()
+    )
+    if path.is_file() and not preserve_main:
         path.unlink(missing_ok=True)
         print(f"Removed prior restart: {path}", flush=True)
+    elif preserve_main:
+        print(f"Keeping in-place restart for resume: {path}", flush=True)
     parent = path.parent
     stem = path.stem
     for slot in (f"{stem}.overlap_a.res", f"{stem}.overlap_b.res"):
@@ -1189,6 +1233,11 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                             trajectory_path=(
                                 Path(seg_io.trajectory) if seg_io.trajectory else None
                             ),
+                            restart_read=(
+                                Path(rread)
+                                if restart and rread is not None
+                                else None
+                            ),
                         )
                         _reset_stage_trajectory(
                             Path(seg_io.trajectory) if seg_io.trajectory else None,
@@ -1600,6 +1649,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             _reset_stage_restart(
                 Path(io.restart_write) if io.restart_write else None,
                 trajectory_path=Path(io.trajectory) if io.trajectory else None,
+                restart_read=Path(rread) if restart and rread is not None else None,
             )
             _reset_stage_trajectory(
                 Path(io.trajectory) if io.trajectory else None,

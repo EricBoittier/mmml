@@ -377,3 +377,61 @@ def test_configure_nve_dynamics_start_memory_handoff_no_readyn(tmp_path):
     assert kw["start"] is False
     assert kw["iasvel"] == 1
     assert io.restart_read is None
+
+
+def _write_restartable_res(path: Path, *, jhstrt: int = 250) -> None:
+    path.write_text(
+        "REST     1       500\n"
+        " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
+        f"   10     0     500       1      10   {jhstrt}     297       0       0\n",
+        encoding="ascii",
+    )
+
+
+def test_configure_heat_dynamics_start_in_place_resume_uses_dyna_restart(tmp_path):
+    res = tmp_path / "heat_dcm_20.res"
+    _write_restartable_res(res, jhstrt=250)
+    io = CharmmTrajectoryFiles(restart_read=res, restart_write=res)
+    kw = {
+        "firstt": 42.4,
+        "finalt": 60.0,
+        "cpt": True,
+        "hoover reft": 60.0,
+        "tmass": 2000,
+        "start": True,
+    }
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.assign_velocities_at_temperature"
+    ) as assign:
+        _configure_heat_dynamics_start(
+            kw,
+            io,
+            coords_in_memory=False,
+            restart_from_file=True,
+            timestep_ps=0.0001,
+            use_pbc=True,
+            quiet=True,
+            heat_thermostat="hoover",
+        )
+
+    assign.assert_not_called()
+    assert kw["restart"] is True
+    assert kw["start"] is False
+    assert kw["new"] is False
+    assert kw["iasvel"] == 1
+    assert io.restart_read == res
+
+
+def test_reset_stage_restart_preserves_in_place_read(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
+        _reset_stage_restart,
+    )
+
+    res = tmp_path / "heat.res"
+    _write_restartable_res(res)
+    _reset_stage_restart(res, restart_read=res)
+    assert res.is_file()
+
+    _reset_stage_restart(res)
+    assert not res.is_file()
