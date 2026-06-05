@@ -5,14 +5,19 @@ from pathlib import Path
 
 
 def _repo_python() -> str:
-    """Match job_shell.sh: prefer repo .venv (JAX) over bare ``python`` on PATH."""
+    """Match job_shell.sh / resolve_mmml_env.sh."""
     repo = Path(workflow.basedir).resolve().parents[1]
-    venv = repo / ".venv" / "bin" / "python"
-    if venv.is_file():
-        return str(venv)
     env_py = os.environ.get("MMML_PYTHON", "").strip()
     if env_py:
         return env_py
+    venv = repo / ".venv" / "bin" / "python"
+    if venv.is_file():
+        return str(venv)
+    conda = os.environ.get("CONDA_PREFIX", "").strip()
+    if conda:
+        conda_py = Path(conda) / "bin" / "python"
+        if conda_py.is_file():
+            return str(conda_py)
     return "python3"
 
 

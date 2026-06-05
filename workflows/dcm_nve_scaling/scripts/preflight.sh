@@ -9,10 +9,10 @@ if [[ -z "${MMML_CKPT:-}" ]]; then
   exit 1
 fi
 
-PY="${MMML_PYTHON:-python3}"
-if [[ -x "$REPO_ROOT/.venv/bin/python" ]]; then
-  PY="$REPO_ROOT/.venv/bin/python"
-fi
+# shellcheck source=../../../scripts/resolve_mmml_env.sh
+source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
+mmml_resolve_env "$REPO_ROOT"
+PY="${MMML_PYTHON}"
 
 "$PY" -c "
 from pathlib import Path

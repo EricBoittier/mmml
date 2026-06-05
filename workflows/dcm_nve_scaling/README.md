@@ -12,7 +12,8 @@ Sibling to [dcm5_md_benchmark](../dcm5_md_benchmark/) (fixed DCM:5, multi-backen
 ## Prerequisites
 
 - `export MMML_CKPT=/path/to/dcm_physnet_ckpt`
-- GPU JAX (`uv sync --extra gpu`)
+- GPU JAX (`uv sync --extra gpu`) **or** an activated conda/micromamba env with `jax` + `mmml` installed
+- Optional: `export MMML_PYTHON=/path/to/python` if Snakemake does not inherit your env (workflow scripts prefer `$CONDA_PREFIX/bin/python` over bare `python3` on PATH)
 - OpenMPI + rebuilt `libcharmm.so` for large clusters if you extend beyond N=10
 - `packmol` on PATH
 - `snakemake`
