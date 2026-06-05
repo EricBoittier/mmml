@@ -36,6 +36,7 @@ nav:
   - Getting Started: getting-started.md
   - Package Architecture: package-architecture.md
   - DCMNet Calculators: dcmnet_calculators.md
+  - MLpot Settings: mlpot-settings.md
   - Development: development.md
   - Units Summary: UNITS_SUMMARY.md
   - API Reference: api.md

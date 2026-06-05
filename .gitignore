@@ -180,6 +180,7 @@ build.setup.out
 CHARMMSETUP
 *.xyz
 *.png
+!docs/images/**/*.png
 CHARMMSETUP
 examples/co2/dcmnet_physnet_train/md_ir_long/trajectory.npz
 examples/openqdc/openqdc_packed_memmap/
