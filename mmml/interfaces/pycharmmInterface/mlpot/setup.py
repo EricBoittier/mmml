@@ -189,8 +189,11 @@ def assert_mlpot_user_active(
     import pycharmm
     import pycharmm.energy as energy
 
+    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
+
     def _read_user() -> float | None:
-        pycharmm.lingo.charmm_script("ENER")
+        with charmm_silent_command():
+            pycharmm.lingo.charmm_script("ENER")
         try:
             return float(energy.get_term_by_name("USER"))
         except Exception:

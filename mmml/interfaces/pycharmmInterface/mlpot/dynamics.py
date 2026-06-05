@@ -637,10 +637,10 @@ def sync_charmm_lists_after_mini(*, quiet: bool = False) -> None:
     ``UPDECI`` otherwise jumps from stale lists.  Uses CHARMM ``UPDATE`` only (no
     ``update_bnbnd`` / ``upinb`` — unsafe with MLpot registered).
     """
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
 
     pycharmm = _import_pycharmm_modules()[0]
-    with charmm_relaxed_bomlev():
+    with charmm_silent_command():
         pycharmm.lingo.charmm_script("ENER")
         pycharmm.lingo.charmm_script("UPDATE")
     if not quiet:
