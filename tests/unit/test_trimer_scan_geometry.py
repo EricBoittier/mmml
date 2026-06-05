@@ -1,0 +1,79 @@
+"""Unit tests for trimer 2D scan geometry (no CHARMM)."""
+
+from __future__ import annotations
+
+import importlib.util
+import sys
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+from mmml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
+    com_distances,
+    distance_report,
+    place_trimer,
+    run_scan_2d,
+)
+
+_REPO = Path(__file__).resolve().parents[2]
+_SCAN_SCRIPT = _REPO / "scripts" / "scan_mlpot_dimer_2d_pycharmm.py"
+
+
+def _load_scan_script():
+    spec = importlib.util.spec_from_file_location("scan_mlpot_dimer_2d_pycharmm", _SCAN_SCRIPT)
+    mod = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    sys.modules[spec.name] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_place_trimer_sets_target_com_distances() -> None:
+    atoms_per = [2, 2, 2]
+    ref = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [5.0, 0.0, 0.0],
+            [6.0, 0.0, 0.0],
+            [0.0, 5.0, 0.0],
+            [1.0, 5.0, 0.0],
+        ],
+        dtype=float,
+    )
+    pos = place_trimer(ref, atoms_per, d01=4.0, d02=5.0, angle_02_rad=0.0)
+    d = com_distances(pos, atoms_per)
+    assert d[0] == pytest.approx(4.0, abs=1e-9)
+    assert d[1] == pytest.approx(5.0, abs=1e-9)
+
+
+def test_run_scan_2d_collects_metrics() -> None:
+    atoms_per = [1, 1, 1]
+    ref = np.eye(3, dtype=float)
+    d_grid = np.array([3.0, 4.0])
+
+    def eval_fn(pos: np.ndarray) -> dict[str, float]:
+        dist = distance_report(pos, atoms_per)
+        return {
+            "energy_kcal": float(dist["com_d01"] + dist["com_d02"]),
+            "min_inter_01": dist["min_inter_01"],
+        }
+
+    out = run_scan_2d(
+        eval_fn,
+        ref,
+        atoms_per,
+        d_grid,
+        d_grid,
+        angle_02_deg=90.0,
+        metric_keys=("energy_kcal", "min_inter_01"),
+    )
+    assert out["energy_kcal"].shape == (2, 2)
+    assert np.all(np.isfinite(out["energy_kcal"]))
+    assert np.all(out["min_inter_01"] > 0.0)
+
+
+def test_scan_mlpot_dimer_2d_pycharmm_batch_parse() -> None:
+    mod = _load_scan_script()
+    assert mod._parse_batch_compositions("DCM:3, ACO:3") == ["DCM:3", "ACO:3"]
