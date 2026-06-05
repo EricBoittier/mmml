@@ -121,8 +121,8 @@ def analyze_pair_lists(
     n_monomers: int,
     atoms_per_monomer: int,
     *,
-    mm_switch_on: float = 5.5,
-    mm_switch_width: float = 1.5,
+    mm_switch_on: float = 7.0,
+    mm_switch_width: float = 5.0,
     ml_switch_width: float = 0.1,
     mm_r_min: float | None = None,
     complementary_handoff: bool = True,
@@ -252,8 +252,8 @@ def main() -> int:
     parser.add_argument("--tag", type=str, default=None)
     parser.add_argument("--n-monomers", type=int, required=True)
     parser.add_argument("--atoms-per-monomer", type=int, default=5)
-    parser.add_argument("--mm-switch-on", type=float, default=5.5)
-    parser.add_argument("--mm-switch-width", type=float, default=1.5)
+    parser.add_argument("--mm-switch-on", type=float, default=7.0)
+    parser.add_argument("--mm-switch-width", type=float, default=5.0)
     parser.add_argument("--ml-switch-width", type=float, default=0.1)
     parser.add_argument("--mm-r-min", type=float, default=None)
     parser.add_argument(

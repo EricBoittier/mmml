@@ -16,8 +16,8 @@ Complementary handoff (default): \(s_{\mathrm{ML}} + s_{\mathrm{MM}} = 1\) over 
 
 | Preset | `--mm-switch-on` | `--mm-switch-width` | `--ml-switch-width` | Used by |
 |--------|------------------|---------------------|---------------------|---------|
-| Code default | 5.5 | 1.5 | 0.1 | `md-system` defaults |
-| **DCM:9 stability** | **7.0** | **5.0** | 0.1 | `scripts/run_dcm9_stability.sh` |
+| **Code default** | **7.0** | **5.0** | 0.1 | `md-system` / PyCHARMM MLpot |
+| DCM:9 stability | 7.0 | 5.0 | 0.1 | `scripts/run_dcm9_stability.sh` (same as default) |
 | Wide ML taper | 7.0 | 5.0 | 1.0 | Example: softer ML→MM transition |
 | Extended handoff | 8.0 | 3.0 | 1.5 | Example: longer-range ML |
 
@@ -27,15 +27,15 @@ Complementary handoff (default): \(s_{\mathrm{ML}} + s_{\mathrm{MM}} = 1\) over 
 
 ### Per-preset schematics
 
-**Code default (5.5 / 1.5 / 0.1 Å)**
+**Code default (7 / 5 / 0.1 Å)**
 
 ![Code default cutoffs](images/mlpot-settings/cutoffs_code-default.png)
 
-**DCM:9 stability (7 / 5 / 0.1 Å)** — current `run_dcm9_stability.sh` defaults
+**DCM:9 stability (7 / 5 / 0.1 Å)** — same as code default; `run_dcm9_stability.sh` passes explicitly
 
 ![DCM9 stability cutoffs](images/mlpot-settings/cutoffs_dcm9-stability.png)
 
-Sparse ML dimer evaluation uses COM distance &lt; `mm_switch_on` (7 Å here vs 5.5 Å default). MM list outer reach is roughly `mm_switch_on + mm_switch_width` (12 Å).
+Sparse ML dimer evaluation uses COM distance &lt; `mm_switch_on` (7 Å). MM list outer reach is roughly `mm_switch_on + mm_switch_width` (12 Å).
 
 **Wide ML taper (7 / 5 / 1.0 Å)**
 
@@ -69,6 +69,6 @@ Example:
 ./scripts/run_dcm9_stability.sh
 # or
 mmml md-system ... --n-heat-segments 4 --ps-heat 20 \
-  --heat-firstt 0 --heat-finalt 240 \
-  --mm-switch-on 7 --mm-switch-width 5
+  --heat-firstt 0 --heat-finalt 240
+# cutoffs default to --mm-switch-on 7 --mm-switch-width 5
 ```

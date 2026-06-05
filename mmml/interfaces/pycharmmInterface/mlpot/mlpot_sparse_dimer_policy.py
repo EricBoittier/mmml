@@ -8,6 +8,7 @@ from typing import List, Optional, Sequence, Tuple
 import numpy as np
 
 from mmml.interfaces.pycharmmInterface.calculator_utils import dimer_permutations
+from mmml.interfaces.pycharmmInterface.cutoffs import DEFAULT_MM_SWITCH_ON
 
 
 def max_dimer_pairs(n_monomers: int) -> int:
@@ -128,7 +129,7 @@ def count_near_dimer_pairs(
     n_monomers: int,
     atoms_per_monomer: int | Sequence[int],
     *,
-    mm_switch_on: float = 5.5,
+    mm_switch_on: float = DEFAULT_MM_SWITCH_ON,
     box_side_A: Optional[float] = None,
     cell: Optional[np.ndarray] = None,
     free_space: bool = False,
@@ -176,7 +177,7 @@ def validate_sparse_dimer_cap(
     n_monomers: int,
     atoms_per_monomer: int | Sequence[int],
     *,
-    mm_switch_on: float = 5.5,
+    mm_switch_on: float = DEFAULT_MM_SWITCH_ON,
     box_side_A: Optional[float] = None,
     max_active_dimers: Optional[int] = None,
     free_space: bool = False,

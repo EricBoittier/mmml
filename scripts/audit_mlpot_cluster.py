@@ -62,7 +62,7 @@ def main() -> int:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--composition", type=str, required=True)
     parser.add_argument("--atoms-per-monomer", type=int, default=5)
-    parser.add_argument("--mm-switch-on", type=float, default=5.5)
+    parser.add_argument("--mm-switch-on", type=float, default=7.0)
     parser.add_argument(
         "--free-space",
         action=argparse.BooleanOptionalAction,

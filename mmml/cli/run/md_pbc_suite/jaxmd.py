@@ -217,8 +217,8 @@ def main(argv: list[str] | None = None) -> int:
         help="system: cluster COM; monomer: sum over monomer COM restraints (same R, k).",
     )
     p.add_argument("--ml-switch-width", "--ml-cutoff", dest="ml_switch_width", type=float, default=0.1)
-    p.add_argument("--mm-switch-on", type=float, default=5.5)
-    p.add_argument("--mm-switch-width", "--mm-cutoff", dest="mm_switch_width", type=float, default=2.0)
+    p.add_argument("--mm-switch-on", type=float, default=7.0)
+    p.add_argument("--mm-switch-width", "--mm-cutoff", dest="mm_switch_width", type=float, default=5.0)
     p.add_argument("--max-pairs", type=int, default=20_000)
     p.add_argument("--pre-min-fmax", type=float, default=0.1)
     p.add_argument("--pre-min-steps", type=int, default=50)
