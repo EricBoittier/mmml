@@ -780,10 +780,12 @@ def run_dynamics_workflow(
                 overlap_config_for_stage,
             )
 
+            n_heat_segments = max(1, int(getattr(args, "n_heat_segments", 1)))
             stage_overlap = overlap_config_for_stage(
                 overlap_cfg,
                 stage="heat",
                 nstep=nstep,
+                n_segments=n_heat_segments,
             )
             from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
                 finalize_heat_dynamics_frequencies,

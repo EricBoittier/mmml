@@ -11,6 +11,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
 from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
     apply_heat_ramp_frequencies,
     apply_heat_ramp_overlap_chunk,
+    apply_heat_segment_ramp_kwargs,
     finalize_heat_dynamics_frequencies,
     heat_ramp_bath_target_K,
 )
@@ -89,6 +90,22 @@ def test_apply_heat_ramp_overlap_chunk_continues_ramp():
     assert chunk_kw["TEMINC"] == 0.12
     assert chunk_kw["iasors"] == 0
     assert chunk_kw["iasvel"] == 0
+
+
+def test_apply_heat_segment_ramp_kwargs_splits_ramp():
+    kw = {"firstt": 0.0, "finalt": 240.0, "ihtfrq": 100, "tbath": 240.0}
+    apply_heat_segment_ramp_kwargs(
+        kw,
+        seg_index=1,
+        n_segments=4,
+        heat_firstt=0.0,
+        heat_finalt=240.0,
+        nstep=20000,
+        ihtfrq=100,
+    )
+    assert kw["firstt"] == 60.0
+    assert kw["finalt"] == 120.0
+    assert kw["TEMINC"] == 60.0 / (20000 // 100)
 
 
 def test_finalize_heat_dynamics_frequencies_harmonizes_ihtfrq_and_teminc():

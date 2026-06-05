@@ -590,6 +590,12 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--n-heat-segments",
+        type=int,
+        default=1,
+        help="pycharmm: split heating into short chained restart segments",
+    )
+    parser.add_argument(
         "--n-equi-segments",
         type=int,
         default=1,
@@ -1246,6 +1252,8 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         str(getattr(args, "npt_pressure", 1.0)),
         "--npt-pgamma",
         str(getattr(args, "npt_pgamma", 5.0)),
+        "--n-heat-segments",
+        str(getattr(args, "n_heat_segments", 1)),
         "--n-equi-segments",
         str(getattr(args, "n_equi_segments", 1)),
         "--n-prod-segments",

@@ -800,6 +800,11 @@ def test_overlap_config_for_stage_heat_uses_single_segment():
     heat_cfg = overlap_config_for_stage(cfg, stage="heat", nstep=4000)
     assert heat_cfg is not None
     assert int(heat_cfg.check_interval) == 4000
+    staged_heat = overlap_config_for_stage(
+        cfg, stage="heat", nstep=1000, n_segments=4
+    )
+    assert staged_heat is not None
+    assert int(staged_heat.check_interval) == 500
     nve_cfg = overlap_config_for_stage(cfg, stage="nve", nstep=8000)
     assert nve_cfg is not None
     assert int(nve_cfg.check_interval) == 500

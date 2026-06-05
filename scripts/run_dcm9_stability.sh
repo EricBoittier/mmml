@@ -77,6 +77,9 @@ HEAT_FIRSTT="${HEAT_FIRSTT:-0}"
 HEAT_FINALT="${HEAT_FINALT:-240}"
 HEAT_THERMOSTAT="${HEAT_THERMOSTAT:-hoover}"
 HEAT_IHTFRQ="${HEAT_IHTFRQ:-100}"
+N_HEAT_SEGMENTS="${N_HEAT_SEGMENTS:-4}"
+MM_SWITCH_ON="${MM_SWITCH_ON:-7}"
+MM_SWITCH_WIDTH="${MM_SWITCH_WIDTH:-5}"
 MINI_NSTEP="${MINI_NSTEP:-150}"
 DYN_NPRINT="${DYN_NPRINT:-500}"
 DCD_NSAVC="${DCD_NSAVC:-500}"
@@ -118,13 +121,15 @@ exec "$MPIRUN" md-system \
   --heat-finalt "$HEAT_FINALT" \
   --heat-thermostat "$HEAT_THERMOSTAT" \
   --heat-ihtfrq "$HEAT_IHTFRQ" \
+  --n-heat-segments "$N_HEAT_SEGMENTS" \
+  --mm-switch-on "$MM_SWITCH_ON" \
+  --mm-switch-width "$MM_SWITCH_WIDTH" \
   --dyn-nprint "$DYN_NPRINT" \
   --dyn-iprfrq 2000 \
   --dcd-nsavc "$DCD_NSAVC" \
   --dynamics-overlap-action rescue \
   --dt-fs 0.25 \
   --temperature 300.0 \
-  --ml-switch-width 0.1 \
   --charmm-sd-steps 25 \
   --charmm-abnr-steps 100 \
   --ml-gpu-count 1 \

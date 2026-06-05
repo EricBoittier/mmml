@@ -1251,6 +1251,15 @@ def add_staged_md_args(parser: argparse.ArgumentParser) -> None:
         ),
     )
     group.add_argument(
+        "--n-heat-segments",
+        type=int,
+        default=1,
+        help=(
+            "Split heating into short chained restart segments (default: 1). "
+            "Use >1 so overlap rescue can run between segments during the ramp."
+        ),
+    )
+    group.add_argument(
         "--n-equi-segments",
         type=int,
         default=1,
