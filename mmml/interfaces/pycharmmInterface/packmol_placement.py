@@ -12,13 +12,23 @@ PACKMOL_PATH = Path("~/mmml/mmml/generate/packmol/packmol").expanduser()
 
 
 def packmol_executable() -> str:
-    path = Path(os.path.expanduser(str(PACKMOL_PATH)))
-    if path.is_file():
-        return str(path)
+    from mmml.paths import bundled_file
+
+    candidates = [
+        bundled_file("generate", "packmol", "packmol"),
+        Path(os.path.expanduser(str(PACKMOL_PATH))),
+    ]
+    for path in candidates:
+        if path.is_file():
+            return str(path)
     found = shutil.which("packmol")
     if found:
         return found
-    return str(path)
+    tried = ", ".join(str(p) for p in candidates)
+    raise FileNotFoundError(
+        "packmol not found on PATH and no bundled binary "
+        f"(tried {tried}). Install packmol or build mmml/generate/packmol."
+    )
 
 
 def execute_packmol_script(packmol_input: str, inp_path: Path) -> None:

@@ -66,7 +66,7 @@ def test_cutoff_lib_preset_geometry_keys() -> None:
     assert len(geometry_ids(cfg)) == 4
 
 
-def test_prepare_geometry_shell_runs_python_script_directly() -> None:
+def test_prepare_geometry_shell_uses_mpirun_wrapper_for_script() -> None:
     sh = (
         _REPO
         / "workflows"
@@ -75,5 +75,6 @@ def test_prepare_geometry_shell_runs_python_script_directly() -> None:
         / "prepare_geometry_shell.sh"
     )
     text = sh.read_text(encoding="utf-8")
-    assert 'exec "$PY" "$WORKFLOW_ROOT/scripts/prepare_geometry.py"' in text
+    assert "mmml_resolve_env" in text
+    assert 'exec "$MPIRUN" "$WORKFLOW_ROOT/scripts/prepare_geometry.py"' in text
     assert '"$MPIRUN" "$PY"' not in text
