@@ -15,8 +15,8 @@ mpirun_wrapper: ../../scripts/mmml-charmm-mpirun.sh
 # Dynamics (free_nve: mini + nve)
 # Short NVE leg for screening; raise ps_nve once COM QC is stable.
 ps_nve: 0.2
-# Sweep CHARMM inbfrq for NVE (-1 = rebuild when cluster moves; 50 = legacy default).
-nve_inbfrq_values: [-1, 1, 10, 50]
+# Sweep CHARMM inbfrq for NVE (-1 = heuristic; 0 = frozen lists; 50 = legacy default).
+nve_inbfrq_values: [-1, 0, 1, 10, 50]
 # ENER+UPDATE after mini before NVE (mini uses inbfrq=0; avoids first UPDECI jump).
 pre_nve_charmm_update: true
 dt_fs: 0.25
