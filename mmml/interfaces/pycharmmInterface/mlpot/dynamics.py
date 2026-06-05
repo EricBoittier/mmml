@@ -712,6 +712,90 @@ def apply_heat_ramp_frequencies(
     kw["TEMINC"] = max(0.0, (finalt - firstt) / heat_updates)
 
 
+def heat_ramp_bath_target_K(
+    *,
+    firstt: float,
+    finalt: float,
+    teminc: float,
+    ihtfrq: int,
+    step: int,
+) -> float:
+    """Target bath temperature (K) after ``step`` integration steps with ``ihtfrq`` scaling."""
+    if ihtfrq <= 0 or teminc <= 0.0:
+        return float(firstt)
+    rescales = max(0, int(step) // int(ihtfrq))
+    target = float(firstt) + rescales * float(teminc)
+    return min(target, float(finalt))
+
+
+def heat_ramp_spec_from_kw(kw: dict[str, Any]) -> dict[str, float | int] | None:
+    """Return stage-level velocity-scaling ramp parameters, or ``None`` if inactive."""
+    ihtfrq = int(kw.get("ihtfrq", 0) or 0)
+    if ihtfrq <= 0 or "hoover reft" in kw or bool(kw.get("cpt")):
+        return None
+    teminc = float(kw.get("TEMINC", 0) or 0)
+    if teminc <= 0.0:
+        return None
+    return {
+        "firstt": float(kw.get("firstt", kw.get("finalt", 300.0))),
+        "finalt": float(kw.get("finalt", 300.0)),
+        "teminc": teminc,
+        "ihtfrq": ihtfrq,
+    }
+
+
+def apply_heat_ramp_overlap_chunk(
+    chunk_kw: dict[str, Any],
+    *,
+    chunk_index: int,
+    steps_done: int,
+    ramp_spec: dict[str, float | int],
+) -> None:
+    """Continue a velocity-scaling heat ramp on overlap chunk ``chunk_index`` > 0."""
+    if chunk_index <= 0:
+        return
+    chunk_kw["firstt"] = heat_ramp_bath_target_K(
+        firstt=float(ramp_spec["firstt"]),
+        finalt=float(ramp_spec["finalt"]),
+        teminc=float(ramp_spec["teminc"]),
+        ihtfrq=int(ramp_spec["ihtfrq"]),
+        step=int(steps_done),
+    )
+    chunk_kw["finalt"] = float(ramp_spec["finalt"])
+    chunk_kw["TEMINC"] = float(ramp_spec["teminc"])
+    chunk_kw["ihtfrq"] = int(ramp_spec["ihtfrq"])
+    chunk_kw["iasvel"] = 0
+    chunk_kw["iasors"] = 0
+
+
+_HEAT_FIN_FREQ_KEYS = ("ihtfrq", "iprfrq", "nprint", "isvfrq", "ntrfrq")
+
+
+def finalize_heat_dynamics_frequencies(kw: dict[str, Any]) -> dict[str, tuple[int, int]]:
+    """Harmonize heat thermostat/print freqs with ``nstep`` and refresh ``TEMINC``.
+
+    CHARMM FINCYC retunes frequencies that do not divide ``nstep``.  When that
+    happens to ``ihtfrq``, the ``TEMINC`` computed for the CLI value no longer
+    matches the rescale cadence and the bath target can jump backward mid-ramp.
+    """
+    nstep = int(kw.get("nstep", 0))
+    changes: dict[str, tuple[int, int]] = {}
+    if nstep <= 0:
+        return changes
+    if heat_ramp_spec_from_kw(kw) is None:
+        return changes
+    for key in _HEAT_FIN_FREQ_KEYS:
+        if key not in kw:
+            continue
+        old = int(kw[key])
+        new = _harmonize_dynamics_frequency(old, nstep)
+        if new != old:
+            changes[key] = (old, new)
+        kw[key] = new
+    apply_heat_ramp_frequencies(kw, nstep=nstep, ihtfrq=int(kw["ihtfrq"]))
+    return changes
+
+
 def build_heat_dynamics(
     *,
     timestep_ps: float = 0.00025,
@@ -1900,6 +1984,7 @@ def run_dynamics_with_io(
     )
 
     n_chunks = total_nstep // interval
+    heat_ramp_spec = heat_ramp_spec_from_kw(kw)
     final_restart = Path(io.restart_write) if io is not None and io.restart_write else None
     last_dyn: Any = None
     steps_done = 0
@@ -1989,6 +2074,13 @@ def run_dynamics_with_io(
                     chunk_kw,
                     chunk_index=chunk_index,
                     has_restart_read=has_restart_read,
+                )
+            if heat_ramp_spec is not None:
+                apply_heat_ramp_overlap_chunk(
+                    chunk_kw,
+                    chunk_index=chunk_index,
+                    steps_done=steps_done,
+                    ramp_spec=heat_ramp_spec,
                 )
             if chunk_io is None or chunk_io.restart_write is None:
                 chunk_kw.pop("iunwri", None)

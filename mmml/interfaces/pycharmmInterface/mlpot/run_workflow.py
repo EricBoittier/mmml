@@ -774,10 +774,26 @@ def run_dynamics_workflow(
             kw,
             args,
         )
+        stage_overlap = overlap_cfg
+        if ensemble != "nve" and overlap_cfg is not None:
+            from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+                overlap_config_for_stage,
+            )
+
+            stage_overlap = overlap_config_for_stage(
+                overlap_cfg,
+                stage="heat",
+                nstep=nstep,
+            )
+            from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+                finalize_heat_dynamics_frequencies,
+            )
+
+            finalize_heat_dynamics_frequencies(kw)
         run_dynamics_with_io(
             kw,
             io,
-            overlap=overlap_cfg,
+            overlap=stage_overlap,
             overlap_context=label,
             mlpot_ctx=ctx,
             rng_base=getattr(args, "seed", None),

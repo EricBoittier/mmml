@@ -818,6 +818,68 @@ def test_overlap_should_split_trajectory_limits_chunk_dcd_count():
     assert _overlap_should_split_trajectory(n_chunks=3, traj_nsavc=100)
 
 
+def test_overlap_chunk_continues_velocity_scaling_heat_ramp(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import CharmmTrajectoryFiles
+
+    cfg = DynamicsOverlapConfig(
+        action="error",
+        min_distance_A=0.5,
+        check_interval=500,
+        n_monomers=2,
+        use_pbc=False,
+    )
+    pos_ok = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [5.0, 0.0, 0.0],
+            [6.0, 0.0, 0.0],
+        ],
+        dtype=float,
+    )
+    calls: list[dict] = []
+    mlpot_ctx = mock.Mock()
+
+    def fake_chunk(kw, _io, *, extra_iokw=None, **kwargs):
+        calls.append(dict(kw))
+        if _io is not None and _io.restart_write is not None:
+            Path(_io.restart_write).write_text("REST 2000 -1\n", encoding="utf-8")
+        return mock.Mock()
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        side_effect=fake_chunk,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
+        return_value=5.0,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_chunk_after_restart",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_last_step",
+        side_effect=lambda path: 500 * len(calls),
+    ):
+        run_dynamics_with_io(
+            {
+                "nstep": 2000,
+                "firstt": 0.0,
+                "finalt": 240.0,
+                "ihtfrq": 100,
+                "TEMINC": 0.12,
+                "iasors": 0,
+            },
+            CharmmTrajectoryFiles(restart_write=tmp_path / "heat.res"),
+            overlap=cfg,
+            overlap_context="heat",
+            mlpot_ctx=mlpot_ctx,
+        )
+
+    assert len(calls) == 4
+    assert calls[0]["firstt"] == 0.0
+    assert calls[1]["firstt"] == pytest.approx(0.6)
+    assert calls[2]["firstt"] == pytest.approx(1.2)
+    assert calls[3]["firstt"] == pytest.approx(1.8)
+
+
 def test_apply_overlap_chunk_preserves_heat_cold_start_kw():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _apply_overlap_chunk_dynamics_kw
 
